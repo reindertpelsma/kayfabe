@@ -82,10 +82,19 @@ class FakeTransport(Transport):
         return item
 
 
+KFSEED = {  # the real `python3 -m kfseed check` outputs and exit codes (W3 PR #345 cb8adf2f9)
+    "same": (0, "nginx installed: 1.24\nnginx candidate: 1.24"),
+    "drift": (0, "nginx installed: 1.24\nnginx candidate: 1.26\nWARNING: installed != candidate"),
+    "unknown": (0, "nginx installed: 1.24\nnginx candidate: unknown"),
+    "missing": (2, "nginx not installed: apt-get install nginx-light"),
+    "odd": (1, "boom"),
+}
+
+
 class FakeSys:
     """Fake command runner for prepare_seeder: records argv, never touches the system."""
 
-    def __init__(self, nginx="nginx version: nginx/1.24", fail=(), after=None, kfseed=0):
+    def __init__(self, nginx="nginx version: nginx/1.24", fail=(), after=None, kfseed="same"):
         self.nginx, self.fail, self.after, self.kfseed, self.calls = nginx, fail, after, kfseed, []
 
     def __call__(self, argv):
@@ -93,7 +102,7 @@ class FakeSys:
         if argv[0] == "nginx":
             return (0, self.nginx) if self.nginx else (None, "")
         if argv[:3] == ["python3", "-m", "kfseed"]:
-            return self.kfseed, "drift: 1.24 -> 1.26" if self.kfseed else "ok"
+            return KFSEED[self.kfseed]
         if argv[0] == "apt-get":
             if argv[1] in self.fail:
                 return 100, "E: failed"
@@ -519,7 +528,7 @@ class SeederTests(unittest.TestCase):
         self.assertTrue(r["available"])
 
     def test_owned_nonroot_never_runs_apt_and_warns_on_drift(self):
-        f = FakeSys(kfseed=1)
+        f = FakeSys(kfseed="drift")
         r = self.prep("owned", 1000, f)
         self.assertEqual(self.apt(f), [])
         self.assertIn(["python3", "-m", "kfseed", "check"], f.calls)
@@ -528,15 +537,31 @@ class SeederTests(unittest.TestCase):
 
     def test_container_and_borrowed_never_run_apt_even_as_root(self):
         for prof in ("container", "borrowed"):
-            f = FakeSys(kfseed=1)
+            f = FakeSys(kfseed="drift")
             r = self.prep(prof, 0, f)
             self.assertEqual(self.apt(f), [], prof)
             self.assertTrue(r["warnings"])
 
     def test_missing_nginx_unavailable_where_no_changes_allowed(self):
         for prof, euid in (("borrowed", 0), ("container", 0), ("owned", 1000)):
-            r = self.prep(prof, euid, FakeSys(nginx=None))
-            self.assertFalse(r["available"], prof)
+            for f in (FakeSys(nginx=None, kfseed="missing"), FakeSys(kfseed="missing")):  # rc 2 alone is enough
+                r = self.prep(prof, euid, f)
+                self.assertFalse(r["available"], prof)
+
+    def test_kfseed_outputs(self):
+        r = self.prep("borrowed", 0, FakeSys(kfseed="same"))
+        self.assertEqual((r["available"], r["warnings"]), (True, []))
+        r = self.prep("borrowed", 0, FakeSys(kfseed="unknown"))
+        self.assertTrue(r["available"] and any("unknown" in w for w in r["warnings"]))
+        r = self.prep("container", 0, FakeSys(kfseed="drift"))
+        self.assertTrue(r["available"] and any("drifted" in w for w in r["warnings"]))
+
+    def test_unexpected_rc_is_unavailable_warning_but_not_blocking(self):
+        r = self.prep("borrowed", 0, FakeSys(kfseed="odd"))
+        self.assertTrue(r["available"])
+        self.assertTrue(any("unavailable" in w for w in r["warnings"]))
+        r = self.prep("borrowed", 0, FakeSys(nginx=None, kfseed="odd"))
+        self.assertFalse(r["available"])  # blocked only because nginx is actually missing
 
     def test_apt_failure_with_nginx_present_still_available_with_warning(self):
         r = self.prep("owned", 0, FakeSys(fail=("update",)))
@@ -608,7 +633,7 @@ class SeedTests(Base):
     def test_drift_warning_in_seed_register_frame(self):
         script = [welcome("container"), lambda c: threading.Thread(target=lambda: d.seed_register("o1", {"name": "a", "sha256": "0" * 64, "size": 1}, "/x")).start(),
                   lambda c: self.wait_sent(c), {"type": "seed_ack", "ok": True}, None, None, Closed(1006)]
-        d, conn, _ = self.serve(script, seeder_run=FakeSys(kfseed=1), ceiling="container")
+        d, conn, _ = self.serve(script, seeder_run=FakeSys(kfseed="drift"), ceiling="container")
         self.run_one(d)
         reg = [m for m in conn.sent if m["type"] == "seed_register"][0]
         self.assertTrue(any("drifted" in w for w in reg["warnings"]))

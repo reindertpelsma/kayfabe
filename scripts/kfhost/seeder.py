@@ -53,11 +53,18 @@ def prepare_seeder(profile, euid, run=default_run, which=shutil.which):
             return {"available": True, "warnings": warnings, "log": log}
     else:
         rc, text = run(["python3", "-m", "kfseed", "check"])
-        if rc is None or rc not in (0, 1):
-            warnings.append("kfseed check unavailable; nginx currency unknown")
-        elif rc != 0:
-            warnings.append("nginx drifted from candidate: " + (text or "")[:200])
         log.append("seeder: no system changes allowed (profile %s, euid %s); kfseed check rc=%s" % (profile, euid, rc))
+        if rc == 0:
+            # exit 0 = nginx present, even with a WARNING line; drift is read from the output only
+            for line in text.splitlines():
+                if line.startswith("WARNING:"):
+                    warnings.append("nginx drifted: " + line[len("WARNING:"):].strip()[:200])
+                elif line.startswith("nginx candidate:") and line.split(":", 1)[1].strip() == "unknown":
+                    warnings.append("nginx candidate version unknown")
+        elif rc == 2:
+            old = None  # exit 2 = nginx missing (install help printed)
+        else:
+            warnings.append("kfseed check unavailable (rc=%s); nginx currency unknown" % rc)
     if old is None:
         log.append("seeder: nginx missing and may not be installed here: seeding unavailable")
         return {"available": False, "warnings": warnings, "log": log}
