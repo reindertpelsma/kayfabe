@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 
-from . import core, devserver, selfcheck
+from . import core, devserver, nginxcheck, selfcheck
 
 INSTALL_HELP = """nginx was not found on PATH. Install it (this tool changes nothing itself):
   Debian/Ubuntu: apt-get install -y --no-install-recommends nginx-light   (then: systemctl disable --now nginx)
@@ -27,13 +27,14 @@ def _artifacts(args):
 
 
 def serve(args):
+    if args.check:
+        return check_nginx(args)
+    if not (args.root and args.port and args.artifact):
+        sys.exit("kfseed: serve needs --root, --port and --artifact (or --check)")
     arts = _artifacts(args)
     nginx = shutil.which("nginx")
     if args.check:
-        print("nginx: %s" % (nginx or "MISSING"))
-        if not nginx:
-            print(INSTALL_HELP)
-        return 0 if nginx else 2
+        return check_nginx(args)
     if not nginx and not args.fallback_python_server:
         sys.stderr.write(INSTALL_HELP + "\n")
         return 2
@@ -83,6 +84,14 @@ def serve(args):
         shutil.rmtree(run, ignore_errors=True)
 
 
+def check_nginx(args):
+    ok, lines = nginxcheck.check()
+    print("\n".join(lines))
+    if not ok:
+        print(INSTALL_HELP)
+    return 0 if ok else 2
+
+
 def check(args):
     bad = selfcheck.selfcheck(args.url, _artifacts(args))
     for b in bad:
@@ -95,15 +104,17 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="kfseed")
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve")
-    s.add_argument("--root", required=True)
-    s.add_argument("--port", type=int, required=True)
+    s.add_argument("--root")
+    s.add_argument("--port", type=int)
     s.add_argument("--token")
-    s.add_argument("--artifact", action="append", required=True, metavar="NAME:SHA256")
+    s.add_argument("--artifact", action="append", default=[], metavar="NAME:SHA256")
     s.add_argument("--serve-until", type=float, help="unix timestamp")
     s.add_argument("--check", action="store_true", help="only report whether nginx is installed")
     s.add_argument("--fallback-python-server", action="store_true", help="DEV/TEST ONLY, used when nginx is missing")
     s.add_argument("--force-fallback", action="store_true", help="DEV/TEST ONLY: use the python server even if nginx exists")
     s.set_defaults(fn=serve)
+    n = sub.add_parser("check", help="print installed and candidate nginx versions; changes nothing")
+    n.set_defaults(fn=check_nginx)
     c = sub.add_parser("selfcheck")
     c.add_argument("--url", required=True)
     c.add_argument("--artifact", action="append", default=[], metavar="NAME:SHA256")

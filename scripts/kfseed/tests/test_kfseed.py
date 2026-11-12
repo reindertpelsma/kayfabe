@@ -152,6 +152,56 @@ class Selfcheck(Base):
         self.assertTrue(url)
 
 
+class NginxCheck(Base):
+    """Fake nginx / apt-cache on PATH; PATH is replaced so the real system tools are never seen."""
+    def run_check(self, nginx=None, apt=None, subcmd=("check",)):
+        bindir = os.path.join(self.tmp, "bin")
+        os.mkdir(bindir)
+        if nginx:
+            self.fake(bindir, "nginx", "echo 'nginx version: nginx/%s (fake)' >&2" % nginx)
+        if apt:
+            inst, cand = apt
+            self.fake(bindir, "apt-cache", "echo '%s:'; echo '  Installed: %s'; echo '  Candidate: %s'" % ("$2", inst, cand))
+        env = {"PATH": bindir}
+        return subprocess.run([sys.executable, "-B", "-m", "kfseed", *subcmd], capture_output=True, text=True, env=env,
+                              cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+    @staticmethod
+    def fake(bindir, name, body):
+        path = os.path.join(bindir, name)
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\n" + body + "\n")
+        os.chmod(path, 0o755)
+
+    def test_equal_no_warning(self):
+        r = self.run_check("1.28.3", ("1.28.3-1", "1.28.3-1"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("nginx installed: 1.28.3", r.stdout)
+        self.assertIn("nginx candidate: 1.28.3-1", r.stdout)
+        self.assertNotIn("WARNING", r.stdout)
+
+    def test_older_warns(self):
+        r = self.run_check("1.28.2", ("1.28.2-1", "1.28.3-1"))
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("WARNING: installed nginx (1.28.2-1) != repo candidate (1.28.3-1)", r.stdout)
+
+    def test_serve_check_same_output(self):
+        r = self.run_check("1.28.2", ("1.28.2-1", "1.28.3-1"), subcmd=("serve", "--check"))
+        self.assertIn("WARNING", r.stdout)
+
+    def test_no_package_manager(self):
+        r = self.run_check("1.28.3")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("candidate unknown", r.stdout)
+        self.assertNotIn("WARNING", r.stdout)
+
+    def test_nginx_missing(self):
+        r = self.run_check()
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("nginx: MISSING", r.stdout)
+        self.assertIn("apt-get install", r.stdout)
+
+
 NGINX = shutil.which("nginx")
 
 

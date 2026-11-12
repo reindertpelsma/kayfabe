@@ -8,7 +8,7 @@ A box serves one or more artifacts to the other boxes of the same session over p
 
 ```
 python3 -m kfseed serve --root DIR --port INNER --token TOKEN --artifact NAME:SHA256 [--serve-until UNIX_TS]
-python3 -m kfseed serve --check --root . --port 1 --artifact NAME:SHA256   # only reports whether nginx exists
+python3 -m kfseed check            # same as: serve --check; read-only
 python3 -m kfseed selfcheck --url http://127.0.0.1:PORT/TOKEN/ --artifact NAME:SHA256
 ```
 
@@ -18,6 +18,13 @@ python3 -m kfseed selfcheck --url http://127.0.0.1:PORT/TOKEN/ --artifact NAME:S
 - nginx missing: exit 2 and the install instructions (Debian/Ubuntu, Fedora, Alpine). `--fallback-python-server` is DEV/TEST ONLY (a range-capable stdlib server with the same layout); it is used only when nginx is absent (or with `--force-fallback`) and prints a warning.
 - Directory requests under the token answer 403 on nginx (404 on the dev server); neither lists anything. `POST` etc. answer 403 (nginx) or 405 (dev server).
 - `selfcheck` verifies: probe content, `GET /` is 404, a wrong token is 404, POST is denied, and per artifact HEAD, sequential Range GETs (206 and exact Content-Range) with the sha256 of the assembled bytes, and a suffix range. Exit 1 and `FAIL` lines on any problem. Run it against the box's own inner port before sending `seed_register`; it does not prove the OUTER port is reachable (that is the Worker probe).
+
+## nginx version and updates
+
+nginx is not pinned and must stay current with security updates. `kfseed check` (or `serve --check`) prints `nginx installed: <nginx -v>` and, when `apt-cache`, `dnf` or `apk` is on PATH, `nginx candidate: <repo version>`; with no package manager it prints `candidate unknown`. It prints a `WARNING:` line when installed differs from the candidate (apt: package version strings, dnf/apk: upstream version numbers; the dnf and apk parsers are covered only by design, not by tests). It exits 2 only when nginx is missing. It never installs or updates anything, and neither does `serve`.
+
+- Vast boxes: the box setup (a separate step, not in kfseed) runs `apt-get update`, then installs `nginx-light` when seeding is chosen.
+- Long-lived custom hosts: enable unattended upgrades; `kfseed check` shows drift.
 
 ## Consumers (documentation only)
 
