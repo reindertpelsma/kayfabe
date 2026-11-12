@@ -133,6 +133,12 @@ mod tests {
             let driver = match kf_abi::versions::table_for(*version) {
                 Ok(driver) => *driver,
                 Err(kf_abi::wire::AbiError::NoEncoding { .. }) => continue,
+                // Compiled, but below the oldest reviewed capability row (535.104.05):
+                // refused by name, never handed the 550 surface (`kf_abi::versions`).
+                Err(kf_abi::wire::AbiError::NoCapabilityRow { .. }) => {
+                    assert!((version.major, version.minor, version.patch) < (535, 104, 5));
+                    continue;
+                }
                 Err(error) => panic!("unexpected table refusal {version:?}: {error:?}"),
             };
             let wire = driver.rm_control_wire();
@@ -156,7 +162,9 @@ mod tests {
             checked += 1;
         }
         assert_eq!(header_sizes, [24, 40].into_iter().collect());
-        assert_eq!(checked, 29, "the encrypted 615 queue remains unsupported");
+        // 45 compiled tags, minus the encrypted 615 queue (unsupported) and 535.54.03 and
+        // 535.86.05 (below the oldest capability row, refused by name).
+        assert_eq!(checked, 42, "the encrypted 615 queue remains unsupported");
     }
 
     #[test]
