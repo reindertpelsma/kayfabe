@@ -381,7 +381,12 @@ falling through to the next family that has an eligible offer; the run records i
 push is **small**: today's check run (the cheapest of `CHECK_DIES`), until the small tier's own
 driver-patch matrix exists. The die sweep stays outside the tiers (`adhoc`). **large** is the
 release; a release tag cannot reach the Worker by itself (GitHub admission accepts master workflows
-only), so the owner starts it from the admin page. The middle tier's VRAM floor
+only), so the owner starts it from the admin page. A large leg also carries the middle apps pair
+(`KF_LINUX_APPS=1`, `KF_WINAPPS=mid`; "large includes middle", owner 2026-11-12, in the draft PR
+`claude/release-rehearsal-20261112`, not deployed). The named one-die **rehearsal** scope
+(`{tier:'large', die, rehearsal:true}`; plan, batch view and every verdict cell say the driver sub-run matrix was NOT
+executed; at most `REHEARSAL_PASS`, never a release PASS or a release record) is described in
+[V3_RELEASE_REHEARSAL.md](../../docs/design/V3_RELEASE_REHEARSAL.md). The middle tier's VRAM floor
 (`MIDDLE_VRAM_FLOOR_MB`) is off (0) until the footprints of the first trio run exist (TBD).
 
 **What a release rents.** Two measured dies per family from `releaseDies` in `defaults.json`

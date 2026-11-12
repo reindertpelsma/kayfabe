@@ -67,7 +67,10 @@ export function tierForClaims(c, profile) {
     profile,
   });
 }
-// Tier contents, owner 2026-11-09. The large contract is intent, not an enabled executor.
+// Tier contents, owner 2026-11-09; 'large includes middle' (owner ruling, 2026-11-12): a large leg also requests the middle
+// apps pair (Linux apps + Windows apps `mid`) through middleAppsRequest, so a large leg is small + apps + Windows gate(s) +
+// SPEC. Only that is sent today (state APPS_SENT): the large tier as a whole is still not executable (the release matrix is
+// proposed), and `llm_parity` stays DESIGN_ONLY. SPECviewperf keeps its own slot state in defaults.json stageSlots.
 export const TIER_CONTENTS = Object.freeze({
   small: Object.freeze({ base: 'check' }),
   middle: Object.freeze({
@@ -77,10 +80,10 @@ export const TIER_CONTENTS = Object.freeze({
   large: Object.freeze({
     inherits: 'middle',
     additionalStages: Object.freeze(['specviewperf', 'llm_parity']),
-    state: 'DESIGN_ONLY',
+    state: 'APPS_SENT',
   }),
 });
-// Owner 2026-11-09: real apps are mandatory only for the signed middle tier.
+// Owner 2026-11-09: real apps are mandatory for the signed middle tier; since 2026-11-12 also for large (large includes middle).
 // Callers request this exact pair; neither PR request fields nor informational box fields choose policy.
 // Middle includes every supported Linux probe, including clpeak, gpu_burn and vkpeak.
 export const MIDDLE_APP_COUNTS = Object.freeze({ apps: 66, windows_apps: 10 });
@@ -101,8 +104,13 @@ export function middleAppsResult(result, requested) {
     ].slice(0, 20),
   };
 }
-export function middleAppsRequest(profile, tierName, enabled) {
-  return profile === 'check' && tierName === 'middle' && enabled
+// `legApps === false` (release legs only): a SPEC lane leg that does not carry the apps (see dieLegs).
+export function middleAppsRequest(profile, tierName, enabled, legApps) {
+  // large includes middle: the release profile's large tier asks for the same pair (owner, 2026-11-12).
+  const mine =
+    (profile === 'check' && tierName === 'middle') ||
+    (profile === 'release' && tierName === 'large');
+  return mine && enabled && (legApps !== false || profile !== 'release')
     ? { linuxApps: true, winApps: TIER_CONTENTS.middle.appProfiles.windows }
     : {};
 }
@@ -131,7 +139,16 @@ export { profileCaps };
 // the proposed matrix and absent executor independently prevent rentals.
 export function tierEnvironment(
   profile,
-  { tierName, windowsRuns = 1, stages = [], releaseMatrix, spec, winApps, linuxApps } = {},
+  {
+    tierName,
+    windowsRuns = 1,
+    stages = [],
+    releaseMatrix,
+    spec,
+    winApps,
+    linuxApps,
+    rehearsal,
+  } = {},
 ) {
   const env = { KF_MERGE_WINDOWS: tier(profile).windows ? '1' : '0' };
   if (tierName !== undefined) env.KF_TIER = tierName;
@@ -149,8 +166,10 @@ export function tierEnvironment(
     Object.assign(env, releaseEnvironment(releaseMatrix));
   }
   if (linuxApps !== undefined) {
-    if (profile !== 'check' || tierName !== 'middle' || linuxApps !== true)
-      throw Error('linuxapps');
+    const mine =
+      (profile === 'check' && tierName === 'middle') ||
+      (profile === 'release' && tierName === 'large');
+    if (!mine || linuxApps !== true) throw Error('linuxapps');
     env.KF_LINUX_APPS = '1';
   }
   if (winApps !== undefined) {
@@ -158,6 +177,18 @@ export function tierEnvironment(
     if (!tier(profile).windows || !['small', 'mid', 'full'].includes(winApps))
       throw Error('winapps');
     env.KF_WINAPPS = winApps;
+  }
+  if (rehearsal !== undefined) {
+    // The named rehearsal scope (docs/design/V3_RELEASE_REHEARSAL.md): large tier only, never together with a matrix row
+    // (a rehearsal leg carries no driver matrix; a matrix leg is never a rehearsal).
+    if (
+      rehearsal !== true ||
+      profile !== 'release' ||
+      tierName !== 'large' ||
+      releaseMatrix !== undefined
+    )
+      throw Error('rehearsal');
+    env.KF_RELEASE_REHEARSAL = '1';
   }
   if (spec !== undefined) {
     if (

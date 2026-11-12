@@ -69,10 +69,18 @@ export class Github {
     } catch {}
     return text;
   }
-  async boxProtocol(sha, { matrix = false } = {}) {
+  async boxProtocol(sha, { matrix = false, rehearsal = false } = {}) {
     const text = await this.sourceText(DEFAULTS.reporterPath, sha);
     const declared = /^BOX_PROTOCOL = "([0-9]{1,4})"$/m.exec(text)?.[1];
     if (declared !== String(DEFAULTS.boxProtocol)) refuse('NOT_ELIGIBLE', 409);
+    // 2026-11-12: the named rehearsal scope needs a payload that understands it, and nothing else (it is not the matrix
+    // capability: a commit with only this declaration still cannot start a matrix leg).
+    if (rehearsal && !matrix) {
+      const payload = await this.sourceText('scripts/ci/vast_payload.py', sha);
+      if (!/^PAYLOAD_RELEASE_REHEARSAL = 1$/m.test(payload))
+        refuse('NOT_ELIGIBLE', 409, 'REHEARSAL_PAYLOAD_CAPABILITY');
+      return;
+    }
     if (!matrix) return;
     const reporter = text;
     if (!/^BOX_RELEASE_MATRIX_RECEIPTS = 1$/m.test(reporter))

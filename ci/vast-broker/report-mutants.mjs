@@ -380,9 +380,18 @@ const MUTANTS = [
   ],
   [
     'box told to send without a store',
-    [[I, "...(storeEnabled(env) ? { KF_RUN_REPORT: '1' } : {}),", "KF_RUN_REPORT: '1',"]],
+    [
+      [
+        I,
+        "...(storeEnabled(env) && leg?.rehearsal !== true ? { KF_RUN_REPORT: '1' } : {}),",
+        "KF_RUN_REPORT: '1',",
+      ],
+    ],
   ],
-  ['box never told', [[I, "...(storeEnabled(env) ? { KF_RUN_REPORT: '1' } : {}),", '']]],
+  [
+    'box never told',
+    [[I, "...(storeEnabled(env) && leg?.rehearsal !== true ? { KF_RUN_REPORT: '1' } : {}),", '']],
+  ],
   [
     'run report not a box route',
     [[T, '/^\\/(?:report|run-report|kill|evidence)\\/', '/^\\/(?:report|kill|evidence)\\/']],
