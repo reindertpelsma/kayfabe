@@ -40,6 +40,11 @@ def run_all(specs, env, environ=None, root=None, reference_dir=None, record_dir=
         cuda_home = root / "cuda_home"
         if (cuda_home / "bin" / "nvcc").exists():
             cenv["CUDA_HOME"] = str(cuda_home)
+        # Venv-contained host gcc <= 14 for nvcc (tools/hostcc_gcc14.sh); hosts whose default gcc is newer
+        # than the nvcc supports (Ubuntu 26.04: gcc 15 vs nvcc 12.8) cannot compile .cu otherwise.
+        gxx14 = root / "gcc14" / "usr" / "bin" / "g++-14"
+        if gxx14.exists() and "NVCC_PREPEND_FLAGS" not in cenv:
+            cenv["NVCC_PREPEND_FLAGS"] = "-ccbin " + str(gxx14)
     data_dir = cenv.get("KF_ML_DATA", os.path.join(os.getcwd(), "kfml-data"))
     log_dir = log_dir or os.path.join(cenv.get("TMPDIR", "."), "kfml-logs")
     out = []
