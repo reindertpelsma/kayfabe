@@ -3457,17 +3457,26 @@ mod tests {
         );
     }
 
-    /// S2: only a STREAM restart re-serves at once (it has no lock holder to wake it).
+    /// S2: a STREAM restart re-serves at once (it has no lock holder to wake it).
     #[test]
-    fn only_a_stream_restart_reserves_a_retry_at_once() {
+    fn a_stream_restart_reserves_a_retry_at_once() {
         assert_eq!(
             super::need_after(&Err(Failure::Retry), false, true),
             Some(Need::Again)
         );
+    }
+
+    /// S2: also when the turn had published an entry before the restart.
+    #[test]
+    fn a_stream_restart_after_a_published_entry_still_reserves_at_once() {
         assert_eq!(
             super::need_after(&Err(Failure::Retry), true, true),
             Some(Need::Again)
         );
+    }
+
+    #[test]
+    fn other_outcomes_keep_their_need() {
         assert_eq!(super::need_after(&Ok(true), true, false), Some(Need::Again));
         assert_eq!(super::need_after(&Ok(false), false, false), None);
         assert_eq!(super::need_after(&Err("x".into()), true, true), None);
