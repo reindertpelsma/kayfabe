@@ -1525,6 +1525,7 @@ fn the_largest_representable_segment_streams_in_at_most_ten_parts() {
     );
     let parts = format!("{:?}", r.life.counts());
     assert!(parts.contains("stream_parts_max: 10"), "{parts}");
+}
 
 // Phase 2 RED: all calls below exercise the existing production Relay API.
 const STREAM_VA: u64 = 0x0002_3110_102c;
