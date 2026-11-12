@@ -661,7 +661,7 @@ class ExpectedRows(unittest.TestCase):
             EXPECTED_BUILD,
             ["BUILD_" + n for n in (
                 "open_dev_packages", "cuda_libs", "cuda_headers", "src_cuda_samples", "src_gpu_burn",
-                "src_llama_cpp", "src_clpeak", "egl_offscreen", "gpu_burn", "llama_cpp", "clpeak", "vkpeak",
+                "src_llama_cpp", "src_clpeak", "egl_offscreen", "cuda_drv_probe", "gpu_burn", "llama_cpp", "clpeak", "vkpeak",
                 "bundle_tar")],
         )
         self.assertEqual(

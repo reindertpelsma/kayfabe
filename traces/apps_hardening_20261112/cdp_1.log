@@ -1,0 +1,9 @@
+CHECK cuda_init ok driver_api=13020 device=NVIDIA GeForce RTX 4070 sm_89
+CHECK cuda_ctx ok
+CHECK cuda_roundtrip ok 8 MiB
+CHECK cuda_memset ok
+CHECK cuda_ptx_jit ok
+CHECK cuda_kernel ok 1048576 elements, 0 wrong (first at 0)
+CHECK cuda_teardown ok
+CUDA_DRV_PROBE_DONE rc=0 checks=7/7
+rc=0 t=.243023686

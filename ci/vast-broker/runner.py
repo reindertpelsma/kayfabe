@@ -543,7 +543,7 @@ def provider_id(v):
 
 
 # Trusted BASE expectations. Tests bind these counts to the supported middle catalogues.
-MIDDLE_APP_COUNTS = {"apps": 66, "windows_apps": 10}
+MIDDLE_APP_COUNTS = {"apps": 67, "windows_apps": 10}
 
 
 def read_apps_policy(availability, ctx, profile):

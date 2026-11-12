@@ -14,6 +14,11 @@ execution remains DESIGN-ONLY; the LLM adapter is deliberately refused.
 | middle, PR to master | Small check plus the complete Linux middle gate list and Windows `mid` probe profile | Implemented, pending matching Worker deployment and first combined run |
 | large, release | Everything in middle plus SPECviewperf and a real LLM workload | Intent only; no new large-tier execution wiring |
 
+CODE READ, 2026-11-12 (apps hardening): both lists now hold **67** supported probes: `cuda_drv_probe` (the byte-exact
+CUDA driver-API probe, `scripts/apps/src/cuda_drv_probe.c`) was added after `vectorAddDrv`. It has not yet run in a
+guest on a real gate (MEASURED on the bare-metal 4070 only, see the PR), and the Worker constant
+`MIDDLE_APP_COUNTS.apps` (66 deployed) must be deployed with it. The text below is the 2026-11-09 state with 66.
+
 CODE READ, RV2 round-18 correction (2026-11-09): both `gate_list_middle.txt` and
 `gate_list.txt` name the same **66 supported Linux probes**, in full order. Middle includes
 `clpeak`, `gpu_burn` and `vkpeak`; the earlier 63-app reduction did not meet the owner's ALL-apps

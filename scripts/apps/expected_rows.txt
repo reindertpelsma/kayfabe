@@ -11,6 +11,7 @@ BUILD_src_gpu_burn
 BUILD_src_llama_cpp
 BUILD_src_clpeak
 BUILD_egl_offscreen
+BUILD_cuda_drv_probe
 BUILD_gpu_burn
 BUILD_llama_cpp
 BUILD_clpeak
