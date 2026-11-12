@@ -106,21 +106,13 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
           : sub
             ? ['POST']
             : ['GET', 'PUT', 'DELETE'];
-      if (!allowed.includes(request.method) || !env.HOSTS)
-        return json({ error: 'Not found' }, 404);
+      if (!allowed.includes(request.method) || !env.HOSTS) return json({ error: 'Not found' }, 404);
       const mutating = request.method !== 'GET';
-      if (
-        mutating &&
-        request.headers.has('Origin') &&
-        request.headers.get('Origin') !== url.origin
-      )
+      if (mutating && request.headers.has('Origin') && request.headers.get('Origin') !== url.origin)
         return json({ error: 'Forbidden' }, 403);
       let body;
       if (request.method === 'PUT' || sub === '/cmd') {
-        if (
-          request.headers.get('Content-Type')?.split(';')[0].trim() !==
-          'application/json'
-        )
+        if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json')
           return json({ error: 'Invalid request' }, 400);
         try {
           const reader = request.body?.getReader();
@@ -147,19 +139,11 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
       try {
         const stub = env.HOSTS.get(env.HOSTS.idFromName(id ?? '__index__'));
         const response = await stub.fetch(
-          new Request(
-            'https://internal.invalid/admin/hosts' +
-              (id ? '/' + id : '') +
-              (sub ?? ''),
-            {
-              method: request.method,
-              body,
-              headers:
-                body === undefined
-                  ? {}
-                  : { 'Content-Type': 'application/json' },
-            },
-          ),
+          new Request('https://internal.invalid/admin/hosts' + (id ? '/' + id : '') + (sub ?? ''), {
+            method: request.method,
+            body,
+            headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+          }),
         );
         return json(await response.json(), response.status);
       } catch {

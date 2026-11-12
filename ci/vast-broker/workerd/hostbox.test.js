@@ -234,6 +234,7 @@ test('admin: only the owner-side internal origin reaches the DO', async (t) => {
   const h = await runtime(t);
   const r = await h.stub('rack-1').fetch('https://public.example/admin/hosts/rack-1');
   assert.equal(r.status, 404);
+  await r.text();
   const g = await h.mf.dispatchFetch('https://broker.example/admin/hosts');
   assert.equal(g.status, 404);
   await g.text();
