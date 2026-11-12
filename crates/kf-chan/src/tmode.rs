@@ -374,7 +374,7 @@ pub struct TState {
     /// a kernel COPY2 ring, `NoCeObject`, channel poisoned). Until the guest binds a class itself
     /// ([`TState::tier`]), copy-engine methods on subchannels 0-4 decode against THIS class. It is
     /// never read from guest bytes and never authored as a bind.
-    pub ce_object: u32,
+    pub(crate) ce_object: u32,
 }
 
 impl TState {

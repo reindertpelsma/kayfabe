@@ -782,7 +782,11 @@ impl HostRing {
     /// sends no `SET_OBJECT` ([`crate::tmode::TState::ce_object`]).
     #[must_use]
     pub fn ce_object_class(&self) -> Option<u32> {
-        (self.gr_context.is_none() && self.video_context.is_none()).then_some(self.ce_class)
+        crate::ce_implicit::host_ce_object_class(
+            self.gr_context.is_some(),
+            self.video_context.is_some(),
+            self.ce_class,
+        )
     }
 
     /// Real owned video object and engine whose constructor promoted a Falcon context.

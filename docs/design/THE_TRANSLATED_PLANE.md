@@ -1318,3 +1318,11 @@ it. A mutation that starts the action before the drain fence fails it (2026-10-0
 - **Tested (GPU-free):** `crates/kf-chan/src/tmode_ce_tests.rs` and `crates/kf-chan/tests/ring.rs`, including the energy-04 words.
 - **NOT proven:** that this removes the energy-04 reset. That needs a hardware run (energy-04 alone, three times, with the fixed binary, kf3 trace
   flags and the guest overlay kept). Whether entries 0-33 of that ring complete on the host is also unknown.
+- **Pre-existing, not decided here (added 2026-11-12 after review):** a guest `SET_OBJECT` of a CE class other than the host channel's class
+  still wins and is authored to the host channel, exactly as before this change. A guest binding `0xCAB5` on a host channel that holds `0xC7B5`
+  lets through methods the Ada CE does not have. INFERRED, not measured: the host channel faults and the fault stays on that ring. Refusing any
+  CE class other than the host channel's is a possible follow-up, not part of this change.
+- **Birth wiring is testable (2026-11-12):** the decision is `birth_ce_object` in `crates/kf-qemu/src/chan.rs` (unit tests, plus a source guard
+  that the birth path calls it and hands the result to `set_ce_object`); `HostRing::ce_object_class` delegates to
+  `kf_chan::ce_implicit::host_ce_object_class` (None on graphics and video rings, tested). `TState::ce_object` is `pub(crate)`, so nothing outside
+  kf-chan can set it except through `TranslatedRing::set_ce_object`.

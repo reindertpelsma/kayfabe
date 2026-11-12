@@ -26,6 +26,8 @@ fn is_ce(c: u32) -> bool {
 
 /// The Ada CE class of the guest of run 3017 (2026-10-19; `RUN31_CE` in `tmode_gr_tests.rs` binds `0xC7B5`).
 const C7B5: u32 = 0xC7B5;
+const C8B5: u32 = 0xC8B5;
+const CAB5: u32 = 0xCAB5;
 
 /// GP 34 of the kernel CE ring, all 6 words as logged by `ring REFUSED segment`:
 /// `SET_SEMAPHORE_A/B/PAYLOAD` (subch 4, `0x240`..), then `LAUNCH_DMA` `0x4c` (subch 4, `0x300`)
@@ -190,10 +192,10 @@ fn the_tier_follows_the_configured_class() {
     for (class, tier) in [
         (0xC5B5, crate::ttables::Tier::C5b5),
         (0xC6B5, crate::ttables::Tier::C6b5),
-        (0xC7B5, crate::ttables::Tier::C7b5),
-        (0xC8B5, crate::ttables::Tier::C8b5),
+        (C7B5, crate::ttables::Tier::C7b5),
+        (C8B5, crate::ttables::Tier::C8b5),
         (0xC9B5, crate::ttables::Tier::C9b5),
-        (0xCAB5, crate::ttables::Tier::Cab5),
+        (CAB5, crate::ttables::Tier::Cab5),
     ] {
         let ir = decode(&RUN3017_GP34, is_ce, &mut cfg(class), None).expect("decoded");
         let Some(Ir::Launch(l)) = ir.last() else {
@@ -203,13 +205,13 @@ fn the_tier_follows_the_configured_class() {
     }
     // A method only a newer class defines is unclassified on an older one (REQ_ATTR, CAB5).
     assert_eq!(
-        decode(&[h(4, 0x754, 1), 0], is_ce, &mut cfg(0xC7B5), None),
+        decode(&[h(4, 0x754, 1), 0], is_ce, &mut cfg(C7B5), None),
         Err(Refusal::Unclassified {
             subch: 4,
             method: 0x754
         })
     );
-    assert!(decode(&[h(4, 0x754, 1), 0], is_ce, &mut cfg(0xCAB5), None).is_ok());
+    assert!(decode(&[h(4, 0x754, 1), 0], is_ce, &mut cfg(CAB5), None).is_ok());
 }
 
 /// The leniency removes ONE refusal (no object bound) and nothing else: a method outside the CE
@@ -275,9 +277,9 @@ fn software_subchannels_gain_nothing() {
 #[test]
 fn a_guest_set_object_still_binds_and_a_foreign_class_is_still_refused() {
     let mut st = cfg(C7B5);
-    let ir = decode(&[h(4, 0, 1), 0xC8B5], is_ce, &mut st, None).expect("bind");
+    let ir = decode(&[h(4, 0, 1), C8B5], is_ce, &mut st, None).expect("bind");
     assert_eq!(st.tier, Some(crate::ttables::Tier::C8b5));
-    assert!(matches!(&ir[..], [Ir::Words(w)] if w[..] == [(4, 0, 0xC8B5)]));
+    assert!(matches!(&ir[..], [Ir::Words(w)] if w[..] == [(4, 0, C8B5)]));
     assert_eq!(
         decode(&[h(4, 0, 1), 0xC997], is_ce, &mut cfg(C7B5), None),
         Err(Refusal::ForeignClass {
@@ -316,14 +318,14 @@ fn emission_is_bounded_by_the_segment() {
 fn the_host_semaphore_width_follows_the_derived_class() {
     let sem_hi: u32 = 0x100; // bit 8: beyond the 8-bit field
     let pb = [h(0, 0x5C, 5), 0x2023_3060, sem_hi, 7, 0, 1];
-    for class in [0xC8B5, 0xC9B5, 0xCAB5] {
+    for class in [C8B5, 0xC9B5, CAB5] {
         let ir = decode(&pb, is_ce, &mut cfg(class), None).expect("wide tier");
         assert!(
             matches!(&ir[..], [Ir::HostSem(_)]),
             "class {class:#x}: {ir:?}"
         );
     }
-    for class in [0xC5B5, 0xC6B5, 0xC7B5, 0] {
+    for class in [0xC5B5, 0xC6B5, C7B5, 0] {
         assert!(
             matches!(
                 decode(&pb, is_ce, &mut cfg(class), None),
@@ -337,17 +339,22 @@ fn the_host_semaphore_width_follows_the_derived_class() {
 /// The guest's own `SET_OBJECT` decides from then on, in BOTH directions: a newer class than the
 /// ring's host class admits that class's methods (REQ_ATTR is `CAB5`-only), an older one refuses
 /// the methods only the host's newer class defines (`SCRUB_PARAMETERS` is `C8B5`+).
+///
+/// This records PRE-EXISTING behaviour (the `SET_OBJECT` arm is unchanged by this work); it is not
+/// a decision. A guest binding `0xCAB5` on a host channel that holds `0xC7B5` lets through methods
+/// the Ada CE does not have. INFERRED, not measured: the host channel faults and the fault stays on
+/// that ring. Refusing any CE class other than the host channel's is a possible follow-up.
 #[test]
 fn the_guests_binding_wins_over_the_derived_class_when_newer() {
     let mut st = cfg(C7B5);
-    decode(&[h(4, 0, 1), 0xCAB5], is_ce, &mut st, None).expect("bind");
+    decode(&[h(4, 0, 1), CAB5], is_ce, &mut st, None).expect("bind");
     assert!(decode(&[h(4, 0x754, 1), 0], is_ce, &mut st, None).is_ok());
 }
 
 #[test]
 fn the_guests_binding_wins_over_the_derived_class_when_older() {
-    let mut st = cfg(0xC8B5);
-    decode(&[h(4, 0, 1), 0xC7B5], is_ce, &mut st, None).expect("bind");
+    let mut st = cfg(C8B5);
+    decode(&[h(4, 0, 1), C7B5], is_ce, &mut st, None).expect("bind");
     assert_eq!(
         decode(&[h(4, 0x6FC, 1), 0], is_ce, &mut st, None),
         Err(Refusal::Unclassified {
@@ -356,16 +363,16 @@ fn the_guests_binding_wins_over_the_derived_class_when_older() {
         })
     );
     // and the derived class alone does admit it
-    assert!(decode(&[h(4, 0x6FC, 1), 0], is_ce, &mut cfg(0xC8B5), None).is_ok());
+    assert!(decode(&[h(4, 0x6FC, 1), 0], is_ce, &mut cfg(C8B5), None).is_ok());
 }
 
 /// The wide host-semaphore field has its own limit (25 bits on `C8B5`+): a bit above it is refused.
 #[test]
 fn the_wide_host_semaphore_field_is_still_bounded() {
     let pb = |hi: u32| [h(0, 0x5C, 5), 0x2023_3060, hi, 7, 0, 1];
-    assert!(decode(&pb(0x1FF_FFFF), is_ce, &mut cfg(0xC8B5), None).is_ok());
+    assert!(decode(&pb(0x1FF_FFFF), is_ce, &mut cfg(C8B5), None).is_ok());
     assert!(matches!(
-        decode(&pb(0x200_0000), is_ce, &mut cfg(0xC8B5), None),
+        decode(&pb(0x200_0000), is_ce, &mut cfg(C8B5), None),
         Err(Refusal::FieldValue { .. })
     ));
 }
@@ -491,7 +498,7 @@ fn energy04_words_are_still_refused_without_a_host_ce_class() {
 #[test]
 fn energy04_words_after_a_guest_set_object_follow_the_guests_class() {
     let mut st = cfg(C7B5);
-    let mut seg = vec![h(4, 0, 1), 0xC8B5];
+    let mut seg = vec![h(4, 0, 1), C8B5];
     seg.extend_from_slice(&ENERGY04_GP34);
     let ir = decode(&seg, is_ce, &mut st, None).expect("bind then release");
     assert_eq!(st.tier, Some(crate::ttables::Tier::C8b5));

@@ -24,9 +24,30 @@ pub fn implicit_ce_class(kernel_work: bool, copy_engine: bool, host_ce: Option<u
     }
 }
 
+/// The CE class a ring's host channel holds a CE object of, or `None` for a graphics ring
+/// (`has_gr_context`) or a video ring (`has_video_context`). [`crate::host::HostRing::ce_object_class`]
+/// is this over the ring's own fields.
+#[must_use]
+pub fn host_ce_object_class(
+    has_gr_context: bool,
+    has_video_context: bool,
+    ce_class: u32,
+) -> Option<u32> {
+    (!has_gr_context && !has_video_context).then_some(ce_class)
+}
+
 #[cfg(test)]
 mod tests {
     use super::implicit_ce_class;
+
+    #[test]
+    fn a_graphics_or_video_host_ring_reports_no_ce_object() {
+        use super::host_ce_object_class;
+        assert_eq!(host_ce_object_class(true, false, 0xC7B5), None);
+        assert_eq!(host_ce_object_class(false, true, 0xC7B5), None);
+        assert_eq!(host_ce_object_class(true, true, 0xC7B5), None);
+        assert_eq!(host_ce_object_class(false, false, 0xC7B5), Some(0xC7B5));
+    }
 
     #[test]
     fn a_kernel_copy_engine_ring_gets_its_host_ce_class() {

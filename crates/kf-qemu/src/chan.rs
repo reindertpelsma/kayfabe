@@ -717,6 +717,19 @@ fn is_copy_engine(engine_type: u32) -> bool {
     kf_chan::passthrough::is_copy_engine(engine_type)
 }
 
+/// ★ 2026-11-12: the CE class a Translated ring is born with for the CE-implicit binding
+/// ([`kf_chan::ce_implicit`]), or `0`. A pure function of host-held facts: the link's own
+/// classification (`kernel_client`, `user_work`: guest-kernel work only), the channel's engine
+/// and the class of the CE object the ring's host channel holds. Kept apart from the birth
+/// closure so that it is testable.
+fn birth_ce_object(kernel_client: bool, user_work: bool, engine: u32, host_ce: Option<u32>) -> u32 {
+    kf_chan::ce_implicit::implicit_ce_class(
+        kernel_client && !user_work,
+        is_copy_engine(engine),
+        host_ce,
+    )
+}
+
 /// ★ Q7: which unforgeable fact made a channel the guest kernel's (for the birth log).
 fn kernel_by(a: &ChannelAlloc) -> String {
     let stamp = match a.privilege {
@@ -7249,9 +7262,10 @@ impl ChanPlane {
                 // has sent no `SET_OBJECT` (not required by any engine). Kernel work on a copy
                 // engine only: a user-tier channel never reaches this route, a graphics or video
                 // ring has no CE object (`ce_object_class` is `None`).
-                let ce_object = kf_chan::ce_implicit::implicit_ce_class(
-                    kernel_work,
-                    is_copy_engine(engine),
+                let ce_object = birth_ce_object(
+                    a.kernel_client,
+                    a.user_work,
+                    engine,
                     host.ce_object_class(),
                 );
                 let mut chan = {
@@ -9821,5 +9835,67 @@ mod snap_tests {
             0x1_0000,
             "a short row never truncates the required context span"
         );
+    }
+}
+
+#[cfg(test)]
+mod ce_birth_tests {
+    use super::birth_ce_object;
+    use kf_abi::submit::{ENGINE_TYPE_GRAPHICS, engine_type_copy};
+
+    const C7B5: u32 = 0xC7B5;
+
+    fn copy0() -> u32 {
+        engine_type_copy(0).expect("COPY0")
+    }
+
+    #[test]
+    fn a_kernel_ce_ring_with_a_known_host_class_gets_it() {
+        for class in [0xC5B5, 0xC6B5, C7B5, 0xC8B5, 0xC9B5, 0xCAB5] {
+            assert_eq!(birth_ce_object(true, false, copy0(), Some(class)), class);
+        }
+    }
+
+    #[test]
+    fn a_user_ring_or_user_work_gets_nothing() {
+        assert_eq!(birth_ce_object(false, false, copy0(), Some(C7B5)), 0);
+        assert_eq!(birth_ce_object(false, true, copy0(), Some(C7B5)), 0);
+        assert_eq!(birth_ce_object(true, true, copy0(), Some(C7B5)), 0);
+    }
+
+    #[test]
+    fn a_non_copy_engine_gets_nothing() {
+        assert_eq!(
+            birth_ce_object(true, false, ENGINE_TYPE_GRAPHICS, Some(C7B5)),
+            0
+        );
+    }
+
+    #[test]
+    fn no_or_an_unknown_host_class_gets_nothing() {
+        // `None` is what a graphics or video ring's host reports.
+        assert_eq!(birth_ce_object(true, false, copy0(), None), 0);
+        for class in [0, 0xC56F, 0xC9B0, 0xC7B4, u32::MAX] {
+            assert_eq!(birth_ce_object(true, false, copy0(), Some(class)), 0);
+        }
+    }
+
+    /// The birth path must use the helper and hand its result to the ring. A refactor that
+    /// drops either leaves every real ring strict and is caught here (source guard: the birth
+    /// closure needs a live host channel, so it cannot run in a unit test).
+    #[test]
+    fn the_birth_path_applies_the_derived_class_to_the_ring() {
+        let src = include_str!("chan.rs");
+        let body = src
+            .split("#[cfg(test)]\nmod ce_birth_tests")
+            .next()
+            .expect("src");
+        assert_eq!(
+            body.matches("birth_ce_object(").count(),
+            2,
+            "def + one call"
+        );
+        assert!(body.contains("a.kernel_client,\n                    a.user_work,\n                    engine,\n                    host.ce_object_class(),"));
+        assert!(body.contains("ring.set_ce_object(ce_object);"));
     }
 }
