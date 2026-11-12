@@ -13,6 +13,7 @@ import {
   receipts,
   receiptParts,
   subrunSuites,
+  withoutVendorRule,
 } from './release-fixture.js';
 const vars = {
   MAX_CONCURRENT_RENTALS: '9',
@@ -163,12 +164,14 @@ for (const filter of ['none', 'one-per-gpu'])
       });
     }
     const { plan } = await h.service.adminPlan({ commit_sha: sha, tier: 'large' });
-    assert.equal(plan.legs, 16);
+    // Owner 2026-11-12: four large dies with two SPEC lanes each, four middle dies with one leg and no SPEC = 12 rentals.
+    assert.equal(plan.legs, 12);
+    assert.deepEqual([plan.large_legs, plan.middle_legs], [8, 4]);
     for (const f of plan.families)
       for (const c of f.cells) {
         assert.deepEqual(
           c.legs.map((l) => l.spec),
-          ['lanea', 'laneb'],
+          c.leg_tier === 'large' ? ['lanea', 'laneb'] : [undefined],
         );
         assert.ok(c.legs.every((l) => l.est_usd > 0));
         assert.equal(
@@ -370,7 +373,7 @@ for (const die of ['AD104', 'TU116'])
   });
 for (const missing of ['specviewperf_lanea', 'specviewperf_laneb'])
   matrixTest('both SPEC rows are independently required ' + missing, () => {
-    const row = RELEASE_MATRIX.dies.find((r) => r.die === 'AD104');
+    const row = RELEASE_MATRIX.dies.find((r) => r.die === 'AD102');
     const outcome = {
       verdict: 'PASS',
       linux: 'PASS',
@@ -382,7 +385,7 @@ for (const missing of ['specviewperf_lanea', 'specviewperf_laneb'])
     delete outcome.stageRows[missing];
     const batch = {
       tier: 'large',
-      releaseDies: { ada: ['AD104'] },
+      releaseDies: { ada: ['AD102'] },
       diesPerFamily: 1,
       windowsRunsPerDie: 2,
       stages: ['specviewperf'],
@@ -390,9 +393,10 @@ for (const missing of ['specviewperf_lanea', 'specviewperf_laneb'])
         { key: 'x', family: 'ada', die: row.die, state: 'ENDED', releaseMatrix: row, outcome },
       ],
     };
-    assert.equal(releaseVerdict(batch).verdict, 'INCOMPLETE');
+    const rule = { releaseMatrix: withoutVendorRule() };
+    assert.equal(releaseVerdict(batch, rule).verdict, 'INCOMPLETE');
     outcome.stageRows[missing] = 'PASS';
-    assert.equal(releaseVerdict(batch).verdict, 'PASS');
+    assert.equal(releaseVerdict(batch, rule).verdict, 'PASS');
   });
 for (const die of ['AD104', 'TU116'])
   matrixTest('matrix coverage cannot be omitted from a release cell ' + die, () => {
@@ -414,9 +418,10 @@ for (const die of ['AD104', 'TU116'])
         },
       ],
     };
-    assert.equal(releaseVerdict(batch).verdict, 'INCOMPLETE');
+    const rule = { releaseMatrix: withoutVendorRule() };
+    assert.equal(releaseVerdict(batch, rule).verdict, 'INCOMPLETE');
     batch.legs[0].outcome.matrix = receiptParts(row);
-    assert.equal(releaseVerdict(batch).verdict, 'PASS');
+    assert.equal(releaseVerdict(batch, rule).verdict, 'PASS');
   });
 
 for (const extra of ['', '# second approved fixture\n'])
@@ -496,6 +501,8 @@ async function finishLeg(h, leg, { fail = false, spec = leg.spec } = {}) {
         host_reference: 'GREEN',
         suites,
         matrix_receipts: receipts(row),
+        // the box's own CPU report: the judge cross-checks it with the offer's cpu_name (src/release.js)
+        host_claims: { cpu_vendor: /AMD/i.test(offer.cpu_name ?? '') ? 'amd' : 'intel' },
         hardware: {
           gpu_name: offer.gpu_name,
           compute_cap: offer.compute_cap,
@@ -560,17 +567,23 @@ for (const single of [false, true])
       // before A was allocated. Its actual rental is still only 31 minutes old.
       batch.created -= 350 * 60000;
       await h.storage.put('batch:' + id, batch);
+      // 4 lane A legs and the 4 middle legs rent first (peak 8); the 4 lane B legs wait for their lane A.
       assert.equal(h.cloud.creates, 8);
-      assert.ok(batch.legs.filter((l) => l.state === 'STARTED').every((l) => l.spec === 'lanea'));
+      assert.ok(
+        batch.legs
+          .filter((l) => l.state === 'STARTED')
+          .every((l) => l.spec === 'lanea' || l.legTier === 'middle'),
+      );
       assert.ok(batch.legs.filter((l) => l.spec === 'laneb').every((l) => l.state === 'PENDING'));
       h.time.value += 20 * 60000;
-      for (const leg of batch.legs.filter((l) => l.spec === 'lanea')) await finishLeg(h, leg);
+      for (const leg of batch.legs.filter((l) => l.spec === 'lanea' || l.legTier === 'middle'))
+        await finishLeg(h, leg);
       h.time.value += 11 * 60000;
       await h.service.sweep();
       const after = await h.storage.get('batch:' + id);
-      assert.equal(h.cloud.creates, 16);
+      assert.equal(h.cloud.creates, 12);
       const b = after.legs.filter((l) => l.spec === 'laneb');
-      assert.equal(b.length, 8);
+      assert.equal(b.length, 4);
       assert.ok(b.every((l) => l.state === 'STARTED'));
       for (const leg of b) {
         const record = await h.storage.get('record:' + leg.key);
@@ -583,8 +596,8 @@ for (const single of [false, true])
       await h.service.sweep();
       const completed = await h.storage.get('batch:' + id);
       assert.equal(completed.verdict, 'PASS');
-      assert.equal(completed.legs.filter((l) => l.state === 'ENDED').length, 16);
-      assert.equal(h.cloud.creates, 16);
+      assert.equal(completed.legs.filter((l) => l.state === 'ENDED').length, 12);
+      assert.equal(h.cloud.creates, 12);
     },
   );
 for (const id of ['full', 'windows_cross'])

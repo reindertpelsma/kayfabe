@@ -1,5 +1,42 @@
-**STATUS: DESIGN-ONLY, 2026-11-07.** Proposed driver choices and a GPU-free planner contract;
-no hardware run, rental, Worker contact or deployment. All driver choices need owner review.
+**STATUS: DESIGN-ONLY, 2026-11-12 (release shape v2 below is OWNER-CONFIRMED; the code is built and tested GPU-free in a draft PR, NOT merged, NOT deployed, NOTHING run).** Proposed driver choices and a GPU-free planner contract;
+no hardware run, rental, Worker contact or deployment. All driver choices need owner review. The matrix stays `status: "proposed"`:
+every blocker in `release-matrix.json` (driver choices, minima, the sub-run executor, the unpinned installers, `GB202_WINDOWS_BUGCHECK_0X113`,
+`windows_guest_abi: UNKNOWN`) is still a true statement and none was removed.
+
+## Release shape v2 (owner CONFIRMED 2026-11-12)
+
+A release does ONE large run per die family (Turing, Ampere, Ada, Blackwell): the **flagship die runs the full LARGE profile**, the **second die
+runs the MIDDLE profile** (small as a sub-run): 4 large + 4 middle. The large run's SPECviewperf is split over two boxes (lane A and lane B on
+separate rentals, 2 SPEC legs per large die, `requiresSeparateRentals`), so a release is 4 x 2 large boxes + 4 middle boxes = **12 rentals** with
+SPEC (8 without: a large die is then one box that runs the Windows gate twice). Peak concurrency is 8, not 12: lane B of a die waits for its lane A
+(`waitForLeg`), and a release may hold at most 8 slots (`MAX_CONCURRENT_RENTALS` is a single digit, release = cap - 1). Release cost target about
+20 USD (`RELEASE_COST_CAP_USD=20`, no reruns by default). Marking: the shape is OWNER DECISION; the code facts below are CODE READ and
+tested GPU-free; every cost number is the planner's WORST CASE on an offer list, never a measurement.
+
+- Matrix data: `policy.full_profile_dies_per_family: 1`, `policy.second_die_profile: "middle"`; a flagship row has `profile: "full"`, a second-die row
+  `profile: "middle"` (validated per role). `dies_per_die_family: 2`, `die_count: 8` and the per-die drivers, sub-runs and cross sub-runs are unchanged.
+- A middle leg is one box: one Windows run, the apps pair, no SPEC lanes, no extra stages (`KF_TIER=middle`), rented with its own hard limit
+  `RELEASE_MIDDLE_HARD_RUNTIME_MINUTES` (default 240, INFERRED from the middle tier's measured 101 min on a 4090 and a slow-host factor of about 2.3;
+  may only be lowered, never above the release limit). The planner prices it with that limit (`est_usd`, `hard_minutes` on the leg); the large legs keep
+  the 300-minute price.
+- **CPU-vendor rule** (`policy.cpu_vendor_min: {amd: 1, intel: 1}`, `policy.cpu_vendor_scope: "full"`): over ALL large boxes of all families at least one
+  box on an Intel and one on an AMD host CPU; every other box any x86 CPU; middle boxes are unconstrained and never count.
+  Planner: each die's cheapest admissible offers first; if the large set lacks a vendor, ONE slot at a time is swapped to the cheapest admissible
+  other-vendor offer of the same die (same matrix host filter; the SPEC lanes of a die stay on different machines when two are offered), never trading
+  one required vendor for the other; the legs that cover a vendor are pinned to it (`cpuVendor`) so the rent step cannot wander. If no admissible
+  combination covers both vendors the plan is refused with `CPU_VENDOR_MISSING` and `INCOMPLETE` (never admitted, never PASS). The vendor comes from the
+  offer's `cpu_name` (AMD/EPYC/Ryzen = amd, Intel/Xeon/Core = intel, ARM-like = arm and never planned, anything else = other: counts for neither).
+  Judge: a release is PASS only if, besides every cell, a PASSING large leg per required vendor has a rent-time vendor (offer `cpu_name`) AND a box
+  report (`host_claims.cpu_vendor`) that agree; a mismatch, a missing report or a missing vendor leaves the release `INCOMPLETE` with reason
+  `CPU_VENDOR_MISSING`. A claim alone can never satisfy the rule.
+- Not built here (still blockers, unchanged): the driver sub-run executor, the payload side of a middle leg inside a release batch (the payload refuses
+  every `KF_RELEASE_*` environment while the matrix is proposed), the proprietary-image CPU-profile interaction (AuthenticAMD guest profile: proprietary
+  stages only on AMD large boxes, `NOT_RUN` with `CPU_VENDOR` on the Intel one; DESIGN-ONLY, `/root/night/RELEASE_GATE_READINESS.md`).
+
+## Superseded in part (2026-11-12)
+
+The paragraphs below record the 2026-11-07 shape (eight FULL runs). Where they say "eight dies, one full run each, two Windows runs per die", the
+release shape v2 above governs: only the four flagship dies run the full profile.
 
 # Release matrix: dies, die families and driver families
 

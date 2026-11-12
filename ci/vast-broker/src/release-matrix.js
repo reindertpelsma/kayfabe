@@ -1,6 +1,21 @@
 // Proposed release data, never a hardware qualification. Owner decisions: 2026-11-07.
 import matrix from '../release-matrix.json' with { type: 'json' };
 export const RELEASE_MATRIX = matrix;
+// CPU vendors the release rule counts (owner 2026-11-12: at least one large box on an Intel and one on an AMD host CPU).
+export const CPU_VENDOR_REQUIRED = Object.freeze(['amd', 'intel']);
+// The vendor of a Vast offer's `cpu_name` ("AMD EPYC 7763", "Intel(R) Xeon(R) Gold 6338"). 'arm' = a CPU kayfabe cannot run
+// on (every box is x86), 'other' = unknown or unrecognised: it counts for neither vendor and is never guessed.
+export function vendorOfCpuName(name) {
+  if (typeof name !== 'string' || name.length === 0 || name.length > 128) return 'other';
+  if (/\b(?:arm|aarch64|neoverse|graviton|cortex|apple|kunpeng|ampere\s+altra)/i.test(name))
+    return 'arm';
+  if (/\b(?:amd|epyc|ryzen|threadripper)\b/i.test(name)) return 'amd';
+  if (/\b(?:intel|xeon|core\s*\(?tm\)?|core\s+i[3579]|celeron|pentium)\b/i.test(name))
+    return 'intel';
+  return 'other';
+}
+// 'large' = the die's full profile (flagship, SPEC lanes, two Windows gates); 'middle' = the second die.
+export const legTierOfRow = (row) => (row?.profile === 'middle' ? 'middle' : 'large');
 const AXES = ['host_driver', 'linux_guest_driver', 'windows_guest_driver'];
 export const driverVersion = (v) =>
   typeof v === 'string' && /^[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?$/.test(v) && !v.includes('\n');
@@ -158,6 +173,10 @@ export function validateReleaseMatrix(value, cfg) {
         'dies_per_die_family',
         'boxes_per_die',
         'parallel_boxes',
+        'full_profile_dies_per_family',
+        'second_die_profile',
+        'cpu_vendor_min',
+        'cpu_vendor_scope',
         'full_profile',
         'subrun_profiles',
         'die_families',
@@ -174,7 +193,19 @@ export function validateReleaseMatrix(value, cfg) {
         p.allow_adjacent_driver_families === false &&
         JSON.stringify(p.die_families) === JSON.stringify(Object.keys(cfg.families)) &&
         p.dies_per_die_family === cfg.releaseDiesPerFamily &&
-        p.die_count === p.dies_per_die_family * p.die_families.length,
+        p.die_count === p.dies_per_die_family * p.die_families.length &&
+        // Owner 2026-11-12 (release shape): one FULL (large) die per family, every other die runs the middle profile.
+        p.full_profile_dies_per_family === 1 &&
+        p.second_die_profile === 'middle' &&
+        p.subrun_profiles.includes(p.second_die_profile) &&
+        p.cpu_vendor_scope === p.full_profile &&
+        keys(p.cpu_vendor_min, CPU_VENDOR_REQUIRED) &&
+        CPU_VENDOR_REQUIRED.every(
+          (v) =>
+            Number.isSafeInteger(p.cpu_vendor_min[v]) &&
+            p.cpu_vendor_min[v] >= 0 &&
+            p.cpu_vendor_min[v] <= p.full_profile_dies_per_family * p.die_families.length * 2,
+        ),
       'policy schema',
     )
   )
@@ -251,7 +282,7 @@ export function validateReleaseMatrix(value, cfg) {
     bad(
       ['flagship', 'second'].includes(row.role) &&
         ['proposed', 'executable'].includes(row.status) &&
-        row.profile === p.full_profile,
+        row.profile === (row.role === 'flagship' ? p.full_profile : p.second_die_profile),
       label + ' role/status/profile schema',
     );
     bad(

@@ -364,7 +364,12 @@ test('tierEnvironment: the marker is large/release only and never beside a matri
     winApps: 'mid',
   });
   assert.deepEqual(middleAppsRequest('release', 'large', false), {});
-  assert.deepEqual(middleAppsRequest('release', 'middle', true), {});
+  // 2026-11-12 (release shape v2): a release MIDDLE leg asks for the apps pair too.
+  assert.deepEqual(middleAppsRequest('release', 'middle', true), {
+    linuxApps: true,
+    winApps: 'mid',
+  });
+  assert.deepEqual(middleAppsRequest('release', 'small', true), {});
   assert.deepEqual(middleAppsRequest('check', 'large', true), {});
   const e = tierEnvironment('release', {
     tierName: 'large',

@@ -444,6 +444,7 @@
   "releaseDailyCount": 24,
   "releaseCostCap": 40,
   "releaseHardMinutes": 300,
+  "releaseMiddleHardMinutes": 240,
   "maxConcurrentRelease": 8,
   "releaseRerunsPerLeg": 1,
   "releaseStartWindowMinutes": 360,

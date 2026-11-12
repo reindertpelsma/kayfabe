@@ -101,7 +101,7 @@ for (const tier of ['small', 'large'])
 import { offlinePlan } from '../release-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { setup, sha } from './helpers.js';
-test('release estimate reserves the large allowance on every full leg', async () => {
+test('release estimate reserves the large allowance on every large leg and the middle limit on every middle leg', async () => {
   const market = JSON.parse(
     readFileSync(new URL('./fixtures/release-market-synthetic.json', import.meta.url)),
   ).offers;
@@ -110,15 +110,19 @@ test('release estimate reserves the large allowance on every full leg', async ()
   const cfg = cfgFor('large');
   const expected = plan.families
     .flatMap((f) => f.cells.flatMap((c) => c.legs))
-    .reduce(
-      (sum, l) =>
+    .reduce((sum, l) => {
+      const price = offerPrice(
+        market.find((o) => o.id === l.offer_id),
+        cfg,
+      );
+      // The large allowance (130 GB, 300 GB disk) is reserved on every leg; a middle leg is priced at the middle hard limit.
+      return (
         sum +
-        offerPrice(
-          market.find((o) => o.id === l.offer_id),
-          cfg,
-        ).total,
-      0,
-    );
+        (l.leg_tier === 'middle'
+          ? (price.computeStorage * (240 * 60000 + cfg.cronPeriod)) / 3600000 + price.bandwidth
+          : price.total)
+      );
+    }, 0);
   assert.ok(Math.abs(plan.estimate_usd - expected) < 0.002);
   assert.equal(plan.resource_profile.bandwidthDownGb, 130);
   assert.equal(plan.resource_profile.diskGb, 300);

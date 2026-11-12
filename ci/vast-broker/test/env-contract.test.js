@@ -126,6 +126,16 @@ test('the whole environment of a mocked signed middle rental passes the box cont
 // put both opt-ins into the environment; every other tier/profile must carry neither.
 // Killers: (1) the exact-value asserts below, (2) the SPEC membership of each emitted name.
 import { middleAppsRequest } from '../src/tier.js';
+// Release shape v2 (2026-11-12): a release MIDDLE leg (the second die of a family) asks for the apps pair too.
+test('a release middle leg carries the apps pair; a release small or adhoc leg does not', () => {
+  assert.deepEqual(middleAppsRequest('release', 'middle', true), {
+    linuxApps: true,
+    winApps: 'mid',
+  });
+  assert.deepEqual(middleAppsRequest('release', 'middle', false), {});
+  assert.deepEqual(middleAppsRequest('release', 'small', true), {});
+  assert.deepEqual(middleAppsRequest('release', 'adhoc', true), {});
+});
 test('the middle and large tier requests carry KF_LINUX_APPS=1 and KF_WINAPPS=mid, and only they', () => {
   const env = tierEnvironment('check', {
     tierName: 'middle',
@@ -141,7 +151,6 @@ test('the middle and large tier requests carry KF_LINUX_APPS=1 and KF_WINAPPS=mi
     ['check', 'small', true],
     ['check', 'adhoc', true],
     ['sweep', 'middle', true],
-    ['release', 'middle', true],
     ['release', 'small', true],
     ['check', 'large', true],
     ['sweep', 'large', true],

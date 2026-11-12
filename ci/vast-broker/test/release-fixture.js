@@ -98,3 +98,10 @@ export function subrunSuites(row) {
   }
   return [...names].map((name) => ({ name, pass: 1, fail: 0, skip: 0 }));
 }
+// A matrix copy WITHOUT the CPU-vendor rule, for the single-leg verdict tests that are about other things (matrix coverage,
+// SPEC rows). Whole-release tests keep the rule; the vendor rule has its own tests (test/release-cpu-vendor.test.js).
+// Evaluated at call time so it follows matrixTest's in-place swap of RELEASE_MATRIX.
+export const withoutVendorRule = () => ({
+  ...RELEASE_MATRIX,
+  policy: { ...RELEASE_MATRIX.policy, cpu_vendor_min: { amd: 0, intel: 0 } },
+});

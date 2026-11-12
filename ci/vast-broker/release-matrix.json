@@ -1,12 +1,19 @@
 {
   "schema_version": 1,
   "status": "proposed",
-  "date": "2026-11-07",
+  "date": "2026-11-12",
   "policy": {
     "die_count": 8,
     "dies_per_die_family": 2,
     "boxes_per_die": 1,
     "parallel_boxes": 8,
+    "full_profile_dies_per_family": 1,
+    "second_die_profile": "middle",
+    "cpu_vendor_min": {
+      "amd": 1,
+      "intel": 1
+    },
+    "cpu_vendor_scope": "full",
     "full_profile": "full",
     "subrun_profiles": [
       "middle",
@@ -91,7 +98,7 @@
       "die_family": "turing",
       "role": "second",
       "status": "proposed",
-      "profile": "full",
+      "profile": "middle",
       "drivers": {
         "host_driver": "580.65.06",
         "linux_guest_driver": "580.65.06",
@@ -184,7 +191,7 @@
       "die_family": "ampere",
       "role": "second",
       "status": "proposed",
-      "profile": "full",
+      "profile": "middle",
       "drivers": {
         "host_driver": "580.82.07",
         "linux_guest_driver": "580.82.07",
@@ -277,7 +284,7 @@
       "die_family": "ada",
       "role": "second",
       "status": "proposed",
-      "profile": "full",
+      "profile": "middle",
       "drivers": {
         "host_driver": "580.94.02",
         "linux_guest_driver": "580.94.02",
@@ -372,7 +379,7 @@
       "die_family": "blackwell",
       "role": "second",
       "status": "proposed",
-      "profile": "full",
+      "profile": "middle",
       "drivers": {
         "host_driver": "580.105.08",
         "linux_guest_driver": "580.105.08",
