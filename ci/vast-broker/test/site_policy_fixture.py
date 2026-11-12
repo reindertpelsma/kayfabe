@@ -51,7 +51,10 @@ if case in {"site", "docs", "workflow", "removed", "renamed-out", "renamed-in"}:
         files[0]["status"] = "removed"
     expected, deploy = True, variant != "pr"
 if case in {"odd", "unknown-status", "count", "missing", "sha", "truncated", "too-many-files"}:
-    expected, known = True, False
+    # A PR with unknown paths builds but never deploys. A push to master with unknown paths builds AND
+    # deploys: the filter only avoids redundant deployments (owner 2026-11-12).
+    expected, known = True, variant == "push"
+    deploy = variant == "push"
 if case == "odd":
     files[0]["filename"] = "src/odd\\name"
 if case == "unknown-status":
@@ -335,14 +338,7 @@ if case in {"untouched", "site", "missing"}:
         sys.argv = ["site_policy.py", "policy"]
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
-            if variant == "push" and case == "missing":
-                try:
-                    m.main()
-                    raise AssertionError("uncertain push authorized deployment")
-                except ValueError:
-                    pass
-            else:
-                m.main()
+            m.main()
         outputs = dict(line.split("=", 1) for line in output_path.read_text().splitlines())
         assert outputs["run"] == str(int(expected))
         assert outputs["deploy"] == str(int(deploy))

@@ -117,17 +117,28 @@ def decide(event, name, ref, sha, get=api):
         ):
             return {"run": True, "deploy": True, "known": True}
         if name == "push" and ref == "refs/heads/master":
-            before = event["before"]
-            if not re.fullmatch(SHA, before) or before == "0" * 40 or event["after"] != sha:
-                return unknown
-            diff = get("/compare/" + before + "..." + sha + "?per_page=100")
-            if diff["base_commit"]["sha"] != before or diff["status"] not in {"ahead", "identical"}:
-                return unknown
-            files = diff["files"]
-            if not isinstance(files, list) or len(files) >= 300:
-                return unknown
-            needed = paths_needed(files)
-            return {"run": needed, "deploy": needed, "known": True}
+            # The path filter only avoids REDUNDANT deployments of master; it is never a correctness
+            # requirement. Whenever the changed paths cannot be established (compare failure, a push range
+            # that is not a clean fast-forward, 300 or more files, a malformed event) the answer is to
+            # build and deploy master anyway: updating the site from master is always allowed.
+            redundant_ok = {"run": True, "deploy": True, "known": True}
+            try:
+                before = event["before"]
+                if not re.fullmatch(SHA, before) or before == "0" * 40 or event["after"] != sha:
+                    return redundant_ok
+                diff = get("/compare/" + before + "..." + sha + "?per_page=100")
+                if diff["base_commit"]["sha"] != before or diff["status"] not in {
+                    "ahead",
+                    "identical",
+                }:
+                    return redundant_ok
+                files = diff["files"]
+                if not isinstance(files, list) or len(files) >= 300:
+                    return redundant_ok
+                needed = paths_needed(files)
+                return {"run": needed, "deploy": needed, "known": True}
+            except Exception:
+                return redundant_ok
     except Exception:
         pass
     return unknown
