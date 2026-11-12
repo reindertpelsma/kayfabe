@@ -17,6 +17,7 @@
 //! Production runs the steps back to back; an error ends the turn (the in-flight entry is dropped and re-loaded by
 //! the next turn, exactly as the straight-line code did).
 
+use crate::user_chunk::{Fed, Refusal as ChunkRefusal, Stream};
 use crate::user_gate::{Gate, Grace, Marks, SyncGate};
 use crate::user_lazy::{Invalidate, Lazy, LazyConfig};
 use crate::user_lifecycle::{GP_SYNC_WAIT, Lifecycle, Mode, Obs, Plan, ScanPermit};
@@ -81,6 +82,10 @@ pub enum Phase {
     PbRead,
     /// Scan it.
     ScanStep,
+    /// Read/classify one bounded part of an intact descriptor.
+    Part,
+    /// Publish an intact descriptor after all parts passed.
+    PubStream,
 }
 
 /// What a guest entry publication is (the trace text only).
@@ -90,6 +95,8 @@ pub enum PubKind {
     Pointer,
     /// A control entry (`LENGTH == 0`).
     Control,
+    /// Classified by bounded parts; the original word is preserved.
+    Stream,
 }
 
 /// The gate / marker / retry events the owner counts or reports.
@@ -99,8 +106,8 @@ pub enum Ev {
     PutBound,
     /// Hardware-format validation refused the loaded value.
     EntryRefused,
-    /// Scan/Window would require a snapshot above the trusted per-copy bound.
-    ScanBudget,
+    /// A trigger requires a whole patched span above staging.
+    StagedSpanBudget,
     /// The scan refused a segment for good.
     ScanRefused,
     /// A SYNC_WAIT entry behind an open packet was read at once.
@@ -235,6 +242,31 @@ pub trait Io {
     fn sw_matches(&self, value: u32) -> bool;
     /// Read the entry's pushbuffer (the words and whether it came from video memory). `entry` is the loaded GP entry.
     fn read_pb(&mut self, entry: u64, seg: &GpSegment) -> Turn<(Vec<u32>, bool)>;
+    /// Fallibly reserve bounded receipt storage before the first part.
+    fn begin_stream(&mut self) -> Turn<()> {
+        Ok(())
+    }
+    /// Copy exactly one bounded part and retain its source receipt. REQUIRED (no default): an implementation that
+    /// forgot it would read a part without keeping the receipt that publication re-admits.
+    fn read_part(&mut self, entry: u64, seg: &GpSegment, part: u8) -> Turn<(Vec<u32>, bool)>;
+    /// Re-admit all source receipts and publish the original word once. REQUIRED (no default): a default that fell
+    /// back to `publish_entry` would publish a streamed word without re-admitting its parts.
+    fn publish_streamed(
+        &mut self,
+        fetch: &mut Fetch,
+        generation: u64,
+        guest_get: u32,
+        entry: u64,
+        parts: u8,
+    ) -> Turn<()>;
+    /// After `publish_streamed` returned `Retry`: the cause was only a busy lock or walk (the receipts are as valid as
+    /// before), not a changed source or a changed software object. The relay then keeps the stream and retries ONLY the
+    /// publication; otherwise the stream restarts from part 0.
+    fn retry_keeps_stream(&self) -> bool {
+        false
+    }
+    /// Drop owned source receipts on completion, restart or teardown.
+    fn drop_receipts(&mut self) {}
     /// Classify the words against the scan state (production: the software snapshot and `stage_plan`).
     fn stage(&mut self, scan: &Scan, words: &[u32]) -> Turn<Staged>;
     /// `inspect_entry` accepted `entry`: the value the relay tested (a test hook; the value stored must be this one).
@@ -331,6 +363,17 @@ pub struct Relay {
     seed: bool,
     plan_forward: bool,
     permit: Option<ScanPermit>,
+    stream: Option<Stream>,
+    stream_planned: bool,
+    stream_maximum: u64,
+    discard_receipts: bool,
+    /// A stream restart (not a kept retry) ended this turn: the owner must re-serve at once (nobody holds a lock to
+    /// wake it). Reset by `claim`.
+    pub restart_owed: bool,
+    /// The retry that ended this turn kept the stream (a retried part copy or a busy-only publication); reset by `claim`.
+    retry_kept: bool,
+    /// Restarts of the segment now streaming (reset at publication, ring switch and retire).
+    stream_restart_run: u32,
 }
 
 impl Relay {
@@ -378,6 +421,13 @@ impl Relay {
             seed: false,
             plan_forward: false,
             permit: None,
+            stream: None,
+            stream_planned: false,
+            stream_maximum: 0,
+            discard_receipts: false,
+            restart_owed: false,
+            retry_kept: false,
+            stream_restart_run: 0,
         })
     }
 
@@ -423,12 +473,24 @@ impl Relay {
             self.written_get,
             u8::from(self.put_full),
         ) + &self.lazy.key()
+            + &self
+                .stream
+                .as_ref()
+                .map(|s| format!("|stream={s:?}"))
+                .unwrap_or_default()
+            + if self.discard_receipts {
+                "|discard_receipts"
+            } else {
+                ""
+            }
     }
 
     /// Start a turn.
     pub fn claim(&mut self) {
         self.need = Need::Idle;
         self.again = false;
+        self.restart_owed = false;
+        self.retry_kept = false;
         self.scan_failed = false;
         self.published = None;
         self.phase = Phase::Obs;
@@ -447,6 +509,9 @@ impl Relay {
     /// GET are untouched; the guest's `GP_GET` is taken to be 0 until [`Relay::new_ring_get`] says otherwise; and the
     /// lifecycle keeps a Window open over the new ring's first entries ([`Lifecycle::source_switched`]).
     pub fn switch_source(&mut self, generation: u64) {
+        self.cancel_stream();
+        // the segment that was streaming is abandoned: its restarts must not be charged to the next one
+        self.stream_restart_run = 0;
         self.generation = generation;
         self.cursor = 0;
         self.grace.clear();
@@ -473,8 +538,29 @@ impl Relay {
     /// The channel was freed: the lifecycle machine is torn down (terminal) and nothing cached survives. The pump calls it
     /// where it used to call `Lifecycle::teardown` itself.
     pub fn retire(&mut self) {
+        self.cancel_stream();
+        self.stream_restart_run = 0;
         self.lazy.invalidate(Invalidate::Retire);
         self.life.teardown();
+    }
+
+    /// Discard classification metadata; the adapter drops its receipts too.
+    /// Returns whether actual parts were pending (a restart obligation).
+    pub fn cancel_stream(&mut self) -> bool {
+        let had = self.stream.take().is_some();
+        if had || self.stream_planned {
+            self.discard_receipts = true;
+            self.permit = None;
+        }
+        self.stream_planned = false;
+        self.stream_maximum = 0;
+        had
+    }
+
+    /// The retry that ended the turn kept the stream and its receipts (the owner must not drop them).
+    #[must_use]
+    pub fn retry_kept_stream(&self) -> bool {
+        self.retry_kept
     }
 
     /// No turn is running.
@@ -509,9 +595,41 @@ impl Relay {
     /// # Errors
     /// A refusal or a retry request from the I/O or from the entry's own validation.
     pub fn step(&mut self, io: &mut impl Io) -> Turn<Step> {
+        let phase = self.phase;
         let r = self.step_inner(io);
         if let Err(e) = &r {
+            // A retried part copy (any `Retry` there: the failed part was never pushed), or a publication that was only
+            // busy, keeps the stream and its receipts: the parts
+            // already copied are re-admitted at publication whatever happens, so keeping them is as safe as copying
+            // again, and a ten-part segment does not need eleven clean turns in a row.
+            let keep = matches!(e, Fail::Retry)
+                && self.stream.is_some()
+                && match phase {
+                    Phase::Part => true,
+                    Phase::PubStream => io.retry_keeps_stream(),
+                    _ => false,
+                };
+            if keep {
+                self.retry_kept = true;
+                if phase == Phase::PubStream {
+                    self.life.stream_publish_retried();
+                }
+                self.phase = Phase::Idle;
+                return r;
+            }
+            let restart = self.cancel_stream();
+            if self.discard_receipts {
+                io.drop_receipts();
+                self.discard_receipts = false;
+            }
             self.phase = Phase::Idle;
+            if matches!(e, Fail::Retry) && restart {
+                self.stream_restart_run = self.stream_restart_run.saturating_add(1);
+                self.life.stream_restarted(self.stream_restart_run);
+                self.restart_owed = true;
+                self.again = true;
+                self.set_need(Need::Again);
+            }
             if matches!(e, Fail::Refused(_)) {
                 self.dead = true;
                 // the relay stops and the guest's channel is reset: nothing remembered survives
@@ -530,6 +648,10 @@ impl Relay {
         match self.phase {
             Phase::Idle => Ok(Step::Idle { submitted: false }),
             Phase::Obs => {
+                if self.discard_receipts {
+                    io.drop_receipts();
+                    self.discard_receipts = false;
+                }
                 // ★ lazy observe (B): the private `USERD` is read on every turn unless the relay is in Pointer mode and
                 // nothing forces a look. A stale view only lowers credit and delays gates and write-backs.
                 let mode = self.life.mode();
@@ -543,7 +665,7 @@ impl Relay {
                     mode,
                     entries,
                     self.fetch.available(),
-                    self.segment_pending,
+                    self.segment_pending || self.stream.is_some(),
                     self.sync.waiting(),
                 ) {
                     let (get, reference) = io.hw_words()?;
@@ -575,6 +697,12 @@ impl Relay {
                 }
                 self.phase = if self.segment_pending {
                     Phase::Segment
+                } else if let Some(stream) = &self.stream {
+                    if stream.done() {
+                        Phase::PubStream
+                    } else {
+                        Phase::Part
+                    }
                 } else {
                     Phase::Put
                 };
@@ -627,6 +755,8 @@ impl Relay {
                 Ok(Step::More)
             }
             Phase::ScanStep => self.scan_step(io),
+            Phase::Part => self.part_step(io),
+            Phase::PubStream => self.publish_stream(io),
         }
     }
 
@@ -724,16 +854,10 @@ impl Relay {
                 seed_gate,
                 permit,
             } => {
+                self.stream_planned = false;
                 if let Source::Segment(d) = desc {
-                    let maximum = io.max_scan_bytes();
-                    if d.len_bytes > maximum {
-                        io.event(Ev::ScanBudget);
-                        self.life.scan_budget_refused();
-                        return Err(format!(
-                            "USER_RING_SCAN_BUDGET len={} max={maximum} mode={:?} entry={:#018x} cursor={:#x} put={:#x}",
-                            d.len_bytes, self.life.mode(), self.raw, self.cursor, self.put
-                        ).into());
-                    }
+                    self.stream_maximum = io.max_scan_bytes();
+                    self.stream_planned = d.len_bytes > self.stream_maximum;
                 }
                 if restart {
                     // The first entry of a Fresh window, at the anchor (a GP_PUT value): parser state restarted,
@@ -809,6 +933,7 @@ impl Relay {
                 io.event(Ev::GateProceeded);
                 self.phase = match self.desc {
                     Some(Source::Nop) => Phase::PubNop,
+                    _ if self.stream_planned => Phase::Part,
                     _ => Phase::PbRead,
                 };
                 if self.phase == Phase::PubNop {
@@ -888,6 +1013,144 @@ impl Relay {
                 Err(e)
             }
         }
+    }
+
+    fn part_step(&mut self, io: &mut impl Io) -> Turn<Step> {
+        // Continuations bypass Put: preserve the snapshot adapter's walk gate on every part.
+        if io.walk_busy() {
+            return self.idle_step(false);
+        }
+        if self.stream.is_none() {
+            let Some(Source::Segment(desc)) = self.desc else {
+                return Err("USER_RING_STREAM_FORMAT".into());
+            };
+            let begun = Stream::begin(desc, self.raw, &self.scan, self.stream_maximum);
+            self.stream = Some(begun.map_err(|e| {
+                format!(
+                    "USER_RING_STREAM {e:?} len={} max={} mode={:?} entry={:#018x} cursor={:#x} put={:#x} live={} post_switch={} stream_restarts_total={}",
+                    desc.len_bytes,
+                    self.stream_maximum,
+                    self.life.mode(),
+                    self.raw,
+                    self.cursor,
+                    self.put,
+                    io.registry_live(),
+                    self.life.post_switch_remaining(),
+                    self.life.counts().stream_restarts
+                )
+            })?);
+            io.begin_stream()?;
+        }
+        let stream = self.stream.as_ref().ok_or("USER_RING_STREAM_ABSENT")?;
+        let (va, bytes) = stream.next_read().ok_or("USER_RING_STREAM_BOUND")?;
+        let part = stream.parts();
+        let (words, vram) = io.read_part(
+            self.raw,
+            &GpSegment {
+                gpu_va: va,
+                len_bytes: bytes,
+            },
+            part,
+        )?;
+        let permit = self.permit.as_ref().ok_or("USER_RING_PERMIT_ABSENT")?;
+        let copied = words.len().checked_mul(4).ok_or("USER_RING_STREAM_BOUND")?;
+        self.life.note_pb_read(permit, copied, vram);
+        let result = self
+            .stream
+            .as_mut()
+            .ok_or("USER_RING_STREAM_ABSENT")?
+            .feed(&words, |v| io.sw_matches(v));
+        match result {
+            Ok(Fed::More) => {
+                self.again = true;
+                self.set_need(Need::Again);
+                self.idle_step(false)
+            }
+            Ok(Fed::Done) => {
+                self.phase = Phase::PubStream;
+                Ok(Step::More)
+            }
+            Err(ChunkRefusal::StagedSpanBudget { at_word }) => {
+                io.event(Ev::StagedSpanBudget);
+                self.life.staged_span_budget_refused();
+                let len = match self.desc {
+                    Some(Source::Segment(d)) => d.len_bytes,
+                    _ => 0,
+                };
+                let (live, post_switch) = (io.registry_live(), self.life.post_switch_remaining());
+                Err(format!("USER_RING_STAGED_SPAN_BUDGET len={len} trigger_at={at_word} max={} mode={:?} entry={:#018x} cursor={:#x} put={:#x} live={live} post_switch={post_switch} stream_restarts={} stream_restarts_total={}",
+                    self.stream_maximum, self.life.mode(), self.raw, self.cursor, self.put, self.stream_restart_run, self.life.counts().stream_restarts).into())
+            }
+            Err(ChunkRefusal::Scan(e)) => {
+                let was_retrying = self.grace.retrying();
+                if !was_retrying {
+                    self.life.scan_refused();
+                }
+                let why = format!("USER_RING_SCAN {e:?}");
+                if self.grace.refused(self.generation, self.cursor) {
+                    io.event(Ev::Retry {
+                        why,
+                        was_retrying,
+                        cursor: self.cursor,
+                    });
+                    self.cancel_stream();
+                    self.stream_restart_run = self.stream_restart_run.saturating_add(1);
+                    self.life.stream_restarted(self.stream_restart_run);
+                    io.drop_receipts();
+                    self.discard_receipts = false;
+                    self.again = true;
+                    self.set_need(Need::Again);
+                    self.idle_step(false)
+                } else {
+                    self.scan_failed = true;
+                    io.event(Ev::ScanRefused);
+                    Err(why.into())
+                }
+            }
+            Err(e) => Err(format!("USER_RING_STREAM {e:?}").into()),
+        }
+    }
+
+    fn publish_stream(&mut self, io: &mut impl Io) -> Turn<Step> {
+        if self.fetch.available() < 2 {
+            self.credit_need(io)?;
+            return self.idle_step(false);
+        }
+        let stream = self
+            .stream
+            .as_ref()
+            .filter(|s| s.done())
+            .ok_or("USER_RING_STREAM_INCOMPLETE")?;
+        let raw = stream.entry();
+        io.publish_streamed(
+            &mut self.fetch,
+            self.generation,
+            self.next_get,
+            raw,
+            stream.parts(),
+        )?;
+        let stream = self.stream.take().ok_or("USER_RING_STREAM_ABSENT")?;
+        self.life.segment_streamed(stream.parts());
+        self.stream_restart_run = 0;
+        self.scan = stream.into_scan();
+        self.life.segment_scanned(self.scan.carried().is_some());
+        let cursor = self.cursor;
+        self.cursor = self.next_get;
+        self.note_relayed(raw);
+        self.count_put();
+        self.published = Some(Published::Entry {
+            kind: PubKind::Stream,
+            cursor,
+            entry: raw,
+        });
+        self.unnotified = true;
+        self.again = true;
+        self.stream_planned = false;
+        self.stream_maximum = 0;
+        self.permit = None;
+        self.grace.clear();
+        io.drop_receipts();
+        self.idle_step(true)
     }
 
     fn publish_marker(&mut self, io: &mut impl Io) -> Turn<()> {
