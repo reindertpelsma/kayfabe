@@ -72,6 +72,9 @@ jobs:
           node ci/vast-broker/release-matrix-mutants.mjs
           # RV1 admission/receipt grading and both SPEC lanes: two named killers each.
           node ci/vast-broker/release-safety-mutants.mjs
+          # Release resilience (2026-11-12): a failed rental is replaced alone, never a FAIL; killers per mutant are stated in the script.
+          node ci/vast-broker/release-resilience-mutants.mjs
+          node ci/vast-broker/release-vendor-mutants.mjs
           # RV2 attribution, SPEC contract and finite-resource regressions: >=2 killers each.
           node ci/vast-broker/rv2-mutants.mjs
           # Official driver pins and media drift: two named killers per mutant.

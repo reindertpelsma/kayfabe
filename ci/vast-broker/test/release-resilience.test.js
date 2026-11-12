@@ -843,3 +843,125 @@ test('pinForRerun keeps the leg pin, else the vendor it rented when nobody else 
   assert.equal(pinForRerun(b, { ...b.legs[4], legTier: 'middle' }, min), undefined);
   assert.equal(pinForRerun(b, b.legs[4], { amd: 0, intel: 0 }), undefined);
 });
+
+// Create answers HTTP 500. `ghost`: the instance really is started on the provider (labelled, with the onstart script) before the
+// error; otherwise nothing is created. `asks` is a Set of offer ids, or 'all'. `seen` receives (ask, stored batch) at every ask.
+function failingCreate(h, asks, { ghost, seen } = {}) {
+  const base = h.cloud.fetch;
+  h.cloud.fetch = async (url, init) => {
+    const m = String(url).match(/\/api\/v0\/asks\/(\d+)/);
+    if (m && seen)
+      seen.push([Number(m[1]), [...(await h.storage.list({ prefix: 'batch:' })).values()][0]]);
+    if (m && (asks === 'all' || asks.has(Number(m[1])))) {
+      if (ghost) await base(url, init);
+      return new Response('upstream', { status: 500 });
+    }
+    return base(url, init);
+  };
+  h.restart();
+}
+const workerInstances = (h) =>
+  [...h.cloud.instances.values()].filter(
+    (x) => x.label?.startsWith('kf-ci-') && x.label !== 'kf-ci-unrecorded',
+  );
+async function sweepUntilDone(h, id, observe) {
+  let batch;
+  for (let i = 0; i < 120; i++) {
+    h.time.value += 5 * 60000;
+    await h.service.sweep();
+    await observe?.();
+    batch = await batchOf(h, id);
+    if (batch.state !== 'RUNNING') break;
+  }
+  return batch;
+}
+
+matrixTest(
+  '(a) a create that starts the instance and then answers HTTP 500: reconciled, destroyed at the boot limit and charged, one replacement, PASS, no instance left',
+  async () => {
+    const h = await harness();
+    const planned = await plannedOffer(h, 'AD102', 'lanea');
+    const seen = [];
+    failingCreate(h, new Set([planned.offer_id]), { ghost: true, seen });
+    const id = await start(h);
+    let batch = await batchOf(h, id);
+    const a = legOf(batch, 'AD102', 'lanea')[0];
+    assert.equal(a.state, 'STARTED');
+    assert.equal(h.cloud.creates, 8, 'the other 7 legs rented in the same tick');
+    // the unproven leg was stored as STARTED before the next leg rented, so that leg's contract check sees its liability
+    const ghostAt = seen.findIndex(([ask]) => ask === planned.offer_id);
+    assert.ok(ghostAt >= 0 && ghostAt < seen.length - 1, 'legs were rented after the ghost');
+    for (const [, stored] of seen.slice(ghostAt + 1))
+      assert.equal(stored.legs.find((l) => l.key === a.key).state, 'STARTED');
+    const healthy = batch.legs.filter((l) => l.key !== a.key && l.state === 'STARTED');
+    await advance(h, 5, healthy, 5);
+    assert.equal((await recordOf(h, a)).idSource, 'reconcile', 'found by label');
+    await advance(h, 90, healthy, 5);
+    const ra = await recordOf(h, a);
+    assert.equal(ra.verdict, 'PROVIDER_FAULT');
+    assert.ok(h.cloud.deletes.includes(String(ra.id)), 'destroyed');
+    batch = await batchOf(h, id);
+    assert.ok(batch.legs.find((l) => l.key === a.key).costUsd > 0, 'charged');
+    assert.equal(batch.legs.filter((l) => l.rerunOf === a.key).length, 1);
+    const done = await finishAll(h, id, 'pass', 8);
+    assert.equal(done.verdict, 'PASS');
+    assertMatrixCovered(done);
+    for (const x of workerInstances(h)) {
+      const r = await h.storage.get('record:' + x.label.replace('kf-ci-', ''));
+      assert.notEqual(r?.ended ?? null, null, 'no open instance left: ' + x.label);
+    }
+  },
+);
+for (const ghost of [true, false])
+  matrixTest(
+    '(a) every create answers HTTP 500 (' +
+      (ghost ? 'instances exist' : 'nothing created') +
+      '): bounded attempts, boxes and spend, INCOMPLETE',
+    async () => {
+      const h = await harness();
+      failingCreate(h, 'all', { ghost });
+      const id = await start(h);
+      let maxOpen = 0,
+        maxInstances = 0;
+      const batch = await sweepUntilDone(h, id, async () => {
+        maxOpen = Math.max(maxOpen, (await openRecords(h)).length);
+        maxInstances = Math.max(maxInstances, workerInstances(h).length);
+      });
+      assert.equal(batch.state, 'DONE');
+      assert.equal(batch.verdict, 'INCOMPLETE');
+      assert.ok(h.cloud.createAttempts.length <= 24, 'at most 12 legs x 2 attempts');
+      assert.ok(batch.legs.every((l) => l.rerunDepth <= 1));
+      assert.ok(maxOpen <= MAX_OPEN && maxInstances <= MAX_OPEN);
+      assert.ok(batch.spentUsd <= batch.costCapUsd);
+      assert.equal(workerInstances(h).length, 0, 'every instance that was created is destroyed');
+      assert.equal(h.cloud.creates, ghost ? h.cloud.createAttempts.length : 0);
+    },
+  );
+matrixTest(
+  'lane A harness RETRY: neither its re-run nor lane B rents the machine that failed',
+  async () => {
+    const h = await harness();
+    const id = await start(h);
+    let batch = await batchOf(h, id);
+    const a = legOf(batch, 'AD102', 'lanea')[0];
+    const ra = await recordOf(h, a);
+    await report(h, a, 'harness');
+    const others = batch.legs.filter((l) => l.key !== a.key && l.state === 'STARTED');
+    await advance(h, 12, others, 1);
+    await report(h, legOf(await batchOf(h, id), 'TU116')[0], 'pass');
+    await advance(
+      h,
+      12,
+      others.filter((l) => l.die !== 'TU116'),
+      1,
+    );
+    batch = await batchOf(h, id);
+    const rerun = batch.legs.find((l) => l.rerunOf === a.key);
+    const b = legOf(batch, 'AD102', 'laneb')[0];
+    const [rr, rb] = [await recordOf(h, rerun), await recordOf(h, b)];
+    assert.ok(rr && rb, 'both rented');
+    assert.notEqual(rr.machineId, ra.machineId);
+    assert.notEqual(rb.machineId, ra.machineId);
+    assert.notEqual(rb.machineId, rr.machineId);
+  },
+);

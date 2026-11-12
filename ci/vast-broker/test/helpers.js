@@ -211,7 +211,7 @@ export class MockCloud {
   // Concurrency harness: further offers, the contract ids handed out in order (default 900)
   // and per-run-id GitHub run rows (default `run`).
   extraOffers = [];
-  // Resilience harness (2026-11-13): offers that Vast stops listing (and refuses to create), asks whose create is
+  // Resilience harness (2026-11-12): offers that Vast stops listing (and refuses to create), asks whose create is
   // refused with Vast's `success: false`, and asks whose create answers an HTTP 500 without a body.
   hiddenOffers = new Set();
   refuseAsks = new Set();

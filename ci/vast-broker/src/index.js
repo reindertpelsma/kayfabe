@@ -2164,7 +2164,7 @@ export function createService({
       if (wasEnded) continue;
       if (batch.state === 'RUNNING' && wantsRerun(l, batch.reruns)) {
         const n = Math.max(...batch.legs.map((x) => x.seq)) + 1;
-        // Owner 2026-11-13: the vendor rule is re-applied to the replacement (it keeps the vendor the release still needs).
+        // Owner 2026-11-12: the vendor rule is re-applied to the replacement (it keeps the vendor the release still needs).
         const pin = pinForRerun(batch, l, RELEASE_MATRIX.policy.cpu_vendor_min);
         batch.legs.push({
           seq: n,
@@ -2320,9 +2320,11 @@ export function createService({
           break;
         }
         // A create that failed after the rental was recorded is an unproven box (the cron reconciles or closes it and the leg is
-        // re-run): the legs after it go on. Owner 2026-11-13: a rental that fails never holds up the others.
+        // re-run): the legs after it go on. Owner 2026-11-12: a rental that fails never holds up the others.
         if (recorded) {
           l.machineId = recorded.machineId ?? null;
+          // Durable at once (review F10, as on the success path): the next leg's contract check reads this leg's liability.
+          await ledger.put('batch:' + batch.id, batch);
           continue;
         }
         // No offer for this die: try the next leg (a leg pinned to a vendor that vanished gives its pin away). Busy, a cap or

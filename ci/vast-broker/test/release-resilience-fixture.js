@@ -7,7 +7,7 @@ import { applyProfile } from '../src/tier.js';
 import { setup, env, sha } from './helpers.js';
 import { matrixTest, capablePayload, receipts, subrunSuites } from './release-fixture.js';
 
-// Release resilience (owner 2026-11-13): "rentals can fail without meaning the test failed". A rental that is refused, an
+// Release resilience (owner 2026-11-12): "rentals can fail without meaning the test failed". A rental that is refused, an
 // offer that disappears, a box that never boots or dies mid-run, and a harness failure replace THAT leg on a fresh box while
 // the other boxes keep running; only a guest failure is a FAIL.
 // FALSIFIERS (written before the tests; docs/design/V3_RELEASE_RESILIENCE.md section 1): a failed or vanished rental yields

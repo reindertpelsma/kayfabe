@@ -6,6 +6,19 @@ with its date, so work can resume from the repository alone. The architecture it
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
 
+## §AQ. A failed rental never means the test failed: the release replaces that leg on the fly, 2026-11-12
+
+**STATUS: LIVE, 2026-11-12; owner requirement, implemented as code and GPU-free tests only (draft PR #362), not deployed.**
+
+Source: the owner's requirement forwarded by the coordinator on 2026-11-12.
+
+<!-- src: owner, 2026-11-12, forwarded requirement "rentals can fail without meaning the test failed" -->
+
+1. **Rentals can fail without meaning the test failed.** If a box rental fails, or a box later becomes unavailable or dies mid-run, the release
+   recomputes and replaces that leg on the fly while the other boxes keep running. Only a guest failure is a FAIL.
+2. The replacement keeps the die, the CPU-vendor requirement, the slot and price caps and the release cost cap; the re-run allowance is
+   `RELEASE_RERUNS_PER_LEG`. Design and tests: `design/V3_RELEASE_RESILIENCE.md`.
+
 ## §AP. Whitepaper answers: translation barriers, progress and evidence, 2026-10-28
 
 **STATUS: LIVE, 2026-10-28; owner design clarifications, not hardware qualification.**

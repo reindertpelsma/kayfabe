@@ -879,7 +879,7 @@ export function wantsRerun(leg, reruns) {
     (leg.rerunDepth ?? 0) < reruns
   );
 }
-// The CPU-vendor cover of a RUNNING release (owner 2026-11-13: a rental that fails is replaced, and the vendor rule is re-applied
+// The CPU-vendor cover of a RUNNING release (owner 2026-11-12: a rental that fails is replaced, and the vendor rule is re-applied
 // to the replacement). The large legs that stand for `vendor`: pinned to it and still waiting to rent, or rented from it and
 // still running or passed. A leg that ended RETRY/UNATTRIBUTED/FAIL covers nothing.
 export function vendorCover(batch, vendor, except) {

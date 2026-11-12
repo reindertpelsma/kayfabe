@@ -1,6 +1,10 @@
 #!/usr/bin/env node
-// Release resilience mutants (2026-11-13). Isolated GPU-free mutants of the rule "a failed rental is replaced on the fly and never means FAIL".
-// Falsifier: a mutant survives or has fewer than two named killers.
+// Release resilience mutants (2026-11-12). Isolated GPU-free mutants of the rule "a failed rental is replaced on the fly and never means FAIL".
+// Falsifier: a mutant survives or has fewer than two named killers, except the one named in ONE below.
+// Real killer counts (PR #362 review): three mutants have two killers that are ONE test with two parameters ('the release cost cap is not
+// applied to a rental': 0 and 2 USD room; 'the replacement may rent the machine that failed' and 'lane B rents the machine its lane A failed
+// on': exited and absent). 'an unproven leg is not stored before the next leg rents' has ONE killer (the ghost-create release test). Every
+// other mutant has two or more independent tests.
 import {
   mkdtempSync,
   mkdirSync,
@@ -89,8 +93,14 @@ const cases = [
   [
     'an unproven create holds up the legs after it',
     IDX,
-    '          l.machineId = recorded.machineId ?? null;\n          continue;',
-    '          l.machineId = recorded.machineId ?? null;\n          break;',
+    "          await ledger.put('batch:' + batch.id, batch);\n          continue;",
+    "          await ledger.put('batch:' + batch.id, batch);\n          break;",
+  ],
+  [
+    'an unproven leg is not stored before the next leg rents',
+    IDX,
+    "          await ledger.put('batch:' + batch.id, batch);\n          continue;",
+    '          continue;',
   ],
   [
     'lane B rents the machine its lane A failed on',
@@ -221,7 +231,8 @@ try {
     results.push({ mutant: name, kills: killers.length, killers });
   }
   // Every mutant is run before the verdict, so one weak test does not hide the others.
-  const weak = results.filter((r) => r.kills < 2);
+  const ONE = new Set(['an unproven leg is not stored before the next leg rents']);
+  const weak = results.filter((r) => r.kills < (ONE.has(r.mutant) ? 1 : 2));
   console.log(
     JSON.stringify({ status: weak.length ? 'FAIL' : 'PASS', weak, cases: results }, null, 2),
   );
