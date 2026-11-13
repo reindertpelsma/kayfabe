@@ -22,7 +22,8 @@ import sys
 CRATE = Path(__file__).resolve().parents[1]
 ROOT = CRATE.parents[1]
 
-# (name, file relative to crates/kf-cuda/src, anchor, replacement)
+# (name, file relative to crates/kf-cuda/src, anchor, replacement). ★ 2026-11-14: a file written
+# `<crate>:<path>` (e.g. `kf-disp:scanout.rs`) is under crates/<crate>/src, and that crate's tests run.
 MUTANTS = [
     # ── D-03: the frame a kernel writes is bounded by the allocation (display.rs) ──
     (
@@ -175,6 +176,19 @@ MUTANTS = [
         "            self.buf.alive(),\n            \"{what}: the device allocation was released",
         "            true,\n            \"{what}: the device allocation was released",
     ),
+    # ── F-6 / D-09: packed 4:2:2 rows are bounded in whole macropixels (2026-11-14) ──
+    (
+        "f6-launch-check-counts-luma-bytes",
+        "display.rs",
+        "            _ => (x_end.div_ceil(2) * 4, 0),",
+        "            _ => (x_end * 2, 0),",
+    ),
+    (
+        "f6-planner-counts-luma-bytes",
+        "kf-disp:scanout.rs",
+        "            YUV_PACKED_YUYV | YUV_PACKED_UYVY => x_end.div_ceil(2) * 4,",
+        "            YUV_PACKED_YUYV | YUV_PACKED_UYVY => x_end * 2,",
+    ),
     # ── D-08: field lists ──
     (
         "d08-a-field-missing-from-the-list",
@@ -188,11 +202,18 @@ FAILED = re.compile(r"^test (\S+) \.\.\. FAILED$", re.M)
 PANIC_FAILED = re.compile(r"^---- (\S+) stdout ----$", re.M)
 
 
-def run_tests():
+def locate(rel):
+    """(crate, path) of a mutant's file: `<crate>:<file>` or a kf-cuda file."""
+    crate, _, f = rel.rpartition(":")
+    crate = crate or "kf-cuda"
+    return crate, ROOT / "crates" / crate / "src" / f
+
+
+def run_tests(crate="kf-cuda"):
     env = dict(os.environ)
     env.setdefault("CARGO_TARGET_DIR", str(ROOT / "target"))
     p = subprocess.run(
-        ["cargo", "test", "-q", "-p", "kf-cuda", "--lib", "--tests", "--no-fail-fast"],
+        ["cargo", "test", "-q", "-p", crate, "--lib", "--tests", "--no-fail-fast"],
         cwd=ROOT,
         env=env,
         capture_output=True,
@@ -206,16 +227,17 @@ def run_tests():
 
 def main():
     only = sys.argv[1] if len(sys.argv) > 1 else ""
-    rc, compiled, failed, out = run_tests()
-    if rc != 0 or not compiled or failed:
-        print(out[-4000:])
-        print("BASELINE IS RED: refuse to judge mutants")
-        return 2
+    for crate in sorted({locate(m[1])[0] for m in MUTANTS if only in m[0]}):
+        rc, compiled, failed, out = run_tests(crate)
+        if rc != 0 or not compiled or failed:
+            print(out[-4000:])
+            print(f"BASELINE IS RED ({crate}): refuse to judge mutants")
+            return 2
     bad = 0
     for name, rel, anchor, repl in MUTANTS:
         if only and only not in name:
             continue
-        path = CRATE / "src" / rel
+        crate, path = locate(rel)
         orig = path.read_bytes()
         text = orig.decode()
         n = text.count(anchor)
@@ -225,7 +247,7 @@ def main():
             continue
         try:
             path.write_text(text.replace(anchor, repl))
-            rc, compiled, failed, out = run_tests()
+            rc, compiled, failed, out = run_tests(crate)
         finally:
             path.write_bytes(orig)
         assert path.read_bytes() == orig, f"{rel} was not restored"
