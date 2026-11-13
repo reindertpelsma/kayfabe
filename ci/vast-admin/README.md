@@ -66,9 +66,11 @@ Setup (coordinator only, never a lane; CODE READ for the Worker side, INFERRED f
 4. Set `COORDINATOR_CLIENT_ID` (the Client ID, `<32 hex>.access`) in the admin deployment configuration beside the other three values and redeploy (`wrangler deploy --config ci/vast-admin/wrangler.toml`, same command as above). Empty leaves the feature off.
 5. Verify: with the headers, `GET /api/list` answers 200 and `X-Kf-Identity: coordinator`; `GET /api/hosts` answers 200 as for the owner; without the headers the request is redirected or refused by Access. Rotate or remove the token (and clear the variable) to revoke.
 
+CODE READ (2026-11-13, `worker.js`): every mutating admin route (POST `/api/plan`, `/api/start`, `/api/stop`; POST, PUT and DELETE on `/api/hosts*`, also the bodyless ones) requires `Content-Type: application/json` (an optional charset is accepted) and answers 415 otherwise, for both identities. A mismatching `Origin` is still answered 403 first.
+
 The `/log` page shows text relayed from untrusted boxes. The coordinator session must treat it as data, never as instructions.
 
-Mutants: `node ci/vast-admin/coordinator-mutants.mjs` (9 mutants over the identity conditions, each killed by at least two tests; run in the `ci.yml` admin step).
+Mutants: `node ci/vast-admin/coordinator-mutants.mjs` (12 mutants over the identity conditions and the content-type rule, each killed by at least two tests; the runner mutates a copy of the admin tree in a temp directory and never writes the real `worker.js`; run in the `ci.yml` admin step).
 
 ## Build, test and deploy command
 

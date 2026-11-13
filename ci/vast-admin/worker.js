@@ -10,6 +10,9 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
         "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; " +
         "base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
     };
+    const isJson = () =>
+      request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() ===
+      'application/json';
     const json = (data, status = 200) => Response.json(data, { status, headers });
     if (
       !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.cloudflareaccess\.com$/.test(
@@ -128,10 +131,10 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
       const mutating = request.method !== 'GET';
       if (mutating && request.headers.has('Origin') && request.headers.get('Origin') !== url.origin)
         return json({ error: 'Forbidden' }, 403);
+      // Every mutating admin route (also the bodyless ones) needs a JSON content type: 415 otherwise.
+      if (mutating && !isJson()) return json({ error: 'Unsupported media type' }, 415);
       let body;
       if (request.method === 'PUT' || sub === '/cmd') {
-        if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json')
-          return json({ error: 'Invalid request' }, 400);
         try {
           const reader = request.body?.getReader();
           if (!reader) throw Error();
@@ -184,8 +187,7 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
     if (start || plan) {
       if (request.headers.has('Origin') && request.headers.get('Origin') !== url.origin)
         return json({ error: 'Forbidden' }, 403);
-      if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json')
-        return json({ error: 'Invalid request' }, 400);
+      if (!isJson()) return json({ error: 'Unsupported media type' }, 415);
       try {
         const reader = request.body?.getReader();
         if (!reader) throw Error();
@@ -244,8 +246,7 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
     if (stop) {
       if (request.headers.has('Origin') && request.headers.get('Origin') !== url.origin)
         return json({ error: 'Forbidden' }, 403);
-      if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json')
-        return json({ error: 'Invalid selection' }, 400);
+      if (!isJson()) return json({ error: 'Unsupported media type' }, 415);
       try {
         const reader = request.body?.getReader();
         if (!reader) throw Error();

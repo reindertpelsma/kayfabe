@@ -53,19 +53,22 @@ const fixture = async (vars = { COORDINATOR_CLIENT_ID: cid }) => {
   return {
     ledger,
     hosts,
-    call: (path, method, bearer, body, headers = {}) =>
-      worker.fetch(
+    call: (path, method, bearer, body, headers = {}) => {
+      const merged = {
+        'Cf-Access-Jwt-Assertion': bearer,
+        ...(body === undefined && method === 'GET' ? {} : { 'Content-Type': 'application/json' }),
+        ...headers,
+      };
+      for (const k of Object.keys(merged)) if (merged[k] === null) delete merged[k];
+      return worker.fetch(
         new Request('https://admin.example' + path, {
           method,
-          headers: {
-            'Cf-Access-Jwt-Assertion': bearer,
-            ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-            ...headers,
-          },
+          headers: merged,
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         }),
         env,
-      ),
+      );
+    },
   };
 };
 const ALLOWED = [
@@ -161,7 +164,7 @@ test('coordinator POST: mismatching Origin refused, missing Origin ok, JSON type
         'Content-Type': 'text/plain',
       })
     ).status,
-    400,
+    415,
   );
   assert.equal(h.ledger.length, 1);
 });
@@ -229,4 +232,31 @@ test('expired, wrong audience, wrong issuer, no JWT still refused for a service 
   }
   const h = await fixture();
   assert.equal((await h.call('/api/list', 'GET', '')).status, 401);
+});
+
+const MUTATING = [
+  ...ALLOWED.filter(([, m]) => m === 'POST'),
+  ...HOSTS.filter(([, m]) => m !== 'GET'),
+];
+for (const who of ['owner', 'coordinator'])
+  for (const [path, method, body] of MUTATING)
+    for (const type of ['text/plain', 'application/x-www-form-urlencoded', null])
+      test(
+        '415 without a JSON content type: ' + who + ' ' + method + ' ' + path + ' ' + type,
+        async () => {
+          const h = await fixture();
+          const bearer = who === 'owner' ? await user() : await service();
+          const r = await h.call(path, method, bearer, body, { 'Content-Type': type });
+          assert.equal(r.status, 415);
+          assert.equal(h.ledger.length + h.hosts.length, 0);
+        },
+      );
+test('JSON content type with a charset is accepted (owner and coordinator)', async () => {
+  const h = await fixture();
+  for (const bearer of [await user(), await service()]) {
+    const r = await h.call('/api/hosts/box1/token', 'POST', bearer, undefined, {
+      'Content-Type': 'application/json; charset=utf-8',
+    });
+    assert.equal(r.status, 200);
+  }
 });
