@@ -891,7 +891,7 @@ impl ObjectPolicy {
             let inner = params
                 .get(4..8)
                 .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: DEFERRED-API {:#010x} on {:#x}:{:#x} hApiHandle={handle:#x} cmd={inner:#x} psz={} -> {status:#x}",
                 h.cmd,
                 h.client,

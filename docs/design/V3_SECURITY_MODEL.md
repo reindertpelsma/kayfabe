@@ -302,7 +302,7 @@ A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-sta
 | walk budget, frontier, report capacity | guest userspace (its VA layout) | per refresh, shared by every space in the batch | **open, S1-61** |
 | display-SW objects, kernel-mapped bytes | guest kernel | caps in progress (`OWNER_RULINGS.md` §N) | **open**. ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-dispsw-exp` at `86b4fa10`): bounded — at most 16 live display-SW twins per channel and 1024 per VM, refused by name past either (`kf_qemu::dispsw::PER_CHANNEL_CAP`, `PER_VM_CAP`); no host map kayfabe makes carries `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` (`kf_host` `nvos46_map_flags` masks it), so no kernel-mapped bytes; the `x11-dispsw` experiment stays default off |
 | host RM/GSP call rate | guest userspace via guest RM | none | **open** |
-| host log volume | guest userspace and guest kernel | none on several paths | **open, S1-86** |
+| host log volume | guest userspace and guest kernel | none on several paths | **open, S1-86**. 2026-11-13: `kf_arch::rate_eprintln!` (first 8 events per site, then powers of two, each line counted) on the guest-per-event sites of `kf-gsp`, `kf-rm` (`chanlink`, `rmrpc`) and `kf-host` (security review 1, F-13); still per event: `kf-host` channel birth lines (the merge-bar census reads every one), and the `kf-qemu`, `kf-mem`, `kf-chan`, `kf-disp` sites (other owners) |
 | GPU time | guest userspace | none; v2 recorded about a 2x slowdown under a spinning kernel (`docs/archive/guest_blast_radius.md` §5) | fairness, inside P |
 
 ## 8. Earlier guarantees that no longer apply without the isolate

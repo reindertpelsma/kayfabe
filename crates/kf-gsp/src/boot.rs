@@ -529,7 +529,7 @@ fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
         None => false,
         Some(0) if rpc.rpc_result != 0 => {
             let undone = d.run_orphan_undo();
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kayfabe: HELD-REPLY fn={:#x} seq={}: its deferred act SUCCEEDED but the reply is a refusal ({:#x}) — {}",
                 rpc.function,
                 rpc.sequence,
@@ -1896,7 +1896,7 @@ impl GspFsm {
         // page; `gpa_same=false seq_same=true` would mean a live queue moved, which nothing
         // in 580 does and which we would want to hear about immediately.
         let gpa_same = self.region_identity == Some(shared_mem_pa);
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kayfabe: GSP-PUBLISH gpa=0x{shared_mem_pa:x} gpa_same={gpa_same} seq_last={seq_evidence:?} \
              cmd_seq={} ⇒ same_instance={same_instance}{}",
             self.cmd_seq,
@@ -2003,9 +2003,11 @@ impl GspFsm {
         self.phase = BootPhase::Booted;
         self.events_outstanding = false;
         self.init_done_posted = false;
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq={} cmd_seq={} cmd_read_ptr={} peer_stat_read={mark}",
-            self.stat_seq, self.cmd_seq, self.cmd_read_ptr
+            self.stat_seq,
+            self.cmd_seq,
+            self.cmd_read_ptr
         );
         let init_done = OutgoingRpc {
             function: self.abi.rpc.codes.gsp_init_done,
@@ -2233,9 +2235,10 @@ impl GspFsm {
                     Some(whole)
                 }
                 crate::large::Step::Refused(why) => {
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf-gsp: LARGE-RPC REFUSED fn {} seq {}: {why}",
-                        cmd.code, cmd.sequence
+                        cmd.code,
+                        cmd.sequence
                     );
                     if matches!(why, crate::large::LargeRefusal::Interrupted { .. }) {
                         self.answer(ram, policy, &cmd, report)?;
@@ -2432,7 +2435,7 @@ impl GspFsm {
             self.refusals
                 .note(full.function, detail, full.rpc_result, full.sequence);
         }
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-gsp: large RPC fn {} seq {} joined from {} fragment(s), {} bytes, answered in {} replies (rpc_result {:#x})",
             whole.code,
             whole.sequence,
@@ -2542,7 +2545,7 @@ impl GspFsm {
             // range completed in the SAME SECOND as the `FAULT_PDE ACCESS_TYPE_VIRT_WRITE`
             // that hit it. So "did the hold run" must be legible FROM the artefact, never
             // inferred from the absence of some other line.
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kayfabe: HELD-REPLY fn={:?} depth={} — this map reply WAITS for its rows",
                 cmd.function,
                 self.held.len() + 1
@@ -2825,7 +2828,9 @@ impl GspFsm {
             // ★ The pair of the HELD-REPLY line. Two counters that must be read together:
             // a boot with holds and no releases is a PARKED GUEST, and a boot with neither
             // is a guest that never waited for its rows at all. Neither is visible from one.
-            eprintln!("kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now");
+            kf_arch::rate_eprintln!(
+                "kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now"
+            );
         }
         Ok(posted)
     }
