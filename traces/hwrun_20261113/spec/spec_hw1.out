@@ -1,0 +1,12 @@
+SPEC_STAGE_START lane=lanea
+SPEC_STAGE_LIST lane=lanea n=4
+SPEC_COPY_DELETED removed=archive
+SPEC_ROW name=creo-04 result=PASS subtests=13/13 reason=- failed=-
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
+SPEC_ROW name=enscape-01 result=FAIL subtests=0/0 reason=GUEST failed=-
+enscape_01 --- FAILED
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
+SPEC_COPY_DELETED removed=overlay
+SPEC_STAGE_COUNTS pass=3 fail=1 not_run=0 of=4
+SPECVIEWPERF_STAGE_FAIL NARROWED
+SPECVIEWPERF_STAGE_EXIT rc=1
