@@ -198,10 +198,11 @@ try {
   if(-not $m.Success){throw ('Missing powercfg alias '+$value)}
   return $m.Groups[1].Value
  }
- $old=Get-ItemPropertyValue 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name InactivityTimeoutSecs -ErrorAction SilentlyContinue
+ function Opt($p,$n){ try { (Get-ItemProperty -LiteralPath $p -Name $n -ErrorAction Stop).$n } catch { $null } }
+ $old=Opt 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'InactivityTimeoutSecs'
  $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
  $marker='HKLM:\SOFTWARE\Kayfabe\PropimageChecks'
- $priorBoot=Get-ItemPropertyValue $marker -Name InactivityRestartBoot -ErrorAction SilentlyContinue
+ $priorBoot=Opt $marker 'InactivityRestartBoot'
  $r.restart_required=(($null -ne $old -and $old -ne 0) -or $priorBoot -ceq $boot)
  if($r.restart_required){
   if(-not (Test-Path $marker)){New-Item $marker -Force | Out-Null}

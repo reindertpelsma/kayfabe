@@ -944,6 +944,15 @@ class T(unittest.TestCase):
     def clock_sidecar(self, root):
         return Path(root) / "overlay.qcow2"
 
+    def test_optional_registry_reads_cannot_abort_the_repair(self):
+        # Real guest: Get-ItemPropertyValue on a missing optional value throws a TERMINATING error that
+        # -ErrorAction SilentlyContinue does not stop, so under $ErrorActionPreference='Stop' the repair aborted.
+        script = m.render_power_fix()
+        self.assertNotRegex(script, r"Get-ItemPropertyValue[^\n]*SilentlyContinue")
+        self.assertIn("function Opt(", script)
+        self.assertIn("Opt $marker 'InactivityRestartBoot'", script)
+        self.assertIn("'InactivityTimeoutSecs'", script)
+
     def test_gop_efi_is_staged_from_dir_or_flag_and_missing_is_refused(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
