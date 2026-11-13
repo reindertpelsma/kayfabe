@@ -2,6 +2,14 @@
 
 **STATUS: RESEARCH, 2026-10-09.** An inventory of the `KF3_*` flags of the Windows run profile and what each does, from code and record reading (last git change 2026-10-18; the amendments below are dated newest first). Read on 2026-11-07: 25 of its 137 distinct `KF3_*` names no longer appear literally in `crates/`, `scripts/` or `qemu/` (among them the `KF3_DIAG_*` trace flags), so the table is the 2026-10-09 state, not the current flag list. Related: [`V3_TSPACE_HARDWIRED.md`](V3_TSPACE_HARDWIRED.md).
 
+**Amended 2026-11-13 (CODE READ; slow-path log lines, default on, no flag, no behaviour change; GPU-free tests only, NOT run on hardware):**
+These lines exist to tell, in the next enscape-01 TDR, whether a held split waited behind a slow VA-thread apply (`docs/` analysis `tdr_enscape_analysis_20261113`, RESEARCH). Each is printed by the VA thread or a user-ring pump only past a threshold (nothing is formatted below it) and is rate-limited to 20 lines per boot per kind; every event is still counted.
+- `kf3: mem SLOW-APPLY walk#<id> <key> maps=<n> unmaps=<n> ms=<n> wants=[Split{ticket,age_ms}|Invalidate{seq,age_ms}|Root,...] carried_total=<n> behind=<n> behind_splits=<n> oldest_behind_ms=<n> batch[calls rows -> pieces(mmaps) call/piece avg/max us] ram_run_maps[...] store_run_maps[...] (n=<k>; ...)` when ONE space's apply exceeds 500 ms. `age_ms` counts from the request. The `pieces` figure is what the batch's stitch makes `MAP_FIXED` calls for (rows coalesce when also file-contiguous); the per-piece microseconds divide the whole batch call (stitch, RM map, view unmap) by its pieces, so they are an upper bound on the mmap, and the stitch-versus-RM split is not measured. `*_max` figures are the process-wide worst, not the worst of this apply.
+- `kf3: mem SPLIT-LATE ticket=<t> target=<key|pdb:0x..|all> ms=<n> (n=<k>, <q> still queued)` when a split takes over 1 s from the channel's request to the VA thread's verdict.
+- `kf3: USER_RING_SPLIT_WAIT idx=<ring> key=<key> ms=<n> state=waiting|done (n=<k>)` when a user ring's held invalidate has waited over 1 s: once while held, once at its end.
+- The periodic status line's `vat[...]` block gains `apply_max_ms= split_max_ms= slow_applies= slow_splits=` (boot-wide worst, not windowed); the shutdown line `kf3: VA_WORST SUMMARY apply_max_ms=.. split_max_ms=.. slow_applies=.. slow_splits=.. hostmaps(whole boot)=..` is always printed next to `USER_RING_LIFECYCLE SUMMARY`.
+Mutants: `scripts/slowapply_mutation_check.py` (16, each killed by at least 2 tests). A `#[ignore]`d KNOWN-RED model test in `crates/kf-mem/src/vasmgr.rs` documents that space B's split waits behind space A's whole apply today.
+
 **Amended 2026-10-18 (CODE READ; hitch diagnostic gates):**
 `KF3_DIAG_STEP_METERS=1` enables display-worker step timing; `KF3_DIAG_EVENT_RING=1`
 enables the relay's bounded lock-step event ring. Both are class M, off when unset or

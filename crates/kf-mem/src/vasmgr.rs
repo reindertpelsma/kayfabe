@@ -63,6 +63,7 @@ fn clear_over_absent() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_INVALIDATE_CLEAR_OVER_ABSENT").map_or(true, |v| v != "0"))
 }
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::AtomicU64;
 
 /// The most objects one walk may carry — the walk kernel's entries (`KF_MAX_PDB`).
 pub const MAX_SPACES_PER_WALK: usize = 64;
@@ -617,7 +618,9 @@ fn maplog_want(w: &Want) -> String {
             r.inval.raw,
             at.elapsed().as_micros()
         ),
-        Want::Split { pdb, ticket, key } => {
+        Want::Split {
+            pdb, ticket, key, ..
+        } => {
             format!("split ticket={ticket} pdb={pdb:x?} space={key:?}")
         }
         Want::Root(k) => format!("root {k:?}"),
@@ -652,6 +655,208 @@ fn ns_since(t: std::time::Instant) -> u64 {
     u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
 
+/// ★ 2026-11-13 (enscape TDR hunt): one space's apply longer than this is named (`SLOW-APPLY`).
+pub const SLOW_APPLY_MS: u64 = 500;
+/// ★ 2026-11-13: a split longer than this, request -> done, is named (`SPLIT-LATE`); the user-ring
+/// counterpart (`USER_RING_SPLIT_WAIT`) uses the same figure.
+pub const SLOW_SPLIT_MS: u64 = 1000;
+/// ★ 2026-11-13: lines per boot for each slow-path line; the rest are only counted.
+pub const SLOW_LOG_CAP: u64 = 20;
+
+/// ★ `true` when `ns` is strictly longer than `ms` milliseconds. Pure; the threshold's one home.
+#[must_use]
+pub fn exceeds_ms(ns: u64, ms: u64) -> bool {
+    ns > ms.saturating_mul(1_000_000)
+}
+
+/// ★ 2026-11-13: process-wide host-map call statistics, fed from the two host call sites in
+/// `ledger.rs` (one stitched batch = one call carrying `rows` rows as `pieces` file-contiguous
+/// pieces, i.e. `pieces` `MAP_FIXED` mmaps plus one reservation; one per-run map = one host RM map)
+/// and read by the apply logging. Relaxed atomics, written by the single VA thread; two clock
+/// reads per host call. Log-only: nothing reads these to decide anything.
+#[derive(Debug, Default)]
+pub struct MapStat {
+    scat_calls: AtomicU64,
+    scat_rows: AtomicU64,
+    scat_pieces: AtomicU64,
+    scat_ns: AtomicU64,
+    scat_ns_max: AtomicU64,
+    scat_piece_ns_max: AtomicU64,
+    ram_calls: AtomicU64,
+    ram_ns: AtomicU64,
+    ram_ns_max: AtomicU64,
+    store_calls: AtomicU64,
+    store_ns: AtomicU64,
+    store_ns_max: AtomicU64,
+}
+
+/// The process-wide [`MapStat`].
+pub static MAPSTAT: MapStat = MapStat::new();
+
+/// A copy of [`MapStat`] (cumulative); `since` gives one apply's share. The `*_max` fields are
+/// the process-wide worst (a delta of a max is meaningless), reported as such.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MapStatSnap {
+    /// Stitched-batch host calls.
+    pub scat_calls: u64,
+    /// Rows those batches carried (before coalescing of file-contiguous neighbours).
+    pub scat_rows: u64,
+    /// Pieces after coalescing = `MAP_FIXED` mmaps made.
+    pub scat_pieces: u64,
+    /// Summed wall ns of those calls (stitch + descriptor + RM map + view unmap).
+    pub scat_ns: u64,
+    /// Worst single call, ns.
+    pub scat_ns_max: u64,
+    /// Worst call's ns per piece.
+    pub scat_piece_ns_max: u64,
+    /// Per-run host maps of guest-RAM rows.
+    pub ram_calls: u64,
+    /// Their summed ns.
+    pub ram_ns: u64,
+    /// Worst one, ns.
+    pub ram_ns_max: u64,
+    /// Per-run host maps of store (VRAM) rows.
+    pub store_calls: u64,
+    /// Their summed ns.
+    pub store_ns: u64,
+    /// Worst one, ns.
+    pub store_ns_max: u64,
+}
+
+impl MapStat {
+    const fn new() -> Self {
+        MapStat {
+            scat_calls: AtomicU64::new(0),
+            scat_rows: AtomicU64::new(0),
+            scat_pieces: AtomicU64::new(0),
+            scat_ns: AtomicU64::new(0),
+            scat_ns_max: AtomicU64::new(0),
+            scat_piece_ns_max: AtomicU64::new(0),
+            ram_calls: AtomicU64::new(0),
+            ram_ns: AtomicU64::new(0),
+            ram_ns_max: AtomicU64::new(0),
+            store_calls: AtomicU64::new(0),
+            store_ns: AtomicU64::new(0),
+            store_ns_max: AtomicU64::new(0),
+        }
+    }
+    /// Record one stitched-batch call of `rows` rows coalesced to `pieces`, taking `ns`.
+    pub fn record_scattered(&self, rows: usize, pieces: usize, ns: u64) {
+        let o = std::sync::atomic::Ordering::Relaxed;
+        self.scat_calls.fetch_add(1, o);
+        self.scat_rows.fetch_add(rows as u64, o);
+        self.scat_pieces.fetch_add(pieces as u64, o);
+        self.scat_ns.fetch_add(ns, o);
+        self.scat_ns_max.fetch_max(ns, o);
+        self.scat_piece_ns_max
+            .fetch_max(ns.checked_div((pieces as u64).max(1)).unwrap_or(0), o);
+    }
+    /// Record one per-run host map (`ram` = a guest-RAM row, else a store row) taking `ns`.
+    pub fn record_single(&self, ram: bool, ns: u64) {
+        let o = std::sync::atomic::Ordering::Relaxed;
+        let (c, t, m) = if ram {
+            (&self.ram_calls, &self.ram_ns, &self.ram_ns_max)
+        } else {
+            (&self.store_calls, &self.store_ns, &self.store_ns_max)
+        };
+        c.fetch_add(1, o);
+        t.fetch_add(ns, o);
+        m.fetch_max(ns, o);
+    }
+    /// A copy of the counters.
+    #[must_use]
+    pub fn snapshot(&self) -> MapStatSnap {
+        let o = std::sync::atomic::Ordering::Relaxed;
+        MapStatSnap {
+            scat_calls: self.scat_calls.load(o),
+            scat_rows: self.scat_rows.load(o),
+            scat_pieces: self.scat_pieces.load(o),
+            scat_ns: self.scat_ns.load(o),
+            scat_ns_max: self.scat_ns_max.load(o),
+            scat_piece_ns_max: self.scat_piece_ns_max.load(o),
+            ram_calls: self.ram_calls.load(o),
+            ram_ns: self.ram_ns.load(o),
+            ram_ns_max: self.ram_ns_max.load(o),
+            store_calls: self.store_calls.load(o),
+            store_ns: self.store_ns.load(o),
+            store_ns_max: self.store_ns_max.load(o),
+        }
+    }
+}
+
+impl MapStatSnap {
+    /// The counters accumulated since `prev`; the `*_max` fields are taken from `self`.
+    #[must_use]
+    pub fn since(&self, prev: &MapStatSnap) -> MapStatSnap {
+        let d = |a: u64, b: u64| a.saturating_sub(b);
+        MapStatSnap {
+            scat_calls: d(self.scat_calls, prev.scat_calls),
+            scat_rows: d(self.scat_rows, prev.scat_rows),
+            scat_pieces: d(self.scat_pieces, prev.scat_pieces),
+            scat_ns: d(self.scat_ns, prev.scat_ns),
+            ram_calls: d(self.ram_calls, prev.ram_calls),
+            ram_ns: d(self.ram_ns, prev.ram_ns),
+            store_calls: d(self.store_calls, prev.store_calls),
+            store_ns: d(self.store_ns, prev.store_ns),
+            ..*self
+        }
+    }
+    /// One log fragment: the coalescing (`rows` -> `pieces` = mmaps) and the per-call costs in us.
+    /// Per-piece figures divide the whole batch call (stitch + RM map + view unmap) by its
+    /// pieces; they are an upper bound on the per-mmap cost, not a mmap-only timing.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let avg = |ns: u64, n: u64| ns.checked_div(n).unwrap_or(0).saturating_div(1000);
+        format!(
+            "batch[calls={} rows={} -> pieces(mmaps)={} call_avg_us={} piece_avg_us={} call_max_us={} piece_max_us={}] ram_run_maps[n={} avg_us={} max_us={}] store_run_maps[n={} avg_us={} max_us={}]",
+            self.scat_calls,
+            self.scat_rows,
+            self.scat_pieces,
+            avg(self.scat_ns, self.scat_calls),
+            avg(self.scat_ns, self.scat_pieces),
+            self.scat_ns_max / 1000,
+            self.scat_piece_ns_max / 1000,
+            self.ram_calls,
+            avg(self.ram_ns, self.ram_calls),
+            self.ram_ns_max / 1000,
+            self.store_calls,
+            avg(self.store_ns, self.store_calls),
+            self.store_ns_max / 1000,
+        )
+    }
+}
+
+/// ★ A per-boot line budget: the first `cap` events are admitted, the rest counted
+/// ([`Self::suppressed`]). A cap on lines, never on counting.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LineBudget {
+    cap: u64,
+    seen: u64,
+}
+
+impl LineBudget {
+    /// A budget of `cap` lines.
+    #[must_use]
+    pub const fn new(cap: u64) -> Self {
+        LineBudget { cap, seen: 0 }
+    }
+    /// Count one event; `true` while it is within the cap (print it).
+    pub fn admit(&mut self) -> bool {
+        self.seen = self.seen.saturating_add(1);
+        self.seen <= self.cap
+    }
+    /// Events seen (printed or not).
+    #[must_use]
+    pub fn seen(&self) -> u64 {
+        self.seen
+    }
+    /// Events counted but not printed.
+    #[must_use]
+    pub fn suppressed(&self) -> u64 {
+        self.seen.saturating_sub(self.cap)
+    }
+}
+
 /// Why a walk is wanted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Want {
@@ -671,6 +876,8 @@ enum Want {
         /// ★ OWNER_RULINGS §U.2: walk exactly this space instead (a deferred TLB invalidate names
         /// the triggering channel's own space; `pdb` is then `None` and ignored).
         key: Option<VasKey>,
+        /// ★ 2026-11-13: when the channel asked (request -> done is `SPLIT-LATE`'s clock).
+        at: std::time::Instant,
     },
 }
 
@@ -834,6 +1041,14 @@ pub struct VaTiming {
     pub leaves_last: u64,
     /// Host verbs issued (maps + unmaps + invalidates).
     pub host_calls: u64,
+    /// ★ 2026-11-13: the longest ONE space's apply of the boot (ns; a max, never windowed).
+    pub apply_ns_max: u64,
+    /// ★ 2026-11-13: the longest split request -> done of the boot (ns; a max, never windowed).
+    pub split_ns_max: u64,
+    /// ★ Applies over [`SLOW_APPLY_MS`] (all counted; only the first [`SLOW_LOG_CAP`] are printed).
+    pub slow_applies: u64,
+    /// ★ Splits over [`SLOW_SPLIT_MS`] (same rule).
+    pub slow_splits: u64,
 }
 
 impl VaTiming {
@@ -852,6 +1067,10 @@ impl VaTiming {
             apply_ns: self.apply_ns.saturating_sub(prev.apply_ns),
             leaves_last: self.leaves_last,
             host_calls: self.host_calls.saturating_sub(prev.host_calls),
+            apply_ns_max: self.apply_ns_max,
+            split_ns_max: self.split_ns_max,
+            slow_applies: self.slow_applies,
+            slow_splits: self.slow_splits,
         }
     }
 }
@@ -893,6 +1112,9 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     store_bytes: u64,
     ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send>,
     pending: Vec<Want>,
+    /// ★ 2026-11-13: line budgets of `SLOW-APPLY` and `SPLIT-LATE`.
+    slow_apply_lines: LineBudget,
+    slow_split_lines: LineBudget,
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
@@ -931,6 +1153,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             store_bytes,
             ram_offset,
             pending: Vec::new(),
+            slow_apply_lines: LineBudget::new(SLOW_LOG_CAP),
+            slow_split_lines: LineBudget::new(SLOW_LOG_CAP),
             inflight: None,
             splits_done: Vec::new(),
             clear_absent: clear_over_absent(),
@@ -1179,7 +1403,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 maplog_want(&Want::Split {
                     pdb,
                     ticket,
-                    key: None
+                    key: None,
+                    at: std::time::Instant::now()
                 }),
                 self.inflight
                     .as_ref()
@@ -1191,6 +1416,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             pdb,
             ticket,
             key: None,
+            at: std::time::Instant::now(),
         });
         self.pump(trigger);
     }
@@ -1203,6 +1429,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             pdb: None,
             ticket,
             key: Some(key),
+            at: std::time::Instant::now(),
         };
         if crate::maplog::on() {
             eprintln!(
@@ -1297,7 +1524,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
             let at = match w {
                 Want::Invalidate(_, at) => at,
-                Want::Root(_) | Want::Split { .. } => std::time::Instant::now(),
+                Want::Split { at, .. } => at,
+                Want::Root(_) => std::time::Instant::now(),
             };
             batch.wants.push((w, keys, at));
         }
@@ -1362,6 +1590,105 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 self.stats.walks_refused = self.stats.walks_refused.saturating_add(1);
                 self.refuse_batch(&batch, format!("walk submit: {e}"));
             }
+        }
+    }
+
+    /// ★ 2026-11-13: account one space's apply; name it (`SLOW-APPLY`) when it exceeded
+    /// [`SLOW_APPLY_MS`]. Hot path: one compare and a max; nothing is formatted below the threshold.
+    /// Everything printed is host-measured or a host-assigned id/count (nothing guest bytes).
+    fn note_apply(
+        tm: &mut VaTiming,
+        lines: &mut LineBudget,
+        pending: &[Want],
+        batch: &Batch,
+        (key, apply_ns): (VasKey, u64),
+        (maps, unmaps): (u64, u64),
+        hostmaps: &MapStatSnap,
+    ) {
+        tm.apply_ns_max = tm.apply_ns_max.max(apply_ns);
+        if !exceeds_ms(apply_ns, SLOW_APPLY_MS) {
+            return;
+        }
+        tm.slow_applies = tm.slow_applies.saturating_add(1);
+        if !lines.admit() {
+            return;
+        }
+        let age = |at: std::time::Instant| at.elapsed().as_millis();
+        // The wants this walk carried that named this space (bounded: the first 6), with how long
+        // each has waited since it was asked.
+        let mut carried = String::new();
+        let mut n_carried = 0usize;
+        for (w, keys, at) in &batch.wants {
+            if !keys.contains(&key) {
+                continue;
+            }
+            n_carried = n_carried.saturating_add(1);
+            if n_carried > 6 {
+                continue;
+            }
+            if !carried.is_empty() {
+                carried.push(',');
+            }
+            match w {
+                Want::Split { ticket, at, .. } => {
+                    carried.push_str(&format!("Split{{ticket={ticket},age_ms={}}}", age(*at)));
+                }
+                Want::Invalidate(r, _) => {
+                    carried.push_str(&format!("Invalidate{{seq={},age_ms={}}}", r.seq, age(*at)));
+                }
+                Want::Root(_) => carried.push_str("Root"),
+            }
+        }
+        let behind_splits = pending
+            .iter()
+            .filter(|w| matches!(w, Want::Split { .. }))
+            .count();
+        let oldest_behind_ms = pending
+            .iter()
+            .filter_map(|w| match w {
+                Want::Split { at, .. } | Want::Invalidate(_, at) => Some(age(*at)),
+                Want::Root(_) => None,
+            })
+            .max()
+            .unwrap_or(0);
+        eprintln!(
+            "kf3: mem SLOW-APPLY walk#{} {key:?} maps={maps} unmaps={unmaps} ms={} wants=[{carried}] carried_total={n_carried} behind={} behind_splits={behind_splits} oldest_behind_ms={oldest_behind_ms} {} (n={}; per-piece us = whole batch call / pieces, an upper bound on the mmap)",
+            batch.id,
+            apply_ns / 1_000_000,
+            pending.len(),
+            hostmaps.describe(),
+            lines.seen()
+        );
+    }
+
+    /// ★ 2026-11-13: a split finished; account request -> done and name it (`SPLIT-LATE`) when it
+    /// exceeded [`SLOW_SPLIT_MS`]. Never prints below the threshold.
+    fn note_split_done(
+        &mut self,
+        ticket: u64,
+        pdb: Option<u64>,
+        key: Option<VasKey>,
+        at: std::time::Instant,
+    ) {
+        let ns = ns_since(at);
+        let tm = &mut self.stats.timing;
+        tm.split_ns_max = tm.split_ns_max.max(ns);
+        if !exceeds_ms(ns, SLOW_SPLIT_MS) {
+            return;
+        }
+        tm.slow_splits = tm.slow_splits.saturating_add(1);
+        if self.slow_split_lines.admit() {
+            eprintln!(
+                "kf3: mem SPLIT-LATE ticket={ticket} target={} ms={} (n={}, {} still queued)",
+                match (key, pdb) {
+                    (Some(k), _) => format!("{k:?}"),
+                    (None, Some(p)) => format!("pdb:{p:#x}"),
+                    (None, None) => "all".to_string(),
+                },
+                ns / 1_000_000,
+                self.slow_split_lines.seen(),
+                self.pending.len()
+            );
         }
     }
 
@@ -1502,9 +1829,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             {
                 std::thread::sleep(std::time::Duration::from_millis(ms));
             }
+            let m0 = MAPSTAT.snapshot();
             let t_apply = std::time::Instant::now();
             let a = apply_entry(&space.target, &e.runs, &cfg);
             let apply_ns = ns_since(t_apply);
+            Self::note_apply(
+                &mut self.stats.timing,
+                &mut self.slow_apply_lines,
+                &self.pending,
+                &batch,
+                (key, apply_ns),
+                (a.mapped as u64, a.unmapped as u64),
+                &MAPSTAT.snapshot().since(&m0),
+            );
             if crate::maplog::on() {
                 // ⊘ Diagnostic only (`KF3_MAPLOG=1`, default off): every diff run and its verdict,
                 // so a host fault VA can be matched against what the guest's tables said, when,
@@ -1702,7 +2039,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         for (w, keys, at) in &batch.wants {
             let bad = keys.iter().find(|k| failed.contains(k));
             let again = keys.iter().any(|k| partial.contains(k));
-            if let Want::Split { ticket, pdb, .. } = w {
+            if let Want::Split {
+                ticket,
+                pdb,
+                key: skey,
+                at: sat,
+            } = w
+            {
                 // ★★★ v3-mapfix — A SPLIT FAILS ONLY ON A REFUSAL THAT IS NOT MERE ABSENCE.
                 // `[measured 670bd310 nb1, UnifiedMemoryStreams]` ONE refused 64 KiB map in ONE
                 // process's space failed the split of the guest's UVM kernel channel (token 3,
@@ -1722,6 +2065,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     failed.contains(k) && !absent_only.contains(k) && !rewalk.contains(k)
                 });
                 let again = again || keys.iter().any(|k| rewalk.contains(k));
+                if hard.is_some() || !again {
+                    self.note_split_done(*ticket, *pdb, *skey, *sat);
+                }
                 match (hard, bad) {
                     (Some(k), _) => self
                         .splits_done
@@ -3446,5 +3792,419 @@ mod tests {
         r.m.on_invalidate(q, r.port.trigger());
         assert_eq!(r.m.stats.no_slot, 1);
         assert!(busy(&r.port), "never cleared: nothing was applied");
+    }
+
+    // ---- 2026-11-13 slow-path instrumentation (enscape TDR hunt) ----
+
+    /// The threshold is STRICTLY greater: exactly at it is not slow, one ns over is.
+    #[test]
+    fn exceeds_ms_is_strict_and_in_milliseconds() {
+        assert!(!exceeds_ms(500_000_000, 500));
+        assert!(exceeds_ms(500_000_001, 500));
+        assert!(!exceeds_ms(0, 500));
+        assert!(!exceeds_ms(499_999_999, 500));
+        assert!(exceeds_ms(1_000_000_001, 1000));
+        assert!(!exceeds_ms(1_000_000_000, 1000));
+        assert!(
+            !exceeds_ms(u64::MAX / 2, u64::MAX),
+            "no overflow on a huge ms"
+        );
+        assert_eq!(SLOW_APPLY_MS, 500);
+        assert_eq!(SLOW_SPLIT_MS, 1000);
+    }
+
+    /// The rate limit: the first `cap` are admitted, the rest counted, never lost.
+    #[test]
+    fn line_budget_admits_cap_and_counts_the_rest() {
+        let mut b = LineBudget::new(3);
+        assert!(b.admit() && b.admit() && b.admit());
+        assert_eq!(b.suppressed(), 0);
+        assert!(!b.admit());
+        assert!(!b.admit());
+        assert_eq!(b.seen(), 5);
+        assert_eq!(b.suppressed(), 2);
+        let mut z = LineBudget::new(0);
+        assert!(!z.admit());
+        assert_eq!(z.suppressed(), 1);
+        assert_eq!(SLOW_LOG_CAP, 20);
+    }
+
+    /// `admit` itself (not only the counts): a cap of one prints exactly one.
+    #[test]
+    fn line_budget_cap_one_admits_exactly_one() {
+        let mut b = LineBudget::new(1);
+        assert!(b.admit());
+        assert!(!b.admit());
+        assert!(!b.admit());
+    }
+
+    fn empty_batch() -> Batch {
+        Batch {
+            wants: Vec::new(),
+            walked: BTreeMap::new(),
+            submitted: std::time::Instant::now(),
+            id: 1,
+        }
+    }
+
+    /// An apply at the threshold is not slow; over it, counted.
+    #[test]
+    fn note_apply_counts_only_over_the_threshold() {
+        type R = VaManager<ModelWalker, FakeHost>;
+        let mut tm = VaTiming::default();
+        let mut lines = LineBudget::new(2);
+        let b = empty_batch();
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 500_000_000),
+            (1, 0),
+            &MapStatSnap::default(),
+        );
+        assert_eq!((tm.slow_applies, lines.seen()), (0, 0));
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 500_000_001),
+            (200_534, 0),
+            &MapStatSnap::default(),
+        );
+        assert_eq!((tm.slow_applies, lines.seen()), (1, 1));
+    }
+
+    /// Past the cap the lines stop, the counter does not.
+    #[test]
+    fn note_apply_counts_every_slow_apply_but_prints_only_the_cap() {
+        type R = VaManager<ModelWalker, FakeHost>;
+        let mut tm = VaTiming::default();
+        let mut lines = LineBudget::new(2);
+        let b = empty_batch();
+        for _ in 0..5 {
+            R::note_apply(
+                &mut tm,
+                &mut lines,
+                &[],
+                &b,
+                (K_A, 600_000_000),
+                (5, 5),
+                &MapStatSnap::default(),
+            );
+        }
+        assert_eq!(tm.slow_applies, 5);
+        assert_eq!(lines.suppressed(), 3);
+    }
+
+    /// The worst apply is kept (below the threshold too) and is not windowed.
+    #[test]
+    fn note_apply_tracks_the_worst_apply() {
+        type R = VaManager<ModelWalker, FakeHost>;
+        let mut tm = VaTiming::default();
+        let mut lines = LineBudget::new(2);
+        let b = empty_batch();
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 40_000_000),
+            (1, 0),
+            &MapStatSnap::default(),
+        );
+        assert_eq!(tm.apply_ns_max, 40_000_000);
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 3_778_000_000),
+            (1, 0),
+            &MapStatSnap::default(),
+        );
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &[],
+            &b,
+            (K_A, 10_000_000),
+            (1, 0),
+            &MapStatSnap::default(),
+        );
+        assert_eq!(tm.apply_ns_max, 3_778_000_000);
+        let w = tm.since(&VaTiming::default());
+        assert_eq!(w.apply_ns_max, 3_778_000_000);
+    }
+
+    /// The real apply path feeds the worst-apply figure.
+    #[test]
+    fn a_walk_updates_the_apply_max() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split(Some(PDB_A), 7, r.port.trigger());
+        r.m.on_walk_ready(r.port.trigger());
+        assert!(r.m.stats.timing.apply_ns_max > 0);
+        assert_eq!(r.m.stats.timing.slow_applies, 0);
+    }
+
+    /// Threshold test: a split is named only past one second.
+    #[test]
+    fn note_split_done_names_only_over_one_second() {
+        let mut r = rig();
+        let now = std::time::Instant::now();
+        let ago = |ms: u64| now - std::time::Duration::from_millis(ms);
+        r.m.note_split_done(1, None, Some(K_A), ago(900));
+        assert_eq!(
+            (r.m.stats.timing.slow_splits, r.m.slow_split_lines.seen()),
+            (0, 0)
+        );
+        assert!(r.m.stats.timing.split_ns_max >= 900_000_000);
+        r.m.note_split_done(2, Some(PDB_A), None, ago(1_500));
+        assert_eq!(
+            (r.m.stats.timing.slow_splits, r.m.slow_split_lines.seen()),
+            (1, 1)
+        );
+        assert!(r.m.stats.timing.split_ns_max >= 1_500_000_000);
+    }
+
+    /// Past the cap SPLIT-LATE lines stop, the counter does not.
+    #[test]
+    fn note_split_done_counts_every_late_split_but_prints_only_the_cap() {
+        let mut r = rig();
+        let at = std::time::Instant::now() - std::time::Duration::from_millis(1_200);
+        for t in 0..38 {
+            r.m.note_split_done(t, None, None, at);
+        }
+        assert_eq!(r.m.stats.timing.slow_splits, 38);
+        assert_eq!(r.m.slow_split_lines.suppressed(), 38 - SLOW_LOG_CAP);
+    }
+
+    /// The clock starts at the request: a split that waits behind another space's walk includes
+    /// that wait (not just its own walk).
+    #[test]
+    fn a_split_queued_behind_a_walk_counts_the_queue_time() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x9000_0000, 0x0300_0000, 0x1000, 0)]);
+        let qa = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(qa, r.port.trigger());
+        r.m.on_split(Some(PDB_B), 5, r.port.trigger());
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        r.m.on_walk_ready(r.port.trigger()); // A lands; B's walk starts only now
+        r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(5, Ok(()))]);
+        assert!(r.m.stats.timing.split_ns_max >= 30_000_000);
+    }
+
+    /// A real walk's split carries its request time through the batch: a split asked, then
+    /// finished by the walk, shows up in `split_ns_max` (the plumbing, not just the helper).
+    #[test]
+    fn a_split_finished_by_a_walk_updates_split_max() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split(Some(PDB_A), 7, r.port.trigger());
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(7, Ok(()))]);
+        assert!(r.m.stats.timing.split_ns_max >= 5_000_000);
+        assert_eq!(r.m.stats.timing.slow_splits, 0);
+    }
+
+    /// ★ KNOWN-RED (documents the CURRENT behaviour; the fix is a later task).
+    /// Space A's walk carries a 200,000-run diff (the enscape-01 TDR's apply: 200,534 maps in
+    /// 3,778 ms). Space B's split arrives while A's walk is in flight. The VA thread applies A's
+    /// whole diff before it starts B's walk, so B's split is done only after ALL of A's host maps:
+    /// head-of-line blocking across spaces. The property a bounded design would give is asserted
+    /// here (B's split finishes behind at most `BOUND` of A's maps); it fails today, by about the
+    /// full 200,000. Run: `cargo test -p kf-mem known_red -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "KNOWN-RED: documents today's cross-space head-of-line behaviour (analysis tdr_enscape_analysis_20261113); not fixed in the instrumentation task"]
+    fn known_red_space_b_split_waits_behind_a_200k_map_apply_of_space_a() {
+        const N: u64 = 200_000;
+        const BOUND: usize = 1_000;
+        let mut r = rig();
+        r.m.walker_mut().cap = 1 << 20;
+        let leaves: Vec<(u64, u64, u64, u32)> = (0..N)
+            .map(|i| (0x1_0000_0000 + i * 0x2000, (i % 60_000) * 0x1000, 0x1000, 0))
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, leaves);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x9000_0000, 0x0300_0000, 0x1000, 0)]);
+        // A's walk is submitted (an invalidate of A); B's split arrives during it.
+        let qa = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(qa, r.port.trigger());
+        r.m.on_split(Some(PDB_B), 42, r.port.trigger());
+        assert!(r.m.take_splits().is_empty());
+        // A's walk lands: its diff is applied in full on this thread.
+        r.m.on_walk_ready(r.port.trigger());
+        let maps_a = ops(&r).iter().filter(|o| matches!(o, Op::Map(..))).count();
+        // B's walk, then B's split.
+        let mut done = r.m.take_splits();
+        while done.is_empty() {
+            r.m.on_walk_ready(r.port.trigger());
+            done = r.m.take_splits();
+        }
+        let before = ops(&r)
+            .iter()
+            .take_while(|o| !matches!(o, Op::Map(0x9000_0000, ..)))
+            .filter(|o| matches!(o, Op::Map(..)))
+            .count();
+        eprintln!(
+            "KNOWN-RED measurement: host maps applied before space B's split completed = {before} (A's diff {maps_a} maps)"
+        );
+        assert_eq!(done, vec![(42, Ok(()))]);
+        assert!(
+            before <= BOUND,
+            "space B's split waited behind {before} of space A's host maps (bound {BOUND})"
+        );
+    }
+
+    /// Batch counters: rows before, pieces after (mmaps), call ns and the worst per piece.
+    #[test]
+    fn mapstat_counts_rows_and_pieces_of_batches() {
+        let m = MapStat::new();
+        m.record_scattered(10, 4, 80_000);
+        m.record_scattered(2, 2, 40_000);
+        let d = m.snapshot();
+        assert_eq!((d.scat_calls, d.scat_rows, d.scat_pieces), (2, 12, 6));
+        assert_eq!(
+            (d.scat_ns, d.scat_ns_max, d.scat_piece_ns_max),
+            (120_000, 80_000, 20_000)
+        );
+    }
+
+    /// Per-run maps are split by backing kind.
+    #[test]
+    fn mapstat_splits_single_maps_by_kind() {
+        let m = MapStat::new();
+        m.record_single(true, 20_000);
+        m.record_single(true, 60_000);
+        m.record_single(false, 5_000);
+        let d = m.snapshot();
+        assert_eq!((d.ram_calls, d.ram_ns, d.ram_ns_max), (2, 80_000, 60_000));
+        assert_eq!(
+            (d.store_calls, d.store_ns, d.store_ns_max),
+            (1, 5_000, 5_000)
+        );
+    }
+
+    /// Host-map statistics: rows -> pieces (mmaps), per-call and per-piece figures, per kind.
+    #[test]
+    fn mapstat_reports_coalescing_and_costs_per_kind() {
+        let m = MapStat::new();
+        let z = m.snapshot();
+        // 10 rows coalesced to 4 pieces in 80 us; 2 rows -> 2 pieces in 40 us.
+        m.record_scattered(10, 4, 80_000);
+        m.record_scattered(2, 2, 40_000);
+        m.record_single(true, 20_000);
+        m.record_single(true, 60_000);
+        m.record_single(false, 5_000);
+        let d = m.snapshot().since(&z);
+        assert_eq!((d.scat_calls, d.scat_rows, d.scat_pieces), (2, 12, 6));
+        assert_eq!(
+            (d.scat_ns, d.scat_ns_max, d.scat_piece_ns_max),
+            (120_000, 80_000, 20_000)
+        );
+        assert_eq!((d.ram_calls, d.ram_ns, d.ram_ns_max), (2, 80_000, 60_000));
+        assert_eq!(
+            (d.store_calls, d.store_ns, d.store_ns_max),
+            (1, 5_000, 5_000)
+        );
+        let t = d.describe();
+        assert!(t.contains("rows=12 -> pieces(mmaps)=6"), "{t}");
+        assert!(
+            t.contains("call_avg_us=60 piece_avg_us=20 call_max_us=80 piece_max_us=20"),
+            "{t}"
+        );
+        assert!(t.contains("ram_run_maps[n=2 avg_us=40 max_us=60]"), "{t}");
+        assert!(t.contains("store_run_maps[n=1 avg_us=5 max_us=5]"), "{t}");
+        // A window since a snapshot excludes what came before it.
+        let z2 = m.snapshot();
+        m.record_single(false, 7_000);
+        let w = m.snapshot().since(&z2);
+        assert_eq!((w.store_calls, w.ram_calls, w.scat_calls), (1, 0, 0));
+        assert!(
+            MapStat::new()
+                .snapshot()
+                .describe()
+                .contains("calls=0 rows=0 -> pieces(mmaps)=0")
+        );
+    }
+
+    /// The same, for a deferred-split (key) want queued behind a walk.
+    #[test]
+    fn a_keyed_split_queued_behind_a_walk_counts_the_queue_time() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x9000_0000, 0x0300_0000, 0x1000, 0)]);
+        let qa = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(qa, r.port.trigger());
+        r.m.on_split_space(K_B, 6, r.port.trigger());
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        r.m.on_walk_ready(r.port.trigger());
+        r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(6, Ok(()))]);
+        assert!(r.m.stats.timing.split_ns_max >= 30_000_000);
+    }
+
+    /// The SLOW-APPLY line formats with real wants (carried, behind) without panicking.
+    #[test]
+    fn slow_apply_line_formats_with_carried_and_pending_wants() {
+        type R = VaManager<ModelWalker, FakeHost>;
+        let mut r = rig();
+        let now = std::time::Instant::now();
+        let mut b = empty_batch();
+        let req = guest_invalidate(&r.port, PDB_A, false);
+        b.wants.push((Want::Invalidate(req, now), vec![K_A], now));
+        b.wants.push((Want::Root(K_A), vec![K_A], now));
+        for t in 0..9 {
+            b.wants.push((
+                Want::Split {
+                    pdb: None,
+                    ticket: t,
+                    key: Some(K_A),
+                    at: now,
+                },
+                vec![K_A],
+                now,
+            ));
+        }
+        let pending = vec![
+            Want::Split {
+                pdb: None,
+                ticket: 99,
+                key: Some(K_B),
+                at: now,
+            },
+            Want::Root(K_B),
+        ];
+        let mut tm = VaTiming::default();
+        let mut lines = LineBudget::new(1);
+        R::note_apply(
+            &mut tm,
+            &mut lines,
+            &pending,
+            &b,
+            (K_A, 3_000_000_000),
+            (9, 9),
+            &MapStatSnap::default(),
+        );
+        assert_eq!(tm.slow_applies, 1);
+        let _ = &mut r;
     }
 }

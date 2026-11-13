@@ -2832,7 +2832,7 @@ impl Device {
         let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
         let nm = self.mem.counters.mirrors.load(Ordering::Relaxed);
         let timing = format!(
-            " mirrors={} reused={} prewarmed={} mirror_avg_us={} mirror_max_us={} vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={}]",
+            " mirrors={} reused={} prewarmed={} mirror_avg_us={} mirror_max_us={} vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={} apply_max_ms={} split_max_ms={} slow_applies={} slow_splits={}]",
             nm,
             self.mem.counters.mirrors_reused.load(Ordering::Relaxed),
             self.mem.counters.prewarmed.load(Ordering::Relaxed),
@@ -2852,6 +2852,10 @@ impl Device {
             avg(tm.apply_ns, tm.walks),
             tm.leaves_last,
             tm.host_calls,
+            tm.apply_ns_max / 1_000_000,
+            tm.split_ns_max / 1_000_000,
+            tm.slow_applies,
+            tm.slow_splits,
         );
         let mem = format!(
             " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} absent_cleared={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} carve_clipped={:#x} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
@@ -3591,6 +3595,18 @@ impl Device {
         let rs = &self.chans.relay_stats;
         if rs.life.any() {
             eprintln!("kf3: USER_RING_LIFECYCLE SUMMARY {}", rs.life.summary());
+        }
+        // ★ 2026-11-13: the boot's worst VA-thread values, always (the per-line logs are capped).
+        if let Ok(v) = self.va_stats.lock() {
+            let t = &v.timing;
+            eprintln!(
+                "kf3: VA_WORST SUMMARY apply_max_ms={} split_max_ms={} slow_applies={} slow_splits={} hostmaps(whole boot)={}",
+                t.apply_ns_max / 1_000_000,
+                t.split_ns_max / 1_000_000,
+                t.slow_applies,
+                t.slow_splits,
+                kf_mem::vasmgr::MAPSTAT.snapshot().describe()
+            );
         }
         if rs.lazy.any() {
             eprintln!("kf3: USER_RING_LAZY_OBSERVE SUMMARY {}", rs.lazy.summary());
