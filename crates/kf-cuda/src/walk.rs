@@ -298,6 +298,39 @@ pub enum ReportError {
         /// The header flags seen.
         flags: u16,
     },
+    /// ★ 2026-11-14 (S1-69): the header's format version is not [`crate::abi::KFWR_VERSION`].
+    BadVersion(u16),
+    /// ★ 2026-11-14 (S1-69): the header's page-size table names a size outside 4 KiB..1 TiB, so
+    /// no alignment below could be checked against it.
+    BadPageSizes([u8; 4]),
+    /// ★ 2026-11-14 (S1-69): more refusal samples claimed than the header carries.
+    TooManySamples(u32),
+    /// ★ 2026-11-14 (S1-69): a run whose op is not MAP, UNMAP or REMAP.
+    BadOp {
+        /// Which run.
+        index: usize,
+        /// The op it carried.
+        op: u16,
+    },
+    /// ★ 2026-11-14 (S1-69): a run whose page-size code is not one of the format's four.
+    BadPageSize {
+        /// Which run.
+        index: usize,
+        /// The code it carried.
+        code: u8,
+    },
+    /// ★ 2026-11-14 (S1-69): a run whose VA, length, or (for a mapping) GPGA is not a multiple
+    /// of its own page size — a mapping no MMU could install as described.
+    Misaligned {
+        /// Which run.
+        index: usize,
+        /// `"va"`, `"len"` or `"gpga"`.
+        field: &'static str,
+        /// The value.
+        value: u64,
+        /// The page size it had to be a multiple of.
+        page: u64,
+    },
 }
 
 impl core::fmt::Display for ReportError {
@@ -342,6 +375,32 @@ impl core::fmt::Display for ReportError {
                 "not a diff report (flags={flags:#x}): the kernel does not speak the \
                  commit-on-ack protocol this host applies"
             ),
+            ReportError::BadVersion(v) => {
+                write!(f, "report version {v} is not {}", crate::abi::KFWR_VERSION)
+            }
+            ReportError::BadPageSizes(t) => {
+                write!(f, "page-size table {t:?} names a size outside 2^12..2^40")
+            }
+            ReportError::TooManySamples(n) => write!(
+                f,
+                "sample_count {n} > the {} samples a report carries",
+                crate::abi::KF_REFUSAL_SAMPLES
+            ),
+            ReportError::BadOp { index, op } => {
+                write!(f, "run[{index}] has op {op}, not MAP/UNMAP/REMAP")
+            }
+            ReportError::BadPageSize { index, code } => {
+                write!(f, "run[{index}] has page-size code {code}, not 0..=3")
+            }
+            ReportError::Misaligned {
+                index,
+                field,
+                value,
+                page,
+            } => write!(
+                f,
+                "run[{index}] {field} {value:#x} is not a multiple of its page size {page:#x}"
+            ),
         }
     }
 }
@@ -361,6 +420,19 @@ impl Report {
         let h = &self.header;
         if h.magic != KFWR_MAGIC {
             return Err(ReportError::BadMagic(h.magic));
+        }
+        // ★ 2026-11-14 (security review 3 F-11 / S1-69): the properties the `.cu`'s own
+        // `kf_validate_report` checks and this one did not — format version, sample count, op,
+        // page-size code and alignment. The page sizes come from the REPORT's own table (the
+        // header carries `ps_log2` so the host needs no format knowledge), bounded first.
+        if h.version != crate::abi::KFWR_VERSION {
+            return Err(ReportError::BadVersion(h.version));
+        }
+        if h.ps_log2.iter().any(|&l| !(12..=40).contains(&l)) {
+            return Err(ReportError::BadPageSizes(h.ps_log2));
+        }
+        if h.sample_count as usize > crate::abi::KF_REFUSAL_SAMPLES {
+            return Err(ReportError::TooManySamples(h.sample_count));
         }
         if h.pdb_count > h.pdb_capacity {
             return Err(ReportError::PdbOverflow {
@@ -397,6 +469,28 @@ impl Report {
             }
             if r.len == 0 {
                 return Err(ReportError::ZeroLenRun(i));
+            }
+            if !matches!(
+                r.op,
+                crate::abi::KFWR_OP_MAP | KFWR_OP_UNMAP | crate::abi::KFWR_OP_REMAP
+            ) {
+                return Err(ReportError::BadOp { index: i, op: r.op });
+            }
+            let code = r.page_size();
+            let Some(&log2) = h.ps_log2.get(usize::from(code)) else {
+                return Err(ReportError::BadPageSize { index: i, code });
+            };
+            let page = 1u64 << log2;
+            let gpga = (r.op != KFWR_OP_UNMAP).then_some(r.gpga);
+            for (field, value) in [("va", Some(r.va)), ("len", Some(r.len)), ("gpga", gpga)] {
+                if let Some(value) = value.filter(|v| v % page != 0) {
+                    return Err(ReportError::Misaligned {
+                        index: i,
+                        field,
+                        value,
+                        page,
+                    });
+                }
             }
             // ★★★★★ §39(c) CONTAINMENT — the one property here about ESCALATION rather than
             // well-formedness. An UNMAP names a VA being retired and carries no gpga, so it is
@@ -2311,6 +2405,117 @@ mod fake_driver_tests {
         assert_eq!(walk_over_the_fake(crate::abi::kf_format_ver3()), 26);
     }
 
+    /// A walker over the fake driver with a 1 MiB store imported.
+    fn fake_walker() -> WalkKernel {
+        let mut k = WalkKernel::bring_up_with(
+            WalkCfg::default(),
+            crate::abi::kf_format_ver2(),
+            WalkDevice::FirstOrdinal,
+            || Ok(Cuda::fake()),
+        )
+        .unwrap();
+        k.import_store(3, 1 << 20).unwrap();
+        let _ = fake::calls();
+        k
+    }
+
+    /// ★★ S1-65 (security review 3 F-11, 2026-11-14): hostile SUBMISSIONS on the production
+    /// launch path (`submit` -> `submit_over` -> `run_parallel`) are refused by name before any
+    /// launch — more entries than the kernel's arrays, a slot out of range, one slot named twice
+    /// (two blocks would race one committed region), a second walk while one is in flight, a walk
+    /// with no store. Each refusal has its control (the same walk, well formed, launches).
+    #[test]
+    fn s165_hostile_submissions_are_refused_before_any_launch() {
+        let mut k = fake_walker();
+        let max = WalkCfg::default().max_slots;
+        let e = |slot: u32| WalkEntry { pdb: 0, slot };
+        let too_many: Vec<WalkEntry> = (0..=KF_MAX_PDB as u32).map(e).collect();
+        let hostile: [(&str, Vec<WalkEntry>); 4] = [
+            ("65 entries", too_many),
+            ("slot out of range", vec![e(max)]),
+            ("slot u32::MAX", vec![e(u32::MAX)]),
+            ("one slot twice", vec![e(1), e(2), e(1)]),
+        ];
+        for (name, entries) in hostile {
+            assert!(k.submit(&entries).is_err(), "{name}");
+            assert_eq!(fake::launches(), 0, "{name}: {:?}", fake::calls());
+        }
+        // the controls: 64 distinct entries walk
+        let full: Vec<WalkEntry> = (0..KF_MAX_PDB as u32).map(e).collect();
+        k.submit(&full).unwrap();
+        assert!(fake::launches() > 0);
+        let _ = fake::calls();
+        assert!(k.submit(&[e(0)]).is_err(), "a walk is in flight");
+        assert_eq!(fake::launches(), 0);
+        let mut bare = WalkKernel::bring_up_with(
+            WalkCfg::default(),
+            crate::abi::kf_format_ver2(),
+            WalkDevice::FirstOrdinal,
+            || Ok(Cuda::fake()),
+        )
+        .unwrap();
+        let _ = fake::calls();
+        assert!(bare.submit(&[e(0)]).is_err(), "no store imported");
+        assert_eq!(fake::launches(), 0);
+    }
+
+    /// Write `h` and `pdbs` into the walker's pinned report, as the diff kernels would.
+    fn plant_report(k: &mut WalkKernel, h: &KfReportHeader, pdbs: &[KfPdbEntry]) {
+        let at = k.pin_at;
+        k.pin.write(at.hdr, &h.encode());
+        for (i, p) in pdbs.iter().enumerate() {
+            k.pin.write(at.rpdb + i * KfPdbEntry::BYTES, &p.encode());
+        }
+    }
+
+    /// ★★ S1-65: a HOSTILE REPORT coming back from the GPU (counts far past every capacity, a
+    /// need of `u32::MAX`) is read within the pinned capacities, never re-walked past the pool
+    /// ceiling, and refused by the validator production consults — no panic, no overrun.
+    #[test]
+    fn s165_a_hostile_report_is_clamped_on_collect_and_refused_by_validate() {
+        let mut k = fake_walker();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        let cfg = WalkCfg::default();
+        let h = KfReportHeader {
+            magic: KFWR_MAGIC,
+            version: crate::abi::KFWR_VERSION,
+            flags: KFWR_HF_TRUNCATED | KFWR_HF_DIFF,
+            pdb_count: u32::MAX,
+            pdb_capacity: cfg.pdb_capacity,
+            run_count: u32::MAX,
+            run_capacity: cfg.run_capacity,
+            refuse_mask: crate::abi::KFWR_R_RUN_CAP,
+            ps_log2: [12, 16, 21, 29],
+            ..KfReportHeader::default()
+        };
+        // entry 0 claims a walk cut at its region with a need no pool can hold
+        let p = KfPdbEntry {
+            reserved2: u64::from(crate::abi::KFWR_R_RUN_CAP) | (u64::from(u32::MAX) << 32),
+            ..KfPdbEntry::default()
+        };
+        plant_report(&mut k, &h, &[p]);
+        let _ = fake::calls();
+        let c = k
+            .try_collect()
+            .unwrap()
+            .expect("not re-walked: the need is past the ceiling");
+        assert_eq!(fake::launches(), 0, "no re-walk was queued");
+        assert_eq!(c.report.pdbs.len(), cfg.pdb_capacity as usize);
+        assert_eq!(c.report.runs.len(), cfg.run_capacity as usize);
+        assert!(
+            k.take_capacity_events()
+                .iter()
+                .any(|e| e.starts_with("capacity ceiling")),
+            "the ceiling is named"
+        );
+        assert!(matches!(
+            c.report.validate(),
+            Err(ReportError::PdbOverflow { .. })
+        ));
+        // the walker is not wedged: the next walk is accepted
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+    }
+
     #[test]
     fn the_store_is_bounded_and_dies_with_the_walker() {
         let mut k = WalkKernel::bring_up_with(
@@ -2335,5 +2540,125 @@ mod fake_driver_tests {
             fake::calls().contains(&fake::Call::CtxDestroy),
             "the walker destroys its context once"
         );
+    }
+}
+
+/// ★★ S1-69 (security review 3 F-11, 2026-11-14): a property sweep of [`Report::validate`]. A
+/// well-formed diff report of mixed page sizes is generated many times; it must validate, and each
+/// single corruption of one property the `.cu`'s `kf_validate_report` checks must be refused by
+/// name. Every check therefore has this killer beside its named test in `tests/report_containment.rs`.
+#[cfg(test)]
+mod validate_sweep {
+    use super::*;
+    use crate::abi::{KFWR_OP_MAP, KFWR_OP_REMAP, KFWR_VERSION, RF_PS};
+
+    struct Lcg(u64);
+    impl Lcg {
+        fn next(&mut self) -> u64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            self.0 >> 33
+        }
+    }
+
+    const PS_LOG2: [u8; 4] = [12, 16, 21, 29];
+
+    fn good(rng: &mut Lcg) -> Report {
+        let header = KfReportHeader {
+            magic: KFWR_MAGIC,
+            version: KFWR_VERSION,
+            flags: KFWR_HF_DIFF,
+            pdb_count: 2,
+            pdb_capacity: 8,
+            run_count: 6,
+            run_capacity: 64,
+            sample_count: (rng.next() % 9) as u32,
+            ps_log2: PS_LOG2,
+            ..KfReportHeader::default()
+        };
+        let runs: Vec<KfMapRun> = (0..6)
+            .map(|i| {
+                let code = (rng.next() % 3) as u32; // 4 KiB, 64 KiB, 2 MiB
+                let page = 1u64 << PS_LOG2[code as usize];
+                KfMapRun {
+                    va: (1 + rng.next() % 1024) * page,
+                    gpga: (rng.next() % 4) * page,
+                    len: (1 + rng.next() % 2) * page,
+                    flags: RF_PS.put(code),
+                    op: [KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_OP_REMAP][(rng.next() % 3) as usize],
+                    pdb_index: u16::from(i >= 3),
+                }
+            })
+            .collect();
+        let pdb = |first: u32| KfPdbEntry {
+            first_run: first,
+            run_count: 3,
+            ..KfPdbEntry::default()
+        };
+        Report {
+            header,
+            pdbs: vec![pdb(0), pdb(3)],
+            runs,
+            gpga_span: 1 << 40,
+        }
+    }
+
+    #[test]
+    fn every_single_corruption_of_a_checked_property_is_refused() {
+        let mut rng = Lcg(0x5169);
+        for _ in 0..500 {
+            let base = good(&mut rng);
+            assert_eq!(base.validate(), Ok(()), "{base:?}");
+            let i = (rng.next() % 6) as usize;
+            let mut c = base.clone();
+            c.header.version = KFWR_VERSION + 1 + (rng.next() % 7) as u16;
+            assert!(matches!(c.validate(), Err(ReportError::BadVersion(_))));
+            let mut c = base.clone();
+            c.header.ps_log2[(rng.next() % 4) as usize] =
+                [0, 11, 41, 255][(rng.next() % 4) as usize];
+            assert!(matches!(c.validate(), Err(ReportError::BadPageSizes(_))));
+            let mut c = base.clone();
+            c.header.sample_count = 9 + (rng.next() % 100) as u32;
+            assert!(matches!(c.validate(), Err(ReportError::TooManySamples(_))));
+            let mut c = base.clone();
+            c.runs[i].op = [0, 4, 5, u16::MAX][(rng.next() % 4) as usize];
+            assert!(matches!(c.validate(), Err(ReportError::BadOp { index, .. }) if index == i));
+            let mut c = base.clone();
+            c.runs[i].flags = RF_PS.put(4 + (rng.next() % 12) as u32);
+            assert!(
+                matches!(c.validate(), Err(ReportError::BadPageSize { index, .. }) if index == i)
+            );
+            // misalign one field by a sub-page amount (a 4 KiB run cannot be misaligned by 4 KiB
+            // multiples, so the offset is below 4 KiB)
+            let off = 1 + rng.next() % 0xfff;
+            let mut c = base.clone();
+            c.runs[i].va += off;
+            assert!(matches!(
+                c.validate(),
+                Err(ReportError::Misaligned { field: "va", .. })
+            ));
+            let mut c = base.clone();
+            c.runs[i].len += off;
+            assert!(matches!(
+                c.validate(),
+                Err(ReportError::Misaligned { field: "len", .. })
+            ));
+            let mut c = base.clone();
+            c.runs[i].gpga += off;
+            if c.runs[i].op == KFWR_OP_UNMAP {
+                assert_eq!(
+                    c.validate(),
+                    Ok(()),
+                    "an UNMAP's gpga is not a mapping target"
+                );
+            } else {
+                assert!(matches!(
+                    c.validate(),
+                    Err(ReportError::Misaligned { field: "gpga", .. })
+                ));
+            }
+        }
     }
 }
