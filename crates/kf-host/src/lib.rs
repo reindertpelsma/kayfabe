@@ -964,7 +964,8 @@ impl HostRm {
             h_object_new: want,
             h_class: class,
             p_alloc_parms: 0,
-            params_size: params.len() as u32,
+            params_size: u32::try_from(params.len())
+                .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?,
             status: 0,
         }
         .encode_into(&mut arg)
@@ -1021,7 +1022,8 @@ impl HostRm {
             h_object_new: want,
             h_class: class,
             p_alloc_parms: 0,
-            params_size: params.len() as u32,
+            params_size: u32::try_from(params.len())
+                .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?,
             status: 0,
         }
         .encode_into(&mut arg)
@@ -1086,7 +1088,8 @@ impl HostRm {
             h_object_new: want,
             h_class: class,
             p_alloc_parms: 0,
-            params_size: params.len() as u32,
+            params_size: u32::try_from(params.len())
+                .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?,
             status: 0,
         }
         .encode_into(&mut arg)
@@ -1210,7 +1213,8 @@ impl HostRm {
             cmd,
             flags: 0,
             params: 0,
-            params_size: payload.len() as u32,
+            params_size: u32::try_from(payload.len())
+                .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?,
             status: 0,
         }
         .encode_into(&mut arg)
@@ -1635,7 +1639,7 @@ impl HostRm {
     /// Whatever RM puts in `status`. ⚠ Which is **the only place a refusal appears**: `ioctl(2)`
     /// returns 0 and leaves `errno` untouched even when the unmap fails.
     pub fn release_cpu_view(&self, r: CpuViewRelease) -> Result<(), RmError> {
-        let (r_mem, r_cookie) = (r.h_memory, r.p_linear_address);
+        let r_mem = r.h_memory;
         let mut arg = [0u8; Nvos34Parameters::SIZE];
         Nvos34Parameters {
             // ⊘ F11: this session's OWN client and device, read here — never carried in from the
@@ -1660,8 +1664,8 @@ impl HostRm {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if r.is_err() && n < 16 {
             eprintln!(
-                "kf-host: CPU view release REFUSED (#{n}): memory {:#x} cookie {:#x}: status {:#x} — its BAR1 aperture stays held",
-                r_mem, r_cookie, out.status
+                "kf-host: CPU view release REFUSED (#{n}): memory {:#x}: status {:#x} — its BAR1 aperture stays held",
+                r_mem, out.status
             );
         }
         r
