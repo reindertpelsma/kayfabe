@@ -175,6 +175,44 @@ MUTANTS = [
         "            self.buf.alive(),\n            \"{what}: the device allocation was released",
         "            true,\n            \"{what}: the device allocation was released",
     ),
+    # ── D-13: a memoised CUDA thread is re-verified (posture.rs, 2026-11-14) ──
+    (
+        "d13-memo-trusted",
+        "posture.rs",
+        "            .is_ok_and(|caps| !caps.holds_effective(CAP_SYS_ADMIN))",
+        "            .is_ok_and(|_| true)",
+    ),
+    (
+        "d13-unreadable-trusted",
+        "posture.rs",
+        "            .is_ok_and(|caps| !caps.holds_effective(CAP_SYS_ADMIN))",
+        "            .map_or(true, |caps| !caps.holds_effective(CAP_SYS_ADMIN))",
+    ),
+    # ── D-15: failed bring-up and import steps give back what they took (2026-11-14) ──
+    (
+        "d15-guard-forgets-the-context",
+        "driver_unsafe.rs",
+        "        if let Some(ctx) = self.ctx.take() {\n            self.cu.ctx_destroy(ctx);",
+        "        if let Some(ctx) = self.ctx.take() {\n            std::mem::forget(ctx);",
+    ),
+    (
+        "d15-unwind-keeps-the-mapping",
+        "driver_unsafe.rs",
+        "            unsafe { unmap(ptr, bytes) };",
+        "            let _ = (unmap, ptr, bytes);",
+    ),
+    (
+        "d15-unwind-keeps-the-reservation",
+        "driver_unsafe.rs",
+        "            unsafe { free(ptr, bytes) };",
+        "            let _ = (free, ptr, bytes);",
+    ),
+    (
+        "d15-unwind-keeps-the-handle",
+        "driver_unsafe.rs",
+        "            unsafe { release(handle) };",
+        "            let _ = (release, handle);",
+    ),
     # ── D-08: field lists ──
     (
         "d08-a-field-missing-from-the-list",

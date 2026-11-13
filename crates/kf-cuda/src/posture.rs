@@ -50,12 +50,37 @@ fn thread_name() -> String {
 /// [`CudaError::Refused`] (`what` = `"CAP_SYS_ADMIN clear"`) when the bit is held and could not be
 /// cleared; the caller must not make the CUDA call.
 pub fn cuda_thread() -> Result<(), CudaError> {
-    if DONE.with(Cell::get) {
-        return Ok(());
+    DONE.with(|done| posture_memo_on(&kf_linux_raw::capability::ThisThread, done, &thread_name))
+}
+
+/// ★ [`cuda_thread`] over any [`ThreadCapOps`] and memo cell (a simulated thread in tests).
+///
+/// ⊘⊘ 2026-11-14 (security review 2 D-13), above the memo it corrects: the memo used to
+/// short-circuit for the rest of the thread's life after the first clear. The permitted set keeps
+/// `CAP_SYS_ADMIN`, so code on the thread could raise it again, and every later CUDA entry would
+/// then create ADMIN channels with no refusal. Now a memoised thread is RE-VERIFIED on every entry
+/// (one `capget`, no log line): the bit back in effect is cleared again (logged, as the first
+/// time), or the entry refuses by name. A failed read is treated as "held" (fail closed).
+///
+/// # Errors
+/// As [`cuda_thread`].
+pub fn posture_memo_on<O: ThreadCapOps + ?Sized>(
+    ops: &O,
+    done: &Cell<bool>,
+    thread: &dyn Fn() -> String,
+) -> Result<(), CudaError> {
+    if done.get() {
+        if ops
+            .get()
+            .is_ok_and(|caps| !caps.holds_effective(CAP_SYS_ADMIN))
+        {
+            return Ok(());
+        }
+        done.set(false);
     }
-    let r = posture_on(&kf_linux_raw::capability::ThisThread, &thread_name());
+    let r = posture_on(ops, &thread());
     if r.is_ok() {
-        DONE.with(|d| d.set(true));
+        done.set(true);
     }
     r.map(|_| ())
 }
@@ -147,6 +172,80 @@ mod tests {
         assert_eq!(t.caps.get().permitted, ROOT_CAPS.permitted);
         assert_eq!(posture_on(&t, "t"), Ok(ThreadLifeClear::NotHeld));
         assert_eq!(t.sets.get(), 1, "cleared once, never restored");
+    }
+
+    /// ★★ D-13 (2026-11-14): a memoised thread whose `CAP_SYS_ADMIN` was RAISED again (it stays
+    /// permitted) is cleared again on its next CUDA entry — the memo no longer vouches for it. A
+    /// quiet entry while it is clear costs one read and no write.
+    #[test]
+    fn d13_a_bit_raised_again_after_the_memo_is_cleared_again() {
+        let t = root(false);
+        let done = Cell::new(false);
+        let name = || "t".to_string();
+        posture_memo_on(&t, &done, &name).unwrap();
+        assert!(done.get());
+        assert_eq!(t.sets.get(), 1);
+        posture_memo_on(&t, &done, &name).unwrap();
+        assert_eq!(t.sets.get(), 1, "clear and memoised: no write");
+        // safe code on the thread raises it again (it is still permitted)
+        t.caps.set(ROOT_CAPS);
+        posture_memo_on(&t, &done, &name).unwrap();
+        assert!(
+            !t.caps.get().holds_effective(CAP_SYS_ADMIN),
+            "cleared again"
+        );
+        assert_eq!(t.sets.get(), 2);
+        assert!(done.get());
+        // fail closed: a memoised thread whose sets cannot be read is not vouched for
+        struct Unreadable;
+        impl ThreadCapOps for Unreadable {
+            fn get(&self) -> Result<ThreadCaps, i32> {
+                Err(13)
+            }
+            fn set(&self, _: ThreadCaps) -> Result<(), i32> {
+                Err(13)
+            }
+        }
+        assert!(posture_memo_on(&Unreadable, &done, &name).is_err());
+        assert!(!done.get());
+    }
+
+    /// ★★ D-13: a re-raised bit that can no longer be cleared refuses the entry, and the memo is
+    /// dropped, so no later entry passes on it either.
+    #[test]
+    fn d13_a_re_raised_bit_that_cannot_be_cleared_refuses_every_later_entry() {
+        let t = root(false);
+        let done = Cell::new(false);
+        let name = || "t".to_string();
+        posture_memo_on(&t, &done, &name).unwrap();
+        let stuck = FakeThread {
+            caps: Cell::new(ROOT_CAPS),
+            refuse: true,
+            sets: Cell::new(0),
+        };
+        for _ in 0..2 {
+            assert!(matches!(
+                posture_memo_on(&stuck, &done, &name),
+                Err(CudaError::Refused {
+                    what: "CAP_SYS_ADMIN clear",
+                    ..
+                })
+            ));
+            assert!(!done.get());
+        }
+        // a thread whose sets cannot even be read is treated as holding the bit
+        struct Unreadable;
+        impl ThreadCapOps for Unreadable {
+            fn get(&self) -> Result<ThreadCaps, i32> {
+                Err(1)
+            }
+            fn set(&self, _: ThreadCaps) -> Result<(), i32> {
+                Err(1)
+            }
+        }
+        let done = Cell::new(true);
+        assert!(posture_memo_on(&Unreadable, &done, &name).is_err());
+        assert!(!done.get());
     }
 
     /// ★ Fail closed: a held bit that cannot be cleared refuses the CUDA entry by name.

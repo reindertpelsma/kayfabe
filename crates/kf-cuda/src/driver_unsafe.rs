@@ -315,6 +315,11 @@ pub struct Cuda {
     pub(crate) cuMemMap: Option<unsafe extern "C" fn(u64, usize, usize, u64, u64) -> CUresult>,
     pub(crate) cuMemSetAccess:
         Option<unsafe extern "C" fn(u64, usize, *const c_void, usize) -> CUresult>,
+    // ★ 2026-11-14 (security review 2 D-15): the three undo steps of an import that failed half
+    // way — `import_and_map` gives back what it took instead of leaking it into the context.
+    pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    pub(crate) cuMemRelease: Option<unsafe extern "C" fn(u64) -> CUresult>,
     // ★ 2026-10-03 (display step 3, the broker relay): page-lock memory WE mapped (a sealed
     // memfd the broker also receives) so the display's async D2H copy can land in it.
     // ⊘ `Option`, like the VMM set: a driver without them loses the broker path BY NAME at its
@@ -490,6 +495,9 @@ impl Cuda {
             cuMemAddressReserve: opt!("cuMemAddressReserve"),
             cuMemMap: opt!("cuMemMap"),
             cuMemSetAccess: opt!("cuMemSetAccess"),
+            cuMemUnmap: opt!("cuMemUnmap"),
+            cuMemAddressFree: opt!("cuMemAddressFree"),
+            cuMemRelease: opt!("cuMemRelease"),
             // ⚠ `_v2`, as everywhere a size is carried (the unsuffixed entry is the 32-bit ABI)
             cuMemHostRegister: opt!("cuMemHostRegister_v2"),
             cuMemHostUnregister: opt!("cuMemHostUnregister"),
@@ -639,6 +647,21 @@ impl Cuda {
         Ok(CtxHandle {
             raw: ctx as usize,
             life,
+        })
+    }
+
+    /// ★ 2026-11-14 (security review 2 D-15): [`Self::ctx_create`] behind a guard that DESTROYS
+    /// the context when it drops — so a bring-up that fails after the context exists (a `?` on any
+    /// later step) gives back the context and with it every allocation, stream, event and module
+    /// made in it, instead of leaking them for the life of the process. [`CtxGuard::disarm`] hands
+    /// the handle over once the owner holds everything.
+    ///
+    /// # Errors
+    /// As [`Self::ctx_create`].
+    pub(crate) fn ctx_create_guarded(&self, dev: i32) -> Result<CtxGuard<'_>, CudaError> {
+        Ok(CtxGuard {
+            cu: self,
+            ctx: Some(self.ctx_create(dev)?),
         })
     }
 
@@ -1683,6 +1706,29 @@ impl Cuda {
     }
 }
 
+/// ★ A context that is destroyed on drop unless [`CtxGuard::disarm`]ed
+/// ([`Cuda::ctx_create_guarded`], D-15).
+pub(crate) struct CtxGuard<'a> {
+    cu: &'a Cuda,
+    ctx: Option<CtxHandle>,
+}
+
+impl CtxGuard<'_> {
+    /// Hand the context over: it is no longer destroyed when the guard goes.
+    pub(crate) fn disarm(mut self) -> CtxHandle {
+        // `ctx` is `Some` from construction until here, the only place that takes it
+        self.ctx.take().unwrap_or_else(CtxHandle::null)
+    }
+}
+
+impl Drop for CtxGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(ctx) = self.ctx.take() {
+            self.cu.ctx_destroy(ctx);
+        }
+    }
+}
+
 /// An opaque CUDA context handle. ⊘ A `usize` and not a pointer, so nothing outside this file
 /// can dereference it and `WalkKernel` can stay `Send`. ★ Not `Copy`/`Clone` (D-04):
 /// [`Cuda::ctx_destroy`] consumes it.
@@ -2663,15 +2709,20 @@ impl Cuda {
         if rc != 0 {
             return Err(format!("cuMemImportFromShareableHandle rc={rc} fd={fd}"));
         }
+        // ★ 2026-11-14 (D-15): from here on a failed step gives back what the earlier steps took
+        // (`import_unwind`), instead of leaking the imported handle and the reservation into the
+        // context for its life.
         let mut ptr: u64 = 0;
         // SAFETY: `ptr` is a live local. Alignment 0 lets CUDA choose.
         let rc = unsafe { reserve(&raw mut ptr, bytes, 0, 0, 0) };
         if rc != 0 {
+            self.import_unwind(handle, None, false);
             return Err(format!("cuMemAddressReserve rc={rc} bytes={bytes}"));
         }
         // SAFETY: `ptr` is a reservation of `bytes` and `handle` is a live imported handle.
         let rc = unsafe { map(ptr, bytes, 0, handle, 0) };
         if rc != 0 {
+            self.import_unwind(handle, Some((ptr, bytes)), false);
             return Err(format!("cuMemMap rc={rc} ptr={ptr:#x} bytes={bytes}"));
         }
         // `CUmemAccessDesc { CUmemLocation { type, id }, flags }` — 12 bytes, transcribed and
@@ -2690,6 +2741,7 @@ impl Cuda {
         // SAFETY: one live `AccessDesc` for a mapped range of `bytes`.
         let rc = unsafe { set_access(ptr, bytes, (&raw const desc).cast::<c_void>(), 1) };
         if rc != 0 {
+            self.import_unwind(handle, Some((ptr, bytes)), true);
             return Err(format!("cuMemSetAccess rc={rc} ptr={ptr:#x}"));
         }
         Ok(DevBuf {
@@ -2699,6 +2751,28 @@ impl Cuda {
             life,
             owner: None,
         })
+    }
+
+    /// ★ D-15: undo a half-done [`Self::import_and_map`], in reverse order — unmap (when
+    /// `mapped`), free the reservation, release the imported handle. Best effort: a driver without
+    /// an undo entry, or one that refuses it, leaves that piece to `cuCtxDestroy` (the old
+    /// behaviour); nothing else names these values, so nothing can use them afterwards.
+    fn import_unwind(&self, handle: u64, reserved: Option<(u64, usize)>, mapped: bool) {
+        if let (true, Some((ptr, bytes)), Some(unmap)) = (mapped, reserved, self.cuMemUnmap) {
+            // SAFETY: `[ptr, ptr + bytes)` is the range `cuMemMap` mapped in this failed import;
+            // no `DevBuf` names it, so nothing can reach it after this.
+            unsafe { unmap(ptr, bytes) };
+        }
+        if let (Some((ptr, bytes)), Some(free)) = (reserved, self.cuMemAddressFree) {
+            // SAFETY: `ptr`/`bytes` are exactly the reservation `cuMemAddressReserve` returned in
+            // this failed import (unmapped just above if it had been mapped).
+            unsafe { free(ptr, bytes) };
+        }
+        if let Some(release) = self.cuMemRelease {
+            // SAFETY: `handle` is the one `cuMemImportFromShareableHandle` returned in this failed
+            // import, released once; a mapping of it was undone above.
+            unsafe { release(handle) };
+        }
     }
 }
 
@@ -2716,15 +2790,42 @@ pub(crate) mod fake {
     /// One driver call that reached the fake.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(crate) enum Call {
-        Launch { grid: u32, block: u32, shmem: u32 },
-        HtoD { dst: u64, n: usize },
-        DtoH { src: u64, n: usize },
-        Memset { dst: u64, n: usize },
-        MemsetAsync { dst: u64, n: usize },
-        DtoD { dst: u64, src: u64, n: usize },
-        DtoHAsync { src: u64, n: usize },
+        Launch {
+            grid: u32,
+            block: u32,
+            shmem: u32,
+        },
+        HtoD {
+            dst: u64,
+            n: usize,
+        },
+        DtoH {
+            src: u64,
+            n: usize,
+        },
+        Memset {
+            dst: u64,
+            n: usize,
+        },
+        MemsetAsync {
+            dst: u64,
+            n: usize,
+        },
+        DtoD {
+            dst: u64,
+            src: u64,
+            n: usize,
+        },
+        DtoHAsync {
+            src: u64,
+            n: usize,
+        },
         Free(u64),
         CtxDestroy,
+        /// The three undo steps of a failed import (D-15).
+        Unmap,
+        AddressFree,
+        Release,
         StreamDestroy,
         EventDestroy,
         HostFn,
@@ -2732,6 +2833,8 @@ pub(crate) mod fake {
     }
 
     thread_local! {
+        /// Entry points that refuse (return 1) on this thread until [`succeed_all`] (D-15 tests).
+        static FAILING: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
         static CALLS: RefCell<Vec<Call>> = const { RefCell::new(Vec::new()) };
         /// Host functions queued by [`deferred_hostfn`], run by [`run_deferred`].
         static DEFERRED: RefCell<Vec<(extern "C" fn(*mut c_void), usize)>> =
@@ -2740,6 +2843,21 @@ pub(crate) mod fake {
 
     fn log(c: Call) {
         CALLS.with(|v| v.borrow_mut().push(c));
+    }
+
+    /// Make entry point `name` refuse on this thread (the stubs that consult it: event create,
+    /// address reserve, map, set access).
+    pub(crate) fn fail(name: &'static str) {
+        FAILING.with(|f| f.borrow_mut().push(name));
+    }
+
+    /// Every entry point succeeds again.
+    pub(crate) fn succeed_all() {
+        FAILING.with(|f| f.borrow_mut().clear());
+    }
+
+    fn rc(name: &str) -> CUresult {
+        CUresult::from(FAILING.with(|f| f.borrow().contains(&name)))
     }
 
     /// Every call this thread's fake saw since the last `calls()`, oldest first.
@@ -2901,13 +3019,28 @@ pub(crate) mod fake {
         0
     }
     extern "C" fn reserve(_: *mut u64, _: usize, _: usize, _: u64, _: u64) -> CUresult {
-        0
+        rc("cuMemAddressReserve")
     }
     extern "C" fn map(_: u64, _: usize, _: usize, _: u64, _: u64) -> CUresult {
-        0
+        rc("cuMemMap")
     }
     extern "C" fn set_access(_: u64, _: usize, _: *const c_void, _: usize) -> CUresult {
+        rc("cuMemSetAccess")
+    }
+    extern "C" fn unmap(_: u64, _: usize) -> CUresult {
+        log(Call::Unmap);
         0
+    }
+    extern "C" fn address_free(_: u64, _: usize) -> CUresult {
+        log(Call::AddressFree);
+        0
+    }
+    extern "C" fn release(_: u64) -> CUresult {
+        log(Call::Release);
+        0
+    }
+    extern "C" fn event_create(_: *mut *mut c_void, _: c_uint) -> CUresult {
+        rc("cuEventCreate")
     }
     extern "C" fn host_register(_: *mut c_void, _: usize, _: c_uint) -> CUresult {
         0
@@ -2947,7 +3080,7 @@ pub(crate) mod fake {
                 cuGetErrorName: None,
                 cuStreamCreate: create2,
                 cuStreamDestroy: stream_destroy,
-                cuEventCreate: create2,
+                cuEventCreate: event_create,
                 cuEventDestroy: event_destroy,
                 cuEventRecord: p2,
                 cuEventQuery: p1,
@@ -2974,6 +3107,9 @@ pub(crate) mod fake {
                 cuMemAddressReserve: Some(reserve),
                 cuMemMap: Some(map),
                 cuMemSetAccess: Some(set_access),
+                cuMemUnmap: Some(unmap),
+                cuMemAddressFree: Some(address_free),
+                cuMemRelease: Some(release),
                 cuMemHostRegister: Some(host_register),
                 cuMemHostUnregister: Some(p1),
             }
@@ -3633,6 +3769,54 @@ mod perimeter_tests {
         let r = abi_bytes(&run);
         assert_eq!(&r[24..28], &4u32.to_ne_bytes());
         assert_eq!(&r[30..32], &6u16.to_ne_bytes());
+    }
+
+    /// ★★ D-15 (2026-11-14): an import that fails half way gives back what it took, in reverse
+    /// order, and nothing else: reserve refused -> release; map refused -> free the reservation,
+    /// release; set-access refused -> unmap, free, release. The control (no failure) undoes nothing.
+    #[test]
+    fn d15_a_half_done_import_is_unwound_in_reverse() {
+        use super::fake::{fail, succeed_all};
+        let (cu, _ctx) = up();
+        let undo = |c: Vec<Call>| -> Vec<Call> {
+            c.into_iter()
+                .filter(|c| matches!(c, Call::Unmap | Call::AddressFree | Call::Release))
+                .collect()
+        };
+        let b = cu.import_and_map(0, 3, 1 << 20).expect("control");
+        assert_eq!(b.len(), 1 << 20);
+        assert_eq!(undo(calls()), vec![], "a successful import undoes nothing");
+        let cases: [(&str, Vec<Call>); 3] = [
+            ("cuMemAddressReserve", vec![Call::Release]),
+            ("cuMemMap", vec![Call::AddressFree, Call::Release]),
+            (
+                "cuMemSetAccess",
+                vec![Call::Unmap, Call::AddressFree, Call::Release],
+            ),
+        ];
+        for (step, want) in cases {
+            succeed_all();
+            fail(step);
+            let e = cu.import_and_map(0, 3, 1 << 20).expect_err(step);
+            assert!(e.contains(step), "{e}");
+            assert_eq!(undo(calls()), want, "{step}");
+        }
+        succeed_all();
+    }
+
+    /// ★★ D-15: a context created behind the guard is destroyed when the guard drops, exactly
+    /// once, and not when it was disarmed.
+    #[test]
+    fn d15_a_guarded_context_dies_with_its_guard_unless_disarmed() {
+        let cu = Cuda::fake();
+        let g = cu.ctx_create_guarded(0).unwrap();
+        let _ = calls();
+        drop(g);
+        assert_eq!(calls(), vec![Call::CtxDestroy]);
+        let ctx = cu.ctx_create_guarded(0).unwrap().disarm();
+        assert_eq!(calls(), vec![], "disarmed: not destroyed");
+        cu.ctx_destroy(ctx);
+        assert_eq!(calls(), vec![Call::CtxDestroy]);
     }
 }
 

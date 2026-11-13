@@ -656,7 +656,9 @@ impl DisplayGpu {
     pub(crate) fn bring_up_with(cu: Cuda, bdf: &str) -> Result<DisplayGpu, CudaError> {
         cu.init()?;
         let device = cu.device_by_pci_bus_id(bdf)?;
-        let ctx = cu.ctx_create(device)?;
+        // ★ 2026-11-14 (security review 2 D-15): guarded — a `?` below destroys the context (and
+        // the stream, events and modules made in it) instead of leaking them.
+        let ctx = cu.ctx_create_guarded(device)?;
         let stream = cu.stream_create()?;
         let done = CompletionFd::new()?;
         let mut ptx = SCANOUT_PTX.to_vec();
@@ -703,6 +705,7 @@ impl DisplayGpu {
             .map_err(|e| format!("the YUV kernel did not load: {e}"));
         let color_event = cu.event_create()?;
         let signal_event = cu.event_create()?;
+        let ctx = ctx.disarm();
         Ok(DisplayGpu {
             cu,
             ctx,
@@ -2634,6 +2637,73 @@ mod fake_driver_tests {
         assert!(g.color_yuv(&yfar, 16384, 16384).is_err());
         assert!(g.color_output(128, 128, None, &[0; 12]).is_err());
         assert_eq!(fake::launches(), 0, "{:?}", fake::calls());
+    }
+
+    /// ★★ D-15 (2026-11-14): a display bring-up that fails after its context exists (the driver
+    /// refuses an event) destroys the context once; a successful one keeps it.
+    #[test]
+    fn d15_a_failed_display_bring_up_destroys_its_context() {
+        let _ = fake::calls();
+        fake::fail("cuEventCreate");
+        let r = DisplayGpu::bring_up_with(Cuda::fake(), "0000:01:00.0");
+        fake::succeed_all();
+        assert!(r.is_err());
+        let calls = fake::calls();
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|c| **c == fake::Call::CtxDestroy)
+                .count(),
+            1,
+            "{calls:?}"
+        );
+        let g = DisplayGpu::bring_up_with(Cuda::fake(), "0000:01:00.0").unwrap();
+        assert!(!fake::calls().contains(&fake::Call::CtxDestroy));
+        drop(g);
+    }
+
+    /// ★★ D-15 through the display's real import paths (a slot, the store): each half-done
+    /// import is unwound in reverse, and the refused slot is not counted against the cap.
+    #[test]
+    fn d15_a_failed_display_import_is_unwound() {
+        let mut g = gpu();
+        let undo = || -> Vec<fake::Call> {
+            fake::calls()
+                .into_iter()
+                .filter(|c| {
+                    matches!(
+                        c,
+                        fake::Call::Unmap | fake::Call::AddressFree | fake::Call::Release
+                    )
+                })
+                .collect()
+        };
+        for (step, want) in [
+            ("cuMemAddressReserve", vec![fake::Call::Release]),
+            (
+                "cuMemMap",
+                vec![fake::Call::AddressFree, fake::Call::Release],
+            ),
+            (
+                "cuMemSetAccess",
+                vec![
+                    fake::Call::Unmap,
+                    fake::Call::AddressFree,
+                    fake::Call::Release,
+                ],
+            ),
+        ] {
+            let mut fresh = DisplayGpu::bring_up_with(Cuda::fake(), "0000:01:00.0").unwrap();
+            let _ = fake::calls();
+            fake::fail(step);
+            assert!(g.import_slot(3, 2 << 20).is_err(), "{step}");
+            assert_eq!(undo(), want, "slot, {step}");
+            assert!(fresh.import_store(3, 1 << 20).is_err(), "{step}");
+            assert_eq!(undo(), want, "store, {step}");
+            fake::succeed_all();
+        }
+        g.import_slot(3, 2 << 20).unwrap();
+        assert_eq!(undo(), vec![]);
     }
 
     #[test]
