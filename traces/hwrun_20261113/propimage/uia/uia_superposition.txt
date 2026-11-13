@@ -1,0 +1,9 @@
+procs: launcher:7308
+toplevel windows: 4
+  TOP name='' class=Shell_TrayWnd pid=5664
+  TOP name='UNIGINE Superposition v1.1' class=Qt5QWindowOwnDCIcon pid=7308
+  TOP name='Administrator: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe' class=ConsoleWindowClass pid=10672
+  TOP name='Program Manager' class=Progman pid=5664
+WINDOW name='UNIGINE Superposition v1.1' class=Qt5QWindowOwnDCIcon pid=7308 rect=448,220,1024,640
+  descendants: 0
+done

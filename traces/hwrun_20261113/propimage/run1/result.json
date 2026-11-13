@@ -1,0 +1,67 @@
+[
+ {
+  "step": "unpack",
+  "verdict": "PASS",
+  "detail": "unpacked directory used; seed check"
+ },
+ {
+  "step": "clock",
+  "verdict": "PASS",
+  "detail": "rtc base 2026-11-12T17:49:48+00:00 (stop + gap, never earlier)"
+ },
+ {
+  "step": "overlay",
+  "verdict": "PASS",
+  "detail": "throwaway overlay of the unpacked base"
+ },
+ {
+  "step": "boot",
+  "verdict": "PASS",
+  "detail": "qemu pid 129047, offline, display=broker, flags=kf3_flags.sample.env"
+ },
+ {
+  "step": "ssh",
+  "verdict": "PASS",
+  "detail": "up after 141 s"
+ },
+ {
+  "step": "verify",
+  "verdict": "FAIL",
+  "detail": "gpu_uuid"
+ },
+ {
+  "step": "gpu",
+  "verdict": "FAIL",
+  "detail": "[\"NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.\"]"
+ },
+ {
+  "step": "app:3dmark",
+  "verdict": "LAUNCH_ONLY",
+  "detail": "evidence=SCREEN(launch only; the app did no work) alive=True window=True procs=3DMark,3DMark titles=3DMark done "
+ },
+ {
+  "step": "app:solidworks",
+  "verdict": "FAIL",
+  "detail": "evidence=SCREEN(launch only; the app did no work) alive=True window=False procs=SLDWORKS,sldworks_fs titles= done "
+ },
+ {
+  "step": "app:resolve",
+  "verdict": "FAIL",
+  "detail": "evidence=SCREEN(launch only; the app did no work) alive=True window=False procs=Resolve titles=Project Manager done "
+ },
+ {
+  "step": "app:superposition",
+  "verdict": "LAUNCH_ONLY",
+  "detail": "evidence=SCREEN(launch only; the app did no work) alive=True window=True procs=launcher titles=UNIGINE Superposition v1.1 done "
+ },
+ {
+  "step": "app:blackmyth",
+  "verdict": "LAUNCH_ONLY",
+  "detail": "evidence=SCREEN(launch only; the app did no work) alive=True window=True procs=steam,steamservice,steamwebhelper,steamwebhelper,steamwebhelper,steamwebhelper,steamwebhelper,steamwebhelper titles=Black Myth: Wukong Benchmark Tool done"
+ },
+ {
+  "step": "stop",
+  "verdict": "FAIL",
+  "detail": "qemu rc=None"
+ }
+]

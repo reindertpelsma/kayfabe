@@ -1,0 +1,62 @@
+procs: eDrawings:9988
+toplevel windows: 5
+  TOP name='' class=#32770 pid=9988
+  TOP name='' class=Shell_TrayWnd pid=5664
+  TOP name='eDrawings' class=Window pid=9988
+  TOP name='Administrator: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe' class=ConsoleWindowClass pid=10672
+  TOP name='Program Manager' class=Progman pid=5664
+WINDOW name='' class=#32770 pid=9988 rect=651,331,618,357
+  descendants: 18
+  Pane name='ACCEPT' id='1' class=Button pat=
+  Pane name='DO NOT ACCEPT' id='2' class=Button pat=
+  Pane name='You must accept all of the terms of this license agreement before proceeding.' id='65535' class=Static pat=
+  Pane name='eulaedrawing.htm' id='' class=Chrome_WidgetWin_1 pat=ScrollItemPattern/ItemContainerPattern
+  Pane name='' id='' class=Intermediate D3D Window pat=
+  Pane name='eulaedrawing.htm - Web content' id='' class=BrowserRootView pat=ScrollItemPattern
+  Pane name='' id='' class=NonClientView pat=ScrollItemPattern
+  Pane name='' id='' class=EmbeddedBrowserTabRootView pat=ScrollItemPattern
+  Pane name='' id='' class=EmbeddedBrowserFrameView pat=ScrollItemPattern
+  Pane name='' id='' class=BrowserView pat=ScrollItemPattern
+  Pane name='' id='' class=TopContainerView pat=ScrollItemPattern
+  Pane name='' id='' class=SidebarContentsSplitView pat=ScrollItemPattern
+  Pane name='' id='' class=SidebarContentsSplitView pat=ScrollItemPattern
+  Pane name='' id='' class=MultiContentsView pat=ScrollItemPattern
+  Pane name='' id='' class=View pat=ScrollItemPattern
+  Pane name='' id='' class=View pat=ScrollItemPattern
+  Pane name='' id='' class=EmbeddedBrowserDownloadView pat=ScrollItemPattern
+  Pane name='' id='' class=TopContainerOverlayView pat=ScrollItemPattern
+WINDOW name='eDrawings' class=Window pid=9988 rect=0,0,1280,960
+  descendants: 32
+  Image name='' id='eDwWatermark' class=Image pat=SynchronizedInputPattern
+  Image name='' id='eDwLogo' class=Image pat=SynchronizedInputPattern
+  Menu name='' id='FileMenu' class=Menu pat=SynchronizedInputPattern
+  MenuItem name='File' id='mFile' class=MenuItem pat=ExpandCollapsePattern/SynchronizedInputPattern
+  Text name='_File' id='' class=TextBlock pat=SynchronizedInputPattern
+  MenuItem name='View' id='mhView' class=MenuItem pat=ExpandCollapsePattern/SynchronizedInputPattern
+  Text name='_View' id='' class=TextBlock pat=SynchronizedInputPattern
+  MenuItem name='Tools' id='mTools' class=MenuItem pat=ExpandCollapsePattern/SynchronizedInputPattern
+  Text name='_Tools' id='' class=TextBlock pat=SynchronizedInputPattern
+  MenuItem name='Help' id='mHelp' class=MenuItem pat=ExpandCollapsePattern/SynchronizedInputPattern
+  Text name='_Help' id='' class=TextBlock pat=SynchronizedInputPattern
+  Button name='' id='bOpen' class=Button pat=InvokePattern/SynchronizedInputPattern
+  Image name='' id='' class=Image pat=SynchronizedInputPattern
+  Menu name='' id='ShortcutFileOpenMenu' class=Menu pat=SynchronizedInputPattern
+  MenuItem name='' id='' class=MenuItem pat=ExpandCollapsePattern/SynchronizedInputPattern
+  Image name='' id='' class=Image pat=SynchronizedInputPattern
+  Button name='' id='bSettings' class=Button pat=InvokePattern/SynchronizedInputPattern
+  Image name='' id='' class=Image pat=SynchronizedInputPattern
+  Menu name='' id='ShortcutOptionsMenu' class=Menu pat=SynchronizedInputPattern
+  MenuItem name='' id='' class=MenuItem pat=ExpandCollapsePattern/SynchronizedInputPattern
+  Image name='' id='' class=Image pat=SynchronizedInputPattern
+  Button name='' id='bGoPro' class=Button pat=InvokePattern/SynchronizedInputPattern
+  Image name='' id='' class=Image pat=SynchronizedInputPattern
+  Button name='' id='bHelp' class=Button pat=InvokePattern/SynchronizedInputPattern
+  Image name='' id='' class=Image pat=SynchronizedInputPattern
+  Button name='' id='bMinimize' class=Button pat=InvokePattern/SynchronizedInputPattern
+  Button name='' id='bMaximize' class=Button pat=InvokePattern/SynchronizedInputPattern
+  Button name='' id='bClose' class=Button pat=InvokePattern/SynchronizedInputPattern
+  Custom name='' id='TabCtrl' class=TabCtrlControl pat=SynchronizedInputPattern
+  Tab name='' id='mainTabControl' class=TabControl pat=SelectionPattern/ScrollPattern/SynchronizedInputPattern/ItemContainerPattern
+  Custom name='' id='BtbControl' class=BottomToolBarControl pat=SynchronizedInputPattern
+  Thumb name='' id='LVsplitter_Markup' class=GridSplitter pat=TransformPattern/SynchronizedInputPattern
+done
