@@ -1,0 +1,48 @@
+SPEC_NOTE stage=preflight 2026-11-12T21:45:39+00:00 left_s=9000
+SPEC_STAGE_LIST lane=lanea n=4
+SPEC_NOTE rev=439ff38e tag=hw1 lane=lanea release=15.0.0 deadline_left_s=9000
+SPEC_NOTE narrowed table=spec_table.json ids=creo-04,catia-07,enscape-01,energy-04: not a lane run; every verdict line of this run ends with NARROWED
+SPEC_NOTE host: gpu="NVIDIA GeForce RTX 4090" cpus=30 ram_gb=49 disk_free_gb=197 need_gb=130
+SPEC_NOTE moved 10 log file(s) of an earlier run with tag spec_hw1 to old_1794519939
+SPEC_NOTE stage=fetch 2026-11-12T21:45:39+00:00 left_s=9000
+SPEC_NOTE stage=hostref_before 2026-11-12T21:45:39+00:00 left_s=9000
+SPEC_NOTE hostref before green cup8=PASS xid_count=0 xid_delta=0
+SPEC_NOTE stage=overlay 2026-11-12T21:45:40+00:00 left_s=8999
+SPEC_NOTE stage=boot_copy 2026-11-12T21:45:40+00:00 left_s=8999
+SPEC_NOTE ssh up after 10s
+SPEC_NOTE guest prep: SPEC_PREP exclusion=ok free_gb=123.6
+SPEC_NOTE stage=fetch_wait 2026-11-12T21:47:56+00:00 left_s=8863
+SPEC_NOTE fetch rc=0: fetch_bench_data: specviewperf-15.0.0.tar.zst -> /workspace/spec/specviewperf-15.0.0.tar.zst (sha256 ok)
+SPEC_NOTE archive sha256 verified against the pin (42002015727 bytes)
+SPEC_NOTE stage=copy 2026-11-12T22:02:54+00:00 left_s=7965
+SPEC_NOTE copy: zstd=0 tarfilter=0 ssh_tar=0 
+SPEC_NOTE copy verified: 4 viewset directories match the manifest
+SPEC_NOTE guest post: SPEC_POST cli=present SPEC_POST icacls_rc=0 SPEC_POST vcredist_rc=0 
+SPEC_COPY_DELETED removed=archive
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE stage=boot_run 2026-11-12T22:29:21+00:00 left_s=6378
+SPEC_NOTE ssh up after 10s
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 283s)
+SPEC_NOTE settle_wait_s=283
+SPEC_NOTE stage=viewset_creo-04 2026-11-12T22:36:59+00:00 left_s=5920
+SPEC_NOTE run creo-04 (budget 3900s, mode full, left 5915s)
+SPEC_ROW name=creo-04 result=PASS subtests=13/13 reason=- failed=-
+SPEC_NOTE stage=viewset_catia-07 2026-11-12T23:05:10+00:00 left_s=4229
+SPEC_NOTE run catia-07 (budget 2700s, mode full, left 4226s)
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
+SPEC_NOTE stage=viewset_enscape-01 2026-11-12T23:22:54+00:00 left_s=3165
+SPEC_NOTE run enscape-01 (budget 2562s, mode cut, left 3162s)
+SPEC_ROW name=enscape-01 result=FAIL subtests=0/0 reason=GUEST failed=-
+enscape_01 --- FAILED
+SPEC_NOTE stage=viewset_energy-04 2026-11-12T23:32:15+00:00 left_s=2604
+SPEC_NOTE ssh up after 10s
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 276s)
+SPEC_NOTE settle_wait_s=276
+SPEC_NOTE run energy-04 (budget 1200s, mode full, left 2146s)
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
+SPEC_NOTE stage=conclude 2026-11-12T23:47:08+00:00 left_s=1711
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE hostref after green cup8=PASS xid_count=0 xid_delta=0
+SPEC_COPY_DELETED removed=overlay
+SPEC_STAGE_COUNTS pass=3 fail=1 not_run=0 of=4
+SPECVIEWPERF_STAGE_FAIL NARROWED

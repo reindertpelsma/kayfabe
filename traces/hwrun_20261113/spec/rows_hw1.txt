@@ -1,0 +1,4 @@
+SPEC_ROW name=creo-04 result=PASS subtests=13/13 reason=- failed=-
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
+SPEC_ROW name=enscape-01 result=FAIL subtests=0/0 reason=GUEST failed=-
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-

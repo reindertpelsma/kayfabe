@@ -169,8 +169,15 @@ const runtime = async (t, extraBindings = {}) => {
       throw Error('no frame ' + type);
     };
     const send = (frame) => sock.send(JSON.stringify({ v: 1, ...frame }));
-    const code = () => {
-      return Promise.race([closedP, new Promise((res) => setTimeout(() => res('open'), 4000))]);
+    // The close code. The bound is generous on purpose: it only fires on a real hang (the Worker
+    // closes a rejected socket in the same turn, ~2 ms measured), never on a slow or stalled CI
+    // runner. A caller that WANTS to probe "still open" passes a short bound.
+    const code = (bound = 20000) => {
+      let timer;
+      const limit = new Promise((res) => {
+        timer = setTimeout(() => res('open'), bound);
+      });
+      return Promise.race([closedP, limit]).finally(() => clearTimeout(timer));
     };
     return { sock, frames, next, send, code, closedP };
   };
@@ -240,6 +247,10 @@ test('admin: only the owner-side internal origin reaches the DO', async (t) => {
   await g.text();
 });
 
+// A token that differs from `token` in its last character. (A fixed replacement such as 'A' is the
+// real token one time in 16: the last base64url char of a 43-char token carries 4 bits.)
+const flipLast = (token) => token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A');
+
 test('ws: unknown box, no token minted, wrong token and another box token all close 4401', async (t) => {
   const h = await runtime(t);
   const wrong = 'kfh_' + 'A'.repeat(43);
@@ -248,7 +259,7 @@ test('ws: unknown box, no token minted, wrong token and another box token all cl
   assert.equal(await (await h.connect('rack-1', wrong)).code(), 4401, 'no token minted yet');
   const token = await h.mint('rack-1');
   assert.equal(await (await h.connect('rack-1', wrong)).code(), 4401);
-  assert.equal(await (await h.connect('rack-1', token.slice(0, -1) + 'A')).code(), 4401);
+  assert.equal(await (await h.connect('rack-1', flipLast(token))).code(), 4401);
   await h.put('rack-2');
   const other = await h.mint('rack-2');
   assert.equal(await (await h.connect('rack-1', other)).code(), 4401);
@@ -399,7 +410,7 @@ test('token rotation during an upgrade never leaves an old-token socket alive', 
     const old = await h.mint('rack-1');
     const [c] = await Promise.all([h.connect('rack-1', old), h.mint('rack-1')]);
     await h.wait(async () => (await openSockets(h, 'rack-1')) === 0, 'round ' + i + ' closed');
-    assert.ok([4401, 'open'].includes(await c.code()), 'round ' + i);
+    assert.ok([4401, 'open'].includes(await c.code(4000)), 'round ' + i);
     assert.equal((await h.view('rack-1')).connected, false, 'round ' + i);
   }
   // Also with a hello in flight right behind the upgrade.
