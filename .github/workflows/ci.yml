@@ -2619,7 +2619,9 @@ jobs:
       - name: Display PTX rebuilds byte for byte (clang 21.1.8)
         run: python3 -B scripts/ci/walk_ptx_repro.py display
       - name: The walk kernel's source on a CPU, over the committed corpus
-        run: make -C cuda/walk check-invariants check-cpu
+        run: |
+          make -C cuda/walk check-invariants check-cpu
+          python3 -B scripts/ci/walk_kernel_mutants.py
 
   # The required status check of the master ruleset ("Master_Protect") is the context `CI`.
   # GitHub names a status check after the JOB name, not the workflow name, so without a job

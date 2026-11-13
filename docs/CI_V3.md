@@ -22,7 +22,11 @@ generated display files reproduce byte for byte):
 - `make -C cuda/walk check-invariants check-cpu` runs the walk kernel's own source (its device half under
   `cuda/walk/kf_cpu_shim.h`) on a CPU over the committed corpus. The warp-parallel walk is not run there; it
   needs a GPU (`kf_tests`).
-- The checker has unit tests (`test_walk_ptx_repro.py`) and 12 mutants, each killed by two named tests.
+- The checker has unit tests (`test_walk_ptx_repro.py`) and mutants, each killed by two named tests.
+- `scripts/ci/walk_kernel_mutants.py` mutates the kernel source's CPU-reachable checks (the VER2/VER3 4 KiB
+  vetoes, review 3 F-1) and requires each mutant to fail at least two distinct `kf_cpu_walk` checks.
+- `static` also ties the VER3 PCF enumerants the kernel names (`KF_VER3_*`) to
+  `crates/kf-chip/data/hwref-580.159.04.tsv`.
 
 ## Stripped tree (2026-11-09)
 

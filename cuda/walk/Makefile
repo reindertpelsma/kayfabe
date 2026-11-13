@@ -186,6 +186,13 @@ check-ver3-sketch: kf_tests_ver3
 	   cat /tmp/kf_ver3.txt; exit 1; fi; \
 	 echo "ver3 ok: the SKETCH is well formed (geometry only -- it has never decoded a table)"
 
+# ★ 2026-11-13 (review 3 F-1): VER3 IS DECODED NOW, on the production (parallel) path. The ver3/* cases
+# exist only in the build whose kf_create accepts the VER3 descriptor.
+check-ver3: kf_tests_ver3
+	@./kf_tests_ver3 ver3/ > /tmp/kf_ver3_cases.txt 2>&1; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then echo "VER3 FAIL: the ver3/* decode cases fail:"; cat /tmp/kf_ver3_cases.txt; exit 1; fi; \
+	 grep -c '^pass ver3/' /tmp/kf_ver3_cases.txt | sed 's/^/ver3 ok: decode cases passed: /'
+
 # No SASS at all ⇒ the driver JITs from PTX at load time.
 check-ptx: kf_tests
 	@if cuobjdump -sass kf_tests 2>/dev/null | grep -q 'code for sm_'; then \
@@ -224,7 +231,7 @@ kf_cpu_walk: kf_cpu_walk.cpp kf_cpu_shim.h kf_walk.cu kf_walk.h
 check-cpu: kf_cpu_walk
 	./kf_cpu_walk
 
-check: check-invariants check-cpu kf_tests check-ptx check-negative check-coalesce-negative check-seam-negative check-sample-negative check-ver3-sketch
+check: check-invariants check-cpu kf_tests check-ptx check-negative check-coalesce-negative check-seam-negative check-sample-negative check-ver3-sketch check-ver3
 
 clean:
 	rm -f kf_tests kf_tests_broken kf_cpu_walk \

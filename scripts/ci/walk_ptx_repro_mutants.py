@@ -26,6 +26,13 @@ MUTANTS = [
     ("walk-committed-header-unchecked", "    if NVRTC_HEADER.encode() not in committed[:400]:", "    if False:"),
     ("display-any-clang", "        if want != clang_version:", "        if False:"),
     ("display-script-failure-ignored", "            if p.returncode != 0:", "            if False:"),
+    ("ver3-no-valid-unchecked", "        if o is None or _int(o) != k:", "        if o is None:"),
+    ("ver3-missing-define-accepted", "    for name in sorted(want - set(defs)):", "    for name in []:"),
+    ("ver3-untied-constant-accepted", "    for name in sorted(set(defs) - want):", "    for name in []:"),
+    ("ver3-sparse-bit-unchecked", "                elif bool(_int(o) & bit) != sparse:", "                elif False:"),
+    ("ver3-oracle-gap-accepted", "                if o is None:\n                    out.append(", "                if o is None:\n                    continue\n                    out.append("),
+    ("ver3-pcf-field-position-unchecked", "            if lo is None or pcf_lo is None or lo != pcf_lo:", "            if lo is None or pcf_lo is None:"),
+    ("ver3-check-not-run", "        findings = check_blobs(ROOT) + check_constants(ROOT) + check_ver3_pcf(ROOT)", "        findings = check_blobs(ROOT) + check_constants(ROOT)"),
     ("display-not-compared", '            out += compare(f"cuda/display/{ptx}"', '            out += [] and compare(f"cuda/display/{ptx}"'),
 ]
 COLLECT = """import io,json,sys,unittest
