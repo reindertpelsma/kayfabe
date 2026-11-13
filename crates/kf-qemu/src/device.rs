@@ -2829,6 +2829,32 @@ impl Device {
             }
             Err(_) => va.timing.clone(),
         };
+        // ★ 2026-11-13: the boot's worst VA-thread values, ALSO on disk without a clean shutdown
+        // (the stop() summary is lost when the VM is killed): printed when a whole-ms worst changed.
+        {
+            static PRINTED_MS: (AtomicU64, AtomicU64) = (AtomicU64::new(0), AtomicU64::new(0));
+            let t = &va.timing;
+            let was = (
+                PRINTED_MS.0.load(Ordering::Relaxed),
+                PRINTED_MS.1.load(Ordering::Relaxed),
+            );
+            if kf_mem::vasmgr::worst_changed(was, t.apply_ns_max, t.split_ns_max) {
+                PRINTED_MS
+                    .0
+                    .store(t.apply_ns_max / 1_000_000, Ordering::Relaxed);
+                PRINTED_MS
+                    .1
+                    .store(t.split_ns_max / 1_000_000, Ordering::Relaxed);
+                eprintln!(
+                    "kf3: VA_WORST apply_max_ms={} split_max_ms={} slow_applies={} slow_splits={} hostmaps(whole boot so far)={}",
+                    t.apply_ns_max / 1_000_000,
+                    t.split_ns_max / 1_000_000,
+                    t.slow_applies,
+                    t.slow_splits,
+                    kf_mem::vasmgr::MAPSTAT.snapshot().describe()
+                );
+            }
+        }
         let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
         let nm = self.mem.counters.mirrors.load(Ordering::Relaxed);
         let timing = format!(

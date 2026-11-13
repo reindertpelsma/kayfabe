@@ -826,6 +826,13 @@ impl MapStatSnap {
     }
 }
 
+/// ★ 2026-11-13: whether the boot-wide worst apply / split (ns) differs, in whole milliseconds,
+/// from what was last printed `(apply_ms, split_ms)` -- the periodic `VA_WORST` line prints then.
+#[must_use]
+pub fn worst_changed(printed_ms: (u64, u64), apply_ns_max: u64, split_ns_max: u64) -> bool {
+    printed_ms != (apply_ns_max / 1_000_000, split_ns_max / 1_000_000)
+}
+
 /// ★ A per-boot line budget: the first `cap` events are admitted, the rest counted
 /// ([`Self::suppressed`]). A cap on lines, never on counting.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -4206,5 +4213,26 @@ mod tests {
         );
         assert_eq!(tm.slow_applies, 1);
         let _ = &mut r;
+    }
+
+    /// Unchanged whole-ms worsts are not reprinted.
+    #[test]
+    fn worst_unchanged_in_whole_ms_is_not_printed() {
+        assert!(!worst_changed((0, 0), 999_999, 0));
+        assert!(!worst_changed((5, 7), 5_900_000, 7_100_000));
+    }
+
+    /// A new whole-ms worst of either value is printed.
+    #[test]
+    fn worst_changed_in_either_value_is_printed() {
+        assert!(worst_changed((5, 7), 6_000_000, 7_000_000));
+        assert!(worst_changed((5, 7), 5_000_000, 8_000_000));
+    }
+
+    /// Equal figures are quiet; a change of the split alone is printed.
+    #[test]
+    fn worst_equal_is_quiet_and_split_alone_counts() {
+        assert!(!worst_changed((6, 7), 6_000_000, 7_000_000));
+        assert!(worst_changed((6, 7), 6_000_000, 9_000_000));
     }
 }

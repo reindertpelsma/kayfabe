@@ -31,6 +31,8 @@ M = {
     "split_clock_from_walk_submit": (VA, "self.note_split_done(*ticket, *pdb, *skey, *sat);", "self.note_split_done(*ticket, *pdb, *skey, batch.submitted);", VA_TESTS),
     "mapstat_rows_not_counted": (VA, "        self.scat_rows.fetch_add(rows as u64, o);\n", "", VA_TESTS),
     "mapstat_ram_store_swapped": (VA, "            (&self.ram_calls, &self.ram_ns, &self.ram_ns_max)\n        } else {\n            (&self.store_calls, &self.store_ns, &self.store_ns_max)", "            (&self.store_calls, &self.store_ns, &self.store_ns_max)\n        } else {\n            (&self.ram_calls, &self.ram_ns, &self.ram_ns_max)", VA_TESTS),
+    "worst_ignores_split": (VA, "printed_ms != (apply_ns_max / 1_000_000, split_ns_max / 1_000_000)", "printed_ms.0 != apply_ns_max / 1_000_000", VA_TESTS),
+    "worst_ns_not_ms": (VA, "printed_ms != (apply_ns_max / 1_000_000, split_ns_max / 1_000_000)", "printed_ms != (apply_ns_max / 1_000, split_ns_max / 1_000)", VA_TESTS),
     "wait_threshold_zero": (UP, "    if !kf_mem::vasmgr::exceeds_ms(ns, kf_mem::vasmgr::SLOW_SPLIT_MS) {", "    if !kf_mem::vasmgr::exceeds_ms(ns, 0) {", UP_TESTS),
     "wait_repeated_per_poll": (UP, "        (false, true) => None,", "        (false, true) => Some(\"waiting\"),", UP_TESTS),
     "wait_end_not_named": (UP, "        (true, _) => Some(\"done\"),", "        (true, _) => None,", UP_TESTS),
