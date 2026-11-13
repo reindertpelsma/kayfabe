@@ -2618,6 +2618,10 @@ jobs:
         run: python3 -B scripts/ci/walk_ptx_repro.py walk --nvrtc "$RUNNER_TEMP/nvrtc/nvidia/cuda_nvrtc/lib/libnvrtc.so.12"
       - name: Display PTX rebuilds byte for byte (clang 21.1.8)
         run: python3 -B scripts/ci/walk_ptx_repro.py display
+      - name: The YUV kernel's body on a CPU, its plane ending at a guard page (review 3 F-6)
+        run: |
+          cc -O1 -Wall -Wextra -Wno-unused-function -DKF_HOST -o "$RUNNER_TEMP/kf_yuv_cpu" cuda/display/kf_yuv_cpu.c
+          "$RUNNER_TEMP/kf_yuv_cpu"
       - name: The walk kernel's source on a CPU, over the committed corpus
         run: make -C cuda/walk check-invariants check-cpu
 
