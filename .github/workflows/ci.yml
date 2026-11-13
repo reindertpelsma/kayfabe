@@ -909,6 +909,11 @@ jobs:
       # shrink-only debt.
       - name: "No-private-reference gate (the public tree never depends on the private repository)"
         run: python3 scripts/ci/no_private_refs.py
+      # Owner rule 2026-11-13: every `CALLER-CONTRACT:` marker has a reviewed row in scripts/ci/caller-contracts.tsv.
+      - name: "Caller-contract gate (no unlisted CALLER-CONTRACT marker, no stale row)"
+        run: |
+          python3 scripts/ci/caller_contracts.py
+          python3 scripts/ci/test_caller_contracts.py
       # docs/design/check_sections.sh existed but ran nowhere, so a duplicate section number
       # (V3_DOORBELL_IOEVENTFD.md, `## 7.` and `### 7.x`) reached master on 2026-09-30.
       - name: "Section-number gate (no two design-doc sections share a number)"
