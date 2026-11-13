@@ -41,8 +41,34 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
     } catch {
       return json({ error: 'Unauthorized' }, 401);
     }
-    if (identity.email !== env.OWNER_EMAIL) return json({ error: 'Forbidden' }, 403);
+    // 2026-11-13 owner decision: ONE Access service token (the coordinator) may use a narrow part of
+    // the API. Fails closed: the var must be a well-formed Client ID, the JWT must carry no email at all
+    // (a user JWT never takes the service path), type "app" and common_name equal to the Client ID.
+    const coordinatorId = env.COORDINATOR_CLIENT_ID;
+    let kind = null;
+    if (identity.email === env.OWNER_EMAIL) kind = 'owner';
+    else if (
+      typeof coordinatorId === 'string' &&
+      /^[a-f0-9]{32}\.access$/.test(coordinatorId) &&
+      identity.email === undefined &&
+      identity.type === 'app' &&
+      identity.common_name === coordinatorId
+    )
+      kind = 'coordinator';
+    if (!kind) return json({ error: 'Forbidden' }, 403);
+    headers['X-Kf-Identity'] = kind;
     const url = new URL(request.url);
+    // Least privilege: the coordinator gets the table and the log viewer, plan, start and stop (run,
+    // batch and all forms, which share /api/stop). Everything else, notably /api/hosts*, is refused.
+    if (
+      kind === 'coordinator' &&
+      !(
+        (request.method === 'GET' && ['/', '/api/list', '/log'].includes(url.pathname)) ||
+        (request.method === 'POST' &&
+          ['/api/plan', '/api/start', '/api/stop'].includes(url.pathname))
+      )
+    )
+      return json({ error: 'Forbidden' }, 403);
     if (url.pathname === '/log' && request.method === 'GET') {
       const params = url.searchParams,
         run = params.get('run'),

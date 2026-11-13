@@ -20,3 +20,5 @@ script_name = "kayfabe-vast-broker"
 ACCESS_TEAM_DOMAIN = ""
 ACCESS_AUDIENCE = ""
 OWNER_EMAIL = ""
+# Client ID of the coordinator's Access service token (not a secret); empty = feature off.
+COORDINATOR_CLIENT_ID = ""
