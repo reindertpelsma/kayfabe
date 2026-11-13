@@ -98,3 +98,65 @@ DOC READ sources (official; consulted in the app lane on 2026-11-13):
 - [Vendor benchmark page](https://store.steampowered.com/app/3132990/).
 - [Microsoft Edge automation](https://learn.microsoft.com/en-us/microsoft-edge/test-and-automation/test-and-automation),
   [UIA InvokePattern](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/invoke-a-control-using-ui-automation).
+
+## Deviations from a default install
+
+DESIGN INTENT (owner, 2026-11-13): the image needs OpenSSH plus its public key,
+the NVIDIA driver, and autologon baked in, alongside the licensed applications.
+Other harness repairs belong at run time. CODE READ: the inherited #357 answer file
+still carries the additional choices below; this inventory neither removes them
+nor claims that a newly minimal image has been captured.
+
+| Deviation / exact choices | Reason | Baked versus per-boot / evidence |
+|---|---|---|
+| OpenSSH Client/Server MSI; sshd Automatic; inbound TCP 22 rule; public key in administrators_authorized_keys with Administrators/SYSTEM ACL; DefaultShell=Windows PowerShell | Remote harness transport and consistent script execution | CODE READ: `propimage.py` render_setup_ssh. Required baked prerequisite; section 11 of the proprietary-image design records the predecessor DefaultShell change (MEASURED, 2026-11-12). No private key is sent by that setup script. |
+| Local administrator account and AutoLogon enabled with LogonCount=1; hidden online/wireless/OEM/local-account OOBE screens; ProtectYourPC=3 | Offline account creation and an interactive desktop for app checks | CODE READ: answer-file oobeSystem. Autologon is required baked; the single initial logon is not proof that every restored boot will autologon. INFERRED: persistent autologon still needs image verification; power_fix never reads or modifies its credential values. |
+| en-US input/system/UI/user locale, UTC, fixed computer name, Windows 11 Pro image index 6; wipe disk 0 and create EFI 300 MiB/MSR 16 MiB/remaining NTFS C: | Deterministic unattended setup and disk/edition selection | CODE READ: answer file plus render_unattend. Existing installation choices, not per-boot repairs; the host-derived VM ids and clock are separate host configuration. |
+| WinPE viostor plus staged NetKVM/vioserial/viorng/pvpanic/fwcfg/smbus; no Balloon/viomem | Virtio storage/network/devices and no guest-directed RAM resizing | CODE READ: render_unattend and answer file. Existing baked driver prerequisites; no new installation in the check step. |
+| BypassCPUCheck=1 only; Secure Boot/TPM/RAM checks are not bypassed | Permit the fixed CPU profile used by the harness | CODE READ: windowsPE. Existing setup-only deviation, not changed by this lane. |
+| PreventDeviceEncryption=true plus BitLocker PreventDeviceEncryption=1 | Owner's VM encryption policy and reproducible test disk | CODE READ: specialize component and registry. Existing baked choice; power_fix does not disable/decrypt BitLocker. |
+| DynamicUpdate disabled; NoAutoUpdate=1; ExcludeWUDriversInQualityUpdate=1; SearchOrderConfig=0 | Avoid setup/update traffic and unexpected driver replacement | CODE READ: windowsPE/specialize. Existing baked policy, not a per-boot rewrite. |
+| EnableVirtualizationBasedSecurity=0; HypervisorEnforcedCodeIntegrity Enabled=0 | Avoid nested security virtualization in the harness | CODE READ: specialize. Existing baked policy; actual running security state is not measured by this lane. |
+| CrashDumpEnabled=2 and DisplayParameters=1 | Kernel dumps and visible bugcheck diagnostics | CODE READ: specialize. Existing baked diagnostics. |
+| VerifiedAndReputablePolicyState=0 | Allow the harness's unsigned CUDA probes | CODE READ: specialize Smart App Control policy. Existing baked deviation. |
+| NVIDIA EnableGpuFirmware=1 in nvlddmkm service and each display class instance | GSP initialization; prevent the new-instance Code 43 finding | MEASURED predecessor: proprietary-image design section 11 (2026-11-12) and 4090 evidence README (2026-11-13). CODE READ: existing driver setup; gpu_fix repairs display instances per boot. |
+| DWM OverlayTestMode=5 | Predecessor workaround for Start-menu display-driver resets | MEASURED predecessor: proprietary-image design sections 10–11, 2026-11-12. Existing manual image change; not changed by power_fix and not newly qualified here. |
+| HiberbootEnabled=0; hibernation disabled; sleep/unattended-sleep/hybrid-sleep/hibernate/monitor/disk timeouts disabled on AC and DC | Avoid suspended/restored Windows state meeting a fresh kf3, and keep unattended checks awake/visible | CODE READ: Fast Startup is already baked by specialize; power_fix now repairs and independently reads back all listed power values every boot. No current hardware measurement. |
+| Wake sign-in disabled on AC/DC; lock-screen policy disabled; machine inactivity limit 0; screensaver active/secure/timeout 0 in user settings and user policy, plus live interactive-session apply/readback | Keep the autologon desktop available for app checks | CODE READ: per-boot power_fix; no wake/timeout repair existed in the reviewed #357 generator. This does not set autologon credentials or defeat an already locked desktop. |
+| Temporary per-boot InactivityRestartBoot registry marker; runtime scripts/results under C:\kfhw and C:\kfapps | Preserve a required-restart warning across repeated repairs within the same boot, and collect evidence in the disposable overlay | CODE READ: per-boot harness state only, not baked. A later actual boot clears the warning by boot-identity comparison; the check never restarts Windows itself. |
+
+CODE READ sources for this inventory: `scripts/bench/windows/propimage.py`, its
+`propimage_autounattend.xml.in` template, and
+`docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md` sections 1, 10 and 11. The latter's
+phrase “only deviation” is not treated as evidence that the other listed tweaks
+are absent. The #357 sources remain unchanged apart from the previously authorised
+single fixture-literal edit; image minimisation is for their owning lane.
+
+CODE READ: after SSH and desktop readiness, power_fix applies the active scheme
+without selecting a different performance plan. It uses powercfg /hibernate off,
+sets both AC and DC indices, reactivates that same scheme, then reads powercfg /q
+plus the active scheme's explicit AC/DC registry indices (also covering hidden
+settings without depending on localised query labels).
+HibernateEnabled is read, never forged by a direct registry write. The hibernation
+file must be absent. Native failures, missing values, wrong user/session, mismatches
+or a pending policy restart produce `power: NOT OK`, with values in the result table
+and the complete queries/readback in `power.json`; app work is blocked. Success is
+`power: OK`. The interactive screensaver setter/readback runs through a temporary
+scheduled task for the same SSH user and is removed afterwards.
+
+INFERRED falsifier for power qualification: any nonzero required AC/DC value,
+remaining hibernation/Fast Startup, active/secure screensaver, wrong desktop user,
+missing query, failed command or pending inactivity-policy restart earns OK. The
+offline fixtures/mutants reject these; real power behavior remains unverified.
+DOC READ: Microsoft documents that a changed machine inactivity limit can require
+a restart. The per-boot marker therefore keeps NOT OK visible on repeat calls in
+that boot, even after the registry has become zero. An already sleeping/locked
+session can also reject the live screensaver change; no success is invented.
+
+DOC READ references (official, consulted 2026-11-13):
+
+- [Powercfg options and aliases](https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options).
+- [Screensaver/lock-screen policy registry mappings](https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-controlpaneldisplay).
+- [Machine inactivity limit and restart requirement](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/interactive-logon-machine-inactivity-limit).
+- [Live screensaver setters/readback](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfow).
+- [Microsoft lab unattended sleep timeout](https://hobl.microsoft.com/docs/HOBL_Prep.html).

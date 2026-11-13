@@ -551,7 +551,7 @@ class T(unittest.TestCase):
         self.assertEqual(m.shutdown_events(g), [])
         self.assertIn("StartTime=$boot", calls[0])
 
-    def pipeline(self, post_events=None, offline=True, overage=False):
+    def pipeline(self, post_events=None, offline=True, overage=False, power_ok=True):
         """Deterministic complete pipeline: no VM, keys, SSH, GPU or sleeps."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -621,6 +621,15 @@ class T(unittest.TestCase):
                     side_effect=[0, 1, 3400] if overage else None,
                     return_value=0,
                 ),
+                patch.object(
+                    m,
+                    "power_fix",
+                    return_value={
+                        "ok": power_ok,
+                        "values": {"sleep": {"ac": 0, "dc": 0}},
+                        "errors": [] if power_ok else ["readback mismatch"],
+                    },
+                ),
                 patch.object(m, "shutdown_events", side_effect=[[], post_events or []]),
                 patch.object(
                     m, "run_check", return_value={"ok": True, "evidence": "FILE", "signal": "work"}
@@ -681,6 +690,190 @@ class T(unittest.TestCase):
         app = next(r for r in rows if r["step"] == "app:resolve")
         self.assertEqual((app["verdict"], app["evidence"]), ("PASS", "FILE"))
 
+    def power_fixture(self):
+        return {
+            "queries": {name: "AC 0x00000000 DC 0x00000000" for name in m.POWER_SETTINGS},
+            "registry": {name: entry[2] for name, entry in m.POWER_REGISTRY.items()},
+            "errors": [],
+            "restart_required": False,
+            "hiberfile_exists": False,
+            "sid": "S-1-5-test",
+            "screen": {"active": False, "secure": False, "timeout": 0, "sid": "S-1-5-test"},
+        }
+
+    def test_power_valid_readback(self):
+        self.assertTrue(m.power_verdict(self.power_fixture())["ok"])
+
+    def test_power_ac_timeout_rejected(self):
+        r = self.power_fixture()
+        r["queries"]["sleep"] = "AC 0x00000001 DC 0x00000000"
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_dc_timeout_rejected(self):
+        r = self.power_fixture()
+        r["queries"]["disk"] = "AC 0x00000000 DC 0x00000005"
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_missing_query_rejected(self):
+        r = self.power_fixture()
+        del r["queries"]["monitor"]
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_missing_registry_rejected(self):
+        r = self.power_fixture()
+        del r["registry"]["fast_startup"]
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_hibernate_enabled_rejected(self):
+        r = self.power_fixture()
+        r["registry"]["hibernate_enabled"] = 1
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_fast_startup_rejected(self):
+        r = self.power_fixture()
+        r["registry"]["fast_startup"] = 1
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_screen_still_active_rejected(self):
+        r = self.power_fixture()
+        r["screen"]["active"] = True
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_wrong_session_rejected(self):
+        r = self.power_fixture()
+        r["screen"]["sid"] = "S-1-5-other"
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_native_failure_rejected(self):
+        r = self.power_fixture()
+        r["errors"] = ["powercfg exit 1"]
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_restart_required_rejected(self):
+        r = self.power_fixture()
+        r["restart_required"] = True
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_hiberfile_rejected(self):
+        r = self.power_fixture()
+        r["hiberfile_exists"] = True
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_render_writes_and_reads(self):
+        script = m.render_power_fix()
+        self.assertIn("/hibernate", script)
+        self.assertIn("/setacvalueindex", script)
+        self.assertIn("/setdcvalueindex", script)
+        self.assertIn("/q", script)
+        self.assertIn("Get-ItemPropertyValue", script)
+        self.assertIn("$LASTEXITCODE", script)
+        self.assertIn("HiberbootEnabled", script)
+
+    def test_power_render_never_sleep(self):
+        script = m.render_power_fix()
+        for _, setting in m.POWER_SETTINGS.values():
+            self.assertIn(setting, script)
+        self.assertNotIn("Restart-Computer", script)
+
+    def test_power_ignores_claimed_ok(self):
+        self.assertFalse(m.power_verdict({"ok": True})["ok"])
+
+    def test_power_argument_vector_keeps_all_arguments(self):
+        self.assertIn("ValueFromRemainingArguments=$true", m.render_power_fix())
+        self.assertIn("powercfg @argsList", m.render_power_fix())
+
+    def test_power_repeat_preserves_pending_restart(self):
+        script = m.render_power_fix()
+        self.assertIn("$priorBoot -ceq $boot", script)
+        self.assertIn("InactivityRestartBoot", script)
+
+    def test_power_native_failure_keeps_actual_values(self):
+        r = self.power_fixture()
+        r["errors"] = ["command failed"]
+        result = m.power_verdict(r)
+        self.assertFalse(result["ok"])
+        self.assertIn("sleep", result["values"])
+
+    def test_power_screensaver_secure_rejected(self):
+        r = self.power_fixture()
+        r["screen"]["secure"] = True
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_screensaver_timeout_rejected(self):
+        r = self.power_fixture()
+        r["screen"]["timeout"] = 300
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_identity_missing_rejected(self):
+        r = self.power_fixture()
+        del r["sid"]
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def power_guest(self, data):
+        screen = data.pop("screen")
+        calls = []
+
+        def ps(script):
+            calls.append(script)
+            stdout = (
+                json.dumps(screen)
+                if "Get-Content" in script
+                else (json.dumps(data) if "ConvertTo-Json" in script else "")
+            )
+            return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+
+        return (
+            SimpleNamespace(ps=ps, interactive=lambda *args: SimpleNamespace(returncode=0)),
+            calls,
+        )
+
+    def test_power_fix_reads_same_user_runtime(self):
+        guest, calls = self.power_guest(self.power_fixture())
+        result = m.power_fix(guest, sleep=lambda _: None, clock=lambda: 0)
+        self.assertTrue(result["ok"])
+        self.assertIn("Unregister-ScheduledTask -TaskName kf_power_", calls[-1])
+
+    def test_power_fix_rejects_bad_registry(self):
+        r = self.power_fixture()
+        r["registry"]["fast_startup"] = 1
+        guest, _ = self.power_guest(r)
+        self.assertFalse(m.power_fix(guest, sleep=lambda _: None, clock=lambda: 0)["ok"])
+
+    def test_power_fix_native_exit_failure(self):
+        guest = SimpleNamespace(
+            ps=lambda *a: SimpleNamespace(returncode=1, stdout="{}", stderr="failed")
+        )
+        self.assertFalse(m.power_fix(guest)["ok"])
+
+    def test_power_pipeline_not_ok_blocks_apps(self):
+        rc, rows, apps = self.pipeline(power_ok=False)
+        self.assertEqual(rc, 1)
+        self.assertEqual(apps, 0)
+        power = next(r for r in rows if r["step"] == "power")
+        self.assertEqual(power["verdict"], "NOT OK")
+        self.assertIn('"dc":0', power["detail"])
+
+    def test_power_pipeline_ok_with_values(self):
+        rc, rows, _ = self.pipeline()
+        self.assertEqual(rc, 0)
+        power = next(r for r in rows if r["step"] == "power")
+        self.assertEqual(power["verdict"], "OK")
+        self.assertIn('"ac":0', power["detail"])
+
+    def test_power_not_ok_blocks_gpu(self):
+        _, rows, _ = self.pipeline(power_ok=False)
+        self.assertFalse(any(r["step"] == "gpu" for r in rows))
+
+    def test_power_ambiguous_query_is_not_readback(self):
+        r = self.power_fixture()
+        r["queries"]["sleep"] = "minimum 0x00000000 maximum 0x00000000"
+        self.assertFalse(m.power_verdict(r)["ok"])
+
+    def test_power_screen_error_rejected_even_with_values(self):
+        r = self.power_fixture()
+        r["screen"]["error"] = "SPI failed"
+        self.assertFalse(m.power_verdict(r)["ok"])
+
 
 def mutants():
     """In-memory, authored-source mutations; two independent test methods per rule."""
@@ -688,6 +881,26 @@ def mutants():
     original = m
     source = SRC.read_text()
     cases = [
+        ("power-step", "power = power_fix(g)", 'power = {"ok": True, "values": {}, "errors": []}'),
+        ("power-indices", "if ac != 0 or dc != 0:", "if False:"),
+        (
+            "power-registry",
+            "if type(actual) is not type(expected) or actual != expected:",
+            "if False:",
+        ),
+        (
+            "power-runtime",
+            'errors.append("Interactive session screensaver readback failed or wrong user")',
+            "pass",
+        ),
+        (
+            "power-boot-state",
+            'errors.append("Hibernation file present, or inactivity-policy restart required/unknown")',
+            "pass",
+        ),
+        ("power-native", 'errors.extend(str(error) for error in data["errors"])', "pass"),
+        ("power-integration", 'if not power["ok"]:', "if False:"),
+        ("power-aggregate", 'r["verdict"] in ("PASS", "OK")', 'r["verdict"] == "PASS"'),
         ("harness-class", 'return "HARNESS", "harness"', 'return "FAIL", "app"'),
         (
             "wlms-postrun",
@@ -722,7 +935,7 @@ def mutants():
     ]
     failed = False
     for name, old, new in cases:
-        expected_count = 2 if name == "length" else 1
+        expected_count = 2 if name in ("length", "task-cleanup") else 1
         if source.count(old) != expected_count:
             raise AssertionError((name, source.count(old)))
         with tempfile.TemporaryDirectory() as td:

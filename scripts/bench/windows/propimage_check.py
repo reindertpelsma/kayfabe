@@ -118,6 +118,233 @@ $ids[0].Trim()
     )
 
 
+# Data used both to render the repair and to validate its independent readback.
+POWER_SETTINGS = {
+    "sleep": ("SUB_SLEEP", "STANDBYIDLE"),
+    "hibernate_after": ("SUB_SLEEP", "HIBERNATEIDLE"),
+    "unattended_sleep": ("SUB_SLEEP", "7bc4a2f9-d8fc-4469-b07b-33eb785aaca0"),
+    "hybrid_sleep": ("SUB_SLEEP", "HYBRIDSLEEP"),
+    "monitor": ("SUB_VIDEO", "VIDEOIDLE"),
+    "disk": ("SUB_DISK", "DISKIDLE"),
+    "wake_signin": ("SUB_NONE", "CONSOLELOCK"),
+}
+POWER_REGISTRY = {
+    "hibernate_enabled": (r"HKLM:\SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled", 0),
+    "fast_startup": (
+        r"HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power",
+        "HiberbootEnabled",
+        0,
+    ),
+    "lock_screen": (
+        r"HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization",
+        "NoLockScreen",
+        1,
+    ),
+    "inactivity": (
+        r"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
+        "InactivityTimeoutSecs",
+        0,
+    ),
+}
+for _prefix, _path in (
+    ("desktop", r"HKCU:\Control Panel\Desktop"),
+    ("policy", r"HKCU:\Software\Policies\Microsoft\Windows\Control Panel\Desktop"),
+):
+    for _key, _value in (
+        ("active", "ScreenSaveActive"),
+        ("secure", "ScreenSaverIsSecure"),
+        ("timeout", "ScreenSaveTimeOut"),
+    ):
+        POWER_REGISTRY[_prefix + "_" + _key] = (_path, _value, "0")
+
+
+def render_power_fix():
+    settings = [{"name": n, "subgroup": s, "setting": v} for n, (s, v) in POWER_SETTINGS.items()]
+    registry = [
+        {
+            "name": n,
+            "path": p,
+            "key": k,
+            "value": v,
+            "kind": "DWord" if type(v) is int else "String",
+        }
+        for n, (p, k, v) in POWER_REGISTRY.items()
+    ]
+    data = json.dumps({"settings": settings, "registry": registry}).replace("'", "''")
+    return (
+        "$plan=ConvertFrom-Json '"
+        + data
+        + "'\n"
+        + r"""
+$ErrorActionPreference='Stop'
+$r=@{queries=@{};registry=@{};sources=@{};errors=@();sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value}
+function Power { param([Parameter(ValueFromRemainingArguments=$true)][string[]]$argsList)
+ $text=(& powercfg @argsList 2>&1 | Out-String)
+ if($LASTEXITCODE -ne 0){$r.errors+=('powercfg '+($argsList -join ' ')+' failed: '+$text)}
+ return $text
+}
+try {
+ $guid='[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}'
+ $scheme=[regex]::Match((Power @('/getactivescheme')),$guid).Value
+ if(-not $scheme){throw 'Cannot identify active power scheme'}
+ $aliases=Power @('/aliases')
+ function Resolve-Guid($value){
+  if($value -match ('^'+$guid+'$')){return $value}
+  $m=[regex]::Match($aliases,('(?im)('+ $guid +')\s+'+[regex]::Escape($value)+'\s*$'))
+  if(-not $m.Success){throw ('Missing powercfg alias '+$value)}
+  return $m.Groups[1].Value
+ }
+ $old=Get-ItemPropertyValue 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name InactivityTimeoutSecs -ErrorAction SilentlyContinue
+ $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
+ $marker='HKLM:\SOFTWARE\Kayfabe\PropimageChecks'
+ $priorBoot=Get-ItemPropertyValue $marker -Name InactivityRestartBoot -ErrorAction SilentlyContinue
+ $r.restart_required=(($null -ne $old -and $old -ne 0) -or $priorBoot -ceq $boot)
+ if($r.restart_required){
+  if(-not (Test-Path $marker)){New-Item $marker -Force | Out-Null}
+  New-ItemProperty $marker -Name InactivityRestartBoot -PropertyType String -Value $boot -Force | Out-Null
+ }
+ $null=Power @('/hibernate','off')
+ foreach($s in $plan.settings){
+  $null=Power @('/setacvalueindex',$scheme,$s.subgroup,$s.setting,'0')
+  $null=Power @('/setdcvalueindex',$scheme,$s.subgroup,$s.setting,'0')
+ }
+ foreach($v in $plan.registry){
+  # powercfg is authoritative for hibernation; do not forge its readback by writing HibernateEnabled.
+  if($v.name -ne 'hibernate_enabled'){
+   if(-not (Test-Path $v.path)){New-Item -Path $v.path -Force | Out-Null}
+   New-ItemProperty -Path $v.path -Name $v.key -PropertyType $v.kind -Value $v.value -Force | Out-Null
+  }
+ }
+ $null=Power @('/setactive',$scheme)
+ $r.raw_query=Power @('/q',$scheme)
+ foreach($s in $plan.settings){
+  $sg=Resolve-Guid $s.subgroup;$vg=Resolve-Guid $s.setting
+  # Read explicit indices written by powercfg; avoid localised /q labels and hidden-setting omissions.
+  $path="HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes\$scheme\$sg\$vg"
+  $ac=Get-ItemPropertyValue $path -Name ACSettingIndex
+  $dc=Get-ItemPropertyValue $path -Name DCSettingIndex
+  $r.queries[$s.name]=('AC 0x{0:x8} DC 0x{1:x8}' -f $ac,$dc)
+  $r.sources[$s.name]='active-scheme registry; powercfg /q retained in raw_query'
+ }
+ foreach($v in $plan.registry){$r.registry[$v.name]=Get-ItemPropertyValue $v.path -Name $v.key}
+ $r.hiberfile_exists=Test-Path ($env:SystemDrive+'\hiberfil.sys')
+ if([regex]::Match((Power @('/getactivescheme')),$guid).Value -ine $scheme){throw 'Active scheme changed during power repair'}
+}catch{$r.errors+=$_.Exception.Message}
+ConvertTo-Json -InputObject $r -Depth 6 -Compress
+"""
+    )
+
+
+def render_screen_power(task):
+    if not re.fullmatch("power_[a-f0-9]{32}", task):
+        raise ValueError("Invalid power task")
+    return (
+        r"""
+$r=@{sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value}
+try {
+ Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class KfPower {
+ [DllImport("user32.dll",EntryPoint="SystemParametersInfoW",SetLastError=true)] public static extern bool Set(uint action,uint value,IntPtr data,uint flags);
+ [DllImport("user32.dll",EntryPoint="SystemParametersInfoW",SetLastError=true)] public static extern bool Get(uint action,uint unused,out int value,uint flags);
+}
+'@
+ foreach($action in @(0x0011,0x0077,0x000f)){
+  if(-not [KfPower]::Set($action,0,[IntPtr]::Zero,3)){throw 'Cannot disable interactive screensaver'}
+ }
+ $active=0;$secure=0;$timeout=0
+ if(-not [KfPower]::Get(0x0010,0,[ref]$active,0) -or -not [KfPower]::Get(0x0076,0,[ref]$secure,0) -or -not [KfPower]::Get(0x000e,0,[ref]$timeout,0)){throw 'Cannot read interactive screensaver'}
+ $r.active=[bool]$active;$r.secure=[bool]$secure;$r.timeout=$timeout
+}catch{$r.error=$_.Exception.Message}
+"""
+        + f'ConvertTo-Json -InputObject $r -Compress | Set-Content -Encoding UTF8 "C:\\kfhw\\{task}.tmp"\nMove-Item "C:\\kfhw\\{task}.tmp" "C:\\kfhw\\{task}.json"\n'
+    )
+
+
+def power_verdict(data):
+    values = {}
+    errors = []
+    try:
+        if type(data.get("errors")) is not list:
+            errors.append("Repair error list missing")
+        elif data["errors"]:
+            errors.extend(str(error) for error in data["errors"])
+        for name in POWER_SETTINGS:
+            indices = re.fullmatch(
+                r"AC 0x([0-9a-fA-F]{8}) DC 0x([0-9a-fA-F]{8})", data["queries"][name]
+            )
+            if not indices:
+                raise ValueError("Missing AC/DC indices for " + name)
+            ac, dc = (int(v, 16) for v in indices.groups())
+            values[name] = {"ac": ac, "dc": dc}
+            if ac != 0 or dc != 0:
+                errors.append(name + " not never/off")
+        for name, (_, _, expected) in POWER_REGISTRY.items():
+            actual = data["registry"][name]
+            values[name] = actual
+            if type(actual) is not type(expected) or actual != expected:
+                errors.append(name + " not disabled")
+        values["hiberfile_exists"] = data.get("hiberfile_exists")
+        values["restart_required"] = data.get("restart_required")
+        screen = data.get("screen", {})
+        values["screen_active"] = screen.get("active")
+        values["screen_secure"] = screen.get("secure")
+        values["screen_timeout"] = screen.get("timeout")
+        if data.get("hiberfile_exists") is not False or data.get("restart_required") is not False:
+            errors.append("Hibernation file present, or inactivity-policy restart required/unknown")
+        if (
+            bool(screen.get("error"))
+            or not data.get("sid")
+            or screen.get("sid") != data["sid"]
+            or screen.get("active") is not False
+            or screen.get("secure") is not False
+            or type(screen.get("timeout")) is not int
+            or screen["timeout"] != 0
+        ):
+            errors.append("Interactive session screensaver readback failed or wrong user")
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        errors.append(str(exc))
+    return {"ok": not errors, "values": values, "errors": errors, "readback": data}
+
+
+def power_fix(g, sleep=time.sleep, clock=time.monotonic):
+    """SSH repairs plus same-user interactive runtime apply/readback; no reboot or credentials."""
+    try:
+        result = g.ps(render_power_fix())
+        if result.returncode:
+            return {
+                "ok": False,
+                "values": {},
+                "errors": ["SSH power repair failed: " + result.stderr],
+            }
+        data = json.loads(result.stdout.lstrip("\ufeff"))
+        task = "power_" + uuid.uuid4().hex
+        try:
+            p = g.interactive(task, render_screen_power(task))
+            if p.returncode:
+                raise ValueError("Cannot start interactive power readback")
+            start = clock()
+            while clock() - start < 60:
+                p = g.ps(
+                    f"if(Test-Path 'C:/kfhw/{task}.json'){{Get-Content 'C:/kfhw/{task}.json' -Raw}}"
+                )
+                if p.returncode:
+                    raise ValueError("Interactive power readback transport failed")
+                if p.stdout.strip():
+                    data["screen"] = json.loads(p.stdout.lstrip("\ufeff"))
+                    break
+                sleep(2)
+            else:
+                raise ValueError("Interactive power readback timed out")
+        finally:
+            g.ps(
+                f"Stop-ScheduledTask -TaskName kf_{task} -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName kf_{task} -Confirm:$false -ErrorAction SilentlyContinue"
+            )
+        return power_verdict(data)
+    except (AttributeError, TypeError, ValueError, OSError, subprocess.SubprocessError) as exc:
+        return {"ok": False, "values": {}, "errors": [str(exc)]}
+
+
 def gpu_uuid_matches(actual, expected):
     return bool(actual.strip()) and actual.strip() == expected
 
@@ -951,6 +1178,20 @@ def main(argv=None):
                     raise ValueError("Guest SSH unavailable")
                 record("ssh", "PASS", "loopback guest transport ready")
                 time.sleep(60)
+                power = power_fix(g)
+                (out / "power.json").write_text(json.dumps(power, indent=2))
+                power_detail = (
+                    ("OK" if power["ok"] else "NOT OK")
+                    + " values="
+                    + json.dumps(power["values"], separators=(",", ":"))
+                )
+                if power["errors"]:
+                    power_detail += " errors=" + ("; ".join(power["errors"]))
+                record("power", "OK" if power["ok"] else "NOT OK", power_detail, "FILE")
+                if not power["ok"]:
+                    raise ValueError(
+                        "Power prerequisites NOT OK; app checks not run (see power.json)"
+                    )
                 fixed, detail = gpu_fix(g, state["ids"]["gpu_uuid"])
                 (out / "gpu_fix.txt").write_text(detail)
                 record(
@@ -1044,7 +1285,7 @@ def main(argv=None):
         record("harness", "HARNESS", exc)
     (out / "result.json").write_text(json.dumps(rows, indent=2))
     (out / "result.md").write_text(result_markdown(rows) + "\n")
-    return 0 if rows and all(r["verdict"] == "PASS" for r in rows) else 1
+    return 0 if rows and all(r["verdict"] in ("PASS", "OK") for r in rows) else 1
 
 
 if __name__ == "__main__":
