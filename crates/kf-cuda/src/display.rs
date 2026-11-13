@@ -2706,6 +2706,78 @@ mod fake_driver_tests {
         assert_eq!(undo(), vec![]);
     }
 
+    /// ★★ D-05(b) through the display's real paths: a frame whose scanout copy
+    /// (`compose_to_host`) has not completed is not released — neither a page-locked frame
+    /// (`cuMemFreeHost`) nor a broker frame (`cuMemHostUnregister`, its mapping then kept) — and is
+    /// released once the copy completed.
+    #[test]
+    fn d05b_a_frame_under_a_queued_copy_is_not_released() {
+        let mut g = gpu();
+        g.compose_begin(16, 16).unwrap();
+        let gone = |c: &[fake::Call]| {
+            c.iter()
+                .filter(|c| matches!(c, fake::Call::FreeHost | fake::Call::HostUnregister))
+                .count()
+        };
+        // page-locked frame
+        let f = g.frame(16 * 16 * 4).unwrap();
+        g.compose_to_host(16, 16, &f).unwrap();
+        fake::fail("cuEventQuery");
+        let _ = fake::calls();
+        assert!(g.release_frame(f).is_err());
+        assert_eq!(gone(&fake::calls()), 0);
+        fake::succeed_all();
+        let f = g.frame(16 * 16 * 4).unwrap();
+        g.compose_to_host(16, 16, &f).unwrap();
+        let _ = fake::calls();
+        g.release_frame(f).unwrap();
+        assert_eq!(gone(&fake::calls()), 1);
+        // a copy whose fence could not be recorded: the frame is never released alone
+        let f = g.frame(16 * 16 * 4).unwrap();
+        fake::fail("cuEventRecord");
+        assert!(g.compose_to_host(16, 16, &f).is_err());
+        fake::succeed_all();
+        let _ = fake::calls();
+        assert!(g.release_frame(f).is_err());
+        assert_eq!(gone(&fake::calls()), 0);
+        // a frame no copy targeted is released
+        let f = g.frame(64).unwrap();
+        g.release_frame(f).unwrap();
+        // a broker frame (a mapping page-locked by registration): not unregistered under a copy
+        let page = kf_linux_raw::HostPageSize::query();
+        let map = || {
+            kf_linux_raw::MappedRegion::map(
+                kf_linux_raw::Backing::PrivateAnonymous,
+                page.bytes(),
+                kf_linux_raw::HostProt::ReadWrite,
+                kf_linux_raw::CachePolicy::WriteBack,
+                page,
+            )
+            .unwrap()
+        };
+        let f = g.frame_over(map()).map_err(|(e, _)| e).unwrap();
+        g.compose_to_host(16, 16, &f).unwrap();
+        fake::fail("cuEventQuery");
+        let _ = fake::calls();
+        assert!(g.release_frame(f).is_err());
+        assert_eq!(gone(&fake::calls()), 0, "registration and mapping kept");
+        fake::succeed_all();
+        let f = g.frame_over(map()).map_err(|(e, _)| e).unwrap();
+        g.compose_to_host(16, 16, &f).unwrap();
+        let _ = fake::calls();
+        g.release_frame(f).unwrap();
+        assert_eq!(gone(&fake::calls()), 1);
+        // checksum buffers: a queued checksum's host half is freed only after the stream drained
+        g.compose_checksum(16, 16).unwrap();
+        g.compose_begin(16, 32).unwrap();
+        fake::fail("cuEventQuery");
+        assert!(
+            g.compose_checksum(16, 32).is_err(),
+            "the old row buffer is still a copy target"
+        );
+        fake::succeed_all();
+    }
+
     #[test]
     fn d11_the_caps_hold_through_the_real_paths() {
         let mut g = gpu();
