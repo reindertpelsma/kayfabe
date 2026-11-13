@@ -616,20 +616,176 @@ fn sink_with(
 /// ★ The PRAMIN trap's helpers: device nodes opened AHEAD of time (so the trap's map is exactly one
 /// ioctl), and a reaper thread that releases retired views and refills the node pool — both OFF
 /// the vCPU.
-pub struct TrapNodes {
-    nodes: Mutex<std::sync::mpsc::Receiver<CharDevice>>,
-    retire: Mutex<std::sync::mpsc::Sender<StoreView>>,
-    /// Trap-time `openat`s because the pool was empty (should stay 0).
-    pub inline_opens: AtomicU64,
+///
+/// ★ 2026-11-14 (security review 1 F-07a = S1-45): **bounded, and nothing opens on the vCPU.** The
+/// retire queue was an unbounded channel and an empty pool made the vCPU `openat` a node inline,
+/// so a guest moving the window from several vCPUs faster than the reaper ran grew pending views
+/// (each an fd and a host BAR1 aperture, shared by tenants) without limit. Now:
+/// - the vCPU only ever TAKES a node ([`TrapPool::take_node`]); the pool has no way to open one
+///   (only the [`Reaper`] can). An empty pool refuses the move (counted in
+///   [`TrapPool::pool_empty`]): the window shows scratch for that move, as for any refused map
+///   (`kf_mem::cpuwin::CpuWindow::repoint`), and the guest's next window write tries again.
+///   `[measured: 2585 heartbeat lines under traces/ print inline_opens=0, up to 1402 repoints]`
+///   so a correct guest never drained the pool of 4;
+/// - every view owns the node it was armed on, so views pending release are bounded by the pool
+///   plus the views the 16 slots can keep (`Repointed::kept`); the retire queue is a bounded
+///   channel of [`RETIRE_QUEUE`] as defense in depth. If it is ever full the view is released
+///   inline (counted in [`TrapPool::retire_full`]): one host unmap, never a wait.
+pub struct TrapPool<N, V> {
+    nodes: Mutex<std::sync::mpsc::Receiver<N>>,
+    retire: Mutex<std::sync::mpsc::SyncSender<V>>,
+    /// Nodes in the pool now (the reaper refills only below the cap, so an idle refill opens
+    /// nothing).
+    ready: std::sync::atomic::AtomicUsize,
+    /// Window moves refused because the node pool was empty (the reaper is behind). Should stay 0.
+    pub pool_empty: AtomicU64,
+    /// Views released inline because the retire queue was full (should be unreachable: see above).
+    pub retire_full: AtomicU64,
     /// Views released by the reaper.
     pub reaped: AtomicU64,
     /// Releases the host refused (the aperture leaked; counted).
     pub reap_refused: AtomicU64,
 }
 
+/// The PRAMIN trap's pool in production: device nodes and armed store views.
+pub type TrapNodes = TrapPool<CharDevice, StoreView>;
+
+/// The reaper's half of a [`TrapPool`]: receives retired views, refills the pool. The only owner
+/// of the node sender, so only the reaper can put a node in the pool.
+pub struct Reaper<N, V> {
+    retired: std::sync::mpsc::Receiver<V>,
+    node_tx: std::sync::mpsc::SyncSender<N>,
+    nodes_cap: usize,
+}
+
+/// ★ 2026-11-14: how long the reaper waits for a retired view before it tops the pool up anyway,
+/// so a refill the host refused once (an `openat` failure) heals without a view to reap.
+const REAPER_IDLE: std::time::Duration = std::time::Duration::from_millis(100);
+
 /// Nodes kept ready for the trap. One is taken per store window move and one is returned to the
 /// reaper by the view it replaces, so a small pool never drains.
 const TRAP_NODES: usize = 4;
+
+/// ★ 2026-11-14: the retire queue's bound: the pool plus the 16 PRAMIN slots' kept views (every
+/// pending view owns a node, see [`TrapPool`]), doubled for headroom.
+pub const RETIRE_QUEUE: usize = 2 * (TRAP_NODES + 16);
+
+/// Why the vCPU got no node or could not hand a view over.
+#[derive(Debug, PartialEq, Eq)]
+pub enum RetireRefused<V> {
+    /// The retire queue is full: release `V` inline.
+    Full(V),
+    /// The reaper is gone: release `V` inline.
+    Gone(V),
+}
+
+impl<N, V> TrapPool<N, V> {
+    /// A pool of `nodes` (pre-opened), a retire queue of `retire_cap`, and its [`Reaper`].
+    /// Nodes beyond `nodes_cap` are dropped.
+    pub fn new(
+        nodes: impl IntoIterator<Item = N>,
+        nodes_cap: usize,
+        retire_cap: usize,
+    ) -> (TrapPool<N, V>, Reaper<N, V>) {
+        let (node_tx, node_rx) = std::sync::mpsc::sync_channel::<N>(nodes_cap);
+        let (retire_tx, retired) = std::sync::mpsc::sync_channel::<V>(retire_cap);
+        let mut ready = 0usize;
+        for n in nodes {
+            if node_tx.try_send(n).is_err() {
+                break;
+            }
+            ready = ready.saturating_add(1);
+        }
+        (
+            TrapPool {
+                nodes: Mutex::new(node_rx),
+                retire: Mutex::new(retire_tx),
+                ready: std::sync::atomic::AtomicUsize::new(ready),
+                pool_empty: AtomicU64::new(0),
+                retire_full: AtomicU64::new(0),
+                reaped: AtomicU64::new(0),
+                reap_refused: AtomicU64::new(0),
+            },
+            Reaper {
+                retired,
+                node_tx,
+                nodes_cap,
+            },
+        )
+    }
+
+    /// **vCPU**: one pre-opened node, or `None` (counted) when the pool is empty. Never opens.
+    pub fn take_node(&self) -> Option<N> {
+        let n = self.nodes.lock().ok().and_then(|rx| rx.try_recv().ok());
+        if n.is_some() {
+            let _ = self
+                .ready
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |r| r.checked_sub(1));
+        } else {
+            self.pool_empty.fetch_add(1, Ordering::Relaxed);
+        }
+        n
+    }
+
+    /// **vCPU**: hand `v` to the reaper. Never waits: a full queue (counted) or a gone reaper
+    /// gives the view back for an inline release.
+    ///
+    /// # Errors
+    /// [`RetireRefused`], carrying the view.
+    pub fn retire(&self, v: V) -> Result<(), RetireRefused<V>> {
+        let Ok(tx) = self.retire.lock() else {
+            return Err(RetireRefused::Gone(v));
+        };
+        match tx.try_send(v) {
+            Ok(()) => Ok(()),
+            Err(std::sync::mpsc::TrySendError::Full(v)) => {
+                self.retire_full.fetch_add(1, Ordering::Relaxed);
+                Err(RetireRefused::Full(v))
+            }
+            Err(std::sync::mpsc::TrySendError::Disconnected(v)) => Err(RetireRefused::Gone(v)),
+        }
+    }
+}
+
+impl<N, V> Reaper<N, V> {
+    /// Release one retired view (waiting up to `idle` for it) and top the pool up. `false` once
+    /// the pool is gone (every sender dropped).
+    pub fn reap_one(
+        &self,
+        pool: &TrapPool<N, V>,
+        idle: std::time::Duration,
+        release: &impl Fn(V) -> bool,
+        open: &impl Fn() -> Option<N>,
+    ) -> bool {
+        match self.retired.recv_timeout(idle) {
+            Ok(v) => {
+                if release(v) {
+                    pool.reaped.fetch_add(1, Ordering::Relaxed);
+                } else {
+                    pool.reap_refused.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return false,
+        }
+        self.refill(pool, open);
+        true
+    }
+
+    /// Top the pool up to its cap (reaper thread only). Opens nothing when it is full; stops at
+    /// the first refused open.
+    pub fn refill(&self, pool: &TrapPool<N, V>, open: &impl Fn() -> Option<N>) {
+        while pool.ready.load(Ordering::Acquire) < self.nodes_cap {
+            let Some(n) = open() else {
+                break;
+            };
+            if self.node_tx.try_send(n).is_err() {
+                break;
+            }
+            pool.ready.fetch_add(1, Ordering::AcqRel);
+        }
+    }
+}
 
 impl TrapNodes {
     /// Open the pool and start the reaper thread.
@@ -637,42 +793,25 @@ impl TrapNodes {
     /// # Errors
     /// The first `openat` or the thread spawn, by name.
     pub fn start(rm: &'static HostRm, store: u32) -> Result<&'static TrapNodes, String> {
-        let (node_tx, node_rx) = std::sync::mpsc::sync_channel::<CharDevice>(TRAP_NODES);
-        let (retire_tx, retire_rx) = std::sync::mpsc::channel::<StoreView>();
         let open = move || rm.open_view_node(MapNode::Gpu, ViewAccess::ReadWrite);
+        let mut first = Vec::with_capacity(TRAP_NODES);
         for _ in 0..TRAP_NODES {
-            node_tx
-                .try_send(open().map_err(|e| format!("PRAMIN node: {e:?}"))?)
-                .map_err(|e| format!("{e}"))?;
+            first.push(open().map_err(|e| format!("PRAMIN node: {e:?}"))?);
         }
-        let t: &'static TrapNodes = Box::leak(Box::new(TrapNodes {
-            nodes: Mutex::new(node_rx),
-            retire: Mutex::new(retire_tx),
-            inline_opens: AtomicU64::new(0),
-            reaped: AtomicU64::new(0),
-            reap_refused: AtomicU64::new(0),
-        }));
+        let (pool, reaper) = TrapPool::new(first, TRAP_NODES, RETIRE_QUEUE);
+        let t: &'static TrapNodes = Box::leak(Box::new(pool));
+        let release = move |v: StoreView| {
+            let r = rm.release_cpu_view(CpuViewRelease {
+                h_memory: store,
+                p_linear_address: v.cookie,
+            });
+            drop(v.node);
+            r.is_ok()
+        };
+        let open = move || open().ok();
         std::thread::Builder::new()
             .name("kf3-pramin-reaper".into())
-            .spawn(move || {
-                while let Ok(v) = retire_rx.recv() {
-                    let r = rm.release_cpu_view(CpuViewRelease {
-                        h_memory: store,
-                        p_linear_address: v.cookie,
-                    });
-                    drop(v.node);
-                    if r.is_ok() {
-                        t.reaped.fetch_add(1, Ordering::Relaxed);
-                    } else {
-                        t.reap_refused.fetch_add(1, Ordering::Relaxed);
-                    }
-                    while let Ok(n) = open() {
-                        if node_tx.try_send(n).is_err() {
-                            break;
-                        }
-                    }
-                }
-            })
+            .spawn(move || while reaper.reap_one(t, REAPER_IDLE, &release, &open) {})
             .map_err(|e| format!("PRAMIN reaper thread: {e}"))?;
         Ok(t)
     }
@@ -758,16 +897,10 @@ impl ViewOps for WindowOps {
         let Some(t) = self.trap else {
             return self.arm_store(off, len);
         };
-        let node = t.nodes.lock().ok().and_then(|rx| rx.try_recv().ok());
-        let node = match node {
-            Some(n) => n,
-            None => {
-                t.inline_opens.fetch_add(1, Ordering::Relaxed);
-                self.rm
-                    .open_view_node(MapNode::Gpu, ViewAccess::ReadWrite)
-                    .map_err(|e| format!("PRAMIN node (inline): {e:?}"))?
-            }
-        };
+        // ★ 2026-11-14 (review 1 F-07a): never an `openat` on the vCPU; an empty pool refuses.
+        let node = t
+            .take_node()
+            .ok_or("PRAMIN node pool empty: the reaper is behind (move refused, counted)")?;
         let (node, cookie) = self
             .rm
             .arm_cpu_view_on(node, self.store, off, len, ViewAccess::ReadWrite)
@@ -775,14 +908,14 @@ impl ViewOps for WindowOps {
         Ok(StoreView { node, cookie, off })
     }
 
-    /// Hand a replaced view to the reaper (off the vCPU); inline only if the reaper is gone.
+    /// Hand a replaced view to the reaper (off the vCPU); inline only if the reaper is gone or
+    /// (★ 2026-11-14, bounded queue) its queue is full. Never waits.
     fn retire(&self, v: StoreView) {
         let Some(t) = self.trap else {
             let _ = self.release(v);
             return;
         };
-        let sent = t.retire.lock().ok().map(|tx| tx.send(v));
-        if let Some(Err(std::sync::mpsc::SendError(v))) = sent {
+        if let Err(RetireRefused::Full(v) | RetireRefused::Gone(v)) = t.retire(v) {
             let _ = self.release(v);
         }
     }
@@ -4915,5 +5048,133 @@ mod memory_list_tests {
         ram.0.del(block.gpa);
         ram.0.add(block);
         assert_eq!(ram.validate(span), None);
+    }
+}
+
+/// ★ 2026-11-14 (security review 1 F-07a = S1-45): the PRAMIN trap pool is bounded and the vCPU
+/// never opens a node. Deterministic: the reaper is driven by hand (no thread, no sleeps).
+#[cfg(test)]
+mod trap_pool_tests {
+    use super::{RetireRefused, TrapPool};
+    use std::cell::Cell;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    const NO_WAIT: Duration = Duration::from_millis(0);
+
+    /// Hostile: a guest moves the window from several vCPUs while the reaper is stalled. Each move
+    /// takes a node; once the pool is empty every further move is refused (counted) and nothing
+    /// was opened: the pool has no open verb, only the reaper does.
+    #[test]
+    fn a_stalled_reaper_empties_the_pool_and_moves_are_refused() {
+        let (pool, _reaper) = TrapPool::<u32, u32>::new(0..4, 4, 8);
+        let taken: Vec<u32> = (0..100).filter_map(|_| pool.take_node()).collect();
+        assert_eq!(
+            taken,
+            [0, 1, 2, 3],
+            "only the pre-opened nodes are handed out"
+        );
+        assert_eq!(pool.pool_empty.load(Ordering::Relaxed), 96);
+        assert_eq!(pool.ready.load(Ordering::Relaxed), 0);
+        // The movers keep retiring views: the queue of 8 holds 8, the ninth is named Full.
+        for v in 0..8 {
+            assert_eq!(pool.retire(v), Ok(()));
+        }
+        assert_eq!(pool.retire(8), Err(RetireRefused::Full(8)));
+        assert_eq!(pool.retire_full.load(Ordering::Relaxed), 1);
+    }
+
+    /// Hostile: views retired faster than the reaper runs. The queue holds at most its bound; past
+    /// it the view comes back for an inline release (counted), and the vCPU never waits.
+    #[test]
+    fn the_retire_queue_is_bounded() {
+        let (pool, _reaper) = TrapPool::<u32, u32>::new(0..4, 4, 3);
+        for v in 0..3 {
+            assert_eq!(pool.retire(v), Ok(()));
+        }
+        assert_eq!(pool.retire(3), Err(RetireRefused::Full(3)));
+        assert_eq!(pool.retire(4), Err(RetireRefused::Full(4)));
+        assert_eq!(pool.retire_full.load(Ordering::Relaxed), 2);
+    }
+
+    /// The reaper releases what was retired and refills the pool to its cap, never past it.
+    #[test]
+    fn the_reaper_releases_and_refills_to_the_cap() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..4, 4, 8);
+        let a = pool.take_node().expect("a node");
+        let b = pool.take_node().expect("a node");
+        assert_eq!(pool.retire(a), Ok(()));
+        assert_eq!(pool.retire(b), Ok(()));
+        let opened = Cell::new(0u32);
+        let open = || {
+            opened.set(opened.get() + 1);
+            Some(100 + opened.get())
+        };
+        let released = Cell::new(0u32);
+        let release = |_v: u32| {
+            released.set(released.get() + 1);
+            true
+        };
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &open));
+        assert_eq!(opened.get(), 2, "the two taken nodes are replaced at once");
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &open));
+        assert_eq!(opened.get(), 2, "a full pool opens nothing");
+        assert_eq!(released.get(), 2);
+        assert_eq!(pool.reaped.load(Ordering::Relaxed), 2);
+        assert_eq!(pool.ready.load(Ordering::Relaxed), 4);
+        let mut n = 0;
+        while pool.take_node().is_some() {
+            n += 1;
+        }
+        assert_eq!(n, 4, "the pool never holds more than its cap");
+    }
+
+    /// A refill the host refused heals on the reaper's idle tick, with no view to reap.
+    #[test]
+    fn a_refused_refill_heals_without_a_view() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..1, 1, 2);
+        let n = pool.take_node().expect("the one node");
+        assert_eq!(pool.retire(n), Ok(()));
+        let fail = || None;
+        let release = |_v: u32| false;
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &fail));
+        assert_eq!(pool.reap_refused.load(Ordering::Relaxed), 1);
+        assert!(pool.take_node().is_none(), "the refill was refused");
+        let ok = || Some(7);
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &ok), "idle tick");
+        assert_eq!(pool.take_node(), Some(7));
+    }
+
+    /// An idle tick with a full pool opens nothing (no `openat` churn while the guest is quiet).
+    #[test]
+    fn an_idle_tick_with_a_full_pool_opens_nothing() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..2, 2, 2);
+        let opened = Cell::new(0u32);
+        let open = || {
+            opened.set(opened.get() + 1);
+            Some(9)
+        };
+        for _ in 0..10 {
+            assert!(reaper.reap_one(&pool, NO_WAIT, &|_v: u32| true, &open));
+        }
+        assert_eq!(opened.get(), 0);
+        assert_eq!(pool.ready.load(Ordering::Relaxed), 2);
+    }
+
+    /// A gone reaper: views come back for an inline release, and the reaper sees the pool gone.
+    #[test]
+    fn a_gone_reaper_or_pool_is_named() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..1, 1, 2);
+        drop(reaper);
+        assert_eq!(pool.retire(1), Err(RetireRefused::Gone(1)));
+        assert_eq!(pool.retire_full.load(Ordering::Relaxed), 0);
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..1, 1, 2);
+        drop(pool);
+        assert!(!reaper.reap_one(
+            &TrapPool::new(0..0, 1, 1).0,
+            NO_WAIT,
+            &|_v: u32| true,
+            &|| None
+        ));
     }
 }
