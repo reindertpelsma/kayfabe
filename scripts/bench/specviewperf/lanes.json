@@ -14,7 +14,8 @@
     "pcp1": 60,
     "pcp2": 60,
     "pcp3": 60,
-    "pcs4": 45
+    "pcs4": 45,
+    "pcs5": 20
   },
   "viewsets": {
     "medical-04": {
@@ -101,6 +102,9 @@
       "creo-04",
       "catia-07",
       "energy-04",
+      "enscape-01"
+    ],
+    "pcs5": [
       "enscape-01"
     ]
   }
