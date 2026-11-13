@@ -14,6 +14,7 @@
 - [Linux guest](linux-guest.md)
 - [Rebuild the Linux apps image](linux-apps-image.md)
 - [Windows guest](windows-guest.md)
+- [Recreate the proprietary Windows image](recreate-the-proprietary-image.md)
 - [Display and the broker](display.md)
 
 # Reference
