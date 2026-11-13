@@ -3524,8 +3524,11 @@ impl ChanPlane {
         });
         let sent = self.acts.lock().ok().and_then(|acts| {
             acts.as_ref().map(|tx| {
-                tx.send((act, kf_gsp::Deferred::new(), "USER ring context"))
-                    .is_ok()
+                tx.send(
+                    (act, kf_gsp::Deferred::new(), "USER ring context"),
+                    super::ActClass::Work,
+                )
+                .is_ok()
             })
         });
         if sent == Some(true) {
