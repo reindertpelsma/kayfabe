@@ -443,19 +443,25 @@ impl HostVas<'_> {
                 _ => pieces.push((d.off, d.len)),
             }
         }
-        self.rm
-            .map_scattered_through(
-                self.space, through, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
+        // ★ 2026-11-13 (log-only): rows -> coalesced pieces (= MAP_FIXED mmaps) and the call's wall ns.
+        let t_call = std::time::Instant::now();
+        let placed = self.rm.map_scattered_through(
+            self.space, through, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
+        );
+        crate::vasmgr::MAPSTAT.record_scattered(
+            rows.len(),
+            pieces.len(),
+            u64::try_from(t_call.elapsed().as_nanos()).unwrap_or(u64::MAX),
+        );
+        placed.map_err(|e| {
+            format!(
+                "batch {:#x}+{:#x} ({} rows, {} pieces): {e:?}",
+                first.va,
+                next.saturating_sub(first.va),
+                rows.len(),
+                pieces.len()
             )
-            .map_err(|e| {
-                format!(
-                    "batch {:#x}+{:#x} ({} rows, {} pieces): {e:?}",
-                    first.va,
-                    next.saturating_sub(first.va),
-                    rows.len(),
-                    pieces.len()
-                )
-            })
+        })
     }
 
     /// ★ 2026-10-09: unmap the ONE committed row `[va, va+len)` — every piece of it. A row that
@@ -485,7 +491,8 @@ impl MapTarget for HostVas<'_> {
         } else {
             self.store
         };
-        match self.rm.map_kind(
+        let t_call = std::time::Instant::now();
+        let placed = self.rm.map_kind(
             self.space,
             obj,
             kf_host::MapBacking::SharedSlice,
@@ -495,7 +502,12 @@ impl MapTarget for HostVas<'_> {
             defer,
             d.kind,
             d.perm,
-        ) {
+        );
+        crate::vasmgr::MAPSTAT.record_single(
+            d.ram,
+            u64::try_from(t_call.elapsed().as_nanos()).unwrap_or(u64::MAX),
+        );
+        match placed {
             Ok(_) => Ok(Mapped::Placed),
             // ★ P6: a FIXED map onto a VA host RM already holds satisfies the guest's statement —
             // the C's semantic (`nvkvm_gpu_emul.c:7935-7938`) — rather than stranding its

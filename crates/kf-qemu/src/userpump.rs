@@ -551,10 +551,43 @@ struct Wait {
     /// ★ The trigger's suffix was published with its prefix ([`gapless_remainder`]).
     gapless: bool,
 }
+/// ★ 2026-11-13 (`USER_RING_SPLIT_WAIT`): whether a held invalidate that has waited `ns` is to be
+/// named now. `waiting` once while it is still held, `done` once when it ends; never below the
+/// threshold ([`kf_mem::vasmgr::SLOW_SPLIT_MS`]). Pure.
+fn split_wait_state(ns: u64, named: bool, finished: bool) -> Option<&'static str> {
+    if !kf_mem::vasmgr::exceeds_ms(ns, kf_mem::vasmgr::SLOW_SPLIT_MS) {
+        return None;
+    }
+    match (finished, named) {
+        (false, false) => Some("waiting"),
+        (false, true) => None,
+        (true, _) => Some("done"),
+    }
+}
+
+/// Print one `USER_RING_SPLIT_WAIT` line, capped per boot by [`kf_mem::vasmgr::SLOW_LOG_CAP`].
+fn note_split_wait(idx: u32, key: kf_mem::vasmgr::VasKey, ns: u64, state: &str) {
+    static LINES: std::sync::Mutex<kf_mem::vasmgr::LineBudget> = std::sync::Mutex::new(
+        kf_mem::vasmgr::LineBudget::new(kf_mem::vasmgr::SLOW_LOG_CAP),
+    );
+    let Ok(mut l) = LINES.lock() else { return };
+    if l.admit() {
+        eprintln!(
+            "kf3: USER_RING_SPLIT_WAIT idx={idx} key={key:?} ms={} state={state} (n={})",
+            ns / 1_000_000,
+            l.seen()
+        );
+    }
+}
+
 enum PendingAction {
     Invalidate {
         ticket: u64,
         plan: crate::defapi::Planned,
+        /// ★ 2026-11-13: when the invalidate was held (`USER_RING_SPLIT_WAIT`'s clock).
+        since: std::time::Instant,
+        /// The wait was already named (once per held invalidate).
+        named: bool,
     },
     Context {
         cell: SwCell,
@@ -2652,13 +2685,33 @@ impl Pump {
         let reg = me.defapi_reg.get().ok_or("USER_RING_REGISTRY_ABSENT")?;
         if let Some(action) = pending.take() {
             let (plan, result, flushed) = match action {
-                PendingAction::Invalidate { ticket, plan } => match me.inbox.split_result(ticket) {
-                    Some(result) => (plan, result, true),
-                    None => {
-                        *pending = Some(PendingAction::Invalidate { ticket, plan });
-                        return Ok(false);
+                PendingAction::Invalidate {
+                    ticket,
+                    plan,
+                    since,
+                    mut named,
+                } => {
+                    // ★ 2026-11-13: name a held invalidate once it has waited over a second —
+                    // once while it waits, and with the total when it ends (never per poll).
+                    let result = me.inbox.split_result(ticket);
+                    let ns = u64::try_from(since.elapsed().as_nanos()).unwrap_or(u64::MAX);
+                    if let Some(state) = split_wait_state(ns, named, result.is_some()) {
+                        named = true;
+                        note_split_wait(r.idx, r.vas_key, ns, state);
                     }
-                },
+                    match result {
+                        Some(result) => (plan, result, true),
+                        None => {
+                            *pending = Some(PendingAction::Invalidate {
+                                ticket,
+                                plan,
+                                since,
+                                named,
+                            });
+                            return Ok(false);
+                        }
+                    }
+                }
                 PendingAction::Context { cell, plan } => {
                     let result = cell.try_lock().ok().and_then(|mut result| result.take());
                     match result {
@@ -2697,7 +2750,12 @@ impl Pump {
                             crate::mem::UserSplitError::Busy => Failure::Retry,
                             crate::mem::UserSplitError::Refused(why) => why.into(),
                         })?;
-                *pending = Some(PendingAction::Invalidate { ticket, plan });
+                *pending = Some(PendingAction::Invalidate {
+                    ticket,
+                    plan,
+                    since: std::time::Instant::now(),
+                    named: false,
+                });
                 return Ok(false);
             }
             kf_abi::defapi::Bundle::InitializeCtx {
@@ -3493,6 +3551,49 @@ impl kf_chan::worker::RelayLoop for ChanPlane {
 
 #[cfg(test)]
 mod tests {
+    /// ★ 2026-11-13 `USER_RING_SPLIT_WAIT`: silent up to and including 1 s, named just over it.
+    #[test]
+    fn split_wait_is_silent_up_to_one_second() {
+        assert_eq!(split_wait_state(1_000_000_000, false, false), None);
+        assert_eq!(split_wait_state(1_000_000_000, false, true), None);
+        assert_eq!(split_wait_state(0, false, true), None);
+        assert_eq!(
+            split_wait_state(1_000_000_001, false, false),
+            Some("waiting")
+        );
+        assert_eq!(split_wait_state(1_000_000_001, false, true), Some("done"));
+    }
+
+    /// A short wait is never named, whatever the state.
+    #[test]
+    fn split_wait_short_waits_are_never_named() {
+        for (named, finished) in [(false, false), (true, false), (false, true), (true, true)] {
+            assert_eq!(split_wait_state(10_000_000, named, finished), None);
+        }
+    }
+
+    /// One `waiting` line while held (never per poll).
+    #[test]
+    fn split_wait_waiting_line_is_not_repeated_per_poll() {
+        let over = 1_000_000_001;
+        assert_eq!(split_wait_state(over, false, false), Some("waiting"));
+        assert_eq!(
+            split_wait_state(over, true, false),
+            None,
+            "not again per poll"
+        );
+    }
+
+    /// `done` when it ends over the threshold, named or not.
+    #[test]
+    fn split_wait_end_is_named_once_over_the_threshold() {
+        let over = 1_000_000_001;
+        assert_eq!(split_wait_state(over, true, true), Some("done"));
+        assert_eq!(split_wait_state(over, false, true), Some("done"));
+        // ...and a held wait that was already named stays quiet until it ends.
+        assert_eq!(split_wait_state(over, true, false), None);
+    }
+
     use kf_chan::user_loop::Need;
 
     /// S2 (review of PR #360): a published entry (`again`) followed by a busy lock still hands off to the lock
