@@ -126,7 +126,7 @@ python3 -B -I scripts/bench/windows/propimage_check.py --dir unpacked/ --work /p
 
 (Use `--zip` with the archive instead of `--dir` the first time; see step 10.) The script checks that `swtpm` is 0.10 or newer, creates the overlay, boots with the network restricted, SSHes in, applies the per-boot repairs (see the deviations table), checks the machine's identity against the state file, then starts each app and records a result. A launch alone is recorded as a launch only, never as a pass.
 
-How known: the offline boot of the maintainers' copy on 2026-11-13 is MEASURED (identity, TPM, CPU, clock window matched; SolidWorks, 3DMark and DaVinci Resolve started offline). The unified script itself was run through the first part of its pipeline and then stopped; it has **not** run end to end to a clean pass: NOT TESTED. 3DMark's storage test showed a "buy" prompt offline on 2026-11-12, so whether the key stays active offline for every test is not settled.
+How known: the offline boot of the maintainers' copy on 2026-11-13 is MEASURED (identity, TPM, CPU, clock window matched; SolidWorks, 3DMark and DaVinci Resolve started offline). The unified script itself was run through the first part of its pipeline and then stopped; it has **not** run end to end to a clean pass: NOT TESTED. Whether the paid 3DMark key is accepted offline for every test remains NOT TESTED: activation was only inferred from the home screen (Time Spy and CPU Profile showed as runnable), and a saved offline result is the real proof. The Storage Benchmark shows a buy card because it is not part of the Advanced edition; that says nothing about activation.
 
 ### 8. Back up before any sign-out or deregistration
 
@@ -200,7 +200,7 @@ Every setting below differs from what you would get by clicking through Windows,
 | Kernel crash dump settings and visible bugcheck text | Diagnostics | Baked in | CODE READ |
 | Smart App Control policy value set to 0 | The harness runs unsigned CUDA probes | Baked in | CODE READ |
 | Boot display firmware signing certificate added to the Secure Boot database (OVMF variables) | The boot-display firmware is signed with kayfabe's own key | Baked in the firmware variables file in the state | MEASURED 2026-11-12 |
-| A Windows firewall rule added by hand before the image was packed | Added by the maintainers during cleanup | Baked in | MEASURED 2026-11-12 that it was added and was disabled in the online copy only; its purpose and exact definition are not recorded in the repository, so this deviation cannot be reproduced from this page |
+| A Windows firewall rule named `kayfabe-block-internet`, blocking outbound Internet | Extra layer, hand-added during cleanup, on top of the network restriction; the offline protection comes from qemu `restrict=on`, not from this rule | Baked in before packing; disabled in the online copy only | MEASURED 2026-11-12 that it was added by hand; the repository has no file for it, so NOT reproducible from this page |
 | Run-time scripts and results under `C:\kfapps` and `C:\kfhw`, plus a temporary restart marker | Evidence collection in the disposable overlay | Per boot, in the overlay only | CODE READ |
 
 The answer file may still carry choices that a future, more minimal image drops. The design notes (*Deviations from a default install* in the app-automation design document) list the same settings with the code that sets each one.
