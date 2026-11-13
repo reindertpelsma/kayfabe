@@ -1305,7 +1305,7 @@ mod tests {
     // the fix (the call reached the kernel) and must be a refusal BY NAME after it.
     // ===================================================================================
 
-    /// ★★★ B-01, the measured PoC as a must-refuse test: `FIONREAD` on a socket with a 1-byte
+    /// ★★★ B-01, the review's PoC as a must-refuse test: `FIONREAD` on a socket with a 1-byte
     /// slice. Before the fix the kernel wrote a 4-byte `int` at the slice, 3 bytes of it into the
     /// neighbouring bytes of `backing`.
     #[test]
