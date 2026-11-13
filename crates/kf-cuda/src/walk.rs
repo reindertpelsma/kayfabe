@@ -48,8 +48,8 @@ use crate::abi::{
     KfReportHeader, KfSlot,
 };
 use crate::driver_unsafe::{
-    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, EventHandle, Func, GraphExecHandle,
-    GraphHandle, GraphNode, PinnedBuf, StreamHandle,
+    Capture, CompletionFd, CtxHandle, Cuda, CudaError, DevBuf, DevSpan, EventHandle, Func,
+    GraphExecHandle, GraphHandle, GraphNode, PinnedBuf, StreamHandle,
 };
 
 /// ★★★ **The committed PTX.** Built from `cuda/walk/kf_walk.cu` by
@@ -516,19 +516,15 @@ impl PinLayout {
 struct InFlight {
     gpga_len: u64,
     submitted: std::time::Instant,
-    /// ★ w829: the window walked, so a fixable capacity refusal can re-submit the same walk.
-    gpga: CUdeviceptr,
+    /// ★ w829: the window walked (its kernel address), so a fixable capacity refusal can
+    /// re-submit the same walk. ⊘ A kernel-parameter value only (`DevSpan::kernel_addr`): no copy
+    /// or set takes it.
+    gpga: u64,
 }
 
-/// A device allocation, freed on drop.
-///
-/// ⊘ It holds a **clone of nothing** — the freeing goes through the owner's [`Cuda`], so this
-/// type deliberately cannot free itself. `WalkKernel` frees them, or neutralises them and
-/// lets `cuCtxDestroy` reclaim the lot; see its `Drop`.
-#[derive(Debug, Clone, Copy)]
-struct DevBuf {
-    ptr: CUdeviceptr,
-}
+// ⊘ 2026-11-13: the walker's own `DevBuf { ptr }` (Copy, address only) is gone; its buffers are
+// the driver perimeter's `DevBuf` (address + length, not Copy). They are never freed one by one:
+// `cuCtxDestroy` reclaims the lot (see `Drop for WalkKernel`).
 
 /// One kernel launch of the captured walk graph, with the parameters it currently carries in
 /// the instantiated graph — kept so a per-walk parameter change is ONE setter call per node,
@@ -655,7 +651,7 @@ pub struct WalkKernel {
     events: Vec<String>,
     /// ★ §13: the imported store, `(device pointer, length)` — never handed out;
     /// [`WalkKernel::write_store`] / [`WalkKernel::read_store`] bound every access by it.
-    store: Option<(CUdeviceptr, u64)>,
+    store: Option<DevBuf>,
     hdr: DevBuf,
     rpdb: DevBuf,
     rrun: DevBuf,
@@ -683,22 +679,14 @@ pub enum WalkDevice<'a> {
 ///
 /// ⊘ A copy and not a cast: `launch` needs `&mut [u8]`, and handing it a view over a live
 /// `KfArgs` would alias. The copy is 216 bytes once per launch.
-fn param_bytes<T: Copy>(v: &T) -> Vec<u8> {
-    let n = core::mem::size_of::<T>();
-    let mut out = vec![0u8; n];
-    // ⊘ A byte-wise copy through a `[u8]` view of ONE value, written with safe code so this
-    // file stays free of `unsafe`. `KfArgs` is a `#[repr(C)]` aggregate of integers, so its
-    // bytes are all initialised and none of them is a pointer Rust tracks.
-    let src: &[u8] = bytes_of(v);
-    out.copy_from_slice(src);
-    out
+fn param_bytes<T: crate::driver_unsafe::AbiField>(v: &T) -> Vec<u8> {
+    // ⊘ 2026-11-13: field by field (`abi_bytes`), padding zero; no view over the value is formed.
+    crate::driver_unsafe::abi_bytes(v)
 }
 
-/// A `&[u8]` over one `Copy` `#[repr(C)]` value.
-fn bytes_of<T: Copy>(v: &T) -> &[u8] {
-    // ⊘ `core::slice::from_raw_parts` is the usual spelling and it is `unsafe`. This crate
-    // keeps `unsafe` in `driver_unsafe.rs`, so the conversion goes through the audited file.
-    crate::driver_unsafe::view_bytes(v)
+/// The bytes of one ABI value (see [`param_bytes`]).
+fn bytes_of<T: crate::driver_unsafe::AbiField>(v: &T) -> Vec<u8> {
+    crate::driver_unsafe::abi_bytes(v)
 }
 
 impl WalkKernel {
@@ -725,6 +713,17 @@ impl WalkKernel {
         cfg: WalkCfg,
         fmt: KfFormat,
         on: WalkDevice<'_>,
+    ) -> Result<WalkKernel, CudaError> {
+        Self::bring_up_with(cfg, fmt, on, Cuda::open)
+    }
+
+    /// [`Self::bring_up_on`] over a binding `open` returns (the tests' fake driver). ⊘ `open`
+    /// runs AFTER the ABI gates, as `Cuda::open` always did.
+    pub(crate) fn bring_up_with(
+        cfg: WalkCfg,
+        fmt: KfFormat,
+        on: WalkDevice<'_>,
+        open: impl FnOnce() -> Result<Cuda, CudaError>,
     ) -> Result<WalkKernel, CudaError> {
         let t0 = std::time::Instant::now();
         // ★★★★★ THE ABI GATE, and it is FIRST — before `dlopen`, so a skew can never be
@@ -762,7 +761,7 @@ impl WalkKernel {
         // (`NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE`, `gh100/dev_mmu.h:140`), which the kernel does
         // not yet test — a Hopper guest mixing big and small pages in one 2 MiB slot is the case.
 
-        let cu = Cuda::open()?;
+        let cu = open()?;
         cu.init()?;
         let count = cu.device_count()?;
         if count < 1 {
@@ -794,15 +793,21 @@ impl WalkKernel {
         };
         let jit_us = u64::try_from(tj.elapsed().as_micros()).unwrap_or(u64::MAX);
 
-        let f_begin = cu.module_function(module, SYM_BEGIN)?;
-        let f_walk = cu.module_function(module, SYM_WALK)?;
-        let f_diff_slots = cu.module_function(module, SYM_DIFF_SLOTS)?;
-        let f_diff_emit = cu.module_function(module, SYM_DIFF_EMIT)?;
-        let f_commit = cu.module_function(module, SYM_COMMIT)?;
-        let mut f_par = [f_begin; 9];
-        for (i, sym) in SYM_PAR.iter().enumerate() {
-            f_par[i] = cu.module_function(module, sym)?;
+        let f_begin = cu.module_function(&module, SYM_BEGIN)?;
+        let f_walk = cu.module_function(&module, SYM_WALK)?;
+        let f_diff_slots = cu.module_function(&module, SYM_DIFF_SLOTS)?;
+        let f_diff_emit = cu.module_function(&module, SYM_DIFF_EMIT)?;
+        let f_commit = cu.module_function(&module, SYM_COMMIT)?;
+        let mut par_fns = Vec::with_capacity(SYM_PAR.len());
+        for sym in SYM_PAR {
+            par_fns.push(cu.module_function(&module, sym)?);
         }
+        let f_par: [Func; 9] = par_fns.try_into().map_err(|_| {
+            refused(
+                "WalkKernel::bring_up",
+                "the parallel walk needs nine entries".to_string(),
+            )
+        })?;
 
         // ★ The diff's scratch reuses the walk's run stage: 4 × runs_per_pdb runs per entry, and
         // the class partition packs counts in 16 bits.
@@ -831,9 +836,7 @@ impl WalkKernel {
         })?;
         let tbl_runs = walk_pool;
         let a = |bytes: usize, what: &'static str| -> Result<DevBuf, CudaError> {
-            Ok(DevBuf {
-                ptr: cu.mem_alloc_zeroed(bytes, what)?,
-            })
+            cu.mem_alloc_zeroed(bytes, what)
         };
         let dev = a(core::mem::size_of::<KfDev>(), "cuMemAlloc(KfDev)")?;
         let walk = a(
@@ -884,7 +887,7 @@ impl WalkKernel {
             max_slots: cfg.max_slots,
             ..h
         };
-        cu.memcpy_h2d(dev.ptr, bytes_of(&h), "cuMemcpyHtoD(KfDev)")?;
+        cu.memcpy_h2d(dev.whole(), &bytes_of(&h), "cuMemcpyHtoD(KfDev)")?;
 
         // ★ P4: the asynchronous half, brought up here with everything else lazy (§w724d).
         let stream = cu.stream_create()?;
@@ -894,36 +897,28 @@ impl WalkKernel {
         let mut pin = cu.pinned_alloc(pin_at.total, "cuMemAllocHost(report + stages)")?;
         // Zeroed: the commit node's first read of "the previous report" must find no magic.
         pin.write(0, &vec![0u8; pin_at.total]);
-        let pdbs = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.pdbs)?,
-        };
-        let slots = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.slots)?,
-        };
-        let ack = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.ack)?,
-        };
-        let ack_code = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.ack_code)?,
-        };
-        let lay = DevBuf {
-            ptr: cu.pinned_device_ptr(&pin, pin_at.lay)?,
-        };
+        // ★ 2026-11-13: each device view is exactly its region of the pinned buffer (D-02).
+        let view = |off: usize, len: usize| cu.pinned_device_view(&pin, off, len);
+        let pdbs = view(pin_at.pdbs, KF_MAX_PDB * 8)?;
+        let slots = view(pin_at.slots, KF_MAX_PDB * 4)?;
+        let ack = view(pin_at.ack, core::mem::size_of::<KfAck>())?;
+        let ack_code = view(pin_at.ack_code, cfg.run_capacity as usize)?;
+        let lay = view(pin_at.lay, core::mem::size_of::<crate::abi::KfLayout>())?;
         // ★ 2026-09-25: the REPORT lives in the pinned buffer too — the diff kernels write it
         // straight into host memory, so a walk moves only the bytes its diff has (a one-run diff
         // is a few hundred bytes) and needs no read-back node. `[measured gate9, 50a6c9a9]` the
         // capacity-sized copy it replaces was 512 KiB of PCIe on every walk. The commit node reads
         // the previous report back from here (its entries' runs only).
         let (hdr, rpdb, rrun) = (
-            DevBuf {
-                ptr: cu.pinned_device_ptr(&pin, pin_at.hdr)?,
-            },
-            DevBuf {
-                ptr: cu.pinned_device_ptr(&pin, pin_at.rpdb)?,
-            },
-            DevBuf {
-                ptr: cu.pinned_device_ptr(&pin, pin_at.rrun)?,
-            },
+            view(pin_at.hdr, core::mem::size_of::<KfReportHeader>())?,
+            view(
+                pin_at.rpdb,
+                cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>(),
+            )?,
+            view(
+                pin_at.rrun,
+                cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>(),
+            )?,
         );
         let done_fd = CompletionFd::new()?;
 
@@ -990,9 +985,9 @@ impl WalkKernel {
     /// ⊘ The wait is `poll(2)` on the fd, at bring-up — not a context synchronize, and not on
     /// the walk path.
     fn warm_up(&self) -> Result<(), CudaError> {
-        let s = self.stream;
+        let s = &self.stream;
         if let Some(g) = &self.graph {
-            self.cu.graph_upload(g.exec, s)?;
+            self.cu.graph_upload(&g.exec, s)?;
         }
         self.cu.launch_host_signal(s, &self.done_fd)?;
         if !self.done_fd.wait_readable(10_000) || self.done_fd.drain() == 0 {
@@ -1014,13 +1009,12 @@ impl WalkKernel {
         if !self.cu.has_graph_api() {
             return Ok(None);
         }
-        let s = self.stream;
         let args = self.args_for(0, 0, 0);
-        self.cu.stream_begin_capture(s)?;
+        let cap = self.cu.stream_begin_capture(&self.stream)?;
         let mut rec = Some(Vec::new());
-        let queued = self.enqueue_walk(&args, 0, &mut rec);
+        let queued = self.enqueue_walk(&args, 0, &mut rec, Some(&cap));
         // ⊘ End the capture on EVERY path: a stream left capturing records every later walk.
-        let ended = self.cu.stream_end_capture(s);
+        let ended = self.cu.stream_end_capture(cap);
         let graph = match (queued, ended) {
             (Ok(()), Ok(g)) => g,
             (Err(e), Ok(g)) => {
@@ -1029,7 +1023,7 @@ impl WalkKernel {
             }
             (Err(e), Err(_)) | (Ok(()), Err(e)) => return Err(e),
         };
-        let exec = match self.cu.graph_instantiate(graph) {
+        let exec = match self.cu.graph_instantiate(&graph) {
             Ok(e) => e,
             Err(e) => {
                 self.cu.graph_destroy(graph);
@@ -1046,7 +1040,7 @@ impl WalkKernel {
         }))
     }
 
-    fn args_for(&self, gpga: CUdeviceptr, gpga_len: u64, npdb: u32) -> KfArgs {
+    fn args_for(&self, gpga: u64, gpga_len: u64, npdb: u32) -> KfArgs {
         // ★★★★★ **w761a — ZEROED FIRST, THEN ASSIGNED. The padding is the point.**
         //
         // ⊘⊘⊘ `KfArgs` carries **8 uninitialised padding bytes** (`npdb`→`scopes` and
@@ -1073,23 +1067,26 @@ impl WalkKernel {
             span: gpga_len,
         };
         a.fmt = self.fmt;
-        a.dev = self.dev.ptr;
-        a.walk = self.walk.ptr;
-        a.com = self.com.ptr;
-        a.slot = self.slot.ptr;
-        a.pdbs = self.pdbs.ptr;
-        a.slots = self.slots.ptr;
+        // ★ kernel-parameter values of whole allocations (`DevSpan::kernel_addr`; the kernels bound
+        // their accesses by the capacities in `KfDev`/`KfLayout`, review 2 D-12)
+        let at = |b: &DevBuf| b.whole().kernel_addr();
+        a.dev = at(&self.dev);
+        a.walk = at(&self.walk);
+        a.com = at(&self.com);
+        a.slot = at(&self.slot);
+        a.pdbs = at(&self.pdbs);
+        a.slots = at(&self.slots);
         a.npdb = npdb;
         a.key_perm = self.cfg.key_perm;
-        a.ack = self.ack.ptr;
-        a.ack_code = self.ack_code.ptr;
+        a.ack = at(&self.ack);
+        a.ack_code = at(&self.ack_code);
         // ⊘ The walk's run stage: done with before the diff runs, free before the commit runs.
-        a.scratch = self.par.runstage.ptr;
-        a.iscratch = self.iscratch.ptr;
-        a.hdr = self.hdr.ptr;
-        a.rpdb = self.rpdb.ptr;
-        a.rrun = self.rrun.ptr;
-        a.lay = self.lay.ptr;
+        a.scratch = at(&self.par.runstage);
+        a.iscratch = at(&self.iscratch);
+        a.hdr = at(&self.hdr);
+        a.rpdb = at(&self.rpdb);
+        a.rrun = at(&self.rrun);
+        a.lay = at(&self.lay);
         a
     }
 
@@ -1106,7 +1103,11 @@ impl WalkKernel {
     /// flight, when no store was imported, when more than [`KF_MAX_PDB`] entries are asked for,
     /// or when a slot is out of range or repeated (two entries may never commit into one slot).
     pub fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), CudaError> {
-        let Some((gpga, gpga_len)) = self.store else {
+        let Some((gpga, gpga_len)) = self
+            .store
+            .as_ref()
+            .map(|b| (b.whole().kernel_addr(), b.len() as u64))
+        else {
             return Err(refused(
                 "WalkKernel::submit",
                 "no store imported (import_store first)".to_string(),
@@ -1126,12 +1127,13 @@ impl WalkKernel {
         entries: &[WalkEntry],
     ) -> Result<(), CudaError> {
         self.retries_left = CAPACITY_RETRIES;
-        self.submit_over(img.ptr, img.len, entries)
+        let (gpga, len) = (img.buf.whole().kernel_addr(), img.buf.len() as u64);
+        self.submit_over(gpga, len, entries)
     }
 
     fn submit_over(
         &mut self,
-        gpga: CUdeviceptr,
+        gpga: u64,
         gpga_len: u64,
         entries: &[WalkEntry],
     ) -> Result<(), CudaError> {
@@ -1176,7 +1178,7 @@ impl WalkKernel {
             self.events.push(format!("capacity ceiling: {name}"));
             refused("WalkKernel::submit (capacity)", name)
         })?;
-        self.pin.write(self.pin_at.lay, bytes_of(&lay));
+        self.pin.write(self.pin_at.lay, &bytes_of(&lay));
         let npdb = u32::try_from(entries.len()).unwrap_or(0);
         let mut pdb_bytes = Vec::with_capacity(entries.len() * 8);
         let mut slot_bytes = Vec::with_capacity(entries.len() * 4);
@@ -1184,7 +1186,6 @@ impl WalkKernel {
             pdb_bytes.extend_from_slice(&e.pdb.to_le_bytes());
             slot_bytes.extend_from_slice(&e.slot.to_le_bytes());
         }
-        let s = self.stream;
         let at = self.pin_at;
         // The stages the graph reads in place; the previous walk has been collected (checked
         // above), so nothing is still reading them.
@@ -1204,22 +1205,22 @@ impl WalkKernel {
             ack.reset[i] = r;
         }
         ack.nreset = u32::try_from(nres).unwrap_or(0);
-        self.pin.write(at.ack, bytes_of(&ack));
+        self.pin.write(at.ack, &bytes_of(&ack));
         let args = self.args_for(gpga, gpga_len, npdb);
         if let Some(mut g) = self.graph.take() {
             // ★ P4b: one graph launch for the walk, followed by its completion event; setters
             // run only when the store or entry count changed since the last walk.
             let r = Self::update_graph(&self.cu, &mut g, &args, npdb)
-                .and_then(|()| self.cu.graph_launch(g.exec, s));
+                .and_then(|()| self.cu.graph_launch(&g.exec, &self.stream));
             self.graph = Some(g);
             r?;
         } else {
-            self.enqueue_walk(&args, npdb, &mut None)?;
+            self.enqueue_walk(&args, npdb, &mut None, None)?;
         }
         // A fresh host-side record captures THIS launch, replacing the previous event state.
         // Keeping this outside capture avoids relying on when a replayed record node resets
         // a reused event. No host callback and no wait; the report precedes it on the stream.
-        if let Err(e) = self.cu.event_record(self.ev_done, s) {
+        if let Err(e) = self.cu.event_record(&self.ev_done, &self.stream) {
             // Work already reached the GPU. Never reuse its pinned storage without proof;
             // only context teardown may reclaim this walker after a failed tail record.
             self.completion_failed = true;
@@ -1294,7 +1295,7 @@ impl WalkKernel {
         if self.inflight.is_none() {
             return Ok(true);
         }
-        self.cu.event_query(self.ev_done)
+        self.cu.event_query(&self.ev_done)
     }
 
     /// Whether a walk is queued and not yet collected.
@@ -1360,7 +1361,7 @@ impl WalkKernel {
             return Ok(None);
         };
         let ready = crate::completion::ready(self.done_fd.drain() != 0, || {
-            self.cu.event_query(self.ev_done)
+            self.cu.event_query(&self.ev_done)
         });
         match ready {
             Ok(false) => return Ok(None),
@@ -1376,7 +1377,7 @@ impl WalkKernel {
             u64::try_from(f.submitted.elapsed().as_micros()).unwrap_or(u64::MAX);
         let gpu_us = self
             .cu
-            .event_elapsed_us(self.ev_start, self.ev_copied)
+            .event_elapsed_us(&self.ev_start, &self.ev_copied)
             .unwrap_or(0);
         let at = self.pin_at;
         // ★ One decoder per report struct (`abi.rs`, `offset_of!`), shared with every other reader.
@@ -1483,11 +1484,11 @@ impl WalkKernel {
         let run = core::mem::size_of::<KfMapRun>() as u64;
         for m in &moves {
             // Copy the whole old region: the counts (in `KfSlot`) say how much of it is live.
+            let n = (u64::from(m.from.cap) * run) as usize;
             self.cu.memcpy_d2d_async(
-                self.stream,
-                self.com.ptr + u64::from(m.to.off) * run,
-                self.com.ptr + u64::from(m.from.off) * run,
-                (u64::from(m.from.cap) * run) as usize,
+                &self.stream,
+                self.com.span(u64::from(m.to.off) * run, n),
+                self.com.span(u64::from(m.from.off) * run, n),
                 "cuMemcpyDtoDAsync(slot growth)",
             )?;
             self.events.push(format!(
@@ -1617,9 +1618,9 @@ impl WalkKernel {
                 k.grid = npdb.div_ceil(128).max(1);
             }
             cu.graph_exec_kernel_set(
-                g.exec,
-                k.node,
-                k.f,
+                &g.exec,
+                &k.node,
+                &k.f,
                 k.grid,
                 k.block,
                 k.shm,
@@ -1642,17 +1643,15 @@ impl WalkKernel {
         args: &KfArgs,
         npdb: u32,
         rec: &mut Option<Vec<GraphKernel>>,
+        cap: Option<&Capture<'_>>,
     ) -> Result<(), CudaError> {
-        let s = self.stream;
-        let at = self.pin_at;
-        self.record(self.ev_start, rec.is_some())?;
+        self.record(&self.ev_start, cap.is_some())?;
         // ⊘ No pdb upload: `a.pdbs` IS the pinned stage `submit` wrote (see `pdbs`). Every
         // level's staging cursor is zeroed here, once (see `KF_USED_SLOTS`).
         self.cu.memset_d8_async(
-            s,
-            self.par.used.ptr,
+            &self.stream,
+            self.par.used.span(0, KF_USED_SLOTS * 4),
             0,
-            KF_USED_SLOTS * 4,
             "cuMemsetD8Async(used)",
         )?;
         // ★ COMMIT-ON-ACK first: the previous report and its verdict, before anything is walked
@@ -1660,7 +1659,8 @@ impl WalkKernel {
         let grid = u32::try_from(KF_MAX_PDB).unwrap_or(64);
         self.kl(
             rec,
-            self.f_commit,
+            cap,
+            &self.f_commit,
             grid,
             KF_DIFF_BLOCK,
             0,
@@ -1669,7 +1669,8 @@ impl WalkKernel {
         )?;
         self.kl(
             rec,
-            self.f_begin,
+            cap,
+            &self.f_begin,
             1,
             1,
             0,
@@ -1679,12 +1680,13 @@ impl WalkKernel {
         // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
         // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space. The serial
         // kernel stays in the PTX for the scoped path the .cu keeps; this walk is never scoped.
-        let _ = self.f_walk;
-        self.run_parallel(args, npdb, rec)?;
+        let _ = &self.f_walk;
+        self.run_parallel(args, npdb, rec, cap)?;
         // ★ The diff against the committed placements (one block per entry), then the dense report.
         self.kl(
             rec,
-            self.f_diff_slots,
+            cap,
+            &self.f_diff_slots,
             grid,
             KF_DIFF_BLOCK,
             0,
@@ -1693,7 +1695,8 @@ impl WalkKernel {
         )?;
         self.kl(
             rec,
-            self.f_diff_emit,
+            cap,
+            &self.f_diff_emit,
             grid,
             256,
             0,
@@ -1701,20 +1704,18 @@ impl WalkKernel {
             "cuLaunchKernel(kf_diff_emit)",
         )?;
         // ⊘ No read-back: the report was written into pinned host memory by the kernels.
-        let _ = (s, at);
-        let capturing = rec.is_some();
-        self.record(self.ev_copied, capturing)?;
+        self.record(&self.ev_copied, cap.is_some())?;
         // The completion event is recorded explicitly after launch, outside this graph.
         // A replay needs no host callback; real CUDA completion remains the sole proof.
         Ok(())
     }
 
     /// `cuEventRecord`, or — under capture — the external record that becomes a graph node.
-    fn record(&self, e: EventHandle, capturing: bool) -> Result<(), CudaError> {
+    fn record(&self, e: &EventHandle, capturing: bool) -> Result<(), CudaError> {
         if capturing {
-            self.cu.event_record_external(e, self.stream)
+            self.cu.event_record_external(e, &self.stream)
         } else {
-            self.cu.event_record(e, self.stream)
+            self.cu.event_record(e, &self.stream)
         }
     }
 
@@ -1723,7 +1724,8 @@ impl WalkKernel {
     fn kl(
         &self,
         rec: &mut Option<Vec<GraphKernel>>,
-        f: Func,
+        cap: Option<&Capture<'_>>,
+        f: &Func,
         grid: u32,
         block: u32,
         shm: u32,
@@ -1731,19 +1733,19 @@ impl WalkKernel {
         what: &'static str,
     ) -> Result<(), CudaError> {
         self.cu
-            .launch_args(self.stream, f, grid, block, shm, &mut params, what)?;
-        if let Some(v) = rec {
-            let node = self.cu.capture_leaf(self.stream)?;
+            .launch_args(&self.stream, f, grid, block, shm, &mut params, what)?;
+        if let (Some(v), Some(cap)) = (rec, cap) {
+            let node = self.cu.capture_leaf(cap)?;
             v.push(GraphKernel {
                 node,
-                f,
+                f: f.clone(),
                 grid,
                 block,
                 shm,
                 params,
                 what,
-                takes_args: f != self.f_par[2],
-                seed: f == self.f_par[0],
+                takes_args: *f != self.f_par[2],
+                seed: *f == self.f_par[0],
             });
         }
         Ok(())
@@ -1754,8 +1756,11 @@ impl WalkKernel {
         a: &KfArgs,
         npdb: u32,
         rec: &mut Option<Vec<GraphKernel>>,
+        cap: Option<&Capture<'_>>,
     ) -> Result<(), CudaError> {
-        let p = |v: u64| v.to_le_bytes().to_vec();
+        // a whole buffer, or one u32 counter of it, as a kernel parameter
+        let p = |b: &DevBuf| b.whole().kernel_arg();
+        let c = |b: &DevBuf, off: u64| b.span(off, 4).kernel_arg();
         let u = |v: u32| v.to_le_bytes().to_vec();
         let ab = || param_bytes(a);
         let par = &self.par;
@@ -1770,30 +1775,33 @@ impl WalkKernel {
             f_bases,
             f_emit,
             f_join,
-        ] = self.f_par;
+        ] = &self.f_par;
         self.kl(
             rec,
+            cap,
             f_seed,
             npdb.div_ceil(128).max(1),
             128,
             0,
-            vec![ab(), p(par.fr[0].ptr), p(par.nfr.ptr), p(par.used.ptr)],
+            vec![ab(), p(&par.fr[0]), p(&par.nfr), p(&par.used)],
             "cuLaunchKernel(kf_par_seed)",
         )?;
         let mut src = 0usize;
         // The last level's output count IS the task count; it is read where it lies (no copy).
-        let mut ntask = par.nfr.ptr;
+        // (offsets into `par.nfr`, whose u32 counters the kernels read and write)
+        let mut ntask = 0u64;
         for k in u32::from(self.fmt.first_dir)..KF_DIRS {
-            let used = par.used.ptr + u64::from(k) * 4;
-            let nin = par.nfr.ptr + (src as u64) * 4;
-            let nout = par.nfr.ptr + ((src ^ 1) as u64) * 4;
+            let used = c(&par.used, u64::from(k) * 4);
+            let nin = (src as u64) * 4;
+            let nout = ((src ^ 1) as u64) * 4;
             let dst = if k + 1 < KF_DIRS {
-                par.fr[src ^ 1].ptr
+                &par.fr[src ^ 1]
             } else {
-                par.task.ptr
+                &par.task
             };
             self.kl(
                 rec,
+                cap,
                 f_expand,
                 KF_PAR_GRID,
                 KF_PAR_BLOCK,
@@ -1801,38 +1809,45 @@ impl WalkKernel {
                 vec![
                     ab(),
                     u(k),
-                    p(par.fr[src].ptr),
-                    p(nin),
-                    p(par.stage.ptr),
+                    p(&par.fr[src]),
+                    c(&par.nfr, nin),
+                    p(&par.stage),
                     u(KF_MAX_FRONTIER as u32),
-                    p(used),
-                    p(par.start.ptr),
-                    p(par.cnt.ptr),
+                    used,
+                    p(&par.start),
+                    p(&par.cnt),
                 ],
                 "cuLaunchKernel(kf_par_expand)",
             )?;
             self.kl(
                 rec,
+                cap,
                 f_scan,
                 1,
                 KF_SCAN_BLOCK,
                 0,
-                vec![p(par.cnt.ptr), p(nin), p(par.off.ptr), p(nout)],
+                vec![
+                    p(&par.cnt),
+                    c(&par.nfr, nin),
+                    p(&par.off),
+                    c(&par.nfr, nout),
+                ],
                 "cuLaunchKernel(kf_par_scan)",
             )?;
             self.kl(
                 rec,
+                cap,
                 f_compact,
                 KF_PAR_GRID,
                 KF_PAR_BLOCK,
                 0,
                 vec![
                     ab(),
-                    p(par.stage.ptr),
-                    p(par.start.ptr),
-                    p(par.cnt.ptr),
-                    p(par.off.ptr),
-                    p(nin),
+                    p(&par.stage),
+                    p(&par.start),
+                    p(&par.cnt),
+                    p(&par.off),
+                    c(&par.nfr, nin),
                     p(dst),
                     u(KF_MAX_FRONTIER as u32),
                 ],
@@ -1846,92 +1861,98 @@ impl WalkKernel {
         }
         self.kl(
             rec,
+            cap,
             f_leaf,
             KF_PAR_GRID,
             KF_PAR_BLOCK,
             shm,
             vec![
                 ab(),
-                p(par.task.ptr),
-                p(ntask),
-                p(par.runstage.ptr),
+                p(&par.task),
+                c(&par.nfr, ntask),
+                p(&par.runstage),
                 u(KF_MAX_SCRATCH as u32),
-                p(par.used.ptr + u64::from(KF_DIRS) * 4),
-                p(par.sum.ptr),
+                c(&par.used, u64::from(KF_DIRS) * 4),
+                p(&par.sum),
             ],
             "cuLaunchKernel(kf_par_leaf)",
         )?;
         self.kl(
             rec,
+            cap,
             f_heads,
             KF_PAR_GRID,
             128,
             0,
             vec![
                 ab(),
-                p(par.task.ptr),
-                p(par.sum.ptr),
-                p(ntask),
-                p(par.cnt.ptr),
-                p(par.head.ptr),
+                p(&par.task),
+                p(&par.sum),
+                c(&par.nfr, ntask),
+                p(&par.cnt),
+                p(&par.head),
             ],
             "cuLaunchKernel(kf_par_heads)",
         )?;
         self.kl(
             rec,
+            cap,
             f_scan,
             1,
             KF_SCAN_BLOCK,
             0,
             vec![
-                p(par.cnt.ptr),
-                p(ntask),
-                p(par.off.ptr),
-                p(par.nfr.ptr + 12),
+                p(&par.cnt),
+                c(&par.nfr, ntask),
+                p(&par.off),
+                c(&par.nfr, 12),
             ],
             "cuLaunchKernel(kf_par_scan tasks)",
         )?;
         self.kl(
             rec,
+            cap,
             f_bases,
             1,
             1,
             0,
-            vec![ab(), p(par.pdbbase.ptr)],
+            vec![ab(), p(&par.pdbbase)],
             "cuLaunchKernel(kf_par_bases)",
         )?;
         self.kl(
             rec,
+            cap,
             f_emit,
             KF_PAR_GRID,
             KF_PAR_BLOCK,
             0,
             vec![
                 ab(),
-                p(par.task.ptr),
-                p(par.sum.ptr),
-                p(ntask),
-                p(par.off.ptr),
-                p(par.head.ptr),
-                p(par.pdbbase.ptr),
-                p(par.runstage.ptr),
+                p(&par.task),
+                p(&par.sum),
+                c(&par.nfr, ntask),
+                p(&par.off),
+                p(&par.head),
+                p(&par.pdbbase),
+                p(&par.runstage),
             ],
             "cuLaunchKernel(kf_par_emit)",
         )?;
         self.kl(
             rec,
+            cap,
             f_join,
             KF_PAR_GRID,
             128,
             0,
             vec![
                 ab(),
-                p(par.task.ptr),
-                p(par.sum.ptr),
-                p(ntask),
-                p(par.off.ptr),
-                p(par.head.ptr),
-                p(par.pdbbase.ptr),
+                p(&par.task),
+                p(&par.sum),
+                c(&par.nfr, ntask),
+                p(&par.off),
+                p(&par.head),
+                p(&par.pdbbase),
             ],
             "cuLaunchKernel(kf_par_join)",
         )
@@ -1947,7 +1968,7 @@ impl WalkKernel {
     /// # Errors
     /// [`CudaError`].
     pub fn make_current(&self) -> Result<(), CudaError> {
-        self.cu.ctx_set_current(self.ctx)
+        self.cu.ctx_set_current(&self.ctx)
     }
 
     /// Copy a host image into fresh device memory.
@@ -1956,11 +1977,11 @@ impl WalkKernel {
     /// [`CudaError`].
     pub fn upload(&self, bytes: &[u8]) -> Result<DeviceImage, CudaError> {
         let p = self.cu.mem_alloc_zeroed(bytes.len(), "cuMemAlloc(gpga)")?;
-        self.cu.memcpy_h2d(p, bytes, "cuMemcpyHtoD(gpga)")?;
-        Ok(DeviceImage {
-            ptr: p,
-            len: bytes.len() as u64,
-        })
+        if let Err(e) = self.cu.memcpy_h2d(p.whole(), bytes, "cuMemcpyHtoD(gpga)") {
+            self.cu.mem_free(p);
+            return Err(e);
+        }
+        Ok(DeviceImage { buf: p })
     }
 
     /// ★★★ **Import an RM-exported object into THIS kernel's context** and map it whole.
@@ -2002,7 +2023,7 @@ impl WalkKernel {
                 code: 0,
                 name,
             })?;
-        self.store = Some((p, bytes));
+        self.store = Some(p);
         Ok(())
     }
 
@@ -2016,22 +2037,23 @@ impl WalkKernel {
     /// The imported store's length, if one was imported.
     #[must_use]
     pub fn store_len(&self) -> Option<u64> {
-        self.store.map(|(_, l)| l)
+        self.store.as_ref().map(|b| b.len() as u64)
     }
 
     /// The store address of `[off, off+len)`, refused by name unless wholly inside the store.
-    fn store_at(&self, off: u64, len: usize, what: &'static str) -> Result<CUdeviceptr, CudaError> {
-        let Some((base, bytes)) = self.store else {
+    fn store_at(&self, off: u64, len: usize, what: &'static str) -> Result<DevSpan<'_>, CudaError> {
+        let Some(store) = self.store.as_ref() else {
             return Err(refused(what, "no store imported".to_string()));
         };
-        let end = off.checked_add(len as u64);
-        if end.is_none_or(|e| e > bytes) {
-            return Err(refused(
+        store.try_span(off, len).ok_or_else(|| {
+            refused(
                 what,
-                format!("[{off:#x}, +{len:#x}) leaves the {bytes:#x}-byte store"),
-            ));
-        }
-        Ok(base + off)
+                format!(
+                    "[{off:#x}, +{len:#x}) leaves the {:#x}-byte store",
+                    store.len()
+                ),
+            )
+        })
     }
 
     /// ★ §13: write `bytes` at store offset `off` — bounds-checked against the store's length.
@@ -2058,8 +2080,7 @@ impl WalkKernel {
         let n = usize::try_from(len)
             .map_err(|_| refused("WalkKernel::zero_store_queued", format!("{len:#x}")))?;
         let dst = self.store_at(off, n, "WalkKernel::zero_store_queued")?;
-        self.cu
-            .memset_d8(dst, 0, n, "cuMemsetD8(zero_store_queued)")
+        self.cu.memset_d8(dst, 0, "cuMemsetD8(zero_store_queued)")
     }
 
     /// ★ The completion of every zero queued so far (`cuCtxSynchronize`): when this returns `Ok`
@@ -2102,7 +2123,15 @@ impl WalkKernel {
             ));
         };
         let mut buf = vec![0u8; reg.cap as usize * KfMapRun::BYTES];
-        let at = self.walk.ptr + u64::from(reg.off) * KfMapRun::BYTES as u64;
+        let at = self
+            .walk
+            .try_span(u64::from(reg.off) * KfMapRun::BYTES as u64, buf.len())
+            .ok_or_else(|| {
+                refused(
+                    "WalkKernel::debug_walk_runs",
+                    format!("entry {entry}: the region leaves the walk table"),
+                )
+            })?;
         self.cu
             .memcpy_d2h(&mut buf, at, "cuMemcpyDtoH(debug_walk_runs)")?;
         Ok(KfMapRun::decode_all(&buf))
@@ -2113,17 +2142,13 @@ impl WalkKernel {
     /// # Errors
     /// Refused by name outside the image; the CUDA error otherwise.
     pub fn read_image(&self, img: &DeviceImage, off: u64, buf: &mut [u8]) -> Result<(), CudaError> {
-        if off
-            .checked_add(buf.len() as u64)
-            .is_none_or(|e| e > img.len)
-        {
+        let Some(src) = img.buf.try_span(off, buf.len()) else {
             return Err(refused(
                 "WalkKernel::read_image",
                 format!("[{off:#x}, +{:#x}) leaves the image", buf.len()),
             ));
-        }
-        self.cu
-            .memcpy_d2h(buf, img.ptr + off, "cuMemcpyDtoH(read_image)")
+        };
+        self.cu.memcpy_d2h(buf, src, "cuMemcpyDtoH(read_image)")
     }
 
     /// Write `bytes` into an uploaded image at `off`, bounds-checked against it.
@@ -2131,22 +2156,19 @@ impl WalkKernel {
     /// # Errors
     /// Refused by name outside the image; the CUDA error otherwise.
     pub fn write_image(&self, img: &DeviceImage, off: u64, bytes: &[u8]) -> Result<(), CudaError> {
-        if off
-            .checked_add(bytes.len() as u64)
-            .is_none_or(|e| e > img.len)
-        {
+        let Some(dst) = img.buf.try_span(off, bytes.len()) else {
             return Err(refused(
                 "WalkKernel::write_image",
                 format!("[{off:#x}, +{:#x}) leaves the image", bytes.len()),
             ));
-        }
-        self.cu
-            .memcpy_h2d(img.ptr + off, bytes, "cuMemcpyHtoD(write_image)")
+        };
+        self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_image)")
     }
 
-    /// Release an image returned by [`WalkKernel::upload`].
+    /// Release an image returned by [`WalkKernel::upload`]. ★ Consumes it (D-04): an image cannot
+    /// be released twice or used after.
     pub fn release(&self, img: DeviceImage) {
-        self.cu.mem_free(img.ptr);
+        self.cu.mem_free(img.buf);
     }
 
     /// ★★ **A launch that must FAIL** — probe (b) of `THE_CONSTRAINTS.md` §w724d.
@@ -2161,7 +2183,7 @@ impl WalkKernel {
     pub fn probe_failed_launch(&mut self) -> Option<String> {
         let args = self.args_for(0, 0, 0);
         let mut p = param_bytes(&args);
-        let r = self.cu.launch_raw(self.f_walk, 1, 2048, &mut p);
+        let r = self.cu.launch_raw(&self.f_walk, 1, 2048, &mut p);
         if r == crate::driver_unsafe::CUDA_SUCCESS {
             // ⊘ Drain it, so a surprising success cannot leave work in flight that the next
             // probe would then be blamed for.
@@ -2186,34 +2208,26 @@ impl Drop for WalkKernel {
         //
         // ★ And the fix is not "free them first": `cuCtxDestroy` reclaims every allocation
         // made in the context, so freeing them individually as well would be the double-free.
-        // ⇒ the buffers are NEUTRALISED and the context is destroyed once.
-        self.dev.ptr = 0;
-        self.walk.ptr = 0;
-        self.com.ptr = 0;
-        self.slot.ptr = 0;
-        self.iscratch.ptr = 0;
-        self.pdbs.ptr = 0;
-        self.slots.ptr = 0;
-        self.ack.ptr = 0;
-        self.ack_code.ptr = 0;
-        self.store = None;
-        self.hdr.ptr = 0;
-        self.rpdb.ptr = 0;
-        self.rrun.ptr = 0;
+        // ⇒ the buffers are never freed one by one (a `DevBuf` does not free itself on drop) and
+        // the context is destroyed once; its token then refuses every one of them.
+        //
         // ★ P4: the stream and events are destroyed explicitly (the context would reclaim them
-        // too); `ctx_destroy` then drains anything still queued — including a host function
-        // that names `done_fd` — BEFORE the `CompletionFd` field closes the fd.
+        // too); `ctx_destroy` then drains anything still queued. ★ D-07: a queued host function
+        // owns its own reference to the completion fd, so the order of the fd's close no longer
+        // matters for soundness.
         let _ = self.make_current();
         if let Some(g) = self.graph.take() {
             self.cu.graph_exec_destroy(g.exec);
             self.cu.graph_destroy(g.graph);
         }
-        self.cu.event_destroy(self.ev_start);
-        self.cu.event_destroy(self.ev_copied);
-        self.cu.event_destroy(self.ev_done);
-        self.cu.stream_destroy(self.stream);
-        self.cu.ctx_destroy(self.ctx);
-        self.ctx = CtxHandle::null();
+        for ev in [&mut self.ev_start, &mut self.ev_copied, &mut self.ev_done] {
+            let e = core::mem::replace(ev, EventHandle::null());
+            self.cu.event_destroy(e);
+        }
+        let s = core::mem::replace(&mut self.stream, StreamHandle::null());
+        self.cu.stream_destroy(s);
+        let ctx = core::mem::replace(&mut self.ctx, CtxHandle::null());
+        self.cu.ctx_destroy(ctx);
     }
 }
 
@@ -2221,23 +2235,105 @@ impl Drop for WalkKernel {
 ///
 /// ⚠ **Not freed on drop**, and that is deliberate: freeing needs the [`Cuda`] that allocated
 /// it, and a guard holding a borrow of the kernel could not coexist with `&mut self` on
-/// `refresh`. Hand it to [`WalkKernel::release`], or let `cuCtxDestroy` reclaim it — which is
-/// always correct here, because the context outlives every image by construction.
-#[derive(Debug, Clone, Copy)]
+/// `refresh`. Hand it to [`WalkKernel::release`], or let `cuCtxDestroy` reclaim it.
+/// ★ 2026-11-13 (D-04): not `Copy`/`Clone` — `release` consumes it, so it cannot be released
+/// twice or written after release; and it refuses once the walker's context is destroyed.
+#[derive(Debug)]
 pub struct DeviceImage {
-    ptr: CUdeviceptr,
-    len: u64,
+    buf: DevBuf,
 }
 
 impl DeviceImage {
     /// Its length.
     #[must_use]
     pub fn len(&self) -> u64 {
-        self.len
+        self.buf.len() as u64
     }
     /// Whether it is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.len == 0
+        self.buf.is_empty()
+    }
+}
+
+/// ★★★ Security review 2 (2026-11-13): the WHOLE walk submission over the fake driver — every
+/// launch's parameter list checked against the committed PTX (D-01), every buffer range against its
+/// allocation (D-02), with no GPU. A host list that drifted from a `.cu` signature fails here.
+#[cfg(test)]
+mod fake_driver_tests {
+    use super::*;
+    use crate::driver_unsafe::fake;
+
+    fn walk_over_the_fake(fmt: KfFormat) -> usize {
+        let mut k =
+            WalkKernel::bring_up_with(WalkCfg::default(), fmt, WalkDevice::FirstOrdinal, || {
+                Ok(Cuda::fake())
+            })
+            .expect("bring-up over the fake driver");
+        assert!(
+            !k.submits_as_graph(),
+            "the fake has no graph API: launch by launch"
+        );
+        let img = k.upload(&vec![0u8; 1 << 16]).unwrap();
+        let _ = fake::calls();
+        k.submit_image(
+            &img,
+            &[
+                WalkEntry { pdb: 0, slot: 0 },
+                WalkEntry {
+                    pdb: 0x1000,
+                    slot: 1,
+                },
+            ],
+        )
+        .expect("a walk over the fake driver");
+        let n = fake::launches();
+        // the image is bounded: a write past it is refused by name, not passed on
+        assert!(k.write_image(&img, (1 << 16) - 3, &[0u8; 4]).is_err());
+        assert!(k.write_image(&img, u64::MAX, &[0u8; 1]).is_err());
+        k.write_image(&img, 0, &[1u8; 16]).unwrap();
+        k.release(img);
+        // the deliberately malformed probe still passes the parameter check (one 264-byte KfArgs)
+        let _ = k.probe_failed_launch();
+        n
+    }
+
+    #[test]
+    fn every_ver2_walk_launch_matches_its_ptx_signature() {
+        // commit, begin, seed, 4 directory levels x (expand, scan, compact), leaf, heads, scan,
+        // bases, emit, join, diff_slots, diff_emit
+        assert_eq!(walk_over_the_fake(crate::abi::kf_format_ver2()), 23);
+    }
+
+    #[test]
+    fn every_ver3_walk_launch_matches_its_ptx_signature() {
+        // VER3 expands one more directory level
+        assert_eq!(walk_over_the_fake(crate::abi::kf_format_ver3()), 26);
+    }
+
+    #[test]
+    fn the_store_is_bounded_and_dies_with_the_walker() {
+        let mut k = WalkKernel::bring_up_with(
+            WalkCfg::default(),
+            crate::abi::kf_format_ver2(),
+            WalkDevice::FirstOrdinal,
+            || Ok(Cuda::fake()),
+        )
+        .unwrap();
+        assert!(k.import_store(-1, 1 << 20).is_err(), "a negative fd");
+        k.import_store(3, 1 << 20).unwrap();
+        assert!(k.write_store((1 << 20) - 1, &[0u8; 2]).is_err());
+        assert!(k.zero_store_queued(u64::MAX, 2).is_err());
+        let mut b = [0u8; 8];
+        assert!(k.read_store(1 << 20, &mut b).is_err());
+        k.write_store(0, &[0u8; 64]).unwrap();
+        let _ = fake::calls();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        assert_eq!(fake::launches(), 23);
+        drop(k);
+        assert!(
+            fake::calls().contains(&fake::Call::CtxDestroy),
+            "the walker destroys its context once"
+        );
     }
 }
