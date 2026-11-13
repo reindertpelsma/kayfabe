@@ -7,20 +7,105 @@
   "settle_s": 300,
   "gather_retry_wait_s": 120,
   "max_guest_boots": 3,
-  "min_free_gb": {"lanea": 130, "laneb": 125, "both": 190},
+  "min_free_gb": {
+    "lanea": 130,
+    "laneb": 125,
+    "both": 190,
+    "pcp1": 60,
+    "pcp2": 60,
+    "pcp3": 60,
+    "pcs4": 45,
+    "pcs5": 20
+  },
   "viewsets": {
-    "medical-04": {"native_s": 318, "budget_s": 1200, "tree_gb": 1.3},
-    "energy-04": {"native_s": 323, "budget_s": 1200, "tree_gb": 1.6},
-    "maya-07": {"native_s": 400, "budget_s": 1200, "tree_gb": 6.3},
-    "catia-07": {"native_s": 803, "budget_s": 2700, "tree_gb": 7.3},
-    "solidworks-08": {"native_s": 989, "budget_s": 3000, "tree_gb": 7.5},
-    "creo-04": {"native_s": 1243, "budget_s": 3900, "tree_gb": 19.7},
-    "unreal_engine-01": {"native_s": 1236, "budget_s": 3900, "tree_gb": 21.5},
-    "blender-01": {"native_s": 1876, "budget_s": 5700, "tree_gb": 26.4},
-    "enscape-01": {"native_s": 2042, "budget_s": 6300, "tree_gb": 2.2}
+    "medical-04": {
+      "native_s": 318,
+      "budget_s": 1200,
+      "tree_gb": 1.3
+    },
+    "energy-04": {
+      "native_s": 323,
+      "budget_s": 1200,
+      "tree_gb": 1.6
+    },
+    "maya-07": {
+      "native_s": 400,
+      "budget_s": 1200,
+      "tree_gb": 6.3
+    },
+    "catia-07": {
+      "native_s": 803,
+      "budget_s": 2700,
+      "tree_gb": 7.3
+    },
+    "solidworks-08": {
+      "native_s": 989,
+      "budget_s": 3000,
+      "tree_gb": 7.5
+    },
+    "creo-04": {
+      "native_s": 1243,
+      "budget_s": 3900,
+      "tree_gb": 19.7
+    },
+    "unreal_engine-01": {
+      "native_s": 1236,
+      "budget_s": 3900,
+      "tree_gb": 21.5
+    },
+    "blender-01": {
+      "native_s": 1876,
+      "budget_s": 5700,
+      "tree_gb": 26.4
+    },
+    "enscape-01": {
+      "native_s": 2042,
+      "budget_s": 6300,
+      "tree_gb": 2.2
+    }
   },
   "lanes": {
-    "lanea": ["energy-04", "creo-04", "blender-01", "enscape-01"],
-    "laneb": ["medical-04", "maya-07", "catia-07", "solidworks-08", "unreal_engine-01"]
+    "lanea": [
+      "energy-04",
+      "creo-04",
+      "blender-01",
+      "enscape-01"
+    ],
+    "laneb": [
+      "medical-04",
+      "maya-07",
+      "catia-07",
+      "solidworks-08",
+      "unreal_engine-01"
+    ],
+    "pcp1": [
+      "enscape-01",
+      "creo-04",
+      "blender-01"
+    ],
+    "pcp3": [
+      "catia-07",
+      "unreal_engine-01",
+      "solidworks-08",
+      "maya-07",
+      "energy-04"
+    ],
+    "pcp2": [
+      "catia-07",
+      "unreal_engine-01",
+      "solidworks-08",
+      "maya-07",
+      "energy-04",
+      "medical-04"
+    ],
+    "pcs4": [
+      "creo-04",
+      "catia-07",
+      "energy-04",
+      "enscape-01"
+    ],
+    "pcs5": [
+      "enscape-01"
+    ]
   }
 }
