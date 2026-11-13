@@ -963,6 +963,14 @@ class T(unittest.TestCase):
         self.assertRegex(m.POWER_SETTINGS["wake_signin"][1], guid)
         self.assertNotIn("CONSOLELOCK", repr(m.POWER_SETTINGS))
 
+    def test_screensaver_set_tolerates_policy_block_but_readback_decides(self):
+        # Real guest: after the repair writes the screensaver policy, SystemParametersInfo(SET) fails with
+        # 1260 (access disabled by policy) in the interactive task. Only that error is tolerated.
+        script = m.render_screen_power("power_" + "a" * 32)
+        self.assertIn("-ne 1260", script)
+        self.assertIn("[KfPower]::Get(0x0010", script)
+        self.assertIn("Cannot disable interactive screensaver", script)
+
     def test_gop_efi_is_staged_from_dir_or_flag_and_missing_is_refused(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)

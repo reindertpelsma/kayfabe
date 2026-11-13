@@ -255,7 +255,8 @@ public class KfPower {
 }
 '@
  foreach($action in @(0x0011,0x0077,0x000f)){
-  if(-not [KfPower]::Set($action,0,[IntPtr]::Zero,3)){throw 'Cannot disable interactive screensaver'}
+  # 1260 = ERROR_ACCESS_DISABLED_BY_POLICY: the screensaver policy written by the repair already forbids it; the Get readback below decides.
+  if(-not [KfPower]::Set($action,0,[IntPtr]::Zero,3) -and [Runtime.InteropServices.Marshal]::GetLastWin32Error() -ne 1260){throw 'Cannot disable interactive screensaver'}
  }
  $active=0;$secure=0;$timeout=0
  if(-not [KfPower]::Get(0x0010,0,[ref]$active,0) -or -not [KfPower]::Get(0x0076,0,[ref]$secure,0) -or -not [KfPower]::Get(0x000e,0,[ref]$timeout,0)){throw 'Cannot read interactive screensaver'}
