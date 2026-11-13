@@ -269,6 +269,11 @@ Kayfabe's QEMU is built without the GTK and SDL front ends on purpose, and the d
 
 <!-- src: docs/design/V3_DISPLAY.md sections 8.2 (rung 0, "no byte crosses PCIe") and 8.18 (gpucopy=169 of sent=170 at 2a20e699); https://looking-glass.io/docs/B7-822-54ea580e/overview/ and /docs/B7/install_libvirt/ (retrieved 2026-10-28); docs/OWNER_RULINGS.md section C item 6 (2026-10-01), section L (frames), section V "Display broker and input" (2026-10-08), sections AJ, AK, AL (cursor and pacing), section AO; docs/design/V3_DISPLAY.md section 8.0 (the piece table, kf3.c about 230 lines) and the cursor-format notes (SDL/GTK conventions, GTK pointer warp, ui_info resize); broker/README.md; docs/howto/security.md -->
 
+### Why is there a private storage bucket?
+
+Some software that kayfabe's Windows tests use, such as a paid benchmark and a student design tool, comes with terms that forbid passing it on, so the project keeps its test image of that software in a private bucket and nowhere public. Build CI has no access to the bucket, so none of it can end up in a released build, and nothing in it is sensitive. Anyone can get the same software by accepting the vendors' licences online, which is free, an automatic form, or a purchase, and the how-to [Recreate the proprietary Windows image](howto/recreate-the-proprietary-image.md) shows how to build your own copy.
+<!-- src: docs/howto/recreate-the-proprietary-image.md; docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md; owner ruling 2026-11-13 -->
+
 ### Do I still need licences for NVIDIA's driver and Windows?
 
 Yes. The NVIDIA driver licence applies to the driver on the host and in the guest, including its limits on datacentre deployment and on hosting, and Windows must be licensed for the way you use it. Kayfabe ships no NVIDIA or Microsoft binaries. See [Credits and notices](howto/credits.md).

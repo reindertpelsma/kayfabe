@@ -33,6 +33,7 @@ These are the repository's own claims, with their limits. Each page of this manu
 | [Attach your GPU to a VM you already have](attach-to-existing-vm.md) | The QEMU arguments, libvirt notes and guest settings for a VM you already run |
 | [Linux guest](linux-guest.md) | Preparing and booting a Linux guest |
 | [Windows guest](windows-guest.md) | The guest settings and the Windows harness |
+| [Recreate the proprietary Windows image](recreate-the-proprietary-image.md) | Building your own copy of the licensed-software test image with your own licences |
 | [Display and the broker](display.md) | Showing a guest's screen on the host |
 | [Troubleshooting](troubleshooting.md) | Symptoms that are documented in the repository |
 | [Security model](security.md) | What is trusted, what is not, and what is unfinished |
