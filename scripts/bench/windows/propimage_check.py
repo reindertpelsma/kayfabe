@@ -130,7 +130,7 @@ POWER_SETTINGS = {
     "hybrid_sleep": ("SUB_SLEEP", "HYBRIDSLEEP"),
     "monitor": ("SUB_VIDEO", "VIDEOIDLE"),
     "disk": ("SUB_DISK", "DISKIDLE"),
-    "wake_signin": ("SUB_NONE", "CONSOLELOCK"),
+    "wake_signin": ("SUB_VIDEO", "8ec4b3a5-6868-48c2-be75-4f3044be88a7")  # CONSOLELOCK: hidden setting, not in powercfg /aliases (MEASURED on guest),
 }
 POWER_REGISTRY = {
     "hibernate_enabled": (r"HKLM:\SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled", 0),
@@ -182,7 +182,7 @@ def render_power_fix():
         + r"""
 $ErrorActionPreference='Stop'
 $r=@{queries=@{};registry=@{};sources=@{};errors=@();sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value}
-function Power { param([Parameter(ValueFromRemainingArguments=$true)][string[]]$argsList)
+function Power { param([string[]]$argsList)
  $text=(& powercfg @argsList 2>&1 | Out-String)
  if($LASTEXITCODE -ne 0){$r.errors+=('powercfg '+($argsList -join ' ')+' failed: '+$text)}
  return $text

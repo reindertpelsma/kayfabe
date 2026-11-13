@@ -846,7 +846,10 @@ class T(unittest.TestCase):
         self.assertFalse(m.power_verdict({"ok": True})["ok"])
 
     def test_power_argument_vector_keeps_all_arguments(self):
-        self.assertIn("ValueFromRemainingArguments=$true", m.render_power_fix())
+        # Real guest: ValueFromRemainingArguments + `Power @('/hibernate','off')` bound ONE joined string, so powercfg
+        # got the single argument "/hibernate off" and answered "Invalid Parameters". A plain string[] keeps elements.
+        self.assertNotIn("ValueFromRemainingArguments", m.render_power_fix())
+        self.assertIn("param([string[]]$argsList)", m.render_power_fix())
         self.assertIn("powercfg @argsList", m.render_power_fix())
 
     def test_power_repeat_preserves_pending_restart(self):
@@ -952,6 +955,13 @@ class T(unittest.TestCase):
         self.assertIn("function Opt(", script)
         self.assertIn("Opt $marker 'InactivityRestartBoot'", script)
         self.assertIn("'InactivityTimeoutSecs'", script)
+
+    def test_every_power_setting_resolves_without_a_missing_alias(self):
+        # Real guest: powercfg /aliases lists SUB_* and most settings but NOT CONSOLELOCK, so Resolve-Guid threw
+        # "Missing powercfg alias CONSOLELOCK". Settings that the alias list may lack are carried as GUIDs.
+        guid = r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}"
+        self.assertRegex(m.POWER_SETTINGS["wake_signin"][1], guid)
+        self.assertNotIn("CONSOLELOCK", repr(m.POWER_SETTINGS))
 
     def test_gop_efi_is_staged_from_dir_or_flag_and_missing_is_refused(self):
         with tempfile.TemporaryDirectory() as d:
