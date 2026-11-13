@@ -94,6 +94,16 @@
 /* The compile-time cap on any level's fan-out. This is the number that keeps I1
  * structural: no descriptor can make a loop run longer than this. */
 #define KF_MAX_ENT 512u
+/* u64 of shared memory per warp in the parallel walk: one table snapshot (the expand) or the small +
+ * big leaf tables (the leaf phase). Mirrored by the Rust launcher's dynamic shared-memory size
+ * (crates/kf-cuda/src/walk.rs, tied by scripts/ci/walk_ptx_repro.py) and checked at launch by the
+ * kernels themselves (kf_par_smem_ok). */
+#define KF_SHWORDS      (KF_MAX_ENT + 64u)
+/* The parallel walk's per-space limits (security review 3 F-2/F-3; the rule is at kf_par_admit). */
+#define KF_WALK_SPACES_AT_BUDGET 4u
+#define KF_ENTRY_FRONTIER_SHARE  (KF_MAX_FRONTIER / KF_WALK_SPACES_AT_BUDGET)
+#define KF_ENTRY_RUN_SHARE       (KF_MAX_SCRATCH / KF_WALK_SPACES_AT_BUDGET)
+#define KF_ENTRY_CUT             (KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP)
 #define KF_PS_NONE 0xFFu
 /* ABI 6: a refusal sample's `level` names a leaf TABLE as one past the directory slots. */
 static_assert(KF_SAMPLE_LVL_BIG == KF_DIRS && KF_SAMPLE_LVL_SMALL == KF_DIRS + 1u,
@@ -258,6 +268,10 @@ __device__ __forceinline__ void kf_sample(KfDev *d, uint32_t entry, uint32_t bit
 }
 
 /* ── decode, entirely off the descriptor ─────────────────────────────────────── */
+/* CALLER-CONTRACT (every decode helper below, and the walk functions that call them): `F` passed
+ * kf_dev_format_ok in this walk's kf_par_seed / kf_walk_kernel. That is what keeps every shift below
+ * 64, every aperture nibble below 4 (it indexes the 4-entry maps) and every page-size code below 4.
+ * Not re-checked per entry: the walk aborts before any decode when the check fails (see above). */
 __device__ __forceinline__ uint64_t kf_field(uint64_t raw, uint32_t lo, uint32_t bits, uint32_t sh)
 {
     return ((raw >> lo) & ((1ull << bits) - 1ull)) << sh;
@@ -471,6 +485,64 @@ __device__ __forceinline__ bool kf_big_pte_unmapped(const KfFormat &F, uint64_t 
 __device__ __forceinline__ bool kf_big_pte_owns_slot(const KfFormat &F, uint64_t e)
 {
     return kf_valid(F, e) || kf_big_pte_unmapped(F, e);
+}
+
+/* ═══ THE DESCRIPTOR, VALIDATED ONCE ON THE DEVICE (2026-11-13, security review 3 F-10) ═════════
+ *
+ * The host checks the descriptor (`kf_format_check` here, `WalkKernel::bring_up_on` in Rust), but that
+ * check is host code: it is NOT in the PTX, and the Rust one checks only `abi_version`. Every bound
+ * below that is written "a descriptor can only make a loop shorter" also relies on the descriptor's
+ * GEOMETRY fitting the kernel's fixed buffers: a dual level of more than KF_SHWORDS / 2 entries makes
+ * a warp decode its neighbour's shared-memory snapshot (another table, possibly another address
+ * space), a big table of more than KF_SHWORDS - KF_MAX_ENT entries overruns the leaf snapshot, and a
+ * field or bit position of 64 or more is an undefined shift.
+ *
+ * ⇒ The PTX validates the descriptor itself, ONCE per walk, at the walk's only entry
+ * (`kf_par_seed`; `kf_walk_kernel` for the serial walk). A descriptor that fails aborts the walk
+ * with KFWR_R_BAD_FORMAT before any table is read, and every later kernel of the walk returns on the
+ * abort. The decode helpers below therefore carry a CALLER-CONTRACT instead of a re-check per entry
+ * (the owner's "validate once at the boundary"). Graded by the hostile-descriptor corpus of
+ * kf_cpu_walk.cpp (CPU, every push) and by format/device_refuses_* in kf_tests.cu (GPU). */
+__device__ __forceinline__ bool kf_dev_field_ok(const KfField &f)
+{
+    return f.lo < 64u && f.bits < 64u && (uint32_t)f.lo + f.bits <= 64u && f.shift < 64u;
+}
+__device__ __forceinline__ bool kf_dev_pow2(uint32_t x) { return x != 0u && (x & (x - 1u)) == 0u; }
+
+__device__ __forceinline__ bool kf_dev_format_ok(const KfFormat &F)
+{
+    if (F.abi_version != KF_ABI_VERSION) return false;
+    if (F.table_version != KF_TBL_VER2 && F.table_version != KF_TBL_VER3) return false;
+    /* (first_dir >= KF_DIRS is refused by this loop: every slot is then "above first_dir" and the dual
+     * level, which must be active, is not allowed to be.) */
+    for (uint32_t k = 0u; k < KF_DIRS; k++) {
+        const KfDir &L = F.dir[k];
+        if (k < F.first_dir) { if (L.active) return false; continue; }
+        if (!L.active) return false;
+        /* the deepest slot is the DUAL level (two words per entry); every other level one word */
+        const uint32_t wpe = (k == KF_DIRS - 1u) ? 2u : 1u;
+        if (L.entry_bytes != 8u * wpe) return false;
+        if (L.entries > KF_MAX_ENT || !kf_dev_pow2(L.entries)) return false;
+        if ((uint32_t)L.entries * wpe > KF_SHWORDS) return false;        /* the expand's snapshot */
+        if (L.va_lo >= 64u) return false;
+        if (L.leaf_ps != KF_PS_NONE && L.leaf_ps > 3u) return false;
+    }
+    if (F.small_entries > KF_MAX_ENT || !kf_dev_pow2(F.small_entries)) return false;   /* ssmall */
+    if (F.big_entries > KF_SHWORDS - KF_MAX_ENT || !kf_dev_pow2(F.big_entries)) return false; /* sbig */
+    if (F.small_entry_bytes != 8u || F.big_entry_bytes != 8u) return false;
+    if (F.big_va_lo <= F.small_va_lo || (uint32_t)(F.big_va_lo - F.small_va_lo) > 4u || F.big_va_lo >= 64u) return false;
+    if (((uint32_t)F.big_entries << (F.big_va_lo - F.small_va_lo)) != F.small_entries) return false;
+    if (F.small_ps > 3u || F.big_ps > 3u) return false;
+    if (!kf_dev_pow2(F.root_align)) return false;
+    if (F.ap_bits == 0u || F.ap_bits > 2u || F.ap_lo > 62u) return false;
+    if (F.valid_bit >= 64u || F.bit_volatile >= 64u || F.bit_privilege >= 64u ||
+        F.bit_read_only >= 64u || F.bit_atomic_disable >= 64u) return false;
+    if (!kf_dev_field_ok(F.addr_local) || !kf_dev_field_ok(F.addr_sys) ||
+        !kf_dev_field_ok(F.big_addr_local) || !kf_dev_field_ok(F.big_addr_sys) ||
+        !kf_dev_field_ok(F.pcf) || !kf_dev_field_ok(F.kind)) return false;
+    for (uint32_t i = 0u; i < 4u; i++)
+        if (F.ps_log2[i] < 12u || F.ps_log2[i] > 40u) return false;
+    return true;
 }
 
 /* ── per-thread walk context ─────────────────────────────────────────────────── */
@@ -838,8 +910,17 @@ __global__ void kf_begin_kernel(KfArgs a)
 __global__ void kf_walk_kernel(KfArgs a)
 {
     const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
-    if (t >= a.npdb) return;
+    /* ★ 2026-11-13 (review 3 F-9/F-10): the entry index bounds every per-entry array, and the
+     * descriptor is validated here, once, before any decode (see kf_dev_format_ok). */
+    if (t >= a.npdb || t >= KF_MAX_PDB) return;
     KfDev *d = a.dev;
+    if (!kf_dev_format_ok(a.fmt)) {
+        atomicOr(&d->refuse_mask, KFWR_R_BAD_FORMAT); atomicAdd(&d->refusals, 1u);
+        atomicOr(&d->entry_refuse[t], KFWR_R_BAD_FORMAT);
+        atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED); atomicOr(&d->walk_trunc, 1u);
+        d->tbl_run_count[t] = 0u; d->need[t] = 0u;
+        return;
+    }
     const uint64_t pdb = a.pdbs[t];
 
     KfCtx c;
@@ -863,7 +944,7 @@ __global__ void kf_walk_kernel(KfArgs a)
 
     atomicAdd(&d->entries_visited, (unsigned long long)c.visited);
     if (c.refusals) atomicAdd(&d->refusals, c.refusals);
-    if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); if (t < KF_MAX_PDB) atomicOr(&d->entry_refuse[t], c.refuse); }
+    if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicOr(&d->entry_refuse[t], c.refuse); }
     if (c.sparse) atomicAdd(&d->sparse_slots, c.sparse);
     if (c.stop) { atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED); atomicOr(&d->walk_trunc, 1u); }
     if (c.refuse & KFWR_R_BUDGET) atomicOr(&d->hdr_flags, KFWR_HF_BUDGET);
@@ -1046,6 +1127,12 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
     const uint32_t t = blockIdx.x;
     if (t >= a.npdb || t >= KF_MAX_PDB) return;
     KfDev *d = a.dev;
+    /* ★ F-2: a CUT space (its walk stopped at its own budget or share) has no complete walk, so it has
+     * no diff: nothing of it is unmapped or mapped, and the host fails it by name (KFWR_V_REFUSED). */
+    if (d->entry_refuse[t] & KF_ENTRY_CUT) {
+        if (threadIdx.x == 0u) { d->diff_count[t] = 0u; d->diff_vflags[t] = 0u; }
+        return;
+    }
     const uint32_t rpp = a.lay->walk_cap[t];   /* this entry's walk region (and staging bound) */
     __shared__ unsigned long long sh64[KF_DIFF_WARPS];
     __shared__ uint32_t sh32[KF_DIFF_WARPS];
@@ -1377,7 +1464,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_commit_kernel(KfArgs a)
             const bool keep = i < pn[c] && rm[i] == 0u;
             uint32_t tot;
             const uint32_t ex = kf_bscan<uint32_t>(keep ? 1u : 0u, &tot, sh32);
-            if (keep) A[na + ex] = P[i];
+            if (keep && na + ex < pcap) A[na + ex] = P[i];   /* S1-66: bounded before the write */
             na += tot;
         }
         for (uint32_t base = 0u; base < nr; base += blockDim.x) {
@@ -1390,7 +1477,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_commit_kernel(KfArgs a)
             }
             uint32_t tot;
             const uint32_t ex = kf_bscan<uint32_t>(take ? 1u : 0u, &tot, sh32);
-            if (take) {
+            if (take && nb + ex < pcap) {   /* S1-66: bounded before the write; the fit check below refuses */
                 r.op = KFWR_OP_MAP;
                 r.pdb_index = 0u;
                 r.flags = (r.flags & ~KFWR_RF_HELD) | (code[i] == 2u ? KFWR_RF_HELD : 0u);
@@ -1494,7 +1581,7 @@ static KfFormat kf_format_ver2(void)
 
 /* ⊘ 2026-11-13, above the text it corrects: VER3 is ACCEPTED in production (crates/kf-cuda/src/walk.rs,
  * w826), this descriptor is pinned byte for byte to the production Rust one, and its 4 KiB vetoes are
- * graded by kf_cpu_walk.cpp (CPU, every push) and the ver3/* cases of kf_tests_ver3 (GPU). The
+ * graded by kf_cpu_walk.cpp (CPU, every push) and the ver3 cases of kf_tests_ver3 (GPU). The
  * "never run" text below is history. */
 /* ⚠⚠⚠ GH100 / VER3 — A SKETCH THAT HAS NEVER RUN.
  *
@@ -1550,6 +1637,60 @@ static KfFormat kf_format_ver3_untested(void)
     F.ps_log2[KFWR_PS_4K] = 12; F.ps_log2[KFWR_PS_64K] = 16;
     F.ps_log2[KFWR_PS_2M] = 21; F.ps_log2[KFWR_PS_512M] = 29;
     return F;
+}
+
+/* ★ THE HOSTILE-DESCRIPTOR CORPUS (2026-11-13, security review 3 F-10). Break exactly ONE rule of
+ * kf_dev_format_ok in a copy of a valid descriptor; false when `which` is past the list. Host code: used
+ * by kf_cpu_walk.cpp (each break must be refused by the device check, on a CPU) and by kf_tests.cu
+ * through kf_test_break_format (each break must abort a real walk on a GPU before any table is read). */
+static bool kf_format_break(KfFormat *F, int which)
+{
+    KfDir &D = F->dir[KF_DIRS - 1u];
+    KfDir &M = F->dir[2];
+    switch (which) {
+    case 0:  F->abi_version += 1u; return true;
+    case 1:  F->table_version = 99u; return true;
+    case 2:  F->first_dir = (uint8_t)KF_DIRS; return true;
+    case 3:  F->first_dir = 2u; return true;                       /* dir[1] active above first_dir */
+    case 4:  F->dir[1].active = 0u; return true;                   /* inactive at/below first_dir   */
+    case 5:  D.entries = 512u; return true;                        /* dual level > KF_SHWORDS / 2   */
+    case 6:  D.entry_bytes = 8u; return true;                      /* the dual level is two words   */
+    case 7:  M.entry_bytes = 16u; return true;                     /* a single level is one word    */
+    case 8:  M.entries = 1024u; return true;
+    case 9:  M.entries = 384u; return true;                        /* not a power of two            */
+    case 10: M.entries = 0u; return true;
+    case 11: M.va_lo = 64u; return true;
+    case 12: F->dir[3].leaf_ps = 7u; return true;
+    case 13: F->small_entries = 1024u; F->big_entries = 64u; return true;
+    case 14: F->big_entries = 128u; F->small_entries = 512u; F->big_va_lo = (uint8_t)(F->small_va_lo + 2u); return true; /* > the 64-word leaf snapshot */
+    case 15: F->small_entry_bytes = 16u; return true;
+    case 16: F->big_entry_bytes = 4u; return true;
+    case 17: F->big_va_lo = F->small_va_lo; return true;
+    case 18: F->big_va_lo = (uint8_t)(F->small_va_lo + 5u); return true;
+    case 19: F->small_va_lo = 60u; F->big_va_lo = 64u; return true;
+    case 20: F->big_entries = 16u; return true;                    /* big and small cover different VA */
+    case 21: F->big_ps = 4u; return true;
+    case 22: F->small_ps = 9u; return true;
+    case 23: F->root_align = 3000u; return true;
+    case 24: F->root_align = 0u; return true;
+    case 25: F->ap_bits = 3u; return true;
+    case 26: F->ap_bits = 0u; return true;
+    case 27: F->ap_lo = 63u; return true;
+    case 28: F->valid_bit = 64u; return true;
+    case 29: F->bit_volatile = 64u; return true;
+    case 30: F->bit_privilege = 200u; return true;
+    case 31: F->bit_read_only = 64u; return true;
+    case 32: F->bit_atomic_disable = 255u; return true;
+    case 33: F->addr_local.bits = 64u; return true;
+    case 34: F->addr_sys.lo = 40u; F->addr_sys.bits = 30u; return true;   /* lo + bits > 64 */
+    case 35: F->big_addr_local.lo = 64u; return true;
+    case 36: F->big_addr_sys.shift = 64u; return true;
+    case 37: F->pcf.bits = 70u; return true;
+    case 38: F->kind.shift = 64u; return true;
+    case 39: F->ps_log2[2] = 63u; return true;
+    case 40: F->ps_log2[0] = 11u; return true;
+    default: return false;
+    }
 }
 
 static bool kf_pow2(uint64_t x) { return x != 0ull && (x & (x - 1ull)) == 0ull; }
@@ -1664,7 +1805,7 @@ static const char *kf_format_check(const KfFormat &F)
 #define KF_WARP         32u
 #define KF_PAR_BLOCK    128u          /* 4 warps */
 #define KF_SCAN_BLOCK   1024u
-#define KF_SHWORDS      (KF_MAX_ENT + 64u)   /* u64 of shared memory per warp */
+/* KF_SHWORDS (u64 of shared memory per warp) is defined with KF_MAX_ENT, above. */
 /* ⊘ A FIXED grid, walked with a stride, rather than one warp per frontier entry.
  * The frontier's size is a device value, so sizing the grid to it would need a
  * device-to-host synchronisation per level; sizing it to the host's UPPER BOUND
@@ -1826,16 +1967,103 @@ __device__ __forceinline__ void kf_par_abort(KfDev *d, unsigned int bit)
 }
 __device__ __forceinline__ bool kf_par_aborted(const KfDev *d) { return d->walk_abort != 0u; }
 
+/* ═══ THE BUDGET BOUNDS WORK, PER ADDRESS SPACE (2026-11-13, security review 3 F-2, F-3) ═══════════
+ *
+ * ⊘⊘ What it was, above the rule that replaces it: ONE counter for the whole walk, charged AFTER the
+ * table was loaded, and only a flag when it ran out -- the table was read and decoded anyway, the
+ * expand had no abort check, and after an abort the compaction was skipped, so the next level expanded
+ * the previous walk's STALE frontier. A self-pointing PDE page drove up to 131 072 x 512 loads per
+ * level whatever the budget said (F-3). And because the counter, the frontier and the run stage were
+ * shared, one address space that exhausted any of them failed EVERY space in the batch (F-2).
+ *
+ * Now, per walk entry (one guest address space) `p`:
+ *   * a table is LOADED only after its entries are admitted: p's charge (`need[p]` during the walk)
+ *     stays within `entry_budget` -- the meaning WalkCfg::entry_budget's own doc gives it, "entries ONE
+ *     address space's walk may examine" -- and the walk's total within
+ *     KF_WALK_SPACES_AT_BUDGET x entry_budget. Loads per walk are therefore bounded by that product,
+ *     and by entry_budget per space (per level and over all levels).
+ *   * p may hold at most KF_ENTRY_FRONTIER_SHARE entries of one level's frontier and
+ *     KF_ENTRY_RUN_SHARE runs of the leaf stage, so no single space can fill a shared buffer.
+ *   * a space that runs out is CUT: KFWR_R_BUDGET or KFWR_R_FRONTIER_CAP in ITS entry_refuse only,
+ *     none of its further tables is read, its walk table is emptied (kf_par_bases) and its diff is
+ *     withheld (kf_diff_slots), so the host fails THAT space by name (KFWR_V_REFUSED) and applies
+ *     nothing for it. The other spaces' reports are complete and unchanged.
+ *   * the walk ABORTS (every space fails, as before) only on a shared ceiling: the global charge, the
+ *     shared frontier/stage, a bad descriptor or launch. Reaching one now needs at least
+ *     KF_WALK_SPACES_AT_BUDGET spaces each at its own limit.
+ * After an abort every kernel of the walk returns at its top (warp-uniformly), so no stale frontier
+ * is ever expanded and no table is loaded.
+ * A walk within all limits is unchanged bit for bit (kf_cpu_walk --dump, kf_tests, the corpus). */
+/* KF_WALK_SPACES_AT_BUDGET, KF_ENTRY_*_SHARE and KF_ENTRY_CUT are defined with KF_SHWORDS, at the top. */
+
+/* Admit `n` entries of one table of walk entry `entry` before it is loaded. False = do not load it.
+ * CALLER-CONTRACT: `entry` < KF_MAX_PDB. It is a frontier entry's `pdb`, which kf_par_seed sets to a
+ * thread index it has bounded by KF_MAX_PDB and every child copies; frontier buffers are zero-filled
+ * at allocation and stale entries are never expanded (the abort rule above). */
+__device__ __forceinline__ bool kf_par_admit(KfDev *d, uint32_t entry, uint32_t n)
+{
+    if (d->entry_refuse[entry] & KF_ENTRY_CUT) return false;          /* already cut: read nothing more */
+    const uint64_t budget = (uint64_t)d->entry_budget;
+    const unsigned int mine = atomicAdd(&d->need[entry], n);          /* need[] = the charge, until kf_par_bases */
+    if ((uint64_t)mine + n > budget) {
+        kf_par_refuse_in(d, KFWR_R_BUDGET, entry);
+        atomicOr(&d->hdr_flags, KFWR_HF_BUDGET);
+        return false;
+    }
+    const unsigned long long all = atomicAdd(&d->entries_visited, (unsigned long long)n);
+    if (all + n > budget * KF_WALK_SPACES_AT_BUDGET) {
+        kf_par_refuse_in(d, KFWR_R_BUDGET, entry);
+        atomicOr(&d->hdr_flags, KFWR_HF_BUDGET);
+        return false;
+    }
+    return true;
+}
+/* Take `n` units of a per-entry share; false (and the entry is cut) when it would exceed `cap`.
+ * CALLER-CONTRACT: as kf_par_admit; `counter` is that entry's element of a KfDev per-entry array. */
+__device__ __forceinline__ bool kf_par_share(KfDev *d, unsigned int *counter, uint32_t entry, uint32_t n, uint32_t cap)
+{
+    if (d->entry_refuse[entry] & KF_ENTRY_CUT) return false;
+    const unsigned int was = atomicAdd(counter, n);
+    if ((uint64_t)was + n > cap) { kf_par_refuse_in(d, KFWR_R_FRONTIER_CAP, entry); return false; }
+    return true;
+}
+
+/* ★ F-10: the dynamic shared memory this launch was given covers KF_SHWORDS words for every warp of
+ * the block. The size is the Rust launcher's (`KF_SHWORDS` in walk.rs, tied by the CI check); this is
+ * the kernel's own check of it, so a host/kernel skew aborts the walk instead of overrunning. */
+__device__ __forceinline__ uint32_t kf_dyn_smem_bytes(void)
+{
+#ifdef __CUDA_ARCH__
+    uint32_t r;
+    asm volatile("mov.u32 %0, %%dynamic_smem_size;" : "=r"(r));
+    return r;
+#else
+    return 0u;   /* host compilers (kf_cpu_shim.h) never launch the warp kernels */
+#endif
+}
+__device__ __forceinline__ bool kf_par_smem_ok(void)
+{
+    const uint64_t need = (uint64_t)((blockDim.x + KF_WARP - 1u) / KF_WARP) * KF_SHWORDS * 8u;
+    return (blockDim.x % KF_WARP) == 0u && (uint64_t)kf_dyn_smem_bytes() >= need;
+}
+
 /* ── seed: one frontier entry per address space, IN ORDER ──────────────────── */
 __global__ void kf_par_seed(KfArgs a, KfEnt *fr, uint32_t *nfr, uint32_t *used)
 {
     const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
-    if (t >= a.npdb) return;
     KfDev *d = a.dev;
+    /* ★ 2026-11-13 (review 3 F-9): more entries than the per-entry arrays hold is refused HERE, by the
+     * kernel, before any of them is read or written (the host refuses it too: walk.rs). */
+    if (a.npdb > KF_MAX_PDB) { if (t == 0u) kf_par_abort(d, KFWR_R_PDB_CAP); return; }
+    if (t >= a.npdb) return;
     const KfFormat &F = a.fmt;
+    /* ★ F-10: the descriptor, validated once for the whole walk (kf_dev_format_ok). */
+    if (!kf_dev_format_ok(F)) { if (t == 0u) kf_par_abort(d, KFWR_R_BAD_FORMAT); return; }
     const uint64_t pdb = a.pdbs[t];
 
-    d->tbl_run_count[t] = 0u;
+    d->tbl_run_count[t] = 0u;   /* during the expand: this entry's share of the level's frontier */
+    d->need[t] = 0u;            /* until kf_par_bases: this entry's budget charge                 */
+    d->diff_count[t] = 0u;      /* until kf_diff_slots: this entry's share of the leaf run stage   */
     if (t == 0u) { *nfr = a.npdb; used[0] = 0u; used[1] = 0u; }
 
     KfEnt e;
@@ -1979,22 +2207,32 @@ __device__ __forceinline__ void kf_par_expand_one(const KfArgs &a, uint32_t leve
     const KfEnt e = in[gw];
     const uint32_t full = 0xFFFFFFFFu;
 
-    if (e.kind == KF_ENT_DEAD) { if (lane == 0u) { cnt[gw] = 0u; start[gw] = 0u; } return; }
+    /* ★ F-3: after an abort nothing is expanded -- above all not a stale frontier (the compaction
+     * that would have written this level's was skipped). Decided by lane 0 and broadcast: the warp
+     * stays converged for the ballots below. */
+    uint32_t go = 0u;
+    if (lane == 0u) go = (kf_par_aborted(d) || e.kind == KF_ENT_DEAD) ? 0u : 1u;
+    go = __shfl_sync(full, go, 0);
+    if (!go) { if (lane == 0u) { cnt[gw] = 0u; start[gw] = 0u; } return; }
     if (e.kind == KF_ENT_LEAF) {          /* a leaf found higher up, passed through */
         if (lane == 0u) {
-            const uint32_t st = atomicAdd(used, 1u);
-            if (st < stagecap) stage[st] = e; else kf_par_abort(d, KFWR_R_FRONTIER_CAP);
-            start[gw] = st; cnt[gw] = 1u;
+            cnt[gw] = 0u; start[gw] = 0u;
+            if (kf_par_share(d, &d->tbl_run_count[e.pdb], e.pdb, 1u, KF_ENTRY_FRONTIER_SHARE)) {
+                const uint32_t st = atomicAdd(used, 1u);
+                if (st < stagecap) { stage[st] = e; start[gw] = st; cnt[gw] = 1u; }
+                else kf_par_abort(d, KFWR_R_FRONTIER_CAP);
+            }
         }
         return;
     }
 
     const uint32_t nslots = L.entries;
     const uint32_t nwords = nslots * (L.entry_bytes / 8u);
-    if (lane == 0u) {
-        const unsigned long long was = atomicAdd(&d->entries_visited, (unsigned long long)nslots);
-        if (was + nslots > (unsigned long long)d->entry_budget) kf_par_abort(d, KFWR_R_BUDGET);
-    }
+    /* ★ F-2/F-3: ADMIT BEFORE LOADING. A table that does not fit its space's budget is never read. */
+    uint32_t ok = 0u;
+    if (lane == 0u) ok = kf_par_admit(d, e.pdb, nslots) ? 1u : 0u;
+    ok = __shfl_sync(full, ok, 0);
+    if (!ok) { if (lane == 0u) { cnt[gw] = 0u; start[gw] = 0u; } return; }
     /* THE ONE PASS OVER GLOBAL MEMORY. */
     for (uint32_t i = lane; i < KF_SHWORDS && i < nwords; i += KF_WARP)
         if (!kf_win_load(a.win, e.addr + (uint64_t)i * 8u, &sh[i])) sh[i] = 0ull;
@@ -2008,14 +2246,19 @@ __device__ __forceinline__ void kf_par_expand_one(const KfArgs &a, uint32_t leve
         n += (uint32_t)__popc(__ballot_sync(full, good));
     }
 
-    uint32_t st = 0u;
+    uint32_t st = 0u, wr = 0u;
     if (lane == 0u) {
-        st = atomicAdd(used, n);
-        start[gw] = st;
-        cnt[gw] = n;
+        cnt[gw] = 0u; start[gw] = 0u;
+        /* ★ F-2: this space's share of the level's frontier, then the shared stage. */
+        if (n == 0u || kf_par_share(d, &d->tbl_run_count[e.pdb], e.pdb, n, KF_ENTRY_FRONTIER_SHARE)) {
+            st = atomicAdd(used, n);
+            if ((uint64_t)st + n > stagecap) kf_par_abort(d, KFWR_R_FRONTIER_CAP);
+            else { start[gw] = st; cnt[gw] = n; wr = 1u; }
+        }
     }
     st = __shfl_sync(full, st, 0);
-    if (st + n > stagecap) { if (lane == 0u) kf_par_abort(d, KFWR_R_FRONTIER_CAP); return; }
+    wr = __shfl_sync(full, wr, 0);
+    if (!wr) return;
 
     uint32_t w = 0u;
     for (uint32_t base = 0u; base < KF_MAX_ENT && base < nslots; base += KF_WARP) {
@@ -2032,6 +2275,9 @@ __global__ void kf_par_expand(KfArgs a, uint32_t level, const KfEnt *in, const u
                               uint32_t *start, uint32_t *cnt)
 {
     extern __shared__ uint64_t shmem[];
+    /* ★ F-10: the launch's shared memory covers every warp's snapshot, or nothing is read. Block-uniform.
+     * CALLER-CONTRACT: `level` is the host launch loop's k, first_dir <= k < KF_DIRS (walk.rs). */
+    if (!kf_par_smem_ok()) { if (threadIdx.x == 0u) kf_par_abort(a.dev, KFWR_R_BAD_FORMAT); return; }
     const uint32_t lane = threadIdx.x & (KF_WARP - 1u);
     const uint32_t wib = threadIdx.x / KF_WARP;
     uint64_t *sh = shmem + (size_t)wib * KF_SHWORDS;
@@ -2078,6 +2324,8 @@ __global__ void kf_par_compact(KfArgs a, const KfEnt *stage, const uint32_t *sta
     const uint32_t lane = threadIdx.x & (KF_WARP - 1u);
     const uint32_t w0 = (blockIdx.x * blockDim.x + threadIdx.x) / KF_WARP;
     const uint32_t stride = (gridDim.x * blockDim.x) / KF_WARP;
+    /* ★ F-2: the frontier share is per LEVEL; the expand of this level is complete (kernel boundary). */
+    if (blockIdx.x == 0u && threadIdx.x < KF_MAX_PDB && threadIdx.x < a.npdb) a.dev->tbl_run_count[threadIdx.x] = 0u;
     if (kf_par_aborted(a.dev)) return;
     const uint32_t nn = *nin;
     for (uint32_t gw = w0; gw < KF_MAX_FRONTIER && gw < nn; gw += stride) {
@@ -2170,7 +2418,12 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
     KfSum sm;
     memset(&sm, 0, sizeof(sm));
     sm.lflags = 0xFFFFFFFFu;     /* a sentinel no real run carries: nothing joins to it */
-    if (kf_par_aborted(d)) { if (lane == 0u) sum[gw] = sm; return; }
+    /* ★ F-3: decided by lane 0 and broadcast. ⊘ Every lane used to read the flag itself, and a flag
+     * raised between two lanes' reads would have sent part of the warp into the shuffles below. */
+    uint32_t go = 0u;
+    if (lane == 0u) go = kf_par_aborted(d) ? 0u : 1u;
+    go = __shfl_sync(full, go, 0);
+    if (!go) { if (lane == 0u) sum[gw] = sm; return; }
 
     const KfEnt t = task[gw];
 
@@ -2184,7 +2437,7 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
             /* §39(e): above the stagecap return below. That return would drop this
              * leaf's refusal on the floor and report only FRONTIER_CAP. */
             if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); if (c.pdb_index < KF_MAX_PDB) atomicOr(&d->entry_refuse[c.pdb_index], c.refuse); }
-            if (c.n) {
+            if (c.n && kf_par_share(d, &d->diff_count[t.pdb], t.pdb, c.n, KF_ENTRY_RUN_SHARE)) {
                 const uint32_t st = atomicAdd(used, c.n);
                 if (st + c.n > stagecap) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); sum[gw] = sm; return; }
                 runstage[st] = c.last;
@@ -2197,13 +2450,16 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
         return;
     }
 
+    /* ★ F-2/F-3: ADMIT BEFORE LOADING (kf_par_admit). */
+    uint32_t ok = 0u;
     if (lane == 0u) {
         uint32_t charge = 0u;
         if (t.has & 1u) charge += F.small_entries;
         if (t.has & 2u) charge += F.big_entries;
-        const unsigned long long was = atomicAdd(&d->entries_visited, (unsigned long long)charge);
-        if (was + charge > (unsigned long long)d->entry_budget) kf_par_abort(d, KFWR_R_BUDGET);
+        ok = kf_par_admit(d, t.pdb, charge) ? 1u : 0u;
     }
+    ok = __shfl_sync(full, ok, 0);
+    if (!ok) { if (lane == 0u) sum[gw] = sm; return; }
     if (t.has & 1u)
         for (uint32_t i = lane; i < KF_MAX_ENT && i < F.small_entries; i += KF_WARP)
             if (!kf_win_load(a.win, t.addr + (uint64_t)i * F.small_entry_bytes, &ssmall[i])) ssmall[i] = 0ull;
@@ -2255,11 +2511,18 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
      * `a_refusal_counter_read_as_absent_demand`. */
     if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); if (c.pdb_index < KF_MAX_PDB) atomicOr(&d->entry_refuse[c.pdb_index], c.refuse); }
 
-    uint32_t st = 0u;
-    if (lane == 0u && total) st = atomicAdd(used, total);
+    uint32_t st = 0u, wr = 0u;
+    if (lane == 0u && total) {
+        /* ★ F-2: this space's share of the run stage, then the shared stage. */
+        if (kf_par_share(d, &d->diff_count[t.pdb], t.pdb, total, KF_ENTRY_RUN_SHARE)) {
+            st = atomicAdd(used, total);
+            if ((uint64_t)st + total > stagecap) kf_par_abort(d, KFWR_R_FRONTIER_CAP);
+            else wr = 1u;
+        }
+    }
     st = __shfl_sync(full, st, 0);
-    if (!total) { if (lane == 0u) sum[gw] = sm; return; }
-    if (st + total > stagecap) { if (lane == 0u) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); sum[gw] = sm; } return; }
+    wr = __shfl_sync(full, wr, 0);
+    if (!wr) { if (lane == 0u) sum[gw] = sm; return; }
 
     KfRunAcc wacc;
     kf_acc_init(wacc, &F, a.win.span, runstage + st + excl, contrib, t.pdb);
@@ -2285,6 +2548,7 @@ __global__ void kf_par_leaf(KfArgs a, const KfEnt *task, const uint32_t *nt,
                             KfMapRun *runstage, uint32_t stagecap, uint32_t *used, KfSum *sum)
 {
     extern __shared__ uint64_t shmem[];
+    if (!kf_par_smem_ok()) { if (threadIdx.x == 0u) kf_par_abort(a.dev, KFWR_R_BAD_FORMAT); return; }
     const uint32_t lane = threadIdx.x & (KF_WARP - 1u);
     const uint32_t wib = threadIdx.x / KF_WARP;
     uint64_t *ssmall = shmem + (size_t)wib * KF_SHWORDS;
@@ -2330,6 +2594,13 @@ __global__ void kf_par_bases(KfArgs a, uint32_t *pdbbase)
         pdbbase[p] = run;
         uint32_t n = d->tbl_run_count[p];
         d->need[p] = n;   /* ★ w829: UNCAPPED — what the host sizes the next walk by */
+        /* ⊘ 2026-11-13: the base advances by the UNCAPPED count, because `off[]` (the task scan that
+         * kf_par_emit subtracts it from) counts every run; with the capped count every entry after a
+         * capped one had its runs placed at the wrong offset. Identical whenever nothing is capped. */
+        run += n;
+        /* ★ F-2/F-9 (S1-62): an aborted walk or a CUT space has no walk table: nothing stale or partial
+         * reaches the diff. */
+        if (kf_par_aborted(d) || (d->entry_refuse[p] & KF_ENTRY_CUT)) { d->tbl_run_count[p] = 0u; continue; }
         if (n > a.lay->walk_cap[p]) {
             n = a.lay->walk_cap[p];
             d->tbl_run_count[p] = n;
@@ -2337,7 +2608,6 @@ __global__ void kf_par_bases(KfArgs a, uint32_t *pdbbase)
             atomicOr(&d->walk_trunc, 1u);
             kf_par_refuse_in(d, KFWR_R_RUN_CAP, p);   /* the host names WHICH space overflowed */
         }
-        run += n;
     }
 }
 
@@ -2425,6 +2695,18 @@ struct KfWalk {
 #define KF_CU_I(x) do { cudaError_t _e = (x); if (_e != cudaSuccess) { \
     fprintf(stderr, "CUDA %s:%d %s -> %s\n", __FILE__, __LINE__, #x, cudaGetErrorString(_e)); \
     return -1; } } while (0)
+
+/* ── TEST HOOKS (2026-11-13) — host half only: NOT in the PTX, NOT used by kayfabe (the isolate drives
+ * the shipped PTX from Rust). They let kf_tests.cu hand the KERNEL what the host half itself refuses,
+ * so that every in-kernel check of security review 3 (F-9 entry count, F-10 descriptor and shared
+ * memory, S1-66 commit bound) has a hostile test that reaches it. */
+static uint32_t g_kf_test_npdb = 0u;            /* 0 = the real count */
+static uint32_t g_kf_test_shm = 0xFFFFFFFFu;    /* ~0 = the real size */
+extern "C" void kf_test_set_npdb_override(uint32_t n) { g_kf_test_npdb = n; }
+extern "C" void kf_test_set_shm_override(uint32_t bytes) { g_kf_test_shm = bytes; }
+extern "C" int kf_test_poke_format(KfWalk *w, size_t off, uint8_t v);
+extern "C" int kf_test_break_format(KfWalk *w, int which);
+extern "C" int kf_test_set_prev_layout(KfWalk *w, uint32_t t, uint32_t off, uint32_t cap);
 
 extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
 {
@@ -2524,6 +2806,29 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
     return w;
 }
 
+/* Overwrite one byte of the walker's descriptor AFTER kf_format_check accepted it (test hook). */
+extern "C" int kf_test_poke_format(KfWalk *w, size_t off, uint8_t v)
+{
+    if (!w || off >= sizeof(w->fmt)) return -1;
+    ((uint8_t *)&w->fmt)[off] = v;
+    return 0;
+}
+/* Break one rule of the walker's descriptor AFTER kf_format_check accepted it (test hook). */
+extern "C" int kf_test_break_format(KfWalk *w, int which)
+{
+    if (!w) return -1;
+    return kf_format_break(&w->fmt, which) ? 0 : -1;
+}
+/* Point entry t's previous-walk scratch region somewhere else (test hook for the commit's bound). */
+extern "C" int kf_test_set_prev_layout(KfWalk *w, uint32_t t, uint32_t off, uint32_t cap)
+{
+    if (!w || t >= KF_MAX_PDB) return -1;
+    KfLayout L;
+    if (cudaMemcpy(&L, w->lay, sizeof(L), cudaMemcpyDeviceToHost) != cudaSuccess) return -1;
+    L.prev_off[t] = off; L.prev_cap[t] = cap;
+    return cudaMemcpy(w->lay, &L, sizeof(L), cudaMemcpyHostToDevice) == cudaSuccess ? 0 : -1;
+}
+
 extern "C" void kf_destroy(KfWalk *w)
 {
     if (!w) return;
@@ -2614,7 +2919,7 @@ static void kf_run_parallel(KfWalk *w, const KfArgs &a, uint32_t npdb)
 {
     KfPar &P = w->par;
     const KfFormat &F = w->fmt;
-    const uint32_t shm = (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8u;
+    const uint32_t shm = g_kf_test_shm != 0xFFFFFFFFu ? g_kf_test_shm : (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8u;
 
     kf_ph("start");
     kf_par_seed<<<(npdb + 127u) / 128u, 128>>>(a, P.fr[0], P.nfr, P.used);
@@ -2681,7 +2986,7 @@ extern "C" int kf_refresh(KfWalk *w,
     a.fmt = w->fmt;
     a.dev = w->dev;
     a.walk = w->walk; a.com = w->com; a.slot = w->slot;
-    a.pdbs = w->pdbs; a.slots = w->slots; a.npdb = npdb;
+    a.pdbs = w->pdbs; a.slots = w->slots; a.npdb = g_kf_test_npdb ? g_kf_test_npdb : npdb;
     a.key_perm = w->cfg.key_perm;
     a.ack = w->ack; a.ack_code = w->ack_code;
     a.scratch = w->par.runstage; a.iscratch = w->iscratch;

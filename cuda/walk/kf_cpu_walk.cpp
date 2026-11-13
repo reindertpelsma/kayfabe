@@ -361,6 +361,28 @@ static void ver2_cases(void)
     }
 }
 
+/* ══ THE HOSTILE-DESCRIPTOR CORPUS (review 3 F-10): every break of kf_format_break is refused by the
+ * device-side check, on both shipped descriptors; the shipped descriptors themselves pass. ══ */
+static void format_cases(void)
+{
+    EXPECT(kf_dev_format_ok(kf_format_ver2()), "the shipped VER2 descriptor must pass the device check");
+    EXPECT(kf_dev_format_ok(kf_format_ver3_untested()), "the shipped VER3 descriptor must pass the device check");
+    int n = 0;
+    for (int which = 0; which < 1000; which++) {
+        KfFormat F = kf_format_ver2();
+        if (!kf_format_break(&F, which)) break;
+        n++;
+        EXPECT(!kf_dev_format_ok(F), "VER2 descriptor break %d accepted by the device check", which);
+    }
+    for (int which = 0; which < n; which++) {
+        KfFormat F = kf_format_ver3_untested();
+        kf_format_break(&F, which);
+        EXPECT(!kf_dev_format_ok(F), "VER3 descriptor break %d accepted by the device check", which);
+    }
+    EXPECT(n >= 40, "the hostile-descriptor corpus shrank to %d cases", n);
+    printf("  [descriptor] %d hostile descriptors refused on VER2 and VER3\n", n);
+}
+
 int main(int argc, char **argv)
 {
     const bool do_dump = argc > 1 && !strcmp(argv[1], "--dump");
@@ -369,6 +391,7 @@ int main(int argc, char **argv)
     if (do_dump) return g_fail ? 1 : 0;
     ver3_cases();
     ver2_cases();
+    format_cases();
     /* ⚠ Two decoders that both produced nothing agree perfectly (kf_tests.cu uses the same floors). */
     EXPECT(a > 1200, "the synthetic differential decoded almost nothing (%llu)", a);
     EXPECT(b > 6000 || b == 0, "real-driver differential too small (%llu)", b);
