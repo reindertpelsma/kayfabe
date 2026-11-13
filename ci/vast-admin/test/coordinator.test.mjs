@@ -172,6 +172,8 @@ for (const patch of [
   { common_name: cid.toUpperCase() },
   { type: 'user' },
   { type: undefined },
+  { sub: 'user-123' },
+  { sub: undefined },
 ])
   test('wrong common_name or type refused ' + JSON.stringify(patch), async () => {
     const h = await fixture();

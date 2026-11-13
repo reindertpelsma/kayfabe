@@ -52,6 +52,7 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
       /^[a-f0-9]{32}\.access$/.test(coordinatorId) &&
       identity.email === undefined &&
       identity.type === 'app' &&
+      identity.sub === '' &&
       identity.common_name === coordinatorId
     )
       kind = 'coordinator';

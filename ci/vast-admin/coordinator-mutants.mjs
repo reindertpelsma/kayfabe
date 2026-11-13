@@ -10,6 +10,7 @@ const W = here + 'worker.js';
 const MUTANTS = [
   ['common_name not checked', 'identity.common_name === coordinatorId', 'true'],
   ['email absence not checked', 'identity.email === undefined &&', ''],
+  ['sub not checked', "identity.sub === '' &&", ''],
   ['type app not checked', "identity.type === 'app' &&", ''],
   [
     'empty var guard removed',
