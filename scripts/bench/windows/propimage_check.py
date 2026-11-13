@@ -101,10 +101,12 @@ def render_gpu_fix(expected):
         + r"""
 $base='HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
 $changed=$false
-Get-ChildItem $base | Where-Object {$_.PSChildName -match '^\d{4}$'} | ForEach-Object {
- $ip=Get-ItemProperty $_.PSPath
+# -Name lists key names only: a full Get-ChildItem opens every subkey, and the protected Properties subkey denies access.
+Get-ChildItem $base -Name | Where-Object {$_ -match '^\d{4}$'} | ForEach-Object {
+ $kp=Join-Path $base $_
+ $ip=Get-ItemProperty $kp
  if(($ip.DriverDesc -match 'NVIDIA' -or $ip.ProviderName -match 'NVIDIA') -and $ip.EnableGpuFirmware -ne 1){
-  New-ItemProperty -Path $_.PSPath -Name EnableGpuFirmware -PropertyType DWord -Value 1 -Force | Out-Null
+  New-ItemProperty -Path $kp -Name EnableGpuFirmware -PropertyType DWord -Value 1 -Force | Out-Null
   $changed=$true
  }
 }
@@ -130,7 +132,7 @@ POWER_SETTINGS = {
     "hybrid_sleep": ("SUB_SLEEP", "HYBRIDSLEEP"),
     "monitor": ("SUB_VIDEO", "VIDEOIDLE"),
     "disk": ("SUB_DISK", "DISKIDLE"),
-    "wake_signin": ("SUB_VIDEO", "8ec4b3a5-6868-48c2-be75-4f3044be88a7")  # CONSOLELOCK: hidden setting, not in powercfg /aliases (MEASURED on guest),
+    "wake_signin": ("SUB_VIDEO", "8ec4b3a5-6868-48c2-be75-4f3044be88a7"),  # CONSOLELOCK: hidden setting, not in powercfg /aliases (MEASURED on guest)
 }
 POWER_REGISTRY = {
     "hibernate_enabled": (r"HKLM:\SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled", 0),

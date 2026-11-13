@@ -971,6 +971,13 @@ class T(unittest.TestCase):
         self.assertIn("[KfPower]::Get(0x0010", script)
         self.assertIn("Cannot disable interactive screensaver", script)
 
+    def test_gpu_fix_lists_class_keys_by_name(self):
+        # Real guest: Get-ChildItem on the display class key opens the protected Properties subkey and throws
+        # "Requested registry access is not allowed"; listing names only avoids it.
+        script = m.render_gpu_fix("GPU-abc")
+        self.assertIn("Get-ChildItem $base -Name", script)
+        self.assertNotIn("$_.PSPath", script)
+
     def test_gop_efi_is_staged_from_dir_or_flag_and_missing_is_refused(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
