@@ -1,0 +1,77 @@
+procs: SLDWORKS:3268
+toplevel windows: 6
+  TOP name='' class=Shell_TrayWnd pid=5664
+  TOP name='' class=SysShadow pid=3268
+  TOP name='SOLIDWORKS Design Standard 2026 SP5.2 - Academic Use Only' class=Afx:0000000140000000:8:0000000000010003:0000000000000000:0000000000020A23 pid=3268
+  TOP name='' class=swBalloonTip pid=3268
+  TOP name='Administrator: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe' class=ConsoleWindowClass pid=10672
+  TOP name='Program Manager' class=Progman pid=5664
+WINDOW name='' class=SysShadow pid=3268 rect=212,0,1005,818
+  descendants: 0
+WINDOW name='SOLIDWORKS Design Standard 2026 SP5.2 - Academic Use Only' class=Afx:0000000140000000:8:0000000000010003:0000000000000000:0000000000020A23 pid=3268 rect=0,0,1625,924
+  descendants: 58
+  Pane name='' id='' class=swWelcomeScreen pat=
+  Pane name='Home' id='285' class=Button pat=
+  Pane name='Recent' id='288' class=Button pat=
+  Pane name='Learn' id='298' class=Button pat=
+  Pane name='Alerts' id='290' class=Button pat=
+  Pane name='' id='284' class=Static pat=
+  Pane name='' id='2998' class=Button pat=
+  Pane name='' id='8567' class=Button pat=
+  Pane name='' id='1158' class=Static pat=
+  Pane name='Do not show on startup' id='2343' class=Button pat=
+  Pane name='Log In' id='47819' class=Button pat=
+  Pane name='' id='' class=#32770 pat=
+  Pane name='' id='866432928' class=swTODPanel pat=
+  Pane name='New' id='14' class=Static pat=
+  Pane name='Part' id='4620' class=Button pat=
+  Pane name='Assembly' id='4621' class=Button pat=
+  Pane name='Drawing' id='4622' class=Button pat=
+  Pane name='Advanced...' id='6870' class=Button pat=
+  Pane name='Open' id='12' class=Button pat=
+  Pane name='Recent Documents' id='23' class=Static pat=
+  Pane name='Recent Folders' id='11' class=Static pat=
+  Pane name='' id='26' class=ListBox pat=
+  Pane name='' id='1379335584' class=swInfoPanel pat=
+  Pane name='Resources' id='15' class=Static pat=
+  Pane name='' id='3000' class=Button pat=
+  Pane name='' id='3005' class=Button pat=
+  Pane name='' id='3012' class=Button pat=
+  Pane name='' id='3002' class=Button pat=
+  Pane name='' id='3004' class=Button pat=
+  Pane name='' id='3003' class=Button pat=
+  Pane name='' id='' class=#32770 pat=
+  Pane name='' id='1425213296' class=swPreviewPanel pat=
+  Pane name='' id='1379336928' class=swInfoPanel pat=
+  Pane name='swCaption' id='54354' class=Afx:0000000140000000:b:0000000000010003:0000000000000000:0000000000000000 pat=
+  Pane name='swMenu' id='1213' class=Afx:0000000140000000:3:0000000000010003:0000000000000000:0000000000000000 pat=
+  Pane name='SearchBox' id='2001' class=Afx:0000000140000000:0 pat=
+  Pane name='SearchBox' id='1000' class=Afx:0000000140000000:0 pat=
+  Pane name='' id='59648' class=swMdiClient pat=
+  Pane name='Auto Hider' id='258184416' class=AfxWnd140u pat=
+  Pane name='Task Pane Tabs Wnd' id='257951296' class=AfxWnd140u pat=
+  Pane name='EM Frame' id='' class=Afx:0000000140000000:80 pat=
+  Pane name='header' id='256612144' class=AfxWnd140u pat=
+  Pane name='taskPaneConfig' id='256617264' class=AfxWnd140u pat=
+  Pane name='expandCollapse' id='258154448' class=AfxWnd140u pat=
+  Pane name='pin' id='256615344' class=AfxWnd140u pat=
+  Pane name='swInnerFrame' id='' class=Afx:0000000140000000:80 pat=
+  Pane name='' id='59904' class=AfxFrameOrView140u pat=
+  Pane name='' id='1' class=AfxFrameOrView140u pat=
+  Pane name='' id='59736' class=AfxMDIFrame140u pat=
+  Pane name='' id='59648' class=AfxFrameOrView140u pat=
+  Pane name='' id='7986' class=ToolbarWindow32 pat=
+  Pane name='' id='59664' class=AfxFrameOrView140u pat=
+  Pane name='ContentSearchBox' id='1' class=Afx:0000000140000000:0 pat=
+  Pane name='' id='15724' class=Edit pat=
+  Pane name='' id='59680' class=SysTreeView32 pat=
+  Pane name='' id='59712' class=AfxFrameOrView140u pat=
+  Pane name='SOLIDWORKS Design Standard 2026 SP5.2 - Academic Use Only' id='59393' class=msctls_statusbar32 pat=
+  Pane name='Standard' id='59419' class=AfxControlBar140u pat=
+WINDOW name='' class=swBalloonTip pid=3268 rect=938,737,393,154
+  descendants: 2
+  Pane name='Simplified Interface' id='221' class=Static pat=
+  Pane name='The Simplified Interface provides a minimalist layout for quick and basic modeling. It can be customized similarly to the standard interface.
+
+Show how to turn off the Simplified Interface.' id='222' class=Static pat=
+done

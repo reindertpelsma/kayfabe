@@ -1,0 +1,245 @@
+[12 Nov 2026 18:20:58 +0000] Superposition 1.1 build 8628
+[12 Nov 2026 18:20:58 +0000] ID: cef43156c1114f94b9bbf287bcda2136
+[12 Nov 2026 18:20:58 +0000] Edition: Basic
+[12 Nov 2026 18:20:58 +0000] SSL supported: 1
+[12 Nov 2026 18:21:35 +0000] Run benchmark
+[12 Nov 2026 18:25:49 +0000] Benchmark finished
+//////////////////////////////////////////////////////////////////////////
+/// PLATFORM
+//////////////////////////////////////////////////////////////////////////
+
+    Chassis:    Desktop
+    Vendor:     kayfabe
+    Name:       propimage
+
+
+//////////////////////////////////////////////////////////////////////////
+/// MOTHERBOARD
+//////////////////////////////////////////////////////////////////////////
+
+    Vendor:     kayfabe
+    Name:       propimage
+
+
+//////////////////////////////////////////////////////////////////////////
+/// CPU
+//////////////////////////////////////////////////////////////////////////
+
+    Count:    1
+
+//////////////////////////////////////////////////////////////////////////
+
+    Vendor:                   AMD
+    Name:                     Virtual
+
+    Physical cores:           8
+    Logical cores:            8
+
+    Base Frequency:           0
+    Current Frequency:        2250
+    Max Frequency:            2250
+
+
+//////////////////////////////////////////////////////////////////////////
+/// GPU
+//////////////////////////////////////////////////////////////////////////
+
+    Count         1
+    SLI:          0
+    Crossfire:    -1
+
+//////////////////////////////////////////////////////////////////////////
+
+    PNP device id:           
+    Chip vendor id:          10de
+    Chip device id:          2684
+    Device vendor id:        1462
+    Device id:               5103
+
+    Chip vendor:             NVIDIA
+    Chip name:               GeForce RTX 4090
+    Chip codename:           AD102
+    Revision:                a1
+    Device vendor:           MSI
+    Device name:             GeForce RTX 4090
+
+    Driver:                  580.88
+    Driver vendor:           
+    VRAM:                    4096
+    VRAM Type:               
+
+    Type:                    Discrete
+    Is mobile:               0
+    Is active:               1
+
+    Base GPU clock:          0
+    Base memory clock:       0
+
+    Current GPU clock:       0
+    Current memory clock:    0
+
+    Utilization:             -1
+    Utilization min:         -1
+    Utilization max:         -1
+
+    Temperature:             nan
+    Temperature min:         nan
+    Temperature max:         nan
+    Temperature min snapshot:0
+    Temperature max snapshot:0
+
+    Connected displays:      1
+    Glx vendor:              
+    Glx renderer:            
+
+//////////////////////////////////////////////////////////////////////////
+/// Displays
+//////////////////////////////////////////////////////////////////////////
+
+    Count:    1
+//////////////////////////////////////////////////////////////////////////
+
+    Name:         \\.\DISPLAY3
+    Width:        0
+    Height:       0
+    System Width: 1920
+    System Height:1080
+    Logical dpi:  0
+    Physical dpi: 0
+    Is primary:   1
+
+
+//////////////////////////////////////////////////////////////////////////
+/// MEMORY
+//////////////////////////////////////////////////////////////////////////
+
+    Total:   8191
+    Count:    1
+
+//////////////////////////////////////////////////////////////////////////
+
+    Location:     DIMM 0
+    Vendor:       
+    Name:         
+    Capacity:     8192
+    Frequency:    0
+    Type:         
+
+
+//////////////////////////////////////////////////////////////////////////
+/// OS
+//////////////////////////////////////////////////////////////////////////
+
+    Name:                 Windows
+    Version:              10
+    Build:                26200
+    Distribution name:    
+    Distribution version: 
+    OpenGL version:       
+    Vulkan API version:   
+    Xorg version:         
+
+
+//////////////////////////////////////////////////////////////////////////
+/// VR USB devices
+//////////////////////////////////////////////////////////////////////////
+
+    Count:    0
+
+
+-- wmi_open --
+-- get_vr_hmd_info --
+  Getting devices count failed
+-- get_gpu_info --
+  NvAPI_EnumPhysicalGPUs result code 0
+    physical_handles_count: 1
+  NvAPI_SYS_GetDriverAndBranchVersion result code 0
+    driver_version: 58088
+    branch_str:     r580_78
+  NvAPI_GPU_GetBusId result code 0
+  NvAPI_GPU_GetFullName result code 0
+    name:     NVIDIA GeForce RTX 4090
+  NvAPI_GPU_GetPCIIdentifiers result code 0
+    pci_device_id:     268410de
+    pci_subsystem_id:  51031462
+    pci_revision_id:   a1
+    pci_ext_device_id: 2684
+-- parse_gpu_device_name --
+  Input:
+    name:     GeForce RTX 4090
+    codename: 
+-- parse_gpu_device_name --
+  Input:
+    name:     GeForce RTX 4090
+    codename: 
+  NvAPI_GPU_GetSystemType result code 0
+    system_type: 2
+  NvAPI_GPU_GetGPUType result code 0
+   gpu_type: 2
+  NvAPI_GPU_GetPstates20 result code -1
+  NvAPI_GPU_GetAllClockFrequencies result code -104
+  ClockType: 1
+  NvAPI_GPU_GetAllClockFrequencies result code -104
+  ClockType: 0
+  NvAPI_GPU_GetMemoryInfo result code 0
+	dedicatedVideoMemory:			 4096
+	availableDedicatedVideoMemory:	3757
+	systemVideoMemory:				0
+	sharedSystemMemory:			   4062
+	curAvailableDedicatedVideoMemory: 2927
+  NvAPI_GPU_GetConnectedDisplayIds result code 0
+	connected_displays: 1
+  NvAPI_GPU_GetThermalSettings result code -104
+  NvAPI_GPU_GetDynamicPstatesInfoEx result code -104
+  SLI detection
+  NvAPI_EnumLogicalGPUs result code 0
+   logical_handles_count:  1
+   physical_handles_count: 1
+   sli_enabled: 0
+-- get_amd_adl_gpu_info --
+DXGI: Adapter 1: 5140 140 0 skipped. Not GPU vendor
+-- Determine active adapters --
+  Gpus count: 1
+-- Determine active adapters --
+  Gpus count: 1
+-- parse_smbios_data --
+  buffer_size: 499
+-- parse_smbios_system_info --
+  Header length: 27
+  manufacturer: kayfabe
+  name:		 propimage
+  version:	  pc-q35-10.2
+  family:	   
+  SN:		   KFA9113E2E07
+-- parse_smbios_board_info --
+  Header length: 15
+  manufacturer: kayfabe
+  product:	  propimage
+  type:		 10
+-- parse_smbios_system_enclosure_info --
+  Header length: 22
+  manufacturer:   kayfabe
+  version:		pc-q35-10.2
+  SN:			 KFC3718C38858
+  OEMDefine:	  0
+  type determined: 1
+-- parse_smbios_memory_info --
+  Input:
+  total_capacity: -1
+  Header length: 40
+  manufacturer: QEMU
+  name:		 
+  speed:		0
+  memoryType:	7
+  deviceLocator: DIMM 0
+  bankLocator:   
+  size:		8192
+  calculated size: 8192
+-- Determine active adapters --
+  Gpus count: 1
+-- get_vr_hmd_info --
+  Getting devices count failed
+-- Determine active adapters --
+  Gpus count: 1
+-- get_vr_hmd_info --
+  Getting devices count failed
