@@ -101,10 +101,12 @@ def render_gpu_fix(expected):
         + r"""
 $base='HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
 $changed=$false
-Get-ChildItem $base | Where-Object {$_.PSChildName -match '^\d{4}$'} | ForEach-Object {
- $ip=Get-ItemProperty $_.PSPath
+# -Name lists key names only: a full Get-ChildItem opens every subkey, and the protected Properties subkey denies access.
+Get-ChildItem $base -Name | Where-Object {$_ -match '^\d{4}$'} | ForEach-Object {
+ $kp=Join-Path $base $_
+ $ip=Get-ItemProperty $kp
  if(($ip.DriverDesc -match 'NVIDIA' -or $ip.ProviderName -match 'NVIDIA') -and $ip.EnableGpuFirmware -ne 1){
-  New-ItemProperty -Path $_.PSPath -Name EnableGpuFirmware -PropertyType DWord -Value 1 -Force | Out-Null
+  New-ItemProperty -Path $kp -Name EnableGpuFirmware -PropertyType DWord -Value 1 -Force | Out-Null
   $changed=$true
  }
 }
@@ -130,7 +132,7 @@ POWER_SETTINGS = {
     "hybrid_sleep": ("SUB_SLEEP", "HYBRIDSLEEP"),
     "monitor": ("SUB_VIDEO", "VIDEOIDLE"),
     "disk": ("SUB_DISK", "DISKIDLE"),
-    "wake_signin": ("SUB_NONE", "CONSOLELOCK"),
+    "wake_signin": ("SUB_VIDEO", "8ec4b3a5-6868-48c2-be75-4f3044be88a7"),  # CONSOLELOCK: hidden setting, not in powercfg /aliases (MEASURED on guest)
 }
 POWER_REGISTRY = {
     "hibernate_enabled": (r"HKLM:\SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled", 0),
@@ -182,7 +184,7 @@ def render_power_fix():
         + r"""
 $ErrorActionPreference='Stop'
 $r=@{queries=@{};registry=@{};sources=@{};errors=@();sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value}
-function Power { param([Parameter(ValueFromRemainingArguments=$true)][string[]]$argsList)
+function Power { param([string[]]$argsList)
  $text=(& powercfg @argsList 2>&1 | Out-String)
  if($LASTEXITCODE -ne 0){$r.errors+=('powercfg '+($argsList -join ' ')+' failed: '+$text)}
  return $text
@@ -198,10 +200,11 @@ try {
   if(-not $m.Success){throw ('Missing powercfg alias '+$value)}
   return $m.Groups[1].Value
  }
- $old=Get-ItemPropertyValue 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name InactivityTimeoutSecs -ErrorAction SilentlyContinue
+ function Opt($p,$n){ try { (Get-ItemProperty -LiteralPath $p -Name $n -ErrorAction Stop).$n } catch { $null } }
+ $old=Opt 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'InactivityTimeoutSecs'
  $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
  $marker='HKLM:\SOFTWARE\Kayfabe\PropimageChecks'
- $priorBoot=Get-ItemPropertyValue $marker -Name InactivityRestartBoot -ErrorAction SilentlyContinue
+ $priorBoot=Opt $marker 'InactivityRestartBoot'
  $r.restart_required=(($null -ne $old -and $old -ne 0) -or $priorBoot -ceq $boot)
  if($r.restart_required){
   if(-not (Test-Path $marker)){New-Item $marker -Force | Out-Null}
@@ -254,7 +257,8 @@ public class KfPower {
 }
 '@
  foreach($action in @(0x0011,0x0077,0x000f)){
-  if(-not [KfPower]::Set($action,0,[IntPtr]::Zero,3)){throw 'Cannot disable interactive screensaver'}
+  # 1260 = ERROR_ACCESS_DISABLED_BY_POLICY: the screensaver policy written by the repair already forbids it; the Get readback below decides.
+  if(-not [KfPower]::Set($action,0,[IntPtr]::Zero,3) -and [Runtime.InteropServices.Marshal]::GetLastWin32Error() -ne 1260){throw 'Cannot disable interactive screensaver'}
  }
  $active=0;$secure=0;$timeout=0
  if(-not [KfPower]::Get(0x0010,0,[ref]$active,0) -or -not [KfPower]::Get(0x0076,0,[ref]$secure,0) -or -not [KfPower]::Get(0x000e,0,[ref]$timeout,0)){throw 'Cannot read interactive screensaver'}
@@ -475,6 +479,21 @@ def load_image(archive, directory):
         if not PI.seed_matches(state):
             raise ValueError("Seed mismatch")
     return state
+
+
+def stage_gop(work, directory, explicit=None):
+    """The signed boot GOP driver is not in state.json: copy it into work/firmware (found by --gop-efi, else
+    <dir>/kf-gop.signed.efi or <dir>/firmware/kf-gop.signed.efi). A missing file is a harness error before QEMU starts."""
+    dst = Path(work) / "firmware/kf-gop.signed.efi"
+    if dst.is_file():
+        return dst
+    cands = [Path(explicit)] if explicit else [Path(directory) / "kf-gop.signed.efi", Path(directory) / "firmware/kf-gop.signed.efi"]
+    for c in cands:
+        if c.is_file():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(c.read_bytes())
+            return dst
+    raise ValueError("kf-gop.signed.efi not found (pass --gop-efi): " + ", ".join(map(str, cands)))
 
 
 def stop_process(proc):
@@ -1024,6 +1043,7 @@ def main(argv=None):
     ap.add_argument("--resume", action="store_true", help="Manual: reuse stopped --work; no --zip")
     ap.add_argument("--flags", default=str(HERE / "kf3_flags.sample.env"))
     ap.add_argument("--broker", default=str(HERE.parents[2] / "broker/nvkvm-display-broker"))
+    ap.add_argument("--gop-efi", help="signed boot GOP driver to stage into the work directory")
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
     ap.add_argument("--apps", default=",".join(CHECKS))
     ap.add_argument("--plans", type=Path)
@@ -1165,6 +1185,7 @@ def main(argv=None):
             sock = str(r / "broker.sock")
             kw = {}
             if a.display == "broker":
+                stage_gop(work, a.dir, a.gop_efi)
                 fifo = r / "broker.fifo"
                 os.mkfifo(fifo)
                 fd = os.open(fifo, os.O_RDWR)
@@ -1222,7 +1243,10 @@ def main(argv=None):
                         break
                     time.sleep(5)
                 else:
-                    raise ValueError("Guest SSH unavailable")
+                    tail = ""
+                    if q.poll() is not None:
+                        tail = " (QEMU exited rc=%s: %s)" % (q.returncode, Path(r / "qemu.log").read_text()[-300:].strip())
+                    raise ValueError("Guest SSH unavailable" + tail)
                 record("ssh", "PASS", "loopback guest transport ready")
                 time.sleep(60)
                 power = power_fix(g)

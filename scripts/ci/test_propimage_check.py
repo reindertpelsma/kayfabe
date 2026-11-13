@@ -846,7 +846,10 @@ class T(unittest.TestCase):
         self.assertFalse(m.power_verdict({"ok": True})["ok"])
 
     def test_power_argument_vector_keeps_all_arguments(self):
-        self.assertIn("ValueFromRemainingArguments=$true", m.render_power_fix())
+        # Real guest: ValueFromRemainingArguments + `Power @('/hibernate','off')` bound ONE joined string, so powercfg
+        # got the single argument "/hibernate off" and answered "Invalid Parameters". A plain string[] keeps elements.
+        self.assertNotIn("ValueFromRemainingArguments", m.render_power_fix())
+        self.assertIn("param([string[]]$argsList)", m.render_power_fix())
         self.assertIn("powercfg @argsList", m.render_power_fix())
 
     def test_power_repeat_preserves_pending_restart(self):
@@ -943,6 +946,49 @@ class T(unittest.TestCase):
 
     def clock_sidecar(self, root):
         return Path(root) / "overlay.qcow2"
+
+    def test_optional_registry_reads_cannot_abort_the_repair(self):
+        # Real guest: Get-ItemPropertyValue on a missing optional value throws a TERMINATING error that
+        # -ErrorAction SilentlyContinue does not stop, so under $ErrorActionPreference='Stop' the repair aborted.
+        script = m.render_power_fix()
+        self.assertNotRegex(script, r"Get-ItemPropertyValue[^\n]*SilentlyContinue")
+        self.assertIn("function Opt(", script)
+        self.assertIn("Opt $marker 'InactivityRestartBoot'", script)
+        self.assertIn("'InactivityTimeoutSecs'", script)
+
+    def test_every_power_setting_resolves_without_a_missing_alias(self):
+        # Real guest: powercfg /aliases lists SUB_* and most settings but NOT CONSOLELOCK, so Resolve-Guid threw
+        # "Missing powercfg alias CONSOLELOCK". Settings that the alias list may lack are carried as GUIDs.
+        guid = r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}"
+        self.assertRegex(m.POWER_SETTINGS["wake_signin"][1], guid)
+        self.assertNotIn("CONSOLELOCK", repr(m.POWER_SETTINGS))
+
+    def test_screensaver_set_tolerates_policy_block_but_readback_decides(self):
+        # Real guest: after the repair writes the screensaver policy, SystemParametersInfo(SET) fails with
+        # 1260 (access disabled by policy) in the interactive task. Only that error is tolerated.
+        script = m.render_screen_power("power_" + "a" * 32)
+        self.assertIn("-ne 1260", script)
+        self.assertIn("[KfPower]::Get(0x0010", script)
+        self.assertIn("Cannot disable interactive screensaver", script)
+
+    def test_gpu_fix_lists_class_keys_by_name(self):
+        # Real guest: Get-ChildItem on the display class key opens the protected Properties subkey and throws
+        # "Requested registry access is not allowed"; listing names only avoids it.
+        script = m.render_gpu_fix("GPU-abc")
+        self.assertIn("Get-ChildItem $base -Name", script)
+        self.assertNotIn("$_.PSPath", script)
+
+    def test_gop_efi_is_staged_from_dir_or_flag_and_missing_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "dir/firmware").mkdir(parents=True)
+            (d / "dir/firmware/kf-gop.signed.efi").write_bytes(b"efi")
+            out = m.stage_gop(d / "work", d / "dir")
+            self.assertEqual(out.read_bytes(), b"efi")
+            (d / "x.efi").write_bytes(b"flag")
+            self.assertEqual(m.stage_gop(d / "w2", d / "dir", d / "x.efi").read_bytes(), b"flag")
+            with self.assertRaises(ValueError):
+                m.stage_gop(d / "w3", d / "none")
 
     def test_clock_fresh_uses_frozen_base(self):
         with tempfile.TemporaryDirectory() as td:
