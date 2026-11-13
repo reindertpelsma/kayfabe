@@ -477,6 +477,21 @@ def load_image(archive, directory):
     return state
 
 
+def stage_gop(work, directory, explicit=None):
+    """The signed boot GOP driver is not in state.json: copy it into work/firmware (found by --gop-efi, else
+    <dir>/kf-gop.signed.efi or <dir>/firmware/kf-gop.signed.efi). A missing file is a harness error before QEMU starts."""
+    dst = Path(work) / "firmware/kf-gop.signed.efi"
+    if dst.is_file():
+        return dst
+    cands = [Path(explicit)] if explicit else [Path(directory) / "kf-gop.signed.efi", Path(directory) / "firmware/kf-gop.signed.efi"]
+    for c in cands:
+        if c.is_file():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(c.read_bytes())
+            return dst
+    raise ValueError("kf-gop.signed.efi not found (pass --gop-efi): " + ", ".join(map(str, cands)))
+
+
 def stop_process(proc):
     if proc.poll() is None:
         proc.terminate()
@@ -1024,6 +1039,7 @@ def main(argv=None):
     ap.add_argument("--resume", action="store_true", help="Manual: reuse stopped --work; no --zip")
     ap.add_argument("--flags", default=str(HERE / "kf3_flags.sample.env"))
     ap.add_argument("--broker", default=str(HERE.parents[2] / "broker/nvkvm-display-broker"))
+    ap.add_argument("--gop-efi", help="signed boot GOP driver to stage into the work directory")
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
     ap.add_argument("--apps", default=",".join(CHECKS))
     ap.add_argument("--plans", type=Path)
@@ -1165,6 +1181,7 @@ def main(argv=None):
             sock = str(r / "broker.sock")
             kw = {}
             if a.display == "broker":
+                stage_gop(work, a.dir, a.gop_efi)
                 fifo = r / "broker.fifo"
                 os.mkfifo(fifo)
                 fd = os.open(fifo, os.O_RDWR)
@@ -1222,7 +1239,10 @@ def main(argv=None):
                         break
                     time.sleep(5)
                 else:
-                    raise ValueError("Guest SSH unavailable")
+                    tail = ""
+                    if q.poll() is not None:
+                        tail = " (QEMU exited rc=%s: %s)" % (q.returncode, Path(r / "qemu.log").read_text()[-300:].strip())
+                    raise ValueError("Guest SSH unavailable" + tail)
                 record("ssh", "PASS", "loopback guest transport ready")
                 time.sleep(60)
                 power = power_fix(g)

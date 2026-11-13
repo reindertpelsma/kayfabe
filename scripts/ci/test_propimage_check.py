@@ -944,6 +944,18 @@ class T(unittest.TestCase):
     def clock_sidecar(self, root):
         return Path(root) / "overlay.qcow2"
 
+    def test_gop_efi_is_staged_from_dir_or_flag_and_missing_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "dir/firmware").mkdir(parents=True)
+            (d / "dir/firmware/kf-gop.signed.efi").write_bytes(b"efi")
+            out = m.stage_gop(d / "work", d / "dir")
+            self.assertEqual(out.read_bytes(), b"efi")
+            (d / "x.efi").write_bytes(b"flag")
+            self.assertEqual(m.stage_gop(d / "w2", d / "dir", d / "x.efi").read_bytes(), b"flag")
+            with self.assertRaises(ValueError):
+                m.stage_gop(d / "w3", d / "none")
+
     def test_clock_fresh_uses_frozen_base(self):
         with tempfile.TemporaryDirectory() as td:
             frozen = m.PI.utc("2026-11-12T00:00:00Z")
