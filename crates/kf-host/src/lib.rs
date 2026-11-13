@@ -1174,16 +1174,20 @@ impl HostRm {
         status_check(self.raw_control_status(object, cmd, payload)?)
     }
 
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (`docs/design/V3_GSS_NATIVE.md`): one `NV_ESC_RM_CONTROL` whose
-    /// `payload` is an OPAQUE byte string kayfabe does not interpret (a GSS-legacy control: no
-    /// public header, params in the GUEST driver's layout) — carried to the host UNCHANGED, with no
-    /// [`kf_abi::hostabi::HostAbi::control_carry`] decision (that gate protects layouts kayfabe's own
-    /// encoders write; here nothing is encoded). `payload` is exactly the declared `paramsSize`
-    /// bytes, so the kernel can neither read nor write more.
+    /// One `NV_ESC_RM_CONTROL` whose `payload` is an OPAQUE byte string kayfabe does not
+    /// interpret, sent with no [`kf_abi::hostabi::HostAbi::control_carry`] decision. `payload` is
+    /// exactly the size handed to the kernel, so it can neither read nor write more.
     ///
-    /// Returns the HOST's `NV_STATUS` exactly as RM wrote it (`Ok(0)` = success; `payload` then holds
-    /// the host's reply), unmapped: the caller hands it to the guest. `Err` is only a failure to ask
-    /// (an ioctl error, an unbuildable request), never an RM answer.
+    /// Returns the HOST's `NV_STATUS` exactly as RM wrote it (`Ok(0)` = success); `Err` is only a
+    /// failure to ask (an ioctl error, an unbuildable request), never an RM answer.
+    ///
+    /// CALLER-CONTRACT: `cmd` and every byte of `payload` are AUTHORED by an operator tool on the
+    /// host (`kf-harness` probes); they must never come from a guest. Not validated here because an
+    /// opaque control has no layout to validate against; a guest-sourced payload is a
+    /// guest-authored host RM action (owner principle A.2), which is exactly what the removed
+    /// `KF3_GSS_NATIVE` experiment did (security review 1, F-06, 2026-11-13). The only VMM caller
+    /// left is that experiment's dead `kf-qemu` glue, whose `kf_rm::gssnative::execute` no longer
+    /// calls it.
     ///
     /// # Errors
     /// [`RmError`] when the ioctl itself failed.
