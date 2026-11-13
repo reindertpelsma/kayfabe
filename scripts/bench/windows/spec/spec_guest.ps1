@@ -18,7 +18,7 @@
 # traces/specviewperf_native_20261107/README.md); the first box run decides. It never opens the
 # vendor result directory, so no score is read, printed or copied.
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('prep', 'post', 'verify', 'launch', 'status', 'collect', 'kill')][string]$Action,
+    [Parameter(Mandatory = $true)][ValidateSet('prep', 'resize', 'post', 'verify', 'launch', 'status', 'collect', 'kill')][string]$Action,
     [string]$Workload = '',
     [string]$Root = 'C:\Program Files\SPECviewperf 15'
 )
@@ -28,6 +28,19 @@ if ($Action -in 'launch', 'status', 'collect') {
     if ($Workload -notmatch '^[a-z][a-z_]*-[0-9]{2}$') { Say 'SPEC_GUEST REFUSED bad workload name'; exit 2 }
 }
 $out = 'C:\spec\out'
+
+if ($Action -eq 'resize') {
+    # PC run (claude/spec-pc-20261112): grow C: into the enlarged virtual disk
+    try {
+        # the install leaves a Recovery partition behind C: and it blocks the growth (MEASURED 2026-11-12: 'already the requested size')
+        $c = Get-Partition -DriveLetter C
+        Get-Partition -DiskNumber $c.DiskNumber | Where-Object { $_.Type -eq 'Recovery' -and $_.Offset -gt $c.Offset } | Remove-Partition -Confirm:$false -ErrorAction Stop
+        $m = (Get-PartitionSupportedSize -DriveLetter C).SizeMax
+        Resize-Partition -DriveLetter C -Size $m -ErrorAction Stop
+        Say ('SPEC_RESIZE ok c_gb=' + [math]::Round((Get-Partition -DriveLetter C).Size / 1GB, 1))
+    } catch { Say ('SPEC_RESIZE fail ' + $_.Exception.Message) }
+    exit 0
+}
 
 if ($Action -eq 'prep') {
     New-Item -ItemType Directory -Force -Path $out | Out-Null

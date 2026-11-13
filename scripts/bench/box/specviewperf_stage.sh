@@ -56,7 +56,7 @@ T=$1
 PROV=$2
 [[ "$T" =~ ^[A-Za-z0-9][A-Za-z0-9_]*$ ]] || { echo "$USAGE_LINE"; exit 2; }
 LANE=${KF_SPEC_LANE:-}
-case "$LANE" in lanea | laneb | both) ;; *) echo "$USAGE_LINE"; exit 2 ;; esac
+case "$LANE" in lanea | laneb | both | pc[a-z0-9]*) ;; *) echo "$USAGE_LINE"; exit 2 ;; esac   # pc*: PC-run lanes of lanes.json (claude/spec-pc-20261112)
 SOURCE=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)
 WIN=$SOURCE/scripts/bench/windows
 WV=$WIN/win_vm.sh
@@ -233,6 +233,11 @@ boot_guest() { # copy|run  -> 0 ssh up, 1 no qemu, 2 no ssh
     BOOT_UP=$(date +%s)
     return 0
 }
+licprobe() { # TAG: read-only licence readout of the guest (PC run, KF_SPEC_LICENCE_PROBE=1), kept in $WORK/licence_<TAG>.txt
+    [ -n "${KF_SPEC_LICENCE_PROBE:-}" ] || return 0
+    timeout 300 bash "$WV" scp-to "$WIN/spec/licence_probe.ps1" 'C:/kf/spec/licence_probe.ps1' < /dev/null > /dev/null 2>&1
+    g 240 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\spec\\licence_probe.ps1" 2> /dev/null | tr -d '\r' > "$WORK/licence_$1.txt"
+}
 wait_desktop() { # 0 once dwm and explorer run for the console user
     local w=0 st
     while [ "$w" -lt "$(cap 420)" ]; do
@@ -299,7 +304,15 @@ bar1_refusal() {
 delete_copy() {
     local gone=""
     if [ -e "$ZST" ] || [ -e "$ZST.part" ]; then rm -f -- "$ZST" "$ZST.part"; gone=archive; fi
-    if [ -e "$VM/disk/$OVERLAY.qcow2" ]; then rm -f -- "$VM/disk/$OVERLAY.qcow2"; gone+="${gone:+,}overlay"; fi
+    if [ -e "$VM/disk/$OVERLAY.qcow2" ]; then
+        # a FAIL row (e.g. reason=RESET) keeps the guest overlay for post-mortem (2026-11-12, PC run lost the evidence);
+        # KF_SPEC_KEEP_ON_FAIL=0 restores the old delete-always behaviour
+        if [ "${KF_SPEC_KEEP_ON_FAIL:-1}" = always ] || { [ "${KF_SPEC_KEEP_ON_FAIL:-1}" = 1 ] && [ -s "${ROWS:-/nonexistent}" ] && grep -q ' result=FAIL ' "$ROWS"; }; then
+            mv -f -- "$VM/disk/$OVERLAY.qcow2" "$VM/disk/$OVERLAY.kept.qcow2"; note "guest overlay kept as $OVERLAY.kept.qcow2 (KF_SPEC_KEEP_ON_FAIL=${KF_SPEC_KEEP_ON_FAIL:-1})"
+        else
+            rm -f -- "$VM/disk/$OVERLAY.qcow2"; gone+="${gone:+,}overlay"
+        fi
+    fi
     say "SPEC_COPY_DELETED removed=${gone:-nothing}"
 }
 # only THIS tag's logs: <TAG>_(copy|run)<n>_(run.log|run.out|b<n>_*); a tag that merely extends this one (ci1 and ci1_x) is not ours
@@ -440,11 +453,13 @@ fi
 # ------------------------------------------------------------------------------------------------
 stage fetch
 FETCH_TMO=$(cap 3600)
+if [ -z "${KF_SPEC_URL_FILE:-}" ]; then
 (
     timeout "$FETCH_TMO" bash "$FETCH" "$OBJECT" --sha256 "$PIN" --out "$ZST" > "$WORK/fetch.txt" 2>&1
     echo $? > "$WORK/fetch.rc"
 ) &
 FETCH_PID=$!
+fi
 
 stage hostref_before
 LIBCUDA=-lcuda
@@ -457,6 +472,7 @@ hostref before
 # ------------------------------------------------------------------------------------------------
 # boot A (no kf3): the tree goes in
 # ------------------------------------------------------------------------------------------------
+if [ -z "${KF_SPEC_REUSE:-}" ]; then   # PC run: KF_SPEC_REUSE=1 reuses an overlay that already holds the tree (copy done earlier)
 stage overlay
 # the gate's overlay is the parent of ours and must not change again; its evidence has been taken
 chmod 0400 "$VM/disk/$GATE_TAG.qcow2"
@@ -464,6 +480,9 @@ if [ -e "$VM/disk/$OVERLAY.qcow2" ]; then abort OPERATOR "the overlay $OVERLAY e
 qemu-img create -q -f qcow2 -F qcow2 -b "$VM/disk/$GATE_TAG.qcow2" "$VM/disk/$OVERLAY.qcow2" > "$WORK/overlay.txt" 2>&1 \
     || abort OPERATOR "qemu-img could not create the child overlay: $(tail -1 "$WORK/overlay.txt")"
 
+if [ -n "${KF_SPEC_DISK_GB:-}" ]; then
+    qemu-img resize -q "$VM/disk/$OVERLAY.qcow2" "${KF_SPEC_DISK_GB}G" > "$WORK/resize.txt" 2>&1 || abort OPERATOR "qemu-img resize failed: $(tail -1 "$WORK/resize.txt")"
+fi
 stage boot_copy
 boot_guest copy
 brc=$?
@@ -473,10 +492,18 @@ for f in spec_guest.ps1 spec_run.ps1; do
     timeout 300 bash "$WV" scp-to "$WIN/spec/$f" 'C:/kf/spec/' < /dev/null > "$WORK/scp_$f.txt" 2>&1 || abort TRANSPORT "scp of $f to the guest failed"
 done
 timeout 300 bash "$WV" scp-to "$WIN/gate_state.ps1" 'C:/kf/gate_state.ps1' < /dev/null > "$WORK/scp_gate_state.txt" 2>&1 || abort TRANSPORT "scp of gate_state.ps1 failed"
+if [ -n "${KF_SPEC_DISK_GB:-}" ]; then
+    gspec 300 resize > "$WORK/resize_guest.txt"
+    note "guest resize: $(tr '\n' ' ' < "$WORK/resize_guest.txt" | head -c 200)"
+fi
 gspec 120 prep > "$WORK/prep.txt"
 grep -q '^SPEC_PREP ' "$WORK/prep.txt" || abort TRANSPORT "spec_guest.ps1 -Action prep gave no answer"
 note "guest prep: $(grep '^SPEC_PREP ' "$WORK/prep.txt")"
 
+stream_src() { # the archive on stdout: the URL file's stream (sha256 checked on the fly, rc 3 = pin mismatch) or the verified file
+    python3 -I "$SPECD/stream_url.py" --url-file "$KF_SPEC_URL_FILE" --key "specviewperf-15.0.0/$OBJECT" --sha256 "$PIN" --status "$WORK/stream_status.txt"
+}
+if [ -z "${KF_SPEC_URL_FILE:-}" ]; then
 stage fetch_wait
 wait "$FETCH_PID"
 FETCH_PID=""
@@ -491,18 +518,23 @@ case "$frc" in
 esac
 [ -f "$ZST" ] || abort MEDIA "no archive after a successful fetch"
 note "archive sha256 verified against the pin ($(stat -c %s "$ZST") bytes)"
+SRC=(cat "$ZST")
+else
+SRC=(stream_src)
+fi
 
 stage copy
 set -o pipefail
-zstd -d -c --long=31 "$ZST" 2> "$WORK/zstd.err" \
+"${SRC[@]}" 2> "$WORK/stream.err" | zstd -d -c --long=31 2> "$WORK/zstd.err" \
     | python3 -I "$SPECD/tarfilter.py" --lane "$LANE" --manifest "$WORK/manifest.txt" 2> "$WORK/tarfilter.err" \
     | timeout "$(cap 4200)" bash "$WV" ssh 'cmd /c "tar -xf - -C C:/"' > "$WORK/copy_tar.txt" 2>&1
 cps=("${PIPESTATUS[@]}")
-note "copy: zstd=${cps[0]} tarfilter=${cps[1]} ssh_tar=${cps[2]} $(tr '\n' ' ' < "$WORK/tarfilter.err" | head -c 120)"
-[ "${cps[1]}" != 3 ] || abort MEDIA "the archive holds a member this tree never holds (tarfilter refused it)"
-[ "${cps[2]}" != 124 ] || abort TIME "the copy into the guest did not finish inside its budget"
-if [ "${cps[0]}" != 0 ] || [ "${cps[1]}" != 0 ] || [ "${cps[2]}" != 0 ]; then
-    abort TRANSPORT "the copy into the guest failed (zstd=${cps[0]} tarfilter=${cps[1]} ssh_tar=${cps[2]})"
+note "copy: src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} ssh_tar=${cps[3]} $(tr '\n' ' ' < "$WORK/tarfilter.err" | head -c 120)"
+[ "${cps[0]}" != 3 ] || abort MEDIA "the streamed archive does not match its sha256 pin"
+[ "${cps[2]}" != 3 ] || abort MEDIA "the archive holds a member this tree never holds (tarfilter refused it)"
+[ "${cps[3]}" != 124 ] || abort TIME "the copy into the guest did not finish inside its budget"
+if [ "${cps[0]}" != 0 ] || [ "${cps[1]}" != 0 ] || [ "${cps[2]}" != 0 ] || [ "${cps[3]}" != 0 ]; then
+    abort TRANSPORT "the copy into the guest failed (src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} ssh_tar=${cps[3]})"
 fi
 gspec 600 verify > "$WORK/guest_view.txt"
 grep -q '^SPEC_VERIFY_DONE' "$WORK/guest_view.txt" || abort TRANSPORT "the guest did not list the copied viewsets"
@@ -521,6 +553,16 @@ rm -f -- "$ZST"
 say "SPEC_COPY_DELETED removed=archive"
 teardown_guest
 
+else
+    [ -f "$VM/disk/$OVERLAY.qcow2" ] || abort OPERATOR "KF_SPEC_REUSE but no overlay $OVERLAY"
+    note "reusing overlay $OVERLAY (tree copied by an earlier pass)"
+fi
+if [ -n "${KF_SPEC_COPY_ONLY:-}" ]; then   # PC run: stop after the copy; the overlay is kept as a pristine post-copy parent for cloned runs
+    note "copy only (KF_SPEC_COPY_ONLY): overlay $OVERLAY kept, no run"
+    VERDICT=COPYONLY
+    trap - EXIT
+    exit 0
+fi
 # ------------------------------------------------------------------------------------------------
 # boot B (kf3): the lane's viewsets
 # ------------------------------------------------------------------------------------------------
@@ -531,6 +573,7 @@ boot_run() { # 0 when a kf3 guest is up, at the desktop and settled
     rc=$?
     [ "$rc" = 0 ] || { note "kf3 boot rc=$rc"; return 1; }
     wait_desktop || { note "no signed-in desktop"; return 1; }
+    licprobe "boot${RUN_BOOTS}_start"
     settle
     return 0
 }
@@ -655,8 +698,14 @@ for w in "${LANE_IDS[@]}"; do
             continue
         fi
         emit_row "$GRADE_LINE"
+        licprobe "after_$w"
+        # PC run hook: a file named by KF_SPEC_PAUSE_FILE holds the stage here (guest stays up) until it is removed; the stage keeps its deadline
+        while [ -n "${KF_SPEC_PAUSE_FILE:-}" ] && [ -e "$KF_SPEC_PAUSE_FILE" ] && [ "$(left)" -gt 900 ]; do note "paused after $w (guest up; remove $KF_SPEC_PAUSE_FILE)"; sleep 60; done
         # a guest that reset, hung or was killed is not evidence for the next viewset: the next one gets a fresh boot
         case "$GRADE_LINE" in *"reason=RESET"* | *"reason=TIMEOUT"* | *"reason=GUEST"*) FRESH=1 ;; esac
+        # KF_SPEC_REBOOT_AFTER=<viewset>[,<viewset>...]: a fresh boot after the named viewset. Used when one boot would outlive
+        # the Windows evaluation licence's shutdown (wlms.exe stops an expired evaluation 60 min after its first check, 2026-11-12)
+        case ",${KF_SPEC_REBOOT_AFTER:-}," in *",$w,"*) note "fresh boot requested after $w (KF_SPEC_REBOOT_AFTER)"; FRESH=1 ;; esac
         break
     done
 done
