@@ -551,7 +551,16 @@ class T(unittest.TestCase):
         self.assertEqual(m.shutdown_events(g), [])
         self.assertIn("StartTime=$boot", calls[0])
 
-    def pipeline(self, post_events=None, offline=True, overage=False, power_ok=True):
+    def pipeline(
+        self,
+        post_events=None,
+        offline=True,
+        overage=False,
+        power_ok=True,
+        resume=False,
+        clock_query_ok=True,
+        resume_last="2026-11-12T00:10:00Z",
+    ):
         """Deterministic complete pipeline: no VM, keys, SSH, GPU or sleeps."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -562,15 +571,35 @@ class T(unittest.TestCase):
             state = {
                 "guest": {"user": "kfimage", "ssh_private_key": "fixture-not-a-key"},
                 "ids": {"gpu_uuid": "GPU-test", "net": {"ssh_port": 1}},
-                "clock": {},
+                "clock": {"last_time_at_stop_utc": "2026-11-12T00:00:00Z", "gap_s": 60},
             }
             processes = []
+            used_bases = []
+            if resume:
+                (work / "run").mkdir(parents=True)
+                (work / "run/clone.qcow2").touch()
+                (work / "image.base.qcow2").symlink_to(root / "img/image.qcow2")
+                (work / "run/clone.qcow2.clock").write_text(
+                    json.dumps(
+                        {
+                            "base_utc": "2026-11-12T00:01:00Z",
+                            "last_guest_utc": resume_last,
+                            "boots": 1,
+                        }
+                    )
+                )
+                for old in ("swtpm.sock", "run/broker.sock", "run/broker.fifo"):
+                    (work / old).touch()
+
+            self_outer = self
 
             class Process:
                 def __init__(self, cmd, **kw):
                     self.rc = None
                     processes.append(self)
                     if cmd[0] == "swtpm":
+                        if resume:
+                            self_outer.assertFalse((work / "run/broker.fifo").exists())
                         (work / "swtpm.sock").touch()
 
                 def poll(self):
@@ -595,16 +624,33 @@ class T(unittest.TestCase):
             def ps(script, **kw):
                 if script == "Stop-Computer -Force":
                     processes[-1].rc = 0
-                return SimpleNamespace(returncode=0, stdout="GPU-test", stderr="")
+                stamp = (
+                    (
+                        m.PI.fmt(m.PI.utc(resume_last) + m.timedelta(seconds=120))
+                        if resume
+                        else "2026-11-12T00:02:00Z"
+                    )
+                    if "Get-Date" in script
+                    else "GPU-test"
+                )
+                return SimpleNamespace(
+                    returncode=0 if clock_query_ok or "Get-Date" not in script else 1,
+                    stdout=stamp,
+                    stderr="",
+                )
 
             g = SimpleNamespace(ps=ps, ssh=lambda *a, **k: SimpleNamespace(returncode=0))
             pi = SimpleNamespace(
                 PropError=ValueError,
                 restore_files=lambda *a: None,
-                boot_clock=lambda *a: SimpleNamespace(isoformat=lambda: "fixture-clock"),
+                boot_clock=m.PI.boot_clock,
+                utc=m.PI.utc,
+                fmt=m.PI.fmt,
                 cpu_preflight=lambda *a: [],
                 run_guest_probe=lambda *a: {},
-                compare=lambda *a: [("ids", "MATCH", "")],
+                compare=lambda s, f: (
+                    used_bases.append(m.PI.boot_clock(s, "ci")) or [("ids", "MATCH", "")]
+                ),
                 build_argv=lambda *a, **k: ["qemu", str(work / "run/clone.qcow2")]
                 + (["restrict=on"] if offline else []),
             )
@@ -653,8 +699,29 @@ class T(unittest.TestCase):
                         "--apps",
                         "resolve",
                     ]
+                    + (["--resume"] if resume else [])
                 )
             rows = json.loads((out / "result.json").read_text())
+            if used_bases:
+                self.assertEqual(
+                    m.PI.fmt(used_bases[0]),
+                    (
+                        m.PI.fmt(m.PI.utc(resume_last) + m.timedelta(seconds=60))
+                        if resume
+                        else "2026-11-12T00:01:00Z"
+                    ),
+                )
+            if clock_query_ok and offline:
+                data = json.loads((work / "run/clone.qcow2.clock").read_text())
+                self.assertEqual(data["boots"], 2 if resume else 1)
+                self.assertEqual(
+                    data["last_guest_utc"],
+                    (
+                        m.PI.fmt(m.PI.utc(resume_last) + m.timedelta(seconds=120))
+                        if resume
+                        else "2026-11-12T00:02:00Z"
+                    ),
+                )
             self.assertTrue(all(pr.poll() is not None for pr in processes))
             self.assertFalse((work / "id_kf").exists())
             return rc, rows, app.call_count
@@ -874,6 +941,147 @@ class T(unittest.TestCase):
         r["screen"]["error"] = "SPI failed"
         self.assertFalse(m.power_verdict(r)["ok"])
 
+    def clock_sidecar(self, root):
+        return Path(root) / "overlay.qcow2"
+
+    def test_clock_fresh_uses_frozen_base(self):
+        with tempfile.TemporaryDirectory() as td:
+            frozen = m.PI.utc("2026-11-12T00:00:00Z")
+            self.assertEqual(m.overlay_clock(self.clock_sidecar(td), frozen), frozen)
+
+    def test_clock_sidecar_write_read(self):
+        with tempfile.TemporaryDirectory() as td:
+            disk = self.clock_sidecar(td)
+            frozen = m.PI.utc("2026-11-12T00:00:00Z")
+            m.overlay_clock(disk, frozen)
+            m.overlay_clock(disk, frozen, guest_utc="2026-11-12T00:10:00Z")
+            data = json.loads(Path(str(disk) + ".clock").read_text())
+            self.assertEqual(data["last_guest_utc"], "2026-11-12T00:10:00Z")
+            self.assertEqual(data["boots"], 1)
+            self.assertEqual(m.overlay_clock(disk, frozen), m.PI.utc("2026-11-12T00:11:00Z"))
+
+    def test_clock_later_frozen_reference_wins(self):
+        with tempfile.TemporaryDirectory() as td:
+            disk = self.clock_sidecar(td)
+            m.overlay_clock(disk, m.PI.utc("2026-11-12T00:00:00Z"))
+            m.overlay_clock(
+                disk, m.PI.utc("2026-11-12T00:00:00Z"), guest_utc="2026-11-12T00:10:00Z"
+            )
+            later = m.PI.utc("2026-11-12T01:00:00Z")
+            self.assertEqual(m.overlay_clock(disk, later), later)
+
+    def test_clock_last_guest_never_decreases(self):
+        with tempfile.TemporaryDirectory() as td:
+            disk = self.clock_sidecar(td)
+            frozen = m.PI.utc("2026-11-12T00:00:00Z")
+            m.overlay_clock(disk, frozen)
+            m.overlay_clock(disk, frozen, guest_utc="2026-11-12T00:10:00Z")
+            m.overlay_clock(disk, frozen, guest_utc="2026-11-12T00:05:00Z")
+            self.assertEqual(m.overlay_clock(disk, frozen), m.PI.utc("2026-11-12T00:11:00Z"))
+
+    def test_clock_known_base_never_decreases(self):
+        with tempfile.TemporaryDirectory() as td:
+            disk = self.clock_sidecar(td)
+            later = m.PI.utc("2026-11-12T01:00:00Z")
+            m.overlay_clock(disk, later)
+            self.assertEqual(m.overlay_clock(disk, m.PI.utc("2026-11-12T00:00:00Z")), later)
+
+    def test_clock_corrupt_sidecar_warns_and_falls_back(self):
+        with tempfile.TemporaryDirectory() as td:
+            disk = self.clock_sidecar(td)
+            frozen = m.PI.utc("2026-11-12T00:00:00Z")
+            Path(str(disk) + ".clock").write_text("{broken")
+            with self.assertWarnsRegex(RuntimeWarning, "frozen"):
+                self.assertEqual(m.overlay_clock(disk, frozen, resume=True), frozen)
+
+    def test_clock_missing_resume_sidecar_warns(self):
+        with tempfile.TemporaryDirectory() as td:
+            frozen = m.PI.utc("2026-11-12T00:00:00Z")
+            with self.assertWarnsRegex(RuntimeWarning, "frozen"):
+                self.assertEqual(
+                    m.overlay_clock(self.clock_sidecar(td), frozen, resume=True), frozen
+                )
+
+    def test_clock_bad_schema_warns(self):
+        with tempfile.TemporaryDirectory() as td:
+            disk = self.clock_sidecar(td)
+            frozen = m.PI.utc("2026-11-12T00:00:00Z")
+            Path(str(disk) + ".clock").write_text(
+                json.dumps({"base_utc": "bad", "last_guest_utc": None, "boots": -1})
+            )
+            with self.assertWarns(RuntimeWarning):
+                self.assertEqual(m.overlay_clock(disk, frozen), frozen)
+
+    def test_clock_resume_window(self):
+        state = m.PI.init_state("clock-test")
+        state["clock"] = {"last_time_at_stop_utc": "2026-11-12T02:00:00Z", "gap_s": 60}
+        for stamp, want in [
+            ("2026-11-12T02:01:00Z", "MATCH"),
+            ("2026-11-12T02:31:00Z", "MATCH"),
+            ("2026-11-12T02:31:01Z", "MISMATCH"),
+            ("2026-11-12T00:01:00Z", "MISMATCH"),
+        ]:
+            row = next(r for r in m.PI.compare(state, {"date_utc": stamp}) if r[0] == "clock")
+            self.assertEqual(row[1], want)
+
+    def test_clock_pipeline_resume_uses_derived_window(self):
+        rc, rows, _ = self.pipeline(resume=True)
+        self.assertEqual(rc, 0)
+        row = next(r for r in rows if r["step"] == "clock")
+        self.assertIn("2026-11-12T00:11:00Z", row["detail"])
+
+    def test_clock_pipeline_shutdown_capture_failure_warns(self):
+        rc, rows, _ = self.pipeline(clock_query_ok=False)
+        self.assertEqual(rc, 1)
+        self.assertTrue(any(r["step"] == "clock-save" and r["verdict"] == "WARN" for r in rows))
+
+    def test_clock_invalid_boot_counter_warns(self):
+        with tempfile.TemporaryDirectory() as td:
+            disk = self.clock_sidecar(td)
+            frozen = m.PI.utc("2026-11-12T00:00:00Z")
+            Path(str(disk) + ".clock").write_text(
+                json.dumps(
+                    {"base_utc": "2026-11-12T00:00:00Z", "last_guest_utc": None, "boots": True}
+                )
+            )
+            with self.assertWarns(RuntimeWarning):
+                self.assertEqual(m.overlay_clock(disk, frozen), frozen)
+
+    def test_clock_inprocess_reboot_keeps_vm_rtc(self):
+        state = m.PI.init_state("clock-test")
+        state["clock"] = {"last_time_at_stop_utc": "2026-11-12T02:00:00Z", "gap_s": 60}
+        argv = m.PI.build_argv(state, "ci", "overlay.qcow2", "/tmp/clock-fixture", display="off")
+        self.assertIn("base=2026-11-12T02:01:00,clock=vm", argv[argv.index("-rtc") + 1])
+
+    def test_clock_capture_not_before_known_base(self):
+        with tempfile.TemporaryDirectory() as td:
+            disk = self.clock_sidecar(td)
+            base = m.PI.utc("2026-11-12T01:00:00Z")
+            m.overlay_clock(disk, base)
+            m.overlay_clock(disk, base, guest_utc="2026-11-12T00:10:00Z")
+            self.assertEqual(
+                json.loads(Path(str(disk) + ".clock").read_text())["last_guest_utc"],
+                "2026-11-12T01:00:00Z",
+            )
+
+    def test_clock_capture_preserves_previous_rtc(self):
+        with tempfile.TemporaryDirectory() as td:
+            disk = self.clock_sidecar(td)
+            m.overlay_clock(disk, m.PI.utc("2026-11-12T01:00:00Z"))
+            m.overlay_clock(
+                disk, m.PI.utc("2026-11-12T00:00:00Z"), guest_utc="2026-11-12T00:10:00Z"
+            )
+            self.assertEqual(
+                json.loads(Path(str(disk) + ".clock").read_text())["base_utc"],
+                "2026-11-12T01:00:00Z",
+            )
+
+    def test_clock_pipeline_late_resume_uses_new_window(self):
+        rc, rows, _ = self.pipeline(resume=True, resume_last="2026-11-12T02:00:00Z")
+        self.assertEqual(rc, 0)
+        row = next(r for r in rows if r["step"] == "clock")
+        self.assertIn("2026-11-12T02:01:00Z", row["detail"])
+
 
 def mutants():
     """In-memory, authored-source mutations; two independent test methods per rule."""
@@ -881,6 +1089,25 @@ def mutants():
     original = m
     source = SRC.read_text()
     cases = [
+        (
+            "clock-advance",
+            "base = max(base, last + timedelta(seconds=60) if last else frozen)",
+            "base = base",
+        ),
+        (
+            "clock-save",
+            "last = max(PI.utc(guest_utc), base, last or base)",
+            "last = PI.utc(guest_utc)",
+        ),
+        ("clock-high-water", "base = max(frozen, base)", "base = frozen"),
+        (
+            "clock-window",
+            'rtc_base - timedelta(seconds=state["clock"]["gap_s"])',
+            'frozen - timedelta(seconds=state["clock"]["gap_s"])',
+        ),
+        ("clock-boots", 'data["boots"] += 1', 'data["boots"] += 0'),
+        ("clock-warning", "if resume or path.exists():", "if False:"),
+        ("clock-capture", "overlay_clock(clone, frozen, guest_utc=utc.stdout.strip())", "pass"),
         ("power-step", "power = power_fix(g)", 'power = {"ok": True, "values": {}, "errors": []}'),
         ("power-indices", "if ac != 0 or dc != 0:", "if False:"),
         (

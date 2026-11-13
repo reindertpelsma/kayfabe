@@ -3,6 +3,8 @@
 """One proprietary-image pipeline: verified unpack, offline overlay, identity/GPU checks,
 interactive app evidence, and shutdown. STATUS: DESIGN-ONLY, 2026-11-13; unified
 pipeline is not hardware-qualified. Measured predecessor facts: traces/hwrun_20261113/README.md.
+A fresh overlay uses the frozen RTC; --resume advances its .clock sidecar across clean
+stops and verifies against that derived base. In-process guest reboots keep clock=vm.
 No window-exists passes. No authentication, runtime downloads or binary reverse engineering.
 """
 import argparse
@@ -17,7 +19,9 @@ import sys
 import tempfile
 import time
 import uuid
+import warnings
 from contextlib import ExitStack
+from datetime import timedelta
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -981,14 +985,43 @@ def app_classification(app):
     return ("LAUNCH_ONLY", "unqualified") if app.get("status") == "LAUNCH_ONLY" else ("FAIL", "app")
 
 
+def overlay_clock(overlay, frozen, guest_utc=None, resume=False):
+    """Persist the RTC base, monotonic guest high-water mark and start counter."""
+    path = Path(str(overlay) + ".clock")
+    try:
+        data = json.loads(path.read_text())
+        base = PI.utc(data["base_utc"])
+        last = PI.utc(data["last_guest_utc"]) if data["last_guest_utc"] else None
+        if type(data["boots"]) is not int or data["boots"] < 0:
+            raise ValueError("invalid boots")
+    except (OSError, ValueError, TypeError, KeyError, PI.PropError):
+        if resume or path.exists():
+            warnings.warn(
+                "Overlay clock missing/corrupt: frozen fallback", RuntimeWarning, stacklevel=2
+            )
+        data, base, last = {"boots": 0}, frozen, None
+    base = max(frozen, base)
+    if guest_utc is None:
+        base = max(base, last + timedelta(seconds=60) if last else frozen)
+        data["boots"] += 1
+    else:
+        last = max(PI.utc(guest_utc), base, last or base)
+    data.update(base_utc=PI.fmt(base), last_guest_utc=PI.fmt(last) if last else None)
+    temporary = Path(str(path) + ".tmp")
+    temporary.write_text(json.dumps(data))
+    temporary.replace(path)
+    return base
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--zip", help="Private image archive already present locally; no downloads")
     ap.add_argument("--dir", required=True, help="Verified unpack directory")
-    ap.add_argument("--work", required=True, help="New, empty disposable run directory")
+    ap.add_argument("--work", required=True, help="Fresh directory; --resume reuses a stopped run")
     ap.add_argument("--out", required=True)
     ap.add_argument("--qemu", required=True)
     ap.add_argument("--stop-utc")
+    ap.add_argument("--resume", action="store_true", help="Manual: reuse stopped --work; no --zip")
     ap.add_argument("--flags", default=str(HERE / "kf3_flags.sample.env"))
     ap.add_argument("--broker", default=str(HERE.parents[2] / "broker/nvkvm-display-broker"))
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
@@ -1026,6 +1059,8 @@ def main(argv=None):
         print(step, status, evidence, str(detail)[:200], flush=True)
 
     try:
+        if a.resume and a.zip:
+            raise ValueError("--resume needs the verified unpacked --dir, without --zip")
         names = list(CHECKS) if a.apps == "all" else a.apps.split(",")
         # Preserve the measured predecessor's app spelling as an input alias only.
         names = ["wukong" if n == "blackmyth" else n for n in names]
@@ -1054,20 +1089,20 @@ def main(argv=None):
                 raise ValueError("Refusing backwards stop-time override")
             state["clock"]["last_time_at_stop_utc"] = PI.fmt(PI.utc(a.stop_utc))
         work = Path(a.work).resolve()
-        work.mkdir(parents=True, exist_ok=False)
-        (work / "run").mkdir()
-        PI.restore_files(state, str(work))
-        (work / "state.json").write_text(json.dumps(state))
-        record("clock", "PASS", "RTC stop + seed gap: " + PI.boot_clock(state, "ci").isoformat())
-        # Immutable backing alias; neither base pathname is ever booted writable.
+        work.mkdir(parents=True, exist_ok=a.resume)
+        (work / "run").mkdir(exist_ok=a.resume)
         base = work / "image.base.qcow2"
-        base.symlink_to((Path(a.dir) / "image.qcow2").resolve())
         clone = work / "run/clone.qcow2"
-        made = run(
-            ["qemu-img", "create", "-q", "-f", "qcow2", "-b", str(base), "-F", "qcow2", str(clone)]
-        )
-        if made.returncode:
-            raise ValueError("Overlay creation failed: " + made.stderr)
+        if a.resume:
+            if not clone.is_file() or base.resolve() != (Path(a.dir) / "image.qcow2").resolve():
+                raise ValueError("Resumed overlay/base missing or belongs to another image")
+        else:
+            PI.restore_files(state, str(work))
+            base.symlink_to((Path(a.dir) / "image.qcow2").resolve())
+            create = ["qemu-img", "create", "-q", "-f", "qcow2"]
+            made = run(create + ["-b", str(base), "-F", "qcow2", str(clone)])
+            if made.returncode:
+                raise ValueError("Overlay creation failed: " + made.stderr)
         info = run(["qemu-img", "info", "--output=json", str(clone)])
         if (
             info.returncode
@@ -1075,6 +1110,18 @@ def main(argv=None):
         ):
             raise ValueError("Overlay backing-file mismatch")
         record("overlay", "PASS", "throwaway clone of image.base.qcow2; base not booted")
+        if a.resume:
+            for artifact in ("swtpm.sock", "run/broker.sock", "run/broker.fifo"):
+                (work / artifact).unlink(missing_ok=True)
+        frozen = PI.boot_clock(state, "ci")
+        rtc_base = overlay_clock(clone, frozen, resume=a.resume)
+        # Same adjusted copy feeds both QEMU's RTC and compare()'s 1800-second window.
+        state["clock"]["last_time_at_stop_utc"] = PI.fmt(
+            rtc_base - timedelta(seconds=state["clock"]["gap_s"])
+        )
+        (work / "state.json").write_text(json.dumps(state))
+        kind = "resumed" if a.resume else "fresh"
+        record("clock", "PASS", f"RTC base {PI.fmt(rtc_base)} ({kind} overlay)")
         env = dict(os.environ)
         for line in Path(a.flags).read_text().splitlines():
             line = line.strip()
@@ -1261,6 +1308,13 @@ def main(argv=None):
                         classification,
                     )
             finally:
+                try:
+                    utc = g.ps("(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')")
+                    if utc.returncode:
+                        raise ValueError("Guest UTC unavailable before shutdown")
+                    overlay_clock(clone, frozen, guest_utc=utc.stdout.strip())
+                except (PI.PropError, ValueError, OSError, subprocess.SubprocessError) as exc:
+                    record("clock-save", "WARN", "Guest clock not saved: " + str(exc))
                 try:
                     g.ps("Stop-Computer -Force", timeout=30)
                 except (OSError, subprocess.TimeoutExpired):

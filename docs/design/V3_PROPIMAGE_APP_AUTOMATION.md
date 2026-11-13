@@ -19,7 +19,8 @@ reuse. The immutable backing alias is `image.base.qcow2`; only its new qcow2 ove
 is passed to QEMU. CI mode is fixed, with restrict=on, a copied stop-time override
 that cannot move backwards, restored TPM/firmware, the exported KF3 flags, guest SSH
 wait, per-boot GPU fix, blocking identity verification, checks, and shutdown.
-A new empty work directory is required. Started processes are cleaned through an
+Fresh/CI runs require a new empty work directory; manual --resume reuses a fully
+stopped run, as described under Clock below. Started processes are cleaned through an
 ExitStack even on setup errors; no process-name kill sweeps or internet boots exist.
 
 CODE READ: GPU fix examines all NVIDIA display class instances, sets missing
@@ -98,6 +99,37 @@ DOC READ sources (official; consulted in the app lane on 2026-11-13):
 - [Vendor benchmark page](https://store.steampowered.com/app/3132990/).
 - [Microsoft Edge automation](https://learn.microsoft.com/en-us/microsoft-edge/test-and-automation/test-and-automation),
   [UIA InvokePattern](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/invoke-a-control-using-ui-automation).
+
+## Clock
+
+CODE READ (2026-11-13): a fresh overlay uses the frozen reference from the verified
+image state: last_time_at_stop_utc + gap_s. CI behavior stays fresh by default.
+Manual `--resume` reuses that work directory's existing overlay and TPM/firmware;
+it refuses --zip and validates the backing image before startup. Fully stop the
+previous run and its helpers first; this option does not attach to a running VM.
+Stale owned socket/FIFO paths are removed after the overlay preflight.
+
+CODE READ: `run/clone.qcow2.clock` is an atomically replaced JSON sidecar with
+base_utc (last selected RTC base), last_guest_utc (recorded guest UTC high-water
+mark, initially null), and boots (recorded start attempts). Startup uses
+max(frozen reference, prior selected base, last_guest_utc + 60 seconds when known).
+Before clean shutdown, SSH reads `(Get-Date).ToUniversalTime()` and updates the
+sidecar without lowering any known timestamp. A failed read/write is visible as
+clock-save WARN and does not prevent shutdown. No host wall clock is substituted.
+
+CODE READ: only the working state copy's last_time_at_stop_utc is adjusted so its
+normal gap produces the selected RTC base. Both QEMU argv and identity comparison
+use that copy, retaining the existing base <= guest UTC <= base+1800 seconds
+verification window for resumed overlays. The immutable image state is unchanged.
+An in-process Windows reboot continues to use the running QEMU RTC (clock=vm);
+sidecar advancement happens only when this runner starts/stops QEMU.
+
+CODE READ: a corrupt sidecar or an unexpectedly missing sidecar on --resume emits
+a warning and falls back to the frozen reference, as the owner requested. Normal
+absence on a fresh clone is expected. INFERRED limitation: fallback cannot recover
+lost disk history, and an abrupt stop cannot supply a clean-shutdown guest sample;
+nondecreasing guarantees apply to valid recorded timestamps, not unknown history.
+Resume/clock behavior has GPU-free fixtures and mutants, not a real guest proof.
 
 ## Deviations from a default install
 
