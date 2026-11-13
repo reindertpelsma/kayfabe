@@ -684,43 +684,14 @@ jobs:
       # is zero-sized and cannot carry an address by construction, and
       # `PhantomData<*mut ()>` is the standard !Send marker (kayfabe-rt/src/lock.rs).
       #
-      # Exit-code polarity: same trap as the gate above. `grep` exits 1 on NO match,
-      # which is the SUCCESS case here, so every grep ends in `|| true` and the
-      # verdict is an `if [ -n … ]` over captured output. Note the loop body uses
-      # `if`/`fi` rather than `[ -n "$hits" ] && …`, because the `&&` form returns 1
-      # on the common (clean) path and would abort the step under `set -e`.
-      - name: Host-pointer gate (no *mut/*const/NonNull/transmute outside *_unsafe.rs)
+      # ★ 2026-11-13 (security review 1, F-01 / S1-02): the logic moved to Python and widened to
+      # pointer-to-integer casts (`.as_mut_ptr() as u64`) and address-of forms, which the
+      # type-name grep could not see. Known positives and >= 2 killers per mutant are checked here.
+      - name: Host-pointer gate (no host address outside *_unsafe.rs)
         run: |
-          offenders=""
-          while IFS= read -r f; do
-            hits=$(sed -e 's|//.*||' -e 's|PhantomData<[^>]*>||g' "$f" \
-                   | grep -nE '\*mut |\*const |NonNull|transmute' || true)
-            if [ -n "$hits" ]; then
-              offenders="$offenders$(echo "$hits" | sed "s|^|$f:|")
-          "
-            fi
-          done < <(find . -name '*.rs' -not -name '*_unsafe.rs' \
-                     -not -path './archive/*' -not -path './third_party/*' \
-                     -not -path './crates/kayfabe-doorbell/*' \
-                     -not -path './target/*' -not -path './*/target/*' \
-                     -not -path './mutants.out/*')
-          if [ -n "$(echo "$offenders" | tr -d '[:space:]')" ]; then
-            echo "$offenders"
-            echo ""
-            echo "★ HOST-POINTER BREACH — gate C's second half (l1_os_shell.md §9.3)."
-            echo "A host CPU address type appears in a file that is not named"
-            echo "*_unsafe.rs. A raw pointer is unsafe to HOLD even in safe code, and"
-            echo "the whole audit claim of decision #33 is that host addresses do not"
-            echo "leave \`kayfabe-linux-raw\`'s *_unsafe.rs files. Two fixes, no third:"
-            echo "  - real pointer code -> move it into a *_unsafe.rs module, behind a"
-            echo "    bounded type (MappedRegion / RegionView / VolatileRegion). It must"
-            echo "    not appear in any signature reachable from outside the crate."
-            echo "  - a comment or doc  -> whole-line comments are already stripped, so"
-            echo "    a hit means it is on a CODE line. Move the prose to its own line."
-            echo "Never widen the pattern and never add an allowlist: the exception is"
-            echo "lexical (PhantomData is a ZST), never editorial."
-            exit 1
-          fi
+          python3 -B scripts/ci/test_host_pointer_gate.py
+          python3 -B scripts/ci/host_pointer_gate_mutants.py > /dev/null
+          python3 -B scripts/ci/host_pointer_gate.py
       # ★ The BRIDGE-EXCLUSIVITY gate (docs/design/gsp_core_bridge.md §1.2, which asks for
       # it in as many words: "It is the ONLY crate in the tree permitted to name both
       # `RpcCommand` and `RmEvent`. That is a one-line CI grep and should be added as one").

@@ -1196,6 +1196,47 @@ impl HostRm {
         self.raw_control_status(object, cmd, payload)
     }
 
+    /// ★ Security review 1, F-01 (2026-11-13): the control ioctl for a parameter block that itself
+    /// carries a userspace pointer (the PRECOMP regops read): the field at `inner_at` of `params`
+    /// points at `inner` for this one call. Both addresses are minted, bounded and scrubbed by
+    /// [`Indirect::nested`](kf_linux_raw::Indirect::nested) inside `kf-linux-raw`; no host address
+    /// is ever written by safe code. `params` is sent at the host's layout, exactly as given.
+    ///
+    /// # Errors
+    /// The host's status, by name; [`RmError::Other`] when the inner pointer field does not fit
+    /// inside `params` (refused before any ioctl).
+    pub(crate) fn raw_control_nested(
+        &self,
+        object: u32,
+        cmd: u32,
+        params: &mut [u8],
+        inner_at: usize,
+        inner: &mut [u8],
+    ) -> Result<(), RmError> {
+        let mut arg = [0u8; Nvos54Parameters::SIZE];
+        Nvos54Parameters {
+            h_client: self.client.raw(),
+            h_object: object,
+            cmd,
+            flags: 0,
+            params: 0,
+            params_size: u32::try_from(params.len())
+                .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_CONTROL as u8, arg.len())
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+        let mut patches = [Indirect::nested(16, params, inner_at, inner)
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?];
+        self.ctl
+            .ioctl(req, &mut arg, &mut patches)
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos54Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
+        status_check(out.status)
+    }
+
     /// The control ioctl with `payload` exactly as given; the RM status it wrote, unmapped.
     fn raw_control_status(
         &self,
