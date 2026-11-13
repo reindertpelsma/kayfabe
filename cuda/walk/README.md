@@ -33,6 +33,12 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 | `run_on_box.sh` | ships the source out of a commit, builds and runs, returns a log |
 | `evidence/` | dated run logs, each naming its GPU and driver |
 
+> **2026-11-13 addition (security review 3 F-5):** the committed `kf_walk.ptx` is now rebuilt with the pinned
+> NVRTC 12.2.140 and compared byte for byte on every push (CI job `ptx`, `scripts/ci/walk_ptx_repro.py`), and
+> `make check-cpu` runs this file's device half on a CPU (g++, no GPU) over `corpus/` against the reference
+> leaves (`kf_cpu_walk.cpp`; `./kf_cpu_walk --dump` prints every run for an old-vs-new identity diff). The
+> parallel walk itself still needs a GPU (`./kf_tests`).
+>
 > **2026-10-31 correction (test port), folded above the one it corrects:** the Rust half is back, as a
 > TEST-ONLY decoder derived from ogkm: `crates/kf-cuda/tests/gmmu_ver2/` (`reference.rs`, with every field
 > cited to a `file:line` re-read at 580.159.04). `corpus.rs` there decodes `corpus/corpus.bin` and
