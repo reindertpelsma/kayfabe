@@ -1,84 +1,100 @@
-STATUS: DESIGN-ONLY, 2026-11-13. GPU-free implementation; no app behavior qualified by this lane.
+STATUS: DESIGN-ONLY, 2026-11-13. Unified code is GPU-free tested, not hardware-qualified.
 
-# Proprietary-image app automation
+# One proprietary-image check pipeline
 
-CODE READ: `scripts/bench/windows/propimage_apps.py` replaces coordinate calibration and
-window-exists passes with per-run evidence collection. `scripts/ci/test_propimage_apps.py`
-uses hand-authored fixtures, not captured vendor output. No third-party code was copied or run.
+CODE READ: `scripts/bench/windows/propimage_check.py` is the single check module and
+`scripts/ci/test_propimage_check.py` its single test file. The former app module is
+folded into it. Image packaging and identity derivation remain in the existing
+`scripts/bench/windows/propimage.py` library; this is not a second check pipeline.
 
-INFERRED hypothesis, falsifier first: if a stale file, launch-only record, API failure, or old
-finished label earns a pass, the verdict contract is false. The offline tests and in-memory
-mutants exercise these counterexamples; they cannot establish that an app did GPU work.
+MEASURED predecessor evidence (2026-11-13, RTX 4090 host, revision `439ff38e7`):
+`traces/hwrun_20261113/README.md`, section B, records a new display device instance
+without EnableGpuFirmware, Code 43 before the key was set, then seed GPU UUID with
+580.88 after restart. swtpm 0.6.3 could not read TPM state; swtpm/libtpms 0.10.1 worked.
+This does not qualify the unified pipeline, which has not run on a real guest.
 
-CODE READ: each guest check writes `C:\kfapps\<random-run-id>\<app>\result.json` (UTF-8 JSON).
-The host pulls that file and allowlisted `uia.json` / `model.step` into
-`<out>/<app>/<run-id>/`, parses local files, and writes `verdict.json` and `result.tsv`.
-Each pass records `FILE` or `UIA`; unqualified checks report `NONE` and fail closed.
-SCREEN verdicts are permitted by the owner's refinement but are not implemented here.
-Screenshots alone do not establish successful work.
+CODE READ: the pipeline checks swtpm >= 0.10 before unpack or VM startup. It preserves
+SHA256 verification of both archive members and verifies those hashes on directory
+reuse. The immutable backing alias is `image.base.qcow2`; only its new qcow2 overlay
+is passed to QEMU. CI mode is fixed, with restrict=on, a copied stop-time override
+that cannot move backwards, restored TPM/firmware, the exported KF3 flags, guest SSH
+wait, per-boot GPU fix, blocking identity verification, checks, and shutdown.
+A new empty work directory is required. Started processes are cleaned through an
+ExitStack even on setup errors; no process-name kill sweeps or internet boots exist.
 
-CODE READ: FILE checks bind the app and random run id, require guest-relative modification
- time strictly after start and no later than completion, matching nonzero byte length,
-API success and recognizable STEP exchange structure with entity data. Host wall time is
-not compared with the image's deliberately shifted clock. This is a structural check,
-not a complete ISO STEP validator or a hostile-guest attestation.
+CODE READ: GPU fix examines all NVIDIA display class instances, sets missing
+EnableGpuFirmware=1, restarts NVIDIA display devices when keys changed, and requires
+one nvidia-smi UUID exactly equal to the seed UUID. A successful command alone or
+an arbitrary GPU UUID cannot pass that step. Runtime SSH key material is used only
+for the image's local guest transport; this lane read no live image state or keys.
 
-| App | Chosen path and evidence | Saved artifact / missing qualification |
+INFERRED falsifiers, stated before qualification: old swtpm accepted; a second
+instance left unfixed; wrong GPU UUID accepted; a stale/unfinished benchmark or
+unchanged launcher screen passed; wlms shutdown blamed on an app; an existing
+finished label treated as new work; or an error path leaving an owned VM running.
+Offline regressions and mutations exercise these counterexamples. They cannot
+establish real guest behavior, GPU rendering or the availability of UI controls.
+
+CODE READ: per-run guest evidence lives in `C:\kfapps\<run-id>\<app>`. The host pulls
+allowlisted JSON, STEP, benchmark HTML and PNG files to `<out>/<app>/<run-id>/`.
+Metadata JSON is published atomically. Host verdicts bind app/run identity and
+use guest-relative start/end/mtime, nonzero matching byte length and parseable
+content. `result.json` and `result.md` record verdict, evidence kind and class;
+app passes identify FILE or UIA. SCREEN remains a supported table label but no
+screenshot-only automatic work verdict is implemented. A window is LAUNCH_ONLY,
+never PASS. Aggregate success requires every requested row to pass.
+
+| App | Path / evidence | Qualification boundary |
 |---|---|---|
-| SolidWorks 2026 | CODE/DOC READ: public COM API `OpenDoc6`, `ActivateDoc3`, `ClearSelection2`, `SaveAs`; implemented export probe | CODE READ: `model.step` plus API outcome in `result.json`; FILE means sample opened and STEP export succeeded, **not** rotation, GPU rendering, or performance. INFERRED: installed sample directory, COM activation, licensing and export need guest proof. |
-| eDrawings | DOC READ: public OLE/ActiveX API exposes OpenDoc and Save; INFERRED: a native ActiveX host is preferable once installed control registration and event handling are known | CODE READ: current adapter collects `uia.json`, no default work pass. INFERRED: hardware agent must identify sample, registered control/version, load-success event and saved format; do not pretend standalone viewer is an attachable SolidWorks COM server. |
-| 3DMark (activated edition unspecified) | DOC READ: Professional has CLI automation and XML export; activation alone does not establish Professional. INFERRED: choose CLI if entitlement is confirmed, otherwise collect UIA Run/Save/result controls | CODE READ: current adapter collects `uia.json`, no default work pass. DOC READ: CLI supports `--definition`, `--out`, `--export` and offline `--online=off`. INFERRED: need actual edition, installed definition, fresh `.3dmark-result` and exported XML with score/status schema before implementing its parser. No unpacking of undocumented native results. |
-| Resolve 21 free | DOC READ: external scripting is Studio-only; console access is distinct. INFERRED: UIA may drive a prepared local project and render queue, or invoke an in-app console if the exact free build exposes it | CODE READ: current adapter collects `uia.json`, no default work pass. INFERRED: need project/timeline, render preset, completion controls and a new media file; validate media streams/frame count with an available trusted parser, not just size or extension. |
-| Superposition Basic | INFERRED: Basic UIA result exposure is unverified on the guest. DOC READ: documented CLI automation and CSV reports are Pro-only. INFERRED: collect UIA Run, progress and finished/results controls for Basic | CODE READ: current adapter collects `uia.json`, no default work pass. INFERRED: if Basic cannot save machine-readable results, an observed new progress-to-finished transition can qualify UIA evidence after controls are measured. A renderer log or “Benchmark stopped” alone is insufficient. |
-| Black Myth Wukong benchmark via Steam | DOC READ: vendor Steam app id 3132990 is the benchmark tool. CODE READ: only launches the existing desktop shortcut, never drives Steam; records fresh candidate game process ids separately as `launched` | CODE READ: launch-only JSON is never a work pass. INFERRED: candidate process names and shortcut target need hardware confirmation; no public result-file schema was established. Hardware agent should supply any result file and its provenance for a parser; Steam stays signed out. |
-| Edge | DOC READ: Microsoft supports WebDriver/Playwright/Puppeteer automation; INFERRED: prefer WebDriver plus a local HTML workload and saved DOM assertions when a matching driver is available | CODE READ: current adapter collects `uia.json`, no default work pass. INFERRED: installed driver/runtime are unknown; do not download at check time. A local page title, PDF header or screenshot alone would not prove GPU work. Need a defined local rendering workload and semantic completion assertion. |
+| SolidWorks | CODE READ: default LAUNCH_ONLY; optional `--solidworks-export` uses public COM OpenDoc6, ActivateDoc3 and SaveAs, then checks `model.step` entity data and API success (FILE). | MEASURED predecessor title: SOLIDWORKS Design Standard 2026 SP5.2 - Academic Use Only. INFERRED: installed samples/COM export are unverified; STEP export is application work, not proof of GPU rendering. |
+| Resolve 21 free | CODE READ: default LAUNCH_ONLY; optional collected UIA Run/status plan requires a new progress-to-finished transition (UIA). | MEASURED predecessor reached Project Manager. DOC READ: external scripting is Studio-only. INFERRED: free-build console exposure, a local project, rendering controls and decodable media output remain unverified. |
+| 3DMark | CODE READ: default LAUNCH_ONLY; optional `--experiment-3dmark-accessibility` adds the Chromium accessibility switch only to its launch. | MEASURED predecessor UIA exposed two panes. INFERRED: the switch is unproven and may do nothing; it is not an automation fix. DOC READ: documented CLI/XML export requires Professional; activation alone does not establish that edition. |
+| Superposition Basic | CODE READ: default LAUNCH_ONLY; explicit `--superposition-run` derives the RUN click from the UIA window rectangle using the measured relative anchor. It removes the old log before launch and captures before/result screens. | MEASURED predecessor Qt launcher had no UIA children. `traces/hwrun_20261113/propimage/results/log.html` records running then stopped; `propimage/shots/sp_after.png` is its result screen. SAVE was missed after launcher closure; no saved score report is claimed. |
+| eDrawings | CODE READ: default LAUNCH_ONLY and UIA dump; optional collected UIA plan. | DOC READ: public OLE/ActiveX OpenDoc/Save exist. INFERRED: installed control registration, successful-load event, sample and native saved-format parser remain unverified. |
+| Wukong | CODE READ: launch existing desktop shortcut only; report fresh candidate game processes, never drive Steam or produce a work pass. | MEASURED predecessor showed Steam's launch dialog, not the benchmark. INFERRED: candidate process names and any native benchmark result-file schema remain unverified. Steam stays signed out. |
+| Edge | CODE READ: default LAUNCH_ONLY and UIA dump; optional collected UIA plan. | DOC READ: Microsoft supports WebDriver automation. INFERRED: matching driver and a defined local workload with semantic completion assertions remain unverified; no runtime downloads. |
 
-INFERRED per-app falsifiers, before any hardware experiment: SolidWorks export fails or has no
-entities; eDrawings Save precedes successful load; 3DMark saves an invalid/incomplete result;
-Resolve produces no decodable frames; Superposition displays an old finished result; Wukong
-starts Steam alone or a pre-existing process is counted; Edge loads its window but never
-finishes the defined local workload. Each falsifies the respective proposed approach.
+CODE READ: Superposition FILE evidence requires a fresh log with exactly one ordered
+running/stopped interval, distinct before/result PNGs, and local tesseract output
+with a positive named score plus ordered positive min/avg/max FPS. Log alone,
+renderer identification, arbitrary changed pixels or a screenshot alone cannot
+pass. Missing OCR is a harness prerequisite error, not an app failure. Native log
+and screens remain saved. No score is guessed and no successful SAVE is claimed.
+INFERRED: rectangle fractions and the conservative OCR layout parser need real-guest
+qualification; resizing, DPI or another launcher version may invalidate them.
 
-CODE READ: optional `run --plans FILE` accepts a JSON map keyed by app (except Wukong).
-Each plan has `run` and `status` selectors with `id`, `name`, `type` (e.g. `ControlType.Text`),
-`running`, `finished` exact text, and a bounded `timeout` in seconds. Empty selector name
-allows changing status text; id/type and an unambiguous process-scoped match remain required.
-No built-in plan invents app control names. A supplied plan invokes exactly one Run button,
-requires a non-running/non-finished initial state, then running, then finished. UIA observations
-are saved in JSON and independently checked against the host's plan. No coordinates or
-keystrokes are injected. This simple plan does not yet drive menus, Save dialogs or render setup.
+CODE READ: `--plans FILE` accepts collected selectors (AutomationId, optional Name,
+ControlType) for one Run control and a stable status control, exact running/finished
+text and a bounded timeout. The process-scoped selector must be unambiguous; old
+running/finished states are rejected. The bounded UIA dump supports discovery.
+INFERRED: use UIA fallback only after establishing that usable native saving is
+unavailable and qualifying the selected controls' work semantics. The generic plan
+does not prepare projects, configure workloads or drive Save dialogs.
 
-INFERRED: UIA fallback is appropriate only after proving the selected app cannot save usable
-results and qualifying the control semantics. An arbitrary plan is not release certification.
-No SCREEN fallback is authorized by code without an app-specific work assertion.
+MEASURED predecessor licence event: `traces/hwrun_20261113/spec/enscape_events.txt`
+records System 1074 from wlms.exe about 62 minutes after boot (the evaluation image).
+CODE READ: per-boot event queries record that event as class harness, never app FAIL.
+Before each app, a monotonic boot-age guard warns and marks NOT_RUN when its maximum
+budget would cross 55 minutes. Lost guest transport is harness/unknown rather than
+an invented app failure. Events are queried again after each app and saved locally.
+INFERRED limitation: if shutdown cuts SSH before event retrieval, the specific wlms
+cause remains unverified; inspect the persisted Windows event log on a later boot.
 
-INFERRED hardware handoff: run one unconfigured adapter to collect `uia.json` in the
-interactive scheduled-task session. Collect another tree during work and at completion,
-including Run/Save controls' AutomationId, Name, ControlType, supported patterns and owning
-process id. Establish launcher/child process ownership, locale, default directories, sample
-availability, and whether the result control exposes Name, ValuePattern or TextPattern.
-The supplied dump is capped at 2048 emitted elements; its PowerShell execution is unproven.
-Do not enumerate authentication UI, credentials, or the whole desktop. If no usable controls
-exist, report that limitation instead of making up a selector or pixel coordinate.
+INFERRED hardware handoff: use a fresh overlay with compatible swtpm/libtpms, first
+verify exact seed GPU UUID after per-instance repair, then qualify each optional
+work path separately. Collect UIA before/during/after, owned process/launcher links,
+locale/DPI, native saved artifacts and freshness metadata. Never dump credentials,
+authentication controls, proprietary binary internals, or the whole desktop UIA tree.
+No disassembly/decompilation or output derived from it is used or stored here.
 
-CODE READ: unconfigured probes leave apps open in the disposable VM for hardware inspection;
-checks stop/unregister only their own scheduled task, never process-name kill sweeps.
-Normal runs shut down their own VM through the existing launcher; this lane ran no VM.
-
-DOC READ sources (official, consulted 2026-11-13):
+DOC READ sources (official; consulted in the app lane on 2026-11-13):
 
 - [SolidWorks SaveAs API](https://help.solidworks.com/2026/English/api/sldworksapi/SOLIDWORKS.Interop.sldworks~SOLIDWORKS.Interop.sldworks.IModelDocExtension~SaveAs.html).
-- [eDrawings API](https://help.solidworks.com/2026/english/eDrawings/t_Application_Programming_Interface.htm),
-  [control methods](https://help.solidworks.com/2026/english/api/emodelapi/eDrawings.Interop.EModelViewControl~eDrawings.Interop.EModelViewControl.IEModelViewControl_methods.html).
+- [eDrawings API](https://help.solidworks.com/2026/english/eDrawings/t_Application_Programming_Interface.htm).
 - [UL edition features](https://support.benchmarks.ul.com/support/solutions/articles/44002132667-3dmark-features-by-edition),
   [CLI guide](https://support.benchmarks.ul.com/support/solutions/articles/44002145411-run-3dmark-benchmarks-from-the-command-line).
-- [Resolve reference manual](https://documents.blackmagicdesign.com/UserManuals/DaVinciResolveReferenceManual.pdf), General / External Scripting Using.
+- [Resolve reference manual](https://documents.blackmagicdesign.com/UserManuals/DaVinciResolveReferenceManual.pdf), External Scripting Using.
 - [Superposition manual](https://benchmark.unigine.com/docs/superposition/Superposition_Benchmark_User_Manual.pdf), Automation (Pro only).
-- [Vendor benchmark page on Steam](https://store.steampowered.com/app/3132990/).
+- [Vendor benchmark page](https://store.steampowered.com/app/3132990/).
 - [Microsoft Edge automation](https://learn.microsoft.com/en-us/microsoft-edge/test-and-automation/test-and-automation),
-  [UIA FindAll](https://learn.microsoft.com/en-us/dotnet/api/system.windows.automation.automationelement.findall),
-  [InvokePattern](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/invoke-a-control-using-ui-automation).
-
-INFERRED owner/coordinator decisions: obtain actual 3DMark edition; approve the narrower
-SolidWorks export probe or require a separate rendering workload; supply licensed local
-samples/projects; arrange per-app hardware collection before treating any path as qualified.
+  [UIA InvokePattern](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/invoke-a-control-using-ui-automation).
