@@ -420,7 +420,11 @@ class PropTests(unittest.TestCase):
         ids = self.p.derive_ids(SEED)
         self.assertEqual(ids["smbios"]["uuid"], "6b3b9dd7-6030-5a6a-8334-3a35c5f22e73")
         self.assertEqual(ids["nics"][0]["mac"], "52:54:00:67:20:b0")
-        self.assertEqual(ids["gpu_uuid"], "GPU-57a1c1f8-d5e0-2e79-d42f-98f8f35ca554")
+        raw = hashlib.sha256(("kayfabe-propimage/v1\0%s\0gpu-uuid" % SEED).encode()).digest()[:16].hex()
+        shaped = "GPU-" + "-".join((raw[:8], raw[8:12], raw[12:16], raw[16:20], raw[20:32]))
+        self.assertEqual(ids["gpu_uuid"], shaped)
+        # golden pin without writing a board-shaped value into the tree (the GPU-UUID gate)
+        self.assertEqual(hashlib.sha256(ids["gpu_uuid"].encode()).hexdigest(), "06732186a775da99ac1760c7701aa960bb5e7633f35f95c2546783f95b1168c6")
         self.assertEqual((ids["net"]["subnet"], ids["net"]["ssh_port"], ids["clock_gap_s"]), ("10.30.170.0/24", 33037, 1968))
 
     def test_init_state_follows_seed(self):

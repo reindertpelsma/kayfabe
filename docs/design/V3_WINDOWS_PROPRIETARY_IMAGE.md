@@ -49,7 +49,7 @@ independent of `win_vm.sh` (no source edit of a file other PRs change). Whether 
 
 ## 3. Clock: the observed anomaly and a hypothesis
 
-MEASURED (`/workspace/bench/specvast_20261112/licence_probes/`, gate overlay of an LTSC eval image, offline, kf3 off):
+MEASURED on 2026-11-12 (`/workspace/bench/specvast_20261112/licence_probes/`, gate overlay of an LTSC eval image, offline, kf3 off):
 
 | RTC base given | guest date at ssh-up | file |
 |---|---|---|
@@ -100,8 +100,8 @@ Zip: `image.qcow2`, `state.json`, `manifest.json`; all STORED; exactly these thr
 
 Proposed seed `kayfabe-prop-v1` derives (from `propimage.py ids kayfabe-prop-v1`): SMBIOS UUID
 `6b3b9dd7-6030-5a6a-8334-3a35c5f22e73`, serial `KFA9113E2E07`, baseboard `KFB2635892EF6`, chassis `KFC3718C38858`,
-MAC `52:54:00:67:20:b0`, disk serial `KFD755F9C3D05A4`, GPU UUID `GPU-57a1c1f8-d5e0-2e79-d42f-98f8f35ca554`,
-slirp `10.30.170.0/24`, ssh port 33037, clock gap 1968 s. (MEASURED: output of the tool.)
+MAC `52:54:00:67:20:b0`, disk serial `KFD755F9C3D05A4`, GPU UUID (the `gpu_uuid` field of that command; the value is not repeated, it identifies no board but the gate forbids the shape),
+slirp `10.30.170.0/24`, ssh port 33037, clock gap 1968 s. (MEASURED 2026-11-12: output of the tool.)
 Derivation is `sha256("kayfabe-propimage/v1\0<seed>\0<field>")` per field; changing the domain string or a field name changes every id.
 
 ## 5. Launch modes and the first check
@@ -111,7 +111,7 @@ argv, the swtpm argv and the clone command. Differences by mode:
 
 | mode | qemu | display and input | network | clock | disk |
 |---|---|---|---|---|---|
-| setup | distro `/usr/bin/qemu-system-x86_64` (gtk; MEASURED on the PC: 10.2.1 lists gtk, the kf3 build lists only none) | `-vga std -display gtk` on the PC's GNOME session, xhci tablet and keyboard | restrict=off | host real | the image |
+| setup | distro `/usr/bin/qemu-system-x86_64` (gtk; MEASURED on the PC on 2026-11-12: 10.2.1 lists gtk, the kf3 build lists only none) | `-vga std -display gtk` on the PC's GNOME session, xhci tablet and keyboard | restrict=off | host real | the image |
 | install | kf3 qemu | `-vga none`, kf3 GPU with `display=on,gop=on,display-broker=...`, xhci tablet and keyboard (as `windows_broker.sh`) | restrict=off | host real | the image |
 | offline | kf3 qemu | as install | restrict=on | faked | the image |
 | ci | kf3 qemu | broker, or `--display off` | restrict=on | faked | clone (`qemu-img create -b image -F qcow2`) |
@@ -203,7 +203,7 @@ A first pass of about 230 G that needs no owner call on content: `/var/lib/kf-wi
 `qemu-img info` and a grep for references in `scripts/`) plus the regenerable `/root` and `/workspace/bench` build trees (about 45 G).
 Second pass (owner): Oct experiment dirs under `/var/lib` and `/data/*` lanes (several hundred GB). Windows needs: 100..150 G
 sparse for the disk, two compressed backups (the SPEC backup precedent: `winimage` captured 19.1 GB compressed for a 150 GiB disk,
-MEASURED in #300; a Pro disk with the apps will be larger: INFERRED 40..80 GB each), clones are thin overlays until used.
+MEASURED in #300 (draft PR opened 2026-11-07); a Pro disk with the apps will be larger: INFERRED 40..80 GB each), clones are thin overlays until used.
 Deletion needs coordinator approval and a per-path check first.
 
 ## 8. Runbook for the owner's manual install (all sizes UNVERIFIED unless noted)
@@ -239,8 +239,8 @@ Preflight on the PC: GPU lock free and recorded in `/root/prov/PC_ACTIVE.log`, `
 ## 9. Setup-mode launch, measured 2026-11-12 (first real start)
 
 - Windows ISO: `/srv/win-storage/win11x64.iso`, 8,471,603,200 B, official multi-edition en-US, build 26200 (25H2), Windows 11 Pro =
-  image index 6, sha256 `768984706b909479417b2368438909440f2967ff05c6a9195ed2667254e465e3` (MEASURED by the coordinator, pinned here).
-  virtio-win 0.1.302 ISO sha256 `303f7ae4...67949d`, OpenSSH MSI and NVIDIA 580.88 sha256 equal the pins in `win_vm.sh` (MEASURED on the PC).
+  image index 6, sha256 `768984706b909479417b2368438909440f2967ff05c6a9195ed2667254e465e3` (MEASURED by the coordinator on 2026-11-12, pinned here).
+  virtio-win 0.1.302 ISO sha256 `303f7ae4...67949d`, OpenSSH MSI and NVIDIA 580.88 sha256 equal the pins in `win_vm.sh` (MEASURED on the PC on 2026-11-12).
 - Disk bus: virtio-blk with serial from the seed, as in CI. No driver click: `propimage_autounattend.xml.in` lists the virtio-win ISO under
   `PnpCustomizationsWinPE` (`viostor\w11\amd64` on D..K) and stages NetKVM and friends offline. The three CDs (Windows ISO, virtio-win, KFUNATTEND)
   sit on separate q35 AHCI ports; only the Windows ISO has a boot index. (The first start used a separate KFUNATTEND CD whose answer file also ran the OpenSSH install at first logon; since the owner's rule of one way to get SSH in, that is gone: one CD, KFTOOLS, below.) UEFI shows "Press any key to boot from CD or DVD" for a few seconds:
@@ -273,7 +273,7 @@ and a USB disk would hide the ISO9660 filesystem from Windows, so a USB SCSI bri
     {"execute":"device_add","arguments":{"driver":"usb-bot","id":"toolsusb","bus":"xhci.0"}}
     {"execute":"device_add","arguments":{"driver":"scsi-cd","id":"toolscd","bus":"toolsusb.0","drive":"tools0"}}
 
-`query-block` then lists `toolscd` as removable with `tools.iso` inserted (MEASURED). That Windows lists it as a CD drive is UNTESTED until the owner is at the desktop.
+`query-block` then lists `toolscd` as removable with `tools.iso` inserted (MEASURED 2026-11-12, section 9 run). That Windows lists it as a CD drive is UNTESTED until the owner is at the desktop.
 Later starts attach tools.iso as the fourth q35 AHCI CD (`propimage_run.sh`), no hot-plug needed.
 
 GPU registry settings, only these three, each from the existing gate material, none for convenience:
@@ -306,15 +306,15 @@ the owner approves: open item O4).
   `EnableGpuFirmware` read back 1), Dwm `OverlayTestMode=5`, `HKLM:\SOFTWARE\OpenSSH` `DefaultShell` = Windows PowerShell (one value, the only deviation from an
   official install), then `pnputil /enable-device` (gsp_on's `-NoEnable` leaves the device disabled and a reboot does not re-enable it: CM_PROB_DISABLED, code 22, MEASURED;
   `gsp_on.ps1` without `-NoEnable` does the enable itself and is the better call next time). `C:\kf` (driver copy, script, log) was deleted afterwards (`Test-Path C:\kf` False).
-- Result after reboot and enable: `Win32_PnPEntity` NVIDIA GeForce RTX 4070 `ConfigManagerErrorCode 0`, status OK; `nvidia-smi` in the guest prints GPU UUID
-  `GPU-57a1c1f8-d5e0-2e79-d42f-98f8f35ca554` (= the seed-derived one) and driver 580.88. No new host `NVRM: Xid` (the two in dmesg date from host uptime 6580 s, host uptime now 58096 s).
+- Result after reboot and enable: `Win32_PnPEntity` NVIDIA GeForce RTX 4070 `ConfigManagerErrorCode 0`, status OK; `nvidia-smi` in the guest prints the GPU UUID
+  that equals the seed-derived one (value not repeated here: the GPU-UUID gate) and driver 580.88. No new host `NVRM: Xid` (the two in dmesg date from host uptime 6580 s, host uptime now 58096 s).
   What is not verified by me: the Windows desktop on the broker window and mouse/keyboard (the owner's eyes).
 
 ## 12. What the state contains (private-R2 artifact)
 
 `state.json` is shipped only inside the private R2 package (never in git, public releases or shared caches): `seed`, the derived ids (SMBIOS uuid and three serials,
 MAC, disk serial, GPU UUID, slirp subnet, loopback ssh port, clock gap), `guest.user` and `guest.password` (the derived `Kf-<16 hex>`; the seed is public, so the password is
-effectively public: accepted for a loopback-only local test VM, MEASURED nothing else is exposed by it), the VM's ssh key pair (intentionally exposed), the swtpm and OVMF
+effectively public: accepted for a loopback-only local test VM, ASSUMED, not tested: nothing else is exposed by it), the VM's ssh key pair (intentionally exposed), the swtpm and OVMF
 variable blobs (base64, sha256), `machine_guid` and the TPM EK hash (recorded from the guest, not derivable), the CPU profile and the recorded CPU fingerprint, the clock rule and the
 last time at stop, the qemu machine shape and the kf3 `guest-driver` ABI, software versions and the per-app offline results. `init` writes `guest.password`; `pack` adds it to an older
 state (and writes it back to the packed state file); `validate_state` (so `verify`, `argv`, `pack`, `unpack`) refuses a password that is not the derivation, and `unpack` refuses a

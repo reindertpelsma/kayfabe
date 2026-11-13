@@ -19,7 +19,7 @@ refused before), `refused_scan_budget=0`; `USER_RING_REFUSED` 0, host Xid 0, gue
 aggregation by log line, `spec/agg.py`; the log has no clock). Run 2 (enscape-01 alone): `segments_streamed=0`, no refusals, host Xid 0 (`spec/counters_hw2.txt`).
 Falsifier of the hypothesis "creo-04 still resets/TDRs with Phase 2" did not hit in this one run (n=1); it does not prove the old reset was the scan budget.
 
-enscape-01 run 1 (MEASURED, `spec/enscape_events.txt`): the guest shut itself down 9 minutes into the viewset: System event 1074, process
+enscape-01 run 1 (MEASURED 2026-11-13, `spec/enscape_events.txt`): the guest shut itself down 9 minutes into the viewset: System event 1074, process
 `wlms.exe`: "The license period for this installation of Windows has expired. The operating system is shutting down", 62 minutes after the boot (the harness'
 Windows 11 evaluation image; earlier note: boots must stay under about 55 minutes). Not a reset, no refusal, host Xid 0: INFERRED to be a harness/licence artifact, not kayfabe.
 Run 2 (own boot, copy and kf3 phase repeated): enscape-01 reached 8 of 10 subtests (`09_RhinoIntWhiteOutlineHigh` not completed) when the stage's cut budget (2813 s,
@@ -47,3 +47,5 @@ A pkill on `qemu-system-x86` by me killed the stage's own copy guest once (about
 - NOT run: 3DMark Time Spy + SAVE, SolidWorks part rotation, DaVinci Resolve project and render, Black Myth benchmark itself.
 - `scripts/bench/windows/propimage_check.py` (one python file) ran the unattended pipeline once (`propimage/run1/result.md`): unpack, clock, overlay, boot, ssh passed; verify and gpu failed on that run because the GPU fix was not yet in the script
   (fixed afterwards, then not re-run end to end: out of time); app rows are LAUNCH_ONLY (screen evidence of a launch is never a PASS). The script was NOT re-run to a full unattended pass.
+
+- Scrub note (2026-11-13, unify-gates): the Vast board UUID printed in `spec/gate_hw1.out` was replaced by the synthetic placeholder `GPU-fa4efa4e-...0001` because the GPU-UUID gate forbids board identifiers in the tree; nothing else in that file changed.
