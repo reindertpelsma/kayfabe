@@ -1,6 +1,8 @@
 import {
   RELEASE_MATRIX,
   hostProvidesDrivers,
+  vendorOfCpuName,
+  rentableCpuName,
   matrixExecutionProblem,
   sameMatrixRow,
 } from './release-matrix.js';
@@ -14,7 +16,7 @@ import {
   middleAppsResult,
 } from './tier.js';
 // prettier-ignore
-import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
+import {planRelease,planRehearsal,REHEARSAL_SCOPE,classifyLeg,releaseVerdict,wantsRerun,movePin,pinForRerun} from './release.js';
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 import {
@@ -1434,19 +1436,48 @@ export function createService({
     market,
     costGuard,
   }) {
+    // Matrix v2 (owner 2026-11-12): a release MIDDLE leg (the second die of a family) rents with its own, shorter hard
+    // limit; the planner prices it with the same number. A copy: the caller's cfg serves the batch's other legs.
+    const middleLeg = leg?.legTier === 'middle';
+    if (middleLeg && profile === 'release') {
+      cfg = { ...cfg, hard: cfg.releaseMiddleHard, ttl: cfg.releaseMiddleHard };
+      cfg.boot = Math.min(cfg.boot, cfg.hard);
+    }
     // Review F1: the switches are checked here, on the one admission path, so turning renting (or
     // the release kill switch) off also stops cron-started release legs and re-runs.
     if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);
     if (profile === 'release' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
+    // large includes middle: a release leg never rents with the apps pair switched off (MIDDLE_APPS_ENABLED=false)
+    if (profile === 'release' && !cfg.middleAppsEnabled)
+      refuse('NOT_ELIGIBLE', 409, 'APPS_DISABLED');
     if (profile === 'release' || tierName === 'large' || leg?.releaseMatrix !== undefined) {
-      requireMatrixExecution(cfg, leg?.releaseMatrix, true);
+      // The named REHEARSAL scope (2026-11-12): one die of the matrix, no driver matrix, large tier on the release
+      // profile only. The matrix refusal below stays exactly as it was for every other release leg.
+      const rehearsal = leg?.rehearsal === true;
+      if (rehearsal) {
+        if (
+          leg.releaseMatrix !== undefined ||
+          !RELEASE_MATRIX.dies.some((row) => row.die === leg.die)
+        )
+          refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
+      } else requireMatrixExecution(cfg, leg?.releaseMatrix, true);
       if (profile !== 'release' || tierName !== 'large')
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
-      if (JSON.stringify(leg?.stages) !== JSON.stringify(cfg.releaseStages))
+      if (JSON.stringify(leg?.stages) !== JSON.stringify(middleLeg ? [] : cfg.releaseStages))
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
-      if (cfg.releaseStages.includes('specviewperf') && !['lanea', 'laneb'].includes(leg?.spec))
+      if (
+        !middleLeg &&
+        cfg.releaseStages.includes('specviewperf') &&
+        !['lanea', 'laneb'].includes(leg?.spec)
+      )
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
-      await github.boxProtocol(target.sha, { matrix: true });
+      if (
+        middleLeg &&
+        (leg?.spec !== undefined ||
+          RELEASE_MATRIX.dies.find((d) => d.die === leg.die)?.profile !== 'middle')
+      )
+        refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
+      await github.boxProtocol(target.sha, rehearsal ? { rehearsal: true } : { matrix: true });
     }
     // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
     // while the spend row exists the key is refused. The row is pruned once its run ended more
@@ -1520,6 +1551,13 @@ export function createService({
           leg.releaseMatrix,
         ),
       );
+    // Owner 2026-11-12: every box is x86, and the legs that cover a required CPU vendor rent only from that vendor
+    // (the vendor of the offer's cpu_name; the judge cross-checks it with the box's own report).
+    if (profile === 'release' && !leg?.rehearsal)
+      evaluation.allowed = evaluation.allowed.filter((o) => {
+        const v = vendorOfCpuName(o.cpu_name);
+        return rentableCpuName(o.cpu_name) && (leg?.cpuVendor === undefined || v === leg.cpuVendor);
+      });
     const selection = {
       tierName,
       ...(leg?.die ? { die: leg.die } : {}),
@@ -1572,7 +1610,12 @@ export function createService({
         ...spendClass({ profile }),
         tier: tierName,
         middleAppsRequested:
-          middleAppsRequest(profile, tierName, cfg.middleAppsEnabled).linuxApps === true,
+          middleAppsRequest(
+            profile,
+            middleLeg ? 'middle' : tierName,
+            cfg.middleAppsEnabled,
+            leg?.apps,
+          ).linuxApps === true,
         family: chosen.family ?? familyOf(offer.die, cfg),
         ...(chosen.wanted !== undefined && chosen.wanted !== chosen.family
           ? { familyWanted: chosen.wanted }
@@ -1584,10 +1627,12 @@ export function createService({
               windowsRuns: leg.windowsRuns,
               stages: leg.stages,
               ...(leg.releaseMatrix ? { releaseMatrix: structuredClone(leg.releaseMatrix) } : {}),
+              ...(leg.rehearsal === true ? { rehearsal: true } : {}),
               ...(leg.spec ? { spec: leg.spec } : {}),
             }
           : { source: 'github' }),
         die: offer.die,
+        ...(profile === 'release' ? { cpuVendorOffered: vendorOfCpuName(offer.cpu_name) } : {}),
         country: offer.country,
         geolocation:
           typeof offer.geolocation === 'string'
@@ -1707,7 +1752,8 @@ export function createService({
       throw e;
     }
     // Result store queue (src/ingest.js); never affects admission or the rental.
-    if (storeEnabled(env))
+    // A rehearsal leg is never a release record: it is not queued for the result store (src/ingest.js).
+    if (storeEnabled(env) && r.rehearsal !== true)
       try {
         if (retrySource) await freeze(ledger, retrySource);
         await enqueue(ledger, r);
@@ -1745,7 +1791,8 @@ export function createService({
         // 2026-11-07 (run report): this Worker accepts POST /run-report/<run> (src/runreport.js).
         // A box sends its report only when it sees this variable, so a box from a newer commit
         // never calls a route an older Worker does not have. Only with a result store to keep it.
-        ...(storeEnabled(env) ? { KF_RUN_REPORT: '1' } : {}),
+        // a rehearsal has no run row and is never a record: no report is requested (its public log is still published)
+        ...(storeEnabled(env) && leg?.rehearsal !== true ? { KF_RUN_REPORT: '1' } : {}),
         KF_BROKER_URL: cfg.audience + '/' + env.BROKER_PATH_PREFIX,
         KF_RUN_ID: key,
         KF_RUN_TOKEN: runToken,
@@ -1762,12 +1809,18 @@ export function createService({
         // The tier: a pure function of the profile and the verified event or admin batch
         // (src/tier.js), never a request field.
         ...tierEnvironment(profile, {
-          tierName,
+          tierName: middleLeg ? 'middle' : tierName,
           windowsRuns: leg?.windowsRuns ?? 1,
           stages: leg?.stages ?? [],
           releaseMatrix: leg?.releaseMatrix,
           spec: leg?.spec,
-          ...middleAppsRequest(profile, tierName, cfg.middleAppsEnabled),
+          ...(leg?.rehearsal === true ? { rehearsal: true } : {}),
+          ...middleAppsRequest(
+            profile,
+            middleLeg ? 'middle' : tierName,
+            cfg.middleAppsEnabled,
+            leg?.apps,
+          ),
         }),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
@@ -1823,7 +1876,7 @@ export function createService({
   // Its legs are ordinary rentals through admit(); the cron tick classifies ended legs, schedules
   // a fresh-box re-run for RETRY/UNATTRIBUTED within the release cost cap, starts pending legs as
   // slots and caps allow, and finishes with a verdict over (family, die, platform) cells.
-  const BATCH_KEYS = ['commit_sha', 'die', 'tier'];
+  const BATCH_KEYS = ['commit_sha', 'die', 'tier', 'rehearsal'];
   function batchRequest(body) {
     if (
       !body ||
@@ -1832,8 +1885,12 @@ export function createService({
       !Object.keys(body).every((k) => BATCH_KEYS.includes(k)) ||
       !hexSha(body.commit_sha) ||
       !['small', 'middle', 'large'].includes(body.tier) ||
+      // The named rehearsal scope: exactly `true`, large only, and only together with one die. A large Start
+      // that names a die without it is refused as before; `rehearsal` without a die or on another tier is too.
+      (body.rehearsal !== undefined &&
+        (body.rehearsal !== true || body.tier !== 'large' || body.die === undefined)) ||
       (body.die !== undefined &&
-        (body.tier === 'large' ||
+        ((body.tier === 'large' && body.rehearsal !== true) ||
           typeof body.die !== 'string' ||
           !/^[A-Z][A-Z0-9_]{1,23}$/.test(body.die)))
     )
@@ -1860,6 +1917,12 @@ export function createService({
       const evaluation = await new OfferBook(now).evaluate(vast, cfg, ledger, 'release', {
         market,
       });
+      if (request.rehearsal === true)
+        return planRehearsal(evaluation.allowed, cfg, {
+          budget: await ledger.budgetSummary(cfg, now()),
+          credit: await vast.credit(),
+          die: request.die,
+        });
       return planRelease(evaluation.allowed, cfg, {
         budget: await ledger.budgetSummary(cfg, now()),
         credit: await vast.credit(),
@@ -1908,7 +1971,13 @@ export function createService({
       cfg = batchConfig(request.tier),
       vast = new Vast(fetcher, cfg, env.VAST_API_KEY),
       token = env.GITHUB_API_TOKEN;
-    if (request.die !== undefined && !tierDies(cfg, request.tier).includes(request.die))
+    if (request.rehearsal === true) {
+      if (
+        !cfg.releaseAdmitDies.includes(request.die) ||
+        !RELEASE_MATRIX.dies.some((row) => row.die === request.die)
+      )
+        refuse('BAD_REQUEST', 400, 'DIE_NOT_IN_TIER');
+    } else if (request.die !== undefined && !tierDies(cfg, request.tier).includes(request.die))
       refuse('BAD_REQUEST', 400, 'DIE_NOT_IN_TIER');
     if (request.tier === 'large' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
     if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
@@ -1916,8 +1985,14 @@ export function createService({
     // Forks never trigger rentals: the commit must be on this repository's master or next.
     await github.reachable(request.commit_sha);
     if (request.tier === 'large') {
-      requireMatrixExecution(cfg);
-      await github.boxProtocol(request.commit_sha, { matrix: true });
+      // A rehearsal does not pass the matrix check (the matrix is not executable and the rehearsal says so); every
+      // other large Start still must.
+      if (request.rehearsal === true)
+        await github.boxProtocol(request.commit_sha, { rehearsal: true });
+      else {
+        requireMatrixExecution(cfg);
+        await github.boxProtocol(request.commit_sha, { matrix: true });
+      }
     }
     await github.boxProtocol(request.commit_sha);
     for (const [, open] of await ledger.storage.list({ prefix: 'batch-open:', limit: 257 })) {
@@ -1947,10 +2022,13 @@ export function createService({
         family,
         die,
         windowsRuns,
+        ...(selected.leg_tier === 'middle' ? { legTier: 'middle' } : {}),
+        ...(selected.pin_cpu_vendor ? { cpuVendor: selected.pin_cpu_vendor } : {}),
         ...(releaseMatrix ? { releaseMatrix } : {}),
         ...(selected.spec
           ? {
               spec: selected.spec,
+              ...(selected.apps === false ? { apps: false } : {}),
               phase: selected.phase,
               reuseMachine: selected.reuse_machine ?? false,
               ...(selected.after_lane
@@ -1986,6 +2064,7 @@ export function createService({
       ),
       costCapUsd: request.tier === 'large' ? cfg.releaseCostCap : null,
       estimateUsd: plan.estimate_usd,
+      ...(request.rehearsal === true ? { rehearsal: true, rehearsalDie: request.die } : {}),
       windowsRunsPerDie: request.tier === 'large' ? cfg.releaseWindowsRuns : 1,
       diesPerFamily: cfg.releaseDiesPerFamily,
       releaseDies: request.tier === 'large' ? cfg.releaseDies : {},
@@ -2013,11 +2092,15 @@ export function createService({
       estimate_usd: batch.estimateUsd,
       spent_usd: batch.spentUsd ?? 0,
       verdict,
+      ...(batch.rehearsal === true
+        ? { ...REHEARSAL_SCOPE, rehearsal: true, die: batch.rehearsalDie }
+        : {}),
       legs: batch.legs.map((l) => ({
         key: l.key,
         family: l.family,
         die: l.die,
         windows_runs: l.windowsRuns,
+        ...(l.legTier ? { leg_tier: l.legTier } : {}),
         ...(l.releaseMatrix ? { release_matrix: l.releaseMatrix } : {}),
         state: l.state,
         verdict: l.outcome?.verdict ?? null,
@@ -2060,30 +2143,40 @@ export function createService({
         r?.sha === batch.sha && r?.batch === batch.id ? r : undefined,
         {
           windowsRuns: l.windowsRuns,
-          stages: batch.stages,
+          stages: l.legTier === 'middle' ? [] : batch.stages,
           die: batch.tier === 'large' ? l.die : (l.die ?? r?.die),
           family: batch.tier === 'large' ? l.family : (l.family ?? r?.family),
           cfg,
           releaseMatrix: l.releaseMatrix,
           spec: l.spec,
+          rehearsal: batch.rehearsal === true,
         },
       );
       // Regrade old persisted outcomes from accepted rows, while keeping a FAIL
       // sticky even if a record has subsequently disappeared or changed shape.
       if (l.outcome?.verdict !== 'FAIL') l.outcome = classified;
+      // Owner 2026-11-12 (CPU vendor): the vendor the Worker saw at rent time and the one the box reports about itself;
+      // releaseVerdict counts a vendor only when both agree.
+      if (r?.cpuVendorOffered !== undefined) l.cpuVendorOffered = r.cpuVendorOffered;
+      l.cpuVendorReported = r?.result?.host_claims?.cpu_vendor ?? null;
       l.costUsd = r ? rentalCost(r, r.ended) : 0;
       l.machineId = r?.machineId ?? null;
       if (wasEnded) continue;
       if (batch.state === 'RUNNING' && wantsRerun(l, batch.reruns)) {
         const n = Math.max(...batch.legs.map((x) => x.seq)) + 1;
+        // Owner 2026-11-12: the vendor rule is re-applied to the replacement (it keeps the vendor the release still needs).
+        const pin = pinForRerun(batch, l, RELEASE_MATRIX.policy.cpu_vendor_min);
         batch.legs.push({
           seq: n,
           key: batch.id + '-' + n,
           family: l.family,
           die: l.die,
           windowsRuns: l.windowsRuns,
+          ...(l.legTier ? { legTier: l.legTier } : {}),
+          ...(pin ? { cpuVendor: pin } : {}),
           ...(l.releaseMatrix ? { releaseMatrix: l.releaseMatrix } : {}),
           ...(l.spec ? { spec: l.spec, phase: l.phase } : {}),
+          ...(l.apps === false ? { apps: false } : {}),
           state: 'PENDING',
           // Review F10: a fresh box: not a machine any leg of this die used, the failed one
           // included (its machineId is set above), so two Windows runs stay on two machines.
@@ -2117,6 +2210,11 @@ export function createService({
         if (dependency.state !== 'ENDED') continue;
         const previous = await ledger.get('record:' + dependency.key);
         if (!previous || previous.ended === null || previous.ended === undefined) continue;
+        // A lane A that did not end in a verdict (rental or harness fault) names a machine and host that lane B does not rent again.
+        if (['RETRY', 'UNATTRIBUTED'].includes(dependency.outcome?.verdict)) {
+          l.avoidMachines = [...new Set([...l.avoidMachines, previous.machineId])];
+          if (previous.hostId) l.avoidHosts = [...new Set([...l.avoidHosts, previous.hostId])];
+        }
         if (l.queued === null) l.queued = now();
       }
       if (
@@ -2156,7 +2254,11 @@ export function createService({
             windowsRuns: l.windowsRuns,
             releaseMatrix: l.releaseMatrix,
             spec: l.spec,
-            stages: batch.stages,
+            ...(l.legTier ? { legTier: l.legTier } : {}),
+            ...(l.cpuVendor ? { cpuVendor: l.cpuVendor } : {}),
+            ...(l.apps === false ? { apps: false } : {}),
+            ...(batch.rehearsal === true ? { rehearsal: true } : {}),
+            stages: l.legTier === 'middle' ? [] : batch.stages,
             avoidMachines: l.avoidMachines,
             avoidHosts: l.avoidHosts,
           },
@@ -2176,6 +2278,7 @@ export function createService({
         l.state = 'STARTED';
         delete l.lastRefusal;
         l.machineId = started.machineId;
+        if (started.cpuVendorOffered !== undefined) l.cpuVendorOffered = started.cpuVendorOffered;
         l.family ??= started.family;
         l.die ??= started.die;
         // A later leg of the same die (the second Windows run) belongs on another machine.
@@ -2194,7 +2297,8 @@ export function createService({
         // and a crash cannot lose the siblings' machine avoidance.
         await ledger.put('batch:' + batch.id, batch);
       } catch (e) {
-        if (await ledger.get('record:' + l.key)) l.state = 'STARTED';
+        const recorded = await ledger.get('record:' + l.key);
+        if (recorded) l.state = 'STARTED';
         const reason = e instanceof BrokerError ? (e.reason ?? e.state) : 'UNAVAILABLE';
         l.lastRefusal = reason;
         // Review F1/F4: admit() refused because renting or releases are switched off: nothing of
@@ -2208,12 +2312,30 @@ export function createService({
             'MATRIX_PLAN_CHANGED',
             'MATRIX_REPORTER_CAPABILITY',
             'MATRIX_PAYLOAD_CAPABILITY',
+            'REHEARSAL_PAYLOAD_CAPABILITY',
+            'APPS_DISABLED',
           ].includes(reason)
         ) {
           for (const x of batch.legs) if (x.state === 'PENDING') x.state = 'MISSING';
           break;
         }
-        // No offer for this die: try the next leg. Busy, a cap or anything else: next tick.
+        // A create that failed after the rental was recorded is an unproven box (the cron reconciles or closes it and the leg is
+        // re-run): the legs after it go on. Owner 2026-11-12: a rental that fails never holds up the others.
+        if (recorded) {
+          l.machineId = recorded.machineId ?? null;
+          // Durable at once (review F10, as on the success path): the next leg's contract check reads this leg's liability.
+          await ledger.put('batch:' + batch.id, batch);
+          continue;
+        }
+        // No offer for this die: try the next leg (a leg pinned to a vendor that vanished gives its pin away). Busy, a cap or
+        // anything else: next tick.
+        if (
+          reason === 'NO_ALLOWED_OFFERS' &&
+          l.cpuVendor &&
+          batch.tier === 'large' &&
+          !batch.rehearsal
+        )
+          movePin(batch, l, RELEASE_MATRIX.policy.cpu_vendor_min);
         if (reason !== 'NO_ALLOWED_OFFERS') break;
       }
     }
@@ -2612,6 +2734,7 @@ export function createService({
     },
   };
 }
+export { HostBox } from './hostbox.js';
 export class BrokerLedger {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -2896,6 +3019,8 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
   let boxVerifier, boxSecret;
   let boxWindow = -1;
   const boxCounts = new Map();
+  const hostUpgrades = new Map();
+  let hostUpgradeWindow = -1;
   const evidenceCounts = new Map();
   // Uploads this isolate holds in memory right now (each is up to 8 MiB, twice while it is joined).
   let evidenceHeld = 0;
@@ -3051,6 +3176,34 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
         return Response.json(
           { state: error.state ?? 'UNAVAILABLE' },
           { status: error.status ?? 503 },
+        );
+      }
+      // Custom-host daemons (docs/design/V3_CUSTOM_HOSTS.md): the WebSocket goes to the box's own
+      // Durable Object, which checks the per-box token. No run-token or OIDC check applies here.
+      const hostId =
+        path === null ? null : /^\/hosts\/([a-z0-9][a-z0-9-]{0,39})\/ws$/.exec(path)?.[1];
+      if (hostId) {
+        if (!env.HOSTS || request.method !== 'GET') return notFound();
+        // Cheap pre-check before a Durable Object is woken (review L1): an upgrade with no
+        // well-formed box token, and a flood from one address, never reach DO storage. Whether the
+        // box exists is the DO's answer (the Worker has no box list outside its DOs).
+        const window = Math.floor(now() / 60000);
+        if (hostUpgradeWindow !== window) {
+          hostUpgradeWindow = window;
+          hostUpgrades.clear();
+        }
+        const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+        const seen = hostUpgrades.get(ip) ?? 0;
+        if (seen >= 30 || (!hostUpgrades.has(ip) && hostUpgrades.size >= 1024))
+          return new Response('Too many requests', { status: 429 });
+        hostUpgrades.set(ip, seen + 1);
+        if (
+          request.headers.get('Upgrade') !== 'websocket' ||
+          !/^Bearer kfh_[A-Za-z0-9_-]{43}$/.test(request.headers.get('Authorization') ?? '')
+        )
+          return new Response('Unauthorized', { status: 401 });
+        return env.HOSTS.get(env.HOSTS.idFromName(hostId)).fetch(
+          new Request('https://internal.invalid/hosts/' + hostId + '/ws', request),
         );
       }
       if (path === null || !routeKind(path)) return notFound();

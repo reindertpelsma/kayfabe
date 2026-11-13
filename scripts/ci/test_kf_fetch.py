@@ -75,6 +75,31 @@ class Fixture:
                     return
                 opts = fixture.options
                 probe = span == "bytes=0-0" or head
+                if "src=bad" in self.path:
+                    if opts.get("bad_accept_reset"):
+                        self.connection.shutdown(socket.SHUT_RDWR)
+                        return
+                    if opts.get("bad_403"):
+                        self.send_response(403)
+                        self.send_header("Content-Length", "0")
+                        self.end_headers()
+                        return
+                    if opts.get("bad_html"):
+                        page = b"<html><body>Blocked by network policy</body></html>"
+                        self.send_response(200)
+                        self.send_header("Content-Length", str(len(page)))
+                        self.end_headers()
+                        self.wfile.write(page)
+                        return
+                    if opts.get("bad_stall"):
+                        time.sleep(3)
+                    if opts.get("bad_wrong_length") and not probe:
+                        self.send_response(206 if span else 200)
+                        self.send_header("Content-Range", "bytes 0-5/%d" % len(fixture.data))
+                        self.send_header("Content-Length", "6")
+                        self.end_headers()
+                        self.wfile.write(b"abcdef")
+                        return
                 if opts.get("auth") or (opts.get("expire") and not probe and
                                          (opts.get("forever") or "v=1" in self.path)):
                     self.send_response(403)
@@ -107,8 +132,11 @@ class Fixture:
                     start = 0
                     body = data
                     self.send_response(200)
-                if opts.get("corrupt") and not probe:
+                bad = "src=bad" in self.path
+                if (opts.get("corrupt") or opts.get("bad_corrupt0") and bad and start == 0) and not probe:
                     body = bytes([body[0] ^ 1]) + body[1:]
+                if opts.get("long") and not probe:
+                    body = body + b"x"
                 if opts.get("encoding"):
                     self.send_header("Content-Encoding", "gzip")
                 self.send_header("Content-Length", str(len(body) + (1 if opts.get("short") and not probe else 0)))
@@ -123,6 +151,11 @@ class Fixture:
                     if opts.get("slow") and not probe:
                         # Ensure the first completed chunk can be checkpointed before others finish.
                         time.sleep(0.03 if start == 0 else 0.8)
+                    if opts.get("drop_after0") and bad and not probe and start > 0:
+                        self.wfile.write(body[:100])
+                        self.wfile.flush()
+                        self.connection.shutdown(socket.SHUT_RDWR)
+                        return
                     if opts.get("reset") and not probe and count == int(bool(opts.get("flaky"))):
                         self.wfile.write(body[:100])
                         self.wfile.flush()
@@ -159,6 +192,7 @@ class FetchTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.out = Path(self.temp.name) / "out.bin"
         self.state = Path(self.temp.name) / "state.json"
+        self.unverified = Path(str(self.out) + ".unverified")
 
     def command(self, url, *extra, pin=PIN, streams=3):
         return [sys.executable, "-I", str(SOURCE), url, str(self.out), "--sha256", pin,
@@ -178,8 +212,8 @@ class FetchTests(unittest.TestCase):
         self.assertIn("FETCH_PROGRESS bytes=", p.stdout)
 
     def seed(self, server, *, size=None, etag=None, completed=None, truncate=None):
-        self.out.write_bytes(DATA if truncate is None else DATA[:truncate])
-        record = {"version": 1, "size": len(DATA) if size is None else size,
+        self.unverified.write_bytes(DATA if truncate is None else DATA[:truncate])
+        record = {"version": 1, "target": os.path.abspath(self.unverified), "size": len(DATA) if size is None else size,
                   "etag": server.etag if etag is None else etag, "chunk_size": CHUNK,
                   "sha256": PIN, "source": hashlib.sha256((server.url + "/object.bin").encode()).hexdigest(),
                   "completed": {"0": hashlib.sha256(DATA[:CHUNK]).hexdigest()} if completed is None else completed}
@@ -187,10 +221,16 @@ class FetchTests(unittest.TestCase):
 
     def test_parallel_ranges_and_final_pin(self):
         with Fixture(slow=True) as server:
-            self.assert_good(self.run_fetch(server))
+            first = self.run_fetch(server)
+            self.assert_good(first)
+            self.assertIn("streams=3", first.stdout)
             self.assertEqual(len(server.chunks()), 3)
             self.assertGreaterEqual(server.peak, 2)
-            self.assertIn("streams=3", self.run_fetch(server).stdout)
+            # A finished, pin-matching <out> needs no network use at all.
+            server.requests.clear()
+            again = self.run_fetch(server)
+            self.assertIn("FETCH_DONE secs=", again.stdout)
+            self.assertFalse(server.requests)
 
     def test_single_stream_ranges(self):
         with Fixture() as server:
@@ -290,21 +330,24 @@ class FetchTests(unittest.TestCase):
             self.assertIn("FETCH_FAIL class=AUTH", p.stdout)
             self.assertEqual(server.mints, 1)
 
-    def test_corrupt_chunk_is_bad_hash_and_retained(self):
+    def test_corrupt_chunk_is_bad_hash_and_deleted(self):
         with Fixture(corrupt=True) as server:
             p = self.run_fetch(server)
             self.assertNotEqual(p.returncode, 0)
             self.assertIn("FETCH_BAD_HASH", p.stdout)
             self.assertIn("FETCH_FAIL class=HASH", p.stdout)
-            self.assertTrue(self.out.exists())
-            self.assertTrue(self.state.exists())
+            self.assertFalse(self.out.exists())
+            self.assertFalse(self.unverified.exists())
+            self.assertFalse(self.state.exists())
 
-    def test_wrong_pin_is_bad_hash_and_retained(self):
+    def test_wrong_pin_is_bad_hash_and_deleted(self):
         with Fixture() as server:
             p = self.run_fetch(server, pin="0" * 64)
             self.assertNotEqual(p.returncode, 0)
             self.assertIn("FETCH_BAD_HASH", p.stdout)
-            self.assertEqual(self.out.read_bytes(), DATA)
+            self.assertFalse(self.out.exists())
+            self.assertFalse(self.unverified.exists())
+            self.assertFalse(self.state.exists())
 
     def test_bad_hash_checkpoint_is_invalidated_for_retry(self):
         with Fixture(corrupt=True) as server:
@@ -336,7 +379,7 @@ class FetchTests(unittest.TestCase):
     def test_resume_local_corruption_is_refetched(self):
         with Fixture() as server:
             self.seed(server)
-            with self.out.open("r+b") as f:
+            with self.unverified.open("r+b") as f:
                 f.write(b"wrong")
             self.assert_good(self.run_fetch(server))
             self.assertEqual(len(server.chunks()), 3)
@@ -370,7 +413,9 @@ class FetchTests(unittest.TestCase):
             p = self.run_fetch(server, "--size", str(len(DATA) + 1))
             self.assertNotEqual(p.returncode, 0)
             self.assertIn("FETCH_FAIL class=SIZE", p.stdout + p.stderr)
-            self.assertEqual(self.out.read_bytes(), b"keep existing output")
+            self.assertFalse(self.out.exists())
+            self.assertFalse(self.unverified.exists())
+            self.assertFalse(self.state.exists())
             self.assertFalse(server.chunks())
 
     def test_smaller_pinned_size_is_refused_before_allocation(self):
@@ -379,7 +424,9 @@ class FetchTests(unittest.TestCase):
             p = self.run_fetch(server, "--size", str(len(DATA) - 1))
             self.assertNotEqual(p.returncode, 0)
             self.assertIn("FETCH_FAIL class=SIZE", p.stdout + p.stderr)
-            self.assertEqual(self.out.read_bytes(), b"keep existing output")
+            self.assertFalse(self.out.exists())
+            self.assertFalse(self.unverified.exists())
+            self.assertFalse(self.state.exists())
             self.assertFalse(server.chunks())
 
     def test_wrong_content_range_is_size_failure(self):
@@ -486,7 +533,7 @@ class FetchTests(unittest.TestCase):
     def test_resume_second_chunk_corruption_is_refetched(self):
         with Fixture() as server:
             self.seed(server, completed={"1": hashlib.sha256(DATA[CHUNK:2*CHUNK]).hexdigest()})
-            with self.out.open("r+b") as f:
+            with self.unverified.open("r+b") as f:
                 f.seek(CHUNK + 9)
                 f.write(b"wrong")
             self.assert_good(self.run_fetch(server))
@@ -532,6 +579,389 @@ class FetchTests(unittest.TestCase):
         with self.out.open("w+b") as output, patch.object(module.os, "pwrite", side_effect=lambda fd, data, offset: actual(fd, data[:1], offset)):
             module.write_at(output.fileno(), b"abcde", 2)
         self.assertEqual(self.out.read_bytes(), b"\0\0abcde")
+
+    # ---- verify-then-rename: the final path exists only after size and pin matched ----
+
+    @staticmethod
+    def closed_url():
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        return f"http://127.0.0.1:{port}/object.bin"
+
+    def run_cmd(self, url, *extra, streams=3, pin=PIN, timeout=60):
+        p = subprocess.run(self.command(url, *extra, pin=pin, streams=streams), capture_output=True, text=True, timeout=timeout)
+        self.assertNotIn("http", p.stdout + p.stderr)
+        return p
+
+    def assert_nothing_left(self, out=True):
+        self.assertFalse(self.out.exists())
+        self.assertFalse(self.unverified.exists())
+        self.assertFalse(self.state.exists())
+
+    def test_final_path_absent_during_download_and_appears_whole(self):
+        with Fixture(slow=True) as server:
+            p = subprocess.Popen(self.command(server.url + "/object.bin", streams=1),
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            seen_unverified = False
+            try:
+                while p.poll() is None:
+                    if self.out.exists():
+                        # Atomic rename: whenever the final path exists it is complete and correct.
+                        self.assertEqual(self.out.read_bytes(), DATA)
+                    else:
+                        seen_unverified = seen_unverified or self.unverified.exists()
+                    time.sleep(0.005)
+                p.communicate(timeout=5)
+            finally:
+                if p.poll() is None:
+                    p.kill()
+                    p.communicate()
+            self.assertEqual(p.returncode, 0)
+            self.assertTrue(seen_unverified, "download never staged in .unverified")
+            self.assertEqual(self.out.read_bytes(), DATA)
+            self.assertFalse(self.unverified.exists())
+
+    def test_final_path_never_written_while_partial_chunks_land(self):
+        with Fixture(slow=True) as server:
+            p = subprocess.Popen(self.command(server.url + "/object.bin", streams=1),
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                until = time.monotonic() + 10
+                while time.monotonic() < until:
+                    try:
+                        if json.loads(self.state.read_text())["completed"]:
+                            break
+                    except (FileNotFoundError, json.JSONDecodeError):
+                        pass
+                    time.sleep(0.005)
+                else:
+                    self.fail("no checkpoint before timeout")
+                self.assertFalse(self.out.exists())
+                self.assertTrue(self.unverified.exists())
+            finally:
+                p.kill()
+                p.communicate()
+
+    def test_hash_failure_leaves_no_final_file(self):
+        with Fixture() as server:
+            p = self.run_fetch(server, pin="0" * 64)
+            self.assertEqual(p.returncode, 3)
+            self.assert_nothing_left()
+
+    def test_stale_final_file_is_removed_before_a_failed_hash(self):
+        with Fixture(corrupt=True) as server:
+            self.out.write_bytes(b"stale final")
+            self.assertEqual(self.run_fetch(server).returncode, 3)
+            self.assert_nothing_left()
+
+    def test_stale_final_file_is_removed_when_network_fails(self):
+        self.out.write_bytes(b"stale final")
+        p = self.run_cmd(self.closed_url())
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("FETCH_FAIL class=NETWORK", p.stdout)
+        self.assertFalse(self.out.exists())
+
+    def test_oversize_response_aborts_and_deletes_unverified(self):
+        with Fixture(long=True) as server:
+            p = self.run_fetch(server)
+            self.assertEqual(p.returncode, 2)
+            self.assertIn("FETCH_FAIL class=SIZE", p.stdout)
+            self.assert_nothing_left()
+
+    def test_oversize_single_stream_deletes_unverified(self):
+        with Fixture(long=True) as server:
+            self.assertEqual(self.run_fetch(server, streams=1).returncode, 2)
+            self.assert_nothing_left()
+
+    def test_pinned_size_mismatch_deletes_partial_from_earlier_run(self):
+        with Fixture() as server:
+            self.seed(server)
+            self.assertTrue(self.unverified.exists())
+            p = self.run_fetch(server, "--size", str(len(DATA) - 1))
+            self.assertEqual(p.returncode, 2)
+            self.assert_nothing_left()
+
+    def test_dropped_connection_keeps_partial_and_resumes(self):
+        with Fixture(drop_after0=True) as server:
+            p = self.run_fetch(server, route="/object.bin?src=bad", streams=1)
+            self.assertEqual(p.returncode, 1)
+            self.assertIn("FETCH_FAIL class=NETWORK", p.stdout)
+            self.assertFalse(self.out.exists())
+            self.assertTrue(self.unverified.exists())
+            self.assertTrue(json.loads(self.state.read_text())["completed"])
+            server.options.clear()
+            server.requests.clear()
+            self.assert_good(self.run_fetch(server, route="/object.bin?src=bad", streams=1))
+            self.assertNotIn("bytes=0-1048575", [r[1] for r in server.chunks()])
+            self.assertFalse(self.unverified.exists())
+
+    def test_killed_download_keeps_partial_and_no_final(self):
+        with Fixture(slow=True) as server:
+            p = subprocess.Popen(self.command(server.url + "/object.bin", streams=1),
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                until = time.monotonic() + 10
+                while time.monotonic() < until:
+                    try:
+                        if json.loads(self.state.read_text())["completed"]:
+                            break
+                    except (FileNotFoundError, json.JSONDecodeError):
+                        pass
+                    time.sleep(0.005)
+                p.kill()
+                p.communicate(timeout=5)
+            finally:
+                if p.poll() is None:
+                    p.kill()
+                    p.communicate()
+            self.assertFalse(self.out.exists())
+            self.assertTrue(self.unverified.exists())
+            self.assertTrue(self.state.exists())
+
+    def test_state_for_another_target_is_stale(self):
+        with Fixture() as server:
+            self.seed(server)
+            record = json.loads(self.state.read_text())
+            record["target"] = "/somewhere/else.unverified"
+            self.state.write_text(json.dumps(record))
+            self.assert_good(self.run_fetch(server))
+            self.assertEqual(len(server.chunks()), 3)
+
+    def test_state_without_target_from_old_layout_is_stale(self):
+        with Fixture() as server:
+            self.seed(server)
+            record = json.loads(self.state.read_text())
+            del record["target"]
+            self.state.write_text(json.dumps(record))
+            self.assert_good(self.run_fetch(server))
+            self.assertEqual(len(server.chunks()), 3)
+
+    def test_existing_complete_file_short_circuits_without_network(self):
+        self.out.write_bytes(DATA)
+        p = self.run_cmd(self.closed_url())
+        self.assertEqual(p.returncode, 0, p.stdout)
+        self.assertIn("FETCH_DONE secs=", p.stdout)
+        self.assertEqual(self.out.read_bytes(), DATA)
+        self.assertFalse(self.unverified.exists())
+
+    def test_existing_complete_file_makes_no_request(self):
+        with Fixture() as server:
+            self.out.write_bytes(DATA)
+            self.assertEqual(self.run_fetch(server).returncode, 0)
+            self.assertFalse(server.requests)
+
+    def test_existing_file_with_other_content_is_replaced(self):
+        with Fixture() as server:
+            self.out.write_bytes(b"not the pinned bytes")
+            self.assert_good(self.run_fetch(server))
+
+    # ---- --fallback-url ----
+
+    def fallback(self, primary, server, *extra, route="/object.bin?src=good", streams=3, pin=PIN):
+        p = subprocess.run(self.command(primary, "--fallback-url", server.url + route, *extra, pin=pin, streams=streams),
+                           capture_output=True, text=True, timeout=60)
+        self.assertNotIn("http", p.stdout + p.stderr)
+        self.assertNotIn("src=", p.stdout + p.stderr)
+        return p
+
+    def good_chunks(self, server):
+        return [r for r in server.chunks() if "src=good" in r[0]]
+
+    def test_fallback_on_network_error(self):
+        with Fixture() as server:
+            p = self.fallback(self.closed_url(), server)
+            self.assert_good(p)
+            self.assertIn("FETCH_FALLBACK reason=NETWORK", p.stdout)
+            self.assertEqual(len(self.good_chunks(server)), 3)
+            self.assertFalse(self.unverified.exists())
+
+    def test_fallback_on_hash_mismatch(self):
+        with Fixture(bad_corrupt0=True) as server:
+            p = self.fallback(server.url + "/object.bin?src=bad", server)
+            self.assert_good(p)
+            self.assertIn("FETCH_FALLBACK reason=HASH", p.stdout)
+            self.assertEqual(len(self.good_chunks(server)), 3)
+
+    def test_fallback_after_dropped_connection_never_mixes_sources(self):
+        # The primary leaves a CORRUPT first chunk (checkpointed) and then drops: reusing it
+        # would fail the pin, and a reused chunk would also save a request.
+        with Fixture(bad_corrupt0=True, drop_after0=True) as server:
+            p = self.fallback(server.url + "/object.bin?src=bad", server, streams=1)
+            self.assert_good(p)
+            self.assertIn("FETCH_FALLBACK reason=NETWORK", p.stdout)
+            self.assertEqual(len(self.good_chunks(server)), 3)
+
+    def test_fallback_refetches_every_chunk_after_partial_primary(self):
+        with Fixture(drop_after0=True) as server:
+            p = self.fallback(server.url + "/object.bin?src=bad", server, streams=1)
+            self.assert_good(p)
+            self.assertIn("FETCH_FALLBACK reason=NETWORK", p.stdout)
+            self.assertIn("bytes=0-1048575", [r[1] for r in self.good_chunks(server)])
+            self.assertEqual(len(self.good_chunks(server)), 3)
+
+    def test_both_fail_exit_class_of_last_failure_hash(self):
+        with Fixture(corrupt=True) as server:
+            p = self.fallback(self.closed_url(), server)
+            self.assertEqual(p.returncode, 3)
+            self.assertIn("FETCH_FALLBACK reason=NETWORK", p.stdout)
+            self.assertIn("FETCH_FAIL class=HASH", p.stdout)
+            self.assert_nothing_left()
+
+    def test_both_fail_exit_class_of_last_failure_network(self):
+        with Fixture(corrupt=True) as server:
+            p = subprocess.run(self.command(server.url + "/object.bin", "--fallback-url", self.closed_url()),
+                               capture_output=True, text=True, timeout=60)
+            self.assertEqual(p.returncode, 1)
+            self.assertEqual(p.stdout.count("FETCH_FALLBACK"), 1)
+            self.assertIn("FETCH_FALLBACK reason=HASH", p.stdout)
+            self.assertIn("FETCH_FAIL class=NETWORK", p.stdout)
+            self.assertFalse(self.out.exists())
+
+    def fallback_env(self, primary_options, route="/object.bin?src=bad", extra=()):
+        # Primary and fallback are the same fixture server; only src=bad misbehaves.
+        with Fixture(**primary_options) as server:
+            p = subprocess.run(self.command(server.url + route, "--fallback-url", server.url + "/object.bin?src=good", *extra),
+                               capture_output=True, text=True, timeout=90, env={**os.environ, "KF_FETCH_TIMEOUT": "0.4"})
+            self.assertNotIn("http", p.stdout + p.stderr)
+            self.assertNotIn("src=", p.stdout + p.stderr)
+            return p, server
+
+    def assert_fell_back(self, p, reason):
+        self.assert_good(p)
+        self.assertIn("FETCH_FALLBACK reason=" + reason, p.stdout)
+        self.assertEqual(p.stdout.count("FETCH_FALLBACK"), 1)
+        self.assertFalse(self.unverified.exists())
+
+    def test_fallback_after_accept_then_reset(self):
+        p, _ = self.fallback_env({"bad_accept_reset": True})
+        self.assert_fell_back(p, "NETWORK")
+
+    def test_fallback_after_html_block_page_with_200(self):
+        p, _ = self.fallback_env({"bad_html": True})
+        self.assert_fell_back(p, "HASH")
+
+    def test_fallback_after_html_block_page_with_pinned_size(self):
+        p, _ = self.fallback_env({"bad_html": True}, extra=("--size", str(len(DATA))))
+        self.assert_fell_back(p, "SIZE")
+
+    def test_fallback_after_403(self):
+        p, _ = self.fallback_env({"bad_403": True})
+        self.assert_fell_back(p, "AUTH")
+
+    def test_fallback_after_truncated_body(self):
+        p, _ = self.fallback_env({"drop_after0": True})
+        self.assert_fell_back(p, "NETWORK")
+
+    def test_fallback_after_stall_past_timeout(self):
+        p, _ = self.fallback_env({"bad_stall": True})
+        self.assert_fell_back(p, "NETWORK")
+
+    def test_stall_on_both_servers_fails_network(self):
+        with Fixture(bad_stall=True) as server:
+            p = subprocess.run(self.command(server.url + "/object.bin?src=bad", "--fallback-url", server.url + "/object.bin?src=bad2&src=bad"),
+                               capture_output=True, text=True, timeout=90, env={**os.environ, "KF_FETCH_TIMEOUT": "0.4"})
+            self.assertEqual(p.returncode, 1)
+            self.assertIn("FETCH_FALLBACK reason=NETWORK", p.stdout)
+            self.assertIn("FETCH_FAIL class=NETWORK", p.stdout)
+            self.assertFalse(self.out.exists())
+
+    def test_fallback_after_correct_headers_corrupt_bytes(self):
+        p, _ = self.fallback_env({"bad_corrupt0": True})
+        self.assert_fell_back(p, "HASH")
+
+    def test_fallback_after_malformed_range_response(self):
+        p, _ = self.fallback_env({"bad_wrong_length": True})
+        self.assert_fell_back(p, "SIZE")
+
+    def test_both_servers_bad_exits_with_last_class_and_no_final_file(self):
+        with Fixture(bad_403=True) as server:
+            p = subprocess.run(self.command(server.url + "/object.bin?src=bad", "--fallback-url", self.closed_url()),
+                               capture_output=True, text=True, timeout=60)
+            self.assertEqual(p.returncode, 1)
+            self.assertIn("FETCH_FALLBACK reason=AUTH", p.stdout)
+            self.assertIn("FETCH_FAIL class=NETWORK", p.stdout)
+            self.assertFalse(self.out.exists())
+
+    def test_invalid_pin_is_local_and_does_not_fall_back(self):
+        with Fixture() as server:
+            p = self.fallback(server.url + "/object.bin?src=bad", server, pin="zz")
+            self.assertEqual(p.returncode, 2)
+            self.assertNotIn("FETCH_FALLBACK", p.stdout)
+            self.assertFalse(server.requests)
+
+    def test_invalid_stream_count_is_local_and_does_not_fall_back(self):
+        with Fixture() as server:
+            p = self.fallback(server.url + "/object.bin?src=bad", server, streams=0)
+            self.assertEqual(p.returncode, 2)
+            self.assertNotIn("FETCH_FALLBACK", p.stdout)
+            self.assertFalse(server.requests)
+
+    def test_unwritable_output_directory_does_not_fall_back(self):
+        with Fixture() as server:
+            blocker = Path(self.temp.name) / "file"
+            blocker.write_text("x")
+            self.out = blocker / "sub" / "out.bin"
+            p = self.fallback(server.url + "/object.bin?src=bad", server)
+            self.assertEqual(p.returncode, 2)
+            self.assertNotIn("FETCH_FALLBACK", p.stdout)
+            self.assertFalse(server.requests)
+
+    def test_disk_limit_is_local_and_does_not_fall_back(self):
+        import resource
+        with Fixture() as server:
+            def limit():
+                resource.setrlimit(resource.RLIMIT_FSIZE, (1000, 1000))
+            p = subprocess.run(self.command(server.url + "/object.bin?src=bad", "--fallback-url", server.url + "/object.bin?src=good"),
+                               capture_output=True, text=True, timeout=60, preexec_fn=limit)
+            self.assertEqual(p.returncode, 2)
+            self.assertNotIn("FETCH_FALLBACK", p.stdout)
+            self.assertFalse(self.out.exists())
+            self.assertFalse([r for r in server.requests if "src=good" in r[0]])
+
+    def test_fallback_never_receives_worker_credentials(self):
+        with Fixture(origin_500=True) as server:
+            env = {**os.environ, "KF_RUN_TOKEN": "fixture-token", "KF_ACCESS_ID": "fixture-id", "KF_ACCESS_SECRET": "fixture-secret"}
+            p = subprocess.run(self.command(server.url + "/worker/object.bin", "--follow-redirect", "--worker-auth",
+                                            "--fallback-url", server.url + "/object.bin?src=good"),
+                               env=env, capture_output=True, text=True, timeout=60)
+            self.assert_good(p)
+            self.assertIn("FETCH_FALLBACK reason=NETWORK", p.stdout)
+            self.assertNotIn("fixture-token", p.stdout + p.stderr)
+            for path, _, headers in server.requests:
+                if not path.startswith("/worker/"):
+                    self.assertNotIn("Authorization", headers)
+                    self.assertNotIn("Cf-Access-Client-Secret", headers)
+
+    def test_fallback_does_not_follow_redirects(self):
+        with Fixture() as server:
+            p = self.fallback(self.closed_url(), server, "--follow-redirect", route="/worker/object.bin")
+            self.assertEqual(p.returncode, 1)
+            self.assertFalse(self.good_chunks(server))
+            self.assertFalse(self.out.exists())
+
+    def test_fallback_after_hash_failure_gets_no_credentials(self):
+        with Fixture(corrupt=True) as server:
+            env = {**os.environ, "KF_RUN_TOKEN": "fixture-token", "KF_ACCESS_ID": "fixture-id", "KF_ACCESS_SECRET": "fixture-secret"}
+            p = subprocess.run(self.command(server.url + "/object.bin?src=bad", "--worker-auth",
+                                            "--fallback-url", server.url + "/object.bin?src=good"),
+                               env=env, capture_output=True, text=True, timeout=60)
+            self.assertIn("FETCH_FALLBACK reason=HASH", p.stdout)
+            bad = [h for path, _, h in server.requests if "src=bad" in path]
+            good = [h for path, _, h in server.requests if "src=good" in path]
+            self.assertTrue(bad and good)
+            self.assertTrue(all(h.get("Authorization") == "Bearer fixture-token" for h in bad))
+            self.assertTrue(all("Authorization" not in h for h in good))
+
+    def test_fallback_redirect_after_hash_failure_is_refused(self):
+        with Fixture(corrupt=True) as server:
+            p = subprocess.run(self.command(server.url + "/object.bin?src=bad", "--follow-redirect",
+                                            "--fallback-url", server.url + "/worker/object.bin"),
+                               capture_output=True, text=True, timeout=60)
+            self.assertIn("FETCH_FALLBACK reason=HASH", p.stdout)
+            self.assertEqual(p.returncode, 1)
+            self.assertIn("FETCH_FAIL class=NETWORK", p.stdout)
+            self.assertFalse(self.out.exists())
 
     def test_cli_errors_do_not_echo_secrets(self):
         p = subprocess.run(self.command("https://example.invalid/object?signature=private-query", "--typo=private-query"),

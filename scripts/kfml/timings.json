@@ -1,0 +1,8 @@
+{
+ "nanogpt_compile": null,
+ "triton_kernels": null,
+ "cuda_ext_inline": null,
+ "amp_convnet_cifar": null,
+ "stress_alloc": null,
+ "managed_oversub": null
+}

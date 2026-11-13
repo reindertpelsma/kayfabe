@@ -353,7 +353,7 @@ CASES += [
     ),
     (
         "apps-tier-ignored-when-reading-the-list",
-        replace("            names = apps_gate_list(root, tier)", '            names = apps_gate_list(root, "large")'),
+        replace("            names = apps_gate_list(root, apps_tier)", '            names = apps_gate_list(root, "large")'),
     ),
     (
         "apps-stage-never-appended",

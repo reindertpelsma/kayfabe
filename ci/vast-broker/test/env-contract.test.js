@@ -34,24 +34,27 @@ function everyTierEnvironment() {
             for (const spec of [undefined, 'lanea', 'laneb', 'both'])
               for (const winApps of [undefined, 'small', 'mid', 'full'])
                 for (const linuxApps of [undefined, true])
-                  try {
-                    found.push(
-                      tierEnvironment(profile, {
-                        tierName,
-                        windowsRuns,
-                        stages,
-                        releaseMatrix,
-                        spec,
-                        winApps,
-                        linuxApps,
-                      }),
-                    );
-                  } catch {
-                    // refused by design
-                  }
+                  for (const rehearsal of [undefined, true])
+                    try {
+                      found.push(
+                        tierEnvironment(profile, {
+                          tierName,
+                          windowsRuns,
+                          stages,
+                          releaseMatrix,
+                          spec,
+                          winApps,
+                          linuxApps,
+                          rehearsal,
+                        }),
+                      );
+                    } catch {
+                      // refused by design
+                    }
   return found;
 }
 const NAMES = [
+  'KF_RELEASE_REHEARSAL',
   'KF_MERGE_WINDOWS',
   'KF_TIER',
   'KF_WINDOWS_RUNS',
@@ -117,4 +120,96 @@ test('the whole environment of a mocked signed middle rental passes the box cont
   } finally {
     await h.call('/stop/123-1');
   }
+});
+// Regression 2026-11-11: KF_LINUX_APPS was dropped between tier.js and the box. The emission side:
+// the signed middle tier's request, taken from middleAppsRequest exactly as index.js builds it, must
+// put both opt-ins into the environment; every other tier/profile must carry neither.
+// Killers: (1) the exact-value asserts below, (2) the SPEC membership of each emitted name.
+import { middleAppsRequest } from '../src/tier.js';
+// Release shape v2 (2026-11-12): a release MIDDLE leg (the second die of a family) asks for the apps pair too.
+test('a release middle leg carries the apps pair; a release small or adhoc leg does not', () => {
+  assert.deepEqual(middleAppsRequest('release', 'middle', true), {
+    linuxApps: true,
+    winApps: 'mid',
+  });
+  assert.deepEqual(middleAppsRequest('release', 'middle', false), {});
+  assert.deepEqual(middleAppsRequest('release', 'small', true), {});
+  assert.deepEqual(middleAppsRequest('release', 'adhoc', true), {});
+});
+test('the middle and large tier requests carry KF_LINUX_APPS=1 and KF_WINAPPS=mid, and only they', () => {
+  const env = tierEnvironment('check', {
+    tierName: 'middle',
+    ...middleAppsRequest('check', 'middle', true),
+  });
+  assert.equal(env.KF_LINUX_APPS, '1');
+  assert.equal(env.KF_WINAPPS, 'mid');
+  const { spec } = contract({ env: {} });
+  for (const name of ['KF_LINUX_APPS', 'KF_WINAPPS']) assert.ok(spec.includes(name), name);
+  assert.deepEqual(contract({ pairs: Object.entries(env) }).malformed, []);
+  for (const [profile, tierName, enabled] of [
+    ['check', 'middle', false],
+    ['check', 'small', true],
+    ['check', 'adhoc', true],
+    ['sweep', 'middle', true],
+    ['release', 'small', true],
+    ['check', 'large', true],
+    ['sweep', 'large', true],
+  ]) {
+    const e = tierEnvironment(profile, {
+      tierName,
+      ...middleAppsRequest(profile, tierName, enabled),
+    });
+    assert.ok(
+      !('KF_LINUX_APPS' in e) && !('KF_WINAPPS' in e),
+      profile + '/' + tierName + '/' + enabled,
+    );
+  }
+});
+
+// 2026-11-12 (release rehearsal, owner: large includes middle). FALSIFIER: a large leg that does not send the apps
+// pair, a rehearsal marker outside the large release profile or beside a matrix row, or a marker the box contract drops.
+test('a large leg carries the middle apps pair; a rehearsal leg adds exactly KF_RELEASE_REHEARSAL=1', () => {
+  const apps = middleAppsRequest('release', 'large', true);
+  assert.deepEqual(apps, { linuxApps: true, winApps: 'mid' });
+  assert.deepEqual(middleAppsRequest('release', 'large', false), {});
+  const env = tierEnvironment('release', {
+    tierName: 'large',
+    windowsRuns: 2,
+    rehearsal: true,
+    ...apps,
+  });
+  assert.equal(env.KF_LINUX_APPS, '1');
+  assert.equal(env.KF_WINAPPS, 'mid');
+  assert.equal(env.KF_RELEASE_REHEARSAL, '1');
+  assert.equal(env.KF_TIER, 'large');
+  assert.ok(!('KF_HOST_DRIVER' in env) && !('KF_RELEASE_SUBRUNS' in env));
+  assert.deepEqual(contract({ pairs: Object.entries(env) }).malformed, []);
+  assert.deepEqual(contract({ pairs: Object.entries(env) }).unknown, []);
+  for (const bad of ['0', 'true', '', ' 1'])
+    assert.deepEqual(
+      contract({ env: { KF_RELEASE_REHEARSAL: bad } }).malformed,
+      ['KF_RELEASE_REHEARSAL'],
+      bad,
+    );
+});
+test('the rehearsal marker is refused outside large/release and beside a matrix row', () => {
+  for (const [profile, tierName] of [
+    ['check', 'middle'],
+    ['check', 'small'],
+    ['sweep', 'adhoc'],
+    ['release', 'middle'],
+    ['release', undefined],
+  ])
+    assert.throws(() => tierEnvironment(profile, { tierName, rehearsal: true }), /rehearsal/);
+  assert.throws(
+    () =>
+      tierEnvironment('release', {
+        tierName: 'large',
+        rehearsal: true,
+        releaseMatrix: RELEASE_MATRIX.dies[0],
+      }),
+    /rehearsal/,
+  );
+  assert.throws(() => tierEnvironment('release', { tierName: 'large', rehearsal: 1 }), /rehearsal/);
+  assert.ok(!('KF_RELEASE_REHEARSAL' in tierEnvironment('release', { tierName: 'large' })));
 });

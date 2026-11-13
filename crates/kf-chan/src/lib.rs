@@ -13,6 +13,7 @@
 //! ★ [`dbfast`] (2026-09-30): the doorbell's optional fast TRANSPORT — a KVM ioeventfd per live
 //! token, serviced by the register drainer, handled exactly as the trap handles it.
 
+pub mod ce_implicit;
 pub mod census;
 pub mod completions;
 pub mod dbfast;
@@ -29,6 +30,7 @@ pub mod translated;
 pub mod tspace_unsafe;
 pub mod ttables;
 pub mod user_batch;
+pub mod user_chunk;
 pub mod user_consumption;
 pub mod user_gate;
 pub mod user_lazy;

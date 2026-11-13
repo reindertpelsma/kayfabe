@@ -16,6 +16,7 @@ const cfgFor = (tier) =>
       BOOT_LIMIT_MINUTES: '75',
       MAX_PRICE_USD_HOUR: '2',
       MAX_CONCURRENT_RENTALS: '9',
+      ...(tier === 'large' ? { MIDDLE_APPS_ENABLED: undefined } : {}),
     }),
     tier === 'large' ? 'release' : tier === 'adhoc' ? 'sweep' : 'check',
     tier,
@@ -25,6 +26,7 @@ const offer = (id, compute, inet, disk = 120) => ({
   id,
   machine_id: 80000 + id,
   gpu_name: 'RTX_4070',
+  cpu_name: 'AMD EPYC 7B13',
   compute_cap: 890,
   geolocation: 'Texas, US',
   dph_base: compute,
@@ -100,7 +102,7 @@ for (const tier of ['small', 'large'])
 import { offlinePlan } from '../release-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { setup, sha } from './helpers.js';
-test('release estimate reserves the large allowance on every full leg', async () => {
+test('release estimate reserves the large allowance on every large leg and the middle limit on every middle leg', async () => {
   const market = JSON.parse(
     readFileSync(new URL('./fixtures/release-market-synthetic.json', import.meta.url)),
   ).offers;
@@ -109,15 +111,19 @@ test('release estimate reserves the large allowance on every full leg', async ()
   const cfg = cfgFor('large');
   const expected = plan.families
     .flatMap((f) => f.cells.flatMap((c) => c.legs))
-    .reduce(
-      (sum, l) =>
+    .reduce((sum, l) => {
+      const price = offerPrice(
+        market.find((o) => o.id === l.offer_id),
+        cfg,
+      );
+      // The large allowance (130 GB, 300 GB disk) is reserved on every leg; a middle leg is priced at the middle hard limit.
+      return (
         sum +
-        offerPrice(
-          market.find((o) => o.id === l.offer_id),
-          cfg,
-        ).total,
-      0,
-    );
+        (l.leg_tier === 'middle'
+          ? (price.computeStorage * (240 * 60000 + cfg.cronPeriod)) / 3600000 + price.bandwidth
+          : price.total)
+      );
+    }, 0);
   assert.ok(Math.abs(plan.estimate_usd - expected) < 0.002);
   assert.equal(plan.resource_profile.bandwidthDownGb, 130);
   assert.equal(plan.resource_profile.diskGb, 300);
@@ -212,6 +218,7 @@ async function largeService() {
   const h = await setup({
     MAX_CONCURRENT_RENTALS: '9',
     RELEASE_ENABLED: 'true',
+    MIDDLE_APPS_ENABLED: undefined,
     ROLLING_SPEND_USD: '200',
     ACCOUNT_DAILY_USD: '50',
   });

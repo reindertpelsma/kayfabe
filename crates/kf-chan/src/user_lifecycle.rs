@@ -134,10 +134,27 @@ pub struct Counts {
     pub pointer_large_entries: u64,
     /// Largest forwarded Pointer PB length; a maximum, never a sum.
     pub pointer_entry_max_bytes: u64,
-    /// Scan/Window refusals at the per-copy budget; observation only.
+    /// Scan/Window refusals at the per-copy budget; observation only. ALWAYS 0 since Phase 2 (kept so log parsers
+    /// keep the field): an oversized segment streams instead of being refused.
     pub refused_scan_budget: u64,
+    /// Triggered descriptor whose whole patched span exceeds staging.
+    pub refused_staged_span_budget: u64,
     /// See above.
     pub entries_window: u64,
+    /// Scan/Window segments above the per-copy bound that Phase 2 classified in bounded parts (observation only).
+    pub segments_streamed: u64,
+    /// Most parts any streamed segment needed; a maximum, never a sum.
+    pub stream_parts_max: u64,
+    /// Largest PB length of any entry forwarded in Window mode; a maximum, never a sum.
+    pub window_entry_max_bytes: u64,
+    /// Streams dropped on a retry and restarted from part 0. Causes: a changed source translation, a scan re-read (grace),
+    /// a changed or not-ready software object, a stopped or disabled channel, or a retry outside a part copy or a busy-only
+    /// publication (those two keep the stream and are not counted here).
+    pub stream_restarts: u64,
+    /// Most restarts any ONE segment needed; a maximum, never a sum.
+    pub stream_restarts_max: u64,
+    /// Publications of a complete stream that were only busy: the stream was kept and only the publication retried.
+    pub stream_publish_retries: u64,
     /// Scan -> Pointer.
     pub to_pointer: u64,
     /// Scan -> Window.
@@ -225,7 +242,7 @@ pub struct Counts {
 }
 
 macro_rules! counts_since {
-    ($a:expr, $b:expr, $($f:ident),*) => { Counts { $($f: $a.$f - $b.$f,)* window_entries_max: 0, pointer_entry_max_bytes: $a.pointer_entry_max_bytes } };
+    ($a:expr, $b:expr, $($f:ident),*) => { Counts { $($f: $a.$f - $b.$f,)* window_entries_max: 0, pointer_entry_max_bytes: $a.pointer_entry_max_bytes, stream_parts_max: $a.stream_parts_max, window_entry_max_bytes: $a.window_entry_max_bytes, stream_restarts_max: $a.stream_restarts_max } };
 }
 impl Counts {
     /// Additive counter deltas. Window maximum is reported separately; Pointer
@@ -239,6 +256,10 @@ impl Counts {
             entries_pointer,
             pointer_large_entries,
             refused_scan_budget,
+            refused_staged_span_budget,
+            segments_streamed,
+            stream_restarts,
+            stream_publish_retries,
             entries_window,
             to_pointer,
             to_window_exact,
@@ -295,6 +316,12 @@ macro_rules! lifecycle_stats {
             pub window_entries_max: std::sync::atomic::AtomicU64,
             /// Maximum Pointer descriptor length across channels (not summed).
             pub pointer_entry_max_bytes: std::sync::atomic::AtomicU64,
+            /// Most parts any streamed segment needed, across channels (a maximum).
+            pub stream_parts_max: std::sync::atomic::AtomicU64,
+            /// Most restarts any one streamed segment needed, across channels (a maximum).
+            pub stream_restarts_max: std::sync::atomic::AtomicU64,
+            /// Largest PB length forwarded in Window mode across channels (a maximum).
+            pub window_entry_max_bytes: std::sync::atomic::AtomicU64,
             /// PHASE 1c (P1 measurement): the most 5080 SET_OBJECTs any ONE channel's scan saw (a maximum).
             pub set_object_5080_max_per_channel: std::sync::atomic::AtomicU64,
             /// The VM-wide switch of Pointer-mode markers (PHASE 1c): every channel's [`Lifecycle`] reads and sets it.
@@ -306,6 +333,9 @@ macro_rules! lifecycle_stats {
                 use std::sync::atomic::Ordering::Relaxed;
                 $( if d.$f != 0 { self.$f.fetch_add(d.$f, Relaxed); } )*
                 self.pointer_entry_max_bytes.fetch_max(d.pointer_entry_max_bytes, Relaxed);
+                self.stream_parts_max.fetch_max(d.stream_parts_max, Relaxed);
+                self.stream_restarts_max.fetch_max(d.stream_restarts_max, Relaxed);
+                self.window_entry_max_bytes.fetch_max(d.window_entry_max_bytes, Relaxed);
             }
             /// Record a channel's total of scanned 5080 SET_OBJECTs (kept as the maximum over channels).
             pub fn set_object_max(&self, total: u64) {
@@ -333,6 +363,9 @@ macro_rules! lifecycle_stats {
                     self.set_object_5080_max_per_channel.load(Relaxed)
                 ));
                 s.push_str(&format!("pointer_entry_max_bytes={} ", self.pointer_entry_max_bytes.load(Relaxed)));
+                s.push_str(&format!("stream_parts_max={} ", self.stream_parts_max.load(Relaxed)));
+                s.push_str(&format!("stream_restarts_max={} ", self.stream_restarts_max.load(Relaxed)));
+                s.push_str(&format!("window_entry_max_bytes={} ", self.window_entry_max_bytes.load(Relaxed)));
                 s.push_str(&format!("window_entries_max={}", self.window_entries_max.load(Relaxed)));
                 s
             }
@@ -344,6 +377,10 @@ lifecycle_stats!(
     entries_pointer,
     pointer_large_entries,
     refused_scan_budget,
+    refused_staged_span_budget,
+    segments_streamed,
+    stream_restarts,
+    stream_publish_retries,
     entries_window,
     to_pointer,
     to_window_exact,
@@ -722,6 +759,12 @@ impl Lifecycle {
             u8::from(self.latched)
         )
     }
+    /// Entries of the new ring still owed a scan after a source switch (`POST_SWITCH_SCAN` counts down). A refusal
+    /// message reports it so that a reader can tell a Window forced only by a migration from one a live registration holds.
+    #[must_use]
+    pub fn post_switch_remaining(&self) -> u32 {
+        self.post_switch
+    }
     /// The current mode.
     #[must_use]
     pub fn mode(&self) -> Mode {
@@ -956,6 +999,12 @@ impl Lifecycle {
                     self.post_switch -= 1;
                     self.counts.post_switch_scanned += 1;
                 }
+                if let Ok(crate::user_stream::Source::Segment(d)) =
+                    crate::user_stream::inspect_format(raw)
+                {
+                    self.counts.window_entry_max_bytes =
+                        self.counts.window_entry_max_bytes.max(d.len_bytes);
+                }
                 self.window_entries += 1;
                 self.counts.window_entries_max =
                     self.counts.window_entries_max.max(self.window_entries);
@@ -1008,9 +1057,27 @@ impl Lifecycle {
             self.fresh_done(FreshFirst::Refused);
         }
     }
-    /// Record a pre-read Scan/Window size refusal; it grants no progress.
-    pub fn scan_budget_refused(&mut self) {
-        self.counts.refused_scan_budget = self.counts.refused_scan_budget.saturating_add(1);
+    /// A stream was dropped on a retry; `run` is the restarts of this segment so far.
+    pub fn stream_restarted(&mut self, run: u32) {
+        self.counts.stream_restarts = self.counts.stream_restarts.saturating_add(1);
+        self.counts.stream_restarts_max = self.counts.stream_restarts_max.max(u64::from(run));
+    }
+
+    /// A complete stream's publication was only busy; the stream was kept.
+    pub fn stream_publish_retried(&mut self) {
+        self.counts.stream_publish_retries = self.counts.stream_publish_retries.saturating_add(1);
+    }
+
+    /// A segment above the per-copy bound was classified in `parts` bounded parts and is being published.
+    pub fn segment_streamed(&mut self, parts: u8) {
+        self.counts.segments_streamed = self.counts.segments_streamed.saturating_add(1);
+        self.counts.stream_parts_max = self.counts.stream_parts_max.max(u64::from(parts));
+    }
+
+    /// Count a triggered stream refused before publication or software action.
+    pub fn staged_span_budget_refused(&mut self) {
+        self.counts.refused_staged_span_budget =
+            self.counts.refused_staged_span_budget.saturating_add(1);
     }
 
     /// A pushbuffer was read (via a [`ScanPermit`]).

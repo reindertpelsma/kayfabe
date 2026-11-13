@@ -363,7 +363,8 @@ test('large tier contract inherits middle and adds SPEC plus reserved LLM', asyn
   assert.deepEqual(TIER_CONTENTS.middle.appProfiles, { linux: 'middle', windows: 'mid' });
   assert.equal(TIER_CONTENTS.large.inherits, 'middle');
   assert.deepEqual(TIER_CONTENTS.large.additionalStages, ['specviewperf', 'llm_parity']);
-  assert.equal(TIER_CONTENTS.large.state, 'DESIGN_ONLY');
+  // 2026-11-12: the apps pair is sent for large (large includes middle); the tier is still not executable.
+  assert.equal(TIER_CONTENTS.large.state, 'APPS_SENT');
 });
 test('the LLM slot is reserved in the release catalogue and cannot be enabled', async () => {
   const { DEFAULTS } = await import('../src/defaults.js');

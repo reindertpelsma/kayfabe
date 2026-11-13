@@ -2514,7 +2514,7 @@ fn pin_the_disable_enable_acts_are_the_models() {
 
 #[test]
 fn pin_publish_rings_the_native_doorbell_after_the_pt_lock_is_released() {
-    let p = after(USERPUMP, "fn publish_guarded(")
+    let p = after(USERPUMP, "fn publish_guarded_classified(")
         .split("fn snapshot_with")
         .next()
         .unwrap();
@@ -2527,7 +2527,12 @@ fn pin_publish_rings_the_native_doorbell_after_the_pt_lock_is_released() {
         "pin: the doorbell is rung after the admission (pt guard) ended"
     );
     assert!(
-        p.contains("if t.stopped || t.disabled {\n                return Err(Failure::Retry);"),
+        p.contains("t.stopped || t.disabled,")
+            && after(USERPUMP, "fn admission_checks(")
+                .split("/// Whether a failed publication")
+                .next()
+                .unwrap()
+                .contains("if stopped {\n        why.set(Some(Stale::Stopped));\n        return Err(Failure::Retry);"),
         "pin: publish refuses a disabled twin"
     );
 }
@@ -2668,7 +2673,7 @@ fn the_exploration_reaches_every_race_it_claims_to_cover() {
 #[test]
 #[ignore = "OPEN (EXPECTED RED since the previous commit): owner decision on a read-back before the private doorbell; docs/design/V3_USER_RING_EVENT_LOOP_20261014.md section 9.2"]
 fn p10_publish_reads_back_before_the_native_doorbell() {
-    let p = after(USERPUMP, "fn publish_guarded(")
+    let p = after(USERPUMP, "fn publish_guarded_classified(")
         .split("fn snapshot_with")
         .next()
         .unwrap();

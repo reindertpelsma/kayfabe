@@ -3,7 +3,10 @@
 // given offer list, and its worst-case cost per family, by the Worker's own code (configuration,
 // offer rules, src/release.js). It rents nothing and needs no credential (wtier, 2026-11-05).
 //
-//   node ci/vast-broker/release-plan.mjs --market <offers.json> [--var NAME=VALUE ...] [--credit N]
+//   node ci/vast-broker/release-plan.mjs --market <offers.json> [--var NAME=VALUE ...] [--credit N] [--rehearsal DIE]
+//
+// --rehearsal DIE plans the named one-die rehearsal scope (admin start {tier:'large', die, rehearsal:true}); it never
+// clears a matrix blocker and its plan says the driver sub-run matrix is NOT executed.
 //
 // <offers.json>: a Vast bundles answer ({"offers": [...]}) or a plain array, for example
 // test/fixtures/release-market-synthetic.json. --var sets a Worker variable as the deployed vars
@@ -15,7 +18,7 @@ import { configuration } from './src/policy.js';
 import { applyProfile } from './src/tier.js';
 import { OfferBook } from './src/offers.js';
 import { Ledger } from './src/ledger.js';
-import { planRelease } from './src/release.js';
+import { planRelease, planRehearsal } from './src/release.js';
 
 class EmptyStorage {
   data = new Map();
@@ -35,7 +38,7 @@ class EmptyStorage {
     return action(this);
   }
 }
-export async function offlinePlan(market, vars = {}, { credit } = {}) {
+export async function offlinePlan(market, vars = {}, { credit, rehearsal } = {}) {
   // Placeholders for the identity variables the configuration requires; nothing is contacted.
   const env = {
     OWNER_GITHUB_ID: '1',
@@ -49,14 +52,24 @@ export async function offlinePlan(market, vars = {}, { credit } = {}) {
   const evaluation = await new OfferBook(Date.now).evaluate(null, cfg, ledger, 'release', {
     market,
   });
+  if (rehearsal !== undefined)
+    return planRehearsal(evaluation.allowed, cfg, {
+      budget: await ledger.budgetSummary(cfg, Date.now()),
+      ...(credit === undefined ? {} : { credit }),
+      die: rehearsal,
+    });
   return planRelease(evaluation.allowed, cfg, {
     budget: await ledger.budgetSummary(cfg, Date.now()),
     ...(credit === undefined ? {} : { credit }),
   });
 }
-function table(plan) {
+export function table(plan) {
   const lines = [
-    'release plan (offline; rents nothing): legs=' +
+    'release plan (offline; rents nothing)' +
+      (plan.rehearsal
+        ? ' REHEARSAL ' + plan.rehearsal_die + ' (driver sub-run matrix NOT executed)'
+        : '') +
+      ': legs=' +
       plan.legs +
       ' parallel=' +
       plan.parallel +
@@ -68,6 +81,16 @@ function table(plan) {
       plan.admitted +
       (plan.refusals.length ? ' refusals=' + plan.refusals.join(',') : ''),
   ];
+  if (plan.cpu_vendor)
+    lines.push(
+      '  cpu_vendor required=' +
+        JSON.stringify(plan.cpu_vendor.required) +
+        ' planned=' +
+        JSON.stringify(plan.cpu_vendor.planned) +
+        ' swaps=' +
+        plan.cpu_vendor.swaps.length +
+        (plan.cpu_vendor.missing.length ? ' MISSING=' + plan.cpu_vendor.missing.join(',') : ''),
+    );
   for (const f of plan.families) {
     lines.push('  ' + f.family + ' est_usd=' + f.est_usd + (f.complete ? '' : ' INCOMPLETE'));
     for (const c of f.cells)
@@ -83,6 +106,11 @@ function table(plan) {
             l.gpu_name +
             ' dph=' +
             l.dph_total +
+            ' tier=' +
+            (l.leg_tier ?? 'large') +
+            ' cpu=' +
+            l.cpu_vendor +
+            (l.pin_cpu_vendor ? '(pinned)' : '') +
             ' windows_runs=' +
             l.windows_runs +
             ' est_usd=' +
@@ -94,7 +122,7 @@ function table(plan) {
 }
 if (import.meta.url === 'file://' + process.argv[1]) {
   const args = process.argv.slice(2);
-  let market, credit;
+  let market, credit, rehearsal;
   const vars = {};
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--market') {
@@ -104,10 +132,14 @@ if (import.meta.url === 'file://' + process.argv[1]) {
       const [name, ...value] = args[++i].split('=');
       vars[name] = value.join('=');
     } else if (args[i] === '--credit') credit = Number(args[++i]);
-    else throw Error('usage: release-plan.mjs --market <offers.json> [--var N=V] [--credit N]');
+    else if (args[i] === '--rehearsal') rehearsal = args[++i];
+    else
+      throw Error(
+        'usage: release-plan.mjs --market <offers.json> [--var N=V] [--credit N] [--rehearsal DIE]',
+      );
   }
   if (!Array.isArray(market)) throw Error('--market <offers.json> is required');
-  const plan = await offlinePlan(market, vars, { credit });
+  const plan = await offlinePlan(market, vars, { credit, rehearsal });
   console.log(table(plan));
   console.log(JSON.stringify(plan, null, 1));
 }

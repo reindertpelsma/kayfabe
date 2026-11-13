@@ -167,9 +167,13 @@ download_file() {
         printf '%s\n' "$location" | python3 -I "$(dirname "$0")/../../ci/kf_fetch.py" - "$1" \
             --sha256 "$want" --streams "$fetch_streams" --chunk-mb 16 \
             | sed '/^FETCH_SOURCE /d' || rc=$?
-        # The caller's existing pin check deletes a bad .part and exits 3; do not
-        # turn a hash mismatch into a network retry or alter its verdict.
-        [ "$rc" -ne 3 ] || return 0
+        # A hash mismatch must not become a network retry: exit 3, as the curl path does.
+        # kf_fetch.py already deleted its .unverified bytes and state and never creates $1 on a mismatch.
+        if [ "$rc" -eq 3 ]; then
+            rm -f -- "$1.fetch-state.json" "$1.fetch-state.json.lock"
+            echo "fetch_bench_data: sha256 mismatch for $name (pinned $want); bytes deleted" >&2
+            exit 3
+        fi
         return "$rc"
     fi
     # One locator is valid for one mint (<= 20 minutes to START a request; a running transfer is not cut by the expiry).

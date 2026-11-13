@@ -278,6 +278,16 @@ export function configuration(env) {
   cfg.hardRelease =
     number('RELEASE_HARD_RUNTIME_MINUTES', DEFAULTS.releaseHardMinutes, DEFAULTS.hardMinutes) *
     60000;
+  // 2026-11-12 (matrix v2): the hard limit of a release MIDDLE leg (the second die of each family). Lowerable only
+  // (never above the release hard limit); the planner prices a middle leg at this limit, admit() rents it with it.
+  cfg.releaseMiddleHard =
+    number(
+      'RELEASE_MIDDLE_HARD_RUNTIME_MINUTES',
+      Math.min(DEFAULTS.releaseMiddleHardMinutes, cfg.hardRelease / 60000),
+      cfg.hardRelease / 60000,
+    ) * 60000;
+  if (!Number.isInteger(cfg.releaseMiddleHard / 60000) || cfg.releaseMiddleHard <= cfg.softMargin)
+    refuse('CONFIG_VAR:RELEASE_MIDDLE_HARD_RUNTIME_MINUTES', 503);
   if (!Number.isInteger(cfg.releaseDailyCount)) refuse('CONFIG_VAR:RELEASE_DAILY_RENTALS', 503);
   if (!Number.isInteger(cfg.hardRelease / 60000) || cfg.hardRelease <= cfg.softMargin)
     refuse('CONFIG_VAR:RELEASE_HARD_RUNTIME_MINUTES', 503);

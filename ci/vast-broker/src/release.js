@@ -19,6 +19,10 @@ import {
   checkedMatrixReceipts,
   sameMatrixRow,
   driverPinsFor,
+  legTierOfRow,
+  vendorOfCpuName,
+  rentableCpuName,
+  CPU_VENDOR_REQUIRED,
 } from './release-matrix.js';
 import { DEFAULTS } from './defaults.js';
 import { gpuClass, resourceCaps, validateStagePolicy } from './policy.js';
@@ -31,6 +35,9 @@ const countryRank = (offer, cfg) => {
 };
 const byPreference = (cfg) => (a, b) =>
   countryRank(a, cfg) - countryRank(b, cfg) || rankingPrice(a) - rankingPrice(b) || a.id - b.id;
+// One credit rule for the release plan and the rehearsal plan (NaN-safe: anything but a sufficient number is short).
+const creditShort = (credit, cfg, estimate, budget) =>
+  credit !== undefined && !(credit >= cfg.reserve + estimate + budget.outstanding_usd);
 export const requiredStageRows = (stages) => {
   validateStagePolicy(stages);
   return Object.fromEntries(
@@ -41,26 +48,53 @@ export const requiredStageRows = (stages) => {
   );
 };
 // One full leg per matrix die; the compatibility path for other callers retains the old split.
-export function dieLegs(offers, cfg, matrixRow) {
+// `rehearsal` (2026-11-12): the named one-die rehearsal scope. The leg carries NO driver matrix (no release_matrix, drivers,
+// pins or subruns: the payload would refuse them, and they would be a false claim), and the host is not filtered by what it
+// could swap, because nothing is swapped. The row is still the die's matrix row, for the box policy only.
+// `pin` (planRelease's CPU-vendor swap): {first?: offer, second?: offer|null} replaces the cheapest-first choice for that
+// leg; `second: null` pins "no second machine" (the second leg then reuses the first box).
+// Matrix v2 (owner 2026-11-12): a die whose matrix profile is 'middle' (the second die of each family) is ONE middle leg:
+// one Windows run, the apps, no SPEC lanes, priced at the middle hard limit (RELEASE_MIDDLE_HARD_RUNTIME_MINUTES).
+// Hosts whose cpu_name is not recognised as AMD or Intel (empty, ARM, unfamiliar) are never planned.
+export function eligibleOffers(offers, releaseMatrix, matrixRow) {
+  const swappable = matrixRow
+    ? offers.filter((o) =>
+        hostProvidesDrivers(
+          o.host_capabilities ?? releaseMatrix.host_capabilities.vast_kvm,
+          matrixRow,
+        ),
+      )
+    : offers;
+  return swappable.filter((o) => rentableCpuName(o.cpu_name));
+}
+export function legEstimate(o, cfg, legTier) {
+  if (legTier !== 'middle') return o.pricing.total;
+  return (
+    (o.pricing.computeStorage * (cfg.releaseMiddleHard + cfg.cronPeriod)) / 3600000 +
+    o.pricing.bandwidth
+  );
+}
+export function dieLegs(offers, cfg, matrixRow, { rehearsal = false, pin } = {}) {
   validateStagePolicy(cfg.releaseStages);
   const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
   matrixRow ??= releaseMatrix.dies.find((d) => d.die === offers[0]?.die);
-  if (matrixRow)
-    offers = offers.filter((o) =>
-      hostProvidesDrivers(
-        o.host_capabilities ?? releaseMatrix.host_capabilities.vast_kvm,
-        matrixRow,
-      ),
-    );
+  if (!rehearsal) offers = eligibleOffers(offers, releaseMatrix, matrixRow);
   const sorted = [...offers].sort(byPreference(cfg));
   if (!sorted.length) return [];
-  const first = sorted[0];
+  const first = pin?.first ?? sorted[0];
   const others = sorted.filter((o) => o.machine_id !== first.machine_id);
-  const second = others.find((o) => o.host_id !== first.host_id) ?? others[0];
+  const second =
+    pin && 'second' in pin
+      ? (pin.second ?? undefined)
+      : (others.find((o) => o.host_id !== first.host_id) ?? others[0]);
+  const legTier = rehearsal ? 'large' : legTierOfRow(matrixRow);
   const leg = (o, windowsRuns, extra = {}) => ({
     ...extra,
+    ...(rehearsal ? {} : { leg_tier: legTier }),
+    cpu_vendor: vendorOfCpuName(o.cpu_name),
     windows_runs: windowsRuns,
-    ...(matrixRow
+    ...(rehearsal ? { rehearsal: true } : {}),
+    ...(matrixRow && !rehearsal
       ? {
           release_matrix: structuredClone(matrixRow),
           drivers: structuredClone(matrixRow.drivers),
@@ -76,14 +110,20 @@ export function dieLegs(offers, cfg, matrixRow) {
     gpu_name: String(o.gpu_name).toUpperCase().replaceAll(' ', '_'),
     country: o.country,
     dph_total: round(o.dph_total),
-    est_usd: round(o.pricing.total),
+    est_usd: round(legEstimate(o, cfg, legTier)),
+    ...(legTier === 'middle' ? { hard_minutes: cfg.releaseMiddleHard / 60000 } : {}),
   });
+  if (legTier === 'middle') return [leg(first, 1)];
   const want = cfg.releaseWindowsRuns;
   if (cfg.releaseStages.includes('specviewperf')) {
     const lanes = DEFAULTS.stageSlots.specviewperf.lanes;
     return lanes.map((spec, index) =>
       leg(index === 0 ? first : (second ?? first), 1, {
         spec,
+        // Large includes middle, but the apps (about 57 min) run only on the LAST lane leg: lane A needs 169 min left
+        // for SPEC and the apps guard does not reserve SPEC's time, so apps before lane A would starve it on a slow host
+        // and trigger a paid rerun. Lane B (133 min) carries them. Absent `apps` means true (legs without SPEC).
+        ...(index < lanes.length - 1 ? { apps: false } : {}),
         phase: index,
         ...(index > 0 ? { after_lane: lanes[0], reuse_machine: !second } : {}),
       }),
@@ -92,6 +132,104 @@ export function dieLegs(offers, cfg, matrixRow) {
   if (second && want >= 2 && (!matrixRow || releaseMatrix.policy.boxes_per_die > 1))
     return [leg(first, 1), leg(second, 1)];
   return [leg(first, want)];
+}
+// The CPU-vendor cover over the large legs (owner 2026-11-12). Each die's cheapest admissible offers are already chosen; if the
+// large legs lack a required vendor, swap ONE slot at a time to the cheapest admissible other-vendor offer of the same die
+// (same constraints: the matrix host filter, no ARM, the SPEC lanes on different machines when two are offered) without
+// dropping another required vendor below its minimum. Middle legs never take part. Returns the report; mutates the cells.
+export function coverCpuVendors(families, pools, cfg, releaseMatrix) {
+  const min = releaseMatrix.policy.cpu_vendor_min;
+  const largeCells = () => families.flatMap((f) => f.cells).filter((c) => c.leg_tier === 'large');
+  const count = (cellsOverride) => {
+    const n = { amd: 0, intel: 0, other: 0, arm: 0 };
+    for (const c of cellsOverride ?? largeCells()) for (const l of c.legs) n[l.cpu_vendor] += 1;
+    return n;
+  };
+  const deficit = (n) => CPU_VENDOR_REQUIRED.filter((v) => n[v] < min[v]);
+  const lack = (n) => CPU_VENDOR_REQUIRED.reduce((sum, v) => sum + Math.max(0, min[v] - n[v]), 0);
+  const before = count();
+  const swaps = [];
+  const costOf = (legs) => legs.reduce((sum, l) => sum + l.est_usd, 0);
+  for (let guard = 0; guard < 16 && deficit(count()).length; guard++) {
+    const cur = count(),
+      lacking = deficit(cur);
+    let best;
+    for (const cell of largeCells()) {
+      const { row, pool } = pools.get(cell);
+      const byId = new Map(pool.map((o) => [o.id, o]));
+      const current = cell.legs.map((l) => byId.get(l.offer_id));
+      if (current.some((o) => o === undefined)) continue;
+      const slots =
+        cell.legs.length === 2 && !cell.same_machine
+          ? [[0], [1]]
+          : [[0, 1].slice(0, cell.legs.length)];
+      for (const vendorWanted of lacking)
+        for (const candidate of pool.filter((o) => vendorOfCpuName(o.cpu_name) === vendorWanted)) {
+          for (const slot of slots) {
+            // The pinned offers of the new plan of this die.
+            const pin =
+              slot.length === 2
+                ? { first: candidate, second: null }
+                : slot[0] === 0
+                  ? { first: candidate }
+                  : { first: current[0], second: candidate };
+            if (pin.first.machine_id === pin.second?.machine_id) continue;
+            if (
+              slot[0] === 0 &&
+              slot.length === 1 &&
+              current[1] &&
+              current[1].machine_id === candidate.machine_id
+            )
+              pin.second = pool.find(
+                (o) => o.machine_id !== candidate.machine_id && o.id !== candidate.id,
+              );
+            const legs = dieLegs(pool, cfg, row, { pin });
+            if (!legs.length) continue;
+            const after = count(largeCells().map((c) => (c === cell ? { legs } : c)));
+            // Never trade one required vendor for another: every step must strictly reduce what is still lacking
+            // (a swap that drops a vendor below its minimum raises the lack on that side and is refused).
+            if (lack(after) >= lack(cur)) continue;
+            const delta = costOf(legs) - costOf(cell.legs);
+            if (
+              !best ||
+              delta < best.delta - 1e-9 ||
+              (Math.abs(delta - best.delta) <= 1e-9 && candidate.id < best.id)
+            )
+              best = { cell, legs, delta, id: candidate.id, vendor: vendorWanted, slot };
+          }
+        }
+    }
+    if (!best) break;
+    swaps.push({
+      die: best.cell.die,
+      slot: best.slot.length === 2 ? 'both' : best.slot[0] === 0 ? 'lane_a' : 'lane_b',
+      to_vendor: best.vendor,
+      offer_id: best.id,
+      delta_usd: round(best.delta),
+    });
+    best.cell.legs = best.legs;
+    best.cell.same_machine = new Set(best.legs.map((l) => l.machine_id)).size === 1;
+    best.cell.est_usd = round(costOf(best.legs));
+  }
+  const planned = count();
+  // The legs that cover a vendor are pinned to it at rent time (index.js admit): cheapest offers elsewhere may pick any vendor.
+  const pinned = {};
+  for (const v of CPU_VENDOR_REQUIRED)
+    if (min[v] > 0)
+      for (const cell of largeCells())
+        for (const l of cell.legs)
+          if (l.cpu_vendor === v && (pinned[v] ?? 0) < min[v] && !l.pin_cpu_vendor) {
+            l.pin_cpu_vendor = v;
+            pinned[v] = (pinned[v] ?? 0) + 1;
+          }
+  return {
+    required: { ...min },
+    scope: releaseMatrix.policy.cpu_vendor_scope,
+    planned,
+    before_swaps: before,
+    swaps,
+    missing: deficit(planned),
+  };
 }
 // The plan: which dies and machines a release WOULD rent, and its worst-case cost. `allowed` are
 // offers already evaluated under the release profile (src/offers.js, the same rejection rules as
@@ -102,9 +240,7 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
   const matrixErrors = validateReleaseMatrix(releaseMatrix, cfg);
   if (matrixErrors.length) throw Error('release matrix: ' + matrixErrors.join('; '));
   const families = [];
-  let estimate = 0,
-    legs = 0;
-  const perFamily = {};
+  const pools = new Map();
   for (const family of Object.keys(cfg.releaseDies)) {
     const cells = [],
       missing = [];
@@ -117,47 +253,61 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
         missing.push({ die, reason: 'NO_OFFER' });
         continue;
       }
-      const cost = planned.reduce((s, l) => s + l.est_usd, 0);
-      cells.push({
+      const cell = {
         die,
+        leg_tier: legTierOfRow(matrixRow),
         offers: offers.length,
         same_machine: new Set(planned.map((l) => l.machine_id)).size === 1,
         legs: planned,
-        est_usd: round(cost),
-      });
-      estimate += cost;
-      legs += planned.length;
+        est_usd: round(planned.reduce((s, l) => s + l.est_usd, 0)),
+      };
+      pools.set(cell, { row: matrixRow, pool: eligibleOffers(offers, releaseMatrix, matrixRow) });
+      cells.push(cell);
     }
-    const familyCost = round(cells.reduce((s, c) => s + c.est_usd, 0));
-    perFamily[family] = familyCost;
     families.push({
       family,
       dies_wanted: releaseMatrix.dies.filter((d) => d.die_family === family).map((d) => d.die),
       cells,
       missing,
       complete: cells.length >= cfg.releaseDiesPerFamily,
-      est_usd: familyCost,
     });
+  }
+  // Owner 2026-11-12: the CPU-vendor rule is over the LARGE legs of the whole release.
+  const vendor = coverCpuVendors(families, pools, cfg, releaseMatrix);
+  let estimate = 0,
+    legs = 0;
+  const perFamily = {};
+  for (const f of families) {
+    f.est_usd = round(f.cells.reduce((sum, c) => sum + c.est_usd, 0));
+    perFamily[f.family] = f.est_usd;
+    estimate += f.cells.reduce((sum, c) => sum + c.est_usd, 0);
+    legs += f.cells.reduce((sum, c) => sum + c.legs.length, 0);
   }
   const parallel = Math.min(cfg.maxConcurrentProfile.release, cfg.maxConcurrent);
   const refusals = [];
   const executionProblem = matrixExecutionProblem(releaseMatrix, cfg);
   if (executionProblem) refusals.push(executionProblem);
   if (!families.every((f) => f.complete)) refusals.push('INCOMPLETE');
+  // A release whose large legs cannot cover every required CPU vendor is INCOMPLETE and never admitted (plan and judge).
+  if (vendor.missing.length) {
+    refusals.push('CPU_VENDOR_MISSING');
+    if (!refusals.includes('INCOMPLETE')) refusals.push('INCOMPLETE');
+  }
   if (estimate > cfg.releaseCostCap) refusals.push('COST_CAP');
   // Review F5: a release runs at most account cap - 1 boxes; with the default account cap of 1 it
   // has no slot until the owner raises MAX_CONCURRENT_RENTALS.
   if (parallel < releaseMatrix.policy.parallel_boxes) refusals.push('PARALLEL_SLOTS');
   if (parallel < 1) refusals.push('NO_SLOTS');
   if (!cfg.releaseEnabled) refusals.push('RELEASE_DISABLED');
+  // large includes middle: the release never inherits the middle apps kill switch (a release without apps is not a release)
+  if (!cfg.middleAppsEnabled) refusals.push('APPS_DISABLED');
   if (budget) {
     const today = budget.profiles.release;
     if (today.daily_usd + estimate > cfg.releaseDaily) refusals.push('DAILY_USD');
     if (budget.daily_usd + estimate > cfg.accountDaily) refusals.push('ACCOUNT_DAILY_USD');
     if (today.count_today + legs > cfg.releaseDailyCount) refusals.push('DAILY_COUNT');
     if (budget.rolling_usd + estimate > cfg.rolling) refusals.push('ROLLING_USD');
-    if (credit !== undefined && !(credit >= cfg.reserve + estimate + budget.outstanding_usd))
-      refusals.push('CREDIT_RESERVE');
+    if (creditShort(credit, cfg, estimate, budget)) refusals.push('CREDIT_RESERVE');
   }
   return {
     resource_profile: resourceCaps(cfg, 'release', 'large'),
@@ -165,6 +315,92 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
     matrix_blockers: releaseMatrix.dies.flatMap((d) =>
       d.blockers.map((reason) => ({ die: d.die, reason })),
     ),
+    execution_ready: executionProblem === null,
+    tier: 'large',
+    profile: 'release',
+    hard_minutes: cfg.hardRelease / 60000,
+    middle_hard_minutes: cfg.releaseMiddleHard / 60000,
+    price_cap_usd_hour: cfg.releasePrice,
+    cost_cap_usd: cfg.releaseCostCap,
+    account_daily_cap_usd: cfg.accountDaily,
+    release_enabled: cfg.releaseEnabled,
+    daily_cap_usd: cfg.releaseDaily,
+    daily_rentals_cap: cfg.releaseDailyCount,
+    rolling_cap_usd: cfg.rolling,
+    parallel,
+    cpu_vendor: vendor,
+    large_legs: families
+      .flatMap((f) => f.cells)
+      .filter((c) => c.leg_tier === 'large')
+      .reduce((n, c) => n + c.legs.length, 0),
+    middle_legs: families
+      .flatMap((f) => f.cells)
+      .filter((c) => c.leg_tier === 'middle')
+      .reduce((n, c) => n + c.legs.length, 0),
+    dies_per_family: cfg.releaseDiesPerFamily,
+    windows_runs_per_die: cfg.releaseWindowsRuns,
+    reruns_per_leg: cfg.releaseReruns,
+    stages: cfg.releaseStages,
+    required_stage_rows_per_die: requiredStageRows(cfg.releaseStages),
+    families,
+    legs,
+    estimate_usd: round(estimate),
+    estimate_by_family_usd: perFamily,
+    rerun_headroom_usd: round(Math.max(0, cfg.releaseCostCap - estimate)),
+    admitted: refusals.length === 0,
+    refusals,
+  };
+}
+// The named REHEARSAL scope (owner request 2026-11-12; docs/design/V3_RELEASE_REHEARSAL.md): the large tier's payload on ONE
+// matrix die, through the same admission, cost and verdict machinery, WITHOUT the driver sub-run matrix. It never hides a
+// matrix blocker: they are listed in the plan as `matrix_blockers`, `execution_ready` stays false, and every report row says
+// the sub-run matrix was not executed. The most it can end in is REHEARSAL_PASS (releaseVerdict); it is never a release PASS.
+export const REHEARSAL_SCOPE = Object.freeze({
+  scope: 'REHEARSAL',
+  driver_subrun_matrix: 'NOT_EXECUTED',
+  max_verdict: 'REHEARSAL_PASS',
+  counts_toward_release: false,
+});
+export function planRehearsal(allowed, cfg, { budget, credit, die } = {}) {
+  validateStagePolicy(cfg.releaseStages);
+  const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
+  const matrixErrors = validateReleaseMatrix(releaseMatrix, cfg);
+  if (matrixErrors.length) throw Error('release matrix: ' + matrixErrors.join('; '));
+  const row = releaseMatrix.dies.find((d) => d.die === die);
+  const refusals = [];
+  if (!row) refusals.push('DIE_NOT_IN_MATRIX');
+  const family = row?.die_family;
+  const offers = row ? allowed.filter((o) => o.die === die && familyOf(o.die, cfg) === family) : [];
+  const planned = row ? dieLegs(offers, cfg, row, { rehearsal: true }) : [];
+  if (row && !planned.length) refusals.push('NO_OFFER');
+  const estimate = planned.reduce((sum, l) => sum + l.est_usd, 0);
+  // Legs of one die run one after the other (SPEC lanes) or on one box, so one slot is enough.
+  const parallel = Math.min(cfg.maxConcurrentProfile.release, cfg.maxConcurrent);
+  if (cfg.releaseCostCap < estimate) refusals.push('COST_CAP');
+  if (parallel < 1) refusals.push('NO_SLOTS');
+  if (!cfg.releaseEnabled) refusals.push('RELEASE_DISABLED');
+  if (!cfg.middleAppsEnabled) refusals.push('APPS_DISABLED');
+  if (budget) {
+    // Same caps as a release plan, written out here so a change to one is a visible change to both.
+    const today = budget.profiles.release;
+    if (cfg.releaseDaily < today.daily_usd + estimate) refusals.push('DAILY_USD');
+    if (cfg.accountDaily < budget.daily_usd + estimate) refusals.push('ACCOUNT_DAILY_USD');
+    if (cfg.releaseDailyCount < today.count_today + planned.length) refusals.push('DAILY_COUNT');
+    if (cfg.rolling < budget.rolling_usd + estimate) refusals.push('ROLLING_USD');
+    if (creditShort(credit, cfg, estimate, budget)) refusals.push('CREDIT_RESERVE');
+  }
+  const executionProblem = matrixExecutionProblem(releaseMatrix, cfg);
+  return {
+    ...REHEARSAL_SCOPE,
+    rehearsal: true,
+    rehearsal_die: die,
+    resource_profile: resourceCaps(cfg, 'release', 'large'),
+    matrix_status: releaseMatrix.status,
+    // Stated, never removed: what the matrix still lacks. A rehearsal does not clear any of it.
+    matrix_blockers: releaseMatrix.dies.flatMap((d) =>
+      d.blockers.map((reason) => ({ die: d.die, reason })),
+    ),
+    matrix_execution_problem: executionProblem,
     execution_ready: executionProblem === null,
     tier: 'large',
     profile: 'release',
@@ -177,15 +413,34 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
     daily_rentals_cap: cfg.releaseDailyCount,
     rolling_cap_usd: cfg.rolling,
     parallel,
-    dies_per_family: cfg.releaseDiesPerFamily,
     windows_runs_per_die: cfg.releaseWindowsRuns,
     reruns_per_leg: cfg.releaseReruns,
     stages: cfg.releaseStages,
     required_stage_rows_per_die: requiredStageRows(cfg.releaseStages),
-    families,
-    legs,
+    families: row
+      ? [
+          {
+            family,
+            dies_wanted: [die],
+            cells: planned.length
+              ? [
+                  {
+                    die,
+                    offers: offers.length,
+                    same_machine: new Set(planned.map((l) => l.machine_id)).size === 1,
+                    legs: planned,
+                    est_usd: round(estimate),
+                  },
+                ]
+              : [],
+            missing: planned.length ? [] : [{ die, reason: 'NO_OFFER' }],
+            complete: planned.length > 0,
+            est_usd: round(estimate),
+          },
+        ]
+      : [],
+    legs: planned.length,
     estimate_usd: round(estimate),
-    estimate_by_family_usd: perFamily,
     rerun_headroom_usd: round(Math.max(0, cfg.releaseCostCap - estimate)),
     admitted: refusals.length === 0,
     refusals,
@@ -227,7 +482,7 @@ export function hardwareMatch(record, { die, family, cfg } = {}) {
 }
 export function classifyLeg(
   record,
-  { windowsRuns = 1, stages = [], die, family, cfg, releaseMatrix, spec } = {},
+  { windowsRuns = 1, stages = [], die, family, cfg, releaseMatrix, spec, rehearsal = false } = {},
 ) {
   const windowsNames =
     windowsRuns === 0
@@ -235,10 +490,13 @@ export function classifyLeg(
       : windowsRuns === 2
         ? ['windows_gate', 'windows_gate_2']
         : ['windows_gate'];
+  // A rehearsal leg is graded WITHOUT matrix receipts: the sub-run matrix is not executed, and that is stated in the
+  // verdict (releaseVerdict), never turned into a pass. A rehearsal that also carries a matrix row is not a rehearsal.
   const matrixRequired = releaseMatrix !== undefined || cfg?.profile === 'release';
+  const matrixCoverage = matrixRequired && !rehearsal;
   const matrixRow =
     releaseMatrix ?? (cfg?.releaseMatrix ?? RELEASE_MATRIX).dies?.find((r) => r.die === die);
-  const definitions = matrixRequired ? matrixReceiptDefinitions(matrixRow) : [];
+  const definitions = matrixCoverage ? matrixReceiptDefinitions(matrixRow) : [];
   const stageRequirements = requiredStageRows(stages);
   const ownStageRows = Object.fromEntries(
     stages.map((stage) => [
@@ -250,7 +508,7 @@ export function classifyLeg(
     linux: v,
     windows: windowsNames.map(() => v),
     stages: Object.fromEntries(stages.map((s) => [s, v])),
-    ...(matrixRequired
+    ...(matrixCoverage
       ? {
           matrix: Object.fromEntries(
             (definitions.length ? definitions : [{ id: 'missing' }]).map((r) => [r.id, v]),
@@ -370,7 +628,7 @@ export function classifyLeg(
     }),
   );
   const coverage = {
-    ...(matrixRequired ? { matrix: definitions.length ? matrixParts : { missing: 'RETRY' } } : {}),
+    ...(matrixCoverage ? { matrix: definitions.length ? matrixParts : { missing: 'RETRY' } } : {}),
     ...(stages.length ? { stageRows } : {}),
   };
   if (record.verdict === 'PASS' && result?.verdict === 'PASS') {
@@ -472,6 +730,8 @@ export function releaseVerdict(batch, { releaseMatrix = RELEASE_MATRIX } = {}) {
   };
   for (const legs of keyed.values()) {
     const { family, die } = legs[0];
+    // Matrix v2: the second die of a family is a MIDDLE leg (one Windows run, no extra stages, apps via the payload).
+    const middleDie = legs.every((l) => l.legTier === 'middle');
     const ended = legs.filter((l) => l.outcome);
     cell(
       family,
@@ -486,10 +746,10 @@ export function releaseVerdict(batch, { releaseMatrix = RELEASE_MATRIX } = {}) {
       die,
       'windows',
       ended.flatMap((l) => l.outcome.windows),
-      batch.tier === 'large' ? need : 1,
+      batch.tier === 'large' && !middleDie ? need : 1,
       legs,
     );
-    for (const s of stages)
+    for (const s of middleDie ? [] : stages)
       for (const name of stageRequirements[s])
         cell(
           family,
@@ -501,7 +761,11 @@ export function releaseVerdict(batch, { releaseMatrix = RELEASE_MATRIX } = {}) {
           1,
           legs,
         );
-    if (batch.tier === 'large') {
+    if (batch.tier === 'large' && batch.rehearsal === true) {
+      // Stated in the report: the driver sub-run matrix was not executed. This cell can never be PASS.
+      cell(family, die, 'matrix:driver_subruns', [], 1, legs);
+      cells[cells.length - 1].verdict = 'NOT_EXECUTED';
+    } else if (batch.tier === 'large') {
       const row = releaseMatrix?.dies?.find((r) => r.die === die);
       const definitions = matrixReceiptDefinitions(row);
       for (const definition of definitions.length ? definitions : [{ id: 'missing' }])
@@ -528,19 +792,82 @@ export function releaseVerdict(batch, { releaseMatrix = RELEASE_MATRIX } = {}) {
     families[c.family] ??= new Set();
     families[c.family].add(c.die);
   }
+  if (batch.tier === 'large' && batch.rehearsal === true) {
+    // One die, no sub-run matrix: the highest verdict is REHEARSAL_PASS, over every cell except the one that says
+    // "not executed". It is not a release verdict and a release PASS stays impossible while matrix blockers exist.
+    const executed = cells.filter((c) => c.platform !== 'matrix:driver_subruns');
+    const verdict = cells.some((c) => c.verdict === 'FAIL')
+      ? 'FAIL'
+      : active
+        ? 'RUNNING'
+        : executed.length && executed.every((c) => c.verdict === 'PASS')
+          ? 'REHEARSAL_PASS'
+          : 'INCOMPLETE';
+    return {
+      verdict,
+      complete: false,
+      ...REHEARSAL_SCOPE,
+      rehearsal: true,
+      cells: cells.map((c) => ({ ...c, ...REHEARSAL_SCOPE })),
+    };
+  }
+  const largeFamilies = new Set(
+    batch.legs.filter((l) => l.legTier !== 'middle').map((l) => l.family),
+  );
+  const middleFamilies = new Set(
+    batch.legs.filter((l) => l.legTier === 'middle').map((l) => l.family),
+  );
   const complete =
     batch.tier !== 'large' ||
     Object.keys(batch.releaseDies ?? {}).every(
-      (f) => (families[f]?.size ?? 0) >= (batch.diesPerFamily ?? 2),
+      (f) =>
+        (families[f]?.size ?? 0) >= (batch.diesPerFamily ?? 2) &&
+        // matrix v2: one large die AND one middle die per family (batches without leg tiers keep the old shape)
+        (middleFamilies.size === 0 || (largeFamilies.has(f) && middleFamilies.has(f))),
     );
+  // CPU-vendor judge (owner 2026-11-12): a vendor counts only from a PASSING large leg whose rent-time vendor (the offer's
+  // cpu_name) AND the box's own report agree. A mismatch or a missing report counts for neither vendor.
+  const vendor = cpuVendorCoverage(batch, releaseMatrix);
   const verdict = cells.some((c) => c.verdict === 'FAIL')
     ? 'FAIL'
     : active
       ? 'RUNNING'
-      : complete && cells.length && cells.every((c) => c.verdict === 'PASS')
+      : complete &&
+          vendor.missing.length === 0 &&
+          cells.length &&
+          cells.every((c) => c.verdict === 'PASS')
         ? 'PASS'
         : 'INCOMPLETE';
-  return { verdict, complete, cells };
+  return {
+    verdict,
+    complete,
+    cpu_vendor: vendor,
+    ...(vendor.missing.length ? { reason: 'CPU_VENDOR_MISSING' } : {}),
+    cells,
+  };
+}
+// Per vendor: the passing large legs whose offered and reported vendors agree. `required` is the matrix policy; a batch of a
+// matrix without the rule (or a non-large batch) requires nothing.
+export function cpuVendorCoverage(batch, releaseMatrix = RELEASE_MATRIX) {
+  const required = batch.tier === 'large' ? (releaseMatrix?.policy?.cpu_vendor_min ?? {}) : {};
+  const confirmed = { amd: 0, intel: 0 },
+    mismatched = [],
+    unreported = [];
+  for (const l of batch.legs) {
+    if (l.legTier === 'middle' || l.outcome?.verdict !== 'PASS') continue;
+    const offered = l.cpuVendorOffered ?? null,
+      reported = l.cpuVendorReported ?? null;
+    if (reported === null || offered === null) unreported.push(l.key);
+    else if (offered !== reported) mismatched.push(l.key);
+    else if (Object.hasOwn(confirmed, offered)) confirmed[offered] += 1;
+  }
+  return {
+    required: { ...required },
+    confirmed,
+    mismatched,
+    unreported,
+    missing: CPU_VENDOR_REQUIRED.filter((v) => confirmed[v] < (required[v] ?? 0)),
+  };
 }
 // Whether an ended leg gets a fresh-box re-run: only RETRY and UNATTRIBUTED (never FAIL, never an
 // owner stop), only while the leg's re-run allowance lasts.
@@ -551,4 +878,44 @@ export function wantsRerun(leg, reruns) {
     leg.outcome.reason !== 'STOPPED' &&
     (leg.rerunDepth ?? 0) < reruns
   );
+}
+// The CPU-vendor cover of a RUNNING release (owner 2026-11-12: a rental that fails is replaced, and the vendor rule is re-applied
+// to the replacement). The large legs that stand for `vendor`: pinned to it and still waiting to rent, or rented from it and
+// still running or passed. A leg that ended RETRY/UNATTRIBUTED/FAIL covers nothing.
+export function vendorCover(batch, vendor, except) {
+  return batch.legs.filter(
+    (l) =>
+      l !== except &&
+      l.legTier !== 'middle' &&
+      ((l.state === 'PENDING' && l.cpuVendor === vendor) ||
+        (l.cpuVendorOffered === vendor &&
+          (l.state === 'STARTED' || (l.state === 'ENDED' && l.outcome?.verdict === 'PASS')))),
+  );
+}
+// The pin of a re-run: the failed leg's own pin, or its rented vendor when the other legs no longer cover that required vendor.
+export function pinForRerun(batch, leg, min) {
+  if (leg.cpuVendor) return leg.cpuVendor;
+  const v = leg.cpuVendorOffered;
+  if (leg.legTier === 'middle' || !(min?.[v] > 0)) return undefined;
+  return vendorCover(batch, v, leg).length < min[v] ? v : undefined;
+}
+// A pinned leg that finds no offer of its vendor gives the pin to another waiting large leg (one that has not already failed to
+// find that vendor), and rents unpinned itself, so its die is still covered. Returns the leg that took the pin, or null (the
+// vendor then stays uncovered and the verdict says CPU_VENDOR_MISSING). Nothing moves when the other legs already cover it.
+export function movePin(batch, leg, min) {
+  const v = leg.cpuVendor;
+  if (!v || leg.legTier === 'middle') return null;
+  leg.pinFailed = [...new Set([...(leg.pinFailed ?? []), v])];
+  delete leg.cpuVendor;
+  if (vendorCover(batch, v, leg).length >= (min?.[v] ?? 0)) return null;
+  const next = batch.legs.find(
+    (l) =>
+      l !== leg &&
+      l.state === 'PENDING' &&
+      l.legTier !== 'middle' &&
+      !l.cpuVendor &&
+      !(l.pinFailed ?? []).includes(v),
+  );
+  if (next) next.cpuVendor = v;
+  return next ?? null;
 }

@@ -9,6 +9,12 @@ name = "LEDGER"
 class_name = "BrokerLedger"
 script_name = "kayfabe-vast-broker"
 
+# Custom hosts admin (/api/hosts*); the class lives in the broker Worker (src/hostbox.js).
+[[durable_objects.bindings]]
+name = "HOSTS"
+class_name = "HostBox"
+script_name = "kayfabe-vast-broker"
+
 [vars]
 # Fill these non-secret values only after configuring the owner's Access application.
 ACCESS_TEAM_DOMAIN = ""

@@ -1,0 +1,14 @@
+# kfml lock, flavor cu126 (older-driver flavor; NO Blackwell sm_120). Linux x86_64.
+# STATUS: exact top-level pins below are real versions (checked against the indexes on 2026-11-11).
+# HASHES TODO: coordinator generates on a Vast container, per target Python (3.10/3.12), with
+#   pip-compile --generate-hashes --index-url https://download.pytorch.org/whl/cu126 \
+#     --extra-index-url https://pypi.org/simple requirements.in
+# The result replaces this file (full transitive closure, `--hash=sha256:` per line). Until then
+# `kfml setup` refuses to install unless --allow-unhashed (dev only). Never invent hashes.
+--index-url https://download.pytorch.org/whl/cu126
+--extra-index-url https://pypi.org/simple
+torch==2.7.1+cu126
+torchvision==0.22.1+cu126
+triton==3.3.1
+numpy==2.2.6
+ninja==1.11.1.4

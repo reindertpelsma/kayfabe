@@ -1,0 +1,1767 @@
+{
+  "_comment": "Golden wire fixture for custom hosts, the SINGLE SOURCE OF TRUTH (docs/design/V3_CUSTOM_HOSTS.md). Copy this file byte for byte. The Worker's validators (ci/vast-broker/src/hosts.js validateDaemonFrame / validateServerFrame) accept every `valid` frame and refuse every `invalid` one; ci/vast-broker/test/hosts-wire.test.js checks ALL of them. Frames use `type`; `v` is optional and must be 1.",
+  "constants": {
+    "canonical_repo": "https://github.com/reindertpelsma/kayfabe",
+    "tree_key_regex": "^[0-9a-f]{64}$",
+    "commit_regex": "^[0-9a-f]{40}$",
+    "stage_names": [
+      "provision",
+      "cuda_host",
+      "merge_bar",
+      "cuda_guest",
+      "apps",
+      "windows_gate",
+      "windows_apps",
+      "specviewperf",
+      "ladder"
+    ],
+    "compute_cap_example": "8.9",
+    "pci_device_id_regex": "^[0-9a-f]{4}$",
+    "box_id_regex": "^[a-z0-9][a-z0-9-]{0,39}$",
+    "artifact_name_regex": "^(?![-.])(?!.*\\.\\.)[A-Za-z0-9._-]{1,100}$",
+    "seed_token_regex": "^[a-z0-9]{8}$",
+    "probe_path": "/<token>/probe.txt",
+    "probe_content": "kfseed-probe-v1\n",
+    "deadline_field": "deadline_ms",
+    "offer_id_regex": "^[0-9a-f]{16}$",
+    "cmd_id_regex": "^[0-9a-f]{16}$",
+    "upgrade_route": "/hosts/<box_id>/ws",
+    "auth_header": "Authorization: Bearer <kfh_ token>",
+    "close_codes": {
+      "bad_token": 4401,
+      "disabled": 4403,
+      "heartbeat_timeout": 4408,
+      "live_connection_exists_or_replaced": 4409
+    },
+    "cmd_output_per_s": 20,
+    "cmd_output_burst": 40,
+    "result_hardware_keys": [
+      "compute_cap",
+      "driver_version",
+      "gpu_name"
+    ],
+    "result_hardware_shape": {
+      "gpu_name": "RTX_4070",
+      "compute_cap": 890,
+      "driver_version": "580.159.04"
+    },
+    "result_keys": [
+      "hardware",
+      "nonce",
+      "runner_nonce",
+      "sha",
+      "suites",
+      "verdict"
+    ],
+    "result_optional_keys": [
+      "host_claims",
+      "host_reference",
+      "matrix_receipts"
+    ],
+    "run_report_only_keys": [
+      "tree_key_mismatch"
+    ],
+    "ack_semantics": "ack = offer accepted (profile checks passed, before the fetch); ready = commit fetched and verified; nack = refused or, after an ack, failed (the run is released, the requirement stays unmet, nothing is recorded as a result)",
+    "step_max": 32,
+    "apps_per_step_max": 32,
+    "app_name_regex": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
+  },
+  "daemon_to_worker": {
+    "hello": {
+      "valid": [
+        {
+          "type": "hello",
+          "box_id": "rack-1",
+          "version": "0.1",
+          "capabilities": {
+            "gpu_name": "NVIDIA GeForce RTX 4070",
+            "compute_cap": "8.9",
+            "pci_device_id": "2786",
+            "vram_gb": 12,
+            "driver": "580.65.06",
+            "module_flavor": "open",
+            "kvm": true,
+            "cpu_model": "x",
+            "cores": 16,
+            "ram_gb": 64,
+            "disk_free_gb": 500,
+            "display": true,
+            "can_swap_driver": false,
+            "container": false,
+            "os": "linux",
+            "kernel": "6.8.0"
+          },
+          "enforced": {
+            "distrust_us": false,
+            "allow_cmd": true,
+            "container": false
+          }
+        },
+        {
+          "v": 1,
+          "type": "hello",
+          "box_id": "rack-1",
+          "capabilities": {}
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "hello",
+            "box_id": "Rack_1",
+            "capabilities": {
+              "gpu_name": "NVIDIA GeForce RTX 4070",
+              "compute_cap": "8.9",
+              "pci_device_id": "2786",
+              "vram_gb": 12,
+              "driver": "580.65.06",
+              "module_flavor": "open",
+              "kvm": true,
+              "cpu_model": "x",
+              "cores": 16,
+              "ram_gb": 64,
+              "disk_free_gb": 500,
+              "display": true,
+              "can_swap_driver": false,
+              "container": false,
+              "os": "linux",
+              "kernel": "6.8.0"
+            }
+          },
+          "why": "box id format [a-z0-9][a-z0-9-]{0,39}"
+        },
+        {
+          "frame": {
+            "type": "hello",
+            "box_id": "rack-1"
+          },
+          "why": "no capabilities"
+        },
+        {
+          "frame": {
+            "type": "hello",
+            "box_id": "rack-1",
+            "capabilities": {
+              "gpu_name": "NVIDIA GeForce RTX 4070",
+              "compute_cap": "8.9",
+              "pci_device_id": "2786",
+              "vram_gb": 12,
+              "driver": "580.65.06",
+              "module_flavor": "open",
+              "kvm": true,
+              "cpu_model": "x",
+              "cores": 16,
+              "ram_gb": 64,
+              "disk_free_gb": 500,
+              "display": true,
+              "can_swap_driver": false,
+              "container": false,
+              "os": "linux",
+              "kernel": "6.8.0"
+            },
+            "shell": "id"
+          },
+          "why": "unknown key"
+        },
+        {
+          "frame": {
+            "v": 2,
+            "type": "hello",
+            "box_id": "rack-1",
+            "capabilities": {
+              "gpu_name": "NVIDIA GeForce RTX 4070",
+              "compute_cap": "8.9",
+              "pci_device_id": "2786",
+              "vram_gb": 12,
+              "driver": "580.65.06",
+              "module_flavor": "open",
+              "kvm": true,
+              "cpu_model": "x",
+              "cores": 16,
+              "ram_gb": 64,
+              "disk_free_gb": 500,
+              "display": true,
+              "can_swap_driver": false,
+              "container": false,
+              "os": "linux",
+              "kernel": "6.8.0"
+            }
+          },
+          "why": "version"
+        },
+        {
+          "frame": {
+            "type": "hello",
+            "box_id": "rack-1",
+            "capabilities": {
+              "gpu_name": "NVIDIA GeForce RTX 4070",
+              "compute_cap": "8.9",
+              "pci_device_id": "2786",
+              "vram_gb": 12,
+              "driver": "580.65.06",
+              "module_flavor": "open",
+              "kvm": true,
+              "cpu_model": "x",
+              "cores": 16,
+              "ram_gb": 64,
+              "disk_free_gb": 500,
+              "display": true,
+              "can_swap_driver": false,
+              "container": false,
+              "os": "linux",
+              "kernel": "6.8.0"
+            },
+            "enforced": {
+              "allow_cmd": "yes"
+            }
+          },
+          "why": "enforced values are booleans"
+        },
+        {
+          "frame": {
+            "type": "hello",
+            "box_id": "rack-1",
+            "capabilities": {
+              "gpu_name": "NVIDIA GeForce RTX 4070",
+              "compute_cap": "8.9",
+              "pci_device_id": "2786",
+              "vram_gb": 12,
+              "driver": "580.65.06",
+              "module_flavor": "open",
+              "kvm": true,
+              "cpu_model": "x",
+              "cores": 16,
+              "ram_gb": 64,
+              "disk_free_gb": 500,
+              "display": true,
+              "can_swap_driver": false,
+              "container": false,
+              "os": "linux",
+              "kernel": "6.8.0"
+            },
+            "enforced": {
+              "ax": true,
+              "bx": true,
+              "cx": true,
+              "dx": true,
+              "ex": true,
+              "fx": true,
+              "gx": true,
+              "hx": true,
+              "ix": true
+            }
+          },
+          "why": "enforced has at most 8 keys"
+        }
+      ]
+    },
+    "heartbeat": {
+      "valid": [
+        {
+          "type": "heartbeat",
+          "ts": 1800000000,
+          "state": "idle",
+          "idle_since": 1799999000000
+        },
+        {
+          "v": 1,
+          "type": "heartbeat",
+          "state": "busy",
+          "run_id": "123-1"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "heartbeat",
+            "state": "sleeping"
+          },
+          "why": "state"
+        },
+        {
+          "frame": {
+            "type": "heartbeat",
+            "state": "busy",
+            "run_id": "0-1"
+          },
+          "why": "run id"
+        },
+        {
+          "frame": {
+            "type": "heartbeat"
+          },
+          "why": "no state"
+        },
+        {
+          "frame": {
+            "type": "heartbeat",
+            "state": "idle",
+            "idle_since": "now"
+          },
+          "why": "idle_since is a number (epoch ms)"
+        }
+      ]
+    },
+    "ack": {
+      "valid": [
+        {
+          "type": "ack",
+          "offer_id": "0123456789abcdef"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "ack",
+            "offer_id": "o1"
+          },
+          "why": "offer id format"
+        },
+        {
+          "frame": {
+            "type": "ack"
+          },
+          "why": "no offer id"
+        }
+      ]
+    },
+    "ready": {
+      "valid": [
+        {
+          "type": "ready",
+          "offer_id": "0123456789abcdef"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "ready"
+          },
+          "why": "no offer id"
+        },
+        {
+          "frame": {
+            "type": "ready",
+            "offer_id": "0123456789abcdef",
+            "extra": 1
+          },
+          "why": "unknown key"
+        }
+      ]
+    },
+    "nack": {
+      "valid": [
+        {
+          "type": "nack",
+          "offer_id": "0123456789abcdef",
+          "reason": "busy"
+        },
+        {
+          "type": "nack",
+          "offer_id": "0123456789abcdef"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "nack",
+            "offer_id": "0123456789abcdef",
+            "reason": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "why": "reason too long"
+        },
+        {
+          "frame": {
+            "type": "nack",
+            "offer_id": "zz"
+          },
+          "why": "offer id format"
+        }
+      ]
+    },
+    "seed_register": {
+      "valid": [
+        {
+          "type": "seed_register",
+          "offer_id": "0123456789abcdef",
+          "artifact": {
+            "name": "kf3.tar",
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "size": 1234
+          },
+          "path": "/ab12cd34/kf3.tar"
+        },
+        {
+          "type": "seed_register",
+          "offer_id": "0123456789abcdef",
+          "artifact": {
+            "name": "kf3.tar",
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "size": 1234
+          },
+          "path": "/ab12cd34/kf3.tar",
+          "warnings": [
+            "candidate unknown",
+            "size mismatch"
+          ]
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/ab12cd34567/kf3.tar"
+          },
+          "why": "token is exactly 8 chars"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/AB12CD34/kf3.tar"
+          },
+          "why": "token is lowercase"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/ab12cd34/other.tar"
+          },
+          "why": "path name differs"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+              "size": 1
+            },
+            "path": "/ab12cd34/kf3.tar"
+          },
+          "why": "sha256 uppercase"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/ab12cd34/kf3.tar"
+          },
+          "why": "no offer id"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "..",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1
+            },
+            "path": "/ab12cd34/.."
+          },
+          "why": "name with .."
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "-x",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1
+            },
+            "path": "/ab12cd34/-x"
+          },
+          "why": "name with leading dash"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 0
+            },
+            "path": "/ab12cd34/kf3.tar"
+          },
+          "why": "size >= 1"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/ab12cd34/kf3.tar",
+            "warnings": [
+              "w",
+              "w",
+              "w",
+              "w",
+              "w",
+              "w"
+            ]
+          },
+          "why": "at most 5 warnings"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/ab12cd34/kf3.tar",
+            "warnings": [
+              "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            ]
+          },
+          "why": "warning too long"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/ab12cd34/kf3.tar",
+            "warnings": [
+              "tab\there"
+            ]
+          },
+          "why": "warning is printable ASCII"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/ab12cd34/kf3.tar",
+            "ip": "1.2.3.4"
+          },
+          "why": "unknown key (an address)"
+        }
+      ]
+    },
+    "cmd_output": {
+      "valid": [
+        {
+          "type": "cmd_output",
+          "cmd_id": "fedcba9876543210",
+          "seq": 0,
+          "stream": "stdout",
+          "data": "hi\n"
+        },
+        {
+          "type": "cmd_output",
+          "cmd_id": "fedcba9876543210",
+          "seq": 1,
+          "stream": "stderr",
+          "data": "",
+          "eof": true
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "cmd_output",
+            "cmd_id": "fedcba9876543210",
+            "seq": -1,
+            "stream": "stdout",
+            "data": ""
+          },
+          "why": "seq"
+        },
+        {
+          "frame": {
+            "type": "cmd_output",
+            "cmd_id": "fedcba9876543210",
+            "seq": 0,
+            "stream": "tty",
+            "data": ""
+          },
+          "why": "stream"
+        },
+        {
+          "frame": {
+            "type": "cmd_output",
+            "cmd_id": "fedcba9876543210",
+            "seq": 0,
+            "stream": "stdout",
+            "data": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "why": "data over 16384"
+        }
+      ]
+    },
+    "cmd_done": {
+      "valid": [
+        {
+          "type": "cmd_done",
+          "cmd_id": "fedcba9876543210",
+          "rc": 0
+        },
+        {
+          "type": "cmd_done",
+          "cmd_id": "fedcba9876543210",
+          "rc": 126
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "cmd_done",
+            "cmd_id": "fedcba9876543210",
+            "rc": "0"
+          },
+          "why": "rc type"
+        },
+        {
+          "frame": {
+            "type": "cmd_done",
+            "cmd_id": "c1",
+            "rc": 0
+          },
+          "why": "cmd id format"
+        }
+      ]
+    },
+    "unknown": {
+      "valid": [],
+      "invalid": [
+        {
+          "frame": {
+            "type": "shell",
+            "cmd": "id"
+          },
+          "why": "unknown type"
+        },
+        {
+          "frame": {
+            "hello": 1
+          },
+          "why": "no type"
+        }
+      ]
+    }
+  },
+  "worker_to_daemon": {
+    "welcome": {
+      "valid": [
+        {
+          "type": "welcome",
+          "v": 1,
+          "box_id": "rack-1",
+          "profile": "standard",
+          "heartbeat_s": 15
+        },
+        {
+          "type": "welcome",
+          "v": 1,
+          "box_id": "rack-1",
+          "profile": "owned",
+          "heartbeat_s": 15,
+          "commands_until_ms": 1800003600000,
+          "cmd_output_per_s": 20
+        },
+        {
+          "type": "welcome",
+          "v": 1,
+          "box_id": "rack-1",
+          "profile": "owned",
+          "heartbeat_s": 15,
+          "commands_until_ms": null,
+          "cmd_output_per_s": 20
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "welcome",
+            "v": 1,
+            "box_id": "rack-1",
+            "profile": "root",
+            "heartbeat_s": 15
+          },
+          "why": "profile"
+        },
+        {
+          "frame": {
+            "type": "welcome",
+            "v": 1,
+            "box_id": "rack-1",
+            "profile": "owned",
+            "heartbeat_s": 15,
+            "commands_until_ms": "soon"
+          },
+          "why": "commands_until_ms is a number or null"
+        }
+      ]
+    },
+    "offer": {
+      "valid": [
+        {
+          "type": "offer",
+          "v": 1,
+          "offer_id": "0123456789abcdef",
+          "request_id": "req-1",
+          "run_id": "123-1",
+          "run_token": "h.p.s",
+          "run": {
+            "nonce": "cccccccccccccccccccccccccccccccc",
+            "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "assignment": {
+            "repo": "https://github.com/reindertpelsma/kayfabe",
+            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "steps": [
+              {
+                "stage": "provision"
+              },
+              {
+                "stage": "windows_gate"
+              }
+            ]
+          },
+          "deadline_ms": 1800000000000
+        },
+        {
+          "type": "offer",
+          "v": 1,
+          "offer_id": "0123456789abcdef",
+          "request_id": "req-1",
+          "run_id": "123-1",
+          "run_token": "h.p.s",
+          "run": {
+            "nonce": "cccccccccccccccccccccccccccccccc",
+            "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "assignment": {
+            "repo": "https://github.com/reindertpelsma/kayfabe",
+            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "steps": [
+              {
+                "stage": "provision"
+              },
+              {
+                "stage": "apps",
+                "apps": [
+                  "nvidia_smi",
+                  "deviceQuery"
+                ]
+              },
+              {
+                "stage": "windows_gate"
+              }
+            ]
+          },
+          "deadline_ms": 1800000000000
+        },
+        {
+          "type": "offer",
+          "v": 1,
+          "offer_id": "0123456789abcdef",
+          "request_id": "req-1",
+          "run_id": "123-1",
+          "run_token": "h.p.s",
+          "run": {
+            "nonce": "cccccccccccccccccccccccccccccccc",
+            "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "assignment": {
+            "repo": "https://github.com/reindertpelsma/kayfabe",
+            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "seed": {
+              "url": "http://93.184.216.34:40022/ab12cd34/kf3.tar",
+              "fallback_url": "http://93-184-216-34.sslip.io:40022/ab12cd34/kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234,
+              "name": "kf3.tar"
+            },
+            "steps": [
+              {
+                "stage": "provision"
+              },
+              {
+                "stage": "windows_gate"
+              }
+            ]
+          },
+          "deadline_ms": 1800000000000
+        },
+        {
+          "type": "offer",
+          "v": 1,
+          "offer_id": "0123456789abcdef",
+          "request_id": "req-1",
+          "run_id": "123-1",
+          "run_token": "h.p.s",
+          "run": {
+            "nonce": "cccccccccccccccccccccccccccccccc",
+            "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "assignment": {
+            "repo": "https://github.com/reindertpelsma/kayfabe",
+            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "seed": {
+              "url": "http://93.184.216.34:40022/ab12cd34/kf3.tar",
+              "fallback_url": null,
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234,
+              "name": "kf3.tar"
+            },
+            "steps": [
+              {
+                "stage": "provision"
+              },
+              {
+                "stage": "windows_gate"
+              }
+            ]
+          },
+          "deadline_ms": 1800000000000
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000,
+            "deadline": 1800000000
+          },
+          "why": "deadline must be deadline_ms"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1.5
+          },
+          "why": "deadline_ms integer"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "repo must be the canonical URL"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "kf-tree-v2:abc",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "tree key shape"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "gates"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "stage name"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "o1",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "offer id format"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "run section (nonce, runner_nonce, sha) is required"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "runner_nonce is 64 hex"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "ccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "nonce is 32 hex"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "run.sha equals assignment.commit"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "seed": {
+                "url": "http://10.0.0.1:40022/ab12cd34/kf3.tar",
+                "fallback_url": "http://93-184-216-34.sslip.io:40022/ab12cd34/kf3.tar",
+                "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "size": 1234,
+                "name": "kf3.tar"
+              },
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "seed url must be a public IPv4"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "seed": {
+                "url": "http://93.184.216.34:40022/ab12cd34/other.tar",
+                "fallback_url": "http://93-184-216-34.sslip.io:40022/ab12cd34/kf3.tar",
+                "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "size": 1234,
+                "name": "kf3.tar"
+              },
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "seed url name differs"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "seed": {
+                "url": "http://93.184.216.34:40022/ab12cd34/kf3.tar",
+                "fallback_url": "http://evil.example:40022/ab12cd34/kf3.tar",
+                "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "size": 1234,
+                "name": "kf3.tar"
+              },
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "fallback host must be an IP-encoding mapper name of the same ip"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "seed": {
+                "url": "http://93.184.216.34:40022/ab12cd34/kf3.tar",
+                "fallback_url": "http://93-184-216-34.sslip.io:40022/ab12cd34/kf3.tar",
+                "sha256": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+                "size": 1234,
+                "name": "kf3.tar"
+              },
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "seed sha256"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ],
+              "requirements": {
+                "tier": "small"
+              }
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "requirements are never sent to a daemon (the Worker plans, the daemon runs the listed steps)"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "windows_gate"
+                }
+              ],
+              "stages": [
+                "provision"
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "stages is gone: steps is the one mechanism"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "rm_rf"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "step stage not allowlisted"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                "provision"
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "step is not an object"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "apps",
+                  "cmd": "id"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "step carries an extra key"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "apps",
+                  "apps": [
+                    "a;id"
+                  ]
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "app name not allowed"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "apps",
+                  "apps": "nvidia_smi"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "apps must be an array of strings"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "run": {
+              "nonce": "cccccccccccccccccccccccccccccccc",
+              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "steps": [
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                },
+                {
+                  "stage": "provision"
+                }
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "too many steps"
+        }
+      ]
+    },
+    "cancel": {
+      "valid": [
+        {
+          "type": "cancel",
+          "offer_id": "0123456789abcdef"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "cancel"
+          },
+          "why": "no offer id"
+        }
+      ]
+    },
+    "seed_ack": {
+      "valid": [
+        {
+          "type": "seed_ack",
+          "ok": true
+        },
+        {
+          "type": "seed_ack",
+          "ok": false,
+          "reason": "TIMEOUT"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "seed_ack",
+            "ok": "yes"
+          },
+          "why": "ok type"
+        }
+      ]
+    },
+    "cmd": {
+      "valid": [
+        {
+          "type": "cmd",
+          "cmd_id": "fedcba9876543210",
+          "argv": [
+            "nvidia-smi",
+            "-L"
+          ],
+          "commands_until_ms": 1800003600000
+        },
+        {
+          "type": "cmd",
+          "cmd_id": "fedcba9876543210",
+          "shell": "uptime",
+          "commands_until_ms": 1800003600000
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "cmd",
+            "cmd_id": "fedcba9876543210",
+            "commands_until_ms": 1800003600000
+          },
+          "why": "neither argv nor shell"
+        },
+        {
+          "frame": {
+            "type": "cmd",
+            "cmd_id": "fedcba9876543210",
+            "argv": [
+              "a"
+            ],
+            "shell": "b",
+            "commands_until_ms": 1800003600000
+          },
+          "why": "both"
+        },
+        {
+          "frame": {
+            "type": "cmd",
+            "cmd_id": "fedcba9876543210",
+            "shell": "uptime"
+          },
+          "why": "commands_until_ms is required"
+        }
+      ]
+    },
+    "error": {
+      "valid": [
+        {
+          "type": "error",
+          "code": "UNKNOWN_OFFER"
+        },
+        {
+          "type": "error",
+          "code": "BAD_FRAME"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "error"
+          },
+          "why": "no code"
+        }
+      ]
+    }
+  },
+  "run_report_fields": {
+    "_comment": "Keys of the EXISTING run report (POST /run-report/<run>-<attempt>), never of the result (POST /report, exact key set).",
+    "tree_key_mismatch": {
+      "valid": [
+        true,
+        false
+      ],
+      "invalid": [
+        "yes",
+        1,
+        0,
+        null,
+        {},
+        [
+          true
+        ]
+      ]
+    }
+  }
+}

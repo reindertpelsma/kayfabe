@@ -56,6 +56,19 @@ struct Mock {
     rewrite_on_validate: Option<u64>,
     rewrite_after_lo: Option<u64>,
     tested: u64,
+    wide: Option<(u64, Vec<u32>)>,
+    part_reads: Vec<(u64, u64)>,
+    read_retry_once: Option<u64>,
+    publish_retry_once: bool,
+    /// The retry the mock returns is only a busy lock (the stream is kept), not a changed source.
+    retry_busy: bool,
+    /// `drop_receipts` calls (the adapter's receipts are released).
+    dropped: u32,
+    /// `read_part` hands back one word fewer than the cut it was asked for.
+    short_read: bool,
+    walk_blocked: bool,
+    scan_bound: u64,
+    fail_stream_allocation: bool,
 }
 
 impl Mock {
@@ -76,6 +89,16 @@ impl Mock {
             rewrite_on_validate: None,
             rewrite_after_lo: None,
             tested: 0,
+            wide: None,
+            part_reads: Vec::new(),
+            read_retry_once: None,
+            publish_retry_once: false,
+            retry_busy: false,
+            dropped: 0,
+            short_read: false,
+            walk_blocked: false,
+            scan_bound: kf_chan::user_storage::MAX_SOURCE_BYTES,
+            fail_stream_allocation: false,
         }
     }
     /// The guest publishes `g` at `slot` (its pushbuffer words are known to the store).
@@ -105,7 +128,10 @@ impl Io for Mock {
     }
     fn max_scan_bytes(&mut self) -> u64 {
         self.calls.push(Call::ScanBound);
-        kf_chan::user_storage::MAX_SOURCE_BYTES
+        self.scan_bound
+    }
+    fn walk_busy(&mut self) -> bool {
+        self.walk_blocked
     }
     fn gp_put(&mut self) -> Turn<Option<u32>> {
         self.calls.push(Call::GpPut);
@@ -137,8 +163,28 @@ impl Io for Mock {
     fn sw_matches(&self, value: u32) -> bool {
         sw(value)
     }
-    fn read_pb(&mut self, entry: u64, _seg: &GpSegment) -> Turn<(Vec<u32>, bool)> {
+    fn begin_stream(&mut self) -> Turn<()> {
+        if self.fail_stream_allocation {
+            return Err("USER_RING_STREAM_ALLOC".into());
+        }
+        Ok(())
+    }
+    fn read_pb(&mut self, entry: u64, seg: &GpSegment) -> Turn<(Vec<u32>, bool)> {
         self.calls.push(Call::ReadPb(entry));
+        if let Some((base, words)) = &self.wide
+            && seg.gpu_va >= *base
+            && seg.gpu_va < *base + words.len() as u64 * 4
+        {
+            assert!(seg.len_bytes <= self.scan_bound, "oversized snapshot");
+            if self.read_retry_once == Some(seg.gpu_va) {
+                self.read_retry_once = None;
+                return Err(Fail::Retry);
+            }
+            let start = ((seg.gpu_va - base) / 4) as usize;
+            let count = seg.len_bytes as usize / 4 - usize::from(self.short_read);
+            self.part_reads.push((seg.gpu_va, seg.len_bytes));
+            return Ok((words[start..start + count].to_vec(), false));
+        }
         Ok((
             self.pb
                 .get(&(entry & !support::SYNC))
@@ -164,6 +210,25 @@ impl Io for Mock {
             self.ring[2] = replacement;
         }
     }
+    fn read_part(&mut self, entry: u64, seg: &GpSegment, _part: u8) -> Turn<(Vec<u32>, bool)> {
+        self.read_pb(entry, seg)
+    }
+    fn retry_keeps_stream(&self) -> bool {
+        self.retry_busy
+    }
+    fn drop_receipts(&mut self) {
+        self.dropped += 1;
+    }
+    fn publish_streamed(
+        &mut self,
+        fetch: &mut Fetch,
+        generation: u64,
+        guest_get: u32,
+        entry: u64,
+        _parts: u8,
+    ) -> Turn<()> {
+        self.publish_entry(PubKind::Stream, fetch, generation, guest_get, entry)
+    }
     fn publish_entry(
         &mut self,
         kind: PubKind,
@@ -172,6 +237,10 @@ impl Io for Mock {
         guest_get: u32,
         entry: u64,
     ) -> Turn<()> {
+        if self.publish_retry_once {
+            self.publish_retry_once = false;
+            return Err(Fail::Retry);
+        }
         fetch
             .publish(Some((generation, guest_get)))
             .map_err(str::to_owned)?;
@@ -932,50 +1001,6 @@ fn pointer_forwards_the_largest_representable_descriptor() {
 }
 
 #[test]
-fn scan_mode_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate() {
-    let mut io = Mock::new(16);
-    let mut r = relay();
-    io.ring[0] = measured::RUN3440[0] | (1 << 63);
-    io.put = 1;
-    let e = turn(&mut r, &mut io).unwrap_err();
-    assert!(
-        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_SCAN_BUDGET ") && why.contains("mode=Scan")),
-        "{e:?}"
-    );
-    assert!(r.dead);
-    assert_eq!(r.refused_entry, 0);
-    assert_eq!(r.cursor, 0);
-    assert!(format!("{:?}", r.life.counts()).contains("refused_scan_budget: 1"));
-    assert!(format!("{:?}", io.events).contains("ScanBudget"));
-    assert!(
-        !io.calls
-            .iter()
-            .any(|c| matches!(c, Call::ReadPb(_) | Call::Gate | Call::Entry(..)))
-    );
-}
-
-#[test]
-fn seeded_window_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate() {
-    let mut io = Mock::new(16);
-    let mut r = flipped_relay(&mut io, true);
-    io.ring[r.cursor as usize] = measured::RUN3440[0];
-    let e = turn(&mut r, &mut io).unwrap_err();
-    assert!(
-        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_SCAN_BUDGET ") && why.contains("mode=Window")),
-        "{e:?}"
-    );
-    assert!(r.dead);
-    assert_eq!(r.refused_entry, 0);
-    assert!(format!("{:?}", r.life.counts()).contains("refused_scan_budget: 1"));
-    assert!(format!("{:?}", io.events).contains("ScanBudget"));
-    assert!(
-        !io.calls
-            .iter()
-            .any(|c| matches!(c, Call::ReadPb(_) | Call::Gate | Call::Entry(..)))
-    );
-}
-
-#[test]
 fn a_large_captured_descriptor_is_not_reloaded_after_guest_mutation() {
     let mut io = Mock::new(16);
     let mut r = pointer_relay(&mut io);
@@ -1216,33 +1241,30 @@ fn scan_boundary(window: bool) {
         let raw = kf_abi::submit::gp_entry(0x4000, len).unwrap();
         io.ring[slot as usize] = raw;
         io.put = (slot + 1) & 15;
-        // Only the admitted copy cases allocate PB bytes in this test.
         if len <= cap {
             io.pb.insert(raw, vec![0; len as usize / 4]);
+        } else {
+            io.wide = Some((0x4000, vec![0; len as usize / 4]));
         }
         let issued = r.fetch.issued();
-        let result = turn(&mut r, &mut io);
-        if len > cap {
-            assert!(
-                matches!(result, Err(Fail::Refused(ref why)) if why.starts_with("USER_RING_SCAN_BUDGET "))
-            );
-            assert_eq!(
-                r.fetch.issued(),
-                issued,
-                "size refusal creates no native receipt"
-            );
-            assert_eq!(r.cursor, slot);
-            assert!(!io.calls.iter().any(|c| matches!(
-                c,
-                Call::ReadPb(_) | Call::Stage | Call::Gate | Call::Entry(..)
-            )));
-        } else {
-            result.unwrap();
-            // Scan and Window admit the copy bound inclusively; all larger copies stop before any read or gate.
-            assert_eq!(io.count(&Call::ReadPb(raw)), 1);
-            assert_eq!(r.cursor, (slot + 1) & 15);
-            assert!(!r.dead);
+        // Phase 2: Scan and Window admit a copy of at most the bound inclusively; a larger descriptor is classified in
+        // bounded parts, one per turn, and its original word is forwarded once. Nothing is refused for size.
+        let mut turns = 0;
+        while r.cursor == slot {
+            turns += 1;
+            assert!(turns <= 10, "len {len}: more than ten parts");
+            turn(&mut r, &mut io).unwrap();
         }
+        assert!(!r.dead);
+        assert_eq!(r.cursor, (slot + 1) & 15);
+        assert_eq!(turns as u64, len.div_ceil(cap), "len {len}");
+        assert!(io.part_reads.iter().all(|(_, n)| *n <= cap));
+        assert_eq!(
+            io.part_reads.iter().map(|(_, n)| *n).sum::<u64>(),
+            if len > cap { len } else { 0 }
+        );
+        assert!(r.fetch.issued() > issued);
+        assert!(format!("{:?}", r.life.counts()).contains("refused_scan_budget: 0"));
     }
 }
 
@@ -1360,7 +1382,7 @@ fn window_to_pointer_transition_releases_only_the_copy_bound() {
 }
 
 #[test]
-fn ring_switch_in_window_keeps_copy_bound_even_after_registry_drains() {
+fn ring_switch_in_window_streams_an_oversized_entry_even_after_registry_drains() {
     let mut io = Mock::new(16);
     let mut r = flipped_relay(&mut io, false);
     turn(&mut r, &mut io).unwrap();
@@ -1368,20 +1390,1336 @@ fn ring_switch_in_window_keeps_copy_bound_even_after_registry_drains() {
     r.switch_source(2);
     io.live = 0;
     io.epoch += 1;
-    io.ring[0] =
-        kf_abi::submit::gp_entry(0x4000, kf_chan::user_storage::MAX_SOURCE_BYTES + 4).unwrap();
+    let len = kf_chan::user_storage::MAX_SOURCE_BYTES + 4;
+    io.ring[0] = kf_abi::submit::gp_entry(0x4000, len).unwrap();
+    io.wide = Some((0x4000, vec![0; len as usize / 4]));
     io.put = 1;
     io.calls.clear();
-    let issued = r.fetch.issued();
-    let result = turn(&mut r, &mut io);
-    // A Window migration retains its post-switch scan obligation even when registrations drain.
-    assert!(
-        matches!(result, Err(Fail::Refused(ref why)) if why.starts_with("USER_RING_SCAN_BUDGET "))
+    // The post-switch scan obligation (Window kept for POST_SWITCH_SCAN entries) no longer kills a large entry.
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 0, "first part only: nothing published yet");
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 1);
+    assert!(!r.dead);
+    assert_eq!(r.life.mode(), Mode::Window);
+    assert_eq!(r.life.counts().post_switch_scanned, 1);
+    assert_eq!(io.part_reads.len(), 2);
+}
+
+// ---- creo-04 replay (2026-11-12): Phase 2 streaming of an oversized Window-mode segment.
+// MEASURED: Vast 4090, kf3 5d7a5bc6, log line 14142: `USER_RING_SCAN_BUDGET len=1042284 max=917504 mode=Window
+// entry=0x0fe76e022f5d102c cursor=0x2 put=0x3f8`, directly after `USER_RING_MIGRATED ... generation=2`.
+// These tests state the Phase 2 contract (docs/design/V3_USER_DESCRIPTOR_DECISION_20261022.md section 4.3); they are
+// EXPECTED RED on a tree without Phase 2 (the relay refuses with USER_RING_SCAN_BUDGET and dies).
+
+/// The creo segment word: C56F entry, VA 0x2_2f5d102c, length 1,042,284, LEVEL=subroutine, no SYNC_WAIT.
+const CREO_WORD: u64 = 0x0fe76e022f5d102c;
+const CREO_BYTES: u64 = 1_042_284;
+
+/// `total` words of complete method packets (`INC sub0 0x100 x n` plus `n` data words); `total` must not be 1.
+fn pb_filler(total: usize) -> Vec<u32> {
+    let mut out = Vec::with_capacity(total);
+    let mut left = total;
+    while left > 0 {
+        let n = (left - 1).min(2000);
+        out.push(kf_abi::submit::method_header_inc(0, 0x100, n as u32).unwrap());
+        out.extend(std::iter::repeat_n(0x1234_5678u32, n));
+        left -= n + 1;
+        assert_ne!(left, 1, "a lone word is not a packet");
+    }
+    out
+}
+
+/// Window mode, migrated to generation 2, two ordinary entries relayed (cursor 2), registry empty: the creo state.
+fn creo_relay(io: &mut Mock) -> Relay {
+    let mut r = flipped_relay(io, false);
+    turn(&mut r, io).unwrap();
+    assert_eq!(r.life.mode(), Mode::Window);
+    r.switch_source(2);
+    io.live = 0;
+    io.epoch += 1;
+    for slot in 0..2u32 {
+        io.put_entry(slot, &ge(10 + slot as u8, Kind::Plain));
+    }
+    io.put = 2;
+    for _ in 0..2 {
+        turn(&mut r, io).unwrap();
+    }
+    assert_eq!((r.cursor, r.life.mode()), (2, Mode::Window));
+    io.calls.clear();
+    io.events.clear();
+    r
+}
+
+/// Offer `raw` (with its pushbuffer `words`, read in bounded parts) at slot 2 and queue ordinary entries up to
+/// `put = 0x3f8` behind it.
+fn offer_creo(io: &mut Mock, raw: u64, words: Vec<u32>) {
+    let va = (raw & 0xffff_ffff) & !3 | ((raw >> 32) & 0xff) << 32;
+    io.wide = Some((va, words));
+    io.ring[2] = raw;
+    for slot in 3..0x3f8u32 {
+        io.put_entry(slot, &ge(100 + (slot % 100) as u8, Kind::Plain));
+    }
+    io.put = 0x3f8;
+}
+
+/// Run worker turns until `raw` is forwarded, a turn fails, or `max` turns pass (each part is one turn).
+fn run_until_forwarded(r: &mut Relay, io: &mut Mock, raw: u64, max: usize) -> Result<usize, Fail> {
+    for n in 1..=max {
+        turn(r, io)?;
+        if io
+            .calls
+            .iter()
+            .any(|c| matches!(c, Call::Entry(_, w) if *w == raw))
+        {
+            return Ok(n);
+        }
+    }
+    panic!(
+        "{raw:#x} was not forwarded in {max} turns: {:?}",
+        r.life.counts()
     );
+}
+
+#[test]
+fn creo_entry_in_window_after_migration_is_streamed_not_refused() {
+    assert_eq!(
+        kf_abi::submit::gp_entry(0x2_2f5d_102c, CREO_BYTES).unwrap() | (1 << 41),
+        CREO_WORD,
+        "the fixture word decodes as the measured segment"
+    );
+    let mut io = Mock::new(2048);
+    let mut r = creo_relay(&mut io);
+    offer_creo(&mut io, CREO_WORD, pb_filler((CREO_BYTES / 4) as usize));
+    let turns = run_until_forwarded(&mut r, &mut io, CREO_WORD, 8)
+        .expect("creo-04: a legitimate 1,042,284-byte segment must not kill the relay");
+    assert_eq!(turns, 2, "917,504 + 124,780 bytes: two parts, two turns");
+    assert_eq!(
+        io.part_reads,
+        vec![(0x2_2f5d_102c, 917_504), (0x2_2f5d_102c + 917_504, 124_780)]
+    );
+    assert!(!r.dead);
+    let c = format!("{:?}", r.life.counts());
+    assert!(c.contains("refused_scan_budget: 0"), "{c}");
+    assert!(c.contains("segments_streamed: 1"), "{c}");
+    assert!(c.contains("stream_parts_max: 2"), "{c}");
+    assert!(c.contains("window_entry_max_bytes: 1042284"), "{c}");
+    assert_eq!(
+        native_words(&io)
+            .iter()
+            .filter(|w| **w == CREO_WORD)
+            .count(),
+        1,
+        "the guest's original word is forwarded exactly once, unchanged"
+    );
+}
+
+#[test]
+fn creo_entry_with_a_software_trigger_in_part_one_refuses_as_staged_span_budget() {
+    let mut io = Mock::new(2048);
+    let mut r = creo_relay(&mut io);
+    let mut pb = vec![
+        kf_abi::submit::method_header_inc(6, 0x200, 1).unwrap(),
+        support::HANDLE,
+    ];
+    pb.extend(pb_filler((CREO_BYTES / 4) as usize - 2));
+    offer_creo(&mut io, CREO_WORD, pb);
+    let e = run_until_forwarded(&mut r, &mut io, CREO_WORD, 8).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STAGED_SPAN_BUDGET ")
+            && why.contains(" live=0 post_switch=6 stream_restarts=0 ")),
+        "a trigger inside an oversized segment cannot be staged: {e:?}"
+    );
+    assert!(!native_words(&io).contains(&CREO_WORD));
+    assert!(!io.calls.contains(&Call::Gate));
+}
+
+#[test]
+fn trigger_in_a_later_part_of_an_oversized_segment_refuses_as_staged_span_budget() {
+    let mut io = Mock::new(2048);
+    let mut r = creo_relay(&mut io);
+    let words = (CREO_BYTES / 4) as usize;
+    let before = 240_000usize; // past the first 229,376-word part
+    let mut pb = pb_filler(before);
+    pb.push(kf_abi::submit::method_header_inc(6, 0x200, 1).unwrap());
+    pb.push(support::HANDLE);
+    pb.extend(pb_filler(words - before - 2));
+    offer_creo(&mut io, CREO_WORD, pb);
+    let e = run_until_forwarded(&mut r, &mut io, CREO_WORD, 8).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STAGED_SPAN_BUDGET ")),
+        "{e:?}"
+    );
+    assert!(!native_words(&io).contains(&CREO_WORD));
+}
+
+#[test]
+fn the_largest_representable_segment_streams_in_at_most_ten_parts() {
+    // 8,388,604 bytes = 9 full parts + one partial: ten is the bound, and no representable word needs an eleventh.
+    let bytes = 8_388_604u64;
+    assert_eq!(bytes.div_ceil(kf_chan::user_storage::MAX_SOURCE_BYTES), 10);
+    let raw = kf_abi::submit::gp_entry(0x4000, bytes).unwrap() | (1 << 41);
+    let mut io = Mock::new(2048);
+    let mut r = creo_relay(&mut io);
+    offer_creo(&mut io, raw, pb_filler((bytes / 4) as usize));
+    let turns = run_until_forwarded(&mut r, &mut io, raw, 12).unwrap();
+    assert_eq!(turns, 10);
+    assert_eq!(io.part_reads.len(), 10);
+    let c = format!("{:?}", r.life.counts());
+    assert!(c.contains("stream_parts_max: 10"), "{c}");
+}
+
+// Phase 2 RED: all calls below exercise the existing production Relay API.
+const STREAM_VA: u64 = 0x0002_3110_102c;
+const COPY_BOUND: u64 = kf_chan::user_storage::MAX_SOURCE_BYTES;
+
+fn wide_words(bytes: u64) -> Vec<u32> {
+    let mut words = vec![0; bytes as usize / 4];
+    words[0] = kf_abi::submit::method_header_inc(0, 0, 1).unwrap();
+    words[1] = 0xc7c0;
+    words
+}
+
+fn install_wide(io: &mut Mock, r: &Relay, words: Vec<u32>, sync: bool) -> u64 {
+    let raw = kf_abi::submit::gp_entry(STREAM_VA, words.len() as u64 * 4).unwrap()
+        | (1 << 41)
+        | if sync { 1 << 63 } else { 0 };
+    io.ring[r.cursor as usize] = raw;
+    io.put = (r.cursor + 1) & (io.entries - 1);
+    io.wide = Some((STREAM_VA, words));
+    io.calls.clear();
+    raw
+}
+
+fn stream_window(io: &mut Mock) -> Relay {
+    let r = pointer_relay(io);
+    io.live = 1;
+    io.epoch += 1;
+    r
+}
+
+fn native_words(io: &Mock) -> Vec<u64> {
+    io.calls
+        .iter()
+        .filter_map(|c| match c {
+            Call::Entry(_, raw) => Some(*raw),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn stream_1026596_window_uses_two_turns_and_commits_only_on_intact_publication() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    let words = wide_words(1_026_596);
+    let mut expected = before.clone();
+    assert_eq!(expected.segment(&words, sw), Ok(None));
+    let raw = install_wide(&mut io, &r, words, false);
+    assert_eq!(raw, measured::RUN3440[0]);
+    let issued = r.fetch.issued();
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.part_reads, vec![(STREAM_VA, COPY_BOUND)]);
+    assert_eq!(r.scan, before);
+    assert_eq!(r.cursor, 2);
     assert_eq!(r.fetch.issued(), issued);
+    assert!(r.again);
+    assert_eq!(r.need, Need::Again);
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert!(
+        !io.calls.contains(&Call::GpPut),
+        "continuation must not re-plan"
+    );
+    assert_eq!(
+        io.part_reads,
+        vec![(STREAM_VA, COPY_BOUND), (STREAM_VA + COPY_BOUND, 109_092)]
+    );
+    assert_eq!(native_words(&io), vec![raw]);
+    assert_eq!(r.scan, expected);
+    assert_eq!(r.cursor, 3);
+    assert_eq!(r.fetch.issued(), issued + 1);
+    assert!(!r.dead);
+}
+
+#[test]
+fn stream_end_in_first_part_never_reads_trigger_shaped_later_part() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let mut words = wide_words(1_026_596);
+    words[2] = 7 << 29;
+    let cut = COPY_BOUND as usize / 4;
+    words[cut] = kf_abi::submit::method_header_inc(6, 0x200, 1).unwrap();
+    words[cut + 1] = 27;
+    let mut expected = r.scan.fresh_resume();
+    expected.segment(&words, sw).unwrap();
+    let raw = install_wide(&mut io, &r, words, false);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.part_reads, vec![(STREAM_VA, COPY_BOUND)]);
+    assert_eq!(native_words(&io), vec![raw]);
+    assert_eq!(r.scan, expected);
+    assert!(!r.dead);
+}
+
+#[test]
+fn stream_trigger_in_second_part_refuses_staged_span_without_publication_or_action() {
+    stream_trigger_budget(false);
+}
+#[test]
+fn stream_software_header_at_part_end_is_a_trigger_not_a_cross_gp_packet_error() {
+    stream_trigger_budget(true);
+}
+fn stream_trigger_budget(across_cut: bool) {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    let mut words = wide_words(1_026_596);
+    let cut = COPY_BOUND as usize / 4;
+    let header = if across_cut { cut - 1 } else { cut + 3 };
+    words[header] = kf_abi::submit::method_header_inc(6, 0x200, 1).unwrap();
+    words[header + 1] = 27;
+    let mut whole = before.clone();
+    assert_eq!(whole.segment(&words, sw).unwrap().unwrap().start, header);
+    install_wide(&mut io, &r, words, false);
+    let issued = r.fetch.issued();
+    turn(&mut r, &mut io).unwrap();
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STAGED_SPAN_BUDGET ") && why.contains(&format!("trigger_at={header}"))),
+        "{e:?}"
+    );
+    assert!(r.dead);
+    assert_eq!(r.scan, before);
+    assert_eq!(r.fetch.issued(), issued);
+    assert!(native_words(&io).is_empty());
+    assert!(!io.calls.contains(&Call::Stage));
+    assert!(format!("{:?}", r.life.counts()).contains("refused_staged_span_budget: 1"));
+}
+
+#[test]
+fn stream_carries_packet_from_previous_descriptor_and_leaves_open_tail_for_next() {
+    let mut io = Mock::new(16);
+    let mut r = relay();
+    io.put_entry(0, &ge(0, Kind::OpenHead));
+    io.put = 1;
+    turn(&mut r, &mut io).unwrap();
+    let before = r.scan.clone();
+    let mut words = vec![0; 1_026_596 / 4];
+    words[0] = 0x22;
+    words[1] = 0x33;
+    *words.last_mut().unwrap() = kf_abi::submit::method_header_inc(1, 0x100, 3).unwrap();
+    let mut whole = before.clone();
+    whole.segment(&words, sw).unwrap();
+    let raw = install_wide(&mut io, &r, words, false);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.scan, before);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.scan, whole);
+    assert!(r.scan.carried().is_some());
+    assert_eq!(native_words(&io), vec![raw]);
+    let next = ge(5, Kind::Plain);
+    io.put_entry(r.cursor, &next);
+    io.put = r.cursor + 1;
+    whole.segment(&next.words(), sw).unwrap();
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.scan, whole);
+}
+
+#[test]
+fn stream_publication_retry_keeps_scan_uncommitted_and_owes_a_fresh_attempt() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.publish_retry_once = true;
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    assert_eq!(r.scan, before);
+    assert!(native_words(&io).is_empty());
+    assert!(r.again);
+    assert_eq!(r.need, Need::Again);
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert!(io.calls.contains(&Call::GpPut));
+    assert_eq!(io.part_reads.last(), Some(&(STREAM_VA, COPY_BOUND)));
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 3);
+}
+
+#[test]
+fn stream_read_retry_keeps_prior_parts_and_retries_only_the_failed_part() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.read_retry_once = Some(STREAM_VA + COPY_BOUND);
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    assert_eq!(r.scan, before, "nothing is committed before publication");
+    assert!(r.retry_kept_stream());
+    assert!(!r.restart_owed, "a kept retry waits for its lock holder");
+    assert!(!r.again);
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert!(
+        !io.calls.contains(&Call::GpPut),
+        "the continuation does not re-plan"
+    );
+    assert_eq!(
+        io.part_reads,
+        vec![(STREAM_VA, COPY_BOUND), (STREAM_VA + COPY_BOUND, 109_092)],
+        "part 0 is not copied again"
+    );
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 3);
+    let c = format!("{:?}", r.life.counts());
+    assert!(c.contains("stream_restarts: 0"), "{c}");
+}
+
+#[test]
+fn stream_busy_publication_retry_keeps_the_stream_and_retries_only_the_publication() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    let raw = install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.publish_retry_once = true;
+    io.retry_busy = true;
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    assert_eq!(r.scan, before);
+    assert!(native_words(&io).is_empty());
+    assert!(r.retry_kept_stream() && !r.restart_owed);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(native_words(&io), vec![raw]);
+    assert_eq!(r.cursor, 3);
+    assert_eq!(io.part_reads.len(), 2, "no part is copied again");
+    let c = format!("{:?}", r.life.counts());
+    assert!(c.contains("stream_publish_retries: 1"), "{c}");
+    assert!(c.contains("stream_restarts: 0"), "{c}");
+}
+
+#[test]
+fn a_stale_publication_retry_restarts_from_part_zero_and_is_counted() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.publish_retry_once = true; // retry_busy stays false: a changed source
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    assert!(!r.retry_kept_stream() && r.restart_owed && r.again);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(
+        io.part_reads,
+        vec![
+            (STREAM_VA, COPY_BOUND),
+            (STREAM_VA + COPY_BOUND, 109_092),
+            (STREAM_VA, COPY_BOUND)
+        ],
+        "part 0 again"
+    );
+    let c = format!("{:?}", r.life.counts());
+    assert!(
+        c.contains("stream_restarts: 1") && c.contains("stream_restarts_max: 1"),
+        "{c}"
+    );
+}
+
+#[test]
+fn stream_maximum_descriptor_reads_at_most_ten_bounded_parts_one_per_turn() {
+    let mut io = Mock::new(16);
+    let mut r = relay();
+    let raw = install_wide(&mut io, &r, wide_words(8_388_604), false);
+    for part in 0..10 {
+        io.calls.clear();
+        let n = io.part_reads.len();
+        turn(&mut r, &mut io).unwrap();
+        assert_eq!(io.part_reads.len(), n + 1);
+        if part != 0 {
+            assert!(!io.calls.contains(&Call::GpPut));
+        }
+        if part != 9 {
+            assert!(native_words(&io).is_empty());
+            assert!(r.again);
+            assert_eq!(r.need, Need::Again);
+        }
+    }
+    assert_eq!(native_words(&io), vec![raw]);
+    assert_eq!(io.part_reads.iter().map(|(_, n)| n).sum::<u64>(), 8_388_604);
+    assert!(io.part_reads.iter().all(|(_, n)| *n <= COPY_BOUND));
+    assert_eq!(r.cursor, 1);
+}
+
+#[test]
+fn stream_scan_error_retries_from_part_zero_with_original_uncommitted_state() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    let mut words = wide_words(1_026_596);
+    let cut = COPY_BOUND as usize / 4;
+    words[0] = kf_abi::submit::method_header_inc(7, 0, 1).unwrap();
+    words[1] = support::SW;
+    words[cut] = 0x0004_0001; // legacy packet with arguments: existing named refusal
+    install_wide(&mut io, &r, words, false);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.scan, before);
+    turn(&mut r, &mut io).unwrap();
+    assert!(!r.dead);
+    assert!(r.again);
+    assert_eq!(r.scan, before);
+    io.wide.as_mut().unwrap().1[cut] = 0;
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert!(io.calls.contains(&Call::GpPut));
+    assert_eq!(io.part_reads.last(), Some(&(STREAM_VA, COPY_BOUND)));
+    let mut expected = before.clone();
+    expected.segment(&io.wide.as_ref().unwrap().1, sw).unwrap();
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.scan, expected);
+    assert_eq!(r.cursor, 3);
+}
+
+#[test]
+fn stream_sync_wait_reads_no_part_until_marker_is_processed_even_if_gp_get_advanced() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let raw = install_wide(&mut io, &r, wide_words(1_026_596), true);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.gates(), 1);
+    assert!(io.part_reads.is_empty());
+    io.hw_get = r.fetch.issued() as u32 & 15;
+    turn(&mut r, &mut io).unwrap();
+    assert!(io.part_reads.is_empty());
+    io.hw_reference = Marks::value(r.marks.issued());
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.part_reads.len(), 1);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(native_words(&io), vec![raw]);
+}
+
+#[test]
+fn stream_seeded_fresh_window_gates_before_first_part() {
+    let mut io = Mock::new(16);
+    let mut r = flipped_relay(&mut io, true);
+    let raw = install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.gates(), 1);
+    assert!(io.part_reads.is_empty());
+    io.hw_get = r.fetch.issued() as u32 & 15;
+    io.hw_reference = Marks::value(r.marks.issued());
+    turn(&mut r, &mut io).unwrap();
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(native_words(&io), vec![raw]);
+}
+
+#[test]
+fn stream_retire_drops_unpublished_state() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    r.retire();
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert!(native_words(&io).is_empty());
+    assert_eq!(r.scan, before);
+    assert_eq!(io.part_reads.len(), 1);
+}
+
+#[test]
+fn stream_source_switch_drops_unpublished_old_parts() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    r.switch_source(2);
+    io.put = 0;
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert!(native_words(&io).is_empty());
+    assert_eq!(r.scan, before);
+    assert_eq!(io.part_reads.len(), 1);
+    assert_eq!(r.generation, 2);
+}
+
+#[test]
+fn stream_receipt_reservation_failure_refuses_before_read_or_publication() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    io.fail_stream_allocation = true;
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e,Fail::Refused(ref why) if why=="USER_RING_STREAM_ALLOC"),
+        "{e:?}"
+    );
+    assert!(r.dead);
+    assert!(io.part_reads.is_empty());
+    assert!(native_words(&io).is_empty());
+}
+
+#[test]
+fn stream_walk_busy_pauses_reads_without_losing_the_descriptor() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let raw = install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.walk_blocked = true;
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.part_reads.len(), 1);
+    assert!(native_words(&io).is_empty());
+    io.walk_blocked = false;
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert!(!io.calls.contains(&Call::GpPut));
+    assert_eq!(native_words(&io), vec![raw]);
+}
+
+#[test]
+fn stream_walk_pause_preserves_uncommitted_parser_state() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.walk_blocked = true;
+    for _ in 0..3 {
+        turn(&mut r, &mut io).unwrap();
+        assert_eq!(r.scan, before);
+        assert_eq!(io.part_reads.len(), 1);
+    }
+    io.walk_blocked = false;
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 3);
+}
+
+#[test]
+fn stream_random_packet_forms_masks_triggers_and_end_match_whole_descriptor_scan() {
+    use kf_abi::submit::method_header_inc as h;
+    for seed in 0..300u32 {
+        let mut io = Mock::new(16);
+        let mut r = stream_window(&mut io);
+        io.scan_bound = 32 + u64::from(seed % 3) * 16;
+        let before = r.scan.fresh_resume();
+        let mut words = vec![h(0, 0, 1).unwrap(), 0xc7c0];
+        for i in 0..5u32 {
+            let form = [1, 3, 5, 4][((seed + i) % 4) as usize];
+            let n = (seed + i) % 4 + 1;
+            words.push((h(1, 0x100, n).unwrap() & !(7 << 29)) | (form << 29));
+            if form != 4 {
+                words.extend((0..n).map(|k| seed ^ k));
+            }
+        }
+        words.extend([0x0002_0010, 0x0003_0000]);
+        if seed % 4 == 0 {
+            words.push(7 << 29);
+        }
+        if seed % 3 == 0 {
+            words.push(0x0001_0000);
+        } // inactive mask
+        if seed % 5 == 0 {
+            words.extend([h(6, 0x200, 1).unwrap(), 27]);
+        }
+        words.resize(words.len().max(io.scan_bound as usize / 4 + 2), 0);
+        assert!(words.len() as u64 * 4 <= 10 * io.scan_bound);
+        let mut expected = before.clone();
+        let trigger = expected.segment(&words, sw).unwrap();
+        let raw = install_wide(&mut io, &r, words, false);
+        let mut done = false;
+        for _ in 0..10 {
+            let n = io.part_reads.len();
+            io.calls.clear();
+            match turn(&mut r, &mut io) {
+                Err(Fail::Refused(why)) => {
+                    assert!(trigger.is_some(), "seed {seed}: {why}");
+                    assert!(
+                        why.starts_with("USER_RING_STAGED_SPAN_BUDGET "),
+                        "seed {seed}: {why}"
+                    );
+                    assert_eq!(r.scan, before);
+                    assert!(native_words(&io).is_empty());
+                    done = true;
+                    break;
+                }
+                Err(e) => panic!("seed {seed}: {e:?}"),
+                Ok(()) => {
+                    assert_eq!(io.part_reads.len(), n + 1);
+                    if r.cursor == 3 {
+                        assert!(trigger.is_none());
+                        assert_eq!(native_words(&io), vec![raw]);
+                        assert_eq!(r.scan, expected);
+                        done = true;
+                        break;
+                    }
+                    assert_eq!(r.scan, before);
+                }
+            }
+        }
+        assert!(done, "seed {seed}");
+    }
+}
+
+// Ring characterization: these assertions run unchanged against master, Phase 1 and Phase 2.
+fn wrap_relay(entries: u32, cursor: u32, pointer: bool) -> (Relay, Mock) {
+    let mut io = Mock::new(entries);
+    let mut scan = Scan::for_subdevice(1).unwrap();
+    if pointer {
+        scan.segment(&ge(0, Kind::SetObj).words(), sw).unwrap();
+    }
+    let life = if pointer {
+        Lifecycle::new()
+    } else {
+        Lifecycle::always_scan()
+    };
+    let mut r = Relay::new(16, life, scan).unwrap();
+    r.cursor = cursor;
+    r.written_get = cursor;
+    r.relayed = u64::from(cursor);
+    for slot in 0..entries {
+        io.ring[slot as usize] = u64::from(slot) << 2; // format-legal, distinct control words
+    }
+    (r, io)
+}
+
+fn wrap_drain(entries: u32, start: u32, put: u32, pointer: bool, cached: bool) {
+    let (mut r, mut io) = wrap_relay(entries, start, pointer);
+    r = r.with_lazy(if cached {
+        kf_chan::user_lazy::LazyConfig::ON
+    } else {
+        kf_chan::user_lazy::LazyConfig::OFF
+    });
+    io.put = put;
+    let mut expected = Vec::new();
+    let mut slot = start;
+    while slot != put {
+        expected.push(u64::from(slot) << 2);
+        slot = if slot + 1 == entries { 0 } else { slot + 1 };
+    }
+    for _ in 0..expected.len() + 3 {
+        turn(&mut r, &mut io).unwrap();
+        io.hw_get = (r.fetch.issued() & 15) as u32;
+    }
+    let copied: Vec<u64> = io
+        .calls
+        .iter()
+        .filter_map(|c| match c {
+            Call::Entry(_, raw) => Some(*raw),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        copied, expected,
+        "n={entries} start={start} put={put} pointer={pointer} cache={cached}"
+    );
+    assert_eq!(r.cursor, put);
+    assert_eq!(
+        r.written_get, put,
+        "write-back wraps with the native fetch receipts"
+    );
+    assert_eq!(r.relayed, u64::from(start) + expected.len() as u64);
+    assert!(!r.dead);
+}
+
+#[test]
+fn wrap_characterization_every_small_ring_range_copies_modulo_in_order() {
+    for entries in [4, 8, 16] {
+        for start in 0..entries {
+            for put in 0..entries {
+                wrap_drain(entries, start, put, false, false);
+                wrap_drain(entries, start, put, true, true);
+            }
+        }
+    }
+}
+
+#[test]
+fn wrap_characterization_ring_end_ranges_and_maximum_admitted_ring() {
+    for entries in [32, 32768, 1 << 20] {
+        for (start, put) in [
+            (entries - 2, 2),
+            (entries - 1, 0),
+            (0, 1),
+            (entries - 1, entries - 1),
+        ] {
+            wrap_drain(entries, start, put, true, false);
+            wrap_drain(entries, start, put, true, true);
+        }
+    }
+}
+
+#[test]
+fn wrap_characterization_full_means_one_reserved_slot_even_when_put_is_below_get() {
+    for start in 0..16 {
+        let (mut r, mut io) = wrap_relay(16, start, true);
+        io.put = if start == 0 { 15 } else { start - 1 };
+        turn(&mut r, &mut io).unwrap();
+        assert!(r.put_full);
+        assert_eq!(r.cursor, (start + 1) % 16);
+        wrap_drain(16, start, io.put, true, true);
+    }
+}
+
+#[test]
+fn wrap_characterization_equal_indices_are_empty_even_after_a_complete_lap() {
+    for start in [0, 1, 15] {
+        let (mut r, mut io) = wrap_relay(16, start, true);
+        io.put = start;
+        // GP_PUT has no wrap/phase bit. A producer writing all sixteen slots
+        // would present this same value; it is not a second legal full encoding.
+        r.relayed += 16;
+        turn(&mut r, &mut io).unwrap();
+        assert_eq!(r.cursor, start);
+        assert!(!r.put_full);
+        assert!(
+            !io.calls
+                .iter()
+                .any(|c| matches!(c, Call::Load(..) | Call::Entry(..) | Call::ReadPb(..)))
+        );
+    }
+}
+
+#[test]
+fn wrap_characterization_u32_put_edges_refuse_before_a_slot_load() {
+    for put in [16, 17, 1 << 31, u32::MAX - 1, u32::MAX] {
+        let (mut r, mut io) = wrap_relay(16, 15, true);
+        io.put = put;
+        assert_eq!(
+            turn(&mut r, &mut io),
+            Err(Fail::Refused("USER_RING_PUT_BOUND".into()))
+        );
+        assert!(r.dead);
+        assert!(
+            !io.calls
+                .iter()
+                .any(|c| matches!(c, Call::Load(..) | Call::Entry(..) | Call::ReadPb(..)))
+        );
+    }
+}
+
+#[test]
+fn wrap_characterization_native_get_wrap_and_unissued_get_edges_preserve_receipts() {
+    let mut f = Fetch::new(16).unwrap();
+    for round in 0..20u32 {
+        let mut expected = Vec::new();
+        for at in 0..15u32 {
+            let receipt = (1, round * 15 + at);
+            f.publish(Some(receipt)).unwrap();
+            expected.push(receipt);
+        }
+        assert_eq!(f.available(), 0);
+        assert!(f.publish(Some((1, 999))).is_err());
+        let get = (f.issued() & 15) as u32;
+        assert_eq!(f.observe(get).unwrap(), expected);
+        assert_eq!(f.available(), 15);
+        assert!(f.observe(get).unwrap().is_empty());
+        let old = f.fetched();
+        for invalid in [16, 1 << 31, u32::MAX] {
+            assert_eq!(f.peek(invalid), Err("USER_FETCH_GET"));
+            assert_eq!(f.observe(invalid), Err("USER_FETCH_GET"));
+            assert_eq!(f.fetched(), old);
+        }
+        assert_eq!(f.observe((get + 1) % 16), Err("USER_FETCH_UNISSUED_GET"));
+        assert_eq!(f.fetched(), old);
+    }
+}
+
+// The actual Plane's token scheduler drives the actual production Relay.
+// No wall clock or timeout participates in this fairness bound.
+struct StreamFairHost<'p, 'v> {
+    plane: &'p kf_core::Plane<'v>,
+    pairs: std::sync::Mutex<Vec<(Relay, Mock)>>,
+    visits: std::sync::Mutex<Vec<u32>>,
+}
+impl kf_core::HostOps for StreamFairHost<'_, '_> {
+    fn operands_translatable(&self, _: u32, _: u64) -> kf_core::Translatable {
+        kf_core::Translatable::Yes
+    }
+    fn run_translated(&self, token: u32, _: u64) -> bool {
+        self.visits.lock().unwrap().push(token);
+        let mut pairs = self.pairs.lock().unwrap();
+        let (r, io) = &mut pairs[token as usize];
+        // A producer continues to publish entries while the huge descriptor
+        // is being copied, stopping only at the legally reserved slot.
+        let new_put = (io.put + 1) % io.entries;
+        if new_put != r.written_get {
+            io.put = new_put;
+        }
+        let reads = io.part_reads.len();
+        turn(r, io).unwrap();
+        assert!(
+            io.part_reads.len() - reads <= 1,
+            "one Pump turn copied multiple parts"
+        );
+        io.hw_get = (r.fetch.issued() & 15) as u32;
+        io.hw_reference = Marks::value(r.marks.issued());
+        // Match user_ring_arm: Again/progress is durable, and a doorbell can
+        // arrive during every serve, including while the token is BUSY.
+        self.plane.ring_internal(token);
+        true
+    }
+    fn ring_host(&self, _: u32) {
+        panic!("no inline USER relay");
+    }
+    fn run_emulated(&self, _: u32, _: u64) {
+        panic!("no CPU work");
+    }
+    fn apply_register(&self, _: u8, _: u32, _: u64, _: u8) {}
+    fn forge_completion(&self, _: u32) {
+        panic!("no forged completion");
+    }
+    fn refuse_and_poison(&self, _: u32) {
+        panic!("no poison");
+    }
+    fn fault_channel(&self, _: u32) {
+        panic!("no fault");
+    }
+    fn map_guest_slice(&self, _: kf_core::leaf::HostSlice) {}
+    fn teardown_step(&self, _: kf_core::lifetime::Step) {}
+}
+
+fn stream_fair_schedule(hot_token: usize, passes: usize) {
+    let vmm = kf_core::Vmm::default();
+    let plane = kf_core::Plane::new(&vmm, 4, 3);
+    let mut caps = kf_core::VmCaps::from_declared(4, 8, 8, 8);
+    for token in 0..2 {
+        plane
+            .allocate_channel(
+                &mut caps,
+                token,
+                kf_trap::Route::Translated,
+                token,
+                kf_core::Owner::User,
+            )
+            .unwrap();
+    }
+    let mut hot_io = Mock::new(32);
+    let mut hot = Relay::new(
+        16,
+        Lifecycle::always_scan(),
+        Scan::for_subdevice(1).unwrap(),
+    )
+    .unwrap();
+    hot_io.ring.fill(0);
+    let bytes = 8_388_604;
+    install_wide(&mut hot_io, &hot, vec![0; bytes / 4], false);
+    hot_io.put = 1;
+    hot.claim(); // begins at Obs, just as Pump::turn_body
+    let (cold, mut cold_io) = wrap_relay(32, 0, true);
+    cold_io.put = 1;
+    let pairs = if hot_token == 0 {
+        vec![(hot, hot_io), (cold, cold_io)]
+    } else {
+        vec![(cold, cold_io), (hot, hot_io)]
+    };
+    let host = StreamFairHost {
+        plane: &plane,
+        pairs: std::sync::Mutex::new(pairs),
+        visits: std::sync::Mutex::new(Vec::new()),
+    };
+    plane.ring_internal(0);
+    plane.ring_internal(1);
+    let mut scratch = Vec::new();
+    let mut cold_before = 0;
+    for pass in 0..passes {
+        let before = host.pairs.lock().unwrap()[hot_token].1.part_reads.len();
+        host.visits.lock().unwrap().clear();
+        plane.worker_pass(&host, &mut scratch, 64);
+        let visits = host.visits.lock().unwrap().clone();
+        for token in 0..2u32 {
+            assert!(
+                visits.contains(&token),
+                "ready token {token} missed pass {pass}"
+            );
+            assert!(
+                visits.iter().filter(|t| **t == token).count()
+                    <= (kf_trap::REACT_ROUNDS + 1) as usize
+            );
+        }
+        let pairs = host.pairs.lock().unwrap();
+        let cold_progress = pairs[1 - hot_token].0.relayed;
+        assert!(
+            cold_progress > cold_before,
+            "second relay made no progress within K=1 worker passes"
+        );
+        cold_before = cold_progress;
+        let copied = pairs[hot_token].1.part_reads.len() - before;
+        assert!(
+            copied <= (kf_trap::REACT_ROUNDS + 1) as usize,
+            "a pass ran away on parts"
+        );
+        assert!(
+            pairs[hot_token]
+                .1
+                .part_reads
+                .iter()
+                .all(|(_, len)| *len <= kf_chan::user_storage::MAX_SOURCE_BYTES)
+        );
+        if pass == 0 {
+            assert_eq!(
+                copied, 9,
+                "a ten-part descriptor must yield before the first pass finishes"
+            );
+            assert_eq!(pairs[hot_token].0.relayed, 0, "no early publication");
+        }
+    }
+    let pairs = host.pairs.lock().unwrap();
+    if passes > 1 {
+        assert!(
+            pairs[hot_token].0.relayed > 0,
+            "the huge descriptor must eventually publish"
+        );
+        assert!(
+            pairs[hot_token].1.part_reads.len() >= 10,
+            "at least one complete attempt, including legal later ring laps"
+        );
+    }
+}
+
+#[test]
+fn stream_fairness_second_relay_progresses_in_one_pass_while_put_advances() {
+    stream_fair_schedule(0, 1);
+}
+
+#[test]
+fn stream_fairness_hot_and_cold_progress_across_parts_wrap_and_reversed_token_order() {
+    stream_fair_schedule(1, 16);
+}
+
+#[test]
+fn stream_end_in_second_part_never_reads_a_third_part_after_more_doorbells() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let cut = COPY_BOUND as usize / 4;
+    let mut words = vec![0; cut * 3];
+    words[cut + 2] = 7 << 29;
+    words[cut * 2] = kf_abi::submit::method_header_inc(6, 0x200, 1).unwrap();
+    words[cut * 2 + 1] = 27;
+    let raw = install_wide(&mut io, &r, words, false);
+    turn(&mut r, &mut io).unwrap();
+    io.put = 6; // independent later entries cannot lengthen this descriptor
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.part_reads.len(), 2);
+    assert_eq!(native_words(&io), [raw]);
+    assert_eq!(r.cursor, 3);
+    assert!(!r.dead);
+}
+
+#[test]
+fn stream_small_entries_keep_the_same_parser_and_io_transcript() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let g = ge(44, Kind::Plain);
+    io.put_entry(r.cursor, &g);
+    io.put = r.cursor + 1;
+    turn(&mut r, &mut io).unwrap();
+    assert!(io.part_reads.is_empty());
+    assert_eq!(
+        io.calls
+            .iter()
+            .filter(|c| matches!(c, Call::ReadPb(..)))
+            .count(),
+        1
+    );
+    assert_eq!(io.count(&Call::Stage), 1);
+    assert_eq!(r.cursor, 3);
+}
+
+#[test]
+fn stream_constructor_and_feed_refuse_hostile_geometry_without_advancing_state() {
+    use kf_chan::user_chunk::{Refusal as R, Stream};
+    let bytes = 8_388_604;
+    let raw = kf_abi::submit::gp_entry(STREAM_VA, bytes).unwrap();
+    let kf_chan::user_stream::Source::Segment(desc) =
+        kf_chan::user_stream::inspect_format(raw).unwrap()
+    else {
+        panic!()
+    };
+    for maximum in [0, 1, 3, 4, COPY_BOUND + 4, u64::MAX] {
+        assert!(matches!(
+            Stream::begin(desc, raw, &Scan::default(), maximum),
+            Err(R::Bounds)
+        ));
+    }
+    let mut stream = Stream::begin(desc, raw, &Scan::default(), COPY_BOUND).unwrap();
+    let first = stream.next_read();
+    assert_eq!(stream.feed(&[], sw), Err(R::Bounds));
+    assert_eq!(stream.next_read(), first);
+    assert_eq!(stream.parts(), 0);
+    assert!(!stream.done());
+    let mut wrong_desc = desc;
+    wrong_desc.len_bytes += 4;
+    assert!(matches!(
+        Stream::begin(wrong_desc, raw, &Scan::default(), COPY_BOUND),
+        Err(R::Bounds)
+    ));
+    assert!(matches!(
+        Stream::begin(desc, raw | 1, &Scan::default(), COPY_BOUND),
+        Err(R::Bounds)
+    ));
+}
+
+fn stream_wrap_completion(private_prefix: u32) {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    r.cursor = 15;
+    r.written_get = 15;
+    r.relayed = 15;
+    r.fetch = Fetch::new(16).unwrap();
+    for _ in 0..private_prefix {
+        let (_, put) = r.fetch.publish(None).unwrap();
+        r.fetch.observe(put).unwrap();
+    }
+    io.hw_get = private_prefix;
+    let raw = install_wide(&mut io, &r, wide_words(1_026_596), false);
+    assert_eq!(io.put, 0);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 15);
+    assert_eq!(r.written_get, 15);
+    assert_eq!(r.fetch.issued(), u64::from(private_prefix));
+    // More entries arrive while the captured last GP slot is in progress.
+    // The source range is [15,0,1], while the descriptor's PB remains contiguous.
+    io.ring[0] = 4;
+    io.ring[1] = 8;
+    io.put = 2;
+    turn(&mut r, &mut io).unwrap();
     assert_eq!(r.cursor, 0);
-    assert!(!io.calls.iter().any(|c| matches!(
-        c,
-        Call::ReadPb(_) | Call::Stage | Call::Gate | Call::Entry(..)
-    )));
+    assert_eq!(
+        r.written_get, 15,
+        "publication itself grants no guest GET credit"
+    );
+    for _ in 0..6 {
+        io.hw_get = (r.fetch.issued() & 15) as u32;
+        io.hw_reference = Marks::value(r.marks.issued());
+        turn(&mut r, &mut io).unwrap();
+    }
+    assert_eq!(native_words(&io), [raw, 4, 8]);
+    assert_eq!(io.part_reads.len(), 2);
+    assert_eq!(r.cursor, 2);
+    assert_eq!(r.written_get, 2);
+    assert!(
+        io.calls.contains(&Call::WriteGuestGet(0)),
+        "wrapped source GET is written back"
+    );
+    assert!(r.marks.issued() > 0);
+    assert_eq!(r.marks.seen(), r.marks.issued());
+    assert!(!r.dead);
+}
+#[test]
+fn stream_source_range_wraps_and_completes_through_marker_and_get_writeback() {
+    stream_wrap_completion(0);
+}
+#[test]
+fn stream_private_get_and_source_get_can_both_wrap_during_completion() {
+    stream_wrap_completion(15);
+}
+
+// ---- second killers for the single-killer mutants of the PR #360 review (R1, R5, R7, R8) and the survivor R2
+
+#[test]
+fn a_per_copy_bound_above_the_staging_region_is_refused_before_any_part_is_read() {
+    // R1: `Stream::begin` must refuse a bound the private object cannot hold, whatever the caller offers.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    io.scan_bound = COPY_BOUND + 4;
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STREAM Bounds ")),
+        "{e:?}"
+    );
+    assert!(io.part_reads.is_empty());
+}
+
+#[test]
+fn a_part_one_word_short_is_refused_and_never_scanned() {
+    // R8: the words fed must be exactly the planned cut.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let before = r.scan.fresh_resume();
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    io.short_read = true;
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STREAM Bounds")),
+        "{e:?}"
+    );
+    assert_eq!(r.scan, before);
+    assert!(native_words(&io).is_empty());
+}
+
+#[test]
+fn eleven_parts_are_refused_at_construction_and_ten_are_admitted() {
+    // R2: ceil(len / maximum) > 10 is Bounds; exactly 10 is fine.
+    use kf_chan::user_chunk::{Refusal, Stream};
+    let scan = Scan::default();
+    for (len, ok) in [(40u64, true), (44, false), (400, false)] {
+        let raw = kf_abi::submit::gp_entry(0x4000, len).unwrap();
+        let Ok(kf_chan::user_stream::Source::Segment(d)) =
+            kf_chan::user_stream::inspect_format(raw)
+        else {
+            panic!()
+        };
+        let begun = Stream::begin(d, raw, &scan, 4);
+        assert_eq!(begun.is_ok(), ok, "len {len}: {:?}", begun.err());
+        if !ok {
+            assert_eq!(begun.err(), Some(Refusal::Bounds));
+        }
+    }
+}
+
+#[test]
+fn a_source_switch_mid_stream_releases_the_receipts_and_serves_the_new_ring() {
+    // R5: a second angle on `switch_source` dropping the stream: the new ring's first entry is forwarded and no part
+    // of the old descriptor is read again.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    let dropped = io.dropped;
+    r.switch_source(2);
+    io.put_entry(0, &ge(70, Kind::Plain));
+    io.put = 1;
+    turn(&mut r, &mut io).unwrap();
+    assert!(io.dropped > dropped, "the receipts are released");
+    assert_eq!(
+        io.part_reads.len(),
+        1,
+        "the old descriptor is not continued"
+    );
+    assert_eq!(r.cursor, 1, "the new ring's first entry was relayed");
+}
+
+#[test]
+fn retire_mid_stream_releases_the_receipts() {
+    // R7: a second angle on `retire` dropping the stream.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    let dropped = io.dropped;
+    r.retire();
+    assert!(!r.cancel_stream(), "no stream is pending after retire");
+    turn(&mut r, &mut io).unwrap();
+    assert!(io.dropped > dropped, "the receipts are released");
+    assert_eq!(r.life.mode(), Mode::Dead);
+}
+
+#[test]
+fn a_ten_part_segment_survives_one_busy_copy_on_every_part_without_a_restart() {
+    // S1: a retry used to throw away every earlier part; now each part is copied exactly once.
+    let bytes = 8_388_604u64;
+    for part in 1..10u64 {
+        let mut io = Mock::new(16);
+        let mut r = relay();
+        let raw = install_wide(&mut io, &r, wide_words(bytes), false);
+        io.read_retry_once = Some(STREAM_VA + part * COPY_BOUND);
+        let mut retries = 0;
+        for _ in 0..40 {
+            match turn(&mut r, &mut io) {
+                Ok(()) => {}
+                Err(Fail::Retry) => retries += 1,
+                Err(e) => panic!("{e:?}"),
+            }
+            if native_words(&io) == vec![raw] {
+                break;
+            }
+        }
+        assert_eq!(native_words(&io), vec![raw], "part {part}");
+        assert_eq!(retries, 1, "part {part}");
+        assert_eq!(
+            io.part_reads.len(),
+            10,
+            "part {part}: no part is copied twice"
+        );
+        assert!(format!("{:?}", r.life.counts()).contains("stream_restarts: 0"));
+    }
+}
+
+#[test]
+fn repeated_busy_publications_never_copy_a_part_again() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let raw = install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.retry_busy = true;
+    for _ in 0..3 {
+        io.publish_retry_once = true;
+        assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+        assert!(r.retry_kept_stream());
+    }
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(native_words(&io), vec![raw]);
+    assert_eq!(io.part_reads.len(), 2);
+    let c = format!("{:?}", r.life.counts());
+    assert!(
+        c.contains("stream_publish_retries: 3") && c.contains("stream_restarts: 0"),
+        "{c}"
+    );
+}
+
+#[test]
+fn eleven_parts_at_the_pumps_bound_are_refused_by_the_relay() {
+    // R2, a second angle through the relay: a bound that makes ceil(len / bound) == 11.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    io.scan_bound = 93_332;
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STREAM Bounds ")),
+        "{e:?}"
+    );
+    assert!(io.part_reads.is_empty());
+}
+
+#[test]
+fn a_ring_switch_does_not_charge_the_abandoned_segments_restarts_to_the_next() {
+    // F3 (round-2 review): `stream_restarts_max` is the most restarts any ONE segment needed.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.publish_retry_once = true; // a stale cause: one restart of the first segment
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    turn(&mut r, &mut io).unwrap(); // restarted: part 0 again, the stream is live
+    r.switch_source(2);
+    io.ring[0] = kf_abi::submit::gp_entry(STREAM_VA, 1_026_596).unwrap() | (1 << 41);
+    io.put = 1;
+    turn(&mut r, &mut io).unwrap(); // part 0 of the second segment
+    io.publish_retry_once = true; // one restart of the second segment
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    let c = format!("{:?}", r.life.counts());
+    assert!(c.contains("stream_restarts: 2"), "{c}");
+    assert!(
+        c.contains("stream_restarts_max: 1"),
+        "no segment needed two restarts: {c}"
+    );
+}
+
+#[test]
+fn restarts_before_a_ring_switch_do_not_inflate_the_next_segments_maximum() {
+    // F3, a second angle: two restarts of the abandoned segment, one of the next: the maximum is 2, never 3.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    for _ in 0..2 {
+        io.publish_retry_once = true;
+        assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+        turn(&mut r, &mut io).unwrap();
+    }
+    r.switch_source(2);
+    io.ring[0] = kf_abi::submit::gp_entry(STREAM_VA, 1_026_596).unwrap() | (1 << 41);
+    io.put = 1;
+    turn(&mut r, &mut io).unwrap();
+    io.publish_retry_once = true;
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    let c = format!("{:?}", r.life.counts());
+    assert!(
+        c.contains("stream_restarts: 3") && c.contains("stream_restarts_max: 2"),
+        "{c}"
+    );
 }

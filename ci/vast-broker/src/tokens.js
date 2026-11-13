@@ -54,10 +54,21 @@ export class RunTokens {
       !/^[0-9a-f]{32}$/.test(r.nonce ?? '') ||
       r.key !== r.run + '-' + r.attempt ||
       r.label !== 'kf-ci-' + r.key ||
-      !Number.isSafeInteger(r.reportExpiry)
+      !Number.isSafeInteger(r.reportExpiry) ||
+      // Custom-host runs (docs/design/V3_CUSTOM_HOSTS.md): box id and profile, both or neither.
+      (r.box === undefined) !== (r.hp === undefined) ||
+      (r.box !== undefined &&
+        (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(r.box) ||
+          !['owned', 'container', 'standard', 'borrowed'].includes(r.hp)))
     )
       refuse();
-    return new SignJWT({ run: r.run, attempt: r.attempt, sha: r.sha, nonce: r.nonce })
+    return new SignJWT({
+      run: r.run,
+      attempt: r.attempt,
+      sha: r.sha,
+      nonce: r.nonce,
+      ...(r.box === undefined ? {} : { box: r.box, hp: r.hp }),
+    })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime(r.reportExpiry)
       .sign(this.key());

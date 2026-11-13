@@ -174,8 +174,8 @@ const cases = [
   [
     'SPEC second rental unpriced',
     L,
-    'est_usd: round(o.pricing.total),',
-    "est_usd: extra.spec === 'laneb' ? 0 : round(o.pricing.total),",
+    'est_usd: round(legEstimate(o, cfg, legTier)),',
+    "est_usd: extra.spec === 'laneb' ? 0 : round(legEstimate(o, cfg, legTier)),",
     'node',
   ],
   ['SPEC dependency scheduling omitted', I, 'if (l.waitForLeg) {', 'if (false) {', 'node'],

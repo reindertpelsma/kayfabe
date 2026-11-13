@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -227,6 +228,81 @@ for (const via of ['path', 'symlink'])
       await assert.rejects(readFile(f.log, 'utf8'));
     } finally {
       await rm(inside, { force: true });
+      await rm(f.root, { recursive: true });
+    }
+  });
+
+// Regression 2026-11-11: deploy.mjs uploaded SHA_GAP_HOURS=0, which the Worker's own configuration()
+// refuses (number() needs 0 < n <= max), so every availability call answered 503.
+// FALSIFIER: a vars file the Worker would refuse reaches the upload step.
+// Killers: (1) the in-process validateWithWorker cases below, (2) the end-to-end deploy.mjs runs.
+import { validateWithWorker, parseVars } from '../deploy.mjs';
+import { configuration } from '../src/policy.js';
+const tomlText = readFileSync(broker + 'wrangler.toml', 'utf8');
+const varsOf = (body) => parseVars('OWNER_GITHUB_ID=' + OWNER + '\n' + body);
+for (const [name, line, ok] of [
+  ['zero', 'SHA_GAP_HOURS=0', false],
+  ['zero-decimal', 'SHA_GAP_HOURS=0.0', false],
+  ['negative', 'SHA_GAP_HOURS=-1', false],
+  ['non-numeric', 'SHA_GAP_HOURS=abc', false],
+  ['over-max', 'SHA_GAP_HOURS=721', false],
+  ['zero-price', 'MAX_PRICE_USD_HOUR=0', false],
+  ['small-positive', 'SHA_GAP_HOURS=0.01', true],
+  ['one', 'SHA_GAP_HOURS=1', true],
+  ['max', 'SHA_GAP_HOURS=720', true],
+])
+  test('vars validation matches the Worker: ' + name, () => {
+    const vars = varsOf(line + '\n');
+    if (ok) validateWithWorker(vars, tomlText);
+    else
+      assert.throws(
+        () => validateWithWorker(vars, tomlText),
+        (e) =>
+          /Worker would refuse/.test(e.message) && !e.message.includes(line.split('=')[1] + '\n'),
+      );
+    // Independent killer: the Worker itself agrees with the helper's verdict.
+    const env = Object.fromEntries(vars);
+    const accepts = () => {
+      try {
+        configuration({
+          ...Object.fromEntries(
+            [...tomlText.split('[vars]')[1].matchAll(/^([A-Z0-9_]+) = "([^"]*)"$/gm)].map((m) => [
+              m[1],
+              m[2],
+            ]),
+          ),
+          ...env,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    // Simplified base lacks the single-quoted refs, so only the refusal direction is asserted here.
+    if (!ok) assert.equal(accepts(), false);
+  });
+test('a refusal names the offending var and not its value', () => {
+  assert.throws(
+    () => validateWithWorker(varsOf('SHA_GAP_HOURS=0\nDAILY_RENTALS=5\n'), tomlText),
+    (e) => /check SHA_GAP_HOURS$/.test(e.message),
+  );
+});
+for (const [name, line, status] of [
+  ['zero', 'SHA_GAP_HOURS=0', 2],
+  ['negative', 'SHA_GAP_HOURS=-3', 2],
+  ['non-numeric', 'SHA_GAP_HOURS=soon', 2],
+  ['valid-small', 'SHA_GAP_HOURS=0.01', 0],
+])
+  test('deploy.mjs end to end, SHA_GAP_HOURS ' + name, async () => {
+    const f = await fixture();
+    try {
+      const r = await deploy(f, 'OWNER_GITHUB_ID=' + OWNER + '\n' + line + '\n', ['--dry-run']);
+      assert.equal(r.status, status, r.text);
+      if (status === 2) {
+        assert.match(r.text, /Worker would refuse.*SHA_GAP_HOURS/);
+        assert.equal(r.calls.length, 0, 'nothing may be bundled or uploaded');
+      } else assert.equal(r.calls.length, 2);
+    } finally {
       await rm(f.root, { recursive: true });
     }
   });

@@ -5,6 +5,16 @@
 Use URL '-' to read a URL from stdin without putting a signed locator in argv.
 --worker-auth sends the run/Access capability from the environment ONLY to the original
 request, never to the redirect target (even on the same host). No remote text is logged.
+
+Every download is written to `<out>.unverified` and renamed to `<out>` only after the size and
+the pinned SHA-256 both match (the pin comes from the caller, never from the server). On any
+failure `<out>` does not exist. The connection is untrusted: a SIZE or HASH failure (an
+oversize response, or a size/pin mismatch after the full transfer) DELETES the `.unverified`
+file and its resume state; only a plain interruption (network error, timeout, kill) keeps them
+so the download can resume. If `<out>` already matches the pin, nothing is downloaded. --fallback-url retries the
+whole download from a second URL (fresh `.unverified`, same pin and size) after ANY failure of the
+first that is not local: connect/DNS/TLS error, reset, stall, truncation, non-2xx status, malformed or
+wrong-size response, pin mismatch (a bad argument or a disk error does not fall back); it never receives --worker-auth headers and never follows redirects.
 """
 import argparse
 import concurrent.futures
@@ -24,13 +34,22 @@ import urllib.request
 
 BLOCK = 1024 * 1024
 ATTEMPTS = 5
+try:
+    # Read timeout (stall) in seconds; the override exists for tests only.
+    TIMEOUT = float(os.environ.get("KF_FETCH_TIMEOUT", "30"))
+    if not 0.05 <= TIMEOUT <= 3600:
+        raise ValueError()
+except ValueError:
+    TIMEOUT = 30.0
 REFRESHES = 2
 REDIRECTS = (301, 302, 303, 307, 308)
 
 
 class FetchError(Exception):
-    def __init__(self, kind):
+    def __init__(self, kind, local=False):
         self.kind = kind
+        # local: our own side is at fault (arguments, disk); a fallback URL cannot help.
+        self.local = local
 
 
 class Expired(Exception):
@@ -53,6 +72,32 @@ def valid_url(url, *, secure=False):
     except (ValueError, TypeError):
         raise FetchError("NETWORK") from None
     return url
+
+
+def unverified_path(out):
+    return Path(str(out) + ".unverified")
+
+
+def fsync_directory(path):
+    directory = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as source:
+        while data := source.read(BLOCK):
+            h.update(data)
+    return h.hexdigest()
+
+
+def discard_partial(out, state):
+    # A fallback never mixes bytes from two sources: start from nothing.
+    for path in (unverified_path(out), state):
+        Path(path).unlink(missing_ok=True)
 
 
 def safe_label(value):
@@ -97,7 +142,7 @@ class Remote:
     def open(self, url, headers):
         request = urllib.request.Request(url, headers={"Accept-Encoding": "identity", "User-Agent": "kayfabe-fetch/1.0", **headers})
         try:
-            return self.opener.open(request, timeout=30)
+            return self.opener.open(request, timeout=getattr(self, "timeout", 30))
         except urllib.error.HTTPError as e:
             if e.code in REDIRECTS or e.code == 416:
                 return e
@@ -195,15 +240,17 @@ class Download:
     def __init__(self, url, out, sha256, streams=8, chunk_size=16 * BLOCK, state=None,
                  follow_redirect=False, origin_headers=None, expected_size=None):
         self.remote = Remote(url, follow_redirect, origin_headers)
+        self.remote.timeout = TIMEOUT
         self.out = Path(out)
+        self.unverified = unverified_path(out)
         self.state = Path(state) if state is not None else Path(str(out) + ".fetch-state.json")
-        if self.out.resolve() == self.state.resolve():
-            raise FetchError("SIZE")
+        if self.state.resolve() in (self.out.resolve(), self.unverified.resolve()):
+            raise FetchError("SIZE", local=True)
         self.pin = sha256.lower()
         if not re.fullmatch(r"[0-9a-f]{64}", self.pin) or not 1 <= streams <= 256 or chunk_size <= 0:
-            raise FetchError("SIZE")
+            raise FetchError("SIZE", local=True)
         if expected_size is not None and not 0 <= expected_size <= 2**63 - 1:
-            raise FetchError("SIZE")
+            raise FetchError("SIZE", local=True)
         self.expected_size = expected_size
         self.streams = streams
         self.chunk_size = chunk_size
@@ -225,11 +272,22 @@ class Download:
             output.flush()
             os.fsync(output.fileno())
         os.replace(temporary, self.state)
-        directory = os.open(self.state.parent, os.O_RDONLY | os.O_DIRECTORY)
+        fsync_directory(self.state.parent)
+
+    def existing_matches(self):
+        # A finished <out> that already matches the pin needs no request.
         try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+            if not self.out.is_file() or self.expected_size is not None and self.out.stat().st_size != self.expected_size:
+                return False
+            return file_sha256(self.out) == self.pin
+        except OSError:
+            return False
+
+    def publish(self):
+        # Only called after the size and the pin matched: data, then rename, then directory.
+        os.fsync(self.fd)
+        os.replace(self.unverified, self.out)
+        fsync_directory(self.out.parent)
 
     def restore(self, old_size):
         try:
@@ -286,7 +344,10 @@ class Download:
                         data = response.read(min(BLOCK, end + 1 - offset))
                         if not data:
                             raise FetchError("NETWORK")
-                        write_at(self.fd, data, offset)
+                        try:
+                            write_at(self.fd, data, offset)
+                        except OSError:
+                            raise FetchError("SIZE", local=True) from None
                         h.update(data)
                         offset += len(data)
                     if response.read(1):
@@ -326,29 +387,44 @@ class Download:
 
     def run(self):
         try:
-            self.remote.meta = self.remote.probe()
-        except Expired:
-            raise FetchError("AUTH") from None
-        self.size, self.etag, self.ranges = self.remote.meta
-        if self.expected_size is not None and self.size != self.expected_size:
-            raise FetchError("SIZE")
-        if not self.ranges:
-            self.streams = 1
-            self.chunk_size = max(1, self.size)
-        self.count = (self.size + self.chunk_size - 1) // self.chunk_size
-        self.identity = {"version": 1, "size": self.size, "etag": self.etag,
-                         "chunk_size": self.chunk_size, "sha256": self.pin,
-                         "source": hashlib.sha256(urllib.parse.urlunsplit(urllib.parse.urlsplit(self.remote.original)._replace(query="")).encode()).hexdigest()}
-        label = urllib.parse.urlsplit(self.remote.url)
-        print(f"FETCH_SOURCE host={safe_label(label.hostname)} object={safe_label(label.path.rsplit('/', 1)[-1])}", flush=True)
+            self.transfer()
+        except FetchError as e:
+            if e.kind in ("SIZE", "HASH") and not e.local:
+                discard_partial(self.out, self.state)
+            raise
+
+    def transfer(self):
+        if self.existing_matches():
+            print("FETCH_DONE secs=0.000 MBps=0.000 streams=0", flush=True)
+            return
         # One process per output AND per state path. Locks are kernel-owned and survive
         # SIGKILL as unlocked files, so a killed run needs no stale-lock workaround.
         self.state.parent.mkdir(parents=True, exist_ok=True)
-        output_fd = os.open(self.out, os.O_RDWR | os.O_CREAT, 0o600)
+        self.out.parent.mkdir(parents=True, exist_ok=True)
+        output_fd = os.open(self.unverified, os.O_RDWR | os.O_CREAT, 0o600)
         with os.fdopen(output_fd, "r+b") as output, open(str(self.state) + ".lock", "a+b") as state_lock:
             self.fd = output.fileno()
             fcntl.flock(state_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            # A stale final file is never left in place while (or after) a download fails.
+            self.out.unlink(missing_ok=True)
+            try:
+                self.remote.meta = self.remote.probe()
+            except Expired:
+                raise FetchError("AUTH") from None
+            self.size, self.etag, self.ranges = self.remote.meta
+            if self.expected_size is not None and self.size != self.expected_size:
+                raise FetchError("SIZE")
+            if not self.ranges:
+                self.streams = 1
+                self.chunk_size = max(1, self.size)
+            self.count = (self.size + self.chunk_size - 1) // self.chunk_size
+            self.identity = {"version": 1, "size": self.size, "etag": self.etag,
+                             "chunk_size": self.chunk_size, "sha256": self.pin,
+                             "target": os.path.abspath(self.unverified),
+                             "source": hashlib.sha256(urllib.parse.urlunsplit(urllib.parse.urlsplit(self.remote.original)._replace(query="")).encode()).hexdigest()}
+            label = urllib.parse.urlsplit(self.remote.url)
+            print(f"FETCH_SOURCE host={safe_label(label.hostname)} object={safe_label(label.path.rsplit('/', 1)[-1])}", flush=True)
             old_size = os.fstat(self.fd).st_size
             self.restore(old_size)
             # Bounds must use old_size above: preallocation must not legitimise holes.
@@ -374,11 +450,10 @@ class Download:
             if os.fstat(self.fd).st_size != self.size or len(self.completed) != self.count:
                 raise FetchError("SIZE")
             if digest_fd(self.fd, 0, self.size) != self.pin:
-                # Keep bytes and state for diagnosis; no corrupt completion is trusted next run.
-                self.completed.clear()
-                self.save()
+                # run() deletes the unverified bytes and state; nothing corrupt is ever resumed.
                 print("FETCH_BAD_HASH", flush=True)
                 raise FetchError("HASH")
+            self.publish()
         seconds = max(time.monotonic() - self.started, 0.000001)
         print(f"FETCH_DONE secs={seconds:.3f} MBps={self.transferred / seconds / 1e6:.3f} streams={self.streams}", flush=True)
 
@@ -399,6 +474,7 @@ def main(argv=None):
     parser.add_argument("--state")
     parser.add_argument("--size", type=int, help="optional pinned byte count, checked before allocation")
     parser.add_argument("--follow-redirect", action="store_true")
+    parser.add_argument("--fallback-url", help="retried whole after a NETWORK or HASH failure of the first URL; no auth headers, no redirects")
     parser.add_argument("--worker-auth", action="store_true", help="origin-only run/Access headers from environment")
     args = parser.parse_args(argv)
     try:
@@ -413,8 +489,18 @@ def main(argv=None):
             headers["Authorization"] = "Bearer " + token
             if ident:
                 headers.update({"CF-Access-Client-Id": ident, "CF-Access-Client-Secret": secret})
-        Download(url, args.out, args.sha256, args.streams, args.chunk_mb * BLOCK,
-                 args.state, args.follow_redirect, headers, expected_size=args.size).run()
+        def download(source, follow, origin_headers):
+            return Download(source, args.out, args.sha256, args.streams, args.chunk_mb * BLOCK,
+                            args.state, follow, origin_headers, expected_size=args.size)
+        try:
+            download(url, args.follow_redirect, headers).run()
+        except FetchError as e:
+            if args.fallback_url is None or e.local:
+                raise
+            print("FETCH_FALLBACK reason=" + e.kind, flush=True)
+            discard_partial(args.out, Path(args.state) if args.state is not None else Path(args.out + ".fetch-state.json"))
+            # The fallback is a different server: it never sees the Worker credentials.
+            download(args.fallback_url, False, {}).run()
         return 0
     except FetchError as e:
         print("FETCH_FAIL class=" + e.kind, flush=True)

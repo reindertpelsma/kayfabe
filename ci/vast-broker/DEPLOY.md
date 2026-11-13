@@ -3,6 +3,8 @@
 STATUS: LIVE, 2026-11-07. The sections "Result store (D1)", "Tiers and the release run" (both added
 2026-11-05), "Evidence bucket" (added 2026-11-06) and "Public logs and run reports" (added 2026-11-07)
 describe deployments that have not been run.
+2026-11-12: the section "Release rehearsal (2026-11-12)" at the end is source in a draft PR
+(`claude/release-rehearsal-20261112`), not merged, not deployed, no hardware run.
 
 [CODE READ: wrangler.toml, deployment.json, deploy.mjs] The owner/controller deploys; no round
 performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acceptance.
@@ -1036,3 +1038,102 @@ matrix driver/subrun receipts; ordinary protocol-7 PASS rows cannot certify it.
 An attributed planned subrun FAIL is sticky and never earns a retry. SPEC stays
 disabled; enabling it plans and prices separate A/B leases and requires both lane
 rows per die. See [the design and review corrections](../../docs/design/V3_RELEASE_MATRIX.md).
+
+## Release rehearsal (2026-11-12)
+
+CODE READ (`src/release.js` `planRehearsal`, `src/index.js` `batchRequest`/`adminStart`/`admit`, `src/tier.js`,
+`src/github.js` `boxProtocol`, `ci/vast-admin/worker.js`, `scripts/ci/vast_payload.py`); GPU-free tests only
+(`test/release-rehearsal.test.js`, `scripts/ci/test_vast_payload_rehearsal.py`, twenty-nine new mutants in
+`scripts/mutate-tiers.mjs`, five in `scripts/ci/middle_apps_mutants.py`); **nothing is deployed, no Vast box has
+run it.** Design and the exact scope: [V3_RELEASE_REHEARSAL.md](../../docs/design/V3_RELEASE_REHEARSAL.md).
+
+What it is: an admin Start `{commit_sha, tier:"large", die:"AD102", rehearsal:true}` (the page has a
+"Rehearsal" checkbox) that plans and rents the large payload on that one die through the normal admission, cost
+and verdict path, without a tag and without clearing any matrix blocker. The plan, batch view and every verdict cell say the
+driver sub-run matrix was NOT executed; the verdict is at most `REHEARSAL_PASS`; the legs never count toward a
+release record and are never queued for the result store. A plain large Start is unchanged and is still refused
+with `MATRIX_NOT_EXECUTABLE`. The large tier also sends the middle apps pair now ("large includes middle").
+
+Vars the owner sets for the first rehearsal (public vars only; `deploy.mjs` accepts them; no secret and no
+Cloudflare token is involved here):
+
+| var | value | why |
+|---|---|---|
+| `RELEASE_ENABLED` | `true` | the kill switch; without it the plan says `RELEASE_DISABLED` |
+| `MAX_CONCURRENT_RENTALS` | `2` (with `MAX_CONCURRENT_CHECK=1`, `MAX_CONCURRENT_SWEEP=1`) | a release leg gets cap - 1 = 1 slot; 1 is `NO_SLOTS`; a rehearsal needs one slot, not eight |
+| `RELEASE_COST_CAP_USD` | optional, `12` suggested (default 40, must be <= `RELEASE_DAILY_USD` 40) | a tighter bound than the default; the default also passes |
+| `RELEASE_RERUNS_PER_LEG` | `0` suggested for the first run | a failed leg cannot silently re-rent |
+| `RELEASE_STAGES` | `[]` for the first run, or `["specviewperf"]` to add the SPEC lanes (two legs, A then B) | SPEC stays its own slot |
+| `MIDDLE_APPS_ENABLED` | unset or `true`; `false` turns the apps pair off for middle, and a large plan or leg is then REFUSED (`APPS_DISABLED`) | the apps pair |
+| `ROLLING_SPEND_USD` | at least the current rolling spend plus the estimate | the existing cap |
+
+Unchanged on purpose: cost cap 40, credit reserve 8, daily limits, the 300 minute hard limit, `RENTING_ENABLED`.
+
+Offline plan (`node ci/vast-broker/release-plan.mjs --market <offers.json> --rehearsal AD102`, with the vars
+`RELEASE_ENABLED=true` and `MAX_CONCURRENT_RENTALS=2` and `--credit 43` as the header of that script describes), MEASURED with the Worker's own code on
+2026-11-12: on the synthetic fixture market (`test/fixtures/release-market-synthetic.json`) the plan is admitted
+with 1 leg, estimate 3.49 USD (two Windows gates on one box), and with `RELEASE_STAGES=["specviewperf"]` 2 legs,
+estimate 7.92 USD; both are far under the cap 40 and the credit 43 (needs 8 + estimate). With the default
+`MAX_CONCURRENT_RENTALS=1` the plan says `NO_SLOTS`. On the real offer snapshot of 2026-11-11 19:41Z
+(`/root/night/vastdrv/offers_all.json`, KVM offers only, re-priced to a 300 GB disk) the same plan says
+`NO_OFFER` for AD102: its four KVM 4090 offers are rejected (reliability 0.961, disk 136 GB, bad host 224600,
+Hungary price). That snapshot is old; the live admin Plan decides.
+
+Time (INFERRED from measured stage times, not measured for a large leg): a large leg runs the middle parts
+(about 101 minutes on a 4090 host, MEASURED once on 2026-11-10) plus the second Windows gate (16 to 50
+minutes) plus SPEC. With SPEC only the last lane leg (lane B, 133 minutes needed) carries the apps; lane A carries none, so the
+apps no longer starve it (review S1). A SPEC stage that still lacks time ends `specviewperf_retry_time` (a retry,
+never a pass); keep `RELEASE_RERUNS_PER_LEG=0` for the first run so it cannot re-rent.
+
+Bundle pin. `deployment.json` `bundle_sha256` and `DEPLOYED_BUNDLE_SHA256` in `wrangler.toml` are updated in the
+same change, by the documented rule above: `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>`,
+SHA-256 of `<dir>/index.js`, twice, identical: `384374d7176e9c9d92c6a94cb99a2735d55b5bae73bd09e288996b087b7d86a8`
+(was `d7a30055f2b1e6ebd56f21b0404e7ac4a9484caf107552f3a52beb2717305b12`). There is no regeneration script; the
+procedure is manual. Trap seen in my own dry-runs: the hash is reproduced only with `node_modules` physically inside the checkout
+(`npm ci --ignore-scripts` there); with `node_modules` as a symlink to another directory the unchanged `next`
+source gave `9b81d0ff...` instead of the pin, because esbuild writes the module paths into comments. Order after
+merge: master must carry the new pin before the coordinator deploys (rule above); set `RELEASE_ENABLED=false`
+before any rollback.
+
+Not deployed here, and no run covers: that the live Worker accepts a rehearsal Start, that any box runs the
+rehearsal payload, the live `/bench-data` route, and everything in "What it does not prove" of the design doc.
+
+## Release matrix v2: one large run per family, CPU-vendor rule (2026-11-12)
+
+STATUS: DESIGN-ONLY, 2026-11-12 for the deployment; the source is CODE READ and GPU-free tested in the draft PR
+`claude/release-matrix-v2-20261112`. **Nothing is deployed, nothing was rented or run.** The owner-confirmed shape, the matrix data and the
+planner/judge behaviour are in [V3_RELEASE_MATRIX.md](../../docs/design/V3_RELEASE_MATRIX.md) ("Release shape v2"). The matrix is still
+`status: "proposed"` and every blocker stays, so a release Start is still refused (`MATRIX_NOT_EXECUTABLE`) after this deploy; the plan (rents nothing)
+shows the new shape, the vendor cover and the recomputed estimate.
+
+Vars the owner sets for the FIRST release (public vars; `deploy.mjs` accepts them; INFERRED values are marked):
+
+| var | value | why |
+|---|---|---|
+| `RELEASE_ENABLED` | `true` | the kill switch (default false); set to `false` before any rollback deploy |
+| `MAX_CONCURRENT_RENTALS` | `9`, with `MAX_CONCURRENT_CHECK=1` and `MAX_CONCURRENT_SWEEP=1` | 9 is the largest account cap (one digit); the release gets cap - 1 = 8 slots. 12 rentals with SPEC run in two waves (4 lane A + 4 middle, then 4 lane B), never 12 at once; the plan needs `parallel >= 8` (`PARALLEL_SLOTS`), one slot stays for the master gate |
+| `RELEASE_COST_CAP_USD` | `30` (coordinator decision 2026-11-12; the owner's target was about 20; code default stays 40) | the plan is refused `COST_CAP` when its WORST-CASE estimate exceeds it. The worst case prices every large leg at the 300-minute limit, so on the SYNTHETIC fixture market it is about 25.6 USD for the 12 legs even with cheap hosts, which a cap of 20 would refuse. Real spend is expected to be lower (INFERRED, unmeasured) |
+| `RELEASE_DAILY_USD` | `40` (default) | must be >= the cost cap |
+| `RELEASE_RERUNS_PER_LEG` | `0` | no silent re-rent; a RETRY/UNATTRIBUTED leg is a human decision |
+| `RELEASE_STAGES` | `["specviewperf"]` | adds the two SPEC lanes per large die; `[]` gives 8 rentals and two Windows gates per large box |
+| `RELEASE_DAILY_RENTALS` | `24` (default) | 12 legs, with room for the checks |
+| `RELEASE_MIDDLE_HARD_RUNTIME_MINUTES` | unset (default 240; INFERRED from 101 min measured once on a 4090 and a slow-host factor of about 2.3; lower only) | the hard limit and the price basis of a middle leg |
+| `MIDDLE_APPS_ENABLED` | unset or `true` | a release plan refuses `APPS_DISABLED` otherwise |
+| `ROLLING_SPEND_USD`, `ACCOUNT_DAILY_USD`, credit | at least the current spend plus the estimate; credit at least 8 + estimate | the existing caps |
+
+Offline plan (rents nothing): `ci/vast-broker/release-plan.mjs` with an offer list and the vars above (usage in README.md, "Plan first"); the market must carry Vast's `cpu_name` per offer (live offers do; the committed
+synthetic fixture has invented alternating AMD/Intel names). New refusal: `CPU_VENDOR_MISSING` (with `INCOMPLETE`). The batch view and the verdict carry
+`cpu_vendor` (required, planned/confirmed, swaps, mismatched, unreported, missing).
+
+Decisions the owner still has to make: see the PR description (cost cap versus worst case, the middle hard limit, whether lane B should run beside lane A,
+what a vendor-less release is allowed to record).
+
+Bundle pin (2026-11-12, release matrix v2). `deployment.json` `bundle_sha256` and `DEPLOYED_BUNDLE_SHA256` in `wrangler.toml` are
+regenerated ONCE here for everything merged since the previous pin: the `#347` hosts Durable Object and the `#355` rehearsal path were merged without
+regenerating it on purpose, so `next` carried a stale pin (`384374d7176e9c9d92c6a94cb99a2735d55b5bae73bd09e288996b087b7d86a8`) until this change. MEASURED 2026-11-12 with wrangler 4.152.0
+and a PHYSICAL `node_modules` inside the checkout (a symlinked one gives a different hash, see above): two `wrangler deploy --config wrangler.toml
+--dry-run --outdir <dir>` runs, SHA-256 of `<dir>/index.js`, identical: `52bb9a0b11b59cb52db6312a7a7dd1f3af14c688aa4cb5396adbc3c278ab2ed2`. Local dry-runs only: no upload, no deploy, no Worker call.
+
+Bundle pin (2026-11-12, release resilience, `claude/release-resilience-20261113`). Regenerated ONCE at the end of that branch because `src/index.js` and `src/release.js` changed (a failed rental is replaced alone; design in `docs/design/V3_RELEASE_RESILIENCE.md`). Old pin `52bb9a0b11b59cb52db6312a7a7dd1f3af14c688aa4cb5396adbc3c278ab2ed2`, new pin `bf98dfcda3729cee7de0ee13e6bea46e2eaadbb20bfa4d0a5ff8caa01385a9e3` (the review round of the same branch moved it once more from `51ae370c7ae3df4189186745d0cf07110953fe17de348d636aa2e94345b920ac`), in all three places (`deployment.json`, `wrangler.toml`, this file). MEASURED 2026-11-12 with wrangler 4.152.0 and a physical `node_modules` in the checkout: two `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>` runs gave identical SHA-256 of `<dir>/index.js`. Local dry-runs only: no upload, no deploy, no Worker call.
+Order after merge: master must carry this pin before the coordinator deploys; set `RELEASE_ENABLED=false` before any rollback.
+

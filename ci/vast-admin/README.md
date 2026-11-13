@@ -1,6 +1,6 @@
 # Owner Vast CI admin
 
-STATUS: LIVE v3 source, 2026-11-05 (plan and start added by branch `claude/worker-tier-20261105`, not deployed); deployment and Access setup remain coordinator work.
+STATUS: LIVE v3 source, 2026-11-05 (plan and start added by branch `claude/worker-tier-20261105`, not deployed); 2026-11-12: the `rehearsal` body key and checkbox are in the draft PR `claude/release-rehearsal-20261112` (not merged, not deployed, no hardware run); deployment and Access setup remain coordinator work.
 
 CODE READ (`worker.js`, `wrangler.toml`): this is owner-only test infrastructure. Its own `kayfabe-vast-admin.<account-subdomain>.workers.dev` hostname serves one plain table, refreshes every ten seconds, and offers Stop per active run and Stop all with a confirmation prompt. Every page and API request verifies `Cf-Access-Jwt-Assertion` with RS256, the team's JWKS, the application's audience and issuer, expiry, and the exact configured owner email. Missing configuration refuses requests.
 
@@ -11,15 +11,18 @@ CODE READ (broker `src/index.js`, `src/ledger.js`): listing returns at most 100 
 ## Plan and start a run (v3, 2026-11-05)
 
 CODE READ (`worker.js`, broker `BrokerLedger.fetch` and `src/index.js` adminPlan/adminStart): the
-page gains a form (commit, tier small/middle/large, optional die) with **Plan** and a confirmed
-**Start**, and a batch list. `POST /api/plan` and `POST /api/start` take only
-`{commit_sha, tier, die?}` (at most 512 bytes, `application/json`, same-origin), behind the same
+page gains a form (commit, tier small/middle/large, optional die, and since 2026-11-12 a
+**Rehearsal** checkbox) with **Plan** and a confirmed **Start**, and a batch list. `POST /api/plan` and
+`POST /api/start` take only `{commit_sha, tier, die?, rehearsal?}` (at most 512 bytes, `application/json`, same-origin), behind the same
 Access check, and forward once to the DO's internal `/admin/plan` or `/admin/start`; the DO's
 answer (a plan, a batch view, or a refusal code with the plan) is relayed as is and carries no log,
 token or capability. The start enters the broker's ordinary admission path; plan rents nothing.
 `POST /api/stop` also accepts `{"batch": "<19-digit id>"}` to end one batch (the batch is stored as
 STOPPED before any box is closed, so a failed provider call cannot let it start more boxes). A
-`large` Start is refused until the broker var `RELEASE_ENABLED=true`. No new secret, binding
+`large` Start is refused until the broker var `RELEASE_ENABLED=true`. `die` is accepted for large
+only together with `rehearsal: true` (the named one-die rehearsal scope, driver sub-run matrix NOT
+executed, never a release PASS: [V3_RELEASE_REHEARSAL.md](../../docs/design/V3_RELEASE_REHEARSAL.md));
+`rehearsal` needs tier large and a die, exactly `true`. Without it the large Start is unchanged. No new secret, binding
 or Access app. How a release works: [broker README](../vast-broker/README.md).
 
 ## Retained log viewer and Stop check (v2)

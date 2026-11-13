@@ -82,6 +82,7 @@
 /.deadman
 **/*.md
 /ci/platform-api
+/ci/r2-index
 /ci/vast-admin
 /ci/vast-reaper
 /scripts/ci/test_*.py

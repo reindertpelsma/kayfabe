@@ -209,6 +209,9 @@ SPEC = [
     # 2026-11-07 (SPECviewperf stage, docs/design/V3_SPEC_GATE.md): the lane of the specviewperf stage slot. It goes with
     # KF_STAGES=specviewperf (release tier only; the payload refuses either alone). Absent: today's run.
     ("KF_SPEC", False, _match(r"lanea|laneb|both")),
+    # 2026-11-12 (release rehearsal, docs/design/V3_RELEASE_REHEARSAL.md): the named large-tier rehearsal scope (one die, driver
+    # sub-run matrix NOT executed). Exactly "1"; the payload refuses it outside the large tier or together with matrix fields.
+    ("KF_RELEASE_REHEARSAL", False, _match(r"1")),
 ]
 
 

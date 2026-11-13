@@ -10,6 +10,11 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// Regression 2026-11-11: a vars file with SHA_GAP_HOURS=0 deployed fine and then made every Worker
+// call answer 503, because the Worker's own configuration() refuses it. The one import from src/
+// is the Worker's own validator, so the two cannot drift. deploy.mjs itself is not in the bundle,
+// so this import does not change the bundle hash.
+import { configuration } from './src/policy.js';
 
 const broker = process.env.KF_DEPLOY_ROOT ?? dirname(fileURLToPath(import.meta.url));
 const checkout = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -20,7 +25,8 @@ export const WRANGLER_VERSION = '4.152.0';
 // `wrangler secret put`, and Cloudflare Access is dashboard-only (the Worker reads no ACCESS_*;
 // the box pair BOX_ACCESS_ID/BOX_ACCESS_SECRET is a secret it only passes through).
 // Boolean-valued public vars (exactly 'true' or 'false'); equal to src/policy.js BOOLEAN_VARS
-// (test/round-deploy-helper.test.js compares them). deploy.mjs imports nothing from src/.
+// (test/round-deploy-helper.test.js compares them). Beyond that one list, the only src/ import is
+// configuration() (see above), run on the vars file merged over wrangler.toml [vars].
 export const BOOLEAN_VARS = Object.freeze([
   'RENTING_ENABLED',
   'RELEASE_ENABLED',
@@ -61,6 +67,11 @@ export const ALLOWED = new Set([
   // commit. Keep it unset/'false' until boxes delete ignored files after cloning (review of #258).
   'TREE_KEY_CARRY_OVER',
   'MIDDLE_APPS_ENABLED',
+  // Custom hosts (docs/design/V3_CUSTOM_HOSTS.md): the 40-hex commit of scripts/kfhost that the admin
+  // enrol route pins in its bootstrap command. No default: the route refuses while it is unset.
+  'HOST_DAEMON_COMMIT',
+  // The public Cloudflare Access client id printed in the enrol command (the secret is never known).
+  'HOST_ACCESS_ID',
   // Tiers (wtier, 2026-11-05; src/tier.js, src/policy.js): the release (large) profile's explicit
   // caps and lists, and the middle tier's rotation and VRAM floor. Account cap is now 1-8.
   'MAX_CONCURRENT_RELEASE',
@@ -123,9 +134,42 @@ export function parseVars(text) {
   for (const key of BOOLEAN_VARS)
     if (vars.has(key) && !['true', 'false'].includes(vars.get(key)))
       fail(key + ' must be true or false');
+  if (vars.has('HOST_DAEMON_COMMIT') && !/^[0-9a-f]{40}$/.test(vars.get('HOST_DAEMON_COMMIT')))
+    fail('HOST_DAEMON_COMMIT must be a 40-hex commit sha');
   if (vars.has('WORKER_URL') && !bareOrigin(vars.get('WORKER_URL')))
     fail('WORKER_URL must be the bare https origin (no trailing slash, path, query or user)');
   return vars;
+}
+
+// wrangler.toml [vars] as a plain map (double- or single-quoted values).
+export function tomlVars(toml) {
+  const section = (toml.split('[vars]')[1] ?? '').split(/^\[/m)[0];
+  const env = {};
+  for (const m of section.matchAll(/^([A-Z][A-Z0-9_]*) = (?:"([^"]*)"|'([^']*)')$/gm))
+    env[m[1]] = m[2] ?? m[3];
+  return env;
+}
+
+// Runs the Worker's own configuration() on toml vars overlaid with the vars file; a refusal names
+// the file var(s) whose removal makes it pass (values are never printed).
+export function validateWithWorker(vars, toml) {
+  const base = tomlVars(toml);
+  const check = (skip) => {
+    const env = { ...base };
+    for (const [key, value] of vars) if (key !== skip) env[key] = value;
+    try {
+      configuration(env);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (check(null)) return;
+  const culprits = [...vars.keys()].filter((key) => check(key));
+  fail(
+    'the Worker would refuse this configuration at runtime (every call would answer 503)' +
+      (culprits.length ? ': check ' + culprits.join(', ') : ''),
+  );
 }
 
 function tomlVar(toml, key) {
@@ -155,6 +199,7 @@ function main(argv) {
     fail('wrangler.toml WORKER_URL must be the bare https origin');
   if (vars.has('WORKER_URL') && tomlVar(toml, 'WORKER_URL') !== vars.get('WORKER_URL'))
     fail('WORKER_URL differs from wrangler.toml');
+  validateWithWorker(vars, toml);
   const manifest = JSON.parse(readFileSync(resolve(broker, 'deployment.json'), 'utf8'));
   if (manifest.bundle_sha256 !== tomlVar(toml, 'DEPLOYED_BUNDLE_SHA256'))
     fail('deployment.json and wrangler.toml DEPLOYED_BUNDLE_SHA256 differ');
