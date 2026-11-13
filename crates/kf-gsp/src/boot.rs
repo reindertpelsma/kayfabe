@@ -388,6 +388,43 @@ struct HeldReply {
     detail: Option<u32>,
 }
 
+/// ★ Security review 1, F-09 (2026-11-13): the replies a command earned whose post the status
+/// queue refused ([`GspFault::QueueFull`]). The command stays unconsumed (answer-then-commit), so
+/// the next doorbell re-reads it; it is then answered from HERE, not by asking the policy again.
+/// Before, every doorbell against a full status queue re-ran `CommandPolicy::respond` (with its
+/// side effects on the object graph, the channel plane and the host) for the same command.
+///
+/// Keyed by the command's function code, sequence and payload: a different command at that queue
+/// position (a guest that rewrote its own ring) is answered afresh and the entry is dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OwedReply {
+    code: u32,
+    sequence: u32,
+    payload: Vec<u8>,
+    /// Posted in order, all or none.
+    replies: Vec<OutgoingRpc>,
+    /// The reply whose status the refusal ledger records (the last one the guest reads).
+    ledger: OutgoingRpc,
+    /// What the command carried, for the ledger.
+    detail: Option<u32>,
+    /// The policy had no answer: reported as unserviced once, when the reply is posted.
+    unserviced: Option<Unserviced>,
+}
+
+impl OwedReply {
+    fn answers(&self, cmd: &RpcCommand) -> bool {
+        self.code == cmd.code && self.sequence == cmd.sequence && self.payload == cmd.payload
+    }
+}
+
+/// ★ Security review 1, F-10 (2026-11-13): the most replies [`GspFsm`] holds for a refresh or a
+/// host act. A GSP client's RPCs are synchronous (one in flight per client thread), so a real
+/// guest holds a handful; past this the drain stops consuming commands (back-pressure: they stay
+/// in the guest's own ring, unanswered and unconsumed, counted in [`GspFsm::held_full_stalls`])
+/// until [`GspFsm::release_held`] frees room. Nothing is dropped: a dropped reply is a guest
+/// hang, and a guest that fills this hangs only itself.
+pub const MAX_HELD: usize = 1024;
+
 /// ★★★ **A reply whose STATUS is the outcome of a host act still in progress** (P5b).
 ///
 /// The answer to a channel's allocation IS its birth (`THE_ARCHITECTURE_v3.md` §7), and a birth
@@ -897,9 +934,14 @@ pub struct GspFsm {
     /// than inside one held store.
     pending_command_doorbells: u32,
     /// Replies withheld until their rows are on the host — [`Reply::hold_for_refresh`].
-    /// ⊘ A `Vec` and not a map: it is ordered, it is single-digit in every measured boot,
+    /// ⊘ A queue and not a map: it is ordered, it is single-digit in every measured boot,
     /// and the order replies are posted in is the order the guest asked for them.
-    held: Vec<HeldReply>,
+    /// ★ Bounded by [`MAX_HELD`] (security review 1, F-10).
+    held: std::collections::VecDeque<HeldReply>,
+    /// ★ Security review 1, F-10: drain passes that stopped because [`MAX_HELD`] replies were held.
+    held_full_stalls: u64,
+    /// ★ Security review 1, F-09: the replies of the command whose post found the status queue full.
+    owed: Option<OwedReply>,
     /// ★★★ v3-refusals: every non-`NV_OK` reply posted, keyed by what it answered
     /// ([`crate::refusal`]). Written at the two posting sites only; answers nothing.
     refusals: crate::refusal::RefusalLedger,
@@ -1110,7 +1152,9 @@ impl GspFsm {
         GspFsm {
             reply_body_trace: crate::replytrace::ReplyBodyTrace::from_host_env(),
             pending_command_doorbells: 0,
-            held: Vec::new(),
+            held: std::collections::VecDeque::new(),
+            held_full_stalls: 0,
+            owed: None,
             refusals: crate::refusal::RefusalLedger::new(),
             bcr_ctrl: None,
             falcon_engine: None,
@@ -1621,6 +1665,7 @@ impl GspFsm {
         self.fwsec_image = None;
         self.queue = QueueState::Unbound;
         self.large.reset();
+        self.owed = None;
         self.init_done_posted = false;
         self.swgen0_pending = false;
         // ★ The batch died with the binding: the queue it was posted into is gone, so the
@@ -1913,6 +1958,8 @@ impl GspFsm {
             self.cmd_read_ptr = 0;
         }
         self.region_identity = Some(shared_mem_pa);
+        // A new binding: nothing owed into the old queue carries over.
+        self.owed = None;
         let count = geom.msg_count();
         let peer_read_at_bind = geom.region().read_u32(ram, geom.peer_stat_read_ptr_off())?;
         self.queue = QueueState::Bound(QueueBinding {
@@ -2223,6 +2270,19 @@ impl GspFsm {
             // retry.
             // ★ Ruling 2: a large control is joined first ([`crate::large`]); the assembler's
             // step is committed only once the command is consumed, so a retried pass rebuilds it.
+            // ★ Security review 1, F-10: no room to hold another reply ⇒ leave this command (and
+            // every later one) unconsumed and unanswered: the policy is not asked, nothing moves.
+            if self.held.len() >= MAX_HELD {
+                self.held_full_stalls = self.held_full_stalls.saturating_add(1);
+                kf_arch::rate_eprintln!(
+                    "kayfabe: HELD-REPLY FULL: {MAX_HELD} replies held; command fn {} seq {} waits \
+                     unconsumed (stall {})",
+                    cmd.code,
+                    cmd.sequence,
+                    self.held_full_stalls
+                );
+                break;
+            }
             let declared = self.large_head_declared(&cmd);
             let consumed = match self.large.step(&cmd, declared) {
                 crate::large::Step::NotLarge => {
@@ -2382,32 +2442,55 @@ impl GspFsm {
         fragments: &[crate::large::Fragment],
         report: &mut ServiceReport,
     ) -> Result<(), GspFault> {
-        let full = match policy.respond(whole) {
-            Some(r) => r.on_wire(whole),
+        // ★ Security review 1, F-09: a retry after `QueueFull` posts what was owed; the policy is
+        // asked once per command.
+        let owed = match self.owed.take().filter(|o| o.answers(whole)) {
+            Some(o) => o,
             None => {
-                report.unserviced.push(Unserviced {
+                let mut unserviced = None;
+                let full = match policy.respond(whole) {
+                    Some(r) => r.on_wire(whole),
+                    None => {
+                        unserviced = Some(Unserviced {
+                            code: whole.code,
+                            sequence: whole.sequence,
+                        });
+                        whole.reply(NV_ERR_NOT_SUPPORTED, &[])
+                    }
+                };
+                let replies = if crate::large::bidirectional(whole.function) {
+                    crate::large::split_reply(
+                        &full,
+                        fragments,
+                        self.abi.rpc.codes.continuation_record,
+                    )
+                } else {
+                    // ★ 2026-10-14: one reply, at the head, carrying only the status the guest reads.
+                    vec![OutgoingRpc {
+                        payload: Vec::new(),
+                        ..full.clone()
+                    }]
+                };
+                OwedReply {
                     code: whole.code,
                     sequence: whole.sequence,
-                });
-                whole.reply(NV_ERR_NOT_SUPPORTED, &[])
+                    payload: whole.payload.clone(),
+                    replies,
+                    detail: self.refusal_detail(whole),
+                    ledger: full,
+                    unserviced,
+                }
             }
         };
-        let replies = if crate::large::bidirectional(whole.function) {
-            crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record)
-        } else {
-            // ★ 2026-10-14: one reply, at the head, carrying only the status the guest reads.
-            vec![OutgoingRpc {
-                payload: Vec::new(),
-                ..full.clone()
-            }]
-        };
+        let replies = &owed.replies;
+        let full = owed.ledger.clone();
         let QueueState::Bound(binding) = &self.queue else {
             return Err(GspFault::QueueNotBound);
         };
         let geom = binding.geom.clone();
         let element_size = geom.element_size();
         let mut needed = 0u32;
-        for r in &replies {
+        for r in replies {
             let run = encode_message(
                 &self.abi.element,
                 self.abi.rpc.header_version,
@@ -2423,17 +2506,21 @@ impl GspFsm {
             let peer_read = geom.region().read_u32(ram, geom.peer_stat_read_ptr_off())?;
             let free = free_elements(peer_read, cursor.write_ptr, geom.msg_count())?;
             if needed > free {
+                self.owed = Some(owed);
                 return Err(GspFault::QueueFull { needed, free });
             }
         }
+        let replies = owed.replies.clone();
         for r in &replies {
             self.post(ram, r)?;
         }
+        if let Some(u) = owed.unserviced {
+            report.unserviced.push(u);
+        }
         // ★ v3-refusals: the guest reads the status from the last reply — one ledger row for the command.
         if full.rpc_result != 0 {
-            let detail = self.refusal_detail(whole);
             self.refusals
-                .note(full.function, detail, full.rpc_result, full.sequence);
+                .note(full.function, owed.detail, full.rpc_result, full.sequence);
         }
         kf_arch::rate_eprintln!(
             "kf-gsp: large RPC fn {} seq {} joined from {} fragment(s), {} bytes, answered in {} replies (rpc_result {:#x})",
@@ -2494,16 +2581,23 @@ impl GspFsm {
         // `memset` of libcuda's stack — with no status anywhere to see it. The whole
         // derivation, the clamps and the ⚠ that this is a RESTORE and not a FILL live on
         // `RpcCommand::reply_alloc`; ⊘ `RpcCommand::reply` is unchanged.
+        // ★ Security review 1, F-09: the retry of a command whose reply found the status queue
+        // full posts what it was owed, without asking the policy (and so without re-running
+        // `respond`'s side effects) a second time.
+        if let Some(o) = self.owed.take().filter(|o| o.answers(cmd)) {
+            return self.post_owed(ram, o, cmd, report);
+        }
         let payload_max = (self.abi.element_size_max as usize)
             .saturating_sub(self.abi.element.hdr_size())
             .saturating_sub(RpcEnvelope::SIZE);
+        let mut unserviced = None;
         let out = match policy.respond(cmd) {
             Some(r) if cmd.function == RpcFunction::RmAlloc => {
                 cmd.reply_alloc(r.rpc_result, &r.body, &self.abi.driver, payload_max)
             }
             Some(r) => r.on_wire(cmd),
             None => {
-                report.unserviced.push(Unserviced {
+                unserviced = Some(Unserviced {
                     code: cmd.code,
                     sequence: cmd.sequence,
                 });
@@ -2534,6 +2628,9 @@ impl GspFsm {
         // deliberately not reachable through it: a teardown reply must never wait on a
         // publication, and it changes no address space, so it never sets the flag.
         if held_this_command {
+            if let Some(u) = unserviced {
+                report.unserviced.push(u);
+            }
             // ⊘⊘ `[measured w425]` this push was SILENT, and the silence read as absence: a
             // whole boot's log carried no held-reply line and I concluded the mechanism never
             // fired. That is the ledger's *"no counter fired is NOT no record exists"* one
@@ -2550,22 +2647,63 @@ impl GspFsm {
                 cmd.function,
                 self.held.len() + 1
             );
-            self.held.push(HeldReply {
+            self.held.push_back(HeldReply {
                 rpc: out,
                 deferred,
                 alloc: cmd.function == RpcFunction::RmAlloc,
                 detail: self.refusal_detail(cmd),
             });
         } else {
-            self.post(ram, &out)?;
-            // ★ v3-refusals: recorded AFTER a successful post — the status the guest reads.
-            if out.rpc_result != 0 {
-                let detail = self.refusal_detail(cmd);
-                self.refusals
-                    .note(out.function, detail, out.rpc_result, out.sequence);
+            let owed = OwedReply {
+                code: cmd.code,
+                sequence: cmd.sequence,
+                payload: cmd.payload.clone(),
+                replies: vec![out.clone()],
+                ledger: out,
+                detail: self.refusal_detail(cmd),
+                unserviced,
+            };
+            return self.post_owed(ram, owed, cmd, report);
+        }
+        self.after_answer(cmd, report);
+        Ok(())
+    }
+
+    /// Post `owed`'s reply; on [`GspFault::QueueFull`] keep it for the retry (F-09) and refuse.
+    /// After a successful post: the ledger row, the unserviced report, and fn 47's suspend.
+    fn post_owed(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        owed: OwedReply,
+        cmd: &RpcCommand,
+        report: &mut ServiceReport,
+    ) -> Result<(), GspFault> {
+        // `answer` builds exactly one reply per command; the large path posts its own.
+        for r in &owed.replies {
+            match self.post(ram, r) {
+                Ok(()) => {}
+                Err(e @ GspFault::QueueFull { .. }) => {
+                    self.owed = Some(owed);
+                    return Err(e);
+                }
+                Err(e) => return Err(e),
             }
         }
+        if let Some(u) = owed.unserviced {
+            report.unserviced.push(u);
+        }
+        // ★ v3-refusals: recorded AFTER a successful post — the status the guest reads.
+        let out = &owed.ledger;
+        if out.rpc_result != 0 {
+            self.refusals
+                .note(out.function, owed.detail, out.rpc_result, out.sequence);
+        }
+        self.after_answer(cmd, report);
+        Ok(())
+    }
 
+    /// What follows a command's answer whatever path it took.
+    fn after_answer(&mut self, cmd: &RpcCommand, report: &mut ServiceReport) {
         if cmd.function == RpcFunction::UnloadingGuestDriver {
             // ★ E9 — reply first, **then** suspend. `MAILBOX0` must report the suspend
             // sentinel afterwards or the guest's close poll spins
@@ -2584,7 +2722,6 @@ impl GspFsm {
             // (`C:2465-2472` records what zeroing them cost).
             self.suspend(report);
         }
-        Ok(())
     }
 
     /// ★ E9 (and, on a regime whose firmware stops itself, E13) — fn-47 has been answered.
@@ -2801,7 +2938,7 @@ impl GspFsm {
 
     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
         let mut posted = 0usize;
-        while let Some(h) = self.held.first() {
+        while let Some(h) = self.held.front() {
             // ⊘ Cloned before the post and removed only AFTER it succeeds. `post` can refuse
             // (an unbound queue, a full ring), and a reply removed by a FAILED post is a
             // reply nobody will ever send — which is a guest hang, not a dropped message.
@@ -2818,7 +2955,7 @@ impl GspFsm {
             }
             let detail = h.detail;
             self.post(ram, &rpc)?;
-            self.held.remove(0);
+            self.held.pop_front();
             // ★ v3-refusals: the FINAL status (after the deferred act resolved it).
             self.refusals
                 .note(rpc.function, detail, rpc.rpc_result, rpc.sequence);
@@ -2871,6 +3008,13 @@ impl GspFsm {
     #[must_use]
     pub fn held_len(&self) -> usize {
         self.held.len()
+    }
+
+    /// ★ Security review 1, F-10: drain passes that left a command unconsumed because
+    /// [`MAX_HELD`] replies were held (a guest that never lets its refreshes finish).
+    #[must_use]
+    pub const fn held_full_stalls(&self) -> u64 {
+        self.held_full_stalls
     }
 
     /// ★ P5c: post one `RC_TRIGGERED` event (`NV_VGPU_MSG_EVENT_RC_TRIGGERED`) whose body is
@@ -3059,6 +3203,8 @@ impl GspFsm {
     }
 
     fn commit_command_cursor(&mut self, read_ptr: u32, seq_num: u32) {
+        // The command at the old cursor is consumed: whatever was owed for it has been posted.
+        self.owed = None;
         self.cmd_seq = seq_num;
         self.cmd_read_ptr = read_ptr;
         if let QueueState::Bound(b) = &mut self.queue {
@@ -4033,10 +4179,15 @@ mod device_reset_from_every_phase {
     // ---- the policy: the three outcomes a reset must be able to interrupt ---------------------
 
     /// `GSP_RM_CONTROL` is unmodelled (a refusal, recorded), `GSP_RM_ALLOC` is held for its
-    /// refresh (a held reply), everything else is echoed.
-    struct Live;
+    /// refresh (a held reply), everything else is echoed. `responds` counts the policy's answers
+    /// (security review 1, F-09: a command must be answered by the policy once).
+    #[derive(Default)]
+    struct Live {
+        responds: u32,
+    }
     impl CommandPolicy for Live {
         fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+            self.responds += 1;
             match cmd.function {
                 RpcFunction::RmControl => None,
                 _ => Some(Reply {
@@ -4312,7 +4463,7 @@ mod device_reset_from_every_phase {
                 fsm,
                 ram,
                 model: Mini { seq: Seq { after } },
-                policy: Live,
+                policy: Live::default(),
                 guest_seq: 0,
                 guest_wp: 0,
                 sent_sysinfo: false,
@@ -4725,6 +4876,8 @@ mod device_reset_from_every_phase {
             reply_body_trace,
             pending_command_doorbells,
             held,
+            held_full_stalls,
+            owed,
             refusals,
             bcr_ctrl,
             falcon_engine,
@@ -4758,6 +4911,8 @@ mod device_reset_from_every_phase {
             reply_body_trace: bt0,
             pending_command_doorbells: p0,
             held: h0,
+            held_full_stalls: hs0,
+            owed: ow0,
             refusals: r0,
             bcr_ctrl: b0,
             falcon_engine: fe0,
@@ -4792,6 +4947,8 @@ mod device_reset_from_every_phase {
         assert_eq!(reply_body_trace, bt0);
         assert_eq!(pending_command_doorbells, p0);
         assert_eq!(held, h0);
+        assert_eq!(held_full_stalls, hs0);
+        assert_eq!(owed, ow0);
         assert_eq!(refusals, r0);
         assert_eq!(bcr_ctrl, b0);
         assert_eq!(falcon_engine, fe0);
@@ -5322,7 +5479,7 @@ mod device_reset_from_every_phase {
             let mut f = fresh(None);
             let mut ram = super::super::a_life_ends_and_the_next_one_boots::Untouchable;
             let r = f
-                .mmio_write_with(&mut ram, &model, &mut Live, 0, OFF_FW_RESUME, 1)
+                .mmio_write_with(&mut ram, &model, &mut Live::default(), 0, OFF_FW_RESUME, 1)
                 .expect("no refusal");
             assert!(r.transitions.is_empty());
             assert_eq!(f, fresh(None));
@@ -5336,7 +5493,7 @@ mod device_reset_from_every_phase {
             f.note_command_doorbells(1);
             let mut ram = super::super::a_life_ends_and_the_next_one_boots::Untouchable;
             assert_eq!(
-                f.service_one_deferred_command(&mut ram, &mut Live)
+                f.service_one_deferred_command(&mut ram, &mut Live::default())
                     .unwrap_err(),
                 GspFault::QueueNotBound,
                 "E8, zero guest-RAM reads"
@@ -5344,7 +5501,8 @@ mod device_reset_from_every_phase {
             assert_eq!(f.wake_reset(), Some(Transition::E14));
             f.note_command_doorbells(1);
             assert!(
-                f.service_one_deferred_command(&mut ram, &mut Live).is_ok(),
+                f.service_one_deferred_command(&mut ram, &mut Live::default())
+                    .is_ok(),
                 "Cold after the wake: E12, zero reads"
             );
         }
@@ -5453,6 +5611,231 @@ mod device_reset_from_every_phase {
     /// "arm-directed beats broadcast"). The gate is kept and pinned so that the day a caller exists
     /// it cannot overrun the status ring, and so a guest that never takes the interrupt can only
     /// starve its OWN wakeups (the safe direction).
+    /// ★ Security review 1 (2026-11-13), F-09 and F-10: a guest that stops reading its status
+    /// queue, or never lets its refreshes finish, gets back-pressure — never a policy that runs
+    /// twice for one command, and never an unbounded queue of held replies.
+    mod held_and_owed_bounds {
+        use super::*;
+
+        fn running() -> Dev {
+            let mut d = drive(BootPhase::Running, false, None);
+            d.guest_drains_status();
+            d
+        }
+
+        fn control(d: &mut Dev) {
+            let code = d.fsm.abi.rpc.codes.gsp_rm_control;
+            d.send(code, vec![0; 40]);
+        }
+
+        /// Fill the status ring with refusals the guest never reads; return the ring output that
+        /// first refused.
+        fn fill_status(d: &mut Dev) -> String {
+            for _ in 0..(2 * COUNT) {
+                control(d);
+                let out = d.ring();
+                if out.contains("QueueFull") {
+                    return out;
+                }
+            }
+            panic!("the status ring never filled");
+        }
+
+        #[test]
+        fn a_full_status_queue_does_not_rerun_the_policy_on_every_doorbell() {
+            let mut d = running();
+            fill_status(&mut d);
+            let after_first = d.policy.responds;
+            let read_ptr = d.fsm.cmd_read_ptr;
+            for _ in 0..5 {
+                let out = d.ring();
+                assert!(out.contains("QueueFull"), "still full: {out}");
+            }
+            assert_eq!(
+                d.policy.responds, after_first,
+                "each doorbell re-ran `respond` for the same command"
+            );
+            assert_eq!(d.fsm.cmd_read_ptr, read_ptr, "the command is not consumed");
+            assert!(d.fsm.owed.is_some(), "its reply is owed");
+        }
+
+        #[test]
+        fn the_owed_reply_is_posted_once_when_the_guest_reads_its_queue() {
+            let mut d = running();
+            fill_status(&mut d);
+            let responds = d.policy.responds;
+            let seq_before = d.fsm.stat_seq;
+            let refusals_before = d.fsm.refusals().total();
+            d.ring();
+            d.ring();
+            d.guest_drains_status();
+            let out = d.ring();
+            assert!(!out.contains("Err"), "posted: {out}");
+            assert!(
+                out.contains("Unserviced {"),
+                "reported unserviced with the post: {out}"
+            );
+            assert_eq!(
+                d.policy.responds, responds,
+                "posted from the stash, not re-asked"
+            );
+            assert_eq!(
+                d.fsm.stat_seq,
+                seq_before + 1,
+                "exactly one reply for the command"
+            );
+            assert_eq!(
+                d.fsm.refusals().total(),
+                refusals_before + 1,
+                "one ledger row, recorded at the post"
+            );
+            assert!(d.fsm.owed.is_none());
+            // The next command is answered by the policy as usual.
+            control(&mut d);
+            d.ring();
+            assert_eq!(d.policy.responds, responds + 1);
+        }
+
+        #[test]
+        fn a_rewritten_command_at_the_owed_position_is_answered_afresh() {
+            let mut d = running();
+            fill_status(&mut d);
+            let owed = d.fsm.owed.clone().expect("owed");
+            // A hostile guest puts a different command at the same ring position.
+            let mut other = owed.clone();
+            other.payload.push(1);
+            d.fsm.owed = Some(other);
+            let responds = d.policy.responds;
+            d.ring();
+            assert_eq!(
+                d.policy.responds,
+                responds + 1,
+                "a stash that does not answer this command is never posted for it"
+            );
+            let stash = d.fsm.owed.clone().expect("re-stashed for the real command");
+            assert_eq!(stash.payload, owed.payload);
+        }
+
+        #[test]
+        fn an_owed_reply_answers_only_the_identical_command() {
+            let cmd = RpcCommand {
+                function: RpcFunction::RmControl,
+                code: 76,
+                sequence: 9,
+                payload: vec![1, 2, 3],
+                elements: 1,
+                delivered: Vec::new(),
+            };
+            let owed = OwedReply {
+                code: 76,
+                sequence: 9,
+                payload: vec![1, 2, 3],
+                replies: Vec::new(),
+                ledger: cmd.reply(0, &[]),
+                detail: None,
+                unserviced: None,
+            };
+            assert!(owed.answers(&cmd));
+            let mut c = cmd.clone();
+            c.payload[2] = 4;
+            assert!(!owed.answers(&c), "payload");
+            let mut c = cmd.clone();
+            c.sequence = 10;
+            assert!(!owed.answers(&c), "sequence");
+            let mut c = cmd.clone();
+            c.code = 77;
+            assert!(!owed.answers(&c), "code");
+        }
+
+        #[test]
+        fn one_doorbell_with_many_commands_stops_exactly_at_the_cap() {
+            let mut d = running();
+            let alloc = d.fsm.abi.rpc.codes.gsp_rm_alloc;
+            while d.fsm.held_len() < MAX_HELD - 10 {
+                let room = (MAX_HELD - 10 - d.fsm.held_len()).min(COUNT as usize - 2);
+                for _ in 0..room {
+                    d.send(alloc, vec![0; 64]);
+                }
+                d.ring();
+            }
+            let responds = d.policy.responds;
+            for _ in 0..40 {
+                d.send(alloc, vec![0; 64]);
+            }
+            d.ring();
+            assert_eq!(d.fsm.held_len(), MAX_HELD);
+            assert_eq!(
+                d.policy.responds,
+                responds + 10,
+                "exactly the room was served"
+            );
+            assert_eq!(d.fsm.held_full_stalls(), 1);
+        }
+
+        #[test]
+        fn a_stash_for_another_sequence_is_not_posted() {
+            let mut d = running();
+            fill_status(&mut d);
+            let mut other = d.fsm.owed.clone().expect("owed");
+            other.sequence = other.sequence.wrapping_add(1);
+            d.fsm.owed = Some(other);
+            let responds = d.policy.responds;
+            d.ring();
+            assert_eq!(d.policy.responds, responds + 1, "answered afresh");
+        }
+
+        #[test]
+        fn an_unserviced_command_is_reported_once_across_its_retries() {
+            let mut d = running();
+            let first = fill_status(&mut d);
+            let mut outs = vec![first];
+            outs.push(d.ring());
+            outs.push(d.ring());
+            d.guest_drains_status();
+            outs.push(d.ring());
+            let seq = d.fsm.owed.as_ref().map(|o| o.sequence);
+            assert!(seq.is_none(), "posted");
+            let reported: usize = outs.iter().map(|o| o.matches("Unserviced {").count()).sum();
+            assert_eq!(reported, 1, "once, at the post: {outs:?}");
+        }
+
+        #[test]
+        fn held_replies_are_capped_and_the_drain_stops_without_asking_the_policy() {
+            let mut d = running();
+            let alloc = d.fsm.abi.rpc.codes.gsp_rm_alloc;
+            // Allocs are held for their refresh; nothing releases them.
+            while d.fsm.held_len() < MAX_HELD {
+                let room = (MAX_HELD - d.fsm.held_len()).min(COUNT as usize - 2);
+                for _ in 0..room {
+                    d.send(alloc, vec![0; 64]);
+                }
+                d.ring();
+            }
+            assert_eq!(d.fsm.held_len(), MAX_HELD);
+            let responds = d.policy.responds;
+            let read_ptr = d.fsm.cmd_read_ptr;
+            d.send(alloc, vec![0; 64]);
+            d.ring();
+            d.ring();
+            assert_eq!(d.fsm.held_len(), MAX_HELD, "never past the cap");
+            assert_eq!(d.policy.responds, responds, "the policy was not asked");
+            assert_eq!(d.fsm.cmd_read_ptr, read_ptr, "the command waits unconsumed");
+            assert!(d.fsm.held_full_stalls() >= 2);
+            // Room again: the guest reads its status queue and some refreshes land.
+            d.guest_drains_status();
+            // The ring takes fewer than the 1024 held, so the release ends in back-pressure.
+            let _ = d.fsm.release_held(&mut d.ram);
+            assert!(d.fsm.held_len() < MAX_HELD, "some held replies were posted");
+            d.ring();
+            assert_eq!(
+                d.policy.responds,
+                responds + 1,
+                "the waiting command is now served"
+            );
+            assert_ne!(d.fsm.cmd_read_ptr, read_ptr);
+        }
+    }
+
     mod os_event_batches {
         use super::*;
 
