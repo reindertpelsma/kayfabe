@@ -18,16 +18,15 @@ const MUTANTS = [
     'identity.common_name !== undefined &&',
   ],
   ['client id format not checked', '/^[a-f0-9]{32}\\.access$/.test(coordinatorId)', 'true'],
-  ['route allowlist removed', "kind === 'coordinator' &&\n      !(", 'false &&\n      !('],
   [
-    'hosts routes allowed',
-    "['/', '/api/list', '/log'].includes(url.pathname)",
-    "['/', '/api/list', '/log'].includes(url.pathname) || url.pathname.startsWith('/api/hosts')",
+    'any email-less app JWT is the coordinator',
+    'identity.email === undefined &&\n      identity.type',
+    'identity.email === undefined ||\n      identity.type',
   ],
   [
-    'method not checked on allowlist',
-    "(request.method === 'POST' &&\n          [",
-    '(true &&\n          [',
+    'coordinator kind refused on hosts routes',
+    "headers['X-Kf-Identity'] = kind;",
+    "headers['X-Kf-Identity'] = kind;\n    if (kind === 'coordinator' && /^\\/api\\/hosts/.test(new URL(request.url).pathname)) return json({ error: 'Forbidden' }, 403);",
   ],
   ['owner kind loses its marker', "kind = 'owner'", "kind = 'coordinator'"],
 ];

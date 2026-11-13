@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { jwt, jwk, clock } from '../../vast-broker/test/helpers.js';
 
-// FALSIFIER: the coordinator service identity (owner decision 2026-11-13) reaches a route outside
-// the table/log/plan/start/stop set, a user JWT or a wrong/absent Client ID takes the service path,
+// FALSIFIER: the coordinator service identity (owner decision 2026-11-13: full owner permission once
+// established) is refused on an owner route, a user JWT or a wrong/absent Client ID takes the service path,
 // or the feature is on while COORDINATOR_CLIENT_ID is empty or malformed.
 const issuer = 'https://test-team.cloudflareaccess.com';
 const audience = 'test-admin-audience';
@@ -78,7 +78,7 @@ const ALLOWED = [
   ['/api/stop', 'POST', { batch: '8' + '0'.repeat(18) }],
   ['/api/stop', 'POST', { all: true }],
 ];
-const FORBIDDEN = [
+const HOSTS = [
   ['/api/hosts', 'GET'],
   ['/api/hosts/box1', 'GET'],
   ['/api/hosts/box1', 'PUT', { a: 1 }],
@@ -87,6 +87,8 @@ const FORBIDDEN = [
   ['/api/hosts/box1/enrol', 'POST'],
   ['/api/hosts/box1/cmd', 'POST', { c: 1 }],
   ['/api/hosts/box1/commands-until', 'PUT', { t: 1 }],
+];
+const NOT_ROUTES = [
   ['/api/list', 'POST', {}],
   ['/api/stop', 'GET'],
   ['/api/plan', 'GET'],
@@ -101,7 +103,9 @@ test('owner path unchanged and marked owner', async () => {
 });
 test('owner keeps full access incl. hosts routes with the var set', async () => {
   const h = await fixture();
-  assert.equal((await h.call('/api/hosts', 'GET', await user())).status, 200);
+  const r = await h.call('/api/hosts', 'GET', await user());
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('x-kf-identity'), 'owner');
   assert.equal(h.hosts.length, 1);
 });
 test('owner still works with the var empty or malformed', async () => {
@@ -120,12 +124,25 @@ for (const [path, method, body] of ALLOWED)
     assert.equal(r.headers.get('x-kf-identity'), 'coordinator');
     assert.equal(h.ledger.length, path === '/' ? 0 : 1);
   });
-for (const [path, method, body] of FORBIDDEN)
-  test('coordinator forbidden ' + method + ' ' + path, async () => {
+for (const [path, method, body] of HOSTS)
+  test('coordinator allowed like the owner (hosts) ' + method + ' ' + path, async () => {
     const h = await fixture();
-    assert.equal((await h.call(path, method, await service(), body)).status, 403);
-    assert.equal(h.hosts.length + h.ledger.length, 0);
+    const r = await h.call(path, method, await service(), body);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('x-kf-identity'), 'coordinator');
+    assert.equal(h.hosts.length, 1);
   });
+for (const [path, method, body] of NOT_ROUTES)
+  test(
+    'coordinator gets the same status as the owner on a non-route ' + method + ' ' + path,
+    async () => {
+      const h = await fixture();
+      const o = await h.call(path, method, await user(), body);
+      const c = await h.call(path, method, await service(), body);
+      assert.equal(c.status, o.status);
+      assert.equal(c.status, 404);
+    },
+  );
 test('coordinator POST: mismatching Origin refused, missing Origin ok, JSON type required', async () => {
   const h = await fixture();
   const b = { commit_sha: sha, tier: 'small' };

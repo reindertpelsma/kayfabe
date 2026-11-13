@@ -59,17 +59,8 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
     if (!kind) return json({ error: 'Forbidden' }, 403);
     headers['X-Kf-Identity'] = kind;
     const url = new URL(request.url);
-    // Least privilege: the coordinator gets the table and the log viewer, plan, start and stop (run,
-    // batch and all forms, which share /api/stop). Everything else, notably /api/hosts*, is refused.
-    if (
-      kind === 'coordinator' &&
-      !(
-        (request.method === 'GET' && ['/', '/api/list', '/log'].includes(url.pathname)) ||
-        (request.method === 'POST' &&
-          ['/api/plan', '/api/start', '/api/stop'].includes(url.pathname))
-      )
-    )
-      return json({ error: 'Forbidden' }, 403);
+    // 2026-11-13 owner decision: once established, the coordinator identity may use every route the
+    // owner can (the Worker is not the security boundary against the coordinator).
     if (url.pathname === '/log' && request.method === 'GET') {
       const params = url.searchParams,
         run = params.get('run'),
