@@ -1,0 +1,37 @@
+"""The third profile binds only GB206, never marketing or a different native tuple."""
+import json
+from pathlib import Path
+import re
+import unittest
+import die_binding as D
+import pending_die as P
+
+ROOT = Path('[OPERATOR_WORKTREE]')
+DIES = (ROOT/'crates/kf-chip/src/die.rs').read_text()
+ARCHES = (ROOT/'crates/kf-chip/src/lib.rs').read_text()
+
+
+class Profile(unittest.TestCase):
+    def binding(self, die):
+        arch, impl = re.search(r'\(arch::(\w+), (0x[0-9a-f]+), "'+die+'"\)', DIES).groups()
+        arch = int(re.search(r'pub const '+arch+r': u32 = (0x[0-9A-Fa-f]+);', ARCHES)[1], 16)
+        impl = int(impl,16)
+        pin = dict(ssh_verified=True, identity=dict(state='match', expected_fingerprint='fixture',
+                   fingerprint='fixture', fingerprints=['fixture']), driver='595.91.07',
+                   pci='0x123410de', arch_impl=[arch,impl])
+        return D.bind(f'host_driver=595.91.07 arch=({arch}, {impl}, 1)\n'
+                      'PASS native read-only timer map/read/drop x3\n',
+                      'Fixture,595.91.07,0x123410de', DIES, ARCHES, pin)
+
+    def test_native_derived_gb206_tuple_is_required(self):
+        self.assertEqual(self.binding('GB206')['die'],'GB206')
+
+    def test_other_blackwell_tuple_is_refused(self):
+        with self.assertRaises(D.BindingRefused): self.binding('GB205')
+
+    def test_other_family_tuple_is_refused(self):
+        with self.assertRaises(D.BindingRefused): self.binding('GA106')
+
+    def test_pending_profile_is_also_gb206_only(self):
+        with self.assertRaises(ValueError): P.require_pending(dict(die='GB205'),[])
+        self.assertEqual(P.require_pending(dict(die='GB206'),[])['die'],'GB206')

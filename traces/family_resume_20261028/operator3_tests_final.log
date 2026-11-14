@@ -1,0 +1,31 @@
+[PRIVATE_CAPTURE_ROOT]/operator3/test_profile.py:16: SyntaxWarning: "\)" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\)"? A raw string is also an option.
+  arch, impl = re.search(r'\(arch::(\w+), (0x[0-9a-f]+), "'+die+'"\)', DIES).groups()
+.............................................................SW5_PHASE native-binding
+SW5_PHASE gates9+10-user
+SW5_PHASE bare30
+SW5_PHASE kf3-build
+SW5_PHASE host-fastguest-build
+SW5_PHASE guest30-180s
+SW5_PHASE xid-user-census
+..SW5_PHASE native-binding
+SW5_PHASE gates9+10-user
+SW5_PHASE bare30
+SW5_PHASE kf3-build
+SW5_PHASE host-fastguest-build
+SW5_PHASE guest30-180s
+SW5_PHASE xid-user-census
+........SW5_PHASE native-binding
+SW5_PHASE gates9+10-user
+SW5_PHASE bare30
+SW5_PHASE kf3-build
+SW5_PHASE host-fastguest-build
+SW5_PHASE guest30-180s
+SW5_PHASE xid-user-census
+..SW5_PHASE native-binding
+SW5_PHASE gates9+10-user
+SW5_PHASE bare30
+.
+----------------------------------------------------------------------
+Ran 74 tests in 5.621s
+
+OK

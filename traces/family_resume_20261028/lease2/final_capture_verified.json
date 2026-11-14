@@ -1,0 +1,11 @@
+{
+  "sha256": "cc5fd9e769ace085f2ca6686bd6f8154e14441cd8b4db0c847a3c1307698cf1c",
+  "bytes": 941181,
+  "files": 185,
+  "local_sha256": "cc5fd9e769ace085f2ca6686bd6f8154e14441cd8b4db0c847a3c1307698cf1c",
+  "verified_utc": "2026-10-28T16:45:18.801911+00:00",
+  "id": 58117397,
+  "capture_verified": true,
+  "payload": "capture.tgz",
+  "final": true
+}

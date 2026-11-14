@@ -1,0 +1,40 @@
+{
+  "die": "GA106",
+  "os": "Linux",
+  "kernel": "6.8.0-59-generic",
+  "host_driver": "595.91.07 open",
+  "guest_driver": "595.91.07 host-mode",
+  "kf3_revision": "7dcedefea093de078188efd5f712561bde746362",
+  "native_gates": "9/9 + gate10 PASS",
+  "native_bare": {
+    "pass_count": 30,
+    "fail_count": 0,
+    "crash_count": 0,
+    "seconds_per_arm": 180
+  },
+  "guest_fast": {
+    "pass_count": 30,
+    "fail_count": 0,
+    "crash_count": 0,
+    "notrun_count": 0,
+    "arms": 30,
+    "seconds_per_arm": 180
+  },
+  "bar1_mib": 256,
+  "framebuffer_mib": 8192,
+  "births": {
+    "suite_user": 161,
+    "gate_user": 12,
+    "refused": 0
+  },
+  "xids": {
+    "initial": 0,
+    "native": 5,
+    "final": 10,
+    "all_source_approved": true
+  },
+  "physical_boxes": 1,
+  "result": "PASS: stock Linux thin baseline only",
+  "full_feature_correctness": "UNRUN: required TSG mirror absent",
+  "windows": "UNRUN"
+}

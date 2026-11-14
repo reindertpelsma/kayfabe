@@ -1,0 +1,19 @@
+test_another_native_adapter_refusal_cannot_be_swallowed (test_driver_inventory.InventoryTests.test_another_native_adapter_refusal_cannot_be_swallowed) ... ok
+test_closed_image_inventory_is_recorded_without_blocking_planned_provision (test_driver_inventory.InventoryTests.test_closed_image_inventory_is_recorded_without_blocking_planned_provision) ... ok
+test_native_adapter_failure_still_stops_before_guest (test_driver_inventory.InventoryTests.test_native_adapter_failure_still_stops_before_guest) ... ok
+test_other_initial_inventory_failure_is_recorded (test_driver_inventory.InventoryTests.test_other_initial_inventory_failure_is_recorded) ... ok
+test_capture_is_verified_before_exact_destroy (test_lease_guard.GuardTests.test_capture_is_verified_before_exact_destroy) ... ok
+test_elapsed_runtime_uses_reserved_rate_without_account_credit (test_lease_guard.GuardTests.test_elapsed_runtime_uses_reserved_rate_without_account_credit) ... ok
+test_failed_pull_still_tears_down_and_never_claims_capture (test_lease_guard.GuardTests.test_failed_pull_still_tears_down_and_never_claims_capture) ... ok
+test_transfer_is_reserved_even_before_runtime (test_lease_guard.GuardTests.test_transfer_is_reserved_even_before_runtime) ... ok
+test_wrong_absence_id_never_completes (test_lease_guard.GuardTests.test_wrong_absence_id_never_completes) ... ok
+test_wrong_capture_id_is_not_a_verified_final_capture (test_lease_guard.GuardTests.test_wrong_capture_id_is_not_a_verified_final_capture) ... ok
+test_already_exited_controller_requires_no_signals (test_quiesce.QuiesceTests.test_already_exited_controller_requires_no_signals) ... ok
+test_pid_reuse_refuses_before_any_signal (test_quiesce.QuiesceTests.test_pid_reuse_refuses_before_any_signal) ... ok
+test_reused_child_is_not_signalled_again (test_quiesce.QuiesceTests.test_reused_child_is_not_signalled_again) ... ok
+test_unrelated_process_is_never_signalled (test_quiesce.QuiesceTests.test_unrelated_process_is_never_signalled) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.023s
+
+OK

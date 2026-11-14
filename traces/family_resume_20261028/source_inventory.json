@@ -1,0 +1,71 @@
+{
+  "source": "7dcedefea093de078188efd5f712561bde746362",
+  "source_class": "approved stock master; no experimental merges",
+  "files": [
+    {
+      "path": "crates/kf-chan/src/user_lifecycle.rs",
+      "sha256": "1cfe7d50da57fb3bcbb80bf8555f6f33397ec1bcee835612a7c7f4695a30ac9d"
+    },
+    {
+      "path": "crates/kf-chan/src/user_lazy.rs",
+      "sha256": "5133eec095f204e6b42a69d15fc8f96e6a9bb0659ee7fcc1d07ffd5aafc978ef"
+    },
+    {
+      "path": "crates/kf-qemu/src/userpump.rs",
+      "sha256": "860f5bb521a32db7662e57445f2cf42e15f484311b2c7b9263ea6724f4e3a6d9"
+    },
+    {
+      "path": "scripts/fastguest/fast_suite.sh",
+      "sha256": "c34de7371f0ac514a5aa3871135ef801ff56c94dc3f45de91602215189410616"
+    },
+    {
+      "path": "scripts/fastguest/bare_metal_suite.sh",
+      "sha256": "20d30bd6b97a4a7f121c19876135f6cef46b02b9a0008e3a7b4f9b48ebba218e"
+    },
+    {
+      "path": "scripts/bench/v3_gates.sh",
+      "sha256": "2e5f525c219c042d0b76192da134d6db15f4327c4aed44839ffd09490a7c0bcb"
+    },
+    {
+      "path": "scripts/bench/native_xid_guard.py",
+      "sha256": "36ac9933ea216152cd847dcc34773a7e48ec9c3d7dc2abec073b86b93b2fc943"
+    },
+    {
+      "path": "scripts/ci/vast_payload.py",
+      "sha256": "4aecde1770250077e3b13e8c22d2b3851e8f082c567f44179f8d37f7c744a86d"
+    },
+    {
+      "path": "scripts/ci/vast_report.py",
+      "sha256": "edaf5eff168ac44f58b32eaf63f1bc09120a1a085e3c86a71337daf8c861b7b8"
+    },
+    {
+      "path": "scripts/ci/vast_payload_hooks.sh",
+      "sha256": "139bcbd623c7a42a3a57e9a3dc19b9ff6e2d92fa05654445021e40a34f8fa961"
+    },
+    {
+      "path": "scripts/ci/vast_setup.py",
+      "sha256": "77efc63c1168dd8bf427d50d6f92af856339fe81cb457c7c8bb73ed5a8c44fc0"
+    },
+    {
+      "path": "crates/kf-chip/src/die.rs",
+      "sha256": "37445d3255a0869a9ff6047504eb5295116391be70da14bc4cb19cad760f482c"
+    },
+    {
+      "path": "crates/kf-chip/src/lib.rs",
+      "sha256": "f2cd2c52cf7426cd3e7352402784b66d33dc4fb3bc732199374c077dc9aa98e2"
+    }
+  ],
+  "TSG_mirror": "absent",
+  "full_feature_correctness": "UNRUN: required mirror absent",
+  "flags": {
+    "KF_DEVICE": "kf3",
+    "KF_FROM_HOST": "1",
+    "KF3_FB_MB": "8192",
+    "KF3_LIFECYCLE_MODE": "default",
+    "KF3_PUT_CACHE": "1",
+    "KF3_LAZY_OBSERVE": "1"
+  },
+  "scope": "Linux native gates+bare and Linux thin fast suite. Windows relay flags do not prove Windows behavior.",
+  "native_oracle": "9/9+gate10 and bare30 at180s on this box before guest",
+  "guest_oracle": "fast30 at180s, source birth census and exact approved Xid attribution"
+}

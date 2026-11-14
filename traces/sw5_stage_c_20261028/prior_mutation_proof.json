@@ -1,0 +1,385 @@
+{
+  "evidence": [
+    {
+      "evidence": "mutations.json",
+      "private_proof_sha256": "ba8d9f6bb9d6fef9d1fc9027f2a6de8ba7abf00c815ff508698bd317be4ed64f",
+      "record_count": 28,
+      "status": "prior unchanged-source proof; not newly rerun profile mutants",
+      "records": [
+        {
+          "mutant": "intent missing",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_credit_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_inventory_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_rate_metadata_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundParentDeathTests.test_bound_dead_parent_credit_failure_retires_without_waiting_cutoff",
+            "test_create_receipt_guard.BoundParentDeathTests.test_bound_dead_parent_inventory_failure_retires_without_waiting_cutoff",
+            "test_create_receipt_guard.IdentityTests.test_another_foreign_owner_context_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_another_preexisting_id_is_excluded",
+            "test_create_receipt_guard.IdentityTests.test_exact_owned_candidate_binds",
+            "test_create_receipt_guard.IdentityTests.test_foreign_label_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_missing_completeness_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_missing_host_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_missing_machine_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_missing_owner_context_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_multiple_matching_candidates_stay_unresolved",
+            "test_create_receipt_guard.IdentityTests.test_optional_foreign_client_id_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_optional_malformed_client_id_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_partial_inventory_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_preexisting_id_is_excluded",
+            "test_create_receipt_guard.IdentityTests.test_prefix_label_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_same_label_mismatch_prevents_partial_binding",
+            "test_create_receipt_guard.IdentityTests.test_wrong_host_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_wrong_machine_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_wrong_owner_context_never_binds",
+            "test_create_receipt_guard.IntentTests.test_file_and_directory_fsync_before_armed_empty",
+            "test_create_receipt_guard.IntentTests.test_file_and_directory_fsync_before_armed_timeout",
+            "test_create_receipt_guard.IntentTests.test_intent_cannot_be_overwritten",
+            "test_create_receipt_guard.IntentTests.test_intent_exists_and_matches_before_arm_empty_response",
+            "test_create_receipt_guard.IntentTests.test_intent_exists_before_arm_timeout_parent_death",
+            "test_create_receipt_guard.IntentTests.test_labels_have_full_collision_resistant_nonce",
+            "test_create_receipt_guard.IntentTests.test_second_intent_tamper_is_refused",
+            "test_create_receipt_guard.IntentTests.test_tampered_intent_is_refused",
+            "test_create_receipt_guard.IntentTests.test_two_labels_differ_despite_same_timestamp",
+            "test_create_receipt_guard.IntentTests.test_unarmed_ready_cannot_issue",
+            "test_create_receipt_guard.IntentTests.test_wrong_ready_intent_cannot_issue",
+            "test_create_receipt_guard.LateAllocationTests.test_allocation_after_deadline_still_recovers_exact_owned_id",
+            "test_create_receipt_guard.LateAllocationTests.test_late_allocation_ambiguous_start_field_still_recovers",
+            "test_create_receipt_guard.LateAllocationTests.test_late_allocation_missing_start_field_still_recovers",
+            "test_create_receipt_guard.ReceiptTests.test_empty_response_cannot_be_retried",
+            "test_create_receipt_guard.ReceiptTests.test_empty_response_retains_safe_outcome",
+            "test_create_receipt_guard.ReceiptTests.test_malformed_output_never_persists_secret",
+            "test_create_receipt_guard.ReceiptTests.test_nonzero_only_retains_safe_metadata",
+            "test_create_receipt_guard.ReceiptTests.test_started_marker_precedes_transport_empty",
+            "test_create_receipt_guard.ReceiptTests.test_started_marker_precedes_transport_timeout",
+            "test_create_receipt_guard.ReceiptTests.test_success_only_retains_validated_fields",
+            "test_create_receipt_guard.ReceiptTests.test_timeout_cannot_be_retried",
+            "test_create_receipt_guard.ReceiptTests.test_timeout_never_persists_secret",
+            "test_create_receipt_guard.ReceiptTests.test_timeout_retains_safe_outcome",
+            "test_create_receipt_guard.TimestampAuditTests.test_fractional_timestamp_does_not_change_exact_identity",
+            "test_create_receipt_guard.TimestampAuditTests.test_late_timestamp_does_not_change_exact_identity",
+            "test_create_receipt_guard.TimestampAuditTests.test_missing_timestamp_does_not_change_exact_identity",
+            "test_create_receipt_guard.TimestampAuditTests.test_null_timestamp_does_not_change_exact_identity",
+            "test_create_receipt_guard.TimestampAuditTests.test_old_timestamp_does_not_change_exact_identity",
+            "test_create_receipt_guard.TimestampAuditTests.test_unknown_timestamp_does_not_change_exact_identity",
+            "test_create_receipt_guard.UnissuedParentTests.test_parent_dies_after_arm_before_issue_destroys_nothing",
+            "test_create_receipt_guard.UnissuedParentTests.test_parent_dies_before_arm_with_no_issue_destroys_nothing",
+            "test_create_receipt_guard.WatchTests.test_allocated_empty_response_recovered_with_empty_ledger",
+            "test_create_receipt_guard.WatchTests.test_allocated_timeout_parent_death_recovered",
+            "test_create_receipt_guard.WatchTests.test_ambiguous_inventory_keeps_liability",
+            "test_create_receipt_guard.WatchTests.test_capture_precedes_recovered_destroy_empty",
+            "test_create_receipt_guard.WatchTests.test_capture_precedes_recovered_destroy_timeout",
+            "test_create_receipt_guard.WatchTests.test_empty_inventory_after_issue_is_not_proven_no_allocation",
+            "test_create_receipt_guard.WatchTests.test_empty_inventory_after_timeout_is_not_proven_no_allocation",
+            "test_create_receipt_guard.WatchTests.test_inventory_error_keeps_liability_empty_response",
+            "test_create_receipt_guard.WatchTests.test_inventory_error_keeps_liability_timeout",
+            "test_create_receipt_guard.WatchTests.test_same_label_wrong_host_keeps_liability"
+          ]
+        },
+        {
+          "mutant": "intent not fsynced",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IntentTests.test_file_and_directory_fsync_before_armed_empty",
+            "test_create_receipt_guard.IntentTests.test_file_and_directory_fsync_before_armed_timeout"
+          ]
+        },
+        {
+          "mutant": "directory not fsynced",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IntentTests.test_file_and_directory_fsync_before_armed_empty",
+            "test_create_receipt_guard.IntentTests.test_file_and_directory_fsync_before_armed_timeout"
+          ]
+        },
+        {
+          "mutant": "intent digest ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IntentTests.test_second_intent_tamper_is_refused",
+            "test_create_receipt_guard.IntentTests.test_tampered_intent_is_refused"
+          ]
+        },
+        {
+          "mutant": "wrong ready accepted",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IntentTests.test_unarmed_ready_cannot_issue",
+            "test_create_receipt_guard.IntentTests.test_wrong_ready_intent_cannot_issue"
+          ]
+        },
+        {
+          "mutant": "issue marker overwritten",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.ReceiptTests.test_empty_response_cannot_be_retried",
+            "test_create_receipt_guard.ReceiptTests.test_timeout_cannot_be_retried"
+          ]
+        },
+        {
+          "mutant": "outcome lost",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.ReceiptTests.test_malformed_output_never_persists_secret",
+            "test_create_receipt_guard.ReceiptTests.test_timeout_never_persists_secret",
+            "test_create_receipt_guard.ReceiptTests.test_empty_response_retains_safe_outcome",
+            "test_create_receipt_guard.ReceiptTests.test_nonzero_only_retains_safe_metadata",
+            "test_create_receipt_guard.ReceiptTests.test_success_only_retains_validated_fields",
+            "test_create_receipt_guard.ReceiptTests.test_timeout_retains_safe_outcome"
+          ]
+        },
+        {
+          "mutant": "raw receipt retained",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.ReceiptTests.test_malformed_output_never_persists_secret",
+            "test_create_receipt_guard.ReceiptTests.test_nonzero_only_retains_safe_metadata",
+            "test_create_receipt_guard.ReceiptTests.test_success_only_retains_validated_fields",
+            "test_create_receipt_guard.ReceiptTests.test_timeout_never_persists_secret"
+          ]
+        },
+        {
+          "mutant": "empty-ledger discovery skipped",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_credit_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_inventory_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_rate_metadata_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundParentDeathTests.test_bound_dead_parent_credit_failure_retires_without_waiting_cutoff",
+            "test_create_receipt_guard.BoundParentDeathTests.test_bound_dead_parent_inventory_failure_retires_without_waiting_cutoff",
+            "test_create_receipt_guard.LateAllocationTests.test_allocation_after_deadline_still_recovers_exact_owned_id",
+            "test_create_receipt_guard.LateAllocationTests.test_late_allocation_ambiguous_start_field_still_recovers",
+            "test_create_receipt_guard.LateAllocationTests.test_late_allocation_missing_start_field_still_recovers",
+            "test_create_receipt_guard.IntentTests.test_file_and_directory_fsync_before_armed_empty",
+            "test_create_receipt_guard.IntentTests.test_file_and_directory_fsync_before_armed_timeout",
+            "test_create_receipt_guard.IntentTests.test_intent_exists_and_matches_before_arm_empty_response",
+            "test_create_receipt_guard.IntentTests.test_intent_exists_before_arm_timeout_parent_death",
+            "test_create_receipt_guard.WatchTests.test_allocated_empty_response_recovered_with_empty_ledger",
+            "test_create_receipt_guard.WatchTests.test_allocated_timeout_parent_death_recovered",
+            "test_create_receipt_guard.WatchTests.test_capture_precedes_recovered_destroy_empty",
+            "test_create_receipt_guard.WatchTests.test_capture_precedes_recovered_destroy_timeout"
+          ]
+        },
+        {
+          "mutant": "label ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IdentityTests.test_foreign_label_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_prefix_label_never_binds"
+          ]
+        },
+        {
+          "mutant": "owner ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IdentityTests.test_another_foreign_owner_context_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_wrong_owner_context_never_binds"
+          ]
+        },
+        {
+          "mutant": "machine ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IdentityTests.test_missing_machine_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_wrong_machine_never_binds"
+          ]
+        },
+        {
+          "mutant": "host ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IdentityTests.test_missing_host_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_wrong_host_never_binds",
+            "test_create_receipt_guard.WatchTests.test_same_label_wrong_host_keeps_liability"
+          ]
+        },
+        {
+          "mutant": "client mismatch ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IdentityTests.test_optional_foreign_client_id_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_optional_malformed_client_id_never_binds"
+          ]
+        },
+        {
+          "mutant": "precreate exclusion ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IdentityTests.test_another_preexisting_id_is_excluded",
+            "test_create_receipt_guard.IdentityTests.test_preexisting_id_is_excluded"
+          ]
+        },
+        {
+          "mutant": "multiple accepted",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IdentityTests.test_multiple_matching_candidates_stay_unresolved",
+            "test_create_receipt_guard.IdentityTests.test_same_label_mismatch_prevents_partial_binding",
+            "test_create_receipt_guard.WatchTests.test_ambiguous_inventory_keeps_liability"
+          ]
+        },
+        {
+          "mutant": "incomplete accepted",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.IdentityTests.test_missing_completeness_never_binds",
+            "test_create_receipt_guard.IdentityTests.test_partial_inventory_never_binds"
+          ]
+        },
+        {
+          "mutant": "unresolved called closed",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.WatchTests.test_ambiguous_inventory_keeps_liability",
+            "test_create_receipt_guard.WatchTests.test_empty_inventory_after_issue_is_not_proven_no_allocation",
+            "test_create_receipt_guard.WatchTests.test_empty_inventory_after_timeout_is_not_proven_no_allocation",
+            "test_create_receipt_guard.WatchTests.test_inventory_error_keeps_liability_empty_response",
+            "test_create_receipt_guard.WatchTests.test_inventory_error_keeps_liability_timeout",
+            "test_create_receipt_guard.WatchTests.test_same_label_wrong_host_keeps_liability"
+          ]
+        },
+        {
+          "mutant": "known deadline fallback removed",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_credit_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_inventory_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_rate_metadata_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundParentDeathTests.test_bound_dead_parent_credit_failure_retires_without_waiting_cutoff",
+            "test_create_receipt_guard.BoundParentDeathTests.test_bound_dead_parent_inventory_failure_retires_without_waiting_cutoff"
+          ]
+        },
+        {
+          "mutant": "parent check deferred",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.BoundParentDeathTests.test_bound_dead_parent_credit_failure_retires_without_waiting_cutoff",
+            "test_create_receipt_guard.BoundParentDeathTests.test_bound_dead_parent_inventory_failure_retires_without_waiting_cutoff"
+          ]
+        },
+        {
+          "mutant": "capture skipped",
+          "killed": true,
+          "killer_tests": [
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_credit_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_inventory_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.BoundDeadlineTests.test_bound_then_rate_metadata_fails_cannot_suppress_deadline_destroy",
+            "test_create_receipt_guard.LateAllocationTests.test_allocation_after_deadline_still_recovers_exact_owned_id",
+            "test_create_receipt_guard.LateAllocationTests.test_late_allocation_ambiguous_start_field_still_recovers",
+            "test_create_receipt_guard.LateAllocationTests.test_late_allocation_missing_start_field_still_recovers",
+            "test_create_receipt_guard.WatchTests.test_capture_precedes_recovered_destroy_empty",
+            "test_create_receipt_guard.WatchTests.test_capture_precedes_recovered_destroy_timeout"
+          ]
+        },
+        {
+          "mutant": "retry count default3",
+          "killed": true,
+          "killer_tests": [
+            "test_provider_inventory.ProviderTests.test_empty_create_transport_has_one_http_attempt",
+            "test_provider_inventory.ProviderTests.test_timeout_create_transport_has_one_http_attempt"
+          ]
+        },
+        {
+          "mutant": "owner-after ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_provider_inventory.ProviderTests.test_another_changed_account_is_unresolved",
+            "test_provider_inventory.ProviderTests.test_changed_account_is_unresolved"
+          ]
+        },
+        {
+          "mutant": "terminal counts ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_provider_inventory.ProviderTests.test_terminal_empty_page_with_nonzero_total_is_unresolved",
+            "test_provider_inventory.ProviderTests.test_terminal_partial_page_with_larger_total_is_unresolved"
+          ]
+        },
+        {
+          "mutant": "raw inventory retained",
+          "killed": true,
+          "killer_tests": [
+            "test_provider_inventory.ProviderTests.test_inventory_projection_omits_arbitrary_secret_fields",
+            "test_provider_inventory.ProviderTests.test_inventory_projects_no_provider_secrets"
+          ]
+        },
+        {
+          "mutant": "per-call budget reset",
+          "killed": true,
+          "killer_tests": [
+            "test_provider_inventory.SnapshotBudgetTests.test_clock_expired_before_first_request_issues_no_api_call",
+            "test_provider_inventory.SnapshotBudgetTests.test_exact_expired_clock_issues_no_api_call",
+            "test_provider_inventory.SnapshotBudgetTests.test_many_pages_stop_at_total_budget_without_partial_complete",
+            "test_provider_inventory.SnapshotBudgetTests.test_slow_pages_share_one_total_budget"
+          ]
+        },
+        {
+          "mutant": "post-call budget ignored",
+          "killed": true,
+          "killer_tests": [
+            "test_provider_inventory.SnapshotBudgetTests.test_another_slow_final_owner_query_cannot_claim_complete",
+            "test_provider_inventory.SnapshotBudgetTests.test_slow_final_owner_query_cannot_claim_complete"
+          ]
+        },
+        {
+          "mutant": "expired budget API call",
+          "killed": true,
+          "killer_tests": [
+            "test_provider_inventory.SnapshotBudgetTests.test_clock_expired_before_first_request_issues_no_api_call",
+            "test_provider_inventory.SnapshotBudgetTests.test_exact_expired_clock_issues_no_api_call"
+          ]
+        }
+      ]
+    },
+    {
+      "evidence": "actual_adapter_mutations.json",
+      "private_proof_sha256": "6563fa24b54228d5c0eed75a0eb4e2d5fda62023c4edcc2bce3096f7b4d9e5c4",
+      "record_count": 5,
+      "status": "prior unchanged-source proof; not newly rerun profile mutants",
+      "records": [
+        {
+          "mutant": "legacy weak absence",
+          "killed": true,
+          "killer_tests": [
+            "test_parent_cleanup.ParentCleanup.test_foreign_account_inventory_cannot_cancel_independent_watcher",
+            "test_parent_cleanup.ParentCleanup.test_truncated_inventory_cannot_cancel_independent_watcher"
+          ]
+        },
+        {
+          "mutant": "skip complete owner validation",
+          "killed": true,
+          "killer_tests": [
+            "test_parent_cleanup.ParentCleanup.test_foreign_account_inventory_cannot_cancel_independent_watcher",
+            "test_parent_cleanup.ParentCleanup.test_truncated_inventory_cannot_cancel_independent_watcher"
+          ]
+        },
+        {
+          "mutant": "stage marker only per intent",
+          "killed": true,
+          "killer_tests": [
+            "test_stage_single_issue.SingleStageIssue.test_empty_response_cannot_retry_with_new_intent",
+            "test_stage_single_issue.SingleStageIssue.test_timeout_cannot_retry_with_new_intent"
+          ]
+        },
+        {
+          "mutant": "arm serial check removed",
+          "killed": true,
+          "killer_tests": [
+            "test_serial_admission.SerialAdmission.test_ci_lease_blocks_arm",
+            "test_serial_admission.SerialAdmission.test_other_lease_blocks_arm"
+          ]
+        },
+        {
+          "mutant": "create serial check removed",
+          "killed": true,
+          "killer_tests": [
+            "test_serial_admission.SerialAdmission.test_ci_lease_blocks_create",
+            "test_serial_admission.SerialAdmission.test_other_lease_blocks_create"
+          ]
+        }
+      ]
+    }
+  ],
+  "combined_with_new_profile_counts": false
+}

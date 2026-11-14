@@ -1,0 +1,40 @@
+{
+  "utc": "2026-10-28T16:46:35.579684+00:00",
+  "offer": {
+    "id": 48152264,
+    "machine_id": 21018,
+    "host_id": 120071,
+    "gpu_name": "RTX 5060 Ti",
+    "gpu_ram": 16311,
+    "geolocation": "Quebec, CA",
+    "verification": "verified",
+    "is_vm_deverified": false,
+    "vms_enabled": true,
+    "dph_total": 0.24,
+    "cpu_cores_effective": 12.0,
+    "cpu_ram": 64368,
+    "inet_down_cost": 0.00390625,
+    "inet_up_cost": 0.00390625
+  },
+  "candidate_die": "GB206",
+  "production_source": "7dcedefea093de078188efd5f712561bde746362",
+  "feature_inventory": {
+    "TSG_mirror": "ABSENT; full-feature UNRUN",
+    "Windows": "UNRUN",
+    "Linux_stock_master": "RUN"
+  },
+  "round_authority": "SW5_RESUME_20261028",
+  "flags": {
+    "KF_DEVICE": "kf3",
+    "KF_FROM_HOST": "1",
+    "KF3_FB_MB": "8192",
+    "KF3_LIFECYCLE_MODE": "default",
+    "KF3_PUT_CACHE": "1",
+    "KF3_LAZY_OBSERVE": "1"
+  },
+  "native_hypothesis": "Actual bound die passes native gates9/9+gate10 and bare30/30.",
+  "native_falsifier": "Any native gate/bare failure excludes the cell before guest work.",
+  "guest_hypothesis": "After native passes on this box, production passes fast30/30.",
+  "guest_falsifier": "Any failed/crashed/unrun arm or unmatched Xid; original180s oracle.",
+  "retained_prior_usd": 1.5639963720133334
+}

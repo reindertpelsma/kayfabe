@@ -1,0 +1,20 @@
+{
+  "transfer_usd": 0.05078125,
+  "nonruntime_margin_usd": 0.5,
+  "armed_utc": "2026-10-28T16:46:35.578596+00:00",
+  "deadline_utc": "2026-10-28T18:46:35.578596+00:00",
+  "seconds": 7200,
+  "quoted_rate": 0.24,
+  "rate_bound": 0.33999999999999997,
+  "reservation_usd": 1.2307812500000002,
+  "stop_usd": 1.5,
+  "cap_usd": 2.0,
+  "reserve_usd": 8.0,
+  "leases_authorized": 1,
+  "capture_lead_seconds": 420,
+  "work_lead_seconds": 480,
+  "authority": "SW5_RESUME_20261028",
+  "stage_cap_usd": 4,
+  "shared_cap_usd": 12,
+  "privacy_note": "Account balance fields omitted; policy and reservation retained."
+}

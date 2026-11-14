@@ -1,0 +1,66 @@
+"""Serialize a final, quiescent capture; checkpoints cannot satisfy this receipt."""
+
+import datetime as dt
+import fcntl
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+HERE = Path(__file__).resolve().parent
+
+
+def finalize(evidence, iid):
+    with (evidence / "final_capture.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        record = json.loads((evidence / "owned.json").read_text())[0]
+        assert record["id"] == iid
+        receipt_path = evidence / "final_capture_verified.json"
+        if receipt_path.exists():
+            receipt = json.loads(receipt_path.read_text())
+            payload = evidence / receipt["payload"]
+            assert receipt["id"] == iid and receipt["capture_verified"] is True
+            assert hashlib.sha256(payload.read_bytes()).hexdigest() == receipt["sha256"]
+            return receipt
+        def run(args, timeout=35):
+            return subprocess.run(args, capture_output=True, text=True,
+                                  check=True, timeout=timeout).stdout
+        conf = str(evidence / "ssh.conf")
+        if record.get("work_started"):
+            command = ("python3 /root/sw5/quiesce.py " + str(record["controller_pid"])
+                       + " " + str(record["controller_starttime"]))
+            proof = json.loads(run(["ssh", "-F", conf, "sw5-own", command]))
+            assert proof["quiesced"] is True
+            (evidence / "quiescence.json").write_text(json.dumps(proof) + "\n")
+            # A fresh kernel snapshot is collected after the stopped workload.
+            run(["ssh", "-F", conf, "sw5-own",
+                 "journalctl -k -b -o short-iso-precise --no-pager "
+                 "> /root/sw5/evidence/kernel_capture.txt; "
+                 "dmesg > /root/sw5/evidence/dmesg_capture.txt"])
+            run([sys.executable, str(HERE / "pull.py")], timeout=240)
+            receipt = json.loads((evidence / "capture_receipt.json").read_text())
+            payload = "capture.tgz"
+        else:
+            data = run(["vastai", "logs", str(iid), "--tail", "5000"], timeout=45).encode()
+            payload = "provider_console.txt"
+            (evidence / payload).write_bytes(data)
+            receipt = dict(sha256=hashlib.sha256(data).hexdigest(),
+                           kind="prework provider console; no workload started")
+        receipt.update(id=iid, capture_verified=True, payload=payload,
+                       final=True, verified_utc=dt.datetime.now(dt.timezone.utc).isoformat())
+        assert hashlib.sha256((evidence / payload).read_bytes()).hexdigest() == receipt["sha256"]
+        temporary = receipt_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(receipt, indent=2) + "\n")
+        temporary.replace(receipt_path)
+        return receipt
+
+
+if __name__ == "__main__":
+    evidence, iid = Path(sys.argv[1]), int(sys.argv[2])
+    try:
+        print(json.dumps(finalize(evidence, iid)))
+    except Exception as error:
+        (evidence / "final_capture_failure.json").write_text(
+            json.dumps(dict(id=iid, kind=type(error).__name__, reason=str(error))) + "\n")
+        raise
