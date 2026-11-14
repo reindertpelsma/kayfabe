@@ -1,0 +1,162 @@
+I2 ok: exactly one dereference site
+I2 ok: exactly one raw pointer cast
+I1 ok: no while loop in kf_walk_one
+I1 ok: no while loop anywhere on the PARALLEL guest-data path
+I1 ok: the parallel walk's depth is a compile-time-bounded launch loop
+I1 ok: 8 parallel loops bounded at compile time by KF_MAX_FRONTIER
+I1 ok: no goto, no recursion
+I1 ok: 6 nested loops, each bounded at compile time by KF_MAX_ENT
+I1 ok: the nesting depth and fan-out caps are #defines, not descriptor fields
+seam ok: no VER2 geometry constants left in the kernel
+I3 ok: the frontier and task caps are loud
+I3 ok: truncation raised from 10 sites
+S39(a) ok: 9 live-GPGA load sites, all distinct offsets -- no double fetch
+S39(c) ok: both emit chokepoints bound the leaf BEFORE they coalesce
+S39(e) ok: refusals are propagated before any early return
+g++ -std=c++14 -O1 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-unused-variable \
+    -Wno-comment -o kf_cpu_walk kf_cpu_walk.cpp
+./kf_cpu_walk
+  [synthetic] 15 images, 1211 benign leaves agreed exactly, 2 hostile leaves inside the reference
+  [real-ga106] 5 images, 7005 benign leaves agreed exactly, 0 hostile leaves inside the reference
+  [descriptor] 41 hostile descriptors refused on VER2 and VER3
+==== kf_cpu_walk: ok ====
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -o kf_tests kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2353): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+jit ok: PTX-only binary
+.target sm_75
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BREAK_BOUNDS -o kf_tests_broken kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2353): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+neg ok: bounds_window_respected fails without the check (rc=1)
+neg ok: pointer_past_end fails without the check (rc=1)
+neg ok: leaf_past_end fails without the check (rc=1)
+neg ok: the control case still passes on the unbroken binary
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BREAK_COALESCE -o kf_tests_nocoalesce kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2353): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BREAK_JOIN -o kf_tests_nojoin kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2353): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+coal ok: no leaf coalescer breaks correctness/coalesce_one_run (rc=1)
+coal ok: no leaf coalescer breaks diff/grow_then_shrink too (rc=1)
+coal ok: no task-boundary join breaks correctness/one_run_across_page_tables (rc=1), on:
+    ! correctness/one_run_across_page_tables:244  f.hdr.run_count == want.size()  -- 2 != 1 (0x2 != 0x1)
+coal ok: the control cases still pass on the unbroken binary
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BAD_DESCRIPTOR -o kf_tests_baddesc kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2353): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BAD_GEOMETRY -o kf_tests_badgeom kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2353): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BAD_ABI -o kf_tests_badabi kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2353): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+seam ok: addr_local.lo off by one breaks the decode (rc=1), on:
+    ! correctness/kind_joins_run_identity:244  f.hdr.run_count == want.size()  -- 0 != 2 (0x0 != 0x2)
+seam ok: dir[3].va_lo off by one breaks the walk (rc=1), on:
+    ! correctness/kind_joins_run_identity:247  f.rn[i].va == want[i].va  -- 141564011610112 != 141565890658304 (0x80c070a00000 != 0x80c0e0a00000)
+seam ok: an abi_version skew is refused AT LAUNCH (rc=1), on:
+kf_create: format descriptor REFUSED: abi_version
+seam ok: the control passes on the real descriptor
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BREAK_SAMPLE_RAW -o kf_tests_badsample kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2353): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+sample ok: a corrupted raw entry fails the sample cases (rc=1), on:
+    ! hostile/refusal_samples_parallel:1713  s.raw == it->second.raw  -- 33554691 != 33554689 (0x2000103 != 0x2000101)
+sample ok: the control sample cases pass on the unbroken binary
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_ALLOW_UNTESTED_VER3 -o kf_tests_ver3 kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:570:60: warning: "/*" within comment [-Wcomment]
+  570 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2353): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+ver3 ok: the SKETCH is well formed (geometry only -- it has never decoded a table)
+ver3 ok: decode cases passed: 3
