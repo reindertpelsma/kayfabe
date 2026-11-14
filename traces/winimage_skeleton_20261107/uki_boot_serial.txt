@@ -1,0 +1,56 @@
+Delete invalid EFI Entry: Boot0003* ubuntu	HD(15,GPT,31313937-ee75-496a-8d0e-ffc8f6411cdc,0x2800,0x35000)/\EFI\ubuntu\shimx64.efi
+Delete invalid EFI Entry: Boot0004* reinstall (windows)	HD(15,GPT,31313937-ee75-496a-8d0e-ffc8f6411cdc,0x2800,0x35000)/\EFI\reinstall\grubx64.efi
+Boot0000* UiApp	FvVol(7cb8bdc9-f8eb-4f34-aaea-3ee4af6516a1)/FvFile(462caa21-7614-4503-836e-8ab6f4662331)
+Boot0001* UEFI Misc Device	PciRoot(0x0)/Pci(0x4,0x0){auto_created_boot_option}
+Boot0002* EFI Internal Shell	FvVol(7cb8bdc9-f8eb-4f34-aaea-3ee4af6516a1)/FvFile(7c04a583-9e3e-4f1c-ad65-e05268d0b4d1)
+Boot0003* bootx64.efi	HD(1,GPT,b7b6b0b1-bb65-462d-93c4-af3390b29327,0x800,0x200000)/\EFI\boot\bootx64.efi
+BdsDxe: loading Boot0003 "bootx64.efi" from HD(1,GPT,B7B6B0B1-BB65-462D-93C4-AF3390B29327,0x800,0x200000)/\EFI\boot\bootx64.efi
+BdsDxe: starting Boot0003 "bootx64.efi" from HD(1,GPT,B7B6B0B1-BB65-462D-93C4-AF3390B29327,0x800,0x200000)/\EFI\boot\bootx64.efi
+BdsDxe: starting Boot0004 "Windows Boot Manager" from HD(1,GPT,728DD7C5-EA63-43F6-9ADB-B62964A5485D,0x800,0x32000)/\EFI\Microsoft\Boot\bootmgfw.efi
+BdsDxe: loading Boot0004 "Windows Boot Manager" from HD(1,GPT,728DD7C5-EA63-43F6-9ADB-B62964A5485D,0x800,0x32000)/\EFI\Microsoft\Boot\bootmgfw.efi
+BdsDxe: starting Boot0004 "Windows Boot Manager" from HD(1,GPT,728DD7C5-EA63-43F6-9ADB-B62964A5485D,0x800,0x32000)/\EFI\Microsoft\Boot\bootmgfw.efi
+BdsDxe: loading Boot0004 "Windows Boot Manager" from HD(1,GPT,728DD7C5-EA63-43F6-9ADB-B62964A5485D,0x800,0x32000)/\EFI\Microsoft\Boot\bootmgfw.efi
+BdsDxe: starting Boot0004 "Windows Boot Manager" from HD(1,GPT,728DD7C5-EA63-43F6-9ADB-B62964A5485D,0x800,0x32000)/\EFI\Microsoft\Boot\bootmgfw.efi
+KFUKI boot kernel=6.18.60-0-virt cmdline=console=tty0 console=ttyS0,115200 rdinit=/init loglevel=4 net.ifnames=0 kf.autorestore=900
+KFUKI module af_packet ok
+KFUKI module virtio_pci ok
+KFUKI module virtio_net ok
+KFUKI module virtio_blk ok
+KFUKI module virtio_scsi ok
+KFUKI module virtio_console ok
+KFUKI module e1000 ok
+KFUKI module e1000e ok
+KFUKI module igb missing-or-failed
+KFUKI module igc missing-or-failed
+KFUKI module ixgbe missing-or-failed
+KFUKI module vmxnet3 ok
+KFUKI module r8169 missing-or-failed
+KFUKI module 8139cp missing-or-failed
+KFUKI module 8139too missing-or-failed
+KFUKI module tg3 missing-or-failed
+KFUKI module nvme ok
+KFUKI module ahci ok
+KFUKI module ata_piix ok
+KFUKI module ata_generic ok
+KFUKI module libata ok
+KFUKI module sd_mod ok
+KFUKI module sr_mod ok
+KFUKI module vfat ok
+KFUKI module fat ok
+KFUKI module nls_cp437 ok
+KFUKI module nls_iso8859_1 ok
+KFUKI module nls_utf8 ok
+KFUKI module ntfs3 ok
+KFUKI module fuse ok
+KFUKI module efivarfs ok
+KFUKI module ext4 ok
+KFUKI module loop ok
+KFUKI module crc32c_generic missing-or-failed
+KFUKI dhcp on eth0 (52:54:00:12:34:56 driver=virtio_net)
+KFUKI net: eth0 10.0.2.15/24  default: default via 10.0.2.2 dev eth0 metric 202 
+KFUKI hostkey 256 SHA256:68YDeH+L8QBhCSuVIxF5cpDPEvsR8zfuBziAJPKRA4U root@(none) (ECDSA)
+KFUKI hostkey 256 SHA256:9Ii25098Icl/8bfTZt3yYrVlrgLeA0vbXBjtWUrIO14 root@(none) (ED25519)
+KFUKI hostkey 3072 SHA256:8E1Od1BezehkB9NXJQvauvB+LgFTc5GDGZko14fcPG4 root@(none) (RSA)
+KFUKI sshd up on 22
+KFUKI READY ip=10.0.2.15/24 autorestore=900s
+KFUKI ssh login seen; recovery timer disarmed

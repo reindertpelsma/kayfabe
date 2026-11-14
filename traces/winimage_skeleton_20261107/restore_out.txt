@@ -1,0 +1,4 @@
+restored EFI/Microsoft/Boot/bootmgfw.efi
+restored EFI/BOOT/BOOTX64.EFI
+KF_RESTORE_RC=0
+ESP_RESTORE_OK
