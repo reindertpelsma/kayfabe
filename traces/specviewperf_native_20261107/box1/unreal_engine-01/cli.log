@@ -1,0 +1,38 @@
+[2026-11-06|19:56:38] Gathering System Details: Started
+[2026-11-06|19:57:16] Gathering System Details: Finished
+[2026-11-06|19:57:16] Workload initialization: Started
+[2026-11-06|19:57:18] Workload initialization: Finished
+
+Valid Workloads: 
+  9) unreal_engine-01 [v1.0.4] 
+    ✓ <id=68> 01_VotALitDetailTracing 
+    ✓ <id=69> 02_VotALitGlobalTracing 
+    ✓ <id=70> 03_VotAUnlit 
+    ✓ <id=71> 04_VotAWireframe 
+    ✓ <id=72> 05_CitySampleLitHitLighting 
+    ✓ <id=73> 06_CitySampleLitSurfaceCache 
+    ✓ <id=74> 07_CitySampleUnlit 
+    ✓ <id=75> 08_CitySampleWireframe 
+    
+[2026-11-06|19:57:18] Starting Workload 1 of 1, Iteration 1 of 1
+[2026-11-06|19:57:18] [Workload:unreal_engine-01] Starting
+[2026-11-06|19:57:20] [workload: unreal_engine-01 / subtest: 01_VotALitDetailTracing] Started
+[2026-11-06|20:00:58] [workload: unreal_engine-01 / subtest: 01_VotALitDetailTracing] Completed
+[2026-11-06|20:00:58] [workload: unreal_engine-01 / subtest: 02_VotALitGlobalTracing] Started
+[2026-11-06|20:02:14] [workload: unreal_engine-01 / subtest: 02_VotALitGlobalTracing] Completed
+[2026-11-06|20:02:14] [workload: unreal_engine-01 / subtest: 03_VotAUnlit] Started
+[2026-11-06|20:03:23] [workload: unreal_engine-01 / subtest: 03_VotAUnlit] Completed
+[2026-11-06|20:03:23] [workload: unreal_engine-01 / subtest: 04_VotAWireframe] Started
+[2026-11-06|20:04:29] [workload: unreal_engine-01 / subtest: 04_VotAWireframe] Completed
+[2026-11-06|20:04:29] [workload: unreal_engine-01 / subtest: 05_CitySampleLitHitLighting] Started
+[2026-11-06|20:10:33] [workload: unreal_engine-01 / subtest: 05_CitySampleLitHitLighting] Completed
+[2026-11-06|20:10:33] [workload: unreal_engine-01 / subtest: 06_CitySampleLitSurfaceCache] Started
+[2026-11-06|20:12:56] [workload: unreal_engine-01 / subtest: 06_CitySampleLitSurfaceCache] Completed
+[2026-11-06|20:12:56] [workload: unreal_engine-01 / subtest: 07_CitySampleUnlit] Started
+[2026-11-06|20:15:03] [workload: unreal_engine-01 / subtest: 07_CitySampleUnlit] Completed
+[2026-11-06|20:15:03] [workload: unreal_engine-01 / subtest: 08_CitySampleWireframe] Started
+[2026-11-06|20:17:14] [workload: unreal_engine-01 / subtest: 08_CitySampleWireframe] Completed
+[2026-11-06|20:17:14] [Workload: unreal_engine-01] Completed
+
+Run complete -- results and logs available in: 
+[Iteration 1] C:\spec\results\unreal_engine-01\result_2026-11-06-19-57-18

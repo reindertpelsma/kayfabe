@@ -1,0 +1,38 @@
+[2026-11-06|22:58:24] Gathering System Details: Started
+[2026-11-06|22:59:00] Gathering System Details: Finished
+[2026-11-06|22:59:00] Workload initialization: Started
+[2026-11-06|22:59:02] Workload initialization: Finished
+
+Valid Workloads: 
+  8) solidworks-08 [v1.0.1] 
+    ✓ <id=60> 01_Excavator4ViewportsShaded 
+    ✓ <id=61> 02_Excavator4ViewportsShadedEdges 
+    ✓ <id=62> 03_ExcavatorRealViewShaded 
+    ✓ <id=63> 04_JetEnginesShaded 
+    ✓ <id=64> 05_JetEnginesShadedEdges 
+    ✓ <id=65> 06_JetEnginesRealViewShaded 
+    ✓ <id=66> 07_NASACrawlerShaded 
+    ✓ <id=67> 08_NASACrawlerShadedEdges 
+    
+[2026-11-06|22:59:02] Starting Workload 1 of 1, Iteration 1 of 1
+[2026-11-06|22:59:02] [Workload:solidworks-08] Starting
+[2026-11-06|23:00:46] [workload: solidworks-08 / subtest: 01_Excavator4ViewportsShaded] Started
+[2026-11-06|23:01:15] [workload: solidworks-08 / subtest: 01_Excavator4ViewportsShaded] Completed
+[2026-11-06|23:01:15] [workload: solidworks-08 / subtest: 02_Excavator4ViewportsShadedEdges] Started
+[2026-11-06|23:01:43] [workload: solidworks-08 / subtest: 02_Excavator4ViewportsShadedEdges] Completed
+[2026-11-06|23:01:43] [workload: solidworks-08 / subtest: 03_ExcavatorRealViewShaded] Started
+[2026-11-06|23:02:09] [workload: solidworks-08 / subtest: 03_ExcavatorRealViewShaded] Completed
+[2026-11-06|23:02:09] [workload: solidworks-08 / subtest: 04_JetEnginesShaded] Started
+[2026-11-06|23:02:37] [workload: solidworks-08 / subtest: 04_JetEnginesShaded] Completed
+[2026-11-06|23:02:37] [workload: solidworks-08 / subtest: 05_JetEnginesShadedEdges] Started
+[2026-11-06|23:07:48] [workload: solidworks-08 / subtest: 05_JetEnginesShadedEdges] Completed
+[2026-11-06|23:07:48] [workload: solidworks-08 / subtest: 06_JetEnginesRealViewShaded] Started
+[2026-11-06|23:08:12] [workload: solidworks-08 / subtest: 06_JetEnginesRealViewShaded] Completed
+[2026-11-06|23:08:12] [workload: solidworks-08 / subtest: 07_NASACrawlerShaded] Started
+[2026-11-06|23:08:51] [workload: solidworks-08 / subtest: 07_NASACrawlerShaded] Completed
+[2026-11-06|23:08:51] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Started
+[2026-11-06|23:14:53] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Completed
+[2026-11-06|23:14:53] [Workload: solidworks-08] Completed
+
+Run complete -- results and logs available in: 
+[Iteration 1] C:\spec\results\solidworks-08\result_2026-11-06-22-59-02

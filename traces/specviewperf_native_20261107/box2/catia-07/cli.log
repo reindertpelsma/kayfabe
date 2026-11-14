@@ -1,0 +1,32 @@
+[2026-11-06|21:49:32] Gathering System Details: Started
+[2026-11-06|21:50:27] Gathering System Details: Finished
+[2026-11-06|21:50:27] Workload initialization: Started
+[2026-11-06|21:50:29] Workload initialization: Finished
+
+Valid Workloads: 
+  2) catia-07 [v1.0.6] 
+    ✓ <id=8> 01_FourICDCarsWhite 
+    ✓ <id=9> 02_MultiJetEngines 
+    ✓ <id=10> 03_ThreeLoftJetsDarkMirror 
+    ✓ <id=11> 04_ThreeLoftJetsWhite 
+    ✓ <id=12> 05_ConceptCars 
+    ✓ <id=13> 06_LoftJets 
+    
+[2026-11-06|21:50:29] Starting Workload 1 of 1, Iteration 1 of 1
+[2026-11-06|21:50:29] [Workload:catia-07] Starting
+[2026-11-06|22:05:19] [workload: catia-07 / subtest: 01_FourICDCarsWhite] Started
+[2026-11-06|22:07:53] [workload: catia-07 / subtest: 01_FourICDCarsWhite] Completed
+[2026-11-06|22:07:53] [workload: catia-07 / subtest: 02_MultiJetEngines] Started
+[2026-11-06|22:09:52] [workload: catia-07 / subtest: 02_MultiJetEngines] Completed
+[2026-11-06|22:09:52] [workload: catia-07 / subtest: 03_ThreeLoftJetsDarkMirror] Started
+[2026-11-06|22:11:33] [workload: catia-07 / subtest: 03_ThreeLoftJetsDarkMirror] Completed
+[2026-11-06|22:11:33] [workload: catia-07 / subtest: 04_ThreeLoftJetsWhite] Started
+[2026-11-06|22:13:11] [workload: catia-07 / subtest: 04_ThreeLoftJetsWhite] Completed
+[2026-11-06|22:13:11] [workload: catia-07 / subtest: 05_ConceptCars] Started
+[2026-11-06|22:14:46] [workload: catia-07 / subtest: 05_ConceptCars] Completed
+[2026-11-06|22:14:46] [workload: catia-07 / subtest: 06_LoftJets] Started
+[2026-11-06|22:16:22] [workload: catia-07 / subtest: 06_LoftJets] Completed
+[2026-11-06|22:16:22] [Workload: catia-07] Completed
+
+Run complete -- results and logs available in: 
+[Iteration 1] C:\spec\results\catia-07\result_2026-11-06-21-50-29
