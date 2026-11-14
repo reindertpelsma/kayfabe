@@ -175,12 +175,68 @@ MUTANTS = [
         "            self.buf.alive(),\n            \"{what}: the device allocation was released",
         "            true,\n            \"{what}: the device allocation was released",
     ),
+    # ── F-2 host half: a space cut at its own limit fails only itself (walk.rs, 2026-11-14) ──
+    (
+        "f2-any-budget-bit-aborts-the-retry",
+        "walk.rs",
+        "        let aborted = h.refuse_mask & walk_level & !entry_bits != 0;",
+        "        let aborted = h.refuse_mask & walk_level != 0;",
+    ),
+    (
+        "f2-header-only-abort-missed",
+        "walk.rs",
+        "        let aborted = h.refuse_mask & walk_level & !entry_bits != 0;",
+        "        let aborted = h.refuse_mask & walk_level & !entry_bits & 0 != 0;",
+    ),
+    (
+        "f2-cut-space-re-walked",
+        "walk.rs",
+        "            if p.refused_bits() & (KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP) != 0 {",
+        "            if false {",
+    ),
+    # ── F-10 host half: the descriptor checked before CUDA opens (walk.rs, 2026-11-14) ──
+    (
+        "f10-check-not-called",
+        "walk.rs",
+        "        if let Err(name) = check_format(&fmt) {",
+        "        if let Err(name) = Ok::<(), String>(()) {",
+    ),
+    (
+        "f10-snapshot-rule-dropped",
+        "walk.rs",
+        "        if n * wpe > KF_SHWORDS {",
+        "        if n > KF_SHWORDS {",
+    ),
+    (
+        "f10-leaf-snapshot-rule-dropped",
+        "walk.rs",
+        "    if big > KF_SHWORDS - KF_MAX_ENT || !pow2(big) {",
+        "    if big > KF_SHWORDS || !pow2(big) {",
+    ),
+    (
+        "f10-field-rule-dropped",
+        "walk.rs",
+        "        if k.lo < 64 && k.bits < 64 && u32::from(k.lo) + u32::from(k.bits) <= 64 && k.shift < 64 {",
+        "        if k.lo < 64 && k.bits < 64 && k.shift < 64 {",
+    ),
+    (
+        "f10-bit-rule-dropped",
+        "walk.rs",
+        "        if b >= 64 {",
+        "        if b > 250 {",
+    ),
+    (
+        "f10-pcf-values-unchecked",
+        "walk.rs",
+        "    if (f.pte_pcf_no_valid_4k, f.pde_pcf_sparse_bit) != pcf {",
+        "    if pcf.0 == 0xff {",
+    ),
     # ── D-08: field lists ──
     (
         "d08-a-field-missing-from-the-list",
         "driver_unsafe.rs",
-        "        pcf_sparse: u8, pad1: [u8; 3], kind: KfField, ps_log2: [u8; 4] }",
-        "        pcf_sparse: u8, pad1: [u8; 3], kind: KfField }",
+        "        pcf_sparse: u8, pte_pcf_no_valid_4k: u8, pde_pcf_sparse_bit: u8, pad1: [u8; 1], kind: KfField,\n        ps_log2: [u8; 4] }",
+        "        pcf_sparse: u8, pte_pcf_no_valid_4k: u8, pde_pcf_sparse_bit: u8, pad1: [u8; 1], kind: KfField }",
     ),
 ]
 
