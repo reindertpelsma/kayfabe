@@ -290,6 +290,80 @@ pub struct DisplayGpu {
 /// The most an expanded cursor image takes: 256 x 256 pixels of 4 bytes.
 pub const CURSOR_PX_MAX: usize = 256 * 256 * 4;
 
+/// ★ D-11 (security review 2, 2026-11-13; DESIGN, not measured): the most pixels a composition's
+/// device staging frame may hold, `3840 x 2160` — the same ceiling as
+/// `kf_disp::scanout::MAX_PIXELS`, which the only production caller (kf-qemu's display worker)
+/// already enforces before [`DisplayGpu::compose_begin`], and as the colour path's fixed 4K
+/// ceiling. 33 MB of device memory instead of the 1 GiB a 16384 x 16384 request used to allocate
+/// outside `fb-mb`. A larger request is refused by name.
+pub const MAX_STAGING_PIXELS: u64 = 3840 * 2160;
+
+/// ★ D-11 (DESIGN): the most display slots one [`DisplayGpu`] imports. The broker's ring has
+/// `kf_broker::slots::MAX_SLOTS` (5) and imports are never unmapped while the device lives, so 16
+/// is three times the need; at 64 MiB per slot it bounds the imported VRAM at 1 GiB. The 17th
+/// import is refused by name (kf-qemu then withdraws the GPU-copy rung, loudly).
+pub const MAX_IMPORTED_SLOTS: usize = 16;
+
+/// The staging frame's bytes for a `w x h` composition, or why it is refused (empty, a side past
+/// 16384, or more than [`MAX_STAGING_PIXELS`]).
+fn staging_request(w: u32, h: u32) -> Result<usize, String> {
+    let pixels = u64::from(w) * u64::from(h);
+    if pixels == 0 || w > 16384 || h > 16384 || pixels > MAX_STAGING_PIXELS {
+        return Err(format!(
+            "a {w}x{h} frame (at most 16384 a side and {MAX_STAGING_PIXELS} pixels, D-11)"
+        ));
+    }
+    usize::try_from(pixels * 4).map_err(|_| format!("{w}x{h}"))
+}
+
+/// The bytes of one more imported slot, or why it is refused: not whole 2 MiB granules, more than
+/// 64 MiB, or [`MAX_IMPORTED_SLOTS`] already imported (`imported`).
+fn slot_request(imported: usize, bytes: u64) -> Result<usize, String> {
+    if bytes == 0 || !bytes.is_multiple_of(2 << 20) || bytes > 64 << 20 {
+        return Err(format!("a {bytes:#x}-byte slot"));
+    }
+    if imported >= MAX_IMPORTED_SLOTS {
+        return Err(format!(
+            "{MAX_IMPORTED_SLOTS} slots are already imported (D-11 cap)"
+        ));
+    }
+    usize::try_from(bytes).map_err(|_| format!("{bytes:#x}"))
+}
+
+/// ★★★ D-03 (security review 2, 2026-11-13): the device frame a kernel writes, validated ONCE
+/// against the allocation it lands in. A compose/colour kernel bounds its writes by the `w x h` its
+/// caller names; this is where that pair is checked against the bytes actually allocated, so a
+/// `(w, h)` larger than the frame can only be refused, never become a GPU write past it.
+///
+/// `frame` is the allocation (`(address, bytes)`), `bpp` the bytes per pixel the kernel writes.
+///
+/// # Errors
+/// Refused by name: no frame, an empty or overflowing `w x h x bpp`, or more bytes than the frame.
+fn frame_for(
+    frame: Option<(CUdeviceptr, usize)>,
+    w: u32,
+    h: u32,
+    bpp: u64,
+    what: &'static str,
+) -> Result<CUdeviceptr, CudaError> {
+    let Some((dst, len)) = frame else {
+        return Err(refused(what, "no composition frame was begun".into()));
+    };
+    let need = u64::from(w)
+        .checked_mul(u64::from(h))
+        .and_then(|p| p.checked_mul(bpp));
+    match need {
+        Some(n) if n > 0 && n <= len as u64 => Ok(dst),
+        _ => Err(refused(
+            what,
+            format!(
+                "a {w}x{h} frame at {bpp} bytes per pixel does not fit the {len:#x}-byte frame \
+                 it would be written into"
+            ),
+        )),
+    }
+}
+
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
 /// QEMU console as an integer; this crate writes it only through the GPU copy engine.
 ///
@@ -835,11 +909,7 @@ impl DisplayGpu {
     /// [`CudaError`]; an empty or oversized frame is refused.
     pub fn compose_begin(&mut self, w: u32, h: u32) -> Result<(), CudaError> {
         let what = "DisplayGpu::compose_begin";
-        let n = usize::try_from(u64::from(w) * u64::from(h) * 4)
-            .map_err(|_| refused(what, format!("{w}x{h}")))?;
-        if n == 0 || w > 16384 || h > 16384 {
-            return Err(refused(what, format!("a {w}x{h} frame")));
-        }
+        let n = staging_request(w, h).map_err(|e| refused(what, e))?;
         if self.staging.is_none_or(|(_, len)| len < n) {
             if let Some((p, _)) = self.staging.take() {
                 // the stream drains first: a queued compose may still write the old staging
@@ -939,9 +1009,8 @@ impl DisplayGpu {
         let what = "DisplayGpu::compose_yuv";
         let f = self.yuv.as_ref().map_err(|e| refused(what, e.clone()))?[0];
         l.check(w, h).map_err(|e| refused(what, e))?;
-        let Some((dst, _)) = self.staging else {
-            return Err(refused(what, "no composition was begun".into()));
-        };
+        // ★ D-03: the frame the kernel writes, checked against the staging ALLOCATION
+        let dst = frame_for(self.staging, w, h, 4, what)?;
         self.launch_yuv(f, dst, l, w, h, what)
     }
 
@@ -954,12 +1023,7 @@ impl DisplayGpu {
         let what = "DisplayGpu::color_yuv";
         let f = self.yuv.as_ref().map_err(|e| refused(what, e.clone()))?[1];
         l.check(w, h).map_err(|e| refused(what, e))?;
-        let (dst, len) = self
-            .color_frame
-            .ok_or_else(|| refused(what, "no colour frame".into()))?;
-        if u64::from(w) * u64::from(h) * 16 > len as u64 {
-            return Err(refused(what, "colour frame is too small".into()));
-        }
+        let dst = frame_for(self.color_frame, w, h, 16, what)?;
         self.launch_yuv(f, dst, l, w, h, what)
     }
 
@@ -1149,13 +1213,7 @@ impl DisplayGpu {
             usize::try_from(l.extent).map_err(|_| refused(what, "layer extent".into()))?,
             what,
         )?;
-        let bytes = u64::from(w) * u64::from(h) * 16;
-        let (dst, len) = self
-            .color_frame
-            .ok_or_else(|| refused(what, "no colour frame".into()))?;
-        if bytes > len as u64 {
-            return Err(refused(what, "colour frame is too small".into()));
-        }
+        let dst = frame_for(self.color_frame, w, h, 16, what)?;
         let p = self.color_snapshot(slot, lut, true)?;
         let tone = self.color_snapshot(32 + slot, tmo, false)?;
         if let Some(tmo) = tmo {
@@ -1233,16 +1291,8 @@ impl DisplayGpu {
         matrix: &[i32; 12],
     ) -> Result<(), CudaError> {
         let what = "DisplayGpu::color_output";
-        let (src, slen) = self
-            .color_frame
-            .ok_or_else(|| refused(what, "no colour frame".into()))?;
-        let (dst, dlen) = self
-            .staging
-            .ok_or_else(|| refused(what, "no output frame".into()))?;
-        let pixels = u64::from(w) * u64::from(h);
-        if w == 0 || h == 0 || pixels * 16 > slen as u64 || pixels * 4 > dlen as u64 {
-            return Err(refused(what, "colour output exceeds frame".into()));
-        }
+        let src = frame_for(self.color_frame, w, h, 16, what)?;
+        let dst = frame_for(self.staging, w, h, 4, what)?;
         let p = self.color_snapshot(64, lut, false)?;
         let f = self.color.as_ref().map_err(|e| refused(what, e.clone()))?[1];
         let mut args = vec![
@@ -1411,11 +1461,8 @@ impl DisplayGpu {
     /// Refused by name for a bad size; the import step that refused.
     pub fn import_slot(&mut self, fd: i32, bytes: u64) -> Result<SlotId, CudaError> {
         let what = "DisplayGpu::import_slot";
-        if bytes == 0 || !bytes.is_multiple_of(2 << 20) || bytes > 64 << 20 {
-            return Err(refused(what, format!("a {bytes:#x}-byte slot")));
-        }
+        let n = slot_request(self.slots.len(), bytes).map_err(|e| refused(what, e))?;
         self.make_current()?;
-        let n = usize::try_from(bytes).map_err(|_| refused(what, format!("{bytes:#x}")))?;
         let p = self
             .cu
             .import_and_map(self.device, fd, n)
@@ -1503,9 +1550,9 @@ impl DisplayGpu {
             .compose
             .as_ref()
             .map_err(|e| refused(what, e.clone()))?;
-        let Some((dst, _)) = self.staging else {
-            return Err(refused(what, "no composition was begun".into()));
-        };
+        // ★★★ D-03: `l.check(w, h)` bounds the kernel's writes by the CALLER's `w x h`; this
+        // bounds that frame by the staging ALLOCATION (the length used to be discarded here).
+        let dst = frame_for(self.staging, w, h, 4, what)?;
         let u = |x: u32| x.to_le_bytes().to_vec();
         let i = |x: i32| x.to_le_bytes().to_vec();
         let mut params = vec![
@@ -1855,6 +1902,154 @@ impl Drop for DisplayGpu {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ═══ D-03 / D-11 (security review 2, 2026-11-13): hostile arguments are refused ═══
+
+    /// The review's scenario: a 64 x 64 staging frame (16 KiB) and a layer composed into a frame the
+    /// caller says is 16384 x 16384. The kernel would write ~1 GiB past the allocation.
+    #[test]
+    fn d03_a_frame_larger_than_the_staging_allocation_is_refused() {
+        let staging = Some((0x1000_0000, 64 * 64 * 4));
+        assert!(frame_for(staging, 16384, 16384, 4, "t").is_err());
+        assert!(
+            frame_for(staging, 64, 65, 4, "t").is_err(),
+            "one row too many"
+        );
+        assert!(
+            frame_for(staging, 65, 64, 4, "t").is_err(),
+            "one column too many"
+        );
+        assert!(
+            frame_for(staging, 64, 64, 16, "t").is_err(),
+            "the FP32 colour frame's 16 bytes per pixel counted, not 4"
+        );
+        assert_eq!(frame_for(staging, 64, 64, 4, "t").ok(), Some(0x1000_0000));
+        assert_eq!(frame_for(staging, 32, 128, 4, "t").ok(), Some(0x1000_0000));
+        assert!(frame_for(staging, 0, 0, 4, "t").is_err(), "an empty frame");
+        // a product that wraps to a small number (3 x 1 x bpp = 2^64 + 2) must not pass as 2 bytes
+        assert!(frame_for(staging, 3, 1, 6_148_914_691_236_517_206, "t").is_err());
+    }
+
+    /// The same bound counted from the other side: exactly the launch sites that write a frame
+    /// take it from [`frame_for`] (two in `color_output`: its source and its destination).
+    #[test]
+    fn d03_frame_for_guards_six_frame_arguments() {
+        let src = include_str!("display.rs");
+        let needle = ["frame_for(", "self."].concat();
+        assert_eq!(
+            src.matches(&needle).count(),
+            6,
+            "a frame-writing launch lost (or gained an unreviewed) frame_for check"
+        );
+    }
+
+    #[test]
+    fn d03_no_frame_an_empty_frame_and_overflow_are_refused() {
+        assert!(frame_for(None, 1, 1, 4, "t").is_err());
+        let big = Some((0x1000, usize::MAX));
+        assert!(frame_for(big, 0, 64, 4, "t").is_err());
+        assert!(frame_for(big, 64, 0, 4, "t").is_err());
+        // u32::MAX^2 * 16 overflows u64: refused, never wrapped into a small length
+        assert!(frame_for(big, u32::MAX, u32::MAX, 16, "t").is_err());
+        assert!(frame_for(big, u32::MAX, u32::MAX, 4, "t").is_err());
+        assert!(
+            frame_for(big, 65536, 65536, 16, "t").is_ok(),
+            "no false overflow"
+        );
+        assert!(frame_for(Some((0x1000, 4)), 3, 1, 6_148_914_691_236_517_206, "t").is_err());
+        assert!(
+            frame_for(Some((0x1000, 15)), 2, 2, 4, "t").is_err(),
+            "one byte short"
+        );
+        assert!(
+            frame_for(Some((0x1000, 16)), 2, 2, 4, "t").is_ok(),
+            "exactly the frame"
+        );
+    }
+
+    /// ★ The check is reached: every launch that writes a staging or colour frame takes its
+    /// destination from [`frame_for`], and no launch path discards the allocation's length again.
+    /// (A source test, the repo's pattern for "this call must be on this path"; the GPU-free fake
+    /// driver of the driver perimeter PR runs the real path.)
+    #[test]
+    fn d03_every_frame_writing_launch_checks_the_allocation() {
+        let src = include_str!("display.rs");
+        let body = |name: &str| -> &str {
+            let at = src
+                .find(&format!("fn {name}("))
+                .unwrap_or_else(|| panic!("NON-VACUITY: fn {name} is gone"));
+            let rest = &src[at..];
+            &rest[..rest.find("\n    }\n").expect("end of fn")]
+        };
+        let guard = ["frame_for(", "self."].concat();
+        for f in [
+            "launch_compose",
+            "compose_yuv",
+            "color_yuv",
+            "color_pipeline_layer",
+            "color_output",
+        ] {
+            assert!(
+                body(f).contains(&guard),
+                "{f} launches a frame-writing kernel without frame_for (D-03)"
+            );
+        }
+        // built from two pieces so this test's own text does not contain it
+        let discard = ["let Some((dst, _)) ", "= self.staging"].concat();
+        assert!(
+            !src.contains(&discard),
+            "a launch path discards the staging allocation's length again (D-03)"
+        );
+    }
+
+    #[test]
+    fn d11_the_staging_frame_is_capped_at_4k() {
+        assert_eq!(staging_request(3840, 2160), Ok(3840 * 2160 * 4));
+        assert_eq!(staging_request(2160, 3840), Ok(3840 * 2160 * 4));
+        assert!(staging_request(3840, 2161).is_err());
+        assert!(staging_request(16384, 16384).is_err(), "the 1 GiB request");
+        assert!(staging_request(16385, 1).is_err());
+        assert!(staging_request(0, 1).is_err());
+        assert!(staging_request(1, 0).is_err());
+        assert_eq!(staging_request(1, 1), Ok(4));
+    }
+
+    #[test]
+    fn d11_no_request_above_the_pixel_cap_passes() {
+        for w in [1u32, 2, 1920, 3840, 4096, 7680, 16384] {
+            let h_max = u32::try_from(MAX_STAGING_PIXELS / u64::from(w)).unwrap_or(u32::MAX);
+            for h in [h_max, h_max + 1, h_max.saturating_mul(2)] {
+                let ok = h > 0 && h <= 16384 && u64::from(w) * u64::from(h) <= MAX_STAGING_PIXELS;
+                assert_eq!(staging_request(w, h).is_ok(), ok, "{w}x{h}");
+            }
+        }
+    }
+
+    #[test]
+    fn d11_the_import_cap_counts_imports() {
+        for imported in 0..=MAX_IMPORTED_SLOTS + 4 {
+            assert_eq!(
+                slot_request(imported, 2 << 20).is_ok(),
+                imported < MAX_IMPORTED_SLOTS,
+                "{imported} already imported"
+            );
+        }
+    }
+
+    #[test]
+    fn d11_slot_imports_are_capped() {
+        let mib = 1u64 << 20;
+        assert_eq!(slot_request(0, 2 * mib), Ok(2 << 20));
+        assert_eq!(slot_request(MAX_IMPORTED_SLOTS - 1, 64 * mib), Ok(64 << 20));
+        assert!(
+            slot_request(MAX_IMPORTED_SLOTS, 2 * mib).is_err(),
+            "the 17th import"
+        );
+        assert!(slot_request(usize::MAX, 2 * mib).is_err());
+        assert!(slot_request(0, 66 * mib).is_err());
+        assert!(slot_request(0, 3 * mib).is_err());
+        assert!(slot_request(0, 0).is_err());
+    }
 
     #[test]
     fn color_ptx_matches_its_source_and_launch_abi() {

@@ -230,7 +230,7 @@ Each link must hold for "the guest cannot reach host memory or another tenant" t
 
 | # | link | where it lives | status |
 |---|---|---|---|
-| 1 | No guest bytes are forwarded to RM; every host struct is authored | kf-host verbs; the inventory in `docs/audits/2026-10-03-v3-stage1.md` §3.2 | holds by construction; the set is closed by review only (S1-41) |
+| 1 | No guest bytes are forwarded to RM; every host struct is authored | kf-host verbs; the inventory in `docs/audits/2026-10-03-v3-stage1.md` §3.2 | holds by construction; the set is closed by review only (S1-41). 2026-11-13: the one exception, the default-off `KF3_GSS_NATIVE` experiment that forwarded guest GSS-legacy control bytes (security review 1, F-06), is removed (`crates/kf-rm/tests/gss_native_removed.rs`; `V3_GSS_NATIVE.md` SUPERSEDED) |
 | 2 | The raw layer re-validates what safe code hands it | `kf-linux-raw` `CharDevice::ioctl` (`chardev_unsafe.rs:565-776`) | holds for `_IOC_SIZE` and pointer placement; the companion size fields are the caller's (S1-40) |
 | 3 | Every mapping is a store or guest-RAM row | `kf-mem` `apply_entry` (`apply.rs:297-310`); RM's object bound | holds |
 | 4 | Guest work runs in per-twin VA spaces | kf-host twins | holds, but the identity windows (S1-21) and the Translated rings (S1-23) sit inside those spaces |

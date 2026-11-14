@@ -799,7 +799,7 @@ impl HostRm {
     ///
     /// # Errors
     /// The session has no usermode window (the error it was opened with).
-    pub fn usermode_view(&self) -> Result<kf_linux_raw::HostSpan, RmError> {
+    pub fn usermode_view(&self) -> Result<kf_linux_raw::HostSpan<'_>, RmError> {
         let w = self.usermode.as_ref().map_err(|e| *e)?;
         Ok(w.region.host_span())
     }
@@ -1176,16 +1176,20 @@ impl HostRm {
         status_check(self.raw_control_status(object, cmd, payload)?)
     }
 
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (`docs/design/V3_GSS_NATIVE.md`): one `NV_ESC_RM_CONTROL` whose
-    /// `payload` is an OPAQUE byte string kayfabe does not interpret (a GSS-legacy control: no
-    /// public header, params in the GUEST driver's layout) — carried to the host UNCHANGED, with no
-    /// [`kf_abi::hostabi::HostAbi::control_carry`] decision (that gate protects layouts kayfabe's own
-    /// encoders write; here nothing is encoded). `payload` is exactly the declared `paramsSize`
-    /// bytes, so the kernel can neither read nor write more.
+    /// One `NV_ESC_RM_CONTROL` whose `payload` is an OPAQUE byte string kayfabe does not
+    /// interpret, sent with no [`kf_abi::hostabi::HostAbi::control_carry`] decision. `payload` is
+    /// exactly the size handed to the kernel, so it can neither read nor write more.
     ///
-    /// Returns the HOST's `NV_STATUS` exactly as RM wrote it (`Ok(0)` = success; `payload` then holds
-    /// the host's reply), unmapped: the caller hands it to the guest. `Err` is only a failure to ask
-    /// (an ioctl error, an unbuildable request), never an RM answer.
+    /// Returns the HOST's `NV_STATUS` exactly as RM wrote it (`Ok(0)` = success); `Err` is only a
+    /// failure to ask (an ioctl error, an unbuildable request), never an RM answer.
+    ///
+    /// CALLER-CONTRACT: `cmd` and every byte of `payload` are AUTHORED by an operator tool on the
+    /// host (`kf-harness` probes); they must never come from a guest. Not validated here because an
+    /// opaque control has no layout to validate against; a guest-sourced payload is a
+    /// guest-authored host RM action (owner principle A.2), which is exactly what the removed
+    /// `KF3_GSS_NATIVE` experiment did (security review 1, F-06, 2026-11-13). The only VMM caller
+    /// left is that experiment's dead `kf-qemu` glue, whose `kf_rm::gssnative::execute` no longer
+    /// calls it.
     ///
     /// # Errors
     /// [`RmError`] when the ioctl itself failed.
@@ -1196,6 +1200,47 @@ impl HostRm {
         payload: &mut [u8],
     ) -> Result<u32, RmError> {
         self.raw_control_status(object, cmd, payload)
+    }
+
+    /// ★ Security review 1, F-01 (2026-11-13): the control ioctl for a parameter block that itself
+    /// carries a userspace pointer (the PRECOMP regops read): the field at `inner_at` of `params`
+    /// points at `inner` for this one call. Both addresses are minted, bounded and scrubbed by
+    /// [`Indirect::nested`](kf_linux_raw::Indirect::nested) inside `kf-linux-raw`; no host address
+    /// is ever written by safe code. `params` is sent at the host's layout, exactly as given.
+    ///
+    /// # Errors
+    /// The host's status, by name; [`RmError::Other`] when the inner pointer field does not fit
+    /// inside `params` (refused before any ioctl).
+    pub(crate) fn raw_control_nested(
+        &self,
+        object: u32,
+        cmd: u32,
+        params: &mut [u8],
+        inner_at: usize,
+        inner: &mut [u8],
+    ) -> Result<(), RmError> {
+        let mut arg = [0u8; Nvos54Parameters::SIZE];
+        Nvos54Parameters {
+            h_client: self.client.raw(),
+            h_object: object,
+            cmd,
+            flags: 0,
+            params: 0,
+            params_size: u32::try_from(params.len())
+                .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_CONTROL as u8, arg.len())
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+        let mut patches = [Indirect::nested(16, params, inner_at, inner)
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?];
+        self.ctl
+            .ioctl(req, &mut arg, &mut patches)
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos54Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
+        status_check(out.status)
     }
 
     /// The control ioctl with `payload` exactly as given; the RM status it wrote, unmapped.
