@@ -482,7 +482,7 @@ qemu_common() {
     -drive "if=pflash,format=raw,unit=0,readonly=on,file=$OVMF_CODE"
     -drive "if=pflash,format=raw,unit=1,file=$VM/firmware/OVMF_VARS.fd"
     -global ICH9-LPC.disable_s3=1 -global ICH9-LPC.disable_s4=1
-    -rtc base=utc,driftfix=slew -global kvm-pit.lost_tick_policy=discard
+    -rtc base=${WINVM_RTC_BASE:-utc},driftfix=slew -global kvm-pit.lost_tick_policy=discard
     -chardev "socket,id=chrtpm,path=$VM/run/swtpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm
     -device tpm-crb,tpmdev=tpm0
     -netdev "user,id=n0,restrict=on,hostfwd=tcp:$SSH_BIND:$SSH_PORT-:22"
