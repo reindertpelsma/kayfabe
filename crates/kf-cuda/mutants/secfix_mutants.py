@@ -24,18 +24,18 @@ ROOT = CRATE.parents[1]
 
 # (name, file relative to crates/kf-cuda/src, anchor, replacement)
 MUTANTS = [
-    # ── D-03: the frame a kernel writes is bounded by the allocation ──
+    # ── D-03: the frame a kernel writes is bounded by the allocation (display.rs) ──
     (
         "d03-length-check-dropped",
         "display.rs",
-        "Some(n) if n > 0 && n <= len as u64 => Ok(dst),",
-        "Some(n) if n > 0 => Ok(dst),",
+        "Some(n) if n > 0 && n <= len as u64 => Ok(buf.span(0, n as usize)),",
+        "Some(n) if n > 0 => Ok(buf.whole()),",
     ),
     (
         "d03-empty-frame-accepted",
         "display.rs",
-        "Some(n) if n > 0 && n <= len as u64 => Ok(dst),",
-        "Some(n) if n <= len as u64 => Ok(dst),",
+        "Some(n) if n > 0 && n <= len as u64 => Ok(buf.span(0, n as usize)),",
+        "Some(n) if n <= len as u64 => Ok(buf.span(0, n as usize)),",
     ),
     (
         "d03-overflow-wraps",
@@ -48,16 +48,16 @@ MUTANTS = [
     (
         "d03-compose-discards-the-staging-length",
         "display.rs",
-        "        let dst = frame_for(self.staging, w, h, 4, what)?;\n        let u = |x: u32| x.to_le_bytes().to_vec();\n        let i =",
-        "        let Some((dst, _)) = self.staging else {\n            return Err(refused(what, \"no composition was begun\".into()));\n        };\n        let u = |x: u32| x.to_le_bytes().to_vec();\n        let i =",
+        "        let dst = frame_for(self.staging.as_ref(), w, h, 4, what)?;\n        let u = |x: u32| x.to_le_bytes().to_vec();\n        let i =",
+        "        let dst = self.staging.as_ref().ok_or_else(|| refused(what, \"none\".into()))?.whole();\n        let u = |x: u32| x.to_le_bytes().to_vec();\n        let i =",
     ),
     (
         "d03-yuv-discards-the-staging-length",
         "display.rs",
-        "        let dst = frame_for(self.staging, w, h, 4, what)?;\n        self.launch_yuv(f, dst, l, w, h, what)",
-        "        let Some((dst, _)) = self.staging else {\n            return Err(refused(what, \"no composition was begun\".into()));\n        };\n        self.launch_yuv(f, dst, l, w, h, what)",
+        "        let dst = frame_for(self.staging.as_ref(), w, h, 4, what)?;\n        self.launch_yuv(f, dst, l, w, h, what)",
+        "        let dst = self.staging.as_ref().ok_or_else(|| refused(what, \"none\".into()))?.whole();\n        self.launch_yuv(f, dst, l, w, h, what)",
     ),
-    # ── D-11: caps ──
+    # ── D-11: caps (display.rs) ──
     (
         "d11-pixel-cap-dropped",
         "display.rs",
@@ -76,6 +76,112 @@ MUTANTS = [
         "    if imported >= MAX_IMPORTED_SLOTS {",
         "    if imported > MAX_IMPORTED_SLOTS {",
     ),
+    # ── D-01: launch parameter lists (driver_unsafe.rs) ──
+    (
+        "d01-count-check-dropped",
+        "driver_unsafe.rs",
+        "            sizes.len(),\n            self.params.len(),\n            \"{what}: `{}` declares",
+        "            self.params.len(),\n            self.params.len(),\n            \"{what}: `{}` declares",
+    ),
+    (
+        "d01-size-check-dropped",
+        "driver_unsafe.rs",
+        "            assert_eq!(\n                got, want,",
+        "            assert_eq!(\n                want, want,",
+    ),
+    (
+        "d01-launch-raw-unchecked",
+        "driver_unsafe.rs",
+        "        f.check_params(&[param.len()], \"cuLaunchKernel\");\n",
+        "",
+    ),
+    (
+        "d01-launch-args-unchecked",
+        "driver_unsafe.rs",
+        "        live(&stream.life, what);\n        let sizes: Vec<usize> = params.iter().map(Vec::len).collect();\n        f.check_params(&sizes, what);",
+        "        live(&stream.life, what);\n        let sizes: Vec<usize> = params.iter().map(Vec::len).collect();\n        let _ = &sizes;",
+    ),
+    (
+        "d01-graph-node-membership-dropped",
+        "driver_unsafe.rs",
+        "            Arc::ptr_eq(&node.graph, &e.graph),",
+        "            true,",
+    ),
+    (
+        "d01-unknown-ptx-type-guessed",
+        "driver_unsafe.rs",
+        "                    _ => return Err(format!(\"an unknown token {t:?}\")),",
+        "                    _ => 8,",
+    ),
+    (
+        "d01-entry-not-in-the-ptx-accepted",
+        "driver_unsafe.rs",
+        "let Some(entry) = m.entries.iter().find(|e| e.name == sym) else {",
+        "let Some(entry) = m.entries.iter().find(|e| e.name == sym).or(m.entries.first()) else {",
+    ),
+    # ── D-02: device ranges (driver_unsafe.rs) ──
+    (
+        "d02-span-bound-dropped",
+        "driver_unsafe.rs",
+        "        if end > self.len as u64 {\n            return None;",
+        "        if end > u64::MAX - 1 {\n            return None;",
+    ),
+    (
+        "d02-copy-length-unchecked",
+        "driver_unsafe.rs",
+        "            n <= self.len,\n            \"{what}: {n:#x} bytes do not fit",
+        "            true,\n            \"{what}: {n:#x} bytes do not fit",
+    ),
+    (
+        "d02-pinned-view-unbounded",
+        "driver_unsafe.rs",
+        "            off.checked_add(len).is_some_and(|e| e <= buf.len),\n            \"pinned_device_view:",
+        "            off.checked_add(len).is_some(),\n            \"pinned_device_view:",
+    ),
+    (
+        "d02-d2h-async-pinned-unbounded",
+        "driver_unsafe.rs",
+        "            off.checked_add(n).is_some_and(|e| e <= buf.len),\n            \"{what}: range leaves the pinned buffer\"\n        );\n        live(&s.life, what);",
+        "            off.checked_add(n).is_some(),\n            \"{what}: range leaves the pinned buffer\"\n        );\n        live(&s.life, what);",
+    ),
+    (
+        "d02-negative-fd-becomes-stdin",
+        "driver_unsafe.rs",
+        "        let Ok(fd_bits) = usize::try_from(fd) else {\n            return Err(format!(\"import_and_map: fd {fd} is negative\"));\n        };",
+        "        let fd_bits = usize::try_from(fd).unwrap_or(0);",
+    ),
+    # ── D-04: lifetimes (driver_unsafe.rs) ──
+    (
+        "d04-ctx-destroy-keeps-children-alive",
+        "driver_unsafe.rs",
+        "        ctx.life.end();\n",
+        "",
+    ),
+    (
+        "d04-free-after-context-death",
+        "driver_unsafe.rs",
+        "        if b.kind == DevKind::Owned && b.ptr != 0 && b.life.alive() {",
+        "        if b.kind == DevKind::Owned && b.ptr != 0 {",
+    ),
+    (
+        "d04-pinned-access-after-context-death",
+        "driver_unsafe.rs",
+        "        live(&self.ctx, \"PinnedBuf::read\");\n",
+        "",
+    ),
+    (
+        "d04-span-of-a-released-buffer",
+        "driver_unsafe.rs",
+        "            self.buf.alive(),\n            \"{what}: the device allocation was released",
+        "            true,\n            \"{what}: the device allocation was released",
+    ),
+    # ── D-08: field lists ──
+    (
+        "d08-a-field-missing-from-the-list",
+        "driver_unsafe.rs",
+        "        pcf_sparse: u8, pad1: [u8; 3], kind: KfField, ps_log2: [u8; 4] }",
+        "        pcf_sparse: u8, pad1: [u8; 3], kind: KfField }",
+    ),
 ]
 
 FAILED = re.compile(r"^test (\S+) \.\.\. FAILED$", re.M)
@@ -86,7 +192,7 @@ def run_tests():
     env = dict(os.environ)
     env.setdefault("CARGO_TARGET_DIR", str(ROOT / "target"))
     p = subprocess.run(
-        ["cargo", "test", "-q", "-p", "kf-cuda", "--lib", "--no-fail-fast"],
+        ["cargo", "test", "-q", "-p", "kf-cuda", "--lib", "--tests", "--no-fail-fast"],
         cwd=ROOT,
         env=env,
         capture_output=True,
