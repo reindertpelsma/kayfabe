@@ -1,0 +1,43 @@
+========= COMPUTE-SANITIZER
+========= Invalid __global__ write of size 8 bytes
+=========     at 0x1ad0 in kf_commit_kernel(KfArgs)
+=========     by thread (96,0,0) in block (0,0,0)
+=========     Address 0x7fcdf4000ba0 is out of bounds
+=========     and is 2977 bytes after the nearest allocation at 0x7fcdec000000 of size 134217728 bytes
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========     Host Frame: [0x331d50]
+=========                in /usr/lib/x86_64-linux-gnu/libcuda.so.1
+=========     Host Frame:libcudart_static_4d8b33a106dceb3c07a56e26de61f2d53bb62a68 [0x3e28e]
+=========                in /w/oldhooks2/./kf_tests
+=========     Host Frame:cudaLaunchKernel [0x9e49e]
+=========                in /w/oldhooks2/./kf_tests
+=========     Host Frame:__device_stub__Z16kf_commit_kernel6KfArgs(KfArgs&) [0x35788]
+=========                in /w/oldhooks2/./kf_tests
+=========     Host Frame:kf_refresh [0x36831]
+=========                in /w/oldhooks2/./kf_tests
+=========     Host Frame:Fix::refresh(std::vector<unsigned long, std::allocator<unsigned long> > const&) [0x314b9]
+=========                in /w/oldhooks2/./kf_tests
+=========     Host Frame:t_hostile_commit_bound_before_write() [0x14058]
+=========                in /w/oldhooks2/./kf_tests
+=========     Host Frame:main [0xebce]
+=========                in /w/oldhooks2/./kf_tests
+=========     Host Frame: [0x29d90]
+=========                in /usr/lib/x86_64-linux-gnu/libc.so.6
+=========     Host Frame:__libc_start_main [0x29e40]
+=========                in /usr/lib/x86_64-linux-gnu/libc.so.6
+=========     Host Frame:_start [0xf175]
+=========                in /w/oldhooks2/./kf_tests
+========= 
+========= Invalid __global__ write of size 8 bytes
+=========     at 0x1ad0 in kf_commit_kernel(KfArgs)
+=========     by thread (97,0,0) in block (0,0,0)
+=========     Address 0x7fcdf4000bc0 is out of bounds
+=========     and is 3009 bytes after the nearest allocation at 0x7fcdec000000 of size 134217728 bytes
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========     Host Frame: [0x331d50]
+=========                in /usr/lib/x86_64-linux-gnu/libcuda.so.1
+=========     Host Frame:libcudart_static_4d8b33a106dceb3c07a56e26de61f2d53bb62a68 [0x3e28e]
+=========                in /w/oldhooks2/./kf_tests
+[... truncated: the same invalid write repeated; full log 169825 bytes ...]
+========= ERROR SUMMARY: 542 errors
+========= ERROR SUMMARY: 442 errors were not printed. Use --print-limit option to adjust the number of printed errors

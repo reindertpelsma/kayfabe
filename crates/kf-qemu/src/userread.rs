@@ -181,7 +181,7 @@ pub(crate) fn mapped<'a>(
     if blocks.len() > PIECES {
         return Err(Refusal::Bounds);
     }
-    let fd = blocks.iter().find_map(|b| b.fd);
+    let fd = blocks.iter().find_map(|b| b.fd.as_ref());
     let mut pieces = 0;
     for span in &spans {
         let end = span.off.checked_add(span.len).ok_or(Refusal::Bounds)?;
@@ -199,7 +199,7 @@ pub(crate) fn mapped<'a>(
             }
             pieces = pieces.saturating_add(1); // bounded by the `== RING_PIECES` refusal just above
             let mut covers = blocks.iter().enumerate().filter(|(_, b)| {
-                b.fd == Some(fd)
+                b.fd.as_ref() == Some(fd)
                     && at >= b.fd_off
                     && b.fd_off
                         .checked_add(b.mem.len() as u64)
@@ -216,7 +216,7 @@ pub(crate) fn mapped<'a>(
                 .min(end);
             if blocks.iter().enumerate().any(|(i, other)| {
                 i != index
-                    && other.fd == Some(fd)
+                    && other.fd.as_ref() == Some(fd)
                     && other.fd_off < until
                     && other
                         .fd_off
@@ -333,7 +333,7 @@ pub(crate) fn snapshot<'a>(
     if blocks.len() > PIECES {
         return Err(Refusal::Bounds);
     }
-    let first_fd = blocks.iter().find_map(|b| b.fd);
+    let first_fd = blocks.iter().find_map(|b| b.fd.as_ref());
     let mut done = 0usize;
     let mut ram_pieces = 0usize;
     for span in &spans {
@@ -353,7 +353,7 @@ pub(crate) fn snapshot<'a>(
                 ram_pieces = ram_pieces.saturating_add(1); // bounded by the `== PIECES` refusal just above
                 let off = span.off.checked_add(copied as u64).ok_or(Refusal::Bounds)?;
                 let mut covers = blocks.iter().enumerate().filter(|(_, b)| {
-                    b.fd == Some(fd)
+                    b.fd.as_ref() == Some(fd)
                         && off >= b.fd_off
                         && b.fd_off
                             .checked_add(b.mem.len() as u64)
@@ -378,7 +378,7 @@ pub(crate) fn snapshot<'a>(
                 let end = off.checked_add(n as u64).ok_or(Refusal::Bounds)?;
                 if blocks.iter().enumerate().any(|(i, other)| {
                     i != index
-                        && other.fd == Some(fd)
+                        && other.fd.as_ref() == Some(fd)
                         && other.fd_off < end
                         && other
                             .fd_off
@@ -424,7 +424,7 @@ mod tests {
         let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes + 4096);
         ram.add(super::super::RamBlock {
             gpa: 0x2000,
-            mem,
+            mem: mem.test_alias(),
             fd: Some(fd),
             fd_off: 0,
         });
@@ -644,11 +644,11 @@ mod tests {
         let (mem, fd) = crate::raw_unsafe::test_owned_ram(0x8000);
         let block = super::super::RamBlock {
             gpa: 0x2000,
-            mem,
+            mem: mem.test_alias(),
             fd: Some(fd),
             fd_off: 0,
         };
-        ram.add(block);
+        ram.add(block.test_alias());
         let rows = PlacedRows::default();
         rows.write()
             .unwrap()
@@ -687,7 +687,7 @@ mod tests {
         );
         drop(guard);
         ram.del(block.gpa);
-        ram.add(block);
+        ram.add(block.test_alias());
         assert_eq!(
             snapshot(&rows, &log, &ram, generation, 0x10000, 4, &mut NoStore).err(),
             Some(Refusal::Topology)
@@ -768,7 +768,7 @@ mod tests {
             .unwrap()
             .insert(0x10000, (0x8000, 0, true, MapPerm::READ_WRITE));
         ram.del(block.gpa);
-        ram.add(block);
+        ram.add(block.test_alias());
         assert_eq!(s.admit(|| panic!("old topology")), Err(Refusal::Topology));
         drop(rows);
         assert_eq!(s.admit(|| panic!("gone source")), Err(Refusal::Changed));
@@ -913,7 +913,7 @@ mod tests {
         let (mem, fd) = crate::raw_unsafe::test_owned_ram(MAX_BYTES + 4096);
         ram.add(super::super::RamBlock {
             gpa: 0x2000,
-            mem,
+            mem: mem.test_alias(),
             fd: Some(fd),
             fd_off: 0,
         });
@@ -1131,7 +1131,7 @@ mod tests {
         let (ram, block, rows, log, generation) = fixture();
         let receipts = stream_receipts(&ram, &rows, &log, generation);
         ram.del(block.gpa);
-        ram.add(block);
+        ram.add(block.test_alias());
         assert_eq!(
             admit_all(&receipts, || panic!("revoked topology")),
             Err(Refusal::Topology)
