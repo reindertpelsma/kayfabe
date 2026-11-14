@@ -730,7 +730,7 @@ CHECKS = {
         "timeout": 900,
         "exe": r"C:\Program Files\Unigine\Superposition Benchmark\bin\launcher.exe",
     },
-    "3dmark": {"timeout": 1500, "exe": r"C:\Program Files\UL\3DMark\3DMark.exe"},
+    "3dmark": {"timeout": 1800, "exe": r"C:\Program Files\UL\3DMark\3DMark.exe"},
     "solidworks": {
         "timeout": 900,
         "exe": r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SLDWORKS.exe",
@@ -752,6 +752,58 @@ CHECKS = {
         "exe": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
     },
 }
+
+# 3DMark (measured 2026-11-14): 3DMarkCmd.exe refuses with "Professional or Developer license key required
+# for command line access", so the run goes through the UI. The CEF UI exposes its controls to UI Automation
+# only when started with --force-renderer-accessibility. The 'RUN' link is picked by geometry from the
+# Time Spy title in the UIA tree (no coordinates), invoked through InvokePattern, and the finish is the new
+# .3dmark-result that 3DMark itself saves to Documents\3DMark (the verdict reads that file).
+THREEDMARK_RUN = r"""
+$exe='C:\Program Files\UL\3DMark\3DMark.exe'
+$cmd='C:\Program Files\UL\3DMark\3DMarkCmd.exe'
+$r.cli_output=''
+if(Test-Path $cmd){
+ $o=(& $cmd --definition=timespy.3dmdef --online=off --audio=off --systeminfo=off --out="$D\cli.3dmark-result" 2>&1 | Out-String)
+ $r.cli_output=$o.Substring(0,[Math]::Min(600,$o.Length))
+}
+$docs="$env:USERPROFILE\Documents\3DMark"
+$started=Get-Date
+$p=Start-Process $exe -ArgumentList '--force-renderer-accessibility' -PassThru
+function Main-Window(){
+ foreach($pr in Get-Process -Name 3DMark -ErrorAction SilentlyContinue){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
+  foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){ if($w.Current.Name -eq '3DMark'){return $w} }
+ }
+}
+function Ui-Elements($w){ @($w.FindAll([System.Windows.Automation.TreeScope]::Subtree,[System.Windows.Automation.Condition]::TrueCondition)) }
+function Ui-Texts($els){ ($els | ForEach-Object {$_.Current.Name} | Where-Object {$_} | Select-Object -Unique -First 60) -join ' ; ' }
+$r.ui_ready=$false;$r.progress_seen=$false;$r.result_file='';$r.ui_texts=''
+$deadline=(Get-Date).AddSeconds(240);$els=@()
+while((Get-Date) -lt $deadline){
+ $w=Main-Window
+ if($w){$els=Ui-Elements $w; if(@($els | Where-Object {$_.Current.Name -eq 'BENCHMARKS' -or $_.Current.Name -eq 'HOME'}).Count -gt 0 -and @($els | Where-Object {$_.Current.Name -eq 'Time Spy'}).Count -gt 0){$r.ui_ready=$true;break}}
+ Start-Sleep 5
+}
+if(-not $r.ui_ready){$r.ui_texts=Ui-Texts $els;throw 'Time Spy card not visible in the UI Automation tree (UI never became ready)'}
+$title=$els | Where-Object {$_.Current.Name -eq 'Time Spy' -and $_.Current.ControlType.ProgrammaticName -eq 'ControlType.Text'} | Select-Object -First 1
+$tl=$title.Current.BoundingRectangle
+$run=$null;$best=99999
+foreach($e in $els){$c=$e.Current;if($c.Name -eq 'RUN' -and $c.ControlType.ProgrammaticName -eq 'ControlType.Hyperlink'){$b=$c.BoundingRectangle;if([math]::Abs($b.Left-$tl.Left) -lt 6 -and $b.Top -gt $tl.Top -and ($b.Top-$tl.Top) -lt $best){$best=$b.Top-$tl.Top;$run=$e}}}
+if(-not $run){throw 'No RUN link under the Time Spy card'}
+$run.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+$r.invoked=Epoch (Get-Date)
+$deadline=(Get-Date).AddSeconds(1080)
+while((Get-Date) -lt $deadline){
+ Start-Sleep 5
+ $w=Main-Window
+ if($w){$els=Ui-Elements $w;$t=Ui-Texts $els;if($t){$r.ui_texts=$t};if($t -match 'Running benchmark'){$r.progress_seen=$true}}
+ $f=Get-ChildItem $docs -Filter *.3dmark-result -ErrorAction SilentlyContinue | Where-Object {$_.LastWriteTime -gt $started} | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+ if($f){Start-Sleep 5;$f=Get-Item $f.FullName;Copy-Item $f.FullName "$D\result.3dmark-result";$r.result_file=$f.Name;$r.modified=Epoch $f.LastWriteTimeUtc;$r.bytes=$f.Length;break}
+}
+$r.kind='TDM'
+try {Save-Screen "$D\3dmark.png"} catch {}
+Get-Process | Where-Object {$_.Name -match '^3DMark'} | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
 
 # Wukong: the Steam .url shortcut cannot resolve offline ("This command cannot be run completely"), and
 # launching b1_benchmark.exe bare makes it hand over to the Steam client's launch-option dialog (a
@@ -960,6 +1012,8 @@ def render_check(
         script += EDGE_RUN.replace("__PAGE__", EDGE_PAGE)
     elif name == "wukong":
         script += WUKONG_RUN
+    elif name == "3dmark":
+        script += THREEDMARK_RUN
     else:
         if name == "superposition" and superposition_run:
             script += (
@@ -1203,6 +1257,30 @@ def verdict(name, run_id, directory, plan=None):
                 evidence="FILE",
                 signal="API exported STEP with entity data (not a GPU/render benchmark)",
             )
+        elif name == "3dmark" and r.get("kind") == "TDM":
+            row["evidence"] = "NONE"
+            if not r.get("result_file"):
+                if r.get("progress_seen") is True:
+                    raise ValueError(
+                        "3DMark ran (UIA saw 'Running benchmark') but saved no result file before the budget; UI: "
+                        + str(r.get("ui_texts", ""))[:200]
+                    )
+                row["status"] = "INCONCLUSIVE"
+                raise ValueError(
+                    "3DMark run did not start; blocker text from the UI: " + str(r.get("ui_texts", ""))[:300]
+                )
+            modified = r.get("modified")
+            if not re.fullmatch(r"[A-Za-z0-9 ._()\-]{1,120}\.3dmark-result", str(r["result_file"])):
+                raise ValueError("Unexpected result file name")
+            if type(modified) not in (int, float) or not start < modified <= end:
+                raise ValueError("Stale result file")
+            path = directory / "result.3dmark-result"
+            if not path.is_file() or path.stat().st_size != r.get("bytes"):
+                raise ValueError("Result file length mismatch")
+            signal = validate_3dmark_result(path, start, end)
+            if cli_refused(str(r.get("cli_output", ""))):
+                signal += "; CLI refused (Professional/Developer key needed), so the run went through UI Automation"
+            row.update(ok=True, evidence="FILE", signal=signal)
         elif name == "wukong" and r.get("kind") == "WUKONG":
             status, text = validate_wukong(r)
             row["evidence"] = "FILE" if r.get("crash") or r.get("kernel_events") else "NONE"
@@ -1282,8 +1360,10 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
             "screen.png",
             "edge.png",
             "crash_context.xml",
+            "result.3dmark-result",
+            "3dmark.png",
         ):
-            limit = 16 * 1024 * 1024 if f == "model.step" or f.endswith(".png") else 1024 * 1024
+            limit = 16 * 1024 * 1024 if f == "model.step" or f.endswith((".png", ".3dmark-result")) else 1024 * 1024
             p = guest.ps(
                 f"if(Test-Path '{remote}/{f}'){{$f=Get-Item '{remote}/{f}';if($f.Length -le {limit}){{'bounded'}}}}",
             )

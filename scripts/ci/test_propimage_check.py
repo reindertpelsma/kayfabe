@@ -354,8 +354,9 @@ class T(unittest.TestCase):
     def test_age_allows_within_budget(self):
         self.assertFalse(m.boot_age_guard(100, 900))
 
-    def test_experiment_off_by_default(self):
-        self.assertNotIn("--force-renderer-accessibility", m.render_check("3dmark"))
+    def test_3dmark_accessibility_flag_is_required_not_an_experiment(self):
+        # Measured 2026-11-14: with the flag the CEF UI exposes 163 named UIA elements within 60 s.
+        self.assertIn("--force-renderer-accessibility", m.render_check("3dmark"))
 
     def test_experiment_explicit(self):
         self.assertIn(
@@ -899,6 +900,79 @@ class T(unittest.TestCase):
     def test_3dmark_cli_refusal_text_is_recognised(self):
         self.assertTrue(m.cli_refused("18:14:02 Professional or Developer license key required for command line access"))
         self.assertFalse(m.cli_refused("18:14:02 benchmark finished"))
+
+    def tdm_row(self, **changes):
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            with zipfile.ZipFile(d / "result.3dmark-result", "w") as z:
+                z.writestr("Result.xml", self.RESULT_XML)
+                z.writestr("Arielle.xml", self.ARIELLE_XML)
+                z.writestr("SI.xml", self.SI_XML)
+            size = (d / "result.3dmark-result").stat().st_size
+            rec = self.fixture(
+                app="3dmark", kind="TDM", started=self.TDM_START, ended=self.TDM_END,
+                modified=self.TDM_START + 500, bytes=size, result_file="3DMark-TimeSpy-7237-x.3dmark-result",
+                progress_seen=True, ui_texts="", cli_output="Professional or Developer license key required for command line access",
+            )
+            for key in ("artifact", "api_ok"):
+                rec.pop(key)
+            rec.update(changes)
+            (d / "result.json").write_text(json.dumps(rec))
+            return m.verdict("3dmark", "a" * 32, d)
+
+    def test_3dmark_verdict_from_the_saved_file(self):
+        row = self.tdm_row()
+        self.assertTrue(row["ok"], row)
+        self.assertEqual(row["evidence"], "FILE")
+        self.assertIn("7237", row["signal"])
+        self.assertIn("CLI refused", row["signal"])
+
+    def test_3dmark_no_file_after_progress_is_a_failure(self):
+        row = self.tdm_row(result_file="")
+        self.assertEqual(m.app_classification(row), ("FAIL", "app"))
+        self.assertIn("saved no result file", row["error"])
+
+    def test_3dmark_never_started_is_inconclusive_with_the_blocker_text(self):
+        row = self.tdm_row(result_file="", progress_seen=False, ui_texts="Sign in to continue ; Offline")
+        self.assertEqual(m.app_classification(row), ("INCONCLUSIVE", "unqualified"))
+        self.assertIn("Sign in to continue", row["error"])
+
+    def test_3dmark_stale_file_modified_before_the_run(self):
+        self.assertIn("Stale", self.tdm_row(modified=self.TDM_START - 5)["error"])
+
+    def test_3dmark_file_modified_after_the_run(self):
+        self.assertIn("Stale", self.tdm_row(modified=self.TDM_END + 5)["error"])
+
+    def test_3dmark_wrong_length_is_refused(self):
+        self.assertIn("length", self.tdm_row(bytes=1)["error"])
+
+    def test_3dmark_result_name_must_be_a_plain_result_file(self):
+        self.assertIn("name", self.tdm_row(result_file="..\\evil.3dmark-result")["error"])
+        self.assertIn("name", self.tdm_row(result_file="x.exe")["error"])
+
+    def test_3dmark_never_started_with_empty_ui_text_is_inconclusive(self):
+        row = self.tdm_row(result_file="", progress_seen=False, ui_texts="")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_3dmark_result_name_exe_extension_refused(self):
+        self.assertIn("name", self.tdm_row(result_file="x.exe")["error"])
+
+    def test_3dmark_result_name_with_path_separator_refused(self):
+        self.assertIn("name", self.tdm_row(result_file="a/b.3dmark-result")["error"])
+
+    def test_3dmark_script_uses_uia_geometry_not_coordinates(self):
+        script = m.render_check("3dmark", run_id="a" * 32)
+        for needle in ("InvokePattern", "BoundingRectangle", "3DMarkCmd.exe", "*.3dmark-result"):
+            self.assertIn(needle, script)
+        self.assertNotIn("SetCursorPos", script)
+        self.assertNotIn("mouse_event", script)
+        self.assertNotIn("SendKeys", script)
+
+    def test_3dmark_script_never_goes_online(self):
+        script = m.render_check("3dmark", run_id="a" * 32)
+        self.assertIn("--online=off", script)
+        self.assertNotIn("INSTALL", script)
 
     def test_edge_page_is_authored_with_the_nonce_slot(self):
         self.assertEqual(m.EDGE_PAGE.count("__NONCE__"), 1)
@@ -1684,6 +1758,10 @@ def mutants():
             "Unregister-ScheduledTask -TaskName kf_{task}",
             "Unregister-ScheduledTask -TaskName {task}",
         ),
+        ("tdm-nofile", 'if not r.get("result_file"):', "if False:"),
+        ("tdm-progress", 'if r.get("progress_seen") is True:', "if True:"),
+        ("tdm-stale", "if type(modified) not in (int, float) or not start < modified <= end:\n                raise ValueError(\"Stale result file\")", "pass"),
+        ("tdm-name", 'if not re.fullmatch(r"[A-Za-z0-9 ._()\\-]{1,120}\\.3dmark-result", str(r["result_file"])):', "if False:"),
         ("tdm-window", "if not (run_start <= began < finished <= run_end):", "if False:"),
         ("tdm-status", 'if not codes or any(c != "0" for c in codes):', "if False:"),
         ("tdm-score", "if not total or min(total) <= 0 or not graphics or min(graphics) <= 0:", "if False:"),
@@ -1715,7 +1793,7 @@ def mutants():
     ]
     failed = False
     for name, old, new in cases:
-        expected_count = 2 if name in ("length", "task-cleanup") else 1
+        expected_count = 2 if name in ("length", "task-cleanup", "freshness") else 1
         if source.count(old) != expected_count:
             raise AssertionError((name, source.count(old)))
         with tempfile.TemporaryDirectory() as td:
