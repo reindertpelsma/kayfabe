@@ -1,9 +1,22 @@
 # BAR1: how much of one reserved vidmem object can be CPU-mapped at once
 
-**STATUS: LIVE — measured 2026-09-14 (w722) on a real GA106.**
+**STATUS: LIVE (2026-11-14: the measurement stands as a 2026-09-14 result; the "never called" finding was ACTED ON, see the correction below; measured 2026-09-14, w722, on a real GA106).**
+
+**Correction, 2026-11-14 (read from the tree, nothing re-measured).** The headline below, *"this
+tree defines `NV_ESC_RM_UNMAP_MEMORY` and NEVER CALLS it"*, **is no longer true**; it described
+the tree at 2026-09-14. The release verb has been built and is called:
+`crates/kf-host/src/lib.rs` `release_cpu_view` issues `NV_ESC_RM_UNMAP_MEMORY` (`0x4F`) on the
+control device, and `crates/kf-qemu/src/mem.rs` (`release`) calls it when a store view is
+dropped; the frozen pre-v3 tree has an equivalent (`crates/kayfabe-isolate/src/lib.rs`, "Give a
+device view's BAR1 aperture back", and `crates/kayfabe-isolate-host/src/rm.rs`). The `grep` in Q3
+and the "zero call sites" sentence are therefore **history**. Not re-verified 2026-11-14: that a
+v3 run actually recycles views across rounds as the A/B below did (this pass read source only,
+no box, no run), and every number, the driver version and the BAR/ReBAR facts, which are
+properties of the 2026-09-14 box (vast 51026490), not of today's.
+
 Bench: vast instance 51026490, RTX 3060 12 GiB, driver **580.159.03**, kernel 5.15.0-181,
 CUDA container (not a VM — host-side RM only). Instrument:
-`tests/bar1/bar1probe.c`, raw RM ioctls, **deliberately independent of the kayfabe stack**.
+`archive/tests/bar1/bar1probe.c` (it moved there from `tests/bar1/`), raw RM ioctls, **deliberately independent of the kayfabe stack**.
 
 ## The headline, in one line
 
