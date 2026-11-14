@@ -799,7 +799,7 @@ impl HostRm {
     ///
     /// # Errors
     /// The session has no usermode window (the error it was opened with).
-    pub fn usermode_view(&self) -> Result<kf_linux_raw::HostSpan, RmError> {
+    pub fn usermode_view(&self) -> Result<kf_linux_raw::HostSpan<'_>, RmError> {
         let w = self.usermode.as_ref().map_err(|e| *e)?;
         Ok(w.region.host_span())
     }
