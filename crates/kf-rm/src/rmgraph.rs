@@ -962,6 +962,17 @@ pub struct RmGraph {
     /// lazily by [`Self::resource_of`]. When `src` becomes known and `dst` is used,
     /// the edge still resolves; freeing either end prunes it.
     pending_dups: BTreeMap<NodeKey, NodeKey>,
+    /// ★ Security review 1, F-11 (2026-11-13): the reverse index of [`Self::pending_dups`],
+    /// `src → {dst}`. Exactly the same edge set, kept in step at every insert and removal (the
+    /// only writers are `park_dup`/`unpark_dup`), so promotion after a new handle visits only
+    /// the edges that name it, and free pruning visits only the doomed keys' edges — never the
+    /// whole table. Before it, every alloc/dup/free of every process walked all parked edges
+    /// (up to [`MAX_PARKED`]) on the drainer.
+    pending_by_src: BTreeMap<NodeKey, BTreeSet<NodeKey>>,
+    /// ★ Security review 1, F-11 (2026-11-13): parked-dup entries examined by promotion and by
+    /// free pruning, summed over the graph's life. Observability only (it decides nothing): the
+    /// bounded-work tests read it ([`RmGraph::parked_dup_work`]).
+    parked_dup_work: u64,
     /// ★★★★ **§16.28 — each Device's DEFAULT VA space, by the transient handle RM named
     /// it with.** Key = the **Device**'s `(client, handle)`; value = the `hVASpace` of the
     /// `FERMI_VASPACE_A` alloc that declared
@@ -1058,6 +1069,8 @@ impl RmGraph {
             handles: BTreeMap::new(),
             children: BTreeMap::new(),
             pending_dups: BTreeMap::new(),
+            parked_dup_work: 0,
+            pending_by_src: BTreeMap::new(),
             device_default_vas: BTreeMap::new(),
             next_res_id: 0,
             gpus: BTreeSet::from([0]),
@@ -1065,6 +1078,28 @@ impl RmGraph {
             by_origin: BTreeMap::new(),
             decls: BTreeMap::new(),
         }
+    }
+
+    /// ★ Security review 1, F-11: parked-dup entries examined so far (promotion and free
+    /// pruning). A work counter for the bounded-work tests; it decides nothing.
+    #[must_use]
+    pub fn parked_dup_work(&self) -> u64 {
+        self.parked_dup_work
+    }
+
+    /// ★ Security review 1, F-11: does the parked-dup reverse index hold exactly the parked
+    /// edges (no stale entry, none missing)? O(parked); for tests only.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn parked_dup_index_is_exact(&self) -> bool {
+        let n: usize = self.pending_by_src.values().map(BTreeSet::len).sum();
+        n == self.pending_dups.len()
+            && self.pending_by_src.values().all(|s| !s.is_empty())
+            && self.pending_dups.iter().all(|(d, s)| {
+                self.pending_by_src
+                    .get(s)
+                    .is_some_and(|set| set.contains(d))
+            })
     }
 
     /// The family this graph classifies for.
@@ -1745,7 +1780,7 @@ impl RmGraph {
                         // itself; now that its target exists, promote each parked fact
                         // so the resource is refcounted and PDB-tagged correctly (and so
                         // it survives the source's later free, order-independently).
-                        self.resolve_pending_dups();
+                        self.resolve_pending_dups(key);
                         // ★ Cache THIS resource's GPU target inline (cheap: a short
                         // parent walk) — the common case, O(1) per alloc. Only when the
                         // new node is a `Device` do we back-fill descendants that
@@ -1833,7 +1868,7 @@ impl RmGraph {
                         //
                         // Order matters and matches the `Alloc` arm: dups first, because
                         // promoting one can be what makes a parked PDB or map resolve.
-                        self.resolve_pending_dups();
+                        self.resolve_pending_dups(dst);
                     }
                     // Source not observed yet (order tolerance). Park the edge so a
                     // later Alloc of `src` (or a chain) resolves it.
@@ -1843,7 +1878,7 @@ impl RmGraph {
                         if self.pending_dups.len() >= MAX_PARKED {
                             return Err(RmGraphError::CapacityExceeded(Capacity::PendingDups));
                         }
-                        self.pending_dups.insert(dst, src);
+                        self.park_dup(dst, src);
                     }
                 }
                 Ok(())
@@ -1913,8 +1948,19 @@ impl RmGraph {
         }
 
         // A parked (unresolved) dup whose dst OR src handle was just freed is stale.
-        self.pending_dups
-            .retain(|dst, src| !doomed.contains(dst) && !doomed.contains(src));
+        // Indexed (F-11): only the doomed keys' own edges are visited, at either end.
+        for k in &doomed {
+            if self.pending_dups.contains_key(k) {
+                self.parked_dup_work += 1;
+                self.unpark_dup(*k);
+            }
+            if let Some(dsts) = self.pending_by_src.get(k).cloned() {
+                for d in dsts {
+                    self.parked_dup_work += 1;
+                    self.unpark_dup(d);
+                }
+            }
+        }
 
         // ★★★ §12.39 Part A — **TEARDOWN COMPLETION: freeing a client root destroys the
         // namespace's PARKED facts as well as its handles.**
@@ -1958,33 +2004,82 @@ impl RmGraph {
         // owner of resources a foreign alias keeps alive — which is Part B's business.
         if root_free {
             let ns = key.client;
-            self.pending_dups
-                .retain(|dst, src| dst.client != ns && src.client != ns);
+            let lo = NodeKey::new(ns, HObject(0));
+            let hi = NodeKey::new(ns, HObject(u32::MAX));
+            // Indexed (F-11): a range of each map, so the work is the namespace's own edges.
+            let mut gone: Vec<NodeKey> =
+                self.pending_dups.range(lo..=hi).map(|(d, _)| *d).collect();
+            for dsts in self.pending_by_src.range(lo..=hi).map(|(_, d)| d) {
+                gone.extend(dsts.iter().copied());
+            }
+            for d in gone {
+                self.parked_dup_work += 1;
+                self.unpark_dup(d);
+            }
         }
     }
 
-    /// Promote every parked dup whose source is now a live resource into a real
-    /// reference (so the resource is refcounted by it). Fixpoint to resolve chains
-    /// (a dup of a dup whose middle just resolved). A parked dst that would collide
-    /// with an existing handle is left parked — [`Self::apply`]'s conflict check owns
-    /// that decision; here we only ever add references for free dst keys.
-    fn resolve_pending_dups(&mut self) {
-        loop {
-            let ready: Option<(NodeKey, ResId)> =
-                self.pending_dups.iter().find_map(|(dst, src)| {
-                    (!self.handles.contains_key(dst))
-                        .then(|| self.resource_of(*src).map(|id| (*dst, id)))
-                        .flatten()
-                });
-            let Some((dst, id)) = ready else { break };
-            self.pending_dups.remove(&dst);
-            // A promoted parked edge is still a `DUP_OBJECT` declaration → an ALIAS.
-            self.handles.insert(dst, HandleRef::Alias(id));
-            self.resources
-                .get_mut(&id)
-                .expect("resource_of returned a live id")
-                .refs
-                .insert(dst);
+    /// Park the dangling edge `dst → src` (both maps, in step).
+    fn park_dup(&mut self, dst: NodeKey, src: NodeKey) {
+        if let Some(old) = self.pending_dups.insert(dst, src) {
+            self.unindex_dup(dst, old);
+        }
+        self.pending_by_src.entry(src).or_default().insert(dst);
+    }
+
+    /// Remove the parked edge whose dst is `dst`, if any (both maps, in step).
+    fn unpark_dup(&mut self, dst: NodeKey) -> Option<NodeKey> {
+        let src = self.pending_dups.remove(&dst)?;
+        self.unindex_dup(dst, src);
+        Some(src)
+    }
+
+    fn unindex_dup(&mut self, dst: NodeKey, src: NodeKey) {
+        if let Some(set) = self.pending_by_src.get_mut(&src) {
+            set.remove(&dst);
+            if set.is_empty() {
+                self.pending_by_src.remove(&src);
+            }
+        }
+    }
+
+    /// Promote the parked dups that `born` (a handle just created by an `Alloc` or a `Dup`)
+    /// makes resolvable into real references (so the resource is refcounted by them), following
+    /// chains (a dup of a dup whose middle just resolved). A parked dst that would collide with an
+    /// existing handle is left parked — [`Self::apply`]'s conflict check owns that decision; here
+    /// we only ever add references for free dst keys.
+    ///
+    /// ★ Security review 1, F-11 (2026-11-13): a worklist over [`Self::pending_by_src`], not a
+    /// fixpoint scan of the whole table. A parked edge `dst → src` can only become resolvable when
+    /// `src` (or, through a chain, a key `src` is parked against) gains a handle, and `Alloc`,
+    /// `Dup` and this promotion are the only three creators of a handle; each passes its new key
+    /// here. So the work is the number of edges that name a newly live key, not the table size.
+    fn resolve_pending_dups(&mut self, born: NodeKey) {
+        let mut work = vec![born];
+        while let Some(k) = work.pop() {
+            let Some(dsts) = self.pending_by_src.get(&k).cloned() else {
+                continue;
+            };
+            for dst in dsts {
+                self.parked_dup_work += 1;
+                // Defence in depth: act only on an edge the primary table still holds as
+                // `dst → k`; a stale index entry must never promote anything.
+                if self.pending_dups.get(&dst) != Some(&k) || self.handles.contains_key(&dst) {
+                    continue;
+                }
+                let Some(id) = self.resource_of(k) else {
+                    continue;
+                };
+                self.unpark_dup(dst);
+                // A promoted parked edge is still a `DUP_OBJECT` declaration → an ALIAS.
+                self.handles.insert(dst, HandleRef::Alias(id));
+                self.resources
+                    .get_mut(&id)
+                    .expect("resource_of returned a live id")
+                    .refs
+                    .insert(dst);
+                work.push(dst);
+            }
         }
     }
 

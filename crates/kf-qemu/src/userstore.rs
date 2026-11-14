@@ -497,7 +497,7 @@ mod tests {
             let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes + 4096);
             ram.add(RamBlock {
                 gpa: 0x2000,
-                mem,
+                mem: mem.test_alias(),
                 fd: Some(fd),
                 fd_off: 0,
             });
