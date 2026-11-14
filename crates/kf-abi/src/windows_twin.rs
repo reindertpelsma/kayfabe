@@ -160,15 +160,20 @@ mod tests {
                 "{} is a matrix tag",
                 t.linux_tag
             );
-            assert_eq!(
-                WINDOWS_TWINS
-                    .iter()
-                    .filter(|o| o.win_name == t.win_name)
-                    .count(),
-                1,
-                "{}",
-                t.win_name
-            );
+            // ★ 2026-11-12: unique among the rows that CAN be a twin (equal changelists). 580.159.03
+            // and 580.159.04 state the same Windows build (582.53, changelist 37799871) against two
+            // different Linux changelists; neither is its twin, both refuse `ChangelistsDiffer`.
+            if t.win_cl == t.linux_cl {
+                assert_eq!(
+                    WINDOWS_TWINS
+                        .iter()
+                        .filter(|o| o.win_cl == o.linux_cl && o.win_name == t.win_name)
+                        .count(),
+                    1,
+                    "{}",
+                    t.win_name
+                );
+            }
         }
     }
 }

@@ -2317,9 +2317,9 @@ mod tests {
                 "{maj}.{min}.{pat} must not resolve to a table",
             );
         }
-        let msg = at(580, 159, 3).unwrap_err().to_string();
+        let msg = at(580, 159, 2).unwrap_err().to_string();
         assert!(
-            msg.contains("580.159.03") && msg.contains("regen.sh"),
+            msg.contains("580.159.02") && msg.contains("regen.sh"),
             "{msg}"
         );
     }

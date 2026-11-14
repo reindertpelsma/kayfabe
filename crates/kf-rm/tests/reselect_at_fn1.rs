@@ -144,9 +144,9 @@ fn a_different_pre_fn1_surface_or_an_unmeasured_version_is_refused_by_name() {
             what: "GSP_MSG_QUEUE_ELEMENT"
         }
     );
-    match w.on_fn1(&fn1("580.159.03").payload) {
+    match w.on_fn1(&fn1("580.159.02").payload) {
         Reselection::RefusedUnserved { reported, why } => {
-            assert_eq!(reported, v(580, 159, 3));
+            assert_eq!(reported, v(580, 159, 2));
             assert!(why.contains("never measured"), "{why}");
         }
         other => panic!("an unmeasured version must be refused, got {other:?}"),
