@@ -1074,6 +1074,12 @@ class T(unittest.TestCase):
             row = m.verdict("solidworks", "a" * 32, Path(td))
         self.assertIn("script step s5", row["error"])
 
+    def test_error_names_another_script_step(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = self.fixture(app="edrawings", kind="PROBE", error="x", step="s9")
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            self.assertIn("script step s9", m.verdict("edrawings", "a" * 32, Path(td))["error"])
+
     def test_error_without_step_has_no_step_suffix(self):
         with tempfile.TemporaryDirectory() as td:
             r = self.fixture(app="solidworks", kind="PROBE", error="boom")
