@@ -824,7 +824,7 @@ EDRAWINGS_RUN = r"""
 $sample=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
 if(-not $sample){throw 'No sample part under C:\ProgramData\SolidWorks'}
 Copy-Item $sample.FullName "$D\kfsample.sldprt"
-$r.sample='kfsample.sldprt';$r.accepted=$false;$r.window_title=''
+$r.sample='kfsample.sldprt';$r.accepted=$false;$r.window_title='';$r.windows_seen=@()
 $p=Start-Process 'C:\Program Files\SOLIDWORKS Corp\eDrawings\eDrawings.exe' -ArgumentList "`"$D\kfsample.sldprt`"" -PassThru
 $deadline=(Get-Date).AddSeconds(240)
 while((Get-Date) -lt $deadline){
@@ -832,6 +832,7 @@ while((Get-Date) -lt $deadline){
   $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
   foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){
    $name=$w.Current.Name
+   $r.windows_seen=@($r.windows_seen)+@($name) | Select-Object -Unique -First 12
    if($name -match 'kfsample'){$r.window_title=$name}
    if(-not $r.accepted){
     $btn=$w.FindAll([System.Windows.Automation.TreeScope]::Subtree,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object {$_.Current.Name -ceq 'ACCEPT' -and $_.Current.AutomationId -ceq '1' -and $_.Current.ControlType.ProgrammaticName -ceq 'ControlType.Button'} | Select-Object -First 1
@@ -954,24 +955,38 @@ Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {$_.Com
 """
 
 SOLIDWORKS = r"""
+$r.step='s1'
 $sw=New-Object -ComObject SldWorks.Application
+$r.step='s2'
 $sw.Visible=$true
+$r.step='s3'
 $part=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
 if(-not $part){throw 'No sample part under C:\ProgramData\SolidWorks'}
+$r.step='s4'
 $err=0;$warn=0
+$r.step='s5'
 $model=$sw.OpenDoc6($part.FullName,1,1,'',[ref]$err,[ref]$warn)
 if(-not $model -or $err -ne 0){throw 'OpenDoc6 failed'}
+$r.step='s6'
 $activeErr=0
+$r.step='s7'
 $model=$sw.ActivateDoc3($part.Name,$false,0,[ref]$activeErr)
 if(-not $model -or $activeErr -ne 0){throw 'ActivateDoc3 failed'}
+$r.step='s8'
 $model.ClearSelection2($true)
+$r.step='s9'
 $model.ViewZoomtofit2()
+$r.step='s10'
 $model.GraphicsRedraw2()
+$r.step='s11'
 $ok=$model.Extension.SaveAs("$D\model.step",0,1,$null,[ref]$err,[ref]$warn)
+$r.step='s12'
 $f=Get-Item "$D\model.step"
 $r.kind='FILE';$r.artifact='model.step';$r.modified=Epoch $f.LastWriteTimeUtc;$r.bytes=$f.Length
 $r.api_ok=([bool]$ok -and $err -eq 0)
+$r.step='s13'
 $sw.CloseDoc($model.GetTitle())
+$r.step='s14'
 $sw.ExitApp()
 """
 
@@ -1280,7 +1295,8 @@ def verdict(name, run_id, directory, plan=None):
         if name == "wukong":
             row["launched"] = r.get("shipping_seen") is True
         if r.get("error"):
-            raise ValueError(str(r["error"]))
+            step = f" (script step {r['step']})" if r.get("step") else ""
+            raise ValueError(str(r["error"]) + step)
         if r.get("kind") == "FILE" and name == "solidworks":
             artifact = r.get("artifact")
             if artifact != "model.step":

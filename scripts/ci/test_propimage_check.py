@@ -1067,6 +1067,22 @@ class T(unittest.TestCase):
     def test_edrawings_wrong_sample_name_is_not_a_pass(self):
         self.assertFalse(self.edrawings(sample="other.sldprt")["ok"])
 
+    def test_error_names_the_script_step_that_failed(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = self.fixture(app="solidworks", kind="PROBE", error="Element not found", step="s5")
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            row = m.verdict("solidworks", "a" * 32, Path(td))
+        self.assertIn("script step s5", row["error"])
+
+    def test_error_without_step_has_no_step_suffix(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = self.fixture(app="solidworks", kind="PROBE", error="boom")
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            self.assertNotIn("script step", m.verdict("solidworks", "a" * 32, Path(td))["error"])
+
+    def test_solidworks_script_marks_steps(self):
+        self.assertIn("$r.step='s5'", m.render_check("solidworks"))
+
     def test_edrawings_script_accepts_by_uia_selector_not_coordinates(self):
         script = m.render_check("edrawings")
         self.assertIn("-ceq 'ACCEPT'", script)
@@ -1859,6 +1875,7 @@ def mutants():
         ("edw-sample", 'r.get("sample") != "kfsample.sldprt" or', "False and"),
         ("hostlog-limit", "[-limit:]", "[:]"),
         ("hostlog-trunc", "ln[:400]", "ln"),
+        ("error-step", 'if r.get("step") else ""', 'if False else ""'),
         ("wukong-crash", 'if crash:', "if False:"),
         ("wukong-kernel", 'if str(e.get("code")) in GPU_KERNEL_EVENTS', "if False and str(e.get(\"code\")) in GPU_KERNEL_EVENTS"),
         ("wukong-start", 'if r.get("shipping_seen") is not True:', "if False:"),
