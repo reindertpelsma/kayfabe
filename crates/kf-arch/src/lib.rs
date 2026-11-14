@@ -43,6 +43,7 @@
 pub mod fault;
 pub mod gsp;
 pub mod ids;
+pub mod ratelog;
 
 pub use gsp::{
     AfterSuspend, ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep,

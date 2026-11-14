@@ -33,7 +33,7 @@ use crate::geometry;
 use crate::page_size::HostPageSize;
 use crate::view::RegionView;
 use core::ptr::NonNull;
-use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
 use kf_util::lockwitness;
 use std::os::fd::{AsRawFd, BorrowedFd};
 
@@ -280,6 +280,9 @@ impl Mapping {
         let len_host =
             usize::try_from(len).map_err(|_| RawError::TooLargeForHost { value: len })?;
         let (fd, file_offset, share_flags) = decode_backing(backing, page)?;
+        if let Backing::SharedFile { fd, offset } = backing {
+            require_within_file(fd, offset, len)?;
+        }
 
         // SAFETY: `mmap` with a NULL address requests a kernel-chosen placement, so this
         // call cannot displace any existing mapping in this process — the clobber hazard
@@ -319,9 +322,10 @@ impl Drop for Mapping {
 
         // SAFETY: the `Mapping` type invariant says `base` is a live mapping of exactly
         // `len` bytes, and this is the unique owner of it — `Disposition::OwnedMunmap` is
-        // set only by `Mapping::anywhere`, `Mapping` is not `Clone`/`Copy`, and no
-        // accessor yields the pointer, so no second `munmap` of this range can exist and
-        // no reference into it can outlive this drop (every accessor borrows `&self`).
+        // set only by `Mapping::anywhere`, `Mapping` is not `Clone`/`Copy`, so no second
+        // `munmap` of this range can exist; nothing derived from it can outlive this drop,
+        // because every accessor — and every `HostSpan` (A-01, 2026-11-13) — borrows the owner
+        // (⊘ the text said "no accessor yields the pointer", stale since `host_span`).
         // Both arguments are exactly the pair the kernel returned.
         let rc = unsafe { libc::munmap(self.base.as_ptr().cast::<libc::c_void>(), self.len) };
 
@@ -336,6 +340,51 @@ impl Drop for Mapping {
         }
     }
 }
+
+/// ★ A-04 (review 2, 2026-11-13): refuse a shared-file mapping of `[offset, offset+len)` that
+/// reaches past the file's current end. ⊘ Without it, `MappedRegion::read_into`/`write_from` on
+/// the part past EOF was a `SIGBUS` in the VMM instead of a refusal. (A peer shrinking an unsealed
+/// file later is not covered: fds that leave the process are sealed `SharedRam`.)
+fn require_within_file(fd: BorrowedFd<'_>, offset: u64, len: u64) -> Result<(), RawError> {
+    let size = file_len(fd)?;
+    let end = offset
+        .checked_add(len)
+        .ok_or(RawError::LengthOverflow { offset, len })?;
+    if end > size {
+        return Err(RawError::OutOfRange {
+            offset,
+            len,
+            object_len: size,
+        });
+    }
+    Ok(())
+}
+
+/// The file's current size (`fstat` on a duplicate: no `unsafe`, one extra `dup`/`close`).
+fn file_len(fd: BorrowedFd<'_>) -> Result<u64, RawError> {
+    fd.try_clone_to_owned()
+        .map(std::fs::File::from)
+        .and_then(|f| f.metadata())
+        .map(|m| m.len())
+        .map_err(|e| RawError::Syscall {
+            call: "fstat",
+            errno: e.raw_os_error(),
+        })
+}
+
+/// ★ A-10 (DESIGN, review 2, 2026-11-13): the most pieces one [`MappedRegion::stitch`] maps. Each
+/// piece is one VMA while the view lives, and Linux caps a process at `vm.max_map_count` (65 530
+/// by default, QEMU's own VMAs included), past which any `mmap` in the process — malloc arenas,
+/// thread stacks — fails and QEMU aborts. Chosen from the measurements so legitimate work is never
+/// refused: the only production caller (`kf_host::HostRm::map_scattered_through`) is fed batches
+/// of at most `kf_mem::apply::BATCH_MAX_RUNS` = 4 096 runs; the largest stitch in `traces/` is
+/// `map_scattered 4096 pieces` (`traces/v3_candidates/cand2_20261004/`, vectorAdd), and the
+/// largest apply on record — 200 702 maps in one ticket, which went out as 50 map verbs of ~4 000
+/// runs each (ENS12 run 7417's split record, 2026-10-28; the same count on the 2026-11-13 creo /
+/// enscape SPECviewperf boot; both in the bench logs of those runs, not committed under
+/// `traces/`). 16 384 is 4× the batch cap and a quarter of the default limit. Not measured as a
+/// limit.
+pub const MAX_STITCH_PIECES: usize = 16_384;
 
 /// Turn a [`Backing`] into the `(fd, offset, flags)` triple `mmap` wants, refusing a
 /// misaligned or unrepresentable file offset **before** any call is made.
@@ -415,13 +464,42 @@ pub enum RegionAdvice {
 #[derive(Debug)]
 pub struct MappedRegion {
     map: Mapping,
-    prot: HostProt,
+    /// ★ A-03 (review 2, 2026-11-13): the protection the VMA has NOW, updated by
+    /// [`Self::reprotect`] (which takes `&self`). ⊘ It was a plain field `reprotect` never
+    /// updated: a region reprotected read-only still said `ReadWrite`, and `write_from` faulted
+    /// with `SIGSEGV` instead of refusing with [`RawError::NotWritable`].
+    prot: ProtState,
     cache: CachePolicy,
+}
+
+/// A region's current [`HostProt`], settable through `&self` (A-03). An atomic rather than a
+/// `Cell` so it adds no auto-trait of its own: `MappedRegion` stays `!Sync` because of its
+/// `Mapping`, exactly as before (trybuild row `region_is_not_sync.rs`).
+#[derive(Debug)]
+struct ProtState(core::sync::atomic::AtomicBool);
+
+impl ProtState {
+    fn new(p: HostProt) -> Self {
+        ProtState(core::sync::atomic::AtomicBool::new(
+            p == HostProt::ReadWrite,
+        ))
+    }
+    fn get(&self) -> HostProt {
+        if self.0.load(Ordering::Relaxed) {
+            HostProt::ReadWrite
+        } else {
+            HostProt::ReadOnly
+        }
+    }
+    fn set(&self, p: HostProt) {
+        self.0.store(p == HostProt::ReadWrite, Ordering::Relaxed);
+    }
 }
 
 // SAFETY: a `MappedRegion` owns a process-wide mapping, not a thread-affine resource. Its
 // three fields are the mapping (established by exactly one `mmap` in `map`, never
-// rewritten, released by exactly one `munmap` in `Drop`) and two `Copy` attributes.
+// rewritten, released by exactly one `munmap` in `Drop`), a `Copy` attribute and an atomic
+// protection flag (A-03).
 // `munmap` from a thread other than the one that called `mmap` is valid on Linux, so moving
 // the owner between threads is sound. Same argument as `VolatileRegion`'s and
 // `GuestWindow`'s.
@@ -471,6 +549,8 @@ impl MappedRegion {
         if rc != 0 {
             return Err(crate::error::last_syscall_error("mprotect"));
         }
+        // The VMA has `prot` now; every later check reads this.
+        self.prot.set(prot);
         Ok(())
     }
 
@@ -504,7 +584,11 @@ impl MappedRegion {
     ) -> Result<Self, RawError> {
         cache::require_attainable(cache, backing.attainable_cache_policy(), backing.describe())?;
         let map = Mapping::anywhere(len, prot.bits(), 0, backing, page, "mapping length")?;
-        Ok(MappedRegion { map, prot, cache })
+        Ok(MappedRegion {
+            map,
+            prot: ProtState::new(prot),
+            cache,
+        })
     }
 
     /// ★★★ **One CONTIGUOUS host view of SCATTERED file pieces** — `pieces` are `(file offset,
@@ -542,8 +626,17 @@ impl MappedRegion {
         cache: CachePolicy,
         page: HostPageSize,
     ) -> Result<Self, RawError> {
+        // ★ A-10 (review 2, 2026-11-13): refused BEFORE any syscall — each piece is one VMA until
+        // the view is dropped, and the guest steers how scattered a batch is.
+        if pieces.len() > MAX_STITCH_PIECES {
+            return Err(RawError::Unsupported {
+                what: "a stitched view of more than MAX_STITCH_PIECES (16 384) pieces",
+                detail: "each piece is one VMA; the cap keeps a guest-steered batch far below vm.max_map_count (65 530 by default)",
+            });
+        }
         let backing = Backing::SharedFile { fd, offset: 0 };
         cache::require_attainable(cache, backing.attainable_cache_policy(), backing.describe())?;
+        let file_size = file_len(fd)?;
         let mut total = 0u64;
         for &(off, len) in pieces {
             if len == 0 {
@@ -553,6 +646,14 @@ impl MappedRegion {
             }
             geometry::require_aligned(len, page, "stitched piece length")?;
             geometry::require_aligned(off, page, "stitched piece file offset")?;
+            // A-04: a piece past the file's end is refused, not mapped.
+            if off.checked_add(len).is_none_or(|end| end > file_size) {
+                return Err(RawError::OutOfRange {
+                    offset: off,
+                    len,
+                    object_len: file_size,
+                });
+            }
             total = total
                 .checked_add(len)
                 .ok_or(RawError::LengthOverflow { offset: total, len })?;
@@ -619,7 +720,11 @@ impl MappedRegion {
         // a live `MAP_SHARED` file mapping (the pieces tile it — `cursor == total`), and the single
         // `OwnedMunmap` releases all of them in one `munmap`.
         debug_assert_eq!(cursor, total);
-        Ok(MappedRegion { map, prot, cache })
+        Ok(MappedRegion {
+            map,
+            prot: ProtState::new(prot),
+            cache,
+        })
     }
 
     /// The cache policy this region was mapped under.
@@ -644,10 +749,11 @@ impl MappedRegion {
     /// driver as a host registration (the display broker's frames, `cuMemHostRegister`). Safe
     /// code can carry it; only `unsafe` can open it, and only while this region lives.
     #[must_use]
-    pub fn host_span(&self) -> HostSpan {
+    pub fn host_span(&self) -> HostSpan<'_> {
         HostSpan {
             base: self.map.base_ptr(),
-            len: usize::try_from(self.map.len_bytes()).unwrap_or(0),
+            len: self.map.len,
+            _owner: core::marker::PhantomData,
         }
     }
 
@@ -694,17 +800,18 @@ impl MappedRegion {
         if rc != 0 {
             return Err(last_syscall_error("madvise(MADV_HUGEPAGE)"));
         }
-        if self.prot.bits() & libc::PROT_WRITE != 0 {
+        if self.prot.get().bits() & libc::PROT_WRITE != 0 {
             let mut off = 0usize;
             while off < len {
                 // SAFETY: `off < len`, so `base.add(off)` is inside this mapping, which is
-                // mapped `PROT_READ|PROT_WRITE` (checked above) and lives as long as `self`.
-                // Reading the byte and writing the same value back changes nothing observable
-                // and forces the write fault that THP collapse keys on.
+                // mapped `PROT_READ|PROT_WRITE` (checked above) and lives as long as `self`; a
+                // byte needs no alignment and every bit pattern is a valid `AtomicU8`.
+                // ★ A-06 (review 2, 2026-11-13): an ATOMIC `fetch_add(0)` forces the write fault
+                // that THP collapse keys on and cannot lose a concurrent store (⊘ it was a
+                // volatile read then write of the same byte: a guest or GPU store landing between
+                // the two was reverted — guest data corruption).
                 unsafe {
-                    let p = base.add(off);
-                    let b = core::ptr::read_volatile(p);
-                    core::ptr::write_volatile(p, b);
+                    AtomicU8::from_ptr(base.add(off)).fetch_add(0, Ordering::Relaxed);
                 }
                 off += 4096;
             }
@@ -751,7 +858,7 @@ impl MappedRegion {
     /// (§11 item 3) is precisely a place a caller gets this wrong. Otherwise as
     /// [`MappedRegion::read_into`].
     pub fn write_from(&self, offset: HostOffset, src: &[u8]) -> Result<(), RawError> {
-        if self.prot == HostProt::ReadOnly {
+        if self.prot.get() == HostProt::ReadOnly {
             return Err(RawError::NotWritable);
         }
         let (start, n) = bounds::checked_span(
@@ -806,7 +913,7 @@ impl MappedRegion {
         let page = HostPageSize::query();
         geometry::require_aligned(offset.get(), page, "advice offset")?;
         geometry::require_aligned(len, page, "advice length")?;
-        if advice == RegionAdvice::DontNeed && self.prot != HostProt::ReadWrite {
+        if advice == RegionAdvice::DontNeed && self.prot.get() != HostProt::ReadWrite {
             return Err(RawError::NotWritable);
         }
         let (start, len_host) = bounds::checked_span(self.map.len_bytes(), offset, len, "advice")?;
@@ -890,7 +997,7 @@ impl MappedRegion {
     /// Is this region writable? Used by [`RegionView`] so a view cannot smuggle a write
     /// past the read-only check.
     pub(crate) fn is_writable(&self) -> bool {
-        self.prot == HostProt::ReadWrite
+        self.prot.get() == HostProt::ReadWrite
     }
 }
 
@@ -1014,32 +1121,44 @@ impl AtomicWord for AtomicU64 {}
 /// VMM pointers in safe code. They belong in `unsafe` only, and safe code is always
 /// bounds-checked"*).
 ///
-/// Safe code may hold, copy and pass it — its length is public, its address is not. It is minted
-/// only by the owners of live mappings ([`VolatileRegion::host_span`],
+/// Safe code may hold, copy and pass it while its owner lives — its length is public, its address
+/// is not. It is minted only by the owners of live mappings ([`VolatileRegion::host_span`],
 /// `GuestWindow::host_span`), bounds-checked at the mint, and opened only by
 /// [`HostSpan::as_ptr`], which is `unsafe`: the one place a pointer leaves is an FFI boundary that
 /// hands it to a hypervisor as a memory region's backing.
+///
+/// ★ A-01 (review 2, 2026-11-13): **it borrows the mapping that minted it** (`'a`), so it cannot
+/// outlive it — trybuild row `tests/ui/span_outlives_region.rs`. ⊘ The text this corrects: *"Safe
+/// code may hold, copy and pass it"* with no lifetime — a span kept past `drop(region)` handed
+/// unmapped (or re-used) addresses to `cuMemHostRegister` or to QEMU as a memory region's backing.
+/// It stays `Copy`: every copy carries the same borrow.
 #[derive(Debug, Clone, Copy)]
-pub struct HostSpan {
+pub struct HostSpan<'a> {
     base: NonNull<u8>,
     len: usize,
+    _owner: core::marker::PhantomData<&'a ()>,
 }
 
 // SAFETY: a `HostSpan` is an address and a length — no reference, no access. Moving or sharing it
 // between threads does nothing to the memory; only `as_ptr` (unsafe) exposes it.
-unsafe impl Send for HostSpan {}
+unsafe impl Send for HostSpan<'_> {}
 // SAFETY: as above.
-unsafe impl Sync for HostSpan {}
+unsafe impl Sync for HostSpan<'_> {}
 
-impl HostSpan {
+impl<'a> HostSpan<'a> {
     /// Mint a span of `[base + off, base + off + len)` inside a live mapping of `total` bytes.
     /// `None` when it would leave the mapping — the bound is checked HERE, once, by the owner.
+    ///
+    /// CALLER-CONTRACT: `base` starts a live mapping of `total` bytes owned by the caller, and
+    /// `'a` is tied to that owner's borrow (crate-private; `GuestWindow::host_span` returns it
+    /// with its `&self` lifetime by elision). Not checkable here because the owner type lives in
+    /// another file; if it breaks, the span names memory the owner no longer maps.
     pub(crate) fn within(
         base: NonNull<u8>,
         total: usize,
         off: usize,
         len: usize,
-    ) -> Option<HostSpan> {
+    ) -> Option<HostSpan<'a>> {
         let end = off.checked_add(len)?;
         if end > total || len == 0 {
             return None;
@@ -1047,7 +1166,11 @@ impl HostSpan {
         // SAFETY: `off < total`, and `base` starts a live mapping of `total` bytes (the minter's
         // type invariant), so `base + off` is inside it and non-null.
         let p = unsafe { NonNull::new_unchecked(base.as_ptr().add(off)) };
-        Some(HostSpan { base: p, len })
+        Some(HostSpan {
+            base: p,
+            len,
+            _owner: core::marker::PhantomData,
+        })
     }
 
     /// Length in bytes.
@@ -1064,6 +1187,11 @@ impl HostSpan {
 
     /// The start address.
     ///
+    /// CALLER-CONTRACT: the raw pointer leaves the borrow checker here — whoever receives it
+    /// (QEMU, the CUDA driver) must stop using it before the minting mapping is dropped. Not
+    /// checkable from Rust; if it breaks, that consumer reads or writes whatever is mapped there
+    /// next. The span's `'a` keeps the mapping alive for as long as the span itself is held.
+    ///
     /// # Safety
     /// The caller must only hand it to a consumer that treats `[ptr, ptr + len)` as the backing of
     /// a memory region (a hypervisor memslot / `memory_region_init_*_ptr`) for no longer than the
@@ -1079,8 +1207,9 @@ impl HostSpan {
 /// Accessed as `Relaxed` atomics, naturally aligned, ≤ 8 bytes, and *nothing else*
 /// (§4.3). A plain or `volatile` read of memory a GPU is concurrently writing is not
 /// defined to be non-tearing; a `Relaxed` atomic load is, and lowers to the same
-/// instruction. There is no `load_u128` and no bulk accessor, which is the width refusal
-/// made structural rather than documented.
+/// instruction. There is no `load_u128`, and the one bulk accessor ([`VolatileRegion::copy_out`],
+/// for data, never registers) is itself a loop of naturally-aligned atomic loads (A-02,
+/// 2026-11-13), so the width refusal stays structural.
 ///
 /// **Ordering against other memory is a separate, explicit act** — a release fence before
 /// ringing a doorbell, an acquire fence after observing a semaphore — named at the two
@@ -1104,11 +1233,12 @@ unsafe impl Send for VolatileRegion {}
 // literal definition. Every accessor takes `&self` and every access goes through
 // `word_at`, which yields `&AtomicU32`/`&AtomicU64` and performs a `Relaxed` load or
 // store — the exact operations the abstract machine defines under concurrent modification,
-// and the reason this type exists instead of a `*mut` and a `volatile`. There is no bulk
-// accessor and no way to obtain a borrow of more than one naturally-aligned word (the
-// `AtomicWord` trait is private and has two impls), so two `&self` methods on different
-// threads cannot tear anything. `base`, `len` and `cache` are immutable for the object's
-// life. The *other* writer — real hardware — is outside the abstract machine either way,
+// and the reason this type exists instead of a `*mut` and a `volatile`. The one bulk accessor,
+// `copy_out`, is a loop of `Relaxed` `AtomicU64`/`AtomicU8` loads (A-02, 2026-11-13: ⊘ it was a
+// plain `memcpy`, which made this argument false), and no method yields a borrow of more than
+// one naturally-aligned word that outlives the call, so two `&self` methods on different
+// threads cannot race or tear an aligned word. `base`, `len` and `cache` are immutable for the
+// object's life. The *other* writer — real hardware — is outside the abstract machine either way,
 // and is precisely what `Relaxed` atomics are chosen here to tolerate.
 //
 // ★★ Load-bearing consequence, stated so it is not discovered later: this grant is what
@@ -1193,10 +1323,11 @@ impl VolatileRegion {
     /// The whole mapping as an opaque [`HostSpan`] — for handing the SAME pages to a VMM as a
     /// memslot (§53.1 disposition C). Safe code can carry it; only `unsafe` can open it.
     #[must_use]
-    pub fn host_span(&self) -> HostSpan {
+    pub fn host_span(&self) -> HostSpan<'_> {
         HostSpan {
             base: self.map.base_ptr(),
-            len: usize::try_from(self.map.len_bytes()).unwrap_or(0),
+            len: self.map.len,
+            _owner: core::marker::PhantomData,
         }
     }
 
@@ -1257,19 +1388,46 @@ impl VolatileRegion {
     ///
     /// [`RawError`] if `offset .. offset + dst.len()` leaves the mapping — checked before any
     /// byte moves, so a refused call copies nothing.
+    ///
+    /// ★ A-02 (review 2, 2026-11-13): **word-wise `Relaxed` atomic loads**, never a `memcpy` —
+    /// 8-byte loads over the 8-aligned body, single-byte atomic loads at the unaligned edges. A
+    /// concurrent [`Self::store_u32`]/[`Self::store_u64`] through another `&self` is then two
+    /// atomic accesses (defined), not a data race, and an aligned 8-byte word inside the range is
+    /// never torn. ⊘ The text this corrects: a plain `copy_nonoverlapping`, while this type's `Sync`
+    /// argument said "there is no bulk accessor". The width (8 bytes) is the lever the measurement
+    /// above names; `memcpy` might issue wider loads on this memory, so throughput on video memory
+    /// is UNMEASURED after this change.
     pub fn copy_out(&self, offset: HostOffset, dst: &mut [u8]) -> Result<(), RawError> {
         let n = dst.len() as u64;
         let (start, _n) =
             bounds::checked_span(self.map.len_bytes(), offset, n, "bulk read length")?;
-        // SAFETY: `checked_span` proved `start .. start + dst.len()` is inside the mapping, the
-        // mapping outlives `&self`, and `dst` cannot alias device memory. Byte copies need no
-        // alignment. This is a plain read of data, not a register access — see the docs above.
+        let len = dst.len();
+        let base = self.map.base.as_ptr();
+        // SAFETY: `checked_span` returned only because `start .. start + len` is inside the
+        // mapping, which outlives `&self`, and every index `i` below is `< len`, so
+        // `base + start + i` is in bounds (the precondition of `add`). The mapping base is page-aligned (an `mmap`
+        // return), so `base + start + i` is 8-aligned exactly when `start + i` is — the condition
+        // the middle loop runs under (and it reads 8 bytes only while `len - i >= 8`); bytes need
+        // no alignment. `AtomicU8`/`AtomicU64` accept every bit pattern, and a `Relaxed` load is
+        // defined under concurrent atomic stores (ours) and tolerates the device's (outside the
+        // abstract machine). Each atomic reference lives for one load and never escapes. `dst` is
+        // ours and cannot alias the mapping.
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                self.map.base.as_ptr().add(start),
-                dst.as_mut_ptr(),
-                dst.len(),
-            );
+            let mut i = 0usize;
+            while i < len && !(start + i).is_multiple_of(8) {
+                dst[i] = AtomicU8::from_ptr(base.add(start + i)).load(Ordering::Relaxed);
+                i += 1;
+            }
+            while len - i >= 8 {
+                let w =
+                    AtomicU64::from_ptr(base.add(start + i).cast::<u64>()).load(Ordering::Relaxed);
+                dst[i..i + 8].copy_from_slice(&w.to_ne_bytes());
+                i += 8;
+            }
+            while i < len {
+                dst[i] = AtomicU8::from_ptr(base.add(start + i)).load(Ordering::Relaxed);
+                i += 1;
+            }
         }
         Ok(())
     }
@@ -1528,7 +1686,7 @@ impl Reservation {
             len,
             region: MappedRegion {
                 map: Mapping::adopt(base, len_host, Disposition::InsideReservation),
-                prot,
+                prot: ProtState::new(prot),
                 cache,
             },
         });
@@ -2515,5 +2673,516 @@ mod tests {
             msg.contains("R1 no-blocking-under-lock violation"),
             "unexpected panic message: {msg}"
         );
+    }
+}
+
+/// ★ Security review 2 (2026-11-13): A-01, A-02, A-03, A-04, A-06, A-10 — each door called with
+/// the argument a wrong or hostile safe caller would pass; the answer is a refusal, never UB.
+#[cfg(test)]
+mod review2_tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use std::os::fd::AsFd;
+    use std::sync::atomic::AtomicBool;
+    use std::time::{Duration, Instant};
+
+    fn page() -> HostPageSize {
+        HostPageSize::query()
+    }
+
+    fn file_of(len: u64) -> File {
+        let path = std::env::temp_dir().join(format!(
+            "kayfabe-review2-{}-{:?}.bin",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let mut f = File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .expect("temp file");
+        f.write_all(&vec![0_u8; usize::try_from(len).expect("len")])
+            .expect("size the file");
+        std::fs::remove_file(&path).expect("unlink");
+        f
+    }
+
+    fn volatile(len: u64) -> VolatileRegion {
+        VolatileRegion::map(
+            Backing::PrivateAnonymous,
+            len,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .expect("anonymous volatile region")
+    }
+
+    // ---------------------------------------------------------------- A-02
+
+    /// Every aligned 8-byte word fully inside `[off, off+len)` of a copy must come from ONE store.
+    fn torn_word(off: usize, buf: &[u8]) -> Option<usize> {
+        let end = off + buf.len();
+        let first = off.next_multiple_of(8);
+        (first..end.saturating_sub(7)).step_by(8).find(|&w| {
+            let b = &buf[w - off..w - off + 8];
+            b.iter().any(|&x| x != b[0])
+        })
+    }
+
+    /// RED on the pre-fix tree (a plain `memcpy` — e.g. glibc's two overlapping 16-byte loads for
+    /// a 24-byte copy — reads one aligned word in two halves at different times while another
+    /// thread `store_u64`s it). GREEN: word-wise atomic loads never tear an aligned word.
+    /// Probabilistic on the red side (it ran red on the dev box); deterministic on the green side.
+    #[test]
+    fn a_bulk_copy_never_tears_an_aligned_word_stored_concurrently() {
+        tear_hunt(&[(1, 24), (3, 40), (5, 17), (0, 64), (7, 33)]);
+    }
+
+    /// The same hunt at 4-aligned (not 8-aligned) and fully aligned starts: an 8-byte load must
+    /// never straddle two aligned words, and the aligned body must never be read bytewise.
+    #[test]
+    fn a_bulk_copy_from_a_4_aligned_start_never_tears_an_aligned_word() {
+        tear_hunt(&[(4, 40), (12, 36), (0, 64), (4, 60)]);
+    }
+
+    fn tear_hunt(shapes: &[(usize, usize)]) {
+        let r = volatile(page().bytes());
+        let stop = AtomicBool::new(false);
+        let mut torn = None;
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                let mut v = 0u64;
+                while !stop.load(Ordering::Relaxed) {
+                    v = !v;
+                    for w in 0..8u64 {
+                        r.store_u64(HostOffset::new(w * 8), v).unwrap();
+                    }
+                }
+            });
+            let t = Instant::now();
+            'outer: while t.elapsed() < Duration::from_secs(2) {
+                for &(off, len) in shapes {
+                    let mut buf = vec![0u8; len];
+                    r.copy_out(HostOffset::new(off as u64), &mut buf).unwrap();
+                    if let Some(w) = torn_word(off, &buf) {
+                        torn = Some((off, len, w, buf));
+                        break 'outer;
+                    }
+                }
+            }
+            stop.store(true, Ordering::Relaxed);
+        });
+        assert_eq!(
+            torn, None,
+            "copy_out tore an aligned word (off, len, word, bytes)"
+        );
+    }
+
+    /// Valid copies are byte-exact for every start offset and length around the 8-byte edges
+    /// (behaviour unchanged for valid input).
+    #[test]
+    fn a_bulk_copy_is_exact_at_every_offset_and_length() {
+        let len = page().bytes();
+        let r = volatile(len);
+        for w in 0..len / 8 {
+            let v = (0..8).fold(0u64, |a, k| {
+                a | (((w * 8 + k) as u8 ^ 0x5a) as u64) << (8 * k)
+            });
+            r.store_u64(HostOffset::new(w * 8), v).unwrap();
+        }
+        let want = |i: u64| (i as u8) ^ 0x5a;
+        for off in 0..24u64 {
+            for n in 1..42usize {
+                let mut buf = vec![0xEEu8; n];
+                r.copy_out(HostOffset::new(off), &mut buf).unwrap();
+                let exp: Vec<u8> = (0..n as u64).map(|i| want(off + i)).collect();
+                assert_eq!(buf, exp, "off {off} len {n}");
+            }
+        }
+        // The very end of the mapping, unaligned start.
+        let mut tail = vec![0u8; 13];
+        r.copy_out(HostOffset::new(len - 13), &mut tail).unwrap();
+        assert_eq!(tail, (len - 13..len).map(want).collect::<Vec<_>>());
+    }
+
+    /// Hostile bounds: nothing is copied, nothing is read past the mapping.
+    #[test]
+    fn a_bulk_copy_past_the_mapping_is_refused_before_any_byte_moves() {
+        let len = page().bytes();
+        let r = volatile(len);
+        let mut buf = [0xAAu8; 16];
+        assert!(r.copy_out(HostOffset::new(len - 15), &mut buf).is_err());
+        assert!(r.copy_out(HostOffset::new(u64::MAX - 3), &mut buf).is_err());
+        assert!(r.copy_out(HostOffset::new(len), &mut buf[..1]).is_err());
+        assert_eq!(buf, [0xAA; 16], "a refused copy wrote into dst");
+    }
+
+    // ---------------------------------------------------------------- A-03
+
+    /// RED on the pre-fix tree: the write faulted (`SIGSEGV`, the test process dies). GREEN: the
+    /// region knows it is read-only now and refuses.
+    #[test]
+    fn a_region_reprotected_read_only_refuses_writes_instead_of_faulting() {
+        let r = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page().bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .unwrap();
+        r.write_from(HostOffset::ZERO, b"ok").unwrap();
+        r.reprotect(HostProt::ReadOnly).unwrap();
+        assert!(matches!(
+            r.write_from(HostOffset::ZERO, b"x"),
+            Err(RawError::NotWritable)
+        ));
+        assert!(!r.is_writable(), "a view would smuggle a write past it");
+        let mut b = [0u8; 2];
+        r.read_into(HostOffset::ZERO, &mut b).unwrap();
+        assert_eq!(&b, b"ok");
+        // And back: writable again only once the kernel agreed.
+        r.reprotect(HostProt::ReadWrite).unwrap();
+        r.write_from(HostOffset::ZERO, b"y").unwrap();
+    }
+
+    /// A refused `mprotect` leaves the recorded protection as it was.
+    #[test]
+    fn a_refused_reprotect_changes_nothing() {
+        let f = file_of(page().bytes());
+        let ro = File::open(
+            std::path::Path::new("/proc/self/fd")
+                .join(std::os::fd::AsRawFd::as_raw_fd(&f).to_string()),
+        )
+        .expect("read-only reopen");
+        let r = MappedRegion::map(
+            Backing::SharedFile {
+                fd: ro.as_fd(),
+                offset: 0,
+            },
+            page().bytes(),
+            HostProt::ReadOnly,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .unwrap();
+        assert!(r.reprotect(HostProt::ReadWrite).is_err(), "O_RDONLY holds");
+        assert!(matches!(
+            r.write_from(HostOffset::ZERO, b"x"),
+            Err(RawError::NotWritable)
+        ));
+    }
+
+    // ---------------------------------------------------------------- A-04
+
+    /// RED on the pre-fix tree: the mapping was made and the read past EOF was a `SIGBUS`.
+    #[test]
+    fn a_shared_file_mapping_past_the_end_of_the_file_is_refused() {
+        let p = page().bytes();
+        let f = file_of(p);
+        let over = MappedRegion::map(
+            Backing::SharedFile {
+                fd: f.as_fd(),
+                offset: 0,
+            },
+            4 * p,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        );
+        assert!(matches!(over, Err(RawError::OutOfRange { .. })), "{over:?}");
+        let shifted = VolatileRegion::map(
+            Backing::SharedFile {
+                fd: f.as_fd(),
+                offset: p,
+            },
+            p,
+            CachePolicy::WriteBack,
+            page(),
+        );
+        assert!(matches!(shifted, Err(RawError::OutOfRange { .. })));
+        // Exactly the file: accepted.
+        MappedRegion::map(
+            Backing::SharedFile {
+                fd: f.as_fd(),
+                offset: 0,
+            },
+            p,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .expect("the whole file maps");
+    }
+
+    #[test]
+    fn a_stitched_piece_past_the_end_of_the_file_is_refused() {
+        let p = page().bytes();
+        let f = file_of(2 * p);
+        let fd = f.as_fd();
+        let s = |pieces: &[(u64, u64)]| {
+            MappedRegion::stitch(
+                fd,
+                pieces,
+                HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+                page(),
+            )
+        };
+        assert!(matches!(
+            s(&[(0, p), (2 * p, p)]),
+            Err(RawError::OutOfRange { .. })
+        ));
+        assert!(matches!(s(&[(p, 2 * p)]), Err(RawError::OutOfRange { .. })));
+        assert!(matches!(
+            s(&[(u64::MAX - p + 1, p)]),
+            Err(RawError::OutOfRange { .. } | RawError::Misaligned { .. })
+        ));
+        s(&[(p, p), (0, p)]).expect("inside the file");
+    }
+
+    // ---------------------------------------------------------------- A-06
+
+    /// The fault-in must not revert a concurrent store (atomic RMW). Probabilistic on the red
+    /// side; deterministic on the green side.
+    #[test]
+    fn requesting_huge_pages_never_loses_a_concurrent_store() {
+        let p = page().bytes();
+        let f = file_of(p);
+        let r = MappedRegion::map(
+            Backing::SharedFile {
+                fd: f.as_fd(),
+                offset: 0,
+            },
+            p,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .unwrap();
+        // A second mapping of the same page plays the guest: it counts in byte 0 atomically.
+        let guest = VolatileRegion::map(
+            Backing::SharedFile {
+                fd: f.as_fd(),
+                offset: 0,
+            },
+            p,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .unwrap();
+        let stop = AtomicBool::new(false);
+        let mut bumps = 0u32;
+        let stop_ref = &stop;
+        std::thread::scope(|s| {
+            s.spawn(move || {
+                let t = Instant::now();
+                while t.elapsed() < Duration::from_millis(500) {
+                    let _ = r.request_huge_pages();
+                }
+                stop_ref.store(true, Ordering::Relaxed);
+            });
+            while !stop.load(Ordering::Relaxed) {
+                let w = guest.load_u32(HostOffset::ZERO).unwrap();
+                // Only byte 0 counts; 255 increments keep it inside one byte.
+                if bumps < 255 {
+                    guest
+                        .store_u32(HostOffset::ZERO, w.wrapping_add(1))
+                        .unwrap();
+                    bumps += 1;
+                }
+            }
+        });
+        assert_eq!(guest.load_u32(HostOffset::ZERO).unwrap(), bumps);
+    }
+
+    // ---------------------------------------------------------------- A-10
+
+    #[test]
+    fn a_stitch_of_more_than_max_stitch_pieces_is_refused_before_any_mapping() {
+        let p = page().bytes();
+        let f = file_of(p);
+        let pieces = vec![(0u64, p); MAX_STITCH_PIECES + 1];
+        let t = Instant::now();
+        let got = MappedRegion::stitch(
+            f.as_fd(),
+            &pieces,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        );
+        assert!(matches!(got, Err(RawError::Unsupported { .. })), "{got:?}");
+        assert!(
+            t.elapsed() < Duration::from_millis(200),
+            "refused only after mapping"
+        );
+    }
+
+    #[test]
+    fn a_guest_sized_stitch_of_a_million_pieces_is_refused_by_the_cap() {
+        let p = page().bytes();
+        let f = file_of(p);
+        let pieces = vec![(0u64, p); 1 << 20];
+        let got = MappedRegion::stitch(
+            f.as_fd(),
+            &pieces,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        );
+        assert!(
+            matches!(got, Err(RawError::Unsupported { .. })),
+            "not the cap: {got:?}"
+        );
+    }
+
+    /// The cap never refuses legitimate work: exactly `MAX_STITCH_PIECES` pieces still map (and the
+    /// production batch maximum, 4 096, is far below it).
+    #[test]
+    fn a_stitch_of_exactly_max_stitch_pieces_maps() {
+        let p = page().bytes();
+        let f = file_of(2 * p);
+        // Alternate two file pages so neighbouring pieces cannot merge into one VMA.
+        let pieces: Vec<(u64, u64)> = (0..MAX_STITCH_PIECES)
+            .map(|i| (if i % 2 == 0 { 0 } else { p }, p))
+            .collect();
+        let v = MappedRegion::stitch(
+            f.as_fd(),
+            &pieces,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .expect("at the cap");
+        assert_eq!(v.len_bytes(), MAX_STITCH_PIECES as u64 * p);
+        const { assert!(MAX_STITCH_PIECES >= 4 * 4096) };
+    }
+
+    /// At the cap, the view is still the file's pages in the order given (first and last piece).
+    #[test]
+    fn a_stitch_at_the_cap_still_shows_the_file_pages_in_order() {
+        let p = page().bytes();
+        let f = file_of(2 * p);
+        let fd = f.as_fd();
+        let pieces: Vec<(u64, u64)> = (0..MAX_STITCH_PIECES)
+            .map(|i| (if i % 2 == 0 { p } else { 0 }, p))
+            .collect();
+        let w = MappedRegion::map(
+            Backing::SharedFile { fd, offset: 0 },
+            2 * p,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .unwrap();
+        w.write_from(HostOffset::ZERO, b"LO").unwrap();
+        w.write_from(HostOffset::new(p), b"HI").unwrap();
+        let v = MappedRegion::stitch(
+            fd,
+            &pieces,
+            HostProt::ReadOnly,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .expect("at the cap");
+        let mut b = [0u8; 2];
+        v.read_into(HostOffset::ZERO, &mut b).unwrap();
+        assert_eq!(&b, b"HI");
+        v.read_into(HostOffset::new((MAX_STITCH_PIECES as u64 - 1) * p), &mut b)
+            .unwrap();
+        assert_eq!(&b, b"LO");
+    }
+
+    /// A file one byte short of the mapping: the last byte would be a `SIGBUS`; refused.
+    #[test]
+    fn a_mapping_one_byte_longer_than_the_file_is_refused() {
+        let p = page().bytes();
+        let f = file_of(2 * p - 1);
+        let m = MappedRegion::map(
+            Backing::SharedFile {
+                fd: f.as_fd(),
+                offset: 0,
+            },
+            2 * p,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        );
+        assert!(matches!(m, Err(RawError::OutOfRange { .. })), "{m:?}");
+    }
+
+    #[test]
+    fn a_volatile_mapping_one_byte_longer_than_the_file_is_refused() {
+        let p = page().bytes();
+        let f = file_of(2 * p - 1);
+        let v = VolatileRegion::map(
+            Backing::SharedFile {
+                fd: f.as_fd(),
+                offset: p,
+            },
+            p,
+            CachePolicy::WriteBack,
+            page(),
+        );
+        assert!(matches!(v, Err(RawError::OutOfRange { .. })), "{v:?}");
+    }
+
+    #[test]
+    fn a_stitched_piece_one_byte_past_the_file_is_refused() {
+        let p = page().bytes();
+        let f = file_of(2 * p - 1);
+        let got = MappedRegion::stitch(
+            f.as_fd(),
+            &[(0, p), (p, p)],
+            HostProt::ReadOnly,
+            CachePolicy::WriteBack,
+            page(),
+        );
+        assert!(matches!(got, Err(RawError::OutOfRange { .. })), "{got:?}");
+    }
+
+    /// A view cannot smuggle a write into a region reprotected read-only (it asks the region).
+    #[test]
+    fn a_view_of_a_reprotected_region_refuses_writes() {
+        let r = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page().bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .unwrap();
+        r.reprotect(HostProt::ReadOnly).unwrap();
+        let v = r.slice(HostOffset::ZERO, 64).unwrap();
+        assert!(v.write_from(HostOffset::ZERO, b"x").is_err());
+        assert!(matches!(
+            r.write_from(HostOffset::new(8), b"x"),
+            Err(RawError::NotWritable)
+        ));
+    }
+
+    // ---------------------------------------------------------------- A-01
+
+    /// The span works while its owner lives (the compile-fail half is
+    /// `tests/ui/span_outlives_region.rs`).
+    #[test]
+    fn a_span_names_its_owner_while_it_lives() {
+        let r = volatile(page().bytes());
+        let s = r.host_span();
+        let copy = s;
+        assert_eq!(copy.len(), page().bytes() as usize);
+        assert!(!s.is_empty());
+        let m = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page().bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .unwrap();
+        assert_eq!(m.host_span().len(), page().bytes() as usize);
     }
 }

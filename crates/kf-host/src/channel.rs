@@ -396,9 +396,10 @@ pub(crate) fn map_pieces<V: DmaVerbs + ?Sized>(
         if let Err(e) = v.map_one(h, piece) {
             for &(h0, va0, _) in pieces[..i].iter().rev() {
                 if let Err(r) = v.unmap_one(h0, va0, 0, rollback_flags) {
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf-host: split map {:#x}+{:#x}: piece {va:#x} refused ({e:?}); rolling back piece {va0:#x} was refused too ({r:?})",
-                        row.at, row.len
+                        row.at,
+                        row.len
                     );
                 }
             }
@@ -750,7 +751,7 @@ impl HostRm {
                     for (slot, (lo, hi)) in vas.guest.iter_mut().zip(ranges) {
                         match self.reserve_va(space, lo, hi - lo) {
                             Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
-                            Err(e) => eprintln!(
+                            Err(e) => kf_arch::rate_eprintln!(
                                 "kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT reserved: {e:?} — host RM may place its own objects there"
                             ),
                         }
@@ -1452,6 +1453,10 @@ impl HostRm {
             },
         )?;
         let chan = born.handle;
+        // ⊘ NOT rate-limited (security review 1, F-13, 2026-11-13): the merge bar's privilege
+        // census (`scripts/bench/box/birth_census.sh`, `scripts/p1p2/tspace_log_gate.py`) checks
+        // EVERY birth line. Bounding this volume needs the census to read a counter instead; that
+        // is a coordinated change, not this one. Live user channels are capped (`userquota`).
         eprintln!(
             "kf-host: channel birth h={chan:#x} engine={engine_type:#x} reply_flags={:#010x} \
              PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin={}",

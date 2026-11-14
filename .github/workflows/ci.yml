@@ -684,43 +684,14 @@ jobs:
       # is zero-sized and cannot carry an address by construction, and
       # `PhantomData<*mut ()>` is the standard !Send marker (kayfabe-rt/src/lock.rs).
       #
-      # Exit-code polarity: same trap as the gate above. `grep` exits 1 on NO match,
-      # which is the SUCCESS case here, so every grep ends in `|| true` and the
-      # verdict is an `if [ -n … ]` over captured output. Note the loop body uses
-      # `if`/`fi` rather than `[ -n "$hits" ] && …`, because the `&&` form returns 1
-      # on the common (clean) path and would abort the step under `set -e`.
-      - name: Host-pointer gate (no *mut/*const/NonNull/transmute outside *_unsafe.rs)
+      # ★ 2026-11-13 (security review 1, F-01 / S1-02): the logic moved to Python and widened to
+      # pointer-to-integer casts (`.as_mut_ptr() as u64`) and address-of forms, which the
+      # type-name grep could not see. Known positives and >= 2 killers per mutant are checked here.
+      - name: Host-pointer gate (no host address outside *_unsafe.rs)
         run: |
-          offenders=""
-          while IFS= read -r f; do
-            hits=$(sed -e 's|//.*||' -e 's|PhantomData<[^>]*>||g' "$f" \
-                   | grep -nE '\*mut |\*const |NonNull|transmute' || true)
-            if [ -n "$hits" ]; then
-              offenders="$offenders$(echo "$hits" | sed "s|^|$f:|")
-          "
-            fi
-          done < <(find . -name '*.rs' -not -name '*_unsafe.rs' \
-                     -not -path './archive/*' -not -path './third_party/*' \
-                     -not -path './crates/kayfabe-doorbell/*' \
-                     -not -path './target/*' -not -path './*/target/*' \
-                     -not -path './mutants.out/*')
-          if [ -n "$(echo "$offenders" | tr -d '[:space:]')" ]; then
-            echo "$offenders"
-            echo ""
-            echo "★ HOST-POINTER BREACH — gate C's second half (l1_os_shell.md §9.3)."
-            echo "A host CPU address type appears in a file that is not named"
-            echo "*_unsafe.rs. A raw pointer is unsafe to HOLD even in safe code, and"
-            echo "the whole audit claim of decision #33 is that host addresses do not"
-            echo "leave \`kayfabe-linux-raw\`'s *_unsafe.rs files. Two fixes, no third:"
-            echo "  - real pointer code -> move it into a *_unsafe.rs module, behind a"
-            echo "    bounded type (MappedRegion / RegionView / VolatileRegion). It must"
-            echo "    not appear in any signature reachable from outside the crate."
-            echo "  - a comment or doc  -> whole-line comments are already stripped, so"
-            echo "    a hit means it is on a CODE line. Move the prose to its own line."
-            echo "Never widen the pattern and never add an allowlist: the exception is"
-            echo "lexical (PhantomData is a ZST), never editorial."
-            exit 1
-          fi
+          python3 -B scripts/ci/test_host_pointer_gate.py
+          python3 -B scripts/ci/host_pointer_gate_mutants.py > /dev/null
+          python3 -B scripts/ci/host_pointer_gate.py
       # ★ The BRIDGE-EXCLUSIVITY gate (docs/design/gsp_core_bridge.md §1.2, which asks for
       # it in as many words: "It is the ONLY crate in the tree permitted to name both
       # `RpcCommand` and `RmEvent`. That is a one-line CI grep and should be added as one").
@@ -1657,7 +1628,7 @@ jobs:
           #   ~0.9 ms on every walk (Ada lane). ENOSYS/EPERM falls back to `epoll_wait`, rounded up.
           #   timerslack_unsafe.rs (+2): `prctl(PR_SET_TIMERSLACK)` and `prctl(PR_GET_TIMERSLACK)` for
           #   the CALLING thread, by value, no pointer; the default 50 us slack equals the wait itself.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:101 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:101 kf-cuda:76 kf-qemu:88 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
@@ -2590,6 +2561,48 @@ jobs:
         if: always()
         run: python3 scripts/ci/runner_namespaces.py --remove
 
+  ptx:
+    name: ptx — shipped GPU programs rebuild byte for byte; the walker source on a CPU
+    # Security review 3 F-5/F-8 (2026-11-13). The walker PTX is rebuilt with the pinned NVRTC 12.2.140 (the
+    # official PyPI wheel, hash-pinned in scripts/ci/nvrtc-12.2.140.requirements.txt, downloaded here and never
+    # committed) and compared byte for byte; the three generated display PTX files likewise with the clang
+    # their headers record (Ubuntu 26.04's clang-21 1:21.1.8-6ubuntu1, hence the pinned container); the two
+    # hand-written ones are sha256-pinned accepted blobs; kernel/launcher constants must agree; and the walk
+    # kernel's own source runs on a CPU over the committed corpus (make -C cuda/walk check-cpu). No GPU.
+    runs-on: ubuntu-latest
+    container: ubuntu@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96 # ubuntu:26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the pinned compilers' prerequisites
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            ca-certificates python3 python3-pip make g++ clang-21=1:21.1.8-6ubuntu1
+          ln -sf /usr/bin/clang-21 /usr/local/bin/clang
+      - name: NVRTC 12.2.140 from the official wheel (hash-pinned)
+        run: |
+          python3 -m pip download --no-deps --only-binary=:all: --require-hashes \
+            --platform manylinux1_x86_64 --python-version 3.10 \
+            -r scripts/ci/nvrtc-12.2.140.requirements.txt -d "$RUNNER_TEMP/nvrtc-whl"
+          python3 -I -m zipfile -e "$RUNNER_TEMP"/nvrtc-whl/*.whl "$RUNNER_TEMP/nvrtc"
+      - name: Static pins, constants, and the checker's own tests and mutants
+        run: |
+          python3 -B scripts/ci/walk_ptx_repro.py static
+          python3 -B -m unittest discover -s scripts/ci -p 'test_walk_ptx_repro.py'
+          python3 -B scripts/ci/walk_ptx_repro_mutants.py
+      - name: Walker PTX rebuilds byte for byte (NVRTC 12.2.140)
+        run: python3 -B scripts/ci/walk_ptx_repro.py walk --nvrtc "$RUNNER_TEMP/nvrtc/nvidia/cuda_nvrtc/lib/libnvrtc.so.12"
+      - name: Display PTX rebuilds byte for byte (clang 21.1.8)
+        run: python3 -B scripts/ci/walk_ptx_repro.py display
+      - name: The YUV kernel's body on a CPU, its plane ending at a guard page (review 3 F-6)
+        run: |
+          cc -O1 -Wall -Wextra -Wno-unused-function -DKF_HOST -o "$RUNNER_TEMP/kf_yuv_cpu" cuda/display/kf_yuv_cpu.c
+          "$RUNNER_TEMP/kf_yuv_cpu"
+      - name: The walk kernel's source on a CPU, over the committed corpus
+        run: |
+          make -C cuda/walk check-invariants check-cpu
+          python3 -B scripts/ci/walk_kernel_mutants.py
+
   # The required status check of the master ruleset ("Master_Protect") is the context `CI`.
   # GitHub names a status check after the JOB name, not the workflow name, so without a job
   # called CI the rule can never be satisfied. This gate job is that check: it is green only
@@ -2598,7 +2611,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [stable, stripped, aarch64, firmware, broker, platform]
+    needs: [stable, stripped, aarch64, firmware, broker, platform, ptx]
     runs-on: ubuntu-latest
     steps:
       - name: Require every needed job to have passed
