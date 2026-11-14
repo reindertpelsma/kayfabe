@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "status": "PREREGISTERED ONLY; NO RUN AUTHORIZED",
+  "base": "7dcedefea093de078188efd5f712561bde746362",
+  "runtime": "bab3c0882b49c76f8a71d47fc672ba6330bc1313",
+  "binary_sha256": "8636abb126a0cd7cdd706737b6d79f0abb0165688901a916e336df055267789c",
+  "installed_guest_driver": "580.88 (32.0.15.8088)",
+  "nominal_launch_driver": "580.65.06",
+  "host_driver": "595.91.07",
+  "gpu": "RTX 4070",
+  "ram_mib": 12288,
+  "vcpus": 8,
+  "guest_vram_mib": 8192,
+  "target": {
+    "workload": "enscape-01",
+    "subtest": "06_SanMiguelFullUltraHQ",
+    "recorded_vendor_command": "\"C:\\Program Files\\SPECviewperf 15\\common\\tools\\run_vset.bat\" enscape 6",
+    "current_batch_script_content_identity": "UNKNOWN; pre-run verification gate",
+    "isolated_FullHD_context": "must be verified before any arm"
+  },
+  "flags": {
+    "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+    "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+    "KF3_KERNEL_GR_CE": "1",
+    "KF3_KERNEL_GR_WORK": "1",
+    "KF3_TRANSLATED_CE_RELAY": "1",
+    "KF3_DEFERRED_API": "1",
+    "KF3_PREEMPT_BIND_PROBE": "1",
+    "KF3_DISPLAY_IMP_ENABLE": "1",
+    "KF3_DISPLAY_CTRL_PROBE": "1",
+    "KF3_ZCULL_BIND_PROBE": "1",
+    "KF3_SW_RUNLIST_HOST_OWNED": "1",
+    "KF3_ASYNC_PREEMPT": "1",
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_SDR_COLOR": "1",
+    "KF3_DISPLAY_CAPS_PROBE": "1",
+    "KF3_DISPLAY_LUT_MIRROR": "1",
+    "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+    "KF3_LIFECYCLE_COUNT": "1",
+    "KF3_LIFECYCLE_PERIOD_S": "5",
+    "KF3_SPARSE_TWIN": "1",
+    "KF3_DIAG_LATENCY": "1"
+  },
+  "diagnostic_irq_storm": "OFF in both arms",
+  "arms": {
+    "A": {
+      "TdrDelay": null,
+      "TdrDdiDelay": null,
+      "meaning": "absent; defaults 2s/5s"
+    },
+    "B": {
+      "TdrDelay": 10,
+      "TdrDdiDelay": null,
+      "meaning": "10s scheduler threshold; DDI default"
+    }
+  },
+  "order": [
+    "A1",
+    "B1",
+    "B2",
+    "A2",
+    "A3",
+    "B3",
+    "B4",
+    "A4",
+    "A5",
+    "B5"
+  ],
+  "n_per_arm": 5,
+  "workload_wall_seconds": 1800,
+  "arm_wall_seconds": 2700,
+  "maximum_total_campaign_seconds": 27000,
+  "failed_arm_replacement": false,
+  "image_identity": {
+    "archived_parent_bytes": 3961389056,
+    "archived_parent_mtime_ns": 1792708203392864461,
+    "archived_parent_mtime_utc": "2026-10-22T22:30:03.392864+00:00",
+    "content_sha256": null,
+    "content_identity": "not recorded; seal before future run"
+  },
+  "reboot_required_in_both_arms": true,
+  "registry_readback_required_after_reboot": true,
+  "all_requested_tickets_required": true,
+  "unreleased_ticket_is_censored_not_zero": true,
+  "clock_alignment": "independent markers/QPC bounds; never tune offset to completion proximity"
+}
