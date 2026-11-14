@@ -1160,7 +1160,7 @@ def validate_3dmark_result(path, run_start, run_end):
     gpus = []
     for dev in si.iter("Device"):
         vals = {}
-        for v in dev.findall("Value"):
+        for v in dev.iter("Value"):  # DriverVersion sits in a nested Software_Key (measured 2026-11-14)
             sub = v.find("Value")
             if sub is not None:
                 vals[v.findtext("Name")] = sub.text or ""

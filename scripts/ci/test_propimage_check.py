@@ -770,7 +770,8 @@ class T(unittest.TestCase):
     SI_XML = (
         "<SystemInfo><Device><DeviceID>PCI\\VEN_10DE&amp;DEV_2786</DeviceID><Value><Name>Class</Name>"
         "<Value>Display</Value></Value><Value><Name>DeviceDesc</Name><Value>NVIDIA GeForce RTX 4070</Value>"
-        "</Value><Value><Name>DriverVersion</Name><Value>32.0.15.8088</Value></Value></Device></SystemInfo>"
+        "</Value><Software_Key><Value><Name>DriverVersion</Name><Value>32.0.15.8088</Value></Value></Software_Key>"
+        "</Device></SystemInfo>"
     )
     # guest epoch for 2026-11-12T17:50:00Z .. 18:10:00Z
     TDM_START, TDM_END = 1794505800.0, 1794507000.0
