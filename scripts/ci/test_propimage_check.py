@@ -450,10 +450,16 @@ class T(unittest.TestCase):
         self.assertIn("score and FPS are not in the log file", row["signal"])
 
     def test_superposition_readable_screen_values_are_reported_not_required(self):
-        row = self.superposition(**{"screen.txt": "7996 FPS: Min 36.59, Avg 59.81, Max 61.18"})
+        row = self.superposition(**{"screen.txt": "Score 7996 FPS: Min 36.59, Avg 59.81, Max 61.18"})
         self.assertTrue(row["ok"], row)
         self.assertIn("screen read", row["signal"])
         self.assertIn("59.81", row["signal"])
+
+    def test_superposition_bare_ocr_number_is_not_reported_as_the_score(self):
+        # Measured 2026-11-14: OCR noise "2076)" next to a real score of about 8000 was reported as the score.
+        row = self.superposition(**{"screen.txt": "2076)\nFPS: Min 33.99, Avg 59.81, Max 62.37"})
+        self.assertTrue(row["ok"], row)
+        self.assertNotIn("2076", row["signal"])
 
     def test_superposition_zero_fps_on_screen_is_a_failure(self):
         row = self.superposition(**{"screen.txt": "Score 12 FPS Min 0 Avg 0 Max 0"})

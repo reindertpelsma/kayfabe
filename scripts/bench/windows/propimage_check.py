@@ -451,7 +451,7 @@ def parse_superposition_log(raw):
 
 def screen_values(text):
     """Optional OCR read of the result screen: (score, min, avg, max) or None when not readable."""
-    score = re.search(r"(?i)\bscore\s*[:=]?\s*(\d+)", text) or re.search(r"(?m)^\s*(\d{3,6})\b", text)
+    score = re.search(r"(?i)\bscore\s*[:=]?\s*(\d+)", text)
     fps = [
         re.search(r"(?i)\b" + label + r"\s*[:=]?\s*(\d+(?:\.\d+)?)", text)
         for label in ("min", "avg", "max")
