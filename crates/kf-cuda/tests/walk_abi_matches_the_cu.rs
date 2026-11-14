@@ -1117,3 +1117,34 @@ fn the_report_constants_match_the_header() {
         assert_eq!(parse(n), u64::from(r), "{n} differs");
     }
 }
+
+/// ★ 2026-11-14 (fixcuda2): the two VER3 PCF enumerants the host checks a descriptor against
+/// (`kf_cuda::walk::KF_VER3_*`) are the values the kernel COMPILES (`kf_walk.cu`'s defines, which
+/// `scripts/ci/walk_ptx_repro.py` ties to ogkm's `gh100/dev_mmu.h`), and the Rust VER3 descriptor
+/// carries them. A drift on either side fails here, without a GPU.
+#[test]
+fn the_ver3_pcf_enumerants_are_the_kernels() {
+    let cu = std::fs::read_to_string(repo_root().join("cuda/walk/kf_walk.cu")).expect("the .cu");
+    let def = |name: &str| -> u8 {
+        let v = extract_define(&cu, name);
+        let v = v.trim_end_matches(['u', 'U']);
+        u8::from_str_radix(v.trim_start_matches("0x"), 16).expect("a hex byte")
+    };
+    let (no_valid, sparse) = (
+        def("KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE"),
+        def("KF_VER3_PDE_PCF_SPARSE_BIT"),
+    );
+    assert_eq!(no_valid, kf_cuda::walk::KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE);
+    assert_eq!(sparse, kf_cuda::walk::KF_VER3_PDE_PCF_SPARSE_BIT);
+    let f = kf_cuda::abi::kf_format_ver3();
+    assert_eq!(
+        (f.pte_pcf_no_valid_4k, f.pde_pcf_sparse_bit),
+        (no_valid, sparse)
+    );
+    let f = kf_cuda::abi::kf_format_ver2();
+    assert_eq!(
+        (f.pte_pcf_no_valid_4k, f.pde_pcf_sparse_bit),
+        (0, 0),
+        "unused on VER2"
+    );
+}
