@@ -1,0 +1,5 @@
+[egl] renderer: AMD Ryzen 9 7900 12-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.0.0-34-generic)
+RENDERER AMD Ryzen 9 7900 12-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.0.0-34-generic)
+CHECK egl_renderer FAIL
+[egl] renderer is not the NVIDIA GPU: 'AMD Ryzen 9 7900 12-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.0.0-34-generic)'
+rc=0

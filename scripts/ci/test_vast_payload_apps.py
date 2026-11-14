@@ -203,7 +203,7 @@ class AppsGateList(unittest.TestCase):
     def test_the_middle_list_includes_all_supported_apps_in_full_order(self):
         full, middle = self.committed("large"), self.committed("middle")
         self.assertEqual(middle, full)
-        self.assertEqual(len(middle), 66)
+        self.assertEqual(len(middle), 67)
         self.assertTrue({"gpu_burn", "vkpeak", "clpeak"} <= set(middle))
 
     def test_no_known_defect_is_in_a_gate_list(self):
@@ -233,18 +233,19 @@ class AppsRealOutput(unittest.TestCase):
 
     def test_the_real_g1_stage_output_grades_as_a_pass(self):
         text, names = self.case("large", "g1/gate_full.out")
+        names = [n for n in names if n != "cuda_drv_probe"]  # added 2026-11-12, after the 2026-11-07 record
         self.assertEqual(self.m.apps_rows(text, 0, names), [self.m.row("apps", len(names))])
         self.assertEqual(len(names), 66)
 
     def test_historical_g2_passes_only_its_original_63_app_contract(self):
         text, names = self.case("middle", "g2/gate_mid.out")
-        names = [n for n in names if n not in {"gpu_burn", "vkpeak", "clpeak"}]
+        names = [n for n in names if n not in {"gpu_burn", "vkpeak", "clpeak", "cuda_drv_probe"}]
         self.assertEqual(self.m.apps_rows(text, 0, names), [self.m.row("apps", len(names))])
         self.assertEqual(len(names), 63)
 
     def test_historical_g3_is_clean_and_passes_its_original_63_app_contract(self):
         text, names = self.case("middle", "g3/gate_watched.out")
-        names = [n for n in names if n not in {"gpu_burn", "vkpeak", "clpeak"}]
+        names = [n for n in names if n not in {"gpu_burn", "vkpeak", "clpeak", "cuda_drv_probe"}]
         self.assertEqual(self.m.watch_delta(text, 0), [])  # 8 host Xid before, 8 after: none new
         self.assertEqual(self.m.apps_rows(text, 0, names), [self.m.row("apps", len(names))])
 

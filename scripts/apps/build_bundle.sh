@@ -62,6 +62,8 @@ for f in "$HERE"/src/*.cu; do
   nvcc -O3 -arch=sm_86 -cudart static -o "$B/bin/$n" "$f" $ex 2>"/tmp/build_$n.err"; ok "$n" $?
 done
 gcc -O2 "$HERE/src/egl_offscreen.c" -o "$B/bin/egl_offscreen" -lEGL -lGLESv2 2>/tmp/build_egl.err; ok egl_offscreen $?
+# driver-API probe: libcuda is dlopen()ed, so it needs no toolkit and no -lcuda stub
+gcc -O2 -Wall "$HERE/src/cuda_drv_probe.c" -o "$B/bin/cuda_drv_probe" -ldl 2>/tmp/build_cdp.err; ok cuda_drv_probe $?
 
 # ---- CUDA libraries the dynamic apps need (guest has the driver but no toolkit) -------------
 rc=0

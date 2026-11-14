@@ -27,6 +27,7 @@ nvidia_smi|60|RTX|nvidia-smi
 deviceQuery|60|Result = PASS|$S/deviceQuery
 vectorAdd|60|Test PASSED|$S/vectorAdd
 vectorAddDrv|60|Result = PASS|cd $S && ./vectorAddDrv
+cuda_drv_probe|90|CUDA_DRV_PROBE_DONE rc=0 checks=7/7|$B/bin/cuda_drv_probe
 matrixMul|90|Result = PASS|$S/matrixMul
 matrixMulDrv|90|Result = PASS|cd $S && ./matrixMulDrv
 bandwidthTest|120|Result = PASS|$S/bandwidthTest
@@ -122,6 +123,16 @@ for app in "$@"; do
   # integer / transfer / launch-latency tests aborted with `clFinish (-36)` after a host Xid 31 —
   # a false PASS. clpeak reports a failed test as "Tests skipped"; the host baseline has none.
   [ "$name" = clpeak ] && [ $v = PASS ] && grep -qaE 'clFinish \(-|Tests skipped' "$log" && { v=FAIL; note="clpeak: $(grep -aE -c 'Tests skipped' "$log") test groups skipped ($(grep -aoE -m1 'cl[A-Za-z]+ \(-[0-9]+\)' "$log"))"; }
+  # ⊘ a graphics row that ran on a software rasterizer (llvmpipe, lavapipe, pocl CPU) proves nothing about the GPU:
+  #   renderer_check.py (src/, copied to share/) names the device per app and FAILS the row otherwise. Fail closed.
+  case $name in egl_offscreen|vulkaninfo|vkpeak|clinfo|clpeak)
+    if [ $v = PASS ]; then
+      rcpy=$B/share/renderer_check.py; [ -f "$rcpy" ] || rcpy=$(dirname "$0")/src/renderer_check.py
+      rpy=$PY; [ -x "$rpy" ] || rpy=python3
+      rout=$("$rpy" "$rcpy" "$name" "$log" 2>&1) || { v=FAIL; note="renderer: ${rout##*FAIL }"; note=$(echo "$note" | tr -s ' \t\n' ' ' | cut -c1-160 | tr '|' '/'); }
+      echo "$rout" >> "$log"
+    fi;;
+  esac
   echo "APPRES side=$SIDE app=$name verdict=$v rc=$rc secs=$((t1-t0)) quiet=$quiet note=${note:--}"
   grep -a -E '^(OUTSHA|DIGEST) ' "$log" | sed "s/^/APPDIG side=$SIDE app=$name /"
 done
