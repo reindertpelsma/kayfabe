@@ -1,8 +1,17 @@
 //! ★ The ONE raw-memory type: a region QEMU owns (BAR0 shadow RAM, guest RAM) that Rust reads and
 //! writes. Everything else in this crate is safe code over it.
 
-/// `[ptr, ptr+len)` of memory QEMU allocated and keeps mapped for the device's lifetime.
-#[derive(Debug, Clone, Copy)]
+/// `[ptr, ptr+len)` of memory QEMU allocated and keeps mapped while the region is registered.
+///
+/// ★ Security fix C-02 (review 2, 2026-11-13): **not `Clone`, not `Copy`.** A guest-RAM region
+/// is owned by exactly one [`crate::mem::RamMap`] entry from `kf3_ram_add` to `kf3_ram_del`, and
+/// safe code reaches it only through a guard that holds the map's read lock across one bounded
+/// copy (`RamMap::block_for` / `RamMap::read_file` and friends). ⊘ The text this corrects: *"a
+/// `Copy` raw region"* — copies left the guard and were used after `kf3_ram_del` let QEMU free the
+/// block (use-after-free of VMM memory, steered by guest ring contents). With no copy, the only
+/// way to keep the address past the unplug is to keep the guard, and the unplug's write lock
+/// waits for it.
+#[derive(Debug)]
 pub struct RawRegion {
     ptr: *mut u8,
     len: usize,
@@ -11,19 +20,54 @@ pub struct RawRegion {
 // SAFETY: the region is process memory QEMU keeps mapped from registration until the device (or
 // the RAM block) is torn down, which unregisters it here first. Concurrent access is the device's
 // ordinary model (a guest vCPU and our threads touch the same page, as hardware DMA does); every
-// access below is a bounds-checked volatile or byte copy, never a reference.
+// access below is a bounds-checked volatile or byte copy, never a reference. The type is neither
+// `Clone` nor `Copy`, so the one owner (the RAM map entry or the device's shadow piece) is the
+// only holder, and unregistering removes it.
 unsafe impl Send for RawRegion {}
 // SAFETY: as above — no `&`/`&mut` into the memory is ever created, only volatile/copy access.
 unsafe impl Sync for RawRegion {}
 
+/// ★ C-02 (2026-11-13): a compile-time guard that `RawRegion` and [`BackendFd`] are never made
+/// `Copy` again (the trait resolution below becomes ambiguous — a build error — for a `Copy`
+/// type). ⊘ `BackendFd` is `Clone` on purpose: a clone shares the owned descriptor.
+const _: fn() = || {
+    trait AmbiguousIfCopy<A> {
+        fn some_item() {}
+    }
+    impl<T: ?Sized> AmbiguousIfCopy<()> for T {}
+    impl<T: Copy> AmbiguousIfCopy<u8> for T {}
+    let _ = <RawRegion as AmbiguousIfCopy<_>>::some_item;
+    let _ = <BackendFd as AmbiguousIfCopy<_>>::some_item;
+};
+
 impl RawRegion {
     /// Adopt `[ptr, ptr+len)`.
+    ///
+    /// What CAN be checked is checked here, once, and panics (a wrong caller stops the VMM, never
+    /// corrupts it): a null `ptr` with a non-zero `len`, and a range that wraps the address space.
+    ///
+    /// CALLER-CONTRACT: that the range is mapped, writable and stays so until this region is
+    /// dropped. Not validated because no syscall can prove QEMU will keep it mapped; if it breaks,
+    /// a copy touches unmapped or reused memory. The one production caller is `kf3_ram_add` /
+    /// `kf3_shadow_attach` (QEMU's RAM block / shadow allocation), and the ONE owner of the result
+    /// is the RAM map entry or the shadow piece, removed before QEMU frees the memory (C-02).
     ///
     /// # Safety
     /// `ptr` must be valid for reads and writes of `len` bytes until this region is dropped from
     /// every structure holding it (the device unregisters it before QEMU frees the memory).
+    ///
+    /// # Panics
+    /// On a null `ptr` with `len > 0`, or when `ptr + len` overflows the address space.
     #[must_use]
     pub unsafe fn adopt(ptr: *mut u8, len: usize) -> RawRegion {
+        assert!(
+            len == 0 || !ptr.is_null(),
+            "RawRegion::adopt: null pointer for {len} bytes"
+        );
+        assert!(
+            (ptr as usize).checked_add(len).is_some(),
+            "RawRegion::adopt: [{ptr:p}, +{len:#x}) wraps the address space"
+        );
         RawRegion { ptr, len }
     }
 
@@ -97,26 +141,77 @@ impl RawRegion {
 /// ★ P4: a memory backend's descriptor (`memory-backend-memfd`) that QEMU registered with this
 /// device — a TYPED token, so safe code can only hold fds that crossed the FFI as one
 /// (`THE_CONSTRAINTS.md` §13). Minted only by the `unsafe` [`BackendFd::adopt`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BackendFd(i32);
+///
+/// ★ Security fix C-03 / A-01 (review 2, 2026-11-13): the token OWNS a duplicate of the
+/// backend's descriptor (`F_DUPFD_CLOEXEC` at adoption, shared by `Arc`), so [`Self::borrow`]
+/// lends a descriptor that is open for as long as the token (or a clone of it) lives — whatever
+/// QEMU does with its own number afterwards. ⊘ The text this corrects: *"a `Copy` integer"* whose
+/// `borrow()` fabricated a `BorrowedFd`: a backend closed between the lookup and the VA thread's
+/// `mmap(MAP_FIXED)` let a REUSED number (a disk image, our own memfd) be mapped into a
+/// guest-visible BAR window. Equality is the FILE's identity (`st_dev`, `st_ino`), which is what
+/// "the one fd every block shares" always meant: QEMU's two q35 aliases of `ram0` hand over the
+/// same file, and two different backends are never equal even if QEMU reused a number.
+#[derive(Debug, Clone)]
+pub struct BackendFd {
+    file: std::sync::Arc<std::fs::File>,
+    dev: u64,
+    ino: u64,
+}
+
+impl PartialEq for BackendFd {
+    fn eq(&self, other: &Self) -> bool {
+        self.dev == other.dev && self.ino == other.ino
+    }
+}
+impl Eq for BackendFd {}
 
 impl BackendFd {
-    /// Adopt `fd`; `None` for a negative fd (a backend with no descriptor).
+    /// Adopt `fd` by duplicating it; `None` for a negative fd (a backend with no descriptor), or
+    /// when the duplicate or its `fstat` is refused (reported on stderr: the block then behaves as
+    /// a backend without a descriptor, exactly as before for `fd < 0`).
+    ///
+    /// CALLER-CONTRACT: that `fd` is the memory backend's descriptor for the block being
+    /// registered. Not validated because any file can back guest RAM (memfd, hugetlbfs, a plain
+    /// file); if it breaks, BAR windows show that file instead of guest RAM. A closed number is
+    /// refused (the duplicate fails), and what is adopted can no longer be swapped by a close and
+    /// a reuse of the number.
     ///
     /// # Safety
-    /// `fd` must be a descriptor QEMU keeps open until the RAM block it backs is unregistered
-    /// (`kf3_ram_del`), which removes every `BackendFd` of it from the device first.
+    /// `fd` must be an open descriptor for the duration of this call. Nothing is assumed about it
+    /// afterwards: the token holds its own duplicate.
     #[must_use]
     pub unsafe fn adopt(fd: i32) -> Option<BackendFd> {
-        (fd >= 0).then_some(BackendFd(fd))
+        if fd < 0 {
+            return None;
+        }
+        // SAFETY: the caller promised `fd` is open for this call; the borrow does not outlive it
+        // (it is duplicated on the next line and dropped at the end of the statement).
+        let owned = unsafe { std::os::fd::BorrowedFd::borrow_raw(fd) }
+            .try_clone_to_owned()
+            .map_err(|e| eprintln!("kf3: backend fd {fd}: dup refused ({e})"))
+            .ok()?;
+        Self::own(std::fs::File::from(owned))
     }
 
-    /// Borrow it for one `mmap`. ⊘ Never closed here.
+    /// Take ownership of an open file (identity read once, here).
+    fn own(file: std::fs::File) -> Option<BackendFd> {
+        use std::os::unix::fs::MetadataExt;
+        let meta = file
+            .metadata()
+            .map_err(|e| eprintln!("kf3: backend fd: fstat refused ({e})"))
+            .ok()?;
+        Some(BackendFd {
+            dev: meta.dev(),
+            ino: meta.ino(),
+            file: std::sync::Arc::new(file),
+        })
+    }
+
+    /// Borrow it for one `mmap`. ⊘ Never closed here; open for as long as `self` lives.
     #[must_use]
     pub fn borrow(&self) -> std::os::fd::BorrowedFd<'_> {
-        // SAFETY: `adopt`'s contract — the descriptor is open while a `BackendFd` of it exists in
-        // the device, and `BorrowedFd` never closes it.
-        unsafe { std::os::fd::BorrowedFd::borrow_raw(self.0) }
+        use std::os::fd::AsFd;
+        self.file.as_fd()
     }
 }
 
@@ -151,6 +246,9 @@ unsafe impl Sync for OverlayHook {}
 
 impl OverlayHook {
     /// Adopt the C device's verb.
+    ///
+    /// CALLER-CONTRACT: the `# Safety` text below — a C function pointer and its opaque state
+    /// cannot be validated from Rust; if it breaks, the call jumps to or passes garbage.
     ///
     /// # Safety
     /// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime, and
@@ -194,6 +292,9 @@ unsafe impl Sync for ReadTrapHook {}
 
 impl ReadTrapHook {
     /// Adopt the C device's verb.
+    ///
+    /// CALLER-CONTRACT: the `# Safety` text below — a C function pointer and its opaque state
+    /// cannot be validated from Rust; if it breaks, the call jumps to or passes garbage.
     ///
     /// # Safety
     /// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime, and
@@ -240,6 +341,9 @@ unsafe impl Sync for IoeventfdHook {}
 
 impl IoeventfdHook {
     /// Adopt the C device's verb.
+    ///
+    /// CALLER-CONTRACT: the `# Safety` text below — a C function pointer and its opaque state
+    /// cannot be validated from Rust; if it breaks, the call jumps to or passes garbage.
     ///
     /// # Safety
     /// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime, must
@@ -304,6 +408,9 @@ unsafe impl Send for BrokerHooks {}
 
 impl BrokerHooks {
     /// Adopt the C device's verbs.
+    ///
+    /// CALLER-CONTRACT: the `# Safety` text below — C function pointers and their opaque state
+    /// cannot be validated from Rust; if it breaks, a call jumps to or passes garbage.
     ///
     /// # Safety
     /// `watch` and `timer` must be callable with `opaque` on QEMU's main loop for the device's
@@ -419,6 +526,9 @@ unsafe impl Send for QemuSink {}
 
 impl QemuSink {
     /// Adopt the C device's verbs; `None` when any is missing.
+    ///
+    /// CALLER-CONTRACT: the `# Safety` text below — C function pointers and their opaque state
+    /// cannot be validated from Rust; if it breaks, a call jumps to or passes garbage.
     ///
     /// # Safety
     /// Every verb in `ops` must be callable with `opaque` on QEMU's main loop for the device's
@@ -560,20 +670,36 @@ impl kf_broker::CursorSink for QemuSink {
     }
 }
 
-/// Test-only owned bytes and permanently open fd. No unsafe adoption contract is
-/// weakened for production; backing is intentionally retained until process exit.
+/// Test-only owned bytes and an open fd (a fresh memfd, so two calls are two distinct files). No
+/// unsafe adoption contract is weakened for production; the bytes are intentionally retained until
+/// process exit.
 #[cfg(test)]
 pub(crate) fn test_owned_ram(bytes: usize) -> (RawRegion, BackendFd) {
-    use std::os::fd::AsRawFd;
     let mem = Box::leak(vec![0u8; bytes].into_boxed_slice());
-    let file = Box::leak(Box::new(std::fs::File::open("/dev/zero").unwrap()));
+    let file = kf_linux_raw::SharedRam::create_named(c"kf-test-ram", 4096)
+        .unwrap()
+        .dup_for_export()
+        .unwrap();
     (
         RawRegion {
             ptr: mem.as_mut_ptr(),
             len: mem.len(),
         },
-        BackendFd(file.as_raw_fd()),
+        BackendFd::own(std::fs::File::from(file)).unwrap(),
     )
+}
+
+#[cfg(test)]
+impl RawRegion {
+    /// Test-only: a second handle on memory [`test_owned_ram`] leaked for the process's life (so
+    /// no lifetime can be violated). ⊘ Not available outside `cfg(test)`: production regions have
+    /// one owner.
+    pub(crate) fn test_alias(&self) -> RawRegion {
+        RawRegion {
+            ptr: self.ptr,
+            len: self.len,
+        }
+    }
 }
 
 /// ★ ABI 23 (`V3_DISPLAY.md` §8.20): the QEMU sink's own conversions, against C-ABI verbs that
@@ -780,5 +906,161 @@ mod qemu_sink_tests {
             &px[..5]
         ));
         assert_eq!(said(), ["define 2x3 1,2 last=0xdeadbeef"]);
+    }
+}
+
+/// ★ Security fixes C-02 / C-03 (review 2, 2026-11-13): the two adoption doors called with
+/// hostile or wrong arguments refuse (or panic), and an adopted descriptor cannot be swapped for
+/// another file by closing and reusing its number.
+#[cfg(test)]
+mod adoption_tests {
+    use super::*;
+    use std::io::{Seek, SeekFrom, Write};
+    use std::os::fd::AsRawFd;
+
+    /// The ONE door these tests open `RawRegion::adopt` through — with deliberately wrong
+    /// arguments; adoption must panic or yield a region that refuses every access.
+    fn adopt_raw(ptr: usize, len: usize) -> RawRegion {
+        // SAFETY: test-only. No region adopted here is ever accessed inside its range: each test
+        // either expects the panic or asserts the access is refused by the bounds check first.
+        unsafe { RawRegion::adopt(ptr as *mut u8, len) }
+    }
+
+    /// The ONE door these tests open `BackendFd::adopt` through.
+    fn adopt_fd(fd: i32) -> Option<BackendFd> {
+        // SAFETY: test-only. Negative and closed numbers are deliberate contract violations the
+        // door must refuse; an open number is open for the call.
+        unsafe { BackendFd::adopt(fd) }
+    }
+
+    fn memfd_with(tag: &[u8]) -> std::fs::File {
+        let fd = kf_linux_raw::SharedRam::create_named(c"kf-adopt-test", 4096)
+            .unwrap()
+            .dup_for_export()
+            .unwrap();
+        let mut f = std::fs::File::from(fd);
+        f.write_all(tag).unwrap();
+        f
+    }
+
+    fn tag_of(fd: std::os::fd::BorrowedFd<'_>) -> Vec<u8> {
+        use std::io::Read;
+        let mut f = std::fs::File::from(fd.try_clone_to_owned().unwrap());
+        f.seek(SeekFrom::Start(0)).unwrap();
+        let mut b = [0u8; 4];
+        f.read_exact(&mut b).unwrap();
+        b.to_vec()
+    }
+
+    /// RED on the pre-fix tree (`BackendFd` was the bare number: after QEMU closed it and the
+    /// number was reused, `borrow()` lent the NEW file — which the VA thread then `mmap`ed into a
+    /// guest-visible BAR window). GREEN: the token owns a duplicate of the file it adopted.
+    #[test]
+    fn a_closed_and_reused_backend_number_still_lends_the_adopted_file() {
+        let backend = memfd_with(b"RAM0");
+        let raw = backend.as_raw_fd();
+        let token = adopt_fd(raw).expect("adopted");
+        // QEMU closes the backend; a disk image opens and gets the same number.
+        drop(backend);
+        let intruder = memfd_with(b"DISK");
+        let reused = intruder.as_raw_fd() == raw;
+        assert_eq!(
+            tag_of(token.borrow()),
+            b"RAM0",
+            "the backend token lends another file (number reused: {reused})"
+        );
+        let other = BackendFd::own(intruder.try_clone().unwrap()).unwrap();
+        assert_ne!(
+            token, other,
+            "two different files are never the same backend"
+        );
+    }
+
+    #[test]
+    fn hostile_descriptor_numbers_are_refused() {
+        for fd in [-1, i32::MIN, -4096] {
+            assert!(adopt_fd(fd).is_none(), "{fd}");
+        }
+        // A number that is not open: the duplicate is refused, nothing is adopted.
+        assert!(adopt_fd(i32::MAX).is_none());
+    }
+
+    #[test]
+    fn two_adoptions_of_one_file_are_the_same_backend_and_outlive_the_original() {
+        let backend = memfd_with(b"RAM1");
+        let (a, b) = (
+            adopt_fd(backend.as_raw_fd()).unwrap(),
+            adopt_fd(backend.as_raw_fd()).unwrap(),
+        );
+        assert_eq!(a, b, "q35's two aliases of one memfd are one backend");
+        drop(backend);
+        let c = a.clone();
+        drop(a);
+        assert_eq!(tag_of(c.borrow()), b"RAM1");
+        assert_eq!(tag_of(b.borrow()), b"RAM1");
+    }
+
+    #[test]
+    #[should_panic(expected = "null pointer")]
+    fn a_null_region_with_a_length_panics() {
+        let _ = adopt_raw(0, 16);
+    }
+
+    #[test]
+    #[should_panic(expected = "null pointer")]
+    fn a_null_region_of_one_byte_panics() {
+        let _ = adopt_raw(0, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "wraps the address space")]
+    fn a_region_that_wraps_the_address_space_panics() {
+        let _ = adopt_raw(usize::MAX, 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "wraps the address space")]
+    fn a_region_ending_one_past_the_address_space_panics() {
+        let _ = adopt_raw(1usize << 63, 1usize << 63);
+    }
+
+    #[test]
+    fn a_region_ending_exactly_at_the_top_is_accepted_and_never_touched() {
+        let r = adopt_raw(usize::MAX - 3, 3);
+        assert_eq!(r.len(), 3);
+        assert!(r.load_u32(0).is_none(), "4 bytes do not fit in 3");
+    }
+
+    #[test]
+    fn a_backend_without_a_descriptor_is_none() {
+        // QEMU passes -1 for a backend with no fd; `BorrowedFd` may never hold -1.
+        assert!(adopt_fd(-1).is_none());
+    }
+
+    #[test]
+    fn an_empty_region_refuses_every_access() {
+        // A null pointer is allowed only for an empty region.
+        let r = adopt_raw(0, 0);
+        assert!(r.is_empty());
+        let mut b = [0u8; 1];
+        assert!(!r.read_into(0, &mut b));
+        assert!(!r.write_from(0, &b));
+        assert!(r.load_u32(0).is_none());
+        assert!(!r.store_u32(0, 1));
+        assert!(r.read_into(0, &mut []));
+    }
+
+    #[test]
+    fn hostile_offsets_into_a_region_are_refused() {
+        let (r, _) = test_owned_ram(16);
+        let mut b = [0u8; 4];
+        assert!(!r.read_into(usize::MAX, &mut b));
+        assert!(!r.read_into(13, &mut b));
+        assert!(r.read_into(12, &mut b));
+        assert!(r.load_u32(usize::MAX - 1).is_none());
+        assert!(!r.store(0, 0, 3), "width 3 is refused");
+        assert!(!r.store(12, 0, 8), "straddles the end");
+        assert!(r.store(8, 0x0102_0304_0506_0708, 8));
+        assert_eq!(r.load_u32(8), Some(0x0506_0708));
     }
 }

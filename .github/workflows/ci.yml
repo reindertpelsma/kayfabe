@@ -1652,7 +1652,7 @@ jobs:
           #   ~0.9 ms on every walk (Ada lane). ENOSYS/EPERM falls back to `epoll_wait`, rounded up.
           #   timerslack_unsafe.rs (+2): `prctl(PR_SET_TIMERSLACK)` and `prctl(PR_GET_TIMERSLACK)` for
           #   the CALLING thread, by value, no pointer; the default 50 us slack equals the wait itself.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:101 kf-cuda:76 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:101 kf-cuda:76 kf-qemu:88 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
