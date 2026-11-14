@@ -805,6 +805,37 @@ try {Save-Screen "$D\3dmark.png"} catch {}
 Get-Process | Where-Object {$_.Name -match '^3DMark'} | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
 """
 
+# eDrawings (measured 2026-11-14): the first start shows a Software License Agreement dialog whose ACCEPT
+# button is visible to UI Automation (AutomationId 1). The check accepts it (licence wording is not a decision
+# factor for test use), opens a copy of a sample part and grades the window title that carries its file name.
+EDRAWINGS_RUN = r"""
+$sample=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
+if(-not $sample){throw 'No sample part under C:\ProgramData\SolidWorks'}
+Copy-Item $sample.FullName "$D\kfsample.sldprt"
+$r.sample='kfsample.sldprt';$r.accepted=$false;$r.window_title=''
+$p=Start-Process 'C:\Program Files\SOLIDWORKS Corp\eDrawings\eDrawings.exe' -ArgumentList "`"$D\kfsample.sldprt`"" -PassThru
+$deadline=(Get-Date).AddSeconds(240)
+while((Get-Date) -lt $deadline){
+ foreach($pr in Get-Process -Name eDrawings -ErrorAction SilentlyContinue){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
+  foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){
+   $name=$w.Current.Name
+   if($name -match 'kfsample'){$r.window_title=$name}
+   if(-not $r.accepted){
+    $btn=$w.FindAll([System.Windows.Automation.TreeScope]::Subtree,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object {$_.Current.Name -ceq 'ACCEPT' -and $_.Current.AutomationId -ceq '1' -and $_.Current.ControlType.ProgrammaticName -ceq 'ControlType.Button'} | Select-Object -First 1
+    if($btn){$btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke();$r.accepted=$true;Start-Sleep 5}
+   }
+  }
+ }
+ if($r.window_title){break}
+ Start-Sleep 3
+}
+$r.kind='EDW'
+Start-Sleep 3
+try {Save-Screen "$D\edrawings.png"} catch {}
+Get-Process -Name eDrawings -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
 # Wukong: the Steam .url shortcut cannot resolve offline ("This command cannot be run completely"), and
 # launching b1_benchmark.exe bare makes it hand over to the Steam client's launch-option dialog (a
 # CEF window UI Automation cannot see). Measured 2026-11-14: with the AppID in the environment (read from
@@ -909,8 +940,8 @@ Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {$_.Com
 SOLIDWORKS = r"""
 $sw=New-Object -ComObject SldWorks.Application
 $sw.Visible=$true
-$part=Get-ChildItem 'C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\samples' -Recurse -Filter *.sldprt | Select-Object -First 1
-if(-not $part){throw 'No sample part; supply a licensed sample in the image'}
+$part=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
+if(-not $part){throw 'No sample part under C:\ProgramData\SolidWorks'}
 $err=0;$warn=0
 $model=$sw.OpenDoc6($part.FullName,1,1,'',[ref]$err,[ref]$warn)
 if(-not $model -or $err -ne 0){throw 'OpenDoc6 failed'}
@@ -993,7 +1024,7 @@ def render_check(
     run_id="0" * 32,
     plan=None,
     accessibility_experiment=False,
-    solidworks_export=False,
+    solidworks_export=True,
     superposition_run=False,
 ):
     spec = CHECKS[name]
@@ -1014,6 +1045,8 @@ def render_check(
         script += WUKONG_RUN
     elif name == "3dmark":
         script += THREEDMARK_RUN
+    elif name == "edrawings":
+        script += EDRAWINGS_RUN
     else:
         if name == "superposition" and superposition_run:
             script += (
@@ -1281,6 +1314,21 @@ def verdict(name, run_id, directory, plan=None):
             if cli_refused(str(r.get("cli_output", ""))):
                 signal += "; CLI refused (Professional/Developer key needed), so the run went through UI Automation"
             row.update(ok=True, evidence="FILE", signal=signal)
+        elif name == "edrawings" and r.get("kind") == "EDW":
+            title = str(r.get("window_title", ""))
+            if r.get("sample") != "kfsample.sldprt" or "kfsample.sldprt" not in title.lower():
+                row["status"] = "INCONCLUSIVE"
+                raise ValueError(
+                    "eDrawings window title does not show the opened sample; accepted licence dialog: "
+                    + str(r.get("accepted") is True)
+                    + "; title: "
+                    + title[:100]
+                )
+            row.update(
+                ok=True,
+                evidence="UIA",
+                signal=f"eDrawings opened the sample part (window title {title[:80]!r}); licence dialog accepted via UIA: {r.get('accepted') is True}",
+            )
         elif name == "wukong" and r.get("kind") == "WUKONG":
             status, text = validate_wukong(r)
             row["evidence"] = "FILE" if r.get("crash") or r.get("kernel_events") else "NONE"
@@ -1362,6 +1410,7 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
             "crash_context.xml",
             "result.3dmark-result",
             "3dmark.png",
+            "edrawings.png",
         ):
             limit = 16 * 1024 * 1024 if f == "model.step" or f.endswith((".png", ".3dmark-result")) else 1024 * 1024
             p = guest.ps(
@@ -1485,9 +1534,10 @@ def main(argv=None):
         help="UNPROVEN Chromium accessibility experiment, not an established fix",
     )
     ap.add_argument(
-        "--solidworks-export",
-        action="store_true",
-        help="Unqualified COM sample/STEP work probe; otherwise LAUNCH_ONLY",
+        "--solidworks-launch-only",
+        dest="solidworks_export",
+        action="store_false",
+        help="Skip the COM sample-part/STEP export (default: run it)",
     )
     ap.add_argument(
         "--superposition-run",

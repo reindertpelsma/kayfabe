@@ -997,8 +997,45 @@ class T(unittest.TestCase):
         self.assertIn("Remove-Item $source", script)
 
     def test_solidworks_default_launch_only(self):
-        self.assertNotIn("OpenDoc6", m.render_check("solidworks"))
-        self.assertIn("OpenDoc6", m.render_check("solidworks", solidworks_export=True))
+        self.assertNotIn("OpenDoc6", m.render_check("solidworks", solidworks_export=False))
+        self.assertIn("OpenDoc6", m.render_check("solidworks"))
+
+    def test_solidworks_sample_comes_from_programdata_not_the_missing_samples_dir(self):
+        script = m.render_check("solidworks")
+        self.assertIn("C:\\ProgramData\\SolidWorks", script)
+        self.assertNotIn("SOLIDWORKS\\samples", script)
+
+    def edrawings(self, **changes):
+        r = self.fixture(app="edrawings", kind="EDW", sample="kfsample.sldprt", accepted=True,
+                         window_title="kfsample.SLDPRT - eDrawings")
+        for key in ("artifact", "modified", "bytes", "api_ok"):
+            r.pop(key)
+        r.update(changes)
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            return m.verdict("edrawings", "a" * 32, Path(td))
+
+    def test_edrawings_title_with_the_sample_name_passes_via_uia(self):
+        row = self.edrawings()
+        self.assertTrue(row["ok"], row)
+        self.assertEqual(row["evidence"], "UIA")
+
+    def test_edrawings_licence_dialog_only_is_inconclusive(self):
+        row = self.edrawings(window_title="", accepted=False)
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_edrawings_generic_title_is_not_a_pass(self):
+        row = self.edrawings(window_title="eDrawings")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_edrawings_wrong_sample_name_is_not_a_pass(self):
+        self.assertFalse(self.edrawings(sample="other.sldprt")["ok"])
+
+    def test_edrawings_script_accepts_by_uia_selector_not_coordinates(self):
+        script = m.render_check("edrawings")
+        self.assertIn("-ceq 'ACCEPT'", script)
+        self.assertIn("AutomationId -ceq '1'", script)
+        self.assertNotIn("SetCursorPos", script)
 
     def test_resolve_default_launch_only(self):
         self.assertIn("$r.kind='LAUNCH_ONLY'", m.render_check("resolve"))
@@ -1782,6 +1819,8 @@ def mutants():
         ("tdm-entity", 'if re.search(rb"<!(DOCTYPE|ENTITY)", raw, re.I):', "if False:"),
         ("tdm-member", "if info.filename not in TDM_MEMBERS or info.file_size > TDM_MAX_MEMBER:", "if False:"),
         ("run-replace", 'kw.setdefault("errors", "replace")', "pass"),
+        ("edw-title", '"kfsample.sldprt" not in title.lower()', "False"),
+        ("edw-sample", 'r.get("sample") != "kfsample.sldprt" or', "False and"),
         ("wukong-crash", 'if crash:', "if False:"),
         ("wukong-kernel", 'if str(e.get("code")) in GPU_KERNEL_EVENTS', "if False and str(e.get(\"code\")) in GPU_KERNEL_EVENTS"),
         ("wukong-start", 'if r.get("shipping_seen") is not True:', "if False:"),
