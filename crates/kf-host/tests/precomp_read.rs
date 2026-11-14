@@ -8,17 +8,17 @@ const VERSION: &str = "595.91.07";
 fn u32_at(b: &[u8], p: usize) -> u32 {
     u32::from_le_bytes(b[p..p + 4].try_into().unwrap())
 }
-fn reply(cmd: u32, p: &mut [u8], ops: &mut [u8]) -> Result<(), String> {
+fn reply(cmd: u32, p: &mut [u8], pointer_at: usize, ops: &mut [u8]) -> Result<(), String> {
     assert_eq!(cmd, 0x2080_0122);
     assert_eq!(p.len(), 48);
+    assert_eq!(
+        pointer_at, 24,
+        "the funnel is told where the ops pointer goes"
+    );
     assert_eq!(u32_at(p, 20) as usize * 32, ops.len());
     assert!(u32_at(p, 20) <= 32);
-    assert_eq!(
-        u64::from_le_bytes(p[24..32].try_into().unwrap()),
-        ops.as_mut_ptr() as u64
-    );
     for (i, byte) in p.iter().enumerate() {
-        if !(20..32).contains(&i) {
+        if !(20..24).contains(&i) {
             assert_eq!(*byte, 0);
         }
     }
@@ -66,9 +66,9 @@ fn all_five_compiled_host_abis_use_the_same_read_only_contract() {
 }
 fn bad_status(at_end: bool) {
     let called = Cell::new(false);
-    let r = read_with(VERSION, true, &addresses(48), |cmd, p, o| {
+    let r = read_with(VERSION, true, &addresses(48), |cmd, p, at, o| {
         called.set(true);
-        reply(cmd, p, o)?;
+        reply(cmd, p, at, o)?;
         let n = if at_end { o.len() - 32 } else { 0 };
         o[n + 2] = 32;
         Ok(())
@@ -86,9 +86,9 @@ fn final_denied_register_abandons_the_whole_snapshot() {
 }
 fn bad_offset(at_end: bool) {
     let called = Cell::new(false);
-    let r = read_with(VERSION, true, &addresses(48), |cmd, p, o| {
+    let r = read_with(VERSION, true, &addresses(48), |cmd, p, at, o| {
         called.set(true);
-        reply(cmd, p, o)?;
+        reply(cmd, p, at, o)?;
         let n = if at_end { o.len() - 32 } else { 0 };
         o[n + 12] ^= 4;
         Ok(())
@@ -105,7 +105,7 @@ fn changed_last_register_is_a_malformed_reply() {
     bad_offset(true);
 }
 fn refusal(detail: &str) {
-    let r = read_with(VERSION, true, &addresses(48), |_, _, _| {
+    let r = read_with(VERSION, true, &addresses(48), |_, _, _, _| {
         Err(detail.to_string())
     });
     assert!(r.unwrap_err().contains(detail));
@@ -121,12 +121,12 @@ fn permission_refusal_is_a_named_fallback() {
 #[test]
 fn a_later_failed_batch_does_not_return_a_partial_page() {
     let calls = Cell::new(0);
-    let r = read_with(VERSION, true, &addresses(48), |cmd, p, o| {
+    let r = read_with(VERSION, true, &addresses(48), |cmd, p, at, o| {
         calls.set(calls.get() + 1);
         if calls.get() == 2 {
             return Err("second batch refused".into());
         }
-        reply(cmd, p, o)
+        reply(cmd, p, at, o)
     });
     assert_eq!(calls.get(), 2);
     assert!(r.is_err());
@@ -134,7 +134,7 @@ fn a_later_failed_batch_does_not_return_a_partial_page() {
 fn refused_before_ioctl(version: &str, unprivileged: bool, a: &[u32]) {
     let calls = Cell::new(0);
     assert!(
-        read_with(version, unprivileged, a, |_, _, _| {
+        read_with(version, unprivileged, a, |_, _, _, _| {
             calls.set(calls.get() + 1);
             Ok(())
         })
@@ -177,4 +177,23 @@ fn unaligned_last_address_never_issues_an_ioctl() {
     let mut a = addresses(2);
     a[1] += 1;
     refused_before_ioctl(VERSION, true, &a);
+}
+/// Security review 1, F-01: safe code must never write a host address into the request. The
+/// pointer field is minted (and scrubbed) by `kf_linux_raw::Indirect`, so the bytes handed to the
+/// control must hold zero there.
+#[test]
+fn the_request_carries_no_host_address() {
+    let saw = Cell::new(false);
+    read_with(VERSION, true, &addresses(2), |cmd, p, at, o| {
+        saw.set(true);
+        assert_eq!(
+            &p[24..32],
+            &[0u8; 8],
+            "a host address was written by safe code"
+        );
+        let _ = (cmd, at, o);
+        Ok(())
+    })
+    .ok();
+    assert!(saw.get());
 }
