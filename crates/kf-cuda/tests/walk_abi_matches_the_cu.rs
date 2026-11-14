@@ -933,6 +933,17 @@ fn the_report_constants_match_the_header() {
         u64::from(kf_cuda::abi::KFWR_HF_RESYNC)
     );
     assert_eq!(parse("KFWR_HF_DIFF"), u64::from(kf_cuda::abi::KFWR_HF_DIFF));
+    // ★ 2026-11-14 (S1-69): the validator's op set and format version
+    assert_eq!(parse("KFWR_VERSION"), u64::from(kf_cuda::abi::KFWR_VERSION));
+    assert_eq!(parse("KFWR_OP_MAP"), u64::from(kf_cuda::abi::KFWR_OP_MAP));
+    assert_eq!(
+        parse("KFWR_OP_UNMAP"),
+        u64::from(kf_cuda::abi::KFWR_OP_UNMAP)
+    );
+    assert_eq!(
+        parse("KFWR_OP_REMAP"),
+        u64::from(kf_cuda::abi::KFWR_OP_REMAP)
+    );
     assert_eq!(parse("KFWR_RF_HELD"), u64::from(kf_cuda::abi::KFWR_RF_HELD));
     assert_eq!(
         parse("KFWR_RF_READ_ONLY"),
