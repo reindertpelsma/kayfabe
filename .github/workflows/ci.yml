@@ -1630,7 +1630,11 @@ jobs:
           #   ~0.9 ms on every walk (Ada lane). ENOSYS/EPERM falls back to `epoll_wait`, rounded up.
           #   timerslack_unsafe.rs (+2): `prctl(PR_SET_TIMERSLACK)` and `prctl(PR_GET_TIMERSLACK)` for
           #   the CALLING thread, by value, no pointer; the default 50 us slack equals the wait itself.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:101 kf-cuda:78 kf-qemu:88 firmware/kf-gop:78 kf-chan:0"
+          # ★ kf-cuda 78 -> 80 (2026-11-14, test branch claude/secbatch-test-20261114, the merged security
+          #   batch): the TRUE count of the merged tree, a combined sum of #382 (-2, 76), #396 (+3, D-15
+          #   unwind guards) and #405 (+1, F-7 pageable-memory query); no single PR carried it. kf-qemu 88
+          #   is #378's +2 (test-only helpers; owner OK pending). Recount before the real merges.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:101 kf-cuda:80 kf-qemu:88 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

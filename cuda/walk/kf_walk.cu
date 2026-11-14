@@ -2279,13 +2279,13 @@ __device__ __forceinline__ void kf_par_expand_one(const KfArgs &a, uint32_t leve
     }
 }
 
+/* CALLER-CONTRACT: `level` is the host launch loop's k, first_dir <= k < KF_DIRS (walk.rs). */
 __global__ void kf_par_expand(KfArgs a, uint32_t level, const KfEnt *in, const uint32_t *nin,
                               KfEnt *stage, uint32_t stagecap, uint32_t *used,
                               uint32_t *start, uint32_t *cnt)
 {
     extern __shared__ uint64_t shmem[];
-    /* ★ F-10: the launch's shared memory covers every warp's snapshot, or nothing is read. Block-uniform.
-     * CALLER-CONTRACT: `level` is the host launch loop's k, first_dir <= k < KF_DIRS (walk.rs). */
+    /* ★ F-10: the launch's shared memory covers every warp's snapshot, or nothing is read. Block-uniform. */
     if (!kf_par_smem_ok()) { if (threadIdx.x == 0u) kf_par_abort(a.dev, KFWR_R_BAD_FORMAT); return; }
     const uint32_t lane = threadIdx.x & (KF_WARP - 1u);
     const uint32_t wib = threadIdx.x / KF_WARP;
