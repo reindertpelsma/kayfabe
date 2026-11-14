@@ -27,6 +27,13 @@ use std::sync::{Mutex, OnceLock};
 
 /// ★ 2026-11-03: the VA-manager thread's timer slack — small against its 50 us pending-walk
 /// wait (`Device::va_loop`); the kernel's default is 50 us.
+/// ★ 2026-11-14 (security review 1 F-13 / S1-86): the drainer's per-doorbell refusal lines (a GSP
+/// write refused, a command service refused, a held reply post refused — `QueueFull` when the guest
+/// stops draining its status queue, once per doorbell) are counted per site and printed only when
+/// [`crate::reset::loud`] picks the count (first 16, then powers of two): the drainer may not write
+/// a line per guest event. Index: 0 write, 1 command service, 2 held reply post.
+static DRAINER_REFUSALS: [AtomicU64; 3] = [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
+
 const VA_TIMER_SLACK_NS: u64 = 5_000;
 
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
@@ -3295,7 +3302,12 @@ impl Device {
             }
             Ok(_) => false,
             Err(e) => {
-                eprintln!("kf3: held reply post REFUSED: {e:?}");
+                let n = DRAINER_REFUSALS[2]
+                    .fetch_add(1, Ordering::Relaxed)
+                    .saturating_add(1);
+                if crate::reset::loud(n) {
+                    eprintln!("kf3: held reply post REFUSED: {e:?} [#{n}, rate-limited]");
+                }
                 false
             }
         }
@@ -4178,7 +4190,16 @@ impl HostOps for Device {
                     self.note_pm_suspend(&mut g.fsm);
                 }
             }
-            Err(e) => eprintln!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}"),
+            Err(e) => {
+                let n = DRAINER_REFUSALS[0]
+                    .fetch_add(1, Ordering::Relaxed)
+                    .saturating_add(1);
+                if crate::reset::loud(n) {
+                    eprintln!(
+                        "kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?} [#{n}, rate-limited]"
+                    );
+                }
+            }
         }
         while g.fsm.pending_command_doorbells() > 0 {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
@@ -4190,7 +4211,12 @@ impl HostOps for Device {
                     }
                 }
                 Err(e) => {
-                    eprintln!("kf3: GSP command service REFUSED: {e:?}");
+                    let n = DRAINER_REFUSALS[1]
+                        .fetch_add(1, Ordering::Relaxed)
+                        .saturating_add(1);
+                    if crate::reset::loud(n) {
+                        eprintln!("kf3: GSP command service REFUSED: {e:?} [#{n}, rate-limited]");
+                    }
                     break;
                 }
             }
