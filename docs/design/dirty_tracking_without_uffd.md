@@ -19,9 +19,9 @@ is `cuda/walk/` (`cuda/walk/README.md`) and `crates/kf-cuda` (`walk.rs`, `diffmo
   this file calls the arbitrating measurement, was ever taken. No run was repeated; this pass
   read source only.
 - The `ogkm` citations were re-checked against `third_party/ogkm` @ `57130a2` (610.43.02) by
-  file name (`ogkm: file.c:N`; the submodule is not checked out by default). All hold except two
-  line numbers, corrected in place: `ogkm: uvm_turing_mmu.c:300` (the "53:36" comment; was
-  `:299`) and `ogkm: mmu_walk.c:1501-1510` (the "If we've changed any sublevel" comment; was
+  file name (`ogkm-610: file.c:N`; the submodule is not checked out by default). All hold except two
+  line numbers, corrected in place: `ogkm-610: uvm_turing_mmu.c:300` (the "53:36" comment; was
+  `:299`) and `ogkm-610: mmu_walk.c:1501-1510` (the "If we've changed any sublevel" comment; was
   `:1506-1510`). The `mmuinval.rs` named below now lives at `crates/kf-trap/src/mmuinval.rs`
   (the older copy is `archive/crates/kayfabe-device/src/mmuinval.rs`); `kayfabe-chips` is
   `crates/kayfabe-chips` (frozen); `gpga_is_one_reserved_object.md` is `docs/design/`;
@@ -36,7 +36,7 @@ enough, one RM object, one MMIO mmap, a lot of code deleted."* ⊘ Its one real 
 tracking**: *"without dirty tracking we end up reading tens of megabytes, every single refresh"*
 — 1178 refreshes a boot, so tens of GB of link traffic stolen from the workload.
 
-⊘⊘ **`userfaultfd` is ruled out** (owner; `ogkm: uvm_hmm.c:577` *"UVM doesn't support userfaultfd"*;
+⊘⊘ **`userfaultfd` is ruled out** (owner; `ogkm-610: uvm_hmm.c:577` *"UVM doesn't support userfaultfd"*;
 `nvkvm-pv/docs/internal/gpa-window-narrow-maxphyaddr.md:213`). Do not re-propose it.
 
 ## The options, and what each actually saves
@@ -117,21 +117,21 @@ built**, and the reason is not aesthetic — it is **two silent false negatives*
 direction:
 
 1. **The read-modify-write path preserves the bit verbatim.**
-   `ogkm: virt_mem_allocator_gm107.c:1797-1802` — when `bReadPtes` is set (any update that is not
+   `ogkm-610: virt_mem_allocator_gm107.c:1797-1802` — when `bReadPtes` is set (any update that is not
    `UPDATE_ALL` and not an invalidation, `:2222`) RM `portMemCopy`s the existing entry out,
    edits fields, writes it back. No masking, no validation. ⇒ **RM changes a PTE meaningfully and
    our marker survives; the detector reports "unchanged".**
-2. **Table relocation bulk-copies entries** (`_gmmuWalkCBCopyEntries`, `ogkm: gmmu_walk.c:1009-1010`,
+2. **Table relocation bulk-copies entries** (`_gmmuWalkCBCopyEntries`, `ogkm-610: gmmu_walk.c:1009-1010`,
    raw `memmgrMemCopy`). The bit survives a table move.
 
 And the bit was never safe to begin with:
 - On the **Turing/Ampere** headers the VER2 PTE has **zero unnamed bits** — all 64 are claimed.
-- ⊘ The two `ogkm: dev_mmu.h` copies in this tree **disagree about bits 54:55**: `ogkm: gp100/dev_mmu.h:150`
-  gives `COMPTAGLINE (18+35):36` = 53:36, `ogkm: tu102/dev_mmu.h:636` gives `(20+35):36` = 55:36 — and
-  `ogkm: uvm_turing_mmu.c:300` comments "53:36" while compiling against 55:36.
-- ⚠ No `_RESERVED`/`_IGNORED`/`_SPARE` field exists in any `ogkm: dev_mmu.h` here, and the source states
+- ⊘ The two `ogkm-610: dev_mmu.h` copies in this tree **disagree about bits 54:55**: `ogkm-610: gp100/dev_mmu.h:150`
+  gives `COMPTAGLINE (18+35):36` = 53:36, `ogkm-610: tu102/dev_mmu.h:636` gives `(20+35):36` = 55:36 — and
+  `ogkm-610: uvm_turing_mmu.c:300` comments "53:36" while compiling against 55:36.
+- ⚠ No `_RESERVED`/`_IGNORED`/`_SPARE` field exists in any `ogkm-610: dev_mmu.h` here, and the source states
   the MMU reads fields one would expect it to ignore: *"When VALID == 0, MMU still reads the VOL
-  and PRIV fields"* (`ogkm: uvm_turing_mmu.c:233-235`). ⇒ **The source cannot certify any bit as
+  and PRIV fields"* (`ogkm-610: uvm_turing_mmu.c:233-235`). ⇒ **The source cannot certify any bit as
   hardware-ignored. Do not stake the design on it.**
 
 ★ **2′ (per-page hashing) is untouched by all of the above**, because it compares **content**: an
@@ -142,25 +142,25 @@ RMW edit shows up, a relocation shows up, and it assumes nothing about which bit
 
 | | targeted range? | detail |
 |---|---|---|
-| **UVM** | **yes** | `tlb_invalidate_va` carries `{base, size, page_size, depth, PDB}` (`ogkm: uvm_hal.h:141-147`); on the wire `MEM_OP_D[31:27] == 0xa` (`MMU_TLB_INVALIDATE_TARGETED`), addr in `MEM_OP_A[31:12]`+`MEM_OP_B`, log2 size in `MEM_OP_A[5:0]` |
-| **RM** | ⊘ **never** | `ogkm: kern_gmmu_gm107.c:193-194` sets `_ALL_VA, _TRUE` **unconditionally**: *"Not using range-based invalidate."* Zero hits tree-wide for `MMU_TLB_INVALIDATE_TARGETED` under `src/nvidia/` |
+| **UVM** | **yes** | `tlb_invalidate_va` carries `{base, size, page_size, depth, PDB}` (`ogkm-610: uvm_hal.h:141-147`); on the wire `MEM_OP_D[31:27] == 0xa` (`MMU_TLB_INVALIDATE_TARGETED`), addr in `MEM_OP_A[31:12]`+`MEM_OP_B`, log2 size in `MEM_OP_A[5:0]` |
+| **RM** | ⊘ **never** | `ogkm-610: kern_gmmu_gm107.c:193-194` sets `_ALL_VA, _TRUE` **unconditionally**: *"Not using range-based invalidate."* Zero hits tree-wide for `MMU_TLB_INVALIDATE_TARGETED` under `src/nvidia/` |
 
 ⚠ Two limits on the UVM half: **≤4 ranges per batch** (`UVM_TLB_BATCH_MAX_ENTRIES = 4`,
-`ogkm: uvm_tlb_batch.h:36`; `max_ranges = 8` on Ampere, `ogkm: uvm_ampere.c:33`) — the 5th collapses the batch
+`ogkm-610: uvm_tlb_batch.h:36`; `max_ranges = 8` on Ampere, `ogkm-610: uvm_ampere.c:33`) — the 5th collapses the batch
 to invalidate-all — and the range is **rounded up to a power of two and aligned down**
-(`ogkm: uvm_ampere_host.c:288-303`). A **superset**, so safe, but not tight.
+(`ogkm-610: uvm_ampere_host.c:288-303`). A **superset**, so safe, but not tight.
 
 ### ⊘⊘⊘ Q3 — HIERARCHICAL DETECTION IS DEAD
 
 **A child PTE change never causes a parent PDE write.** No accessed bit, no dirty bit, no counter,
 no valid-count anywhere in the VER2 PDE or DUAL_PDE. Both drivers keep that bookkeeping in **host
-CPU structs** — `uvm_page_directory_struct.ref_count` (`ogkm: uvm_mmu.h:144`), RM's
-`numValid`/`numSparse`/… in `MMU_WALK_LEVEL_INST` (`ogkm: mmu_walk_private.h:184-209`). A PDE is written
-only on a **structural** change (`ogkm: mmu_walk.c:1501-1510`: *"If we've changed any sublevel…"*).
+CPU structs** — `uvm_page_directory_struct.ref_count` (`ogkm-610: uvm_mmu.h:144`), RM's
+`numValid`/`numSparse`/… in `MMU_WALK_LEVEL_INST` (`ogkm-610: mmu_walk_private.h:184-209`). A PDE is written
+only on a **structural** change (`ogkm-610: mmu_walk.c:1501-1510`: *"If we've changed any sublevel…"*).
 
 ⇒ Reading a small directory level tells you **nothing** about which leaves changed. ★ One partial
 exception: at PD0 (and PD1 on Ampere) the 16-byte entry is *either* a dual PDE *or* a 2 MB /
-512 MB PTE (`ogkm: uvm_turing_mmu.c:47-53`, `ogkm: gmmu_fmt.c:64-86`), so watching those levels **does** catch
+512 MB PTE (`ogkm-610: uvm_turing_mmu.c:47-53`, `ogkm-610: gmmu_fmt.c:64-86`), so watching those levels **does** catch
 every large-page mapping change — and nothing about 4 KB or 64 KB.
 
 ### ⚠ A correction of my own, recorded because the shape recurs
@@ -173,7 +173,7 @@ only as complete as its list of transports"*. ⇒ The agent re-derived a correct
 file in the other tree.
 
 ★ One genuinely new detail from it: **RPC fn=200 is a compile-time STUB on GA106**
-(`ogkm: g_rpc_private.h:320`, `rpcInvalidateTlb_STUB`), returning `RPC_UNKNOWN_FUNCTION`. ⇒ That
+(`ogkm-610: g_rpc_private.h:320`, `rpcInvalidateTlb_STUB`), returning `RPC_UNKNOWN_FUNCTION`. ⇒ That
 particular zero was **structurally guaranteed** and could never have been anything else.
 
 ## ★★★★★ w720c — THE SETTLED DESIGN: three layers, each degrading into the one below
@@ -226,7 +226,7 @@ either**.
 ### ⚠ Why PTX and not a hand-built launch — the Turing+ requirement decides it
 
 Launching compute at the RM level means constructing a **QMD**, and ogkm publishes **exactly one**
-QMD header in the entire tree: `ogkm: src/common/sdk/nvidia/inc/class/cla0c0qmd.h` — **Kepler**. Turing,
+QMD header in the entire tree: `ogkm-610: src/common/sdk/nvidia/inc/class/cla0c0qmd.h` — **Kepler**. Turing,
 Ampere, Hopper and Blackwell QMD layouts are **not in the open driver**; they live in closed CUDA
 userspace and differ per family. ⇒ A hand-built launch is **per-family reverse engineering by
 construction**, which is the opposite of the owner's *"ensure that it works across all families
