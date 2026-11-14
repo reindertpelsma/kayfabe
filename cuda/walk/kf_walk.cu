@@ -355,8 +355,22 @@ __device__ __forceinline__ bool kf_dir_present(const KfFormat &F, uint64_t raw,
     }
 }
 
-/* Did the guest DECLARE this slot empty, as opposed to never having written it? */
-__device__ __forceinline__ bool kf_slot_sparse(const KfFormat &F, uint64_t raw)
+/* ═══ VER3's PCF ENUMERANTS that are not a moved bit (2026-11-13, security review 3 F-1) ═══
+ * Cited from ogkm-580.159.04 `hopper/gh100/dev_mmu.h` (mirrored in
+ * `crates/kf-chip/data/hwref-580.159.04.tsv`; `scripts/ci/walk_ptx_repro.py` checks both values
+ * against that file, so a typo here fails CI):
+ *   NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE = 0x3   -- a big PTE: "no 4 KiB PTE below me"
+ *   NV_MMU_VER3_PDE_PCF / DUAL_PDE_PCF_BIG / _SMALL (5:3 of the word): SPARSE_ATS_ALLOWED 0x1,
+ *     SPARSE_ATS_NOT_ALLOWED 0x3, INVALID_ATS_ALLOWED 0x0, INVALID_ATS_NOT_ALLOWED 0x2 -- an invalid
+ *     PDE is SPARSE exactly when bit 0 of its PCF is set, whatever its ATS bit.
+ * ⚠ They belong in the descriptor (`KfFormat`), which is mirrored byte for byte in
+ * `crates/kf-cuda/src/abi.rs`; until that ABI grows the two fields they are family constants of
+ * the VER3 arm below -- the switch exists for exactly what a field offset cannot say. */
+#define KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE 0x3u
+#define KF_VER3_PDE_PCF_SPARSE_BIT        0x1u
+
+/* Did the guest DECLARE this PTE slot empty, as opposed to never having written it? */
+__device__ __forceinline__ bool kf_pte_sparse(const KfFormat &F, uint64_t raw)
 {
     switch (F.table_version) {
     case KF_TBL_VER2:
@@ -364,10 +378,25 @@ __device__ __forceinline__ bool kf_slot_sparse(const KfFormat &F, uint64_t raw)
          * the valid bit is clear" — `kern_gmmu_gm200.c:46-70`. A BIT TEST. */
         return ((raw >> F.bit_volatile) & 1ull) != 0ull;
     default:
-        /* ⚠ UNTESTED. `NV_MMU_VER3_PTE_PCF_SPARSE = 1` (`gh100/dev_mmu.h:499`).
+        /* `NV_MMU_VER3_PTE_PCF_SPARSE = 1` (`gh100/dev_mmu.h:499`).
          * An EQUALITY against a multi-bit value — which is exactly why a field
          * descriptor cannot carry this and this switch exists. */
         return kf_field(raw, F.pcf.lo, F.pcf.bits, 0) == (uint64_t)F.pcf_sparse;
+    }
+}
+
+/* ⊘⊘ 2026-11-13 (review 3 F-1, S1-67) — A PDE IS NOT A PTE. One function used to answer for both,
+ * and on VER3 the two PCFs differ: a PDE's PCF is 3 bits (5:3) and spells sparse in its bit 0 for
+ * BOTH ATS settings (1 and 3), while the PTE equality above matches only 1. So an invalid big half of
+ * a dual PDE written SPARSE_ATS_NOT_ALLOWED (3) did not veto the small table, and the walk published
+ * 4 KiB leaves the hardware would never read. VER2 has one encoding for both (VOL): unchanged. */
+__device__ __forceinline__ bool kf_pde_sparse(const KfFormat &F, uint64_t raw)
+{
+    switch (F.table_version) {
+    case KF_TBL_VER2:
+        return ((raw >> F.bit_volatile) & 1ull) != 0ull;
+    default:
+        return (kf_field(raw, F.pcf.lo, F.pcf.bits, 0) & KF_VER3_PDE_PCF_SPARSE_BIT) != 0ull;
     }
 }
 
@@ -406,11 +435,21 @@ __device__ __forceinline__ bool kf_slot_sparse(const KfFormat &F, uint64_t raw)
  * table. `[measured w826 ct4]` a guest 4 KiB operand leaf present on one walk was gone on
  * the next beside a big-page region, reconcile unmapped it, and the copy did nothing.
  * Now: an UNMAPPED big PTE (VALID=0 VOL=0 PRIV=1) hides only the small PTEs of its slot. */
+/* ⊘⊘⊘ 2026-11-13 (security review 3 F-1, S1-60) — AND ON VER3 TOO, above the "VER2 only" note it
+ * corrects. That note left every Hopper/Blackwell guest publishing the stale 4 KiB leaves this
+ * function exists to hide: VER3 spells the same state as a big PTE with VALID=0 and
+ * `PCF = NO_VALID_4KB_PAGE` (0x3, `gh100/dev_mmu.h`), the value a guest writes to unmap 64 KiB over
+ * stale 4 KiB PTEs. VER3 is accepted in production (`crates/kf-cuda/src/walk.rs`, KNOWN GAP w826). */
 __device__ __forceinline__ bool kf_big_pte_unmapped(const KfFormat &F, uint64_t e)
 {
-    if (F.table_version != KF_TBL_VER2) return false;
-    if (kf_valid(F, e) || kf_slot_sparse(F, e)) return false;
-    return ((e >> F.bit_privilege) & 1ull) != 0ull;
+    if (kf_valid(F, e)) return false;
+    switch (F.table_version) {
+    case KF_TBL_VER2:
+        if (kf_pte_sparse(F, e)) return false;
+        return ((e >> F.bit_privilege) & 1ull) != 0ull;
+    default:
+        return kf_field(e, F.pcf.lo, F.pcf.bits, 0) == (uint64_t)KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE;
+    }
 }
 
 /* ★★★★★ v3-mapfix — A VALID BIG PTE OWNS ITS 64 KiB SLOT: the small PTEs under it are
@@ -599,7 +638,7 @@ __device__ __forceinline__ uint32_t kf_dir_step(KfCtx &c, uint32_t k, uint64_t t
     }
     uint32_t apc = kf_ap_raw(F, raw);
     if (!kf_dir_present(F, raw, apc, L.leaf_ps != KF_PS_NONE)) {
-        if (kf_slot_sparse(F, raw)) c.sparse++;
+        if (kf_pde_sparse(F, raw)) c.sparse++;
         return KF_STEP_SKIP;
     }
     if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; return KF_STEP_SKIP; }
@@ -686,14 +725,14 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                 pts = kf_addr(F, hi16, aps);
                                 has_s = kf_table_ok(c, pts, sb, sb);   /* 0 is a table: see below */
                             }
-                        } else if (kf_slot_sparse(F, hi16)) c.sparse++;
+                        } else if (kf_pde_sparse(F, hi16)) c.sparse++;
                         if (kf_dir_present(F, lo16, apb, D.leaf_ps != KF_PS_NONE)) {
                             if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; }
                             else {
                                 ptb = kf_big_addr(F, lo16, apb);
                                 has_b = kf_table_ok(c, ptb, bb, bb);   /* 0 is a table: see below */
                             }
-                        } else if (kf_slot_sparse(F, lo16)) {
+                        } else if (kf_pde_sparse(F, lo16)) {
                             /* ogkm `_gmmuIsInvalidPdeOk`: an INVALID big half with VOL set
                              * is sparse and aborts the whole 2 MiB — sublevel 1 is never
                              * read. ⊘ Only when the big half is NOT present: VOL on a
@@ -737,7 +776,7 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
                                                 1ull << F.ps_log2[F.big_ps],
                                                 kf_leaf_flags(F, e, F.big_ps), e, KF_SAMPLE_LVL_BIG);
-                                    else if (kf_slot_sparse(F, e)) c.sparse++;
+                                    else if (kf_pte_sparse(F, e)) c.sparse++;
                                 }
                             }
                             if (has_s && !slot_owned) {
@@ -752,7 +791,7 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
                                                 1ull << F.ps_log2[F.small_ps],
                                                 kf_leaf_flags(F, e, F.small_ps), e, KF_SAMPLE_LVL_SMALL);
-                                    else if (kf_slot_sparse(F, e)) c.sparse++;
+                                    else if (kf_pte_sparse(F, e)) c.sparse++;
                                 }
                             }
                         }
@@ -1453,6 +1492,10 @@ static KfFormat kf_format_ver2(void)
     return F;
 }
 
+/* ⊘ 2026-11-13, above the text it corrects: VER3 is ACCEPTED in production (crates/kf-cuda/src/walk.rs,
+ * w826), this descriptor is pinned byte for byte to the production Rust one, and its 4 KiB vetoes are
+ * graded by kf_cpu_walk.cpp (CPU, every push) and the ver3/* cases of kf_tests_ver3 (GPU). The
+ * "never run" text below is history. */
 /* ⚠⚠⚠ GH100 / VER3 — A SKETCH THAT HAS NEVER RUN.
  *
  * Read off `research_clones/ogkm` 610.43.02 `hopper/gh100/dev_mmu.h:413-536` and
@@ -1848,7 +1891,7 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
     if (!dual) {
         const uint32_t apc = kf_ap_raw(F, lo16);
         if (!kf_dir_present(F, lo16, apc, L.leaf_ps != KF_PS_NONE)) {
-            if (census && kf_slot_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
+            if (census && kf_pde_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
             return false;
         }
         const uint64_t cb = (uint64_t)F.dir[level + 1u].entries * F.dir[level + 1u].entry_bytes;
@@ -1887,7 +1930,7 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
             else if (census) kf_par_refuse_samp(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb,
                                                 level, dva, hi16, pts, sb);
         }
-    } else if (census && kf_slot_sparse(F, hi16)) atomicAdd(&d->sparse_slots, 1u);
+    } else if (census && kf_pde_sparse(F, hi16)) atomicAdd(&d->sparse_slots, 1u);
     if (kf_dir_present(F, lo16, apb, L.leaf_ps != KF_PS_NONE)) {
         if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) {
             if (census) kf_par_refuse_samp(d, KFWR_R_FOREIGN_AP, e.pdb, level, dva, lo16,
@@ -1899,7 +1942,7 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
             else if (census) kf_par_refuse_samp(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb,
                                                 level, dva, lo16, ptb, bb);
         }
-    } else if (kf_slot_sparse(F, lo16)) {
+    } else if (kf_pde_sparse(F, lo16)) {
         /* An INVALID, sparse big half vetoes the small table (see the serial walk). */
         if (census) atomicAdd(&d->sparse_slots, 1u);
         has &= ~1u;
@@ -2076,7 +2119,7 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
                 kf_acc_emit(c, t.va | ((uint64_t)bb << F.big_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                             1ull << F.ps_log2[F.big_ps], kf_leaf_flags(F, e, F.big_ps),
                             e, KF_SAMPLE_LVL_BIG);
-            else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
+            else if (census && kf_pte_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
         }
         if ((t.has & 1u) && !slot_owned) {
             for (uint32_t j = 0u; j < 16u && j < ratio; j++) {
@@ -2087,7 +2130,7 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
                     kf_acc_emit(c, t.va | ((uint64_t)si << F.small_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                                 1ull << F.ps_log2[F.small_ps], kf_leaf_flags(F, e, F.small_ps),
                                 e, KF_SAMPLE_LVL_SMALL);
-                else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
+                else if (census && kf_pte_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
             }
         }
     }

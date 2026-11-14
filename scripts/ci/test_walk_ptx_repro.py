@@ -25,6 +25,7 @@ FILES = [
     "cuda/display/kf_yuv.ptx",
     "cuda/display/kf_color.ptx",
     "cuda/display/kf_bl_pack.ptx",
+    "crates/kf-chip/data/hwref-580.159.04.tsv",
 ]
 
 
@@ -149,6 +150,85 @@ class Constants(unittest.TestCase):
         for bad in ("__import__('os')", "u32::MAX", "max(1, 2)"):
             with self.assertRaises(ValueError):
                 w._eval_const(bad, {})
+
+
+class Ver3Pcf(unittest.TestCase):
+    CU = "cuda/walk/kf_walk.cu"
+
+    def test_the_tree_matches_the_oracle(self):
+        self.assertEqual(w.check_ver3_pcf(ROOT), [])
+
+    def test_a_wrong_no_valid_4kb_value_fails(self):
+        with Tree() as r:
+            edit(r / self.CU, "#define KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE 0x3u", "#define KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE 0x2u")
+            self.assertTrue(any("NO_VALID_4KB_PAGE 0x2" in f for f in w.check_ver3_pcf(r)))
+
+    def test_a_missing_no_valid_4kb_define_fails(self):
+        with Tree() as r:
+            edit(r / self.CU, "#define KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE 0x3u", "")
+            self.assertEqual(w.check_ver3_pcf(r), ["KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE: not defined in cuda/walk/kf_walk.cu"])
+
+    def sparse_bit(self, bad):
+        with Tree() as r:
+            edit(r / self.CU, "#define KF_VER3_PDE_PCF_SPARSE_BIT        0x1u", f"#define KF_VER3_PDE_PCF_SPARSE_BIT        {bad}")
+            return w.check_ver3_pcf(r)
+
+    def test_the_ats_bit_is_not_the_sparse_bit(self):
+        self.assertTrue(any("misclassifies" in f for f in self.sparse_bit("0x2u")))
+
+    def test_a_bit_outside_the_pde_pcf_misclassifies(self):
+        self.assertTrue(any("misclassifies" in f for f in self.sparse_bit("0x4u")))
+
+    def test_the_pte_sparse_value_is_not_no_valid_4kb(self):
+        with Tree() as r:
+            edit(r / self.CU, "#define KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE 0x3u", "#define KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE 0x1u")
+            self.assertEqual(len(w.check_ver3_pcf(r)), 1)
+
+    def test_a_missing_sparse_bit_define_fails(self):
+        with Tree() as r:
+            edit(r / self.CU, "#define KF_VER3_PDE_PCF_SPARSE_BIT        0x1u", "")
+            self.assertEqual(w.check_ver3_pcf(r), ["KF_VER3_PDE_PCF_SPARSE_BIT: not defined in cuda/walk/kf_walk.cu"])
+
+    def test_another_untied_ver3_constant_fails(self):
+        with Tree() as r:
+            edit(r / self.CU, "#define KF_VER3_PDE_PCF_SPARSE_BIT", "#define KF_VER3_PTE_PCF_SPARSE 0x1u\n#define KF_VER3_PDE_PCF_SPARSE_BIT")
+            self.assertEqual(len(w.check_ver3_pcf(r)), 1)
+
+    def test_a_descriptor_pcf_below_the_field_fails(self):
+        with Tree() as r:
+            edit(r / self.CU, "    F.pcf = kf_f(3, 5, 0);\n    F.pcf_sparse = 1;", "    F.pcf = kf_f(2, 5, 0);\n    F.pcf_sparse = 1;")
+            self.assertTrue(any("starts at bit 3 of its word; the VER3 descriptor's pcf field starts at 2" in f
+                                for f in w.check_ver3_pcf(r)))
+
+    def test_an_oracle_without_an_invalid_pde_enumerant_fails(self):
+        with Tree() as r:
+            p = r / w.HWREF
+            p.write_text("\n".join(l for l in p.read_text().splitlines() if "VER3_PDE_PCF_INVALID_ATS_ALLOWED\t" not in l))
+            self.assertTrue(any("NV_MMU_VER3_PDE_PCF_INVALID_ATS_ALLOWED: missing" in f for f in w.check_ver3_pcf(r)))
+
+    def test_an_untied_ver3_constant_fails(self):
+        with Tree() as r:
+            edit(r / self.CU, "#define KF_VER3_PDE_PCF_SPARSE_BIT", "#define KF_VER3_NEW_THING 0x5u\n#define KF_VER3_PDE_PCF_SPARSE_BIT")
+            self.assertTrue(any("KF_VER3_NEW_THING" in f for f in w.check_ver3_pcf(r)))
+
+    def test_a_descriptor_pcf_at_another_bit_fails(self):
+        with Tree() as r:
+            edit(r / self.CU, "    F.pcf = kf_f(3, 5, 0);\n    F.pcf_sparse = 1;", "    F.pcf = kf_f(4, 5, 0);\n    F.pcf_sparse = 1;")
+            out = w.check_ver3_pcf(r)
+            self.assertEqual(len(out), 3)
+            self.assertTrue(all("starts at bit" in f for f in out))
+
+    def test_an_oracle_without_the_enumerant_fails(self):
+        with Tree() as r:
+            p = r / w.HWREF
+            p.write_text("\n".join(l for l in p.read_text().splitlines() if "PTE_PCF_NO_VALID_4KB_PAGE" not in l))
+            self.assertTrue(any("oracle NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE None" in f for f in w.check_ver3_pcf(r)))
+
+    def test_an_oracle_without_a_pde_enumerant_fails(self):
+        with Tree() as r:
+            p = r / w.HWREF
+            p.write_text("\n".join(l for l in p.read_text().splitlines() if "DUAL_PDE_PCF_BIG_SPARSE_ATS_NOT_ALLOWED" not in l))
+            self.assertTrue(any("missing from" in f for f in w.check_ver3_pcf(r)))
 
 
 class Compare(unittest.TestCase):
@@ -295,6 +375,30 @@ class Display(unittest.TestCase):
 
 
 class Main(unittest.TestCase):
+    def static_on(self, mutate):
+        with Tree() as r:
+            mutate(r)
+            old = w.ROOT
+            w.ROOT = r
+            try:
+                return w.main(["static"])
+            finally:
+                w.ROOT = old
+
+    def test_static_passes_on_the_tree(self):
+        self.assertEqual(self.static_on(lambda r: None), 0)
+
+    def test_static_runs_the_ver3_oracle_check(self):
+        self.assertEqual(self.static_on(lambda r: edit(r / "cuda/walk/kf_walk.cu",
+                         "#define KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE 0x3u", "#define KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE 0x2u")), 1)
+
+    def test_static_fails_on_a_missing_ver3_define(self):
+        self.assertEqual(self.static_on(lambda r: edit(r / "cuda/walk/kf_walk.cu",
+                         "#define KF_VER3_PDE_PCF_SPARSE_BIT        0x1u", "")), 1)
+
+    def test_static_fails_on_a_changed_blob(self):
+        self.assertEqual(self.static_on(lambda r: (r / "cuda/display/kf_sum.ptx").write_text("x")), 1)
+
     def test_unknown_command_is_usage(self):
         self.assertEqual(w.main(["nope"]), 2)
 

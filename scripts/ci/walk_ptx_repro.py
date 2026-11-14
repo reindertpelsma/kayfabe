@@ -12,6 +12,9 @@ STATUS: LIVE, 2026-11-13. Stdlib only. Three checks, each a list of findings (em
               frontier and scratch capacities, grid, block, warp) is read from both
               `cuda/walk/kf_walk.cu` and `crates/kf-cuda/src/walk.rs` and compared. A disagreement is a
               shared-memory or buffer overrun, not a style issue.
+            * the VER3 PCF enumerants the kernel's VER3 arm names (`KF_VER3_*`, review 3 F-1) equal the
+              values in `crates/kf-chip/data/hwref-580.159.04.tsv` (ogkm `hopper/gh100/dev_mmu.h`), and the
+              PDE PCF fields start at the bit the VER3 descriptor's `pcf` field starts at.
   walk      `cuda/walk/kf_walk.ptx` is rebuilt from `kf_walk.cu` with `cuda/walk/make_ptx.py` and the
             pinned NVRTC (nvidia-cuda-nvrtc-cu12==12.2.140, the wheel's sha256 is pinned in
             `scripts/ci/nvrtc-12.2.140.requirements.txt`) and compared byte for byte.
@@ -64,6 +67,8 @@ SHARED_CONSTANTS = (
     "KF_SCAN_BLOCK",
     "KF_WARP",
 )
+
+HWREF = "crates/kf-chip/data/hwref-580.159.04.tsv"
 
 NVRTC_HEADER = "// Cuda compilation tools, release 12.2, V12.2.140"
 
@@ -127,6 +132,53 @@ def check_constants(root: Path) -> list[str]:
             out.append(f"{name}: not defined in crates/kf-cuda/src/walk.rs")
         elif k[name] != r[name]:
             out.append(f"{name}: kernel {k[name]} != launcher {r[name]} (the launch would overrun a kernel buffer)")
+    return out
+
+
+def hwref_values(tsv: str) -> dict[str, str]:
+    out = {}
+    for line in tsv.splitlines():
+        f = line.split("\t")
+        if len(f) == 4 and f[0] == "hopper/gh100" and f[1] == "dev_mmu.h" and f[2].startswith("NV_MMU_VER3_"):
+            out.setdefault(f[2], f[3])
+    return out
+
+
+def _int(v: str) -> int:
+    return int(v.rstrip("uU"), 0)
+
+
+def check_ver3_pcf(root: Path) -> list[str]:
+    cu = (root / "cuda/walk/kf_walk.cu").read_text()
+    hw = hwref_values((root / HWREF).read_text())
+    defs = dict(re.findall(r"^\s*#define\s+(KF_VER3_[A-Z0-9_]+)\s+(\S+)", cu, re.M))
+    out = []
+    want = {"KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE", "KF_VER3_PDE_PCF_SPARSE_BIT"}
+    for name in sorted(want - set(defs)):
+        out.append(f"{name}: not defined in cuda/walk/kf_walk.cu")
+    for name in sorted(set(defs) - want):
+        out.append(f"{name}: a VER3 constant this check does not tie to the oracle (add it here)")
+    if "KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE" in defs:
+        k = _int(defs["KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE"])
+        o = hw.get("NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE")
+        if o is None or _int(o) != k:
+            out.append(f"KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE {k:#x} != oracle NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE {o}")
+    m = re.search(r"kf_format_ver3_untested\(void\).*?F\.pcf = kf_f\((\d+),", cu, re.S)
+    pcf_lo = int(m.group(1)) if m else None
+    if "KF_VER3_PDE_PCF_SPARSE_BIT" in defs:
+        bit = _int(defs["KF_VER3_PDE_PCF_SPARSE_BIT"])
+        for fld in ("NV_MMU_VER3_PDE_PCF", "NV_MMU_VER3_DUAL_PDE_PCF_BIG", "NV_MMU_VER3_DUAL_PDE_PCF_SMALL"):
+            for suf, sparse in (("_SPARSE_ATS_ALLOWED", True), ("_SPARSE_ATS_NOT_ALLOWED", True),
+                                ("_INVALID_ATS_ALLOWED", False), ("_INVALID_ATS_NOT_ALLOWED", False)):
+                o = hw.get(fld + suf)
+                if o is None:
+                    out.append(f"{fld + suf}: missing from {HWREF}")
+                elif bool(_int(o) & bit) != sparse:
+                    out.append(f"KF_VER3_PDE_PCF_SPARSE_BIT {bit:#x} misclassifies {fld + suf} = {o}")
+            rng = hw.get(fld)
+            lo = int(rng.split(":")[1]) % 64 if rng and ":" in rng else None
+            if lo is None or pcf_lo is None or lo != pcf_lo:
+                out.append(f"{fld} starts at bit {lo} of its word; the VER3 descriptor's pcf field starts at {pcf_lo}")
     return out
 
 
@@ -198,7 +250,7 @@ def main(argv: list[str]) -> int:
         return 2
     cmd = argv[0]
     if cmd == "static":
-        findings = check_blobs(ROOT) + check_constants(ROOT)
+        findings = check_blobs(ROOT) + check_constants(ROOT) + check_ver3_pcf(ROOT)
     elif cmd == "walk":
         if len(argv) != 3 or argv[1] != "--nvrtc":
             print("usage: walk_ptx_repro.py walk --nvrtc /path/to/libnvrtc.so.12", file=sys.stderr)
