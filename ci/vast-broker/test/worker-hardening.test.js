@@ -407,12 +407,16 @@ test('mutant copy: the report and evidence test files pass unmutated inside the 
   const { spawnSync } = await import('node:child_process');
   const copy = tempCopy();
   for (const file of ['run-report.test.js', 'run-report-extra.test.js', 'public-log.test.js']) {
-    const r = spawnSync(process.execPath, ['--no-warnings', '--test', copy + 'test/' + file], {
-      cwd: copy,
-      encoding: 'utf8',
-      timeout: 120000,
-      env: { ...process.env, NODE_TEST_CONTEXT: undefined },
-    });
+    const r = spawnSync(
+      process.execPath,
+      ['--no-warnings', '--test', '--test-reporter=tap', copy + 'test/' + file],
+      {
+        cwd: copy,
+        encoding: 'utf8',
+        timeout: 120000,
+        env: { ...process.env, NODE_TEST_CONTEXT: undefined },
+      },
+    );
     assert.match(r.stdout, /^# pass [1-9]/m, file);
     assert.equal(r.status, 0, file + '\n' + (r.stdout + r.stderr).slice(0, 600));
   }
