@@ -269,7 +269,9 @@ def case_exact_head():
 def case_budget_line_kept():
     out, _ = run("".join(row(i) for i in range(1500)))
     assert re.search(r"^\[\d+ bytes dropped by runner display budget\]$", out, re.M), out[-300:]
-    assert out.rstrip().endswith("::endgroup::")
+    # 2026-11-12: the verdict line follows the closed group, outside the display budget.
+    lines = out.rstrip().splitlines()
+    assert lines[-1].startswith("VERDICT ") and lines[-2] == "::endgroup::", lines[-3:]
 
 
 def case_constants():

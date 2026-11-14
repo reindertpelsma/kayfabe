@@ -25,6 +25,14 @@ KEY_LINES, KEY_BYTES, KEY_LINE_BYTES, KEY_SCAN = 60, 12000, 400, 1000
 KEY_TAG = "[key] "
 # Census of the middle that the display drops: at most CENSUS_LINES groups, each prefix <= CENSUS_PREFIX.
 CENSUS_LINES, CENSUS_PREFIX, CENSUS_KEYS = 12, 60, 5000
+# Public places of a run (2026-11-12). Built ONLY from these two constants and the validated run id
+# and leg number (public_urls), never from a string of the Worker or the box. The Worker's own
+# LOGS_BASE rule is "https origin on kayfabe.dev"; the runner pins the default origin here.
+LOGS_BASE = "https://logs.kayfabe.dev"
+STATUS_BASE = "https://kayfabe.dev/status/run/?id="
+RUN_ID = re.compile(r"[1-9][0-9]{0,19}-[1-9][0-9]{0,19}")
+# Compact live stage lines (STAGE_START / STAGE_END), at most this many for a whole run.
+STAGE_LINES = 80
 STATES = {
     "NONE",
     "CREATING",
@@ -70,6 +78,34 @@ class Diagnosed(Invalid):
     def __init__(self, line):
         super().__init__()
         self.line = line
+
+
+def worker_masks(origin, prefix):
+    """Values masked in the job log (::add-mask::) and redacted from displayed box text.
+
+    The origin string, its hostname and the secret path prefix. NOT the individual hostname labels
+    (2026-11-12): the hostname is a public repo variable, and masking `kayfabe` / `dev` / `ci`
+    would turn the printed LOG_URL / STATUS_URL (logs.kayfabe.dev, kayfabe.dev) into `***`.
+    """
+    return [origin, urllib.parse.urlsplit(origin).hostname, prefix]
+
+
+def public_urls(run, leg):
+    """(log url, status url) of leg `leg` of run `run` ("<github run>-<attempt>"), or None.
+
+    The Worker names a box's rows `vast-<run>-<leg>`; the log is `<LOGS_BASE>/<id>/log.txt` and the
+    status page `STATUS_BASE<id>`. Only a run that matches RUN_ID and an int leg in 0..31 (not a
+    bool) give a URL, so no Worker or box text can reach either string.
+    """
+    if (
+        not isinstance(run, str)
+        or not RUN_ID.fullmatch(run)
+        or type(leg) is not int
+        or not 0 <= leg <= 31
+    ):
+        return None
+    public = "vast-" + run + "-" + str(leg)
+    return LOGS_BASE + "/" + public + "/log.txt", STATUS_BASE + public
 
 
 def clean(value, limit=64):
@@ -1369,6 +1405,81 @@ class Runner:
         self.phase = "setup"
         self.http_status = None
         self.reply_state = "UNAVAILABLE"
+        # Overview state (2026-11-12): all of it is built from validated values, never box text.
+        self.announced = {}  # leg -> (log url, status url), in announcement order
+        self.leg_info = {}  # leg -> one trusted RENTAL line
+        self.stage_lines = []  # the compact STAGE_* lines already printed live
+        self.stage_marks = set()
+
+    def announce(self, leg):
+        """Print LOG_URL / STATUS_URL of a leg once, as soon as the leg is known."""
+        urls = public_urls(self.ctx.get("run"), leg)
+        if urls is None or leg in self.announced:
+            return
+        self.announced[leg] = urls
+        self.emit("LOG_URL leg=" + str(leg) + " " + urls[0] + "\n")
+        self.emit("STATUS_URL leg=" + str(leg) + " " + urls[1] + "\n")
+
+    def stage_events(self, text):
+        """Compact live lines from the stage markers of the box log.
+
+        The box can print these markers too, so every line says box-reported; its characters come
+        from the strict pattern only (name [A-Za-z0-9_.-]{1,40}, small integers).
+        """
+        for m in re.finditer(
+            r"KF_PAYLOAD_STAGE_(START|END) name=([A-Za-z0-9_.-]{1,40})(?=[ \t\r\n]|$)(?: rc=(-?[0-9]{1,4}))?"
+            r"(?: duration_ms=([0-9]{1,9}))?",
+            text,
+            re.M,
+        ):
+            kind, name, rc, ms = m.groups()
+            if (kind, name) in self.stage_marks or len(self.stage_lines) >= STAGE_LINES:
+                continue
+            self.stage_marks.add((kind, name))
+            line = "STAGE_" + kind + " " + name
+            if kind == "END" and rc is not None:
+                line += " rc=" + rc + (" duration_ms=" + ms if ms is not None else "")
+            line += " (box-reported)"
+            self.stage_lines.append(line)
+            self.emit(line + "\n")
+
+    def show_overview(self, result):
+        """The overview, emitted outside the display budget: every line is trusted or validated."""
+        out = [
+            "OVERVIEW tested_sha="
+            + self.ctx["sha"]
+            + " profile="
+            + self.ctx.get("profile", "check")
+        ]
+        for leg, urls in self.announced.items():
+            out.append("LEG " + str(leg) + " " + self.leg_info.get(leg, "no box admitted"))
+            out.append("LOG_URL leg=" + str(leg) + " " + urls[0])
+            out.append("STATUS_URL leg=" + str(leg) + " " + urls[1])
+        out += self.stage_lines
+        if self.metadata is not None:
+            for row in self.metadata.get("suites") or []:
+                out.append(
+                    "SUITE "
+                    + clean(row["name"], 64)
+                    + " pass="
+                    + str(row["pass"])
+                    + " fail="
+                    + str(row["fail"])
+                    + " skip="
+                    + str(row["skip"])
+                )
+        self.emit("\n".join(out) + "\n")
+
+    def verdict_line(self, result):
+        return (
+            "VERDICT "
+            + result["verdict"]
+            + " state="
+            + result["state"]
+            + " verified="
+            + str(result["verified"])
+            + "\n"
+        )
 
     def read(self, route, method="GET", body=None):
         return self.decode(self.client(route, method, body))
@@ -1596,6 +1707,7 @@ class Runner:
             r"KF_PAYLOAD_STAGE_START name=([A-Za-z0-9_.-]{1,40})",
             before + "".join(chunks),
         )
+        self.stage_events(before + "".join(chunks))
         if found:
             self.stage_seen = (found[-1], now)
 
@@ -1717,6 +1829,7 @@ class Runner:
         self.notified_faults = set()
         try:
             profile = self.ctx.get("profile", "check")
+            self.announce(0)
             app_policy = self.ctx.get("apps_policy_required", False)
             code, availability = self.retry_read(
                 "/availability?profile=" + profile + ("&apps=1" if app_policy else "")
@@ -1854,8 +1967,18 @@ class Runner:
                     self.rental_shown != (data["id"], data.get("provider_retries", 0))
                     and data["id"] is not None
                 ):
+                    self.announce(data.get("provider_retries", 0))
                     self.emit(rental_line(data) + "\n")
                     self.rental_shown = (data["id"], data.get("provider_retries", 0))
+                if data["id"] is not None:
+                    self.leg_info[data.get("provider_retries", 0)] = (
+                        # Not the live `RENTAL instance=` marker: that is logged once per leg.
+                        rental_line(data).removeprefix("RENTAL ")
+                        + " state="
+                        + clean(data["state"])
+                        + " verdict="
+                        + clean(data["verdict"])
+                    )
                 final = data["state"] in {"GRACE", "NONE"} and data["result_at"] is not None
                 self.pages(data["log_cursor"])
                 if data["verdict"] == "PROVIDER_FAULT":
@@ -2032,6 +2155,8 @@ class Runner:
         vanished = admitted and not (
             terminal and result["verified"] == 1 and result["verdict"] in {"PASS", "FAIL"}
         )
+        # Outside the display budget: URLs, legs, stages, suites (validated values only).
+        self.show_overview(result)
         diag = self.diagnostics() if vanished else None
         if diag:
             for line in diag[0]:
@@ -2049,6 +2174,8 @@ class Runner:
             + str(self.display_dropped)
             + " bytes dropped by runner display budget]\n::endgroup::\n"
         )
+        # The verdict is the last line of the step log, after the budgeted group (not truncatable).
+        self.emit(self.verdict_line(result))
         if self.summary is not None:
             self.phase = "summary"
             # Every interpolated Worker text passed the local allow-list. All
@@ -2060,6 +2187,8 @@ class Runner:
                 ("State", result["state"]),
                 ("Verdict", result["verdict"]),
                 ("Tested SHA", self.ctx["sha"]),
+                *[("Log URL leg " + str(leg), urls[0]) for leg, urls in self.announced.items()],
+                *[("Status URL leg " + str(leg), urls[1]) for leg, urls in self.announced.items()],
                 ("Worker version", self.manifest["worker_version"]),
                 ("Expected bundle SHA256", self.manifest["bundle_sha256"]),
                 ("Received log hash", self.hash),
@@ -2350,12 +2479,7 @@ def main():
                 short = re.fullmatch("[A-Za-z0-9_-]*", prefix) and len(prefix) < 32
                 reason = "too short" if short else "bad characters"
             raise Diagnosed(setting_line("WORKER_PATH", reason))
-        for value in [
-            origin,
-            urllib.parse.urlsplit(origin).hostname,
-            prefix,
-            *urllib.parse.urlsplit(origin).hostname.split("."),
-        ]:
+        for value in worker_masks(origin, prefix):
             if value:
                 print("::add-mask::" + value, flush=True)
         print(
@@ -2386,13 +2510,7 @@ def main():
             "sha": sha,
             "run": run,
             "nonce": secrets.token_hex(32),
-            "redactions": [
-                origin,
-                urllib.parse.urlsplit(origin).hostname,
-                prefix,
-                urllib.parse.quote(origin, safe=""),
-                *urllib.parse.urlsplit(origin).hostname.split("."),
-            ],
+            "redactions": [*worker_masks(origin, prefix), urllib.parse.quote(origin, safe="")],
         }
 
         phase = "access"
