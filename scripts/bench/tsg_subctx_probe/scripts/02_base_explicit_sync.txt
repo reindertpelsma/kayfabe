@@ -1,0 +1,8 @@
+# baseline: ONE TSG(GR), one explicit SYNC ctxshare, one GR channel with 3D+compute+copy
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+chan g ctx=S engine=gr objs=3d+cmp+ce
+bindtsg
+schedtsg
+work g
+work g

@@ -1,0 +1,12 @@
+# VEID assignment rules (no channel needed)
+info
+tsg engine=gr vas=0
+ctx s0 flags=sync vas=0
+ctx s0dup flags=sync vas=0
+ctx a1 flags=async vas=0
+ctx a2 flags=async vas=0
+ctx p1 flags=prefer vas=0
+ctx sp3 flags=spec:3 vas=0
+ctx sp3dup flags=spec:3 vas=0
+ctx sp0 flags=spec:0 vas=0
+ctx vnone flags=async vas=none

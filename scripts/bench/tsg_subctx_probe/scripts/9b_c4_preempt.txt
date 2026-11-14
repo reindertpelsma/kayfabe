@@ -1,0 +1,13 @@
+# CONTROL SCOPE: TSG PREEMPT (bWait=1, manual timeout) on a multi-subcontext TSG; work before and after
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+ctx A flags=async vas=0
+chan g ctx=S engine=gr objs=3d+cmp
+chan c ctx=A engine=gr rawflags=0x10 objs=cmp
+bindtsg
+schedtsg
+work g,c
+preempt wait=1 timeout_us=500000
+work g,c
+preempt wait=0
+work g,c

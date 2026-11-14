@@ -1,0 +1,17 @@
+# same as 90 but the TSG is bound first and every joiner gets a channel-level schedule
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+chan d ctx=S engine=gr objs=sw+ce+3d+cmp
+bindtsg
+timeslice us=1000
+schedtsg enable=1 skipsubmit=1
+ctx A1 flags=async vas=0
+chan k1 ctx=A1 engine=gr rawflags=0x10 objs=sw+ce+cmp
+schedchan k1
+chan k2 ctx=A1 engine=gr rawflags=0x10 objs=sw+ce+cmp
+schedchan k2
+ctx A2 flags=async vas=0
+chan k3 ctx=A2 engine=gr rawflags=0x10 objs=sw+ce+cmp
+schedchan k3
+work d,k1,k2,k3
+bench d,k1,k2,k3 iters=300

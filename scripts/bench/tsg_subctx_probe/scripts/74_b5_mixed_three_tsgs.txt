@@ -1,0 +1,21 @@
+# LATENCY b5 (kayfabe today, D3D12-like): DIRECT(3D) / COPY / COMPUTE queues as THREE TSGs (SYNC ctxshare each)
+tsg engine=gr vas=0
+ctx S0 flags=sync vas=0
+tsg engine=gr vas=0
+ctx S1 flags=sync vas=0
+tsg engine=gr vas=0
+ctx S2 flags=sync vas=0
+chan d tsg=0 ctx=S0 engine=gr objs=ce+3d+cmp
+chan k tsg=1 ctx=S1 engine=gr objs=ce
+chan c tsg=2 ctx=S2 engine=gr objs=cmp
+bindtsg tsg=0
+bindtsg tsg=1
+bindtsg tsg=2
+schedtsg tsg=0
+schedtsg tsg=1
+schedtsg tsg=2
+work d,k,c
+bench d,k,c iters=500
+bench d iters=500
+bench k iters=500
+bench c iters=500

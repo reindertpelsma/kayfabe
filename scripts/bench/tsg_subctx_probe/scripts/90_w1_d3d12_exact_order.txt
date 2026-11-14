@@ -1,0 +1,17 @@
+# D3D12 shape in the Windows order and verbs (no BIND, timeslice then schedule bSkipSubmit=1, joiners with NO schedule): ctx0 SYNC 5080,c7b5,c997,c9c0; ctx1 ASYNC x2 channels; ctx2 ASYNC x1 channel (all joiners runqueue 1)
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+chan d ctx=S engine=gr objs=sw+ce+3d+cmp
+timeslice us=1000
+schedtsg enable=1 skipsubmit=1
+ctx A1 flags=async vas=0
+chan k1 ctx=A1 engine=gr rawflags=0x10 objs=sw+ce+cmp
+chan k2 ctx=A1 engine=gr rawflags=0x10 objs=sw+ce+cmp
+ctx A2 flags=async vas=0
+chan k3 ctx=A2 engine=gr rawflags=0x10 objs=sw+ce+cmp
+work d
+work k1
+work k2
+work k3
+work d,k1,k2,k3
+bench d,k1,k2,k3 iters=300

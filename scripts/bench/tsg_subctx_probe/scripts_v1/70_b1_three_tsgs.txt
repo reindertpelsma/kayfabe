@@ -1,0 +1,16 @@
+# LATENCY b1 (kayfabe today): three channels in THREE TSGs (one per queue), all compute
+tsg engine=gr vas=0
+tsg engine=gr vas=0
+tsg engine=gr vas=0
+chan a tsg=0 engine=gr objs=cmp
+chan b tsg=1 engine=gr objs=cmp
+chan c tsg=2 engine=gr objs=cmp
+bindtsg tsg=0
+bindtsg tsg=1
+bindtsg tsg=2
+schedtsg tsg=0
+schedtsg tsg=1
+schedtsg tsg=2
+work a,b,c
+bench a,b,c iters=500
+bench a iters=500

@@ -1,0 +1,11 @@
+# LATENCY b3 (CUDA-like): ONE TSG, one (SYNC) ctxshare, three compute channels
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+chan a ctx=S engine=gr objs=cmp
+chan b ctx=S engine=gr objs=cmp
+chan c ctx=S engine=gr objs=cmp
+bindtsg
+schedtsg
+work a,b,c
+bench a,b,c iters=500
+bench a iters=500

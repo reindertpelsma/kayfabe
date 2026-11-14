@@ -1,0 +1,11 @@
+# SHAPE 1 variant: engine objects allocated AFTER bind+schedule
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+ctx A flags=async vas=0
+chan g ctx=S engine=gr
+chan c ctx=A engine=gr rawflags=0x10
+bindtsg
+schedtsg
+obj g 3d+cmp
+obj c cmp
+work g,c

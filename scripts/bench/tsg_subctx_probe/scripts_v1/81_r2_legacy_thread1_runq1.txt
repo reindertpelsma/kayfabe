@@ -1,0 +1,7 @@
+# RUNQUEUE: legacy mode; g thread 0 (3D+cmp); c thread 1 + runqueue 1 (cmp)
+tsg engine=gr vas=0
+chan g engine=gr thread=0 objs=3d+cmp
+chan c engine=gr thread=1 rawflags=0x10 objs=cmp
+bindtsg
+schedtsg
+work g,c
