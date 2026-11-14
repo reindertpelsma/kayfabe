@@ -3,6 +3,27 @@
 **STATUS: LIVE, 2026-11-09.** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
+## Shipped GPU programs: the `ptx` job (2026-11-13)
+
+**STATUS of this section: LIVE, 2026-11-13.** Security review 3 F-5/F-8 (S1-68): before this job nothing
+that runs tied the committed PTX to its source. CODE READ, and MEASURED locally in the job's pinned
+container on 2026-11-13 (all steps pass on `next` at `dba284320`; the committed `kf_walk.ptx` and the three
+generated display files reproduce byte for byte):
+
+- `scripts/ci/walk_ptx_repro.py walk` rebuilds `cuda/walk/kf_walk.ptx` with `cuda/walk/make_ptx.py` and
+  NVRTC 12.2.140 (the official `nvidia-cuda-nvrtc-cu12` wheel, sha256-pinned in
+  `scripts/ci/nvrtc-12.2.140.requirements.txt`, downloaded in the job, never committed) and compares the bytes.
+- `... display` rebuilds `kf_yuv.ptx`, `kf_color.ptx`, `kf_bl_pack.ptx` with their `make_*_ptx.sh` and the
+  clang their headers record (Ubuntu 26.04 `clang-21 1:21.1.8-6ubuntu1`, hence the digest-pinned container);
+  any other clang is refused, not compared.
+- `... static` pins the two hand-written display PTX files (`kf_scanout.ptx`, `kf_sum.ptx`: no source exists,
+  so they are **accepted unreviewed blobs** until one does) by sha256, and requires the constants the walk
+  kernel and its Rust launcher share (`KF_SHWORDS`, frontier/scratch capacities, grid, block, warp) to agree.
+- `make -C cuda/walk check-invariants check-cpu` runs the walk kernel's own source (its device half under
+  `cuda/walk/kf_cpu_shim.h`) on a CPU over the committed corpus. The warp-parallel walk is not run there; it
+  needs a GPU (`kf_tests`).
+- The checker has unit tests (`test_walk_ptx_repro.py`) and 12 mutants, each killed by two named tests.
+
 ## Stripped tree (2026-11-09)
 
 **STATUS of this section: LIVE, 2026-11-09.** Owner ruling (cited as section AQ of `OWNER_RULINGS.md` in the
