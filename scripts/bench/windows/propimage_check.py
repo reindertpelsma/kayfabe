@@ -405,14 +405,62 @@ $r.kind='FILE';$r.artifact='log.html';$r.modified=Epoch $f.LastWriteTimeUtc;$r.b
 
 
 def extract_screen_text(directory):
+    """Best-effort OCR of the result screen. Never a verdict: measured 2026-11-14, tesseract returned noise
+    for a clean result screen, so the score it may read is only reported."""
     try:
-        p = run(["tesseract", str(directory / "result.png"), str(directory / "screen")], timeout=60)
+        p = run(
+            ["tesseract", str(directory / "result.png"), str(directory / "screen"), "--psm", "11"],
+            timeout=60,
+        )
         return not p.returncode
     except (OSError, subprocess.TimeoutExpired):
         return False
 
 
+SOFTWARE_RENDERERS = re.compile(r"(?i)basic render|\bwarp\b|llvmpipe|softpipe|swiftshader|software")
+
+
+def _log_seconds(stamp):
+    h, mi, se = (int(x) for x in stamp.split(":"))
+    return h * 3600 + mi * 60 + se
+
+
+def parse_superposition_log(raw):
+    """Facts from the saved Unigine log.html, nothing guessed. The 1.1 log carries the GPU, the renderer
+    and the 'Benchmark running/stopped' interval; the score and FPS are only on the result screen."""
+    text = re.sub(r"<[^>]*>", "\n", raw)
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    facts = {"fatal": len(re.findall(r'<div class="f">', raw))}
+    for ln in lines:
+        gpu = re.fullmatch(r"\d\d:\d\d:\d\d GPU: (.+?) (\d+(?:\.\d+)+) x\d+", ln)
+        if gpu and "gpu" not in facts:
+            facts["gpu"], facts["driver"] = gpu[1], gpu[2]
+        desc = re.fullmatch(r"\d\d:\d\d:\d\d Direct3D11 desc: (.+)", ln)
+        if desc and "renderer" not in facts:
+            facts["renderer"] = desc[1].strip()
+        if "Benchmark running" in ln or "Benchmark stopped" in ln:
+            stamp = re.match(r"(\d\d:\d\d:\d\d) Benchmark (running|stopped)$", ln)
+            if stamp:
+                facts.setdefault(stamp[2], []).append(_log_seconds(stamp[1]))
+    if len(facts.get("running", [])) == 1 and len(facts.get("stopped", [])) == 1:
+        facts["interval_s"] = (facts["stopped"][0] - facts["running"][0]) % 86400
+    return facts
+
+
+def screen_values(text):
+    """Optional OCR read of the result screen: (score, min, avg, max) or None when not readable."""
+    score = re.search(r"(?i)\bscore\s*[:=]?\s*(\d+)", text) or re.search(r"(?m)^\s*(\d{3,6})\b", text)
+    fps = [
+        re.search(r"(?i)\b" + label + r"\s*[:=]?\s*(\d+(?:\.\d+)?)", text)
+        for label in ("min", "avg", "max")
+    ]
+    if not score or not all(fps):
+        return None
+    return (int(score[1]),) + tuple(float(x[1]) for x in fps)
+
+
 def validate_superposition(r, directory, start, end):
+    """Verdict from the saved log (FILE). Returns the signal text; raises ValueError when not a pass."""
     if r.get("artifact") != "log.html" or not start < r.get("modified", 0) <= end:
         raise ValueError("Stale or missing benchmark log")
     raw = (directory / "log.html").read_bytes()
@@ -428,6 +476,21 @@ def validate_superposition(r, directory, start, end):
         or log.count("Benchmark stopped") != 1
     ):
         raise ValueError("No single completed benchmark interval")
+    facts = parse_superposition_log(log)
+    interval = facts.get("interval_s")
+    if not interval or interval <= 0:
+        raise ValueError("Benchmark interval has no positive length")
+    if interval > end - start:
+        raise ValueError("Benchmark interval is longer than this run (stale or foreign log)")
+    if facts["fatal"]:
+        raise ValueError("Fatal line in the benchmark log")
+    gpu, renderer = facts.get("gpu"), facts.get("renderer")
+    if not gpu or not renderer:
+        raise ValueError("Benchmark log names no GPU or renderer")
+    if SOFTWARE_RENDERERS.search(gpu + " " + renderer):
+        raise ValueError("Software renderer: not GPU work")
+    if "nvidia" not in gpu.lower() or not gpu.startswith(renderer):
+        raise ValueError("Benchmark log GPU is not the NVIDIA device the renderer reports")
     before = (directory / "before.png").read_bytes()
     after = (directory / "result.png").read_bytes()
     if (
@@ -436,18 +499,20 @@ def validate_superposition(r, directory, start, end):
         or before == after
     ):
         raise ValueError("Missing or unchanged result screen")
-    text = (directory / "screen.txt").read_text()
-    # No guessed score from pixels: require a named positive score and all three FPS fields.
-    score = re.search(r"(?i)\bscore\s*[:=]?\s*(\d+)", text)
-    fps = [
-        re.search(r"(?i)\b" + label + r"\s*[:=]?\s*(\d+(?:\.\d+)?)", text)
-        for label in ("min", "avg", "max")
-    ]
-    if not score or int(score[1]) <= 0 or not all(fps):
-        raise ValueError("Result screen score/FPS not readable; no verdict")
-    values = [float(x[1]) for x in fps]
-    if not 0 < values[0] <= values[1] <= values[2] or not re.search(r"(?i)\bFPS\b", text):
-        raise ValueError("Invalid result screen FPS")
+    signal = (
+        f"Completed benchmark interval {interval} s on {gpu} (driver {facts['driver']}) from the saved "
+        "log; score and FPS are not in the log file"
+    )
+    try:
+        values = screen_values((directory / "screen.txt").read_text())
+    except OSError:
+        values = None
+    if values:
+        score, lo, avg, hi = values
+        if not (0 < avg and 0 <= lo <= avg <= hi and score > 0):
+            raise ValueError("Result screen read shows zero or inconsistent FPS")
+        signal += f"; screen read (not the verdict): score {score}, FPS min {lo} avg {avg} max {hi}"
+    return signal
 
 
 def load_image(archive, directory):
@@ -494,6 +559,22 @@ def stage_gop(work, directory, explicit=None):
             dst.write_bytes(c.read_bytes())
             return dst
     raise ValueError("kf-gop.signed.efi not found (pass --gop-efi): " + ", ".join(map(str, cands)))
+
+
+def hold_for_release(path, max_s, sleep=time.sleep, clock=time.monotonic):
+    """Manual iteration aid: keep the booted guest up until the release file exists (or max_s passes).
+
+    Returns "released" or "timeout". The release file must not exist beforehand (a stale file would
+    release at once, so refuse it)."""
+    path = Path(path)
+    if path.exists():
+        raise ValueError("Release file already exists; refusing a stale release")
+    t0 = clock()
+    while clock() - t0 < max_s:
+        if path.exists():
+            return "released"
+        sleep(5)
+    return "timeout"
 
 
 def stop_process(proc):
@@ -670,6 +751,56 @@ CHECKS = {
     },
 }
 
+# Edge check: the harness authors a local page (no network) that draws with WebGL for 4 s and puts
+# the renderer string, the frame count and a per-run nonce in the document title. The verdict reads that
+# title from the browser window through UI Automation, so a window that merely exists cannot pass.
+EDGE_PAGE = r"""<!doctype html><meta charset=utf-8><title>KFGL pending</title><canvas id=c width=64 height=64></canvas>
+<script>
+const nonce='__NONCE__';
+try {
+ const c=document.getElementById('c');
+ const gl=c.getContext('webgl2')||c.getContext('webgl');
+ const ext=gl.getExtension('WEBGL_debug_renderer_info');
+ const r=ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER);
+ let n=0;const t0=performance.now();
+ function f(){gl.clearColor((n%255)/255,0.5,0.2,1);gl.clear(gl.COLOR_BUFFER_BIT);n++;
+  if(performance.now()-t0<4000){requestAnimationFrame(f);}
+  else{document.title='KFGL '+nonce+' ok renderer='+r+' frames='+n;}}
+ requestAnimationFrame(f);
+} catch(e){document.title='KFGL '+nonce+' err '+e;}
+</script>"""
+
+EDGE_RUN = r"""
+$exe='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+$page="$D\kfgl.html"
+$html=@'
+__PAGE__
+'@
+Set-Content -Encoding UTF8 $page $html.Replace('__NONCE__',$r.run_id)
+$profile="$D\edge-profile"
+$uri=([System.Uri]$page).AbsoluteUri
+$p=Start-Process $exe -ArgumentList "--user-data-dir=`"$profile`"","--no-first-run","--no-default-browser-check","--disable-sync","--new-window",$uri -PassThru
+$deadline=(Get-Date).AddSeconds(120)
+$r.launched=$false;$r.window_title=''
+while((Get-Date) -lt $deadline){
+ $procs=@(Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {$_.CommandLine -like "*$profile*"} | ForEach-Object {$_.ProcessId})
+ $r.edge_pids=$procs
+ foreach($pidv in $procs){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pidv)
+  $wins=[System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)
+  foreach($w in $wins){
+   $name=$w.Current.Name
+   if($name -like 'KFGL *'){$r.launched=$true;$r.window_title=$name}
+  }
+ }
+ if($r.window_title -match ' (ok|err) '){break}
+ Start-Sleep -Seconds 2
+}
+$r.kind='UIA'
+try {Save-Screen "$D\edge.png"} catch {}
+Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {$_.CommandLine -like "*$profile*"} | ForEach-Object {Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}
+"""
+
 SOLIDWORKS = r"""
 $sw=New-Object -ComObject SldWorks.Application
 $sw.Visible=$true
@@ -772,6 +903,8 @@ def render_check(
     )
     if name == "solidworks" and solidworks_export:
         script += SOLIDWORKS
+    elif name == "edge":
+        script += EDGE_RUN.replace("__PAGE__", EDGE_PAGE)
     else:
         if name == "superposition" and superposition_run:
             script += (
@@ -820,6 +953,26 @@ def validate_transition(record, running, finished):
     )
 
 
+def validate_edge(r, run_id):
+    """Grade the browser window title that the authored WebGL page wrote (read through UIA)."""
+    if r.get("launched") is not True:
+        raise ValueError("Edge page window not found (no window with the run's title)")
+    title = str(r.get("window_title", ""))
+    ok = re.match(r"KFGL ([0-9a-f]{32}) ok renderer=(.*) frames=(\d+)", title)
+    if not ok:
+        raise ValueError("Edge WebGL page did not report a renderer: " + title[:120])
+    if ok[1] != run_id:
+        raise ValueError("Edge page title belongs to another run")
+    renderer, frames = ok[2], int(ok[3])
+    if frames <= 0:
+        raise ValueError("Edge WebGL drew no frames")
+    if SOFTWARE_RENDERERS.search(renderer):
+        raise ValueError("Edge WebGL renderer is software: " + renderer[:120])
+    if "nvidia" not in renderer.lower():
+        raise ValueError("Edge WebGL renderer is not the NVIDIA device: " + renderer[:120])
+    return f"WebGL drew {frames} frames in 4 s on {renderer[:120]} (title read through UIA)"
+
+
 def verdict(name, run_id, directory, plan=None):
     """Grade pulled bytes, never a guest-authored ok flag. Guest clocks stay guest-relative."""
     row = {"app": name, "ok": False, "evidence": "NONE", "signal": "", "secs": 0}
@@ -863,6 +1016,8 @@ def verdict(name, run_id, directory, plan=None):
                 evidence="FILE",
                 signal="API exported STEP with entity data (not a GPU/render benchmark)",
             )
+        elif name == "edge" and r.get("kind") == "UIA":
+            row.update(ok=True, evidence="UIA", signal=validate_edge(r, run_id))
         elif r.get("kind") == "UIA" and plan and name != "wukong":
             validate_plan(plan)
             if not validate_transition(r, plan["running"], plan["finished"]):
@@ -873,11 +1028,10 @@ def verdict(name, run_id, directory, plan=None):
                 signal="Observed progress then finished; selector semantics require hardware qualification",
             )
         elif r.get("kind") == "FILE" and name == "superposition":
-            validate_superposition(r, directory, start, end)
             row.update(
                 ok=True,
                 evidence="FILE",
-                signal="Fresh benchmark log plus OCR-checked result screen; SAVE not claimed",
+                signal=validate_superposition(r, directory, start, end),
             )
         else:
             if r.get("kind") == "LAUNCH_ONLY" and r.get("launched") is True:
@@ -896,7 +1050,7 @@ def task_wrapper(name, user="kfimage"):
         raise ValueError("Invalid interactive user")
     return (
         f"$n='kf_{name}'; Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue\n"
-        f"$a=New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -ExecutionPolicy Bypass -File C:\\kfhw\\{name}.ps1'\n"
+        f"$a=New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\\kfhw\\{name}.ps1'\n"
         f"$p=New-ScheduledTaskPrincipal -UserId {user} -LogonType Interactive -RunLevel Highest\n"
         "Register-ScheduledTask -TaskName $n -Action $a -Principal $p | Out-Null; Start-ScheduledTask -TaskName $n; 'started'\n"
     )
@@ -934,6 +1088,7 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
             "before.png",
             "result.png",
             "screen.png",
+            "edge.png",
         ):
             limit = 16 * 1024 * 1024 if f == "model.step" or f.endswith(".png") else 1024 * 1024
             p = guest.ps(
@@ -945,10 +1100,8 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
                 and guest.scp(remote + "/" + f, str(d / f), False).returncode
             ):
                 raise ValueError("Artifact transfer failed")
-        if name == "superposition" and (d / "result.png").exists() and not extract_screen_text(d):
-            raise ValueError(
-                "Harness prerequisite: result-screen OCR unavailable or failed; no app verdict"
-            )
+        if name == "superposition" and (d / "result.png").exists():
+            extract_screen_text(d)  # optional extra; the verdict is the saved log
         row = verdict(name, run_id, d, plan)
     except (ValueError, TypeError, OSError, subprocess.TimeoutExpired) as exc:
         row = {"class": "harness", "app": name, "ok": False, "evidence": "NONE", "error": str(exc)}
@@ -1046,6 +1199,10 @@ def main(argv=None):
     ap.add_argument("--gop-efi", help="signed boot GOP driver to stage into the work directory")
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
     ap.add_argument("--apps", default=",".join(CHECKS))
+    ap.add_argument(
+        "--hold-until-file",
+        help="Manual iteration: after verify, keep the guest up until this file appears (max 3 h)",
+    )
     ap.add_argument("--plans", type=Path)
     ap.add_argument(
         "--experiment-3dmark-accessibility",
@@ -1280,6 +1437,12 @@ def main(argv=None):
                 if any(row[1] == "MISMATCH" for row in matches):
                     raise ValueError("Blocking identity mismatch; app checks not run")
                 record("verify", "PASS", "identity, clock, TPM and seed GPU checked")
+                if a.hold_until_file:
+                    record(
+                        "hold",
+                        hold_for_release(a.hold_until_file, 3 * 3600),
+                        "guest held for manual iteration; ssh port %s" % g.port,
+                    )
                 for name in names:
                     if boot_age_guard(time.monotonic() - booted, CHECKS[name]["timeout"]):
                         record(

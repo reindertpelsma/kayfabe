@@ -5,6 +5,7 @@
 import importlib.util
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -12,7 +13,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-SRC = Path(__file__).resolve().parents[2] / "scripts/bench/windows/propimage_check.py"
+SRC = Path(
+    os.environ.get("KF_PROPIMAGE_CHECK_UNDER_TEST")  # red-then-green: point at the pre-fix module
+    or Path(__file__).resolve().parents[2] / "scripts/bench/windows/propimage_check.py"
+)
 spec = importlib.util.spec_from_file_location("fixture_propimage_check", SRC)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
@@ -369,10 +373,33 @@ class T(unittest.TestCase):
     def test_other_process_1074_again(self):
         self.assertIsNone(m.classify_shutdown([{"event_id": 1074, "process": "winlogon.exe"}]))
 
+    @staticmethod
+    def sp_log(
+        running="17:53:02",
+        stopped="17:53:12",
+        gpu="NVIDIA GeForce RTX 4070 32.0.15.8088 x1",
+        desc="NVIDIA GeForce RTX 4070",
+        extra="",
+    ):
+        """Shape of the real Superposition 1.1 log.html measured on the PC 2026-11-14 (no score, no FPS)."""
+        lines = [
+            '<div class="e">17:52:43 Can\'t initialize OpenAL. Install driver for your sound card.</div>',
+            f'<div class="m">17:52:44 GPU: {gpu}</div>',
+            f'<div class="m">17:52:44 Direct3D11 desc: {desc}</div>',
+            '<div class="m">17:52:46 Preset: 1 (Medium)</div>',
+        ]
+        if running:
+            lines.append(f'<div class="m">{running} Benchmark running</div>')
+        if stopped:
+            lines.append(f'<div class="m">{stopped} Benchmark stopped</div>')
+        if extra:
+            lines.append(extra)
+        return ("<html><body>" + "\n".join(lines) + "</body></html>").encode()
+
     def superposition(self, **changes):
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
-            log = b"<html>Benchmark running<br/>Benchmark stopped</html>"
+            log = self.sp_log()
             (d / "log.html").write_bytes(log)
             (d / "before.png").write_bytes(b"\x89PNG\r\n\x1a\nbefore")
             (d / "result.png").write_bytes(b"\x89PNG\r\n\x1a\nafter")
@@ -386,7 +413,10 @@ class T(unittest.TestCase):
                     if key == "log.html":
                         record["bytes"] = len(value)
                 elif key == "screen.txt":
-                    (d / key).write_text(value)
+                    if value is None:
+                        (d / key).unlink()
+                    else:
+                        (d / key).write_text(value)
                 else:
                     record[key] = value
             (d / "result.json").write_text(json.dumps(record))
@@ -403,11 +433,34 @@ class T(unittest.TestCase):
     def test_superposition_equal_start_log(self):
         self.assertFalse(self.superposition(modified=100)["ok"])
 
-    def test_superposition_no_result_score(self):
-        self.assertFalse(self.superposition(**{"screen.txt": "launcher FPS"})["ok"])
+    def test_superposition_verdict_comes_from_the_file_not_the_ocr(self):
+        # Measured 2026-11-14: tesseract returned noise ("eum aideit idils piles") for a real, clean
+        # result screen of a completed run. The log is the verdict; unreadable OCR cannot veto it.
+        garbage = "eum aideit\nidils piles\n@ SUPERPOSITION a mae\n9 BENCHMARK"
+        row = self.superposition(**{"screen.txt": garbage})
+        self.assertTrue(row["ok"], row)
+        self.assertEqual(row["evidence"], "FILE")
+        self.assertIn("GeForce RTX 4070", row["signal"])
+        self.assertIn("10 s", row["signal"])
 
-    def test_superposition_no_fps(self):
-        self.assertFalse(self.superposition(**{"screen.txt": "Score 7685"})["ok"])
+    def test_superposition_without_ocr_still_file_verdict(self):
+        row = self.superposition(**{"screen.txt": None})
+        self.assertTrue(row["ok"], row)
+        self.assertIn("score and FPS are not in the log file", row["signal"])
+
+    def test_superposition_readable_screen_values_are_reported_not_required(self):
+        row = self.superposition(**{"screen.txt": "7996 FPS: Min 36.59, Avg 59.81, Max 61.18"})
+        self.assertTrue(row["ok"], row)
+        self.assertIn("screen read", row["signal"])
+        self.assertIn("59.81", row["signal"])
+
+    def test_superposition_zero_fps_on_screen_is_a_failure(self):
+        row = self.superposition(**{"screen.txt": "Score 12 FPS Min 0 Avg 0 Max 0"})
+        self.assertFalse(row["ok"])
+
+    def test_superposition_unordered_fps_on_screen_is_a_failure(self):
+        row = self.superposition(**{"screen.txt": "Score 12 FPS Min 90 Avg 50 Max 70"})
+        self.assertFalse(row["ok"])
 
     def test_superposition_unchanged_screen(self):
         self.assertFalse(self.superposition(**{"result.png": b"\x89PNG\r\n\x1a\nbefore"})["ok"])
@@ -419,6 +472,195 @@ class T(unittest.TestCase):
         self.assertFalse(
             self.superposition(**{"log.html": b"Benchmark stopped Benchmark running"})["ok"]
         )
+
+    def software(self, name):
+        log = self.sp_log(gpu=name + " 1.0 x1", desc=name)
+        return self.superposition(**{"log.html": log})["ok"]
+
+    def test_superposition_basic_render_driver_is_not_gpu_work(self):
+        self.assertFalse(self.software("NVIDIA Microsoft Basic Render Driver"))
+
+    def test_superposition_llvmpipe_is_not_gpu_work(self):
+        self.assertFalse(self.software("NVIDIA llvmpipe (LLVM 15)"))
+
+    def test_superposition_warp_is_not_gpu_work(self):
+        self.assertFalse(self.software("NVIDIA WARP"))
+
+    def test_superposition_gpu_must_be_nvidia(self):
+        log = self.sp_log(gpu="AMD Radeon RX 7800 1.0 x1", desc="AMD Radeon RX 7800")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_intel_gpu_is_not_the_nvidia_device(self):
+        log = self.sp_log(gpu="Intel(R) UHD Graphics 770 31.0.101.4 x1", desc="Intel(R) UHD Graphics 770")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_renderer_prefix_of_another_nvidia_gpu(self):
+        log = self.sp_log(gpu="NVIDIA GeForce RTX 3060 Ti 32.0.15.8088 x1", desc="NVIDIA GeForce RTX 4070")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_missing_renderer_line(self):
+        log = self.sp_log().replace(b"Direct3D11 desc:", b"desc-less:")
+        row = self.superposition(**{"log.html": log})
+        self.assertFalse(row["ok"])
+        self.assertIn("names no GPU", row["error"])
+
+    def test_superposition_renderer_must_match_reported_gpu(self):
+        log = self.sp_log(desc="NVIDIA GeForce RTX 3060")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_missing_gpu_line(self):
+        log = self.sp_log().replace(b"GPU:", b"gpu-less:")
+        row = self.superposition(**{"log.html": log})
+        self.assertFalse(row["ok"])
+        self.assertIn("names no GPU", row["error"])
+
+    def test_superposition_fatal_log_line(self):
+        log = self.sp_log(extra='<div class="f">17:53:05 Fatal error: device lost</div>')
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_interval_longer_than_the_run_is_stale_text(self):
+        log = self.sp_log(running="17:53:02", stopped="17:55:58")  # 176 s inside a 20 s run
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_interval_much_longer_than_the_run(self):
+        log = self.sp_log(running="10:00:00", stopped="10:59:59")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_two_fatal_lines(self):
+        extra = '<div class="f">1 x</div><div class="f">2 y</div>'
+        self.assertFalse(self.superposition(**{"log.html": self.sp_log(extra=extra)})["ok"])
+
+    def test_superposition_stop_before_start_is_not_a_midnight_wrap_of_a_short_run(self):
+        # 17:53:12 -> 17:53:02 would be 86390 s across midnight: far beyond any run window
+        log = self.sp_log(running="17:53:12", stopped="17:53:02")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_interval_across_midnight(self):
+        log = self.sp_log(running="23:59:55", stopped="00:00:05")
+        self.assertTrue(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_zero_length_interval(self):
+        log = self.sp_log(running="17:53:02", stopped="17:53:02")
+        row = self.superposition(**{"log.html": log})
+        self.assertFalse(row["ok"])
+        self.assertIn("positive length", row["error"])
+
+    def test_superposition_zero_length_interval_late_evening(self):
+        log = self.sp_log(running="23:59:59", stopped="23:59:59")
+        self.assertIn("positive length", self.superposition(**{"log.html": log})["error"])
+
+    def test_superposition_short_interval_across_midnight(self):
+        log = self.sp_log(running="23:59:50", stopped="00:00:00")
+        self.assertTrue(self.superposition(**{"log.html": log})["ok"])
+
+    EDGE_RUN_ID = "a" * 32
+
+    def edge(self, title=None, **changes):
+        """Edge verdict from a result.json shaped like the guest script's output."""
+        if title is None:
+            title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11) frames=238"
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            record = self.fixture(
+                app="edge", kind="UIA", launched=True, window_title=title + " and 1 more page - Microsoft Edge"
+            )
+            for key in ("artifact", "modified", "bytes", "api_ok"):
+                record.pop(key)
+            record.update(changes)
+            (d / "result.json").write_text(json.dumps(record))
+            return m.verdict("edge", self.EDGE_RUN_ID, d)
+
+    def test_edge_webgl_title_read_through_uia_passes(self):
+        # Measured 2026-11-14: the old probe said launched:false for a window that was visibly open,
+        # because msedge.exe hands over to the browser process and the launcher PID exits at once.
+        row = self.edge()
+        self.assertTrue(row["ok"], row)
+        self.assertEqual(row["evidence"], "UIA")
+        self.assertIn("238 frames", row["signal"])
+
+    def test_edge_window_missing_is_not_a_pass(self):
+        row = self.edge(launched=False, window_title="")
+        self.assertFalse(row["ok"])
+        self.assertIn("window not found", row["error"])
+
+    def test_edge_window_without_the_page_title_is_not_a_pass(self):
+        row = self.edge(title="New tab")
+        self.assertFalse(row["ok"])
+        self.assertIn("did not report a renderer", row["error"])
+
+    def test_edge_error_title_is_not_a_pass(self):
+        row = self.edge(title="KFGL " + self.EDGE_RUN_ID + " err TypeError: gl is null")
+        self.assertFalse(row["ok"])
+
+    def test_edge_title_of_another_run(self):
+        title = "KFGL " + "b" * 32 + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070) frames=10"
+        self.assertIn("another run", self.edge(title=title)["error"])
+
+    def test_edge_title_nonce_is_bound_to_the_run(self):
+        # a stale title from a previous page of the same profile must not pass
+        title = "KFGL " + "0" * 32 + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070) frames=10"
+        self.assertFalse(self.edge(title=title)["ok"])
+
+    def test_edge_zero_frames(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070) frames=0"
+        row = self.edge(title=title)
+        self.assertFalse(row["ok"])
+        self.assertIn("no frames", row["error"])
+
+    def test_edge_zero_frames_with_leading_zeros(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070) frames=000"
+        self.assertFalse(self.edge(title=title)["ok"])
+
+    def test_edge_launched_must_be_the_boolean_true(self):
+        self.assertFalse(self.edge(launched="yes")["ok"])
+
+    def test_edge_swiftshader_is_software(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver) frames=50"
+        self.assertIn("software", self.edge(title=title)["error"])
+
+    def test_edge_nvidia_named_software_rasterizer_is_software(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (NVIDIA, NVIDIA llvmpipe, D3D11) frames=50"
+        self.assertIn("software", self.edge(title=title)["error"])
+
+    def test_edge_basic_render_driver_is_not_nvidia(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11) frames=50"
+        self.assertFalse(self.edge(title=title)["ok"])
+
+    def test_edge_intel_renderer_is_not_the_nvidia_device(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (Intel, Intel(R) UHD Graphics 770, D3D11) frames=50"
+        self.assertIn("not the NVIDIA device", self.edge(title=title)["error"])
+
+    def test_edge_amd_renderer_is_not_the_nvidia_device(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (AMD, AMD Radeon RX 7800, D3D11) frames=50"
+        self.assertIn("not the NVIDIA device", self.edge(title=title)["error"])
+
+    def test_edge_script_finds_the_window_by_process_and_title_not_the_launcher_pid(self):
+        script = m.render_check("edge", run_id=self.EDGE_RUN_ID)
+        self.assertIn("Win32_Process", script)
+        self.assertIn("--user-data-dir", script)
+        self.assertIn("ProcessIdProperty", script)
+        self.assertIn("-like 'KFGL *'", script)
+        self.assertNotIn("HasExited", script)  # the launcher PID exits by design
+        self.assertIn(self.EDGE_RUN_ID, script.replace("__NONCE__", self.EDGE_RUN_ID))
+        self.assertNotIn("SetCursorPos", script)
+
+    def test_edge_script_closes_only_its_own_profile(self):
+        script = m.render_check("edge", run_id=self.EDGE_RUN_ID)
+        self.assertIn("Stop-Process -Id $_.ProcessId", script)
+        self.assertIn("*$profile*", script)
+
+    def test_interactive_task_window_is_hidden_so_screenshots_show_the_app(self):
+        # Measured 2026-11-14: the visible PowerShell console covered most of every app screenshot.
+        wrapper = m.task_wrapper("x")
+        self.assertIn("-WindowStyle Hidden", wrapper)
+
+    def test_interactive_task_hidden_flag_is_before_the_script_file(self):
+        wrapper = m.task_wrapper("x")
+        self.assertLess(wrapper.index("-WindowStyle Hidden"), wrapper.index("-File"))
+
+    def test_edge_page_is_authored_with_the_nonce_slot(self):
+        self.assertEqual(m.EDGE_PAGE.count("__NONCE__"), 1)
+        self.assertIn("WEBGL_debug_renderer_info", m.EDGE_PAGE)
 
     def test_superposition_click_derived_from_rectangle(self):
         script = m.render_check("superposition", superposition_run=True)
@@ -1200,11 +1442,21 @@ def mutants():
             "Unregister-ScheduledTask -TaskName kf_{task}",
             "Unregister-ScheduledTask -TaskName {task}",
         ),
-        (
-            "superposition-screen",
-            'raise ValueError("Result screen score/FPS not readable; no verdict")',
-            "return",
-        ),
+        ("task-hidden", "-NoProfile -WindowStyle Hidden -ExecutionPolicy", "-NoProfile -ExecutionPolicy"),
+        ("edge-software", 'if SOFTWARE_RENDERERS.search(renderer):', "if False:"),
+        ("edge-nvidia", 'if "nvidia" not in renderer.lower():', "if False:"),
+        ("edge-frames", "if frames <= 0:", "if False:"),
+        ("edge-nonce", "if ok[1] != run_id:", "if False:"),
+        ("edge-window", 'if r.get("launched") is not True:', "if False:"),
+        ("sp-window", "if interval > end - start:", "if False:"),
+        ("sp-fatal", 'if facts["fatal"]:', "if False:"),
+        ("sp-software", "if SOFTWARE_RENDERERS.search(gpu + \" \" + renderer):", "if False:"),
+        ("sp-nvidia", '"nvidia" not in gpu.lower() or not gpu.startswith(renderer)', "not gpu.startswith(renderer)"),
+        ("sp-renderer-match", '"nvidia" not in gpu.lower() or not gpu.startswith(renderer)', '"nvidia" not in gpu.lower()'),
+        ("sp-names-gpu", "if not gpu or not renderer:", "if False:"),
+        ("sp-positive-interval", "if not interval or interval <= 0:", "if False:"),
+        ("sp-wrap", "% 86400", ""),
+        ("sp-screen-fps", "if not (0 < avg and 0 <= lo <= avg <= hi and score > 0):", "if False:"),
     ]
     failed = False
     for name, old, new in cases:
