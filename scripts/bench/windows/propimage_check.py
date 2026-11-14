@@ -874,6 +874,74 @@ try {Save-Screen "$D\edrawings.png"} catch {}
 Get-Process -Name eDrawings -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
 """
 
+# Resolve (measured 2026-11-14): the Qt UI is fully visible to UI Automation once past the splash: the Project
+# Manager window ('Project Manager', AutomationId UiProjectManagerDialog) has a 'New Project' button
+# (AutomationId ending btnAddProject, InvokePattern); the main window is named 'DaVinci Resolve - <project>'.
+# Scripting through DaVinciResolveScript returns None (external scripting is not available), and Resolve has no
+# built-in benchmark, so no render is run: the verdict is the UIA window for a project this run created plus
+# Resolve's own log lines (compute API, OpenGL context, NVDEC/NVENC) written after the start.
+RESOLVE_RUN = r"""
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class KfFocus {
+ [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+ [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+ [DllImport("user32.dll")] public static extern void keybd_event(byte vk,byte sc,uint f,UIntPtr e);
+ [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h,out uint p);
+ [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a,uint b,bool f);
+ [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+}
+'@
+function Focus-Win($w){
+ $h=[IntPtr]$w.Current.NativeWindowHandle;$fg=[KfFocus]::GetForegroundWindow();$d=0
+ $ft=[KfFocus]::GetWindowThreadProcessId($fg,[ref]$d);$me=[KfFocus]::GetCurrentThreadId()
+ [KfFocus]::AttachThreadInput($me,$ft,$true) | Out-Null
+ [KfFocus]::keybd_event(0x12,0,0,[UIntPtr]::Zero);[KfFocus]::keybd_event(0x12,0,2,[UIntPtr]::Zero)
+ [KfFocus]::SetForegroundWindow($h) | Out-Null
+ [KfFocus]::AttachThreadInput($me,$ft,$false) | Out-Null
+ ([KfFocus]::GetForegroundWindow() -eq $h)
+}
+function Resolve-Win(){
+ foreach($pr in Get-Process -Name Resolve -ErrorAction SilentlyContinue){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
+  foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){
+   if($w.Current.AutomationId -in 'UiProjectManagerDialog','UiMainWindow'){return $w}
+  }
+ }
+}
+$name='kf'+$r.run_id.Substring(0,8)
+$r.project_name=$name;$r.window_name='';$r.stage='';$r.log_lines=@()
+$t0=Get-Date
+$p=Start-Process 'C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe' -PassThru
+$deadline=(Get-Date).AddSeconds(300);$w=$null
+while((Get-Date) -lt $deadline){$w=Resolve-Win;if($w -and $w.Current.AutomationId -eq 'UiProjectManagerDialog'){break};Start-Sleep 3}
+if(-not $w -or $w.Current.AutomationId -ne 'UiProjectManagerDialog'){$r.stage='no project manager';throw 'Resolve Project Manager window never appeared in UI Automation'}
+$r.stage='project manager'
+$new=$w.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object {$_.Current.Name -ceq 'New Project' -and $_.Current.AutomationId.EndsWith('btnAddProject')} | Select-Object -First 1
+if(-not $new){throw 'New Project button not found by AutomationId'}
+$new.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+Start-Sleep 4
+$r.focus=Focus-Win $w
+[System.Windows.Forms.SendKeys]::SendWait('^a');Start-Sleep -Milliseconds 300
+[System.Windows.Forms.SendKeys]::SendWait($name);Start-Sleep -Milliseconds 500
+[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+$r.stage='create sent'
+$deadline=(Get-Date).AddSeconds(120)
+while((Get-Date) -lt $deadline){$m=Resolve-Win;if($m -and $m.Current.AutomationId -eq 'UiMainWindow'){$r.window_name=$m.Current.Name;if($r.window_name -like "*$name*"){break}};Start-Sleep 3}
+$r.stage='main window'
+Start-Sleep 5
+$log="$env:APPDATA\Blackmagic Design\DaVinci Resolve\Support\logs\davinci_resolve.log"
+$lines=@()
+foreach($ln in Get-Content $log -ErrorAction SilentlyContinue){
+ $m=[regex]::Match($ln,'\| (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ \| (.*)$')
+ if($m.Success){$ts=[datetime]::ParseExact($m.Groups[1].Value,'yyyy-MM-dd HH:mm:ss',$null);if($ts -ge $t0.AddSeconds(-2) -and $m.Groups[2].Value -match 'Selected compute API|initialised as decoding|Initialized OpenGL|Let There Be CUDA|Detected 1 GPUs'){$lines+=$ln.Substring(0,[Math]::Min(260,$ln.Length))}}
+}
+$r.log_lines=@($lines | Select-Object -First 40)
+$r.kind='RESOLVE'
+try {Save-Screen "$D\resolve.png"} catch {}
+Get-Process -Name Resolve -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
 # Wukong: the Steam .url shortcut cannot resolve offline ("This command cannot be run completely"), and
 # launching b1_benchmark.exe bare makes it hand over to the Steam client's launch-option dialog (a
 # CEF window UI Automation cannot see). Measured 2026-11-14: with the AppID in the environment (read from
@@ -1104,6 +1172,8 @@ def render_check(
         script += THREEDMARK_RUN
     elif name == "edrawings":
         script += EDRAWINGS_RUN
+    elif name == "resolve":
+        script += RESOLVE_RUN
     else:
         if name == "superposition" and superposition_run:
             script += (
@@ -1372,6 +1442,32 @@ def verdict(name, run_id, directory, plan=None):
             if cli_refused(str(r.get("cli_output", ""))):
                 signal += "; CLI refused (Professional/Developer key needed), so the run went through UI Automation"
             row.update(ok=True, evidence="FILE", signal=signal)
+        elif name == "resolve" and r.get("kind") == "RESOLVE":
+            row["evidence"] = "NONE"
+            wanted = "kf" + run_id[:8]
+            lines = [str(x) for x in (r.get("log_lines") or [])]
+            blob = "\n".join(lines)
+            gl = re.search(r"Initialized OpenGL [\d.]+ .*on device '([^']*)'", blob)
+            problems = []
+            if r.get("project_name") != wanted or wanted not in str(r.get("window_name", "")):
+                problems.append(f"main window {str(r.get('window_name'))[:60]!r} does not name the project this run created")
+            if "Selected compute API: CUDA" not in blob:
+                problems.append("log does not show the CUDA compute API selected after the start")
+            if "initialised as decoding and encoding device" not in blob:
+                problems.append("log does not show the NVIDIA decode/encode device initialised")
+            if not gl or "nvidia" not in gl[1].lower() or SOFTWARE_RENDERERS.search(gl[1]):
+                problems.append("log shows no NVIDIA OpenGL context")
+            if problems:
+                row["status"] = "INCONCLUSIVE"
+                raise ValueError("; ".join(problems) + f"; stage {r.get('stage')}")
+            row.update(
+                ok=True,
+                evidence="FILE",
+                signal=(
+                    f"Resolve created project {wanted} (UIA main window {r['window_name']!r}); its log after the start shows "
+                    f"CUDA compute, NVDEC/NVENC initialised and OpenGL on {gl[1]}; no render or benchmark was run"
+                ),
+            )
         elif name == "edrawings" and r.get("kind") == "EDW":
             tab = str(r.get("tab_name", ""))
             if r.get("sample") != "kfsample.sldprt" or tab.lower() != "kfsample.sldprt":
@@ -1472,6 +1568,7 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
             "result.3dmark-result",
             "3dmark.png",
             "edrawings.png",
+            "resolve.png",
             "nvidia_smi_memory.txt",
             "dxdiag.txt",
             "system_events.txt",

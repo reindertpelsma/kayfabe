@@ -176,9 +176,9 @@ class T(unittest.TestCase):
 
     def test_no_check_signs_in_or_types_credentials(self):
         for n in m.CHECKS:
-            self.assertNotRegex(
-                m.render_check(n), r"(?i)password|sendkeys|Invoke-WebRequest|Invoke-RestMethod"
-            )
+            # Resolve alone types a project name (keyboard tier, UIA found the dialog); nothing types a secret.
+            banned = r"(?i)password|Invoke-WebRequest|Invoke-RestMethod" + ("" if n == "resolve" else r"|sendkeys")
+            self.assertNotRegex(m.render_check(n), banned)
 
     def test_task_is_interactive(self):
         self.assertIn("-LogonType Interactive", m.task_wrapper("x"))
@@ -1148,8 +1148,81 @@ class T(unittest.TestCase):
         self.assertIn("AutomationId -ceq '1'", script)
         self.assertNotIn("SetCursorPos", script)
 
-    def test_resolve_default_launch_only(self):
-        self.assertIn("$r.kind='LAUNCH_ONLY'", m.render_check("resolve"))
+    def resolve(self, **changes):
+        wanted = "kf" + "a" * 8
+        log = [
+            "[0x1] | Main.GPUConfig | INFO  | 2026-11-12 18:10:20,984 | Selected compute API: CUDA",
+            "[0x2] | IO | INFO  | 2026-11-12 18:10:22,185 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+            "[0x3] | UI.GLContext | INFO  | 2026-11-12 18:10:24,156 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'",
+        ]
+        r = self.fixture(app="resolve", kind="RESOLVE", project_name=wanted,
+                         window_name="DaVinci Resolve - " + wanted, log_lines=log, stage="main window")
+        for key in ("artifact", "modified", "bytes", "api_ok"):
+            r.pop(key)
+        r.update(changes)
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            return m.verdict("resolve", "a" * 32, Path(td))
+
+    def test_resolve_project_window_and_gpu_log_pass(self):
+        row = self.resolve()
+        self.assertTrue(row["ok"], row)
+        self.assertIn("no render or benchmark was run", row["signal"])
+
+    def test_resolve_window_without_the_projects_name_is_inconclusive(self):
+        row = self.resolve(window_name="DaVinci Resolve - New Project 1")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_resolve_project_name_mismatch_is_inconclusive(self):
+        row = self.resolve(project_name="kfbbbbbbbb")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_resolve_without_cuda_line_is_inconclusive(self):
+        log = [x for x in self.resolve_log() if "compute API" not in x]
+        self.assertIn("CUDA", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_without_nvenc_line_is_inconclusive(self):
+        log = [x for x in self.resolve_log() if "decoding and encoding" not in x]
+        self.assertIn("decode/encode", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_without_opengl_line_is_inconclusive(self):
+        log = [x for x in self.resolve_log() if "OpenGL" not in x]
+        self.assertIn("OpenGL", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_software_opengl_is_inconclusive(self):
+        log = [x.replace("NVIDIA Corporation NVIDIA GeForce RTX 4070", "Microsoft Corporation GDI Generic") for x in self.resolve_log()]
+        self.assertIn("OpenGL", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_nvidia_named_llvmpipe_opengl_is_inconclusive(self):
+        log = [x.replace("NVIDIA GeForce RTX 4070", "NVIDIA llvmpipe") for x in self.resolve_log()]
+        self.assertIn("OpenGL", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_empty_log_names_cuda_missing(self):
+        self.assertIn("CUDA", self.resolve(log_lines=[])["error"])
+
+    def test_resolve_empty_log_names_encode_device_missing(self):
+        self.assertIn("decode/encode", self.resolve(log_lines=[])["error"])
+
+    def resolve_log(self):
+        return list(self._resolve_log_lines)
+
+    _resolve_log_lines = [
+        "[0x1] | Main.GPUConfig | INFO  | 2026-11-12 18:10:20,984 | Selected compute API: CUDA",
+        "[0x2] | IO | INFO  | 2026-11-12 18:10:22,185 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+        "[0x3] | UI.GLContext | INFO  | 2026-11-12 18:10:24,156 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'",
+    ]
+
+    def test_resolve_script_finds_ui_by_automationid_and_invokes(self):
+        script = m.render_check("resolve", run_id="a" * 32)
+        for needle in ("UiProjectManagerDialog", "btnAddProject", "InvokePattern", "UiMainWindow"):
+            self.assertIn(needle, script)
+        self.assertNotIn("SetCursorPos", script)
+        self.assertNotIn("mouse_event", script)
+
+    def test_resolve_script_types_only_the_project_name(self):
+        script = m.render_check("resolve", run_id="a" * 32)
+        self.assertEqual(script.count("SendWait("), 3)
+        self.assertIn("SendWait($name)", script)
 
     def test_result_markdown_evidence_kinds(self):
         rows = [
@@ -1930,6 +2003,10 @@ def mutants():
         ("tdm-entity", 'if re.search(rb"<!(DOCTYPE|ENTITY)", raw, re.I):', "if False:"),
         ("tdm-member", "if info.filename not in TDM_MEMBERS or info.file_size > TDM_MAX_MEMBER:", "if False:"),
         ("run-replace", 'kw.setdefault("errors", "replace")', "pass"),
+        ("res-name", 'if r.get("project_name") != wanted or wanted not in str(r.get("window_name", "")):', "if False:"),
+        ("res-cuda", 'if "Selected compute API: CUDA" not in blob:', "if False:"),
+        ("res-enc", 'if "initialised as decoding and encoding device" not in blob:', "if False:"),
+        ("res-gl", 'if not gl or "nvidia" not in gl[1].lower() or SOFTWARE_RENDERERS.search(gl[1]):', "if False:"),
         ("edw-title", 'tab.lower() != "kfsample.sldprt"', "False"),
         ("edw-sample", 'r.get("sample") != "kfsample.sldprt" or', "False and"),
         ("hostlog-status", "if STATUS_LINE.match(line):", "if False:"),
