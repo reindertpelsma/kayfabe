@@ -42,6 +42,8 @@ GUEST_DIR = r"C:\kfapps"
 def run(cmd, **kw):
     kw.setdefault("capture_output", True)
     kw.setdefault("text", True)
+    if kw["text"]:
+        kw.setdefault("errors", "replace")  # guest/box output is data; a stray byte must not abort the run
     return subprocess.run(cmd, check=False, **kw)
 
 
@@ -1016,6 +1018,109 @@ def validate_edge(r, run_id):
     if "nvidia" not in renderer.lower():
         raise ValueError("Edge WebGL renderer is not the NVIDIA device: " + renderer[:120])
     return f"WebGL drew {frames} frames in 4 s on {renderer[:120]} (title read through UIA)"
+
+
+TDM_MAX_MEMBER = 64 * 1024 * 1024
+TDM_MEMBERS = {
+    "Result.xml", "Arielle.xml", "SI.xml", "hash.txt", "Monitoring.csv", "RawMonitoringData.json",
+    "product-info-level.log",
+}
+
+
+def cli_refused(text):
+    """3DMarkCmd.exe prints this and exits 0 when the key's edition has no command line (measured 2026-11-14)."""
+    return bool(re.search(r"(?i)license key required for command line access", text))
+
+
+def _tdm_xml(zf, name):
+    import xml.etree.ElementTree as ET
+
+    raw = zf.read(name)
+    if re.search(rb"<!(DOCTYPE|ENTITY)", raw, re.I):
+        raise ValueError(f"{name} contains a DOCTYPE/ENTITY declaration; refused as data")
+    try:
+        return ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise ValueError(f"{name} is not valid XML: {exc}") from exc
+
+
+def _tdm_epoch(stamp):
+    from datetime import datetime, timezone
+
+    base = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)", stamp or "")
+    if not base:
+        raise ValueError("3DMark result has no parseable start/finish time")
+    return datetime.strptime(base[1], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+
+
+def validate_3dmark_result(path, run_start, run_end):
+    """Grade a saved .3dmark-result (a zip read as data, never extracted or executed). Returns the signal text.
+
+    Result.xml carries the scores, Arielle.xml the workload status codes and start/finish times, SI.xml the
+    devices. Structure measured on the PC's 2026-11-12 Time Spy BASIC result; the finish time must fall inside
+    this run so the stale preparation result in the image can never pass."""
+    import zipfile
+
+    try:
+        zf = zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise ValueError(f"3DMark result is not a readable zip: {exc}") from exc
+    with zf:
+        for info in zf.infolist():
+            if info.filename not in TDM_MEMBERS or info.file_size > TDM_MAX_MEMBER:
+                raise ValueError(f"Unexpected or oversized zip member {info.filename[:60]!r}")
+        for need in ("Result.xml", "Arielle.xml", "SI.xml"):
+            if need not in zf.namelist():
+                raise ValueError(f"3DMark result lacks {need}")
+        result, arielle, si = (_tdm_xml(zf, n) for n in ("Result.xml", "Arielle.xml", "SI.xml"))
+    infos = {
+        (i.findtext("name") or ""): (i.findtext("value") or "") for i in arielle.iter("info")
+    }
+    began, finished = _tdm_epoch(infos.get("benchmark_start_time")), _tdm_epoch(infos.get("benchmark_finish_time"))
+    if not (run_start <= began < finished <= run_end):
+        raise ValueError("3DMark result is not from this run (start/finish outside the guest run window)")
+    codes = [s.get("code") for s in arielle.iter("status")]
+    if not codes or any(c != "0" for c in codes):
+        raise ValueError(f"3DMark workload status codes not all 0: {codes[:8]}")
+    scores = {}
+    for node in result.iter():
+        tag = node.tag
+        if tag.endswith("3DMarkScore") or tag.endswith("GraphicsScore"):
+            try:
+                scores.setdefault(tag, int(node.text or "0"))
+            except ValueError:
+                scores.setdefault(tag, 0)
+    total = [v for k, v in scores.items() if k.endswith("3DMarkScore")]
+    graphics = [v for k, v in scores.items() if k.endswith("GraphicsScore")]
+    if not total or min(total) <= 0 or not graphics or min(graphics) <= 0:
+        raise ValueError("3DMark result has no positive 3DMark and graphics score")
+    fps = []
+    for node in result.iter():
+        if re.search(r"GraphicsTest\d+$", node.tag):
+            try:
+                fps.append(float(node.text or "0"))
+            except ValueError:
+                fps.append(0.0)
+    if not fps or min(fps) <= 0:
+        raise ValueError("3DMark result has no positive graphics-test FPS")
+    gpus = []
+    for dev in si.iter("Device"):
+        vals = {}
+        for v in dev.findall("Value"):
+            sub = v.find("Value")
+            if sub is not None:
+                vals[v.findtext("Name")] = sub.text or ""
+        if vals.get("Class") == "Display" and "nvidia" in (vals.get("DeviceDesc", "")).lower():
+            gpus.append((vals.get("DeviceDesc", ""), vals.get("DriverVersion", "?")))
+    if not gpus:
+        raise ValueError("SI.xml names no NVIDIA display device")
+    if any(SOFTWARE_RENDERERS.search(name) for name, _ in gpus):
+        raise ValueError("SI.xml display device is a software renderer")
+    name, driver = gpus[0]
+    return (
+        f"3DMark score {total[0]} (graphics {graphics[0]}), graphics tests {', '.join(f'{x:g}' for x in fps)} FPS, "
+        f"finished {infos['benchmark_finish_time'][:19]}Z on {name} driver {driver}, all {len(codes)} workload status codes 0"
+    )
 
 
 GPU_KERNEL_EVENTS = {"117": "VIDEO_TDR_FAILURE", "141": "VIDEO_ENGINE_TIMEOUT_DETECTED (watchdog)"}

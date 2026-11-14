@@ -737,6 +737,169 @@ class T(unittest.TestCase):
         for needle in ("CrashContext.runtime-xml", "LiveKernelEvent", "nvidia-smi", "Id=1000"):
             self.assertIn(needle, script)
 
+    def test_run_replaces_undecodable_guest_bytes(self):
+        # Measured 2026-11-14: a binary byte in guest output raised UnicodeDecodeError in the harness.
+        p = m.run([sys.executable, "-c", "import sys;sys.stdout.buffer.write(b'ok\\x87\\x98end')"])
+        self.assertEqual(p.returncode, 0)
+        self.assertTrue(p.stdout.startswith("ok") and p.stdout.endswith("end"))
+
+    def test_run_keeps_bytes_mode_when_asked(self):
+        p = m.run([sys.executable, "-c", "print(1)"], text=False)
+        self.assertEqual(p.stdout.strip(), b"1")
+
+    # ---- 3DMark result file (zip of Result.xml, Arielle.xml, SI.xml), structure measured 2026-11-14 ----
+    RESULT_XML = (
+        "<benchmark><results><result><name/><passIndex>-1</passIndex>"
+        "<TimeSpyPerformanceGraphicsScore>7203</TimeSpyPerformanceGraphicsScore>"
+        "<TimeSpyPerformance3DMarkScore>7237</TimeSpyPerformance3DMarkScore>"
+        "<TimeSpyPerformanceCPUScore>7442</TimeSpyPerformanceCPUScore></result>"
+        "<result><passIndex>0</passIndex>"
+        "<TimeSpyPerformanceGraphicsTest1>47.66</TimeSpyPerformanceGraphicsTest1>"
+        "<TimeSpyPerformanceGraphicsTest2>40.76</TimeSpyPerformanceGraphicsTest2></result>"
+        "</results></benchmark>"
+    )
+    ARIELLE_XML = (
+        "<benchmark><application_info><info><name>benchmark_start_time</name>"
+        "<value>2026-11-12T17:55:00.000000000Z</value></info><info><name>benchmark_finish_time</name>"
+        "<value>2026-11-12T18:02:10.000000000Z</value></info></application_info>"
+        '<sets><set><workloads><workload><results><result pass_index="0"><status code="0"></status></result>'
+        '</results></workload><workload><results><result pass_index="0"><status code="0"></status></result>'
+        "</results></workload></workloads></set></sets></benchmark>"
+    )
+    SI_XML = (
+        "<SystemInfo><Device><DeviceID>PCI\\VEN_10DE&amp;DEV_2786</DeviceID><Value><Name>Class</Name>"
+        "<Value>Display</Value></Value><Value><Name>DeviceDesc</Name><Value>NVIDIA GeForce RTX 4070</Value>"
+        "</Value><Value><Name>DriverVersion</Name><Value>32.0.15.8088</Value></Value></Device></SystemInfo>"
+    )
+    # guest epoch for 2026-11-12T17:50:00Z .. 18:10:00Z
+    TDM_START, TDM_END = 1794505800.0, 1794507000.0
+
+    def refused(self, out, part):
+        self.assertIsInstance(out, ValueError, out)
+        self.assertIn(part, str(out))
+
+    def tdm(self, result=None, arielle=None, si=None, extra=None, start=None, end=None, raw=None):
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "r.3dmark-result"
+            if raw is not None:
+                path.write_bytes(raw)
+            else:
+                with zipfile.ZipFile(path, "w") as z:
+                    z.writestr("Result.xml", self.RESULT_XML if result is None else result)
+                    z.writestr("Arielle.xml", self.ARIELLE_XML if arielle is None else arielle)
+                    z.writestr("SI.xml", self.SI_XML if si is None else si)
+                    for name, data in (extra or {}).items():
+                        z.writestr(name, data)
+            try:
+                return m.validate_3dmark_result(
+                    path, self.TDM_START if start is None else start, self.TDM_END if end is None else end
+                )
+            except ValueError as exc:
+                return exc
+
+    def test_3dmark_result_file_passes_with_score_gpu_and_driver(self):
+        out = self.tdm()
+        self.assertNotIsInstance(out, Exception, out)
+        for part in ("7237", "7203", "47.66", "NVIDIA GeForce RTX 4070", "32.0.15.8088"):
+            self.assertIn(part, out)
+
+    def test_3dmark_stale_result_from_the_image_is_refused(self):
+        # the image ships a 2026-11-12T15:56 Time Spy result from preparation; it must never pass
+        old = self.ARIELLE_XML.replace("17:55:00", "15:49:44").replace("18:02:10", "15:56:52")
+        out = self.tdm(arielle=old)
+        self.assertIsInstance(out, ValueError)
+        self.refused(out, "not from this run")
+
+    def test_3dmark_finish_after_the_run_end_is_refused(self):
+        out = self.tdm(end=self.TDM_END - 3600)
+        self.refused(out, "not from this run")
+
+    def test_3dmark_start_before_the_run_start_is_refused(self):
+        out = self.tdm(start=self.TDM_START + 600)
+        self.refused(out, "not from this run")
+
+    def test_3dmark_nonzero_workload_status_is_a_failure(self):
+        bad = self.ARIELLE_XML.replace('<status code="0">', '<status code="9">', 1)
+        self.refused(self.tdm(arielle=bad), "workload status")
+
+    def test_3dmark_all_statuses_must_be_zero(self):
+        head, _, tail = self.ARIELLE_XML.rpartition('<status code="0">')
+        bad = head + '<status code="3">' + tail  # only the last workload failed
+        self.refused(self.tdm(arielle=bad), "workload status")
+
+    def test_3dmark_no_status_at_all_is_not_a_completed_run(self):
+        none = self.ARIELLE_XML.replace('<status code="0"></status>', "")
+        self.refused(self.tdm(arielle=none), "workload status")
+
+    def test_3dmark_zero_score_is_refused(self):
+        bad = self.RESULT_XML.replace(">7237<", ">0<")
+        self.refused(self.tdm(result=bad), "score")
+
+    def test_3dmark_missing_score_is_refused(self):
+        bad = self.RESULT_XML.replace("TimeSpyPerformance3DMarkScore", "Other")
+        self.refused(self.tdm(result=bad), "score")
+
+    def test_3dmark_zero_graphics_fps_is_refused(self):
+        bad = self.RESULT_XML.replace(">47.66<", ">0.00<")
+        self.refused(self.tdm(result=bad), "FPS")
+
+    def test_3dmark_no_fps_values_is_refused(self):
+        bad = self.RESULT_XML.replace("GraphicsTest1", "X1").replace("GraphicsTest2", "X2")
+        self.refused(self.tdm(result=bad), "FPS")
+
+    def test_3dmark_missing_nvidia_display_device_is_refused(self):
+        bad = self.SI_XML.replace("NVIDIA GeForce RTX 4070", "Microsoft Basic Render Driver")
+        self.refused(self.tdm(si=bad), "NVIDIA")
+
+    def test_3dmark_software_device_named_nvidia_is_refused(self):
+        bad = self.SI_XML.replace("NVIDIA GeForce RTX 4070", "NVIDIA WARP")
+        self.refused(self.tdm(si=bad), "software")
+
+    def test_3dmark_intel_only_display_is_refused(self):
+        bad = self.SI_XML.replace("NVIDIA GeForce RTX 4070", "Intel(R) UHD Graphics 770")
+        self.refused(self.tdm(si=bad), "NVIDIA")
+
+    def test_3dmark_non_display_class_nvidia_device_is_refused(self):
+        bad = self.SI_XML.replace("<Value>Display</Value>", "<Value>Audio</Value>")
+        self.refused(self.tdm(si=bad), "NVIDIA")
+
+    def test_3dmark_llvmpipe_named_nvidia_is_software(self):
+        bad = self.SI_XML.replace("NVIDIA GeForce RTX 4070", "NVIDIA llvmpipe")
+        self.refused(self.tdm(si=bad), "software")
+
+    def test_3dmark_not_a_zip_is_refused(self):
+        self.refused(self.tdm(raw=b"not a zip"), "zip")
+
+    def test_3dmark_missing_member_is_refused(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "r"
+            with zipfile.ZipFile(path, "w") as z:
+                z.writestr("Result.xml", self.RESULT_XML)
+            with self.assertRaises(ValueError):
+                m.validate_3dmark_result(path, self.TDM_START, self.TDM_END)
+
+    def test_3dmark_xml_with_entities_is_refused_as_data_attack(self):
+        evil = '<!DOCTYPE x [<!ENTITY a "boom">]>' + self.RESULT_XML
+        self.refused(self.tdm(result=evil), "DOCTYPE")
+
+    def test_3dmark_arielle_with_entities_is_refused(self):
+        evil = '<!DOCTYPE x [<!ENTITY a "boom">]>' + self.ARIELLE_XML
+        self.refused(self.tdm(arielle=evil), "DOCTYPE")
+
+    def test_3dmark_unexpected_zip_member_path_is_refused(self):
+        out = self.tdm(extra={"../evil.xml": "x"})
+        self.refused(out, "member")
+
+    def test_3dmark_oversized_member_is_refused(self):
+        out = self.tdm(extra={"Monitoring.csv": b"x" * (64 * 1024 * 1024 + 1)})
+        self.refused(out, "member")
+
+    def test_3dmark_cli_refusal_text_is_recognised(self):
+        self.assertTrue(m.cli_refused("18:14:02 Professional or Developer license key required for command line access"))
+        self.assertFalse(m.cli_refused("18:14:02 benchmark finished"))
+
     def test_edge_page_is_authored_with_the_nonce_slot(self):
         self.assertEqual(m.EDGE_PAGE.count("__NONCE__"), 1)
         self.assertIn("WEBGL_debug_renderer_info", m.EDGE_PAGE)
@@ -1521,6 +1684,15 @@ def mutants():
             "Unregister-ScheduledTask -TaskName kf_{task}",
             "Unregister-ScheduledTask -TaskName {task}",
         ),
+        ("tdm-window", "if not (run_start <= began < finished <= run_end):", "if False:"),
+        ("tdm-status", 'if not codes or any(c != "0" for c in codes):', "if False:"),
+        ("tdm-score", "if not total or min(total) <= 0 or not graphics or min(graphics) <= 0:", "if False:"),
+        ("tdm-fps", "if not fps or min(fps) <= 0:", "if False:"),
+        ("tdm-gpu", "if not gpus:", "if False:"),
+        ("tdm-software", "if any(SOFTWARE_RENDERERS.search(name) for name, _ in gpus):", "if False:"),
+        ("tdm-entity", 'if re.search(rb"<!(DOCTYPE|ENTITY)", raw, re.I):', "if False:"),
+        ("tdm-member", "if info.filename not in TDM_MEMBERS or info.file_size > TDM_MAX_MEMBER:", "if False:"),
+        ("run-replace", 'kw.setdefault("errors", "replace")', "pass"),
         ("wukong-crash", 'if crash:', "if False:"),
         ("wukong-kernel", 'if str(e.get("code")) in GPU_KERNEL_EVENTS', "if False and str(e.get(\"code\")) in GPU_KERNEL_EVENTS"),
         ("wukong-start", 'if r.get("shipping_seen") is not True:', "if False:"),
