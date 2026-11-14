@@ -1050,6 +1050,40 @@ static void kf3_console_cursor(Kf3State *s)
     kf3_display_cursor_apply(s->h);
 }
 
+/* Bytes per pixel of a Kf3Frame format code (kf3_pixman_format's codes); 0 for an unknown one. */
+static uint64_t kf3_frame_bpp(uint32_t f)
+{
+    switch (f) {
+    case 1: case 2: case 4: case 5: return 4;
+    case 3: return 2;
+    default: return 0;
+    }
+}
+
+/* ★ C-04/D-06 = S1-03 (security review 2, 2026-11-13; ABI 32): does the frame's geometry fit the
+ * bytes at `data`? pixman (and VNC, screendump, GTK behind it) reads (height-1)*stride + width*bpp
+ * bytes there. ⊘ The old check compared stride (BYTES) with width (PIXELS), and had no length to
+ * compare anything with. Rust checks the same (CheckedFrame); this is the C side's own bound, so a
+ * wrong archive or a Rust bug still cannot put host memory on the console. Width/height are capped
+ * at 16384 and stride at INT32_MAX (they are cast to int for qemu_create_displaysurface_from), so in
+ * 64 bits (height-1)*stride < 2^45 and width*bpp < 2^17: nothing below can overflow. */
+static bool kf3_frame_fits(const Kf3Frame *f)
+{
+    uint64_t bpp = kf3_frame_bpp(f->format);
+    uint64_t row, need;
+
+    if (!bpp || !f->data || f->width == 0 || f->height == 0 || f->width > 16384 ||
+        f->height > 16384 || f->stride > INT32_MAX || (f->stride & 3) != 0) {
+        return false;
+    }
+    row = (uint64_t)f->width * bpp;
+    if ((uint64_t)f->stride < row) {
+        return false;
+    }
+    need = (uint64_t)(f->height - 1) * f->stride + row;
+    return need <= f->len;
+}
+
 /* The newest frame onto the console's surface (gfx_update). */
 static void kf3_console_frame(Kf3State *s)
 {
@@ -1060,12 +1094,11 @@ static void kf3_console_frame(Kf3State *s)
         return;
     }
     fmt = kf3_pixman_format(f.format);
-    if (!fmt || !f.data || f.width == 0 || f.height == 0 || f.stride < f.width ||
-        (f.stride & 3) != 0) {
+    if (!fmt || !kf3_frame_fits(&f)) {
         return;
     }
     if (f.data != s->shown.data || f.width != s->shown.width || f.height != s->shown.height ||
-        f.stride != s->shown.stride || f.format != s->shown.format) {
+        f.stride != s->shown.stride || f.format != s->shown.format || f.len != s->shown.len) {
         dpy_gfx_replace_surface(s->con, qemu_create_displaysurface_from((int)f.width, (int)f.height,
                                                                          fmt, (int)f.stride, f.data));
     }
