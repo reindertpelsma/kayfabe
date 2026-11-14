@@ -17,6 +17,7 @@ crates/kf-cuda/src/driver_unsafe.rs	pinned_free	1	no queued copy may still targe
 crates/kf-host/src/lib.rs	raw_control_opaque	1	cmd and payload are authored by a host operator tool, never a guest; an opaque control has no layout to validate (F-06)
 crates/kf-linux-raw/src/mapping_unsafe.rs	as_ptr	1	the raw pointer leaves the borrow checker; its consumer (QEMU, the CUDA driver) must stop using it before the mapping drops
 crates/kf-linux-raw/src/mapping_unsafe.rs	within	1	base starts a live mapping of total bytes owned by the caller and 'a is tied to it; the owner type lives in another file
+crates/kf-qemu/src/ffi_unsafe.rs	CheckedFrame	1	proves the geometry fits len, not that len bytes are mapped at addr; addr/len still minted by safe kf-cuda code until D-02/S1-04
 crates/kf-qemu/src/mem.rs	new	1	index is in bounds of guard (private, one caller passes a position found in the same guard); otherwise deref panics, never reads out of bounds
 crates/kf-qemu/src/raw_unsafe.rs	adopt	7	QEMU-owned memory, backend fds and C callbacks with opaque state cannot be validated from Rust; each carries its # Safety contract
 cuda/walk/kf_walk.cu	kf_par_admit	1	entry < KF_MAX_PDB: a frontier entry's pdb, bounded by kf_par_seed and copied by every child; stale entries never expanded
