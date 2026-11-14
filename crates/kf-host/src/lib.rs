@@ -268,7 +268,7 @@ const PASSED_THROUGH: &[&kf_abi::matrix::StructRuns] = &[
 
 /// Print a host-ABI refusal once, by name, and turn it into the status class callers see.
 fn abi_refused(what: &str, e: &kf_abi::hostabi::HostAbiError) -> RmError {
-    eprintln!("kf-host: HOST-ABI REFUSED {what}: {e}");
+    kf_arch::rate_eprintln!("kf-host: HOST-ABI REFUSED {what}: {e}");
     RmError::Other(HOST_ABI_REFUSED)
 }
 
@@ -913,7 +913,7 @@ impl HostRm {
         let (name, carry) = match strukt {
             None if params.is_empty() => return issue(params),
             None => {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf-host: HOST-ABI REFUSED {what}: a parameter block with no named struct"
                 );
                 return Err(RmError::Other(HOST_ABI_REFUSED));
@@ -923,7 +923,9 @@ impl HostRm {
                 (before.name, self.abi.carry_renamed(before, after))
             }
             Some(HostParams::NoHeader { .. } | HostParams::MeasuredOpaque { .. }) => {
-                eprintln!("kf-host: HOST-ABI REFUSED {what}: allocation params with no header");
+                kf_arch::rate_eprintln!(
+                    "kf-host: HOST-ABI REFUSED {what}: allocation params with no header"
+                );
                 return Err(RmError::Other(HOST_ABI_REFUSED));
             }
         };
@@ -1072,7 +1074,7 @@ impl HostRm {
         // at the bench layout, which is only known correct on the interval the encoders were
         // written for. (No caller today — `NV_MEMORY_LIST_ALLOCATION_PARAMS`.)
         if !self.abi.in_encoded_interval() {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-host: HOST-ABI REFUSED nested alloc class {class:#06x}: not carried, and host driver {} is \
                  outside the interval its bench layout is known for",
                 self.abi.version()
