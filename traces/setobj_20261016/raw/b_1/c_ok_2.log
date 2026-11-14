@@ -1,0 +1,56 @@
+OBS t=0.000 e=1792197594.777 START case=c_ok rep=2 pid=2578291 comm=setobj_probe
+RM t=0.000 e=1792197594.777 alloc client class=0x0 parent=0x0 -> h=0xc1d00eea status=0x0
+RM t=0.000 e=1792197594.777 control ATTACHED_IDS obj=0xc1d00eea cmd=0x00000201 -> status=0x0
+RM t=0.000 e=1792197594.777 control ID_INFO obj=0xc1d00eea cmd=0x00000202 -> status=0x0
+RM t=0.001 e=1792197594.777 alloc device class=0x80 parent=0xc1d00eea -> h=0xb00b0001 status=0x0
+RM t=0.001 e=1792197594.778 alloc subdevice class=0x2080 parent=0xb00b0001 -> h=0xb00b0002 status=0x0
+RM t=0.002 e=1792197594.779 alloc vaspace class=0x90f1 parent=0xb00b0001 -> h=0xb00b0003 status=0x0
+RM t=0.002 e=1792197594.779 alloc virtual class=0x70 parent=0xb00b0001 -> h=0xb00b0004 status=0x0
+RM t=0.002 e=1792197594.779 alloc ring class=0x40 parent=0xb00b0001 -> h=0xb00b0005 status=0x0
+RM t=0.002 e=1792197594.779 alloc notifier(vid) class=0x40 parent=0xb00b0001 -> h=0xb00b0006 status=0x0
+RM t=0.002 e=1792197594.779 map_cpu ring ok len=0x20000
+RM t=0.002 e=1792197594.779 map_cpu notifier ok len=0x10000
+RM t=0.002 e=1792197594.779 map_dma ring -> va=0x120000000 status=0x0 rc=0
+RM t=0.003 e=1792197594.780 alloc tsg class=0xa06c parent=0xb00b0001 -> h=0xb00b0007 status=0x0
+RM t=0.004 e=1792197594.781 alloc channel class=0xc56f parent=0xb00b0007 -> h=0xb00b0008 status=0x0
+RM t=0.004 e=1792197594.781 control BIND obj=0xb00b0007 cmd=0xa06c0102 -> status=0x0
+RM t=0.004 e=1792197594.781 control WORK_SUBMIT_TOKEN obj=0xb00b0008 cmd=0xc36f0108 -> status=0x0
+RM t=0.004 e=1792197594.781 alloc usermode class=0xc561 parent=0xb00b0002 -> h=0xb00b0009 status=0x0
+RM t=0.004 e=1792197594.781 map_cpu usermode(hDevice) ok len=0x10000
+RM t=0.006 e=1792197594.783 alloc compute ADA_COMPUTE_A class=0xc9c0 parent=0xb00b0008 -> h=0xb00b000a status=0x0
+RM t=0.006 e=1792197594.783 control SCHEDULE obj=0xb00b0007 cmd=0xa06c0101 -> status=0x0
+OBS t=0.006 e=1792197594.783 channel scheduled: hClient=0xc1d00eea hChan=0xb00b0008 token=0x4 ringVA=0x120000000
+PB t=0.006 e=1792197594.783 submit words=7 gp_put=1 pb@0x0:
+PBW 0 0x20012000
+PBW 1 0x0000c9c0
+PBW 2 0x20040004
+PBW 3 0x00000001
+PBW 4 0x20002010
+PBW 5 0x5e000001
+PBW 6 0x01000002
+RES t=0.007 e=1792197594.783 step=SO(1,compute) sem_arrived=1 notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RES t=0.257 e=1792197595.034 step=SO(1,compute) +250ms notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+PB t=0.257 e=1792197595.034 submit words=11 gp_put=2 pb@0x20:
+PBW 0 0x20052056
+PBW 1 0xc0de0001
+PBW 2 0x00000000
+PBW 3 0x20002140
+PBW 4 0x00000001
+PBW 5 0x00000008
+PBW 6 0x20040004
+PBW 7 0x00000001
+PBW 8 0x20002020
+PBW 9 0x5e000002
+PBW 10 0x01000002
+RES t=0.258 e=1792197595.034 step=compute report-semaphore on sub1 sem_arrived=1 notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RES t=0.508 e=1792197595.285 step=compute report-semaphore on sub1 +250ms notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RES t=0.508 e=1792197595.285 engine_sem slot20=0xc0de0001 (expect c0de0001: engine work on a hardware subchannel is detectable)
+PB t=2.008 e=1792197596.785 submit words=5 gp_put=3 pb@0x50:
+PBW 0 0x20040004
+PBW 1 0x00000001
+PBW 2 0x20002030
+PBW 3 0x5e000003
+PBW 4 0x01000002
+RES t=2.008 e=1792197596.785 step=FINAL tail after a 1.5 s settle (is the channel still executing?) sem_arrived=1 notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RES t=2.258 e=1792197597.035 step=FINAL tail after a 1.5 s settle (is the channel still executing?) +250ms notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+OBS t=2.258 e=1792197597.035 END case=c_ok rc=0

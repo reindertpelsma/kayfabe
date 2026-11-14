@@ -1,0 +1,79 @@
+OBS t=0.000 e=1792197871.735 START case=s2br rep=2 pid=2580187 comm=setobj_probe
+RM t=0.000 e=1792197871.735 alloc client class=0x0 parent=0x0 -> h=0xc1d00f38 status=0x0
+RM t=0.000 e=1792197871.735 control ATTACHED_IDS obj=0xc1d00f38 cmd=0x00000201 -> status=0x0
+RM t=0.000 e=1792197871.735 control ID_INFO obj=0xc1d00f38 cmd=0x00000202 -> status=0x0
+RM t=0.001 e=1792197871.736 alloc device class=0x80 parent=0xc1d00f38 -> h=0xb00b0001 status=0x0
+RM t=0.001 e=1792197871.736 alloc subdevice class=0x2080 parent=0xb00b0001 -> h=0xb00b0002 status=0x0
+RM t=0.002 e=1792197871.737 alloc vaspace class=0x90f1 parent=0xb00b0001 -> h=0xb00b0003 status=0x0
+RM t=0.002 e=1792197871.737 alloc virtual class=0x70 parent=0xb00b0001 -> h=0xb00b0004 status=0x0
+RM t=0.002 e=1792197871.737 alloc ring class=0x40 parent=0xb00b0001 -> h=0xb00b0005 status=0x0
+RM t=0.002 e=1792197871.737 alloc notifier(vid) class=0x40 parent=0xb00b0001 -> h=0xb00b0006 status=0x0
+RM t=0.002 e=1792197871.737 map_cpu ring ok len=0x20000
+RM t=0.002 e=1792197871.737 map_cpu notifier ok len=0x10000
+RM t=0.002 e=1792197871.737 map_dma ring -> va=0x120000000 status=0x0 rc=0
+RM t=0.003 e=1792197871.738 alloc tsg class=0xa06c parent=0xb00b0001 -> h=0xb00b0007 status=0x0
+RM t=0.004 e=1792197871.739 alloc channel class=0xc56f parent=0xb00b0007 -> h=0xb00b0008 status=0x0
+RM t=0.004 e=1792197871.739 control BIND obj=0xb00b0007 cmd=0xa06c0102 -> status=0x0
+RM t=0.004 e=1792197871.739 control WORK_SUBMIT_TOKEN obj=0xb00b0008 cmd=0xc36f0108 -> status=0x0
+RM t=0.004 e=1792197871.739 alloc usermode class=0xc561 parent=0xb00b0002 -> h=0xb00b0009 status=0x0
+RM t=0.004 e=1792197871.739 map_cpu usermode(hDevice) ok len=0x10000
+RM t=0.006 e=1792197871.741 alloc compute ADA_COMPUTE_A class=0xc9c0 parent=0xb00b0008 -> h=0xb00b000a status=0x0
+RM t=0.006 e=1792197871.741 control SCHEDULE obj=0xb00b0007 cmd=0xa06c0101 -> status=0x0
+OBS t=0.006 e=1792197871.741 channel scheduled: hClient=0xc1d00f38 hChan=0xb00b0008 token=0x4 ringVA=0x120000000
+RM t=0.006 e=1792197871.742 alloc A class=0x5080 parent=0xb00b0008 -> h=0xb00b000b status=0x0
+RM t=0.006 e=1792197871.742 control GET_CLASS_ENGINEID obj=0xb00b0008 cmd=0x906f0101 -> status=0x0
+RES t=0.007 e=1792197871.742 alloc_sw A ok h=0xb00b000b classEngineID=0x1 classID=0x5080 engineID=0x22 ctlstatus=0x0
+PB t=0.007 e=1792197871.742 submit words=9 gp_put=1 pb@0x0:
+PBW 0 0x2001c000
+PBW 1 0x00000001
+PBW 2 0x2001c040
+PBW 3 0x00000000
+PBW 4 0x20040004
+PBW 5 0x00000001
+PBW 6 0x20002010
+PBW 7 0x5e000001
+PBW 8 0x01000002
+RES t=0.007 e=1792197871.742 step=SO(6,A) + NOP (first work) sem_arrived=1 notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RES t=0.257 e=1792197871.992 step=SO(6,A) + NOP (first work) +250ms notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RM t=0.258 e=1792197871.993 free A (bound on sub6) obj=0xb00b000b -> status=0x0
+RM t=0.258 e=1792197871.993 alloc B (after the channel ran work) class=0x5080 parent=0xb00b0008 -> h=0xb00b000c status=0x0
+RM t=0.258 e=1792197871.993 control GET_CLASS_ENGINEID obj=0xb00b0008 cmd=0x906f0101 -> status=0x0
+RES t=0.258 e=1792197871.993 alloc_sw B (after the channel ran work) ok h=0xb00b000c classEngineID=0x2 classID=0x5080 engineID=0x22 ctlstatus=0x0
+PB t=0.258 e=1792197871.993 submit words=11 gp_put=2 pb@0x30:
+PBW 0 0x2001c000
+PBW 1 0x00000002
+PBW 2 0x2001c040
+PBW 3 0x00000000
+PBW 4 0x2001c040
+PBW 5 0x00000000
+PBW 6 0x20040004
+PBW 7 0x00000001
+PBW 8 0x20002020
+PBW 9 0x5e000002
+PBW 10 0x01000002
+RES t=0.258 e=1792197871.994 step=SO(6,B) [rebind sub6 to a later object] sem_arrived=1 notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RES t=0.509 e=1792197872.244 step=SO(6,B) [rebind sub6 to a later object] +250ms notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RM t=0.509 e=1792197872.244 control B obj=0xb00b000c cmd=0x50800101 -> status=0x0
+RES t=0.509 e=1792197872.244 reach S2 reach: 0x200 on the (re)bound subchannel register on B status=0x0
+PB t=0.509 e=1792197872.244 submit words=7 gp_put=3 pb@0x60:
+PBW 0 0x2001c080
+PBW 1 0xde200001
+PBW 2 0x20040004
+PBW 3 0x00000001
+PBW 4 0x20002030
+PBW 5 0x5e000003
+PBW 6 0x01000002
+RES t=0.510 e=1792197872.245 step=S2 reach: 0x200 on the (re)bound subchannel sem_arrived=1 notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RES t=0.760 e=1792197872.495 step=S2 reach: 0x200 on the (re)bound subchannel +250ms notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RM t=0.760 e=1792197872.496 control B obj=0xb00b000c cmd=0x50800102 -> status=0xffff
+RES t=0.760 e=1792197872.496 reach S2 reach: 0x200 on the (re)bound subchannel remove_api(B) status=0xffff => executed (entry gone) or object gone
+RES t=0.760 e=1792197872.496 reach S2 reach: 0x200 on the (re)bound subchannel sem_arrived=1 executed_by=B
+PB t=2.261 e=1792197873.996 submit words=5 gp_put=4 pb@0x80:
+PBW 0 0x20040004
+PBW 1 0x00000001
+PBW 2 0x20002040
+PBW 3 0x5e000004
+PBW 4 0x01000002
+RES t=2.261 e=1792197873.996 step=FINAL tail after a 1.5 s settle (is the channel still executing?) sem_arrived=1 notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+RES t=2.511 e=1792197874.246 step=FINAL tail after a 1.5 s settle (is the channel still executing?) +250ms notifier_error=0 n0{info32=0x0 info16=0x0 status=0x0} n1{info32=0x4 info16=0x0 status=0xffff} 
+OBS t=2.511 e=1792197874.246 END case=s2br rc=0

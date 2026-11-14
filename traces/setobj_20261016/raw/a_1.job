@@ -1,0 +1,10 @@
+JOB_START 2026-10-17T01:56:05+02:00 pid=2556602 n=8
+DONE case=c_ok rep=1 pid=2556607 rc=0 xid_lines_for_pid=0
+DONE case=c_badclass rep=1 pid=2556639 rc=0 xid_lines_for_pid=1
+DONE case=c_badsw rep=1 pid=2556709 rc=0 xid_lines_for_pid=1
+DONE case=c_hw_rebind rep=1 pid=2556780 rc=0 xid_lines_for_pid=0
+DONE case=c_hw_two rep=1 pid=2556847 rc=0 xid_lines_for_pid=1
+DONE case=r0 rep=1 pid=2557047 rc=0 xid_lines_for_pid=0
+DONE case=s1 rep=1 pid=2557346 rc=0 xid_lines_for_pid=0
+DONE case=s1r rep=1 pid=2557578 rc=0 xid_lines_for_pid=0
+JOB_END 2026-10-17T01:56:35+02:00
