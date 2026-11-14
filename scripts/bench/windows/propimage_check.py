@@ -742,14 +742,65 @@ CHECKS = {
         "exe": r"C:\Program Files\SOLIDWORKS Corp\eDrawings\eDrawings.exe",
     },
     "wukong": {
-        "timeout": 300,
-        "exe": r"C:\Users\kfimage\Desktop\Black Myth Wukong Benchmark Tool.url",
+        "timeout": 480,
+        "exe": r"C:\Program Files (x86)\Steam\steamapps\common\Black Myth Wukong Benchmark Tool\b1_benchmark.exe",
     },
     "edge": {
         "timeout": 300,
         "exe": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
     },
 }
+
+# Wukong: the Steam .url shortcut cannot resolve offline ("This command cannot be run completely"), and
+# launching b1_benchmark.exe bare makes it hand over to the Steam client's launch-option dialog (a
+# CEF window UI Automation cannot see). Measured 2026-11-14: with the AppID in the environment (read from
+# Steam's own appmanifest) the launcher starts b1-Win64-Shipping.exe directly. The script samples VRAM
+# with nvidia-smi and, if the game dies, collects its crash context and the kernel watchdog event.
+WUKONG_RUN = r"""
+$game='C:\Program Files (x86)\Steam\steamapps\common\Black Myth Wukong Benchmark Tool'
+$exe="$game\b1_benchmark.exe"
+if(-not (Test-Path $exe)){throw 'Black Myth: Wukong Benchmark Tool is not installed'}
+$manifest=Get-ChildItem 'C:\Program Files (x86)\Steam\steamapps\appmanifest_*.acf' | Where-Object {(Get-Content $_.FullName -Raw) -match '"installdir"\s+"Black Myth Wukong Benchmark Tool"'} | Select-Object -First 1
+if(-not $manifest){throw 'No Steam appmanifest for the benchmark tool'}
+$appid=[regex]::Match((Get-Content $manifest.FullName -Raw),'"appid"\s+"(\d+)"').Groups[1].Value
+if(-not $appid){throw 'No appid in the Steam appmanifest'}
+$crashRoot="$game\b1\Saved\Crashes"
+$known=@(Get-ChildItem $crashRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {$_.Name})
+if(-not (Get-Process steam -ErrorAction SilentlyContinue)){
+ Start-Process 'C:\Program Files (x86)\Steam\steam.exe' -ArgumentList '-silent' | Out-Null
+ $w=(Get-Date).AddSeconds(90); while((Get-Date) -lt $w -and -not (Get-Process steamwebhelper -ErrorAction SilentlyContinue)){Start-Sleep 3}
+ Start-Sleep 10
+}
+$env:SteamAppId=$appid;$env:SteamGameId=$appid
+$p=Start-Process $exe -WorkingDirectory $game -PassThru
+$r.appid=$appid;$r.shipping_seen=$false;$r.shipping_secs=0;$r.vram_peak_mib=0;$r.vram_total_mib=0;$r.samples=@()
+$t0=Get-Date;$first=$null;$deadline=$t0.AddSeconds(360)
+while((Get-Date) -lt $deadline){
+ $g=Get-Process -Name b1-Win64-Shipping -ErrorAction SilentlyContinue | Select-Object -First 1
+ $smi=@(& nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>$null)
+ $used=0;$total=0
+ if($smi.Count -gt 0 -and $smi[0] -match '^\s*(\d+)\s*,\s*(\d+)'){$used=[int]$Matches[1];$total=[int]$Matches[2]}
+ if($used -gt $r.vram_peak_mib){$r.vram_peak_mib=$used};if($total -gt 0){$r.vram_total_mib=$total}
+ if($g){ if(-not $first){$first=Get-Date;$r.shipping_seen=$true}; $r.shipping_secs=[int]((Get-Date)-$first).TotalSeconds }
+ if($r.samples.Count -lt 200){$r.samples+=@{t=[int]((Get-Date)-$t0).TotalSeconds;alive=[bool]$g;vram=$used}}
+ if($first -and -not $g){break}
+ Start-Sleep 5
+}
+$r.exited=[bool]($first -and -not (Get-Process -Name b1-Win64-Shipping -ErrorAction SilentlyContinue))
+$r.kind='WUKONG'
+$r.crash=$null
+$dir=Get-ChildItem $crashRoot -Directory -ErrorAction SilentlyContinue | Where-Object {$known -notcontains $_.Name} | Select-Object -First 1
+if($dir -and (Test-Path "$($dir.FullName)\CrashContext.runtime-xml")){
+ $x=Get-Content "$($dir.FullName)\CrashContext.runtime-xml" -Raw
+ function Field($n){$m=[regex]::Match($x,"<$n>([^<]{0,300})</$n>");if($m.Success){$m.Groups[1].Value}else{''}}
+ $mods=@([regex]::Matches((Field 'CallStack'),'[A-Za-z0-9_\-]+') | ForEach-Object {$_.Value} | Where-Object {$_ -match '^(sl_|nv|d3d|dxg|b1|ntdll|KERNEL)'} | Select-Object -Unique -First 8)
+ $r.crash=@{dir=$dir.Name;type=(Field 'CrashType');message=(Field 'ErrorMessage');exe=(Field 'ExecutableName');gpu=(Field 'Misc.PrimaryGPUBrand');seconds_since_start=(Field 'SecondsSinceStart');modules=$mods}
+ Copy-Item "$($dir.FullName)\CrashContext.runtime-xml" "$D\crash_context.xml"
+}
+$r.kernel_events=@(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1001;StartTime=$t0} -ErrorAction SilentlyContinue | ForEach-Object {$m=[regex]::Match($_.Message,'Event Name: (\w+)[\s\S]*?P1: (\w+)');if($m.Success -and $m.Groups[1].Value -eq 'LiveKernelEvent'){@{event=$m.Groups[1].Value;code=$m.Groups[2].Value;time=(Epoch $_.TimeCreated)}}})
+$r.app_errors=@(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1000;StartTime=$t0} -ErrorAction SilentlyContinue | Where-Object {$_.Message -match 'b1-Win64-Shipping'} | ForEach-Object {$m=$_.Message;@{time=(Epoch $_.TimeCreated);text=$m.Substring(0,[Math]::Min(400,$m.Length))}})
+Get-Process | Where-Object {$_.Name -match '^(b1_benchmark|b1-Win64-Shipping|CrashReportClient)$' -and $_.StartTime -gt $t0.AddSeconds(-5)} | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
 
 # Edge check: the harness authors a local page (no network) that draws with WebGL for 4 s and puts
 # the renderer string, the frame count and a per-run nonce in the document title. The verdict reads that
@@ -905,6 +956,8 @@ def render_check(
         script += SOLIDWORKS
     elif name == "edge":
         script += EDGE_RUN.replace("__PAGE__", EDGE_PAGE)
+    elif name == "wukong":
+        script += WUKONG_RUN
     else:
         if name == "superposition" and superposition_run:
             script += (
@@ -917,24 +970,16 @@ def render_check(
             else ""
         )
         script += f"$p=Start-Process '{spec['exe']}'{args} -PassThru; Start-Sleep 30\n"
-        if name != "wukong":
-            script += "$p.Refresh();$r.kind='LAUNCH_ONLY';$r.launched=(-not $p.HasExited);$r.title=$p.MainWindowTitle\n"
-        # URI launchers need a process tree from hardware before their UI can be scoped safely.
-        if name == "wukong":
-            script += r"""$fresh=@(Get-Process -Name b1,b1-Win64-Shipping,BlackMythWukong -ErrorAction SilentlyContinue | Where-Object {(Epoch $_.StartTime) -gt $r.started})
-$r.kind='LAUNCH_ONLY';$r.launched=($fresh.Count -gt 0);$r.process_ids=@($fresh | ForEach-Object {$_.Id})
-$r.note='Launch probe only; no benchmark verdict or Steam interaction'
-"""
+        script += "$p.Refresh();$r.kind='LAUNCH_ONLY';$r.launched=(-not $p.HasExited);$r.title=$p.MainWindowTitle\n"
+        script += "try {Dump-Uia $p.Id} catch {$r.uia_error=$_.Exception.Message}\n"
+        if name == "superposition" and superposition_run:
+            script += SUPERPOSITION
+        elif plan:
+            validate_plan(plan)
+            literal = json.dumps(plan).replace("'", "''")
+            script += f"$plan=ConvertFrom-Json '{literal}'\n" + UIA_RUN
         else:
-            script += "try {Dump-Uia $p.Id} catch {$r.uia_error=$_.Exception.Message}\n"
-            if name == "superposition" and superposition_run:
-                script += SUPERPOSITION
-            elif plan:
-                validate_plan(plan)
-                literal = json.dumps(plan).replace("'", "''")
-                script += f"$plan=ConvertFrom-Json '{literal}'\n" + UIA_RUN
-            else:
-                script += "$r.note='UIA tree collected; verified run controls and result schema pending'\n"
+            script += "$r.note='UIA tree collected; verified run controls and result schema pending'\n"
     script += '} catch { $r.error=$_.Exception.Message } finally {\ntry {Save-Screen "$D\\screen.png"} catch {$r.screen_error=$_.Exception.Message}\n$r.ended=Epoch (Get-Date)\n'
     script += 'ConvertTo-Json -InputObject $r -Depth 6 | Set-Content -Encoding UTF8 "$D\\result.tmp"\nMove-Item "$D\\result.tmp" "$D\\result.json"\n}\n'
     return script
@@ -973,6 +1018,43 @@ def validate_edge(r, run_id):
     return f"WebGL drew {frames} frames in 4 s on {renderer[:120]} (title read through UIA)"
 
 
+GPU_KERNEL_EVENTS = {"117": "VIDEO_TDR_FAILURE", "141": "VIDEO_ENGINE_TIMEOUT_DETECTED (watchdog)"}
+
+
+def validate_wukong(r):
+    """Returns (status, text). FAIL on a crash or GPU watchdog event, INCONCLUSIVE when the tool merely stayed up
+    (nothing drives its benchmark yet), never a PASS from a window or a process alone."""
+    peak, total = r.get("vram_peak_mib"), r.get("vram_total_mib")
+    vram = f"VRAM peak {peak} of {total} MiB" if peak and total else "VRAM not sampled"
+    if r.get("shipping_seen") is not True:
+        return "FAIL", "Benchmark process b1-Win64-Shipping never started"
+    events = [
+        str(e.get("code"))
+        for e in (r.get("kernel_events") or [])
+        if str(e.get("code")) in GPU_KERNEL_EVENTS
+    ]
+    crash = r.get("crash")
+    if crash:
+        mods = ",".join(str(x) for x in (crash.get("modules") or [])[:6])
+        text = (
+            f"Game crashed after {r.get('shipping_secs')} s: {crash.get('type')} "
+            f"'{crash.get('message')}' in {crash.get('exe')} on {crash.get('gpu')}; modules {mods}; {vram}"
+        )
+        if events:
+            text += "; kernel " + ", ".join(f"LiveKernelEvent {c} {GPU_KERNEL_EVENTS[c]}" for c in events)
+        return "FAIL", text
+    if events:
+        return "FAIL", f"GPU watchdog event {events[0]} {GPU_KERNEL_EVENTS[events[0]]} during the run; {vram}"
+    if r.get("exited") is True and r.get("app_errors"):
+        return "FAIL", "Game exited with an Application Error event; " + vram
+    if r.get("exited") is True:
+        return "INCONCLUSIVE", f"Game ran {r.get('shipping_secs')} s and exited without a crash; no result file to grade; {vram}"
+    return "INCONCLUSIVE", (
+        f"Game stayed up {r.get('shipping_secs')} s with no crash or GPU event; the benchmark was not driven, "
+        f"so no work is proven; {vram}"
+    )
+
+
 def verdict(name, run_id, directory, plan=None):
     """Grade pulled bytes, never a guest-authored ok flag. Guest clocks stay guest-relative."""
     row = {"app": name, "ok": False, "evidence": "NONE", "signal": "", "secs": 0}
@@ -988,7 +1070,7 @@ def verdict(name, run_id, directory, plan=None):
             raise ValueError("Invalid guest timestamps")
         row["secs"] = int(end - start)
         if name == "wukong":
-            row["launched"] = r.get("launched") is True
+            row["launched"] = r.get("shipping_seen") is True
         if r.get("error"):
             raise ValueError(str(r["error"]))
         if r.get("kind") == "FILE" and name == "solidworks":
@@ -1016,6 +1098,11 @@ def verdict(name, run_id, directory, plan=None):
                 evidence="FILE",
                 signal="API exported STEP with entity data (not a GPU/render benchmark)",
             )
+        elif name == "wukong" and r.get("kind") == "WUKONG":
+            status, text = validate_wukong(r)
+            row["evidence"] = "FILE" if r.get("crash") or r.get("kernel_events") else "NONE"
+            row["status"] = status
+            raise ValueError(text)
         elif name == "edge" and r.get("kind") == "UIA":
             row.update(ok=True, evidence="UIA", signal=validate_edge(r, run_id))
         elif r.get("kind") == "UIA" and plan and name != "wukong":
@@ -1089,6 +1176,7 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
             "result.png",
             "screen.png",
             "edge.png",
+            "crash_context.xml",
         ):
             limit = 16 * 1024 * 1024 if f == "model.step" or f.endswith(".png") else 1024 * 1024
             p = guest.ps(
@@ -1154,7 +1242,9 @@ def app_classification(app):
         return "HARNESS", "harness"
     if app.get("ok") is True:
         return "PASS", "app"
-    return ("LAUNCH_ONLY", "unqualified") if app.get("status") == "LAUNCH_ONLY" else ("FAIL", "app")
+    if app.get("status") in ("LAUNCH_ONLY", "INCONCLUSIVE"):
+        return app["status"], "unqualified"
+    return "FAIL", "app"
 
 
 def overlay_clock(overlay, frozen, guest_utc=None, resume=False):

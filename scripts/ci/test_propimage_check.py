@@ -658,6 +658,85 @@ class T(unittest.TestCase):
         wrapper = m.task_wrapper("x")
         self.assertLess(wrapper.index("-WindowStyle Hidden"), wrapper.index("-File"))
 
+    def wukong(self, **changes):
+        r = self.fixture(
+            app="wukong", kind="WUKONG", shipping_seen=True, shipping_secs=97, exited=True,
+            vram_peak_mib=2578, vram_total_mib=4096, crash=None, kernel_events=[], app_errors=[],
+        )
+        for key in ("artifact", "modified", "bytes", "api_ok"):
+            r.pop(key)
+        r.update(changes)
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            (d / "result.json").write_text(json.dumps(r))
+            return m.verdict("wukong", "a" * 32, d)
+
+    CRASH = {
+        "type": "GPUCrash", "message": "GPU Crash dump Triggered", "exe": "b1-Win64-Shipping",
+        "gpu": "NVIDIA GeForce RTX 4070", "modules": ["b1_Win64_Shipping", "sl_dlss_g", "sl_interposer"],
+    }
+
+    def test_wukong_measured_gpu_crash_is_a_failure_with_the_signature(self):
+        # Measured 2026-11-14 on the PC: GPUCrash 97 s after start, LiveKernelEvent 141 at the same second.
+        row = self.wukong(crash=self.CRASH, kernel_events=[{"code": "141"}])
+        self.assertFalse(row["ok"])
+        self.assertEqual(row["evidence"], "FILE")
+        self.assertEqual(m.app_classification(row), ("FAIL", "app"))
+        for part in ("GPUCrash", "GPU Crash dump Triggered", "sl_dlss_g", "141", "4096", "2578"):
+            self.assertIn(part, row["error"])
+
+    def test_wukong_crash_without_kernel_event_still_fails(self):
+        self.assertEqual(m.app_classification(self.wukong(crash=self.CRASH))[0], "FAIL")
+
+    def test_wukong_kernel_watchdog_without_crash_context_fails(self):
+        row = self.wukong(exited=False, kernel_events=[{"code": "117"}])
+        self.assertEqual(m.app_classification(row)[0], "FAIL")
+        self.assertIn("117", row["error"])
+
+    def test_wukong_unrelated_kernel_event_is_ignored(self):
+        row = self.wukong(exited=False, kernel_events=[{"code": "1a8"}])
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_wukong_never_started_is_a_failure(self):
+        row = self.wukong(shipping_seen=False)
+        self.assertEqual(m.app_classification(row)[0], "FAIL")
+
+    def test_wukong_application_error_event_after_exit_fails(self):
+        row = self.wukong(app_errors=[{"text": "Faulting application b1-Win64-Shipping.exe"}])
+        self.assertEqual(m.app_classification(row)[0], "FAIL")
+
+    def test_wukong_seen_flag_must_be_boolean_true(self):
+        self.assertEqual(m.app_classification(self.wukong(shipping_seen="yes"))[0], "FAIL")
+
+    def test_wukong_two_application_error_events_fail(self):
+        events = [{"text": "a"}, {"text": "b"}]
+        row = self.wukong(app_errors=events)
+        self.assertIn("Application Error", row["error"])
+
+    def test_wukong_survival_alone_is_inconclusive_not_a_pass(self):
+        row = self.wukong(exited=False)
+        self.assertFalse(row["ok"])
+        self.assertEqual(m.app_classification(row), ("INCONCLUSIVE", "unqualified"))
+
+    def test_wukong_clean_exit_without_result_file_is_inconclusive(self):
+        self.assertEqual(m.app_classification(self.wukong())[0], "INCONCLUSIVE")
+
+    def test_wukong_script_launches_the_exe_with_the_appid_from_the_manifest(self):
+        script = m.render_check("wukong", run_id="a" * 32)
+        self.assertIn("b1_benchmark.exe", script)
+        self.assertIn("appmanifest_*.acf", script)
+        self.assertIn("$env:SteamAppId=$appid", script)
+        self.assertNotIn(".url", script)
+        self.assertNotIn("SetCursorPos", script)
+
+    def test_wukong_check_points_at_the_exe_not_the_url_shortcut(self):
+        self.assertTrue(m.CHECKS["wukong"]["exe"].endswith("b1_benchmark.exe"))
+
+    def test_wukong_script_collects_crash_context_and_kernel_events(self):
+        script = m.render_check("wukong", run_id="a" * 32)
+        for needle in ("CrashContext.runtime-xml", "LiveKernelEvent", "nvidia-smi", "Id=1000"):
+            self.assertIn(needle, script)
+
     def test_edge_page_is_authored_with_the_nonce_slot(self):
         self.assertEqual(m.EDGE_PAGE.count("__NONCE__"), 1)
         self.assertIn("WEBGL_debug_renderer_info", m.EDGE_PAGE)
@@ -1442,6 +1521,10 @@ def mutants():
             "Unregister-ScheduledTask -TaskName kf_{task}",
             "Unregister-ScheduledTask -TaskName {task}",
         ),
+        ("wukong-crash", 'if crash:', "if False:"),
+        ("wukong-kernel", 'if str(e.get("code")) in GPU_KERNEL_EVENTS', "if False and str(e.get(\"code\")) in GPU_KERNEL_EVENTS"),
+        ("wukong-start", 'if r.get("shipping_seen") is not True:', "if False:"),
+        ("wukong-apperr", 'if r.get("exited") is True and r.get("app_errors"):', "if False:"),
         ("task-hidden", "-NoProfile -WindowStyle Hidden -ExecutionPolicy", "-NoProfile -ExecutionPolicy"),
         ("edge-software", 'if SOFTWARE_RENDERERS.search(renderer):', "if False:"),
         ("edge-nvidia", 'if "nvidia" not in renderer.lower():', "if False:"),
