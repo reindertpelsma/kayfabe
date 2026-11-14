@@ -744,6 +744,10 @@ class T(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertTrue(p.stdout.startswith("ok") and p.stdout.endswith("end"))
 
+    def test_run_replaces_undecodable_bytes_on_stderr_too(self):
+        p = m.run([sys.executable, "-c", "import sys;sys.stderr.buffer.write(b'e\\xff')"])
+        self.assertTrue(p.stderr.startswith("e"))
+
     def test_run_keeps_bytes_mode_when_asked(self):
         p = m.run([sys.executable, "-c", "print(1)"], text=False)
         self.assertEqual(p.stdout.strip(), b"1")
