@@ -245,6 +245,8 @@ pub struct DisplayGpu {
     cu: Cuda,
     ctx: CtxHandle,
     device: i32,
+    /// ★ F-7: `cuDeviceGetAttribute(PAGEABLE_MEMORY_ACCESS)` at bring-up (`None`: unknown).
+    pageable: Option<bool>,
     store: Option<DevBuf>,
     /// The scanout copies' stream (blocking, like every stream this binding creates).
     stream: StreamHandle,
@@ -656,6 +658,14 @@ impl DisplayGpu {
     pub(crate) fn bring_up_with(cu: Cuda, bdf: &str) -> Result<DisplayGpu, CudaError> {
         cu.init()?;
         let device = cu.device_by_pci_bus_id(bdf)?;
+        let pageable = cu.pageable_memory_access(device);
+        // ★ F-7 / S1-05 (2026-11-14): one line at bring-up, so a run's log says whether a kernel
+        // address leaving its buffer could reach this process's memory (the bounds hold either way)
+        eprintln!(
+            "kf-cuda: display device {bdf} pageable_memory_access={} (yes: every compose-kernel \
+             bound is a host-memory-safety obligation, OWNER_RULINGS S1-05)",
+            pageable.map_or("unknown", |p| if p { "yes" } else { "no" })
+        );
         // ★ 2026-11-14 (security review 2 D-15): guarded — a `?` below destroys the context (and
         // the stream, events and modules made in it) instead of leaking them.
         let ctx = cu.ctx_create_guarded(device)?;
@@ -710,6 +720,7 @@ impl DisplayGpu {
             cu,
             ctx,
             device,
+            pageable,
             store: None,
             stream,
             done,
@@ -732,6 +743,13 @@ impl DisplayGpu {
             cursor_at: None,
             signal_event,
         })
+    }
+
+    /// ★ F-7 / S1-05: whether this device's kernels can reach pageable host memory (HMM/ATS), as
+    /// the driver answered at bring-up; `None` when it could not say.
+    #[must_use]
+    pub fn pageable_memory_access(&self) -> Option<bool> {
+        self.pageable
     }
 
     /// Why the checksum kernel is unavailable, if it is (the worker logs it once and sends every
@@ -2776,6 +2794,17 @@ mod fake_driver_tests {
             "the old row buffer is still a copy target"
         );
         fake::succeed_all();
+    }
+
+    /// ★ F-7 / S1-05: the display context records the driver's pageable-memory answer at
+    /// bring-up; a refused question is "unknown", never "no".
+    #[test]
+    fn f7_the_display_records_whether_kernels_reach_pageable_memory() {
+        assert_eq!(gpu().pageable_memory_access(), Some(false));
+        fake::fail("cuDeviceGetAttribute");
+        let g = DisplayGpu::bring_up_with(Cuda::fake(), "0000:01:00.0").unwrap();
+        fake::succeed_all();
+        assert_eq!(g.pageable_memory_access(), None);
     }
 
     #[test]

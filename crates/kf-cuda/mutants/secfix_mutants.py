@@ -250,6 +250,13 @@ MUTANTS = [
         "            .store(true, core::sync::atomic::Ordering::Release);",
         "            .store(false, core::sync::atomic::Ordering::Release);",
     ),
+    # ── F-7 / S1-05: the pageable-memory question (2026-11-14) ──
+    (
+        "f7-unknown-reported-as-no",
+        "driver_unsafe.rs",
+        "        (r == CUDA_SUCCESS).then_some(v != 0)",
+        "        Some(r == CUDA_SUCCESS && v != 0)",
+    ),
     # ── D-08: field lists ──
     (
         "d08-a-field-missing-from-the-list",
