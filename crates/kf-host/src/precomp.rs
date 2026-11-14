@@ -15,8 +15,12 @@ pub const MAX_WORDS: usize = 32 * 6;
 const BATCH_WORDS: usize = 32;
 
 /// Read a bounded plan while the caller has no effective CAP_SYS_ADMIN.
-/// The callback is the actual host ioctl or a GPU-free fake; both buffers remain
-/// live for that synchronous call. Only the authored READ32 operation is permitted.
+/// The callback is the actual host ioctl or a GPU-free fake, called as
+/// `control(cmd, params, pointer_at, ops)`: the field at `pointer_at` of `params` must point at
+/// `ops` for that one synchronous call. ★ Security review 1, F-01 (2026-11-13): this function
+/// never writes that address (the field stays zero); the real ioctl has
+/// `kf_linux_raw::Indirect::nested` mint it, bound it to `ops` and scrub it afterwards, so no host
+/// address exists in safe code. Only the authored READ32 operation is permitted.
 ///
 /// # Errors
 /// Unknown ABI, privileged caller, invalid plan, ioctl refusal or malformed reply.
@@ -24,7 +28,7 @@ pub fn read_with(
     version: &str,
     unprivileged: bool,
     addresses: &[u32],
-    mut control: impl FnMut(u32, &mut [u8], &mut [u8]) -> Result<(), String>,
+    mut control: impl FnMut(u32, &mut [u8], usize, &mut [u8]) -> Result<(), String>,
 ) -> Result<Vec<u32>, String> {
     if !unprivileged {
         return Err("PRECOMP host query requires CAP_SYS_ADMIN clear".into());
@@ -50,9 +54,10 @@ pub fn read_with(
         let mut params = vec![0; l.param_size]; // No target channel, write mask, route or privilege flags.
         let count = u32::try_from(batch.len()).map_err(|_| "PRECOMP count overflow")?;
         params[l.count..l.count + 4].copy_from_slice(&count.to_le_bytes());
-        params[l.pointer..l.pointer + 8].copy_from_slice(&(ops.as_mut_ptr() as u64).to_le_bytes());
+        // The pointer field at `l.pointer` stays ZERO here: `Indirect::nested` writes it inside
+        // `kf-linux-raw` and scrubs it back to zero, so `requested_params` still matches after.
         let requested_params = params.clone();
-        control(l.cmd, &mut params, &mut ops)?;
+        control(l.cmd, &mut params, l.pointer, &mut ops)?;
         if params != requested_params {
             return Err("PRECOMP host changed request metadata".into());
         }
@@ -98,8 +103,8 @@ impl crate::HostRm {
             self.driver_version(),
             !caps.holds_effective(kf_linux_raw::capability::CAP_SYS_ADMIN),
             addresses,
-            |cmd, params, _ops| {
-                self.raw_control_exact(self.subdevice(), cmd, params)
+            |cmd, params, pointer_at, ops| {
+                self.raw_control_nested(self.subdevice(), cmd, params, pointer_at, ops)
                     .map_err(|e| format!("PRECOMP own-subdevice control: {e:?}"))
             },
         )
