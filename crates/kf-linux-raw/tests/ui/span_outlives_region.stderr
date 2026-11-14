@@ -1,0 +1,12 @@
+error[E0597]: `region` does not live long enough
+  --> tests/ui/span_outlives_region.rs:18:9
+   |
+ 9 |     let span: HostSpan<'_> = {
+   |         ---- borrow later stored here
+10 |         let region = MappedRegion::map(
+   |             ------ binding `region` declared here
+...
+18 |         region.host_span()
+   |         ^^^^^^ borrowed value does not live long enough
+19 |     };
+   |     - `region` dropped here while still borrowed

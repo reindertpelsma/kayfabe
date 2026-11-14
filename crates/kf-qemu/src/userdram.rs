@@ -51,11 +51,11 @@ mod tests {
         let (mem, fd) = crate::raw_unsafe::test_owned_ram(0x1000);
         let block = super::super::RamBlock {
             gpa: 0x1_0000_0000,
-            mem,
+            mem: mem.test_alias(),
             fd: Some(fd),
             fd_off: 0xc000_0000,
         };
-        ram.add(block);
+        ram.add(block.test_alias());
         (ram, block)
     }
     #[test]
@@ -95,7 +95,7 @@ mod tests {
         assert_eq!(source.write(0, &[1]), Err(AccessError::Busy));
         drop(guard);
         ram.del(block.gpa);
-        ram.add(block);
+        ram.add(block.test_alias());
         assert_eq!(source.write(0, &[1]), Err(AccessError::Topology));
         assert_eq!(source.read(0, &mut [0]), Err(AccessError::Topology));
     }

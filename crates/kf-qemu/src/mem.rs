@@ -79,7 +79,11 @@ pub const K_BAR1: VasKey = VasKey(0xFFFF_FFFF_0000_0001);
 
 /// One guest-RAM block QEMU registered: guest-physical `[gpa, gpa+len)` at `mem`, backed by the
 /// memory backend's `fd` at `fd_off` (`None` when the backend has no fd).
-#[derive(Debug, Clone, Copy)]
+///
+/// ★ Security fix C-02 (2026-11-13): **not `Clone`/`Copy`** — it owns its [`RawRegion`], which
+/// lives in the [`RamMap`] from `kf3_ram_add` to `kf3_ram_del`; safe code borrows it through a
+/// [`RamRef`] guard only.
+#[derive(Debug)]
 pub struct RamBlock {
     /// Guest-physical base.
     pub gpa: u64,
@@ -89,6 +93,19 @@ pub struct RamBlock {
     pub fd: Option<BackendFd>,
     /// File offset of `gpa`.
     pub fd_off: u64,
+}
+
+#[cfg(test)]
+impl RamBlock {
+    /// Test-only second handle on a block over [`crate::raw_unsafe::test_owned_ram`] memory.
+    pub(crate) fn test_alias(&self) -> RamBlock {
+        RamBlock {
+            gpa: self.gpa,
+            mem: self.mem.test_alias(),
+            fd: self.fd.clone(),
+            fd_off: self.fd_off,
+        }
+    }
 }
 
 /// ★ Guest RAM, as QEMU registered it — the VMM's own guest-physical layout, which is NOT the
@@ -148,6 +165,10 @@ impl RamMap {
     }
 
     /// Register (or replace) the block at `b.gpa`.
+    ///
+    /// ⚠ Takes the write lock, so it waits for every outstanding [`RamRef`] (each held across one
+    /// bounded copy, at most [`RAM_COPY_CHUNK`] bytes for the chunked accessors) — see
+    /// [`Self::del`].
     pub fn add(&self, b: RamBlock) {
         if let Ok(mut v) = self.blocks.write() {
             self.revoke();
@@ -158,6 +179,25 @@ impl RamMap {
     }
 
     /// Unregister the block at `gpa`.
+    ///
+    /// ★★ Security fix C-02 (2026-11-13) — **what the unplug path does.** `kf3_ram_del` (QEMU's
+    /// memory listener, under the BQL, on whichever thread commits the memory transaction — which
+    /// can be a vCPU that reprogrammed a BAR) lands here. The write lock WAITS for every
+    /// outstanding [`RamRef`] guard, then removes the block (its [`RawRegion`] is dropped: there is
+    /// no copy of it anywhere) and bumps the generation; only after this returns does QEMU free the
+    /// block (after its RCU grace period). So no kayfabe thread can touch the host address after
+    /// the unplug: a lookup after it finds nothing and refuses.
+    ///
+    /// Why the wait does not break *"nothing blocks on a vCPU or under a lock a vCPU takes"*: a
+    /// guard is held across ONE bounded `memcpy` of guest RAM and nothing else — no syscall, no
+    /// other lock, no allocation inside the guard (the chunked accessors copy at most
+    /// [`RAM_COPY_CHUNK`] bytes per acquisition; `block_for`'s callers copy one bounded object:
+    /// a GSP message, a display pushbuffer ≤ 64 KiB, a context-DMA word). The longest wait is
+    /// therefore one such copy (microseconds), on a path that runs only at a topology change
+    /// (boot, machine reset, hot-unplug), and a guard holder never waits for anything a vCPU
+    /// holds. This is the pattern [`MemoryListRam`] already used. The alternative that waits for
+    /// nothing at all — kayfabe threads as QEMU RCU readers, so QEMU's deferred free waits instead
+    /// — needs the C device and the FFI (not this file) and is recorded as the follow-up.
     pub fn del(&self, gpa: u64) {
         if let Ok(mut v) = self.blocks.write() {
             self.revoke();
@@ -165,42 +205,143 @@ impl RamMap {
         }
     }
 
-    /// The ONE backend fd every fd-backed block shares, if any.
+    /// The read guard, never re-entered blocking: a thread that already holds a [`RamRef`] takes
+    /// a nested one with `try_read` (a queued unplug makes it refuse, `None`), because a blocking
+    /// nested read behind a queued writer is a self-deadlock (`std`'s lock is writer-preferring).
+    fn guard(&self) -> Option<std::sync::RwLockReadGuard<'_, Vec<RamBlock>>> {
+        if RAM_GUARDS_HELD.get() == 0 {
+            self.blocks.read().ok()
+        } else {
+            self.blocks.try_read().ok()
+        }
+    }
+
+    /// The ONE backend fd every fd-backed block shares, if any — an owning clone, open for as long
+    /// as the caller keeps it (C-03).
     #[must_use]
     pub fn backing_fd(&self) -> Option<BackendFd> {
-        self.blocks.read().ok()?.iter().find_map(|b| b.fd)
+        self.guard()?.iter().find_map(|b| b.fd.clone())
     }
 
-    /// The block wholly covering `[gpa, gpa+len)`.
+    /// The block wholly covering `[gpa, gpa+len)`, borrowed through a [`RamRef`] that holds the
+    /// map's read lock.
+    ///
+    /// ⚠ Hold the guard across ONE bounded copy and drop it: unplug waits for it ([`Self::del`]).
+    /// Prefer [`Self::read_gpa`] / [`Self::write_gpa`], which bound the hold themselves.
     #[must_use]
-    pub fn block_for(&self, gpa: u64, len: u64) -> Option<RamBlock> {
-        let v = self.blocks.read().ok()?;
-        v.iter()
-            .find(|b| {
-                gpa >= b.gpa
-                    && gpa
-                        .checked_add(len)
-                        .is_some_and(|e| e.saturating_sub(b.gpa) <= b.mem.len() as u64)
-            })
-            .copied()
+    pub fn block_for(&self, gpa: u64, len: u64) -> Option<RamRef<'_>> {
+        let v = self.guard()?;
+        let index = v.iter().position(|b| {
+            gpa >= b.gpa
+                && gpa
+                    .checked_add(len)
+                    .is_some_and(|e| e.saturating_sub(b.gpa) <= b.mem.len() as u64)
+        })?;
+        Some(RamRef::new(v, index))
     }
 
-    /// ★ P5: the host mapping of guest-RAM memfd bytes `[off, off+len)` — the inverse of
-    /// [`Self::file_range`], for reading a sysmem row the reconcile placed (whose offset is a FILE
-    /// offset). `None` when no single fd-backed block covers it.
-    #[must_use]
-    pub fn at_file_offset(&self, off: u64, len: u64) -> Option<(RawRegion, usize)> {
-        let v = self.blocks.read().ok()?;
-        let first = v.iter().find_map(|x| x.fd)?;
-        v.iter()
-            .filter(|b| b.fd == Some(first))
+    /// ★ C-02: under the guard, the block holding guest-RAM memfd bytes `[off, off+len)` (the
+    /// inverse of [`Self::file_range`]) and the offset of `off` inside it; `f` runs with the guard
+    /// held. `None` when no single fd-backed block covers it.
+    fn with_file_span<R>(
+        &self,
+        off: u64,
+        len: u64,
+        f: impl FnOnce(&RawRegion, usize) -> R,
+    ) -> Option<R> {
+        let v = self.guard()?;
+        let first = v.iter().find_map(|x| x.fd.as_ref())?;
+        let b = v
+            .iter()
+            .filter(|b| b.fd.as_ref() == Some(first))
             .find(|b| {
                 off >= b.fd_off
                     && off
                         .checked_add(len)
                         .is_some_and(|e| e.saturating_sub(b.fd_off) <= b.mem.len() as u64)
+            })?;
+        let at = usize::try_from(off.saturating_sub(b.fd_off)).ok()?;
+        let _held = Held::new();
+        Some(f(&b.mem, at))
+    }
+
+    /// ★ P5 / C-02: copy guest-RAM memfd bytes `[off, off+dst.len())` into `dst` — the read of a
+    /// sysmem row the reconcile placed (whose offset is a FILE offset). Copied in pieces of at most
+    /// [`RAM_COPY_CHUNK`] bytes, each under the read guard (so an unplug waits for one piece, never
+    /// the whole read). `false` when a piece is not covered by one fd-backed block (a refused read
+    /// may have filled a prefix of `dst`).
+    #[must_use]
+    pub fn read_file(&self, off: u64, dst: &mut [u8]) -> bool {
+        dst.chunks_mut(RAM_COPY_CHUNK)
+            .enumerate()
+            .all(|(i, piece)| {
+                let Some(at) = chunk_at(off, i) else {
+                    return false;
+                };
+                self.with_file_span(at, piece.len() as u64, |m, rel| m.read_into(rel, piece))
+                    .unwrap_or(false)
             })
-            .map(|b| (b.mem, off.saturating_sub(b.fd_off) as usize))
+    }
+
+    /// Whether one fd-backed block covers guest-RAM memfd bytes `[off, off+len)` now.
+    #[must_use]
+    pub fn covers_file(&self, off: u64, len: u64) -> bool {
+        self.with_file_span(off, len, |_, _| ()).is_some()
+    }
+
+    /// The 32-bit word at guest-RAM memfd offset `off`, read under the guard.
+    #[must_use]
+    pub fn load_u32_file(&self, off: u64) -> Option<u32> {
+        self.with_file_span(off, 4, |m, at| m.load_u32(at))
+            .flatten()
+    }
+
+    /// Store the 32-bit word at guest-RAM memfd offset `off` under the guard.
+    #[must_use]
+    pub fn store_u32_file(&self, off: u64, v: u32) -> bool {
+        self.with_file_span(off, 4, |m, at| m.store_u32(at, v))
+            .unwrap_or(false)
+    }
+
+    /// ★ C-02: under the guard, the block wholly covering guest-physical `[gpa, gpa+len)` and the
+    /// offset of `gpa` inside it; `f` runs with the guard held.
+    fn with_gpa_span<R>(
+        &self,
+        gpa: u64,
+        len: u64,
+        f: impl FnOnce(&RawRegion, usize) -> R,
+    ) -> Option<R> {
+        let b = self.block_for(gpa, len)?;
+        let at = usize::try_from(gpa.saturating_sub(b.gpa)).ok()?;
+        Some(f(&b.mem, at))
+    }
+
+    /// ★ C-02: copy guest-physical `[gpa, gpa+dst.len())` into `dst`, in guarded pieces of at most
+    /// [`RAM_COPY_CHUNK`] bytes (see [`Self::read_file`]).
+    #[must_use]
+    pub fn read_gpa(&self, gpa: u64, dst: &mut [u8]) -> bool {
+        dst.chunks_mut(RAM_COPY_CHUNK)
+            .enumerate()
+            .all(|(i, piece)| {
+                let Some(at) = chunk_at(gpa, i) else {
+                    return false;
+                };
+                self.with_gpa_span(at, piece.len() as u64, |m, rel| m.read_into(rel, piece))
+                    .unwrap_or(false)
+            })
+    }
+
+    /// ★ C-02: copy `src` to guest-physical `gpa`, in guarded pieces of at most
+    /// [`RAM_COPY_CHUNK`] bytes (see [`Self::read_file`]).
+    #[must_use]
+    pub fn write_gpa(&self, gpa: u64, src: &[u8]) -> bool {
+        src.chunks(RAM_COPY_CHUNK).enumerate().all(|(i, piece)| {
+            let Some(at) = chunk_at(gpa, i) else {
+                return false;
+            };
+            self.with_gpa_span(at, piece.len() as u64, |m, rel| m.write_from(rel, piece))
+                .unwrap_or(false)
+        })
     }
 
     /// ★ The guest-RAM object's fd and the file offset of `[gpa, gpa+len)`. `None` when no single
@@ -209,11 +350,12 @@ impl RamMap {
     #[must_use]
     pub fn file_range(&self, gpa: u64, len: u64) -> Option<(BackendFd, u64)> {
         let b = self.block_for(gpa, len)?;
-        let first = self.blocks.read().ok()?.iter().find_map(|x| x.fd)?;
-        (b.fd == Some(first))
-            .then(|| b.fd_off.checked_add(gpa.saturating_sub(b.gpa)))
-            .flatten()
-            .map(|o| (first, o))
+        let first = b.all().iter().find_map(|x| x.fd.as_ref())?;
+        if b.fd.as_ref() != Some(first) {
+            return None;
+        }
+        let off = b.fd_off.checked_add(gpa.saturating_sub(b.gpa))?;
+        Some((first.clone(), off))
     }
 
     /// ★★ P1+P2 (`docs/design/V3_P1P2_TSPACE.md` §2.6) — **THE vIOMMU SEAM: the one path from a
@@ -228,6 +370,88 @@ impl RamMap {
     #[must_use]
     pub fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
         self.file_range(dma, len).map(|(_, off)| off)
+    }
+}
+
+/// ★ C-02 (DESIGN, 2026-11-13): the most guest-RAM bytes one guarded copy moves before the read
+/// lock is dropped and re-taken — the longest an unplug ([`RamMap::del`]) waits for one reader.
+/// 64 KiB is one display pushbuffer's maximum (`kf_disp` `MAX_PUSHBUFFER`), a few microseconds of
+/// `memcpy`; the measured snapshot and USERD reads are far smaller per piece. Not measured as a
+/// wait on hardware.
+pub const RAM_COPY_CHUNK: usize = 64 << 10;
+
+thread_local! {
+    /// How many [`RamRef`] guards this thread holds (see [`RamMap::guard`]).
+    static RAM_GUARDS_HELD: core::cell::Cell<u32> = const { core::cell::Cell::new(0) };
+}
+
+/// Counts one held guard for the thread (`RamMap::guard`'s nested-acquisition rule).
+struct Held;
+impl Held {
+    fn new() -> Held {
+        RAM_GUARDS_HELD.set(RAM_GUARDS_HELD.get().saturating_add(1));
+        Held
+    }
+}
+impl Drop for Held {
+    fn drop(&mut self) {
+        RAM_GUARDS_HELD.set(RAM_GUARDS_HELD.get().saturating_sub(1));
+    }
+}
+
+/// Start of piece `i` of a chunked copy beginning at `base`.
+fn chunk_at(base: u64, i: usize) -> Option<u64> {
+    u64::try_from(i)
+        .ok()?
+        .checked_mul(RAM_COPY_CHUNK as u64)
+        .and_then(|d| base.checked_add(d))
+}
+
+/// ★★ Security fix C-02 (2026-11-13): **a registered guest-RAM block, borrowed under the RAM
+/// map's read lock.** It derefs to the [`RamBlock`] (so `b.gpa`, `b.mem.read_into(..)` read as
+/// before), but the block cannot be copied out of it (`RamBlock`/`RawRegion` are not `Copy`), so
+/// the host address is usable only while this guard lives — and [`RamMap::del`] (the unplug)
+/// waits for the guard before QEMU may free the memory. ⚠ Hold it across one bounded copy only.
+pub struct RamRef<'a> {
+    guard: std::sync::RwLockReadGuard<'a, Vec<RamBlock>>,
+    index: usize,
+    _held: Held,
+}
+
+impl<'a> RamRef<'a> {
+    /// CALLER-CONTRACT: `index` is in bounds of `guard` (private; the one caller passes a
+    /// `position` found in this very guard). Otherwise `deref` panics — never reads out of bounds.
+    fn new(guard: std::sync::RwLockReadGuard<'a, Vec<RamBlock>>, index: usize) -> Self {
+        RamRef {
+            guard,
+            index,
+            _held: Held::new(),
+        }
+    }
+
+    /// Every registered block (the same guard).
+    fn all(&self) -> &[RamBlock] {
+        &self.guard
+    }
+}
+
+impl core::ops::Deref for RamRef<'_> {
+    type Target = RamBlock;
+    // `new`'s one caller passes an `index` found in this very guard, whose vector cannot change
+    // while the read lock is held; `RamRef` is built nowhere else. The index cannot fail, so this
+    // is not a reachable panic site.
+    #[allow(clippy::indexing_slicing)]
+    fn deref(&self) -> &RamBlock {
+        &self.guard[self.index]
+    }
+}
+
+impl core::fmt::Debug for RamRef<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RamRef")
+            .field("gpa", &self.gpa)
+            .field("len", &self.mem.len())
+            .finish()
     }
 }
 
@@ -286,7 +510,7 @@ fn memory_list_block(blocks: &[RamBlock], span: kf_rm::memory_list::RamSpan) -> 
         return None;
     }
     let end = span.base.checked_add(span.length)?;
-    let first = blocks.iter().find_map(|b| b.fd)?;
+    let first = blocks.iter().find_map(|b| b.fd.as_ref())?;
     let mut overlaps = blocks.iter().filter(|b| {
         b.gpa
             .checked_add(b.mem.len() as u64)
@@ -294,7 +518,7 @@ fn memory_list_block(blocks: &[RamBlock], span: kf_rm::memory_list::RamSpan) -> 
     });
     let b = overlaps.next()?;
     if overlaps.next().is_some()
-        || b.fd != Some(first)
+        || b.fd.as_ref() != Some(first)
         || span.base < b.gpa
         || end.checked_sub(b.gpa)? > b.mem.len() as u64
     {
@@ -705,7 +929,7 @@ impl ViewOps for WindowOps {
             .blocks
             .read()
             .ok()
-            .and_then(|v| v.iter().find_map(|b| b.fd))
+            .and_then(|v| v.iter().find_map(|b| b.fd.clone()))
             .ok_or("no fd-backed guest RAM (the VM needs memory-backend-memfd,share=on)")?;
         self.win
             .place(
@@ -4781,7 +5005,7 @@ mod memory_list_tests {
             fd_off: 0,
         };
         let ram = Box::leak(Box::new(RamMap::default()));
-        ram.add(block);
+        ram.add(block.test_alias());
         (MemoryListRam(ram), block)
     }
     #[test]
@@ -4822,7 +5046,7 @@ mod memory_list_tests {
             Err(AccessError::Topology)
         );
         ram.0.del(block.gpa);
-        ram.0.add(block);
+        ram.0.add(block.test_alias());
         assert_eq!(
             ram.try_read(span, epoch, 0, &mut bytes),
             Err(AccessError::Topology)
@@ -4845,7 +5069,7 @@ mod memory_list_tests {
         assert!(!ram.read(span, 0, 0, &mut result));
         ram.0.del(block.gpa);
         assert!(!ram.read(span, epoch, 0, &mut result));
-        ram.0.add(block);
+        ram.0.add(block.test_alias());
         assert!(ram.validate(span).is_some());
         assert!(!ram.write(span, epoch, 0, &[1]));
         let current = ram.validate(span).unwrap();
@@ -4877,7 +5101,7 @@ mod memory_list_tests {
         }
         ram.0.add(RamBlock {
             gpa: 0x4000,
-            ..block
+            ..block.test_alias()
         });
         assert!(
             ram.validate(RamSpan {
@@ -4889,7 +5113,7 @@ mod memory_list_tests {
         ram.0.del(0x4000);
         ram.0.add(RamBlock {
             gpa: 0xa000,
-            ..block
+            ..block.test_alias()
         });
         assert!(
             ram.validate(RamSpan {
@@ -4903,7 +5127,7 @@ mod memory_list_tests {
         ram.0.add(RamBlock {
             gpa: 0x20000,
             fd: Some(fd),
-            ..block
+            ..block.test_alias()
         });
         assert!(
             ram.validate(RamSpan {
@@ -4915,7 +5139,7 @@ mod memory_list_tests {
         ram.0.add(RamBlock {
             gpa: 0x2000,
             fd: None,
-            ..block
+            ..block.test_alias()
         });
         assert!(
             ram.validate(RamSpan {
@@ -4934,10 +5158,10 @@ mod memory_list_tests {
         };
         ram.0.generation.store(u64::MAX, Ordering::Relaxed);
         assert_eq!(ram.validate(span), Some(u64::MAX));
-        ram.0.add(block);
+        ram.0.add(block.test_alias());
         assert_eq!(ram.validate(span), None);
         ram.0.del(block.gpa);
-        ram.0.add(block);
+        ram.0.add(block.test_alias());
         assert_eq!(ram.validate(span), None);
     }
 }
@@ -4968,5 +5192,290 @@ mod overlay_cap_tests {
             "the same depth refuses an install"
         );
         assert_eq!(BAR1_OVERLAY_INFLIGHT, 4 * BAR1_OVERLAY_SLOTS);
+    }
+}
+
+/// ★ Security fix C-02 (review 2, 2026-11-13): guest-RAM regions never outlive `kf3_ram_del`.
+/// Each test calls the safe boundary the way a WRONG or hostile caller would and expects a refusal
+/// (or a wait), never a use of freed memory.
+#[cfg(test)]
+mod c02_unplug_tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    const GPA: u64 = 0x1_0000_0000;
+    const FD_OFF: u64 = 0x4000_0000;
+
+    fn ram_with_block(bytes: usize) -> (&'static RamMap, RawRegion) {
+        let ram: &'static RamMap = Box::leak(Box::new(RamMap::default()));
+        let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes);
+        let peer = mem.test_alias();
+        ram.add(RamBlock {
+            gpa: GPA,
+            mem,
+            fd: Some(fd),
+            fd_off: FD_OFF,
+        });
+        (ram, peer)
+    }
+
+    /// Run `f` on another thread; `None` if it has not finished within `wait`.
+    fn within<T: Send + 'static>(
+        wait: Duration,
+        f: impl FnOnce() -> T + Send + 'static,
+    ) -> Option<T> {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(f());
+        });
+        rx.recv_timeout(wait).ok()
+    }
+
+    /// RED on the pre-fix tree (`block_for` handed out a `Copy` block; `del` returned at once while
+    /// the copy was still in use). GREEN: the unplug waits for the outstanding accessor.
+    #[test]
+    fn an_unplug_waits_for_an_outstanding_accessor() {
+        let (ram, _) = ram_with_block(0x2000);
+        let held = ram.block_for(GPA, 4).expect("registered");
+        let (tx, rx) = mpsc::channel();
+        let unplug = std::thread::spawn(move || {
+            ram.del(GPA);
+            let _ = tx.send(());
+        });
+        assert!(
+            rx.recv_timeout(Duration::from_millis(200)).is_err(),
+            "kf3_ram_del returned while a guest-RAM accessor was still alive (use-after-free window)"
+        );
+        // Still the registered memory while the guard lives.
+        assert!(held.mem.write_from(0, &[1, 2, 3, 4]));
+        drop(held);
+        rx.recv_timeout(Duration::from_secs(5))
+            .expect("the unplug completes once the accessor is gone");
+        unplug.join().unwrap();
+        assert!(
+            ram.block_for(GPA, 4).is_none(),
+            "the block is gone after the unplug"
+        );
+    }
+
+    /// After the unplug every accessor refuses (no stale host address survives anywhere).
+    #[test]
+    fn every_accessor_refuses_after_the_unplug() {
+        let (ram, peer) = ram_with_block(0x2000);
+        assert!(peer.write_from(8, &0xfeed_beefu32.to_le_bytes()));
+        assert_eq!(ram.load_u32_file(FD_OFF + 8), Some(0xfeed_beef));
+        let mut b = [0u8; 4];
+        assert!(ram.read_gpa(GPA + 8, &mut b));
+        assert!(ram.covers_file(FD_OFF, 0x200));
+        ram.del(GPA);
+        assert_eq!(ram.load_u32_file(FD_OFF + 8), None);
+        assert!(!ram.store_u32_file(FD_OFF + 8, 1));
+        assert!(!ram.read_file(FD_OFF + 8, &mut b));
+        assert!(!ram.read_gpa(GPA + 8, &mut b));
+        assert!(!ram.write_gpa(GPA + 8, &b));
+        assert!(!ram.covers_file(FD_OFF, 0x200));
+        assert!(ram.block_for(GPA, 4).is_none());
+        assert!(ram.file_range(GPA, 4).is_none());
+        assert!(ram.backing_fd().is_none());
+    }
+
+    /// Hold one guard, queue an unplug behind it, then run `nested` on the SAME thread; `None` if
+    /// that deadlocked (the unplug never finishes either, so the thread is simply abandoned).
+    fn nested_behind_a_queued_unplug<T: Send + 'static>(
+        nested: impl FnOnce(&'static RamMap) -> T + Send + 'static,
+    ) -> Option<T> {
+        let (ram, _) = ram_with_block(0x2000);
+        within(Duration::from_secs(10), move || {
+            let outer = ram.block_for(GPA, 4).expect("registered");
+            let unplug = std::thread::spawn(move || ram.del(GPA));
+            // The unplug is queued once a fresh reader can no longer get in.
+            let t = std::time::Instant::now();
+            while ram.blocks.try_read().is_ok() {
+                assert!(
+                    t.elapsed() < Duration::from_secs(5),
+                    "the unplug never queued"
+                );
+                std::thread::yield_now();
+            }
+            let got = nested(ram);
+            drop(outer);
+            unplug.join().unwrap();
+            got
+        })
+    }
+
+    /// A thread that already holds a guard and asks again while an unplug is queued must REFUSE,
+    /// not self-deadlock behind the writer (`std`'s lock is writer-preferring).
+    #[test]
+    fn a_nested_block_lookup_behind_a_queued_unplug_refuses_instead_of_deadlocking() {
+        let got = nested_behind_a_queued_unplug(|ram| {
+            (
+                ram.block_for(GPA, 4).is_some(),
+                ram.file_range(GPA, 4).is_some(),
+            )
+        });
+        assert_eq!(got, Some((false, false)), "deadlocked (None) or granted");
+    }
+
+    /// As above for the chunked and word accessors.
+    #[test]
+    fn a_nested_copy_behind_a_queued_unplug_refuses_instead_of_deadlocking() {
+        let got = nested_behind_a_queued_unplug(|ram| {
+            let mut b = [0u8; 4];
+            (
+                ram.read_file(FD_OFF, &mut b),
+                ram.load_u32_file(FD_OFF).is_some(),
+                ram.write_gpa(GPA, &b),
+            )
+        });
+        assert_eq!(
+            got,
+            Some((false, false, false)),
+            "deadlocked (None) or granted"
+        );
+    }
+
+    /// Hostile offsets and lengths: past the block, wrapping `u64`, straddling the end — refused,
+    /// nothing copied past the block.
+    #[test]
+    fn hostile_offsets_and_lengths_are_refused() {
+        let (ram, _) = ram_with_block(0x2000);
+        let mut one = [0u8; 1];
+        let mut two = [0u8; 2];
+        assert!(
+            !ram.read_file(FD_OFF + 0x2000, &mut one),
+            "one past the end"
+        );
+        assert!(
+            !ram.read_file(FD_OFF + 0x1fff, &mut two),
+            "straddles the end"
+        );
+        assert!(!ram.read_file(FD_OFF - 1, &mut one), "below the block");
+        assert!(!ram.read_file(u64::MAX, &mut two), "wraps u64");
+        assert!(ram.load_u32_file(u64::MAX - 1).is_none(), "wraps u64");
+        assert!(!ram.store_u32_file(FD_OFF + 0x1ffd, 0), "straddles the end");
+        assert!(!ram.read_gpa(u64::MAX, &mut two), "wraps u64");
+        assert!(!ram.write_gpa(GPA + 0x1fff, &two), "straddles the end");
+        assert!(!ram.covers_file(FD_OFF, 0x2001));
+        assert!(ram.covers_file(FD_OFF, 0x2000));
+        // A chunked copy longer than u64 space past `base` cannot wrap into another block.
+        let mut big = vec![0u8; RAM_COPY_CHUNK + 1];
+        assert!(!ram.read_file(u64::MAX - RAM_COPY_CHUNK as u64 + 1, &mut big));
+        assert!(chunk_at(u64::MAX, 1).is_none());
+        assert_eq!(chunk_at(7, 2), Some(7 + 2 * RAM_COPY_CHUNK as u64));
+    }
+
+    /// A piece offset that would wrap `u64` is refused, never wrapped into low guest memory.
+    #[test]
+    fn chunk_offsets_never_wrap() {
+        let top = u64::MAX - RAM_COPY_CHUNK as u64;
+        assert_eq!(chunk_at(top, 1), Some(u64::MAX));
+        assert_eq!(chunk_at(top + 1, 1), None);
+        assert_eq!(chunk_at(1, usize::MAX), None);
+        assert_eq!(chunk_at(0, 0), Some(0));
+    }
+
+    /// The chunked/word accessors keep the guard across the copy itself: an unplug issued from
+    /// inside the copy closure cannot finish until the copy returns.
+    fn unplug_waits_inside(copy: impl FnOnce(&'static RamMap, &dyn Fn() -> bool) -> bool) {
+        let (ram, _) = ram_with_block(0x2000);
+        let (tx, rx) = mpsc::channel();
+        let rx = std::sync::Mutex::new(rx);
+        let tx = std::sync::Mutex::new(Some(tx));
+        let start_unplug_and_check = || {
+            let tx = tx.lock().unwrap().take().unwrap();
+            std::thread::spawn(move || {
+                ram.del(GPA);
+                let _ = tx.send(());
+            });
+            // Still registered while the copy runs: the unplug must not have completed.
+            rx.lock()
+                .unwrap()
+                .recv_timeout(Duration::from_millis(200))
+                .is_err()
+        };
+        assert!(
+            copy(ram, &start_unplug_and_check),
+            "the unplug completed while a guarded copy was in flight"
+        );
+        rx.lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the unplug completes after the copy");
+    }
+
+    /// Inside every guarded copy the registration lock is held for read: no writer (unplug or
+    /// re-register) can get in while the host address is in use.
+    #[test]
+    fn no_writer_can_enter_while_a_guarded_copy_runs() {
+        let (ram, _) = ram_with_block(0x2000);
+        let file = ram.with_file_span(FD_OFF, 4, |_, _| ram.blocks.try_write().is_err());
+        let gpa = ram.with_gpa_span(GPA, 4, |_, _| ram.blocks.try_write().is_err());
+        assert_eq!((file, gpa), (Some(true), Some(true)));
+        assert!(ram.blocks.try_write().is_ok(), "released after the copy");
+    }
+
+    #[test]
+    fn an_unplug_waits_for_an_in_flight_file_offset_copy() {
+        unplug_waits_inside(|ram, during| {
+            ram.with_file_span(FD_OFF, 4, |m, at| {
+                let waited = during();
+                waited && m.store_u32(at, 5)
+            })
+            .unwrap_or(false)
+        });
+    }
+
+    #[test]
+    fn an_unplug_waits_for_an_in_flight_guest_physical_copy() {
+        unplug_waits_inside(|ram, during| {
+            ram.with_gpa_span(GPA, 4, |m, at| {
+                let waited = during();
+                waited && m.store_u32(at, 6)
+            })
+            .unwrap_or(false)
+        });
+    }
+
+    /// Valid copies are byte-exact across chunk boundaries (behaviour unchanged for valid input).
+    #[test]
+    fn chunked_copies_are_exact_across_piece_boundaries() {
+        let n = 3 * RAM_COPY_CHUNK + 17;
+        let (ram, peer) = ram_with_block(n + 64);
+        let pattern: Vec<u8> = (0..n).map(|i| (i * 7 + 3) as u8).collect();
+        assert!(ram.write_gpa(GPA + 5, &pattern));
+        let mut back = vec![0u8; n];
+        assert!(ram.read_file(FD_OFF + 5, &mut back));
+        assert_eq!(back, pattern);
+        let mut via_gpa = vec![0u8; n];
+        assert!(ram.read_gpa(GPA + 5, &mut via_gpa));
+        assert_eq!(via_gpa, pattern);
+        let mut direct = vec![0u8; n];
+        assert!(peer.read_into(5, &mut direct));
+        assert_eq!(direct, pattern);
+        assert!(ram.store_u32_file(FD_OFF + 4, 0x0102_0304));
+        assert_eq!(ram.load_u32_file(FD_OFF + 4), Some(0x0102_0304));
+        assert_eq!(ram.file_range(GPA + 9, 4).map(|(_, o)| o), Some(FD_OFF + 9));
+    }
+
+    /// The guard count returns to zero on every path (a leak would turn later reads into
+    /// `try_read`s that refuse under contention).
+    #[test]
+    fn the_thread_guard_count_is_balanced() {
+        let (ram, _) = ram_with_block(0x2000);
+        assert_eq!(RAM_GUARDS_HELD.get(), 0);
+        {
+            let a = ram.block_for(GPA, 4);
+            assert!(a.is_some());
+            assert_eq!(RAM_GUARDS_HELD.get(), 1);
+            let mut b = [0u8; 4];
+            assert!(ram.read_file(FD_OFF, &mut b));
+            assert_eq!(RAM_GUARDS_HELD.get(), 1);
+        }
+        assert!(ram.block_for(u64::MAX, 4).is_none());
+        let mut b = [0u8; 4];
+        assert!(!ram.read_file(0, &mut b));
+        assert_eq!(RAM_GUARDS_HELD.get(), 0);
     }
 }
