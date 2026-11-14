@@ -2726,7 +2726,8 @@ abi_struct! {
         pte_ap_map: [u8; 4], pde_ap_map: [u8; 4], addr_sel: [u8; 4], addr_local: KfField,
         addr_sys: KfField, big_addr_local: KfField, big_addr_sys: KfField, bit_volatile: u8,
         bit_privilege: u8, bit_read_only: u8, bit_atomic_disable: u8, pcf: KfField,
-        pcf_sparse: u8, pad1: [u8; 3], kind: KfField, ps_log2: [u8; 4] }
+        pcf_sparse: u8, pte_pcf_no_valid_4k: u8, pde_pcf_sparse_bit: u8, pad1: [u8; 1], kind: KfField,
+        ps_log2: [u8; 4] }
     KfWin { base: u64, len: u64, span: u64 }
     KfRefusalSample { va: u64, raw: u64, gpga: u64, ps_bytes: u64, bit: u32, level: u16, entry: u16 }
     KfDev { generation: u64, committed: u64, runs_per_pdb: u32, entry_budget: u32,

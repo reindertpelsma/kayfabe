@@ -95,6 +95,177 @@ const KF_SCAN_BLOCK: u32 = 1024;
 const KF_WARP: u32 = 32;
 const KF_MAX_ENT: u32 = 512;
 const KF_SHWORDS: u32 = KF_MAX_ENT + 64;
+/// ★ 2026-11-14: the two VER3 PCF enumerants the committed kernel COMPILES
+/// (`KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE`, `KF_VER3_PDE_PCF_SPARSE_BIT` in `kf_walk.cu`, tied to
+/// ogkm's `gh100/dev_mmu.h` by `scripts/ci/walk_ptx_repro.py`; pinned to the `.cu` here by
+/// `tests/walk_abi_matches_the_cu.rs`). A VER3 descriptor must carry exactly these
+/// ([`check_format`]): the kernel reads the defines, so a descriptor that says otherwise would be
+/// silently ignored.
+pub const KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE: u8 = 0x3;
+/// See [`KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE`].
+pub const KF_VER3_PDE_PCF_SPARSE_BIT: u8 = 0x1;
+
+/// ★★ 2026-11-14 (security review 3 F-10, host half; fixcuda2): the descriptor's GEOMETRY and
+/// field positions, checked on the host before CUDA is opened — the Rust port of the kernel's
+/// `kf_dev_format_ok` (#387), rule for rule, plus the VER3 PCF values the kernel compiles. ⊘ The
+/// bring-up used to check only `abi_version`: a family row with a dual level above
+/// `KF_SHWORDS / 2` entries, or a big table above `KF_SHWORDS - KF_MAX_ENT`, would have made a warp
+/// decode its neighbour's shared-memory snapshot, and a bit position of 64 or more is an undefined
+/// shift. The descriptor is host-authored (never guest data); this is defence in depth, so the
+/// kernel's own check (which aborts the walk) and this one (which refuses the bring-up, by name)
+/// each hold alone.
+///
+/// # Errors
+/// The first rule the descriptor breaks, by name.
+pub fn check_format(f: &KfFormat) -> Result<(), String> {
+    use crate::abi::{KF_PS_NONE, KF_TBL_VER3};
+    let pow2 = |x: u32| x.is_power_of_two();
+    let field = |name: &str, k: &crate::abi::KfField| {
+        if k.lo < 64 && k.bits < 64 && u32::from(k.lo) + u32::from(k.bits) <= 64 && k.shift < 64 {
+            Ok(())
+        } else {
+            Err(format!("field {name} {k:?} leaves the 64-bit entry"))
+        }
+    };
+    if f.abi_version != KF_ABI_VERSION {
+        return Err(format!(
+            "abi_version {} is not {KF_ABI_VERSION}",
+            f.abi_version
+        ));
+    }
+    if f.table_version != KF_TBL_VER2 && f.table_version != KF_TBL_VER3 {
+        return Err(format!(
+            "table_version {} is neither VER2 nor VER3",
+            f.table_version
+        ));
+    }
+    for (k, l) in f.dir.iter().enumerate() {
+        if k < usize::from(f.first_dir) {
+            if l.active != 0 {
+                return Err(format!(
+                    "dir[{k}] is active above first_dir {}",
+                    f.first_dir
+                ));
+            }
+            continue;
+        }
+        if l.active == 0 {
+            return Err(format!(
+                "dir[{k}] at or below first_dir {} is not active",
+                f.first_dir
+            ));
+        }
+        // the deepest slot is the DUAL level (two words per entry); every other level one word
+        let wpe: u32 = if k == KF_DIRS as usize - 1 { 2 } else { 1 };
+        if u32::from(l.entry_bytes) != 8 * wpe {
+            return Err(format!(
+                "dir[{k}] entry_bytes {} is not {}",
+                l.entry_bytes,
+                8 * wpe
+            ));
+        }
+        let n = u32::from(l.entries);
+        if n > KF_MAX_ENT || !pow2(n) {
+            return Err(format!(
+                "dir[{k}] entries {n} is not a power of two <= {KF_MAX_ENT}"
+            ));
+        }
+        if n * wpe > KF_SHWORDS {
+            return Err(format!(
+                "dir[{k}] {n} entries x {wpe} words overrun the {KF_SHWORDS}-word snapshot"
+            ));
+        }
+        if l.va_lo >= 64 {
+            return Err(format!("dir[{k}] va_lo {} >= 64", l.va_lo));
+        }
+        if l.leaf_ps != KF_PS_NONE && l.leaf_ps > 3 {
+            return Err(format!(
+                "dir[{k}] leaf_ps {} is no page-size code",
+                l.leaf_ps
+            ));
+        }
+    }
+    let (small, big) = (u32::from(f.small_entries), u32::from(f.big_entries));
+    if small > KF_MAX_ENT || !pow2(small) {
+        return Err(format!(
+            "small_entries {small} is not a power of two <= {KF_MAX_ENT}"
+        ));
+    }
+    if big > KF_SHWORDS - KF_MAX_ENT || !pow2(big) {
+        return Err(format!(
+            "big_entries {big} is not a power of two <= {} (the leaf snapshot)",
+            KF_SHWORDS - KF_MAX_ENT
+        ));
+    }
+    if f.small_entry_bytes != 8 || f.big_entry_bytes != 8 {
+        return Err("a leaf table entry is not 8 bytes".into());
+    }
+    if f.big_va_lo <= f.small_va_lo || f.big_va_lo - f.small_va_lo > 4 || f.big_va_lo >= 64 {
+        return Err(format!(
+            "big_va_lo {} / small_va_lo {} are not 1..=4 bits apart below 64",
+            f.big_va_lo, f.small_va_lo
+        ));
+    }
+    if big << (f.big_va_lo - f.small_va_lo) != small {
+        return Err(format!(
+            "big_entries {big} and small_entries {small} cover different spans"
+        ));
+    }
+    if f.small_ps > 3 || f.big_ps > 3 {
+        return Err("a leaf page-size code is not 0..=3".into());
+    }
+    if !pow2(f.root_align) {
+        return Err(format!(
+            "root_align {:#x} is not a power of two",
+            f.root_align
+        ));
+    }
+    if f.ap_bits == 0 || f.ap_bits > 2 || f.ap_lo > 62 {
+        return Err(format!(
+            "aperture field {}:{} is not 1..=2 bits below 64",
+            f.ap_lo, f.ap_bits
+        ));
+    }
+    for (name, b) in [
+        ("valid_bit", f.valid_bit),
+        ("bit_volatile", f.bit_volatile),
+        ("bit_privilege", f.bit_privilege),
+        ("bit_read_only", f.bit_read_only),
+        ("bit_atomic_disable", f.bit_atomic_disable),
+    ] {
+        if b >= 64 {
+            return Err(format!("{name} {b} >= 64"));
+        }
+    }
+    field("addr_local", &f.addr_local)?;
+    field("addr_sys", &f.addr_sys)?;
+    field("big_addr_local", &f.big_addr_local)?;
+    field("big_addr_sys", &f.big_addr_sys)?;
+    field("pcf", &f.pcf)?;
+    field("kind", &f.kind)?;
+    if f.ps_log2.iter().any(|&l| !(12..=40).contains(&l)) {
+        return Err(format!(
+            "ps_log2 {:?} names a size outside 2^12..2^40",
+            f.ps_log2
+        ));
+    }
+    let pcf = if f.table_version == KF_TBL_VER3 {
+        (
+            KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE,
+            KF_VER3_PDE_PCF_SPARSE_BIT,
+        )
+    } else {
+        (0, 0)
+    };
+    if (f.pte_pcf_no_valid_4k, f.pde_pcf_sparse_bit) != pcf {
+        return Err(format!(
+            "PCF enumerants (no-valid-4K {:#x}, PDE sparse bit {:#x}) are not the {:#x?} the \
+             committed kernel compiles for table_version {}",
+            f.pte_pcf_no_valid_4k, f.pde_pcf_sparse_bit, pcf, f.table_version
+        ));
+    }
+    Ok(())
+}
 /// ★ P4b: `used` (the staging cursor) holds one slot PER LEVEL plus one for the leaf pass, all
 /// zeroed by ONE memset at the start of the walk — instead of a reset node after every level.
 /// Slot `KF_DIRS` is the leaf pass's; slots `0..KF_DIRS` the expand levels'.
@@ -850,10 +1021,16 @@ impl WalkKernel {
         // descriptor is pinned byte for byte against the `.cu` (`kf_format_ver3`), every field
         // re-checked against ogkm-580's `hopper/gh100/dev_mmu.h`, and `kf-gate7` walks REAL VER3
         // tables on any GPU — the walker decodes guest bytes; the host's own MMU never sees them.
-        // ⚠ KNOWN GAP (w826): the .cu's big-PTE veto (`kf_big_pte_unmapped`, the w826 ct4 fix) is
-        // VER2-only. VER3 spells "no valid 4 KiB page under this big PTE" as `PCF = 0x3`
-        // (`NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE`, `gh100/dev_mmu.h:140`), which the kernel does
-        // not yet test — a Hopper guest mixing big and small pages in one 2 MiB slot is the case.
+        // ⊘ 2026-11-14: the "KNOWN GAP (w826)" note that stood here (the big-PTE veto was VER2-only)
+        // is closed by #386 (`kf_big_pte_unmapped` / `kf_pde_sparse` have VER3 arms); the two PCF
+        // values those arms use are carried in the descriptor and checked just below.
+        // ★★ 2026-11-14 (review 3 F-10, host half): the whole descriptor, before CUDA is opened.
+        if let Err(name) = check_format(&fmt) {
+            return Err(refused(
+                "the walk kernel's setup data (KfFormat)",
+                format!("{name}; REFUSED at launch, by name"),
+            ));
+        }
 
         let cu = open()?;
         cu.init()?;
@@ -1524,10 +1701,11 @@ impl WalkKernel {
     ///   the slot GROWS — a new region, the committed placements copied device-to-device on the
     ///   walk stream (ordered before the re-walk's commit and diff), the old region freed.
     ///
-    /// ⊘ Not fixable, and returned to the caller to refuse by name: a walk abort (budget,
-    /// frontier), a report-level truncation (more runs than the report carries, more spaces than
-    /// its `PdbEntry` array), a need past the ceiling, or a need that keeps moving
-    /// ([`CAPACITY_RETRIES`] re-walks).
+    /// ⊘ Not fixable, and returned to the caller to refuse by name: a walk abort (a budget or
+    /// frontier refusal no entry owns), a report-level truncation (more runs than the report
+    /// carries, more spaces than its `PdbEntry` array), a need past the ceiling, or a need that
+    /// keeps moving ([`CAPACITY_RETRIES`] re-walks). ★ 2026-11-14: a space CUT at its own budget
+    /// or frontier share fails only itself — the others' fixable refusals are still re-walked.
     ///
     /// ⊘ Runs on the thread that collects (the VA manager's), never a vCPU; the device copy is
     /// queued, not waited for.
@@ -1537,13 +1715,25 @@ impl WalkKernel {
             KFWR_V_PARTIAL,
         };
         let h = &r.header;
-        let aborted = h.refuse_mask & (KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP | KFWR_R_PDB_CAP) != 0;
+        // ★★ 2026-11-14 (review 3 F-2/F-3 host half, with #387's per-space budget): a space at its
+        // own limit is CUT — KFWR_R_BUDGET / KFWR_R_FRONTIER_CAP in ITS entry bits (and in the
+        // header's mask, which ORs every refusal), its diff withheld — and the walk goes on for the
+        // others. Only a refusal NO entry owns is a walk abort (a shared ceiling, the report's
+        // PdbEntry capacity). ⊘ Was "any of these bits in the header's mask aborts", so one cut
+        // space stopped every other space's fixable capacity refusal from being re-walked.
+        let entry_bits = r.pdbs.iter().fold(0u32, |a, p| a | p.refused_bits());
+        let walk_level = KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP | KFWR_R_PDB_CAP;
+        let aborted = h.refuse_mask & walk_level & !entry_bits != 0;
         let mut fix = false;
         let mut walk_cut = false;
         let mut moves = Vec::new();
         for p in &r.pdbs {
             let s = p.slot();
             let need = p.need();
+            // a CUT space stays cut on a re-walk (its limit is fixed): nothing of it to fix
+            if p.refused_bits() & (KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP) != 0 {
+                continue;
+            }
             if p.refused_bits() & KFWR_R_RUN_CAP != 0 {
                 walk_cut = true;
                 match self.cap.walk_needed(s, need) {
@@ -2572,6 +2762,199 @@ mod fake_driver_tests {
         let (failed, calls) = bring(WalkCfg::default());
         assert!(!failed);
         assert!(!calls.contains(&fake::Call::CtxDestroy), "{calls:?}");
+    }
+
+    /// ★★ F-10 host half (2026-11-14): both shipped descriptors pass [`check_format`], and a
+    /// descriptor breaking any ONE rule of the kernel's `kf_dev_format_ok` (or carrying VER3 PCF
+    /// values the kernel does not compile) is refused at bring-up, by name, BEFORE CUDA is opened.
+    fn f10_refuses_every_break_of(base: KfFormat) {
+        use crate::abi::KfField;
+        assert_eq!(check_format(&base), Ok(()));
+        type Break = fn(&mut KfFormat);
+        let breaks: Vec<(&str, Break)> = vec![
+            ("table version", |f| f.table_version = 4),
+            ("an inactive level below first_dir", |f| f.dir[4].active = 0),
+            ("an active level above first_dir", |f| {
+                f.first_dir = 1;
+                f.dir[0].active = 1;
+            }),
+            ("dual level entry bytes", |f| f.dir[4].entry_bytes = 8),
+            ("entries not a power of two", |f| f.dir[2].entries = 384),
+            ("entries above KF_MAX_ENT", |f| f.dir[2].entries = 1024),
+            ("a dual level overrunning the snapshot", |f| {
+                f.dir[4].entries = 512
+            }),
+            ("va_lo", |f| f.dir[3].va_lo = 64),
+            ("leaf page size", |f| f.dir[4].leaf_ps = 4),
+            ("small entries", |f| f.small_entries = 1024),
+            // 128 big entries two VA bits above 512 small ones: a consistent span, but 128 words
+            // overrun the 64-word leaf snapshot
+            ("big entries overrunning the leaf snapshot", |f| {
+                f.big_entries = 128;
+                f.small_entries = 512;
+                f.big_va_lo = f.small_va_lo + 2;
+            }),
+            ("leaf entry bytes", |f| f.big_entry_bytes = 16),
+            ("big/small va", |f| f.big_va_lo = f.small_va_lo),
+            ("big/small span", |f| f.big_entries /= 2),
+            ("leaf ps", |f| f.big_ps = 4),
+            ("root align", |f| f.root_align = 0x3000),
+            ("aperture bits", |f| f.ap_bits = 3),
+            ("aperture lo", |f| f.ap_lo = 63),
+            ("valid bit", |f| f.valid_bit = 64),
+            ("privilege bit", |f| f.bit_privilege = 200),
+            ("addr field", |f| {
+                f.addr_local = KfField {
+                    lo: 60,
+                    bits: 8,
+                    shift: 0,
+                    pad: 0,
+                }
+            }),
+            ("kind field", |f| f.kind.shift = 64),
+            ("pcf field", |f| f.pcf.bits = 64),
+            ("page-size table", |f| f.ps_log2[3] = 41),
+            ("no-valid-4K value", |f| f.pte_pcf_no_valid_4k ^= 1),
+            ("PDE sparse bit", |f| f.pde_pcf_sparse_bit ^= 2),
+        ];
+        {
+            for (name, brk) in &breaks {
+                let mut f = base;
+                brk(&mut f);
+                assert!(
+                    check_format(&f).is_err(),
+                    "table {}: {name} accepted",
+                    base.table_version
+                );
+                let mut opened = false;
+                let r = WalkKernel::bring_up_with(
+                    WalkCfg::default(),
+                    f,
+                    WalkDevice::FirstOrdinal,
+                    || {
+                        opened = true;
+                        Ok(Cuda::fake())
+                    },
+                );
+                assert!(r.is_err(), "{name}");
+                assert!(!opened, "{name}: refused BEFORE the library is opened");
+            }
+        }
+    }
+
+    #[test]
+    fn f10_a_ver2_descriptor_breaking_one_rule_is_refused_before_cuda_opens() {
+        f10_refuses_every_break_of(crate::abi::kf_format_ver2());
+    }
+
+    #[test]
+    fn f10_a_ver3_descriptor_breaking_one_rule_is_refused_before_cuda_opens() {
+        f10_refuses_every_break_of(crate::abi::kf_format_ver3());
+    }
+
+    /// A planted collect: `pdbs` and a header naming `refuse_mask` / `flags`.
+    fn collect_planted(
+        k: &mut WalkKernel,
+        refuse_mask: u32,
+        flags: u16,
+        pdbs: &[KfPdbEntry],
+    ) -> Option<Collected> {
+        let cfg = WalkCfg::default();
+        let h = KfReportHeader {
+            magic: KFWR_MAGIC,
+            flags: flags | KFWR_HF_DIFF,
+            pdb_count: u32::try_from(pdbs.len()).unwrap(),
+            pdb_capacity: cfg.pdb_capacity,
+            run_capacity: cfg.run_capacity,
+            refuse_mask,
+            ps_log2: [12, 16, 21, 29],
+            ..KfReportHeader::default()
+        };
+        let at = k.pin_at;
+        k.pin.write(at.hdr, &h.encode());
+        for (i, p) in pdbs.iter().enumerate() {
+            k.pin.write(at.rpdb + i * KfPdbEntry::BYTES, &p.encode());
+        }
+        let _ = fake::calls();
+        k.try_collect().unwrap()
+    }
+
+    fn entry(slot: u32, bits: u32, need: u32, vas: u32) -> KfPdbEntry {
+        KfPdbEntry {
+            reserved: slot,
+            vas_flags: vas,
+            reserved2: u64::from(bits) | (u64::from(need) << 32),
+            ..KfPdbEntry::default()
+        }
+    }
+
+    /// ★★ F-2 host half (2026-11-14, with #387's per-space budget): one space CUT at its own
+    /// budget (its entry bits, KFWR_V_REFUSED) no longer stops another space's fixable capacity
+    /// refusal from being re-walked; a budget refusal NO entry owns (a walk abort) still does, as
+    /// does the report's PdbEntry capacity. ⊘ RED before: any budget bit in the header's mask
+    /// aborted the retry for every space.
+    fn f2_cut_by(cut: u32) {
+        use crate::abi::{KFWR_R_PDB_CAP, KFWR_R_RUN_CAP, KFWR_V_REFUSED};
+        {
+            let mut k = fake_walker();
+            k.submit(&[
+                WalkEntry { pdb: 0, slot: 0 },
+                WalkEntry {
+                    pdb: 0x1000,
+                    slot: 1,
+                },
+            ])
+            .unwrap();
+            let pdbs = [
+                entry(0, cut, 0, KFWR_V_REFUSED),
+                entry(1, KFWR_R_RUN_CAP, 20_000, 0),
+            ];
+            let got = collect_planted(&mut k, cut | KFWR_R_RUN_CAP, KFWR_HF_TRUNCATED, &pdbs);
+            assert!(got.is_none(), "{cut:#x}: re-walked for space 1");
+            assert!(fake::launches() > 0, "the re-walk was queued");
+            assert!(
+                k.take_capacity_events()
+                    .iter()
+                    .any(|e| e.contains("re-walk")),
+                "named"
+            );
+        }
+        // a walk abort: the budget bit is in the mask but no entry owns it
+        let mut k = fake_walker();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        let pdbs = [entry(0, KFWR_R_RUN_CAP, 20_000, 0)];
+        let got = collect_planted(&mut k, cut | KFWR_R_RUN_CAP, KFWR_HF_TRUNCATED, &pdbs);
+        assert!(got.is_some(), "an aborted walk is not re-walked");
+        assert_eq!(fake::launches(), 0);
+        // the report's PdbEntry capacity (header-level only): not re-walked
+        let mut k = fake_walker();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        let got = collect_planted(
+            &mut k,
+            KFWR_R_PDB_CAP | KFWR_R_RUN_CAP,
+            KFWR_HF_TRUNCATED,
+            &pdbs,
+        );
+        assert!(got.is_some());
+        assert_eq!(fake::launches(), 0);
+        // a cut space alone, even one whose walk region was also cut: its limit is fixed, so
+        // re-walking cannot help — handed to the caller, no re-walk
+        let mut k = fake_walker();
+        k.submit(&[WalkEntry { pdb: 0, slot: 0 }]).unwrap();
+        let lone = [entry(0, cut | KFWR_R_RUN_CAP, 20_000, KFWR_V_REFUSED)];
+        let got = collect_planted(&mut k, cut | KFWR_R_RUN_CAP, KFWR_HF_TRUNCATED, &lone);
+        assert!(got.is_some(), "a cut space is not re-walked");
+        assert_eq!(fake::launches(), 0);
+    }
+
+    #[test]
+    fn f2_one_space_cut_at_its_budget_does_not_stop_the_others_retry() {
+        f2_cut_by(crate::abi::KFWR_R_BUDGET);
+    }
+
+    #[test]
+    fn f2_one_space_cut_at_its_frontier_share_does_not_stop_the_others_retry() {
+        f2_cut_by(crate::abi::KFWR_R_FRONTIER_CAP);
     }
 
     #[test]

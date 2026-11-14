@@ -163,7 +163,13 @@ struct KfFormat {
      * and the switches below exist for. */
     KfField  pcf;
     uint8_t  pcf_sparse;        /* the PCF value meaning SPARSE (VER3)            */
-    uint8_t  pad1[3];
+    /* ★ 2026-11-14 (fixcuda2): VER3's two other PCF enumerants, carried in the descriptor (they
+     * took two of pad1's bytes; no offset moved). The kernel still compiles the same values as
+     * KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE / KF_VER3_PDE_PCF_SPARSE_BIT; the host refuses a descriptor
+     * that disagrees with them (WalkKernel::bring_up_on). 0 on VER2 (unused). */
+    uint8_t  pte_pcf_no_valid_4k;  /* a big PTE's "no valid 4 KiB PTE below me" (VER3: 0x3)  */
+    uint8_t  pde_pcf_sparse_bit;   /* the PDE PCF bit meaning SPARSE, either ATS (VER3: 0x1) */
+    uint8_t  pad1[1];
 
     /* ★ The PTE's KIND, which joins RUN IDENTITY. VER2: 63:56. VER3: 11:8. A
      * moved field, so the descriptor carries it and no switch arm is needed. */
@@ -1564,6 +1570,7 @@ static KfFormat kf_format_ver2(void)
     F.bit_volatile = 3; F.bit_privilege = 5; F.bit_read_only = 6; F.bit_atomic_disable = 7;
     F.pcf = kf_f(0, 0, 0);               /* VER2 has none */
     F.pcf_sparse = 0;
+    F.pte_pcf_no_valid_4k = 0; F.pde_pcf_sparse_bit = 0;
     F.kind = kf_f(56, 8, 0);             /* NV_MMU_VER2_PTE_KIND 63:56 */
     F.ps_log2[KFWR_PS_4K] = 12; F.ps_log2[KFWR_PS_64K] = 16;
     F.ps_log2[KFWR_PS_2M] = 21; F.ps_log2[KFWR_PS_512M] = 29;
@@ -1633,6 +1640,8 @@ static KfFormat kf_format_ver3_untested(void)
     F.bit_volatile = 3; F.bit_privilege = 4; F.bit_read_only = 5; F.bit_atomic_disable = 6;
     F.pcf = kf_f(3, 5, 0);
     F.pcf_sparse = 1;                    /* NV_MMU_VER3_PTE_PCF_SPARSE */
+    F.pte_pcf_no_valid_4k = 0x3;         /* = KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE (pinned by the Rust */
+    F.pde_pcf_sparse_bit = 0x1;          /* = KF_VER3_PDE_PCF_SPARSE_BIT  test the_ver3_pcf_...)  */
     F.kind = kf_f(8, 4, 0);              /* NV_MMU_VER3_PTE_KIND 11:8 */
     F.ps_log2[KFWR_PS_4K] = 12; F.ps_log2[KFWR_PS_64K] = 16;
     F.ps_log2[KFWR_PS_2M] = 21; F.ps_log2[KFWR_PS_512M] = 29;
