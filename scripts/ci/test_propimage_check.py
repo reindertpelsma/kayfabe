@@ -176,9 +176,9 @@ class T(unittest.TestCase):
 
     def test_no_check_signs_in_or_types_credentials(self):
         for n in m.CHECKS:
-            self.assertNotRegex(
-                m.render_check(n), r"(?i)password|sendkeys|Invoke-WebRequest|Invoke-RestMethod"
-            )
+            # Resolve alone types a project name (keyboard tier, UIA found the dialog); nothing types a secret.
+            banned = r"(?i)password|Invoke-WebRequest|Invoke-RestMethod" + ("" if n == "resolve" else r"|sendkeys")
+            self.assertNotRegex(m.render_check(n), banned)
 
     def test_task_is_interactive(self):
         self.assertIn("-LogonType Interactive", m.task_wrapper("x"))
@@ -1071,7 +1071,7 @@ class T(unittest.TestCase):
 
     def edrawings(self, **changes):
         r = self.fixture(app="edrawings", kind="EDW", sample="kfsample.sldprt", accepted=True,
-                         window_title="kfsample.SLDPRT - eDrawings")
+                         tab_name="kfsample.sldprt")
         for key in ("artifact", "modified", "bytes", "api_ok"):
             r.pop(key)
         r.update(changes)
@@ -1079,17 +1079,17 @@ class T(unittest.TestCase):
             (Path(td) / "result.json").write_text(json.dumps(r))
             return m.verdict("edrawings", "a" * 32, Path(td))
 
-    def test_edrawings_title_with_the_sample_name_passes_via_uia(self):
+    def test_edrawings_tab_with_the_sample_name_passes_via_uia(self):
         row = self.edrawings()
         self.assertTrue(row["ok"], row)
         self.assertEqual(row["evidence"], "UIA")
 
     def test_edrawings_licence_dialog_only_is_inconclusive(self):
-        row = self.edrawings(window_title="", accepted=False)
+        row = self.edrawings(tab_name="", accepted=False)
         self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
 
     def test_edrawings_generic_title_is_not_a_pass(self):
-        row = self.edrawings(window_title="eDrawings")
+        row = self.edrawings(tab_name="eDrawings")
         self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
 
     def test_edrawings_wrong_sample_name_is_not_a_pass(self):
@@ -1115,7 +1115,32 @@ class T(unittest.TestCase):
             self.assertNotIn("script step", m.verdict("solidworks", "a" * 32, Path(td))["error"])
 
     def test_solidworks_script_marks_steps(self):
-        self.assertIn("$r.step='s5'", m.render_check("solidworks"))
+        self.assertIn("$r.step='open'", m.render_check("solidworks"))
+
+    def test_solidworks_uses_late_bound_invokemember_not_the_powershell_adapter(self):
+        # Measured 2026-11-14: the adapter path failed every call with TYPE_E_ELEMENTNOTFOUND.
+        script = m.render_check("solidworks")
+        self.assertIn("InvokeMember", script)
+        self.assertIn("DispatchWrapper", script)
+        self.assertNotIn("New-Object -ComObject", script)
+        self.assertNotIn("$sw.OpenDoc6", script)
+
+    def test_solidworks_byref_arguments_use_a_parameter_modifier(self):
+        script = m.render_check("solidworks")
+        self.assertIn("ParameterModifier", script)
+        self.assertIn("@(4,5)", script)
+
+    def test_edrawings_accept_uses_the_window_handle_not_invoke(self):
+        # Measured 2026-11-14: ACCEPT is a Pane with no Invoke pattern; BM_CLICK on its handle worked.
+        script = m.render_check("edrawings")
+        self.assertIn("0xF5", script)
+        self.assertIn("NativeWindowHandle", script)
+        self.assertNotIn("InvokePattern", script)
+
+    def test_edrawings_evidence_is_the_tab_item_not_the_window_title(self):
+        script = m.render_check("edrawings")
+        self.assertIn("ControlType.TabItem", script)
+        self.assertNotIn("-match 'kfsample'", script)
 
     def test_edrawings_script_accepts_by_uia_selector_not_coordinates(self):
         script = m.render_check("edrawings")
@@ -1123,8 +1148,81 @@ class T(unittest.TestCase):
         self.assertIn("AutomationId -ceq '1'", script)
         self.assertNotIn("SetCursorPos", script)
 
-    def test_resolve_default_launch_only(self):
-        self.assertIn("$r.kind='LAUNCH_ONLY'", m.render_check("resolve"))
+    def resolve(self, **changes):
+        wanted = "kf" + "a" * 8
+        log = [
+            "[0x1] | Main.GPUConfig | INFO  | 2026-11-12 18:10:20,984 | Selected compute API: CUDA",
+            "[0x2] | IO | INFO  | 2026-11-12 18:10:22,185 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+            "[0x3] | UI.GLContext | INFO  | 2026-11-12 18:10:24,156 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'",
+        ]
+        r = self.fixture(app="resolve", kind="RESOLVE", project_name=wanted,
+                         window_name="DaVinci Resolve - " + wanted, log_lines=log, stage="main window")
+        for key in ("artifact", "modified", "bytes", "api_ok"):
+            r.pop(key)
+        r.update(changes)
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            return m.verdict("resolve", "a" * 32, Path(td))
+
+    def test_resolve_project_window_and_gpu_log_pass(self):
+        row = self.resolve()
+        self.assertTrue(row["ok"], row)
+        self.assertIn("no render or benchmark was run", row["signal"])
+
+    def test_resolve_window_without_the_projects_name_is_inconclusive(self):
+        row = self.resolve(window_name="DaVinci Resolve - New Project 1")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_resolve_project_name_mismatch_is_inconclusive(self):
+        row = self.resolve(project_name="kfbbbbbbbb")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_resolve_without_cuda_line_is_inconclusive(self):
+        log = [x for x in self.resolve_log() if "compute API" not in x]
+        self.assertIn("CUDA", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_without_nvenc_line_is_inconclusive(self):
+        log = [x for x in self.resolve_log() if "decoding and encoding" not in x]
+        self.assertIn("decode/encode", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_without_opengl_line_is_inconclusive(self):
+        log = [x for x in self.resolve_log() if "OpenGL" not in x]
+        self.assertIn("OpenGL", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_software_opengl_is_inconclusive(self):
+        log = [x.replace("NVIDIA Corporation NVIDIA GeForce RTX 4070", "Microsoft Corporation GDI Generic") for x in self.resolve_log()]
+        self.assertIn("OpenGL", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_nvidia_named_llvmpipe_opengl_is_inconclusive(self):
+        log = [x.replace("NVIDIA GeForce RTX 4070", "NVIDIA llvmpipe") for x in self.resolve_log()]
+        self.assertIn("OpenGL", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_empty_log_names_cuda_missing(self):
+        self.assertIn("CUDA", self.resolve(log_lines=[])["error"])
+
+    def test_resolve_empty_log_names_encode_device_missing(self):
+        self.assertIn("decode/encode", self.resolve(log_lines=[])["error"])
+
+    def resolve_log(self):
+        return list(self._resolve_log_lines)
+
+    _resolve_log_lines = [
+        "[0x1] | Main.GPUConfig | INFO  | 2026-11-12 18:10:20,984 | Selected compute API: CUDA",
+        "[0x2] | IO | INFO  | 2026-11-12 18:10:22,185 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+        "[0x3] | UI.GLContext | INFO  | 2026-11-12 18:10:24,156 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'",
+    ]
+
+    def test_resolve_script_finds_ui_by_automationid_and_invokes(self):
+        script = m.render_check("resolve", run_id="a" * 32)
+        for needle in ("UiProjectManagerDialog", "btnAddProject", "InvokePattern", "UiMainWindow"):
+            self.assertIn(needle, script)
+        self.assertNotIn("SetCursorPos", script)
+        self.assertNotIn("mouse_event", script)
+
+    def test_resolve_script_types_only_the_project_name(self):
+        script = m.render_check("resolve", run_id="a" * 32)
+        self.assertEqual(script.count("SendWait("), 3)
+        self.assertIn("SendWait($name)", script)
 
     def test_result_markdown_evidence_kinds(self):
         rows = [
@@ -1905,7 +2003,11 @@ def mutants():
         ("tdm-entity", 'if re.search(rb"<!(DOCTYPE|ENTITY)", raw, re.I):', "if False:"),
         ("tdm-member", "if info.filename not in TDM_MEMBERS or info.file_size > TDM_MAX_MEMBER:", "if False:"),
         ("run-replace", 'kw.setdefault("errors", "replace")', "pass"),
-        ("edw-title", '"kfsample.sldprt" not in title.lower()', "False"),
+        ("res-name", 'if r.get("project_name") != wanted or wanted not in str(r.get("window_name", "")):', "if False:"),
+        ("res-cuda", 'if "Selected compute API: CUDA" not in blob:', "if False:"),
+        ("res-enc", 'if "initialised as decoding and encoding device" not in blob:', "if False:"),
+        ("res-gl", 'if not gl or "nvidia" not in gl[1].lower() or SOFTWARE_RENDERERS.search(gl[1]):', "if False:"),
+        ("edw-title", 'tab.lower() != "kfsample.sldprt"', "False"),
         ("edw-sample", 'r.get("sample") != "kfsample.sldprt" or', "False and"),
         ("hostlog-status", "if STATUS_LINE.match(line):", "if False:"),
         ("hostlog-nonzero", "return bool(STATUS_NONZERO.search(line))", "return False"),

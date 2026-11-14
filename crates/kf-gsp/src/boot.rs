@@ -1686,7 +1686,17 @@ impl GspFsm {
         let mut args_pa = None;
         let mut entry = vec![0u8; layout.entry_stride];
         for i in 0..layout.max_entries {
-            let gpa = boot_args_gpa + (i as u64) * (layout.entry_stride as u64);
+            // ★ Security review 1, F-23 (2026-11-13): `boot_args_gpa` is guest-written; an entry
+            // past the top of the address space is a named refusal, not an overflow panic.
+            let gpa = u64::try_from(i)
+                .ok()
+                .and_then(|i| i.checked_mul(layout.entry_stride as u64))
+                .and_then(|off| boot_args_gpa.checked_add(off))
+                .ok_or(crate::fault::RamRefused {
+                    gpa: boot_args_gpa,
+                    len: layout.entry_stride,
+                    why: "region-array entry past the top of the guest address space",
+                })?;
             ram.read(gpa, &mut entry)?;
             let id = read_u64(&entry, layout.id_offset)?;
             let pa = read_u64(&entry, layout.pa_offset)?;
@@ -5513,22 +5523,6 @@ mod device_reset_from_every_phase {
         }
     }
 
-    /// ★ 2026-10-31 — **the SWGEN0 drain gate** ([`GspFsm::deliver_events`], `events_outstanding`).
-    ///
-    /// Ported from the retired `kayfabe-completion` `DeliveryPlane` tests
-    /// (`drain_gate_batches_across_procs_without_serializing`,
-    /// `batch_outstanding_tracks_the_drain_gate_state`, `successive_batches_carry_distinct_monotonic_ids`),
-    /// whose contract lives here now: ONE os-event batch outstanding on the shared status queue,
-    /// the whole registered set riding it, opened only by the guest's `IRQSCLR`, and every message
-    /// carrying the next transport `seqNum` (the stream the guest's `rpcRecvPoll` checks; a gap is
-    /// `Bad sequence number`). Before this module the gate was compared only for
-    /// reset-equivalence, never driven.
-    ///
-    /// ⊘ Nothing in production calls `deliver_events` today: v3 wakes the guest per registration,
-    /// from the host event that fired (`kf_rm::osevent`; `docs/design/the_interrupt_arming_model.md`,
-    /// "arm-directed beats broadcast"). The gate is kept and pinned so that the day a caller exists
-    /// it cannot overrun the status ring, and so a guest that never takes the interrupt can only
-    /// starve its OWN wakeups (the safe direction).
     /// ★ Security review 1 (2026-11-13), F-09 and F-10: a guest that stops reading its status
     /// queue, or never lets its refreshes finish, gets back-pressure — never a policy that runs
     /// twice for one command, and never an unbounded queue of held replies.
@@ -5754,6 +5748,68 @@ mod device_reset_from_every_phase {
         }
     }
 
+    /// ★ Security review 1, F-23 (2026-11-13): the region array's address is guest-written. With
+    /// guest RAM that answers every read, an array at the top of the address space must end in a
+    /// named refusal, never an arithmetic-overflow panic on the service thread.
+    mod region_array_address_bounds {
+        use super::*;
+
+        struct AllZero;
+        impl GuestRam for AllZero {
+            fn read(&mut self, _gpa: u64, buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
+                buf.fill(0);
+                Ok(())
+            }
+            fn write(&mut self, _gpa: u64, _b: &[u8]) -> Result<(), crate::fault::RamRefused> {
+                Ok(())
+            }
+        }
+
+        fn publish_at(gpa: u64) -> Result<ServiceReport, GspFault> {
+            let mut d = Dev::life(fresh(None), AfterSuspend::AwaitsTeardownUcode);
+            d.fsm.publish(&mut AllZero, &d.model, &mut d.policy, gpa)
+        }
+
+        fn refused_past_the_top(r: &Result<ServiceReport, GspFault>) -> bool {
+            matches!(r, Err(GspFault::GuestRam(e)) if e.why.contains("past the top"))
+        }
+
+        #[test]
+        fn an_array_whose_second_entry_wraps_is_refused() {
+            let stride = Mini {
+                seq: Seq {
+                    after: AfterSuspend::AwaitsTeardownUcode,
+                },
+            }
+            .libos_region_layout()
+            .entry_stride as u64;
+            let r = publish_at(u64::MAX - stride + 1);
+            assert!(refused_past_the_top(&r), "{r:?}");
+        }
+
+        #[test]
+        fn an_array_at_the_last_byte_is_refused() {
+            let r = publish_at(u64::MAX);
+            assert!(refused_past_the_top(&r), "{r:?}");
+        }
+    }
+
+    /// ★ 2026-10-31 — **the SWGEN0 drain gate** ([`GspFsm::deliver_events`], `events_outstanding`).
+    ///
+    /// Ported from the retired `kayfabe-completion` `DeliveryPlane` tests
+    /// (`drain_gate_batches_across_procs_without_serializing`,
+    /// `batch_outstanding_tracks_the_drain_gate_state`, `successive_batches_carry_distinct_monotonic_ids`),
+    /// whose contract lives here now: ONE os-event batch outstanding on the shared status queue,
+    /// the whole registered set riding it, opened only by the guest's `IRQSCLR`, and every message
+    /// carrying the next transport `seqNum` (the stream the guest's `rpcRecvPoll` checks; a gap is
+    /// `Bad sequence number`). Before this module the gate was compared only for
+    /// reset-equivalence, never driven.
+    ///
+    /// ⊘ Nothing in production calls `deliver_events` today: v3 wakes the guest per registration,
+    /// from the host event that fired (`kf_rm::osevent`; `docs/design/the_interrupt_arming_model.md`,
+    /// "arm-directed beats broadcast"). The gate is kept and pinned so that the day a caller exists
+    /// it cannot overrun the status ring, and so a guest that never takes the interrupt can only
+    /// starve its OWN wakeups (the safe direction).
     mod os_event_batches {
         use super::*;
 
