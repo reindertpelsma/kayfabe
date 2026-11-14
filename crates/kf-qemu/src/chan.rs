@@ -123,6 +123,121 @@ fn delay_act(not_before: std::time::Instant, what: &'static str, act: Act, d: kf
     ACT_DELAYED.with(|c| c.borrow_mut().push((not_before, act, d, what)));
 }
 
+/// ★ 2026-11-14 (security review 1 F-10): the most guest-driven acts queued (or parked) at once.
+/// Each act holds one guest RPC reply; the guest kernel can post RPCs faster than the act thread
+/// runs host calls (a slow host RM, many births), and the queue was an unbounded channel. Past this
+/// a guest-driven act is refused `NV_ERR_INSUFFICIENT_RESOURCES` on the drainer (never a wait),
+/// counted in [`ChanPlane::acts_over_cap`]. Releases ([`ActClass::Release`]: guest frees, the
+/// device reset's and unload's frees) are never refused: refusing one would leak a host object, and
+/// their number is bounded by the objects that exist. 4096: a correct guest holds a few acts at a
+/// time (one per held reply; `acts_parked` is the retries); each queued act is a boxed closure of a
+/// few hundred bytes, so the cap is about a megabyte (design choice, not measured).
+const ACT_QUEUE_CAP: usize = 4096;
+
+/// ★ 2026-11-14: what an act is, for the act queue's cap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActClass {
+    /// Guest-driven work: refused past [`ACT_QUEUE_CAP`].
+    Work,
+    /// A release (a free, a reset or unload barrier): always queued.
+    Release,
+}
+
+/// ★ 2026-11-14: admit one act of `class` into a queue whose depth is `queued`. A `Work` act is
+/// admitted only while the depth is below `cap` (one atomic, never a wait); a `Release` always.
+/// The act thread gives the depth back as it takes each act ([`act_taken`]).
+fn admit_act(queued: &std::sync::atomic::AtomicUsize, cap: usize, class: ActClass) -> bool {
+    match class {
+        ActClass::Release => {
+            queued.fetch_add(1, Ordering::AcqRel);
+            true
+        }
+        ActClass::Work => queued
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                (n < cap).then(|| n.saturating_add(1))
+            })
+            .is_ok(),
+    }
+}
+
+/// ★ 2026-11-14: the act thread took one admitted act off the queue (or a send failed after
+/// admission). Never below zero.
+fn act_taken(queued: &std::sync::atomic::AtomicUsize) {
+    let _ = queued.try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1));
+}
+
+/// One queued act: the act, the cell its reply waits on, its name.
+type ActItem = (Act, kf_gsp::Deferred, &'static str);
+
+/// ★ 2026-11-14 (review 1 F-10): the act queue's only sender. Every send goes through
+/// [`ActSender::send`], which admits it against [`ACT_QUEUE_CAP`] ([`admit_act`]), so no path can
+/// queue an act the depth does not count.
+#[derive(Clone)]
+struct ActSender {
+    tx: std::sync::mpsc::Sender<ActItem>,
+    queued: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+/// ★ 2026-11-14: [`ChanPlane::defer_classed`]'s body — queue one act on `acts` and answer the
+/// drainer: `Deferred` once queued; past the cap (a `Work` act) `NV_ERR_INSUFFICIENT_RESOURCES`,
+/// counted in `over` and logged only when [`crate::reset::loud`] picks the count; with no act
+/// thread `NV_ERR_INVALID_STATE`. ⊘ Never waits beyond the `acts` lock (held only for the send).
+fn queue_act(
+    acts: &Mutex<Option<ActSender>>,
+    over: &AtomicU64,
+    what: &'static str,
+    act: Act,
+    d: kf_gsp::Deferred,
+    class: ActClass,
+) -> ChanAnswer {
+    let sent = acts
+        .lock()
+        .ok()
+        .and_then(|a| a.as_ref().map(|tx| tx.send((act, d.clone(), what), class)));
+    match sent {
+        Some(Ok(())) => ChanAnswer::Deferred(d),
+        Some(Err(ActRefused::Full)) => {
+            let n = over.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+            if crate::reset::loud(n) {
+                eprintln!(
+                    "kf3: act {what} REFUSED: the act queue holds its cap of {ACT_QUEUE_CAP} \
+                     (refusal #{n})"
+                );
+            }
+            ChanAnswer::Refused {
+                status: NV_ERR_INSUFFICIENT_RESOURCES,
+                why: format!("{what}: the act queue is full ({ACT_QUEUE_CAP})"),
+            }
+        }
+        Some(Err(ActRefused::Gone)) | None => ChanAnswer::Refused {
+            status: NV_ERR_INVALID_STATE,
+            why: format!("{what}: the act thread is not running"),
+        },
+    }
+}
+
+/// Why [`ActSender::send`] did not queue an act (the act is dropped, unrun).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActRefused {
+    /// The queue holds [`ACT_QUEUE_CAP`] and the act is [`ActClass::Work`].
+    Full,
+    /// The act thread is gone.
+    Gone,
+}
+
+impl ActSender {
+    /// Admit and queue `item`. ⊘ Never waits.
+    fn send(&self, item: ActItem, class: ActClass) -> Result<(), ActRefused> {
+        if !admit_act(&self.queued, ACT_QUEUE_CAP, class) {
+            return Err(ActRefused::Full);
+        }
+        self.tx.send(item).map_err(|_| {
+            act_taken(&self.queued);
+            ActRefused::Gone
+        })
+    }
+}
+
 /// ★★ v3-video — one guest `engine object` alloc on a Passthrough twin, as a RE-QUEUEABLE act.
 ///
 /// STEER THE HOST'S FALCON CONTEXT ONTO THE GUEST'S. In a video channel's VA space guest RM and host
@@ -2327,7 +2442,7 @@ pub struct ChanPlane {
     /// per-Device edges, so the union is exactly the guest's own state).
     cuda_limit: Mutex<(std::collections::BTreeSet<(u32, u32)>, bool)>,
     /// ★ P5b: the act thread's queue (`None` until [`ChanPlane::start`]).
-    acts: Mutex<Option<std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>>>,
+    acts: Mutex<Option<ActSender>>,
     /// The register drainer's wake: an act that resolved a held reply signals it.
     release: &'static kf_linux_raw::Notifier,
     /// ★ P5b §2.7: the per-engine host non-stall events.
@@ -2448,6 +2563,11 @@ pub struct ChanPlane {
     pub life_reset: crate::reset::Ack,
     /// Retries the act thread holds parked ([`crate::actq::ActQueue::parked`]), as of its last act.
     acts_parked: std::sync::atomic::AtomicUsize,
+    /// ★ 2026-11-14 (review 1 F-10): acts admitted and not yet taken by the act thread (queued
+    /// plus parked retries), against [`ACT_QUEUE_CAP`].
+    acts_queued: Arc<std::sync::atomic::AtomicUsize>,
+    /// ★ 2026-11-14: guest-driven acts refused because the queue was at [`ACT_QUEUE_CAP`].
+    pub acts_over_cap: AtomicU64,
     /// Device resets that gave up waiting for a parked retry or a refused free (counted, named).
     pub reset_incomplete: AtomicU64,
 }
@@ -2599,7 +2719,7 @@ fn keep_engine_object(
 /// handle cannot withdraw somebody else's later object. Host free is act-only.
 fn attach_engine_withdraw(
     d: &kf_gsp::Deferred,
-    tx: std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>,
+    tx: ActSender,
     key: (u32, u32),
     channel: Arc<()>,
     object: Arc<()>,
@@ -2617,7 +2737,10 @@ fn attach_engine_withdraw(
                 None => "ENGINE_OBJECT_ORPHAN no allocation of this act remains".into(),
             })
         });
-        let _ = tx.send((undo, kf_gsp::Deferred::new(), "engine object withdraw"));
+        let _ = tx.send(
+            (undo, kf_gsp::Deferred::new(), "engine object withdraw"),
+            ActClass::Release,
+        );
     });
 }
 
@@ -2706,7 +2829,7 @@ const DISPSW_WITHDRAW: &str = "display-SW withdraw";
 /// `tx`, so it runs after the act that set `kept` (the host object the act kept; 0: none).
 fn attach_dispsw_withdraw(
     d: &kf_gsp::Deferred,
-    tx: std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>,
+    tx: ActSender,
     kept: Arc<AtomicU32>,
     key: (u32, u32),
     handle: u32,
@@ -2725,7 +2848,10 @@ fn attach_dispsw_withdraw(
             ))
         });
         // Nobody waits on this cell: the guest already has the refusal.
-        let _ = tx.send((undo, kf_gsp::Deferred::new(), DISPSW_WITHDRAW));
+        let _ = tx.send(
+            (undo, kf_gsp::Deferred::new(), DISPSW_WITHDRAW),
+            ActClass::Release,
+        );
     });
 }
 
@@ -3049,6 +3175,8 @@ impl ChanPlane {
             dispsw: crate::dispsw::DispSwCounters::default(),
             life_reset: crate::reset::Ack::default(),
             acts_parked: std::sync::atomic::AtomicUsize::new(0),
+            acts_queued: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            acts_over_cap: AtomicU64::new(0),
             reset_incomplete: AtomicU64::new(0),
             dbfast,
             token_fmt,
@@ -3114,12 +3242,17 @@ impl ChanPlane {
 
     /// The spawn.
     pub fn start(&'static self) -> Result<(), String> {
-        let (tx, rx) = std::sync::mpsc::channel::<(Act, kf_gsp::Deferred, &'static str)>();
+        let (tx, rx) = std::sync::mpsc::channel::<ActItem>();
+        let tx = ActSender {
+            tx,
+            queued: self.acts_queued.clone(),
+        };
         std::thread::Builder::new()
             .name(ACT_THREAD.into())
             .spawn(move || {
                 let mut q = crate::actq::ActQueue::new(rx);
                 while let Some((act, d, what)) = q.next_act() {
+                    act_taken(&self.acts_queued);
                     // What is parked BESIDES the act about to run (the reset's barrier reads it).
                     self.acts_parked.store(q.parked(), Ordering::Release);
                     let t0 = std::time::Instant::now();
@@ -3130,6 +3263,8 @@ impl ChanPlane {
                     for (when, a, dd, w) in
                         ACT_DELAYED.with(|c| std::mem::take(&mut *c.borrow_mut()))
                     {
+                        // An admitted act parked again: it stays counted (never refused).
+                        let _ = admit_act(&self.acts_queued, ACT_QUEUE_CAP, ActClass::Release);
                         q.delay(when, (a, dd, w));
                     }
                     self.acts_parked.store(q.parked(), Ordering::Release);
@@ -3517,26 +3652,32 @@ impl ChanPlane {
     }
 
     /// Queue `act` and answer [`ChanAnswer::Deferred`] — the drainer returns at once.
+    /// ★ 2026-11-14: guest-driven work, refused past [`ACT_QUEUE_CAP`].
     fn defer(&self, what: &'static str, act: Act) -> ChanAnswer {
         let d = kf_gsp::Deferred::new();
         self.defer_cell(what, act, d)
     }
 
+    /// ★ 2026-11-14: [`Self::defer`] for a release (a guest free, the reset's and unload's
+    /// barriers): never refused by the queue's cap ([`ActClass::Release`]).
+    fn defer_release(&self, what: &'static str, act: Act) -> ChanAnswer {
+        self.defer_classed(what, act, kf_gsp::Deferred::new(), ActClass::Release)
+    }
+
     /// [`Self::defer`] with the caller's own cell (an act that must reach its own `Deferred`).
     fn defer_cell(&self, what: &'static str, act: Act, d: kf_gsp::Deferred) -> ChanAnswer {
-        let sent = self
-            .acts
-            .lock()
-            .ok()
-            .and_then(|a| a.as_ref().map(|tx| tx.send((act, d.clone(), what)).is_ok()));
-        if sent == Some(true) {
-            ChanAnswer::Deferred(d)
-        } else {
-            ChanAnswer::Refused {
-                status: NV_ERR_INVALID_STATE,
-                why: format!("{what}: the act thread is not running"),
-            }
-        }
+        self.defer_classed(what, act, d, ActClass::Work)
+    }
+
+    /// Admit (★ 2026-11-14, [`admit_act`]) and queue one act. ⊘ Never waits.
+    fn defer_classed(
+        &self,
+        what: &'static str,
+        act: Act,
+        d: kf_gsp::Deferred,
+        class: ActClass,
+    ) -> ChanAnswer {
+        queue_act(&self.acts, &self.acts_over_cap, what, act, d, class)
     }
 
     /// The passthrough twins matching `f`, removed.
@@ -5169,8 +5310,11 @@ impl ChanPlane {
         });
         let sent = self.acts.lock().ok().and_then(|a| {
             a.as_ref().map(|tx| {
-                tx.send((act, kf_gsp::Deferred::new(), "deferred API context"))
-                    .is_ok()
+                tx.send(
+                    (act, kf_gsp::Deferred::new(), "deferred API context"),
+                    ActClass::Work,
+                )
+                .is_ok()
             })
         });
         if sent == Some(true) {
@@ -5677,7 +5821,7 @@ impl ChanPlane {
                 g.scheduled = false;
             }
         }
-        self.defer(
+        self.defer_release(
             "free",
             Box::new(move |me: &ChanPlane| {
                 let mut line = Vec::new();
@@ -8315,7 +8459,7 @@ impl ChanPlane {
     /// (preempt + unbind), and nothing is written to guest memory on its behalf.
     pub fn reset_life(&'static self, epoch: u64) {
         self.life_reset.request(epoch);
-        let queued = self.defer(
+        let queued = self.defer_release(
             "device reset: free every guest client",
             Box::new(move |me: &ChanPlane| me.reset_free_round(epoch, 0)),
         );
@@ -8372,7 +8516,7 @@ impl ChanPlane {
     pub fn free_dead_clients_then(&self, done: Arc<dyn Fn() + Send + Sync>) -> Vec<u32> {
         let clients = self.free_dead_clients();
         let d = done.clone();
-        let answer = self.defer(
+        let answer = self.defer_release(
             "unload: frees barrier",
             Box::new(move |_me: &ChanPlane| {
                 d();
@@ -8391,7 +8535,7 @@ impl ChanPlane {
         for c in &clients {
             let _ = self.free(*c, *c);
         }
-        let _ = self.defer(
+        let _ = self.defer_release(
             "device reset: barrier",
             Box::new(move |me: &ChanPlane| me.reset_barrier(epoch, round)),
         );
@@ -9124,6 +9268,10 @@ mod dispsw_tests {
     fn an_orphaned_display_sw_act_queues_exactly_one_withdraw() {
         let d = kf_gsp::Deferred::new();
         let (tx, rx) = std::sync::mpsc::channel();
+        let tx = super::ActSender {
+            tx,
+            queued: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        };
         attach_dispsw_withdraw(&d, tx, Arc::new(AtomicU32::new(0xa0)), (A, CH1), 0x70);
         assert!(rx.try_recv().is_err(), "nothing until orphaned");
         d.resolve(0);
@@ -9857,5 +10005,140 @@ mod ce_birth_tests {
         );
         assert!(body.contains("a.kernel_client,\n                    a.user_work,\n                    engine,\n                    host.ce_object_class(),"));
         assert!(body.contains("ring.set_ce_object(ce_object);"));
+    }
+}
+
+/// ★ 2026-11-14 (security review 1 F-10): the act queue's cap. Deterministic (no act thread).
+#[cfg(test)]
+mod act_cap_tests {
+    use super::{
+        ACT_QUEUE_CAP, ActClass, ActRefused, ActSender, NV_ERR_INSUFFICIENT_RESOURCES,
+        NV_ERR_INVALID_STATE, act_taken, admit_act, queue_act,
+    };
+    use kf_rm::chanlink::ChanAnswer;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn item() -> super::ActItem {
+        (
+            Box::new(|_| Ok(String::new())),
+            kf_gsp::Deferred::new(),
+            "test",
+        )
+    }
+
+    /// Hostile: the guest kernel posts RPCs faster than the act thread runs (here: not at all).
+    /// Work acts past the cap are refused, never queued; the depth never passes the cap.
+    #[test]
+    fn a_flood_of_work_acts_stops_at_the_cap() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let s = ActSender {
+            tx,
+            queued: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut refused = 0usize;
+        for _ in 0..ACT_QUEUE_CAP + 100 {
+            match s.send(item(), ActClass::Work) {
+                Ok(()) => {}
+                Err(e) => {
+                    assert_eq!(e, ActRefused::Full);
+                    refused += 1;
+                }
+            }
+        }
+        assert_eq!(refused, 100);
+        assert_eq!(s.queued.load(Ordering::Relaxed), ACT_QUEUE_CAP);
+        assert_eq!(
+            rx.try_iter().count(),
+            ACT_QUEUE_CAP,
+            "refused acts were never queued"
+        );
+    }
+
+    /// A release (a guest free) is queued even at the cap: refusing it would leak a host object.
+    #[test]
+    fn a_release_is_queued_at_the_cap() {
+        let q = AtomicUsize::new(0);
+        for _ in 0..3 {
+            assert!(admit_act(&q, 3, ActClass::Work));
+        }
+        assert!(!admit_act(&q, 3, ActClass::Work));
+        assert!(admit_act(&q, 3, ActClass::Release));
+        assert_eq!(q.load(Ordering::Relaxed), 4);
+        assert!(
+            !admit_act(&q, 3, ActClass::Work),
+            "work waits for the depth to fall"
+        );
+    }
+
+    /// The act thread gives the depth back as it takes acts; work is admitted again.
+    #[test]
+    fn taking_an_act_frees_a_place() {
+        let q = AtomicUsize::new(0);
+        assert!(admit_act(&q, 1, ActClass::Work));
+        assert!(!admit_act(&q, 1, ActClass::Work));
+        act_taken(&q);
+        assert!(admit_act(&q, 1, ActClass::Work));
+        act_taken(&q);
+        act_taken(&q);
+        assert_eq!(q.load(Ordering::Relaxed), 0, "never below zero");
+    }
+
+    /// A gone act thread: the send is refused and its admission given back.
+    #[test]
+    fn a_gone_act_thread_gives_the_place_back() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        drop(rx);
+        let s = ActSender {
+            tx,
+            queued: Arc::new(AtomicUsize::new(0)),
+        };
+        assert_eq!(s.send(item(), ActClass::Work), Err(ActRefused::Gone));
+        assert_eq!(s.send(item(), ActClass::Release), Err(ActRefused::Gone));
+        assert_eq!(s.queued.load(Ordering::Relaxed), 0);
+    }
+
+    /// The drainer's answer: queued is `Deferred`; past the cap the guest gets
+    /// `NV_ERR_INSUFFICIENT_RESOURCES` and the refusal is counted; a release still queues; no act
+    /// thread is `NV_ERR_INVALID_STATE` and not counted as over the cap.
+    #[test]
+    fn the_drainer_answer_past_the_cap_is_insufficient_resources() {
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let acts = Mutex::new(Some(ActSender {
+            tx,
+            queued: Arc::new(AtomicUsize::new(ACT_QUEUE_CAP - 1)),
+        }));
+        let over = AtomicU64::new(0);
+        let q = |class| queue_act(&acts, &over, "t", item().0, kf_gsp::Deferred::new(), class);
+        assert!(matches!(q(ActClass::Work), ChanAnswer::Deferred(_)));
+        for k in 1..=3u64 {
+            match q(ActClass::Work) {
+                ChanAnswer::Refused { status, .. } => {
+                    assert_eq!(status, NV_ERR_INSUFFICIENT_RESOURCES);
+                }
+                _ => panic!("past the cap the act is refused"),
+            }
+            assert_eq!(over.load(Ordering::Relaxed), k);
+        }
+        assert!(matches!(q(ActClass::Release), ChanAnswer::Deferred(_)));
+        let none = Mutex::new(None);
+        match queue_act(
+            &none,
+            &over,
+            "t",
+            item().0,
+            kf_gsp::Deferred::new(),
+            ActClass::Work,
+        ) {
+            ChanAnswer::Refused { status, .. } => assert_eq!(status, NV_ERR_INVALID_STATE),
+            _ => panic!("no act thread"),
+        }
+        assert_eq!(
+            over.load(Ordering::Relaxed),
+            3,
+            "not counted as over the cap"
+        );
     }
 }

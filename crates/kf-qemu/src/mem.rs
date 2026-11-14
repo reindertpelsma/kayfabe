@@ -2316,6 +2316,23 @@ impl MapTarget for Target {
 /// holding a CUDA context, plus UVM's one kernel view. One more is refused by name.
 pub const BAR1_OVERLAY_SLOTS: usize = 64;
 
+/// ★ 2026-11-14 (security review 2 C-08, the Rust side): the most overlay changes queued to QEMU's
+/// main loop and not yet acknowledged before a NEW install is refused (by name, counted in
+/// [`Bar1Overlay::refused`]). The C queue (`kf3.c` `kf3_bar1_overlay`, `g_new0` per request) has no
+/// cap of its own; guest BAR1 PTE churn (install, unmap, install …) within one VA-thread loop
+/// queued one request per change while the main loop was busy. Removals are never refused: each
+/// belongs to a view an admitted install placed, so they add at most [`BAR1_OVERLAY_SLOTS`], and
+/// refusing one would leave a live trap the tracker had forgotten. 4 × the pool, the bound the
+/// review proposed for the C side.
+pub const BAR1_OVERLAY_INFLIGHT: usize = 4 * BAR1_OVERLAY_SLOTS;
+
+/// ★ 2026-11-14: whether a change may be queued with `inflight` changes unacknowledged: a removal
+/// always, an install only below [`BAR1_OVERLAY_INFLIGHT`].
+#[must_use]
+pub const fn overlay_change_admitted(install: bool, inflight: usize) -> bool {
+    !install || inflight < BAR1_OVERLAY_INFLIGHT
+}
+
 /// ★ The BAR1 overlay verb the C device registered, its pool size, the completions its main-loop
 /// bottom half posts back, and the counters.
 #[derive(Debug)]
@@ -2468,6 +2485,13 @@ impl Bar1Target {
                 v.base, v.len
             ));
         };
+        let inflight = self.inflight.borrow().len();
+        if !overlay_change_admitted(install, inflight) {
+            return Err(format!(
+                "BAR1 doorbell view {:#x}+{:#x}: {inflight} overlay changes still queued to the main loop (cap {BAR1_OVERLAY_INFLIGHT}); install refused",
+                v.base, v.len
+            ));
+        }
         let seq = self.next_seq.get();
         hook.submit(seq, u32::from(install), v.base, v.len, v.vf_rel).map_err(|e| {
             format!("BAR1 doorbell view {:#x}+{:#x}: the C device refused to queue the change (errno {e})", v.base, v.len)
@@ -5343,6 +5367,35 @@ mod memory_list_tests {
         ram.0.del(block.gpa);
         ram.0.add(block.test_alias());
         assert_eq!(ram.validate(span), None);
+    }
+}
+
+/// ★ 2026-11-14 (security review 2 C-08): the overlay queue's admission.
+#[cfg(test)]
+mod overlay_cap_tests {
+    use super::{BAR1_OVERLAY_INFLIGHT, BAR1_OVERLAY_SLOTS, overlay_change_admitted};
+
+    /// Hostile: BAR1 PTE churn while the main loop is busy. Installs stop at the cap.
+    #[test]
+    fn installs_stop_at_the_inflight_cap() {
+        let admitted = (0..10 * BAR1_OVERLAY_INFLIGHT)
+            .take_while(|n| overlay_change_admitted(true, *n))
+            .count();
+        assert_eq!(admitted, BAR1_OVERLAY_INFLIGHT);
+        assert!(!overlay_change_admitted(true, BAR1_OVERLAY_INFLIGHT));
+        assert!(overlay_change_admitted(true, BAR1_OVERLAY_INFLIGHT - 1));
+    }
+
+    /// A removal is never refused, even past the cap (refusing it would strand a live trap).
+    #[test]
+    fn removals_are_always_admitted() {
+        assert!(overlay_change_admitted(false, BAR1_OVERLAY_INFLIGHT));
+        assert!(overlay_change_admitted(false, usize::MAX));
+        assert!(
+            !overlay_change_admitted(true, usize::MAX),
+            "the same depth refuses an install"
+        );
+        assert_eq!(BAR1_OVERLAY_INFLIGHT, 4 * BAR1_OVERLAY_SLOTS);
     }
 }
 
