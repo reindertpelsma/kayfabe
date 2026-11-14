@@ -1047,7 +1047,8 @@ test('heartbeats write storage only on a state change or once a minute', async (
   await h.call('rack-1', 'POST', '/__t/skew', 1, '6000');
   c.send({ type: 'heartbeat', state: 'busy', run_id: '123-1' });
   await h.wait(async () => (await stored()).state === 'busy', 'busy stored');
-  await h.call('rack-1', 'POST', '/__t/skew', 1, '61000');
+  // The periodic write is a minute after the LAST write (the busy change stored at 6 s), not after the hello.
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '67000');
   c.send({ type: 'heartbeat', state: 'busy', run_id: '123-1' });
   await h.wait(async () => (await stored()).ts > first.ts + 60000, 'periodic write');
 });

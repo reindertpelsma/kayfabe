@@ -398,3 +398,22 @@ test('F8 the Worker reports the hash of the uploaded bytes, not a toml string', 
   const at = upload.indexOf('DEPLOYED_BUNDLE_SHA256:' + digest);
   assert.ok(at > 0 && upload[at - 1] === '--var', JSON.stringify(upload));
 });
+
+// A mutant copy (mutant-copy.mjs) must carry everything the mutated test files read, or a file
+// fails to import and its tests stop being killers (CI 'stable', 2026-11-13: kills fell to 0-1).
+// FALSIFIER: an unmutated test file of the report/evidence mutant scripts fails inside the copy.
+test('mutant copy: the report and evidence test files pass unmutated inside the copy', async () => {
+  const { tempCopy } = await import('../mutant-copy.mjs');
+  const { spawnSync } = await import('node:child_process');
+  const copy = tempCopy();
+  for (const file of ['run-report.test.js', 'run-report-extra.test.js', 'public-log.test.js']) {
+    const r = spawnSync(process.execPath, ['--no-warnings', '--test', copy + 'test/' + file], {
+      cwd: copy,
+      encoding: 'utf8',
+      timeout: 120000,
+      env: { ...process.env, NODE_TEST_CONTEXT: undefined },
+    });
+    assert.match(r.stdout, /^# pass [1-9]/m, file);
+    assert.equal(r.status, 0, file + '\n' + (r.stdout + r.stderr).slice(0, 600));
+  }
+});
