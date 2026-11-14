@@ -128,8 +128,9 @@ pub struct Identity {
     pub bar0_bytes: u64,
 }
 
-/// A registered BAR0 shadow piece.
-#[derive(Debug, Clone, Copy)]
+/// A registered BAR0 shadow piece. ⊘ Not `Copy` (security fix C-02, 2026-11-13): it owns its
+/// [`RawRegion`], which has one owner; readers borrow it.
+#[derive(Debug)]
 struct Piece {
     base: u64,
     mem: RawRegion,
@@ -1331,10 +1332,10 @@ impl Device {
         }
     }
 
-    fn piece_for(&self, off: u64) -> Option<(Piece, usize)> {
+    fn piece_for(&self, off: u64) -> Option<(&Piece, usize)> {
         let pieces = self.pieces.get()?;
         let i = pieces.partition_point(|p| p.base <= off).checked_sub(1)?;
-        let p = pieces[i];
+        let p = pieces.get(i)?;
         let rel = (off - p.base) as usize;
         (rel < p.mem.len()).then_some((p, rel))
     }
