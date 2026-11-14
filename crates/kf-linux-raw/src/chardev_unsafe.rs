@@ -43,11 +43,15 @@
 //!
 //! ## What this file does NOT do
 //!
-//! It does not know what an ioctl *means*. There is no NVIDIA vocabulary here: no escape
-//! numbers, no `NVOS` names, no notion of a handle. Request numbers are built by
-//! [`crate::ioctl`] (pure arithmetic) and their meaning belongs to the adapter — §4.7's
-//! "no business logic" rule, held by the fact that this file would compile unchanged
-//! against any driver.
+//! It does not know what an ioctl *means*: no handles, no notion of a class. Request numbers are
+//! built by [`crate::ioctl`] (pure arithmetic) and their meaning belongs to the adapter.
+//!
+//! ⊘ CORRECTED 2026-11-13 (security review 2, B-01/B-02): this said "there is no NVIDIA
+//! vocabulary here … this file would compile unchanged against any driver". That property is why
+//! the companion size fields (`paramsSize`, NVOS02 `limit`) were a safe-caller contract the funnel
+//! never checked. The minimum vocabulary needed to check them — the offsets of each pointer and
+//! its size field, per request — now lives in `crate::companion` (a safe file of pure predicates),
+//! and the funnel refuses an [`Indirect`] on any request that has no row there.
 
 use crate::error::{RawError, last_syscall_error};
 use crate::ioctl::MAX_IOCTL_SIZE;
@@ -367,16 +371,46 @@ impl<'a> Indirect<'a> {
     }
 
     /// How many bytes the pointed-at range holds — the value that belongs in the
-    /// argument's companion *size* field, which the caller must set itself.
+    /// argument's companion *size* field. The caller sets that field; since 2026-11-13 (B-02)
+    /// [`CharDevice::ioctl`] re-reads it and refuses a value above this length.
     ///
     /// ⚠ For `NVOS02` that field is `limit` and is this **minus one**; the off-by-one is
-    /// the ABI's and stays the caller's.
+    /// the ABI's, and the check applies it (`companion::RULES`).
     #[must_use]
     pub fn len(&self) -> usize {
         match &self.target {
             IndirectTarget::Buf(b) => b.len(),
             IndirectTarget::Region { len, .. } => *len as usize,
         }
+    }
+
+    /// Lengths and offsets of this patch for `companion::check` — never an address.
+    ///
+    /// # Errors
+    /// [`RawError::UnvalidatedPointer`] for more than one nested pointer (no constructor makes
+    /// one; refused rather than half-checked).
+    fn view(&self) -> Result<crate::companion::PatchView<'_>, RawError> {
+        let nested = match self.inner.as_slice() {
+            [] => None,
+            [n] => Some((n.at, n.buf.len() as u64)),
+            [_, n, ..] => {
+                return Err(RawError::UnvalidatedPointer {
+                    request: 0,
+                    at: n.at as u64,
+                    why: "more than one nested pointer",
+                });
+            }
+        };
+        let (len, bytes) = match &self.target {
+            IndirectTarget::Buf(b) => (b.len() as u64, Some(&**b)),
+            IndirectTarget::Region { len, .. } => (*len, None),
+        };
+        Ok(crate::companion::PatchView {
+            at: self.at,
+            len,
+            bytes,
+            nested,
+        })
     }
 
     /// True if the pointed-at range is empty. A [`Indirect::describing`] range never is —
@@ -607,7 +641,12 @@ impl CharDevice {
         // own. `declared == 0` says the number describes no payload and the check can say
         // nothing; `declared < arg.len()` is a buffer larger than the driver will touch, which
         // is wasteful and safe. Only `declared > arg.len()` is the overrun.
-        let declared = crate::ioctl::declared_size(request);
+        // ⊘⊘ B-01 (security review 2, 2026-11-13, MEASURED): `declared == 0` used to pass this
+        // check, and the kernel served `FIONREAD` on a 1-byte slice by writing 4 bytes — 3 outside
+        // the slice, from 100% safe code. The bound is now `companion::payload_bound`: the
+        // `_IOC_SIZE` of a real `_IOC` encoding, or a per-request table entry for a legacy number,
+        // or a refusal. A number this layer cannot bound never reaches the kernel.
+        let declared = crate::companion::payload_bound(request)?;
         if declared > arg.len() {
             return Err(RawError::IoctlSizeMismatch {
                 declared: declared as u64,
@@ -686,6 +725,21 @@ impl CharDevice {
             }
         }
 
+        // ★★★ B-02 = S1-40 (security review 2, 2026-11-13): every pointer minted below has a
+        // COMPANION SIZE FIELD in `arg` (or in its outer buffer, nested) — the count the driver
+        // copies at that pointer. It was "the caller must set itself"; a safe caller that set
+        // `paramsSize` above its buffer's length made RM `copy_to_user` past a Rust allocation.
+        // `companion::check` re-reads every such field from the bytes the kernel will see and
+        // refuses one that exceeds its buffer, an `Indirect` on a request or at an offset with no
+        // rule, and a non-zero pointer field no `Indirect` covers. Still before any mutation.
+        {
+            let mut views = Vec::with_capacity(indirect.len());
+            for p in indirect.iter() {
+                views.push(p.view()?);
+            }
+            crate::companion::check(request, arg, &views)?;
+        }
+
         for p in indirect.iter_mut() {
             // ★ Inner first: the bytes of `buf` must already carry the nested address by
             // the time the driver follows `buf`'s own address, and `buf` is borrowed
@@ -726,11 +780,14 @@ impl CharDevice {
         }
 
         // SAFETY: `arg` is a live exclusive borrow of at least one byte (checked above). The
-        // driver reads and writes exactly `_IOC_SIZE(request)` bytes at that address, and
-        // that number was **re-derived from `request` and compared against `arg.len()`
-        // above** — it is this block's own bound, not a contract handed to the caller.
-        // Every pointer field the driver will follow was bounds-checked into `arg` above
-        // and points at a buffer borrowed exclusively for this call. `ioctl` is variadic:
+        // driver reads and writes `companion::payload_bound(request)` bytes at that address —
+        // `_IOC_SIZE` of a real `_IOC` encoding, or a table entry for a legacy number; anything
+        // else was refused — and that number was **compared against `arg.len()` above**: it is
+        // this block's own bound, not a contract handed to the caller. Every pointer field the
+        // driver will follow was bounds-checked into `arg` above, points at a buffer borrowed
+        // exclusively for this call, and its companion size field (re-read from `arg` or the
+        // outer buffer by `companion::check`) states no more bytes than that buffer holds.
+        // Known pointer fields not covered by an `Indirect` were checked to be zero. `ioctl` is variadic:
         // the third argument is passed as a pointer, which is what the frontend expects.
         let rc = unsafe {
             libc::ioctl(
@@ -910,12 +967,20 @@ mod tests {
         let req = ioctl::readwrite(b'F', 0x2A, arg.len()).expect("32 fits");
         let mut buf = vec![0u8; 8];
         let expect = buf.as_mut_ptr() as u64;
-        let _ = d.ioctl(req, &mut arg, &mut [Indirect::new(0, &mut buf)]);
+        let r = d.ioctl(req, &mut arg, &mut [Indirect::new(16, &mut buf)]);
+        assert_eq!(
+            r,
+            Err(RawError::Syscall {
+                call: "ioctl",
+                errno: Some(libc::ENOTTY),
+            }),
+            "the call reached the kernel, so the patch ran"
+        );
         // The scrub already ran, so re-derive what it MUST have been and assert the
         // premise is not degenerate: a null address here would make the scrub assertion
         // above pass on a buffer that was never patched at all.
         assert_ne!(expect, 0, "a live buffer never has a null address");
-        assert_eq!(&arg[..8], &[0u8; 8], "and it was scrubbed");
+        assert_eq!(&arg[16..24], &[0u8; 8], "and it was scrubbed");
     }
 
     /// ★★★ **The two-level patch, and its known-positive.** `Indirect::nested` has to write
@@ -925,16 +990,29 @@ mod tests {
     /// how a silent no-op would look.
     #[test]
     fn a_nested_pointer_is_patched_and_scrubbed_at_both_levels() {
+        // ⊘ 2026-11-13 (B-02): the nest is now the one shape `companion::RULES` covers —
+        // NV_ESC_RM_ALLOC, a memory-list class, `pageNumberList` @128, `pageCount` @68 — so the
+        // call reaches the kernel and the patch and scrub really run.
         let d = dev_null();
         let mut list = vec![0x11u8; 8];
-        let mut params = vec![0u8; 24];
+        let mut params = vec![0u8; 152];
+        params[68..72].copy_from_slice(&1u32.to_le_bytes());
         // The sentinel: if nesting is a no-op these bytes survive the call unchanged.
-        params[8..16].copy_from_slice(&0xDEAD_BEEF_CAFE_F00Du64.to_le_bytes());
+        params[128..136].copy_from_slice(&0xDEAD_BEEF_CAFE_F00Du64.to_le_bytes());
         let mut arg = [0u8; 32];
-        let req = ioctl::readwrite(b'F', 0x2A, arg.len()).expect("32 fits");
-        let mut nest = Indirect::nested(16, &mut params, 8, &mut list).expect("8 + 8 <= 24");
+        arg[12..16].copy_from_slice(&0x83u32.to_le_bytes());
+        arg[24..28].copy_from_slice(&152u32.to_le_bytes());
+        let req = ioctl::readwrite(b'F', 0x2B, arg.len()).expect("32 fits");
+        let mut nest = Indirect::nested(16, &mut params, 128, &mut list).expect("128 + 8 <= 152");
         let r = d.ioctl(req, &mut arg, std::slice::from_mut(&mut nest));
-        assert!(r.is_err(), "/dev/null answers ENOTTY");
+        assert_eq!(
+            r,
+            Err(RawError::Syscall {
+                call: "ioctl",
+                errno: Some(libc::ENOTTY),
+            }),
+            "/dev/null answers ENOTTY: the call got past every check"
+        );
         assert_eq!(
             &arg[16..24],
             &[0u8; 8],
@@ -942,17 +1020,17 @@ mod tests {
         );
         drop(nest);
         assert_eq!(
-            &params[8..16],
+            &params[128..136],
             &[0u8; 8],
             "the INNER field is neither the sentinel (never patched) nor an address (never \
              scrubbed)"
         );
         assert_eq!(
-            &params[..8],
-            &[0u8; 8],
+            &params[72..128],
+            &[0u8; 56],
             "nothing else in the block was disturbed"
         );
-        assert_eq!(&params[16..], &[0u8; 8], "nor after it");
+        assert_eq!(&params[136..], &[0u8; 16], "nor after it");
     }
 
     /// An inner pointer field that does not fit its own buffer is refused **at
@@ -1038,18 +1116,29 @@ mod tests {
         assert_eq!(p.len() as u64, page.bytes());
         assert!(!p.is_empty());
 
+        // ⊘ 2026-11-13 (B-02): the NVOS02 shape `companion::RULES` covers — `pMemory` @24,
+        // `limit` @32 = len - 1 — so the call reaches the kernel and the patch really runs.
         let d = dev_null();
-        let mut arg = [0u8; 32];
-        let req = ioctl::readwrite(b'F', 0x2A, arg.len()).expect("32 fits");
+        let mut arg = [0u8; 56];
+        arg[32..40].copy_from_slice(&(page.bytes() - 1).to_le_bytes());
+        let before = arg;
+        let req = ioctl::readwrite(b'F', 0x27, arg.len()).expect("56 fits");
         let mut patch =
             [
-                Indirect::describing(8, &region, HostOffset::new(page.bytes()), page.bytes())
+                Indirect::describing(24, &region, HostOffset::new(page.bytes()), page.bytes())
                     .expect("the second page is inside it too"),
             ];
         let r = d.ioctl(req, &mut arg, &mut patch);
-        assert!(r.is_err(), "/dev/null answers ENOTTY");
         assert_eq!(
-            arg, [0u8; 32],
+            r,
+            Err(RawError::Syscall {
+                call: "ioctl",
+                errno: Some(libc::ENOTTY),
+            }),
+            "/dev/null answers ENOTTY: the call got past every check"
+        );
+        assert_eq!(
+            arg, before,
             "a region's address survived a FAILED ioctl in the caller's buffer"
         );
 
@@ -1208,6 +1297,221 @@ mod tests {
             !matches!(r, Err(RawError::IoctlSizeMismatch { .. })),
             "a matching request must get PAST the size check (whatever /dev/null then says \
              about the ioctl itself): {r:?}"
+        );
+    }
+
+    // ===================================================================================
+    // ★★★ Security review 2 (2026-11-13): hostile safe callers. Each is RED on `next` before
+    // the fix (the call reached the kernel) and must be a refusal BY NAME after it.
+    // ===================================================================================
+
+    /// ★★★ B-01, the review's PoC as a must-refuse test: `FIONREAD` on a socket with a 1-byte
+    /// slice. Before the fix the kernel wrote a 4-byte `int` at the slice, 3 bytes of it into the
+    /// neighbouring bytes of `backing`.
+    #[test]
+    fn b01_fionread_on_a_one_byte_slice_is_refused_and_writes_nothing() {
+        use std::io::Write as _;
+        const FIONREAD: u64 = 0x541B;
+        let (mut a, b) = std::os::unix::net::UnixStream::pair().expect("socketpair");
+        a.write_all(&[7u8; 3]).expect("queue 3 bytes");
+        let dev = CharDevice::adopt(OwnedFd::from(b));
+        let mut backing = [0xAAu8; 8];
+        let r = dev.ioctl(FIONREAD, &mut backing[..1], &mut []);
+        assert_eq!(
+            backing, [0xAA; 8],
+            "★★★ the kernel wrote around a 1-byte slice ({r:?})"
+        );
+        assert_eq!(
+            r,
+            Err(RawError::IoctlSizeMismatch {
+                declared: 4,
+                buffer: 1
+            })
+        );
+        // ★ known-positive: the right-sized call still reaches the kernel and answers 3.
+        let mut queued = [0u8; 4];
+        assert_eq!(dev.ioctl(FIONREAD, &mut queued, &mut []), Ok(0));
+        assert_eq!(i32::from_le_bytes(queued), 3);
+    }
+
+    /// ★★ B-01: a size-less request with no table entry (`TCGETS`: the kernel writes a 36-byte
+    /// termios) is refused whatever the buffer, before the syscall.
+    #[test]
+    fn b01_an_unlisted_size_less_request_never_reaches_the_kernel() {
+        let d = dev_null();
+        let mut big = [0u8; 64];
+        assert_eq!(
+            d.ioctl(0x5401, &mut big, &mut []),
+            Err(RawError::IoctlSizeUnknown { request: 0x5401 })
+        );
+    }
+
+    /// ★★★ B-02 = S1-40: `NVOS54.paramsSize` above the buffer `params` names. Before the fix the
+    /// call reached the driver (here `/dev/null`'s `ENOTTY`; on RM, a `copy_to_user` of
+    /// `paramsSize` bytes at a 32-byte buffer).
+    #[test]
+    fn b02_params_size_above_the_buffer_is_refused_before_the_driver() {
+        let d = dev_null();
+        let mut small = vec![0u8; 32];
+        let mut arg = [0u8; 32];
+        arg[24..28].copy_from_slice(&4096u32.to_le_bytes());
+        let before = arg;
+        let req = ioctl::readwrite(b'F', 0x2A, arg.len()).expect("32 fits");
+        assert_eq!(
+            d.ioctl(req, &mut arg, &mut [Indirect::new(16, &mut small)]),
+            Err(RawError::IndirectSizeMismatch {
+                pointer_at: 16,
+                stated: 4096,
+                buffer: 32,
+            })
+        );
+        assert_eq!(arg, before, "a refused call patches nothing");
+    }
+
+    /// ★★★ B-02: NVOS02 `limit` naming more than the described region (the driver would PIN the
+    /// pages past it). `describing` bounds the region; the funnel bounds the size field.
+    #[test]
+    fn b02_an_nvos02_limit_past_the_described_range_is_refused() {
+        use crate::{Backing, CachePolicy, HostOffset, HostPageSize, HostProt, MappedRegion};
+        let page = HostPageSize::query();
+        let region = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .expect("anonymous mapping");
+        let d = dev_null();
+        let mut arg = [0u8; 56];
+        arg[32..40].copy_from_slice(&(2 * page.bytes() - 1).to_le_bytes());
+        let req = ioctl::readwrite(b'F', 0x27, arg.len()).expect("56 fits");
+        let mut patch = [
+            Indirect::describing(24, &region, HostOffset::new(0), page.bytes()).expect("in bounds"),
+        ];
+        assert_eq!(
+            d.ioctl(req, &mut arg, &mut patch),
+            Err(RawError::IndirectSizeMismatch {
+                pointer_at: 24,
+                stated: 2 * page.bytes(),
+                buffer: page.bytes(),
+            })
+        );
+    }
+
+    /// ★★ B-02, nested: a `pageCount` naming more elements than the inner list holds.
+    #[test]
+    fn b02_a_nested_count_above_the_inner_list_is_refused() {
+        let d = dev_null();
+        let mut list = vec![0u8; 8];
+        let mut params = vec![0u8; 152];
+        params[68..72].copy_from_slice(&512u32.to_le_bytes());
+        let mut arg = [0u8; 32];
+        arg[12..16].copy_from_slice(&0x83u32.to_le_bytes());
+        arg[24..28].copy_from_slice(&152u32.to_le_bytes());
+        let req = ioctl::readwrite(b'F', 0x2B, arg.len()).expect("32 fits");
+        let mut nest = Indirect::nested(16, &mut params, 128, &mut list).expect("fits");
+        assert_eq!(
+            d.ioctl(req, &mut arg, std::slice::from_mut(&mut nest)),
+            Err(RawError::IndirectSizeMismatch {
+                pointer_at: 128,
+                stated: 4096,
+                buffer: 8,
+            })
+        );
+        drop(nest);
+        assert_eq!(&params[128..136], &[0u8; 8], "nothing was patched");
+    }
+
+    /// ★★ B-02 / B-03: an `Indirect` on a request with no companion-size rule, and a stray
+    /// non-zero value in a known pointer field, are refused — the kernel would follow either.
+    #[test]
+    fn b02_pointers_the_funnel_cannot_validate_are_refused() {
+        let d = dev_null();
+        let mut buf = vec![0u8; 8];
+        let mut arg = [0u8; 32];
+        let unknown = ioctl::readwrite(b'F', 0x99, arg.len()).expect("fits");
+        assert!(matches!(
+            d.ioctl(unknown, &mut arg, &mut [Indirect::new(16, &mut buf)]),
+            Err(RawError::UnvalidatedPointer { at: 16, .. })
+        ));
+        let ctl = ioctl::readwrite(b'F', 0x2A, arg.len()).expect("fits");
+        arg[16..24].copy_from_slice(&0x7fff_0000_1000u64.to_le_bytes());
+        assert!(matches!(
+            d.ioctl(ctl, &mut arg, &mut []),
+            Err(RawError::UnvalidatedPointer { at: 16, .. })
+        ));
+    }
+
+    /// ★ Placement edges (mutation killers, 2026-11-13): a pointer field ending EXACTLY at the
+    /// argument's end, and two ADJACENT fields in either order, pass the placement pre-pass (so the
+    /// refusal is `companion`'s, by name) — a `>=`/`<=` slip in the pre-pass would turn them into
+    /// `OutOfRange`/`OverlappingPlacement`.
+    #[test]
+    fn placement_edges_pass_the_pre_pass_and_meet_the_companion_rule() {
+        let d = dev_null();
+        let req = ioctl::readwrite(b'F', 0x2A, 32).expect("fits");
+        let (mut a, mut b) = (vec![0u8; 8], vec![0u8; 8]);
+        let mut arg = [0u8; 32];
+        assert!(matches!(
+            d.ioctl(req, &mut arg, &mut [Indirect::new(24, &mut a)]),
+            Err(RawError::UnvalidatedPointer { at: 24, .. })
+        ));
+        assert!(matches!(
+            d.ioctl(
+                req,
+                &mut arg,
+                &mut [Indirect::new(8, &mut a), Indirect::new(16, &mut b)]
+            ),
+            Err(RawError::UnvalidatedPointer { at: 8, .. })
+        ));
+        assert!(matches!(
+            d.ioctl(
+                req,
+                &mut arg,
+                &mut [Indirect::new(16, &mut a), Indirect::new(8, &mut b)]
+            ),
+            Err(RawError::UnvalidatedPointer { at: 8, .. })
+        ));
+        assert_eq!(arg, [0u8; 32]);
+    }
+
+    /// ★ A nested field ending EXACTLY at its buffer's end passes construction and the pre-pass;
+    /// the refusal is the companion rule's (only `pageNumberList` @128 is a nested pointer).
+    #[test]
+    fn a_nested_field_at_the_buffer_end_meets_the_companion_rule() {
+        let d = dev_null();
+        let mut list = vec![0u8; 8];
+        let mut params = vec![0u8; 152];
+        let mut arg = [0u8; 32];
+        arg[12..16].copy_from_slice(&0x83u32.to_le_bytes());
+        let req = ioctl::readwrite(b'F', 0x2B, 32).expect("fits");
+        let mut nest = Indirect::nested(16, &mut params, 144, &mut list).expect("144 + 8 = 152");
+        assert!(matches!(
+            d.ioctl(req, &mut arg, std::slice::from_mut(&mut nest)),
+            Err(RawError::UnvalidatedPointer { at: 144, .. })
+        ));
+    }
+
+    /// ★ The `MAX_IOCTL_SIZE` edge: a buffer of exactly the largest encodable size reaches the
+    /// kernel; one byte more is refused by name.
+    #[test]
+    fn the_largest_encodable_argument_is_accepted_and_one_more_refused() {
+        let d = dev_null();
+        let req = ioctl::readwrite(b'F', 0x2A, MAX_IOCTL_SIZE).expect("fits");
+        let mut arg = vec![0u8; MAX_IOCTL_SIZE + 1];
+        assert_eq!(
+            d.ioctl(req, &mut arg[..MAX_IOCTL_SIZE], &mut []),
+            Err(RawError::Syscall {
+                call: "ioctl",
+                errno: Some(libc::ENOTTY),
+            })
+        );
+        assert_eq!(
+            d.ioctl(req, &mut arg, &mut []),
+            Err(RawError::TooLargeForHost {
+                value: (MAX_IOCTL_SIZE + 1) as u64
+            })
         );
     }
 }
