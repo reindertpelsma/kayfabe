@@ -1,13 +1,14 @@
 // Mutation check for the result store, the tree key and the requirements check (GPU-free).
-// Each mutant is applied in place, the store tests run, and the file is restored before the
+// Each mutant is applied in a temporary copy, the store tests run, and the file is restored before the
 // next mutant (also on error). Every mutant must make at least one named test fail.
 // Run from anywhere, with no other test or build running in this checkout:
 //   node ci/vast-broker/store-mutants.mjs [name ...]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { tempCopy } from './mutant-copy.mjs';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
+// Every edit is made in a temporary COPY of the tree (mutant-copy.mjs), never in the checkout.
+const here = tempCopy();
 const TESTS = [
   'test/treekey.test.js',
   'test/treekey-parity.test.js',

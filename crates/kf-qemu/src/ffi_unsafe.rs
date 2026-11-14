@@ -74,7 +74,10 @@ use std::os::unix::ffi::OsStrExt as _;
 /// [`kf3_device_reset_wait`] (the `exit` phase's bounded wait) joins.
 /// 30 (2026-10-15, `claude/perf-fix-20261015`, `docs/design/V3_WINDOWS_PERF_20261015.md`): `kf3_realize` gains
 /// `user_view_keep` (the `user-view-keep` property; 0 = the default, 16) after `channel_budget`.
-pub const KF3_ABI: u32 = 30;
+/// 32 (2026-11-13, `claude/secfix-raw-frame-20261113`, security review 2 C-04/D-06 = S1-03):
+/// [`Kf3Frame`] gains `len` after `serial`, and [`kf3_display_frame`] hands over only a frame whose
+/// geometry fits it (`CheckedFrame`). 31 is taken by unmerged branches.
+pub const KF3_ABI: u32 = 32;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -798,6 +801,76 @@ pub struct Kf3Frame {
     pub format: u32,
     /// Increases with every new frame.
     pub serial: u64,
+    /// ★ ABI 32 (C-04): bytes readable at `data`. `(height - 1) * stride + width * bpp <= len`.
+    pub len: u64,
+}
+
+/// Bytes per pixel of a `Kf3Frame::format` code; `None` for a code the console does not map.
+#[must_use]
+pub(crate) fn frame_bpp(format: u32) -> Option<u64> {
+    match format {
+        1 | 2 | 4 | 5 => Some(4),
+        3 => Some(2),
+        _ => None,
+    }
+}
+
+/// ★★★ C-04 / D-06 = S1-03 (security review 2, 2026-11-13): a console frame whose geometry was
+/// checked, ONCE, against the bytes its host memory holds — the only value [`kf3_display_frame`]
+/// turns into a [`Kf3Frame`].
+///
+/// The C console wraps `height * stride` bytes at the address in a pixman surface that VNC,
+/// screendump and GTK read. Before this it got no length at all, and kf3.c compared `stride`
+/// (bytes) with `width` (pixels); what kept it in bounds was safe code three files away. A safe-side
+/// geometry bug (or a stale address under a new mode, which the guest steers) would have put host
+/// memory on the console. Now: a known format; `0 < width`, `0 < height`,
+/// `width * height <= kf_disp::scanout::MAX_PIXELS`; `width * bpp <= stride`, `stride % 4 == 0`,
+/// `stride <= i32::MAX` (kf3.c casts to `int`); `(height - 1) * stride + width * bpp <= len`; all
+/// in checked `u64` arithmetic. kf3.c re-checks the same (`kf3_frame_fits`).
+///
+/// CALLER-CONTRACT: `(addr, len)` itself is still minted by safe code (`kf_cuda::Frame::addr`/`len`
+/// through `FrameView`): this type proves the geometry fits `len`, not that `len` bytes are mapped
+/// at `addr`. Closing that needs the address minted by the kf-cuda perimeter (D-02 / S1-04, owned
+/// by the kf-cuda fix); until then a wrong `(addr, len)` pair from safe code is not caught here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CheckedFrame {
+    addr: usize,
+    len: u64,
+    width: u32,
+    height: u32,
+    stride: u32,
+    format: u32,
+    serial: u64,
+}
+
+impl CheckedFrame {
+    /// Check `f`. `None` for any frame the console must not show.
+    #[must_use]
+    pub(crate) fn of(f: &crate::display::FrameView) -> Option<CheckedFrame> {
+        let bpp = frame_bpp(f.format)?;
+        let (w, h, stride) = (u64::from(f.width), u64::from(f.height), u64::from(f.stride));
+        let len = u64::try_from(f.len).ok()?;
+        if f.addr == 0 || w == 0 || h == 0 || w.checked_mul(h)? > kf_disp::scanout::MAX_PIXELS {
+            return None;
+        }
+        let row = w.checked_mul(bpp)?;
+        if stride < row || stride % 4 != 0 || stride > i32::MAX as u64 {
+            return None;
+        }
+        let need = (h - 1).checked_mul(stride)?.checked_add(row)?;
+        if need > len {
+            return None;
+        }
+        Some(CheckedFrame {
+            addr: f.addr,
+            len,
+            width: f.width,
+            height: f.height,
+            stride: f.stride,
+            format: f.format,
+            serial: f.serial,
+        })
+    }
 }
 
 /// ★ ABI 23 (2026-10-08, `OWNER_RULINGS.md` §V; `docs/design/V3_DISPLAY.md` §8.20): one pointing
@@ -908,6 +981,10 @@ pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -
     let Some(f) = d.display.and_then(|dp| dp.console.take()) else {
         return -1;
     };
+    // ★ C-04: only a frame whose geometry fits its bytes crosses; any other is "no frame".
+    let Some(f) = CheckedFrame::of(&f) else {
+        return -1;
+    };
     let fr = Kf3Frame {
         data: f.addr as *mut u8,
         width: f.width,
@@ -915,6 +992,7 @@ pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -
         stride: f.stride,
         format: f.format,
         serial: f.serial,
+        len: f.len,
     };
     // SAFETY: `out` is writable (caller contract).
     unsafe { *out = fr };
@@ -1238,6 +1316,92 @@ pub extern "C" fn kf3_device_reset_wait(h: *mut c_void, timeout_ms: u32) -> i32 
 pub extern "C" fn kf3_unrealize(h: *mut c_void) {
     if let Some(d) = dev(h) {
         d.stop();
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+    use crate::display::FrameView;
+
+    fn view(width: u32, height: u32, stride: u32, format: u32, len: usize) -> FrameView {
+        FrameView {
+            addr: 0x10_0000,
+            len,
+            width,
+            height,
+            stride,
+            format,
+            serial: 1,
+            cursor: false,
+        }
+    }
+
+    #[test]
+    fn c04_an_exact_fit_crosses_and_carries_its_length() {
+        let f = CheckedFrame::of(&view(1920, 1080, 7680, 1, 7680 * 1080)).expect("fits");
+        assert_eq!((f.len, f.stride, f.width), (7680 * 1080, 7680, 1920));
+        // the last row needs only width*bpp, not a whole stride
+        assert!(CheckedFrame::of(&view(2, 2, 16, 1, 16 + 8)).is_some());
+        assert!(
+            CheckedFrame::of(&view(2, 2, 4, 3, 8)).is_some(),
+            "rgb565: 2 bytes a pixel"
+        );
+    }
+
+    #[test]
+    fn c04_a_geometry_larger_than_its_bytes_is_refused() {
+        assert!(CheckedFrame::of(&view(1920, 1080, 7680, 1, 7680 * 1080 - 1)).is_none());
+        assert!(CheckedFrame::of(&view(2, 2, 16, 1, 16 + 7)).is_none());
+        assert!(
+            CheckedFrame::of(&view(1920, 1080, 7680, 1, 0)).is_none(),
+            "no host frame"
+        );
+    }
+
+    #[test]
+    fn c04_stride_is_compared_in_bytes_not_pixels() {
+        // the old C check: stride (bytes) >= width (pixels) — 1920 >= 1920 passed for xrgb8888
+        assert!(CheckedFrame::of(&view(1920, 1, 1920, 1, 1 << 30)).is_none());
+        assert!(CheckedFrame::of(&view(1920, 1, 7676, 1, 1 << 30)).is_none());
+        assert!(CheckedFrame::of(&view(1920, 1, 7680, 1, 1 << 30)).is_some());
+    }
+
+    #[test]
+    fn c04_hostile_values_are_refused_without_overflow() {
+        let big = usize::MAX;
+        assert!(
+            CheckedFrame::of(&view(0, 1, 4, 1, big)).is_none(),
+            "zero width"
+        );
+        assert!(
+            CheckedFrame::of(&view(1, 0, 4, 1, big)).is_none(),
+            "zero height"
+        );
+        assert!(
+            CheckedFrame::of(&view(1, 1, 4, 9, big)).is_none(),
+            "unknown format"
+        );
+        assert!(
+            CheckedFrame::of(&view(4, 1, 18, 1, big)).is_none(),
+            "stride % 4"
+        );
+        assert!(
+            CheckedFrame::of(&view(u32::MAX, u32::MAX, u32::MAX, 1, big)).is_none(),
+            "above MAX_PIXELS"
+        );
+        assert!(
+            CheckedFrame::of(&view(1, 1, 0x8000_0000, 1, big)).is_none(),
+            "a stride kf3.c's (int) cast would make negative"
+        );
+        assert!(
+            CheckedFrame::of(&view(3840, 2160, 15360, 1, big)).is_some(),
+            "4K at the pixel cap fits"
+        );
+        assert!(CheckedFrame::of(&view(3841, 2160, 15364, 1, big)).is_none());
+        let mut v = view(1, 1, 4, 1, 4);
+        v.addr = 0;
+        assert!(CheckedFrame::of(&v).is_none(), "a null address");
     }
 }
 

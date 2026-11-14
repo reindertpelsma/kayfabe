@@ -883,6 +883,10 @@ const SLOTS: usize = kf_broker::slots::MAX_SLOTS;
 pub struct FrameView {
     /// Host address of the first pixel (page-locked memory the worker owns for the process).
     pub addr: usize,
+    /// ★ C-04 / S1-03 (2026-11-13): bytes readable at `addr` (the host frame's `Frame::len`, 0 with
+    /// no host frame). It crosses with `addr` to [`crate::ffi_unsafe::kf3_display_frame`], which
+    /// refuses a geometry that does not fit it — the C console no longer trusts geometry alone.
+    pub len: usize,
     /// Width in pixels.
     pub width: u32,
     /// Height in pixels.
@@ -912,6 +916,8 @@ pub struct ConsoleShare {
     ring: Arc<kf_broker::FrameRing>,
     /// Per slot: the host address of its current frame (the console's view of the pixels).
     addrs: [AtomicUsize; SLOTS],
+    /// Per slot: the bytes readable at `addrs[slot]` (C-04).
+    lens: [AtomicUsize; SLOTS],
     /// Per slot: the [`kf_disp::scanout::PixelFormat`] code of its frame.
     formats: [AtomicU32; SLOTS],
     /// Milliseconds (since the plane's start) of the console's last request — the refresh rate
@@ -959,6 +965,7 @@ impl ConsoleShare {
         ConsoleShare {
             ring,
             addrs: core::array::from_fn(|_| AtomicUsize::new(0)),
+            lens: core::array::from_fn(|_| AtomicUsize::new(0)),
             formats: core::array::from_fn(|_| AtomicU32::new(0)),
             demand_ms: AtomicU64::new(0),
             broker_ms: AtomicU64::new(0),
@@ -1094,6 +1101,7 @@ impl ConsoleShare {
         let cursor = self.cursors.took(slot);
         Some(FrameView {
             addr: self.addrs[slot].load(Ordering::Acquire),
+            len: self.lens[slot].load(Ordering::Acquire),
             width: g.width,
             height: g.height,
             stride: g.stride,
@@ -1117,6 +1125,7 @@ impl ConsoleShare {
         }
         if host {
             self.addrs[i].store(f.addr, Ordering::Release);
+            self.lens[i].store(f.len, Ordering::Release);
             self.formats[i].store(f.format, Ordering::Release);
         }
         // ★ the bit belongs to the frame whichever backing carries it: the console reads it with the
@@ -4804,6 +4813,7 @@ impl ScanState {
             slot,
             FrameView {
                 addr: host.map_or(0, Frame::addr),
+                len: host.map_or(0, Frame::len),
                 width: w,
                 height: h,
                 stride: w * 4,
@@ -7325,6 +7335,7 @@ mod tests {
     fn frame(addr: usize, serial: u64) -> FrameView {
         FrameView {
             addr,
+            len: 7680 * 1080,
             width: 1920,
             height: 1080,
             stride: 7680,

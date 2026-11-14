@@ -213,6 +213,49 @@ MUTANTS = [
         "            unsafe { release(handle) };",
         "            let _ = (release, handle);",
     ),
+    # ── S1-69: Report::validate checks what the .cu's kf_validate_report checks (2026-11-14) ──
+    (
+        "s169-version-unchecked",
+        "walk.rs",
+        "        if h.version != crate::abi::KFWR_VERSION {",
+        "        if false {",
+    ),
+    (
+        "s169-page-size-table-unchecked",
+        "walk.rs",
+        "        if h.ps_log2.iter().any(|&l| !(12..=40).contains(&l)) {",
+        "        if h.ps_log2.iter().any(|&l| l > 63) {",
+    ),
+    (
+        "s169-sample-count-unchecked",
+        "walk.rs",
+        "        if h.sample_count as usize > crate::abi::KF_REFUSAL_SAMPLES {",
+        "        if false {",
+    ),
+    (
+        "s169-op-unchecked",
+        "walk.rs",
+        "                crate::abi::KFWR_OP_MAP | KFWR_OP_UNMAP | crate::abi::KFWR_OP_REMAP",
+        "                _",
+    ),
+    (
+        "s169-page-size-code-aliased",
+        "walk.rs",
+        "            let Some(&log2) = h.ps_log2.get(usize::from(code)) else {",
+        "            let Some(&log2) = h.ps_log2.get(usize::from(code) & 3) else {",
+    ),
+    (
+        "s169-alignment-unchecked",
+        "walk.rs",
+        "                if let Some(value) = value.filter(|v| v % page != 0) {",
+        "                if let Some(value) = value.filter(|_| false) {",
+    ),
+    (
+        "s169-unmap-gpga-checked",
+        "walk.rs",
+        "            let gpga = (r.op != KFWR_OP_UNMAP).then_some(r.gpga);",
+        "            let gpga = Some(r.gpga);",
+    ),
     # ── D-08: field lists ──
     (
         "d08-a-field-missing-from-the-list",

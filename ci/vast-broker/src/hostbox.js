@@ -53,6 +53,12 @@ const OPEN = 1;
 // Storage and frame budgets (review M5): a heartbeat is written at most every 60 s unless the state
 // changes; command output is flushed in batches; a socket gets a token bucket.
 export const HB_STORE_MS = 60000;
+// Review F5 (2026-11-13): a box flipping idle/busy at up to 10 frames per second wrote Durable Object
+// storage on every flip. A state change is stored at most once per HB_CHANGE_MIN_MS per box; a
+// change inside the interval is held in the socket attachment (`dirty`) and flushed by the next
+// heartbeat after the interval, by the liveness alarm, or when the socket closes, so the final
+// state is never lost.
+export const HB_CHANGE_MIN_MS = 5000;
 export const CMD_FLUSH_BYTES = 4096;
 export const CMD_FLUSH_MS = 1000;
 export const BUCKET_CAPACITY = 20;
@@ -279,8 +285,10 @@ export class HostBox {
     if (path === '/internal/seed' && method === 'GET') {
       // The consumer's profile is the planner's knowledge, never the box's.
       const consumer = url.searchParams.get('consumer');
-      const record = await this.get('seed');
-      if (!record) throw new HostError('NOT_FOUND', 404);
+      // Review F10 (2026-11-13): a disabled box or a disabled seeder serves nothing, whatever record
+      // it registered earlier.
+      const [record, cfg] = await Promise.all([this.get('seed'), this.get('config')]);
+      if (!record || !cfg?.enabled || !cfg.seeder?.enabled) throw new HostError('NOT_FOUND', 404);
       const out = seedFor(record, consumer);
       if (!out) throw new HostError('SEED_NOT_ALLOWED', 403);
       return json(out);
@@ -411,10 +419,16 @@ export class HostBox {
     // idle_since: when the box last became idle (shown in the admin list).
     next.idle_since = m.state === 'idle' ? (a.state === 'idle' ? a.idle_since : now) : null;
     const changed = a.state !== m.state || a.run_id !== m.run_id;
-    // Liveness lives in the attachment; storage is written on a change or once a minute.
-    if (changed || now - (a.stored ?? 0) >= HB_STORE_MS) {
+    // Liveness lives in the attachment; storage is written on a (rate-limited) change or once a minute.
+    const pending = changed || a.dirty === true;
+    const age = now - (a.stored ?? 0);
+    if (pending ? age >= HB_CHANGE_MIN_MS : age >= HB_STORE_MS) {
       next.stored = now;
+      next.dirty = false;
       await this.put('hb', { ts: now, state: m.state, ...(m.run_id ? { run_id: m.run_id } : {}) });
+    } else if (pending) {
+      next.dirty = true;
+      await this.scheduleAlarm(Date.now() + (HB_CHANGE_MIN_MS - age));
     }
     ws.serializeAttachment(next);
     if (m.state === 'idle' && !m.run_id) {
@@ -604,13 +618,36 @@ export class HostBox {
     }
     await this.put('commands', commands);
   }
+  // Writes a held state change (see HB_CHANGE_MIN_MS) from a socket's attachment.
+  async flushHeartbeat(ws, now, force = false) {
+    let a;
+    try {
+      a = ws.deserializeAttachment();
+    } catch {
+      return null;
+    }
+    if (!a?.dirty) return null;
+    const wait = HB_CHANGE_MIN_MS - (now - (a.stored ?? 0));
+    if (!force && wait > 0) return wait;
+    await this.put('hb', {
+      ts: a.seen ?? now,
+      state: a.state,
+      ...(a.run_id ? { run_id: a.run_id } : {}),
+    });
+    try {
+      ws.serializeAttachment({ ...a, dirty: false, stored: now });
+    } catch {}
+    return null;
+  }
   async webSocketClose(ws, code, reason) {
+    await this.flushHeartbeat(ws, this.now(), true);
     await this.flushCommands();
     try {
       ws.close(code >= 1000 && code < 5000 && code !== 1005 && code !== 1006 ? code : 1000, reason);
     } catch {}
   }
   async webSocketError(ws) {
+    await this.flushHeartbeat(ws, this.now(), true);
     try {
       ws.close(1011, 'error');
     } catch {}
@@ -622,13 +659,19 @@ export class HostBox {
     const now = this.now();
     const sockets = this.openSockets();
     if (!sockets.length) return;
+    let flushIn = Infinity;
+    for (const w of sockets)
+      flushIn = Math.min(flushIn, (await this.flushHeartbeat(w, now)) ?? Infinity);
     const fresh = sockets
       .map((w) => w.deserializeAttachment()?.seen ?? 0)
       .filter((seen) => now - seen < LIVENESS_MS);
     if (fresh.length) {
-      await this.ctx.storage.setAlarm(Math.min(...fresh) + LIVENESS_MS);
+      await this.ctx.storage.setAlarm(
+        Math.min(Math.min(...fresh) + LIVENESS_MS, Date.now() + flushIn),
+      );
       return;
     }
+    for (const w of sockets) await this.flushHeartbeat(w, now, true);
     this.closeAll(4408, 'heartbeat timeout');
     const offer = await this.get('offer');
     if (offer?.status === 'offered') await this.put('offer', { ...offer, status: 'lost' });

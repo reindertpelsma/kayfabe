@@ -11,3 +11,8 @@ REAPER_MARGIN_MINUTES = "15"
 [observability]
 enabled = true
 head_sampling_rate = 1
+# F4 (2026-11-13): optional memory of the instance ids seen under a kf-ci label. Create a KV namespace,
+# then uncomment (DEPLOY.md, "Worker hardening"). Without it the label alone decides.
+# [[kv_namespaces]]
+# binding = "REAPER_SEEN"
+# id = "<namespace id>"

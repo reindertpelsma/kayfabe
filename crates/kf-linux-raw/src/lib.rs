@@ -275,6 +275,7 @@ pub mod capability;
 mod capability_unsafe;
 pub mod census;
 mod chardev_unsafe;
+mod companion;
 pub mod drm;
 mod drm_unsafe;
 mod epoll_unsafe;

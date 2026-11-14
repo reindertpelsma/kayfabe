@@ -57,6 +57,39 @@ pub enum RawError {
         /// Bytes the argument buffer actually holds.
         buffer: u64,
     },
+    /// ★★★ (B-01, 2026-11-13) An ioctl request whose number encodes no payload size the raw
+    /// layer can trust: `_IOC_SIZE` is 0 (a legacy number such as `FIONREAD`, where the driver
+    /// copies its OWN fixed size) and the request is not in `companion::LEGACY_PAYLOAD`, or the
+    /// number is not an `_IOC` encoding at all (no direction bits, or bits above 31). Refused
+    /// before the syscall: the driver would copy a size this layer cannot bound.
+    IoctlSizeUnknown {
+        /// The refused request number (an ioctl number, never an address).
+        request: u64,
+    },
+    /// ★★★ (B-02 = S1-40, 2026-11-13) An [`crate::Indirect`] whose COMPANION SIZE FIELD (the
+    /// count the driver copies at the pointer: `paramsSize`, NVOS02 `limit + 1`, a nested list's
+    /// element count) states more bytes than the pointed-at buffer holds. Re-derived by
+    /// `CharDevice::ioctl` from the argument itself, never trusted from the caller.
+    IndirectSizeMismatch {
+        /// Offset of the pointer field in the argument (or in the outer buffer, nested).
+        pointer_at: u64,
+        /// Bytes the size field tells the driver to copy.
+        stated: u64,
+        /// Bytes the pointed-at buffer actually holds.
+        buffer: u64,
+    },
+    /// ★★★ (B-02, 2026-11-13) A pointer field `CharDevice::ioctl` cannot validate: an
+    /// [`crate::Indirect`] on a request with no companion-size rule, at an offset the rule does
+    /// not name, or a nested pointer the rule does not cover; or a non-zero value left in a
+    /// known pointer field that no [`crate::Indirect`] covers (the kernel would follow it).
+    UnvalidatedPointer {
+        /// The request number.
+        request: u64,
+        /// The pointer field's offset.
+        at: u64,
+        /// Which rule refused it.
+        why: &'static str,
+    },
     /// A value the host requires to be page- (or word-) aligned was not.
     Misaligned {
         /// What was misaligned (`"mapping length"`, `"volatile load offset"`, …).
@@ -330,6 +363,24 @@ impl fmt::Display for RawError {
                 write!(f, "export token {token} names no backing this table minted")
             }
             RawError::BadSocketPath { why } => write!(f, "refused socket path: {why}"),
+            RawError::IoctlSizeUnknown { request } => write!(
+                f,
+                "ioctl request {request:#x} encodes no payload size this layer can bound — the \
+                 driver would copy its own size at the argument"
+            ),
+            RawError::IndirectSizeMismatch {
+                pointer_at,
+                stated,
+                buffer,
+            } => write!(
+                f,
+                "the size field of the pointer at +{pointer_at} states {stated} bytes but the \
+                 buffer it points at holds {buffer} — the driver would copy past the buffer"
+            ),
+            RawError::UnvalidatedPointer { request, at, why } => write!(
+                f,
+                "ioctl {request:#x}: pointer field at +{at} cannot be validated: {why}"
+            ),
         }
     }
 }

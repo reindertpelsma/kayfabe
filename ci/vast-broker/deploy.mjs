@@ -4,7 +4,7 @@
 // emitted module's SHA-256 equals deployment.json and wrangler.toml, then uploads exactly that
 // verified file (`--no-bundle`) with one --var per entry. It never prints a value: wrangler output
 // is redacted and refusals name only the key or line number.
-import { mkdtempSync, readFileSync, rmSync, statSync, realpathSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -106,6 +106,8 @@ const bareOrigin = (value) => {
     return false;
   }
 };
+// The files wrangler 4.152.0 writes next to the bundle in a dry run (README.md, index.js.map).
+const EMITTED = new Set(['index.js', 'index.js.map', 'README.md']);
 class Refusal extends Error {}
 const fail = (message) => {
   throw new Refusal(message);
@@ -232,20 +234,29 @@ function main(argv) {
     const digest = createHash('sha256').update(bundle).digest('hex');
     if (digest !== manifest.bundle_sha256)
       fail('wrangler bundle ' + digest + ' does not match deployment.json');
+    // Review F8 (2026-11-13): the hash covers index.js only, and the upload has module discovery on,
+    // so any other module wrangler finds beside it would be uploaded unhashed. The dry run's
+    // directory may hold wrangler's own three files and nothing else.
+    const extra = readdirSync(out).filter((n) => !EMITTED.has(n));
+    if (extra.length)
+      fail('wrangler emitted files beyond the hashed bundle (' + extra.length + ')');
 
     const redact = (text) => {
       let result = String(text ?? '');
       for (const [key, value] of vars) result = result.split(value).join('<' + key + '>');
       return result;
     };
-    const upload = [...vars];
+    // The Worker reports DEPLOYED_BUNDLE_SHA256 from a var. It is set here from the bytes that are
+    // uploaded, not read from wrangler.toml, so the self-report is the hash this helper verified
+    // (and the file is re-read once more below, just before the upload).
+    const upload = [...vars, ['DEPLOYED_BUNDLE_SHA256', digest]];
     process.stdout.write(
       'deploy: bundle ' +
         digest +
         ' (' +
         bundle.length +
         ' bytes) verified; vars ' +
-        upload.map(([key]) => key).join(',') +
+        [...vars.keys()].join(',') +
         ' (values withheld)' +
         (dryRun ? '; dry run' : '') +
         '\n',
@@ -255,6 +266,12 @@ function main(argv) {
       'deploy: before first public-var deploy, coordinator must run: ' +
         'wrangler secret delete WORKER_URL\n',
     );
+    if (
+      createHash('sha256')
+        .update(readFileSync(join(out, 'index.js')))
+        .digest('hex') !== digest
+    )
+      fail('the verified bundle changed before the upload');
     // Upload exactly the verified bytes; wrangler does not bundle a second time.
     // --x-provision=false (hidden flag, default true in the pinned wrangler 4.152.0): without it
     // wrangler CREATES any bucket or database that a binding names and that does not exist, with

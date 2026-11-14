@@ -297,7 +297,7 @@ A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-sta
 | twin-private host VRAM (RM-owned context buffers) | guest userspace via guest RM | uncounted (`crates/kf-qemu/src/cardbudget.rs:1-19` covers BAR1 and the store only) | **open, S1-82** |
 | host NVENC sessions | guest userspace | none per VM (`crates/kf-qemu/src/chan.rs` `ChanPlane::encoder_session`; `:2551-2598` at `12a526df`) | **open, S1-42** |
 | host BAR1 across VMs | guest kernel | this process only (`cardbudget.rs:10-13`) | **open** |
-| PRAMIN view retire queue (fds and BAR1 aperture) | guest kernel | unbounded channel (`crates/kf-qemu/src/mem.rs` `TrapNodes::start`, its `retire` `mpsc::channel::<StoreView>()`; `:301` at `12a526df`) | **open, S1-45** |
+| PRAMIN view retire queue (fds and BAR1 aperture) | guest kernel | unbounded channel (`crates/kf-qemu/src/mem.rs` `TrapNodes::start`, its `retire` `mpsc::channel::<StoreView>()`; `:301` at `12a526df`). ⊘ CORRECTED 2026-11-14: bounded on branch `claude/secfix-queues-pramin-20261113` (`TrapPool`: no open on the vCPU, a pool of 32 woken on every take, an empty pool refuses the move (said, counted), retire queue 96), unmerged | **open, S1-45** (fixed on branch) |
 | runlist time (TSG timeslice) | guest kernel | host minimum only | **open, S1-44** |
 | walk budget, frontier, report capacity | guest userspace (its VA layout) | per refresh, shared by every space in the batch | **open, S1-61** |
 | display-SW objects, kernel-mapped bytes | guest kernel | caps in progress (`OWNER_RULINGS.md` §N) | **open**. ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-dispsw-exp` at `86b4fa10`): bounded — at most 16 live display-SW twins per channel and 1024 per VM, refused by name past either (`kf_qemu::dispsw::PER_CHANNEL_CAP`, `PER_VM_CAP`); no host map kayfabe makes carries `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` (`kf_host` `nvos46_map_flags` masks it), so no kernel-mapped bytes; the `x11-dispsw` experiment stays default off |
@@ -339,6 +339,18 @@ A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-sta
 - **Proposed, awaiting the owner:** the host clock disclosure through the read-only usermode page
   (S1-30): accept for a single tenant, disclose for multi-tenant, with one guest per GPU as the
   answer.
+- **ACCEPTED RISKS, owner 2026-11-13 (review 4 of the CI Worker; DESIGN, accepted, not claims of safety):**
+  - Standard custom hosts may seed each other and owned hosts during a run. All untrusted boxes
+    are at the trust level of Vast boxes; git-only (borrowed) hosts cannot be seeded from untrusted
+    hosts. A custom host may also roll over into a later CI run and inherit its environment; if
+    that matters the owner re-rents the box. (F2: behaviour intentionally unchanged.)
+  - Any repo writer can post the required master statuses (`CI`, `gpu-vast`). There are exactly two
+    writers (the owner and the coordinator), and an untrusted PR cannot get a run without approval.
+    GitHub settings stay as they are. (F3.)
+  - The `gpu-vast` environment has no required reviewer and allows `v*` tags; only repo writers can
+    reach it. ci/vast-broker/DEPLOY.md states this. (F7.)
+  - The box Access pair and the secret path prefix go to every box (2026-10-24 ruling). They are
+    treated as secrets toward everyone else and redacted by the Worker (DEPLOY.md, "Worker hardening").
 
 ## 11. Deployment assumptions (to state in SUPPORT and SECURITY)
 
