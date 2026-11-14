@@ -270,6 +270,43 @@ MUTANTS = [
         "            unsafe { release(handle) };",
         "            let _ = (release, handle);",
     ),
+    # ── D-05(b): pinned pages never go back under a queued GPU write (2026-11-14) ──
+    (
+        "d05b-free-ignores-the-fence",
+        "driver_unsafe.rs",
+        "        self.settle(&buf, what)?;\n        // SAFETY: `buf.ptr` is the base of a live `cuMemAllocHost`",
+        "        // SAFETY: `buf.ptr` is the base of a live `cuMemAllocHost`",
+    ),
+    (
+        "d05b-unregister-ignores-the-fence",
+        "driver_unsafe.rs",
+        "        self.settle(&buf, what)?;\n        // SAFETY: `buf.ptr` is the base of a live registration",
+        "        // SAFETY: `buf.ptr` is the base of a live registration",
+    ),
+    (
+        "d05b-no-fence-after-the-copy",
+        "driver_unsafe.rs",
+        "        })?;\n        self.fence_after(buf, s)\n",
+        "        })\n",
+    ),
+    (
+        "d05b-not-ready-taken-as-done",
+        "driver_unsafe.rs",
+        "                Ok(false) => {\n                    *fence = Fence::After(ev);\n                    busy(\"the last queued copy has not completed\")\n                }",
+        "                Ok(false) => {\n                    self.event_destroy(ev);\n                    Ok(())\n                }",
+    ),
+    (
+        "d05b-unknown-completion-forgotten",
+        "driver_unsafe.rs",
+        "            Fence::Unknown => {\n                *fence = Fence::Unknown;\n                busy(",
+        "            Fence::Unknown => {\n                return Ok(());\n                #[allow(unreachable_code)]\n                busy(",
+    ),
+    (
+        "d05b-lent-view-forgotten",
+        "driver_unsafe.rs",
+        "            .store(true, core::sync::atomic::Ordering::Release);",
+        "            .store(false, core::sync::atomic::Ordering::Release);",
+    ),
     # ── D-08: field lists ──
     (
         "d08-a-field-missing-from-the-list",
