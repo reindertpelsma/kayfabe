@@ -27,6 +27,13 @@ use std::sync::{Mutex, OnceLock};
 
 /// ★ 2026-11-03: the VA-manager thread's timer slack — small against its 50 us pending-walk
 /// wait (`Device::va_loop`); the kernel's default is 50 us.
+/// ★ 2026-11-14 (security review 1 F-13 / S1-86): the drainer's per-doorbell refusal lines (a GSP
+/// write refused, a command service refused, a held reply post refused — `QueueFull` when the guest
+/// stops draining its status queue, once per doorbell) are counted per site and printed only when
+/// [`crate::reset::loud`] picks the count (first 16, then powers of two): the drainer may not write
+/// a line per guest event. Index: 0 write, 1 command service, 2 held reply post.
+static DRAINER_REFUSALS: [AtomicU64; 3] = [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
+
 const VA_TIMER_SLACK_NS: u64 = 5_000;
 
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
@@ -128,8 +135,9 @@ pub struct Identity {
     pub bar0_bytes: u64,
 }
 
-/// A registered BAR0 shadow piece.
-#[derive(Debug, Clone, Copy)]
+/// A registered BAR0 shadow piece. ⊘ Not `Copy` (security fix C-02, 2026-11-13): it owns its
+/// [`RawRegion`], which has one owner; readers borrow it.
+#[derive(Debug)]
 struct Piece {
     base: u64,
     mem: RawRegion,
@@ -337,10 +345,6 @@ pub struct Device {
     /// ★ EXPERIMENT `x11-dispsw` ([`Config::x11_dispsw`]): the status line's `dispsw[...]` segment
     /// is printed only when it is on.
     x11_dispsw: bool,
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (default off, `docs/design/V3_GSS_NATIVE.md`), read once at
-    /// realize: `Some` when on. The counters the status line prints (`gss[...]`); the same value the
-    /// chain's seat writes.
-    gss_native: Option<std::sync::Arc<kf_rm::gssnative::Stats>>,
     /// ★ DIAGNOSTIC, default off (`KF3_BAR0_READ_TRACE=1`, [`crate::readtrace`]): the BAR0 access
     /// trace in the VFIO reference's record format. Off: the C device takes none of its paths.
     pub trace: crate::readtrace::AccessTrace,
@@ -372,18 +376,6 @@ impl Device {
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
         cfg.check()?;
-        // ★ EXPERIMENT `KF3_GSS_NATIVE` (default off): read once, here, and said once.
-        let gss_native = kf_rm::gssnative::enabled()
-            .then(|| std::sync::Arc::new(kf_rm::gssnative::Stats::new()));
-        if gss_native.is_some() {
-            eprintln!(
-                "kf3: ⚠ EXPERIMENT KF3_GSS_NATIVE ON (docs/design/V3_GSS_NATIVE.md): non-privileged subdevice-level GSS-legacy controls \
-                 ((cmd & 0xC000) == 0x8000, class 0x2080, <= {} B, at most {} per boot) are carried to the HOST RM and its status and reply returned; \
-                 params are opaque and host-side layout is assumed equal to the guest's; display controls are never forwarded",
-                kf_rm::gssnative::MAX_PARAMS,
-                kf_rm::gssnative::BOOT_CAP
-            );
-        }
         // ★ The boot display (`gop=on`, `crate::gop`): decided from the configuration and the virtual
         // monitor alone, so a refusal costs nothing. `None` with `gop=off`: every step below that
         // reads it is then skipped, and the device is today's. ★ The same monitor the display
@@ -965,7 +957,6 @@ impl Device {
             let memory_access = chans.memory_access.clone();
             let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
-            let gss_native = gss_native.clone();
             let (board, host, chain_logs, census, inbox, console, defapi_reg) = (
                 board.clone(),
                 host.clone(),
@@ -976,7 +967,7 @@ impl Device {
                 defapi_reg.clone(),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
-                let mut objects = kf_rm::rmrpc::ObjectPolicy::over(
+                let objects = kf_rm::rmrpc::ObjectPolicy::over(
                     &t,
                     kf_abi::GuestOs::Linux,
                     Box::new(kf_rm::memory_access::SharedObjects::new(
@@ -989,14 +980,6 @@ impl Device {
                     )),
                     kf_rm::rmrpc::ReasmLimits::default(),
                 );
-                // ★ EXPERIMENT `KF3_GSS_NATIVE`: the SAME counters across a chain rebuild.
-                if let Some(stats) = &gss_native {
-                    let st = stats.clone();
-                    objects = objects.with_gss_native(kf_rm::gssnative::GssSeat {
-                        sink: std::sync::Arc::new(move |req| chans.gss_forward(req, &st)),
-                        stats: stats.clone(),
-                    });
-                }
                 kf_rm::served_policy(
                     board.clone(),
                     host.clone(),
@@ -1248,7 +1231,6 @@ impl Device {
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
             display: display_plane,
             x11_dispsw: cfg.x11_dispsw,
-            gss_native,
             gop,
             gop_rom,
             bar1_mode,
@@ -1357,10 +1339,10 @@ impl Device {
         }
     }
 
-    fn piece_for(&self, off: u64) -> Option<(Piece, usize)> {
+    fn piece_for(&self, off: u64) -> Option<(&Piece, usize)> {
         let pieces = self.pieces.get()?;
         let i = pieces.partition_point(|p| p.base <= off).checked_sub(1)?;
-        let p = pieces[i];
+        let p = pieces.get(i)?;
         let rel = (off - p.base) as usize;
         (rel < p.mem.len()).then_some((p, rel))
     }
@@ -1891,7 +1873,12 @@ impl Device {
     /// ★ P4: the host address of `[base, base+len)` of a disposition-A region — PRAMIN (BAR0),
     /// BAR1 or BAR2 (`bar` 2 = PCI BAR3). `None` when no window covers it.
     #[must_use]
-    pub fn window_address(&self, bar: u32, base: u64, len: u64) -> Option<kf_linux_raw::HostSpan> {
+    pub fn window_address(
+        &self,
+        bar: u32,
+        base: u64,
+        len: u64,
+    ) -> Option<kf_linux_raw::HostSpan<'_>> {
         let (win, rel) = match bar {
             0 => (
                 self.mem.pramin_win,
@@ -2884,7 +2871,7 @@ impl Device {
             tm.slow_splits,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} absent_cleared={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} carve_clipped={:#x} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} absent_cleared={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} carve_clipped={:#x} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} pramin_pool_empty={} pramin_retire_full={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -2922,7 +2909,8 @@ impl Device {
             self.mem.pramin.kept.load(o),
             self.mem.pramin.kept_now.load(o),
             crate::mem::WINDOW_ADVICE_REFUSED.load(o),
-            self.mem.pramin_trap.inline_opens.load(o),
+            self.mem.pramin_trap.pool_empty.load(o),
+            self.mem.pramin_trap.retire_full.load(o),
             self.mem.pramin_trap.reaped.load(o),
             mc.cache_ops.load(o),
             mc.sysmembars.load(o),
@@ -3108,11 +3096,6 @@ impl Device {
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
         let db = format!(" {}", self.dbfast.status());
         // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`: `""` with the switch off (the line is the line it was).
-        // ★ EXPERIMENT `KF3_GSS_NATIVE`: `""` with the switch off (the line is the line it was).
-        let db = match &self.gss_native {
-            Some(g) => db + " EXPERIMENT KF3_GSS_NATIVE " + &g.status(),
-            None => db,
-        };
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
             self.family,
@@ -3319,7 +3302,12 @@ impl Device {
             }
             Ok(_) => false,
             Err(e) => {
-                eprintln!("kf3: held reply post REFUSED: {e:?}");
+                let n = DRAINER_REFUSALS[2]
+                    .fetch_add(1, Ordering::Relaxed)
+                    .saturating_add(1);
+                if crate::reset::loud(n) {
+                    eprintln!("kf3: held reply post REFUSED: {e:?} [#{n}, rate-limited]");
+                }
                 false
             }
         }
@@ -3897,9 +3885,6 @@ impl crate::reset::Owners for Device {
         self.hotplug_pending.store(0, Ordering::Release);
         self.chain_logs.os_events.clear();
         let defapi = self.defapi_reg.clear_life();
-        if let Some(st) = &self.gss_native {
-            st.new_boot();
-        }
         self.intr.reset();
         if let Some(f) = &self.fsp {
             f.reset();
@@ -4205,7 +4190,16 @@ impl HostOps for Device {
                     self.note_pm_suspend(&mut g.fsm);
                 }
             }
-            Err(e) => eprintln!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}"),
+            Err(e) => {
+                let n = DRAINER_REFUSALS[0]
+                    .fetch_add(1, Ordering::Relaxed)
+                    .saturating_add(1);
+                if crate::reset::loud(n) {
+                    eprintln!(
+                        "kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?} [#{n}, rate-limited]"
+                    );
+                }
+            }
         }
         while g.fsm.pending_command_doorbells() > 0 {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
@@ -4217,7 +4211,12 @@ impl HostOps for Device {
                     }
                 }
                 Err(e) => {
-                    eprintln!("kf3: GSP command service REFUSED: {e:?}");
+                    let n = DRAINER_REFUSALS[1]
+                        .fetch_add(1, Ordering::Relaxed)
+                        .saturating_add(1);
+                    if crate::reset::loud(n) {
+                        eprintln!("kf3: GSP command service REFUSED: {e:?} [#{n}, rate-limited]");
+                    }
                     break;
                 }
             }

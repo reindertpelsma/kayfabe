@@ -79,7 +79,11 @@ pub const K_BAR1: VasKey = VasKey(0xFFFF_FFFF_0000_0001);
 
 /// One guest-RAM block QEMU registered: guest-physical `[gpa, gpa+len)` at `mem`, backed by the
 /// memory backend's `fd` at `fd_off` (`None` when the backend has no fd).
-#[derive(Debug, Clone, Copy)]
+///
+/// ★ Security fix C-02 (2026-11-13): **not `Clone`/`Copy`** — it owns its [`RawRegion`], which
+/// lives in the [`RamMap`] from `kf3_ram_add` to `kf3_ram_del`; safe code borrows it through a
+/// [`RamRef`] guard only.
+#[derive(Debug)]
 pub struct RamBlock {
     /// Guest-physical base.
     pub gpa: u64,
@@ -89,6 +93,19 @@ pub struct RamBlock {
     pub fd: Option<BackendFd>,
     /// File offset of `gpa`.
     pub fd_off: u64,
+}
+
+#[cfg(test)]
+impl RamBlock {
+    /// Test-only second handle on a block over [`crate::raw_unsafe::test_owned_ram`] memory.
+    pub(crate) fn test_alias(&self) -> RamBlock {
+        RamBlock {
+            gpa: self.gpa,
+            mem: self.mem.test_alias(),
+            fd: self.fd.clone(),
+            fd_off: self.fd_off,
+        }
+    }
 }
 
 /// ★ Guest RAM, as QEMU registered it — the VMM's own guest-physical layout, which is NOT the
@@ -148,6 +165,10 @@ impl RamMap {
     }
 
     /// Register (or replace) the block at `b.gpa`.
+    ///
+    /// ⚠ Takes the write lock, so it waits for every outstanding [`RamRef`] (each held across one
+    /// bounded copy, at most [`RAM_COPY_CHUNK`] bytes for the chunked accessors) — see
+    /// [`Self::del`].
     pub fn add(&self, b: RamBlock) {
         if let Ok(mut v) = self.blocks.write() {
             self.revoke();
@@ -158,6 +179,25 @@ impl RamMap {
     }
 
     /// Unregister the block at `gpa`.
+    ///
+    /// ★★ Security fix C-02 (2026-11-13) — **what the unplug path does.** `kf3_ram_del` (QEMU's
+    /// memory listener, under the BQL, on whichever thread commits the memory transaction — which
+    /// can be a vCPU that reprogrammed a BAR) lands here. The write lock WAITS for every
+    /// outstanding [`RamRef`] guard, then removes the block (its [`RawRegion`] is dropped: there is
+    /// no copy of it anywhere) and bumps the generation; only after this returns does QEMU free the
+    /// block (after its RCU grace period). So no kayfabe thread can touch the host address after
+    /// the unplug: a lookup after it finds nothing and refuses.
+    ///
+    /// Why the wait does not break *"nothing blocks on a vCPU or under a lock a vCPU takes"*: a
+    /// guard is held across ONE bounded `memcpy` of guest RAM and nothing else — no syscall, no
+    /// other lock, no allocation inside the guard (the chunked accessors copy at most
+    /// [`RAM_COPY_CHUNK`] bytes per acquisition; `block_for`'s callers copy one bounded object:
+    /// a GSP message, a display pushbuffer ≤ 64 KiB, a context-DMA word). The longest wait is
+    /// therefore one such copy (microseconds), on a path that runs only at a topology change
+    /// (boot, machine reset, hot-unplug), and a guard holder never waits for anything a vCPU
+    /// holds. This is the pattern [`MemoryListRam`] already used. The alternative that waits for
+    /// nothing at all — kayfabe threads as QEMU RCU readers, so QEMU's deferred free waits instead
+    /// — needs the C device and the FFI (not this file) and is recorded as the follow-up.
     pub fn del(&self, gpa: u64) {
         if let Ok(mut v) = self.blocks.write() {
             self.revoke();
@@ -165,42 +205,143 @@ impl RamMap {
         }
     }
 
-    /// The ONE backend fd every fd-backed block shares, if any.
+    /// The read guard, never re-entered blocking: a thread that already holds a [`RamRef`] takes
+    /// a nested one with `try_read` (a queued unplug makes it refuse, `None`), because a blocking
+    /// nested read behind a queued writer is a self-deadlock (`std`'s lock is writer-preferring).
+    fn guard(&self) -> Option<std::sync::RwLockReadGuard<'_, Vec<RamBlock>>> {
+        if RAM_GUARDS_HELD.get() == 0 {
+            self.blocks.read().ok()
+        } else {
+            self.blocks.try_read().ok()
+        }
+    }
+
+    /// The ONE backend fd every fd-backed block shares, if any — an owning clone, open for as long
+    /// as the caller keeps it (C-03).
     #[must_use]
     pub fn backing_fd(&self) -> Option<BackendFd> {
-        self.blocks.read().ok()?.iter().find_map(|b| b.fd)
+        self.guard()?.iter().find_map(|b| b.fd.clone())
     }
 
-    /// The block wholly covering `[gpa, gpa+len)`.
+    /// The block wholly covering `[gpa, gpa+len)`, borrowed through a [`RamRef`] that holds the
+    /// map's read lock.
+    ///
+    /// ⚠ Hold the guard across ONE bounded copy and drop it: unplug waits for it ([`Self::del`]).
+    /// Prefer [`Self::read_gpa`] / [`Self::write_gpa`], which bound the hold themselves.
     #[must_use]
-    pub fn block_for(&self, gpa: u64, len: u64) -> Option<RamBlock> {
-        let v = self.blocks.read().ok()?;
-        v.iter()
-            .find(|b| {
-                gpa >= b.gpa
-                    && gpa
-                        .checked_add(len)
-                        .is_some_and(|e| e.saturating_sub(b.gpa) <= b.mem.len() as u64)
-            })
-            .copied()
+    pub fn block_for(&self, gpa: u64, len: u64) -> Option<RamRef<'_>> {
+        let v = self.guard()?;
+        let index = v.iter().position(|b| {
+            gpa >= b.gpa
+                && gpa
+                    .checked_add(len)
+                    .is_some_and(|e| e.saturating_sub(b.gpa) <= b.mem.len() as u64)
+        })?;
+        Some(RamRef::new(v, index))
     }
 
-    /// ★ P5: the host mapping of guest-RAM memfd bytes `[off, off+len)` — the inverse of
-    /// [`Self::file_range`], for reading a sysmem row the reconcile placed (whose offset is a FILE
-    /// offset). `None` when no single fd-backed block covers it.
-    #[must_use]
-    pub fn at_file_offset(&self, off: u64, len: u64) -> Option<(RawRegion, usize)> {
-        let v = self.blocks.read().ok()?;
-        let first = v.iter().find_map(|x| x.fd)?;
-        v.iter()
-            .filter(|b| b.fd == Some(first))
+    /// ★ C-02: under the guard, the block holding guest-RAM memfd bytes `[off, off+len)` (the
+    /// inverse of [`Self::file_range`]) and the offset of `off` inside it; `f` runs with the guard
+    /// held. `None` when no single fd-backed block covers it.
+    fn with_file_span<R>(
+        &self,
+        off: u64,
+        len: u64,
+        f: impl FnOnce(&RawRegion, usize) -> R,
+    ) -> Option<R> {
+        let v = self.guard()?;
+        let first = v.iter().find_map(|x| x.fd.as_ref())?;
+        let b = v
+            .iter()
+            .filter(|b| b.fd.as_ref() == Some(first))
             .find(|b| {
                 off >= b.fd_off
                     && off
                         .checked_add(len)
                         .is_some_and(|e| e.saturating_sub(b.fd_off) <= b.mem.len() as u64)
+            })?;
+        let at = usize::try_from(off.saturating_sub(b.fd_off)).ok()?;
+        let _held = Held::new();
+        Some(f(&b.mem, at))
+    }
+
+    /// ★ P5 / C-02: copy guest-RAM memfd bytes `[off, off+dst.len())` into `dst` — the read of a
+    /// sysmem row the reconcile placed (whose offset is a FILE offset). Copied in pieces of at most
+    /// [`RAM_COPY_CHUNK`] bytes, each under the read guard (so an unplug waits for one piece, never
+    /// the whole read). `false` when a piece is not covered by one fd-backed block (a refused read
+    /// may have filled a prefix of `dst`).
+    #[must_use]
+    pub fn read_file(&self, off: u64, dst: &mut [u8]) -> bool {
+        dst.chunks_mut(RAM_COPY_CHUNK)
+            .enumerate()
+            .all(|(i, piece)| {
+                let Some(at) = chunk_at(off, i) else {
+                    return false;
+                };
+                self.with_file_span(at, piece.len() as u64, |m, rel| m.read_into(rel, piece))
+                    .unwrap_or(false)
             })
-            .map(|b| (b.mem, off.saturating_sub(b.fd_off) as usize))
+    }
+
+    /// Whether one fd-backed block covers guest-RAM memfd bytes `[off, off+len)` now.
+    #[must_use]
+    pub fn covers_file(&self, off: u64, len: u64) -> bool {
+        self.with_file_span(off, len, |_, _| ()).is_some()
+    }
+
+    /// The 32-bit word at guest-RAM memfd offset `off`, read under the guard.
+    #[must_use]
+    pub fn load_u32_file(&self, off: u64) -> Option<u32> {
+        self.with_file_span(off, 4, |m, at| m.load_u32(at))
+            .flatten()
+    }
+
+    /// Store the 32-bit word at guest-RAM memfd offset `off` under the guard.
+    #[must_use]
+    pub fn store_u32_file(&self, off: u64, v: u32) -> bool {
+        self.with_file_span(off, 4, |m, at| m.store_u32(at, v))
+            .unwrap_or(false)
+    }
+
+    /// ★ C-02: under the guard, the block wholly covering guest-physical `[gpa, gpa+len)` and the
+    /// offset of `gpa` inside it; `f` runs with the guard held.
+    fn with_gpa_span<R>(
+        &self,
+        gpa: u64,
+        len: u64,
+        f: impl FnOnce(&RawRegion, usize) -> R,
+    ) -> Option<R> {
+        let b = self.block_for(gpa, len)?;
+        let at = usize::try_from(gpa.saturating_sub(b.gpa)).ok()?;
+        Some(f(&b.mem, at))
+    }
+
+    /// ★ C-02: copy guest-physical `[gpa, gpa+dst.len())` into `dst`, in guarded pieces of at most
+    /// [`RAM_COPY_CHUNK`] bytes (see [`Self::read_file`]).
+    #[must_use]
+    pub fn read_gpa(&self, gpa: u64, dst: &mut [u8]) -> bool {
+        dst.chunks_mut(RAM_COPY_CHUNK)
+            .enumerate()
+            .all(|(i, piece)| {
+                let Some(at) = chunk_at(gpa, i) else {
+                    return false;
+                };
+                self.with_gpa_span(at, piece.len() as u64, |m, rel| m.read_into(rel, piece))
+                    .unwrap_or(false)
+            })
+    }
+
+    /// ★ C-02: copy `src` to guest-physical `gpa`, in guarded pieces of at most
+    /// [`RAM_COPY_CHUNK`] bytes (see [`Self::read_file`]).
+    #[must_use]
+    pub fn write_gpa(&self, gpa: u64, src: &[u8]) -> bool {
+        src.chunks(RAM_COPY_CHUNK).enumerate().all(|(i, piece)| {
+            let Some(at) = chunk_at(gpa, i) else {
+                return false;
+            };
+            self.with_gpa_span(at, piece.len() as u64, |m, rel| m.write_from(rel, piece))
+                .unwrap_or(false)
+        })
     }
 
     /// ★ The guest-RAM object's fd and the file offset of `[gpa, gpa+len)`. `None` when no single
@@ -209,11 +350,12 @@ impl RamMap {
     #[must_use]
     pub fn file_range(&self, gpa: u64, len: u64) -> Option<(BackendFd, u64)> {
         let b = self.block_for(gpa, len)?;
-        let first = self.blocks.read().ok()?.iter().find_map(|x| x.fd)?;
-        (b.fd == Some(first))
-            .then(|| b.fd_off.checked_add(gpa.saturating_sub(b.gpa)))
-            .flatten()
-            .map(|o| (first, o))
+        let first = b.all().iter().find_map(|x| x.fd.as_ref())?;
+        if b.fd.as_ref() != Some(first) {
+            return None;
+        }
+        let off = b.fd_off.checked_add(gpa.saturating_sub(b.gpa))?;
+        Some((first.clone(), off))
     }
 
     /// ★★ P1+P2 (`docs/design/V3_P1P2_TSPACE.md` §2.6) — **THE vIOMMU SEAM: the one path from a
@@ -228,6 +370,88 @@ impl RamMap {
     #[must_use]
     pub fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
         self.file_range(dma, len).map(|(_, off)| off)
+    }
+}
+
+/// ★ C-02 (DESIGN, 2026-11-13): the most guest-RAM bytes one guarded copy moves before the read
+/// lock is dropped and re-taken — the longest an unplug ([`RamMap::del`]) waits for one reader.
+/// 64 KiB is one display pushbuffer's maximum (`kf_disp` `MAX_PUSHBUFFER`), a few microseconds of
+/// `memcpy`; the measured snapshot and USERD reads are far smaller per piece. Not measured as a
+/// wait on hardware.
+pub const RAM_COPY_CHUNK: usize = 64 << 10;
+
+thread_local! {
+    /// How many [`RamRef`] guards this thread holds (see [`RamMap::guard`]).
+    static RAM_GUARDS_HELD: core::cell::Cell<u32> = const { core::cell::Cell::new(0) };
+}
+
+/// Counts one held guard for the thread (`RamMap::guard`'s nested-acquisition rule).
+struct Held;
+impl Held {
+    fn new() -> Held {
+        RAM_GUARDS_HELD.set(RAM_GUARDS_HELD.get().saturating_add(1));
+        Held
+    }
+}
+impl Drop for Held {
+    fn drop(&mut self) {
+        RAM_GUARDS_HELD.set(RAM_GUARDS_HELD.get().saturating_sub(1));
+    }
+}
+
+/// Start of piece `i` of a chunked copy beginning at `base`.
+fn chunk_at(base: u64, i: usize) -> Option<u64> {
+    u64::try_from(i)
+        .ok()?
+        .checked_mul(RAM_COPY_CHUNK as u64)
+        .and_then(|d| base.checked_add(d))
+}
+
+/// ★★ Security fix C-02 (2026-11-13): **a registered guest-RAM block, borrowed under the RAM
+/// map's read lock.** It derefs to the [`RamBlock`] (so `b.gpa`, `b.mem.read_into(..)` read as
+/// before), but the block cannot be copied out of it (`RamBlock`/`RawRegion` are not `Copy`), so
+/// the host address is usable only while this guard lives — and [`RamMap::del`] (the unplug)
+/// waits for the guard before QEMU may free the memory. ⚠ Hold it across one bounded copy only.
+pub struct RamRef<'a> {
+    guard: std::sync::RwLockReadGuard<'a, Vec<RamBlock>>,
+    index: usize,
+    _held: Held,
+}
+
+impl<'a> RamRef<'a> {
+    /// CALLER-CONTRACT: `index` is in bounds of `guard` (private; the one caller passes a
+    /// `position` found in this very guard). Otherwise `deref` panics — never reads out of bounds.
+    fn new(guard: std::sync::RwLockReadGuard<'a, Vec<RamBlock>>, index: usize) -> Self {
+        RamRef {
+            guard,
+            index,
+            _held: Held::new(),
+        }
+    }
+
+    /// Every registered block (the same guard).
+    fn all(&self) -> &[RamBlock] {
+        &self.guard
+    }
+}
+
+impl core::ops::Deref for RamRef<'_> {
+    type Target = RamBlock;
+    // `new`'s one caller passes an `index` found in this very guard, whose vector cannot change
+    // while the read lock is held; `RamRef` is built nowhere else. The index cannot fail, so this
+    // is not a reachable panic site.
+    #[allow(clippy::indexing_slicing)]
+    fn deref(&self) -> &RamBlock {
+        &self.guard[self.index]
+    }
+}
+
+impl core::fmt::Debug for RamRef<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RamRef")
+            .field("gpa", &self.gpa)
+            .field("len", &self.mem.len())
+            .finish()
     }
 }
 
@@ -286,7 +510,7 @@ fn memory_list_block(blocks: &[RamBlock], span: kf_rm::memory_list::RamSpan) -> 
         return None;
     }
     let end = span.base.checked_add(span.length)?;
-    let first = blocks.iter().find_map(|b| b.fd)?;
+    let first = blocks.iter().find_map(|b| b.fd.as_ref())?;
     let mut overlaps = blocks.iter().filter(|b| {
         b.gpa
             .checked_add(b.mem.len() as u64)
@@ -294,7 +518,7 @@ fn memory_list_block(blocks: &[RamBlock], span: kf_rm::memory_list::RamSpan) -> 
     });
     let b = overlaps.next()?;
     if overlaps.next().is_some()
-        || b.fd != Some(first)
+        || b.fd.as_ref() != Some(first)
         || span.base < b.gpa
         || end.checked_sub(b.gpa)? > b.mem.len() as u64
     {
@@ -616,20 +840,236 @@ fn sink_with(
 /// ★ The PRAMIN trap's helpers: device nodes opened AHEAD of time (so the trap's map is exactly one
 /// ioctl), and a reaper thread that releases retired views and refills the node pool — both OFF
 /// the vCPU.
-pub struct TrapNodes {
-    nodes: Mutex<std::sync::mpsc::Receiver<CharDevice>>,
-    retire: Mutex<std::sync::mpsc::Sender<StoreView>>,
-    /// Trap-time `openat`s because the pool was empty (should stay 0).
-    pub inline_opens: AtomicU64,
+///
+/// ★ 2026-11-14 (security review 1 F-07a = S1-45): **bounded, and nothing opens on the vCPU.** The
+/// retire queue was an unbounded channel and an empty pool made the vCPU `openat` a node inline,
+/// so a guest moving the window from several vCPUs faster than the reaper ran grew pending views
+/// (each an fd and a host BAR1 aperture, shared by tenants) without limit. Now:
+/// - the vCPU only ever TAKES a node ([`TrapPool::take_node`]); the pool has no way to open one
+///   (only the [`Reaper`] can). An empty pool refuses the move (counted in
+///   [`TrapPool::pool_empty`]): the window shows scratch for that move, as for any refused map
+///   (`kf_mem::cpuwin::CpuWindow::repoint`), and the guest's next window write tries again.
+///   `[measured: 2585 heartbeat lines under traces/ print inline_opens=0, up to 1402 repoints]`
+///   so a correct guest never drained the pool of 4 in those runs;
+///
+/// ⊘ CORRECTED 2026-11-14 (PC reset lane on this branch, `/workspace/bench/secbatch_20261114`):
+/// **the pool of 4 DID drain after device resets** (`pramin_pool_empty` 0,0,2,2,2,2 per boot; each
+/// life makes 18 window moves while the reset's frees and scrub contend for the RM lock with the
+/// reaper's release + open), and each refused move left the window on scratch — guest PRAMIN
+/// reads saw scratch and its writes were lost (INFERRED from the code path; no arm failed). Now:
+/// - [`TRAP_NODES`] = 32: one guest life's measured burst (18 moves) is served even if the reaper
+///   does not run at all during it (test `a_life_burst_after_a_reset_is_served_with_a_stalled_reaper`);
+/// - every take wakes the reaper (one coalesced message, never a wait), and the reaper refills
+///   BEFORE it releases, so the slow host unmap never delays the pool;
+/// - a refusal can still happen only after more than 32 moves with no reaper step at all. It is
+///   counted and said (first 16, then powers of two). Its guest-visible result stays SCRATCH, by
+///   choice: keeping the previous view instead would send the guest's PRAMIN writes for the new
+///   base to the OLD base's memory (corruption of other guest data), while scratch loses only the
+///   writes of that move. The only fully correct fallback is an `openat` on the vCPU (what
+///   `origin/next` does), which the security fix rules out: an owner decision, not taken here.
+/// - every view owns the node it was armed on, so views pending release are bounded by the pool
+///   plus the views the 16 slots can keep (`Repointed::kept`); the retire queue is a bounded
+///   channel of [`RETIRE_QUEUE`] as defense in depth. If it is ever full the view is released
+///   inline (counted in [`TrapPool::retire_full`]): one host unmap, never a wait.
+pub struct TrapPool<N, V> {
+    nodes: Mutex<std::sync::mpsc::Receiver<N>>,
+    retire: Mutex<std::sync::mpsc::SyncSender<Reap<V>>>,
+    /// ★ 2026-11-14: a wake is already queued for the reaper (takes coalesce into one).
+    wake_queued: std::sync::atomic::AtomicBool,
+    /// Nodes in the pool now (the reaper refills only below the cap, so an idle refill opens
+    /// nothing).
+    ready: std::sync::atomic::AtomicUsize,
+    /// Window moves refused because the node pool was empty (the reaper is behind). Should stay 0.
+    pub pool_empty: AtomicU64,
+    /// Views released inline because the retire queue was full (should be unreachable: see above).
+    pub retire_full: AtomicU64,
     /// Views released by the reaper.
     pub reaped: AtomicU64,
     /// Releases the host refused (the aperture leaked; counted).
     pub reap_refused: AtomicU64,
 }
 
-/// Nodes kept ready for the trap. One is taken per store window move and one is returned to the
-/// reaper by the view it replaces, so a small pool never drains.
-const TRAP_NODES: usize = 4;
+/// The PRAMIN trap's pool in production: device nodes and armed store views.
+pub type TrapNodes = TrapPool<CharDevice, StoreView>;
+
+/// The reaper's half of a [`TrapPool`]: receives retired views, refills the pool. The only owner
+/// of the node sender, so only the reaper can put a node in the pool.
+pub struct Reaper<N, V> {
+    retired: std::sync::mpsc::Receiver<Reap<V>>,
+    node_tx: std::sync::mpsc::SyncSender<N>,
+    nodes_cap: usize,
+}
+
+/// ★ 2026-11-14: how long the reaper waits for a retired view before it tops the pool up anyway,
+/// so a refill the host refused once (an `openat` failure) heals without a view to reap.
+const REAPER_IDLE: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// What the reaper receives: a retired view, or a wake after a take (refill now).
+#[derive(Debug, PartialEq, Eq)]
+pub enum Reap<V> {
+    /// A view no longer placed: release it.
+    View(V),
+    /// The vCPU took a node: top the pool up.
+    Wake,
+}
+
+/// Nodes kept ready for the trap. One is taken per store window move. ★ 2026-11-14: 32, not 4 —
+/// at least one guest life's measured burst of moves after a device reset (18, see [`TrapPool`])
+/// with margin; a node is an open descriptor with no aperture until it is armed.
+const TRAP_NODES: usize = 32;
+
+/// ★ 2026-11-14: the retire queue's bound: the pool plus the 16 PRAMIN slots' kept views (every
+/// pending view owns a node, see [`TrapPool`]), doubled for headroom.
+pub const RETIRE_QUEUE: usize = 2 * (TRAP_NODES + 16);
+
+/// Why the vCPU got no node or could not hand a view over.
+#[derive(Debug, PartialEq, Eq)]
+pub enum RetireRefused<V> {
+    /// The retire queue is full: release `V` inline.
+    Full(V),
+    /// The reaper is gone: release `V` inline.
+    Gone(V),
+}
+
+impl<N, V> TrapPool<N, V> {
+    /// A pool of `nodes` (pre-opened), a retire queue of `retire_cap`, and its [`Reaper`].
+    /// Nodes beyond `nodes_cap` are dropped.
+    pub fn new(
+        nodes: impl IntoIterator<Item = N>,
+        nodes_cap: usize,
+        retire_cap: usize,
+    ) -> (TrapPool<N, V>, Reaper<N, V>) {
+        let (node_tx, node_rx) = std::sync::mpsc::sync_channel::<N>(nodes_cap);
+        // The coalesced wake (at most one queued) shares the queue: views then have `retire_cap - 1`
+        // places at worst, far above the views that can be pending (see [`RETIRE_QUEUE`]).
+        let (retire_tx, retired) = std::sync::mpsc::sync_channel::<Reap<V>>(retire_cap);
+        let mut ready = 0usize;
+        for n in nodes {
+            if node_tx.try_send(n).is_err() {
+                break;
+            }
+            ready = ready.saturating_add(1);
+        }
+        (
+            TrapPool {
+                nodes: Mutex::new(node_rx),
+                retire: Mutex::new(retire_tx),
+                wake_queued: std::sync::atomic::AtomicBool::new(false),
+                ready: std::sync::atomic::AtomicUsize::new(ready),
+                pool_empty: AtomicU64::new(0),
+                retire_full: AtomicU64::new(0),
+                reaped: AtomicU64::new(0),
+                reap_refused: AtomicU64::new(0),
+            },
+            Reaper {
+                retired,
+                node_tx,
+                nodes_cap,
+            },
+        )
+    }
+
+    /// **vCPU**: one pre-opened node, or `None` (counted) when the pool is empty. Never opens,
+    /// never waits. ★ 2026-11-14: every take wakes the reaper to refill (one coalesced message).
+    pub fn take_node(&self) -> Option<N> {
+        let n = self.nodes.lock().ok().and_then(|rx| rx.try_recv().ok());
+        if n.is_some() {
+            let _ = self
+                .ready
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |r| r.checked_sub(1));
+        } else {
+            self.pool_empty.fetch_add(1, Ordering::Relaxed);
+        }
+        self.wake();
+        n
+    }
+
+    /// Queue one wake for the reaper unless one is already queued. Never waits.
+    fn wake(&self) {
+        if !self.wake_queued.swap(true, Ordering::AcqRel) {
+            let sent = self
+                .retire
+                .lock()
+                .ok()
+                .is_some_and(|tx| tx.try_send(Reap::Wake).is_ok());
+            if !sent {
+                self.wake_queued.store(false, Ordering::Release);
+            }
+        }
+    }
+
+    /// **vCPU**: hand `v` to the reaper. Never waits: a full queue (counted) or a gone reaper
+    /// gives the view back for an inline release.
+    ///
+    /// # Errors
+    /// [`RetireRefused`], carrying the view.
+    pub fn retire(&self, v: V) -> Result<(), RetireRefused<V>> {
+        let Ok(tx) = self.retire.lock() else {
+            return Err(RetireRefused::Gone(v));
+        };
+        match tx.try_send(Reap::View(v)) {
+            Ok(()) => Ok(()),
+            Err(std::sync::mpsc::TrySendError::Full(Reap::View(v))) => {
+                self.retire_full.fetch_add(1, Ordering::Relaxed);
+                Err(RetireRefused::Full(v))
+            }
+            Err(std::sync::mpsc::TrySendError::Disconnected(Reap::View(v))) => {
+                Err(RetireRefused::Gone(v))
+            }
+            // Only a view was sent.
+            Err(
+                std::sync::mpsc::TrySendError::Full(Reap::Wake)
+                | std::sync::mpsc::TrySendError::Disconnected(Reap::Wake),
+            ) => Ok(()),
+        }
+    }
+}
+
+impl<N, V> Reaper<N, V> {
+    /// Wait up to `idle` for a retired view or a wake; top the pool up FIRST (★ 2026-11-14: the
+    /// host unmap is the slow half, and the vCPU waits for nodes, not for releases), then release
+    /// the view. `false` once the pool is gone (every sender dropped).
+    pub fn reap_one(
+        &self,
+        pool: &TrapPool<N, V>,
+        idle: std::time::Duration,
+        release: &impl Fn(V) -> bool,
+        open: &impl Fn() -> Option<N>,
+    ) -> bool {
+        let got = match self.retired.recv_timeout(idle) {
+            Ok(Reap::View(v)) => Some(v),
+            Ok(Reap::Wake) => {
+                pool.wake_queued.store(false, Ordering::Release);
+                None
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => None,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return false,
+        };
+        self.refill(pool, open);
+        if let Some(v) = got {
+            if release(v) {
+                pool.reaped.fetch_add(1, Ordering::Relaxed);
+            } else {
+                pool.reap_refused.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        true
+    }
+
+    /// Top the pool up to its cap (reaper thread only). Opens nothing when it is full; stops at
+    /// the first refused open.
+    pub fn refill(&self, pool: &TrapPool<N, V>, open: &impl Fn() -> Option<N>) {
+        while pool.ready.load(Ordering::Acquire) < self.nodes_cap {
+            let Some(n) = open() else {
+                break;
+            };
+            if self.node_tx.try_send(n).is_err() {
+                break;
+            }
+            pool.ready.fetch_add(1, Ordering::AcqRel);
+        }
+    }
+}
 
 impl TrapNodes {
     /// Open the pool and start the reaper thread.
@@ -637,42 +1077,25 @@ impl TrapNodes {
     /// # Errors
     /// The first `openat` or the thread spawn, by name.
     pub fn start(rm: &'static HostRm, store: u32) -> Result<&'static TrapNodes, String> {
-        let (node_tx, node_rx) = std::sync::mpsc::sync_channel::<CharDevice>(TRAP_NODES);
-        let (retire_tx, retire_rx) = std::sync::mpsc::channel::<StoreView>();
         let open = move || rm.open_view_node(MapNode::Gpu, ViewAccess::ReadWrite);
+        let mut first = Vec::with_capacity(TRAP_NODES);
         for _ in 0..TRAP_NODES {
-            node_tx
-                .try_send(open().map_err(|e| format!("PRAMIN node: {e:?}"))?)
-                .map_err(|e| format!("{e}"))?;
+            first.push(open().map_err(|e| format!("PRAMIN node: {e:?}"))?);
         }
-        let t: &'static TrapNodes = Box::leak(Box::new(TrapNodes {
-            nodes: Mutex::new(node_rx),
-            retire: Mutex::new(retire_tx),
-            inline_opens: AtomicU64::new(0),
-            reaped: AtomicU64::new(0),
-            reap_refused: AtomicU64::new(0),
-        }));
+        let (pool, reaper) = TrapPool::new(first, TRAP_NODES, RETIRE_QUEUE);
+        let t: &'static TrapNodes = Box::leak(Box::new(pool));
+        let release = move |v: StoreView| {
+            let r = rm.release_cpu_view(CpuViewRelease {
+                h_memory: store,
+                p_linear_address: v.cookie,
+            });
+            drop(v.node);
+            r.is_ok()
+        };
+        let open = move || open().ok();
         std::thread::Builder::new()
             .name("kf3-pramin-reaper".into())
-            .spawn(move || {
-                while let Ok(v) = retire_rx.recv() {
-                    let r = rm.release_cpu_view(CpuViewRelease {
-                        h_memory: store,
-                        p_linear_address: v.cookie,
-                    });
-                    drop(v.node);
-                    if r.is_ok() {
-                        t.reaped.fetch_add(1, Ordering::Relaxed);
-                    } else {
-                        t.reap_refused.fetch_add(1, Ordering::Relaxed);
-                    }
-                    while let Ok(n) = open() {
-                        if node_tx.try_send(n).is_err() {
-                            break;
-                        }
-                    }
-                }
-            })
+            .spawn(move || while reaper.reap_one(t, REAPER_IDLE, &release, &open) {})
             .map_err(|e| format!("PRAMIN reaper thread: {e}"))?;
         Ok(t)
     }
@@ -705,7 +1128,7 @@ impl ViewOps for WindowOps {
             .blocks
             .read()
             .ok()
-            .and_then(|v| v.iter().find_map(|b| b.fd))
+            .and_then(|v| v.iter().find_map(|b| b.fd.clone()))
             .ok_or("no fd-backed guest RAM (the VM needs memory-backend-memfd,share=on)")?;
         self.win
             .place(
@@ -758,15 +1181,20 @@ impl ViewOps for WindowOps {
         let Some(t) = self.trap else {
             return self.arm_store(off, len);
         };
-        let node = t.nodes.lock().ok().and_then(|rx| rx.try_recv().ok());
-        let node = match node {
-            Some(n) => n,
-            None => {
-                t.inline_opens.fetch_add(1, Ordering::Relaxed);
-                self.rm
-                    .open_view_node(MapNode::Gpu, ViewAccess::ReadWrite)
-                    .map_err(|e| format!("PRAMIN node (inline): {e:?}"))?
+        // ★ 2026-11-14 (review 1 F-07a): never an `openat` on the vCPU; an empty pool refuses.
+        let Some(node) = t.take_node() else {
+            // ★ 2026-11-14: never silent (see `TrapPool`: the window shows scratch for this move).
+            let n = t.pool_empty.load(Ordering::Relaxed);
+            if crate::reset::loud(n) {
+                eprintln!(
+                    "kf3: PRAMIN window move to store {off:#x}+{len:#x} REFUSED: the node pool \
+                     ({TRAP_NODES}) is empty, the reaper is behind; the window shows scratch until \
+                     the guest's next move (refusal #{n})"
+                );
             }
+            return Err(
+                "PRAMIN node pool empty: the reaper is behind (move refused, counted)".into(),
+            );
         };
         let (node, cookie) = self
             .rm
@@ -775,14 +1203,14 @@ impl ViewOps for WindowOps {
         Ok(StoreView { node, cookie, off })
     }
 
-    /// Hand a replaced view to the reaper (off the vCPU); inline only if the reaper is gone.
+    /// Hand a replaced view to the reaper (off the vCPU); inline only if the reaper is gone or
+    /// (★ 2026-11-14, bounded queue) its queue is full. Never waits.
     fn retire(&self, v: StoreView) {
         let Some(t) = self.trap else {
             let _ = self.release(v);
             return;
         };
-        let sent = t.retire.lock().ok().map(|tx| tx.send(v));
-        if let Some(Err(std::sync::mpsc::SendError(v))) = sent {
+        if let Err(RetireRefused::Full(v) | RetireRefused::Gone(v)) = t.retire(v) {
             let _ = self.release(v);
         }
     }
@@ -1888,6 +2316,23 @@ impl MapTarget for Target {
 /// holding a CUDA context, plus UVM's one kernel view. One more is refused by name.
 pub const BAR1_OVERLAY_SLOTS: usize = 64;
 
+/// ★ 2026-11-14 (security review 2 C-08, the Rust side): the most overlay changes queued to QEMU's
+/// main loop and not yet acknowledged before a NEW install is refused (by name, counted in
+/// [`Bar1Overlay::refused`]). The C queue (`kf3.c` `kf3_bar1_overlay`, `g_new0` per request) has no
+/// cap of its own; guest BAR1 PTE churn (install, unmap, install …) within one VA-thread loop
+/// queued one request per change while the main loop was busy. Removals are never refused: each
+/// belongs to a view an admitted install placed, so they add at most [`BAR1_OVERLAY_SLOTS`], and
+/// refusing one would leave a live trap the tracker had forgotten. 4 × the pool, the bound the
+/// review proposed for the C side.
+pub const BAR1_OVERLAY_INFLIGHT: usize = 4 * BAR1_OVERLAY_SLOTS;
+
+/// ★ 2026-11-14: whether a change may be queued with `inflight` changes unacknowledged: a removal
+/// always, an install only below [`BAR1_OVERLAY_INFLIGHT`].
+#[must_use]
+pub const fn overlay_change_admitted(install: bool, inflight: usize) -> bool {
+    !install || inflight < BAR1_OVERLAY_INFLIGHT
+}
+
 /// ★ The BAR1 overlay verb the C device registered, its pool size, the completions its main-loop
 /// bottom half posts back, and the counters.
 #[derive(Debug)]
@@ -2040,6 +2485,13 @@ impl Bar1Target {
                 v.base, v.len
             ));
         };
+        let inflight = self.inflight.borrow().len();
+        if !overlay_change_admitted(install, inflight) {
+            return Err(format!(
+                "BAR1 doorbell view {:#x}+{:#x}: {inflight} overlay changes still queued to the main loop (cap {BAR1_OVERLAY_INFLIGHT}); install refused",
+                v.base, v.len
+            ));
+        }
         let seq = self.next_seq.get();
         hook.submit(seq, u32::from(install), v.base, v.len, v.vf_rel).map_err(|e| {
             format!("BAR1 doorbell view {:#x}+{:#x}: the C device refused to queue the change (errno {e})", v.base, v.len)
@@ -4757,7 +5209,7 @@ mod memory_list_tests {
             fd_off: 0,
         };
         let ram = Box::leak(Box::new(RamMap::default()));
-        ram.add(block);
+        ram.add(block.test_alias());
         (MemoryListRam(ram), block)
     }
     #[test]
@@ -4798,7 +5250,7 @@ mod memory_list_tests {
             Err(AccessError::Topology)
         );
         ram.0.del(block.gpa);
-        ram.0.add(block);
+        ram.0.add(block.test_alias());
         assert_eq!(
             ram.try_read(span, epoch, 0, &mut bytes),
             Err(AccessError::Topology)
@@ -4821,7 +5273,7 @@ mod memory_list_tests {
         assert!(!ram.read(span, 0, 0, &mut result));
         ram.0.del(block.gpa);
         assert!(!ram.read(span, epoch, 0, &mut result));
-        ram.0.add(block);
+        ram.0.add(block.test_alias());
         assert!(ram.validate(span).is_some());
         assert!(!ram.write(span, epoch, 0, &[1]));
         let current = ram.validate(span).unwrap();
@@ -4853,7 +5305,7 @@ mod memory_list_tests {
         }
         ram.0.add(RamBlock {
             gpa: 0x4000,
-            ..block
+            ..block.test_alias()
         });
         assert!(
             ram.validate(RamSpan {
@@ -4865,7 +5317,7 @@ mod memory_list_tests {
         ram.0.del(0x4000);
         ram.0.add(RamBlock {
             gpa: 0xa000,
-            ..block
+            ..block.test_alias()
         });
         assert!(
             ram.validate(RamSpan {
@@ -4879,7 +5331,7 @@ mod memory_list_tests {
         ram.0.add(RamBlock {
             gpa: 0x20000,
             fd: Some(fd),
-            ..block
+            ..block.test_alias()
         });
         assert!(
             ram.validate(RamSpan {
@@ -4891,7 +5343,7 @@ mod memory_list_tests {
         ram.0.add(RamBlock {
             gpa: 0x2000,
             fd: None,
-            ..block
+            ..block.test_alias()
         });
         assert!(
             ram.validate(RamSpan {
@@ -4910,10 +5362,572 @@ mod memory_list_tests {
         };
         ram.0.generation.store(u64::MAX, Ordering::Relaxed);
         assert_eq!(ram.validate(span), Some(u64::MAX));
-        ram.0.add(block);
+        ram.0.add(block.test_alias());
         assert_eq!(ram.validate(span), None);
         ram.0.del(block.gpa);
-        ram.0.add(block);
+        ram.0.add(block.test_alias());
         assert_eq!(ram.validate(span), None);
+    }
+}
+
+/// ★ 2026-11-14 (security review 2 C-08): the overlay queue's admission.
+#[cfg(test)]
+mod overlay_cap_tests {
+    use super::{BAR1_OVERLAY_INFLIGHT, BAR1_OVERLAY_SLOTS, overlay_change_admitted};
+
+    /// Hostile: BAR1 PTE churn while the main loop is busy. Installs stop at the cap.
+    #[test]
+    fn installs_stop_at_the_inflight_cap() {
+        let admitted = (0..10 * BAR1_OVERLAY_INFLIGHT)
+            .take_while(|n| overlay_change_admitted(true, *n))
+            .count();
+        assert_eq!(admitted, BAR1_OVERLAY_INFLIGHT);
+        assert!(!overlay_change_admitted(true, BAR1_OVERLAY_INFLIGHT));
+        assert!(overlay_change_admitted(true, BAR1_OVERLAY_INFLIGHT - 1));
+    }
+
+    /// A removal is never refused, even past the cap (refusing it would strand a live trap).
+    #[test]
+    fn removals_are_always_admitted() {
+        assert!(overlay_change_admitted(false, BAR1_OVERLAY_INFLIGHT));
+        assert!(overlay_change_admitted(false, usize::MAX));
+        assert!(
+            !overlay_change_admitted(true, usize::MAX),
+            "the same depth refuses an install"
+        );
+        assert_eq!(BAR1_OVERLAY_INFLIGHT, 4 * BAR1_OVERLAY_SLOTS);
+    }
+}
+
+/// ★ 2026-11-14 (security review 1 F-07a = S1-45): the PRAMIN trap pool is bounded and the vCPU
+/// never opens a node. Deterministic: the reaper is driven by hand (no thread, no sleeps).
+#[cfg(test)]
+mod trap_pool_tests {
+    use super::{RetireRefused, TrapPool};
+    use std::cell::Cell;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    const NO_WAIT: Duration = Duration::from_millis(0);
+
+    /// Hostile: a guest moves the window from several vCPUs while the reaper is stalled. Each move
+    /// takes a node; once the pool is empty every further move is refused (counted) and nothing
+    /// was opened: the pool has no open verb, only the reaper does.
+    #[test]
+    fn a_stalled_reaper_empties_the_pool_and_moves_are_refused() {
+        let (pool, _reaper) = TrapPool::<u32, u32>::new(0..4, 4, 8);
+        let taken: Vec<u32> = (0..100).filter_map(|_| pool.take_node()).collect();
+        assert_eq!(
+            taken,
+            [0, 1, 2, 3],
+            "only the pre-opened nodes are handed out"
+        );
+        assert_eq!(pool.pool_empty.load(Ordering::Relaxed), 96);
+        assert_eq!(pool.ready.load(Ordering::Relaxed), 0);
+        // The takes queued ONE wake (coalesced), however many there were.
+        // The movers keep retiring views: the queue of 8 (one place the wake's) holds 7 views,
+        // the eighth is named Full.
+        for v in 0..7 {
+            assert_eq!(pool.retire(v), Ok(()));
+        }
+        assert_eq!(pool.retire(7), Err(RetireRefused::Full(7)));
+        assert_eq!(pool.retire_full.load(Ordering::Relaxed), 1);
+    }
+
+    /// Hostile: views retired faster than the reaper runs. The queue holds at most its bound; past
+    /// it the view comes back for an inline release (counted), and the vCPU never waits.
+    #[test]
+    fn the_retire_queue_is_bounded() {
+        let (pool, _reaper) = TrapPool::<u32, u32>::new(0..4, 4, 3);
+        for v in 0..3 {
+            assert_eq!(pool.retire(v), Ok(()));
+        }
+        assert_eq!(pool.retire(3), Err(RetireRefused::Full(3)));
+        assert_eq!(pool.retire(4), Err(RetireRefused::Full(4)));
+        assert_eq!(pool.retire_full.load(Ordering::Relaxed), 2);
+    }
+
+    /// The reaper releases what was retired and refills the pool to its cap, never past it.
+    #[test]
+    fn the_reaper_releases_and_refills_to_the_cap() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..4, 4, 8);
+        let a = pool.take_node().expect("a node");
+        let b = pool.take_node().expect("a node");
+        assert_eq!(pool.retire(a), Ok(()));
+        assert_eq!(pool.retire(b), Ok(()));
+        let opened = Cell::new(0u32);
+        let open = || {
+            opened.set(opened.get() + 1);
+            Some(100 + opened.get())
+        };
+        let released = Cell::new(0u32);
+        let release = |_v: u32| {
+            released.set(released.get() + 1);
+            true
+        };
+        // The first message is the takes' one coalesced wake: refill, nothing released.
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &open));
+        assert_eq!(
+            opened.get(),
+            2,
+            "the two taken nodes are replaced at once, on the wake"
+        );
+        assert_eq!(released.get(), 0);
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &open));
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &open));
+        assert_eq!(opened.get(), 2, "a full pool opens nothing");
+        assert_eq!(released.get(), 2);
+        assert_eq!(pool.reaped.load(Ordering::Relaxed), 2);
+        assert_eq!(pool.ready.load(Ordering::Relaxed), 4);
+        let mut n = 0;
+        while pool.take_node().is_some() {
+            n += 1;
+        }
+        assert_eq!(n, 4, "the pool never holds more than its cap");
+    }
+
+    /// A refill the host refused heals on the reaper's idle tick, with no view to reap.
+    #[test]
+    fn a_refused_refill_heals_without_a_view() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..1, 1, 2);
+        let n = pool.take_node().expect("the one node");
+        assert_eq!(pool.retire(n), Ok(()));
+        let fail = || None;
+        let release = |_v: u32| false;
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &fail), "the wake");
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &fail), "the view");
+        assert_eq!(pool.reap_refused.load(Ordering::Relaxed), 1);
+        assert!(pool.take_node().is_none(), "the refill was refused");
+        let ok = || Some(7);
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &ok), "idle tick");
+        assert_eq!(pool.take_node(), Some(7));
+    }
+
+    /// ★ 2026-11-14: a take wakes the reaper at once (no 100 ms idle wait, no retired view
+    /// needed), and many takes queue ONE wake.
+    #[test]
+    fn a_take_wakes_the_reaper_once() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..4, 4, 8);
+        for _ in 0..3 {
+            let _ = pool.take_node();
+        }
+        let opened = Cell::new(0u32);
+        let open = || {
+            opened.set(opened.get() + 1);
+            Some(50)
+        };
+        let release = |_v: u32| true;
+        // A long idle would block this test if no wake were queued.
+        assert!(reaper.reap_one(&pool, Duration::from_secs(30), &release, &open));
+        assert_eq!(opened.get(), 3, "the wake refilled all three");
+        assert!(reaper.retired.try_recv().is_err(), "one wake, not three");
+        let _ = pool.take_node();
+        assert!(
+            matches!(reaper.retired.try_recv(), Ok(super::Reap::Wake)),
+            "the next take wakes again"
+        );
+    }
+
+    /// ★ 2026-11-14: the reaper refills BEFORE the (slow) release.
+    #[test]
+    fn the_reaper_refills_before_it_releases() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..1, 1, 4);
+        let n = pool.take_node().expect("node");
+        let _ = reaper.retired.try_recv(); // the take's wake, consumed by hand
+        pool.wake_queued.store(false, Ordering::Release);
+        assert_eq!(pool.retire(n), Ok(()));
+        let release = |_v: u32| {
+            assert_eq!(
+                pool.ready.load(Ordering::Acquire),
+                1,
+                "the pool was refilled first"
+            );
+            true
+        };
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &|| Some(2)));
+        assert_eq!(pool.reaped.load(Ordering::Relaxed), 1);
+    }
+
+    /// A release the host takes long over (here: it panics if a node is still missing) comes
+    /// after the replacement node was opened, also when the wake was lost.
+    #[test]
+    fn a_view_alone_refills_before_its_release() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..2, 2, 4);
+        let n = pool.take_node().expect("node");
+        while reaper.retired.try_recv().is_ok() {} // drop the wake: the view must suffice
+        assert_eq!(pool.retire(n), Ok(()));
+        let opened = Cell::new(0u32);
+        let open = || {
+            opened.set(opened.get() + 1);
+            Some(70)
+        };
+        let release = |_v: u32| {
+            assert_eq!(opened.get(), 1, "the node was replaced before the release");
+            true
+        };
+        assert!(reaper.reap_one(&pool, NO_WAIT, &release, &open));
+        assert_eq!(pool.reaped.load(Ordering::Relaxed), 1);
+    }
+
+    /// An idle tick with a full pool opens nothing (no `openat` churn while the guest is quiet).
+    #[test]
+    fn an_idle_tick_with_a_full_pool_opens_nothing() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..2, 2, 2);
+        let opened = Cell::new(0u32);
+        let open = || {
+            opened.set(opened.get() + 1);
+            Some(9)
+        };
+        for _ in 0..10 {
+            assert!(reaper.reap_one(&pool, NO_WAIT, &|_v: u32| true, &open));
+        }
+        assert_eq!(opened.get(), 0);
+        assert_eq!(pool.ready.load(Ordering::Relaxed), 2);
+    }
+
+    /// `[measured 2026-11-14, RTX 4070 PC, secbatch_20261114 reset lane]` each guest life after a device reset
+    /// made 18 PRAMIN window moves (`pramin_repoints` +18 per life), and on the 4-node pool
+    /// `pramin_pool_empty` rose 0,0,2,2,2,2 per boot: the reaper (one release + one open per
+    /// view, contending for the RM lock with the reset's frees and scrub) fell behind the burst.
+    const MEASURED_LIFE_MOVES: u32 = 18;
+
+    /// The production pool holds the life burst of [`MEASURED_LIFE_MOVES`] with room to spare,
+    /// and the retire queue every view that can then be pending (the pool, the 16 slots' kept
+    /// views, the wake).
+    #[test]
+    fn the_production_sizes_cover_the_life_burst() {
+        let (nodes, queue) = (std::hint::black_box(super::TRAP_NODES), super::RETIRE_QUEUE);
+        assert!(nodes > MEASURED_LIFE_MOVES as usize);
+        assert!(std::hint::black_box(queue) > nodes + 16);
+    }
+
+    /// ★ 2026-11-14 (PC finding on #397): a device reset, then the next life's whole burst of
+    /// window moves back to back while the reaper does not run at all (the worst case of "falls
+    /// behind"). Every move must get a node (a refused move leaves the window on scratch) and
+    /// every replaced view must fit the retire queue.
+    #[test]
+    fn a_life_burst_after_a_reset_is_served_with_a_stalled_reaper() {
+        let (pool, _reaper) = TrapPool::<u32, u32>::new(
+            0..super::TRAP_NODES as u32,
+            super::TRAP_NODES,
+            super::RETIRE_QUEUE,
+        );
+        // The reset sinks the window: its live view is retired.
+        assert_eq!(pool.retire(1000), Ok(()));
+        for i in 0..MEASURED_LIFE_MOVES {
+            assert!(
+                pool.take_node().is_some(),
+                "move {i} after the reset found the pool empty: the window would show scratch"
+            );
+            assert_eq!(
+                pool.retire(i),
+                Ok(()),
+                "the view move {i} replaced must queue"
+            );
+        }
+        assert_eq!(pool.pool_empty.load(Ordering::Relaxed), 0);
+        assert_eq!(pool.retire_full.load(Ordering::Relaxed), 0);
+    }
+
+    /// A gone reaper: views come back for an inline release, and the reaper sees the pool gone.
+    #[test]
+    fn a_gone_reaper_or_pool_is_named() {
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..1, 1, 2);
+        drop(reaper);
+        assert_eq!(pool.retire(1), Err(RetireRefused::Gone(1)));
+        assert_eq!(pool.retire_full.load(Ordering::Relaxed), 0);
+        let (pool, reaper) = TrapPool::<u32, u32>::new(0..1, 1, 2);
+        drop(pool);
+        assert!(!reaper.reap_one(
+            &TrapPool::new(0..0, 1, 1).0,
+            NO_WAIT,
+            &|_v: u32| true,
+            &|| None
+        ));
+    }
+}
+
+/// ★ Security fix C-02 (review 2, 2026-11-13): guest-RAM regions never outlive `kf3_ram_del`.
+/// Each test calls the safe boundary the way a WRONG or hostile caller would and expects a refusal
+/// (or a wait), never a use of freed memory.
+#[cfg(test)]
+mod c02_unplug_tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    const GPA: u64 = 0x1_0000_0000;
+    const FD_OFF: u64 = 0x4000_0000;
+
+    fn ram_with_block(bytes: usize) -> (&'static RamMap, RawRegion) {
+        let ram: &'static RamMap = Box::leak(Box::new(RamMap::default()));
+        let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes);
+        let peer = mem.test_alias();
+        ram.add(RamBlock {
+            gpa: GPA,
+            mem,
+            fd: Some(fd),
+            fd_off: FD_OFF,
+        });
+        (ram, peer)
+    }
+
+    /// Run `f` on another thread; `None` if it has not finished within `wait`.
+    fn within<T: Send + 'static>(
+        wait: Duration,
+        f: impl FnOnce() -> T + Send + 'static,
+    ) -> Option<T> {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(f());
+        });
+        rx.recv_timeout(wait).ok()
+    }
+
+    /// RED on the pre-fix tree (`block_for` handed out a `Copy` block; `del` returned at once while
+    /// the copy was still in use). GREEN: the unplug waits for the outstanding accessor.
+    #[test]
+    fn an_unplug_waits_for_an_outstanding_accessor() {
+        let (ram, _) = ram_with_block(0x2000);
+        let held = ram.block_for(GPA, 4).expect("registered");
+        let (tx, rx) = mpsc::channel();
+        let unplug = std::thread::spawn(move || {
+            ram.del(GPA);
+            let _ = tx.send(());
+        });
+        assert!(
+            rx.recv_timeout(Duration::from_millis(200)).is_err(),
+            "kf3_ram_del returned while a guest-RAM accessor was still alive (use-after-free window)"
+        );
+        // Still the registered memory while the guard lives.
+        assert!(held.mem.write_from(0, &[1, 2, 3, 4]));
+        drop(held);
+        rx.recv_timeout(Duration::from_secs(5))
+            .expect("the unplug completes once the accessor is gone");
+        unplug.join().unwrap();
+        assert!(
+            ram.block_for(GPA, 4).is_none(),
+            "the block is gone after the unplug"
+        );
+    }
+
+    /// After the unplug every accessor refuses (no stale host address survives anywhere).
+    #[test]
+    fn every_accessor_refuses_after_the_unplug() {
+        let (ram, peer) = ram_with_block(0x2000);
+        assert!(peer.write_from(8, &0xfeed_beefu32.to_le_bytes()));
+        assert_eq!(ram.load_u32_file(FD_OFF + 8), Some(0xfeed_beef));
+        let mut b = [0u8; 4];
+        assert!(ram.read_gpa(GPA + 8, &mut b));
+        assert!(ram.covers_file(FD_OFF, 0x200));
+        ram.del(GPA);
+        assert_eq!(ram.load_u32_file(FD_OFF + 8), None);
+        assert!(!ram.store_u32_file(FD_OFF + 8, 1));
+        assert!(!ram.read_file(FD_OFF + 8, &mut b));
+        assert!(!ram.read_gpa(GPA + 8, &mut b));
+        assert!(!ram.write_gpa(GPA + 8, &b));
+        assert!(!ram.covers_file(FD_OFF, 0x200));
+        assert!(ram.block_for(GPA, 4).is_none());
+        assert!(ram.file_range(GPA, 4).is_none());
+        assert!(ram.backing_fd().is_none());
+    }
+
+    /// Hold one guard, queue an unplug behind it, then run `nested` on the SAME thread; `None` if
+    /// that deadlocked (the unplug never finishes either, so the thread is simply abandoned).
+    fn nested_behind_a_queued_unplug<T: Send + 'static>(
+        nested: impl FnOnce(&'static RamMap) -> T + Send + 'static,
+    ) -> Option<T> {
+        let (ram, _) = ram_with_block(0x2000);
+        within(Duration::from_secs(10), move || {
+            let outer = ram.block_for(GPA, 4).expect("registered");
+            let unplug = std::thread::spawn(move || ram.del(GPA));
+            // The unplug is queued once a fresh reader can no longer get in.
+            let t = std::time::Instant::now();
+            while ram.blocks.try_read().is_ok() {
+                assert!(
+                    t.elapsed() < Duration::from_secs(5),
+                    "the unplug never queued"
+                );
+                std::thread::yield_now();
+            }
+            let got = nested(ram);
+            drop(outer);
+            unplug.join().unwrap();
+            got
+        })
+    }
+
+    /// A thread that already holds a guard and asks again while an unplug is queued must REFUSE,
+    /// not self-deadlock behind the writer (`std`'s lock is writer-preferring).
+    #[test]
+    fn a_nested_block_lookup_behind_a_queued_unplug_refuses_instead_of_deadlocking() {
+        let got = nested_behind_a_queued_unplug(|ram| {
+            (
+                ram.block_for(GPA, 4).is_some(),
+                ram.file_range(GPA, 4).is_some(),
+            )
+        });
+        assert_eq!(got, Some((false, false)), "deadlocked (None) or granted");
+    }
+
+    /// As above for the chunked and word accessors.
+    #[test]
+    fn a_nested_copy_behind_a_queued_unplug_refuses_instead_of_deadlocking() {
+        let got = nested_behind_a_queued_unplug(|ram| {
+            let mut b = [0u8; 4];
+            (
+                ram.read_file(FD_OFF, &mut b),
+                ram.load_u32_file(FD_OFF).is_some(),
+                ram.write_gpa(GPA, &b),
+            )
+        });
+        assert_eq!(
+            got,
+            Some((false, false, false)),
+            "deadlocked (None) or granted"
+        );
+    }
+
+    /// Hostile offsets and lengths: past the block, wrapping `u64`, straddling the end — refused,
+    /// nothing copied past the block.
+    #[test]
+    fn hostile_offsets_and_lengths_are_refused() {
+        let (ram, _) = ram_with_block(0x2000);
+        let mut one = [0u8; 1];
+        let mut two = [0u8; 2];
+        assert!(
+            !ram.read_file(FD_OFF + 0x2000, &mut one),
+            "one past the end"
+        );
+        assert!(
+            !ram.read_file(FD_OFF + 0x1fff, &mut two),
+            "straddles the end"
+        );
+        assert!(!ram.read_file(FD_OFF - 1, &mut one), "below the block");
+        assert!(!ram.read_file(u64::MAX, &mut two), "wraps u64");
+        assert!(ram.load_u32_file(u64::MAX - 1).is_none(), "wraps u64");
+        assert!(!ram.store_u32_file(FD_OFF + 0x1ffd, 0), "straddles the end");
+        assert!(!ram.read_gpa(u64::MAX, &mut two), "wraps u64");
+        assert!(!ram.write_gpa(GPA + 0x1fff, &two), "straddles the end");
+        assert!(!ram.covers_file(FD_OFF, 0x2001));
+        assert!(ram.covers_file(FD_OFF, 0x2000));
+        // A chunked copy longer than u64 space past `base` cannot wrap into another block.
+        let mut big = vec![0u8; RAM_COPY_CHUNK + 1];
+        assert!(!ram.read_file(u64::MAX - RAM_COPY_CHUNK as u64 + 1, &mut big));
+        assert!(chunk_at(u64::MAX, 1).is_none());
+        assert_eq!(chunk_at(7, 2), Some(7 + 2 * RAM_COPY_CHUNK as u64));
+    }
+
+    /// A piece offset that would wrap `u64` is refused, never wrapped into low guest memory.
+    #[test]
+    fn chunk_offsets_never_wrap() {
+        let top = u64::MAX - RAM_COPY_CHUNK as u64;
+        assert_eq!(chunk_at(top, 1), Some(u64::MAX));
+        assert_eq!(chunk_at(top + 1, 1), None);
+        assert_eq!(chunk_at(1, usize::MAX), None);
+        assert_eq!(chunk_at(0, 0), Some(0));
+    }
+
+    /// The chunked/word accessors keep the guard across the copy itself: an unplug issued from
+    /// inside the copy closure cannot finish until the copy returns.
+    fn unplug_waits_inside(copy: impl FnOnce(&'static RamMap, &dyn Fn() -> bool) -> bool) {
+        let (ram, _) = ram_with_block(0x2000);
+        let (tx, rx) = mpsc::channel();
+        let rx = std::sync::Mutex::new(rx);
+        let tx = std::sync::Mutex::new(Some(tx));
+        let start_unplug_and_check = || {
+            let tx = tx.lock().unwrap().take().unwrap();
+            std::thread::spawn(move || {
+                ram.del(GPA);
+                let _ = tx.send(());
+            });
+            // Still registered while the copy runs: the unplug must not have completed.
+            rx.lock()
+                .unwrap()
+                .recv_timeout(Duration::from_millis(200))
+                .is_err()
+        };
+        assert!(
+            copy(ram, &start_unplug_and_check),
+            "the unplug completed while a guarded copy was in flight"
+        );
+        rx.lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the unplug completes after the copy");
+    }
+
+    /// Inside every guarded copy the registration lock is held for read: no writer (unplug or
+    /// re-register) can get in while the host address is in use.
+    #[test]
+    fn no_writer_can_enter_while_a_guarded_copy_runs() {
+        let (ram, _) = ram_with_block(0x2000);
+        let file = ram.with_file_span(FD_OFF, 4, |_, _| ram.blocks.try_write().is_err());
+        let gpa = ram.with_gpa_span(GPA, 4, |_, _| ram.blocks.try_write().is_err());
+        assert_eq!((file, gpa), (Some(true), Some(true)));
+        assert!(ram.blocks.try_write().is_ok(), "released after the copy");
+    }
+
+    #[test]
+    fn an_unplug_waits_for_an_in_flight_file_offset_copy() {
+        unplug_waits_inside(|ram, during| {
+            ram.with_file_span(FD_OFF, 4, |m, at| {
+                let waited = during();
+                waited && m.store_u32(at, 5)
+            })
+            .unwrap_or(false)
+        });
+    }
+
+    #[test]
+    fn an_unplug_waits_for_an_in_flight_guest_physical_copy() {
+        unplug_waits_inside(|ram, during| {
+            ram.with_gpa_span(GPA, 4, |m, at| {
+                let waited = during();
+                waited && m.store_u32(at, 6)
+            })
+            .unwrap_or(false)
+        });
+    }
+
+    /// Valid copies are byte-exact across chunk boundaries (behaviour unchanged for valid input).
+    #[test]
+    fn chunked_copies_are_exact_across_piece_boundaries() {
+        let n = 3 * RAM_COPY_CHUNK + 17;
+        let (ram, peer) = ram_with_block(n + 64);
+        let pattern: Vec<u8> = (0..n).map(|i| (i * 7 + 3) as u8).collect();
+        assert!(ram.write_gpa(GPA + 5, &pattern));
+        let mut back = vec![0u8; n];
+        assert!(ram.read_file(FD_OFF + 5, &mut back));
+        assert_eq!(back, pattern);
+        let mut via_gpa = vec![0u8; n];
+        assert!(ram.read_gpa(GPA + 5, &mut via_gpa));
+        assert_eq!(via_gpa, pattern);
+        let mut direct = vec![0u8; n];
+        assert!(peer.read_into(5, &mut direct));
+        assert_eq!(direct, pattern);
+        assert!(ram.store_u32_file(FD_OFF + 4, 0x0102_0304));
+        assert_eq!(ram.load_u32_file(FD_OFF + 4), Some(0x0102_0304));
+        assert_eq!(ram.file_range(GPA + 9, 4).map(|(_, o)| o), Some(FD_OFF + 9));
+    }
+
+    /// The guard count returns to zero on every path (a leak would turn later reads into
+    /// `try_read`s that refuse under contention).
+    #[test]
+    fn the_thread_guard_count_is_balanced() {
+        let (ram, _) = ram_with_block(0x2000);
+        assert_eq!(RAM_GUARDS_HELD.get(), 0);
+        {
+            let a = ram.block_for(GPA, 4);
+            assert!(a.is_some());
+            assert_eq!(RAM_GUARDS_HELD.get(), 1);
+            let mut b = [0u8; 4];
+            assert!(ram.read_file(FD_OFF, &mut b));
+            assert_eq!(RAM_GUARDS_HELD.get(), 1);
+        }
+        assert!(ram.block_for(u64::MAX, 4).is_none());
+        let mut b = [0u8; 4];
+        assert!(!ram.read_file(0, &mut b));
+        assert_eq!(RAM_GUARDS_HELD.get(), 0);
     }
 }

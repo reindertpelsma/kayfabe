@@ -1,13 +1,14 @@
 // Mutation check for the evidence route (src/evidence.js, and its wiring in src/index.js and
-// src/routes.js), GPU-free. Each mutant is applied in place (one or more exact-once replacements),
+// src/routes.js), GPU-free. Each mutant is applied in a temporary copy (one or more exact-once replacements),
 // test/evidence.test.js runs, and every file is restored before the next mutant (also on error).
 // Every mutant must make at least TWO named tests fail. Run with no other test running here:
 //   node ci/vast-broker/evidence-mutants.mjs [name ...]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { tempCopy } from './mutant-copy.mjs';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
+// Every edit is made in a temporary COPY of the tree (mutant-copy.mjs), never in the checkout.
+const here = tempCopy();
 const TESTS = [here + 'test/evidence.test.js'];
 const E = 'src/evidence.js',
   I = 'src/index.js',

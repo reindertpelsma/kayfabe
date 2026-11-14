@@ -22,7 +22,8 @@ import sys
 CRATE = Path(__file__).resolve().parents[1]
 ROOT = CRATE.parents[1]
 
-# (name, file relative to crates/kf-cuda/src, anchor, replacement)
+# (name, file relative to crates/kf-cuda/src, anchor, replacement). ★ 2026-11-14: a file written
+# `<crate>:<path>` (e.g. `kf-disp:scanout.rs`) is under crates/<crate>/src, and that crate's tests run.
 MUTANTS = [
     # ── D-03: the frame a kernel writes is bounded by the allocation (display.rs) ──
     (
@@ -250,6 +251,62 @@ MUTANTS = [
         "            .store(true, core::sync::atomic::Ordering::Release);",
         "            .store(false, core::sync::atomic::Ordering::Release);",
     ),
+    # ── F-6 / D-09: packed 4:2:2 rows are bounded in whole macropixels (2026-11-14) ──
+    (
+        "f6-launch-check-counts-luma-bytes",
+        "display.rs",
+        "            _ => (x_end.div_ceil(2) * 4, 0),",
+        "            _ => (x_end * 2, 0),",
+    ),
+    (
+        "f6-planner-counts-luma-bytes",
+        "kf-disp:scanout.rs",
+        "            YUV_PACKED_YUYV | YUV_PACKED_UYVY => x_end.div_ceil(2) * 4,",
+        "            YUV_PACKED_YUYV | YUV_PACKED_UYVY => x_end * 2,",
+    ),
+    # ── S1-69: Report::validate checks what the .cu's kf_validate_report checks (2026-11-14) ──
+    (
+        "s169-version-unchecked",
+        "walk.rs",
+        "        if h.version != crate::abi::KFWR_VERSION {",
+        "        if false {",
+    ),
+    (
+        "s169-page-size-table-unchecked",
+        "walk.rs",
+        "        if h.ps_log2.iter().any(|&l| !(12..=40).contains(&l)) {",
+        "        if h.ps_log2.iter().any(|&l| l > 63) {",
+    ),
+    (
+        "s169-sample-count-unchecked",
+        "walk.rs",
+        "        if h.sample_count as usize > crate::abi::KF_REFUSAL_SAMPLES {",
+        "        if false {",
+    ),
+    (
+        "s169-op-unchecked",
+        "walk.rs",
+        "                crate::abi::KFWR_OP_MAP | KFWR_OP_UNMAP | crate::abi::KFWR_OP_REMAP",
+        "                _",
+    ),
+    (
+        "s169-page-size-code-aliased",
+        "walk.rs",
+        "            let Some(&log2) = h.ps_log2.get(usize::from(code)) else {",
+        "            let Some(&log2) = h.ps_log2.get(usize::from(code) & 3) else {",
+    ),
+    (
+        "s169-alignment-unchecked",
+        "walk.rs",
+        "                if let Some(value) = value.filter(|v| v % page != 0) {",
+        "                if let Some(value) = value.filter(|_| false) {",
+    ),
+    (
+        "s169-unmap-gpga-checked",
+        "walk.rs",
+        "            let gpga = (r.op != KFWR_OP_UNMAP).then_some(r.gpga);",
+        "            let gpga = Some(r.gpga);",
+    ),
     # ── D-08: field lists ──
     (
         "d08-a-field-missing-from-the-list",
@@ -263,11 +320,18 @@ FAILED = re.compile(r"^test (\S+) \.\.\. FAILED$", re.M)
 PANIC_FAILED = re.compile(r"^---- (\S+) stdout ----$", re.M)
 
 
-def run_tests():
+def locate(rel):
+    """(crate, path) of a mutant's file: `<crate>:<file>` or a kf-cuda file."""
+    crate, _, f = rel.rpartition(":")
+    crate = crate or "kf-cuda"
+    return crate, ROOT / "crates" / crate / "src" / f
+
+
+def run_tests(crate="kf-cuda"):
     env = dict(os.environ)
     env.setdefault("CARGO_TARGET_DIR", str(ROOT / "target"))
     p = subprocess.run(
-        ["cargo", "test", "-q", "-p", "kf-cuda", "--lib", "--tests", "--no-fail-fast"],
+        ["cargo", "test", "-q", "-p", crate, "--lib", "--tests", "--no-fail-fast"],
         cwd=ROOT,
         env=env,
         capture_output=True,
@@ -281,16 +345,17 @@ def run_tests():
 
 def main():
     only = sys.argv[1] if len(sys.argv) > 1 else ""
-    rc, compiled, failed, out = run_tests()
-    if rc != 0 or not compiled or failed:
-        print(out[-4000:])
-        print("BASELINE IS RED: refuse to judge mutants")
-        return 2
+    for crate in sorted({locate(m[1])[0] for m in MUTANTS if only in m[0]}):
+        rc, compiled, failed, out = run_tests(crate)
+        if rc != 0 or not compiled or failed:
+            print(out[-4000:])
+            print(f"BASELINE IS RED ({crate}): refuse to judge mutants")
+            return 2
     bad = 0
     for name, rel, anchor, repl in MUTANTS:
         if only and only not in name:
             continue
-        path = CRATE / "src" / rel
+        crate, path = locate(rel)
         orig = path.read_bytes()
         text = orig.decode()
         n = text.count(anchor)
@@ -300,7 +365,7 @@ def main():
             continue
         try:
             path.write_text(text.replace(anchor, repl))
-            rc, compiled, failed, out = run_tests()
+            rc, compiled, failed, out = run_tests(crate)
         finally:
             path.write_bytes(orig)
         assert path.read_bytes() == orig, f"{rel} was not restored"

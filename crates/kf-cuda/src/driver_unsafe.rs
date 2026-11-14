@@ -3840,21 +3840,34 @@ mod perimeter_tests {
 
     #[test]
     fn d07_a_queued_signal_keeps_the_fd_open_after_its_owner_dropped_it() {
+        // ⊘ 2026-11-14: deterministic. The first version looked the fd NUMBER up in /proc after
+        // the close, and a parallel test's new eventfd could take the same number (flaky 3/30).
+        // Now the eventfd OBJECT is observed: a `Weak` to the shared `OwnedFd` (alive exactly while
+        // a reference exists) and a dup of the descriptor (same open file description), which must
+        // receive the queued signal however the fd numbers are reused meanwhile.
+        use std::io::Read;
         let (mut cu, _ctx) = up();
         cu.cuLaunchHostFunc = fake::deferred_hostfn;
         let s = cu.stream_create().unwrap();
         let fd = CompletionFd::new().unwrap();
-        let n = fd.raw();
-        let link = || std::fs::read_link(format!("/proc/self/fd/{n}"));
+        let alive = Arc::downgrade(&fd.fd);
+        let mut witness = std::fs::File::from(fd.fd.try_clone().expect("dup the eventfd"));
         cu.launch_host_signal(&s, &fd).unwrap();
         drop(fd);
-        let target = link().expect("the fd must stay open while a signal is queued");
-        assert!(target.to_string_lossy().contains("eventfd"), "{target:?}");
+        assert!(
+            alive.upgrade().is_some(),
+            "the queued signal holds the fd open after its owner dropped it"
+        );
         fake::run_deferred();
         assert!(
-            link().map_or(true, |t| !t.to_string_lossy().contains("eventfd")),
+            alive.upgrade().is_none(),
             "the last reference (the callback's) closed it"
         );
+        let mut v = [0u8; 8];
+        witness
+            .read_exact(&mut v)
+            .expect("the signal reached THIS eventfd, not a reused fd number");
+        assert_eq!(u64::from_ne_bytes(v), 1);
     }
 
     #[test]

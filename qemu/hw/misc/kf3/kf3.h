@@ -70,7 +70,11 @@
 /* 30 (2026-10-15, claude/perf-fix-20261015, docs/design/V3_WINDOWS_PERF_20261015.md): kf3_realize gains
  * user_view_keep (the user-view-keep property: CPU views of the store each USER-ring channel keeps armed;
  * 0 = the default, 16) after channel_budget. */
-#define KF3_ABI 30
+/* 32 (2026-11-13, claude/secfix-raw-frame-20261113, security review 2 C-04/D-06 = S1-03): Kf3Frame
+ * gains `len` (bytes readable at `data`) after `serial`; kf3_display_frame refuses a frame whose
+ * geometry does not fit it, and kf3.c checks it again (kf3_frame_fits). 31 is taken by unmerged
+ * branches (claude/guestmem-*-20261031, integration/beta-candidate-1, codex/perf-parity). */
+#define KF3_ABI 32
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -90,11 +94,14 @@ typedef struct Kf3Region {
 } Kf3Region;
 
 /* ★ ABI 10 (v3-display2's 9): one frame of the virtual display (display=on). `data` stays valid and unwritten until
- * the next kf3_display_frame call. format: 1 xrgb8888, 2 xbgr8888, 3 rgb565, 4 x2rgb10, 5 x2bgr10. */
+ * the next kf3_display_frame call. format: 1 xrgb8888, 2 xbgr8888, 3 rgb565, 4 x2rgb10, 5 x2bgr10.
+ * ★ ABI 32 (C-04): `len` = bytes readable at `data`; (height-1)*stride + width*bpp <= len, checked by
+ * both sides. */
 typedef struct Kf3Frame {
     uint8_t* data;   /* (spelled for the wire-mirror census) */
     uint32_t width, height, stride, format;
     uint64_t serial;
+    uint64_t len;
 } Kf3Frame;
 
 /* ★ ABI 23 (OWNER_RULINGS.md sec. V, docs/design/V3_DISPLAY.md sec. 8.20): one pointing device the

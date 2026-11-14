@@ -116,6 +116,19 @@ impl YuvFormat {
             _ => 2,
         }
     }
+    /// ★ 2026-11-14 (security review 3 F-6 / review 2 D-09): the bytes of one plane-0 row the
+    /// kernel may read for luma columns `[0, x_end)`. Semi-planar: `x_end` luma samples. Packed
+    /// 4:2:2: whole 4-byte macropixels, `x_end.div_ceil(2) * 4` — the chroma of the last luma
+    /// pixel is in the second half of its macropixel, so with an odd `x_end` the kernel's chroma
+    /// read reaches 2 bytes past `x_end * 2`. ⊘ Was `x_end * 2` for every layout, which let that
+    /// read leave the checked extent (and the context DMA) by up to 2 bytes.
+    #[must_use]
+    pub fn plane0_row_bytes(self, x_end: u64) -> u64 {
+        match self.layout {
+            YUV_PACKED_YUYV | YUV_PACKED_UYVY => x_end.div_ceil(2) * 4,
+            _ => x_end * self.luma_bytes(),
+        }
+    }
     /// Bytes per chroma pair in plane 1 (0: packed, no plane 1).
     #[must_use]
     pub fn chroma_bytes(self) -> u64 {
@@ -813,8 +826,7 @@ pub fn plan_yuv(
                  dma: &CtxDma,
                  base: u64,
                  pitch_units: u32,
-                 bytes_per_px: u64,
-                 x_end: u64,
+                 row_bytes: u64,
                  y_end: u64|
      -> Result<(u64, u64, u32), String> {
         if dma.block_linear {
@@ -825,10 +837,9 @@ pub fn plan_yuv(
                 ));
             }
             let gobs = u64::from(pitch_units);
-            if gobs == 0 || x_end * bytes_per_px > gobs * 64 {
+            if gobs == 0 || row_bytes > gobs * 64 {
                 return Err(format!(
-                    "{plane}: {} bytes leave the {gobs}-GOB-wide surface",
-                    x_end * bytes_per_px
+                    "{plane}: {row_bytes} bytes leave the {gobs}-GOB-wide surface"
                 ));
             }
             let block_rows = y_end.div_ceil(8u64 << bh);
@@ -842,13 +853,12 @@ pub fn plan_yuv(
             Ok((src, extent, pitch_units))
         } else {
             let pitch = u64::from(pitch_units) * 64;
-            if x_end * bytes_per_px > pitch {
+            if row_bytes > pitch {
                 return Err(format!(
-                    "{plane}: a {}-byte row is wider than the {pitch}-byte pitch",
-                    x_end * bytes_per_px
+                    "{plane}: a {row_bytes}-byte row is wider than the {pitch}-byte pitch"
                 ));
             }
-            let extent = (y_end - 1) * pitch + x_end * bytes_per_px;
+            let extent = (y_end - 1) * pitch + row_bytes;
             let src = dma.span(base, extent).ok_or_else(|| {
                 format!(
                     "{plane}: [{base:#x}, +{extent:#x}) leaves context DMA {:#x}..={:#x}",
@@ -867,8 +877,7 @@ pub fn plan_yuv(
         y_dma,
         s.offset,
         s.pitch,
-        f.luma_bytes(),
-        x_end,
+        f.plane0_row_bytes(x_end),
         y_end,
     )
     .map_err(refuse)?;
@@ -929,8 +938,7 @@ pub fn plan_yuv(
         c_dma,
         chroma_off,
         s.pitch1,
-        f.chroma_bytes(),
-        cx_end,
+        cx_end * f.chroma_bytes(),
         cy_end,
     )
     .map_err(refuse)?;
@@ -2361,6 +2369,107 @@ mod tests {
             .is_err()
         );
         assert!(plan_yuv(&Scanout { pitch: 11, ..sb }, yf, &bl, &bl, 1920, 1080).is_err());
+    }
+
+    /// ★ 2026-11-14 (security review 3 F-6, review 2 D-09): a packed 4:2:2 window whose right
+    /// edge `x + width` is ODD. The kernel reads the last pixel's chroma from the second half of
+    /// its 4-byte macropixel, 2 bytes past `x_end * 2`. The plan's extent covers whole macropixels
+    /// and a context DMA that ends at `x_end * 2` is refused (the review's model example: x 37,
+    /// width 32, y 11, height 4, 256-byte pitch). ⊘ RED before: the extent was `14 * 256 + 138`.
+    #[test]
+    fn a_packed_window_with_an_odd_right_edge_is_bounded_in_whole_macropixels() {
+        let f = formats();
+        let t = crate::class::for_version("580.159.04").unwrap();
+        for name in [
+            "SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422",
+            "SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422",
+        ] {
+            let code = t.v(0xC67E, name).unwrap();
+            let yf = f.yuv_of(code).unwrap();
+            assert_eq!(yf.plane0_row_bytes(69), 140, "{name}: 35 macropixels");
+            assert_eq!(yf.plane0_row_bytes(68), 136, "{name}: even edge unchanged");
+            let s = Scanout {
+                window: 4,
+                format: code,
+                x: 37,
+                y: 11,
+                width: 32,
+                height: 4,
+                surface_width: 128,
+                surface_height: 16,
+                pitch: 256 / 64,
+                offset: 0,
+                out_x: 0,
+                out_y: 0,
+                out_width: 0,
+                out_height: 0,
+                ..fb1080()
+            };
+            let roomy = vid(0x4000_0000, 1 << 20);
+            let p = plan_yuv(&s, yf, &roomy, &roomy, 1920, 1080)
+                .unwrap()
+                .unwrap();
+            assert_eq!(p.y_extent, 14 * 256 + 140, "{name}");
+            assert_eq!(p.c_extent, p.y_extent, "{name}: one plane");
+            // a context DMA that ends where the old `x_end * 2` formula ended is refused
+            let tight = vid(0x4000_0000, 14 * 256 + 138);
+            assert!(
+                plan_yuv(&s, yf, &tight, &tight, 1920, 1080).is_err(),
+                "{name}: the last chroma byte is outside the context DMA"
+            );
+            let exact = vid(0x4000_0000, p.y_extent);
+            assert!(plan_yuv(&s, yf, &exact, &exact, 1920, 1080).is_ok());
+        }
+    }
+
+    /// ★ F-6 / D-09, the reference half: `yuv_reference` (the kernel's CPU model) handed EXACTLY
+    /// the plan's extent of bytes for an odd-edged packed window reads inside it, nearest and
+    /// bilinear. ⊘ RED before: the plan's extent stopped 2 bytes short and the reference refused
+    /// its own last chroma read.
+    #[test]
+    fn the_yuv_reference_of_an_odd_packed_window_reads_inside_the_planned_extent() {
+        let f = formats();
+        let t = crate::class::for_version("580.159.04").unwrap();
+        for name in [
+            "SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422",
+            "SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422",
+        ] {
+            let code = t.v(0xC67E, name).unwrap();
+            let yf = f.yuv_of(code).unwrap();
+            let s = Scanout {
+                window: 4,
+                format: code,
+                x: 37,
+                y: 11,
+                width: 32,
+                height: 4,
+                surface_width: 128,
+                surface_height: 16,
+                pitch: 256 / 64,
+                offset: 0,
+                out_x: 0,
+                out_y: 0,
+                out_width: 0,
+                out_height: 0,
+                ..fb1080()
+            };
+            let roomy = vid(0x4000_0000, 1 << 20);
+            let p = plan_yuv(&s, yf, &roomy, &roomy, 1920, 1080)
+                .unwrap()
+                .unwrap();
+            let bytes: Vec<u8> = (0..p.y_extent).map(|i| (i * 7 + 3) as u8).collect();
+            let mut frame = vec![0u8; 64 * 8 * 4];
+            for filter in [0, 1] {
+                let pl = YuvPlan {
+                    filter,
+                    dw: if filter == 0 { 32 } else { 61 },
+                    dh: if filter == 0 { 4 } else { 7 },
+                    ..p
+                };
+                yuv_reference(&pl, &bytes, &bytes, &mut frame, 64, 8)
+                    .unwrap_or_else(|e| panic!("{name} filter {filter}: {e:?}"));
+            }
+        }
     }
 
     fn vid(base: u64, bytes: u64) -> CtxDma {

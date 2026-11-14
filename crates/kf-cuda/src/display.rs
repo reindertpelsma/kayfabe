@@ -595,28 +595,33 @@ impl YuvLayer {
             x_end.div_ceil(1 << l.sub_x_log2),
             y_end.div_ceil(1 << l.sub_y_log2),
         );
-        let need = |pitch: u32, bpp: u64, xe: u64, ye: u64| -> Result<u64, String> {
+        // `row`: the bytes of one row the kernel may read (whole macropixels for packed 4:2:2)
+        let need = |pitch: u32, row: u64, ye: u64| -> Result<u64, String> {
             if l.block_linear {
-                if l.block_height_log2 > 5 || xe * bpp > u64::from(pitch) * 64 || pitch == 0 {
+                if l.block_height_log2 > 5 || row > u64::from(pitch) * 64 || pitch == 0 {
                     return Err(format!("{l:?}: the row leaves the surface's GOB columns"));
                 }
                 Ok(ye.div_ceil(8u64 << l.block_height_log2)
                     * u64::from(pitch)
                     * (512u64 << l.block_height_log2))
             } else {
-                if xe * bpp > u64::from(pitch) {
+                if row > u64::from(pitch) {
                     return Err(format!("{l:?}: a row is wider than the pitch"));
                 }
-                Ok((ye - 1) * u64::from(pitch) + xe * bpp)
+                Ok((ye - 1) * u64::from(pitch) + row)
             }
         };
-        let (luma_bytes, chroma_bytes) = match l.layout {
-            0 => (1, 2),
-            1 => (2, 4),
-            _ => (2, 0),
+        // ★ 2026-11-14 (security review 3 F-6 / review 2 D-09): a packed 4:2:2 row is read in whole
+        // 4-byte macropixels — the last luma pixel's chroma is the second half of its macropixel, so
+        // an odd `x_end` reads 2 bytes past `x_end * 2`. ⊘ Was `x_end * 2`. Same formula as
+        // `kf_disp::scanout::YuvFormat::plane0_row_bytes`, re-derived here on purpose.
+        let (luma_row, chroma_bytes) = match l.layout {
+            0 => (x_end, 2),
+            1 => (x_end * 2, 4),
+            _ => (x_end.div_ceil(2) * 4, 0),
         };
-        if need(l.y_pitch, luma_bytes, x_end, y_end)? > l.y_extent
-            || (chroma_bytes != 0 && need(l.c_pitch, chroma_bytes, cx_end, cy_end)? > l.c_extent)
+        if need(l.y_pitch, luma_row, y_end)? > l.y_extent
+            || (chroma_bytes != 0 && need(l.c_pitch, cx_end * chroma_bytes, cy_end)? > l.c_extent)
         {
             return Err(format!(
                 "{l:?}: the planes need more bytes than their extents"
@@ -2325,6 +2330,69 @@ mod tests {
         }
     }
 
+    /// ★ 2026-11-14 (security review 3 F-6, review 2 D-09): a packed 4:2:2 window with an ODD right
+    /// edge reads the last pixel's chroma 2 bytes past `x_end * 2` (the second half of its 4-byte
+    /// macropixel). The launch check counts whole macropixels: an extent that ends at `x_end * 2`
+    /// is refused, one that ends at `x_end.div_ceil(2) * 4` is accepted; an even edge is unchanged.
+    #[test]
+    fn a_packed_yuv_launch_with_an_odd_right_edge_is_bounded_in_whole_macropixels() {
+        for layout in [2, 3] {
+            // the review's model example: x 37, width 32 (x_end 69), y 11, height 4, pitch 256
+            let odd = YuvLayer {
+                y_src: 0,
+                y_extent: 14 * 256 + 140,
+                c_src: 0,
+                c_extent: 14 * 256 + 140,
+                block_linear: false,
+                y_pitch: 256,
+                c_pitch: 256,
+                block_height_log2: 0,
+                sx0: 37,
+                sy0: 11,
+                sw: 32,
+                sh: 4,
+                ox: 0,
+                oy: 0,
+                dw: 32,
+                dh: 4,
+                sub_x_log2: 1,
+                sub_y_log2: 0,
+                vu_first: false,
+                layout,
+                filter: 0,
+                fmt: [0; 12],
+            };
+            assert_eq!(
+                odd.check(64, 8),
+                Ok(()),
+                "layout {layout}: whole macropixels"
+            );
+            for short in [14 * 256 + 138, 14 * 256 + 139] {
+                assert!(
+                    YuvLayer {
+                        y_extent: short,
+                        c_extent: short,
+                        ..odd
+                    }
+                    .check(64, 8)
+                    .is_err(),
+                    "layout {layout}: extent {short:#x} stops inside the last macropixel"
+                );
+            }
+            // an even right edge (x_end 68) needs exactly x_end * 2 bytes, as before
+            let even = YuvLayer {
+                sw: 31,
+                dw: 31,
+                y_extent: 14 * 256 + 136,
+                c_extent: 14 * 256 + 136,
+                ..odd
+            };
+            assert_eq!(even.check(64, 8), Ok(()), "layout {layout}: even edge");
+            // ⊘ block-linear is unaffected: its extent is whole GOB rows, and with a GOB a
+            // multiple of 4 bytes an odd `x_end * 2` and its macropixel end share a GOB column
+        }
+    }
+
     /// The YUV launch is bounded before it is queued, independently of the planner.
     #[test]
     fn a_yuv_launch_is_bounded_before_it_is_queued() {
@@ -2776,6 +2844,46 @@ mod fake_driver_tests {
             "the old row buffer is still a copy target"
         );
         fake::succeed_all();
+    }
+
+    /// ★ F-6 / D-09 through the real launch path: an odd-edged packed window whose extent stops at
+    /// `x_end * 2` is refused before anything is queued (compose and colour); the whole-macropixel
+    /// extent launches.
+    #[test]
+    fn f6_an_odd_packed_window_is_refused_before_the_launch_unless_whole_macropixels_fit() {
+        let mut g = gpu();
+        g.compose_begin(64, 8).unwrap();
+        g.color_begin(64, 8).unwrap();
+        for layout in [2, 3] {
+            let odd = YuvLayer {
+                y_extent: 14 * 256 + 140,
+                c_extent: 14 * 256 + 140,
+                y_pitch: 256,
+                c_pitch: 256,
+                c_src: 0,
+                sx0: 37,
+                sy0: 11,
+                sw: 32,
+                sh: 4,
+                dw: 32,
+                dh: 4,
+                sub_y_log2: 0,
+                layout,
+                ..yuv(64, 8)
+            };
+            let short = YuvLayer {
+                y_extent: 14 * 256 + 138,
+                c_extent: 14 * 256 + 138,
+                ..odd
+            };
+            let _ = fake::calls();
+            assert!(g.compose_yuv(&short, 64, 8).is_err(), "layout {layout}");
+            assert!(g.color_yuv(&short, 64, 8).is_err(), "layout {layout}");
+            assert_eq!(fake::launches(), 0, "{:?}", fake::calls());
+            g.compose_yuv(&odd, 64, 8).unwrap();
+            g.color_yuv(&odd, 64, 8).unwrap();
+            assert_eq!(fake::launches(), 2, "layout {layout}");
+        }
     }
 
     #[test]

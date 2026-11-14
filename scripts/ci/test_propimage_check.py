@@ -5,6 +5,7 @@
 import importlib.util
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -12,7 +13,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-SRC = Path(__file__).resolve().parents[2] / "scripts/bench/windows/propimage_check.py"
+SRC = Path(
+    os.environ.get("KF_PROPIMAGE_CHECK_UNDER_TEST")  # red-then-green: point at the pre-fix module
+    or Path(__file__).resolve().parents[2] / "scripts/bench/windows/propimage_check.py"
+)
 spec = importlib.util.spec_from_file_location("fixture_propimage_check", SRC)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
@@ -172,9 +176,9 @@ class T(unittest.TestCase):
 
     def test_no_check_signs_in_or_types_credentials(self):
         for n in m.CHECKS:
-            self.assertNotRegex(
-                m.render_check(n), r"(?i)password|sendkeys|Invoke-WebRequest|Invoke-RestMethod"
-            )
+            # Resolve alone types a project name (keyboard tier, UIA found the dialog); nothing types a secret.
+            banned = r"(?i)password|Invoke-WebRequest|Invoke-RestMethod" + ("" if n == "resolve" else r"|sendkeys")
+            self.assertNotRegex(m.render_check(n), banned)
 
     def test_task_is_interactive(self):
         self.assertIn("-LogonType Interactive", m.task_wrapper("x"))
@@ -350,8 +354,9 @@ class T(unittest.TestCase):
     def test_age_allows_within_budget(self):
         self.assertFalse(m.boot_age_guard(100, 900))
 
-    def test_experiment_off_by_default(self):
-        self.assertNotIn("--force-renderer-accessibility", m.render_check("3dmark"))
+    def test_3dmark_accessibility_flag_is_required_not_an_experiment(self):
+        # Measured 2026-11-14: with the flag the CEF UI exposes 163 named UIA elements within 60 s.
+        self.assertIn("--force-renderer-accessibility", m.render_check("3dmark"))
 
     def test_experiment_explicit(self):
         self.assertIn(
@@ -369,10 +374,33 @@ class T(unittest.TestCase):
     def test_other_process_1074_again(self):
         self.assertIsNone(m.classify_shutdown([{"event_id": 1074, "process": "winlogon.exe"}]))
 
+    @staticmethod
+    def sp_log(
+        running="17:53:02",
+        stopped="17:53:12",
+        gpu="NVIDIA GeForce RTX 4070 32.0.15.8088 x1",
+        desc="NVIDIA GeForce RTX 4070",
+        extra="",
+    ):
+        """Shape of the real Superposition 1.1 log.html measured on the PC 2026-11-14 (no score, no FPS)."""
+        lines = [
+            '<div class="e">17:52:43 Can\'t initialize OpenAL. Install driver for your sound card.</div>',
+            f'<div class="m">17:52:44 GPU: {gpu}</div>',
+            f'<div class="m">17:52:44 Direct3D11 desc: {desc}</div>',
+            '<div class="m">17:52:46 Preset: 1 (Medium)</div>',
+        ]
+        if running:
+            lines.append(f'<div class="m">{running} Benchmark running</div>')
+        if stopped:
+            lines.append(f'<div class="m">{stopped} Benchmark stopped</div>')
+        if extra:
+            lines.append(extra)
+        return ("<html><body>" + "\n".join(lines) + "</body></html>").encode()
+
     def superposition(self, **changes):
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
-            log = b"<html>Benchmark running<br/>Benchmark stopped</html>"
+            log = self.sp_log()
             (d / "log.html").write_bytes(log)
             (d / "before.png").write_bytes(b"\x89PNG\r\n\x1a\nbefore")
             (d / "result.png").write_bytes(b"\x89PNG\r\n\x1a\nafter")
@@ -386,7 +414,10 @@ class T(unittest.TestCase):
                     if key == "log.html":
                         record["bytes"] = len(value)
                 elif key == "screen.txt":
-                    (d / key).write_text(value)
+                    if value is None:
+                        (d / key).unlink()
+                    else:
+                        (d / key).write_text(value)
                 else:
                     record[key] = value
             (d / "result.json").write_text(json.dumps(record))
@@ -403,11 +434,40 @@ class T(unittest.TestCase):
     def test_superposition_equal_start_log(self):
         self.assertFalse(self.superposition(modified=100)["ok"])
 
-    def test_superposition_no_result_score(self):
-        self.assertFalse(self.superposition(**{"screen.txt": "launcher FPS"})["ok"])
+    def test_superposition_verdict_comes_from_the_file_not_the_ocr(self):
+        # Measured 2026-11-14: tesseract returned noise ("eum aideit idils piles") for a real, clean
+        # result screen of a completed run. The log is the verdict; unreadable OCR cannot veto it.
+        garbage = "eum aideit\nidils piles\n@ SUPERPOSITION a mae\n9 BENCHMARK"
+        row = self.superposition(**{"screen.txt": garbage})
+        self.assertTrue(row["ok"], row)
+        self.assertEqual(row["evidence"], "FILE")
+        self.assertIn("GeForce RTX 4070", row["signal"])
+        self.assertIn("10 s", row["signal"])
 
-    def test_superposition_no_fps(self):
-        self.assertFalse(self.superposition(**{"screen.txt": "Score 7685"})["ok"])
+    def test_superposition_without_ocr_still_file_verdict(self):
+        row = self.superposition(**{"screen.txt": None})
+        self.assertTrue(row["ok"], row)
+        self.assertIn("score and FPS are not in the log file", row["signal"])
+
+    def test_superposition_readable_screen_values_are_reported_not_required(self):
+        row = self.superposition(**{"screen.txt": "Score 7996 FPS: Min 36.59, Avg 59.81, Max 61.18"})
+        self.assertTrue(row["ok"], row)
+        self.assertIn("screen read", row["signal"])
+        self.assertIn("59.81", row["signal"])
+
+    def test_superposition_bare_ocr_number_is_not_reported_as_the_score(self):
+        # Measured 2026-11-14: OCR noise "2076)" next to a real score of about 8000 was reported as the score.
+        row = self.superposition(**{"screen.txt": "2076)\nFPS: Min 33.99, Avg 59.81, Max 62.37"})
+        self.assertTrue(row["ok"], row)
+        self.assertNotIn("2076", row["signal"])
+
+    def test_superposition_zero_fps_on_screen_is_a_failure(self):
+        row = self.superposition(**{"screen.txt": "Score 12 FPS Min 0 Avg 0 Max 0"})
+        self.assertFalse(row["ok"])
+
+    def test_superposition_unordered_fps_on_screen_is_a_failure(self):
+        row = self.superposition(**{"screen.txt": "Score 12 FPS Min 90 Avg 50 Max 70"})
+        self.assertFalse(row["ok"])
 
     def test_superposition_unchanged_screen(self):
         self.assertFalse(self.superposition(**{"result.png": b"\x89PNG\r\n\x1a\nbefore"})["ok"])
@@ -420,6 +480,579 @@ class T(unittest.TestCase):
             self.superposition(**{"log.html": b"Benchmark stopped Benchmark running"})["ok"]
         )
 
+    def software(self, name):
+        log = self.sp_log(gpu=name + " 1.0 x1", desc=name)
+        return self.superposition(**{"log.html": log})["ok"]
+
+    def test_superposition_basic_render_driver_is_not_gpu_work(self):
+        self.assertFalse(self.software("NVIDIA Microsoft Basic Render Driver"))
+
+    def test_superposition_llvmpipe_is_not_gpu_work(self):
+        self.assertFalse(self.software("NVIDIA llvmpipe (LLVM 15)"))
+
+    def test_superposition_warp_is_not_gpu_work(self):
+        self.assertFalse(self.software("NVIDIA WARP"))
+
+    def test_superposition_gpu_must_be_nvidia(self):
+        log = self.sp_log(gpu="AMD Radeon RX 7800 1.0 x1", desc="AMD Radeon RX 7800")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_intel_gpu_is_not_the_nvidia_device(self):
+        log = self.sp_log(gpu="Intel(R) UHD Graphics 770 31.0.101.4 x1", desc="Intel(R) UHD Graphics 770")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_renderer_prefix_of_another_nvidia_gpu(self):
+        log = self.sp_log(gpu="NVIDIA GeForce RTX 3060 Ti 32.0.15.8088 x1", desc="NVIDIA GeForce RTX 4070")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_missing_renderer_line(self):
+        log = self.sp_log().replace(b"Direct3D11 desc:", b"desc-less:")
+        row = self.superposition(**{"log.html": log})
+        self.assertFalse(row["ok"])
+        self.assertIn("names no GPU", row["error"])
+
+    def test_superposition_renderer_must_match_reported_gpu(self):
+        log = self.sp_log(desc="NVIDIA GeForce RTX 3060")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_missing_gpu_line(self):
+        log = self.sp_log().replace(b"GPU:", b"gpu-less:")
+        row = self.superposition(**{"log.html": log})
+        self.assertFalse(row["ok"])
+        self.assertIn("names no GPU", row["error"])
+
+    def test_superposition_fatal_log_line(self):
+        log = self.sp_log(extra='<div class="f">17:53:05 Fatal error: device lost</div>')
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_interval_longer_than_the_run_is_stale_text(self):
+        log = self.sp_log(running="17:53:02", stopped="17:55:58")  # 176 s inside a 20 s run
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_interval_much_longer_than_the_run(self):
+        log = self.sp_log(running="10:00:00", stopped="10:59:59")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_two_fatal_lines(self):
+        extra = '<div class="f">1 x</div><div class="f">2 y</div>'
+        self.assertFalse(self.superposition(**{"log.html": self.sp_log(extra=extra)})["ok"])
+
+    def test_superposition_stop_before_start_is_not_a_midnight_wrap_of_a_short_run(self):
+        # 17:53:12 -> 17:53:02 would be 86390 s across midnight: far beyond any run window
+        log = self.sp_log(running="17:53:12", stopped="17:53:02")
+        self.assertFalse(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_interval_across_midnight(self):
+        log = self.sp_log(running="23:59:55", stopped="00:00:05")
+        self.assertTrue(self.superposition(**{"log.html": log})["ok"])
+
+    def test_superposition_zero_length_interval(self):
+        log = self.sp_log(running="17:53:02", stopped="17:53:02")
+        row = self.superposition(**{"log.html": log})
+        self.assertFalse(row["ok"])
+        self.assertIn("positive length", row["error"])
+
+    def test_superposition_zero_length_interval_late_evening(self):
+        log = self.sp_log(running="23:59:59", stopped="23:59:59")
+        self.assertIn("positive length", self.superposition(**{"log.html": log})["error"])
+
+    def test_superposition_short_interval_across_midnight(self):
+        log = self.sp_log(running="23:59:50", stopped="00:00:00")
+        self.assertTrue(self.superposition(**{"log.html": log})["ok"])
+
+    EDGE_RUN_ID = "a" * 32
+
+    def edge(self, title=None, **changes):
+        """Edge verdict from a result.json shaped like the guest script's output."""
+        if title is None:
+            title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11) frames=238"
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            record = self.fixture(
+                app="edge", kind="UIA", launched=True, window_title=title + " and 1 more page - Microsoft Edge"
+            )
+            for key in ("artifact", "modified", "bytes", "api_ok"):
+                record.pop(key)
+            record.update(changes)
+            (d / "result.json").write_text(json.dumps(record))
+            return m.verdict("edge", self.EDGE_RUN_ID, d)
+
+    def test_edge_webgl_title_read_through_uia_passes(self):
+        # Measured 2026-11-14: the old probe said launched:false for a window that was visibly open,
+        # because msedge.exe hands over to the browser process and the launcher PID exits at once.
+        row = self.edge()
+        self.assertTrue(row["ok"], row)
+        self.assertEqual(row["evidence"], "UIA")
+        self.assertIn("238 frames", row["signal"])
+
+    def test_edge_window_missing_is_not_a_pass(self):
+        row = self.edge(launched=False, window_title="")
+        self.assertFalse(row["ok"])
+        self.assertIn("window not found", row["error"])
+
+    def test_edge_window_without_the_page_title_is_not_a_pass(self):
+        row = self.edge(title="New tab")
+        self.assertFalse(row["ok"])
+        self.assertIn("did not report a renderer", row["error"])
+
+    def test_edge_error_title_is_not_a_pass(self):
+        row = self.edge(title="KFGL " + self.EDGE_RUN_ID + " err TypeError: gl is null")
+        self.assertFalse(row["ok"])
+
+    def test_edge_title_of_another_run(self):
+        title = "KFGL " + "b" * 32 + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070) frames=10"
+        self.assertIn("another run", self.edge(title=title)["error"])
+
+    def test_edge_title_nonce_is_bound_to_the_run(self):
+        # a stale title from a previous page of the same profile must not pass
+        title = "KFGL " + "0" * 32 + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070) frames=10"
+        self.assertFalse(self.edge(title=title)["ok"])
+
+    def test_edge_zero_frames(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070) frames=0"
+        row = self.edge(title=title)
+        self.assertFalse(row["ok"])
+        self.assertIn("no frames", row["error"])
+
+    def test_edge_zero_frames_with_leading_zeros(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070) frames=000"
+        self.assertFalse(self.edge(title=title)["ok"])
+
+    def test_edge_launched_must_be_the_boolean_true(self):
+        self.assertFalse(self.edge(launched="yes")["ok"])
+
+    def test_edge_swiftshader_is_software(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver) frames=50"
+        self.assertIn("software", self.edge(title=title)["error"])
+
+    def test_edge_nvidia_named_software_rasterizer_is_software(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (NVIDIA, NVIDIA llvmpipe, D3D11) frames=50"
+        self.assertIn("software", self.edge(title=title)["error"])
+
+    def test_edge_basic_render_driver_is_not_nvidia(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11) frames=50"
+        self.assertFalse(self.edge(title=title)["ok"])
+
+    def test_edge_intel_renderer_is_not_the_nvidia_device(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (Intel, Intel(R) UHD Graphics 770, D3D11) frames=50"
+        self.assertIn("not the NVIDIA device", self.edge(title=title)["error"])
+
+    def test_edge_amd_renderer_is_not_the_nvidia_device(self):
+        title = "KFGL " + self.EDGE_RUN_ID + " ok renderer=ANGLE (AMD, AMD Radeon RX 7800, D3D11) frames=50"
+        self.assertIn("not the NVIDIA device", self.edge(title=title)["error"])
+
+    def test_edge_script_finds_the_window_by_process_and_title_not_the_launcher_pid(self):
+        script = m.render_check("edge", run_id=self.EDGE_RUN_ID)
+        self.assertIn("Win32_Process", script)
+        self.assertIn("--user-data-dir", script)
+        self.assertIn("ProcessIdProperty", script)
+        self.assertIn("-like 'KFGL *'", script)
+        self.assertNotIn("HasExited", script)  # the launcher PID exits by design
+        self.assertIn(self.EDGE_RUN_ID, script.replace("__NONCE__", self.EDGE_RUN_ID))
+        self.assertNotIn("SetCursorPos", script)
+
+    def test_edge_script_closes_only_its_own_profile(self):
+        script = m.render_check("edge", run_id=self.EDGE_RUN_ID)
+        self.assertIn("Stop-Process -Id $_.ProcessId", script)
+        self.assertIn("*$profile*", script)
+
+    def test_interactive_task_window_is_hidden_so_screenshots_show_the_app(self):
+        # Measured 2026-11-14: the visible PowerShell console covered most of every app screenshot.
+        wrapper = m.task_wrapper("x")
+        self.assertIn("-WindowStyle Hidden", wrapper)
+
+    def test_interactive_task_hidden_flag_is_before_the_script_file(self):
+        wrapper = m.task_wrapper("x")
+        self.assertLess(wrapper.index("-WindowStyle Hidden"), wrapper.index("-File"))
+
+    def wukong(self, **changes):
+        r = self.fixture(
+            app="wukong", kind="WUKONG", shipping_seen=True, shipping_secs=97, exited=True,
+            vram_peak_mib=2578, vram_total_mib=4096, crash=None, kernel_events=[], app_errors=[],
+        )
+        for key in ("artifact", "modified", "bytes", "api_ok"):
+            r.pop(key)
+        r.update(changes)
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            (d / "result.json").write_text(json.dumps(r))
+            return m.verdict("wukong", "a" * 32, d)
+
+    CRASH = {
+        "type": "GPUCrash", "message": "GPU Crash dump Triggered", "exe": "b1-Win64-Shipping",
+        "gpu": "NVIDIA GeForce RTX 4070", "modules": ["b1_Win64_Shipping", "sl_dlss_g", "sl_interposer"],
+    }
+
+    def test_wukong_measured_gpu_crash_is_a_failure_with_the_signature(self):
+        # Measured 2026-11-14 on the PC: GPUCrash 97 s after start, LiveKernelEvent 141 at the same second.
+        row = self.wukong(crash=self.CRASH, kernel_events=[{"code": "141"}])
+        self.assertFalse(row["ok"])
+        self.assertEqual(row["evidence"], "FILE")
+        self.assertEqual(m.app_classification(row), ("FAIL", "app"))
+        for part in ("GPUCrash", "GPU Crash dump Triggered", "sl_dlss_g", "141", "4096", "2578"):
+            self.assertIn(part, row["error"])
+
+    def test_wukong_crash_without_kernel_event_still_fails(self):
+        self.assertEqual(m.app_classification(self.wukong(crash=self.CRASH))[0], "FAIL")
+
+    def test_wukong_kernel_watchdog_without_crash_context_fails(self):
+        row = self.wukong(exited=False, kernel_events=[{"code": "117"}])
+        self.assertEqual(m.app_classification(row)[0], "FAIL")
+        self.assertIn("117", row["error"])
+
+    def test_wukong_unrelated_kernel_event_is_ignored(self):
+        row = self.wukong(exited=False, kernel_events=[{"code": "1a8"}])
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_wukong_never_started_is_a_failure(self):
+        row = self.wukong(shipping_seen=False)
+        self.assertEqual(m.app_classification(row)[0], "FAIL")
+
+    def test_wukong_application_error_event_after_exit_fails(self):
+        row = self.wukong(app_errors=[{"text": "Faulting application b1-Win64-Shipping.exe"}])
+        self.assertEqual(m.app_classification(row)[0], "FAIL")
+
+    def test_wukong_seen_flag_must_be_boolean_true(self):
+        self.assertEqual(m.app_classification(self.wukong(shipping_seen="yes"))[0], "FAIL")
+
+    def test_wukong_two_application_error_events_fail(self):
+        events = [{"text": "a"}, {"text": "b"}]
+        row = self.wukong(app_errors=events)
+        self.assertIn("Application Error", row["error"])
+
+    def test_wukong_survival_alone_is_inconclusive_not_a_pass(self):
+        row = self.wukong(exited=False)
+        self.assertFalse(row["ok"])
+        self.assertEqual(m.app_classification(row), ("INCONCLUSIVE", "unqualified"))
+
+    def test_wukong_clean_exit_without_result_file_is_inconclusive(self):
+        self.assertEqual(m.app_classification(self.wukong())[0], "INCONCLUSIVE")
+
+    def test_wukong_script_launches_the_exe_with_the_appid_from_the_manifest(self):
+        script = m.render_check("wukong", run_id="a" * 32)
+        self.assertIn("b1_benchmark.exe", script)
+        self.assertIn("appmanifest_*.acf", script)
+        self.assertIn("$env:SteamAppId=$appid", script)
+        self.assertNotIn(".url", script)
+        self.assertNotIn("SetCursorPos", script)
+
+    def test_wukong_script_captures_vram_and_event_context(self):
+        script = m.render_check("wukong", run_id="a" * 32)
+        for needle in ("Win32_VideoController", "nvidia-smi -q -d MEMORY", "dxdiag", "system_events.txt", "nvlddmkm"):
+            self.assertIn(needle, script)
+
+    def test_host_log_excerpt_filters_and_bounds(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text("\n".join(["quiet line"] * 5 + [f"Xid {i} refused" for i in range(10)] + ["pramin ok"]))
+            out = m.host_log_excerpt(log, limit=4)
+            self.assertEqual(len(out), 4)
+            self.assertTrue(all(("Xid" in x or "pramin" in x) for x in out))
+            self.assertNotIn("quiet line", out)
+
+    def test_host_log_excerpt_keeps_the_latest_lines(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text("\n".join(f"error {i}" for i in range(50)))
+            self.assertEqual(m.host_log_excerpt(log, limit=2), ["error 48", "error 49"])
+
+    def test_host_log_excerpt_long_line_keeps_its_start(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text("fault START " + "y" * 900)
+            self.assertTrue(m.host_log_excerpt(log)[0].startswith("fault START"))
+            self.assertEqual(len(m.host_log_excerpt(log)[0]), 400)
+
+    def test_host_log_excerpt_skips_quiet_status_lines(self):
+        quiet = "kf3: family=Ada phase=Running trapped=1 applied=2 refused=0 ram_refused=0 unshadowed_writes=0 read_exits=0"
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text(quiet + "\n" + quiet + "\nXid 79 device lost\n")
+            self.assertEqual(m.host_log_excerpt(log), ["Xid 79 device lost"])
+
+    def test_host_log_excerpt_skips_quiet_status_line_without_other_noise(self):
+        quiet = "kf3: family=Blackwell phase=Running refused=0 ram_refused=0 unshadowed_writes=0 read_exits=0 mem[error_free=1]"
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text(quiet + "\n")
+            self.assertEqual(m.host_log_excerpt(log), [])
+
+    def test_host_log_excerpt_keeps_status_line_with_nonzero_refusals(self):
+        bad = "kf3: family=Ada phase=Running trapped=1 applied=2 refused=3 ram_refused=0 unshadowed_writes=0"
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text(bad + "\n")
+            self.assertEqual(m.host_log_excerpt(log), [bad])
+
+    def test_host_log_excerpt_keeps_status_line_with_unshadowed_writes(self):
+        bad = "kf3: family=Ada phase=Running refused=0 unshadowed_writes=7"
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text(bad + "\n")
+            self.assertEqual(m.host_log_excerpt(log), [bad])
+
+    def test_host_log_excerpt_missing_file_is_empty(self):
+        self.assertEqual(m.host_log_excerpt("/nonexistent/qemu.log"), [])
+
+    def test_host_log_excerpt_truncates_long_lines(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text("error " + "x" * 5000)
+            self.assertLessEqual(len(m.host_log_excerpt(log)[0]), 400)
+
+    def test_wukong_check_points_at_the_exe_not_the_url_shortcut(self):
+        self.assertTrue(m.CHECKS["wukong"]["exe"].endswith("b1_benchmark.exe"))
+
+    def test_wukong_script_collects_crash_context_and_kernel_events(self):
+        script = m.render_check("wukong", run_id="a" * 32)
+        for needle in ("CrashContext.runtime-xml", "LiveKernelEvent", "nvidia-smi", "Id=1000"):
+            self.assertIn(needle, script)
+
+    def test_run_replaces_undecodable_guest_bytes(self):
+        # Measured 2026-11-14: a binary byte in guest output raised UnicodeDecodeError in the harness.
+        p = m.run([sys.executable, "-c", "import sys;sys.stdout.buffer.write(b'ok\\x87\\x98end')"])
+        self.assertEqual(p.returncode, 0)
+        self.assertTrue(p.stdout.startswith("ok") and p.stdout.endswith("end"))
+
+    def test_run_replaces_undecodable_bytes_on_stderr_too(self):
+        p = m.run([sys.executable, "-c", "import sys;sys.stderr.buffer.write(b'e\\xff')"])
+        self.assertTrue(p.stderr.startswith("e"))
+
+    def test_run_keeps_bytes_mode_when_asked(self):
+        p = m.run([sys.executable, "-c", "print(1)"], text=False)
+        self.assertEqual(p.stdout.strip(), b"1")
+
+    # ---- 3DMark result file (zip of Result.xml, Arielle.xml, SI.xml), structure measured 2026-11-14 ----
+    RESULT_XML = (
+        "<benchmark><results><result><name/><passIndex>-1</passIndex>"
+        "<TimeSpyPerformanceGraphicsScore>7203</TimeSpyPerformanceGraphicsScore>"
+        "<TimeSpyPerformance3DMarkScore>7237</TimeSpyPerformance3DMarkScore>"
+        "<TimeSpyPerformanceCPUScore>7442</TimeSpyPerformanceCPUScore></result>"
+        "<result><passIndex>0</passIndex>"
+        "<TimeSpyPerformanceGraphicsTest1>47.66</TimeSpyPerformanceGraphicsTest1>"
+        "<TimeSpyPerformanceGraphicsTest2>40.76</TimeSpyPerformanceGraphicsTest2></result>"
+        "</results></benchmark>"
+    )
+    ARIELLE_XML = (
+        "<benchmark><application_info><info><name>benchmark_start_time</name>"
+        "<value>2026-11-12T17:55:00.000000000Z</value></info><info><name>benchmark_finish_time</name>"
+        "<value>2026-11-12T18:02:10.000000000Z</value></info></application_info>"
+        '<sets><set><workloads><workload><results><result pass_index="0"><status code="0"></status></result>'
+        '</results></workload><workload><results><result pass_index="0"><status code="0"></status></result>'
+        "</results></workload></workloads></set></sets></benchmark>"
+    )
+    SI_XML = (
+        "<SystemInfo><Device><DeviceID>PCI\\VEN_10DE&amp;DEV_2786</DeviceID><Value><Name>Class</Name>"
+        "<Value>Display</Value></Value><Value><Name>DeviceDesc</Name><Value>NVIDIA GeForce RTX 4070</Value>"
+        "</Value><Software_Key><Value><Name>DriverVersion</Name><Value>32.0.15.8088</Value></Value></Software_Key>"
+        "</Device></SystemInfo>"
+    )
+    # guest epoch for 2026-11-12T17:50:00Z .. 18:10:00Z
+    TDM_START, TDM_END = 1794505800.0, 1794507000.0
+
+    def refused(self, out, part):
+        self.assertIsInstance(out, ValueError, out)
+        self.assertIn(part, str(out))
+
+    def tdm(self, result=None, arielle=None, si=None, extra=None, start=None, end=None, raw=None):
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "r.3dmark-result"
+            if raw is not None:
+                path.write_bytes(raw)
+            else:
+                with zipfile.ZipFile(path, "w") as z:
+                    z.writestr("Result.xml", self.RESULT_XML if result is None else result)
+                    z.writestr("Arielle.xml", self.ARIELLE_XML if arielle is None else arielle)
+                    z.writestr("SI.xml", self.SI_XML if si is None else si)
+                    for name, data in (extra or {}).items():
+                        z.writestr(name, data)
+            try:
+                return m.validate_3dmark_result(
+                    path, self.TDM_START if start is None else start, self.TDM_END if end is None else end
+                )
+            except ValueError as exc:
+                return exc
+
+    def test_3dmark_result_file_passes_with_score_gpu_and_driver(self):
+        out = self.tdm()
+        self.assertNotIsInstance(out, Exception, out)
+        for part in ("7237", "7203", "47.66", "NVIDIA GeForce RTX 4070", "32.0.15.8088"):
+            self.assertIn(part, out)
+
+    def test_3dmark_stale_result_from_the_image_is_refused(self):
+        # the image ships a 2026-11-12T15:56 Time Spy result from preparation; it must never pass
+        old = self.ARIELLE_XML.replace("17:55:00", "15:49:44").replace("18:02:10", "15:56:52")
+        out = self.tdm(arielle=old)
+        self.assertIsInstance(out, ValueError)
+        self.refused(out, "not from this run")
+
+    def test_3dmark_finish_after_the_run_end_is_refused(self):
+        out = self.tdm(end=self.TDM_END - 3600)
+        self.refused(out, "not from this run")
+
+    def test_3dmark_start_before_the_run_start_is_refused(self):
+        out = self.tdm(start=self.TDM_START + 600)
+        self.refused(out, "not from this run")
+
+    def test_3dmark_nonzero_workload_status_is_a_failure(self):
+        bad = self.ARIELLE_XML.replace('<status code="0">', '<status code="9">', 1)
+        self.refused(self.tdm(arielle=bad), "workload status")
+
+    def test_3dmark_all_statuses_must_be_zero(self):
+        head, _, tail = self.ARIELLE_XML.rpartition('<status code="0">')
+        bad = head + '<status code="3">' + tail  # only the last workload failed
+        self.refused(self.tdm(arielle=bad), "workload status")
+
+    def test_3dmark_no_status_at_all_is_not_a_completed_run(self):
+        none = self.ARIELLE_XML.replace('<status code="0"></status>', "")
+        self.refused(self.tdm(arielle=none), "workload status")
+
+    def test_3dmark_zero_score_is_refused(self):
+        bad = self.RESULT_XML.replace(">7237<", ">0<")
+        self.refused(self.tdm(result=bad), "score")
+
+    def test_3dmark_missing_score_is_refused(self):
+        bad = self.RESULT_XML.replace("TimeSpyPerformance3DMarkScore", "Other")
+        self.refused(self.tdm(result=bad), "score")
+
+    def test_3dmark_zero_graphics_fps_is_refused(self):
+        bad = self.RESULT_XML.replace(">47.66<", ">0.00<")
+        self.refused(self.tdm(result=bad), "FPS")
+
+    def test_3dmark_no_fps_values_is_refused(self):
+        bad = self.RESULT_XML.replace("GraphicsTest1", "X1").replace("GraphicsTest2", "X2")
+        self.refused(self.tdm(result=bad), "FPS")
+
+    def test_3dmark_missing_nvidia_display_device_is_refused(self):
+        bad = self.SI_XML.replace("NVIDIA GeForce RTX 4070", "Microsoft Basic Render Driver")
+        self.refused(self.tdm(si=bad), "NVIDIA")
+
+    def test_3dmark_software_device_named_nvidia_is_refused(self):
+        bad = self.SI_XML.replace("NVIDIA GeForce RTX 4070", "NVIDIA WARP")
+        self.refused(self.tdm(si=bad), "software")
+
+    def test_3dmark_intel_only_display_is_refused(self):
+        bad = self.SI_XML.replace("NVIDIA GeForce RTX 4070", "Intel(R) UHD Graphics 770")
+        self.refused(self.tdm(si=bad), "NVIDIA")
+
+    def test_3dmark_non_display_class_nvidia_device_is_refused(self):
+        bad = self.SI_XML.replace("<Value>Display</Value>", "<Value>Audio</Value>")
+        self.refused(self.tdm(si=bad), "NVIDIA")
+
+    def test_3dmark_llvmpipe_named_nvidia_is_software(self):
+        bad = self.SI_XML.replace("NVIDIA GeForce RTX 4070", "NVIDIA llvmpipe")
+        self.refused(self.tdm(si=bad), "software")
+
+    def test_3dmark_not_a_zip_is_refused(self):
+        self.refused(self.tdm(raw=b"not a zip"), "zip")
+
+    def test_3dmark_missing_member_is_refused(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "r"
+            with zipfile.ZipFile(path, "w") as z:
+                z.writestr("Result.xml", self.RESULT_XML)
+            with self.assertRaises(ValueError):
+                m.validate_3dmark_result(path, self.TDM_START, self.TDM_END)
+
+    def test_3dmark_xml_with_entities_is_refused_as_data_attack(self):
+        evil = '<!DOCTYPE x [<!ENTITY a "boom">]>' + self.RESULT_XML
+        self.refused(self.tdm(result=evil), "DOCTYPE")
+
+    def test_3dmark_arielle_with_entities_is_refused(self):
+        evil = '<!DOCTYPE x [<!ENTITY a "boom">]>' + self.ARIELLE_XML
+        self.refused(self.tdm(arielle=evil), "DOCTYPE")
+
+    def test_3dmark_unexpected_zip_member_path_is_refused(self):
+        out = self.tdm(extra={"../evil.xml": "x"})
+        self.refused(out, "member")
+
+    def test_3dmark_oversized_member_is_refused(self):
+        out = self.tdm(extra={"Monitoring.csv": b"x" * (64 * 1024 * 1024 + 1)})
+        self.refused(out, "member")
+
+    def test_3dmark_cli_refusal_text_is_recognised(self):
+        self.assertTrue(m.cli_refused("18:14:02 Professional or Developer license key required for command line access"))
+        self.assertFalse(m.cli_refused("18:14:02 benchmark finished"))
+
+    def tdm_row(self, **changes):
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            with zipfile.ZipFile(d / "result.3dmark-result", "w") as z:
+                z.writestr("Result.xml", self.RESULT_XML)
+                z.writestr("Arielle.xml", self.ARIELLE_XML)
+                z.writestr("SI.xml", self.SI_XML)
+            size = (d / "result.3dmark-result").stat().st_size
+            rec = self.fixture(
+                app="3dmark", kind="TDM", started=self.TDM_START, ended=self.TDM_END,
+                modified=self.TDM_START + 500, bytes=size, result_file="3DMark-TimeSpy-7237-x.3dmark-result",
+                progress_seen=True, ui_texts="", cli_output="Professional or Developer license key required for command line access",
+            )
+            for key in ("artifact", "api_ok"):
+                rec.pop(key)
+            rec.update(changes)
+            (d / "result.json").write_text(json.dumps(rec))
+            return m.verdict("3dmark", "a" * 32, d)
+
+    def test_3dmark_verdict_from_the_saved_file(self):
+        row = self.tdm_row()
+        self.assertTrue(row["ok"], row)
+        self.assertEqual(row["evidence"], "FILE")
+        self.assertIn("7237", row["signal"])
+        self.assertIn("CLI refused", row["signal"])
+
+    def test_3dmark_no_file_after_progress_is_a_failure(self):
+        row = self.tdm_row(result_file="")
+        self.assertEqual(m.app_classification(row), ("FAIL", "app"))
+        self.assertIn("saved no result file", row["error"])
+
+    def test_3dmark_never_started_is_inconclusive_with_the_blocker_text(self):
+        row = self.tdm_row(result_file="", progress_seen=False, ui_texts="Sign in to continue ; Offline")
+        self.assertEqual(m.app_classification(row), ("INCONCLUSIVE", "unqualified"))
+        self.assertIn("Sign in to continue", row["error"])
+
+    def test_3dmark_stale_file_modified_before_the_run(self):
+        self.assertIn("Stale", self.tdm_row(modified=self.TDM_START - 5)["error"])
+
+    def test_3dmark_file_modified_after_the_run(self):
+        self.assertIn("Stale", self.tdm_row(modified=self.TDM_END + 5)["error"])
+
+    def test_3dmark_wrong_length_is_refused(self):
+        self.assertIn("length", self.tdm_row(bytes=1)["error"])
+
+    def test_3dmark_result_name_must_be_a_plain_result_file(self):
+        self.assertIn("name", self.tdm_row(result_file="..\\evil.3dmark-result")["error"])
+        self.assertIn("name", self.tdm_row(result_file="x.exe")["error"])
+
+    def test_3dmark_never_started_with_empty_ui_text_is_inconclusive(self):
+        row = self.tdm_row(result_file="", progress_seen=False, ui_texts="")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_3dmark_result_name_exe_extension_refused(self):
+        self.assertIn("name", self.tdm_row(result_file="x.exe")["error"])
+
+    def test_3dmark_result_name_with_path_separator_refused(self):
+        self.assertIn("name", self.tdm_row(result_file="a/b.3dmark-result")["error"])
+
+    def test_3dmark_script_uses_uia_geometry_not_coordinates(self):
+        script = m.render_check("3dmark", run_id="a" * 32)
+        for needle in ("InvokePattern", "BoundingRectangle", "3DMarkCmd.exe", "*.3dmark-result"):
+            self.assertIn(needle, script)
+        self.assertNotIn("SetCursorPos", script)
+        self.assertNotIn("mouse_event", script)
+        self.assertNotIn("SendKeys", script)
+
+    def test_3dmark_script_never_goes_online(self):
+        script = m.render_check("3dmark", run_id="a" * 32)
+        self.assertIn("--online=off", script)
+        self.assertNotIn("INSTALL", script)
+
+    def test_edge_page_is_authored_with_the_nonce_slot(self):
+        self.assertEqual(m.EDGE_PAGE.count("__NONCE__"), 1)
+        self.assertIn("WEBGL_debug_renderer_info", m.EDGE_PAGE)
+
     def test_superposition_click_derived_from_rectangle(self):
         script = m.render_check("superposition", superposition_run=True)
         self.assertIn("BoundingRectangle", script)
@@ -428,11 +1061,168 @@ class T(unittest.TestCase):
         self.assertIn("Remove-Item $source", script)
 
     def test_solidworks_default_launch_only(self):
-        self.assertNotIn("OpenDoc6", m.render_check("solidworks"))
-        self.assertIn("OpenDoc6", m.render_check("solidworks", solidworks_export=True))
+        self.assertNotIn("OpenDoc6", m.render_check("solidworks", solidworks_export=False))
+        self.assertIn("OpenDoc6", m.render_check("solidworks"))
 
-    def test_resolve_default_launch_only(self):
-        self.assertIn("$r.kind='LAUNCH_ONLY'", m.render_check("resolve"))
+    def test_solidworks_sample_comes_from_programdata_not_the_missing_samples_dir(self):
+        script = m.render_check("solidworks")
+        self.assertIn("C:\\ProgramData\\SolidWorks", script)
+        self.assertNotIn("SOLIDWORKS\\samples", script)
+
+    def edrawings(self, **changes):
+        r = self.fixture(app="edrawings", kind="EDW", sample="kfsample.sldprt", accepted=True,
+                         tab_name="kfsample.sldprt")
+        for key in ("artifact", "modified", "bytes", "api_ok"):
+            r.pop(key)
+        r.update(changes)
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            return m.verdict("edrawings", "a" * 32, Path(td))
+
+    def test_edrawings_tab_with_the_sample_name_passes_via_uia(self):
+        row = self.edrawings()
+        self.assertTrue(row["ok"], row)
+        self.assertEqual(row["evidence"], "UIA")
+
+    def test_edrawings_licence_dialog_only_is_inconclusive(self):
+        row = self.edrawings(tab_name="", accepted=False)
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_edrawings_generic_title_is_not_a_pass(self):
+        row = self.edrawings(tab_name="eDrawings")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_edrawings_wrong_sample_name_is_not_a_pass(self):
+        self.assertFalse(self.edrawings(sample="other.sldprt")["ok"])
+
+    def test_error_names_the_script_step_that_failed(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = self.fixture(app="solidworks", kind="PROBE", error="Element not found", step="s5")
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            row = m.verdict("solidworks", "a" * 32, Path(td))
+        self.assertIn("script step s5", row["error"])
+
+    def test_error_names_another_script_step(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = self.fixture(app="edrawings", kind="PROBE", error="x", step="s9")
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            self.assertIn("script step s9", m.verdict("edrawings", "a" * 32, Path(td))["error"])
+
+    def test_error_without_step_has_no_step_suffix(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = self.fixture(app="solidworks", kind="PROBE", error="boom")
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            self.assertNotIn("script step", m.verdict("solidworks", "a" * 32, Path(td))["error"])
+
+    def test_solidworks_script_marks_steps(self):
+        self.assertIn("$r.step='open'", m.render_check("solidworks"))
+
+    def test_solidworks_uses_late_bound_invokemember_not_the_powershell_adapter(self):
+        # Measured 2026-11-14: the adapter path failed every call with TYPE_E_ELEMENTNOTFOUND.
+        script = m.render_check("solidworks")
+        self.assertIn("InvokeMember", script)
+        self.assertIn("DispatchWrapper", script)
+        self.assertNotIn("New-Object -ComObject", script)
+        self.assertNotIn("$sw.OpenDoc6", script)
+
+    def test_solidworks_byref_arguments_use_a_parameter_modifier(self):
+        script = m.render_check("solidworks")
+        self.assertIn("ParameterModifier", script)
+        self.assertIn("@(4,5)", script)
+
+    def test_edrawings_accept_uses_the_window_handle_not_invoke(self):
+        # Measured 2026-11-14: ACCEPT is a Pane with no Invoke pattern; BM_CLICK on its handle worked.
+        script = m.render_check("edrawings")
+        self.assertIn("0xF5", script)
+        self.assertIn("NativeWindowHandle", script)
+        self.assertNotIn("InvokePattern", script)
+
+    def test_edrawings_evidence_is_the_tab_item_not_the_window_title(self):
+        script = m.render_check("edrawings")
+        self.assertIn("ControlType.TabItem", script)
+        self.assertNotIn("-match 'kfsample'", script)
+
+    def test_edrawings_script_accepts_by_uia_selector_not_coordinates(self):
+        script = m.render_check("edrawings")
+        self.assertIn("-ceq 'ACCEPT'", script)
+        self.assertIn("AutomationId -ceq '1'", script)
+        self.assertNotIn("SetCursorPos", script)
+
+    def resolve(self, **changes):
+        wanted = "kf" + "a" * 8
+        log = [
+            "[0x1] | Main.GPUConfig | INFO  | 2026-11-12 18:10:20,984 | Selected compute API: CUDA",
+            "[0x2] | IO | INFO  | 2026-11-12 18:10:22,185 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+            "[0x3] | UI.GLContext | INFO  | 2026-11-12 18:10:24,156 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'",
+        ]
+        r = self.fixture(app="resolve", kind="RESOLVE", project_name=wanted,
+                         window_name="DaVinci Resolve - " + wanted, log_lines=log, stage="main window")
+        for key in ("artifact", "modified", "bytes", "api_ok"):
+            r.pop(key)
+        r.update(changes)
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "result.json").write_text(json.dumps(r))
+            return m.verdict("resolve", "a" * 32, Path(td))
+
+    def test_resolve_project_window_and_gpu_log_pass(self):
+        row = self.resolve()
+        self.assertTrue(row["ok"], row)
+        self.assertIn("no render or benchmark was run", row["signal"])
+
+    def test_resolve_window_without_the_projects_name_is_inconclusive(self):
+        row = self.resolve(window_name="DaVinci Resolve - New Project 1")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_resolve_project_name_mismatch_is_inconclusive(self):
+        row = self.resolve(project_name="kfbbbbbbbb")
+        self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
+
+    def test_resolve_without_cuda_line_is_inconclusive(self):
+        log = [x for x in self.resolve_log() if "compute API" not in x]
+        self.assertIn("CUDA", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_without_nvenc_line_is_inconclusive(self):
+        log = [x for x in self.resolve_log() if "decoding and encoding" not in x]
+        self.assertIn("decode/encode", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_without_opengl_line_is_inconclusive(self):
+        log = [x for x in self.resolve_log() if "OpenGL" not in x]
+        self.assertIn("OpenGL", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_software_opengl_is_inconclusive(self):
+        log = [x.replace("NVIDIA Corporation NVIDIA GeForce RTX 4070", "Microsoft Corporation GDI Generic") for x in self.resolve_log()]
+        self.assertIn("OpenGL", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_nvidia_named_llvmpipe_opengl_is_inconclusive(self):
+        log = [x.replace("NVIDIA GeForce RTX 4070", "NVIDIA llvmpipe") for x in self.resolve_log()]
+        self.assertIn("OpenGL", self.resolve(log_lines=log)["error"])
+
+    def test_resolve_empty_log_names_cuda_missing(self):
+        self.assertIn("CUDA", self.resolve(log_lines=[])["error"])
+
+    def test_resolve_empty_log_names_encode_device_missing(self):
+        self.assertIn("decode/encode", self.resolve(log_lines=[])["error"])
+
+    def resolve_log(self):
+        return list(self._resolve_log_lines)
+
+    _resolve_log_lines = [
+        "[0x1] | Main.GPUConfig | INFO  | 2026-11-12 18:10:20,984 | Selected compute API: CUDA",
+        "[0x2] | IO | INFO  | 2026-11-12 18:10:22,185 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+        "[0x3] | UI.GLContext | INFO  | 2026-11-12 18:10:24,156 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'",
+    ]
+
+    def test_resolve_script_finds_ui_by_automationid_and_invokes(self):
+        script = m.render_check("resolve", run_id="a" * 32)
+        for needle in ("UiProjectManagerDialog", "btnAddProject", "InvokePattern", "UiMainWindow"):
+            self.assertIn(needle, script)
+        self.assertNotIn("SetCursorPos", script)
+        self.assertNotIn("mouse_event", script)
+
+    def test_resolve_script_types_only_the_project_name(self):
+        script = m.render_check("resolve", run_id="a" * 32)
+        self.assertEqual(script.count("SendWait("), 3)
+        self.assertIn("SendWait($name)", script)
 
     def test_result_markdown_evidence_kinds(self):
         rows = [
@@ -1200,15 +1990,53 @@ def mutants():
             "Unregister-ScheduledTask -TaskName kf_{task}",
             "Unregister-ScheduledTask -TaskName {task}",
         ),
-        (
-            "superposition-screen",
-            'raise ValueError("Result screen score/FPS not readable; no verdict")',
-            "return",
-        ),
+        ("tdm-nofile", 'if not r.get("result_file"):', "if False:"),
+        ("tdm-progress", 'if r.get("progress_seen") is True:', "if True:"),
+        ("tdm-stale", "if type(modified) not in (int, float) or not start < modified <= end:\n                raise ValueError(\"Stale result file\")", "pass"),
+        ("tdm-name", 'if not re.fullmatch(r"[A-Za-z0-9 ._()\\-]{1,120}\\.3dmark-result", str(r["result_file"])):', "if False:"),
+        ("tdm-window", "if not (run_start <= began < finished <= run_end):", "if False:"),
+        ("tdm-status", 'if not codes or any(c != "0" for c in codes):', "if False:"),
+        ("tdm-score", "if not total or min(total) <= 0 or not graphics or min(graphics) <= 0:", "if False:"),
+        ("tdm-fps", "if not fps or min(fps) <= 0:", "if False:"),
+        ("tdm-gpu", "if not gpus:", "if False:"),
+        ("tdm-software", "if any(SOFTWARE_RENDERERS.search(name) for name, _ in gpus):", "if False:"),
+        ("tdm-entity", 'if re.search(rb"<!(DOCTYPE|ENTITY)", raw, re.I):', "if False:"),
+        ("tdm-member", "if info.filename not in TDM_MEMBERS or info.file_size > TDM_MAX_MEMBER:", "if False:"),
+        ("run-replace", 'kw.setdefault("errors", "replace")', "pass"),
+        ("res-name", 'if r.get("project_name") != wanted or wanted not in str(r.get("window_name", "")):', "if False:"),
+        ("res-cuda", 'if "Selected compute API: CUDA" not in blob:', "if False:"),
+        ("res-enc", 'if "initialised as decoding and encoding device" not in blob:', "if False:"),
+        ("res-gl", 'if not gl or "nvidia" not in gl[1].lower() or SOFTWARE_RENDERERS.search(gl[1]):', "if False:"),
+        ("edw-title", 'tab.lower() != "kfsample.sldprt"', "False"),
+        ("edw-sample", 'r.get("sample") != "kfsample.sldprt" or', "False and"),
+        ("hostlog-status", "if STATUS_LINE.match(line):", "if False:"),
+        ("hostlog-nonzero", "return bool(STATUS_NONZERO.search(line))", "return False"),
+        ("hostlog-limit", "[-limit:]", "[:]"),
+        ("hostlog-trunc", "ln[:400]", "ln"),
+        ("error-step", 'if r.get("step") else ""', 'if False else ""'),
+        ("wukong-crash", 'if crash:', "if False:"),
+        ("wukong-kernel", 'if str(e.get("code")) in GPU_KERNEL_EVENTS', "if False and str(e.get(\"code\")) in GPU_KERNEL_EVENTS"),
+        ("wukong-start", 'if r.get("shipping_seen") is not True:', "if False:"),
+        ("wukong-apperr", 'if r.get("exited") is True and r.get("app_errors"):', "if False:"),
+        ("task-hidden", "-NoProfile -WindowStyle Hidden -ExecutionPolicy", "-NoProfile -ExecutionPolicy"),
+        ("edge-software", 'if SOFTWARE_RENDERERS.search(renderer):', "if False:"),
+        ("edge-nvidia", 'if "nvidia" not in renderer.lower():', "if False:"),
+        ("edge-frames", "if frames <= 0:", "if False:"),
+        ("edge-nonce", "if ok[1] != run_id:", "if False:"),
+        ("edge-window", 'if r.get("launched") is not True:', "if False:"),
+        ("sp-window", "if interval > end - start:", "if False:"),
+        ("sp-fatal", 'if facts["fatal"]:', "if False:"),
+        ("sp-software", "if SOFTWARE_RENDERERS.search(gpu + \" \" + renderer):", "if False:"),
+        ("sp-nvidia", '"nvidia" not in gpu.lower() or not gpu.startswith(renderer)', "not gpu.startswith(renderer)"),
+        ("sp-renderer-match", '"nvidia" not in gpu.lower() or not gpu.startswith(renderer)', '"nvidia" not in gpu.lower()'),
+        ("sp-names-gpu", "if not gpu or not renderer:", "if False:"),
+        ("sp-positive-interval", "if not interval or interval <= 0:", "if False:"),
+        ("sp-wrap", "% 86400", ""),
+        ("sp-screen-fps", "if not (0 < avg and 0 <= lo <= avg <= hi and score > 0):", "if False:"),
     ]
     failed = False
     for name, old, new in cases:
-        expected_count = 2 if name in ("length", "task-cleanup") else 1
+        expected_count = 2 if name in ("length", "task-cleanup", "freshness") else 1
         if source.count(old) != expected_count:
             raise AssertionError((name, source.count(old)))
         with tempfile.TemporaryDirectory() as td:
