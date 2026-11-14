@@ -1631,7 +1631,10 @@ jobs:
           # ★ kf-cuda 76 -> 79 (2026-11-14, #396, D-15): `import_unwind` in driver_unsafe.rs, one
           #   block per undo call of a half-done import (cuMemUnmap, cuMemAddressFree, cuMemRelease),
           #   each on the values that failed import itself produced, which no DevBuf names.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:101 kf-cuda:79 kf-qemu:88 firmware/kf-gop:78 kf-chan:0"
+          # ★ kf-cuda 79 -> 80 (2026-11-14, #405, F-7 / S1-05): `Cuda::pageable_memory_access` in
+          #   driver_unsafe.rs — one `unsafe extern "C" fn` type in the optional-symbol table and
+          #   one call of `cuDeviceGetAttribute` into a local `c_int`; a refusal reads as unknown.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:101 kf-cuda:80 kf-qemu:88 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
