@@ -1254,7 +1254,7 @@ mod tests {
 
     /// ★★★ **EACH DECODER READS THE DOCUMENTED BYTES AS THE DOCUMENTED VALUES** — little-endian,
     /// every field at its offset — and round-trips through the struct's own layout: the bytes the
-    /// compiler lays the value out in (`view_bytes`, what the device writes) decode back to the
+    /// compiler lays the value out in (`abi_bytes`, field by field at `offset_of!`; what the device writes) decode back to the
     /// value, `encode` produces exactly those bytes, and `encode ∘ decode` is the identity on any
     /// buffer (the fields tile the struct, so no byte is skipped or left stale).
     #[test]
@@ -1314,7 +1314,7 @@ mod tests {
                 assert_eq!(&v.encode()[..], &doc[..], "{}: encode is decode's inverse", stringify!($t));
                 // The struct's own layout — the bytes the device writes — on a little-endian host.
                 if cfg!(target_endian = "little") {
-                    let laid_out = crate::driver_unsafe::view_bytes(&v);
+                    let laid_out = &crate::driver_unsafe::abi_bytes(&v)[..];
                     assert_eq!(laid_out, &doc[..], "{}: the compiler lays it out as documented", stringify!($t));
                     assert_eq!($t::decode(laid_out), v, "{}: layout → decode → equal", stringify!($t));
                 }

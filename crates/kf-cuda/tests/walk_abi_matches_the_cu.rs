@@ -806,7 +806,7 @@ fn assert_descriptor_matches(cu_fn: &str, rust: &kf_cuda::abi::KfFormat, tag: &s
     let run = Command::new(&bin).output().expect("run the probe");
     let c_hex = String::from_utf8_lossy(&run.stdout).trim().to_string();
 
-    let rust_hex: String = kf_cuda::driver_unsafe::view_bytes(rust)
+    let rust_hex: String = kf_cuda::driver_unsafe::abi_bytes(rust)
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
@@ -817,7 +817,7 @@ fn assert_descriptor_matches(cu_fn: &str, rust: &kf_cuda::abi::KfFormat, tag: &s
         let cb: Vec<u8> = (0..c_hex.len() / 2)
             .map(|i| u8::from_str_radix(&c_hex[i * 2..i * 2 + 2], 16).unwrap_or(0))
             .collect();
-        let rb = kf_cuda::driver_unsafe::view_bytes(rust);
+        let rb = kf_cuda::driver_unsafe::abi_bytes(rust);
         let at = cb
             .iter()
             .zip(rb.iter())
