@@ -212,6 +212,11 @@ pub struct Cuda {
     /// fastest-first and `CUDA_VISIBLE_DEVICES` reorders them). Present since CUDA 4.1, so a
     /// missing symbol refuses the binding by name.
     pub(crate) cuDeviceGetByPCIBusId: unsafe extern "C" fn(*mut c_int, *const c_char) -> CUresult,
+    /// ★ 2026-11-14 (security review 3 F-7 / S1-05): `cuDeviceGetAttribute(int*, attr, dev)`,
+    /// for the one question the display and walk contexts must answer about the host: can a
+    /// kernel reach PAGEABLE host memory (HMM / ATS)? `Option`: absent is an answer, not a failure.
+    pub(crate) cuDeviceGetAttribute:
+        Option<unsafe extern "C" fn(*mut c_int, c_int, c_int) -> CUresult>,
     pub(crate) cuCtxCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint, c_int) -> CUresult,
     pub(crate) cuCtxDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
     pub(crate) cuCtxSynchronize: unsafe extern "C" fn() -> CUresult,
@@ -445,6 +450,7 @@ impl Cuda {
             cuDeviceGetCount: sym!("cuDeviceGetCount"),
             cuDeviceGetName: sym!("cuDeviceGetName"),
             cuDeviceGetByPCIBusId: sym!("cuDeviceGetByPCIBusId"),
+            cuDeviceGetAttribute: opt!("cuDeviceGetAttribute"),
             cuCtxCreate: sym!("cuCtxCreate_v2"),
             cuCtxDestroy: sym!("cuCtxDestroy_v2"),
             cuCtxSynchronize: sym!("cuCtxSynchronize"),
@@ -602,6 +608,23 @@ impl Cuda {
             (self.cuDeviceGetByPCIBusId)(&raw mut d, c.as_ptr())
         })?;
         Ok(d)
+    }
+
+    /// ★★ F-7 / S1-05 (security review 3, 2026-11-14): whether kernels on device `dev` can
+    /// dereference PAGEABLE host memory (`CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS`, 88: HMM or
+    /// ATS). Where they can, a kernel address that leaves its buffer may reach the VMM's own memory,
+    /// not just a fault — which is why every kernel bound here is a host-memory-safety obligation
+    /// (OWNER_RULINGS: "HMM is not refused"). `None` when the driver has no entry or refuses the
+    /// question; the caller logs the answer once, at bring-up.
+    #[must_use]
+    pub fn pageable_memory_access(&self, dev: i32) -> Option<bool> {
+        const CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS: c_int = 88;
+        let f = self.cuDeviceGetAttribute?;
+        let mut v: c_int = 0;
+        // SAFETY: one live out-pointer; the attribute is a fixed enumerant and `dev` an ordinal
+        // the driver bounds itself (an invalid one is an error code, not memory access).
+        let r = unsafe { f(&raw mut v, CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS, dev) };
+        (r == CUDA_SUCCESS).then_some(v != 0)
     }
 
     /// `cuDeviceGetName`. ⊘ Never fails the caller: a device whose name we cannot read is
@@ -3170,6 +3193,9 @@ pub(crate) mod fake {
     extern "C" fn event_create(_: *mut *mut c_void, _: c_uint) -> CUresult {
         rc("cuEventCreate")
     }
+    extern "C" fn dev_attr(_: *mut c_int, _: c_int, _: c_int) -> CUresult {
+        rc("cuDeviceGetAttribute")
+    }
     extern "C" fn event_record(_: *mut c_void, _: *mut c_void) -> CUresult {
         rc("cuEventRecord")
     }
@@ -3212,6 +3238,7 @@ pub(crate) mod fake {
                 cuDeviceGetCount: dev_count,
                 cuDeviceGetName: dev_name,
                 cuDeviceGetByPCIBusId: dev_by_pci,
+                cuDeviceGetAttribute: Some(dev_attr),
                 cuCtxCreate: ctx_create,
                 cuCtxDestroy: ctx_destroy,
                 cuCtxSynchronize: p0,
@@ -4006,6 +4033,27 @@ mod perimeter_tests {
         assert_eq!(undone(&calls()), 1);
         // the first registration's pages must outlive it: keep the mapping (as display::Frame does)
         std::mem::forget(map);
+    }
+
+    /// ★ F-7 / S1-05 (2026-11-14): the pageable-memory question is asked, and a driver that has
+    /// no entry or refuses it answers "unknown" (`None`), never "no".
+    #[test]
+    fn f7_pageable_memory_access_is_asked_and_unknown_is_not_no() {
+        use super::fake::{fail, succeed_all};
+        let cu = Cuda::fake();
+        assert_eq!(
+            cu.pageable_memory_access(0),
+            Some(false),
+            "the fake writes 0"
+        );
+        fail("cuDeviceGetAttribute");
+        assert_eq!(cu.pageable_memory_access(0), None, "refused: unknown");
+        succeed_all();
+        let old = Cuda {
+            cuDeviceGetAttribute: None,
+            ..Cuda::fake()
+        };
+        assert_eq!(old.pageable_memory_access(0), None, "no entry: unknown");
     }
 
     /// ★★ D-15 (2026-11-14): an import that fails half way gives back what it took, in reverse
