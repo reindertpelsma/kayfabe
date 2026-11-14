@@ -32,7 +32,7 @@ pub fn is_service_thread(name: Option<&str>) -> bool {
     n == "kf3-drainer"
         || n == "kf3-vamgr"
         || n == "kf3-display"
-        || n == kf_rm::gssnative::ACT_THREAD
+        || n == crate::chan::ACT_THREAD
         // ★ Review 2 item 6: the helper threads. A dead PRAMIN reaper stops releasing store views
         // (the pool of nodes runs dry); a dead VRAM provisioning thread leaves display slots
         // unmade for ever; a dead view reaper (`kf-host`) leaks pinned guest pages. None is
@@ -82,7 +82,12 @@ mod tests {
         ] {
             assert!(is_service_thread(Some(n)), "{n}");
         }
-        assert!(is_service_thread(Some(kf_rm::gssnative::ACT_THREAD)));
+        assert!(is_service_thread(Some(crate::chan::ACT_THREAD)));
+        assert_eq!(
+            crate::chan::ACT_THREAD,
+            "kf3-chan-act",
+            "the name the logs and gates know"
+        );
         for n in [
             "kf3-worker",
             "kf3-workerX",

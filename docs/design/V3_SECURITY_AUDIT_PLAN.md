@@ -54,7 +54,8 @@ Each area lists its method and what already exists. **Stage** says when it runs.
 - **Check:** no raw VMM virtual address, raw pointer, `mmap` or `transmute` in safe Rust. Window
   offsets (BAR offsets, store offsets) are used instead of addresses.
 - **Already enforced in CI:** the host-pointer gate (no `*mut`, `*const`, `NonNull` or `transmute`
-  outside `*_unsafe.rs`), the unsafe-surface gate (every unsafe file is named `*_unsafe.rs`), and
+  outside `*_unsafe.rs`; since 2026-11-13 also no pointer cast to a wide integer and no address-of
+  form, `scripts/ci/host_pointer_gate.py`), the unsafe-surface gate (every unsafe file is named `*_unsafe.rs`), and
   the unsafe-containment gates (forbid inheritance, the named crates, a ratchet).
 - **Audit:** confirm the gates cannot be bypassed (macros, `include!`, build scripts, C code in
   `kf3.c`), and that no safe API returns or accepts a host address in disguise, such as a `u64`
@@ -187,7 +188,7 @@ P1 and P2 are the rows above.
 |---|---|---|
 | **S1-20 (blocker):** USER host channels refusing physical-mode and privileged work is the host boundary, and it is untested in v3 | `crates/kf-host/src/channel.rs:603-611`; closed GSP firmware | open: client-audit box test T-PHYS-CE, both privilege arms, every family |
 | S1-01: the four lexical unsafe gates can all be passed at once by rustfmt-clean code | `.github/workflows/ci.yml:1462-1473`, `:676-682` | open |
-| S1-02: the host-pointer gate sees only pointer type names | `.github/workflows/ci.yml:734-751` | open |
+| S1-02: the host-pointer gate sees only pointer type names | `.github/workflows/ci.yml:734-751` | partly closed 2026-11-13: `scripts/ci/host_pointer_gate.py` also refuses `.as_ptr()`/`.as_mut_ptr()` cast to `u64`/`i64`/`u128`/`i128`, `&raw const|mut`, `addr_of(_mut)!` and the exposed-provenance API (known positives in `test_host_pointer_gate.py`, mutants >= 2 killers); `as usize` and named pointer variables are still not lexically detectable |
 | S1-03: the console frame's host address crosses safe code as a `usize`; `Kf3Frame` has no length | `crates/kf-cuda/src/display.rs:44-53`, `crates/kf-qemu/src/ffi_unsafe.rs:513` | open |
 | S1-04: kf-cuda's public safe API takes raw device addresses | `crates/kf-cuda/src/driver_unsafe.rs:672-842` | open |
 | S1-05: under unified addressing or HMM the in-process CUDA contexts can address the VMM; the compose kernel has no in-kernel bound | `crates/kf-cuda/src/display.rs:122-154`; `cuda/display/kf_scanout.ptx` | open |
