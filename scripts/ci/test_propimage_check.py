@@ -763,6 +763,34 @@ class T(unittest.TestCase):
             self.assertTrue(m.host_log_excerpt(log)[0].startswith("fault START"))
             self.assertEqual(len(m.host_log_excerpt(log)[0]), 400)
 
+    def test_host_log_excerpt_skips_quiet_status_lines(self):
+        quiet = "kf3: family=Ada phase=Running trapped=1 applied=2 refused=0 ram_refused=0 unshadowed_writes=0 read_exits=0"
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text(quiet + "\n" + quiet + "\nXid 79 device lost\n")
+            self.assertEqual(m.host_log_excerpt(log), ["Xid 79 device lost"])
+
+    def test_host_log_excerpt_skips_quiet_status_line_without_other_noise(self):
+        quiet = "kf3: family=Blackwell phase=Running refused=0 ram_refused=0 unshadowed_writes=0 read_exits=0 mem[error_free=1]"
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text(quiet + "\n")
+            self.assertEqual(m.host_log_excerpt(log), [])
+
+    def test_host_log_excerpt_keeps_status_line_with_nonzero_refusals(self):
+        bad = "kf3: family=Ada phase=Running trapped=1 applied=2 refused=3 ram_refused=0 unshadowed_writes=0"
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text(bad + "\n")
+            self.assertEqual(m.host_log_excerpt(log), [bad])
+
+    def test_host_log_excerpt_keeps_status_line_with_unshadowed_writes(self):
+        bad = "kf3: family=Ada phase=Running refused=0 unshadowed_writes=7"
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text(bad + "\n")
+            self.assertEqual(m.host_log_excerpt(log), [bad])
+
     def test_host_log_excerpt_missing_file_is_empty(self):
         self.assertEqual(m.host_log_excerpt("/nonexistent/qemu.log"), [])
 
@@ -1879,6 +1907,8 @@ def mutants():
         ("run-replace", 'kw.setdefault("errors", "replace")', "pass"),
         ("edw-title", '"kfsample.sldprt" not in title.lower()', "False"),
         ("edw-sample", 'r.get("sample") != "kfsample.sldprt" or', "False and"),
+        ("hostlog-status", "if STATUS_LINE.match(line):", "if False:"),
+        ("hostlog-nonzero", "return bool(STATUS_NONZERO.search(line))", "return False"),
         ("hostlog-limit", "[-limit:]", "[:]"),
         ("hostlog-trunc", "ln[:400]", "ln"),
         ("error-step", 'if r.get("step") else ""', 'if False else ""'),

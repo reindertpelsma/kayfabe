@@ -566,13 +566,25 @@ def stage_gop(work, directory, explicit=None):
 HOST_LOG_PATTERN = re.compile(r"(?i)xid|tdr|reset|refus|walker|pramin|error|warn|timeout|fault|fail")
 
 
+STATUS_LINE = re.compile(r"^kf3: family=\S+ phase=")
+STATUS_NONZERO = re.compile(r"\b(refused|ram_refused|unshadowed_writes|read_exits)=[1-9]")
+
+
+def _host_line_interesting(line, pattern):
+    """The periodic kf3 status line names 'refused' even when the counter is 0 (measured 2026-11-14: it flooded
+    the excerpt); it counts only when one of its error counters is non-zero."""
+    if STATUS_LINE.match(line):
+        return bool(STATUS_NONZERO.search(line))
+    return bool(pattern.search(line))
+
+
 def host_log_excerpt(path, limit=300, pattern=HOST_LOG_PATTERN):
     """Last `limit` lines of the host qemu/kf3 log that match the pattern (the whole log is never copied)."""
     try:
         lines = Path(path).read_text(errors="replace").splitlines()
     except OSError:
         return []
-    return [ln[:400] for ln in lines if pattern.search(ln)][-limit:]
+    return [ln[:400] for ln in lines if _host_line_interesting(ln, pattern)][-limit:]
 
 
 def hold_for_release(path, max_s, sleep=time.sleep, clock=time.monotonic):
