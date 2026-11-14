@@ -165,6 +165,11 @@ proof. Archived QEMU headers are not live ABI declarations.
   are bound to SHA-256 hashes of **every Rust source and its manifest**. Added,
   removed or changed files fail that guard. Its tests still execute. This
   exception does not authorize new unsafe surfaces in the prototype.
+- **Caller contracts (2026-11-14).** `scripts/ci/caller_contracts.py` requires every `CALLER-CONTRACT:`
+  definition comment (owner rule, 2026-11-13) in `crates/ cuda/ qemu/hw/misc/kf3/ broker/ firmware/ tools/` to have a
+  reviewed row in `scripts/ci/caller-contracts.tsv`; the list is exact (missing row, wrong count, stale row or empty
+  reason fails). A citation in running prose is not a definition. Tests and mutants: `test_caller_contracts.py`,
+  `caller_contracts_mutants.py`.
 
 ## Firmware (2026-10-03)
 

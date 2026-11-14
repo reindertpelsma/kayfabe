@@ -897,7 +897,10 @@ impl ChanPlane {
             if let Some(tx) = &tx {
                 let identity = identity.clone();
                 let undo: Act = Box::new(move |me| me.withdraw_user_ring(key, &identity));
-                let _ = tx.send((undo, kf_gsp::Deferred::new(), "Windows USER ring withdraw"));
+                let _ = tx.send(
+                    (undo, kf_gsp::Deferred::new(), "Windows USER ring withdraw"),
+                    super::ActClass::Release,
+                );
             }
         });
         let birth = Birth {
