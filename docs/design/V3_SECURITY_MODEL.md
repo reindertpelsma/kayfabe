@@ -295,7 +295,7 @@ A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-sta
 | scratch memfds, mapping growth | guest kernel | `v3-scratch-bound` | fixed on branch (unmerged). ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-scratch-bound` at `1461bfd7`): merged there — one scratch tile per BAR window, and kf3 refuses RAM-pinning co-residents; bounded |
 | host channel IDs / twin count | guest userspace via guest RM | the host's per-runlist count only | **open** |
 | twin-private host VRAM (RM-owned context buffers) | guest userspace via guest RM | uncounted (`crates/kf-qemu/src/cardbudget.rs:1-19` covers BAR1 and the store only) | **open, S1-82** |
-| host NVENC sessions | guest userspace | none per VM (`crates/kf-qemu/src/chan.rs` `ChanPlane::encoder_session`; `:2551-2598` at `12a526df`) | **open, S1-42** |
+| host NVENC sessions | guest userspace | none per VM (`crates/kf-qemu/src/chan.rs` `ChanPlane::encoder_session`; `:2551-2598` at `12a526df`). ⊘ CORRECTED 2026-11-14: 3 per VM on branch `claude/secfix-queues-20261113` (`crates/kf-qemu/src/encquota.rs`), unmerged | **open, S1-42** (fixed on branch) |
 | host BAR1 across VMs | guest kernel | this process only (`cardbudget.rs:10-13`) | **open** |
 | PRAMIN view retire queue (fds and BAR1 aperture) | guest kernel | unbounded channel (`crates/kf-qemu/src/mem.rs` `TrapNodes::start`, its `retire` `mpsc::channel::<StoreView>()`; `:301` at `12a526df`). ⊘ CORRECTED 2026-11-14: bounded on branch `claude/secfix-queues-pramin-20261113` (`TrapPool`: no open on the vCPU, an empty pool refuses the move, retire queue 40), unmerged | **open, S1-45** (fixed on branch) |
 | runlist time (TSG timeslice) | guest kernel | host minimum only | **open, S1-44** |

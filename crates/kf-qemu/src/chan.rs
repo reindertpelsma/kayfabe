@@ -66,6 +66,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
+#[path = "encquota.rs"]
+mod encquota;
 #[path = "userpump.rs"]
 mod userpump;
 #[path = "userquota.rs"]
@@ -164,6 +166,77 @@ fn admit_act(queued: &std::sync::atomic::AtomicUsize, cap: usize, class: ActClas
 /// admission). Never below zero.
 fn act_taken(queued: &std::sync::atomic::AtomicUsize) {
     let _ = queued.try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1));
+}
+
+/// ★ 2026-11-14 (review 1 F-05 = S1-42): one guest NVENC session acquire/release against the
+/// per-VM book, `host(cmd)` being the host control. An acquire is reserved BEFORE the host call and
+/// refused `NV_ERR_INSUFFICIENT_RESOURCES` with no host call past the cap; a host refusal gives the
+/// reservation back; a release with nothing held makes no host call. The book's lock is never held
+/// across `host`. Returns the reply status. `refused` counts host refusals (rate-limited line).
+fn enc_session_step(
+    book: &Mutex<encquota::EncSessions>,
+    refused: &AtomicU64,
+    client: u32,
+    acquire: bool,
+    host: impl FnOnce(u32) -> Result<(), kf_host::RmError>,
+) -> u32 {
+    let Ok(mut b) = book.lock() else {
+        return NV_ERR_INVALID_STATE;
+    };
+    let reservation = if acquire {
+        match b.reserve(client) {
+            Ok(r) => Some(r),
+            Err(e) => {
+                if crate::reset::loud(e.refused) {
+                    eprintln!(
+                        "kf3: NVENC session acquire by guest client {client:#x} REFUSED: the VM \
+                         holds {} of its cap {} (refusal #{})",
+                        e.held, e.cap, e.refused
+                    );
+                }
+                return NV_ERR_INSUFFICIENT_RESOURCES;
+            }
+        }
+    } else if b.of(client) == 0 {
+        return 0;
+    } else {
+        None
+    };
+    drop(b);
+    let r = host(if acquire {
+        kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE
+    } else {
+        kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE
+    });
+    let Ok(mut b) = book.lock() else {
+        return NV_ERR_INVALID_STATE;
+    };
+    match (r, reservation) {
+        (Ok(()), Some(res)) => {
+            b.keep(res);
+            0
+        }
+        (Ok(()), None) => {
+            b.released(client);
+            0
+        }
+        (Err(e), res) => {
+            if let Some(res) = res {
+                b.cancel(res);
+            }
+            let n = refused.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+            if crate::reset::loud(n) {
+                eprintln!(
+                    "kf3: host NVENC session {} for guest client {client:#x} REFUSED: {e:?}",
+                    if acquire { "acquire" } else { "release" }
+                );
+            }
+            match e {
+                kf_host::RmError::Other(s) if s < 0x4B00 => s,
+                _ => NV_ERR_INVALID_STATE,
+            }
+        }
+    }
 }
 
 /// One queued act: the act, the cell its reply waits on, its name.
@@ -2468,8 +2541,10 @@ pub struct ChanPlane {
     /// `FIFO_EVENT_MTHD` edge (credited to `pt_fifo_raised` when the tick delivers it).
     pt_fifo_owed: [AtomicU64; kf_chan::ptnsi::VECTORS / 64],
     /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
-    /// released with the guest's release or its client's free).
-    enc_sessions: Mutex<HashMap<u32, u32>>,
+    /// released with the guest's release or its client's free). ★ 2026-11-14 (review 1 F-05):
+    /// capped per VM ([`encquota::ENC_SESSIONS_PER_VM`]), checked before the host call. Locked by
+    /// acts and briefly by the free statement; never held across a host call.
+    enc_sessions: Mutex<encquota::EncSessions>,
     /// ★ v3-video: guest TSG `(hClient, hTsg, hContextShare)` → `(host group, live members)` — the
     /// guest's TSG membership mirrored, so its channels share ONE host GR context as on hardware.
     /// Touched by acts only (serialised on the act thread).
@@ -3148,7 +3223,7 @@ impl ChanPlane {
             pt_fifo_owed: std::array::from_fn(|_| AtomicU64::new(0)),
             groups: Mutex::new(HashMap::new()),
             guest_sched: Mutex::new(crate::latejoin::GuestTsgSched::default()),
-            enc_sessions: Mutex::new(HashMap::new()),
+            enc_sessions: Mutex::new(encquota::EncSessions::default()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
@@ -5777,11 +5852,7 @@ impl ChanPlane {
         // ★ x11-dispsw: display-SW twins that go WITH their channel's twin (host RM frees them with
         // it) leave the maps with it, so `live=` drops at once; a refused channel free is counted
         // as leaving them behind on the host (`free_refused`, `crate::dispsw::released_with_channel`).
-        let sessions = client == object
-            && self
-                .enc_sessions
-                .lock()
-                .is_ok_and(|m| m.get(&client).is_some_and(|n| *n > 0));
+        let sessions = client == object && self.enc_sessions.lock().is_ok_and(|m| m.of(client) > 0);
         if translated.is_empty()
             && twins.is_empty()
             && obj.is_none()
@@ -5918,55 +5989,35 @@ impl ChanPlane {
     /// ★ v3-video: a guest NVENC session acquire/release, carried to the HOST's GPU-wide slot
     /// accounting (`kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE`): an act (a host ioctl), the reply
     /// held until it lands. A release with nothing held is answered without a host call.
+    /// ★ 2026-11-14 (review 1 F-05 = S1-42): an acquire past the per-VM cap
+    /// ([`encquota::ENC_SESSIONS_PER_VM`]) is refused `NV_ERR_INSUFFICIENT_RESOURCES` BEFORE the
+    /// host call, counted, and logged only when [`crate::reset::loud`] picks the count. The act
+    /// resolves its own cell, so acquires and releases are quiet (no line per guest call).
     fn encoder_session(&self, client: u32, acquire: bool) -> ChanAnswer {
-        self.defer(
+        let d = kf_gsp::Deferred::new();
+        let cell = d.clone();
+        self.defer_cell(
             "encoder session",
             Box::new(move |me: &ChanPlane| {
-                let held = me
-                    .enc_sessions
-                    .lock()
-                    .map(|m| m.get(&client).copied().unwrap_or(0))
-                    .unwrap_or(0);
-                if !acquire && held == 0 {
-                    return Ok(format!(
-                        "{client:#x} NVENC session release with none held — no host call"
-                    ));
-                }
-                let cmd = if acquire {
-                    kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE
-                } else {
-                    kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE
-                };
-                let mut p = [0u8; kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE];
-                me.rm
-                    .raw_control(me.rm.subdevice(), cmd, &mut p)
-                    .map_err(|e| {
-                        let st = match e {
-                            kf_host::RmError::Other(s) if s < 0x4B00 => s,
-                            _ => NV_ERR_INVALID_STATE,
-                        };
-                        (
-                            st,
-                            format!(
-                                "{client:#x} host NVENC session {}: {e:?}",
-                                if acquire { "acquire" } else { "release" }
-                            ),
-                        )
-                    })?;
-                let now = me.enc_sessions.lock().map(|mut m| {
-                    let c = m.entry(client).or_insert(0);
-                    if acquire {
-                        *c = c.saturating_add(1)
-                    } else {
-                        *c = c.saturating_sub(1)
-                    }
-                    *c
-                });
-                Ok(format!(
-                    "{client:#x} NVENC session {} on the host (held now {now:?})",
-                    if acquire { "ACQUIRED" } else { "released" }
-                ))
+                cell.resolve(me.encoder_session_act(client, acquire));
+                Ok(String::new())
             }),
+            d,
+        )
+    }
+
+    /// [`Self::encoder_session`]'s act body: the reply status ([`enc_session_step`] with OUR host
+    /// subdevice's control as the host call).
+    fn encoder_session_act(&self, client: u32, acquire: bool) -> u32 {
+        enc_session_step(
+            &self.enc_sessions,
+            &self.acts_refused,
+            client,
+            acquire,
+            |cmd| {
+                let mut p = [0u8; kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE];
+                self.rm.raw_control(self.rm.subdevice(), cmd, &mut p)
+            },
         )
     }
 
@@ -5975,8 +6026,7 @@ impl ChanPlane {
         let n = self
             .enc_sessions
             .lock()
-            .ok()
-            .and_then(|mut m| m.remove(&client))
+            .map(|mut m| m.take_client(client))
             .unwrap_or(0);
         (0..n)
             .map(|_| {
@@ -8618,7 +8668,7 @@ impl ChanPlane {
             out.extend(m.0.iter().map(|k| k.0));
         }
         if let Ok(m) = self.enc_sessions.lock() {
-            out.extend(m.iter().filter(|(_, n)| **n > 0).map(|(c, _)| *c));
+            out.extend(m.clients());
         }
         if let Ok(m) = self.groups.lock() {
             out.extend(m.keys().map(|k| k.0));
@@ -10140,5 +10190,93 @@ mod act_cap_tests {
             3,
             "not counted as over the cap"
         );
+    }
+}
+
+/// ★ 2026-11-14 (security review 1 F-05 = S1-42): the per-VM NVENC cap at the act's boundary,
+/// with a fake host call (no HostRm).
+#[cfg(test)]
+mod nvenc_cap_tests {
+    use super::{NV_ERR_INSUFFICIENT_RESOURCES, NV_ERR_INVALID_STATE, enc_session_step, encquota};
+    use std::cell::Cell;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    /// ★ Review 1 F-05: a guest process loops the NVENC acquire. Past the per-VM cap the host is
+    /// not called at all and the guest gets `NV_ERR_INSUFFICIENT_RESOURCES`; the client's
+    /// releases call the host once per held slot and free the cap again.
+    #[test]
+    fn nvenc_acquires_past_the_cap_make_no_host_call() {
+        let book = Mutex::new(encquota::EncSessions::default());
+        let refused = AtomicU64::new(0);
+        let calls = Cell::new(0u32);
+        let host = |_cmd: u32| {
+            calls.set(calls.get() + 1);
+            Ok(())
+        };
+        let cap = encquota::ENC_SESSIONS_PER_VM;
+        for i in 0..1000u32 {
+            let st = enc_session_step(&book, &refused, 0xc1, true, host);
+            assert_eq!(
+                st,
+                if i < cap {
+                    0
+                } else {
+                    NV_ERR_INSUFFICIENT_RESOURCES
+                }
+            );
+        }
+        assert_eq!(
+            calls.get(),
+            cap,
+            "one host call per granted slot, none past the cap"
+        );
+        assert_eq!(enc_session_step(&book, &refused, 0xc1, false, host), 0);
+        assert_eq!(calls.get(), cap + 1);
+        assert_eq!(
+            enc_session_step(&book, &refused, 0xc2, true, host),
+            0,
+            "a slot is free again"
+        );
+        assert_eq!(
+            refused.load(Ordering::Relaxed),
+            0,
+            "no host refusal happened"
+        );
+    }
+
+    /// A host refusal gives the reservation back and passes the host's status; a release with
+    /// none held makes no host call.
+    #[test]
+    fn nvenc_host_refusal_cancels_and_release_without_slot_is_free() {
+        let book = Mutex::new(encquota::EncSessions::with_cap(1));
+        let refused = AtomicU64::new(0);
+        let st = enc_session_step(&book, &refused, 1, true, |cmd| {
+            assert_eq!(cmd, kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE);
+            Err(kf_host::RmError::Other(0x69))
+        });
+        assert_eq!(st, 0x69);
+        assert_eq!(refused.load(Ordering::Relaxed), 1);
+        let st = enc_session_step(&book, &refused, 2, true, |_| {
+            Err(kf_host::RmError::Other(0x4B00))
+        });
+        assert_eq!(
+            st, NV_ERR_INVALID_STATE,
+            "a status outside RM's range is not passed on"
+        );
+        {
+            let b = book.lock().expect("book");
+            assert_eq!(b.of(1) + b.of(2), 0, "refused acquires hold nothing");
+        }
+        let st = enc_session_step(&book, &refused, 3, false, |_| panic!("no host call"));
+        assert_eq!(st, 0);
+        let st = enc_session_step(&book, &refused, 4, true, |_| Ok(()));
+        assert_eq!(st, 0, "the cancelled reservations left the cap free");
+        let st = enc_session_step(&book, &refused, 4, false, |cmd| {
+            assert_eq!(cmd, kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE);
+            Ok(())
+        });
+        assert_eq!(st, 0);
+        assert_eq!(book.lock().expect("book").of(4), 0);
     }
 }
