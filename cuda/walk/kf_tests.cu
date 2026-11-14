@@ -2702,12 +2702,108 @@ static void t_kind_uniform_is_one_run(void)
                 F4K | (9u << KFWR_RF_KIND_SHIFT), KFWR_OP_MAP}});
 }
 
+
+/* ══ VER3 (Hopper, Blackwell): the 4 KiB vetoes on the PRODUCTION (parallel) path ══════════════
+ * Security review 3 F-1 (S1-60, S1-67), 2026-11-13. Compiled only into kf_tests_ver3
+ * (-DKF_ALLOW_UNTESTED_VER3, `make check-ver3`), the build whose kf_create accepts the VER3 descriptor
+ * (`kf_format_ver3_untested`, pinned byte for byte to the production Rust descriptor by
+ * crates/kf-cuda/tests/walk_abi_matches_the_cu.rs). Raw bits from ogkm-580 `hopper/gh100/dev_mmu.h`,
+ * written here without any kernel helper (the same encodings as kf_cpu_walk.cpp's CPU cases):
+ *   PDE: AP 2:1 (1 vid), PCF 5:3, ADDR 51:12 | dual low = big half: AP 2:1, PCF_BIG 5:3, ADDR_BIG 51:8
+ *   dual high = small half: AP, PCF_SMALL, ADDR 51:12 | PTE: VALID 0, AP 2:1 (0 vid), PCF 7:3, ADDR 51:12
+ *   PTE PCF NO_VALID_4KB_PAGE = 3; PDE PCF SPARSE_ATS_ALLOWED = 1, SPARSE_ATS_NOT_ALLOWED = 3. */
+#ifdef KF_ALLOW_UNTESTED_VER3
+static const uint64_t V3A = 0x000FFFFFFFFFF000ull;
+struct V3T {
+    Gpga &g;
+    uint64_t root, pd0, big, small;
+    static const uint64_t VA = 3ull << 21;   /* PD4..PD1 index 0, PD0 index 3 */
+    explicit V3T(Gpga &gg) : g(gg)
+    {
+        root = g.alloc(4096, 4096);
+        const uint64_t pd3 = g.alloc(4096, 4096), pd2 = g.alloc(4096, 4096), pd1 = g.alloc(4096, 4096);
+        pd0 = g.alloc(4096, 4096); big = g.alloc(256, 256); small = g.alloc(4096, 4096);
+        g.u64(root) = 2ull | (pd3 & V3A); g.u64(pd3) = 2ull | (pd2 & V3A);
+        g.u64(pd2) = 2ull | (pd1 & V3A); g.u64(pd1) = 2ull | (pd0 & V3A);
+    }
+    void dual(uint64_t lo, uint64_t hi) { g.u64(pd0 + 48u) = lo; g.u64(pd0 + 56u) = hi; }
+    uint64_t big_half(void) const { return 2ull | (big & 0x000FFFFFFFFFFF00ull); }
+    uint64_t small_half(void) const { return 2ull | (small & V3A); }
+    static uint64_t pte(uint64_t phys) { return 1ull | (phys & V3A); }
+};
+
+static KfWalkCfg cfg_ver3(void) { KfWalkCfg c = cfg_default(); c.table_version = KF_TBL_VER3; return c; }
+
+static void t_ver3_unmapped_big_pte_hides_stale_4k(void)
+{
+    Fix f(4u << 20, cfg_ver3());
+    CHECK_M(f.w != NULL, "the VER3 descriptor must be accepted in this build");
+    if (!f.w) return;
+    V3T t(f.g);
+    t.dual(t.big_half(), t.small_half());
+    f.g.u64(t.big) = 3ull << 3;          /* slot 0: VALID=0, PCF=NO_VALID_4KB_PAGE: its 4 KiB PTEs are stale */
+    f.g.u64(t.big + 8u) = 0ull;          /* slot 1: INVALID: the 4 KiB table is consulted                  */
+    for (uint32_t i = 0; i < 32u; i++) f.g.u64(t.small + 8u * i) = V3T::pte((i < 16u ? 0x100000ull : 0x200000ull) + 4096ull * i);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{V3T::VA + 0x10000ull, 0x200000ull + 16ull * 4096ull, 16ull * 4096ull, F4K, KFWR_OP_MAP}});
+}
+
+static void t_ver3_sparse_big_half_hides_small_table(void)
+{
+    const uint64_t pcf_big[2] = {1ull, 3ull};   /* SPARSE_ATS_ALLOWED, SPARSE_ATS_NOT_ALLOWED */
+    for (int k = 0; k < 2; k++) {
+        Fix f(4u << 20, cfg_ver3());
+        if (!f.w) { CHECK(f.w != NULL); return; }
+        V3T t(f.g);
+        t.dual(pcf_big[k] << 3, t.small_half());   /* big half: aperture INVALID, PCF_BIG sparse */
+        for (uint32_t i = 0; i < 4u; i++) f.g.u64(t.small + 8u * i) = V3T::pte(0x100000ull + 4096ull * i);
+        f.upload();
+        CHECK_EQ(f.refresh({t.root}), 0);
+        validate(f);
+        CHECK_M(f.hdr.run_count == 0u, pcf_big[k] == 1ull ? "PCF_BIG=1 must hide the small table" : "PCF_BIG=3 must hide the small table");
+        if (g_fails_here) dump(f);
+    }
+}
+
+static void t_ver3_non_vetoes_keep_the_4k_table(void)
+{
+    /* Controls: a big PTE that is SPARSE (1) or MAPPING_NOWHERE (2), and a big half that is
+     * INVALID_ATS_NOT_ALLOWED (2), are not "nothing below": the 4 KiB leaves stand. */
+    for (uint32_t pcf = 1u; pcf <= 2u; pcf++) {
+        Fix f(4u << 20, cfg_ver3());
+        if (!f.w) { CHECK(f.w != NULL); return; }
+        V3T t(f.g);
+        t.dual(t.big_half(), t.small_half());
+        f.g.u64(t.big) = (uint64_t)pcf << 3;
+        for (uint32_t i = 0; i < 16u; i++) f.g.u64(t.small + 8u * i) = V3T::pte(0x100000ull + 4096ull * i);
+        f.upload();
+        CHECK_EQ(f.refresh({t.root}), 0);
+        expect(f, {{V3T::VA, 0x100000ull, 16ull * 4096ull, F4K, KFWR_OP_MAP}});
+    }
+    Fix f(4u << 20, cfg_ver3());
+    if (!f.w) return;
+    V3T t(f.g);
+    t.dual(2ull << 3, t.small_half());
+    for (uint32_t i = 0; i < 4u; i++) f.g.u64(t.small + 8u * i) = V3T::pte(0x100000ull + 4096ull * i);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{V3T::VA, 0x100000ull, 4ull * 4096ull, F4K, KFWR_OP_MAP}});
+}
+#endif
+
 /* ══ registry ════════════════════════════════════════════════════════════════ */
 struct Case { const char *name; void (*fn)(void); };
 static const Case CASES[] = {
     { "format/refuses_unknown_table_version",   t_format_refuses_unknown_table_version },
     { "format/refuses_untested_ver3",           t_format_refuses_untested_ver3 },
     { "format/report_is_self_describing",       t_format_report_is_self_describing },
+#ifdef KF_ALLOW_UNTESTED_VER3
+    { "ver3/unmapped_big_pte_hides_stale_4k",   t_ver3_unmapped_big_pte_hides_stale_4k },
+    { "ver3/sparse_big_half_hides_small_table", t_ver3_sparse_big_half_hides_small_table },
+    { "ver3/non_vetoes_keep_the_4k_table",      t_ver3_non_vetoes_keep_the_4k_table },
+#endif
+
     { "format/sparse_is_counted",               t_format_sparse_is_counted },
 
     { "correctness/kind_joins_run_identity",    t_kind_joins_run_identity },
