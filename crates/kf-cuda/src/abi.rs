@@ -108,6 +108,11 @@ pub const KFWR_HF_RESYNC: u16 = 1 << 1;
 pub const KFWR_HF_DIFF: u16 = 1 << 7;
 /// `KFWR_OP_MAP`.
 pub const KFWR_OP_MAP: u16 = 1;
+/// `KFWR_OP_REMAP` (`kf_walk.h`): a placement whose target moved. ★ 2026-11-14: named here so
+/// [`crate::walk::Report::validate`] accepts exactly the three ops the header defines (S1-69).
+pub const KFWR_OP_REMAP: u16 = 3;
+/// `KFWR_VERSION` (`kf_walk.h`): the report format version the header carries.
+pub const KFWR_VERSION: u16 = 1;
 /// ★ A committed placement the host answered "already held" — its UNMAP is retired without asking
 /// the host (P6b ruling (a)). Mirrors `KFWR_RF_HELD`.
 pub const KFWR_RF_HELD: u32 = 1 << 31;

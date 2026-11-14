@@ -171,7 +171,11 @@ export class Vast {
       refuse();
     return String(candidate.id);
   }
-  async inspect(record) {
+  // `destroying`: teardown is by the PROVEN instance id (the id this Worker created, or the one it
+  // proved by label and onstart hash at reconcile, both recorded in the ledger). Review F4
+  // (2026-11-13): the label is a box-writable field, so a label that changed after the proof must
+  // not stop a destroy; the id, the ledger's own label prefix and the onstart proof still must hold.
+  async inspect(record, { destroying = false } = {}) {
     const response = await this.api('/api/v0/instances/' + record.id, 'GET', undefined, true);
     if (response === null) return null;
     const i = response.instances;
@@ -180,7 +184,7 @@ export class Vast {
       !i ||
       String(i.id) !== record.id ||
       !record.label.startsWith('kf-ci-') ||
-      (record.idSource !== 'create' && i.label !== record.label)
+      (!destroying && record.idSource !== 'create' && i.label !== record.label)
     )
       refuse('OWNERSHIP_MISMATCH', 409);
     if (record.proofVersion === 1 && !record.contractVerified) {
@@ -215,11 +219,11 @@ export class Vast {
     return new TextDecoder('utf-8', { fatal: true }).decode(data);
   }
   async destroy(record) {
-    const instance = await this.inspect(record);
+    const instance = await this.inspect(record, { destroying: true });
     if (instance === null) return;
     const r = await this.api('/api/v0/instances/' + record.id, 'DELETE');
     if (r.success !== true) refuse();
     // Acknowledgement is not absence. Retain liability and retry via cron if still present.
-    if ((await this.inspect(record)) !== null) refuse();
+    if ((await this.inspect(record, { destroying: true })) !== null) refuse();
   }
 }
