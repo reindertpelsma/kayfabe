@@ -736,6 +736,42 @@ class T(unittest.TestCase):
         self.assertNotIn(".url", script)
         self.assertNotIn("SetCursorPos", script)
 
+    def test_wukong_script_captures_vram_and_event_context(self):
+        script = m.render_check("wukong", run_id="a" * 32)
+        for needle in ("Win32_VideoController", "nvidia-smi -q -d MEMORY", "dxdiag", "system_events.txt", "nvlddmkm"):
+            self.assertIn(needle, script)
+
+    def test_host_log_excerpt_filters_and_bounds(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text("\n".join(["quiet line"] * 5 + [f"Xid {i} refused" for i in range(10)] + ["pramin ok"]))
+            out = m.host_log_excerpt(log, limit=4)
+            self.assertEqual(len(out), 4)
+            self.assertTrue(all(("Xid" in x or "pramin" in x) for x in out))
+            self.assertNotIn("quiet line", out)
+
+    def test_host_log_excerpt_keeps_the_latest_lines(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text("\n".join(f"error {i}" for i in range(50)))
+            self.assertEqual(m.host_log_excerpt(log, limit=2), ["error 48", "error 49"])
+
+    def test_host_log_excerpt_long_line_keeps_its_start(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text("fault START " + "y" * 900)
+            self.assertTrue(m.host_log_excerpt(log)[0].startswith("fault START"))
+            self.assertEqual(len(m.host_log_excerpt(log)[0]), 400)
+
+    def test_host_log_excerpt_missing_file_is_empty(self):
+        self.assertEqual(m.host_log_excerpt("/nonexistent/qemu.log"), [])
+
+    def test_host_log_excerpt_truncates_long_lines(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "q.log"
+            log.write_text("error " + "x" * 5000)
+            self.assertLessEqual(len(m.host_log_excerpt(log)[0]), 400)
+
     def test_wukong_check_points_at_the_exe_not_the_url_shortcut(self):
         self.assertTrue(m.CHECKS["wukong"]["exe"].endswith("b1_benchmark.exe"))
 
@@ -1821,6 +1857,8 @@ def mutants():
         ("run-replace", 'kw.setdefault("errors", "replace")', "pass"),
         ("edw-title", '"kfsample.sldprt" not in title.lower()', "False"),
         ("edw-sample", 'r.get("sample") != "kfsample.sldprt" or', "False and"),
+        ("hostlog-limit", "[-limit:]", "[:]"),
+        ("hostlog-trunc", "ln[:400]", "ln"),
         ("wukong-crash", 'if crash:', "if False:"),
         ("wukong-kernel", 'if str(e.get("code")) in GPU_KERNEL_EVENTS', "if False and str(e.get(\"code\")) in GPU_KERNEL_EVENTS"),
         ("wukong-start", 'if r.get("shipping_seen") is not True:', "if False:"),

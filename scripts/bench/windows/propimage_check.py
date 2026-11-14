@@ -563,6 +563,18 @@ def stage_gop(work, directory, explicit=None):
     raise ValueError("kf-gop.signed.efi not found (pass --gop-efi): " + ", ".join(map(str, cands)))
 
 
+HOST_LOG_PATTERN = re.compile(r"(?i)xid|tdr|reset|refus|walker|pramin|error|warn|timeout|fault|fail")
+
+
+def host_log_excerpt(path, limit=300, pattern=HOST_LOG_PATTERN):
+    """Last `limit` lines of the host qemu/kf3 log that match the pattern (the whole log is never copied)."""
+    try:
+        lines = Path(path).read_text(errors="replace").splitlines()
+    except OSError:
+        return []
+    return [ln[:400] for ln in lines if pattern.search(ln)][-limit:]
+
+
 def hold_for_release(path, max_s, sleep=time.sleep, clock=time.monotonic):
     """Manual iteration aid: keep the booted guest up until the release file exists (or max_s passes).
 
@@ -856,6 +868,9 @@ if(-not (Get-Process steam -ErrorAction SilentlyContinue)){
  $w=(Get-Date).AddSeconds(90); while((Get-Date) -lt $w -and -not (Get-Process steamwebhelper -ErrorAction SilentlyContinue)){Start-Sleep 3}
  Start-Sleep 10
 }
+$r.video_controllers=@(Get-CimInstance Win32_VideoController | ForEach-Object {@{name=$_.Name;adapter_ram=$_.AdapterRAM;driver=$_.DriverVersion}})
+try {& nvidia-smi -q -d MEMORY 2>&1 | Out-File -Encoding utf8 "$D\nvidia_smi_memory.txt"} catch {}
+try {$dx=Start-Process dxdiag -ArgumentList "/t","$D\dxdiag.txt" -PassThru;$dx.WaitForExit(90000) | Out-Null} catch {}
 $env:SteamAppId=$appid;$env:SteamGameId=$appid
 $p=Start-Process $exe -WorkingDirectory $game -PassThru
 $r.appid=$appid;$r.shipping_seen=$false;$r.shipping_secs=0;$r.vram_peak_mib=0;$r.vram_total_mib=0;$r.samples=@()
@@ -884,6 +899,7 @@ if($dir -and (Test-Path "$($dir.FullName)\CrashContext.runtime-xml")){
 }
 $r.kernel_events=@(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1001;StartTime=$t0} -ErrorAction SilentlyContinue | ForEach-Object {$m=[regex]::Match($_.Message,'Event Name: (\w+)[\s\S]*?P1: (\w+)');if($m.Success -and $m.Groups[1].Value -eq 'LiveKernelEvent'){@{event=$m.Groups[1].Value;code=$m.Groups[2].Value;time=(Epoch $_.TimeCreated)}}})
 $r.app_errors=@(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1000;StartTime=$t0} -ErrorAction SilentlyContinue | Where-Object {$_.Message -match 'b1-Win64-Shipping'} | ForEach-Object {$m=$_.Message;@{time=(Epoch $_.TimeCreated);text=$m.Substring(0,[Math]::Min(400,$m.Length))}})
+Get-WinEvent -FilterHashtable @{LogName='System';StartTime=$t0} -ErrorAction SilentlyContinue | Where-Object {$_.ProviderName -match 'Display|nvlddmkm|dxgkrnl|BugCheck|LiveKernel'} | Select-Object -First 200 | ForEach-Object {'{0} {1} id={2} {3}' -f $_.TimeCreated.ToString('HH:mm:ss'),$_.ProviderName,$_.Id,($_.Message -replace '\s+',' ').Substring(0,[Math]::Min(300,$_.Message.Length))} | Set-Content "$D\system_events.txt"
 Get-Process | Where-Object {$_.Name -match '^(b1_benchmark|b1-Win64-Shipping|CrashReportClient)$' -and $_.StartTime -gt $t0.AddSeconds(-5)} | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
 """
 
@@ -1411,6 +1427,9 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
             "result.3dmark-result",
             "3dmark.png",
             "edrawings.png",
+            "nvidia_smi_memory.txt",
+            "dxdiag.txt",
+            "system_events.txt",
         ):
             limit = 16 * 1024 * 1024 if f == "model.step" or f.endswith((".png", ".3dmark-result")) else 1024 * 1024
             p = guest.ps(
@@ -1524,6 +1543,11 @@ def main(argv=None):
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
     ap.add_argument("--apps", default=",".join(CHECKS))
     ap.add_argument(
+        "--fb-mb",
+        type=int,
+        help="DIAGNOSTIC ARM: override the guest-visible FB size (the image's own value is the default)",
+    )
+    ap.add_argument(
         "--hold-until-file",
         help="Manual iteration: after verify, keep the guest up until this file appears (max 3 h)",
     )
@@ -1590,6 +1614,10 @@ def main(argv=None):
             if PI.utc(a.stop_utc) < PI.utc(state["clock"]["last_time_at_stop_utc"]):
                 raise ValueError("Refusing backwards stop-time override")
             state["clock"]["last_time_at_stop_utc"] = PI.fmt(PI.utc(a.stop_utc))
+        if a.fb_mb is not None:
+            if not 1024 <= a.fb_mb <= 1048576:
+                raise ValueError("--fb-mb out of range")
+            state["qemu"]["fb_mb"] = a.fb_mb
         work = Path(a.work).resolve()
         work.mkdir(parents=True, exist_ok=a.resume)
         (work / "run").mkdir(exist_ok=a.resume)
@@ -1624,6 +1652,8 @@ def main(argv=None):
         (work / "state.json").write_text(json.dumps(state))
         kind = "resumed" if a.resume else "fresh"
         record("clock", "PASS", f"RTC base {PI.fmt(rtc_base)} ({kind} overlay)")
+        if a.fb_mb is not None:
+            record("fb-mb", "PASS", f"DIAGNOSTIC ARM: guest-visible FB {a.fb_mb} MiB (image default differs)")
         env = dict(os.environ)
         for line in Path(a.flags).read_text().splitlines():
             line = line.strip()
@@ -1811,6 +1841,10 @@ def main(argv=None):
                             "Guest event log/transport lost; shutdown cause unverified, not app FAIL",
                         )
                         break
+                    if name == "wukong":
+                        (out / "host_qemu_filtered.txt").write_text(
+                            "\n".join(host_log_excerpt(r / "qemu.log")) + "\n"
+                        )
                     status, classification = app_classification(app)
                     record(
                         "app:" + name,
