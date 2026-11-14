@@ -896,8 +896,8 @@ pub struct GspFsm {
     /// than inside one held store.
     pending_command_doorbells: u32,
     /// Replies withheld until their rows are on the host — [`Reply::hold_for_refresh`].
-    /// ⊘ A queue and not a map: it is ordered, it is single-digit in every measured boot,
-    /// and the order replies are posted in is the order the guest asked for them.
+    /// ⊘ A queue and not a map: it is ordered, and the order replies are posted in is the
+    /// order the guest asked for them.
     /// ★ Bounded by [`MAX_HELD`] (security review 1, F-10).
     held: std::collections::VecDeque<HeldReply>,
     /// ★ Security review 1, F-10: drain passes that stopped because [`MAX_HELD`] replies were held.
