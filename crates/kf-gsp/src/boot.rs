@@ -1686,7 +1686,17 @@ impl GspFsm {
         let mut args_pa = None;
         let mut entry = vec![0u8; layout.entry_stride];
         for i in 0..layout.max_entries {
-            let gpa = boot_args_gpa + (i as u64) * (layout.entry_stride as u64);
+            // ★ Security review 1, F-23 (2026-11-13): `boot_args_gpa` is guest-written; an entry
+            // past the top of the address space is a named refusal, not an overflow panic.
+            let gpa = u64::try_from(i)
+                .ok()
+                .and_then(|i| i.checked_mul(layout.entry_stride as u64))
+                .and_then(|off| boot_args_gpa.checked_add(off))
+                .ok_or(crate::fault::RamRefused {
+                    gpa: boot_args_gpa,
+                    len: layout.entry_stride,
+                    why: "region-array entry past the top of the guest address space",
+                })?;
             ram.read(gpa, &mut entry)?;
             let id = read_u64(&entry, layout.id_offset)?;
             let pa = read_u64(&entry, layout.pa_offset)?;
@@ -5751,6 +5761,52 @@ mod device_reset_from_every_phase {
                 "the waiting command is now served"
             );
             assert_ne!(d.fsm.cmd_read_ptr, read_ptr);
+        }
+    }
+
+    /// ★ Security review 1, F-23 (2026-11-13): the region array's address is guest-written. With
+    /// guest RAM that answers every read, an array at the top of the address space must end in a
+    /// named refusal, never an arithmetic-overflow panic on the service thread.
+    mod region_array_address_bounds {
+        use super::*;
+
+        struct AllZero;
+        impl GuestRam for AllZero {
+            fn read(&mut self, _gpa: u64, buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
+                buf.fill(0);
+                Ok(())
+            }
+            fn write(&mut self, _gpa: u64, _b: &[u8]) -> Result<(), crate::fault::RamRefused> {
+                Ok(())
+            }
+        }
+
+        fn publish_at(gpa: u64) -> Result<ServiceReport, GspFault> {
+            let mut d = Dev::life(fresh(None), AfterSuspend::AwaitsTeardownUcode);
+            d.fsm.publish(&mut AllZero, &d.model, &mut d.policy, gpa)
+        }
+
+        fn refused_past_the_top(r: &Result<ServiceReport, GspFault>) -> bool {
+            matches!(r, Err(GspFault::GuestRam(e)) if e.why.contains("past the top"))
+        }
+
+        #[test]
+        fn an_array_whose_second_entry_wraps_is_refused() {
+            let stride = Mini {
+                seq: Seq {
+                    after: AfterSuspend::AwaitsTeardownUcode,
+                },
+            }
+            .libos_region_layout()
+            .entry_stride as u64;
+            let r = publish_at(u64::MAX - stride + 1);
+            assert!(refused_past_the_top(&r), "{r:?}");
+        }
+
+        #[test]
+        fn an_array_at_the_last_byte_is_refused() {
+            let r = publish_at(u64::MAX);
+            assert!(refused_past_the_top(&r), "{r:?}");
         }
     }
 
