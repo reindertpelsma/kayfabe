@@ -1,0 +1,23 @@
+# Ledger of every `CALLER-CONTRACT:` definition in the tree, checked by scripts/ci/caller_contracts.py (CI).
+#
+# Owner rule, 2026-11-13: a function that relies on its caller instead of validating its inputs carries a
+# doc comment starting `CALLER-CONTRACT:` (what the caller must guarantee, why it is not validated, what
+# breaks otherwise). Each such comment needs a reviewed row here, so a new deviation cannot appear silently.
+#
+# Row: path<TAB>item<TAB>count<TAB>one-line reason. `item` is the first fn/struct/impl/#define/C function
+# after the comment block; `count` is how many definitions it carries. The list is exact: a missing row, a
+# wrong count, a stale row (the contract was removed) or an empty reason fails the gate. Citations of the
+# marker in running prose are not definitions. Added 2026-11-14.
+crates/kf-cuda/src/driver_unsafe.rs	host_register	1	the host mapping behind the span outlives the registration; HostSpan carries no lifetime (kf-linux-raw type)
+crates/kf-cuda/src/driver_unsafe.rs	import_and_map	1	fd names an open RM export of at least bytes bytes; an fd number cannot be checked for openness without owning it
+crates/kf-cuda/src/driver_unsafe.rs	kernel_addr	1	the kernel bounds its own accesses by the length passed beside it; kernel parameters are opaque bytes to the driver
+crates/kf-cuda/src/driver_unsafe.rs	memcpy_d2h_async	1	no read of the range or free of buf until the stream passed this copy; queued operations are not tracked (D-05(b))
+crates/kf-host/src/lib.rs	raw_control_opaque	1	cmd and payload are authored by a host operator tool, never a guest; an opaque control has no layout to validate (F-06)
+crates/kf-linux-raw/src/mapping_unsafe.rs	as_ptr	1	the raw pointer leaves the borrow checker; its consumer (QEMU, the CUDA driver) must stop using it before the mapping drops
+crates/kf-linux-raw/src/mapping_unsafe.rs	within	1	base starts a live mapping of total bytes owned by the caller and 'a is tied to it; the owner type lives in another file
+crates/kf-qemu/src/ffi_unsafe.rs	CheckedFrame	1	proves the geometry fits len, not that len bytes are mapped at addr; addr/len still minted by safe kf-cuda code until D-02/S1-04
+crates/kf-qemu/src/mem.rs	new	1	index is in bounds of guard (private, one caller passes a position found in the same guard); otherwise deref panics, never reads out of bounds
+crates/kf-qemu/src/raw_unsafe.rs	adopt	7	QEMU-owned memory, backend fds and C callbacks with opaque state cannot be validated from Rust; each carries its # Safety contract
+cuda/walk/kf_walk.cu	kf_par_admit	1	entry < KF_MAX_PDB: a frontier entry's pdb, bounded by kf_par_seed and copied by every child; stale entries never expanded
+cuda/walk/kf_walk.cu	kf_par_expand	1	level is the host launch loop's k, first_dir <= k < KF_DIRS (walk.rs); a kernel argument the host authors
+cuda/walk/kf_walk.cu	kf_par_share	1	as kf_par_admit; counter is that entry's element of a KfDev per-entry array

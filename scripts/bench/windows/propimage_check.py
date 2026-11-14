@@ -42,6 +42,8 @@ GUEST_DIR = r"C:\kfapps"
 def run(cmd, **kw):
     kw.setdefault("capture_output", True)
     kw.setdefault("text", True)
+    if kw["text"]:
+        kw.setdefault("errors", "replace")  # guest/box output is data; a stray byte must not abort the run
     return subprocess.run(cmd, check=False, **kw)
 
 
@@ -405,14 +407,62 @@ $r.kind='FILE';$r.artifact='log.html';$r.modified=Epoch $f.LastWriteTimeUtc;$r.b
 
 
 def extract_screen_text(directory):
+    """Best-effort OCR of the result screen. Never a verdict: measured 2026-11-14, tesseract returned noise
+    for a clean result screen, so the score it may read is only reported."""
     try:
-        p = run(["tesseract", str(directory / "result.png"), str(directory / "screen")], timeout=60)
+        p = run(
+            ["tesseract", str(directory / "result.png"), str(directory / "screen"), "--psm", "11"],
+            timeout=60,
+        )
         return not p.returncode
     except (OSError, subprocess.TimeoutExpired):
         return False
 
 
+SOFTWARE_RENDERERS = re.compile(r"(?i)basic render|\bwarp\b|llvmpipe|softpipe|swiftshader|software")
+
+
+def _log_seconds(stamp):
+    h, mi, se = (int(x) for x in stamp.split(":"))
+    return h * 3600 + mi * 60 + se
+
+
+def parse_superposition_log(raw):
+    """Facts from the saved Unigine log.html, nothing guessed. The 1.1 log carries the GPU, the renderer
+    and the 'Benchmark running/stopped' interval; the score and FPS are only on the result screen."""
+    text = re.sub(r"<[^>]*>", "\n", raw)
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    facts = {"fatal": len(re.findall(r'<div class="f">', raw))}
+    for ln in lines:
+        gpu = re.fullmatch(r"\d\d:\d\d:\d\d GPU: (.+?) (\d+(?:\.\d+)+) x\d+", ln)
+        if gpu and "gpu" not in facts:
+            facts["gpu"], facts["driver"] = gpu[1], gpu[2]
+        desc = re.fullmatch(r"\d\d:\d\d:\d\d Direct3D11 desc: (.+)", ln)
+        if desc and "renderer" not in facts:
+            facts["renderer"] = desc[1].strip()
+        if "Benchmark running" in ln or "Benchmark stopped" in ln:
+            stamp = re.match(r"(\d\d:\d\d:\d\d) Benchmark (running|stopped)$", ln)
+            if stamp:
+                facts.setdefault(stamp[2], []).append(_log_seconds(stamp[1]))
+    if len(facts.get("running", [])) == 1 and len(facts.get("stopped", [])) == 1:
+        facts["interval_s"] = (facts["stopped"][0] - facts["running"][0]) % 86400
+    return facts
+
+
+def screen_values(text):
+    """Optional OCR read of the result screen: (score, min, avg, max) or None when not readable."""
+    score = re.search(r"(?i)\bscore\s*[:=]?\s*(\d+)", text)
+    fps = [
+        re.search(r"(?i)\b" + label + r"\s*[:=]?\s*(\d+(?:\.\d+)?)", text)
+        for label in ("min", "avg", "max")
+    ]
+    if not score or not all(fps):
+        return None
+    return (int(score[1]),) + tuple(float(x[1]) for x in fps)
+
+
 def validate_superposition(r, directory, start, end):
+    """Verdict from the saved log (FILE). Returns the signal text; raises ValueError when not a pass."""
     if r.get("artifact") != "log.html" or not start < r.get("modified", 0) <= end:
         raise ValueError("Stale or missing benchmark log")
     raw = (directory / "log.html").read_bytes()
@@ -428,6 +478,21 @@ def validate_superposition(r, directory, start, end):
         or log.count("Benchmark stopped") != 1
     ):
         raise ValueError("No single completed benchmark interval")
+    facts = parse_superposition_log(log)
+    interval = facts.get("interval_s")
+    if not interval or interval <= 0:
+        raise ValueError("Benchmark interval has no positive length")
+    if interval > end - start:
+        raise ValueError("Benchmark interval is longer than this run (stale or foreign log)")
+    if facts["fatal"]:
+        raise ValueError("Fatal line in the benchmark log")
+    gpu, renderer = facts.get("gpu"), facts.get("renderer")
+    if not gpu or not renderer:
+        raise ValueError("Benchmark log names no GPU or renderer")
+    if SOFTWARE_RENDERERS.search(gpu + " " + renderer):
+        raise ValueError("Software renderer: not GPU work")
+    if "nvidia" not in gpu.lower() or not gpu.startswith(renderer):
+        raise ValueError("Benchmark log GPU is not the NVIDIA device the renderer reports")
     before = (directory / "before.png").read_bytes()
     after = (directory / "result.png").read_bytes()
     if (
@@ -436,18 +501,20 @@ def validate_superposition(r, directory, start, end):
         or before == after
     ):
         raise ValueError("Missing or unchanged result screen")
-    text = (directory / "screen.txt").read_text()
-    # No guessed score from pixels: require a named positive score and all three FPS fields.
-    score = re.search(r"(?i)\bscore\s*[:=]?\s*(\d+)", text)
-    fps = [
-        re.search(r"(?i)\b" + label + r"\s*[:=]?\s*(\d+(?:\.\d+)?)", text)
-        for label in ("min", "avg", "max")
-    ]
-    if not score or int(score[1]) <= 0 or not all(fps):
-        raise ValueError("Result screen score/FPS not readable; no verdict")
-    values = [float(x[1]) for x in fps]
-    if not 0 < values[0] <= values[1] <= values[2] or not re.search(r"(?i)\bFPS\b", text):
-        raise ValueError("Invalid result screen FPS")
+    signal = (
+        f"Completed benchmark interval {interval} s on {gpu} (driver {facts['driver']}) from the saved "
+        "log; score and FPS are not in the log file"
+    )
+    try:
+        values = screen_values((directory / "screen.txt").read_text())
+    except OSError:
+        values = None
+    if values:
+        score, lo, avg, hi = values
+        if not (0 < avg and 0 <= lo <= avg <= hi and score > 0):
+            raise ValueError("Result screen read shows zero or inconsistent FPS")
+        signal += f"; screen read (not the verdict): score {score}, FPS min {lo} avg {avg} max {hi}"
+    return signal
 
 
 def load_image(archive, directory):
@@ -494,6 +561,46 @@ def stage_gop(work, directory, explicit=None):
             dst.write_bytes(c.read_bytes())
             return dst
     raise ValueError("kf-gop.signed.efi not found (pass --gop-efi): " + ", ".join(map(str, cands)))
+
+
+HOST_LOG_PATTERN = re.compile(r"(?i)xid|tdr|reset|refus|walker|pramin|error|warn|timeout|fault|fail")
+
+
+STATUS_LINE = re.compile(r"^kf3: family=\S+ phase=")
+STATUS_NONZERO = re.compile(r"\b(refused|ram_refused|unshadowed_writes|read_exits)=[1-9]")
+
+
+def _host_line_interesting(line, pattern):
+    """The periodic kf3 status line names 'refused' even when the counter is 0 (measured 2026-11-14: it flooded
+    the excerpt); it counts only when one of its error counters is non-zero."""
+    if STATUS_LINE.match(line):
+        return bool(STATUS_NONZERO.search(line))
+    return bool(pattern.search(line))
+
+
+def host_log_excerpt(path, limit=300, pattern=HOST_LOG_PATTERN):
+    """Last `limit` lines of the host qemu/kf3 log that match the pattern (the whole log is never copied)."""
+    try:
+        lines = Path(path).read_text(errors="replace").splitlines()
+    except OSError:
+        return []
+    return [ln[:400] for ln in lines if _host_line_interesting(ln, pattern)][-limit:]
+
+
+def hold_for_release(path, max_s, sleep=time.sleep, clock=time.monotonic):
+    """Manual iteration aid: keep the booted guest up until the release file exists (or max_s passes).
+
+    Returns "released" or "timeout". The release file must not exist beforehand (a stale file would
+    release at once, so refuse it)."""
+    path = Path(path)
+    if path.exists():
+        raise ValueError("Release file already exists; refusing a stale release")
+    t0 = clock()
+    while clock() - t0 < max_s:
+        if path.exists():
+            return "released"
+        sleep(5)
+    return "timeout"
 
 
 def stop_process(proc):
@@ -647,7 +754,7 @@ CHECKS = {
         "timeout": 900,
         "exe": r"C:\Program Files\Unigine\Superposition Benchmark\bin\launcher.exe",
     },
-    "3dmark": {"timeout": 1500, "exe": r"C:\Program Files\UL\3DMark\3DMark.exe"},
+    "3dmark": {"timeout": 1800, "exe": r"C:\Program Files\UL\3DMark\3DMark.exe"},
     "solidworks": {
         "timeout": 900,
         "exe": r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SLDWORKS.exe",
@@ -661,8 +768,8 @@ CHECKS = {
         "exe": r"C:\Program Files\SOLIDWORKS Corp\eDrawings\eDrawings.exe",
     },
     "wukong": {
-        "timeout": 300,
-        "exe": r"C:\Users\kfimage\Desktop\Black Myth Wukong Benchmark Tool.url",
+        "timeout": 480,
+        "exe": r"C:\Program Files (x86)\Steam\steamapps\common\Black Myth Wukong Benchmark Tool\b1_benchmark.exe",
     },
     "edge": {
         "timeout": 300,
@@ -670,26 +777,311 @@ CHECKS = {
     },
 }
 
+# 3DMark (measured 2026-11-14): 3DMarkCmd.exe refuses with "Professional or Developer license key required
+# for command line access", so the run goes through the UI. The CEF UI exposes its controls to UI Automation
+# only when started with --force-renderer-accessibility. The 'RUN' link is picked by geometry from the
+# Time Spy title in the UIA tree (no coordinates), invoked through InvokePattern, and the finish is the new
+# .3dmark-result that 3DMark itself saves to Documents\3DMark (the verdict reads that file).
+THREEDMARK_RUN = r"""
+$exe='C:\Program Files\UL\3DMark\3DMark.exe'
+$cmd='C:\Program Files\UL\3DMark\3DMarkCmd.exe'
+$r.cli_output=''
+if(Test-Path $cmd){
+ $o=(& $cmd --definition=timespy.3dmdef --online=off --audio=off --systeminfo=off --out="$D\cli.3dmark-result" 2>&1 | Out-String)
+ $r.cli_output=$o.Substring(0,[Math]::Min(600,$o.Length))
+}
+$docs="$env:USERPROFILE\Documents\3DMark"
+$started=Get-Date
+$p=Start-Process $exe -ArgumentList '--force-renderer-accessibility' -PassThru
+function Main-Window(){
+ foreach($pr in Get-Process -Name 3DMark -ErrorAction SilentlyContinue){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
+  foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){ if($w.Current.Name -eq '3DMark'){return $w} }
+ }
+}
+function Ui-Elements($w){ @($w.FindAll([System.Windows.Automation.TreeScope]::Subtree,[System.Windows.Automation.Condition]::TrueCondition)) }
+function Ui-Texts($els){ ($els | ForEach-Object {$_.Current.Name} | Where-Object {$_} | Select-Object -Unique -First 60) -join ' ; ' }
+$r.ui_ready=$false;$r.progress_seen=$false;$r.result_file='';$r.ui_texts=''
+$deadline=(Get-Date).AddSeconds(240);$els=@()
+while((Get-Date) -lt $deadline){
+ $w=Main-Window
+ if($w){$els=Ui-Elements $w; if(@($els | Where-Object {$_.Current.Name -eq 'BENCHMARKS' -or $_.Current.Name -eq 'HOME'}).Count -gt 0 -and @($els | Where-Object {$_.Current.Name -eq 'Time Spy'}).Count -gt 0){$r.ui_ready=$true;break}}
+ Start-Sleep 5
+}
+if(-not $r.ui_ready){$r.ui_texts=Ui-Texts $els;throw 'Time Spy card not visible in the UI Automation tree (UI never became ready)'}
+$title=$els | Where-Object {$_.Current.Name -eq 'Time Spy' -and $_.Current.ControlType.ProgrammaticName -eq 'ControlType.Text'} | Select-Object -First 1
+$tl=$title.Current.BoundingRectangle
+$run=$null;$best=99999
+foreach($e in $els){$c=$e.Current;if($c.Name -eq 'RUN' -and $c.ControlType.ProgrammaticName -eq 'ControlType.Hyperlink'){$b=$c.BoundingRectangle;if([math]::Abs($b.Left-$tl.Left) -lt 6 -and $b.Top -gt $tl.Top -and ($b.Top-$tl.Top) -lt $best){$best=$b.Top-$tl.Top;$run=$e}}}
+if(-not $run){throw 'No RUN link under the Time Spy card'}
+$run.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+$r.invoked=Epoch (Get-Date)
+$deadline=(Get-Date).AddSeconds(1080)
+while((Get-Date) -lt $deadline){
+ Start-Sleep 5
+ $w=Main-Window
+ if($w){$els=Ui-Elements $w;$t=Ui-Texts $els;if($t){$r.ui_texts=$t};if($t -match 'Running benchmark'){$r.progress_seen=$true}}
+ $f=Get-ChildItem $docs -Filter *.3dmark-result -ErrorAction SilentlyContinue | Where-Object {$_.LastWriteTime -gt $started} | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+ if($f){Start-Sleep 5;$f=Get-Item $f.FullName;Copy-Item $f.FullName "$D\result.3dmark-result";$r.result_file=$f.Name;$r.modified=Epoch $f.LastWriteTimeUtc;$r.bytes=$f.Length;break}
+}
+$r.kind='TDM'
+try {Save-Screen "$D\3dmark.png"} catch {}
+Get-Process | Where-Object {$_.Name -match '^3DMark'} | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
+# eDrawings (measured 2026-11-14): the first start shows a Software License Agreement dialog. Its ACCEPT is a
+# Win32 button that UI Automation exposes as a Pane named 'ACCEPT' (AutomationId '1', the dialog's IDOK) with NO
+# Invoke pattern, so UIA cannot press it; the window handle UIA reports for it takes a BM_CLICK message (no
+# coordinates, no focus needed). After accepting, the opened part shows as a TabItem named after the file in the
+# UIA tree (the window title stays 'eDrawings'); that tab is the evidence. Licence wording is not a decision
+# factor for test use.
+EDRAWINGS_RUN = r"""
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class KfMsg { [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l); }
+'@
+function Find-Ui($root,$test){
+ $q=New-Object System.Collections.Queue;$q.Enqueue($root);$n=0
+ while($q.Count -gt 0 -and $n -lt 800){$el=$q.Dequeue();$n++
+  try{foreach($ch in $el.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition)){ if(& $test $ch){return $ch}; $q.Enqueue($ch) }}catch{}
+ }
+}
+$sample=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
+if(-not $sample){throw 'No sample part under C:\ProgramData\SolidWorks'}
+Copy-Item $sample.FullName "$D\kfsample.sldprt"
+$r.sample='kfsample.sldprt';$r.accepted=$false;$r.accept_method='';$r.tab_name='';$r.windows_seen=@()
+$p=Start-Process 'C:\Program Files\SOLIDWORKS Corp\eDrawings\eDrawings.exe' -ArgumentList "`"$D\kfsample.sldprt`"" -PassThru
+$deadline=(Get-Date).AddSeconds(240)
+while((Get-Date) -lt $deadline){
+ foreach($pr in Get-Process -Name eDrawings -ErrorAction SilentlyContinue){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
+  foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){
+   $r.windows_seen=@(@($r.windows_seen)+@("$($w.Current.ClassName):$($w.Current.Name)") | Select-Object -Unique -First 12)
+   if(-not $r.accepted){
+    $btn=Find-Ui $w {param($e) $e.Current.Name -ceq 'ACCEPT' -and $e.Current.AutomationId -ceq '1'}
+    if($btn){$h=[IntPtr]$btn.Current.NativeWindowHandle;if($h -ne [IntPtr]::Zero){[KfMsg]::SendMessage($h,0xF5,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null;$r.accepted=$true;$r.accept_method='BM_CLICK on the UIA window handle';Start-Sleep 5}}
+   }
+   $tab=Find-Ui $w {param($e) $e.Current.ControlType.ProgrammaticName -ceq 'ControlType.TabItem' -and $e.Current.Name -ieq 'kfsample.sldprt'}
+   if($tab){$r.tab_name=$tab.Current.Name}
+  }
+ }
+ if($r.tab_name){break}
+ Start-Sleep 3
+}
+$r.kind='EDW'
+Start-Sleep 3
+try {Save-Screen "$D\edrawings.png"} catch {}
+Get-Process -Name eDrawings -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
+# Resolve (measured 2026-11-14): the Qt UI is fully visible to UI Automation once past the splash: the Project
+# Manager window ('Project Manager', AutomationId UiProjectManagerDialog) has a 'New Project' button
+# (AutomationId ending btnAddProject, InvokePattern); the main window is named 'DaVinci Resolve - <project>'.
+# Scripting through DaVinciResolveScript returns None (external scripting is not available), and Resolve has no
+# built-in benchmark, so no render is run: the verdict is the UIA window for a project this run created plus
+# Resolve's own log lines (compute API, OpenGL context, NVDEC/NVENC) written after the start.
+RESOLVE_RUN = r"""
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class KfFocus {
+ [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+ [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+ [DllImport("user32.dll")] public static extern void keybd_event(byte vk,byte sc,uint f,UIntPtr e);
+ [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h,out uint p);
+ [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a,uint b,bool f);
+ [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+}
+'@
+function Focus-Win($w){
+ $h=[IntPtr]$w.Current.NativeWindowHandle;$fg=[KfFocus]::GetForegroundWindow();$d=0
+ $ft=[KfFocus]::GetWindowThreadProcessId($fg,[ref]$d);$me=[KfFocus]::GetCurrentThreadId()
+ [KfFocus]::AttachThreadInput($me,$ft,$true) | Out-Null
+ [KfFocus]::keybd_event(0x12,0,0,[UIntPtr]::Zero);[KfFocus]::keybd_event(0x12,0,2,[UIntPtr]::Zero)
+ [KfFocus]::SetForegroundWindow($h) | Out-Null
+ [KfFocus]::AttachThreadInput($me,$ft,$false) | Out-Null
+ ([KfFocus]::GetForegroundWindow() -eq $h)
+}
+function Resolve-Win(){
+ foreach($pr in Get-Process -Name Resolve -ErrorAction SilentlyContinue){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
+  foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){
+   if($w.Current.AutomationId -in 'UiProjectManagerDialog','UiMainWindow'){return $w}
+  }
+ }
+}
+$name='kf'+$r.run_id.Substring(0,8)
+$r.project_name=$name;$r.window_name='';$r.stage='';$r.log_lines=@()
+$t0=Get-Date
+$p=Start-Process 'C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe' -PassThru
+$deadline=(Get-Date).AddSeconds(300);$w=$null
+while((Get-Date) -lt $deadline){$w=Resolve-Win;if($w -and $w.Current.AutomationId -eq 'UiProjectManagerDialog'){break};Start-Sleep 3}
+if(-not $w -or $w.Current.AutomationId -ne 'UiProjectManagerDialog'){$r.stage='no project manager';throw 'Resolve Project Manager window never appeared in UI Automation'}
+$r.stage='project manager'
+$new=$w.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object {$_.Current.Name -ceq 'New Project' -and $_.Current.AutomationId.EndsWith('btnAddProject')} | Select-Object -First 1
+if(-not $new){throw 'New Project button not found by AutomationId'}
+$new.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+Start-Sleep 4
+$r.focus=Focus-Win $w
+[System.Windows.Forms.SendKeys]::SendWait('^a');Start-Sleep -Milliseconds 300
+[System.Windows.Forms.SendKeys]::SendWait($name);Start-Sleep -Milliseconds 500
+[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+$r.stage='create sent'
+$deadline=(Get-Date).AddSeconds(120)
+while((Get-Date) -lt $deadline){$m=Resolve-Win;if($m -and $m.Current.AutomationId -eq 'UiMainWindow'){$r.window_name=$m.Current.Name;if($r.window_name -like "*$name*"){break}};Start-Sleep 3}
+$r.stage='main window'
+Start-Sleep 5
+$log="$env:APPDATA\Blackmagic Design\DaVinci Resolve\Support\logs\davinci_resolve.log"
+$lines=@()
+foreach($ln in Get-Content $log -ErrorAction SilentlyContinue){
+ $m=[regex]::Match($ln,'\| (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ \| (.*)$')
+ if($m.Success){$ts=[datetime]::ParseExact($m.Groups[1].Value,'yyyy-MM-dd HH:mm:ss',$null);if($ts -ge $t0.AddSeconds(-2) -and $m.Groups[2].Value -match 'Selected compute API|initialised as decoding|Initialized OpenGL|Let There Be CUDA|Detected 1 GPUs'){$lines+=$ln.Substring(0,[Math]::Min(260,$ln.Length))}}
+}
+$r.log_lines=@($lines | Select-Object -First 40)
+$r.kind='RESOLVE'
+try {Save-Screen "$D\resolve.png"} catch {}
+Get-Process -Name Resolve -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
+# Wukong: the Steam .url shortcut cannot resolve offline ("This command cannot be run completely"), and
+# launching b1_benchmark.exe bare makes it hand over to the Steam client's launch-option dialog (a
+# CEF window UI Automation cannot see). Measured 2026-11-14: with the AppID in the environment (read from
+# Steam's own appmanifest) the launcher starts b1-Win64-Shipping.exe directly. The script samples VRAM
+# with nvidia-smi and, if the game dies, collects its crash context and the kernel watchdog event.
+WUKONG_RUN = r"""
+$game='C:\Program Files (x86)\Steam\steamapps\common\Black Myth Wukong Benchmark Tool'
+$exe="$game\b1_benchmark.exe"
+if(-not (Test-Path $exe)){throw 'Black Myth: Wukong Benchmark Tool is not installed'}
+$manifest=Get-ChildItem 'C:\Program Files (x86)\Steam\steamapps\appmanifest_*.acf' | Where-Object {(Get-Content $_.FullName -Raw) -match '"installdir"\s+"Black Myth Wukong Benchmark Tool"'} | Select-Object -First 1
+if(-not $manifest){throw 'No Steam appmanifest for the benchmark tool'}
+$appid=[regex]::Match((Get-Content $manifest.FullName -Raw),'"appid"\s+"(\d+)"').Groups[1].Value
+if(-not $appid){throw 'No appid in the Steam appmanifest'}
+$crashRoot="$game\b1\Saved\Crashes"
+$known=@(Get-ChildItem $crashRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {$_.Name})
+if(-not (Get-Process steam -ErrorAction SilentlyContinue)){
+ Start-Process 'C:\Program Files (x86)\Steam\steam.exe' -ArgumentList '-silent' | Out-Null
+ $w=(Get-Date).AddSeconds(90); while((Get-Date) -lt $w -and -not (Get-Process steamwebhelper -ErrorAction SilentlyContinue)){Start-Sleep 3}
+ Start-Sleep 10
+}
+$r.video_controllers=@(Get-CimInstance Win32_VideoController | ForEach-Object {@{name=$_.Name;adapter_ram=$_.AdapterRAM;driver=$_.DriverVersion}})
+try {& nvidia-smi -q -d MEMORY 2>&1 | Out-File -Encoding utf8 "$D\nvidia_smi_memory.txt"} catch {}
+try {$dx=Start-Process dxdiag -ArgumentList "/t","$D\dxdiag.txt" -PassThru;$dx.WaitForExit(90000) | Out-Null} catch {}
+$env:SteamAppId=$appid;$env:SteamGameId=$appid
+$p=Start-Process $exe -WorkingDirectory $game -PassThru
+$r.appid=$appid;$r.shipping_seen=$false;$r.shipping_secs=0;$r.vram_peak_mib=0;$r.vram_total_mib=0;$r.samples=@()
+$t0=Get-Date;$first=$null;$deadline=$t0.AddSeconds(360)
+while((Get-Date) -lt $deadline){
+ $g=Get-Process -Name b1-Win64-Shipping -ErrorAction SilentlyContinue | Select-Object -First 1
+ $smi=@(& nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>$null)
+ $used=0;$total=0
+ if($smi.Count -gt 0 -and $smi[0] -match '^\s*(\d+)\s*,\s*(\d+)'){$used=[int]$Matches[1];$total=[int]$Matches[2]}
+ if($used -gt $r.vram_peak_mib){$r.vram_peak_mib=$used};if($total -gt 0){$r.vram_total_mib=$total}
+ if($g){ if(-not $first){$first=Get-Date;$r.shipping_seen=$true}; $r.shipping_secs=[int]((Get-Date)-$first).TotalSeconds }
+ if($r.samples.Count -lt 200){$r.samples+=@{t=[int]((Get-Date)-$t0).TotalSeconds;alive=[bool]$g;vram=$used}}
+ if($first -and -not $g){break}
+ Start-Sleep 5
+}
+$r.exited=[bool]($first -and -not (Get-Process -Name b1-Win64-Shipping -ErrorAction SilentlyContinue))
+$r.kind='WUKONG'
+$r.crash=$null
+$dir=Get-ChildItem $crashRoot -Directory -ErrorAction SilentlyContinue | Where-Object {$known -notcontains $_.Name} | Select-Object -First 1
+if($dir -and (Test-Path "$($dir.FullName)\CrashContext.runtime-xml")){
+ $x=Get-Content "$($dir.FullName)\CrashContext.runtime-xml" -Raw
+ function Field($n){$m=[regex]::Match($x,"<$n>([^<]{0,300})</$n>");if($m.Success){$m.Groups[1].Value}else{''}}
+ $mods=@([regex]::Matches((Field 'CallStack'),'[A-Za-z0-9_\-]+') | ForEach-Object {$_.Value} | Where-Object {$_ -match '^(sl_|nv|d3d|dxg|b1|ntdll|KERNEL)'} | Select-Object -Unique -First 8)
+ $r.crash=@{dir=$dir.Name;type=(Field 'CrashType');message=(Field 'ErrorMessage');exe=(Field 'ExecutableName');gpu=(Field 'Misc.PrimaryGPUBrand');seconds_since_start=(Field 'SecondsSinceStart');modules=$mods}
+ Copy-Item "$($dir.FullName)\CrashContext.runtime-xml" "$D\crash_context.xml"
+}
+$r.kernel_events=@(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1001;StartTime=$t0} -ErrorAction SilentlyContinue | ForEach-Object {$m=[regex]::Match($_.Message,'Event Name: (\w+)[\s\S]*?P1: (\w+)');if($m.Success -and $m.Groups[1].Value -eq 'LiveKernelEvent'){@{event=$m.Groups[1].Value;code=$m.Groups[2].Value;time=(Epoch $_.TimeCreated)}}})
+$r.app_errors=@(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1000;StartTime=$t0} -ErrorAction SilentlyContinue | Where-Object {$_.Message -match 'b1-Win64-Shipping'} | ForEach-Object {$m=$_.Message;@{time=(Epoch $_.TimeCreated);text=$m.Substring(0,[Math]::Min(400,$m.Length))}})
+Get-WinEvent -FilterHashtable @{LogName='System';StartTime=$t0} -ErrorAction SilentlyContinue | Where-Object {$_.ProviderName -match 'Display|nvlddmkm|dxgkrnl|BugCheck|LiveKernel'} | Select-Object -First 200 | ForEach-Object {'{0} {1} id={2} {3}' -f $_.TimeCreated.ToString('HH:mm:ss'),$_.ProviderName,$_.Id,($_.Message -replace '\s+',' ').Substring(0,[Math]::Min(300,$_.Message.Length))} | Set-Content "$D\system_events.txt"
+Get-Process | Where-Object {$_.Name -match '^(b1_benchmark|b1-Win64-Shipping|CrashReportClient)$' -and $_.StartTime -gt $t0.AddSeconds(-5)} | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
+"""
+
+# Edge check: the harness authors a local page (no network) that draws with WebGL for 4 s and puts
+# the renderer string, the frame count and a per-run nonce in the document title. The verdict reads that
+# title from the browser window through UI Automation, so a window that merely exists cannot pass.
+EDGE_PAGE = r"""<!doctype html><meta charset=utf-8><title>KFGL pending</title><canvas id=c width=64 height=64></canvas>
+<script>
+const nonce='__NONCE__';
+try {
+ const c=document.getElementById('c');
+ const gl=c.getContext('webgl2')||c.getContext('webgl');
+ const ext=gl.getExtension('WEBGL_debug_renderer_info');
+ const r=ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER);
+ let n=0;const t0=performance.now();
+ function f(){gl.clearColor((n%255)/255,0.5,0.2,1);gl.clear(gl.COLOR_BUFFER_BIT);n++;
+  if(performance.now()-t0<4000){requestAnimationFrame(f);}
+  else{document.title='KFGL '+nonce+' ok renderer='+r+' frames='+n;}}
+ requestAnimationFrame(f);
+} catch(e){document.title='KFGL '+nonce+' err '+e;}
+</script>"""
+
+EDGE_RUN = r"""
+$exe='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+$page="$D\kfgl.html"
+$html=@'
+__PAGE__
+'@
+Set-Content -Encoding UTF8 $page $html.Replace('__NONCE__',$r.run_id)
+$profile="$D\edge-profile"
+$uri=([System.Uri]$page).AbsoluteUri
+$p=Start-Process $exe -ArgumentList "--user-data-dir=`"$profile`"","--no-first-run","--no-default-browser-check","--disable-sync","--new-window",$uri -PassThru
+$deadline=(Get-Date).AddSeconds(120)
+$r.launched=$false;$r.window_title=''
+while((Get-Date) -lt $deadline){
+ $procs=@(Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {$_.CommandLine -like "*$profile*"} | ForEach-Object {$_.ProcessId})
+ $r.edge_pids=$procs
+ foreach($pidv in $procs){
+  $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pidv)
+  $wins=[System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)
+  foreach($w in $wins){
+   $name=$w.Current.Name
+   if($name -like 'KFGL *'){$r.launched=$true;$r.window_title=$name}
+  }
+ }
+ if($r.window_title -match ' (ok|err) '){break}
+ Start-Sleep -Seconds 2
+}
+$r.kind='UIA'
+try {Save-Screen "$D\edge.png"} catch {}
+Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {$_.CommandLine -like "*$profile*"} | ForEach-Object {Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}
+"""
+
 SOLIDWORKS = r"""
-$sw=New-Object -ComObject SldWorks.Application
-$sw.Visible=$true
-$part=Get-ChildItem 'C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\samples' -Recurse -Filter *.sldprt | Select-Object -First 1
-if(-not $part){throw 'No sample part; supply a licensed sample in the image'}
-$err=0;$warn=0
-$model=$sw.OpenDoc6($part.FullName,1,1,'',[ref]$err,[ref]$warn)
-if(-not $model -or $err -ne 0){throw 'OpenDoc6 failed'}
-$activeErr=0
-$model=$sw.ActivateDoc3($part.Name,$false,0,[ref]$activeErr)
-if(-not $model -or $activeErr -ne 0){throw 'ActivateDoc3 failed'}
-$model.ClearSelection2($true)
-$model.ViewZoomtofit2()
-$model.GraphicsRedraw2()
-$ok=$model.Extension.SaveAs("$D\model.step",0,1,$null,[ref]$err,[ref]$warn)
+# Measured 2026-11-14: PowerShell's COM adapter fails every SldWorks call with TYPE_E_ELEMENTNOTFOUND, but
+# late-bound IDispatch InvokeMember works (RevisionNumber 34.5.2, OpenDoc6, SaveAs). Optional IDispatch
+# arguments must be a DispatchWrapper around null; ints by reference need a ParameterModifier.
+$ComT=[System.__ComObject]
+$bf=[Reflection.BindingFlags]
+function Com-Call($obj,$name,$kind,$argv,$byref){
+ $pm=$null
+ if($byref -and $byref.Count -gt 0){$m=New-Object Reflection.ParameterModifier $argv.Count;foreach($i in $byref){$m[$i]=$true};$pm=@($m)}
+ $ComT.InvokeMember($name,$bf::$kind,$null,$obj,$argv,$pm,$null,$null)
+}
+$r.step='create'
+$t=[Type]::GetTypeFromProgID('SldWorks.Application')
+$sw=[Activator]::CreateInstance($t)
+$r.step='visible'
+[void](Com-Call $sw 'Visible' SetProperty @($true) @())
+$r.revision=[string](Com-Call $sw 'RevisionNumber' InvokeMethod @() @())
+$part=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
+if(-not $part){throw 'No sample part under C:\ProgramData\SolidWorks'}
+$r.step='open'
+$a=[object[]]@($part.FullName,[int]1,[int]1,'',[int]0,[int]0)
+$model=Com-Call $sw 'OpenDoc6' InvokeMethod $a @(4,5)
+if(-not $model -or $a[4] -ne 0){throw "OpenDoc6 failed err=$($a[4])"}
+$r.opened_title=[string](Com-Call $model 'GetTitle' InvokeMethod @() @())
+$r.step='saveas'
+$ext=Com-Call $model 'Extension' GetProperty @() @()
+$b=[object[]]@("$D\model.step",[int]0,[int]1,[System.Runtime.InteropServices.DispatchWrapper]::new([object]$null),[int]0,[int]0)
+$ok=Com-Call $ext 'SaveAs' InvokeMethod $b @(4,5)
+$r.step='stat'
 $f=Get-Item "$D\model.step"
 $r.kind='FILE';$r.artifact='model.step';$r.modified=Epoch $f.LastWriteTimeUtc;$r.bytes=$f.Length
-$r.api_ok=([bool]$ok -and $err -eq 0)
-$sw.CloseDoc($model.GetTitle())
-$sw.ExitApp()
+$r.api_ok=([bool]$ok -and $b[4] -eq 0)
+$r.step='exit'
+try{[void](Com-Call $sw 'ExitApp' InvokeMethod @() @())}catch{}
+Get-Process SLDWORKS -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
 """
 
 # UIA is deliberately data-driven: no invented AutomationIds or completion labels.
@@ -757,7 +1149,7 @@ def render_check(
     run_id="0" * 32,
     plan=None,
     accessibility_experiment=False,
-    solidworks_export=False,
+    solidworks_export=True,
     superposition_run=False,
 ):
     spec = CHECKS[name]
@@ -772,6 +1164,16 @@ def render_check(
     )
     if name == "solidworks" and solidworks_export:
         script += SOLIDWORKS
+    elif name == "edge":
+        script += EDGE_RUN.replace("__PAGE__", EDGE_PAGE)
+    elif name == "wukong":
+        script += WUKONG_RUN
+    elif name == "3dmark":
+        script += THREEDMARK_RUN
+    elif name == "edrawings":
+        script += EDRAWINGS_RUN
+    elif name == "resolve":
+        script += RESOLVE_RUN
     else:
         if name == "superposition" and superposition_run:
             script += (
@@ -784,24 +1186,16 @@ def render_check(
             else ""
         )
         script += f"$p=Start-Process '{spec['exe']}'{args} -PassThru; Start-Sleep 30\n"
-        if name != "wukong":
-            script += "$p.Refresh();$r.kind='LAUNCH_ONLY';$r.launched=(-not $p.HasExited);$r.title=$p.MainWindowTitle\n"
-        # URI launchers need a process tree from hardware before their UI can be scoped safely.
-        if name == "wukong":
-            script += r"""$fresh=@(Get-Process -Name b1,b1-Win64-Shipping,BlackMythWukong -ErrorAction SilentlyContinue | Where-Object {(Epoch $_.StartTime) -gt $r.started})
-$r.kind='LAUNCH_ONLY';$r.launched=($fresh.Count -gt 0);$r.process_ids=@($fresh | ForEach-Object {$_.Id})
-$r.note='Launch probe only; no benchmark verdict or Steam interaction'
-"""
+        script += "$p.Refresh();$r.kind='LAUNCH_ONLY';$r.launched=(-not $p.HasExited);$r.title=$p.MainWindowTitle\n"
+        script += "try {Dump-Uia $p.Id} catch {$r.uia_error=$_.Exception.Message}\n"
+        if name == "superposition" and superposition_run:
+            script += SUPERPOSITION
+        elif plan:
+            validate_plan(plan)
+            literal = json.dumps(plan).replace("'", "''")
+            script += f"$plan=ConvertFrom-Json '{literal}'\n" + UIA_RUN
         else:
-            script += "try {Dump-Uia $p.Id} catch {$r.uia_error=$_.Exception.Message}\n"
-            if name == "superposition" and superposition_run:
-                script += SUPERPOSITION
-            elif plan:
-                validate_plan(plan)
-                literal = json.dumps(plan).replace("'", "''")
-                script += f"$plan=ConvertFrom-Json '{literal}'\n" + UIA_RUN
-            else:
-                script += "$r.note='UIA tree collected; verified run controls and result schema pending'\n"
+            script += "$r.note='UIA tree collected; verified run controls and result schema pending'\n"
     script += '} catch { $r.error=$_.Exception.Message } finally {\ntry {Save-Screen "$D\\screen.png"} catch {$r.screen_error=$_.Exception.Message}\n$r.ended=Epoch (Get-Date)\n'
     script += 'ConvertTo-Json -InputObject $r -Depth 6 | Set-Content -Encoding UTF8 "$D\\result.tmp"\nMove-Item "$D\\result.tmp" "$D\\result.json"\n}\n'
     return script
@@ -820,6 +1214,166 @@ def validate_transition(record, running, finished):
     )
 
 
+def validate_edge(r, run_id):
+    """Grade the browser window title that the authored WebGL page wrote (read through UIA)."""
+    if r.get("launched") is not True:
+        raise ValueError("Edge page window not found (no window with the run's title)")
+    title = str(r.get("window_title", ""))
+    ok = re.match(r"KFGL ([0-9a-f]{32}) ok renderer=(.*) frames=(\d+)", title)
+    if not ok:
+        raise ValueError("Edge WebGL page did not report a renderer: " + title[:120])
+    if ok[1] != run_id:
+        raise ValueError("Edge page title belongs to another run")
+    renderer, frames = ok[2], int(ok[3])
+    if frames <= 0:
+        raise ValueError("Edge WebGL drew no frames")
+    if SOFTWARE_RENDERERS.search(renderer):
+        raise ValueError("Edge WebGL renderer is software: " + renderer[:120])
+    if "nvidia" not in renderer.lower():
+        raise ValueError("Edge WebGL renderer is not the NVIDIA device: " + renderer[:120])
+    return f"WebGL drew {frames} frames in 4 s on {renderer[:120]} (title read through UIA)"
+
+
+TDM_MAX_MEMBER = 64 * 1024 * 1024
+TDM_MEMBERS = {
+    "Result.xml", "Arielle.xml", "SI.xml", "hash.txt", "Monitoring.csv", "RawMonitoringData.json",
+    "product-info-level.log",
+}
+
+
+def cli_refused(text):
+    """3DMarkCmd.exe prints this and exits 0 when the key's edition has no command line (measured 2026-11-14)."""
+    return bool(re.search(r"(?i)license key required for command line access", text))
+
+
+def _tdm_xml(zf, name):
+    import xml.etree.ElementTree as ET
+
+    raw = zf.read(name)
+    if re.search(rb"<!(DOCTYPE|ENTITY)", raw, re.I):
+        raise ValueError(f"{name} contains a DOCTYPE/ENTITY declaration; refused as data")
+    try:
+        return ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise ValueError(f"{name} is not valid XML: {exc}") from exc
+
+
+def _tdm_epoch(stamp):
+    from datetime import datetime, timezone
+
+    base = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)", stamp or "")
+    if not base:
+        raise ValueError("3DMark result has no parseable start/finish time")
+    return datetime.strptime(base[1], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+
+
+def validate_3dmark_result(path, run_start, run_end):
+    """Grade a saved .3dmark-result (a zip read as data, never extracted or executed). Returns the signal text.
+
+    Result.xml carries the scores, Arielle.xml the workload status codes and start/finish times, SI.xml the
+    devices. Structure measured on the PC's 2026-11-12 Time Spy BASIC result; the finish time must fall inside
+    this run so the stale preparation result in the image can never pass."""
+    import zipfile
+
+    try:
+        zf = zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise ValueError(f"3DMark result is not a readable zip: {exc}") from exc
+    with zf:
+        for info in zf.infolist():
+            if info.filename not in TDM_MEMBERS or info.file_size > TDM_MAX_MEMBER:
+                raise ValueError(f"Unexpected or oversized zip member {info.filename[:60]!r}")
+        for need in ("Result.xml", "Arielle.xml", "SI.xml"):
+            if need not in zf.namelist():
+                raise ValueError(f"3DMark result lacks {need}")
+        result, arielle, si = (_tdm_xml(zf, n) for n in ("Result.xml", "Arielle.xml", "SI.xml"))
+    infos = {
+        (i.findtext("name") or ""): (i.findtext("value") or "") for i in arielle.iter("info")
+    }
+    began, finished = _tdm_epoch(infos.get("benchmark_start_time")), _tdm_epoch(infos.get("benchmark_finish_time"))
+    if not (run_start <= began < finished <= run_end):
+        raise ValueError("3DMark result is not from this run (start/finish outside the guest run window)")
+    codes = [s.get("code") for s in arielle.iter("status")]
+    if not codes or any(c != "0" for c in codes):
+        raise ValueError(f"3DMark workload status codes not all 0: {codes[:8]}")
+    scores = {}
+    for node in result.iter():
+        tag = node.tag
+        if tag.endswith("3DMarkScore") or tag.endswith("GraphicsScore"):
+            try:
+                scores.setdefault(tag, int(node.text or "0"))
+            except ValueError:
+                scores.setdefault(tag, 0)
+    total = [v for k, v in scores.items() if k.endswith("3DMarkScore")]
+    graphics = [v for k, v in scores.items() if k.endswith("GraphicsScore")]
+    if not total or min(total) <= 0 or not graphics or min(graphics) <= 0:
+        raise ValueError("3DMark result has no positive 3DMark and graphics score")
+    fps = []
+    for node in result.iter():
+        if re.search(r"GraphicsTest\d+$", node.tag):
+            try:
+                fps.append(float(node.text or "0"))
+            except ValueError:
+                fps.append(0.0)
+    if not fps or min(fps) <= 0:
+        raise ValueError("3DMark result has no positive graphics-test FPS")
+    gpus = []
+    for dev in si.iter("Device"):
+        vals = {}
+        for v in dev.iter("Value"):  # DriverVersion sits in a nested Software_Key (measured 2026-11-14)
+            sub = v.find("Value")
+            if sub is not None:
+                vals[v.findtext("Name")] = sub.text or ""
+        if vals.get("Class") == "Display" and "nvidia" in (vals.get("DeviceDesc", "")).lower():
+            gpus.append((vals.get("DeviceDesc", ""), vals.get("DriverVersion", "?")))
+    if not gpus:
+        raise ValueError("SI.xml names no NVIDIA display device")
+    if any(SOFTWARE_RENDERERS.search(name) for name, _ in gpus):
+        raise ValueError("SI.xml display device is a software renderer")
+    name, driver = gpus[0]
+    return (
+        f"3DMark score {total[0]} (graphics {graphics[0]}), graphics tests {', '.join(f'{x:g}' for x in fps)} FPS, "
+        f"finished {infos['benchmark_finish_time'][:19]}Z on {name} driver {driver}, all {len(codes)} workload status codes 0"
+    )
+
+
+GPU_KERNEL_EVENTS = {"117": "VIDEO_TDR_FAILURE", "141": "VIDEO_ENGINE_TIMEOUT_DETECTED (watchdog)"}
+
+
+def validate_wukong(r):
+    """Returns (status, text). FAIL on a crash or GPU watchdog event, INCONCLUSIVE when the tool merely stayed up
+    (nothing drives its benchmark yet), never a PASS from a window or a process alone."""
+    peak, total = r.get("vram_peak_mib"), r.get("vram_total_mib")
+    vram = f"VRAM peak {peak} of {total} MiB" if peak and total else "VRAM not sampled"
+    if r.get("shipping_seen") is not True:
+        return "FAIL", "Benchmark process b1-Win64-Shipping never started"
+    events = [
+        str(e.get("code"))
+        for e in (r.get("kernel_events") or [])
+        if str(e.get("code")) in GPU_KERNEL_EVENTS
+    ]
+    crash = r.get("crash")
+    if crash:
+        mods = ",".join(str(x) for x in (crash.get("modules") or [])[:6])
+        text = (
+            f"Game crashed after {r.get('shipping_secs')} s: {crash.get('type')} "
+            f"'{crash.get('message')}' in {crash.get('exe')} on {crash.get('gpu')}; modules {mods}; {vram}"
+        )
+        if events:
+            text += "; kernel " + ", ".join(f"LiveKernelEvent {c} {GPU_KERNEL_EVENTS[c]}" for c in events)
+        return "FAIL", text
+    if events:
+        return "FAIL", f"GPU watchdog event {events[0]} {GPU_KERNEL_EVENTS[events[0]]} during the run; {vram}"
+    if r.get("exited") is True and r.get("app_errors"):
+        return "FAIL", "Game exited with an Application Error event; " + vram
+    if r.get("exited") is True:
+        return "INCONCLUSIVE", f"Game ran {r.get('shipping_secs')} s and exited without a crash; no result file to grade; {vram}"
+    return "INCONCLUSIVE", (
+        f"Game stayed up {r.get('shipping_secs')} s with no crash or GPU event; the benchmark was not driven, "
+        f"so no work is proven; {vram}"
+    )
+
+
 def verdict(name, run_id, directory, plan=None):
     """Grade pulled bytes, never a guest-authored ok flag. Guest clocks stay guest-relative."""
     row = {"app": name, "ok": False, "evidence": "NONE", "signal": "", "secs": 0}
@@ -835,9 +1389,10 @@ def verdict(name, run_id, directory, plan=None):
             raise ValueError("Invalid guest timestamps")
         row["secs"] = int(end - start)
         if name == "wukong":
-            row["launched"] = r.get("launched") is True
+            row["launched"] = r.get("shipping_seen") is True
         if r.get("error"):
-            raise ValueError(str(r["error"]))
+            step = f" (script step {r['step']})" if r.get("step") else ""
+            raise ValueError(str(r["error"]) + step)
         if r.get("kind") == "FILE" and name == "solidworks":
             artifact = r.get("artifact")
             if artifact != "model.step":
@@ -863,6 +1418,81 @@ def verdict(name, run_id, directory, plan=None):
                 evidence="FILE",
                 signal="API exported STEP with entity data (not a GPU/render benchmark)",
             )
+        elif name == "3dmark" and r.get("kind") == "TDM":
+            row["evidence"] = "NONE"
+            if not r.get("result_file"):
+                if r.get("progress_seen") is True:
+                    raise ValueError(
+                        "3DMark ran (UIA saw 'Running benchmark') but saved no result file before the budget; UI: "
+                        + str(r.get("ui_texts", ""))[:200]
+                    )
+                row["status"] = "INCONCLUSIVE"
+                raise ValueError(
+                    "3DMark run did not start; blocker text from the UI: " + str(r.get("ui_texts", ""))[:300]
+                )
+            modified = r.get("modified")
+            if not re.fullmatch(r"[A-Za-z0-9 ._()\-]{1,120}\.3dmark-result", str(r["result_file"])):
+                raise ValueError("Unexpected result file name")
+            if type(modified) not in (int, float) or not start < modified <= end:
+                raise ValueError("Stale result file")
+            path = directory / "result.3dmark-result"
+            if not path.is_file() or path.stat().st_size != r.get("bytes"):
+                raise ValueError("Result file length mismatch")
+            signal = validate_3dmark_result(path, start, end)
+            if cli_refused(str(r.get("cli_output", ""))):
+                signal += "; CLI refused (Professional/Developer key needed), so the run went through UI Automation"
+            row.update(ok=True, evidence="FILE", signal=signal)
+        elif name == "resolve" and r.get("kind") == "RESOLVE":
+            row["evidence"] = "NONE"
+            wanted = "kf" + run_id[:8]
+            lines = [str(x) for x in (r.get("log_lines") or [])]
+            blob = "\n".join(lines)
+            gl = re.search(r"Initialized OpenGL [\d.]+ .*on device '([^']*)'", blob)
+            problems = []
+            if r.get("project_name") != wanted or wanted not in str(r.get("window_name", "")):
+                problems.append(f"main window {str(r.get('window_name'))[:60]!r} does not name the project this run created")
+            if "Selected compute API: CUDA" not in blob:
+                problems.append("log does not show the CUDA compute API selected after the start")
+            if "initialised as decoding and encoding device" not in blob:
+                problems.append("log does not show the NVIDIA decode/encode device initialised")
+            if not gl or "nvidia" not in gl[1].lower() or SOFTWARE_RENDERERS.search(gl[1]):
+                problems.append("log shows no NVIDIA OpenGL context")
+            if problems:
+                row["status"] = "INCONCLUSIVE"
+                raise ValueError("; ".join(problems) + f"; stage {r.get('stage')}")
+            row.update(
+                ok=True,
+                evidence="FILE",
+                signal=(
+                    f"Resolve created project {wanted} (UIA main window {r['window_name']!r}); its log after the start shows "
+                    f"CUDA compute, NVDEC/NVENC initialised and OpenGL on {gl[1]}; no render or benchmark was run"
+                ),
+            )
+        elif name == "edrawings" and r.get("kind") == "EDW":
+            tab = str(r.get("tab_name", ""))
+            if r.get("sample") != "kfsample.sldprt" or tab.lower() != "kfsample.sldprt":
+                row["status"] = "INCONCLUSIVE"
+                raise ValueError(
+                    "eDrawings shows no tab for the opened sample; licence accepted: "
+                    + str(r.get("accepted") is True)
+                    + "; windows: "
+                    + str(r.get("windows_seen"))[:160]
+                )
+            row.update(
+                ok=True,
+                evidence="UIA",
+                signal=(
+                    f"eDrawings opened the sample part (UIA TabItem {tab!r}); licence dialog accepted: "
+                    f"{r.get('accepted') is True} ({r.get('accept_method', '')})"
+                ),
+            )
+        elif name == "wukong" and r.get("kind") == "WUKONG":
+            status, text = validate_wukong(r)
+            row["evidence"] = "FILE" if r.get("crash") or r.get("kernel_events") else "NONE"
+            row["status"] = status
+            raise ValueError(text)
+        elif name == "edge" and r.get("kind") == "UIA":
+            row.update(ok=True, evidence="UIA", signal=validate_edge(r, run_id))
         elif r.get("kind") == "UIA" and plan and name != "wukong":
             validate_plan(plan)
             if not validate_transition(r, plan["running"], plan["finished"]):
@@ -873,11 +1503,10 @@ def verdict(name, run_id, directory, plan=None):
                 signal="Observed progress then finished; selector semantics require hardware qualification",
             )
         elif r.get("kind") == "FILE" and name == "superposition":
-            validate_superposition(r, directory, start, end)
             row.update(
                 ok=True,
                 evidence="FILE",
-                signal="Fresh benchmark log plus OCR-checked result screen; SAVE not claimed",
+                signal=validate_superposition(r, directory, start, end),
             )
         else:
             if r.get("kind") == "LAUNCH_ONLY" and r.get("launched") is True:
@@ -896,7 +1525,7 @@ def task_wrapper(name, user="kfimage"):
         raise ValueError("Invalid interactive user")
     return (
         f"$n='kf_{name}'; Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue\n"
-        f"$a=New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -ExecutionPolicy Bypass -File C:\\kfhw\\{name}.ps1'\n"
+        f"$a=New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\\kfhw\\{name}.ps1'\n"
         f"$p=New-ScheduledTaskPrincipal -UserId {user} -LogonType Interactive -RunLevel Highest\n"
         "Register-ScheduledTask -TaskName $n -Action $a -Principal $p | Out-Null; Start-ScheduledTask -TaskName $n; 'started'\n"
     )
@@ -934,8 +1563,17 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
             "before.png",
             "result.png",
             "screen.png",
+            "edge.png",
+            "crash_context.xml",
+            "result.3dmark-result",
+            "3dmark.png",
+            "edrawings.png",
+            "resolve.png",
+            "nvidia_smi_memory.txt",
+            "dxdiag.txt",
+            "system_events.txt",
         ):
-            limit = 16 * 1024 * 1024 if f == "model.step" or f.endswith(".png") else 1024 * 1024
+            limit = 16 * 1024 * 1024 if f == "model.step" or f.endswith((".png", ".3dmark-result")) else 1024 * 1024
             p = guest.ps(
                 f"if(Test-Path '{remote}/{f}'){{$f=Get-Item '{remote}/{f}';if($f.Length -le {limit}){{'bounded'}}}}",
             )
@@ -945,10 +1583,8 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
                 and guest.scp(remote + "/" + f, str(d / f), False).returncode
             ):
                 raise ValueError("Artifact transfer failed")
-        if name == "superposition" and (d / "result.png").exists() and not extract_screen_text(d):
-            raise ValueError(
-                "Harness prerequisite: result-screen OCR unavailable or failed; no app verdict"
-            )
+        if name == "superposition" and (d / "result.png").exists():
+            extract_screen_text(d)  # optional extra; the verdict is the saved log
         row = verdict(name, run_id, d, plan)
     except (ValueError, TypeError, OSError, subprocess.TimeoutExpired) as exc:
         row = {"class": "harness", "app": name, "ok": False, "evidence": "NONE", "error": str(exc)}
@@ -1001,7 +1637,9 @@ def app_classification(app):
         return "HARNESS", "harness"
     if app.get("ok") is True:
         return "PASS", "app"
-    return ("LAUNCH_ONLY", "unqualified") if app.get("status") == "LAUNCH_ONLY" else ("FAIL", "app")
+    if app.get("status") in ("LAUNCH_ONLY", "INCONCLUSIVE"):
+        return app["status"], "unqualified"
+    return "FAIL", "app"
 
 
 def overlay_clock(overlay, frozen, guest_utc=None, resume=False):
@@ -1046,6 +1684,15 @@ def main(argv=None):
     ap.add_argument("--gop-efi", help="signed boot GOP driver to stage into the work directory")
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
     ap.add_argument("--apps", default=",".join(CHECKS))
+    ap.add_argument(
+        "--fb-mb",
+        type=int,
+        help="DIAGNOSTIC ARM: override the guest-visible FB size (the image's own value is the default)",
+    )
+    ap.add_argument(
+        "--hold-until-file",
+        help="Manual iteration: after verify, keep the guest up until this file appears (max 3 h)",
+    )
     ap.add_argument("--plans", type=Path)
     ap.add_argument(
         "--experiment-3dmark-accessibility",
@@ -1053,9 +1700,10 @@ def main(argv=None):
         help="UNPROVEN Chromium accessibility experiment, not an established fix",
     )
     ap.add_argument(
-        "--solidworks-export",
-        action="store_true",
-        help="Unqualified COM sample/STEP work probe; otherwise LAUNCH_ONLY",
+        "--solidworks-launch-only",
+        dest="solidworks_export",
+        action="store_false",
+        help="Skip the COM sample-part/STEP export (default: run it)",
     )
     ap.add_argument(
         "--superposition-run",
@@ -1108,6 +1756,10 @@ def main(argv=None):
             if PI.utc(a.stop_utc) < PI.utc(state["clock"]["last_time_at_stop_utc"]):
                 raise ValueError("Refusing backwards stop-time override")
             state["clock"]["last_time_at_stop_utc"] = PI.fmt(PI.utc(a.stop_utc))
+        if a.fb_mb is not None:
+            if not 1024 <= a.fb_mb <= 1048576:
+                raise ValueError("--fb-mb out of range")
+            state["qemu"]["fb_mb"] = a.fb_mb
         work = Path(a.work).resolve()
         work.mkdir(parents=True, exist_ok=a.resume)
         (work / "run").mkdir(exist_ok=a.resume)
@@ -1142,6 +1794,8 @@ def main(argv=None):
         (work / "state.json").write_text(json.dumps(state))
         kind = "resumed" if a.resume else "fresh"
         record("clock", "PASS", f"RTC base {PI.fmt(rtc_base)} ({kind} overlay)")
+        if a.fb_mb is not None:
+            record("fb-mb", "PASS", f"DIAGNOSTIC ARM: guest-visible FB {a.fb_mb} MiB (image default differs)")
         env = dict(os.environ)
         for line in Path(a.flags).read_text().splitlines():
             line = line.strip()
@@ -1280,6 +1934,12 @@ def main(argv=None):
                 if any(row[1] == "MISMATCH" for row in matches):
                     raise ValueError("Blocking identity mismatch; app checks not run")
                 record("verify", "PASS", "identity, clock, TPM and seed GPU checked")
+                if a.hold_until_file:
+                    record(
+                        "hold",
+                        hold_for_release(a.hold_until_file, 3 * 3600),
+                        "guest held for manual iteration; ssh port %s" % g.port,
+                    )
                 for name in names:
                     if boot_age_guard(time.monotonic() - booted, CHECKS[name]["timeout"]):
                         record(
@@ -1323,6 +1983,10 @@ def main(argv=None):
                             "Guest event log/transport lost; shutdown cause unverified, not app FAIL",
                         )
                         break
+                    if name == "wukong":
+                        (out / "host_qemu_filtered.txt").write_text(
+                            "\n".join(host_log_excerpt(r / "qemu.log")) + "\n"
+                        )
                     status, classification = app_classification(app)
                     record(
                         "app:" + name,

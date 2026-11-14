@@ -527,6 +527,11 @@ struct Aux {
     sync_carried: u64,
     /// Measurement only: when the last Pointer-mode backstop wake was counted (ms since the first).
     pointer_backstop_ms: Option<u64>,
+    /// ★ 2026-11-14 (security review, userpump pass F1): lifecycle notices this channel reported
+    /// (one per guest `GP_PUT` mid-packet inside a Window): logged first 16, then powers of two.
+    notices: u64,
+    /// ★ 2026-11-14 (userpump pass F2): ring migrations of this channel (one per guest trigger).
+    migrations: u64,
 }
 
 struct Segment {
@@ -1587,7 +1592,14 @@ impl Pump {
             )
             .ok()
             .map(|()| u32::from_le_bytes(b));
-        let native_get = r.lease.storage.lock().ok().and_then(|s| s.gpu_get().ok());
+        // ★ 2026-11-14: `try_lock` (measurement only): the VA thread holds `storage` across host
+        // RM calls; a busy lock prints `None`, the worker never waits.
+        let native_get = r
+            .lease
+            .storage
+            .try_lock()
+            .ok()
+            .and_then(|s| s.gpu_get().ok());
         let segment = self.segment.as_ref().map(|s| {
             format!(
                 "at={}/{} staged={} rare={} wait_witness={:?} wait_trigger={}",
@@ -1616,7 +1628,7 @@ impl Pump {
         let userd = r
             .lease
             .storage
-            .lock()
+            .try_lock()
             .ok()
             .and_then(|s| s.userd_words().ok());
         let fetched = self.core.fetch.fetched();
@@ -2003,8 +2015,14 @@ impl Pump {
         }
         // Re-read the same GP slot, the same segment and USERD PUT later; rescan from the same state.
         let mut summary = Vec::new();
+        // ★ 2026-11-14 (userpump pass F5): the 221 ms of re-read sleeps run on the shared worker,
+        // so only the first 4 refusals of the process sleep (measurement only).
+        static SLEPT: AtomicU32 = AtomicU32::new(0);
+        let may_sleep = SLEPT.fetch_add(1, Ordering::Relaxed) < 4;
         for delay in [1u64, 20, 200] {
-            std::thread::sleep(std::time::Duration::from_millis(delay));
+            if may_sleep {
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            }
             let entry2 = self
                 .snapshot(me, r, gp_va, 8)
                 .ok()
@@ -2149,6 +2167,14 @@ impl Pump {
         use kf_chan::user_lifecycle::Notice;
         for n in self.core.life.take_notices() {
             let key = self.key;
+            // ★ 2026-11-14: a guest `GP_PUT` mid-packet or a Window flip is a guest event; the
+            // worker may not write a line per guest event. The once-per-VM latch is always said.
+            if !matches!(n, Notice::MarkersLatchedOff { .. }) {
+                self.aux.notices = self.aux.notices.saturating_add(1);
+                if !crate::reset::loud(self.aux.notices) {
+                    continue;
+                }
+            }
             match n {
                 Notice::PutBoundaryOpen {
                     mode,
@@ -2904,10 +2930,16 @@ impl Pump {
                 .map_err(|e| source_error(e, "USER_RING_MIGRATION_ADMISSION"))
             })
             .map_err(|e| access_error(e, "USER_RING_MIGRATION_USERD_ADMISSION"))??;
-        eprintln!(
-            "kf3: USER_RING_MIGRATED {:#x}:{:#x} source={:#x}x{} generation={generation}; private native ring/USERD unchanged; no host migration verb",
-            r.key.0, r.key.1, u.gpfifo_va, u.entries
-        );
+        // ★ 2026-11-14 (userpump pass F2): one migration per guest trigger; logged first 16, then
+        // powers of two.
+        self.aux.migrations = self.aux.migrations.saturating_add(1);
+        let loud = crate::reset::loud(self.aux.migrations);
+        if loud {
+            eprintln!(
+                "kf3: USER_RING_MIGRATED {:#x}:{:#x} source={:#x}x{} generation={generation} n={}; private native ring/USERD unchanged; no host migration verb",
+                r.key.0, r.key.1, u.gpfifo_va, u.entries, self.aux.migrations
+            );
+        }
         // ★ PHASE 1b (review D5): the first entries of the new ring are scanned before the Window may end (done by
         // `switch_source` above), and a nonzero GP_GET in the NEW USERD (the guest's own statement of where its ring
         // stands) contradicts the reset-to-0 cursor loudly.
@@ -2923,6 +2955,7 @@ impl Pump {
                 )
                 .is_ok()
                 && self.core.new_ring_get(u32::from_le_bytes(b))
+                && loud
             {
                 eprintln!(
                     "kf3: USER_RING_SWITCH_CURSOR_MISMATCH {:#x}:{:#x} the new ring's USERD shows GP_GET={} at the switch; the relay resets its cursor to 0 (reset-to-0 is contradicted for this growth)",
@@ -3524,8 +3557,11 @@ impl ChanPlane {
         });
         let sent = self.acts.lock().ok().and_then(|acts| {
             acts.as_ref().map(|tx| {
-                tx.send((act, kf_gsp::Deferred::new(), "USER ring context"))
-                    .is_ok()
+                tx.send(
+                    (act, kf_gsp::Deferred::new(), "USER ring context"),
+                    super::ActClass::Work,
+                )
+                .is_ok()
             })
         });
         if sent == Some(true) {
