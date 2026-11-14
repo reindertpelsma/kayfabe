@@ -1071,7 +1071,7 @@ class T(unittest.TestCase):
 
     def edrawings(self, **changes):
         r = self.fixture(app="edrawings", kind="EDW", sample="kfsample.sldprt", accepted=True,
-                         window_title="kfsample.SLDPRT - eDrawings")
+                         tab_name="kfsample.sldprt")
         for key in ("artifact", "modified", "bytes", "api_ok"):
             r.pop(key)
         r.update(changes)
@@ -1079,17 +1079,17 @@ class T(unittest.TestCase):
             (Path(td) / "result.json").write_text(json.dumps(r))
             return m.verdict("edrawings", "a" * 32, Path(td))
 
-    def test_edrawings_title_with_the_sample_name_passes_via_uia(self):
+    def test_edrawings_tab_with_the_sample_name_passes_via_uia(self):
         row = self.edrawings()
         self.assertTrue(row["ok"], row)
         self.assertEqual(row["evidence"], "UIA")
 
     def test_edrawings_licence_dialog_only_is_inconclusive(self):
-        row = self.edrawings(window_title="", accepted=False)
+        row = self.edrawings(tab_name="", accepted=False)
         self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
 
     def test_edrawings_generic_title_is_not_a_pass(self):
-        row = self.edrawings(window_title="eDrawings")
+        row = self.edrawings(tab_name="eDrawings")
         self.assertEqual(m.app_classification(row)[0], "INCONCLUSIVE")
 
     def test_edrawings_wrong_sample_name_is_not_a_pass(self):
@@ -1115,7 +1115,32 @@ class T(unittest.TestCase):
             self.assertNotIn("script step", m.verdict("solidworks", "a" * 32, Path(td))["error"])
 
     def test_solidworks_script_marks_steps(self):
-        self.assertIn("$r.step='s5'", m.render_check("solidworks"))
+        self.assertIn("$r.step='open'", m.render_check("solidworks"))
+
+    def test_solidworks_uses_late_bound_invokemember_not_the_powershell_adapter(self):
+        # Measured 2026-11-14: the adapter path failed every call with TYPE_E_ELEMENTNOTFOUND.
+        script = m.render_check("solidworks")
+        self.assertIn("InvokeMember", script)
+        self.assertIn("DispatchWrapper", script)
+        self.assertNotIn("New-Object -ComObject", script)
+        self.assertNotIn("$sw.OpenDoc6", script)
+
+    def test_solidworks_byref_arguments_use_a_parameter_modifier(self):
+        script = m.render_check("solidworks")
+        self.assertIn("ParameterModifier", script)
+        self.assertIn("@(4,5)", script)
+
+    def test_edrawings_accept_uses_the_window_handle_not_invoke(self):
+        # Measured 2026-11-14: ACCEPT is a Pane with no Invoke pattern; BM_CLICK on its handle worked.
+        script = m.render_check("edrawings")
+        self.assertIn("0xF5", script)
+        self.assertIn("NativeWindowHandle", script)
+        self.assertNotIn("InvokePattern", script)
+
+    def test_edrawings_evidence_is_the_tab_item_not_the_window_title(self):
+        script = m.render_check("edrawings")
+        self.assertIn("ControlType.TabItem", script)
+        self.assertNotIn("-match 'kfsample'", script)
 
     def test_edrawings_script_accepts_by_uia_selector_not_coordinates(self):
         script = m.render_check("edrawings")
@@ -1905,7 +1930,7 @@ def mutants():
         ("tdm-entity", 'if re.search(rb"<!(DOCTYPE|ENTITY)", raw, re.I):', "if False:"),
         ("tdm-member", "if info.filename not in TDM_MEMBERS or info.file_size > TDM_MAX_MEMBER:", "if False:"),
         ("run-replace", 'kw.setdefault("errors", "replace")', "pass"),
-        ("edw-title", '"kfsample.sldprt" not in title.lower()', "False"),
+        ("edw-title", 'tab.lower() != "kfsample.sldprt"', "False"),
         ("edw-sample", 'r.get("sample") != "kfsample.sldprt" or', "False and"),
         ("hostlog-status", "if STATUS_LINE.match(line):", "if False:"),
         ("hostlog-nonzero", "return bool(STATUS_NONZERO.search(line))", "return False"),

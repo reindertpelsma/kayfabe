@@ -829,30 +829,43 @@ try {Save-Screen "$D\3dmark.png"} catch {}
 Get-Process | Where-Object {$_.Name -match '^3DMark'} | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
 """
 
-# eDrawings (measured 2026-11-14): the first start shows a Software License Agreement dialog whose ACCEPT
-# button is visible to UI Automation (AutomationId 1). The check accepts it (licence wording is not a decision
-# factor for test use), opens a copy of a sample part and grades the window title that carries its file name.
+# eDrawings (measured 2026-11-14): the first start shows a Software License Agreement dialog. Its ACCEPT is a
+# Win32 button that UI Automation exposes as a Pane named 'ACCEPT' (AutomationId '1', the dialog's IDOK) with NO
+# Invoke pattern, so UIA cannot press it; the window handle UIA reports for it takes a BM_CLICK message (no
+# coordinates, no focus needed). After accepting, the opened part shows as a TabItem named after the file in the
+# UIA tree (the window title stays 'eDrawings'); that tab is the evidence. Licence wording is not a decision
+# factor for test use.
 EDRAWINGS_RUN = r"""
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class KfMsg { [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l); }
+'@
+function Find-Ui($root,$test){
+ $q=New-Object System.Collections.Queue;$q.Enqueue($root);$n=0
+ while($q.Count -gt 0 -and $n -lt 800){$el=$q.Dequeue();$n++
+  try{foreach($ch in $el.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition)){ if(& $test $ch){return $ch}; $q.Enqueue($ch) }}catch{}
+ }
+}
 $sample=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
 if(-not $sample){throw 'No sample part under C:\ProgramData\SolidWorks'}
 Copy-Item $sample.FullName "$D\kfsample.sldprt"
-$r.sample='kfsample.sldprt';$r.accepted=$false;$r.window_title='';$r.windows_seen=@()
+$r.sample='kfsample.sldprt';$r.accepted=$false;$r.accept_method='';$r.tab_name='';$r.windows_seen=@()
 $p=Start-Process 'C:\Program Files\SOLIDWORKS Corp\eDrawings\eDrawings.exe' -ArgumentList "`"$D\kfsample.sldprt`"" -PassThru
 $deadline=(Get-Date).AddSeconds(240)
 while((Get-Date) -lt $deadline){
  foreach($pr in Get-Process -Name eDrawings -ErrorAction SilentlyContinue){
   $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty,[int]$pr.Id)
   foreach($w in [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,$cond)){
-   $name=$w.Current.Name
-   $r.windows_seen=@($r.windows_seen)+@($name) | Select-Object -Unique -First 12
-   if($name -match 'kfsample'){$r.window_title=$name}
+   $r.windows_seen=@(@($r.windows_seen)+@("$($w.Current.ClassName):$($w.Current.Name)") | Select-Object -Unique -First 12)
    if(-not $r.accepted){
-    $btn=$w.FindAll([System.Windows.Automation.TreeScope]::Subtree,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object {$_.Current.Name -ceq 'ACCEPT' -and $_.Current.AutomationId -ceq '1' -and $_.Current.ControlType.ProgrammaticName -ceq 'ControlType.Button'} | Select-Object -First 1
-    if($btn){$btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke();$r.accepted=$true;Start-Sleep 5}
+    $btn=Find-Ui $w {param($e) $e.Current.Name -ceq 'ACCEPT' -and $e.Current.AutomationId -ceq '1'}
+    if($btn){$h=[IntPtr]$btn.Current.NativeWindowHandle;if($h -ne [IntPtr]::Zero){[KfMsg]::SendMessage($h,0xF5,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null;$r.accepted=$true;$r.accept_method='BM_CLICK on the UIA window handle';Start-Sleep 5}}
    }
+   $tab=Find-Ui $w {param($e) $e.Current.ControlType.ProgrammaticName -ceq 'ControlType.TabItem' -and $e.Current.Name -ieq 'kfsample.sldprt'}
+   if($tab){$r.tab_name=$tab.Current.Name}
   }
  }
- if($r.window_title){break}
+ if($r.tab_name){break}
  Start-Sleep 3
 }
 $r.kind='EDW'
@@ -967,39 +980,40 @@ Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {$_.Com
 """
 
 SOLIDWORKS = r"""
-$r.step='s1'
-$sw=New-Object -ComObject SldWorks.Application
-$r.step='s2'
-$sw.Visible=$true
-$r.step='s3'
+# Measured 2026-11-14: PowerShell's COM adapter fails every SldWorks call with TYPE_E_ELEMENTNOTFOUND, but
+# late-bound IDispatch InvokeMember works (RevisionNumber 34.5.2, OpenDoc6, SaveAs). Optional IDispatch
+# arguments must be a DispatchWrapper around null; ints by reference need a ParameterModifier.
+$ComT=[System.__ComObject]
+$bf=[Reflection.BindingFlags]
+function Com-Call($obj,$name,$kind,$argv,$byref){
+ $pm=$null
+ if($byref -and $byref.Count -gt 0){$m=New-Object Reflection.ParameterModifier $argv.Count;foreach($i in $byref){$m[$i]=$true};$pm=@($m)}
+ $ComT.InvokeMember($name,$bf::$kind,$null,$obj,$argv,$pm,$null,$null)
+}
+$r.step='create'
+$t=[Type]::GetTypeFromProgID('SldWorks.Application')
+$sw=[Activator]::CreateInstance($t)
+$r.step='visible'
+[void](Com-Call $sw 'Visible' SetProperty @($true) @())
+$r.revision=[string](Com-Call $sw 'RevisionNumber' InvokeMethod @() @())
 $part=Get-ChildItem 'C:\ProgramData\SolidWorks' -Recurse -Filter *.sldprt -ErrorAction SilentlyContinue | Sort-Object Length | Select-Object -First 1
 if(-not $part){throw 'No sample part under C:\ProgramData\SolidWorks'}
-$r.step='s4'
-$err=0;$warn=0
-$r.step='s5'
-$model=$sw.OpenDoc6($part.FullName,1,1,'',[ref]$err,[ref]$warn)
-if(-not $model -or $err -ne 0){throw 'OpenDoc6 failed'}
-$r.step='s6'
-$activeErr=0
-$r.step='s7'
-$model=$sw.ActivateDoc3($part.Name,$false,0,[ref]$activeErr)
-if(-not $model -or $activeErr -ne 0){throw 'ActivateDoc3 failed'}
-$r.step='s8'
-$model.ClearSelection2($true)
-$r.step='s9'
-$model.ViewZoomtofit2()
-$r.step='s10'
-$model.GraphicsRedraw2()
-$r.step='s11'
-$ok=$model.Extension.SaveAs("$D\model.step",0,1,$null,[ref]$err,[ref]$warn)
-$r.step='s12'
+$r.step='open'
+$a=[object[]]@($part.FullName,[int]1,[int]1,'',[int]0,[int]0)
+$model=Com-Call $sw 'OpenDoc6' InvokeMethod $a @(4,5)
+if(-not $model -or $a[4] -ne 0){throw "OpenDoc6 failed err=$($a[4])"}
+$r.opened_title=[string](Com-Call $model 'GetTitle' InvokeMethod @() @())
+$r.step='saveas'
+$ext=Com-Call $model 'Extension' GetProperty @() @()
+$b=[object[]]@("$D\model.step",[int]0,[int]1,[System.Runtime.InteropServices.DispatchWrapper]::new([object]$null),[int]0,[int]0)
+$ok=Com-Call $ext 'SaveAs' InvokeMethod $b @(4,5)
+$r.step='stat'
 $f=Get-Item "$D\model.step"
 $r.kind='FILE';$r.artifact='model.step';$r.modified=Epoch $f.LastWriteTimeUtc;$r.bytes=$f.Length
-$r.api_ok=([bool]$ok -and $err -eq 0)
-$r.step='s13'
-$sw.CloseDoc($model.GetTitle())
-$r.step='s14'
-$sw.ExitApp()
+$r.api_ok=([bool]$ok -and $b[4] -eq 0)
+$r.step='exit'
+try{[void](Com-Call $sw 'ExitApp' InvokeMethod @() @())}catch{}
+Get-Process SLDWORKS -ErrorAction SilentlyContinue | ForEach-Object {Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue}
 """
 
 # UIA is deliberately data-driven: no invented AutomationIds or completion labels.
@@ -1359,19 +1373,22 @@ def verdict(name, run_id, directory, plan=None):
                 signal += "; CLI refused (Professional/Developer key needed), so the run went through UI Automation"
             row.update(ok=True, evidence="FILE", signal=signal)
         elif name == "edrawings" and r.get("kind") == "EDW":
-            title = str(r.get("window_title", ""))
-            if r.get("sample") != "kfsample.sldprt" or "kfsample.sldprt" not in title.lower():
+            tab = str(r.get("tab_name", ""))
+            if r.get("sample") != "kfsample.sldprt" or tab.lower() != "kfsample.sldprt":
                 row["status"] = "INCONCLUSIVE"
                 raise ValueError(
-                    "eDrawings window title does not show the opened sample; accepted licence dialog: "
+                    "eDrawings shows no tab for the opened sample; licence accepted: "
                     + str(r.get("accepted") is True)
-                    + "; title: "
-                    + title[:100]
+                    + "; windows: "
+                    + str(r.get("windows_seen"))[:160]
                 )
             row.update(
                 ok=True,
                 evidence="UIA",
-                signal=f"eDrawings opened the sample part (window title {title[:80]!r}); licence dialog accepted via UIA: {r.get('accepted') is True}",
+                signal=(
+                    f"eDrawings opened the sample part (UIA TabItem {tab!r}); licence dialog accepted: "
+                    f"{r.get('accepted') is True} ({r.get('accept_method', '')})"
+                ),
             )
         elif name == "wukong" and r.get("kind") == "WUKONG":
             status, text = validate_wukong(r)
