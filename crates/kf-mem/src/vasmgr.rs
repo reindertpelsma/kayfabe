@@ -377,6 +377,28 @@ pub trait Walker {
     fn slots(&self) -> u32;
 }
 
+/// ★ Security review 3 F-4 (2026-11-13): the two walker log lines a guest can trigger once per walk, at
+/// its own pace (a refusal inside a report; a capacity event), are sampled like the other per-event lines
+/// of the VMM: the first [`LOG_FIRST`] occurrences, then every power of two, each line carrying the running
+/// count so nothing is hidden, only not repeated. Process-wide counters: a VMM runs one VA manager.
+/// ⊘ Before: one `eprintln!` per walk, unbounded (disk/journal exhaustion, and a blocking write on the VA
+/// manager thread when stderr is a full pipe — the owner's quiet-by-default rule).
+pub const LOG_FIRST: u64 = 16;
+static WALK_REFUSAL_LINES: AtomicU64 = AtomicU64::new(0);
+static WALK_CAPACITY_LINES: AtomicU64 = AtomicU64::new(0);
+
+/// Count one occurrence on `counter`; `Some(n)` (the running count, from 1) when this occurrence is printed.
+#[must_use]
+pub fn log_sampled(counter: &AtomicU64) -> Option<u64> {
+    use std::sync::atomic::Ordering::Relaxed;
+    // Saturating: a counter at u64::MAX stays there instead of wrapping back to "the first lines".
+    let was = counter
+        .try_update(Relaxed, Relaxed, |v| Some(v.saturating_add(1)))
+        .unwrap_or(u64::MAX);
+    let n = was.saturating_add(1);
+    (n <= LOG_FIRST || n.is_power_of_two()).then_some(n)
+}
+
 /// ★★★ **The production walker**: [`kf_cuda::WalkKernel`] over its imported store.
 ///
 /// `submit` queues the walk on the kernel's stream (no `cuCtxSynchronize`); `poll` is
@@ -400,7 +422,11 @@ impl Walker for GpuWalker {
         let got = self.kernel.try_collect().map_err(|e| e.to_string());
         // ★ w829: capacity growth / re-walks / ceilings are named in the log as they happen.
         for ev in self.kernel.take_capacity_events() {
-            eprintln!("kf3: walk {ev}");
+            if let Some(n) = log_sampled(&WALK_CAPACITY_LINES) {
+                eprintln!(
+                    "kf3: walk {ev} [capacity event #{n}; first {LOG_FIRST}, then powers of two]"
+                );
+            }
         }
         let Some(c) = got? else {
             return Ok(None);
@@ -483,11 +509,14 @@ impl Walker for GpuWalker {
                 }
             }
         }
-        if r.header.refusals > 0 {
+        if r.header.refusals > 0
+            && let Some(n) = log_sampled(&WALK_REFUSAL_LINES)
+        {
             // ★ P6b: a refusal inside a report is named — a walk that refused a table reports
-            // fewer leaves than the guest's tables hold.
+            // fewer leaves than the guest's tables hold. (Sampled: review 3 F-4.)
             eprintln!(
-                "kf3: walk report carried refusals={} refuse_mask={:#x} pdbs={:x?} runs={}",
+                "kf3: walk report carried refusals={} refuse_mask={:#x} pdbs={:x?} runs={} \
+                 [report with refusals #{n}; first {LOG_FIRST}, then powers of two]",
                 r.header.refusals,
                 r.header.refuse_mask,
                 r.pdbs.iter().map(|p| p.pdb).collect::<Vec<_>>(),
@@ -2162,6 +2191,53 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 
 #[cfg(test)]
 mod tests {
+    // ★ Security review 3 F-4: the per-walk log lines are bounded.
+    #[test]
+    fn log_sampled_prints_the_first_lines_then_powers_of_two() {
+        let c = AtomicU64::new(0);
+        let printed: Vec<u64> = (0..100).filter_map(|_| log_sampled(&c)).collect();
+        let mut want: Vec<u64> = (1..=LOG_FIRST).collect();
+        want.extend([32, 64]);
+        assert_eq!(printed, want);
+    }
+
+    #[test]
+    fn ten_thousand_refusing_walks_print_a_bounded_number_of_lines() {
+        let c = AtomicU64::new(0);
+        let lines = (0..10_000).filter(|_| log_sampled(&c).is_some()).count();
+        // 16 first lines + 32, 64, ..., 8192 (9 powers of two above 16)
+        assert_eq!(lines, 25);
+        assert_eq!(c.load(std::sync::atomic::Ordering::Relaxed), 10_000);
+    }
+
+    #[test]
+    fn log_sampled_reports_the_running_count() {
+        let c = AtomicU64::new(0);
+        for _ in 0..1000 {
+            let _ = log_sampled(&c);
+        }
+        assert_eq!(
+            log_sampled(&c),
+            None,
+            "1001 is neither early nor a power of two"
+        );
+        c.store(1023, std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(log_sampled(&c), Some(1024));
+    }
+
+    #[test]
+    fn log_sampled_saturates_instead_of_wrapping() {
+        let c = AtomicU64::new(u64::MAX - 1);
+        assert_eq!(log_sampled(&c), None);
+        assert_eq!(
+            log_sampled(&c),
+            None,
+            "past u64::MAX the count must not wrap back to the first lines"
+        );
+        assert_eq!(log_sampled(&c), None);
+        assert_eq!(c.load(std::sync::atomic::Ordering::Relaxed), u64::MAX);
+    }
+
     use super::*;
     use crate::ledger::{Desired, Mapped};
     use kf_cuda::abi::KfMapRun;
