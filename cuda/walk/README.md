@@ -39,6 +39,19 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 > leaves (`kf_cpu_walk.cpp`; `./kf_cpu_walk --dump` prints every run for an old-vs-new identity diff). The
 > parallel walk itself still needs a GPU (`./kf_tests`).
 >
+> **2026-11-13 correction (security review 3 F-2, F-3, F-9, F-10), above the I3 text it corrects:** the entry
+> budget is a bound on what is READ, per address space: a table is loaded only after its entries are admitted
+> against that space's `entry_budget` and the walk's 4 x `entry_budget` ceiling, and each space may hold at most
+> a quarter of a level's frontier and of the leaf run stage. A space at its own limit is CUT (its own
+> `KFWR_R_BUDGET` / `KFWR_R_FRONTIER_CAP`, `KFWR_V_REFUSED`, no diff); the walk is no longer truncated for it,
+> so the other spaces of the batch apply. The walk still aborts (every space fails) on a shared ceiling, a bad
+> descriptor (`KFWR_R_BAD_FORMAT`: the PTX now validates the descriptor itself, `kf_dev_format_ok`), a short
+> shared-memory launch, or more than `KF_MAX_PDB` entries; after an abort no kernel reads a table or a stale
+> frontier. Cases: `hostile/entry_budget`, `hostile/budget_fails_only_its_space`, `hostile/frontier_fan_in`,
+> `format/device_refuses_bad_descriptors`, `hostile/short_shared_memory_launch`,
+> `hostile/npdb_past_kernel_arrays`, `hostile/commit_bound_before_write` (GPU); the hostile-descriptor
+> corpus in `kf_cpu_walk.cpp` (CPU).
+>
 > **2026-10-31 correction (test port), folded above the one it corrects:** the Rust half is back, as a
 > TEST-ONLY decoder derived from ogkm: `crates/kf-cuda/tests/gmmu_ver2/` (`reference.rs`, with every field
 > cited to a `file:line` re-read at 580.159.04). `corpus.rs` there decodes `corpus/corpus.bin` and
