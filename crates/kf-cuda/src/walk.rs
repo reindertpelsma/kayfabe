@@ -872,6 +872,13 @@ impl WalkKernel {
             WalkDevice::PciBusId(bdf) => cu.device_by_pci_bus_id(bdf)?,
         };
         let device_name = cu.device_name(dev_ord);
+        // ★ F-7 / S1-05 (2026-11-14): logged once, as the display context does
+        eprintln!(
+            "kf-cuda: walk device {device_name} pageable_memory_access={} (yes: the walker's \
+             store and pool bounds are host-memory-safety obligations, OWNER_RULINGS S1-05)",
+            cu.pageable_memory_access(dev_ord)
+                .map_or("unknown", |p| if p { "yes" } else { "no" })
+        );
         // ★ 2026-11-14 (security review 2 D-15): guarded — a `?` below, before the walker owns
         // the context, destroys it and everything made in it instead of leaking them.
         let ctx = cu.ctx_create_guarded(dev_ord)?;

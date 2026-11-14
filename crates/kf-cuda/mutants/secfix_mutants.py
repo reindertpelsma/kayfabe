@@ -251,6 +251,13 @@ MUTANTS = [
         "            .store(true, core::sync::atomic::Ordering::Release);",
         "            .store(false, core::sync::atomic::Ordering::Release);",
     ),
+    # ── F-7 / S1-05: the pageable-memory question (2026-11-14) ──
+    (
+        "f7-unknown-reported-as-no",
+        "driver_unsafe.rs",
+        "        (r == CUDA_SUCCESS).then_some(v != 0)",
+        "        Some(r == CUDA_SUCCESS && v != 0)",
+    ),
     # ── F-6 / D-09: packed 4:2:2 rows are bounded in whole macropixels (2026-11-14) ──
     (
         "f6-launch-check-counts-luma-bytes",
