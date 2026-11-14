@@ -288,7 +288,7 @@ test('foreign run cannot destroy ledger instance', async () => {
   assert.equal((await h.call('/stop/123-1', { claims: { run_id: '124' } })).status, 401);
   assert.deepEqual(h.cloud.deletes, []);
 });
-test('reconciled changed label prevents deletion', async () => {
+test('reconciled changed label does not stop a destroy by the proven id (review F4)', async () => {
   const h = await setup();
   await rent(h);
   const r = await h.storage.get('record:123-1');
@@ -296,7 +296,7 @@ test('reconciled changed label prevents deletion', async () => {
   await h.storage.put('record:123-1', r);
   h.cloud.instances.get('900').label = 'owner-dev';
   await h.call('/stop/123-1');
-  assert.deepEqual(h.cloud.deletes, []);
+  assert.deepEqual(h.cloud.deletes, ['900']);
 });
 test('reconciled changed label prevents status log access', async () => {
   const h = await setup();

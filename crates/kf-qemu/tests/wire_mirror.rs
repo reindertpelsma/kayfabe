@@ -117,7 +117,7 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
         class => "class_code", revision => "revision", pad => "pad", bar0_bytes => "bar0_bytes"]);
     layout!(Kf3Region, [bar => "bar", how => "how", pad => "pad", base => "base", len => "len"]);
     layout!(Kf3Frame, [data => "data", width => "width", height => "height", stride => "stride",
-        format => "format", serial => "serial"]);
+        format => "format", serial => "serial", len => "len"]);
     // ★ ABI 23 (OWNER_RULINGS.md §V, V3_DISPLAY.md §8.20): the input/cursor verbs and the device list
     layout!(Kf3Pointer, [id => "id", absolute => "absolute", paravirtual => "paravirtual",
         pad => "pad", name => "name"]);
