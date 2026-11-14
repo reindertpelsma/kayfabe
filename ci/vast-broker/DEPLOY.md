@@ -409,8 +409,12 @@ public variable VAST_BROKER_URL=https://ci.kayfabe.dev, secret VAST_BROKER_PATH,
 runner token A secrets (VAST_BROKER_ACCESS_ID and
 VAST_BROKER_ACCESS_SECRET), bound only in the sole trusted BASE broker step and passed to the
 controller as CF_ACCESS_CLIENT_ID/CF_ACCESS_CLIENT_SECRET. Keep the environment's deployment-branch
-policy master-only with a required reviewer (review V8); the Worker no longer honours branch
-copies, so widening it buys nothing and exposes the environment secrets to branch workflows.
+policy master-only (review V8); the Worker no longer honours branch copies, so widening it buys
+nothing and exposes the environment secrets to branch workflows.
+[MEASURED 2026-11-13, review 4 F7; owner ACCEPTED the state] The environment has NO required
+reviewer, and its deployment policy allows `v*` tags besides master. Only repo writers (the owner
+and the coordinator) can reach it, and an untrusted PR cannot get a run without approval. This is an
+accepted risk, not a safeguard (docs/design/V3_SECURITY_MODEL.md section 10).
 
 ## Cloudflare Access is dashboard-only
 
@@ -490,7 +494,8 @@ Reaper cron schedule: `*/5 * * * *`
 reaper has no other trigger. Until the secret is set each tick logs `reaper_unavailable` and
 deletes nothing.
 
-[CODE READ: ../vast-reaper/worker.js] Default hard=180 minutes, margin=15. It deletes only
+[CODE READ: ../vast-reaper/worker.js] Default hard=300 minutes (2026-11-13: the code default was 180,
+below the main Worker's hard limit), margin=15. It deletes only
 strictly older exact kf-ci-<run>-<attempt> labels with a valid numeric provider start_date, after
 matching ID/label/start_date in two list snapshots; anything uncertain fails closed. Each sweep
 deletes at most 20 and confirms absence. A failed DELETE no longer aborts the sweep (V9): the
@@ -1137,3 +1142,41 @@ and a PHYSICAL `node_modules` inside the checkout (a symlinked one gives a diffe
 Bundle pin (2026-11-12, release resilience, `claude/release-resilience-20261113`). Regenerated ONCE at the end of that branch because `src/index.js` and `src/release.js` changed (a failed rental is replaced alone; design in `docs/design/V3_RELEASE_RESILIENCE.md`). Old pin `52bb9a0b11b59cb52db6312a7a7dd1f3af14c688aa4cb5396adbc3c278ab2ed2`, new pin `bf98dfcda3729cee7de0ee13e6bea46e2eaadbb20bfa4d0a5ff8caa01385a9e3` (the review round of the same branch moved it once more from `51ae370c7ae3df4189186745d0cf07110953fe17de348d636aa2e94345b920ac`), in all three places (`deployment.json`, `wrangler.toml`, this file). MEASURED 2026-11-12 with wrangler 4.152.0 and a physical `node_modules` in the checkout: two `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>` runs gave identical SHA-256 of `<dir>/index.js`. Local dry-runs only: no upload, no deploy, no Worker call.
 Order after merge: master must carry this pin before the coordinator deploys; set `RELEASE_ENABLED=false` before any rollback.
 
+
+## Worker hardening (review 4 of 2026-11-13: F4, F5, F6, F8, F10)
+
+STATUS: LIVE as source on branch claude/worker-hardening-20261113; NOT DEPLOYED. Every item below
+is [CODE READ + GPU-free tests]; nothing ran against Cloudflare or Vast.
+
+- **F4, teardown by the proven id.** `Vast.destroy` verifies the instance id, the ledger's own
+  `kf-ci-` label prefix and the onstart proof, but no longer the current label (a box-writable
+  field). The reaper has no ledger: it deletes an instance whose label matches
+  `kf-ci-<n>-<n>`, or an id it has itself seen under such a label (first-seen `start_date` must
+  match). That memory is an optional KV binding `REAPER_SEEN` (create one namespace and add
+  `[[kv_namespaces]] binding = "REAPER_SEEN"` to ci/vast-reaper/wrangler.toml with its id; without
+  it the label alone decides, as before). Ids never seen under the label are never touched. Residual:
+  a box that relabels before the first 5-minute tick sees it still escapes the reaper (the broker's
+  own destroy covers it); an onstart rewritten through an instance key would still stop the broker's
+  destroy (UNVERIFIED whether Vast allows either).
+- **F5.** A host's heartbeat state change is stored at most once per 5 s (`HB_CHANGE_MIN_MS`); a
+  held change is flushed by the next heartbeat, the liveness alarm or the socket close.
+- **F6.** Every gateway response carries `X-Content-Type-Options: nosniff`; non-JSON ones also a
+  deny-all CSP and an attachment disposition. R2 objects of the public log get a fixed inline
+  filename. R2 cannot set `nosniff` or a CSP per object: add a Cloudflare Transform Rule on
+  `logs.kayfabe.dev` (response headers `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: default-src 'none'; sandbox`). [NOT DONE: dashboard setting.]
+- **F8.** `deploy.mjs` refuses any file beside the hashed bundle other than wrangler's own
+  `README.md` and `index.js.map`, re-hashes the file just before the upload, and sets
+  `DEPLOYED_BUNDLE_SHA256` from the uploaded bytes (not from wrangler.toml). NOT done: the runner
+  comparing the reported hash with the deploy log (needs a deploy log store and a `runner.py`
+  change; `deployment.json` keeps its three fields because master's runner requires exactly them).
+- **F10.** A box-reported PASS no longer decays a host's fault history (there is no attestation
+  notion; the verdict is the box's word). The owner path is the internal `POST /admin/provider-success`
+  `{machine_id, host_id}` (vast-admin does not forward it yet). `/internal/seed` serves nothing for
+  a disabled box or seeder. The host-upgrade limiter keys IPv6 by /64 and evicts the oldest entry
+  when full instead of refusing new addresses. The reaper default is 300 minutes.
+- **Box Access pair and secret path (owner ruling 2026-10-24, restated 2026-11-13).** Both are
+  treated as SECRETS toward everyone but the boxes: the Worker redacts them (and the path prefix,
+  the full URL) in every private and public log, report and evidence path it writes, including the
+  values the box held at rent time. Boxes receive them by design; they are not capabilities beyond
+  reaching the Worker's edge, because every route still needs a run token.

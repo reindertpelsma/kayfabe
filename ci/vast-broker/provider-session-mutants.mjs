@@ -789,7 +789,7 @@ const cases = [
   {
     name: 'absence verification disabled',
     file: 'src/vast.js',
-    before: 'if ((await this.inspect(record)) !== null) refuse();',
+    before: 'if ((await this.inspect(record, { destroying: true })) !== null) refuse();',
     after: 'void record;',
     all: false,
     pattern: '^rules teardown needs verified absence',

@@ -14,7 +14,7 @@ export function createReaper({
       return Number(value);
     };
     try {
-      const hard = integer('REAPER_HARD_MINUTES', 180, 1, 1440);
+      const hard = integer('REAPER_HARD_MINUTES', 300, 1, 1440);
       const margin = integer('REAPER_MARGIN_MINUTES', 15, 15, 120);
       if (
         typeof env.REAPER_VAST_API_KEY !== 'string' ||
@@ -88,15 +88,47 @@ export function createReaper({
         }
         return data.instances;
       };
+      const LABEL = /^kf-ci-[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/;
+      // Review F4 (2026-11-13): the label is a field the box may be able to rewrite. An id that this
+      // reaper has once seen under a kf-ci label stays ours (REAPER_SEEN, a KV binding the reaper
+      // alone writes, keyed by instance id and holding the first-seen start_date). An id never seen
+      // under the label is never touched. Without the binding the label alone decides (as before).
+      let seen = {};
+      if (env.REAPER_SEEN && typeof env.REAPER_SEEN.get === 'function') {
+        try {
+          const stored = JSON.parse((await env.REAPER_SEEN.get('seen')) ?? '{}');
+          if (stored && typeof stored === 'object' && !Array.isArray(stored)) seen = stored;
+        } catch {
+          seen = {};
+        }
+      }
+      const ours = (row) =>
+        (typeof row.label === 'string' && LABEL.test(row.label)) ||
+        (Number.isSafeInteger(row.id) && seen[row.id] === row.start_date);
       const overdue = (row) =>
-        typeof row.label === 'string' &&
-        /^kf-ci-[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(row.label) &&
+        ours(row) &&
         typeof row.start_date === 'number' &&
         Number.isFinite(row.start_date) &&
         row.start_date >= 1000000000 &&
         row.start_date <= now() / 1000 &&
         now() / 1000 - row.start_date > (hard + margin) * 60;
-      const first = (await list()).filter(overdue).slice(0, 20);
+      const rows = await list();
+      if (env.REAPER_SEEN && typeof env.REAPER_SEEN.put === 'function') {
+        // Remember every labelled id now; forget the ids that are gone. A write failure only
+        // weakens the backstop (the label rule still holds), it never stops the sweep.
+        const next = {};
+        for (const row of rows) {
+          if (typeof row.label === 'string' && LABEL.test(row.label)) next[row.id] = row.start_date;
+          else if (seen[row.id] === row.start_date) next[row.id] = row.start_date;
+        }
+        if (JSON.stringify(next) !== JSON.stringify(seen)) {
+          try {
+            await env.REAPER_SEEN.put('seen', JSON.stringify(next));
+          } catch {}
+        }
+        seen = next;
+      }
+      const first = rows.filter(overdue).slice(0, 20);
       if (!first.length) {
         report({ event: 'reaper_complete', deleted: 0 });
         return;
@@ -110,7 +142,7 @@ export function createReaper({
         if (
           !current ||
           !overdue(current) ||
-          row.label !== current.label ||
+          (row.label !== current.label && seen[row.id] !== current.start_date) ||
           row.start_date !== current.start_date
         )
           continue;
