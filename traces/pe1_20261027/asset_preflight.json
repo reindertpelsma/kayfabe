@@ -1,0 +1,29 @@
+{
+  "run": "PE1-preflight-20261027",
+  "utc": "2026-10-27T22:33:45.725745+00:00",
+  "kayfabe_base": "858ca1e8ad4a2b264656b8e499d820856bcc7310",
+  "image": {
+    "sha256": "a650252c82f1c09a62b475a4f629e304b05606d5d029357df9ce583b83f6440c",
+    "bytes": 1549436928,
+    "release_tag": "img-a650252c82f1c09a",
+    "attestation_repo": "reindertpelsma/win-gpu-image",
+    "recipe_commit": "320f7f83309eddfff8d557feb0c385232f675412",
+    "source": "Public workflow run39848309657 output, independent of the private store",
+    "review_scope": "PE1 operator research pin, not an active CI lock"
+  },
+  "attestation": {
+    "command": "gh release download ... --output - | gh attestation verify /dev/stdin --repo reindertpelsma/win-gpu-image --format json",
+    "exit": 0,
+    "verified_statements": 1,
+    "predicate_type": "https://slsa.dev/provenance/v1",
+    "source_repository": "https://github.com/reindertpelsma/win-gpu-image",
+    "source_commit": "320f7f83309eddfff8d557feb0c385232f675412",
+    "signer": "https://github.com/reindertpelsma/win-gpu-image/.github/workflows/build.yml@refs/heads/main",
+    "issuer": "https://token.actions.githubusercontent.com"
+  },
+  "store_manifest_matches_independent_pin": true,
+  "iso_bytes_on_dev_disk": false,
+  "gpu_runs": 0,
+  "vast_instances_created": [],
+  "vast_spend_usd": 0
+}
