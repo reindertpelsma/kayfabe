@@ -1,15 +1,16 @@
 // Mutation check for the provider-status tolerance and the close lines (src/index.js update(),
 // report(), close(), closeLine(); defaults.json), GPU-free. STATUS: LIVE, 2026-11-06. Each mutant is
-// applied in place (exact-once replacements), test/provider-tolerance.test.js runs, and every file is
+// applied in a temporary copy (exact-once replacements), test/provider-tolerance.test.js runs, and every file is
 // restored before the next mutant (also on error). Every mutant must make at least TWO named tests
 // fail; the OLD behaviour (close on one reading) is the first mutant. Run with nothing else touching
 // ci/vast-broker/src:
 //   node ci/vast-broker/provider-tolerance-mutants.mjs [name ...]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { tempCopy } from './mutant-copy.mjs';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
+// Every edit is made in a temporary COPY of the tree (mutant-copy.mjs), never in the checkout.
+const here = tempCopy();
 const TESTS = [here + 'test/provider-tolerance.test.js'];
 const I = 'src/index.js',
   D = 'defaults.json';

@@ -65,3 +65,23 @@ export function endpointSecrets(env) {
     (a, b) => b.length - a.length,
   );
 }
+
+// Review F6 (2026-11-13): every response of the public gateway carries nosniff, and a response that
+// can carry box-written text (anything but JSON) a CSP that forbids loading or running anything and
+// an attachment disposition, so a browser that is pointed at one never renders it as a page. A
+// WebSocket upgrade is returned as it is (it has no body to rewrap).
+export function harden(response) {
+  if (response.status === 101 || response.webSocket) return response;
+  const headers = new Headers(response.headers);
+  headers.set('X-Content-Type-Options', 'nosniff');
+  const type = headers.get('Content-Type') ?? '';
+  if (!/^application\/json(?:;|$)/i.test(type)) {
+    headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
+    headers.set('Content-Disposition', 'attachment; filename="response.txt"');
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}

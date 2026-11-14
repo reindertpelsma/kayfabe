@@ -339,6 +339,18 @@ A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-sta
 - **Proposed, awaiting the owner:** the host clock disclosure through the read-only usermode page
   (S1-30): accept for a single tenant, disclose for multi-tenant, with one guest per GPU as the
   answer.
+- **ACCEPTED RISKS, owner 2026-11-13 (review 4 of the CI Worker; DESIGN, accepted, not claims of safety):**
+  - Standard custom hosts may seed each other and owned hosts during a run. All untrusted boxes
+    are at the trust level of Vast boxes; git-only (borrowed) hosts cannot be seeded from untrusted
+    hosts. A custom host may also roll over into a later CI run and inherit its environment; if
+    that matters the owner re-rents the box. (F2: behaviour intentionally unchanged.)
+  - Any repo writer can post the required master statuses (`CI`, `gpu-vast`). There are exactly two
+    writers (the owner and the coordinator), and an untrusted PR cannot get a run without approval.
+    GitHub settings stay as they are. (F3.)
+  - The `gpu-vast` environment has no required reviewer and allows `v*` tags; only repo writers can
+    reach it. ci/vast-broker/DEPLOY.md states this. (F7.)
+  - The box Access pair and the secret path prefix go to every box (2026-10-24 ruling). They are
+    treated as secrets toward everyone else and redacted by the Worker (DEPLOY.md, "Worker hardening").
 
 ## 11. Deployment assumptions (to state in SUPPORT and SECURITY)
 

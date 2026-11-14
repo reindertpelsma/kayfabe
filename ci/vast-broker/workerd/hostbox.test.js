@@ -1043,12 +1043,102 @@ test('heartbeats write storage only on a state change or once a minute', async (
   await new Promise((r) => setTimeout(r, 200));
   assert.equal((await stored()).ts, first.ts, 'no write for repeated idle heartbeats');
   assert.equal((await h.view('rack-1')).connected, true, 'liveness still tracked');
+  // The first change after the hello is inside the per-box minimum interval (F5): move the clock.
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '6000');
   c.send({ type: 'heartbeat', state: 'busy', run_id: '123-1' });
   await h.wait(async () => (await stored()).state === 'busy', 'busy stored');
-  await h.call('rack-1', 'POST', '/__t/skew', 1, '61000');
+  // The periodic write is a minute after the LAST write (the busy change stored at 6 s), not after the hello.
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '67000');
   c.send({ type: 'heartbeat', state: 'busy', run_id: '123-1' });
   await h.wait(async () => (await stored()).ts > first.ts + 60000, 'periodic write');
 });
+
+// Review F5 (2026-11-13): a flapping box wrote storage on every flip (up to 10 a second). A change
+// is stored at most once per minimum interval; a change inside it is held and flushed by the next
+// heartbeat after the interval, by the liveness alarm, or when the socket closes.
+const flap = async (h, c, n = 8) => {
+  for (let i = 0; i < n; i++)
+    c.send({
+      type: 'heartbeat',
+      state: i % 2 ? 'idle' : 'busy',
+      run_id: i % 2 ? undefined : '123-1',
+    });
+  await new Promise((r) => setTimeout(r, 150));
+};
+const hbOf = async (h) =>
+  Object.fromEntries((await h.call('rack-1', 'GET', '/__t/storage')).data).hb;
+test('F5 flipping state inside the interval writes nothing; the next heartbeat after it flushes', async (t) => {
+  const h = await runtime(t);
+  await h.put('rack-1');
+  const c = await h.hello('rack-1', await h.mint('rack-1'));
+  const first = await hbOf(h);
+  await flap(h, c);
+  assert.deepEqual(await hbOf(h), first, 'no storage write for the flips');
+  assert.equal((await h.view('rack-1')).state, 'idle', 'liveness and the live state are exact');
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '5001');
+  c.send({ type: 'heartbeat', state: 'busy', run_id: '123-1' });
+  await h.wait(async () => (await hbOf(h)).state === 'busy', 'final state flushed');
+  assert.equal((await hbOf(h)).run_id, '123-1');
+});
+for (const run_id of ['123-1', '456-2'])
+  test(
+    'F5 a held change is flushed by the liveness alarm without another heartbeat ' + run_id,
+    async (t) => {
+      const h = await runtime(t);
+      await h.put('rack-1');
+      const c = await h.hello('rack-1', await h.mint('rack-1'));
+      const first = await hbOf(h);
+      c.send({ type: 'heartbeat', state: 'busy', run_id });
+      await new Promise((r) => setTimeout(r, 100));
+      assert.deepEqual(await hbOf(h), first);
+      await h.call('rack-1', 'POST', '/__t/skew', 1, '5001');
+      await h.call('rack-1', 'POST', '/__t/alarm', 1, '');
+      assert.equal((await hbOf(h)).state, 'busy');
+      assert.equal((await hbOf(h)).run_id, run_id);
+    },
+  );
+for (const code of [1000, 1001])
+  test('F5 a held change is flushed when the socket closes ' + code, async (t) => {
+    const h = await runtime(t);
+    await h.put('rack-1');
+    const c = await h.hello('rack-1', await h.mint('rack-1'));
+    await flap(h, c, 3);
+    assert.equal((await hbOf(h)).state, 'idle');
+    c.sock.close(code, 'bye');
+    await h.wait(async () => (await hbOf(h)).state === 'busy', 'state at close stored');
+  });
+test('F5 a steady state is still stored once a minute and an unchanged one is not held', async (t) => {
+  const h = await runtime(t);
+  await h.put('rack-1');
+  const c = await h.hello('rack-1', await h.mint('rack-1'));
+  const first = await hbOf(h);
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '6000');
+  c.send({ type: 'heartbeat', state: 'idle' });
+  await new Promise((r) => setTimeout(r, 100));
+  assert.deepEqual(await hbOf(h), first, 'an unchanged state waits for the minute');
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '61000');
+  c.send({ type: 'heartbeat', state: 'idle' });
+  await h.wait(async () => (await hbOf(h)).ts > first.ts + 60000, 'minute write');
+});
+for (const how of ['seeder disabled', 'box disabled']) {
+  test('F10 /internal/seed serves nothing after ' + how, async (t) => {
+    const h = await runtime(t);
+    await h.put('rack-1', { profile: 'container' });
+    const { c, offer } = await ackedOffer(h, 'rack-1');
+    reg(c, offer);
+    assert.equal((await c.next('seed_ack')).ok, true);
+    assert.equal((await h.call('rack-1', 'GET', '/internal/seed?consumer=standard')).status, 200);
+    await h.put(
+      'rack-1',
+      how === 'box disabled'
+        ? { profile: 'container', enabled: false }
+        : { profile: 'container', seeder: { enabled: false } },
+    );
+    const r = await h.call('rack-1', 'GET', '/internal/seed?consumer=standard');
+    assert.equal(r.status, 404);
+    assert.equal(r.text.includes('seeder_profile'), false);
+  });
+}
 
 test('admin list shows idle_since and the hourly price; a bad price is refused', async (t) => {
   const h = await runtime(t);
