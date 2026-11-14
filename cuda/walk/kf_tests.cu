@@ -21,6 +21,12 @@
 #include "kf_walk.h"
 #include "kf_tables.h"
 
+/* Test hooks of kf_walk.cu's host half (2026-11-13; not in the PTX, not used by kayfabe). */
+extern "C" void kf_test_set_npdb_override(uint32_t n);
+extern "C" void kf_test_set_shm_override(uint32_t bytes);
+extern "C" int kf_test_break_format(KfWalk *w, int which);
+extern "C" int kf_test_set_prev_layout(KfWalk *w, uint32_t t, uint32_t off, uint32_t cap);
+
 /* ── a very small assertion framework ────────────────────────────────────────── */
 static const char *g_name = "";
 static int g_fails_here = 0;
@@ -1959,8 +1965,17 @@ static void t_hostile_budget(void)
     CHECK_EQ(f.refresh({t.root}), 0);
     hostile_invariants(f);
     CHECK_M(f.hdr.flags & KFWR_HF_BUDGET, "the entry budget must be loud");
-    CHECK(f.hdr.flags & KFWR_HF_TRUNCATED);
+    /* ⊘ 2026-11-13 (review 3 F-2), above the text it corrects: a space that runs out of ITS budget is
+     * CUT -- named in its own entry, its diff withheld -- and the walk is NOT truncated, so the other
+     * spaces of the batch still apply (hostile/budget_fails_only_its_space). It used to be
+     * `CHECK(TRUNCATED)`: one space failed the whole batch. */
+    CHECK_M(!(f.hdr.flags & KFWR_HF_TRUNCATED), "one space's budget must not truncate the walk");
     CHECK(f.hdr.refuse_mask & KFWR_R_BUDGET);
+    CHECK_M(f.pe[0].vas_flags & KFWR_V_REFUSED, "the space that ran out is failed by name");
+    CHECK_M((f.pe[0].reserved2 & 0xFFFFFFFFull) & KFWR_R_BUDGET, "... and its own refusal bits say BUDGET");
+    CHECK_M(f.pe[0].run_count == 0u, "a cut space has no diff: nothing of a partial walk is applied");
+    /* ★ F-3: the budget is now a BOUND on what is read, not a flag raised after reading it. */
+    CHECK_M(f.hdr.entries_visited <= c.entry_budget, "no table is read past the space's budget");
     /* ⊘ NOT `<= budget + 1` any more, and the change is honest rather than
      * convenient. The parallel walk charges a whole TABLE at a time, by one
      * atomic per warp, because charging per entry would serialise the very loads
@@ -2502,6 +2517,16 @@ static void d_run(const char *corpus_path, const char *leaves_path,
             }
         }
         std::sort(mine.begin(), mine.end());
+        /* ★ 2026-11-13: KF_TESTS_DUMP_RUNS=1 prints the whole report, bit for bit, for an old-vs-new
+         * kernel identity diff over the corpus (the PARALLEL path; kf_cpu_walk --dump is the serial one). */
+        if (getenv("KF_TESTS_DUMP_RUNS")) {
+            printf("dumpimg %s %s flags=%#x refuse=%#x refusals=%u sparse=%u visited=%llu runs=%u\n", label,
+                   im.name.c_str(), h.flags, h.refuse_mask, h.refusals, h.sparse_slots,
+                   (unsigned long long)h.entries_visited, h.run_count);
+            for (uint32_t k = 0; k < h.run_count; k++)
+                printf("dumprun %llx %llx %llx %x %u\n", (unsigned long long)rn[k].va, (unsigned long long)rn[k].gpga,
+                       (unsigned long long)rn[k].len, rn[k].flags, (unsigned)rn[k].op);
+        }
 
         if (im.benign) {
             /* w825 A1: the kernel REFUSES peer leaves (no peer aperture is backed); the Rust
@@ -2702,12 +2727,272 @@ static void t_kind_uniform_is_one_run(void)
                 F4K | (9u << KFWR_RF_KIND_SHIFT), KFWR_OP_MAP}});
 }
 
+
+/* ══ VER3 (Hopper, Blackwell): the 4 KiB vetoes on the PRODUCTION (parallel) path ══════════════
+ * Security review 3 F-1 (S1-60, S1-67), 2026-11-13. Compiled only into kf_tests_ver3
+ * (-DKF_ALLOW_UNTESTED_VER3, `make check-ver3`), the build whose kf_create accepts the VER3 descriptor
+ * (`kf_format_ver3_untested`, pinned byte for byte to the production Rust descriptor by
+ * crates/kf-cuda/tests/walk_abi_matches_the_cu.rs). Raw bits from ogkm-580 `hopper/gh100/dev_mmu.h`,
+ * written here without any kernel helper (the same encodings as kf_cpu_walk.cpp's CPU cases):
+ *   PDE: AP 2:1 (1 vid), PCF 5:3, ADDR 51:12 | dual low = big half: AP 2:1, PCF_BIG 5:3, ADDR_BIG 51:8
+ *   dual high = small half: AP, PCF_SMALL, ADDR 51:12 | PTE: VALID 0, AP 2:1 (0 vid), PCF 7:3, ADDR 51:12
+ *   PTE PCF NO_VALID_4KB_PAGE = 3; PDE PCF SPARSE_ATS_ALLOWED = 1, SPARSE_ATS_NOT_ALLOWED = 3. */
+#ifdef KF_ALLOW_UNTESTED_VER3
+static const uint64_t V3A = 0x000FFFFFFFFFF000ull;
+struct V3T {
+    Gpga &g;
+    uint64_t root, pd0, big, small;
+    static const uint64_t VA = 3ull << 21;   /* PD4..PD1 index 0, PD0 index 3 */
+    explicit V3T(Gpga &gg) : g(gg)
+    {
+        root = g.alloc(4096, 4096);
+        const uint64_t pd3 = g.alloc(4096, 4096), pd2 = g.alloc(4096, 4096), pd1 = g.alloc(4096, 4096);
+        pd0 = g.alloc(4096, 4096); big = g.alloc(256, 256); small = g.alloc(4096, 4096);
+        g.u64(root) = 2ull | (pd3 & V3A); g.u64(pd3) = 2ull | (pd2 & V3A);
+        g.u64(pd2) = 2ull | (pd1 & V3A); g.u64(pd1) = 2ull | (pd0 & V3A);
+    }
+    void dual(uint64_t lo, uint64_t hi) { g.u64(pd0 + 48u) = lo; g.u64(pd0 + 56u) = hi; }
+    uint64_t big_half(void) const { return 2ull | (big & 0x000FFFFFFFFFFF00ull); }
+    uint64_t small_half(void) const { return 2ull | (small & V3A); }
+    static uint64_t pte(uint64_t phys) { return 1ull | (phys & V3A); }
+};
+
+static KfWalkCfg cfg_ver3(void) { KfWalkCfg c = cfg_default(); c.table_version = KF_TBL_VER3; return c; }
+
+static void t_ver3_unmapped_big_pte_hides_stale_4k(void)
+{
+    Fix f(4u << 20, cfg_ver3());
+    CHECK_M(f.w != NULL, "the VER3 descriptor must be accepted in this build");
+    if (!f.w) return;
+    V3T t(f.g);
+    t.dual(t.big_half(), t.small_half());
+    f.g.u64(t.big) = 3ull << 3;          /* slot 0: VALID=0, PCF=NO_VALID_4KB_PAGE: its 4 KiB PTEs are stale */
+    f.g.u64(t.big + 8u) = 0ull;          /* slot 1: INVALID: the 4 KiB table is consulted                  */
+    for (uint32_t i = 0; i < 32u; i++) f.g.u64(t.small + 8u * i) = V3T::pte((i < 16u ? 0x100000ull : 0x200000ull) + 4096ull * i);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{V3T::VA + 0x10000ull, 0x200000ull + 16ull * 4096ull, 16ull * 4096ull, F4K, KFWR_OP_MAP}});
+}
+
+static void t_ver3_sparse_big_half_hides_small_table(void)
+{
+    const uint64_t pcf_big[2] = {1ull, 3ull};   /* SPARSE_ATS_ALLOWED, SPARSE_ATS_NOT_ALLOWED */
+    for (int k = 0; k < 2; k++) {
+        Fix f(4u << 20, cfg_ver3());
+        if (!f.w) { CHECK(f.w != NULL); return; }
+        V3T t(f.g);
+        t.dual(pcf_big[k] << 3, t.small_half());   /* big half: aperture INVALID, PCF_BIG sparse */
+        for (uint32_t i = 0; i < 4u; i++) f.g.u64(t.small + 8u * i) = V3T::pte(0x100000ull + 4096ull * i);
+        f.upload();
+        CHECK_EQ(f.refresh({t.root}), 0);
+        validate(f);
+        CHECK_M(f.hdr.run_count == 0u, pcf_big[k] == 1ull ? "PCF_BIG=1 must hide the small table" : "PCF_BIG=3 must hide the small table");
+        if (g_fails_here) dump(f);
+    }
+}
+
+static void t_ver3_non_vetoes_keep_the_4k_table(void)
+{
+    /* Controls: a big PTE that is SPARSE (1) or MAPPING_NOWHERE (2), and a big half that is
+     * INVALID_ATS_NOT_ALLOWED (2), are not "nothing below": the 4 KiB leaves stand. */
+    for (uint32_t pcf = 1u; pcf <= 2u; pcf++) {
+        Fix f(4u << 20, cfg_ver3());
+        if (!f.w) { CHECK(f.w != NULL); return; }
+        V3T t(f.g);
+        t.dual(t.big_half(), t.small_half());
+        f.g.u64(t.big) = (uint64_t)pcf << 3;
+        for (uint32_t i = 0; i < 16u; i++) f.g.u64(t.small + 8u * i) = V3T::pte(0x100000ull + 4096ull * i);
+        f.upload();
+        CHECK_EQ(f.refresh({t.root}), 0);
+        expect(f, {{V3T::VA, 0x100000ull, 16ull * 4096ull, F4K, KFWR_OP_MAP}});
+    }
+    Fix f(4u << 20, cfg_ver3());
+    if (!f.w) return;
+    V3T t(f.g);
+    t.dual(2ull << 3, t.small_half());
+    for (uint32_t i = 0; i < 4u; i++) f.g.u64(t.small + 8u * i) = V3T::pte(0x100000ull + 4096ull * i);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{V3T::VA, 0x100000ull, 4ull * 4096ull, F4K, KFWR_OP_MAP}});
+}
+#endif
+
+
+/* ══ THE BUDGET IS A WORK BOUND, PER SPACE (security review 3 F-2, F-3, 2026-11-13) ═══════════════ */
+/* A page that points at itself in every slot: each level re-reads it and fans out x512. */
+static uint64_t self_pointing_page(Gpga &g)
+{
+    const uint64_t T = g.alloc(4096, 4096);
+    for (uint32_t i = 0; i < 512u; i++) g.u64(T + 8ull * i) = kfb_pde(T);
+    return T;
+}
+
+static void t_hostile_budget_fails_only_its_space(void)
+{
+    /* F-2: one guest process whose layout charges more than the budget used to TRUNCATE the whole
+     * batch, so every other space's maps stopped. Now only that space is cut. */
+    KfWalkCfg c = cfg_default();
+    c.entry_budget = 20000u;
+    Fix f(8u << 20, c);
+    const uint64_t T = self_pointing_page(f.g);
+    Tree t(f.g);
+    t.map4k(VBASE, 0x300000ull);
+    t.map64k(VBASE + (1ull << 21), 0x400000ull);
+    f.upload();
+    CHECK_EQ(f.refresh({T, t.root}), 0);
+    hostile_invariants(f);
+    CHECK_M(!(f.hdr.flags & KFWR_HF_TRUNCATED), "the hostile space must not truncate the batch");
+    CHECK_EQ(f.hdr.pdb_count, 2);
+    CHECK_M(f.pe[0].vas_flags & KFWR_V_REFUSED, "the hostile space is failed by name");
+    CHECK_M((f.pe[0].reserved2 & 0xFFFFFFFFull) & KFWR_R_BUDGET, "... for its BUDGET");
+    CHECK_EQ(f.pe[0].run_count, 0);
+    CHECK_M(!(f.pe[1].vas_flags & KFWR_V_REFUSED), "the innocent space is not refused");
+    CHECK_EQ(f.pe[1].run_count, 2);
+    if (f.pe[1].run_count == 2u) {
+        const KfMapRun &a = f.rn[f.pe[1].first_run], &b = f.rn[f.pe[1].first_run + 1u];
+        CHECK_EQ(a.va, VBASE); CHECK_EQ(a.gpga, 0x300000ull); CHECK_EQ(a.len, 4096ull);
+        CHECK_EQ(b.va, VBASE + (1ull << 21)); CHECK_EQ(b.gpga, 0x400000ull); CHECK_EQ(b.len, 65536ull);
+    }
+    CHECK_M(f.hdr.entries_visited <= c.entry_budget + 4096u, "the hostile space read no more than its budget");
+    if (g_fails_here) dump(f);
+}
+
+static void t_hostile_frontier_fan_in(void)
+{
+    /* F-3 (S1-63) + F-2: three spaces rooted at self-pointing pages (default budget). Each reaches a
+     * level of 2048 x 512 children. Before: the shared frontier overflowed, the walk aborted, the next
+     * level expanded a STALE frontier, and the innocent fourth space failed with the batch. Now each
+     * hostile space is cut at its frontier share, nothing more of it is read, and the walk completes. */
+    Fix f(16u << 20, cfg_default());
+    const uint64_t T1 = self_pointing_page(f.g), T2 = self_pointing_page(f.g), T3 = self_pointing_page(f.g);
+    Tree t(f.g);
+    t.map4k(VBASE, 0x300000ull);
+    f.upload();
+    const auto t0 = std::chrono::steady_clock::now();
+    CHECK_EQ(f.refresh({T1, T2, T3, t.root}), 0);
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    printf("      [fan-in] refresh %.1f ms, entries_visited %llu, flags %#x, refuse_mask %#x\n", ms,
+           (unsigned long long)f.hdr.entries_visited, f.hdr.flags, f.hdr.refuse_mask);
+    hostile_invariants(f);
+    CHECK_M(!(f.hdr.flags & KFWR_HF_TRUNCATED), "three hostile spaces must not truncate the batch");
+    for (uint32_t i = 0; i < 3u && i < f.hdr.pdb_count; i++) {
+        CHECK_M(f.pe[i].vas_flags & KFWR_V_REFUSED, "each hostile space is failed by name");
+        CHECK_EQ(f.pe[i].run_count, 0);
+    }
+    CHECK_EQ(f.hdr.pdb_count, 4);
+    CHECK_M(!(f.pe[3].vas_flags & KFWR_V_REFUSED), "the innocent space is not refused");
+    CHECK_EQ(f.pe[3].run_count, 1);
+    /* the work bound: each hostile space read at most its budget, in practice far less */
+    CHECK_M(f.hdr.entries_visited <= 4ull * f.cfg.entry_budget, "the walk read past its global ceiling");
+    CHECK_M(ms < 5000.0, "the fan-in walk held the GPU for seconds");
+    if (g_fails_here) dump(f);
+}
+
+/* ══ IN-KERNEL BOUNDS THAT USED TO BE THE HOST'S ALONE (review 3 F-9, F-10, S1-66) ═════════════════ */
+static void t_format_device_refuses_bad_descriptors(void)
+{
+    /* F-10: the PTX validates the descriptor itself. Every break of the hostile-descriptor corpus
+     * (kf_format_break), slipped past the HOST check, must abort the walk before any table is read. */
+    int n = 0;
+    for (int which = 0; which < 1000; which++) {
+        Fix f(8u << 20, cfg_default());
+        Tree t(f.g);
+        t.map4k(VBASE, 0x300000ull);
+        f.upload();
+        if (kf_test_break_format(f.w, which) != 0) break;
+        n++;
+        CHECK_EQ(f.refresh({t.root}), 0);
+        char b[96];
+        snprintf(b, sizeof(b), "descriptor break %d was walked", which);
+        CHECK_M((f.hdr.flags & KFWR_HF_TRUNCATED) && (f.hdr.refuse_mask & KFWR_R_BAD_FORMAT), b);
+        CHECK_M(f.hdr.entries_visited == 0ull && f.hdr.run_count == 0u, b);
+        if (g_fails_here) { dump(f); break; }
+    }
+    CHECK_M(n >= 40, "the hostile-descriptor corpus shrank");
+    Fix f(8u << 20, cfg_default());   /* the control: the real descriptor walks */
+    Tree t(f.g);
+    t.map4k(VBASE, 0x300000ull);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, 0x300000ull, 4096ull, F4K, KFWR_OP_MAP}});
+}
+
+static void t_hostile_short_shared_memory_launch(void)
+{
+    /* F-10: the kernels check the dynamic shared memory they were launched with. */
+    const uint32_t full = (128u / 32u) * (512u + 64u) * 8u;
+    const uint32_t shorts[2] = {full - 8u, 0u};
+    for (int k = 0; k < 2; k++) {
+        Fix f(8u << 20, cfg_default());
+        Tree t(f.g);
+        t.map4k(VBASE, 0x300000ull);
+        f.upload();
+        kf_test_set_shm_override(shorts[k]);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        kf_test_set_shm_override(0xFFFFFFFFu);
+        CHECK_M((f.hdr.flags & KFWR_HF_TRUNCATED) && (f.hdr.refuse_mask & KFWR_R_BAD_FORMAT),
+                "a launch with too little shared memory must abort the walk");
+        CHECK_EQ(f.hdr.run_count, 0);
+        CHECK_EQ(f.hdr.entries_visited, 0);
+    }
+}
+
+static void t_hostile_npdb_past_kernel_arrays(void)
+{
+    /* F-9: kf_par_seed bounds the entry count by the per-entry arrays (KF_MAX_PDB) itself. */
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    t.map4k(VBASE, 0x300000ull);
+    f.upload();
+    kf_test_set_npdb_override(KF_MAX_PDB + 1u);
+    CHECK_EQ(f.refresh({t.root}), 0);
+    kf_test_set_npdb_override(0u);
+    CHECK_M((f.hdr.flags & KFWR_HF_TRUNCATED) && (f.hdr.refuse_mask & KFWR_R_PDB_CAP),
+            "more entries than KF_MAX_PDB must be refused by the kernel");
+    CHECK_EQ(f.hdr.run_count, 0);
+}
+
+static void t_hostile_commit_bound_before_write(void)
+{
+    /* S1-66: the commit wrote its MAP staging (B) before the fit check. Entry 0's previous-walk
+     * scratch is pointed at the last run slots of the stage with room for ONE run, then 2048 MAPs are
+     * acknowledged: every write must be bounded first (a write past the stage is an illegal address or
+     * silent corruption), the commit refused, and nothing committed (the next diff re-emits all). */
+    KfWalkCfg c = cfg_default();
+    Fix f(16u << 20, c);
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 2048u; i++) t.map4k(VBASE + 4096ull * i, 0x800000ull + 8192ull * i);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    CHECK_EQ(f.hdr.run_count, 2048);
+    f.ack();
+    CHECK_EQ(kf_test_set_prev_layout(f.w, 0u, (4u << 20) / 4u - 1u, 1u), 0);
+    CHECK_EQ(f.refresh({t.root}), 0);
+    CHECK_EQ(cudaGetLastError(), cudaSuccess);
+    /* ⚠ The commit's own RUN_CAP refusal is not visible here: kf_begin_kernel, the next node, zeroes
+     * the refusal accumulators. What is visible is the consequence: nothing was committed, so the
+     * same 2048 MAPs are reported again. The OUT-OF-BOUNDS half is graded by compute-sanitizer
+     * (memcheck --padding) on the box: before the fix this case writes past the run stage. */
+    CHECK_EQ(f.hdr.run_count, 2048);
+    /* control: with the real region back, the same verdict commits and the next diff is quiet */
+    CHECK_EQ(kf_test_set_prev_layout(f.w, 0u, 0u, f.cfg.runs_per_pdb), 0);
+    f.ack();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    CHECK_EQ(f.hdr.run_count, 0);
+}
+
 /* ══ registry ════════════════════════════════════════════════════════════════ */
 struct Case { const char *name; void (*fn)(void); };
 static const Case CASES[] = {
     { "format/refuses_unknown_table_version",   t_format_refuses_unknown_table_version },
     { "format/refuses_untested_ver3",           t_format_refuses_untested_ver3 },
     { "format/report_is_self_describing",       t_format_report_is_self_describing },
+#ifdef KF_ALLOW_UNTESTED_VER3
+    { "ver3/unmapped_big_pte_hides_stale_4k",   t_ver3_unmapped_big_pte_hides_stale_4k },
+    { "ver3/sparse_big_half_hides_small_table", t_ver3_sparse_big_half_hides_small_table },
+    { "ver3/non_vetoes_keep_the_4k_table",      t_ver3_non_vetoes_keep_the_4k_table },
+#endif
+
     { "format/sparse_is_counted",               t_format_sparse_is_counted },
 
     { "correctness/kind_joins_run_identity",    t_kind_joins_run_identity },
@@ -2776,6 +3061,12 @@ static const Case CASES[] = {
     { "hostile/enormous_but_legal",             t_hostile_enormous_but_legal },
     { "hostile/report_run_cap",                 t_hostile_report_run_cap },
     { "hostile/entry_budget",                   t_hostile_budget },
+    { "hostile/budget_fails_only_its_space",    t_hostile_budget_fails_only_its_space },
+    { "hostile/frontier_fan_in",                t_hostile_frontier_fan_in },
+    { "format/device_refuses_bad_descriptors",  t_format_device_refuses_bad_descriptors },
+    { "hostile/short_shared_memory_launch",     t_hostile_short_shared_memory_launch },
+    { "hostile/npdb_past_kernel_arrays",        t_hostile_npdb_past_kernel_arrays },
+    { "hostile/commit_bound_before_write",      t_hostile_commit_bound_before_write },
     { "hostile/pdb_capacity",                   t_hostile_pdb_capacity },
     { "hostile/unsorted_pdb_list",              t_hostile_unsorted_pdbs },
     { "hostile/bounds_window_respected",        t_bounds_window_is_respected },
