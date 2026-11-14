@@ -240,10 +240,6 @@ impl RmObjects for SharedObjects {
             Err(_) => Some(kf_abi::NV_ERR_INVALID_STATE),
         }
     }
-    fn is_subdevice(&self, client: u32, object: u32) -> bool {
-        self.objects()
-            .is_ok_and(|objects| objects.is_subdevice(client, object))
-    }
 }
 
 #[cfg(test)]

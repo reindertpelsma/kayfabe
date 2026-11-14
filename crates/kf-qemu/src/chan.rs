@@ -52,7 +52,6 @@
 )]
 
 use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed, resolve_placed_prefix};
-use crate::raw_unsafe::RawRegion;
 use kf_chan::completions::Completions;
 use kf_chan::host::{ChanError, GuestUserd, Publisher, Split, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, TranslatedRing};
@@ -91,18 +90,10 @@ const NV_ERR_INVALID_CLASS: u32 = 0x22;
 /// `NV2080_NOTIFIERS_GR0` = `NV2080_NOTIFIERS_GRAPHICS` (`ogkm-580: cl2080_notification.h:48,185`).
 const NV2080_NOTIFIERS_GR0: u32 = 12;
 
-/// ★ EXPERIMENT `KF3_GSS_NATIVE`: the host seam of `kf_rm::gssnative` over OUR host client: one
-/// `NV_ESC_RM_CONTROL` on kayfabe's own host subdevice, params carried unchanged
-/// ([`HostRm::raw_control_opaque`]).
-struct GssHostRm(&'static HostRm);
-
-impl kf_rm::gssnative::GssHost for GssHostRm {
-    fn control(&self, cmd: u32, params: &mut [u8]) -> Result<u32, String> {
-        self.0
-            .raw_control_opaque(self.0.subdevice(), cmd, params)
-            .map_err(|e| format!("{e:?}"))
-    }
-}
+/// The channel plane's act thread (a service thread: its death stops the VM,
+/// [`crate::failclosed::is_service_thread`]). ★ 2026-11-14: owned here; it was
+/// `kf_rm::gssnative::ACT_THREAD` (same name) until the `KF3_GSS_NATIVE` experiment was removed.
+pub const ACT_THREAD: &str = "kf3-chan-act";
 
 /// ★ P5b: one host act, run on the plane's act thread. `Err((status, why))` refuses by name.
 type Act = Box<dyn FnOnce(&ChanPlane) -> Result<String, (u32, String)> + Send>;
@@ -762,8 +753,10 @@ enum UserdView {
         cookie: u64,
         at: u64,
     },
-    /// Guest RAM.
-    Ram { mem: RawRegion, at: usize },
+    /// Guest RAM: the guest-memfd offset of USERD, resolved under the RAM map's guard on every
+    /// access (security fix C-02: ⊘ was a `RawRegion` copy kept for the channel's life, which
+    /// outlived `kf3_ram_del`).
+    Ram { ram: &'static RamMap, off: u64 },
 }
 
 impl UserdView {
@@ -772,8 +765,8 @@ impl UserdView {
             UserdView::Store { region, at, .. } => region
                 .load_u32(HostOffset::new(at.saturating_add(off)))
                 .map_err(|e| format!("{e:?}")),
-            UserdView::Ram { mem, at } => mem
-                .load_u32(at.saturating_add(off as usize))
+            UserdView::Ram { ram, off: at } => ram
+                .load_u32_file(at.saturating_add(off))
                 .ok_or_else(|| "guest-RAM USERD load".to_string()),
         }
     }
@@ -782,8 +775,8 @@ impl UserdView {
             UserdView::Store { region, at, .. } => region
                 .store_u32(HostOffset::new(at.saturating_add(off)), v)
                 .map_err(|e| format!("{e:?}")),
-            UserdView::Ram { mem, at } => mem
-                .store_u32(at.saturating_add(off as usize), v)
+            UserdView::Ram { ram, off: at } => ram
+                .store_u32_file(at.saturating_add(off), v)
                 .then_some(())
                 .ok_or_else(|| "guest-RAM USERD store".to_string()),
         }
@@ -1522,13 +1515,13 @@ impl GuestMemory for Mem<'_> {
                 done = done.saturating_add(n);
                 continue;
             }
-            let (mem, at) = self
-                .ram
-                .at_file_offset(off, n)
-                .ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
+            // ★ C-02: copied under the RAM map's guard (in bounded pieces), never through a
+            // region copied out of it; an unregistered offset refuses here.
             let dst = out_window(out, done, n)?;
-            if !mem.read_into(at, dst) {
-                return Err(format!("{at_va:#x}: guest-RAM read"));
+            if !self.ram.read_file(off, dst) {
+                return Err(format!(
+                    "{at_va:#x}: guest-RAM offset {off:#x} unregistered or read refused"
+                ));
             }
             crate::prof::RAM_READ_BYTES.fetch_add(n, Ordering::Relaxed);
             done = done.saturating_add(n);
@@ -2013,9 +2006,7 @@ fn probe_read(
             got: None,
         },
         Some((true, off)) => {
-            let got = ram
-                .at_file_offset(off, 4)
-                .and_then(|(m, at)| m.load_u32(at));
+            let got = ram.load_u32_file(off);
             ReleaseRead {
                 r,
                 at: format!("ram+{off:#x}"),
@@ -2069,10 +2060,10 @@ fn probe_side(
                 None => (format!("VA {va:#x}+{n:#x} UNPLACED by us"), None),
                 Some((true, off)) => {
                     let n16 = usize::try_from(len).unwrap_or(16);
-                    let host = ram.at_file_offset(off, len).and_then(|(m, at)| {
+                    let host = {
                         let mut b = vec![0u8; n16];
-                        m.read_into(at, &mut b).then_some(b)
-                    });
+                        ram.read_file(off, &mut b).then_some(b)
+                    };
                     (
                         format!(
                             "VA {va:#x}+{n:#x} -> ram+{off:#x} host[{}]",
@@ -2134,13 +2125,10 @@ fn probe_operand(
             )
         }
         Target::CoherentSysmem | Target::NonCoherentSysmem => {
-            let host = ram
-                .dma_to_file_range(phys, n as u64)
-                .and_then(|off| ram.at_file_offset(off, n as u64))
-                .and_then(|(m, at)| {
-                    let mut b = vec![0u8; n];
-                    m.read_into(at, &mut b).then_some(b)
-                });
+            let host = ram.dma_to_file_range(phys, n as u64).and_then(|off| {
+                let mut b = vec![0u8; n];
+                ram.read_file(off, &mut b).then_some(b)
+            });
             (
                 format!(
                     "{t:?}+{phys:#x}+{len:#x} host[{}]",
@@ -3128,7 +3116,7 @@ impl ChanPlane {
     pub fn start(&'static self) -> Result<(), String> {
         let (tx, rx) = std::sync::mpsc::channel::<(Act, kf_gsp::Deferred, &'static str)>();
         std::thread::Builder::new()
-            .name(kf_rm::gssnative::ACT_THREAD.into())
+            .name(ACT_THREAD.into())
             .spawn(move || {
                 let mut q = crate::actq::ActQueue::new(rx);
                 while let Some((act, d, what)) = q.next_act() {
@@ -3151,8 +3139,8 @@ impl ChanPlane {
                     self.acts_run.fetch_add(1, Ordering::Relaxed);
                     match r {
                         Ok(line) => {
-                            // EXPERIMENT KF3_GSS_NATIVE: an act that says nothing is quiet (its own
-                            // counters and once-lines speak; no per-RPC print).
+                            // An act that says nothing is quiet (its own counters and once-lines
+                            // speak; no per-RPC print).
                             if !line.is_empty() {
                                 eprintln!("kf3: act {what}: {line} ({us} us, off the GSP lock)");
                             }
@@ -3548,32 +3536,6 @@ impl ChanPlane {
                 status: NV_ERR_INVALID_STATE,
                 why: format!("{what}: the act thread is not running"),
             }
-        }
-    }
-
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (`docs/design/V3_GSS_NATIVE.md`): a non-privileged subdevice-level
-    /// GSS-legacy control, carried to OUR host subdevice as an act — the host call is the act
-    /// thread's (statement order, off the drainer, off every lock the drainer holds), the reply is
-    /// held on the cell, and a call that blocks on the host RM API lock shows in `acts` /
-    /// `act_worst_us`. The act resolves the cell itself (the host's status, not `0`) and says
-    /// nothing per call (`kf_rm::gssnative` counts, and says each first answer once).
-    pub fn gss_forward(
-        &self,
-        req: kf_rm::gssnative::GssRequest,
-        stats: &Arc<kf_rm::gssnative::Stats>,
-    ) -> kf_rm::gssnative::GssAnswer {
-        let d = kf_gsp::Deferred::new();
-        let (cell, stats) = (d.clone(), stats.clone());
-        let act: Act = Box::new(move |me: &ChanPlane| {
-            kf_rm::gssnative::execute(&stats, &GssHostRm(me.rm), req, &cell);
-            Ok(String::new())
-        });
-        match self.defer_cell("gss-native control", act, d) {
-            ChanAnswer::Deferred(d) => kf_rm::gssnative::GssAnswer::Deferred(d),
-            ChanAnswer::Refused { why, .. } => kf_rm::gssnative::GssAnswer::Refused { why },
-            _ => kf_rm::gssnative::GssAnswer::Refused {
-                why: "unexpected answer".into(),
-            },
         }
     }
 
@@ -6479,14 +6441,12 @@ impl ChanPlane {
                     .ram
                     .dma_to_file_range(gpa, u.len() as u64)
                     .ok_or_else(|| format!("USERD GPA {gpa:#x} outside guest RAM"))?;
-                let (mem, at) = self
-                    .ram
-                    .at_file_offset(off, u.len() as u64)
-                    .ok_or_else(|| format!("USERD offset {off:#x} unregistered"))?;
-                if mem.read_into(at, &mut u) {
+                if self.ram.read_file(off, &mut u) {
                     Ok(())
                 } else {
-                    Err("USERD read".to_string())
+                    Err(format!(
+                        "USERD offset {off:#x} unregistered or read refused"
+                    ))
                 }
             });
         let w = |o: usize| {
@@ -6653,12 +6613,10 @@ impl ChanPlane {
             if n == 0 {
                 return Err(format!("{at_va:#x}: no progress"));
             }
-            let (mem, at) = self
-                .ram
-                .at_file_offset(off, n)
-                .ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
-            if !mem.read_into(at, out_window(out, done, n)?) {
-                return Err(format!("{at_va:#x}: guest-RAM read"));
+            if !self.ram.read_file(off, out_window(out, done, n)?) {
+                return Err(format!(
+                    "{at_va:#x}: guest-RAM offset {off:#x} unregistered or read refused"
+                ));
             }
             done = done.saturating_add(n);
         }
@@ -7635,24 +7593,23 @@ impl ChanPlane {
         )];
         let notifier = match g.err_notifier {
             None => "none declared".to_string(),
-            Some(kf_arch::fault::ErrorNotifier::Sysmem { gpa }) => self
-                .ram
-                .dma_to_file_range(gpa, 16)
-                .and_then(|off| self.ram.at_file_offset(off, 16))
-                .map_or_else(
+            Some(kf_arch::fault::ErrorNotifier::Sysmem { gpa }) => {
+                self.ram.dma_to_file_range(gpa, 16).map_or_else(
                     || format!("sysmem @{gpa:#x}: no guest RAM"),
-                    |(mem, at)| {
+                    |off| {
                         format!(
                             "sysmem @{gpa:#x}: {}",
                             words(
-                                &|o| mem
-                                    .load_u32(at.saturating_add(o as usize))
+                                &|o| self
+                                    .ram
+                                    .load_u32_file(off.saturating_add(o))
                                     .ok_or_else(|| "load".to_string()),
                                 4
                             )
                         )
                     },
-                ),
+                )
+            }
             Some(kf_arch::fault::ErrorNotifier::Framebuffer { off }) => {
                 match self.userd_view(Some(kf_arch::UserdMem::Framebuffer {
                     base: off,
@@ -7713,12 +7670,15 @@ impl ChanPlane {
                 // address to a guest-memfd range, then that range's host mapping — never a GPA
                 // lookup of a device address. (Equal to the block lookup it replaces for the one
                 // fd-backed guest RAM kf3 supports.)
-                let (mem, at) = self
+                // ★ C-02 (2026-11-13): the view keeps the FILE offset, never a host region: each
+                // access is resolved under the RAM map's guard, so an unplugged block refuses
+                // instead of being read after QEMU freed it.
+                let off = self
                     .ram
                     .dma_to_file_range(base, 0x200)
-                    .and_then(|off| self.ram.at_file_offset(off, 0x200))
+                    .filter(|&off| self.ram.covers_file(off, 0x200))
                     .ok_or_else(|| format!("USERD at guest DMA address {base:#x}: no guest RAM"))?;
-                Ok(UserdView::Ram { mem, at })
+                Ok(UserdView::Ram { ram: self.ram, off })
             }
             other => Err(format!(
                 "USERD not declared as a physical descriptor ({other:?})"

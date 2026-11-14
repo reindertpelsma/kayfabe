@@ -410,21 +410,6 @@ struct HeldReply {
 pub struct Deferred {
     outcome: std::sync::Arc<core::sync::atomic::AtomicU64>,
     undo: std::sync::Arc<std::sync::Mutex<Option<OrphanUndo>>>,
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the HOST's reply bytes, written into the held reply when the
-    /// act succeeded ([`Self::set_reply_patch`]). `None` for every other act.
-    patch: std::sync::Arc<std::sync::Mutex<Option<ReplyPatch>>>,
-}
-
-/// ★ EXPERIMENT `KF3_GSS_NATIVE`: bytes an act wants in its held reply's payload, at `at`. Applied by
-/// [`GspFsm::release_held`] only when the act resolved `NV_OK` and only inside the payload the reply
-/// already has (the reply is clamped to the request's own size, `RpcCommand::reply`): a patch never
-/// grows a reply.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReplyPatch {
-    /// Offset into the reply payload.
-    pub at: usize,
-    /// The bytes.
-    pub bytes: Vec<u8>,
 }
 
 /// What undoes a deferred act whose command another link refused ([`Deferred::on_orphaned`]).
@@ -441,23 +426,7 @@ impl Deferred {
         Deferred {
             outcome: std::sync::Arc::new(core::sync::atomic::AtomicU64::new(Self::PENDING)),
             undo: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            patch: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
-    }
-
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the bytes the held reply carries when the act succeeds. Set
-    /// BEFORE [`Self::resolve`] (the reply may be posted the moment the cell resolves). A second
-    /// call replaces the first.
-    pub fn set_reply_patch(&self, at: usize, bytes: Vec<u8>) {
-        if let Ok(mut p) = self.patch.lock() {
-            *p = Some(ReplyPatch { at, bytes });
-        }
-    }
-
-    /// The reply patch, if one was set (a copy: a post that fails is retried).
-    #[must_use]
-    pub fn reply_patch(&self) -> Option<ReplyPatch> {
-        self.patch.lock().ok().and_then(|p| p.clone())
     }
 
     /// Resolve with an `NV_STATUS` (`0` = the act succeeded). The first resolution wins.
@@ -529,7 +498,7 @@ fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
         None => false,
         Some(0) if rpc.rpc_result != 0 => {
             let undone = d.run_orphan_undo();
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kayfabe: HELD-REPLY fn={:#x} seq={}: its deferred act SUCCEEDED but the reply is a refusal ({:#x}) — {}",
                 rpc.function,
                 rpc.sequence,
@@ -542,16 +511,9 @@ fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
             );
             true
         }
-        Some(0) => {
-            // ★ EXPERIMENT `KF3_GSS_NATIVE`: the host's bytes, only inside the payload the reply has.
-            if let Some(p) = d.reply_patch()
-                && let Some(end) = p.at.checked_add(p.bytes.len())
-                && let Some(dst) = rpc.payload.get_mut(p.at..end)
-            {
-                dst.copy_from_slice(&p.bytes);
-            }
-            true
-        }
+        // ⊘ 2026-11-13: a succeeded act posts the reply exactly as the link built it. The removed
+        // `KF3_GSS_NATIVE` experiment's reply patch (host bytes into the guest's reply) is gone.
+        Some(0) => true,
         Some(status) => {
             rpc.rpc_result = status;
             rpc.rpc_result_private = status;
@@ -1896,7 +1858,7 @@ impl GspFsm {
         // page; `gpa_same=false seq_same=true` would mean a live queue moved, which nothing
         // in 580 does and which we would want to hear about immediately.
         let gpa_same = self.region_identity == Some(shared_mem_pa);
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kayfabe: GSP-PUBLISH gpa=0x{shared_mem_pa:x} gpa_same={gpa_same} seq_last={seq_evidence:?} \
              cmd_seq={} ⇒ same_instance={same_instance}{}",
             self.cmd_seq,
@@ -2003,9 +1965,11 @@ impl GspFsm {
         self.phase = BootPhase::Booted;
         self.events_outstanding = false;
         self.init_done_posted = false;
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq={} cmd_seq={} cmd_read_ptr={} peer_stat_read={mark}",
-            self.stat_seq, self.cmd_seq, self.cmd_read_ptr
+            self.stat_seq,
+            self.cmd_seq,
+            self.cmd_read_ptr
         );
         let init_done = OutgoingRpc {
             function: self.abi.rpc.codes.gsp_init_done,
@@ -2233,9 +2197,10 @@ impl GspFsm {
                     Some(whole)
                 }
                 crate::large::Step::Refused(why) => {
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf-gsp: LARGE-RPC REFUSED fn {} seq {}: {why}",
-                        cmd.code, cmd.sequence
+                        cmd.code,
+                        cmd.sequence
                     );
                     if matches!(why, crate::large::LargeRefusal::Interrupted { .. }) {
                         self.answer(ram, policy, &cmd, report)?;
@@ -2432,7 +2397,7 @@ impl GspFsm {
             self.refusals
                 .note(full.function, detail, full.rpc_result, full.sequence);
         }
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-gsp: large RPC fn {} seq {} joined from {} fragment(s), {} bytes, answered in {} replies (rpc_result {:#x})",
             whole.code,
             whole.sequence,
@@ -2542,7 +2507,7 @@ impl GspFsm {
             // range completed in the SAME SECOND as the `FAULT_PDE ACCESS_TYPE_VIRT_WRITE`
             // that hit it. So "did the hold run" must be legible FROM the artefact, never
             // inferred from the absence of some other line.
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kayfabe: HELD-REPLY fn={:?} depth={} — this map reply WAITS for its rows",
                 cmd.function,
                 self.held.len() + 1
@@ -2679,7 +2644,7 @@ impl GspFsm {
             b.stat.free_cache = free - elements;
         }
         self.swgen0_pending = true;
-        // AFTER successful queue publication and any held-reply patch. Never
+        // AFTER successful queue publication. Never
         // records a failed/full-queue attempt; it cannot alter the posted RPC.
         if let Some(record) =
             self.reply_body_trace
@@ -2825,7 +2790,9 @@ impl GspFsm {
             // ★ The pair of the HELD-REPLY line. Two counters that must be read together:
             // a boot with holds and no releases is a PARKED GUEST, and a boot with neither
             // is a guest that never waited for its rows at all. Neither is visible from one.
-            eprintln!("kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now");
+            kf_arch::rate_eprintln!(
+                "kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now"
+            );
         }
         Ok(posted)
     }
@@ -3303,50 +3270,6 @@ mod a_reply_whose_status_is_a_host_act {
         let mut refused = held(0x19);
         assert!(settle_deferred(&mut refused, &twin, true));
         assert!(!bare.run_orphan_undo());
-    }
-
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the host's bytes land in the held reply when the act succeeded,
-    /// only inside the payload the reply has, and never when the act failed or the reply is a refusal.
-    #[test]
-    fn a_reply_patch_lands_only_on_success_and_only_inside_the_reply() {
-        let bytes = vec![0xAB, 0xCD, 0xEF];
-        // Success: written at `at`, nothing else moves.
-        let d = Deferred::new();
-        d.set_reply_patch(10, bytes.clone());
-        d.resolve(0);
-        let mut rpc = held(0);
-        assert!(settle_deferred(&mut rpc, &d, false));
-        assert_eq!(&rpc.payload[10..13], &bytes[..]);
-        assert_eq!(rpc.payload.len(), 40);
-        assert!(rpc.payload[..10].iter().all(|b| *b == 0));
-        assert!(rpc.payload[13..].iter().all(|b| *b == 0));
-        // A retried post settles again from a fresh clone: the patch is still there.
-        let mut again = held(0);
-        assert!(settle_deferred(&mut again, &d, false));
-        assert_eq!(again.payload, rpc.payload);
-        // Failure: the status is the reply's and the bytes are NOT written.
-        let bad = Deferred::new();
-        bad.set_reply_patch(10, bytes.clone());
-        bad.resolve(0x56);
-        let mut r = held(0);
-        assert!(settle_deferred(&mut r, &bad, false));
-        assert_eq!(r.rpc_result, 0x56);
-        assert!(r.payload.iter().all(|b| *b == 0));
-        // A patch that does not fit the reply is dropped whole (the reply never grows).
-        let big = Deferred::new();
-        big.set_reply_patch(38, bytes);
-        big.resolve(0);
-        let mut r = held(0);
-        assert!(settle_deferred(&mut r, &big, false));
-        assert_eq!(r.payload.len(), 40);
-        assert!(r.payload.iter().all(|b| *b == 0));
-        // A refused reply (another link) is not patched.
-        let refused = Deferred::new();
-        refused.set_reply_patch(0, vec![1]);
-        refused.resolve(0);
-        let mut r = held(0x19);
-        assert!(settle_deferred(&mut r, &refused, false));
-        assert!(r.payload.iter().all(|b| *b == 0));
     }
 
     /// ⊘ The default defers nothing, and a chain reports the one link that deferred wherever it

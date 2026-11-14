@@ -1,0 +1,16 @@
+device: NVIDIA GeForce RTX 3060  sm_86  driver-jit-from-PTX
+sizeof: header=392 pdb=32 run=32
+    ! ver3/unmapped_big_pte_hides_stale_4k:244  f.hdr.run_count == want.size()  -- 2 != 1 (0x2 != 0x1)
+      hdr gen=1 ack=0 flags=0x0080 pdb=1/8 run=2/8192 visited=2338 ref=0 mask=0x0
+      pdb[0] 0x1000 first=0 n=2 vflags=0x0
+      run[0] op=1 va=0x600000 gpga=0x100000 len=0x10000 flags=0x0 pdb=0
+      run[1] op=1 va=0x610000 gpga=0x210000 len=0x10000 flags=0x0 pdb=0
+FAIL ver3/unmapped_big_pte_hides_stale_4k (1)
+    ! ver3/sparse_big_half_hides_small_table:2789  f.hdr.run_count == 0u  -- PCF_BIG=3 must hide the small table
+      hdr gen=1 ack=0 flags=0x0080 pdb=1/8 run=1/8192 visited=2306 ref=0 mask=0x0
+      pdb[0] 0x1000 first=0 n=1 vflags=0x0
+      run[0] op=1 va=0x600000 gpga=0x100000 len=0x4000 flags=0x0 pdb=0
+FAIL ver3/sparse_big_half_hides_small_table (1)
+pass ver3/non_vetoes_keep_the_4k_table
+
+==== 1 passed, 2 failed ====
