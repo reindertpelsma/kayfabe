@@ -18,6 +18,10 @@ const SPAN: u64 = 8 << 20;
 fn report(runs: Vec<KfMapRun>) -> Report {
     let mut header = KfReportHeader::default();
     header.magic = KFWR_MAGIC;
+    // ★ 2026-11-14 (S1-69): the validator checks the format version and bounds every run by the
+    // report's own page-size table (VER2's: 4 KiB, 64 KiB, 2 MiB, 512 MiB)
+    header.version = kf_cuda::abi::KFWR_VERSION;
+    header.ps_log2 = [12, 16, 21, 29];
     header.pdb_count = 1;
     header.pdb_capacity = 8;
     header.run_count = u32::try_from(runs.len()).unwrap();
@@ -156,4 +160,144 @@ fn a_vidmem_or_peer_run_past_the_span_is_still_refused() {
             "aperture {ap} past the store span must stay refused"
         );
     }
+}
+
+// ═══ S1-69 (security review 3 F-11, 2026-11-14): the properties `kf_validate_report` checks ═══
+// The host validator now checks what the `.cu`'s oracle checks: format version, page-size table,
+// sample count, op, page-size code and alignment. Each refusal below has its control above or
+// beside it, so it cannot pass for an unrelated reason.
+
+/// A run with page-size code `ps` (VER2 table: 0 = 4 KiB, 1 = 64 KiB, 2 = 2 MiB, 3 = 512 MiB).
+fn sized(va: u64, gpga: u64, len: u64, op: u16, ps: u32) -> KfMapRun {
+    let mut r = run(gpga, len, op);
+    r.va = va;
+    r.flags = kf_cuda::abi::RF_PS.put(ps);
+    r
+}
+
+#[test]
+fn s169_every_op_the_header_defines_is_accepted_and_no_other() {
+    for op in [
+        kf_cuda::abi::KFWR_OP_MAP,
+        KFWR_OP_UNMAP,
+        kf_cuda::abi::KFWR_OP_REMAP,
+    ] {
+        assert_eq!(report(vec![run(0x30_0000, 4096, op)]).validate(), Ok(()));
+    }
+    for op in [0, 4, u16::MAX] {
+        assert_eq!(
+            report(vec![run(0x30_0000, 4096, op)]).validate(),
+            Err(ReportError::BadOp { index: 0, op })
+        );
+    }
+}
+
+#[test]
+fn s169_the_header_must_be_this_format_version_with_a_sane_page_size_table() {
+    let mut r = report(vec![run(0x30_0000, 4096, 1)]);
+    r.header.version = 2;
+    assert_eq!(r.validate(), Err(ReportError::BadVersion(2)));
+    for bad in [[11, 16, 21, 29], [12, 16, 21, 41], [0; 4]] {
+        let mut r = report(vec![run(0x30_0000, 4096, 1)]);
+        r.header.ps_log2 = bad;
+        assert_eq!(r.validate(), Err(ReportError::BadPageSizes(bad)));
+    }
+    let mut r = report(vec![run(0x30_0000, 4096, 1)]);
+    r.header.sample_count = 8;
+    assert_eq!(r.validate(), Ok(()), "eight samples is the capacity");
+    r.header.sample_count = 9;
+    assert_eq!(r.validate(), Err(ReportError::TooManySamples(9)));
+}
+
+#[test]
+fn s169_a_page_size_code_outside_the_four_is_refused() {
+    assert_eq!(
+        report(vec![sized(0x8000_0000, 0x40_0000, 0x20_0000, 1, 2)]).validate(),
+        Ok(()),
+        "control: a 2 MiB run, aligned"
+    );
+    for code in [4u8, 15] {
+        let r = report(vec![sized(
+            0x8000_0000,
+            0x40_0000,
+            0x20_0000,
+            1,
+            u32::from(code),
+        )]);
+        assert_eq!(
+            r.validate(),
+            Err(ReportError::BadPageSize { index: 0, code })
+        );
+    }
+}
+
+#[test]
+fn s169_va_len_and_a_mappings_gpga_are_multiples_of_the_runs_own_page_size() {
+    // 64 KiB pages (code 1)
+    assert_eq!(
+        report(vec![sized(0x8001_0000, 0x30_0000, 0x2_0000, 1, 1)]).validate(),
+        Ok(())
+    );
+    let cases = [
+        (
+            sized(0x8000_1000, 0x30_0000, 0x1_0000, 1, 1),
+            "va",
+            0x8000_1000,
+        ),
+        (
+            sized(0x8001_0000, 0x30_0000, 0x1_1000, 1, 1),
+            "len",
+            0x1_1000,
+        ),
+        (
+            sized(0x8001_0000, 0x30_1000, 0x1_0000, 1, 1),
+            "gpga",
+            0x30_1000,
+        ),
+        (
+            sized(0x8001_0000, 0x30_1000, 0x1_0000, 3, 1),
+            "gpga",
+            0x30_1000,
+        ),
+    ];
+    for (r, field, value) in cases {
+        assert_eq!(
+            report(vec![r]).validate(),
+            Err(ReportError::Misaligned {
+                index: 0,
+                field,
+                value,
+                page: 0x1_0000
+            })
+        );
+    }
+    // an UNMAP carries no gpga: its gpga is not checked (its va and len are)
+    assert_eq!(
+        report(vec![sized(
+            0x8001_0000,
+            0x30_1234,
+            0x1_0000,
+            KFWR_OP_UNMAP,
+            1
+        )])
+        .validate(),
+        Ok(())
+    );
+    assert!(matches!(
+        report(vec![sized(0x8001_1000, 0, 0x1_0000, KFWR_OP_UNMAP, 1)]).validate(),
+        Err(ReportError::Misaligned { field: "va", .. })
+    ));
+    // the SECOND run is the bad one: the index names it
+    assert!(matches!(
+        report(vec![
+            sized(0x8001_0000, 0x30_0000, 0x1_0000, 1, 1),
+            sized(0x8001_0000, 0x30_0000, 0x1_0800, 1, 1),
+        ])
+        .validate(),
+        Err(ReportError::Misaligned {
+            index: 1,
+            field: "len",
+            ..
+        })
+    ));
 }

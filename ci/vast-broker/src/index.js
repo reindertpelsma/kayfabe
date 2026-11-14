@@ -36,7 +36,7 @@ import {RunTokens,constantTimeEqual,validSecret,sha256Hex} from './tokens.js';
 // prettier-ignore
 import {readReportBody,parseReport} from './reports.js';
 // prettier-ignore
-import {routePath,notFound,endpointSecrets,routeKind,secretFormatError} from './routes.js';
+import {routePath,notFound,endpointSecrets,routeKind,secretFormatError,harden} from './routes.js';
 // prettier-ignore
 import {OidcVerifier} from './oidc.js';
 // prettier-ignore
@@ -980,7 +980,9 @@ export function createService({
         };
         r.hardware = payload.result.hardware;
         if (['PROVIDER_FAULT', 'UNAVAILABLE'].includes(r.result.verdict)) r.result.verdict = 'FAIL';
-        if (r.result.verdict === 'PASS') await ledger.markProviderSuccess(r, cfg.provider);
+        // Review F10 (2026-11-13): the verdict is the box's own word, so it no longer decays the host's
+        // fault history (a forged PASS would have cleared it). The owner clears it through
+        // /admin/provider-success; faults still decay by their half-life.
         if (r.profile === 'sweep' && payload.result.verdict === 'PASS')
           await ledger.put('passed:' + r.die, now());
         r.resultAt = now();
@@ -2725,6 +2727,16 @@ export function createService({
     adminStart: (body) => serial(2, () => adminStart(body), '@admin-start'),
     adminStopBatch: (id) =>
       serial(0, () => stopBatches([id], new Vast(fetcher, configuration(env), env.VAST_API_KEY))),
+    adminProviderSuccess: (machineId, hostId) =>
+      serial(
+        0,
+        () =>
+          ledger.markProviderSuccess(
+            { machineId, hostId, nonce: 'admin-' + now() },
+            configuration(env).provider,
+          ),
+        '@admin-provider-success',
+      ),
     adminBatches: async () => {
       const entries = await ledger.storage.list({ prefix: 'batch:', limit: 1000 });
       return [...entries.values()]
@@ -2888,6 +2900,27 @@ export class BrokerLedger {
           );
         }
       }
+      // Review F10 (2026-11-13): the only way to decay a machine's and a host's fault history by
+      // hand (a box-reported PASS no longer does). Internal origin only, like every /admin/ route.
+      if (url.pathname === '/admin/provider-success' && request.method === 'POST') {
+        let body;
+        try {
+          body = JSON.parse(new TextDecoder().decode(await readBounded(request, 256)));
+          if (
+            !body ||
+            Object.keys(body).length !== 2 ||
+            !Number.isSafeInteger(body.machine_id) ||
+            body.machine_id <= 0 ||
+            !Number.isSafeInteger(body.host_id) ||
+            body.host_id <= 0
+          )
+            throw Error();
+        } catch {
+          return json({ error: 'Invalid selection' }, 400);
+        }
+        await this.service.adminProviderSuccess(body.machine_id, body.host_id);
+        return json({ state: 'DECAYED' });
+      }
       if (url.pathname === '/admin/stop' && request.method === 'POST') {
         let selection;
         try {
@@ -3012,6 +3045,25 @@ function placedLedger(env) {
   return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account-enam-v1'), {
     locationHint: 'enam',
   });
+}
+// The rate-limit key of a client address: IPv4 as is, IPv6 as its /64 (first four groups).
+export function ipRateKey(ip) {
+  if (typeof ip !== 'string' || !ip.includes(':') || ip.includes('.')) return String(ip);
+  const [head, tail, extra] = ip.split('::');
+  if (extra !== undefined) return ip;
+  const front = head ? head.split(':') : [];
+  const back = tail ? tail.split(':') : [];
+  const groups =
+    tail === undefined
+      ? front
+      : [...front, ...Array(Math.max(0, 8 - front.length - back.length)).fill('0'), ...back];
+  if (groups.length !== 8 || !groups.every((g) => /^[0-9a-f]{1,4}$/i.test(g))) return ip;
+  return (
+    groups
+      .slice(0, 4)
+      .map((g) => g.toLowerCase().padStart(4, '0'))
+      .join(':') + '::/64'
+  );
 }
 export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {}) {
   const verifier = new OidcVerifier(fetcher, now),
@@ -3156,88 +3208,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
   }
   return {
     async fetch(request, env) {
-      let path;
-      try {
-        if (new URL(request.url).pathname.endsWith('/availability') && secretFormatError(env)) {
-          const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
-          const cfg = configuration(env);
-          const c = verifiedIdentity(await verifier.verify(bearer, env.WORKER_URL), cfg);
-          if (c.actor_id === env.OWNER_GITHUB_ID) refuse(secretFormatError(env), 503);
-        }
-      } catch (error) {
-        return Response.json(
-          { state: error instanceof BrokerError ? error.state : 'UNAVAILABLE' },
-          { status: error instanceof BrokerError ? error.status : 503 },
-        );
-      }
-      try {
-        path = await routePath(request, env);
-      } catch (error) {
-        return Response.json(
-          { state: error.state ?? 'UNAVAILABLE' },
-          { status: error.status ?? 503 },
-        );
-      }
-      // Custom-host daemons (docs/design/V3_CUSTOM_HOSTS.md): the WebSocket goes to the box's own
-      // Durable Object, which checks the per-box token. No run-token or OIDC check applies here.
-      const hostId =
-        path === null ? null : /^\/hosts\/([a-z0-9][a-z0-9-]{0,39})\/ws$/.exec(path)?.[1];
-      if (hostId) {
-        if (!env.HOSTS || request.method !== 'GET') return notFound();
-        // Cheap pre-check before a Durable Object is woken (review L1): an upgrade with no
-        // well-formed box token, and a flood from one address, never reach DO storage. Whether the
-        // box exists is the DO's answer (the Worker has no box list outside its DOs).
-        const window = Math.floor(now() / 60000);
-        if (hostUpgradeWindow !== window) {
-          hostUpgradeWindow = window;
-          hostUpgrades.clear();
-        }
-        const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
-        const seen = hostUpgrades.get(ip) ?? 0;
-        if (seen >= 30 || (!hostUpgrades.has(ip) && hostUpgrades.size >= 1024))
-          return new Response('Too many requests', { status: 429 });
-        hostUpgrades.set(ip, seen + 1);
-        if (
-          request.headers.get('Upgrade') !== 'websocket' ||
-          !/^Bearer kfh_[A-Za-z0-9_-]{43}$/.test(request.headers.get('Authorization') ?? '')
-        )
-          return new Response('Unauthorized', { status: 401 });
-        return env.HOSTS.get(env.HOSTS.idFromName(hostId)).fetch(
-          new Request('https://internal.invalid/hosts/' + hostId + '/ws', request),
-        );
-      }
-      if (path === null || !routeKind(path)) return notFound();
-      let buffered;
-      try {
-        await (authorize ?? frontAuthorize)(request, env, path);
-        await controlLimit(request, env, path);
-        if (/^\/evidence\//.test(path))
-          return Response.json(
-            await evidenceGateway(
-              request,
-              env,
-              path,
-              request.headers.get('Authorization')?.replace(/^Bearer /, ''),
-            ),
-            { headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } },
-          );
-        buffered = await detachedUpload(request, path);
-      } catch (error) {
-        logRefusal(error, path);
-        return Response.json(
-          {
-            state: error instanceof BrokerError ? error.state : 'UNAVAILABLE',
-            verdict: 'UNAVAILABLE',
-            log_tail_sanitised: '',
-            bytes_dropped: 0,
-          },
-          {
-            status: error instanceof BrokerError ? error.status : 503,
-            headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
-          },
-        );
-      }
-      return placedLedger(env).fetch(buffered);
+      return harden(await gatewayFetch(request, env));
     },
     scheduled(_event, env, ctx) {
       ctx.waitUntil(
@@ -3245,5 +3216,93 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       );
     },
   };
+  async function gatewayFetch(request, env) {
+    let path;
+    try {
+      if (new URL(request.url).pathname.endsWith('/availability') && secretFormatError(env)) {
+        const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
+        const cfg = configuration(env);
+        const c = verifiedIdentity(await verifier.verify(bearer, env.WORKER_URL), cfg);
+        if (c.actor_id === env.OWNER_GITHUB_ID) refuse(secretFormatError(env), 503);
+      }
+    } catch (error) {
+      return Response.json(
+        { state: error instanceof BrokerError ? error.state : 'UNAVAILABLE' },
+        { status: error instanceof BrokerError ? error.status : 503 },
+      );
+    }
+    try {
+      path = await routePath(request, env);
+    } catch (error) {
+      return Response.json(
+        { state: error.state ?? 'UNAVAILABLE' },
+        { status: error.status ?? 503 },
+      );
+    }
+    // Custom-host daemons (docs/design/V3_CUSTOM_HOSTS.md): the WebSocket goes to the box's own
+    // Durable Object, which checks the per-box token. No run-token or OIDC check applies here.
+    const hostId =
+      path === null ? null : /^\/hosts\/([a-z0-9][a-z0-9-]{0,39})\/ws$/.exec(path)?.[1];
+    if (hostId) {
+      if (!env.HOSTS || request.method !== 'GET') return notFound();
+      // Cheap pre-check before a Durable Object is woken (review L1): an upgrade with no
+      // well-formed box token, and a flood from one address, never reach DO storage. Whether the
+      // box exists is the DO's answer (the Worker has no box list outside its DOs).
+      const window = Math.floor(now() / 60000);
+      if (hostUpgradeWindow !== window) {
+        hostUpgradeWindow = window;
+        hostUpgrades.clear();
+      }
+      // Review F10 (2026-11-13): an IPv6 client holds a whole /64, so the key is the /64; a full
+      // table evicts the oldest entry (a flood of addresses resets counters, it never locks out
+      // a real daemon).
+      const ip = ipRateKey(request.headers.get('CF-Connecting-IP') ?? 'unknown');
+      const seen = hostUpgrades.get(ip) ?? 0;
+      if (seen >= 30) return new Response('Too many requests', { status: 429 });
+      if (!hostUpgrades.has(ip) && hostUpgrades.size >= 1024)
+        hostUpgrades.delete(hostUpgrades.keys().next().value);
+      hostUpgrades.set(ip, seen + 1);
+      if (
+        request.headers.get('Upgrade') !== 'websocket' ||
+        !/^Bearer kfh_[A-Za-z0-9_-]{43}$/.test(request.headers.get('Authorization') ?? '')
+      )
+        return new Response('Unauthorized', { status: 401 });
+      return env.HOSTS.get(env.HOSTS.idFromName(hostId)).fetch(
+        new Request('https://internal.invalid/hosts/' + hostId + '/ws', request),
+      );
+    }
+    if (path === null || !routeKind(path)) return notFound();
+    let buffered;
+    try {
+      await (authorize ?? frontAuthorize)(request, env, path);
+      await controlLimit(request, env, path);
+      if (/^\/evidence\//.test(path))
+        return Response.json(
+          await evidenceGateway(
+            request,
+            env,
+            path,
+            request.headers.get('Authorization')?.replace(/^Bearer /, ''),
+          ),
+          { headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } },
+        );
+      buffered = await detachedUpload(request, path);
+    } catch (error) {
+      logRefusal(error, path);
+      return Response.json(
+        {
+          state: error instanceof BrokerError ? error.state : 'UNAVAILABLE',
+          verdict: 'UNAVAILABLE',
+          log_tail_sanitised: '',
+          bytes_dropped: 0,
+        },
+        {
+          status: error instanceof BrokerError ? error.status : 503,
+          headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+        },
+      );
+    }
+    return placedLedger(env).fetch(buffered);
+  }
 }
 export default createGateway();
