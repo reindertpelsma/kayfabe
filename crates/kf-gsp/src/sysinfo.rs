@@ -91,7 +91,7 @@ pub fn nocat_line(driver: &kf_abi::versions::DriverAbiTable, payload: &[u8]) -> 
 
 /// Log [`nocat_line`] for one fn 72.
 pub fn log_nocat(driver: &kf_abi::versions::DriverAbiTable, payload: &[u8], sequence: u32) {
-    eprintln!(
+    kf_arch::rate_eprintln!(
         "kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq={sequence} {} bytes: {}",
         payload.len(),
         nocat_line(driver, payload)
