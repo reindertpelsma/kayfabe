@@ -1866,7 +1866,12 @@ impl Device {
     /// ★ P4: the host address of `[base, base+len)` of a disposition-A region — PRAMIN (BAR0),
     /// BAR1 or BAR2 (`bar` 2 = PCI BAR3). `None` when no window covers it.
     #[must_use]
-    pub fn window_address(&self, bar: u32, base: u64, len: u64) -> Option<kf_linux_raw::HostSpan> {
+    pub fn window_address(
+        &self,
+        bar: u32,
+        base: u64,
+        len: u64,
+    ) -> Option<kf_linux_raw::HostSpan<'_>> {
         let (win, rel) = match bar {
             0 => (
                 self.mem.pramin_win,
