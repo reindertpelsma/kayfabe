@@ -338,10 +338,6 @@ pub struct Device {
     /// ★ EXPERIMENT `x11-dispsw` ([`Config::x11_dispsw`]): the status line's `dispsw[...]` segment
     /// is printed only when it is on.
     x11_dispsw: bool,
-    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (default off, `docs/design/V3_GSS_NATIVE.md`), read once at
-    /// realize: `Some` when on. The counters the status line prints (`gss[...]`); the same value the
-    /// chain's seat writes.
-    gss_native: Option<std::sync::Arc<kf_rm::gssnative::Stats>>,
     /// ★ DIAGNOSTIC, default off (`KF3_BAR0_READ_TRACE=1`, [`crate::readtrace`]): the BAR0 access
     /// trace in the VFIO reference's record format. Off: the C device takes none of its paths.
     pub trace: crate::readtrace::AccessTrace,
@@ -373,18 +369,6 @@ impl Device {
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
         cfg.check()?;
-        // ★ EXPERIMENT `KF3_GSS_NATIVE` (default off): read once, here, and said once.
-        let gss_native = kf_rm::gssnative::enabled()
-            .then(|| std::sync::Arc::new(kf_rm::gssnative::Stats::new()));
-        if gss_native.is_some() {
-            eprintln!(
-                "kf3: ⚠ EXPERIMENT KF3_GSS_NATIVE ON (docs/design/V3_GSS_NATIVE.md): non-privileged subdevice-level GSS-legacy controls \
-                 ((cmd & 0xC000) == 0x8000, class 0x2080, <= {} B, at most {} per boot) are carried to the HOST RM and its status and reply returned; \
-                 params are opaque and host-side layout is assumed equal to the guest's; display controls are never forwarded",
-                kf_rm::gssnative::MAX_PARAMS,
-                kf_rm::gssnative::BOOT_CAP
-            );
-        }
         // ★ The boot display (`gop=on`, `crate::gop`): decided from the configuration and the virtual
         // monitor alone, so a refusal costs nothing. `None` with `gop=off`: every step below that
         // reads it is then skipped, and the device is today's. ★ The same monitor the display
@@ -966,7 +950,6 @@ impl Device {
             let memory_access = chans.memory_access.clone();
             let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
-            let gss_native = gss_native.clone();
             let (board, host, chain_logs, census, inbox, console, defapi_reg) = (
                 board.clone(),
                 host.clone(),
@@ -977,7 +960,7 @@ impl Device {
                 defapi_reg.clone(),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
-                let mut objects = kf_rm::rmrpc::ObjectPolicy::over(
+                let objects = kf_rm::rmrpc::ObjectPolicy::over(
                     &t,
                     kf_abi::GuestOs::Linux,
                     Box::new(kf_rm::memory_access::SharedObjects::new(
@@ -990,14 +973,6 @@ impl Device {
                     )),
                     kf_rm::rmrpc::ReasmLimits::default(),
                 );
-                // ★ EXPERIMENT `KF3_GSS_NATIVE`: the SAME counters across a chain rebuild.
-                if let Some(stats) = &gss_native {
-                    let st = stats.clone();
-                    objects = objects.with_gss_native(kf_rm::gssnative::GssSeat {
-                        sink: std::sync::Arc::new(move |req| chans.gss_forward(req, &st)),
-                        stats: stats.clone(),
-                    });
-                }
                 kf_rm::served_policy(
                     board.clone(),
                     host.clone(),
@@ -1249,7 +1224,6 @@ impl Device {
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
             display: display_plane,
             x11_dispsw: cfg.x11_dispsw,
-            gss_native,
             gop,
             gop_rom,
             bar1_mode,
@@ -3114,11 +3088,6 @@ impl Device {
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
         let db = format!(" {}", self.dbfast.status());
         // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`: `""` with the switch off (the line is the line it was).
-        // ★ EXPERIMENT `KF3_GSS_NATIVE`: `""` with the switch off (the line is the line it was).
-        let db = match &self.gss_native {
-            Some(g) => db + " EXPERIMENT KF3_GSS_NATIVE " + &g.status(),
-            None => db,
-        };
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
             self.family,
@@ -3903,9 +3872,6 @@ impl crate::reset::Owners for Device {
         self.hotplug_pending.store(0, Ordering::Release);
         self.chain_logs.os_events.clear();
         let defapi = self.defapi_reg.clear_life();
-        if let Some(st) = &self.gss_native {
-            st.new_boot();
-        }
         self.intr.reset();
         if let Some(f) = &self.fsp {
             f.reset();
