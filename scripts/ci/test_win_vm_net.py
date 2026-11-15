@@ -30,7 +30,7 @@ class WinVmNet(unittest.TestCase):
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(self.tmp), "LANG": "C",
                "WINVM_ROOT": str(self.tmp / "root"), "KF_GPU_LOCK": str(self.tmp / "gpu.lock"),
                "BENCH": str(self.tmp / "bench"), "WINVM_QEMU": "/fake/qemu", **extra}
-        r = subprocess.run(["bash", str(SCRIPT), "run", "--dry-run", "--tag", "t"], env=env, stdin=subprocess.DEVNULL,
+        r = subprocess.run(["bash", str(SCRIPT), "run", "--dry-run", "--no-default-flags", "--tag", "t"], env=env, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=60, check=False)
         q = [l for l in r.stdout.splitlines() if l.startswith("DRYRUN_QEMU ")]
         return r, (shlex.split(q[0][12:]) if q else [])

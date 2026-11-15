@@ -86,9 +86,14 @@ class WinVmVast(unittest.TestCase):
             check=False,
         )
 
-    def dry(self, sub="run", *args, name="kfwin", **extra):
+    def dry(self, sub="run", *args, name="kfwin", defaults=False, **extra):
+        # The tests that predate 2026-11-15 pin the lane knobs, not the Windows defaults: they run with
+        # --no-default-flags (a default `run` now needs an identity.env and carries the Windows flag set; those are
+        # the tests below that pass defaults=True).
         if sub == "run":
             self.vm(name)
+            if not defaults:
+                args = ("--no-default-flags", *args)
             if "--tag" not in args:
                 args = (*args, "--tag", "t")  # the default tag is a timestamp
         extra.setdefault("WINVM_NAME", name)

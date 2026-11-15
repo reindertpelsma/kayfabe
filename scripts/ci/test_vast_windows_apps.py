@@ -141,7 +141,7 @@ class WinVmOptIns(unittest.TestCase):
         e = {"PATH": os.environ["PATH"], "HOME": str(self.tmp), "LANG": "C", "WINVM_ROOT": str(self.tmp / "root"),
              "KF_GPU_LOCK": str(self.tmp / "gpu.lock"), "BENCH": str(self.tmp / "bench"), "WINVM_QEMU": "/fake/qemu-system-x86_64"}
         e.update(extra)
-        r = subprocess.run(["bash", str(WV), "run", "--dry-run", "--tag", "t"], env=e, capture_output=True, text=True, timeout=60,
+        r = subprocess.run(["bash", str(WV), "run", "--dry-run", "--no-default-flags", "--tag", "t"], env=e, capture_output=True, text=True, timeout=60,
                            stdin=subprocess.DEVNULL)
         q = [l for l in r.stdout.splitlines() if l.startswith("DRYRUN_QEMU ")]
         return r, (shlex.split(q[0][len("DRYRUN_QEMU "):]) if q else [])

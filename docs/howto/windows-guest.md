@@ -84,8 +84,8 @@ Other sub-commands in the script's header: `scp-to`, `scp-from`, `sign` (export 
 | Option | Effect |
 |---|---|
 | `--overlay NAME` | The disk to boot: `disk/NAME.qcow2` over the sealed `base.qcow2`, created on first use. Default `main`. |
-| `--guest-driver V` | The device's `guest-driver=` (for example `580.65.06` for Windows 580.88). |
-| `--kf3-extra P` | Extra device properties. |
+| `--guest-driver V` | The device's `guest-driver=`. Default `580.65.06` (what Windows 580.88 pairs with; `WINVM_GUEST_DRIVER` changes the default). |
+| `--kf3-extra P` | Extra device properties. Unless P has a `gpu-uuid=`, `run` adds `gpu-uuid=GPU-<VM_UUID>` from the VM's `identity.env` and refuses if the VM has none. |
 | `--no-kf3` | Boot on the standard VGA without kayfabe. |
 | `--arm A` / `--arm B` | Without (A, the default) or with (B) Hyper-V enlightenments. |
 | `--once` | Do not restart after a guest reboot. |
@@ -93,10 +93,14 @@ Other sub-commands in the script's header: `scp-to`, `scp-from`, `sign` (export 
 | `--detach` | Run in the background. |
 | `--no-rpc-trace` | Do not set `KF3_RPC_TRACE=1` (on by default for kayfabe runs). |
 | `--tag`, `--max-boots` | Name the run; limit restarts (default 12). |
-| `--env-file FILE` | Export the `KF3_*` flags listed in FILE (only `KF3_NAME=digits` lines and `#` comments are accepted). Added 2026-10-31; the sample `kf3_flags.sample.env` is not confirmed as the current production list. |
+| `--env-file FILE` | Export the `KF3_*` flags listed in FILE instead of the default set (only `KF3_NAME=digits` lines and `#` comments are accepted). You do not need one: since 2026-11-15 `run` loads `kf3_windows_defaults.env` by itself. |
+| `--no-default-flags` | Take none of the defaults (flag file, guest-driver, gpu-uuid). |
 | `--dry-run` | Print the QEMU command line and exit; start nothing. |
 
 <!-- src: scripts/bench/windows/README.md; scripts/bench/windows/win_vm.sh (cmd_run) -->
+
+**Defaults (2026-11-15).** A plain `$S run --detach` starts a Windows guest with the right kayfabe settings: the Windows flag set, `guest-driver=580.65.06` and a per-VM `gpu-uuid`, with no env file and no extra argument. [measured] On the pc the old `run` (none of these) ended in Windows Code 43, and the same guest with these settings reached Code 0 and a working `nvidia-smi`. [inferred] A plain `run` with the new defaults gives the same command line as the CI gate's, so it should behave the same; no one has booted it that way yet. The VM needs an identity (`WINVM_VM_IDENTITY=1` before `install`), or `run` refuses and says so. `WINVM_USB_TABLET=1` (off by default) adds a USB tablet for an absolute pointer; do not use virtio input devices, which swallow all input in a guest without the vioinput driver [measured, 2026-11-15].
+<!-- src: scripts/bench/windows/README.md (Defaults of run) -->
 
 The harness environment: `WINVM_ROOT` (default `/workspace/winvm`), `WINVM_NAME`, `WINVM_RAM_MB` (8192), `WINVM_SMP` (8), `WINVM_KF3_FB_MB` (8192), `WINVM_SSH_PORT` (2224), `WINVM_QEMU`. <!-- src: scripts/bench/windows/win_vm.sh header -->
 
