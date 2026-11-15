@@ -250,19 +250,22 @@ pub struct ChannelAlloc {
     /// unprivileged host channel, the VM's own VA space) instead of Translated. Decided once, from
     /// the alloc's facts; it never changes over the channel's life.
     pub user_work: bool,
+    /// ★ 2026-11-15 (flag cleanup, Stage 1): the guest declared the measured Windows build at fn 1 AND
+    /// `windows-support` is on, as of this alloc ([`ChannelPolicy`]'s identity). The channel plane gates
+    /// every Windows-profile birth behaviour on this one fact (the kernel-GR tier, the deferred-API
+    /// trigger, the copy-engine relay, host-owned scheduling): a Linux guest's channels carry `false`
+    /// and take every route they took before the profile existed. Decided once at the alloc, like
+    /// [`Self::user_work`].
+    pub windows: bool,
     /// Birth-time admission for the restricted read-only Windows user ring.
     /// No other route can manufacture this witness from USERD placement alone.
     pub user_ring_permit: Option<WindowsUserRingPermit>,
 }
 
-/// ★ 2026-10-08: `KF3_ASYNC_PREEMPT=1` (default off) serves `DISABLE_CHANNELS` with a
-/// `pRunlistPreemptEvent` ([`async_preempt_admitted`]).
-fn async_preempt_enabled() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_ASYNC_PREEMPT").is_some_and(|v| v == "1"))
-}
-
 /// ★ 2026-10-08 — may a `DISABLE_CHANNELS` carrying `pRunlistPreemptEvent = ev` reach the plane?
+/// ★ 2026-11-15 (was the default-off `KF3_ASYNC_PREEMPT`): `enabled` is now "the guest declared the
+/// measured Windows build and `windows-support` is on" ([`ChannelPolicy`]'s identity), so a Linux guest's
+/// asynchronous form is refused exactly as before.
 /// The synchronous form (`ev == 0`) always may; the asynchronous one only with the switch on AND
 /// as a DISABLE (`bDisable`): a preempt-complete is posted only for a host disable+preempt that
 /// really ran (RM itself preempts only on disable, `kernel_fifo_ctrl.c:720-760`).
@@ -274,7 +277,9 @@ pub fn async_preempt_admitted(enabled: bool, ev: u64, disable: bool) -> bool {
 /// ★★ 2026-10-08 — the facts [`windows_user_work`] decides from, all known at the channel's alloc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct UserWorkFacts {
-    /// `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`.
+    /// `windows-support=on` (the device property, default on; was `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`).
+    /// Redundant with [`UserWorkFacts::windows`] in production (the link never sets `windows` with the
+    /// property off) and kept as the rule's own first, by-name refusal.
     pub flag: bool,
     /// The guest declared the Windows build of its driver (fn 1, the host-stub cell's identity).
     pub windows: bool,
@@ -899,8 +904,10 @@ pub struct ChannelPolicy {
     /// [`ChanStatement::DisplaySw`] ([`Self::with_display_sw_twins`]); `false` (the default) leaves
     /// them graph nodes, byte for byte as before.
     display_sw_twins: bool,
-    /// ★ 2026-10-08: `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1` (read once at construction).
-    user_work_flag: bool,
+    /// ★ 2026-11-15: the `windows-support` device property (default on; replaces the 2026-10-08
+    /// `KF3_WIN_USER_CHANNELS_PASSTHROUGH` environment read). With it off, [`ChannelPolicy::windows_identity`]
+    /// can never become true, so no Windows route below is reachable by any declaration.
+    windows_support: bool,
     /// ★ 2026-10-08: the guest declared the Windows build of its driver (fn 1).
     windows_identity: bool,
     /// ★ 2026-10-08: `ProcessID` of the first guest-kernel, non-internal channel ([`UserWorkFacts`]).
@@ -910,9 +917,6 @@ pub struct ChannelPolicy {
     /// ★ DEBUG ONLY ([`FORCE_MIGRATABLE`], read once, refused without [`DEBUG_PROFILE`]).
     force_migratable: bool,
 }
-
-/// ★ 2026-10-08: the flag of [`windows_user_work`].
-pub const USER_WORK_FLAG: &str = "KF3_WIN_USER_CHANNELS_PASSTHROUGH";
 
 impl ChannelPolicy {
     /// A link for one guest driver's wire.
@@ -941,7 +945,7 @@ impl ChannelPolicy {
             carried: 0,
             refused: 0,
             display_sw_twins: false,
-            user_work_flag: std::env::var(USER_WORK_FLAG).as_deref() == Ok("1"),
+            windows_support: true,
             windows_identity: false,
             windows_kernel_pid: None,
             system_pid_is_kernel: kernel_pid4_enabled(),
@@ -957,11 +961,16 @@ impl ChannelPolicy {
         self
     }
 
-    /// ★ 2026-10-08: the flag of [`windows_user_work`], set explicitly (tests; the device reads
-    /// [`USER_WORK_FLAG`] at construction).
+    /// ★ 2026-11-15: the `windows-support` device property (default on). Off: a Windows declaration
+    /// is never recorded as an identity, so none of the Windows routes (user-work Passthrough twins,
+    /// the user-ring permit, asynchronous preempt, the kernel-GR tier, the deferred-API trigger, the CE
+    /// relay, host-owned scheduling) can be reached by any guest.
     #[must_use]
-    pub fn with_user_work_flag(mut self, on: bool) -> ChannelPolicy {
-        self.user_work_flag = on;
+    pub fn with_windows_support(mut self, on: bool) -> ChannelPolicy {
+        self.windows_support = on;
+        if !on {
+            self.windows_identity = false;
+        }
         self
     }
 
@@ -1354,7 +1363,7 @@ impl ChannelPolicy {
             self.windows_kernel_pid = process_id;
         }
         let user_facts = UserWorkFacts {
-            flag: self.user_work_flag,
+            flag: self.windows_support,
             windows: self.windows_identity,
             kernel_stamped,
             uvm_owned: privilege.is_some_and(|p| p.uvm_owned),
@@ -1373,7 +1382,7 @@ impl ChannelPolicy {
             force_migratable: self.force_migratable && !self.windows_identity,
         };
         let user_work = windows_user_work(&user_facts);
-        if self.user_work_flag && kernel_stamped {
+        if self.windows_identity && kernel_stamped {
             kf_arch::rate_eprintln!(
                 "kf-rm: chanlink: CLASSIFY {:#x}:{:#x} {} ({})",
                 h.client,
@@ -1437,6 +1446,7 @@ impl ChannelPolicy {
                 .flatten(),
             process_id,
             user_work: user_work.is_ok(),
+            windows: self.windows_identity,
             user_ring_permit: windows_user_ring_permit(&user_facts).ok(),
         };
         // ★ 2026-10-08 (Windows user-work classification, diagnostic): the declared process ids and
@@ -1966,7 +1976,7 @@ impl ChannelPolicy {
                 // ⊘ `pRunlistPreemptEvent` is a KEVENT pointer in the GUEST kernel's address space
                 // (kernel callers only, `kernel_fifo_ctrl.c:720-725`): nothing on the host can
                 // signal it, so the asynchronous form is refused by name, never dropped.
-                // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT=1`, default off; OWNER_RULINGS §S applied to
+                // ★ 2026-10-08 (was `KF3_ASYNC_PREEMPT=1`, default off; OWNER_RULINGS §S applied to
                 // RUNLIST_PREEMPT_COMPLETE): served as the synchronous host disable+preempt of the
                 // VM's own twins, and the completion is posted to the guest's RM as
                 // RUNLIST_PREEMPT_COMPLETE with the value as eventData — the GSP's own shape
@@ -1974,7 +1984,7 @@ impl ChannelPolicy {
                 // dereferenced. [measured, runs 78/79] the refusal is followed by the TDR exactly
                 // TdrDelay later.
                 if !async_preempt_admitted(
-                    async_preempt_enabled(),
+                    self.windows_identity,
                     d.runlist_preempt_event,
                     d.disable,
                 ) {
@@ -1998,7 +2008,7 @@ impl ChannelPolicy {
                 // synchronous form (bDisable=0, no event); refusing it left them disabled and the
                 // next work on them TDR'd — so the re-enable is admitted the same way (switch on).
                 let cross_client_ok =
-                    d.runlist_preempt_event != 0 || (async_preempt_enabled() && !d.disable);
+                    d.runlist_preempt_event != 0 || (self.windows_identity && !d.disable);
                 if !cross_client_ok
                     && let Some((c, ch)) = d.list.iter().find(|(c, _)| *c != h.client)
                 {
@@ -2484,8 +2494,10 @@ impl CommandPolicy for ChannelPolicy {
             RpcFunction::DupObject => self.on_dup(cmd),
             RpcFunction::SetGuestSystemInfo => {
                 // ★ 2026-10-08: every declaration replaces the previous one (as the host stub does).
-                self.windows_identity = kf_abi::hoststub::cell(self.abi.driver_version())
-                    .is_some_and(|c| c.matches_identity(&cmd.payload));
+                // ★ 2026-11-15: and only with `windows-support` on ([`ChannelPolicy::with_windows_support`]).
+                self.windows_identity = self.windows_support
+                    && kf_abi::hoststub::cell(self.abi.driver_version())
+                        .is_some_and(|c| c.matches_identity(&cmd.payload));
                 None
             }
             _ => None,
@@ -4238,8 +4250,25 @@ mod tests {
         engine: u32,
         pid: u32,
     ) -> RpcCommand {
+        kernel_channel_alloc_for(
+            kf_abi::versions::BENCH_DRIVER,
+            client,
+            parent,
+            handle,
+            engine,
+            pid,
+        )
+    }
+
+    fn kernel_channel_alloc_for(
+        v: kf_abi::DriverVersion,
+        client: u32,
+        parent: u32,
+        handle: u32,
+        engine: u32,
+        pid: u32,
+    ) -> RpcCommand {
         use kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS;
-        let v = kf_abi::versions::BENCH_DRIVER;
         let l = kf_abi::matrix::Resolved::of(&NV_CHANNEL_ALLOC_PARAMS, v).expect("measured");
         let mut params = vec![0u8; l.size()];
         for (path, val) in [
@@ -4326,7 +4355,7 @@ mod tests {
                 ChanAnswer::Done
             });
             let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink)
-                .with_user_work_flag(true)
+                .with_windows_support(true)
                 .with_kernel_pid4(pid4);
             link.windows_identity = true;
             // first start: the kernel driver's own copy channel (pid 0x350) teaches the pid; then
@@ -4371,6 +4400,179 @@ mod tests {
             ],
             "flag on: only pid 4 moves, to Translated"
         );
+    }
+
+    /// The guest arms of the Windows profile: what the guest declares at fn 1 and whether the VM has
+    /// `windows-support` on. Returns a link for the measured Windows wire version (580.65.06, the only
+    /// one with a Windows identity) that has been through the arm's fn 1.
+    fn link_for_arm(arm: &str, sink: ChanSink) -> ChannelPolicy {
+        use crate::winprofile::fn1;
+        let abi = fn1::abi();
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink)
+            .with_windows_support(arm != "windows, windows-support=off");
+        match arm {
+            "windows" | "windows, windows-support=off" => {
+                link.respond(&fn1::windows(&abi));
+            }
+            "linux" => {
+                link.respond(&fn1::linux(&abi));
+            }
+            "undeclared" => {}
+            other => panic!("{other}"),
+        }
+        link
+    }
+
+    const PROFILE_ARMS: [&str; 4] = [
+        "windows",
+        "linux",
+        "undeclared",
+        "windows, windows-support=off",
+    ];
+
+    /// ★ 2026-11-15 (flag cleanup, Stage 1): the link's Windows identity, end to end from a REAL fn 1.
+    /// Only the measured Windows build on a `windows-support=on` VM is an identity; a Linux declaration,
+    /// no declaration, and a Windows declaration on an `off` VM are not, and a later declaration replaces
+    /// the earlier one. Every other behaviour of this file keys on this one fact.
+    #[test]
+    fn the_windows_identity_is_the_declared_one_and_only_with_support_on() {
+        use crate::winprofile::fn1;
+        let sink: ChanSink = std::sync::Arc::new(|_| ChanAnswer::Done);
+        for arm in PROFILE_ARMS {
+            let link = link_for_arm(arm, sink.clone());
+            assert_eq!(link.windows_identity, arm == "windows", "{arm}");
+        }
+        let abi = fn1::abi();
+        let mut link = link_for_arm("windows", sink);
+        link.respond(&fn1::linux(&abi));
+        assert!(!link.windows_identity, "a Linux declaration revokes it");
+        link.respond(&fn1::windows(&abi));
+        assert!(link.windows_identity, "and a Windows one restores it");
+    }
+
+    /// What the plane is told about the two allocs of an arm: the kernel driver's own channel (it teaches
+    /// the link the kernel pid) and a copy channel of another process stamped as kernel by the Windows
+    /// driver (the per-process USER work the Passthrough route is for): `(process_id, user_work, windows)`.
+    fn plane_view(arm: &str) -> Vec<(u32, bool, bool)> {
+        use std::sync::{Arc, Mutex};
+        let seen: Arc<Mutex<Vec<(u32, bool, bool)>>> = Arc::default();
+        let s2 = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if let ChanStatement::Alloc(a) = st {
+                s2.lock()
+                    .unwrap()
+                    .push((a.process_id.unwrap_or(u32::MAX), a.user_work, a.windows));
+            }
+            ChanAnswer::Done
+        });
+        let mut link = link_for_arm(arm, sink);
+        for (i, (engine, pid)) in [(0xb, 0x350), (0xb, 0x554)].into_iter().enumerate() {
+            let _ = link.respond(&kernel_channel_alloc_for(
+                crate::winprofile::fn1::abi().driver_version(),
+                0xc1d0_0013,
+                0xff0e_0000,
+                0xff04_0000 + i as u32,
+                engine,
+                pid,
+            ));
+        }
+        std::mem::take(&mut *seen.lock().unwrap())
+    }
+
+    /// ★ 2026-11-15 (was `KF3_WIN_USER_CHANNELS_PASSTHROUGH`, default off): the per-process USER-work
+    /// reclassification reaches the plane only for a declared Windows guest; for a Linux guest, an
+    /// undeclared guest and an `off` VM the same allocs stay Translated kernel work, exactly as before the
+    /// profile existed.
+    #[test]
+    fn user_work_reaches_the_plane_only_for_a_declared_windows_guest() {
+        for arm in PROFILE_ARMS {
+            let w = arm == "windows";
+            let got: Vec<(u32, bool)> = plane_view(arm).iter().map(|(p, u, _)| (*p, *u)).collect();
+            assert_eq!(got, vec![(0x350, false), (0x554, w)], "{arm}");
+        }
+    }
+
+    /// ★ 2026-11-15: the plane's gate for every other Windows behaviour (the kernel-GR tier, the deferred-API
+    /// trigger, the copy-engine relay, host-owned scheduling) is `ChannelAlloc::windows`: true for every
+    /// alloc of a declared Windows guest, false for every alloc of any other guest.
+    #[test]
+    fn the_windows_fact_reaches_the_plane_only_for_a_declared_windows_guest() {
+        for arm in PROFILE_ARMS {
+            let w = arm == "windows";
+            let view = plane_view(arm);
+            let got: Vec<bool> = view.iter().map(|(_, _, win)| *win).collect();
+            assert_eq!(got, vec![w, w], "{arm}");
+            // and per-process USER work is never carried for a guest without the identity
+            assert!(
+                view.iter().all(|(_, user, win)| !user || *win),
+                "{arm}: {view:?}"
+            );
+        }
+    }
+
+    /// ★ 2026-11-15 (was `KF3_ASYNC_PREEMPT`, default off): the asynchronous `DISABLE_CHANNELS`
+    /// (`pRunlistPreemptEvent != 0`) reaches the plane for a declared Windows guest and is refused by
+    /// name for every other guest, as before; the same holds for the synchronous RE-ENABLE of another
+    /// client's channel group that the async path needs (run 83).
+    #[test]
+    fn an_async_preempt_is_served_only_to_a_declared_windows_guest() {
+        use std::sync::{Arc, Mutex};
+        for arm in PROFILE_ARMS {
+            let seen: Arc<Mutex<Vec<ChanStatement>>> = Arc::default();
+            let s2 = seen.clone();
+            let sink: ChanSink = Arc::new(move |st| {
+                s2.lock().unwrap().push(st);
+                ChanAnswer::Done
+            });
+            let mut link = link_for_arm(arm, sink);
+            let ctl = |client: u32, p: &[u8]| {
+                let mut b = vec![0u8; 40];
+                b[0..4].copy_from_slice(&client.to_le_bytes());
+                b[4..8].copy_from_slice(&0x5c00_0002u32.to_le_bytes());
+                b[8..12].copy_from_slice(&DISABLE_CHANNELS.to_le_bytes());
+                b[16..20].copy_from_slice(&(p.len() as u32).to_le_bytes());
+                b.extend_from_slice(p);
+                RpcCommand {
+                    function: RpcFunction::RmControl,
+                    code: 76,
+                    sequence: 1,
+                    payload: b,
+                    elements: 1,
+                    delivered: Vec::new(),
+                }
+            };
+            let d = |list: Vec<(u32, u32)>, disable: bool, ev: u64| {
+                let mut b = kf_abi::submit::DisableChannels {
+                    disable,
+                    only_disable_scheduling: false,
+                    rewind_gp_put: false,
+                    runlist_preempt_event: 0,
+                    list,
+                }
+                .encode()
+                .expect("encode");
+                b[16..24].copy_from_slice(&ev.to_le_bytes());
+                b
+            };
+            let (c, ch) = (0xc1d0_000b, 0xcafe_0013);
+            let w = arm == "windows";
+            // the async DISABLE of the caller's own channel
+            let r = link
+                .respond(&ctl(c, &d(vec![(c, ch)], true, 0xffff_8000_0000_1000)))
+                .expect("answered");
+            assert_eq!(r.rpc_result == NV_OK, w, "{arm}: async disable");
+            assert_eq!(seen.lock().unwrap().len(), usize::from(w), "{arm}");
+            // the synchronous RE-ENABLE naming ANOTHER client's channel group (run 83)
+            let r = link
+                .respond(&ctl(c, &d(vec![(0xc1d0_000c, 0xcafe_0001)], false, 0)))
+                .expect("answered");
+            assert_eq!(r.rpc_result == NV_OK, w, "{arm}: cross-client re-enable");
+            // the synchronous DISABLE of another client's channel is refused for EVERY guest
+            let r = link
+                .respond(&ctl(c, &d(vec![(0xc1d0_000c, 0xcafe_0001)], true, 0)))
+                .expect("refused");
+            assert_ne!(r.rpc_result, NV_OK, "{arm}: cross-client disable");
+        }
     }
 
     #[test]

@@ -495,7 +495,11 @@ impl RmObjects for GraphObjects {
 
 /// The shared half of [`GraphPolicy`] and [`ObjectPolicy`]: reassemble → translate → apply.
 struct Bridge {
-    memory_list_probe: bool,
+    /// ★ 2026-11-15 (was `KF3_MEMORY_LIST_PROBE`): the Windows support profile that admits the
+    /// contiguous-SYSRAM `ALLOC_MEMORY` descriptor; the descriptor is served only while the profile
+    /// is active (`windows-support=on` and a declared Windows guest), per command, so a Linux guest
+    /// that sends the same function code reaches the ledger as before.
+    memory_list_probe: Option<crate::winprofile::WindowsProfile>,
     sw_runlist_probe: Option<crate::sw_runlist_probe::Probe>,
     abi: DriverAbiTable,
     guest_os: GuestOs,
@@ -511,10 +515,17 @@ struct Bridge {
 }
 
 impl Bridge {
+    /// Whether the Windows profile's memory-list descriptor may be served right now.
+    fn memory_list_active(&self) -> bool {
+        self.memory_list_probe
+            .as_ref()
+            .is_some_and(crate::winprofile::WindowsProfile::active)
+    }
+
     fn new(abi: DriverAbiTable, guest_os: GuestOs, limits: ReasmLimits) -> Bridge {
         Bridge {
             sw_runlist_probe: None,
-            memory_list_probe: false,
+            memory_list_probe: None,
             abi,
             guest_os,
             reasm: Reassembler::with_limits(limits),
@@ -534,6 +545,7 @@ impl Bridge {
     ) -> Result<Translation, BridgeRefusal> {
         let abi = &self.abi;
         let guest_os = self.guest_os;
+        let memory_list_active = self.memory_list_active();
         let outcome = self.reasm.accept(abi, cmd).and_then(|r| {
             let whole: &RpcCommand = match &r {
                 Reassembled::Whole => cmd,
@@ -541,8 +553,7 @@ impl Bridge {
                 Reassembled::Complete(full) => full,
             };
             let probe_request = self.sw_runlist_probe.as_ref().and_then(|p| p.decode(whole));
-            let memory_cell = self
-                .memory_list_probe
+            let memory_cell = memory_list_active
                 .then(|| kf_abi::memory_list::cell(abi.driver_version()))
                 .flatten();
             let is_memory = memory_cell
@@ -780,8 +791,11 @@ pub const OBJECT_VERBS: &[kf_gsp::RpcFunction] = &[
 ];
 
 impl ObjectPolicy {
-    pub(crate) fn with_memory_list_probe(mut self) -> Self {
-        self.bridge.memory_list_probe = true;
+    pub(crate) fn with_memory_list_probe(
+        mut self,
+        profile: crate::winprofile::WindowsProfile,
+    ) -> Self {
+        self.bridge.memory_list_probe = Some(profile);
         self
     }
 
@@ -939,7 +953,7 @@ impl CommandPolicy for ObjectPolicy {
         {
             return Some(r);
         }
-        let memory = self.bridge.memory_list_probe
+        let memory = self.bridge.memory_list_active()
             && kf_abi::memory_list::cell(self.bridge.abi.driver_version())
                 .is_some_and(|c| cmd.function == kf_gsp::RpcFunction::Other(c.function()));
         if !ObjectPolicy::claims(cmd.function) && !memory {

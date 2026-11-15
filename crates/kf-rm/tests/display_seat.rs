@@ -70,6 +70,7 @@ fn chain_with_objects(
         channels: None,
         display: display.then(|| (&kf_chip::display::AMPERE).into()),
         console: None,
+        windows: Default::default(),
     };
     kf_rm::served_policy(
         ga106::board(),
@@ -549,6 +550,7 @@ fn dispsw_chain(
             x11_dispsw,
         }),
         console: None,
+        windows: Default::default(),
     };
     kf_rm::served_policy(
         ga106::board(),
