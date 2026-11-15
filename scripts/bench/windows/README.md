@@ -53,8 +53,8 @@ $S status
 | option | effect |
 |---|---|
 | `--overlay NAME` | The disk to boot: `disk/NAME.qcow2` over the sealed `base.qcow2`. It is created on first use. The default is `main`. |
-| `--guest-driver V` | kf3's `guest-driver=` (for example `580.65.06` for Windows 580.88). |
-| `--kf3-extra P` | Extra kf3 device properties. |
+| `--guest-driver V` | kf3's `guest-driver=`. **Default `580.65.06`** (the ogkm tag Windows 580.88 pairs with; kf3 refuses `580.88` itself) for a kf3 run; set `WINVM_GUEST_DRIVER` to change the default (set empty for none). |
+| `--kf3-extra P` | Extra kf3 device properties. Unless P holds a `gpu-uuid=`, `run` appends **`gpu-uuid=GPU-<VM_UUID>`** from `$VM/identity.env` and refuses (exit 2, before a `--detach` forks) if the VM has no valid identity. |
 | `--no-kf3` | Boot on std VGA without kf3. |
 | `--arm A` / `--arm B` | Without (A, the default) or with (B) Hyper-V enlightenments. |
 | `--once` | Do not restart after a guest reboot. |
@@ -62,8 +62,23 @@ $S status
 | `--ssh-bind ADDR` | Bind the ssh port wider than `127.0.0.1`. **Explicit only.** |
 | `--detach` | Run in the background. |
 | `--no-rpc-trace` | Do not set `KF3_RPC_TRACE=1` (on by default for kf3 runs: one log line per command kf3 answers). |
-| `--env-file FILE` | Export the `KF3_*` flags in FILE for this run (added 2026-10-31). Only blank lines, `#` comments and `KF3_NAME=digits` lines are accepted; any other line refuses the file. The run log records the file's name, sha256 prefix and flag count (`ENV_FILE`) and the resulting `KF3_*` environment (`KF3_ENV`). A sample is [`kf3_flags.sample.env`](kf3_flags.sample.env): the 19 flags of the recorded Windows Code 0 holds, **not confirmed as the current production list** (its header says what to check against `next`). |
+| `--env-file FILE` | Export the `KF3_*` flags in FILE for this run (added 2026-10-31) **instead of** the default set. Only blank lines, `#` comments and `KF3_NAME=digits` lines are accepted; any other line refuses the file. The run log records the file's name, sha256 prefix and flag count (`ENV_FILE`) and the resulting `KF3_*` environment (`KF3_ENV`). The CI gates still pass [`kf3_flags.sample.env`](kf3_flags.sample.env) explicitly (the same 19 flags as the default file). |
+| `--no-default-flags` | Take none of the defaults below: no default flag file, no default guest-driver, no default gpu-uuid (only what you pass; `KF3_RPC_TRACE=1` is still set unless `--no-rpc-trace`). |
 | `--dry-run` | Print the QEMU command line (`DRYRUN_QEMU`) and the `KF3_*` environment (`DRYRUN_ENV`) and exit; nothing is started, locked, signed or created (same as `WINVM_DRY_RUN=1`; `install --dry-run` prints the install boot). |
+
+**Defaults of `run` (2026-11-15; owner: "To start windows you do not need an env file. Then the defaults are wrong.").** With kf3 on,
+`win_vm.sh run` needs no env file, no `--guest-driver` and no gpu-uuid: it loads [`kf3_windows_defaults.env`](kf3_windows_defaults.env)
+(the 19 flags every Windows guest needs, no diagnostics; a `KF3_*` flag already set in your environment wins), uses
+guest-driver `580.65.06` and `gpu-uuid=GPU-<VM_UUID>` of the VM's `identity.env` (so the VM must have been installed with
+`WINVM_VM_IDENTITY=1`; otherwise `run` refuses and names the three ways out). An explicit `--env-file`, `--guest-driver` or `gpu-uuid=`
+in `--kf3-extra` replaces its own default only; `--no-default-flags` and `--no-kf3` take none. **Measured, 2026-11-15, the pc:** the old
+`run` (no file, no guest-driver, no gpu-uuid) ended in Windows Code 43 (kf3 log: GSP Running -> Suspending -> Halted), and the same guest started
+with exactly the gate's arguments reached `ConfigManagerErrorCode 0` with a working `nvidia-smi`. **Not yet measured:** a guest booted with
+the new defaults and no argument (a dry run proves the command line and environment equal the gate's, nothing more), and which of the 19
+flags are individually necessary (the list is the recorded Code 0 set, not a bisected minimum; the header of the defaults file says what was read from
+code). **Opt-in, not default:** `WINVM_USB_TABLET=1` adds `-device qemu-xhci,id=xhci -device usb-tablet,bus=xhci.0`, an absolute pointer for
+the display broker's hover (measured 2026-11-15: virtio keyboard/tablet/mouse devices swallow all input in a guest without the vioinput driver, so it is
+USB, never virtio-input; the new controller can make Windows see a new NIC, so its DNS settings reset). It is off so CI runs are unchanged.
 
 **Options for a rented Vast box (added 2026-10-31, from [`V3_WINDOWS_ON_VAST.md`](../../../docs/design/V3_WINDOWS_ON_VAST.md) section 3).**
 All are opt-in. The default column is today's behaviour for the old host workflow; the last column is what the Vast lane

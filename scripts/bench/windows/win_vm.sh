@@ -14,10 +14,17 @@
 #                    prevented, OpenSSH keyed to the harness; then a check boot; then the disk is sealed
 #   win_vm.sh run [--overlay NAME] [--once] [--arm A|B] [--no-kf3] [--guest-driver V]
 #                 [--kf3-extra PROPS] [--tag TAG] [--ssh-port N] [--ssh-bind ADDR] [--detach]
-#                 [--no-rpc-trace] [--env-file FILE] [--dry-run]
+#                 [--no-rpc-trace] [--env-file FILE] [--no-default-flags] [--dry-run]
 #                    boot the installed disk with kf3 (its signed GOP ROM, display on). kf3 has no
 #                    reset path, so every guest reboot is a fresh QEMU: -action reboot=shutdown and a
-#                    restart loop; the SAME OVMF vars and the SAME TPM state every time
+#                    restart loop; the SAME OVMF vars and the SAME TPM state every time.
+#                    ★ No env file, no --guest-driver and no gpu-uuid are needed (2026-11-15): with kf3 on, `run`
+#                    defaults to the Windows flag set kf3_windows_defaults.env beside this script, guest-driver
+#                    580.65.06 (WINVM_GUEST_DRIVER; the guest ABI of the Windows 580.88 driver; kf3 refuses 580.88
+#                    itself) and gpu-uuid=GPU-<VM_UUID of $VM/identity.env> (refused if the VM has no identity).
+#                    --env-file, --guest-driver and a gpu-uuid in --kf3-extra each replace their default;
+#                    --no-default-flags takes none of them; --no-kf3 never gets any. A KF3_* flag already set in
+#                    the environment wins over the defaults file.
 #   win_vm.sh ssh [CMD...]        ssh to the guest (powershell is its default shell)
 #   win_vm.sh scp-to SRC DST | scp-from SRC DST    (guest paths like C:/kf/x)
 #   win_vm.sh check [--kf3]       run check.ps1 in the running guest (WIN_* lines)
@@ -48,6 +55,9 @@
 # the spec load). The proprietary image ALWAYS stays offline: online is refused (REFUSED, exit 2) when
 # WINVM_OFFICIAL_APPS_ISO is set, WINVM_PROPRIETARY=1, or the VM directory holds the proprietary image's marks
 # ($VM/proprietary, or a propimage.py $VM/state.json). Anything but online|offline is refused.
+# WINVM_USB_TABLET=1 (default off, 2026-11-15): `run` adds `-device qemu-xhci,id=xhci -device usb-tablet,bus=xhci.0`, an
+# absolute pointer for the display broker's hover. Never virtio-input: those devices swallow all input in a guest
+# without the vioinput driver (measured 2026-11-15). The new controller can make Windows see a new NIC (DNS reset).
 # WINVM_KF3_DISPLAY=off: a headless device (no display plane, no boot GOP) for a box without a
 # monitor; `run` only, default on (2026-10-27).
 # WINVM_INSTALL_CACHE=unsafe: the install-time boots only (install and its check boot) run the base
@@ -430,10 +440,10 @@ log_identity() {
 # ------------------------------------------------------------------------------------------------
 # Only blank lines, '#' comments and KF3_NAME=digits lines are accepted; any other line refuses the
 # whole file (by line number, never by content). The list is NOT hard-coded here: it is the caller's
-# file (a sample is scripts/bench/windows/kf3_flags.sample.env, which must be confirmed against `next`).
+# file; with none, `run` loads the shipped Windows defaults (kf3_windows_defaults.env, see cmd_run).
 ENVFILE_SRC="" ENVFILE_SHA="" ENVFILE_N=0
 load_env_file() {
-  local f=$1 line n=0 lineno=0 pairs=()
+  local f=$1 soft=${2:-0} line n=0 lineno=0 pairs=()
   [ -r "$f" ] || die "--env-file $f is not a readable file"
   while IFS= read -r line || [ -n "$line" ]; do
     lineno=$((lineno + 1))
@@ -444,9 +454,14 @@ load_env_file() {
     n=$((n + 1))
   done < "$f"
   [ "$n" -gt 0 ] || die "--env-file $f holds no KF3_* flag"
-  local p
+  local p nm
   # shellcheck disable=SC2163  # `export NAME=value`, with the pair already validated above
-  for p in "${pairs[@]}"; do export "$p"; done
+  for p in "${pairs[@]}"; do
+    nm=${p%%=*}
+    # soft (the shipped defaults): a flag the caller already set in the environment is theirs
+    if [ "$soft" = 1 ] && [ -n "${!nm+x}" ]; then continue; fi
+    export "$p"
+  done
   ENVFILE_SRC=$f
   ENVFILE_SHA=$(sha256sum "$f" | cut -c1-16)
   ENVFILE_N=$n
@@ -834,8 +849,18 @@ kf3_device_props() {
   echo "$d"
 }
 # KF3_DEVICE_PROPS_END
+# The kf3 gpu-uuid a `run` gets when the caller gave none: GPU-<this VM's identity VM_UUID>, as the CI gate passes it.
+# (kf3's gpu-uuid=auto hashes QEMU's -uuid and needs the host RM to answer GET_GID_INFO; without a per-VM uuid the
+# 2026-11-15 pc run ended in Code 43.) Refused, not guessed, when the VM has no identity: an installed VM is not
+# silently given a new SMBIOS identity (load_identity says why).
+default_gpu_uuid() {
+  load_identity
+  [[ "$VM_UUID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] \
+    || die "run: no per-VM identity (VM_UUID) in $VM/identity.env, so there is no default gpu-uuid: set WINVM_VM_IDENTITY=1 for a NEW VM (the install creates the identity), or pass --kf3-extra gpu-uuid=GPU-<uuid>, or --no-default-flags"
+  echo "gpu-uuid=GPU-$VM_UUID"
+}
 cmd_run() {
-  local argv=("$@") overlay=main once=0 arm=A kf3=1 extra="" gdrv="" tag="" detach=0 max_boots=12 envfile=""
+  local argv=("$@") overlay=main once=0 arm=A kf3=1 extra="" gdrv="" tag="" detach=0 max_boots=12 envfile="" defaults=1
   while [ $# -gt 0 ]; do
     case "$1" in
       --overlay) overlay=$2; shift 2 ;;
@@ -851,6 +876,7 @@ cmd_run() {
       --detach) detach=1; shift ;;
       --no-rpc-trace) export KF3_RPC_TRACE=0; shift ;;
       --env-file) envfile=${2:?--env-file needs a file}; shift 2 ;;
+      --no-default-flags) defaults=0; shift ;;
       --dry-run) DRY_RUN=1; shift ;;
       *) die "run: unknown option $1" ;;
     esac
@@ -861,6 +887,15 @@ cmd_run() {
   [ -n "$tag" ] || tag="run_$(date -u +%Y%m%dT%H%M%SZ)"
   # refused here, before a --detach forks, when the file is bad; the child parses it again
   [ -z "$envfile" ] || load_env_file "$envfile"
+  # 2026-11-15 (owner: "To start windows you do not need an env file. Then the defaults are wrong."): with kf3 on, a `run`
+  # that names no env file, guest-driver or gpu-uuid gets the Windows set the CI gate passes (kf3_windows_defaults.env,
+  # guest-driver 580.65.06 = the guest ABI of the Windows 580.88 driver, gpu-uuid=GPU-<VM_UUID>). An explicit argument
+  # wins; --no-default-flags takes none of them; kf3 off never gets any.
+  if [ "$kf3" = 1 ] && [ "$defaults" = 1 ]; then
+    [ -n "$envfile" ] || load_env_file "$HERE/kf3_windows_defaults.env" 1
+    [ -n "$gdrv" ] || gdrv=${WINVM_GUEST_DRIVER-580.65.06}
+    [[ ",$extra" == *,gpu-uuid=* ]] || extra=${extra:+$extra,}$(default_gpu_uuid)
+  fi
   if [ "$detach" = 1 ] && ! dry_run; then
     local a fwd=()
     for a in "${argv[@]}"; do [ "$a" = --detach ] || fwd+=("$a"); done
@@ -894,6 +929,13 @@ cmd_run() {
   qemu_common
   QA+=(-cpu "$(cpu_flags "$arm")" -action reboot=shutdown,panic=none
        -drive "file=$disk,if=none,id=sys,format=qcow2,discard=unmap" -device virtio-blk-pci,drive=sys,bootindex=0)
+  # WINVM_USB_TABLET=1 (opt-in, 2026-11-15): an absolute pointer (USB tablet on an xHCI) for the display broker's hover.
+  # MEASURED 2026-11-15 on the pc: virtio keyboard/tablet/mouse devices swallow ALL input in a guest without the vioinput
+  # driver, so this is USB, never virtio-input. Adding the controller can make Windows see a NEW NIC (adapter settings
+  # such as DNS reset). Off by default: the CI runs are unchanged.
+  if [ "${WINVM_USB_TABLET:-0}" = 1 ]; then
+    QA+=(-device "qemu-xhci,id=xhci" -device "usb-tablet,bus=xhci.0")
+  fi
   # WINVM_APPS_ISO=FILE (opt-in, 2026-11-07, the Windows app matrix): the read-only app disk (kfapps.iso, label KFAPPS)
   # on the machine's own AHCI bus (q35's ide.3; the install boots use ide.0-2), present from power-on: no hot-plug,
   # and the guest needs no network to find its apps.
@@ -1102,7 +1144,7 @@ main() {
     status) cmd_status ;;
     sign) cmd_sign ;;
     fetch) cmd_fetch ;;
-    ""|-h|--help|help) sed -n '3,64p' "$0" | sed 's/^# \{0,1\}//' ;;
+    ""|-h|--help|help) sed -n '3,74p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "unknown subcommand '$sub' (win_vm.sh help)" ;;
   esac
 }
