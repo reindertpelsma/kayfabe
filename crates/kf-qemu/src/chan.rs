@@ -9852,6 +9852,20 @@ mod windows_birth_tests {
         );
     }
 
+    /// The deferred-API trigger is the profile's alone.
+    #[test]
+    fn the_deferred_api_trigger_is_the_profiles() {
+        assert!(!WindowsBirth::of(false).deferred_api);
+        assert!(WindowsBirth::of(true).deferred_api);
+    }
+
+    /// Host-owned scheduling at birth (the kernel channel's gate opened) is the profile's alone.
+    #[test]
+    fn host_owned_scheduling_at_birth_is_the_profiles() {
+        assert!(!WindowsBirth::of(false).scheduled_at_birth);
+        assert!(WindowsBirth::of(true).scheduled_at_birth);
+    }
+
     /// The whole matrix of the kernel-GR tier and its GR work, over the three facts it depends on.
     #[test]
     fn the_kernel_gr_tier_matrix() {

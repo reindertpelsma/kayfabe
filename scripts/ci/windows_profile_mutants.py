@@ -47,7 +47,7 @@ RM = [
 QEMU = [
     [
         "cargo", "test", "-p", "kf-qemu", "--lib", "--",
-        "windows_birth", "twin_defapi", "mirror_space", "spare", "recycled", "retired", "created_twin",
+        "windows_birth", "twin_defapi", "mirror_space", "spare", "recycled", "retired", "created_twin", "the_start_travels",
         "sdr", "caps_page", "declaration", "reseal", "single_page", "lab_override",
     ]
 ]
@@ -58,9 +58,23 @@ def ed(rel, old, new):
     return rel, FILES[rel].replace(old, new)
 
 
+def ed_all(rel, pairs):
+    text = FILES[rel]
+    for old, new in pairs:
+        assert text.count(old) == 1, (rel, old, text.count(old))
+        text = text.replace(old, new)
+    return rel, text
+
+
 CASES = [
     # --- the witness (kf-rm winprofile.rs)
-    ("active-ignores-the-property", ed(WP, "self.support && self.declared.load(Ordering::Acquire)", "self.declared.load(Ordering::Acquire)"), RM),
+    # `declare` and `active` both apply the property (defence in depth), so each alone is an equivalent mutant;
+    # the two together are the real one.
+    (
+        "profile-ignores-the-property",
+        ed_all(WP, [("self.support && self.declared.load(Ordering::Acquire)", "self.declared.load(Ordering::Acquire)"), (".store(self.support && windows, Ordering::Release)", ".store(windows, Ordering::Release)")]),
+        RM,
+    ),
     ("active-ignores-the-declaration", ed(WP, "self.support && self.declared.load(Ordering::Acquire)", "self.support"), RM),
     ("wrapper-answers-always", ed(WP, "        if self.profile.active() {\n            self.inner.respond(cmd)\n        } else {\n            None\n        }", "        self.inner.respond(cmd)"), RM),
     ("wrapper-holds-always", ed(WP, "self.profile.active() && self.inner.holds_for_refresh(cmd)", "self.inner.holds_for_refresh(cmd)"), RM),

@@ -4487,8 +4487,11 @@ mod tests {
     fn user_work_reaches_the_plane_only_for_a_declared_windows_guest() {
         for arm in PROFILE_ARMS {
             let w = arm == "windows";
-            let got: Vec<(u32, bool)> = plane_view(arm).iter().map(|(p, u, _)| (*p, *u)).collect();
+            let view = plane_view(arm);
+            let got: Vec<(u32, bool)> = view.iter().map(|(p, u, _)| (*p, *u)).collect();
             assert_eq!(got, vec![(0x350, false), (0x554, w)], "{arm}");
+            // the facts that decided it: the channel plane is told the identity with every alloc
+            assert!(view.iter().all(|(_, _, win)| *win == w), "{arm}: {view:?}");
         }
     }
 

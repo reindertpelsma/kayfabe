@@ -272,6 +272,26 @@ mod tests {
         }
     }
 
+    /// A chain holds a reply for a refresh only while the wrapper holding it is active: the gate is
+    /// inside the wrapper, so it also holds through [`kf_gsp::PolicyChain`], which asks every link.
+    #[test]
+    fn a_chain_of_inactive_wrappers_holds_no_reply() {
+        let c = any_control();
+        for (on, declared, reachable) in WRAPPER_ARMS {
+            let profile = WindowsProfile::new(on);
+            profile.declare(declared);
+            let chain = kf_gsp::PolicyChain::new(vec![Box::new(WindowsOnly::new(
+                AnswersEverything,
+                profile,
+            ))]);
+            assert_eq!(
+                chain.holds_for_refresh(&c),
+                reachable,
+                "on={on} declared={declared}"
+            );
+        }
+    }
+
     /// The identity is read from the guest's fn 1 and nothing else: Windows declares it, Linux does
     /// not, a later Linux declaration revokes it, and `windows-support=off` never records it.
     #[test]

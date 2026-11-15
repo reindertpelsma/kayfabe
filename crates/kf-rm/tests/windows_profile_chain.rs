@@ -150,19 +150,59 @@ fn fabricated() -> Vec<(&'static str, RpcCommand)> {
     v_out
 }
 
-/// ★ Every fabricated NV_OK answer is given to the declared Windows guest and to nobody else.
-#[test]
-fn the_fabricated_answers_stop_at_the_declared_windows_identity() {
+/// One fabricated answer, by the name `fabricated()` gave it (a prefix is enough).
+fn stops_at_the_identity(name: &str) {
+    let all = fabricated();
+    let picked: Vec<_> = all.iter().filter(|(n, _)| n.starts_with(name)).collect();
+    assert!(!picked.is_empty(), "no fabricated answer named {name}");
     for arm in ARMS {
-        for (name, cmd) in fabricated() {
+        for (n, cmd) in &picked {
             let mut policy = chain(arm);
             assert_eq!(
-                answered_ok(&mut *policy, &cmd),
+                answered_ok(&mut *policy, cmd),
                 arm.served(),
-                "{arm:?}: {name} must be answered iff the guest declared the Windows build on a windows-support=on VM"
+                "{arm:?}: {n} must be answered iff the guest declared the Windows build on a windows-support=on VM"
             );
         }
     }
+}
+
+/// ★ Every fabricated NV_OK answer is given to the declared Windows guest and to nobody else.
+#[test]
+fn the_fabricated_answers_stop_at_the_declared_windows_identity() {
+    for (name, _) in fabricated() {
+        stops_at_the_identity(name);
+    }
+}
+
+#[test]
+fn the_preemption_bind_answer_stops_at_the_identity() {
+    stops_at_the_identity("GR_CTXSW_PREEMPTION_BIND");
+}
+
+#[test]
+fn the_zcull_bind_answer_stops_at_the_identity() {
+    stops_at_the_identity("GR_CTXSW_ZCULL_BIND");
+}
+
+#[test]
+fn the_echoed_display_controls_stop_at_the_identity() {
+    stops_at_the_identity("NV0073 echoed control");
+}
+
+#[test]
+fn the_gfx_pool_query_stops_at_the_identity() {
+    stops_at_the_identity("GFX_POOL_QUERY_SIZE");
+}
+
+#[test]
+fn the_software_runlist_submit_stops_at_the_identity() {
+    stops_at_the_identity("software-runlist submit");
+}
+
+#[test]
+fn the_host_stub_stops_at_the_identity() {
+    stops_at_the_identity("host stub");
 }
 
 /// ★ A Windows declaration is revoked by a later Linux one (every fn 1 replaces the last): a VM that
@@ -231,6 +271,35 @@ fn imp_enable_stays_false_for_an_undeclared_guest() {
 #[test]
 fn imp_enable_stays_false_on_a_windows_support_off_vm() {
     imp_enable_for(Arm::WindowsOnAnOffVm);
+}
+
+/// ★ A later Linux declaration takes the IMP answer back to FALSE (each fn 1 decides it again).
+#[test]
+fn imp_enable_follows_a_later_linux_declaration() {
+    let abi = support::abi();
+    let m = kf_rm::display::model_for(&abi, &kf_chip::display::AMPERE, 0).expect("derived layouts");
+    let imp = m
+        .layouts()
+        .k32("NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER")
+        .expect("the IMP control is derived");
+    let words = |w: &[u32]| -> Vec<u8> { w.iter().flat_map(|x| x.to_le_bytes()).collect() };
+    let at = abi.rm_control_wire().params_off + 20;
+    let value = |policy: &mut Box<dyn CommandPolicy>| {
+        let r = policy
+            .respond(&control(imp, &words(&[0, 1, 0, 0, 0, 0])))
+            .expect("answered");
+        u32::from_le_bytes(r.body[at..at + 4].try_into().unwrap())
+    };
+    let mut policy = chain(Arm::Windows);
+    assert_eq!(value(&mut policy), 1);
+    policy.respond(&support::linux(&abi)).expect("fn 1");
+    assert_eq!(
+        value(&mut policy),
+        0,
+        "the Linux declaration took IMP_ENABLE back"
+    );
+    policy.respond(&support::windows(&abi)).expect("fn 1");
+    assert_eq!(value(&mut policy), 1);
 }
 
 /// ★ `windows-support=off` is a real opt-out: with it off, even a guest that sends the Windows identity

@@ -4958,6 +4958,47 @@ mod tests {
         assert_eq!(MirrorVaStart::GuestFloor.va_base(), 0x1_0000);
     }
 
+    /// ★ The start the caller asks for is the start the host is asked to allocate, and the start the
+    /// space is recorded with — through the prewarm path, the created twin, the recycled spare and the
+    /// retired mirror alike.
+    #[test]
+    fn the_start_travels_with_the_space_through_every_twin_path() {
+        let key = user_key();
+        for start in [MirrorVaStart::HostDefault, MirrorVaStart::GuestFloor] {
+            let h = LedgerHost::default();
+            let spare =
+                prewarm_spare(&h, start, Some(RAM_OBJ), STORE, STORE_12G, false).expect("spare");
+            assert_eq!(
+                h.starts.borrow().as_slice(),
+                [start],
+                "the host was asked for {start:?}"
+            );
+            assert_eq!(spare.start, start);
+            let reborn = tmode_reuse(key, &spare);
+            assert_eq!(
+                reborn.mirror.start, start,
+                "a recycled spare keeps its start"
+            );
+            let space = TwinHost::alloc_space(&h, start).expect("space");
+            let created = tmode_twin(
+                &h,
+                key,
+                space,
+                start,
+                Some(RAM_OBJ),
+                STORE,
+                STORE_12G,
+                false,
+            );
+            assert_eq!(created.mirror.start, start);
+            let retired = retire_spare(&created.mirror, 0).expect("kept");
+            assert_eq!(
+                retired.start, start,
+                "a retired space is kept with its start"
+            );
+        }
+    }
+
     /// ★ A Linux guest's mirror spaces are NEVER asked for the floor: the start derived for a profile
     /// that is not active is what the host is asked to allocate.
     #[test]

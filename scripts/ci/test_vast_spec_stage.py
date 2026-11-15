@@ -488,6 +488,19 @@ class Copy(StageCase):
         self.go("lanea")
         self.assertIn("--env-file " + str(self.sb.root / "flags.env"), self.sb.runs()[1])
 
+    def test_without_gate_flags_no_boot_gets_an_env_file(self):
+        # 2026-11-15 (flag cleanup, Stage 1): Windows needs no env file; the default is none, and
+        # KF_WINGATE_FLAGS (measurement flags only) is the one way a file reaches win_vm.sh.
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-noflags-"))
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        p = sb.run("lanea", 40000, KF_WINGATE_FLAGS=None)
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_PASS", p.stdout[-600:])
+        runs = sb.runs()
+        self.assertEqual(len(runs), 2)
+        self.assertIn("--guest-driver 580.65.06", runs[1])
+        for line in runs:
+            self.assertNotIn("--env-file", line)
+
     def test_the_copy_boot_is_started_without_kf3_and_without_the_gate_flags(self):
         self.go("lanea")
         self.assertIn("--no-kf3", self.sb.runs()[0])
