@@ -533,7 +533,7 @@ static void check_report(EmitRig &r, uint32_t cap, const char *tag)
                     (unsigned long long)x.va, (unsigned long long)x.len, (unsigned long long)y.va, (unsigned long long)y.len);
             }
         } else {
-            EXPECT(r.rpdb[t].run_count == 0 && r.rpdb[t].first_run == fbase + want, "%s: entry %u after the cut is withheld and starts where the report ends", tag, t);
+            EXPECT(r.rpdb[t].run_count == 0 && r.rpdb[t].first_run == fbase, "%s: entry %u after the cut is withheld and starts at the cut entry's first_run", tag, t);
             EXPECT(((r.rpdb[t].vas_flags & KFWR_V_CUT) != 0) == (s.size() > 0), "%s: entry %u CUT iff it has a diff", tag, t);
         }
     }
@@ -606,7 +606,7 @@ static void emit_cut_cases(void)
         r.emit();
         check_report(r, 10, "three-entries");
         EXPECT(r.rpdb[1].run_count == 6 && r.rpdb[2].run_count == 0 && (r.rpdb[2].vas_flags & KFWR_V_CUT), "4 whole + 6 of the second + none of the third");
-        EXPECT(r.rpdb[2].first_run == r.hdr.run_count && r.rpdb[2].first_run == 10u, "the withheld entry starts where the report ends (%u)", r.rpdb[2].first_run);
+        EXPECT(r.rpdb[2].first_run == 4u && r.rpdb[2].first_run <= r.hdr.run_count, "the withheld entry starts at the cut entry's first_run (%u)", r.rpdb[2].first_run);
     }
     /* the first entry cannot fit but an earlier one filled the report: that entry is withheld, the
      * earlier one's progress is the walk's progress */
@@ -682,6 +682,47 @@ static void emit_cut_hostile(void)
     }
 }
 
+/* ★ Review of PR #424, F3: a brick CHAIN of overlapping runs — UNMAP [2k, 2k+2) pages and MAP [2k+1, 2k+3)
+ * pages, k < len — is one clump of 2*len runs. The first version of the cut walked down from the count
+ * boundary one straddler at a time and gave up after 4096 steps, so a chain that long was refused
+ * (flags 0x85, run_count 0) although a window existed below it. The cut has no step limit now: the
+ * window below the chain is reported whatever the chain's length, and a chain too big for the report is
+ * refused only when nothing else precedes it. `iso` isolated maps sit below the chain. */
+static void chain_case(uint32_t len, uint32_t iso, uint32_t cap, const char *tag)
+{
+    EmitRig r((2 * len + iso) * 2 + 64, cap);
+    std::vector<SRun> v;
+    for (uint32_t i = 0; i < iso; i++) v.push_back({0x100000ull + 0x1000ull * 4 * i, 0x1000ull, 0, true});
+    const uint64_t b = 0x10000000ull;
+    for (uint32_t k = 0; k < len; k++) {
+        v.push_back({b + 0x1000ull * 2 * k, 0x2000ull, 0, false});
+        v.push_back({b + 0x1000ull * (2 * k + 1), 0x2000ull, 0, true});
+    }
+    r.stage(0, v);
+    r.emit();
+    check_report(r, cap, tag);
+}
+
+static void emit_cut_chains(void)
+{
+    chain_case(12000, 10, 5000, "chain-12000-cap-5000");      /* the review's probe: 10 runs, then a 24000-run chain */
+    EmitRig r(40000, 5000);
+    std::vector<SRun> v;
+    for (uint32_t i = 0; i < 10; i++) v.push_back({0x100000ull + 0x4000ull * i, 0x1000ull, 0, true});
+    for (uint32_t k = 0; k < 12000; k++) {
+        v.push_back({0x10000000ull + 0x2000ull * k, 0x2000ull, 0, false});
+        v.push_back({0x10000000ull + 0x2000ull * k + 0x1000ull, 0x2000ull, 0, true});
+    }
+    r.stage(0, v);
+    r.emit();
+    EXPECT(!(r.hdr.flags & KFWR_HF_TRUNCATED) && (r.hdr.flags & KFWR_HF_CUT) && r.hdr.run_count == 10, "the 10 isolated runs are the window (flags %#x, %u runs)", r.hdr.flags, r.hdr.run_count);
+    chain_case(12000, 0, 5000, "chain-alone-too-big");         /* nothing precedes it: the loud refusal */
+    for (uint32_t len : {1u, 2u, 7u, 64u, 600u})
+        for (uint32_t iso : {0u, 3u})
+            for (uint32_t cap : {len, 2 * len, 2 * len + 3, 4 * len + 10 + iso})
+                chain_case(len, iso, cap > 3 ? cap : 4, "chain");
+}
+
 /* Random staged diffs over a small page grid so that lists overlap and straddle each other, at
  * random capacities: every report meets the spec (and the legacy refusal is exactly the case where
  * no boundary reports anything). */
@@ -731,6 +772,7 @@ int main(int argc, char **argv)
     format_cases();
     emit_cut_cases();
     emit_cut_hostile();
+    emit_cut_chains();
     emit_cut_random();
     /* ⚠ Two decoders that both produced nothing agree perfectly (kf_tests.cu uses the same floors). */
     EXPECT(a > 1200, "the synthetic differential decoded almost nothing (%llu)", a);

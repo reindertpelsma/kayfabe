@@ -46,8 +46,11 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 > pages); a window by address is closed under overlap, so the host applies exactly that window of the whole diff.
 > The report carries `KFWR_HF_CUT` (not `TRUNCATED`: the commit applies it), each entry that is not whole
 > `KFWR_V_CUT`; entries after the cut entry are withheld. The host treats `CUT` like `PARTIAL`: apply, acknowledge,
-> walk again at once, complete the split or invalidate only on a walk whose diff is empty. ⊘ Still refused, loudly
-> (the legacy `TRUNCATED`): one overlap-connected clump of runs larger than the report, which cannot be windowed.
+> walk again at once, complete the split or invalidate only on a walk whose diff is empty, and spend at most
+> `MAX_CUT_WINDOWS_PER_REQUEST` walks on one request. The cut is exact with no step limit (review of PR #424 F3: an
+> earlier version gave up after 4096 steps down a chain of overlapping runs and refused a report that had a window).
+> ⊘ Still refused, loudly (the legacy `TRUNCATED`): the FIRST thing in an entry is one overlap-connected clump of runs
+> (a chain of overlapping runs counts as one, however long) larger than the report, which cannot be windowed.
 > Graded on this source by `kf_cpu_walk.cpp` (`emit_cut_cases`, `emit_cut_random`; mutants in
 > `scripts/ci/walk_kernel_mutants.py`), and by `diffmodel::cut_report` and the `kf-mem` windowed-apply model.
 > `[not measured on a GPU]` the PTX is rebuilt, but `kf_tests` (including the rewritten `t_hostile_report_run_cap`)

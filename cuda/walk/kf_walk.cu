@@ -1360,10 +1360,14 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
  * clump of runs larger than the report), nothing can be reported without splitting the clump: the
  * legacy refusal stands (TRUNCATED, RUN_CAP, run_count 0), loudly.
  *
- * ⊘ Every thread of the block computes the cut itself (a few thousand reads of the staged lists);
- * no shared memory and no barrier, so the same code runs on one CPU thread (kf_cpu_walk.cpp). */
+ * ⊘ Only two blocks compute the cut — block 0 (the header's run_count) and block f (the copy) — and
+ * each by its first thread into shared memory, the same function of the same read-only staged data in
+ * both; every other block needs only f, fbase and its own count. The computation (kf_cut_point) is
+ * exact and has no step limit (review of PR #424 F3), and costs a binary search of about 64 x 8 x log n
+ * dependent loads plus a descending sweep that normally ends at once and in the worst case (one long
+ * overlap-connected chain) takes one step per run below the boundary, at most `allowed`. `[not measured
+ * on a GPU]`. The same code runs on one CPU thread (kf_cpu_walk.cpp). */
 #define KF_CUT_LISTS 8u
-#define KF_CUT_ITERS (1u << 12)
 
 __device__ __forceinline__ uint32_t kf_stg_key(const KfMapRun &r)
 {
@@ -1392,42 +1396,52 @@ __device__ uint32_t kf_cut_count(const KfMapRun *stg, const uint32_t *off, uint6
     return c;
 }
 
-/* The start of the first run of any list that straddles v (va < v < end), or v when none does. */
-__device__ uint64_t kf_cut_straddler(const KfMapRun *stg, const uint32_t *off, uint64_t v)
-{
-    uint64_t first = v;
-    for (uint32_t j = 0u; j < KF_CUT_LISTS; j++) {
-        const uint32_t k = kf_n_lt(stg + off[j], off[j + 1u] - off[j], v);
-        if (k == 0u) continue;
-        const KfMapRun &r = stg[off[j] + k - 1u];
-        if (kf_end(r) > v && r.va < first) first = r.va;
-    }
-    return first;
-}
-
 /* ★ The largest straddle-free boundary that reports at most `allowed` of the entry's `n` staged runs
  * (n > allowed). Fills the lists' bounds and `pre[j]` = how many of list j are reported; returns the
- * number reported (0: no boundary reports anything). */
+ * number reported (0: no boundary reports anything — one overlap-connected clump of runs is the first
+ * thing in the entry and is larger than `allowed`).
+ *
+ * Exact, with no step limit (2026-11-15, review of PR #424 F3: an earlier version walked down from the
+ * count boundary one straddler at a time and gave up after 4096 steps, so a chain of overlapping runs
+ * longer than that was refused although a window existed):
+ *   1. v0 = the largest v with count(v) <= allowed, by binary search (count is non-decreasing);
+ *   2. the answer is the left end of the overlap-connected clump that straddles v0, or v0 itself. One
+ *      DESCENDING sweep over the runs that start below v0, in start order (an 8-way merge of the lists'
+ *      tails), finds it: keeping `cur` (initially v0), a run with va < cur < end straddles it and moves
+ *      cur to va. A run skipped because it ends at or before `cur` can never straddle a later, lower
+ *      cur (that is at most its own start). The sweep ends early when no list's next run can reach
+ *      `cur` (a list's ends ascend with its starts), so the common case is one pass of eight tests;
+ *      the worst case is one step per run below v0, at most `allowed`. */
 __device__ uint32_t kf_cut_point(const KfMapRun *stg, uint32_t n, uint32_t allowed, uint32_t *off, uint32_t *pre)
 {
     kf_stg_lists(stg, n, off);
-    /* The largest v with count(v) <= allowed. count is non-decreasing in v; count(0) == 0 and
-     * count(~0) > allowed (n > allowed and every va is below 2^64 - 1 in a guest of 49 bits). */
+    /* The largest v with count(v) <= allowed. count(0) == 0 and count(~0) > allowed (n > allowed and
+     * every va is below 2^64 - 1 in a guest of 49 bits). */
     uint64_t lo = 0ull, hi = ~0ull;
     while (hi - lo > 1ull) {
         const uint64_t mid = lo + ((hi - lo) >> 1);
         if (kf_cut_count(stg, off, mid) <= allowed) lo = mid; else hi = mid;
     }
-    uint64_t v = lo;
-    for (uint32_t it = 0u; it < KF_CUT_ITERS; it++) {
-        const uint64_t s = kf_cut_straddler(stg, off, v);
-        if (s == v) break;
-        v = s;                 /* strictly lower: a run start below v */
-        if (it + 1u == KF_CUT_ITERS) return 0u;
+    uint32_t idx[KF_CUT_LISTS];            /* list j: its runs [0, idx[j]) start below v0 and are unswept */
+    for (uint32_t j = 0u; j < KF_CUT_LISTS; j++) idx[j] = kf_n_lt(stg + off[j], off[j + 1u] - off[j], lo);
+    uint64_t cur = lo;
+    for (;;) {
+        int best = -1;
+        uint64_t bva = 0ull, reach = 0ull;     /* the head with the greatest start; the greatest end of any head */
+        for (uint32_t j = 0u; j < KF_CUT_LISTS; j++) {
+            if (idx[j] == 0u) continue;
+            const KfMapRun &h = stg[off[j] + idx[j] - 1u];
+            if (best < 0 || h.va > bva) { best = (int)j; bva = h.va; }
+            if (kf_end(h) > reach) reach = kf_end(h);
+        }
+        if (best < 0 || reach <= cur) break;   /* nothing left can straddle cur, now or later */
+        const KfMapRun &r = stg[off[best] + idx[best] - 1u];
+        idx[best]--;
+        if (r.va < cur && kf_end(r) > cur) cur = r.va;
     }
     uint32_t total = 0u;
     for (uint32_t j = 0u; j < KF_CUT_LISTS; j++) {
-        pre[j] = kf_n_lt(stg + off[j], off[j + 1u] - off[j], v);
+        pre[j] = kf_n_lt(stg + off[j], off[j + 1u] - off[j], cur);
         total += pre[j];
     }
     return total;
@@ -1452,19 +1466,25 @@ __global__ void kf_diff_emit(KfArgs a)
         if (f == np && total + d->diff_count[u] > cap) { f = u; fbase = total; }
         total += d->diff_count[u];
     }
-    /* The cut entry's window, computed by whoever needs it — block 0 (the header), block f (the
-     * copy), every block after f (an entry the cut withheld starts where the report ends, so the
-     * entries' first_run never decreases: the host's validator checks the order), and every block
-     * while nothing precedes f (whether the report is refused outright depends on it): the same
-     * function of the same staged data. */
-    uint32_t off[KF_CUT_LISTS + 1u], pre[KF_CUT_LISTS];
+    /* A block past the entries has nothing to report (block 0 still writes the header). */
+    if (t >= np && t != 0u) return;
+    /* The cut entry's window, computed ONCE by the two blocks that need it — block 0 (the header's
+     * run_count) and block f (the copy) — by their first thread into shared memory (the same function
+     * of the same read-only staged data in both). Every other block needs only f, fbase and its own
+     * count: a withheld entry starts at fbase (the cut entry's own first_run, so the entries' first_run
+     * never decreases, which the host's validator checks). */
+    __shared__ uint32_t off[KF_CUT_LISTS + 1u], pre[KF_CUT_LISTS], sh_cut;
     uint32_t fcut = 0u;
-    if (f < np && (t == 0u || t >= f || fbase == 0u)) {
-        const KfMapRun *fstg = kf_scr(a, a.lay->walk_off[f]) + a.lay->walk_cap[f];
-        fcut = kf_cut_point(fstg, d->diff_count[f], cap - fbase, off, pre);
+    if (f < np && (t == 0u || t == f)) {
+        if (threadIdx.x == 0u) {
+            const KfMapRun *fstg = kf_scr(a, a.lay->walk_off[f]) + a.lay->walk_cap[f];
+            sh_cut = kf_cut_point(fstg, d->diff_count[f], cap - fbase, off, pre);
+        }
+        __syncthreads();        /* uniform: the condition is the block's, not the thread's */
+        fcut = sh_cut;
     }
     /* Nothing can be reported at all: one clump larger than the report is the first thing in it. */
-    const bool trunc = f < np && fcut == 0u && fbase == 0u;
+    const bool trunc = f < np && fcut == 0u && fbase == 0u;    /* meaningful in blocks 0 and f */
     const bool cut = f < np && !trunc;
     const uint32_t emitted = trunc ? 0u : (cut ? fbase + fcut : total);
     if (t == 0u && threadIdx.x == 0u) {
@@ -1507,12 +1527,12 @@ __global__ void kf_diff_emit(KfArgs a)
         *a.hdr = h;
     }
     if (t >= np) return;
-    /* What this entry reports: all of it, the cut window (entry f), or nothing (after f, or all). */
+    /* What this entry reports: all of it (before f, or no f), the cut window (entry f; 0 when the
+     * whole report is refused), or nothing (after f). */
     const uint32_t dn = d->diff_count[t];
-    const bool mine = cut && t == f;
-    const uint32_t n = trunc ? 0u : (cut ? (t < f ? dn : (mine ? fcut : 0u)) : dn);
+    const uint32_t n = f >= np ? dn : (t < f ? dn : (t == f ? fcut : 0u));
     const KfMapRun *stg = kf_scr(a, a.lay->walk_off[t]) + a.lay->walk_cap[t];
-    if (mine) {
+    if (f < np && t == f) {
         uint32_t o = 0u;
         for (uint32_t j = 0u; j < KF_CUT_LISTS; j++) {
             for (uint32_t k = threadIdx.x; k < pre[j]; k += blockDim.x) a.rrun[base + o + k] = stg[off[j] + k];
@@ -1524,10 +1544,10 @@ __global__ void kf_diff_emit(KfArgs a)
     if (threadIdx.x == 0u) {
         KfPdbEntry e;
         e.pdb = a.pdbs[t];
-        e.first_run = trunc ? 0u : ((cut && t > f) ? fbase + fcut : base);
+        e.first_run = (f < np && t > f) ? fbase : base;
         e.run_count = n;
         e.vas_flags = d->diff_vflags[t] | (d->entry_refuse[t] ? KFWR_V_REFUSED : 0u)
-                    | ((cut && n < dn) ? KFWR_V_CUT : 0u);
+                    | ((f < np && t >= f && n < dn) ? KFWR_V_CUT : 0u);
         e.reserved = a.slots[t];
         /* low 32: which refusals, for the host to name; high 32: the capacity it needed (w829) */
         e.reserved2 = (uint64_t)d->entry_refuse[t] | ((uint64_t)d->need[t] << 32);

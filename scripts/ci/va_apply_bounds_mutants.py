@@ -57,14 +57,20 @@ CASES = [
     ("cut-flag-never-set", changed(MODEL, "        out.cut[t] = t >= f && out.entries[t].len() < st.len();", "        out.cut[t] = false;")),
     ("host-ignores-the-cut-flag", changed(VASMGR, "                partial: p.vas_flags & (kf_cuda::abi::KFWR_V_PARTIAL | kf_cuda::abi::KFWR_V_CUT)\n                    != 0,", "                partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,")),
     ("host-reads-only-the-cut-flag", changed(VASMGR, "                partial: p.vas_flags & (kf_cuda::abi::KFWR_V_PARTIAL | kf_cuda::abi::KFWR_V_CUT)\n                    != 0,", "                partial: p.vas_flags & kf_cuda::abi::KFWR_V_CUT != 0,")),
-    ("cut-window-does-not-continue", changed(VASMGR, "                if progressed {\n                    partial.insert(key);\n                } else {", "                if false {\n                    partial.insert(key);\n                } else {")),
-    ("cut-window-retries-without-progress", changed(VASMGR, "                if progressed {\n                    partial.insert(key);\n                } else {", "                if true {\n                    partial.insert(key);\n                } else {")),
-    ("no-progress-stays-absence", changed(VASMGR, "                    absent_only.remove(&key);\n", "")),
+    ("cut-window-does-not-continue", changed(VASMGR, "                if if withheld { any } else { own } {", "                if false {")),
+    ("cut-window-retries-without-progress", changed(VASMGR, "                if if withheld { any } else { own } {", "                if true {")),
+    ("no-progress-stays-absence", changed(VASMGR, "                    absent_only.remove(&key);\n                    self.stats.refuse(format!(\n                        \"{key:?}: the walk report was cut", "                    self.stats.refuse(format!(\n                        \"{key:?}: the walk report was cut")),
+    # --- review of PR #424: F1 (progress per space), F2 (a budget of windows per request)
+    ("progress-judged-per-report", changed(VASMGR, "                if if withheld { any } else { own } {", "                if any {")),
+    ("withheld-space-judged-by-its-own-runs", changed(VASMGR, "                if if withheld { any } else { own } {", "                if own {")),
+    ("window-budget-not-enforced", changed(VASMGR, "            if *n > self.cut_window_budget {", "            if false {")),
+    ("window-budget-off-by-one", changed(VASMGR, "            if *n > self.cut_window_budget {", "            if *n >= self.cut_window_budget {")),
+    ("window-count-kept-after-the-request-ends", changed(VASMGR, "            if !again {\n                self.cut_windows.remove(&id);\n            }", "            let _ = again;")),
     # The slow-call line loses its cap.
     ("slow-line-no-cap", changed(BATCH, "(n < SLOW_UNMAP_LOG_CAP).then(|| {", "(n < u32::MAX).then(|| {")),
 ]
 
-TESTS = ["-p", "kf-mem", "-p", "kf-cuda", "--lib", "--", "chunk", "a_zero_cap", "a_clean_span", "slow_unmap", "a_span_one_entry", "host_call_amplification", "cut_report", "a_cut_report", "draining_a_diff", "windowed_apply", "a_staged_order_prefix", "a_split_over", "the_split_verdict", "an_invalidate_over", "a_window_carries", "a_clump_larger", "a_cut_entry", "a_withheld", "a_capacity_withheld", "a_refused_map_in_a_window", "a_window_in_which", "an_invalidate_over_a_window", "hostile_arguments"]
+TESTS = ["-p", "kf-mem", "-p", "kf-cuda", "--lib", "--", "chunk", "a_zero_cap", "a_clean_span", "slow_unmap", "a_span_one_entry", "host_call_amplification", "cut_report", "a_cut_report", "draining_a_diff", "windowed_apply", "a_staged_order_prefix", "a_split_over", "the_split_verdict", "an_invalidate_over", "a_window_carries", "a_clump_larger", "a_space_whose", "an_invalidate_whose", "one_persistently", "a_guest_that", "the_budget_is", "a_split_waits_for", "an_invalidate_waits_for", "a_chain_of", "a_cut_entry", "a_withheld", "a_capacity_withheld", "a_refused_map_in_a_window", "a_window_in_which", "an_invalidate_over_a_window", "hostile_arguments"]
 
 
 def run(overrides):

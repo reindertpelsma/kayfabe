@@ -1222,6 +1222,62 @@ mod tests {
         assert!(multi > 500, "{multi}");
     }
 
+    /// ★ Review of PR #424, F3: a brick CHAIN of overlapping runs (UNMAP `[2k, 2k+2)` pages, MAP
+    /// `[2k+1, 2k+3)` pages) is ONE clump however long. The first kernel walked down one straddler at a
+    /// time and gave up after 4096 steps, refusing a report that had a window; the spec never had a
+    /// step limit and the kernel has none now. (The kernel's 12 000-run case at capacity 5 000 is in
+    /// `kf_cpu_walk.cpp`; the spec's reference is quadratic, so the chain here is shorter.)
+    #[test]
+    fn a_chain_of_overlapping_runs_is_one_clump_however_long() {
+        let chain = |len: u64, iso: u64| -> Vec<KfMapRun> {
+            let mut v: Vec<KfMapRun> = (0..iso)
+                .map(|i| run(0x10_0000 + 0x4000 * i, 0x20_0000, PAGE, SYS))
+                .collect();
+            for k in 0..len {
+                v.push(unmap(0x1000_0000 + 0x2000 * k, 0x2000, SYS));
+                v.push(run(0x1000_0000 + 0x2000 * k + PAGE, 0x20_0000, 0x2000, SYS));
+            }
+            v.sort_by_key(|r| (class_of(r.flags), r.op != KFWR_OP_UNMAP, r.va));
+            v
+        };
+        // longer than any step limit a kernel might carry, capacity above it: the 10 isolated runs
+        let s = chain(1500, 10);
+        let c = cut_report(std::slice::from_ref(&s), 700);
+        assert!(c.is_cut && !c.truncated);
+        assert_eq!(c.entries[0].len(), 10, "the window below the chain");
+        assert!(c.entries[0].iter().all(|r| r.va < 0x1000_0000));
+        // nothing below it: the chain alone is a clump larger than the report
+        let c = cut_report(&[chain(1500, 0)], 700);
+        assert!(c.truncated);
+        // a report big enough for the whole chain takes it whole
+        let c = cut_report(&[chain(300, 4)], 5000);
+        assert!(!c.is_cut && c.entries[0].len() == 604);
+        // chains of every small length at every small capacity: the spec and the closure agree
+        for len in [1u64, 2, 3, 7, 40] {
+            for iso in [0u64, 3] {
+                let s = chain(len, iso);
+                for cap in 1..(2 * s.len()) {
+                    let c = cut_report(std::slice::from_ref(&s), cap);
+                    if c.truncated {
+                        assert!(
+                            iso == 0 || cap < iso as usize,
+                            "len {len} iso {iso} cap {cap}"
+                        );
+                        continue;
+                    }
+                    if !c.is_cut {
+                        continue;
+                    }
+                    let rep = &c.entries[0];
+                    assert!(rep.len() <= cap);
+                    for u in s.iter().filter(|r| !rep.contains(r)) {
+                        assert!(rep.iter().all(|w| !overlaps(u, w)));
+                    }
+                }
+            }
+        }
+    }
+
     /// Hostile arguments: a capacity of zero, of one, and of everything; nothing staged; runs at the top
     /// of the address space (the end of a run saturates, it never wraps).
     #[test]
