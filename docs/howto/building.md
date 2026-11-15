@@ -6,6 +6,7 @@ Read [Requirements](requirements.md) first. A QEMU binary built from this tree i
 
 ## 1. Get the source
 
+<!-- kf-run: clone -->
 ```sh
 git clone https://github.com/reindertpelsma/kayfabe.git
 cd kayfabe
@@ -18,6 +19,7 @@ The submodules under `third_party/` are reference sources. They are not built, l
 
 The package policy lives in one function of `scripts/bench/provision_box.sh`, and you can print the list instead of reading the script:
 
+<!-- kf-run: packages_list -->
 ```sh
 bash scripts/bench/provision_box.sh --packages full    # Rust workspace build
 bash scripts/bench/provision_box.sh --packages bench   # QEMU build and the guest disk tooling
@@ -26,10 +28,18 @@ bash scripts/bench/provision_box.sh --packages bench   # QEMU build and the gues
 
 At the time of writing, `full` is `build-essential pkg-config git curl python3 kmod pciutils cpio zstd psmisc busybox-static openssh-client clang lld libssl-dev` and `bench` is `ninja-build meson python3-venv python3-pip python3-tomli libglib2.0-dev libpixman-1-dev flex bison qemu-utils cloud-image-utils genisoimage qemu-system-x86 ovmf musl-tools libslirp-dev`. The script is authoritative. <!-- src: scripts/bench/provision_box.sh -->
 
+To install both lists in one step (this needs root, so it is the one step of this page that does):
+
+<!-- kf-run: packages_install user=root timeout=3600 -->
+```sh
+sudo apt-get install -y $(bash scripts/bench/provision_box.sh --packages full) $(bash scripts/bench/provision_box.sh --packages bench)
+```
+
 ## 3. Install the pinned Rust toolchain
 
 The repository pins one toolchain in `rust-toolchain.toml` (channel `1.99.0`, with `rustfmt` and `clippy`) and lists two extra targets: `x86_64-unknown-linux-musl` and `x86_64-unknown-uefi`. <!-- src: rust-toolchain.toml -->
 
+<!-- kf-run: rust_toolchain timeout=3600 -->
 ```sh
 curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
 . "$HOME/.cargo/env"
@@ -42,6 +52,7 @@ rustup target add --toolchain 1.99.0 x86_64-unknown-linux-musl x86_64-unknown-ue
 
 ## 4. Build and test the workspace
 
+<!-- kf-run: workspace_build timeout=7200 -->
 ```sh
 cargo build --workspace --release
 cargo test -p kf-oprom          # any kf-* crate; no GPU needed
@@ -58,14 +69,15 @@ The device is a small C QOM device (`qemu/hw/misc/kf3/`) plus a Rust static libr
 
 The scripts fetch **QEMU 10.2.4**. Other versions are not documented. <!-- src: scripts/bench/provision_bench_tree.sh (QEMU_VER=10.2.4) -->
 
+<!-- kf-run: qemu_build timeout=7200 -->
 ```sh
 curl -fsSL -o qemu-10.2.4.tar.xz https://download.qemu.org/qemu-10.2.4.tar.xz
 tar -xf qemu-10.2.4.tar.xz
-bash scripts/bench/build_kf3.sh "$PWD/qemu-10.2.4" [<build-dir>]
+bash scripts/bench/build_kf3.sh "$PWD/qemu-10.2.4"
 ```
 <!-- src: scripts/bench/provision_bench_tree.sh (download URL), scripts/bench/build_kf3.sh (usage) -->
 
-`cargo` must be on `PATH`. The build directory defaults to `qemu-build-kf3` beside the QEMU source directory. What the script does, in order: <!-- src: scripts/bench/build_kf3.sh -->
+`cargo` must be on `PATH`. `build_kf3.sh` takes an optional second argument, the build directory. It defaults to `qemu-build-kf3` beside the QEMU source directory. What the script does, in order: <!-- src: scripts/bench/build_kf3.sh -->
 
 1. Runs `cargo build --release -p kf-qemu` and requires the resulting `target/release/libkf_qemu.a`. A failed cargo step stops the script, so a stale archive is never used.
 2. Copies every `qemu/hw/misc/kf3/*.c`, `*.h` and `meson.build` into `<qemu>/hw/misc/kf3/`, and the archive beside them.
@@ -89,6 +101,7 @@ The per-revision directory exists because a shared binary was once replaced unde
 
 **The raw client** is the test program the 30-arm suite uses, built twice: for the host (bare-metal baseline) and as a static musl binary for the guest. <!-- src: scripts/fastguest/bare_metal_suite.sh, scripts/bench/provision_bench_tree.sh -->
 
+<!-- kf-run: raw_client timeout=3600 -->
 ```sh
 cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder
 cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder
@@ -105,6 +118,18 @@ make check               # build + selftest
 <!-- src: broker/IMPORTED.md, broker/README.md -->
 
 Build dependencies named in `broker/Makefile`: `libwayland-dev wayland-protocols` (Wayland backend), `libxcb1-dev libxcb-dri3-dev libxcb-present-dev` (X11 backend), optionally `libxcb-render0-dev` and `libxcb-xinput-dev`. A backend is built only when its libraries are present, and the build prints which ones it kept. <!-- src: broker/Makefile -->
+
+## How the commands on this page are tested (2026-11-15)
+
+The commands in the blocks above that carry a `<!-- kf-run: ... -->` line are run, as written, by the CI GPU boxes (payload stage `install_flow`, `scripts/ci/install_flow.py`, large tier only, selected with `--only install_flow`). There is no second copy of them: `scripts/ci/doc_steps.py` reads the blocks from this file and refuses a marker it does not know. The marker convention is in that script's header. Blocks without a marker (the broker build, the GPU gates, the thin guest) are not run by it.
+
+What the test changes, and nothing else:
+
+- **The clone URL.** `git clone https://github.com/reindertpelsma/kayfabe.git` is replaced by a clone of a local mirror that holds exactly the commit under test, because the stage must test that commit and not whatever the public repository says. The stage then checks that the clone's `HEAD` is that commit.
+- **Who runs it.** Every block runs in a fresh bash with `set -euo pipefail`, as a new unprivileged user in group `kvm` with no capabilities and a home directory under a temporary prefix. The one block marked `user=root` (`packages_install`) runs as root, where `sudo` is a no-op; the result lists which steps needed root.
+- **The QEMU tarball** is downloaded from `download.qemu.org` as the block says. [Not pinned by this page's block yet: the pin of `scripts/bench/qemu.pin` is a separate change.]
+
+*(Design, not implemented: when a CI-built attested binary exists for the exact commit, the stage will use it instead of the `qemu_build` step, as `docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md` section 2 describes. The hook is `install_flow.py`'s `--attested-binary`.)*
 
 ## Not documented yet
 
