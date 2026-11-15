@@ -56,14 +56,17 @@ cargo test -p kf-oprom          # any kf-* crate; no GPU needed
 
 The device is a small C QOM device (`qemu/hw/misc/kf3/`) plus a Rust static library (`crates/kf-qemu`). `build_kf3.sh` lays the first into a QEMU source tree, links the second, and builds QEMU in its own build directory.
 
-The scripts fetch **QEMU 10.2.4**. Other versions are not documented. <!-- src: scripts/bench/provision_bench_tree.sh (QEMU_VER=10.2.4) -->
+The scripts fetch **QEMU 10.2.4**. Other versions are not documented. <!-- src: scripts/bench/qemu.pin -->
+
+The tarball is pinned by sha256 and size in `scripts/bench/qemu.pin`. Fetch it with the helper, which downloads it, checks it against the pin and refuses (exit 1, no file left behind) on any mismatch:
 
 ```sh
-curl -fsSL -o qemu-10.2.4.tar.xz https://download.qemu.org/qemu-10.2.4.tar.xz
+python3 -I scripts/ci/qemu_source.py fetch .          # prints ./qemu-10.2.4.tar.xz
 tar -xf qemu-10.2.4.tar.xz
 bash scripts/bench/build_kf3.sh "$PWD/qemu-10.2.4" [<build-dir>]
 ```
-<!-- src: scripts/bench/provision_bench_tree.sh (download URL), scripts/bench/build_kf3.sh (usage) -->
+
+To use a tarball you already have, add `--from-file <path>`; it is checked against the same pin, and a copy that does not match is refused. There is no way to turn the check off. The pin file says how the hash was obtained and that the QEMU release signature was verified once, by hand, when it was recorded; the scripts check the hash and do not run `gpg`. `build_kf3.sh` takes an already extracted tree and does not re-check it. <!-- src: scripts/ci/qemu_source.py, scripts/bench/qemu.pin, scripts/bench/build_kf3.sh (usage) -->
 
 `cargo` must be on `PATH`. The build directory defaults to `qemu-build-kf3` beside the QEMU source directory. What the script does, in order: <!-- src: scripts/bench/build_kf3.sh -->
 
