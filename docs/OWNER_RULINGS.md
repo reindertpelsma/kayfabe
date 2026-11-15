@@ -26,6 +26,12 @@ citation: ask whether its reason still holds before relying on it.
    - The **Python on the box** takes only the instruction: CLI flags for simple cases, a data file for complexity. It runs standalone from a
      file, with a run token from the Worker for reporting.
    - An admin-instructed manual run (an instruction given to a box directly, with no requirement) is a valid extra path.
+   - **Instruction sources (owner, 2026-11-15).** A data file is required as an option for standalone use. In an automated Worker run the box
+     connects to the Worker with its run token to report and to fetch, so the Worker itself may be the instruction source instead of a file.
+     Both sources feed one loader and one validation.
+   - *Coordinator refinement (proposal):* the fetch happens in the bootstrap/reporter layer, which already holds the token. It writes the
+     instruction to a file, records its hash and hands the file to the payload, which stays tokenless (the payload loses the token, broker URL
+     and run id today; `scripts/ci/README.md`). The payload therefore only ever reads a file, and that file's hash is the provenance record.
 3. **Anything the Worker can run must be runnable standalone**, in Python, from a CLI: every artifact pinnable from the filesystem; every step
    decomposable (run alone, or from an instruction file identical to what the Worker would give); private R2 configurable.
 4. **Coordinator refinements (proposals, not rulings; the owner may overrule):**
