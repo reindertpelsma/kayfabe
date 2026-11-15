@@ -1485,7 +1485,40 @@ def instruction_from_file(path, environ):
         raise EvidenceError("preflight") from None
 
 
-def plan_stage_names(i):
+# 2026-11-15 propimage_apps (OWNER_RULINGS 2026-11-15: the proprietary Windows image's seven apps must PASS per GPU family in the
+# release full run): scripts/ci/propimage_apps.py. LARGE tier only, SLOW, NEVER run on a box and it cannot pass yet (the image, GOP and
+# swtpm pins in scripts/ci/propimage_apps_pins.json are unset, and the harness does not drive the Wukong benchmark). So it is planned only when
+# named by --only. Joining the release tier = flip PROPIMAGE_APPS_IN_LARGE in the commit that records its first green box run, with a
+# payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
+PROPIMAGE_APPS_IN_LARGE = False
+# stages with no budget row (scripts/ci/profile_resources.py): planned only by --only; the guard refuses one whose flag is True
+MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE"}
+PROPIMAGE_APPS_MIN_REMAINING_MS = 210 * 60000   # DESIGN: download ~16 min, 4 unpacks/hashes, 3 boots, apps up to 98 min worst case
+PROPIMAGE_APPS_PREFIX = "/workspace/kf-propimage"
+PROPIMAGE_APPS_MARGIN_S = 300
+
+
+def propimage_apps_rows(text, rc, sha, result):
+    """One KF_PROPIMAGE_APPS_RESULT line, kept in the result file even when it is red (vast_report.py validates it).
+    PASS needs rc 0 and verdict PASS; NOT_RUN (CPU_VENDOR) is a skipped row, never a pass; everything else is the stage failing."""
+    found = re.findall(r"^KF_PROPIMAGE_APPS_RESULT (\{.*\})$", text, re.M)
+    if len(found) != 1:
+        raise EvidenceError("propimage_apps")
+    try:
+        doc = json.loads(found[0])
+    except ValueError:
+        raise EvidenceError("propimage_apps") from None
+    result["propimage_apps"] = doc
+    if type(doc) is not dict or doc.get("sha") != sha:
+        raise EvidenceError("propimage_apps")
+    if doc.get("verdict") == "NOT_RUN" and doc.get("reason") == "CPU_VENDOR" and rc == 0:
+        return [row("propimage_apps", skipped=1)]
+    if rc or doc.get("verdict") != "PASS":
+        raise EvidenceError("propimage_apps")
+    return [row("propimage_apps", 1)]
+
+
+def plan_stage_names(i, only=()):
     """The stages main() builds for this instruction, in run order (main checks its own list against this)."""
     names = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
     if i.linux_apps is not None:
@@ -1496,6 +1529,8 @@ def plan_stage_names(i):
             names.append("windows_apps")
         if i.windows_runs == 2:
             names.append("windows_gate_2")
+    if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only):
+        names.append("propimage_apps")
     if "specviewperf" in i.stages:
         names.append("specviewperf")
     return names
@@ -1568,7 +1603,7 @@ def plan_only(args, root):
     """--dry-run / --emit-instruction: no directory, device or result file is touched."""
     try:
         inst, digest = build_instruction(args, os.environ)
-        plan = plan_stage_names(inst)
+        plan = plan_stage_names(inst, args.only)
         chosen = select_stages(plan, args.only, args.skip)
         if inst.spec:
             spec_table(root)
@@ -1625,7 +1660,7 @@ def main():
         windows, tier, windows_runs = instruction.windows, instruction.tier, instruction.windows_runs
         extra_stages, spec, winapps = list(instruction.stages), instruction.spec, instruction.winapps
         apps_tier, linuxapps = instruction.linux_apps, instruction.linux_apps is not None
-        plan = plan_stage_names(instruction)
+        plan = plan_stage_names(instruction, args.only)
         selected = select_stages(plan, args.only, args.skip)
         if args.only or args.skip:
             result["selection"] = {"only": args.only, "skip": args.skip}
@@ -1866,6 +1901,23 @@ def main():
             stage.update(
                 min_remaining_ms=WINDOWS_REPEAT_MIN_REMAINING_MS, short_row="windows_retry_time"
             )
+            stages.append(stage)
+        if "propimage_apps" in plan:
+            # After every other Linux and Windows stage (the GPU is free again) and before the SPEC lane. The image is private and runs
+            # only offline; scripts/ci/propimage_apps.py owns the download, the swtpm build, the boots and the record.
+            output_pa = evidence / "propimage_apps.run"
+            stage = make_stage(
+                "propimage_apps",
+                [
+                    "python3", str(root / "scripts/ci/propimage_apps.py"), "run", "--sha", sha, "--checkout", str(root),
+                    "--prefix", PROPIMAGE_APPS_PREFIX, "--out", str(evidence / "propimage_apps.json"),
+                    "--evidence-dir", str(evidence / "propimage_apps"), "--deadline-epoch", str(soft // 1000 - PROPIMAGE_APPS_MARGIN_S),
+                ],
+                output_pa,
+                [],
+                lambda rc, output=output_pa: propimage_apps_rows(bounded_text(output), rc, sha, result),
+            )
+            stage.update(min_remaining_ms=PROPIMAGE_APPS_MIN_REMAINING_MS, short_row="propimage_apps_retry_time")
             stages.append(stage)
         if "specviewperf" in extra_stages:
             # DISABLED BY DEFAULT (docs/design/V3_SPEC_GATE.md): the wrapper runs scripts/bench/box/specviewperf_stage.sh,

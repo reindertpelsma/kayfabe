@@ -839,6 +839,7 @@ def main():
             "vast_payload.py",
             "payload_instruction.py",
             "box_downloader.py",
+            "propimage_apps.py",
             "kf_fetch.py",
             "vast_payload.sh",
             "vast_payload_hooks.sh",

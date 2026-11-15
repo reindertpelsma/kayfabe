@@ -1,0 +1,46 @@
+{
+ "schema": "kayfabe.propimage-pins/1",
+ "status": "UNSET pins are the point: nothing in the repository records the sha256 or the exact size of the image archive, of the signed boot GOP or of the swtpm sources, so the propimage_apps stage refuses (PIN_UNSET:<role>) until a person who holds the real object fills them in from the object itself and commits them. The stage never reads a pin from a server and never runs an unpinned object. STATUS 2026-11-15.",
+ "items": [
+  {
+   "role": "image",
+   "name": "propimage-kfimg-20261112.zip",
+   "dest": "image/image.zip",
+   "ref": "propimage-kfimg-20261112.zip",
+   "sha256": null,
+   "size": null,
+   "needed_by": "image",
+   "recorded_in": "traces/hwrun_20261113/README.md (private R2 object windows-proprietary/kfimg-20261112/image.zip, about 47 GiB packed). The Worker's bench-data allow-list (ci/vast-broker/src/benchdata.js BENCH_OBJECTS) has no entry for this ref yet: a Worker change, not made here."
+  },
+  {
+   "role": "gop",
+   "name": "kf-gop.signed.efi",
+   "dest": "image/kf-gop.signed.efi",
+   "ref": "propimage-kf-gop.signed.efi",
+   "sha256": null,
+   "size": null,
+   "needed_by": "image",
+   "recorded_in": "scripts/bench/windows/propimage_check.py stage_gop: the signed boot GOP driver is not inside the image archive; the OVMF variables in the image trust the maintainers' signing key, so a GOP signed by a box's own key is refused by Secure Boot (INFERRED). Not in any bucket or Worker allow-list yet."
+  },
+  {
+   "role": "libtpms",
+   "name": "libtpms-0.10.1.tar.gz",
+   "dest": "tools/libtpms-0.10.1.tar.gz",
+   "sha256": null,
+   "size": null,
+   "needed_by": "tools",
+   "mirror": "https://github.com/stefanberger/libtpms/archive/refs/tags/v0.10.1.tar.gz",
+   "recorded_in": "traces/hwrun_20261113/README.md (swtpm/libtpms 0.10.1 built from source under /opt/tpm worked; the recipe is not recorded). Needed only when the box's swtpm is older than 0.10."
+  },
+  {
+   "role": "swtpm",
+   "name": "swtpm-0.10.1.tar.gz",
+   "dest": "tools/swtpm-0.10.1.tar.gz",
+   "sha256": null,
+   "size": null,
+   "needed_by": "tools",
+   "mirror": "https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.1.tar.gz",
+   "recorded_in": "same as libtpms"
+  }
+ ]
+}

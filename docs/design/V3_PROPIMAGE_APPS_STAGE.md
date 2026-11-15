@@ -1,0 +1,69 @@
+STATUS: DESIGN-ONLY, 2026-11-15. The stage is built and GPU-free tested (`scripts/ci/test_propimage_apps.py`, mutants `scripts/ci/propimage_apps_mutants.py`). It has run on no box, and it cannot PASS today for two named reasons (below). Depends on the box downloader (draft PR #425).
+
+# The `propimage_apps` payload stage
+
+Owner ruling, 2026-11-15, as given in the instruction for this work (the offline-only part is `docs/OWNER_RULINGS.md` section AR item 1; the rest is not yet recorded there and the coordinator should fold it in): the proprietary Windows image's apps (`propimage_check.py`: superposition, 3dmark, solidworks, resolve, edrawings, wukong, edge) must PASS in the release full run, per GPU family. The licences inside the image are not secrets (the vendors only forbid redistribution), so the image may run on Vast boxes, always offline in the guest (slirp `restrict=on`), fetched through presigned download-only URLs, and never copied back or redistributed. The planner runs the stage once on each family's large box.
+
+Code: `scripts/ci/propimage_apps.py` (stage), `scripts/ci/propimage_apps_pins.json` (pins), `scripts/ci/vast_payload.py` (stage table), `scripts/ci/vast_report.py` (`validate_propimage_apps`). It changes no file of the harness (`scripts/bench/windows/`), the Worker or `ci/vast-broker/defaults.json`.
+
+## What is not done, by name
+
+1. **Every pin is unset.** Nothing in the repository records the sha256 or exact size of the image archive, of the signed boot GOP driver or of the swtpm/libtpms 0.10.1 sources (`propimage_apps_pins.json`, all `null`). The stage refuses with `PIN_UNSET:<role>` and never fetches or runs an unpinned object (a hash without a size counts as unpinned). Whoever holds the real objects fills the pins in from the objects themselves. The image object is recorded in `traces/hwrun_20261113/README.md` as private R2 `windows-proprietary/kfimg-20261112/image.zip`; the Worker's `BENCH_OBJECTS` allow-list has no entry for it yet (a Worker change, not made here), so the manifest's ref is `propimage-kfimg-20261112.zip` for the Worker to map.
+2. **Wukong cannot PASS through the harness.** `propimage_check.py` launches the benchmark tool and grades it FAIL on a crash or GPU watchdog event, otherwise INCONCLUSIVE ("the benchmark was not driven"). The menu driver that reached the benchmark's result screen (`scripts/bench/windows/wukong_drive/`, OCR of guest screenshots on the host) is research tooling in draft PR #417 and is not part of the harness. So the stage ends `FAIL`, reason `APP_FAIL:wukong`, until the driver (or an equivalent file verdict) is part of `propimage_check.py`. Extension point: the Wukong boot is a separate harness run, so a driver can be attached to that boot without touching the other six apps.
+
+## What the stage does
+
+| Step | Detail | Refusal reason (record `reason`) |
+|---|---|---|
+| CPU vendor | The image runs the fixed CPU profile `kayfabe-amd-v1` (EPYC-v1, AuthenticAMD). Anything but AMD is `NOT_RUN`, never a pass and never a failure (release matrix rule, DESIGN-ONLY there) | `CPU_VENDOR` (verdict `NOT_RUN`) |
+| CPU features | `propimage.cpu_preflight` against `/proc/cpuinfo` | `CPU_PROFILE_UNSUPPORTED` |
+| GPU family | compute capability: 7.5 turing, 8.6 ampere, 8.9 ada, 12.0 blackwell. 8.0, 9.0, 10.0 (datacenter parts) are refused: no desktop driver path for the image's 580.88 driver (INFERRED). Only Ada has run with this image (RTX 4070 and RTX 4090, `traces/hwrun_20261113/README.md`) | `GPU_FAMILY` |
+| Pins | the roles the run needs (image, gop, and libtpms plus swtpm only when the box's swtpm is older than 0.10) | `PIN_UNSET:<role>` |
+| kf3 QEMU | `$BENCH/kf3-bins/<rev8>/qemu-system-x86_64` of this revision, built by `merge_bar` | `NO_KF3_QEMU` |
+| URL file | presigned-URL JSON from the bootstrap layer (`box_downloader_worker.py resolve`), default `/run/kf-ci/download-urls.json` (DESIGN: the bootstrap layer must write it there) | `URLS_MISSING` |
+| Disk | archive twice (archive plus unpacked members) plus 40 GiB (DESIGN) | `DISK_FREE` |
+| swtpm | `swtpm --version` at least 0.10; else build libtpms and swtpm 0.10.1 under `/opt/tpm` from the pinned tarballs | `SWTPM_VERSION`, `SWTPM_BUILD` |
+| Host kernel log | `dmesg -w` (else `journalctl -k -f`) from before the download; a log that cannot be read or stays empty refuses the run | `KERNEL_LOG` |
+| Download | `box_downloader.py check`, `fetch` (blocking, resumable), `verify` on a manifest made from the pins; image and GOP are `signed` sources only, the swtpm sources are public mirrors | `DOWNLOAD` |
+| Unpack | `propimage_check.load_image`: sha256 of both members and the seed; then the archive is deleted | `UNPACK` |
+| Boots | see below | `APP_FAIL:<app>`, `HARNESS:<app>`, `TIME`, `OFFLINE_NOT_PROVEN` |
+
+Boots. The harness (`propimage_check.py`) boots the image on a fresh throwaway overlay each time and refuses to start an app whose own timeout would cross about 55 minutes of boot age (the Windows evaluation timer; its shutdown is event 1074 from `wlms.exe`). The apps' timeouts add up to 98 minutes, so one boot cannot run all seven. `plan_boots` groups them in order so that each boot's timeouts sum to at most 45 minutes (DESIGN: 55 minus about 10 minutes of boot, ssh, power and GPU repair), and Wukong is always last and alone: boot 1 superposition, 3dmark; boot 2 solidworks, resolve, edrawings, edge; boot 3 wukong. Each boot is `propimage_check.py --dir ... --display broker --gop-efi ... --apps ...` with `--superposition-run` (without it Superposition is only launched) and, for Wukong, `--fb-mb 8192` (MEASURED 2026-11-14 on the PC: 5 of 5 driven runs reached the result screen at 8192 MiB, 11 of 12 had a GPU watchdog event at the image's 4096 MiB; `traces/pcnight_20261114/README.md` in draft PR #417). Every boot re-hashes the unpacked image (the harness does that for a `--dir`), which costs minutes on a slow disk (NOT measured).
+
+Offline is proved, not assumed: the harness writes its QEMU argument vector to `<work>/run/last_cmd.txt`; the stage requires `restrict=on`, no `restrict=off`, and the overlay (not the image) as the disk. A PASS in a boot without that proof becomes FAIL with `OFFLINE_NOT_PROVEN`.
+
+Verdicts are read from what the harness saved, never from a flag the guest wrote: the row `app:<name>` of `result.json` and the `verdict.json` in the single run directory of that app must agree, `ok` must be true and the evidence kind must be the one the app is graded by (FILE: superposition, 3dmark, solidworks, resolve, wukong; UIA: edrawings, edge). Anything else that says PASS becomes FAIL (`UNPROVEN_PASS`). Guest-authored text is cut to printable ASCII, 200 characters.
+
+The stage PASSes only if all seven apps PASS with the expected kind. A FAIL names the first failing app (`APP_FAIL:wukong`) and lists all of them in `failed`. Harness problems (SSH not up, `wlms.exe` shutdown, boot-age guard, a boot not started for lack of time) are `RETRY` (`HARNESS:<app>` or `TIME`), never a guest FAIL.
+
+## The record
+
+One line `KF_PROPIMAGE_APPS_RESULT {json}` and the file given as `--out`; it goes into `kf-result.json` as `propimage_apps` and `vast_report.validate_propimage_apps` reads it strictly (exact keys, bounded, printable, at most 24 KiB; a PASS record needs all seven apps in order, each PASS with its kind, every boot offline, no reason). The reporter does not forward it.
+
+`schema, verdict (PASS|FAIL|RETRY|REFUSED|NOT_RUN), sha, reason, family, cpu_vendor, preflight[{name,status,detail}], image{name,sha256,size}, swtpm{version,built}, boots[{index,apps,rc,secs,offline,harness[],host_xid_unattributed}], apps[...], failed[]`, and per app: `app, verdict, kind (FILE|UIA|NONE), secs, detail, evidence[{file,bytes,sha256}], scores, guest_events{collected,live_kernel_events,codes,tdr_4101,nvlddmkm_153}, host_xid{count,lines}`.
+
+- Scores come from the harness's own signal text for a graded file: 3DMark overall and graphics (from `Result.xml`), Superposition only if the optional OCR read exists. No score is guessed.
+- Guest GPU events are collected only by the Wukong script (`LiveKernelEvent` 141/117, `Display` 4101, `nvlddmkm` 153). For the other apps `collected` is false: a zero there means nothing was looked at.
+- Host Xid lines are those of the host kernel log inside the app's window: the stage reads the harness's stdout while it runs and marks the log's line count at the `verify` line and at every `app:<name>` line (offsets in `kernel/stage-offsets.tsv`, same formats as `scripts/ci/kernel_log.py` of draft PR #420, which is not merged: this is a local equivalent, replaceable by an import). Limit: a kernel line that arrives after a mark settled lands in the next window, and events between two apps (the harness's shutdown-event query) belong to the next app. Xid lines inside the boot but outside any app window are kept as `host_xid_unattributed`. The payload's own host Xid watcher still fails the stage on any new Xid.
+- Evidence files stay on the box under the prefix; the record holds names, sizes and sha256. Only `verdict.json`, `result.json`, `system_events.txt` and `nvidia_smi_memory.txt` of each app are copied into the payload's evidence directory (text only). The image, archive, overlays and work directories are deleted at the end, always.
+
+## Wiring
+
+`vast_payload.py --instruction FILE --only propimage_apps` with a `large` instruction. As with `install_flow` (draft PR #423) it is not in the default large plan (`PROPIMAGE_APPS_IN_LARGE = False`) and has no budget row (`MANUAL_ONLY_STAGES`, `profile_resources.py` refuses the flag being True while it is listed). It runs after every Windows stage and before the SPEC lane, needs 210 minutes left (DESIGN: download about 16 minutes at the 52 MB/s the SPEC download measured, unpack and hash, three boots, the apps' worst case), and the soft deadline is passed to the stage, which does not start a boot it cannot finish. Joining the release tier is flipping the constant in the commit that records the first green box run, plus a `payloadStageResources` row (a Worker bundle change). The 300 GB large profile disk is enough for the 47 GiB archive plus its unpacked copy (not measured on a box).
+
+The CPU rule is `ALLOWED_CPU_VENDORS` (AMD only) and `cpu_rows()`. An Intel run needs more than a flag: `propimage.py` pins the image CPU profile to AuthenticAMD in `validate_state`, and the TPM and Windows state were made under it. The Intel host experiment (`/root/night/PROPIMAGE_INTEL_20261115.md`) had not reported when this was written, so the rule is AMD-only with the refusal named. If it succeeds, the extension is an Intel CPU profile in `propimage.py` and the vendor list in the instruction, not here.
+
+Conflicts to expect: draft PR #423 (`install_flow`) adds `MANUAL_ONLY_STAGES`, the `plan_stage_names(i, only)` signature and the `profile_resources.py` hunk; the `profile_resources.py` hunk here is byte-identical to #423's, the others are adjacent lines in `vast_payload.py`, `vast_report.py` and `ci.yml`. Whichever merges second resolves them by keeping both stages in the dict and the plan.
+
+## First-run checklist (a box run is the only way to learn these)
+
+1. Fill the pins first; without them the first run ends in `PIN_UNSET:image` after about one second.
+2. Download: time of the 47 GiB archive from the presigned URL (the Worker's 20-minute URL expiry and 4 mints per object per run; the downloader asks again on expiry), and the disk right after the box comes up (`df -h /`; the disk request can be ignored).
+3. Does `/run/kf-ci/download-urls.json` exist, and is the image ref in the Worker's allow-list.
+4. swtpm: the build recipe (`SWTPM_DEPS`, `./autogen.sh --with-openssl`, prefix `/opt/tpm`) is NOT TESTED; the maintainers only recorded that 0.10.1 built from source worked. Check the version line and that the TPM state loads (`swtpm failed to load image state` in the boot log).
+5. Nested KVM: Windows 11 under nested virtualisation with the kf3 device. Boot time to ssh (the harness waits 7 minutes), the 55-minute budget per boot (each app's own timeout is a ceiling, real durations are shorter: 177 s for Superposition on the PC, 203 to 230 s from Confirm to the result screen for the Wukong benchmark at 8192 MiB on the PC; the others are not recorded), and the Vast reset lane timing out 4 of 5 under nested KVM (`traces/vastgate_20261114`) as a sign of slow host-side applies.
+6. Offline: `logs/boot*.log` and `work/boot*/run/last_cmd.txt` show `restrict=on`; the record says `offline: true` per boot.
+7. The signed boot GOP: the image's OVMF variables trust the maintainers' key, so the GOP in the pins must be signed by it; a box-signed GOP is refused by Secure Boot (INFERRED). `--display broker` also needs the broker binary: `make -C broker` builds it (the test backend needs no libraries); not tried on a box.
+8. GPU memory: the Wukong boot gives the guest 8192 MiB of framebuffer; the preflight row `gpu_memory` warns below 16 GiB. Run so far only on a 12 GB card (RTX 4070, `traces/pcnight_20261114/README.md` in draft PR #417).
+9. Per-app timeouts against nested-KVM speed, the per-app verdicts, `host_xid` by app, the TDR counts, and whether the hold on a failed Wukong boot leaves the GPU usable for the next family's stage (it is the last stage).
+10. Per-boot image re-hash time (every `--dir` start hashes the 47 GiB again).
