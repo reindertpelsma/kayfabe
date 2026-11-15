@@ -32,7 +32,7 @@ generated display files reproduce byte for byte):
   named tests. The tests are the proof that a Linux guest, an undeclared guest and a `windows-support=off` VM reach none of the profile
   (`crates/kf-rm/tests/windows_profile_chain.rs` and the unit tests it names). Review of PR #438 (2026-11-15) added mutants at the USE sites of the gates (where the
   gate is read, not only its truth table): behavioural tests with the real profile where a site is reachable GPU-free, and `crates/kf-qemu/tests/windows_use_sites.rs`
-  (source pins, two independent tests) for the sites inside `ChanPlane::birth`, the drainer loop and `Device::realize`.
+  (source pins, two independent tests) for the sites inside `ChanPlane::birth`, the drainer loop and `Device::realize`. **Honest count (delta review, 2026-11-15): 9 of the 23 use-site mutants are killed ONLY by those text-matching pins, which prove a line exists, not that it works; 5 more have a single behavioural killer.** The reviewer's own 15 re-spelled use-site hardwires (birth and pump, memory-plane and display construction, the display worker's `sdr()` reads, the drainer's caps sync, `HostRm::alloc_vaspace_at`, and one that makes the device ignore `windows-support=off`) mostly survive; that is a known coverage gap (`V3_WINDOWS_SUPPORT_PROFILE.md`, *Known coverage gap*), not a claim of full coverage.
 - `static` also ties the VER3 PCF enumerants the kernel names (`KF_VER3_*`) to
   `crates/kf-chip/data/hwref-580.159.04.tsv`.
 

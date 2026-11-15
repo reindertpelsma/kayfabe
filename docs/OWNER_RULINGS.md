@@ -19,7 +19,7 @@ the first proof is the Windows gate on a rented box with NO env file (`docs/desi
    `_DEFERRED_API`, `_PREEMPT_BIND_PROBE`, `_ZCULL_BIND_PROBE`, `_ASYNC_PREEMPT`, `_DISPLAY_CTRL_PROBE`, `_DISPLAY_IMP_ENABLE`,
    `_SW_RUNLIST_PROBE`, `_SW_RUNLIST_HOST_OWNED`, `_GFX_POOL_PROBE`, `_MEMORY_LIST_PROBE`, `_DISPLAY_SDR_COLOR`,
    `_DISPLAY_LUT_MIRROR`, `_DISPLAY_ILUT_OFFSET_256`) are hardwired **together**. What was measured: the Windows gates PASSed with all 18
-   on (RTX 4090 `a76d1397`, RTX 3090 `006d845a`, RTX 5070 Ti `54410b7d`, AD102; `windows_apps` 10/10 on the 4090). Individually ablated
+   on (RTX 4090 `a76d1397`, RTX 3090 `006d845a`, RTX 5070 Ti `54410b7d`, and an Ada die-coverage run: three GPU families; `windows_apps` 10/10 on the 4090). Individually ablated
    (2026-10-10/11, idle desktop only): `TIMER_MAP` (not in this set) and a subset of the 18 (see `V3_FLAG_INVENTORY.md`); **not** ablated:
    `ZCULL_BIND_PROBE`; needed only INFERRED: `KERNEL_GR_WORK`, `SW_RUNLIST_PROBE`, `MEMORY_LIST_PROBE`; idle-only: `TRANSLATED_CE_RELAY`,
    `ASYNC_PREEMPT`; `DISPLAY_SDR_COLOR` was "not needed to boot" (colour fidelity). Those passes ran with the OLD, process-wide flags; the
