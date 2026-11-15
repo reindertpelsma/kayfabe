@@ -1,0 +1,188 @@
+# qemu.log lines 26674..28135 (about 5 s before first LKE, +-1-2 s clock mapping); 1456 non-heartbeat lines, 187 matching apply|refus|walk capacity|UNSERVICED|DISABLE_CHANNELS|late|error|fail; first 250 shown
+kf3: act birth translated: chan 0xc1d0016a:0xff040001 BORN Translated: token 0x3 -> host 0x2d in VasKey(13965663930517817456) gpfifo=0x120276000x8192 userd=Some(Sysmem { base: 10711597568, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL r
+kf3: chan 0xc1d0016a:0xff040001: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x2d, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote translated context: 0xc1d0016a:0xff040001 GPU_PROMOTE_CTX satisfied by Translated host 0x2d GR=Some((cafe3703, c9c0)) VIDEO=None entries=8 init_ids=0x5 va_ids=0xa7d bound=true — no guest buffer touched (3 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xb: gp=0x20 pb=0xe00 (the host's answer)
+kf3: act birth translated: chan 0xc1d0016b:0xff040002 BORN Translated: token 0x804 -> host 0x1002e in VasKey(13965663930517817456) gpfifo=0x1204f0000x16384 userd=Some(Sysmem { base: 10711598080, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d0016b:0xff040002: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x1002e, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x13: gp=0x20 pb=0x80 (the host's answer)
+kf3: act birth translated: chan 0xc1d0016d:0xff040003 BORN Translated: token 0x1805 -> host 0x3002f in VasKey(13965663930517817456) gpfifo=0x1203c6000x2048 userd=Some(Sysmem { base: 10711598592, size: 512 }) engine=0x13 tsg=None kernel_by=PRIVILEGE=KERNEL ring
+kf3: chan 0xc1d0016d:0xff040003: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x3002f, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: act promote translated context: 0xc1d0016d:0xff040003 GPU_PROMOTE_CTX satisfied by Translated host 0x3002f GR=None VIDEO=Some((cafe3714, c9b0, 13)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (2 us, off the GSP lock)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xb: gp=0x20 pb=0xe00 (the host's answer)
+kf3: act birth translated: chan 0xc1d0016e:0xff040004 BORN Translated: token 0x806 -> host 0x10030 in VasKey(13965663930517817456) gpfifo=0x12051b000x2048 userd=Some(Sysmem { base: 10711599104, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KER
+kf3: chan 0xc1d0016e:0xff040004: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10030, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1c: gp=0x20 pb=0x80 (the host's answer)
+kf3: act birth translated: chan 0xc1d0016f:0xff040005 BORN Translated: token 0x2007 -> host 0xc0031 in VasKey(13965663930517817456) gpfifo=0x120522000x2048 userd=Some(Sysmem { base: 10711599616, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring
+kf3: chan 0xc1d0016f:0xff040005: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0xc0031, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: act promote translated context: 0xc1d0016f:0xff040005 GPU_PROMOTE_CTX satisfied by Translated host 0xc0031 GR=None VIDEO=Some((cafe3721, c9b7, 1c)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (2 us, off the GSP lock)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1c: gp=0x20 pb=0x80 (the host's answer)
+kf3: act birth translated: chan 0xc1d00170:0xff040006 BORN Translated: token 0x2008 -> host 0xc0032 in VasKey(13965663930517817456) gpfifo=0x120529000x2048 userd=Some(Sysmem { base: 10711600128, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring
+kf3: chan 0xc1d00170:0xff040006: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0xc0032, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: act promote translated context: 0xc1d00170:0xff040006 GPU_PROMOTE_CTX satisfied by Translated host 0xc0032 GR=None VIDEO=Some((cafe3728, c9b7, 1c)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (2 us, off the GSP lock)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x33: gp=0x20 pb=0x80 (the host's answer)
+kf3: act birth translated: chan 0xc1d00171:0xff040007 BORN Translated: token 0x2809 -> host 0x50033 in VasKey(13965663930517817456) gpfifo=0x120530000x2048 userd=Some(Sysmem { base: 10711600640, size: 512 }) engine=0x33 tsg=None kernel_by=PRIVILEGE=KERNEL ring
+kf3: chan 0xc1d00171:0xff040007: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x50033, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: act promote translated context: 0xc1d00171:0xff040007 GPU_PROMOTE_CTX satisfied by Translated host 0x50033 GR=None VIDEO=Some((cafe372f, c9fa, 33)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (3 us, off the GSP lock)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1c: gp=0x20 pb=0x80 (the host's answer)
+kf3: act birth translated: chan 0xc1d00172:0xff040008 BORN Translated: token 0x200a -> host 0xc0034 in VasKey(13965663930517817456) gpfifo=0x120538000x2048 userd=Some(Sysmem { base: 10624966656, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring
+kf3: chan 0xc1d00172:0xff040008: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0xc0034, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: act promote translated context: 0xc1d00172:0xff040008 GPU_PROMOTE_CTX satisfied by Translated host 0xc0034 GR=None VIDEO=Some((cafe3736, c9b7, 1c)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (2 us, off the GSP lock)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xb: gp=0x20 pb=0xe00 (the host's answer)
+kf3: VasKey(13965662590488021072) is a guest-KERNEL space (Translated chan 0xc1d00173:0xff040009): privileged leaves are mirrored here
+kf3: act birth translated: chan 0xc1d00173:0xff040009 BORN Translated: token 0x80b -> host 0x10035 in VasKey(13965662590488021072) gpfifo=0x200c4000x16384 userd=Some(Sysmem { base: 10624729088, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KER
+kf3: chan 0xc1d00173:0xff040009: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10035, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: act birth translated: chan 0xc1d00174:0xff04000a BORN Translated: token 0xc -> host 0x36 in VasKey(13965662590488021072) gpfifo=0x200ef000x16384 userd=Some(Sysmem { base: 10624729600, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL r
+kf3: chan 0xc1d00174:0xff04000a: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x36, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote translated context: 0xc1d00174:0xff04000a GPU_PROMOTE_CTX satisfied by Translated host 0x36 GR=Some((cafe3743, c9c0)) VIDEO=None entries=8 init_ids=0x5 va_ids=0xa7d bound=true — no guest buffer touched (2 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xb: gp=0x20 pb=0xe00 (the host's answer)
+kf3: VasKey(13965664055071869008) is a guest-KERNEL space (Translated chan 0xc1d00178:0xff04000b): privileged leaves are mirrored here
+kf3: act birth translated: chan 0xc1d00178:0xff04000b BORN Translated: token 0x80d -> host 0x10037 in VasKey(13965664055071869008) gpfifo=0x1200c4000x4096 userd=Some(Sysmem { base: 10712100864, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_v
+kf3: chan 0xc1d00178:0xff04000b: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10037, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: RPC-REFUSED #15 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the
+kf-rm: RPC-REFUSED #16 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 143)
+kf3: GSP REFUSED fn76/0x20809064=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 144)
+W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 145)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017a:0xff04000c->host 0x38] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017e:0xff04000d->host 0x39] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017a:0xff04000c->host 0x38] + 0 Translated ring(s); relays before after (187 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017e:0xff04000d->host 0x39] + 0 Translated ring(s); relays before after (200 us, off the GSP lock)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017a:0xff04000c->host 0x38] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017e:0xff04000d->host 0x39] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017f:0xff04000e->host 0x2003a] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLET
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00180:0xff04000f->host 0x3b] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00181:0xff040010->host 0x2003c] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLET
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017a:0xff04000c->host 0x38] + 0 Translated ring(s); relays before after (187 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017e:0xff04000d->host 0x39] + 0 Translated ring(s); relays before after (171 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0017f:0xff04000e->host 0x2003a] + 0 Translated ring(s); relays before after (174 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00180:0xff04000f->host 0x3b] + 0 Translated ring(s); relays before after (193 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00181:0xff040010->host 0x2003c] + 0 Translated ring(s); relays before after (176 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: RPC-REFUSED #17 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the
+kf-rm: RPC-REFUSED #18 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: walk capacity: slot 88 grown 1024 → 1792 runs
+kf3: walk capacity: re-walk (needs s88:1025); walk pool 1048576 runs, slot pool 2097152 runs (2074880 free), max per space 1048576, slots held 21, grows 28, retries 40, ceilings 1, largest slot 723968, largest walk 854272
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: walk capacity: re-walk (needs s91:1062); walk pool 1048576 runs, slot pool 2097152 runs (2074880 free), max per space 1048576, slots held 21, grows 28, retries 41, ceilings 1, largest slot 723968, largest walk 854272
+kf3: walk capacity: slot 91 grown 1024 → 1792 runs
+kf3: walk capacity: re-walk (needs s91:1067); walk pool 1048576 runs, slot pool 2097152 runs (2074112 free), max per space 1048576, slots held 21, grows 29, retries 42, ceilings 1, largest slot 723968, largest walk 854272
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: walk capacity: re-walk (needs s91:1830); walk pool 1048576 runs, slot pool 2097152 runs (2074112 free), max per space 1048576, slots held 21, grows 29, retries 43, ceilings 1, largest slot 723968, largest walk 854272
+kf3: walk capacity: slot 91 grown 1792 → 2816 runs
+kf3: walk capacity: re-walk (needs s91:1835); walk pool 1048576 runs, slot pool 2097152 runs (2073088 free), max per space 1048576, slots held 21, grows 30, retries 44, ceilings 1, largest slot 723968, largest walk 854272
+kf3: walk capacity: re-walk (needs s91:2826); walk pool 1048576 runs, slot pool 2097152 runs (2073088 free), max per space 1048576, slots held 21, grows 30, retries 45, ceilings 1, largest slot 723968, largest walk 854272
+kf3: walk capacity: slot 91 grown 2816 → 4352 runs
+kf3: walk capacity: re-walk (needs s91:2831); walk pool 1048576 runs, slot pool 2097152 runs (2071552 free), max per space 1048576, slots held 21, grows 31, retries 46, ceilings 1, largest slot 723968, largest walk 854272
+kf3: walk capacity: re-walk (needs s91:4358); walk pool 1048576 runs, slot pool 2097152 runs (2071552 free), max per space 1048576, slots held 21, grows 31, retries 47, ceilings 1, largest slot 723968, largest walk 854272
+kf3: walk capacity: slot 91 grown 4352 → 6656 runs
+kf3: walk capacity: re-walk (needs s91:4363); walk pool 1048576 runs, slot pool 2097152 runs (2069248 free), max per space 1048576, slots held 21, grows 32, retries 48, ceilings 1, largest slot 723968, largest walk 854272
+kf3: walk capacity: slot 91 grown 6656 → 10240 runs
+kf3: walk capacity: re-walk (needs s91:6659); walk pool 1048576 runs, slot pool 2097152 runs (2065664 free), max per space 1048576, slots held 21, grows 33, retries 49, ceilings 1, largest slot 723968, largest walk 854272
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00183:0xff040011->host 0x3d] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00184:0xff040012->host 0x2003e] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLET

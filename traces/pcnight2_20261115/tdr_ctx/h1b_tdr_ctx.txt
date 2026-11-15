@@ -1,0 +1,18 @@
+== attempt 1: polls=16 baseline_lke=0
+   first LKE guest=1794506168.5 -> host epoch 1794718971.8 (offset spread 1.0 s) -> qemu.log lines 12882..17020 (5 s window, 4138 lines)
+   heartbeats around: first trapped=2205206 applied=7484 refused=0 -> last trapped=2515915 applied=11042 refused=1
+   event counts in window: {'late': 183, 'refus': 86, 'unserviced': 173, 'disable_channels': 12, 'walk capacity': 16, 'mem large apply': 1}
+   large apply ms in window: [22]
+   sample non-heartbeat lines:
+      kf3: act engine object: 0xc1d00141:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x2004a -> host object 0xcafe18a3 (274 us, off the GSP lock)
+      kf3: GSP rpc RmControl seq=0
+      kf3: act timeslice: 0xc1d00141:0xff0e0000 SET_TIMESLICE 16000 us on 1 twin group(s) (162 us, off the GSP lock)
+      kf3: GSP rpc RmControl seq=0
+      kf3: act schedule: 0xc1d00141:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (298 us, off the GSP lock)
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+== attempt 2: polls=24 baseline_lke=2
+   no LiveKernelEvent seen
+== attempt 3: polls=22 baseline_lke=2
+   no LiveKernelEvent seen

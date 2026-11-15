@@ -1,0 +1,30 @@
+== attempt 1: polls=44 baseline_lke=0
+   first LKE guest=1794506611.7 -> host epoch 1794720776.6 (offset spread 2.3 s) -> qemu.log lines 26674..28135 (5 s window, 1461 lines)
+   heartbeats around: first trapped=3499269 applied=17399 refused=26 -> last trapped=3537535 applied=17881 refused=26
+   event counts in window: {'late': 54, 'unserviced': 92, 'refus': 9, 'disable_channels': 16, 'walk capacity': 16}
+   large apply ms in window: none
+   sample non-heartbeat lines:
+      kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00183:0xff040011->host 0x3d] 
+      kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00159:0xff0620a0 (eventData 0xffffd70ad9a0c220) after the host's disable+preempt returned
+      kf3: GSP rpc RmControl seq=0
+      kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00184:0xff040012->host 0x2003
+      kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00159:0xff0620a0 (eventData 0xffffd70ad9a3b690) after the host's disable+preempt returned
+      kf-mem: SKED-REFLECTED leaf 0x10120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+      kf3: GSP rpc RmControl seq=0
+      kf-mem: SKED-REFLECTED leaf 0x10120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+== attempt 2: polls=33 baseline_lke=2
+   no LiveKernelEvent seen
+== attempt 3: polls=19 baseline_lke=2
+   first LKE guest=1794507483.3 -> host epoch 1794721648.5 (offset spread 2.1 s) -> qemu.log lines 50950..54536 (5 s window, 3586 lines)
+   heartbeats around: first trapped=7522037 applied=30817 refused=26 -> last trapped=7625205 applied=34258 refused=26
+   event counts in window: {'unserviced': 123, 'refus': 86, 'disable_channels': 14, 'late': 169, 'walk capacity': 20, 'mem large apply': 3}
+   large apply ms in window: [22, 24, 25]
+   sample non-heartbeat lines:
+      kf3: GSP rpc Free seq=0
+      kf3: act free: 0xc1d002d6:0xff1fe02c: engine object host 0xcafe8b7e freed (339 us, off the GSP lock)
+      kf3: GSP rpc Free seq=0
+      kf3: GSP rpc Free seq=0
+      kf3: USER_RING_LIFECYCLE (c1d002d6, ff04000d) mode=Pointer Counts { entries_scan: 17, entries_pointer: 19, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refus
+      kf3: USER_RING_LAZY_OBSERVE (c1d002d6, ff04000d) turns=46 put_cache_hits=17 put_fresh_reads=26 obs_skipped=19 obs_unconditional=24 obs_forced_wait=2 obs_forced_low_credit
+      kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=0 emulated=0 forwarded=0 host=0x39 trap=0 fast=0
+      kf3: act free: 0xc1d002d6:0xff04000d: passthrough 0xc1d002d6:0xff04000d token 0xf host 0x39 objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4
