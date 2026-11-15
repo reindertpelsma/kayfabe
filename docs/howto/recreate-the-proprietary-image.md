@@ -52,7 +52,7 @@ The lifecycle of an image, in order. The numbered steps below carry the commands
 5. Test the backup the way CI would use it: a clone, the same fixed hardware identity, offline, the deterministic clock (steps 7 and 9).
 6. Pack it (step 9) and store it privately (step 10).
 
-The order of steps 3 and 4 is the point: see *Why the image is signed out before it is sealed* after step 11. Steps 9 to 11 are numbered in the order the maintainers did them; only the backup of step 8 must come before step 11.
+The order of steps 3 and 4 is the point: see *Why the sign-in state is revoked at the vendor before the image is distributed* after step 11. Steps 9 to 11 are numbered in the order the maintainers did them; only the backup of step 8 must come before step 11.
 
 ### 1. Choose a seed and create the state file
 
@@ -182,9 +182,9 @@ How known: the maintainers' upload to their own private bucket and a download wi
 
 Only now revoke the accounts: start the original (online) disk, or a separate copy of it, and sign out of every account, unlink the device, deregister keys on the vendors' own pages (for example the 3DMark key), change the password and end all sessions at each vendor, confirm on each vendor's website, then discard that disk. Never do this on the sealed image. Do it only after the backup exists: signing out or deregistering first would change the state the backup is meant to capture.
 
-How known: the maintainers did this after their upload, on an overlay of the packed disk, on 2026-11-12 (MEASURED that it was started; completion was by hand and is not shown by a file). Which vendor registrations the image still needs after this is NOT TESTED.
+How known: the maintainers did this after their upload, on an overlay of the packed disk, on 2026-11-12 (MEASURED that it was started; completion was by hand and is not shown by a file).
 
-#### Why the image is signed out before it is sealed
+#### Why the sign-in state is revoked at the vendor before the image is distributed
 
 PROCEDURE and DESIGN INTENT (owner decision, 2026-11-15). The tool cannot see vendor-side state, so nothing in the repository verifies it.
 
