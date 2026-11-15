@@ -62,6 +62,9 @@ What exists (CODE READ unless marked):
   `scripts/bench/box/merge_check.sh`. The `stable` job keeps clippy with its warning-debt ratchet, rustfmt,
   and every structure, boundary, claim and documentation gate. **Not run on hardware:** the box strip has
   never run on a rented box; the first `gpu-vast` run of a batch PR is its test.
+- **merge_check.sh options (2026-11-15, OWNER_RULINGS section AR).** `--no-fetch` (resolve the branch locally), `--tree PATH` (use a
+  checkout as is: no fetch, no worktree, no strip, so it is no merge claim) and `--gates --kf3 --host --fast --census` (run only the
+  named sections, in bar order). No option is the full bar as before. Tests: `scripts/ci/test_vast_merge_bar.py`.
 - **Oracles must run.** `crates/kf-chip/tests/hwref_is_current.rs` skipped (a printed line that cargo counts
   as a pass) when `third_party/ogkm-580` or `gcc` was absent. With `KF_REQUIRE_ORACLES` set to anything but
   empty or `0` an absence is a failure. The stripped job sets it (`merge_check.sh` exports it too, but the box merge bar fetches no oracle and runs no cargo test except the opt-in KVM stage, so no oracle test runs on a box today); a developer may leave it
