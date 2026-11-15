@@ -1536,3 +1536,173 @@ fn a_span_one_entry_over_the_default_cap_costs_two_calls() {
         assert!(m.bv.own.lock().unwrap().within(0, u64::MAX).is_empty());
     }
 }
+
+// ─── 8. 2026-11-15 (M4): a diff larger than the report is applied as WINDOWS ───────────────────
+//
+// `kf_diff_emit` cuts a diff that does not fit the report at a VA boundary no run straddles
+// (`diffmodel::cut_report`). The windows go through the REAL apply over the host model, each
+// committed before the next walk. Held to: the same committed placements and host translations as
+// one whole apply; the unchanged-translation guard (`arm_guard`: a page whose translation the guest
+// did not change is never unmapped, even transiently) never trips across the windows; nothing
+// foreign is touched. The counter-model, a PREFIX of the staged order, must fail the same checks.
+
+/// How a diff larger than the report is reported.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Cut {
+    /// `cut_report`: a closed window by address.
+    Window,
+    /// The first `cap` runs of the staged order (the naive cut, kept as a counter-model).
+    StagedPrefix,
+}
+
+/// One walk, windowed: repeat diff → report at most `cap` runs → real apply → commit, until the
+/// diff is empty. Returns the slot, the windows taken, and whether the report was refused.
+fn refresh_windows(
+    m: &dyn MapTarget,
+    com0: &diffmodel::Committed,
+    table: &[Pte],
+    cap: usize,
+    cut: Cut,
+) -> (diffmodel::Committed, usize, bool) {
+    let mut com = com0.clone();
+    let ram = |gpa: u64, len: u64| (gpa + len <= 1 << 30).then_some(gpa);
+    let cfg = cfg(&ram);
+    for window in 0..200 {
+        let d = diffmodel::diff(&com, &walk(table), usize::MAX / 2);
+        assert!(!d.overflow && !d.partial);
+        if d.runs.is_empty() {
+            return (com, window, false);
+        }
+        let rep: Vec<KfMapRun> = match cut {
+            Cut::Window => {
+                let c = diffmodel::cut_report(std::slice::from_ref(&d.runs), cap);
+                if c.truncated {
+                    return (com, window, true);
+                }
+                c.entries[0].clone()
+            }
+            Cut::StagedPrefix => d.runs[..cap.min(d.runs.len())].to_vec(),
+        };
+        let runs: Vec<DiffRun> = rep
+            .iter()
+            .map(|r| PermPolicy::default().diff_run(r))
+            .collect();
+        let out = apply_entry(m, &runs, &cfg);
+        let codes: Vec<AckCode> = out.codes.iter().map(|&c| ack(c)).collect();
+        com = diffmodel::commit(&com, &rep, &codes);
+    }
+    (com, 200, false)
+}
+
+/// Run `steps` random refreshes twice — whole, and windowed at `cap` — and return what differs:
+/// `(windowed steps, refused steps, violations)`. A violation is a transient of an unchanged page,
+/// a host/walker disagreement, a different committed set or a different host translation.
+fn windows_vs_whole(
+    seed: u64,
+    steps: usize,
+    low: bool,
+    cap: usize,
+    cut: Cut,
+) -> (usize, usize, Vec<String>) {
+    let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
+    let (sa, sb) = (
+        Sim::new(space(RESV_LO, RESV_HI)),
+        Sim::new(space(RESV_LO, RESV_HI)),
+    );
+    let (fa, fb) = (Faulty::new(&sa), Faulty::new(&sb));
+    let (ma, mb) = (FMirror::new(&fa, true, low), FMirror::new(&fb, true, low));
+    let mut table: Vec<Pte> = vec![None; PAGES as usize];
+    let (mut ca, mut cb) = (
+        diffmodel::Committed::default(),
+        diffmodel::Committed::default(),
+    );
+    let (mut windowed, mut refused) = (0usize, 0usize);
+    let mut bad = Vec::new();
+    for step in 0..steps {
+        let new = random_table(&mut rng, &table);
+        arm_guard(&sb, &table, &new);
+        let (c2, _) = refresh(&ma, &ca, &new, 1 << 30);
+        ca = c2;
+        let (c3, n, trunc) = refresh_windows(&mb, &cb, &new, cap, cut);
+        cb = c3;
+        let transient = core::mem::take(&mut sb.0.borrow_mut().transient);
+        sb.0.borrow_mut().guard.clear();
+        if trunc {
+            // One clump larger than the report: the legacy refusal. Bring B level the whole way.
+            refused += 1;
+            let (c4, _) = refresh(&mb, &cb, &new, 1 << 30);
+            cb = c4;
+        } else {
+            windowed += usize::from(n > 1);
+        }
+        table = new;
+        if let Some(t) = transient.first() {
+            bad.push(format!("step {step}: TRANSIENT {t}"));
+        }
+        if !trunc && ca.flat() != cb.flat() {
+            bad.push(format!("step {step}: committed placements differ"));
+        }
+        if let Err(e) = host_vs_walker(&sb, &cb) {
+            bad.push(format!("step {step}: {e}"));
+        }
+        if !trunc {
+            for i in 0..PAGES {
+                let (a, b) = (
+                    sa.0.borrow().translate(pg(i), Owner::Mirror),
+                    sb.0.borrow().translate(pg(i), Owner::Mirror),
+                );
+                if a != b {
+                    bad.push(format!(
+                        "step {step}: page {i}: whole {a:x?} windowed {b:x?}"
+                    ));
+                    break;
+                }
+            }
+        }
+        if !bad.is_empty() {
+            break;
+        }
+    }
+    (windowed, refused, bad)
+}
+
+/// ★ Windows end where the whole apply ends, and never transiently unmap an unchanged page.
+#[test]
+fn windowed_apply_ends_in_the_uncut_state_and_never_unmaps_an_unchanged_page() {
+    let (mut windowed, mut refused) = (0, 0);
+    for low in [false, true] {
+        for cap in [3usize, 5, 9, 17] {
+            for seed in 1..=60u64 {
+                let (w, r, bad) = windows_vs_whole(seed, 30, low, cap, Cut::Window);
+                assert!(bad.is_empty(), "low={low} cap {cap} seed {seed}: {bad:?}");
+                windowed += w;
+                refused += r;
+            }
+        }
+    }
+    assert!(
+        windowed > 300,
+        "only {windowed} steps needed more than one window"
+    );
+    eprintln!("windowed steps {windowed}, clump refusals {refused}");
+}
+
+/// The counter-model: reporting the first `cap` runs of the staged order breaks the same checks
+/// (an UNMAP and its overlapping MAP of another class split across reports, or an unchanged page
+/// unmapped for a while). If this ever passes clean, the test above has stopped being sensitive.
+#[test]
+fn a_staged_order_prefix_breaks_the_same_checks() {
+    let mut broken = 0;
+    for low in [false, true] {
+        for cap in [3usize, 5, 9] {
+            for seed in 1..=40u64 {
+                let (_, _, bad) = windows_vs_whole(seed, 30, low, cap, Cut::StagedPrefix);
+                broken += usize::from(!bad.is_empty());
+            }
+        }
+    }
+    assert!(
+        broken >= 10,
+        "a staged-order prefix broke only {broken} of 240 runs"
+    );
+}

@@ -18,8 +18,10 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 BATCH = "crates/kf-mem/src/batch.rs"
+MODEL = "crates/kf-cuda/src/diffmodel.rs"
+VASMGR = "crates/kf-mem/src/vasmgr.rs"
 FILES = {}
-for rel in (BATCH,):
+for rel in (BATCH, MODEL, VASMGR):
     with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
         FILES[rel] = f.read()
 
@@ -44,11 +46,25 @@ CASES = [
     ("default-cap-changed", changed(BATCH, "pub const UNMAP_CALL_MAX_ENTRIES: usize = 4096;", "pub const UNMAP_CALL_MAX_ENTRIES: usize = 4097;")),
     # The slow-call line loses its threshold.
     ("slow-line-no-threshold", changed(BATCH, "    if elapsed < std::time::Duration::from_millis(SLOW_UNMAP_CALL_MS) {\n        return None;\n    }", "    let _ = SLOW_UNMAP_CALL_MS;")),
+    # --- 2026-11-15 (M4): the report-capacity window (`diffmodel::cut_report`, the spec of kf_diff_emit's
+# cut, and the host's treatment of a CUT entry as partial). The kernel's own mutants are in
+# scripts/ci/walk_kernel_mutants.py (graded on the real source by kf_cpu_walk).
+    ("window-ignores-straddlers", changed(MODEL, "        let straddled = s.iter().any(|r| r.va < v && v < ends(r));", "        let straddled = false;")),
+    ("window-allows-one-more", changed(MODEL, "if !straddled && below <= allowed && below >= best.0 {", "if !straddled && below <= allowed + 1 && below >= best.0 {")),
+    ("window-is-a-staged-prefix", changed(MODEL, "out.entries[t] = s.iter().filter(|r| r.va < best.1).copied().collect();", "out.entries[t] = s[..allowed.min(s.len())].to_vec();")),
+    ("clump-never-refused", changed(MODEL, "    if best.0 == 0 && fbase == 0 {", "    if false {")),
+    ("later-entries-not-withheld", changed(MODEL, "        } else if t > f {\n            out.entries[t] = Vec::new();\n        }", "        }")),
+    ("cut-flag-never-set", changed(MODEL, "        out.cut[t] = t >= f && out.entries[t].len() < st.len();", "        out.cut[t] = false;")),
+    ("host-ignores-the-cut-flag", changed(VASMGR, "                partial: p.vas_flags & (kf_cuda::abi::KFWR_V_PARTIAL | kf_cuda::abi::KFWR_V_CUT)\n                    != 0,", "                partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,")),
+    ("host-reads-only-the-cut-flag", changed(VASMGR, "                partial: p.vas_flags & (kf_cuda::abi::KFWR_V_PARTIAL | kf_cuda::abi::KFWR_V_CUT)\n                    != 0,", "                partial: p.vas_flags & kf_cuda::abi::KFWR_V_CUT != 0,")),
+    ("cut-window-does-not-continue", changed(VASMGR, "                if progressed {\n                    partial.insert(key);\n                } else {", "                if false {\n                    partial.insert(key);\n                } else {")),
+    ("cut-window-retries-without-progress", changed(VASMGR, "                if progressed {\n                    partial.insert(key);\n                } else {", "                if true {\n                    partial.insert(key);\n                } else {")),
+    ("no-progress-stays-absence", changed(VASMGR, "                    absent_only.remove(&key);\n", "")),
     # The slow-call line loses its cap.
     ("slow-line-no-cap", changed(BATCH, "(n < SLOW_UNMAP_LOG_CAP).then(|| {", "(n < u32::MAX).then(|| {")),
 ]
 
-TESTS = ["-p", "kf-mem", "--lib", "--", "chunk", "a_zero_cap", "a_clean_span", "slow_unmap", "a_span_one_entry", "host_call_amplification"]
+TESTS = ["-p", "kf-mem", "-p", "kf-cuda", "--lib", "--", "chunk", "a_zero_cap", "a_clean_span", "slow_unmap", "a_span_one_entry", "host_call_amplification", "cut_report", "a_cut_report", "draining_a_diff", "windowed_apply", "a_staged_order_prefix", "a_split_over", "the_split_verdict", "an_invalidate_over", "a_window_carries", "a_clump_larger", "a_cut_entry", "a_withheld", "a_capacity_withheld", "a_refused_map_in_a_window", "a_window_in_which", "an_invalidate_over_a_window", "hostile_arguments"]
 
 
 def run(overrides):

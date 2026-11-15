@@ -1332,25 +1332,146 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
     }
 }
 
-/* ★ The report: every entry's staged diff, in entry order, dense. One block per
- * entry copies its own slice; block 0 writes the header. Each block derives its
- * base from the counts, so no extra launch orders them. */
+/* ★★★★★ 2026-11-15 (M4) — A DIFF LARGER THAN THE REPORT IS CUT AT A VA BOUNDARY, NOT REFUSED.
+ *
+ * ⊘ Was: `total > run_capacity` set KFWR_HF_TRUNCATED, wrote run_count 0 and no runs, and the host
+ * (which never retries a report-level truncation) refused the split and killed the channel
+ * (`[measured f4a b20fd84b]` "walk report TRUNCATED (runs 0 of 0)" at one diff of > 262 144 runs).
+ *
+ * The staged diff of one entry is EIGHT sorted lists, [UNMAP c0][MAP c0] ... [UNMAP c3][MAP c3],
+ * each VA-ascending and DISJOINT within itself (the committed placements of a class are disjoint;
+ * so are a class's walk runs). Taking a PREFIX of the staged order is NOT safe: it can leave a MAP in
+ * the report whose overlapping UNMAP (another page-size class) is not, and it separates an UNMAP from
+ * the MAP that carries its unchanged pages (the host would unmap what the guest did not change). So
+ * the cut is by ADDRESS: report every run, of every list, that STARTS below a boundary V, where
+ * no run straddles V (va < V < va+len). Then every run that overlaps a reported run is itself
+ * reported — the apply's pairing and ordering rules (`kf-mem` apply.rs: unchanged_pairs,
+ * fail_linked, maps_over) only ever relate OVERLAPPING runs — so the reported window is applied
+ * exactly as the same window of the whole diff would be, and what is left is untouched by it: the
+ * commit (per run, on ack) leaves it in the NEXT diff.
+ *
+ * The cut entry is the first whose running total passes the capacity; entries before it are whole,
+ * entries after it are withheld (empty, KFWR_V_CUT: their diff is also still to come). Each
+ * entry that is not whole carries KFWR_V_CUT, which the host treats as "walk again at once; the
+ * split / invalidate completes only on the walk whose diff is empty". The header carries
+ * KFWR_HF_CUT and NOT KFWR_HF_TRUNCATED (the commit ignores a truncated report).
+ *
+ * ⊘ If no boundary exists that reports at least one run of the first entry (ONE overlap-connected
+ * clump of runs larger than the report), nothing can be reported without splitting the clump: the
+ * legacy refusal stands (TRUNCATED, RUN_CAP, run_count 0), loudly.
+ *
+ * ⊘ Every thread of the block computes the cut itself (a few thousand reads of the staged lists);
+ * no shared memory and no barrier, so the same code runs on one CPU thread (kf_cpu_walk.cpp). */
+#define KF_CUT_LISTS 8u
+#define KF_CUT_ITERS (1u << 12)
+
+__device__ __forceinline__ uint32_t kf_stg_key(const KfMapRun &r)
+{
+    return kf_pcls(r.flags) * 2u + (r.op == KFWR_OP_MAP ? 1u : 0u);
+}
+
+/* off[j] = the first staged index whose list key is >= j (off[8] = n): the lists' bounds. The key
+ * never decreases along the staged order, so each bound is one binary search. */
+__device__ void kf_stg_lists(const KfMapRun *stg, uint32_t n, uint32_t *off)
+{
+    for (uint32_t j = 0u; j <= KF_CUT_LISTS; j++) {
+        uint32_t lo = 0u, hi = n;
+        while (lo < hi) {
+            const uint32_t m = (lo + hi) >> 1;
+            if (kf_stg_key(stg[m]) < j) lo = m + 1u; else hi = m;
+        }
+        off[j] = lo;
+    }
+}
+
+/* Runs of all lists that start below v. */
+__device__ uint32_t kf_cut_count(const KfMapRun *stg, const uint32_t *off, uint64_t v)
+{
+    uint32_t c = 0u;
+    for (uint32_t j = 0u; j < KF_CUT_LISTS; j++) c += kf_n_lt(stg + off[j], off[j + 1u] - off[j], v);
+    return c;
+}
+
+/* The start of the first run of any list that straddles v (va < v < end), or v when none does. */
+__device__ uint64_t kf_cut_straddler(const KfMapRun *stg, const uint32_t *off, uint64_t v)
+{
+    uint64_t first = v;
+    for (uint32_t j = 0u; j < KF_CUT_LISTS; j++) {
+        const uint32_t k = kf_n_lt(stg + off[j], off[j + 1u] - off[j], v);
+        if (k == 0u) continue;
+        const KfMapRun &r = stg[off[j] + k - 1u];
+        if (kf_end(r) > v && r.va < first) first = r.va;
+    }
+    return first;
+}
+
+/* ★ The largest straddle-free boundary that reports at most `allowed` of the entry's `n` staged runs
+ * (n > allowed). Fills the lists' bounds and `pre[j]` = how many of list j are reported; returns the
+ * number reported (0: no boundary reports anything). */
+__device__ uint32_t kf_cut_point(const KfMapRun *stg, uint32_t n, uint32_t allowed, uint32_t *off, uint32_t *pre)
+{
+    kf_stg_lists(stg, n, off);
+    /* The largest v with count(v) <= allowed. count is non-decreasing in v; count(0) == 0 and
+     * count(~0) > allowed (n > allowed and every va is below 2^64 - 1 in a guest of 49 bits). */
+    uint64_t lo = 0ull, hi = ~0ull;
+    while (hi - lo > 1ull) {
+        const uint64_t mid = lo + ((hi - lo) >> 1);
+        if (kf_cut_count(stg, off, mid) <= allowed) lo = mid; else hi = mid;
+    }
+    uint64_t v = lo;
+    for (uint32_t it = 0u; it < KF_CUT_ITERS; it++) {
+        const uint64_t s = kf_cut_straddler(stg, off, v);
+        if (s == v) break;
+        v = s;                 /* strictly lower: a run start below v */
+        if (it + 1u == KF_CUT_ITERS) return 0u;
+    }
+    uint32_t total = 0u;
+    for (uint32_t j = 0u; j < KF_CUT_LISTS; j++) {
+        pre[j] = kf_n_lt(stg + off[j], off[j + 1u] - off[j], v);
+        total += pre[j];
+    }
+    return total;
+}
+
+/* ★ The report: every entry's staged diff, in entry order, dense (a diff larger than the report is
+ * cut: see above). One block per entry copies its own slice; block 0 writes the header. Each block
+ * derives its base from the counts, so no extra launch orders them. */
 __global__ void kf_diff_emit(KfArgs a)
 {
     const uint32_t t = blockIdx.x;
     KfDev *d = a.dev;
     const uint32_t cap_pdb = d->pdb_capacity < KF_MAX_PDB ? d->pdb_capacity : KF_MAX_PDB;
     const uint32_t np = a.npdb < cap_pdb ? a.npdb : cap_pdb;
+    const uint32_t cap = d->run_capacity;
     uint32_t base = 0u, total = 0u;
+    /* f: the first entry whose running total passes the report's capacity (np: none);
+     * fbase: the runs of the entries before it. */
+    uint32_t f = np, fbase = 0u;
     for (uint32_t u = 0u; u < np; u++) {
         if (u < t) base += d->diff_count[u];
+        if (f == np && total + d->diff_count[u] > cap) { f = u; fbase = total; }
         total += d->diff_count[u];
     }
-    const bool trunc = total > d->run_capacity;
+    /* The cut entry's window, computed by whoever needs it — block 0 (the header), block f (the
+     * copy), every block after f (an entry the cut withheld starts where the report ends, so the
+     * entries' first_run never decreases: the host's validator checks the order), and every block
+     * while nothing precedes f (whether the report is refused outright depends on it): the same
+     * function of the same staged data. */
+    uint32_t off[KF_CUT_LISTS + 1u], pre[KF_CUT_LISTS];
+    uint32_t fcut = 0u;
+    if (f < np && (t == 0u || t >= f || fbase == 0u)) {
+        const KfMapRun *fstg = kf_scr(a, a.lay->walk_off[f]) + a.lay->walk_cap[f];
+        fcut = kf_cut_point(fstg, d->diff_count[f], cap - fbase, off, pre);
+    }
+    /* Nothing can be reported at all: one clump larger than the report is the first thing in it. */
+    const bool trunc = f < np && fcut == 0u && fbase == 0u;
+    const bool cut = f < np && !trunc;
+    const uint32_t emitted = trunc ? 0u : (cut ? fbase + fcut : total);
     if (t == 0u && threadIdx.x == 0u) {
         d->generation += 1ull;
         uint32_t flags = d->hdr_flags | KFWR_HF_DIFF;
         if (trunc) flags |= KFWR_HF_TRUNCATED;
+        if (cut) flags |= KFWR_HF_CUT;
         if (a.npdb > cap_pdb) {
             flags |= (KFWR_HF_TRUNCATED | KFWR_HF_PDB_TRUNCATED);
             atomicOr(&d->refuse_mask, KFWR_R_PDB_CAP);
@@ -1367,7 +1488,7 @@ __global__ void kf_diff_emit(KfArgs a)
         h.acked_generation = d->committed;
         h.pdb_count = np;
         h.pdb_capacity = d->pdb_capacity;
-        h.run_count = trunc ? 0u : total;
+        h.run_count = emitted;
         h.run_capacity = d->run_capacity;
         h.entries_visited = d->entries_visited;
         h.refusals = d->refusals;
@@ -1386,15 +1507,27 @@ __global__ void kf_diff_emit(KfArgs a)
         *a.hdr = h;
     }
     if (t >= np) return;
-    const uint32_t n = trunc ? 0u : d->diff_count[t];
+    /* What this entry reports: all of it, the cut window (entry f), or nothing (after f, or all). */
+    const uint32_t dn = d->diff_count[t];
+    const bool mine = cut && t == f;
+    const uint32_t n = trunc ? 0u : (cut ? (t < f ? dn : (mine ? fcut : 0u)) : dn);
     const KfMapRun *stg = kf_scr(a, a.lay->walk_off[t]) + a.lay->walk_cap[t];
-    for (uint32_t k = threadIdx.x; k < n; k += blockDim.x) a.rrun[base + k] = stg[k];
+    if (mine) {
+        uint32_t o = 0u;
+        for (uint32_t j = 0u; j < KF_CUT_LISTS; j++) {
+            for (uint32_t k = threadIdx.x; k < pre[j]; k += blockDim.x) a.rrun[base + o + k] = stg[off[j] + k];
+            o += pre[j];
+        }
+    } else {
+        for (uint32_t k = threadIdx.x; k < n; k += blockDim.x) a.rrun[base + k] = stg[k];
+    }
     if (threadIdx.x == 0u) {
         KfPdbEntry e;
         e.pdb = a.pdbs[t];
-        e.first_run = trunc ? 0u : base;
+        e.first_run = trunc ? 0u : ((cut && t > f) ? fbase + fcut : base);
         e.run_count = n;
-        e.vas_flags = d->diff_vflags[t] | (d->entry_refuse[t] ? KFWR_V_REFUSED : 0u);
+        e.vas_flags = d->diff_vflags[t] | (d->entry_refuse[t] ? KFWR_V_REFUSED : 0u)
+                    | ((cut && n < dn) ? KFWR_V_CUT : 0u);
         e.reserved = a.slots[t];
         /* low 32: which refusals, for the host to name; high 32: the capacity it needed (w829) */
         e.reserved2 = (uint64_t)d->entry_refuse[t] | ((uint64_t)d->need[t] << 32);
