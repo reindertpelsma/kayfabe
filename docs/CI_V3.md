@@ -27,6 +27,10 @@ generated display files reproduce byte for byte):
   vetoes, review 3 F-1) and requires each mutant to fail at least two distinct `kf_cpu_walk` checks.
 - `scripts/ci/va_apply_bounds_mutants.py` (Rust job, 2026-11-15) mutates the host unmap-call cap in `crates/kf-mem/src/batch.rs`
   (`UNMAP_CALL_MAX_ENTRIES`) and requires each mutant to fail at least two named `kf-mem` tests.
+- `scripts/ci/windows_profile_mutants.py` (Rust job, 2026-11-15) mutates the Windows support profile's identity gates (`kf-rm` `winprofile.rs`, the
+  chain and channel links, `kf-qemu` channel birth, the mirror-space start and the display colour path) and requires each mutant to fail at least two
+  named tests. The tests are the proof that a Linux guest, an undeclared guest and a `windows-support=off` VM reach none of the profile
+  (`crates/kf-rm/tests/windows_profile_chain.rs` and the unit tests it names).
 - `static` also ties the VER3 PCF enumerants the kernel names (`KF_VER3_*`) to
   `crates/kf-chip/data/hwref-580.159.04.tsv`.
 

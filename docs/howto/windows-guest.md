@@ -47,6 +47,10 @@ apt-get install -y ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorri
 ```
 <!-- src: scripts/bench/windows/README.md -->
 
+### Windows needs no flags
+
+*(Since 2026-11-15.)* `win_vm.sh run` boots Windows with **no `KF3_*` environment file**. kayfabe's Windows support set (the kernel graphics tier, per-process channel passthrough, the deferred-API and software-runlist objects, host-owned scheduling, async preempt, the colour path, and the answers to the preemption, zcull, display-control and GFX pool queries that the Windows driver needs) is on by default and is selected by what the guest declares about itself when its driver starts: a Linux guest on the same device never reaches it. Some of those answers are made up by kayfabe, not taken from the GPU (the GFX pool sizes; `NV_OK` for the preemption and zcull binds with nothing bound on the host); they were measured as required by the Windows driver and are product behaviour for a declared Windows guest only. To make a VM Linux-only, set the device property `windows-support=off` ([Running the QEMU device](installing.md)); a Windows guest on such a VM is refused by name at its first Windows-only control [expected to end in Code 43; not measured]. **[Not yet run on hardware without an env file: the change was made 2026-11-15 from the measured env-file profile (RTX 4090, `windows_apps` 10/10); the first proof is the Windows gate on a rented box with no env file.]** <!-- src: docs/design/V3_WINDOWS_SUPPORT_PROFILE.md, docs/OWNER_RULINGS.md section W -->
+
 ### What it sets up
 
 | Piece | How |
@@ -93,7 +97,7 @@ Other sub-commands in the script's header: `scp-to`, `scp-from`, `sign` (export 
 | `--detach` | Run in the background. |
 | `--no-rpc-trace` | Do not set `KF3_RPC_TRACE=1` (on by default for kayfabe runs). |
 | `--tag`, `--max-boots` | Name the run; limit restarts (default 12). |
-| `--env-file FILE` | Export the `KF3_*` flags listed in FILE (only `KF3_NAME=digits` lines and `#` comments are accepted). Added 2026-10-31; the sample `kf3_flags.sample.env` is not confirmed as the current production list. |
+| `--env-file FILE` | Export the `KF3_*` flags listed in FILE (only `KF3_NAME=digits` lines and `#` comments are accepted). Not needed to start Windows (since 2026-11-15 the Windows profile is the device's default); for measurement flags only, and `kf3_flags.sample.env` is a one-line example. |
 | `--dry-run` | Print the QEMU command line and exit; start nothing. |
 
 <!-- src: scripts/bench/windows/README.md; scripts/bench/windows/win_vm.sh (cmd_run) -->

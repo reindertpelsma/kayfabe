@@ -135,6 +135,10 @@ jobs:
       # The host unmap-call cap (crates/kf-mem/src/batch.rs `UNMAP_CALL_MAX_ENTRIES`, 2026-11-15): each mutant needs two named killers.
       - name: Host unmap-call cap mutations require two named killers each
         run: python3 scripts/ci/va_apply_bounds_mutants.py
+      # The Windows support profile (2026-11-15: kf-rm winprofile and the chain/channel links, kf-qemu channel birth, mirror-space
+      # start and display colour path; "a Linux guest, an undeclared guest and windows-support=off reach none of it"): each mutant needs two named killers.
+      - name: Windows support profile mutations require two named killers each
+        run: python3 scripts/ci/windows_profile_mutants.py
       - name: v3 dependency isolation and CI guard self-tests
         run: |
           python3 scripts/ci/dependencies.py
