@@ -74,6 +74,8 @@ d. Seeders, only as an optimisation (section 4: deferred, so this source is empt
 - Details of offline verification of an attestation: `gh attestation verify` needs network access to GitHub unless the attestation bundle is checked offline; whether the publish job can store the bundle beside the object in R2 so that a box can check it without the Worker is untested.
 - Whether a pull request from a fork can be attested at all beyond the read-only-token statement above (that statement is the owner's, not tested here).
 
+*(2026-11-15 note, still DESIGN-ONLY: the install-flow stage, `scripts/ci/install_flow.py`, defines the consumer side of the attested binary as `resolve_binary(sha)`, which returns a verified path or None (= compile the documented way). It returns None today and refuses `--attested-binary`. The download client, `gh attestation verify` and the publish job are the later steps above and are not built.)*
+
 ## 3. Trust table
 
 **OWNER DECISION (2026-11-13).**
