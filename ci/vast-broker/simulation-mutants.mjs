@@ -153,6 +153,10 @@ try {
     'scripts/ci/payload_instruction.py',
     'scripts/ci/box_downloader.py',
     'scripts/ci/kf_fetch.py',
+    'scripts/ci/llm_parity.py',
+    'scripts/ci/llm_parity_arm.py',
+    'scripts/ci/llm_parity_pins.json',
+    'scripts/ci/llm_parity_hook.sh',
   ]) {
     mkdirSync(dirname(join(scratch, path)), { recursive: true });
     cpSync(join(repo, path), join(scratch, path));

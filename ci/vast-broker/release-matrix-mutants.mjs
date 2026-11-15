@@ -131,6 +131,10 @@ const files = [
   'scripts/ci/payload_instruction.py',
   'scripts/ci/box_downloader.py',
   'scripts/ci/kf_fetch.py',
+  'scripts/ci/llm_parity.py',
+  'scripts/ci/llm_parity_arm.py',
+  'scripts/ci/llm_parity_pins.json',
+  'scripts/ci/llm_parity_hook.sh',
   'scripts/bench/native_xid_guard.py',
   'scripts/bench/native_fault_names.json',
 ];

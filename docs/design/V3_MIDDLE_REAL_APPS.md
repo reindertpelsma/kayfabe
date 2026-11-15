@@ -37,7 +37,7 @@ CODE READ: `TIER_CONTENTS` in `src/tier.js` records the inheritance. Both
 `ci/vast-broker/defaults.json` and the payload's `STAGE_SLOTS` reserve `llm_parity` for large
 with state `DESIGN_ONLY`. Owner configuration cannot enable it through `RELEASE_STAGES`;
 `KF_STAGES=llm_parity`, alone or with SPEC, is refused before work. The existing fat-guest
-`llm_parity.sh` is not a CI stage adapter and is not invoked here. A short llama.cpp probe in
+`llm_parity.sh` is not a CI stage adapter and is not invoked here (2026-11-15: the stage adapter is `scripts/ci/llm_parity.py`, [V3_LLM_PARITY_STAGE.md](V3_LLM_PARITY_STAGE.md), manual-only and never run on a box). A short llama.cpp probe in
 the app list is not qualification of that real workload. SPEC keeps its existing `KF_STAGES`
 / `KF_SPEC` plumbing. No LLM execution is wired and no large-tier qualification is claimed.
 

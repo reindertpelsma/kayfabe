@@ -338,6 +338,72 @@ def compact_diagnostics(records):
     return result
 
 
+def _lp_positive(v):
+    return type(v) in (int, float) and math.isfinite(v) and v > 0
+
+
+def _lp_finite(v):
+    return type(v) in (int, float) and math.isfinite(v) and v >= 0
+
+
+def _lp_int(v, lo=0, hi=2**62):
+    return type(v) is int and lo <= v <= hi
+
+
+def _lp_arm(a):
+    """One arm of the llm_parity record (scripts/ci/llm_parity.py, arm_record): raw counts and the rates the stage computed."""
+    keys = {"ran", "tok_s", "eval_count", "eval_duration_ns", "text_sha256", "load_ms", "create_secs", "size", "size_vram", "gpu", "share_read"}
+    if type(a) is not dict or set(a) != keys or a["ran"] is not True:
+        return False
+    if not all(type(a[k]) is list and 1 <= len(a[k]) <= 8 for k in ("tok_s", "eval_count", "eval_duration_ns")):
+        return False
+    ok = len(a["tok_s"]) == len(a["eval_count"]) == len(a["eval_duration_ns"])
+    ok = ok and all(r is None or _lp_positive(r) for r in a["tok_s"]) and all(_lp_int(v) for v in a["eval_count"] + a["eval_duration_ns"])
+    ok = ok and type(a["text_sha256"]) is str and re.fullmatch("[0-9a-f]{64}", a["text_sha256"]) is not None
+    ok = ok and _lp_finite(a["load_ms"]) and _lp_finite(a["create_secs"]) and _lp_int(a["size"]) and _lp_int(a["size_vram"])
+    ok = ok and type(a["gpu"]) is str and len(a["gpu"]) <= 80
+    sr = a["share_read"]
+    return ok and type(sr) is dict and set(sr) == {"model", "ollama"} and all(
+        type(v) is dict and set(v) == {"bytes", "read_secs", "MBps"} and _lp_int(v["bytes"], 0, 1 << 42)
+        and _lp_finite(v["read_secs"]) and _lp_finite(v["MBps"]) for v in sr.values())
+
+
+def validate_llm_parity(value):
+    """The llm_parity stage's record: bounded, read and validated, not forwarded. The ratio is data: nothing here compares it with
+    a target (OWNER_RULINGS section AS item 8: parity is reported, never a gate), and `ratio.gate` must be false."""
+    keys = {"schema", "sha", "verdict", "transport", "ollama_version", "items", "arms", "reason", "ratio", "agreement", "detail"}
+    ok = type(value) is dict and {"schema", "sha", "verdict", "transport", "ollama_version", "items", "arms"} <= set(value) <= keys
+    ok = ok and value["schema"] == 1 and value["verdict"] in ("PASS", "FAIL")
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    ok = ok and value["transport"] in ("virtiofs", "9p", "none")
+    ok = ok and type(value["ollama_version"]) is str and re.fullmatch(r"[A-Za-z0-9._+-]{1,40}", value["ollama_version"]) is not None
+    ok = ok and type(value["items"]) is dict and set(value["items"]) <= {"model", "ollama", "virtiofsd"} and all(
+        type(v) is dict and set(v) == {"sha256", "size"} and type(v["sha256"]) is str
+        and re.fullmatch("[0-9a-f]{64}", v["sha256"]) is not None and _lp_int(v["size"], 1, 1 << 42) for v in value["items"].values())
+    ok = ok and type(value["arms"]) is dict and set(value["arms"]) <= {"host", "guest"} and all(_lp_arm(a) for a in value["arms"].values())
+    if ok and "reason" in value:
+        ok = type(value["reason"]) is str and re.fullmatch("[a-z0-9_]{1,48}", value["reason"]) is not None and value["verdict"] == "FAIL"
+    ok = ok and (value["verdict"] == "PASS" or "reason" in value)
+    ok = ok and ("detail" not in value or (type(value["detail"]) is str and len(value["detail"]) <= 200))
+    if ok and "ratio" in value:
+        r = value["ratio"]
+        ok = type(r) is dict and set(r) == {"state", "value", "host_tok_s", "guest_tok_s", "min", "preferred", "meets_min", "meets_preferred", "gate"}
+        ok = ok and r["state"] in ("OK", "INVALID") and r["gate"] is False and r["min"] == 0.9 and r["preferred"] == 0.95
+        ok = ok and all(r[k] is None or _lp_positive(r[k]) for k in ("value", "host_tok_s", "guest_tok_s"))
+        ok = ok and (r["state"] == "OK") == (r["value"] is not None)
+        ok = ok and all(r[k] is None or type(r[k]) is bool for k in ("meets_min", "meets_preferred"))
+    if ok and "agreement" in value:
+        a = value["agreement"]
+        ok = type(a) is dict and set(a) == {"mode", "equal", "distinct_texts", "token_ids_compared"} and a["mode"] == "exact"
+        ok = ok and type(a["equal"]) is bool and _lp_int(a["distinct_texts"], 0, 64) and type(a["token_ids_compared"]) is bool
+    if ok and value["verdict"] == "PASS":
+        ok = set(value["arms"]) == {"host", "guest"} and "reason" not in value and value.get("ratio", {}).get("state") == "OK" and (
+            value.get("agreement", {}).get("equal") is True)
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 16384
+    if not ok:
+        raise ValueError("llm_parity")
+
+
 def validate_matrix_receipts(value):
     """Bounded evidence claims; selected drivers/required rows are checked by the Worker."""
     axes = {"host_driver", "linux_guest_driver", "windows_guest_driver"}
@@ -381,6 +447,7 @@ def read_result_file(path):
             "matrix_receipts",
             "instruction_sha256",
             "selection",
+            "llm_parity",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
@@ -389,6 +456,8 @@ def read_result_file(path):
             type(doc["instruction_sha256"]) is str and re.fullmatch("[0-9a-f]{64}", doc["instruction_sha256"])
         ):
             raise ValueError("instruction hash")
+        if "llm_parity" in doc:
+            validate_llm_parity(doc["llm_parity"])
         if "selection" in doc and not (
             type(doc["selection"]) is dict and set(doc["selection"]) == {"only", "skip"}
             and all(type(v) is list and len(v) <= 16 and all(type(x) is str and len(x) <= 32 for x in v)

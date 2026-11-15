@@ -55,7 +55,8 @@ the coordinator and the owner agreed; it is binding as intent and can still chan
   `mid`, which is a superset of `small`. The old approximate app/time target is superseded by
   the exact lists and guarded budget above. No app is silently dropped to fit. Large inherits
   middle and adds SPEC plus a real LLM workload; `llm_parity` is reserved and refused until its
-  CI adapter exists. See the linked middle-apps design for historical timing sources.
+  CI adapter exists (2026-11-15: the adapter exists as a manual-only payload stage, `--only llm_parity`, never run on a box and with every pin
+  UNSET: [V3_LLM_PARITY_STAGE.md](V3_LLM_PARITY_STAGE.md); the Worker's slot and `KF_STAGES=llm_parity` are still refused). See the linked middle-apps design for historical timing sources.
 - **OPEN:** the exact middle-tier rotation order and the fallback die when the rotation's die has no
   offer.
 

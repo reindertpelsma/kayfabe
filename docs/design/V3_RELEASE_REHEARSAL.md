@@ -67,7 +67,7 @@ SPEC lane A 169, lane B 133) and the 300 minute hard limit are unchanged. In the
 request runs the **middle** app profile in large (`apps_gate_list(root, "middle")`); the legacy source
 flag `APPS_STAGE_ENABLED` (off) keeps its old large profile.
 `TIER_CONTENTS.large.state` is `APPS_SENT` (the apps pair is sent; the tier as a whole is still not
-executable); `llm_parity` stays DESIGN_ONLY and SPECviewperf keeps its own slot state in `defaults.json`.
+executable); `llm_parity` stays DESIGN_ONLY (2026-11-15: its payload stage now exists as manual-only code, never run on a box, pins UNSET: [V3_LLM_PARITY_STAGE.md](V3_LLM_PARITY_STAGE.md); the Worker slot is unchanged) and SPECviewperf keeps its own slot state in `defaults.json`.
 
 **Which leg carries the apps (review S1, 2026-11-12).** Without SPEC every large leg carries the apps pair. With SPEC (two lane legs) only the LAST lane leg (lane B, 133 minute guard) carries it: the apps and Windows start guards do not reserve SPEC's time, so apps before lane A (169 minutes) would starve it on a slow host and a `specviewperf_retry_time` RETRY would trigger a paid rerun. Chosen over adding SPEC's time to the apps guards because that would make lane A refuse the apps on every host (245 + 169 > 290). The first rehearsal keeps `RELEASE_RERUNS_PER_LEG=0` so a timing RETRY cannot silently re-rent.
 

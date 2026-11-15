@@ -1,5 +1,5 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: LIVE, 2026-11-15 (box downloader `box_downloader.py`, built and tested GPU-free, run on no box and wired into no stage; payload `--instruction FILE`, `--only/--skip/--dry-run`: GPU-free tests only, no box has run them; the rest of this page is as of 2026-11-06) (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
+STATUS: LIVE, 2026-11-15 (`llm_parity` payload stage, manual-only, every pin UNSET so it refuses, run on no box; box downloader `box_downloader.py`, built and tested GPU-free, run on no box and wired into no stage; payload `--instruction FILE`, `--only/--skip/--dry-run`: GPU-free tests only, no box has run them; the rest of this page is as of 2026-11-06) (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
 claude/vast-payload-p7-20261024). MEASURED 2026-10-25: a real Vast box booted with the
 protocol-7 setup but had not yet reported to the Worker, so protocol 7 has no end-to-end run on a
 real box yet. The evidence below is for the pre-port payload. MEASURED: run `v9-xid-kvm-20261023`, source
@@ -154,3 +154,27 @@ root payload, which can read `/run/kf-ci/env` today. The payload's only hook is 
 MANIFEST` (prints `KF_PAYLOAD_PREFETCH ...` for the planned stages); without `--dry-run` it is refused. Not done: starting the
 downloader from the payload, a stage calling `wait`, apt (design source c), seeders (deferred), the real manifest for the
 SPEC and Windows media, disk reservation of unpack space beyond `--reserve-gb`.
+
+
+## `llm_parity` payload stage (`llm_parity.py`, 2026-11-15; depends on the box downloader above)
+
+GPU-free tests only (`test_llm_parity.py`; mutants `llm_parity_mutants.py`, two named killers each, in `ci.yml`). **Never run on a box,
+and every input pin is UNSET, so the stage refuses (`unpinned`, exit 1, one `KF_LLM_PARITY_RESULT` record naming it).** Design, the
+findings on virtio-fs, kf3 and the guest kernel, and the first-run checklist: [V3_LLM_PARITY_STAGE](../../docs/design/V3_LLM_PARITY_STAGE.md).
+It is manual-only: `vast_payload.py --only llm_parity` (large tier), in no default plan (`LLM_PARITY_IN_LARGE = False`); the Worker's
+`llm_parity` slot is still DESIGN-ONLY and `KF_STAGES=llm_parity` is still refused.
+
+```sh
+python3 scripts/ci/llm_parity.py plan            # the plan and the pin state, runs nothing
+python3 scripts/ci/llm_parity.py check           # exit 0 only when every item the transport needs is pinned (3 otherwise)
+python3 scripts/ci/vast_payload.py --dry-run --instruction I.json --only llm_parity     # the plan with the stage in it
+```
+
+What it does: fetches the model (a GGUF), the ollama tarball and (virtio-fs only) virtiofsd **once** through `box_downloader.py` (the
+pins file `llm_parity_pins.json` becomes a `kayfabe.download-manifest/1`), puts model and tarball alone in a read-only directory, runs
+the host arm (`llm_parity_arm.py`, one file for both arms), runs `virtiofsd` as uid 65534 without capabilities exporting that directory
+read-only (`--sandbox none`, no DAX), boots the Linux guest with `vhost-user-fs-pci` (9p only if the QEMU build lacks it), mounts it
+read-only in the guest, and runs the same arm there. PASS = both arms ran, every run printed the same text, the whole model sat in GPU
+memory on both, the timings are usable, the ratio is recorded. **The ratio (guest/host decode tok/s; targets 0.90 and preferably 0.95)
+is reported and never gates**: `ratio.gate` is always false. The kf3 QEMU build (`build_kf3.sh`) has neither device until
+`--enable-vhost-user` (and `--enable-virtfs` for 9p) is added; the stage refuses with `no_share_transport` until then.

@@ -1485,11 +1485,43 @@ def instruction_from_file(path, environ):
         raise EvidenceError("preflight") from None
 
 
-def plan_stage_names(i):
+# 2026-11-15 llm_parity (docs/design/V3_LLM_PARITY_STAGE.md): the same LLM on the host and in the Linux guest, the model and ollama
+# fetched ONCE through the box downloader and shared read-only with the guest (virtio-fs; 9p only as the documented fallback), by
+# scripts/ci/llm_parity.py. LARGE tier only. It has run on no box and its pins are UNSET, so it is NOT in the default large plan:
+# it is planned only when named by --only. Joining the release tier = flip LLM_PARITY_IN_LARGE to True in the commit that also records
+# its first green box run, with a payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
+# The Worker's `llm_parity` stage slot stays DESIGN_ONLY (STAGE_SLOTS, defaults.json): KF_STAGES=llm_parity is still refused.
+# PARITY IS REPORTED, NEVER A GATE (OWNER_RULINGS section AS item 8): the verdict never reads the ratio.
+LLM_PARITY_IN_LARGE = False
+# stages with no budget row (scripts/ci/profile_resources.py): planned only by --only; the guard refuses one whose flag is True
+MANUAL_ONLY_STAGES = {"llm_parity": "LLM_PARITY_IN_LARGE"}
+LLM_PARITY_MIN_REMAINING_MS = 60 * 60 * 1000  # DESIGN value, unmeasured: downloads + one guest boot + two arms of one small model
+LLM_PARITY_WORK = "/workspace/kf-llm-parity"
+
+
+def llm_parity_rows(text, rc, sha, result):
+    """One KF_LLM_PARITY_RESULT line, kept in the result file even when it is red. PASS = both arms ran, output agrees, the
+    ratio is recorded (the record says so itself); the ratio's value is never read here."""
+    found = re.findall(r"^KF_LLM_PARITY_RESULT (\{.*\})$", text, re.M)
+    if len(found) != 1:
+        raise EvidenceError("llm_parity")
+    try:
+        doc = json.loads(found[0])
+    except ValueError:
+        raise EvidenceError("llm_parity") from None
+    result["llm_parity"] = doc
+    if rc or type(doc) is not dict or doc.get("verdict") != "PASS" or doc.get("sha") != sha:
+        raise EvidenceError("llm_parity")
+    return [row("llm_parity", 1)]
+
+
+def plan_stage_names(i, only=()):
     """The stages main() builds for this instruction, in run order (main checks its own list against this)."""
     names = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
     if i.linux_apps is not None:
         names.append("apps")
+    if i.tier == "large" and (LLM_PARITY_IN_LARGE or "llm_parity" in only):
+        names.append("llm_parity")
     if i.windows:
         names.append("windows_gate")
         if i.winapps:
@@ -1568,7 +1600,7 @@ def plan_only(args, root):
     """--dry-run / --emit-instruction: no directory, device or result file is touched."""
     try:
         inst, digest = build_instruction(args, os.environ)
-        plan = plan_stage_names(inst)
+        plan = plan_stage_names(inst, args.only)
         chosen = select_stages(plan, args.only, args.skip)
         if inst.spec:
             spec_table(root)
@@ -1625,7 +1657,7 @@ def main():
         windows, tier, windows_runs = instruction.windows, instruction.tier, instruction.windows_runs
         extra_stages, spec, winapps = list(instruction.stages), instruction.spec, instruction.winapps
         apps_tier, linuxapps = instruction.linux_apps, instruction.linux_apps is not None
-        plan = plan_stage_names(instruction)
+        plan = plan_stage_names(instruction, args.only)
         selected = select_stages(plan, args.only, args.skip)
         if args.only or args.skip:
             result["selection"] = {"only": args.only, "skip": args.skip}
@@ -1812,6 +1844,20 @@ def main():
             stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS + (
                 WINDOWS_MIN_REMAINING_MS + (WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0) if windows else 0
             ), short_row="apps_retry_time")
+            stages.append(stage)
+        if "llm_parity" in plan:
+            output_lp = evidence / "llm_parity.run"
+            stage = make_stage(
+                "llm_parity",
+                [
+                    "python3", str(root / "scripts/ci/llm_parity.py"), "run", "--sha", sha, "--checkout", str(root),
+                    "--work", LLM_PARITY_WORK, "--out", str(evidence / "llm_parity.json"),
+                ],
+                output_lp,
+                [],
+                lambda rc, output=output_lp: llm_parity_rows(bounded_text(output), rc, sha, result),
+            )
+            stage.update(min_remaining_ms=LLM_PARITY_MIN_REMAINING_MS, short_row="llm_parity_retry_time")
             stages.append(stage)
         if windows:
             # Last, after every Linux guest has stopped: windows_gate.sh owns the GPU from here.
