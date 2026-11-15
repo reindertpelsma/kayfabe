@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kayfabe.dev/schemas/kfci/v1/instruction.schema.json",
+  "title": "kayfabe box payload instruction version 1",
+  "$comment": "STATUS 2026-11-15: LIVE (scripts/ci/payload_instruction.py reads it). Mirror: scripts/kfci/schemas/instruction.schema.json must be byte-identical (test_payload_instruction.py). Instruction = what a box runs; a requirement (what is wanted) is a different format that the Worker resolves into this.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "kayfabe.payload-instruction/1"
+    },
+    "requirement_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[A-Za-z0-9_.:-]+$"
+    },
+    "tree_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "tier": {
+      "enum": [
+        "small",
+        "middle",
+        "large",
+        "adhoc",
+        "unknown"
+      ]
+    },
+    "windows": {
+      "type": "boolean"
+    },
+    "windows_runs": {
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "stages": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "enum": [
+          "specviewperf"
+        ]
+      }
+    },
+    "spec": {
+      "enum": [
+        "lanea",
+        "laneb",
+        "both",
+        null
+      ]
+    },
+    "winapps": {
+      "enum": [
+        "small",
+        "mid",
+        "full",
+        null
+      ]
+    },
+    "linux_apps": {
+      "enum": [
+        "middle",
+        "large",
+        null
+      ]
+    },
+    "rehearsal": {
+      "type": "boolean"
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "tier",
+    "windows",
+    "windows_runs",
+    "stages",
+    "spec",
+    "winapps",
+    "linux_apps",
+    "rehearsal"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -129,6 +129,9 @@ jobs:
       # named killers. The harness rewrites that one file and always restores it (this checkout is throwaway).
       - name: Oracle-gate mutations require two named killers each
         run: python3 scripts/ci/oracle_gate_mutants.py
+      # The video-class coverage ratchet (crates/kf-chan/tests/video_class_coverage.rs, 2026-11-15): each mutant needs two named killers.
+      - name: Video-class coverage mutations require two named killers each
+        run: python3 scripts/ci/video_class_coverage_mutants.py
       - name: v3 dependency isolation and CI guard self-tests
         run: |
           python3 scripts/ci/dependencies.py
@@ -146,6 +149,8 @@ jobs:
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
           python3 scripts/ci/image_size_mutants.py
           python3 scripts/ci/kfci_mutants.py
+          # Payload instruction file, --only/--skip/--dry-run (2026-11-15, OWNER_RULINGS section AR S1/S3): >=2 named killers per mutant.
+          python3 scripts/ci/instruction_mutants.py
           python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest

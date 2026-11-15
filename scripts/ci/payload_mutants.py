@@ -837,6 +837,8 @@ def main():
         ci.mkdir(parents=True)
         for name in [
             "vast_payload.py",
+            "payload_instruction.py",
+            "kernel_log.py",
             "vast_payload.sh",
             "kernel_log.py",
             "vast_payload_hooks.sh",

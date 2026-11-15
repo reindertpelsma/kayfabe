@@ -186,8 +186,8 @@ CASES = [
     (
         "payload-header-linuxapps-dropped",
         "scripts/ci/vast_payload.py",
-        '\n            + " linuxapps="\n            + str(int(linuxapps)),',
-        ",",
+        ' + " linuxapps=" + str(int(i.linux_apps is not None))',
+        "",
         "py",
     ),
     (
@@ -228,8 +228,8 @@ CASES = [
     (
         "large-apps-profile-not-middle",
         "scripts/ci/vast_payload.py",
-        'apps_tier = "middle" if tier == "large" and "KF_LINUX_APPS" in os.environ else tier',
-        "apps_tier = tier",
+        '(("middle" if tier == "large" and explicit_apps else tier) if linuxapps else None)',
+        "(tier if linuxapps else None)",
         "py",
     ),
     (

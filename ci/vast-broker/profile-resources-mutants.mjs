@@ -119,6 +119,8 @@ try {
     'scripts/ci/vast_report.py',
     'scripts/ci/release_driver_pins.py',
     'scripts/ci/vast_payload.py',
+    'scripts/ci/payload_instruction.py',
+    'scripts/ci/kernel_log.py',
     'scripts/bench/native_xid_guard.py',
     'scripts/bench/native_fault_names.json',
     G,

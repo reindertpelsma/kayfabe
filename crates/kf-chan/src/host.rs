@@ -133,6 +133,23 @@ pub fn private_ring_spec(
     })
 }
 
+/// The video engine behind an NV2080 engine type and the class kind its host ring's owned object
+/// has: `(engine index, kind)`, or `None` (not an NVDEC, NVENC or OFA). The ONE place the ring's
+/// video-context routing is decided; `tests/video_class_coverage.rs` enumerates the classes a
+/// guest-kernel video ring can hold from it, so a new video engine kind cannot escape the audit.
+#[must_use]
+pub fn video_kind_of_engine(engine: u32) -> Option<(u32, kf_chip::classes::Kind)> {
+    use kf_chip::classes::Kind;
+    kf_abi::submit::nvdec_index_of_engine_type(engine)
+        .map(|i| (i, Kind::VideoDecoder))
+        .or_else(|| {
+            kf_abi::submit::nvenc_index_of_engine_type(engine).map(|i| (i, Kind::VideoEncoder))
+        })
+        .or_else(|| {
+            kf_abi::submit::ofa_index_of_engine_type(engine).map(|i| (i, Kind::OpticalFlow))
+        })
+}
+
 /// ★ Unmap every map in `maps` — all of them, whatever any one answers — and report the first
 /// refusal (review fix 2026-10-04: a short-circuit left the later maps live).
 ///
@@ -528,16 +545,7 @@ impl HostRing {
             live: VecDeque::new(),
         };
         let tail = (|| {
-            use kf_chip::classes::Kind;
-            let video = kf_abi::submit::nvdec_index_of_engine_type(engine)
-                .map(|i| (i, Kind::VideoDecoder))
-                .or_else(|| {
-                    kf_abi::submit::nvenc_index_of_engine_type(engine)
-                        .map(|i| (i, Kind::VideoEncoder))
-                })
-                .or_else(|| {
-                    kf_abi::submit::ofa_index_of_engine_type(engine).map(|i| (i, Kind::OpticalFlow))
-                });
+            let video = video_kind_of_engine(engine);
             if let Some((index, kind)) = video {
                 let (arch, imp, _) = rm.arch_info();
                 let family = kf_chip::Family::from_arch(arch, imp)

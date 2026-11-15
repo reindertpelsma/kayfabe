@@ -104,6 +104,8 @@ try {
   for (const path of [
     'scripts/ci/vast_report.py',
     'scripts/ci/vast_payload.py',
+    'scripts/ci/payload_instruction.py',
+    'scripts/ci/kernel_log.py',
     'scripts/ci/release_driver_pins.py',
     'ci/vast-reaper',
     'ci/platform-api/migrations',
