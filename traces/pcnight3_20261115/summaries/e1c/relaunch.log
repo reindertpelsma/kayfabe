@@ -1,0 +1,17 @@
+07:51:24 RELAUNCH attempt-1 end=result_screen lke0=0 qemu.log line 14495
+07:51:35 t=7 alive=True lke=0 q=15236
+07:51:43 t=14 alive=True lke=0 q=15295
+07:51:51 t=22 alive=True lke=0 q=16098
+07:52:02 t=33 alive=True lke=0 q=16882
+07:52:10 t=42 alive=True lke=0 q=16991
+07:52:18 t=50 alive=True lke=0 q=17054
+07:52:26 t=58 alive=True lke=0 q=17115
+07:52:34 t=66 alive=True lke=0 q=17175
+07:52:43 t=74 alive=True lke=0 q=17235
+07:52:51 t=82 alive=True lke=0 q=17295
+07:52:59 t=90 alive=True lke=0 q=17355
+07:53:07 t=99 alive=True lke=0 q=17416
+07:53:15 t=107 alive=True lke=0 q=17476
+07:53:23 t=115 alive=True lke=0 q=17536
+07:53:31 t=123 alive=True lke=0 q=17596
+07:53:31 RELAUNCH done: tdr=False first_lke_s=None alive_end=True qlog 14495->17596

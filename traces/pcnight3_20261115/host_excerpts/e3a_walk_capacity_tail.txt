@@ -1,0 +1,3 @@
+kf3: walk capacity: re-walk (needs s15:2856); walk pool 1048576 runs, slot pool 2097152 runs (916736 free), max per space 1048576, slots held 21, grows 77, retries 134, ceilings 0, largest slot 896256, largest walk 896256
+kf3: walk capacity: slot 15 grown 2816 → 4352 runs
+kf3: walk capacity: re-walk (needs s15:2865); walk pool 1048576 runs, slot pool 2097152 runs (915200 free), max per space 1048576, slots held 21, grows 78, retries 135, ceilings 0, largest slot 896256, largest walk 896256

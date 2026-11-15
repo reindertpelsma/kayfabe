@@ -13,16 +13,21 @@ polls = [json.loads(l) for l in open(out / "polls.jsonl")]
 def hbs(lines): return [l for l in lines if l.startswith("kf3: family=")]
 def g(l, k):
     m = re.search(k + r"=(\d+)", l); return int(m.group(1)) if m else 0
+def lke_times(p): return [iso(x) for x in (p.get("lke") or [])]
 for att in sorted({p["att"] for p in polls}):
     P = [p for p in polls if p["att"] == att]
-    base = P[0]["nlke"]; first = next((p for p in P if p["nlke"] > base), None)
-    print(f"== attempt {att}: polls={len(P)} baseline_lke={base}")
-    if not first: print("   no LiveKernelEvent seen"); continue
-    gt = min(iso(x) for x in first["lke"][: first["nlke"] - base]) if first["lke"] else None
+    # FIX 2026-11-15 (pcnight3): the old baseline was P[0]["nlke"], but the first poll of an attempt can already hold the first
+    # LKE pair, so the window then sat before the SECOND wave. Now: the first LKE of the attempt = the earliest LKE timestamp seen
+    # in any poll of the attempt that is newer than (first poll guest time - 8 s); older ones belong to a previous attempt.
+    guest0 = iso(P[0]["guest"]) if P[0].get("guest") else None
+    cut = (guest0 - 8) if guest0 else 0
+    seen = sorted({t for p in P for t in lke_times(p) if t >= cut})
+    base = P[0]["nlke"] - len([t for t in lke_times(P[0]) if t >= cut])
+    print(f"== attempt {att}: polls={len(P)} baseline_lke={base} (events older than first poll - 8 s)")
+    if not seen: print("   no LiveKernelEvent seen"); continue
     offs = [p["host"] - iso(p["guest"]) for p in P if p.get("guest")]
     off = sum(offs) / len(offs)
-    # LKE list is newest-first; the oldest of the new ones is the first event
-    new = first["lke"][: first["nlke"] - base]; gt = min(iso(x) for x in new)
+    gt = seen[0]
     ht = gt + off; Lend = line_at(ht); Lbeg = line_at(ht - 5)
     seg = L[Lbeg:Lend]
     print(f"   first LKE guest={gt:.1f} -> host epoch {ht:.1f} (offset spread {max(offs)-min(offs):.1f} s) -> qemu.log lines {Lbeg}..{Lend} (5 s window, {len(seg)} lines)")

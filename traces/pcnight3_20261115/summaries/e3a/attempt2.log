@@ -1,0 +1,13 @@
+08:23:16 ATTEMPT 2 qemu.log line 23514
+08:23:36 t=12 ocr='& Raeyele Bin Syiegesiil.. earnabourr BETCuI US CUISIPICUUTE) " >| Wiiesesitt — <iDiawvings Helge WOR SP) siteaum nee 0° ae a oe a ee a m7 | i j more i/o F - , '
+08:23:49 t=25 ocr='& Raeyele Bin Syiegesiil.. earnabourr BETCuI US CUISIPICUUTE) " >| Wiiesesitt — <iDiawvings Helge WOR SP) siteaum nee 0° ae a oe a ee a m7 | i j more i/o F - , '
+08:24:03 t=39 ocr='sh Lb Fy] AMA TRA SA GAME SCIENCE '
+08:24:17 t=52 ocr='Vy ST AE. Pik Lhe NIRS SA “0 SBS mx Py i S) ae ee. me Y Rk Se ell » a Nee a Oe 7 =" sae Os pes’ oe } = — a. “ BLACK MYTH: — a tn ' '
+08:24:30 t=66 ocr='A oe: OA ma “ 9 BY gaee ore G8, iw. A . — 2aN A eo ied . = aia og © o es) Sees Oe iy BLACK MYTH ~ d ie on WUKONG _ eC Press Any Button oy ae S a a a ga7. ne i 4'
+08:24:48 t=83 ocr=': SA 1X “fiz . r Fan a \p er ree ee L i eo 4 5a Benchmark \ . (Si ae i" a Settings me MeaGc 2. o ag A; Purchase Now Pg ie be i ih Se, ee \ ae Pee x é he Ro VW T'
+08:25:07 t=103 ocr='| Benchmark : Are you sure you want to run benchmark? Confirm ‘ Cancel '
+08:25:14 CONFIRM clicked, qemu.log line 26457
+08:25:33 t=129 ocr=''
+08:25:40 LKE count 2->5: first GPU watchdog event, qemu.log line 31440
+08:25:40 game process gone; status={'now': '2026-11-12T18:01:30.1035663+00:00', 'alive': False, 'smi': '512, [N/A]', 'lke': ['2026-11-12T18:01:23.0340673+00:00 141', '2026-11-12T18:01:22.9829005+00:00 141', '2026-11-12T18:01:22.8687215+00:00 141', '2026-11-12T17:58:28.4907682+00:00 141', '2026-11-12T17:58:28.4447085+00:00 141'], 'launcher': False, 'cpu': 0}
+08:25:47 END game_exited vram_peak=3495 secs_since_launch=142 confirm_to_end=39 qlog 23576->26457->31440

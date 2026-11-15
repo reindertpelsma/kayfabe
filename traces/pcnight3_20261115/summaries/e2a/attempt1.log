@@ -1,0 +1,28 @@
+07:59:14 ATTEMPT 1 qemu.log line 8778
+07:59:34 t=12 ocr='a nny =. a ‘ : 7VET ” a ia 4 i Reteyelle Sin Sluipictygiessiit.. 5 F ied : . < < atl - > ;. - Se A Bay 12026) all Cate Bdge AUR. Slice = sity a rie | oe ee nT ;'
+07:59:47 t=24 ocr='a nny =. a ‘ : 7VET ” a ia 4 i Reteyelle Sin Sluipictygiessiit.. 5 F ied : . < < atl - > ;. - Se A Bay 12026) all Cate Bdge AUR. Slice = sity a rie | oe ee nT ;'
+08:00:00 t=37 ocr=''
+08:00:12 t=49 ocr='Initial Setup Text < English == > Change the language of the interface text. This setting can only be changed on the title screen. '
+08:00:28 t=66 ocr='Adjust the brightness until the pattern is faintly visible. Decrease Brightness 50 Increase Brightness ® Confirm G Return '
+08:00:45 t=83 ocr='Data Storage and Processing Agreement Preface 1 In order to continuously optimize user experience and improve service quality, with the consent of the user (her'
+08:01:10 t=107 ocr='Data Storage and Processing Agreement the "Settings" menu interface. However, this does not affect the lawful collection and processing of data by Game Science '
+08:01:29 t=126 ocr='oe | ¢ ee '
+08:01:42 t=139 ocr='ARAL xe we ' SN fia Wonias = ae 7 oe a a os el Ee Ory oe a ad | 7 i? s { ee BLACK MYTH* ‘ » ae a ‘ iy Le 8: 2. | y ee J FOSS LB ~ ee sa Pee Hee Press Any Button'
+08:01:59 t=156 ocr=': SA 1X “fiz . r Fan a \p er ree ee L i eo 4 5a Benchmark \ . (Si ae i" a Settings ue MaaGc 2 o ag A; Purchase Now Pg ie be i ih Se, ee \ ae Pee x é he Ro VW Th'
+08:02:16 t=174 ocr='| Benchmark : Are you sure you want to run benchmark? Confirm ‘ Cancel '
+08:02:20 CONFIRM clicked, qemu.log line 16017
+08:02:37 t=194 ocr='oe | ¢ ee '
+08:02:51 t=209 ocr=''
+08:03:06 t=223 ocr='Cument FS “ aN et oe y | 30 FPS Saar ——— — re RE ee " a Pe ee eee CO ia ; ey 2 a. ENG UAL ais SS aes é LAC de << . SAYA SW Ve ‘Seed co ~ a ge Ll : fos oa Res (#'
+08:03:20 t=237 ocr='— = ef ‘ee Se Se ee Pees So 3 i ih —<e 5 = — = oF Re een = - t= 7 eee YZ . & = =SF a es ee Se : eee ee Ss Current FPS Se. 2 Se = 2 hg . Sher S Fe es + oa = pps '
+08:03:33 t=251 ocr='Se ee ee 2 ee Mae 2 &. 4 eee : eee» Ry See = 4b Segipie. age Sr Zee Current FPS = < Fg BE os A pe ee es = é fe a We i SP aot “Sees 1G tik ee Se ee See SS ee 6° '
+08:03:47 t=265 ocr='Current FPS Fee Pa he RS - Aye : oC Nets i Ce ne Se 29 FPS a ae Ne Be ye ee MAG eGo Le : ae) tt y : ae) ee oe RE Cy a) NaN Soe ae = ~ : De } a SY eae Rec aa et '
+08:04:02 t=280 ocr='Current FPS Ree X Reg x Le Su) & oh a x = “ws iq = Ses SS i gape eer eae : - > S sa eS, See MR. egy ° = . 4 : ~< Se ae TTS “eget eI Se a | Et ey ae : Z = . = ie'
+08:04:17 t=294 ocr='Current FPS < = ES ~S a pe Se, HY A Ge ‘fe— ~ 2 a — Do eS Sin’ Ga % "ato 2 eee. ae = = z = gin Bee Mies . x ee 2 % * ON ga Se 2 = Se She a a : = = a ee so = PE '
+08:04:30 t=308 ocr='Coren ce aa es es ae Ree 8 Rud a. eye i “ess Yaga ss AGUS, ee SS peas ba: 4 SS PP. x l? | CI a “= ra = _ _ es ae BS aig jam sf 3 aE — = yf * o — ay z _ = Se = z'
+08:04:46 t=324 ocr='Ld i Pe gi Ae) Abs gee LOY =o as ge BO fwd Current FPS We 2 YI" hp Ww “id tj go Spt Chee, PO Ome ; 4 ) MLS, 7 pe gunn es a ‘ a tite gi VM a are nie Tee A IO bom'
+08:05:00 t=337 ocr='Current FPS : sng pe St wiy WE Savi i ke iN NY § SHE os a at Leg, SO Ce = ie 30 FPS . =a Bee « he pe SBR ee as a ene i Hck ce ee eigsee” 7 - ay Seo 4M Be Roe Se'
+08:05:14 t=351 ocr='PA. A a an Current FPS SAVE AY MA 3 A ‘a ) <i y . mee YY Bet)", ad Ee if, We ER $0 ake = et oe NYY, se Bn: fam Res 'G - . "0 ga TarCti«*Y Sy ee ra : Dee fh ie B'
+08:05:27 t=365 ocr='Vin * - . ; ? * Oo ? (se NIT 38 ¥ vee 4 o Benchmark Results Operating System Dey Graphic Settings , 77 Nov 12, 2026 7 - d i Game Version Di r uality a \ a 1.0.3'
+08:05:27 result screen text: Vin * - . ; ? * Oo ? (se NIT 38 ¥ vee 4 o Benchmark Results Operating System Dey Graphic Settings , 77 Nov 12, 2026 7 - d i Game Version Di r uality a \ a 1.0.3.14649 a Borderle » : Boe Sa. Bis Operating System Version ' 2 Paap, & ated Sime as . 9 ae a 10.0.26200.1.256.64bit . 1920 x 1¢ Low Sees Se 
+08:05:34 END result_screen vram_peak=3476 secs_since_launch=371 confirm_to_end=197 qlog 9319->16017->19853

@@ -1,0 +1,23 @@
+08:05:38 ATTEMPT 2 qemu.log line 20030
+08:05:59 t=12 ocr='& Raeyele Bin Syiegesiil.. earnabourr BETCuI US CUISIPICUUTE) " >| Wiiesesitt — <iDiawvings Helge WOR SP) siteaum nee 0° ae a oe a ee a m7 | i j more i/o F - , '
+08:06:13 t=25 ocr='& Raeyele Bin Syiegesiil.. earnabourr BETCuI US CUISIPICUUTE) " >| Wiiesesitt — <iDiawvings Helge WOR SP) siteaum nee 0° ae a oe a ee a m7 | i j more i/o F - , '
+08:06:26 t=39 ocr='SS LS Fy] AMA TRA GAME SCIENCE '
+08:06:40 t=53 ocr='AT Re AA a - 376 Aires 4: ae, 24 LY Me = ell |’ So eee Oe ee o/GN ot | ee it ‘ ge \' \ Segoe eos b ane : < — a. - WUKONG — toa Press Any Button ee : Bie Bi ee a'
+08:06:57 t=70 ocr=': SA 1X “fiz . r Fan a \p er ree ee L i eo 4 5a Benchmark \ . (Si ae i" a Settings ue MaaGc 2 o ag A; Purchase Now Pg ie be i ih Se, ee \ ae Pee x é he Ro VW Th'
+08:07:14 t=86 ocr='| Benchmark : Are you sure you want to run benchmark? Confirm ‘ Cancel '
+08:07:20 CONFIRM clicked, qemu.log line 24716
+08:07:33 t=106 ocr='oe | ¢ ee '
+08:07:48 t=120 ocr=''
+08:08:02 t=134 ocr='aE See "oe Ae 0 A es rian © eT a E ig, ee ee A Current FPS j = “oxy é ope, be Re ae aie oe 2 igh v5 g 29 FPS > yy at ee gS No a Mes 5" a Z < f gS a WS spe wate '
+08:08:18 t=150 ocr='2980S , Tek 8S 2 eee : % “ee ee 2 oe ee ee 2S = be Se Kies Se ee = = eee : — Fe : = 5 == of ae = ee eS Sa 2 ) <= a he ee Pee ae ; ~_jACSa > Sa ee oS aaa ie =x -'
+08:08:32 t=164 ocr='Dy Fae fas et / fos Lest pay, cs gee gael “om ee eae a Sot 2S ee GA ge FE is epee Se a Ne ees Ss ree ide o SRS h a Sie ee rr eS: CRE fe Gi ’ 4 ee ee Ne ale Seg '
+08:08:46 t=178 ocr='Current FPS : =. Po ge Paget SSA Lt a if KK ee os 29 FPS Se ge te ee Ne Sg, ee SE a WE BN Se a Be ; ? p> : Se SOLA Ss A a ke APOE 6 Bw aes ——— mn, a Oe ae * “> '
+08:09:01 t=193 ocr='oe te ye a a = Current FPS es z * x “ Say Sis # Bee) Be Y = ia a ee 27 FPS a SE Lae: oa ~ Se ae aN oh i x >i~ toe, et oA Sr Lf 3 OD oS ps ‘MA iG Sed >) ~ Ney et'
+08:09:15 t=207 ocr='—— — a ae of Biss po Ose, ‘tle y : CS POON | a a ntl AN NNR ME joe Current FPS * we x es x Ne Nees a ee } “aia as VA te NZ: aa 2 s ee ae a wees Ya See (OAN Piet'
+08:09:31 t=223 ocr='(SO as > et oe r 17 j + syn Ft Me - a I call Ss Bag) see _— es Do eee Current FPS oo = S a oe Ss aN ? me gel a >. 2S Saye Ke : eG: Zs Ts a oe, 29 FPS 4 = << eae'
+08:09:44 t=237 ocr='Current FPS Ge ete tay 4 re os Ee ow inee Ds oe iy (je SS Z 4 se 28 FPS : ie Bes. rect S a ay“ act ae hay 0000? cay bay B Mein Y Me i ee a AG a ies a en Oo hi g'
+08:09:58 t=251 ocr='Current FPS a e. . a aN \ ) \ yr ¥ ‘i Wee. ve € 4 s By 30 FPS iad Beds <4 oe * ay nx * : j = a OF % ania =e a OF ee 4 Xx ‘an Seas é j i ‘ § Ya = \ BNA ale ° i” '
+08:10:12 t=264 ocr='Current FPS Mes, 2 - We ae f 29 FPS : Le eA ee ee P Bele te = og Ants } —— Ww Bee hh i MES pas tid Ly AY i Age 6 3 we ee SS Eg . | i - WZ. by a gg is ra 2 % Ra '
+08:10:25 t=278 ocr='; Vian “7 i. ; AL K MYTH 7~ v . 4 ae — ; 4 « Benchmark Results Operating System _ Graphic Setting a“ » Nov 12, 2026 r az t Game Version Disp Texture Quality) ‘ '
+08:10:25 result screen text: ; Vian “7 i. ; AL K MYTH 7~ v . 4 ae — ; 4 « Benchmark Results Operating System _ Graphic Setting a“ » Nov 12, 2026 r az t Game Version Disp Texture Quality) ‘ 1.0.3.14649 Border Average “Ge anes - GO Se. a Operating System Version __ DisplayR Hair Quality ee re) a > . Be 10.0.26200.1.256.64bit 1920
+08:10:34 END result_screen vram_peak=3531 secs_since_launch=287 confirm_to_end=200 qlog 20329->24716->28319
