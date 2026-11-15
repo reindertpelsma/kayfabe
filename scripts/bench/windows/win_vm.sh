@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-. "$(dirname "${BASH_SOURCE[0]}")/../../lib/kf_lock.sh"
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 #
 # ★ win_vm.sh — a Windows 11 guest on kayfabe (kf3): installed ONCE, booted many times.
@@ -76,6 +75,7 @@
 #     logs/                     every boot's QEMU log, QMP events, screenshots, checks, evidence
 #     installed                 written last by a passing install
 # shellcheck disable=SC2054  # QEMU arguments carry commas by design
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/kf_lock.sh"
 set -euo pipefail
 umask 077
 

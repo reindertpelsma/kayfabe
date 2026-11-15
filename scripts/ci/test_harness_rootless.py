@@ -116,6 +116,25 @@ class SharedLock(unittest.TestCase):
         self.assertEqual(bad, [])
 
 
+    def test_lib_source_line_does_not_unscope_a_file_wide_shellcheck_directive(self):
+        """A `# shellcheck disable=` before the first command is file-wide; a command inserted above it makes it
+        cover one line only (win_vm.sh SC2054 on next's stable, 2026-11-15). The sourced helper goes below it."""
+        bad = []
+        for path in ROOT.glob("scripts/**/*.sh"):
+            lines = path.read_text(errors="replace").splitlines()
+            src = [i for i, l in enumerate(lines) if l.startswith('. "$(dirname "${BASH_SOURCE[0]}")/') and "/lib/kf_" in l]
+            if not src:
+                continue
+            first = min(src)
+            commands = [i for i, l in enumerate(lines[1:], 1) if l.strip() and not l.lstrip().startswith("#")]
+            if commands and commands[0] != first:
+                continue
+            for i, l in enumerate(lines):
+                if i > first and l.startswith("# shellcheck disable=") and i < (commands[1] if len(commands) > 1 else i + 1):
+                    bad.append("%s:%d" % (path.relative_to(ROOT), i + 1))
+        self.assertEqual(bad, [])
+
+
 class GitTrust(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
