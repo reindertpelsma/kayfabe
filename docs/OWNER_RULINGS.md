@@ -29,6 +29,12 @@ citation: ask whether its reason still holds before relying on it.
    (no GPU acceleration) or a separate daemon such as Looking Glass. Whatever the integration shape (patched binary, module, vfio-user),
    the broker stays an optional, separate piece.
 
+8. **Performance parity goal (owner, 2026-11-15).** The goal is at least 90 percent of native on ALL benchmarks, preferably 95 percent or more,
+   across CUDA, LLM, 3D games, graphics design and SPECviewperf (many apps). One benchmark is not parity: the owner recalls about 95 percent on
+   Unigine Heaven but only about 60 percent on another; a result like "SPECviewperf overall at 90 percent of native" is worth much more than a
+   single Superposition score. *Measured so far (not parity):* Wukong under kf3 about 39 percent of VFIO on the RTX 4070 (36 vs 93 FPS), and
+   3DMark Time Spy 7297 with no native reference. A parity claim needs a native or VFIO reference on the same hardware and settings.
+
 ## §AR. Release run: standalone parity, requirement vs instruction, manual run first, Windows lanes, 2026-11-15
 
 **STATUS: LIVE, 2026-11-15; owner rulings (stated in conversation, recorded by the coordinator). Whether today's code already meets 2 to 4 is NOT yet audited.**
