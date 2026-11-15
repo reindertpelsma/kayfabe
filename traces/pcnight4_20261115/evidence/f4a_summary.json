@@ -1,0 +1,153 @@
+[
+ {
+  "attempt": 1,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [
+   [
+    402,
+    4
+   ],
+   [
+    425,
+    4
+   ]
+  ],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "lang",
+   "bright",
+   "scroll",
+   "agree",
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 3655,
+  "confirm_to_end": 450,
+  "qlog": [
+   14802,
+   19844,
+   33081
+  ],
+  "status": {
+   "now": "2026-11-12T18:03:44.8246832+00:00",
+   "alive": true,
+   "smi": "3591, [N/A]",
+   "lke": [],
+   "launcher": true,
+   "cpu": 330.515625
+  },
+  "events": []
+ },
+ {
+  "attempt": 2,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [
+   [
+    428,
+    1
+   ]
+  ],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 3636,
+  "confirm_to_end": 456,
+  "qlog": [
+   33509,
+   37147,
+   50582
+  ],
+  "status": {
+   "now": "2026-11-12T18:13:40.1059971+00:00",
+   "alive": true,
+   "smi": "3089, [N/A]",
+   "lke": [],
+   "launcher": true,
+   "cpu": 233.25
+  },
+  "events": []
+ },
+ {
+  "attempt": 3,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [
+   [
+    313,
+    4
+   ],
+   [
+    327,
+    3
+   ]
+  ],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 3645,
+  "confirm_to_end": 392,
+  "qlog": [
+   51504,
+   55173,
+   65740
+  ],
+  "status": {
+   "now": "2026-11-12T18:22:36.1780148+00:00",
+   "alive": true,
+   "smi": "3559, [N/A]",
+   "lke": [],
+   "launcher": true,
+   "cpu": 237.3125
+  },
+  "events": []
+ }
+]
