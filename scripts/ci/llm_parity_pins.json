@@ -1,0 +1,29 @@
+{
+  "schema": "kayfabe.llm-parity-pins/1",
+  "status": "STATUS: DESIGN 2026-11-15. EVERY HASH IS UNSET: no pin for the ollama binary, the model file or virtiofsd exists in the repository, and the stage refuses (reason `unpinned`) until all the items it needs are pinned. A pin is set in a reviewed commit, together with the sources, never by a run. See docs/design/V3_LLM_PARITY_STAGE.md section 3.",
+  "ollama_version": "UNSET",
+  "model_id": "Qwen2-0.5B-Instruct (fp16 GGUF)",
+  "items": {
+    "model": {
+      "dest": "llm/model.gguf",
+      "sha256": "UNSET",
+      "size": "UNSET",
+      "sources": [],
+      "note": "The MODEL the earlier traces used (traces/llm_parity: Qwen/Qwen2-0.5B-Instruct, HF snapshot c540970f9e29518b1d8f06ab8b24cba66ad77b6d, run through torch) in the one form ollama can load: a GGUF of the same model, fp16 to match the torch runs. The snapshot is a safetensors repository, so it is NOT the file to pin; the pin is one GGUF file (candidate, UNVERIFIED: Qwen/Qwen2-0.5B-Instruct-GGUF, qwen2-0_5b-instruct-fp16.gguf). Sources go here with the hash."
+    },
+    "ollama": {
+      "dest": "llm/ollama.tgz",
+      "sha256": "UNSET",
+      "size": "UNSET",
+      "sources": [],
+      "note": "The ollama Linux amd64 release tarball (bin/ollama and lib/ollama/*), a .tgz because the arm unpacks it with Python's tarfile on both sides. The earlier traces ran no ollama at all, so no version is pinned in the repository; ollama_version above must be set with the hash and is compared with what the server reports."
+    },
+    "virtiofsd": {
+      "dest": "llm/virtiofsd",
+      "sha256": "UNSET",
+      "size": "UNSET",
+      "sources": [],
+      "note": "The Rust virtiofsd as ONE executable file, for the virtio-fs transport only (the 9p fallback does not need it). The Vast box image is Ubuntu 22.04 (glibc 2.35): INFERRED (no 22.04 archive was checked) that no Rust virtiofsd package exists there, and the Ubuntu 26.04 package needs glibc 2.39, so it must be fetched, as a build that runs on 2.35 (a static build)."
+    }
+  }
+}

@@ -83,7 +83,7 @@ MUTANTS = [
          [MEDIA + "test_file_mode_hash_failure_is_exit_three_without_retry", MEDIA + "test_file_mode_corrupt_chunk_is_exit_three_without_retry"], BENCH),
     case("writes-straight-to-final-path", 'return Path(str(out) + ".unverified")', "return Path(str(out))",
          [CORE + "test_final_path_absent_during_download_and_appears_whole", CORE + "test_final_path_never_written_while_partial_chunks_land"]),
-    case("bad-final-file-left-after-hash-failure", 'print("FETCH_BAD_HASH", flush=True)', 'print("FETCH_BAD_HASH", flush=True); self.publish()',
+    case("bad-final-file-left-after-hash-failure", 'self.emit("FETCH_BAD_HASH")', 'self.emit("FETCH_BAD_HASH"); self.publish()',
          [CORE + "test_hash_failure_leaves_no_final_file", CORE + "test_wrong_pin_is_bad_hash_and_deleted"]),
     case("stale-final-file-kept", "self.out.unlink(missing_ok=True)\n            try:", "pass\n            try:",
          [CORE + "test_stale_final_file_is_removed_when_network_fails", CORE + "test_stale_final_file_is_removed_before_a_failed_hash"]),

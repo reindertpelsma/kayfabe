@@ -1,6 +1,6 @@
 # Box downloader and build supply chain
 
-**STATUS: DESIGN-ONLY 2026-11-13.** Records the owner's decisions of 2026-11-13, taken in the coordinator's session. Nothing here is implemented, deployed or run; every "will", "must" and "proposed" below is DESIGN. This document touches no code and no Worker.
+**STATUS: DESIGN-ONLY 2026-11-13; PARTLY BUILT 2026-11-15.** Records the owner's decisions of 2026-11-13, taken in the coordinator's session. BUILT 2026-11-15 (step 3, section 1, GPU-free tests only, run on no box): `scripts/ci/box_downloader.py` (manifest, N workers, bandwidth caps, `.unverified` resume through `kf_fetch.py`, `wait`/`status`/`verify`, KF_STEP lines, bounded status file, cancellation, standalone use without the Worker; sources: local pin, presigned-URL file, S3-compatible endpoint, https mirror), `box_downloader_worker.py` (the bootstrap-layer Worker call) and the payload's dry-run-only `--prefetch`; see `scripts/ci/README.md`. NOT built: the downloader started by the payload, stages calling `wait`, the apt source, a real manifest for SPEC or the Windows media, step 1 (KF_STEP in the box scripts), steps 2 and 4. The manifest format is a file beside the instruction (an instruction field would change the Worker's schema mirror). Everything not listed as BUILT, and every "will", "must" and "proposed" below, is still DESIGN.
 
 Labels used below. **OWNER DECISION (2026-11-13)** is binding and is not re-litigated here. **DESIGN** is a proposal that follows from a decision. **MEASURED** names a file or log line. **INFERRED** is arithmetic or reasoning from measured lines. **UNVERIFIED** is a fact about an outside system that nobody has checked. **CODE READ** means the code was read and not run.
 
@@ -132,7 +132,7 @@ DESIGN. A trusted build keeps an installed Windows base in private R2, keyed mor
 
 ### 5.3 Step 3: the downloader
 
-Section 1, built on `scripts/ci/kf_fetch.py`.
+Section 1, built on `scripts/ci/kf_fetch.py`. BUILT 2026-11-15 as `scripts/ci/box_downloader.py` (manifest `kayfabe.download-manifest/1`), GPU-free tests only; the default cap (125 MB/s global) is a DESIGN value, unmeasured. Not wired into the stage executor.
 
 ### 5.4 Step 4: CI-built attested binary and image
 

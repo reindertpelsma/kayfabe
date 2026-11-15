@@ -1,5 +1,5 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: LIVE, 2026-11-15 (payload `--instruction FILE`, `--only/--skip/--dry-run`: GPU-free tests only, no box has run them; the rest of this page is as of 2026-11-06) (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
+STATUS: LIVE, 2026-11-15 (`llm_parity` payload stage, manual-only, every pin UNSET so it refuses, run on no box; box downloader `box_downloader.py`, built and tested GPU-free, run on no box and wired into no stage; payload `--instruction FILE`, `--only/--skip/--dry-run`: GPU-free tests only, no box has run them; the rest of this page is as of 2026-11-06) (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
 claude/vast-payload-p7-20261024). MEASURED 2026-10-25: a real Vast box booted with the
 protocol-7 setup but had not yet reported to the Worker, so protocol 7 has no end-to-end run on a
 real box yet. The evidence below is for the pre-port payload. MEASURED: run `v9-xid-kvm-20261023`, source
@@ -100,3 +100,81 @@ The test runtime is Ubuntu 22.04 with GNU coreutils (`setup-test.Dockerfile`), m
 
 CODE READ: if cloud-init omits standard HOME or leaves it empty, repo-side onstart restores the
 current OS account's home directory. An explicit process HOME is preserved; no Worker var is added.
+
+
+## Box downloader (`box_downloader.py`, 2026-11-15; step 3 of [V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN](../../docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md))
+
+MEASURED by GPU-free tests only (loopback HTTP server, `test_box_downloader.py`; mutants `box_downloader_mutants.py`, two named
+killers each, in `ci.yml`). Not run on a box, not wired into any stage, no real private R2 object ever fetched. Stdlib only,
+Python 3.9+, on top of `kf_fetch.py` (`.unverified` staging, per-chunk Range resume, size + sha256 pinned by the caller,
+atomic rename, partial deleted on a size or hash violation). It needs no Worker, no run token and no network credentials: a
+normal user needs Python 3 and a manifest.
+
+Standalone example (a local directory pin and an https mirror, nothing else):
+
+```sh
+cat > manifest.json <<'JSON'
+{"schema": "kayfabe.download-manifest/1", "stages": ["setup"],
+ "items": [
+  {"name": "tool.tar", "dest": "dl/tool.tar", "sha256": "<64 hex>", "size": 1234567, "needed_by": "setup",
+   "sources": [{"kind": "mirror", "url": "https://mirror.example.org/tool.tar"}]}]}
+JSON
+python3 scripts/ci/box_downloader.py check manifest.json                       # validate, print item count and bytes
+python3 scripts/ci/box_downloader.py fetch manifest.json --dest ./out --pin-dir ~/Downloads --limit-bandwidth 50 &
+python3 scripts/ci/box_downloader.py wait --dest ./out --deadline 600 tool.tar     # 0 verified, 1 failed, 3 deadline, 4 downloader gone
+python3 scripts/ci/box_downloader.py status --dest ./out
+python3 scripts/ci/box_downloader.py verify manifest.json --dest ./out             # re-hash every dest
+```
+
+`--pin-dir DIR` (repeatable) and `--pin NAME=PATH` use an existing local file when its size and sha256 match (otherwise it is
+ignored). Manifest format `kayfabe.download-manifest/1` (at most 1 MiB, strict, validated once in `box_downloader.py`):
+`stages` (first-use order) and `items`, each `{name, dest, sha256, size, needed_by, sources[], priority?, local?}`; `dest` is
+relative to `--dest`, with no `..` and no symlink on the way; ordering is stage, then priority, then manifest order; sources
+are the fallback order and `signed`/`s3` (private) must come before `mirror`. Source kinds: `mirror` (plain https URL,
+optional `follow_redirect`), `signed` (a presigned URL looked up by `ref` in `--urls FILE`, JSON `kayfabe.download-urls/1`,
+mode 0600, re-read on every attempt) and `s3` (any S3-compatible endpoint, path style; bucket and key in the manifest, the
+endpoint and credentials from `KF_S3_ENDPOINT`/`KF_S3_REGION`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN`
+or `--s3-config FILE`, mode 0600; the URL is signed locally with SigV4, 20 minutes). No account or bucket name is in the
+code; the repo's own defaults belong in the shipped manifest. `http://` sources need `--allow-http` (tests, trusted LANs).
+
+Defaults (DESIGN values, not measured on any box): 3 items in parallel, 4 streams per item, global cap 125 MB/s
+(`--limit-bandwidth MBPS`, 0 = off), per-connection cap off (`--stream-limit`), niced 19 and ionice idle (`--no-nice` off).
+Each completed item prints `KF_STEP name=download.<item> secs= bytes= source=<local|present|r2|s3|mirrorN> MBps=`; a failed
+one `KF_DOWNLOAD_FAIL name= class=RETRY reason=` (a harness failure, never a guest FAIL). URLs and credentials are never
+printed (every line is scrubbed). The bounded status file is `<dest>/.kf-downloader/status.json`. SIGTERM/SIGINT cancels:
+exit 5, partial files kept, the next run resumes after re-verifying every saved chunk.
+
+Payload and the token: `box_downloader.py` never reads the run token, the broker URL or the Access pair (a test greps its
+source for them). The Worker-aware part is `box_downloader_worker.py resolve MANIFEST --urls-out FILE`, run by the bootstrap
+layer that already holds the token (OWNER_RULINGS section AR): it asks `GET <broker>/bench-data/<run>/<name>` for each `signed`
+ref, keeps the 302 target, writes the 0600 URL file, and prints no URL. The payload gets only `--urls FILE` (a file, not a
+descriptor, because presigned URLs expire after 20 minutes and a refresher must be able to replace the file, and a restarted
+downloader must be able to read it again). That keeps the payload from being handed the token; it does not hide it from a
+root payload, which can read `/run/kf-ci/env` today. The payload's only hook is `vast_payload.py --dry-run --prefetch
+MANIFEST` (prints `KF_PAYLOAD_PREFETCH ...` for the planned stages); without `--dry-run` it is refused. Not done: starting the
+downloader from the payload, a stage calling `wait`, apt (design source c), seeders (deferred), the real manifest for the
+SPEC and Windows media, disk reservation of unpack space beyond `--reserve-gb`.
+
+
+## `llm_parity` payload stage (`llm_parity.py`, 2026-11-15; depends on the box downloader above)
+
+GPU-free tests only (`test_llm_parity.py`; mutants `llm_parity_mutants.py`, two named killers each, in `ci.yml`). **Never run on a box,
+and every input pin is UNSET, so the stage refuses (`unpinned`, exit 1, one `KF_LLM_PARITY_RESULT` record naming it).** Design, the
+findings on virtio-fs, kf3 and the guest kernel, and the first-run checklist: [V3_LLM_PARITY_STAGE](../../docs/design/V3_LLM_PARITY_STAGE.md).
+It is manual-only: `vast_payload.py --only llm_parity` (large tier), in no default plan (`LLM_PARITY_IN_LARGE = False`); the Worker's
+`llm_parity` slot is still DESIGN-ONLY and `KF_STAGES=llm_parity` is still refused.
+
+```sh
+python3 scripts/ci/llm_parity.py plan            # the plan and the pin state, runs nothing
+python3 scripts/ci/llm_parity.py check           # exit 0 only when every item the transport needs is pinned (3 otherwise)
+python3 scripts/ci/vast_payload.py --dry-run --instruction I.json --only llm_parity     # the plan with the stage in it
+```
+
+What it does: fetches the model (a GGUF), the ollama tarball and (virtio-fs only) virtiofsd **once** through `box_downloader.py` (the
+pins file `llm_parity_pins.json` becomes a `kayfabe.download-manifest/1`), puts model and tarball alone in a read-only directory, runs
+the host arm (`llm_parity_arm.py`, one file for both arms), runs `virtiofsd` as uid 65534 without capabilities exporting that directory
+read-only (`--sandbox none`, no DAX), boots the Linux guest with `vhost-user-fs-pci` (9p only if the QEMU build lacks it), mounts it
+read-only in the guest, and runs the same arm there. PASS = both arms ran, every run printed the same text, the whole model sat in GPU
+memory on both, the timings are usable, the ratio is recorded. **The ratio (guest/host decode tok/s; targets 0.90 and preferably 0.95)
+is reported and never gates**: `ratio.gate` is always false. The kf3 QEMU build (`build_kf3.sh`) has neither device until
+`--enable-vhost-user` (and `--enable-virtfs` for 9p) is added; the stage refuses with `no_share_transport` until then.

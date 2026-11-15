@@ -838,6 +838,12 @@ def main():
         for name in [
             "vast_payload.py",
             "payload_instruction.py",
+            "box_downloader.py",
+            "kf_fetch.py",
+            "llm_parity.py",
+            "llm_parity_arm.py",
+            "llm_parity_pins.json",
+            "llm_parity_hook.sh",
             "vast_payload.sh",
             "vast_payload_hooks.sh",
             "test_vast_payload.py",
