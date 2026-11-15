@@ -315,3 +315,170 @@ fn windows_support_off_ignores_every_declaration() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Review of PR #438 (2026-11-15), F1 and F2: a rebuilt chain is a new life; and the CHANNEL half of the
+// profile, through the served chain's own `ChannelPolicy` (the `windows-support=off` opt-out must reach it).
+// ---------------------------------------------------------------------------------------------------
+
+/// What the channel plane is told about two kernel-stamped allocs of an arm, through the real served chain:
+/// `(process_id, user_work, windows)`. The first (pid 0x350) is the kernel driver's own channel, which teaches
+/// the link the kernel pid; the second (pid 0x554) is a per-process copy channel.
+fn plane_view(arm: Arm) -> Vec<(u32, bool, bool)> {
+    use kf_rm::chanlink::{ChanAnswer, ChanStatement};
+    use std::sync::{Arc, Mutex};
+    let abi = support::abi();
+    let seen: Arc<Mutex<Vec<(u32, bool, bool)>>> = Arc::default();
+    let s2 = seen.clone();
+    let sink: kf_rm::chanlink::ChanSink = Arc::new(move |st| {
+        if let ChanStatement::Alloc(a) = st {
+            s2.lock()
+                .unwrap()
+                .push((a.process_id.unwrap_or(u32::MAX), a.user_work, a.windows));
+        }
+        ChanAnswer::Done
+    });
+    let mut policy = kf_rm::served_policy(
+        ga106::board(),
+        ga106::host(),
+        abi,
+        Default::default(),
+        Default::default(),
+        kf_rm::ObjectLinks {
+            channels: Some(sink),
+            windows: if arm == Arm::WindowsOnAnOffVm {
+                WindowsProfile::off()
+            } else {
+                WindowsProfile::on()
+            },
+            ..Default::default()
+        },
+    );
+    match arm {
+        Arm::Windows | Arm::WindowsOnAnOffVm => {
+            policy.respond(&support::windows(&abi));
+        }
+        Arm::Linux => {
+            policy.respond(&support::linux(&abi));
+        }
+        Arm::Undeclared => {}
+    }
+    for (i, (engine, pid)) in [(0xb, 0x350), (0xb, 0x554)].into_iter().enumerate() {
+        let _ = policy.respond(&support::kernel_channel_alloc(
+            abi.driver_version(),
+            0xff04_0000 + u32::try_from(i).unwrap(),
+            engine,
+            pid,
+        ));
+    }
+    std::mem::take(&mut *seen.lock().unwrap())
+}
+
+/// The channel link inside the served chain carries the declared identity to the plane ONLY for a declared
+/// Windows guest on a `windows-support=on` VM: a Linux guest, an undeclared guest AND a Windows declaration on
+/// an `off` VM are told `windows == false` for every alloc.
+#[test]
+fn the_served_chains_channel_link_tells_the_plane_windows_only_for_a_declared_windows_guest() {
+    for arm in ARMS {
+        let got: Vec<bool> = plane_view(arm).iter().map(|(_, _, w)| *w).collect();
+        assert_eq!(got, vec![arm.served(); 2], "{arm:?}");
+    }
+}
+
+/// `windows-support=off` stops the channel half: a Windows declaration on an off VM reclassifies no channel
+/// as per-process USER work (the Passthrough route) and carries no identity.
+#[test]
+fn windows_support_off_stops_the_channel_half_of_the_opt_out() {
+    let got = plane_view(Arm::WindowsOnAnOffVm);
+    assert_eq!(got.len(), 2);
+    assert!(
+        got.iter()
+            .all(|(_, user_work, windows)| !user_work && !windows),
+        "{got:?}"
+    );
+}
+
+/// ... and the same allocs on an `on` VM with a declared Windows guest DO reach the Passthrough route
+/// (so the off arm above is not vacuous).
+#[test]
+fn a_declared_windows_guest_on_an_on_vm_reaches_the_passthrough_route() {
+    let got = plane_view(Arm::Windows);
+    assert_eq!(
+        got.iter().map(|(p, u, _)| (*p, *u)).collect::<Vec<_>>(),
+        vec![(0x350, false), (0x554, true)]
+    );
+}
+
+/// A Linux declaration moves no channel to the Passthrough route.
+#[test]
+fn a_linux_guests_channels_stay_translated() {
+    let got = plane_view(Arm::Linux);
+    assert!(
+        got.iter()
+            .all(|(_, user_work, windows)| !user_work && !windows),
+        "{got:?}"
+    );
+}
+
+/// F1: a NEW chain is a NEW guest life. The profile outlives the chain (the display and memory planes read
+/// it), so building a chain starts the declaration over: a device reset (`reset_life`) must not leave a dead
+/// life's Windows identity standing for the planes outside the chain.
+#[test]
+fn a_rebuilt_chain_starts_undeclared() {
+    let abi = support::abi();
+    let profile = WindowsProfile::on();
+    let build = |profile: WindowsProfile| {
+        kf_rm::served_policy(
+            ga106::board(),
+            ga106::host(),
+            abi,
+            Default::default(),
+            Default::default(),
+            kf_rm::ObjectLinks {
+                windows: profile,
+                ..Default::default()
+            },
+        )
+    };
+    let mut first = build(profile.clone());
+    first.respond(&support::windows(&abi));
+    assert!(profile.active(), "declared in the first life");
+    let _second = build(profile.clone());
+    assert!(
+        !profile.active(),
+        "a rebuilt chain is a new life: nothing declared"
+    );
+}
+
+/// F1, through the real reset path: `ReselectAtFn1::reset_life` (the device reset) rebuilds the chain from the
+/// recipe, and the declaration of the old life is gone before the next fn 1.
+#[test]
+fn a_device_reset_clears_the_windows_declaration() {
+    let abi = support::abi();
+    let profile = WindowsProfile::on();
+    let p2 = profile.clone();
+    let build: Box<dyn Fn(kf_abi::versions::DriverAbiTable) -> Box<dyn CommandPolicy> + Send> =
+        Box::new(move |t| {
+            kf_rm::served_policy(
+                ga106::board(),
+                ga106::host(),
+                t,
+                Default::default(),
+                Default::default(),
+                kf_rm::ObjectLinks {
+                    windows: p2.clone(),
+                    ..Default::default()
+                },
+            )
+        });
+    let mut policy = kf_rm::ReselectAtFn1::new(abi, kf_rm::GuestDriverSource::Declared, build);
+    policy.respond(&support::windows(&abi));
+    assert!(profile.active());
+    policy.reset_life();
+    assert!(
+        !profile.active(),
+        "the dead life's identity must not survive the reset"
+    );
+    policy.respond(&support::windows(&abi));
+    assert!(profile.active(), "and the next life declares its own");
+}

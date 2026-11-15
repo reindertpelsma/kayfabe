@@ -2024,6 +2024,56 @@ impl WindowsBirth {
     }
 }
 
+/// ★ 2026-11-15 (review of PR #438, F2): every birth decision the Windows profile makes, as ONE value
+/// computed from the alloc by [`BirthPlan::of`]. [`ChanPlane::birth`] reads only these fields, never the
+/// alloc's identity directly, so the decision is testable without a host (`windows_birth_tests`): a Linux
+/// alloc yields an all-`false` plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct BirthPlan {
+    /// The channel takes the kernel-GR tier's host ring.
+    kernel_gr: bool,
+    /// ... and its GR work (the allowlisted graphics objects).
+    gr_tier: bool,
+    /// The Translated ring serves the deferred-API software trigger.
+    deferred_api: bool,
+    /// The channel's guest-side gate is opened at birth (host-owned scheduling).
+    scheduled_at_birth: bool,
+    /// The alloc's declared identity, kept in the slot for the pump's copy-engine relay.
+    windows: bool,
+}
+
+impl BirthPlan {
+    fn of(a: &kf_rm::chanlink::ChannelAlloc, kernel_work: bool, engine: u32) -> BirthPlan {
+        let p = WindowsBirth::of_alloc(a);
+        let kernel_gr = p.kernel_gr(kernel_work, engine);
+        BirthPlan {
+            kernel_gr,
+            gr_tier: p.gr_tier(kernel_gr),
+            deferred_api: p.deferred_api,
+            scheduled_at_birth: p.scheduled_at_birth,
+            windows: a.windows,
+        }
+    }
+}
+
+/// Whether a Translated copy-engine pump relays its completion to the guest: the slot's identity
+/// (fixed at birth, [`BirthPlan::windows`]) decides, with the pump's own facts.
+fn slot_relays_ce_completion(
+    slot_windows: bool,
+    gr_tier: bool,
+    copy_engine: bool,
+    advanced: bool,
+) -> bool {
+    WindowsBirth::of(slot_windows).relays_ce_completion(gr_tier, copy_engine, advanced)
+}
+
+/// The deferred-API plan of one Passthrough twin (`None`: not a twin of ours).
+fn twin_defapi_for(twin: Option<&PtChan>) -> TwinDefapiPlan {
+    twin.map_or(TwinDefapiPlan::NoHostObject, |v| {
+        twin_defapi_plan(v.windows, v.user_work)
+    })
+}
+
 // ★ Owner ruling 2026-10-07 (§S item 4): on a T-mode Translated ring, a SET_OBJECT on a software
 // subchannel (5-7) of a value no family lists as a class is accepted silently; any later software
 // method there is refused by name. The hardware behaviour is INFERRED, not tested. Default off.
@@ -5234,15 +5284,15 @@ impl ChanPlane {
         handle: u32,
         notify_completion: bool,
     ) -> ChanAnswer {
-        let (passthrough, user_work, user_ring, windows) = self
+        let (passthrough, user_work, user_ring, defapi_plan) = self
             .pt
             .lock()
             .ok()
             .and_then(|m| {
                 m.get(&(client, parent))
-                    .map(|v| (true, v.user_work, v.user_ring, v.windows))
+                    .map(|v| (true, v.user_work, v.user_ring, twin_defapi_for(Some(v))))
             })
-            .unwrap_or((false, false, false, false));
+            .unwrap_or((false, false, false, TwinDefapiPlan::NoHostObject));
         if user_ring {
             return self.user_ring_software_object(client, parent, handle, notify_completion);
         }
@@ -5258,7 +5308,7 @@ impl ChanPlane {
             // carry reaches the host engine as a software method with no host object behind it,
             // and the host RCs that channel (fail closed). `[measured, runs 47-57]` Windows' deferred
             // triggers all ran on its kernel GR channel.
-            if twin_defapi_plan(windows, user_work) == TwinDefapiPlan::AuthorHostObject {
+            if defapi_plan == TwinDefapiPlan::AuthorHostObject {
                 return self.twin_defapi_act(client, parent, handle);
             }
             eprintln!(
@@ -6861,8 +6911,8 @@ impl ChanPlane {
         // Windows profile's values; measured required, runs 21-24). ★ 2026-11-15: the kernel-GR tier
         // (was `KF3_KERNEL_GR_CE`) is the Windows profile's and follows the alloc's declared identity
         // ([`WindowsBirth`]); a Linux guest's internal kernel GR channel is "not born", as before.
-        let profile = WindowsBirth::of_alloc(&a);
-        let kernel_gr = profile.kernel_gr(kernel_work, engine);
+        let plan = BirthPlan::of(&a, kernel_work, engine);
+        let kernel_gr = plan.kernel_gr;
         let kernel_nvdec =
             kernel_work && kf_abi::submit::nvdec_index_of_engine_type(engine).is_some();
         let kernel_nvenc =
@@ -7389,7 +7439,7 @@ impl ChanPlane {
                 me.rc_armed.fetch_add(1, Ordering::Relaxed);
                 // ★★★ GR tier (owner rulings 2026-10-07): USER assertion, then the allowlisted host
                 // objects — refused by name, the ring freed, the birth refused, on any failure.
-                let gr_tier = profile.gr_tier(kernel_gr);
+                let gr_tier = plan.gr_tier;
                 let gr_gp_get = if gr_tier {
                     let at = match a.userd {
                         Some(kf_arch::UserdMem::Framebuffer { base, .. }) => {
@@ -7425,7 +7475,7 @@ impl ChanPlane {
                 let gr_cfg = kf_chan::tmode::GrConfig {
                     tier: gr_tier,
                     inert_sw_subch: sw_subch_inert(),
-                    deferred_api: profile.deferred_api,
+                    deferred_api: plan.deferred_api,
                     video: video_class,
                 };
                 // ★ 2026-10-19 (run 3017, token 0x806): a guest-KERNEL copy-engine ring decodes
@@ -7488,8 +7538,8 @@ impl ChanPlane {
                     guest_engine: engine,
                     ctx: CtxBind::default(),
                     // ⚠ Host-owned scheduling for a declared Windows guest (OWNER_RULINGS §W, 2026-11-15).
-                    scheduled: profile.scheduled_at_birth,
-                    windows: a.windows,
+                    scheduled: plan.scheduled_at_birth,
+                    windows: plan.windows,
                     dead: None,
                     serves: 0,
                     last_put: None,
@@ -7545,7 +7595,7 @@ impl ChanPlane {
                     kernel_by(&a),
                     gr_gp_get.is_some(),
                     gr_cfg.inert_sw_subch,
-                    profile.scheduled_at_birth
+                    plan.scheduled_at_birth
                 ))
             }),
         )
@@ -8168,7 +8218,8 @@ impl ChanPlane {
             is_any_ce_class,
             &NoMirrorWindow,
         );
-        if WindowsBirth::of(g.windows).relays_ce_completion(
+        if slot_relays_ce_completion(
+            g.windows,
             g.gr_tier,
             is_copy_engine(g.guest_engine),
             g.chan.last_gp_get() != gp_before,
@@ -8955,6 +9006,38 @@ mod dispsw_tests {
             falcon_ctx: None,
             ring_at: (0, 0, None),
         }
+    }
+
+    /// ★ 2026-11-15 (review of PR #438, F2): the deferred-API plan of a twin is read from the twin's own
+    /// declared identity. A Linux twin (`windows == false`) gets no host object even if its record says
+    /// user work; a declared Windows user-work twin gets one; a Windows twin that is not user work, and a
+    /// handle that names no twin of ours, get none.
+    #[test]
+    fn a_twin_of_a_guest_that_did_not_declare_windows_gets_no_host_deferred_api_object() {
+        use super::{TwinDefapiPlan, twin_defapi_for};
+        let mut t = twin(1, &[]);
+        t.user_work = true;
+        t.windows = false;
+        assert_eq!(twin_defapi_for(Some(&t)), TwinDefapiPlan::NoHostObject);
+    }
+
+    #[test]
+    fn a_declared_windows_user_work_twin_gets_a_host_deferred_api_object() {
+        use super::{TwinDefapiPlan, twin_defapi_for};
+        let mut t = twin(1, &[]);
+        t.user_work = true;
+        t.windows = true;
+        assert_eq!(twin_defapi_for(Some(&t)), TwinDefapiPlan::AuthorHostObject);
+    }
+
+    #[test]
+    fn a_windows_twin_that_is_not_user_work_and_a_stranger_get_none() {
+        use super::{TwinDefapiPlan, twin_defapi_for};
+        let mut t = twin(1, &[]);
+        t.user_work = false;
+        t.windows = true;
+        assert_eq!(twin_defapi_for(Some(&t)), TwinDefapiPlan::NoHostObject);
+        assert_eq!(twin_defapi_for(None), TwinDefapiPlan::NoHostObject);
     }
 
     /// Two clients, three twinned channels — client A's `CH1` and `CH2`, and client B's `CH1` (the
@@ -9769,7 +9852,7 @@ mod sw_scan_tests {
 /// (every Linux channel) every behaviour is off and every route is the one it took before the profile.
 #[cfg(test)]
 mod windows_birth_tests {
-    use super::WindowsBirth;
+    use super::{BirthPlan, WindowsBirth, slot_relays_ce_completion};
     use kf_abi::submit::{ENGINE_TYPE_COPY0, ENGINE_TYPE_GRAPHICS};
 
     fn alloc(windows: bool) -> kf_rm::chanlink::ChannelAlloc {
@@ -9850,6 +9933,65 @@ mod windows_birth_tests {
             !WindowsBirth::of(false).gr_tier(true),
             "never for a Linux channel"
         );
+    }
+
+    /// ★ 2026-11-15 (review of PR #438, F2): the plan `birth()` reads. A Linux alloc (no declared
+    /// identity) yields an all-`false` plan whatever the route (kernel or user, any engine), so the
+    /// kernel-GR tier, its GR work, the deferred-API trigger and host-owned scheduling are all off and the
+    /// slot is stamped `windows == false`.
+    #[test]
+    fn a_linux_alloc_yields_an_all_false_birth_plan() {
+        for kernel_work in [false, true] {
+            for engine in [ENGINE_TYPE_GRAPHICS, ENGINE_TYPE_COPY0] {
+                assert_eq!(
+                    BirthPlan::of(&alloc(false), kernel_work, engine),
+                    BirthPlan {
+                        kernel_gr: false,
+                        gr_tier: false,
+                        deferred_api: false,
+                        scheduled_at_birth: false,
+                        windows: false
+                    },
+                    "kernel={kernel_work} engine={engine:#x}"
+                );
+            }
+        }
+    }
+
+    /// A declared Windows kernel graphics alloc takes the whole profile and stamps the slot.
+    #[test]
+    fn a_declared_windows_kernel_graphics_alloc_takes_the_whole_birth_plan() {
+        assert_eq!(
+            BirthPlan::of(&alloc(true), true, ENGINE_TYPE_GRAPHICS),
+            BirthPlan {
+                kernel_gr: true,
+                gr_tier: true,
+                deferred_api: true,
+                scheduled_at_birth: true,
+                windows: true
+            }
+        );
+    }
+
+    /// The slot is stamped with the ALLOC's identity, and the pump's relay follows the slot's: a
+    /// Linux slot never relays, a Windows slot relays an advanced copy-engine ring.
+    #[test]
+    fn the_pump_relay_follows_the_slots_identity() {
+        let linux = BirthPlan::of(&alloc(false), true, ENGINE_TYPE_COPY0);
+        let windows = BirthPlan::of(&alloc(true), true, ENGINE_TYPE_COPY0);
+        assert!(!slot_relays_ce_completion(linux.windows, false, true, true));
+        assert!(slot_relays_ce_completion(
+            windows.windows,
+            false,
+            true,
+            true
+        ));
+        assert!(!slot_relays_ce_completion(
+            windows.windows,
+            true,
+            true,
+            true
+        ));
     }
 
     /// The deferred-API trigger is the profile's alone.

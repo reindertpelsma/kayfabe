@@ -49,3 +49,47 @@ pub fn windows(w: &kf_abi::versions::DriverAbiTable) -> RpcCommand {
 pub fn linux(w: &kf_abi::versions::DriverAbiTable) -> RpcCommand {
     fn1(w, &w.driver_version().to_string(), "", 0)
 }
+
+/// An `NV_CHANNEL_ALLOC_PARAMS` alloc (`RmAlloc`, class `0xc56f`) of a guest-KERNEL channel on `engine` with
+/// `pid`, at the wire version `v`: the shape the Windows driver's per-process channels take.
+pub fn kernel_channel_alloc(
+    v: kf_abi::DriverVersion,
+    handle: u32,
+    engine: u32,
+    pid: u32,
+) -> RpcCommand {
+    use kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS;
+    let l = kf_abi::matrix::Resolved::of(&NV_CHANNEL_ALLOC_PARAMS, v).expect("measured");
+    let mut params = vec![0u8; l.size()];
+    for (path, val) in [
+        ("ProcessID", pid),
+        ("engineType", engine),
+        ("internalFlags", 0x16),
+        ("gpFifoEntries", 4096),
+    ] {
+        let off = l.need(path).expect("field").off();
+        params[off..off + 4].copy_from_slice(&val.to_le_bytes());
+    }
+    let mut payload: Vec<u8> = [
+        0xc1d0_0013u32,
+        0xff0e_0000,
+        handle,
+        0xc56f,
+        0,
+        params.len() as u32,
+        0,
+        0,
+    ]
+    .into_iter()
+    .flat_map(u32::to_le_bytes)
+    .collect();
+    payload.extend(params);
+    RpcCommand {
+        function: RpcFunction::RmAlloc,
+        code: 103,
+        sequence: 1,
+        payload,
+        elements: 1,
+        delivered: Vec::new(),
+    }
+}

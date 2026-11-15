@@ -18,13 +18,24 @@ the first proof is the Windows gate on a rented box with NO env file (`docs/desi
    (`KF3_WIN_USER_CHANNELS_PASSTHROUGH`, `_WIN_TWIN_DEFAPI_OBJECT`, `_KERNEL_GR_CE`, `_KERNEL_GR_WORK`, `_TRANSLATED_CE_RELAY`,
    `_DEFERRED_API`, `_PREEMPT_BIND_PROBE`, `_ZCULL_BIND_PROBE`, `_ASYNC_PREEMPT`, `_DISPLAY_CTRL_PROBE`, `_DISPLAY_IMP_ENABLE`,
    `_SW_RUNLIST_PROBE`, `_SW_RUNLIST_HOST_OWNED`, `_GFX_POOL_PROBE`, `_MEMORY_LIST_PROBE`, `_DISPLAY_SDR_COLOR`,
-   `_DISPLAY_LUT_MIRROR`, `_DISPLAY_ILUT_OFFSET_256`) were ablated and validated **together** and are hardwired **together**. "To start
-   Windows you don't need an env file; then the defaults are wrong."
+   `_DISPLAY_LUT_MIRROR`, `_DISPLAY_ILUT_OFFSET_256`) are hardwired **together**. What was measured: the Windows gates PASSed with all 18
+   on (RTX 4090 `a76d1397`, RTX 3090 `006d845a`, RTX 5070 Ti `54410b7d`, AD102; `windows_apps` 10/10 on the 4090). Individually ablated
+   (2026-10-10/11, idle desktop only): `TIMER_MAP` (not in this set) and a subset of the 18 (see `V3_FLAG_INVENTORY.md`); **not** ablated:
+   `ZCULL_BIND_PROBE`; needed only INFERRED: `KERNEL_GR_WORK`, `SW_RUNLIST_PROBE`, `MEMORY_LIST_PROBE`; idle-only: `TRANSLATED_CE_RELAY`,
+   `ASYNC_PREEMPT`; `DISPLAY_SDR_COLOR` was "not needed to boot" (colour fidelity). Those passes ran with the OLD, process-wide flags; the
+   per-declaration form shipped here (identity-gated per alloc, per space and per page) has **not** run on hardware. "To start Windows you
+   don't need an env file; then the defaults are wrong."
 2. **Both OSes out of the box.** "By default kayfabe should run both Linux and Windows out of the box, unless it is explicitly told to be
    Linux-only on the command line." The compromise: each behaviour is gated on the guest DECLARING the Windows driver identity (owner
    rule D4: keyed on declared state, never a flag), so Linux is unchanged by construction; one coarse device property
    `windows-support=on|off`, **default on**, is the only opt-out (`docs/design/V3_WINDOWS_SUPPORT_PROFILE.md`). "Windows-only" is not worth
    a switch. The rest of the `KF3_*` flags stay, documented for power users; the env-read allowlist lint comes later (Stage 3).
+   **The declaration is the guest's own bytes (rule D4): it selects a compatibility profile and is not a security boundary.** An honest Linux
+   guest never reaches the profile; a guest that declares Windows 580.88 reaches about fifteen paths that used to need an operator env flag
+   (user-work twins and the user ring, the 64 KiB-floor spaces, the host deferred-API object, the kernel-GR tier, the copy-engine relay,
+   memory-list descriptors, async preempt with cross-client re-enable, host-owned scheduling, the colour decoder). No path into another VM or
+   the host was found (read, not tested); a dedicated hostile-guest review is a follow-up. `windows-support=off` is the hardening for
+   Linux-only or multi-tenant hosts.
 3. **`KF3_SW_RUNLIST_HOST_OWNED` is turned on with the rest.** §W's "stays off and undecided" is reversed (see §W): "undecided" was never a
    decision to keep it off.
 4. **Fabricated answers become product behaviour, named as such.** The profile includes answers no host query produced (class (c) in the

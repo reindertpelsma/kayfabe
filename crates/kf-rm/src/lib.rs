@@ -511,6 +511,14 @@ pub fn served_chain(
         static_info = static_info.with_name(n, sn);
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
+    // ★ 2026-11-15 (review of PR #438, F1): a NEW chain is a NEW guest life — a device reset rebuilds it
+    // (`reset_life`), and so does the fn-1 re-selection — and every per-life link (the channel link's
+    // identity above all) starts undeclared. The profile is shared with planes that live outside the chain
+    // (the display and memory planes), so its declaration is cleared HERE, with the chain it belongs to:
+    // otherwise those planes would keep a dead life's Windows identity until the next fn 1 (never, for a
+    // guest that boots Linux or only the basic display adapter). The guest's fn 1, which follows, declares
+    // its own identity through the observer seated below.
+    windows.declare(false);
     // ★ 2026-11-15 (flag cleanup, Stage 1): the Windows support profile. The identity observer is
     // seated FIRST, so every Windows-gated link below sees the declaration of the SAME fn 1 that
     // reaches it (a `CommandObserver` cannot answer: seating it first changes no reply). With the

@@ -30,7 +30,9 @@ generated display files reproduce byte for byte):
 - `scripts/ci/windows_profile_mutants.py` (Rust job, 2026-11-15) mutates the Windows support profile's identity gates (`kf-rm` `winprofile.rs`, the
   chain and channel links, `kf-qemu` channel birth, the mirror-space start and the display colour path) and requires each mutant to fail at least two
   named tests. The tests are the proof that a Linux guest, an undeclared guest and a `windows-support=off` VM reach none of the profile
-  (`crates/kf-rm/tests/windows_profile_chain.rs` and the unit tests it names).
+  (`crates/kf-rm/tests/windows_profile_chain.rs` and the unit tests it names). Review of PR #438 (2026-11-15) added mutants at the USE sites of the gates (where the
+  gate is read, not only its truth table): behavioural tests with the real profile where a site is reachable GPU-free, and `crates/kf-qemu/tests/windows_use_sites.rs`
+  (source pins, two independent tests) for the sites inside `ChanPlane::birth`, the drainer loop and `Device::realize`.
 - `static` also ties the VER3 PCF enumerants the kernel names (`KF_VER3_*`) to
   `crates/kf-chip/data/hwref-580.159.04.tsv`.
 

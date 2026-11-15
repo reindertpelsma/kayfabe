@@ -73,7 +73,7 @@ export KF_GUEST_USER=${KF_GUEST_USER:-kf}
 IDLE_S=${KF_WINGATE_IDLE_S:-300}
 BUDGET_S=${KF_WINGATE_BUDGET_S:-9000}
 # ★ 2026-11-15 (flag cleanup, Stage 1): NO env file by default. The Windows profile is the device's default for a
-# declared Windows guest (OWNER_RULINGS section W), so the gate boots with the flags the product has. KF_WINGATE_FLAGS
+# declared Windows guest (OWNER_RULINGS section AT), so the gate boots with the flags the product has. KF_WINGATE_FLAGS
 # names a MEASUREMENT-only file (e.g. KF3_RPC_TRACE=1) and is the only way an env file reaches win_vm.sh.
 FLAGS=${KF_WINGATE_FLAGS:-}
 ENVFILE_ARGS=()

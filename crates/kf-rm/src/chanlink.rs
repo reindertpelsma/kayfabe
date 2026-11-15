@@ -4513,68 +4513,104 @@ mod tests {
         }
     }
 
+    /// One `DISABLE_CHANNELS` control (`list`, `disable`, `ev` = `pRunlistPreemptEvent`) from client
+    /// `0xc1d0_000b` through the link of `arm`: `(rpc_result, statements the plane received)`.
+    fn disable_channels(arm: &str, list: Vec<(u32, u32)>, disable: bool, ev: u64) -> (u32, usize) {
+        use std::sync::{Arc, Mutex};
+        let seen: Arc<Mutex<Vec<ChanStatement>>> = Arc::default();
+        let s2 = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            s2.lock().unwrap().push(st);
+            ChanAnswer::Done
+        });
+        let mut link = link_for_arm(arm, sink);
+        let p = {
+            let mut b = kf_abi::submit::DisableChannels {
+                disable,
+                only_disable_scheduling: false,
+                rewind_gp_put: false,
+                runlist_preempt_event: 0,
+                list,
+            }
+            .encode()
+            .expect("encode");
+            b[16..24].copy_from_slice(&ev.to_le_bytes());
+            b
+        };
+        let mut b = vec![0u8; 40];
+        b[0..4].copy_from_slice(&0xc1d0_000bu32.to_le_bytes());
+        b[4..8].copy_from_slice(&0x5c00_0002u32.to_le_bytes());
+        b[8..12].copy_from_slice(&DISABLE_CHANNELS.to_le_bytes());
+        b[16..20].copy_from_slice(&(p.len() as u32).to_le_bytes());
+        b.extend_from_slice(&p);
+        let r = link
+            .respond(&RpcCommand {
+                function: RpcFunction::RmControl,
+                code: 76,
+                sequence: 1,
+                payload: b,
+                elements: 1,
+                delivered: Vec::new(),
+            })
+            .expect("answered");
+        let n = seen.lock().unwrap().len();
+        (r.rpc_result, n)
+    }
+
+    const MINE: (u32, u32) = (0xc1d0_000b, 0xcafe_0013);
+    const OTHERS: (u32, u32) = (0xc1d0_000c, 0xcafe_0001);
+
     /// ★ 2026-11-15 (was `KF3_ASYNC_PREEMPT`, default off): the asynchronous `DISABLE_CHANNELS`
-    /// (`pRunlistPreemptEvent != 0`) reaches the plane for a declared Windows guest and is refused by
-    /// name for every other guest, as before; the same holds for the synchronous RE-ENABLE of another
-    /// client's channel group that the async path needs (run 83).
+    /// (`pRunlistPreemptEvent != 0`) of the caller's own channel reaches the plane for a declared Windows
+    /// guest and is refused by name for every other guest, as before.
     #[test]
     fn an_async_preempt_is_served_only_to_a_declared_windows_guest() {
-        use std::sync::{Arc, Mutex};
         for arm in PROFILE_ARMS {
-            let seen: Arc<Mutex<Vec<ChanStatement>>> = Arc::default();
-            let s2 = seen.clone();
-            let sink: ChanSink = Arc::new(move |st| {
-                s2.lock().unwrap().push(st);
-                ChanAnswer::Done
-            });
-            let mut link = link_for_arm(arm, sink);
-            let ctl = |client: u32, p: &[u8]| {
-                let mut b = vec![0u8; 40];
-                b[0..4].copy_from_slice(&client.to_le_bytes());
-                b[4..8].copy_from_slice(&0x5c00_0002u32.to_le_bytes());
-                b[8..12].copy_from_slice(&DISABLE_CHANNELS.to_le_bytes());
-                b[16..20].copy_from_slice(&(p.len() as u32).to_le_bytes());
-                b.extend_from_slice(p);
-                RpcCommand {
-                    function: RpcFunction::RmControl,
-                    code: 76,
-                    sequence: 1,
-                    payload: b,
-                    elements: 1,
-                    delivered: Vec::new(),
-                }
-            };
-            let d = |list: Vec<(u32, u32)>, disable: bool, ev: u64| {
-                let mut b = kf_abi::submit::DisableChannels {
-                    disable,
-                    only_disable_scheduling: false,
-                    rewind_gp_put: false,
-                    runlist_preempt_event: 0,
-                    list,
-                }
-                .encode()
-                .expect("encode");
-                b[16..24].copy_from_slice(&ev.to_le_bytes());
-                b
-            };
-            let (c, ch) = (0xc1d0_000b, 0xcafe_0013);
             let w = arm == "windows";
-            // the async DISABLE of the caller's own channel
-            let r = link
-                .respond(&ctl(c, &d(vec![(c, ch)], true, 0xffff_8000_0000_1000)))
-                .expect("answered");
-            assert_eq!(r.rpc_result == NV_OK, w, "{arm}: async disable");
-            assert_eq!(seen.lock().unwrap().len(), usize::from(w), "{arm}");
-            // the synchronous RE-ENABLE naming ANOTHER client's channel group (run 83)
-            let r = link
-                .respond(&ctl(c, &d(vec![(0xc1d0_000c, 0xcafe_0001)], false, 0)))
-                .expect("answered");
-            assert_eq!(r.rpc_result == NV_OK, w, "{arm}: cross-client re-enable");
-            // the synchronous DISABLE of another client's channel is refused for EVERY guest
-            let r = link
-                .respond(&ctl(c, &d(vec![(0xc1d0_000c, 0xcafe_0001)], true, 0)))
-                .expect("refused");
-            assert_ne!(r.rpc_result, NV_OK, "{arm}: cross-client disable");
+            let (rc, to_plane) = disable_channels(arm, vec![MINE], true, 0xffff_8000_0000_1000);
+            assert_eq!(rc == NV_OK, w, "{arm}: async disable");
+            assert_eq!(to_plane, usize::from(w), "{arm}");
+        }
+    }
+
+    /// The synchronous RE-ENABLE naming ANOTHER client's channel group (run 83) is the half of the async
+    /// path the kernel needs: the same identity gate, in its own test (a Linux guest's cross-client
+    /// re-enable is refused for permissions).
+    #[test]
+    fn a_cross_client_re_enable_is_served_only_to_a_declared_windows_guest() {
+        for arm in PROFILE_ARMS {
+            let w = arm == "windows";
+            let (rc, to_plane) = disable_channels(arm, vec![OTHERS], false, 0);
+            assert_eq!(rc == NV_OK, w, "{arm}: cross-client re-enable");
+            assert_eq!(to_plane, usize::from(w), "{arm}");
+        }
+    }
+
+    /// A Linux guest's cross-client re-enable is refused for PERMISSIONS (the old behaviour), and nothing
+    /// reaches the plane.
+    #[test]
+    fn a_linux_guests_cross_client_re_enable_is_refused_for_permissions() {
+        let (rc, to_plane) = disable_channels("linux", vec![OTHERS], false, 0);
+        assert_eq!(rc, NV_ERR_INSUFFICIENT_PERMISSIONS);
+        assert_eq!(to_plane, 0);
+    }
+
+    /// ... and so is a Windows declaration on a `windows-support=off` VM.
+    #[test]
+    fn an_off_vms_cross_client_re_enable_is_refused_for_permissions() {
+        let (rc, to_plane) =
+            disable_channels("windows, windows-support=off", vec![OTHERS], false, 0);
+        assert_eq!(rc, NV_ERR_INSUFFICIENT_PERMISSIONS);
+        assert_eq!(to_plane, 0);
+    }
+
+    /// The synchronous DISABLE of another client's channel is refused for EVERY guest, Windows included.
+    #[test]
+    fn a_cross_client_disable_is_refused_for_every_guest() {
+        for arm in PROFILE_ARMS {
+            let (rc, to_plane) = disable_channels(arm, vec![OTHERS], true, 0);
+            assert_ne!(rc, NV_OK, "{arm}");
+            assert_eq!(to_plane, 0, "{arm}");
         }
     }
 

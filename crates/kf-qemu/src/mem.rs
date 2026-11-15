@@ -2188,6 +2188,50 @@ pub fn mirror_start_for(profile: &kf_rm::winprofile::WindowsProfile) -> MirrorVa
     MirrorVaStart::select(profile.active())
 }
 
+/// ★ 2026-11-15 (review of PR #438, F2): the three places a guest VA space gets its host space, as functions of
+/// the REAL profile so the choice is tested where it is made: a fresh mirror space...
+///
+/// # Errors
+/// The host's refusal, by name.
+pub fn new_mirror_space(
+    host: &dyn TwinHost,
+    windows: &kf_rm::winprofile::WindowsProfile,
+) -> Result<(kf_host::VaSpace, MirrorVaStart), String> {
+    let start = mirror_start_for(windows);
+    host.alloc_space(start).map(|s| (s, start))
+}
+
+/// ... a prewarmed spare (built before any declaration, so default-start unless one stands)...
+///
+/// # Errors
+/// The host's refusal, by name.
+pub fn prewarm_spare_for(
+    host: &dyn TwinHost,
+    windows: &kf_rm::winprofile::WindowsProfile,
+    ram_obj: Option<u32>,
+    store: u32,
+    store_len: u64,
+    negctl: bool,
+) -> Result<Spare, String> {
+    prewarm_spare(
+        host,
+        mirror_start_for(windows),
+        ram_obj,
+        store,
+        store_len,
+        negctl,
+    )
+}
+
+/// ... and the recycled spare a new guest VA space may take: one made with the start ITS guest wants.
+fn take_spare_for(
+    spares: &Mutex<Vec<Spare>>,
+    windows: &kf_rm::winprofile::WindowsProfile,
+) -> Option<Spare> {
+    let mut spares = spares.lock().ok()?;
+    take_spare_of(&mut spares, mirror_start_for(windows))
+}
+
 /// Take (the most recently added) spare whose start is `start`; a spare of the other start stays.
 fn take_spare_of(spares: &mut Vec<Spare>, start: MirrorVaStart) -> Option<Spare> {
     let at = spares.iter().rposition(|s| s.start == start)?;
@@ -3246,24 +3290,6 @@ impl MemPlane {
         ))
     }
 
-    /// ★ 2026-11-15 (was `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): where the next mirror space starts —
-    /// the 64 KiB twin floor ([`MirrorVaStart::GuestFloor`]) iff the guest has declared the measured
-    /// Windows build at fn 1 and `windows-support` is on, host RM's default otherwise (every Linux
-    /// guest, and a guest that has declared nothing yet). Read on the VA thread when a space is
-    /// created; a space keeps the start it was made with ([`Mirror::start`], [`Spare::start`]).
-    #[must_use]
-    pub fn mirror_start(&self) -> MirrorVaStart {
-        mirror_start_for(&self.windows)
-    }
-
-    /// ★ 2026-11-15: a recycled spare space whose start is `start` ([`Spare::start`]), if any. A spare of
-    /// the other start stays in the list: prewarm (before any declaration) builds default-start spaces,
-    /// which a Windows guest must not take, and a retired Windows space must not reach a Linux guest.
-    fn take_spare(&self, start: MirrorVaStart) -> Option<Spare> {
-        let mut spares = self.spares.lock().ok()?;
-        take_spare_of(&mut spares, start)
-    }
-
     /// ★ The guest-RAM object: an OS descriptor over the whole guest memfd, so a sysmem leaf at
     /// memfd offset `o` is object offset `o` — the same numbering `RamMap::file_range` gives the
     /// VA manager. Created ONCE, on the VA thread (never a vCPU: it pins every page).
@@ -3622,10 +3648,9 @@ fn create_mirror(
     let t_mirror = std::time::Instant::now();
     let us = |t: std::time::Instant| t.elapsed().as_micros();
     let t_step = std::time::Instant::now();
-    // ★ 2026-11-15: the start follows the guest's DECLARED identity at this moment ([`MemPlane::mirror_start`]).
-    let start = plane.mirror_start();
-    let space = match TwinHost::alloc_space(rm, start) {
-        Ok(space) => space,
+    // ★ 2026-11-15: the start follows the guest's DECLARED identity at this moment ([`new_mirror_space`]).
+    let (space, start) = match new_mirror_space(rm, &plane.windows) {
+        Ok(v) => v,
         Err(e) => {
             plane.counters.refused.fetch_add(1, Ordering::Relaxed);
             return Err(format!("pagedir {key:?}: host VA space refused: {e}"));
@@ -3706,9 +3731,9 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
     // ★ P1+P2 inc D (§4.1), hardwired 2026-10-10 (§AB rule 2): spares are plain spaces — still
     // prewarmed (the space and its reservations cost RM calls), with no window to pay for. ★ Review
     // fix 2026-10-04: the line names what the spare's record holds ([`spare_windows_text`]).
-    let sp = match prewarm_spare(
+    let sp = match prewarm_spare_for(
         rm,
-        plane.mirror_start(),
+        &plane.windows,
         ram_obj.ok().map(|(o, _)| o),
         store,
         plane.fb_len,
@@ -4132,7 +4157,7 @@ pub fn apply_statement(
                 }
             };
             if m.table.target(key).is_none() {
-                let reused = plane.take_spare(plane.mirror_start());
+                let reused = take_spare_for(&plane.spares, &plane.windows);
                 if let Some(sp) = reused.as_ref() {
                     // ★ P1+P2 inc D: a recycled spare is a plain space (§AB rule 2); classified
                     // afresh.
@@ -4996,6 +5021,92 @@ mod tests {
                 retired.start, start,
                 "a retired space is kept with its start"
             );
+        }
+    }
+
+    fn profile(on: bool, declared: bool) -> kf_rm::winprofile::WindowsProfile {
+        let p = kf_rm::winprofile::WindowsProfile::new(on);
+        p.declare(declared);
+        p
+    }
+
+    /// ★ 2026-11-15 (review of PR #438, F2): the functions the memory plane calls where it makes a space,
+    /// with the REAL profile. A fresh mirror space of a guest that did not declare Windows (Linux, nothing
+    /// declared, `windows-support=off`) is allocated at host RM's default start; a declared Windows guest's
+    /// at the floor; and the start the host is asked for is the start the space is recorded with.
+    #[test]
+    fn a_fresh_mirror_space_is_allocated_at_the_start_of_its_guest() {
+        for (name, p, want) in [
+            ("windows", profile(true, true), MirrorVaStart::GuestFloor),
+            ("linux", profile(true, false), MirrorVaStart::HostDefault),
+            (
+                "off VM, windows declared",
+                profile(false, true),
+                MirrorVaStart::HostDefault,
+            ),
+        ] {
+            let h = LedgerHost::default();
+            let (_, start) = new_mirror_space(&h, &p).expect(name);
+            assert_eq!(start, want, "{name}");
+            assert_eq!(
+                h.starts.borrow().as_slice(),
+                [want],
+                "{name}: the host was asked for it"
+            );
+        }
+    }
+
+    #[test]
+    fn a_prewarmed_spare_is_built_at_the_start_of_the_standing_declaration() {
+        for (name, p, want) in [
+            (
+                "nothing declared (prewarm runs before the guest)",
+                profile(true, false),
+                MirrorVaStart::HostDefault,
+            ),
+            ("windows", profile(true, true), MirrorVaStart::GuestFloor),
+            (
+                "off VM, windows declared",
+                profile(false, true),
+                MirrorVaStart::HostDefault,
+            ),
+        ] {
+            let h = LedgerHost::default();
+            let spare =
+                prewarm_spare_for(&h, &p, Some(RAM_OBJ), STORE, STORE_12G, false).expect(name);
+            assert_eq!(spare.start, want, "{name}");
+            assert_eq!(h.starts.borrow().as_slice(), [want], "{name}");
+        }
+    }
+
+    /// A recycled spare is taken for the start the NEW guest wants: a Windows guest never gets a default
+    /// spare, a Linux guest or an `off` VM never gets a floor spare, and the list keeps what was not taken.
+    #[test]
+    fn a_windows_guest_takes_only_a_floor_spare() {
+        let list = Mutex::new(spares_of(&[
+            MirrorVaStart::HostDefault,
+            MirrorVaStart::HostDefault,
+        ]));
+        assert!(take_spare_for(&list, &profile(true, true)).is_none());
+        assert_eq!(list.lock().unwrap().len(), 2);
+        list.lock()
+            .unwrap()
+            .extend(spares_of(&[MirrorVaStart::GuestFloor]));
+        let got = take_spare_for(&list, &profile(true, true)).expect("a floor spare");
+        assert_eq!(got.start, MirrorVaStart::GuestFloor);
+    }
+
+    #[test]
+    fn a_linux_guest_or_an_off_vm_never_takes_a_floor_spare() {
+        for p in [profile(true, false), profile(false, true)] {
+            let list = Mutex::new(spares_of(&[MirrorVaStart::GuestFloor]));
+            assert!(take_spare_for(&list, &p).is_none(), "{p:?}");
+            assert_eq!(list.lock().unwrap().len(), 1);
+            list.lock()
+                .unwrap()
+                .extend(spares_of(&[MirrorVaStart::HostDefault]));
+            let got = take_spare_for(&list, &p).expect("a default spare");
+            assert_eq!(got.start, MirrorVaStart::HostDefault);
         }
     }
 

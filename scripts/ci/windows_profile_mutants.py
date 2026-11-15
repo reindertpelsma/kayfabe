@@ -31,10 +31,12 @@ POL = "crates/kf-rm/src/rmrpc/policy.rs"
 SRP = "crates/kf-rm/src/sw_runlist_probe.rs"
 KDISP = "crates/kf-rm/src/display.rs"
 CHAN = "crates/kf-qemu/src/chan.rs"
+DEV = "crates/kf-qemu/src/device.rs"
+HOST = "crates/kf-host/src/channel.rs"
 MEM = "crates/kf-qemu/src/mem.rs"
 QDISP = "crates/kf-qemu/src/display.rs"
 FILES = {}
-for rel in (WP, LIB, CL, POL, SRP, KDISP, CHAN, MEM, QDISP):
+for rel in (WP, LIB, CL, POL, SRP, KDISP, CHAN, MEM, QDISP, DEV, HOST):
     with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
         FILES[rel] = f.read()
 
@@ -47,10 +49,11 @@ RM = [
 QEMU = [
     [
         "cargo", "test", "-p", "kf-qemu", "--lib", "--",
-        "windows_birth", "twin_defapi", "mirror_space", "spare", "recycled", "retired", "created_twin", "the_start_travels",
-        "sdr", "caps_page", "declaration", "reseal", "single_page", "lab_override",
-    ]
+        "windows_birth", "dispsw_tests", "twin_defapi", "mem::tests", "display::tests",
+    ],
+    ["cargo", "test", "-p", "kf-qemu", "--test", "windows_use_sites"],
 ]
+HOSTT = [["cargo", "test", "-p", "kf-host", "--lib", "--", "effective_start", "bare_space", "mirror_space"]]
 
 
 def ed(rel, old, new):
@@ -126,6 +129,31 @@ CASES = [
     ("caps-sync-stores-nothing", ed(QDISP, "                store(to.base + u64::from(o), b);", "                let _ = (to.base, b);"), QEMU),
     ("caps-sdr-page-never-shown", ed(QDISP, "            (Some(p), true) => p,", "            (Some(_), true) => &self.base,"), QEMU),
     ("color-decoder-mirror-off", ed(QDISP, "    lut_mirror: true,\n    ilut_offset_256: true,\n};", "    lut_mirror: false,\n    ilut_offset_256: true,\n};"), QEMU),
+    # --- review of PR #438 (2026-11-15), F1 and F2: the USE sites (each of these hardwires `true` where the
+    # gate is read; a Linux or windows-support=off guest would reach the Windows behaviour)
+    ("device-reset-keeps-the-declaration", ed(LIB, "    windows.declare(false);\n", ""), RM),
+    ("chain-channel-link-ignores-windows-support", ed(LIB, ".with_windows_support(windows.support()),", ".with_windows_support(true),"), RM),
+    ("birth-plan-of-true", ed(CHAN, "        let p = WindowsBirth::of_alloc(a);", "        let p = WindowsBirth::of(true);"), QEMU),
+    ("birth-plan-stamps-the-slot-true", ed(CHAN, "            windows: a.windows,\n        }\n    }\n}", "            windows: true,\n        }\n    }\n}"), QEMU),
+    ("birth-site-scheduling-true", ed(CHAN, "scheduled: plan.scheduled_at_birth,", "scheduled: true,"), QEMU),
+    ("birth-site-slot-identity-true", ed(CHAN, "windows: plan.windows,", "windows: true,"), QEMU),
+    ("birth-site-deferred-api-true", ed(CHAN, "deferred_api: plan.deferred_api,", "deferred_api: true,"), QEMU),
+    ("pump-site-ce-relay-true", ed(CHAN, "            g.windows,\n            g.gr_tier,", "            true,\n            g.gr_tier,"), QEMU),
+    ("twin-defapi-for-true", ed(CHAN, "twin_defapi_plan(v.windows, v.user_work)", "twin_defapi_plan(true, v.user_work)"), QEMU),
+    ("new-mirror-space-at-the-floor", ed(MEM, "    let start = mirror_start_for(windows);\n    host.alloc_space(start)", "    let start = MirrorVaStart::GuestFloor;\n    host.alloc_space(start)"), QEMU),
+    ("prewarm-spare-at-the-floor", ed(MEM, "    prewarm_spare(\n        host,\n        mirror_start_for(windows),", "    prewarm_spare(\n        host,\n        MirrorVaStart::GuestFloor,"), QEMU),
+    ("take-spare-for-the-floor", ed(MEM, "take_spare_of(&mut spares, mirror_start_for(windows))", "take_spare_of(&mut spares, MirrorVaStart::GuestFloor)"), QEMU),
+    ("reuse-site-takes-any-spare", ed(MEM, "take_spare_for(&plane.spares, &plane.windows)", "plane.spares.lock().ok().and_then(|mut v| v.pop())"), QEMU),
+    ("create-mirror-site-private-profile", ed(MEM, "new_mirror_space(rm, &plane.windows)", "new_mirror_space(rm, &kf_rm::winprofile::WindowsProfile::on())"), QEMU),
+    ("color-path-ungated", ed(QDISP, "        sdr_for(self.wanted(), self.built)", "        self.built"), QEMU),
+    ("color-path-seals-sdr-always", ed(QDISP, "        self.caps.seal(self.wanted())", "        self.caps.seal(true)"), QEMU),
+    ("color-path-syncs-sdr-always", ed(QDISP, "        self.caps.sync(self.wanted(), store);", "        self.caps.sync(true, store);"), QEMU),
+    ("display-site-bypasses-the-color-path", ed(QDISP, "        self.color.sdr()\n", "        self.color.built\n"), QEMU),
+    ("drainer-never-syncs-the-caps-page", ed(DEV, "dp.sync_caps_page(&|o, v| self.shadow_store(o, u64::from(v), 4));", "let _ = dp;"), QEMU),
+    ("device-profile-ignores-the-property", ed(DEV, "WindowsProfile::new(cfg.windows_support)", "WindowsProfile::new(true)"), QEMU),
+    ("bare-space-takes-the-floor", ed(HOST, "    if reserve_guest {\n        start\n    } else {\n        MirrorVaStart::HostDefault\n    }", "    start"), HOSTT),
+    ("mirror-space-never-takes-the-floor", ed(HOST, "    if reserve_guest {\n        start\n    } else {\n        MirrorVaStart::HostDefault\n    }", "    MirrorVaStart::HostDefault"), HOSTT),
+    ("cross-client-re-enable-always", ed(CL, "(self.windows_identity && !d.disable)", "(true && !d.disable)"), RM),
 ]
 
 
@@ -163,7 +191,7 @@ def main():
     want = set(sys.argv[1:])
     cases = [c for c in CASES if not want or c[0] in want]
     try:
-        base = run({}, RM + QEMU)
+        base = run({}, RM + QEMU + HOSTT)
         assert not base, "baseline is not green: %s" % base
         print("baseline: green")
         weak = []
