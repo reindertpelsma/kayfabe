@@ -386,6 +386,56 @@ pub fn keep_statable_ofa(family: Family, kinds: Vec<EngineKind>) -> Vec<EngineKi
         .collect()
 }
 
+/// ★ 2026-11-15 — **how the device is realized, beyond what the host says.** Declared by whoever
+/// realizes the device (kf-qemu reads the run profile), never detected from the guest: the guest OS
+/// is not on the wire (`kf_abi::guest_os`, section 2). [`Default`] is the pre-2026-11-15 behaviour.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct HostFactsPolicy {
+    /// Serve no video engine (NVDEC, NVENC, OFA) whose classes have no derived method table
+    /// ([`hide_untabled_video`]). For a guest that builds KERNEL rings on its engines (the Windows
+    /// KMD): such a ring is decoded against the class's table, an untabled class is refused on its
+    /// first method and the channel dies (the OFA ring on every frame-generation boot, ~9 s before
+    /// the guest's GPU watchdog). Off for a guest whose video work is USER channels only: those are
+    /// passthrough twins that read no table, and the engine is what gives it `VK_NV_optical_flow`.
+    pub hide_untabled_video: bool,
+}
+
+/// ★ The engine list with every video engine that a guest-kernel ring could not be served from a
+/// DERIVED method table REMOVED — named on stderr — so the guest never learns the engine exists and
+/// never builds the ring that would die. Same shape and same choke point as [`keep_statable_ofa`]: it
+/// runs on the engine list before the falcon, FIFO, interrupt and PRI statements are derived from it,
+/// so they all omit the engine together, exactly as for a host without it. The rule's data is
+/// `kf_chip::video_gaps::UNTABLED_VIDEO_CLASSES`, which the coverage audit in `kf-chan` holds equal to
+/// the decoder's real coverage; nothing here is a table, and an engine is never added.
+///
+/// What the guest's RM does with the omission is read from ogkm: `gpuCheckEngineWithOrderList_KERNEL`
+/// (`ogkm-580: gpu.c:6550-6562`) answers `ENG_CLASS_NVENC`/`NVDEC`/`OFA` from `engineCaps` alone, so an
+/// absent engine is an absent object and its classes leave the class database.
+#[must_use]
+pub fn hide_untabled_video(family: Family, kinds: Vec<EngineKind>) -> Vec<EngineKind> {
+    use kf_chip::classes::Kind;
+    kinds
+        .into_iter()
+        .filter(|&k| {
+            let kind = match k {
+                EngineKind::VideoDecode(_) => Kind::VideoDecoder,
+                EngineKind::VideoEncode(_) => Kind::VideoEncoder,
+                EngineKind::OpticalFlow(_) => Kind::OpticalFlow,
+                _ => return true,
+            };
+            if kf_chip::video_gaps::kernel_ring_servable(family, kind) {
+                true
+            } else {
+                eprintln!(
+                    "kf3: host facts: {} NOT advertised — no derived method table for {family:?}'s {kind:?} class(es) (a guest-kernel ring on it would die on its first method)",
+                    k.name()
+                );
+                false
+            }
+        })
+        .collect()
+}
+
 /// `ENG_NVENC(i)` / `ENG_NVDEC(i)` / `ENG_OFA(i)` — `(NVOC classId << 8) | i` (`OBJMSENC 0xe97b6c`,
 /// `OBJBSP 0x8f99e1`, `OBJOFA 0xdd7bab`, `ogkm-580: g_eng_desc_nvoc.h:1273,833,1351`); `None` for a
 /// non-video kind.
@@ -1755,6 +1805,18 @@ pub fn query_host_facts(
     host: &mut dyn HostControls,
     family: Family,
 ) -> Result<HostFacts, HostFactsRefused> {
+    query_host_facts_with(host, family, HostFactsPolicy::default())
+}
+
+/// [`query_host_facts`] under a declared [`HostFactsPolicy`].
+///
+/// # Errors
+/// [`HostFactsRefused`] — every refused field, in [`PROVENANCE`](crate::hostfacts::PROVENANCE) order.
+pub fn query_host_facts_with(
+    host: &mut dyn HostControls,
+    family: Family,
+    policy: HostFactsPolicy,
+) -> Result<HostFacts, HostFactsRefused> {
     let arch = query_arch_die(host);
     let asked = family;
     let family = match &arch {
@@ -1770,6 +1832,13 @@ pub fn query_host_facts(
     let ce_caps = query_ce_caps(host);
     let grce = ce_caps.as_ref().map(kf_abi::cecaps::HostCeCaps::grce_mask);
     let kinds = query_engine_list(host);
+    // ★ 2026-11-15: an engine with no derived method table is dropped HERE, before the falcon table is
+    // asked for and before any other statement is derived from the list.
+    let kinds = if policy.hide_untabled_video {
+        kinds.map(|k| hide_untabled_video(asked, k))
+    } else {
+        kinds
+    };
     // ★ The video falcons, then the list kept to the video engines the host's falcon table names.
     // A refused falcon query is not fatal to the device: it advertises no video engine, loudly.
     let video_falcons: Vec<ConstructedFalcon> = match &kinds {

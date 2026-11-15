@@ -16,6 +16,10 @@
 //! from the list (the test fails if a listed class is covered); a new uncovered class fails the
 //! test. This file records the gap; it does NOT fix it. The public headers define no OFA method
 //! layout, so no OFA table entry may be added or aliased without an owner ruling.
+//!
+//! 2026-11-15: the list lives in `kf_chip::video_gaps` (it is also the offer filter's input: an engine
+//! whose classes are listed is not offered to a guest that builds kernel rings on it, see that
+//! module). It is imported here as `KNOWN_GAPS`.
 use kf_abi::submit::method_header_inc;
 use kf_chan::host::video_kind_of_engine;
 use kf_chan::tmode::{GrConfig, TState, decode};
@@ -28,94 +32,12 @@ use std::collections::BTreeSet;
 /// Where the gap was investigated.
 const REPORT: &str = "/root/night/WUKONG_RELAUNCH_TDR_20261115.md section A (H-A1)";
 
-/// Video classes a guest-kernel ring can hold that have NO derived method table today, each with
-/// a one-line reason and the report. Exact match: see the module comment.
-const KNOWN_GAPS: &[(u32, &str)] = &[
-    (
-        0xb4b7,
-        "NVENC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xb8b0,
-        "NVDEC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xb8fa,
-        "OFA: no public header defines an OFA method layout, a table needs an owner ruling (see WUKONG_RELAUNCH_TDR_20261115.md section A: the guest kernel OFA ring dies on its first method, class 0xC9FA measured)",
-    ),
-    (
-        0xc4b0,
-        "NVDEC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xc4b7,
-        "NVENC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xc6fa,
-        "OFA: no public header defines an OFA method layout, a table needs an owner ruling (see WUKONG_RELAUNCH_TDR_20261115.md section A: the guest kernel OFA ring dies on its first method, class 0xC9FA measured)",
-    ),
-    (
-        0xc7fa,
-        "OFA: no public header defines an OFA method layout, a table needs an owner ruling (see WUKONG_RELAUNCH_TDR_20261115.md section A: the guest kernel OFA ring dies on its first method, class 0xC9FA measured)",
-    ),
-    (
-        0xc9fa,
-        "OFA: no public header defines an OFA method layout, a table needs an owner ruling (see WUKONG_RELAUNCH_TDR_20261115.md section A: the guest kernel OFA ring dies on its first method, class 0xC9FA measured)",
-    ),
-    (
-        0xcdb0,
-        "NVDEC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xcdfa,
-        "OFA: no public header defines an OFA method layout, a table needs an owner ruling (see WUKONG_RELAUNCH_TDR_20261115.md section A: the guest kernel OFA ring dies on its first method, class 0xC9FA measured)",
-    ),
-    (
-        0xceb0,
-        "NVDEC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xceb7,
-        "NVENC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xcefa,
-        "OFA: no public header defines an OFA method layout, a table needs an owner ruling (see WUKONG_RELAUNCH_TDR_20261115.md section A: the guest kernel OFA ring dies on its first method, class 0xC9FA measured)",
-    ),
-    (
-        0xcfb0,
-        "NVDEC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xcfb7,
-        "NVENC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xcffa,
-        "OFA: no public header defines an OFA method layout, a table needs an owner ruling (see WUKONG_RELAUNCH_TDR_20261115.md section A: the guest kernel OFA ring dies on its first method, class 0xC9FA measured)",
-    ),
-    (
-        0xd1b0,
-        "NVDEC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xd1b7,
-        "NVENC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xd1fa,
-        "OFA: no public header defines an OFA method layout, a table needs an owner ruling (see WUKONG_RELAUNCH_TDR_20261115.md section A: the guest kernel OFA ring dies on its first method, class 0xC9FA measured)",
-    ),
-    (
-        0xd2b0,
-        "NVDEC: class id from ogkm but no open-gpu-doc header in classes/video, so no derived table (not observed on the route; see WUKONG_RELAUNCH_TDR_20261115.md section A)",
-    ),
-    (
-        0xd2fa,
-        "OFA: no public header defines an OFA method layout, a table needs an owner ruling (see WUKONG_RELAUNCH_TDR_20261115.md section A: the guest kernel OFA ring dies on its first method, class 0xC9FA measured)",
-    ),
-];
+/// Video classes a guest-kernel ring can hold that have NO derived method table today. ★ 2026-11-15:
+/// this is NOT a copy kept in this file. It is `kf_chip::video_gaps::UNTABLED_VIDEO_CLASSES`, the one
+/// list the guest-facing offer filter (`kf_rm::hostquery`, `KF3_WIN_HIDE_UNTABLED_VIDEO`) reads too, so
+/// the filter and this audit cannot drift: the ratchet below fails unless the list is exactly the
+/// uncovered set.
+use kf_chip::video_gaps::UNTABLED_VIDEO_CLASSES as KNOWN_GAPS;
 
 /// Every class a Translated guest-kernel video ring can hold: for each NV2080 engine type that
 /// `video_kind_of_engine` routes, the classes of that kind on every family.
