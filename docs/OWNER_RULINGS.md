@@ -44,7 +44,11 @@ citation: ask whether its reason still holds before relying on it.
    exact tree sha (the final full run stays mandatory; `gpu-vast` on master needs the exact final tree); (b) a manual full release run on a
    manual box (the PC when up, else a Vast box) passing **before** any Worker run; (c) Worker "tiny box" runs only when they save time, to
    exercise the waterfall without a full release run, in parallel with (b), never gating it; (d) the real Worker run last.
-6. **Wukong under VFIO passthrough is the most useful reference** for the Wukong TDR (2026-11-15). A pass there makes the kf3 TDR a release
+6. **Rootless proof (owner, 2026-11-15).** The release run executes kayfabe as a non-root user, to prove kayfabe itself does not need root.
+   Box setup that needs root (packages, device permissions, mounts) is allowed and is kept separate from the run; the run step drops to an
+   unprivileged user with only the device-node access it is granted. Which steps still need root is recorded, not assumed
+   (audit: `/root/night/PARITY_AUDIT_20261115.md`, pending). This also fits the "unprivileged RM verbs" rule.
+7. **Wukong under VFIO passthrough is the most useful reference** for the Wukong TDR (2026-11-15). A pass there makes the kf3 TDR a release
    blocker; a TDR there points away from kayfabe (inferred until runs are in).
 
 ## §AQ. A failed rental never means the test failed: the release replaces that leg on the fly, 2026-11-12
