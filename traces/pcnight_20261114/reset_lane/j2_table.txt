@@ -1,0 +1,68 @@
+== pnr1
+ reset 1 waited_us 0
+   req 2 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 2 VA retired 4
+ reset 2 waited_us 72596
+   req 3 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 3 VA retired 0
+ reset 3 waited_us 23392
+   req 4 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 4 VA retired 4
+ reset 4 waited_us 54325
+   req 5 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 5 VA retired 0
+ reset 5 waited_us 21946
+   req 6 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 6 VA retired 4
+ reset 6 waited_us 52490
+   req 7 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 7 VA retired 0
+ reset 7 waited_us 22165
+   req 8 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 8 VA retired 4
+ reset 8 waited_us 21364
+   req 9 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 9 VA retired 0
+ reset 9 waited_us 21769
+   req 10 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 10 VA retired 4
+ reset 10 waited_us 52259
+   req 11 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 11 VA retired 0
+ reset 11 waited_us 21751
+ heartbeats 3141 pramin_pool_empty nonzero: 0 retire_full nonzero: 0 has_pool_field: 69
+ waits_timed_out values: {'0'}
+== pnr2
+ reset 1 waited_us 0
+   req 2 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 2 VA retired 4
+ reset 2 waited_us 77724
+   req 3 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 3 VA retired 0
+ reset 3 waited_us 23207
+   req 4 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 4 VA retired 4
+ reset 4 waited_us 47871
+   req 5 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 5 VA retired 0
+ reset 5 waited_us 21969
+   req 6 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 6 VA retired 4
+ reset 6 waited_us 59827
+   req 7 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 7 VA retired 0
+ reset 7 waited_us 21776
+   req 8 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 8 VA retired 4
+ reset 8 waited_us 67592
+   req 9 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 9 VA retired 0
+ reset 9 waited_us 21976
+   req 10 pumps 2 GSP GSP Running -> Cold
+   mem stage reset 10 VA retired 4
+ reset 10 waited_us 49479
+   req 11 pumps 0 GSP GSP Cold -> Cold
+   mem stage reset 11 VA retired 0
+ reset 11 waited_us 21762
+ heartbeats 3142 pramin_pool_empty nonzero: 0 retire_full nonzero: 0 has_pool_field: 70
+ waits_timed_out values: {'0'}

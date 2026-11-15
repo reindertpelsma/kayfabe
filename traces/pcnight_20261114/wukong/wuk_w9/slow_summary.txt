@@ -1,0 +1,5 @@
+a1_menu: lines 7187-12553 hb=106 large_applies=18 max_ms=353 n>=200=1 n>=1000=0 DISABLE_CHANNELS=0 rewalk=16
+a1_bench: lines 12553-14360 hb=104 large_applies=211 max_ms=268 n>=200=1 n>=1000=0 DISABLE_CHANNELS=4 rewalk=3
+a2_launch_to_tdr: lines 14424-18869 hb=12 large_applies=2 max_ms=20 n>=200=0 n>=1000=0 DISABLE_CHANNELS=14 rewalk=8
+a3_launch_to_confirm: lines 20567-24674 hb=49 large_applies=67 max_ms=181 n>=200=0 n>=1000=0 DISABLE_CHANNELS=12 rewalk=9
+a3_bench: lines 24674-28550 hb=159 large_applies=301 max_ms=126 n>=200=0 n>=1000=0 DISABLE_CHANNELS=28 rewalk=12
