@@ -106,6 +106,10 @@ pub const KFWR_HF_TRUNCATED: u16 = 1 << 0;
 pub const KFWR_HF_RESYNC: u16 = 1 << 1;
 /// ★ Report header flag: the runs are each entry's DIFF against its slot's committed placements.
 pub const KFWR_HF_DIFF: u16 = 1 << 7;
+/// ★ 2026-11-15 (M4): the diff was larger than the report's run capacity, so the report carries a
+/// WINDOW of it (every run that starts below a VA boundary no run straddles). NOT truncated: the
+/// commit applies it like any report; each entry that is not whole carries [`KFWR_V_CUT`].
+pub const KFWR_HF_CUT: u16 = 1 << 8;
 /// `KFWR_OP_MAP`.
 pub const KFWR_OP_MAP: u16 = 1;
 /// `KFWR_OP_REMAP` (`kf_walk.h`): a placement whose target moved. ★ 2026-11-14: named here so
@@ -148,6 +152,11 @@ pub const KFWR_R_FRONTIER_CAP: u32 = 1 << 12;
 pub const KFWR_V_PARTIAL: u32 = 1 << 3;
 /// Per-entry flag: the slot is full and nothing can be retired; no runs.
 pub const KFWR_V_OVERFLOW: u32 = 1 << 4;
+/// ★ 2026-11-15 (M4) per-entry flag: only part of the entry's diff is in the report (the window
+/// below a VA boundary no run straddles, or nothing of it while an earlier entry fills the report);
+/// the rest is re-emitted by the next walk. The host walks again at once and completes the split or
+/// invalidate only on a walk whose diff is empty.
+pub const KFWR_V_CUT: u32 = 1 << 6;
 /// ★ Per-entry flag: the entry's walk refused something (`KfPdbEntry::reserved2` = the
 /// `KFWR_R_*` bits); its refused leaves are absent from the walk (owner ruling 2026-09-25).
 pub const KFWR_V_REFUSED: u32 = 1 << 5;

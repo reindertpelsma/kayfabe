@@ -14,7 +14,7 @@
 > the Rust model. Everything below about the WALK (I1–I3, the seam, hostile/race/differential) stands;
 > read every "delta"/"resync"/"ack" passage as history.
 
-**STATUS: LIVE (2026-09-14).** A standalone CUDA proving ground for the kernel of
+**STATUS: LIVE (2026-11-15; the report-capacity cut below was added on that date, the rest is as of 2026-09-14).** A standalone CUDA proving ground for the kernel of
 `docs/design/dirty_tracking_without_uffd.md` §w720e, emitting the report of
 `docs/design/the_walk_kernel_report_format.md`. Bare metal, no VM, no guest,
 nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
@@ -32,6 +32,29 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 | `corpus/` | `corpus.bin` (15 synthetic images) + `real_ga106.bin` (5 **real** ones) + each one's `*_leaves.txt` (the Rust walker's decode) |
 | `run_on_box.sh` | ships the source out of a commit, builds and runs, returns a log |
 | `evidence/` | dated run logs, each naming its GPU and driver |
+
+> ### ★ 2026-11-15 (M4) — A DIFF LARGER THAN THE REPORT IS CUT AT A VA BOUNDARY, NOT REFUSED
+> ⊘ Before this date (and in `t_hostile_report_run_cap`, which asserted it) a diff that does not fit the report was
+> "handed out as NOTHING": `kf_diff_emit` set `TRUNCATED`, `RUN_CAP`, `run_count 0`, and the host, which
+> never retries a report-level truncation, refused the split and marked the guest-kernel copy channel dead
+> (`[measured f4a b20fd84b]` `walk report TRUNCATED (flags=0x85, refuse_mask=0x10, runs 0 of 0)` at one diff of
+> more than `run_capacity` = 262 144 runs; 1 boot in 23, near misses at 260 446 and 253 996 runs).
+> Now `kf_diff_emit` reports a WINDOW of the first entry whose running total passes the capacity: every run, of
+> the eight staged lists, that STARTS below the largest boundary `v` that no run straddles (`va < v < va + len`)
+> and keeps the report within the capacity. A staged-order PREFIX is wrong (it can carry a MAP without the
+> overlapping UNMAP of another page-size class, and it separates an UNMAP from the MAP that carries its unchanged
+> pages); a window by address is closed under overlap, so the host applies exactly that window of the whole diff.
+> The report carries `KFWR_HF_CUT` (not `TRUNCATED`: the commit applies it), each entry that is not whole
+> `KFWR_V_CUT`; entries after the cut entry are withheld. The host treats `CUT` like `PARTIAL`: apply, acknowledge,
+> walk again at once, complete the split or invalidate only on a walk whose diff is empty, and spend at most
+> `MAX_CUT_WINDOWS_PER_REQUEST` walks on one request. The cut is exact with no step limit (review of PR #424 F3: an
+> earlier version gave up after 4096 steps down a chain of overlapping runs and refused a report that had a window).
+> ⊘ Still refused, loudly (the legacy `TRUNCATED`): the FIRST thing in an entry is one overlap-connected clump of runs
+> (a chain of overlapping runs counts as one, however long) larger than the report, which cannot be windowed.
+> Graded on this source by `kf_cpu_walk.cpp` (`emit_cut_cases`, `emit_cut_random`; mutants in
+> `scripts/ci/walk_kernel_mutants.py`), and by `diffmodel::cut_report` and the `kf-mem` windowed-apply model.
+> `[not measured on a GPU]` the PTX is rebuilt, but `kf_tests` (including the rewritten `t_hostile_report_run_cap`)
+> has not been run on this revision.
 
 > **2026-11-13 addition (security review 3 F-5):** the committed `kf_walk.ptx` is now rebuilt with the pinned
 > NVRTC 12.2.140 and compared byte for byte on every push (CI job `ptx`, `scripts/ci/walk_ptx_repro.py`), and

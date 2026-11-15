@@ -42,6 +42,10 @@ extern "C" {
  * committed placements (kf_walk.cu, "THE DIFF AGAINST THE COMMITTED
  * PLACEMENTS"): UNMAPs name whole placements, MAPs the pieces to place. */
 #define KFWR_HF_DIFF           (1u << 7)
+/* ★ 2026-11-15 (M4): the diff was larger than the report (`run_capacity`), so the report carries a
+ * WINDOW of it — every run that starts below a VA boundary no run straddles — and each entry that
+ * is not whole carries KFWR_V_CUT. NOT truncated: the commit applies it like any report. */
+#define KFWR_HF_CUT            (1u << 8)
 
 /* ── ReportHeader::refuse_mask — WHICH refusal, so a test can name it ────────── */
 #define KFWR_R_OOB           (1u << 0)  /* a table would leave the GPGA buffer     */
@@ -98,6 +102,11 @@ extern "C" {
  * refused leaves are ABSENT from the walk, so the host fails that space by name
  * rather than treating the diff as the whole truth (owner ruling 2026-09-25). */
 #define KFWR_V_REFUSED  (1u << 5)
+/* ★ 2026-11-15 (M4): the entry's diff is only PARTLY in the report — the window below a VA boundary
+ * no run straddles (see kf_diff_emit), or nothing of it while an earlier entry fills the report. The
+ * rest is re-emitted by the next walk (commit on ack leaves it in the diff). The host walks again at
+ * once and completes the split only on a walk whose diff is empty. */
+#define KFWR_V_CUT      (1u << 6)
 
 /* ── MapRun::op ──────────────────────────────────────────────────────────────── */
 #define KFWR_OP_MAP   1u

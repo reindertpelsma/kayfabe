@@ -383,6 +383,384 @@ static void format_cases(void)
     printf("  [descriptor] %d hostile descriptors refused on VER2 and VER3\n", n);
 }
 
+
+/* ══ THE REPORT'S OWN CAPACITY (M4, 2026-11-15): kf_diff_emit on staged data ═══════════════════════
+ * kf_diff_emit has no barrier and no shared memory, so one CPU thread per block runs the real
+ * source. The staged diff of an entry is eight sorted lists [UNMAP c0][MAP c0] ... [UNMAP c3][MAP c3]
+ * (kf_diff_slots' output, which only the GPU suite runs); here it is built by hand. */
+struct SRun { uint64_t va, len; unsigned cls; bool map; };
+
+struct EmitRig {
+    static const uint32_t NP = 3;
+    std::vector<KfMapRun> scratch, rrun;
+    KfDev dev;
+    KfLayout lay;
+    KfPdbEntry rpdb[KF_MAX_PDB];
+    KfReportHeader hdr;
+    uint64_t pdbs[KF_MAX_PDB];
+    uint32_t slots[KF_MAX_PDB];
+    uint32_t cap_each;
+    std::vector<std::vector<KfMapRun>> staged;   /* per entry, in staged order */
+    uint32_t np;
+    EmitRig(uint32_t cap, uint32_t run_capacity) : cap_each(cap), np(0)
+    {
+        memset(&dev, 0, sizeof(dev));
+        memset(&lay, 0, sizeof(lay));
+        memset(rpdb, 0, sizeof(rpdb));
+        memset(&hdr, 0, sizeof(hdr));
+        dev.run_capacity = run_capacity;
+        dev.pdb_capacity = KF_MAX_PDB;
+        for (uint32_t t = 0; t < NP; t++) { lay.walk_off[t] = t * cap; lay.walk_cap[t] = cap; pdbs[t] = 0x1000u * (t + 1); slots[t] = t; }
+        scratch.assign((size_t)NP * cap * 4u + 8u, KfMapRun());
+        rrun.assign((size_t)run_capacity * 4u + 64u, KfMapRun());   /* slack: a mutated kernel may overrun */
+    }
+    /* Stage entry t: lists in staged order, each sorted by VA. */
+    void stage(uint32_t t, std::vector<SRun> rs)
+    {
+        std::stable_sort(rs.begin(), rs.end(), [](const SRun &a, const SRun &b) {
+            const unsigned ka = a.cls * 2u + (a.map ? 1u : 0u), kb = b.cls * 2u + (b.map ? 1u : 0u);
+            return ka != kb ? ka < kb : a.va < b.va;
+        });
+        std::vector<KfMapRun> v;
+        for (const SRun &r : rs) {
+            KfMapRun m;
+            memset(&m, 0, sizeof(m));
+            m.va = r.va; m.len = r.len; m.gpga = r.map ? 0x100000ull + r.va : 0ull;
+            m.flags = (uint32_t)r.cls << KFWR_RF_PS_SHIFT;
+            m.op = r.map ? KFWR_OP_MAP : KFWR_OP_UNMAP;
+            m.pdb_index = (uint16_t)t;
+            v.push_back(m);
+        }
+        if (staged.size() <= t) staged.resize(t + 1);
+        staged[t] = v;
+        KfMapRun *stg = scratch.data() + (size_t)lay.walk_off[t] * 4u + lay.walk_cap[t];
+        for (size_t i = 0; i < v.size(); i++) stg[i] = v[i];
+        dev.diff_count[t] = (uint32_t)v.size();
+        if (t + 1 > np) np = t + 1;
+    }
+    void emit()
+    {
+        KfArgs a;
+        memset(&a, 0, sizeof(a));
+        a.dev = &dev; a.npdb = np; a.lay = &lay; a.scratch = scratch.data();
+        a.hdr = &hdr; a.rpdb = rpdb; a.rrun = rrun.data(); a.pdbs = pdbs; a.slots = slots;
+        for (uint32_t t = 0; t < KF_MAX_PDB; t++) {
+            blockIdx.x = t; blockDim.x = 1; threadIdx.x = 0;
+            kf_diff_emit(a);
+        }
+    }
+    uint32_t total() const { uint32_t s = 0; for (auto &v : staged) s += (uint32_t)v.size(); return s; }
+};
+
+static bool overlap(const KfMapRun &a, const KfMapRun &b) { return a.va < b.va + b.len && b.va < a.va + a.len; }
+
+/* The reference for one entry's window: the best straddle-free boundary by brute force over every
+ * run start. Returns the largest number of runs a straddle-free boundary reports within `allowed`,
+ * and that boundary. */
+static uint32_t ref_window(const std::vector<KfMapRun> &s, uint32_t allowed, uint64_t *vout)
+{
+    std::vector<uint64_t> cands;
+    for (const KfMapRun &r : s) cands.push_back(r.va);
+    cands.push_back(0);
+    uint32_t best = 0; uint64_t bv = 0;
+    for (uint64_t v : cands) {
+        uint32_t cnt = 0; bool ok = true;
+        for (const KfMapRun &r : s) {
+            if (r.va < v) cnt++;
+            if (r.va < v && v < r.va + r.len) ok = false;
+        }
+        if (ok && cnt <= allowed && cnt >= best) { best = cnt; bv = v; }
+    }
+    *vout = bv;
+    return best;
+}
+
+/* Check one emitted report against the spec. `tag` names the case. */
+static void check_report(EmitRig &r, uint32_t cap, const char *tag)
+{
+    const uint32_t total = r.total();
+    const bool over = total > cap;
+    if (!over) {
+        EXPECT(!(r.hdr.flags & (KFWR_HF_TRUNCATED | KFWR_HF_CUT)), "%s: a diff that fits is reported whole (flags %#x)", tag, r.hdr.flags);
+        EXPECT(r.hdr.run_count == total, "%s: run_count %u != %u", tag, r.hdr.run_count, total);
+        uint32_t at = 0;
+        for (uint32_t t = 0; t < r.np; t++) {
+            EXPECT(r.rpdb[t].run_count == r.staged[t].size() && r.rpdb[t].first_run == at && !(r.rpdb[t].vas_flags & KFWR_V_CUT), "%s: entry %u whole", tag, t);
+            for (size_t i = 0; i < r.staged[t].size(); i++)
+                EXPECT(r.rrun[at + i].va == r.staged[t][i].va && r.rrun[at + i].op == r.staged[t][i].op, "%s: entry %u run %zu", tag, t, i);
+            at += (uint32_t)r.staged[t].size();
+        }
+        return;
+    }
+    /* The entries' first_run never decreases (the host validator checks it), cut or not. */
+    for (uint32_t t = 1; t < r.np; t++)
+        EXPECT(r.rpdb[t].first_run >= r.rpdb[t - 1].first_run, "%s: pdb order at entry %u", tag, t);
+    /* Over capacity: the first entry whose running total passes it. */
+    uint32_t f = 0, fbase = 0, run = 0;
+    for (uint32_t t = 0; t < r.np; t++) {
+        if (run + r.staged[t].size() > cap) { f = t; fbase = run; break; }
+        run += (uint32_t)r.staged[t].size();
+    }
+    uint64_t v = 0;
+    const uint32_t want = ref_window(r.staged[f], cap - fbase, &v);
+    if (want == 0 && fbase == 0) {
+        EXPECT((r.hdr.flags & KFWR_HF_TRUNCATED) && !(r.hdr.flags & KFWR_HF_CUT), "%s: one clump larger than the report is the legacy refusal (flags %#x)", tag, r.hdr.flags);
+        EXPECT(r.hdr.run_count == 0 && (r.hdr.refuse_mask & KFWR_R_RUN_CAP), "%s: ... with run_count 0 and RUN_CAP", tag);
+        return;
+    }
+    EXPECT((r.hdr.flags & KFWR_HF_CUT) && !(r.hdr.flags & KFWR_HF_TRUNCATED), "%s: a cut report is CUT and not TRUNCATED (flags %#x)", tag, r.hdr.flags);
+    EXPECT(!(r.hdr.refuse_mask & KFWR_R_RUN_CAP) && r.hdr.refusals == 0, "%s: a cut is not a refusal", tag);
+    EXPECT(r.hdr.run_count == fbase + want && r.hdr.run_count <= cap, "%s: run_count %u, want %u (cap %u)", tag, r.hdr.run_count, fbase + want, cap);
+    uint32_t at = 0;
+    for (uint32_t t = 0; t < r.np; t++) {
+        const std::vector<KfMapRun> &s = r.staged[t];
+        if (t < f) {
+            EXPECT(r.rpdb[t].run_count == s.size() && r.rpdb[t].first_run == at && !(r.rpdb[t].vas_flags & KFWR_V_CUT), "%s: entry %u before the cut is whole", tag, t);
+            for (size_t i = 0; i < s.size(); i++) EXPECT(r.rrun[at + i].va == s[i].va && r.rrun[at + i].op == s[i].op, "%s: entry %u run %zu", tag, t, i);
+            at += (uint32_t)s.size();
+        } else if (t == f) {
+            EXPECT(r.rpdb[t].run_count == want && r.rpdb[t].first_run == fbase && (r.rpdb[t].vas_flags & KFWR_V_CUT), "%s: the cut entry reports its window and says CUT", tag);
+            /* the window is exactly the runs starting below v, in staged order ... */
+            std::vector<KfMapRun> w;
+            for (const KfMapRun &x : s) if (x.va < v) w.push_back(x);
+            EXPECT(w.size() == want, "%s: window size %zu vs %u", tag, w.size(), want);
+            for (size_t i = 0; i < w.size() && i < want; i++)
+                EXPECT(r.rrun[fbase + i].va == w[i].va && r.rrun[fbase + i].len == w[i].len && r.rrun[fbase + i].op == w[i].op, "%s: window run %zu", tag, i);
+            /* ... and closed under overlap: nothing left out overlaps anything reported. */
+            for (const KfMapRun &x : s) {
+                if (x.va < v) continue;
+                for (const KfMapRun &y : w) EXPECT(!overlap(x, y), "%s: an unreported run %#llx+%#llx overlaps a reported one %#llx+%#llx", tag,
+                    (unsigned long long)x.va, (unsigned long long)x.len, (unsigned long long)y.va, (unsigned long long)y.len);
+            }
+        } else {
+            EXPECT(r.rpdb[t].run_count == 0 && r.rpdb[t].first_run == fbase, "%s: entry %u after the cut is withheld and starts at the cut entry's first_run", tag, t);
+            EXPECT(((r.rpdb[t].vas_flags & KFWR_V_CUT) != 0) == (s.size() > 0), "%s: entry %u CUT iff it has a diff", tag, t);
+        }
+    }
+}
+
+static void emit_cut_cases(void)
+{
+    /* the M4 shape: ONE entry whose diff is twice the report, all MAPs of one class, 8 KiB apart */
+    {
+        EmitRig r(1024, 100);
+        std::vector<SRun> v;
+        for (uint32_t i = 0; i < 200; i++) v.push_back({0x1000000ull + 0x2000ull * i, 0x1000ull, 0, true});
+        r.stage(0, v);
+        r.emit();
+        check_report(r, 100, "m4-shape");
+        EXPECT(r.hdr.run_count == 100 && (r.hdr.flags & KFWR_HF_CUT) && !(r.hdr.flags & KFWR_HF_TRUNCATED), "m4: 100 of 200 runs, cut, not truncated");
+        EXPECT(r.rpdb[0].vas_flags & KFWR_V_CUT, "m4: the entry says CUT");
+        EXPECT(r.rrun[99].va == 0x1000000ull + 0x2000ull * 99, "m4: the lowest 100 runs");
+    }
+    /* a diff that exactly fills the report is whole */
+    {
+        EmitRig r(64, 50);
+        std::vector<SRun> v;
+        for (uint32_t i = 0; i < 50; i++) v.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        r.stage(0, v);
+        r.emit();
+        check_report(r, 50, "exactly-full");
+        EXPECT(!(r.hdr.flags & KFWR_HF_CUT), "exactly full is not a cut");
+    }
+    /* an UNMAP of one class and the MAP of another that overlaps it (a page-size change) are never
+     * separated: a prefix in staged order would report the class-0 MAP without the class-1 UNMAP */
+    {
+        EmitRig r(64, 4);
+        std::vector<SRun> v;
+        v.push_back({0x10000ull, 0x10000ull, 1, false});          /* UNMAP of a 64 KiB placement */
+        v.push_back({0x10000ull, 0x1000ull, 0, true});            /* its first page, re-made at 4 KiB */
+        v.push_back({0x11000ull, 0x1000ull, 0, true});
+        v.push_back({0x12000ull, 0x1000ull, 0, true});
+        v.push_back({0x100000ull, 0x1000ull, 0, true});
+        v.push_back({0x102000ull, 0x1000ull, 0, true});
+        r.stage(0, v);
+        r.emit();
+        check_report(r, 4, "page-size-change");
+        /* the staged-order prefix of 4 would be {M0@0x10000, M0@0x11000, M0@0x12000, M0@0x100000} and
+         * leave the UNMAP behind: the window must instead be the whole clump + nothing else (4 runs). */
+        EXPECT(r.hdr.run_count == 4, "clump + both its maps (4), got %u", r.hdr.run_count);
+        bool unmap_in = false;
+        for (uint32_t i = 0; i < r.hdr.run_count; i++) unmap_in |= r.rrun[i].op == KFWR_OP_UNMAP;
+        EXPECT(unmap_in, "the UNMAP travels with the maps that overlap it");
+    }
+    /* one overlap-connected clump larger than the report: nothing can be reported, loudly */
+    {
+        EmitRig r(64, 4);
+        std::vector<SRun> v;
+        v.push_back({0x10000ull, 0x100000ull, 1, false});         /* one big placement ... */
+        for (uint32_t i = 0; i < 8; i++) v.push_back({0x10000ull + 0x1000ull * i, 0x1000ull, 0, true}); /* ... remade as 8 pages */
+        r.stage(0, v);
+        r.emit();
+        check_report(r, 4, "clump-larger-than-report");
+        EXPECT((r.hdr.flags & KFWR_HF_TRUNCATED) && r.hdr.run_count == 0, "a clump larger than the report is refused (legacy), flags %#x", r.hdr.flags);
+    }
+    /* several entries: the first whole, the second cut, the third withheld */
+    {
+        EmitRig r(64, 10);
+        std::vector<SRun> a, b, c;
+        for (uint32_t i = 0; i < 4; i++) a.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        for (uint32_t i = 0; i < 20; i++) b.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        for (uint32_t i = 0; i < 3; i++) c.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        r.stage(0, a); r.stage(1, b); r.stage(2, c);
+        r.emit();
+        check_report(r, 10, "three-entries");
+        EXPECT(r.rpdb[1].run_count == 6 && r.rpdb[2].run_count == 0 && (r.rpdb[2].vas_flags & KFWR_V_CUT), "4 whole + 6 of the second + none of the third");
+        EXPECT(r.rpdb[2].first_run == 4u && r.rpdb[2].first_run <= r.hdr.run_count, "the withheld entry starts at the cut entry's first_run (%u)", r.rpdb[2].first_run);
+    }
+    /* the first entry cannot fit but an earlier one filled the report: that entry is withheld, the
+     * earlier one's progress is the walk's progress */
+    {
+        EmitRig r(64, 10);
+        std::vector<SRun> a, b;
+        for (uint32_t i = 0; i < 9; i++) a.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        for (uint32_t i = 0; i < 30; i++) b.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        r.stage(0, a); r.stage(1, b);
+        r.emit();
+        check_report(r, 10, "second-entry-gets-the-remainder");
+    }
+}
+
+/* HOSTILE ARGUMENTS: capacities and addresses at the edges. Nothing here may read outside the staged
+ * lists, loop for ever, or report more than the capacity. */
+static void emit_cut_hostile(void)
+{
+    {   /* a capacity of zero: nothing can be reported, the legacy refusal (and no division by it) */
+        EmitRig r(64, 0);
+        std::vector<SRun> v;
+        for (uint32_t i = 0; i < 5; i++) v.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        r.stage(0, v);
+        r.emit();
+        check_report(r, 0, "capacity-zero");
+        EXPECT((r.hdr.flags & KFWR_HF_TRUNCATED) && r.hdr.run_count == 0, "capacity 0 is the legacy refusal (flags %#x)", r.hdr.flags);
+    }
+    {   /* a capacity of one */
+        EmitRig r(64, 1);
+        std::vector<SRun> v;
+        for (uint32_t i = 0; i < 5; i++) v.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        r.stage(0, v);
+        r.emit();
+        check_report(r, 1, "capacity-one");
+        EXPECT(r.hdr.run_count == 1 && r.rrun[0].va == 0x1000ull, "the lowest run only");
+    }
+    {   /* no entries at all, and entries with empty diffs: whole, no flags */
+        EmitRig r(64, 8);
+        r.stage(0, std::vector<SRun>());
+        r.stage(1, std::vector<SRun>());
+        r.emit();
+        check_report(r, 8, "empty-entries");
+        EXPECT(r.hdr.flags == KFWR_HF_DIFF && r.hdr.run_count == 0, "an empty diff is a quiet report (flags %#x)", r.hdr.flags);
+    }
+    {   /* addresses at the top of the guest's 49-bit space, one run ending exactly at 2^49 */
+        EmitRig r(64, 3);
+        std::vector<SRun> v;
+        const uint64_t top = (1ull << 49) - 0x1000ull;
+        for (uint32_t i = 0; i < 6; i++) v.push_back({top - 0x2000ull * (5 - i), 0x1000ull, 0, true});
+        r.stage(0, v);
+        r.emit();
+        check_report(r, 3, "top-of-the-address-space");
+        EXPECT(r.hdr.run_count == 3 && r.rrun[0].va == top - 0x2000ull * 5, "the lowest three at the top of the space");
+    }
+    {   /* every run at ONE address (all lists stacked on the same pages): one clump, refused when it does not fit */
+        EmitRig r(64, 5);
+        std::vector<SRun> v;
+        for (unsigned cls = 0; cls < 4; cls++) { v.push_back({0x10000ull, 0x1000ull, cls, false}); v.push_back({0x10000ull, 0x1000ull, cls, true}); }
+        r.stage(0, v);
+        r.emit();
+        check_report(r, 5, "stacked");
+        EXPECT((r.hdr.flags & KFWR_HF_TRUNCATED) && r.hdr.run_count == 0, "eight runs on one page are one clump larger than five");
+    }
+    {   /* an entry that fits exactly, then one that cannot start: the second is withheld, the first is whole */
+        EmitRig r(64, 4);
+        std::vector<SRun> a, b;
+        for (uint32_t i = 0; i < 4; i++) a.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        for (uint32_t i = 0; i < 4; i++) b.push_back({0x1000ull * (2 * i + 1), 0x1000ull, 0, true});
+        r.stage(0, a); r.stage(1, b);
+        r.emit();
+        check_report(r, 4, "full-then-more");
+        EXPECT(r.rpdb[0].run_count == 4 && r.rpdb[1].run_count == 0 && (r.rpdb[1].vas_flags & KFWR_V_CUT), "the first whole, the second withheld");
+    }
+}
+
+/* ★ Review of PR #424, F3: a brick CHAIN of overlapping runs — UNMAP [2k, 2k+2) pages and MAP [2k+1, 2k+3)
+ * pages, k < len — is one clump of 2*len runs. The first version of the cut walked down from the count
+ * boundary one straddler at a time and gave up after 4096 steps, so a chain that long was refused
+ * (flags 0x85, run_count 0) although a window existed below it. The cut has no step limit now: the
+ * window below the chain is reported whatever the chain's length, and a chain too big for the report is
+ * refused only when nothing else precedes it. `iso` isolated maps sit below the chain. */
+static void chain_case(uint32_t len, uint32_t iso, uint32_t cap, const char *tag)
+{
+    EmitRig r((2 * len + iso) * 2 + 64, cap);
+    std::vector<SRun> v;
+    for (uint32_t i = 0; i < iso; i++) v.push_back({0x100000ull + 0x1000ull * 4 * i, 0x1000ull, 0, true});
+    const uint64_t b = 0x10000000ull;
+    for (uint32_t k = 0; k < len; k++) {
+        v.push_back({b + 0x1000ull * 2 * k, 0x2000ull, 0, false});
+        v.push_back({b + 0x1000ull * (2 * k + 1), 0x2000ull, 0, true});
+    }
+    r.stage(0, v);
+    r.emit();
+    check_report(r, cap, tag);
+}
+
+static void emit_cut_chains(void)
+{
+    chain_case(12000, 10, 5000, "chain-12000-cap-5000");      /* the review's probe: 10 runs, then a 24000-run chain */
+    EmitRig r(40000, 5000);
+    std::vector<SRun> v;
+    for (uint32_t i = 0; i < 10; i++) v.push_back({0x100000ull + 0x4000ull * i, 0x1000ull, 0, true});
+    for (uint32_t k = 0; k < 12000; k++) {
+        v.push_back({0x10000000ull + 0x2000ull * k, 0x2000ull, 0, false});
+        v.push_back({0x10000000ull + 0x2000ull * k + 0x1000ull, 0x2000ull, 0, true});
+    }
+    r.stage(0, v);
+    r.emit();
+    EXPECT(!(r.hdr.flags & KFWR_HF_TRUNCATED) && (r.hdr.flags & KFWR_HF_CUT) && r.hdr.run_count == 10, "the 10 isolated runs are the window (flags %#x, %u runs)", r.hdr.flags, r.hdr.run_count);
+    chain_case(12000, 0, 5000, "chain-alone-too-big");         /* nothing precedes it: the loud refusal */
+    for (uint32_t len : {1u, 2u, 7u, 64u, 600u})
+        for (uint32_t iso : {0u, 3u})
+            for (uint32_t cap : {len, 2 * len, 2 * len + 3, 4 * len + 10 + iso})
+                chain_case(len, iso, cap > 3 ? cap : 4, "chain");
+}
+
+/* Random staged diffs over a small page grid so that lists overlap and straddle each other, at
+ * random capacities: every report meets the spec (and the legacy refusal is exactly the case where
+ * no boundary reports anything). */
+static void emit_cut_random(void)
+{
+    uint64_t x = 0x9e3779b97f4a7c15ull;
+    auto rnd = [&x](uint32_t n) { x ^= x << 13; x ^= x >> 7; x ^= x << 17; return (uint32_t)((x >> 11) % n); };
+    unsigned cuts = 0, whole = 0, legacy = 0;
+    for (int it = 0; it < 4000; it++) {
+        const uint32_t cap = 3 + rnd(30);
+        const uint32_t dense = rnd(3);          /* 0: sparse lists ... 2: lists that pile onto each other */
+        EmitRig r(256, cap);
+        const uint32_t ne = 1 + rnd(3);
+        for (uint32_t t = 0; t < ne; t++) {
+            std::vector<SRun> v;
+            for (unsigned cls = 0; cls < 4; cls++)
+                for (int m = 0; m < 2; m++) {
+                    /* disjoint runs of one list on a grid of 120 pages */
+                    uint32_t p = rnd(6);
+                    const uint32_t cnt = rnd(2 + 4 * dense);
+                    for (uint32_t i = 0; i < cnt && p < 118; i++) {
+                        const uint32_t len = 1 + rnd(5);
+                        v.push_back({0x100000ull + 0x1000ull * p, 0x1000ull * len, cls, m == 1});
+                        p += len + rnd(4) + (dense == 0 ? 6 : 0);
+                    }
+                }
+            r.stage(t, v);
+        }
+        r.emit();
+        check_report(r, cap, "random");
+        if (r.total() <= cap) whole++;
+        else if (r.hdr.flags & KFWR_HF_CUT) cuts++;
+        else legacy++;
+    }
+    printf("  [emit] 4000 random staged diffs: %u whole, %u cut, %u legacy refusals\n", whole, cuts, legacy);
+    EXPECT(cuts > 500 && whole > 200 && legacy > 20, "the random set must exercise all three outcomes (%u/%u/%u)", whole, cuts, legacy);
+}
+
 int main(int argc, char **argv)
 {
     const bool do_dump = argc > 1 && !strcmp(argv[1], "--dump");
@@ -392,6 +770,10 @@ int main(int argc, char **argv)
     ver3_cases();
     ver2_cases();
     format_cases();
+    emit_cut_cases();
+    emit_cut_hostile();
+    emit_cut_chains();
+    emit_cut_random();
     /* ⚠ Two decoders that both produced nothing agree perfectly (kf_tests.cu uses the same floors). */
     EXPECT(a > 1200, "the synthetic differential decoded almost nothing (%llu)", a);
     EXPECT(b > 6000 || b == 0, "real-driver differential too small (%llu)", b);
