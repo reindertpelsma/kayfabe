@@ -1227,6 +1227,7 @@ impl Cuda {
                 len,
                 ctx,
                 own: Life::new(),
+                dma: PinnedDma::default(),
             });
         }
         let mut p: *mut c_void = core::ptr::null_mut();
@@ -1237,27 +1238,33 @@ impl Cuda {
             len,
             ctx,
             own: Life::new(),
+            dma: PinnedDma::default(),
         })
     }
 
     /// `cuMemFreeHost` — give back a [`Self::pinned_alloc`] buffer. ★ Consumes it and ends its
     /// token, so a device view of it ([`Self::pinned_device_view`]) refuses from now on.
     ///
-    /// CALLER-CONTRACT: no queued copy may still target the buffer (the caller observed the
-    /// completion of the last one). Not validated here: the binding does not track which queued
-    /// operations name which buffer (security review 2, D-05(b), open). Otherwise: a DMA lands in
-    /// freed host pages.
+    /// ⊘⊘ 2026-11-14 (security review 2 D-05(b)), above the contract it replaces: this used to
+    /// carry a CALLER-CONTRACT ("no queued copy may still target the buffer"). Now the binding
+    /// knows ([`PinnedDma`]): while the last queued copy's event has not completed, or completion
+    /// is unknowable, or a device view was lent to a kernel, the pages are NOT freed — the buffer
+    /// is consumed and left to `cuCtxDestroy`, and the refusal says why. A DMA can no longer land
+    /// in freed host pages.
     ///
     /// # Errors
-    /// [`CudaError::Refused`].
+    /// [`CudaError::Refused`]: the driver's, or "the GPU may still write it" (the buffer is then
+    /// kept until the context dies).
     pub(crate) fn pinned_free(&self, buf: PinnedBuf, what: &'static str) -> Result<(), CudaError> {
         buf.own.end();
         if !buf.ctx.alive() {
             // the context's destruction already reclaimed it
             return Ok(());
         }
+        self.settle(&buf, what)?;
         // SAFETY: `buf.ptr` is the base of a live `cuMemAllocHost` allocation of a live context,
-        // consumed here, so no safe code can reach it afterwards.
+        // consumed here, so no safe code can reach it afterwards; no GPU write to it can still be
+        // pending (`settle`, just above).
         self.check(what, unsafe {
             (self.cuMemFreeHost)(buf.ptr as *mut c_void)
         })
@@ -1295,15 +1302,16 @@ impl Cuda {
             len: span.len(),
             ctx,
             own: Life::new(),
+            dma: PinnedDma::default(),
         })
     }
 
-    /// ★ `cuMemHostUnregister` — undo [`Self::host_register`].
-    ///
-    /// CALLER-CONTRACT: as [`Self::pinned_free`] — no queued copy may still target the pages.
+    /// ★ `cuMemHostUnregister` — undo [`Self::host_register`]. ★ 2026-11-14 (D-05(b)): refused,
+    /// leaving the pages registered until the context dies, while the GPU may still write them
+    /// (as [`Self::pinned_free`]); the caller then must keep the mapping (`display::Frame` does).
     ///
     /// # Errors
-    /// [`CudaError::MissingSymbol`]; [`CudaError::Refused`].
+    /// [`CudaError::MissingSymbol`]; [`CudaError::Refused`], as [`Self::pinned_free`].
     pub(crate) fn host_unregister(
         &self,
         buf: PinnedBuf,
@@ -1316,9 +1324,56 @@ impl Cuda {
         if !buf.ctx.alive() {
             return Ok(());
         }
+        self.settle(&buf, what)?;
         // SAFETY: `buf.ptr` is the base of a live registration made by `host_register` in a live
-        // context, consumed here; the driver unpins and dereferences nothing.
+        // context, consumed here, and no GPU write to it can still be pending (`settle`, just
+        // above); the driver unpins and dereferences nothing.
         self.check(what, unsafe { f(buf.ptr as *mut c_void) })
+    }
+
+    /// ★ D-05(b): may `buf`'s pages go back? Only when no GPU write can still land in them: no
+    /// device view was ever lent, and the last queued copy's event completed (it is destroyed
+    /// then). Refuses by name otherwise; the caller keeps the pages until the context dies.
+    fn settle(&self, buf: &PinnedBuf, what: &'static str) -> Result<(), CudaError> {
+        let busy = |why: &str| {
+            Err(CudaError::Refused {
+                what,
+                code: 0,
+                name: format!(
+                    "{why}: the GPU may still write these pinned pages, so they are kept until \
+                     the context is destroyed (D-05(b))"
+                ),
+            })
+        };
+        if buf.dma.viewed.load(core::sync::atomic::Ordering::Acquire) {
+            return busy("a device view of the buffer was lent to a kernel");
+        }
+        let mut fence = buf
+            .dma
+            .fence
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match core::mem::take(&mut *fence) {
+            Fence::Clear => Ok(()),
+            Fence::Unknown => {
+                *fence = Fence::Unknown;
+                busy("a copy was queued whose completion could not be recorded")
+            }
+            Fence::After(ev) => match self.event_query(&ev) {
+                Ok(true) => {
+                    self.event_destroy(ev);
+                    Ok(())
+                }
+                Ok(false) => {
+                    *fence = Fence::After(ev);
+                    busy("the last queued copy has not completed")
+                }
+                Err(e) => {
+                    *fence = Fence::After(ev);
+                    Err(e)
+                }
+            },
+        }
     }
 
     /// `cuMemHostGetDevicePointer_v2` — a DEVICE view of `buf[off..off + len]`, so a kernel can
@@ -1344,6 +1399,10 @@ impl Cuda {
         );
         live(&buf.ctx, "cuMemHostGetDevicePointer_v2");
         live(&buf.own, "cuMemHostGetDevicePointer_v2");
+        // D-05(b): from now on only the context's destruction gives these pages back
+        buf.dma
+            .viewed
+            .store(true, core::sync::atomic::Ordering::Release);
         let mut d: CUdeviceptr = 0;
         // SAFETY: one live out-pointer; `buf.ptr` is the base of a live `cuMemAllocHost`
         // allocation of a live context (checked above), which is what the call requires.
@@ -1364,13 +1423,18 @@ impl Cuda {
 
     /// `cuMemcpyDtoHAsync_v2` of the whole of `src` into `buf[off..off + src.len()]`, in `stream`.
     ///
-    /// CALLER-CONTRACT: the caller does not read the range, or free `buf`, until the stream has
-    /// passed this copy (it observed the completion queued after it). Not validated here: the
-    /// binding does not track queued operations (D-05(b)). Otherwise: a torn read, or a DMA into
-    /// freed pages.
+    /// ★ 2026-11-14 (D-05(b)): an event is recorded on `s` right after the copy and kept in `buf`
+    /// ([`PinnedDma`]), so `buf` cannot be given back while the copy may still land. ⊘ Was a
+    /// CALLER-CONTRACT ("do not free `buf` until the stream passed this copy").
+    ///
+    /// CALLER-CONTRACT: the caller does not READ the range until it observed the completion queued
+    /// after this copy. Not validated here: `PinnedBuf::read` holds no binding to ask the fence
+    /// with. Otherwise: a torn read of frame bytes — a wrong picture, never memory unsafety (the
+    /// read is a raw-pointer copy out of live pages; freeing them is refused above).
     ///
     /// # Errors
-    /// [`CudaError::Refused`].
+    /// [`CudaError::Refused`]. ⚠ An error after the copy was queued (the fence event could not be
+    /// made or recorded) leaves `buf` unfreeable until the context dies.
     ///
     /// # Panics
     /// If the range leaves `buf` (checked arithmetic), or a handle was released.
@@ -1392,8 +1456,8 @@ impl Cuda {
         live(&buf.own, what);
         src.check(n, what);
         // SAFETY: `[off, off+n)` lies inside the live pinned allocation and the device range
-        // inside a live device allocation (both checked above); `s` is alive. The completion
-        // ordering is the CALLER-CONTRACT above.
+        // inside a live device allocation (both checked above); `s` is alive. The pages cannot be
+        // given back before this copy completed (`fence_after`, below; `settle`).
         self.check(what, unsafe {
             (self.cuMemcpyDtoHAsync)(
                 (buf.ptr + off) as *mut c_void,
@@ -1401,7 +1465,43 @@ impl Cuda {
                 n,
                 s.raw as *mut c_void,
             )
-        })
+        })?;
+        self.fence_after(buf, s)
+    }
+
+    /// ★ D-05(b): record `buf`'s fence on `s`, after the copy just queued (its event is made once
+    /// per buffer and re-recorded). A failure makes the buffer's completion unknowable.
+    fn fence_after(&self, buf: &PinnedBuf, s: &StreamHandle) -> Result<(), CudaError> {
+        let mut fence = buf
+            .dma
+            .fence
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ev = match core::mem::take(&mut *fence) {
+            Fence::After(ev) => ev,
+            Fence::Unknown => {
+                *fence = Fence::Unknown;
+                return Ok(());
+            }
+            Fence::Clear => match self.event_create() {
+                Ok(ev) => ev,
+                Err(e) => {
+                    *fence = Fence::Unknown;
+                    return Err(e);
+                }
+            },
+        };
+        match self.event_record(&ev, s) {
+            Ok(()) => {
+                *fence = Fence::After(ev);
+                Ok(())
+            }
+            Err(e) => {
+                self.event_destroy(ev);
+                *fence = Fence::Unknown;
+                Err(e)
+            }
+        }
     }
 
     /// ★ Whether every graph entry point the walk's one-call submission needs resolved.
@@ -2000,6 +2100,33 @@ pub(crate) struct PinnedBuf {
     ctx: Arc<Life>,
     /// Its own token, ended by `pinned_free` / `host_unregister` (device views check it).
     own: Arc<Life>,
+    /// ★ 2026-11-14 (D-05(b)): what the GPU may still write here — the fence after the last queued
+    /// copy, and whether a device view was ever handed out. Consulted before the pages go back.
+    dma: PinnedDma,
+}
+
+/// ★★ D-05(b) (security review 2, 2026-11-14): the GPU writes still pending on a [`PinnedBuf`].
+/// [`Cuda::memcpy_d2h_async`] records an event after every copy it queues into the buffer; giving
+/// the buffer back ([`Cuda::pinned_free`], [`Cuda::host_unregister`]) first asks that event, and
+/// REFUSES — keeping the pages until the context dies — while a copy may still land. A buffer that
+/// lent a device view to a kernel ([`Cuda::pinned_device_view`]) is never given back alone: the
+/// binding cannot see which queued launch names a view, so only `cuCtxDestroy` reclaims it.
+#[derive(Debug, Default)]
+struct PinnedDma {
+    fence: std::sync::Mutex<Fence>,
+    viewed: core::sync::atomic::AtomicBool,
+}
+
+/// The last copy queued into a pinned buffer.
+#[derive(Debug, Default)]
+enum Fence {
+    /// No copy was ever queued, or the last one was observed complete.
+    #[default]
+    Clear,
+    /// An event recorded on the copy's stream right after it.
+    After(EventHandle),
+    /// A copy was queued but its event could not be recorded: completion is unknowable.
+    Unknown,
 }
 
 impl PinnedBuf {
@@ -2011,6 +2138,7 @@ impl PinnedBuf {
             len: 0,
             ctx: Life::dead(),
             own: Life::dead(),
+            dma: PinnedDma::default(),
         }
     }
 
@@ -2822,6 +2950,9 @@ pub(crate) mod fake {
         },
         Free(u64),
         CtxDestroy,
+        /// `cuMemFreeHost` / `cuMemHostUnregister` (D-05(b)).
+        FreeHost,
+        HostUnregister,
         /// The three undo steps of a failed import (D-15).
         Unmap,
         AddressFree,
@@ -2846,7 +2977,7 @@ pub(crate) mod fake {
     }
 
     /// Make entry point `name` refuse on this thread (the stubs that consult it: event create,
-    /// address reserve, map, set access).
+    /// event record, address reserve, map, set access; `cuEventQuery` answers NOT READY).
     pub(crate) fn fail(name: &'static str) {
         FAILING.with(|f| f.borrow_mut().push(name));
     }
@@ -2956,9 +3087,6 @@ pub(crate) mod fake {
     extern "C" fn create2(_: *mut *mut c_void, _: c_uint) -> CUresult {
         0
     }
-    extern "C" fn p2(_: *mut c_void, _: *mut c_void) -> CUresult {
-        0
-    }
     extern "C" fn elapsed(_: *mut f32, _: *mut c_void, _: *mut c_void) -> CUresult {
         0
     }
@@ -3042,6 +3170,25 @@ pub(crate) mod fake {
     extern "C" fn event_create(_: *mut *mut c_void, _: c_uint) -> CUresult {
         rc("cuEventCreate")
     }
+    extern "C" fn event_record(_: *mut c_void, _: *mut c_void) -> CUresult {
+        rc("cuEventRecord")
+    }
+    /// `fail("cuEventQuery")` makes every event NOT READY (the GPU has not got there yet).
+    extern "C" fn event_query(_: *mut c_void) -> CUresult {
+        if rc("cuEventQuery") != 0 {
+            CUDA_ERROR_NOT_READY
+        } else {
+            0
+        }
+    }
+    extern "C" fn free_host(_: *mut c_void) -> CUresult {
+        log(Call::FreeHost);
+        0
+    }
+    extern "C" fn host_unregister(_: *mut c_void) -> CUresult {
+        log(Call::HostUnregister);
+        0
+    }
     extern "C" fn host_register(_: *mut c_void, _: usize, _: c_uint) -> CUresult {
         0
     }
@@ -3082,12 +3229,12 @@ pub(crate) mod fake {
                 cuStreamDestroy: stream_destroy,
                 cuEventCreate: event_create,
                 cuEventDestroy: event_destroy,
-                cuEventRecord: p2,
-                cuEventQuery: p1,
+                cuEventRecord: event_record,
+                cuEventQuery: event_query,
                 cuEventElapsedTime: elapsed,
                 cuLaunchHostFunc: hostfn,
                 cuMemAllocHost: alloc_host,
-                cuMemFreeHost: p1,
+                cuMemFreeHost: free_host,
                 cuMemHostGetDevicePointer: host_devptr,
                 cuMemcpyDtoHAsync: d2h_async,
                 cuMemcpyDtoDAsync: d2d_async,
@@ -3111,7 +3258,7 @@ pub(crate) mod fake {
                 cuMemAddressFree: Some(address_free),
                 cuMemRelease: Some(release),
                 cuMemHostRegister: Some(host_register),
-                cuMemHostUnregister: Some(p1),
+                cuMemHostUnregister: Some(host_unregister),
             }
         }
     }
@@ -3487,7 +3634,9 @@ mod perimeter_tests {
             let _ = cu.memcpy_d2h_async(&s, &pin, 200, dev.span(0, 57), "t");
         });
         assert!(seen.is_empty(), "a D2H into pinned memory past its end");
-        cu.pinned_free(pin, "t").unwrap();
+        // ★ D-05(b): a buffer that lent a device view is kept until the context dies; its token
+        // ends all the same, so the view refuses
+        assert!(cu.pinned_free(pin, "t").is_err());
         let seen = refused_before_the_driver(|| {
             let _ = cu.memset_d8(v.whole(), 0, "t");
         });
@@ -3782,6 +3931,94 @@ mod perimeter_tests {
         let r = abi_bytes(&run);
         assert_eq!(&r[24..28], &4u32.to_ne_bytes());
         assert_eq!(&r[30..32], &6u16.to_ne_bytes());
+    }
+
+    /// ★★ D-05(b) (2026-11-14): a pinned buffer whose queued copy has not completed is NOT given
+    /// back — `cuMemFreeHost` is never called — and the refusal says why; once the copy's event
+    /// completed it is freed. A copy whose fence could not be recorded makes the buffer unfreeable.
+    #[test]
+    fn d05b_pinned_memory_is_never_freed_under_a_queued_copy() {
+        use super::fake::{fail, succeed_all};
+        let (cu, _ctx) = up();
+        let s = cu.stream_create().unwrap();
+        let dev = cu.mem_alloc_zeroed(4096, "t").unwrap();
+        let freed = |c: &[Call]| c.iter().filter(|c| **c == Call::FreeHost).count();
+        // the control: a buffer no copy ever targeted is freed
+        let pin = cu.pinned_alloc(4096, "t").unwrap();
+        let _ = calls();
+        cu.pinned_free(pin, "t").unwrap();
+        assert_eq!(freed(&calls()), 1);
+        // a copy queued, the GPU not there yet: refused, kept
+        let pin = cu.pinned_alloc(4096, "t").unwrap();
+        cu.memcpy_d2h_async(&s, &pin, 0, dev.span(0, 4096), "t")
+            .unwrap();
+        fail("cuEventQuery");
+        let _ = calls();
+        let e = cu.pinned_free(pin, "t").unwrap_err();
+        assert!(e.to_string().contains("not completed"), "{e}");
+        assert_eq!(freed(&calls()), 0, "the pages stay until the context dies");
+        succeed_all();
+        // the copy completed: freed
+        let pin = cu.pinned_alloc(4096, "t").unwrap();
+        cu.memcpy_d2h_async(&s, &pin, 0, dev.span(0, 4096), "t")
+            .unwrap();
+        let _ = calls();
+        cu.pinned_free(pin, "t").unwrap();
+        assert_eq!(freed(&calls()), 1);
+        // the fence could not be recorded: completion is unknowable, so never freed alone
+        let pin = cu.pinned_alloc(4096, "t").unwrap();
+        fail("cuEventRecord");
+        assert!(
+            cu.memcpy_d2h_async(&s, &pin, 0, dev.span(0, 4096), "t")
+                .is_err()
+        );
+        succeed_all();
+        let _ = calls();
+        assert!(cu.pinned_free(pin, "t").is_err());
+        assert_eq!(freed(&calls()), 0);
+        // a buffer that lent a device view to a kernel is kept until the context dies
+        let pin = cu.pinned_alloc(4096, "t").unwrap();
+        let _view = cu.pinned_device_view(&pin, 0, 64).unwrap();
+        let _ = calls();
+        let e = cu.pinned_free(pin, "t").unwrap_err();
+        assert!(e.to_string().contains("device view"), "{e}");
+        assert_eq!(freed(&calls()), 0);
+    }
+
+    /// ★★ D-05(b): the same for a REGISTERED mapping — no `cuMemHostUnregister` while a queued
+    /// copy into it has not completed; unregistered once it has.
+    #[test]
+    fn d05b_a_registration_is_never_undone_under_a_queued_copy() {
+        use super::fake::{fail, succeed_all};
+        let (cu, _ctx) = up();
+        let s = cu.stream_create().unwrap();
+        let dev = cu.mem_alloc_zeroed(4096, "t").unwrap();
+        let page = kf_linux_raw::HostPageSize::query();
+        let map = kf_linux_raw::MappedRegion::map(
+            kf_linux_raw::Backing::PrivateAnonymous,
+            page.bytes(),
+            kf_linux_raw::HostProt::ReadWrite,
+            kf_linux_raw::CachePolicy::WriteBack,
+            page,
+        )
+        .unwrap();
+        let undone = |c: &[Call]| c.iter().filter(|c| **c == Call::HostUnregister).count();
+        let reg = cu.host_register(&map.host_span(), "t").unwrap();
+        cu.memcpy_d2h_async(&s, &reg, 0, dev.span(0, 4096), "t")
+            .unwrap();
+        fail("cuEventQuery");
+        let _ = calls();
+        assert!(cu.host_unregister(reg, "t").is_err());
+        assert_eq!(undone(&calls()), 0);
+        succeed_all();
+        let reg = cu.host_register(&map.host_span(), "t").unwrap();
+        cu.memcpy_d2h_async(&s, &reg, 0, dev.span(0, 4096), "t")
+            .unwrap();
+        let _ = calls();
+        cu.host_unregister(reg, "t").unwrap();
+        assert_eq!(undone(&calls()), 1);
+        // the first registration's pages must outlive it: keep the mapping (as display::Frame does)
+        std::mem::forget(map);
     }
 
     /// ★★ D-15 (2026-11-14): an import that fails half way gives back what it took, in reverse
