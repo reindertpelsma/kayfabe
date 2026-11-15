@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vast_report as local_result_contract
+import payload_instruction as pinst
 
 # The current payload has no matrix driver/subrun executor. The trusted Worker
 # checks this exact declaration at the selected commit before creating a lease.
@@ -1433,17 +1434,149 @@ def stage_grade(root, tag, log, grade, rc):
     return grade(0)
 
 
+# The legacy environment path and the new file path build ONE typed object (payload_instruction.Instruction).
+# The KF_* variables below are the instruction's env spelling; with --instruction FILE none of them may be set,
+# so a box can never get two answers to one question.
+INSTRUCTION_ENV = (
+    "KF_MERGE_WINDOWS", "KF_TIER", "KF_WINDOWS_RUNS", "KF_STAGES", "KF_SPEC", "KF_LINUX_APPS", "KF_WINAPPS",
+    "KF_RELEASE_REHEARSAL", *RELEASE_DRIVER_FIELDS, "KF_WINGATE_GUEST_DRIVER", "KF_RELEASE_SUBRUNS",
+    "KF_RELEASE_DRIVER_PINS",
+)
+
+
+def instruction_from_env(environ):
+    """ADAPTER: the KF_* environment to the instruction. Same functions, same order, same refusals as before the
+    instruction existed; consumes (pops) what it reads."""
+    windows, windows_source = windows_requested(environ)
+    # the explicit Worker request runs the middle app profile in every tier that sends it (large includes middle)
+    explicit_apps = "KF_LINUX_APPS" in environ
+    tier, windows_runs, extra_stages = tier_requested(environ, windows)
+    rehearsal = rehearsal_requested(environ, tier)
+    selected_drivers = release_driver_environment(environ)
+    require_executable_release(environ)
+    environ.update(selected_drivers)
+    winapps = winapps_requested(environ, windows)
+    linuxapps = linuxapps_requested(environ, tier)
+    spec = spec_requested(environ, windows, extra_stages)
+    return pinst.Instruction(
+        tier=tier,
+        windows=windows,
+        windows_runs=windows_runs,
+        stages=tuple(extra_stages),
+        spec=spec,
+        winapps=winapps,
+        linux_apps=(("middle" if tier == "large" and explicit_apps else tier) if linuxapps else None),
+        rehearsal=rehearsal,
+        source=windows_source,
+    )
+
+
+def instruction_from_file(path, environ):
+    """The file path: validated once by payload_instruction; returns (Instruction, sha256 of the bytes read)."""
+    if any(name in environ for name in INSTRUCTION_ENV):
+        raise EvidenceError("preflight")
+    # the stage knobs linuxapps_requested drops are dropped here too
+    for knob in (*APPS_STAGE_KNOBS, "KF_APPS_PROVISION"):
+        environ.pop(knob, None)
+    try:
+        return pinst.load(path)
+    except pinst.InstructionError as error:
+        print("KF_PAYLOAD_INSTRUCTION_REFUSED " + str(error)[:120], flush=True)
+        raise EvidenceError("preflight") from None
+
+
+def plan_stage_names(i):
+    """The stages main() builds for this instruction, in run order (main checks its own list against this)."""
+    names = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
+    if i.linux_apps is not None:
+        names.append("apps")
+    if i.windows:
+        names.append("windows_gate")
+        if i.winapps:
+            names.append("windows_apps")
+        if i.windows_runs == 2:
+            names.append("windows_gate_2")
+    if "specviewperf" in i.stages:
+        names.append("specviewperf")
+    return names
+
+
+def select_stages(plan, only, skip):
+    """--only / --skip over the planned names. A name that is not in the plan is refused (a typo must not select
+    nothing), and so is an empty selection. Skipping a stage does not skip what it provides: provision, the kf3
+    binary of merge_bar and the Windows gate are prerequisites of later stages, which the caller owns."""
+    for name in (*only, *skip):
+        if name not in plan:
+            raise EvidenceError("preflight")
+    chosen = [n for n in plan if (not only or n in only) and n not in skip]
+    if not chosen:
+        raise EvidenceError("preflight")
+    return chosen
+
+
+def tier_line(i):
+    return (
+        "KF_PAYLOAD_TIER windows=" + str(int(i.windows)) + " source=" + i.source + " tier=" + i.tier
+        + " rehearsal=" + str(int(i.rehearsal)) + " windows_runs=" + str(i.windows_runs)
+        + " stages=" + (":".join(i.stages) or "none") + " spec=" + (i.spec or "none")
+        + " winapps=" + (i.winapps or "none") + " linuxapps=" + str(int(i.linux_apps is not None))
+    )
+
+
+def parse_args(argv):
+    import argparse
+
+    p = argparse.ArgumentParser(prog="vast_payload.py", description="Disposable-box payload (tokenless).")
+    p.add_argument("sha", nargs="?", default="")
+    p.add_argument("nonce", nargs="?", default="")
+    p.add_argument("--instruction", metavar="FILE", help="JSON instruction (schema kayfabe.payload-instruction/1); replaces the KF_* tier variables")
+    p.add_argument("--only", action="append", default=[], metavar="STAGE", help="run only this stage (repeatable)")
+    p.add_argument("--skip", action="append", default=[], metavar="STAGE", help="skip this stage (repeatable)")
+    p.add_argument("--dry-run", action="store_true", help="print the stage plan and run nothing")
+    p.add_argument("--emit-instruction", metavar="FILE", help="write the instruction built from the source and exit")
+    return p.parse_args(argv)
+
+
+def build_instruction(args, environ):
+    if args.instruction:
+        return instruction_from_file(args.instruction, environ)
+    return instruction_from_env(environ), None
+
+
+def plan_only(args, root):
+    """--dry-run / --emit-instruction: no directory, device or result file is touched."""
+    try:
+        inst, digest = build_instruction(args, os.environ)
+        plan = plan_stage_names(inst)
+        chosen = select_stages(plan, args.only, args.skip)
+        if inst.spec:
+            spec_table(root)
+    except EvidenceError as error:
+        print("KF_PAYLOAD_FAIL suite=" + error.name, flush=True)
+        return 1
+    if args.emit_instruction:
+        print("KF_PAYLOAD_INSTRUCTION_WRITTEN sha256=" + pinst.write(inst, args.emit_instruction), flush=True)
+    if args.dry_run:
+        print(tier_line(inst), flush=True)
+        if digest:
+            print("KF_PAYLOAD_INSTRUCTION sha256=" + digest, flush=True)
+        print("KF_PAYLOAD_PLAN stages=" + ":".join(chosen) + " planned=" + ":".join(plan), flush=True)
+    return 0
+
+
 def main():
     global STOP
     if len(sys.argv) == 5 and sys.argv[1] == "--grade-xid":
         return guard_command(sys.argv[2], Path(sys.argv[3]), int(sys.argv[4]))
     if len(sys.argv) > 3 and sys.argv[1] == "--guest-exec":
         return guest_command(sys.argv[2], sys.argv[3:])
-    sha = sys.argv[1] if len(sys.argv) > 1 else ""
-    nonce = sys.argv[2] if len(sys.argv) > 2 else ""
+    args = parse_args(sys.argv[1:])
+    sha, nonce = args.sha, args.nonce
+    root = Path(__file__).resolve().parents[2]
+    if args.dry_run or args.emit_instruction:
+        return plan_only(args, root)
     if not re.fullmatch("[0-9a-f]{40}", sha) or not re.fullmatch("[0-9a-f]{32}", nonce):
         return 2
-    root = Path(__file__).resolve().parents[2]
     bench = Path("/workspace/bench")
     evidence = Path("/workspace/kf-ci-evidence")
     evidence.mkdir(parents=True, exist_ok=True)
@@ -1458,43 +1591,20 @@ def main():
     old_term = signal.signal(signal.SIGTERM, terminate)
     try:
         soft = int(os.environ["KF_SOFT_DEADLINE_MS"])
-        # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
-        windows, windows_source = windows_requested(os.environ)
-        tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
-        rehearsal = rehearsal_requested(os.environ, tier)
-        selected_drivers = release_driver_environment(os.environ)
-        require_executable_release(os.environ)
-        os.environ.update(selected_drivers)
-
-        winapps = winapps_requested(os.environ, windows)
-        # The explicit Worker request runs the middle app profile in every tier that sends it (large includes middle).
-        apps_tier = "middle" if tier == "large" and "KF_LINUX_APPS" in os.environ else tier
-        linuxapps = linuxapps_requested(os.environ, tier)
-
-        spec = spec_requested(os.environ, windows, extra_stages)
+        # The environment is consumed before any stage runs: merge_check.sh must not run the gate inside merge_bar.
+        instruction, digest = build_instruction(args, os.environ)
+        if digest:
+            result["instruction_sha256"] = digest
+        windows, tier, windows_runs = instruction.windows, instruction.tier, instruction.windows_runs
+        extra_stages, spec, winapps = list(instruction.stages), instruction.spec, instruction.winapps
+        apps_tier, linuxapps = instruction.linux_apps, instruction.linux_apps is not None
+        plan = plan_stage_names(instruction)
+        selected = select_stages(plan, args.only, args.skip)
+        if args.only or args.skip:
+            result["selection"] = {"only": args.only, "skip": args.skip}
         spec_tbl = spec_table(root) if spec else None
         refresh_claims(result, windows)
-        print(
-            "KF_PAYLOAD_TIER windows="
-            + str(int(windows))
-            + " source="
-            + windows_source
-            + " tier="
-            + tier
-            + " rehearsal="
-            + str(int(rehearsal))
-            + " windows_runs="
-            + str(windows_runs)
-            + " stages="
-            + (":".join(extra_stages) or "none")
-            + " spec="
-            + (spec or "none")
-            + " winapps="
-            + (winapps or "none")
-            + " linuxapps="
-            + str(int(linuxapps)),
-            flush=True,
-        )
+        print(tier_line(instruction), flush=True)
         subprocess.run(["df", "-h", "/"], check=True)
         free = shutil.disk_usage("/").free
         print("KF_PREFLIGHT_FREE_BYTES=" + str(free), flush=True)
@@ -1759,6 +1869,9 @@ def main():
                 min_remaining_ms=spec_min_remaining_ms(spec_tbl, spec), short_row="specviewperf_retry_time"
             )
             stages.append(stage)
+        if [s["name"] for s in stages] != plan:
+            raise EvidenceError("infrastructure")
+        stages = [s for s in stages if s["name"] in selected]
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):
