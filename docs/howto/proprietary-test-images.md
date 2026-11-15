@@ -28,7 +28,7 @@ Standalone use is supported: someone who builds an image themselves can run the 
 
 ## Why the images are signed out before they are sealed
 
-A rented test box is not trusted, and whoever controls it can read the image delivered to it. The image is meant to hold no live account state or session, so that an untrusted host cannot take over any account from it. The order of the build is: back up the disk and its state, then start the original disk online, sign out of and unregister the applications and accounts everywhere, and discard that disk. The how-to explains the order and says what has not been checked, in *Why the image is signed out before it is sealed*. Design intent: it has not been verified for any vendor, and nobody has searched a finished image for credentials.
+A rented test box is not trusted, and whoever controls it can read the image delivered to it. The procedure is: back up the disk and its state first; then, on a separate copy of the disk, sign out of every account, unlink the device, change the password and end all sessions at the vendor. Any sign-in state still stored in the backup is then revoked on the vendor's side and cannot be used to sign in anywhere. This is the procedure and the design intent. The tooling cannot see vendor-side state, so nothing in the repository verifies it. The how-to gives the order in *Why the image is signed out before it is sealed*. The reasons for the whole arrangement are isolation (the guest is hostile and rented hosts are untrusted), reproducibility (no network dependence and a deterministic start), and a private store so that nothing proprietary is redistributed.
 
 ## How the maintainers' images reach a test box
 

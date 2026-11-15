@@ -47,8 +47,8 @@ The lifecycle of an image, in order. The numbered steps below carry the commands
 
 1. Install online, with the real clock (steps 2 to 6).
 2. Go offline and check that every application starts and works without internet (step 7).
-3. Shut down. Back up the disk and the state **before** any sign-out (step 8). This backup is the sealed image.
-4. Start the **original** disk online, sign out of and unregister the applications and accounts everywhere, and discard that disk (step 11).
+3. Shut down. Back up the disk and the state **before** any account revocation (step 8). This backup is the sealed image.
+4. On the **original** disk (or a separate copy), online: sign out of every account, unlink the device, change the password and end all sessions at the vendor, then discard that disk (step 11).
 5. Test the backup the way CI would use it: a clone, the same fixed hardware identity, offline, the deterministic clock (steps 7 and 9).
 6. Pack it (step 9) and store it privately (step 10).
 
@@ -117,7 +117,7 @@ Use the installer from the vendor's own page, run it over the desktop with the d
 | Black Myth: Wukong Benchmark Tool | [Steam store](https://store.steampowered.com/) | not recorded | A Steam account. Use a throwaway account, never a personal one | MEASURED 2026-11-13 for the launch dialog only: Steam's launch dialog came up and the tool itself was not run |
 | Steam client | [Steam](https://store.steampowered.com/about/) | not recorded | The same throwaway account, for the install only | MEASURED 2026-11-12 |
 
-Steam stays signed out in the finished image. Log in once to install the benchmark tool, then sign out; do not leave a saved password or cached login behind. Whether the tool still launches signed out has been seen only as the launch dialog (MEASURED 2026-11-13); that it runs signed out is NOT TESTED.
+Log in to Steam once to install the benchmark tool, then sign out before the backup; do not leave a saved password behind. With Steam signed out, the tool's launch dialog has been seen (MEASURED 2026-11-13); that the tool runs signed out is NOT TESTED.
 
 Which apps the repository's automated check starts is listed in `propimage_check.py` (CODE READ). The pass rules for each app, and what the check does not prove, are in the design notes on app automation.
 
@@ -180,20 +180,19 @@ How known: the maintainers' upload to their own private bucket and a download wi
 
 ### 11. Sign out and unregister, on the original online disk only, after the backup exists
 
-Only now sign out and unregister everywhere: start the original (online) disk, sign out of Steam if it is signed in, deregister the 3DMark key on the vendor's options page, sign out of any other account, confirm on each vendor's website, then discard that disk. Never do this on the sealed image. Signing out or deregistering before the backup would change the state the backup is meant to capture; whether an application then still starts offline is NOT TESTED.
+Only now revoke the accounts: start the original (online) disk, or a separate copy of it, and sign out of every account, unlink the device, deregister keys on the vendors' own pages (for example the 3DMark key), change the password and end all sessions at each vendor, confirm on each vendor's website, then discard that disk. Never do this on the sealed image. Do it only after the backup exists: signing out or deregistering first would change the state the backup is meant to capture.
 
 How known: the maintainers did this after their upload, on an overlay of the packed disk, on 2026-11-12 (MEASURED that it was started; completion was by hand and is not shown by a file). Which vendor registrations the image still needs after this is NOT TESTED.
 
 #### Why the image is signed out before it is sealed
 
-DESIGN INTENT (owner decision, 2026-11-15); not verified for any vendor.
+PROCEDURE and DESIGN INTENT (owner decision, 2026-11-15). The tool cannot see vendor-side state, so nothing in the repository verifies it.
 
-A rented test box is not trusted: whoever controls it can read the disk image that was delivered to it. The sealed image is therefore meant to hold no live account state or session, so that an untrusted host cannot take over any account from it. The procedure works toward that in two parts:
+The backup is taken first (step 8). Then, on a separate copy of the disk, the owner signs out of every account, unlinks the device, changes the password and ends all sessions at the vendor (step 11). The purpose is that any sign-in state still stored in the backup is revoked on the vendor's side and cannot be used to sign in anywhere.
 
-- An application that can be signed out inside the image without losing the ability to start offline is signed out before the backup. Steam is the case in this guide (step 5).
-- For everything else the backup is taken first, so that the applications still start offline. Then the original disk is started online and every account and registration is signed out and unregistered at the vendor (step 11). Sessions and registrations that the backup refers to are ended on the vendor's side, and the original disk, which held the live ones, is discarded.
+The reasons for the arrangement are isolation (the guest is hostile and rented hosts are untrusted), reproducibility (no network dependence and a deterministic start), and a private store so that nothing proprietary is redistributed.
 
-What is not shown: that every vendor's sign-out or deregistration ends a session or key that was copied before it. Nobody has searched a finished image for credentials, tokens or registration data. Until someone has, treat every image as private (step 10) and use throwaway accounts where the vendor allows it.
+Use throwaway accounts where the vendor allows it, and treat every image as private (step 10).
 
 ## Using the image afterwards
 
@@ -238,5 +237,5 @@ The answer file may still carry choices that a future, more minimal image drops.
 ## What has and has not been shown
 
 - The maintainers built the image once, by hand with the repository's helper scripts, between 2026-11-12 and 2026-11-13, and ran parts of the offline check on it.
-- NOT TESTED: that someone else can follow this page from an empty disk to a working image, the ISO-making and the empty-disk and firmware-variable preparation (hand work), `setup_ssh.ps1` in a guest, `--resume` on hardware, an end-to-end pass of `propimage_check.py`, that a sign-out and deregistration ends every session and registration recorded in the backup, and the behaviour of any storage other than the maintainers' own.
+- NOT TESTED: that someone else can follow this page from an empty disk to a working image, the ISO-making and the empty-disk and firmware-variable preparation (hand work), `setup_ssh.ps1` in a guest, `--resume` on hardware, an end-to-end pass of `propimage_check.py`, that the vendor-side revocation of step 11 covers every sign-in state stored in the backup (the tool cannot see vendor-side state), and the behaviour of any storage other than the maintainers' own.
 - Nothing here depends on, or is stored in, a public release build.
