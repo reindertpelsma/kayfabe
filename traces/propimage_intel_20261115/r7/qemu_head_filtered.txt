@@ -1,0 +1,400 @@
+2026-11-15T14:19:15.355470Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+2026-11-15T14:19:15.355614Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+2026-11-15T14:19:15.355630Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+2026-11-15T14:19:15.355645Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+2026-11-15T14:19:15.355660Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+2026-11-15T14:19:15.355675Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+2026-11-15T14:19:15.355689Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+2026-11-15T14:19:15.358542Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+2026-11-15T14:19:15.358581Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+2026-11-15T14:19:15.358597Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+2026-11-15T14:19:15.358613Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+2026-11-15T14:19:15.358628Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+2026-11-15T14:19:15.358643Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+2026-11-15T14:19:15.358658Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+2026-11-15T14:19:15.360602Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+2026-11-15T14:19:15.360637Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+2026-11-15T14:19:15.360653Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+2026-11-15T14:19:15.360669Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+2026-11-15T14:19:15.360684Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+2026-11-15T14:19:15.360699Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+2026-11-15T14:19:15.360714Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+2026-11-15T14:19:15.362693Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+2026-11-15T14:19:15.362727Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+2026-11-15T14:19:15.362742Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+2026-11-15T14:19:15.362758Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+2026-11-15T14:19:15.362774Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+2026-11-15T14:19:15.362789Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+2026-11-15T14:19:15.362804Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+2026-11-15T14:19:15.364746Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+2026-11-15T14:19:15.364780Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+2026-11-15T14:19:15.364805Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+2026-11-15T14:19:15.364821Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+2026-11-15T14:19:15.364836Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+2026-11-15T14:19:15.364851Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+2026-11-15T14:19:15.364867Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+2026-11-15T14:19:15.366904Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+2026-11-15T14:19:15.366966Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+2026-11-15T14:19:15.366988Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+2026-11-15T14:19:15.367010Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+2026-11-15T14:19:15.367032Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+2026-11-15T14:19:15.367053Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+2026-11-15T14:19:15.367074Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+2026-11-15T14:19:15.369199Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+2026-11-15T14:19:15.369245Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+2026-11-15T14:19:15.369279Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+2026-11-15T14:19:15.369302Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+2026-11-15T14:19:15.369323Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+2026-11-15T14:19:15.369344Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+2026-11-15T14:19:15.369365Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+2026-11-15T14:19:15.371425Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+2026-11-15T14:19:15.371471Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+2026-11-15T14:19:15.371493Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+2026-11-15T14:19:15.371515Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+2026-11-15T14:19:15.371536Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+2026-11-15T14:19:15.371557Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+2026-11-15T14:19:15.371577Z qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+kf-host: host tier: stock
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: GSS 0x2080853b [(4, 1)] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784 [#1, rate-limited]
+kf3: host facts: GSS 0x2080852a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: FIFO latency buffers (engine, gp, pb) from the host: [(1, 240, 2880), (9, 240, 2880), (a, 240, 2000), (b, 20, e00), (c, 20, e00), (13, 20, 80), (1b, 20, 80), (22, 20, 80), (33, 20, 80)]
+kf3: channel budget 1789 per runlist (Derived; derived default 1789, host limit 2045; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)
+kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 (gpu-uuid=explicit, basis Explicit, devfn 0x20)
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: walk device NVIDIA GeForce RTX 3090 pageable_memory_access=yes (yes: the walker's store and pool bounds are host-memory-safety obligations, OWNER_RULINGS S1-05)
+kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf3: host GPU minor=0 bdf=0000:00:08.0 gpuId=0x8 rm_device_instance=0 cuda_device="NVIDIA GeForce RTX 3090" store=4096 MiB
+kf3: guest driver 580.65.06 (guest-driver=); measured ABI: static-info Pre610, element Pre610, init-args FourField, rm-control params@40, vgx Some((43, 19))
+kf3: native timer BAR0=0x9000, read-only 4096-byte mapping, host/guest layout TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 }
+kf3: P1+P2 T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/V3_P1P2_TSPACE.md); mirrors carry no window and no ring; host channel births require USER replies
+kf3: channel plane: Translated rings on host COPY2 (engine 0xb); completions on FIFO_EVENT_MTHD + CE2
+kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE1->Some(0) CE2->Some(1) CE3->Some(2) NVENC0->Some(4) NVDEC0->Some(3) OFA->Some(5)]
+kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> a vector no armed engine shares, else GR0 vector Some(0) (relay=on, pacing=off; KF3_PT_NSI_RELAY / KF3_PT_NSI_MIN_INTERVAL_US)
+kf3: display plane ON — virtual NVDisplay for GA102 GA103 GA104 GA106 GA107 (IP 0x04010000, display class 0xc670, 4 heads)
+kf3: broker: the GPU-copy rung is NOT offered: GPU-copy rung: nvidia-drm cannot import NVKMS memory here (GET_DEV_INFO supports_alloc = 0: nvidia-drm runs without modeset=1); frames go through host memory
+kf3: PRECOMP source=T1 fallback: PRECOMP own-subdevice control: Other(19270)
+kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it
+kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)
+kf3: display: caps page derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)
+kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID fnv1a64=c9dcbb394c28b1c7 (display-max-fps 0)
+kf-cuda: cuda thread posture thread=kf3-cuda-disp cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: display device 0000:00:08.0 pageable_memory_access=yes (yes: every compose-kernel bound is a host-memory-safety obligation, OWNER_RULINGS S1-05)
+kf3: broker: /dev/udmabuf opened — frames can go as a dma-buf (rungs 1 and 1b)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:08.0
+kf-rm: EXPERIMENT software-runlist allocation metadata only; native backing and scheduling are NOT implemented
+kf-rm: KF3_SW_RUNLIST_HOST_OWNED=1: software-runlist submits answered NV_OK and ignored; kernel channels scheduled at birth — AWAITING OWNER CONFIRMATION
+kf-rm: PROBE KF3_PREEMPT_BIND_PROBE=1: GR_CTXSW_PREEMPTION_BIND answered NV_OK, NOTHING bound on the host (H-preempt-bind probe, not a shipped behaviour)
+kf-rm: PROBE KF3_ZCULL_BIND_PROBE=1: a cross-client GR_CTXSW_ZCULL_BIND answered NV_OK, NOTHING bound on the host (probe, not a shipped behaviour)
+kf-rm: PROBE KF3_DISPLAY_CTRL_PROBE=1: six NV0073 controls answered NV_OK with the request echoed (H-modeset probe, not a shipped behaviour)
+kf-rm: EXPERIMENT contiguous SYSRAM descriptors backed by checked guest RAM; no scheduling
+kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented
+kf-rm: display: PROBE KF3_DISPLAY_IMP_ENABLE=1 — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS_MODE_POSSIBLE already says possible)
+kf3: PRAMIN scratch: tile 0x100000 x 1 over 0x100000 (host RAM bound 0x100000)
+kf3: BAR1 scratch: tile 0x200000 x 64 over 0x8000000 (host RAM bound 0x200000)
+kf3: BAR2 scratch: tile 0x200000 x 16 over 0x2000000 (host RAM bound 0x200000)
+kf3: scratch host-RAM bound 0x500000 for this device (PRAMIN 0x100000 + BAR1 0x200000 + BAR2 0x200000); whole-window scratch would have allowed 0xa100000
+kf3: boot display ON — option ROM 11776 bytes (10de:2204, KFGP BAR1 +0x0, 1920x1080 pitch 7680, G = 0x7f0000); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU; kf-gop SIGNED (cert table 2008 bytes at +0x2400, WIN_CERTIFICATE 2008 bytes; /root/prop/work_r7/firmware/kf-gop.signed.efi)
+kf3: P4 memory plane: store 4096 MiB (imported into the walker), walker pools 236 MiB of host GPU memory (walk pool 1048576 runs, slot pool 2097152 runs (2097152 free), max per space 1048576, slots held 0, grows 0, retries 0, ceilings 0, largest slot 0, largest walk 0), roots bar1=0xf1cac000 bar2=0x
+kf-cuda: cuda thread posture thread=kf3-display cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf3: VA manager: pending-walk wait 50us..1ms (epoll_pwait2) (timer slack 5us)
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: display: display-max-fps unset — every head's vblank tick is capped at 75 Hz; copies without a flip are made at the console head's tick, while watched, and sent only when the frame's checksum changed
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+kf3: broker: relay to /root/prop/work_r7/run/broker.sock (brokers accepted: uid 0, QEMU's effective uid at each connect, display-broker-uid 0); no clipboard
+2026-11-15T14:19:17.421234Z qemu-system-x86_64: -device kf3-gpu,id=kf0,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,gpu-uuid=GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001,guest-driver=580.65.06,display=on,gop=on,gop-efi=/root/prop/work_r7/firmware/kf-gop.signed.efi,display-broker=/root/prop/work_r7/
+2026-11-15T14:19:17.421345Z qemu-system-x86_64: -device kf3-gpu,id=kf0,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,gpu-uuid=GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001,guest-driver=580.65.06,display=on,gop=on,gop-efi=/root/prop/work_r7/firmware/kf-gop.signed.efi,display-broker=/root/prop/work_r7/
+2026-11-15T14:19:17.421522Z qemu-system-x86_64: -device kf3-gpu,id=kf0,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,gpu-uuid=GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001,guest-driver=580.65.06,display=on,gop=on,gop-efi=/root/prop/work_r7/firmware/kf-gop.signed.efi,display-broker=/root/prop/work_r7/
+2026-11-15T14:19:17.421586Z qemu-system-x86_64: -device kf3-gpu,id=kf0,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,gpu-uuid=GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001,guest-driver=580.65.06,display=on,gop=on,gop-efi=/root/prop/work_r7/firmware/kf-gop.signed.efi,display-broker=/root/prop/work_r7/
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: broker: connected to /root/prop/work_r7/run/broker.sock, capabilities 0x3fff
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: broker window is now 1920x1080 at 0 mHz
+kf3: broker: window inactive (input suspended)
+kf3: broker: grab off
+kf3: broker: guest cursor: the BROKER draws it in every mode (CAP_CURSOR_STREAM); nothing is composed into the frame
+kf3: broker: guest cursor: the HOST pointer shows it (hover)
+kf3: broker: pointing device -> #3 QEMU HID Tablet (absolute)
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: guest-RAM object 0xcafe0011 over 0x200000000 bytes of the guest memfd
+kf3: mem t=3.314s tspace space=0xcafe0012 fb=0x120000000+0xefbe0000 ram=0x20fbe0000+0x200000000 (obj 0xcafe0011) rings=0xff00000000+0x100000000 build_us=216325 fb_pages=2M:0xefa00000+4K:0x1e0000
+kf3: mem t=3.316s [1/3] prewarm: spare host space 0xcafe0015 ready before the guest runs — windows=none (vaspace 2618 us, ram_obj 0 us, total 2620 us)
+kf3: display: copy 1 has not completed in 2s and its stream reports no failure (the host RM or the GPU has not run it yet): waiting for its signal, nothing is forged meanwhile
+kf3: PT-NSI host CE3 notifier wake #1: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #1: NotArmed (guest armed=false, vector None)
+kf3: broker: guest resolution is now 1920x1080
+kf3: broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+kf3: broker: the display CAN show XR24 modifier 0x0000000000000000
+kf3: PT-NSI host CE3 notifier wake #2: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #2: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host CE3 notifier wake #3: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #3: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host CE3 notifier wake #4: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #4: NotArmed (guest armed=false, vector None)
+kf3: mem t=3.369s [2/3] prewarm: spare host space 0xcafe001a ready before the guest runs — windows=none (vaspace 2160 us, ram_obj 0 us, total 2162 us)
+kf3: PT-NSI host CE3 notifier wake #5: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #5: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host CE3 notifier wake #6: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #6: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host CE3 notifier wake #7: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #7: NotArmed (guest armed=false, vector None)
+kf3: mem t=3.421s [3/3] prewarm: spare host space 0xcafe001f ready before the guest runs — windows=none (vaspace 1938 us, ram_obj 0 us, total 1940 us)
+kf3: PT-NSI host CE3 notifier wake #8: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #8: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #9: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #10: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #11: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #12: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #13: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #14: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #15: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host CE3 notifier wake #16: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #16: NotArmed (guest armed=false, vector None)
+kf3: PT-NSI host CE3 notifier wake #32: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #32: NotArmed (guest armed=false, vector None)
+kf3: display fps[cap=75(unset) copies=0.9 skipped=0 checks=59.9 same=59 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale=0 probation=0]]
+kf3: PT-NSI host CE3 notifier wake #64: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #64: NotArmed (guest armed=false, vector None)
+kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=120 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale=0 probation=0]]
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset=0xffe00000 → served WPR2_ADDR_LO=Some(Ok("0xffe000"))
+kayfabe: GSP-PUBLISH gpa=0x2e622000 gpa_same=false seq_last=Some(1) cmd_seq=0 ⇒ same_instance=false [#1, rate-limited]
+kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq=0 936 bytes: bGspNocatEnabled=1 at +929 (driver 580.65.06's layout; 1 = a Windows-built RM, THE_WINDOWS_AXIS §7) [#1, rate-limited]
+kf3: GSP rpc GspSetSystemInfo seq=0
+kf3: GSP rpc SetRegistry seq=0
+kf3: display: +246114 ms the console shows NOTHING yet (no head has scanned a window) (core channel FREE)
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf-rm: the guest is Windows 580.88 (r580_78-7), the Windows build of Linux 580.65.06 (one changelist, 36308443): keyed as 580.65.06
+kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says guestDriverVersion="580.88" guestVersion="r580_78-7" guestTitle="DVSReal r580_78 580.88 DVS-Applications" guestClNum=0 vgx=0x2b.0x13; this device answers as driver 580.65.06
+kf3: GSP rpc SetGuestSystemInfo seq=0
+kf3: GSP phase Booted -> Running
+kf3: GSP rpc GetGspStaticInfo seq=0
+kf-rm: chanlink: client 0xc1d00002 root: kernel=false internal=false [#1, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1e00003 root: kernel=false internal=true [#2, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+W349AUTHORED key=rm.0x20802a08 die=GA102 branch=580: rm.0x20802a08: unmeasured on GA102 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (CE fault-method buffer size: AUTHO
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: client 0xc1e00004 root: kernel=false internal=true [#3, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmControl seq=0
+W349AUTHORED key=rm.0x20800a59 die=GA102 branch=580: rm.0x20800a59: unmeasured on GA102 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (GMMU fault-buffer sizes: AUTHORED,
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows [#1, rate-limited]
+kf3: GSP rpc UpdateBarPde seq=0
+kf3: mem t=246.283s fn70 Bar2 entry=0xefbc302 shift=47 -> our root @0xf3392000, walk scheduled
+kf3: mem t=246.283s walk reconciled [0xffffffff00000002:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#1, rate-limited]
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#2, rate-limited]
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=246.293s sysmembar #1: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 348 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#2, rate-limited]
+kf3: mem t=246.294s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(0, Cleared)] unreconciled=[]
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#3, rate-limited]
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=246.294s sysmembar #2: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 266 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#3, rate-limited]
+kf3: mem t=246.295s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(1, Cleared)] unreconciled=[]
+kf3: mem t=246.296s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(2, Cleared)] unreconciled=[]
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: display: InstMem(InstMem { phys: 4022009856, size: 65536, addr_space: 2 })
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1e00005 root: kernel=false internal=true [#4, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: mem t=246.313s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(3, Cleared)] unreconciled=[]
+kf3: mem t=246.314s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(4, Cleared)] unreconciled=[]
+kf3: GSP rpc RmControl seq=0
+kf3: display: SharedData(Some(InstMem { phys: 4022001664, size: 32, addr_space: 2 }))
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=246.317s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(5, Cleared)] unreconciled=[]
+kf3: mem t=246.318s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(6, Cleared)] unreconciled=[]
+kf3: mem t=246.319s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(7, Cleared)] unreconciled=[]
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=246.322s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(8, Cleared)] unreconciled=[]
+kf3: mem t=246.323s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(9, Cleared)] unreconciled=[]
+kf3: mem t=246.324s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(10, Cleared)] unreconciled=[]
+kf3: mem t=246.324s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(11, Cleared)] unreconciled=[]
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=246.326s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(12, Cleared)] unreconciled=[]
+kf3: mem t=246.327s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(13, Cleared)] unreconciled=[]
+kf3: mem t=246.328s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(14, Cleared)] unreconciled=[]
+kf3: mem t=246.329s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(15, Cleared)] unreconciled=[]
+kf3: mem t=246.330s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(16, Cleared)] unreconciled=[]
+kf3: mem t=246.330s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(17, Cleared)] unreconciled=[]
+kf-rm: chanlink: client 0xc1e00006 root: kernel=false internal=true [#5, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: mem t=246.339s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(18, Cleared)] unreconciled=[]
+kf3: mem t=246.340s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(19, Cleared)] unreconciled=[]
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: no placement inside it (no console adopted); 0x7f0000 bytes re-pointed to scratch
+kf3: mem t=246.349s walk reconciled [0xffffffff00000001:+1-0r0] completed=[(20, Cleared)] unreconciled=[]
+kf3: mem t=246.349s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #1: guest views []; 0x7f0000 bytes show SCRATCH
+kf-rm: chanlink: client 0xc1e00007 root: kernel=false internal=true [#6, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00007:0xbaba0042 under 0xcaf00000 (device default for it: 0xbaba0042) VAS-FACTS index=Some(0) flags=Some(2000) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0) [#1, rate-limited]
+kf-rm: chanlink: VAS-DECL 0xc1e00007:0xbaba0042 vaBase=0x0 vaSize=0x0 end=None shared_management=false [#1, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=246.351s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(21, Cleared)] unreconciled=[]
+kf3: mem t=246.352s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(22, Cleared)] unreconciled=[]
+kf3: mem t=246.353s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(23, Cleared)] unreconciled=[]
+kf3: mem t=246.353s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(24, Cleared)] unreconciled=[]
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#4, rate-limited]
+kf3: VasKey(13970166077300801602) mirror space=0xcafe001f: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=246.354s pagedir VasKey(13970166077300801602) root=0xefba4000 First
+kf3: mem t=246.354s walk reconciled [0xc1e00007baba0042:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#4, rate-limited]
+kf3: mem t=246.355s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(25, Cleared)] unreconciled=[]
+kf3: mem t=246.356s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(26, Cleared)] unreconciled=[]
+kf3: mem t=246.357s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(27, Cleared)] unreconciled=[]
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=246.360s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(28, Cleared)] unreconciled=[]
+kf-rm: chanlink: CLASSIFY 0xc1e00007:0xbaba0045 kernel work -> Translated (an RM-internal client) [#1, rate-limited]
+kf-rm: chanlink: CHAN-FACTS 0xc1e00007:0xbaba0045 parent=0xcaf00000 class=0xc56f engine=Some(1) flags=0x200120 hVASpace=0xbaba0042 ctxShare=0x0 vas=0xc1e00007:Some(baba0042) tsg=None device=0xcaf00000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) 
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows [#5, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf-host: channel birth h=0xcafe0027 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-chan: GR tier admitted host channel 0xcafe0027 (token 0x28) reply_flags=0x00000080 privilege=USER objects=[(902d, cafe002b), (a140, cafe002c), (c797, cafe002d), (c7c0, cafe0029)]
+kf3: act birth translated: chan 0xc1e00007:0xbaba0045 BORN Translated: token 0x1 -> host 0x28 in VasKey(13970166077300801602) gpfifo=0x0x32 userd=Some(Framebuffer { base: 4020699136, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#5, rate-limited]
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=246.373s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(29, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=246.374s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(30, Cleared)] unreconciled=[]
+kf3: mem t=246.374s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(31, Cleared)] unreconciled=[]
+kf3: mem t=246.375s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(32, Cleared)] unreconciled=[]
+kf3: mem t=246.376s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(33, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=246.377s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(34, Cleared)] unreconciled=[]
+kf3: mem t=246.377s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(35, Cleared)] unreconciled=[]
+kf3: mem t=246.378s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(36, Cleared)] unreconciled=[]
+kf3: mem t=246.379s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(37, Cleared)] unreconciled=[]
+kf3: mem t=246.380s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(38, Cleared)] unreconciled=[]
+kf3: mem t=246.380s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(39, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=246.382s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(40, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=246.382s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(41, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=246.383s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(42, Cleared)] unreconciled=[]
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1e00007:0xcaf00001 params=560 rpc_flags=0x0 [#1, rate-limited]
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows [#6, rate-limited]
+kf3: GSP rpc RmControl seq=0
+kf3: act promote translated context: 0xc1e00007:0xbaba0045 GPU_PROMOTE_CTX satisfied by Translated host 0x28 GR=Some((cafe0029, c7c0)) VIDEO=None entries=9 init_ids=0xe05 va_ids=0xa7d bound=true — no guest buffer touched (5 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#6, rate-limited]
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows [#7, rate-limited]
+kf3: GSP rpc Free seq=0
+kf3: TSPACE-RETIRE tok=0x1 host=0x28 key=VasKey(13970166077300801602) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=0 host=0x28 fast=0
+kf3: chan token 0x1 (host 0x28) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[m
+kf3: act free: 0xc1e00007:0xbaba0045: translated host 0x28 (3807 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now [#7, rate-limited]
+kf3: mem t=246.388s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(43, Cleared)] unreconciled=[]
+kf3: mem t=246.389s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(44, Cleared)] unreconciled=[]
+kf3: mem t=246.390s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(45, Cleared)] unreconciled=[]
+kf3: mem t=246.390s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(46, Cleared)] unreconciled=[]
+kf3: mem t=246.391s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(47, Cleared)] unreconciled=[]
+kf3: mem t=246.391s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(48, Cleared)] unreconciled=[]
+kf3: mem t=246.392s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(49, Cleared)] unreconciled=[]

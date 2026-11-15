@@ -1,0 +1,18 @@
+﻿{
+    "window_name":  "DaVinci Resolve - kfa5b08266",
+    "kind":  "RESOLVE",
+    "focus":  false,
+    "started":  1794507837.53,
+    "log_lines":  [
+                      "[0x00000dd8] | GPUDetect            | INFO  | 2026-11-12 18:24:33,700 | Detected 1 GPUs:",
+                      "[0x00000dd8] | Main.GPUConfig       | INFO  | 2026-11-12 18:24:33,730 | Selected compute API: CUDA",
+                      "[0x00001880] | IO                   | INFO  | 2026-11-12 18:24:41,759 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+                      "[0x00000dd8] | UI.GLContext         | INFO  | 2026-11-12 18:24:58,070 | Initialized OpenGL 4.5 (requested 4.5) on device \u0027NVIDIA Corporation NVIDIA GeForce RTX 3090/PCIe/SSE2\u0027",
+                      "[0x000014bc] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 18:24:59,356 | Let There Be CUDA Light!"
+                  ],
+    "app":  "resolve",
+    "ended":  1794508026.863,
+    "run_id":  "a5b082662c614ac08e8d7391475de934",
+    "stage":  "main window",
+    "project_name":  "kfa5b08266"
+}

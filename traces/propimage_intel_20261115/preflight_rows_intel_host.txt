@@ -1,0 +1,2 @@
+('cpu_vendor', 'MISMATCH', 'profile kayfabe-amd-v1 needs AuthenticAMD, host is GenuineIntel (no vendor spoofing; Intel needs its own image)')
+('cpu_features', 'MISMATCH', 'missing host flags: clzero, misalignsse, sha_ni, sse4a')

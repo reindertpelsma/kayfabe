@@ -1,0 +1,26 @@
+=== [1] -cpu EPYC-v1,model-id=AMD Virtual CPU,family=23,model=1,stepping=2,-avx512f,-rtm,-hle,-mpx,-sgx,-vmx,-svm,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash
+RESULT started (paused) OK
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+qemu-system-x86_64: terminating on signal 15 from pid 91912 (timeout)
+=== [2] -cpu EPYC-v1,model-id=AMD Virtual CPU,family=23,model=1,stepping=2,enforce
+RESULT exited rc=1
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=07h,ecx=00h].EBX.sha-ni [bit 29]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.mmxext [bit 22]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].EDX.fxsr-opt [bit 25]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.cr8legacy [bit 4]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.sse4a [bit 6]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.misalignsse [bit 7]
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID[eax=80000001h].ECX.osvw [bit 9]
+qemu-system-x86_64: Host doesn't support requested features
+=== [3] -cpu host,vendor=AuthenticAMD,family=23,model=1,stepping=2,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash
+RESULT started (paused) OK
+qemu-system-x86_64: terminating on signal 15 from pid 91931 (timeout)
+=== [4] -cpu host,vendor=AuthenticAMD,family=23,model=1,stepping=2,-avx512f,-rtm,-hle,-mpx,-sgx,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash
+RESULT started (paused) OK
+qemu-system-x86_64: terminating on signal 15 from pid 91941 (timeout)

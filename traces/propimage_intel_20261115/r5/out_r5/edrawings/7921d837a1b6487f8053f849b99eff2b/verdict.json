@@ -1,0 +1,7 @@
+{
+  "app": "edrawings",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "eDrawings opened the sample part (UIA TabItem 'kfsample.sldprt'); licence dialog accepted: True (BM_CLICK on the UIA window handle)",
+  "secs": 81
+}
