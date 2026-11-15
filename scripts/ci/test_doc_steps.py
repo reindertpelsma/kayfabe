@@ -303,14 +303,38 @@ class RealDocs(unittest.TestCase):
             self.assertNotIn("<", " ".join(words))
 
     def test_the_real_blocks_run_through_the_runner_when_the_commands_are_stubbed(self):
-        """The qemu_build block as written, against stub curl/tar/bash on PATH: the runner's own plumbing, GPU-free."""
+        """The qemu_build block as written, against stub python3/tar on PATH: the runner's own plumbing, GPU-free.
+
+        The block fetches the tarball with `python3 -I scripts/ci/qemu_source.py fetch .` (PR #422), which is not reachable
+        from the runner's temp home and would hit the network, so python3 is stubbed. The stub accepts exactly one call, the
+        verifying fetch with no flag (no --from-file, nothing that skips the pin check), and refuses every other argument
+        list with rc 2; the real helper must exist at the path the block names. tar refuses to run unless the fetch has
+        put the pinned file in place first, so the order is checked too.
+        """
+        import qemu_source
+
         docs = self.docs()
+        name = qemu_source.read_pin()[0]
+        self.assertTrue((ROOT / "scripts/ci/qemu_source.py").is_file())
         with tempfile.TemporaryDirectory() as d:
             stubs = Path(d) / "stubs"
             stubs.mkdir()
-            for name in ("curl", "tar"):
-                (stubs / name).write_text('#!/bin/sh\necho "STUB ' + name + ' $*" >> "$HOME/calls"\n')
-                (stubs / name).chmod(0o755)
+            (stubs / "python3").write_text(
+                "#!/bin/sh\n"
+                'echo "STUB python3 $*" >> "$HOME/calls"\n'
+                'if [ "$#" -ne 4 ] || [ "$1" != -I ] || [ "$2" != scripts/ci/qemu_source.py ] || [ "$3" != fetch ] || [ "$4" != . ]; then\n'
+                '  echo "stub python3: refused: $*" >&2; exit 2\n'
+                "fi\n"
+                ': > "./' + name + '"\n'
+                'echo "./' + name + '"\n'
+            )
+            (stubs / "tar").write_text(
+                "#!/bin/sh\n"
+                'echo "STUB tar $*" >> "$HOME/calls"\n'
+                '[ "$1" = -xf ] && [ -f "$2" ] || { echo "stub tar: no fetched $*" >&2; exit 2; }\n'
+            )
+            for n in ("python3", "tar"):
+                (stubs / n).chmod(0o755)
             r = ds.Runner(Path(d) / "run", base_env={"PATH": str(stubs) + ":" + ds.DEFAULT_PATH}, log=lambda *_: None)
             step = next(s for s in docs["building.md"].steps if s.name == "qemu_build")
             tail = step.text.splitlines()[-1]
@@ -319,9 +343,9 @@ class RealDocs(unittest.TestCase):
             import dataclasses
 
             r.run(dataclasses.replace(step, text=body))
-            calls = (r.home / "calls").read_text()
-            self.assertIn("STUB curl -fsSL -o qemu-10.2.4.tar.xz https://download.qemu.org/qemu-10.2.4.tar.xz", calls)
-            self.assertIn("STUB tar -xf qemu-10.2.4.tar.xz", calls)
+            calls = (r.home / "calls").read_text().splitlines()
+            self.assertEqual(calls, ["STUB python3 -I scripts/ci/qemu_source.py fetch .", "STUB tar -xf " + name])
+            self.assertNotIn("curl", body)
 
 
 class Stage(unittest.TestCase):
