@@ -37,6 +37,7 @@ COPY_FILES = [
     "scripts/bench/native_fault_names.json",
     "scripts/bench/specviewperf/lanes.json",
     "scripts/bench/provision_box.sh",
+    "scripts/bench/qemu.pin",
     "ci/vast-broker/planner/schemas/instruction.schema.json",
     "ci/vast-broker/release-matrix.json",
     "ci/vast-broker/defaults.json",
