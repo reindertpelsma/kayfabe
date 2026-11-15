@@ -40,8 +40,8 @@
 # Knobs (all optional): KF_WINGATE_STRICT_LKE (0: 1 makes any LiveKernelEvent 193 gate),
 # KF_WINGATE_LKE_RATCHET (report: warn above the per-die maximum; gate: fail above it),
 # KF_WINGATE_IDLE_S (300), KF_WINGATE_BUDGET_S (9000: the wall for everything after the
-# install; the install itself is bounded by WINVM_INSTALL_WAIT_S, 4200), KF_WINGATE_FLAGS (the kf3 env file,
-# scripts/bench/windows/kf3_flags.sample.env), KF_WINGATE_GUEST_DRIVER (580.65.06: the guest ABI of the
+# install; the install itself is bounded by WINVM_INSTALL_WAIT_S, 4200), KF_WINGATE_FLAGS (a MEASUREMENT-only kf3 env file; default: none,
+# the product defaults are the Windows profile: scripts/bench/windows/kf3_flags.sample.env), KF_WINGATE_GUEST_DRIVER (580.65.06: the guest ABI of the
 # Windows 580.88 driver), KF_WINGATE_ARM (B), WINVM_ROOT (/workspace/winvm), BENCH (/workspace/bench).
 # Secrets: the Windows password and the ssh key stay in $WINVM_ROOT/kfwin/secrets; nothing from there, from tpm/
 # or from firmware/ is copied to the evidence directory, and the evidence is scanned for the password.
@@ -72,7 +72,12 @@ export WINVM_LOCK_WAIT_S=${WINVM_LOCK_WAIT_S:-120}
 export KF_GUEST_USER=${KF_GUEST_USER:-kf}
 IDLE_S=${KF_WINGATE_IDLE_S:-300}
 BUDGET_S=${KF_WINGATE_BUDGET_S:-9000}
-FLAGS=${KF_WINGATE_FLAGS:-$WIN/kf3_flags.sample.env}
+# ★ 2026-11-15 (flag cleanup, Stage 1): NO env file by default. The Windows profile is the device's default for a
+# declared Windows guest (OWNER_RULINGS section W), so the gate boots with the flags the product has. KF_WINGATE_FLAGS
+# names a MEASUREMENT-only file (e.g. KF3_RPC_TRACE=1) and is the only way an env file reaches win_vm.sh.
+FLAGS=${KF_WINGATE_FLAGS:-}
+ENVFILE_ARGS=()
+[ -z "$FLAGS" ] || ENVFILE_ARGS=(--env-file "$FLAGS")
 GDRV=${KF_WINGATE_GUEST_DRIVER:-580.65.06}
 ARM=${KF_WINGATE_ARM:-B}
 VM=$WINVM_ROOT/${WINVM_NAME:-kfwin}
@@ -629,7 +634,7 @@ if [ "$SELFTEST" = 1 ]; then selftest; fi
 # ------------------------------------------------------------------------------------------------
 mkdir -p "$EV"
 chmod 0700 "$EV"
-say "WINDOWS_GATE_START tag=$T rev=$REV source=$SOURCE $(date -u -Is) idle_s=$IDLE_S flags=$(basename "$FLAGS") guest_driver=$GDRV arm=$ARM"
+say "WINDOWS_GATE_START tag=$T rev=$REV source=$SOURCE $(date -u -Is) idle_s=$IDLE_S flags=${FLAGS:+$(basename "$FLAGS")}${FLAGS:-none} guest_driver=$GDRV arm=$ARM"
 say "WINDOWS_GATE_REQUESTED=1"
 
 stage_begin preflight
@@ -640,7 +645,7 @@ if [ -e "$VM/installed" ]; then need_gb=20; else need_gb=45; fi
 [ "${avail_gb:-0}" -ge "$need_gb" ] || refuse "disk-${avail_gb:-0}G-free-need-${need_gb}G"
 mem_gb=$(free -g | awk '/^Mem:/{print $2}')
 [ "${mem_gb:-0}" -ge 20 ] || refuse "ram-${mem_gb:-0}G-need-20G"
-[ -r "$FLAGS" ] || refuse "no-flags-file-$FLAGS"
+[ -z "$FLAGS" ] || [ -r "$FLAGS" ] || refuse "no-flags-file-$FLAGS"
 if ! nvidia-smi -L > "$EV/nvidia_smi_L.txt" 2>&1; then
     verdict RETRY PROVIDER "nvidia-smi -L failed on the host: $(head -c 200 "$EV/nvidia_smi_L.txt")"
     finish
@@ -780,7 +785,7 @@ GUEST_STARTED=1
 vmuuid=$(sed -n 's/^VM_UUID=//p' "$VM/identity.env" 2> /dev/null | head -1)
 [[ "$vmuuid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || fail_op "no per-VM identity (VM_UUID) in $VM/identity.env"
 if ! bash "$WV" run --detach --overlay "$TAG" --arm "$ARM" --guest-driver "$GDRV" --kf3-extra "gpu-uuid=GPU-$vmuuid" \
-    --env-file "$FLAGS" --tag "$TAG" > "$EV/run_launch.txt" 2>&1 < /dev/null; then
+    "${ENVFILE_ARGS[@]}" --tag "$TAG" > "$EV/run_launch.txt" 2>&1 < /dev/null; then
     fail_op "win_vm.sh run did not start: $(tail -2 "$EV/run_launch.txt" | tr '\n' ' ')"
 fi
 wait_qemu_start "$TAG" 1 "$(cap 300)" || fail_op "the run loop never started QEMU for boot 1; run log: $(tail -2 "$VM/logs/${TAG}_run.log" 2> /dev/null | tr '\n' ' ')"

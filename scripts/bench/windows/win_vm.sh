@@ -430,7 +430,9 @@ log_identity() {
 # ------------------------------------------------------------------------------------------------
 # Only blank lines, '#' comments and KF3_NAME=digits lines are accepted; any other line refuses the
 # whole file (by line number, never by content). The list is NOT hard-coded here: it is the caller's
-# file (a sample is scripts/bench/windows/kf3_flags.sample.env, which must be confirmed against `next`).
+# file. ★ 2026-11-15 (flag cleanup, Stage 1): Windows needs NO env file: the measured Windows profile is the
+# device's default for a declared Windows guest, so a plain `run` boots with it. An env file is for MEASUREMENT
+# flags only (scripts/bench/windows/kf3_flags.sample.env is the commented example).
 ENVFILE_SRC="" ENVFILE_SHA="" ENVFILE_N=0
 load_env_file() {
   local f=$1 line n=0 lineno=0 pairs=()
