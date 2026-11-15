@@ -132,6 +132,9 @@ jobs:
       # The video-class coverage ratchet (crates/kf-chan/tests/video_class_coverage.rs, 2026-11-15): each mutant needs two named killers.
       - name: Video-class coverage mutations require two named killers each
         run: python3 scripts/ci/video_class_coverage_mutants.py
+      # The host unmap-call cap (crates/kf-mem/src/batch.rs `UNMAP_CALL_MAX_ENTRIES`, 2026-11-15): each mutant needs two named killers.
+      - name: Host unmap-call cap mutations require two named killers each
+        run: python3 scripts/ci/va_apply_bounds_mutants.py
       - name: v3 dependency isolation and CI guard self-tests
         run: |
           python3 scripts/ci/dependencies.py
