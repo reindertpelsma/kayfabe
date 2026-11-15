@@ -379,9 +379,22 @@ def read_result_file(path):
             "host_reference",
             "host_claims",
             "matrix_receipts",
+            "instruction_sha256",
+            "selection",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
+        # 2026-11-15 provenance of --instruction FILE and of --only/--skip (read, validated, not forwarded)
+        if "instruction_sha256" in doc and not (
+            type(doc["instruction_sha256"]) is str and re.fullmatch("[0-9a-f]{64}", doc["instruction_sha256"])
+        ):
+            raise ValueError("instruction hash")
+        if "selection" in doc and not (
+            type(doc["selection"]) is dict and set(doc["selection"]) == {"only", "skip"}
+            and all(type(v) is list and len(v) <= 16 and all(type(x) is str and len(x) <= 32 for x in v)
+                    for v in doc["selection"].values())
+        ):
+            raise ValueError("selection")
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):
             raise ValueError("verdict")
         if "matrix_receipts" in doc:

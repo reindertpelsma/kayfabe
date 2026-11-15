@@ -128,6 +128,7 @@ const files = [
   'scripts/ci/release_driver_pins.py',
   P,
   R,
+  'scripts/ci/payload_instruction.py',
   'scripts/bench/native_xid_guard.py',
   'scripts/bench/native_fault_names.json',
 ];

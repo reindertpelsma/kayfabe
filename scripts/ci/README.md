@@ -1,5 +1,5 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: LIVE, 2026-11-06 (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
+STATUS: LIVE, 2026-11-15 (payload `--instruction FILE`, `--only/--skip/--dry-run`: GPU-free tests only, no box has run them; the rest of this page is as of 2026-11-06) (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
 claude/vast-payload-p7-20261024). MEASURED 2026-10-25: a real Vast box booted with the
 protocol-7 setup but had not yet reported to the Worker, so protocol 7 has no end-to-end run on a
 real box yet. The evidence below is for the pre-port payload. MEASURED: run `v9-xid-kvm-20261023`, source
@@ -36,6 +36,25 @@ value in the file makes it invalid. PASS is withheld (FAIL + failing row) on non
 zero passes, unknown hardware or compute_cap < 750. Soft deadline: TERM, KILL after 30 s; result is
 FAIL with the suites already written plus `timeout`. Absent payload: FAIL `payload_missing`; absent
 or invalid result file: FAIL `result_missing`/`result_invalid`. Exit text never makes a PASS.
+
+Instruction file and stage selection (2026-11-15, OWNER_RULINGS section AR, stages S1 and S3; MEASURED by
+GPU-free tests only, not on a box): the payload also takes `--instruction FILE` (JSON, at most 64 KiB, schema
+`kayfabe.payload-instruction/1`: `ci/vast-broker/planner/schemas/instruction.schema.json`, mirrored byte for byte
+in `scripts/kfci/schemas/`). `payload_instruction.py` validates it once (restricted schema interpreter of
+`scripts/kfci/planner_assignment.py`, plus cross-field rules) into a frozen `Instruction`; unknown fields, wrong
+types, duplicate keys, traversing artifact paths and another schema version are refused (`preflight`). The
+KF_* tier variables (`KF_MERGE_WINDOWS`, `KF_TIER`, `KF_WINDOWS_RUNS`, `KF_STAGES`, `KF_SPEC`, `KF_LINUX_APPS`,
+`KF_WINAPPS`, `KF_RELEASE_REHEARSAL`, the matrix fields) are ONE adapter, `instruction_from_env`, building the same
+object with the same functions as before; with `--instruction` none of them may be set. A release matrix cannot be
+spelled in a file. `--only STAGE` and `--skip STAGE` (repeatable) select among the planned stages (a name outside
+the plan, or an empty selection, is `preflight`); skipping does not provide a skipped stage's outputs, so a partial
+run is local evidence and its result carries `selection`. `--dry-run` prints the `KF_PAYLOAD_TIER` line, the
+instruction hash and `KF_PAYLOAD_PLAN stages=... planned=...` and touches nothing (no sha or deadline needed);
+`--emit-instruction FILE` writes the env-built instruction. A run from a file records `instruction_sha256` (of the
+bytes read) in `kf-result.json`; the reporter validates it and does not forward it. `artifacts` (name, relative
+path, sha256) is validated and recorded but not yet consumed (stage S7). The payload still reads no token or broker
+URL. Tests `test_payload_instruction.py`; mutants `instruction_mutants.py` (two named killers each, in `ci.yml`).
+Not done: the Worker does not write an instruction yet (S2), hard-coded paths remain (S4).
 
 CODE READ: optional local `diagnostics` records contain `arm, mode, rc, admitted, text,
 sha256, source_bytes, dropped_bytes`. Previews retain head/tail:256 UTF-8 bytes for a clean

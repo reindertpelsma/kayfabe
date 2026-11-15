@@ -34,23 +34,24 @@ def string_length(value):
     return len(value.encode("utf-16-le", errors="surrogatepass")) // 2
 
 
-def check(schema, value, path="assignment"):
+def check(schema, value, path="assignment", defs=None):
+    defs = SCHEMA["$defs"] if defs is None else defs
     if "$ref" in schema:
         reference = schema["$ref"]
         if not reference.startswith("#/$defs/"):
             raise AssignmentError("unsupported schema reference")
-        return check(SCHEMA["$defs"][reference[8:]], value, path)
+        return check(defs[reference[8:]], value, path, defs)
     if "const" in schema and not same(schema["const"], value):
         return path + " const"
     if "enum" in schema and not any(same(item, value) for item in schema["enum"]):
         return path + " enum"
     if "anyOf" in schema and not any(
-        check(item, value, path) is None for item in schema["anyOf"]
+        check(item, value, path, defs) is None for item in schema["anyOf"]
     ):
         return path + " anyOf"
     if (
         "oneOf" in schema
-        and sum(check(item, value, path) is None for item in schema["oneOf"]) != 1
+        and sum(check(item, value, path, defs) is None for item in schema["oneOf"]) != 1
     ):
         return path + " oneOf"
     kind = schema.get("type")
@@ -95,7 +96,7 @@ def check(schema, value, path="assignment"):
         ):
             return path + " array length"
         for index, item in enumerate(value):
-            error = check(schema.get("items", {}), item, path + "[%d]" % index)
+            error = check(schema.get("items", {}), item, path + "[%d]" % index, defs)
             if error:
                 return error
     if type(value) is dict:
@@ -111,7 +112,10 @@ def check(schema, value, path="assignment"):
                 return path + "." + name + " unknown"
             if child is not None or type(additional) is dict:
                 error = check(
-                    child if child is not None else additional, item, path + "." + name
+                    child if child is not None else additional,
+                    item,
+                    path + "." + name,
+                    defs,
                 )
                 if error:
                     return error

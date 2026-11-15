@@ -261,6 +261,7 @@ try {
     'scripts/ci/vast_report.py',
     'scripts/ci/release_driver_pins.py',
     'scripts/ci/vast_payload.py',
+    'scripts/ci/payload_instruction.py',
     'scripts/ci/test_vast_matrix_receipts.py',
     'scripts/bench/native_xid_guard.py',
     'scripts/bench/native_fault_names.json',
