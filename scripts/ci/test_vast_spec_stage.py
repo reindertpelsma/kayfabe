@@ -493,7 +493,7 @@ class Copy(StageCase):
         # KF_WINGATE_FLAGS (measurement flags only) is the one way a file reaches win_vm.sh.
         sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-noflags-"))
         self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
-        p = sb.run("lanea", 40000, KF_WINGATE_FLAGS=None)
+        p = sb.run("lanea", 40000, KF_WINGATE_FLAGS="")
         self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_PASS", p.stdout[-600:])
         runs = sb.runs()
         self.assertEqual(len(runs), 2)
