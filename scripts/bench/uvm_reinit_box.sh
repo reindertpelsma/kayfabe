@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_lock.sh"
 # The no-PM adapter re-init loop on a SHARED bench box: build this checkout's kf3 (idle + locked),
 # then boot the fat guest with uvm_reinit_loop_hook.sh (locked). Writes a start marker and an exit
 # line, so "file exists but has no terminator" is detectable (CLAUDE.md: a killed job looks like a
@@ -12,7 +13,7 @@ say() { echo "[$(date -Is)] $*"; }
 idle() { ! pgrep -x qemu-system-x86 >/dev/null && ! pgrep -x cargo >/dev/null \
          && ! pgrep -f '^(/usr/bin/)?bash [^-]\S*(fast_suite|run_fast_guest|boot_capture)\.sh' >/dev/null; }
 locked() {
-    exec 9>/tmp/kayfabe-fastguest.lock
+    kf_lock_open /tmp/kayfabe-fastguest.lock 9
     while :; do flock 9; idle && break; flock -u 9; sleep 5; done
     "$@"; local rc=$?
     flock -u 9; exec 9>&-

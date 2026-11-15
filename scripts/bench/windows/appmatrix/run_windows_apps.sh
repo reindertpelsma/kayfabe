@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../../../lib/kf_lock.sh"
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 # run_windows_apps.sh — the Windows app matrix lane (docs/design/V3_WINDOWS_APP_MATRIX.md). Boots Windows guests on
 # kf3 through windows_broker_prod2.sh (or windows_broker.sh), signs in by scripted keystrokes (bootstrap only), hot-plugs
@@ -72,7 +73,7 @@ if [ "$(pgrep -c qemu-system)" != 0 ]; then say "REFUSED: another QEMU is runnin
 if [ -e "$RUN/session.log" ] && ! printf '%s\n' "${PASS[@]}" | grep -qx -- '--resume'; then say "REFUSED: $RUN has a session.log (use --resume or a new --run-dir)"; exit 4; fi
 mkdir -p "$RUN"
 if [ "${KF_LOCKED:-0}" != 1 ]; then      # KF_LOCKED=1: the caller already holds the lock (e.g. `flock -o LOCK bash run_windows_apps.sh ...`, as tdr-run.sh is launched)
-  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"
+  kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9
   if ! flock -n 9; then say "waiting for the GPU lock ${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9; fi
 fi
 XID0=$(dmesg 2>/dev/null | grep -c 'NVRM: Xid')

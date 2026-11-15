@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/kf_lock.sh"
 # ★ THE HEADLESS-GRAPHICS TEST SET (docs/design/V3_GFX_TESTSET.md) — one command, one table.
 #   usage (on the box, in the kayfabe checkout, as root):
 #     bash scripts/bench/gfxset/suite.sh <run> [item...]      (default: every item)
@@ -39,7 +40,7 @@ if [ -n "${GSET_HOST_FROM:-}" ]; then
     miss=""; for a in $want; do grep -q "item=$a " "$R/host.res" 2>/dev/null || miss="$miss $a"; done
     say "host baseline reused from $GSET_HOST_FROM; measuring on bare metal only:${miss:- (none)}"
     if [ -n "$miss" ]; then
-        exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+        kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
         mkdir -p "$R/hm1" "$R/hm2"
         bash "$HERE/host.sh" "$R/hm1" $miss > "$R/hm1/host.console" 2>&1
         bash "$HERE/host.sh" "$R/hm2" $miss > "$R/hm2/host.console" 2>&1
@@ -50,7 +51,7 @@ if [ -n "${GSET_HOST_FROM:-}" ]; then
     GSET_NO_HOST=1
 fi
 if [ "${GSET_NO_HOST:-0}" != 1 ]; then
-    exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+    kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
     rm -f "$R"/host.res "$R"/host.dig "$R"/host2.res "$R"/host2.dig
     bash "$HERE/host.sh" "$R" $ITEMS 2>&1 | tee -a "$R/suite.log" | grep -E 'GSET_RES|HOST_DONE|⊘'
     # run 2 = the noise floor of the CONTENT digests; the perf-only items (their digests are test-set shapes,
@@ -69,7 +70,7 @@ QB=${KF3_BIN:-/workspace/bench/kf3-bins/$REV/qemu-system-x86_64}
 [ -x "$QB" ] || { say "⊘ no kf3 binary at $QB — run scripts/bench/build_kf3.sh from this checkout"; exit 2; }
 say "kf3 binary: $QB  items: $ITEMS"
 boot(){  # $1 tag, $2 items, $3 resdir
-    exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+    kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
     env KF_DEVICE=kf3 QEMU_BIN="$QB" NVKVM_RAM_MB=${NVKVM_RAM_MB:-12288} KF_SMP=${KF_SMP:-6} GQ_TIMEOUT=300 \
         GSET_ITEMS="$2" GSET_RES_DIR="$3" POST_CAPTURE_HOOK="$HERE/hook.sh" \
         bash "$REPO/scripts/bench/boot_capture.sh" "$1" > "$3/boot_$1.driver.log" 2>&1

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/kf_lock.sh"
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 # interactive.sh — one command for the owner: a Linux guest on kf3 shown in a display-broker window
 # on the host's live desktop, with keyboard, absolute (tablet) and relative (mouse) pointer
@@ -222,7 +223,7 @@ EOF
     pick_qemu
     RUN=$WORK/prep-$(date +%Y%m%d-%H%M%S); mkdir -p "$RUN"
     qemu_args "$RUN"
-    exec 9>"$LOCK"; flock -w 600 9 || die "the GPU lock $LOCK is held"
+    kf_lock_open "$LOCK" 9; flock -w 600 9 || die "the GPU lock $LOCK is held"
     [ ! -e "$RECEIPT" ] || die "an owned QEMU receipt remains; run stop or inspect it first"
     pgrep -x qemu-system-x86 >/dev/null && die "a QEMU is already running"
     say "provisioning boot, kf3 $QREV ($QBIN)"
@@ -308,7 +309,7 @@ pgrep -x qemu-system-x86 >/dev/null && die "a QEMU is already running ($(pgrep -
 pick_qemu
 RUN=${KF_RUN_DIR:-$WORK/run-$(date +%Y%m%d-%H%M%S)}; mkdir -p "$RUN"
 echo "INTERACTIVE_START kf3=$QREV checkout=$(git -C "$REPO" rev-parse --short=8 HEAD) $(date -Is)" | tee "$RUN/marker.txt"
-exec 9>"$LOCK"; flock -n 9 || die "the GPU lock $LOCK is held by another run (fuser $LOCK)"
+kf_lock_open "$LOCK" 9; flock -n 9 || die "the GPU lock $LOCK is held by another run (fuser $LOCK)"
 [ ! -e "$RECEIPT" ] || die "an owned QEMU receipt remains; run stop or inspect it first"
 say "session: $SU (uid $SUID) session $SID type=$STYPE wayland=${WD:-none} x=${XD:-none}; locked=$(loginctl show-session "$SID" -p LockedHint --value)"
 # ⊘ CORRECTED 2026-10-08 (V3_DISPLAY.md §8.18): this launcher started the broker only after the

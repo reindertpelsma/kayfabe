@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/kf_lock.sh"
 # rf_run.sh host|guest <run> [workload...|all] — the refusal-audit recording on a bench box
 # (docs/design/V3_REFUSAL_AUDIT.md). Strictly serial (the bench lock), like apps_matrix.sh.
 #   host : build the recorder + probes on the host, run every workload on bare metal under it
@@ -28,7 +29,7 @@ if [ "$SIDE" = host ]; then
   I="-I$REPO/scripts/bench/cuda_min"; LC=-lcuda; [ -e /usr/lib/x86_64-linux-gnu/libcuda.so ] || LC=/usr/lib/x86_64-linux-gnu/libcuda.so.1
   gcc -O0 $I -o /opt/rf/cup2 "$REPO/archive/nvkvm/tests/mode2/cup2.c" $LC && gcc -O0 $I -o /opt/rf/cup3 "$REPO/scripts/bench/cup3.c" $LC \
     && gcc -O0 $I -o /opt/rf/cup8 "$REPO/scripts/bench/cup8.c" $LC -lm || { say "cup build failed"; exit 2; }
-  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+  kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
   bash /opt/rf/rf_workloads.sh host /workspace/rf/host_tmp "$@" | tee -a "$R/host.res"
   flock -u 9
   for w in "$@"; do mkdir -p "$R/$w"; mv -f /workspace/rf/host_tmp/$w/host_r1.jsonl /workspace/rf/host_tmp/$w/host.log "$R/$w/" 2>/dev/null; done
@@ -42,7 +43,7 @@ say "kf3 binary: $QB"
 PER=${RF_PER_BOOT:-6}; todo="$*"; n=0
 while [ -n "$(echo $todo)" ] && [ $n -lt 40 ]; do
   n=$((n+1)); tag="rf_${RUN}_b$n"; batch=$(echo $todo | cut -d' ' -f1-"$PER")
-  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+  kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
   env KF_DEVICE=kf3 QEMU_BIN="$QB" NVKVM_RAM_MB=${NVKVM_RAM_MB:-16384} KF_SMP=${KF_SMP:-6} GQ_TIMEOUT=300 \
       RF_WORKLOADS="$batch" RF_OUT="$R" POST_CAPTURE_HOOK="$HERE/rf_hook.sh" \
       bash "$REPO/scripts/bench/boot_capture.sh" "$tag" > "$R/boot_$tag.driver.log" 2>&1

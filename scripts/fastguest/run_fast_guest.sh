@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_lock.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_git.sh"
 # ★★★★★ ONE ITERATION OF THE FAST LANE — boot, run, verdict, under a HARD budget.
 #
 # usage: run_fast_guest.sh [tag] [budget-seconds]
@@ -33,8 +35,8 @@ if [ "${KF_DEVICE:-kf3}" = kf3 ]; then
     # ★ 2026-09-25: the binary built from THIS checkout's revision (`build_kf3.sh` installs one per
     # revision) — never the shared build dir's, which another build can replace mid-measurement.
     KF3_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-    KF3_REV=$(git -C "$KF3_REPO" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
-    [ -z "$(git -C "$KF3_REPO" status --porcelain --untracked-files=no 2>/dev/null)" ] || KF3_REV="$KF3_REV-dirty"
+    KF3_REV=$(kf_git "$KF3_REPO" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
+    [ -z "$(kf_git "$KF3_REPO" status --porcelain --untracked-files=no 2>/dev/null)" ] || KF3_REV="$KF3_REV-dirty"
     Q=${QEMU_BIN:-$BENCH/kf3-bins/$KF3_REV/qemu-system-x86_64}
     [ -n "${QEMU_BIN:-}" ] || [ -x "$Q" ] || {
         echo "run_fast_guest: no kf3 binary for this checkout's revision ($KF3_REV) at $Q — run scripts/bench/build_kf3.sh from this checkout (or set QEMU_BIN)"
@@ -66,7 +68,7 @@ rm -f "$SER"
 # document is a rule that gets broken by whoever did not read it; this makes it structural.
 # ⊘ Blocking (not `-n`): a second run should WAIT, never silently skip — a skipped arm that
 # reports nothing is the same false-negative the lock exists to prevent.
-exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"
+kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9
 if command -v flock >/dev/null 2>&1; then
     echo "== serializing on ${KF_LOCK:-/tmp/kayfabe-fastguest.lock} (GPU runs are strictly serial)"
     flock 9 || { echo "run_fast_guest: could not take the run lock" >&2; exit 2; }

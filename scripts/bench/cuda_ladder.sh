@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_lock.sh"
 # ★★★★★ THE CUDA LADDER ON kf3 — cup2 → cup3 → cup8 → cup8bench, guest arm and host arm.
 #
 # > Owner, 2026-09-25: *"Test the CUDA ladder. How much slower is the raw client compared to
@@ -75,7 +76,7 @@ host)
     for r in $(echo "$RUNGS" | tr ',' ' '); do
         for i in $(seq 1 "$REPS"); do
             log=$BENCH/cl_${TAG}_host_${r}_$i.log
-            exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9   # GPU runs strictly serial
+            kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9   # GPU runs strictly serial
             envp=""
             [ "$r" = cup8bench ] && envp="BENCH_SIZES=$KAYFABE_BENCH_SIZES BENCH_ITERS=$B_ITERS BENCH_BATCH=$B_BATCH"
             t0=$(date +%s%N)

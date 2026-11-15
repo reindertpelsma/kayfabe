@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_lock.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_git.sh"
 # ★★★★★ THE RAW CLIENT ON BARE METAL — the baseline every guest verdict is read against.
 #
 # > Owner, 2026-09-20: *"The raw client has been the most valuable thing though… a full good
@@ -31,7 +33,7 @@ if [ "${#ARMS[@]}" -eq 0 ]; then
           --cross-client-leak --rpc-mixed-allocs)
 fi
 
-exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"
+kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9
 command -v flock >/dev/null 2>&1 && flock 9
 
 # ★★★★★ THE CELL IDENTITY — this suite is an AXIS PROBE, not only a regression test.
@@ -59,7 +61,7 @@ GPU_UUID=$(_q uuid)
 # ⊘ The open module and the proprietary one are DIFFERENT host drivers at the same version string;
 # the axis is "host driver", and the module flavour is part of the cell.
 KMOD=$(grep -q "Open Kernel Module" /proc/driver/nvidia/version 2>/dev/null && echo open || echo proprietary)
-REV=$(cd "$(dirname "$0")/../.." 2>/dev/null && git rev-parse --short HEAD 2>/dev/null || echo '?')
+REV=$(kf_git "$(dirname "$0")/../.." rev-parse --short HEAD 2>/dev/null || echo '?')
 echo "BARE_SUITE_STARTED=$(date -Is) arms=${#ARMS[@]} budget=${BUDGET}s"
 echo "bin=$BIN  rev=$REV"
 echo "gpu=$GPU_NAME  driver=$GPU_DRV($KMOD)  pci_dev=$GPU_DEV  cc=$GPU_CC"

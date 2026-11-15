@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_lock.sh"
 # ★★★★★ w828 REOPEN STRESS — N fat-guest boots × (boot_capture's own nvidia-smi + the hook's M
 # nvidia-smi/cup3 pairs). 0 failures required: every boot's REOPEN_VERDICT=PASS.
 #
@@ -23,7 +24,7 @@ for b in $(seq 1 "$N"); do
   done
   # ★ GPU runs are strictly serial across agents: hold the shared run lock for the whole boot
   # (boot_capture.sh itself takes none).
-  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+  kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
   for _w in $(seq 1 60); do   # re-check after the lock: another agent's VM may just have exited
     u=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc 0-9)
     [ -n "$u" ] && [ "$u" -le 512 ] && break; sleep 0.5

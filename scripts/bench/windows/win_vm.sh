@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/kf_lock.sh"
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 #
 # ★ win_vm.sh — a Windows 11 guest on kayfabe (kf3): installed ONCE, booted many times.
@@ -918,7 +919,7 @@ cmd_run() {
     # every command kf3's chain answers, logged with its id and result (kf-rm census, log only)
     export KF3_RPC_TRACE=${KF3_RPC_TRACE:-1}
     if ! dry_run; then
-      exec 8>"$GPU_LOCK"
+      kf_lock_open "$GPU_LOCK" 8
       log "waiting for the GPU lock $GPU_LOCK (GPU work is strictly serial; up to ${LOCK_WAIT_S}s)"
       flock -w "$LOCK_WAIT_S" 8 || die "the GPU lock $GPU_LOCK was not free in ${LOCK_WAIT_S}s$(lock_holder)"
     fi
