@@ -252,8 +252,18 @@ pub struct KfFormat {
     pub pcf: KfField,
     /// The PCF value meaning SPARSE (VER3).
     pub pcf_sparse: u8,
+    /// ★ 2026-11-14 (fixcuda2; review 3 F-1 host side): VER3's big-PTE PCF value meaning "no
+    /// valid 4 KiB PTE below me" (`NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE` = 0x3). Carried in the
+    /// descriptor, as the format's other moved values are; it took one of `pad1`'s bytes (no
+    /// offset moved). 0 on VER2. `WalkKernel::bring_up_on` refuses a descriptor whose value
+    /// differs from the one the committed kernel compiles (`KF_VER3_PTE_PCF_NO_VALID_4KB_PAGE`).
+    pub pte_pcf_no_valid_4k: u8,
+    /// ★ 2026-11-14: VER3's PDE PCF bit meaning SPARSE for either ATS setting (0x1: SPARSE_ATS_
+    /// ALLOWED 1 and _NOT_ALLOWED 3 both have it, the INVALID values 0 and 2 do not). 0 on VER2.
+    /// Checked at bring-up like [`Self::pte_pcf_no_valid_4k`].
+    pub pde_pcf_sparse_bit: u8,
     /// Explicit padding.
-    pub pad1: [u8; 3],
+    pub pad1: [u8; 1],
     /// ★★★ **The PTE's KIND, which joins RUN IDENTITY** — added to the `.cu` by §w725b
     /// (*"run identity must include KIND — don't coalesce across a field you don't
     /// propagate"*). VER2 spells it 63:56, VER3 spells it 11:8; a **moved field**, so the
@@ -1003,7 +1013,9 @@ pub fn kf_format_ver2() -> KfFormat {
     f.bit_atomic_disable = 7;
     f.pcf = KfField::default();
     f.pcf_sparse = 0;
-    f.pad1 = [0; 3];
+    f.pte_pcf_no_valid_4k = 0;
+    f.pde_pcf_sparse_bit = 0;
+    f.pad1 = [0; 1];
     // ★ VER2's KIND is 63:56, shift 0 — read from the `.cu`'s own `kf_format_ver2`, and
     // pinned byte-for-byte by the descriptor differential.
     f.kind = KfField {
@@ -1123,6 +1135,11 @@ pub fn kf_format_ver3() -> KfFormat {
         pad: 0,
     };
     f.pcf_sparse = 1;
+    // ★ 2026-11-14: the two VER3 PCF enumerants that are not a moved bit, as the `.cu` assigns
+    // them in `kf_format_ver3` (pinned by the descriptor differential); tied to ogkm's
+    // `hopper/gh100/dev_mmu.h` by `scripts/ci/walk_ptx_repro.py` through the kernel's defines.
+    f.pte_pcf_no_valid_4k = 0x3;
+    f.pde_pcf_sparse_bit = 0x1;
     f.kind = KfField {
         lo: 8,
         bits: 4,

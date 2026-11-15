@@ -514,7 +514,9 @@ mod tests {
             bit_atomic_disable: 7,
             pcf: f(0, 0, 0),
             pcf_sparse: 0,
-            pad1: [0; 3],
+            pte_pcf_no_valid_4k: 0,
+            pde_pcf_sparse_bit: 0,
+            pad1: [0; 1],
             kind: f(56, 8, 0),
             ps_log2: [12, 16, 21, 29],
         }
