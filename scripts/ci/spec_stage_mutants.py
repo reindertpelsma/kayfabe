@@ -35,6 +35,7 @@ COPY = [
     "scripts/ci/test_vast_spec_lane.py",
     "scripts/ci/test_vast_spec_stage.py",
     "scripts/ci/vast_payload.py",
+    "scripts/ci/kernel_log.py",
     "scripts/ci/vast_report.py",
     "scripts/bench/native_xid_guard.py",
     "scripts/bench/native_fault_names.json",
