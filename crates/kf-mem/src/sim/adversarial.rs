@@ -612,6 +612,18 @@ fn fuzz_one(
     low: bool,
     inj: Option<(usize, u64, Inject)>,
 ) -> Result<u64, String> {
+    fuzz_one_cap(seed, steps, low, inj, None)
+}
+
+/// [`fuzz_one`] with the ledger's per-call unmap cap lowered to `cap` entries (2026-11-15), so a
+/// span of a few pages is issued as several host calls.
+fn fuzz_one_cap(
+    seed: u64,
+    steps: usize,
+    low: bool,
+    inj: Option<(usize, u64, Inject)>,
+    cap: Option<usize>,
+) -> Result<u64, String> {
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let sim = Sim::new(space(RESV_LO, RESV_HI));
     let mut f = Faulty::new(&sim);
@@ -619,7 +631,11 @@ fn fuzz_one(
         f.mode = mode;
     }
     let f = f;
-    let m = FMirror::new(&f, true, low);
+    let mut m = FMirror::new(&f, true, low);
+    if let Some(c) = cap {
+        m.bv.unmap_call_cap = c;
+    }
+    let m = m;
     // Two foreign mappings in the NV01 range (other kayfabe code, same client + hDma).
     assert!(sim.0.borrow_mut().place_foreign(1, pg(2), 2 * P));
     assert!(sim.0.borrow_mut().place_foreign(2, pg(70), P));
@@ -1208,4 +1224,315 @@ fn the_falcon_steer_unmaps_through_the_ledger() {
         crate::batch::HandOver::Free
     );
     assert!(sim.0.borrow().resv.is_empty() && m.bv.leftovers() == 0);
+}
+
+// ─── 7. 2026-11-15: a host unmap call covers at most `unmap_call_cap` ledger entries ───────────
+//
+// Wukong stalls (`WUKONG_STALLS_20261115.md` §B): one RM unmap call covered up to 120 930 runs.
+// `BatchedVas::unmap_owned` now cuts a span at `unmap_call_cap` entries. These tests are the model
+// the change is held to: the same guest tables, the real apply and ledger over the host model,
+// once with the cap out of reach (the old behaviour) and once with a tiny cap.
+
+fn one_page(i: u64, back: u64) -> Desired {
+    Desired {
+        va: pg(i),
+        len: P,
+        off: back * P,
+        ram: true,
+        kind: 0,
+        perm: MapPerm::READ_WRITE,
+        leaf: 0,
+    }
+}
+
+/// Everything observable after each refresh of a no-injection run: the verdicts, the ledger, the
+/// host's translation of every page and the committed placements. Plus the host calls made.
+fn chunk_trace(seed: u64, steps: usize, low: bool, cap: usize) -> (Vec<String>, u64) {
+    let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let mut m = FMirror::new(&f, true, low);
+    m.bv.unmap_call_cap = cap;
+    let mut table: Vec<Pte> = vec![None; PAGES as usize];
+    let mut com = diffmodel::Committed::default();
+    let mut trace = Vec::new();
+    for step in 0..steps {
+        let new = random_table(&mut rng, &table);
+        let (c2, out) = refresh(&m, &com, &new, 1 << 30);
+        com = c2;
+        table = new;
+        let own: Vec<(u64, u64, Option<u32>, Option<u32>)> =
+            m.bv.own
+                .lock()
+                .unwrap()
+                .within(0, u64::MAX)
+                .iter()
+                .map(|(v, o)| (*v, o.len, o.batch, o.via))
+                .collect();
+        let rm = sim.0.borrow();
+        let tr: Vec<Option<Backing>> = (0..PAGES)
+            .map(|i| rm.translate(pg(i), Owner::Mirror))
+            .collect();
+        trace.push(format!(
+            "step {step}: codes={:?} unmapped={} mapped={} own={own:x?} rows={:x?} host={tr:x?} com={:x?}",
+            out.codes,
+            out.unmapped,
+            out.mapped,
+            m.rows.borrow(),
+            com.flat()
+                .iter()
+                .map(|r| (r.va, r.len, r.gpga, r.flags))
+                .collect::<Vec<_>>()
+        ));
+    }
+    (trace, f.calls.get())
+}
+
+/// ★ Same total effect: for random guest tables the verdicts, ledger, host translations and
+/// committed placements after every refresh are identical with the cap out of reach and with caps
+/// of 1, 2, 3 and 7 entries per call — micro reservations on and off.
+#[test]
+fn chunked_and_unchunked_unmap_end_in_the_same_ledger_state() {
+    let mut chunked_more = 0u64;
+    for low in [false, true] {
+        for seed in 1..=120u64 {
+            let (base, base_calls) = chunk_trace(seed, 30, low, usize::MAX);
+            for cap in [1usize, 2, 3, 7] {
+                let (got, calls) = chunk_trace(seed, 30, low, cap);
+                assert_eq!(
+                    got, base,
+                    "low={low} seed {seed} cap {cap}: the chunked run diverged from the unchunked one"
+                );
+                assert!(calls >= base_calls, "a cap can only add calls");
+                chunked_more += calls - base_calls;
+            }
+        }
+    }
+    // Not vacuous: the cap really did split spans into more host calls.
+    assert!(
+        chunked_more > 1000,
+        "only {chunked_more} extra calls: the cap never cut a span"
+    );
+}
+
+/// ★ Failure injected at EVERY host-call index, both failure modes, with spans cut into 1, 2 and 3
+/// entry calls (a chunk boundary falls between any two entries of a span): the invariants of the
+/// every-call-index sweep above hold — after two clean refreshes the walker's committed set equals
+/// the host, no half-applied chunk is left unrecorded, nothing foreign is touched.
+#[test]
+fn chunked_unmap_error_injection_at_every_call_index_and_chunk_boundary() {
+    let mut failures: Vec<String> = Vec::new();
+    let mut runs = 0usize;
+    for cap in [1usize, 2, 3] {
+        for low in [false, true] {
+            for mode in [Inject::Before, Inject::AfterRange] {
+                for seed in 1..=10u64 {
+                    for inj_step in [3usize, 7] {
+                        let mut k = 0u64;
+                        loop {
+                            runs += 1;
+                            match fuzz_one_cap(seed, inj_step + 6, low, Some((inj_step, k, mode)), Some(cap)) {
+                                Ok(calls) => {
+                                    if k + 1 >= calls {
+                                        break;
+                                    }
+                                }
+                                Err(e) => failures.push(format!(
+                                    "cap {cap} low={low} {mode:?} seed {seed} step {inj_step} call {k}: {e}"
+                                )),
+                            }
+                            k += 1;
+                            if k > 600 {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} of {runs} injected runs broke an invariant; first 6:\n{}",
+        failures.len(),
+        failures
+            .iter()
+            .take(6)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// One 12-entry owned span with the cap at 4: three calls; failing the SECOND leaves exactly the
+/// first four entries cut in the ledger and on the host, the other eight recorded and mapped.
+#[test]
+fn a_failure_in_chunk_k_leaves_the_ledger_equal_to_the_host() {
+    for fail_chunk in 0..3u64 {
+        for mode in [Inject::Before, Inject::AfterRange] {
+            let sim = Sim::new(space(RESV_LO, RESV_HI));
+            let mut f = Faulty::new(&sim);
+            f.mode = mode;
+            let mut m = FMirror::new(&f, true, false);
+            m.bv.unmap_call_cap = 4;
+            // Twelve single-page placements, VA-adjacent, scattered backing (one entry each).
+            for i in 0..12u64 {
+                let d = one_page(i, 100 + 7 * i);
+                assert_eq!(m.map(&d, true), Ok(Mapped::Placed));
+            }
+            let before = f.calls.get();
+            f.fail_at.set(Some(before + fail_chunk));
+            let r = m.bv.unmap_range(pg(0), 12 * P, true);
+            assert!(r.is_err() && f.fired.get(), "chunk {fail_chunk} {mode:?}");
+            assert_eq!(
+                f.calls.get() - before,
+                fail_chunk + 1,
+                "it stops at the failing call"
+            );
+            let own: Vec<u64> =
+                m.bv.own
+                    .lock()
+                    .unwrap()
+                    .within(0, u64::MAX)
+                    .iter()
+                    .map(|(v, _)| (v - BASE) / P)
+                    .collect();
+            let rm = sim.0.borrow();
+            let host: Vec<u64> = (0..12)
+                .filter(|&i| rm.translate(pg(i), Owner::Mirror).is_some())
+                .collect();
+            // Chunks before the failing one are gone from both; in AfterRange mode the failing
+            // chunk itself is gone from the host but STILL RECORDED in the ledger (the existing
+            // span contract: a span that answered an error stays recorded, a range over it is
+            // idempotent and retried), so the ledger may hold a superset of the host, never less.
+            let first_live = 4 * fail_chunk;
+            let want_own: Vec<u64> = (first_live..12).collect();
+            assert_eq!(own, want_own, "chunk {fail_chunk} {mode:?}: the ledger");
+            let want_host: Vec<u64> = match mode {
+                Inject::Before => want_own.clone(),
+                Inject::AfterRange => ((first_live + 4)..12).collect(),
+            };
+            assert_eq!(host, want_host, "chunk {fail_chunk} {mode:?}: the host");
+            drop(rm);
+            // A retry (the next refresh's range over the same pages) finishes the job.
+            f.fail_at.set(None);
+            m.bv.unmap_range(pg(0), 12 * P, true).unwrap();
+            assert!(m.bv.own.lock().unwrap().within(0, u64::MAX).is_empty());
+            assert!((0..12).all(|i| sim.0.borrow().translate(pg(i), Owner::Mirror).is_none()));
+        }
+    }
+}
+
+/// The count of host calls is exactly ceil(entries / cap) for a clean span, and the default cap is
+/// the documented constant.
+#[test]
+fn a_clean_span_costs_ceil_entries_over_cap_calls() {
+    assert_eq!(crate::batch::UNMAP_CALL_MAX_ENTRIES, 4096);
+    for (cap, calls) in [(1usize, 12u64), (4, 3), (5, 3), (12, 1), (100, 1)] {
+        let sim = Sim::new(space(RESV_LO, RESV_HI));
+        let f = Faulty::new(&sim);
+        let mut m = FMirror::new(&f, true, false);
+        m.bv.unmap_call_cap = cap;
+        for i in 0..12u64 {
+            let d = one_page(i, 100 + 7 * i);
+            assert_eq!(m.map(&d, true), Ok(Mapped::Placed));
+        }
+        let before = f.calls.get();
+        m.bv.unmap_range(pg(0), 12 * P, true).unwrap();
+        assert_eq!(f.calls.get() - before, calls, "cap {cap}");
+    }
+}
+
+/// A zero cap is read as one entry per call, never as "no progress".
+#[test]
+fn a_zero_cap_still_unmaps_one_entry_per_call() {
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let mut m = FMirror::new(&f, true, false);
+    m.bv.unmap_call_cap = 0;
+    for i in 0..3u64 {
+        let d = one_page(i, 50 + 3 * i);
+        assert_eq!(m.map(&d, true), Ok(Mapped::Placed));
+    }
+    let before = f.calls.get();
+    m.bv.unmap_range(pg(0), 3 * P, true).unwrap();
+    assert_eq!(f.calls.get() - before, 3);
+}
+
+/// The slow-call line: silent below the budget (and then it spends none of the line budget),
+/// named at it.
+#[test]
+fn the_slow_unmap_line_is_silent_below_the_threshold_and_named_at_it() {
+    use crate::batch::{SLOW_UNMAP_CALL_MS, slow_unmap_line};
+    use std::sync::atomic::AtomicU32;
+    use std::time::Duration;
+    let n = AtomicU32::new(0);
+    assert!(slow_unmap_line(5, Duration::from_millis(SLOW_UNMAP_CALL_MS - 1), &n).is_none());
+    assert_eq!(
+        n.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "a fast call does not spend the budget"
+    );
+    let l = slow_unmap_line(4096, Duration::from_millis(SLOW_UNMAP_CALL_MS), &n).unwrap();
+    assert!(
+        l.contains("4096") && l.contains("SLOW host unmap call"),
+        "{l}"
+    );
+}
+
+/// The slow-call line is capped per process, fast calls interleaved or not.
+#[test]
+fn the_slow_unmap_line_is_capped() {
+    use crate::batch::{SLOW_UNMAP_LOG_CAP, slow_unmap_line};
+    use std::sync::atomic::AtomicU32;
+    use std::time::Duration;
+    let n = AtomicU32::new(0);
+    let mut printed = 0u32;
+    for _ in 0..(3 * SLOW_UNMAP_LOG_CAP) {
+        assert!(slow_unmap_line(1, Duration::from_millis(1), &n).is_none());
+        printed += u32::from(slow_unmap_line(1, Duration::from_secs(2), &n).is_some());
+    }
+    assert_eq!(printed, SLOW_UNMAP_LOG_CAP, "exactly the cap, then silence");
+}
+
+/// Past the cap the line stops and the count does not (the counter is the budget's own).
+#[test]
+fn the_slow_unmap_line_stops_past_the_cap_and_the_count_goes_on() {
+    use crate::batch::{SLOW_UNMAP_LOG_CAP, slow_unmap_line};
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::time::Duration;
+    let n = AtomicU32::new(0);
+    let mut last = None;
+    for _ in 0..(2 * SLOW_UNMAP_LOG_CAP) {
+        last = slow_unmap_line(7, Duration::from_secs(3), &n);
+    }
+    assert!(
+        last.is_none(),
+        "the {}th slow call prints nothing",
+        2 * SLOW_UNMAP_LOG_CAP
+    );
+    assert_eq!(n.load(Ordering::Relaxed), 2 * SLOW_UNMAP_LOG_CAP);
+}
+
+/// The default cap is `UNMAP_CALL_MAX_ENTRIES`: a span of one entry more costs one call more.
+#[test]
+fn a_span_one_entry_over_the_default_cap_costs_two_calls() {
+    use crate::batch::UNMAP_CALL_MAX_ENTRIES;
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let m = FMirror::new(&f, false, false);
+    assert_eq!(UNMAP_CALL_MAX_ENTRIES, 4096, "the documented figure");
+    assert_eq!(m.bv.unmap_call_cap, UNMAP_CALL_MAX_ENTRIES);
+    let base = 0x40_0000_0000u64;
+    for (n, calls) in [(4096u64, 1u64), (4097, 2)] {
+        for i in 0..n {
+            let mut d = one_page(0, 1000 + 3 * i);
+            d.va = base + i * P;
+            assert_eq!(m.map(&d, true), Ok(Mapped::Placed));
+        }
+        let before = f.calls.get();
+        m.bv.unmap_range(base, n * P, true).unwrap();
+        assert_eq!(f.calls.get() - before, calls, "{n} entries");
+        assert!(m.bv.own.lock().unwrap().within(0, u64::MAX).is_empty());
+    }
 }
