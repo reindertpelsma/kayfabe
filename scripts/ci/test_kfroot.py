@@ -588,6 +588,23 @@ class Drop(unittest.TestCase):
         self.assertIn("LD_LIBRARY_PATH=/opt/cuda/lib64", argv)
         self.assertGreater(argv.index("LD_LIBRARY_PATH=/opt/cuda/lib64"), argv.index("--"))
 
+    def test_the_drop_argv_command_prints_the_no_new_privs_and_bounding_set_flags(self):
+        out, _ = self.run_cli_drop(1000, K.cmd_drop_argv)
+        self.assertIn("--no-new-privs", out.split())
+        self.assertIn("--bounding-set=-all", out.split())
+
+    def test_run_execs_a_command_that_sets_no_new_privs_and_empties_the_bounding_set(self):
+        _, calls = self.run_cli_drop(1000, K.cmd_run)
+        argv = calls["argv"]
+        before_command = argv[:argv.index("--")]
+        self.assertIn("--no-new-privs", before_command)
+        self.assertIn("--bounding-set=-all", before_command)
+
+    def test_the_drop_argv_has_each_privilege_flag_exactly_once(self):
+        argv = K.drop_argv(1002, 1002, 104)
+        self.assertEqual(argv.count("--no-new-privs"), 1)
+        self.assertEqual(argv.count("--bounding-set=-all"), 1)
+
     def test_run_keeps_an_explicit_kf_rootless_mode(self):
         os.environ["KF_ROOTLESS"] = "record"
         self.addCleanup(lambda: os.environ.pop("KF_ROOTLESS", None))
