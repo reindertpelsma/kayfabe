@@ -383,6 +383,112 @@ static void format_cases(void)
     printf("  [descriptor] %d hostile descriptors refused on VER2 and VER3\n", n);
 }
 
+
+/* ══ THE REPORT'S OWN CAPACITY (M4, 2026-11-15): kf_diff_emit on staged data ═══════════════════════
+ * kf_diff_emit has no barrier and no shared memory, so one CPU thread per block runs the real
+ * source. The staged diff of an entry is eight sorted lists [UNMAP c0][MAP c0] ... [UNMAP c3][MAP c3]
+ * (kf_diff_slots' output, which only the GPU suite runs); here it is built by hand. */
+struct SRun { uint64_t va, len; unsigned cls; bool map; };
+
+struct EmitRig {
+    static const uint32_t NP = 3;
+    std::vector<KfMapRun> scratch, rrun;
+    KfDev dev;
+    KfLayout lay;
+    KfPdbEntry rpdb[KF_MAX_PDB];
+    KfReportHeader hdr;
+    uint64_t pdbs[KF_MAX_PDB];
+    uint32_t slots[KF_MAX_PDB];
+    uint32_t cap_each;
+    std::vector<std::vector<KfMapRun>> staged;   /* per entry, in staged order */
+    uint32_t np;
+    EmitRig(uint32_t cap, uint32_t run_capacity) : cap_each(cap), np(0)
+    {
+        memset(&dev, 0, sizeof(dev));
+        memset(&lay, 0, sizeof(lay));
+        memset(rpdb, 0, sizeof(rpdb));
+        memset(&hdr, 0, sizeof(hdr));
+        dev.run_capacity = run_capacity;
+        dev.pdb_capacity = KF_MAX_PDB;
+        for (uint32_t t = 0; t < NP; t++) { lay.walk_off[t] = t * cap; lay.walk_cap[t] = cap; pdbs[t] = 0x1000u * (t + 1); slots[t] = t; }
+        scratch.assign((size_t)NP * cap * 4u + 8u, KfMapRun());
+        rrun.assign((size_t)run_capacity + 8u, KfMapRun());
+    }
+    /* Stage entry t: lists in staged order, each sorted by VA. */
+    void stage(uint32_t t, std::vector<SRun> rs)
+    {
+        std::stable_sort(rs.begin(), rs.end(), [](const SRun &a, const SRun &b) {
+            const unsigned ka = a.cls * 2u + (a.map ? 1u : 0u), kb = b.cls * 2u + (b.map ? 1u : 0u);
+            return ka != kb ? ka < kb : a.va < b.va;
+        });
+        std::vector<KfMapRun> v;
+        for (const SRun &r : rs) {
+            KfMapRun m;
+            memset(&m, 0, sizeof(m));
+            m.va = r.va; m.len = r.len; m.gpga = r.map ? 0x100000ull + r.va : 0ull;
+            m.flags = (uint32_t)r.cls << KFWR_RF_PS_SHIFT;
+            m.op = r.map ? KFWR_OP_MAP : KFWR_OP_UNMAP;
+            m.pdb_index = (uint16_t)t;
+            v.push_back(m);
+        }
+        if (staged.size() <= t) staged.resize(t + 1);
+        staged[t] = v;
+        KfMapRun *stg = scratch.data() + (size_t)lay.walk_off[t] * 4u + lay.walk_cap[t];
+        for (size_t i = 0; i < v.size(); i++) stg[i] = v[i];
+        dev.diff_count[t] = (uint32_t)v.size();
+        if (t + 1 > np) np = t + 1;
+    }
+    void emit()
+    {
+        KfArgs a;
+        memset(&a, 0, sizeof(a));
+        a.dev = &dev; a.npdb = np; a.lay = &lay; a.scratch = scratch.data();
+        a.hdr = &hdr; a.rpdb = rpdb; a.rrun = rrun.data(); a.pdbs = pdbs; a.slots = slots;
+        for (uint32_t t = 0; t < KF_MAX_PDB; t++) {
+            blockIdx.x = t; blockDim.x = 1; threadIdx.x = 0;
+            kf_diff_emit(a);
+        }
+    }
+    uint32_t total() const { uint32_t s = 0; for (auto &v : staged) s += (uint32_t)v.size(); return s; }
+};
+
+/* ★ M4 CHARACTERIZATION (2026-11-15, written BEFORE the fix; the fix replaces it). `[measured f4a
+ * b20fd84b]` one walk diff larger than the report's run capacity (262 144) made kf_diff_emit write
+ * flags 0x85 (TRUNCATED | REFUSED | DIFF), refuse_mask RUN_CAP, run_count 0 and no runs — the host's
+ * "walk report TRUNCATED (flags=0x85, refuse_mask=0x10, runs 0 of 0 ...)" — and the host does not retry
+ * a report-level truncation, so the split was refused and the guest-kernel copy channel marked dead.
+ * 1 boot in 23; near misses at 260 446 and 253 996 runs. The same source, on a CPU, at a small capacity. */
+static void emit_m4_legacy(void)
+{
+    {   /* one entry, a diff of twice the capacity: the refusal */
+        EmitRig r(1024, 100);
+        std::vector<SRun> v;
+        for (uint32_t i = 0; i < 200; i++) v.push_back({0x1000000ull + 0x2000ull * i, 0x1000ull, 0, true});
+        r.stage(0, v);
+        r.emit();
+        EXPECT(r.hdr.flags == (KFWR_HF_TRUNCATED | KFWR_HF_REFUSED | KFWR_HF_DIFF), "M4: flags %#x, want 0x85", r.hdr.flags);
+        EXPECT(r.hdr.refuse_mask == KFWR_R_RUN_CAP && r.hdr.refusals == 1, "M4: refuse_mask %#x refusals %u", r.hdr.refuse_mask, r.hdr.refusals);
+        EXPECT(r.hdr.run_count == 0 && r.rpdb[0].run_count == 0, "M4: runs 0 of 0 (the diff is handed out as NOTHING)");
+        EXPECT(r.rpdb[0].reserved2 == 0, "M4: no per-entry refusal bits (\"refusing entries: []\")");
+    }
+    {   /* the near miss: a diff that exactly fills the report is reported whole */
+        EmitRig r(1024, 100);
+        std::vector<SRun> v;
+        for (uint32_t i = 0; i < 100; i++) v.push_back({0x1000000ull + 0x2000ull * i, 0x1000ull, 0, true});
+        r.stage(0, v);
+        r.emit();
+        EXPECT(r.hdr.flags == KFWR_HF_DIFF && r.hdr.run_count == 100, "near miss: exactly at capacity is whole (flags %#x)", r.hdr.flags);
+    }
+    {   /* ... and one run more is the refusal */
+        EmitRig r(1024, 100);
+        std::vector<SRun> v;
+        for (uint32_t i = 0; i < 101; i++) v.push_back({0x1000000ull + 0x2000ull * i, 0x1000ull, 0, true});
+        r.stage(0, v);
+        r.emit();
+        EXPECT((r.hdr.flags & KFWR_HF_TRUNCATED) && r.hdr.run_count == 0, "one run over capacity is refused (flags %#x)", r.hdr.flags);
+    }
+}
+
 int main(int argc, char **argv)
 {
     const bool do_dump = argc > 1 && !strcmp(argv[1], "--dump");
@@ -392,6 +498,7 @@ int main(int argc, char **argv)
     ver3_cases();
     ver2_cases();
     format_cases();
+    emit_m4_legacy();
     /* ⚠ Two decoders that both produced nothing agree perfectly (kf_tests.cu uses the same floors). */
     EXPECT(a > 1200, "the synthetic differential decoded almost nothing (%llu)", a);
     EXPECT(b > 6000 || b == 0, "real-driver differential too small (%llu)", b);
