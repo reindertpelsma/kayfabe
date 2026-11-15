@@ -1,0 +1,2 @@
+before: 0x0 @0
+result=0 after: 1920x1080

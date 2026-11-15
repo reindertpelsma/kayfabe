@@ -28,7 +28,7 @@ result screen or a GPU watchdog event (guest `LiveKernelEvent` 141/117, `nvlddmk
 - VFIO (12 GB): average 93 / 92 / 93 FPS (max 107-108, min 4-6, low 5th 83-84), 5.3-5.5 GB VRAM used, 1920x1080 Very High, DLSS + frame generation on.
 - kf3 8192 MiB: one result screen read: average 36 FPS (max 43, min 4, low 5th 30), 5.6 GB VRAM used. [the other four result screens were not read]
 - kf3 4096 MiB: the game's VRAM peak stays at 3.3-3.7 GB (nvidia-smi in the guest); at 8192 and VFIO it is 5.4-5.6 GB.
-- Conclusion (measured correlation, causal link [inferred]): the benchmark-phase TDR follows the 4096 MiB guest-visible framebuffer,
+- Conclusion (correlation from the 2026-11-14/15 Wukong boots w4-w12 on the RTX 4070; causal link [inferred]): the benchmark-phase TDR follows the 4096 MiB guest-visible framebuffer,
   not the image or the guest software. Falsifier tried and not met: kf3 with 8192 MiB TDR'ing in 3 of 3 driven runs.
 - Host side, 4096 MiB runs: `mem large apply` took up to 2.0 s (34 applies of at least 1 s in one run) during the watchdog storms, against
   at most 0.35 s in the 8192 MiB benchmark windows (`wuk_w9/slow_summary.txt`). [inferred] slow applies follow VRAM over-commit; in the 19 s

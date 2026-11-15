@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<benchmark>
+    <results>
+        <result>
+            <name/>
+            <description/>
+            <passIndex>-1</passIndex>
+            <SteelNomadDx12GraphicsScore>3957</SteelNomadDx12GraphicsScore>
+            <SteelNomadDx123DMarkScore>3957</SteelNomadDx123DMarkScore>
+            <benchmarkRunId>afad8836-44fa-407c-83b0-3366cebd0dc8</benchmarkRunId>
+        </result>
+        <result>
+            <name/>
+            <description/>
+            <passIndex>0</passIndex>
+            <SteelNomadDx123DMarkScoreForPass>3957</SteelNomadDx123DMarkScoreForPass>
+            <SteelNomadDx12GraphicsScoreForPass>3957</SteelNomadDx12GraphicsScoreForPass>
+            <SteelNomadDx12GraphicsTest>39.58</SteelNomadDx12GraphicsTest>
+            <benchmarkRunId>afad8836-44fa-407c-83b0-3366cebd0dc8</benchmarkRunId>
+        </result>
+    </results>
+</benchmark>

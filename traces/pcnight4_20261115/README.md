@@ -30,7 +30,7 @@ STATUS: LIVE 2026-11-15 (pcnight4, finished 10:05Z). Hypotheses and falsifiers a
 Per the brief it runs only if E4 is clean. E4 was not clean (one DEAD marker plus guest hang), and the time went to E4 repeats and E5.
 
 ## E5 (FPS ceiling, 8192 MiB, Low, FG off, KF3_PROF=1): the letter of the falsifier is NOT met (average moves 12 percent), but the cap is not the ceiling above 30
-Three boots (g5a cap 60, g5b cap 75, g5c cap 30 control), 2 benchmark runs each in one boot; `display-max-fps` through the pass-through wrapper (`qemu_fps30.sh`, `KF_FPS`), the log shows `cap=60(cfg)`, `cap=75(cfg)`, `cap=30(cfg)`. Numbers are read from the result screens (screenshots, MEASURED); PROF figures are the cumulative-counter deltas between the Confirm click and the result screen (`scripts/prof_delta.py`, `evidence/e5_prof_delta.txt`).
+Three boots (g5a cap 60, g5b cap 75, g5c cap 30 control), 2 benchmark runs each in one boot; `display-max-fps` through the pass-through wrapper (`qemu_fps30.sh`, `KF_FPS`), the log shows `cap=60(cfg)`, `cap=75(cfg)`, `cap=30(cfg)`. Numbers are read from the result screens (screenshots, MEASURED in boots g5a/g5b/g5c on 2026-11-15); PROF figures are the cumulative-counter deltas between the Confirm click and the result screen (`scripts/prof_delta.py`, `evidence/e5_prof_delta.txt`).
 | cap | run | avg | max | min | low 5th | window | BAR0 traps (per s) | handler total, per trap, share of wall | vamgr busy |
 |---|---|---|---|---|---|---|---|---|---|
 | 60 | 1 | 32 | 46 | 1 | 25 | 196 s | 2.15 M (10.99 k) | 1004 ms, 0.47 us, 0.51 % | 6957 ms |
@@ -44,7 +44,7 @@ Three boots (g5a cap 60, g5b cap 75, g5c cap 30 control), 2 benchmark runs each 
 - PROF trap cost (MEASURED): BAR0 handler 0.45-0.47 us per trap, 8.6-11.1 k traps per second, 0.39-0.52 percent of wall, p99 3.6 us, whole-boot max 0.98-3.4 ms. The vCPU trap path is not the ceiling in any cap (same conclusion as pcnight3 E2). VA-manager busy delta 6.3-7.4 s per 200 s (3.2-3.7 percent).
 - Limits: n = 2 runs per cap, one boot per cap, the result screen average is an integer FPS (rounding 0.5), cap order 60, 75, 30 (a drift over the session cannot be excluded; the control was last and matches the pcnight3 cap-30 numbers, 29/29).
 
-## Incident: the PC lost power or rebooted during the first g5a boot (MEASURED facts, cause unknown)
+## Incident: the PC lost power or rebooted during the first g5a boot (MEASURED facts of boot g5a on 2026-11-15, RTX 4070 PC; cause unknown)
 At about 09:09Z (start g5a 09:05Z, guest still in early boot, qemu.log 7.7 k lines) ssh to the PC timed out in the banner exchange, then the tunnel was refused; at 09:12Z `uptime` showed 3 min. The previous boot's journal ends at 10:07:01 local without a shutdown or panic line. INFERRED only: an opportunistic power cut or a host hang; not shown to be caused by kf3 (no earlier occurrence in the boots of pcnight3 and this agent). The aborted boot's evidence is in the PC's aborted_g5a_1/, work_g5a was deleted, an END line (ABORTED) was written, and g5a was re-run cleanly.
 
 ## Housekeeping
