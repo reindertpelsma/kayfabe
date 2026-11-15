@@ -22,8 +22,12 @@ citation: ask whether its reason still holds before relying on it.
 5. **Bench scripts focus on CI.** The `scripts/bench/*` tooling exists for CI and the release gate, not as the user product. Keep it out of
    the user flow; the user-facing path is documented in `docs/howto/` and uses only QEMU arguments.
 6. **Unchecked consequences (for the next work, not decisions):** a tested libvirt XML snippet and Proxmox `args:` example; whether kf3 can be a
-   loadable QEMU module or a minimal patch; which host-side pieces (Rust host crates, CUDA walker, broker) a user must also run, so "just a
-   QEMU device" is not overstated.
+   loadable QEMU module or a minimal patch; which host-side pieces a user must also run, so "just a QEMU device" is not overstated.
+7. **The broker is display only (owner, 2026-11-15).** The broker is only for those who want a display. Headless VMs (the majority of Proxmox,
+   private-cloud and compute use) do not need it; the headless host-side set is the kf3 device, the Rust host crates and the CUDA walker.
+   Treat the broker as the replacement for Looking Glass: a VFIO guest has no display in QEMU unless one adds a simple built-in display
+   (no GPU acceleration) or a separate daemon such as Looking Glass. Whatever the integration shape (patched binary, module, vfio-user),
+   the broker stays an optional, separate piece.
 
 ## §AR. Release run: standalone parity, requirement vs instruction, manual run first, Windows lanes, 2026-11-15
 
