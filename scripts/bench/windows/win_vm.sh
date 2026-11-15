@@ -43,6 +43,11 @@
 #                                  and reused on every boot (an existing identity.env is always used)
 #   WINVM_DRY_RUN=1 (off)          `run` / `install` print the QEMU command line (DRYRUN_QEMU) and exit
 #   KF_GUEST_USER (kf)             the account `desktop-prep` configures for autologon
+# WINVM_NET=offline|online (default offline, 2026-11-15, OWNER_RULINGS section AR): offline is slirp `restrict=on`
+# (the guest reaches only the ssh hostfwd); online is `restrict=off`, for the from-spec LTSC lane (open probes,
+# the spec load). The proprietary image ALWAYS stays offline: online is refused (REFUSED, exit 2) when
+# WINVM_OFFICIAL_APPS_ISO is set, WINVM_PROPRIETARY=1, or the VM directory holds the proprietary image's marks
+# ($VM/proprietary, or a propimage.py $VM/state.json). Anything but online|offline is refused.
 # WINVM_KF3_DISPLAY=off: a headless device (no display plane, no boot GOP) for a box without a
 # monitor; `run` only, default on (2026-10-27).
 # WINVM_INSTALL_CACHE=unsafe: the install-time boots only (install and its check boot) run the base
@@ -99,6 +104,7 @@ LOCK_WAIT_S=${WINVM_LOCK_WAIT_S:-7200}
 INSTALL_WAIT_S=${WINVM_INSTALL_WAIT_S:-14400}
 SSH_CONNECT_TIMEOUT=${WINVM_SSH_CONNECT_TIMEOUT:-8}
 DRY_RUN=${WINVM_DRY_RUN:-0}
+NET=${WINVM_NET:-offline}
 VM_UUID="" VM_SERIAL="" VM_MAC=""   # the per-VM identity (load_identity); empty = the fixed MAC, QEMU's SMBIOS
 export PATH="$HOME/.cargo/bin:$PATH"
 
@@ -471,8 +477,24 @@ cpu_flags() {
     *) die "--arm must be A (no Hyper-V enlightenments) or B (with)" ;;
   esac
 }
+# The proprietary Windows image (propimage.py, docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md) is never online.
+is_proprietary_image() {
+  [ -n "${WINVM_OFFICIAL_APPS_ISO:-}" ] || [ "${WINVM_PROPRIETARY:-0}" = 1 ] || [ -e "$VM/proprietary" ] \
+    || { [ -f "$VM/state.json" ] && grep -q '"state_version"' "$VM/state.json"; }
+}
+# net_restrict: prints the slirp restrict value for WINVM_NET, or refuses
+net_restrict() {
+  case "$NET" in
+    offline) echo on ;;
+    online) if is_proprietary_image; then die "WINVM_NET=online is refused: this is the proprietary image, which always stays offline"; fi
+            echo off ;;
+    *) die "WINVM_NET must be online or offline, got '$NET'" ;;
+  esac
+}
 qemu_common() {
   load_identity
+  local restrict
+  restrict=$(net_restrict)
   QA=(
     -name "$NAME,debug-threads=on"
     -object "memory-backend-memfd,id=ram0,size=${RAM_MB}M,share=on"
@@ -485,7 +507,7 @@ qemu_common() {
     -rtc base=utc,driftfix=slew -global kvm-pit.lost_tick_policy=discard
     -chardev "socket,id=chrtpm,path=$VM/run/swtpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm
     -device tpm-crb,tpmdev=tpm0
-    -netdev "user,id=n0,restrict=on,hostfwd=tcp:$SSH_BIND:$SSH_PORT-:22"
+    -netdev "user,id=n0,restrict=$restrict,hostfwd=tcp:$SSH_BIND:$SSH_PORT-:22"
     -device "virtio-net-pci,netdev=n0,mac=${VM_MAC:-$MAC}"
     -device virtio-serial-pci,id=vser0
     -chardev "socket,id=qga0,path=$VM/run/qga.sock,server=on,wait=off"
