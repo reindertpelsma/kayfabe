@@ -872,7 +872,9 @@ impl WalkKernel {
             WalkDevice::PciBusId(bdf) => cu.device_by_pci_bus_id(bdf)?,
         };
         let device_name = cu.device_name(dev_ord);
-        let ctx = cu.ctx_create(dev_ord)?;
+        // ★ 2026-11-14 (security review 2 D-15): guarded — a `?` below, before the walker owns
+        // the context, destroys it and everything made in it instead of leaking them.
+        let ctx = cu.ctx_create_guarded(dev_ord)?;
 
         // ★★★ THE PTX JIT RUNS HERE. Timed on its own because it is the single most expensive
         // lazy path CUDA has, and §w724d's argument is that it must happen while paths exist.
@@ -1015,6 +1017,8 @@ impl WalkKernel {
             )?,
         );
         let done_fd = CompletionFd::new()?;
+        // the walker owns the context from here (its `Drop` destroys it)
+        let ctx = ctx.disarm();
 
         let mut k = WalkKernel {
             cu,
@@ -2403,6 +2407,53 @@ mod fake_driver_tests {
     fn every_ver3_walk_launch_matches_its_ptx_signature() {
         // VER3 expands one more directory level
         assert_eq!(walk_over_the_fake(crate::abi::kf_format_ver3()), 26);
+    }
+
+    /// ★★ D-15 (2026-11-14): a bring-up that fails AFTER its context exists destroys it (and
+    /// with it every allocation made so far) — a bad pool size refused after the JIT, and a driver
+    /// refusing an event. ⊘ Before, the context and every allocation leaked for the process's life.
+    #[test]
+    fn d15_a_failed_bring_up_destroys_its_context() {
+        let bring = |cfg: WalkCfg| {
+            let _ = fake::calls();
+            let r = WalkKernel::bring_up_with(
+                cfg,
+                crate::abi::kf_format_ver2(),
+                WalkDevice::FirstOrdinal,
+                || Ok(Cuda::fake()),
+            );
+            (r.is_err(), fake::calls())
+        };
+        let bad_pool = WalkCfg {
+            walk_pool: 0,
+            ..WalkCfg::default()
+        };
+        let (failed, calls) = bring(bad_pool);
+        assert!(failed, "walk_pool 0 is refused");
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|c| **c == fake::Call::CtxDestroy)
+                .count(),
+            1,
+            "{calls:?}"
+        );
+        fake::fail("cuEventCreate");
+        let (failed, calls) = bring(WalkCfg::default());
+        fake::succeed_all();
+        assert!(failed, "an event the driver refused");
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|c| **c == fake::Call::CtxDestroy)
+                .count(),
+            1,
+            "{calls:?}"
+        );
+        // the control: a bring-up that succeeds keeps its context until the walker drops
+        let (failed, calls) = bring(WalkCfg::default());
+        assert!(!failed);
+        assert!(!calls.contains(&fake::Call::CtxDestroy), "{calls:?}");
     }
 
     /// A walker over the fake driver with a 1 MiB store imported.
