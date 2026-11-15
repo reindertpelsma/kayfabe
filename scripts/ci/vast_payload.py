@@ -1485,11 +1485,40 @@ def instruction_from_file(path, environ):
         raise EvidenceError("preflight") from None
 
 
-def plan_stage_names(i):
+# 2026-11-15 install_flow (docs/howto/building.md "How the commands on this page are tested"): the documented user flow run on the
+# box by scripts/ci/install_flow.py. LARGE tier only. It is SLOW and has not run on a GPU box yet, so it is NOT in the default
+# large plan: it is planned only when named by --only. Joining the release tier = flip INSTALL_FLOW_IN_LARGE to True in the commit that
+# also records its first green box run, with a payloadStageResources row (a Worker bundle change) and its name taken out of
+# MANUAL_ONLY_STAGES; no instruction schema change is needed because the plan, not the schema, lists it.
+INSTALL_FLOW_IN_LARGE = False
+# stages with no budget row (scripts/ci/profile_resources.py): planned only by --only; the guard refuses one whose flag is True
+MANUAL_ONLY_STAGES = {"install_flow": "INSTALL_FLOW_IN_LARGE"}
+INSTALL_FLOW_MIN_REMAINING_MS = 3 * 3600 * 1000
+INSTALL_FLOW_PREFIX = "/workspace/kf-install-flow"
+
+
+def install_flow_rows(text, rc, sha, result):
+    """One KF_INSTALL_FLOW_RESULT line, which is kept in the result file (the doc hashes, the root steps) even when it is red."""
+    found = re.findall(r"^KF_INSTALL_FLOW_RESULT (\{.*\})$", text, re.M)
+    if len(found) != 1:
+        raise EvidenceError("install_flow")
+    try:
+        doc = json.loads(found[0])
+    except ValueError:
+        raise EvidenceError("install_flow") from None
+    result["install_flow"] = doc
+    if rc or type(doc) is not dict or doc.get("verdict") != "PASS" or doc.get("sha") != sha:
+        raise EvidenceError("install_flow")
+    return [row("install_flow", 1)]
+
+
+def plan_stage_names(i, only=()):
     """The stages main() builds for this instruction, in run order (main checks its own list against this)."""
     names = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
     if i.linux_apps is not None:
         names.append("apps")
+    if i.tier == "large" and (INSTALL_FLOW_IN_LARGE or "install_flow" in only):
+        names.append("install_flow")
     if i.windows:
         names.append("windows_gate")
         if i.winapps:
@@ -1547,7 +1576,7 @@ def plan_only(args, root):
     """--dry-run / --emit-instruction: no directory, device or result file is touched."""
     try:
         inst, digest = build_instruction(args, os.environ)
-        plan = plan_stage_names(inst)
+        plan = plan_stage_names(inst, args.only)
         chosen = select_stages(plan, args.only, args.skip)
         if inst.spec:
             spec_table(root)
@@ -1598,7 +1627,7 @@ def main():
         windows, tier, windows_runs = instruction.windows, instruction.tier, instruction.windows_runs
         extra_stages, spec, winapps = list(instruction.stages), instruction.spec, instruction.winapps
         apps_tier, linuxapps = instruction.linux_apps, instruction.linux_apps is not None
-        plan = plan_stage_names(instruction)
+        plan = plan_stage_names(instruction, args.only)
         selected = select_stages(plan, args.only, args.skip)
         if args.only or args.skip:
             result["selection"] = {"only": args.only, "skip": args.skip}
@@ -1785,6 +1814,20 @@ def main():
             stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS + (
                 WINDOWS_MIN_REMAINING_MS + (WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0) if windows else 0
             ), short_row="apps_retry_time")
+            stages.append(stage)
+        if "install_flow" in plan:
+            output_if = evidence / "install_flow.run"
+            stage = make_stage(
+                "install_flow",
+                [
+                    "python3", str(root / "scripts/ci/install_flow.py"), "run", "--sha", sha, "--checkout", str(root),
+                    "--prefix", INSTALL_FLOW_PREFIX, "--out", str(evidence / "install_flow.json"),
+                ],
+                output_if,
+                [],
+                lambda rc, output=output_if: install_flow_rows(bounded_text(output), rc, sha, result),
+            )
+            stage.update(min_remaining_ms=INSTALL_FLOW_MIN_REMAINING_MS, short_row="install_flow_retry_time")
             stages.append(stage)
         if windows:
             # Last, after every Linux guest has stopped: windows_gate.sh owns the GPU from here.

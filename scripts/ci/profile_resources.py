@@ -49,6 +49,29 @@ def stage_names(source):
     return names
 
 
+def manual_only(source):
+    """{stage: flag name} from the payload's literal MANUAL_ONLY_STAGES, and the literal value of each flag (2026-11-15).
+    A manual-only stage runs only when named by --only, so it carries no budget row and charges no profile; the moment its
+    flag is True (it is in a default plan) it must leave this table and get a row, which is a Worker change."""
+    tree = ast.parse(source)
+    consts = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            try:
+                consts[node.targets[0].id] = ast.literal_eval(node.value)
+            except (ValueError, TypeError):
+                pass
+    if any(
+        isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "MANUAL_ONLY_STAGES" for t in n.targets)
+        for n in tree.body
+    ) and "MANUAL_ONLY_STAGES" not in consts:
+        raise ValueError("MANUAL_ONLY_STAGES must be a literal {stage: flag} dict")
+    table = consts.get("MANUAL_ONLY_STAGES", {})
+    if not isinstance(table, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in table.items()):
+        raise ValueError("MANUAL_ONLY_STAGES must be a literal {stage: flag} dict")
+    return table, {flag: consts.get(flag) for flag in table.values()}
+
+
 def profile_numbers_valid(profile):
     disk = profile["diskGb"]
     return (
@@ -83,7 +106,14 @@ def validate(data, source):
     if set(profiles) != {"small", "middle", "large", "adhoc"}:
         errors.append("profile names")
     try:
-        missing = stage_names(source) - stages.keys()
+        manual, flags = manual_only(source)
+        missing = stage_names(source) - stages.keys() - manual.keys()
+        errors.extend(
+            "manual-only stage is in a default plan: " + name
+            for name, flag in sorted(manual.items())
+            if flags[flag] is not False
+        )
+        errors.extend("manual-only stage has a budget row: " + name for name in sorted(manual) if name in stages)
         errors.extend("unbudgeted payload stage: " + name for name in sorted(missing))
     except ValueError as error:
         errors.append(str(error))
