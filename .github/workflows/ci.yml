@@ -151,6 +151,8 @@ jobs:
           python3 scripts/ci/kfci_mutants.py
           # Payload instruction file, --only/--skip/--dry-run (2026-11-15, OWNER_RULINGS section AR S1/S3): >=2 named killers per mutant.
           python3 scripts/ci/instruction_mutants.py
+          # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.
+          python3 scripts/ci/doc_steps_mutants.py
           python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest
