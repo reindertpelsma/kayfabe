@@ -4,7 +4,7 @@ STATUS: 2026-11-14 (recovered from the lost local branch claude/unigine-20261112
 
 Original status line (2026-11-12): 2026-11-12 (update 2), RESEARCH, result: **PASS-PARTIAL. Offline start answer: YES. The Basic GUI starts and completes the benchmark with NO network, driven by injected input, on the real NVIDIA GPU: 3 consecutive runs, scores 42243 / 42392 / 42392.** Missing (stated below): programmatic score parse (scores were read from the result screenshots by eye, OCR not written) and the libnvidia /proc maps check. So the gate "parsed score AND result screen" is met for the result screen and NOT yet for the parser. The earlier CLI finding (Pro only) stands and is kept below as "Part 1".
 
-## Part 2: GUI route (update 2). VERIFIED = observed on the PC this session; INFERRED = marked.
+## Part 2: GUI route (update 2, session of 2026-11-12). VERIFIED = observed on the PC in that session; INFERRED = marked.
 
 ### (1) Network off (VERIFIED)
 - Method: `unshare -n` (new network namespace, loopback down) as root, then `setpriv --reuid=1000 --regid=1000 --clear-groups env -i ... launcher`. Affects only that process tree; the PC's other jobs and SSH are untouched. X access still works (filesystem X socket + XAUTHORITY of the mutter Xwayland).
@@ -12,7 +12,7 @@ Original status line (2026-11-12): 2026-11-12 (update 2), RESEARCH, result: **PA
 - First run on a fresh HOME (/workspace/bench/unigine_20261112/home, owned by ubuntu): the launcher window (Qt, xcb under Xwayland) appears within 3 s. **No EULA prompt, no license dialog, no update dialog, no activation dialog appeared** at launch or at RUN (screenshots every 3 s for 75 s, then through three runs). Launcher log: "Superposition 1.1 build 8628, Edition: Basic, SSL supported: 1". The falsifier (refuses to start / hangs without network) did NOT fire.
 - Not observed (so not claimed): whether Basic phones home when a network exists (stats/update check); Compare/Publish need network and were not used. PUBLISH is locked (greyed) in Basic.
 
-### (2) Driving the Basic GUI (VERIFIED)
+### (2) Driving the Basic GUI (VERIFIED on the PC, run of 2026-11-12)
 - Input: /dev/uinput as root (scripts/bench/unigine/kfin.py; the interactive driver kfd.py is not in the tree, see STATUS): one virtual absolute pointer (0..65535 mapped over the 5120x2880 Xwayland root) plus keyboard. No xdotool/ydotool installed, nothing installed. Calibration check with XQueryPointer (ctypes libX11): root coords reported = requested coords when the pointer is over the X window, so click position = window origin (from `xwininfo -root -tree`, content window 2048x1280 at +1536+800) + offset in the window screenshot.
 - Screenshots: `xwd -silent -id <content window>` as ubuntu, converted with Pillow (works for the launcher and the GL window; the full desktop is not capturable on this Wayland session).
 - Sequence that worked: Preset combo -> "Custom" (the presets force Fullscreen=Enabled; Custom unlocks it) -> Fullscreen -> Disabled -> Resolution -> 1280x720 -> RUN. Graphics API stays "OpenGL" and is greyed out on Linux (no choice). Shaders/Textures Medium, DOF and Motion blur on. The launcher spawns `superposition -preset 0 -video_app opengl -shaders_quality 1 -textures_quality 1 -dof 1 -motion_blur 1 -video_fullscreen 0 -video_width 1280 -video_height 720 ...` (observed with pgrep; this is the normal GUI path, no raw engine launch by us). Window title while running: "UNIGINE Superposition Benchmark 1.1 (OpenGL) - Benchmarking...".
@@ -56,7 +56,7 @@ READ-ONLY survey of /workspace/kayfabe/scripts/apps and scripts/bench (VERIFIED 
 
 STATUS (Part 1, superseded in part by Part 2 above): 2026-11-12, RESEARCH, result: **BLOCKED, scripted CLI runs need the paid Pro edition; stopped at the license wall, no benchmark was run.**
 
-## Artifacts (VERIFIED, on the PC in /workspace/bench/unigine_20261112/, never in git/R2/GitHub)
+## Artifacts (listed on 2026-11-12; on the PC in /workspace/bench/unigine_20261112/, never in git/R2/GitHub)
 | file | size | sha256 |
 |---|---|---|
 | dl/Unigine_Superposition-1.1.run (Makeself 2.4.0, gzip) | 1642169125 | 7494e1c73bf59ef2161513d5d5cb9d9bffbd8479929d4976ac53b6955de580f8 |
@@ -64,7 +64,7 @@ STATUS (Part 1, superseded in part by Part 2 above): 2026-11-12, RESEARCH, resul
 
 The vendor publishes no hashes; these are hashes of what the official URLs served on 2026-11-12 (Last-Modified 2025-11-21 for the .run). Extracted with `--noexec --nox11 --target app/` as user `ubuntu`; `postinstall.sh` was read and NOT run (it only writes .desktop/icons into ~/.local and ~/Desktop). The embedded listing has the engine (bin/superposition), bin/superposition_cli, bin/launcher (Qt GUI), data/*.ung (2.8 GB), docs PDFs, pro_xml_samples/.
 
-## (a) Command-line mode (VERIFIED from files and the shipped manual)
+## (a) Command-line mode (VERIFIED on the PC on 2026-11-12, from files and the shipped manual)
 - `bin/superposition_cli [-xml file | -api -textures -fullscreen 0/1/2 -resolution WxH -sound -quality low|medium|high|extreme|4k_optimized|8k_optimized -mode default|frame|scene -iterations N -dof -motion_blur -log_csv -log_txt -log_csv_step -key <25-char key> -vr_emulation]`. APIs: DirectX (maps to `-video_app direct3d11`, Windows) and OpenGL (`-video_app opengl`); no Vulkan. Reports go to the paths given in -log_csv/-log_txt, default dir `~/.Superposition/automation` (Linux), `%userprofile%\Superposition\automation` (Windows). 16 sample XMLs in pro_xml_samples/ (single/multiple/loop/VR).
 - **The manual states: "Automation [Pro version only]"; the edition table lists CLI automation, per-frame stats, reports, commercial use as Pro only.** Basic = GUI single run, settings, GPU monitoring, VR.
 - Observed (VERIFIED, strace): `superposition_cli -xml ...` as ubuntu on a fresh profile does `openat(~/.Superposition/license) = ENOENT` then `exit_group(0)`: silent exit 0, no window, no log, no report. A script judging by exit code alone would see a false pass; any gate must also require the report file.
