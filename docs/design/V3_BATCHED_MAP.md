@@ -1,6 +1,19 @@
 # V3 — batched guest-RAM maps: N scattered runs, O(1) host calls
 
-**STATUS: RESEARCH, 2026-10-10.** Design and measurement record; the mechanism is in the tree (read on 2026-11-07 against `crates/kf-mem/src/batch.rs` (`BatchedVas`, `reserve_exact`, `reserve_cores`), `kf-mem/src/apply.rs` and `kf-qemu/src/mem.rs`, where the mechanism and the `KF3_NO_BATCHED_MAP` per-run fallback exist). The numbers in each section belong to the run and revision named there; the document's last change is 2026-10-10 and `batch.rs` changed after that (last merge 2026-11-01), so code details beyond those anchors were not re-checked, which is why this is RESEARCH and not LIVE. The corrections below (2026-10-09 and 2026-10-10) are dated, newest first, and sit above the text they correct.
+**STATUS: RESEARCH, 2026-11-15 (a correction to §4 was added on that date; the rest is unchanged from 2026-10-10).** Design and measurement record; the mechanism is in the tree (read on 2026-11-07 against `crates/kf-mem/src/batch.rs` (`BatchedVas`, `reserve_exact`, `reserve_cores`), `kf-mem/src/apply.rs` and `kf-qemu/src/mem.rs`, where the mechanism and the `KF3_NO_BATCHED_MAP` per-run fallback exist). The numbers in each section belong to the run and revision named there; the document's last change is 2026-10-10 and `batch.rs` changed after that (last merge 2026-11-01), so code details beyond those anchors were not re-checked, which is why this is RESEARCH and not LIVE. The corrections below (2026-10-09 and 2026-10-10) are dated, newest first, and sit above the text they correct.
+
+**★ CORRECTION (2026-11-15, branch `claude/va-apply-bounds-20261115`) — one range call is no longer unbounded (§4, and the "1 (one range)" row of §7's table).**
+`BatchedVas::unmap_owned` used to issue one host `NVOS47` range unmap per maximal owned span however long
+(`[measured, f4a b20fd84b]` 120 930 runs in TWO calls, 1 502 ms, about 4 µs per run; the channel that asked for
+the split waited for the whole apply, which at Windows' default 2 s `TdrDelay` coincides with a TDR). A span is now cut into
+calls of at most `UNMAP_CALL_MAX_ENTRIES` = 4 096 ledger entries (about 16 ms at that cost), cut BETWEEN entries so no
+mapping of ours is split that the whole span would not have split; each call is recorded in the ledger as it lands, so a
+failure in call k leaves calls 0..k cut and the rest recorded and mapped (`BatchedVas::unmap_owned`). The total effect is
+unchanged `[model]` (`sim::adversarial::chunked_*`: identical ledger, host and committed state for random tables at caps 1, 2, 3
+and 7, and failure injected at every host-call index). Map calls were already bounded (`BATCH_MAX_RUNS` = 4 096 per batch). A host call
+at or over 250 ms is named in the log (`SLOW host unmap call`, at most 16 lines per process). NOT measured on a GPU: that the
+smaller calls shorten the waiting channel's worst stall (the total time is unchanged; the point is that other host RM callers and the
+log can interleave, and the per-call figure is visible).
 
 **★ CORRECTION (2026-10-10, branch `claude/held-hole-20261010`) — the HELD-hole of the D1-D3 code
 (Windows run 289: 14 leaves `HELD BY HOST`, 4 host Xid 31 `FAULT_PTE`) is a reservation-geometry defect;
