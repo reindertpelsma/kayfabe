@@ -276,7 +276,9 @@ class Sudoers(unittest.TestCase):
             f.chmod(0o440)
             ok, out = K.visudo_check(f, visudo)
             self.assertTrue(ok, out)
+            f.chmod(0o640)  # a read-only file is writable only by root: the runner is not
             f.write_text(K.sudoers_text("ci", logfile=False) + "ci ALL=(root BROKEN\n")
+            f.chmod(0o440)
             self.assertFalse(K.visudo_check(f, visudo)[0])
 
 
