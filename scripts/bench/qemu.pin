@@ -1,0 +1,15 @@
+# STATUS: LIVE, 2026-11-15. The ONE pin of the QEMU source tarball every kf3 build starts from. Read by
+# scripts/ci/qemu_source.py (the only code that fetches or checks the tarball); provision_bench_tree.sh,
+# scripts/ci/vast_box_main.sh and docs/howto/building.md go through it. One line, exactly
+# `<tarball name> sha256=<64 hex> size=<bytes>`; the version is the one in the name. A change of version is a change
+# of this line, reviewed like code.
+#
+# PROVENANCE (2026-11-15, measured): the tarball and its detached signature qemu-10.2.4.tar.xz.sig were downloaded from
+# https://download.qemu.org/ into an empty scratch directory (not extracted, not built). `gpg --verify` reported a GOOD
+# signature by RSA key CEAC C9E1 5534 EBAB B82D 3FA0 3353 C9CE F108 B584 (uid "Michael Roth <michael.roth@amd.com>",
+# signature dated 2026-06-27). That key was fetched from https://keys.openpgp.org/vks/v1/by-fingerprint/<that fingerprint>,
+# the link the page https://www.qemu.org/download/ gives for the release signing key, and the fingerprint is the one in the
+# signature packet. LIMIT: the key is not in a web of trust here (gpg: "not certified with a trusted signature"), so
+# this shows the tarball matches what the holder of that key signed, not who that holder is. The hash below is what the
+# build scripts enforce; they do NOT run gpg (the signature is checked once, here, by whoever bumps the pin).
+qemu-10.2.4.tar.xz sha256=821b545b92f165e57dddccac5077d76d4d436a226595b8813ad59306bbfd0746 size=141137724

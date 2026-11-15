@@ -66,6 +66,20 @@ path, sha256) is validated and recorded but not yet consumed (stage S7). The pay
 URL. Tests `test_payload_instruction.py`; mutants `instruction_mutants.py` (two named killers each, in `ci.yml`).
 Not done: the Worker does not write an instruction yet (S2), hard-coded paths remain (S4).
 
+The `install_flow` stage (2026-11-15, OWNER_RULINGS section AS; GPU-free tests only, NOT run on a box): `install_flow.py` runs
+the commands the manual tells users to run (docs/howto/building.md) as a fresh unprivileged user in group kvm with no
+capabilities, then boots a Linux guest with the QEMU arguments of docs/howto/attach-to-existing-vm.md and runs `cup8` in it.
+The commands are never copied: `doc_steps.py` reads the fenced blocks that carry a `<!-- kf-run: STEP [user=root|unpriv]
+[timeout=S] -->` or `<!-- kf-args: STEP -->` line directly above them (convention and refusals in its header), and
+`install_flow.PLAN` must list every marked step. Selection: `vast_payload.py --instruction FILE --only install_flow` with a
+`large` instruction; it is NOT in the default large plan (`INSTALL_FLOW_IN_LARGE = False`) and joins the release tier by
+setting that constant to True in the commit that records its first green box run, adds its `payloadStageResources` row (`ci/vast-broker/defaults.json`, so a Worker bundle change) and takes it out of `MANUAL_ONLY_STAGES`; `profile_resources.py` refuses the flag being True while it is listed there (no schema change). It runs after
+`cuda_guest`/`apps` and before the Windows gate, needs 3 hours left, and leaves `install_flow` in `kf-result.json`: verdict,
+per-step rc/uid/capabilities, which steps needed root, the substitutions, the QEMU and guest facts and the sha256 of all five
+howto documents (the reporter validates the record and does not forward it). The attested-binary hook is
+`install_flow.resolve_binary` (returns None today; `--attested-binary` is refused). Tests `test_doc_steps.py`; mutants
+`doc_steps_mutants.py` (two named killers each, in `ci.yml`).
+
 CODE READ: optional local `diagnostics` records contain `arm, mode, rc, admitted, text,
 sha256, source_bytes, dropped_bytes`. Previews retain head/tail:256 UTF-8 bytes for a clean
 arm,2048 for a refused arm; the first refusal is preserved when compacting. Limits:128
