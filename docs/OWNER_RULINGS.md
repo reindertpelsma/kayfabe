@@ -6,6 +6,41 @@ with its date, so work can resume from the repository alone. The architecture it
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
 
+## §AR. Release run: standalone parity, requirement vs instruction, manual run first, Windows lanes, 2026-11-15
+
+**STATUS: LIVE, 2026-11-15; owner rulings (stated in conversation, recorded by the coordinator). Whether today's code already meets 2 to 4 is NOT yet audited.**
+
+<!-- src: owner, 2026-11-15, release-gate scoping conversation -->
+
+1. **Windows lanes and proprietary software.**
+   - A from-scratch Windows lane (official ISO, installed by the user) cannot run proprietary software, so it is not a release-gate item.
+     It is spec-tested only for an app whose vendor ships a portable zip; any other app is excluded.
+   - Proprietary apps run only on our prebuilt image, always offline (slirp `restrict=on`).
+   - Standalone use stays supported: someone who builds the image themselves can run the same lane. It is not gated.
+   - Open probes need a Windows guest anyway. For them a from-spec LTSC image **with internet** is the lane, and it is also where the spec is loaded.
+     This keeps a per-lane network switch on the list (online for the LTSC lane, offline for the proprietary image).
+2. **Three layers, two formats.**
+   - A **requirement** says what is wanted (for example: release gate, tree X, tier Y). CI sends requirements, and so can a manual check.
+   - The **Worker** resolves a requirement against its database and writes an **instruction** for a box. Requirement and instruction are
+     different formats.
+   - The **Python on the box** takes only the instruction: CLI flags for simple cases, a data file for complexity. It runs standalone from a
+     file, with a run token from the Worker for reporting.
+   - An admin-instructed manual run (an instruction given to a box directly, with no requirement) is a valid extra path.
+3. **Anything the Worker can run must be runnable standalone**, in Python, from a CLI: every artifact pinnable from the filesystem; every step
+   decomposable (run alone, or from an instruction file identical to what the Worker would give); private R2 configurable.
+4. **Coordinator refinements (proposals, not rulings; the owner may overrule):**
+   - Do not duplicate the requirement-to-instruction compiler in Python; expose a Worker "resolve only" call if the audit finds none.
+   - A manual or hand-edited run counts toward the release gate only if its result records the requirement id, the tree sha, the instruction
+     file hash and a valid run token; otherwise it is local evidence.
+   - Versioned schemas for both formats; the instruction is validated once at the boundary and carried in a type.
+   - A parity test: the Worker-generated instruction for a sample requirement runs in dry-run on the Python side.
+5. **Order of work.** The release bar is high on purpose, so: (a) small, independently manageable stages, each with a pass record keyed by the
+   exact tree sha (the final full run stays mandatory; `gpu-vast` on master needs the exact final tree); (b) a manual full release run on a
+   manual box (the PC when up, else a Vast box) passing **before** any Worker run; (c) Worker "tiny box" runs only when they save time, to
+   exercise the waterfall without a full release run, in parallel with (b), never gating it; (d) the real Worker run last.
+6. **Wukong under VFIO passthrough is the most useful reference** for the Wukong TDR (2026-11-15). A pass there makes the kf3 TDR a release
+   blocker; a TDR there points away from kayfabe (inferred until runs are in).
+
 ## §AQ. A failed rental never means the test failed: the release replaces that leg on the fly, 2026-11-12
 
 **STATUS: LIVE, 2026-11-12; owner requirement, implemented as code and GPU-free tests only (draft PR #362), not deployed.**
