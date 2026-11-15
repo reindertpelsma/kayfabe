@@ -6,6 +6,65 @@ with its date, so work can resume from the repository alone. The architecture it
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
 
+## §AR. Release run: standalone parity, requirement vs instruction, manual run first, Windows lanes, 2026-11-15
+
+**STATUS: LIVE, 2026-11-15; owner rulings (stated in conversation, recorded by the coordinator). Whether today's code already meets 2 to 4 is NOT yet audited.**
+
+<!-- src: owner, 2026-11-15, release-gate scoping conversation -->
+
+1. **Windows lanes and proprietary software.**
+   - A from-scratch Windows lane (official ISO, installed by the user) cannot run proprietary software, so it is not a release-gate item.
+     It is spec-tested only for an app whose vendor ships a portable zip; any other app is excluded.
+   - Proprietary apps run only on our prebuilt image, always offline (slirp `restrict=on`).
+   - Standalone use stays supported: someone who builds the image themselves can run the same lane. It is not gated.
+   - Open probes need a Windows guest anyway. For them a from-spec LTSC image **with internet** is the lane, and it is also where the spec is loaded.
+     This keeps a per-lane network switch on the list (online for the LTSC lane, offline for the proprietary image).
+2. **Three layers, two formats.**
+   - A **requirement** says what is wanted (for example: release gate, tree X, tier Y). CI sends requirements, and so can a manual check.
+   - The **Worker** resolves a requirement against its database and writes an **instruction** for a box. Requirement and instruction are
+     different formats.
+   - The **Python on the box** takes only the instruction: CLI flags for simple cases, a data file for complexity. It runs standalone from a
+     file, with a run token from the Worker for reporting.
+   - An admin-instructed manual run (an instruction given to a box directly, with no requirement) is a valid extra path.
+   - **Instruction sources (owner, 2026-11-15).** A data file is required as an option for standalone use. In an automated Worker run the box
+     connects to the Worker with its run token to report and to fetch, so the Worker itself may be the instruction source instead of a file.
+     Both sources feed one loader and one validation.
+   - *Coordinator refinement (proposal):* the fetch happens in the bootstrap/reporter layer, which already holds the token. It writes the
+     instruction to a file, records its hash and hands the file to the payload, which stays tokenless (the payload loses the token, broker URL
+     and run id today; `scripts/ci/README.md`). The payload therefore only ever reads a file, and that file's hash is the provenance record.
+3. **Anything the Worker can run must be runnable standalone**, in Python, from a CLI: every artifact pinnable from the filesystem; every step
+   decomposable (run alone, or from an instruction file identical to what the Worker would give); private R2 configurable.
+4. **Coordinator refinements (proposals, not rulings; the owner may overrule):**
+   - Do not duplicate the requirement-to-instruction compiler in Python; expose a Worker "resolve only" call if the audit finds none.
+   - A manual or hand-edited run counts toward the release gate only if its result records the requirement id, the tree sha, the instruction
+     file hash and a valid run token; otherwise it is local evidence.
+   - Versioned schemas for both formats; the instruction is validated once at the boundary and carried in a type.
+   - A parity test: the Worker-generated instruction for a sample requirement runs in dry-run on the Python side.
+5. **Order of work.** The release bar is high on purpose, so: (a) small, independently manageable stages, each with a pass record keyed by the
+   exact tree sha (the final full run stays mandatory; `gpu-vast` on master needs the exact final tree); (b) a manual full release run on a
+   manual box (the PC when up, else a Vast box) passing **before** any Worker run; (c) Worker "tiny box" runs only when they save time, to
+   exercise the waterfall without a full release run, in parallel with (b), never gating it; (d) the real Worker run last.
+6. **Rootless proof (owner, 2026-11-15).** The purpose is to prove that kayfabe works in real production as a non-root user with **no
+   capabilities** (no `CAP_*`). It is NOT a CI security measure; where it is easy, the release run may add it as a bonus. The run executes
+   kayfabe as an unprivileged user that holds no capabilities, with only the device-node access (file permissions or group membership) it is
+   granted. Box setup that needs root (packages, device permissions, mounts, driver and module loading) is allowed and kept separate from the
+   run. Which steps still need root or a capability is recorded, not assumed (audit: `/root/night/PARITY_AUDIT_20261115.md`, pending). This
+   also fits the "unprivileged RM verbs" rule.
+   - **Explicit privilege (owner, 2026-11-11, restated 2026-11-15; design in the coordinator's `RELEASE_SEQUENCE.md`, not yet in the repo).**
+     The unprivileged account may run privileged commands, but only explicitly: every root step is a greppable `kfroot <cmd>` line.
+     `/usr/local/bin/kfroot` runs `sudo -n -E` on a root-owned wrapper that is the ONLY sudoers entry (`ci ALL=(root) NOPASSWD:SETENV`,
+     `!secure_path`), so a third-party script that calls plain `sudo X` is refused. The sudo log is the audit: the gate asserts no sudo entry
+     other than the wrapper in the kayfabe run window. The kayfabe process tree runs with `NoNewPrivs=1` and `CapEff/CapPrm/CapBnd=0`, so
+     `kfroot` cannot be used from inside it. This is accident prevention, not security inside the box: the whole box is an untrusted community
+     sandbox and the Worker is the boundary, so no setuid-hardening is required. A small setuid C helper is only a fallback if the image has no
+     sudo or env forwarding proves fiddly. Root-owned prerequisites are created by the harness before the drop: `/dev/nvidia*`,
+     `nvidia-uvm`, `/dev/dri` nodes (NoNewPrivs blocks `nvidia-modprobe`) and the memlock rlimit.
+   - **All tiers (owner, 2026-11-15):** kayfabe's VMs run rootless with group `kvm` in the small, mid and large tiers alike, so a root
+     dependency fails on the first PR that adds it. The run records `uid != 0` and the `/proc/self/status` capability and `NoNewPrivs`
+     lines in its result; a mutant that runs the step as root must be caught.
+7. **Wukong under VFIO passthrough is the most useful reference** for the Wukong TDR (2026-11-15). A pass there makes the kf3 TDR a release
+   blocker; a TDR there points away from kayfabe (inferred until runs are in).
+
 ## §AQ. A failed rental never means the test failed: the release replaces that leg on the fly, 2026-11-12
 
 **STATUS: LIVE, 2026-11-12; owner requirement, implemented as code and GPU-free tests only (draft PR #362), not deployed.**
