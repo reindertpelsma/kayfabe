@@ -1534,6 +1534,8 @@ def parse_args(argv):
     p.add_argument("--skip", action="append", default=[], metavar="STAGE", help="skip this stage (repeatable)")
     p.add_argument("--dry-run", action="store_true", help="print the stage plan and run nothing")
     p.add_argument("--emit-instruction", metavar="FILE", help="write the instruction built from the source and exit")
+    p.add_argument("--prefetch", metavar="MANIFEST", help="DRY-RUN ONLY (not wired into the executor yet): validate a download manifest "
+                   "(kayfabe.download-manifest/1, scripts/ci/box_downloader.py) against the plan and print KF_PAYLOAD_PREFETCH")
     return p.parse_args(argv)
 
 
@@ -1541,6 +1543,25 @@ def build_instruction(args, environ):
     if args.instruction:
         return instruction_from_file(args.instruction, environ)
     return instruction_from_env(environ), None
+
+
+def prefetch_line(manifest_path, plan):
+    """Validate the manifest once (box_downloader owns the format) and say which items the planned stages need.
+    Reads one file, starts nothing, touches no disk."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import box_downloader
+    finally:
+        sys.path.pop(0)
+    try:
+        m = box_downloader.load_manifest(manifest_path)
+    except box_downloader.ManifestError as error:
+        print("KF_PAYLOAD_PREFETCH_REFUSED " + str(error)[:120], flush=True)
+        raise EvidenceError("preflight") from None
+    planned = [i for i in m.items if i.needed_by in plan]
+    return ("KF_PAYLOAD_PREFETCH manifest_sha256=" + m.sha256 + " items=" + str(len(m.items)) + " planned_items=" + str(len(planned))
+            + " planned_bytes=" + str(sum(i.size for i in planned)) + " unplanned_items=" + str(len(m.items) - len(planned))
+            + " stages=" + ":".join(m.stages))
 
 
 def plan_only(args, root):
@@ -1551,6 +1572,7 @@ def plan_only(args, root):
         chosen = select_stages(plan, args.only, args.skip)
         if inst.spec:
             spec_table(root)
+        prefetch = prefetch_line(args.prefetch, chosen) if args.prefetch else None
     except EvidenceError as error:
         print("KF_PAYLOAD_FAIL suite=" + error.name, flush=True)
         return 1
@@ -1561,6 +1583,8 @@ def plan_only(args, root):
         if digest:
             print("KF_PAYLOAD_INSTRUCTION sha256=" + digest, flush=True)
         print("KF_PAYLOAD_PLAN stages=" + ":".join(chosen) + " planned=" + ":".join(plan), flush=True)
+        if prefetch:
+            print(prefetch, flush=True)
     return 0
 
 
@@ -1573,6 +1597,9 @@ def main():
     args = parse_args(sys.argv[1:])
     sha, nonce = args.sha, args.nonce
     root = Path(__file__).resolve().parents[2]
+    if args.prefetch and not args.dry_run:
+        print("KF_PAYLOAD_FAIL suite=preflight prefetch_not_wired=1", flush=True)
+        return 2
     if args.dry_run or args.emit_instruction:
         return plan_only(args, root)
     if not re.fullmatch("[0-9a-f]{40}", sha) or not re.fullmatch("[0-9a-f]{32}", nonce):
