@@ -29,7 +29,7 @@ below has not been done.
   `VideoClass::of_class` has no table for. The filter is a coverage list, not a table: it holds no method.
 - CODE: the filter runs on the host's engine list at the one place `keep_statable_ofa` already runs, before any
   statement is derived from it, so the FIFO device-info rows, `engineCaps`, the constructed-falcon table, the interrupt
-  table, the PRI bases and the OS-event wiring all omit the engine together, as for a host that lacks it. [E] ogkm:
+  table, the PRI bases and the OS-event wiring all omit the engine together, as for a host that lacks it. [E] ogkm-580 (re-read there, not against 610):
   `gpuCheckEngineWithOrderList_KERNEL` (`gpu.c:6550-6562`) answers `ENG_CLASS_NVENC`/`NVDEC`/`OFA` from `engineCaps`
   alone, so an absent engine is an absent object and its classes leave the guest's class database (the same effect
   `V3_GFX_TESTSET.md` 4.1 measured on a Linux guest, in the opposite direction). No ogkm path requires an OFA engine

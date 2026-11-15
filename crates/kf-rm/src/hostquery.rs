@@ -408,7 +408,7 @@ pub struct HostFactsPolicy {
 /// `kf_chip::video_gaps::UNTABLED_VIDEO_CLASSES`, which the coverage audit in `kf-chan` holds equal to
 /// the decoder's real coverage; nothing here is a table, and an engine is never added.
 ///
-/// What the guest's RM does with the omission is read from ogkm: `gpuCheckEngineWithOrderList_KERNEL`
+/// What the guest's RM does with the omission is read from the ogkm-580 tree (re-read there, not against 610): `gpuCheckEngineWithOrderList_KERNEL`
 /// (`ogkm-580: gpu.c:6550-6562`) answers `ENG_CLASS_NVENC`/`NVDEC`/`OFA` from `engineCaps` alone, so an
 /// absent engine is an absent object and its classes leave the class database.
 #[must_use]
