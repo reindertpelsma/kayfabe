@@ -50,6 +50,18 @@ citation: ask whether its reason still holds before relying on it.
    granted. Box setup that needs root (packages, device permissions, mounts, driver and module loading) is allowed and kept separate from the
    run. Which steps still need root or a capability is recorded, not assumed (audit: `/root/night/PARITY_AUDIT_20261115.md`, pending). This
    also fits the "unprivileged RM verbs" rule.
+   - **Explicit privilege (owner, 2026-11-11, restated 2026-11-15; design in the coordinator's `RELEASE_SEQUENCE.md`, not yet in the repo).**
+     The unprivileged account may run privileged commands, but only explicitly: every root step is a greppable `kfroot <cmd>` line.
+     `/usr/local/bin/kfroot` runs `sudo -n -E` on a root-owned wrapper that is the ONLY sudoers entry (`ci ALL=(root) NOPASSWD:SETENV`,
+     `!secure_path`), so a third-party script that calls plain `sudo X` is refused. The sudo log is the audit: the gate asserts no sudo entry
+     other than the wrapper in the kayfabe run window. The kayfabe process tree runs with `NoNewPrivs=1` and `CapEff/CapPrm/CapBnd=0`, so
+     `kfroot` cannot be used from inside it. This is accident prevention, not security inside the box: the whole box is an untrusted community
+     sandbox and the Worker is the boundary, so no setuid-hardening is required. A small setuid C helper is only a fallback if the image has no
+     sudo or env forwarding proves fiddly. Root-owned prerequisites are created by the harness before the drop: `/dev/nvidia*`,
+     `nvidia-uvm`, `/dev/dri` nodes (NoNewPrivs blocks `nvidia-modprobe`) and the memlock rlimit.
+   - **All tiers (owner, 2026-11-15):** kayfabe's VMs run rootless with group `kvm` in the small, mid and large tiers alike, so a root
+     dependency fails on the first PR that adds it. The run records `uid != 0` and the `/proc/self/status` capability and `NoNewPrivs`
+     lines in its result; a mutant that runs the step as root must be caught.
 7. **Wukong under VFIO passthrough is the most useful reference** for the Wukong TDR (2026-11-15). A pass there makes the kf3 TDR a release
    blocker; a TDR there points away from kayfabe (inferred until runs are in).
 
