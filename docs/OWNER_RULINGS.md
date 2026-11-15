@@ -44,10 +44,12 @@ citation: ask whether its reason still holds before relying on it.
    exact tree sha (the final full run stays mandatory; `gpu-vast` on master needs the exact final tree); (b) a manual full release run on a
    manual box (the PC when up, else a Vast box) passing **before** any Worker run; (c) Worker "tiny box" runs only when they save time, to
    exercise the waterfall without a full release run, in parallel with (b), never gating it; (d) the real Worker run last.
-6. **Rootless proof (owner, 2026-11-15).** The release run executes kayfabe as a non-root user, to prove kayfabe itself does not need root.
-   Box setup that needs root (packages, device permissions, mounts) is allowed and is kept separate from the run; the run step drops to an
-   unprivileged user with only the device-node access it is granted. Which steps still need root is recorded, not assumed
-   (audit: `/root/night/PARITY_AUDIT_20261115.md`, pending). This also fits the "unprivileged RM verbs" rule.
+6. **Rootless proof (owner, 2026-11-15).** The purpose is to prove that kayfabe works in real production as a non-root user with **no
+   capabilities** (no `CAP_*`). It is NOT a CI security measure; where it is easy, the release run may add it as a bonus. The run executes
+   kayfabe as an unprivileged user that holds no capabilities, with only the device-node access (file permissions or group membership) it is
+   granted. Box setup that needs root (packages, device permissions, mounts, driver and module loading) is allowed and kept separate from the
+   run. Which steps still need root or a capability is recorded, not assumed (audit: `/root/night/PARITY_AUDIT_20261115.md`, pending). This
+   also fits the "unprivileged RM verbs" rule.
 7. **Wukong under VFIO passthrough is the most useful reference** for the Wukong TDR (2026-11-15). A pass there makes the kf3 TDR a release
    blocker; a TDR there points away from kayfabe (inferred until runs are in).
 
