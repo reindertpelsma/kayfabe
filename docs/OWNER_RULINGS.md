@@ -6,6 +6,25 @@ with its date, so work can resume from the repository alone. The architecture it
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
 
+## §AS. User flow: compile QEMU, use your own tools; no new CLI; module and hypervisor independence are priorities, 2026-11-15
+
+**STATUS: LIVE, 2026-11-15; owner rulings (stated in conversation, recorded by the coordinator). Feasibility of the QEMU module is NOT yet studied.**
+
+<!-- src: owner, 2026-11-15, guesthouse comparison conversation -->
+
+1. **Integrated, not another manager.** Users do not want another CLI to manage VMs. kayfabe must work through their existing workflows
+   (QEMU command line, libvirt, Proxmox, VM managers, private-cloud stacks). A new user-facing CLI is a **no**.
+2. **The user flow is: compile QEMU, then use the VM with your own tools, now with a GPU device** (the kf3 device on the QEMU command line).
+3. **One patched QEMU binary is acceptable** (it becomes a drop-in for the distro binary). A **QEMU module** (loadable, so stock QEMU plus a
+   module) is preferred where it works, and has been a priority from day 1. Until a module works, the patched binary stays.
+4. **Hypervisor agnostic** is a goal from day 1 (QEMU first; the core already reaches the hypervisor through traits; other VMMs such as Cloud
+   Hypervisor later). *Measured status: only QEMU is supported.*
+5. **Bench scripts focus on CI.** The `scripts/bench/*` tooling exists for CI and the release gate, not as the user product. Keep it out of
+   the user flow; the user-facing path is documented in `docs/howto/` and uses only QEMU arguments.
+6. **Unchecked consequences (for the next work, not decisions):** a tested libvirt XML snippet and Proxmox `args:` example; whether kf3 can be a
+   loadable QEMU module or a minimal patch; which host-side pieces (Rust host crates, CUDA walker, broker) a user must also run, so "just a
+   QEMU device" is not overstated.
+
 ## §AR. Release run: standalone parity, requirement vs instruction, manual run first, Windows lanes, 2026-11-15
 
 **STATUS: LIVE, 2026-11-15; owner rulings (stated in conversation, recorded by the coordinator). Whether today's code already meets 2 to 4 is NOT yet audited.**
