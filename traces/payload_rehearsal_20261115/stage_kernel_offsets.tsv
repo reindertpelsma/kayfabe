@@ -1,0 +1,10 @@
+stage	start_utc(derived from KF_PAYLOAD_STAGE durations)	last_offset_sample_at_or_before	kernel_log_bytes	Xid_count_so_far
+provision_start	11:40:24	2026-11-15T11:40:24Z	3737	0
+cuda_host_start	11:53:31	2026-11-15T11:53:24Z	65440	0
+merge_bar_start	11:53:43	2026-11-15T11:53:24Z	65440	0
+cuda_guest_start	12:14:31	2026-11-15T12:14:25Z	131301	10
+apps_start	12:19:36	2026-11-15T12:19:25Z	131743	10
+windows_gate_start	13:15:10	2026-11-15T13:14:56Z	132195	10
+windows_apps_start	14:45:06	2026-11-15T14:44:58Z	133793	10
+windows_gate_2_start	15:14:44	2026-11-15T15:14:28Z	134616	10
+payload_end	15:41:01	2026-11-15T15:40:59Z	135097	10

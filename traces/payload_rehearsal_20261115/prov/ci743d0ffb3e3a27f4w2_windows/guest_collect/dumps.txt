@@ -1,0 +1,8 @@
+﻿
+FullName                                                Length     LastWriteTime        
+--------                                                ------     -------------        
+C:\Windows\LiveKernelReports\WATCHDOG                              11/15/2026 3:28:05 PM
+C:\Windows\LiveKernelReports\WATCHDOG-20261115-1527.dmp 1386086400 11/15/2026 3:27:41 PM
+
+
+

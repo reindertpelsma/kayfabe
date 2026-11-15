@@ -1,0 +1,28 @@
+[xid-watch] tag=ci-arm-61481-28818  host=ubuntu  utc=2026-11-15T11:55:46Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --timer
+[xid-watch] host_dmesg_lines=726  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=61559 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--timer]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d001a5
+ok    R6 hSubdevice      = 0xcafe0002
+info  R19 euid            = 0  ⚠ ROOT — RmValidateMmapRequest takes the osIsAdministrator() fast path and the range walk NEVER RUNS. This run is the CONTROL, not the measurement.
+★     R19 TIMER_GET_REGISTER_OFFSET = NV_OK, tmr_offset = 0x9000 (DRF_BASE(NV_PTIMER) is 0x9000)
+★     R19 NV01_TIMER alloc = hObject 0xcafe0004
+info  R19 NV01_TIMER map  = ioctl 0x414 / mmap 0x414 refused Other(19271)  (the object's own size for both)  ⚠ OUR OWN NOT_IN_THIS_OBJECT — the request never reached RM; that mmap length is not page-aligned
+info  R19 NV01_TIMER map  = ioctl 0x1000 / mmap 0x1000 refused Other(46)  (a whole page for both)  ← NV_ERR_INVALID_LIMIT: the driver says the length is past the resource's own size — a BOUND, not a privilege
+★     R19 NV01_TIMER map  = ioctl 0x414 / mmap 0x1000 ACCEPTED  (the object's size to RM, the rounded size to mmap)
+★     R19 PTIMER page     = 1794743749255011488 ns then 1794743749275091264 ns (+20079776 ns over a 20 ms sleep)
+★     R19 usermode mirror = 1794743749275102848 ns then 1794743749295191616 ns (+20088768 ns over a 20 ms sleep) — read through the SAME window the doorbell is rung through, so it costs no new mapping
+★      R19 same counter?   = PTIMER page 1794743749255011488 then 1794743749275091264, mirror 1794743749275102848 read next — mirror is 11584 ns after the second page reading (bound 1000000 ns)
+★     R19 host geography  = the PTIMER page carries the counter at page + 0x400; the usermode window carries it at page + 0x080, with the doorbell 0x10 bytes further on at page + 0x090
+done — timer probe only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (726 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-61481-28818.log

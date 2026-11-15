@@ -1,0 +1,3 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=none spec=none winapps=mid linuxapps=1
+KF_PAYLOAD_INSTRUCTION sha256=bbe559444a6c7bf1cbf41489b169c70d34ee8b413bafeab214a1273d070537fb
+KF_PAYLOAD_PLAN stages=provision:cuda_host:merge_bar:cuda_guest:apps:windows_gate:windows_apps:windows_gate_2 planned=provision:cuda_host:merge_bar:cuda_guest:apps:windows_gate:windows_apps:windows_gate_2

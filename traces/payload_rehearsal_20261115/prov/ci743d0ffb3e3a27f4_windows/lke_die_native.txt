@@ -1,0 +1,15 @@
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+Groups:	0 
+CapInh:	0000000000000000
+CapPrm:	000001ffffffffff
+CapEff:	000001ffffffffff
+CapBnd:	000001ffffffffff
+CapAmb:	0000000000000000
+NoNewPrivs:	0
+kf-host: host tier: stock
+host_driver=580.159.04 arch=(400, 2, 161)
+round=0 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1794748564442592000 second=1794748564462683328 delta=20091328 usermode=1794748564462684992 delta_to_usermode=1664
+round=1 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1794748564463189824 second=1794748564483314816 delta=20124992 usermode=1794748564483316512 delta_to_usermode=1696
+round=2 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1794748564483823168 second=1794748564503932576 delta=20109408 usermode=1794748564503934240 delta_to_usermode=1664
+PASS native read-only timer map/read/drop x3
