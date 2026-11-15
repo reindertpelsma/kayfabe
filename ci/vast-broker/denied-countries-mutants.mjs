@@ -105,6 +105,8 @@ try {
     'scripts/ci/vast_report.py',
     'scripts/ci/vast_payload.py',
     'scripts/ci/payload_instruction.py',
+    'scripts/ci/box_downloader.py',
+    'scripts/ci/kf_fetch.py',
     'scripts/ci/release_driver_pins.py',
     'ci/vast-reaper',
     'ci/platform-api/migrations',

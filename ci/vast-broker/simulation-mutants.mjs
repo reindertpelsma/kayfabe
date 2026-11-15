@@ -151,6 +151,8 @@ try {
     'scripts/ci/vast_report.py',
     'scripts/ci/vast_payload.py',
     'scripts/ci/payload_instruction.py',
+    'scripts/ci/box_downloader.py',
+    'scripts/ci/kf_fetch.py',
   ]) {
     mkdirSync(dirname(join(scratch, path)), { recursive: true });
     cpSync(join(repo, path), join(scratch, path));
