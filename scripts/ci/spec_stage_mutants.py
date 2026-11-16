@@ -212,7 +212,7 @@ MUTANTS = [
       "grep -q '^WINDOWS_GATE_PASS ' \"$PROV/${T}_windows.log\" 2> /dev/null || abort OPERATOR", "true || abort OPERATOR", PF),
     M("stage-no-disk-check", "stage", '[ "${avail_gb:-0}" -ge "$need_gb" ] || abort PROVIDER', "true || abort PROVIDER", PF),
     M("stage-no-ram-check", "stage", '[ "${mem_gb:-0}" -ge 24 ] || abort PROVIDER', "true || abort PROVIDER", PF),
-    M("stage-run-boot-without-the-gate-flags", "stage", ' --env-file "$FLAGS")', ")", CP),
+    M("stage-run-boot-without-the-gate-flags", "stage", '[ -z "$FLAGS" ] || args+=(--env-file "$FLAGS")', "true", CP),
     M("stage-copy-boot-with-kf3", "stage", "        args+=(--no-kf3)", "        args+=()", CP),
     M("stage-gate-overlay-unsealed", "stage", 'chmod 0400 "$VM/disk/$GATE_TAG.qcow2"', "true", CP),
     M("stage-cut-viewset-is-a-fail", "stage", 'if [ "$mode" = cut ]; then abn="cut"; else abn="full"; fi', 'abn="full"', TG),

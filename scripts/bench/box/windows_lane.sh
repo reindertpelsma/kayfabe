@@ -74,6 +74,8 @@ kf3() {
     /workspace/bench/qemu-build-kf3 > /root/prov/kf3.log 2>&1)
 }
 prereqs() {
+  # root: this whole script is box PROVISIONING (host driver, /root paths, apt) and stays root-run; the unprivileged Windows
+  # gate is windows_gate.sh, whose own root steps are `kfroot` lines (docs/design/V3_KFROOT_ROOTLESS.md)
   DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y -qq \
     ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full \
     > /root/prov/win_prereq.log 2>&1

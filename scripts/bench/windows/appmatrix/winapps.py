@@ -311,7 +311,11 @@ class WinVmVm(Vm):
         if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", uuid):
             raise RuntimeError("no per-VM identity (VM_UUID) in identity.env")
         cmd = ["bash", self.winvm, "run", "--detach", "--overlay", self.overlay, "--arm", self.arm, "--guest-driver", self.gdrv,
-               "--kf3-extra", f"gpu-uuid=GPU-{uuid}", "--env-file", self.flags, "--tag", self.runtag]
+               "--kf3-extra", f"gpu-uuid=GPU-{uuid}"]
+        # 2026-11-15 (flag cleanup, Stage 1): an env file only when the caller names one (measurement flags).
+        if self.flags:
+            cmd += ["--env-file", self.flags]
+        cmd += ["--tag", self.runtag]
         r = subprocess.run(cmd, env=self._env(), capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
         self.log(f"win_vm.sh run --detach tag={self.runtag} rc={r.returncode}")
         if r.returncode != 0:
@@ -949,7 +953,7 @@ def main(argv=None):
     ap.add_argument("--winvm-root", default=os.environ.get("WINVM_ROOT", "/workspace/winvm"))
     ap.add_argument("--winvm-name", default=os.environ.get("WINVM_NAME", "kfwin"))
     ap.add_argument("--parent-overlay", default="", help="(vm winvm) the overlay (name, in disk/) every guest is a child of: the gate's, with the driver")
-    ap.add_argument("--flags-file", default="", help="(vm winvm) the kf3 env file of the gate (--env-file of win_vm.sh run)")
+    ap.add_argument("--flags-file", default="", help="(vm winvm) OPTIONAL measurement-only kf3 env file (--env-file of win_vm.sh run); default none: the product defaults are the Windows profile (2026-11-15)")
     ap.add_argument("--guest-driver", default="580.65.06", help="(vm winvm) kf3 guest-driver= (the guest ABI of the Windows 580.88 driver)")
     ap.add_argument("--arm", default="B", help="(vm winvm) win_vm.sh run --arm")
     ap.add_argument("--ssh-port", type=int, default=int(os.environ.get("WINVM_SSH_PORT", "2224")))
@@ -1000,7 +1004,7 @@ def main(argv=None):
                 cfg.password = cfg.password or "mockpw"
                 sleep = lambda s: time.sleep(min(s, 0.02) if a.fast else s)
             elif a.vm == "winvm":
-                for what, val in (("--iso", a.iso), ("--parent-overlay", a.parent_overlay), ("--flags-file", a.flags_file)):
+                for what, val in (("--iso", a.iso), ("--parent-overlay", a.parent_overlay)):
                     if not val:
                         raise SystemExit(f"vm winvm needs {what}")
                 if cfg.password:

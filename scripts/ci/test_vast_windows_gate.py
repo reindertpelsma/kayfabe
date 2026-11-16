@@ -80,7 +80,7 @@ class GateVerdicts(unittest.TestCase):
     def test_the_selftest_classifies_every_case(self):
         p = run_gate("--selftest")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=24$")
+        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=27$")
 
     def test_a_guest_failure_is_kayfabes_only_with_both_references_green(self):
         text = code(GATE)

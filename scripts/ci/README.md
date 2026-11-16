@@ -37,6 +37,16 @@ zero passes, unknown hardware or compute_cap < 750. Soft deadline: TERM, KILL af
 FAIL with the suites already written plus `timeout`. Absent payload: FAIL `payload_missing`; absent
 or invalid result file: FAIL `result_missing`/`result_invalid`. Exit text never makes a PASS.
 
+kfroot and rootless Windows (2026-11-15, OWNER_RULINGS section AR item 6; GPU-free tests and one hand run of the real sudo in a sandbox, NOT run on a box):
+`kfroot.py` installs the explicit root step (`/usr/local/bin/kfroot` = `exec sudo -n -E` on a root-owned wrapper that is the only sudoers entry; the
+sudoers file is `visudo -c` checked before it is installed), bootstraps the box for an unprivileged `ci` user in group `kvm` (device nodes, memlock,
+`/workspace`, GPU lock, sudo log), starts a command dropped (`run`: every capability set empty, `NoNewPrivs=1`), and asserts the result from `/proc`
+and the sudo log (`assert-tree`, `audit-check`). `windows_gate.sh` and `windows_apps.sh` no longer refuse non-root: they check `/dev/kvm`, `/dev/nvidiactl`,
+writable directories, cargo and a readable kernel log by name, and the root operations (apt, the swtpm AppArmor rule, `dmesg` under
+`kernel.dmesg_restrict=1`) are `kfroot <cmd>` lines (`scripts/lib/kfroot.sh`). `KF_ROOTLESS=require|record|off` (default record). Design, the
+inventory of what really needs root, the measured sudo behaviour and the first-box checklist: [V3_KFROOT_ROOTLESS](../../docs/design/V3_KFROOT_ROOTLESS.md).
+Tests `test_kfroot.py`; mutants `kfroot_mutants.py` (two named killers each, in `ci.yml`). `vast_payload.py` does not yet use it.
+
 Instruction file and stage selection (2026-11-15, OWNER_RULINGS section AR, stages S1 and S3; MEASURED by
 GPU-free tests only, not on a box): the payload also takes `--instruction FILE` (JSON, at most 64 KiB, schema
 `kayfabe.payload-instruction/1`: `ci/vast-broker/planner/schemas/instruction.schema.json`, mirrored byte for byte

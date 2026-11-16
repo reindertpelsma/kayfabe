@@ -117,6 +117,7 @@ fn rig(seat: bool) -> Rig {
             channels: None,
             display: None,
             console: None,
+            windows: Default::default(),
         },
     );
     let root = rpc(

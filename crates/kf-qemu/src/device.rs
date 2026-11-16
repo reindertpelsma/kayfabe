@@ -101,6 +101,14 @@ pub struct Config {
     /// The device's guest PCI `devfn` (0..=255), a byte of the `auto` construction: it separates
     /// two kf3 devices of one VM that sit on one host GPU.
     pub pci_devfn: u32,
+    /// ★ 2026-11-15 (flag cleanup, Stage 1; `docs/design/V3_WINDOWS_SUPPORT_PROFILE.md`): the
+    /// `windows-support` property, default ON. On, a guest that declares the measured Windows build at
+    /// fn 1 gets the Windows profile (kernel-GR tier, user-channel passthrough, deferred API, the
+    /// fabricated preempt/zcull/GFX-pool/display-control answers, host-owned scheduling, the SDR colour
+    /// path); no other guest reaches any of it. Off, no declaration reaches any of it (a Windows guest
+    /// then fails by name at its first Windows-only control). The only opt-out; never an environment
+    /// variable and never inferred from the guest.
+    pub windows_support: bool,
 }
 
 impl Config {
@@ -882,6 +890,10 @@ impl Device {
         // ★ v3-display step (3): the plane — the shared model the served chain answers from across
         // `ReselectAtFn1` rebuilds, and its own GPU context over the store (a second export: the
         // walker's context keeps its own import).
+        // ★ 2026-11-15: the Windows support profile — ONE value per VM, shared by the chain (which
+        // records the guest's fn-1 identity), the memory plane (the mirror-space start) and the display
+        // plane (the SDR colour path).
+        let windows = kf_rm::winprofile::WindowsProfile::new(cfg.windows_support);
         let display_plane: Option<&'static crate::display::DisplayPlane> = match display_row {
             Some(row) => {
                 let export = rm
@@ -938,6 +950,7 @@ impl Device {
                         fb_length,
                         broker,
                         cfg.display_max_fps,
+                        windows.clone(),
                     )
                 })?
                 .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
@@ -959,7 +972,7 @@ impl Device {
             let memory_access = chans.memory_access.clone();
             let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
-            let (board, host, chain_logs, census, inbox, console, defapi_reg) = (
+            let (board, host, chain_logs, census, inbox, console, defapi_reg, windows) = (
                 board.clone(),
                 host.clone(),
                 chain_logs.clone(),
@@ -967,6 +980,7 @@ impl Device {
                 inbox.clone(),
                 console.clone(),
                 defapi_reg.clone(),
+                windows.clone(),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
                 let objects = kf_rm::rmrpc::ObjectPolicy::over(
@@ -1010,6 +1024,7 @@ impl Device {
                         // ★ The boot display: fn 65's region table follows the guest's preserved
                         // console with `gop=on`; with `gop=off` there is no seat (today's table).
                         console: console.seat(),
+                        windows: windows.clone(),
                     },
                 )
             })
@@ -1055,6 +1070,7 @@ impl Device {
             ram,
             inbox,
             mirrors,
+            windows.clone(),
         )?;
         let walker = kf_mem::vasmgr::GpuWalker { kernel, perm };
         // ★ 2026-09-26 (`V3_BAR1_DOORBELL.md` §7 T1's NEGATIVE CONTROL, `V3_FAMILY_PORT_BLACKWELL.md`):
@@ -2604,6 +2620,12 @@ impl Device {
         let mut last_delivery: Option<std::time::Instant> = None;
         let mut snap_at = std::time::Instant::now();
         while !self.stop.load(Ordering::Acquire) {
+            // ★ 2026-11-15 (flag cleanup, Stage 1): the caps page follows the guest's declared identity
+            // (the Windows profile's SDR page), on this thread, before the next command is served. An
+            // atomic compare when nothing changed; never on a vCPU.
+            if let Some(dp) = self.display {
+                dp.sync_caps_page(&|o, v| self.shadow_store(o, u64::from(v), 4));
+            }
             if let Some([gsprm, libos]) = heartbeat
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
             {
@@ -4401,6 +4423,7 @@ mod config_tests {
             gpu_uuid: None,
             vm_id: None,
             pci_devfn: 0,
+            windows_support: true,
         }
     }
 
