@@ -20,19 +20,26 @@ $Script:DialogButtons = @('OK', 'Ok', 'Continue', 'Not Now', 'Skip', 'Got it', '
 # Buttons that are never pressed even when listed above: they could start a sign-in or an online flow.
 $Script:NeverButtons = @('Sign In', 'Sign in', 'Sign Up', 'Create an account', 'Get Started', 'Buy', 'Subscribe', 'Try')
 function Dismiss-Dialogs($procNames, [string[]]$only = $null) {
+  # Two levels only (a process window, its child windows, their direct children): a full subtree walk of a large application window can
+  # block in UI Automation for minutes (MEASURED with Premiere Pro under kf3), and every dialog seen so far is a window one level down.
   $pids = Proc-Pids $procNames
   $roots = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
   $n = 0
+  $list = if ($only) { $only } else { $Script:DialogButtons }
   foreach ($r in $roots) {
     try { if ($pids -notcontains $r.Current.ProcessId) { continue } } catch { continue }
-    $all = $r.FindAll([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.Condition]::TrueCondition)
     $title = $r.Current.Name
-    foreach ($el in $all) {
-      if ($el.Current.ControlType.ProgrammaticName -ne 'ControlType.Button') { continue }
-      $nm = $el.Current.Name
-      $list = if ($only) { $only } else { $Script:DialogButtons }
-      if ($list -contains $nm -and $Script:NeverButtons -notcontains $nm -and ($nm -ne 'Close' -or $r.Current.ControlType.ProgrammaticName -eq 'ControlType.Window' -and $title -notmatch '^(Adobe |Photoshop|Illustrator|InDesign|Animate|Premiere|After Effects|Lightroom|Acrobat|Dimension)') -and $el.Current.IsEnabled) {
-        try { $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); $n++; $Script:Dismissed += ("{0}: {1}" -f $title, $nm) } catch {}
+    $level = @($r)
+    try { $level += @($r.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.ControlType.ProgrammaticName -eq 'ControlType.Window' }) } catch {}
+    foreach ($w in $level) {
+      $wt = $w.Current.Name
+      try { $kids = $w.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition) } catch { continue }
+      foreach ($el in $kids) {
+        if ($el.Current.ControlType.ProgrammaticName -ne 'ControlType.Button') { continue }
+        $nm = $el.Current.Name
+        if ($list -contains $nm -and $Script:NeverButtons -notcontains $nm -and $el.Current.IsEnabled) {
+          try { $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); $n++; $Script:Dismissed += ("{0}: {1}" -f $wt, $nm) } catch {}
+        }
       }
     }
   }
