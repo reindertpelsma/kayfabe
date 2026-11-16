@@ -36,6 +36,9 @@ COPY_FILES = [
     "scripts/bench/native_xid_guard.py",
     "scripts/bench/native_fault_names.json",
     "scripts/bench/specviewperf/lanes.json",
+    "scripts/bench/windows/propimage_runspec.py",     # the payload validates an instruction's `propimages` with it
+    "scripts/bench/windows/propimage_registry.py",    # and a strict one against the application registry
+    "scripts/bench/windows/app_defs/core_apps.py",
     "ci/vast-broker/planner/schemas/instruction.schema.json",
     "ci/vast-broker/release-matrix.json",
 ]
@@ -55,6 +58,15 @@ MUTANTS = [
     M("schema-artifact-open", "schema", '"additionalProperties": false\n    }\n  }\n}', '"additionalProperties": true\n    }\n  }\n}'),
     M("schema-version-const-dropped", "schema", '"schema": {\n      "const": "kayfabe.payload-instruction/1"\n    }', '"schema": {\n      "type": "string"\n    }'),
     M("schema-artifact-count-unbounded", "schema", '"maxItems": 32', '"maxItems": 3200'),
+    M("schema-propimage-image-open", "schema", '"required": [\n        "kind"\n      ],\n      "additionalProperties": false',
+      '"required": [\n        "kind"\n      ],\n      "additionalProperties": true'),
+    M("schema-propimage-app-open", "schema", '"required": [\n        "mode"\n      ],\n      "additionalProperties": false',
+      '"required": [\n        "mode"\n      ],\n      "additionalProperties": true'),
+    M("schema-propimages-strict-not-boolean", "schema", '"propimages_strict": {\n      "type": "boolean"\n    }', '"propimages_strict": {\n      "type": "string"\n    }'),
+    M("inst-strict-needs-a-list-dropped", "inst", "if i.propimages_strict and not i.propimages:", "if False:"),
+    M("schema-lane-open", "schema", '"lane": {\n          "enum": [\n            "gate",\n            "discovery"\n          ]\n        }', '"lane": {\n          "type": "string"\n        }'),
+    M("inst-propimages-large-tier-dropped", "inst", 'if i.propimages and i.tier != "large":', "if False:"),
+    M("inst-propimage-duplicate-label-allowed", "inst", "if len(set(labels)) != len(labels):", "if False:"),
     M("schema-tier-name-opened", "schema", '"unknown"\n      ]', '"unknown",\n        "huge"\n      ]'),
     M("schema-required-dropped", "schema", '"required": [\n    "schema",\n    "tier",', '"required": [\n    "schema",'),
     M("inst-stage-name-check-dropped", "inst", "    if len(set(i.stages)) != len(i.stages) or any(s not in RUNNABLE_EXTRA_STAGES for s in i.stages):", "    if False:"),
