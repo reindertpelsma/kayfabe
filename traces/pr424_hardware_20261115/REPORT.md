@@ -69,7 +69,7 @@ cuda_guest or windows_gate. No oops, hung task, OOM, soft lockup or reset line i
 ## Cost and teardown
 - Box rates 0.854 (60809802, 13.1 min), 0.798 (60811069, 6.5 min), 0.959 (60811732, 2.06 h) USD/h: about 0.19 + 0.09 + 1.97 = **2.2 USD** (offer rate times time, not an invoice; the account credit fell 2.21 USD over the period, other agents may share it).
   Total elapsed 16:30:54Z to 18:53:59Z = 2.4 h. Hard stops were 5 USD / 5 h.
-- `vastai destroy instance 60811732 -y` at 18:53:59Z, then `vastai show instances-v1 --raw`: only `60824157` (not mine) remains; mine absent (`teardown_verify.txt`). 60809802 and 60811069 were verified absent the same way when destroyed. No other instance touched.
+- Teardown on 2026-11-15 (RTX 4090 box, instance 60811732, run of rev 9ddb897e7): `vastai destroy instance 60811732 -y` at 18:53:59Z, then `vastai show instances-v1 --raw`: only `60824157` (not mine) remains; mine absent (evidence `teardown_verify.txt`). The same listing check was made on 2026-11-15 after each of 60809802 and 60811069 was destroyed (`log.txt`). No other instance touched.
 - Evidence copied back: text, logs and JSON only (`export.tgz` 0.66 MB); no tarballs of images, no PNG. Scrubbed (GPU UUIDs, guest serial, MAC); `no_gpu_uuids.py` and `no_private_refs.py` pass; `doc_freshness.py` clean.
 
 ## What remains unproven
