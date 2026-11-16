@@ -36,6 +36,8 @@ COPY = [
     "scripts/ci/test_vast_spec_stage.py",
     "scripts/ci/vast_payload.py",
     "scripts/ci/payload_instruction.py",
+    "scripts/ci/box_downloader.py",
+    "scripts/ci/kf_fetch.py",
     "scripts/ci/vast_report.py",
     "scripts/bench/native_xid_guard.py",
     "scripts/bench/native_fault_names.json",

@@ -1,12 +1,61 @@
 # V3 video engines — NVENC and NVDEC for guest userspace
 
-**STATUS: LIVE, 2026-09-26 (branch `v3-video`).** Measured on one GA106 (RTX 3060) with the stock
+**STATUS: LIVE, 2026-11-15 (amended; original 2026-09-26, branch `v3-video`).** Measured on one GA106 (RTX 3060) with the stock
 580.159.04 driver, in a kf3 fat guest on vast box `52661900`. Every NVENC and NVDEC output of the
 graded lane is **byte-identical to bare metal** on the same box (§5). Turing, Ada and Blackwell are
 derived from source and not yet measured on hardware. Hopper is refused by name (§6).
 
 Read with `V3_HEADLESS_GRAPHICS.md` §4, which listed the six gaps this branch closes. Legend:
 **[E]** read in source at the cited place, **[M]** measured, with the run named.
+
+---
+
+**2026-11-15 AMENDMENT (CODE, GPU-free tests only; NOT measured on hardware): a Windows profile that does not offer
+an engine it cannot serve from a derived table.** Status of the change: implemented, default OFF; the box/PC run
+below has not been done.
+- MEASURED (PC night, RTX 4070 Ada, kf3 `b20fd84b`; the report is `WUKONG_RELAUNCH_TDR_20261115.md` section A, a
+  read-only research note outside the repository): the Windows guest kernel creates an OFA channel (class `0xC9FA`) on
+  the Translated route at every frame-generation boot. Its first segment (semaphore release on subchannel 0, then
+  subchannel-4 methods `0x240..0x248`, `0x304`, then a host acquire) is refused `ForeignClass` because
+  `kf_chan::video_generated` has no `*FA` class (the public headers define no OFA method layout), the channel dies
+  and the guest's GPU watchdog fires about 9 s later (10 of 10 frame-generation boots; none with frame generation off).
+- Owner ruling 2026-11-15, as relayed: follow the standing rulings for the OFA table. No hand-maintained or captured
+  OFA method table, no undecoded pass-through of guest-built ring contents, no forged completion. So no OFA table entry
+  is added, and the table is not aliased to another class.
+- CODE: the rule is **"an engine whose classes have no derived method table is not offered to a guest that builds
+  kernel rings on it."** One list, `kf_chip::video_gaps::UNTABLED_VIDEO_CLASSES` (21 classes today: 9 OFA, 7 NVDEC,
+  5 NVENC), is read by the offer filter (`kf_rm::hostquery::hide_untabled_video`) and by the coverage audit
+  (`crates/kf-chan/tests/video_class_coverage.rs`), which fails unless the list is exactly the set of classes
+  `VideoClass::of_class` has no table for. The filter is a coverage list, not a table: it holds no method.
+- CODE: the filter runs on the host's engine list at the one place `keep_statable_ofa` already runs, before any
+  statement is derived from it, so the FIFO device-info rows, `engineCaps`, the constructed-falcon table, the interrupt
+  table, the PRI bases and the OS-event wiring all omit the engine together, as for a host that lacks it. [E] ogkm-580 (re-read there, not against 610):
+  `gpuCheckEngineWithOrderList_KERNEL` (`gpu.c:6550-6562`) answers `ENG_CLASS_NVENC`/`NVDEC`/`OFA` from `engineCaps`
+  alone, so an absent engine is an absent object and its classes leave the guest's class database (the same effect
+  `V3_GFX_TESTSET.md` 4.1 measured on a Linux guest, in the opposite direction). No ogkm path requires an OFA engine
+  (the OFA mentions in `kernel_mig_manager.c` are MIG partition counts, MIG being off).
+- CODE: it is a **declared run-profile flag, `KF3_WIN_HIDE_UNTABLED_VIDEO=1`, off by default**, read once at realize
+  (`kf_qemu::rmfacts`), not the default. Why: the rule is about the guest-KERNEL ring route. A guest USER video
+  channel is a passthrough twin that reads no table (measured on a Linux guest, `V3_GFX_TESTSET.md` 4.1), and OFA is
+  what gives that guest `VK_NV_optical_flow`, its sixth queue family and `vk_ofa` (three of the 38 graded items).
+  Hiding it for everyone would revert the 2026-09-26 correction below. The guest OS is declared, never detected from
+  the wire (`kf_abi::guest_os`, section 2).
+- CODE, what changes with the flag set, by family (from the lists): Ampere and Ada lose OFA only; Turing, Hopper and
+  Blackwell lose every video engine (their NVDEC/NVENC/OFA classes have no table either, or the family lists none).
+  Linux lanes and every run without the flag are byte-identical to before (tests: `host_facts_query_ga106.rs`,
+  `by_default_the_guest_is_served_nvdec_nvenc_and_ofa`, `the_plain_query_still_serves_ofa`).
+- **Falsifier for the PC/box run (not done):** Wukong benchmark, DLSS frame generation requested, first launch plus
+  relaunch, 3 sequences on kf3 with `KF3_WIN_HIDE_UNTABLED_VIDEO=1` in the Windows profile. The kf3 log must print
+  `kf3: host facts: OFA NOT advertised`; marker M1 (`chan token 0x2809 ... DEAD: ring: Rewrite ... ForeignClass`)
+  must NOT appear; there must be no GPU watchdog event (LiveKernelEvent 141/117) after the relaunch; frame generation
+  must show as unavailable in the game. FALSIFIED if the guest still opens an OFA channel, the guest driver hangs or
+  Code 43s without the engine, or a watchdog still fires.
+- NOT established (assumed, to be read from the run): what the closed Windows KMD and the DLSS-G runtime do with a GPU
+  that has no OFA. ogkm is the Linux/GSP client and is the only readable source; the Windows run before 2026-09-26
+  never existed, so no Windows boot without OFA was ever measured. If the guest needs the engine to boot, the flag
+  stays off and the table needs the owner ruling. Also open: a hostile guest naming an unadvertised video engine in a
+  channel alloc still reaches `ChanPlane::birth`, which routes by engine type, not by the served list; the result is
+  the pre-existing refusal on the ring's first method (a dead channel of its own, no escape).
 
 ---
 
@@ -316,7 +365,9 @@ it sooner, because it runs more processes. Results files are in `traces/video_ga
   `crates/kf-rm/tests/ofa_engine.rs`. OFA0's fault id per family is held both ways to `kf_chip::hwref`
   (Ampere/Ada 10, Hopper 53 from the UVM hwref copy like Hopper's `HOST0`, Blackwell 48; Turing has
   none); GB100's `OFA1` has no fault id in any header and is not advertised, by name. Only GA10x is
-  measured.
+  measured. ⊘ **2026-11-15: still advertised by default.** The Windows profile flag
+  `KF3_WIN_HIDE_UNTABLED_VIDEO=1` withholds it (and any other video engine with no derived method table), see the
+  amendment at the top of this document.
 - **Not advertised**: NVJPG and SEC2. Their `classify_engine` arms return `None` by design.
 - **`0x2080a028`**: only the NVD and GPC clock domains are asked of the host. A library asking another domain is refused, as before.
 - **The steer (§2.1) is falcon-specific.** Any other host-RM internal allocation in a mirrored VA space has the same two-allocator hazard. A GR collision would show as a `HELD BY HOST` leaf, and none has been seen.
