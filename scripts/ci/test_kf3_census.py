@@ -33,6 +33,10 @@ class T(unittest.TestCase):
         self.assertNotIn("12345678", str(c))
         self.assertNotIn("52:54", str(c))
 
+    def test_the_zero_status_counter_is_not_a_refusal(self):
+        c = kc.census(["kf3: family=Ada phase=Running trapped=5 applied=3 refused=0 serviced=2", "kf3: family=Ada refused=16 serviced=2"])
+        self.assertEqual(c["counts"].get("refused"), 1)
+
     def test_window(self):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "q.log"
