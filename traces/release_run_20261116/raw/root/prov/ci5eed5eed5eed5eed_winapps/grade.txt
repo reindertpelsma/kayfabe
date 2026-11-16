@@ -1,0 +1,20 @@
+APP_POLICY name=overlay_yuv_probe os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_hide os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_occlude os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_resize os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_move os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_recreate os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_fullscreen os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_soak os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=managed_t os=windows result=NOT_RUN note=unsupported (UVM)
+WINAPPS_APP app=nvidia_smi class=pass verdict=PASS batched=PASS alone=- secs=8 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=deviceQuery_demo class=pass verdict=PASS batched=PASS alone=- secs=8 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=matmul_t class=pass verdict=PASS batched=PASS alone=- secs=32 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cup8_ladder class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d11 class=pass verdict=PASS batched=PASS alone=- secs=8 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=glgears_wgl class=pass verdict=PASS batched=PASS alone=- secs=19 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=vulkaninfo class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=warn:WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed 
+WINAPPS_APP app=torch_correct class=pass verdict=PASS batched=PASS alone=- secs=37 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=edge_webgl class=pass verdict=PASS batched=PASS alone=- secs=31 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d12 class=pass verdict=PASS batched=PASS alone=- secs=13 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_GRADE kind=PASS expected=10 pass=10 guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0

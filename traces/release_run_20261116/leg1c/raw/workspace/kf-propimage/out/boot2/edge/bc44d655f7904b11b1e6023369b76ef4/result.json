@@ -1,0 +1,26 @@
+﻿{
+    "window_title":  "KFGL bc44d655f7904b11b1e6023369b76ef4 ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 (0x00002684) Direct3D11 vs_5_0 ps_5_0, D3D11) frames=173 - Profile 1 - Microsoft​ Edge",
+    "launched":  true,
+    "kind":  "UIA",
+    "started":  1794507017.759,
+    "app":  "edge",
+    "ended":  1794507028.263,
+    "run_id":  "bc44d655f7904b11b1e6023369b76ef4",
+    "edge_pids":  [
+                      3004,
+                      7432,
+                      4244,
+                      7348,
+                      10840,
+                      10172,
+                      3868,
+                      4328,
+                      8756,
+                      2004,
+                      9764,
+                      7968,
+                      5840,
+                      6396,
+                      11032
+                  ]
+}

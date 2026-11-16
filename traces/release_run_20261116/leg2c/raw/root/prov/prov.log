@@ -1,0 +1,17 @@
+START 2026-11-16T03:47:16+00:00
+BOX_RC=0
+f723d3261 propimage_check: gpu_fix restarts only present NVIDIA devices (a phantom instance of the build host's GPU made pnputil fail with 1167)
+DRIVER_RC=0
+NVIDIA GeForce RTX 2060, 580.159.04
+/dev/root       388G   13G  375G   4% /
+TREE_RC=0
+[2026-11-16T03:59:15+00:00] B4: guest ladder built: 5061288 bytes
+[2026-11-16T03:59:15+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/f723d326/qemu-system-x86_64 rev=f723d326 mtime=2026-11-16 04:00:38.927976703 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-16T04:00:40+00:00

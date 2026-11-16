@@ -1,0 +1,7 @@
+{
+  "app": "edge",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "WebGL drew 173 frames in 4 s on ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 (0x00002684) Direct3D11 vs_5_0 ps_5_0, D3D11) (title read through UIA)",
+  "secs": 10
+}

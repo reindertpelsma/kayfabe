@@ -1,0 +1,1357 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+build-essential is already the newest version (12.9ubuntu3).
+pkg-config is already the newest version (0.29.2-1ubuntu3).
+libglib2.0-dev is already the newest version (2.72.4-0ubuntu2.11).
+libssl-dev is already the newest version (3.0.2-0ubuntu1.30).
+The following packages were automatically installed and are no longer required:
+  adwaita-icon-theme at-spi2-core dconf-gsettings-backend dconf-service
+  dctrl-tools dkms fontconfig gsettings-desktop-schemas gtk-update-icon-cache
+  hicolor-icon-theme humanity-icon-theme libatk-bridge2.0-0 libatk1.0-0
+  libatk1.0-data libatspi2.0-0 libcairo-gobject2 libcolord2 libdatrie1
+  libdconf1 libfontenc1 libgail-common libgail18 libgtk-3-0 libgtk-3-bin
+  libgtk-3-common libgtk2.0-0 libgtk2.0-bin libgtk2.0-common libice6
+  libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 librsvg2-2
+  librsvg2-common libsm6 libthai-data libthai0 libvdpau1 libwayland-cursor0
+  libwayland-egl1 libxaw7 libxcursor1 libxcvt0 libxfont2 libxinerama1
+  libxkbfile1 libxmu6 libxnvctrl0 libxt6 mesa-vdpau-drivers python3-xkit
+  screen-resolution-extra session-migration switcheroo-control ubuntu-mono
+  vdpau-driver-all x11-xkb-utils xcvt xfonts-base xfonts-encodings
+  xfonts-utils xserver-common xserver-xorg-core
+Use 'apt autoremove' to remove them.
+The following additional packages will be installed:
+  autotools-dev gir1.2-json-1.0 libevent-2.1-7 libfuse2 libgmpxx4ldbl
+  libgnutls-dane0 libgnutls-openssl27 libgnutls30 libgnutlsxx28 libidn2-dev
+  libp11-kit-dev libp11-kit0 libtasn1-6 libtss2-rc0 libtss2-tctildr0
+  libunbound8 nettle-dev tcl-expect
+Suggested packages:
+  autoconf-archive gnu-standards autoconf-doc gettext tk8.6 gawk-doc gmp-doc
+  libgmp10-doc libmpfr-dev dns-root-data gnutls-doc libjson-glib-doc
+  p11-kit-doc seccomp libtool-doc gfortran | fortran95-compiler gcj-jdk
+  python-cryptography-doc python3-cryptography-vectors
+Recommended packages:
+  libtasn1-doc libltdl-dev
+The following NEW packages will be installed:
+  autoconf automake autotools-dev expect gir1.2-json-1.0 gnutls-bin
+  libevent-2.1-7 libfuse-dev libfuse2 libgmp-dev libgmpxx4ldbl libgnutls-dane0
+  libgnutls-openssl27 libgnutls28-dev libgnutlsxx28 libidn2-dev
+  libjson-glib-dev libp11-kit-dev libseccomp-dev libtasn1-6-dev libtool
+  libtool-bin libtss2-rc0 libtss2-tctildr0 libunbound8 nettle-dev socat
+  tcl-expect tpm2-tools
+The following packages will be upgraded:
+  gawk libgnutls30 libp11-kit0 libtasn1-6 net-tools python3-cryptography
+6 upgraded, 29 newly installed, 0 to remove and 265 not upgraded.
+Need to get 9451 kB of archives.
+After this operation, 30.2 MB of additional disk space will be used.
+Get:1 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 gawk amd64 1:5.1.0-1ubuntu0.2 [447 kB]
+Get:2 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libp11-kit0 amd64 0.24.0-6ubuntu0.1 [252 kB]
+Get:3 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libtasn1-6 amd64 4.18.0-4ubuntu0.2 [43.6 kB]
+Get:4 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libgnutls30 amd64 3.7.3-4ubuntu1.9 [971 kB]
+Get:5 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 autoconf all 2.71-2 [338 kB]
+Get:6 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 autotools-dev all 20220109.1 [44.9 kB]
+Get:7 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 automake all 1:1.16.5-1.3 [558 kB]
+Get:8 http://mirrors.edge.kernel.org/ubuntu jammy/universe amd64 tcl-expect amd64 5.45.4-2build1 [105 kB]
+Get:9 http://mirrors.edge.kernel.org/ubuntu jammy/universe amd64 expect amd64 5.45.4-2build1 [137 kB]
+Get:10 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 gir1.2-json-1.0 amd64 1.6.6-1build1 [8874 B]
+Get:11 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libevent-2.1-7 amd64 2.1.12-stable-1ubuntu0.2 [149 kB]
+Get:12 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libunbound8 amd64 1.13.1-1ubuntu5.17 [404 kB]
+Get:13 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libgnutls-dane0 amd64 3.7.3-4ubuntu1.9 [22.6 kB]
+Get:14 http://mirrors.edge.kernel.org/ubuntu jammy-updates/universe amd64 gnutls-bin amd64 3.7.3-4ubuntu1.9 [257 kB]
+Get:15 http://mirrors.edge.kernel.org/ubuntu jammy/universe amd64 libfuse2 amd64 2.9.9-5ubuntu3 [90.3 kB]
+Get:16 http://mirrors.edge.kernel.org/ubuntu jammy/universe amd64 libfuse-dev amd64 2.9.9-5ubuntu3 [987 kB]
+Get:17 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 libgmpxx4ldbl amd64 2:6.2.1+dfsg-3ubuntu1 [9580 B]
+Get:18 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 libgmp-dev amd64 2:6.2.1+dfsg-3ubuntu1 [337 kB]
+Get:19 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libgnutls-openssl27 amd64 3.7.3-4ubuntu1.9 [22.8 kB]
+Get:20 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libgnutlsxx28 amd64 3.7.3-4ubuntu1.9 [16.4 kB]
+Get:21 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 libidn2-dev amd64 2.3.2-2build1 [86.7 kB]
+Get:22 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libp11-kit-dev amd64 0.24.0-6ubuntu0.1 [20.2 kB]
+Get:23 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libtasn1-6-dev amd64 4.18.0-4ubuntu0.2 [91.8 kB]
+Get:24 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 nettle-dev amd64 3.7.3-1build2 [1135 kB]
+Get:25 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libgnutls28-dev amd64 3.7.3-4ubuntu1.9 [1047 kB]
+Get:26 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 libjson-glib-dev amd64 1.6.6-1build1 [96.7 kB]
+Get:27 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libseccomp-dev amd64 2.5.3-2ubuntu3~22.04.1 [94.1 kB]
+Get:28 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 libtool all 2.4.6-15build2 [164 kB]
+Get:29 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 libtool-bin amd64 2.4.6-15build2 [81.5 kB]
+Get:30 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libtss2-rc0 amd64 3.2.0-1ubuntu1.1 [11.7 kB]
+Get:31 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 libtss2-tctildr0 amd64 3.2.0-1ubuntu1.1 [16.3 kB]
+Get:32 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 net-tools amd64 1.60+git20181103.0eebece-1ubuntu5.4 [204 kB]
+Get:33 http://mirrors.edge.kernel.org/ubuntu jammy-updates/main amd64 python3-cryptography amd64 3.4.8-1ubuntu2.4 [236 kB]
+Get:34 http://mirrors.edge.kernel.org/ubuntu jammy/universe amd64 tpm2-tools amd64 5.2-1build1 [613 kB]
+Get:35 http://mirrors.edge.kernel.org/ubuntu jammy/main amd64 socat amd64 <ip>-3ubuntu4 [349 kB]
+Fetched 9451 kB in 1s (12.0 MB/s)
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 156365 files and directories currently installed.)
+Preparing to unpack .../gawk_1%3a5.1.0-1ubuntu0.2_amd64.deb ...
+Unpacking gawk (1:5.1.0-1ubuntu0.2) over (1:5.1.0-1ubuntu0.1) ...
+Preparing to unpack .../libp11-kit0_0.24.0-6ubuntu0.1_amd64.deb ...
+Unpacking libp11-kit0:amd64 (0.24.0-6ubuntu0.1) over (0.24.0-6build1) ...
+Setting up libp11-kit0:amd64 (0.24.0-6ubuntu0.1) ...
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 156365 files and directories currently installed.)
+Preparing to unpack .../libtasn1-6_4.18.0-4ubuntu0.2_amd64.deb ...
+Unpacking libtasn1-6:amd64 (4.18.0-4ubuntu0.2) over (4.18.0-4ubuntu0.1) ...
+Setting up libtasn1-6:amd64 (4.18.0-4ubuntu0.2) ...
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 156365 files and directories currently installed.)
+Preparing to unpack .../libgnutls30_3.7.3-4ubuntu1.9_amd64.deb ...
+Unpacking libgnutls30:amd64 (3.7.3-4ubuntu1.9) over (3.7.3-4ubuntu1.6) ...
+Setting up libgnutls30:amd64 (3.7.3-4ubuntu1.9) ...
+Selecting previously unselected package autoconf.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 156365 files and directories currently installed.)
+Preparing to unpack .../00-autoconf_2.71-2_all.deb ...
+Unpacking autoconf (2.71-2) ...
+Selecting previously unselected package autotools-dev.
+Preparing to unpack .../01-autotools-dev_20220109.1_all.deb ...
+Unpacking autotools-dev (20220109.1) ...
+Selecting previously unselected package automake.
+Preparing to unpack .../02-automake_1%3a1.16.5-1.3_all.deb ...
+Unpacking automake (1:1.16.5-1.3) ...
+Selecting previously unselected package tcl-expect:amd64.
+Preparing to unpack .../03-tcl-expect_5.45.4-2build1_amd64.deb ...
+Unpacking tcl-expect:amd64 (5.45.4-2build1) ...
+Selecting previously unselected package expect.
+Preparing to unpack .../04-expect_5.45.4-2build1_amd64.deb ...
+Unpacking expect (5.45.4-2build1) ...
+Selecting previously unselected package gir1.2-json-1.0:amd64.
+Preparing to unpack .../05-gir1.2-json-1.0_1.6.6-1build1_amd64.deb ...
+Unpacking gir1.2-json-1.0:amd64 (1.6.6-1build1) ...
+Selecting previously unselected package libevent-2.1-7:amd64.
+Preparing to unpack .../06-libevent-2.1-7_2.1.12-stable-1ubuntu0.2_amd64.deb ...
+Unpacking libevent-2.1-7:amd64 (2.1.12-stable-1ubuntu0.2) ...
+Selecting previously unselected package libunbound8:amd64.
+Preparing to unpack .../07-libunbound8_1.13.1-1ubuntu5.17_amd64.deb ...
+Unpacking libunbound8:amd64 (1.13.1-1ubuntu5.17) ...
+Selecting previously unselected package libgnutls-dane0:amd64.
+Preparing to unpack .../08-libgnutls-dane0_3.7.3-4ubuntu1.9_amd64.deb ...
+Unpacking libgnutls-dane0:amd64 (3.7.3-4ubuntu1.9) ...
+Selecting previously unselected package gnutls-bin.
+Preparing to unpack .../09-gnutls-bin_3.7.3-4ubuntu1.9_amd64.deb ...
+Unpacking gnutls-bin (3.7.3-4ubuntu1.9) ...
+Selecting previously unselected package libfuse2:amd64.
+Preparing to unpack .../10-libfuse2_2.9.9-5ubuntu3_amd64.deb ...
+Unpacking libfuse2:amd64 (2.9.9-5ubuntu3) ...
+Selecting previously unselected package libfuse-dev:amd64.
+Preparing to unpack .../11-libfuse-dev_2.9.9-5ubuntu3_amd64.deb ...
+Unpacking libfuse-dev:amd64 (2.9.9-5ubuntu3) ...
+Selecting previously unselected package libgmpxx4ldbl:amd64.
+Preparing to unpack .../12-libgmpxx4ldbl_2%3a6.2.1+dfsg-3ubuntu1_amd64.deb ...
+Unpacking libgmpxx4ldbl:amd64 (2:6.2.1+dfsg-3ubuntu1) ...
+Selecting previously unselected package libgmp-dev:amd64.
+Preparing to unpack .../13-libgmp-dev_2%3a6.2.1+dfsg-3ubuntu1_amd64.deb ...
+Unpacking libgmp-dev:amd64 (2:6.2.1+dfsg-3ubuntu1) ...
+Selecting previously unselected package libgnutls-openssl27:amd64.
+Preparing to unpack .../14-libgnutls-openssl27_3.7.3-4ubuntu1.9_amd64.deb ...
+Unpacking libgnutls-openssl27:amd64 (3.7.3-4ubuntu1.9) ...
+Selecting previously unselected package libgnutlsxx28:amd64.
+Preparing to unpack .../15-libgnutlsxx28_3.7.3-4ubuntu1.9_amd64.deb ...
+Unpacking libgnutlsxx28:amd64 (3.7.3-4ubuntu1.9) ...
+Selecting previously unselected package libidn2-dev:amd64.
+Preparing to unpack .../16-libidn2-dev_2.3.2-2build1_amd64.deb ...
+Unpacking libidn2-dev:amd64 (2.3.2-2build1) ...
+Selecting previously unselected package libp11-kit-dev:amd64.
+Preparing to unpack .../17-libp11-kit-dev_0.24.0-6ubuntu0.1_amd64.deb ...
+Unpacking libp11-kit-dev:amd64 (0.24.0-6ubuntu0.1) ...
+Selecting previously unselected package libtasn1-6-dev:amd64.
+Preparing to unpack .../18-libtasn1-6-dev_4.18.0-4ubuntu0.2_amd64.deb ...
+Unpacking libtasn1-6-dev:amd64 (4.18.0-4ubuntu0.2) ...
+Selecting previously unselected package nettle-dev:amd64.
+Preparing to unpack .../19-nettle-dev_3.7.3-1build2_amd64.deb ...
+Unpacking nettle-dev:amd64 (3.7.3-1build2) ...
+Selecting previously unselected package libgnutls28-dev:amd64.
+Preparing to unpack .../20-libgnutls28-dev_3.7.3-4ubuntu1.9_amd64.deb ...
+Unpacking libgnutls28-dev:amd64 (3.7.3-4ubuntu1.9) ...
+Selecting previously unselected package libjson-glib-dev:amd64.
+Preparing to unpack .../21-libjson-glib-dev_1.6.6-1build1_amd64.deb ...
+Unpacking libjson-glib-dev:amd64 (1.6.6-1build1) ...
+Selecting previously unselected package libseccomp-dev:amd64.
+Preparing to unpack .../22-libseccomp-dev_2.5.3-2ubuntu3~22.04.1_amd64.deb ...
+Unpacking libseccomp-dev:amd64 (2.5.3-2ubuntu3~22.04.1) ...
+Selecting previously unselected package libtool.
+Preparing to unpack .../23-libtool_2.4.6-15build2_all.deb ...
+Unpacking libtool (2.4.6-15build2) ...
+Selecting previously unselected package libtool-bin.
+Preparing to unpack .../24-libtool-bin_2.4.6-15build2_amd64.deb ...
+Unpacking libtool-bin (2.4.6-15build2) ...
+Selecting previously unselected package libtss2-rc0:amd64.
+Preparing to unpack .../25-libtss2-rc0_3.2.0-1ubuntu1.1_amd64.deb ...
+Unpacking libtss2-rc0:amd64 (3.2.0-1ubuntu1.1) ...
+Selecting previously unselected package libtss2-tctildr0:amd64.
+Preparing to unpack .../26-libtss2-tctildr0_3.2.0-1ubuntu1.1_amd64.deb ...
+Unpacking libtss2-tctildr0:amd64 (3.2.0-1ubuntu1.1) ...
+Preparing to unpack .../27-net-tools_1.60+git20181103.0eebece-1ubuntu5.4_amd64.deb ...
+Unpacking net-tools (1.60+git20181103.0eebece-1ubuntu5.4) over (1.60+git20181103.0eebece-1ubuntu5) ...
+Preparing to unpack .../28-python3-cryptography_3.4.8-1ubuntu2.4_amd64.deb ...
+Unpacking python3-cryptography (3.4.8-1ubuntu2.4) over (3.4.8-1ubuntu2.2) ...
+Selecting previously unselected package tpm2-tools.
+Preparing to unpack .../29-tpm2-tools_5.2-1build1_amd64.deb ...
+Unpacking tpm2-tools (5.2-1build1) ...
+Selecting previously unselected package socat.
+Preparing to unpack .../30-socat_1.7.4.1-3ubuntu4_amd64.deb ...
+Unpacking socat (<ip>-3ubuntu4) ...
+Setting up net-tools (1.60+git20181103.0eebece-1ubuntu5.4) ...
+Setting up libseccomp-dev:amd64 (2.5.3-2ubuntu3~22.04.1) ...
+Setting up libgnutls-openssl27:amd64 (3.7.3-4ubuntu1.9) ...
+Setting up gawk (1:5.1.0-1ubuntu0.2) ...
+Setting up tcl-expect:amd64 (5.45.4-2build1) ...
+Setting up libfuse2:amd64 (2.9.9-5ubuntu3) ...
+Setting up autotools-dev (20220109.1) ...
+Setting up libgmpxx4ldbl:amd64 (2:6.2.1+dfsg-3ubuntu1) ...
+Setting up python3-cryptography (3.4.8-1ubuntu2.4) ...
+Setting up socat (<ip>-3ubuntu4) ...
+Setting up libevent-2.1-7:amd64 (2.1.12-stable-1ubuntu0.2) ...
+Setting up libtss2-tctildr0:amd64 (3.2.0-1ubuntu1.1) ...
+Setting up libgnutlsxx28:amd64 (3.7.3-4ubuntu1.9) ...
+Setting up libidn2-dev:amd64 (2.3.2-2build1) ...
+Setting up autoconf (2.71-2) ...
+Setting up gir1.2-json-1.0:amd64 (1.6.6-1build1) ...
+Setting up libtss2-rc0:amd64 (3.2.0-1ubuntu1.1) ...
+Setting up libtasn1-6-dev:amd64 (4.18.0-4ubuntu0.2) ...
+Setting up libp11-kit-dev:amd64 (0.24.0-6ubuntu0.1) ...
+Setting up tpm2-tools (5.2-1build1) ...
+Setting up automake (1:1.16.5-1.3) ...
+update-alternatives: using /usr/bin/automake-1.16 to provide /usr/bin/automake (automake) in auto mode
+Setting up libgmp-dev:amd64 (2:6.2.1+dfsg-3ubuntu1) ...
+Setting up nettle-dev:amd64 (3.7.3-1build2) ...
+Setting up libtool (2.4.6-15build2) ...
+Setting up libjson-glib-dev:amd64 (1.6.6-1build1) ...
+Setting up expect (5.45.4-2build1) ...
+Setting up libfuse-dev:amd64 (2.9.9-5ubuntu3) ...
+Setting up libunbound8:amd64 (1.13.1-1ubuntu5.17) ...
+Setting up libtool-bin (2.4.6-15build2) ...
+Setting up libgnutls-dane0:amd64 (3.7.3-4ubuntu1.9) ...
+Setting up gnutls-bin (3.7.3-4ubuntu1.9) ...
+Setting up libgnutls28-dev:amd64 (3.7.3-4ubuntu1.9) ...
+Processing triggers for man-db (2.10.2-1) ...
+Processing triggers for install-info (6.8-4build1) ...
+Processing triggers for libc-bin (2.35-0ubuntu3.9) ...
+NEEDRESTART-VER: 3.5
+NEEDRESTART-KCUR: 6.8.0-59-generic
+NEEDRESTART-KEXP: 6.8.0-59-generic
+NEEDRESTART-KSTA: 1
+NEEDRESTART-SVC: containerd.service
+NEEDRESTART-SVC: cron.service
+NEEDRESTART-SVC: dbus.service
+NEEDRESTART-SVC: docker.service
+NEEDRESTART-SVC: getty@tty1.service
+NEEDRESTART-SVC: irqbalance.service
+NEEDRESTART-SVC: multipathd.service
+NEEDRESTART-SVC: networkd-dispatcher.service
+NEEDRESTART-SVC: packagekit.service
+NEEDRESTART-SVC: polkit.service
+NEEDRESTART-SVC: qemu-guest-agent.service
+NEEDRESTART-SVC: rsyslog.service
+NEEDRESTART-SVC: serial-getty@ttyS0.service
+NEEDRESTART-SVC: switcheroo-control.service
+NEEDRESTART-SVC: systemd-journald.service
+NEEDRESTART-SVC: systemd-logind.service
+NEEDRESTART-SVC: systemd-manager
+NEEDRESTART-SVC: systemd-networkd.service
+NEEDRESTART-SVC: systemd-resolved.service
+NEEDRESTART-SVC: systemd-timesyncd.service
+NEEDRESTART-SVC: systemd-udevd.service
+NEEDRESTART-SVC: user@0.service
+autoreconf: export WARNINGS=
+autoreconf: Entering directory '.'
+autoreconf: configure.ac: not using Gettext
+autoreconf: running: aclocal --force -I m4
+autoreconf: configure.ac: tracing
+autoreconf: running: libtoolize --copy --force
+libtoolize: putting auxiliary files in AC_CONFIG_AUX_DIR, '.'.
+libtoolize: copying file './ltmain.sh'
+libtoolize: putting macros in AC_CONFIG_MACRO_DIRS, 'm4'.
+libtoolize: copying file 'm4/libtool.m4'
+libtoolize: copying file 'm4/ltoptions.m4'
+libtoolize: copying file 'm4/ltsugar.m4'
+libtoolize: copying file 'm4/ltversion.m4'
+libtoolize: copying file 'm4/lt~obsolete.m4'
+autoreconf: configure.ac: not using Intltool
+autoreconf: configure.ac: not using Gtkdoc
+autoreconf: running: aclocal --force -I m4
+autoreconf: running: /usr/bin/autoconf --force
+autoreconf: running: /usr/bin/autoheader --force
+autoreconf: running: automake --add-missing --copy --force-missing
+configure.ac:57: installing './compile'
+configure.ac:13: installing './config.guess'
+configure.ac:13: installing './config.sub'
+configure.ac:14: installing './install-sh'
+configure.ac:14: installing './missing'
+src/Makefile.am: installing './depcomp'
+parallel-tests: installing './test-driver'
+autoreconf: Leaving directory '.'
+checking build system type... x86_64-pc-linux-gnu
+checking host system type... x86_64-pc-linux-gnu
+checking target system type... x86_64-pc-linux-gnu
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether build environment is sane... yes
+checking for a race-free mkdir -p... /usr/bin/mkdir -p
+checking for gawk... gawk
+checking whether make sets $(MAKE)... yes
+checking whether make supports nested variables... yes
+checking whether make supports nested variables... (cached) yes
+checking for debug-enabled build... no
+checking whether make supports the include directive... yes (GNU style)
+checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables... 
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether the compiler supports GNU C... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to enable C11 features... none needed
+checking whether gcc understands -c and -o together... yes
+checking dependency style of gcc... gcc3
+checking whether the linker accepts -Wl,--version-script=./src/test.syms... yes
+Building with TPM2 support
+checking for stdio.h... yes
+checking for stdlib.h... yes
+checking for string.h... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for strings.h... yes
+checking for sys/stat.h... yes
+checking for sys/types.h... yes
+checking for unistd.h... yes
+checking for AES_set_encrypt_key in -lcrypto... yes
+checking for openssl/aes.h... yes
+Building with openssl crypto library
+checking for EVP_CIPHER_CTX_new in -lcrypto... yes
+checking for EVP_EncryptInit_ex in -lcrypto... yes
+checking for EVP_aes_128_cbc in -lcrypto... yes
+checking for EVP_des_ede3_cbc in -lcrypto... yes
+checking for EVP_camellia_128_cbc in -lcrypto... yes
+checking for DES_random_key in -lcrypto... yes
+checking for EVP_CIPHER_CTX_iv in -lcrypto... yes
+checking for EC_KEY_set_group in -lcrypto... yes
+checking for EC_KEY_generate_key in -lcrypto... yes
+checking for EC_KEY_get0_private_key in -lcrypto... yes
+checking for ECDSA_SIG_new in -lcrypto... yes
+checking for ECDSA_SIG_set0 in -lcrypto... yes
+checking for ECDSA_do_verify in -lcrypto... yes
+checking for ECDSA_do_sign in -lcrypto... yes
+checking for EC_KEY_set_group in -lcrypto... (cached) yes
+checking for RSA_set0_key in -lcrypto... yes
+checking for RSA_set0_factors in -lcrypto... yes
+checking for RSA_set0_crt_params in -lcrypto... yes
+checking for RSA_generate_key_ex in -lcrypto... yes
+checking for EVP_PKEY_CTX_new in -lcrypto... yes
+checking for EVP_PKEY_assign in -lcrypto... yes
+checking for EVP_PKEY_encrypt_init in -lcrypto... yes
+checking for EVP_PKEY_encrypt in -lcrypto... yes
+checking for EVP_PKEY_decrypt_init in -lcrypto... yes
+checking for EVP_PKEY_decrypt in -lcrypto... yes
+checking for EVP_PKEY_sign_init in -lcrypto... yes
+checking for EVP_PKEY_sign in -lcrypto... yes
+checking for EVP_PKEY_verify_init in -lcrypto... yes
+checking for EVP_PKEY_verify in -lcrypto... yes
+checking for EVP_get_digestbyname in -lcrypto... yes
+checking whether EVP_PKEY_CTX_set0_rsa_oaep_label is defined in <openssl/rsa.h>... no
+checking for EVP_PKEY_CTX_set0_rsa_oaep_label in -lcrypto... yes
+checking whether EVP_PKEY_CTX_set_rsa_padding is defined in <openssl/rsa.h>... no
+checking for EVP_PKEY_CTX_set_rsa_padding in -lcrypto... yes
+checking whether EVP_PKEY_CTX_set_rsa_oaep_md is defined in <openssl/rsa.h>... no
+checking for EVP_PKEY_CTX_set_rsa_oaep_md in -lcrypto... yes
+checking whether EVP_PKEY_CTX_set_signature_md is defined in <openssl/evp.h>... no
+checking for EVP_PKEY_CTX_set_signature_md in -lcrypto... yes
+checking whether OSSL_KDF_NAME_SSKDF is defined in <openssl/core_names.h>... yes
+checking for EC_POINT_get_affine_coordinates in -lcrypto... yes
+checking how to print strings... printf
+checking for a sed that does not truncate output... /usr/bin/sed
+checking for grep that handles long lines and -e... /usr/bin/grep
+checking for egrep... /usr/bin/grep -E
+checking for fgrep... /usr/bin/grep -F
+checking for ld used by gcc... /usr/bin/ld
+checking if the linker (/usr/bin/ld) is GNU ld... yes
+checking for BSD- or MS-compatible name lister (nm)... /usr/bin/nm -B
+checking the name lister (/usr/bin/nm -B) interface... BSD nm
+checking whether ln -s works... yes
+checking the maximum length of command line arguments... 1572864
+checking how to convert x86_64-pc-linux-gnu file names to x86_64-pc-linux-gnu format... func_convert_file_noop
+checking how to convert x86_64-pc-linux-gnu file names to toolchain format... func_convert_file_noop
+checking for /usr/bin/ld option to reload object files... -r
+checking for objdump... objdump
+checking how to recognize dependent libraries... pass_all
+checking for dlltool... no
+checking how to associate runtime and link libraries... printf %s\n
+checking for ar... ar
+checking for archiver @FILE support... @
+checking for strip... strip
+checking for ranlib... ranlib
+checking command to parse /usr/bin/nm -B output from gcc object... ok
+checking for sysroot... no
+checking for a working dd... /usr/bin/dd
+checking how to truncate binary pipes... /usr/bin/dd bs=4096 count=1
+checking for mt... mt
+checking if mt is a manifest tool... no
+checking for dlfcn.h... yes
+checking for objdir... .libs
+checking if gcc supports -fno-rtti -fno-exceptions... no
+checking for gcc option to produce PIC... -fPIC -DPIC
+checking if gcc PIC flag -fPIC -DPIC works... yes
+checking if gcc static flag -static works... yes
+checking if gcc supports -c -o file.o... yes
+checking if gcc supports -c -o file.o... (cached) yes
+checking whether the gcc linker (/usr/bin/ld -m elf_x86_64) supports shared libraries... yes
+checking whether -lc should be explicitly linked in... no
+checking dynamic linker characteristics... GNU/Linux ld.so
+checking how to hardcode library paths into programs... immediate
+checking whether stripping libraries is possible... yes
+checking if libtool supports shared libraries... yes
+checking whether to build shared libraries... yes
+checking whether to build static libraries... yes
+checking for gcc... (cached) gcc
+checking whether the compiler supports GNU C... (cached) yes
+checking whether gcc accepts -g... (cached) yes
+checking for gcc option to enable C11 features... (cached) none needed
+checking whether gcc understands -c and -o together... (cached) yes
+checking dependency style of gcc... (cached) gcc3
+checking for g++... g++
+checking whether the compiler supports GNU C++... yes
+checking whether g++ accepts -g... yes
+checking for g++ option to enable C++11 features... none needed
+checking dependency style of g++... gcc3
+checking how to run the C++ preprocessor... g++ -E
+checking for ld used by g++... /usr/bin/ld -m elf_x86_64
+checking if the linker (/usr/bin/ld -m elf_x86_64) is GNU ld... yes
+checking whether the g++ linker (/usr/bin/ld -m elf_x86_64) supports shared libraries... yes
+checking for g++ option to produce PIC... -fPIC -DPIC
+checking if g++ PIC flag -fPIC -DPIC works... yes
+checking if g++ static flag -static works... yes
+checking if g++ supports -c -o file.o... yes
+checking if g++ supports -c -o file.o... (cached) yes
+checking whether the g++ linker (/usr/bin/ld -m elf_x86_64) supports shared libraries... yes
+checking dynamic linker characteristics... (cached) GNU/Linux ld.so
+checking how to hardcode library paths into programs... immediate
+checking for an ANSI C-conforming const... yes
+checking for inline... inline
+checking for size_t... yes
+checking for clock_gettime in -lc... yes
+checking whether linker supports -Wl,-z,relro... yes
+checking whether linker supports -Wl,-z,now... yes
+checking that generated files are newer than configure... done
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating dist/libtpms.spec
+config.status: creating include/Makefile
+config.status: creating include/libtpms/Makefile
+config.status: creating include/libtpms/tpm_library.h
+config.status: creating man/Makefile
+config.status: creating man/man3/Makefile
+config.status: creating src/Makefile
+config.status: creating libtpms.pc
+config.status: creating tests/Makefile
+config.status: creating config.h
+config.status: executing depfiles commands
+config.status: executing libtool commands
+
+AM_CFLAGS=-g -O2 -DUSE_OPENSSL_FUNCTIONS_SYMMETRIC=1 -DUSE_OPENSSL_FUNCTIONS_EC=1 -DUSE_OPENSSL_FUNCTIONS_ECDSA=1 -DUSE_OPENSSL_FUNCTIONS_RSA=1 -DUSE_OPENSSL_FUNCTIONS_SSKDF=1 -DUSE_EC_POINT_GET_AFFINE_COORDINATES_API=1  -Wall -Werror -Wshadow -Wreturn-type -Wsign-compare -Wno-self-assign -Wmissing-prototypes
+HARDENING_CFLAGS=-fstack-protector-strong  -D_FORTIFY_SOURCE=2
+HARDENING_LDFLAGS= -Wl,-z,relro -Wl,-z,now
+AM_LDFLAGS= 
+
+Version to build        : 0.10.1
+Crypto library          : openssl
+Debug build             : no
+With TPM1.2 support     : yes
+With TPM2 support       : yes
+HAVE_VERSION_SCRIPT     : yes
+Use openssl crypto for  : symmetric (AES, TDES) general elliptic curve (EC) elliptic curve (ECDSA) RSA SSKDF (KDFe) 
+Test coverage           : no
+Static build            : yes
+Statically linked tests : yes
+
+
+make  all-recursive
+make[1]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1'
+Making all in include
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+Making all in libtpms
+make[3]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/include/libtpms'
+make[3]: Nothing to be done for 'all'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/include/libtpms'
+make[3]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+make[3]: Nothing to be done for 'all-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+Making all in man
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+Making all in man3
+make[3]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/man/man3'
+make[3]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/man/man3'
+make[3]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+make[3]: Nothing to be done for 'all-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+Making all in src
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/src'
+  CC       libtpms_la-disabled_interface.lo
+  CC       libtpms_la-tpm_debug.lo
+  CC       libtpms_la-tpm_memory.lo
+  CC       libtpms_la-tpm_nvfile.lo
+  CC       libtpms_la-tpm_library.lo
+  CC       libtpms_tpm12_la-tpm_tpm12_interface.lo
+  CC       libtpms_tpm12_la-tpm_tpm12_tis.lo
+  CC       libtpms_tpm2_la-tpm_tpm2_interface.lo
+  CC       libtpms_tpm2_la-tpm_tpm2_tis.lo
+  CC       tpm2/libtpms_tpm2_la-BackwardsCompatibilityBitArray.lo
+  CC       tpm2/libtpms_tpm2_la-BackwardsCompatibilityObject.lo
+  CC       tpm2/libtpms_tpm2_la-LibtpmsCallbacks.lo
+  CC       tpm2/libtpms_tpm2_la-NVMarshal.lo
+  CC       tpm2/libtpms_tpm2_la-RuntimeAlgorithm.lo
+  CC       tpm2/libtpms_tpm2_la-RuntimeAttributes.lo
+  CC       tpm2/libtpms_tpm2_la-RuntimeCommands.lo
+  CC       tpm2/libtpms_tpm2_la-RuntimeProfile.lo
+  CC       tpm2/libtpms_tpm2_la-StateMarshal.lo
+  CC       tpm2/libtpms_tpm2_la-Volatile.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_admin.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_audit.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_auth.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_cryptoh.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_counter.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_daa.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_delegate.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_digest.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_error.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_global.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_identity.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_init.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_libtpms_io.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_key.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_load.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_maint.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_migration.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_nonce.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_nvram.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_openssl_helpers.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_owner.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_pcr.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_permanent.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_platform.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_process.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_secret.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_session.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_sizedbuffer.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_startup.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_store.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_storage.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_ticks.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_time.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_transport.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_ver.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_svnrevision.lo
+  CC       tpm12/libtpms_tpm12_la-tpm_crypto.lo
+  CC       tpm2/libtpms_tpm2_la-ACT_spt.lo
+  CC       tpm2/libtpms_tpm2_la-ACTCommands.lo
+  CC       tpm2/libtpms_tpm2_la-AlgorithmCap.lo
+  CC       tpm2/libtpms_tpm2_la-AlgorithmTests.lo
+  CC       tpm2/libtpms_tpm2_la-AsymmetricCommands.lo
+  CC       tpm2/libtpms_tpm2_la-AttestationCommands.lo
+  CC       tpm2/libtpms_tpm2_la-Attest_spt.lo
+  CC       tpm2/libtpms_tpm2_la-AuditCommands.lo
+  CC       tpm2/libtpms_tpm2_la-Bits.lo
+  CC       tpm2/libtpms_tpm2_la-BnEccConstants.lo
+  CC       tpm2/libtpms_tpm2_la-BnConvert.lo
+  CC       tpm2/libtpms_tpm2_la-BnMath.lo
+  CC       tpm2/libtpms_tpm2_la-BnMemory.lo
+  CC       tpm2/libtpms_tpm2_la-Cancel.lo
+  CC       tpm2/libtpms_tpm2_la-CapabilityCommands.lo
+  CC       tpm2/libtpms_tpm2_la-Clock.lo
+  CC       tpm2/libtpms_tpm2_la-ClockCommands.lo
+  CC       tpm2/libtpms_tpm2_la-CommandAudit.lo
+  CC       tpm2/libtpms_tpm2_la-CommandCodeAttributes.lo
+  CC       tpm2/libtpms_tpm2_la-CommandDispatcher.lo
+  CC       tpm2/libtpms_tpm2_la-ContextCommands.lo
+  CC       tpm2/libtpms_tpm2_la-Context_spt.lo
+  CC       tpm2/libtpms_tpm2_la-CryptEccData.lo
+  CC       tpm2/libtpms_tpm2_la-CryptSelfTest.lo
+  CC       tpm2/libtpms_tpm2_la-CryptUtil.lo
+  CC       tpm2/libtpms_tpm2_la-DA.lo
+  CC       tpm2/libtpms_tpm2_la-DebugHelpers.lo
+  CC       tpm2/libtpms_tpm2_la-DictionaryCommands.lo
+  CC       tpm2/libtpms_tpm2_la-DuplicationCommands.lo
+  CC       tpm2/libtpms_tpm2_la-EACommands.lo
+  CC       tpm2/libtpms_tpm2_la-EncryptDecrypt_spt.lo
+  CC       tpm2/libtpms_tpm2_la-Entity.lo
+  CC       tpm2/libtpms_tpm2_la-Entropy.lo
+  CC       tpm2/libtpms_tpm2_la-EphemeralCommands.lo
+  CC       tpm2/libtpms_tpm2_la-ExecCommand.lo
+  CC       tpm2/libtpms_tpm2_la-ExtraData.lo
+  CC       tpm2/libtpms_tpm2_la-Global.lo
+  CC       tpm2/libtpms_tpm2_la-Handle.lo
+  CC       tpm2/libtpms_tpm2_la-HashCommands.lo
+  CC       tpm2/libtpms_tpm2_la-Hierarchy.lo
+  CC       tpm2/libtpms_tpm2_la-HierarchyCommands.lo
+  CC       tpm2/libtpms_tpm2_la-IntegrityCommands.lo
+  CC       tpm2/libtpms_tpm2_la-IoBuffers.lo
+  CC       tpm2/libtpms_tpm2_la-Locality.lo
+  CC       tpm2/libtpms_tpm2_la-LocalityPlat.lo
+  CC       tpm2/libtpms_tpm2_la-ManagementCommands.lo
+  CC       tpm2/libtpms_tpm2_la-Manufacture.lo
+  CC       tpm2/libtpms_tpm2_la-Marshal.lo
+  CC       tpm2/libtpms_tpm2_la-MathOnByteBuffers.lo
+  CC       tpm2/libtpms_tpm2_la-Memory.lo
+  CC       tpm2/libtpms_tpm2_la-NVCommands.lo
+  CC       tpm2/libtpms_tpm2_la-NVDynamic.lo
+  CC       tpm2/libtpms_tpm2_la-NVMem.lo
+  CC       tpm2/libtpms_tpm2_la-NVReserved.lo
+  CC       tpm2/libtpms_tpm2_la-NV_spt.lo
+  CC       tpm2/libtpms_tpm2_la-Object.lo
+  CC       tpm2/libtpms_tpm2_la-ObjectCommands.lo
+  CC       tpm2/libtpms_tpm2_la-Object_spt.lo
+  CC       tpm2/libtpms_tpm2_la-PCR.lo
+  CC       tpm2/libtpms_tpm2_la-PlatformACT.lo
+  CC       tpm2/libtpms_tpm2_la-PlatformData.lo
+  CC       tpm2/libtpms_tpm2_la-PlatformPCR.lo
+  CC       tpm2/libtpms_tpm2_la-Policy_spt.lo
+  CC       tpm2/libtpms_tpm2_la-Power.lo
+  CC       tpm2/libtpms_tpm2_la-PowerPlat.lo
+  CC       tpm2/libtpms_tpm2_la-PP.lo
+  CC       tpm2/libtpms_tpm2_la-PPPlat.lo
+  CC       tpm2/libtpms_tpm2_la-PrimeData.lo
+  CC       tpm2/libtpms_tpm2_la-PropertyCap.lo
+  CC       tpm2/libtpms_tpm2_la-RandomCommands.lo
+  CC       tpm2/libtpms_tpm2_la-Response.lo
+  CC       tpm2/libtpms_tpm2_la-ResponseCodeProcessing.lo
+  CC       tpm2/libtpms_tpm2_la-RunCommand.lo
+  CC       tpm2/libtpms_tpm2_la-Session.lo
+  CC       tpm2/libtpms_tpm2_la-SessionCommands.lo
+  CC       tpm2/libtpms_tpm2_la-SessionProcess.lo
+  CC       tpm2/libtpms_tpm2_la-SigningCommands.lo
+  CC       tpm2/libtpms_tpm2_la-StartupCommands.lo
+  CC       tpm2/libtpms_tpm2_la-SymmetricCommands.lo
+  CC       tpm2/libtpms_tpm2_la-TestingCommands.lo
+  CC       tpm2/libtpms_tpm2_la-Ticket.lo
+  CC       tpm2/libtpms_tpm2_la-Time.lo
+  CC       tpm2/libtpms_tpm2_la-TpmAsn1.lo
+  CC       tpm2/libtpms_tpm2_la-TpmBigNumThunks.lo
+  CC       tpm2/libtpms_tpm2_la-TpmEcc_Signature_ECDAA.lo
+  CC       tpm2/libtpms_tpm2_la-TpmEcc_Signature_ECDSA.lo
+  CC       tpm2/libtpms_tpm2_la-TpmEcc_Signature_Schnorr.lo
+  CC       tpm2/libtpms_tpm2_la-TpmEcc_Signature_SM2.lo
+  CC       tpm2/libtpms_tpm2_la-TpmEcc_Signature_Util.lo
+  CC       tpm2/libtpms_tpm2_la-TpmEcc_Util.lo
+  CC       tpm2/libtpms_tpm2_la-TpmMath_Debug.lo
+  CC       tpm2/libtpms_tpm2_la-TpmMath_Util.lo
+  CC       tpm2/libtpms_tpm2_la-TpmSizeChecks.lo
+  CC       tpm2/libtpms_tpm2_la-TPMCmdp.lo
+  CC       tpm2/libtpms_tpm2_la-TpmFail.lo
+  CC       tpm2/libtpms_tpm2_la-Unique.lo
+  CC       tpm2/libtpms_tpm2_la-Unmarshal.lo
+  CC       tpm2/libtpms_tpm2_la-VendorInfo.lo
+  CC       tpm2/libtpms_tpm2_la-Vendor_TCG_Test.lo
+  CC       tpm2/libtpms_tpm2_la-X509_ECC.lo
+  CC       tpm2/libtpms_tpm2_la-X509_RSA.lo
+  CC       tpm2/libtpms_tpm2_la-X509_spt.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-BnToOsslMath.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptCmac.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptDes.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptEccCrypt.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptEccKeyExchange.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptEccMain.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptEccSignature.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptHash.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptPrime.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptPrimeSieve.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptRand.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptRsa.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptSmac.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-CryptSym.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-ExpDCache.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-Helpers.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-TpmToOsslDesSupport.lo
+  CC       tpm2/crypto/openssl/libtpms_tpm2_la-TpmToOsslSupport.lo
+  CCLD     libtpms_tpm12.la
+  CCLD     libtpms_tpm2.la
+  CCLD     libtpms.la
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/src'
+Making all in tests
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/tests'
+make[2]: Nothing to be done for 'all'.
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/tests'
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1'
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1'
+make[1]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1'
+Making install in include
+make[1]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+Making install in libtpms
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/include/libtpms'
+make[3]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/include/libtpms'
+make[3]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '/opt/tpm/include/libtpms'
+ /usr/bin/install -c -m 644 tpm_error.h tpm_library.h tpm_memory.h tpm_nvfilename.h tpm_tis.h tpm_types.h '/opt/tpm/include/libtpms'
+make[3]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/include/libtpms'
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/include/libtpms'
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+make[3]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+make[1]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/include'
+Making install in man
+make[1]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+Making install in man3
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/man/man3'
+make[3]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/man/man3'
+make[3]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '/opt/tpm/share/man/man3'
+ /usr/bin/install -c -m 644 TPM_Free.3 TPM_IO_Hash_Data.3 TPM_IO_Hash_End.3 TPMLIB_GetState.3 TPMLIB_SetDebugPrefix.3 TPMLIB_SetDebugLevel.3 TPM_IO_TpmEstablished_Reset.3 TPMLIB_Terminate.3 TPM_Realloc.3 TPM_IO_Hash_Start.3 TPM_IO_TpmEstablished_Get.3 TPMLIB_CancelCommand.3 TPMLIB_ChooseTPMVersion.3 TPMLIB_DecodeBlob.3 TPMLIB_GetInfo.3 TPMLIB_GetTPMProperty.3 TPMLIB_GetVersion.3 TPMLIB_MainInit.3 TPMLIB_Process.3 TPMLIB_SetDebugFD.3 TPMLIB_SetBufferSize.3 TPMLIB_SetProfile.3 TPMLIB_SetState.3 TPMLIB_RegisterCallbacks.3 TPMLIB_ValidateState.3 TPMLIB_VolatileAll_Store.3 TPMLIB_WasManufactured.3 TPM_Malloc.3 '/opt/tpm/share/man/man3'
+make[3]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/man/man3'
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/man/man3'
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+make[3]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+make[1]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/man'
+Making install in src
+make[1]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/src'
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/src'
+ /usr/bin/mkdir -p '/opt/tpm/lib'
+ /bin/bash ../libtool   --mode=install /usr/bin/install -c   libtpms.la '/opt/tpm/lib'
+libtool: install: /usr/bin/install -c .libs/libtpms.so.0.10.1 /opt/tpm/lib/libtpms.so.0.10.1
+libtool: install: (cd /opt/tpm/lib && { ln -s -f libtpms.so.0.10.1 libtpms.so.0 || { rm -f libtpms.so.0 && ln -s libtpms.so.0.10.1 libtpms.so.0; }; })
+libtool: install: (cd /opt/tpm/lib && { ln -s -f libtpms.so.0.10.1 libtpms.so || { rm -f libtpms.so && ln -s libtpms.so.0.10.1 libtpms.so; }; })
+libtool: install: /usr/bin/install -c .libs/libtpms.lai /opt/tpm/lib/libtpms.la
+libtool: install: /usr/bin/install -c .libs/libtpms.a /opt/tpm/lib/libtpms.a
+libtool: install: chmod 644 /opt/tpm/lib/libtpms.a
+libtool: install: ranlib /opt/tpm/lib/libtpms.a
+libtool: finish: PATH="/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/sbin" ldconfig -n /opt/tpm/lib
+----------------------------------------------------------------------
+Libraries have been installed in:
+   /opt/tpm/lib
+
+If you ever happen to want to link against installed libraries
+in a given directory, LIBDIR, you must either use libtool, and
+specify the full pathname of the library, or use the '-LLIBDIR'
+flag during linking and do at least one of the following:
+   - add LIBDIR to the 'LD_LIBRARY_PATH' environment variable
+     during execution
+   - add LIBDIR to the 'LD_RUN_PATH' environment variable
+     during linking
+   - use the '-Wl,-rpath -Wl,LIBDIR' linker flag
+   - have your system administrator add LIBDIR to '/etc/ld.so.conf'
+
+See any operating system documentation about shared libraries for
+more information, such as the ld(1) and ld.so(8) manual pages.
+----------------------------------------------------------------------
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/src'
+make[1]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/src'
+Making install in tests
+make[1]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/tests'
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1/tests'
+make[2]: Nothing to be done for 'install-exec-am'.
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/tests'
+make[1]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1/tests'
+make[1]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1'
+make[2]: Entering directory '/workspace/kf-propimage/work/libtpms-0.10.1'
+make[2]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '/opt/tpm/lib/pkgconfig'
+ /usr/bin/install -c -m 644 libtpms.pc '/opt/tpm/lib/pkgconfig'
+make[2]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1'
+make[1]: Leaving directory '/workspace/kf-propimage/work/libtpms-0.10.1'
+autoreconf: export WARNINGS=
+autoreconf: Entering directory '.'
+autoreconf: configure.ac: not using Gettext
+autoreconf: running: aclocal --force -I m4
+autoreconf: configure.ac: tracing
+autoreconf: running: libtoolize --copy --force
+libtoolize: putting auxiliary files in '.'.
+libtoolize: copying file './ltmain.sh'
+libtoolize: putting macros in AC_CONFIG_MACRO_DIRS, 'm4'.
+libtoolize: copying file 'm4/libtool.m4'
+libtoolize: copying file 'm4/ltoptions.m4'
+libtoolize: copying file 'm4/ltsugar.m4'
+libtoolize: copying file 'm4/ltversion.m4'
+libtoolize: copying file 'm4/lt~obsolete.m4'
+autoreconf: configure.ac: not using Intltool
+autoreconf: configure.ac: not using Gtkdoc
+autoreconf: running: aclocal --force -I m4
+autoreconf: running: /usr/bin/autoconf --force
+autoreconf: running: /usr/bin/autoheader --force
+autoreconf: running: automake --add-missing --copy --force-missing
+configure.ac:40: installing './compile'
+configure.ac:43: installing './config.guess'
+configure.ac:43: installing './config.sub'
+configure.ac:41: installing './install-sh'
+configure.ac:48: installing './missing'
+src/swtpm/Makefile.am: installing './depcomp'
+parallel-tests: installing './test-driver'
+autoreconf: Leaving directory '.'
+checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables... 
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether the compiler supports GNU C... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to enable C11 features... none needed
+checking whether gcc understands -c and -o together... yes
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether ln -s works... yes
+checking build system type... x86_64-pc-linux-gnu
+checking host system type... x86_64-pc-linux-gnu
+checking how to print strings... printf
+checking for a sed that does not truncate output... /usr/bin/sed
+checking for grep that handles long lines and -e... /usr/bin/grep
+checking for egrep... /usr/bin/grep -E
+checking for fgrep... /usr/bin/grep -F
+checking for ld used by gcc... /usr/bin/ld
+checking if the linker (/usr/bin/ld) is GNU ld... yes
+checking for BSD- or MS-compatible name lister (nm)... /usr/bin/nm -B
+checking the name lister (/usr/bin/nm -B) interface... BSD nm
+checking the maximum length of command line arguments... 1572864
+checking how to convert x86_64-pc-linux-gnu file names to x86_64-pc-linux-gnu format... func_convert_file_noop
+checking how to convert x86_64-pc-linux-gnu file names to toolchain format... func_convert_file_noop
+checking for /usr/bin/ld option to reload object files... -r
+checking for objdump... objdump
+checking how to recognize dependent libraries... pass_all
+checking for dlltool... no
+checking how to associate runtime and link libraries... printf %s\n
+checking for ar... ar
+checking for archiver @FILE support... @
+checking for strip... strip
+checking for ranlib... ranlib
+checking for gawk... gawk
+checking command to parse /usr/bin/nm -B output from gcc object... ok
+checking for sysroot... no
+checking for a working dd... /usr/bin/dd
+checking how to truncate binary pipes... /usr/bin/dd bs=4096 count=1
+checking for mt... mt
+checking if mt is a manifest tool... no
+checking for stdio.h... yes
+checking for stdlib.h... yes
+checking for string.h... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for strings.h... yes
+checking for sys/stat.h... yes
+checking for sys/types.h... yes
+checking for unistd.h... yes
+checking for dlfcn.h... yes
+checking for objdir... .libs
+checking if gcc supports -fno-rtti -fno-exceptions... no
+checking for gcc option to produce PIC... -fPIC -DPIC
+checking if gcc PIC flag -fPIC -DPIC works... yes
+checking if gcc static flag -static works... yes
+checking if gcc supports -c -o file.o... yes
+checking if gcc supports -c -o file.o... (cached) yes
+checking whether the gcc linker (/usr/bin/ld -m elf_x86_64) supports shared libraries... yes
+checking whether -lc should be explicitly linked in... no
+checking dynamic linker characteristics... GNU/Linux ld.so
+checking how to hardcode library paths into programs... immediate
+checking whether stripping libraries is possible... yes
+checking if libtool supports shared libraries... yes
+checking whether to build shared libraries... yes
+checking whether to build static libraries... yes
+checking target system type... x86_64-pc-linux-gnu
+checking whether build environment is sane... yes
+checking for a race-free mkdir -p... /usr/bin/mkdir -p
+checking whether make sets $(MAKE)... yes
+checking whether make supports the include directive... yes (GNU style)
+checking whether make supports nested variables... yes
+checking dependency style of gcc... gcc3
+checking whether make supports nested variables... (cached) yes
+checking for special C compiler options needed for large files... no
+checking for _FILE_OFFSET_BITS value needed for large files... no
+checking for debug-enabled build... no
+checking for an ANSI C-conforming const... yes
+checking for inline... inline
+checking for size_t... yes
+checking for gcc... (cached) gcc
+checking whether the compiler supports GNU C... (cached) yes
+checking whether gcc accepts -g... (cached) yes
+checking for gcc option to enable C11 features... (cached) none needed
+checking whether gcc understands -c and -o together... (cached) yes
+checking for semodule... no
+checking for AES_set_encrypt_key in -lcrypto... yes
+checking for openssl/aes.h... yes
+Building with openssl crypto library
+checking for openssl/fips.h... no
+checking for FIPS_mode_set in -lcrypto... no
+checking for pkg-config... /usr/bin/pkg-config
+checking pkg-config is at least version 0.9.0... yes
+checking for libtpms >= 0.10... yes
+checking for clock_gettime in -lc... yes
+checking for whether to build with CUSE interface... yes
+checking for whether to build with chardev interface... yes
+checking for certtool... /usr/bin/certtool
+checking for gnutls 3.4.0 or later... yes
+checking for gnutls_load_file in -lgnutls... yes
+checking for gnutls/abstract.h... yes
+checking for bash... yes
+checking which PCR banks to activate by default... sha256
+checking for netstat... /usr/bin/netstat
+checking for tcsd... no
+configure: WARNING: tcsd could not be found; typically need it for tss user account and tests
+checking for expect... /usr/bin/expect
+checking for gawk... /usr/bin/gawk
+checking for socat... /usr/bin/socat
+checking for base64... /usr/bin/base64
+checking for cp... /usr/bin/cp
+checking for a Python interpreter with version >= 3.3... python3
+checking for python3... /usr/bin/python3
+checking for python3 version... 3.10
+checking for python3 platform... linux
+checking for GNU default python3 prefix... ${prefix}
+checking for GNU default python3 exec_prefix... ${exec_prefix}
+checking for python3 script directory (pythondir)... ${PYTHON_PREFIX}/lib/python3.10/site-packages
+checking for python3 extension module directory (pyexecdir)... ${PYTHON_EXEC_PREFIX}/lib/python3.10/site-packages
+checking whether linker supports -Wl,-z,relro... yes
+checking whether linker supports -Wl,-z,now... yes
+checking for pkg-config... (cached) /usr/bin/pkg-config
+checking pkg-config is at least version 0.9.0... yes
+checking Checking the crypto library libtpms is linked to... openssl
+checking for whether to build with seccomp profile... yes
+checking that generated files are newer than configure... done
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating debian/swtpm-tools.postinst
+config.status: creating swtpm.spec
+config.status: creating samples/Makefile
+config.status: creating samples/swtpm-localca.conf
+config.status: creating samples/swtpm-create-user-config-files
+config.status: creating samples/swtpm_setup.conf
+config.status: creating include/Makefile
+config.status: creating include/swtpm/Makefile
+config.status: creating include/swtpm.h
+config.status: creating src/Makefile
+config.status: creating src/selinux/Makefile
+config.status: creating src/selinux/swtpm.fc
+config.status: creating src/selinux/swtpmcuse.fc
+config.status: creating src/swtpm/Makefile
+config.status: creating src/swtpm_bios/Makefile
+config.status: creating src/swtpm_cert/Makefile
+config.status: creating src/swtpm_ioctl/Makefile
+config.status: creating src/swtpm_localca/Makefile
+config.status: creating src/swtpm_setup/Makefile
+config.status: creating src/utils/Makefile
+config.status: creating src/utils/swtpm_conf.h
+config.status: creating man/Makefile
+config.status: creating man/man3/Makefile
+config.status: creating man/man5/Makefile
+config.status: creating man/man8/Makefile
+config.status: creating tests/Makefile
+config.status: creating tests/test_config
+config.status: creating samples/swtpm-localca
+config.status: creating config.h
+config.status: executing libtool commands
+config.status: executing depfiles commands
+
+with_gnutls     :   yes  (no = swtpm_cert will NOT be built)
+with_selinux    :    no  (no = SELinux policy extensions will NOT be built)
+with_cuse       :   yes  (no = no CUSE interface)
+with_chardev    :   yes  (no = no chardev interface)
+with_vtpm_proxy :   yes  (no = no vtpm proxy support; Linux only)
+with_seccomp    :   yes  (no = no seccomp profile; Linux only)
+enable_tests    :   yes  (no = no tests will run)
+
+active PCR banks      : sha256
+TPM 2 profile support : yes
+
+Version to build  : 0.10.1
+Crypto library    : openssl
+
+        MY_CFLAGS = -g -O2 -I/opt/tpm/include -Wreturn-type -Wsign-compare -Wswitch-enum -Wmissing-prototypes -Wall -Werror -Wformat -Wformat-security -Wshadow -I/usr/include/p11-kit-1  
+ HARDENING_CFLAGS = -fstack-protector-strong -Wstack-protector -D_FORTIFY_SOURCE=2
+HARDENING_LDFLAGS =  -Wl,-z,relro -Wl,-z,now
+       MY_LDFLAGS =  -L/opt/tpm/lib -ltpms  
+  LIBSECCOMP_LIBS = -lseccomp
+ JSON_GLIB_CFLAGS = -pthread -I/usr/include/json-glib-1.0 -I/usr/include/libmount -I/usr/include/blkid -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include
+   JSON_GLIB_LIBS = -ljson-glib-1.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0
+      GLIB_CFLAGS = -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include
+        GLIB_LIBS = -lglib-2.0
+      GNUTLS_LIBS = -lgnutls
+         GMP_LIBS = -lgmp
+       GMP_CFLAGS = 
+
+TSS_USER=tss
+TSS_GROUP=tss
+
+make  all-recursive
+make[1]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1'
+Making all in include
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+Making all in swtpm
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/include/swtpm'
+make[3]: Nothing to be done for 'all'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/include/swtpm'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+make[3]: Nothing to be done for 'all-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+Making all in man
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+Making all in man3
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man3'
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man3'
+Making all in man5
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man5'
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man5'
+Making all in man8
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man8'
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man8'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+make[3]: Nothing to be done for 'all-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+Making all in samples
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/samples'
+make[2]: Nothing to be done for 'all'.
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/samples'
+Making all in src
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+Making all in utils
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/utils'
+  CC       libswtpm_utils_la-swtpm_utils.lo
+  CCLD     libswtpm_utils.la
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/utils'
+Making all in swtpm
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm'
+  CC       swtpm-main.o
+  CC       swtpm-daemonize.o
+  CC       swtpm-swtpm.o
+  CC       libswtpm_libtpms_la-capabilities.lo
+  CC       swtpm-swtpm_chardev.o
+  CC       swtpm-cuse_tpm.o
+  CC       libswtpm_libtpms_la-check_algos.lo
+  CC       libswtpm_libtpms_la-common.lo
+  CC       libswtpm_libtpms_la-ctrlchannel.lo
+  CC       libswtpm_libtpms_la-fips.lo
+  CC       libswtpm_libtpms_la-key.lo
+  CC       libswtpm_libtpms_la-logging.lo
+  CC       libswtpm_libtpms_la-mainloop.lo
+  CC       libswtpm_libtpms_la-options.lo
+  CC       libswtpm_libtpms_la-pidfile.lo
+  CC       libswtpm_libtpms_la-profile.lo
+  CC       libswtpm_libtpms_la-seccomp_profile.lo
+  CC       libswtpm_libtpms_la-server.lo
+  CC       libswtpm_libtpms_la-swtpm_aes.lo
+  CC       libswtpm_libtpms_la-swtpm_debug.lo
+  CC       libswtpm_libtpms_la-swtpm_io.lo
+  CC       libswtpm_libtpms_la-swtpm_nvstore.lo
+  CC       libswtpm_libtpms_la-swtpm_nvstore_dir.lo
+  CC       libswtpm_libtpms_la-swtpm_nvstore_linear.lo
+  CC       libswtpm_libtpms_la-swtpm_nvstore_linear_file.lo
+  CC       libswtpm_libtpms_la-tlv.lo
+  CC       libswtpm_libtpms_la-tpmlib.lo
+  CC       libswtpm_libtpms_la-tpmstate.lo
+  CC       libswtpm_libtpms_la-utils.lo
+  CC       libswtpm_libtpms_la-threadpool.lo
+  CC       swtpm_cuse-cuse_tpm.o
+  CCLD     libswtpm_libtpms.la
+  CCLD     swtpm
+  CCLD     swtpm_cuse
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm'
+Making all in swtpm_bios
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_bios'
+  CC       swtpm_bios-tpm_bios.o
+  CCLD     swtpm_bios
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_bios'
+Making all in swtpm_cert
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_cert'
+  CC       swtpm_cert-ek-cert.o
+  CCLD     swtpm_cert
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_cert'
+Making all in swtpm_ioctl
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_ioctl'
+  CC       swtpm_ioctl-tpm_ioctl.o
+  CCLD     swtpm_ioctl
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_ioctl'
+Making all in swtpm_localca
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_localca'
+  CC       swtpm_localca-swtpm_localca_utils.o
+  CC       swtpm_localca-swtpm_localca.o
+  CCLD     swtpm_localca
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_localca'
+Making all in swtpm_setup
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_setup'
+  CC       swtpm_setup-profile.o
+  CC       swtpm_setup-swtpm_setup.o
+  CC       swtpm_setup-swtpm.o
+  CC       swtpm_setup-swtpm_setup_utils.o
+  CC       swtpm_setup-swtpm_backend_dir.o
+  CC       swtpm_setup-swtpm_backend_file.o
+  CCLD     swtpm_setup
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_setup'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+make[3]: Nothing to be done for 'all-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+Making all in tests
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/tests'
+make[2]: Nothing to be done for 'all'.
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/tests'
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1'
+make[1]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1'
+Making install in include
+make[1]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+Making install in swtpm
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/include/swtpm'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/include/swtpm'
+make[3]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '/opt/tpm/include/swtpm'
+ /usr/bin/install -c -m 644 tpm_ioctl.h '/opt/tpm/include/swtpm'
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/include/swtpm'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/include/swtpm'
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+make[1]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/include'
+Making install in man
+make[1]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+Making install in man3
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man3'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man3'
+make[3]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '/opt/tpm/share/man/man3'
+ /usr/bin/install -c -m 644 swtpm_ioctls.3 '/opt/tpm/share/man/man3'
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man3'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man3'
+Making install in man5
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man5'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man5'
+make[3]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '/opt/tpm/share/man/man5'
+ /usr/bin/install -c -m 644 swtpm_setup.conf.5 swtpm-localca.options.5 swtpm-localca.conf.5 '/opt/tpm/share/man/man5'
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man5'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man5'
+Making install in man8
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man8'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man8'
+make[3]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '/opt/tpm/share/man/man8'
+ /usr/bin/install -c -m 644 swtpm.8 swtpm_bios.8 swtpm_cert.8 swtpm_ioctl.8 swtpm_localca.8 swtpm_setup.8 swtpm-create-tpmca.8 swtpm-localca.8 swtpm_cuse.8 '/opt/tpm/share/man/man8'
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man8'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man/man8'
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+make[1]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/man'
+Making install in samples
+make[1]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/samples'
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/samples'
+make[2]: Nothing to be done for 'install-exec-am'.
+/usr/bin/mkdir -p /opt/tpm/var/lib/swtpm-localca
+if test -z ; then \
+	chown -R tss:root /opt/tpm/var/lib/swtpm-localca || true; \
+	chmod 0750 /opt/tpm/var/lib/swtpm-localca || true; \
+fi
+ /usr/bin/mkdir -p '/opt/tpm/share/swtpm'
+ /usr/bin/install -c swtpm-create-tpmca swtpm-create-user-config-files swtpm-localca '/opt/tpm/share/swtpm'
+ /usr/bin/mkdir -p '/opt/tpm/etc'
+ /usr/bin/install -c -m 644 swtpm-localca.conf swtpm-localca.options swtpm_setup.conf '/opt/tpm/etc'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/samples'
+make[1]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/samples'
+Making install in src
+make[1]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+Making install in utils
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/utils'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/utils'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/utils'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/utils'
+Making install in swtpm
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm'
+ /usr/bin/mkdir -p '/opt/tpm/bin'
+  /bin/bash ../../libtool   --mode=install /usr/bin/install -c swtpm swtpm_cuse '/opt/tpm/bin'
+libtool: warning: 'libswtpm_libtpms.la' has not been installed in '/opt/tpm/lib/swtpm'
+libtool: install: /usr/bin/install -c .libs/swtpm /opt/tpm/bin/swtpm
+libtool: warning: 'libswtpm_libtpms.la' has not been installed in '/opt/tpm/lib/swtpm'
+libtool: install: /usr/bin/install -c .libs/swtpm_cuse /opt/tpm/bin/swtpm_cuse
+ /usr/bin/mkdir -p '/opt/tpm/lib/swtpm'
+ /bin/bash ../../libtool   --mode=install /usr/bin/install -c   libswtpm_libtpms.la '/opt/tpm/lib/swtpm'
+libtool: install: /usr/bin/install -c .libs/libswtpm_libtpms.so.0.0.0 /opt/tpm/lib/swtpm/libswtpm_libtpms.so.0.0.0
+libtool: install: (cd /opt/tpm/lib/swtpm && { ln -s -f libswtpm_libtpms.so.0.0.0 libswtpm_libtpms.so.0 || { rm -f libswtpm_libtpms.so.0 && ln -s libswtpm_libtpms.so.0.0.0 libswtpm_libtpms.so.0; }; })
+libtool: install: (cd /opt/tpm/lib/swtpm && { ln -s -f libswtpm_libtpms.so.0.0.0 libswtpm_libtpms.so || { rm -f libswtpm_libtpms.so && ln -s libswtpm_libtpms.so.0.0.0 libswtpm_libtpms.so; }; })
+libtool: install: /usr/bin/install -c .libs/libswtpm_libtpms.lai /opt/tpm/lib/swtpm/libswtpm_libtpms.la
+libtool: install: /usr/bin/install -c .libs/libswtpm_libtpms.a /opt/tpm/lib/swtpm/libswtpm_libtpms.a
+libtool: install: chmod 644 /opt/tpm/lib/swtpm/libswtpm_libtpms.a
+libtool: install: ranlib /opt/tpm/lib/swtpm/libswtpm_libtpms.a
+libtool: finish: PATH="/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/sbin" ldconfig -n /opt/tpm/lib/swtpm
+----------------------------------------------------------------------
+Libraries have been installed in:
+   /opt/tpm/lib/swtpm
+
+If you ever happen to want to link against installed libraries
+in a given directory, LIBDIR, you must either use libtool, and
+specify the full pathname of the library, or use the '-LLIBDIR'
+flag during linking and do at least one of the following:
+   - add LIBDIR to the 'LD_LIBRARY_PATH' environment variable
+     during execution
+   - add LIBDIR to the 'LD_RUN_PATH' environment variable
+     during linking
+   - use the '-Wl,-rpath -Wl,LIBDIR' linker flag
+   - have your system administrator add LIBDIR to '/etc/ld.so.conf'
+
+See any operating system documentation about shared libraries for
+more information, such as the ld(1) and ld.so(8) manual pages.
+----------------------------------------------------------------------
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm'
+Making install in swtpm_bios
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_bios'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_bios'
+ /usr/bin/mkdir -p '/opt/tpm/bin'
+  /bin/bash ../../libtool   --mode=install /usr/bin/install -c swtpm_bios '/opt/tpm/bin'
+libtool: install: /usr/bin/install -c swtpm_bios /opt/tpm/bin/swtpm_bios
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_bios'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_bios'
+Making install in swtpm_cert
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_cert'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_cert'
+ /usr/bin/mkdir -p '/opt/tpm/bin'
+  /bin/bash ../../libtool   --mode=install /usr/bin/install -c swtpm_cert '/opt/tpm/bin'
+libtool: install: /usr/bin/install -c swtpm_cert /opt/tpm/bin/swtpm_cert
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_cert'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_cert'
+Making install in swtpm_ioctl
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_ioctl'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_ioctl'
+ /usr/bin/mkdir -p '/opt/tpm/bin'
+  /bin/bash ../../libtool   --mode=install /usr/bin/install -c swtpm_ioctl '/opt/tpm/bin'
+libtool: install: /usr/bin/install -c swtpm_ioctl /opt/tpm/bin/swtpm_ioctl
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_ioctl'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_ioctl'
+Making install in swtpm_localca
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_localca'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_localca'
+ /usr/bin/mkdir -p '/opt/tpm/bin'
+  /bin/bash ../../libtool   --mode=install /usr/bin/install -c swtpm_localca '/opt/tpm/bin'
+libtool: install: /usr/bin/install -c swtpm_localca /opt/tpm/bin/swtpm_localca
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_localca'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_localca'
+Making install in swtpm_setup
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_setup'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_setup'
+ /usr/bin/mkdir -p '/opt/tpm/bin'
+  /bin/bash ../../libtool   --mode=install /usr/bin/install -c swtpm_setup '/opt/tpm/bin'
+libtool: install: /usr/bin/install -c swtpm_setup /opt/tpm/bin/swtpm_setup
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_setup'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src/swtpm_setup'
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+make[1]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/src'
+Making install in tests
+make[1]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/tests'
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/tests'
+make[2]: Nothing to be done for 'install-exec-am'.
+make  install-data-hook
+make[3]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1/tests'
+mkdir -p /opt/tpm/libexec/installed-tests/swtpm
+cd . && for file in test_config test_vtpm_proxy test_tpm2_vtpm_proxy test_commandline test_ctrlchannel test_ctrlchannel2 test_ctrlchannel3 test_ctrlchannel4 test_encrypted_state test_getcap test_hashing test_hashing2 test_init test_locality test_migration_key test_parameters test_resume_volatile test_save_load_encrypted_state test_save_load_state test_setbuffersize test_volatilestate test_swtpm_bios test_tpm_probe test_tpm12 test_wrongorder test_print_capabilities test_print_states test_swtpm_setup_overwrite test_swtpm_setup_file_backend test_swtpm_setup_misc test_tpm2_avoid_da_lockout test_tpm2_chroot_socket test_tpm2_chroot_chardev test_tpm2_chroot_cuse test_tpm2_ctrlchannel2 test_tpm2_ctrlchannel3 test_tpm2_derived_keys test_tpm2_encrypted_state test_tpm2_init test_tpm2_file_permissions test_tpm2_getcap test_tpm2_locality test_tpm2_hashing test_tpm2_hashing2 test_tpm2_hashing3 test_tpm2_migration_key test_tpm2_partial_reads test_tpm2_print_capabilities test_tpm2_print_states test_tpm2_resume_volatile test_tpm2_savestate test_tpm2_save_load_encrypted_state test_tpm2_save_load_state test_tpm2_save_load_state_2 test_tpm2_save_load_state_2_linear test_tpm2_save_load_state_2_block test_tpm2_save_load_state_3 test_tpm2_save_load_state_da_timeout test_tpm2_save_load_state_locking test_tpm2_setbuffersize test_tpm2_volatilestate test_tpm2_wrongorder test_tpm2_probe test_tpm2_swtpm_bios test_tpm2_ibmtss2 test_tpm2_swtpm_setup_overwrite test_tpm2_swtpm_setup_profile test_tpm2_swtpm_setup_profile_name test_tpm2_libtpms_versions_profiles test_samples_create_tpmca test_swtpm_cert test_swtpm_setup_create_cert test_tpm2_parameters test_tpm2_swtpm_cert test_tpm2_swtpm_cert_ecc test_tpm2_swtpm_localca test_tpm2_swtpm_localca_pkcs11.test test_tpm2_swtpm_setup_create_cert  common load_vtpm_proxy test_common test_cuse swtpm_setup.conf create_certs.sh data/ecpubek.pem data/ecprivek.pem data/issuercert.pem data/pubek.pem data/signkey.pem data/signkey-encrypted.pem data/keyfile.txt data/keyfile256bit.txt data/pwdfile.txt data/migkey1/tpm2-volatilestate.bin data/migkey1/volatilestate.bin data/tpmstate1/tpm-00.permall data/tpmstate1/tpm-00.volatilestate data/tpmstate1/README data/tpmstate2/tpm-00.permall data/tpmstate2/tpm-00.volatilestate data/tpmstate2/pwdfile.txt data/tpmstate2/README data/tpmstate2b/tpm-00.permall data/tpmstate2b/tpm-00.volatilestate data/tpmstate2b/pwdfile.txt data/tpm2state1/tpm2-00.permall data/tpm2state1/tpm2-00.volatilestate data/tpm2state2/tpm2-00.permall data/tpm2state2/tpm2-00.volatilestate data/tpm2state2b/pwdfile.txt data/tpm2state2b/tpm2-00.permall data/tpm2state2b/tpm2-00.volatilestate data/tpm2state2/pwdfile.txt data/tpm2state3/hkey.priv data/tpm2state3/hkey.pub data/tpm2state3/signature.bin data/tpm2state3/tpm2-00.permall data/tpm2state3c/tpm2-00.volatilestate data/tpm2state3c/tpm2-00.permall data/tpm2state3d/tpm2-00.volatilestate data/tpm2state3d/signature2.bin data/tpm2state3d/tpm2-00.permall data/tpm2state3b/h81000000.bin data/tpm2state3b/h02000000.bin data/tpm2state3b/tpm2-00.volatilestate data/tpm2state3b/tpm2-00.permall data/tpm2state4/tpm2-00.volatilestate data/tpm2state4/tpm2-00.permall data/tpm2state5/signature.bin data/tpm2state5/tpm2-00.permall data/tpm2state6/tpm2-00.permall fileinstall patches/0001-Deactivate-test-cases-accessing-rootcerts.txt.patch patches/0002-Implement-powerup-for-swtpm.patch patches/0003-Set-CRYPTOLIBRARY-to-openssl.patch patches/0004-Store-and-restore-volatile-state-at-every-step.patch patches/0005-Disable-tests-related-to-events.patch patches/0010-Adjust-test-cases-for-OpenSSL-3.patch patches/0012-Disable-Nuvoton-commands.patch patches/libtpm.patch sed-inplace softhsm_setup test_clientfds.py test_setdatafd.py test_swtpm_cert _test_encrypted_state _test_getcap _test_hashing _test_hashing2 _test_init _test_locality _test_migration_key _test_migration_key_2 _test_print_capabilities _test_print_states _test_resume_volatile _test_save_load_encrypted_state _test_save_load_state _test_setbuffersize _test_swtpm_bios _test_tpm_probe _test_tpm2_avoid_da_lockout _test_tpm2_derived_keys _test_tpm2_encrypted_state _test_tpm2_file_permissions _test_tpm2_getcap _test_tpm2_hashing _test_tpm2_hashing2 _test_tpm2_hashing3 _test_tpm2_init _test_tpm2_locality _test_tpm2_migration_key _test_tpm2_print_capabilities _test_tpm2_print_states _test_tpm2_probe _test_tpm2_resume_volatile _test_tpm2_savestate _test_tpm2_save_load_encrypted_state _test_tpm2_save_load_state _test_tpm2_save_load_state_da_timeout _test_tpm2_save_load_state_locking _test_tpm2_setbuffersize _test_tpm2_swtpm_bios _test_tpm2_volatilestate _test_tpm2_wrongorder _test_volatilestate _test_wrongorder installed-runner.sh; do ./fileinstall "$file" "/opt/tpm/libexec/installed-tests/swtpm/$file" ; done
+echo "test_vtpm_proxy test_tpm2_vtpm_proxy test_commandline test_ctrlchannel test_ctrlchannel2 test_ctrlchannel3 test_ctrlchannel4 test_encrypted_state test_getcap test_hashing test_hashing2 test_init test_locality test_migration_key test_parameters test_resume_volatile test_save_load_encrypted_state test_save_load_state test_setbuffersize test_volatilestate test_swtpm_bios test_tpm_probe test_tpm12 test_wrongorder test_print_capabilities test_print_states test_swtpm_setup_overwrite test_swtpm_setup_file_backend test_swtpm_setup_misc test_tpm2_avoid_da_lockout test_tpm2_chroot_socket test_tpm2_chroot_chardev test_tpm2_chroot_cuse test_tpm2_ctrlchannel2 test_tpm2_ctrlchannel3 test_tpm2_derived_keys test_tpm2_encrypted_state test_tpm2_init test_tpm2_file_permissions test_tpm2_getcap test_tpm2_locality test_tpm2_hashing test_tpm2_hashing2 test_tpm2_hashing3 test_tpm2_migration_key test_tpm2_partial_reads test_tpm2_print_capabilities test_tpm2_print_states test_tpm2_resume_volatile test_tpm2_savestate test_tpm2_save_load_encrypted_state test_tpm2_save_load_state test_tpm2_save_load_state_2 test_tpm2_save_load_state_2_linear test_tpm2_save_load_state_2_block test_tpm2_save_load_state_3 test_tpm2_save_load_state_da_timeout test_tpm2_save_load_state_locking test_tpm2_setbuffersize test_tpm2_volatilestate test_tpm2_wrongorder test_tpm2_probe test_tpm2_swtpm_bios test_tpm2_ibmtss2 test_tpm2_swtpm_setup_overwrite test_tpm2_swtpm_setup_profile test_tpm2_swtpm_setup_profile_name test_tpm2_libtpms_versions_profiles test_samples_create_tpmca test_swtpm_cert test_swtpm_setup_create_cert test_tpm2_parameters test_tpm2_swtpm_cert test_tpm2_swtpm_cert_ecc test_tpm2_swtpm_localca test_tpm2_swtpm_localca_pkcs11.test test_tpm2_swtpm_setup_create_cert " > /opt/tpm/libexec/installed-tests/swtpm/tests
+./sed-inplace '/SWTPM_TEST_UNINSTALLED=1/d' /opt/tpm/libexec/installed-tests/swtpm/common
+make[3]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/tests'
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/tests'
+make[1]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1/tests'
+make[1]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1'
+make[2]: Entering directory '/workspace/kf-propimage/work/swtpm-0.10.1'
+make[2]: Nothing to be done for 'install-exec-am'.
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1'
+make[1]: Leaving directory '/workspace/kf-propimage/work/swtpm-0.10.1'

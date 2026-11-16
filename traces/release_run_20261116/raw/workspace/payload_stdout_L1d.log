@@ -1,0 +1,46 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=lanea winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       543G  180G  363G  34% /
+KF_PREFLIGHT_FREE_BYTES=389430575104
+KF_PAYLOAD_STAGE_START name=windows_apps
+[xid-watch] tag=ci5eed5eed5eed5eed_windows_apps  host=ubuntu  utc=2026-11-16T04:18:47Z
+[xid-watch] command: env KF_WINAPPS_PROFILE=mid bash /workspace/kf-ci-src/scripts/bench/box/windows_apps.sh ci5eed5eed5eed5eed /root/prov
+[xid-watch] host_dmesg_lines=1202  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+WINAPPS_START tag=ci5eed5eed5eed5eed rev=c53dd6b8 source=/workspace/kf-ci-src 2026-11-16T04:18:49+00:00 profile=mid gate_tag=gate_ci5eed5eed5eed5eed per_guest=8
+WINAPPS_REQUESTED=1
+APP_POLICY name=overlay_yuv_probe os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_hide os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_occlude os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_resize os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_move os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_recreate os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_fullscreen os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_soak os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=managed_t os=windows result=NOT_RUN note=unsupported (UVM)
+APPS_STAGE preflight 2026-11-16T04:18:49+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 137585(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 137585(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 137585(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 137585(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 137585(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 137632(bash) uid_root 0/0/0/0
+WINAPPS_REFUSED why=no-kf3-qemu-/workspace/bench/kf3-bins/c53dd6b8/qemu-system-x86_64
+WINAPPS_EXIT rc=2 2026-11-16T04:18:49+00:00
+[xid-watch] --- command output ends (rc=2) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1202 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_windows_apps.log
+KF_PAYLOAD_STAGE_END name=windows_apps rc=2 duration_ms=4098
+KF_PAYLOAD_FAIL suite=windows_apps_retry_refused
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=2
+stage name=windows_apps rc=2 duration_ms=4098 result=FAIL reason=windows_apps_retry_refused
+stage name=windows_gate_2 result=NOT_RUN
+suite name=windows_apps_retry_refused pass=0 fail=1 skip=0
+first_fail stage=windows_apps line=no red line found; last line: [xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_windows~_apps.log
+KF_FINAL_SUMMARY_END

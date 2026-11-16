@@ -1,0 +1,17 @@
+START 2026-11-16T02:51:46+00:00
+BOX_RC=0
+a717f3369 propimage_apps: swtpm build deps include expect (measured on a real box), a prebuilt /opt/tpm swtpm gets LD_LIBRARY_PATH; tests
+DRIVER_RC=0
+NVIDIA GeForce RTX 3090, 580.159.04
+/dev/root       485G   13G  472G   3% /
+TREE_RC=0
+[2026-11-16T02:59:54+00:00] B4: guest ladder built: 5061288 bytes
+[2026-11-16T02:59:54+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/a717f336/qemu-system-x86_64 rev=a717f336 mtime=2026-11-16 03:00:59.800556774 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-16T03:01:01+00:00

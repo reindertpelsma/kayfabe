@@ -1,0 +1,9 @@
+[2026-11-16T05:29:46Z] OVERLAY_CREATED disk/apps_g1_052945.qcow2 over gate_ci5eed5eed5eed5eed.qcow2
+[2026-11-16T05:29:46Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial; up to 120s)
+[2026-11-16T05:29:47Z] WINVM_RUN_START tag=apps_g1_052945 repo_rev=c53dd6b8 kf3=on qemu=/workspace/bench/kf3-bins/c53dd6b8/qemu-system-x86_64 host_driver=580.159.04 overlay=apps_g1_052945 arm=B guest_driver=580.65.06 gop_efi=/workspace/winvm/secureboot/kf-gop.c53dd6b8.signed.efi sha256(gop_efi)=fec8444153821f3f
+[2026-11-16T05:29:47Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.c53dd6b8.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-00000000-0000-0000-0000-000000000000
+[2026-11-16T05:29:47Z] VM_IDENTITY uuid=e89e227a-3df9-4c01-974b-f25603120be3 serial=KFF53669C8A0 mac=52:54:00:05:c9:2d
+[2026-11-16T05:29:47Z] KF3_ENV KF3_RPC_TRACE=1 
+[2026-11-16T05:29:49Z] QEMU_START tag=apps_g1_052945 boot=1 pid=77676 log=logs/apps_g1_052945_b1_qemu.log
+[2026-11-16T05:59:31Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=17547 host_xid=0
+[2026-11-16T05:59:31Z] WINVM_RUN_END tag=apps_g1_052945 boots=1 reason=guest-shutdown

@@ -1,0 +1,15 @@
+﻿{
+    "accept_method":  "BM_CLICK on the UIA window handle",
+    "sample":  "kfsample.sldprt",
+    "accepted":  true,
+    "kind":  "EDW",
+    "ended":  1794506857.458,
+    "started":  1794506804.327,
+    "windows_seen":  [
+                         "#32770:",
+                         "Window:eDrawings"
+                     ],
+    "app":  "edrawings",
+    "tab_name":  "kfsample.sldprt",
+    "run_id":  "373133ea09cb41229e7e29c0397a8700"
+}

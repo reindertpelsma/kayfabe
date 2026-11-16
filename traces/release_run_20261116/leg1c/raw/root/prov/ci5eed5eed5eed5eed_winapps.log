@@ -1,0 +1,38 @@
+WINAPPS_START tag=ci5eed5eed5eed5eed rev=4ed439ef source=/workspace/kf-ci-src 2026-11-16T06:15:42+00:00 profile=mid gate_tag=gate_ci5eed5eed5eed5eed per_guest=8
+WINAPPS_REQUESTED=1
+APPS_STAGE preflight 2026-11-16T06:15:42+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 132730(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 132730(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 132730(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 132730(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 132730(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 132777(bash) uid_root 0/0/0/0
+APPS_NOTE host: gpu="NVIDIA GeForce RTX 4090" cpus=30 ram_gb=98 disk_free_gb=340 apps=10 budget_s=3600
+APPS_NOTE app ids: nvidia_smi,deviceQuery_demo,matmul_t,cup8_ladder,dxprobe_d3d11,glgears_wgl,vulkaninfo,torch_correct,edge_webgl,dxprobe_d3d12
+APPS_STAGE app_disk 2026-11-16T06:15:45+00:00
+APPS_NOTE app disk /workspace/winapps/kfapps.iso sha256=c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee bytes=2708119552
+APPS_STAGE hostref_before 2026-11-16T06:16:06+00:00
+APPS_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0
+APPS_STAGE seal_parent 2026-11-16T06:16:10+00:00
+APPS_STAGE run_matrix 2026-11-16T06:16:10+00:00
+APPS_NOTE winapps.py rc=0 (0 done, 3 repeated guest boot failures, 4 guest limit, 6 time budget ended)
+KFROOT_ASSERT mode=record ok=unchecked label=final why=no-sudo-log-mark
+APPS_STAGE hostref_after 2026-11-16T06:44:37+00:00
+APPS_HOSTREF after green cup8=PASS xid_count=10 xid_delta=0
+APPS_STAGE grade 2026-11-16T06:44:41+00:00
+WINAPPS_APP app=nvidia_smi class=pass verdict=PASS batched=PASS alone=- secs=8 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=deviceQuery_demo class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=matmul_t class=pass verdict=PASS batched=PASS alone=- secs=31 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cup8_ladder class=pass verdict=PASS batched=PASS alone=- secs=8 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d11 class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=glgears_wgl class=pass verdict=PASS batched=PASS alone=- secs=17 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=vulkaninfo class=pass verdict=PASS batched=PASS alone=- secs=8 tdr=0 wer=0 gsp=0 note=warn:WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed
+WINAPPS_APP app=torch_correct class=pass verdict=PASS batched=PASS alone=- secs=34 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=edge_webgl class=pass verdict=PASS batched=PASS alone=- secs=31 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d12 class=pass verdict=PASS batched=PASS alone=- secs=13 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_GRADE kind=PASS expected=10 pass=10 guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0
+APPS_STAGE collect 2026-11-16T06:44:41+00:00
+APPS_NOTE evidence: /root/prov/ci5eed5eed5eed5eed_winapps (73 files), /root/prov/ci5eed5eed5eed5eed_winapps.tgz sha256=f7e791a6979cda36
+WINAPPS_PASS rev=4ed439ef gpu="NVIDIA GeForce RTX 4090" profile=mid apps=10 hostref=green/green secs=1739 grade: kind=PASS expected=10 pass=10 guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0; rootless=violated
+WINAPPS_EXIT rc=0 2026-11-16T06:44:41+00:00

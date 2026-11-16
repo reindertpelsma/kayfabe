@@ -1,0 +1,5 @@
+[2026-11-16T08:59:43Z] WINVM_RUN_START tag=spec_ci5eed5eed5eed5eed_copy1 repo_rev=06086008 kf3=off qemu=/workspace/bench/kf3-bins/06086008/qemu-system-x86_64 host_driver=580.159.04 overlay=spec_ci5eed5eed5eed5eed arm=B guest_driver=default gop_efi=none sha256(gop_efi)=-
+[2026-11-16T08:59:43Z] VM_IDENTITY uuid=23adaa7e-a7c3-4e07-ac74-6db6b8958634 serial=KFBEEE72A1A5 mac=52:54:00:70:ef:74
+[2026-11-16T08:59:45Z] QEMU_START tag=spec_ci5eed5eed5eed5eed_copy1 boot=1 pid=169254 log=logs/spec_ci5eed5eed5eed5eed_copy1_b1_qemu.log
+[2026-11-16T09:43:50Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=0 host_xid=0
+[2026-11-16T09:43:50Z] WINVM_RUN_END tag=spec_ci5eed5eed5eed5eed_copy1 boots=1 reason=guest-shutdown

@@ -1,0 +1,33 @@
+[xid-watch] tag=ci5eed5eed5eed5eed_cuda_host  host=ubuntu  utc=2026-11-16T02:09:10Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/cuda_ladder.sh host ci5eed5eed5eed5eed 1 cup2,cup3,cup8,cup8bench
+[xid-watch] host_dmesg_lines=748  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA RTX 4000 Ada Generation, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1925 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1873 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1919 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=11.175 med_ms=11.146 p90_ms=11.166 min_ms=10.540 max_ms=11.188 gflops=1541.339 batch_per_launch_ms=10.652 batch_gflops=1612.799 h2d_ms=3.985 d2h_med_ms=1.767 submit_med_ms=0.007 sync_med_ms=11.137 sync_cpu_med_ms=11.143 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.010 bad=0 maxerr=0
+CUDA_LADDER_STARTED=2026-11-16T02:09:12+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=03c3c419
+bench sizes=16,2048 iters=20 batch=10
+host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+src cup2.c md5 d9f82375ebd54de500aeb7f85ef71efc
+src cup3.c md5 b353d96b3694261293e5bdd409c0863e
+src cup8.c md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8
+src cup8bench.c md5 6c9f86d2581016ec9d34d6a7636fc8b5
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1925 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1873 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1919 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2389 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=1 BENCH_INIT_MS=1473.08
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=104.70
+CL_BENCH mode=host rep=1 BENCH_MODULE_MS=15.36
+CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.022 med_ms=0.006 p90_ms=0.007 min_ms=0.006 max_ms=0.007 gflops=1.296 batch_per_launch_ms=0.004 batch_gflops=2.031 h2d_ms=0.026 d2h_med_ms=0.006 submit_med_ms=0.002 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.003 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=11.175 med_ms=11.146 p90_ms=11.166 min_ms=10.540 max_ms=11.188 gflops=1541.339 batch_per_launch_ms=10.652 batch_gflops=1612.799 h2d_ms=3.985 d2h_med_ms=1.767 submit_med_ms=0.007 sync_med_ms=11.137 sync_cpu_med_ms=11.143 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.010 bad=0 maxerr=0
+CUDA_LADDER_DONE=2026-11-16T02:09:20+00:00
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (748 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_cuda_host.log

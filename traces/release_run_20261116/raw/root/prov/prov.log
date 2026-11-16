@@ -1,0 +1,17 @@
+START 2026-11-16T01:35:32+00:00
+BOX_RC=0
+03c3c4199 release-run tree only: KF_PROPIMAGE_SKIP_APPS (operator skip of an app with no verdict source, recorded NOT_RUN)
+DRIVER_RC=0
+NVIDIA GeForce RTX 4060 Ti, 580.159.04
+/dev/root       543G   13G  530G   3% /
+TREE_RC=0
+[2026-11-16T01:45:27+00:00] B4: guest ladder built: 5061288 bytes
+[2026-11-16T01:45:27+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/03c3c419/qemu-system-x86_64 rev=03c3c419 mtime=2026-11-16 01:46:36.853764384 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-16T01:46:38+00:00

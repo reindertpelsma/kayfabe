@@ -1,0 +1,197 @@
+[2026-11-16T04:28:38Z] WINVM_INSTALL_START name=kfwin repo=c53dd6b8 qemu=/workspace/bench/kf3-bins/c53dd6b8/qemu-system-x86_64 host_driver=580.159.04 install_wait_s=4200
+[2026-11-16T04:28:38Z] VM_IDENTITY_CREATED /workspace/winvm/kfwin/identity.env
+[2026-11-16T04:28:38Z] VM_IDENTITY uuid=e89e227a-3df9-4c01-974b-f25603120be3 serial=KFF53669C8A0 mac=52:54:00:05:c9:2d
+[2026-11-16T04:28:38Z] START prereqs
+[2026-11-16T04:28:38Z] EXIT prereqs rc=0
+[2026-11-16T04:28:38Z] START fetch
+[2026-11-16T04:28:38Z] fetch win11_ltsc_2024_eval_x64_en-us.iso from https://go.microsoft.com/fwlink/?linkid=2289029&clcid=0x409&culture=en-us&country=us
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+
+  0 4875M    0 13.3M    0     0  11.5M      0  0:07:02  0:00:01  0:07:01 11.5M
+  2 4875M    2  119M    0     0  55.4M      0  0:01:27  0:00:02  0:01:25  106M
+  5 4875M    5  270M    0     0  85.5M      0  0:00:56  0:00:03  0:00:53  128M
+  8 4875M    8  414M    0     0  99.7M      0  0:00:48  0:00:04  0:00:44  133M
+ 11 4875M   11  559M    0     0   108M      0  0:00:44  0:00:05  0:00:39  136M
+ 14 4875M   14  702M    0     0   114M      0  0:00:42  0:00:06  0:00:36  137M
+ 17 4875M   17  862M    0     0   120M      0  0:00:40  0:00:07  0:00:33  148M
+ 20 4875M   20 1004M    0     0   123M      0  0:00:39  0:00:08  0:00:31  146M
+ 23 4875M   23 1153M    0     0   125M      0  0:00:38  0:00:09  0:00:29  147M
+ 26 4875M   26 1306M    0     0   128M      0  0:00:37  0:00:10  0:00:27  149M
+ 29 4875M   29 1452M    0     0   130M      0  0:00:37  0:00:11  0:00:26  149M
+ 32 4875M   32 1600M    0     0   131M      0  0:00:37  0:00:12  0:00:25  147M
+ 35 4875M   35 1739M    0     0   132M      0  0:00:36  0:00:13  0:00:23  146M
+ 38 4875M   38 1878M    0     0   132M      0  0:00:36  0:00:14  0:00:22  144M
+ 41 4875M   41 2031M    0     0   133M      0  0:00:36  0:00:15  0:00:21  144M
+ 44 4875M   44 2184M    0     0   135M      0  0:00:36  0:00:16  0:00:20  146M
+ 48 4875M   48 2341M    0     0   136M      0  0:00:35  0:00:17  0:00:18  148M
+ 51 4875M   51 2489M    0     0   137M      0  0:00:35  0:00:18  0:00:17  150M
+ 54 4875M   54 2638M    0     0   137M      0  0:00:35  0:00:19  0:00:16  152M
+ 57 4875M   57 2798M    0     0   138M      0  0:00:35  0:00:20  0:00:15  153M
+ 60 4875M   60 2943M    0     0   139M      0  0:00:35  0:00:21  0:00:14  151M
+ 63 4875M   63 3090M    0     0   139M      0  0:00:34  0:00:22  0:00:12  149M
+ 65 4875M   65 3212M    0     0   138M      0  0:00:35  0:00:23  0:00:12  144M
+ 68 4875M   68 3358M    0     0   139M      0  0:00:35  0:00:24  0:00:11  144M
+ 71 4875M   71 3494M    0     0   138M      0  0:00:35  0:00:25  0:00:10  139M
+ 74 4875M   74 3634M    0     0   138M      0  0:00:35  0:00:26  0:00:09  138M
+ 77 4875M   77 3783M    0     0   139M      0  0:00:35  0:00:27  0:00:08  138M
+ 80 4875M   80 3941M    0     0   139M      0  0:00:34  0:00:28  0:00:06  145M
+ 83 4875M   83 4083M    0     0   140M      0  0:00:34  0:00:29  0:00:05  144M
+ 86 4875M   86 4241M    0     0   140M      0  0:00:34  0:00:30  0:00:04  149M
+ 90 4875M   90 4389M    0     0   140M      0  0:00:34  0:00:31  0:00:03  151M
+ 92 4875M   92 4532M    0     0   140M      0  0:00:34  0:00:32  0:00:02  149M
+ 96 4875M   96 4690M    0     0   141M      0  0:00:34  0:00:33  0:00:01  149M
+ 98 4875M   98 4825M    0     0   141M      0  0:00:34  0:00:34 --:--:--  148M
+100 4875M  100 4875M    0     0   141M      0  0:00:34  0:00:34 --:--:--  146M
+[2026-11-16T04:29:41Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-11-16T04:29:41Z] fetch virtio-win-0.1.302.iso from https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.302-1/virtio-win-0.1.302.iso
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  2  836M    2 21.1M    0     0  20.4M      0  0:00:41  0:00:01  0:00:40 20.3M
+  7  836M    7 65.6M    0     0  32.2M      0  0:00:25  0:00:02  0:00:23 32.1M
+ 13  836M   13  114M    0     0  37.5M      0  0:00:22  0:00:03  0:00:19 37.5M
+ 19  836M   19  163M    0     0  40.4M      0  0:00:20  0:00:04  0:00:16 40.4M
+ 24  836M   24  205M    0     0  40.7M      0  0:00:20  0:00:05  0:00:15 41.1M
+ 29  836M   29  244M    0     0  40.5M      0  0:00:20  0:00:06  0:00:14 44.6M
+ 33  836M   33  284M    0     0  40.3M      0  0:00:20  0:00:07  0:00:13 43.6M
+ 38  836M   38  326M    0     0  40.5M      0  0:00:20  0:00:08  0:00:12 42.3M
+ 44  836M   44  368M    0     0  40.8M      0  0:00:20  0:00:09  0:00:11 41.1M
+ 49  836M   49  411M    0     0  41.0M      0  0:00:20  0:00:10  0:00:10 41.3M
+ 54  836M   54  454M    0     0  41.2M      0  0:00:20  0:00:11  0:00:09 42.0M
+ 59  836M   59  497M    0     0  41.3M      0  0:00:20  0:00:12  0:00:08 42.7M
+ 64  836M   64  541M    0     0  41.5M      0  0:00:20  0:00:13  0:00:07 43.1M
+ 69  836M   69  582M    0     0  41.4M      0  0:00:20  0:00:14  0:00:06 42.6M
+ 73  836M   73  615M    0     0  40.9M      0  0:00:20  0:00:15  0:00:05 40.7M
+ 77  836M   77  651M    0     0  40.6M      0  0:00:20  0:00:16  0:00:04 39.2M
+ 82  836M   82  689M    0     0  40.4M      0  0:00:20  0:00:17  0:00:03 38.4M
+ 87  836M   87  730M    0     0  40.4M      0  0:00:20  0:00:18  0:00:02 37.7M
+ 92  836M   92  771M    0     0  40.5M      0  0:00:20  0:00:19  0:00:01 37.9M
+ 97  836M   97  814M    0     0  40.6M      0  0:00:20  0:00:20 --:--:-- 39.7M
+100  836M  100  836M    0     0  40.6M      0  0:00:20  0:00:20 --:--:-- 41.0M
+[2026-11-16T04:30:07Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-11-16T04:30:07Z] fetch OpenSSH-Win64-v10.0.0.0.msi from https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.0.0.0p2-Preview/OpenSSH-Win64-v10.0.0.0.msi
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+
+ 69 6432k   69 4478k    0     0  7860k      0 --:--:-- --:--:-- --:--:-- 7860k
+100 6432k  100 6432k    0     0  10.7M      0 --:--:-- --:--:-- --:--:--  119M
+[2026-11-16T04:30:07Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-11-16T04:30:08Z] fetch 580.88-desktop-win10-win11-64bit-international-dch-whql.exe from https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  2  849M    2 20.7M    0     0  22.4M      0  0:00:37 --:--:--  0:00:37 22.4M
+  5  849M    5 44.7M    0     0  23.2M      0  0:00:36  0:00:01  0:00:35 23.2M
+  8  849M    8 76.1M    0     0  26.2M      0  0:00:32  0:00:02  0:00:30 26.2M
+ 12  849M   12  108M    0     0  27.6M      0  0:00:30  0:00:03  0:00:27 27.6M
+ 16  849M   16  138M    0     0  28.2M      0  0:00:30  0:00:04  0:00:26 28.2M
+ 19  849M   19  168M    0     0  28.6M      0  0:00:29  0:00:05  0:00:24 29.8M
+ 25  849M   25  212M    0     0  30.9M      0  0:00:27  0:00:06  0:00:21 33.9M
+ 30  849M   30  256M    0     0  32.5M      0  0:00:26  0:00:07  0:00:19 36.2M
+ 35  849M   35  297M    0     0  33.5M      0  0:00:25  0:00:08  0:00:17 38.2M
+ 38  849M   38  330M    0     0  33.4M      0  0:00:25  0:00:09  0:00:16 38.5M
+ 44  849M   44  374M    0     0  34.3M      0  0:00:24  0:00:10  0:00:14 41.0M
+ 48  849M   48  411M    0     0  34.6M      0  0:00:24  0:00:11  0:00:13 39.8M
+ 51  849M   51  441M    0     0  34.2M      0  0:00:24  0:00:12  0:00:12 37.0M
+ 53  849M   53  453M    0     0  32.6M      0  0:00:26  0:00:13  0:00:13 31.0M
+ 57  849M   57  488M    0     0  32.7M      0  0:00:25  0:00:14  0:00:11 31.4M
+ 60  849M   60  514M    0     0  32.3M      0  0:00:26  0:00:15  0:00:11 27.8M
+ 64  849M   64  551M    0     0  32.6M      0  0:00:26  0:00:16  0:00:10 27.7M
+ 68  849M   68  580M    0     0  32.4M      0  0:00:26  0:00:17  0:00:09 27.6M
+ 73  849M   73  622M    0     0  32.9M      0  0:00:25  0:00:18  0:00:07 33.7M
+ 78  849M   78  664M    0     0  33.4M      0  0:00:25  0:00:19  0:00:06 35.2M
+ 83  849M   83  706M    0     0  33.8M      0  0:00:25  0:00:20  0:00:05 38.5M
+ 87  849M   87  742M    0     0  33.8M      0  0:00:25  0:00:21  0:00:04 38.1M
+ 90  849M   90  772M    0     0  33.7M      0  0:00:25  0:00:22  0:00:03 38.3M
+ 96  849M   96  818M    0     0  34.2M      0  0:00:24  0:00:23  0:00:01 39.3M
+100  849M  100  849M    0     0  34.5M      0  0:00:24  0:00:24 --:--:-- 39.4M
+[2026-11-16T04:30:37Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-11-16T04:30:37Z] EXIT fetch rc=0
+[2026-11-16T04:30:37Z] START apparmor
+[2026-11-16T04:30:37Z] AppArmor: swtpm may use /workspace/winvm
+[2026-11-16T04:30:37Z] EXIT apparmor rc=0
+[2026-11-16T04:30:37Z] START secrets
+[2026-11-16T04:30:37Z] generated the Windows password (secrets/win_password, 0600)
+[2026-11-16T04:30:37Z] generated the harness ssh key (secrets/ssh_ed25519)
+[2026-11-16T04:30:37Z] EXIT secrets rc=0
+[2026-11-16T04:30:37Z] START secureboot-key
+[2026-11-16T04:30:38Z] generated this host's kayfabe Secure Boot db key (/workspace/winvm/secureboot/db.key, never leaves the host)
+[2026-11-16T04:30:38Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-11-16) sha256 Fingerprint=30:7E:BE:31:AE:21:1E:26:CB:DB:A5:C1:78:40:1A:66:B9:E9:17:9B:D5:01:D1:39:AA:BA:B3:8F:E4:97:8F:1E 
+[2026-11-16T04:30:38Z] EXIT secureboot-key rc=0
+[2026-11-16T04:30:38Z] START ovmf-vars
+INFO: reading raw edk2 varstore from /usr/share/OVMF/OVMF_VARS_4M.fd
+INFO: var store range: 0x64 -> 0x40000
+INFO: create variable PK
+INFO: clear PK sigdb
+INFO: add PK cert /tmp/tmpkuvsuppd
+INFO: create variable KEK
+INFO: clear KEK sigdb
+INFO: add KEK cert /tmp/tmpkuvsuppd
+INFO: add KEK cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationKEKCA2011.pem
+INFO: add dummy dbx entry
+INFO: create variable dbx
+INFO: create variable db
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftWindowsProductionPCA2011.pem
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationUEFICA2011.pem
+INFO: add db cert /workspace/winvm/secureboot/db.crt
+INFO: create variable SecureBootEnable
+INFO: set variable SecureBootEnable: True
+INFO: create variable CustomMode
+INFO: set variable CustomMode: False
+INFO: writing raw edk2 varstore to /workspace/winvm/kfwin/firmware/OVMF_VARS.fd.tmp
+[2026-11-16T04:30:40Z] VARS_CREATED /workspace/winvm/kfwin/firmware/OVMF_VARS.fd
+[2026-11-16T04:30:40Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-11-16); 
+[2026-11-16T04:30:40Z] EXIT ovmf-vars rc=0
+[2026-11-16T04:30:40Z] START tpm-manufacture
+TPM is listening on Unix socket.
+[2026-11-16T04:30:42Z] TPM_MANUFACTURED /workspace/winvm/kfwin/tpm (5993 bytes of state)
+[2026-11-16T04:30:42Z] EXIT tpm-manufacture rc=0
+[2026-11-16T04:30:42Z] START disk
+[2026-11-16T04:30:42Z] DISK_CREATED base.qcow2 220G
+[2026-11-16T04:30:42Z] EXIT disk rc=0
+[2026-11-16T04:30:42Z] START unattend
+xorriso 1.5.4 : RockRidge filesystem manipulator, libburnia project.
+
+[2026-11-16T04:30:42Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-11-16T04:30:42Z] EXIT unattend rc=0
+[2026-11-16T04:30:42Z] START install-boot
+[2026-11-16T04:30:42Z] QEMU_START tag=install boot=1 pid=68766 log=logs/install_b1_qemu.log
+[2026-11-16T04:57:19Z] INSTALL_BOOT_END rc=0 reason=guest-shutdown
+[2026-11-16T04:57:19Z] EXIT install-boot rc=0
+[2026-11-16T04:57:19Z] START check-boot
+[2026-11-16T04:57:19Z] QEMU_START tag=installcheck boot=1 pid=72139 log=logs/installcheck_b1_qemu.log
+[2026-11-16T04:58:15Z] SSH_UP after 10s
+[2026-11-16T04:58:28Z] first logon said: KF_FIRSTLOGON OK 2026-11-16T04:56:16.6517783+00:00
+  WIN_EDITION PASS Microsoft Windows 11 Enterprise LTSC Evaluation build 26100 10.0.26100
+  WIN_SECUREBOOT PASS Confirm-SecureBootUEFI=True
+  WIN_DB_HAS_KAYFABE PASS db contains 'kayfabe GOP'=True; Microsoft entries: Windows Production PCA 2011; Microsoft Corporation UEFI CA 2011; Windows UEFI CA 2023; Microsoft UEFI CA 2023; Microsoft Option ROM UEFI CA 2023
+  WIN_TPM PASS present=True ready=True enabled=True activated=True owned=True spec=2.0, 0, 1.64
+  WIN_TPM_EK INFO PublicKeyHash=766b11b490ec3623f57b0208fccfdc164c199eb07286d11efb2b02dd376331f3 ManufacturerCertificates=1
+  WIN_BITLOCKER PASS VolumeStatus=FullyDecrypted ProtectionStatus=Off PreventDeviceEncryption=1; manage-bde: Conversion Status: Fully Decrypted; Percentage Encrypted: 0.0%; Encryption Method: None; Protection Status: Protection Off
+  WIN_VBS PASS VirtualizationBasedSecurityStatus=0
+  WIN_VIRTIO PASS store: fwcfg.inf,pvpanic.inf,smbus.inf,viorng.inf,vioser.inf,viostor.inf,netkvm.inf; missing: ; balloon/viomem staged: ; bound: QEMU FwCfg Device; QEMU PVPanic Device; Red Hat VirtIO SCSI controller; VirtIO RNG Device; VirtIO Serial Driver; Red Hat VirtIO Ethernet Adapter
+  WIN_PNP_CLEAN PASS problem devices:
+  WIN_DISPLAY INFO Microsoft Basic Display Adapter [PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08] status=OK problem=CM_PROB_NONE
+  WIN_SERVICES PASS QEMU-GA=Running sshd=Running
+  WIN_WU_OFF PASS NoAutoUpdate=1 ExcludeWUDriversInQualityUpdate=1 wuauserv=Running
+  WIN_NO_HIBER PASS HiberbootEnabled=0
+  WIN_SAC_OFF PASS VerifiedAndReputablePolicyState=0
+  WIN_FIRSTLOGON PASS KF_FIRSTLOGON OK 2026-11-16T04:56:16.6517783+00:00
+  WIN_CHECK_DONE fail=0
+[2026-11-16T04:59:47Z] CHECK_BOOT_END rc=0 reason=guest-shutdown check_rc=0
+[2026-11-16T04:59:47Z] EXIT check-boot rc=0
+[2026-11-16T04:59:47Z] START seal
+[2026-11-16T04:59:47Z] SEALED disk/base.qcow2 (0400); unattend.iso (it held the password) deleted; every run uses an overlay
+[2026-11-16T04:59:47Z] EXIT seal rc=0
+[2026-11-16T04:59:47Z] WINVM_INSTALL_DONE name=kfwin

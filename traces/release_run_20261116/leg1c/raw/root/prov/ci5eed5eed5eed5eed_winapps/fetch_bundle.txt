@@ -1,0 +1,2 @@
+CACHE_OK public-bundle/winapps-open.iso
+PUBLIC_BUNDLE_OK
