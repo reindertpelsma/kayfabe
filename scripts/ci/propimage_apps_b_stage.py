@@ -43,11 +43,18 @@ def apps_module(root):
     return pa.load_module(Path(root) / "scripts/bench/windows/propimage_apps_b.py", "kf_propimage_apps_b_for_stage")
 
 
-def plan_boots(timeouts, order, budget=BOOT_BUDGET_S):
-    """Greedy groups in table order whose timeouts sum to at most `budget` (the evaluation timer is per boot)."""
+def plan_boots(timeouts, order, budget=BOOT_BUDGET_S, lanes=None):
+    """Greedy groups in table order whose timeouts sum to at most `budget` (the evaluation timer is per boot). A discovery-lane row
+    (`lanes[app] == "discovery"`) boots ALONE in a fresh clone: it is allowed to crash or hang the guest, and then only its own row fails."""
     boots, cur, total = [], [], 0
     for app in order:
         t = timeouts[app]
+        if lanes and lanes.get(app) == "discovery":
+            if cur:
+                boots.append(cur)
+                cur, total = [], 0
+            boots.append([app])
+            continue
         if cur and total + t > budget:
             boots.append(cur)
             cur, total = [], 0
@@ -193,7 +200,7 @@ def run(ctx, evidence_dir=None, apps=None):
         klog = pa.KernelLog(ctx.prefix / "kernel", ctx.klog_source)
         klog.start()
         timeouts = {a: mod.CHECKS[a]["timeout"] for a in order}
-        plan = plan_boots(timeouts, order)
+        plan = plan_boots(timeouts, order, lanes={n: mod.CHECKS[n].get("lane") for n in order})
         rec["boots"] = [{"index": i + 1, "apps": b, "rc": None, "secs": 0, "offline": False} for i, b in enumerate(plan)]
         work, dl, imgdir, logs = ctx.prefix / "work", ctx.prefix / "dl", ctx.prefix / "unpacked", ctx.prefix / "logs"
         for d in (work, dl, imgdir, logs):
@@ -324,7 +331,7 @@ def main(argv=None):
         if a.cmd == "plan":
             mod = apps_module(pa.ROOT)
             order = tuple(mod.CHECKS)
-            print(json.dumps({"apps": order, "boots": plan_boots({n: mod.CHECKS[n]["timeout"] for n in order}, order)}, indent=1))
+            print(json.dumps({"apps": order, "boots": plan_boots({n: mod.CHECKS[n]["timeout"] for n in order}, order, lanes={n: mod.CHECKS[n].get("lane") for n in order})}, indent=1))
             return 0
         if not pa.SHA_RE.fullmatch(a.sha):
             return 2

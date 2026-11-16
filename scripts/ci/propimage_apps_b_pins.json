@@ -24,11 +24,11 @@
   },
   {
    "role": "data",
-   "name": "test-assets-20261116b.iso",
+   "name": "test-assets-20261116c.iso",
    "dest": "image/test-assets.iso",
-   "mirror": "https://bundles.kayfabe.dev/test-assets/20261116/test-assets-20261116b.iso",
-   "sha256": "11032bb101893a7a13bac1d9073869df14f0d04fa713a2ec9ab5abfbc311e722",
-   "size": 171390976,
+   "mirror": "https://bundles.kayfabe.dev/test-assets/20261116/test-assets-20261116c.iso",
+   "sha256": "6b5fa657625e5a69ff66c88a0a2a5bb630844f37738163b9c5f5eeb8f8630266",
+   "size": 366745600,
    "needed_by": "image",
    "recorded_in": "public bundle bucket, prefix test-assets/20261116/; rebuild from source URLs with scripts/bench/assets/build_test_assets.py (the rebuilt ISO differs in bytes: pin the downloaded object, not a rebuild)"
   },
