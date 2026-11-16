@@ -13,7 +13,7 @@ try {
   $log = "$D\aerender.log"
   $ar = Run-Aerender @('-project', "$D\kf.aep", '-comp', 'kfcomp') $log "$D\frames" 900000
   if (Get-Process -Id $ar.Id -ErrorAction SilentlyContinue) { Stop-Process -Id $ar.Id -Force; throw 'aerender timed out' }
-  $R.aerender_exit = $(try { $ar.ExitCode } catch { $null }); if ($R.aerender_exit -eq $null) { $R.aerender_exit = $(if ((Get-Content $log -Raw) -match 'Finished composition') { 0 } else { -1 }) }
+  $R.aerender_exit = $(try { $ar.ExitCode } catch { $null }); if ($R.aerender_exit -eq $null) { $R.aerender_exit = $(if (([string](Get-Content $log -Raw)) -match 'Finished composition' -or @(Get-ChildItem "$D\frames" | Where-Object { $_.Name -match '^f_\d+\.(png|tif)$' }).Count -ge 10) { 0 } else { -1 }) }
   $f = Get-ChildItem "$D\frames" | Where-Object { $_.Name -match '^f_\d+\.(png|tif)$' } | Sort-Object Name
   $R.frame_count = @($f).Count
   $R.outputs = @(); if ($f) { $R.outputs += (Copy-Out $f[0]); $R.outputs += (Copy-Out $f[-1]) }

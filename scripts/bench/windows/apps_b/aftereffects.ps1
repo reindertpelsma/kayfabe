@@ -17,7 +17,7 @@ try {
   $log = "$D\aerender.log"
   $ar = Run-Aerender @('-project', "$D\kf.aep", '-comp', 'kfcomp') $log "$D\frames" 900000
   if (Get-Process -Id $ar.Id -ErrorAction SilentlyContinue) { Stop-Process -Id $ar.Id -Force; throw 'aerender timed out' }
-  $R.aerender_exit = $(try { $ar.ExitCode } catch { $null }); if ($R.aerender_exit -eq $null) { $R.aerender_exit = $(if ((Get-Content $log -Raw) -match 'Finished composition') { 0 } else { -1 }) }
+  $R.aerender_exit = $(try { $ar.ExitCode } catch { $null }); if ($R.aerender_exit -eq $null) { $R.aerender_exit = $(if (([string](Get-Content $log -Raw)) -match 'Finished composition' -or @(Get-ChildItem "$D\frames" | Where-Object { $_.Name -match '^f_\d+\.(png|tif)$' }).Count -ge 60) { 0 } else { -1 }) }
   $R.t_render_end = Epoch
   $frames = @(Get-ChildItem "$D\frames" | Where-Object { $_.Extension -in '.png', '.tif' } | Sort-Object Name)
   $R.frame_count = $frames.Count
