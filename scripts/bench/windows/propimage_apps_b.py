@@ -519,6 +519,10 @@ def grade_aeparallel(r, d):
     for n in names:
         if n.endswith(".png"):
             _png(d, n, 3840, 2160)
+        elif n.endswith(".tif"):
+            i = media_check.tiff_info(d / n)
+            if (i["width"], i["height"]) != (3840, 2160):
+                raise ValueError("%s is %dx%d" % (n, i["width"], i["height"]))
     return "four concurrent aerender processes rendered 60 frames of a 4K project", ""
 
 
