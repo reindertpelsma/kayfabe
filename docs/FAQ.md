@@ -271,8 +271,8 @@ Kayfabe's QEMU is built without the GTK and SDL front ends on purpose, and the d
 
 ### Why is there a private storage bucket?
 
-Some software that kayfabe's Windows tests use, such as a paid benchmark and a student design tool, comes with terms that forbid passing it on, so the project keeps its test image of that software in a private bucket and nowhere public. Build CI has no access to the bucket, so none of it can end up in a released build, and nothing in it is sensitive. Anyone can get the same software by accepting the vendors' licences online, which is free, an automatic form, or a purchase, and the how-to [Recreate the proprietary Windows image](howto/recreate-the-proprietary-image.md) shows how to build your own copy.
-<!-- src: docs/howto/recreate-the-proprietary-image.md; docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md; owner ruling 2026-11-13 -->
+The project keeps its proprietary test images in a private object store. A proprietary test image is a private Windows disk image that the maintainers build to test kayfabe with commercial design, video and 3D applications. The repository contains no proprietary software, installers, licence keys, account data or images; the images are never published, never in git and never served publicly, and a rented test box receives one only through a time-limited, authenticated download. The maintainers' images are not shared with anyone. To reproduce those tests, build your own image with your own accounts and licences: the how-to [Recreate the proprietary Windows image](howto/recreate-the-proprietary-image.md) shows how, and [Proprietary test images](howto/proprietary-test-images.md) states the policy.
+<!-- src: docs/howto/proprietary-test-images.md; docs/howto/recreate-the-proprietary-image.md; docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md; owner decisions 2026-11-13 and 2026-11-15 -->
 
 ### Do I still need licences for NVIDIA's driver and Windows?
 

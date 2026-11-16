@@ -87,6 +87,7 @@ See [Building from source](building.md) for the package list, the pinned Rust to
 - Windows 11 Pro (build 26200) and Windows 11 Enterprise LTSC 2024 (build 26100) with NVIDIA's stock 580.88 driver, plus three registry settings. See [Windows guest](windows-guest.md). <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 - The Windows harness normally gives the guest a TPM 2.0 (swtpm), Secure Boot firmware (OVMF) and kayfabe's boot display driver. A headless device without display or boot-display driver reached Code 0 before resets and a later loss of guest responsiveness [measured at revision `b439ae82`, lease 57908255, GA106, guest 580.88; branch `claude/tur1-20261027`, not merged, `traces/tur1_20261027/iter2_ga106/ga106_h1_ndtimeline.csv`]. That establishes initialisation without the boot-display driver, not a stability pass. A kayfabe guest without TPM or Secure Boot has no recorded acceptance run. <!-- src: scripts/bench/windows/README.md; branch claude/tur1-20261027 commit 0b44315ef -->
 - You supply and license Windows yourself. <!-- src: docs/NOTICES.md -->
+- Tests with commercial applications need a private image that you build yourself with your own accounts and licences; the maintainers' images are not shared. See [Proprietary test images](proprietary-test-images.md).
 
 ## Not supported or not finished
 
