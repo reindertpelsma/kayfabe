@@ -63,6 +63,31 @@ function Win-Titles($procNames) {
 }
 # Keyboard fallback for dialogs whose controls UI Automation does not expose (After Effects): the key goes to the foreground window.
 function Press-Key($keys) { try { [System.Windows.Forms.SendKeys]::SendWait($keys) } catch {} }
+# After Effects refuses scripts that write files until the per-user preference is on (MEASURED 2026-11-16: the script aborts at its first file
+# write, the application stays open with an empty project and a UI_MessageBox, nothing is saved). The preference lives in the user's own
+# Prefs.txt and is changed here while the application is not running; nothing outside the user profile is touched.
+function Enable-AeFileScripts {
+  if (Get-Process AfterFX -ErrorAction SilentlyContinue) { throw 'After Effects is running: preference not changed' }
+  $f = Get-ChildItem "$env:APPDATA\Adobe\After Effects" -Recurse -Filter 'Adobe After Effects * Prefs.txt' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Prefs-' } | Select-Object -First 1
+  if (-not $f) {
+    # a fresh clone has no preferences file until the application has run once: start it, wait for the file, close it
+    $base = 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files'
+    Start-Process "$base\AfterFX.exe" | Out-Null
+    $t0 = Get-Date
+    while (((Get-Date) - $t0).TotalSeconds -lt 600 -and -not $f) {
+      Start-Sleep 5; [void](Dismiss-Dialogs 'AfterFX'); Press-Key '{ESC}'
+      $f = Get-ChildItem "$env:APPDATA\Adobe\After Effects" -Recurse -Filter 'Adobe After Effects * Prefs.txt' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Prefs-' } | Select-Object -First 1
+    }
+    [void](Quit-App 'AfterFX')
+    if (-not $f) { return 'no Prefs.txt after a first start' }
+  }
+  $t = Get-Content $f.FullName -Raw
+  if ($t -match '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "1"') { return 'already on' }
+  $n = $t -replace '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "0"', '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "1"'
+  if ($n -eq $t) { return 'key not found' }
+  Set-Content -Path $f.FullName -Value $n -NoNewline
+  return 'switched on'
+}
 function Has-Window($procNames) { (@(Win-Titles $procNames | Where-Object { $_ })).Count -gt 0 }
 function Quit-App($procNames, $comApp = $null) {
   # clean exit: ask politely first, then close the windows, only then end the process (and say which one happened)

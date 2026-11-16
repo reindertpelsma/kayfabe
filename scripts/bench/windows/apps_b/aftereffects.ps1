@@ -9,6 +9,7 @@ try {
   $js = $AE_MAKE.Replace('@MODE@', 'render').Replace('@OUT@', ($D -replace '\\', '/')).Replace('@VIDEO@', $(if ($vid) { $vid.FullName -replace '\\', '/' } else { '' }))
   Set-Content "$D\ae_make_run.jsx" $js
   New-Item -Force -ItemType Directory "$D\frames" | Out-Null
+  $R.ae_file_scripts = Enable-AeFileScripts
   $p = Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', "$D\ae_make_run.jsx") -PassThru
   $t0 = Get-Date
   $n = 0

@@ -27,6 +27,7 @@ var f = new File('$($D -replace '\\','/')/ae_open.txt'); f.open('w'); f.write(ro
 app.quit();
 "@
   Set-Content "$D\ae_open.jsx" $jsx
+  $R.ae_file_scripts = Enable-AeFileScripts
   $p = Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', "$D\ae_open.jsx") -PassThru
   $t0 = Get-Date; $n = 0
   while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 900) { [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++; if ($n % 5 -eq 0) { Press-Key '{ENTER}' } elseif ($n % 5 -eq 3) { Press-Key '{ESC}' } }

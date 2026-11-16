@@ -5,6 +5,7 @@ $base = 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files'
 try {
   $jsx = $AE_TOGGLE.Replace('@OUT@', ($D -replace '\\', '/'))
   Set-Content "$D\ae_toggle_run.jsx" $jsx
+  $R.ae_file_scripts = Enable-AeFileScripts
   $p = Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', "$D\ae_toggle_run.jsx") -PassThru
   $t0 = Get-Date; $n = 0
   while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 900) { [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++; if ($n % 5 -eq 0) { Press-Key '{ENTER}' } elseif ($n % 5 -eq 3) { Press-Key '{ESC}' } }
