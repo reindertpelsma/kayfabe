@@ -437,7 +437,7 @@ class Differential(unittest.TestCase):
     def test_census_counts_and_strips(self):
         lines = ["kf3: GSP rpc UNSERVICED Unserviced { code: 1234, sequence: 5 }"] * 3 + [
             "kf3: GSP rpc UNSERVICED Unserviced { code: 99, sequence: 6 }",
-            "kf3: chan token 0x1 (host 2) RETIRED, forwarded=1 dead=Some(Fault) uuid GPU-57a1c1f8-d5e0-2e79-d42f-98f8f35ca554",
+            "kf3: chan token 0x1 (host 2) RETIRED, forwarded=1 dead=Some(Fault) uuid GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001",
             "kf-rm: ForeignClass 0xc7b0 object refused",
             "NVRM: Xid (PCI:0000:00:07): 31, pid=1",
             "kf3: wait timed out after 5000 ms",
