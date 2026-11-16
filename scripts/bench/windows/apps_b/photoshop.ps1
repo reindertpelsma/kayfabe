@@ -40,13 +40,17 @@ var modes = [BlendMode.MULTIPLY, BlendMode.SCREEN, BlendMode.OVERLAY, BlendMode.
 var used = {}, base = doc.activeLayer, n = 0;
 for (var i = 0; i < 100; i++) {
   try {
-    var L = base.duplicate();
+    var x = (i * 311) % 5600, y = (i * 173) % 3200, w = 1536, h = 1024;
+    doc.activeLayer = base;
+    doc.selection.select([[x, y], [x + w, y], [x + w, y + h], [x, y + h]]);
+    doc.selection.copy();
+    var L = doc.paste();
     L.blendMode = modes[i % modes.length]; used[i % modes.length] = 1;
     L.opacity = 20 + (i * 7) % 60;
-    L.translate(UnitValue((i * 311) % 2000 - 1000, 'px'), UnitValue((i * 173) % 1200 - 600, 'px'));
     n++;
   } catch (e) { out.err_layer = String(e).substring(0,80); break; }
 }
+try { doc.selection.deselect(); } catch (e) {}
 out.layers = doc.layers.length; out.blend_modes = 0; for (var k in used) out.blend_modes++;
 if (n >= 100) feats.push('layers100');
 P('layers done');
