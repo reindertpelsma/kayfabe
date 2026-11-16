@@ -1636,7 +1636,7 @@ def app_classification(app):
     if app.get("class") == "harness":
         return "HARNESS", "harness"
     if app.get("ok") is True:
-        return "PASS", "app"
+        return ("PASS_LIMITED" if app.get("limited") else "PASS"), "app"
     if app.get("status") in ("LAUNCH_ONLY", "INCONCLUSIVE"):
         return app["status"], "unqualified"
     return "FAIL", "app"
@@ -1684,6 +1684,8 @@ def main(argv=None):
     ap.add_argument("--gop-efi", help="signed boot GOP driver to stage into the work directory")
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
     ap.add_argument("--apps", default=",".join(CHECKS))
+    ap.add_argument("--app-set", choices=("a", "b"), default="a", help="a: the first image's applications (default); b: the second image's creative applications")
+    ap.add_argument("--data-iso", help="read-only data volume (label KFDATA) attached on the AHCI cd port; required by --app-set b")
     ap.add_argument(
         "--fb-mb",
         type=int,
@@ -1729,14 +1731,24 @@ def main(argv=None):
     try:
         if a.resume and a.zip:
             raise ValueError("--resume needs the verified unpacked --dir, without --zip")
-        names = list(CHECKS) if a.apps == "all" else a.apps.split(",")
+        checks, app_runner = CHECKS, None
+        if a.app_set == "b":
+            spec_b = importlib.util.spec_from_file_location("propimage_apps_b", HERE / "propimage_apps_b.py")
+            app_b = importlib.util.module_from_spec(spec_b)
+            spec_b.loader.exec_module(app_b)
+            checks, app_runner = app_b.CHECKS, app_b.run_check
+            if not a.data_iso or not Path(a.data_iso).is_file():
+                raise ValueError("--app-set b needs --data-iso FILE (the open test-asset volume)")
+            if a.apps == ",".join(CHECKS):
+                a.apps = ",".join(checks)
+        names = list(checks) if a.apps == "all" else a.apps.split(",")
         # Preserve the measured predecessor's app spelling as an input alias only.
         names = ["wukong" if n == "blackmyth" else n for n in names]
-        if any(n not in CHECKS for n in names) or len(set(names)) != len(names):
+        if any(n not in checks for n in names) or len(set(names)) != len(names):
             raise ValueError("Unknown or duplicate app")
         plans = json.loads(a.plans.read_text()) if a.plans else {}
         for name, plan in plans.items():
-            if name not in CHECKS or name == "wukong":
+            if name not in checks or name == "wukong":
                 raise ValueError("Unsupported plan app")
             validate_plan(plan)
         swtpm = os.environ.get("SWTPM", "swtpm")
@@ -1874,7 +1886,7 @@ def main(argv=None):
                     "uid": 0,
                 }
             command = PI.build_argv(
-                state, "ci", str(clone), str(work), qemu=a.qemu, display=a.display, **kw
+                state, "ci", str(clone), str(work), qemu=a.qemu, display=a.display, data_iso=a.data_iso if a.app_set == "b" else None, **kw
             )
             if "restrict=on" not in " ".join(command) or str(clone) not in " ".join(command):
                 raise ValueError("Offline overlay invariant violated")
@@ -1941,7 +1953,7 @@ def main(argv=None):
                         "guest held for manual iteration; ssh port %s" % g.port,
                     )
                 for name in names:
-                    if boot_age_guard(time.monotonic() - booted, CHECKS[name]["timeout"]):
+                    if boot_age_guard(time.monotonic() - booted, checks[name]["timeout"]):
                         record(
                             "app:" + name,
                             "NOT_RUN",
@@ -1957,16 +1969,19 @@ def main(argv=None):
                             "wlms.exe event 1074: evaluation shutdown, not app FAIL",
                         )
                         break
-                    app = run_check(
-                        name,
-                        {},
-                        out,
-                        g,
-                        plan=plans.get(name),
-                        accessibility_experiment=a.experiment_3dmark_accessibility,
-                        solidworks_export=a.solidworks_export,
-                        superposition_run=a.superposition_run,
-                    )
+                    if app_runner:
+                        app = app_runner(name, out, g)
+                    else:
+                        app = run_check(
+                            name,
+                            {},
+                            out,
+                            g,
+                            plan=plans.get(name),
+                            accessibility_experiment=a.experiment_3dmark_accessibility,
+                            solidworks_export=a.solidworks_export,
+                            superposition_run=a.superposition_run,
+                        )
                     try:
                         events = shutdown_events(g)
                         (out / "shutdown_events.json").write_text(json.dumps(events, indent=2))
@@ -2027,7 +2042,7 @@ def main(argv=None):
         record("harness", "HARNESS", exc)
     (out / "result.json").write_text(json.dumps(rows, indent=2))
     (out / "result.md").write_text(result_markdown(rows) + "\n")
-    return 0 if rows and all(r["verdict"] in ("PASS", "OK") for r in rows) else 1
+    return 0 if rows and all(r["verdict"] in ("PASS", "OK", "PASS_LIMITED") for r in rows) else 1
 
 
 if __name__ == "__main__":

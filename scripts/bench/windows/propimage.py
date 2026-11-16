@@ -227,7 +227,7 @@ def slirp_net(subnet):
 
 
 def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_4M.secboot.fd",
-               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker", cdroms=()):
+               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker", cdroms=(), data_iso=None):
     """The exact qemu argv. disk: the image path (install/offline) or the clone (ci)."""
     require(mode in MODES, "mode must be one of %s" % (MODES,))
     require(display in ("broker", "off"), "display must be broker or off")
@@ -266,6 +266,9 @@ def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_
         # read-only install media on the q35 AHCI bus (Windows ISO first: it boots, then the disk)
         a += ["-drive", "if=none,id=cd%d,format=raw,media=cdrom,readonly=on,file=%s" % (i, iso),
               "-device", "ide-cd,drive=cd%d,bus=ide.%d%s" % (i, i, ",bootindex=1" if i == 0 else "")]   # q35 AHCI: one unit per port
+    if data_iso:
+        # read-only data volume (label KFDATA) on the AHCI cd port ide.2: the guest sees it as a CD drive (no bootindex, never booted)
+        a += ["-drive", "if=ide,index=2,media=cdrom,readonly=on,file=%s" % data_iso]
     if mode == "setup":
         # Windows setup first on std VGA, as the gate does; kayfabe's QEMU has no GTK front end, so the
         # distro QEMU (gtk, measured on the PC) shows it on the physical desktop.
