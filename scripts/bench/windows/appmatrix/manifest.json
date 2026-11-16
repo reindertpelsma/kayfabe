@@ -2966,11 +2966,11 @@
  },
  "official_fetcher": {
   "path": "scripts/ci/kf_fetch.py",
-  "sha256": "194d05ec4f29dbf12f65689b01f2d0682cc0a215c868eb6cd385b1647b7f6149",
-  "size": 22817,
-  "source_commit": "7bc49234f2b1050d4c4f02f65ee5c4896bc9364d",
-  "source_url": "https://raw.githubusercontent.com/reindertpelsma/kayfabe/7bc49234f2b1050d4c4f02f65ee5c4896bc9364d/scripts/ci/kf_fetch.py",
-  "recorded_utc": "2026-11-12"
+  "sha256": "d93521a5d19a737a81d27c56c2f0cc1d815e2fef19e4b60ae432c2d4a81be75f",
+  "size": 23534,
+  "source_commit": "be315853f24c5bf1b95afdc4a0f197e0faf6e051",
+  "source_url": "https://raw.githubusercontent.com/reindertpelsma/kayfabe/be315853f24c5bf1b95afdc4a0f197e0faf6e051/scripts/ci/kf_fetch.py",
+  "recorded_utc": "2026-11-16"
  },
  "official_drivers": [
   {

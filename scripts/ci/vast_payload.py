@@ -920,19 +920,29 @@ def watched_command_output(text):
     return text.split(begin, 1)[1].split(end, 1)[0]
 
 
-def xid_ok(text, rc, arm, arm_output=""):
-    """Admission delegates to the single S4 exact-source implementation."""
+def xid_refusal(text, rc, arm, arm_output=""):
+    """None when the host Xid delta is admitted, else the one-line reason it is not."""
     try:
         delta = watch_delta(text, rc)
         if arm not in ("--defer-liveness", "--missing-page-fault"):
-            return not delta
+            return None if not delta else "%d host Xid line(s) in an arm with no admitted fault" % len(delta)
         journal = "\n".join(delta)
         if len(xid_guard.xid_lines(journal)) != len(delta):
-            return False
+            return "a watched line is not a parsed Xid record"
         xid_guard.approve_native_arm(journal, arm, watched_command_output(text))
-        return True
-    except (EvidenceError, xid_guard.GuardRefused, ValueError, TypeError):
-        return False
+        return None
+    except (EvidenceError, xid_guard.GuardRefused, ValueError, TypeError) as error:
+        return refusal_text(type(error).__name__ + ": " + str(error))
+
+
+def refusal_text(reason):
+    """One printable-ASCII line, bounded: a reason goes into a log line, never raw bytes."""
+    return re.sub(r"[^\x20-\x7e]", "?", reason)[:1000]
+
+
+def xid_ok(text, rc, arm, arm_output=""):
+    """Admission delegates to the single S4 exact-source implementation."""
+    return xid_refusal(text, rc, arm, arm_output) is None
 
 
 def _stop(child):
@@ -1356,12 +1366,14 @@ def retain_native_control(arm, text):
 
 def guard_command(arm, log_path, rc):
     text = bounded_text(log_path)
-    ok = xid_ok(text, rc, arm, text)
+    reason = xid_refusal(text, rc, arm, text)
+    ok = reason is None
     if ok:
         try:
             retain_native_control(arm, text)
         except (xid_guard.GuardRefused, EvidenceError, OSError, ValueError) as error:
             text += "\nKF_NATIVE_RECEIPT_REFUSED reason=" + str(error) + "\n"
+            reason = refusal_text("native receipt refused: " + str(error))
             ok = False
     arm_diagnostic(arm, text, rc, ok)
     if ok:
@@ -1372,7 +1384,7 @@ def guard_command(arm, log_path, rc):
                     approved.write(json.dumps(xid_record_key(line)) + "\n")
     else:
         Path(os.environ["KF_PAYLOAD_XID_FAILED"]).touch()
-        print("KF_XID_REFUSED arm=" + arm, flush=True)
+        print("KF_XID_REFUSED arm=" + arm + " reason=" + reason, flush=True)
     return 0 if ok else 6
 
 
