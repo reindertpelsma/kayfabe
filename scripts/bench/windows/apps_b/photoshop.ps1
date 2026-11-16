@@ -18,18 +18,23 @@ try {
 app.displayDialogs = DialogModes.NO;
 function sid(s){return stringIDToTypeID(s);}
 var out = {}, feats = [];
+function P(m) { var pf = new File('$($D -replace '\\','/')/ps_progress.txt'); pf.open('a'); pf.writeln(new Date().getTime() + ' ' + m); pf.close(); }
+P('start');
 var si = app.systemInformation.split(/[\r\n]+/); var keep = [];
 for (var i=0;i<si.length;i++){ if (/GPU|Graphics|OpenGL|Driver|VRAM|Compute/i.test(si[i])) keep.push(si[i].replace(/^\s+|\s+$/g,'')); }
 out.gpuinfo = keep.join(' || ');
 var t0 = new Date().getTime();
 var doc = app.open(new File('$($src -replace '\\','/')'));
 out.w0 = doc.width.as('px'); out.h0 = doc.height.as('px');
+P('opened');
 // scale: an 8K-class canvas
 doc.resizeImage(UnitValue(7680,'px'), undefined, undefined, ResampleMethod.BICUBIC);
 out.w_big = doc.width.as('px'); out.h_big = doc.height.as('px'); feats.push('canvas8k');
+P('resized8k');
 // colour: 16 bit and a wide-gamut profile
 try { doc.bitsPerChannel = BitsPerChannelType.SIXTEEN; feats.push('16bit'); } catch (e) {}
 try { doc.convertProfile('Display P3', Intent.RELATIVECOLORIMETRIC, true, true); feats.push('iccP3'); } catch (e) { out.err_icc = String(e).substring(0,80); }
+P('colour done');
 // many layers with blend modes and opacities (patches of the photo at random places)
 var modes = [BlendMode.MULTIPLY, BlendMode.SCREEN, BlendMode.OVERLAY, BlendMode.SOFTLIGHT, BlendMode.HARDLIGHT, BlendMode.COLORDODGE, BlendMode.LINEARBURN, BlendMode.DIFFERENCE, BlendMode.LUMINOSITY, BlendMode.COLORBLEND];
 var used = {}, base = doc.activeLayer, n = 0;
@@ -44,6 +49,7 @@ for (var i = 0; i < 100; i++) {
 }
 out.layers = doc.layers.length; out.blend_modes = 0; for (var k in used) out.blend_modes++;
 if (n >= 100) feats.push('layers100');
+P('layers done');
 // adjustment layers
 try {
   var ad = 0;
@@ -55,9 +61,11 @@ try {
   }
   out.adjustments = ad; if (ad >= 3) feats.push('adjustment_layers');
 } catch (e) {}
+P('adjustments done');
 // flatten a copy into one raster layer for the filters (merged visible), smart object + smart filter
 try { var mv = new ActionDescriptor(); executeAction(sid('mergeVisible'), mv, DialogModes.NO); } catch (e) { try { doc.mergeVisibleLayers(); } catch (e2) {} }
 try { executeAction(sid('newPlacedLayer'), new ActionDescriptor(), DialogModes.NO); feats.push('smart_object'); } catch (e) {}
+P('smartobject done');
 var done = 0;
 for (var pass = 0; pass < 6; pass++) {
   try { var s1 = new ActionDescriptor();
@@ -69,6 +77,7 @@ for (var pass = 0; pass < 6; pass++) {
   try { doc.activeLayer.applyGaussianBlur(2 + pass); } catch (e) {}
 }
 out.smart_sharpen = done; if (done >= 3) feats.push('smart_sharpen'); out.filters = new Array(done + 1).join('smartSharpen,');
+P('filters done');
 // brush strokes: large soft strokes on a new layer
 try {
   var bl = doc.artLayers.add(); bl.name = 'strokes';
@@ -83,8 +92,9 @@ try {
   }
   out.strokes = bs; if (bs >= 20) feats.push('brush_strokes');
 } catch (e) { out.err_brush = String(e).substring(0,80); }
+P('strokes done');
 out.features = feats.join(',');
-doc.flatten();
+P('flatten'); doc.flatten();
 doc.resizeImage(UnitValue(2048,'px'), undefined, undefined, ResampleMethod.BICUBICSHARPER);
 try { doc.bitsPerChannel = BitsPerChannelType.EIGHT; } catch (e) {}
 out.w1 = doc.width.as('px'); out.h1 = doc.height.as('px');

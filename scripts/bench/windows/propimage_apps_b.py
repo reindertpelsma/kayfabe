@@ -159,7 +159,7 @@ def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignor
         for f in ("result.json", "steps.log"):
             guest.scp(remote + "/" + f, str(d / f), False)
         res = _json(d / "result.json")
-        names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
+        names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt", "ps_progress.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
         for fn in names:
             if not isinstance(fn, str) or not SAFE_FILE.fullmatch(fn):
                 continue
