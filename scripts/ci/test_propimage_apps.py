@@ -801,6 +801,15 @@ class Run(unittest.TestCase):
             self.assertEqual(argv[argv.index("--display") + 1], "broker")
         json.dumps(rec)
 
+    def test_github_archive_mirrors_follow_a_redirect_and_the_private_sources_never_do(self):
+        manifest = pa.build_manifest(pins_doc(), True)
+        by = {i["name"]: i["sources"][0] for i in manifest["items"]}
+        self.assertIs(by["libtpms-0.10.1.tar.gz"]["follow_redirect"], True)
+        self.assertIs(by["swtpm-0.10.1.tar.gz"]["follow_redirect"], True)
+        self.assertNotIn("follow_redirect", by["propimage-kfimg-20261112.zip"])
+        self.assertNotIn("follow_redirect", by["kf-gop.signed.efi"])
+        box_downloader.parse_manifest(json.dumps(manifest).encode())
+
     def test_a_prebuilt_prefix_swtpm_gets_its_library_path(self):
         env = pa.swtpm_env({}, prefix_bin=sys.executable)   # any executable stands in for /opt/tpm/bin/swtpm
         self.assertEqual(env["SWTPM"], sys.executable)

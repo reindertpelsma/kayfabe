@@ -186,7 +186,9 @@ def build_manifest(pins, build_swtpm):
     for it in pins["items"]:
         if it["role"] not in roles:
             continue
-        source = {"kind": "signed", "ref": it["ref"]} if "ref" in it else {"kind": "mirror", "url": it["mirror"]}
+        # 2026-11-16, MEASURED on a Vast box: the GitHub archive URLs answer 302 (to codeload.github.com) and the downloader refuses a redirect unless
+        # the mirror source says follow_redirect (class NETWORK, stage REFUSED:DOWNLOAD). The sha256 and size pins still decide.
+        source = {"kind": "signed", "ref": it["ref"]} if "ref" in it else {"kind": "mirror", "url": it["mirror"], "follow_redirect": True}
         items.append({"name": it["name"], "dest": it["dest"], "sha256": it["sha256"], "size": it["size"],
                       "needed_by": it["needed_by"], "sources": [source]})
     for it in items:
