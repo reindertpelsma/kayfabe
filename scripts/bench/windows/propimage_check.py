@@ -45,6 +45,41 @@ def _load_resolve_gpu():
     spec.loader.exec_module(mod)
     return mod
 
+PLATFORM = "kf3"
+
+
+def enable_vfio(bdf):
+    """Differential-test platform `vfio`: the same harness, image, overlay, offline slirp, clock, CPU profile and in-guest scripts, but the
+    kf3 device is replaced by the real GPU (function 0 and its audio function .1) through vfio-pci, and the kf3-only checks (seed UUID
+    repair/compare) are not applicable: they are recorded as VFIO_DIFF, never as a pass of kf3. The caller (the PC) has bound the GPU to
+    vfio-pci and holds the GPU lock (traces/pcnight_20261114 vfio_host.sh)."""
+    global PLATFORM
+    if not re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.0", bdf):
+        raise ValueError("--vfio-gpu must be a PCI address of function 0, for example 0000:01:00.0")
+    audio = bdf[:-1] + "1"
+    original = PI.build_argv
+
+    def build_argv(*a, **k):
+        argv = original(*a, **k)
+        i = next(n for n, v in enumerate(argv) if v == "-device" and argv[n + 1].startswith("kf3-gpu"))
+        del argv[i : i + 2]
+        argv[i:i] = [
+            "-device",
+            f"vfio-pci,host={bdf},multifunction=on,addr=0x4.0",
+            "-device",
+            f"vfio-pci,host={audio},addr=0x4.1",
+        ]
+        return argv
+
+    PI.build_argv = build_argv
+    globals()["gpu_fix"] = lambda g, uuid: (True, "VFIO platform: kf3 seed repair/UUID check not applicable (real GPU)")
+    compare = PI.compare
+    PI.compare = lambda st, facts: [
+        tuple("VFIO_DIFF" if (j == 1 and v == "MISMATCH") else v for j, v in enumerate(r)) for r in compare(st, facts)
+    ]
+    PLATFORM = "vfio"
+
+
 GUEST_DIR = r"C:\kfapps"
 
 
@@ -1560,7 +1595,8 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
     d.mkdir(parents=True)
     tmp = d / (name + ".ps1")
     resolve_cfg = options.pop("resolve_gpu", None)  # dict (media directory, ...) or None: the launch-only Resolve row
-    resolve_plan, host_sampler, host_t0 = None, None, None
+    qlog = options.pop("qemu_log", None)
+    resolve_plan, host_sampler, host_t0, qlines0 = None, None, None, None
     if name != "resolve" or resolve_cfg is None:
         tmp.write_text(render_check(name, env, run_id, plan, **options))
     task = "app_" + run_id
@@ -1574,6 +1610,7 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
             host_sampler.start()
             time.sleep(2)
             host_t0 = time.time()
+            qlines0 = len(Path(qlog).read_text(errors="replace").splitlines()) if qlog and Path(qlog).is_file() else None
         p = guest.interactive(task, tmp.read_text())
         if p.returncode:
             raise ValueError("Task start failed")
@@ -1624,7 +1661,12 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
             host_sampler = None
             (d / "host_smi.csv").write_text(host_csv)
             rg.pull_outputs(guest, d, resolve_plan, remote)
-            resolve_host = {"host_csv": host_csv, "host_t0": host_t0, "host_utc_offset_s": float(time.localtime().tm_gmtoff)}
+            resolve_host = {"host_csv": host_csv, "host_t0": host_t0, "host_utc_offset_s": float(time.localtime().tm_gmtoff),
+                            "platform": PLATFORM}
+            if PLATFORM == "kf3" and qlog and qlines0 is not None and Path(qlog).is_file():
+                window = Path(qlog).read_text(errors="replace").splitlines()[qlines0:]
+                resolve_host["census_lines"] = window
+                (d / "kf3_census.json").write_text(json.dumps(rg.census(window), indent=1))
         row = verdict(name, run_id, d, plan, resolve_host=resolve_host)
     except (ValueError, TypeError, OSError, subprocess.TimeoutExpired) as exc:
         row = {"class": "harness", "app": name, "ok": False, "evidence": "NONE", "error": str(exc)}
@@ -1737,6 +1779,13 @@ def main(argv=None):
     )
     ap.add_argument("--plans", type=Path)
     ap.add_argument(
+        "--platform",
+        choices=("kf3", "vfio"),
+        default="kf3",
+        help="how the guest GPU is provided: kf3 (the product) or vfio (the real GPU, control for differential tests; PC only)",
+    )
+    ap.add_argument("--vfio-gpu", default="0000:01:00.0", help="PCI address of the GPU function 0 for --platform vfio")
+    ap.add_argument(
         "--resolve-launch-only",
         action="store_true",
         help="Resolve row: only create a project (the old weak check) instead of the GPU rendering coverage",
@@ -1762,6 +1811,8 @@ def main(argv=None):
         help="Repeat measured rectangle-derived RUN click; requires local tesseract for result-screen validation",
     )
     a = ap.parse_args(argv)
+    if a.platform == "vfio":
+        enable_vfio(a.vfio_gpu)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -2018,7 +2069,10 @@ def main(argv=None):
                         solidworks_export=a.solidworks_export,
                         superposition_run=a.superposition_run,
                         **(
-                            {"resolve_gpu": {"media_dir": a.resolve_media or str(Path(a.work) / "resolve_media")}}
+                            {
+                                "resolve_gpu": {"media_dir": a.resolve_media or str(Path(a.work) / "resolve_media")},
+                                "qemu_log": str(r / "qemu.log"),
+                            }
                             if name == "resolve" and not a.resolve_launch_only
                             else {}
                         ),

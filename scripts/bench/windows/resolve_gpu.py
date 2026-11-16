@@ -63,18 +63,24 @@ SOURCES = {  # name -> (guest file, source frame rate, total source frames)
 NAME_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]{0,119}")
 MAX_MOVIE_BYTES = 400 * 1024 * 1024
 RENDER_ORDER = ("h264", "dnxhr", "prores", "png", "hevc")
+# Two-lane model (owner, 2026-11-16): `gate` rows must pass on kf3 (strict); `discovery` rows try to break kf3 and may fail, the failure being the
+# product. A row starts in `discovery` until it has passed on kf3; `expected_fail` names the known breakage per platform
+# (failure class CRASH/HANG/TDR/XID/ASSERT/OUTPUT_MISMATCH, one-line reason) and is empty until a run records one. The five basic renders are
+# `gate` by intent: NOT yet measured passing, so the lane field is DESIGN, flipped only by a run that records it (traces README).
+FAILURE_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")
+LANES = ("gate", "discovery")
 
 # One entry per deliverable. `expect` is what the host verifies on the pulled bytes.
 RENDERS = {
-    "h264": dict(label="H.264 MP4, UHD", fmt="MP4", codec="H.264", try_nvidia=True, resolution_prefix=None, timeout_s=900,
+    "h264": dict(lane="gate", expected_fail={}, label="H.264 MP4, UHD", fmt="MP4", codec="H.264", try_nvidia=True, resolution_prefix=None, timeout_s=900,
                  expect=dict(kind="movie", ext=".mp4", codecs=("h264", "avc1"), width=3840, height=2160)),
-    "dnxhr": dict(label="Avid DNxHR MOV, UHD", fmt="QuickTime", codec="Avid DNxHR", try_nvidia=False, resolution_prefix=None, timeout_s=900,
+    "dnxhr": dict(lane="gate", expected_fail={}, label="Avid DNxHR MOV, UHD", fmt="QuickTime", codec="Avid DNxHR", try_nvidia=False, resolution_prefix=None, timeout_s=900,
                   expect=dict(kind="movie", ext=".mov", codecs=("dnxhd", "avdh", "avdn"), width=3840, height=2160)),
-    "prores": dict(label="Apple ProRes MOV, UHD", fmt="QuickTime", codec="Apple ProRes", try_nvidia=False, resolution_prefix=None, timeout_s=900,
+    "prores": dict(lane="gate", expected_fail={}, label="Apple ProRes MOV, UHD", fmt="QuickTime", codec="Apple ProRes", try_nvidia=False, resolution_prefix=None, timeout_s=900,
                    expect=dict(kind="movie", ext=".mov", codecs=("prores", "apch", "apcn", "apcs", "apco", "ap4h", "ap4x"), width=3840, height=2160)),
-    "png": dict(label="PNG image sequence, UHD", fmt="PNG", codec=None, try_nvidia=False, resolution_prefix=None, timeout_s=900,
+    "png": dict(lane="gate", expected_fail={}, label="PNG image sequence, UHD", fmt="PNG", codec=None, try_nvidia=False, resolution_prefix=None, timeout_s=900,
                 expect=dict(kind="sequence", ext=".png", width=3840, height=2160)),
-    "hevc": dict(label="H.265 MP4, 720p (software HEVC)", fmt="MP4", codec="H.265", try_nvidia=True, resolution_prefix="1280", timeout_s=900,
+    "hevc": dict(lane="gate", expected_fail={}, label="H.265 MP4, 720p (software HEVC)", fmt="MP4", codec="H.265", try_nvidia=True, resolution_prefix="1280", timeout_s=900,
                  expect=dict(kind="movie", ext=".mp4", codecs=("hevc", "hvc1", "hev1"), width=1280, height=720)),
 }
 
@@ -293,13 +299,16 @@ def verify_render(rid: str, rr: dict, directory: Path) -> tuple[bool, list[str],
 
 # ------------------------------------------------------------------------------------------------ the row
 
-def grade(result: dict, directory: Path, host_csv: str = "", host_t0: Optional[float] = None, host_utc_offset_s: float = 0.0) -> dict:
+def grade(result: dict, directory: Path, host_csv: str = "", host_t0: Optional[float] = None, host_utc_offset_s: float = 0.0,
+          census_lines: Optional[list] = None, platform: str = "kf3") -> dict:
     """Return {'ok','status','error'/'signal','renders': {...},'findings': [...]} for the Resolve row.
 
     `result` is the guest's result.json (a source of file lists and timestamps only); `directory` holds the pulled bytes plus engine.csv and
     smi.csv; `host_csv` is host nvidia-smi output sampled during the task, `host_t0` the host epoch at which the guest script was started
     (guest epoch result['t0'] maps to it; the skew is the start-up latency, so windows are trimmed by 2 s each side)."""
-    row = {"ok": False, "status": "FAIL", "evidence": "FILE", "renders": {}, "findings": [], "problems": []}
+    row = {"ok": False, "status": "FAIL", "evidence": "FILE", "platform": platform, "renders": {}, "findings": [], "problems": []}
+    if census_lines is not None:
+        row["census_whole_row"] = census(census_lines)
     engine_text = (directory / "engine.csv").read_text(errors="replace") if (directory / "engine.csv").is_file() else ""
     smi_text = (directory / "smi.csv").read_text(errors="replace") if (directory / "smi.csv").is_file() else ""
     guest_samples = parse_engine_csv(engine_text)
@@ -366,6 +375,11 @@ def grade(result: dict, directory: Path, host_csv: str = "", host_t0: Optional[f
                 row["findings"].append(f"{rid}: the Encoder control offered no NVIDIA encoder (Auto/Native only): NVENC not exercised (Studio-only feature of Resolve)")
         entry["status"] = "PASS" if not probs else "FAIL"
         entry["problems"] = probs
+        entry["lane"] = RENDERS[rid]["lane"]
+        if probs:
+            entry["failure_class"] = classify_failure(entry, row.get("census_whole_row"))
+            known = RENDERS[rid]["expected_fail"].get(platform)
+            entry["expected_fail"] = bool(known and known.get("class") == entry["failure_class"])
         if probs:
             row["problems"].append(f"{rid}: " + "; ".join(probs[:3]))
         if not rr.get("finished"):
@@ -430,3 +444,97 @@ def pull_outputs(guest, d: Path, plan: dict, remote: str) -> None:
             target = d / name
             target.parent.mkdir(parents=True, exist_ok=True)
             guest.scp(out_remote + "/" + name, str(target), False)
+
+
+def row_definitions() -> list[dict]:
+    """The rows of this lane in the shape the generic runner consumes (id, lane, expected_fail per platform)."""
+    out = []
+    for rid in RENDER_ORDER:
+        r = RENDERS[rid]
+        if r["lane"] not in LANES or any(v.get("class") not in FAILURE_CLASSES for v in r["expected_fail"].values()):
+            raise ValueError(f"bad lane definition for {rid}")
+        out.append({"id": "resolve." + rid, "label": r["label"], "lane": r["lane"], "expected_fail": r["expected_fail"],
+                    "platforms": ["kf3", "vfio"]})
+    return out
+
+
+# ------------------------------------------------------------------------------------------------ kf3 census
+
+_UUID = re.compile(r"GPU-[0-9a-fA-F-]{8,}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+
+def census(lines: list[str], top: int = 12) -> dict:
+    """RM-call census of the kf3 host QEMU log lines of one row's window: unserviced GSP controls (by code), ForeignClass, DEAD channels,
+    retired channels, Xid/TDR/timeouts. Counts and normalised patterns only: UUIDs and numbers are stripped, no raw log line is kept."""
+    uns = {}
+    pat = {}
+    out = {"lines": len(lines), "unserviced": 0, "unserviced_codes": {}, "foreign_class": 0, "dead_channels": 0, "channels_retired": 0,
+           "xid": 0, "tdr_or_timeout": 0, "refused_leaves_absent": 0}
+    for ln in lines:
+        if "UNSERVICED" in ln:
+            out["unserviced"] += 1
+            m = re.search(r"code: (\d+)", ln)
+            if m:
+                uns[m.group(1)] = uns.get(m.group(1), 0) + 1
+            continue
+        low = ln.lower()
+        hit = False
+        if "foreignclass" in low or "foreign class" in low:
+            out["foreign_class"] += 1
+            hit = True
+        if re.search(r"dead=some|\bdead channel|channel .*\bdead\b", low):
+            out["dead_channels"] += 1
+            hit = True
+        if "retired" in low and "chan token" in low:
+            out["channels_retired"] += 1
+        if "xid" in low and "nvrm" in low:
+            out["xid"] += 1
+            hit = True
+        if re.search(r"\btdr\b|timed out|timeout", low):
+            out["tdr_or_timeout"] += 1
+            hit = True
+        if "refused leaves are absent" in low:
+            out["refused_leaves_absent"] += 1
+        if hit:
+            key = re.sub(r"\d+", "N", _UUID.sub("UUID", ln))[:140]
+            pat[key] = pat.get(key, 0) + 1
+    out["unserviced_codes"] = dict(sorted(uns.items(), key=lambda kv: -kv[1])[:top])
+    out["patterns"] = [{"n": n, "pattern": k} for k, n in sorted(pat.items(), key=lambda kv: -kv[1])[:top]]
+    return out
+
+
+def classify_failure(entry: dict, cen: Optional[dict]) -> Optional[str]:
+    """One failure class for a failed render entry (None when it passed): the first that applies, evidence-based."""
+    if entry.get("status") == "PASS":
+        return None
+    probs = " ".join(entry.get("problems") or [])
+    if cen and cen.get("xid"):
+        return "XID"
+    if cen and cen.get("tdr_or_timeout") and entry.get("status") != "NOT_RUN":
+        return "TDR"
+    if "render end" in probs or "stopped by driver" in probs:
+        return "HANG"
+    if re.search(r"no output file|not transferred|codec|size|frames|duration|flat|identical|sequence", probs):
+        return "OUTPUT_MISMATCH"
+    return "ASSERT"
+
+
+def compare_platforms(kf3: Optional[dict], vfio: Optional[dict]) -> dict:
+    """Differential classification per render id from two graded rows (verdict.json of each platform)."""
+    out = {}
+    ids = set((kf3 or {}).get("renders", {})) | set((vfio or {}).get("renders", {}))
+    for rid in sorted(ids):
+        a = ((kf3 or {}).get("renders", {}).get(rid) or {}).get("status")
+        b = ((vfio or {}).get("renders", {}).get(rid) or {}).get("status")
+        if a is None or b is None:
+            c = "VFIO_CONTROL_PENDING" if b is None else "KF3_PENDING"
+        elif a == "PASS" and b == "PASS":
+            c = "BOTH_PASS"
+        elif a != "PASS" and b != "PASS":
+            c = "BOTH_FAIL (row or application problem)"
+        elif a != "PASS":
+            c = "KAYFABE_DEFECT (kf3 fails, bare GPU passes)"
+        else:
+            c = "KF3_PASS_VFIO_FAIL (odd)"
+        out[rid] = {"kf3": a, "vfio": b, "class": c}
+    return out

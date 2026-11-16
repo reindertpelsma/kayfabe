@@ -405,5 +405,73 @@ class Grade(unittest.TestCase):
         self.assertIn("guest script error", self.grade()["error"] + " ".join(self.grade()["problems"]))
 
 
+class Differential(unittest.TestCase):
+    def test_census_counts_and_strips(self):
+        lines = ["kf3: GSP rpc UNSERVICED Unserviced { code: 1234, sequence: 5 }"] * 3 + [
+            "kf3: GSP rpc UNSERVICED Unserviced { code: 99, sequence: 6 }",
+            "kf3: chan token 0x1 (host 2) RETIRED, forwarded=1 dead=Some(Fault) uuid GPU-57a1c1f8-d5e0-2e79-d42f-98f8f35ca554",
+            "kf-rm: ForeignClass 0xc7b0 object refused",
+            "NVRM: Xid (PCI:0000:00:07): 31, pid=1",
+            "kf3: wait timed out after 5000 ms",
+            "kf3: family=Ada phase=Cold ok"]
+        c = RG.census(lines)
+        self.assertEqual((c["unserviced"], c["unserviced_codes"]["1234"], c["foreign_class"], c["dead_channels"], c["xid"], c["tdr_or_timeout"]), (4, 3, 1, 1, 1, 1))
+        text = json.dumps(c)
+        self.assertNotIn("GPU-57a1", text)
+        self.assertNotIn("0xc7b0", text)
+
+    def test_census_of_a_clean_window_is_zero(self):
+        c = RG.census(["kf3: family=Ada phase=Hot trapped=3"] * 10)
+        self.assertEqual((c["unserviced"], c["foreign_class"], c["dead_channels"], c["xid"], c["tdr_or_timeout"]), (0, 0, 0, 0, 0))
+
+    def test_failure_classes(self):
+        self.assertIsNone(RG.classify_failure({"status": "PASS"}, None))
+        self.assertEqual(RG.classify_failure({"status": "FAIL", "problems": ["codec 'x' not in"]}, None), "OUTPUT_MISMATCH")
+        self.assertEqual(RG.classify_failure({"status": "FAIL", "problems": ["render end step failed"]}, None), "HANG")
+        self.assertEqual(RG.classify_failure({"status": "FAIL", "problems": ["guest: utilization.gpu peaked"]}, None), "ASSERT")
+        self.assertEqual(RG.classify_failure({"status": "FAIL", "problems": ["render end step failed"]}, {"xid": 2}), "XID")
+        self.assertEqual(RG.classify_failure({"status": "FAIL", "problems": ["x"]}, {"tdr_or_timeout": 1, "xid": 0}), "TDR")
+
+    def test_platform_comparison_classes(self):
+        def row(*st):
+            return {"renders": {k: {"status": v} for k, v in zip(("a", "b", "c", "d"), st)}}
+        c = RG.compare_platforms(row("PASS", "FAIL", "FAIL", "PASS"), row("PASS", "FAIL", "PASS", "FAIL"))
+        self.assertTrue(c["a"]["class"].startswith("BOTH_PASS"))
+        self.assertTrue(c["b"]["class"].startswith("BOTH_FAIL"))
+        self.assertTrue(c["c"]["class"].startswith("KAYFABE_DEFECT"))
+        self.assertTrue(c["d"]["class"].startswith("KF3_PASS_VFIO_FAIL"))
+        self.assertEqual(RG.compare_platforms(row("PASS"), None)["a"]["class"], "VFIO_CONTROL_PENDING")
+
+    def test_lane_definitions(self):
+        rows = RG.row_definitions()
+        self.assertEqual([r["id"] for r in rows], ["resolve." + x for x in RG.RENDER_ORDER])
+        self.assertTrue(all(r["lane"] in RG.LANES for r in rows))
+        saved = RG.RENDERS["h264"]["expected_fail"]
+        RG.RENDERS["h264"]["expected_fail"] = {"kf3": {"class": "BOGUS"}}
+        try:
+            with self.assertRaises(ValueError):
+                RG.row_definitions()
+        finally:
+            RG.RENDERS["h264"]["expected_fail"] = saved
+
+    def test_vfio_switch_rewrites_the_device_and_nothing_else(self):
+        spec = importlib.util.spec_from_file_location("kf_pc_diff", WIN / "propimage_check.py")
+        pc = importlib.util.module_from_spec(spec)
+        sys.modules["kf_pc_diff"] = pc
+        spec.loader.exec_module(pc)
+        argv0 = ["qemu", "-machine", "q35", "-device", "kf3-gpu,id=kf0,fb-mb=4096", "-device", "virtio-net-pci", "-drive", "file=x"]
+        pc.PI.build_argv = lambda *a, **k: list(argv0)
+        with self.assertRaises(ValueError):
+            pc.enable_vfio("0000:01:00.1")
+        pc.enable_vfio("0000:01:00.0")
+        argv = pc.PI.build_argv()
+        self.assertEqual(pc.PLATFORM, "vfio")
+        self.assertNotIn("kf3-gpu", " ".join(argv))
+        self.assertIn("vfio-pci,host=0000:01:00.0,multifunction=on,addr=0x4.0", argv)
+        self.assertIn("vfio-pci,host=0000:01:00.1,addr=0x4.1", argv)
+        self.assertEqual([a for a in argv if "vfio" not in a and a != "-device"], ["qemu", "-machine", "q35", "virtio-net-pci", "-drive", "file=x"])
+        self.assertEqual(pc.gpu_fix(None, "u")[0], True)
+
+
 if __name__ == "__main__":
     unittest.main()
