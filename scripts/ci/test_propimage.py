@@ -542,6 +542,42 @@ class PropTests(unittest.TestCase):
         self.assertNotIn("hostfwd=tcp::", " ".join(self.argv("offline")))
         self.assertNotIn("hostfwd=tcp:0.0.0.0", " ".join(self.argv("ci")))
 
+    def test_default_argv_names_no_host_gpu(self):
+        # 2026-11-16: gpu-minor is opt-in; unset, the kf3 device is exactly today's (the device default is minor 0)
+        for mode in ("install", "offline", "ci"):
+            self.assertNotIn("gpu-minor", " ".join(self.argv(mode)))
+
+    def test_gpu_minor_selects_the_host_gpu_of_the_kf3_device_only(self):
+        for mode in ("install", "offline", "ci"):
+            for minor in (0, 1, 3):
+                argv = self.argv(mode, gpu_minor=minor)
+                dev = self.opt(argv, "-device", "kf3-gpu")
+                self.assertEqual(len(dev), 1)
+                self.assertEqual(dev[0].split(",").count("gpu-minor=%d" % minor), 1)
+                self.assertEqual(" ".join(argv).count("gpu-minor"), 1)
+
+    def test_gpu_minor_changes_nothing_else_in_the_argv(self):
+        base, with_minor = self.argv("ci"), self.argv("ci", gpu_minor=1)
+        rest = [a.replace(",gpu-minor=1", "") for a in with_minor]
+        self.assertEqual(rest, base)
+        self.assertNotEqual(with_minor, base)
+
+    def test_gpu_minor_negative_is_refused(self):
+        with self.assertRaises(Exception):
+            self.argv("ci", gpu_minor=-1)
+
+    def test_gpu_minor_above_63_is_refused(self):
+        with self.assertRaises(Exception):
+            self.argv("ci", gpu_minor=64)
+
+    def test_gpu_minor_float_is_refused(self):
+        with self.assertRaises(Exception):
+            self.argv("ci", gpu_minor=1.0)
+
+    def test_gpu_minor_bool_is_refused(self):
+        with self.assertRaises(Exception):
+            self.argv("ci", gpu_minor=True)
+
     def test_gpu_uuid_never_auto(self):
         for mode in ("install", "offline", "ci"):
             self.assertNotIn("gpu-uuid=auto", " ".join(self.argv(mode)))
