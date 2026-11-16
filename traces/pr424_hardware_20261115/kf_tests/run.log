@@ -1,0 +1,7 @@
+START 2026-11-15T18:51:00Z rev=9ddb897e7281ecff4baa9d35acb863bbd265644a Build cuda_12.2.r12.2/compiler.33191640_0 NVIDIA GeForce RTX 4090, 580.159.04 kernel_bytes=138410
+check-invariants rc=0
+build rc=0
+check-ptx rc=0
+case hostile/report_run_cap rc=0
+kf_tests full rc=0
+END 2026-11-15T18:51:18Z kernel_bytes=138410

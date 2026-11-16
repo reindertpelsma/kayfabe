@@ -30,6 +30,8 @@
 #   win_vm.sh status              what runs, by process AND socket
 #   win_vm.sh sign                export + sign this checkout's kf-gop for gop-efi=
 #   win_vm.sh fetch               download + verify the pinned media into the cache
+#   win_vm.sh prepare             the one root step of the lane (the swtpm AppArmor rule, through `kfroot`); run it BEFORE
+#                                 the unprivileged drop (windows_gate.sh --prepare calls it); nothing else here needs root
 #
 # Environment: WINVM_ROOT (/workspace/winvm), WINVM_NAME (kfwin), BENCH (/workspace/bench: kf3
 # binaries per revision), WINVM_QEMU (override the binary), WINVM_SSH_PORT (2224),
@@ -107,6 +109,10 @@ DRY_RUN=${WINVM_DRY_RUN:-0}
 NET=${WINVM_NET:-offline}
 VM_UUID="" VM_SERIAL="" VM_MAC=""   # the per-VM identity (load_identity); empty = the fixed MAC, QEMU's SMBIOS
 export PATH="$HOME/.cargo/bin:$PATH"
+# `kfroot` (the explicit root step) and `kf_dmesg`; see scripts/lib/kfroot.sh. This script runs as an unprivileged uid in
+# group kvm: its only root operation is apparmor_swtpm below.
+# shellcheck source=../../lib/kfroot.sh
+. "$REPO/scripts/lib/kfroot.sh"
 
 # ★ The media, each pinned by sha256 at its first fetch (2026-10-04, box vwin). Only official
 # sources: Microsoft's evaluation fwlink, the virtio-win project's own versioned archive (the
@@ -257,13 +263,17 @@ make_layout() {
 apparmor_swtpm() {
   # jammy's swtpm runs under an enforced AppArmor profile scoped to libvirt paths; allow this
   # harness's tree (state, sockets, logs) through the profile's local include, once.
-  local prof=/etc/apparmor.d/usr.bin.swtpm local=/etc/apparmor.d/local/usr.bin.swtpm rule
+  # (WINVM_APPARMOR_DIR: a test knob, a fake /etc/apparmor.d)
+  local aa=${WINVM_APPARMOR_DIR:-/etc/apparmor.d}
+  local prof=$aa/usr.bin.swtpm local=$aa/local/usr.bin.swtpm rule
   [ -e "$prof" ] || { log "no swtpm AppArmor profile"; return 0; }
   grep -q 'include.*local/usr.bin.swtpm' "$prof" || die "$prof does not include $local"
   rule="$WINVM_ROOT/** rwk,"
   if ! grep -qxF "$rule" "$local" 2>/dev/null; then
-    printf '# kayfabe scripts/bench/windows/win_vm.sh: per-VM swtpm state, sockets, logs\n%s\n' "$rule" >> "$local"
-    apparmor_parser -r "$prof"
+    # root: /etc/apparmor.d is root-owned, and loading a profile into the kernel needs CAP_MAC_ADMIN. Both are kfroot steps
+    # (a box that already has the rule, the usual case after `windows_gate.sh --prepare`, needs neither).
+    printf '# kayfabe scripts/bench/windows/win_vm.sh: per-VM swtpm state, sockets, logs\n%s\n' "$rule" | kfroot tee -a "$local" > /dev/null
+    kfroot apparmor_parser -r "$prof"
     log "AppArmor: swtpm may use $WINVM_ROOT"
   fi
 }
@@ -430,7 +440,9 @@ log_identity() {
 # ------------------------------------------------------------------------------------------------
 # Only blank lines, '#' comments and KF3_NAME=digits lines are accepted; any other line refuses the
 # whole file (by line number, never by content). The list is NOT hard-coded here: it is the caller's
-# file (a sample is scripts/bench/windows/kf3_flags.sample.env, which must be confirmed against `next`).
+# file. ★ 2026-11-15 (flag cleanup, Stage 1): Windows needs NO env file: the measured Windows profile is the
+# device's default for a declared Windows guest, so a plain `run` boots with it. An env file is for MEASUREMENT
+# flags only (scripts/bench/windows/kf3_flags.sample.env is the commented example).
 ENVFILE_SRC="" ENVFILE_SHA="" ENVFILE_N=0
 load_env_file() {
   local f=$1 line n=0 lineno=0 pairs=()
@@ -944,7 +956,7 @@ cmd_run() {
   local n=0 reason="" dm0
   while :; do
     n=$((n + 1))
-    dm0=$(dmesg 2>/dev/null | wc -l || echo 0)
+    dm0=$(kf_dmesg 2>/dev/null | wc -l || echo 0)
     nvidia-smi -q > "$VM/logs/${tag}_b${n}_host_smi_before.txt" 2>&1 || true
     # ★ 2026-10-09, DIAGNOSTIC (default off; docs/design/V3_BAR0_TRACE_MODE.md, OWNER_RULINGS §X):
     # WINVM_TRACE=1 records this boot with the VFIO reference's tracer — QEMU's trace events from
@@ -962,7 +974,7 @@ cmd_run() {
     vm_start "$tag" "$n" -serial "file:$VM/logs/${tag}_b${n}_serial.log" "${tracea[@]}"
     vm_wait 0
     reason=$BOOT_REASON
-    dmesg 2>/dev/null | tail -n "+$((dm0 + 1))" > "$VM/logs/${tag}_b${n}_host_dmesg.txt" || true
+    kf_dmesg 2>/dev/null | tail -n "+$((dm0 + 1))" > "$VM/logs/${tag}_b${n}_host_dmesg.txt" || true
     nvidia-smi -q > "$VM/logs/${tag}_b${n}_host_smi_after.txt" 2>&1 || true
     log "WINVM_BOOT_END boot=$n rc=$BOOT_RC reason=$reason kf3_lines=$(grep -c 'kf3\|kf-rm\|kf-gsp' "$VM/logs/${tag}_b${n}_qemu.log" || true) host_xid=$(grep -c 'NVRM: Xid' "$VM/logs/${tag}_b${n}_host_dmesg.txt" || true)"
     grep -q GUEST_PANICKED "$BOOT_EV" && log "  GUEST_PANICKED in boot $n: $(grep GUEST_PANICKED "$BOOT_EV" | tail -1)"
@@ -1104,6 +1116,7 @@ main() {
     status) cmd_status ;;
     sign) cmd_sign ;;
     fetch) cmd_fetch ;;
+    prepare) install -d -m 0700 "$WINVM_ROOT"; apparmor_swtpm ;;
     ""|-h|--help|help) sed -n '3,64p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "unknown subcommand '$sub' (win_vm.sh help)" ;;
   esac

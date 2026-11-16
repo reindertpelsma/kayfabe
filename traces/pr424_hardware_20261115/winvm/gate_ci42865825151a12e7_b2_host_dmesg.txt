@@ -1,0 +1,7 @@
+[ 5931.474153] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 5987.594257] sched: RT throttling activated
+[ 6110.474211] x86/PAT: kf3-vamgr:85897 freeing invalid memtype [mem 0x380000520000-0x38000071ffff]
+[ 6110.475763] x86/PAT: kf3-vamgr:85897 freeing invalid memtype [mem 0x380000720000-0x38000091ffff]
+[ 6110.476941] x86/PAT: kf3-vamgr:85897 freeing invalid memtype [mem 0x380000920000-0x380000b1ffff]
+[ 6160.080624] x86/PAT: kf3-vamgr:85897 freeing invalid memtype [mem 0x380002bd0000-0x380002c3ffff]
+[ 6249.794540] x86/PAT: kf3-vamgr:85897 freeing invalid memtype [mem 0x3800030e0000-0x38000315ffff]

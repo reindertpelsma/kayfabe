@@ -1,8 +1,15 @@
 # Recreate the proprietary Windows image
 
-STATUS: DESIGN-ONLY, 2026-11-13. Nobody has followed this guide from scratch yet. A from-scratch run by a second person is still to do, and until it happens every step below is only as good as its label. This page is not legal advice.
+STATUS: LIVE, 2026-11-15 (a procedure and a policy). Nobody has followed this guide from scratch yet: a from-scratch run by a second person is still to do, and until it happens every step below is only as good as its label. This page is not legal advice and makes no statement about the licence terms of any application.
 
-Kayfabe's Windows test image holds software that vendors do not let anyone redistribute: licensed or account-bound benchmarks and design tools. The repository therefore does not ship the image, the installers or any key. This page tells you how to build your own copy with your own licences and accounts. The maintainers' copy lives in a private bucket (see the FAQ entry *Why is there a private storage bucket?*). Yours stays wherever you put it.
+Kayfabe's Windows tests include commercial design, video and 3D applications and benchmarks. A *proprietary test image* is a private Windows disk image that the maintainers build to run those applications under kayfabe. This page tells you how to build your own, with your own accounts and licences. The policy in one page is [Proprietary test images](proprietary-test-images.md).
+
+## What this repository does and does not contain
+
+- The repository contains **no** proprietary software, installers, licence keys, account data or disk images. It contains the scripts, the answer file and the notes that this page describes.
+- The maintainers' images are stored in a private object store. They are never published, never in git and never served publicly. A rented test box receives an image only through a time-limited, authenticated download. This is the maintainers' policy: the repository's code does not show an image being fetched this way (see [Proprietary test images](proprietary-test-images.md), *How the maintainers' images reach a test box*).
+- **The maintainers' images are not shared with anyone**, contributors included. Anyone who wants to reproduce the proprietary-application tests builds their own image from this page, with their own accounts and licences. The offline tests then run against that image.
+- Kayfabe's open Windows lanes need none of this: they run open or freely downloadable software on a Windows guest that has internet access. See [Proprietary test images](proprietary-test-images.md).
 
 How each step is known:
 
@@ -10,7 +17,7 @@ How each step is known:
 - **CODE READ** means a script in the repository does it, and the script was read but not run end to end for this guide.
 - **NOT TESTED** means it is a plan or an assumption. Nobody has done it.
 
-This guide never links to a protected installer or a product key. It links official download pages. You supply every licence, in your own name.
+This guide never links to a protected installer or a product key. It links official download pages. You supply every account and licence, in your own name.
 
 ## What you need before you start
 
@@ -18,10 +25,10 @@ This guide never links to a protected installer or a product key. It links offic
 |---|---|---|
 | A Linux host with KVM, QEMU (distro build for setup, the kayfabe build for the GPU modes), `swtpm`, `qemu-img`, Python 3.12+ | Setup mode uses the distro QEMU window, the later modes use the kayfabe QEMU with its display broker | MEASURED 2026-11-12 (setup and install modes) |
 | **swtpm 0.10 or newer** with a matching libtpms | The image's TPM state was written by swtpm 0.10.1. Ubuntu 22.04's swtpm 0.6.3 refused to read it ("Minimum version 4 higher than implementation version 3"); a build of 0.10.1 from source worked | MEASURED 2026-11-13 (traces/hwrun_20261113/README.md) |
-| An AMD host CPU | The image runs a fixed CPU model named `kayfabe-amd-v1`; the tool refuses to start on a host that cannot run it. Intel hosts are not supported by this image | CODE READ (`propimage.py`, `CPU_PROFILE_UNSUPPORTED`) |
+| An AMD host CPU | The image runs a fixed CPU model named `kayfabe-amd-v1` (AMD vendor). The host CPU vendor must match the image's CPU profile, and the tool refuses to start on a host that cannot run it. Intel hosts are not supported by an image built on this profile; an Intel host would need a second image, built on an Intel host with its own profile (that profile does not exist yet). On 2026-11-15 an Intel host that presented the AMD vendor to the guest hung in Windows Boot Manager | CODE READ (`propimage.py`, `CPU_PROFILE_UNSUPPORTED`); the hang is MEASURED 2026-11-15 by the maintainers, and no record of that run is in the repository |
 | An NVIDIA GPU that kayfabe supports, for the install and offline modes | See [Requirements](requirements.md) | MEASURED 2026-11-12 (RTX 4070), 2026-11-13 (RTX 4090) |
 | About 300 GB free disk, 12 GB free RAM for one VM | Our finished disk was 62.8 GB after trimming and about 47 GiB as the packed archive | MEASURED 2026-11-12 |
-| Your own licences, accounts and a payment method where the vendor charges | See the table in step 6 | not applicable |
+| Your own accounts, licences and a payment method where the vendor charges | See the table in step 6 | not applicable |
 
 You also need the pinned system media. Fetch each from its official place and check the sha256 before you use it.
 
@@ -36,9 +43,20 @@ The Windows installation is unactivated: no product key is entered. The maintain
 
 ## The steps, in order
 
+The lifecycle of an image, in order. The numbered steps below carry the commands.
+
+1. Install online, with the real clock (steps 2 to 6).
+2. Go offline and check that every application starts and works without internet (step 7).
+3. Shut down. Back up the disk and the state **before** any account revocation (step 8). This backup is the sealed image.
+4. On the **original** disk (or a separate copy), online: sign out of every account, unlink the device, change the password and end all sessions at the vendor, then discard that disk (step 11).
+5. Test the backup the way CI would use it: a clone, the same fixed hardware identity, offline, the deterministic clock (steps 7 and 9).
+6. Pack it (step 9) and store it privately (step 10).
+
+The order of steps 3 and 4 is the point: see *Why the sign-in state is revoked at the vendor before the image is distributed* after step 11. Steps 9 to 11 are numbered in the order the maintainers did them; only the backup of step 8 must come before step 11.
+
 ### 1. Choose a seed and create the state file
 
-One seed string derives every hardware identity of the virtual machine: SMBIOS UUID and serials, MAC address, disk serial, GPU UUID, a private network range, a loopback SSH port and a clock gap. Pick your own seed so your machine differs from the maintainers'. (The maintainers' seed is public, so the machine it makes has public identifiers.) Whether any vendor ties a licence to these identifiers is NOT TESTED; the point of a fixed seed is that they stay the same on every start.
+One seed string derives every hardware identity of the virtual machine: SMBIOS UUID and serials, MAC address, disk serial, GPU UUID, a private network range, a loopback SSH port and the small gap that the deterministic clock adds (step 7). The identity is fixed per image so that test runs are repeatable: the machine looks the same on every start. Pick your own seed so your machine differs from the maintainers'. (The maintainers' seed is public, so the machine it makes has public identifiers.)
 
 ```text
 python3 -B -I scripts/bench/windows/propimage.py ids MYSEED
@@ -51,7 +69,7 @@ How known: the derivation and the file layout are MEASURED 2026-11-12 (the tool'
 
 ### 2. Install Windows in setup mode, from the official ISO, with the answer file
 
-Setup mode starts the machine with a standard VGA window and internet access, the real clock, and the same hardware identities as every later mode. It attaches the Windows ISO, the virtio-win ISO and the tools disc (step 3) as CD drives. The answer file (`propimage_autounattend.xml.in`, delivered on the tools disc) chooses Windows 11 Pro, partitions the disk, creates an offline local administrator account and loads the virtio storage and network drivers. It also contains the other deviations listed in the table below.
+Setup mode starts the machine with a standard VGA window and internet access, the real clock (the vendors' sites need correct dates for TLS; INFERRED), and the same hardware identities as every later mode. It attaches the Windows ISO, the virtio-win ISO and the tools disc (step 3) as CD drives. The answer file (`propimage_autounattend.xml.in`, delivered on the tools disc) chooses Windows 11 Pro, partitions the disk, creates an offline local administrator account and loads the virtio storage and network drivers. It also contains the other deviations listed in the table below.
 
 ```text
 PROP_DIR=/path/to/workdir scripts/bench/windows/propimage_run.sh setup
@@ -89,44 +107,44 @@ How known: MEASURED 2026-11-12 on an RTX 4070: driver 580.88 installed through t
 
 Use the installer from the vendor's own page, run it over the desktop with the default options, and delete the installer afterwards to save disk. Do not change install paths: the check script expects the default locations.
 
-| App | Official page | Version in the maintainers' image | Licence or account you need | How known |
+| App | Official page | Version in the maintainers' image | Account or key you need | How known |
 |---|---|---|---|---|
-| 3DMark (Advanced edition) | [UL Benchmarks](https://benchmarks.ul.com/3dmark) | 2.32.0 per the maintainers' file name; the download was a zip of about 12.9 GB with 25 files | A paid key. The maintainers bought 3DMark Advanced | MEASURED 2026-11-12 (installed, registered, started offline 2026-11-12) |
-| SolidWorks Design Standard, student edition | [SolidWorks](https://www.solidworks.com/) | 2026 SP5.2 "Academic Use Only" | A student serial that comes from a request form on the vendor's site. The installer is a small downloader (217 MB, signed by the vendor, sha256 `5230b4e1dce3f23b9f6c41ccda7aad8f7096e0f832220cfbb68282cd5f8078c8` on 2026-11-12) that fetches the rest while the guest is online, so the download changes over time | MEASURED 2026-11-12 (installed, started offline 2026-11-12) |
-| DaVinci Resolve (free) | [Blackmagic Design](https://www.blackmagicdesign.com/products/davinciresolve) | 21 | No licence for the free edition. The download page asks for contact details in a form | MEASURED 2026-11-12 (started offline to the Project Manager) |
+| 3DMark (Advanced edition) | [UL Benchmarks](https://benchmarks.ul.com/3dmark) | 2.32.0 per the maintainers' file name; the download was a zip of about 12.9 GB with 25 files | A key from the vendor for the Advanced edition (a paid product) | MEASURED 2026-11-12 (installed, registered, started offline 2026-11-12) |
+| SolidWorks Design Standard, student edition | [SolidWorks](https://www.solidworks.com/) | 2026 SP5.2 "Academic Use Only" | A serial that comes from a request form on the vendor's site; whether you qualify for the student edition is between you and the vendor. The installer is a small downloader (217 MB, signed by the vendor, sha256 `5230b4e1dce3f23b9f6c41ccda7aad8f7096e0f832220cfbb68282cd5f8078c8` on 2026-11-12) that fetches the rest while the guest is online, so the download changes over time | MEASURED 2026-11-12 (installed, started offline 2026-11-12) |
+| DaVinci Resolve (free) | [Blackmagic Design](https://www.blackmagicdesign.com/products/davinciresolve) | 21 | No key for the free edition. The download page asks for contact details in a form | MEASURED 2026-11-12 (started offline to the Project Manager) |
 | Unigine Superposition (Basic) | [Unigine benchmark page](https://benchmark.unigine.com/superposition) | not recorded | None | MEASURED 2026-11-13 (a full run completed offline on the image; results screen seen) |
 | eDrawings | [SolidWorks](https://www.solidworks.com/) | not recorded | None | MEASURED 2026-11-13 (a UI tree dump was taken; it is installed). No run beyond launch |
 | Black Myth: Wukong Benchmark Tool | [Steam store](https://store.steampowered.com/) | not recorded | A Steam account. Use a throwaway account, never a personal one | MEASURED 2026-11-13 for the launch dialog only: Steam's launch dialog came up and the tool itself was not run |
 | Steam client | [Steam](https://store.steampowered.com/about/) | not recorded | The same throwaway account, for the install only | MEASURED 2026-11-12 |
 
-Steam stays signed out in the finished image. Log in once to install the benchmark tool, then sign out; do not leave a saved password or cached login behind. Whether the tool still launches signed out has been seen only as the launch dialog (MEASURED 2026-11-13); that it runs signed out is NOT TESTED.
+Log in to Steam once to install the benchmark tool, then sign out before the backup; do not leave a saved password behind. With Steam signed out, the tool's launch dialog has been seen (MEASURED 2026-11-13); that the tool runs signed out is NOT TESTED.
 
 Which apps the repository's automated check starts is listed in `propimage_check.py` (CODE READ). The pass rules for each app, and what the check does not prove, are in the design notes on app automation.
 
-### 6. Enter your licences
+### 6. Sign in or register each application
 
-Do this while the machine is online, in install mode, on the console window. Type the licence into the app yourself; never put a key into a script, a file in the repository or the state file.
+Do this while the machine is online, in install mode, on the console window, with the real clock. Where an application asks for an account or a key, type your own into the application yourself; never put a key or password into a script, a file in the repository or the state file.
 
 | App | What to do | How known |
 |---|---|---|
-| 3DMark | Enter your key in the app and let it register | MEASURED 2026-11-12 (the maintainers' key, not recorded here) |
-| SolidWorks | Enter your student serial during the installer | MEASURED 2026-11-12 |
+| 3DMark | Enter your own key in the app and let it register | MEASURED 2026-11-12 (that this step was done; the key is not recorded here) |
+| SolidWorks | Enter your own serial during the installer | MEASURED 2026-11-12 |
 | Steam | Sign in, install the benchmark tool, sign out | MEASURED 2026-11-12 |
 | DaVinci Resolve, Superposition, eDrawings | Nothing to enter | MEASURED 2026-11-12 |
 
-Whether each licence keeps working with no internet is the next step's job.
+Whether each application starts and works with no internet is the next step's job.
 
-### 7. Test offline, on a throwaway overlay, with a faked clock
+### 7. Test offline, on a throwaway overlay, with the deterministic clock
 
-Shut the machine down cleanly first. Then test the way the image will be used: offline mode, no internet, with the clock set from the state file. The test uses a disposable overlay of the disk, never the disk itself.
+Shut the machine down cleanly first. Then test the way the image will be used: offline mode (user-mode network with `restrict=on`, no internet) and the deterministic clock, which the tool sets from the state file (see *Using the image afterwards*). The question for each application is whether it starts and works without internet. The test uses a disposable overlay of the disk, never the disk itself.
 
 ```text
-python3 -B -I scripts/bench/windows/propimage_check.py --dir unpacked/ --work /path/to/fresh-workdir --out results/ --qemu /path/to/kayfabe-qemu --flags kf3_flags.sample.env --broker /path/to/broker
+python3 -B -I scripts/bench/windows/propimage_check.py --dir unpacked/ --work /path/to/fresh-workdir --out results/ --qemu /path/to/kayfabe-qemu --flags kf3_flags.sample.env --broker /path/to/broker   # the flags file is optional measurement flags; Windows needs none
 ```
 
 (Use `--zip` with the archive instead of `--dir` the first time; see step 10.) The script checks that `swtpm` is 0.10 or newer, creates the overlay, boots with the network restricted, SSHes in, applies the per-boot repairs (see the deviations table), checks the machine's identity against the state file, then starts each app and records a result. A launch alone is recorded as a launch only, never as a pass.
 
-How known: the offline boot of the maintainers' copy on 2026-11-13 is MEASURED (identity, TPM, CPU, clock window matched; SolidWorks, 3DMark and DaVinci Resolve started offline). The unified script ran end to end on 2026-11-14 on the maintainers' PC (offline overlay, RTX 4070, three boots): MEASURED results are 3DMark Time Spy PASS from the saved `.3dmark-result` file (score 7400; the command-line client refuses this key with "Professional or Developer license key required", so the run goes through the UI), Superposition PASS from its saved log, Edge PASS (WebGL drew frames on the NVIDIA GPU, read through UI Automation) and Black Myth Wukong FAIL in two of five runs (game crash with a GPU crash dump and a Windows GPU watchdog event; the other runs stayed up at the menu, which proves nothing about the benchmark). eDrawings (licence dialog not dismissed), SolidWorks (COM error) and DaVinci Resolve (launch only) have no verdict yet: NOT TESTED beyond launch. A full clean pass of every app has not happened. The Storage Benchmark shows a buy card because it is not part of the Advanced edition; that says nothing about activation.
+How known: the offline boot of the maintainers' copy on 2026-11-13 is MEASURED (identity, TPM, CPU, clock window matched; SolidWorks, 3DMark and DaVinci Resolve started offline). The unified script ran end to end on 2026-11-14 on the maintainers' PC (offline overlay, RTX 4070, three boots): MEASURED results are 3DMark Time Spy PASS from the saved `.3dmark-result` file (score 7400; the command-line client refuses this key with "Professional or Developer license key required", so the run goes through the UI), Superposition PASS from its saved log, Edge PASS (WebGL drew frames on the NVIDIA GPU, read through UI Automation) and Black Myth Wukong FAIL in two of five runs (game crash with a GPU crash dump and a Windows GPU watchdog event; the other runs stayed up at the menu, which proves nothing about the benchmark). eDrawings (licence dialog not dismissed), SolidWorks (COM error) and DaVinci Resolve (launch only) have no verdict yet: NOT TESTED beyond launch. A full clean pass of every app has not happened. The Storage Benchmark shows a buy card in the maintainers' copy because it is not part of the Advanced edition.
 
 ### 8. Back up before any sign-out or deregistration
 
@@ -156,21 +174,32 @@ How known: pack, unpack and the member checks are MEASURED (2026-11-12 for the a
 
 ### 10. Upload to private storage
 
-Keep the archive where only you can read it: a private bucket, an encrypted disk, an offline backup. The state file inside it holds a throwaway password, a throwaway key pair, the TPM state and the machine's identifiers. Your vendor passwords are not meant to be in it (INFERRED from the design; nobody has searched a finished archive for them), but the design keeps 3DMark's registration in the disk. Treat the archive as a licensed product. Do not post it, and do not hand it to anyone else.
+Keep the archive where only you can read it: a private bucket, an encrypted disk, an offline backup. The state file inside it holds a throwaway password, a throwaway key pair, the TPM state and the machine's identifiers. Your vendor passwords are not meant to be in it (INFERRED from the design; nobody has searched a finished archive for them), but the design keeps 3DMark's registration state in the disk, because the backup is taken before the sign-out of step 11. Treat the archive as private: do not post it, do not commit it and do not hand it to anyone else.
 
 How known: the maintainers' upload to their own private bucket and a download with a checksum match are MEASURED 2026-11-12. Any other storage is NOT TESTED.
 
-### 11. Deregister, on the online copy only, after the offline image exists
+### 11. Sign out and unregister, on the original online disk only, after the backup exists
 
-Only now sign out and deregister: start a copy of the original (online) disk, sign out of Steam, deregister the 3DMark key on the vendor's options page, confirm on the vendor's website, then discard that copy. Never do this on the offline image. Deregistering earlier would unlicense the image you just built.
+Only now revoke the accounts: start the original (online) disk, or a separate copy of it, and sign out of every account, unlink the device, deregister keys on the vendors' own pages (for example the 3DMark key), change the password and end all sessions at each vendor, confirm on each vendor's website, then discard that disk. Never do this on the sealed image. Do it only after the backup exists: signing out or deregistering first would change the state the backup is meant to capture.
 
-How known: the maintainers did this after their upload, on an overlay of the packed disk, on 2026-11-12 (MEASURED that it was started; completion was by hand and is not shown by a file). Which vendor registrations the image still needs after this is NOT TESTED.
+How known: the maintainers did this after their upload, on an overlay of the packed disk, on 2026-11-12 (MEASURED that it was started; completion was by hand and is not shown by a file).
+
+#### Why the sign-in state is revoked at the vendor before the image is distributed
+
+PROCEDURE and DESIGN INTENT (owner decision, 2026-11-15). The tool cannot see vendor-side state, so nothing in the repository verifies it.
+
+The backup is taken first (step 8). Then, on a separate copy of the disk, the owner signs out of every account, unlinks the device, changes the password and ends all sessions at the vendor (step 11). The purpose is that any sign-in state still stored in the backup is revoked on the vendor's side and cannot be used to sign in anywhere.
+
+The reasons for the arrangement are isolation (the guest is hostile and rented hosts are untrusted), reproducibility (no network dependence and a deterministic start), and a private store so that nothing proprietary is redistributed.
+
+Use throwaway accounts where the vendor allows it, and treat every image as private (step 10).
 
 ## Using the image afterwards
 
 - **The image is immutable.** The scripts come from the repository over SSH on every boot. Nothing is written back to the image. CODE READ (`propimage_check.py`: the PowerShell travels on SSH standard input).
 - **Always offline, and the clock rule.** (2026-11-16: the rule is now a check on every start, `scripts/bench/windows/clocknet_assert.py`: a guest with a faked clock must have its network off, and a guest with internet must have the real clock. The image's `state.json` shape is always the first case. To run any image or disk with internet and the real clock, see [Run applications on your own Windows images](run-windows-images.md).) Every boot of the image uses the restricted slirp network (`restrict=on`), never internet. Never boot the base disk itself; boot a throwaway overlay of it. CODE READ (the script refuses to start unless the command line has `restrict=on` and the overlay path); MEASURED 2026-11-13.
-- **The clock is faked and only moves forward.** A fresh overlay starts at the state's last stop time plus the seed's gap, never earlier than the last real use. Windows keeps its own floor and clamps earlier times (MEASURED 2026-11-12: bases set to 2025 came up at the old floor). To restart the same overlay, pass `--resume`: a small sidecar file next to the overlay carries the clock forward across clean stops. CODE READ; the sidecar has not been run on hardware.
+- **The clock is deterministic and never goes earlier.** A fresh overlay starts at the guest time recorded at the last clean shutdown (the state's last stop time) plus a small gap of 600 to 3599 seconds derived from the seed, so the start time is a function of the state alone. The purpose is reproducibility: boot behaviour, timestamps in results and application and certificate timers are the same on every run. The setup and install sessions use the real clock instead, because TLS to the vendors' sites needs correct dates (INFERRED). Windows keeps its own floor and clamps earlier times (MEASURED 2026-11-12: bases set to 2025 came up at the old floor). To restart the same overlay, pass `--resume`: a small sidecar file next to the overlay carries the clock forward across clean stops. CODE READ (`propimage.py` `boot_clock`, `propimage_check.py` `overlay_clock`); the sidecar has not been run on hardware.
+- **The hardware identity is fixed per image.** SMBIOS UUID and serials, MAC address, disk serial and GPU UUID all come from the image's seed and are the same on every run, so that test runs are repeatable. The host CPU vendor must match the image's CPU profile (AMD; see the table of needs above). CODE READ (`propimage.py` `derive_ids`, `cpu_preflight`); the identity checks matched on the maintainers' boots (MEASURED 2026-11-12, 2026-11-13).
 - **Die-binding.** The image is bound to the GPU it was made on in one respect. A different GPU gives the guest a new display device instance with no `EnableGpuFirmware` key, and the driver shows Code 43. The check script sets the key on each new instance every boot. MEASURED 2026-11-13: image made on an RTX 4070, Code 43 on an RTX 4090 until the key was set on the new instance; then `nvidia-smi` showed the seed GPU UUID.
 - **swtpm 0.10 or newer** is required, as above.
 
@@ -190,7 +219,7 @@ Every setting below differs from what you would get by clicking through Windows,
 | `EnableGpuFirmware` = 1 in the display class key and in `nvlddmkm` | Without it the guest GPU shows Code 43 | Baked in for the first instance, set again for every new display instance on each boot | MEASURED 2026-11-12 and 2026-11-13 |
 | DWM `OverlayTestMode` = 5 | The Start menu reset the display driver without it | Baked in (a manual image change) | MEASURED 2026-11-12 for the effect on that image; not re-qualified since |
 | Fast startup off (`HiberbootEnabled` 0), hibernation off, sleep, hybrid sleep, monitor and disk timeouts off on AC and DC, wake sign-in off, lock-screen policy off, screensaver off | A suspended or restored Windows meeting a fresh kayfabe, or a locked desktop, breaks unattended checks | Fast startup baked in by the answer file; the rest applied every boot over SSH by `propimage_check.py` (`power_fix`) | CODE READ; no hardware measurement of the repair |
-| The system clock | Fixed starting time so licences and certificates behave the same | Per boot: the virtual machine's RTC is set from the state file | CODE READ; MEASURED 2026-11-12 and 2026-11-13 (guest time read back in the window) |
+| The system clock (the deterministic clock) | A fixed starting time, so that boot behaviour, timestamps in results and application and certificate timers are the same on every run | Per boot: the virtual machine's RTC is set from the state file in offline and CI modes; setup and install modes use the real clock | CODE READ; MEASURED 2026-11-12 and 2026-11-13 (guest time read back in the window) |
 | US English locale, UTC, fixed computer name, Windows 11 Pro, disk 0 wiped, EFI 300 MiB, MSR 16 MiB, rest NTFS | A repeatable install | Baked in | CODE READ (answer file) |
 | virtio storage driver during setup, plus the network, serial, RNG, panic and firmware-config drivers; no memory-balloon driver | Virtual disk and network; no guest-directed RAM resizing | Baked in | CODE READ |
 | `BypassCPUCheck` only; the TPM and Secure Boot checks stay on | The fixed AMD CPU model is older than Windows 11 officially accepts | Setup only | CODE READ |
@@ -208,5 +237,5 @@ The answer file may still carry choices that a future, more minimal image drops.
 ## What has and has not been shown
 
 - The maintainers built the image once, by hand with the repository's helper scripts, between 2026-11-12 and 2026-11-13, and ran parts of the offline check on it.
-- NOT TESTED: that someone else can follow this page from an empty disk to a working image, the ISO-making and the empty-disk and firmware-variable preparation (hand work), `setup_ssh.ps1` in a guest, `--resume` on hardware, an end-to-end pass of `propimage_check.py`, whether any vendor ties a licence to the seed's hardware identifiers, and the behaviour of any storage other than the maintainers' own.
+- NOT TESTED: that someone else can follow this page from an empty disk to a working image, the ISO-making and the empty-disk and firmware-variable preparation (hand work), `setup_ssh.ps1` in a guest, `--resume` on hardware, an end-to-end pass of `propimage_check.py`, that the vendor-side revocation of step 11 covers every sign-in state stored in the backup (the tool cannot see vendor-side state), and the behaviour of any storage other than the maintainers' own.
 - Nothing here depends on, or is stored in, a public release build.

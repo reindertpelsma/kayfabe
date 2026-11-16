@@ -1,6 +1,6 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-15 (the host unmap-call cap mutants were added to the Rust job; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-16 (the VA-apply profiling mutants and the profile-table self-test were added; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
 ## Shipped GPU programs: the `ptx` job (2026-11-13)
@@ -27,6 +27,16 @@ generated display files reproduce byte for byte):
   vetoes, review 3 F-1) and requires each mutant to fail at least two distinct `kf_cpu_walk` checks.
 - `scripts/ci/va_apply_bounds_mutants.py` (Rust job, 2026-11-15) mutates the host unmap-call cap in `crates/kf-mem/src/batch.rs`
   (`UNMAP_CALL_MAX_ENTRIES`) and requires each mutant to fail at least two named `kf-mem` tests.
+- `scripts/ci/windows_profile_mutants.py` (Rust job, 2026-11-15) mutates the Windows support profile's identity gates (`kf-rm` `winprofile.rs`, the
+  chain and channel links, `kf-qemu` channel birth, the mirror-space start and the display colour path) and requires each mutant to fail at least two
+  named tests. The tests are the proof that a Linux guest, an undeclared guest and a `windows-support=off` VM reach none of the profile
+  (`crates/kf-rm/tests/windows_profile_chain.rs` and the unit tests it names). Review of PR #438 (2026-11-15) added mutants at the USE sites of the gates (where the
+  gate is read, not only its truth table): behavioural tests with the real profile where a site is reachable GPU-free, and `crates/kf-qemu/tests/windows_use_sites.rs`
+  (source pins, two independent tests) for the sites inside `ChanPlane::birth`, the drainer loop and `Device::realize`. **Honest count (delta review, 2026-11-15): 9 of the 23 use-site mutants are killed ONLY by those text-matching pins, which prove a line exists, not that it works; 5 more have a single behavioural killer.** The reviewer's own 15 re-spelled use-site hardwires (birth and pump, memory-plane and display construction, the display worker's `sdr()` reads, the drainer's caps sync, `HostRm::alloc_vaspace_at`, and one that makes the device ignore `windows-support=off`) mostly survive; that is a known coverage gap (`V3_WINDOWS_SUPPORT_PROFILE.md`, *Known coverage gap*), not a claim of full coverage.
+- `scripts/ci/va_profile_mutants.py` (Rust job, 2026-11-16) mutates the observation-only VA-apply profiling
+  (`docs/design/V3_VA_PROFILE.md`: `kf-mem` vaprof/vasmgr/batch, `kf-qemu` split delivery, `kf-cuda` ceiling geometry)
+  and requires each mutant to fail at least two named tests; `scripts/bench/va_profile_table.py --self-test` runs in the
+  Python self-test step.
 - `static` also ties the VER3 PCF enumerants the kernel names (`KF_VER3_*`) to
   `crates/kf-chip/data/hwref-580.159.04.tsv`.
 
