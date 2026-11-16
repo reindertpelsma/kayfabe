@@ -6,7 +6,7 @@ Same image format, same runner, same state file as the first image (`propimage.p
 
 ## How a row works
 
-1. `propimage_apps_b.run_check` writes one PowerShell script (`scripts/bench/windows/apps_b/lib.ps1` plus the row's script) and starts it in the logged-in desktop session through a scheduled task at the user's normal integrity level. The applications' automation interfaces refuse an elevated caller (measured: `CO_E_SERVER_EXEC_FAILURE` from an elevated task, success from a normal one), so this differs from the first image's task wrapper on purpose.
+1. `propimage_apps_b.run_check` writes one PowerShell script (`scripts/bench/windows/apps_b/lib.ps1` plus the row's script) and starts it in the logged-in desktop session through a scheduled task at the user's normal integrity level. The applications' automation interfaces refuse an elevated caller (measured on the image B runs of 2026-11-16, `traces/imageb_apps_20261116/`: `CO_E_SERVER_EXEC_FAILURE` from an elevated task, success from a normal one), so this differs from the first image's task wrapper on purpose.
 2. The script handles first-run dialogs by UI Automation (a fixed list of harmless button names; sign-in, purchase and trial buttons are never pressed), drives the application through its own automation (COM + ExtendScript, a command-line script, `aerender`, a plugin the application loads from its per-user folder), writes the outputs and `result.json` into `C:\kfapps\<run>\<app>`, quits the application and records whether the exit was clean.
 3. The host pulls only the file names the guest lists (safe names, bounded size) and grades the files themselves (`media_check.py`: PNG decode with pixel statistics, JPEG/PSD headers, PDF page count, MP4 duration/codec/size). No screenshot is taken or stored; the application windows show account details.
 4. A row that is meant to use the GPU runs inside `gpu_assert.assert_gpu_used`: the guest samples `nvidia-smi` (query and dmon) while the operation runs; an engine that stayed idle FAILS the row and the sampled numbers are written to `<app>_gpu.json` (text). A row that only proves a launch is PASS_LIMITED and says so; it never claims GPU use.
@@ -15,7 +15,7 @@ Same image format, same runner, same state file as the first image (`propimage.p
 
 Every row carries a `lane` (`gate`: expected to pass on kf3, strict; `discovery`: heavy or exotic, allowed to fail and crash, each failure is a finding) and a `path` (the GPU path it is meant to exercise). A row that is meant to use the GPU asserts it from the HOST's nvidia-smi (`gpu_assert.py`); rows marked "sampled" record the numbers and assert nothing. Disabled rows say why and are skipped by default (`--apps` can still name them).
 
-| Row | Lane | Operation | Verified on the host | GPU assertion |
+| Row | Lane | Operation | Checked on the host | GPU assertion |
 |---|---|---|---|---|
 | `gpudiag` | gate | the applications' own GPU sniffers (Premiere, After Effects, Media Encoder `GPUSniffer.exe`; Photoshop `sniffer.exe`) | each prints an NVIDIA CUDA device and not "no devices" | the diagnostic itself |
 | `photoshop` | discovery | 8K canvas, 16 bit, 100 pasted layers over 10 blend modes, 5 adjustment layers, smart object, 6 Smart Sharpen passes, 40 brush strokes, saves PNG and PSD | PNG pixel statistics, PSD header, feature list, own system information names the NVIDIA GPU | gpu |
@@ -66,7 +66,7 @@ Verified offline in the image: the sniffers above (`gpudiag`). Not driven: Photo
 
 ## The stage
 
-`scripts/ci/propimage_apps_b_stage.py` is the first stage's companion: same preflight, pins, manifest, downloader, swtpm, verified unpack, offline proof and kernel-log windows (imported from `propimage_apps.py`), its own application list, boot command (`--app-set b --data-iso`), record (`KF_PROPIMAGE_APPS_B_RESULT`, `image_set: "b"`) and grading (PASS needs every row PASS or PASS_LIMITED and every asserted row to carry a PASS GPU record that names its engines). Pins: `scripts/ci/propimage_apps_b_pins.json` (image archive, data volume, signed boot GOP and swtpm sources all pinned; the GOP and swtpm values are the first image's).
+`scripts/ci/propimage_apps_b_stage.py` is the first stage's companion: same preflight, pins, manifest, downloader, swtpm, checksum-checked unpack, offline proof and kernel-log windows (imported from `propimage_apps.py`), its own application list, boot command (`--app-set b --data-iso`), record (`KF_PROPIMAGE_APPS_B_RESULT`, `image_set: "b"`) and grading (PASS needs every row PASS or PASS_LIMITED and every asserted row to carry a PASS GPU record that names its engines). Pins: `scripts/ci/propimage_apps_b_pins.json` (image archive, data volume, signed boot GOP and swtpm sources all pinned; the GOP and swtpm values are the first image's).
 
 Wired 2026-11-16: the `vast_payload.py` stage entry and the `vast_report.py` validator for the B record (next section). Not done: the Worker allow-list entry for the image's opaque ref (`propimage-kfimg-20261116.zip`) and a Worker budget row (the stage is manual-only, so it has none). The B leg runs on its own one-GPU box (a leg selector A|B in the instruction); this stage does not need a die index.
 

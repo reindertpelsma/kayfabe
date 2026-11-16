@@ -14,7 +14,7 @@ the licence id, the page where the licence was read, the exact attribution text,
 the pinned sha256 and size. Only CC0, public domain, CC-BY, CC-BY-SA (3.0 and 4.0, each entry flagged
 `share_alike` and carrying its own attribution) and the
 permissive software licences MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC and Zlib are admitted; the
-validator rejects NC, ND, the GPL family and any other id. When a licence could not be verified, the
+validator rejects NC, ND, the GPL family and any other id. When a licence could not be established, the
 asset was left out.
 
 `project/` holds sample project files (layered raster, vector, page layout, motion graphics, video editing
@@ -32,7 +32,7 @@ copyright line and the licence page of each. Git LFS files are fetched from `med
 |---|---|---|
 | `origin` | a stable, reliable source URL: a release host, a commit-pinned GitHub raw or media URL, a texture or raw-photo archive, a government server. No copy in public storage is needed. A Wikimedia host or a GitHub URL that is not pinned to a 40-hex commit is refused as an origin. | downloads `url`, checks the pin |
 | `public-mirror` | open licence but an unstable origin (Wikimedia redirects, files re-uploaded in place). The file is **also** kept in the public bucket at `mirror_path` = `test-assets/<YYYYMMDD>/<name>`. | tries `url` first; if that fails or does not match the pin and `--mirror-base https://bundles.kayfabe.dev` is given, downloads `<base>/<mirror_path>`; the pin is checked on both |
-| `private` | copyrighted or redistribution-prohibited file with real test value. Kept in a private object; `url` may be `null`, `fallback_url` is an optional official URL for maintainers. A `value` text is required: why the file is worth having and why no open equivalent works. Licence is `Proprietary`. | skipped; with `--include-private --private-dir DIR` the file must already be in `DIR` and its pin is verified (it is never downloaded or copied into the bundle directory) |
+| `private` | copyrighted or redistribution-prohibited file with real test value. Kept in a private object; `url` may be `null`, `fallback_url` is an optional official URL for maintainers. A `value` text is required: why the file is worth having and why no open equivalent works. Licence is `Proprietary`. | skipped; with `--include-private --private-dir DIR` the file must already be in `DIR` and its pin is checked (it is never downloaded or copied into the bundle directory) |
 
 Private entries never enter the ISO, the `MANIFEST.json` copy or `LICENSES.txt`: `build`-side commands
 (`licenses`, `iso`, `all`) list only the non-private entries, even when a private file sits in the directory.

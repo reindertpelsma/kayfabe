@@ -10,7 +10,7 @@ STATUS: LIVE, 2026-11-16 (second pass; MEASURED on one Vast RTX 4090 box under k
 - Host: Vast offer 59749375 (Romania, AMD EPYC 7B13, 30 vCPU), RTX 4090 24 GB, host driver 580.159.04 (installed by the repo's `provision_host_driver.sh`), guest NVIDIA 580.88, 8 vCPU / 7.9 GB guest. Instance 60915501, label `kf-imageb-apps2-20261116`. A first box (offer 60784389, Denmark) never became reachable over ssh and was destroyed within minutes.
 - Platform: kf3 only; no VFIO control exists yet, so every FAIL below is a candidate defect, not a proven one.
 
-## Row results of this pass (newest result per row, MEASURED)
+## Row results of this pass (newest result per row, MEASURED on one Vast RTX 4090 box, 2026-11-16)
 
 | row | lane | verdict | host GPU assertion | note |
 |---|---|---|---|---|
