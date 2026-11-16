@@ -182,7 +182,10 @@ CASES = [
     ),
     (
         "wrong-arm-admitted",
-        replace("            return not delta", '            arm = "--defer-liveness"'),
+        replace(
+            '            return None if not delta else "%d host Xid line(s) in an arm with no admitted fault" % len(delta)',
+            '            arm = "--defer-liveness"',
+        ),
     ),
     ("xid-refusal-status-forged", replace("    return 0 if ok else 6", "    return 0")),
     (
@@ -730,6 +733,31 @@ CASES += [
     ("xd1-only-captured-host-zero", guard_replace(
         "engine in HOST_FAULT_NAMES['engines']", "engine in ('GR_HOST0', 'GR0_PBDMA0')"
     ), "native_xid_guard.py"),
+    ("xd1-turing-host-names-refused", guard_replace(
+        "engine in HOST_FAULT_NAMES['engines']", "engine in HOST_FAULT_NAMES['engines'] and not engine.startswith('HOST')"
+    ), "native_xid_guard.py"),
+    ("xd1-turing-only-captured-host-zero", guard_replace(
+        "engine in HOST_FAULT_NAMES['engines']", "engine in ('GR_HOST0', 'GR0_PBDMA0', 'HOST0')"
+    ), "native_xid_guard.py"),
+    ("xd1-turing-host-cpu-client-refused", guard_replace(
+        "client in HOST_FAULT_NAMES['clients']", "client in HOST_FAULT_NAMES['clients'] and client != 'HUBCLIENT_HOST_CPU'"
+    ), "native_xid_guard.py"),
+    ("xd1-refusal-reason-dropped", replace(
+        '        print("KF_XID_REFUSED arm=" + arm + " reason=" + reason, flush=True)',
+        '        print("KF_XID_REFUSED arm=" + arm, flush=True)'
+    )),
+    ("xd1-refusal-unknown-engine-not-named", guard_replace(
+        "        if parsed['engine'] not in table['engines']:", "        if False:"
+    ), "native_xid_guard.py"),
+    ("xd1-refusal-unknown-client-not-named", guard_replace(
+        "        if parsed['client'] not in table['clients']:", "        if False:"
+    ), "native_xid_guard.py"),
+    ("xd1-refusal-table-not-named", guard_replace(
+        '"engine %r is not in native_fault_names.json engines (%d names, ogkm %s)"', '"engine %r (%d, %s)"'
+    ), "native_xid_guard.py"),
+    ("xd1-refusal-unmatched-records-not-shown", guard_replace(
+        '    detail += "; unmatched actual: %s; unmatched expected: %s" % (surplus, missing)', "    pass"
+    ), "native_xid_guard.py"),
     ("xd1-host-engine-unchecked", guard_replace(
         "engine in HOST_FAULT_NAMES['engines']", "True"
     ), "native_xid_guard.py"),
@@ -743,7 +771,7 @@ CASES += [
         "raise GuardRefused('missing/duplicate native exec identity')", "return 4242"
     ), "native_xid_guard.py"),
     ("xd1-command-window-ignored", scoped(
-        "xid_ok", "watched_command_output(text)", "arm_output"
+        "xid_refusal", "watched_command_output(text)", "arm_output"
     )),
     ("xd1-contract-va-unchecked", guard_replace(
         "if int(markers[0][1], 16) != 0x0000000a11000000:", "if False:"

@@ -5,8 +5,11 @@
     "src/nvidia/src/kernel/gpu/fifo/kernel_fifo.c": "db6f1c1ffb7a096d37827d4ebfd1d8e65ce4a77f34914e1e99c1ed999010cc23",
     "src/nvidia/src/kernel/gpu/fifo/arch/ampere/kernel_fifo_ga100.c": "bd1913c3931abfae706d64d2e3e722835f462a2afc9198f68ec9a7c062fa1e57",
     "src/nvidia/src/kernel/gpu/fifo/arch/blackwell/kernel_fifo_gb202.c": "b1b219d8f8c4837b3101756c440f3438dd355669c7f0c817f460f21c581775f2",
+    "src/nvidia/src/kernel/gpu/fifo/arch/turing/kernel_fifo_tu102.c": "3c4add1619b7d3467052bc004c95a39342c8f26df603921cb015511de94267e7",
     "src/common/inc/swref/published/ampere/ga100/dev_fault.h": "4636a1dab710c0d25309d805faabba80f05cd5d03c3d864936c784a63beeaf39",
-    "src/common/inc/swref/published/blackwell/gb202/dev_fault.h": "96753b062f4451bb183dd90229c1cf3e9fd0d0567636ea58734e26e1f8b6b862"
+    "src/common/inc/swref/published/blackwell/gb202/dev_fault.h": "96753b062f4451bb183dd90229c1cf3e9fd0d0567636ea58734e26e1f8b6b862",
+    "src/common/inc/swref/published/turing/tu102/dev_fault.h": "8410c458867a942f03358e94333ae274caa1a7adafca5bb4331f52500d855f50",
+    "src/common/inc/swref/published/turing/tu102/hwproject.h": "4b84e419f9e8a041e2c757303ced79efa260a322f6d24cec47076b93e2a93534"
   },
   "engines": [
     "GR0_PBDMA0",
@@ -32,7 +35,19 @@
     "GR_HOST4",
     "GR_HOST5",
     "GR_HOST6",
-    "GR_HOST7"
+    "GR_HOST7",
+    "HOST0",
+    "HOST1",
+    "HOST10",
+    "HOST11",
+    "HOST2",
+    "HOST3",
+    "HOST4",
+    "HOST5",
+    "HOST6",
+    "HOST7",
+    "HOST8",
+    "HOST9"
   ],
   "clients": [
     "HUBCLIENT_ESC",
@@ -47,6 +62,7 @@
     "HUBCLIENT_ESC6",
     "HUBCLIENT_ESC7",
     "HUBCLIENT_ESC8",
-    "HUBCLIENT_ESC9"
+    "HUBCLIENT_ESC9",
+    "HUBCLIENT_HOST_CPU"
   ]
 }
