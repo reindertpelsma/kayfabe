@@ -226,6 +226,8 @@ class Lane(unittest.TestCase):
         self.assertIn(plan["project"], body)
         self.assertNotRegex(body, r"(?i)password|Invoke-WebRequest|Invoke-RestMethod")
         self.assertEqual(body.count("'@"), body.count("@'"))
+        self.assertEqual(body.count("param($out,$stop)"), 1)  # the sampler text lives only in its here-string (a comment once swallowed it)
+        self.assertNotIn("__SAMPLER__", body)
         import shutil, subprocess
         pwsh = os.environ.get("KF_PWSH") or shutil.which("pwsh")
         if pwsh:

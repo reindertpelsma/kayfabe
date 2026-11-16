@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 # Guest script body for the Resolve GPU lane (scripts/bench/windows/resolve_gpu.py). STATUS: DESIGN-ONLY, 2026-11-16.
-# Placed after propimage_check.PS_LIB; sampler script is substituted for __SAMPLER__. Coordinates are measured on the 1920x1080 guest
+# Placed after propimage_check.PS_LIB; the sampler script text is substituted for the placeholder inside the samplers here-string. Coordinates are measured on the 1920x1080 guest
 # (Resolve 21.2.0.6 free, image A); controls with UIA rectangles are found through UI Automation.
 Add-Type @'
 using System; using System.Runtime.InteropServices;

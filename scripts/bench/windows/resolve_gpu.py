@@ -149,10 +149,11 @@ def guest_body(plan: dict) -> str:
     """The PowerShell placed after propimage_check.PS_LIB (it defines $r and $D). The plan is data, passed as one quoted JSON literal."""
     sampler = (HERE / "resolve_gpu_sampler.ps1").read_text()
     body = (HERE / "resolve_gpu_guest.ps1").read_text()
-    if "__SAMPLER__" not in body or "'@" in sampler:
+    marker = "@'\n__SAMPLER__\n'@"
+    if body.count("__SAMPLER__") != 1 or marker not in body or "'@" in sampler:
         raise ValueError("guest script template broken")
     literal = json.dumps(plan).replace("'", "''")
-    return f"$plan=ConvertFrom-Json '{literal}'\n" + body.replace("__SAMPLER__", sampler.rstrip("\n"))
+    return f"$plan=ConvertFrom-Json '{literal}'\n" + body.replace(marker, "@'\n" + sampler.rstrip("\n") + "\n'@")
 
 
 # ------------------------------------------------------------------------------------------------ samples
