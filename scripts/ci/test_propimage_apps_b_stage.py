@@ -19,7 +19,7 @@ import propimage_apps_b_stage as sb  # noqa: E402
 import test_propimage_apps as tpa  # noqa: E402
 
 MOD = sb.apps_module(pa.ROOT)
-ORDER = tuple(MOD.CHECKS)
+ORDER = tuple(MOD.ENABLED)
 H64 = "c" * 64
 
 
@@ -186,7 +186,9 @@ class Run(unittest.TestCase):
         rec = sb.run(env.ctx, str(ev))
         self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
         self.assertEqual([a["app"] for a in rec["apps"]], list(ORDER))
-        self.assertEqual(sorted(rec["limited"]), sorted(MOD.LAUNCH_ONLY))
+        self.assertEqual(sorted(rec["limited"]), sorted(a for a in MOD.LAUNCH_ONLY if a in ORDER))
+        self.assertIn("animate", rec["not_run"])
+        self.assertNotIn("animate", [a["app"] for a in rec["apps"]])
         self.assertTrue(all(b["offline"] for b in rec["boots"]))
         self.assertIn("--app-set", self.argv)
         copied = {p.name for p in ev.rglob("*") if p.is_file()}

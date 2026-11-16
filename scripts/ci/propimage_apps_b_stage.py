@@ -123,7 +123,7 @@ def grade(apps, order):
 def new_record(ctx):
     return {"schema": SCHEMA, "image_set": "b", "verdict": "RETRY", "sha": ctx.sha, "reason": "INTERRUPTED", "family": None, "cpu_vendor": None,
             "preflight": [], "image": {"name": None, "sha256": None, "size": None}, "swtpm": {"version": None, "built": False},
-            "boots": [], "apps": [], "failed": [], "limited": []}
+            "boots": [], "apps": [], "failed": [], "limited": [], "not_run": {}}
 
 
 def build_manifest(pins, build_swtpm):
@@ -185,7 +185,8 @@ def run(ctx, evidence_dir=None, apps=None):
             return rec
         pi_check = pa.harness(ctx.checkout)
         mod = apps_module(ctx.checkout)
-        order = tuple(a for a in mod.CHECKS if not apps or a in apps)
+        order = tuple(a for a in mod.CHECKS if (a in apps if apps else not mod.CHECKS[a].get("disabled")))
+        rec["not_run"] = {a: pa.clean(c["disabled"], 160) for a, c in mod.CHECKS.items() if c.get("disabled") and a not in order}
         if not order:
             raise pa.Refused("APPS")
         started = True

@@ -53,24 +53,25 @@ CHECKS = {
     "indesign": {"timeout": 480, "script": "indesign.ps1", "gpu": (), "lane": "gate", "path": "D3D11/Direct2D page rendering, PDF/JPEG export"},
     "illustratorsample": {"timeout": 480, "script": "illustrator_sample.ps1", "gpu": (), "lane": "gate", "path": "D3D11 canvas on shipped art"},
     "indesignsample": {"timeout": 480, "script": "indesign_sample.ps1", "gpu": (), "lane": "gate", "path": "D3D11/Direct2D on shipped documents"},
-    "animatesample": {"timeout": 420, "script": "animate_sample.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage on a shipped document"},
+    "animatesample": {"timeout": 420, "script": "animate_sample.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage on a shipped document", "disabled": 'same as animate (JSFL entry)'},
     "photoshopsample": {"timeout": 900, "script": "photoshop_sample.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "GPU filters on shipped 4K+ photo, 3840x2160 template"},
     "photoshopprojects": {"timeout": 900, "script": "photoshop_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence PSD corpus: layer/colour-mode decoding and GPU canvas on foreign files"},
     "indesignprojects": {"timeout": 600, "script": "indesign_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence INDD corpus open + PDF export"},
-    "animateprojects": {"timeout": 600, "script": "animate_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence FLA corpus open + stage export"},
+    "animateprojects": {"timeout": 600, "script": "animate_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence FLA corpus open + stage export", "disabled": 'same as animate (JSFL entry)'},
     "aeprojects": {"timeout": 900, "script": "aeprojects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence AEP corpus open (project load, GPU capability scan)"},
     "aetoggle": {"timeout": 1500, "script": "ae_toggle.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "CUDA <-> software renderer switch inside one After Effects session, 4K effects frame"},
     "aeparallel": {"timeout": 1800, "script": "ae_parallel.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "four concurrent aerender processes (CUDA contexts x4), 4K"},
     "acrobat": {"timeout": 360, "script": "acrobat.ps1", "gpu": (), "lane": "gate", "path": "Direct2D page rendering"},
-    "animate": {"timeout": 360, "script": "animate.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage, tween export"},
+    "animate": {"timeout": 360, "script": "animate.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage, tween export", "disabled": 'no working offline entry for scripts: Animate.exe with a .jsfl argument shows an "Open JSFL File" dialog that no keyboard route closed (MEASURED 2026-11-16, pc no-GPU and Vast kf3)'},
     "premiere": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Mercury engine start, CUDA/D3D12 init (launch only)"},
     "mediaencoder": {"timeout": 600, "script": "mediaencoder.ps1", "gpu": ("enc",), "lane": "discovery", "path": "NVENC H.264 via the After Effects hand-off"},
-    "lightroom": {"timeout": 600, "script": "lightroom.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "develop pipeline GPU processing on 12/24 MP raws"},
+    "lightroom": {"timeout": 600, "script": "lightroom.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "develop pipeline GPU processing on 12/24 MP raws", "disabled": 'a plugin dropped into the per-user Modules folder is not loaded by Lightroom Classic at start (MEASURED: no plugin result, no log line); the launch row lightroomlaunch covers the application'},
     "lightroomlaunch": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Lightroom Classic start: catalog open, GPU capability scan (launch only)"},
     "dimension": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/OptiX init (launch only)"},
     "uxp": {"timeout": 300, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "UXP tooling start (launch only)"},
 }
 EMBED = {"aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
+ENABLED = tuple(n for n, c in CHECKS.items() if not c.get("disabled"))
 LAUNCH_ONLY = ("premiere", "dimension", "uxp", "lightroomlaunch")
 
 

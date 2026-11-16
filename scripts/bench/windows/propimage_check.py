@@ -1768,7 +1768,7 @@ def main(argv=None):
             if not a.data_iso or not Path(a.data_iso).is_file():
                 raise ValueError("--app-set b needs --data-iso FILE (the open test-asset volume)")
             if a.apps == ",".join(CHECKS):
-                a.apps = ",".join(checks)
+                a.apps = ",".join(getattr(app_b, "ENABLED", checks))
         names = list(checks) if a.apps == "all" else a.apps.split(",")
         # Preserve the measured predecessor's app spelling as an input alias only.
         names = ["wukong" if n == "blackmyth" else n for n in names]
