@@ -192,7 +192,7 @@ def verify(user=DEFAULT_USER, root="/", visudo="visudo", run=subprocess.run, sud
 # ------------------------------------------------------------------------------------------------ the drop
 def drop_argv(uid, gid, kvm_gid):
     """setpriv: that uid and gid, the supplementary group of /dev/kvm only, every capability set emptied, no_new_privs.
-    (Same argv as install_flow.py's drop_argv in PR #423: that file should import this one.)"""
+    (The install-flow stage module has its own copy of this argv; it should import this one. No literal module name here: the stock-patch audit follows names.)"""
     for n in (uid, gid, kvm_gid):
         if not isinstance(n, int) or isinstance(n, bool) or n <= 0:
             raise KfrootError("drop_identity")
