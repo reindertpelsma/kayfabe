@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-11-07.** One page to resume from. The newest dated UPDATE below (2026-11-04) is the last resume point recorded in this file; everything older was moved on 2026-11-07, unchanged, to [`history/`](history/) (see *History and the citation map*). Nothing in this file was re-run on 2026-11-07: each entry keeps its own date and evidence pointer, and a lane that finished later records itself in its own design document and `traces/` README, not here.
+**STATUS: LIVE, 2026-11-15.** One page to resume from. The newest dated UPDATE below (2026-11-15) is the last resume point recorded in this file; everything older was moved on 2026-11-07, unchanged, to [`history/`](history/) (see *History and the citation map*). Nothing in this file was re-run on 2026-11-07: each entry keeps its own date and evidence pointer, and a lane that finished later records itself in its own design document and `traces/` README, not here.
 
 ## Resume checklist
 
@@ -11,6 +11,23 @@
 5. The state of the branches: `git log --first-parent origin/master` (one line per batch) and `git log --first-parent origin/next`.
 6. The documents map: [`README.md`](README.md) (current documents versus history).
 
+
+## UPDATE 2026-11-15 — engines with no derived method table are not offered to a Windows guest (flag, default off; not run on hardware)
+
+Branch `claude/hide-untabled-classes-20261115`, draft PR against `next`. Design, rule and falsifier:
+[`design/V3_VIDEO_ENGINES.md`](design/V3_VIDEO_ENGINES.md), 2026-11-15 amendment.
+- CODE READ + GPU-free tests: the Windows guest kernel's OFA ring (class `0xC9FA`) dies `ForeignClass` on its first method
+  because no OFA table exists (no public header defines one), and the guest's GPU watchdog fires about 9 s later on every
+  frame-generation boot. Owner ruling 2026-11-15 (as relayed): no OFA table entry, no capture, no forged completion.
+- CODE: `KF3_WIN_HIDE_UNTABLED_VIDEO=1` (Windows run profile, default off) leaves every video engine whose classes have no
+  table out of the served engine list (`kf_rm::hostquery::hide_untabled_video`), so FIFO rows, `engineCaps`, falcons,
+  interrupt table and PRI bases omit it together. One list, `kf_chip::video_gaps::UNTABLED_VIDEO_CLASSES`, feeds the filter and
+  the coverage audit (`crates/kf-chan/tests/video_class_coverage.rs`); they cannot drift. Not the default, because the OFA
+  engine is what gives a Linux guest `VK_NV_optical_flow` through a table-free passthrough twin (measured 2026-09-26).
+- NOT measured: how the Windows KMD and DLSS-G behave on a GPU with no OFA. Next step is the PC run in the amendment (Wukong,
+  frame generation requested, first launch + relaunch, 3 sequences): no M1 marker, no watchdog after relaunch, frame
+  generation unavailable in the game. If the guest does not boot without the engine, the flag stays off and an OFA table needs the
+  owner ruling.
 
 ## UPDATE 2026-11-04 — Windows is required on the gpu-vast master gate (lane 2)
 

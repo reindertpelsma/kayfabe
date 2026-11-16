@@ -177,6 +177,8 @@ try {
     'scripts/ci/release_driver_pins.py',
     'scripts/ci/vast_payload.py',
     'scripts/ci/payload_instruction.py',
+    'scripts/ci/box_downloader.py',
+    'scripts/ci/kf_fetch.py',
     'scripts/ci/release_driver_media.py',
     'scripts/ci/test_release_driver_media.py',
     'scripts/bench/native_xid_guard.py',
