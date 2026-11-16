@@ -1764,6 +1764,14 @@ impl WalkKernel {
                     }
                     Err(e) => {
                         self.events.push(format!("capacity ceiling: {e}"));
+                        // ★ 2026-11-16 (observation only): the pool's geometry at the ceiling,
+                        // bounded to the first 16 ceilings of the walker.
+                        if self.cap.stats.ceilings <= 16 {
+                            self.events.push(format!(
+                                "capacity ceiling geometry: {}",
+                                self.cap.slot_geometry(s, need)
+                            ));
+                        }
                         return Ok(false);
                     }
                 }

@@ -35,6 +35,8 @@ use std::sync::{Mutex, OnceLock};
 static DRAINER_REFUSALS: [AtomicU64; 3] = [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
 
 const VA_TIMER_SLACK_NS: u64 = 5_000;
+/// ★ 2026-11-16: split tickets whose enqueue time the VA thread keeps at once (observation only).
+const SPLIT_PROFILE_BOUND: usize = 4096;
 
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
 pub const PROM_BASE: u64 = 0x0030_0000;
@@ -99,6 +101,14 @@ pub struct Config {
     /// The device's guest PCI `devfn` (0..=255), a byte of the `auto` construction: it separates
     /// two kf3 devices of one VM that sit on one host GPU.
     pub pci_devfn: u32,
+    /// ★ 2026-11-15 (flag cleanup, Stage 1; `docs/design/V3_WINDOWS_SUPPORT_PROFILE.md`): the
+    /// `windows-support` property, default ON. On, a guest that declares the measured Windows build at
+    /// fn 1 gets the Windows profile (kernel-GR tier, user-channel passthrough, deferred API, the
+    /// fabricated preempt/zcull/GFX-pool/display-control answers, host-owned scheduling, the SDR colour
+    /// path); no other guest reaches any of it. Off, no declaration reaches any of it (a Windows guest
+    /// then fails by name at its first Windows-only control). The only opt-out; never an environment
+    /// variable and never inferred from the guest.
+    pub windows_support: bool,
 }
 
 impl Config {
@@ -315,7 +325,7 @@ pub struct Device {
     /// Boot-log counters.
     pub counters: Counters,
     /// ★ P5c: the VA timing at the previous heartbeat (the heartbeat prints the window).
-    vat_prev: Mutex<kf_mem::vasmgr::VaTiming>,
+    vat_prev: Mutex<(kf_mem::vasmgr::VaTiming, crate::mem::DeliverySnap)>,
     /// ★ w827: the attribution instruments (`KF3_PROF=1`; off = one relaxed load per hook).
     pub prof: Box<crate::prof::Prof>,
     /// ★ Hopper+: the C device's BAR1 overlay verb and its counters (`V3_BAR1_DOORBELL.md`).
@@ -880,6 +890,10 @@ impl Device {
         // ★ v3-display step (3): the plane — the shared model the served chain answers from across
         // `ReselectAtFn1` rebuilds, and its own GPU context over the store (a second export: the
         // walker's context keeps its own import).
+        // ★ 2026-11-15: the Windows support profile — ONE value per VM, shared by the chain (which
+        // records the guest's fn-1 identity), the memory plane (the mirror-space start) and the display
+        // plane (the SDR colour path).
+        let windows = kf_rm::winprofile::WindowsProfile::new(cfg.windows_support);
         let display_plane: Option<&'static crate::display::DisplayPlane> = match display_row {
             Some(row) => {
                 let export = rm
@@ -936,6 +950,7 @@ impl Device {
                         fb_length,
                         broker,
                         cfg.display_max_fps,
+                        windows.clone(),
                     )
                 })?
                 .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
@@ -957,7 +972,7 @@ impl Device {
             let memory_access = chans.memory_access.clone();
             let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
-            let (board, host, chain_logs, census, inbox, console, defapi_reg) = (
+            let (board, host, chain_logs, census, inbox, console, defapi_reg, windows) = (
                 board.clone(),
                 host.clone(),
                 chain_logs.clone(),
@@ -965,6 +980,7 @@ impl Device {
                 inbox.clone(),
                 console.clone(),
                 defapi_reg.clone(),
+                windows.clone(),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
                 let objects = kf_rm::rmrpc::ObjectPolicy::over(
@@ -1008,6 +1024,7 @@ impl Device {
                         // ★ The boot display: fn 65's region table follows the guest's preserved
                         // console with `gop=on`; with `gop=off` there is no seat (today's table).
                         console: console.seat(),
+                        windows: windows.clone(),
                     },
                 )
             })
@@ -1053,6 +1070,7 @@ impl Device {
             ram,
             inbox,
             mirrors,
+            windows.clone(),
         )?;
         let walker = kf_mem::vasmgr::GpuWalker { kernel, perm };
         // ★ 2026-09-26 (`V3_BAR1_DOORBELL.md` §7 T1's NEGATIVE CONTROL, `V3_FAMILY_PORT_BLACKWELL.md`):
@@ -1224,7 +1242,7 @@ impl Device {
             stop: AtomicBool::new(false),
             hotplug_pending: AtomicU32::new(0),
             counters: Counters::default(),
-            vat_prev: Mutex::new(kf_mem::vasmgr::VaTiming::default()),
+            vat_prev: Mutex::new(Default::default()),
             prof: Box::default(),
             bar1_overlay,
             qhead_off,
@@ -2039,6 +2057,11 @@ impl Device {
         let carve = kf_chip::bar0::fb_layout(self.mem.fb_len).map_or(0, |l| l.carve());
         let mut va_busy_from = crate::prof::now_ns();
         let mut cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
+        // ★ 2026-11-16 (observation only, `V3_VA_PROFILE.md`): each taken split's worker enqueue time,
+        // until its result is published (this thread only; bounded — past the bound a ticket is
+        // simply not profiled).
+        let mut split_queued: std::collections::HashMap<u64, std::time::Instant> =
+            std::collections::HashMap::new();
         self.va_up.store(true, Ordering::Release);
         let _up = Up(&self.va_up);
         while !self.stop.load(Ordering::Acquire) {
@@ -2098,6 +2121,7 @@ impl Device {
                 }
                 if !m.in_flight() {
                     let _ = m.abandon_life();
+                    split_queued.clear();
                     let mut statements = 0usize;
                     for st in self.mem.inbox.take() {
                         taken += 1;
@@ -2212,12 +2236,19 @@ impl Device {
             }
             // ★ P6: a Translated channel's `MEM_OP` split — walked with the invalidates, never a
             // wait on the worker that asked.
-            for (ticket, target) in self.mem.inbox.take_split_requests() {
+            for (ticket, target, queued) in self.mem.inbox.take_split_requests_timed() {
+                if split_queued.len() < SPLIT_PROFILE_BOUND {
+                    split_queued.insert(ticket, queued);
+                }
                 match target {
-                    crate::mem::SplitTarget::Pdb(pdb) => m.on_split(pdb, ticket, trigger),
+                    crate::mem::SplitTarget::Pdb(pdb) => {
+                        m.on_split_queued(pdb, ticket, Some(queued), trigger);
+                    }
                     // ★ §U.2: a deferred TLB invalidate — the channel's own space; its gate is
                     // released by `finish_split` below, after the walk's commit.
-                    crate::mem::SplitTarget::Space(key) => m.on_split_space(key, ticket, trigger),
+                    crate::mem::SplitTarget::Space(key) => {
+                        m.on_split_space_queued(key, ticket, Some(queued), trigger);
+                    }
                 }
             }
             let r = m.on_walk_ready(trigger);
@@ -2249,7 +2280,8 @@ impl Device {
                     );
                 }
                 // Ring the channel's own token: its next pump resumes after the split.
-                if let Some(tok) = self.mem.inbox.finish_split(ticket, res)
+                let queued = split_queued.remove(&ticket);
+                if let Some(tok) = self.mem.inbox.finish_split_timed(ticket, res, queued)
                     && self.plane.ring_internal(tok)
                 {
                     let _ = self.worker_efd.signal();
@@ -2474,6 +2506,11 @@ impl Device {
                 }
             }
         }
+        // ★ 2026-11-16 (`V3_VA_PROFILE.md`): the slow records not printed live, and the ring summary
+        // (bounded: the ring's size plus one line).
+        for line in m.slow_ring_dump() {
+            eprintln!("{line}");
+        }
         // ★ The boot display: a seed the guest never retired (it never loaded its driver) goes with
         // the device — scratch first, then the view's host aperture (`CpuWindow::retire_seed`).
         if let Some(w) = m
@@ -2583,6 +2620,12 @@ impl Device {
         let mut last_delivery: Option<std::time::Instant> = None;
         let mut snap_at = std::time::Instant::now();
         while !self.stop.load(Ordering::Acquire) {
+            // ★ 2026-11-15 (flag cleanup, Stage 1): the caps page follows the guest's declared identity
+            // (the Windows profile's SDR page), on this thread, before the next command is served. An
+            // atomic compare when nothing changed; never on a vCPU.
+            if let Some(dp) = self.display {
+                dp.sync_caps_page(&|o, v| self.shadow_store(o, u64::from(v), 4));
+            }
             if let Some([gsprm, libos]) = heartbeat
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
             {
@@ -2808,13 +2851,14 @@ impl Device {
         let va = self.va_stats.lock().map(|v| v.clone()).unwrap_or_default();
         let (recv, settled) = self.mem.inbox.counts();
         // ★ P5c: the window since the last heartbeat (the cumulative mean hides growth).
-        let tm = &match self.vat_prev.lock() {
+        let delivery = self.mem.inbox.delivery.snapshot();
+        let (tm, dl) = &match self.vat_prev.lock() {
             Ok(mut p) => {
-                let d = va.timing.since(&p);
-                *p = va.timing.clone();
+                let d = (va.timing.since(&p.0), delivery.since(&p.1));
+                *p = (va.timing.clone(), delivery);
                 d
             }
-            Err(_) => va.timing.clone(),
+            Err(_) => (va.timing.clone(), delivery),
         };
         // ★ 2026-11-13: the boot's worst VA-thread values, ALSO on disk without a clean shutdown
         // (the stop() summary is lost when the VM is killed): printed when a whole-ms worst changed.
@@ -2844,31 +2888,18 @@ impl Device {
         }
         let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
         let nm = self.mem.counters.mirrors.load(Ordering::Relaxed);
+        // ★ 2026-11-16 (`V3_VA_PROFILE.md`): the old `vat[...]` fields unchanged and first
+        // (`kf_mem::vaprof::vat_old_fields`), then the phase profile, then the result delivery.
         let timing = format!(
-            " mirrors={} reused={} prewarmed={} mirror_avg_us={} mirror_max_us={} vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={} apply_max_ms={} split_max_ms={} slow_applies={} slow_splits={}]",
+            " mirrors={} reused={} prewarmed={} mirror_avg_us={} mirror_max_us={} vat[{} {} {}]",
             nm,
             self.mem.counters.mirrors_reused.load(Ordering::Relaxed),
             self.mem.counters.prewarmed.load(Ordering::Relaxed),
             avg(self.mem.counters.mirror_ns.load(Ordering::Relaxed), nm),
             self.mem.counters.mirror_ns_max.load(Ordering::Relaxed) / 1000,
-            tm.invals,
-            avg(tm.inval_ns, tm.invals),
-            tm.inval_ns_max / 1000,
-            tm.walks,
-            avg(tm.walk_ns, tm.walks),
-            if tm.walks == 0 {
-                0
-            } else {
-                tm.gpu_us / tm.walks
-            },
-            avg(tm.plan_ns, tm.walks),
-            avg(tm.apply_ns, tm.walks),
-            tm.leaves_last,
-            tm.host_calls,
-            tm.apply_ns_max / 1_000_000,
-            tm.split_ns_max / 1_000_000,
-            tm.slow_applies,
-            tm.slow_splits,
+            kf_mem::vaprof::vat_old_fields(tm),
+            kf_mem::vaprof::vat_new_fields(&tm.prof),
+            dl.vat_fields(),
         );
         let mem = format!(
             " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} absent_cleared={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} carve_clipped={:#x} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} pramin_pool_empty={} pramin_retire_full={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
@@ -4392,6 +4423,7 @@ mod config_tests {
             gpu_uuid: None,
             vm_id: None,
             pci_devfn: 0,
+            windows_support: true,
         }
     }
 

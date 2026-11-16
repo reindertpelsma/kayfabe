@@ -53,12 +53,14 @@ case "$MODE" in
       "$B" --socket "$SOCK" --backend wayland --persist --verbose --title "kayfabe Windows (proprietary image)" > "$D/run/broker.log" 2>&1 < /dev/null &
     for _ in $(seq 50); do [ -S "$SOCK" ] && break; sleep 0.2; done
     [ -S "$SOCK" ] || { echo "the broker made no socket (see $D/run/broker.log)" >&2; exit 3; }
-    # KF3_* flags of the gate (only KF3_NAME=digits lines are accepted)
+    # KF3_* MEASUREMENT flags (only KF3_NAME=digits lines are accepted). 2026-11-15: the Windows profile is the
+    # device's default (no env file needed); the sample is a measurement example and may be absent.
+    PROP_ENVF=${PROP_KF3_ENV:-$D/bin/kf3_flags.sample.env}; [ -r "$PROP_ENVF" ] || PROP_ENVF=/dev/null
     while IFS= read -r line; do
       [[ "$line" =~ ^[[:space:]]*(#.*)?$ ]] && continue
       [[ "$line" =~ ^KF3_[A-Z0-9_]+=[0-9]+$ ]] || { echo "refused env line: $line" >&2; exit 2; }
       export "$line"
-    done < "${PROP_KF3_ENV:-$D/bin/kf3_flags.sample.env}"
+    done < "$PROP_ENVF"
     export KF3_RPC_TRACE=${KF3_RPC_TRACE:-1} ;;
 esac
 echo "START $MODE $(date -Is) pid $$" >> "$D/run/marker.txt"

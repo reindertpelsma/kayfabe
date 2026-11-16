@@ -31,15 +31,28 @@ def changed(rel, old, new):
     return rel, FILES[rel].replace(old, new)
 
 
+def changed_all(rel, pairs):
+    text = FILES[rel]
+    for old, new in pairs:
+        assert text.count(old) == 1, (rel, old)
+        text = text.replace(old, new)
+    return rel, text
+
+
 CASES = [
     # The cap is ignored: one call per span again.
     ("cap-ignored", changed(BATCH, "if *oe == cs && *via == m.via && *n < cap =>", "if *oe == cs && *via == m.via =>")),
     # Off by one: a call covers cap + 1 entries.
     ("cap-off-by-one", changed(BATCH, "if *oe == cs && *via == m.via && *n < cap =>", "if *oe == cs && *via == m.via && *n <= cap =>")),
     # The ledger is not cut when a chunk lands.
-    ("ledger-not-cut", changed(BATCH, "        r?;\n        self.cut_own(s, e);", "        r?;")),
-    # A chunk that failed is recorded as gone anyway (a half-applied chunk the ledger hides).
-    ("failed-chunk-cut-anyway", changed(BATCH, "        r?;\n        self.cut_own(s, e);\n        self.retired(s, e.saturating_sub(s));\n        Ok(())", "        self.cut_own(s, e);\n        self.retired(s, e.saturating_sub(s));\n        r")),
+    # (2026-11-16: anchored after the profiling's ledger timer, `V3_VA_PROFILE.md`; same mutant.)
+    ("ledger-not-cut", changed(BATCH, "        let freed0 = kf_host::phase::total_ns(kf_host::phase::Phase::RmFree);\n        self.cut_own(s, e);", "        let freed0 = kf_host::phase::total_ns(kf_host::phase::Phase::RmFree);")),
+    # A chunk that failed is recorded as gone anyway (a half-applied chunk the ledger hides). (2026-11-16: two edits
+    # around the profiling's ledger timer, `V3_VA_PROFILE.md`; same mutant: no early return, cut and retire, then `r`.)
+    ("failed-chunk-cut-anyway", changed_all(BATCH, [
+        ("        r?;\n        // \u2605 2026-11-16 (observation only): the ledger's share", "        // \u2605 2026-11-16 (observation only): the ledger's share"),
+        ("            kf_host::phase::ns_since(t_led).saturating_sub(freed),\n        );\n        Ok(())", "            kf_host::phase::ns_since(t_led).saturating_sub(freed),\n        );\n        r"),
+    ])),
     # The span's tail chunk is never issued.
     ("last-chunk-dropped", changed(BATCH, "        if let Some((lo, hi, via, n)) = open {\n            self.unmap_span((lo, hi, via), n, defer)?;\n        }", "        let _ = open;")),
     # The default cap changes.

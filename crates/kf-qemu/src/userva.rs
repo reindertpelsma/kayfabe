@@ -637,7 +637,7 @@ fn same_lifetime(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     #[test]
     fn exclusions_are_complete_spans_and_survive_no_receipt() {
@@ -760,6 +760,7 @@ mod tests {
                 range: 2,
                 guest: Default::default(),
             },
+            start: kf_host::channel::MirrorVaStart::GuestFloor,
             user_regions: Arc::default(),
             negctl_window: None,
             rows: Default::default(),
@@ -1087,7 +1088,7 @@ mod tests {
         assert_eq!(q.pending.lock().unwrap().len(), 2);
     }
 
-    fn channel_declaration() -> kf_rm::chanlink::ChannelAlloc {
+    pub(crate) fn channel_declaration() -> kf_rm::chanlink::ChannelAlloc {
         use kf_rm::chanlink::*;
         ChannelAlloc {
             client: 1,
@@ -1114,6 +1115,7 @@ mod tests {
             error_notifier: None,
             process_id: Some(200),
             user_work: true,
+            windows: true,
             user_ring_permit: windows_user_ring_permit(&UserWorkFacts {
                 flag: true,
                 windows: true,

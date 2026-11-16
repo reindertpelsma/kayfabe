@@ -358,6 +358,77 @@ impl Capacity {
         }))
     }
 
+    /// ★ 2026-11-16 (observation only, `docs/design/V3_VA_PROFILE.md`): the slot pool's geometry
+    /// around slot `s` when its growth to `need` placements hit the ceiling — what a fragmentation
+    /// fix must know (whether the tail after the slot is free, the largest free blocks, who sits
+    /// next to it). Bounded: the 8 largest free regions and the slot's two neighbours.
+    #[must_use]
+    pub fn slot_geometry(&self, s: u32, need: u32) -> String {
+        let required = grain(u64::from(need), self.slot_default).min(u64::from(self.max_cap));
+        let old = self.region.get(s as usize).copied().flatten();
+        let mut free = self.slots.free.clone();
+        free.sort_by(|a, b| b.cap.cmp(&a.cap).then(a.off.cmp(&b.off)));
+        let largest: Vec<String> = free
+            .iter()
+            .take(8)
+            .map(|r| format!("{}+{}", r.off, r.cap))
+            .collect();
+        let (tail_free, head_free, left, right) = match old {
+            Some(o) => {
+                let end = o.off.saturating_add(o.cap);
+                let tail = self
+                    .slots
+                    .free
+                    .iter()
+                    .find(|r| r.off == end)
+                    .map_or(0, |r| r.cap);
+                let head = self
+                    .slots
+                    .free
+                    .iter()
+                    .find(|r| r.off.saturating_add(r.cap) == o.off)
+                    .map_or(0, |r| r.cap);
+                let mut left: Option<(usize, Region)> = None;
+                let mut right: Option<(usize, Region)> = None;
+                for (i, r) in self.region.iter().enumerate() {
+                    let Some(r) = *r else { continue };
+                    if i == s as usize {
+                        continue;
+                    }
+                    if r.off < o.off && left.is_none_or(|(_, l)| r.off > l.off) {
+                        left = Some((i, r));
+                    }
+                    if r.off > o.off && right.is_none_or(|(_, x)| r.off < x.off) {
+                        right = Some((i, r));
+                    }
+                }
+                (tail, head, left, right)
+            }
+            None => (0, 0, None, None),
+        };
+        let fmt = |x: Option<(usize, Region)>| {
+            x.map_or("none".to_string(), |(i, r)| {
+                format!("s{i}@{}+{}", r.off, r.cap)
+            })
+        };
+        format!(
+            "slot {s} region {} required {required} pool {} free {} in {} region(s), largest [{}]; adjacent free: head {head_free} tail {tail_free} (in-place growth {}); neighbours left {} right {}; slots held {}",
+            old.map_or("none".to_string(), |o| format!("{}+{}", o.off, o.cap)),
+            self.slots.size,
+            self.slots.free_runs(),
+            self.slots.free.len(),
+            largest.join(" "),
+            if old.is_some_and(|o| u64::from(o.cap) + u64::from(tail_free) >= required) {
+                "would fit"
+            } else {
+                "would not fit"
+            },
+            fmt(left),
+            fmt(right),
+            self.region.iter().filter(|r| r.is_some()).count(),
+        )
+    }
+
     /// Free runs in the slot pool.
     #[must_use]
     pub fn slot_pool_free(&self) -> u64 {
@@ -389,6 +460,85 @@ mod tests {
 
     fn cap() -> Capacity {
         Capacity::new(8, 1 << 16, 1 << 16, 1 << 15, 1024).expect("config")
+    }
+
+    /// ★ 2026-11-16: a ceiling with enough free runs in total but no block large enough names the
+    /// slot's region, the largest free blocks, its neighbours and that in-place growth would not fit.
+    #[test]
+    fn ceiling_geometry_names_the_blocks_and_the_neighbours() {
+        let mut c = Capacity::new(8, 4096, 4096, 4096, 1024).expect("config");
+        let _ = c.plan(&[0, 1, 2]).expect("plan");
+        let e = c
+            .slot_needed(1, 1500)
+            .expect_err("the pool has 1024 free, 1536 required");
+        assert!(e.contains("slot pool exhausted"), "{e}");
+        let g = c.slot_geometry(1, 1500);
+        for want in [
+            "slot 1 region 1024+1024",
+            "required 1536",
+            "free 1024 in 1 region(s)",
+            "largest [3072+1024]",
+            "head 0 tail 0",
+            "would not fit",
+            "left s0@0+1024",
+            "right s2@2048+1024",
+            "slots held 3",
+        ] {
+            assert!(g.contains(want), "{want} in {g}");
+        }
+        // slot 2 hits the same ceiling, but the free run right after it would hold the growth
+        assert!(c.slot_needed(2, 1500).is_err());
+        let g2 = c.slot_geometry(2, 1500);
+        for want in [
+            "slot 2 region 2048+1024",
+            "tail 1024",
+            "would fit",
+            "right none",
+        ] {
+            assert!(g2.contains(want), "{want} in {g2}");
+        }
+        assert!(!g2.contains("would not fit"), "{g2}");
+    }
+
+    /// ★ 2026-11-16: a free tail too small for the required size is named, and in-place growth
+    /// is said NOT to fit.
+    #[test]
+    fn ceiling_geometry_names_a_free_tail_too_small() {
+        let mut c = Capacity::new(8, 4096, 4096, 4096, 512).expect("config");
+        let _ = c.plan(&[0, 1, 2, 3]).expect("plan");
+        assert!(c.slot_needed(3, 4000).is_err());
+        let g = c.slot_geometry(3, 4000);
+        for want in [
+            "slot 3 region 1536+512",
+            "required 4096",
+            "largest [2048+2048]",
+            "head 0 tail 2048",
+            "would not fit",
+            "left s2@1024+512",
+        ] {
+            assert!(g.contains(want), "{want} in {g}");
+        }
+    }
+
+    /// ★ 2026-11-16: a free tail directly after the slot is named, with whether growth in place fits.
+    #[test]
+    fn ceiling_geometry_names_a_free_tail_that_would_fit() {
+        let mut c = Capacity::new(8, 4096, 4096, 4096, 1024).expect("config");
+        let _ = c.plan(&[0, 1]).expect("plan");
+        // 2048 free after slot 1; growth needs a NEW region of 3072 (no in-place growth today)
+        assert!(c.slot_needed(1, 3000).is_err());
+        let g = c.slot_geometry(1, 3000);
+        for want in [
+            "slot 1 region 1024+1024",
+            "required 3072",
+            "tail 2048",
+            "would fit",
+            "right none",
+            "left s0@0+1024",
+        ] {
+            assert!(g.contains(want), "{want} in {g}");
+        }
+        assert!(!g.contains("would not fit"), "{g}");
     }
 
     #[test]
