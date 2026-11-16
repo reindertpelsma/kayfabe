@@ -1,7 +1,7 @@
 # Animate on the image's own sample documents (shipped with the application): a JSFL script opens one, reads its size and timeline,
 # exports a frame as PNG, closes it and quits.
 . 'C:\kfhw\lib.ps1'
-$R = Init-Run 'animate_sample'
+$R = Init-Run 'animatesample'
 try {
   $f = Get-ChildItem 'C:\Program Files\Adobe\Adobe Animate 2027' -Recurse -Filter 'Hippo.fla' -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $f) { throw 'shipped sample document not found' }

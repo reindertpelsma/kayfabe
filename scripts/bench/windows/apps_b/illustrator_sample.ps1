@@ -1,7 +1,7 @@
 # Illustrator on the image's own sample art (a presets library document shipped with the application; nothing is copied off the image):
 # open it, export a 2x PNG and a PDF, quit.
 . 'C:\kfhw\lib.ps1'
-$R = Init-Run 'illustrator_sample'
+$R = Init-Run 'illustratorsample'
 try {
   $ai0 = Get-ChildItem 'C:\Program Files\Adobe\Adobe Illustrator 2027' -Recurse -Filter 'Dot Pattern Vector Pack.ai' -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $ai0) { throw 'shipped sample document not found' }

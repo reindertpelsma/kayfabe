@@ -66,6 +66,15 @@ class T(unittest.TestCase):
             self.assertTrue((B.APPS_DIR / c["script"]).is_file(), name)
             self.assertTrue(name in B.GRADERS or name in B.LAUNCH_ONLY, name)
 
+    def test_script_run_names_match_the_check_names(self):
+        import re
+        for name, c in B.CHECKS.items():
+            text = (B.APPS_DIR / c["script"]).read_text()
+            m = re.search(r"Init-Run ('([a-z]+)'|\$APPNAME)", text)
+            self.assertTrue(m, name)
+            if m.group(2):
+                self.assertIn(m.group(2), (name, "sniffers") if name == "gpudiag" else (name,), name)
+
     def test_photoshop_pass(self):
         self.photoshop()
         row = B.verdict("photoshop", "x" * 32, self.d, GPU_OK)

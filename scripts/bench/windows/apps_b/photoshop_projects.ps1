@@ -1,7 +1,7 @@
 # Photoshop opens every open-licence PSD project of the data volume (project/*.psd), records size, layer count and colour mode per file,
 # and saves a 1024-pixel PNG of the flattened result of up to 6 of them. One file failing does not stop the others.
 . 'C:\kfhw\lib.ps1'
-$R = Init-Run 'photoshop_projects'
+$R = Init-Run 'photoshopprojects'
 try {
   $DATA = Data-Root
   $files = @(Get-ChildItem (Join-Path $DATA 'project') -Filter *.psd | Sort-Object Name)

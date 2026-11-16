@@ -1,6 +1,6 @@
 # InDesign on the image's own sample documents (shipped with the application): open one, export a PDF and a page JPEG, quit.
 . 'C:\kfhw\lib.ps1'
-$R = Init-Run 'indesign_sample'
+$R = Init-Run 'indesignsample'
 try {
   $f = Get-ChildItem 'C:\Program Files\Adobe\Adobe InDesign 2027' -Recurse -Filter 'SampleFlexLayoutFile.indd' -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $f) { throw 'shipped sample document not found' }

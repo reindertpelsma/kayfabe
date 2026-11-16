@@ -1,6 +1,6 @@
 # Animate opens the open-licence FLA projects of the data volume, records size and timeline counts, exports a PNG of each.
 . 'C:\kfhw\lib.ps1'
-$R = Init-Run 'animate_projects'
+$R = Init-Run 'animateprojects'
 try {
   $DATA = Data-Root
   $files = @(Get-ChildItem (Join-Path $DATA 'project') -Filter *.fla | Sort-Object Name)

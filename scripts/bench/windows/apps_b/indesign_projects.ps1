@@ -1,6 +1,6 @@
 # InDesign opens the open-licence INDD projects of the data volume and exports each as PDF; one failing file does not stop the others.
 . 'C:\kfhw\lib.ps1'
-$R = Init-Run 'indesign_projects'
+$R = Init-Run 'indesignprojects'
 try {
   $DATA = Data-Root
   $files = @(Get-ChildItem (Join-Path $DATA 'project') -Filter *.indd | Sort-Object Name)

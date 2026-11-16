@@ -1,7 +1,7 @@
 # Photoshop on the image's own sample files (a sky preset photo and a document-template PSD shipped with the applications): open both,
 # run GPU-class filters on the photo, save it as PNG, and report the template's size. Nothing is copied off the image.
 . 'C:\kfhw\lib.ps1'
-$R = Init-Run 'photoshop_sample'
+$R = Init-Run 'photoshopsample'
 try {
   $sky = Get-ChildItem 'C:\Program Files\Adobe\Adobe Photoshop 2027\Required\Sky_Presets' -Filter *.jpg | Sort-Object Length -Descending | Select-Object -First 1
   $psd = Get-ChildItem 'C:\Program Files\Adobe\Adobe Media Encoder 2027' -Recurse -Filter '3840x2160x1.0.psd' -ErrorAction SilentlyContinue | Select-Object -First 1
