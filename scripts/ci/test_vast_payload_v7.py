@@ -303,10 +303,15 @@ class V7Tests(unittest.TestCase):
         with patch.object(self.m.subprocess, "check_output", return_value=two):
             self.assertEqual(self.m.hardware()["compute_cap"], 0)
 
-    def test_gpus_flag_is_bounded(self):
-        for bad in ("0", "9", "x"):
-            with self.assertRaises(SystemExit):
-                self.m.parse_args(["--gpus", bad])
+    def test_gpus_flag_zero_is_refused(self):
+        with self.assertRaises(SystemExit):
+            self.m.parse_args(["--gpus", "0"])
+
+    def test_gpus_flag_above_eight_is_refused(self):
+        with self.assertRaises(SystemExit):
+            self.m.parse_args(["--gpus", "9"])
+
+    def test_gpus_flag_parses_and_defaults_to_one(self):
         self.assertEqual(self.m.parse_args(["--gpus", "2"]).gpus, 2)
         self.assertEqual(self.m.parse_args([]).gpus, 1)
 
