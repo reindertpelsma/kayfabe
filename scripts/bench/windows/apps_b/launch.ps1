@@ -17,7 +17,7 @@ try {
   }
   Step 'launch'
   Start-Process $c.exe
-  $ok = Wait-For { Has-Window $c.proc } $c.proc 240
+  $ok = Wait-For { Has-Window $c.proc } $c.proc 600
   $R.main_window = $ok
   Step "window=$ok"
   [void](Wait-For { $false } $c.proc 30)

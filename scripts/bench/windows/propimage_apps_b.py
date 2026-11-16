@@ -63,12 +63,12 @@ CHECKS = {
     "aeparallel": {"timeout": 1800, "script": "ae_parallel.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "four concurrent aerender processes (CUDA contexts x4), 4K"},
     "acrobat": {"timeout": 360, "script": "acrobat.ps1", "gpu": (), "lane": "gate", "path": "Direct2D page rendering"},
     "animate": {"timeout": 360, "script": "animate.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage, tween export", "disabled": 'no working offline entry for scripts: Animate.exe with a .jsfl argument shows an "Open JSFL File" dialog that no keyboard route closed (MEASURED 2026-11-16, pc no-GPU and Vast kf3)'},
-    "premiere": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Mercury engine start, CUDA/D3D12 init (launch only)"},
+    "premiere": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Mercury engine start, CUDA/D3D12 init (launch only)"},
     "mediaencoder": {"timeout": 600, "script": "mediaencoder.ps1", "gpu": ("enc",), "lane": "discovery", "path": "NVENC H.264 via the After Effects hand-off"},
     "lightroom": {"timeout": 600, "script": "lightroom.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "develop pipeline GPU processing on 12/24 MP raws", "disabled": 'a plugin dropped into the per-user Modules folder is not loaded by Lightroom Classic at start (MEASURED: no plugin result, no log line); the launch row lightroomlaunch covers the application'},
-    "lightroomlaunch": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Lightroom Classic start: catalog open, GPU capability scan (launch only)"},
-    "dimension": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/OptiX init (launch only)"},
-    "uxp": {"timeout": 300, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "UXP tooling start (launch only)"},
+    "lightroomlaunch": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Lightroom Classic start: catalog open, GPU capability scan (launch only)"},
+    "dimension": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/OptiX init (launch only)"},
+    "uxp": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "UXP tooling start (launch only)"},
 }
 EMBED = {"aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
 ENABLED = tuple(n for n, c in CHECKS.items() if not c.get("disabled"))

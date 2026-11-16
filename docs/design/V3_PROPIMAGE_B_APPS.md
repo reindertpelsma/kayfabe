@@ -13,20 +13,29 @@ Same image format, same runner, same state file as the first image (`propimage.p
 
 ## Rows (the table in `propimage_apps_b.CHECKS` is the source)
 
-| Row | Operation | Verified on the host | GPU assertion | Limit |
-|---|---|---|---|---|
-| `gpudiag` | the applications' own GPU sniffers (`GPUSniffer.exe` of Premiere, After Effects, Media Encoder; Photoshop `sniffer.exe`) | each prints an NVIDIA compute device and not "no devices" | none: it is the diagnostic | a diagnostic, not work |
-| `photoshop` | open a 4480x2928 photo, 6 passes of Smart Sharpen and Gaussian blur, resize, save PNG and PSD | PNG 2048x1339 with pixel statistics, PSD header, source identity, own system information names an NVIDIA GPU | gpu | |
-| `illustrator` | open an SVG, add 400 shapes, export a 4x PNG and a PDF | PNG 4x artboard with pixel statistics, PDF | sampled only | export is not GPU-accelerated work in this application |
-| `aftereffects` | generate a project (solid, fractal noise, glow, blur, footage, text), render 60 frames with `aerender` | 60 PNG frames 1920x1080, `aerender` exit and log | gpu | |
-| `mediaencoder` | queue the generated comp in Media Encoder as H.264 | MP4 duration, codec, size | enc | depends on the After Effects to Media Encoder hand-off |
-| `indesign` | build a 2-page document with a placed photo, export PDF and a page JPEG | PDF with 2 pages, JPEG size, one placed graphic | sampled only | |
-| `acrobat` | open a 16-page PDF through its automation interface, extract 5 pages | page counts, new PDF with 5 pages | sampled only | |
-| `animate` | a JSFL script builds a document with a motion tween, saves it, exports a PNG | PNG 1280x720, file saved | sampled only | |
-| `lightroom` | a plugin loaded from the per-user Modules folder imports a raw photo and exports a 1920 px JPEG | JPEG size | gpu | falls back to a failure with the plugin's own message |
-| `premiere`, `dimension`, `uxp` | launch, reach the main window through UI Automation, hold, close | process alive and responding | none | PASS_LIMITED: no document work (no scripting route was usable offline) |
+Every row carries a `lane` (`gate`: expected to pass on kf3, strict; `discovery`: heavy or exotic, allowed to fail and crash, each failure is a finding) and a `path` (the GPU path it is meant to exercise). A row that is meant to use the GPU asserts it from the HOST's nvidia-smi (`gpu_assert.py`); rows marked "sampled" record the numbers and assert nothing. Disabled rows say why and are skipped by default (`--apps` can still name them).
 
-Per-row measured status (PASS, PASS_LIMITED, FAIL, NOT RUN with the reason) is in the traces README, never in this table.
+| Row | Lane | Operation | Verified on the host | GPU assertion |
+|---|---|---|---|---|
+| `gpudiag` | gate | the applications' own GPU sniffers (Premiere, After Effects, Media Encoder `GPUSniffer.exe`; Photoshop `sniffer.exe`) | each prints an NVIDIA CUDA device and not "no devices" | the diagnostic itself |
+| `photoshop` | discovery | 8K canvas, 16 bit, 100 pasted layers over 10 blend modes, 5 adjustment layers, smart object, 6 Smart Sharpen passes, 40 brush strokes, saves PNG and PSD | PNG pixel statistics, PSD header, feature list, own system information names the NVIDIA GPU | gpu |
+| `photoshopsample` | discovery | the shipped sky photo and the shipped 3840x2160 PSD template: open, filters, PNG | dimensions, statistics | gpu |
+| `photoshopprojects` | discovery | opens every open-licence PSD project (`project/*.psd`), flattens up to 6 | 70 percent open, PNG sanity | sampled |
+| `illustrator` | gate | open SVG, 400 generated shapes, 4x PNG and PDF | PNG 4x artboard, statistics, PDF | sampled |
+| `illustratorsample` | gate | the shipped sample art document: 2x PNG and PDF | dimensions, PDF | sampled |
+| `aftereffects` | discovery | generated 4K 16-bit project (fractal noise, turbulent displace, glow, blur, nested precomp, 3D layers, expressions, particles, footage), `aerender` 60 frames | frames 3840x2160, `aerender` log, feature list | gpu |
+| `aetoggle` | discovery | CUDA to software to CUDA renderer switch inside one session, one 4K frame each | the three frames agree within tolerance | gpu |
+| `aeparallel` | discovery | four concurrent `aerender` processes | 60 frames, exit codes | gpu |
+| `aeprojects` | discovery | opens every open-licence AEP project | 70 percent open | sampled |
+| `mediaencoder` | discovery | the generated comp queued in Media Encoder as H.264 | MP4 duration, codec, size | enc |
+| `indesign` | gate | 2-page document with a placed photo, PDF and JPEG | PDF pages, JPEG size, one graphic placed | sampled |
+| `indesignsample` | gate | the shipped sample document: PDF and JPEG | pages, size | sampled |
+| `indesignprojects` | discovery | opens every open-licence INDD project, PDF each | 50 percent open | sampled |
+| `acrobat` | gate | open a 16-page PDF through the automation interface, extract 5 pages | page counts | sampled |
+| `premiere`, `dimension`, `uxp`, `lightroomlaunch` | gate | launch, reach the main window through UI Automation, hold, close | process alive and responding | none: PASS_LIMITED, no document work |
+| `animate`, `animatesample`, `animateprojects`, `lightroom` | disabled | JSFL entry and Lightroom plugin entry | | the reasons are in the table in code and in the traces README |
+
+Per-row measured status (PASS, PASS_LIMITED, FAIL, NOT RUN with the reason) is in `traces/imageb_apps_20261116/README.md`, never in this table.
 
 ## Built-in and third-party suites
 
