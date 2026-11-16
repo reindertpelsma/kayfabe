@@ -187,24 +187,78 @@ building wheels). Not run anywhere yet.
 
 ## Running
 
-In a venv: `python3 -m kfml setup --venv /opt/kfml-venv --allow-unhashed` (until the hashed lock
-exists), then `/opt/kfml-venv/bin/python -m kfml check` and `... run`. On a CUDA container:
-`docker build -t kfml scripts/kfml` then `docker run --gpus all kfml run`. The Dockerfile installs system
-packages and the venv at build time; `run` itself never installs (UNVERIFIED, never built).
+On any box with one NVIDIA GPU and its driver, a C++ compiler, `python3-venv` and `python3-dev` (a CUDA `devel`
+container image has the compiler and an nvcc; `setup --nvcc-if-needed` fetches the venv-contained one otherwise):
+
+```
+python3 -m kfml setup --venv /opt/kfml-venv --nvcc-if-needed     # flavour derived from the box; hashed lock
+/opt/kfml-venv/bin/python -m kfml fetch-data                       # sha256-pinned datasets (CIFAR-10: ~15 min from its server)
+/opt/kfml-venv/bin/python -m kfml check                            # what it chose and why, per-test verdicts
+/opt/kfml-venv/bin/python -m kfml run --tier mid --json rows.json --log-dir logs [--reference scripts/kfml/reference]
+```
+
+MEASURED on the run-id box (below), wall seconds: setup about 3 min (hashed cu126 wheels, about 4 GB at 500 Mbit), the
+`run --tier large` step 190 s warm. The payload stage (`scripts/ci/kfml_stage.py`, `--only kfml`) runs the same three
+steps. The Dockerfile derives the flavour at container start (no GPU at build time); UNVERIFIED, never built.
+
+## The measured baseline, and how it is compared
+
+`reference/<die>/<test>.json` holds the per-row baseline of run `kfml_run_20261116` (RTX 4070, sm_89, driver
+560.35.03, cu126 flavour, cold caches): `wall_s`, the row's `metrics`, the workload's comparison `data` (loss
+windows, accuracy) and `measured_on` (die, compute capability, driver, driver CUDA, torch, CUDA runtime, flavour, run id).
+`kfml run --reference scripts/kfml/reference` compares against it; `--record-reference DIR` writes the same layout
+for another die (one directory per die, a PASS row only). The rule, which is not pinned to a die:
+
+1. `data` (algorithmic: losses on fixed seeds, accuracy) is compared with the best available reference: same die, else same
+   compute capability, else any other die. Its tolerance (in the workload) does not depend on the die. Which one
+   was used is in the row (`metrics.reference_from.how`: `same_die` | `same_cc` | `other_die`).
+2. Wall time is never a pass criterion. `metrics.wall_ratio` (this row's wall_s over the reference's) is reported only against
+   the same die; against another die it is null, because a ratio between two different cards measures the cards.
+3. Parity of a kayfabe guest against this native baseline is therefore a same-box comparison (native run and guest run on one
+   box, one die): record with `--record-reference` on the native box, run the guest with `--reference`.
 
 ## Unit tests (GPU-free)
 
-`python3 -m unittest discover -s tests -t .` covers requirement gating, rows, tier derivation, the
+`python3 -m unittest discover -s tests -t .` (in CI) covers requirement gating, rows, tier derivation, the
 child-process executor (timeout kill, crash, signal, NotRun/EnvMissing mapping, against fake workload
 modules), cache-dir confinement, dataset pin handling, upstream pin verification (wrong SHA, branch,
 HEAD mismatch, patch that does not apply, NOTICE for every vendor dir), wheel licence derivation with
 fake wheels (allowlisted, missing, custom, NVIDIA binaries), bundle selection and reproducibility, setup
-refusals, `check`/`list`. It also asserts that all workload modules import without torch.
+refusals, `check`/`list`, the child's working directory, the flavour selection with made-up (driver CUDA, compute capability) pairs including
+the NOT_RUN path, the lock/pins consistency (every lock hashed, its sha256 and index as pinned), the per-die
+reference layout and comparison rule, and the PATH of the child. It also asserts that all workload modules import without torch.
+
+## First run, 2026-11-16 (`kfml_run_20261116`): what broke, and what it was
+
+Six workloads, one box. Findings, each with its decision:
+
+* `cuda_ext_inline` FAIL `Ninja is required to load C++ extensions` although the venv has ninja: **test-harness bug**
+  (the runner is started with an explicit interpreter path, so the venv's `bin/` was not on PATH). Fixed
+  (`runner.py` puts it first on the child PATH, two unit tests); the row then PASSes. Not a CUDA or driver issue.
+* A probe printed `Intel oneMKL FATAL ERROR: Cannot load .../libtorch_cpu.so` and reported torch missing, twice: once for the
+  `check` and once for a whole stage run. In both the working directory of the process had been deleted underneath it by the
+  operator's own `rm -rf` of the source directory it ran in. MEASURED: `import torch` from a deleted working directory
+  reproduces the message exactly and the same import from an existing directory works (25 of 25 repeated probes of an undisturbed
+  process were fine): **operator error, environment, not a CUDA or driver issue**. Hardened anyway (a stage that reads as "torch is
+  missing" for an unrelated reason is worth one line): the probe and every test child now start in a directory that exists
+  (`env.probe_torch` cwd, `executor.run_child` cwd=its work dir), with two unit tests that each fail without the change.
+* Nothing else failed. No row was FAIL on a healthy GPU stack once the PATH was fixed, so there is no CUDA or driver issue to report.
+* CIFAR-10: the pin in `pins.json` was compared with a second download from the dataset's own server (sha256 identical to the one the PC run
+  printed on 2026-11-12), about 15 min at roughly 0.2 MB/s: that server, not the box, is the slow step.
 
 ## What is not verified
 
-All six workloads on a GPU; the loss/accuracy thresholds; `torch.compile` behavior on Turing; the Triton
-autotune configs on sm_75 shared-memory limits (OutOfResources configs should be skipped by the autotuner);
-the `--with-nvcc` tree; Docker; `build-wheels`; the driver minimum table; the CIFAR-10 sha256 pin
-(`pins.json` holds the hash `fetch-data` printed in the native run on the RTX 4070 PC, 2026-11-12,
-`/workspace/bench/kfml_20261112`; it has not been compared with a second download).
+* Everything on a second die, on Blackwell, on another driver or distro, and on CPython 3.12/3.13: ONE die (RTX 4070 sm_89), ONE driver
+  (560.35.03), one container (Ubuntu 22.04, CPython 3.10.12, gcc 11.4) were measured. The cu128 wheels were also run on that same
+  driver as a supplement (all six PASS, cu128 redist nvcc 12.8): that is a statement about cu128 wheels with a CUDA 12.6 driver, not
+  about a CUDA 12.8 driver.
+* The loss/accuracy thresholds on any die but this one (the measured values sit far inside them: compiled-vs-eager window diff
+  0.0003..0.0019 against 0.15, amp-vs-fp32 0.0026 against 0.25, ConvNet accuracy 0.7425 amp vs 0.744 fp32).
+* `torch.compile` on Turing; the Triton autotune configs on sm_75 shared-memory limits (OutOfResources configs should be
+  skipped by the autotuner); `managed_oversub` on anything but this card; the guest behaviour of every row (`KF_ML_GUEST=1`).
+* The driver minimum table `MIN_DRIVER_FOR_CUDA`: only 12.6 -> 560.x is consistent with the measured driver; the others are NVIDIA's
+  numbers from memory of the release notes. The selection reads `nvidia-smi`'s `CUDA Version` first, so the table matters only
+  as a fallback and for the wording of the old "driver too old" message.
+* Docker; `build-wheels`; the lock resolved for CPython 3.12/3.13; the assembled `--with-nvcc` tree with a host compiler
+  that nvcc does not support; the stage under the payload on a kayfabe box (`python3-venv`, `python3-dev` and a C++ compiler on the
+  KVM image).

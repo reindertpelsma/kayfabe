@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 
@@ -185,3 +186,44 @@ class Executor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChildCwd(unittest.TestCase):
+    """2026-11-16: torch imported from a deleted working directory dies with an oneMKL error that reads as 'torch missing'."""
+
+    def test_child_runs_in_its_own_work_dir_not_the_callers_cwd(self):
+        import sys
+        import textwrap
+        with tempfile.TemporaryDirectory() as d:
+            mod = os.path.join(d, "kfml_fake_cwd.py")
+            with open(mod, "w") as f:
+                f.write(textwrap.dedent("""
+                    import os
+                    def run(ctx):
+                        return {"metrics": {"cwd": os.getcwd()}}
+                    """))
+            ctx = {"name": "t", "module": "kfml_fake_cwd", "data_dir": d, "budget_s": 60, "cc": None}
+            env = {"PATH": os.environ["PATH"], "TMPDIR": d}
+            res = executor.run_child(ctx, 60, env, os.path.join(d, "log"), python=sys.executable, extra_path=(d,))
+            self.assertEqual(res["status"], "PASS", res)
+            self.assertNotEqual(res["metrics"]["cwd"], os.getcwd())
+            self.assertTrue(res["metrics"]["cwd"].startswith(d))
+
+    def test_probe_runs_from_an_existing_directory_even_if_the_callers_cwd_was_deleted(self):
+        # a stand-in interpreter that succeeds only when its working directory still exists (as torch's import needs)
+        with tempfile.TemporaryDirectory() as d:
+            fake = os.path.join(d, "fakepython")
+            with open(fake, "w") as f:
+                f.write("#!%s -S\nimport os, sys\ntry:\n    os.getcwd()\nexcept OSError:\n"
+                        "    sys.stderr.write('Intel oneMKL FATAL ERROR: Cannot load libtorch_cpu.so')\n    sys.exit(2)\n"
+                        "print('{\"torch\": \"9.9\", \"modules\": {}}')\n" % sys.executable)
+            os.chmod(fake, 0o755)
+            old = os.getcwd()
+            gone = tempfile.mkdtemp()
+            os.chdir(gone)
+            os.rmdir(gone)
+            try:
+                out = envmod.probe_torch(python=fake)
+            finally:
+                os.chdir(old)
+        self.assertEqual(out.get("torch"), "9.9", out)

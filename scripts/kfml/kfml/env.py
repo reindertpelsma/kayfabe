@@ -169,8 +169,10 @@ def probe_torch(python=None, environ=None, timeout=180) -> dict:
     here = str(Path(__file__).resolve().parent.parent)
     env["PYTHONPATH"] = here + os.pathsep + env.get("PYTHONPATH", "")
     try:
+        # cwd=a directory that exists: importing torch from a deleted working directory dies with "Intel oneMKL FATAL ERROR:
+        # Cannot load libtorch_cpu.so" (measured 2026-11-16), which would read as "torch is missing".
         p = subprocess.run([python, "-m", "kfml._probe"], capture_output=True, text=True,
-                           timeout=timeout, env=env)
+                           timeout=timeout, env=env, cwd=here)
     except Exception as e:
         return {"error": "probe failed: %s" % e}
     for line in reversed(p.stdout.splitlines()):

@@ -101,3 +101,31 @@ class Reference(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CommittedReference(unittest.TestCase):
+    """reference/<die>/<test>.json is labelled with the die and driver it was measured on, covers every spec, and loads."""
+
+    def test_every_spec_has_a_labelled_baseline(self):
+        from pathlib import Path
+        from kfml import registry
+        base = Path(__file__).resolve().parent.parent / "reference"
+        dies = sorted(p for p in base.iterdir() if p.is_dir())
+        self.assertTrue(dies)
+        for die in dies:
+            for s in registry.all_specs():
+                doc = json.loads((die / (s.name + ".json")).read_text())
+                m = doc["measured_on"]
+                for k in ("gpu_name", "compute_cap", "driver", "driver_cuda", "cuda", "torch", "flavor", "run_id"):
+                    self.assertTrue(m.get(k), (die.name, s.name, k))
+                self.assertEqual(reference.die_slug(m["gpu_name"]), die.name)
+                self.assertGreater(doc["wall_s"], 0)
+                self.assertIn("data", doc)
+
+    def test_a_box_of_another_die_still_finds_them(self):
+        from pathlib import Path
+        base = Path(__file__).resolve().parent.parent / "reference"
+        doc, how = reference.find(str(base), "nanogpt_compile", fake_env(gpu_name="Never Seen Card", cc=(12, 0)))
+        self.assertEqual(how, "other_die")
+        self.assertTrue(doc["data"])  # the loss windows
+        self.assertIsNone(reference.wall_ratio(doc, how, 99.0))
