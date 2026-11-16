@@ -98,8 +98,12 @@ class Runner(unittest.TestCase):
         rows, _ = self.go([spec()], ex=ex, record_dir=rec)
         self.assertEqual(rows[0]["dataset_sha256"], {"d": "f" * 64})
         self.assertTrue(rows[0]["metrics"]["reference_recorded"])
-        with open(os.path.join(rec, "t.json")) as f:
-            self.assertEqual(json.load(f)["data"], {"x": 1})
+        with open(os.path.join(rec, "fake-rtx", "t.json")) as f:  # per die class, not flat
+            doc = json.load(f)
+        self.assertEqual(doc["data"], {"x": 1})
+        self.assertEqual(doc["measured_on"]["gpu_name"], "Fake RTX")
+        self.assertEqual(doc["measured_on"]["driver"], "999.1")
+        self.assertIn("wall_s", doc)
         ex2 = Fake({"status": "PASS", "metrics": {}})
         self.go([spec()], ex=ex2, reference_dir=rec)
         self.assertEqual(ex2.calls[0][0]["reference"], {"x": 1})

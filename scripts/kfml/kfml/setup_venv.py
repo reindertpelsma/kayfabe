@@ -20,6 +20,10 @@ class SetupError(Exception):
     pass
 
 
+class NoFlavor(SetupError):
+    """No pinned wheel flavour can run on this box (driver too old / GPU not covered): NOT_RUN, never FAIL."""
+
+
 def lock_path(flavor: str) -> Path:
     if flavor not in FLAVORS:
         raise SetupError("unknown flavor %r (choose %s)" % (flavor, "|".join(FLAVORS)))
@@ -96,9 +100,36 @@ def install_nvcc(venv: Path, flavor: str, pins: dict, fetch_fn=None):
     return home
 
 
-def setup(venv, flavor="cu128", python=None, with_nvcc=False, allow_unhashed=False, installer="pip",
-          pins=None, run=subprocess.run, fetch_fn=None):
+def resolve_flavor(flavor, pins=None, smi=None):
+    """'auto' derives the flavour from this box (nvidia-smi: driver CUDA version, compute capability); an explicit
+    name is used as given. Returns (flavor, reason). Raises NoFlavor when no pinned flavour fits."""
+    if flavor != "auto":
+        lock_path(flavor)
+        return flavor, "explicit --flavor %s" % flavor
+    from . import datasets
+    pins = pins if pins is not None else datasets.load_pins()
+    e = envmod.Env()
+    smi = envmod.nvidia_smi() if smi is None else smi
+    if not smi:
+        raise SetupError("--flavor auto needs an NVIDIA GPU visible to nvidia-smi (none found); pass --flavor explicitly")
+    e.driver, e.cc, e.driver_cuda = smi.get("driver"), smi.get("cc"), smi.get("driver_cuda")
+    c = envmod.choose_flavor(e, pins)
+    if c.flavor is None:
+        raise (NoFlavor if e.flavor_blocked else SetupError)(c.reason)
+    return c.flavor, c.reason
+
+
+def nvcc_matches_flavor(flavor, pins, environ=None, root=None):
+    """True when an nvcc already on the box has the flavour's CUDA major.minor (no redist download needed)."""
+    got, _ = envmod.find_nvcc(environ, root)
+    want = pins["flavors"][flavor]["cuda"]
+    return bool(got) and tuple(got.split(".")[:2]) == tuple(want.split(".")[:2])
+
+
+def setup(venv, flavor="auto", python=None, with_nvcc=False, allow_unhashed=False, installer="pip",
+          pins=None, run=subprocess.run, fetch_fn=None, nvcc_if_needed=False, smi=None):
     venv = Path(venv).resolve()
+    flavor, flavor_reason = resolve_flavor(flavor, pins, smi)
     lock = lock_path(flavor)
     text = lock.read_text()
     hashed = has_hashes(text)
@@ -119,10 +150,16 @@ def setup(venv, flavor="cu128", python=None, with_nvcc=False, allow_unhashed=Fal
     sha = hashlib.sha256(lock.read_bytes()).hexdigest()
     (venv / "kfml-lock.sha256").write_text("%s  %s\n" % (sha, lock.name))
     (venv / "kfml-setup.json").write_text(json.dumps(
-        {"flavor": flavor, "lock": lock.name, "lock_sha256": sha, "hashed": hashed, "installer": installer}) + "\n")
-    if with_nvcc:
-        if pins is None:
-            from . import datasets
-            pins = datasets.load_pins()
-        install_nvcc(venv, flavor, pins, fetch_fn)
-    return {"venv": str(venv), "lock_sha256": sha, "hashed": hashed}
+        {"flavor": flavor, "flavor_reason": flavor_reason, "lock": lock.name, "lock_sha256": sha, "hashed": hashed, "installer": installer}) + "\n")
+    if pins is None:
+        from . import datasets
+        pins = datasets.load_pins()
+    nvcc = "none"
+    if with_nvcc or nvcc_if_needed:
+        if with_nvcc or not nvcc_matches_flavor(flavor, pins, None, venv):
+            install_nvcc(venv, flavor, pins, fetch_fn)
+            nvcc = "redist"
+        else:
+            nvcc = "system"
+    return {"venv": str(venv), "flavor": flavor, "flavor_reason": flavor_reason, "lock_sha256": sha,
+            "hashed": hashed, "nvcc": nvcc}

@@ -42,6 +42,10 @@ def _list(args, out):
     return 0
 
 
+def flavor_cuda(name):
+    return datasets.load_pins()["flavors"][name]["cuda"]
+
+
 def _check(args, out, probe=envmod.probe_env):
     e = probe()
     root = envmod.venv_root()
@@ -56,13 +60,21 @@ def _check(args, out, probe=envmod.probe_env):
     item(e.gpu_visible or e.cuda_available, "NVIDIA GPU: %s, cc %s, %s GB, driver %s" % (
         e.gpu_name, versions.cc_str(e.cc), e.vram_total_gb and round(e.vram_total_gb, 1), e.driver),
         "no GPU visible: need an NVIDIA GPU and its driver (the driver is never installed by kfml)")
+    lines.append("flavor: %s%s" % (e.flavor or "NONE", "  (" + e.flavor_reason + ")" if e.flavor_reason else ""))
+    lines.append("       driver %s supports CUDA %s; GPU sm_%s" % (
+        e.driver, e.driver_cuda, ("%d%d" % tuple(e.cc)) if e.cc else "?"))
+    if e.flavor_blocked:
+        lines.append("NOT_RUN: no pinned flavour can run here; every test row will be NOT_RUN (not FAIL)")
+    elif e.flavor and e.torch and e.cuda and e.cuda != flavor_cuda(e.flavor):
+        lines.append("note: installed torch is CUDA %s, the derived flavour is %s (CUDA %s); re-run setup with "
+                     "--flavor auto into a fresh venv if it does not run" % (e.cuda, e.flavor, flavor_cuda(e.flavor)))
     item(bool(e.vram_total_gb and e.vram_total_gb >= 8), "VRAM >= 8 GB (documented floor)",
          "tests need >= 8 GB total VRAM; smaller cards get NOT_RUN")
     item(e.torch is not None, "torch %s (cuda %s, cudnn %s, triton %s)" % (e.torch, e.cuda, e.cudnn, e.triton),
-         "python3 -m kfml setup --venv DIR   (then run kfml from DIR/bin/python)")
+         "python3 -m kfml setup --venv DIR   (flavour is derived from the box; then run kfml from DIR/bin/python)")
     if e.torch and not e.cuda_available:
         item(False, "torch.cuda usable (%s)" % e.cuda_error,
-             "driver too old for this CUDA wheel -> NOT_RUN; try `setup --flavor cu126`, or update the driver")
+             "driver too old for this CUDA wheel -> NOT_RUN; `setup --flavor auto` picks the flavour the driver can run")
     item(bool(e.torch and versions.ge(e.torch, "2.7")), "torch >= 2.7", "install torch >= 2.7 (cu128 index)")
     nv_ok = bool(e.nvcc) and (not e.cuda or tuple(versions.parse(e.nvcc)[:2]) == tuple((versions.parse(e.cuda) or ())[:2]))
     item(nv_ok, "nvcc %s (must equal torch cuda %s major.minor) %s" % (e.nvcc, e.cuda, e.nvcc_path or ""),
@@ -88,7 +100,7 @@ def _check(args, out, probe=envmod.probe_env):
 def _run(args, out, probe=envmod.probe_env):
     specs = registry.all_specs()
     try:
-        sel = runner.select(specs, args.only.split(",") if args.only else None, args.all)
+        sel = runner.select(specs, args.only.split(",") if args.only else None, args.all, args.tier)
     except runner.RunnerError as e:
         sys.stderr.write("error: %s\n" % e)
         return 2
@@ -116,7 +128,12 @@ def _run(args, out, probe=envmod.probe_env):
 
 def _setup(args, out):
     try:
-        r = setup_venv.setup(args.venv, args.flavor, args.python, args.with_nvcc, args.allow_unhashed, args.installer)
+        r = setup_venv.setup(args.venv, args.flavor, args.python, args.with_nvcc, args.allow_unhashed, args.installer,
+                             nvcc_if_needed=args.nvcc_if_needed)
+    except setup_venv.NoFlavor as e:
+        sys.stderr.write("NOT_RUN: %s\n" % e)
+        out.write(json.dumps({"status": "NOT_RUN", "reason": str(e)}) + "\n")
+        return 3
     except setup_venv.SetupError as e:
         sys.stderr.write("error: %s\n" % e)
         return 2
@@ -171,6 +188,8 @@ def build_parser():
     s = sub.add_parser("run")
     s.add_argument("--only")
     s.add_argument("--all", action="store_true", help="include tests that are not part of the gate")
+    s.add_argument("--tier", choices=("mid", "large"),
+                   help="mid: the gated mid tests; large: every test (mid plus the non-gate ones)")
     s.add_argument("--json")
     s.add_argument("--record-reference")
     s.add_argument("--reference")
@@ -178,9 +197,12 @@ def build_parser():
     s.add_argument("--budget-scale")
     s = sub.add_parser("setup")
     s.add_argument("--venv", required=True)
-    s.add_argument("--flavor", choices=tuple(setup_venv.FLAVORS), default="cu128")
+    s.add_argument("--flavor", choices=("auto",) + tuple(setup_venv.FLAVORS), default="auto",
+                   help="auto (default): derived from the driver's CUDA version and the GPU's compute capability")
     s.add_argument("--python")
     s.add_argument("--with-nvcc", action="store_true")
+    s.add_argument("--nvcc-if-needed", action="store_true",
+                   help="like --with-nvcc, but only when no nvcc with the flavour's CUDA major.minor is on the box")
     s.add_argument("--allow-unhashed", action="store_true")
     s.add_argument("--installer", choices=("pip", "uv"), default="pip")
     sub.add_parser("fetch-data")

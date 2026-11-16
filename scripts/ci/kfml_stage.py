@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+"""The `kfml` payload stage (2026-11-16): ML research workloads (scripts/kfml) as an OPTIONAL stage of vast_payload.py.
+
+    kfml_stage.py run --sha SHA --checkout DIR --prefix DIR --out FILE [--tier mid|large] [--reference DIR] [--record-reference DIR]
+    kfml_stage.py plan
+
+It runs on the box's own GPU, whatever single NVIDIA die and driver the box has: nothing here names a die or a driver. The wheel flavour is
+derived by `kfml setup --flavor auto` from the driver's CUDA version and the GPU's compute capability. Steps, each a child process:
+
+  1. setup      python3 -m kfml setup --venv PREFIX/venv --nvcc-if-needed      rc 3 = no pinned flavour fits: every row NOT_RUN
+  2. fetch-data PREFIX/venv/bin/python -m kfml fetch-data                      sha256-pinned datasets (tinyshakespeare, CIFAR-10 binary)
+  3. run        PREFIX/venv/bin/python -m kfml run --tier T --json PREFIX/rows.json
+
+and prints one line `KF_KFML_RESULT {...}` (the file given by --out has the same text) that vast_payload.py grades: verdict PASS (no row FAIL, at
+least one PASS), NOT_RUN (every row NOT_RUN, with the named reason), FAIL (a failed step or a FAIL row). Per row: name, status, reason, wall_s
+and the die/driver facts; metrics are kept to a bounded set of scalars. No credential is read or written; every download is a public, sha256-pinned
+URL (pins.json) or a hashed wheel lock.
+"""
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+SCHEMA = 1
+TIERS = ("mid", "large")
+STEP_BUDGET_S = {"setup": 3600, "fetch-data": 900, "run": 7200}
+MAX_ROWS = 8
+FACT_KEYS = ("gpu_name", "compute_cap", "vram_gb", "driver", "driver_cuda", "cuda", "torch", "flavor")
+ROW_KEYS = {"name", "status", "reason", "wall_s", "metrics"}
+METRIC_LIMIT = 12
+
+
+class StageError(Exception):
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
+
+
+def kfml_dir(checkout):
+    d = Path(checkout) / "scripts" / "kfml"
+    if not (d / "kfml" / "cli.py").is_file():
+        raise StageError("no_kfml_in_checkout")
+    return d
+
+
+def scrub(text, limit=200):
+    """Printable ASCII, no UUIDs, bounded."""
+    t = re.sub(r"[^\x20-\x7e]", "?", str(text))
+    t = re.sub(r"(?i)\b(?:GPU|MIG)-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b", "GPU-<uuid>", t)
+    t = re.sub(r"(?i)\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b", "<uuid>", t)
+    return t[:limit]
+
+
+def scalar_metrics(metrics):
+    out = {}
+    for k in sorted(metrics or {}):
+        v = metrics[k]
+        if type(v) in (int, float) and v == v and abs(v) < 1e15:
+            out[scrub(k, 48)] = round(v, 6) if type(v) is float else v
+        elif type(v) is bool:
+            out[scrub(k, 48)] = v
+        if len(out) >= METRIC_LIMIT:
+            break
+    return out
+
+
+def summarize(rows, sha, tier, steps, run_id=None):
+    """The bounded result document from `kfml run --json` rows."""
+    verdict = "FAIL"
+    statuses = [r.get("status") for r in rows]
+    if rows and all(s == "NOT_RUN" for s in statuses):
+        verdict = "NOT_RUN"
+    elif rows and "FAIL" not in statuses and "PASS" in statuses and all(s in ("PASS", "NOT_RUN") for s in statuses):
+        verdict = "PASS"
+    facts = {}
+    for k in FACT_KEYS:
+        for r in rows:
+            if r.get(k) is not None:
+                facts[k] = scrub(r[k], 64) if type(r[k]) is str else r[k]
+                break
+    return {
+        "schema": SCHEMA, "verdict": verdict, "sha": sha, "tier": tier, "run_id": scrub(run_id or "", 48), "facts": facts, "steps": steps,
+        "rows": [{"name": scrub(r.get("name"), 48), "status": r.get("status"), "reason": scrub(r.get("reason", "")),
+                  "wall_s": round(float(r.get("wall_s") or 0), 3), "metrics": scalar_metrics(r.get("metrics"))} for r in rows[:MAX_ROWS]],
+    }
+
+
+def failure(sha, tier, steps, reason, run_id=None):
+    return {"schema": SCHEMA, "verdict": "FAIL", "sha": sha, "tier": tier, "run_id": scrub(run_id or "", 48), "facts": {}, "steps": steps,
+            "rows": [], "reason": scrub(reason)}
+
+
+def not_run(sha, tier, steps, reason, names, run_id=None):
+    return {"schema": SCHEMA, "verdict": "NOT_RUN", "sha": sha, "tier": tier, "run_id": scrub(run_id or "", 48), "facts": {}, "steps": steps,
+            "rows": [{"name": n, "status": "NOT_RUN", "reason": scrub(reason), "wall_s": 0.0, "metrics": {}} for n in names[:MAX_ROWS]],
+            "reason": scrub(reason)}
+
+
+def run_step(name, cmd, cwd, log_path, env, runner=subprocess.run):
+    t0 = time.time()
+    with open(log_path, "wb") as log:
+        try:
+            p = runner(cmd, cwd=str(cwd), env=env, stdout=log, stderr=subprocess.STDOUT, timeout=STEP_BUDGET_S[name])
+            rc = p.returncode
+        except subprocess.TimeoutExpired:
+            rc = 124
+    return {"step": name, "rc": rc, "s": round(time.time() - t0, 1)}
+
+
+def test_names(kdir, tier, runner=subprocess.run):
+    p = runner([sys.executable, "-m", "kfml", "list", "--tier", tier, "--json"] if tier == "mid"
+               else [sys.executable, "-m", "kfml", "list", "--json"], cwd=str(kdir), capture_output=True, text=True)
+    try:
+        return [t["name"] for t in json.loads(p.stdout)["tests"]]
+    except (ValueError, KeyError):
+        return ["kfml"]
+
+
+def run(args, runner=subprocess.run):
+    kdir = kfml_dir(args.checkout)
+    prefix = Path(args.prefix)
+    prefix.mkdir(parents=True, exist_ok=True)
+    logs = prefix / "logs"
+    logs.mkdir(exist_ok=True)
+    venv = prefix / "venv"
+    env = dict(os.environ)
+    for k in list(env):  # nothing secret rides along into the workload processes
+        if re.search(r"TOKEN|SECRET|PASSWORD|API_KEY|AWS_", k):
+            del env[k]
+    env["PYTHONPATH"] = str(kdir)
+    env["KF_ML_RUN_ID"] = args.run_id or ""
+    steps = []
+    py = sys.executable
+    s = run_step("setup", [py, "-m", "kfml", "setup", "--venv", str(venv), "--nvcc-if-needed"], kdir, logs / "setup.log", env, runner)
+    steps.append(s)
+    if s["rc"] == 3:
+        reason = "no pinned flavour can run on this box"
+        try:
+            reason = json.loads((logs / "setup.log").read_text().splitlines()[-1])["reason"]
+        except (OSError, ValueError, KeyError, IndexError):
+            pass
+        return not_run(args.sha, args.tier, steps, reason, test_names(kdir, args.tier, runner), args.run_id)
+    if s["rc"] != 0:
+        return failure(args.sha, args.tier, steps, "setup failed rc=%d" % s["rc"], args.run_id)
+    vpy = str(venv / "bin" / "python")
+    env["PYTHONPATH"] = str(kdir)
+    s = run_step("fetch-data", [vpy, "-m", "kfml", "fetch-data"], kdir, logs / "fetch-data.log", env, runner)
+    steps.append(s)
+    if s["rc"] != 0:
+        return failure(args.sha, args.tier, steps, "fetch-data failed rc=%d (pin mismatch or unreachable)" % s["rc"], args.run_id)
+    rows_json = prefix / "rows.json"
+    cmd = [vpy, "-m", "kfml", "run", "--tier", args.tier, "--json", str(rows_json), "--log-dir", str(logs)]
+    if args.reference:
+        cmd += ["--reference", args.reference]
+    if args.record_reference:
+        cmd += ["--record-reference", args.record_reference]
+    s = run_step("run", cmd, kdir, logs / "run.log", env, runner)
+    steps.append(s)
+    try:
+        rows = json.loads(rows_json.read_text())
+    except (OSError, ValueError):
+        return failure(args.sha, args.tier, steps, "kfml run wrote no rows (rc=%d)" % s["rc"], args.run_id)
+    if not isinstance(rows, list) or not rows:
+        return failure(args.sha, args.tier, steps, "kfml run wrote an empty row list", args.run_id)
+    doc = summarize(rows, args.sha, args.tier, steps, args.run_id)
+    if s["rc"] not in (0, 1) and doc["verdict"] == "PASS":
+        doc["verdict"] = "FAIL"
+        doc["reason"] = "kfml run exited rc=%d" % s["rc"]
+    return doc
+
+
+def parse_args(argv):
+    p = argparse.ArgumentParser(prog="kfml_stage.py", description=__doc__.split("\n")[0])
+    sub = p.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("plan")
+    r = sub.add_parser("run")
+    r.add_argument("--sha", required=True)
+    r.add_argument("--checkout", required=True)
+    r.add_argument("--prefix", required=True)
+    r.add_argument("--out", required=True)
+    r.add_argument("--tier", choices=TIERS, default="mid")
+    r.add_argument("--reference")
+    r.add_argument("--record-reference")
+    r.add_argument("--run-id", default="")
+    return p.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    if args.cmd == "plan":
+        print("kfml_stage: setup (flavour auto) -> fetch-data -> run --tier mid|large; rows = one per test; NOT_RUN when no flavour fits")
+        return 0
+    if not re.fullmatch("[0-9a-f]{40}", args.sha):
+        print("KF_KFML_REFUSED reason=sha", flush=True)
+        return 2
+    try:
+        doc = run(args)
+    except StageError as error:
+        print("KF_KFML_REFUSED reason=" + error.reason, flush=True)
+        return 2
+    text = json.dumps(doc, separators=(",", ":"), sort_keys=True)
+    Path(args.out).write_text(text + "\n")
+    print("KF_KFML_RESULT " + text, flush=True)
+    return 0 if doc["verdict"] in ("PASS", "NOT_RUN") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

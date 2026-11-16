@@ -456,6 +456,50 @@ def validate_install_flow(value):
         raise ValueError("install_flow")
 
 
+def validate_kfml(value):
+    """The kfml stage's record (scripts/ci/kfml_stage.py): bounded, strictly read, not forwarded. Rows carry only a name, a status, a
+    printable reason, a wall time and scalar metrics; the die/driver facts are printable strings or numbers. A PASS verdict needs a PASS row
+    and no FAIL row; NOT_RUN needs every row NOT_RUN; a FAIL verdict needs a reason or a FAIL row."""
+    name = re.compile(r"[a-z][a-z0-9_.-]{0,47}")
+    text = re.compile(r"[\x20-\x7e]{0,200}")
+    keys = {"schema", "verdict", "sha", "tier", "run_id", "facts", "steps", "rows", "reason"}
+    ok = type(value) is dict and {"schema", "verdict", "sha", "tier", "facts", "steps", "rows"} <= set(value) <= keys
+    ok = ok and value["schema"] == 1 and value["verdict"] in ("PASS", "FAIL", "NOT_RUN") and value["tier"] in ("mid", "large")
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    ok = ok and type(value.get("run_id", "")) is str and re.fullmatch("[A-Za-z0-9_.-]{0,48}", value.get("run_id", "")) is not None
+    ok = ok and type(value.get("reason", "")) is str and text.fullmatch(value.get("reason", "")) is not None
+    facts = value["facts"]
+    ok = ok and type(facts) is dict and len(facts) <= 8 and set(facts) <= {
+        "gpu_name", "compute_cap", "vram_gb", "driver", "driver_cuda", "cuda", "torch", "flavor"}
+    ok = ok and all(type(v) in (int, float) or (type(v) is str and text.fullmatch(v)) for v in facts.values())
+    steps = value["steps"]
+    ok = ok and type(steps) is list and len(steps) <= 4 and all(
+        type(s) is dict and set(s) == {"step", "rc", "s"} and s["step"] in ("setup", "fetch-data", "run")
+        and type(s["rc"]) is int and type(s["s"]) in (int, float) for s in steps)
+    rows = value["rows"]
+    ok = ok and type(rows) is list and len(rows) <= 8
+    if ok:
+        for r in rows:
+            ok = ok and type(r) is dict and set(r) == {"name", "status", "reason", "wall_s", "metrics"}
+            ok = ok and type(r["name"]) is str and name.fullmatch(r["name"]) is not None
+            ok = ok and r["status"] in ("PASS", "FAIL", "NOT_RUN") and type(r["reason"]) is str and text.fullmatch(r["reason"]) is not None
+            ok = ok and type(r["wall_s"]) in (int, float) and 0 <= r["wall_s"] < 1e7
+            ok = ok and type(r["metrics"]) is dict and len(r["metrics"]) <= 12 and all(
+                type(k) is str and len(k) <= 48 and (type(v) in (int, float, bool)) for k, v in r["metrics"].items())
+            ok = ok and (r["status"] == "PASS" or r["reason"] != "")  # a NOT_RUN or FAIL row names its reason
+    if ok:
+        status = [r["status"] for r in rows]
+        if value["verdict"] == "PASS":
+            ok = "PASS" in status and "FAIL" not in status
+        elif value["verdict"] == "NOT_RUN":
+            ok = bool(rows) and all(x == "NOT_RUN" for x in status)
+        else:
+            ok = "FAIL" in status or value.get("reason", "") != ""
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 8192
+    if not ok:
+        raise ValueError("kfml")
+
+
 def read_result_file(path):
     """Strictly parse local results, including optional bounded arm diagnostics."""
     with open(path, "rb") as source:
@@ -479,6 +523,7 @@ def read_result_file(path):
             "selection",
             "propimage_apps",
             "install_flow",
+            "kfml",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
@@ -499,6 +544,10 @@ def read_result_file(path):
                 raise ValueError("propimage_apps verdict")
         if "install_flow" in doc:
             validate_install_flow(doc["install_flow"])
+        if "kfml" in doc:
+            validate_kfml(doc["kfml"])
+            if doc["verdict"] == "PASS" and doc["kfml"]["verdict"] == "FAIL":
+                raise ValueError("kfml verdict")
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):
             raise ValueError("verdict")
         if "matrix_receipts" in doc:

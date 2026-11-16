@@ -35,23 +35,42 @@ class Setup(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def unhashed_root(self):
+        """A stand-in lock directory whose locks have no hashes (the real ones are hashed since 2026-11-16)."""
+        from unittest.mock import patch
+        r = self.t / "locks"
+        r.mkdir(exist_ok=True)
+        for fl, fn in setup_venv.FLAVORS.items():
+            (r / fn).write_text("--index-url https://download.pytorch.org/whl/%s\ntorch==2.7.1+%s\n" % (fl, fl))
+        return patch.object(setup_venv, "ROOT", r)
+
     def test_refuses_unhashed_lock(self):
-        with self.assertRaises(setup_venv.SetupError) as cm:
-            setup_venv.setup(self.t / "v", run=FakeRun(), allow_unhashed=False)
+        with self.unhashed_root():
+            with self.assertRaises(setup_venv.SetupError) as cm:
+                setup_venv.setup(self.t / "v", flavor="cu126", run=FakeRun(), allow_unhashed=False)
         self.assertIn("HASHES TODO", str(cm.exception))
         self.assertFalse((self.t / "v").exists())
+
+    def test_real_locks_are_hashed_and_installed_with_require_hashes(self):
+        for flavor in setup_venv.FLAVORS:
+            fr = FakeRun()
+            r = setup_venv.setup(self.t / ("v-" + flavor), flavor=flavor, run=fr, allow_unhashed=False)
+            self.assertTrue(r["hashed"])
+            self.assertIn("--require-hashes", fr.calls[-1][0])
+            self.assertEqual(r["flavor"], flavor)
 
     def test_refuses_foreign_dir(self):
         d = self.t / "home"
         d.mkdir()
         (d / "precious.txt").write_text("x")
         with self.assertRaises(setup_venv.SetupError):
-            setup_venv.setup(d, run=FakeRun(), allow_unhashed=True)
+            setup_venv.setup(d, flavor="cu126", run=FakeRun(), allow_unhashed=False)
         self.assertTrue((d / "precious.txt").exists())
 
     def test_unhashed_dev_install_touches_only_venv(self):
         fr = FakeRun()
-        r = setup_venv.setup(self.t / "v", flavor="cu126", run=fr, allow_unhashed=True)
+        with self.unhashed_root():
+            r = setup_venv.setup(self.t / "v", flavor="cu126", run=fr, allow_unhashed=True)
         self.assertFalse(r["hashed"])
         env = fr.calls[-1][1]["env"]
         from kfml import env as envmod
@@ -74,7 +93,7 @@ class Setup(unittest.TestCase):
             text = (Path(setup_venv.ROOT) / fn).read_text()
             self.assertIn("download.pytorch.org/whl/" + fl, text)
             self.assertIn("torch==2.7.1+" + fl, text)
-            self.assertIn("HASHES TODO", text)
+            self.assertTrue(setup_venv.has_hashes(text), fn + " must be a hashed lock")
         with self.assertRaises(setup_venv.SetupError):
             setup_venv.lock_path("cu999")
 

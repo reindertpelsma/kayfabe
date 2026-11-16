@@ -14,7 +14,15 @@ class RunnerError(Exception):
     pass
 
 
-def select(specs, only=None, run_all=False):
+def select(specs, only=None, run_all=False, tier=None):
+    """--tier mid: the gated mid tests. --tier large: every test of every tier (the large tier includes mid, plus the
+    tests that are not in the gate). --only wins over both."""
+    if tier not in (None, "mid", "large"):
+        raise RunnerError("unknown tier %r (mid|large)" % tier)
+    if tier == "large":
+        run_all = True
+    elif tier == "mid" and not only:
+        return [s for s in specs if s.gate and s.tier == "mid"]
     by = {s.name: s for s in specs}
     if only:
         bad = [n for n in only if n not in by]
@@ -85,18 +93,26 @@ def _run_one(spec, env, cenv, data_dir, log_dir, budget, reference_dir, record_d
             psha[up.name] = r.patch_sha256
         if r and r.path:
             paths[up.name] = r.path
+    ref_doc, ref_how = reference.find(reference_dir, spec.name, env)
     ctx = {"name": spec.name, "module": spec.module, "cc": list(env.cc) if env.cc else None,
            "vram_total_gb": env.vram_total_gb, "vram_free_gb": env.vram_free_gb, "data_dir": data_dir,
-           "reference": reference.load(reference_dir, spec.name), "budget_s": budget,
+           "reference": ref_doc.get("data") if ref_doc else None, "budget_s": budget,
            "upstream_paths": paths, "dev_cpu": dev_cpu, "guest": cenv.get("KF_ML_GUEST") == "1"}
     res = exec_fn(ctx, budget, cenv, os.path.join(log_dir, spec.name + ".log"), python=python)
     status, reason = res.get("status", "FAIL"), res.get("reason", "")
     metrics = res.get("metrics", {})
     if res.get("log"):
         metrics = dict(metrics, log=res["log"])
+    wall = time.time() - t0
+    if ref_doc is not None:
+        metrics = dict(metrics, reference_from=reference.describe(ref_doc, ref_how),
+                       wall_ratio=reference.wall_ratio(ref_doc, ref_how, wall))
     if status == "PASS" and record_dir and res.get("reference") is not None:
-        reference.write(record_dir, spec.name, env, res["reference"])
+        reference.write(record_dir, spec.name, env, res["reference"], wall_s=round(wall, 3),
+                        metrics={k: v for k, v in res.get("metrics", {}).items()
+                                 if isinstance(v, (int, float, str, bool)) or v is None},
+                        run_id=cenv.get("KF_ML_RUN_ID"))
         metrics = dict(metrics, reference_recorded=True)
-    return rows.make_row(spec.name, status, reason, time.time() - t0, env, metrics,
+    return rows.make_row(spec.name, status, reason, wall, env, metrics,
                          upstream_commits=commits, patch_sha256=psha,
                          dataset_sha256=res.get("dataset_sha256", {}), **extra)

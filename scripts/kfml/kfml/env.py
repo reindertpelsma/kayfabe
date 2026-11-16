@@ -34,6 +34,10 @@ class Env:
     vram_total_gb: Optional[float] = None
     vram_free_gb: Optional[float] = None
     driver: Optional[str] = None
+    driver_cuda: Optional[str] = None  # highest CUDA the driver supports (nvidia-smi header)
+    flavor: Optional[str] = None  # pinned wheel flavour derived from driver_cuda + cc (flavor.choose)
+    flavor_reason: str = ""  # why that flavour, or why none can run
+    flavor_blocked: bool = False  # True only when facts are known and NO pinned flavour fits (NOT_RUN, never FAIL)
     torch: Optional[str] = None
     cuda: Optional[str] = None  # torch.version.cuda
     cudnn: Optional[str] = None
@@ -193,6 +197,8 @@ def nvidia_smi() -> dict:
     if len(parts) < 5:
         return {}
     d = {"name": parts[0], "driver": parts[1]}
+    from . import flavor
+    d["driver_cuda"] = flavor.smi_driver_cuda()
     try:
         d["total"] = float(parts[2]) / 1024.0
         d["free"] = float(parts[3]) / 1024.0
@@ -204,6 +210,18 @@ def nvidia_smi() -> dict:
     return d
 
 
+def choose_flavor(e: Env, pins=None):
+    """Fill e.driver_cuda / e.flavor / e.flavor_reason from the GPU facts (nvidia-smi); pure but for the pins read."""
+    from . import datasets, flavor
+    pins = pins if pins is not None else datasets.load_pins()
+    if e.driver_cuda is None and e.driver:
+        e.driver_cuda = flavor.driver_cuda_from_driver(e.driver, MIN_DRIVER_FOR_CUDA)
+    c = flavor.choose(pins, e.driver_cuda, e.cc)
+    e.flavor, e.flavor_reason = c.flavor, c.reason
+    e.flavor_blocked = c.flavor is None and bool(c.considered)
+    return c
+
+
 def probe_env(environ=None, python=None) -> Env:
     environ = os.environ if environ is None else environ
     root = venv_root(environ)
@@ -212,6 +230,7 @@ def probe_env(environ=None, python=None) -> Env:
     e.gpu_visible = bool(smi)
     e.driver = smi.get("driver")
     e.gpu_name, e.cc = smi.get("name"), smi.get("cc")
+    e.driver_cuda = smi.get("driver_cuda")
     e.vram_total_gb, e.vram_free_gb = smi.get("total"), smi.get("free")
     t = probe_torch(python, environ)
     e.torch, e.cuda, e.cudnn, e.triton = t.get("torch"), t.get("cuda"), t.get("cudnn"), t.get("triton")
@@ -223,6 +242,8 @@ def probe_env(environ=None, python=None) -> Env:
             e.cc = tuple(t["cc"])
         e.vram_total_gb = t.get("vram_total_gb", e.vram_total_gb)
         e.vram_free_gb = t.get("vram_free_gb", e.vram_free_gb)
+    if e.gpu_visible or e.cuda_available:
+        choose_flavor(e)
     e.nvcc, e.nvcc_path = find_nvcc(environ, root)
     e.cxx = bool(shutil.which(environ.get("CC", "cc")) or shutil.which("gcc"))
     inc = sysconfig.get_paths().get("include")

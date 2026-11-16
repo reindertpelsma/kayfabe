@@ -16,6 +16,34 @@
    "redistribution_ok": false
   }
  },
+ "flavors": {
+  "cu128": {
+   "cuda": "12.8",
+   "cc_min": [
+    7,
+    5
+   ],
+   "cc_max": [
+    12,
+    0
+   ],
+   "lock": "requirements.lock.txt",
+   "lock_sha256": "41eda0847699c9e91ef1a3c27b550be332a415e64ee2e54c968a6b16e5a5118a"
+  },
+  "cu126": {
+   "cuda": "12.6",
+   "cc_min": [
+    7,
+    5
+   ],
+   "cc_max": [
+    9,
+    0
+   ],
+   "lock": "requirements.cu126.lock.txt",
+   "lock_sha256": "26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0"
+  }
+ },
  "cuda_redist": {
   "cu128": {
    "base_url": "https://developer.download.nvidia.com/compute/cuda/redist/",

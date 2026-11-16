@@ -1492,7 +1492,7 @@ def instruction_from_file(path, environ):
 # payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
 PROPIMAGE_APPS_IN_LARGE = False
 # stages with no budget row (scripts/ci/profile_resources.py): planned only by --only; the guard refuses one whose flag is True
-MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}
+MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE", "kfml": "KFML_IN_MIDDLE_LARGE"}
 PROPIMAGE_APPS_MIN_REMAINING_MS = 210 * 60000   # DESIGN: download ~16 min, 4 unpacks/hashes, 3 boots, apps up to 98 min worst case
 PROPIMAGE_APPS_PREFIX = "/workspace/kf-propimage"
 PROPIMAGE_APPS_MARGIN_S = 300
@@ -1543,11 +1543,45 @@ def install_flow_rows(text, rc, sha, result):
     return [row("install_flow", 1)]
 
 
+# 2026-11-16 kfml (scripts/kfml, ML research workloads; scripts/ci/kfml_stage.py): the six ML workloads run natively on the box's own
+# single NVIDIA GPU, with the wheel flavour derived from the box (no die and no driver is named anywhere). MIDDLE and LARGE tiers (the
+# kfml tier is mid for `middle`, large for `large`), planned only when named by --only: it has run on one container box (see
+# traces/kfml_run_20261116/) and on no kf3 box. Joining the default plan = flip KFML_IN_MIDDLE_LARGE in the commit that records its first
+# green box run under this payload, with a payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
+KFML_IN_MIDDLE_LARGE = False
+KFML_MIN_REMAINING_MS = {"middle": 60 * 60000, "large": 150 * 60000}   # DESIGN: setup downloads several GB of wheels; budgets in kfml specs
+KFML_PREFIX = "/workspace/kf-kfml"
+KFML_TIER = {"middle": "mid", "large": "large"}
+
+
+def kfml_rows(text, rc, sha, result):
+    """One KF_KFML_RESULT line, kept in the result file (die, driver, per-row status) even when it is red (vast_report.py validates it).
+    PASS needs rc 0, verdict PASS and the right sha. verdict NOT_RUN (no pinned wheel flavour fits this box, or every test NOT_RUN for a
+    named hardware reason) with rc 0 is a skipped row, never a pass; a FAIL row, a failed step or anything else is the stage failing."""
+    found = re.findall(r"^KF_KFML_RESULT (\{.*\})$", text, re.M)
+    if len(found) != 1:
+        raise EvidenceError("kfml")
+    try:
+        doc = json.loads(found[0])
+    except ValueError:
+        raise EvidenceError("kfml") from None
+    result["kfml"] = doc
+    if type(doc) is not dict or doc.get("sha") != sha:
+        raise EvidenceError("kfml")
+    if rc == 0 and doc.get("verdict") == "NOT_RUN":
+        return [row("kfml", skipped=1)]
+    if rc or doc.get("verdict") != "PASS":
+        raise EvidenceError("kfml")
+    return [row("kfml", 1)]
+
+
 def plan_stage_names(i, only=()):
     """The stages main() builds for this instruction, in run order (main checks its own list against this)."""
     names = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
     if i.linux_apps is not None:
         names.append("apps")
+    if i.tier in KFML_TIER and (KFML_IN_MIDDLE_LARGE or "kfml" in only):
+        names.append("kfml")
     if i.tier == "large" and (INSTALL_FLOW_IN_LARGE or "install_flow" in only):
         names.append("install_flow")
     if i.windows:
@@ -1874,6 +1908,23 @@ def main():
             stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS + (
                 WINDOWS_MIN_REMAINING_MS + (WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0) if windows else 0
             ), short_row="apps_retry_time")
+            stages.append(stage)
+        if "kfml" in plan:
+            # Host-native, on the GPU the earlier Linux stages have released; scripts/ci/kfml_stage.py owns setup (flavour auto), the
+            # pinned downloads, the run and the record. Its tier follows the payload tier.
+            output_kf = evidence / "kfml.run"
+            stage = make_stage(
+                "kfml",
+                [
+                    "python3", str(root / "scripts/ci/kfml_stage.py"), "run", "--sha", sha, "--checkout", str(root),
+                    "--prefix", KFML_PREFIX, "--out", str(evidence / "kfml.json"), "--tier", KFML_TIER[tier],
+                    "--run-id", tag,
+                ],
+                output_kf,
+                [],
+                lambda rc, output=output_kf: kfml_rows(bounded_text(output), rc, sha, result),
+            )
+            stage.update(min_remaining_ms=KFML_MIN_REMAINING_MS[tier], short_row="kfml_retry_time")
             stages.append(stage)
         if "install_flow" in plan:
             output_if = evidence / "install_flow.run"
