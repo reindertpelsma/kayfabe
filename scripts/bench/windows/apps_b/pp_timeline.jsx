@@ -5,6 +5,7 @@ var OUT = "@OUT@", FCP = "@FCPXML@", MODE = "@MODE@", JOBS = @JOBS@;
 function L(m) { try { var f = new File(OUT + "/pp_progress.txt"); f.open("a"); f.writeln(new Date().getTime() + " " + m); f.close(); } catch (e) {} }
 L("begin " + app.version + " mode " + MODE);
 var summary = [];
+function main() {
 try {
   var made = app.newProject(OUT + "/kf.prproj");
   L("newProject " + made + " name=" + app.project.name);
@@ -44,3 +45,6 @@ try {
   } else { L("no sequence after import"); }
 } catch (e) { L("TOP ERR " + e); }
 var d = new File(OUT + "/pp_done.txt"); d.open("w"); d.writeln(summary.join(" | ")); d.close();
+}
+// run on the application's own event loop (project calls block inside a Startup script); falls back to a direct call
+if (typeof app.setTimeout == "function") { app.setTimeout(main, 40000); L("scheduled"); } else { main(); }
