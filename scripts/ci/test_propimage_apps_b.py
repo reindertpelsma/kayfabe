@@ -136,6 +136,17 @@ class T(unittest.TestCase):
         self.result("photoshopsample", ["out.png"], source="s", js={"tw": "100", "th": "2160", "w1": "1920", "h1": "1080", "sharpen": "4"})
         self.assertIn("3840x2160", B.verdict("photoshopsample", "x", self.d, GPU_OK)["error"])
 
+    def test_project_corpus_rows(self):
+        self.result("aeprojects", [], count=3, rows="OK a.aep:I3:C1:L4||OK b.aep:I1:C1:L1||ERR c.aep:missing footage")
+        self.assertTrue(B.verdict("aeprojects", "x", self.d, None)["ok"])
+        self.result("aeprojects", [], count=3, rows="ERR a||ERR b||OK c.aep:I1:C0:L0")
+        self.assertIn("1 of 3", B.verdict("aeprojects", "x", self.d, None)["error"])
+        self.result("aeprojects", [], count=3, rows="OK a")
+        self.assertIn("reported 1 of 3", B.verdict("aeprojects", "x", self.d, None)["error"])
+        (self.d / "q0.pdf").write_bytes(b"%PDF-1.4\n1 0 obj<</Type/Page>>endobj\n%%EOF\n")
+        self.result("indesignprojects", ["q0.pdf"], count=1, rows="OK x.indd:P1")
+        self.assertTrue(B.verdict("indesignprojects", "x", self.d, None)["ok"])
+
     def test_gpudiag(self):
         (self.d / "sniffer_premiere.txt").write_text("CUDA device found: NVIDIA GeForce RTX 4070\n")
         self.result("sniffers", ["sniffer_premiere.txt"])

@@ -55,6 +55,10 @@ CHECKS = {
     "indesignsample": {"timeout": 480, "script": "indesign_sample.ps1", "gpu": (), "lane": "gate", "path": "D3D11/Direct2D on shipped documents"},
     "animatesample": {"timeout": 420, "script": "animate_sample.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage on a shipped document"},
     "photoshopsample": {"timeout": 480, "script": "photoshop_sample.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "GPU filters on shipped 4K+ photo, 3840x2160 template"},
+    "photoshopprojects": {"timeout": 900, "script": "photoshop_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence PSD corpus: layer/colour-mode decoding and GPU canvas on foreign files"},
+    "indesignprojects": {"timeout": 600, "script": "indesign_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence INDD corpus open + PDF export"},
+    "animateprojects": {"timeout": 600, "script": "animate_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence FLA corpus open + stage export"},
+    "aeprojects": {"timeout": 900, "script": "aeprojects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence AEP corpus open (project load, GPU capability scan)"},
     "acrobat": {"timeout": 360, "script": "acrobat.ps1", "gpu": (), "lane": "gate", "path": "Direct2D page rendering"},
     "animate": {"timeout": 360, "script": "animate.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage, tween export"},
     "premiere": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Mercury engine start, CUDA/D3D12 init (launch only)"},
@@ -395,7 +399,56 @@ def grade_mediaencoder(r, d):
     return "Media Encoder encoded the generated comp: H.264 (%s) %dx%d, %.2f s" % (i["codec"], i["width"], i["height"], i["duration_s"]), ""
 
 
-GRADERS = {"illustratorsample": grade_illustratorsample, "indesignsample": grade_indesignsample, "animatesample": grade_animatesample,
+def _project_rows(r, minimum):
+    rows = [x for x in str(r.get("rows", "")).strip().split("||") if x]
+    ok = [x for x in rows if x.startswith("OK ")]
+    bad = [x for x in rows if x.startswith("ERR")]
+    if not rows or r.get("count", 0) != len(rows):
+        raise ValueError("the script reported %d of %s files: %s" % (len(rows), r.get("count"), str(r.get("rows", ""))[:100]))
+    if len(ok) < max(1, int(minimum * len(rows))):
+        raise ValueError("%d of %d project files opened (need %d%%); first errors: %s" % (len(ok), len(rows), int(minimum * 100), " ; ".join(bad[:3])[:200]))
+    return ok, bad
+
+
+def grade_photoshopprojects(r, d):
+    ok, bad = _project_rows(r, 0.7)
+    names = [o["file"] for o in r.get("outputs", [])]
+    if not names:
+        raise ValueError("no flattened PNG saved")
+    _outputs_fresh(r, d, names)
+    flat = 0
+    for n in names:
+        i = media_check.png_info(d / n)
+        if i["width"] > 1024 or i["height"] > 4096:
+            raise ValueError("%s is %dx%d" % (n, i["width"], i["height"]))
+        flat += 1 if (i["decoded"] and i["std"] < 1.0) else 0
+    return "%d of %d open-licence PSD projects opened (layers/mode read), %d flattened PNGs (%d flat); errors: %d" % (len(ok), len(ok) + len(bad), len(names), flat, len(bad)), ""
+
+
+def grade_indesignprojects(r, d):
+    ok, bad = _project_rows(r, 0.5)
+    names = [o["file"] for o in r.get("outputs", [])]
+    _outputs_fresh(r, d, names)
+    for n in names:
+        if media_check.pdf_info(d / n)["pages"] < 1:
+            raise ValueError("%s has no pages" % n)
+    return "%d of %d open-licence INDD projects opened and exported to PDF (%d PDFs)" % (len(ok), len(ok) + len(bad), len(names)), ""
+
+
+def grade_animateprojects(r, d):
+    ok, bad = _project_rows(r, 0.5)
+    names = [o["file"] for o in r.get("outputs", [])]
+    _outputs_fresh(r, d, names)
+    return "%d of %d open-licence FLA projects opened, %d PNGs exported" % (len(ok), len(ok) + len(bad), len(names)), ""
+
+
+def grade_aeprojects(r, d):
+    ok, bad = _project_rows(r, 0.7)
+    return "%d of %d open-licence AEP projects opened (items, comps and layers counted)" % (len(ok), len(ok) + len(bad)), ""
+
+
+GRADERS = {"photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
+           "aeprojects": grade_aeprojects, "illustratorsample": grade_illustratorsample, "indesignsample": grade_indesignsample, "animatesample": grade_animatesample,
            "photoshopsample": grade_photoshopsample, "mediaencoder": grade_mediaencoder, "lightroom": grade_lightroom, "photoshop": grade_photoshop, "illustrator": grade_illustrator, "aftereffects": grade_aftereffects, "indesign": grade_indesign,
            "acrobat": grade_acrobat, "animate": grade_animate, "gpudiag": grade_gpudiag}
 
