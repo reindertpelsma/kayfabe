@@ -19,7 +19,7 @@ try {
   }
   $t1 = Get-Date
   foreach ($q in $procs) { $left = [int](1500000 - ((Get-Date) - $t1).TotalMilliseconds); if ($left -lt 1000) { $left = 1000 }; [void](Wait-Proc $q $left) }
-  $R.exit_codes = @($procs | ForEach-Object { if (-not (Get-Process -Id $_.Id -ErrorAction SilentlyContinue)) { $(try { $_.ExitCode } catch { 0 }) } else { 'running' } })
+  $ix = 0; $R.exit_codes = @($procs | ForEach-Object { $c = $null; if (-not (Get-Process -Id $_.Id -ErrorAction SilentlyContinue)) { try { $c = $_.ExitCode } catch { } ; if ($c -eq $null) { $c = $(if ((Test-Path "$D\aerender$ix.log") -and ([string](Get-Content "$D\aerender$ix.log" -Raw)) -match 'Finished composition') { 0 } else { -1 }) } } else { $c = 'running' }; $ix++; $c })
   foreach ($q in $procs) { if (Get-Process -Id $q.Id -ErrorAction SilentlyContinue) { Stop-Process -Id $q.Id -Force } }
   $R.frame_count = @(Get-ChildItem "$D\frames" | Where-Object { $_.Name -match '^f_\d+\.(png|tif)$' }).Count
   $R.outputs = @(); $f = Get-ChildItem "$D\frames" | Where-Object { $_.Name -match '^f_\d+\.(png|tif)$' } | Sort-Object Name; if ($f) { $R.outputs += (Copy-Out $f[0]); $R.outputs += (Copy-Out $f[-1]) }
