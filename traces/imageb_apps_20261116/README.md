@@ -1,5 +1,7 @@
 STATUS: LIVE, 2026-11-16. MEASURED on one Vast box (RTX 4090, kf3) and on a no-GPU clone on the owner's pc; text evidence only (no screenshot of an application window is kept: the windows show account details). The newest result per row is in `rows/<row>/`.
 
+SECOND PASS (same day, newer drivers, fresh clones, kf3 census, crash evidence, After Effects rows working): see `second_pass/README.md`. The table below is the FIRST pass and is kept as it was measured.
+
 # Image B application rows: first runs (2026-11-16)
 
 Platform: kf3 (the kayfabe device), one Vast RTX 4090 box (AMD EPYC 7B13, host driver 580.159.04, kf3 built from `bb43a35a`), the second proprietary image as a throwaway clone, offline (`restrict=on`), recorded clock, guest NVIDIA 580.88. Driven by `propimage_check.py --app-set b` rules (`scripts/bench/windows/propimage_apps_b.py`); development iterations ran the rows one by one inside a held clone (`--hold-until-file`), the stage `propimage_apps_b_stage.py` ran end to end once up to the GPU step and recorded `RETRY`/`HARNESS` there (the phantom-device defect below, fixed afterwards).

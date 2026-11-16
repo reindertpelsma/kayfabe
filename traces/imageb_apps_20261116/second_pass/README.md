@@ -1,0 +1,67 @@
+STATUS: LIVE, 2026-11-16 (second pass; MEASURED on one Vast RTX 4090 box under kf3, text evidence only; no window screenshot is kept because the application windows show account details).
+
+# Image B application rows: second pass (2026-11-16)
+
+## Header (what ran)
+
+- Repo: the box cloned the public repo (sparse, at `d54cda1ab`, the commit its kf3 QEMU and broker were BUILT FROM SOURCE at by `provision_full.sh`; the kf3 binary is `kf3-bins/d54cda1a`); the application-row scripts of the PR branch were laid over that checkout with `git archive` of the branch head (the sparse partial clone could not fetch newer commits), final head recorded in the PR. No prebuilt binary came from the coordinator or the pc; swtpm 0.10.1 was built on the box from the pinned sources (the stage's recipe).
+- Image: `propimage-kfimg-20261116.zip`, sha256 `fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a` (62,506,351,001 B), downloaded by the box from a presigned read-only URL (ranged, resumable, `curl -r` loop, nothing logged), sha256 verified on the box, unpacked by the repo's own `load_image`, booted only as throwaway offline clones (`restrict=on`, recorded clock, `--fb-mb 8192` for the dev clones; the first two stage runs used the image default 4096, the third 8192).
+- Data volume: `test-assets-20261116c.iso` (sha256 `6b5fa657625e5a69ff66c88a0a2a5bb630844f37738163b9c5f5eeb8f8630266`): the open assets plus the neutral timeline spec and its synthetic sources.
+- Host: Vast offer 59749375 (Romania, AMD EPYC 7B13, 30 vCPU), RTX 4090 24 GB, host driver 580.159.04 (installed by the repo's `provision_host_driver.sh`), guest NVIDIA 580.88, 8 vCPU / 7.9 GB guest. Instance 60915501, label `kf-imageb-apps2-20261116`. A first box (offer 60784389, Denmark) never became reachable over ssh and was destroyed within minutes.
+- Platform: kf3 only; no VFIO control exists yet, so every FAIL below is a candidate defect, not a proven one.
+
+## Row results of this pass (newest result per row, MEASURED)
+
+| row | lane | verdict | host GPU assertion | note |
+|---|---|---|---|---|
+| `photoshop` | discovery | PASS | PASS (sm peak 53.0%, VRAM peak 9539.0 MiB) | PASS (clean exit in 31 s): 8K canvas, 101 layers, 10 blend modes, adjustment layers, smart object, 6 Smart Sharpen passes, 40 strokes. Display P3 conversion error recorded (backlog). |
+| `aftereffects` | discovery | PASS | PASS (sm peak 40.0%, VRAM peak 9853.0 MiB) | PASS on the first startup attempt of a fresh clone: 4K 16-bit project built by the Startup-stub script (3D layers, camera, particles, glow, expressions, footage), `aerender` 60 frames 3840x2160. |
+| `aeprojects` | discovery | PASS | PASS (sm peak 33.0%, VRAM peak 9611.0 MiB) | PASS: 14 of 14 open-licence AEP projects opened. |
+| `aetoggle` | discovery | PASS | PASS (sm peak 34.0%, VRAM peak 9610.0 MiB) | PASS: CUDA -> software -> CUDA renderer switch inside one session; all three 3840x2160 frames written (14.0 s, 4.8 s, 4.1 s); frames are not byte-identical between CUDA and software but equal in size. |
+| `aeadv3d` | discovery | FAIL | PASS (sm peak 42.0%, VRAM peak 9610.0 MiB) | FAIL as recorded: the Advanced 3D comp (DoF, light, 24 3D layers, 16 bit) rendered all 10 frames (aerender log ends at frame 10), the row's exit-code fallback was wrong; fixed afterwards, NOT rerun. |
+| `aeparallel` | discovery | FAIL | - | FAIL as recorded: two concurrent `aerender` rendered all 60 frames, the exit-code check was wrong; fixed afterwards, NOT rerun. The first run with FOUR processes ended with the guest's ssh dead (see backlog). |
+| `indesign_s6` | discovery | FAIL | - | FAIL: all six steps (start, COM, document, text, placed photo, PDF export, JPEG export) completed in 93 s, then InDesign crashed (see backlog); the row never reached its end. |
+| `aeparallel4` | - | NOT RUN / see note | - | first run of the 4-process variant: guest ssh dead, desktop alive (backlog 2); evidence in `rows/aeparallel4_first_run/`. |
+| `premieretl / amematrix` | - | NOT RUN / see note | - | no passing run: Premiere's project calls hang (see Not done). |
+| `photoshopcpu` | - | NOT RUN / see note | - | started, blocked by the graphics-processor compatibility window Photoshop shows when the GPU is denied; no verdict. |
+| `gate rows: gpudiag, illustrator, acrobat, uxp, dimension, premiere, lightroomlaunch` | - | NOT RUN / see note | - | no stage verdict: the stage GPU step failed on every fresh stage boot of this pass (backlog 7, gate section); their first-pass and held-clone results stand. |
+
+## What changed in the drivers (each cost a run; details in `docs/design/V3_PROPIMAGE_B_APPS.md`)
+
+- ExtendScript hand-off for After Effects, Premiere Pro and Media Encoder: a Startup stub installed elevated by the harness, a job file, a marker and a retry loop. First attempt succeeded every time for After Effects after it; `AfterFX.exe -r` and `aerender -reuse` were the unreliable pieces.
+- Result tables: `$r = ...` clobbered the result table `$R`, and `Get-Content -Raw` in a result field produced a 47 MB `result.json`; both are pinned by tests.
+- Crash evidence: WER LocalDumps (minidump) is set elevated before each row, `app_events.txt` collects the Application log entries of the row.
+- Every row writes `output_stats.json` (sha256 and pixel statistics of each output) and the dev runs recorded the kf3 census per row (`census.json`); `KF_REFERENCE_DIR` compares against a reference run (VFIO control later).
+- Discovery rows boot ALONE in a fresh clone in the stage; the report lists discovery rows as a known-breakages table and only gate rows decide the stage verdict (`vast_report.validate_propimage_apps_b`, payload stage `propimage_apps_b`).
+- Harness: the GPU step polls for the UUID for 45 s after the device restart (a 120 s poll broke the harness' own 120 s call limit); the stage now passes `--fb-mb 8192` (the applications see 4 GB at the default); neither fixed the stage-boot GPU failure (backlog 7).
+
+## Robustness backlog (discovery lane, kf3 platform, no VFIO control yet)
+
+| # | row / feature | what happened under kf3 | kf3 census (host QEMU log, UUIDs stripped) | hypothesis | next step |
+|---|---|---|---|---|---|
+| 1 | InDesign 2027, any row that reaches the end of a document session (`indesign`, `indesign_s6`) | all work completes (document, text, placed photo, PDF and JPEG export), then `InDesign.exe` access violation 0xc0000005 in `Public.dll` at offset 0x59a123 (version 22.0.0.104), vendor crash window, the row hangs behind it. SAME module and offset on 3 occurrences on 2 boxes. No minidump file appeared while the dialog was open. | one `GSP rpc UNSERVICED` function 76 stream, no Xid, no TDR | an application bug at document close or quit that bare metal may share; or a GPU-resource teardown path | VFIO control; `indesign_s1` (no document) and the close/quit progress lines now in `indesign_steps.ps1` split start / close / quit; WER dump after dialog dismissal |
+| 2 | After Effects, FOUR concurrent `aerender` (`aeparallel4`), 4K | the 8 GB guest stopped answering ssh ("banner exchange" timeout, permanently), desktop stayed visible, QEMU idle (12% CPU), host GPU memory 9.7 GB; the row ended `Guest transport lost` | 765 unserviced and 210 refused lines in the row window (old regex, includes counters) | guest memory exhaustion (7.9 GB guest, four 4K 16-bit renderers) is the likely cause; a kf3 problem is not excluded: no guest event log could be read | rerun on VFIO with the same 8 GB guest; then with more RAM |
+| 3 | GSP RM controls refused by the device model | across a 2.2 h session the device refused 58 distinct RM controls with status 0x56 (list in `evidence/refused_rm_controls_h2.txt`, for example 0x20800a87, 0x2080a630, 0x2080a801, 0x20810108, 0x2080b201), 5 host-facts reads (GSS 0x2080a618, 0x2080852e, status 31) and 13 VA-walk refusals (`refuse_mask=0x400`, absent leaves); 5685 `GSP rpc UNSERVICED` lines, all function 76 | `evidence/census_session_h2.json` | the applications' capability queries (NV2080 family) are not all answered; none stopped an application | decide per control whether it must be served; the NVML utilisation counters stay `[N/A]` in the guest (GPU use is judged from the host) |
+| 4 | Premiere Pro 2027 script entry | Startup-stub scripts run (28 to 64 s after start) and the encoder inventory works (31 exporters), but `app.newProject` and `importFiles` block the script thread; the project window shows, a modal "No output device is available" window sits on top and the script never continues; `/C es.processFile` does nothing in a running instance | no Xid | the guest has no audio device; Premiere's project calls need the event loop that the modal window blocks | give the guest an audio device (hardware option) or find the key that suppresses the window; then the timeline import can be tested |
+| 5 | Photoshop, Display P3 conversion | `convertProfile('Display P3', ...)` raises "General Photoshop error" (code -25923); ProPhoto RGB, Adobe RGB (1998) and sRGB conversions of the same 16-bit document succeed | no Xid | the profile name may simply not exist in this Photoshop's list (not a GPU path) | list the profile names the application knows before blaming kf3 |
+| 6 | Photoshop with the graphics processor denied (`photoshopcpu`) | Photoshop shows its graphics-processor compatibility window and blocks COM until a key press; the row had no result when the time ended | no Xid | expected product behaviour with `GPUDeny 1`; harness needs the keyboard route | rerun; compare the output with `photoshopsample` through `KF_REFERENCE_DIR` |
+| 7 | harness GPU step in the STAGE boot | on 3 of 3 fresh stage boots (`--fb-mb 4096`, 4096, then 8192 after the stage was changed) the GPU step ended "Post-fix seed GPU UUID mismatch" after the device restart; the same image and an identical QEMU command line (compared argument by argument) passed the step on 5 of 5 boots started directly by `propimage_check.py` in the dev wrapper. A 120 s UUID poll added meanwhile broke the harness' 120 s call limit (g1 boot 2) and was cut to 45 s | not attributed (the stage keeps no guest log of the failing step) | something in the stage boot sequence differs from the dev boot: stage boots follow a 59 GB unpack and hash (cold page cache), and pass `--display broker` explicitly; the fb-mb theory was tested and is NOT the cause | reproduce with the stage on a box with the guest `nvidia-smi` and event log captured on failure; do not treat as an application result |
+| 8 | After Effects start dialogs | "System Compatibility Report" (RAM below the vendor minimum: the guest has 7.9 GB) blocks quitting; Enter closes it, UI Automation shows no buttons | no Xid | guest RAM, not kf3 | none |
+
+
+## Gate rows (fresh clones, stage runs)
+
+Gate-quality rows (3 of 3 on fresh stage clones): **NONE reached in this pass.** The stage's GPU step failed on every fresh stage boot of the pass (`stage/g1/boot1.log`, `stage/g2/boot1.log`, `stage/g3/boot1.log`: "Post-fix seed GPU UUID mismatch" after the device restart; g1 boot 2 then failed in the harness because of my own 120 s UUID poll, cut to 45 s afterwards; g1 boot 3 was cut short), so no gate row got a stage verdict. The same image, QEMU command line (compared argument by argument, UUID and paths masked) and device options passed the GPU step on 5 of 5 boots started by `propimage_check.py` directly from the dev wrapper (held clones), including with `--fb-mb 4096`/`8192` arms; what differs between the stage boot and the held boot is not yet known (candidates: the stage boots right after the 59 GB unpack and hash with a cold page cache; `--display broker` as an explicit argument). Treat it as a stage/harness finding to reproduce, not as an application result.
+
+What the gate rows did in the held (dev) clones of this pass and of the first pass, one boot each, NOT counted as 3 of 3:
+`gpudiag` PASS, `illustrator` PASS, `acrobat` PASS, `premiere`, `dimension`, `uxp`, `lightroomlaunch` PASS_LIMITED (launch only; Premiere took 10 minutes to reach its window in one run). `illustratorsample` FAILED in the first pass (export too large for the host decoder; fixed, not rerun).
+So the exact row ids to put in the gate lane today are none; the candidates that need three stage passes are: `gpudiag`, `illustrator`, `acrobat`, `uxp`, `dimension`, `lightroomlaunch`, `premiere`. In the code table `indesign` and `indesignsample` moved from gate to discovery (access violation).
+
+
+## Not done in this pass (and why)
+
+- Premiere Pro: the neutral timeline could NOT be imported. The Startup stub runs and `app.encoder` lists 31 exporters (H.264 43 presets, HEVC 10, ProRes MXF 8, DNxHR 152), but `app.newProject` / `importFiles` hang the script thread behind the modal "No output device is available" dialog (the guest has no audio device); `Premiere.exe /C es.processFile` did nothing in a running instance and a project opened by argument never loaded. Rows `premieretl` and `amematrix` are written (export matrix H.264/HEVC 8 and 10 bit, 720p to 8K, ProRes) but have no passing run; `premiere` stays PASS_LIMITED (launch).
+- Dimension: only the launch row; no render attempt (no time).
+- Animate and the Lightroom plugin entry: still disabled (see the first pass).
+- The InDesign crash dump: WER LocalDumps wrote no `.dmp` while the crash dialog was open; the faulting module and offset come from the Application log.
+- A full 3-of-3 on fresh clones for the gate rows was NOT reached: see the gate section.

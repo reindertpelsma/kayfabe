@@ -1,0 +1,1 @@
+fractalnoise,glow,blur,avail=1813|1816,cuda1:set=1813,cuda1:rendered_ms=7525,soft:set=1816,soft:rendered_ms=1363,cuda2:set=1813,cuda2:rendered_ms=856
