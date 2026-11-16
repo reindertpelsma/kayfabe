@@ -337,6 +337,13 @@ impl Default for WalkCfg {
         // report **truncate** — which the shadow refuses by name, so the symptom would be a
         // permanently VACUOUS census with the cause one indirection away.
         //
+        // ★ 2026-11-15 (M4), above the text it corrects: a diff LARGER than `run_capacity` is no longer
+        // refused. `kf_diff_emit` reports a window of it (`KFWR_HF_CUT`, entries `KFWR_V_CUT`; the spec is
+        // `diffmodel::cut_report`), the host applies and acknowledges the window, and the rest comes on the
+        // next walk; the split completes on the walk whose diff is empty. Only one overlap-connected clump
+        // of runs larger than the report is still refused (`walk report TRUNCATED`). ⊘ The text below
+        // (the `FRAME_MAX` wire) appears to predate the pinned report, which is read in place; at 32 B a
+        // run, `run_capacity` 2^18 is 8 MiB of pinned memory.
         // ⚠ **`run_capacity` is bounded from ABOVE by the wire, and that bound is real.** The
         // report crosses as one `Reply::Payload` and the isolate protocol's `FRAME_MAX` is
         // 1 MiB; a `KfMapRun` is 32 bytes. 16 384 runs is 512 KiB — half the frame, with room

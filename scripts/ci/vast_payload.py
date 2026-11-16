@@ -1057,7 +1057,14 @@ def prepare_checkout(root, sha):
     return branch
 
 
-def hardware():
+# 2026-11-16: MANUAL standalone runs on a box with N identical GPUs (`--gpus N`, the die-per-image propimage_apps lane): the record
+# still describes ONE die (the first), because every other stage uses GPU 0 only. Default 1: a Worker box has exactly one GPU and
+# a second one is refused as before. A mix of models, drivers or compute capabilities is never accepted.
+EXPECTED_GPUS = 1
+
+
+def hardware(expected=None):
+    expected = EXPECTED_GPUS if expected is None else expected
     try:
         lines = (
             subprocess.check_output(
@@ -1071,7 +1078,7 @@ def hardware():
             .strip()
             .splitlines()
         )
-        if len(lines) != 1:
+        if len(lines) != expected or len(set(lines)) != 1:
             raise ValueError()
         name, cc, driver = [x.strip() for x in lines[0].split(",")]
         if not re.fullmatch(r"[A-Za-z0-9_. -]{1,100}", name) or not re.fullmatch(
@@ -1492,7 +1499,7 @@ def instruction_from_file(path, environ):
 # payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
 PROPIMAGE_APPS_IN_LARGE = False
 # stages with no budget row (scripts/ci/profile_resources.py): planned only by --only; the guard refuses one whose flag is True
-MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE"}
+MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}
 PROPIMAGE_APPS_MIN_REMAINING_MS = 210 * 60000   # DESIGN: download ~16 min, 4 unpacks/hashes, 3 boots, apps up to 98 min worst case
 PROPIMAGE_APPS_PREFIX = "/workspace/kf-propimage"
 PROPIMAGE_APPS_MARGIN_S = 300
@@ -1518,11 +1525,38 @@ def propimage_apps_rows(text, rc, sha, result):
     return [row("propimage_apps", 1)]
 
 
+# 2026-11-15 install_flow (docs/howto/building.md "How the commands on this page are tested"): the documented user flow run on the
+# box by scripts/ci/install_flow.py. LARGE tier only. It is SLOW and has not run on a GPU box yet, so it is NOT in the default
+# large plan: it is planned only when named by --only. Joining the release tier = flip INSTALL_FLOW_IN_LARGE to True in the commit that
+# also records its first green box run, with a payloadStageResources row (a Worker bundle change) and its name taken out of
+# MANUAL_ONLY_STAGES; no instruction schema change is needed because the plan, not the schema, lists it.
+INSTALL_FLOW_IN_LARGE = False
+INSTALL_FLOW_MIN_REMAINING_MS = 3 * 3600 * 1000
+INSTALL_FLOW_PREFIX = "/workspace/kf-install-flow"
+
+
+def install_flow_rows(text, rc, sha, result):
+    """One KF_INSTALL_FLOW_RESULT line, which is kept in the result file (the doc hashes, the root steps) even when it is red."""
+    found = re.findall(r"^KF_INSTALL_FLOW_RESULT (\{.*\})$", text, re.M)
+    if len(found) != 1:
+        raise EvidenceError("install_flow")
+    try:
+        doc = json.loads(found[0])
+    except ValueError:
+        raise EvidenceError("install_flow") from None
+    result["install_flow"] = doc
+    if rc or type(doc) is not dict or doc.get("verdict") != "PASS" or doc.get("sha") != sha:
+        raise EvidenceError("install_flow")
+    return [row("install_flow", 1)]
+
+
 def plan_stage_names(i, only=()):
     """The stages main() builds for this instruction, in run order (main checks its own list against this)."""
     names = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
     if i.linux_apps is not None:
         names.append("apps")
+    if i.tier == "large" and (INSTALL_FLOW_IN_LARGE or "install_flow" in only):
+        names.append("install_flow")
     if i.windows:
         names.append("windows_gate")
         if i.winapps:
@@ -1569,6 +1603,8 @@ def parse_args(argv):
     p.add_argument("--skip", action="append", default=[], metavar="STAGE", help="skip this stage (repeatable)")
     p.add_argument("--dry-run", action="store_true", help="print the stage plan and run nothing")
     p.add_argument("--emit-instruction", metavar="FILE", help="write the instruction built from the source and exit")
+    p.add_argument("--gpus", type=int, default=1, choices=range(1, 9), metavar="N",
+                   help="MANUAL runs: the box has N identical GPUs (default 1, the Worker's rule); the result still records one die")
     p.add_argument("--prefetch", metavar="MANIFEST", help="DRY-RUN ONLY (not wired into the executor yet): validate a download manifest "
                    "(kayfabe.download-manifest/1, scripts/ci/box_downloader.py) against the plan and print KF_PAYLOAD_PREFETCH")
     return p.parse_args(argv)
@@ -1630,6 +1666,8 @@ def main():
     if len(sys.argv) > 3 and sys.argv[1] == "--guest-exec":
         return guest_command(sys.argv[2], sys.argv[3:])
     args = parse_args(sys.argv[1:])
+    global EXPECTED_GPUS
+    EXPECTED_GPUS = args.gpus
     sha, nonce = args.sha, args.nonce
     root = Path(__file__).resolve().parents[2]
     if args.prefetch and not args.dry_run:
@@ -1847,6 +1885,20 @@ def main():
             stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS + (
                 WINDOWS_MIN_REMAINING_MS + (WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0) if windows else 0
             ), short_row="apps_retry_time")
+            stages.append(stage)
+        if "install_flow" in plan:
+            output_if = evidence / "install_flow.run"
+            stage = make_stage(
+                "install_flow",
+                [
+                    "python3", str(root / "scripts/ci/install_flow.py"), "run", "--sha", sha, "--checkout", str(root),
+                    "--prefix", INSTALL_FLOW_PREFIX, "--out", str(evidence / "install_flow.json"),
+                ],
+                output_if,
+                [],
+                lambda rc, output=output_if: install_flow_rows(bounded_text(output), rc, sha, result),
+            )
+            stage.update(min_remaining_ms=INSTALL_FLOW_MIN_REMAINING_MS, short_row="install_flow_retry_time")
             stages.append(stage)
         if windows:
             # Last, after every Linux guest has stopped: windows_gate.sh owns the GPU from here.

@@ -18,8 +18,11 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 TEST = "crates/kf-chan/tests/video_class_coverage.rs"
 TABLE = "crates/kf-chan/src/video_generated.rs"
 HOST = "crates/kf-chan/src/host.rs"
+# 2026-11-15: the gap list is `kf_chip::video_gaps::UNTABLED_VIDEO_CLASSES` (also the offer filter's input),
+# imported by the test as KNOWN_GAPS.
+GAPS = "crates/kf-chip/src/video_gaps.rs"
 FILES = {}
-for rel in (TEST, TABLE, HOST):
+for rel in (TEST, TABLE, HOST, GAPS):
     with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
         FILES[rel] = f.read()
 
@@ -35,10 +38,10 @@ CASES = [
     # A stray allow-list entry for a class that has a table.
     (
         "stray-allow-list-entry",
-        changed(TEST, "const KNOWN_GAPS: &[(u32, &str)] = &[\n", 'const KNOWN_GAPS: &[(u32, &str)] = &[\n    (0xc9d1, "x WUKONG_RELAUNCH_TDR_20261115"),\n'),
+        changed(GAPS, "pub const UNTABLED_VIDEO_CLASSES: &[(u32, &str)] = &[\n", 'pub const UNTABLED_VIDEO_CLASSES: &[(u32, &str)] = &[\n    (0xc9d1, "x WUKONG_RELAUNCH_TDR_20261115"),\n'),
     ),
     # The OFA gap entry names the wrong class: 0xc9fa is uncovered and unlisted, 0xc9fb is a stray.
-    ("allow-list-entry-misnamed", changed(TEST, "        0xc9fa,\n", "        0xc9fb,\n")),
+    ("allow-list-entry-misnamed", changed(GAPS, "        0xc9fa,\n", "        0xc9fb,\n")),
     # The check that an uncovered class needs an entry is removed.
     (
         "removes-the-uncovered-check",

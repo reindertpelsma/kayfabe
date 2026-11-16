@@ -43,6 +43,8 @@ def pins_doc(set_roles=("image", "gop", "libtpms", "swtpm")):
     for it in doc["items"]:
         if it["role"] in set_roles:
             it["sha256"], it["size"] = H64, 1234567
+        else:
+            it["sha256"], it["size"] = None, None   # the committed pins are set (2026-11-16): a role left out here is UNSET on purpose
     return doc
 
 
@@ -328,7 +330,24 @@ class Preflight(unittest.TestCase):
         self.assertEqual(pa.disk_row(need - 1, pins)[0]["status"], "MISMATCH")
         self.assertEqual(pa.refusal_of([pa.disk_row(0, pins)[0]]), ("REFUSED", "DISK_FREE"))
         # unpinned: the estimate of 47 GiB applies
-        self.assertEqual(pa.disk_row(0, pa.load_pins())[1], 2 * pa.IMAGE_ZIP_ESTIMATE + pa.DISK_HEADROOM)
+        self.assertEqual(pa.disk_row(0, pins_doc(set_roles=()))[1], 2 * pa.IMAGE_ZIP_ESTIMATE + pa.DISK_HEADROOM)
+        # the committed pin knows the size of image A (2026-11-16)
+        self.assertEqual(pa.disk_row(0, pa.load_pins())[1], 2 * 50496618964 + pa.DISK_HEADROOM)
+
+    def test_the_committed_pins_are_image_a_gop_and_the_swtpm_sources(self):
+        by = {i["role"]: i for i in pa.load_pins()["items"]}
+        self.assertEqual((by["image"]["size"], by["image"]["sha256"]), (50496618964, "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3"))
+        self.assertEqual((by["gop"]["size"], by["gop"]["sha256"]), (11224, "423a9abc5789b8b4e9834ba016261efb9d64515d53f259a90446917ce91b848e"))
+        for role in ("libtpms", "swtpm"):
+            self.assertIsNotNone(by[role]["sha256"], role)
+            self.assertIsNotNone(by[role]["size"], role)
+        self.assertEqual(pa.unset_roles(pa.load_pins(), ("image", "gop", "libtpms", "swtpm")), [])
+
+    def test_the_committed_manifest_matches_the_urls_file_the_kit_writes(self):
+        # /root/night/release_kit/mint_urls.py writes these refs into the kayfabe.download-urls/1 file the stage reads
+        refs = {i["name"]: i["sources"][0].get("ref") for i in pa.build_manifest(pa.load_pins(), True)["items"]}
+        self.assertEqual(refs["propimage-kfimg-20261112.zip"], "propimage-kfimg-20261112.zip")
+        self.assertEqual(refs["kf-gop.signed.efi"], "propimage-kf-gop.signed.efi")
 
     def test_missing_kf3_qemu_and_urls_are_refusals(self):
         env = Env(self)
@@ -1355,7 +1374,7 @@ class PayloadWiring(unittest.TestCase):
         self.assertEqual(vast_payload.plan_stage_names(inst, ["propimage_apps"])[-2:], ["propimage_apps", "specviewperf"])
 
     def test_manual_only_table_and_the_budget_guard(self):
-        self.assertEqual(vast_payload.MANUAL_ONLY_STAGES, {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE"})
+        self.assertEqual(vast_payload.MANUAL_ONLY_STAGES, {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"})
         data = json.loads((profile_resources.ROOT / "ci/vast-broker/defaults.json").read_text())
         for stage in data["payloadStageResources"].values():
             stage["source"] = "scripts/ci/vast_payload.py"      # only the manual-only logic is under test, not the provenance files

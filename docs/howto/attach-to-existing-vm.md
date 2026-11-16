@@ -15,6 +15,7 @@ You already run a Linux or Windows VM under QEMU/KVM or libvirt. This page is on
 
 Take your VM's command line and make these changes. The binary is the one `build_kf3.sh` installed under `kf3-bins/<rev>/`, and its `pc-bios` folder must stay beside it. <!-- src: scripts/bench/build_kf3.sh -->
 
+<!-- kf-args: qemu_args -->
 ```
 -object memory-backend-memfd,id=ram0,size=8192M,share=on
 -machine q35,accel=kvm,memory-backend=ram0 -m 8192 -cpu host
@@ -126,5 +127,9 @@ Known issues, plainly:
 - Putting the boot-display key into an existing Secure Boot VM.
 - Machine types other than `q35`, and a guest without KVM.
 - Moving an existing Windows install onto the device (the order of driver and registry steps outside `gsp_on.ps1`).
+
+## How these arguments are tested (2026-11-15)
+
+The argument block above is the one the CI GPU box boots (payload stage `install_flow`, `scripts/ci/install_flow.py`): the stage reads it from this file (marker `kf-args`, convention in `scripts/ci/doc_steps.py`), replaces only `<a fixed uuid for this VM>` with a fixed UUID and, on a card under 10 GiB, `fb-mb=8192` with the value the table above prescribes, adds the disk and network arguments of a throwaway VM, boots the Linux guest as an unprivileged user and runs the CUDA probe `cup8` in it. The stage records the hash of this file. Not run on a GPU box yet: see [Building from source](building.md), section "How the commands on this page are tested".
 
 Verified on: the QEMU arguments and properties were read from `run_fast_guest.sh`, `boot_nvkvm.sh`, `interactive.sh`, `win_vm.sh` and `kf3.c` at `next` (`e1dbdbd41`). Not verified end to end: nothing on this page was run, and no libvirt or Proxmox start is recorded.

@@ -66,10 +66,10 @@ export BENCH_DIR=/workspace/bench KF_DEVICE=kf3 KF_FROM_HOST=1
 export CARGO_TARGET_DIR=/workspace/kf-ci-target CARGO_BUILD_JOBS=2
 mkdir -p "$BENCH_DIR" /workspace/kf-ci-evidence
 evidence=/workspace/kf-ci-evidence
-qemu_version=10.2.4
-curl --fail --location --show-error --connect-timeout 20 --max-time 600 \
-  "https://download.qemu.org/qemu-$qemu_version.tar.xz" -o "$BENCH_DIR/qemu.tar.xz"
-tar -C "$BENCH_DIR" -xf "$BENCH_DIR/qemu.tar.xz"
+# The QEMU source is pinned by sha256 in scripts/bench/qemu.pin; qemu_source.py refuses on any mismatch (set -e stops the run).
+qemu_version=$(python3 -I scripts/ci/qemu_source.py version)
+qemu_tarball=$(python3 -I scripts/ci/qemu_source.py fetch "$BENCH_DIR")
+tar -C "$BENCH_DIR" -xf "$qemu_tarball"
 crates=()
 for manifest in crates/kf-*/Cargo.toml; do crate=${manifest#crates/}; crates+=(-p "${crate%/Cargo.toml}"); done
 [[ ${#crates[@]} -ge 36 ]]

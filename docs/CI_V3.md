@@ -1,6 +1,6 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-09.** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-15 (the host unmap-call cap mutants were added to the Rust job; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
 ## Shipped GPU programs: the `ptx` job (2026-11-13)
@@ -25,6 +25,8 @@ generated display files reproduce byte for byte):
 - The checker has unit tests (`test_walk_ptx_repro.py`) and mutants, each killed by two named tests.
 - `scripts/ci/walk_kernel_mutants.py` mutates the kernel source's CPU-reachable checks (the VER2/VER3 4 KiB
   vetoes, review 3 F-1) and requires each mutant to fail at least two distinct `kf_cpu_walk` checks.
+- `scripts/ci/va_apply_bounds_mutants.py` (Rust job, 2026-11-15) mutates the host unmap-call cap in `crates/kf-mem/src/batch.rs`
+  (`UNMAP_CALL_MAX_ENTRIES`) and requires each mutant to fail at least two named `kf-mem` tests.
 - `static` also ties the VER3 PCF enumerants the kernel names (`KF_VER3_*`) to
   `crates/kf-chip/data/hwref-580.159.04.tsv`.
 

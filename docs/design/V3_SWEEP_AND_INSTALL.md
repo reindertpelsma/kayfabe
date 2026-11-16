@@ -846,7 +846,7 @@ runs it, and the sweep's fallback for an unreleased revision runs it. It reads `
 
 | input | pin |
 |---|---|
-| QEMU | 10.2.4 from `download.qemu.org`, sha256 recorded in the lock after checking the release signature on a trusted network. Today the tarball is fetched with no check (`scripts/bench/provision_bench_tree.sh:81-82`). |
+| QEMU | 10.2.4 from `download.qemu.org`, sha256 recorded in the lock after checking the release signature on a trusted network. UPDATE 2026-11-15: the tarball is now pinned by sha256 and size in `scripts/bench/qemu.pin` and every download site refuses on a mismatch (`scripts/ci/qemu_source.py`); the release signature was checked once, by hand, when the pin was recorded (the pin file says how and its limit). The lock would carry the same hash. |
 | Rust | 1.99.0, minimal profile, from `rust-toolchain.toml:5-10`. The script refuses a different `rustc --version`. |
 | crates | `cargo build --release --locked -p kf-qemu`; the lock records `Cargo.lock`'s sha256. `--locked` is new: `build_kf3.sh:24` lacks it. |
 | build container | `ubuntu:22.04` by digest, so the glibc floor is 2.35 and matches vast's Ubuntu 22.04 KVM template (`scripts/bench/box/README.md:37`, `:101-102`). The study's proxy build on the 26.04 dev host required GLIBC_2.42. |

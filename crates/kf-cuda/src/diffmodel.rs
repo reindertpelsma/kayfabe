@@ -257,6 +257,83 @@ pub fn diff_with(com: &Committed, walk: &[KfMapRun], cap: usize, key_perm: u32) 
     out
 }
 
+/// ★★★★★ **The report's own capacity (M4, 2026-11-15) — the Rust spec of `kf_diff_emit`'s cut.**
+///
+/// `staged[t]` is entry `t`'s whole diff in STAGED order (the order [`diff`] returns: per class,
+/// its UNMAPs then its MAPs — eight lists, each VA-ascending and disjoint within itself). A report
+/// carries at most `cap` runs in all. A diff that does not fit is NOT a prefix of the staged order
+/// (that separates an UNMAP from the overlapping MAP of another page-size class and from the MAP
+/// that carries its unchanged pages — see `kf_walk.cu`'s cut) but a **window by address**: the first
+/// entry whose running total passes `cap` reports every run that STARTS below the largest boundary
+/// `v` that no run straddles (`va < v < va + len`) and that keeps the report within `cap`; entries
+/// before it are whole, entries after it are withheld. Every run that overlaps a reported run is
+/// itself reported, so the apply's pairing and ordering (which only ever relate overlapping runs)
+/// sees exactly the window of the whole diff. When no such boundary reports anything of the FIRST
+/// non-empty entry (one overlap-connected clump larger than the report) the legacy refusal stands:
+/// [`CutReport::truncated`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CutReport {
+    /// Per entry: the runs reported, in staged order.
+    pub entries: Vec<Vec<KfMapRun>>,
+    /// Per entry: `KFWR_V_CUT` — part of its diff is still to come.
+    pub cut: Vec<bool>,
+    /// The report is a window (`KFWR_HF_CUT`).
+    pub is_cut: bool,
+    /// Nothing can be reported without splitting a clump: the legacy `TRUNCATED` refusal.
+    pub truncated: bool,
+}
+
+/// [`CutReport`] of `staged` at report capacity `cap`; the mirror of `kf_diff_emit`.
+#[must_use]
+pub fn cut_report(staged: &[Vec<KfMapRun>], cap: usize) -> CutReport {
+    let n = staged.len();
+    let mut out = CutReport {
+        entries: staged.to_vec(),
+        cut: vec![false; n],
+        is_cut: false,
+        truncated: false,
+    };
+    let (mut run, mut first) = (0usize, None);
+    for (t, s) in staged.iter().enumerate() {
+        if run + s.len() > cap {
+            first = Some((t, run));
+            break;
+        }
+        run += s.len();
+    }
+    let Some((f, fbase)) = first else {
+        return out;
+    };
+    let s = &staged[f];
+    let allowed = cap - fbase;
+    let ends = |r: &KfMapRun| r.va.saturating_add(r.len);
+    // The best straddle-free boundary: every run start (and 0) is a candidate, the most runs
+    // within `allowed` wins (ties name the same set).
+    let mut best: (usize, u64) = (0, 0);
+    for v in s.iter().map(|r| r.va).chain(std::iter::once(0)) {
+        let below = s.iter().filter(|r| r.va < v).count();
+        let straddled = s.iter().any(|r| r.va < v && v < ends(r));
+        if !straddled && below <= allowed && below >= best.0 {
+            best = (below, v);
+        }
+    }
+    if best.0 == 0 && fbase == 0 {
+        out.entries = vec![Vec::new(); n];
+        out.truncated = true;
+        return out;
+    }
+    out.is_cut = true;
+    for (t, st) in staged.iter().enumerate() {
+        if t == f {
+            out.entries[t] = s.iter().filter(|r| r.va < best.1).copied().collect();
+        } else if t > f {
+            out.entries[t] = Vec::new();
+        }
+        out.cut[t] = t >= f && out.entries[t].len() < st.len();
+    }
+    out
+}
+
 /// ★★★★★ **Commit the host's verdict** on one entry's diff (`runs`, `codes` parallel) into its
 /// slot: remove the placements whose UNMAP was applied, insert the MAPs that were applied (a
 /// `Held` one carries [`KFWR_RF_HELD`]). Everything not acknowledged leaves the slot as it was.
@@ -925,5 +1002,379 @@ mod tests {
             com = commit(&com, &d.runs, &ok(1));
         }
         assert_eq!(com.len(), 2000);
+    }
+    // ── ★ 2026-11-15 (M4): the report's own capacity — `cut_report`, the spec of kf_diff_emit's cut ──
+
+    fn unmap(va: u64, len: u64, flags: u32) -> KfMapRun {
+        KfMapRun {
+            op: KFWR_OP_UNMAP,
+            gpga: 0,
+            ..run(va, 0, len, flags)
+        }
+    }
+    fn overlaps(a: &KfMapRun, b: &KfMapRun) -> bool {
+        a.va < b.va + b.len && b.va < a.va + a.len
+    }
+
+    /// The vectors `cuda/walk/kf_cpu_walk.cpp` (`emit_cut_cases`) runs on the REAL kernel source:
+    /// the same staged diffs, the same capacities, the same expectations. Two statements of one spec.
+    #[test]
+    fn cut_report_matches_the_kernel_vectors() {
+        // the M4 shape: one entry, twice the capacity, 200 maps 8 KiB apart
+        let maps: Vec<KfMapRun> = (0..200u64)
+            .map(|i| run(0x100_0000 + 0x2000 * i, 0x20_0000, PAGE, SYS))
+            .collect();
+        let c = cut_report(std::slice::from_ref(&maps), 100);
+        assert!(c.is_cut && !c.truncated && c.cut == vec![true]);
+        assert_eq!(c.entries[0], maps[..100].to_vec(), "the lowest 100 runs");
+        // exactly full is whole
+        let c = cut_report(&[maps[..100].to_vec()], 100);
+        assert!(!c.is_cut && c.cut == vec![false] && c.entries[0].len() == 100);
+        // a page-size change: the class-1 UNMAP travels with the class-0 maps that overlap it
+        let staged = [
+            unmap(0x10000, 0x10000, BIG | SYS),
+            run(0x10000, 0x1000, PAGE, SYS),
+            run(0x11000, 0x1000, PAGE, SYS),
+            run(0x12000, 0x1000, PAGE, SYS),
+            run(0x100000, 0x1000, PAGE, SYS),
+            run(0x102000, 0x1000, PAGE, SYS),
+        ];
+        // (staged order is class 0 first, so put the class-0 maps first as `diff` would)
+        let mut staged_order = vec![
+            staged[1], staged[2], staged[3], staged[4], staged[5], staged[0],
+        ];
+        staged_order.sort_by_key(|r| (class_of(r.flags), r.op != KFWR_OP_UNMAP));
+        let c = cut_report(&[staged_order.clone()], 4);
+        assert!(c.is_cut && !c.truncated);
+        assert_eq!(
+            c.entries[0].len(),
+            4,
+            "the clump and the maps below the far ones"
+        );
+        assert!(
+            c.entries[0].iter().any(|r| r.op == KFWR_OP_UNMAP),
+            "the unmap is reported with the maps over it"
+        );
+        // ... where a staged-order PREFIX of 4 would not carry it
+        assert!(staged_order[..4].iter().all(|r| r.op != KFWR_OP_UNMAP));
+        // one overlap-connected clump larger than the report: the legacy refusal
+        let mut clump = vec![unmap(0x10000, 0x10_0000, BIG | SYS)];
+        clump.extend((0..8u64).map(|i| run(0x10000 + 0x1000 * i, 0x1000, PAGE, SYS)));
+        clump.sort_by_key(|r| (class_of(r.flags), r.op != KFWR_OP_UNMAP));
+        let c = cut_report(&[clump], 4);
+        assert!(c.truncated && !c.is_cut && c.entries == vec![Vec::new()]);
+        // three entries: whole, cut, withheld
+        let e = |n: u64| -> Vec<KfMapRun> {
+            (0..n)
+                .map(|i| run(0x1000 * (2 * i + 1), 0x1000, PAGE, SYS))
+                .collect()
+        };
+        let c = cut_report(&[e(4), e(20), e(3)], 10);
+        assert_eq!(
+            (c.entries[0].len(), c.entries[1].len(), c.entries[2].len()),
+            (4, 6, 0)
+        );
+        assert_eq!(c.cut, vec![false, true, true]);
+    }
+
+    /// A random staged diff: eight sorted disjoint lists on a small page grid, so that lists
+    /// overlap and straddle each other.
+    fn random_staged(x: &mut u64, dense: u64) -> Vec<KfMapRun> {
+        let mut rnd = |n: u64| {
+            *x ^= *x << 13;
+            *x ^= *x >> 7;
+            *x ^= *x << 17;
+            (*x >> 11) % n
+        };
+        let mut v = Vec::new();
+        for cls in 0..4u32 {
+            for m in 0..2 {
+                let mut p = rnd(6);
+                for _ in 0..rnd(2 + 4 * dense) {
+                    if p >= 118 {
+                        break;
+                    }
+                    let len = 1 + rnd(5);
+                    let f = SYS | RF_PS.put(cls);
+                    let r = if m == 1 {
+                        run(0x10_0000 + PAGE * p, 0x20_0000, PAGE * len, f)
+                    } else {
+                        unmap(0x10_0000 + PAGE * p, PAGE * len, f)
+                    };
+                    v.push(r);
+                    p += len + rnd(4) + if dense == 0 { 6 } else { 0 };
+                }
+            }
+        }
+        v
+    }
+
+    /// ★ The cut is a WINDOW: within the capacity, a boundary no run straddles, every run that
+    /// overlaps a reported run reported with it — over random staged diffs and capacities. And the
+    /// counter-model: a PREFIX of the staged order violates exactly that, often.
+    #[test]
+    fn a_cut_report_is_a_closed_window_and_a_staged_prefix_is_not() {
+        let mut x = 0x9E37_79B9_7F4A_7C15u64;
+        let (mut cuts, mut whole, mut refused, mut prefix_breaks) = (0, 0, 0, 0);
+        for _ in 0..4000 {
+            let cap = 3 + (x % 30) as usize;
+            let dense = (x >> 9) % 3;
+            let s = random_staged(&mut x, dense);
+            let c = cut_report(std::slice::from_ref(&s), cap);
+            if s.len() <= cap {
+                assert!(!c.is_cut && !c.truncated && c.entries[0] == s);
+                whole += 1;
+                continue;
+            }
+            // the staged-order prefix a naive cut would report
+            let prefix = &s[..cap];
+            if s[cap..]
+                .iter()
+                .any(|u| prefix.iter().any(|w| overlaps(u, w)))
+            {
+                prefix_breaks += 1;
+            }
+            if c.truncated {
+                refused += 1;
+                assert!(c.entries[0].is_empty() && !c.is_cut);
+                continue;
+            }
+            cuts += 1;
+            let rep = &c.entries[0];
+            assert!(c.is_cut && c.cut[0] && !rep.is_empty() && rep.len() <= cap);
+            let v = s
+                .iter()
+                .filter(|r| !rep.contains(r))
+                .map(|r| r.va)
+                .min()
+                .unwrap();
+            assert!(
+                rep.iter().all(|r| r.va < v),
+                "a window: reported runs start below the boundary"
+            );
+            for u in s.iter().filter(|r| !rep.contains(r)) {
+                assert!(
+                    rep.iter().all(|w| !overlaps(u, w)),
+                    "closed: {u:x?} overlaps a reported run"
+                );
+            }
+            // maximal: no larger straddle-free boundary reports more within the capacity
+            for b in s.iter().map(|r| r.va).filter(|&b| b > v) {
+                let below = s.iter().filter(|r| r.va < b).count();
+                let straddled = s.iter().any(|r| r.va < b && b < r.va + r.len);
+                assert!(
+                    straddled || below > cap,
+                    "boundary {b:#x} would report {below}"
+                );
+            }
+        }
+        assert!(
+            cuts > 500 && whole > 200 && refused > 20,
+            "{whole}/{cuts}/{refused}"
+        );
+        assert!(
+            prefix_breaks > cuts / 4,
+            "a staged-order prefix separates overlapping runs in {prefix_breaks} of {cuts} cuts"
+        );
+    }
+
+    /// Across entries: the report never carries more than `cap`; entries before the cut entry are
+    /// whole, the cut entry is a window, entries after it are withheld and say so.
+    #[test]
+    fn a_cut_report_across_entries_stays_within_the_capacity() {
+        let mut x = 0xA076_1D64_78BD_642Fu64;
+        let mut multi = 0;
+        for _ in 0..3000 {
+            let n = 2 + (x % 3) as usize;
+            let staged: Vec<Vec<KfMapRun>> = (0..n)
+                .map(|_| {
+                    let dense = (x >> 5) % 2;
+                    random_staged(&mut x, dense)
+                })
+                .collect();
+            let cap = 3 + ((x >> 13) % 30) as usize;
+            let c = cut_report(&staged, cap);
+            let total: usize = staged.iter().map(Vec::len).sum();
+            if total <= cap {
+                assert!(!c.is_cut && !c.truncated && c.entries == staged);
+                continue;
+            }
+            if c.truncated {
+                assert!(c.entries.iter().all(Vec::is_empty));
+                continue;
+            }
+            multi += 1;
+            let sent: usize = c.entries.iter().map(Vec::len).sum();
+            assert!(sent <= cap, "{sent} runs in a report of {cap}");
+            let f = c.cut.iter().position(|&b| b).expect("some entry is cut");
+            for (t, st) in staged.iter().enumerate() {
+                if t < f {
+                    assert_eq!(&c.entries[t], st, "entries before the cut are whole");
+                } else if t > f {
+                    assert!(
+                        c.entries[t].is_empty(),
+                        "entries after the cut are withheld"
+                    );
+                    assert_eq!(c.cut[t], !st.is_empty());
+                }
+            }
+        }
+        assert!(multi > 500, "{multi}");
+    }
+
+    /// ★ Review of PR #424, F3: a brick CHAIN of overlapping runs (UNMAP `[2k, 2k+2)` pages, MAP
+    /// `[2k+1, 2k+3)` pages) is ONE clump however long. The first kernel walked down one straddler at a
+    /// time and gave up after 4096 steps, refusing a report that had a window; the spec never had a
+    /// step limit and the kernel has none now. (The kernel's 12 000-run case at capacity 5 000 is in
+    /// `kf_cpu_walk.cpp`; the spec's reference is quadratic, so the chain here is shorter.)
+    #[test]
+    fn a_chain_of_overlapping_runs_is_one_clump_however_long() {
+        let chain = |len: u64, iso: u64| -> Vec<KfMapRun> {
+            let mut v: Vec<KfMapRun> = (0..iso)
+                .map(|i| run(0x10_0000 + 0x4000 * i, 0x20_0000, PAGE, SYS))
+                .collect();
+            for k in 0..len {
+                v.push(unmap(0x1000_0000 + 0x2000 * k, 0x2000, SYS));
+                v.push(run(0x1000_0000 + 0x2000 * k + PAGE, 0x20_0000, 0x2000, SYS));
+            }
+            v.sort_by_key(|r| (class_of(r.flags), r.op != KFWR_OP_UNMAP, r.va));
+            v
+        };
+        // longer than any step limit a kernel might carry, capacity above it: the 10 isolated runs
+        let s = chain(1500, 10);
+        let c = cut_report(std::slice::from_ref(&s), 700);
+        assert!(c.is_cut && !c.truncated);
+        assert_eq!(c.entries[0].len(), 10, "the window below the chain");
+        assert!(c.entries[0].iter().all(|r| r.va < 0x1000_0000));
+        // nothing below it: the chain alone is a clump larger than the report
+        let c = cut_report(&[chain(1500, 0)], 700);
+        assert!(c.truncated);
+        // a report big enough for the whole chain takes it whole
+        let c = cut_report(&[chain(300, 4)], 5000);
+        assert!(!c.is_cut && c.entries[0].len() == 604);
+        // chains of every small length at every small capacity: the spec and the closure agree
+        for len in [1u64, 2, 3, 7, 40] {
+            for iso in [0u64, 3] {
+                let s = chain(len, iso);
+                for cap in 1..(2 * s.len()) {
+                    let c = cut_report(std::slice::from_ref(&s), cap);
+                    if c.truncated {
+                        assert!(
+                            iso == 0 || cap < iso as usize,
+                            "len {len} iso {iso} cap {cap}"
+                        );
+                        continue;
+                    }
+                    if !c.is_cut {
+                        continue;
+                    }
+                    let rep = &c.entries[0];
+                    assert!(rep.len() <= cap);
+                    for u in s.iter().filter(|r| !rep.contains(r)) {
+                        assert!(rep.iter().all(|w| !overlaps(u, w)));
+                    }
+                }
+            }
+        }
+    }
+
+    /// Hostile arguments: a capacity of zero, of one, and of everything; nothing staged; runs at the top
+    /// of the address space (the end of a run saturates, it never wraps).
+    #[test]
+    fn cut_report_hostile_arguments() {
+        let one = |va: u64| run(va, 0x20_0000, PAGE, SYS);
+        // capacity 0: nothing can be reported, the legacy refusal
+        let c = cut_report(&[vec![one(0x1000), one(0x3000)]], 0);
+        assert!(c.truncated && !c.is_cut && c.entries == vec![Vec::new()]);
+        // capacity 1: the lowest run
+        let c = cut_report(&[vec![one(0x1000), one(0x3000)]], 1);
+        assert_eq!(c.entries[0], vec![one(0x1000)]);
+        // nothing staged, any capacity: whole, quiet
+        for cap in [0, 1, usize::MAX] {
+            let c = cut_report(&[Vec::new(), Vec::new()], cap);
+            assert!(!c.is_cut && !c.truncated && c.cut == vec![false, false]);
+            assert_eq!(cut_report(&[], cap), CutReport::default());
+        }
+        // an unbounded capacity: whole
+        let big: Vec<KfMapRun> = (0..50u64).map(|i| one(0x1000 * (2 * i + 1))).collect();
+        let c = cut_report(std::slice::from_ref(&big), usize::MAX);
+        assert!(!c.is_cut && c.entries[0] == big);
+        // the top of the space: a run whose end is u64::MAX saturates; a run at u64::MAX - 0x1000 too
+        let top = vec![
+            run(u64::MAX - 0x2000, 0, 0x1000, SYS),
+            run(u64::MAX - 0x1000, 0, 0x1000, SYS),
+            run(u64::MAX - 0x1000, 0, u64::MAX, SYS),
+        ];
+        let c = cut_report(&[top], 1);
+        assert!(c.is_cut || c.truncated, "no panic, and a decision");
+        // the same run staged twice (a hostile diff with a duplicate): one clump
+        let c = cut_report(&[vec![one(0x1000), one(0x1000), one(0x1000)]], 2);
+        assert!(
+            c.truncated,
+            "three runs on one page are a clump larger than two"
+        );
+    }
+
+    /// ★ Draining a big diff through capacity-bounded windows, each applied and committed before the
+    /// next walk, ends where the whole diff ends — every step makes progress, and the diff is empty
+    /// only at the end. (Closed under overlap + committed per run ⇒ the rest stays in the next diff.)
+    #[test]
+    fn draining_a_diff_through_windows_reaches_the_uncut_state() {
+        let mut x = 0xD1B5_4A32_D192_ED03u64;
+        let (mut multi, mut refused, mut cases) = (0, 0, 0);
+        for _ in 0..1500 {
+            // an old state, settled, and a new walk
+            let dense = x % 2;
+            let mk = |x: &mut u64| -> Vec<KfMapRun> {
+                random_staged(x, dense)
+                    .into_iter()
+                    .filter(|r| r.op == KFWR_OP_MAP)
+                    .collect()
+            };
+            let old = mk(&mut x);
+            let new = mk(&mut x);
+            let cap = 4 + (x % 20) as usize;
+            let c0 = settle(&Committed::default(), &old);
+            let uncut = settle(&c0, &new);
+            let mut com = c0.clone();
+            let mut steps = 0;
+            let drained = loop {
+                let d = diff(&com, &new, usize::MAX);
+                if d.runs.is_empty() {
+                    break true;
+                }
+                let c = cut_report(std::slice::from_ref(&d.runs), cap);
+                if c.truncated {
+                    break false;
+                }
+                let rep = &c.entries[0];
+                assert_eq!(c.cut[0], rep.len() < d.runs.len());
+                for u in d.runs.iter().filter(|r| !rep.contains(r)) {
+                    assert!(rep.iter().all(|w| !overlaps(u, w)));
+                }
+                let next = commit(&com, rep, &ok(rep.len()));
+                assert_ne!(next, com, "every window makes progress");
+                assert_sound(&next);
+                com = next;
+                steps += 1;
+                assert!(steps < 5000);
+            };
+            if !drained {
+                refused += 1;
+                continue;
+            }
+            cases += 1;
+            multi += usize::from(steps > 1);
+            assert_eq!(
+                coverage(&com.flat()),
+                coverage(&uncut.flat()),
+                "same coverage as the uncut apply"
+            );
+            assert_eq!(com, uncut, "and the same committed placements");
+        }
+        assert!(
+            cases > 400 && multi > 150,
+            "{cases} drained, {multi} in more than one window, {refused} refused"
+        );
     }
 }
