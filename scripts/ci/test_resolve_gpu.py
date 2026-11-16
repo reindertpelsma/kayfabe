@@ -418,6 +418,16 @@ class Grade(unittest.TestCase):
         self.assertFalse(row["ok"])
         self.assertEqual(row["renders"]["prores"]["status"], "NOT_RUN")
 
+    def test_resolve_crash_is_classified_with_the_guest_events(self):
+        self.result["error"] = "Deliver page did not open"
+        self.result["resolve_running"] = False
+        self.result["app_events"] = ["Application Error id=1000 Faulting application name: Resolve.exe | Faulting module name: nvoglv64.dll | Exception code: 0xc0000409"]
+        self.result["nvlddmkm_events"] = ["id=153 2026-11-12T18:02:40"] * 3
+        row = self.grade()
+        self.assertEqual(row["failure_class"], "CRASH")
+        self.assertIn("nvoglv64.dll", " ".join(row["problems"]))
+        self.assertEqual(len(row["guest_nvlddmkm_events"]), 3)
+
     def test_guest_script_error_is_a_problem(self):
         self.result["error"] = "Deliver page did not open"
         self.assertIn("guest script error", self.grade()["error"] + " ".join(self.grade()["problems"]))

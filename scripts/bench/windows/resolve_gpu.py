@@ -138,7 +138,7 @@ def build_plan(run_id: str, renders=None, out_dir: Optional[str] = None, lane: s
                       "resolution_prefix": r["resolution_prefix"], "timeout_s": r["timeout_s"], "name": "kf_" + rid,
                       "profile": r.get("profile")})
     return {"lane": lane, "project": "kf" + run_id[:8], "timeline": TIMELINE, "fcpxml_guest": GUEST_MEDIA + r"\kf_timeline.fcpxml", "out_dir": out_dir,
-            "grade": True, "grade_clips": [70, 337], "renders": items}
+            "grade": lane == "discovery", "grade_clips": [70, 337], "renders": items}
 
 
 def fcpxml_text() -> str:
@@ -370,6 +370,12 @@ def grade(result: dict, directory: Path, host_csv: str = "", host_t0: Optional[f
         row["findings"].append("grading was driven but fewer than three nodes could be read back on any clip: grade not proven")
     if result.get("error"):
         row["problems"].append("guest script error: " + str(result["error"])[:160])
+    row["guest_goto_debug"] = [re.sub(r"[^\x20-\x7e]", "?", str(x))[:300] for x in (result.get("goto_debug") or [])][:12]
+    for key in ("app_events", "nvlddmkm_events"):
+        row["guest_" + key] = [re.sub(r"[^\x20-\x7e]", "?", str(x))[:240] for x in (result.get(key) or [])][:8]
+    if result.get("resolve_running") is False and result.get("app_events"):
+        row["failure_class"] = "CRASH"
+        row["problems"].append("Resolve.exe died during the row: " + row["guest_app_events"][0][:160])
     by_id = {rr.get("id"): rr for rr in result.get("renders") or [] if isinstance(rr, dict)}
     order = DISCOVERY_ORDER if result.get("lane") == "discovery" else GATE_ORDER
     row["lane"] = "discovery" if order is DISCOVERY_ORDER else "gate"

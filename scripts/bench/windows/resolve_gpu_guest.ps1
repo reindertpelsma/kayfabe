@@ -81,7 +81,13 @@ function Dump-Menus($path){
 # --- Deliver page helpers (UIA for discovery and verification, coordinates only derived from UIA rectangles) ---
 function Epoch-Now(){ ([DateTimeOffset](Get-Date).ToUniversalTime()).ToUnixTimeMilliseconds()/1000.0 }
 function Vis($e){ try{ $r=$e.Current.BoundingRectangle; ($r.Width -gt 0 -and $r.X -ge -5 -and $r.Y -ge 0 -and ($r.Y+$r.Height) -le 1080) }catch{ $false } }
-function All-Els(){ $m=Main-Win; if(-not $m){return @()}; @($m.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)) }
+function All-Els(){
+ # MEASURED 2026-11-16 (RTX 4090 box): right after a timeline import or a page switch Resolve is not responding for 10 to 20 s and has no
+ # UiMainWindow in UI Automation; wait for it (up to 120 s) instead of reading an empty tree
+ $m=$null; for($i=0;$i -lt 60 -and -not $m;$i++){ $m=Main-Win; if(-not $m){ Start-Sleep 2 } }
+ if(-not $m){return @()}
+ @($m.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition))
+}
 function Label-Row($els,$label,$type,$maxX){
  # the control of $type on the same row as the left-panel Text $label
  $lab=$els | Where-Object { try{ $c=$_.Current; $c.Name -ceq $label -and $c.ControlType.ProgrammaticName -eq 'ControlType.Text' -and (Vis $_) -and $c.BoundingRectangle.X -lt $maxX }catch{$false} } | Select-Object -First 1
@@ -149,9 +155,14 @@ function Prefix-Combo($label,$prefix){
 function Goto-Page($page,$marker){
  $els=All-Els
  $b=$els | Where-Object { try{ $_.Current.AutomationId.EndsWith("button${page}Panel") }catch{$false} } | Select-Object -First 1
+ $script:r.goto_debug += ('page={0} elements={1} main={2} button={3}' -f $page,$els.Count,[bool](Main-Win),[bool]$b)
  if(-not $b){ return $false }
- try{ $b.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }catch{ Click-Rect $b }
- return (Wait-Until { $x=All-Els; ($x | Where-Object { try{ $_.Current.Name -ceq $marker -and (Vis $_) }catch{$false} } | Select-Object -First 1) -ne $null } 90 3)
+ try{ $b.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); $script:r.goto_debug += 'invoked' }catch{ Click-Rect $b; $script:r.goto_debug += 'clicked' }
+ $ok=Wait-Until { $x=All-Els; ($x | Where-Object { try{ $_.Current.Name -ceq $marker -and (Vis $_) }catch{$false} } | Select-Object -First 1) -ne $null } 90 3
+ $x=All-Els
+ $names=@($x | Where-Object { try{ $_.Current.Name -like "*$marker*" }catch{$false} } | ForEach-Object { $_.Current.Name + '@' + [int]$_.Current.BoundingRectangle.X + ',' + [int]$_.Current.BoundingRectangle.Y })
+ $script:r.goto_debug += ('marker={0} found={1} elements={2} like={3}' -f $marker,$ok,$x.Count,($names -join ';'))
+ return $ok
 }
 function Dbl-At($x,$y){ Click-At $x $y; Start-Sleep -Milliseconds 120; Click-At $x $y }
 function Win-Has($name){ $x=All-Els; ($x | Where-Object { try{ $_.Current.Name -ceq $name }catch{$false} } | Select-Object -First 1) -ne $null }
@@ -167,13 +178,13 @@ $smi=Start-Process nvidia-smi -WindowStyle Hidden -PassThru -RedirectStandardOut
 $r.t0=Epoch-Now
 $r.tz_offset_s=[int]([TimeZoneInfo]::Local.GetUtcOffset((Get-Date)).TotalSeconds)
 Step 'samplers' $true ''
-$r.grade_nodes=@()
+$r.grade_nodes=@(); $r.goto_debug=@()
+$tStart=Get-Date
 try {
 
 # --- Resolve: start, project manager, new project
 $logPath="$env:APPDATA\Blackmagic Design\DaVinci Resolve\Support\logs\davinci_resolve.log"
 $r.log_start_bytes=(Get-Item $logPath -ErrorAction SilentlyContinue).Length
-$tStart=Get-Date
 Start-Process 'C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe' | Out-Null
 $pm=$null
 $ok=Wait-Until { $script:pm=Resolve-Wins | Where-Object {$_.Current.AutomationId -eq 'UiProjectManagerDialog'} | Select-Object -First 1; $script:pm -ne $null } 300 3
@@ -280,16 +291,19 @@ foreach($p in $plan.renders){
  if(-not $rr.finished){ break }
 }
 
+$r.stage='done'
+} finally {
 # --- Resolve's own log after the start, GPU-relevant lines only
-Start-Sleep 3
 $lines=@()
 foreach($ln in Get-Content $logPath -ErrorAction SilentlyContinue){
  $m=[regex]::Match($ln,'\| (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ \| (.*)$')
  if($m.Success){ $ts=[datetime]::ParseExact($m.Groups[1].Value,'yyyy-MM-dd HH:mm:ss',$null)
   if($ts -ge $tStart.AddSeconds(-2) -and $m.Groups[2].Value -match 'Selected compute API|compute API set|Automatic GPU Selection|Detected \d+ GPUs|NVDEC decodes|NVENC encodes|initialised as decoding|Initialized .*OpenGL|Let There Be CUDA|Initializing CUDA|Board manager thread|CPU only|No GPU|OpenCL|VRAM|GPUDetect.*ERROR|NVML'){ $lines+=$ln.Substring(0,[Math]::Min(260,$ln.Length)) } } }
 $r.log_lines=@($lines | Select-Object -First 80)
-$r.stage='done'
-} finally {
+ # what the guest saw while this ran: application crashes (faulting module, exception code) and nvlddmkm events; text only
+ try{ $r.resolve_running=[bool](Get-Process -Name Resolve -ErrorAction SilentlyContinue) }catch{}
+ try{ $r.app_events=@(Get-WinEvent -FilterHashtable @{LogName='Application';Level=1,2;StartTime=$tStart} -MaxEvents 8 -ErrorAction SilentlyContinue | ForEach-Object { ('{0} id={1} {2}' -f $_.ProviderName,$_.Id,((($_.Message -split "`n") | Select-Object -First 4) -join ' | ')) }) }catch{}
+ try{ $r.nvlddmkm_events=@(Get-WinEvent -FilterHashtable @{LogName='System';ProviderName='nvlddmkm';StartTime=$tStart} -MaxEvents 20 -ErrorAction SilentlyContinue | ForEach-Object { ('id={0} {1}' -f $_.Id,$_.TimeCreated.ToString('o')) }) }catch{}
  New-Item $stopFile -Force | Out-Null
  try{ if($smi -and -not $smi.HasExited){ Stop-Process -Id $smi.Id -Force } }catch{}
  Start-Sleep 3
