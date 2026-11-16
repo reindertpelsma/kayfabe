@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """The `install_flow` payload stage: the documented user flow, run on a CI GPU box (stdlib only).
 
-STATUS: LIVE as code, 2026-11-15; NOT YET RUN ON A GPU BOX (see docs/howto/building.md, "How the commands on this page are
-tested", and the PR that added it). OWNER_RULINGS section AS: the user flow is "compile QEMU (or use the attested binary),
+STATUS: LIVE as code, 2026-11-15. First GPU-box run 2026-11-15 (release shakeout, RTX 4090, sha 84b541cae): it failed three times on harness
+defects (the mirror clone of the blob-less Worker checkout never finished, the mirror directory was not named `kayfabe`, the cup8 log
+directory did not exist), all fixed in this file, and then ended PASS in 258 s (see docs/howto/building.md, "How the commands on this
+page are tested"). OWNER_RULINGS section AS: the user flow is "compile QEMU (or use the attested binary),
 then use the VM with your own tools with a kf3 GPU device", and the exact commands we tell users to run are tested on the
 boxes that run for CI. Section AR: run as an unprivileged uid in group kvm with no capabilities; root steps are explicit.
 
@@ -247,11 +249,34 @@ def ensure_user(prefix):
     return entry.pw_uid, entry.pw_gid, os.stat("/dev/kvm").st_gid
 
 
+def has_missing_objects(rev_list_output):
+    """`git rev-list --objects --missing=print` marks an object the store lacks with a leading `?`."""
+    return any(line.startswith("?") for line in rev_list_output.splitlines())
+
+
+def mirror_source(checkout, sha):
+    """Where the mirror is cloned from: the checkout when it holds every object of `sha`, else the public repository.
+    The Worker's /workspace/kf-ci-src is a depth-1, blob-less, sparse clone (18k blobs absent); a bare clone of it never finished
+    (measured 2026-11-15, one box: git pack-objects at 94 percent CPU for 13+ minutes, killed), a bare clone of the public URL took 25 s."""
+    listing = sh(["git", "-c", "safe.directory=" + str(checkout), "-C", str(checkout), "rev-list", "--objects", "--missing=print", sha],
+                 capture_output=True, text=True, timeout=300)
+    if listing.returncode == 0 and not has_missing_objects(listing.stdout):
+        return str(checkout)
+    return REPO_URL
+
+
 def make_mirror(checkout, prefix, sha, uid, gid):
     """A bare repository holding the commit under test as `main`; the documented clone URL is replaced by its file URL."""
-    mirror = prefix / "mirror.git"
-    if sh(["git", "clone", "--bare", "--quiet", str(checkout), str(mirror)]).returncode:
-        raise FlowError("mirror_clone")
+    mirror = prefix / REPO_URL.rsplit("/", 1)[1]  # `git clone <URL>` names its directory after the URL, and the docs then `cd kayfabe`
+    try:
+        if sh(["git", "clone", "--bare", "--quiet", mirror_source(checkout, sha), str(mirror)], timeout=900).returncode:
+            raise FlowError("mirror_clone")
+        if sh(["git", f"--git-dir={mirror}", "cat-file", "-e", sha + "^{commit}"]).returncode and sh(
+            ["git", f"--git-dir={mirror}", "fetch", "--quiet", "origin", sha], timeout=900
+        ).returncode:
+            raise FlowError("mirror_commit_missing")
+    except subprocess.TimeoutExpired:
+        raise FlowError("mirror_timeout") from None
     for argv in (["update-ref", "refs/heads/main", sha], ["symbolic-ref", "HEAD", "refs/heads/main"]):
         if sh(["git", f"--git-dir={mirror}", *argv]).returncode:
             raise FlowError("mirror_ref")
@@ -310,6 +335,13 @@ def guest_access(prefix, uid, gid, image, key):
     return key_copy, actions
 
 
+def cup8_log(prefix):
+    """The probe's own output goes beside the documented steps' logs (doc_steps.Runner puts those under <prefix>/run/logs)."""
+    logs = Path(prefix) / "run" / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    return logs / "cup8.out"
+
+
 def probe_guest(prefix, drop, qemu, words, image, key, clone, log):
     """Boot, ssh in, nvidia-smi, cup8, power off. Returns the guest record; raises FlowError on a failed check."""
     env = {"HOME": str(prefix / "home"), "PATH": doc_steps.DEFAULT_PATH, "TMPDIR": str(prefix / "tmp")}
@@ -354,7 +386,7 @@ def probe_guest(prefix, drop, qemu, words, image, key, clone, log):
         if sh([*ssh, "gcc -O0 -o /tmp/cup8 /tmp/cup8.c -lcuda -lm"], env=env, capture_output=True).returncode:
             raise FlowError("build_cup8")
         run = sh([*ssh, "cd /tmp && timeout 900 ./cup8"], env=env, capture_output=True, text=True, timeout=1000)
-        (prefix / "logs" / "cup8.out").write_text(run.stdout)
+        cup8_log(prefix).write_text(run.stdout)
         guest["cup8"] = "PASS" if (run.returncode == 0 and grade_cup8(run.stdout)) else "FAIL"
         if guest["cup8"] != "PASS":
             raise FlowError("cup8_failed")
