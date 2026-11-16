@@ -27,19 +27,29 @@ LrTasks.startAsyncTask(function()
   if not job then return end
   local ok, err = pcall(function()
     local catalog = LrApplication.activeCatalog()
-    local photo
+    local photos = {}
     catalog:withWriteAccessDo('kf import', function()
-      photo = catalog:addPhoto(job.raw)
+      for path in string.gmatch(job.raws, '[^|]+') do
+        local p = catalog:addPhoto(path)
+        if p then photos[#photos + 1] = p end
+      end
+    end, { timeout = 120 })
+    if #photos == 0 then error('addPhoto returned nothing') end
+    -- develop: a stack of corrections that all run on the GPU pipeline
+    catalog:withWriteAccessDo('kf develop', function()
+      for _, p in ipairs(photos) do
+        p:applyDevelopSettings({ Exposure2012 = 0.4, Contrast2012 = 25, Highlights2012 = -40, Shadows2012 = 35, Texture = 30, Clarity2012 = 25,
+          Dehaze = 20, Vibrance = 20, Saturation = 5, Sharpness = 60, LuminanceSmoothing = 30, ColorNoiseReduction = 25, PostCropVignetteAmount = -20 })
+      end
     end, { timeout = 60 })
-    if not photo then error('addPhoto returned nothing') end
     local session = LrExportSession {
-      photosToExport = { photo },
+      photosToExport = photos,
       exportSettings = {
         LR_format = 'JPEG', LR_jpeg_quality = 0.9,
         LR_export_destinationType = 'specificFolder', LR_export_destinationPathPrefix = job.out,
         LR_export_useSubfolder = false, LR_collisionHandling = 'overwrite',
-        LR_size_doConstrain = true, LR_size_resizeType = 'wh', LR_size_maxWidth = 1920, LR_size_maxHeight = 1920, LR_size_units = 'pixels',
-        LR_renamingTokensOn = true, LR_tokens = 'kfexport', LR_tokensCustomString = 'kfexport',
+        LR_size_doConstrain = false,
+        LR_renamingTokensOn = true, LR_tokens = '{{naming_sequenceNumber_3Digits}}', LR_tokensCustomString = 'kf',
         LR_metadata_keywordOptions = 'flat', LR_removeLocationMetadata = true,
       },
     }
@@ -48,7 +58,7 @@ LrTasks.startAsyncTask(function()
       local success, pathOrMessage = rendition:waitForRender()
       if success then n = n + 1 else error(tostring(pathOrMessage)) end
     end
-    writeResult(job.result, 'OK renditions=' .. tostring(n) .. ' version=' .. tostring(LrApplication.versionString()))
+    writeResult(job.result, 'OK renditions=' .. tostring(n) .. ' photos=' .. tostring(#photos) .. ' version=' .. tostring(LrApplication.versionString()))
   end)
   if not ok then writeResult(job.result, 'ERR ' .. tostring(err)) end
 end)

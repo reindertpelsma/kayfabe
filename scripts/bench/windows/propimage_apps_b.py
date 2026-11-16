@@ -380,13 +380,16 @@ def grade_launch(r, d, name):
 
 def grade_lightroom(r, d):
     res = str(r.get("plugin_result", ""))
-    if not res.startswith("OK renditions=1"):
-        raise ValueError("plugin did not export: %s" % res.strip()[:120])
-    _outputs_fresh(r, d, ("out.jpg",))
-    w, h = media_check.jpeg_size(d / "out.jpg")
-    if max(w, h) != 1920:
-        raise ValueError("exported JPEG is %dx%d, expected 1920 on the long side" % (w, h))
-    return "imported the raw photo into the catalog and exported a %dx%d JPEG through the develop pipeline (%s)" % (w, h, res.strip()[:40]), ""
+    if not res.startswith("OK renditions=2"):
+        raise ValueError("plugin did not export both photos: %s" % res.strip()[:120])
+    names = [o["file"] for o in r.get("outputs", [])]
+    if len(names) != 2:
+        raise ValueError("%d exported JPEGs, expected 2" % len(names))
+    _outputs_fresh(r, d, names)
+    dims = sorted(media_check.jpeg_size(d / n) for n in names)
+    if max(dims[0]) < 3000 or max(dims[1]) < 5000:
+        raise ValueError("exports are %s: full-size develop output expected (>= 3000 and >= 5000 px long side)" % (dims,))
+    return "imported 2 raw photos, applied a 13-setting develop stack and exported full-size JPEGs %s through the develop pipeline" % (dims,), ""
 
 
 def grade_mediaencoder(r, d):
