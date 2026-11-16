@@ -316,6 +316,9 @@ class T(unittest.TestCase):
     def test_gpu_fix_restarts_changed_devices(self):
         script = m.render_gpu_fix("GPU-test")
         self.assertIn("pnputil /restart-device", script)
+        # a phantom device of another die (CM_PROB_PHANTOM) must never be restarted: only present devices with the NVIDIA vendor id
+        self.assertIn("$_.Present -and $_.InstanceId -match 'VEN_10DE'", script)
+        self.assertNotIn("FriendlyName -match 'NVIDIA'", script)
         self.assertIn("$LASTEXITCODE", script)
         self.assertIn("$expected", script)
 

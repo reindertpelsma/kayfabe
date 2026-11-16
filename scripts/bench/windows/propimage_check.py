@@ -113,9 +113,11 @@ Get-ChildItem $base -Name | Where-Object {$_ -match '^\d{4}$'} | ForEach-Object 
  }
 }
 if($changed){
- # Present devices only: a phantom NVIDIA instance left from the host the image was built on (Status Unknown, CM_PROB_PHANTOM) cannot be restarted
- # and made `pnputil /restart-device` fail on the second image (MEASURED 2026-11-16, built on an RTX 4070, run on an RTX 4090).
- Get-PnpDevice -Class Display -PresentOnly | Where-Object {$_.FriendlyName -match 'NVIDIA'} | ForEach-Object {
+ # Only PRESENT NVIDIA devices (hardware id VEN_10DE): a die other than the image's own leaves the old GPU as a phantom entry (Status Unknown,
+ # CM_PROB_PHANTOM) that cannot be restarted, and a new device is still named 'Video Controller (VGA Compatible)' until its driver binds
+ # (MEASURED 2026-11-16 on RTX 4000 Ada, RTX 4060 Ti and RTX 4090 boxes: restarting the phantom RTX 4070 failed the whole step).
+ # Single implementation: the resolve-gpu fix (068680b5d) supersedes the -PresentOnly + FriendlyName form of b1d5b452d.
+ Get-PnpDevice -Class Display | Where-Object {$_.Present -and $_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
   pnputil /restart-device $_.InstanceId | Out-Null
   if($LASTEXITCODE -ne 0){throw 'NVIDIA display device restart failed'}
  }
