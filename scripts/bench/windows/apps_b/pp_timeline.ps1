@@ -16,7 +16,7 @@ try {
   # job = name, preset file, extension
   $h264 = "$sp\4E49434B_48323634"; $hevc = "$sp\4A454646_48455643"; $prores = "$sp\4D584620_504D5846"
   if ($mode -eq 'direct') {
-    $jobs = @(@('h264_1080', "$h264\High Quality 1080 HD.epr", 'mp4'))
+    $jobs = ,@('h264_1080', "$h264\High Quality 1080 HD.epr", 'mp4')
   } else {
     $jobs = @(@('h264_2160', "$h264\High Quality 2160 4K.epr", 'mp4'), @('h264_1080', "$h264\High Quality 1080 HD.epr", 'mp4'), @('h264_720', "$h264\High Quality 720 HD.epr", 'mp4'),
               @('hevc_2160', "$hevc\4K UHD.epr", 'mp4'), @('hevc_1080', "$hevc\HD 1080p.epr", 'mp4'), @('hevc_pq10', "$hevc\02 - Match Source - PQ.epr", 'mp4'),
