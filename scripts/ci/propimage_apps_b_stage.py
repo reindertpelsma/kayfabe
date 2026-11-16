@@ -13,7 +13,7 @@ It reuses `propimage_apps.py` for everything that does not depend on the applica
 the verified unpack, the offline proof, the host kernel log windows, cleanup) and replaces three things: the application list and its
 timeouts (`scripts/bench/windows/propimage_apps_b.py`, selected with `propimage_check.py --app-set b`), the boot command (adds
 `--data-iso`), and the grading (PASS or PASS_LIMITED per row; a PASS row names the GPU engines it was asserted on and carries the sampled
-peaks). Two images on one box: `run --gpu-minor N` passes the harness's `--gpu-minor N` (kf3 gpu-minor=N) to every boot; the first image's stage takes its die the same way.
+peaks). One-GPU boxes: the image B leg is a separate box with the same instruction shape (a leg selector A|B).
 A row that only proves a launch is PASS_LIMITED and the stage says so; the stage verdict is PASS when no row failed.
 The record is printed as `KF_PROPIMAGE_APPS_B_RESULT {json}` (scores and sampled GPU numbers are written to the record, not to the log).
 """
@@ -62,8 +62,6 @@ def boot_command(check_py, a):
     cmd = [sys.executable, "-B", "-I", str(check_py), "--dir", a["dir"], "--work", a["work"], "--out", a["out"], "--qemu", a["qemu"],
            "--flags", a["flags"], "--broker", a["broker"], "--gop-efi", a["gop"], "--display", "broker", "--app-set", "b",
            "--data-iso", a["data"], "--apps", ",".join(a["apps"])]
-    if a.get("gpu_minor") is not None:
-        cmd += ["--gpu-minor", str(int(a["gpu_minor"]))]
     return cmd
 
 
@@ -138,7 +136,7 @@ def build_manifest(pins, build_swtpm):
     return m
 
 
-def run(ctx, evidence_dir=None, gpu_minor=None):
+def run(ctx, evidence_dir=None):
     rec = new_record(ctx)
     klog, started, out_of_time = None, False, False
     try:
@@ -196,7 +194,7 @@ def run(ctx, evidence_dir=None, gpu_minor=None):
                 continue
             out, wk = ctx.prefix / "out" / label, work / label
             a = {"dir": str(imgdir), "work": str(wk), "out": str(out), "qemu": str(ctx.qemu), "flags": str(flags), "broker": str(broker),
-                 "gop": str(dl / "image/kf-gop.signed.efi"), "data": str(dl / data_item["dest"]), "apps": boot["apps"], "gpu_minor": gpu_minor}
+                 "gop": str(dl / "image/kf-gop.signed.efi"), "data": str(dl / data_item["dest"]), "apps": boot["apps"]}
             klog.mark(label, "start")
             t0 = time.monotonic()
             mark = pa.Mark(klog, label, boot["apps"])
@@ -280,7 +278,6 @@ def main(argv=None):
     r.add_argument("--bench", default="/workspace/bench")
     r.add_argument("--deadline-epoch", type=float, default=0.0)
     r.add_argument("--evidence-dir")
-    r.add_argument("--gpu-minor", type=int)
     q = sub.add_parser("plan")
     q.add_argument("--sha", default="0" * 40)
     a = p.parse_args(argv)
@@ -294,7 +291,7 @@ def main(argv=None):
             return 2
         ctx = pa.Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=pa.hardware_now())
         ctx.pins_path = PINS_PATH
-        return finish(run(ctx, a.evidence_dir, a.gpu_minor), a.out)
+        return finish(run(ctx, a.evidence_dir), a.out)
     except pa.Refused as exc:
         print("KF_PROPIMAGE_APPS_B_REFUSED " + pa.clean(exc.reason, 80), flush=True)
         return 2

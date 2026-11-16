@@ -83,8 +83,6 @@ class Plan(unittest.TestCase):
         self.assertEqual(c[c.index("--app-set") + 1], "b")
         self.assertEqual(c[c.index("--data-iso") + 1], "/d.iso")
         self.assertNotIn("--gpu-minor", c)
-        c = sb.boot_command(Path("/c.py"), dict(a, gpu_minor=1))
-        self.assertEqual(c[c.index("--gpu-minor") + 1], "1")
 
 
 class Collect(unittest.TestCase):

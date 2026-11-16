@@ -138,18 +138,6 @@ CASES = [
             '    return {"gpu_name":"RTX 3060","compute_cap":860,"driver_version":"580.159.04"}',
         ),
     ),
-    (
-        "hardware-gpu-count-unchecked",
-        replace("        if len(lines) != expected or len(set(lines)) != 1:", "        if len(set(lines)) != 1:"),
-    ),
-    (
-        "hardware-mixed-gpus-accepted",
-        replace("        if len(lines) != expected or len(set(lines)) != 1:", "        if len(lines) != expected:"),
-    ),
-    (
-        "hardware-gpus-flag-unbounded",
-        replace('choices=range(1, 9), metavar="N"', 'metavar="N"'),
-    ),
     ("failed-stage-attribution-lost", replace("    if rc not in (0, 6):", "    if rc == 124:")),
     (
         "unattributed-stage-xid-admitted",

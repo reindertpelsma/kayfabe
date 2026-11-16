@@ -36,7 +36,7 @@ Verified offline in the image: the sniffers above (`gpudiag`). Not driven: Photo
 
 `scripts/ci/propimage_apps_b_stage.py` is the first stage's companion: same preflight, pins, manifest, downloader, swtpm, verified unpack, offline proof and kernel-log windows (imported from `propimage_apps.py`), its own application list, boot command (`--app-set b --data-iso`), record (`KF_PROPIMAGE_APPS_B_RESULT`, `image_set: "b"`) and grading (PASS needs every row PASS or PASS_LIMITED and every asserted row to carry a PASS GPU record that names its engines). Pins: `scripts/ci/propimage_apps_b_pins.json` (image archive, data volume, signed boot GOP and swtpm sources all pinned; the GOP and swtpm values are the first image's).
 
-Not done here (they sit in files that the release-run work is changing): the `vast_payload.py` stage entry and the `vast_report.py` validator for the B record, and the Worker allow-list entry for the image's opaque ref (`propimage-kfimg-20261116.zip`). Two images on one box use `propimage_check.py --gpu-minor N` (the release-run work); this stage passes `--gpu-minor` through when given.
+Not done here (they sit in files that the release-run work is changing): the `vast_payload.py` stage entry and the `vast_report.py` validator for the B record, and the Worker allow-list entry for the image's opaque ref (`propimage-kfimg-20261116.zip`). The B leg runs on its own one-GPU box (a leg selector A|B in the instruction); this stage does not need a die index.
 
 ## What is not claimed
 
