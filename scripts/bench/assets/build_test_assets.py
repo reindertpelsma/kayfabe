@@ -7,7 +7,12 @@ files, PDF, video, audio, 3D models) that GPU creative and 3D application
 tests open. Every file keeps its own licence; ``test_assets.json`` records the
 source URL, licence, attribution, sha256 and size of each one.
 
-Subcommands: fetch, verify, licenses, iso, all, pin. See README.md.
+Subcommands: fetch, verify, licenses, iso, all, pin, synth, pin-synth. See README.md.
+
+Every asset has a ``source_kind``: ``origin`` (a stable source URL, no copy needed),
+``public-mirror`` (open licence, unstable origin: also kept in the public bucket under
+``mirror_path``) or ``private`` (redistribution prohibited: never in the ISO, never in the
+published licence list). A ``synthetic`` section lists deterministic generated files.
 
 Downloaded files are untrusted data: this program only hashes and copies them.
 """
@@ -15,7 +20,7 @@ Downloaded files are untrusted data: this program only hashes and copies them.
 from __future__ import annotations
 
 import argparse
-import datetime
+import array
 import hashlib
 import json
 import os
@@ -26,12 +31,13 @@ import subprocess
 import sys
 import tempfile
 import time
+import zlib
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
-SCHEMA = "kayfabe.test-assets/1"
+SCHEMA = "kayfabe.test-assets/2"
 HERE = Path(__file__).resolve().parent
 DEFAULT_MANIFEST = HERE / "test_assets.json"
 
@@ -46,9 +52,25 @@ ALLOWED_LICENSES = frozenset({
     "CC0-1.0", "Public-Domain",
     "CC-BY-2.0", "CC-BY-2.5", "CC-BY-3.0", "CC-BY-4.0",
     "CC-BY-SA-3.0", "CC-BY-SA-4.0",
+    # Permissive software licences, admitted for the project files (project/) whose
+    # source repository carries one of them. Copyleft (GPL family) stays out.
+    "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib",
 })
-KEYS = ("name", "url", "license", "license_url", "share_alike", "attribution",
+KEYS = ("name", "url", "source_kind", "license", "license_url", "share_alike", "attribution",
         "source_page", "sha256", "size", "purpose")
+OPTIONAL_KEYS = ("mirror_path", "fallback_url", "value")
+SOURCE_KINDS = ("origin", "public-mirror", "private")
+PRIVATE_LICENSE = "Proprietary"
+PRIVATE_MAX_FILE = 2 * 1024 * 1024 * 1024
+# Hosts whose URLs are not stable (files are re-uploaded or renamed in place): an entry
+# from one of them must be a public-mirror, never an origin.
+UNSTABLE_HOST_SUFFIXES = ("wikimedia.org", "wikipedia.org")
+GITHUB_HOSTS = ("raw.githubusercontent.com", "media.githubusercontent.com", "github.com")
+MIRROR_RE = re.compile(r"^test-assets/\d{8}/")
+COMMIT_RE = re.compile(r"/[0-9a-f]{40}/")
+SYNTH_KEYS = ("name", "generator", "output", "description", "requires",
+              "sha256", "size", "sha256_prefix", "prefix_bytes")
+PREFIX_BYTES_DEFAULT = 65536
 
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}(/[A-Za-z0-9][A-Za-z0-9._-]{0,63})?$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -71,44 +93,53 @@ def validate_name(name: object) -> str:
     return name
 
 
-def validate_manifest(m: object) -> list[dict]:
-    """Return the asset list or raise AssetError listing every problem found."""
-    problems: list[str] = []
-    if not isinstance(m, dict):
-        raise AssetError("manifest is not a JSON object")
-    if m.get("schema") != SCHEMA:
-        problems.append(f"schema must be {SCHEMA!r}, got {m.get('schema')!r}")
-    extra_top = set(m) - {"schema", "comment", "assets"}
-    if extra_top:
-        problems.append(f"unknown top-level keys {sorted(extra_top)}")
-    assets = m.get("assets")
-    if not isinstance(assets, list) or not assets:
-        raise AssetError("; ".join(problems + ["assets must be a non-empty list"]))
-    seen: set[str] = set()
-    for i, a in enumerate(assets):
-        tag = f"assets[{i}]"
-        if not isinstance(a, dict):
-            problems.append(f"{tag} is not an object")
+def _is_https(v: object) -> bool:
+    return isinstance(v, str) and urllib.parse.urlsplit(v).scheme == "https" \
+        and bool(urllib.parse.urlsplit(v).netloc)
+
+
+def _host(url: str) -> str:
+    return (urllib.parse.urlsplit(url).hostname or "").lower()
+
+
+def _validate_asset(a: dict, tag: str, problems: list[str]) -> None:
+    kind = a["source_kind"]
+    if kind not in SOURCE_KINDS:
+        problems.append(f"{tag}: source_kind must be one of {list(SOURCE_KINDS)}, got {kind!r}")
+        return
+    try:
+        validate_name(a["name"])
+    except AssetError as e:
+        problems.append(f"{tag}: {e}")
+    allowed_extra = {"origin": set(), "public-mirror": {"mirror_path"},
+                     "private": {"fallback_url", "value"}}[kind]
+    keys = set(a)
+    if not set(KEYS) <= keys or keys - set(KEYS) - allowed_extra:
+        problems.append(f"{tag}: keys must be exactly {list(KEYS)} plus "
+                        f"{sorted(allowed_extra)} for a {kind} entry; missing {sorted(set(KEYS) - keys)}, "
+                        f"extra {sorted(keys - set(KEYS) - allowed_extra)}")
+        return
+    private = kind == "private"
+    # URLs: a private entry may have no origin URL at all and keeps an optional fallback.
+    for k in ("url", "license_url", "source_page"):
+        v = a[k]
+        if private and v is None:
             continue
-        tag = f"assets[{i}] {a.get('name')!r}"
-        if set(a) != set(KEYS):
-            problems.append(f"{tag}: keys must be exactly {list(KEYS)}, "
-                            f"missing {sorted(set(KEYS) - set(a))}, extra {sorted(set(a) - set(KEYS))}")
-            continue
-        try:
-            validate_name(a["name"])
-        except AssetError as e:
-            problems.append(f"{tag}: {e}")
-        else:
-            low = a["name"].lower()
-            if low in seen:
-                problems.append(f"{tag}: duplicate name (case-insensitive)")
-            seen.add(low)
-        for k in ("url", "license_url", "source_page"):
-            v = a[k]
-            if not isinstance(v, str) or urllib.parse.urlsplit(v).scheme != "https" \
-                    or not urllib.parse.urlsplit(v).netloc:
-                problems.append(f"{tag}: {k} must be an https URL, got {v!r}")
+        if not _is_https(v):
+            problems.append(f"{tag}: {k} must be an https URL, got {v!r}")
+    if private:
+        fb = a.get("fallback_url")
+        if "fallback_url" in a and fb is not None and not _is_https(fb):
+            problems.append(f"{tag}: fallback_url must be an https URL or null, got {fb!r}")
+        v = a.get("value")
+        if not isinstance(v, str) or len(v.strip()) < 20:
+            problems.append(f"{tag}: a private entry needs a 'value' text (at least 20 characters) "
+                            "saying why the file is worth having and why no open equivalent works")
+        if a["license"] != PRIVATE_LICENSE:
+            problems.append(f"{tag}: a private entry has licence {PRIVATE_LICENSE!r}, got {a['license']!r}")
+        if a["share_alike"] is not False:
+            problems.append(f"{tag}: a private entry has share_alike false")
+    else:
         if a["license"] not in ALLOWED_LICENSES:
             problems.append(f"{tag}: licence {a['license']!r} is not allowed "
                             f"(allowed: {sorted(ALLOWED_LICENSES)})")
@@ -116,25 +147,144 @@ def validate_manifest(m: object) -> list[dict]:
             problems.append(f"{tag}: share_alike must be a boolean")
         elif isinstance(a["license"], str) and ("-SA-" in a["license"]) != a["share_alike"]:
             problems.append(f"{tag}: share_alike={a['share_alike']} disagrees with licence {a['license']}")
-        for k in ("attribution", "purpose"):
-            if not isinstance(a[k], str) or not a[k].strip():
-                problems.append(f"{tag}: {k} must be a non-empty string")
-        sha, size = a["sha256"], a["size"]
-        if sha is not None and not (isinstance(sha, str) and SHA_RE.match(sha)):
-            problems.append(f"{tag}: sha256 must be 64 lowercase hex digits or null")
-        if size is not None and not (isinstance(size, int) and not isinstance(size, bool) and size > 0):
-            problems.append(f"{tag}: size must be a positive integer or null")
-        if (sha is None) != (size is None):
-            problems.append(f"{tag}: sha256 and size must be pinned together")
+    if kind == "origin" and _is_https(a["url"]):
+        host = _host(a["url"])
+        if any(host == h or host.endswith("." + h) for h in UNSTABLE_HOST_SUFFIXES):
+            problems.append(f"{tag}: {host} is not a stable origin; use source_kind public-mirror")
+        if host in GITHUB_HOSTS and not COMMIT_RE.search(a["url"]):
+            problems.append(f"{tag}: a GitHub origin URL must be pinned to a 40-hex commit, not a branch")
+    if kind == "public-mirror":
+        mp = a.get("mirror_path")
+        name = a["name"] if isinstance(a["name"], str) else ""
+        if not (isinstance(mp, str) and MIRROR_RE.match(mp) and mp.split("/", 2)[2:] == [name]):
+            problems.append(f"{tag}: mirror_path must be 'test-assets/<YYYYMMDD>/{name}', got {mp!r}")
+    for k in ("attribution", "purpose"):
+        if not isinstance(a[k], str) or not a[k].strip():
+            problems.append(f"{tag}: {k} must be a non-empty string")
+    sha, size = a["sha256"], a["size"]
+    if sha is not None and not (isinstance(sha, str) and SHA_RE.match(sha)):
+        problems.append(f"{tag}: sha256 must be 64 lowercase hex digits or null")
+    if size is not None and not (isinstance(size, int) and not isinstance(size, bool) and size > 0):
+        problems.append(f"{tag}: size must be a positive integer or null")
+    if (sha is None) != (size is None):
+        problems.append(f"{tag}: sha256 and size must be pinned together")
+    cap = PRIVATE_MAX_FILE if private else MAX_FILE
+    if isinstance(size, int) and not isinstance(size, bool) and size > cap:
+        problems.append(f"{tag}: size {size} exceeds the per-file limit {cap}")
+
+
+def _validate_synthetic(entries: object, problems: list[str]) -> None:
+    if not isinstance(entries, list):
+        problems.append("synthetic must be a list")
+        return
+    seen_names: set[str] = set()
+    seen_out: set[str] = set()
+    for i, s in enumerate(entries):
+        tag = f"synthetic[{i}]"
+        if not isinstance(s, dict):
+            problems.append(f"{tag} is not an object")
+            continue
+        tag = f"synthetic[{i}] {s.get('name')!r}"
+        if set(s) != set(SYNTH_KEYS):
+            problems.append(f"{tag}: keys must be exactly {list(SYNTH_KEYS)}, "
+                            f"missing {sorted(set(SYNTH_KEYS) - set(s))}, extra {sorted(set(s) - set(SYNTH_KEYS))}")
+            continue
+        for k in ("name", "output"):
+            try:
+                validate_name(s[k])
+            except AssetError as e:
+                problems.append(f"{tag}: {k}: {e}")
+        if isinstance(s["name"], str):
+            if s["name"].lower() in seen_names:
+                problems.append(f"{tag}: duplicate synthetic name")
+            seen_names.add(s["name"].lower())
+        if isinstance(s["output"], str):
+            if s["output"].lower() in seen_out:
+                problems.append(f"{tag}: duplicate synthetic output")
+            seen_out.add(s["output"].lower())
+        g = s["generator"]
+        if isinstance(g, str):
+            if g not in BUILTIN_GENERATORS:
+                problems.append(f"{tag}: unknown built-in generator {g!r} (known: {sorted(BUILTIN_GENERATORS)})")
+        elif isinstance(g, list) and g and all(isinstance(x, str) and x for x in g):
+            if sum(x == OUTPUT_TOKEN for x in g) != 1:
+                problems.append(f"{tag}: an argv generator needs exactly one {OUTPUT_TOKEN!r} element")
+            if isinstance(s["requires"], list) and g[0] not in s["requires"]:
+                problems.append(f"{tag}: the tool {g[0]!r} must be listed in requires")
+        else:
+            problems.append(f"{tag}: generator must be a built-in name or a non-empty argv list of strings")
+        if not isinstance(s["requires"], list) or not all(isinstance(x, str) and x for x in s["requires"]):
+            problems.append(f"{tag}: requires must be a list of tool names")
+        if not isinstance(s["description"], str) or not s["description"].strip():
+            problems.append(f"{tag}: description must be a non-empty string")
+        sha, size, pre, pb = s["sha256"], s["size"], s["sha256_prefix"], s["prefix_bytes"]
+        for k, v in (("sha256", sha), ("sha256_prefix", pre)):
+            if v is not None and not (isinstance(v, str) and SHA_RE.match(v)):
+                problems.append(f"{tag}: {k} must be 64 lowercase hex digits or null")
+        for k, v in (("size", size), ("prefix_bytes", pb)):
+            if v is not None and not (isinstance(v, int) and not isinstance(v, bool) and v > 0):
+                problems.append(f"{tag}: {k} must be a positive integer or null")
+        full, prefix = (sha is not None, size is not None), (pre is not None, pb is not None)
+        if len(set(full)) != 1 or len(set(prefix)) != 1:
+            problems.append(f"{tag}: sha256 and size (or sha256_prefix and prefix_bytes) must be pinned together")
+        elif all(full) and all(prefix):
+            problems.append(f"{tag}: pin the whole file (sha256 + size) or a prefix, not both")
         if isinstance(size, int) and not isinstance(size, bool) and size > MAX_FILE:
             problems.append(f"{tag}: size {size} exceeds the per-file limit {MAX_FILE}")
+
+
+def validate_manifest(m: object) -> list[dict]:
+    """Return the asset list or raise AssetError listing every problem found."""
+    problems: list[str] = []
+    if not isinstance(m, dict):
+        raise AssetError("manifest is not a JSON object")
+    if m.get("schema") != SCHEMA:
+        problems.append(f"schema must be {SCHEMA!r}, got {m.get('schema')!r}")
+    extra_top = set(m) - {"schema", "comment", "assets", "synthetic"}
+    if extra_top:
+        problems.append(f"unknown top-level keys {sorted(extra_top)}")
+    assets = m.get("assets")
+    if not isinstance(assets, list) or not assets:
+        raise AssetError("; ".join(problems + ["assets must be a non-empty list"]))
+    if "synthetic" in m:
+        _validate_synthetic(m["synthetic"], problems)
+    seen: set[str] = set()
+    for i, a in enumerate(assets):
+        tag = f"assets[{i}]"
+        if not isinstance(a, dict):
+            problems.append(f"{tag} is not an object")
+            continue
+        tag = f"assets[{i}] {a.get('name')!r}"
+        if "source_kind" not in a:
+            problems.append(f"{tag}: source_kind is required (one of {list(SOURCE_KINDS)})")
+            continue
+        _validate_asset(a, tag, problems)
+        if isinstance(a.get("name"), str):
+            low = a["name"].lower()
+            if low in seen:
+                problems.append(f"{tag}: duplicate name (case-insensitive)")
+            seen.add(low)
+    outs = {s["output"].lower() for s in m.get("synthetic", [])
+            if isinstance(s, dict) and isinstance(s.get("output"), str)}
+    for clash in sorted(outs & seen):
+        problems.append(f"synthetic output {clash!r} collides with an asset name")
     total = sum(a["size"] for a in assets
-                if isinstance(a, dict) and isinstance(a.get("size"), int) and not isinstance(a.get("size"), bool))
+                if isinstance(a, dict) and a.get("source_kind") != "private"
+                and isinstance(a.get("size"), int) and not isinstance(a.get("size"), bool))
     if total > MAX_TOTAL:
         problems.append(f"total size {total} exceeds the bundle limit {MAX_TOTAL}")
     if problems:
         raise AssetError("manifest invalid:\n  " + "\n  ".join(problems))
     return assets
+
+
+def synthetic_entries(m: dict) -> list[dict]:
+    return list(m.get("synthetic", []))
+
+
+def public_assets(assets: list[dict]) -> list[dict]:
+    """The entries that may enter the ISO and the published licence list."""
+    return [a for a in assets if a["source_kind"] != "private"]
 
 
 def load_manifest(path: Path) -> tuple[dict, list[dict]]:
@@ -282,14 +432,75 @@ def _rm(p: Path) -> None:
         pass
 
 
-def cmd_fetch(manifest: Path, dest: Path, allow_unpinned: bool = False, opener=None) -> int:
+def mirror_url(base: str, mirror_path: str) -> str:
+    if not _is_https(base):
+        raise AssetError(f"--mirror-base must be an https URL, got {base!r}")
+    return base.rstrip("/") + "/" + urllib.parse.quote(mirror_path)
+
+
+def _fetch_one(a: dict, target: Path, budget: list[int], opener, mirror_base: str | None,
+               unpinned_ok: bool) -> None:
+    """Download one public entry: origin first, then (public-mirror only) the mirror.
+
+    Every source is verified against the manifest pin, so a mirror cannot change the bytes."""
+    mirror = (mirror_url(mirror_base, a["mirror_path"])
+              if mirror_base and a["source_kind"] == "public-mirror" and a["sha256"] is not None else None)
+    print(f"fetch {a['name']} <- {a['url']}")
+    try:
+        sha, n = download(a["url"], target, a["sha256"], a["size"], budget, opener=opener,
+                          retries=2 if mirror else 6)
+    except AssetError as e:
+        if mirror is None:
+            hint = ("; no --mirror-base given" if a["source_kind"] == "public-mirror" else "")
+            raise AssetError(f"{e}{hint}") from e
+        print(f"      origin failed ({e}); trying the public mirror {mirror}")
+        try:
+            sha, n = download(mirror, target, a["sha256"], a["size"], budget, opener=opener)
+        except AssetError as e2:
+            raise AssetError(f"{a['name']}: origin and mirror both failed: origin: {e}; mirror: {e2}") from e2
+    print(f"      {n} bytes sha256 {sha}")
+
+
+def _check_private(assets: list[dict], private_dir: Path, dest: Path) -> list[str]:
+    """Verify the private entries already present in private_dir; return the missing names."""
+    pd, dd = Path(os.path.abspath(private_dir)), Path(os.path.abspath(dest))
+    if pd == dd or dd in pd.parents or pd in dd.parents:
+        raise AssetError("--private-dir must be a separate directory, not the bundle directory or a "
+                         "parent or child of it")
+    missing: list[str] = []
+    for a in assets:
+        if a["source_kind"] != "private":
+            continue
+        p = safe_join(private_dir, a["name"])
+        if p.is_symlink() or not p.is_file():
+            print(f"MISSING private {a['name']} (provision it into {private_dir}; it is never downloaded here)")
+            missing.append(a["name"])
+            continue
+        if a["sha256"] is None:
+            raise AssetError(f"{a['name']}: private entry is not pinned (run pin --dir {private_dir})")
+        sha, n = sha256_file(p)
+        if (sha, n) != (a["sha256"], a["size"]):
+            raise AssetError(f"{a['name']}: private file {sha}/{n} differs from the pin "
+                             f"{a['sha256']}/{a['size']}")
+        print(f"ok    {a['name']} (private, present and pin verified)")
+    return missing
+
+
+def cmd_fetch(manifest: Path, dest: Path, allow_unpinned: bool = False, opener=None,
+              mirror_base: str | None = None, include_private: bool = False,
+              private_dir: Path | None = None) -> int:
     _, assets = load_manifest(manifest)
-    unpinned = [a["name"] for a in assets if a["sha256"] is None]
+    if include_private and private_dir is None:
+        raise AssetError("--include-private needs --private-dir DIR")
+    if private_dir is not None and not include_private:
+        raise AssetError("--private-dir is only used together with --include-private")
+    public = public_assets(assets)
+    unpinned = [a["name"] for a in public if a["sha256"] is None]
     if unpinned and not allow_unpinned:
         raise AssetError(f"unpinned assets (run fetch --allow-unpinned then pin): {unpinned}")
     dest.mkdir(parents=True, exist_ok=True)
     budget = [MAX_TOTAL]
-    for a in assets:
+    for a in public:
         target = safe_join(dest, a["name"])
         if target.is_symlink():
             raise AssetError(f"{a['name']}: destination is a symlink")
@@ -303,27 +514,44 @@ def cmd_fetch(manifest: Path, dest: Path, allow_unpinned: bool = False, opener=N
             budget[0] -= target.stat().st_size
             print(f"keep  {a['name']} (unpinned, already present; delete it to fetch again)")
             continue
-        print(f"fetch {a['name']} <- {a['url']}")
-        sha, n = download(a["url"], target, a["sha256"], a["size"], budget, opener=opener)
-        print(f"      {n} bytes sha256 {sha}")
+        _fetch_one(a, target, budget, opener, mirror_base, allow_unpinned)
+    n_private = len(assets) - len(public)
+    if include_private:
+        missing = _check_private(assets, private_dir, dest)
+        if missing:
+            raise AssetError(f"{len(missing)} private file(s) missing from {private_dir}: {missing}")
+    elif n_private:
+        print(f"skip  {n_private} private entr{'y' if n_private == 1 else 'ies'} "
+              "(--include-private --private-dir DIR checks files already provisioned there)")
     return 0
 
 
 # --------------------------------------------------------------------------- verify
 
-def verify_dir(manifest: Path, root: Path) -> list[str]:
-    """Return a list of problems (empty means the directory matches the manifest exactly)."""
-    _, assets = load_manifest(manifest)
+def verify_dir(manifest: Path, root: Path, require_private: bool = False,
+               with_synthetic: bool = False) -> list[str]:
+    """Return a list of problems (empty means the directory matches the manifest exactly).
+
+    Public entries must be present. A private entry or a synthetic output is checked against
+    its pin when the file is there, and is only required with require_private / with_synthetic
+    (a synthetic file whose tool is missing on this host is never required)."""
+    m, assets = load_manifest(manifest)
     problems: list[str] = []
     if not root.is_dir():
         return [f"{root} is not a directory"]
     names = {a["name"] for a in assets}
     for a in assets:
+        private = a["source_kind"] == "private"
+        p = safe_join(root, a["name"])
+        present = not p.is_symlink() and p.is_file()
+        if private and not p.is_symlink() and not p.exists():
+            if require_private:
+                problems.append(f"{a['name']}: private file missing")
+            continue
         if a["sha256"] is None:
             problems.append(f"{a['name']}: not pinned in the manifest")
             continue
-        p = safe_join(root, a["name"])
-        if p.is_symlink() or not p.is_file():
+        if not present:
             problems.append(f"{a['name']}: missing (or not a regular file)")
             continue
         sha, n = sha256_file(p)
@@ -331,6 +559,18 @@ def verify_dir(manifest: Path, root: Path) -> list[str]:
             problems.append(f"{a['name']}: size {n} != manifest {a['size']}")
         elif sha != a["sha256"]:
             problems.append(f"{a['name']}: sha256 {sha} != manifest {a['sha256']}")
+    for sy in synthetic_entries(m):
+        names.add(sy["output"])
+        p = safe_join(root, sy["output"])
+        if p.is_symlink() or not p.is_file():
+            if p.is_symlink() or p.exists():
+                problems.append(f"{sy['output']}: not a regular file")
+            elif with_synthetic and not synth_missing_tools(sy):
+                problems.append(f"{sy['output']}: synthetic file missing (run synth --dest {root})")
+            continue
+        bad = synth_pin_problem(sy, p)
+        if bad:
+            problems.append(f"{sy['output']}: {bad}")
     for rel in scan_files(root):
         if rel in names or rel in GENERATED:
             continue
@@ -338,8 +578,9 @@ def verify_dir(manifest: Path, root: Path) -> list[str]:
     return problems
 
 
-def cmd_verify(manifest: Path, root: Path) -> int:
-    problems = verify_dir(manifest, root)
+def cmd_verify(manifest: Path, root: Path, require_private: bool = False,
+               with_synthetic: bool = False) -> int:
+    problems = verify_dir(manifest, root, require_private, with_synthetic)
     for p in problems:
         print(f"FAIL {p}", file=sys.stderr)
     if problems:
@@ -351,42 +592,70 @@ def cmd_verify(manifest: Path, root: Path) -> int:
 
 # --------------------------------------------------------------------------- licences
 
-def licenses_text(assets: list[dict]) -> str:
+SHARE_ALIKE_NOTICE = (
+    "Files marked SHARE-ALIKE are under a licence that requires the same licence for adaptations.\n"
+    "They must stay under it when redistributed or adapted, and derived outputs or evidence that\n"
+    "contain renders of a share-alike asset (screenshots, frames, recordings, converted files) must\n"
+    "not be published."
+)
+
+
+def licenses_text(assets: list[dict], synthetic: list[dict] | None = None) -> str:
+    """The published licence list. Private entries never appear in it."""
     lines = [
         "LICENSES for the test asset bundle",
         "==================================",
         "",
         "Every file below keeps its own licence. This bundle only collects them.",
-        "Attribution texts are reproduced as the sources require. Files marked",
-        "SHARE-ALIKE must stay under their licence when redistributed or adapted.",
+        "Attribution texts are reproduced as the sources require.",
+        SHARE_ALIKE_NOTICE,
         "",
     ]
-    for a in sorted(assets, key=lambda x: x["name"]):
+    for a in sorted(public_assets(assets), key=lambda x: x["name"]):
+        sa = a["share_alike"]
         lines += [
-            f"File:         {a['name']}",
+            f"File:         {a['name']}" + ("   [SHARE-ALIKE]" if sa else ""),
             f"Licence:      {a['license']}",
             f"Licence URL:  {a['license_url']}",
             f"Attribution:  {a['attribution']}",
             f"Source page:  {a['source_page']}",
-            "Share-alike:  " + ("YES - derivatives and redistribution must use the same licence"
-                                if a["share_alike"] else "no"),
+            "Share-alike:  " + ("YES (SHARE-ALIKE) - derivatives and redistribution must use the same "
+                                "licence; derived outputs or evidence containing renders of this file "
+                                "must not be published" if sa else "no"),
             f"Used for:     {a['purpose']}",
+            "",
+        ]
+    for sy in sorted(synthetic or [], key=lambda x: x["output"]):
+        lines += [
+            f"File:         {sy['output']}",
+            "Licence:      generated by build_test_assets.py (no third-party content)",
+            f"Used for:     {sy['description']}",
             "",
         ]
     return "\n".join(lines)
 
 
-def write_bundle_meta(manifest: Path, root: Path) -> None:
+def public_manifest(m: dict, with_synthetic: bool = False) -> dict:
+    """The manifest copy that may be published: no private entry, synthetic only on request."""
+    out = {k: v for k, v in m.items() if k not in ("assets", "synthetic")}
+    out["assets"] = public_assets(m["assets"])
+    if with_synthetic and m.get("synthetic"):
+        out["synthetic"] = m["synthetic"]
+    return out
+
+
+def write_bundle_meta(manifest: Path, root: Path, with_synthetic: bool = False) -> None:
     m, assets = load_manifest(manifest)
-    (root / "LICENSES.txt").write_text(licenses_text(assets), encoding="utf-8")
-    (root / "MANIFEST.json").write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n",
+    pub = public_manifest(m, with_synthetic)
+    (root / "LICENSES.txt").write_text(licenses_text(assets, pub.get("synthetic")), encoding="utf-8")
+    (root / "MANIFEST.json").write_text(json.dumps(pub, indent=2, ensure_ascii=False) + "\n",
                                         encoding="utf-8")
 
 
-def cmd_licenses(manifest: Path, root: Path) -> int:
+def cmd_licenses(manifest: Path, root: Path, with_synthetic: bool = False) -> int:
     if not root.is_dir():
         raise AssetError(f"{root} is not a directory")
-    write_bundle_meta(manifest, root)
+    write_bundle_meta(manifest, root, with_synthetic)
     print(f"wrote {root / 'LICENSES.txt'} and {root / 'MANIFEST.json'}")
     return 0
 
@@ -423,6 +692,341 @@ def cmd_pin(manifest: Path, root: Path) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- synthetic files
+# Deterministic generated files for scale tests. The built-in generators are pure Python and
+# use only integer arithmetic for anything that reaches the output (no libm, no zlib
+# compression: PNG data is written as stored deflate blocks, whose bytes do not depend on the
+# zlib build), so the bytes are the same on every machine and Python version.
+
+OUTPUT_TOKEN = "{output}"
+IDAT_SIZE = 1 << 20
+
+
+def _png_chunk(tag: bytes, data: bytes) -> bytes:
+    return (struct.pack(">I", len(data)) + tag + data
+            + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+
+
+class _StoredZlib:
+    """A zlib stream of stored deflate blocks of fixed size; the output depends only on the input."""
+    BLOCK = 65535
+
+    def __init__(self, sink):
+        self.sink = sink
+        self.buf = bytearray()
+        self.adler = 1
+        self.started = False
+
+    def _head(self) -> bytes:
+        if self.started:
+            return b""
+        self.started = True
+        return b"\x78\x01"
+
+    def write(self, data: bytes) -> None:
+        self.adler = zlib.adler32(data, self.adler)
+        self.buf += data
+        out = bytearray(self._head())
+        pos = 0
+        while len(self.buf) - pos >= self.BLOCK:
+            out += b"\x00" + struct.pack("<HH", self.BLOCK, self.BLOCK ^ 0xFFFF)
+            out += self.buf[pos:pos + self.BLOCK]
+            pos += self.BLOCK
+        del self.buf[:pos]
+        if out:
+            self.sink(bytes(out))
+
+    def finish(self) -> None:
+        n = len(self.buf)
+        out = bytearray(self._head())
+        out += b"\x01" + struct.pack("<HH", n, n ^ 0xFFFF) + self.buf
+        out += struct.pack(">I", self.adler)
+        self.buf = bytearray()
+        self.sink(bytes(out))
+
+
+def gen_png_gradient(path: Path, width: int = 7680, height: int = 4320) -> None:
+    """8-bit RGB PNG: red = horizontal ramp, green = vertical ramp, blue = hash tiles."""
+    with open(path, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n")
+        f.write(_png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)))
+        pending = bytearray()
+
+        def sink(b: bytes) -> None:
+            pending.extend(b)
+            while len(pending) >= IDAT_SIZE:
+                f.write(_png_chunk(b"IDAT", bytes(pending[:IDAT_SIZE])))
+                del pending[:IDAT_SIZE]
+        z = _StoredZlib(sink)
+        red = bytes((x * 255) // max(1, width - 1) for x in range(width))
+        tile = b""
+        for y in range(height):
+            if y % 16 == 0:
+                tile = hashlib.sha256(b"kf-png-gradient:%d" % (y // 16)).digest()
+                tile = tile * (width // 32 + 3)
+            off = (y % 16) * 2
+            row = bytearray(1 + 3 * width)  # filter type 0
+            row[1::3] = red
+            row[2::3] = bytes([(y * 255) // max(1, height - 1)]) * width
+            row[3::3] = tile[off:off + width]
+            z.write(bytes(row))
+        z.finish()
+        if pending:
+            f.write(_png_chunk(b"IDAT", bytes(pending)))
+        f.write(_png_chunk(b"IEND", b""))
+
+
+def gen_tiff_16bit(path: Path, width: int = 4096, height: int = 4096) -> None:
+    """Uncompressed little-endian baseline TIFF, 16-bit RGB, one strip."""
+    assert array.array("H").itemsize == 2
+    strip = width * height * 6
+    tags = [  # (tag, type, count, value) ; type 3 SHORT, 4 LONG
+        (256, 4, 1, width), (257, 4, 1, height), (258, 3, 3, None), (259, 3, 1, 1),
+        (262, 3, 1, 2), (273, 4, 1, None), (277, 3, 1, 3), (278, 4, 1, height),
+        (279, 4, 1, strip), (284, 3, 1, 1),
+    ]
+    ifd_off = 8
+    bps_off = ifd_off + 2 + 12 * len(tags) + 4
+    data_off = bps_off + 6
+    ifd = struct.pack("<H", len(tags))
+    for tag, typ, cnt, val in tags:
+        if tag == 258:
+            ifd += struct.pack("<HHII", tag, typ, cnt, bps_off)
+        elif tag == 273:
+            ifd += struct.pack("<HHII", tag, typ, cnt, data_off)
+        else:
+            ifd += struct.pack("<HHII", tag, typ, cnt, val)
+    ifd += struct.pack("<I", 0)
+    with open(path, "wb") as f:
+        f.write(b"II" + struct.pack("<HI", 42, ifd_off) + ifd + struct.pack("<HHH", 16, 16, 16))
+        rx = array.array("H", [(x * 65535) // max(1, width - 1) for x in range(width)])
+        tile = array.array("H")
+        for y in range(height):
+            if y % 16 == 0:
+                d = hashlib.sha256(b"kf-tiff-16bit:%d" % (y // 16)).digest()
+                tile = array.array("H", struct.unpack("<16H", d)) * (width // 16 + 3)
+            row = array.array("H", bytes(6 * width))
+            row[0::3] = rx
+            row[1::3] = array.array("H", [(y * 65535) // max(1, height - 1)]) * width
+            row[2::3] = tile[y % 16:y % 16 + width]
+            if sys.byteorder == "big":
+                row.byteswap()
+            f.write(row.tobytes())
+
+
+def _sine_table() -> list[int]:
+    """1025 entries of sin(2*pi*k/1024) * 2^24, from integer Taylor series (no libm)."""
+    sc = 1 << 64
+    pi = 314159265358979323846264338327950288 * sc // 10 ** 35
+
+    def div0(a: int, b: int) -> int:  # division truncating toward zero
+        return a // b if a >= 0 else -((-a) // b)
+
+    def sin_fx(x: int) -> int:
+        x2 = div0(x * x, sc)
+        term = total = x
+        n = 1
+        while term:
+            term = -div0(div0(term * x2, sc), (2 * n) * (2 * n + 1))
+            total += term
+            n += 1
+        return total
+    quarter = [(sin_fx(pi * k // 512) + (1 << 39)) >> 40 for k in range(257)]
+    t = []
+    for k in range(1025):
+        if k <= 256:
+            t.append(quarter[k])
+        elif k <= 512:
+            t.append(quarter[512 - k])
+        elif k <= 768:
+            t.append(-quarter[k - 512])
+        else:
+            t.append(-quarter[1024 - k])
+    return t
+
+
+def gen_wav_sine_sweep(path: Path, seconds: int = 30, rate: int = 48000,
+                       f0: int = 20, f1: int = 20000) -> None:
+    """16-bit stereo PCM WAV: left sweeps f0 -> f1, right sweeps f1 -> f0 (linear, half scale)."""
+    t = _sine_table()
+    n = seconds * rate
+    amp = 16384
+    span = (f1 - f0) << 16
+    pl = pr = 0
+    with open(path, "wb") as f:
+        f.write(b"RIFF" + struct.pack("<I", 36 + 4 * n) + b"WAVEfmt "
+                + struct.pack("<IHHIIHH", 16, 1, 2, rate, rate * 4, 4, 16)
+                + b"data" + struct.pack("<I", 4 * n))
+        step = rate
+        for start in range(0, n, step):
+            out = array.array("h", bytes(4 * min(step, n - start)))
+            j = 0
+            for i in range(start, min(start + step, n)):
+                pl = (pl + ((((f0 << 16) + span * i // n) << 16) // rate)) & 0xFFFFFFFF
+                pr = (pr + ((((f1 << 16) - span * i // n) << 16) // rate)) & 0xFFFFFFFF
+                a = pl >> 22
+                b = pr >> 22
+                out[j] = ((t[a] + (((t[a + 1] - t[a]) * ((pl >> 6) & 0xFFFF)) >> 16)) * amp) >> 24
+                out[j + 1] = ((t[b] + (((t[b + 1] - t[b]) * ((pr >> 6) & 0xFFFF)) >> 16)) * amp) >> 24
+                j += 2
+            if sys.byteorder == "big":
+                out.byteswap()
+            f.write(out.tobytes())
+
+
+BUILTIN_GENERATORS = {
+    "png_gradient_8k": lambda p: gen_png_gradient(p),
+    "tiff_16bit_big": lambda p: gen_tiff_16bit(p),
+    "wav_sine_sweep": lambda p: gen_wav_sine_sweep(p),
+}
+
+
+def synth_missing_tools(sy: dict) -> list[str]:
+    return [t for t in sy["requires"] if shutil.which(t) is None]
+
+
+def synth_mode(sy: dict) -> str:
+    if sy["sha256"] is not None:
+        return "full"
+    if sy["sha256_prefix"] is not None:
+        return "prefix"
+    return "unpinned"
+
+
+def prefix_hash(path: Path, nbytes: int) -> str | None:
+    """sha256 of the first nbytes of the file, or None when the file is shorter."""
+    h = hashlib.sha256()
+    left = nbytes
+    with open(path, "rb") as f:
+        while left:
+            b = f.read(min(left, 1 << 20))
+            if not b:
+                return None
+            h.update(b)
+            left -= len(b)
+    return h.hexdigest()
+
+
+def synth_pin_problem(sy: dict, path: Path) -> str | None:
+    mode = synth_mode(sy)
+    if mode == "unpinned":
+        return "not pinned in the manifest"
+    if mode == "full":
+        sha, n = sha256_file(path)
+        if n != sy["size"]:
+            return f"size {n} != manifest {sy['size']}"
+        if sha != sy["sha256"]:
+            return f"sha256 {sha} != manifest {sy['sha256']}"
+        return None
+    got = prefix_hash(path, sy["prefix_bytes"])
+    if got is None:
+        return f"file is shorter than the pinned prefix of {sy['prefix_bytes']} bytes"
+    if got != sy["sha256_prefix"]:
+        return f"sha256 of the first {sy['prefix_bytes']} bytes {got} != manifest {sy['sha256_prefix']}"
+    return None
+
+
+def generate_synth(sy: dict, target: Path) -> None:
+    """Generate one synthetic file at target through a private temporary directory."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmpdir = Path(tempfile.mkdtemp(prefix=".synth-", dir=target.parent))
+    try:
+        tmp = tmpdir / target.name
+        g = sy["generator"]
+        if isinstance(g, str):
+            BUILTIN_GENERATORS[g](tmp)
+        else:
+            argv = [str(tmp) if x == OUTPUT_TOKEN else x for x in g]
+            r = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, text=True)
+            if r.returncode != 0 or not tmp.is_file():
+                raise AssetError(f"{sy['name']}: {g[0]} failed (exit {r.returncode}): "
+                                 f"{(r.stderr or '').strip()[-400:]}")
+        os.replace(tmp, target)
+    except OSError as e:
+        raise AssetError(f"{sy['name']}: cannot generate: {e}") from e
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def cmd_synth(manifest: Path, dest: Path, only: list[str] | None = None,
+              allow_unpinned: bool = False) -> int:
+    m, _ = load_manifest(manifest)
+    entries = synthetic_entries(m)
+    if only:
+        unknown = sorted(set(only) - {sy["name"] for sy in entries})
+        if unknown:
+            raise AssetError(f"unknown synthetic name(s) {unknown}")
+        entries = [sy for sy in entries if sy["name"] in only]
+    if not entries:
+        print("synth: the manifest has no synthetic entries")
+        return 0
+    dest.mkdir(parents=True, exist_ok=True)
+    failed = 0
+    for sy in entries:
+        target = safe_join(dest, sy["output"])
+        missing = synth_missing_tools(sy)
+        if missing:
+            print(f"skip  {sy['name']}: needs {', '.join(missing)} on PATH, which is not installed; "
+                  "not generated (this is not a failure)")
+            continue
+        if target.is_symlink():
+            raise AssetError(f"{sy['output']}: destination is a symlink")
+        if target.is_file() and synth_pin_problem(sy, target) is None:
+            print(f"ok    {sy['output']} (already present, pin verified)")
+            continue
+        print(f"synth {sy['output']}")
+        generate_synth(sy, target)
+        problem = synth_pin_problem(sy, target)
+        if problem is None:
+            print(f"      ok ({target.stat().st_size} bytes, {synth_mode(sy)} pin verified)")
+        elif synth_mode(sy) == "unpinned" and allow_unpinned:
+            print(f"      unpinned; generated {target.stat().st_size} bytes (run pin-synth --dir {dest})")
+        else:
+            print(f"FAIL  {sy['output']}: {problem}", file=sys.stderr)
+            _rm(target)
+            failed += 1
+    return 1 if failed else 0
+
+
+def cmd_pin_synth(manifest: Path, root: Path) -> int:
+    m, _ = load_manifest(manifest)
+    errors: list[str] = []
+    updates = []
+    for sy in synthetic_entries(m):
+        p = safe_join(root, sy["output"])
+        if p.is_symlink() or not p.is_file():
+            if synth_mode(sy) == "unpinned":
+                if synth_missing_tools(sy):
+                    print(f"pin-synth: {sy['name']}: still unpinned (needs {sy['requires']} to generate it)")
+                else:
+                    errors.append(f"{sy['name']}: unpinned and not present in {root} (run synth first)")
+            continue
+        if synth_mode(sy) == "unpinned":
+            if isinstance(sy["generator"], str):
+                sha, n = sha256_file(p)
+                updates.append((sy, {"sha256": sha, "size": n}))
+            else:
+                nb = min(PREFIX_BYTES_DEFAULT, p.stat().st_size)
+                updates.append((sy, {"sha256_prefix": prefix_hash(p, nb), "prefix_bytes": nb}))
+        else:
+            problem = synth_pin_problem(sy, p)
+            if problem:
+                errors.append(f"{sy['name']}: {problem}; refusing to overwrite a pin")
+    if errors:
+        for e in errors:
+            print(f"pin-synth: {e}", file=sys.stderr)
+        return 1
+    for sy, fields in updates:
+        sy.update(fields)
+        print(f"pinned {sy['name']} {fields}")
+    validate_manifest(m)
+    if updates:
+        write_manifest(manifest, m)
+    print(f"pin-synth: {len(updates)} newly pinned")
+    return 0
+
+
 # --------------------------------------------------------------------------- ISO (tool)
 
 def find_iso_tool() -> list[str] | None:
@@ -433,14 +1037,20 @@ def find_iso_tool() -> list[str] | None:
     return None
 
 
-def bundle_entries(manifest: Path, root: Path) -> list[tuple[str, Path]]:
-    """(iso path, real path) for the assets plus the generated files, after a full verify."""
-    problems = verify_dir(manifest, root)
+def bundle_entries(manifest: Path, root: Path, with_synthetic: bool = False) -> list[tuple[str, Path]]:
+    """(iso path, real path) for the public assets plus the generated files, after a full verify.
+
+    Private entries never enter the image, even when their file sits in the directory;
+    synthetic files only with with_synthetic."""
+    problems = verify_dir(manifest, root, with_synthetic=with_synthetic)
     if problems:
         raise AssetError("refusing to build an ISO from an unverified directory:\n  " + "\n  ".join(problems))
-    write_bundle_meta(manifest, root)
-    _, assets = load_manifest(manifest)
-    out = [(a["name"], safe_join(root, a["name"])) for a in assets]
+    write_bundle_meta(manifest, root, with_synthetic)
+    m, assets = load_manifest(manifest)
+    out = [(a["name"], safe_join(root, a["name"])) for a in public_assets(assets)]
+    if with_synthetic:
+        out += [(sy["output"], safe_join(root, sy["output"])) for sy in synthetic_entries(m)
+                if safe_join(root, sy["output"]).is_file()]
     out += [(g, root / g) for g in GENERATED]
     return sorted(out)
 
@@ -703,9 +1313,10 @@ def validate_name_iso(name: str) -> None:
     validate_name(name)
 
 
-def cmd_iso(manifest: Path, root: Path, out: Path, engine: str = "auto") -> int:
+def cmd_iso(manifest: Path, root: Path, out: Path, engine: str = "auto",
+            with_synthetic: bool = False) -> int:
     _check_out(root, out)
-    entries = bundle_entries(manifest, root)
+    entries = bundle_entries(manifest, root, with_synthetic)
     out.parent.mkdir(parents=True, exist_ok=True)
     tool = find_iso_tool() if engine in ("auto", "tool") else None
     if tool is None:
@@ -730,23 +1341,47 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST,
                    help="manifest JSON (default: test_assets.json beside this script)")
     sub = p.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("fetch", help="download every asset and check it against the manifest")
+    syn = dict(action="store_true", help="also handle the synthetic generated files "
+                                         "(default: not in the bundle; they are generated where used)")
+    s = sub.add_parser("fetch", help="download every public asset and check it against the manifest")
     s.add_argument("--dest", type=Path, required=True)
     s.add_argument("--allow-unpinned", action="store_true",
                    help="maintainer: download entries whose sha256/size are still null (then run pin)")
+    s.add_argument("--mirror-base", metavar="URL",
+                   help="https base URL of the public mirror (for example https://bundles.kayfabe.dev): "
+                        "a public-mirror entry whose origin fails is fetched from BASE/<mirror_path>; "
+                        "the pin is checked either way")
+    s.add_argument("--include-private", action="store_true",
+                   help="also check the private entries, which must already be in --private-dir "
+                        "(they are never downloaded and never copied into --dest)")
+    s.add_argument("--private-dir", type=Path, help="directory that holds the private files")
     s = sub.add_parser("verify", help="check hashes, sizes and that no other file is present")
     s.add_argument("--dir", type=Path, required=True)
-    s = sub.add_parser("licenses", help="write LICENSES.txt (and MANIFEST.json) into the directory")
+    s.add_argument("--require-private", action="store_true",
+                   help="fail when a private file is absent (present ones are always checked)")
+    s.add_argument("--with-synthetic", **syn)
+    s = sub.add_parser("licenses", help="write LICENSES.txt (and MANIFEST.json) of the public entries")
     s.add_argument("--dir", type=Path, required=True)
-    s = sub.add_parser("iso", help="build the read-only ISO (label KFDATA)")
+    s.add_argument("--with-synthetic", **syn)
+    s = sub.add_parser("iso", help="build the read-only ISO (label KFDATA) of the public entries")
     s.add_argument("--dir", type=Path, required=True)
     s.add_argument("--out", type=Path, required=True)
     s.add_argument("--engine", choices=("auto", "tool", "python"), default="auto")
-    s = sub.add_parser("all", help="fetch, verify, licenses, iso")
+    s.add_argument("--with-synthetic", **syn)
+    s = sub.add_parser("all", help="fetch, (synth), verify, licenses, iso; public entries only")
     s.add_argument("--dest", type=Path, required=True)
     s.add_argument("--iso", type=Path, required=True)
     s.add_argument("--engine", choices=("auto", "tool", "python"), default="auto")
+    s.add_argument("--mirror-base", metavar="URL", help="see fetch --mirror-base")
+    s.add_argument("--with-synthetic", **syn)
     s = sub.add_parser("pin", help="maintainer: fill null sha256/size from downloaded files")
+    s.add_argument("--dir", type=Path, required=True)
+    s = sub.add_parser("synth", help="generate the synthetic files and verify their pins")
+    s.add_argument("--dest", type=Path, required=True)
+    s.add_argument("--only", action="append", metavar="NAME", help="generate only this entry (repeatable)")
+    s.add_argument("--allow-unpinned", action="store_true",
+                   help="maintainer: generate entries whose pin is still null (then run pin-synth)")
+    s = sub.add_parser("pin-synth", help="maintainer: fill null synthetic pins from generated files")
     s.add_argument("--dir", type=Path, required=True)
     return p
 
@@ -755,20 +1390,28 @@ def main(argv: list[str] | None = None) -> int:
     a = build_parser().parse_args(argv)
     try:
         if a.cmd == "fetch":
-            return cmd_fetch(a.manifest, a.dest, a.allow_unpinned)
+            return cmd_fetch(a.manifest, a.dest, a.allow_unpinned, mirror_base=a.mirror_base,
+                             include_private=a.include_private, private_dir=a.private_dir)
         if a.cmd == "verify":
-            return cmd_verify(a.manifest, a.dir)
+            return cmd_verify(a.manifest, a.dir, a.require_private, a.with_synthetic)
         if a.cmd == "licenses":
-            return cmd_licenses(a.manifest, a.dir)
+            return cmd_licenses(a.manifest, a.dir, a.with_synthetic)
         if a.cmd == "iso":
-            return cmd_iso(a.manifest, a.dir, a.out, a.engine)
+            return cmd_iso(a.manifest, a.dir, a.out, a.engine, a.with_synthetic)
         if a.cmd == "pin":
             return cmd_pin(a.manifest, a.dir)
+        if a.cmd == "synth":
+            return cmd_synth(a.manifest, a.dest, a.only, a.allow_unpinned)
+        if a.cmd == "pin-synth":
+            return cmd_pin_synth(a.manifest, a.dir)
         if a.cmd == "all":
-            for step in (lambda: cmd_fetch(a.manifest, a.dest),
-                         lambda: cmd_verify(a.manifest, a.dest),
-                         lambda: cmd_licenses(a.manifest, a.dest),
-                         lambda: cmd_iso(a.manifest, a.dest, a.iso, a.engine)):
+            steps = [lambda: cmd_fetch(a.manifest, a.dest, mirror_base=a.mirror_base)]
+            if a.with_synthetic:
+                steps.append(lambda: cmd_synth(a.manifest, a.dest))
+            steps += [lambda: cmd_verify(a.manifest, a.dest, with_synthetic=a.with_synthetic),
+                      lambda: cmd_licenses(a.manifest, a.dest, a.with_synthetic),
+                      lambda: cmd_iso(a.manifest, a.dest, a.iso, a.engine, a.with_synthetic)]
+            for step in steps:
                 rc = step()
                 if rc:
                     return rc

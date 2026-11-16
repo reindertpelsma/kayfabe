@@ -1670,6 +1670,28 @@ def overlay_clock(overlay, frozen, guest_utc=None, resume=False):
     return base
 
 
+def apply_vfio_platform(gpu):
+    """The control platform of a differential run: the kf3-gpu device is replaced by the real GPU through vfio-pci; the kf3-only GPU seed
+    repair and UUID check are skipped (the real GPU has its own identity) and a MISMATCH in the identity comparison is relabelled
+    VFIO_DIFF (not blocking). Everything else (image, overlay, offline slirp, faked RTC, CPU profile, TPM, scripts) is unchanged.
+    Same patch as the 2026-11-14 Wukong VFIO reference runs (scripts of the pcnight work)."""
+    if not re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.0", gpu):
+        raise ValueError("bad --vfio-gpu")
+    orig = PI.build_argv
+
+    def patched(*args, **kw):
+        argv = orig(*args, **kw)
+        i = next(n for n, v in enumerate(argv) if v == "-device" and argv[n + 1].startswith("kf3-gpu"))
+        del argv[i:i + 2]
+        argv[i:i] = ["-device", f"vfio-pci,host={gpu},multifunction=on,addr=0x4.0", "-device", f"vfio-pci,host={gpu[:-1]}1,addr=0x4.1"]
+        return argv
+
+    PI.build_argv = patched
+    globals()["gpu_fix"] = lambda g, uuid: (True, "VFIO control: kf3 seed repair and UUID check not applicable (real GPU)")
+    oc = PI.compare
+    PI.compare = lambda st, facts: [tuple("VFIO_DIFF" if (j == 1 and v == "MISMATCH") else v for j, v in enumerate(r)) for r in oc(st, facts)]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--zip", help="Private image archive already present locally; no downloads")
@@ -1685,6 +1707,9 @@ def main(argv=None):
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
     ap.add_argument("--apps", default=",".join(CHECKS))
     ap.add_argument("--app-set", choices=("a", "b"), default="a", help="a: the first image's applications (default); b: the second image's creative applications")
+    ap.add_argument("--platform", choices=("kf3", "vfio"), default="kf3",
+                    help="kf3 (default): the kayfabe device. vfio: the same image, script and verification with the real GPU passed through (the control of a differential test; only where the host GPU is bound to vfio-pci; kf3-only repair and UUID checks are skipped)")
+    ap.add_argument("--vfio-gpu", default="0000:01:00.0", help="PCI address of the GPU function for --platform vfio (its audio function is .1)")
     ap.add_argument("--data-iso", help="read-only data volume (label KFDATA) attached on the AHCI cd port; required by --app-set b")
     ap.add_argument(
         "--fb-mb",
@@ -1751,6 +1776,8 @@ def main(argv=None):
             if name not in checks or name == "wukong":
                 raise ValueError("Unsupported plan app")
             validate_plan(plan)
+        if a.platform == "vfio":
+            apply_vfio_platform(a.vfio_gpu)
         swtpm = os.environ.get("SWTPM", "swtpm")
         try:
             version = run([swtpm, "--version"], timeout=30)
@@ -1762,6 +1789,7 @@ def main(argv=None):
             raise ValueError("Prerequisite: cannot query swtpm version; swtpm >= 0.10 required")
         require_swtpm(version.stdout + version.stderr)
         record("prerequisite", "PASS", "swtpm >= 0.10 (libtpms state compatibility still required)")
+        record("platform", "PASS", a.platform)
         state = load_image(a.zip, a.dir)
         record("unpack", "PASS", "SHA256 of image and state; derived seed verified")
         if a.stop_utc:

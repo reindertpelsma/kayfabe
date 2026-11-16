@@ -136,6 +136,35 @@ def build_manifest(pins, build_swtpm):
     return m
 
 
+class QMark(pa.Mark):
+    """pa.Mark plus the line count of the boot's QEMU log at each row boundary (the kf3 device prints what it did not serve there)."""
+
+    def __init__(self, klog, boot_label, apps, qlog, census_mod):
+        super().__init__(klog, boot_label, apps)
+        self.qlog, self.census_mod, self.edges = qlog, census_mod, {}
+
+    def line(self, text):
+        m = self.LINE.match(text)
+        if m:
+            self.edges[m.group(1)] = self.census_mod.count_lines(self.qlog)
+        super().line(text)
+
+    def census(self):
+        """{app: census} from the QEMU log lines between the previous boundary (verify, then each row's end) and the row's own end."""
+        out, prev = {}, self.edges.get("verify")
+        for app in self.apps:
+            end = self.edges.get("app:" + app)
+            if prev is None or end is None:
+                continue
+            out[app] = self.census_mod.census(self.census_mod.window(self.qlog, prev + 1, end))
+            prev = end
+        return out
+
+
+def census_module(root):
+    return pa.load_module(Path(root) / "scripts/bench/windows/kf3_census.py", "kf_census_for_stage")
+
+
 def run(ctx, evidence_dir=None, apps=None):
     rec = new_record(ctx)
     klog, started, out_of_time = None, False, False
@@ -199,7 +228,7 @@ def run(ctx, evidence_dir=None, apps=None):
                  "gop": str(dl / "image/kf-gop.signed.efi"), "data": str(dl / data_item["dest"]), "apps": boot["apps"]}
             klog.mark(label, "start")
             t0 = time.monotonic()
-            mark = pa.Mark(klog, label, boot["apps"])
+            mark = QMark(klog, label, boot["apps"], wk / "run/qemu.log", census_module(ctx.checkout))
             (ctx.prefix / "out").mkdir(exist_ok=True)
             boot["rc"] = (ctx.boot_runner or pa.run_boot)(ctx, boot_command(ctx.check_py, a), logs / (label + ".log"), need + pa.BOOT_SLACK_S, mark)
             boot["secs"] = int(time.monotonic() - t0)
@@ -213,8 +242,11 @@ def run(ctx, evidence_dir=None, apps=None):
             boot["harness"] = [{"step": pa.clean(r.get("step"), 24), "verdict": pa.clean(r.get("verdict"), 12), "detail": pa.clean(r.get("detail"), 120)}
                                for r in rows_json if type(r) is dict and r.get("class") == "harness" and r.get("verdict") not in ("PASS", "OK")][:6]
             per, unattributed = pa.xid_by_window(klog, boot["apps"], label)
+            censuses = mark.census() if hasattr(mark, "census") else {}
             for app in boot["apps"]:
                 item = collect_app(out, app, rows_json, per[app], mod.CHECKS[app]["gpu"])
+                item["census"] = censuses.get(app, {})
+                item["path"] = pa.clean(mod.CHECKS[app].get("path", ""), 80)
                 if not boot["offline"] and item["verdict"] in ("PASS", "PASS_LIMITED"):
                     item["verdict"], item["detail"] = "FAIL", "OFFLINE_NOT_PROVEN: " + item["detail"][:150]
                 rec["apps"].append(item)
