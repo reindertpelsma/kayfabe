@@ -45,6 +45,12 @@ def run_all(specs, env, environ=None, root=None, reference_dir=None, record_dir=
     if root is not None:
         cenv.update(envmod.cache_env(root))
         envmod.ensure_dirs(envmod.cache_env(root))
+        # ninja (torch.utils.cpp_extension.load_inline) and nvcc-adjacent tools are console scripts of the venv: put its bin/ on PATH
+        # (the runner is started with an explicit interpreter path, so the venv is usually not activated). First run, 2026-11-16: without
+        # this cuda_ext_inline failed "Ninja is required to load C++ extensions" although the venv has ninja.
+        vbin = root / "bin"
+        if vbin.is_dir():
+            cenv["PATH"] = str(vbin) + os.pathsep + cenv.get("PATH", "")
         cuda_home = root / "cuda_home"
         if (cuda_home / "bin" / "nvcc").exists():
             cenv["CUDA_HOME"] = str(cuda_home)
@@ -107,10 +113,9 @@ def _run_one(spec, env, cenv, data_dir, log_dir, budget, reference_dir, record_d
     if ref_doc is not None:
         metrics = dict(metrics, reference_from=reference.describe(ref_doc, ref_how),
                        wall_ratio=reference.wall_ratio(ref_doc, ref_how, wall))
-    if status == "PASS" and record_dir and res.get("reference") is not None:
-        reference.write(record_dir, spec.name, env, res["reference"], wall_s=round(wall, 3),
-                        metrics={k: v for k, v in res.get("metrics", {}).items()
-                                 if isinstance(v, (int, float, str, bool)) or v is None},
+    if status == "PASS" and record_dir:  # every PASS row is recorded: `data` (what a workload compares) may be empty, wall_s/metrics never are
+        reference.write(record_dir, spec.name, env, res.get("reference") or {}, wall_s=round(wall, 3),
+                        metrics={k: v for k, v in res.get("metrics", {}).items() if k != "log"},
                         run_id=cenv.get("KF_ML_RUN_ID"))
         metrics = dict(metrics, reference_recorded=True)
     return rows.make_row(spec.name, status, reason, wall, env, metrics,

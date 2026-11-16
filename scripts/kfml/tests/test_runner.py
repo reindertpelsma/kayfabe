@@ -56,6 +56,15 @@ class Runner(unittest.TestCase):
         self.assertTrue(rows[0]["reason"].startswith("env-missing"))
         self.assertEqual(ex.calls, [])
 
+    def test_venv_bin_is_first_on_path_so_ninja_is_found(self):
+        os.makedirs(os.path.join(self.root, "bin"))
+        _, ex = self.go([spec()], environ={"PATH": "/usr/bin"})
+        self.assertEqual(ex.calls[0][2]["PATH"], os.path.join(self.root, "bin") + os.pathsep + "/usr/bin")
+
+    def test_no_venv_bin_leaves_path_alone(self):
+        _, ex = self.go([spec()], environ={"PATH": "/usr/bin"})
+        self.assertEqual(ex.calls[0][2]["PATH"], "/usr/bin")
+
     def test_child_env_inside_root(self):
         _, ex = self.go([spec()])
         env = ex.calls[0][2]

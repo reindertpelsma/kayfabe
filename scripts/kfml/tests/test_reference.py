@@ -74,6 +74,23 @@ class Reference(unittest.TestCase):
         self.assertIsNone(m["wall_ratio"])
         self.assertEqual(rows[0]["status"], "PASS")
 
+    def test_every_pass_row_is_recorded_even_without_workload_data(self):
+        ex = Fake({"status": "PASS", "metrics": {"x": 1.5, "s": "t", "nested": {"a": 1}}})
+        runner.run_all([spec()], fake_env(gpu_name="Die A"), environ={}, root=self.root, record_dir=self.d,
+                       exec_fn=ex, resolve_fn=lambda u, t: None)
+        doc = json.load(open(os.path.join(self.d, "die-a", "t.json")))
+        self.assertEqual(doc["data"], {})
+        self.assertEqual(doc["metrics"], {"x": 1.5, "s": "t", "nested": {"a": 1}})  # the row's metrics as measured, minus the log path
+        self.assertGreaterEqual(doc["wall_s"], 0)
+        self.assertEqual(doc["measured_on"]["driver"], "999.1")
+
+    def test_failed_and_not_run_rows_are_not_recorded(self):
+        for st in ("FAIL", "NOT_RUN"):
+            ex = Fake({"status": st, "metrics": {}, "reason": "x"})
+            runner.run_all([spec()], fake_env(gpu_name="Die B"), environ={}, root=self.root, record_dir=self.d,
+                           exec_fn=ex, resolve_fn=lambda u, t: None)
+        self.assertFalse(os.path.exists(os.path.join(self.d, "die-b")))
+
     def test_no_reference_means_no_reference_fields(self):
         ex = Fake({"status": "PASS", "metrics": {}})
         rows = runner.run_all([spec()], fake_env(), environ={}, root=self.root, reference_dir=self.d,

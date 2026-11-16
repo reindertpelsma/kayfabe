@@ -1,9 +1,11 @@
 # kfml: ML research-style GPU workloads as gate tests
 
-**STATUS: DESIGN, NOT RUN ON HARDWARE, 2026-11-11.** Everything below was written without a GPU. What
-was executed: the GPU-free unit tests (`python3 -m unittest discover -s tests -t .`), and the logic of
-`nanogpt_compile` on CPU (`KF_ML_DEV_CPU=1`, author debugging only; not a result). No test has
-touched a CUDA device. Items marked UNVERIFIED need a Vast CUDA container.
+**STATUS: LIVE, 2026-11-16. MEASURED on one box (run id `kfml_run_20261116`; evidence `traces/kfml_run_20261116/`):
+all six workloads PASS natively on a Vast CUDA container, GeForce RTX 4070 (sm_89, 12 GB), driver 560.35.03
+(CUDA 12.6), wheel flavour cu126 chosen automatically, Ubuntu 22.04, Python 3.10.12, gcc 11.4, nvcc 12.6.85, torch
+2.7.1+cu126, triton 3.3.1.** That is ONE die and ONE driver: nothing here was run on another die, on Blackwell, on
+another driver, on Python 3.12, in Docker, or inside a kayfabe guest (every such claim below stays UNVERIFIED). The
+GPU-free unit tests run in CI (`cd scripts/kfml && python3 -m unittest discover -s tests -t .`).
 
 A standalone Python package. The runner (`python3 -m kfml`) is stdlib-only; torch, triton and the rest
 are imported only inside the per-test child processes. Linux only.
@@ -11,9 +13,9 @@ are imported only inside the per-test child processes. Linux only.
 ```
 python3 -m kfml list [--tier mid|large] [--json]
 python3 -m kfml check                      # what is missing and how to install it; changes nothing
-python3 -m kfml run [--only a,b] [--all] [--json out.json] [--record-reference DIR] [--reference DIR]
-                    [--log-dir DIR] [--budget-scale X]
-python3 -m kfml setup --venv DIR [--flavor cu128|cu126] [--with-nvcc] [--allow-unhashed]
+python3 -m kfml run [--only a,b] [--all] [--tier mid|large] [--json out.json] [--record-reference DIR]
+                    [--reference DIR] [--log-dir DIR] [--budget-scale X]
+python3 -m kfml setup --venv DIR [--flavor auto|cu128|cu126] [--with-nvcc | --nvcc-if-needed] [--allow-unhashed]
 python3 -m kfml fetch-data                 # datasets only, into the venv
 python3 -m kfml bundle --out DIR [--wheels DIR]
 python3 -m kfml build-wheels --out DIR
@@ -21,11 +23,15 @@ python3 -m kfml build-wheels --out DIR
 
 Run from `scripts/kfml/` (or put it on `PYTHONPATH`). `run` prints one JSON row per test on stdout as it
 finishes (JSON lines) and writes a JSON array with `--json`. Exit code 1 when any row is FAIL, 2 on a
-usage error; NOT_RUN does not fail the run.
+usage error; NOT_RUN does not fail the run. `setup` exits 3 (and prints a `{"status": "NOT_RUN", "reason": ...}` line) when no
+pinned flavour can run on the box. `run --tier mid` runs the gated mid tests; `--tier large` runs every test (mid plus
+the non-gate ones).
 
 ## The rows
 
-`{name, status, reason, wall_s, gpu_name, compute_cap, vram_gb, driver, torch, cuda, metrics}` plus the
+`{name, status, reason, wall_s, gpu_name, compute_cap, vram_gb, driver, driver_cuda, flavor, torch, cuda, metrics}`
+(die, compute capability, driver, the highest CUDA the driver supports, the wheel flavour kfml derived, and torch's CUDA
+runtime are recorded in every row, PASS or not) plus the
 resolved pins: `cudnn, triton, lock_sha256` (of the lock the venv was set up from), `upstream_commits`,
 `patch_sha256`, `dataset_sha256`, and `tier, launch_bound, guest_estimate_s`.
 
@@ -80,14 +86,41 @@ once timings exist). Until timings exist all tiers are the author's guess (UNVER
 
 `kfml setup --venv DIR` is the only installing command and touches only DIR (it refuses a non-empty
 directory that is not a venv). Torch comes from the explicit `download.pytorch.org/whl/<flavor>` index in
-the lock. `requirements.lock.txt` is flavor cu128 (default; needed for Blackwell sm_120),
-`requirements.cu126.lock.txt` is the older-driver flavor (no sm_120), selected with `--flavor`.
+the lock.
 
-**HASHES TODO: the coordinator generates the hashed lock on a Vast container** (`pip-compile
---generate-hashes`, command in the lock header), per target Python. The files hold the real exact
-top-level pins only; `setup` refuses an unhashed lock unless `--allow-unhashed` (dev only) and uses
-`--require-hashes` as soon as the file has hashes (or `--installer uv`). Nothing is resolved at test time.
-The sha256 of the lock used is stored in `DIR/kfml-lock.sha256` and in every row.
+### Flavour selection is automatic (owner, 2026-11-16: no die and no driver is pinned)
+
+`setup` (default `--flavor auto`) and `check` derive the wheel flavour from two facts of the box: the highest CUDA
+version the driver supports (the `CUDA Version` of `nvidia-smi`; fallback: the driver version against
+`MIN_DRIVER_FOR_CUDA`) and the GPU's compute capability. The table is `pins.json` `flavors` (CUDA version, the
+compute-capability range its wheels carry kernels for, the lock file and its sha256). The newest flavour wins that
+satisfies both: driver CUDA >= the flavour's CUDA **and** the GPU's sm inside the flavour's range.
+
+| flavour | needs driver CUDA | wheels carry | lock |
+|---|---|---|---|
+| cu128 | >= 12.8 | sm_75 .. sm_120 (Blackwell) | `requirements.lock.txt` |
+| cu126 | >= 12.6 | sm_50 .. sm_90 in the wheel; kfml declares 7.5 .. 9.0 | `requirements.cu126.lock.txt` |
+
+`kfml check` prints the choice and why (`flavor: cu126  (chose cu126 (driver CUDA 12.6 >= 12.6 and sm_89 is inside
+sm_75..sm_90); rejected cu128: driver supports CUDA 12.6 < 12.8)`). When no pinned flavour fits (a Blackwell card on
+a CUDA 12.6 driver, or a driver older than CUDA 12.6) the box is **NOT_RUN with the named reason, never FAIL**:
+`setup` exits 3, `run` emits NOT_RUN rows (`no pinned flavour can run on this box: cu128: driver supports CUDA 12.6
+< 12.8; cu126: its wheels cover sm_75..sm_90, the GPU is sm_120`). Unknown facts (no `nvidia-smi` CUDA version and
+a driver not in the table, no compute capability) are not NOT_RUN: they are `env-missing` (FAIL), because nothing is
+known to be unsupported. `--flavor cu126|cu128` still forces one (dev, comparisons).
+MEASURED (`kfml_run_20261116`): the rule picked cu126 on driver 560.35.03 / sm_89. UNVERIFIED: every other branch (the
+selection and the NOT_RUN path are covered by GPU-free tests with made-up facts, not by another box).
+Observation, not a rule: on that same driver the cu128 wheels also imported and ran kernels (minor-version
+compatibility; see the supplementary run in the trace), so the CUDA-version rule is conservative.
+
+### Locks are hashed
+
+Both locks are the full transitive closure with `--hash=sha256:` per line (generated 2026-11-16 on the Vast container
+with `uv pip compile --generate-hashes`, command in each lock's header; resolved for CPython 3.10, UNVERIFIED for
+3.12/3.13). `setup` installs them with `--require-hashes` (MEASURED: cu126 installed from the hashed lock on the
+box and cu128 too), and refuses an unhashed lock unless `--allow-unhashed` (dev only). `pins.json` holds the sha256 of
+each lock (a unit test compares them), and the sha256 of the lock used is stored in `DIR/kfml-lock.sha256` and in
+every row. Nothing is resolved at test time.
 
 For every test process the runner sets `HOME, HF_HOME, HF_HUB_CACHE, TORCH_HOME, XDG_*,
 PIP_CACHE_DIR, UV_CACHE_DIR, TRITON_CACHE_DIR, TORCHINDUCTOR_CACHE_DIR, TORCH_EXTENSIONS_DIR,
@@ -101,16 +134,18 @@ Datasets and weights are downloaded there on first use and verified against `pin
 sha256 printed, and the run fails with `PIN ME` unless `KF_ML_ALLOW_UNPINNED=1` (dev only). CIFAR-10 uses
 the binary archive so no pickle is ever loaded. Kaggle is not used.
 
-### nvcc (for `cuda_ext_inline`)
+### nvcc (for `cuda_ext_inline`, `managed_oversub`)
 
 The test needs an nvcc whose major.minor equals `torch.version.cuda`; `kfml check` detects and compares,
-`KF_ML_NVCC_LOOSE=1` downgrades a mismatch to a warning. Observed by the author on 2026-11-11: the pip package
-`nvidia-cuda-nvcc-cu12` does **not** contain an `nvcc` binary (only `ptxas`, `libnvvm`, `libdevice` and
-headers), so the "pip nvcc" route does not work. `setup --with-nvcc` instead downloads three official
-NVIDIA redist archives (`cuda_nvcc`, `cuda_cudart`, `cuda_cccl`, sha256 in `pins.json`, taken from
-NVIDIA's `redistrib_12.8.1.json` / `redistrib_12.6.3.json`) and merges them into `DIR/cuda_home`, which
-the runner exports as `CUDA_HOME`. **UNVERIFIED:** that this assembled tree builds `load_inline`
-extensions (the host compiler must be one nvcc supports, e.g. gcc 13 on Ubuntu 24.04).
+`KF_ML_NVCC_LOOSE=1` downgrades a mismatch to a warning. `setup --nvcc-if-needed` installs the venv-contained toolkit
+only when the box has no matching nvcc (a CUDA devel image does: nothing is downloaded then). The pip package
+`nvidia-cuda-nvcc-cu12` contains no `nvcc` binary (author, 2026-11-11), so the venv-contained route is
+`setup --with-nvcc`: three official NVIDIA redist archives (`cuda_nvcc`, `cuda_cudart`, `cuda_cccl`, sha256 in
+`pins.json`, from NVIDIA's `redistrib_12.8.1.json` / `redistrib_12.6.3.json`) merged into `DIR/cuda_home`, which
+the runner exports as `CUDA_HOME`. MEASURED (`kfml_run_20261116`): the cu126 archives and the cu128 archives both match
+their pinned sha256; `cuda_ext_inline` PASSes with the assembled cu126 tree alone (no system CUDA on PATH, gcc 11,
+Ubuntu 22.04) and with the system nvcc 12.6 of the container. UNVERIFIED: the assembled tree with a host compiler newer
+than the nvcc supports without `tools/hostcc_gcc14.sh`, and on any other distro.
 
 No NVIDIA binary is ever mirrored in our storage; wheels and archives come from the official indexes
 on each box.
