@@ -20,9 +20,8 @@ try {
   $R.t_render_start = Epoch
   $log = "$D\aerender.log"
   $r = Start-Process "$base\aerender.exe" -ArgumentList @('-project', "$D\kf.aep", '-comp', 'kfcomp', '-reuse') -RedirectStandardOutput $log -RedirectStandardError "$D\aerender.err" -PassThru -WindowStyle Hidden
-  $t1 = Get-Date
-  while (-not $r.HasExited -and ((Get-Date) - $t1).TotalSeconds -lt 600) { [void](Dismiss-Dialogs 'aerender'); Start-Sleep 2 }
-  if (-not $r.HasExited) { Stop-Process -Id $r.Id -Force; throw 'aerender timed out' }
+  # WaitForExit, not HasExited: with redirected output the Process object from Start-Process -PassThru can report HasExited = false for ever
+  if (-not $r.WaitForExit(900000)) { Stop-Process -Id $r.Id -Force; throw 'aerender timed out' }
   $R.aerender_exit = $r.ExitCode
   $R.t_render_end = Epoch
   $frames = @(Get-ChildItem "$D\frames" | Where-Object { $_.Extension -in '.png', '.tif' } | Sort-Object Name)

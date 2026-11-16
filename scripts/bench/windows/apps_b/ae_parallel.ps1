@@ -19,9 +19,9 @@ try {
     $procs += Start-Process "$base\aerender.exe" -ArgumentList @('-project', "$D\kf.aep", '-comp', 'kfcomp', '-s', $s, '-e', $e, '-output', "$D\frames\p${i}_[#####].png", '-OMtemplate', 'PNG Sequence') -RedirectStandardOutput "$D\aerender$i.log" -RedirectStandardError "$D\aerender$i.err" -PassThru -WindowStyle Hidden
   }
   $t1 = Get-Date
-  while (@($procs | Where-Object { -not $_.HasExited }).Count -gt 0 -and ((Get-Date) - $t1).TotalSeconds -lt 1500) { Start-Sleep 3 }
-  $R.exit_codes = @($procs | ForEach-Object { if ($_.HasExited) { $_.ExitCode } else { 'running' } })
-  foreach ($q in ($procs | Where-Object { -not $_.HasExited })) { Stop-Process -Id $q.Id -Force }
+  foreach ($q in $procs) { $left = [int](1500000 - ((Get-Date) - $t1).TotalMilliseconds); if ($left -lt 1000) { $left = 1000 }; [void]$q.WaitForExit($left) }
+  $R.exit_codes = @($procs | ForEach-Object { if ($_.WaitForExit(1)) { $_.ExitCode } else { 'running' } })
+  foreach ($q in $procs) { if (-not $q.WaitForExit(1)) { Stop-Process -Id $q.Id -Force } }
   $R.frame_count = @(Get-ChildItem "$D\frames" -Filter 'p*.png').Count
   $R.outputs = @(); $f = Get-ChildItem "$D\frames" -Filter 'p*.png' | Sort-Object Name; if ($f) { $R.outputs += (File-Info $f[0].FullName); $R.outputs += (File-Info $f[-1].FullName) }
   $R.quit = 'process'
