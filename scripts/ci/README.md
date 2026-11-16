@@ -1,5 +1,5 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: LIVE, 2026-11-15 (box downloader `box_downloader.py`, built and tested GPU-free, run on no box and wired into no stage; payload `--instruction FILE`, `--only/--skip/--dry-run`: GPU-free tests only, no box has run them; the rest of this page is as of 2026-11-06) (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
+STATUS: LIVE, 2026-11-15 (propimage_apps payload stage, `--only propimage_apps`, GPU-free tests only, no box has run it; box downloader `box_downloader.py`, built and tested GPU-free, run on no box and wired into no stage; payload `--instruction FILE`, `--only/--skip/--dry-run`: GPU-free tests only, no box has run them; the rest of this page is as of 2026-11-06) (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
 claude/vast-payload-p7-20261024). MEASURED 2026-10-25: a real Vast box booted with the
 protocol-7 setup but had not yet reported to the Worker, so protocol 7 has no end-to-end run on a
 real box yet. The evidence below is for the pre-port payload. MEASURED: run `v9-xid-kvm-20261023`, source
@@ -115,6 +115,18 @@ The test runtime is Ubuntu 22.04 with GNU coreutils (`setup-test.Dockerfile`), m
 CODE READ: if cloud-init omits standard HOME or leaves it empty, repo-side onstart restores the
 current OS account's home directory. An explicit process HOME is preserved; no Worker var is added.
 
+
+The `propimage_apps` stage (2026-11-15, owner ruling that the proprietary Windows image's seven apps must PASS per GPU family; GPU-free tests only, NOT run on a box,
+and it cannot PASS yet): `propimage_apps.py` fetches the private image through `box_downloader.py` (manifest made from `propimage_apps_pins.json`), builds swtpm 0.10.1 when
+the box's is older, unpacks, and runs `scripts/bench/windows/propimage_check.py` in three offline boots (Wukong last, alone, guest framebuffer 8192 MiB), then
+records per app the verdict kind, evidence names and sha256, scores, guest TDR/LiveKernelEvent counts and the host Xid lines inside the app's kernel-log window.
+Every pin in `propimage_apps_pins.json` is unset (nothing in the repository records the image sha256), so it refuses `PIN_UNSET:image`; and the harness grades
+Wukong INCONCLUSIVE (its benchmark menu driver is research tooling in draft PR #417), so it ends `APP_FAIL:wukong` until that is in the harness. Non-AMD hosts are
+`NOT_RUN` (`CPU_VENDOR`). Selection: `vast_payload.py --instruction FILE --only propimage_apps` with a `large` instruction; not in the default large plan
+(`PROPIMAGE_APPS_IN_LARGE = False`, `MANUAL_ONLY_STAGES`). `propimage_apps.py plan` prints the preflight rows and the boot plan without touching anything;
+`propimage_apps.py manifest --out FILE` writes the download manifest (and refuses while pins are unset). The record is `propimage_apps` in `kf-result.json`, validated in
+`vast_report.py`. Design, refusal table and first-run checklist: `docs/design/V3_PROPIMAGE_APPS_STAGE.md`. Tests `test_propimage_apps.py`; mutants `propimage_apps_mutants.py`
+(two named killers each, in `ci.yml`).
 
 ## Box downloader (`box_downloader.py`, 2026-11-15; step 3 of [V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN](../../docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md))
 

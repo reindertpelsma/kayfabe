@@ -2,6 +2,8 @@ STATUS: DESIGN-ONLY, 2026-11-13. Unified code is GPU-free tested, not hardware-q
 
 # One proprietary-image check pipeline
 
+2026-11-15 update: the release-run stage that runs this pipeline on Vast boxes (three offline boots, Wukong last, per-app record, pins unset, Wukong not yet drivable by the harness) is `docs/design/V3_PROPIMAGE_APPS_STAGE.md`. Nothing below changed.
+
 CODE READ: `scripts/bench/windows/propimage_check.py` is the single check module and
 `scripts/ci/test_propimage_check.py` its single test file. The former app module is
 folded into it. Image packaging and identity derivation remain in the existing

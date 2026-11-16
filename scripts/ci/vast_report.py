@@ -338,6 +338,83 @@ def compact_diagnostics(records):
     return result
 
 
+PROPIMAGE_APPS = ("superposition", "3dmark", "solidworks", "resolve", "edrawings", "edge", "wukong")   # propimage_apps.APPS, Wukong last
+PROPIMAGE_EXPECTED_KIND = {"superposition": "FILE", "3dmark": "FILE", "solidworks": "FILE", "resolve": "FILE", "edrawings": "UIA",
+                           "edge": "UIA", "wukong": "FILE"}
+
+
+def validate_propimage_apps(value):
+    """The propimage_apps stage's record (scripts/ci/propimage_apps.py): bounded, strictly read, not forwarded. A PASS needs all seven
+    apps in order, each PASS with its expected evidence kind; no other verdict may carry an empty reason."""
+    token = re.compile(r"[A-Z][A-Z0-9_]{0,31}(:[A-Za-z0-9_]{1,32})?")
+    text = re.compile(r"[\x20-\x7e]{0,200}")
+    num = lambda v, hi=1 << 40: type(v) is int and 0 <= v <= hi  # noqa: E731
+    top = {"schema", "verdict", "sha", "reason", "family", "cpu_vendor", "preflight", "image", "swtpm", "boots", "apps", "failed"}
+    ok = type(value) is dict and top <= set(value) <= top | {"error"}
+    ok = ok and value["schema"] == 1 and value["verdict"] in ("PASS", "FAIL", "RETRY", "REFUSED", "NOT_RUN")
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    ok = ok and type(value["reason"]) is str and (token.fullmatch(value["reason"]) is not None or value["reason"] == "")
+    ok = ok and ("error" not in value or text.fullmatch(str(value["error"])) is not None)
+    ok = ok and value["family"] in (None, "turing", "ampere", "ada", "blackwell") and value["cpu_vendor"] in ("amd", "intel", "other")
+    ok = ok and type(value["preflight"]) is list and len(value["preflight"]) <= 16 and all(
+        type(r) is dict and set(r) == {"name", "status", "detail"} and re.fullmatch(r"[a-z0-9_]{1,24}", str(r["name"]))
+        and r["status"] in ("MATCH", "MISMATCH", "WARN") and text.fullmatch(str(r["detail"])) for r in value["preflight"])
+    image = value["image"] if ok else None
+    ok = ok and type(image) is dict and set(image) == {"name", "sha256", "size"} and (image["name"] is None or NAME_OK.fullmatch(str(image["name"])))
+    ok = ok and (image["sha256"] is None or re.fullmatch("[0-9a-f]{64}", str(image["sha256"]))) and (image["size"] is None or num(image["size"]))
+    sw = value["swtpm"] if ok else None
+    ok = ok and type(sw) is dict and set(sw) == {"version", "built"} and type(sw["built"]) is bool
+    ok = ok and (sw["version"] is None or re.fullmatch(r"[0-9.]{0,16}", str(sw["version"])) is not None)
+    boots = value["boots"] if ok else None
+    ok = ok and type(boots) is list and len(boots) <= 8
+    ok = ok and all(
+        type(b) is dict and {"index", "apps", "rc", "secs", "offline"} <= set(b) <= {"index", "apps", "rc", "secs", "offline", "harness", "host_xid_unattributed"}
+        and num(b["index"], 8) and type(b["apps"]) is list and all(a in PROPIMAGE_APPS for a in b["apps"])
+        and (b["rc"] is None or (type(b["rc"]) is int and -256 <= b["rc"] <= 256)) and num(b["secs"], 1 << 20) and type(b["offline"]) is bool
+        and type(b.get("harness", [])) is list and len(b.get("harness", [])) <= 6 and all(
+            type(h) is dict and set(h) == {"step", "verdict", "detail"} and all(text.fullmatch(str(v)) for v in h.values()) for h in b.get("harness", []))
+        and ("host_xid_unattributed" not in b or (type(b["host_xid_unattributed"]) is dict and set(b["host_xid_unattributed"]) == {"count", "lines"}
+                                                 and num(b["host_xid_unattributed"]["count"], 1 << 30) and type(b["host_xid_unattributed"]["lines"]) is list
+                                                 and len(b["host_xid_unattributed"]["lines"]) <= 8
+                                                 and all(text.fullmatch(str(x)) for x in b["host_xid_unattributed"]["lines"])))
+        for b in boots)
+    apps = value["apps"] if ok else None
+    ok = ok and type(apps) is list and len(apps) <= 7
+    names = [a.get("app") for a in apps] if ok and all(type(a) is dict for a in apps) else None
+    ok = ok and names is not None and names == [n for n in PROPIMAGE_APPS if n in names]
+    guest = {"collected", "live_kernel_events", "codes", "tdr_4101", "nvlddmkm_153"}
+    for a in apps if ok else ():
+        ok = ok and set(a) == {"app", "verdict", "kind", "secs", "detail", "evidence", "scores", "guest_events", "host_xid"}
+        ok = ok and a["verdict"] in ("PASS", "FAIL", "INCONCLUSIVE", "LAUNCH_ONLY", "HARNESS", "NOT_RUN", "MISSING")
+        ok = ok and a["kind"] in ("FILE", "UIA", "NONE") and num(a["secs"], 1 << 20) and text.fullmatch(str(a["detail"])) is not None
+        ok = ok and type(a["evidence"]) is list and len(a["evidence"]) <= 24 and all(
+            type(e) is dict and set(e) == {"file", "bytes", "sha256"} and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", str(e["file"]))
+            and num(e["bytes"]) and re.fullmatch("[0-9a-f]{64}", str(e["sha256"])) for e in a["evidence"])
+        ok = ok and type(a["scores"]) is dict and len(a["scores"]) <= 4 and all(
+            re.fullmatch(r"[a-z0-9_]{1,16}", str(k)) and num(v, 1 << 32) for k, v in a["scores"].items())
+        g = a["guest_events"]
+        ok = ok and type(g) is dict and set(g) == guest and type(g["collected"]) is bool and num(g["live_kernel_events"], 1 << 20)
+        ok = ok and num(g["tdr_4101"], 1 << 20) and num(g["nvlddmkm_153"], 1 << 20) and type(g["codes"]) is list and len(g["codes"]) <= 8
+        ok = ok and all(re.fullmatch(r"[A-Za-z0-9?]{0,8}", str(c)) for c in g["codes"])
+        x = a["host_xid"]
+        ok = ok and type(x) is dict and set(x) == {"count", "lines"} and num(x["count"], 1 << 30) and type(x["lines"]) is list
+        ok = ok and len(x["lines"]) <= 8 and all(text.fullmatch(str(t)) for t in x["lines"])
+    failed = value["failed"] if ok else None
+    ok = ok and type(failed) is list and len(failed) <= 7 and all(f in PROPIMAGE_APPS for f in failed)
+    if ok and value["verdict"] == "PASS":
+        ok = (names == list(PROPIMAGE_APPS) and not failed and value["reason"] == "" and all(
+            a["verdict"] == "PASS" and a["kind"] == PROPIMAGE_EXPECTED_KIND[a["app"]] for a in apps)
+            and all(b["offline"] for b in boots) and len(boots) >= 1)
+    elif ok:
+        ok = value["reason"] != ""
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 24576
+    if not ok:
+        raise ValueError("propimage_apps")
+
+
+NAME_OK = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
+
+
 def validate_matrix_receipts(value):
     """Bounded evidence claims; selected drivers/required rows are checked by the Worker."""
     axes = {"host_driver", "linux_guest_driver", "windows_guest_driver"}
@@ -400,6 +477,7 @@ def read_result_file(path):
             "matrix_receipts",
             "instruction_sha256",
             "selection",
+            "propimage_apps",
             "install_flow",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
@@ -415,6 +493,10 @@ def read_result_file(path):
                     for v in doc["selection"].values())
         ):
             raise ValueError("selection")
+        if "propimage_apps" in doc:
+            validate_propimage_apps(doc["propimage_apps"])
+            if doc["verdict"] == "PASS" and doc["propimage_apps"]["verdict"] not in ("PASS", "NOT_RUN"):
+                raise ValueError("propimage_apps verdict")
         if "install_flow" in doc:
             validate_install_flow(doc["install_flow"])
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):
