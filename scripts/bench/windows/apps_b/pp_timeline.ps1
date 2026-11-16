@@ -28,7 +28,7 @@ try {
   Set-Content "$D\pp_run.jsx" $js
   $R.t_script = Epoch
   Run-StartupScript 'pp' 'C:\Program Files\Adobe\Adobe Premiere Pro 2027\Adobe Premiere Pro.exe' 'Adobe Premiere Pro' "$D\pp_run.jsx" "$D\pp_done.txt" 900 2
-  $R.summary = (Get-Content "$D\pp_done.txt" -Raw -ErrorAction SilentlyContinue)
+  $R.summary = [string](Get-Content "$D\pp_done.txt" -Raw -ErrorAction SilentlyContinue)
   # direct exports are synchronous; Media Encoder jobs finish later: wait for every output (or the budget), recording when each appeared
   $want = @($jobs | ForEach-Object { "$($_[0]).$($_[2])" })
   $t0 = Get-Date; $seen = @{}

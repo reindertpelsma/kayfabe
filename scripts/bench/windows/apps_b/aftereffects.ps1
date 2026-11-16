@@ -12,7 +12,7 @@ try {
   Run-AeScript "$D\ae_make_run.jsx" "$D\ae_make.txt" 900
   if (Get-Process AfterFX -ErrorAction SilentlyContinue) { $R.make_quit = Quit-App 'AfterFX' }
   if (-not (Test-Path "$D\kf.aep")) { throw ('project not saved: ' + (Get-Content "$D\ae_make.txt" -Raw -ErrorAction SilentlyContinue)) }
-  $R.make_log = (Get-Content "$D\ae_make.txt" -Raw)
+  $R.make_log = [string](Get-Content "$D\ae_make.txt" -Raw)
   $R.t_render_start = Epoch
   $log = "$D\aerender.log"
   $ar = Run-Aerender @('-project', "$D\kf.aep", '-comp', 'kfcomp') $log "$D\frames" 900000
@@ -21,7 +21,7 @@ try {
   $R.t_render_end = Epoch
   $frames = @(Get-ChildItem "$D\frames" | Where-Object { $_.Extension -in '.png', '.tif' } | Sort-Object Name)
   $R.frame_count = $frames.Count
-  $R.outputs = @($frames | Select-Object -First 1 | ForEach-Object { File-Info $_.FullName }) + @($frames | Select-Object -Last 1 | ForEach-Object { File-Info $_.FullName }) + @(File-Info $log) + @(File-Info "$D\kf.aep") + @(File-Info "$D\ae_make.txt")
+  $R.outputs = @($frames | Select-Object -First 1 | ForEach-Object { Copy-Out $_ }) + @($frames | Select-Object -Last 1 | ForEach-Object { Copy-Out $_ }) + @(File-Info $log) + @(File-Info "$D\kf.aep") + @(File-Info "$D\ae_make.txt")
   $R.quit = 'process'
 } catch { $R.error = $_.Exception.Message; $R.quit = Quit-App 'AfterFX' }
 Finish $R

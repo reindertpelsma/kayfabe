@@ -17,7 +17,7 @@ try {
   Step 'launch'
   Start-Process 'C:\Program Files\Adobe\Adobe Lightroom Classic\Lightroom.exe'
   $done = Wait-For { Test-Path $res } 'Lightroom' 420
-  $R.plugin_result = (Get-Content $res -Raw -ErrorAction SilentlyContinue)
+  $R.plugin_result = [string](Get-Content $res -Raw -ErrorAction SilentlyContinue)
   $R.titles = @(Win-Titles 'Lightroom' | Where-Object { $_ })
   if (-not $done) { throw 'plugin did not report (not loaded or no catalog)' }
   $R.outputs = @(); $k = 0

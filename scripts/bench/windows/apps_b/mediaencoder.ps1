@@ -19,7 +19,7 @@ try {
     if (Test-Path "$D\ae_make.txt") { Set-Content "$D\ame_make.ok" 'x' }
     Start-Sleep 3
   }
-  $R.make_log = (Get-Content "$D\ae_make.txt" -Raw -ErrorAction SilentlyContinue)
+  $R.make_log = [string](Get-Content "$D\ae_make.txt" -Raw -ErrorAction SilentlyContinue)
   if (-not (Test-Path $mp4)) { throw ('no encoded file; AE script said: ' + $R.make_log) }
   $R.outputs = @(File-Info $mp4)
   $q1 = Quit-App 'Adobe Media Encoder'

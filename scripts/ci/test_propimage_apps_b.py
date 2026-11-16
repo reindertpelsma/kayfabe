@@ -84,6 +84,13 @@ class T(unittest.TestCase):
             for n, line in enumerate(f.read_text().splitlines(), 1):
                 self.assertIsNone(re.match(r"\s*\$r\s*=", line), "%s:%d assigns to $r" % (f.name, n))
 
+    def test_a_result_field_never_holds_a_raw_get_content(self):
+        """`Get-Content -Raw` returns a string with note properties; ConvertTo-Json then serialises the drive and path objects too (a 47 MB result.json, MEASURED)."""
+        import re
+        for f in sorted(B.APPS_DIR.glob("*.ps1")):
+            for n, line in enumerate(f.read_text().splitlines(), 1):
+                self.assertIsNone(re.search(r"\$R\.\w+ = \(Get-Content", line), "%s:%d" % (f.name, n))
+
     def test_photoshop_pass(self):
         self.photoshop()
         row = B.verdict("photoshop", "x" * 32, self.d, GPU_OK)

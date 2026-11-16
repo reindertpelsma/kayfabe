@@ -27,7 +27,7 @@ fl.quit(false);
   $t0 = Get-Date
   while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 400) { [void](Dismiss-Dialogs 'Animate'); Start-Sleep 3 }
   if (-not $p.HasExited) { $R.quit = Quit-App 'Animate'; throw 'Animate did not finish the script' } else { $R.quit = 'process' }
-  $R.rows = (Get-Content "$D\jsfl_log.txt" -Raw -ErrorAction SilentlyContinue)
+  $R.rows = [string](Get-Content "$D\jsfl_log.txt" -Raw -ErrorAction SilentlyContinue)
   $R.outputs = @(Get-ChildItem $D -Filter f*.png | ForEach-Object { File-Info $_.FullName })
 } catch { $R.error = $_.Exception.Message; if (-not $R.quit) { $R.quit = Quit-App 'Animate' } }
 Finish $R

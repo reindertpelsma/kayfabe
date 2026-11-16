@@ -29,7 +29,7 @@ app.quit();
   Set-Content "$D\ae_open.jsx" $jsx
   Run-AeScript "$D\ae_open.jsx" "$D\ae_open.txt" 900
   if (Get-Process AfterFX -ErrorAction SilentlyContinue) { $R.quit = Quit-App 'AfterFX' } else { $R.quit = 'process' }
-  $R.rows = (Get-Content "$D\ae_open.txt" -Raw -ErrorAction SilentlyContinue)
+  $R.rows = [string](Get-Content "$D\ae_open.txt" -Raw -ErrorAction SilentlyContinue)
   $R.outputs = @(); if (Test-Path "$D\ae_open.txt") { $R.outputs += (File-Info "$D\ae_open.txt") }
 } catch { $R.error = $_.Exception.Message; if (-not $R.quit) { $R.quit = Quit-App 'AfterFX' } }
 Finish $R

@@ -185,4 +185,6 @@ function Init-Run($app) {
   New-Item -Force -ItemType Directory $D | Out-Null
   return [ordered]@{ app = $app; started = (Epoch); error = $null; outputs = @() }
 }
+# the rows' outputs are pulled by NAME from the run directory: copy a file that lives in a sub folder up first (frames\f_00000.tif -> f_00000.tif)
+function Copy-Out($f) { if ((Split-Path $f.FullName -Parent) -ne $D) { Copy-Item $f.FullName "$D\$($f.Name)" -Force }; return (File-Info "$D\$($f.Name)") }
 function File-Info($path) { $f = Get-Item $path; return [ordered]@{ file = $f.Name; bytes = $f.Length; modified = ([DateTimeOffset]$f.LastWriteTimeUtc).ToUnixTimeMilliseconds() / 1000.0 } }
