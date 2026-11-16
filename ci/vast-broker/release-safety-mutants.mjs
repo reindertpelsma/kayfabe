@@ -265,6 +265,7 @@ try {
     'scripts/ci/box_downloader.py',
     'scripts/ci/propimage_apps.py',
     'scripts/ci/kf_fetch.py',
+    'scripts/ci/kernel_log.py',
     'scripts/ci/test_vast_matrix_receipts.py',
     'scripts/bench/native_xid_guard.py',
     'scripts/bench/native_fault_names.json',

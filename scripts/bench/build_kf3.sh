@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_git.sh"
 # ★ Build QEMU with the v3 kf3-gpu device: the Rust archive (crates/kf-qemu → libkf_qemu.a) + the C
 # overlay (qemu/hw/misc/kf3) laid into a QEMU source tree with two one-line hunks, built in its OWN
 # build dir (the old nvkvm build is untouched).
@@ -20,7 +21,7 @@ QEMU="$(cd "${1:?usage: build_kf3.sh <qemu-source-tree> [<build-dir>]}" && pwd)"
 BUILD="${2:-$(dirname "$QEMU")/qemu-build-kf3}"
 [ -f "$QEMU/VERSION" ] || { echo "⊘ $QEMU is not a QEMU source tree"; exit 1; }
 command -v cargo >/dev/null || { echo "⊘ cargo not on PATH (export PATH=\$HOME/.cargo/bin:\$PATH)"; exit 127; }
-echo "== kf3 build: QEMU $(cat "$QEMU/VERSION") rev $(git -C "$REPO" rev-parse --short=8 HEAD)"
+echo "== kf3 build: QEMU $(cat "$QEMU/VERSION") rev $(kf_git "$REPO" rev-parse --short=8 HEAD)"
 ( cd "$REPO" && cargo build --release -p kf-qemu )
 TARGET=${CARGO_TARGET_DIR:-$REPO/target}
 [[ "$TARGET" = /* ]] || TARGET="$REPO/$TARGET"
@@ -69,8 +70,8 @@ if [ ! -f "$BUILD/build.ninja" ] || [ "$(cat "$BUILD/.kf3-configure" 2>/dev/null
   printf '%s' "$CONF_FLAGS" > "$BUILD/.kf3-configure"
 fi
 ninja -C "$BUILD" qemu-system-x86_64
-REV=$(git -C "$REPO" rev-parse --short=8 HEAD)
-[ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || REV="$REV-dirty"
+REV=$(kf_git "$REPO" rev-parse --short=8 HEAD)
+[ -z "$(kf_git "$REPO" status --porcelain --untracked-files=no)" ] || REV="$REV-dirty"
 PRIV="$(dirname "$BUILD")/kf3-bins/$REV"
 mkdir -p "$PRIV"
 cp "$BUILD/qemu-system-x86_64" "$PRIV/.qemu-system-x86_64.tmp.$$"

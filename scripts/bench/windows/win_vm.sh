@@ -77,6 +77,7 @@
 #     logs/                     every boot's QEMU log, QMP events, screenshots, checks, evidence
 #     installed                 written last by a passing install
 # shellcheck disable=SC2054  # QEMU arguments carry commas by design
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/kf_lock.sh"
 set -euo pipefail
 umask 077
 
@@ -930,7 +931,7 @@ cmd_run() {
     # every command kf3's chain answers, logged with its id and result (kf-rm census, log only)
     export KF3_RPC_TRACE=${KF3_RPC_TRACE:-1}
     if ! dry_run; then
-      exec 8>"$GPU_LOCK"
+      kf_lock_open "$GPU_LOCK" 8
       log "waiting for the GPU lock $GPU_LOCK (GPU work is strictly serial; up to ${LOCK_WAIT_S}s)"
       flock -w "$LOCK_WAIT_S" 8 || die "the GPU lock $GPU_LOCK was not free in ${LOCK_WAIT_S}s$(lock_holder)"
     fi

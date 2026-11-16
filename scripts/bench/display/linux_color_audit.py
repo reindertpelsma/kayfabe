@@ -5,6 +5,9 @@ Run on the GPU host. --base is a powered-off guest with NVIDIA 580.159.04,
 Weston/Sway/seatd/wlsunset, Vulkan tools, and Wayland/DRM development packages.
 No host display settings are changed. All screenshots are of the guest console.
 """
+import sys
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2] / "lib"))
+import kf_lock  # noqa: E402
 import argparse
 import datetime
 import fcntl
@@ -57,7 +60,7 @@ def main():
         p.error('QEMU must be the immutable binary for the named revision')
     if subprocess.run(['pgrep', '-x', 'qemu-system-x86'], capture_output=True).returncode == 0:
         p.error('Another VM is running; hardware work is serial')
-    lock = open('/tmp/kayfabe-fastguest.lock', 'w')
+    lock = kf_lock.open_lock_file()
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     a.out.mkdir(mode=0o700, parents=True, exist_ok=False)
     ssh = ['ssh', '-i', str(a.key), '-p', str(a.port), '-o', 'BatchMode=yes',

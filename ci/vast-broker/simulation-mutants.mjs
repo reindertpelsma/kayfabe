@@ -154,6 +154,7 @@ try {
     'scripts/ci/box_downloader.py',
     'scripts/ci/propimage_apps.py',
     'scripts/ci/kf_fetch.py',
+    'scripts/ci/kernel_log.py',
   ]) {
     mkdirSync(dirname(join(scratch, path)), { recursive: true });
     cpSync(join(repo, path), join(scratch, path));

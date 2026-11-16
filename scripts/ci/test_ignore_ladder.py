@@ -635,9 +635,9 @@ class StripStep(unittest.TestCase):
         ) as f:
             fast = f.read()
         # The two lines that name the directory, taken from the REAL scripts (a drift fails here).
-        rev_line = re.search(r"^REV=\$\(git -C \"\$REPO\" rev-parse --short=8 HEAD\)$", build, re.M)
+        rev_line = re.search(r"^REV=\$\(kf_git \"\$REPO\" rev-parse --short=8 HEAD\)$", build, re.M)
         dirty_line = re.search(
-            r"^\[ -z \"\$\(git -C \"\$REPO\" status --porcelain --untracked-files=no\)\" \] \|\| REV=.*$",
+            r"^\[ -z \"\$\(kf_git \"\$REPO\" status --porcelain --untracked-files=no\)\" \] \|\| REV=.*$",
             build,
             re.M,
         )
@@ -648,7 +648,7 @@ class StripStep(unittest.TestCase):
             full = sh("git", "-C", root, "rev-parse", "HEAD").strip()
             self.assertEqual(run_cli(root, "strip", "--in-place").returncode, 0)
             self.assertEqual(sh("git", "-C", root, "status", "--porcelain", "--untracked-files=no"), "")
-            script = rev_line.group(0) + "\n" + dirty_line.group(0) + '\necho "$REV"\n'
+            script = '. "%s"\n' % os.path.join(real_root(), "scripts", "lib", "kf_git.sh") + rev_line.group(0) + "\n" + dirty_line.group(0) + '\necho "$REV"\n'
             rev = subprocess.run(
                 ["bash", "-c", script], env={**os.environ, "REPO": root},
                 capture_output=True, text=True, check=True,

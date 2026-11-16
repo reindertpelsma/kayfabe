@@ -4,6 +4,9 @@
 The immutable baseline disk and virtual OVMF variables must already be staged.
 No physical GPU is unbound. The experiment writes only its new run directory.
 """
+import sys
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2] / "lib"))
+import kf_lock  # noqa: E402
 import argparse
 import datetime
 import fcntl
@@ -46,7 +49,7 @@ base = args.base.resolve()
 work = base / args.name
 source = base / 'baseline/windows.qcow2'
 qemu = base / 'kf3-bins' / args.revision[:8] / 'qemu-system-x86_64'
-with open('/tmp/kayfabe-fastguest.lock', 'a') as lock:
+with kf_lock.open_lock_file() as lock:
  fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
  if work.exists(): raise RuntimeError('Run directory already exists; choose a fresh name')
  if not qemu.is_file(): raise RuntimeError('Pinned QEMU build missing')

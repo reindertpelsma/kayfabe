@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/kf_lock.sh"
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 # broker_lane.sh — the display BROKER lane on a box with a host desktop (docs/design/V3_DISPLAY.md
 # §8.9 item 5, §8.11 E0-E5, §8.12 the hover cursor). Two subcommands, each run from this checkout:
@@ -183,7 +184,7 @@ if [ "${BRK_VNC:-}" = 1 ]; then
 else
     unset BRK_VNC
 fi
-exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
 bash "$REPO/scripts/bench/boot_capture.sh" "$TAG" -- -vga none -device virtio-keyboard-pci \
     -device virtio-tablet-pci,display=kf0,head=0 -device virtio-mouse-pci "${VNC_ARGS[@]}"
 rc=$?

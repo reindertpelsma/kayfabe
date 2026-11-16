@@ -1063,6 +1063,7 @@ try {
     'scripts/ci/box_downloader.py',
     'scripts/ci/propimage_apps.py',
     'scripts/ci/kf_fetch.py',
+    'scripts/ci/kernel_log.py',
     'scripts/ci/release_driver_pins.py',
     'ci/vast-reaper',
     'ci/platform-api/migrations',
