@@ -136,9 +136,9 @@ function Run-Aerender($argList, $log, $framesDir, [int]$budgetMs = 900000, [int]
   $R.aerender_attempts = @()
   for ($a = 1; $a -le $attempts; $a++) {
     Get-Process aerender -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    $r = Start-Process 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files\aerender.exe' -ArgumentList $argList -RedirectStandardOutput $log -RedirectStandardError "$log.err" -PassThru -WindowStyle Hidden
+    $ar = Start-Process 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files\aerender.exe' -ArgumentList $argList -RedirectStandardOutput $log -RedirectStandardError "$log.err" -PassThru -WindowStyle Hidden
     $t0 = Get-Date; $stalled = $false
-    while (Get-Process -Id $r.Id -ErrorAction SilentlyContinue) {
+    while (Get-Process -Id $ar.Id -ErrorAction SilentlyContinue) {
       $el = ((Get-Date) - $t0).TotalSeconds
       if ($el -gt ($budgetMs / 1000)) { break }
       $fr = @(Get-ChildItem $framesDir -ErrorAction SilentlyContinue).Count
@@ -146,12 +146,12 @@ function Run-Aerender($argList, $log, $framesDir, [int]$budgetMs = 900000, [int]
       Start-Sleep 3
     }
     $R.aerender_attempts += ("{0}:{1}:{2}s" -f $a, $(if ($stalled) { 'stalled' } else { 'ran' }), [int]((Get-Date) - $t0).TotalSeconds)
-    if (-not $stalled) { return $r }
-    Stop-Process -Id $r.Id -Force -ErrorAction SilentlyContinue
+    if (-not $stalled) { return $ar }
+    Stop-Process -Id $ar.Id -Force -ErrorAction SilentlyContinue
     Get-Process AfterFX -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep 5
   }
-  return $r
+  return $ar
 }
 function Has-Window($procNames) { (@(Win-Titles $procNames | Where-Object { $_ })).Count -gt 0 }
 function Quit-App($procNames, $comApp = $null, [int]$budget = 150) {

@@ -11,9 +11,9 @@ try {
   if (-not (Test-Path "$D\kf.aep")) { throw ('project not saved: ' + (Get-Content "$D\ae_make.txt" -Raw -ErrorAction SilentlyContinue)) }
   $R.make_log = (Get-Content "$D\ae_make.txt" -Raw)
   $log = "$D\aerender.log"
-  $r = Run-Aerender @('-project', "$D\kf.aep", '-comp', 'kfcomp', '-reuse') $log "$D\frames" 900000
-  if (Get-Process -Id $r.Id -ErrorAction SilentlyContinue) { Stop-Process -Id $r.Id -Force; throw 'aerender timed out' }
-  $R.aerender_exit = $(try { $r.ExitCode } catch { $null }); if ($R.aerender_exit -eq $null) { $R.aerender_exit = $(if ((Get-Content $log -Raw) -match 'Finished composition') { 0 } else { -1 }) }
+  $ar = Run-Aerender @('-project', "$D\kf.aep", '-comp', 'kfcomp', '-reuse') $log "$D\frames" 900000
+  if (Get-Process -Id $ar.Id -ErrorAction SilentlyContinue) { Stop-Process -Id $ar.Id -Force; throw 'aerender timed out' }
+  $R.aerender_exit = $(try { $ar.ExitCode } catch { $null }); if ($R.aerender_exit -eq $null) { $R.aerender_exit = $(if ((Get-Content $log -Raw) -match 'Finished composition') { 0 } else { -1 }) }
   $f = Get-ChildItem "$D\frames" -Filter 'f_*.png' | Sort-Object Name
   $R.frame_count = @($f).Count
   $R.outputs = @(); if ($f) { $R.outputs += (File-Info $f[0].FullName); $R.outputs += (File-Info $f[-1].FullName) }

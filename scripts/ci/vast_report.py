@@ -422,11 +422,11 @@ PROPIMAGE_B_ROWS = {
     "indesign": ("gate", True), "illustratorsample": ("gate", True), "indesignsample": ("gate", True), "animatesample": ("gate", False),
     "photoshopsample": ("discovery", True), "photoshopcpu": ("discovery", True), "photoshopprojects": ("discovery", True),
     "indesignprojects": ("discovery", True), "animateprojects": ("discovery", False), "aeprojects": ("discovery", True),
-    "aetoggle": ("discovery", True), "aeadv3d": ("discovery", True), "aeparallel": ("discovery", True), "indesign_s1": ("discovery", True),
-    "indesign_s2": ("discovery", True), "indesign_s3": ("discovery", True), "indesign_s4": ("discovery", True), "indesign_s5": ("discovery", True),
-    "indesign_s6": ("discovery", True), "acrobat": ("gate", True), "animate": ("gate", False), "premiere": ("gate", True),
-    "mediaencoder": ("discovery", True), "lightroom": ("discovery", False), "lightroomlaunch": ("gate", True), "dimension": ("gate", True),
-    "uxp": ("gate", True),
+    "aetoggle": ("discovery", True), "aeadv3d": ("discovery", True), "premieretl": ("discovery", True), "amematrix": ("discovery", True),
+    "aeparallel": ("discovery", True), "indesign_s1": ("discovery", True), "indesign_s2": ("discovery", True), "indesign_s3": ("discovery", True),
+    "indesign_s4": ("discovery", True), "indesign_s5": ("discovery", True), "indesign_s6": ("discovery", True), "acrobat": ("gate", True),
+    "animate": ("gate", False), "premiere": ("gate", True), "mediaencoder": ("discovery", True), "lightroom": ("discovery", False),
+    "lightroomlaunch": ("gate", True), "dimension": ("gate", True), "uxp": ("gate", True),
 }
 PROPIMAGE_B_PASS = ("PASS", "PASS_LIMITED")
 PROPIMAGE_B_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")

@@ -27,8 +27,8 @@ try {
     ('var doc = app.documents[0]; app.jpegExportPreferences.pageString = "1"; app.jpegExportPreferences.exportResolution = 150; app.jpegExportPreferences.jpegQuality = JPEGOptionsQuality.HIGH; doc.exportFile(ExportFormat.JPG, File("' + ($D -replace '\\', '/') + '/out.jpg"), false); "jpg"')
   )
   for ($k = 0; $k -lt [Math]::Min($N - 1, $steps.Count); $k++) {
-    $r = $id.DoScript($steps[$k], 1246973031)
-    IdP ('s{0} done: {1}' -f ($k + 2), $r)
+    $dres = $id.DoScript($steps[$k], 1246973031)
+    IdP ('s{0} done: {1}' -f ($k + 2), $dres)
   }
   $R.outputs = @(); foreach ($f in 'out.pdf', 'out.jpg') { if (Test-Path "$D\$f") { $R.outputs += (File-Info "$D\$f") } }
   try { $id.DoScript('app.documents.everyItem().close(SaveOptions.NO); "closed"', 1246973031) | Out-Null } catch {}

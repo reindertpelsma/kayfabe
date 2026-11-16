@@ -75,6 +75,15 @@ class T(unittest.TestCase):
             if m.group(2):
                 self.assertIn(m.group(2), (name, "sniffers") if name == "gpudiag" else (name,), name)
 
+    def test_no_script_assigns_to_r_which_is_the_result_table(self):
+        """PowerShell variables are case-insensitive: `$r = ...` at the top level of a row script silently replaces `$R` (the result table)."""
+        import re
+        for f in sorted(B.APPS_DIR.glob("*.ps1")):
+            if f.name == "lib.ps1":
+                continue
+            for n, line in enumerate(f.read_text().splitlines(), 1):
+                self.assertIsNone(re.match(r"\s*\$r\s*=", line), "%s:%d assigns to $r" % (f.name, n))
+
     def test_photoshop_pass(self):
         self.photoshop()
         row = B.verdict("photoshop", "x" * 32, self.d, GPU_OK)
