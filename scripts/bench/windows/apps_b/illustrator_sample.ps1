@@ -16,11 +16,12 @@ try {
   $js = @"
 var doc = app.open(new File('$($ai0.FullName -replace '\\','/')'));
 var w0 = doc.width, h0 = doc.height, n = doc.pathItems.length, sy = doc.symbols.length;
-var po = new ExportOptionsPNG24(); po.horizontalScale = 200; po.verticalScale = 200; po.antiAliasing = true; po.transparency = false; po.artBoardClipping = true;
+var sc = Math.max(10, Math.min(200, Math.floor(Math.sqrt(16000000 / (w0 * h0)) * 100)));
+var po = new ExportOptionsPNG24(); po.horizontalScale = sc; po.verticalScale = sc; po.antiAliasing = true; po.transparency = false; po.artBoardClipping = true;
 doc.exportFile(new File('$($D -replace '\\','/')/out.png'), ExportType.PNG24, po);
 doc.saveAs(new File('$($D -replace '\\','/')/out.pdf'), new PDFSaveOptions());
 doc.close(SaveOptions.DONOTSAVECHANGES);
-'{"w0":"' + w0 + '","h0":"' + h0 + '","paths":"' + n + '","symbols":"' + sy + '"}';
+'{"w0":"' + w0 + '","h0":"' + h0 + '","scale":"' + sc + '","paths":"' + n + '","symbols":"' + sy + '"}';
 "@
   $R.js = ($ai.DoJavaScript($js) | ConvertFrom-Json)
   $R.outputs = @((File-Info "$D\out.png"), (File-Info "$D\out.pdf"))

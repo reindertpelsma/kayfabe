@@ -37,6 +37,17 @@ Every row carries a `lane` (`gate`: expected to pass on kf3, strict; `discovery`
 
 Per-row measured status (PASS, PASS_LIMITED, FAIL, NOT RUN with the reason) is in `traces/imageb_apps_20261116/README.md`, never in this table.
 
+## Driver facts that cost time (MEASURED 2026-11-16, kf3 on a Vast RTX 4090 and no-GPU clones on the pc)
+
+- Automation interfaces (COM) fail from an elevated task (`CO_E_SERVER_EXEC_FAILURE`); the rows run at the user's normal integrity level.
+- Dialogs are found by UI Automation two levels deep only: a full subtree walk of Premiere's or After Effects' window blocks for minutes. Some dialogs (After Effects, the no-GPU Photoshop notice) expose no buttons; the keyboard fallback (`Press-Key`) closes them. Without a GPU, Photoshop's graphics notice blocks COM until it is closed.
+- After Effects: scripts that write files are refused until the per-user preference `Pref_SCRIPTING_FILE_NETWORK_SECURITY` is 1 (the lib sets it in the user's Prefs.txt while the application is not running); a script handed to AE at the cold start is ignored about half the time, so the lib starts AE, waits, and hands the script to the idle instance. `aerender` redirected output makes `Process.HasExited` unreliable: wait with `WaitForExit`.
+- Photoshop: 100 full-size duplicate layers at 8K exceed the guest's 8 GB RAM; the row pastes 1536x1024 patches instead. Quitting after an 8K session takes longer than 40 s.
+- Animate: `Animate.exe script.jsfl` shows an "Open JSFL File" dialog and no keyboard route ran the script; the three Animate rows are disabled with that reason. Lightroom Classic did not load a plugin from the per-user Modules folder; its launch row remains.
+- GPU use is judged from the HOST nvidia-smi: the guest's utilisation counters are `[N/A]` under kf3 (a GSP RPC, function 76, is not served).
+- The guest-visible VRAM is the device's `fb-mb` (4096 by default): applications report 3.8 GB. The After Effects rows were run with `--fb-mb 8192`.
+- A phantom PnP instance of the build host's GPU makes the harness's device restart fail on any other die (fixed in `propimage_check.py`).
+
 ## Built-in and third-party suites
 
 Verified offline in the image: the sniffers above (`gpudiag`). Not driven: Photoshop's Help menu GPU pages (their data is the same as `app.systemInformation`, which the `photoshop` row reads), Premiere and After Effects renderer settings (set in the generated project: `app.project.gpuAccelType`), Lightroom's System Info (a window). PugetBench for Creators: Puget's end-user licence forbids transferring the software to third parties, restricts the free licence to personal non-commercial use, and ties command-line automation and local result logging to a paid licence (checked on Puget's pages on 2026-11-16: https://www.pugetsystems.com/pugetbench/creators/puget-bench-end-user-license-agreement/ and the download page). It is therefore not bundled and not run. If the owner supplies a licensed package it would be a pinned private object like the first image's SPEC zips, row `pugetbench`: NOT RUN, package not pinned.

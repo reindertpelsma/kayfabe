@@ -130,7 +130,7 @@ class T(unittest.TestCase):
     def test_sample_rows(self):
         png(self.d / "out.png", 400, 300)
         (self.d / "out.pdf").write_bytes(b"%PDF-1.4\n1 0 obj<</Type/Page>>endobj\n%%EOF\n")
-        self.result("illustratorsample", ["out.png", "out.pdf"], source="x.ai", js={"w0": "200", "h0": "150", "paths": "9"})
+        self.result("illustratorsample", ["out.png", "out.pdf"], source="x.ai", js={"w0": "200", "h0": "150", "paths": "9", "scale": "200"})
         self.assertTrue(B.verdict("illustratorsample", "x", self.d, None)["ok"])
         self.result("illustratorsample", ["out.png", "out.pdf"], source="x.ai", js={"w0": "999", "h0": "150"})
         self.assertFalse(B.verdict("illustratorsample", "x", self.d, None)["ok"])

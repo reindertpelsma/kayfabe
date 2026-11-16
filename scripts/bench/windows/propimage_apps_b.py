@@ -295,11 +295,15 @@ def grade_indesign(r, d):
 def grade_illustratorsample(r, d):
     js = r.get("js") or {}
     _outputs_fresh(r, d, ("out.png", "out.pdf"))
-    w0, h0 = int(float(js["w0"])), int(float(js["h0"]))
-    p = _png(d, "out.png", w0 * 2, h0 * 2)
+    w0, h0, sc = float(js["w0"]), float(js["h0"]), float(js.get("scale", 200)) / 100.0
+    i = media_check.png_info(d / "out.png")
+    ew, eh = round(w0 * sc), round(h0 * sc)
+    if abs(i["width"] - ew) > 2 or abs(i["height"] - eh) > 2:
+        raise ValueError("out.png is %dx%d, expected about %dx%d" % (i["width"], i["height"], ew, eh))
+    p = _png(d, "out.png", i["width"], i["height"], min_std=1.0, min_distinct=4)
     if media_check.pdf_info(d / "out.pdf")["pages"] < 1:
         raise ValueError("PDF without pages")
-    return "opened the shipped sample %s (%dx%d, %s paths), exported %dx%d PNG (std %.1f) and a PDF" % (r.get("source"), w0, h0, js.get("paths"), w0 * 2, h0 * 2, p["std"]), ""
+    return "opened the shipped sample %s (%dx%d, %s paths), exported %dx%d PNG at %d%% (std %.1f) and a PDF" % (r.get("source"), w0, h0, js.get("paths"), i["width"], i["height"], sc * 100, p["std"]), ""
 
 
 def grade_indesignsample(r, d):
