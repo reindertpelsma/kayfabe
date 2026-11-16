@@ -17,8 +17,8 @@ try {
   $log = "$D\aerender.log"
   $r = Start-Process "$base\aerender.exe" -ArgumentList @('-project', "$D\kf.aep", '-comp', 'kfcomp', '-reuse') -RedirectStandardOutput $log -RedirectStandardError "$D\aerender.err" -PassThru -WindowStyle Hidden
   # WaitForExit, not HasExited: with redirected output the Process object from Start-Process -PassThru can report HasExited = false for ever
-  if (-not $r.WaitForExit(900000)) { Stop-Process -Id $r.Id -Force; throw 'aerender timed out' }
-  $R.aerender_exit = $r.ExitCode
+  if (-not (Wait-Proc $r 900000)) { Stop-Process -Id $r.Id -Force; throw 'aerender timed out' }
+  $R.aerender_exit = $(try { $r.ExitCode } catch { $null }); if ($R.aerender_exit -eq $null) { $R.aerender_exit = $(if ((Get-Content $log -Raw) -match 'Finished composition') { 0 } else { -1 }) }
   $R.t_render_end = Epoch
   $frames = @(Get-ChildItem "$D\frames" | Where-Object { $_.Extension -in '.png', '.tif' } | Sort-Object Name)
   $R.frame_count = $frames.Count

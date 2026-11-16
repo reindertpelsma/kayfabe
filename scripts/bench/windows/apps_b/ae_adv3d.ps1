@@ -12,8 +12,8 @@ try {
   $R.make_log = (Get-Content "$D\ae_make.txt" -Raw)
   $log = "$D\aerender.log"
   $r = Start-Process "$base\aerender.exe" -ArgumentList @('-project', "$D\kf.aep", '-comp', 'kfcomp', '-reuse') -RedirectStandardOutput $log -RedirectStandardError "$D\aerender.err" -PassThru -WindowStyle Hidden
-  if (-not $r.WaitForExit(1200000)) { Stop-Process -Id $r.Id -Force; throw 'aerender timed out' }
-  $R.aerender_exit = $r.ExitCode
+  if (-not (Wait-Proc $r 1200000)) { Stop-Process -Id $r.Id -Force; throw 'aerender timed out' }
+  $R.aerender_exit = $(try { $r.ExitCode } catch { $null }); if ($R.aerender_exit -eq $null) { $R.aerender_exit = $(if ((Get-Content $log -Raw) -match 'Finished composition') { 0 } else { -1 }) }
   $f = Get-ChildItem "$D\frames" -Filter 'f_*.png' | Sort-Object Name
   $R.frame_count = @($f).Count
   $R.outputs = @(); if ($f) { $R.outputs += (File-Info $f[0].FullName); $R.outputs += (File-Info $f[-1].FullName) }

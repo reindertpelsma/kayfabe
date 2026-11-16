@@ -120,6 +120,16 @@ function Run-AeScript($jsx, $marker, [int]$timeoutS = 900, [int]$attempts = 3) {
   $R.ae_file_scripts = Enable-AeFileScripts
   Run-StartupScript 'ae' 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files\AfterFX.exe' 'AfterFX' $jsx $marker $timeoutS $attempts
 }
+# Wait for a process started with Start-Process -PassThru and redirected output: Process.WaitForExit()/HasExited can stay false for ever while a
+# grandchild keeps the redirected handles open (MEASURED with aerender), so poll the process table by id instead. Returns $true when it ended.
+function Wait-Proc($p, [int]$timeoutMs) {
+  $t0 = Get-Date
+  while (((Get-Date) - $t0).TotalMilliseconds -lt $timeoutMs) {
+    if (-not (Get-Process -Id $p.Id -ErrorAction SilentlyContinue)) { return $true }
+    Start-Sleep 2
+  }
+  return $false
+}
 function Has-Window($procNames) { (@(Win-Titles $procNames | Where-Object { $_ })).Count -gt 0 }
 function Quit-App($procNames, $comApp = $null, [int]$budget = 150) {
   # clean exit: ask politely first, then close the windows, only then end the process (and say which one happened)
