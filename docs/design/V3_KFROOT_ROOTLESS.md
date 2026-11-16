@@ -30,8 +30,9 @@ This is accident prevention in an untrusted sandbox, not security inside the box
 
 Only the wrapper is whitelisted, so a third-party script that calls `sudo X` is refused. `install` validates the sudoers text with
 `visudo -c -f` in a temporary file BEFORE it is put in `/etc/sudoers.d` (a missing or refusing `visudo` is a refusal; nothing is written).
-Two additions to the owner's three lines, both measured to be needed (section 3): `!use_pty` (no pseudo-terminal between the harness and
-the command) and `logfile=/var/log/kfroot-sudo.log` with `loglinelen=0` (the audit file, readable by the CI user, one entry per line).
+Additions to the owner's three lines: `!use_pty` (design intent, not measured: no pseudo-terminal between the harness and the command) and
+`logfile=/var/log/kfroot-sudo.log` with `loglinelen=0` (the audit file, readable by the CI user, one entry per line; the need for
+`loglinelen=0` was seen in the hand run of section 3, 2026-11-15, and is pinned by `scripts/ci/test_kfroot.py`).
 
 `kfroot.py` subcommands: `install`, `verify`, `bootstrap`, `drop-argv`, `run`, `audit-mark`, `audit-check`, `assert-tree`
 (`python3 scripts/ci/kfroot.py --help`). `scripts/lib/kfroot.sh` is the shell glue the three harness scripts source: the `kfroot`
@@ -40,8 +41,10 @@ the assertion helpers. Logic is Python (CLAUDE.md).
 
 ## 3. Measured, in a sandbox, by hand (2026-11-15)
 
-Real `sudo.ws` 1.9.17 (the original sudo; the box image `vastai/kvm:ubuntu_cli_22.04` has 1.9.9, not tested) and `sudo-rs` 0.2.13,
-a throwaway user, real `visudo`, `setpriv`, `prlimit`. No GPU, no `/dev/kvm` group test, no box. MEASURED:
+Hand run of 2026-11-15 in the coordinator sandbox of this session at tree `84dff90b6` plus this PR's files; no trace is committed, so
+treat the list as a record of the author's hand run, not as evidence. It used real `sudo.ws` 1.9.17 (the original sudo; the box image
+`vastai/kvm:ubuntu_cli_22.04` has 1.9.9, not tested) and `sudo-rs` 0.2.13, a throwaway user, real `visudo`, `setpriv`, `prlimit`.
+No GPU, no `/dev/kvm` group test, no box. Observed in that run:
 
 - sudo.ws: `kfroot id -u` prints 0; environment variables (`FOO`, `KF3_*`, `DEBIAN_FRONTEND`, `HOME`) and `PATH` arrive; stdin, stdout and
   stderr stay separate; the exit status is returned; argv with spaces, newline, quotes, `$(...)`, `;`, `*`, `-n`, an empty string and `--`
