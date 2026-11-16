@@ -275,6 +275,41 @@ class V7Tests(unittest.TestCase):
         with patch.object(self.m.subprocess, "check_output", return_value=text):
             self.assertEqual(self.m.hardware()["compute_cap"], 0)
 
+    def test_n_identical_gpus_are_one_die_when_the_run_says_so(self):
+        text = "NVIDIA RTX 4000 Ada Generation, 8.9, 580.159.04\n" * 2
+        with patch.object(self.m.subprocess, "check_output", return_value=text):
+            self.assertEqual(self.m.hardware(2), {"gpu_name": "NVIDIA RTX 4000 Ada Generation", "compute_cap": 890, "driver_version": "580.159.04"})
+
+    def test_the_gpu_count_must_match_exactly(self):
+        two = "RTX 3060, 8.6, 580.159.04\n" * 2
+        with patch.object(self.m.subprocess, "check_output", return_value=two):
+            self.assertEqual(self.m.hardware(3)["compute_cap"], 0)
+        with patch.object(self.m.subprocess, "check_output", return_value="RTX 3060, 8.6, 580.159.04\n"):
+            self.assertEqual(self.m.hardware(2)["compute_cap"], 0)
+
+    def test_mixed_gpus_are_never_one_die(self):
+        mixed = "RTX 3060, 8.6, 580.159.04\nRTX 4090, 8.9, 580.159.04\n"
+        with patch.object(self.m.subprocess, "check_output", return_value=mixed):
+            self.assertEqual(self.m.hardware(2)["compute_cap"], 0)
+
+    def test_mixed_driver_versions_are_never_one_die(self):
+        mixed = "RTX 4090, 8.9, 580.159.04\nRTX 4090, 8.9, 575.51.03\n"
+        with patch.object(self.m.subprocess, "check_output", return_value=mixed):
+            self.assertEqual(self.m.hardware(2)["driver_version"], "unknown")
+
+    def test_the_default_is_still_one_gpu(self):
+        self.assertEqual(self.m.EXPECTED_GPUS, 1)
+        two = "RTX 3060, 8.6, 580.159.04\n" * 2
+        with patch.object(self.m.subprocess, "check_output", return_value=two):
+            self.assertEqual(self.m.hardware()["compute_cap"], 0)
+
+    def test_gpus_flag_is_bounded(self):
+        for bad in ("0", "9", "x"):
+            with self.assertRaises(SystemExit):
+                self.m.parse_args(["--gpus", bad])
+        self.assertEqual(self.m.parse_args(["--gpus", "2"]).gpus, 2)
+        self.assertEqual(self.m.parse_args([]).gpus, 1)
+
     def test_malformed_hardware_stays_unknown(self):
         with patch.object(self.m.subprocess, "check_output", return_value="bad"):
             self.assertEqual(self.m.hardware()["gpu_name"], "unknown")
