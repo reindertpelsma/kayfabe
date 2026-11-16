@@ -46,6 +46,23 @@ class Official(unittest.TestCase):
             p=Path(t)/'fetch.py';p.write_bytes(b'changed')
             with self.assertRaises(O.MediaDrift):O.check_fetcher(p,{'sha256':'a'*64})
 
+    def tree_fetcher(self):return B.HERE.parents[2]/'ci'/'kf_fetch.py'
+
+    def test_committed_fetcher_pin_matches_the_tree_file(self):
+        """#425-style drift: kf_fetch.py edited without re-pinning official_fetch.json fails here, not on the box (J4)."""
+        pin=B.load(B.HERE/'official_fetch.json')['fetcher'];O.check_fetcher(self.tree_fetcher(),pin)
+        self.assertEqual(pin['size'],self.tree_fetcher().stat().st_size)
+        self.assertEqual(pin,B.load(B.HERE/'manifest.json')['official_fetcher'])
+
+    def test_stale_size_pin_on_the_tree_file_is_media_drift(self):
+        pin=dict(B.load(B.HERE/'official_fetch.json')['fetcher']);pin['size']+=1
+        with self.assertRaises(O.MediaDrift):O.check_fetcher(self.tree_fetcher(),pin)
+
+    def test_size_change_with_matching_hash_is_media_drift(self):
+        with tempfile.TemporaryDirectory()as t:
+            p=Path(t)/'fetch.py';p.write_bytes(b'abc')
+            with self.assertRaises(O.MediaDrift):O.check_fetcher(p,{'sha256':hashlib.sha256(b'abc').hexdigest(),'size':2})
+
     def test_missing_fetcher_is_media_drift(self):
         with self.assertRaises(O.MediaDrift):O.check_fetcher(Path('/missing/official-fetcher'),{'sha256':'a'*64})
 
