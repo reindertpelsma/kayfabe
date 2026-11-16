@@ -15,7 +15,7 @@ import re
 from collections import OrderedDict
 
 KEYWORDS = OrderedDict([
-    ("unserviced", re.compile(r"UNSERVICED", re.I)),
+    ("unserviced", re.compile(r"\bUNSERVICED\b")),   # the GSP rpc line; case-sensitive: status lines carry lower-case counters
     ("foreign_class", re.compile(r"ForeignClass|foreign_class", re.I)),
     ("refused", re.compile(r"\brefused\b(?!=0\b)|\bREFUSED\b")),   # not the status counter `refused=0` that every status line prints
     ("dead_channel", re.compile(r"\bDEAD\b")),

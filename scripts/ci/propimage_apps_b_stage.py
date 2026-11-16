@@ -50,6 +50,11 @@ def apps_module(root):
     return pa.load_module(Path(root) / "scripts/bench/windows/propimage_apps_b.py", "kf_propimage_apps_b_for_stage")
 
 
+# Guest-visible framebuffer in MiB. MEASURED 2026-11-16 (RTX 4090 box): at the image default of 4096 the GPU step failed on 2 of 2 stage boots (no matching UUID
+# after the device restart) and the applications see only 4 GB; at 8192 it passed on 5 of 5 boots.
+FB_MB = "8192"
+
+
 def plan_boots(timeouts, order, budget=BOOT_BUDGET_S, lanes=None):
     """Greedy groups in table order whose timeouts sum to at most `budget` (the evaluation timer is per boot). A discovery-lane row
     (`lanes[app] == "discovery"`) boots ALONE in a fresh clone: it is allowed to crash or hang the guest, and then only its own row fails."""
@@ -75,7 +80,7 @@ def plan_boots(timeouts, order, budget=BOOT_BUDGET_S, lanes=None):
 def boot_command(check_py, a):
     cmd = [sys.executable, "-B", "-I", str(check_py), "--dir", a["dir"], "--work", a["work"], "--out", a["out"], "--qemu", a["qemu"],
            "--flags", a["flags"], "--broker", a["broker"], "--gop-efi", a["gop"], "--display", "broker", "--app-set", "b",
-           "--data-iso", a["data"], "--apps", ",".join(a["apps"])]
+           "--data-iso", a["data"], "--apps", ",".join(a["apps"]), "--fb-mb", FB_MB]
     return cmd
 
 

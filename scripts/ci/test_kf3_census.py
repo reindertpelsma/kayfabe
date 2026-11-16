@@ -37,6 +37,10 @@ class T(unittest.TestCase):
         c = kc.census(["kf3: family=Ada phase=Running trapped=5 applied=3 refused=0 serviced=2", "kf3: family=Ada refused=16 serviced=2"])
         self.assertEqual(c["counts"].get("refused"), 1)
 
+    def test_status_counters_are_not_unserviced_events(self):
+        c = kc.census(["kf3: family=Ada phase=Running trapped=5 unserviced=7 serviced=2", "kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }"])
+        self.assertEqual(c["counts"]["unserviced"], 1)
+
     def test_window(self):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "q.log"
