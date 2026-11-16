@@ -1,10 +1,25 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-15 (§AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-16 (§AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §AU. The guest clock depends only on the network; a recorded clock is never earlier than the software loaded into the image, 2026-11-16
+
+**STATUS: LIVE, 2026-11-16; owner rulings (stated in conversation, recorded by the coordinator).** Design and measured/code-read
+split: `docs/design/V3_CLOCK_RULE.md`. Implemented GPU-free in `scripts/bench/windows/clockrule.py` and `win_vm.sh`; nothing here has
+run on hardware yet.
+
+1. **Network off** (slirp `restrict=on`, only the ssh forward) runs a **recorded** clock; **network on** (`restrict=off`) runs the
+   **real** clock. Whether an image is open or proprietary does not matter. An offline image needs no current time; a moving clock
+   only adds ways for it to break. A guest with network needs the real time.
+2. A recorded clock with network is always refused. An offline guest on the real clock (no record yet) is a WARN, with one
+   switch (`WINVM_CLOCK_STRICT=1`) that the owner can flip later to refuse it.
+3. **A recorded clock is never earlier than the creation time of software loaded into the image** (SPECviewperf bundle on the open
+   LTSC image, a guest driver installer): clock floor = max(recorded, newest created_utc + 1 h). Our scripts and test/input assets do
+   not count. A proprietary image uses exactly the clock of its `state.json` and no floor.
 
 ## §AT. The measured Windows profile is the default; `windows-support=on|off` is the one opt-out, 2026-11-15
 
