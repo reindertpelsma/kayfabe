@@ -1564,3 +1564,7 @@ sentence was removed. Thin multi-GPU tests and aarch64 builds already exist (ite
    `STATUS_DETAIL.md` section 3 records it: a Linux thin guest with two distinct GPUs. CUDA in a two-GPU guest, UVM
    across GPUs, peer access (refused by name) and Windows or display with several GPUs are not measured. Existing
    two-GPU thin tests and the aarch64 cross-builds do not establish full support.
+
+## §AT. Proprietary-image runner: a list of images, prebuilt now and built later, state.json optional, clock and network asserted, 2026-11-16
+
+Owner, 2026-11-16: the runner takes any number of images (a list); the kinds are `prebuilt` (phase 1) and `built` (phase 2, after the release run); `state.json` is optional (required for CI); a faked clock requires the network off and a networked guest requires the real clock (asserted in every launch path); the Worker builds instructions from its image and app configuration. Design, schema and the phase split: `docs/design/V3_PROPIMAGE_RUNNER.md`.

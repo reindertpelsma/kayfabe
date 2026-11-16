@@ -178,6 +178,7 @@ def main():
         (tree / "scripts/ci").mkdir(parents=True)
         shutil.copy(test_src, tree / "scripts/ci/test_propimage.py")
         shutil.copy(ROOT / "scripts/bench/windows/win_vm.sh", tree / "scripts/bench/windows/win_vm.sh")
+        shutil.copy(ROOT / "scripts/bench/windows/clocknet_assert.py", tree / "scripts/bench/windows/clocknet_assert.py")   # propimage.py imports it
         shutil.copy(ROOT / "scripts/bench/windows/propimage_autounattend.xml.in", tree / "scripts/bench/windows/propimage_autounattend.xml.in")
         shutil.copytree(ROOT / "scripts/ci/fixtures/cpuflags", tree / "scripts/ci/fixtures/cpuflags")
         target = tree / "scripts/bench/windows/propimage.py"

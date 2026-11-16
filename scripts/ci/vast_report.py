@@ -415,6 +415,96 @@ def validate_propimage_apps(value):
 NAME_OK = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 
 
+def validate_propimage_run(value):
+    """The generic proprietary-image runner's record (scripts/ci/propimage_images.py, schema kayfabe.propimage-run/1): bounded, strictly read,
+    not forwarded. PASS needs at least one PASS image, every image PASS or NOT_RUN, and for a PASS image every app PASS and every boot's
+    clock and network proven; every other verdict carries a reason."""
+    text = re.compile(r"[\x20-\x7e]{0,200}")
+    word = re.compile(r"[A-Za-z0-9_:.-]{0,80}")
+    num = lambda v, hi=1 << 40: type(v) is int and 0 <= v <= hi  # noqa: E731
+    verdicts = ("PASS", "FAIL", "RETRY", "REFUSED", "SKIPPED")
+    classes = ("MISSING_INPUT", "NO_DRIVER", "NOT_INSTALLED", "NOT_PROVIDED", "CONSTRAINT")
+    top = {"schema", "verdict", "sha", "reason", "family", "cpu_vendor", "preflight", "images", "strict", "summary", "strict_failures", "breakages", "platform", "rows"}
+    ok = type(value) is dict and top <= set(value) <= top | {"error"} and value["schema"] == "kayfabe.propimage-run/1"
+    ok = ok and value["verdict"] in verdicts and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    ok = ok and type(value["reason"]) is str and word.fullmatch(value["reason"]) is not None and ("error" not in value or text.fullmatch(str(value["error"])))
+    ok = ok and value["family"] in (None, "turing", "ampere", "ada", "blackwell") and value["cpu_vendor"] in (None, "amd", "intel", "other")
+    ok = ok and type(value["preflight"]) is list and len(value["preflight"]) <= 16 and all(
+        type(r) is dict and set(r) == {"name", "status", "detail"} and re.fullmatch(r"[a-z0-9_]{1,24}", str(r["name"]))
+        and r["status"] in ("MATCH", "MISMATCH", "WARN") and text.fullmatch(str(r["detail"])) for r in value["preflight"])
+    sm = value["summary"] if ok else None
+    ok = ok and type(value["strict"]) is bool and type(sm) is dict and set(sm) == {"ran", "passed", "failed", "skipped", "classes", "lanes"}
+    ok = ok and all(num(sm[k], 4096) for k in ("ran", "passed", "failed", "skipped")) and sm["passed"] + sm["failed"] == sm["ran"]
+    ok = ok and type(sm["classes"]) is dict and set(sm["classes"]) <= set(classes) and all(num(v, 4096) for v in sm["classes"].values())
+    ok = ok and sum(sm["classes"].values()) == sm["skipped"]
+    ok = ok and type(sm["lanes"]) is dict and set(sm["lanes"]) == {"gate", "discovery"} and all(
+        type(v) is dict and set(v) == {"ran", "passed"} and num(v["ran"], 4096) and num(v["passed"], 4096) and v["passed"] <= v["ran"] for v in sm["lanes"].values())
+    ok = ok and value["platform"] == "kf3"
+    classes_of_failure = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")
+    br = value["breakages"] if ok else None
+    ok = ok and type(br) is list and len(br) <= 32 and all(
+        type(b) is dict and set(b) == {"row", "class", "reason", "host_xid"} and word.fullmatch(str(b["row"])) and b["class"] in classes_of_failure
+        and text.fullmatch(str(b["reason"])) and num(b["host_xid"], 1 << 30) for b in br)
+    sf = value["strict_failures"] if ok else None
+    ok = ok and type(sf) is list and len(sf) <= 32 and all(
+        type(f) is dict and set(f) == {"image", "app", "class", "reason"} and f["class"] in classes and word.fullmatch(str(f["image"]))
+        and (f["app"] is None or word.fullmatch(str(f["app"]))) and word.fullmatch(str(f["reason"])) for f in sf)
+    rows = value["rows"] if ok else None
+    rkeys = {"die", "family", "host_driver", "guest_driver", "kf3_rev", "image", "app", "row", "lane", "platform", "result", "failure_class", "reason", "duration_s",
+             "started_utc", "ended_utc"}
+    iso = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
+    ok = ok and type(rows) is list and len(rows) <= 96 and all(
+        type(r) is dict and set(r) == rkeys and (r["die"] is None or text.fullmatch(str(r["die"]))) and r["family"] in (None, "turing", "ampere", "ada", "blackwell")
+        and (r["host_driver"] is None or re.fullmatch(r"\d+\.\d+(\.\d+)?", str(r["host_driver"]))) and (r["guest_driver"] is None or re.fullmatch(r"\d+\.\d+(\.\d+)?", str(r["guest_driver"])))
+        and (r["kf3_rev"] is None or re.fullmatch("[0-9a-f]{40}", str(r["kf3_rev"]))) and word.fullmatch(str(r["image"])) and (r["app"] is None or word.fullmatch(str(r["app"])))
+        and word.fullmatch(str(r["row"])) and r["lane"] in ("gate", "discovery") and r["platform"] == "kf3" and r["result"] in ("PASS", "FAIL", "SKIPPED")
+        and r["failure_class"] in (None,) + classes_of_failure and (r["reason"] is None or text.fullmatch(str(r["reason"])))
+        and (r["duration_s"] is None or num(r["duration_s"], 1 << 24)) and all(r[k] is None or iso.fullmatch(str(r[k])) for k in ("started_utc", "ended_utc"))
+        and (r["result"] != "PASS" or (r["failure_class"] is None and r["reason"] is None)) and (r["result"] != "FAIL" or (r["failure_class"] is not None and r["reason"]))
+        for r in rows)
+    images = value["images"] if ok else None
+    ok = ok and type(images) is list and len(images) <= 8
+    keys = {"label", "kind", "mode", "source", "verdict", "reason", "skip_class", "guest_driver", "decided", "boots", "apps", "not_run", "breakages", "unsupported"}
+    for im in images if ok else ():
+        ok = ok and type(im) is dict and keys <= set(im) <= keys | {"error"} and im["verdict"] in verdicts and im["kind"] in ("prebuilt", "built")
+        ok = ok and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}", str(im["label"])) and im["mode"] in (None, "ci", "plain")
+        ok = ok and type(im["reason"]) is str and word.fullmatch(im["reason"]) is not None and (im["verdict"] in ("PASS",) or im["reason"] != "")
+        src = im["source"] if ok else None
+        ok = ok and type(src) is dict and set(src) == {"from", "name", "sha256"} and src["from"] in ("official", "file", "url", "pin")
+        ok = ok and text.fullmatch(str(src["name"])) and (src["sha256"] is None or re.fullmatch("[0-9a-f]{64}", str(src["sha256"])))
+        ok = ok and type(im["boots"]) is list and len(im["boots"]) <= 16 and all(
+            type(b) is dict and {"index", "apps", "rc", "secs", "clock", "net", "proven"} <= set(b) <= {"index", "apps", "rc", "secs", "clock", "net",
+                                                                                                 "proven", "host_xid_unattributed", "started_utc", "ended_utc"}
+            and type(b["proven"]) is bool and type(b["apps"]) is list and all(re.fullmatch(r"[a-z0-9_]{1,32}", str(a)) for a in b["apps"])
+            and (b["rc"] is None or (type(b["rc"]) is int and -256 <= b["rc"] <= 256)) and num(b["secs"], 1 << 20)
+            and b["clock"] in (None, "real", "recorded") and b["net"] in (None, "off", "on") for b in im["boots"])
+        ok = ok and type(im["apps"]) is list and len(im["apps"]) <= 32 and type(im["not_run"]) is list and len(im["not_run"]) <= 64
+        ok = ok and all(type(a) is dict and set(a) == {"app", "verdict", "kind", "secs", "detail", "evidence", "scores", "guest_events", "host_xid", "lane", "outcome"}
+                        and a["lane"] in ("gate", "discovery") and a["outcome"] in ("PASS", "FAIL", "BREAKAGE")
+                        and re.fullmatch(r"[a-z0-9_]{1,32}", str(a["app"])) and a["kind"] in ("FILE", "UIA", "NONE")
+                        and a["verdict"] in ("PASS", "FAIL", "INCONCLUSIVE", "LAUNCH_ONLY", "HARNESS", "NOT_RUN", "MISSING")
+                        and text.fullmatch(str(a["detail"])) and type(a["evidence"]) is list and len(a["evidence"]) <= 24
+                        and type(a["scores"]) is dict and len(a["scores"]) <= 4 for a in im["apps"])
+        ok = ok and all(type(n) is dict and set(n) == {"app", "reason", "class"} and word.fullmatch(str(n["app"])) and word.fullmatch(str(n["reason"]))
+                        and n["class"] in classes for n in im["not_run"])
+        ok = ok and (im["skip_class"] in classes if im["verdict"] == "SKIPPED" else im["skip_class"] is None)
+        ok = ok and type(im["unsupported"]) is list and len(im["unsupported"]) <= 64 and all(text.fullmatch(str(u)) for u in im["unsupported"])
+        if ok and im["verdict"] == "PASS":
+            ok = bool(im["apps"]) and all(a["verdict"] == "PASS" for a in im["apps"] if a["lane"] == "gate") and all(b["proven"] for b in im["boots"] if b["rc"] != 125)
+    if ok and value["verdict"] == "PASS":
+        ok = (bool(images) and all(i["verdict"] in ("PASS", "SKIPPED") for i in images) and any(i["verdict"] == "PASS" for i in images)
+              and value["reason"] == "" and not sf)
+        if ok and value["strict"]:        # a strict PASS has no skip anywhere: zero skips is the assertion
+            ok = sm["skipped"] == 0 and all(i["verdict"] == "PASS" and not i["not_run"] for i in images)
+    elif ok:
+        ok = value["reason"] != ""
+    if ok and value["strict"] and value["verdict"] == "FAIL" and value["reason"].startswith("STRICT_SKIP"):
+        ok = bool(sf)
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 49152
+    if not ok:
+        raise ValueError("propimage_run")
+
+
 def validate_matrix_receipts(value):
     """Bounded evidence claims; selected drivers/required rows are checked by the Worker."""
     axes = {"host_driver", "linux_guest_driver", "windows_guest_driver"}
@@ -478,6 +568,7 @@ def read_result_file(path):
             "instruction_sha256",
             "selection",
             "propimage_apps",
+            "propimage_run",
             "install_flow",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
@@ -497,6 +588,10 @@ def read_result_file(path):
             validate_propimage_apps(doc["propimage_apps"])
             if doc["verdict"] == "PASS" and doc["propimage_apps"]["verdict"] not in ("PASS", "NOT_RUN"):
                 raise ValueError("propimage_apps verdict")
+        if "propimage_run" in doc:
+            validate_propimage_run(doc["propimage_run"])
+            if doc["verdict"] == "PASS" and doc["propimage_run"]["verdict"] != "PASS":
+                raise ValueError("propimage_run verdict")
         if "install_flow" in doc:
             validate_install_flow(doc["install_flow"])
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):

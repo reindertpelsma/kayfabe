@@ -173,9 +173,9 @@ def needed_roles(build_swtpm):
     return ("image", "gop") + (("libtpms", "swtpm") if build_swtpm else ())
 
 
-def build_manifest(pins, build_swtpm):
+def build_manifest(pins, build_swtpm, roles=None):
     """kayfabe.download-manifest/1 for the needed roles. Refuses (PIN_UNSET:<first role>) when any needed item is unpinned."""
-    roles = needed_roles(build_swtpm)
+    roles = roles or needed_roles(build_swtpm)
     unset = unset_roles(pins, roles)
     if unset:
         raise Refused("PIN_UNSET:" + unset[0], ",".join(unset))
@@ -461,7 +461,7 @@ def scores_of(app, signal_text):
     return {"score": int(m[1])} if m else {}
 
 
-def collect_app(out, app, rows, xids):
+def collect_app(out, app, rows, xids, expected=None):
     """One app's record from the harness rows (result.json) and its verdict.json; both must agree for a PASS."""
     rec = {"app": app, "verdict": "MISSING", "kind": "NONE", "secs": 0, "detail": "", "evidence": [], "scores": {},
            "guest_events": {"collected": False, "live_kernel_events": 0, "codes": [], "tdr_4101": 0, "nvlddmkm_153": 0},
@@ -490,7 +490,7 @@ def collect_app(out, app, rows, xids):
         rec["scores"] = scores_of(app, clean(verdict_doc.get("signal"), 400))
     if rec["verdict"] == "PASS":
         proven = (type(verdict_doc) is dict and verdict_doc.get("app") == app and verdict_doc.get("ok") is True
-                  and verdict_doc.get("evidence") == rec["kind"] == EXPECTED_KIND[app] and len(dirs) == 1)
+                  and verdict_doc.get("evidence") == rec["kind"] == (expected or EXPECTED_KIND.get(app)) and len(dirs) == 1)
         if not proven:
             rec["verdict"], rec["detail"] = "FAIL", "UNPROVEN_PASS: " + rec["detail"][:150]
     return rec
@@ -529,11 +529,13 @@ class Context:
     klog_source: object = None
     qemu: Path = None
     unpack: object = None
+    plain_py: Path = None          # propimage_plain.py (the generic runner's no-state.json harness)
 
     def __post_init__(self):
         self.checkout, self.prefix, self.out, self.urls = (Path(x) for x in (self.checkout, self.prefix, self.out, self.urls))
         self.check_py = Path(self.check_py or self.checkout / "scripts/bench/windows/propimage_check.py")
         self.qemu = Path(self.qemu or Path(self.bench) / "kf3-bins" / self.sha[:8] / "qemu-system-x86_64")
+        self.plain_py = Path(self.plain_py or self.checkout / "scripts/bench/windows/propimage_plain.py")
 
 
 def new_record(ctx):
@@ -665,7 +667,7 @@ def fetch(ctx, manifest_path, dl, logs):
 class Mark:
     """Reads the harness stdout while it runs and marks the kernel log at each app boundary."""
 
-    LINE = re.compile(r"^(app:[a-z0-9]+|verify|stop) ")
+    LINE = re.compile(r"^(app:[a-z0-9_]+|verify|stop) ")
 
     def __init__(self, klog, boot_label, apps):
         self.klog, self.label, self.apps, self.seen = klog, boot_label, apps, []
@@ -856,6 +858,25 @@ def finish(rec, out):
 
 
 def main(argv=None):
+    """`run` with image flags (--image, --propimage, --images-file) is the generic runner (propimage_images.py); without them the
+    legacy stage below. The image flags are taken out of the words first: they are per image and order matters."""
+    sys.path.insert(0, str(WINDOWS_DIR))
+    import propimage_runspec as spec_mod
+    try:
+        words, spec = spec_mod.split_flags(list(sys.argv[1:] if argv is None else argv))
+        if "--images-file" in words:
+            i = words.index("--images-file")
+            path, words = words[i + 1], words[:i] + words[i + 2:]
+            if spec:
+                raise spec_mod.SpecError("IMAGES_FILE_AND_FLAGS")
+            spec = spec_mod.parse_json(Path(path).read_text())
+    except (spec_mod.SpecError, OSError, IndexError) as exc:
+        print("KF_PROPIMAGE_APPS_USAGE SPEC:" + clean(exc, 80), flush=True)
+        return 2
+    return _main(words, spec)
+
+
+def _main(argv, spec):
     p = argparse.ArgumentParser(prog="propimage_apps.py", description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
@@ -867,6 +888,8 @@ def main(argv=None):
     r.add_argument("--bench", default="/workspace/bench")
     r.add_argument("--deadline-epoch", type=float, default=0.0)
     r.add_argument("--evidence-dir")
+    r.add_argument("--qemu", help="generic runner: the kf3 QEMU binary (default: the bench dir's kf3-bins/<sha>/)")
+    r.add_argument("--gop-efi", help="generic runner: the signed boot GOP driver for state.json images")
     q = sub.add_parser("plan")
     q.add_argument("--sha", default="0" * 40)
     q.add_argument("--cpuinfo", default="/proc/cpuinfo")
@@ -874,9 +897,20 @@ def main(argv=None):
     m.add_argument("--out", required=True)
     m.add_argument("--swtpm-build", action="store_true")
     a = p.parse_args(argv)
+    if spec and a.cmd == "manifest":
+        return 2
     try:
         if a.cmd == "manifest":
             Path(a.out).write_text(json.dumps(build_manifest(load_pins(), a.swtpm_build), indent=1) + "\n")
+            return 0
+        if a.cmd == "plan" and spec:           # the per-image plan; touches nothing
+            import propimage_registry
+            import propimage_runspec
+            reg, doc = propimage_registry.load_registry(), propimage_runspec.validate(spec)
+            for img, line in zip(doc["images"], propimage_runspec.describe(doc)):
+                rows, _, decided = propimage_runspec.plan_apps(img, reg)
+                print(line, "decided=" + decided, "run=" + ",".join(r["app"] for r in rows if r["action"] == "run"),
+                      "not_run=" + ",".join("%s(%s)" % (r["app"], r["reason"]) for r in rows if r["action"] == "not_run"), flush=True)
             return 0
         if a.cmd == "plan":
             ctx = Context(a.sha, ROOT, DEFAULT_PREFIX, "/dev/null", DEFAULT_URLS, cpuinfo=a.cpuinfo, hardware=hardware_now())
@@ -886,6 +920,12 @@ def main(argv=None):
             return 0
         if not SHA_RE.fullmatch(a.sha):
             return 2
+        if spec:
+            sys.path.insert(0, str(HERE))
+            import propimage_images
+            ctx = Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=hardware_now(),
+                          qemu=a.qemu)
+            return propimage_images.finish(propimage_images.run_images(ctx, spec, a.evidence_dir, gop=Path(a.gop_efi) if a.gop_efi else None), a.out)
         ctx = Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=hardware_now())
         return finish(run(ctx, a.evidence_dir), a.out)
     except Refused as exc:
