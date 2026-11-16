@@ -1,10 +1,51 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-28 (§AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-15 (§AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §AT. The measured Windows profile is the default; `windows-support=on|off` is the one opt-out, 2026-11-15
+
+**STATUS: LIVE, 2026-11-15; owner rulings (stated in conversation, recorded by the coordinator).** Implements Stage 1 of
+`docs/design/V3_FLAG_INVENTORY.md`'s flag cleanup (draft PR `claude/flags-stage1-20261115`). Nothing here has run on hardware yet:
+the first proof is the Windows gate on a rented box with NO env file (`docs/design/V3_WINDOWS_SUPPORT_PROFILE.md`, *Status*).
+
+<!-- src: owner, 2026-11-15, flag-cleanup conversation: "Can you set these flags as default. To start windows you dont need an env file. Then the defaults are wrong." and "by default kayfabe should run both linux & windows out of the box, unless it's explicitly told to be linux only in the command line" -->
+
+1. **2026-11-15, owner: set the measured Windows profile as the default.** The 18 flags of the recorded Windows Code 0 holds
+   (`KF3_WIN_USER_CHANNELS_PASSTHROUGH`, `_WIN_TWIN_DEFAPI_OBJECT`, `_KERNEL_GR_CE`, `_KERNEL_GR_WORK`, `_TRANSLATED_CE_RELAY`,
+   `_DEFERRED_API`, `_PREEMPT_BIND_PROBE`, `_ZCULL_BIND_PROBE`, `_ASYNC_PREEMPT`, `_DISPLAY_CTRL_PROBE`, `_DISPLAY_IMP_ENABLE`,
+   `_SW_RUNLIST_PROBE`, `_SW_RUNLIST_HOST_OWNED`, `_GFX_POOL_PROBE`, `_MEMORY_LIST_PROBE`, `_DISPLAY_SDR_COLOR`,
+   `_DISPLAY_LUT_MIRROR`, `_DISPLAY_ILUT_OFFSET_256`) are hardwired **together**. What was measured: the Windows gates PASSed with all 18
+   on (RTX 4090 `a76d1397`, RTX 3090 `006d845a`, RTX 5070 Ti `54410b7d`, and an Ada die-coverage run: three GPU families; `windows_apps` 10/10 on the 4090). Individually ablated
+   (2026-10-10/11, idle desktop only): `TIMER_MAP` (not in this set) and a subset of the 18 (see `V3_FLAG_INVENTORY.md`); **not** ablated:
+   `ZCULL_BIND_PROBE`; needed only INFERRED: `KERNEL_GR_WORK`, `SW_RUNLIST_PROBE`, `MEMORY_LIST_PROBE`; idle-only: `TRANSLATED_CE_RELAY`,
+   `ASYNC_PREEMPT`; `DISPLAY_SDR_COLOR` was "not needed to boot" (colour fidelity). Those passes ran with the OLD, process-wide flags; the
+   per-declaration form shipped here (identity-gated per alloc, per space and per page) has **not** run on hardware. "To start Windows you
+   don't need an env file; then the defaults are wrong."
+2. **Both OSes out of the box.** "By default kayfabe should run both Linux and Windows out of the box, unless it is explicitly told to be
+   Linux-only on the command line." The compromise: each behaviour is gated on the guest DECLARING the Windows driver identity (owner
+   rule D4: keyed on declared state, never a flag), so Linux is unchanged by construction; one coarse device property
+   `windows-support=on|off`, **default on**, is the only opt-out (`docs/design/V3_WINDOWS_SUPPORT_PROFILE.md`). "Windows-only" is not worth
+   a switch. The rest of the `KF3_*` flags stay, documented for power users; the env-read allowlist lint comes later (Stage 3).
+   **The declaration is the guest's own bytes (rule D4): it selects a compatibility profile and is not a security boundary.** An honest Linux
+   guest never reaches the profile; a guest that declares Windows 580.88 reaches about fifteen paths that used to need an operator env flag
+   (user-work twins and the user ring, the 64 KiB-floor spaces, the host deferred-API object, the kernel-GR tier, the copy-engine relay,
+   memory-list descriptors, async preempt with cross-client re-enable, host-owned scheduling, the colour decoder). No path into another VM or
+   the host was found (read, not tested); a dedicated hostile-guest review is a follow-up. `windows-support=off` is the hardening for
+   Linux-only or multi-tenant hosts.
+3. **`KF3_SW_RUNLIST_HOST_OWNED` is turned on with the rest.** §W's "stays off and undecided" is reversed (see §W): "undecided" was never a
+   decision to keep it off.
+4. **Fabricated answers become product behaviour, named as such.** The profile includes answers no host query produced (class (c) in the
+   flag inventory): the `GFX_POOL_QUERY_SIZE` sizes (`kf_abi::gfxpool::experimental_query`), `NV_OK` with nothing bound on the host for
+   `GR_CTXSW_PREEMPTION_BIND` and the cross-client `GR_CTXSW_ZCULL_BIND`, the six echoed NV0073 controls, the software-runlist submit
+   `NV_OK` (contents ignored) and `IMP_ENABLE` TRUE. They are served only to a declared Windows guest; code and docs say "FABRICATED". They
+   claim no GPU work (§S: no forged completion).
+5. **Not decided here:** the colour path (`DISPLAY_SDR_COLOR` with its two decoder switches) is keyed on the declaration and shown to a Windows
+   guest only; whether a Linux guest should also get it is **not decided** (the Linux colour audit keeps `KF3_DISPLAY_SDR_COLOR=1` as an explicit
+   lab override). Stage 2 (delete dead and old-experiment branches), the lint and display-mode properties are later stages.
 
 ## §AS. User flow: compile QEMU, use your own tools; no new CLI; module and hypervisor independence are priorities, 2026-11-15
 
@@ -1121,7 +1162,12 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   served read-only (`nvidia-smi` is unprivileged on bare metal); power is not important. Direction: the
   values the guest sees are this VM's own, never host-wide quantities (§S exposure rule); the design
   and its measurements are open work (`docs/STATUS_AND_HANDOFF.md`).
-- **Software-runlist flag (`KF3_SW_RUNLIST_HOST_OWNED`):** stays off and undecided.
+- ⊘ **REVERSED 2026-11-15 (owner, §AT: "set the measured Windows profile as the default"): the
+  software-runlist host-owned scheduling (`KF3_SW_RUNLIST_HOST_OWNED`, now no flag) is ON for a guest that
+  declares the measured Windows driver, and off for every other guest.** "Undecided" was never a decision to
+  keep it off, and the owner did not keep it off: every passing Windows gate ran with it on.
+- **Software-runlist flag (`KF3_SW_RUNLIST_HOST_OWNED`):** ~~stays off and undecided~~ *(superseded
+  2026-11-15, see the bullet above and §AT).*
   - ⊘ *Later idea, not for now (owner, 2026-10-08):* "for B ... kayfabe can quota VMs
     scheduling/fairness, is related." If kayfabe owns the scheduling of the host twins (B), a per-VM
     share, timeslice or fairness quota has a natural place; a guest-built runlist, which B ignores,

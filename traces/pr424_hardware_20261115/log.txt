@@ -1,0 +1,6 @@
+destroy 60809802 (ssh unreachable) 2026-11-15T16:43:57Z
+[]
+created 60811069 2026-11-15T16:44:12Z (60809802 destroyed: ssh port never answered)
+destroy 60811069 (same unreachable Denmark IP) 2026-11-15T16:50:37Z
+[]
+created 60811732 2026-11-15T16:50:49Z Romania EPYC 7V73X

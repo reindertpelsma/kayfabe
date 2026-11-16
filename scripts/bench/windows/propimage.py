@@ -14,7 +14,7 @@ docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md. Logic lives here; shell is glue onl
   propimage.py pack STATE IMAGE --out ZIP [--workdir W] | unpack ZIP --dir D [--workdir W]   one zip64 blob
 
 Modes: setup (std VGA, no kf3, internet on, real clock), install (kf3 + broker, internet on, real
-clock), offline (kf3 + broker, slirp restrict=on, faked clock), ci (clone + offline + faked clock).
+clock), offline (kf3 + broker, slirp restrict=on, deterministic clock), ci (clone + offline + deterministic clock).
 The same machine ids, disk serial, MAC, subnet and swtpm state apply in every mode.
 """
 import argparse

@@ -139,6 +139,14 @@ jobs:
       # The host unmap-call cap (crates/kf-mem/src/batch.rs `UNMAP_CALL_MAX_ENTRIES`, 2026-11-15): each mutant needs two named killers.
       - name: Host unmap-call cap mutations require two named killers each
         run: python3 scripts/ci/va_apply_bounds_mutants.py
+      # The Windows support profile (2026-11-15: kf-rm winprofile and the chain/channel links, kf-qemu channel birth, mirror-space
+      # start and display colour path; "a Linux guest, an undeclared guest and windows-support=off reach none of it"): each mutant needs two named killers.
+      - name: Windows support profile mutations require two named killers each
+        run: python3 scripts/ci/windows_profile_mutants.py
+      # The bounded VA-apply phase profiling (docs/design/V3_VA_PROFILE.md, 2026-11-16: kf-mem vaprof/vasmgr/batch,
+      # kf-qemu split delivery, kf-cuda ceiling geometry; observation only): each mutant needs two named killers.
+      - name: VA-apply profiling mutations require two named killers each
+        run: python3 scripts/ci/va_profile_mutants.py
       - name: v3 dependency isolation and CI guard self-tests
         run: |
           python3 scripts/ci/dependencies.py
@@ -158,6 +166,8 @@ jobs:
           python3 scripts/ci/kfci_mutants.py
           # Payload instruction file, --only/--skip/--dry-run (2026-11-15, OWNER_RULINGS section AR S1/S3): >=2 named killers per mutant.
           python3 scripts/ci/instruction_mutants.py
+          # kfroot (the explicit root step) and the rootless assertion of the Windows harness (2026-11-15, OWNER_RULINGS section AR item 6): >=2 named killers per mutant.
+          python3 scripts/ci/kfroot_mutants.py --jobs 4
           # Box downloader (2026-11-15, design V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN step 3): >=2 named killers per mutant.
           python3 scripts/ci/box_downloader_mutants.py
           # propimage_apps payload stage (2026-11-15, OWNER_RULINGS 2026-11-15): >=2 named killers per mutant.
@@ -165,10 +175,13 @@ jobs:
           # Generic proprietary-image runner, 2026-11-16 (docs/design/V3_PROPIMAGE_RUNNER.md): registry, run spec, images; clock/network assert in every launch path; >=2 named killers per mutant.
           python3 scripts/ci/propimage_runner_mutants.py
           python3 scripts/ci/clocknet_assert_mutants.py
+          # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
+          python3 scripts/ci/stream_url_mutants.py
           # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.
           python3 scripts/ci/doc_steps_mutants.py
           python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
+          python3 -I scripts/bench/va_profile_table.py --self-test
           bash scripts/bench/box/birth_census.sh --selftest
       # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
       # completion-source reactor's MODEL is core-owned and PURE: the core says

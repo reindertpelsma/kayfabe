@@ -1,7 +1,6 @@
 # w754 — the GSP command-queue doorbell, and what is ACTUALLY on the vCPU behind it
 
-**STATUS: LIVE, 2026-09-16 — MEASURED. See §MEASURED at the end; the pre-registration below
-is kept verbatim and its six predictions are resolved there, two of them REFUTED.**
+**STATUS: ANSWERED, 2026-11-16.** The pre-registration below is kept verbatim and its six predictions were resolved by the MEASURED section at the end on 2026-09-16 (two REFUTED; 24 999 -> 9 649 us on the device arm, and the 25 ms register was a bystander). It was measured on the pre-v3 tree (`kayfabe-device`, `kayfabe-qemu-raw`), now frozen under `archive/crates/` (`archive/README.md`), so its paths and `KAYFABE_*` variables no longer resolve and it is not updated. The outcome is folded into [`THE_CONSTRAINTS.md`](THE_CONSTRAINTS.md) (the 2026-09-16 w754 correction under constraint 25); v3 is built to that rule in [`THE_ARCHITECTURE_v3.md`](THE_ARCHITECTURE_v3.md).
 
 Pre-registration, written and committed **before the first
 boot of this rung** (the box was rented first because provisioning is the long pole; no

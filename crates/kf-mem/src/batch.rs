@@ -1741,7 +1741,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 let mut made: Vec<Seg> = Vec::with_capacity(cores.len());
                 let mut refused = false;
                 for &(cs, ce) in &cores {
-                    match self.vas.reserve(cs, ce.saturating_sub(cs)) {
+                    match kf_host::phase::timed(kf_host::phase::Phase::RmReserve, || {
+                        self.vas.reserve(cs, ce.saturating_sub(cs))
+                    }) {
                         Ok(h) => {
                             self.add_micro(cs, ce, h);
                             made.push((Some(h), cs, ce));
@@ -1887,7 +1889,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                     e.saturating_sub(s)
                 ));
             }
-            match self.vas.reserve(cur, leaf) {
+            match kf_host::phase::timed(kf_host::phase::Phase::RmReserve, || {
+                self.vas.reserve(cur, leaf)
+            }) {
                 Ok(h) => {
                     self.add_micro(cur, next, h);
                     fresh.push((Some(h), cur, next));
@@ -2200,9 +2204,13 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// Whole-mapping unmap of one OWN entry, by its routing.
     fn unmap_entry(&self, s: u64, m: OwnMap, defer: bool) -> Result<(), String> {
         match m.via {
-            Some(h) => self.vas.unmap_in(h, s, 0, defer),
+            Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                self.vas.unmap_in(h, s, 0, defer)
+            }),
             // By ROW: a row straddling a guest-reservation edge is one host mapping per `hDma`.
-            None => self.vas.unmap_row(s, m.len, defer),
+            None => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                self.vas.unmap_row(s, m.len, defer)
+            }),
         }
     }
 
@@ -2257,8 +2265,12 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             }
             for &(via, s, e) in runs.iter().rev() {
                 let r = match via {
-                    Some(h) => self.vas.unmap_in(h, s, e.saturating_sub(s), defer),
-                    None => self.vas.unmap_range(s, e.saturating_sub(s), defer),
+                    Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                        self.vas.unmap_in(h, s, e.saturating_sub(s), defer)
+                    }),
+                    None => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                        self.vas.unmap_range(s, e.saturating_sub(s), defer)
+                    }),
                 };
                 if let Err(r) = r {
                     // ★ Review fix 2026-10-10: the pieces are still OURS on the host — recorded, so
@@ -2318,8 +2330,12 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 ..*d
             };
             match via {
-                Some(h) => self.vas.map_row_in(h, &piece, defer),
-                None => self.vas.map_row(&piece, defer),
+                Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_row_in(h, &piece, defer)
+                }),
+                None => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_row(&piece, defer)
+                }),
             }
         })
     }
@@ -2346,8 +2362,12 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 ..*sk
             };
             match via {
-                Some(h) => self.vas.map_sked_in(h, &piece, defer),
-                None => self.vas.map_sked_row(&piece, defer),
+                Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_sked_in(h, &piece, defer)
+                }),
+                None => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_sked_row(&piece, defer)
+                }),
             }
         })
     }
@@ -2408,14 +2428,16 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         // Pieces of the rows OUTSIDE the core, placed per run after the batch.
         let mut outside: Vec<Desired> = Vec::new();
         let mapped: Result<(u32, Option<u32>), String> = match segs.as_slice() {
-            [(None, ..)] if self.vas.splits_safely(va, len) => self
-                .vas
-                .map_scattered(ram_fd, rows, defer)
-                .map(|h| (h, None)),
-            [(Some(h), ..)] => self
-                .vas
-                .map_scattered_in(*h, ram_fd, rows, defer)
-                .map(|o| (o, Some(*h))),
+            [(None, ..)] if self.vas.splits_safely(va, len) => {
+                kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                    self.vas.map_scattered(ram_fd, rows, defer)
+                })
+                .map(|h| (h, None))
+            }
+            [(Some(h), ..)] => kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                self.vas.map_scattered_in(*h, ram_fd, rows, defer)
+            })
+            .map(|o| (o, Some(*h))),
             [(None, ..)] if self.low_reserve && rows.len() >= LOW_RANGE_MIN_RUNS => {
                 // ★ Held-hole fix: host RM rounds a reservation to 64 KiB / 2 MiB ([`reserve_exact`]).
                 // The reservation is made over the run's aligned HULL when nothing of ours lies in
@@ -2437,7 +2459,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                         continue;
                     }
                     tried = Some((rs, re));
-                    match self.vas.reserve(rs, re.saturating_sub(rs)) {
+                    match kf_host::phase::timed(kf_host::phase::Phase::RmReserve, || {
+                        self.vas.reserve(rs, re.saturating_sub(rs))
+                    }) {
                         Ok(h) => {
                             self.add_micro(rs, re, h);
                             pinned.push((Some(h), rs, re));
@@ -2445,10 +2469,10 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                             outside = clip_rows(rows, va, ms);
                             outside.extend(clip_rows(rows, me, end));
                             (bva, blen) = (ms, me.saturating_sub(ms));
-                            result = self
-                                .vas
-                                .map_scattered_in(h, ram_fd, &core_rows, defer)
-                                .map(|o| (o, Some(h)));
+                            result = kf_host::phase::timed(kf_host::phase::Phase::RmMap, || {
+                                self.vas.map_scattered_in(h, ram_fd, &core_rows, defer)
+                            })
+                            .map(|o| (o, Some(h)));
                             break;
                         }
                         // Refused (the hull may touch a guest reservation or a host buffer): the
@@ -2618,15 +2642,27 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let t0 = std::time::Instant::now();
         let r = match via {
-            Some(h) => self.vas.unmap_in(h, s, e.saturating_sub(s), defer),
-            None => self.vas.unmap_range(s, e.saturating_sub(s), defer),
+            Some(h) => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                self.vas.unmap_in(h, s, e.saturating_sub(s), defer)
+            }),
+            None => kf_host::phase::timed(kf_host::phase::Phase::RmUnmap, || {
+                self.vas.unmap_range(s, e.saturating_sub(s), defer)
+            }),
         };
         if let Some(line) = slow_unmap_line(entries, t0.elapsed(), &LOGGED) {
             eprintln!("{line}");
         }
         r?;
+        // ★ 2026-11-16 (observation only): the ledger's share, the frees it makes excluded.
+        let t_led = std::time::Instant::now();
+        let freed0 = kf_host::phase::total_ns(kf_host::phase::Phase::RmFree);
         self.cut_own(s, e);
         self.retired(s, e.saturating_sub(s));
+        let freed = kf_host::phase::total_ns(kf_host::phase::Phase::RmFree).saturating_sub(freed0);
+        kf_host::phase::record(
+            kf_host::phase::Phase::LedgerRetire,
+            kf_host::phase::ns_since(t_led).saturating_sub(freed),
+        );
         Ok(())
     }
 
@@ -2812,7 +2848,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
 
     /// Free one micro reservation; `true` when host RM freed it.
     fn free_micro(&self, h: u32) -> bool {
-        match self.vas.free(h) {
+        match kf_host::phase::timed(kf_host::phase::Phase::RmFree, || self.vas.free(h)) {
             Ok(()) => {
                 bump(&self.micro_freed);
                 true
@@ -2852,7 +2888,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
 
     fn free(&self, handles: Vec<u32>) {
         for h in handles {
-            match self.vas.free(h) {
+            match kf_host::phase::timed(kf_host::phase::Phase::RmFree, || self.vas.free(h)) {
                 Ok(()) => bump(&self.frees),
                 // ⊘ Not fatal to the unmap that emptied it (its mappings ARE gone); the object and
                 // its pinned pages live on — named. ★ Review fix 2026-10-10: and TRACKED

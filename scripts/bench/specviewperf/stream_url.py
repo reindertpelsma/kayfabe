@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Stream one object of a presigned-URL JSON file to stdout, checking its sha256 on the fly (stdlib only).
 
-STATUS: CODE, 2026-11-12 (branch claude/spec-pc-20261112; PC run, not on the Worker path). The stage's normal input is
+STATUS: CODE, 2026-11-12 (branch claude/spec-pc-20261112; PC run, not on the Worker path); 2026-11-16 it also reads the standalone release-run URL file (pick_url). The stage's normal input is
 the Worker's /bench-data route; this helper serves a run where the disk cannot hold the archive: the bytes go to stdout
 (zstd | tarfilter | guest), the hash is computed as they pass, and the exit status says whether they matched the pin.
 Exit 0 = whole object read and the sha256 equals the pin; 3 = read to the end and the sha256 differs; 1 = transport failure
@@ -17,6 +17,22 @@ import urllib.request
 from pathlib import Path
 
 
+URLS_SCHEMA = "kayfabe.download-urls/1"
+
+
+def pick_url(doc, key):
+    """The URL for `key` from either file shape: the flat PC-run map {key: url}, or the standalone-run file of
+    scripts/ci/box_downloader.py (schema kayfabe.download-urls/1, {"urls": {ref: url}}), where the ref is the object's
+    basename (the name the Worker's bench-data route knows: specviewperf-15.0.0.tar.zst). Exactly one shape is accepted:
+    a document that names the schema is never read as a flat map. A missing key is a KeyError (no guessing)."""
+    if type(doc) is dict and doc.get("schema") == URLS_SCHEMA:
+        urls = doc.get("urls")
+        if type(urls) is not dict:
+            raise KeyError("urls")
+        return urls[key] if key in urls else urls[key.rsplit("/", 1)[-1]]
+    return doc[key]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--url-file", required=True)
@@ -25,7 +41,7 @@ def main(argv=None):
     ap.add_argument("--status", required=True)
     ap.add_argument("--retries", type=int, default=20)
     a = ap.parse_args(argv)
-    url = json.loads(Path(a.url_file).read_text())[a.key]
+    url = pick_url(json.loads(Path(a.url_file).read_text()), a.key)
     out = sys.stdout.buffer
     h = hashlib.sha256()
     pos = 0
