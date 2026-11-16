@@ -1,4 +1,4 @@
-STATUS: DESIGN-ONLY, 2026-11-16. The rows are built and GPU-free tested (`scripts/ci/test_propimage_apps_b.py`, `test_propimage_apps_b_stage.py`, `test_gpu_assert.py`, `test_media_check.py`, `test_test_assets.py`). The measured state of each row on the owner's pc (no-GPU and GPU boots) is in `traces/imageb_apps_20261116/README.md`; nothing here was run on a Vast box when this line was written.
+STATUS: DESIGN-ONLY, 2026-11-16 (first measurements exist: `traces/imageb_apps_20261116/README.md`; most rows are not yet qualified). The rows are built and GPU-free tested (`scripts/ci/test_propimage_apps_b.py`, `test_propimage_apps_b_stage.py`, `test_gpu_assert.py`, `test_media_check.py`, `test_test_assets.py`). The measured state of each row (one Vast RTX 4090 box under kf3, and no-GPU clones on the owner's pc) is in `traces/imageb_apps_20261116/README.md`.
 
 # Application rows for the second proprietary image
 
@@ -60,4 +60,4 @@ Not done here (they sit in files that the release-run work is changing): the `va
 
 ## What is not claimed
 
-No row is qualified on a Vast box. The first image's rows and this list share the 55-minute boot budget logic (`plan_boots`). Premiere, Dimension and the UXP tools are launch rows only. Scores are never printed to the stream.
+Rows ran on ONE Vast box (RTX 4090) with kf3 during development; none is qualified, none has a VFIO control, and the stage was not run end to end after the GPU-step fix. The first image's rows and this list share the 55-minute boot budget logic (`plan_boots`). Premiere, Dimension and the UXP tools are launch rows only. Scores are never printed to the stream.

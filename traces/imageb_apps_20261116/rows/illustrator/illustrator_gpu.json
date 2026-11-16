@@ -1,0 +1,32 @@
+{
+ "required": [],
+ "verdict": "PASS",
+ "reasons": [],
+ "baseline": {
+  "mem_mb": 5312.0,
+  "gpu": 0.0,
+  "enc_sessions": 0.0
+ },
+ "peak": {
+  "gpu": 15.0,
+  "mem_mb": 5408.0,
+  "enc_sessions": 0.0,
+  "gpu_dmon_sm": 15.0,
+  "enc": 0.0,
+  "dec": 0.0,
+  "busy_samples": 40
+ },
+ "samples": 367,
+ "dmon_samples": 184,
+ "source": "host",
+ "guest": {
+  "verdict": "PASS",
+  "reasons": [
+   "no samples: the GPU could not be read (nvidia-smi missing, no GPU or empty output)"
+  ],
+  "peak": {},
+  "baseline": {},
+  "samples": 0
+ },
+ "name": "illustrator"
+}

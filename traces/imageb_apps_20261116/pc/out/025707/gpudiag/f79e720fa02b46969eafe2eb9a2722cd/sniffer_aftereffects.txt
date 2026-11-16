@@ -1,0 +1,36 @@
+﻿GPUSniffer testing 830
+Initializing GPU Tech:
+	Try CUDA: 1
+	Try OpenCL: 1
+	Try Metal: 1
+	Try Vulkan: 1
+	Try DirectX: 0
+	KernelLoadAction: 0
+No CUDA devices Found
+GetPlatformIDs Failed
+OpenCL system device count: 0
+Finished gpu initialization in 0 ms
+
+--- GPU Computation Info ---
+Did not find any devices that support GPU computation.
+--- DirectX Graphics Info ---
+   DirectX Graphics Test skipped: no compatible compute device.
+--- OpenGL Info ---
+Vendor: Microsoft Corporation
+Renderer: GDI Generic
+OpenGL Version: 1.1.0
+GLSL Version: Unknown
+Monitors: 1
+Monitor 0 properties -
+   Size: (0, 0, 1280, 800)
+   Max texture size: 1024
+   Supports non-power of two: 0
+   Shaders 444: 0
+   Shaders 422: 0
+   Shaders 420: 0
+Finished OpenGL test in 30.4876 ms
+
+GPUSniffer process exiting after  107.862 ms 
+GPUSniffer result: 1(0x1)
+InitMS: 252.722, SniffMS: 108.137
+

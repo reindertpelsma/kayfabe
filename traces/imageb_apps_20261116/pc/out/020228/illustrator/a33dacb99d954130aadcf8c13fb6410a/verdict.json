@@ -1,0 +1,17 @@
+{
+  "app": "illustrator",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "opened gradient_3d_colored.svg (720x705), added 400 shapes, exported 2880x2820 PNG (std 71.3) and a 1-page PDF",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "secs": 33,
+  "gpu": {
+    "required": [],
+    "verdict": "FAIL",
+    "peak": {},
+    "baseline": {},
+    "samples": 0
+  }
+}
