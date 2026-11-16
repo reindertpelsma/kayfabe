@@ -469,3 +469,21 @@ results store (`src/ingest.js`, section above) records it like any other rental,
 record carries `tier`, `family`, `source` (`github` or `admin`) and `batch`. The release verdict
 itself lives in the batch (`batch:<id>` in the ledger, shown on the admin page): per (family, die,
 platform) cells with their runs, passes and machines.
+
+## Proprietary Windows images in the instruction (built 2026-11-16, NOT DEPLOYED, wired to nothing)
+
+STATUS: DESIGN-ONLY, 2026-11-16. Design and the decisions behind it: `docs/design/V3_WORKER_PROPIMAGES.md`.
+
+`propimages.json` is the Worker's list of the private Windows images (image A and image B): per image an opaque label, the private
+object (name, size, sha256 pin; the signed GOP is the third object), the die families it has run on, and its applications,
+each in the `gate` lane (must pass) or the `discovery` lane (may fail; the failure is a listed finding). The configuration is
+`strict: true` and a configuration that is not strict is refused: a strict run must run everything listed, and any skip fails it.
+`src/propimages.js` is pure: `buildInstruction(profile, options, ...)` returns the payload instruction of a leg (the same base fields
+`tierEnvironment` sends), and adds the `propimages` / `propimages_strict` part only for a leg that passes `propimages: true` and its
+`die` (default off). `propimageLabelsFor({tierName, die})` tells a planner which images a leg takes. Nothing in `src/index.js` imports
+the module, `tierEnvironment` is unchanged, and the `/bench-data` allow-list (`src/benchdata.js`) does not contain the images: that
+route is gated by a live run token only, not by profile or stage, so adding them is a decision for the owner.
+
+`test/propimages.test.js` (64 tests) pins the shape against the box's own parser, `vast_payload.py --instruction` and
+`--emit-instruction`, and the standalone runner's flag parser (`test/propimages_check.py`, golden files in `test/fixtures/propimages/`);
+`propimages-mutants.mjs` (two named killers per mutant) is run by CI.

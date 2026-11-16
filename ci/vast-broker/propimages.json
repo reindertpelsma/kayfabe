@@ -1,0 +1,84 @@
+{
+  "schema": "kayfabe.worker-propimages/1",
+  "status": "STATUS: DESIGN-ONLY, 2026-11-16. Not read by the deployed Worker (nothing imports src/propimages.js yet). Owner decision 2026-11-16: the Worker knows the images and their applications from this file; the Worker and CI run is STRICT (everything listed must run, zero skips); a row is in the gate lane when it passes today and in the discovery lane otherwise. Design: docs/design/V3_WORKER_PROPIMAGES.md.",
+  "strict": true,
+  "objects": [
+    {
+      "id": "imga",
+      "role": "image",
+      "ref": "propimage-kfimg-20261112.zip",
+      "object": "windows-proprietary/kfimg-20261112/image-v2.zip",
+      "size": 50496618964,
+      "sha256": "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3"
+    },
+    {
+      "id": "imgb",
+      "role": "image",
+      "ref": "propimage-kfimg-20261116.zip",
+      "object": "windows-proprietary/kfimg-20261116/image.zip",
+      "size": 62506351001,
+      "sha256": "fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a"
+    },
+    {
+      "id": "gop",
+      "role": "gop",
+      "ref": "propimage-kf-gop.signed.efi",
+      "object": "windows-proprietary/kfimg-20261112/kf-gop.signed.efi",
+      "size": 11224,
+      "sha256": "423a9abc5789b8b4e9834ba016261efb9d64515d53f259a90446917ce91b848e"
+    }
+  ],
+  "images": [
+    {
+      "label": "imga",
+      "object": "imga",
+      "families": ["ampere", "ada"],
+      "families_basis": "image ran on GA102 and on AD102/AD104/AD106 dies; turing and blackwell never measured, so a leg of those families gets no image from this file until a measured pass is recorded",
+      "apps": {
+        "solidworks": { "lane": "gate", "basis": "PASS on the pc and on Vast boxes" },
+        "edrawings": { "lane": "gate", "basis": "PASS on the pc and on Vast boxes" },
+        "edge": { "lane": "gate", "basis": "PASS on the pc and on Vast boxes" },
+        "3dmark": { "lane": "discovery", "basis": "PASS on the pc; failed twice on a Vast box (no RUN link found); unsure, so discovery" },
+        "superposition": { "lane": "discovery", "basis": "PASS on the pc; no Vast-box result; unsure, so discovery" },
+        "resolve": { "lane": "discovery", "basis": "application crashed 3 of 3 times on an RTX 4090 Vast box; passed on a 3090 box; unsure, so discovery" }
+      },
+      "excluded": {
+        "wukong": "no verdict driver yet (grades INCONCLUSIVE); a strict list that names it fails the leg"
+      }
+    },
+    {
+      "label": "imgb",
+      "object": "imgb",
+      "families": ["ada"],
+      "families_basis": "image ran on one RTX 4090 (AD102) Vast box only; every other family is unmeasured",
+      "apps": {
+        "gpudiag": { "lane": "gate", "basis": "PASS on a Vast box (AD102)" },
+        "illustrator": { "lane": "gate", "basis": "PASS on a Vast box (AD102)" },
+        "acrobat": { "lane": "gate", "basis": "PASS on a Vast box (AD102)" },
+        "premiere": { "lane": "gate", "basis": "PASS_LIMITED (launch only) on a Vast box (AD102): the row's best verdict by design" },
+        "lightroomlaunch": { "lane": "gate", "basis": "PASS_LIMITED (launch only) on a Vast box (AD102)" },
+        "dimension": { "lane": "gate", "basis": "PASS_LIMITED (launch only) on a Vast box (AD102)" },
+        "uxp": { "lane": "gate", "basis": "PASS_LIMITED (launch only) on a Vast box (AD102)" },
+        "photoshop": { "lane": "discovery", "basis": "heavy workload; FAIL on exit only; discovery row" },
+        "photoshopsample": { "lane": "discovery", "basis": "discovery row, PASS on a Vast box (AD102)" },
+        "photoshopprojects": { "lane": "discovery", "basis": "discovery row, PASS on a Vast box (AD102)" },
+        "aftereffects": { "lane": "discovery", "basis": "discovery row, FAIL on a Vast box (AD102)" },
+        "aeparallel": { "lane": "discovery", "basis": "discovery row, FAIL on a Vast box (AD102)" },
+        "aeprojects": { "lane": "discovery", "basis": "discovery row, no valid result yet" },
+        "aetoggle": { "lane": "discovery", "basis": "discovery row, no valid result yet" },
+        "mediaencoder": { "lane": "discovery", "basis": "discovery row, no valid result yet" },
+        "indesign": { "lane": "discovery", "basis": "gate-tagged in the harness; no passing result (application crash); unsure, so discovery" },
+        "indesignsample": { "lane": "discovery", "basis": "gate-tagged in the harness; FAIL on a Vast box (AD102); discovery until it passes" },
+        "illustratorsample": { "lane": "discovery", "basis": "gate-tagged in the harness; FAIL on a Vast box (AD102); discovery until it passes" }
+      },
+      "excluded": {
+        "animate": "no working offline script entry (disabled in the harness)",
+        "animatesample": "same as animate",
+        "animateprojects": "same as animate",
+        "lightroom": "plugin not loaded by the application at start (disabled in the harness); lightroomlaunch covers it",
+        "indesignprojects": "no result of a final driver yet",
+        "pugetbench": "package not pinned and not redistributable"
+      }
+    }
+  ]
+}
