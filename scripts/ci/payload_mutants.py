@@ -171,12 +171,14 @@ CASES = [
             "Counter(actual) != Counter(expected)",
             "Counter(x[:3]+x[4:] for x in actual) != Counter(x[:3]+x[4:] for x in expected)",
         ),
+        "native_xid_guard.py",
     ),
     (
         "non-ce-client-admitted",
         guard_replace(
             'return re.fullmatch(r"HUBCLIENT_(?:CE|HSCE)[0-9]+", name) is not None', "return True"
         ),
+        "native_xid_guard.py",
     ),
     (
         "wrong-arm-admitted",
@@ -228,10 +230,12 @@ CASES += [
             "Counter(actual) != Counter(expected)",
             "Counter(x[:2]+x[3:] for x in actual) != Counter(x[:2]+x[3:] for x in expected)",
         ),
+        "native_xid_guard.py",
     ),
     (
         "native-extra-record-ignored",
         guard_replace("Counter(actual) != Counter(expected)", "set(actual) != set(expected)"),
+        "native_xid_guard.py",
     ),
     (
         "native-ce-instance-hardcoded",
@@ -239,16 +243,19 @@ CASES += [
             'return re.fullmatch(r"HUBCLIENT_(?:CE|HSCE)[0-9]+", name) is not None',
             'return name == "HUBCLIENT_CE1"',
         ),
+        "native_xid_guard.py",
     ),
     (
         "guest-ce-instance-hardcoded",
         guard_replace(
             "not copy_engine_client(record['client'])", "record['client'] != 'HUBCLIENT_CE1'"
         ),
+        "native_xid_guard.py",
     ),
     (
         "native-entire-proof-bypassed",
         guard_replace("Counter(actual) != Counter(expected)", "False"),
+        "native_xid_guard.py",
     ),
     (
         "native-receipt-not-created",
@@ -434,10 +441,12 @@ CASES += [
             'claims = {k: v for k, v in clean_claims(doc["host_claims"]).items() if v is not None}',
             'claims = dict(doc["host_claims"]) if isinstance(doc["host_claims"], dict) else {}',
         ),
+        "vast_report.py",
     ),
     (
         "claims-variable-not-in-the-env-contract",
         report_replace('    ("KF_HOST_CLAIMS", False, _match(r"1")),\n', ""),
+        "vast_report.py",
     ),
     (
         "claims-driver-pattern-loose",
@@ -445,6 +454,7 @@ CASES += [
             'CLAIM_DRIVER = re.compile(r"[0-9]{3,4}\\.[0-9]{1,5}(?:\\.[0-9]{1,5})?")',
             'CLAIM_DRIVER = re.compile(r".{1,16}")',
         ),
+        "vast_report.py",
     ),
     (
         "claims-identifier-check-removed",
@@ -452,6 +462,7 @@ CASES += [
             "    return None if CLAIM_IDENTIFIER.search(value) or CLAIM_TOKEN.search(value) else value",
             "    return value",
         ),
+        "vast_report.py",
     ),
     (
         "claims-windows-guest-without-the-stage",
@@ -484,14 +495,17 @@ CASES += [
     (
         "local-reader-skips-log-validation",
         report_replace('            validate_diagnostics(doc["diagnostics"])', "            pass"),
+        "vast_report.py",
     ),
     (
         "local-log-preview-loses-head",
         report_replace('head = raw[:half].decode("utf-8", errors="ignore")', 'head = ""'),
+        "vast_report.py",
     ),
     (
         "local-log-preview-loses-tail",
         report_replace('tail = raw[-half:].decode("utf-8", errors="ignore")', 'tail = ""'),
+        "vast_report.py",
     ),
     (
         "local-log-hash-covers-preview-only",
@@ -499,6 +513,7 @@ CASES += [
             "sha256=hashlib.sha256(raw).hexdigest()",
             "sha256=hashlib.sha256(preview.encode()).hexdigest()",
         ),
+        "vast_report.py",
     ),
     (
         "local-log-manifest-budget-disabled",
@@ -506,6 +521,7 @@ CASES += [
             'if budget and len(json.dumps(records, separators=(",", ":")).encode()) > 49152:',
             "if False:",
         ),
+        "vast_report.py",
     ),
     (
         "local-log-first-refusal-can-be-evicted",
@@ -513,6 +529,7 @@ CASES += [
             'first_fault = next((i for i, item in enumerate(result) if not item["admitted"]), None)',
             "first_fault = None",
         ),
+        "vast_report.py",
     ),
     (
         "local-logs-leak-into-worker-wire-schema",
@@ -525,12 +542,14 @@ CASES += [
     (
         "local-log-boolean-rc-admitted",
         report_replace('type(item["rc"]) is not int', 'not isinstance(item["rc"], int)'),
+        "vast_report.py",
     ),
     (
         "local-log-invalid-source-hash-admitted",
         report_replace(
             're.fullmatch(r"[0-9a-f]{64}", item["sha256"])', 're.fullmatch(r".*", item["sha256"])'
         ),
+        "vast_report.py",
     ),
     (
         "summary-not-printed-on-failure",
@@ -822,8 +841,8 @@ def main():
             "box_downloader.py",
             "propimage_apps.py",
             "kf_fetch.py",
-            "kernel_log.py",
             "vast_payload.sh",
+            "kernel_log.py",
             "vast_payload_hooks.sh",
             "test_vast_payload.py",
             "test_vast_payload_v7.py",

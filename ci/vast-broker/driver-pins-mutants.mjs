@@ -131,6 +131,7 @@ const cases = [
   ],
   [
     'payload installer coverage ignored',
+    'scripts/ci/vast_payload.py',
     '    if not required.issubset({(p["os"], p["version"]) for p in pins}):',
     '    if False:',
     'python',
