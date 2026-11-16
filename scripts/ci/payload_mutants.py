@@ -838,6 +838,8 @@ def main():
         for name in [
             "vast_payload.py",
             "payload_instruction.py",
+            "box_downloader.py",
+            "kf_fetch.py",
             "vast_payload.sh",
             "vast_payload_hooks.sh",
             "test_vast_payload.py",

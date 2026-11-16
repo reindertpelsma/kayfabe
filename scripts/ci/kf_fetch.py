@@ -238,7 +238,12 @@ class Remote:
 
 class Download:
     def __init__(self, url, out, sha256, streams=8, chunk_size=16 * BLOCK, state=None,
-                 follow_redirect=False, origin_headers=None, expected_size=None):
+                 follow_redirect=False, origin_headers=None, expected_size=None, emit=None, throttle=None):
+        # emit: where the FETCH_* lines go (default stdout); throttle(nbytes): called after every network read
+        # (box_downloader.py caps bandwidth with it); cancel(): stops the transfer and KEEPS the partial file.
+        self.emit = emit if emit is not None else (lambda line: print(line, flush=True))
+        self.throttle = throttle if throttle is not None else (lambda n: None)
+        self.cancelled = False
         self.remote = Remote(url, follow_redirect, origin_headers)
         self.remote.timeout = TIMEOUT
         self.out = Path(out)
@@ -260,6 +265,10 @@ class Download:
         self.transferred = 0
         self.next_chunk = 0
         self.started = time.monotonic()
+
+    def cancel(self):
+        self.cancelled = True
+        self.stop.set()
 
     def save(self):
         # Called under the completion lock: data reaches disk before the atomic checkpoint.
@@ -314,7 +323,7 @@ class Download:
     def progress(self):
         seconds = max(time.monotonic() - self.started, 0.000001)
         done = sum(min(self.chunk_size, self.size - int(i) * self.chunk_size) for i in self.completed)
-        print(f"FETCH_PROGRESS bytes={done} total={self.size} MBps={self.transferred / seconds / 1e6:.3f}", flush=True)
+        self.emit(f"FETCH_PROGRESS bytes={done} total={self.size} MBps={self.transferred / seconds / 1e6:.3f}")
 
     def chunk(self, index):
         start = index * self.chunk_size
@@ -349,6 +358,7 @@ class Download:
                         except OSError:
                             raise FetchError("SIZE", local=True) from None
                         h.update(data)
+                        self.throttle(len(data))
                         offset += len(data)
                     if response.read(1):
                         raise FetchError("SIZE")
@@ -395,7 +405,7 @@ class Download:
 
     def transfer(self):
         if self.existing_matches():
-            print("FETCH_DONE secs=0.000 MBps=0.000 streams=0", flush=True)
+            self.emit("FETCH_DONE secs=0.000 MBps=0.000 streams=0")
             return
         # One process per output AND per state path. Locks are kernel-owned and survive
         # SIGKILL as unlocked files, so a killed run needs no stale-lock workaround.
@@ -424,7 +434,7 @@ class Download:
                              "target": os.path.abspath(self.unverified),
                              "source": hashlib.sha256(urllib.parse.urlunsplit(urllib.parse.urlsplit(self.remote.original)._replace(query="")).encode()).hexdigest()}
             label = urllib.parse.urlsplit(self.remote.url)
-            print(f"FETCH_SOURCE host={safe_label(label.hostname)} object={safe_label(label.path.rsplit('/', 1)[-1])}", flush=True)
+            self.emit(f"FETCH_SOURCE host={safe_label(label.hostname)} object={safe_label(label.path.rsplit('/', 1)[-1])}")
             old_size = os.fstat(self.fd).st_size
             self.restore(old_size)
             # Bounds must use old_size above: preallocation must not legitimise holes.
@@ -447,15 +457,18 @@ class Download:
                         future.result()
                 finally:
                     self.stop.set()
+            if self.cancelled:
+                # not a size or hash violation: the partial file and its state stay, so the next run resumes
+                raise FetchError("NETWORK")
             if os.fstat(self.fd).st_size != self.size or len(self.completed) != self.count:
                 raise FetchError("SIZE")
             if digest_fd(self.fd, 0, self.size) != self.pin:
                 # run() deletes the unverified bytes and state; nothing corrupt is ever resumed.
-                print("FETCH_BAD_HASH", flush=True)
+                self.emit("FETCH_BAD_HASH")
                 raise FetchError("HASH")
             self.publish()
         seconds = max(time.monotonic() - self.started, 0.000001)
-        print(f"FETCH_DONE secs={seconds:.3f} MBps={self.transferred / seconds / 1e6:.3f} streams={self.streams}", flush=True)
+        self.emit(f"FETCH_DONE secs={seconds:.3f} MBps={self.transferred / seconds / 1e6:.3f} streams={self.streams}")
 
 
 class Parser(argparse.ArgumentParser):

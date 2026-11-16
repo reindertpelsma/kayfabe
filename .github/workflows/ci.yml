@@ -132,6 +132,10 @@ jobs:
       # The video-class coverage ratchet (crates/kf-chan/tests/video_class_coverage.rs, 2026-11-15): each mutant needs two named killers.
       - name: Video-class coverage mutations require two named killers each
         run: python3 scripts/ci/video_class_coverage_mutants.py
+      # The offer filter "an engine with no derived method table is not offered to the guest" (2026-11-15:
+      # kf-chip video_gaps, kf-rm hostquery::hide_untabled_video, kf-qemu rmfacts flag): each mutant needs two named killers.
+      - name: Video-engine offer-filter mutations require two named killers each
+        run: python3 scripts/ci/hide_untabled_video_mutants.py
       # The host unmap-call cap (crates/kf-mem/src/batch.rs `UNMAP_CALL_MAX_ENTRIES`, 2026-11-15): each mutant needs two named killers.
       - name: Host unmap-call cap mutations require two named killers each
         run: python3 scripts/ci/va_apply_bounds_mutants.py
@@ -158,6 +162,8 @@ jobs:
           python3 scripts/ci/kfci_mutants.py
           # Payload instruction file, --only/--skip/--dry-run (2026-11-15, OWNER_RULINGS section AR S1/S3): >=2 named killers per mutant.
           python3 scripts/ci/instruction_mutants.py
+          # Box downloader (2026-11-15, design V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN step 3): >=2 named killers per mutant.
+          python3 scripts/ci/box_downloader_mutants.py
           # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.
           python3 scripts/ci/doc_steps_mutants.py
           python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
