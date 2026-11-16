@@ -123,9 +123,9 @@ if($changed){
  Start-Sleep 15
 }
 # The driver can take longer than the fixed pause to come up after the restart under kf3 (MEASURED 2026-11-16: 1 of 5 fresh boots had no UUID
-# yet at the first query): poll for up to 120 s; a UUID that is present and DIFFERENT is still an immediate failure.
+# yet at the first query): poll for up to 45 s (the harness call has a 120 s limit); a UUID that is present and DIFFERENT is still an immediate failure.
 $ids=@()
-for($n=0;$n -lt 24;$n++){ $ids=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader 2>$null); if($LASTEXITCODE -eq 0 -and $ids.Count -eq 1 -and $ids[0].Trim() -match '^GPU-'){break}; Start-Sleep 5 }
+for($n=0;$n -lt 9;$n++){ $ids=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader 2>$null); if($LASTEXITCODE -eq 0 -and $ids.Count -eq 1 -and $ids[0].Trim() -match '^GPU-'){break}; Start-Sleep 5 }
 if($ids.Count -ne 1 -or $ids[0].Trim() -cne $expected){throw 'Post-fix seed GPU UUID mismatch'}
 $ids[0].Trim()
 """
