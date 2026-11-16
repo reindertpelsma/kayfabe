@@ -377,6 +377,56 @@ MUTANTS = [
         "        pcf_sparse: u8, pte_pcf_no_valid_4k: u8, pde_pcf_sparse_bit: u8, pad1: [u8; 1], kind: KfField,\n        ps_log2: [u8; 4] }",
         "        pcf_sparse: u8, pte_pcf_no_valid_4k: u8, pde_pcf_sparse_bit: u8, pad1: [u8; 1], kind: KfField }",
     ),
+    # ── 2026-11-16 replay pilot (tests/replay_slot_ceiling.rs, docs/design/V3_REPLAY_TESTS.md): the
+    #    replay seam and the decisions the measured ceiling replay depends on ──
+    (
+        "replay-seam-overlap-accepted",
+        "capacity.rs",
+        "            if u64::from(r.off) < end {",
+        "            if false {",
+    ),
+    (
+        "replay-seam-pool-bound-dropped",
+        "capacity.rs",
+        "            if u64::from(r.off) + u64::from(r.cap) > u64::from(slot_pool) {",
+        "            if false {",
+    ),
+    (
+        "replay-seam-free-tail-dropped",
+        "capacity.rs",
+        "        if end < u64::from(slot_pool) {",
+        "        if false {",
+    ),
+    (
+        "replay-seam-free-gap-dropped",
+        "capacity.rs",
+        "            if u64::from(r.off) > end {",
+        "            if false {",
+    ),
+    (
+        "replay-geometry-tail-read-as-head",
+        "capacity.rs",
+        "                    .find(|r| r.off == end)\n                    .map_or(0, |r| r.cap);",
+        "                    .find(|r| r.off.saturating_add(r.cap) == o.off)\n                    .map_or(0, |r| r.cap);",
+    ),
+    (
+        "replay-ceiling-line-reworded",
+        "capacity.rs",
+        '{} free (largest {}) of {}",\n                old.cap,',
+        '{} free (largest {}) of {} runs",\n                old.cap,',
+    ),
+    (
+        "replay-ceiling-refusal-not-counted",
+        "capacity.rs",
+        '            self.stats.ceilings += 1;\n            return Err(format!(\n                "slot pool exhausted: slot {s} grows',
+        '            return Err(format!(\n                "slot pool exhausted: slot {s} grows',
+    ),
+    (
+        "replay-alloc-last-fit",
+        "capacity.rs",
+        "        let i = self.free.iter().position(|r| r.cap >= cap)?;",
+        "        let i = self.free.iter().rposition(|r| r.cap >= cap)?;",
+    ),
 ]
 
 FAILED = re.compile(r"^test (\S+) \.\.\. FAILED$", re.M)
