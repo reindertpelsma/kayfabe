@@ -67,6 +67,15 @@ class T(unittest.TestCase):
         with self.assertRaises(ValueError):
             mc.pdf_info(self.d / "b.pdf")
 
+    def test_tiff(self):
+        ifd = struct.pack("<H", 2) + struct.pack("<HHII", 256, 4, 1, 1920) + struct.pack("<HHII", 257, 4, 1, 1080) + b"\0" * 4
+        (self.d / "a.tif").write_bytes(b"II*\x00" + struct.pack("<I", 8) + ifd + bytes(range(256)) * 1000)
+        i = mc.tiff_info(self.d / "a.tif")
+        self.assertEqual((i["width"], i["height"]), (1920, 1080))
+        (self.d / "b.tif").write_bytes(b"nope")
+        with self.assertRaises(ValueError):
+            mc.tiff_info(self.d / "b.tif")
+
     def test_mp4(self):
         mvhd = box(b"mvhd", bytes([0]) + b"\0" * 3 + b"\0" * 8 + struct.pack(">II", 1000, 3000) + b"\0" * 80)
         tkhd = box(b"tkhd", bytes([0]) + b"\0" * 3 + b"\0" * 72 + struct.pack(">II", 1280 << 16, 720 << 16))

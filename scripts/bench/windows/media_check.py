@@ -111,6 +111,29 @@ def jpeg_size(path):
     raise ValueError("JPEG without frame header")
 
 
+def tiff_info(path):
+    """(width, height) of the first image in a classic TIFF, plus the compressibility of its first megabyte (flat images compress far)."""
+    raw = Path(path).read_bytes()
+    if raw[:4] not in (b"II*\x00", b"MM\x00*"):
+        raise ValueError("not a TIFF")
+    e = "<" if raw[:2] == b"II" else ">"
+    ifd = struct.unpack(e + "I", raw[4:8])[0]
+    n = struct.unpack(e + "H", raw[ifd:ifd + 2])[0]
+    w = h = None
+    for i in range(n):
+        tag, typ, cnt = struct.unpack(e + "HHI", raw[ifd + 2 + 12 * i:ifd + 10 + 12 * i])
+        val = raw[ifd + 10 + 12 * i:ifd + 14 + 12 * i]
+        v = struct.unpack(e + ("H" if typ == 3 else "I"), val[:2] if typ == 3 else val)[0]
+        if tag == 256:
+            w = v
+        elif tag == 257:
+            h = v
+    if not w or not h:
+        raise ValueError("TIFF without dimensions")
+    head = raw[:1 << 20]
+    return {"width": w, "height": h, "bytes": len(raw), "ratio": round(len(zlib.compress(head)) / max(1, len(head)), 3)}
+
+
 def psd_info(path):
     with open(path, "rb") as f:
         head = f.read(26)

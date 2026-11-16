@@ -54,6 +54,8 @@ function Win-Titles($procNames) {
   $roots = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
   @(foreach ($r in $roots) { try { if ($pids -contains $r.Current.ProcessId) { $r.Current.Name } } catch {} })
 }
+# Keyboard fallback for dialogs whose controls UI Automation does not expose (After Effects): the key goes to the foreground window.
+function Press-Key($keys) { try { [System.Windows.Forms.SendKeys]::SendWait($keys) } catch {} }
 function Has-Window($procNames) { (@(Win-Titles $procNames | Where-Object { $_ })).Count -gt 0 }
 function Quit-App($procNames, $comApp = $null) {
   # clean exit: ask politely first, then close the windows, only then end the process (and say which one happened)

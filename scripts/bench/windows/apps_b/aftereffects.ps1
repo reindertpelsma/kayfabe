@@ -11,7 +11,8 @@ try {
   New-Item -Force -ItemType Directory "$D\frames" | Out-Null
   $p = Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', "$D\ae_make_run.jsx") -PassThru
   $t0 = Get-Date
-  while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 240) { [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3 }
+  $n = 0
+  while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 420) { [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++; if ($n % 5 -eq 0) { Press-Key '{ENTER}' } elseif ($n % 5 -eq 3) { Press-Key '{ESC}' } }
   if (-not $p.HasExited) { $R.make_quit = Quit-App 'AfterFX'; throw 'After Effects did not finish creating the project' }
   if (-not (Test-Path "$D\kf.aep")) { throw ('project not saved: ' + (Get-Content "$D\ae_make.txt" -Raw -ErrorAction SilentlyContinue)) }
   $R.make_log = (Get-Content "$D\ae_make.txt" -Raw)
@@ -23,7 +24,7 @@ try {
   if (-not $r.HasExited) { Stop-Process -Id $r.Id -Force; throw 'aerender timed out' }
   $R.aerender_exit = $r.ExitCode
   $R.t_render_end = Epoch
-  $frames = @(Get-ChildItem "$D\frames" -Filter *.png | Sort-Object Name)
+  $frames = @(Get-ChildItem "$D\frames" | Where-Object { $_.Extension -in '.png', '.tif' } | Sort-Object Name)
   $R.frame_count = $frames.Count
   $R.outputs = @($frames | Select-Object -First 1 | ForEach-Object { File-Info $_.FullName }) + @($frames | Select-Object -Last 1 | ForEach-Object { File-Info $_.FullName }) + @(File-Info $log) + @(File-Info "$D\kf.aep") + @(File-Info "$D\ae_make.txt")
   $R.quit = 'process'

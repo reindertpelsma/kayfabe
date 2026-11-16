@@ -27,8 +27,12 @@ try {
     for (var ti = 0; ti < tl.length && !tok; ti++) { try { om.applyTemplate(tl[ti]); tok = true; log.push("om_h264"); } catch (e) { log.push("om_h264_missing"); } }
     om.file = new File(OUT + "/ame_out.mp4");
   } else {
-    try { om.applyTemplate("PNG Sequence"); log.push("om_png"); } catch (e) { log.push("om_default:" + String(e).substring(0, 60)); }
-    om.file = new File(OUT + "/frames/f_[#####].png");
+    var tp = om.templates, pick = "", ext = "png";
+    for (var k = 0; k < tp.length; k++) { if (/png/i.test(tp[k])) { pick = tp[k]; break; } }
+    if (pick == "") { for (var k2 = 0; k2 < tp.length; k2++) { if (/^tiff sequence/i.test(tp[k2])) { pick = tp[k2]; ext = "tif"; break; } } }
+    try { om.applyTemplate(pick); log.push("om:" + pick); } catch (e) { log.push("om_default:" + String(e).substring(0, 60)); }
+    log.push("templates:" + tp.join("|"));
+    om.file = new File(OUT + "/frames/f_[#####]." + ext);
   }
   app.project.save(new File(OUT + "/kf.aep"));
   if (MODE == "ame") { try { app.project.renderQueue.queueInAME(true); log.push("queued_in_ame"); } catch (e) { log.push("queue_fail:" + String(e).substring(0, 80)); } }

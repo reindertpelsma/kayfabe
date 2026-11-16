@@ -233,10 +233,14 @@ def grade_aftereffects(r, d):
     if n < 60:
         raise ValueError("%s frames rendered, expected 60" % n)
     names = [o["file"] for o in r["outputs"]]
-    pngs = [x for x in names if x.endswith(".png")]
+    pngs = [x for x in names if x.endswith(".png") and x != "ame_out.png"]
     _outputs_fresh(r, d, names)
     for x in pngs:
         _png(d, x, 1920, 1080)
+    for x in [x for x in names if x.endswith(".tif")]:
+        i = media_check.tiff_info(d / x)
+        if (i["width"], i["height"]) != (1920, 1080) or i["bytes"] < 200_000:
+            raise ValueError("%s is %dx%d, %d bytes" % (x, i["width"], i["height"], i["bytes"]))
     log = (d / "aerender.log").read_text(errors="replace")
     if "Finished composition" not in log:
         raise ValueError("aerender log has no 'Finished composition'")
