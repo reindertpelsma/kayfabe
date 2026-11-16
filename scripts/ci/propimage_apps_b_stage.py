@@ -205,6 +205,7 @@ def run(ctx, evidence_dir=None, apps=None):
             env = pa.build_swtpm(ctx, dl, work, logs)
             ctx.environ.update(SWTPM=pa.SWTPM_PREFIX + "/bin/swtpm", LD_LIBRARY_PATH=env["LD_LIBRARY_PATH"])
             rec["swtpm"]["built"] = True
+        ctx.environ.update(pa.swtpm_env(ctx.environ))
         have_version = pa.swtpm_version(pa.swtpm_binary(ctx.environ), ctx.runner, ctx.environ)
         rec["swtpm"]["version"] = ".".join(str(x) for x in have_version) if have_version else None
         broker = ctx.checkout / "broker/nvkvm-display-broker"
