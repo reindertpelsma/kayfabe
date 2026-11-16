@@ -31,7 +31,10 @@ try {
     IdP ('s{0} done: {1}' -f ($k + 2), $dres)
   }
   $R.outputs = @(); foreach ($f in 'out.pdf', 'out.jpg') { if (Test-Path "$D\$f") { $R.outputs += (File-Info "$D\$f") } }
-  try { $id.DoScript('app.documents.everyItem().close(SaveOptions.NO); "closed"', 1246973031) | Out-Null } catch {}
+  IdP 'closing documents'
+  try { $id.DoScript('app.documents.everyItem().close(SaveOptions.NO); "closed"', 1246973031) | Out-Null; IdP 'documents closed' } catch { IdP ('close ERR ' + $_.Exception.Message.Substring(0, 60)) }
+  IdP 'quitting application'
   $R.quit = Quit-App 'InDesign' $id
+  IdP ('quit result: ' + $R.quit)
 } catch { $R.error = $_.Exception.Message; $R.quit = Quit-App 'InDesign' }
 Finish $R
