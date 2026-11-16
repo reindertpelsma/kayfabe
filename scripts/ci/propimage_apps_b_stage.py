@@ -136,7 +136,7 @@ def build_manifest(pins, build_swtpm):
     return m
 
 
-def run(ctx, evidence_dir=None):
+def run(ctx, evidence_dir=None, apps=None):
     rec = new_record(ctx)
     klog, started, out_of_time = None, False, False
     try:
@@ -154,7 +154,9 @@ def run(ctx, evidence_dir=None):
             return rec
         pi_check = pa.harness(ctx.checkout)
         mod = apps_module(ctx.checkout)
-        order = tuple(mod.CHECKS)
+        order = tuple(a for a in mod.CHECKS if not apps or a in apps)
+        if not order:
+            raise pa.Refused("APPS")
         started = True
         klog = pa.KernelLog(ctx.prefix / "kernel", ctx.klog_source)
         klog.start()
@@ -278,6 +280,7 @@ def main(argv=None):
     r.add_argument("--bench", default="/workspace/bench")
     r.add_argument("--deadline-epoch", type=float, default=0.0)
     r.add_argument("--evidence-dir")
+    r.add_argument("--apps", help="comma list: run only these rows (default: all)")
     q = sub.add_parser("plan")
     q.add_argument("--sha", default="0" * 40)
     a = p.parse_args(argv)
@@ -291,7 +294,7 @@ def main(argv=None):
             return 2
         ctx = pa.Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=pa.hardware_now())
         ctx.pins_path = PINS_PATH
-        return finish(run(ctx, a.evidence_dir), a.out)
+        return finish(run(ctx, a.evidence_dir, a.apps.split(",") if a.apps else None), a.out)
     except pa.Refused as exc:
         print("KF_PROPIMAGE_APPS_B_REFUSED " + pa.clean(exc.reason, 80), flush=True)
         return 2
