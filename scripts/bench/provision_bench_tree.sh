@@ -50,7 +50,10 @@ KF_FATAL=""
 kf_fatal() { say "⊘ FATAL: $*"; KF_FATAL="${KF_FATAL:+$KF_FATAL; }$*"; }
 REPO=$(kf_resolve_repo) || exit 1
 echo "== repo: $REPO  rev: $(git -C "$REPO" log --oneline -1 2>/dev/null || echo UNKNOWN)"
-QEMU_VER=10.2.4
+# The QEMU source is pinned by sha256 in scripts/bench/qemu.pin and fetched ONLY by scripts/ci/qemu_source.py, which
+# refuses on a size or hash mismatch (2026-11-15). KF_QEMU_TARBALL=<path> supplies a local copy; it is hash-checked too.
+QEMU_SRC="$REPO/scripts/ci/qemu_source.py"
+QEMU_VER=$(python3 -I "$QEMU_SRC" version) || { echo "⊘ FATAL: scripts/bench/qemu.pin is unreadable" >&2; exit 2; }
 RUN=/root/NVIDIA-Linux-x86_64-580.159.04.run
 say(){ echo "[$(date -Is)] $*"; }
 say "BENCH_TREE_START"
@@ -88,14 +91,15 @@ say "apt rc=$?  (ninja=$(command -v ninja||echo NO) meson=$(command -v meson||ec
 
 # ---- 2. downloads, in parallel ----------------------------------------------------------
 say "phase 3: downloads"
-[ -s "$BENCH/qemu-$QEMU_VER.tar.xz" ] || \
-  curl -fsSL -o "$BENCH/qemu-$QEMU_VER.tar.xz" "https://download.qemu.org/qemu-$QEMU_VER.tar.xz" &
+python3 -I "$QEMU_SRC" fetch "$BENCH" ${KF_QEMU_TARBALL:+--from-file "$KF_QEMU_TARBALL"} >/dev/null &
 P1=$!
 [ -s "$BENCH/noble-server-cloudimg-amd64.img" ] || \
   curl -fsSL -o "$BENCH/noble-server-cloudimg-amd64.img" \
     "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" &
 P2=$!
-wait $P1; say "qemu tarball rc=$?  $(ls -la $BENCH/qemu-$QEMU_VER.tar.xz 2>/dev/null | awk '{print $5}')"
+wait $P1; QRC=$?; say "qemu tarball (pinned, verified) rc=$QRC"
+# Fail closed: nothing below may build from a tarball that did not match the pin.
+[ "$QRC" = 0 ] || { say "⊘ FATAL: QEMU source tarball did not match scripts/bench/qemu.pin; refusing to build"; exit 2; }
 wait $P2; say "cloudimg rc=$?  $(ls -la $BENCH/noble-server-cloudimg-amd64.img 2>/dev/null | awk '{print $5}')"
 
 # ---- 3. tap + NAT ----------------------------------------------------------------------

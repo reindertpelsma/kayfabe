@@ -1935,6 +1935,13 @@ static void t_hostile_enormous_but_legal(void)
 
 static void t_hostile_report_run_cap(void)
 {
+    /* ★ 2026-11-15 (M4): the REPORT is what overflows. ⊘ Was: TRUNCATED, RUN_CAP, run_count 0 — the
+     * diff handed out as NOTHING, which the host refuses and answers by killing the channel
+     * (`[measured f4a b20fd84b]` "walk report TRUNCATED (runs 0 of 0)" at a diff of > 262 144 runs).
+     * Now the report carries a WINDOW: the runs below a VA boundary no run straddles, flagged CUT, not
+     * TRUNCATED (the commit applies it), and the rest of the diff is re-emitted by each next walk
+     * once the window is acknowledged. Mirrored on a CPU, against this same kernel text, by
+     * `kf_cpu_walk.cpp` (emit_cut_cases, emit_cut_random). */
     KfWalkCfg c = cfg_default();
     c.runs_per_pdb = 4096;
     c.run_capacity = 16;              /* the REPORT is what overflows this time */
@@ -1943,13 +1950,26 @@ static void t_hostile_report_run_cap(void)
     for (uint32_t i = 0; i < 100; i++)
         t.map4k(VBASE + (uint64_t)i * 4096ull, 0x800000ull + (uint64_t)i * 8192ull);
     f.upload();
+    uint32_t seen = 0;
+    for (int w = 0; w < 10 && seen < 100; w++) {
+        CHECK_EQ(f.refresh({t.root}), 0);
+        hostile_invariants(f);
+        const uint32_t left = 100 - seen, want = left > 16 ? 16 : left;
+        CHECK_M(!(f.hdr.flags & KFWR_HF_TRUNCATED), "a diff larger than the report is a window, not a truncation");
+        CHECK_M(!(f.hdr.refuse_mask & KFWR_R_RUN_CAP), "and not a refusal");
+        CHECK_EQ(f.hdr.run_count, want);
+        CHECK_EQ(!!(f.hdr.flags & KFWR_HF_CUT), left > 16);
+        CHECK_EQ(!!(f.pe[0].vas_flags & KFWR_V_CUT), left > 16);
+        for (uint32_t i = 0; i < f.hdr.run_count; i++) {
+            CHECK_M(f.rn[i].op == KFWR_OP_MAP, "a window of maps");
+            CHECK_M(f.rn[i].va == VBASE + (uint64_t)(seen + i) * 4096ull, "windows go up the address space, no gap, no repeat");
+        }
+        seen += f.hdr.run_count;
+        f.ack();
+    }
+    CHECK_EQ(seen, 100);
     CHECK_EQ(f.refresh({t.root}), 0);
-    hostile_invariants(f);
-    CHECK(f.hdr.flags & KFWR_HF_TRUNCATED);
-    CHECK(f.hdr.refuse_mask & KFWR_R_RUN_CAP);
-    /* ⊘ A diff that does not fit is handed out as NOTHING: a partial diff is not
-     * a smaller diff, it is a wrong one (and it would be committed piecemeal). */
-    CHECK_EQ(f.hdr.run_count, 0);
+    CHECK_M(f.hdr.run_count == 0 && !(f.hdr.flags & KFWR_HF_CUT), "the diff is empty only after every window was acknowledged");
     if (g_fails_here) dump(f);
 }
 

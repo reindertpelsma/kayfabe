@@ -437,6 +437,25 @@ def validate_matrix_receipts(value):
         seen.add(row["id"])
 
 
+def validate_install_flow(value):
+    """The install_flow stage's record (scripts/ci/install_flow.py): bounded, read and validated, not forwarded."""
+    name = re.compile(r"[a-z][a-z0-9_.-]{0,47}")
+    keys = {"schema", "verdict", "sha", "docs", "steps", "root_steps", "substitutions", "binary", "guest", "reason"}
+    ok = type(value) is dict and {"schema", "verdict", "sha", "docs", "steps", "root_steps"} <= set(value) <= keys
+    ok = ok and value["schema"] == 1 and value["verdict"] in ("PASS", "FAIL")
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    ok = ok and type(value["docs"]) is dict and 1 <= len(value["docs"]) <= 8
+    ok = ok and all(name.fullmatch(k) and type(v) is str and re.fullmatch("[0-9a-f]{64}", v) for k, v in value["docs"].items())
+    ok = ok and type(value["steps"]) is list and len(value["steps"]) <= 32
+    ok = ok and all(type(s) is dict and type(s.get("step")) is str and name.fullmatch(s["step"]) and type(s.get("rc")) is int
+                    for s in value["steps"])
+    ok = ok and type(value["root_steps"]) is list and len(value["root_steps"]) <= 32
+    ok = ok and all(type(s) is str and name.fullmatch(s) for s in value["root_steps"])
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 8192
+    if not ok:
+        raise ValueError("install_flow")
+
+
 def read_result_file(path):
     """Strictly parse local results, including optional bounded arm diagnostics."""
     with open(path, "rb") as source:
@@ -459,6 +478,7 @@ def read_result_file(path):
             "instruction_sha256",
             "selection",
             "propimage_apps",
+            "install_flow",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
@@ -477,6 +497,8 @@ def read_result_file(path):
             validate_propimage_apps(doc["propimage_apps"])
             if doc["verdict"] == "PASS" and doc["propimage_apps"]["verdict"] not in ("PASS", "NOT_RUN"):
                 raise ValueError("propimage_apps verdict")
+        if "install_flow" in doc:
+            validate_install_flow(doc["install_flow"])
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):
             raise ValueError("verdict")
         if "matrix_receipts" in doc:

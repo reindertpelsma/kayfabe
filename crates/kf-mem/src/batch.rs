@@ -367,6 +367,47 @@ pub enum BookRefusal {
 /// inserts and removals go in chunks of this size, the structure consistent between chunks.
 pub const LEDGER_CHUNK: usize = 2048;
 
+/// ★ 2026-11-15 (Wukong stalls, `WUKONG_STALLS_20261115.md` §B): the most ledger entries — our host
+/// mappings, one per placed run piece — ONE host unmap RM call may cover. ⊘ Was unbounded: one
+/// maximal owned span was one `NVOS47` range unmap however long (`[measured, f4a b20fd84b]` 120 930
+/// runs in TWO calls, 1 502 ms, about 4 µs per run), and the channel that asked for the split waited
+/// for all of it, which at Windows' default 2 s `TdrDelay` coincides with a TDR. Now a span longer
+/// than this is issued as several calls, cut BETWEEN ledger entries (never inside one of our
+/// mappings, so no split that the whole span would not have made), each recorded in the ledger as
+/// it lands: a failure in call k leaves calls `0..k` cut and call k and the rest untouched, exactly
+/// what the ledger says. The total effect is the same. At 4 µs per run a call costs about 16 ms.
+/// Map calls are already bounded the same way (`apply::BATCH_MAX_RUNS` = 4 096 per batch, one run
+/// per single map).
+pub const UNMAP_CALL_MAX_ENTRIES: usize = 4096;
+
+/// ★ 2026-11-15: one host unmap call that took at least this long is named in the log (bounded by
+/// [`SLOW_UNMAP_LOG_CAP`] lines per process). The apply as a whole has the `SLOW-APPLY` line
+/// (`vasmgr::SLOW_APPLY_MS`).
+pub const SLOW_UNMAP_CALL_MS: u64 = 250;
+
+/// The most [`SLOW_UNMAP_CALL_MS`] lines one process prints (the count keeps going).
+pub const SLOW_UNMAP_LOG_CAP: u32 = 16;
+
+/// The line for one slow host unmap call, or `None` below [`SLOW_UNMAP_CALL_MS`] or past the cap
+/// (`logged` counts the lines already printed). Pure apart from the counter, so a test can pin it.
+pub(crate) fn slow_unmap_line(
+    entries: usize,
+    elapsed: std::time::Duration,
+    logged: &std::sync::atomic::AtomicU32,
+) -> Option<String> {
+    if elapsed < std::time::Duration::from_millis(SLOW_UNMAP_CALL_MS) {
+        return None;
+    }
+    let n = logged.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    (n < SLOW_UNMAP_LOG_CAP).then(|| {
+        format!(
+            "kf-mem: SLOW host unmap call: {entries} ledger entr(ies) in {} ms (budget {SLOW_UNMAP_CALL_MS} ms; calls are cut at {UNMAP_CALL_MAX_ENTRIES} entries; line {} of {SLOW_UNMAP_LOG_CAP})",
+            elapsed.as_millis(),
+            n.saturating_add(1)
+        )
+    })
+}
+
 /// ★ Review 3 item 2: the most host calls ONE steer hull (one claim) may cost — see
 /// [`BatchedVas::hand_to_host`]. At 84-123 µs per unmap `[measured earlier, vast 52624429,
 /// 2026-09-26]` a hull holds its claim for ≲ 2 ms.
@@ -1097,6 +1138,9 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     pub unsafe_splits: std::sync::atomic::AtomicU64,
     /// ★ Review fix 2026-10-10: the per-row bound ([`MAX_LEAF_PIECES`]; tests lower it).
     pub max_leaf_pieces: u64,
+    /// ★ 2026-11-15: the most ledger entries one host unmap call covers
+    /// ([`UNMAP_CALL_MAX_ENTRIES`]; tests lower it; 0 is read as 1).
+    pub unmap_call_cap: usize,
     /// ★ Review fix 2026-10-10: rows refused by [`HUGE_ROW_OUTSIDE_RESERVATION`].
     pub huge_refused: std::sync::atomic::AtomicU64,
     /// ★ Review fix 2026-10-10: mappings of ours found where a NEW row was about to be mapped (a
@@ -1264,6 +1308,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             micro_refused: std::sync::atomic::AtomicU64::new(0),
             unsafe_splits: std::sync::atomic::AtomicU64::new(0),
             max_leaf_pieces: MAX_LEAF_PIECES,
+            unmap_call_cap: UNMAP_CALL_MAX_ENTRIES,
             huge_refused: std::sync::atomic::AtomicU64::new(0),
             strays_removed: std::sync::atomic::AtomicU64::new(0),
             held_ours: std::sync::atomic::AtomicU64::new(0),
@@ -2524,7 +2569,10 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 m.len
             ));
         }
-        let mut open: Option<(u64, u64, Option<u32>)> = None;
+        // ★ 2026-11-15: a span is cut at `unmap_call_cap` entries (between entries, never inside
+        // one of our mappings); `open` carries (lo, hi, via, entries so far).
+        let cap = self.unmap_call_cap.max(1);
+        let mut open: Option<(u64, u64, Option<u32>, usize)> = None;
         let mut cur = va;
         while cur < end {
             let chunk = self.hold(&self.own, |o| {
@@ -2537,10 +2585,13 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 let e = s.saturating_add(m.len);
                 let (cs, ce) = (s.max(va), e.min(end));
                 match open.as_mut() {
-                    Some((_, oe, via)) if *oe == cs && *via == m.via => *oe = ce,
+                    Some((_, oe, via, n)) if *oe == cs && *via == m.via && *n < cap => {
+                        *oe = ce;
+                        *n = n.saturating_add(1);
+                    }
                     _ => {
-                        if let Some(span) = open.replace((cs, ce, m.via)) {
-                            self.unmap_span(span, defer)?;
+                        if let Some((lo, hi, via, n)) = open.replace((cs, ce, m.via, 1)) {
+                            self.unmap_span((lo, hi, via), n, defer)?;
                         }
                     }
                 }
@@ -2550,18 +2601,30 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 break;
             }
         }
-        if let Some(span) = open {
-            self.unmap_span(span, defer)?;
+        if let Some((lo, hi, via, n)) = open {
+            self.unmap_span((lo, hi, via), n, defer)?;
         }
         Ok(())
     }
 
-    /// One maximal owned span: the host call (no lock held), then the ledger and the book.
-    fn unmap_span(&self, (s, e, via): (u64, u64, Option<u32>), defer: bool) -> Result<(), String> {
-        match via {
-            Some(h) => self.vas.unmap_in(h, s, e.saturating_sub(s), defer)?,
-            None => self.vas.unmap_range(s, e.saturating_sub(s), defer)?,
+    /// One owned span of at most `unmap_call_cap` entries: the host call (no lock held), then the
+    /// ledger and the book. A call at or over [`SLOW_UNMAP_CALL_MS`] is named in the log.
+    fn unmap_span(
+        &self,
+        (s, e, via): (u64, u64, Option<u32>),
+        entries: usize,
+        defer: bool,
+    ) -> Result<(), String> {
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let t0 = std::time::Instant::now();
+        let r = match via {
+            Some(h) => self.vas.unmap_in(h, s, e.saturating_sub(s), defer),
+            None => self.vas.unmap_range(s, e.saturating_sub(s), defer),
+        };
+        if let Some(line) = slow_unmap_line(entries, t0.elapsed(), &LOGGED) {
+            eprintln!("{line}");
         }
+        r?;
         self.cut_own(s, e);
         self.retired(s, e.saturating_sub(s));
         Ok(())
@@ -3513,7 +3576,7 @@ mod tests {
 
     /// ★ Review item 4 — amplification is bounded: with the refresh armed, a row that would cost a
     /// million host calls at 4 KiB grain (a reservation refused) is refused by name with at most
-    /// the one reservation attempt; a row inside the budget is taken down by ONE range call, and
+    /// the one reservation attempt; a row inside the budget is taken down by one range call per `UNMAP_CALL_MAX_ENTRIES` entries, and
     /// rolled back by one range call when a piece fails; the next refresh starts afresh.
     #[test]
     fn host_call_amplification_is_bounded_per_refresh() {
@@ -3539,9 +3602,12 @@ mod tests {
         let before = host.inner.host_calls.load(Relaxed);
         assert_eq!(bv.unmap_run(va, Some(len), true), Ok(()));
         let used = host.inner.host_calls.load(Relaxed) - before;
+        // ★ 2026-11-15: ⊘ was `used <= 2` (one range call). A call now covers at most
+        // `UNMAP_CALL_MAX_ENTRIES` entries, so 65 536 entries are 16 calls (+1 for the free).
+        let calls = 65_536 / UNMAP_CALL_MAX_ENTRIES as u64;
         assert!(
-            used <= 2,
-            "unmap_run issued {used} host calls for 65 536 entries"
+            (2..=calls + 2).contains(&used),
+            "unmap_run issued {used} host calls for 65 536 entries (expected about {calls})"
         );
         assert!(bv.own.lock().unwrap().is_empty());
         // (3) a piece fails mid-row: the placed pieces go in ONE range call.

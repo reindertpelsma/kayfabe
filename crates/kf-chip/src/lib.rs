@@ -28,6 +28,7 @@ pub mod hwref;
 pub mod ptekind;
 pub mod sked;
 pub mod usermode;
+pub mod video_gaps;
 
 pub use classes::{ClassSet, Kind, classes_for, is_any_dma_copy_class};
 pub use die::DieId;

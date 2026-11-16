@@ -48,7 +48,11 @@
 //! failed. ★ Two exceptions, both because we hold nothing to be stale: a PDB no object carries
 //! ([`VaStats::named_missed`]) and a batch in which no named space has a root. ★ And one retry
 //! that is ours: a diff whose maps were WITHHELD for slot capacity (`KFWR_V_PARTIAL`) is walked
-//! again at once, after its unmaps landed — its invalidate clears on that walk.
+//! again at once, after its unmaps landed — its invalidate clears on that walk. ★ 2026-11-15 (M4) The
+//! same for a diff larger than the REPORT's run capacity (`KFWR_V_CUT`): the report carries a window
+//! of it (`kf_cuda::diffmodel::cut_report`), the window is applied and acknowledged, the next walk
+//! re-emits the rest, and a split or invalidate completes only on a walk whose diff is empty. ⊘ Was:
+//! a report-level truncation was refused and the channel marked dead (`walk report TRUNCATED`).
 
 use crate::apply::{Applied, ApplyCfg, DiffRun, apply_entry};
 use crate::ledger::{MapTarget, Settle};
@@ -320,8 +324,15 @@ pub struct EntryDiff {
     pub first: usize,
     /// Its runs: per page-size class, UNMAPs then MAPs.
     pub runs: Vec<DiffRun>,
-    /// ★ Its maps were withheld (slot capacity): walk again once its unmaps land.
+    /// ★ Its maps were withheld (slot capacity), or only a window of its diff is in the report
+    /// ([`EntryDiff::cut`]): walk again once what is here has landed.
     pub partial: bool,
+    /// ★ 2026-11-15 (M4): `KFWR_V_CUT` — the diff was larger than the report, so only a window of it
+    /// (or nothing of it, while an earlier entry fills the report) is here; the rest comes on the next
+    /// walk. Also `partial`. Unlike a capacity-withheld diff it stays partial over a refused MAP
+    /// (absence): the split must not complete while runs remain unreported, and a window in which
+    /// nothing at all applied is refused by name, never retried for ever.
+    pub cut: bool,
     /// Its slot is full and nothing can be retired: no progress is possible.
     pub overflow: bool,
     /// ★ Owner ruling 2026-09-25: the `KFWR_R_*` bits its WALK refused (0 = none). Its refused
@@ -494,36 +505,26 @@ impl Walker for GpuWalker {
                 r.runs.len()
             );
         }
-        let entries = r
-            .pdbs
-            .iter()
-            .map(|p| {
-                // `validate` proved every slice lies inside the run array.
-                let first = p.first_run as usize;
-                // (Never out of range after `validate`; if it ever were, an empty slice — the entry's
-                // runs are then simply absent — beats a panic on the VA thread.)
-                let runs = r
-                    .runs
-                    .get(first..first.saturating_add(p.run_count as usize))
-                    .unwrap_or_default()
+        if r.header.flags & kf_cuda::abi::KFWR_HF_CUT != 0 {
+            // ★ 2026-11-15 (M4): the diff was larger than the report. Not an error: this window is
+            // applied, the rest comes on the next walk (bounded: the first 32 lines).
+            static CUT_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            if CUT_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
+                let cut: Vec<String> = r
+                    .pdbs
                     .iter()
-                    .map(|m| self.perm.diff_run(m))
+                    .filter(|p| p.vas_flags & kf_cuda::abi::KFWR_V_CUT != 0)
+                    .map(|p| format!("pdb {:#x} slot {} {} runs", p.pdb, p.slot(), p.run_count))
                     .collect();
-                EntryDiff {
-                    pdb: p.pdb,
-                    slot: p.slot(),
-                    first,
-                    runs,
-                    partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,
-                    overflow: p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0,
-                    refused: if p.vas_flags & kf_cuda::abi::KFWR_V_REFUSED != 0 {
-                        p.refused_bits().max(1)
-                    } else {
-                        0
-                    },
-                }
-            })
-            .collect();
+                eprintln!(
+                    "kf3: walk report CUT at its capacity ({} of {}): the rest of the diff is re-emitted by the next walk; the split completes only when it is empty [{}]",
+                    r.runs.len(),
+                    r.header.run_capacity,
+                    cut.join(", ")
+                );
+            }
+        }
+        let entries = entry_diffs(r, &self.perm);
         Ok(Some(WalkDone {
             generation: r.header.generation,
             nrun: r.runs.len(),
@@ -545,6 +546,47 @@ impl Walker for GpuWalker {
     fn slots(&self) -> u32 {
         self.kernel.max_slots()
     }
+}
+
+/// ★ 2026-11-15: one report's entries as the apply sees them (split out of [`GpuWalker`]'s `poll`
+/// so that the mapping of the report's per-entry flags is testable without a GPU).
+///
+/// A window of a diff larger than the report (`KFWR_V_CUT`) is a PARTIAL diff, like one whose maps
+/// were withheld for slot capacity (`KFWR_V_PARTIAL`): what is in the report is applied, the rest is
+/// re-emitted by the next walk (commit on ack), and the split / invalidate completes only on a walk
+/// whose diff is empty.
+pub(crate) fn entry_diffs(r: &kf_cuda::Report, perm: &crate::apply::PermPolicy) -> Vec<EntryDiff> {
+    r.pdbs
+        .iter()
+        .map(|p| {
+            // `validate` proved every slice lies inside the run array.
+            let first = p.first_run as usize;
+            // (Never out of range after `validate`; if it ever were, an empty slice — the entry's
+            // runs are then simply absent — beats a panic on the VA thread.)
+            let runs = r
+                .runs
+                .get(first..first.saturating_add(p.run_count as usize))
+                .unwrap_or_default()
+                .iter()
+                .map(|m| perm.diff_run(m))
+                .collect();
+            EntryDiff {
+                pdb: p.pdb,
+                slot: p.slot(),
+                first,
+                runs,
+                partial: p.vas_flags & (kf_cuda::abi::KFWR_V_PARTIAL | kf_cuda::abi::KFWR_V_CUT)
+                    != 0,
+                cut: p.vas_flags & kf_cuda::abi::KFWR_V_CUT != 0,
+                overflow: p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0,
+                refused: if p.vas_flags & kf_cuda::abi::KFWR_V_REFUSED != 0 {
+                    p.refused_bits().max(1)
+                } else {
+                    0
+                },
+            }
+        })
+        .collect()
 }
 
 /// Diagnostics: a walk table slice summarised — per aperture, per page size, per 1 GiB of VA,
@@ -662,6 +704,16 @@ pub const SLOW_APPLY_MS: u64 = 500;
 pub const SLOW_SPLIT_MS: u64 = 1000;
 /// ★ 2026-11-13: lines per boot for each slow-path line; the rest are only counted.
 pub const SLOW_LOG_CAP: u64 = 20;
+
+/// ★ 2026-11-15 (M4, review of PR #424 F2): the most walks ONE request (a split ticket or an
+/// invalidate) may spend on a diff larger than the report. A clean drain of the per-space maximum
+/// (1 Mi runs, a staged diff of up to three times that) is about a dozen windows at the report's
+/// 262 144 runs; refused runs re-carried by every window, or a guest that keeps editing its tables
+/// between windows, slow it down. Past this the request fails by name (a split `Err`, an invalidate
+/// left armed) instead of re-walking without bound. ⊘ Was unbounded: with `R` persistently refused
+/// runs at the low end of a diff of `N`, a window advances `capacity - R` runs, so one split could
+/// cost `(N - R) / (capacity - R)` walks (about 7.9e5 at `R = capacity - 1`, `N = 1 Mi`).
+pub const MAX_CUT_WINDOWS_PER_REQUEST: u32 = 64;
 
 /// ★ `true` when `ns` is strictly longer than `ms` milliseconds. Pure; the threshold's one home.
 #[must_use]
@@ -1122,6 +1174,11 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     /// ★ 2026-11-13: line budgets of `SLOW-APPLY` and `SPLIT-LATE`.
     slow_apply_lines: LineBudget,
     slow_split_lines: LineBudget,
+    /// ★ 2026-11-15: windows spent so far per request (`(0, ticket)` for a split, `(1, seq)` for an
+    /// invalidate); dropped when the request completes or fails.
+    cut_windows: BTreeMap<(u8, u64), u32>,
+    /// ★ 2026-11-15: [`MAX_CUT_WINDOWS_PER_REQUEST`] (a test lowers it).
+    pub cut_window_budget: u32,
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
@@ -1162,6 +1219,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             pending: Vec::new(),
             slow_apply_lines: LineBudget::new(SLOW_LOG_CAP),
             slow_split_lines: LineBudget::new(SLOW_LOG_CAP),
+            cut_windows: BTreeMap::new(),
+            cut_window_budget: MAX_CUT_WINDOWS_PER_REQUEST,
             inflight: None,
             splits_done: Vec::new(),
             clear_absent: clear_over_absent(),
@@ -1788,6 +1847,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         // ★ v3-mapfix: of `failed`, spaces whose root moved during the walk (re-walked at once).
         let mut rewalk: BTreeSet<VasKey> = BTreeSet::new();
         let mut partial: BTreeSet<VasKey> = BTreeSet::new();
+        // ★ 2026-11-15 (M4): the spaces whose report was a window of a larger diff.
+        // (space, its entry carries no runs, a run of its own entry applied)
+        let mut cut_keys: Vec<(VasKey, bool, bool)> = Vec::new();
         let cfg = ApplyCfg {
             store_bytes: self.store_bytes,
             grain: self.page_grain,
@@ -2028,7 +2090,73 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             } else {
                 self.stats.spaces_reconciled = self.stats.spaces_reconciled.saturating_add(1);
             }
+            if e.cut {
+                // ★ 2026-11-15 (M4): the diff goes on past this window. A refused MAP (absence) must
+                // not complete the split early — runs, UNMAPs among them, are still unreported — so a
+                // cut entry stays partial unless the failure is a hard one. Whether the window did
+                // anything is decided below, over the whole report.
+                let own = a.codes.iter().any(|&c| c != kf_cuda::abi::KFWR_ACK_FAILED);
+                cut_keys.push((key, e.runs.is_empty(), own));
+            }
             out.applied.push((key, a));
+        }
+        // ★ 2026-11-15 (M4): a window of a larger diff continues unless it was a hard failure, and a
+        // window in which NOTHING of ITS OWN space applied is refused by name rather than re-walked for
+        // ever or completed over runs still unreported. (Review of PR #424 F1: this was judged over the
+        // whole report, so a space whose window never applies was re-walked for ever while another
+        // space in the same report kept making progress.) A space withheld with no runs of its own
+        // (an earlier space fills the report) has no window to judge: it waits while the report as a
+        // whole applies something, and the per-request budget below bounds that wait.
+        let mut cut_partial: BTreeSet<VasKey> = BTreeSet::new();
+        if !cut_keys.is_empty() {
+            let any = codes.iter().any(|&c| c != kf_cuda::abi::KFWR_ACK_FAILED);
+            for (key, withheld, own) in cut_keys {
+                let hard = failed.contains(&key) && !absent_only.contains(&key);
+                if hard || rewalk.contains(&key) {
+                    continue;
+                }
+                if if withheld { any } else { own } {
+                    partial.insert(key);
+                    cut_partial.insert(key);
+                } else {
+                    failed.insert(key);
+                    absent_only.remove(&key);
+                    self.stats.refuse(format!(
+                        "{key:?}: the walk report was cut at its capacity and no run of its window applied — refusing rather than completing over runs still unreported"
+                    ));
+                }
+            }
+        }
+        // ★ 2026-11-15 (review of PR #424 F2): the walks one request may spend on windows are bounded.
+        for (w, keys, _) in &batch.wants {
+            let id = match w {
+                Want::Split { ticket, .. } => (0u8, *ticket),
+                Want::Invalidate(r, _) => (1u8, r.seq),
+                Want::Root(_) => continue,
+            };
+            let windowed: Vec<VasKey> = keys
+                .iter()
+                .copied()
+                .filter(|k| cut_partial.contains(k))
+                .collect();
+            if windowed.is_empty() {
+                continue;
+            }
+            let n = self.cut_windows.entry(id).or_insert(0);
+            *n = n.saturating_add(1);
+            if *n > self.cut_window_budget {
+                let spent = *n;
+                self.cut_windows.remove(&id);
+                for k in windowed {
+                    partial.remove(&k);
+                    failed.insert(k);
+                    absent_only.remove(&k);
+                }
+                self.stats.refuse(format!(
+                    "request {id:?}: {spent} windows of a diff larger than the walk report (budget {}) and it is still not whole — refusing rather than re-walking without bound",
+                    self.cut_window_budget
+                ));
+            }
         }
         // ★ THE VERDICT, before any clear: the next walk (below, or the next invalidate's)
         // commits exactly what landed.
@@ -2148,6 +2276,23 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
             }
         }
+        // A request of this walk that is not requeued is finished (completed or failed): its window
+        // count goes.
+        for (w, _, _) in &batch.wants {
+            let id = match w {
+                Want::Split { ticket, .. } => (0u8, *ticket),
+                Want::Invalidate(r, _) => (1u8, r.seq),
+                Want::Root(_) => continue,
+            };
+            let again = requeue.iter().any(|(q, _)| match (q, w) {
+                (Want::Split { ticket: a, .. }, Want::Split { ticket: b, .. }) => a == b,
+                (Want::Invalidate(a, _), Want::Invalidate(b, _)) => a.seq == b.seq,
+                _ => false,
+            });
+            if !again {
+                self.cut_windows.remove(&id);
+            }
+        }
         for (w, at) in requeue.into_iter().rev() {
             let w = match w {
                 Want::Invalidate(r, _) => Want::Invalidate(r, at),
@@ -2205,6 +2350,8 @@ mod tests {
         diff_runs: Vec<usize>,
         /// A root whose walk "refuses" a leaf (`KFWR_R_LEAF_OOB`) — the refusal the ruling names.
         refuse_in: Option<u64>,
+        /// ★ 2026-11-15 (M4): the report's run capacity; a larger diff is cut as the kernel cuts it.
+        report_cap: Option<usize>,
     }
 
     impl ModelWalker {
@@ -2224,6 +2371,7 @@ mod tests {
                 fail_poll: None,
                 diff_runs: vec![],
                 refuse_in: None,
+                report_cap: None,
             }
         }
     }
@@ -2300,11 +2448,28 @@ mod tests {
             let mut entries = Vec::new();
             let mut last = Vec::new();
             let mut first = 0usize;
-            for (e, w) in q {
-                let com = self.slots.get(&e.slot).cloned().unwrap_or_default();
-                let d = diffmodel::diff(&com, &w, self.cap);
-                let runs: Vec<DiffRun> = d
-                    .runs
+            // Every entry's whole diff first; then the report's capacity (when the test sets one).
+            let diffs: Vec<(WalkEntry, diffmodel::EntryDiff)> = q
+                .into_iter()
+                .map(|(e, w)| {
+                    let com = self.slots.get(&e.slot).cloned().unwrap_or_default();
+                    (e, diffmodel::diff(&com, &w, self.cap))
+                })
+                .collect();
+            let mut cut = vec![false; diffs.len()];
+            let mut reported: Vec<Vec<KfMapRun>> =
+                diffs.iter().map(|(_, d)| d.runs.clone()).collect();
+            if let Some(cap) = self.report_cap {
+                let c = diffmodel::cut_report(&reported, cap);
+                if c.truncated {
+                    // The legacy answer, still the answer when one clump is larger than the report.
+                    return Err("walk report TRUNCATED (flags=0x85, refuse_mask=0x10, runs 0 of 0; refusing entries: []): nothing of it is applied, nothing committed".to_string());
+                }
+                reported = c.entries;
+                cut = c.cut;
+            }
+            for (i, (e, d)) in diffs.into_iter().enumerate() {
+                let runs: Vec<DiffRun> = reported[i]
                     .iter()
                     .map(|m| crate::apply::PermPolicy::default().diff_run(m))
                     .collect();
@@ -2318,12 +2483,13 @@ mod tests {
                     slot: e.slot,
                     first,
                     runs,
-                    partial: d.partial,
+                    partial: d.partial || cut[i],
+                    cut: cut[i],
                     overflow: d.overflow,
                     refused,
                 });
-                first += d.runs.len();
-                last.push((e.slot, d.runs));
+                first += reported[i].len();
+                last.push((e.slot, reported[i].clone()));
             }
             self.diff_runs.push(first);
             self.last = Some((self.generation, last));
@@ -3546,6 +3712,654 @@ mod tests {
                 Op::Map(0x5000, 0x40_0000, 0x1000),
                 Op::Invalidate
             ]
+        );
+    }
+
+    /// The report's per-entry flags as the apply sees them: `KFWR_V_CUT` and `KFWR_V_PARTIAL` both make an
+    /// entry partial, nothing else does, and a withheld entry (no runs) is partial too.
+    fn report_with(flags: &[u32], runs_each: u32) -> kf_cuda::Report {
+        use kf_cuda::abi::{KfMapRun, KfPdbEntry, KfReportHeader};
+        let mut runs = Vec::new();
+        let mut pdbs = Vec::new();
+        for (i, &f) in flags.iter().enumerate() {
+            pdbs.push(KfPdbEntry {
+                pdb: 0x1000 * (i as u64 + 1),
+                first_run: runs.len() as u32,
+                run_count: runs_each,
+                vas_flags: f,
+                reserved: i as u32,
+                ..KfPdbEntry::default()
+            });
+            for k in 0..runs_each {
+                runs.push(KfMapRun {
+                    va: 0x1000 * u64::from(k + 1),
+                    gpga: 0x10_0000,
+                    len: 0x1000,
+                    flags: 2,
+                    op: 1,
+                    pdb_index: i as u16,
+                });
+            }
+        }
+        kf_cuda::Report {
+            header: KfReportHeader::default(),
+            pdbs,
+            runs,
+            gpga_span: 1 << 40,
+        }
+    }
+
+    #[test]
+    fn a_cut_entry_is_partial_for_the_apply() {
+        use kf_cuda::abi::{KFWR_V_CUT, KFWR_V_OVERFLOW, KFWR_V_PARTIAL};
+        let r = report_with(&[0, KFWR_V_CUT, KFWR_V_PARTIAL, KFWR_V_OVERFLOW], 2);
+        let e = entry_diffs(&r, &crate::apply::PermPolicy::default());
+        assert_eq!(
+            e.iter().map(|x| x.partial).collect::<Vec<_>>(),
+            vec![false, true, true, false]
+        );
+        assert_eq!(
+            e.iter().map(|x| x.cut).collect::<Vec<_>>(),
+            vec![false, true, false, false],
+            "only KFWR_V_CUT is a cut; a capacity-withheld diff is partial and not cut"
+        );
+        assert!(e[3].overflow && !e[1].overflow);
+        assert_eq!(e[1].runs.len(), 2);
+        assert_eq!(e[2].first, 4);
+    }
+
+    /// The capacity-withheld case (`KFWR_V_PARTIAL`) is unchanged by the cut flag: still partial.
+    #[test]
+    fn a_capacity_withheld_entry_is_still_partial_for_the_apply() {
+        use kf_cuda::abi::KFWR_V_PARTIAL;
+        let r = report_with(&[KFWR_V_PARTIAL], 3);
+        let e = entry_diffs(&r, &crate::apply::PermPolicy::default());
+        assert!(e[0].partial && !e[0].overflow && e[0].refused == 0 && e[0].runs.len() == 3);
+    }
+
+    #[test]
+    fn a_withheld_entry_with_no_runs_is_partial_for_the_apply() {
+        use kf_cuda::abi::KFWR_V_CUT;
+        let r = report_with(&[KFWR_V_CUT, KFWR_V_CUT], 0);
+        let e = entry_diffs(&r, &crate::apply::PermPolicy::default());
+        assert!(e.iter().all(|x| x.partial && x.runs.is_empty()));
+    }
+
+    /// ★★★ 2026-11-15 (M4) — `[measured f4a b20fd84b]` one diff larger than the report's run
+    /// capacity was refused (`walk report TRUNCATED`), the split failed and the channel died. Now
+    /// the report carries a window, every window is applied and acknowledged, and the split is NOT
+    /// done until the diff is empty: 25 scattered maps at a report capacity of 10 are three walks.
+    #[test]
+    fn a_split_over_a_diff_larger_than_the_report_completes_only_when_it_is_empty() {
+        let mut r = rig();
+        r.m.walker_mut().report_cap = Some(10);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..25u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows.clone());
+        r.m.on_split(Some(PDB_A), 7, r.port.trigger());
+        let mut walks = 0;
+        while r.m.take_splits().is_empty() {
+            assert!(r.m.in_flight(), "walked again at once while runs remain");
+            let out = r.m.on_walk_ready(r.port.trigger());
+            walks += 1;
+            assert!(walks <= 3, "25 runs at 10 per report are three walks");
+            assert!(out.unreconciled.is_empty());
+            let landed = ops(&r).iter().filter(|o| matches!(o, Op::Map(..))).count();
+            assert_eq!(
+                landed,
+                (10 * walks).min(25),
+                "walk {walks}: a window of the diff landed"
+            );
+            if walks < 3 {
+                assert!(
+                    r.m.take_splits().is_empty(),
+                    "the split is not done while the diff is not empty"
+                );
+            } else {
+                break;
+            }
+        }
+        assert_eq!(walks, 3);
+        assert_eq!(
+            r.m.take_splits(),
+            vec![(7, Ok(()))],
+            "done on the third walk, and Ok"
+        );
+        assert_eq!(
+            r.m.stats.partial, 2,
+            "two windows were partial, the third was whole"
+        );
+        let maps: Vec<Op> = ops(&r)
+            .into_iter()
+            .filter(|o| matches!(o, Op::Map(..)))
+            .collect();
+        assert_eq!(
+            maps,
+            rows.iter()
+                .map(|&(va, at, len, _)| Op::Map(va, at, len))
+                .collect::<Vec<_>>(),
+            "every map exactly once, lowest addresses first"
+        );
+        assert!(ops(&r).iter().all(|o| !matches!(o, Op::Unmap(_))));
+    }
+
+    /// The same as a verdict: the split's answer is Ok, and only on the last walk.
+    #[test]
+    fn the_split_verdict_arrives_on_the_last_window_and_is_ok() {
+        let mut r = rig();
+        r.m.walker_mut().report_cap = Some(4);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..9u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.m.on_split(Some(PDB_A), 21, r.port.trigger());
+        let mut verdicts = Vec::new();
+        for walk in 1..=3 {
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            let v = r.m.take_splits();
+            if walk < 3 {
+                assert!(v.is_empty(), "walk {walk}: not done");
+            }
+            verdicts.extend(v);
+        }
+        assert_eq!(verdicts, vec![(21, Ok(()))]);
+        assert!(!r.m.in_flight());
+    }
+
+    /// An invalidate over a larger-than-the-report diff clears on the last window and not before
+    /// (§49.1: a clear over runs still unapplied would tell the guest a mapping is live that is not).
+    #[test]
+    fn an_invalidate_over_a_larger_than_the_report_diff_clears_only_on_the_last_window() {
+        let mut r = rig();
+        r.m.walker_mut().report_cap = Some(6);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..14u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        for walk in 1..=3 {
+            let out = r.m.on_walk_ready(r.port.trigger());
+            if walk < 3 {
+                assert!(
+                    out.completed.is_empty() && busy(&r.port),
+                    "walk {walk}: still busy"
+                );
+                assert!(r.m.in_flight());
+            } else {
+                assert_eq!(out.completed, vec![(q.seq, ClearOutcome::Cleared)]);
+                assert!(!busy(&r.port));
+            }
+        }
+    }
+
+    /// An UNMAP and the maps that overlap it are in ONE window: `[old 16 KiB placement]` becomes four
+    /// pages with the middle two re-pointed, while 30 unrelated maps appear. A report of 8 never
+    /// carries the maps without the unmap (or the unmap without its maps).
+    #[test]
+    fn a_window_carries_an_unmap_with_the_maps_that_replace_it() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x4000, 0)]);
+        settle(&mut r, PDB_A);
+        r.m.walker_mut().report_cap = Some(8);
+        let mut rows = vec![
+            (0x1000_0000, 0x0200_0000, 0x1000, 0),
+            (0x1000_1000, 0x0500_0000, 0x1000, 0),
+            (0x1000_2000, 0x0500_1000, 0x1000, 0),
+            (0x1000_3000, 0x0200_3000, 0x1000, 0),
+        ];
+        rows.extend((0..30u64).map(|i| {
+            (
+                0x2000_0000 + 0x2000 * i,
+                0x0600_0000 + 0x2000 * i,
+                0x1000,
+                0,
+            )
+        }));
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.ops.borrow_mut().clear();
+        r.m.on_split(Some(PDB_A), 3, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let first = ops(&r);
+        assert!(
+            first.contains(&Op::Unmap(0x1000_0000)),
+            "the unmap is in the first window: {first:x?}"
+        );
+        let remade = first
+            .iter()
+            .filter(|o| matches!(o, Op::Map(va, ..) if (0x1000_0000..0x1000_4000).contains(va)))
+            .count();
+        assert!(remade >= 1, "with the maps that replace it: {first:x?}");
+        assert!(r.m.take_splits().is_empty());
+        for _ in 0..8 {
+            if r.m.take_splits().len() == 1 || !r.m.in_flight() {
+                break;
+            }
+            let _ = r.m.on_walk_ready(r.port.trigger());
+        }
+        let maps = ops(&r).iter().filter(|o| matches!(o, Op::Map(..))).count();
+        assert_eq!(
+            maps, 34,
+            "every new page is mapped exactly once across the windows"
+        );
+    }
+
+    /// ★ A refused MAP (absence) inside a window must NOT complete the split early: the absence ruling
+    /// (v3-mapfix) completes a split over a refused map because the diff is otherwise whole — here the
+    /// diff goes on past the window, and unreported runs (UNMAPs among them) would be left stale under a
+    /// completed split. The split waits for the walk whose diff is whole, and then completes unsettled.
+    #[test]
+    fn a_refused_map_in_a_window_does_not_complete_the_split_early() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x4000_0000 + 0x2000 * 3);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.m.walker_mut().report_cap = Some(10);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..25u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.m.on_split(Some(PDB_A), 31, r.port.trigger());
+        for walk in 1..=3 {
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            if walk < 3 {
+                assert!(
+                    r.m.take_splits().is_empty(),
+                    "walk {walk}: runs remain unreported, the split is not done (a refused map is absence only when the diff is whole)"
+                );
+                assert!(r.m.in_flight());
+            }
+        }
+        assert_eq!(r.m.take_splits(), vec![(31, Ok(()))]);
+        assert_eq!(
+            r.m.stats.splits_unsettled, 1,
+            "completed over the one refused map, named"
+        );
+    }
+
+    /// ⊘ A window in which NOTHING applied (here: the one run it carries is refused, capacity 1) is not
+    /// re-walked for ever and not completed over unreported runs: it fails the split by name.
+    #[test]
+    fn a_window_in_which_nothing_applied_fails_the_split_by_name() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x4000_0000);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.m.walker_mut().report_cap = Some(1);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..3u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.m.on_split(Some(PDB_A), 41, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let s = r.m.take_splits();
+        assert!(
+            matches!(&s[..], [(41, Err(e))] if e.contains("did not apply")),
+            "{s:?}"
+        );
+        assert!(!r.m.in_flight(), "not re-walked for ever");
+    }
+
+    /// The same for an invalidate: a window in which nothing applied leaves the trigger armed and is
+    /// named (a visible failure — the guest's own timeout), never cleared over unreported runs.
+    #[test]
+    fn an_invalidate_over_a_window_in_which_nothing_applied_stays_armed() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x4000_0000);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.m.walker_mut().report_cap = Some(1);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..3u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.unreconciled, vec![q.seq]);
+        assert!(
+            out.completed.is_empty() && busy(&r.port),
+            "armed, not cleared"
+        );
+        assert!(!r.m.in_flight());
+    }
+
+    /// `n` scattered one-page maps from page `from`, 8 KiB apart (they never coalesce).
+    fn scattered(from: u64, n: u64) -> Vec<(u64, u64, u64, u32)> {
+        (from..from + n)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect()
+    }
+
+    /// A rig whose space B refuses the map at page `bad` (absence), over `n_b` pages, with the report
+    /// capacity `cap`; space A (walked BEFORE B) holds 2 pages.
+    fn two_spaces(cap: usize, bad: u64, n_b: u64) -> Rig {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x5000_0000 + 0x2000 * bad);
+        r.m.table.insert(K_B, h);
+        r.m.table.set_root(K_B, PDB_B, PdbAperture::Vidmem).unwrap();
+        r.m.walker_mut().report_cap = Some(cap);
+        let b: Vec<(u64, u64, u64, u32)> = (0..n_b)
+            .map(|i| {
+                (
+                    0x5000_0000 + 0x2000 * i,
+                    0x0400_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_B, b);
+        r.tables.borrow_mut().insert(PDB_A, scattered(0, 2));
+        r
+    }
+
+    /// The guest adds `n` pages to space A before the next walk.
+    fn guest_edits_a(r: &Rig, round: u64, n: u64) {
+        let mut t = r.tables.borrow_mut();
+        t.get_mut(&PDB_A)
+            .unwrap()
+            .extend(scattered(2 + round * n, n));
+    }
+
+    /// ★ Review of PR #424, F1 (the review's model run: 40 walks with no verdict). Progress is judged PER
+    /// SPACE: space B's window is the single run its capacity share allows, and that run is refused;
+    /// space A, walked before B, applies something on every walk because the guest keeps editing it.
+    /// ⊘ Judged over the whole report, A's progress kept B's split alive for ever with no verdict.
+    #[test]
+    fn a_space_whose_window_never_applies_fails_the_split_while_another_space_progresses() {
+        let mut r = two_spaces(3, 0, 6);
+        r.m.on_split(None, 77, r.port.trigger());
+        let mut verdict = None;
+        for walk in 1..=6u64 {
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            let v = r.m.take_splits();
+            if !v.is_empty() {
+                verdict = Some((walk, v));
+                break;
+            }
+            guest_edits_a(&r, walk, 2);
+        }
+        let (walk, v) = verdict.expect("a verdict within 6 walks, not 40 without one");
+        assert!(walk <= 2, "named at once, walk {walk}");
+        assert!(
+            matches!(&v[..], [(77, Err(e))] if e.contains("did not apply")),
+            "{v:?}"
+        );
+    }
+
+    /// The same for an invalidate of every space: it stays armed and is named, it does not hang.
+    #[test]
+    fn an_invalidate_whose_space_window_never_applies_is_named_while_another_space_progresses() {
+        let mut r = two_spaces(3, 0, 6);
+        let q = guest_invalidate(&r.port, PDB_A, true);
+        r.m.on_invalidate(q, r.port.trigger());
+        let mut named = None;
+        for walk in 1..=6u64 {
+            let out = r.m.on_walk_ready(r.port.trigger());
+            if !out.unreconciled.is_empty() {
+                named = Some((walk, out.unreconciled));
+                break;
+            }
+            guest_edits_a(&r, walk, 2);
+        }
+        let (walk, un) = named.expect("named within 6 walks");
+        assert!(walk <= 2 && un == vec![q.seq], "walk {walk} {un:?}");
+        assert!(
+            busy(&r.port),
+            "armed, never cleared over runs still unreported"
+        );
+    }
+
+    /// ★ Review of PR #424, F2 (the review's model run: one refused run at capacity 2 took 19 walks instead
+    /// of 10). Windows re-carry the refused run, so a request spends more walks than it would: it is
+    /// allowed `MAX_CUT_WINDOWS_PER_REQUEST`, then fails by name.
+    #[test]
+    fn one_persistently_refused_run_costs_windows_and_the_budget_bounds_them() {
+        // control: without the budget biting, 20 maps at capacity 2 with the lowest refused complete
+        // (unsettled) in 19 walks
+        let run = |budget: u32| {
+            let mut r = rig();
+            let h = host(&r, None, Vec::new());
+            *h.refuse_map_at.borrow_mut() = Some(0x4000_0000);
+            r.m.table.insert(K_A, h);
+            r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+            r.m.walker_mut().report_cap = Some(2);
+            r.m.cut_window_budget = budget;
+            r.tables.borrow_mut().insert(PDB_A, scattered(0, 20));
+            r.m.on_split(Some(PDB_A), 5, r.port.trigger());
+            for walk in 1..=40u32 {
+                let _ = r.m.on_walk_ready(r.port.trigger());
+                let v = r.m.take_splits();
+                if !v.is_empty() {
+                    return (walk, v, r.m.cut_windows.len());
+                }
+            }
+            (0, Vec::new(), r.m.cut_windows.len())
+        };
+        let (walks, v, left) = run(MAX_CUT_WINDOWS_PER_REQUEST);
+        assert_eq!((walks, &v[..]), (19, &[(5, Ok(()))][..]));
+        assert_eq!(left, 0, "a finished request keeps no window count");
+        let (walks, v, left) = run(8);
+        assert_eq!(walks, 9, "the 9th window is refused");
+        assert!(
+            matches!(&v[..], [(5, Err(e))] if e.contains("did not apply")),
+            "{v:?}"
+        );
+        assert_eq!(left, 0, "a failed request keeps no window count");
+    }
+
+    /// F2: a guest that keeps editing its tables between windows never lets the diff drain; the request
+    /// fails by name at the budget (the control, the same table left alone, completes).
+    #[test]
+    fn a_guest_that_keeps_editing_between_windows_exhausts_the_budget() {
+        let drive = |edit: bool| {
+            let mut r = rig();
+            r.m.walker_mut().report_cap = Some(2);
+            r.m.cut_window_budget = 8;
+            r.tables.borrow_mut().insert(PDB_A, scattered(0, 4));
+            r.m.on_split(Some(PDB_A), 6, r.port.trigger());
+            for walk in 1..=30u64 {
+                // (the next walk was submitted inside the last `on_walk_ready`, so an edit made
+                // BEFORE this call is what the walk after it reads)
+                if edit {
+                    let mut t = r.tables.borrow_mut();
+                    t.get_mut(&PDB_A)
+                        .unwrap()
+                        .extend(scattered(4 + walk * 2, 2));
+                }
+                let _ = r.m.on_walk_ready(r.port.trigger());
+                let v = r.m.take_splits();
+                if !v.is_empty() {
+                    return (walk, v);
+                }
+            }
+            (0, Vec::new())
+        };
+        assert_eq!(drive(false), (2, vec![(6, Ok(()))]));
+        let (walk, v) = drive(true);
+        assert_eq!(walk, 9, "the ninth window is refused");
+        assert!(
+            matches!(&v[..], [(6, Err(e))] if e.contains("did not apply")),
+            "{v:?}"
+        );
+    }
+
+    /// F2, the edge: a request that needs exactly `budget` windows completes, one more fails (a split
+    /// and an invalidate alike).
+    #[test]
+    fn the_budget_is_exactly_the_windows_a_request_may_spend() {
+        let split = |budget: u32| {
+            let mut r = rig();
+            r.m.walker_mut().report_cap = Some(10);
+            r.m.cut_window_budget = budget;
+            r.tables.borrow_mut().insert(PDB_A, scattered(0, 25)); // 3 windows: 10, 10, 5
+            r.m.on_split(Some(PDB_A), 8, r.port.trigger());
+            for _ in 0..6 {
+                let _ = r.m.on_walk_ready(r.port.trigger());
+                let v = r.m.take_splits();
+                if !v.is_empty() {
+                    return (v[0].1.is_ok(), r.m.cut_windows.len());
+                }
+            }
+            (false, 99)
+        };
+        // windows needing continuation are counted: 2 of the 3 walks continue
+        assert_eq!(split(2), (true, 0));
+        assert_eq!(split(1), (false, 0));
+        let inval = |budget: u32| {
+            let mut r = rig();
+            r.m.walker_mut().report_cap = Some(10);
+            r.m.cut_window_budget = budget;
+            r.tables.borrow_mut().insert(PDB_A, scattered(0, 25));
+            let q = guest_invalidate(&r.port, PDB_A, false);
+            r.m.on_invalidate(q, r.port.trigger());
+            for _ in 0..6 {
+                let out = r.m.on_walk_ready(r.port.trigger());
+                if !out.unreconciled.is_empty() {
+                    return (false, r.m.cut_windows.len());
+                }
+                if !out.completed.is_empty() {
+                    return (true, r.m.cut_windows.len());
+                }
+            }
+            (false, 99)
+        };
+        assert_eq!(inval(2), (true, 0));
+        assert_eq!(inval(1), (false, 0));
+    }
+
+    /// A space withheld behind a full report (an earlier space fills it) has no window of its own to
+    /// judge: it waits while the report applies, and completes once the earlier space is out of the way.
+    #[test]
+    fn a_split_waits_for_a_space_withheld_behind_a_full_report() {
+        let mut r = two_spaces(2, 99, 6);
+        r.m.on_split(None, 12, r.port.trigger());
+        let mut verdict = None;
+        for walk in 1..=12u32 {
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            let v = r.m.take_splits();
+            if !v.is_empty() {
+                verdict = Some((walk, v));
+                break;
+            }
+        }
+        let (walk, v) = verdict.expect("a verdict");
+        assert!(walk >= 3, "B was withheld on the first walk (walk {walk})");
+        assert_eq!(v, vec![(12, Ok(()))]);
+        let landed = ops(&r)
+            .iter()
+            .filter(|o| matches!(o, Op::Map(va, ..) if *va >= 0x5000_0000 && *va < 0x6000_0000))
+            .count();
+        assert_eq!(landed, 6, "all of B landed");
+    }
+
+    #[test]
+    fn an_invalidate_waits_for_a_space_withheld_behind_a_full_report() {
+        let mut r = two_spaces(2, 99, 6);
+        let q = guest_invalidate(&r.port, PDB_A, true);
+        r.m.on_invalidate(q, r.port.trigger());
+        let mut done = None;
+        for walk in 1..=12u32 {
+            let out = r.m.on_walk_ready(r.port.trigger());
+            assert!(
+                out.unreconciled.is_empty(),
+                "walk {walk}: not named while B merely waits"
+            );
+            if !out.completed.is_empty() {
+                done = Some((walk, out.completed));
+                break;
+            }
+        }
+        let (walk, c) = done.expect("cleared");
+        assert!(walk >= 3);
+        assert_eq!(c, vec![(q.seq, ClearOutcome::Cleared)]);
+    }
+
+    /// ⊘ What is NOT recoverable stays loud: one overlap-connected clump larger than the report
+    /// cannot be windowed, so the walk is refused by name and the split fails (the legacy answer).
+    #[test]
+    fn a_clump_larger_than_the_report_still_fails_the_split_by_name() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x10_0000, 0)]);
+        settle(&mut r, PDB_A);
+        r.m.walker_mut().report_cap = Some(4);
+        // the whole placement re-pointed as 8 separately-backed pages: an unmap over 8 maps
+        let rows: Vec<(u64, u64, u64, u32)> = (0..8u64)
+            .map(|i| {
+                (
+                    0x1000_0000 + 0x1000 * i,
+                    0x0700_0000 + 0x3000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        r.m.on_split(Some(PDB_A), 5, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let s = r.m.take_splits();
+        assert!(
+            matches!(&s[..], [(5, Err(e))] if e.contains("TRUNCATED")),
+            "{s:?}"
         );
     }
 

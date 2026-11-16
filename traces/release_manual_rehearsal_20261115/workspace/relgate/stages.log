@@ -1,0 +1,20 @@
+RELGATE_START 2026-11-15T02:58:00+00:00 tree=a76d139790ab2ef126d4abd26b9237e887c5af15
+STAGE provision START 2026-11-15T02:58:11+00:00 pid=1795 cmd=bash /workspace/kf-ci-src/scripts/bench/box/provision_full.sh
+STAGE provision EXIT rc=0 2026-11-15T03:09:07+00:00
+STAGE cuda_host START 2026-11-15T03:10:02+00:00 pid=58402 cmd=bash /workspace/kf-ci-src/scripts/bench/cuda_ladder.sh host cirelgate0001 1 cup2,cup3,cup8,cup8bench
+STAGE cuda_host EXIT rc=0 2026-11-15T03:10:11+00:00
+STAGE merge_bar START 2026-11-15T03:11:43+00:00 pid=58706 cmd=bash /workspace/kf-ci-src/scripts/bench/box/merge_check.sh a76d139790ab2ef126d4abd26b9237e887c5af15 cirelgate0001
+STAGE merge_bar EXIT rc=0 2026-11-15T03:33:13+00:00
+STAGE cuda_guest START 2026-11-15T03:35:15+00:00 pid=67705 cmd=bash /workspace/kf-ci-src/scripts/bench/cuda_ladder.sh guest cirelgate0001 1 cup2,cup3,cup8,cup8bench
+STAGE cuda_guest EXIT rc=0 2026-11-15T03:41:25+00:00
+STAGE apps START 2026-11-15T03:41:25+00:00 pid=69516 cmd=env KF_APPS_PROVISION=1 bash /workspace/kf-ci-src/scripts/bench/box/apps_gate.sh cirelgate0001 /root/prov middle
+STAGE apps EXIT rc=0 2026-11-15T04:26:41+00:00
+STAGE windows_gate START 2026-11-15T04:26:41+00:00 pid=92130 cmd=bash /workspace/kf-ci-src/scripts/bench/box/windows_gate.sh cirelgate0001 /root/prov
+STAGE windows_gate EXIT rc=0 2026-11-15T05:29:36+00:00
+STAGE windows_apps START 2026-11-15T05:29:36+00:00 pid=99230 cmd=env KF_WINAPPS_PROFILE=mid bash /workspace/kf-ci-src/scripts/bench/box/windows_apps.sh cirelgate0001 /root/prov
+STAGE windows_apps EXIT rc=0 2026-11-15T05:59:56+00:00
+STAGE windows_gate_2 START 2026-11-15T05:59:56+00:00 pid=102044 cmd=bash /workspace/kf-ci-src/scripts/bench/box/windows_gate.sh cirelgate0001w2 /root/prov
+STAGE windows_gate_2 EXIT rc=0 2026-11-15T06:28:15+00:00
+CHAIN done 2026-11-15T06:28:15+00:00
+ROOTLESS_START 2026-11-15T06:29:33+00:00
+ROOTLESS_SUITE_START 2026-11-15T06:31:31+00:00

@@ -226,7 +226,7 @@ ptx: kf_walk.ptx
 CXX ?= g++
 kf_cpu_walk: kf_cpu_walk.cpp kf_cpu_shim.h kf_walk.cu kf_walk.h
 	$(CXX) -std=c++14 -O1 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-unused-variable \
-	    -Wno-comment -o $@ kf_cpu_walk.cpp
+	    -Wno-maybe-uninitialized -Wno-comment -o $@ kf_cpu_walk.cpp
 
 check-cpu: kf_cpu_walk
 	./kf_cpu_walk

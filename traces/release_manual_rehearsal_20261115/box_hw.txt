@@ -1,0 +1,7 @@
+NVIDIA GeForce RTX 4090, 8.9, 580.159.04, 24564 MiB
+CPU(s):                               15
+Model name:                           AMD EPYC 7502 32-Core Processor
+Mem:              98           1          10           0          87          96
+/dev/root       194G  101G   93G  53% /
+6.8.0-59-generic
+15
