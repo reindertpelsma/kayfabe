@@ -1791,6 +1791,12 @@ def main(argv=None):
         help="Resolve row: only create a project (the old weak check) instead of the GPU rendering coverage",
     )
     ap.add_argument(
+        "--resolve-lane",
+        choices=("gate", "discovery"),
+        default="gate",
+        help="Resolve row set: gate (must pass on kf3, in the app boot) or discovery (exotic deliverables meant to break kf3; own clone, time-boxed)",
+    )
+    ap.add_argument(
         "--resolve-media",
         help="Directory for the open media of the Resolve row (fetched from the pinned sources or the public mirror when missing)",
     )
@@ -2070,7 +2076,7 @@ def main(argv=None):
                         superposition_run=a.superposition_run,
                         **(
                             {
-                                "resolve_gpu": {"media_dir": a.resolve_media or str(Path(a.work) / "resolve_media")},
+                                "resolve_gpu": {"media_dir": a.resolve_media or str(Path(a.work) / "resolve_media"), "lane": a.resolve_lane},
                                 "qemu_log": str(r / "qemu.log"),
                             }
                             if name == "resolve" and not a.resolve_launch_only

@@ -244,12 +244,14 @@ foreach($p in $plan.renders){
  $rr=@{id=$p.id;label=$p.label}
  $rr.fmt_ok=Set-Combo 'Format' $p.fmt
  if($p.codec){ $rr.codec_ok=Set-Combo 'Codec' $p.codec } else { $rr.codec_ok=$true }
+ if($p.profile){ $rr.profile_ok=Prefix-Combo 'Encoding Profile' $p.profile; $rr.profile_value=Combo-Value 'Encoding Profile' }
  if($p.try_nvidia){ $rr.nvidia_encoder_selectable=Set-Combo 'Encoder' 'NVIDIA'; }
  $rr.encoder_value=Combo-Value 'Encoder'
  if($p.resolution_prefix){ $rr.res_ok=Prefix-Combo 'Resolution' $p.resolution_prefix } else { $rr.res_ok=Prefix-Combo 'Resolution' 'Timeline' }
  $rr.fmt_value=Combo-Value 'Format'; $rr.codec_value=Combo-Value 'Codec'; $rr.res_value=Combo-Value 'Resolution'
  $rr.name_ok=Set-Edit 'File Name' $p.name
  $rr.loc_ok=Set-Edit 'Location' $plan.out_dir
+ if(-not $rr.fmt_ok -or -not $rr.codec_ok -or ($p.profile -and -not $rr.profile_ok)){ $r.renders += $rr; continue }
  $rr.queued=Press-Btn 'Add to Render Queue'
  Start-Sleep 4
  $rr.t_start=Epoch-Now

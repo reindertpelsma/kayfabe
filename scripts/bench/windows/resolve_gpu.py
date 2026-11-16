@@ -84,6 +84,29 @@ RENDERS = {
                  expect=dict(kind="movie", ext=".mp4", codecs=("hevc", "hvc1", "hev1"), width=1280, height=720)),
 }
 
+# Discovery rows (exotic paths meant to break kf3; allowed to fail, the failure is the product; they run in their own fresh clone with a hard
+# time-box, never in the gate boot). `profile` is typed into the Encoding Profile control (prefix match, read back); a control or value the
+# free edition does not offer is recorded as "not offered", which is a statement about the edition, not a kf3 result.
+RENDERS.update({
+    "prores4444xq": dict(lane="discovery", expected_fail={}, label="Apple ProRes 4444 XQ MOV (12-bit 4:4:4), UHD", fmt="QuickTime", codec="Apple ProRes",
+                         profile="Apple ProRes 4444 XQ", try_nvidia=False, resolution_prefix=None, timeout_s=900,
+                         expect=dict(kind="movie", ext=".mov", codecs=("prores", "ap4x"), width=3840, height=2160)),
+    "dnxhr444": dict(lane="discovery", expected_fail={}, label="Avid DNxHR 444 10-bit MOV, UHD", fmt="QuickTime", codec="Avid DNxHR",
+                     profile="DNxHR 444", try_nvidia=False, resolution_prefix=None, timeout_s=900,
+                     expect=dict(kind="movie", ext=".mov", codecs=("dnxhd", "avdh", "avdn"), width=3840, height=2160)),
+    "av1": dict(lane="discovery", expected_fail={}, label="AV1 MP4, UHD (NVENC AV1 is Studio, Ada+)", fmt="MP4", codec="AV1", try_nvidia=True,
+                resolution_prefix=None, timeout_s=900,
+                expect=dict(kind="movie", ext=".mp4", codecs=("av1", "av01"), width=3840, height=2160)),
+    "hevc_uhd": dict(lane="discovery", expected_fail={}, label="H.265 MP4, UHD", fmt="MP4", codec="H.265", try_nvidia=True, resolution_prefix=None,
+                     timeout_s=1200, expect=dict(kind="movie", ext=".mp4", codecs=("hevc", "hvc1", "hev1"), width=3840, height=2160)),
+    "exr": dict(lane="discovery", expected_fail={}, label="OpenEXR sequence (16-bit float), UHD", fmt="EXR", codec=None, try_nvidia=False,
+                resolution_prefix=None, timeout_s=1200, expect=dict(kind="sequence", ext=".exr", width=3840, height=2160)),
+    "tiff": dict(lane="discovery", expected_fail={}, label="TIFF sequence (16-bit), UHD", fmt="TIFF", codec=None, try_nvidia=False,
+                 resolution_prefix=None, timeout_s=1200, expect=dict(kind="sequence", ext=".tif", width=3840, height=2160)),
+})
+GATE_ORDER = RENDER_ORDER
+DISCOVERY_ORDER = ("prores4444xq", "dnxhr444", "tiff", "exr", "av1", "hevc_uhd")
+
 # Per-render requirement on the guest engine counters of the Resolve process (any engine counts: see engine_samples).
 GUEST_NEED = G.Need(gpu_peak=10.0, gpu_active_samples=3, gpu_active_floor=5.0, mem_growth_mib=None, min_samples=4)
 # The physical GPU (host nvidia-smi) must be busy: the guest scheduler does not see CUDA compute (MEASURED on the PC, see the README).
@@ -101,16 +124,20 @@ def timeline_clips(frames: int = CLIP_FRAMES) -> list[dict]:
     return [clip("sintel_a", "sintel", 10), clip("sintel_slow", "sintel", 25, 0.5), clip("bbb_a", "bbb", 8), clip("bbb_fast", "bbb", 16, 2.0)]
 
 
-def build_plan(run_id: str, renders=RENDER_ORDER, out_dir: Optional[str] = None) -> dict:
+def build_plan(run_id: str, renders=None, out_dir: Optional[str] = None, lane: str = "gate") -> dict:
     if not re.fullmatch("[a-f0-9]{32}", run_id):
         raise ValueError("bad run id")
     out_dir = out_dir or rf"C:\kfapps\{run_id}\resolve\render"
+    if lane not in ("gate", "discovery"):
+        raise ValueError("lane must be gate or discovery")
+    renders = renders or (GATE_ORDER if lane == "gate" else DISCOVERY_ORDER)
     items = []
     for rid in renders:
         r = RENDERS[rid]
         items.append({"id": rid, "label": r["label"], "fmt": r["fmt"], "codec": r["codec"], "try_nvidia": r["try_nvidia"],
-                      "resolution_prefix": r["resolution_prefix"], "timeout_s": r["timeout_s"], "name": "kf_" + rid})
-    return {"project": "kf" + run_id[:8], "timeline": TIMELINE, "fcpxml_guest": GUEST_MEDIA + r"\kf_timeline.fcpxml", "out_dir": out_dir,
+                      "resolution_prefix": r["resolution_prefix"], "timeout_s": r["timeout_s"], "name": "kf_" + rid,
+                      "profile": r.get("profile")})
+    return {"lane": lane, "project": "kf" + run_id[:8], "timeline": TIMELINE, "fcpxml_guest": GUEST_MEDIA + r"\kf_timeline.fcpxml", "out_dir": out_dir,
             "grade": True, "grade_clips": [70, 337], "renders": items}
 
 
@@ -280,6 +307,17 @@ def verify_render(rid: str, rr: dict, directory: Path) -> tuple[bool, list[str],
     if len(pulled) < 2:
         return False, problems + ["fewer than two sequence frames were transferred"], facts
     seen = []
+    if exp["ext"] != ".png":
+        # no stdlib decoder for EXR/TIFF: the frames must be non-trivial files that differ between first and last
+        for name, p in pulled:
+            size = p.stat().st_size
+            if size < 100_000:
+                problems.append(f"{name}: only {size} bytes for a UHD frame")
+            seen.append(M.sha256_file(p))
+            facts.setdefault("frames_checked", []).append({"name": name, "bytes": size, "sha256": seen[-1]})
+        if len(set(seen)) < 2:
+            problems.append("first and last pulled frames are identical (nothing was rendered over time)")
+        return not problems, problems, facts
     for name, p in pulled:
         try:
             info = M.png_info(p)
@@ -332,9 +370,11 @@ def grade(result: dict, directory: Path, host_csv: str = "", host_t0: Optional[f
     if result.get("error"):
         row["problems"].append("guest script error: " + str(result["error"])[:160])
     by_id = {rr.get("id"): rr for rr in result.get("renders") or [] if isinstance(rr, dict)}
-    for rid in RENDER_ORDER:
+    order = DISCOVERY_ORDER if result.get("lane") == "discovery" else GATE_ORDER
+    row["lane"] = "discovery" if order is DISCOVERY_ORDER else "gate"
+    for rid in order:
         row["renders"][rid] = {"label": RENDERS[rid]["label"], "status": "NOT_RUN"}
-    for rid in RENDER_ORDER:
+    for rid in order:
         rr = by_id.get(rid)
         entry = row["renders"][rid]
         if rr is None:
@@ -346,6 +386,13 @@ def grade(result: dict, directory: Path, host_csv: str = "", host_t0: Optional[f
                           ("render_pressed", "render"), ("started", "render start"), ("finished", "render end")):
             if rr.get(key) is not True:
                 probs.append(f"{what} step failed")
+        not_offered = [what for key, what in (("fmt_ok", "format"), ("codec_ok", "codec"), ("profile_ok", "profile"))
+                       if key in rr and rr.get(key) is not True]
+        if not_offered and RENDERS[rid]["lane"] == "discovery" and not rr.get("render_pressed"):
+            entry.update(status="NOT_OFFERED", reason="the free edition's controls do not offer: " + ", ".join(not_offered),
+                         fmt=rr.get("fmt_value"), codec=rr.get("codec_value"))
+            row["findings"].append(f"{rid}: not offered by Resolve free ({', '.join(not_offered)}); a statement about the edition, not about kf3")
+            continue
         entry.update(fmt=rr.get("fmt_value"), codec=rr.get("codec_value"), encoder=rr.get("encoder_value"), resolution=rr.get("res_value"),
                      nvidia_encoder_selectable=rr.get("nvidia_encoder_selectable"), ui_speed=[re.sub(r"[^\x20-\x7e]", "?", str(x))[:120] for x in (rr.get("speed_texts") or [])][:12], queue=[str(x)[:60] for x in (rr.get("queue") or [])][:8])
         t0, t1 = rr.get("t_started"), rr.get("t_end")
@@ -394,7 +441,7 @@ def grade(result: dict, directory: Path, host_csv: str = "", host_t0: Optional[f
         row["status"] = "INCONCLUSIVE" if any("driver step" in p for p in row["problems"]) else "FAIL"
         return row
     row.update(ok=True, status="PASS", signal=(
-        "Resolve rendered " + ", ".join(RENDER_ORDER) + " (outputs verified on the host); guest engine counters and the host GPU were busy during every render; "
+        "Resolve rendered " + ", ".join(order) + " (outputs verified on the host); guest engine counters and the host GPU were busy during every render; "
         f"Resolve's log: compute API {log_facts['compute_api']}, device {log_facts['device']!r}"))
     return row
 
@@ -423,7 +470,7 @@ def prepare(guest, run_id: str, cfg: dict) -> dict:
     sent = guest.scp(str(xml), GUEST_MEDIA.replace("\\", "/") + "/kf_timeline.fcpxml", True)
     if sent.returncode:
         raise ValueError("could not copy the timeline to the guest")
-    return build_plan(run_id)
+    return build_plan(run_id, lane=cfg.get("lane", "gate"))
 
 
 def pull_outputs(guest, d: Path, plan: dict, remote: str) -> None:
@@ -449,7 +496,7 @@ def pull_outputs(guest, d: Path, plan: dict, remote: str) -> None:
 def row_definitions() -> list[dict]:
     """The rows of this lane in the shape the generic runner consumes (id, lane, expected_fail per platform)."""
     out = []
-    for rid in RENDER_ORDER:
+    for rid in GATE_ORDER + DISCOVERY_ORDER:
         r = RENDERS[rid]
         if r["lane"] not in LANES or any(v.get("class") not in FAILURE_CLASSES for v in r["expected_fail"].values()):
             raise ValueError(f"bad lane definition for {rid}")

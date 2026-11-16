@@ -236,6 +236,22 @@ class Lane(unittest.TestCase):
             done = subprocess.run([pwsh, "-NoProfile", "-File", str(chk), str(f)], capture_output=True, text=True, timeout=60)
             self.assertEqual(done.returncode, 0, done.stdout)
 
+    def test_discovery_plan_and_not_offered_is_not_a_kf3_failure(self):
+        plan = RG.build_plan("b" * 32, lane="discovery")
+        self.assertEqual([r["id"] for r in plan["renders"]], list(RG.DISCOVERY_ORDER))
+        self.assertEqual(plan["lane"], "discovery")
+        with self.assertRaises(ValueError):
+            RG.build_plan("b" * 32, lane="gold")
+        body = RG.guest_body(plan)
+        self.assertIn("Encoding Profile", body)
+        result = {"kind": "RESOLVE_GPU", "lane": "discovery", "t0": 1.0, "stage": "done", "log_lines": LOG, "steps": [
+            {"n": n, "ok": True} for n in ("project manager", "main window", "deliver page", "timeline on deliver page")],
+            "renders": [{"id": "av1", "fmt_ok": True, "codec_ok": False, "fmt_value": "MP4", "codec_value": "H.264"}]}
+        row = RG.grade(result, Path(tempfile.mkdtemp()), "", None, 0.0)
+        self.assertEqual(row["renders"]["av1"]["status"], "NOT_OFFERED")
+        self.assertTrue(any("not offered" in f for f in row["findings"]))
+        self.assertEqual(row["lane"], "discovery")
+
     def test_timeline_clips_and_fcpxml(self):
         x = RG.fcpxml_text()
         doc = minidom.parseString(x)
@@ -444,7 +460,8 @@ class Differential(unittest.TestCase):
 
     def test_lane_definitions(self):
         rows = RG.row_definitions()
-        self.assertEqual([r["id"] for r in rows], ["resolve." + x for x in RG.RENDER_ORDER])
+        self.assertEqual([r["id"] for r in rows], ["resolve." + x for x in RG.GATE_ORDER + RG.DISCOVERY_ORDER])
+        self.assertEqual({r["lane"] for r in rows if r["id"].split(".")[1] in RG.DISCOVERY_ORDER}, {"discovery"})
         self.assertTrue(all(r["lane"] in RG.LANES for r in rows))
         saved = RG.RENDERS["h264"]["expected_fail"]
         RG.RENDERS["h264"]["expected_fail"] = {"kf3": {"class": "BOGUS"}}
