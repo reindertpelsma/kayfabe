@@ -8,6 +8,7 @@ try {
   Set-Content "$D\ae_make_run.jsx" $js
   New-Item -Force -ItemType Directory "$D\frames" | Out-Null
   Run-AeScript "$D\ae_make_run.jsx" "$D\ae_make.txt" 900
+  if (Get-Process AfterFX -ErrorAction SilentlyContinue) { $R.make_quit = Quit-App 'AfterFX' }
   if (-not (Test-Path "$D\kf.aep")) { throw 'project not created' }
   $R.t_start = Epoch
   $procs = @()

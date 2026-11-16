@@ -163,6 +163,7 @@ function Quit-App($procNames, $comApp = $null, [int]$budget = 150) {
     if (-not (Proc-Pids $procNames)) { return 'clean' }
     foreach ($p in Get-Process $procNames -ErrorAction SilentlyContinue) { [void]$p.CloseMainWindow() }
     [void](Dismiss-Dialogs $procNames @("Don't Save", 'No', 'Discard', 'OK', 'Skip This Time', 'Skip', 'Exit', 'Quit'))
+    if ($procNames -match 'AfterFX') { Press-Key '{ENTER}' }   # AE's own dialogs (compatibility report, tips) expose no buttons to UI Automation
     Start-Sleep 2
   }
   foreach ($p in Get-Process $procNames -ErrorAction SilentlyContinue) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
