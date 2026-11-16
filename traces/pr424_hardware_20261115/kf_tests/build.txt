@@ -1,0 +1,13 @@
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -o kf_tests kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:576:60: warning: "/*" within comment [-Wcomment]
+  576 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:576:60: warning: "/*" within comment [-Wcomment]
+  576 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(2515): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
