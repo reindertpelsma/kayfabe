@@ -420,10 +420,13 @@ NAME_OK = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 PROPIMAGE_B_ROWS = {
     "gpudiag": ("gate", True), "photoshop": ("discovery", True), "illustrator": ("gate", True), "aftereffects": ("discovery", True),
     "indesign": ("gate", True), "illustratorsample": ("gate", True), "indesignsample": ("gate", True), "animatesample": ("gate", False),
-    "photoshopsample": ("discovery", True), "photoshopprojects": ("discovery", True), "indesignprojects": ("discovery", True),
-    "animateprojects": ("discovery", False), "aeprojects": ("discovery", True), "aetoggle": ("discovery", True), "aeparallel": ("discovery", True),
-    "acrobat": ("gate", True), "animate": ("gate", False), "premiere": ("gate", True), "mediaencoder": ("discovery", True),
-    "lightroom": ("discovery", False), "lightroomlaunch": ("gate", True), "dimension": ("gate", True), "uxp": ("gate", True),
+    "photoshopsample": ("discovery", True), "photoshopcpu": ("discovery", True), "photoshopprojects": ("discovery", True),
+    "indesignprojects": ("discovery", True), "animateprojects": ("discovery", False), "aeprojects": ("discovery", True),
+    "aetoggle": ("discovery", True), "aeadv3d": ("discovery", True), "aeparallel": ("discovery", True), "indesign_s1": ("discovery", True),
+    "indesign_s2": ("discovery", True), "indesign_s3": ("discovery", True), "indesign_s4": ("discovery", True), "indesign_s5": ("discovery", True),
+    "indesign_s6": ("discovery", True), "acrobat": ("gate", True), "animate": ("gate", False), "premiere": ("gate", True),
+    "mediaencoder": ("discovery", True), "lightroom": ("discovery", False), "lightroomlaunch": ("gate", True), "dimension": ("gate", True),
+    "uxp": ("gate", True),
 }
 PROPIMAGE_B_PASS = ("PASS", "PASS_LIMITED")
 PROPIMAGE_B_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")
@@ -456,10 +459,10 @@ def validate_propimage_apps_b(value):
     ok = ok and type(sw) is dict and set(sw) == {"version", "built"} and type(sw["built"]) is bool
     ok = ok and (sw["version"] is None or re.fullmatch(r"[0-9.]{0,16}", str(sw["version"])) is not None)
     boots = value["boots"] if ok else None
-    ok = ok and type(boots) is list and len(boots) <= 16
+    ok = ok and type(boots) is list and len(boots) <= 40
     ok = ok and all(
         type(b) is dict and {"index", "apps", "rc", "secs", "offline"} <= set(b) <= {"index", "apps", "rc", "secs", "offline", "harness", "host_xid_unattributed"}
-        and num(b["index"], 16) and type(b["apps"]) is list and len(b["apps"]) <= 32 and all(a in PROPIMAGE_B_ROWS for a in b["apps"])
+        and num(b["index"], 40) and type(b["apps"]) is list and len(b["apps"]) <= 32 and all(a in PROPIMAGE_B_ROWS for a in b["apps"])
         and (b["rc"] is None or (type(b["rc"]) is int and -256 <= b["rc"] <= 256)) and num(b["secs"], 1 << 20) and type(b["offline"]) is bool
         and type(b.get("harness", [])) is list and len(b.get("harness", [])) <= 6 and all(
             type(h) is dict and set(h) == {"step", "verdict", "detail"} and all(text.fullmatch(str(v)) for v in h.values()) for h in b.get("harness", []))
