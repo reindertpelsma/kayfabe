@@ -48,11 +48,11 @@ class Pins(unittest.TestCase):
         self.assertEqual(c.exception.reason, "PIN_UNSET:data")
         m = sb.build_manifest(pins_doc(), False)
         names = [i["name"] for i in m["items"]]
-        self.assertIn("test-assets-20261116.iso", names)
+        self.assertIn("test-assets-20261116b.iso", names)
         parsed = box_downloader.parse_manifest(json.dumps(m).encode())
         by = {i.name: i for i in parsed.items}
         self.assertEqual([s.kind for s in by["propimage-kfimg-20261116.zip"].sources], ["signed"])
-        self.assertEqual([s.kind for s in by["test-assets-20261116.iso"].sources], ["mirror"])
+        self.assertEqual([s.kind for s in by["test-assets-20261116b.iso"].sources], ["mirror"])
 
     def test_no_vendor_or_licence_wording_in_the_pins(self):
         text = sb.PINS_PATH.read_text().lower()
