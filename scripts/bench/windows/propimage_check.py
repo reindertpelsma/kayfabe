@@ -2033,6 +2033,12 @@ def main(argv=None):
                     "post-fix seed UUID exact match" if fixed else "repair or UUID check failed",
                 )
                 if not fixed:
+                    if a.hold_until_file:  # manual investigation: keep the guest up (max 1 h) so the PnP state can be inspected
+                        record(
+                            "hold",
+                            hold_for_release(a.hold_until_file, 3600),
+                            "guest held after the GPU prerequisite failed; ssh port %s" % g.port,
+                        )
                     raise ValueError("GPU prerequisite failed; app checks not run")
                 facts = PI.run_guest_probe(state, str(key))
                 matches = PI.compare(state, facts)
