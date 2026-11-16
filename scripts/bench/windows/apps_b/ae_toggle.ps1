@@ -9,7 +9,7 @@ try {
   if (Get-Process AfterFX -ErrorAction SilentlyContinue) { $R.quit = Quit-App 'AfterFX' } else { $R.quit = 'process' }
   $R.log = [string](Get-Content "$D\ae_toggle.txt" -Raw -ErrorAction SilentlyContinue)
   $R.outputs = @()
-  foreach ($f in (Get-ChildItem $D -Filter 'toggle_*.png' | Sort-Object Name)) { $R.outputs += (File-Info $f.FullName) }
+  foreach ($f in (Get-ChildItem $D | Where-Object { $_.Name -match '^toggle_.*\.(png|tif)$' } | Sort-Object Name)) { $R.outputs += (File-Info $f.FullName) }
   if (Test-Path "$D\ae_toggle.txt") { $R.outputs += (File-Info "$D\ae_toggle.txt") }
 } catch { $R.error = $_.Exception.Message; if (-not $R.quit) { $R.quit = Quit-App 'AfterFX' } }
 Finish $R

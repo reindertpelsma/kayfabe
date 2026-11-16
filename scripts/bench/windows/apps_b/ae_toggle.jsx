@@ -11,10 +11,11 @@ function render(tag, type) {
     while (rq.numItems > 0) { rq.item(1).remove(); }
     var rqi = rq.items.add(comp);
     var om = rqi.outputModule(1);
-    var tp = om.templates, pick = "";
+    var tp = om.templates, pick = "", ext = "png";
     for (var k = 0; k < tp.length; k++) { if (/png/i.test(tp[k])) { pick = tp[k]; break; } }
+    if (pick == "") { for (var k2 = 0; k2 < tp.length; k2++) { if (/^tiff sequence/i.test(tp[k2])) { pick = tp[k2]; ext = "tif"; break; } } }
     if (pick != "") { om.applyTemplate(pick); }
-    om.file = new File(OUT + "/toggle_" + tag + "_[#####].png");
+    om.file = new File(OUT + "/toggle_" + tag + "_[#####]." + ext);
     rqi.timeSpanStart = 0.5; rqi.timeSpanDuration = 1 / 30;
     var t0 = new Date().getTime();
     rq.render();

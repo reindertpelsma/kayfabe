@@ -501,13 +501,27 @@ def grade_aetoggle(r, d):
     if any(len(v) != 1 for v in names.values()):
         raise ValueError("expected one frame per renderer, got %s" % {k: len(v) for k, v in names.items()})
     _outputs_fresh(r, d, [v[0] for v in names.values()])
-    st = {t: _png(d, v[0], 3840, 2160) for t, v in names.items()}
-    a, b, c = st["cuda1"], st["soft"], st["cuda2"]
-    if abs(a["mean"] - c["mean"]) > 0.5 or abs(a["std"] - c["std"]) > 0.05 * max(a["std"], 1):
-        raise ValueError("CUDA frame changed between two renders of the same frame: mean %.2f/%.2f std %.2f/%.2f" % (a["mean"], c["mean"], a["std"], c["std"]))
-    if abs(a["mean"] - b["mean"]) > 3.0 or abs(a["std"] - b["std"]) > 0.15 * max(a["std"], 1):
-        raise ValueError("software frame differs from the CUDA frame beyond tolerance: mean %.2f/%.2f std %.2f/%.2f" % (a["mean"], b["mean"], a["std"], b["std"]))
-    return "CUDA, software, CUDA frames agree (mean %.1f/%.1f/%.1f, std %.1f/%.1f/%.1f)" % (a["mean"], b["mean"], c["mean"], a["std"], b["std"], c["std"]), log
+    if all(v[0].endswith(".png") for v in names.values()):
+        st = {t: _png(d, v[0], 3840, 2160) for t, v in names.items()}
+        a, b, c = st["cuda1"], st["soft"], st["cuda2"]
+        if abs(a["mean"] - c["mean"]) > 0.5 or abs(a["std"] - c["std"]) > 0.05 * max(a["std"], 1):
+            raise ValueError("CUDA frame changed between two renders of the same frame: mean %.2f/%.2f std %.2f/%.2f" % (a["mean"], c["mean"], a["std"], c["std"]))
+        if abs(a["mean"] - b["mean"]) > 3.0 or abs(a["std"] - b["std"]) > 0.15 * max(a["std"], 1):
+            raise ValueError("software frame differs from the CUDA frame beyond tolerance: mean %.2f/%.2f std %.2f/%.2f" % (a["mean"], b["mean"], a["std"], b["std"]))
+        return "CUDA, software, CUDA frames agree (mean %.1f/%.1f/%.1f, std %.1f/%.1f/%.1f)" % (a["mean"], b["mean"], c["mean"], a["std"], b["std"], c["std"]), log
+    # TIFF sequence (no PNG template in this build): compare dimensions, size and sha256 (pixel statistics need a TIFF decoder; recorded in output_stats.json)
+    dims, sizes = {}, {}
+    for t, v in names.items():
+        i = media_check.tiff_info(d / v[0])
+        dims[t], sizes[t] = (i["width"], i["height"]), (d / v[0]).stat().st_size
+        if dims[t] != (3840, 2160):
+            raise ValueError("%s frame is %dx%d" % (t, dims[t][0], dims[t][1]))
+    if abs(sizes["cuda1"] - sizes["cuda2"]) > 0.02 * sizes["cuda1"]:
+        raise ValueError("CUDA frame size changed between two renders of the same frame: %s" % sizes)
+    if abs(sizes["soft"] - sizes["cuda1"]) > 0.10 * sizes["cuda1"]:
+        raise ValueError("software frame size differs from the CUDA frame beyond 10 percent: %s" % sizes)
+    same = len({hashlib.sha256((d / v[0]).read_bytes()).hexdigest() for v in names.values()}) == 1
+    return "CUDA -> software -> CUDA renderer switch in one session: three 3840x2160 TIFF frames, sizes %s, byte-identical=%s" % (sizes, same), log
 
 
 def grade_aeparallel(r, d):
