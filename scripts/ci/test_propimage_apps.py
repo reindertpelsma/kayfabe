@@ -810,6 +810,23 @@ class Run(unittest.TestCase):
         self.assertNotIn("follow_redirect", by["kf-gop.signed.efi"])
         box_downloader.parse_manifest(json.dumps(manifest).encode())
 
+    def test_pin_dir_is_passed_to_the_fetch_only_when_valid(self):
+        self.assertEqual(pa.pin_dir_args({}), [])
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(pa.pin_dir_args({"KF_PROPIMAGE_PIN_DIR": d}), ["--pin-dir", d])
+        for bad in ("relative/dir", "/", "/nonexistent-dir-xyz", "/tmp/../tmp"):
+            with self.assertRaises(pa.Refused, msg=bad) as ctx:
+                pa.pin_dir_args({"KF_PROPIMAGE_PIN_DIR": bad})
+            self.assertEqual(ctx.exception.reason, "PIN_DIR_INVALID")
+
+    def test_the_fetch_command_carries_the_pin_dir(self):
+        env = Env(self)
+        with tempfile.TemporaryDirectory() as d:
+            env.ctx.environ["KF_PROPIMAGE_PIN_DIR"] = d
+            pa.fetch(env.ctx, env.tmp / "m.json", env.tmp / "dl", env.tmp)
+        fetches = [c for c in env.fake.calls if len(c) > 4 and c[3].endswith("box_downloader.py") and c[4] == "fetch"]
+        self.assertTrue(fetches and "--pin-dir" in fetches[0])
+
     def test_a_prebuilt_prefix_swtpm_gets_its_library_path(self):
         env = pa.swtpm_env({}, prefix_bin=sys.executable)   # any executable stands in for /opt/tpm/bin/swtpm
         self.assertEqual(env["SWTPM"], sys.executable)

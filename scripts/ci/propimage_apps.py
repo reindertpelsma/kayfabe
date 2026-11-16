@@ -668,12 +668,26 @@ def build_swtpm(ctx, dl, work, logs):
     return env
 
 
+def pin_dir_args(environ):
+    """RUN-TREE ONLY (2026-11-16, OWNER_RULINGS section AR item 3: every artifact pinnable from the filesystem): KF_PROPIMAGE_PIN_DIR=/abs/dir makes the
+    downloader take an item from DIR/<item name> when its size and sha256 match the pins (the coordinator pushes private objects there; a failed
+    stage deletes dl/, which holds anything pre-placed there). Anything else is refused: the value must be an absolute, normalized, existing directory."""
+    value = environ.get("KF_PROPIMAGE_PIN_DIR")
+    if not value:
+        return []
+    p = Path(value)
+    if not p.is_absolute() or ".." in p.parts or str(p) == "/" or not p.is_dir() or p.is_symlink():
+        raise Refused("PIN_DIR_INVALID")
+    return ["--pin-dir", str(p)]
+
+
 def fetch(ctx, manifest_path, dl, logs):
     """box_downloader.py: check, fetch (blocking, resumable), verify. The sha256 and size come from the pins file only."""
     dl_py = str(HERE / "box_downloader.py")
     log = logs / "downloader.log"
     for argv in (["check", str(manifest_path)],
-                 ["fetch", str(manifest_path), "--dest", str(dl), "--urls", str(ctx.urls), "--reserve-gb", str(DISK_HEADROOM >> 30)],
+                 ["fetch", str(manifest_path), "--dest", str(dl), "--urls", str(ctx.urls), "--reserve-gb", str(DISK_HEADROOM >> 30),
+                  *pin_dir_args(ctx.environ)],
                  ["verify", str(manifest_path), "--dest", str(dl)]):
         if run_command(ctx, [sys.executable, "-B", "-I", dl_py, *argv], log, 7200 if argv[0] == "fetch" else 3600) != 0:
             raise Refused("DOWNLOAD")
