@@ -2,6 +2,7 @@ STATUS: DESIGN-ONLY, 2026-11-13; terminology corrections of 2026-11-15 are folde
 
 # One proprietary-image check pipeline
 
+2026-11-15 update: the release-run stage that runs this pipeline on Vast boxes (three offline boots, Wukong last, per-app record, pins unset, Wukong not yet drivable by the harness) is `docs/design/V3_PROPIMAGE_APPS_STAGE.md`. Nothing below changed.
 **Correction (2026-11-15, owner decisions; it takes precedence over the text below it).** The clock described under *Clock* is the **deterministic clock** (also called the fixed clock; older notes said "faked clock"). It starts at the guest time recorded at the last clean shutdown plus a small seed-derived gap and never starts earlier, so that boot behaviour, timestamps in results and application and certificate timers are the same on every run. It exists for reproducibility. The pipeline runs offline only (user-mode network with `restrict=on`), and the image's hardware identity is fixed per image so that runs are repeatable. The host CPU vendor must match the image's CPU profile (AMD); an Intel host is not supported by this image (`V3_WINDOWS_PROPRIETARY_IMAGE.md`, *Corrections*). The repository holds no proprietary software, installer, key or image; this document makes no statement about the licence terms of any application. Where a row below mentions a licence edition or an activation, it records what an application's own interface or documentation shows, not a finding about the clock.
 
 CODE READ: `scripts/bench/windows/propimage_check.py` is the single check module and

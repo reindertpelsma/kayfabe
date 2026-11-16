@@ -1032,7 +1032,7 @@ class Budget(unittest.TestCase):
         self.assertIn("manual-only stage is in a default plan: install_flow", errors)
 
     def test_a_stage_that_is_neither_budgeted_nor_manual_only_is_refused(self):
-        errors = self.pr.validate(self.data, self.source.replace('MANUAL_ONLY_STAGES = {"install_flow": "INSTALL_FLOW_IN_LARGE"}', "MANUAL_ONLY_STAGES = {}"))
+        errors = self.pr.validate(self.data, self.source.replace('MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}', 'MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE"}'))
         self.assertEqual(errors, ["unbudgeted payload stage: install_flow"])
 
     def test_a_manual_only_stage_that_also_has_a_row_is_refused(self):
@@ -1058,7 +1058,7 @@ class Budget(unittest.TestCase):
 
     def test_a_non_literal_table_is_refused(self):
         with self.assertRaises(ValueError):
-            self.pr.manual_only(self.source.replace('MANUAL_ONLY_STAGES = {"install_flow": "INSTALL_FLOW_IN_LARGE"}', "MANUAL_ONLY_STAGES = dict(a=1)"))
+            self.pr.manual_only(self.source.replace('MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}', "MANUAL_ONLY_STAGES = dict(a=1)"))
 
 
 def shutil_which(tool):

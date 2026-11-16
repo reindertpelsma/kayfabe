@@ -2732,15 +2732,19 @@ pub struct Inbox {
     settled: AtomicU64,
     /// The VA thread's wake.
     pub wake: Notifier,
-    /// ★ P6: `MEM_OP` splits a Translated channel asked for — `(ticket, guest token, target)`.
-    splits: Mutex<Vec<(u64, u32, SplitTarget)>>,
+    /// ★ P6: `MEM_OP` splits a Translated channel asked for — `(ticket, guest token, target)`,
+    /// ★ 2026-11-16: and when the worker queued it (observation only, `V3_VA_PROFILE.md`).
+    splits: Mutex<Vec<(u64, u32, SplitTarget, std::time::Instant)>>,
     /// ★ OWNER_RULINGS §U.2: the host gate a split opens once it is committed — ticket →
     /// `(the ring's gate, the payload its acquire waits for)`.
     gates: Mutex<std::collections::HashMap<u64, (kf_chan::host::Gate, u32)>>,
     /// ★ P6: tickets the VA thread took and has not finished — ticket → guest token.
     split_tokens: Mutex<std::collections::HashMap<u64, u32>>,
-    /// ★ P6: finished splits waiting for their channel's next pump.
-    split_results: Mutex<std::collections::HashMap<u64, Result<(), String>>>,
+    /// ★ P6: finished splits waiting for their channel's next pump (★ 2026-11-16: with the
+    /// enqueue and publication times when known — observation only).
+    split_results: Mutex<SplitResults>,
+    /// ★ 2026-11-16 (observation only): result delivery — enqueue -> publication -> the worker's take.
+    pub delivery: SplitDelivery,
     next_ticket: AtomicU64,
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): how many times the guest's RM gave BAR1 up
     /// (the drainer bumps it; the VA thread re-seeds the boot framebuffer when it moved).
@@ -2760,6 +2764,166 @@ pub struct Inbox {
     /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the epoch the VA thread has reset the
     /// memory plane for.
     pub life_reset: crate::reset::Ack,
+}
+
+/// Finished splits by ticket: the outcome and, when known, its [`SplitStamp`].
+type SplitResults = std::collections::HashMap<u64, (Result<(), String>, Option<SplitStamp>)>;
+
+/// ★ 2026-11-16 (observation only): when a split's worker queued it and when its result was published.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SplitStamp {
+    /// The worker's enqueue.
+    pub enqueued: std::time::Instant,
+    /// The VA thread's publication ([`Inbox::finish_split_timed`]).
+    pub published: std::time::Instant,
+}
+
+fn ns_between(a: std::time::Instant, b: std::time::Instant) -> u64 {
+    u64::try_from(b.saturating_duration_since(a).as_nanos()).unwrap_or(u64::MAX)
+}
+
+/// ★ 2026-11-16 (observation only): a lock-free duration accumulator — count, sum, maximum and a
+/// log2 histogram ([`kf_mem::vaprof::Log2Hist`]'s buckets). Relaxed atomics; written by the VA
+/// thread or a worker, read by the status line.
+#[derive(Debug)]
+pub struct AtomicDur {
+    n: AtomicU64,
+    ns: AtomicU64,
+    max: AtomicU64,
+    hist: [AtomicU64; kf_mem::vaprof::HIST_BUCKETS],
+}
+
+impl Default for AtomicDur {
+    fn default() -> Self {
+        AtomicDur {
+            n: AtomicU64::new(0),
+            ns: AtomicU64::new(0),
+            max: AtomicU64::new(0),
+            hist: std::array::from_fn(|_| AtomicU64::new(0)),
+        }
+    }
+}
+
+/// A copy of an [`AtomicDur`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DurSnap {
+    /// Count, sum and maximum (ns).
+    pub acc: kf_host::phase::Acc,
+    /// The histogram.
+    pub hist: kf_mem::vaprof::Log2Hist,
+}
+
+impl AtomicDur {
+    /// Count one duration of `ns`.
+    pub fn record(&self, ns: u64) {
+        let o = Ordering::Relaxed;
+        self.n.fetch_add(1, o);
+        self.ns.fetch_add(ns, o);
+        self.max.fetch_max(ns, o);
+        if let Some(h) = self.hist.get(kf_mem::vaprof::bucket_of_ns(ns)) {
+            h.fetch_add(1, o);
+        }
+    }
+
+    /// A copy.
+    #[must_use]
+    pub fn snapshot(&self) -> DurSnap {
+        let o = Ordering::Relaxed;
+        let mut hist = kf_mem::vaprof::Log2Hist::default();
+        for (d, s) in hist.b.iter_mut().zip(self.hist.iter()) {
+            *d = s.load(o);
+        }
+        DurSnap {
+            acc: kf_host::phase::Acc {
+                n: self.n.load(o),
+                ns: self.ns.load(o),
+                max: self.max.load(o),
+            },
+            hist,
+        }
+    }
+}
+
+impl DurSnap {
+    /// The window since `prev` (the maximum is `self`'s, boot-wide).
+    #[must_use]
+    pub fn since(&self, prev: &DurSnap) -> DurSnap {
+        DurSnap {
+            acc: kf_host::phase::Acc {
+                n: self.acc.n.saturating_sub(prev.acc.n),
+                ns: self.acc.ns.saturating_sub(prev.acc.ns),
+                max: self.acc.max,
+            },
+            hist: self.hist.since(&prev.hist),
+        }
+    }
+}
+
+/// ★ 2026-11-16 (observation only): split result delivery, for splits whose enqueue time is known.
+#[derive(Debug, Default)]
+pub struct SplitDelivery {
+    /// Worker enqueue -> result published by the VA thread.
+    pub published: AtomicDur,
+    /// Result published -> the worker took it (its resume).
+    pub resume: AtomicDur,
+    /// Worker enqueue -> the worker took the result: the full worker-visible latency.
+    pub e2e: AtomicDur,
+}
+
+/// A copy of [`SplitDelivery`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DeliverySnap {
+    /// See [`SplitDelivery::published`].
+    pub published: DurSnap,
+    /// See [`SplitDelivery::resume`].
+    pub resume: DurSnap,
+    /// See [`SplitDelivery::e2e`].
+    pub e2e: DurSnap,
+}
+
+impl SplitDelivery {
+    /// A copy.
+    #[must_use]
+    pub fn snapshot(&self) -> DeliverySnap {
+        DeliverySnap {
+            published: self.published.snapshot(),
+            resume: self.resume.snapshot(),
+            e2e: self.e2e.snapshot(),
+        }
+    }
+}
+
+impl DeliverySnap {
+    /// The window since `prev`.
+    #[must_use]
+    pub fn since(&self, prev: &DeliverySnap) -> DeliverySnap {
+        DeliverySnap {
+            published: self.published.since(&prev.published),
+            resume: self.resume.since(&prev.resume),
+            e2e: self.e2e.since(&prev.e2e),
+        }
+    }
+
+    /// The delivery fields of the `vat[...]` block (`key=integer`, unique names, no brackets).
+    #[must_use]
+    pub fn vat_fields(&self) -> String {
+        let avg = |a: &kf_host::phase::Acc| a.ns.checked_div(a.n).unwrap_or(0) / 1000;
+        format!(
+            "pub_n={} pub_avg_us={} pub_max_us={} resume_n={} resume_avg_us={} resume_max_us={} e2e_n={} e2e_avg_us={} e2e_p50_us={} e2e_p95_us={} e2e_p99_us={} e2e_max_ms={}",
+            self.published.acc.n,
+            avg(&self.published.acc),
+            self.published.acc.max / 1000,
+            self.resume.acc.n,
+            avg(&self.resume.acc),
+            self.resume.acc.max / 1000,
+            self.e2e.acc.n,
+            avg(&self.e2e.acc),
+            self.e2e.hist.percentile_us(500),
+            self.e2e.hist.percentile_us(950),
+            self.e2e.hist.percentile_us(990),
+            self.e2e.acc.max / 1_000_000,
+        )
+    }
 }
 
 pub(crate) enum UserSplitError {
@@ -2785,6 +2949,7 @@ impl Inbox {
             gates: Mutex::new(std::collections::HashMap::new()),
             split_tokens: Mutex::new(std::collections::HashMap::new()),
             split_results: Mutex::new(std::collections::HashMap::new()),
+            delivery: SplitDelivery::default(),
             next_ticket: AtomicU64::new(1),
             bar1_physical: AtomicU64::new(0),
             full_scrub: std::sync::atomic::AtomicBool::new(false),
@@ -2920,7 +3085,7 @@ impl Inbox {
             );
         }
         if let Ok(mut q) = self.splits.lock() {
-            q.push((t, token, SplitTarget::Pdb(pdb)));
+            q.push((t, token, SplitTarget::Pdb(pdb), std::time::Instant::now()));
         }
         let _ = self.wake.signal();
         t
@@ -2950,7 +3115,7 @@ impl Inbox {
             }
             q.try_reserve(1)
                 .map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_ALLOCATION"))?;
-            q.push((t, token, SplitTarget::Space(key)));
+            q.push((t, token, SplitTarget::Space(key), std::time::Instant::now()));
         }
         let _ = self.wake.signal();
         Ok(t)
@@ -2976,7 +3141,7 @@ impl Inbox {
             g.insert(t, (gate, payload));
         }
         if let Ok(mut q) = self.splits.lock() {
-            q.push((t, token, SplitTarget::Space(key)));
+            q.push((t, token, SplitTarget::Space(key), std::time::Instant::now()));
         }
         let _ = self.wake.signal();
         t
@@ -2984,17 +3149,26 @@ impl Inbox {
 
     /// ★ P6, the VA thread: the splits requested since the last call, `(ticket, target)`.
     pub fn take_split_requests(&self) -> Vec<(u64, SplitTarget)> {
+        self.take_split_requests_timed()
+            .into_iter()
+            .map(|(t, p, _)| (t, p))
+            .collect()
+    }
+
+    /// ★ 2026-11-16: [`Inbox::take_split_requests`] with each request's worker enqueue time
+    /// (observation only; the same lock, the same bookkeeping).
+    pub fn take_split_requests_timed(&self) -> Vec<(u64, SplitTarget, std::time::Instant)> {
         let taken = self
             .splits
             .lock()
             .map(|mut q| std::mem::take(&mut *q))
             .unwrap_or_default();
         if let Ok(mut m) = self.split_tokens.lock() {
-            for (t, tok, _) in &taken {
+            for (t, tok, _, _) in &taken {
                 m.insert(*t, *tok);
             }
         }
-        taken.into_iter().map(|(t, _, p)| (t, p)).collect()
+        taken.into_iter().map(|(t, _, p, q)| (t, p, q)).collect()
     }
 
     /// ★ P6, the VA thread: `ticket` finished. Returns the guest token to ring.
@@ -3005,6 +3179,17 @@ impl Inbox {
     /// its gate open. A failed split never releases it (the channel dies at its poll); a release
     /// that fails (the ring is gone) turns the outcome into that failure.
     pub fn finish_split(&self, ticket: u64, r: Result<(), String>) -> Option<u32> {
+        self.finish_split_timed(ticket, r, None)
+    }
+
+    /// ★ 2026-11-16: [`Inbox::finish_split`] with the worker's enqueue time (observation only: the
+    /// publication time is stamped with the result, and the worker's take is profiled).
+    pub fn finish_split_timed(
+        &self,
+        ticket: u64,
+        r: Result<(), String>,
+        enqueued: Option<std::time::Instant>,
+    ) -> Option<u32> {
         let gate = self.gates.lock().ok().and_then(|mut g| g.remove(&ticket));
         let r = match (r, gate) {
             (Ok(()), Some((g, payload))) => g
@@ -3017,8 +3202,18 @@ impl Inbox {
                 .map_err(|e| format!("gate release: {e}")),
             (r, _) => r,
         };
+        let stamp = enqueued.map(|enqueued| {
+            let published = std::time::Instant::now();
+            self.delivery
+                .published
+                .record(ns_between(enqueued, published));
+            SplitStamp {
+                enqueued,
+                published,
+            }
+        });
         if let Ok(mut m) = self.split_results.lock() {
-            m.insert(ticket, r);
+            m.insert(ticket, (r, stamp));
         }
         self.split_tokens
             .lock()
@@ -3028,10 +3223,18 @@ impl Inbox {
 
     /// ★ P6, a WORKER: `ticket`'s outcome, once (`None`: still running).
     pub fn split_result(&self, ticket: u64) -> Option<Result<(), String>> {
-        self.split_results
+        let (r, stamp) = self
+            .split_results
             .lock()
             .ok()
-            .and_then(|mut m| m.remove(&ticket))
+            .and_then(|mut m| m.remove(&ticket))?;
+        if let Some(st) = stamp {
+            // ★ 2026-11-16 (observation only): relaxed atomics after the lock is released.
+            let now = std::time::Instant::now();
+            self.delivery.resume.record(ns_between(st.published, now));
+            self.delivery.e2e.record(ns_between(st.enqueued, now));
+        }
+        Some(r)
     }
 
     /// The drainer: enqueue one statement and wake the VA thread.
@@ -4205,6 +4408,99 @@ pub fn apply_statement(
 
 #[cfg(test)]
 mod tests {
+
+    // ★ 2026-11-16 (`V3_VA_PROFILE.md`, observation only): split enqueue and delivery timing.
+
+    #[test]
+    fn profiling_split_enqueue_time_is_the_workers() {
+        let i = Inbox::new().expect("eventfd");
+        let before = std::time::Instant::now();
+        let t = i.request_split(0x80b, Some(0x1000));
+        let gate = kf_chan::host::Gate::scratch().expect("scratch gate");
+        let g = i.request_gated_split(0x80c, kf_mem::vasmgr::VasKey(3), gate, 1);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let taken = i.take_split_requests_timed();
+        assert_eq!(taken.len(), 2);
+        assert_eq!((taken[0].0, taken[1].0), (t, g));
+        for (_, _, q) in &taken {
+            assert!(*q >= before, "queued before the request");
+            assert!(
+                q.elapsed() >= std::time::Duration::from_millis(20),
+                "queued at the worker, not at the take"
+            );
+        }
+        // the untimed take keeps its shape and its bookkeeping
+        let u = i.request_split(0x80d, None);
+        assert_eq!(i.take_split_requests(), vec![(u, SplitTarget::Pdb(None))]);
+        assert!(i.walk_busy(), "taken tickets are still running");
+    }
+
+    #[test]
+    fn profiling_delivery_counts_publication_resume_and_e2e() {
+        let i = Inbox::new().expect("eventfd");
+        let t = i.request_split(0x80b, Some(0x1000));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let (tk, _, q) = i.take_split_requests_timed().remove(0);
+        assert_eq!(tk, t);
+        assert_eq!(i.finish_split_timed(t, Ok(()), Some(q)), Some(0x80b));
+        let d = i.delivery.snapshot();
+        assert_eq!((d.published.acc.n, d.resume.acc.n, d.e2e.acc.n), (1, 0, 0));
+        assert!(d.published.acc.ns >= 20_000_000, "{:?}", d.published);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        assert_eq!(i.split_result(t), Some(Ok(())));
+        let d = i.delivery.snapshot();
+        assert_eq!((d.resume.acc.n, d.e2e.acc.n), (1, 1));
+        assert!(d.resume.acc.ns >= 5_000_000);
+        assert!(d.e2e.acc.ns >= d.published.acc.ns + d.resume.acc.ns - 1_000);
+        assert_eq!(d.e2e.hist.count(), 1);
+        assert_eq!(i.split_result(t), None, "taken once");
+        // an untimed finish publishes the same outcome and counts nothing
+        let u = i.request_split(0x80e, None);
+        let _ = i.take_split_requests();
+        assert_eq!(i.finish_split(u, Err("x".into())), Some(0x80e));
+        assert_eq!(i.split_result(u), Some(Err("x".into())));
+        assert_eq!(i.delivery.snapshot(), d);
+    }
+
+    #[test]
+    fn profiling_delivery_fields_are_unique_and_parse() {
+        let i = Inbox::new().expect("eventfd");
+        let t = i.request_split(1, None);
+        let (_, _, q) = i.take_split_requests_timed().remove(0);
+        let _ = i.finish_split_timed(t, Ok(()), Some(q));
+        let _ = i.split_result(t);
+        let a = DeliverySnap::default();
+        let b = i.delivery.snapshot();
+        let w = b.since(&a);
+        assert_eq!(w.e2e.acc.n, 1);
+        assert_eq!(b.since(&b).e2e.acc.n, 0);
+        let f = w.vat_fields();
+        assert!(!f.contains('[') && !f.contains(']'));
+        let names: Vec<&str> = f
+            .split(' ')
+            .map(|kv| kv.split('=').next().unwrap_or(""))
+            .collect();
+        let mut u = names.clone();
+        u.sort_unstable();
+        u.dedup();
+        assert_eq!(u.len(), names.len());
+        assert!(
+            names
+                .iter()
+                .all(|n| n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        );
+        // no delivery field collides with a kf-mem vat field
+        let tm = kf_mem::vasmgr::VaTiming::default();
+        let mem = format!(
+            "{} {}",
+            kf_mem::vaprof::vat_old_fields(&tm),
+            kf_mem::vaprof::vat_new_fields(&tm.prof)
+        );
+        for kv in mem.split(' ') {
+            let k = kv.split('=').next().unwrap_or("");
+            assert!(!names.contains(&k), "{k} collides");
+        }
+    }
     /// ★ Review (M2b): the memory stage arms the scrub only when the reset asked for it, and the VA
     /// thread takes it once; an in-guest reset's stage arms nothing.
     #[test]
