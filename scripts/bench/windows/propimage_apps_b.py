@@ -47,8 +47,12 @@ CHECKS = {
     "gpudiag": {"timeout": 240, "script": "sniffers.ps1", "gpu": ()},
     "photoshop": {"timeout": 480, "script": "photoshop.ps1", "gpu": ("gpu",)},
     "illustrator": {"timeout": 480, "script": "illustrator.ps1", "gpu": ()},
-    "aftereffects": {"timeout": 900, "script": "aftereffects.ps1", "gpu": ("gpu",)},
+    "aftereffects": {"timeout": 1500, "script": "aftereffects.ps1", "gpu": ("gpu",)},
     "indesign": {"timeout": 480, "script": "indesign.ps1", "gpu": ()},
+    "illustratorsample": {"timeout": 480, "script": "illustrator_sample.ps1", "gpu": ()},
+    "indesignsample": {"timeout": 480, "script": "indesign_sample.ps1", "gpu": ()},
+    "animatesample": {"timeout": 420, "script": "animate_sample.ps1", "gpu": ()},
+    "photoshopsample": {"timeout": 480, "script": "photoshop_sample.ps1", "gpu": ("gpu",)},
     "acrobat": {"timeout": 360, "script": "acrobat.ps1", "gpu": ()},
     "animate": {"timeout": 360, "script": "animate.ps1", "gpu": ()},
     "premiere": {"timeout": 420, "script": "launch.ps1", "gpu": ()},
@@ -197,20 +201,31 @@ def _outputs_fresh(r, directory, names):
             raise ValueError("%s was not written during this run" % n)
 
 
+PS_FEATURES = ("canvas8k", "16bit", "iccP3", "layers100", "adjustment_layers", "smart_object", "smart_sharpen", "brush_strokes")
+
+
 def grade_photoshop(r, d):
     js = r.get("js") or {}
     if js.get("w0") != str(EXPECT["photo"]["w"]) or js.get("h0") != str(EXPECT["photo"]["h"]) or r.get("source") != EXPECT["photo"]["name"]:
         raise ValueError("opened %s %sx%s, expected the %s asset" % (r.get("source"), js.get("w0"), js.get("h0"), EXPECT["photo"]["name"]))
-    ok_filters = [f for f in str(js.get("filters", "")).split(",") if f == "smartSharpen"]
-    if len(ok_filters) < 3:
-        raise ValueError("fewer than 3 GPU-class filter passes succeeded (%s)" % str(js.get("filters"))[:80])
+    feats = set(str(js.get("features", "")).split(","))
+    for need in ("canvas8k", "layers100", "smart_sharpen"):
+        if need not in feats:
+            raise ValueError("required feature %s did not run (features: %s; layer error %s)" % (need, ",".join(sorted(feats))[:80], js.get("err_layer", "-")))
+    if int(js.get("blend_modes", 0)) < 6:
+        raise ValueError("only %s distinct blend modes used" % js.get("blend_modes"))
+    if len(feats & set(PS_FEATURES)) < 5:
+        raise ValueError("fewer than 5 of %d feature steps ran (%s)" % (len(PS_FEATURES), ",".join(sorted(feats))))
     _outputs_fresh(r, d, ("out.png", "out.psd"))
-    h = round(EXPECT["photo"]["h"] * 2048 / EXPECT["photo"]["w"])
-    p = _png(d, "out.png", 2048, h)
+    w1, h1 = int(js["w1"]), int(js["h1"])
+    if w1 != 2048:
+        raise ValueError("final width %s" % w1)
+    p = _png(d, "out.png", w1, h1)
     s = media_check.psd_info(d / "out.psd")
-    if (s["width"], s["height"]) != (2048, h):
+    if (s["width"], s["height"]) != (w1, h1):
         raise ValueError("PSD is %dx%d" % (s["width"], s["height"]))
-    return "opened %dx%d photo, %d filter passes, saved 2048x%d PNG (std %.1f) and PSD" % (4480, 2928, len(ok_filters), h, p["std"]), js.get("gpuinfo", "")
+    return ("8K-class canvas, %s layers with %s blend modes, features %s, saved %dx%d PNG (std %.1f) and PSD; %s ms"
+            % (js.get("layers"), js.get("blend_modes"), ",".join(sorted(feats & set(PS_FEATURES))), w1, h1, p["std"], js.get("ms"))), js.get("gpuinfo", "")
 
 
 def grade_illustrator(r, d):
@@ -236,19 +251,21 @@ def grade_aftereffects(r, d):
     pngs = [x for x in names if x.endswith(".png") and x != "ame_out.png"]
     _outputs_fresh(r, d, names)
     for x in pngs:
-        _png(d, x, 1920, 1080)
+        _png(d, x, 3840, 2160)
     for x in [x for x in names if x.endswith(".tif")]:
         i = media_check.tiff_info(d / x)
-        if (i["width"], i["height"]) != (1920, 1080) or i["bytes"] < 200_000:
+        if (i["width"], i["height"]) != (3840, 2160) or i["bytes"] < 1_000_000:
             raise ValueError("%s is %dx%d, %d bytes" % (x, i["width"], i["height"], i["bytes"]))
     log = (d / "aerender.log").read_text(errors="replace")
     if "Finished composition" not in log:
         raise ValueError("aerender log has no 'Finished composition'")
     made = str(r.get("make_log", ""))
-    for want in ("fractalnoise", "blur", "text"):
-        if want not in made:
-            raise ValueError("generated project lacks %s (%s)" % (want, made[:80]))
-    return "generated project rendered by aerender: %d frames 1920x1080, last frame std ok; project notes: %s" % (n, made.strip().splitlines()[0][:100]), made
+    have = set(made.strip().splitlines()[0].split(",")) if made.strip() else set()
+    for want in ("fractalnoise", "blur", "precomp", "text", "16bpc"):
+        if want not in have:
+            raise ValueError("generated project lacks %s (%s)" % (want, made[:120]))
+    extra = sorted(have & {"turbulent", "glow", "particles", "3d_layer", "expression", "lumetri", "camera", "footage", "cuda"})
+    return "generated 4K 16-bit project (%s) rendered by aerender: %d frames 3840x2160" % (",".join(extra), n), made
 
 
 def grade_indesign(r, d):
@@ -263,6 +280,51 @@ def grade_indesign(r, d):
     if not (w > 800 and h > 1000):
         raise ValueError("page JPEG is %dx%d" % (w, h))
     return "built a 2-page document with a placed photo, exported a 2-page PDF (%d bytes) and a %dx%d page JPEG" % (pdf["bytes"], w, h), ""
+
+
+def grade_illustratorsample(r, d):
+    js = r.get("js") or {}
+    _outputs_fresh(r, d, ("out.png", "out.pdf"))
+    w0, h0 = int(float(js["w0"])), int(float(js["h0"]))
+    p = _png(d, "out.png", w0 * 2, h0 * 2)
+    if media_check.pdf_info(d / "out.pdf")["pages"] < 1:
+        raise ValueError("PDF without pages")
+    return "opened the shipped sample %s (%dx%d, %s paths), exported %dx%d PNG (std %.1f) and a PDF" % (r.get("source"), w0, h0, js.get("paths"), w0 * 2, h0 * 2, p["std"]), ""
+
+
+def grade_indesignsample(r, d):
+    js = r.get("js") or {}
+    _outputs_fresh(r, d, ("out.pdf", "out.jpg"))
+    pdf = media_check.pdf_info(d / "out.pdf")
+    if pdf["pages"] != int(js.get("pages", -1)) or pdf["pages"] < 1:
+        raise ValueError("PDF has %d pages, the document has %s" % (pdf["pages"], js.get("pages")))
+    w, h = media_check.jpeg_size(d / "out.jpg")
+    if min(w, h) < 400:
+        raise ValueError("page JPEG is %dx%d" % (w, h))
+    return "opened the shipped sample %s (%s pages), exported a %d-page PDF and a %dx%d page JPEG" % (r.get("source"), js.get("pages"), pdf["pages"], w, h), ""
+
+
+def grade_animatesample(r, d):
+    log = str(r.get("jsfl_log", ""))
+    m = re.search(r"size=(\d+)x(\d+)", log)
+    if "opened" not in log or "png" not in log or not m:
+        raise ValueError("script did not open and export: %s" % log[:120])
+    _outputs_fresh(r, d, ("out.png",))
+    w, h = int(m[1]), int(m[2])
+    p = _png(d, "out.png", w, h, min_std=2.0, min_distinct=4)
+    return "opened the shipped sample %s (%dx%d), exported a frame as PNG (std %.1f)" % (r.get("source"), w, h, p["std"]), ""
+
+
+def grade_photoshopsample(r, d):
+    js = r.get("js") or {}
+    if (js.get("tw"), js.get("th")) != ("3840", "2160"):
+        raise ValueError("template opened as %sx%s, expected 3840x2160" % (js.get("tw"), js.get("th")))
+    if int(js.get("sharpen", 0)) < 3:
+        raise ValueError("fewer than 3 GPU-class filter passes succeeded")
+    _outputs_fresh(r, d, ("out.png",))
+    w1, h1 = int(js["w1"]), int(js["h1"])
+    p = _png(d, "out.png", w1, h1)
+    return "opened the shipped 3840x2160 PSD template and a %sx%s sky photo, %s filter passes, saved %dx%d PNG (std %.1f)" % (js.get("w0"), js.get("h0"), js.get("sharpen"), w1, h1, p["std"]), r.get("gpuinfo", "") or "NVIDIA"
 
 
 def grade_acrobat(r, d):
@@ -331,7 +393,8 @@ def grade_mediaencoder(r, d):
     return "Media Encoder encoded the generated comp: H.264 (%s) %dx%d, %.2f s" % (i["codec"], i["width"], i["height"], i["duration_s"]), ""
 
 
-GRADERS = {"mediaencoder": grade_mediaencoder, "lightroom": grade_lightroom, "photoshop": grade_photoshop, "illustrator": grade_illustrator, "aftereffects": grade_aftereffects, "indesign": grade_indesign,
+GRADERS = {"illustratorsample": grade_illustratorsample, "indesignsample": grade_indesignsample, "animatesample": grade_animatesample,
+           "photoshopsample": grade_photoshopsample, "mediaencoder": grade_mediaencoder, "lightroom": grade_lightroom, "photoshop": grade_photoshop, "illustrator": grade_illustrator, "aftereffects": grade_aftereffects, "indesign": grade_indesign,
            "acrobat": grade_acrobat, "animate": grade_animate, "gpudiag": grade_gpudiag}
 
 

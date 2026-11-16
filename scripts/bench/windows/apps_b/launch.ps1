@@ -13,7 +13,7 @@ $R = Init-Run $APPNAME
 $c = $T[$APPNAME]
 try {
   if ($c.sniffer -and (Test-Path $c.sniffer)) {
-    ((& $c.sniffer 2>&1) | Out-String) | Set-Content -Encoding UTF8 "$D\sniffer.txt"
+    ((cmd.exe /c "`"$($c.sniffer)`" 2>&1") | Out-String) | Set-Content -Encoding UTF8 "$D\sniffer.txt"
   }
   Step 'launch'
   Start-Process $c.exe

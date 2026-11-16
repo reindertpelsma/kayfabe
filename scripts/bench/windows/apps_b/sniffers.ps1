@@ -11,7 +11,7 @@ try {
       @('photoshop', 'C:\Program Files\Adobe\Adobe Photoshop 2027\sniffer.exe'))) {
     if (-not (Test-Path $e[1])) { continue }
     $f = "$D\sniffer_$($e[0]).txt"
-    ((& $e[1] 2>&1) | Out-String) | Set-Content -Encoding UTF8 $f
+    ((cmd.exe /c "`"$($e[1])`" 2>&1") | Out-String) | Set-Content -Encoding UTF8 $f
     $R.outputs += (File-Info $f)
   }
 } catch { $R.error = $_.Exception.Message }

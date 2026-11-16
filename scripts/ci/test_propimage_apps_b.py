@@ -42,11 +42,13 @@ class T(unittest.TestCase):
         r.update(extra)
         (self.d / "result.json").write_text(json.dumps(r))
 
-    def photoshop(self, w=2048, h=1339, filters="smartSharpen," * 3, noisy=True, gpuinfo="Graphics Processor: NVIDIA GeForce RTX 4070"):
+    def photoshop(self, w=2048, h=1339, filters="smartSharpen," * 3, noisy=True, gpuinfo="Graphics Processor: NVIDIA GeForce RTX 4070",
+                  features="canvas8k,16bit,iccP3,layers100,smart_sharpen,brush_strokes", layers="101", blend="10"):
         png(self.d / "out.png", w, h, noisy)
         psd(self.d / "out.psd", w, h)
         self.result("photoshop", ["out.png", "out.psd"], source="ktiponissi_dirfys_4480x2928.jpg",
-                    js={"w0": "4480", "h0": "2928", "filters": filters, "gpuinfo": gpuinfo})
+                    js={"w0": "4480", "h0": "2928", "w1": str(w), "h1": str(h), "features": filters and features, "layers": layers, "blend_modes": blend,
+                       "gpuinfo": gpuinfo, "ms": "1234"})
 
     def test_render_and_task(self):
         s = B.render_check("photoshop", "a" * 32)
@@ -74,9 +76,13 @@ class T(unittest.TestCase):
         self.photoshop(noisy=False)
         self.assertIn("blank", B.verdict("photoshop", "x", self.d, GPU_OK)["error"])
         self.photoshop(w=1000, h=500)
-        self.assertIn("expected", B.verdict("photoshop", "x", self.d, GPU_OK)["error"])
-        self.photoshop(filters="gaussianBlur,smartSharpen")
-        self.assertIn("filter passes", B.verdict("photoshop", "x", self.d, GPU_OK)["error"])
+        self.assertIn("final width", B.verdict("photoshop", "x", self.d, GPU_OK)["error"])
+        self.photoshop(features="canvas8k,16bit,iccP3,layers100")
+        self.assertIn("smart_sharpen", B.verdict("photoshop", "x", self.d, GPU_OK)["error"])
+        self.photoshop(blend="3")
+        self.assertIn("blend modes", B.verdict("photoshop", "x", self.d, GPU_OK)["error"])
+        self.photoshop(features="canvas8k,layers100,smart_sharpen")
+        self.assertIn("fewer than 5", B.verdict("photoshop", "x", self.d, GPU_OK)["error"])
         self.photoshop()
         row = B.verdict("photoshop", "x", self.d, GPU_BAD)
         self.assertFalse(row["ok"])
