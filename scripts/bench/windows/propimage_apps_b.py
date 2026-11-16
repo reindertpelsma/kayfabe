@@ -147,6 +147,21 @@ LOCALDUMPS_SETUP = (
 )
 
 
+STARTUP_STUB_B64 = "dHJ5IHsKICB2YXIgaiA9IG5ldyBGaWxlKCJDOi9rZmh3L0BBUFBAX2pvYi50eHQiKTsKICBpZiAoai5leGlzdHMpIHsKICAgIGoub3BlbigiciIpOyB2YXIgcCA9IGoucmVhZCgpOyBqLmNsb3NlKCk7IGoucmVtb3ZlKCk7CiAgICB2YXIgbCA9IG5ldyBGaWxlKCJDOi9rZmh3L0BBUFBAX3N0dWIubG9nIik7IGwub3BlbigiYSIpOyBsLndyaXRlbG4obmV3IERhdGUoKS5nZXRUaW1lKCkgKyAiIGpvYiAiICsgcCArICIgc2NoZWR1bGVUYXNrPSIgKyAodHlwZW9mIGFwcC5zY2hlZHVsZVRhc2spKTsgbC5jbG9zZSgpOwogICAgdmFyIHJ1biA9ICJ0cnkgeyAkLmV2YWxGaWxlKG5ldyBGaWxlKCciICsgcCArICInKSk7IH0gY2F0Y2ggKGUpIHsgdmFyIGYgPSBuZXcgRmlsZSgnQzova2Zody9AQVBQQF9zdHViLmxvZycpOyBmLm9wZW4oJ2EnKTsgZi53cml0ZWxuKCdFUlIgJyArIGUpOyBmLmNsb3NlKCk7IH0iOwogICAgaWYgKHR5cGVvZiBhcHAuc2NoZWR1bGVUYXNrID09ICJmdW5jdGlvbiIpIHsgYXBwLnNjaGVkdWxlVGFzayhydW4sIDYwMDAsIGZhbHNlKTsgfSBlbHNlIHsgJC5zbGVlcCg2MDAwKTsgZXZhbChydW4pOyB9CiAgfQp9IGNhdGNoIChlKSB7IH0K"
+STARTUP_DIRS = (("ae", r"C:\Program Files\Adobe\Adobe After Effects 2027\Support Files\Scripts\Startup"),
+                ("pp", r"C:\Program Files\Adobe\Adobe Premiere Pro 2027\Scripts\Startup"),
+                ("ame", r"C:\Program Files\Adobe\Adobe Media Encoder 2027\Scripts\Startup"))
+
+
+def startup_stub_setup():
+    """Elevated, once per row: a Startup script in each ExtendScript host that runs the job file named C:\\kfhw\\<app>_job.txt (see lib.ps1,
+    Run-StartupScript). `-r script` on the command line is unreliable; the Startup folder is read by the application itself."""
+    ps = "$b=[Convert]::FromBase64String('%s'); $t=[Text.Encoding]::UTF8.GetString($b)\n" % STARTUP_STUB_B64
+    for app, d in STARTUP_DIRS:
+        ps += "if(Test-Path '%s'){ Set-Content -Path '%s\\kf_job.jsx' -Value $t.Replace('@APP@','%s') }\n" % (d, d, app)
+    return ps
+
+
 def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignored):
     """One row. Same contract as propimage_check.run_check: returns the verdict row and writes verdict.json."""
     run_id = uuid.uuid4().hex
@@ -158,7 +173,7 @@ def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignor
     gpu_record = None
 
     def operation():
-        guest.ps(LOCALDUMPS_SETUP)                          # elevated: WER keeps a minidump of any crashing process (the row's own task is not elevated)
+        guest.ps(LOCALDUMPS_SETUP + startup_stub_setup())                          # elevated: WER keeps a minidump of any crashing process (the row's own task is not elevated)
         p = _interactive(guest, task, render_check(name, run_id))
         if p.returncode:
             raise ValueError("Task start failed")
@@ -182,7 +197,7 @@ def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignor
         for f in ("result.json", "steps.log"):
             guest.scp(remote + "/" + f, str(d / f), False)
         res = _json(d / "result.json")
-        names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt", "ps_progress.txt", "ae_progress.txt", "id_progress.txt", "ps_log_tail.txt", "ae_stub.log", "app_events.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
+        names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt", "ps_progress.txt", "ae_progress.txt", "id_progress.txt", "ps_log_tail.txt", "ae_stub.log", "pp_stub.log", "ame_stub.log", "app_events.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
         for fn in names:
             if not isinstance(fn, str) or not SAFE_FILE.fullmatch(fn):
                 continue

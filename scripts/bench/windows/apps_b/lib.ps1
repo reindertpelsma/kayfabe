@@ -88,54 +88,37 @@ function Enable-AeFileScripts {
   Set-Content -Path $f.FullName -Value $n -NoNewline
   return 'switched on'
 }
-# Run an ExtendScript file in After Effects. `AfterFX.exe -r script` is unreliable (MEASURED 2026-11-16: ignored in 2 of 4 cold starts, and
-# also ignored when handed to an idle instance on a fresh clone). So the script is handed over by a STARTUP stub instead: AE runs every
-# *.jsx of its Scripts\Startup folder at launch, the stub reads a job file naming the real script and runs it after a short delay
-# (app.scheduleTask). The job file is deleted by the stub, so a restart does not rerun it. Each attempt starts a fresh AE; the script must
-# write `$marker` as its last act (and may quit AE itself). A missing marker kills AE and retries (3 attempts); the attempts are recorded.
-function Install-AeStartupStub {
-  $dirs = @('C:\Program Files\Adobe\Adobe After Effects 2027\Support Files\Scripts\Startup', "$env:APPDATA\Adobe\After Effects\27.0\Scripts\Startup")
-  $stub = @'
-try {
-  var j = new File("C:/kfhw/ae_job.txt");
-  if (j.exists) {
-    j.open("r"); var p = j.read(); j.close(); j.remove();
-    var l = new File("C:/kfhw/ae_stub.log"); l.open("a"); l.writeln(new Date().getTime() + " job " + p); l.close();
-    app.scheduleTask("try { $.evalFile(new File('" + p + "')); } catch (e) { var f = new File('C:/kfhw/ae_stub.log'); f.open('a'); f.writeln('ERR ' + e); f.close(); }", 6000, false);
-  }
-} catch (e) { }
-'@
-  $done = @()
-  foreach ($d in $dirs) {
-    try { New-Item -Force -ItemType Directory $d -ErrorAction Stop | Out-Null; Set-Content -Path (Join-Path $d 'kf_job.jsx') -Value $stub -ErrorAction Stop; $done += $d } catch { }
-  }
-  return ($done -join ';')
-}
-function Run-AeScript($jsx, $marker, [int]$timeoutS = 900, [int]$attempts = 3) {
-  $base = 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files'
-  $R.ae_file_scripts = Enable-AeFileScripts
-  $R.ae_stub_dirs = Install-AeStartupStub
-  if (-not $R.ae_stub_dirs) { throw 'no Startup folder writable' }
-  $R.ae_attempts = @()
+# Run an ExtendScript file in After Effects, Premiere Pro or Media Encoder. `AfterFX.exe -r script` is unreliable (MEASURED 2026-11-16: ignored in
+# 2 of 4 cold starts, and also ignored when handed to an idle instance on a fresh clone). So the script is handed over by a STARTUP stub: each
+# host runs every *.jsx of its Scripts\Startup folder at launch; the stub (installed ELEVATED by the harness before the row, see
+# propimage_apps_b.startup_stub_setup) reads C:\kfhw\<app>_job.txt, deletes it and runs the script named there after a short delay. Each attempt
+# starts a fresh application; the script must write `$marker` as its last act. A missing marker kills the application and retries.
+function Run-StartupScript($app, $exe, $proc, $jsx, $marker, [int]$timeoutS = 900, [int]$attempts = 3) {
+  $R.startup_attempts = @()
+  $job = "C:\kfhw\${app}_job.txt"
   for ($att = 1; $att -le $attempts; $att++) {
-    Get-Process AfterFX -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process $proc -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item $marker -ErrorAction SilentlyContinue
-    Set-Content 'C:\kfhw\ae_job.txt' ($jsx -replace '\\', '/') -NoNewline
+    Set-Content $job ($jsx -replace '\\', '/') -NoNewline
     $t0 = Get-Date
-    Start-Process "$base\AfterFX.exe" | Out-Null
+    Start-Process $exe | Out-Null
     $n = 0; $limit = [int]($timeoutS / $attempts) + 60
     while (-not (Test-Path $marker) -and ((Get-Date) - $t0).TotalSeconds -lt $limit) {
-      [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++
+      [void](Dismiss-Dialogs $proc); Start-Sleep 3; $n++
       if ($n % 15 -eq 0) { Press-Key '{ESC}' }
     }
     $ok = Test-Path $marker
-    $R.ae_attempts += ("{0}:{1}:{2}s" -f $att, $(if ($ok) { 'marker' } else { 'none' }), [int]((Get-Date) - $t0).TotalSeconds)
+    $R.startup_attempts += ("{0}:{1}:{2}s" -f $att, $(if ($ok) { 'marker' } else { 'none' }), [int]((Get-Date) - $t0).TotalSeconds)
     if ($ok) { break }
   }
-  if (Test-Path 'C:\kfhw\ae_stub.log') { Copy-Item 'C:\kfhw\ae_stub.log' "$D\ae_stub.log" -Force }
-  if (-not (Test-Path $marker)) { throw ('After Effects did not run the script in ' + $attempts + ' attempts (no marker)') }
+  if (Test-Path "C:\kfhw\${app}_stub.log") { Copy-Item "C:\kfhw\${app}_stub.log" "$D\${app}_stub.log" -Force }
+  if (-not (Test-Path $marker)) { throw ("$proc did not run the script in $attempts attempts (no marker; stub log " + $(if (Test-Path "$D\${app}_stub.log") { 'present' } else { 'absent' }) + ')') }
   $t1 = Get-Date
-  while ((Get-Process AfterFX -ErrorAction SilentlyContinue) -and ((Get-Date) - $t1).TotalSeconds -lt 120) { Start-Sleep 3 }
+  while ((Get-Process $proc -ErrorAction SilentlyContinue) -and ((Get-Date) - $t1).TotalSeconds -lt 120) { Start-Sleep 3 }
+}
+function Run-AeScript($jsx, $marker, [int]$timeoutS = 900, [int]$attempts = 3) {
+  $R.ae_file_scripts = Enable-AeFileScripts
+  Run-StartupScript 'ae' 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files\AfterFX.exe' 'AfterFX' $jsx $marker $timeoutS $attempts
 }
 function Has-Window($procNames) { (@(Win-Titles $procNames | Where-Object { $_ })).Count -gt 0 }
 function Quit-App($procNames, $comApp = $null, [int]$budget = 150) {
