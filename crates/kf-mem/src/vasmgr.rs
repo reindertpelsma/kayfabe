@@ -386,6 +386,12 @@ pub trait Walker {
 
     /// How many slots the walker holds.
     fn slots(&self) -> u32;
+
+    /// ★ 2026-11-16 (observation only, `crate::vaprof`): hidden capacity re-walks so far
+    /// (cumulative; a walk the walker re-submitted itself before reporting). `0`: it has none.
+    fn capacity_retries(&self) -> u64 {
+        0
+    }
 }
 
 /// ★★★ **The production walker**: [`kf_cuda::WalkKernel`] over its imported store.
@@ -545,6 +551,10 @@ impl Walker for GpuWalker {
 
     fn slots(&self) -> u32 {
         self.kernel.max_slots()
+    }
+
+    fn capacity_retries(&self) -> u64 {
+        self.kernel.capacity_stats().retries
     }
 }
 
@@ -937,6 +947,8 @@ enum Want {
         key: Option<VasKey>,
         /// ★ 2026-11-13: when the channel asked (request -> done is `SPLIT-LATE`'s clock).
         at: std::time::Instant,
+        /// ★ 2026-11-16 (observation only): this ticket's profile across its windows.
+        prof: crate::vaprof::TicketProf,
     },
 }
 
@@ -967,6 +979,10 @@ struct Batch {
     /// ★ `KF3_MAPLOG`: this walk's number (the n-th submitted), so its runs can be traced to its
     /// wants.
     id: u64,
+    /// ★ 2026-11-16 (observation only): the submit call's wall, ns.
+    submit_ns: u64,
+    /// ★ 2026-11-16: [`Walker::capacity_retries`] at submit.
+    retries0: u64,
 }
 
 /// What the VA manager has done, cumulatively. Every refusal is counted AND named.
@@ -1108,6 +1124,8 @@ pub struct VaTiming {
     pub slow_applies: u64,
     /// ★ Splits over [`SLOW_SPLIT_MS`] (same rule).
     pub slow_splits: u64,
+    /// ★ 2026-11-16: the bounded phase profile (`crate::vaprof`, `V3_VA_PROFILE.md`).
+    pub prof: crate::vaprof::VaProfCounters,
 }
 
 impl VaTiming {
@@ -1130,6 +1148,7 @@ impl VaTiming {
             split_ns_max: self.split_ns_max,
             slow_applies: self.slow_applies,
             slow_splits: self.slow_splits,
+            prof: self.prof.since(&prev.prof),
         }
     }
 }
@@ -1198,6 +1217,11 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     /// refused ([`VaManager::with_carve`]); `store_bytes` (no bound) until set.
     carve: u64,
     carve_refuse: bool,
+    /// ★ 2026-11-16 (observation only): the slow-record ring, its print budget, the clock origin of
+    /// both, and the threshold (ns; [`crate::vaprof::SLOW_PROFILE_NS`], a test lowers it).
+    slow: crate::vaprof::SlowSink,
+    /// See above.
+    pub slow_profile_ns: u64,
     /// Counters and named refusals.
     pub stats: VaStats,
 }
@@ -1230,6 +1254,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             per_map_kind: true,
             carve: store_bytes,
             carve_refuse: false,
+            slow: crate::vaprof::SlowSink::default(),
+            slow_profile_ns: crate::vaprof::SLOW_PROFILE_NS,
             stats: VaStats::default(),
         }
     }
@@ -1462,6 +1488,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// `PDB_ALL`). **Never blocks**: queued like an invalidate; the outcome is reported under
     /// `ticket` by [`Self::take_splits`] once every named space applied (or failed, by name).
     pub fn on_split(&mut self, pdb: Option<u64>, ticket: u64, trigger: &Trigger) {
+        self.on_split_queued(pdb, ticket, None, trigger);
+    }
+
+    /// ★ 2026-11-16: [`Self::on_split`] with the worker's enqueue time `queued` (observation only:
+    /// enqueue -> acceptance is profiled; nothing else differs).
+    pub fn on_split_queued(
+        &mut self,
+        pdb: Option<u64>,
+        ticket: u64,
+        queued: Option<std::time::Instant>,
+        trigger: &Trigger,
+    ) {
         if crate::maplog::on() {
             eprintln!(
                 "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
@@ -1470,7 +1508,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     pdb,
                     ticket,
                     key: None,
-                    at: std::time::Instant::now()
+                    at: std::time::Instant::now(),
+                    prof: crate::vaprof::TicketProf::default(),
                 }),
                 self.inflight
                     .as_ref()
@@ -1478,24 +1517,58 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             );
         }
         self.stats.splits = self.stats.splits.saturating_add(1);
+        let at = std::time::Instant::now();
+        let prof = self.accept_prof(queued, at);
         self.pending.push(Want::Split {
             pdb,
             ticket,
             key: None,
-            at: std::time::Instant::now(),
+            at,
+            prof,
         });
         self.pump(trigger);
+    }
+
+    /// ★ 2026-11-16 (observation only): a ticket accepted at `at` that a worker queued at `queued`.
+    fn accept_prof(
+        &mut self,
+        queued: Option<std::time::Instant>,
+        at: std::time::Instant,
+    ) -> crate::vaprof::TicketProf {
+        let q = queued
+            .map(|q| u64::try_from(at.saturating_duration_since(q).as_nanos()).unwrap_or(u64::MAX));
+        if let Some(ns) = q {
+            self.stats.timing.prof.q_inbox.add(ns);
+        }
+        crate::vaprof::TicketProf {
+            q_inbox_ns: q,
+            ..crate::vaprof::TicketProf::default()
+        }
     }
 
     /// ★★ OWNER_RULINGS §U.2: a deferred TLB invalidate's split — walk and apply exactly `key`
     /// (the triggering channel's own space), then report `ticket` done through
     /// [`VaManager::take_splits`]. A space with no root has nothing to be stale: done at once.
     pub fn on_split_space(&mut self, key: VasKey, ticket: u64, trigger: &Trigger) {
+        self.on_split_space_queued(key, ticket, None, trigger);
+    }
+
+    /// ★ 2026-11-16: [`Self::on_split_space`] with the worker's enqueue time (observation only).
+    pub fn on_split_space_queued(
+        &mut self,
+        key: VasKey,
+        ticket: u64,
+        queued: Option<std::time::Instant>,
+        trigger: &Trigger,
+    ) {
+        let at = std::time::Instant::now();
+        let prof = self.accept_prof(queued, at);
         let w = Want::Split {
             pdb: None,
             ticket,
             key: Some(key),
-            at: std::time::Instant::now(),
+            at,
+            prof,
         };
         if crate::maplog::on() {
             eprintln!(
@@ -1543,6 +1616,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             walked: BTreeMap::new(),
             submitted: std::time::Instant::now(),
             id: self.stats.walks_submitted.saturating_add(1),
+            submit_ns: 0,
+            retries0: 0,
         };
         let mut vacuous: Vec<u64> = Vec::new();
         let mut no_slot: Vec<VasKey> = Vec::new();
@@ -1638,9 +1713,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         let r = self.walker.submit(&entries);
         let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
         self.stats.submit_ns_max = self.stats.submit_ns_max.max(ns);
+        self.stats.timing.prof.submit.add(ns);
         match r {
             Ok(()) => {
                 self.stats.walks_submitted = self.stats.walks_submitted.saturating_add(1);
+                batch.submit_ns = ns;
+                batch.retries0 = self.walker.capacity_retries();
                 batch.submitted = std::time::Instant::now();
                 if crate::maplog::on() {
                     eprintln!(
@@ -1758,6 +1836,145 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
     }
 
+    /// ★ 2026-11-16 (observation only, `crate::vaprof`): account one space's apply and its phases;
+    /// keep a detailed record when it is longer than `threshold_ns` ([`Self::slow_profile_ns`]).
+    /// An associated function: the apply loop holds `self.table` and the apply configuration.
+    fn note_apply_prof(
+        (pc, sink): (
+            &mut crate::vaprof::VaProfCounters,
+            &mut crate::vaprof::SlowSink,
+        ),
+        (cut_windows, threshold_ns): (&BTreeMap<(u8, u64), u32>, u64),
+        batch: &Batch,
+        (key, root, slot): (VasKey, u64, u32),
+        apply_ns: u64,
+        (maps, unmaps): (u64, u64),
+        phases: &kf_host::phase::Phases,
+    ) {
+        pc.aps.add(apply_ns);
+        pc.aps_hist.record_ns(apply_ns);
+        pc.phases.merge(phases);
+        if apply_ns <= threshold_ns {
+            return;
+        }
+        pc.slow_aps = pc.slow_aps.saturating_add(1);
+        // The first request of this walk naming the space: its ticket and this window's ordinal.
+        let (ticket, window) = batch
+            .wants
+            .iter()
+            .find(|(_, keys, _)| keys.contains(&key))
+            .map_or((0, 1), |(w, _, _)| match w {
+                Want::Split { ticket, prof, .. } => (*ticket, prof.windows.saturating_add(1)),
+                Want::Invalidate(r, _) => (
+                    0,
+                    cut_windows
+                        .get(&(1, r.seq))
+                        .copied()
+                        .unwrap_or(0)
+                        .saturating_add(1),
+                ),
+                Want::Root(_) => (0, 1),
+            });
+        sink.keep(
+            crate::vaprof::SlowRecord {
+                kind: crate::vaprof::SlowKind::Apply,
+                ticket,
+                walk: batch.id,
+                key: key.0,
+                pdb: root,
+                slot,
+                window,
+                apply_us: apply_ns / 1000,
+                maps,
+                unmaps,
+                phases: *phases,
+                ..crate::vaprof::SlowRecord::default()
+            },
+            pc,
+        );
+    }
+
+    /// ★ 2026-11-16 (observation only): a split reached its verdict after an apply walk; account its
+    /// request latency (enqueue, else acceptance, to verdict) and keep a record when it is slow.
+    fn note_ticket_prof(
+        &mut self,
+        ticket: u64,
+        pdb: Option<u64>,
+        key: Option<VasKey>,
+        at: std::time::Instant,
+        p: &crate::vaprof::TicketProf,
+    ) {
+        let mgr_ns = ns_since(at);
+        let req_ns = mgr_ns.saturating_add(p.q_inbox_ns.unwrap_or(0));
+        let pc = &mut self.stats.timing.prof;
+        pc.req.add(req_ns);
+        pc.req_hist.record_ns(req_ns);
+        pc.windows_max = pc.windows_max.max(u64::from(p.windows));
+        if req_ns <= self.slow_profile_ns {
+            return;
+        }
+        pc.slow_reqs = pc.slow_reqs.saturating_add(1);
+        let us = |ns: u64| ns / 1000;
+        self.slow.keep(
+            crate::vaprof::SlowRecord {
+                kind: crate::vaprof::SlowKind::Ticket,
+                ticket,
+                walk: p.last_walk,
+                key: key.map_or(0, |k| k.0),
+                pdb: pdb.unwrap_or(0),
+                windows: p.windows,
+                window: p.windows,
+                q_inbox_us: us(p.q_inbox_ns.unwrap_or(0)),
+                mgr_us: us(mgr_ns),
+                req_us: us(req_ns),
+                submit_us: us(p.submit_ns),
+                walk_us: us(p.walk_ns),
+                collect_us: us(p.collect_ns),
+                apply_own_us: us(p.apply_own_ns),
+                apply_all_us: us(p.apply_all_ns),
+                cap_retries: p.cap_retries,
+                ..crate::vaprof::SlowRecord::default()
+            },
+            &mut self.stats.timing.prof,
+        );
+    }
+
+    /// ★ 2026-11-16 (observation only): the slow records held now, oldest first, with their
+    /// sequence number and whether they were printed.
+    #[must_use]
+    pub fn slow_records(&self) -> Vec<(u64, crate::vaprof::SlowRecord, bool)> {
+        self.slow.ring.held()
+    }
+
+    /// ★ 2026-11-16: at teardown — the held slow records that were NOT printed (oldest first), then
+    /// one summary line. Bounded by the ring ([`crate::vaprof::SLOW_RING`] + 1 lines); the records
+    /// returned are marked printed, so a second call returns only the summary.
+    pub fn slow_ring_dump(&mut self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for (seq, r, printed) in self.slow.ring.held() {
+            if !printed {
+                out.push(format!("{} (at teardown)", r.line(seq)));
+                self.slow.ring.mark_printed(seq);
+            }
+        }
+        let pc = &self.stats.timing.prof;
+        out.push(format!(
+            "kf3: VA_SLOW SUMMARY recorded={} held={} overwritten={} printed_live={} suppressed_live={} dumped_now={} slow_reqs={} slow_aps={} req_max_ms={} aps_max_ms={} windows_max={}",
+            self.slow.ring.pushed(),
+            self.slow.ring.len(),
+            self.slow.ring.overwritten(),
+            self.slow.dump.printed(),
+            self.slow.dump.suppressed(),
+            out.len(),
+            pc.slow_reqs,
+            pc.slow_aps,
+            pc.req.max / 1_000_000,
+            pc.aps.max / 1_000_000,
+            pc.windows_max
+        ));
+        out
+    }
+
     /// The batch's objects (`key=slot@root`) and the table's size — for a refusal's name.
     fn batch_census(&self, b: &Batch) -> String {
         let walked: Vec<String> = b
@@ -1797,6 +2014,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         if self.inflight.is_none() {
             return out;
         }
+        let t_poll = std::time::Instant::now();
         let done = match self.walker.poll() {
             Ok(None) => return out,
             Ok(Some(d)) => d,
@@ -1826,10 +2044,27 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 return out;
             }
         };
+        // ★ 2026-11-16 (observation only): this window's collect/decode and hidden re-walks.
+        let collect_ns = ns_since(t_poll);
         out.collected = true;
-        let Some(batch) = self.inflight.take() else {
+        let Some(mut batch) = self.inflight.take() else {
             return out;
         };
+        let window_walk_ns = ns_since(batch.submitted);
+        let window_retries = self
+            .walker
+            .capacity_retries()
+            .saturating_sub(batch.retries0);
+        self.stats.timing.prof.collect.add(collect_ns);
+        self.stats.timing.prof.cap_retries = self
+            .stats
+            .timing
+            .prof
+            .cap_retries
+            .saturating_add(window_retries);
+        let mut applied_ns: [(VasKey, u64); MAX_SPACES_PER_WALK] =
+            [(VasKey(0), 0); MAX_SPACES_PER_WALK];
+        let mut n_applied = 0usize;
         self.stats.walks_reconciled = self.stats.walks_reconciled.saturating_add(1);
         let tm = &mut self.stats.timing;
         tm.walks = tm.walks.saturating_add(1);
@@ -1899,9 +2134,24 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 std::thread::sleep(std::time::Duration::from_millis(ms));
             }
             let m0 = MAPSTAT.snapshot();
+            let _ = kf_host::phase::take();
             let t_apply = std::time::Instant::now();
             let a = apply_entry(&space.target, &e.runs, &cfg);
             let apply_ns = ns_since(t_apply);
+            let phases = kf_host::phase::take();
+            if let Some(slot) = applied_ns.get_mut(n_applied) {
+                *slot = (key, apply_ns);
+                n_applied = n_applied.saturating_add(1);
+            }
+            Self::note_apply_prof(
+                (&mut self.stats.timing.prof, &mut self.slow),
+                (&self.cut_windows, self.slow_profile_ns),
+                &batch,
+                (key, walked_root, slot),
+                apply_ns,
+                (a.mapped as u64, a.unmapped as u64),
+                &phases,
+            );
             Self::note_apply(
                 &mut self.stats.timing,
                 &mut self.slow_apply_lines,
@@ -2168,6 +2418,27 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 done.generation
             ));
         }
+        // ★ 2026-11-16 (observation only): each split this window carried rides one more window.
+        let applied_ns = applied_ns.get(..n_applied).unwrap_or(&[]);
+        let apply_all_ns = applied_ns
+            .iter()
+            .fold(0u64, |a, &(_, ns)| a.saturating_add(ns));
+        for (w, keys, _) in &mut batch.wants {
+            if let Want::Split { prof, .. } = w {
+                let own = applied_ns
+                    .iter()
+                    .filter(|(k, _)| keys.contains(k))
+                    .fold(0u64, |a, &(_, ns)| a.saturating_add(ns));
+                prof.windows = prof.windows.saturating_add(1);
+                prof.submit_ns = prof.submit_ns.saturating_add(batch.submit_ns);
+                prof.walk_ns = prof.walk_ns.saturating_add(window_walk_ns);
+                prof.collect_ns = prof.collect_ns.saturating_add(collect_ns);
+                prof.apply_own_ns = prof.apply_own_ns.saturating_add(own);
+                prof.apply_all_ns = prof.apply_all_ns.saturating_add(apply_all_ns);
+                prof.cap_retries = prof.cap_retries.saturating_add(window_retries);
+                prof.last_walk = batch.id;
+            }
+        }
         // ★ THE CLEAR IS LAST: every map above has landed and its space's ONE invalidate ran.
         let mut requeue: Vec<(Want, std::time::Instant)> = Vec::new();
         let mut settled: BTreeMap<VasKey, Settle> = BTreeMap::new();
@@ -2179,6 +2450,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 pdb,
                 key: skey,
                 at: sat,
+                prof,
             } = w
             {
                 // ★★★ v3-mapfix — A SPLIT FAILS ONLY ON A REFUSAL THAT IS NOT MERE ABSENCE.
@@ -2202,6 +2474,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 let again = again || keys.iter().any(|k| rewalk.contains(k));
                 if hard.is_some() || !again {
                     self.note_split_done(*ticket, *pdb, *skey, *sat);
+                    self.note_ticket_prof(*ticket, *pdb, *skey, *sat, prof);
                 }
                 match (hard, bad) {
                     (Some(k), _) => self
@@ -2352,6 +2625,8 @@ mod tests {
         refuse_in: Option<u64>,
         /// ★ 2026-11-15 (M4): the report's run capacity; a larger diff is cut as the kernel cuts it.
         report_cap: Option<usize>,
+        /// ★ 2026-11-16: hidden capacity re-walks so far ([`Walker::capacity_retries`]; a test bumps it).
+        retries: u64,
     }
 
     impl ModelWalker {
@@ -2372,6 +2647,7 @@ mod tests {
                 diff_runs: vec![],
                 refuse_in: None,
                 report_cap: None,
+                retries: 0,
             }
         }
     }
@@ -2514,6 +2790,9 @@ mod tests {
         }
         fn slots(&self) -> u32 {
             self.nslots
+        }
+        fn capacity_retries(&self) -> u64 {
+            self.retries
         }
     }
 
@@ -4665,6 +4944,8 @@ mod tests {
             walked: BTreeMap::new(),
             submitted: std::time::Instant::now(),
             id: 1,
+            submit_ns: 0,
+            retries0: 0,
         }
     }
 
@@ -5000,6 +5281,7 @@ mod tests {
                     ticket: t,
                     key: Some(K_A),
                     at: now,
+                    prof: crate::vaprof::TicketProf::default(),
                 },
                 vec![K_A],
                 now,
@@ -5011,6 +5293,7 @@ mod tests {
                 ticket: 99,
                 key: Some(K_B),
                 at: now,
+                prof: crate::vaprof::TicketProf::default(),
             },
             Want::Root(K_B),
         ];
@@ -5048,5 +5331,398 @@ mod tests {
     fn worst_equal_is_quiet_and_split_alone_counts() {
         assert!(!worst_changed((6, 7), 6_000_000, 7_000_000));
         assert!(worst_changed((6, 7), 6_000_000, 9_000_000));
+    }
+    /// ★ 2026-11-16 (`V3_VA_PROFILE.md`): a fixed sequence of splits (windowed, PDB_ALL, a remap),
+    /// invalidates and a refused map, rendered as everything the manager decided: host ops in
+    /// order, each walk's verdict codes, the split outcomes, the reconciled spaces and the
+    /// decision counters. `split` asks for one split (the caller chooses the API).
+    fn equivalence_trace(split: &dyn Fn(&mut Rig, Option<u64>, u64)) -> String {
+        let mut r = rig();
+        let mut out = String::new();
+        let step = |r: &mut Rig, out: &mut String, tag: &str| {
+            let rec = r.m.on_walk_ready(r.port.trigger());
+            let applied: Vec<String> = rec
+                .applied
+                .iter()
+                .map(|(k, a)| format!("{k:?}:{a:?}"))
+                .collect();
+            let verdict = r.m.walker().verdict.clone();
+            let splits = r.m.take_splits();
+            out.push_str(&format!(
+                "[{tag}] collected={} applied={applied:?} completed={:?} unreconciled={:?} verdict={:?} splits={:?}\n",
+                rec.collected,
+                rec.completed,
+                rec.unreconciled,
+                verdict,
+                splits
+            ));
+        };
+        r.m.walker_mut().report_cap = Some(4);
+        let rows: Vec<(u64, u64, u64, u32)> = (0..9u64)
+            .map(|i| {
+                (
+                    0x4000_0000 + 0x2000 * i,
+                    0x0300_0000 + 0x2000 * i,
+                    0x1000,
+                    0,
+                )
+            })
+            .collect();
+        r.tables.borrow_mut().insert(PDB_A, rows);
+        split(&mut r, Some(PDB_A), 21);
+        for w in 0..4 {
+            step(&mut r, &mut out, &format!("a{w}"));
+        }
+        r.m.walker_mut().report_cap = None;
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x5000_0000, 0x0400_0000, 0x2000, 0)]);
+        let q = guest_invalidate(&r.port, PDB_B, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        step(&mut r, &mut out, "b");
+        // a remap of A's first rows and a refused map, then PDB_ALL
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_map_at.borrow_mut() = Some(0x6000_0000);
+        }
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x4000_0000, 0x0500_0000, 0x1000, 0),
+                (0x6000_0000, 0x0600_0000, 0x1000, 0),
+            ],
+        );
+        split(&mut r, None, 22);
+        split(&mut r, Some(PDB_B), 23);
+        for w in 0..3 {
+            step(&mut r, &mut out, &format!("c{w}"));
+        }
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_map_at.borrow_mut() = None;
+        }
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        step(&mut r, &mut out, "d");
+        let s = &r.m.stats;
+        out.push_str(&format!(
+            "ops={:?}\nsubmits={:?}\nstats walks={}/{}/{} spaces={} mapped={} unmapped={} inval={} cleared={} unreconciled={} splits={} unsettled={} partial={} refusals={:?}\n",
+            ops(&r),
+            r.m.walker().submits,
+            s.walks_submitted,
+            s.walks_reconciled,
+            s.walks_refused,
+            s.spaces_reconciled,
+            s.mapped,
+            s.unmapped,
+            s.host_invalidates,
+            s.cleared,
+            s.unreconciled,
+            s.splits,
+            s.splits_unsettled,
+            s.partial,
+            s.refusals
+        ));
+        out
+    }
+
+    fn fnv(s: &str) -> u64 {
+        s.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
+        })
+    }
+
+    /// The trace of the scenario above on `origin/next` 2831e3c9c, BEFORE any profiling code existed
+    /// (captured 2026-11-16 by running `equivalence_trace` there with `on_split`).
+    const GOLDEN_FNV: u64 = 0x7751_ee14_7073_7f6c;
+    const GOLDEN_LEN: usize = 7296;
+
+    fn queued_ago(ms: u64) -> Option<std::time::Instant> {
+        std::time::Instant::now().checked_sub(std::time::Duration::from_millis(ms))
+    }
+
+    /// ★★ OBSERVATION CANNOT CHANGE BEHAVIOUR: the same splits/invalidates give the same host ops,
+    /// verdicts, split outcomes and counters as the code before profiling existed — with the slow
+    /// records off, with every apply and ticket recorded (threshold 0), and with enqueue times.
+    #[test]
+    fn profiling_does_not_change_acks_commits_or_host_ops() {
+        let plain = equivalence_trace(&|r, pdb, t| r.m.on_split(pdb, t, r.port.trigger()));
+        assert_eq!(
+            (fnv(&plain), plain.len()),
+            (GOLDEN_FNV, GOLDEN_LEN),
+            "trace differs from the pre-profiling golden:\n{plain}"
+        );
+        let all = equivalence_trace(&|r, pdb, t| {
+            r.m.slow_profile_ns = 0;
+            r.m.on_split_queued(pdb, t, queued_ago(5), r.port.trigger());
+        });
+        assert_eq!(
+            all, plain,
+            "profiling every apply and ticket changed a decision"
+        );
+        let none = equivalence_trace(&|r, pdb, t| {
+            r.m.slow_profile_ns = u64::MAX;
+            r.m.on_split_queued(pdb, t, None, r.port.trigger());
+        });
+        assert_eq!(none, plain);
+    }
+
+    /// The same, for the space-keyed split (`on_split_space_queued` vs `on_split_space`).
+    #[test]
+    fn profiling_does_not_change_a_space_split() {
+        let run = |queued: bool| {
+            let mut r = rig();
+            r.m.slow_profile_ns = if queued { 0 } else { u64::MAX };
+            r.m.walker_mut().report_cap = Some(2);
+            r.tables.borrow_mut().insert(
+                PDB_A,
+                (0..5u64)
+                    .map(|i| {
+                        (
+                            0x4000_0000 + 0x2000 * i,
+                            0x0300_0000 + 0x2000 * i,
+                            0x1000,
+                            0,
+                        )
+                    })
+                    .collect(),
+            );
+            if queued {
+                r.m.on_split_space_queued(K_A, 5, queued_ago(3), r.port.trigger());
+            } else {
+                r.m.on_split_space(K_A, 5, r.port.trigger());
+            }
+            let mut v = Vec::new();
+            for _ in 0..5 {
+                let rec = r.m.on_walk_ready(r.port.trigger());
+                let verdict = r.m.walker().verdict.clone();
+                let splits = r.m.take_splits();
+                v.push(format!("{:?} {verdict:?} {splits:?}", rec.applied));
+            }
+            (v, ops(&r))
+        };
+        assert_eq!(run(true), run(false));
+    }
+
+    /// ★ The inbox wait starts at the WORKER's enqueue, not at the manager's acceptance.
+    #[test]
+    fn profiling_q_inbox_starts_at_the_worker_enqueue() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split_queued(Some(PDB_A), 7, queued_ago(30), r.port.trigger());
+        let p = r.m.stats.timing.prof;
+        assert_eq!(p.q_inbox.n, 1);
+        assert!(p.q_inbox.ns >= 30_000_000, "{:?}", p.q_inbox);
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(7, Ok(()))]);
+        let p = r.m.stats.timing.prof;
+        assert_eq!(p.req.n, 1);
+        assert!(
+            p.req.max >= 30_000_000,
+            "request latency includes the inbox: {:?}",
+            p.req
+        );
+        assert_eq!(p.req_hist.count(), 1);
+        assert_eq!(p.collect.n, 1);
+        assert_eq!(p.submit.n, 1);
+        // a split with no known enqueue time is a request, not an inbox sample
+        r.m.on_split(Some(PDB_A), 8, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let p = r.m.stats.timing.prof;
+        assert_eq!((p.q_inbox.n, p.req.n), (1, 2));
+    }
+
+    /// ★ A slow ticket's record: its windows, inbox time, and the request latency that contains it.
+    #[test]
+    fn profiling_a_slow_ticket_record_names_its_inbox_time_and_windows() {
+        let mut r = rig();
+        r.m.slow_profile_ns = 0;
+        r.m.walker_mut().report_cap = Some(4);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            (0..9u64)
+                .map(|i| {
+                    (
+                        0x4000_0000 + 0x2000 * i,
+                        0x0300_0000 + 0x2000 * i,
+                        0x1000,
+                        0,
+                    )
+                })
+                .collect(),
+        );
+        r.m.on_split_queued(Some(PDB_A), 21, queued_ago(30), r.port.trigger());
+        for _ in 0..3 {
+            r.m.walker_mut().retries += 1;
+            let _ = r.m.on_walk_ready(r.port.trigger());
+        }
+        assert_eq!(r.m.take_splits(), vec![(21, Ok(()))]);
+        let tickets: Vec<crate::vaprof::SlowRecord> =
+            r.m.slow_records()
+                .into_iter()
+                .map(|(_, rec, _)| rec)
+                .filter(|rec| rec.kind == crate::vaprof::SlowKind::Ticket)
+                .collect();
+        assert_eq!(tickets.len(), 1, "one verdict, one ticket record");
+        let t = tickets[0];
+        assert_eq!((t.ticket, t.windows, t.walk, t.pdb), (21, 3, 3, PDB_A));
+        assert!(t.q_inbox_us >= 30_000, "{t:?}");
+        assert!(t.req_us >= t.q_inbox_us + t.mgr_us - 1, "{t:?}");
+        assert_eq!(t.cap_retries, 3);
+        assert!(t.apply_own_us <= t.apply_all_us);
+        assert_eq!(r.m.stats.timing.prof.slow_reqs, 1);
+    }
+
+    /// ★ Every space's apply is counted with its phases (the apply's own partition).
+    #[test]
+    fn profiling_every_apply_is_counted_with_its_phases() {
+        use kf_host::phase::Phase;
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        let _ = settle(&mut r, PDB_A);
+        let p = r.m.stats.timing.prof;
+        assert_eq!((p.aps.n, p.aps_hist.count()), (1, 1));
+        for ph in [
+            Phase::Prep,
+            Phase::UnmapPhase,
+            Phase::MapPhase,
+            Phase::Takedown,
+            Phase::Invalidate,
+        ] {
+            assert_eq!(p.phases.get(ph).n, 1, "{ph:?}");
+        }
+        // phases of a FakeHost apply never reach a host-verb accumulator (no BatchedVas)
+        assert_eq!(p.phases.get(Phase::RmMap).n, 0);
+        r.tables.borrow_mut().insert(PDB_A, vec![]);
+        let _ = settle(&mut r, PDB_A);
+        let p = r.m.stats.timing.prof;
+        assert_eq!(p.aps.n, 2);
+        assert_eq!(p.phases.get(Phase::Prep).n, 2);
+        assert_eq!(p.slow_aps, 0, "nothing is slow at the default threshold");
+        assert!(r.m.slow_records().is_empty());
+    }
+
+    /// ★ A slow apply's record carries its ticket, walk, space, root, slot and window ordinal.
+    #[test]
+    fn profiling_a_slow_apply_record_carries_its_ids() {
+        use kf_host::phase::Phase;
+        let mut r = rig();
+        r.m.slow_profile_ns = 0;
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split(Some(PDB_A), 7, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let held = r.m.slow_records();
+        let (seq, a, _) = held
+            .iter()
+            .copied()
+            .find(|(_, rec, _)| rec.kind == crate::vaprof::SlowKind::Apply)
+            .expect("an apply record");
+        assert_eq!(seq, 1, "the apply is recorded before the ticket's verdict");
+        assert_eq!(
+            (
+                a.ticket, a.walk, a.key, a.pdb, a.slot, a.window, a.maps, a.unmaps
+            ),
+            (
+                7,
+                1,
+                K_A.0,
+                PDB_A,
+                r.m.table.slot(K_A).unwrap_or(99),
+                1,
+                1,
+                0
+            )
+        );
+        assert_eq!(a.phases.get(Phase::Prep).n, 1);
+        assert_eq!(r.m.stats.timing.prof.slow_aps, 1);
+        // the teardown dump returns what was not printed live, then a summary; a second dump only
+        // the summary
+        let first = r.m.slow_ring_dump();
+        assert!(
+            first
+                .last()
+                .is_some_and(|l| l.contains("VA_SLOW SUMMARY recorded=2"))
+        );
+        let second = r.m.slow_ring_dump();
+        assert_eq!(second.len(), 1);
+        assert!(second[0].contains("dumped_now=0"));
+    }
+
+    /// ★ The ring never grows past its size; what it overwrote is counted and published.
+    #[test]
+    fn profiling_the_ring_holds_at_most_its_size() {
+        let mut r = rig();
+        r.m.slow_profile_ns = 0;
+        let rounds = 70u64;
+        for i in 0..rounds {
+            r.tables.borrow_mut().insert(
+                PDB_A,
+                vec![(0x4000_0000 + 0x2000 * (i % 2), 0x0300_0000, 0x1000, 0)],
+            );
+            r.m.on_split(Some(PDB_A), 100 + i, r.port.trigger());
+            let _ = r.m.on_walk_ready(r.port.trigger());
+            assert_eq!(r.m.take_splits(), vec![(100 + i, Ok(()))]);
+        }
+        let p = r.m.stats.timing.prof;
+        assert_eq!(
+            (p.aps.n, p.req.n, p.slow_aps, p.slow_reqs),
+            (rounds, rounds, rounds, rounds)
+        );
+        let held = r.m.slow_records();
+        assert_eq!(held.len(), crate::vaprof::SLOW_RING);
+        let pushed = 2 * rounds;
+        assert_eq!(p.ring_overwritten, pushed - crate::vaprof::SLOW_RING as u64);
+        // the newest are kept, oldest first
+        assert_eq!(held.last().map(|h| h.0), Some(pushed));
+        assert_eq!(
+            held.first().map(|h| h.0),
+            Some(pushed - crate::vaprof::SLOW_RING as u64 + 1)
+        );
+        // the live print budget's burst was spent; the rest stayed in the ring for the teardown dump
+        assert_eq!(p.slow_printed, u64::from(crate::vaprof::DUMP_BURST));
+        assert_eq!(p.slow_printed + p.slow_suppressed, pushed);
+        let dump = r.m.slow_ring_dump();
+        assert!(dump.len() <= crate::vaprof::SLOW_RING + 1);
+    }
+
+    /// ★ Per window: submit, collect/decode and hidden capacity re-walks are counted; the phases
+    /// of every window's apply are merged.
+    #[test]
+    fn profiling_windows_count_submit_collect_and_retries() {
+        use kf_host::phase::Phase;
+        let mut r = rig();
+        r.m.walker_mut().report_cap = Some(4);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            (0..9u64)
+                .map(|i| {
+                    (
+                        0x4000_0000 + 0x2000 * i,
+                        0x0300_0000 + 0x2000 * i,
+                        0x1000,
+                        0,
+                    )
+                })
+                .collect(),
+        );
+        r.m.on_split(Some(PDB_A), 21, r.port.trigger());
+        for _ in 0..3 {
+            r.m.walker_mut().retries += 2;
+            let _ = r.m.on_walk_ready(r.port.trigger());
+        }
+        assert_eq!(r.m.take_splits(), vec![(21, Ok(()))]);
+        let p = r.m.stats.timing.prof;
+        assert_eq!((p.submit.n, p.collect.n), (3, 3));
+        assert_eq!(p.cap_retries, 6);
+        assert_eq!(p.windows_max, 3);
+        assert_eq!(p.phases.get(Phase::Prep).n, 3);
+        assert_eq!(p.phases.get(Phase::MapPhase).n, 3);
+        // the window of the status line
+        let d = r.m.stats.timing.since(&VaTiming::default());
+        assert_eq!(d.prof.collect.n, 3);
     }
 }

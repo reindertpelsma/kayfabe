@@ -143,6 +143,10 @@ jobs:
       # start and display colour path; "a Linux guest, an undeclared guest and windows-support=off reach none of it"): each mutant needs two named killers.
       - name: Windows support profile mutations require two named killers each
         run: python3 scripts/ci/windows_profile_mutants.py
+      # The bounded VA-apply phase profiling (docs/design/V3_VA_PROFILE.md, 2026-11-16: kf-mem vaprof/vasmgr/batch,
+      # kf-qemu split delivery, kf-cuda ceiling geometry; observation only): each mutant needs two named killers.
+      - name: VA-apply profiling mutations require two named killers each
+        run: python3 scripts/ci/va_profile_mutants.py
       - name: v3 dependency isolation and CI guard self-tests
         run: |
           python3 scripts/ci/dependencies.py
@@ -172,6 +176,7 @@ jobs:
           python3 scripts/ci/doc_steps_mutants.py
           python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
+          python3 -I scripts/bench/va_profile_table.py --self-test
           bash scripts/bench/box/birth_census.sh --selftest
       # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
       # completion-source reactor's MODEL is core-owned and PURE: the core says
