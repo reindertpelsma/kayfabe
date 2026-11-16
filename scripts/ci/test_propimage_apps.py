@@ -801,6 +801,22 @@ class Run(unittest.TestCase):
             self.assertEqual(argv[argv.index("--display") + 1], "broker")
         json.dumps(rec)
 
+    def test_a_prebuilt_prefix_swtpm_gets_its_library_path(self):
+        env = pa.swtpm_env({}, prefix_bin=sys.executable)   # any executable stands in for /opt/tpm/bin/swtpm
+        self.assertEqual(env["SWTPM"], sys.executable)
+        self.assertTrue(env["LD_LIBRARY_PATH"].endswith("/lib"))
+        env = pa.swtpm_env({"LD_LIBRARY_PATH": "/x"}, prefix_bin=sys.executable)
+        self.assertTrue(env["LD_LIBRARY_PATH"].endswith("/lib:/x"))
+
+    def test_an_explicit_or_system_swtpm_keeps_the_environment_unchanged(self):
+        e = {"SWTPM": "/custom/swtpm"}
+        self.assertIs(pa.swtpm_env(e), e)
+        e = {}
+        self.assertIs(pa.swtpm_env(e, prefix_bin="/nonexistent/bin/swtpm"), e)
+
+    def test_the_swtpm_build_dependencies_include_expect(self):
+        self.assertIn("expect", pa.SWTPM_DEPS)
+
     def test_wukong_failure_is_named_and_the_record_still_validates(self):
         env = Env(self, scenario={"wukong": {"verdict": "FAIL", "detail": "Game crashed", "kernel_events": [{"event": "LiveKernelEvent", "code": "141"}],
                                              "xids": ["NVRM: Xid (PCI:0000:01:00): 31, pid=1, name=qemu"]}})

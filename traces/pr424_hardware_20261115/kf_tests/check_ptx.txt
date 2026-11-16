@@ -1,0 +1,2 @@
+jit ok: PTX-only binary
+/bin/sh: 1: cuobjdump: not found

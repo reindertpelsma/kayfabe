@@ -1,8 +1,9 @@
-STATUS: DESIGN-ONLY, 2026-11-13 (Resolve row updated 2026-11-16, see V3_RESOLVE_GPU_LANE.md). Unified code is GPU-free tested, not hardware-qualified.
+STATUS: DESIGN-ONLY, 2026-11-13; terminology corrections of 2026-11-15 are folded in below (Resolve row updated 2026-11-16, see V3_RESOLVE_GPU_LANE.md). Unified code is GPU-free tested, not hardware-qualified.
 
 # One proprietary-image check pipeline
 
 2026-11-15 update: the release-run stage that runs this pipeline on Vast boxes (three offline boots, Wukong last, per-app record, pins unset, Wukong not yet drivable by the harness) is `docs/design/V3_PROPIMAGE_APPS_STAGE.md`. Nothing below changed.
+**Correction (2026-11-15, owner decisions; it takes precedence over the text below it).** The clock described under *Clock* is the **deterministic clock** (also called the fixed clock; older notes said "faked clock"). It starts at the guest time recorded at the last clean shutdown plus a small seed-derived gap and never starts earlier, so that boot behaviour, timestamps in results and application and certificate timers are the same on every run. It exists for reproducibility. The pipeline runs offline only (user-mode network with `restrict=on`), and the image's hardware identity is fixed per image so that runs are repeatable. The host CPU vendor must match the image's CPU profile (AMD); an Intel host is not supported by this image (`V3_WINDOWS_PROPRIETARY_IMAGE.md`, *Corrections*). The repository holds no proprietary software, installer, key or image; this document makes no statement about the licence terms of any application. Where a row below mentions a licence edition or an activation, it records what an application's own interface or documentation shows, not a finding about the clock.
 
 CODE READ: `scripts/bench/windows/propimage_check.py` is the single check module and
 `scripts/ci/test_propimage_check.py` its single test file. The former app module is
@@ -104,7 +105,7 @@ DOC READ sources (official; consulted in the app lane on 2026-11-13):
 
 ## Clock
 
-CODE READ (2026-11-13): a fresh overlay uses the frozen reference from the verified
+This is the deterministic clock (see the correction at the top). CODE READ (2026-11-13): a fresh overlay uses the frozen reference from the verified
 image state: last_time_at_stop_utc + gap_s. CI behavior stays fresh by default.
 Manual `--resume` reuses that work directory's existing overlay and TPM/firmware;
 it refuses --zip and validates the backing image before startup. Fully stop the

@@ -748,6 +748,10 @@ impl Applied {
 /// crossing the extent is placed up to it.
 #[allow(clippy::too_many_lines)]
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
+    // ★ 2026-11-16 (observation only, `kf_host::phase`): the apply's partition — Prep, UnmapPhase,
+    // MapPhase, Takedown, Invalidate — five clock reads and nothing decided by them.
+    use kf_host::phase::{Phase, ns_since, record};
+    let mut t_phase = std::time::Instant::now();
     // ★ Review item 4: one walker entry is one refresh — the target's per-refresh host-call budget.
     target.begin_refresh();
     let n = runs.len();
@@ -835,6 +839,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
     }
     link_fail(&mut out, &mut failed);
+    record(Phase::Prep, ns_since(t_phase));
+    t_phase = std::time::Instant::now();
 
     // ── 2. Unmaps: the CHANGED pieces of every UNMAP run. An UNMAP already failed by a link keeps
     // its rigid mappings whole (its placement stays committed), but its changed pieces still go.
@@ -949,6 +955,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         .filter(|&(i, r)| r.unmap && failed[i])
         .map(|(_, r)| (r.va, r.va.saturating_add(r.len)))
         .collect();
+    record(Phase::UnmapPhase, ns_since(t_phase));
+    t_phase = std::time::Instant::now();
 
     // ── 3. Usermode views and SKED pages (their own verbs), then the plain rows.
     // Per MAP run: pieces placed (ours), a piece held by the host.
@@ -1064,6 +1072,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
     }
     link_fail(&mut out, &mut failed);
+    record(Phase::MapPhase, ns_since(t_phase));
+    t_phase = std::time::Instant::now();
 
     // ── 4. Verdicts of the MAP runs. A FAILED run's NEW pieces that were placed go again (the
     // walker re-emits the run; the ledger must hold nothing it does not commit) — never a kept
@@ -1084,6 +1094,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             out.codes[i] = KFWR_ACK_HELD;
         }
     }
+    record(Phase::Takedown, ns_since(t_phase));
     if out
         .mapped
         .saturating_add(out.unmapped)
@@ -1092,7 +1103,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         .saturating_add(out.sked_placed)
         > 0
     {
-        match target.invalidate() {
+        match kf_host::phase::timed(Phase::Invalidate, || target.invalidate()) {
             Ok(()) => out.invalidated = true,
             Err(e) => {
                 // ⊘ The rows landed (their verdicts stand — the host holds them); the space is

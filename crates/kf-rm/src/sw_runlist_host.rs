@@ -1,4 +1,10 @@
-//! ⚠⚠ **AWAITING OWNER CONFIRMATION — default off (`KF3_SW_RUNLIST_HOST_OWNED=1`).**
+//! ★★ **DECIDED 2026-11-15 (owner: "set the measured Windows profile as the default"): ON for a declared
+//! Windows guest** (`OWNER_RULINGS.md` §W, whose "stays off and undecided" this reverses; was the
+//! default-off `KF3_SW_RUNLIST_HOST_OWNED`). The chain seats this link behind
+//! [`crate::winprofile::WindowsOnly`], and kf-qemu opens a kernel channel's gate at birth only for a
+//! channel allocated under the same declared identity, so a Linux guest and `windows-support=off` reach
+//! neither half. ⚠ The answer is a FABRICATED `NV_OK` (class (c)): the guest's runlist contents are
+//! ignored and the host scheduler decides. The text below is the 2026-10-07 task-B experiment's own.
 //!
 //! 2026-10-07 (Windows Code43, task B): the software-runlist submit treated as **host-owned
 //! scheduling**, option (b) of `traces/windows_code43_walls_20261007/README.md` ("Stop: an owner
@@ -37,15 +43,6 @@ use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 const NV_OK: u32 = 0;
 /// Answers logged per run (the rest are counted only).
 const LOG_CAP: u64 = 16;
-
-/// The flag. Read by kf-rm (this link) and by kf-qemu (the birth-time gate) — one name.
-pub const FLAG: &str = "KF3_SW_RUNLIST_HOST_OWNED";
-
-/// Whether the flag is on (`=1`).
-#[must_use]
-pub fn enabled() -> bool {
-    std::env::var(FLAG).as_deref() == Ok("1")
-}
 
 /// The link.
 #[derive(Debug, Clone)]
@@ -108,7 +105,7 @@ impl CommandPolicy for SwRunlistHostOwnedPolicy {
         if self.answered <= LOG_CAP {
             eprintln!(
                 "kf-rm: SW-RUNLIST HOST-OWNED {:#010x} client={:#x} object={:#x}: NV_OK, request echoed, \
-                 contents ignored (kernel channels are scheduled at birth) — AWAITING OWNER CONFIRMATION #{}",
+                 contents ignored (kernel channels are scheduled at birth) — FABRICATED answer (Windows profile) #{}",
                 req.cmd, req.client, req.object, self.answered
             );
         }

@@ -46,19 +46,65 @@ class PcKnobs(unittest.TestCase):
             if k not in ("lanes", "min_free_gb"):
                 self.assertEqual(pc[k], base[k], k)
 
-    def run_stream(self, pin):
+    def run_stream(self, pin, shape="flat", key="k", ref="k", extra=None):
         srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         try:
             with tempfile.TemporaryDirectory() as d:
                 uf = Path(d) / "u.json"
-                uf.write_text(json.dumps({"k": "http://127.0.0.1:%d/o" % srv.server_port}))
+                url = "http://127.0.0.1:%d/o" % srv.server_port
+                doc = {"k": url} if shape == "flat" else {"schema": "kayfabe.download-urls/1", "urls": {ref: url}}
+                if shape == "wrong-schema":
+                    doc = {"schema": "kayfabe.download-urls/2", "urls": {ref: url}}
+                if shape == "flat-with-schema-entry":
+                    doc = {"schema": "not-a-url-but-a-flat-map-entry", "k": url}
+                if extra:
+                    (doc["urls"] if "urls" in doc else doc).update(extra)
+                uf.write_text(json.dumps(doc))
                 st = Path(d) / "st"
-                p = subprocess.run([sys.executable, "-I", str(SPEC / "stream_url.py"), "--url-file", str(uf), "--key", "k",
+                p = subprocess.run([sys.executable, "-I", str(SPEC / "stream_url.py"), "--url-file", str(uf), "--key", key,
                                     "--sha256", pin, "--status", str(st)], capture_output=True, timeout=60)
-                return p.returncode, p.stdout, st.read_text()
+                return p.returncode, p.stdout, st.read_text() if st.exists() else ""
         finally:
             srv.shutdown()
+
+    # 2026-11-16: the standalone release run's file (scripts/ci/box_downloader.py --urls, schema kayfabe.download-urls/1)
+    def test_stream_reads_the_standalone_url_file_by_basename_of_the_key(self):
+        rc, out, st = self.run_stream(hashlib.sha256(BODY).hexdigest(), "standalone", key="specviewperf-15.0.0/x.tar.zst", ref="x.tar.zst")
+        self.assertEqual((rc, out), (0, BODY))
+        self.assertTrue(st.startswith("STREAM_OK"))
+
+    def test_stream_reads_the_standalone_url_file_by_the_full_key_too(self):
+        rc, out, _ = self.run_stream(hashlib.sha256(BODY).hexdigest(), "standalone", key="a/b", ref="a/b")
+        self.assertEqual((rc, out), (0, BODY))
+
+    def test_stream_still_checks_the_pin_with_the_standalone_file(self):
+        rc, _, st = self.run_stream("0" * 64, "standalone", key="d/k", ref="k")
+        self.assertEqual(rc, 3)
+        self.assertTrue(st.startswith("STREAM_MISMATCH"))
+
+    def test_stream_refuses_a_standalone_file_without_the_object(self):
+        rc, out, _ = self.run_stream(hashlib.sha256(BODY).hexdigest(), "standalone", key="d/missing", ref="k")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(out, b"")
+
+    def test_the_full_key_wins_over_the_basename_when_both_are_present(self):
+        rc, out, _ = self.run_stream(hashlib.sha256(BODY).hexdigest(), "standalone", key="a/b", ref="a/b", extra={"b": "http://127.0.0.1:9/dead"})
+        self.assertEqual((rc, out), (0, BODY))
+
+    def test_stream_refuses_a_standalone_file_with_only_other_objects(self):
+        rc, out, _ = self.run_stream(hashlib.sha256(BODY).hexdigest(), "standalone", key="d/missing", ref="other1", extra={"other2": "http://127.0.0.1:9/x"})
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(out, b"")
+
+    def test_a_flat_map_may_have_an_entry_called_schema(self):
+        rc, out, _ = self.run_stream(hashlib.sha256(BODY).hexdigest(), "flat-with-schema-entry", key="k")
+        self.assertEqual((rc, out), (0, BODY))
+
+    def test_a_document_with_another_schema_is_not_read_as_a_map(self):
+        rc, out, _ = self.run_stream(hashlib.sha256(BODY).hexdigest(), "wrong-schema", key="k", ref="k")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(out, b"")
 
     def test_stream_match(self):
         rc, out, st = self.run_stream(hashlib.sha256(BODY).hexdigest())
