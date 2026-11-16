@@ -31,8 +31,13 @@ import sys
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import clocknet_assert as cna  # noqa: E402  the clock/network assert: every argv built here goes through it
+
 DOMAIN = "kayfabe-propimage/v1"
 MODES = ("setup", "install", "offline", "ci")
+PLAIN = "plain"      # 2026-11-16: someone's own disk, no state.json: a throwaway overlay, real clock, network off (default) or on
+ALL_MODES = MODES + (PLAIN,)
 STATE_VERSION = 1
 
 
@@ -171,6 +176,18 @@ def init_state(seed, nics=1, disks=1):
     }
 
 
+def plain_state(seed, user, ssh_port=None):
+    """A throwaway machine description for a disk WITHOUT a state.json (mode plain): ids from a per-run seed (identity not pinned),
+    the guest's login name, an optional ssh forward port. Never validated against a file and never packed."""
+    st = init_state(seed)
+    st["guest"]["user"] = user
+    if ssh_port is not None:
+        require(1024 <= ssh_port <= 65535, "bad ssh port")
+        st["ids"]["net"]["ssh_port"] = ssh_port
+    st["plain"] = True
+    return st
+
+
 def validate_state(state, require_password=False):
     require(state.get("state_version") == STATE_VERSION, "unknown state_version")
     ids = state["ids"]
@@ -210,7 +227,7 @@ def seed_matches(state):
 
 def boot_clock(state, mode):
     """RTC base for a mode, or None = the host's real clock (internet modes need valid TLS dates)."""
-    if mode in ("setup", "install"):
+    if mode in ("setup", "install", PLAIN):
         return None
     last = state["clock"]["last_time_at_stop_utc"]
     require(last, "offline/ci need clock.last_time_at_stop_utc (record it at the first clean stop)")
@@ -227,22 +244,27 @@ def slirp_net(subnet):
 
 
 def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_4M.secboot.fd",
-               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker", cdroms=()):
-    """The exact qemu argv. disk: the image path (install/offline) or the clone (ci)."""
-    require(mode in MODES, "mode must be one of %s" % (MODES,))
+               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker", cdroms=(), net="off", now=None):
+    """The exact qemu argv. disk: the image path (install/offline) or the clone (ci, plain).
+    `net` (off|on) only chooses for mode plain; every other mode's network is fixed by the mode. Every argv this returns has passed
+    clocknet_assert (a faked clock needs the network off, internet needs the real clock): a violation raises PropError."""
+    require(mode in ALL_MODES, "mode must be one of %s" % (ALL_MODES,))
     require(display in ("broker", "off"), "display must be broker or off")
+    require(net in ("off", "on"), "net must be off or on")
+    require(net == "off" or mode == PLAIN, "net=on is only for mode plain (the other modes' network is fixed by the mode)")
     ids, q = state["ids"], state["qemu"]
     wd = str(workdir)
     qemu = qemu or ("/usr/bin/qemu-system-x86_64" if mode == "setup" else "qemu-system-x86_64")
     base = boot_clock(state, mode)
-    restrict = "off" if mode in ("setup", "install") else "on"
+    restrict = "off" if mode in ("setup", "install") or (mode == PLAIN and net == "on") else "on"
     rtc = "base=utc" if base is None else "base=%s,clock=vm" % base.strftime("%Y-%m-%dT%H:%M:%S")
     sm = ids["smbios"]
     a = [qemu, "-name", "propimage-" + mode,
          # guest RAM in a shared memfd backend (kf3 needs it; win_vm.sh does the same), in every mode so the machine is one
          "-object", "memory-backend-memfd,id=ram0,size=%dM,share=on" % q["ram_mb"],
          "-machine", q["machine"] + ",accel=kvm,smm=on,memory-backend=ram0", "-m", str(q["ram_mb"]),
-         "-smp", "%d,sockets=1,cores=%d,threads=1" % (q["smp"], q["smp"]), "-cpu", cpu_arg(state),
+         "-smp", "%d,sockets=1,cores=%d,threads=1" % (q["smp"], q["smp"]),
+         "-cpu", ("host," + ",".join(state["cpu"]["hv_flags"])) if mode == PLAIN else cpu_arg(state),   # plain: the host's own CPU
          "-uuid", sm["uuid"],
          "-smbios", "type=1,manufacturer=%s,product=%s,serial=%s" % (_comma(sm["manufacturer"]), _comma(sm["product"]), sm["serial"]),
          "-smbios", "type=2,manufacturer=%s,product=%s,serial=%s" % (_comma(sm["manufacturer"]), _comma(sm["product"]), sm["baseboard_serial"]),
@@ -282,6 +304,10 @@ def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_
                     "display-broker-uid=%d" % uid]
         a += ["-device", ",".join(kf3), "-display", "none",
               "-device", "qemu-xhci,id=xhci", "-device", "usb-tablet,bus=xhci.0", "-device", "usb-kbd,bus=xhci.0"]
+    try:
+        cna.assert_argv(a, "propimage build_argv " + mode, now)     # the product, parsed: a faked clock needs the network off, internet the real clock
+    except cna.ClockNetViolation as exc:
+        raise PropError(str(exc)) from exc
     return a
 
 
