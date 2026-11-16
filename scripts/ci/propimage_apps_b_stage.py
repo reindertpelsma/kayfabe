@@ -3,7 +3,7 @@
 """The second proprietary image's application rows as a payload stage: same runner and image format as `propimage_apps.py` (stdlib only).
 
 STATUS: DESIGN-ONLY, 2026-11-16. GPU-free tests only (test_propimage_apps_b_stage.py); not run on a box. It refuses until its three pins
-(image archive, signed boot GOP, open-asset data volume) are set. Wiring into vast_payload.py / vast_report.py is NOT done here: those files
+(image archive, signed boot GOP, open-asset data volume) are set (all three are, as of 2026-11-16). Wiring into vast_payload.py / vast_report.py is NOT done here: those files
 are being changed by the release-run work (#434 stack); see docs/design/V3_PROPIMAGE_B_APPS.md for the exact additions.
 
     propimage_apps_b_stage.py run --sha SHA --checkout ROOT --prefix DIR --out FILE --urls FILE [--bench DIR] [--deadline-epoch N]
@@ -13,7 +13,7 @@ It reuses `propimage_apps.py` for everything that does not depend on the applica
 the verified unpack, the offline proof, the host kernel log windows, cleanup) and replaces three things: the application list and its
 timeouts (`scripts/bench/windows/propimage_apps_b.py`, selected with `propimage_check.py --app-set b`), the boot command (adds
 `--data-iso`), and the grading (PASS or PASS_LIMITED per row; a PASS row names the GPU engines it was asserted on and carries the sampled
-peaks). Two images on one box: pass `--gpu-minor N` through PROPIMAGE_B_GPU_MINOR (the release-run work adds the harness flag).
+peaks). Two images on one box: `run --gpu-minor N` passes the harness's `--gpu-minor N` (kf3 gpu-minor=N) to every boot; the first image's stage takes its die the same way.
 A row that only proves a launch is PASS_LIMITED and the stage says so; the stage verdict is PASS when no row failed.
 The record is printed as `KF_PROPIMAGE_APPS_B_RESULT {json}` (scores and sampled GPU numbers are written to the record, not to the log).
 """

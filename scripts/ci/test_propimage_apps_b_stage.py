@@ -32,16 +32,15 @@ def pins_doc(unset=()):
 
 
 class Pins(unittest.TestCase):
-    def test_committed_file_is_valid_and_gop_is_the_named_gap(self):
+    def test_committed_file_is_valid_and_fully_pinned(self):
         doc = pa.load_pins(sb.PINS_PATH)
         roles = {i["role"] for i in doc["items"]}
         self.assertEqual(roles, {"image", "gop", "data", "libtpms", "swtpm"})
         by = {i["role"]: i for i in doc["items"]}
         self.assertEqual(by["image"]["sha256"], "fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a")
         self.assertEqual(by["image"]["size"], 62506351001)
-        with self.assertRaises(pa.Refused) as c:
-            sb.build_manifest(doc, False)
-        self.assertEqual(c.exception.reason, "PIN_UNSET:gop")
+        self.assertEqual(by["image"]["name"], "propimage-kfimg-20261116.zip")
+        self.assertEqual(sb.build_manifest(doc, True)["stages"], ["tools", "image"])
 
     def test_data_pin_is_required_and_manifest_has_it(self):
         with self.assertRaises(pa.Refused) as c:
@@ -202,11 +201,15 @@ class Run(unittest.TestCase):
         rec = sb.run(self.make(aftereffects="FAIL").ctx)
         self.assertEqual((rec["verdict"], rec["reason"]), ("FAIL", "APP_FAIL:aftereffects"))
 
-    def test_unset_gop_pin_refuses_before_anything_is_fetched(self):
-        env = tpa.Env(self)           # the committed pins: gop unset
-        env.ctx.pins_path = sb.PINS_PATH
+    def test_unset_data_pin_refuses_before_anything_is_fetched(self):
+        env = self.make()
+        doc = json.loads(self.pins_path.read_text())
+        for it in doc["items"]:
+            if it["role"] == "data":
+                it["sha256"] = it["size"] = None
+        self.pins_path.write_text(json.dumps(doc))
         rec = sb.run(env.ctx)
-        self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "PIN_UNSET:gop"))
+        self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "PIN_UNSET:data"))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 {
  "schema": "kayfabe.propimage-pins/1",
- "status": "2026-11-16. The image archive and the open-asset data volume are pinned from the objects themselves (the archive's sha256 and size were recorded when it was uploaded to the private bucket; the data volume was built by scripts/bench/assets/build_test_assets.py and its sha256 read back through the public URL). The signed boot GOP is the same object as the first image's (propimage_apps_pins.json role gop) and stays UNSET here until that pin is set: the stage refuses with PIN_UNSET:gop. The swtpm sources follow the first image's pins.",
+ "status": "2026-11-16. The image archive and the open-asset data volume are pinned from the objects themselves (archive: sha256 and size read back after the private upload; data volume: built by scripts/bench/assets/build_test_assets.py, sha256 read back through the public URL). The signed boot GOP and the swtpm sources are the same objects as the first image's pins and carry the same values.",
  "items": [
   {
    "role": "image",
@@ -17,10 +17,10 @@
    "name": "kf-gop.signed.efi",
    "dest": "image/kf-gop.signed.efi",
    "ref": "propimage-kf-gop.signed.efi",
-   "sha256": null,
-   "size": null,
+   "sha256": "423a9abc5789b8b4e9834ba016261efb9d64515d53f259a90446917ce91b848e",
+   "size": 11224,
    "needed_by": "image",
-   "recorded_in": "same object as the first image's gop pin; copy its sha256 and size here when it is pinned"
+   "recorded_in": "same object as the first image pin of this role (propimage_apps_pins.json)"
   },
   {
    "role": "data",
@@ -36,21 +36,21 @@
    "role": "libtpms",
    "name": "libtpms-0.10.1.tar.gz",
    "dest": "tools/libtpms-0.10.1.tar.gz",
-   "sha256": null,
-   "size": null,
+   "sha256": "ebc24f3191d90f6cf0b4d4200cd876db4bd224b3c565708bbea0a82ee275e0fb",
+   "size": 1399253,
    "needed_by": "tools",
    "mirror": "https://github.com/stefanberger/libtpms/archive/refs/tags/v0.10.1.tar.gz",
-   "recorded_in": "same as the first image's pins"
+   "recorded_in": "same object as the first image pin of this role (propimage_apps_pins.json)"
   },
   {
    "role": "swtpm",
    "name": "swtpm-0.10.1.tar.gz",
    "dest": "tools/swtpm-0.10.1.tar.gz",
-   "sha256": null,
-   "size": null,
+   "sha256": "f8da11cadfed27e26d26c5f58a7b8f2d14d684e691927348906b5891f525c684",
+   "size": 415992,
    "needed_by": "tools",
    "mirror": "https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.1.tar.gz",
-   "recorded_in": "same as the first image's pins"
+   "recorded_in": "same object as the first image pin of this role (propimage_apps_pins.json)"
   }
  ]
 }

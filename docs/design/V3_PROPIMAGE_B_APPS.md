@@ -34,9 +34,9 @@ Verified offline in the image: the sniffers above (`gpudiag`). Not driven: Photo
 
 ## The stage
 
-`scripts/ci/propimage_apps_b_stage.py` is the first stage's companion: same preflight, pins, manifest, downloader, swtpm, verified unpack, offline proof and kernel-log windows (imported from `propimage_apps.py`), its own application list, boot command (`--app-set b --data-iso`), record (`KF_PROPIMAGE_APPS_B_RESULT`, `image_set: "b"`) and grading (PASS needs every row PASS or PASS_LIMITED and every asserted row to carry a PASS GPU record that names its engines). Pins: `scripts/ci/propimage_apps_b_pins.json` (image archive and data volume pinned; the signed boot GOP and the swtpm sources are copied from the first image's pins when those are set; until then the stage refuses with `PIN_UNSET:gop`).
+`scripts/ci/propimage_apps_b_stage.py` is the first stage's companion: same preflight, pins, manifest, downloader, swtpm, verified unpack, offline proof and kernel-log windows (imported from `propimage_apps.py`), its own application list, boot command (`--app-set b --data-iso`), record (`KF_PROPIMAGE_APPS_B_RESULT`, `image_set: "b"`) and grading (PASS needs every row PASS or PASS_LIMITED and every asserted row to carry a PASS GPU record that names its engines). Pins: `scripts/ci/propimage_apps_b_pins.json` (image archive, data volume, signed boot GOP and swtpm sources all pinned; the GOP and swtpm values are the first image's).
 
-Not done here (they sit in files that the release-run work is changing): the `vast_payload.py` stage entry and the `vast_report.py` validator for the B record, the Worker allow-list entry for the image's opaque ref, and the `--gpu-minor` harness flag that lets both images run on separate dies of one box (the stage already passes it through when given).
+Not done here (they sit in files that the release-run work is changing): the `vast_payload.py` stage entry and the `vast_report.py` validator for the B record, and the Worker allow-list entry for the image's opaque ref (`propimage-kfimg-20261116.zip`). Two images on one box use `propimage_check.py --gpu-minor N` (the release-run work); this stage passes `--gpu-minor` through when given.
 
 ## What is not claimed
 
