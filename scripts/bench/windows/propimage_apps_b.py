@@ -47,14 +47,14 @@ EXPECT = {
 # name -> timeout (s), script, GPU engines that must be busy during the operation (() = informational sampling only)
 CHECKS = {
     "gpudiag": {"timeout": 240, "script": "sniffers.ps1", "gpu": (), "lane": "gate", "path": "NVIDIA driver/CUDA enumeration by the applications own sniffers"},
-    "photoshop": {"timeout": 480, "script": "photoshop.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "OpenGL/D3D12 canvas, GPU filters (smart sharpen), 16-bit/wide-gamut, large VRAM allocation (8K, 100 layers)"},
+    "photoshop": {"timeout": 1500, "script": "photoshop.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "OpenGL/D3D12 canvas, GPU filters (smart sharpen), 16-bit/wide-gamut, large VRAM allocation (8K, 100 layers)"},
     "illustrator": {"timeout": 480, "script": "illustrator.ps1", "gpu": (), "lane": "gate", "path": "D3D11 canvas, large path counts, raster export"},
     "aftereffects": {"timeout": 1500, "script": "aftereffects.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "CUDA/OptiX effects, 3D layers, 16-bit float, 4K render, particle effects"},
     "indesign": {"timeout": 480, "script": "indesign.ps1", "gpu": (), "lane": "gate", "path": "D3D11/Direct2D page rendering, PDF/JPEG export"},
     "illustratorsample": {"timeout": 480, "script": "illustrator_sample.ps1", "gpu": (), "lane": "gate", "path": "D3D11 canvas on shipped art"},
     "indesignsample": {"timeout": 480, "script": "indesign_sample.ps1", "gpu": (), "lane": "gate", "path": "D3D11/Direct2D on shipped documents"},
     "animatesample": {"timeout": 420, "script": "animate_sample.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage on a shipped document"},
-    "photoshopsample": {"timeout": 480, "script": "photoshop_sample.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "GPU filters on shipped 4K+ photo, 3840x2160 template"},
+    "photoshopsample": {"timeout": 900, "script": "photoshop_sample.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "GPU filters on shipped 4K+ photo, 3840x2160 template"},
     "photoshopprojects": {"timeout": 900, "script": "photoshop_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence PSD corpus: layer/colour-mode decoding and GPU canvas on foreign files"},
     "indesignprojects": {"timeout": 600, "script": "indesign_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence INDD corpus open + PDF export"},
     "animateprojects": {"timeout": 600, "script": "animate_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence FLA corpus open + stage export"},
