@@ -83,7 +83,7 @@ impl WindowsProfile {
     }
 
     /// May a Windows behaviour be reached NOW: the property is on AND the guest's current
-    /// declaration is the measured Windows identity. The one question every gate asks.
+    /// declaration is the Windows 580.88 identity. The one question every gate asks.
     #[must_use]
     pub fn active(&self) -> bool {
         self.support && self.declared.load(Ordering::Acquire)

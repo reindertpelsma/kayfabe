@@ -280,7 +280,7 @@ pub enum MirrorVaStart {
 
 impl MirrorVaStart {
     /// The rule's switch: [`MirrorVaStart::GuestFloor`] iff Windows per-process work may run on twins
-    /// of this guest (`windows_user_twins`: the guest declared the measured Windows build and
+    /// of this guest (`windows_user_twins`: the guest declared the Windows 580.88 build and
     /// `windows-support` is on; [`kf_rm`'s `WindowsProfile::active`]).
     #[must_use]
     pub const fn select(windows_user_twins: bool) -> Self {

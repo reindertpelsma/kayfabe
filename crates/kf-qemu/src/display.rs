@@ -6182,7 +6182,7 @@ mod tests {
             Some("sdr")
         );
         assert_eq!(sdr_for::<&str>(true, None), None, "not built");
-        // The decoder behaviours the path needs are the measured ones, both on.
+        // The decoder behaviours the path needs are the two switches that H-mirror runs 98-100 needed (see `COLOR_EXPERIMENTS`), both on.
         let x = std::hint::black_box(COLOR_EXPERIMENTS);
         assert!(x.lut_mirror && x.ilut_offset_256);
     }

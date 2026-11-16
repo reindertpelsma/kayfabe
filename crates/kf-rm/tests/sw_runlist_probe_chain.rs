@@ -129,7 +129,7 @@ fn child_case() {
         elements: 1,
         delivered: Vec::new(),
     };
-    // The guest's fn 1 for this arm: the measured Windows build, the Linux build of the same wire, or
+    // The guest's fn 1 for this arm: the Windows 580.88 build, the Linux build of the same wire, or
     // nothing.
     let declaration = match arm.as_str() {
         "windows" | "windows-support-off" => Some(support::windows(&driver)),

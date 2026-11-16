@@ -26,7 +26,7 @@ const NV_OK: u32 = 0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Arm {
-    /// Declares the measured Windows build, `windows-support=on`.
+    /// Declares the Windows 580.88 build, `windows-support=on`.
     Windows,
     /// Declares the Linux build of the same wire version.
     Linux,
