@@ -1706,3 +1706,68 @@ fn a_staged_order_prefix_breaks_the_same_checks() {
         "a staged-order prefix broke only {broken} of 240 runs"
     );
 }
+
+/// ★ 2026-11-16 (`V3_VA_PROFILE.md`, observation only): every host verb `BatchedVas` makes is timed
+/// once in its phase, and each landed unmap call's ledger retirement once.
+#[test]
+fn profiling_each_host_verb_is_timed_once_and_each_landed_unmap_retired_once() {
+    use kf_host::phase::{Phase, take};
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let mut m = FMirror::new(&f, true, false);
+    m.bv.unmap_call_cap = 4;
+    let _ = take();
+    let before = f.calls.get();
+    for i in 0..12u64 {
+        assert_eq!(m.map(&one_page(i, 100 + 7 * i), true), Ok(Mapped::Placed));
+    }
+    let p = take();
+    let verbs = |p: &kf_host::phase::Phases| {
+        [
+            Phase::RmMap,
+            Phase::RmUnmap,
+            Phase::RmFree,
+            Phase::RmReserve,
+        ]
+        .iter()
+        .map(|&ph| p.get(ph).n)
+        .sum::<u64>()
+    };
+    assert!(p.get(Phase::RmMap).n >= 12, "{p:?}");
+    assert_eq!(
+        verbs(&p),
+        f.calls.get() - before,
+        "one record per host verb"
+    );
+    assert_eq!(p.get(Phase::RmUnmap).n, 0);
+    let before = f.calls.get();
+    m.bv.unmap_range(pg(0), 12 * P, true).unwrap();
+    let p = take();
+    assert_eq!(p.get(Phase::RmUnmap).n, 3, "ceil(12 / 4) unmap calls");
+    assert_eq!(
+        p.get(Phase::LedgerRetire).n,
+        3,
+        "one retirement per landed call"
+    );
+    assert_eq!(verbs(&p), f.calls.get() - before);
+}
+
+/// ★ 2026-11-16: a refused unmap call is timed but nothing is retired for it.
+#[test]
+fn profiling_a_refused_unmap_call_is_timed_and_not_retired() {
+    use kf_host::phase::{Phase, take};
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let mut m = FMirror::new(&f, true, false);
+    m.bv.unmap_call_cap = 4;
+    for i in 0..12u64 {
+        assert_eq!(m.map(&one_page(i, 100 + 7 * i), true), Ok(Mapped::Placed));
+    }
+    let _ = take();
+    // the second unmap call fails
+    f.fail_at.set(Some(f.calls.get() + 1));
+    assert!(m.bv.unmap_range(pg(0), 12 * P, true).is_err());
+    let p = take();
+    assert_eq!(p.get(Phase::RmUnmap).n, 2, "{p:?}");
+    assert_eq!(p.get(Phase::LedgerRetire).n, 1, "{p:?}");
+}

@@ -1,6 +1,6 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-15 (the host unmap-call cap mutants were added to the Rust job; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-16 (the VA-apply profiling mutants and the profile-table self-test were added; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
 ## Shipped GPU programs: the `ptx` job (2026-11-13)
@@ -27,6 +27,10 @@ generated display files reproduce byte for byte):
   vetoes, review 3 F-1) and requires each mutant to fail at least two distinct `kf_cpu_walk` checks.
 - `scripts/ci/va_apply_bounds_mutants.py` (Rust job, 2026-11-15) mutates the host unmap-call cap in `crates/kf-mem/src/batch.rs`
   (`UNMAP_CALL_MAX_ENTRIES`) and requires each mutant to fail at least two named `kf-mem` tests.
+- `scripts/ci/va_profile_mutants.py` (Rust job, 2026-11-16) mutates the observation-only VA-apply profiling
+  (`docs/design/V3_VA_PROFILE.md`: `kf-mem` vaprof/vasmgr/batch, `kf-qemu` split delivery, `kf-cuda` ceiling geometry)
+  and requires each mutant to fail at least two named tests; `scripts/bench/va_profile_table.py --self-test` runs in the
+  Python self-test step.
 - `static` also ties the VER3 PCF enumerants the kernel names (`KF_VER3_*`) to
   `crates/kf-chip/data/hwref-580.159.04.tsv`.
 

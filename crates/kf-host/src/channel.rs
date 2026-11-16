@@ -1202,6 +1202,11 @@ impl HostRm {
         // 4 096 populated VMAs on the nested bench, vs 0.5 ms for the map itself).
         reap_view(view);
         let t_drop = t0.elapsed();
+        // ★ 2026-11-16 (observation only, `crate::phase`): the three host-side steps before the map.
+        let ns = |d: std::time::Duration| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX);
+        crate::phase::record(crate::phase::Phase::Stitch, ns(t_stitch));
+        crate::phase::record(crate::phase::Phase::Descriptor, ns(t_desc - t_stitch));
+        crate::phase::record(crate::phase::Phase::Reap, ns(t_drop - t_desc));
         let r = match through {
             None => self.map_kind(
                 space,
