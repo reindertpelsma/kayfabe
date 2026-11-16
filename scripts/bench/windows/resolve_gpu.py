@@ -313,7 +313,7 @@ def grade(result: dict, directory: Path, host_csv: str = "", host_t0: Optional[f
     if not ok_log:
         row["problems"] += log_problems
     steps = {s.get("n"): s.get("ok") for s in result.get("steps") or []}
-    for needed in ("project manager", "main window", "import timeline", "deliver page"):
+    for needed in ("project manager", "main window", "deliver page", "timeline on deliver page"):
         if not steps.get(needed):
             row["problems"].append(f"driver step '{needed}' did not complete (stage {result.get('stage')})")
     grade_nodes = result.get("grade_nodes") or []

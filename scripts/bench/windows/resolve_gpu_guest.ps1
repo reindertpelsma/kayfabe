@@ -153,6 +153,7 @@ function Goto-Page($page,$marker){
  try{ $b.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }catch{ Click-Rect $b }
  return (Wait-Until { $x=All-Els; ($x | Where-Object { try{ $_.Current.Name -ceq $marker -and (Vis $_) }catch{$false} } | Select-Object -First 1) -ne $null } 90 3)
 }
+function Dbl-At($x,$y){ Click-At $x $y; Start-Sleep -Milliseconds 120; Click-At $x $y }
 function Win-Has($name){ $x=All-Els; ($x | Where-Object { try{ $_.Current.Name -ceq $name }catch{$false} } | Select-Object -First 1) -ne $null }
 
 # --- samplers (guest side): WDDM per-engine counters of the Resolve process, and nvidia-smi as the guest driver reports it
@@ -202,7 +203,7 @@ Click-At 450 515; Start-Sleep 1
 $ok=Wait-Until { Win-Has $plan.timeline } 120 4
 if(-not $ok){ Click-At 1330 862; Click-At 1330 902; $ok=Wait-Until { Win-Has $plan.timeline } 60 4 }
 Step 'import timeline' $ok $plan.timeline
-if(-not $ok){ throw 'FCPXML timeline did not appear' }
+if(-not $ok){ $r.import_unconfirmed=$true }
 Start-Sleep 5
 
 # --- grade (best effort; recorded either way): node names are read back from the node graph
@@ -214,12 +215,12 @@ if($plan.grade){
   foreach($clipX in $plan.grade_clips){
    Click-At $clipX 480; Start-Sleep 4
    Click-At 186 576; Start-Sleep 3
-   foreach($f in @(@(528,648,'1.35'),@(597,956,'72'),@(133,956,'35'))){ Click-At $f[0] $f[1]; Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait($f[2]+'{ENTER}'); Start-Sleep 1 }
+   foreach($f in @(@(528,648,'1.35'),@(597,956,'72'),@(133,956,'35'))){ Dbl-At $f[0] $f[1]; Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait($f[2]+'{ENTER}'); Start-Sleep 1 }
    [System.Windows.Forms.SendKeys]::SendWait('%s'); Start-Sleep 3
-   foreach($f in @(@(231,648,'-900'),@(438,956,'25'))){ Click-At $f[0] $f[1]; Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait($f[2]+'{ENTER}'); Start-Sleep 1 }
+   foreach($f in @(@(231,648,'-900'),@(438,956,'25'))){ Dbl-At $f[0] $f[1]; Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait($f[2]+'{ENTER}'); Start-Sleep 1 }
    [System.Windows.Forms.SendKeys]::SendWait('%s'); Start-Sleep 3
    Click-At 935 576; Start-Sleep 3
-   Click-At 102 903; Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait('0.85{ENTER}'); Start-Sleep 2
+   Dbl-At 102 903; Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait('0.85{ENTER}'); Start-Sleep 2
    $x=All-Els
    $nodes=@($x | Where-Object { try{ $c=$_.Current; $c.ControlType.ProgrammaticName -eq 'ControlType.Text' -and $c.Name -match '^\d\d$' -and $c.BoundingRectangle.X -gt 1300 -and $c.BoundingRectangle.Y -lt 400 }catch{$false} } | ForEach-Object { $_.Current.Name })
    $r.grade_nodes += @{clip_x=$clipX;nodes=$nodes}
@@ -232,6 +233,9 @@ if($plan.grade){
 $okd=Goto-Page 'Deliver' 'Render Queue'
 Step 'deliver page' $okd ''
 if(-not $okd){ throw 'Deliver page did not open' }
+$okt=Wait-Until { Win-Has $plan.timeline } 60 3
+Step 'timeline on deliver page' $okt $plan.timeline
+if(-not $okt){ throw 'the imported timeline is not on the Deliver page' }
 Start-Sleep 5
 New-Item -Force -ItemType Directory $plan.out_dir | Out-Null
 $eng=Combo-Value 'Encoder'

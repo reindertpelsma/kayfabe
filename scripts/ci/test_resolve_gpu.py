@@ -293,7 +293,7 @@ class Grade(unittest.TestCase):
         self._fs = M.frame_stats
         M.frame_stats = lambda *a, **k: {"luma_std": 20.0, "luma_mean": 90.0}
         self.result = {"kind": "RESOLVE_GPU", "t0": self.T0, "stage": "done", "grade": True, "log_lines": LOG,
-                       "steps": [{"n": n, "ok": True} for n in ("project manager", "main window", "import timeline", "deliver page")],
+                       "steps": [{"n": n, "ok": True} for n in ("project manager", "main window", "import timeline", "deliver page", "timeline on deliver page")],
                        "grade_nodes": [{"clip_x": 70, "nodes": ["01", "02", "03"]}], "renders": []}
         rows = ["epoch,iso,pid,e3d,compute,copy,vdec,venc,ofa,mem_pid_mb,mem_all_mb,e3d_all,compute_all,venc_all,vdec_all"]
         host = []
@@ -390,7 +390,7 @@ class Grade(unittest.TestCase):
         self.result["log_lines"] = [x for x in LOG if "Selected compute API" not in x]
         self.assertFalse(self.grade()["ok"])
         self.result["log_lines"] = LOG
-        self.result["steps"][2]["ok"] = False
+        self.result["steps"][4]["ok"] = False
         row = self.grade()
         self.assertEqual(row["status"], "INCONCLUSIVE")
 
