@@ -8,8 +8,7 @@ try {
   if ($js.Length -lt 100) { throw 'ae_make.jsx missing' }
   $js = $js.Replace('@MODE@', 'ame').Replace('@OUT@', ($D -replace '\\', '/')).Replace('@VIDEO@', '')
   Set-Content "$D\ae_make_run.jsx" $js
-  $R.ae_file_scripts = Enable-AeFileScripts
-  $p = Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', "$D\ae_make_run.jsx") -PassThru
+  Run-AeScript "$D\ae_make_run.jsx" "$D\ae_make.txt" 900
   $mp4 = "$D\ame_out.mp4"
   $t0 = Get-Date
   $last = -1; $stable = 0

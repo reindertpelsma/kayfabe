@@ -27,11 +27,8 @@ var f = new File('$($D -replace '\\','/')/ae_open.txt'); f.open('w'); f.write(ro
 app.quit();
 "@
   Set-Content "$D\ae_open.jsx" $jsx
-  $R.ae_file_scripts = Enable-AeFileScripts
-  $p = Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', "$D\ae_open.jsx") -PassThru
-  $t0 = Get-Date; $n = 0
-  while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 900) { [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++; if ($n % 5 -eq 0) { Press-Key '{ENTER}' } elseif ($n % 5 -eq 3) { Press-Key '{ESC}' } }
-  if (-not $p.HasExited) { $R.quit = Quit-App 'AfterFX'; throw 'After Effects did not finish opening the projects' } else { $R.quit = 'process' }
+  Run-AeScript "$D\ae_open.jsx" "$D\ae_open.txt" 900
+  if (Get-Process AfterFX -ErrorAction SilentlyContinue) { $R.quit = Quit-App 'AfterFX' } else { $R.quit = 'process' }
   $R.rows = (Get-Content "$D\ae_open.txt" -Raw -ErrorAction SilentlyContinue)
   $R.outputs = @(); if (Test-Path "$D\ae_open.txt") { $R.outputs += (File-Info "$D\ae_open.txt") }
 } catch { $R.error = $_.Exception.Message; if (-not $R.quit) { $R.quit = Quit-App 'AfterFX' } }

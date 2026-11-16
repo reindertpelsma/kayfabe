@@ -88,6 +88,30 @@ function Enable-AeFileScripts {
   Set-Content -Path $f.FullName -Value $n -NoNewline
   return 'switched on'
 }
+# Run an ExtendScript file in After Effects. `AfterFX.exe -r script` given at the very start is unreliable (MEASURED 2026-11-16: the script was
+# ignored in 2 of 4 cold starts, the application sat idle with an empty project); the same call to an already idle instance ran within a
+# minute every time. So: start the application plain, wait for its window and a quiet period, then hand it the script. The script must write
+# `$marker` as its last act; the function waits for it (and for the application to quit when the script quits it).
+function Run-AeScript($jsx, $marker, [int]$timeoutS = 900) {
+  $base = 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files'
+  $R.ae_file_scripts = Enable-AeFileScripts
+  if (-not (Get-Process AfterFX -ErrorAction SilentlyContinue)) {
+    Start-Process "$base\AfterFX.exe" | Out-Null
+    [void](Wait-For { Has-Window 'AfterFX' } 'AfterFX' 300)
+    $q = Get-Date
+    while (((Get-Date) - $q).TotalSeconds -lt 45) { [void](Dismiss-Dialogs 'AfterFX'); Press-Key '{ESC}'; Start-Sleep 5 }
+  }
+  Remove-Item $marker -ErrorAction SilentlyContinue
+  Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', $jsx) | Out-Null
+  $t0 = Get-Date; $n = 0
+  while (-not (Test-Path $marker) -and ((Get-Date) - $t0).TotalSeconds -lt $timeoutS) {
+    [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++
+    if ($n % 20 -eq 0) { Press-Key '{ESC}' }
+  }
+  if (-not (Test-Path $marker)) { throw 'After Effects did not finish the script (no marker)' }
+  $t1 = Get-Date
+  while ((Get-Process AfterFX -ErrorAction SilentlyContinue) -and ((Get-Date) - $t1).TotalSeconds -lt 120) { Start-Sleep 3 }
+}
 function Has-Window($procNames) { (@(Win-Titles $procNames | Where-Object { $_ })).Count -gt 0 }
 function Quit-App($procNames, $comApp = $null) {
   # clean exit: ask politely first, then close the windows, only then end the process (and say which one happened)
