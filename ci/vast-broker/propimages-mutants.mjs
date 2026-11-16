@@ -8,11 +8,13 @@ import { spawnSync } from 'node:child_process';
 import { tempCopy } from './mutant-copy.mjs';
 
 const here = tempCopy();
-const TESTS = [here + 'test/propimages.test.js'];
+const TESTS = [here + 'test/propimages.test.js', here + 'test/bandwidth.test.js'];
 const S = 'src/propimages.js',
   C = 'propimages.json',
   B = 'src/benchdata.js';
-// [name, [[file, before, after], ...]]
+// [name, [[file, before, after], ...]]  or  [name, { file, change(json) }] for an edit of a JSON data file
+const BW = 'src/bandwidth.js',
+  BJ = 'bandwidth.json';
 const MUTANTS = [
   [
     'strict flag dropped from the part',
@@ -48,34 +50,54 @@ const MUTANTS = [
       ],
     ],
   ],
-  [
-    'lane forced to gate',
-    [[S, "{ mode: 'present', lane: row.lane }", "{ mode: 'present', lane: 'gate' }"]],
-  ],
   ['lane not checked', [[S, 'LANES.includes(row.lane)', 'true']]],
   [
-    'family constraint ignored when choosing images',
+    'unmeasured family keeps the configured lanes',
+    [[S, "lane: measured ? row.lane : 'discovery'", 'lane: row.lane']],
+  ],
+  [
+    'every family counts as measured',
+    [[S, 'const measured = img.measured_families.includes(family);', 'const measured = true;']],
+  ],
+  [
+    'slot ignored: every image on every box',
     [
       [
         S,
-        'chosen = value.images.filter((img) => img.families.includes(family));',
+        'chosen = value.images.filter((img) => boxSlot(img) === slot);',
         'chosen = value.images;',
       ],
     ],
   ],
+  ['swap never applied', [[S, 'const swap = value.swap !== rotation;', 'const swap = false;']]],
   [
-    'family constraint ignored for a named image',
+    'rotation by release number ignored',
+    [[S, 'const swap = value.swap !== rotation;', 'const swap = value.swap;']],
+  ],
+  ['config swap ignored', [[S, 'const swap = value.swap !== rotation;', 'const swap = rotation;']]],
+  [
+    'release number parity inverted',
+    [[S, 'const rotation = releaseSeq % 2 === 1;', 'const rotation = releaseSeq % 2 === 0;']],
+  ],
+  [
+    'release number not required',
     [
       [
         S,
-        "if (!img.families.includes(family)) throw Error('propimages family:' + label + ':' + family);",
+        "if (!Number.isSafeInteger(releaseSeq) || releaseSeq < 0) throw Error('propimages releaseSeq');",
         '',
       ],
     ],
   ],
+  ['single die still splits the images', [[S, 'if (count === 1) {', 'if (false) {']]],
+  ['die place not taken from the matrix order', [[S, 'return at + 1;', 'return 1;']]],
+  [
+    'release profile not required',
+    [[S, "if (profile !== PROPIMAGES_PROFILE) throw Error('propimages release only');", '']],
+  ],
   [
     'tier not checked',
-    [[S, "if (tierName !== PROPIMAGES_TIER) throw Error('propimages tier');", '']],
+    [[S, "if (!PROPIMAGES_TIERS.includes(tierName)) throw Error('propimages tier');", '']],
   ],
   [
     'unknown image label ignored',
@@ -83,7 +105,7 @@ const MUTANTS = [
       [
         S,
         "if (img === undefined) throw Error('propimages unknown image:' + String(label).slice(0, 32));",
-        'if (img === undefined) return { label, disk: {}, apps: {} };',
+        'if (img === undefined) return { label, disk: {}, apps: {}, measured_families: [] };',
       ],
     ],
   ],
@@ -130,6 +152,10 @@ const MUTANTS = [
   ],
   ['duplicate label accepted', [[S, '!labels.has(img.label)', 'true']]],
   ['duplicate object id accepted', [[S, '!objects.has(o.id)', 'true']]],
+  [
+    'two images in one slot accepted',
+    [[S, 'SLOTS.includes(img.slot) && !slots.has(img.slot)', 'SLOTS.includes(img.slot)']],
+  ],
   ['image may name any object', [[S, "objects.get(img.object)?.role === 'image'", 'true']]],
   ['runner registry not consulted', [[S, 'if (registry !== undefined)', 'if (false)']]],
   ['excluded application may also be listed', [[S, ' && !(id in apps)', '']]],
@@ -155,21 +181,86 @@ const MUTANTS = [
   ],
   [
     'a gate row moved to discovery in the config',
-    [[C, '"edge": { "lane": "gate"', '"edge": { "lane": "discovery"']],
+    [C, { change: (d) => (d.images[0].apps.edge.lane = 'discovery') }],
   ],
   [
-    'image B widened to ampere in the config',
-    [[C, '"families": ["ada"],', '"families": ["ampere", "ada"],']],
+    'image B marked measured on blackwell in the config',
+    [C, { change: (d) => d.images[1].measured_families.push('blackwell') }],
   ],
+  [
+    'image slots exchanged in the config',
+    [C, { change: (d) => ([d.images[0].slot, d.images[1].slot] = [2, 1]) }],
+  ],
+  ['swap switched on in the config', [C, { change: (d) => (d.swap = true) }]],
   [
     'wukong listed in the config',
+    [C, { change: (d) => (d.images[0].apps.wukong = { lane: 'discovery', basis: 'x' }) }],
+  ],
+  // the bandwidth estimate (src/bandwidth.js, bandwidth.json)
+  [
+    'margin not applied',
     [
       [
-        C,
-        '"3dmark": { "lane": "discovery",',
-        '"wukong": { "lane": "discovery", "basis": "x" },\n        "3dmark": { "lane": "discovery",',
+        BW,
+        'const scaled = (n) => Math.ceil((n * (PERCENT + margin)) / PERCENT);',
+        'const scaled = (n) => n;',
       ],
     ],
+  ],
+  [
+    'per-image lines counted once for no image',
+    [
+      [
+        BW,
+        'for (const label of entry.per_image ? images : [undefined]) {',
+        'for (const label of [undefined]) {',
+      ],
+    ],
+  ],
+  ['conditions of an entry ignored', [[BW, 'if (!matches(entry.when, ctx)) return;', '']]],
+  [
+    'skipped stage still counted',
+    [
+      [
+        BW,
+        'const chosen = plan.filter((n) => (!only.length || only.includes(n)) && !skip.includes(n));',
+        'const chosen = plan;',
+      ],
+    ],
+  ],
+  [
+    'pinned size not read from the pin',
+    [
+      [
+        BW,
+        "return { bytes: object.size, from: 'propimages.json:' + id };",
+        "return { bytes: 1, from: 'propimages.json:' + id };",
+      ],
+    ],
+  ],
+  ['r2 list ignored', [[BW, 'if (count(r2Sizes[name])) return', 'if (false) return']]],
+  ['upload not counted', [[BW, 'up: upload.up_bytes,', 'up: 0,']]],
+  [
+    'image stage planned without an image list',
+    [
+      [
+        BW,
+        "if ((i.propimages ?? []).length > 0 || (i.tier === 'large' && only.includes('propimage_apps')))",
+        'if (true)',
+      ],
+    ],
+  ],
+  [
+    'default image not counted for the manual stage',
+    [[BW, "chosen.includes('propimage_apps') ? table.default_images : []", '[]']],
+  ],
+  [
+    'repo size passed in ignored',
+    [[BW, "if (entry.id === 'fixed.repo_clone' && count(repoBytes))", 'if (false)']],
+  ],
+  [
+    'image size copied into the table',
+    [[BJ, '"size_from": "propimage:image"', '"down_bytes": 50496618964']],
   ],
 ];
 
@@ -201,12 +292,29 @@ if (baseline.status !== 0 || !tap(baseline).complete) {
 for (const [name, edits] of MUTANTS) {
   if (selected.length && !selected.includes(name)) continue;
   const originals = new Map();
+  const current = new Map();
   let ambiguous = false;
-  for (const [file, before] of edits) {
-    const path = here + file;
-    const text = originals.get(path) ?? readFileSync(path, 'utf8');
+  if (typeof edits[1]?.change === 'function') {
+    // an edit of a JSON data file: parse, change, write back
+    const path = here + edits[0];
+    const text = readFileSync(path, 'utf8');
     originals.set(path, text);
-    if (text.split(before).length !== 2) ambiguous = true;
+    const doc = JSON.parse(text);
+    edits[1].change(doc);
+    current.set(path, JSON.stringify(doc, null, 2) + '\n');
+  } else {
+    for (const [file, before] of edits) {
+      const path = here + file;
+      const text = originals.get(path) ?? readFileSync(path, 'utf8');
+      originals.set(path, text);
+      if (text.split(before).length !== 2) ambiguous = true;
+    }
+    for (const [path, text] of originals) current.set(path, text);
+    if (!ambiguous)
+      for (const [file, before, after] of edits) {
+        const path = here + file;
+        current.set(path, current.get(path).split(before).join(after));
+      }
   }
   if (ambiguous) {
     console.log(JSON.stringify({ mutant: name, ok: false, why: 'ambiguous or missing' }));
@@ -214,11 +322,6 @@ for (const [name, edits] of MUTANTS) {
     continue;
   }
   try {
-    const current = new Map(originals);
-    for (const [file, before, after] of edits) {
-      const path = here + file;
-      current.set(path, current.get(path).split(before).join(after));
-    }
     for (const [path, text] of current) writeFileSync(path, text);
     const run = test();
     const { kills, complete } = tap(run);

@@ -11,11 +11,15 @@
 import config from '../propimages.json' with { type: 'json' };
 import { DEFAULTS } from './defaults.js';
 import { tierEnvironment, familyOf } from './tier.js';
+import { RELEASE_MATRIX } from './release-matrix.js';
 
 export const PROPIMAGES = config;
 export const INSTRUCTION_SCHEMA = 'kayfabe.payload-instruction/1';
-// The instruction schema's own rule (payload_instruction.check_semantics): propimages need the large tier.
-export const PROPIMAGES_TIER = 'large';
+// Images are for the RELEASE run only (owner, 2026-11-16): profile `release`, never the check profile's small or middle tier and
+// never the sweep. Inside a release the two dies of a family run tier `large` (slot 1, the flagship) and tier `middle` (slot 2).
+export const PROPIMAGES_PROFILE = 'release';
+export const PROPIMAGES_TIERS = Object.freeze(['large', 'middle']);
+export const SLOTS = Object.freeze([1, 2]);
 export const MAX_IMAGES = 8; // propimage_runspec.MAX_IMAGES
 export const MAX_APPS = 32; // propimage_runspec.check_image
 export const LANES = Object.freeze(['gate', 'discovery']);
@@ -38,8 +42,19 @@ export function propimagesConfigProblems(value = PROPIMAGES, { registry } = {}) 
     if (!ok) problems.push(reason);
     return ok;
   };
-  if (!bad('SCHEMA', only(value, ['schema', 'status', 'strict', 'objects', 'images'])))
+  if (
+    !bad(
+      'SCHEMA',
+      only(value, ['schema', 'status', 'strict', 'swap', 'unmeasured_note', 'objects', 'images']),
+    )
+  )
     return problems;
+  // the release-level exchange of the two slots (default no swap); the per-release rotation is applied on top of it
+  bad('SWAP', typeof value.swap === 'boolean');
+  bad(
+    'UNMEASURED_NOTE',
+    typeof value.unmeasured_note === 'string' && value.unmeasured_note.length > 0,
+  );
   bad('SCHEMA', value.schema === 'kayfabe.worker-propimages/1');
   // the Worker/CI run is strict, always: a configuration that is not strict is refused, never "made strict" quietly
   bad('NOT_STRICT', value.strict === true);
@@ -68,12 +83,21 @@ export function propimagesConfigProblems(value = PROPIMAGES, { registry } = {}) 
   if (!bad('IMAGES', Array.isArray(images) && images.length > 0 && images.length <= MAX_IMAGES))
     return problems;
   const labels = new Set();
+  const slots = new Set();
   const families = Object.keys(DEFAULTS.families);
   for (const img of images) {
     if (
       !bad(
         'IMAGE_SCHEMA',
-        only(img, ['label', 'object', 'families', 'families_basis', 'apps', 'excluded']),
+        only(img, [
+          'label',
+          'object',
+          'slot',
+          'measured_families',
+          'measured_basis',
+          'apps',
+          'excluded',
+        ]),
       )
     )
       continue;
@@ -82,12 +106,15 @@ export function propimagesConfigProblems(value = PROPIMAGES, { registry } = {}) 
     bad('DUPLICATE_LABEL:' + label.slice(0, 32), !labels.has(img.label));
     labels.add(img.label);
     bad('UNKNOWN_OBJECT:' + label, objects.get(img.object)?.role === 'image');
+    // the box slot of the family's two boxes this image runs on (1 = the flagship die); one image per slot
+    bad('SLOT:' + label, SLOTS.includes(img.slot) && !slots.has(img.slot));
+    slots.add(img.slot);
+    // the families the image has run on: a lane is trusted there. Any other family runs every application in discovery.
     bad(
-      'FAMILIES:' + label,
-      Array.isArray(img.families) &&
-        img.families.length > 0 &&
-        new Set(img.families).size === img.families.length &&
-        img.families.every((f) => families.includes(f)),
+      'MEASURED_FAMILIES:' + label,
+      Array.isArray(img.measured_families) &&
+        new Set(img.measured_families).size === img.measured_families.length &&
+        img.measured_families.every((f) => families.includes(f)),
     );
     const apps = img.apps;
     if (!bad('NO_APPS:' + label, isObject(apps) && Object.keys(apps).length > 0)) continue;
@@ -121,58 +148,144 @@ export function checkPropimagesConfig(value = PROPIMAGES, options) {
   return value;
 }
 
-// Which configured images a leg of this tier and die takes. Never throws for a leg that simply has none (a middle leg, a
-// family the images have not been measured on): the planner asks this before it asks for the instruction.
-export function propimageLabelsFor(
-  { tierName, die } = {},
-  { config: value = PROPIMAGES, cfg = {} } = {},
-) {
-  if (tierName !== PROPIMAGES_TIER) return [];
+// Which of the family's two boxes a die is: its 1-based place among the release matrix rows of its family, the order the Worker
+// plans them in (src/release.js planRelease: the flagship first, which runs leg tier `large`; the second die runs `middle`).
+export function slotOfDie(die, { cfg = {}, releaseMatrix = RELEASE_MATRIX } = {}) {
   const family = familyOf(die, cfg);
-  return value.images.filter((img) => img.families.includes(family)).map((img) => img.label);
+  const rows = releaseMatrix.dies.filter((d) => d.die_family === family);
+  const at = rows.findIndex((d) => d.die === die);
+  if (at < 0 || at >= SLOTS.length) throw Error('propimages slot:' + String(die).slice(0, 16));
+  return at + 1;
 }
 
-// The `propimages` part of the instruction for ONE leg, or a refusal by name. The leg must ASK (this function is only called
-// for a leg that asked); `images` optionally names the images by label (any other label is refused by name).
-export function propimagesForLeg(
-  { tierName, die, images } = {},
-  { config: value = PROPIMAGES, cfg = {} } = {},
+// Who runs which image (the plan, with the reasons the Worker prints in the leg's log). The rule, in two sentences: image slot 1
+// runs on the family's first box and image slot 2 on its second, exchanged when `config.swap` XOR (releaseSeq is odd), so
+// consecutive releases rotate which die gets which image while one release (one releaseSeq, hence a retry on the same sha) always
+// gets the same assignment; a family with one die available (`familyDies` 1, also the one-die rehearsal) runs BOTH images on that
+// box and is not rotated. `releaseSeq` is a request field (a non-negative integer; the Worker takes it from the admin start of the
+// release), never state kept here. Lanes: configured for a family the image has run on, discovery for every other family.
+export function propimagePlan(
+  { profile, tierName, die, familyDies, releaseSeq, images } = {},
+  { config: value = PROPIMAGES, cfg = {}, releaseMatrix = RELEASE_MATRIX } = {},
 ) {
   checkPropimagesConfig(value);
-  if (tierName !== PROPIMAGES_TIER) throw Error('propimages tier');
+  if (profile !== PROPIMAGES_PROFILE) throw Error('propimages release only');
+  if (!PROPIMAGES_TIERS.includes(tierName)) throw Error('propimages tier');
   const family = familyOf(die, cfg);
   if (family === 'unknown') throw Error('propimages die');
+  if (!Object.hasOwn(cfg.releaseDies ?? DEFAULTS.releaseDies, family))
+    throw Error('propimages family:' + family);
   const known = new Map(value.images.map((img) => [img.label, img]));
+  const lines = [];
   let chosen;
-  if (images === undefined) {
-    chosen = value.images.filter((img) => img.families.includes(family));
-    if (!chosen.length) throw Error('propimages family:' + family);
-  } else {
+  let assignment;
+  if (images !== undefined) {
+    // an explicit selection (a manual or standalone run); it bypasses the slot rule and says so
     if (!Array.isArray(images) || !images.length || new Set(images).size !== images.length)
       throw Error('propimages images');
     chosen = images.map((label) => {
       const img = known.get(label);
       if (img === undefined) throw Error('propimages unknown image:' + String(label).slice(0, 32));
-      if (!img.families.includes(family)) throw Error('propimages family:' + label + ':' + family);
       return img;
     });
+    assignment = { mode: 'explicit' };
+    lines.push(
+      'images named by the request (' + images.join(', ') + '), the slot rule is not applied',
+    );
+  } else {
+    const count = familyDies ?? DEFAULTS.releaseDiesPerFamily;
+    if (!SLOTS.includes(count)) throw Error('propimages dies');
+    if (count === 1) {
+      chosen = value.images;
+      assignment = { mode: 'single-die', slot: null, swap: false };
+      lines.push(
+        'only one die of family ' +
+          family +
+          ' is available: this box runs BOTH images (' +
+          chosen.map((i) => i.label).join(', ') +
+          '), no rotation',
+      );
+    } else {
+      if (!Number.isSafeInteger(releaseSeq) || releaseSeq < 0) throw Error('propimages releaseSeq');
+      const slot = slotOfDie(die, { cfg, releaseMatrix });
+      const rotation = releaseSeq % 2 === 1;
+      const swap = value.swap !== rotation;
+      // an image's box slot: its own slot, exchanged when the effective swap is on
+      const boxSlot = (img) => (swap ? SLOTS.length + 1 - img.slot : img.slot);
+      chosen = value.images.filter((img) => boxSlot(img) === slot);
+      assignment = { mode: 'split', slot, swap, config_swap: value.swap, releaseSeq, rotation };
+      lines.push(
+        'die ' +
+          die +
+          ' (' +
+          family +
+          ') is box slot ' +
+          slot +
+          ' of ' +
+          count +
+          '; release ' +
+          releaseSeq +
+          ' is ' +
+          (rotation ? 'odd' : 'even') +
+          ' and config swap is ' +
+          (value.swap ? 'on' : 'off') +
+          ', so the effective swap is ' +
+          (swap ? 'on' : 'off'),
+      );
+      for (const img of value.images)
+        lines.push(
+          '  image ' +
+            img.label +
+            ': configured slot ' +
+            img.slot +
+            ', box slot ' +
+            boxSlot(img) +
+            (boxSlot(img) === slot ? ' -> RUNS HERE' : ' (runs on the other box)'),
+        );
+      if (!chosen.length) throw Error('propimages no image for slot:' + slot);
+    }
   }
   const objects = new Map(value.objects.map((o) => [o.id, o]));
-  return {
+  const part = {
     propimages: chosen.map((img) => {
       const object = objects.get(img.object);
+      const measured = img.measured_families.includes(family);
+      lines.push(
+        '  ' +
+          img.label +
+          ' on ' +
+          family +
+          ': ' +
+          (measured
+            ? 'lanes as configured'
+            : value.unmeasured_note + ': every application in the discovery lane'),
+      );
       return {
         label: img.label,
         kind: 'prebuilt',
         disk: { from: 'pin', ref: object.ref, sha256: object.sha256 },
         apps: Object.fromEntries(
-          Object.entries(img.apps).map(([id, row]) => [id, { mode: 'present', lane: row.lane }]),
+          Object.entries(img.apps).map(([id, row]) => [
+            id,
+            { mode: 'present', lane: measured ? row.lane : 'discovery' },
+          ]),
         ),
       };
     }),
     // The Worker/CI run is strict. There is no option to say otherwise.
     propimages_strict: true,
   };
+  return { part, assignment: { ...assignment, family, images: chosen.map((i) => i.label) }, lines };
+}
+// The `propimages` / `propimages_strict` part of the instruction for ONE leg (see propimagePlan for the rule and the refusals).
+export const propimagesForLeg = (leg, options) => propimagePlan(leg, options).part;
+// Which images a leg takes, or [] when it takes none (the planner asks this before it asks for the instruction).
+export function propimageLabelsFor(leg, options) {
+  try {
+    return propimagePlan(leg, options).assignment.images;
+  } catch {
+    return [];
+  }
 }
 
 // The instruction fields a box derives from a Worker environment (the adapter vast_payload.instruction_from_env: KF_* in,
@@ -192,29 +305,39 @@ export function instructionFromEnvironment(env) {
 }
 
 // The whole instruction of a leg. The base is exactly what tierEnvironment sends for the same options. The `propimages` part is
-// added ONLY when the caller passes `propimages: true` (default off, so no live leg changes), with the leg's `die`.
-export function buildInstruction(
+// added ONLY when the caller passes `propimages: true` (default off, so no live leg changes), for a release-profile leg, with the
+// leg's `die` and the release's `releaseSeq`; `familyDies` (1 or 2, default the release's two) says how many dies of the family
+// this release has. A one-die rehearsal is a single-die leg. Returns the instruction; `buildLeg` also returns the plan text.
+export function buildLeg(
   profile,
-  { propimages = false, propimageImages, die, ...tierOptions } = {},
-  { config: value = PROPIMAGES, cfg = {} } = {},
+  { propimages = false, propimageImages, die, releaseSeq, familyDies, ...tierOptions } = {},
+  { config: value = PROPIMAGES, cfg = {}, releaseMatrix = RELEASE_MATRIX } = {},
 ) {
   if (tierOptions.releaseMatrix !== undefined) throw Error('instruction release matrix');
-  const doc = {
+  const instruction = {
     schema: INSTRUCTION_SCHEMA,
     ...instructionFromEnvironment(tierEnvironment(profile, tierOptions)),
   };
+  let plan;
   if (propimages !== false) {
     if (propimages !== true) throw Error('propimages flag');
-    Object.assign(
-      doc,
-      propimagesForLeg(
-        { tierName: tierOptions.tierName, die, images: propimageImages },
-        { config: value, cfg },
-      ),
+    plan = propimagePlan(
+      {
+        profile,
+        tierName: tierOptions.tierName,
+        die,
+        releaseSeq,
+        images: propimageImages,
+        familyDies: familyDies ?? (tierOptions.rehearsal === true ? 1 : undefined),
+      },
+      { config: value, cfg, releaseMatrix },
     );
+    Object.assign(instruction, plan.part);
   } else if (propimageImages !== undefined) throw Error('propimages images without the flag');
-  return doc;
+  return { instruction, plan };
 }
+export const buildInstruction = (profile, options, config) =>
+  buildLeg(profile, options, config).instruction;
 
 // The bytes scripts/ci/payload_instruction.py writes (json.dumps(indent=2, sort_keys=True) + newline), so the Worker's
 // instruction and the box's emitted one can be compared byte for byte (and hashed to the same value).

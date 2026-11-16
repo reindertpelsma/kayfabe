@@ -133,8 +133,10 @@ def check_semantics(i):
         raise InstructionError("linux_apps middle needs middle or large")
     if i.linux_apps == "large" and i.tier != "large":
         raise InstructionError("linux_apps large needs large")
-    if i.propimages and i.tier != "large":
-        raise InstructionError("propimages need the large tier")
+    # 2026-11-16 (owner ruling): a release rents two dies per family and the images are split across the two boxes, so the second
+    # die's leg (tier middle) carries one image too
+    if i.propimages and i.tier not in ("middle", "large"):
+        raise InstructionError("propimages need the middle or large tier")
     if i.propimages_strict and not i.propimages:
         raise InstructionError("propimages_strict needs propimages")
     labels = [p.get("label") for p in i.propimages if p.get("label") is not None]

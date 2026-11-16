@@ -546,6 +546,20 @@ def validate_install_flow(value):
         raise ValueError("install_flow")
 
 
+def validate_net_bytes(value):
+    """The bytes the box's default interface moved while each stage ran (vast_payload.record_net). Read, validated and not forwarded:
+    it only calibrates ci/vast-broker/bandwidth.json (scripts/ci/bandwidth_calibrate.py)."""
+    ok = type(value) is dict and set(value) == {"interface", "stages"}
+    ok = ok and type(value["interface"]) is str and re.fullmatch(r"[A-Za-z0-9_.:-]{1,32}", value["interface"]) is not None
+    stages = value["stages"] if ok else None
+    ok = ok and type(stages) is dict and len(stages) <= 24
+    ok = ok and all(type(k) is str and re.fullmatch(r"[a-z][a-z0-9_]{0,31}", k) for k in stages)
+    ok = ok and all(type(v) is dict and set(v) == {"rx", "tx"} and all(type(n) is int and 0 <= n <= 1 << 50 for n in v.values())
+                    for v in stages.values())
+    if not ok:
+        raise ValueError("net_bytes")
+
+
 def read_result_file(path):
     """Strictly parse local results, including optional bounded arm diagnostics."""
     with open(path, "rb") as source:
@@ -570,6 +584,7 @@ def read_result_file(path):
             "propimage_apps",
             "propimage_run",
             "install_flow",
+            "net_bytes",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
@@ -594,6 +609,8 @@ def read_result_file(path):
                 raise ValueError("propimage_run verdict")
         if "install_flow" in doc:
             validate_install_flow(doc["install_flow"])
+        if "net_bytes" in doc:
+            validate_net_bytes(doc["net_bytes"])
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):
             raise ValueError("verdict")
         if "matrix_receipts" in doc:

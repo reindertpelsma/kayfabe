@@ -38,12 +38,10 @@
     }
   ],
   "propimages_strict": true,
-  "rehearsal": true,
+  "rehearsal": false,
   "schema": "kayfabe.payload-instruction/1",
-  "spec": "lanea",
-  "stages": [
-    "specviewperf"
-  ],
+  "spec": null,
+  "stages": [],
   "tier": "large",
   "winapps": "mid",
   "windows": true,
