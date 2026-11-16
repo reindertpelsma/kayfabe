@@ -6,6 +6,7 @@ import bundle_mutants as M
 CASES=[
  ('generated-official-pin-lock', 'gen_official.py', "sha256=f['sha256']", 'sha256="0"*64'),
  ('official-fetcher-pin','official_runtime.py',"if not path.is_file() or path.is_symlink() or B.sha256(path)!=pin['sha256']:",'if False:'),
+ ('official-fetcher-size','official_runtime.py',"if pin.get('size',path.stat().st_size)!=path.stat().st_size:raise MediaDrift('MEDIA_DRIFT J4 fetcher size changed')",'if False:raise MediaDrift()'),
  ('official-upstream-failure','official_runtime.py','if result.returncode:', 'if False:'),
  ('official-origin','official_runtime.py',"if not allowed:raise MediaDrift('MEDIA_DRIFT non-official origin: '+e['package'])",'if False:raise MediaDrift()'),
  ('guest-destination','official_runtime.py',"if '..'in destination.parts or not any(destination.is_relative_to(PureWindowsPath(p))for p in ('C:/kfapps','C:/kf/official')):",'if False:'),
