@@ -33,7 +33,12 @@ out.w_big = doc.width.as('px'); out.h_big = doc.height.as('px'); feats.push('can
 P('resized8k');
 // colour: 16 bit and a wide-gamut profile
 try { doc.bitsPerChannel = BitsPerChannelType.SIXTEEN; feats.push('16bit'); } catch (e) {}
-try { doc.convertProfile('Display P3', Intent.RELATIVECOLORIMETRIC, true, true); feats.push('iccP3'); } catch (e) { out.err_icc = String(e).substring(0,80); }
+var iccNames = ['Display P3', 'ProPhoto RGB', 'Adobe RGB (1998)', 'sRGB IEC61966-2.1'], iccRes = [];
+for (var ic = 0; ic < iccNames.length; ic++) {
+  try { doc.convertProfile(iccNames[ic], Intent.RELATIVECOLORIMETRIC, true, true); iccRes.push(iccNames[ic] + '=ok'); feats.push('icc' + ic); if (ic == 0) feats.push('iccP3'); }
+  catch (e) { iccRes.push(iccNames[ic] + '=ERR ' + String(e).substring(0, 100) + ' (code ' + e.number + ')'); }
+}
+out.icc_results = iccRes.join(' ; '); out.doc_profile = String(doc.colorProfileName); out.doc_mode = String(doc.mode) + '/' + String(doc.bitsPerChannel);
 P('colour done');
 // many layers with blend modes and opacities (patches of the photo at random places)
 var modes = [BlendMode.MULTIPLY, BlendMode.SCREEN, BlendMode.OVERLAY, BlendMode.SOFTLIGHT, BlendMode.HARDLIGHT, BlendMode.COLORDODGE, BlendMode.LINEARBURN, BlendMode.DIFFERENCE, BlendMode.LUMINOSITY, BlendMode.COLORBLEND];
@@ -114,6 +119,12 @@ s;
   $res = $ps.DoJavaScript($js)
   $R.js = ($res | ConvertFrom-Json)
   $R.outputs = @((File-Info "$D\out.png"), (File-Info "$D\out.psd"))
-  $R.quit = Quit-App 'Photoshop' $ps
+  $qs = Get-Date
+  $R.quit = Quit-App 'Photoshop' $ps 420
+  $R.quit_secs = [int]((Get-Date) - $qs).TotalSeconds
+  # Photoshop's own log lines (the colour conversion errors), for the evidence
+  $lg = Get-ChildItem "$env:APPDATA\Adobe\Adobe Photoshop 2027", "$env:LOCALAPPDATA\Temp" -Recurse -Include '*.log' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'Photoshop|PS' } | Sort-Object LastWriteTime | Select-Object -Last 3
+  $tx = @(); foreach ($f in $lg) { $tx += ('== ' + $f.FullName); $tx += (Get-Content $f.FullName -Tail 60 -ErrorAction SilentlyContinue) }
+  if ($tx.Count) { Set-Content "$D\ps_log_tail.txt" $tx }
 } catch { $R.error = $_.Exception.Message; $R.quit = Quit-App 'Photoshop' }
 Finish $R

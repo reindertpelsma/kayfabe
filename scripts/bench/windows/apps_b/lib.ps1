@@ -88,36 +88,61 @@ function Enable-AeFileScripts {
   Set-Content -Path $f.FullName -Value $n -NoNewline
   return 'switched on'
 }
-# Run an ExtendScript file in After Effects. `AfterFX.exe -r script` given at the very start is unreliable (MEASURED 2026-11-16: the script was
-# ignored in 2 of 4 cold starts, the application sat idle with an empty project); the same call to an already idle instance ran within a
-# minute every time. So: start the application plain, wait for its window and a quiet period, then hand it the script. The script must write
-# `$marker` as its last act; the function waits for it (and for the application to quit when the script quits it).
-function Run-AeScript($jsx, $marker, [int]$timeoutS = 900) {
+# Run an ExtendScript file in After Effects. `AfterFX.exe -r script` is unreliable (MEASURED 2026-11-16: ignored in 2 of 4 cold starts, and
+# also ignored when handed to an idle instance on a fresh clone). So the script is handed over by a STARTUP stub instead: AE runs every
+# *.jsx of its Scripts\Startup folder at launch, the stub reads a job file naming the real script and runs it after a short delay
+# (app.scheduleTask). The job file is deleted by the stub, so a restart does not rerun it. Each attempt starts a fresh AE; the script must
+# write `$marker` as its last act (and may quit AE itself). A missing marker kills AE and retries (3 attempts); the attempts are recorded.
+function Install-AeStartupStub {
+  $dirs = @('C:\Program Files\Adobe\Adobe After Effects 2027\Support Files\Scripts\Startup', "$env:APPDATA\Adobe\After Effects\27.0\Scripts\Startup")
+  $stub = @'
+try {
+  var j = new File("C:/kfhw/ae_job.txt");
+  if (j.exists) {
+    j.open("r"); var p = j.read(); j.close(); j.remove();
+    var l = new File("C:/kfhw/ae_stub.log"); l.open("a"); l.writeln(new Date().getTime() + " job " + p); l.close();
+    app.scheduleTask("try { $.evalFile(new File('" + p + "')); } catch (e) { var f = new File('C:/kfhw/ae_stub.log'); f.open('a'); f.writeln('ERR ' + e); f.close(); }", 6000, false);
+  }
+} catch (e) { }
+'@
+  $done = @()
+  foreach ($d in $dirs) {
+    try { New-Item -Force -ItemType Directory $d -ErrorAction Stop | Out-Null; Set-Content -Path (Join-Path $d 'kf_job.jsx') -Value $stub -ErrorAction Stop; $done += $d } catch { }
+  }
+  return ($done -join ';')
+}
+function Run-AeScript($jsx, $marker, [int]$timeoutS = 900, [int]$attempts = 3) {
   $base = 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files'
   $R.ae_file_scripts = Enable-AeFileScripts
-  if (-not (Get-Process AfterFX -ErrorAction SilentlyContinue)) {
+  $R.ae_stub_dirs = Install-AeStartupStub
+  if (-not $R.ae_stub_dirs) { throw 'no Startup folder writable' }
+  $R.ae_attempts = @()
+  for ($att = 1; $att -le $attempts; $att++) {
+    Get-Process AfterFX -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Remove-Item $marker -ErrorAction SilentlyContinue
+    Set-Content 'C:\kfhw\ae_job.txt' ($jsx -replace '\\', '/') -NoNewline
+    $t0 = Get-Date
     Start-Process "$base\AfterFX.exe" | Out-Null
-    [void](Wait-For { Has-Window 'AfterFX' } 'AfterFX' 300)
-    $q = Get-Date
-    while (((Get-Date) - $q).TotalSeconds -lt 45) { [void](Dismiss-Dialogs 'AfterFX'); Press-Key '{ESC}'; Start-Sleep 5 }
+    $n = 0; $limit = [int]($timeoutS / $attempts) + 60
+    while (-not (Test-Path $marker) -and ((Get-Date) - $t0).TotalSeconds -lt $limit) {
+      [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++
+      if ($n % 15 -eq 0) { Press-Key '{ESC}' }
+    }
+    $ok = Test-Path $marker
+    $R.ae_attempts += ("{0}:{1}:{2}s" -f $att, $(if ($ok) { 'marker' } else { 'none' }), [int]((Get-Date) - $t0).TotalSeconds)
+    if ($ok) { break }
   }
-  Remove-Item $marker -ErrorAction SilentlyContinue
-  Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', $jsx) | Out-Null
-  $t0 = Get-Date; $n = 0
-  while (-not (Test-Path $marker) -and ((Get-Date) - $t0).TotalSeconds -lt $timeoutS) {
-    [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++
-    if ($n % 20 -eq 0) { Press-Key '{ESC}' }
-  }
-  if (-not (Test-Path $marker)) { throw 'After Effects did not finish the script (no marker)' }
+  if (Test-Path 'C:\kfhw\ae_stub.log') { Copy-Item 'C:\kfhw\ae_stub.log' "$D\ae_stub.log" -Force }
+  if (-not (Test-Path $marker)) { throw ('After Effects did not run the script in ' + $attempts + ' attempts (no marker)') }
   $t1 = Get-Date
   while ((Get-Process AfterFX -ErrorAction SilentlyContinue) -and ((Get-Date) - $t1).TotalSeconds -lt 120) { Start-Sleep 3 }
 }
 function Has-Window($procNames) { (@(Win-Titles $procNames | Where-Object { $_ })).Count -gt 0 }
-function Quit-App($procNames, $comApp = $null) {
+function Quit-App($procNames, $comApp = $null, [int]$budget = 150) {
   # clean exit: ask politely first, then close the windows, only then end the process (and say which one happened)
   if ($comApp) { try { $comApp.Quit() } catch { try { $comApp.Exit() } catch {} } }
   $t0 = Get-Date
-  while (((Get-Date) - $t0).TotalSeconds -lt 150) {
+  while (((Get-Date) - $t0).TotalSeconds -lt $budget) {
     if (-not (Proc-Pids $procNames)) { return 'clean' }
     foreach ($p in Get-Process $procNames -ErrorAction SilentlyContinue) { [void]$p.CloseMainWindow() }
     [void](Dismiss-Dialogs $procNames @("Don't Save", 'No', 'Discard', 'OK', 'Skip This Time', 'Skip', 'Exit', 'Quit'))
@@ -128,6 +153,14 @@ function Quit-App($procNames, $comApp = $null) {
 }
 function Finish($R) {
   $R.ended = Epoch
+  # crash evidence of this run: Application log errors/WER entries since the row started, and the minidumps WER kept (names and sizes only)
+  try {
+    $since = [DateTimeOffset]::FromUnixTimeSeconds([long]$R.started).UtcDateTime
+    $ev = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $since.ToLocalTime() } -ErrorAction SilentlyContinue | Where-Object { $_.Id -in 1000, 1001, 1002, 1005, 1026, 4097 -or $_.ProviderName -match 'Windows Error Reporting|Application Error|Application Hang' } | Select-Object -First 12)
+    $tx = $ev | ForEach-Object { ("{0} id={1} {2}: {3}" -f $_.TimeCreated.ToString('HH:mm:ss'), $_.Id, $_.ProviderName, (($_.Message -replace '\s+', ' ') -replace 'Attached files:.*$', '')) }
+    $dm = @(Get-ChildItem 'C:\kfapps\dumps' -Filter *.dmp -ErrorAction SilentlyContinue | ForEach-Object { 'dump {0} {1} bytes {2}' -f $_.Name, $_.Length, $_.LastWriteTime.ToString('HH:mm:ss') })
+    if ($tx -or $dm) { Set-Content "$D\app_events.txt" (@($tx) + @($dm)) -Encoding UTF8; $R.crash_events = @($ev).Count; $R.crash_dumps = @($dm).Count }
+  } catch { $R.events_error = $_.Exception.Message }
   $R.dismissed = @($Script:Dismissed)
   ($R | ConvertTo-Json -Depth 6) | Set-Content -Encoding UTF8 "$D\result.json"
 }

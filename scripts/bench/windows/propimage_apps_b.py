@@ -61,6 +61,12 @@ CHECKS = {
     "aeprojects": {"timeout": 900, "script": "aeprojects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence AEP corpus open (project load, GPU capability scan)"},
     "aetoggle": {"timeout": 1500, "script": "ae_toggle.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "CUDA <-> software renderer switch inside one After Effects session, 4K effects frame"},
     "aeparallel": {"timeout": 1800, "script": "ae_parallel.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "four concurrent aerender processes (CUDA contexts x4), 4K"},
+    "indesign_s1": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 1 of 6 (start and COM)"},
+    "indesign_s2": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 2 of 6 (new document)"},
+    "indesign_s3": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 3 of 6 (text frames)"},
+    "indesign_s4": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 4 of 6 (placed photo)"},
+    "indesign_s5": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 5 of 6 (PDF export)"},
+    "indesign_s6": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 6 of 6 (JPEG export)"},
     "acrobat": {"timeout": 360, "script": "acrobat.ps1", "gpu": (), "lane": "gate", "path": "Direct2D page rendering"},
     "animate": {"timeout": 360, "script": "animate.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage, tween export", "disabled": 'no working offline entry for scripts: Animate.exe with a .jsfl argument shows an "Open JSFL File" dialog that no keyboard route closed (MEASURED 2026-11-16, pc no-GPU and Vast kf3)'},
     "premiere": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Mercury engine start, CUDA/D3D12 init (launch only)"},
@@ -129,6 +135,15 @@ def _json(path):
     return json.loads(Path(path).read_text(encoding="utf-8-sig"))
 
 
+LOCALDUMPS_SETUP = (
+    "$k='HKLM:\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting\\LocalDumps'; New-Item -Force -Path $k | Out-Null; "
+    "New-Item -Force -ItemType Directory C:\\kfapps\\dumps | Out-Null; "
+    "New-ItemProperty -Path $k -Name DumpFolder -PropertyType ExpandString -Value 'C:\\kfapps\\dumps' -Force | Out-Null; "
+    "New-ItemProperty -Path $k -Name DumpType -PropertyType DWord -Value 1 -Force | Out-Null; "
+    "New-ItemProperty -Path $k -Name DumpCount -PropertyType DWord -Value 10 -Force | Out-Null\n"
+)
+
+
 def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignored):
     """One row. Same contract as propimage_check.run_check: returns the verdict row and writes verdict.json."""
     run_id = uuid.uuid4().hex
@@ -140,6 +155,7 @@ def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignor
     gpu_record = None
 
     def operation():
+        guest.ps(LOCALDUMPS_SETUP)                          # elevated: WER keeps a minidump of any crashing process (the row's own task is not elevated)
         p = _interactive(guest, task, render_check(name, run_id))
         if p.returncode:
             raise ValueError("Task start failed")
@@ -163,7 +179,7 @@ def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignor
         for f in ("result.json", "steps.log"):
             guest.scp(remote + "/" + f, str(d / f), False)
         res = _json(d / "result.json")
-        names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt", "ps_progress.txt", "ae_progress.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
+        names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt", "ps_progress.txt", "ae_progress.txt", "id_progress.txt", "ps_log_tail.txt", "ae_stub.log", "app_events.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
         for fn in names:
             if not isinstance(fn, str) or not SAFE_FILE.fullmatch(fn):
                 continue
@@ -443,6 +459,28 @@ def grade_aeparallel(r, d):
     return "four concurrent aerender processes rendered 60 frames of a 4K project", ""
 
 
+def grade_indesign_step(r, d):
+    """Isolation rows: PASS when every step of the row completed (the progress file shows the last step); a crash is a FAIL that says which step."""
+    want = int(r.get("steps_wanted", 0))
+    prog = ""
+    try:
+        prog = (d / "id_progress.txt").read_text()
+    except OSError:
+        pass
+    last = prog.strip().splitlines()[-1].split(" ", 1)[1] if prog.strip() else "none"
+    if r.get("error"):
+        raise ValueError("InDesign step %d did not complete; last progress line: %s; crash events: %s" % (want, last, r.get("crash_events", 0)))
+    if want >= 5:
+        _outputs_fresh(r, d, ("out.pdf",))
+        if media_check.pdf_info(d / "out.pdf")["pages"] != 2:
+            raise ValueError("PDF page count")
+    if want >= 6:
+        _outputs_fresh(r, d, ("out.jpg",))
+    if r.get("crash_events", 0):
+        raise ValueError("InDesign finished step %d but the Application log has %s crash/hang events" % (want, r.get("crash_events")))
+    return "InDesign steps 1..%d completed (last: %s)" % (want, last), ""
+
+
 def _project_rows(r, minimum):
     rows = [x for x in str(r.get("rows", "")).strip().split("||") if x]
     ok = [x for x in rows if x.startswith("OK ")]
@@ -491,7 +529,7 @@ def grade_aeprojects(r, d):
     return "%d of %d open-licence AEP projects opened (items, comps and layers counted)" % (len(ok), len(ok) + len(bad)), ""
 
 
-GRADERS = {"aetoggle": grade_aetoggle, "aeparallel": grade_aeparallel, "photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
+GRADERS = {**{"indesign_s%d" % i: grade_indesign_step for i in range(1, 7)}, "aetoggle": grade_aetoggle, "aeparallel": grade_aeparallel, "photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
            "aeprojects": grade_aeprojects, "illustratorsample": grade_illustratorsample, "indesignsample": grade_indesignsample, "animatesample": grade_animatesample,
            "photoshopsample": grade_photoshopsample, "mediaencoder": grade_mediaencoder, "lightroom": grade_lightroom, "photoshop": grade_photoshop, "illustrator": grade_illustrator, "aftereffects": grade_aftereffects, "indesign": grade_indesign,
            "acrobat": grade_acrobat, "animate": grade_animate, "gpudiag": grade_gpudiag}
