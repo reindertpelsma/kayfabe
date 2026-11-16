@@ -1057,7 +1057,14 @@ def prepare_checkout(root, sha):
     return branch
 
 
-def hardware():
+# 2026-11-16: MANUAL standalone runs on a box with N identical GPUs (`--gpus N`, the die-per-image propimage_apps lane): the record
+# still describes ONE die (the first), because every other stage uses GPU 0 only. Default 1: a Worker box has exactly one GPU and
+# a second one is refused as before. A mix of models, drivers or compute capabilities is never accepted.
+EXPECTED_GPUS = 1
+
+
+def hardware(expected=None):
+    expected = EXPECTED_GPUS if expected is None else expected
     try:
         lines = (
             subprocess.check_output(
@@ -1071,7 +1078,7 @@ def hardware():
             .strip()
             .splitlines()
         )
-        if len(lines) != 1:
+        if len(lines) != expected or len(set(lines)) != 1:
             raise ValueError()
         name, cc, driver = [x.strip() for x in lines[0].split(",")]
         if not re.fullmatch(r"[A-Za-z0-9_. -]{1,100}", name) or not re.fullmatch(
@@ -1563,6 +1570,8 @@ def parse_args(argv):
     p.add_argument("--skip", action="append", default=[], metavar="STAGE", help="skip this stage (repeatable)")
     p.add_argument("--dry-run", action="store_true", help="print the stage plan and run nothing")
     p.add_argument("--emit-instruction", metavar="FILE", help="write the instruction built from the source and exit")
+    p.add_argument("--gpus", type=int, default=1, choices=range(1, 9), metavar="N",
+                   help="MANUAL runs: the box has N identical GPUs (default 1, the Worker's rule); the result still records one die")
     p.add_argument("--prefetch", metavar="MANIFEST", help="DRY-RUN ONLY (not wired into the executor yet): validate a download manifest "
                    "(kayfabe.download-manifest/1, scripts/ci/box_downloader.py) against the plan and print KF_PAYLOAD_PREFETCH")
     return p.parse_args(argv)
@@ -1624,6 +1633,8 @@ def main():
     if len(sys.argv) > 3 and sys.argv[1] == "--guest-exec":
         return guest_command(sys.argv[2], sys.argv[3:])
     args = parse_args(sys.argv[1:])
+    global EXPECTED_GPUS
+    EXPECTED_GPUS = args.gpus
     sha, nonce = args.sha, args.nonce
     root = Path(__file__).resolve().parents[2]
     if args.prefetch and not args.dry_run:

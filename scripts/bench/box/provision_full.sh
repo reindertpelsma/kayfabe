@@ -65,7 +65,7 @@ echo "LADDER_RC=$LADDER_RC"
 bash scripts/fastguest/build_fast_guest.sh /workspace/bench/guest.qcow2 /workspace/bench/fastguest > /root/prov/fg.log 2>&1; FG_RC=$?; echo "FG_RC=$FG_RC"; tail -2 /root/prov/fg.log
 bash scripts/bench/build_kf3.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build-kf3 > /root/prov/kf3.log 2>&1; KF3_RC=$?; echo "KF3_RC=$KF3_RC"; tail -1 /root/prov/kf3.log
 # KF_READY_CHECK_BEGIN
-V=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader)
+V=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | sort -u)   # 2026-11-16: N identical GPUs give one line; mixed drivers stay NOT_READY
 if [ "$V" = "${KF_HOST_DRIVER:-580.159.04}" ] && [ "$KF3_RC" = 0 ] && [ "$FG_RC" = 0 ] && [ -f /workspace/bench/fastguest/initrd.cpio.gz ]; then
   touch /root/prov/READY; echo "READY driver=$V"
 else echo "NOT_READY driver=$V KF3_RC=$KF3_RC FG_RC=$FG_RC"; not_ready_diag; fi
