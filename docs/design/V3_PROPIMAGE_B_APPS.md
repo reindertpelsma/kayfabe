@@ -25,7 +25,7 @@ Every row carries a `lane` (`gate`: expected to pass on kf3, strict; `discovery`
 | `illustratorsample` | gate | the shipped sample art document: 2x PNG and PDF | dimensions, PDF | sampled |
 | `aftereffects` | discovery | generated 4K 16-bit project (fractal noise, turbulent displace, glow, blur, nested precomp, 3D layers, expressions, particles, footage), `aerender` 60 frames | frames 3840x2160, `aerender` log, feature list | gpu |
 | `aetoggle` | discovery | CUDA to software to CUDA renderer switch inside one session, one 4K frame each | the three frames agree within tolerance | gpu |
-| `aeparallel` | discovery | four concurrent `aerender` processes | 60 frames, exit codes | gpu |
+| `aeparallel` | discovery | two concurrent `aerender` processes | 60 frames, exit codes | gpu |
 | `aeprojects` | discovery | opens every open-licence AEP project | 70 percent open | sampled |
 | `mediaencoder` | discovery | the generated comp queued in Media Encoder as H.264 | MP4 duration, codec, size | enc |
 | `indesign` | gate | 2-page document with a placed photo, PDF and JPEG | PDF pages, JPEG size, one graphic placed | sampled |

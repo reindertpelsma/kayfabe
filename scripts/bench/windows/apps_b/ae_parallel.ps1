@@ -1,7 +1,8 @@
 # After Effects exotic row: several aerender processes at once (CUDA contexts times N) on one generated project, each rendering its own
 # frame range. Reuses the project builder script (ae_make.jsx) for the project, then starts 4 aerender processes.
 . 'C:\kfhw\lib.ps1'
-$R = Init-Run 'aeparallel'
+$R = Init-Run $APPNAME
+$np = if ($APPNAME -eq 'aeparallel4') { 4 } else { 2 }
 $base = 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files'
 try {
   $js = $AE_MAKE.Replace('@MODE@', 'render').Replace('@OUT@', ($D -replace '\\', '/')).Replace('@VIDEO@', '')
@@ -12,8 +13,8 @@ try {
   if (-not (Test-Path "$D\kf.aep")) { throw 'project not created' }
   $R.t_start = Epoch
   $procs = @()
-  for ($i = 0; $i -lt 4; $i++) {
-    $s = $i * 15; $e = $s + 14
+  for ($i = 0; $i -lt $np; $i++) {
+    $per = 60 / $np; $s = $i * $per; $e = $s + $per - 1
     $procs += Start-Process "$base\aerender.exe" -ArgumentList @('-project', "$D\kf.aep", '-comp', 'kfcomp', '-s', $s, '-e', $e) -RedirectStandardOutput "$D\aerender$i.log" -RedirectStandardError "$D\aerender$i.err" -PassThru -WindowStyle Hidden
   }
   $t1 = Get-Date

@@ -65,7 +65,8 @@ CHECKS = {
     "aeadv3d": {"timeout": 1800, "script": "ae_adv3d.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "After Effects Advanced 3D renderer, depth of field, 24 shadow-casting 3D layers, 4K 16 bit"},
     "premieretl": {"timeout": 1500, "script": "pp_timeline.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "Premiere Pro: neutral timeline (FCPXML import), Mercury CUDA playback engine, own exporter (NVENC H.264)"},
     "amematrix": {"timeout": 2400, "script": "pp_timeline.ps1", "gpu": ("enc",), "lane": "discovery", "path": "Media Encoder export matrix (H.264/HEVC 8 and 10 bit, 720p to 8K, ProRes) of the neutral timeline: NVENC or silent software fallback"},
-    "aeparallel": {"timeout": 1800, "script": "ae_parallel.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "four concurrent aerender processes (CUDA contexts x4), 4K"},
+    "aeparallel4": {"timeout": 1800, "script": "ae_parallel.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "four concurrent aerender processes (CUDA contexts x4), 4K: stress row, exhausted the 8 GB guest on the first run (guest ssh dead, desktop alive)"},
+    "aeparallel": {"timeout": 1800, "script": "ae_parallel.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "two concurrent aerender processes (CUDA contexts x2), 4K"},
     "indesign_s1": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 1 of 6 (start and COM)"},
     "indesign_s2": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 2 of 6 (new document)"},
     "indesign_s3": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 3 of 6 (text frames)"},
@@ -81,7 +82,7 @@ CHECKS = {
     "dimension": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/OptiX init (launch only)"},
     "uxp": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "UXP tooling start (launch only)"},
 }
-EMBED = {"premieretl": {"PP_TL": "pp_timeline.jsx"}, "amematrix": {"PP_TL": "pp_timeline.jsx"}, "aeadv3d": {"AE_ADV3D": "ae_adv3d.jsx"}, "aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
+EMBED = {"premieretl": {"PP_TL": "pp_timeline.jsx"}, "amematrix": {"PP_TL": "pp_timeline.jsx"}, "aeadv3d": {"AE_ADV3D": "ae_adv3d.jsx"}, "aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aeparallel4": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
 ENABLED = tuple(n for n, c in CHECKS.items() if not c.get("disabled"))
 LAUNCH_ONLY = ("premiere", "dimension", "uxp", "lightroomlaunch")
 
@@ -510,7 +511,7 @@ def grade_aetoggle(r, d):
 
 
 def grade_aeparallel(r, d):
-    if r.get("exit_codes") != [0, 0, 0, 0]:
+    if r.get("exit_codes") != [0] * (4 if r.get("app") == "aeparallel4" else 2):
         raise ValueError("aerender exit codes %s" % r.get("exit_codes"))
     if r.get("frame_count") != 60:
         raise ValueError("%s frames rendered by 4 processes, expected 60" % r.get("frame_count"))
@@ -523,7 +524,7 @@ def grade_aeparallel(r, d):
             i = media_check.tiff_info(d / n)
             if (i["width"], i["height"]) != (3840, 2160):
                 raise ValueError("%s is %dx%d" % (n, i["width"], i["height"]))
-    return "four concurrent aerender processes rendered 60 frames of a 4K project", ""
+    return "two concurrent aerender processes rendered 60 frames of a 4K project", ""
 
 
 def grade_indesign_step(r, d):
@@ -684,7 +685,7 @@ def grade_aeprojects(r, d):
     return "%d of %d open-licence AEP projects opened (items, comps and layers counted)" % (len(ok), len(ok) + len(bad)), ""
 
 
-GRADERS = {"premieretl": grade_premieretl, "amematrix": grade_amematrix, "aeadv3d": grade_aeadv3d, "photoshopcpu": lambda r, d: grade_photoshopcpu(r, d), **{"indesign_s%d" % i: grade_indesign_step for i in range(1, 7)}, "aetoggle": grade_aetoggle, "aeparallel": grade_aeparallel, "photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
+GRADERS = {"aeparallel4": lambda r, d: grade_aeparallel(r, d), "premieretl": grade_premieretl, "amematrix": grade_amematrix, "aeadv3d": grade_aeadv3d, "photoshopcpu": lambda r, d: grade_photoshopcpu(r, d), **{"indesign_s%d" % i: grade_indesign_step for i in range(1, 7)}, "aetoggle": grade_aetoggle, "aeparallel": grade_aeparallel, "photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
            "aeprojects": grade_aeprojects, "illustratorsample": grade_illustratorsample, "indesignsample": grade_indesignsample, "animatesample": grade_animatesample,
            "photoshopsample": grade_photoshopsample, "mediaencoder": grade_mediaencoder, "lightroom": grade_lightroom, "photoshop": grade_photoshop, "illustrator": grade_illustrator, "aftereffects": grade_aftereffects, "indesign": grade_indesign,
            "acrobat": grade_acrobat, "animate": grade_animate, "gpudiag": grade_gpudiag}
