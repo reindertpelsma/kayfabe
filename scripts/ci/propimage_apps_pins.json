@@ -1,0 +1,46 @@
+{
+ "schema": "kayfabe.propimage-pins/1",
+ "status": "Image A, the signed GOP and the swtpm sources are pinned (2026-11-16, values MEASURED from the objects, see each recorded_in). A pin that is unset (null) still refuses by name (PIN_UNSET:<role>) and the stage never fetches or runs an unpinned object; image B's pin is added with its role by the image-B change. The stage never reads a pin from a server.",
+ "items": [
+  {
+   "role": "image",
+   "name": "propimage-kfimg-20261112.zip",
+   "dest": "image/image.zip",
+   "ref": "propimage-kfimg-20261112.zip",
+   "sha256": "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3",
+   "size": 50496618964,
+   "needed_by": "image",
+   "recorded_in": "traces/hwrun_20261113/README.md (image A, private R2 object windows-proprietary/kfimg-20261112/image-v2.zip). sha256 and size: MEASURED 2026-11-16 by a full readback of the R2 object through a presigned URL on the coordinator (50,496,618,964 bytes read, one hash; the box re-hashes the members against state.json when it unpacks). The ref `propimage-kfimg-20261112.zip` is what a presigned-URL file (kayfabe.download-urls/1) must carry: /root/night/release_kit/mint_urls.py writes it; the Worker's bench-data allow-list (ci/vast-broker/src/benchdata.js) has no entry for it yet (a Worker change, not made here)."
+  },
+  {
+   "role": "gop",
+   "name": "kf-gop.signed.efi",
+   "dest": "image/kf-gop.signed.efi",
+   "ref": "propimage-kf-gop.signed.efi",
+   "sha256": "423a9abc5789b8b4e9834ba016261efb9d64515d53f259a90446917ce91b848e",
+   "size": 11224,
+   "needed_by": "image",
+   "recorded_in": "scripts/bench/windows/propimage_check.py stage_gop: the signed twin of the embedded kf-gop (crates/kf-gop-image; kf3 accepts only the embedded driver plus an Authenticode signature). MEASURED 2026-11-16: the file signed 2026-11-12 on the PC (propimage_20261112/firmware/kf-gop.signed.efi, 11224 bytes) minus its certificate table is byte-identical to the kf-gop.efi built from next af85a9353 (9216 bytes), so it is still the signed twin. Copied to private R2 as windows-proprietary/kfimg-20261112/kf-gop.signed.efi by the coordinator on 2026-11-16. It must be re-signed whenever the kf-gop sources change (a signature on any other build is refused by kf3)."
+  },
+  {
+   "role": "libtpms",
+   "name": "libtpms-0.10.1.tar.gz",
+   "dest": "tools/libtpms-0.10.1.tar.gz",
+   "sha256": "ebc24f3191d90f6cf0b4d4200cd876db4bd224b3c565708bbea0a82ee275e0fb",
+   "size": 1399253,
+   "needed_by": "tools",
+   "mirror": "https://github.com/stefanberger/libtpms/archive/refs/tags/v0.10.1.tar.gz",
+   "recorded_in": "traces/hwrun_20261113/README.md (swtpm/libtpms 0.10.1 built from source under /opt/tpm worked; the recipe is not recorded). Needed only when the box's swtpm is older than 0.10. sha256 and size MEASURED 2026-11-16 from the GitHub archive tarball (two downloads gave the same hash; GitHub does not promise archive tarballs are byte-stable forever: a mismatch refuses by name)."
+  },
+  {
+   "role": "swtpm",
+   "name": "swtpm-0.10.1.tar.gz",
+   "dest": "tools/swtpm-0.10.1.tar.gz",
+   "sha256": "f8da11cadfed27e26d26c5f58a7b8f2d14d684e691927348906b5891f525c684",
+   "size": 415992,
+   "needed_by": "tools",
+   "mirror": "https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.1.tar.gz",
+   "recorded_in": "same as libtpms sha256 and size MEASURED 2026-11-16 (as libtpms)."
+  }
+ ]
+}

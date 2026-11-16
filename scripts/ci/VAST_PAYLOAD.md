@@ -1,6 +1,6 @@
 # Thin Vast payload
 
-STATUS: LIVE, 2026-11-15 (install_flow stage, `--only install_flow`, large tier, GPU-free tests only, no box has run it: see `scripts/ci/README.md`); earlier status: LIVE, 2026-11-09 (XD1 host-semaphore admission correction is GPU-free tested, not hardware-qualified; the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
+STATUS: LIVE, 2026-11-15 (install_flow stage, `--only install_flow`, and propimage_apps stage, `--only propimage_apps`, large tier, GPU-free tests only, no box has run propimage_apps and it cannot PASS yet: see `scripts/ci/README.md` and `docs/design/V3_PROPIMAGE_APPS_STAGE.md`); earlier status: LIVE, 2026-11-09 (XD1 host-semaphore admission correction is GPU-free tested, not hardware-qualified; the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
 extras added by branch `claude/worker-tier-20261105`; the evidence bundle added by branch
 `claude/ci-evidence-bundle-20261106`; the run report added by branch `claude/report-20261107`; none has
 run on a box).

@@ -33,6 +33,7 @@ tests only. Every cost number is a planner estimate (a worst case priced at the 
 - Not built here (still blockers, unchanged): the driver sub-run executor, the payload side of a middle leg inside a release batch (the payload refuses
   every `KF_RELEASE_*` environment while the matrix is proposed), the proprietary-image CPU-profile interaction (AuthenticAMD guest profile: proprietary
   stages only on AMD large boxes, `NOT_RUN` with `CPU_VENDOR` on the Intel one; DESIGN-ONLY, `/root/night/RELEASE_GATE_READINESS.md`).
+  2026-11-15: the stage side is `scripts/ci/propimage_apps.py` (`docs/design/V3_PROPIMAGE_APPS_STAGE.md`): AMD only, `NOT_RUN` `CPU_VENDOR` otherwise, GPU-free tested, run on no box.
 
 ## Superseded in part (2026-11-12)
 
