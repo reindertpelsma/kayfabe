@@ -52,13 +52,13 @@ class Summarize(unittest.TestCase):
         self.assertEqual(d["rows"][0]["metrics"], {"loss": 1.5, "ok": True})
 
     def test_uuids_are_scrubbed(self):
-        t = "GPU-12345678-1234-1234-1234-123456789abc and 12345678-1234-1234-1234-123456789abc"
+        t = "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 and fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001"
         self.assertNotRegex(ks.scrub(t), r"[0-9a-f]{8}-[0-9a-f]{4}")
         d = self.doc([ml_row(reason="x " + t)])
         self.assertNotRegex(json.dumps(d), r"[0-9a-f]{8}-[0-9a-f]{4}-")
 
     def test_failure_and_not_run_reasons_are_scrubbed_too(self):
-        u = "12345678-1234-1234-1234-123456789abc"
+        u = "fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001"
         self.assertNotIn(u, json.dumps(ks.failure(SHA, "mid", [], "bad " + u)))
         self.assertNotIn(u, json.dumps(ks.not_run(SHA, "mid", [], "bad " + u, ["a"])))
 

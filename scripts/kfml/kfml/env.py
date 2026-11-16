@@ -37,6 +37,7 @@ class Env:
     driver_cuda: Optional[str] = None  # highest CUDA the driver supports (nvidia-smi header)
     flavor: Optional[str] = None  # pinned wheel flavour derived from driver_cuda + cc (flavor.choose)
     flavor_reason: str = ""  # why that flavour, or why none can run
+    flavor_installed: Optional[str] = None  # the flavour `kfml setup` installed into the venv (kfml-setup.json), if any
     flavor_blocked: bool = False  # True only when facts are known and NO pinned flavour fits (NOT_RUN, never FAIL)
     torch: Optional[str] = None
     cuda: Optional[str] = None  # torch.version.cuda
@@ -135,6 +136,16 @@ def read_lock_sha(root: Optional[Path]) -> Optional[str]:
     p = Path(root) / "kfml-lock.sha256"
     try:
         return p.read_text().split()[0]
+    except Exception:
+        return None
+
+
+def read_installed_flavor(root: Optional[Path]) -> Optional[str]:
+    """The flavour kfml-setup.json says was installed (it can differ from the one derived for the box: `setup --flavor cu128` forced)."""
+    if not root:
+        return None
+    try:
+        return json.loads((Path(root) / "kfml-setup.json").read_text()).get("flavor")
     except Exception:
         return None
 
@@ -255,4 +266,5 @@ def probe_env(environ=None, python=None) -> Env:
     except Exception:
         pass
     e.lock_sha256 = read_lock_sha(root)
+    e.flavor_installed = read_installed_flavor(root)
     return e

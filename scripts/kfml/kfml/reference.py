@@ -33,7 +33,8 @@ def write(dirpath, name, env, data, wall_s=None, metrics=None, run_id=None):
     d.mkdir(parents=True, exist_ok=True)
     doc = {"test": name, "measured_on": {"gpu_name": env.gpu_name, "compute_cap": _cc(env), "driver": env.driver,
                                          "driver_cuda": getattr(env, "driver_cuda", None), "torch": env.torch,
-                                         "cuda": env.cuda, "flavor": getattr(env, "flavor", None), "run_id": run_id},
+                                         "cuda": env.cuda, "flavor": getattr(env, "flavor_installed", None) or getattr(env, "flavor", None),
+                                         "run_id": run_id},
            "gpu_name": env.gpu_name, "compute_cap": _cc(env), "torch": env.torch, "cuda": env.cuda,
            "driver": env.driver, "data": data, "wall_s": wall_s, "metrics": metrics or {}}
     p = d / (name + ".json")

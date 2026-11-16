@@ -30,7 +30,7 @@ the non-gate ones).
 ## The rows
 
 `{name, status, reason, wall_s, gpu_name, compute_cap, vram_gb, driver, driver_cuda, flavor, torch, cuda, metrics}`
-(die, compute capability, driver, the highest CUDA the driver supports, the wheel flavour kfml derived, and torch's CUDA
+(die, compute capability, driver, the highest CUDA the driver supports, the wheel flavour installed in the venv (the derived one when the venv has no setup record), and torch's CUDA
 runtime are recorded in every row, PASS or not) plus the
 resolved pins: `cudnn, triton, lock_sha256` (of the lock the venv was set up from), `upstream_commits`,
 `patch_sha256`, `dataset_sha256`, and `tier, launch_bound, guest_estimate_s`.
@@ -201,7 +201,7 @@ MEASURED on the run-id box (below), wall seconds: setup about 3 min (hashed cu12
 `run --tier large` step 190 s warm. The payload stage (`scripts/ci/kfml_stage.py`, `--only kfml`) runs the same three
 steps. The Dockerfile derives the flavour at container start (no GPU at build time); UNVERIFIED, never built.
 
-## The measured baseline, and how it is compared
+## The recorded baseline, and how it is compared
 
 `reference/<die>/<test>.json` holds the per-row baseline of run `kfml_run_20261116` (RTX 4070, sm_89, driver
 560.35.03, cu126 flavour, cold caches): `wall_s`, the row's `metrics`, the workload's comparison `data` (loss

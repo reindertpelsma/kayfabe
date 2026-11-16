@@ -491,6 +491,6 @@ status, reason, wall_s, scalar metrics, and the die, compute capability, driver,
 `middle`, 150 min for `large` (DESIGN: setup downloads about 4 GB of wheels, MEASURED 2026-11-16 at about 3 min on a
 500 Mbit link, and a CIFAR-10 download of about 15 min from the dataset's own server). The stage installs no system package: it needs
 `python3-venv`, `python3-dev` and a C++ compiler on the box (UNVERIFIED for the KVM image; `kfml check` names what is missing).
-GPU-free checks: `test_kfml_stage.py` (36 tests), mutants `kfml_stage_mutants.py` (16 mutants, two named killers each, in `ci.yml`).
+GPU-free checks: `test_kfml_stage.py` (37 tests), mutants `kfml_stage_mutants.py` (16 mutants, two named killers each, in `ci.yml`).
 Joining a default plan = flip `KFML_IN_MIDDLE_LARGE`, add the `payloadStageResources` row (a Worker bundle change) and
 take the name out of `MANUAL_ONLY_STAGES`, in the commit that records its first green run under this payload.

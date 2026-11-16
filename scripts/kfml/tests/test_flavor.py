@@ -166,6 +166,21 @@ class NotRunNeverFail(unittest.TestCase):
         self.assertEqual((r["driver_cuda"], r["flavor"], r["compute_cap"]), ("12.6", "cu126", "8.9"))
 
 
+class InstalledFlavour(unittest.TestCase):
+    def test_row_says_the_installed_flavour_not_the_derived_one(self):
+        e = fake_env(driver_cuda="12.6", flavor="cu126", flavor_installed="cu128", torch="2.7.1+cu128")
+        self.assertEqual(rows.make_row("x", "PASS", "", 1.0, e)["flavor"], "cu128")
+        self.assertEqual(rows.make_row("x", "PASS", "", 1.0, fake_env(flavor="cu126"))["flavor"], "cu126")
+
+    def test_installed_flavour_is_read_from_the_setup_record(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(envmod.read_installed_flavor(Path(d)))
+            (Path(d) / "kfml-setup.json").write_text(json.dumps({"flavor": "cu128"}))
+            self.assertEqual(envmod.read_installed_flavor(Path(d)), "cu128")
+            self.assertIsNone(envmod.read_installed_flavor(None))
+
+
 class CheckSays(unittest.TestCase):
     def test_check_prints_choice_and_reason(self):
         e = fake_env(torch=None, cuda_available=False, nvcc=None)

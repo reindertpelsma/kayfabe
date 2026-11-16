@@ -21,7 +21,8 @@ def make_row(name, status, reason, wall_s, env, metrics=None, **extra):
         "vram_gb": getattr(env, "vram_total_gb", None),
         "driver": getattr(env, "driver", None),
         "driver_cuda": getattr(env, "driver_cuda", None),  # highest CUDA the driver supports
-        "flavor": getattr(env, "flavor", None),  # wheel flavour kfml derived for this box
+        # the wheel flavour that is INSTALLED (kfml-setup.json); the one derived for the box when none is recorded
+        "flavor": getattr(env, "flavor_installed", None) or getattr(env, "flavor", None),
         "torch": getattr(env, "torch", None),
         "cuda": getattr(env, "cuda", None),
         "metrics": dict(metrics or {}),
