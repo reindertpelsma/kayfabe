@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench/windows"))
 import apps_b_compare as cmp  # noqa: E402
 import kf3_census as kc  # noqa: E402
 
-LOG = """kf3: GSP rpc UNSERVICED Fn(0x1f) uuid 12345678-1234-1234-1234-123456789abc
+LOG = """kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Fn(0x1f) uuid 12345678-1234-1234-1234-123456789abc
 kf3: refused write 0xdeadbeef
 kf3: GR channel 0x5 ForeignClass subch 5 class 0xa140
 channel 0x7 DEAD
@@ -22,8 +23,9 @@ NVRM: Xid (PCI:0000:00:08): 31 mac 52:54:00:12:34:56
 class T(unittest.TestCase):
     def test_census(self):
         c = kc.census(LOG.splitlines())
-        self.assertEqual(c["lines"], 6)
-        self.assertEqual(c["counts"]["unserviced"], 1)
+        self.assertEqual(c["lines"], 7)
+        self.assertEqual(c["counts"]["unserviced"], 2)
+        self.assertIn("code: 76", c["ids"]["unserviced"])
         self.assertEqual(c["counts"]["foreign_class"], 1)
         self.assertEqual(c["counts"]["dead_channel"], 1)
         self.assertEqual(c["xid"], 1)
@@ -35,9 +37,9 @@ class T(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "q.log"
             p.write_text(LOG)
-            self.assertEqual(kc.count_lines(p), 6)
+            self.assertEqual(kc.count_lines(p), 7)
             self.assertEqual(len(kc.window(p, 2, 3)), 2)
-            self.assertEqual(len(kc.window(p, 5, None)), 2)
+            self.assertEqual(len(kc.window(p, 6, None)), 2)
 
     def test_classes(self):
         kf3 = {"a": {"app": "a", "verdict": "PASS"}, "b": {"app": "b", "verdict": "FAIL", "census": {"counts": {"xid": 2}}},

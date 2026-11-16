@@ -5,7 +5,7 @@
 $T = @{
   premiere     = @{ exe = 'C:\Program Files\Adobe\Adobe Premiere Pro 2027\Adobe Premiere Pro.exe'; proc = 'Adobe Premiere Pro'; title = 'Premiere'; sniffer = 'C:\Program Files\Adobe\Adobe Premiere Pro 2027\GPUSniffer.exe' }
   mediaencoder = @{ exe = 'C:\Program Files\Adobe\Adobe Media Encoder 2027\Adobe Media Encoder.exe'; proc = 'Adobe Media Encoder'; title = 'Media Encoder'; sniffer = 'C:\Program Files\Adobe\Adobe Media Encoder 2027\GPUSniffer.exe' }
-  lightroom    = @{ exe = 'C:\Program Files\Adobe\Adobe Lightroom Classic\Lightroom.exe'; proc = 'Lightroom'; title = 'Lightroom'; sniffer = $null }
+  lightroomlaunch = @{ exe = 'C:\Program Files\Adobe\Adobe Lightroom Classic\Lightroom.exe'; proc = 'Lightroom'; title = 'Lightroom'; sniffer = $null }
   dimension    = @{ exe = 'C:\Program Files\Adobe\Adobe Dimension\Adobe Dimension.exe'; proc = 'Adobe Dimension'; title = 'Dimension'; sniffer = 'C:\Program Files\Adobe\Adobe Dimension\gpu-sniffer-core.exe' }
   uxp          = @{ exe = 'C:\Program Files\Adobe\Adobe UXP Developer Tools\Adobe UXP Developer Tools.exe'; proc = 'Adobe UXP Developer Tools'; title = 'UXP'; sniffer = $null }
 }

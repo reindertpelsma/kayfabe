@@ -26,7 +26,7 @@ KEYWORDS = OrderedDict([
 ])
 UUID = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b|GPU-[0-9a-f-]{20,}")
 MAC = re.compile(r"\b(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b")
-HEXID = re.compile(r"\b0x[0-9a-fA-F]{1,16}\b")
+HEXID = re.compile(r"\b0x[0-9a-fA-F]{1,16}\b|\bcode: \d{1,6}\b")
 MAX_IDS = 40
 
 

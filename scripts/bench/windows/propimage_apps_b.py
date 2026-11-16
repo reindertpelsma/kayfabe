@@ -59,16 +59,19 @@ CHECKS = {
     "indesignprojects": {"timeout": 600, "script": "indesign_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence INDD corpus open + PDF export"},
     "animateprojects": {"timeout": 600, "script": "animate_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence FLA corpus open + stage export"},
     "aeprojects": {"timeout": 900, "script": "aeprojects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence AEP corpus open (project load, GPU capability scan)"},
+    "aetoggle": {"timeout": 1500, "script": "ae_toggle.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "CUDA <-> software renderer switch inside one After Effects session, 4K effects frame"},
+    "aeparallel": {"timeout": 1800, "script": "ae_parallel.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "four concurrent aerender processes (CUDA contexts x4), 4K"},
     "acrobat": {"timeout": 360, "script": "acrobat.ps1", "gpu": (), "lane": "gate", "path": "Direct2D page rendering"},
     "animate": {"timeout": 360, "script": "animate.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage, tween export"},
     "premiere": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Mercury engine start, CUDA/D3D12 init (launch only)"},
     "mediaencoder": {"timeout": 600, "script": "mediaencoder.ps1", "gpu": ("enc",), "lane": "discovery", "path": "NVENC H.264 via the After Effects hand-off"},
     "lightroom": {"timeout": 600, "script": "lightroom.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "develop pipeline GPU processing on 12/24 MP raws"},
+    "lightroomlaunch": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Lightroom Classic start: catalog open, GPU capability scan (launch only)"},
     "dimension": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/OptiX init (launch only)"},
     "uxp": {"timeout": 300, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "UXP tooling start (launch only)"},
 }
-EMBED = {"aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
-LAUNCH_ONLY = ("premiere", "dimension", "uxp")
+EMBED = {"aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
+LAUNCH_ONLY = ("premiere", "dimension", "uxp", "lightroomlaunch")
 
 
 def render_check(name, run_id):
@@ -402,6 +405,39 @@ def grade_mediaencoder(r, d):
     return "Media Encoder encoded the generated comp: H.264 (%s) %dx%d, %.2f s" % (i["codec"], i["width"], i["height"], i["duration_s"]), ""
 
 
+def grade_aetoggle(r, d):
+    log = str(r.get("log", ""))
+    for tag in ("cuda1", "soft", "cuda2"):
+        if tag + ":rendered_ms=" not in log:
+            raise ValueError("render %s did not complete: %s" % (tag, log[:200]))
+    if "soft:set=" not in log:
+        raise ValueError("the renderer switch to software was not accepted: %s" % log[:200])
+    names = {t: [o["file"] for o in r.get("outputs", []) if o["file"].startswith("toggle_" + t + "_")] for t in ("cuda1", "soft", "cuda2")}
+    if any(len(v) != 1 for v in names.values()):
+        raise ValueError("expected one frame per renderer, got %s" % {k: len(v) for k, v in names.items()})
+    _outputs_fresh(r, d, [v[0] for v in names.values()])
+    st = {t: _png(d, v[0], 3840, 2160) for t, v in names.items()}
+    a, b, c = st["cuda1"], st["soft"], st["cuda2"]
+    if abs(a["mean"] - c["mean"]) > 0.5 or abs(a["std"] - c["std"]) > 0.05 * max(a["std"], 1):
+        raise ValueError("CUDA frame changed between two renders of the same frame: mean %.2f/%.2f std %.2f/%.2f" % (a["mean"], c["mean"], a["std"], c["std"]))
+    if abs(a["mean"] - b["mean"]) > 3.0 or abs(a["std"] - b["std"]) > 0.15 * max(a["std"], 1):
+        raise ValueError("software frame differs from the CUDA frame beyond tolerance: mean %.2f/%.2f std %.2f/%.2f" % (a["mean"], b["mean"], a["std"], b["std"]))
+    return "CUDA, software, CUDA frames agree (mean %.1f/%.1f/%.1f, std %.1f/%.1f/%.1f)" % (a["mean"], b["mean"], c["mean"], a["std"], b["std"], c["std"]), log
+
+
+def grade_aeparallel(r, d):
+    if r.get("exit_codes") != [0, 0, 0, 0]:
+        raise ValueError("aerender exit codes %s" % r.get("exit_codes"))
+    if r.get("frame_count") != 60:
+        raise ValueError("%s frames rendered by 4 processes, expected 60" % r.get("frame_count"))
+    names = [o["file"] for o in r.get("outputs", [])]
+    _outputs_fresh(r, d, names)
+    for n in names:
+        if n.endswith(".png"):
+            _png(d, n, 3840, 2160)
+    return "four concurrent aerender processes rendered 60 frames of a 4K project", ""
+
+
 def _project_rows(r, minimum):
     rows = [x for x in str(r.get("rows", "")).strip().split("||") if x]
     ok = [x for x in rows if x.startswith("OK ")]
@@ -450,7 +486,7 @@ def grade_aeprojects(r, d):
     return "%d of %d open-licence AEP projects opened (items, comps and layers counted)" % (len(ok), len(ok) + len(bad)), ""
 
 
-GRADERS = {"photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
+GRADERS = {"aetoggle": grade_aetoggle, "aeparallel": grade_aeparallel, "photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
            "aeprojects": grade_aeprojects, "illustratorsample": grade_illustratorsample, "indesignsample": grade_indesignsample, "animatesample": grade_animatesample,
            "photoshopsample": grade_photoshopsample, "mediaencoder": grade_mediaencoder, "lightroom": grade_lightroom, "photoshop": grade_photoshop, "illustrator": grade_illustrator, "aftereffects": grade_aftereffects, "indesign": grade_indesign,
            "acrobat": grade_acrobat, "animate": grade_animate, "gpudiag": grade_gpudiag}
