@@ -1,0 +1,5 @@
+ptxas info    : Used 121 registers, 616 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compiling entry function '_Z15kf_begin_kernel6KfArgs' for 'sm_89'
+ptxas info    : Function properties for _Z15kf_begin_kernel6KfArgs
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 16 registers, 616 bytes cmem[0]
