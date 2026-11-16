@@ -82,9 +82,10 @@ function Enable-AeFileScripts {
     if (-not $f) { return 'no Prefs.txt after a first start' }
   }
   $t = Get-Content $f.FullName -Raw
-  if ($t -match '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "1"') { return 'already on' }
-  $n = $t -replace '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "0"', '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "1"'
-  if ($n -eq $t) { return 'key not found' }
+  # also: no "Tip of the Day" window at the start (a modal window the script's app.quit() cannot get past; MEASURED 2026-11-16)
+  $n = $t -replace '"Show Tip of the Day" = 01', '"Show Tip of the Day" = 00'
+  if ($n -notmatch '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "1"') { $n = $n -replace '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "0"', '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "1"' }
+  if ($n -eq $t) { return $(if ($t -match '"Pref_SCRIPTING_FILE_NETWORK_SECURITY" = "1"') { 'already on' } else { 'key not found' }) }
   Set-Content -Path $f.FullName -Value $n -NoNewline
   return 'switched on'
 }
@@ -113,8 +114,8 @@ function Run-StartupScript($app, $exe, $proc, $jsx, $marker, [int]$timeoutS = 90
   }
   if (Test-Path "C:\kfhw\${app}_stub.log") { Copy-Item "C:\kfhw\${app}_stub.log" "$D\${app}_stub.log" -Force }
   if (-not (Test-Path $marker)) { throw ("$proc did not run the script in $attempts attempts (no marker; stub log " + $(if (Test-Path "$D\${app}_stub.log") { 'present' } else { 'absent' }) + ')') }
-  $t1 = Get-Date
-  while ((Get-Process $proc -ErrorAction SilentlyContinue) -and ((Get-Date) - $t1).TotalSeconds -lt 120) { Start-Sleep 3 }
+  $t1 = Get-Date; $k = 0
+  while ((Get-Process $proc -ErrorAction SilentlyContinue) -and ((Get-Date) - $t1).TotalSeconds -lt 120) { Start-Sleep 3; $k++; if ($k % 5 -eq 0) { Press-Key '{ESC}' } }
 }
 function Run-AeScript($jsx, $marker, [int]$timeoutS = 900, [int]$attempts = 3) {
   $R.ae_file_scripts = Enable-AeFileScripts
