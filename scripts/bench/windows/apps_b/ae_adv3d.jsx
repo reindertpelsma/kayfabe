@@ -27,10 +27,11 @@ try {
   log.push("layers3d=" + n3);
   var rqi = app.project.renderQueue.items.add(comp);
   var om = rqi.outputModule(1);
-  var tp = om.templates, pick = "";
+  var tp = om.templates, pick = "", ext = "png";
   for (var k = 0; k < tp.length; k++) { if (/png/i.test(tp[k])) { pick = tp[k]; break; } }
+  if (pick == "") { for (var k2 = 0; k2 < tp.length; k2++) { if (/^tiff sequence/i.test(tp[k2])) { pick = tp[k2]; ext = "tif"; break; } } }
   try { om.applyTemplate(pick); log.push("om:" + pick); } catch (e) { log.push("om_default"); }
-  om.file = new File(OUT + "/frames/f_[#####].png");
+  om.file = new File(OUT + "/frames/f_[#####]." + ext);
   rqi.timeSpanStart = 0; rqi.timeSpanDuration = 10 / 30;
   app.project.save(new File(OUT + "/kf.aep"));
   P("saved");

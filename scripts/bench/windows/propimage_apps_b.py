@@ -565,10 +565,15 @@ def grade_aeadv3d(r, d):
         raise ValueError("aerender exit code %s; project notes: %s" % (r.get("aerender_exit"), made[:160]))
     if r.get("frame_count") != 10:
         raise ValueError("%s frames, expected 10" % r.get("frame_count"))
-    names = [o["file"] for o in r.get("outputs", []) if o["file"].endswith(".png")]
+    names = [o["file"] for o in r.get("outputs", []) if o["file"].endswith((".png", ".tif"))]
     _outputs_fresh(r, d, names)
     for n in names:
-        _png(d, n, 3840, 2160)
+        if n.endswith(".png"):
+            _png(d, n, 3840, 2160)
+        else:
+            i = media_check.tiff_info(d / n)
+            if (i["width"], i["height"]) != (3840, 2160):
+                raise ValueError("%s is %dx%d" % (n, i["width"], i["height"]))
     renderer = [h for h in have if h.startswith("renderer=")]
     return "Advanced 3D comp (%s; dof=%s; %s) rendered 10 frames 3840x2160" % (renderer[0] if renderer else "renderer not reported", "dof" in have, "layers3d=24" if "layers3d=24" in have else "layers?"), made
 
