@@ -26,6 +26,11 @@ try {
   $av.Close(1) | Out-Null
   $R.outputs = @(File-Info "$D\out.pdf")
   try { [void]$app.Exit() } catch {}
-  $R.quit = Quit-App 'Acrobat'
+  # after Exit() the application's windowed process is gone; a headless helper of the same name may linger and is not the application
+  $t = Get-Date
+  while (((Get-Date) - $t).TotalSeconds -lt 40 -and (@(Get-Process Acrobat -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }).Count -gt 0)) { Start-Sleep 2 }
+  $R.helpers_left = @(Get-Process Acrobat -ErrorAction SilentlyContinue).Count
+  $R.quit = if (@(Get-Process Acrobat -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }).Count -eq 0) { 'clean' } else { Quit-App 'Acrobat' }
+  Get-Process Acrobat -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 } catch { $R.error = $_.Exception.Message; $R.quit = Quit-App 'Acrobat' }
 Finish $R
