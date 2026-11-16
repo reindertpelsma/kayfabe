@@ -9,8 +9,7 @@ Give this script one or more of those files and the instruction the runs were st
 
     python3 -B -I scripts/ci/bandwidth_calibrate.py --instruction instruction.json run1/kf-result.json run2/kf-result.json
 
-It prints a diff of the table (and warnings), nothing else changes. Editing = run it, review the diff, apply it (`... | patch -p0`
-or edit by hand), run `bandwidth_check.py`, commit. What it proposes:
+It prints a diff of the table (and warnings), nothing else changes. Editing = run it, review the diff, apply the change by hand, run `bandwidth_check.py`, commit. What it proposes:
   - the entry of a stage marked `calibrate: true` becomes (mean actual download of the stage) minus (the stage's other entries), rounded
     up to 10 MB, basis `measured`, today's date, a source naming the files; a negative remainder becomes 0 and is reported;
   - the stage's upload becomes the mean actual upload, rounded up to 10 KB;
