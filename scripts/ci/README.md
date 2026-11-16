@@ -127,6 +127,15 @@ Wukong INCONCLUSIVE (its benchmark menu driver is research tooling in draft PR #
 `propimage_apps.py manifest --out FILE` writes the download manifest (and refuses while pins are unset). The record is `propimage_apps` in `kf-result.json`, validated in
 `vast_report.py`. Design, refusal table and first-run checklist: `docs/design/V3_PROPIMAGE_APPS_STAGE.md`. Tests `test_propimage_apps.py`; mutants `propimage_apps_mutants.py`
 (two named killers each, in `ci.yml`).
+## Standalone run: one presigned-URL file for every private object (2026-11-16)
+
+A box that runs the payload by hand (no Worker, no run token, OWNER_RULINGS section AR item 3) needs the private objects through ONE file,
+`/run/kf-ci/download-urls.json` (mode 0600, schema `kayfabe.download-urls/1`: `{"urls": {ref: presigned https URL}}`, extra top-level keys such as the
+sizes and sha256 pins of the objects are ignored by the readers). The coordinator, which alone holds the R2 credential, writes it with
+`rclone link r2:... --expire <= 12h` per object; the box gets the file and nothing else (no key, token or rclone config).
+The readers: `box_downloader.py --urls` (the `propimage_apps` stage: refs `propimage-kfimg-<date>.zip`, `propimage-kf-gop.signed.efi`) and
+`scripts/bench/specviewperf/stream_url.py` (SPEC lane, `KF_SPEC_URL_FILE=<file>`; since 2026-11-16 it reads this shape too, object ref
+`specviewperf-15.0.0.tar.zst`, and still the PC-run flat map). Mutants: `stream_url_mutants.py`. Every other object of the rehearsal stages is public.
 
 ## Box downloader (`box_downloader.py`, 2026-11-15; step 3 of [V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN](../../docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md))
 
