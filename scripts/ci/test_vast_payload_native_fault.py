@@ -1,11 +1,14 @@
 """XD1: contract-shaped host semaphore faults; synthetic 5070 log shape, no GPU."""
 
+import contextlib
+import io
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 import vast_payload as payload
 from test_vast_payload import watch
@@ -28,6 +31,11 @@ BLACKWELL = (
     "Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
 )
 LEGACY = BLACKWELL.replace("GR_HOST0 HUBCLIENT_ESC0", "GR0_PBDMA0 HUBCLIENT_ESC")
+# The Xid record the same arm printed on an RTX 2060 (TU106), release run 20261116, leg 2: engine and
+# client spelled by kfifoPrintPbdmaId_TU102 and the TU102 client printer. Shape only: PID, channel
+# and timestamp are this fixture's. Product code carries no captured value; derive_native_fault_names.py
+# derives HOST0 and HUBCLIENT_HOST_CPU from the pinned open driver.
+TURING = BLACKWELL.replace("GR_HOST0 HUBCLIENT_ESC0", "HOST0 HUBCLIENT_HOST_CPU")
 
 
 class NativeFaultContract(unittest.TestCase):
@@ -214,6 +222,134 @@ class NativeFaultContract(unittest.TestCase):
     def test_replaced_matching_fault_is_fatal(self):
         with self.assertRaises(payload.xid_guard.GuardRefused):
             payload.xid_guard.check_unchanged(BLACKWELL, [LEGACY])
+
+
+class TuringHostNames(unittest.TestCase):
+    """The Turing spelling of the same deliberate fault: derived names, the same exact matcher."""
+
+    admit = NativeFaultContract.admit
+
+    def test_turing_host_cpu_is_the_intentional_fault(self):
+        self.assertTrue(self.admit(TURING))
+
+    def test_every_derived_turing_host_engine_accepts(self):
+        for index in (0, 1, 11):
+            with self.subTest(index=index):
+                self.assertTrue(self.admit(TURING.replace("HOST0 ", "HOST%d " % index)))
+
+    def test_turing_wrong_pid_refuses(self):
+        self.assertFalse(self.admit(TURING.replace("pid=4242", "pid=4243")))
+
+    def test_turing_wrong_channel_refuses(self):
+        self.assertFalse(self.admit(TURING.replace("channel 0x00000003", "channel 0x00000002")))
+
+    def test_turing_wrong_va_refuses(self):
+        self.assertFalse(self.admit(TURING.replace("0xa_11000000", "0xa_11001000")))
+
+    def test_turing_wrong_fault_type_refuses(self):
+        self.assertFalse(self.admit(TURING.replace("FAULT_PDE", "FAULT_PTE")))
+
+    def test_turing_wrong_access_type_refuses(self):
+        self.assertFalse(self.admit(TURING.replace("VIRT_WRITE", "VIRT_READ")))
+
+    def test_turing_wrong_name_refuses(self):
+        self.assertFalse(self.admit(TURING.replace("name=kayfabe-rm-ladd", "name=qemu-system-x86")))
+
+    def test_turing_second_occurrence_refuses(self):
+        self.assertFalse(self.admit(TURING + "\n" + TURING))
+
+    def test_turing_other_xid_refuses(self):
+        self.assertFalse(self.admit(TURING.replace(": 31,", ": 79,")))
+
+    def test_host_engine_with_a_copy_client_refuses(self):
+        for client in ("HUBCLIENT_CE0", "HUBCLIENT_HSCE0"):
+            with self.subTest(client=client):
+                self.assertFalse(self.admit(TURING.replace("HUBCLIENT_HOST_CPU", client)))
+
+    def test_underived_turing_names_refuse(self):
+        # HUBCLIENT_HOST and HUBCLIENT_HOST_CPU_NB are other clients of the same printer; HOST12 is
+        # past NV_HOST_NUM_PBDMA. None is the arm's fault, so none is derived.
+        for old, new in (
+            ("HUBCLIENT_HOST_CPU", "HUBCLIENT_HOST"),
+            ("HUBCLIENT_HOST_CPU", "HUBCLIENT_HOST_CPU_NB"),
+            ("HUBCLIENT_HOST_CPU", "HUBCLIENT_HOST_CPUgarbage"),
+            ("HOST0", "HOST12"),
+            ("HOST0", "HOST0garbage"),
+            ("HOST0", "HOST"),
+        ):
+            with self.subTest(new=new):
+                self.assertFalse(self.admit(TURING.replace(old + " ", new + " ")))
+
+    def test_turing_contract_va_changed_in_both_records_refuses(self):
+        self.assertFalse(
+            self.admit(
+                TURING.replace("0xa_11000000", "0xa_12000000"),
+                SOURCE.replace("0x0000000a11000000", "0x0000000a12000000"),
+            )
+        )
+
+
+class RefusalReason(unittest.TestCase):
+    """KF_XID_REFUSED names why: the unknown name and the table that did not admit it."""
+
+    def refuse(self, line, arm="--missing-page-fault", source=SOURCE):
+        text = watch(line, 4, 5).replace("\nfixture\n", "\n" + source + "\n")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "watch").write_text(text)
+            env = {
+                "KF_PAYLOAD_XID_ALLOWED": str(root / "allowed"),
+                "KF_PAYLOAD_XID_FAILED": str(root / "failed"),
+            }
+            for name in ("KF_PAYLOAD_CONTROL_DIR", "KF_PAYLOAD_NATIVE_RECEIPT"):
+                os.environ.pop(name, None)
+            out = io.StringIO()
+            with unittest.mock.patch.dict(os.environ, env), contextlib.redirect_stdout(out):
+                rc = payload.guard_command(arm, root / "watch", 6)
+            self.assertEqual((rc, (root / "failed").exists()), (6, True))
+        lines = [x for x in out.getvalue().splitlines() if x.startswith("KF_XID_REFUSED")]
+        self.assertEqual(len(lines), 1, out.getvalue())
+        return lines[0]
+
+    def test_unknown_engine_and_client_are_named_with_their_tables(self):
+        line = self.refuse(TURING.replace("HOST0 HUBCLIENT_HOST_CPU", "HOST12 HUBCLIENT_PMU"))
+        self.assertIn("arm=--missing-page-fault reason=", line)
+        self.assertIn("engine 'HOST12' is not in native_fault_names.json engines", line)
+        self.assertIn("client 'HUBCLIENT_PMU' is not in native_fault_names.json clients", line)
+        self.assertIn("ogkm b81d58ee0224", line)
+        self.assertIn("unmatched actual: [(31, 3, ", line)
+        self.assertIn("'HOST_SEMAPHORE', 'ESC'", line)
+
+    def test_unknown_engine_alone_is_named_and_the_client_is_not(self):
+        line = self.refuse(TURING.replace("HOST0 ", "HOST12 "))
+        self.assertIn("engine 'HOST12' is not in native_fault_names.json engines", line)
+        self.assertNotIn("client 'HUBCLIENT_HOST_CPU' is not", line)
+
+    def test_unknown_client_alone_is_named_and_the_engine_is_not(self):
+        line = self.refuse(TURING.replace("HUBCLIENT_HOST_CPU", "HUBCLIENT_PMU"))
+        self.assertIn("client 'HUBCLIENT_PMU' is not in native_fault_names.json clients", line)
+        self.assertNotIn("engine 'HOST0' is not", line)
+
+    def test_admitted_names_are_not_blamed_when_another_field_differs(self):
+        line = self.refuse(TURING.replace("pid=4242", "pid=4243"))
+        self.assertIn("unknown names: none (every name admitted)", line)
+        self.assertIn("unmatched actual:", line)
+        self.assertIn("4243", line)
+
+    def test_reason_is_one_bounded_printable_line(self):
+        line = self.refuse(TURING.replace("HOST0", "HOST0" + "x" * 5000))
+        self.assertEqual(len(line.splitlines()), 1)
+        self.assertLess(len(line), 1400)
+        self.assertTrue(all(32 <= ord(c) < 127 for c in line))
+
+    def test_no_fault_arm_reason_counts_the_lines(self):
+        line = self.refuse(TURING, arm="--timer")
+        self.assertIn("arm=--timer reason=1 host Xid line(s) in an arm with no admitted fault", line)
+
+    def test_unparsed_record_is_named_as_such(self):
+        line = self.refuse("NVRM: Xid hidden; " + TURING)
+        self.assertIn("reason=", line)
+        self.assertNotIn("unknown names:", line)
 
 
 class NativeExecHook(unittest.TestCase):

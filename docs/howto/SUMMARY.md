@@ -16,6 +16,7 @@
 - [Windows guest](windows-guest.md)
 - [Proprietary test images](proprietary-test-images.md)
 - [Recreate the proprietary Windows image](recreate-the-proprietary-image.md)
+- [Run applications on your own Windows images](run-windows-images.md)
 - [Display and the broker](display.md)
 
 # Reference
