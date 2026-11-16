@@ -126,6 +126,12 @@ jobs:
           python3 scripts/ci/app_policy_mutants.py
       - name: Payload mutations require two named killers each
         run: python3 scripts/ci/payload_mutants.py
+      - name: Native fault names are the pinned open driver's (oracle required), tests and mutations
+        run: |
+          bash scripts/ci/fetch_oracles.sh . ogkm-580
+          python3 scripts/bench/derive_native_fault_names.py --check
+          KF_REQUIRE_ORACLES=1 python3 -m unittest scripts/ci/test_derive_native_fault_names.py
+          python3 scripts/ci/derive_fault_names_mutants.py
       - name: Provider environment mutations require two named killers each
         run: python3 scripts/ci/provider_env_mutants.py
       - name: Diagnostic mutations require two named killers each
