@@ -1,0 +1,27 @@
+Image resized.
+setup VM pid 3574056; ram 4096 MB, smp 2; clock real, network ON
+ssh tunnel (run on YOUR machine; the box's VNC listens on 127.0.0.1 only):
+  ssh -N -L 5907:127.0.0.1:5907 <user>@<this-box>
+  then any VNC client: vnc://127.0.0.1:5907     (no password: the tunnel is the access control)
+noVNC in the browser (run `propimage_linux.py novnc --dir D` on the box first, then tunnel its port):
+  ssh -N -L 6080:127.0.0.1:6080 <user>@<this-box>   then open http://127.0.0.1:6080/vnc.html?autoconnect=1
+harness ssh: ssh -i <dir>/ssh/id_ed25519 -p 32766 kfimage@127.0.0.1 (127.0.0.1 on the box)
+ssh up after 26.8s
+stage A (packages) ok in 462s
+rebooted; ssh up after 7.9s
+stage B (config, identity) ok in 3s
+rebooted; ssh up after 7.6s
+provisioned in 565s; kernel 6.8.0-149-generic; 1645 packages
+MATCH     machine_id               want='cae00bf870cbe5245c279a1c9c78befd' got='cae00bf870cbe5245c279a1c9c78befd'
+MATCH     hostname                 want='kf-ec33b0ad' got='kf-ec33b0ad'
+MATCH     smbios_uuid              want='3efe1836-fd4e-5b92-abc0-b4627169347f' got='3efe1836-fd4e-5b92-abc0-b4627169347f'
+MATCH     smbios_serial            want='KF6307E7AD86' got='KF6307E7AD86'
+MATCH     baseboard_serial         want='KFB310735833B' got='KFB310735833B'
+MATCH     chassis_serial           want='KFC60A45FA1B0' got='KFC60A45FA1B0'
+MATCH     mac                      want=['52:54:00:e5:d4:2c'] got=['52:54:00:e5:d4:2c']
+MATCH     disk_serial              want=['KFD634954E7BE37'] got=['KFD634954E7BE37']
+MATCH     kernel_headers           kernel=6.8.0-149-generic
+MATCH     driver_build_tools       kernel_cc=x86_64-linux-gnu-gcc-13
+MATCH     cloud_init_disabled      True
+MATCH     cpu_no_forbidden_flags   []
+the setup VM keeps running; install/sign in through the console, then `seal`

@@ -1,0 +1,10 @@
+KF_CLOCK image=propimage-linux net=offline using=recorded base=2026-11-16T20:10:10Z recorded=2026-11-16T20:10:10Z floor_input=- inputs=0
+PASS  loopback-localhost         port=34613 redirect_kind=localhost forward=-L 34613:127.0.0.1:34613 code_len=13
+PASS  loopback-127.0.0.1         port=34357 redirect_kind=127.0.0.1 forward=-L 127.0.0.1:34357:127.0.0.1:34357 code_len=13
+PASS  loopback-[::1]             port=41411 redirect_kind=::1 forward=-L [::1]:41411:[::1]:41411 code_len=13
+PASS  paste-code                 code_len=20 pty_log_contains_code=0
+PASS  paste-code-not-in-pty-log  count=0
+
+real	1m16.756s
+user	0m1.014s
+sys	0m0.215s
