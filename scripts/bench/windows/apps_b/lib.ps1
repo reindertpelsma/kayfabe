@@ -61,7 +61,7 @@ function Quit-App($procNames, $comApp = $null) {
   # clean exit: ask politely first, then close the windows, only then end the process (and say which one happened)
   if ($comApp) { try { $comApp.Quit() } catch { try { $comApp.Exit() } catch {} } }
   $t0 = Get-Date
-  while (((Get-Date) - $t0).TotalSeconds -lt 40) {
+  while (((Get-Date) - $t0).TotalSeconds -lt 150) {
     if (-not (Proc-Pids $procNames)) { return 'clean' }
     foreach ($p in Get-Process $procNames -ErrorAction SilentlyContinue) { [void]$p.CloseMainWindow() }
     [void](Dismiss-Dialogs $procNames @("Don't Save", 'No', 'Discard', 'OK'))
