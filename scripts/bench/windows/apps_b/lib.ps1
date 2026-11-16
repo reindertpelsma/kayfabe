@@ -106,7 +106,7 @@ function Run-StartupScript($app, $exe, $proc, $jsx, $marker, [int]$timeoutS = 90
     $n = 0; $limit = [int]($timeoutS / $attempts) + 60
     while (-not (Test-Path $marker) -and ((Get-Date) - $t0).TotalSeconds -lt $limit) {
       [void](Dismiss-Dialogs $proc); Start-Sleep 3; $n++
-      if ($n % 15 -eq 0) { Press-Key '{ESC}' }
+      if ($n % 15 -eq 0) { Press-Key '{ESC}' } elseif ($n % 15 -eq 7) { Press-Key '{ENTER}' }
     }
     $ok = Test-Path $marker
     $R.startup_attempts += ("{0}:{1}:{2}s" -f $att, $(if ($ok) { 'marker' } else { 'none' }), [int]((Get-Date) - $t0).TotalSeconds)
@@ -115,7 +115,7 @@ function Run-StartupScript($app, $exe, $proc, $jsx, $marker, [int]$timeoutS = 90
   if (Test-Path "C:\kfhw\${app}_stub.log") { Copy-Item "C:\kfhw\${app}_stub.log" "$D\${app}_stub.log" -Force }
   if (-not (Test-Path $marker)) { throw ("$proc did not run the script in $attempts attempts (no marker; stub log " + $(if (Test-Path "$D\${app}_stub.log") { 'present' } else { 'absent' }) + ')') }
   $t1 = Get-Date; $k = 0
-  while ((Get-Process $proc -ErrorAction SilentlyContinue) -and ((Get-Date) - $t1).TotalSeconds -lt 120) { Start-Sleep 3; $k++; if ($k % 5 -eq 0) { Press-Key '{ESC}' } }
+  while ((Get-Process $proc -ErrorAction SilentlyContinue) -and ((Get-Date) - $t1).TotalSeconds -lt 120) { Start-Sleep 3; $k++; if ($k % 5 -eq 0) { Press-Key '{ESC}' } elseif ($k % 5 -eq 2) { Press-Key '{ENTER}' } }
 }
 function Run-AeScript($jsx, $marker, [int]$timeoutS = 900, [int]$attempts = 3) {
   $R.ae_file_scripts = Enable-AeFileScripts
