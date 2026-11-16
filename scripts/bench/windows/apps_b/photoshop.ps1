@@ -11,7 +11,7 @@ try {
   if (-not $ok) { throw 'Photoshop main window did not appear' }
   [void](Wait-For { $false } 'Photoshop' 20)       # first-run and graphics-notice dialogs
   $ps = $null
-  for ($i = 0; $i -lt 15 -and -not $ps; $i++) { try { $ps = New-Object -ComObject Photoshop.Application } catch { Step "com retry ${i}: $($_.Exception.Message.Substring(0, 60))"; [void](Dismiss-Dialogs 'Photoshop'); Start-Sleep 6 } }
+  for ($i = 0; $i -lt 15 -and -not $ps; $i++) { try { $ps = New-Object -ComObject Photoshop.Application } catch { Step "com retry ${i}: $($_.Exception.Message.Substring(0, 60))"; [void](Dismiss-Dialogs 'Photoshop'); if ($i % 3 -eq 2) { Press-Key '{ENTER}' }; Start-Sleep 6 } }
   if (-not $ps) { throw 'Photoshop COM not available' }
   $R.version = $ps.Version
   $js = @"

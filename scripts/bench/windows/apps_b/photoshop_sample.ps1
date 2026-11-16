@@ -11,7 +11,7 @@ try {
   [void](Wait-For { Has-Window 'Photoshop' } 'Photoshop' 150)
   [void](Wait-For { $false } 'Photoshop' 20)
   $ps = $null
-  for ($i = 0; $i -lt 15 -and -not $ps; $i++) { try { $ps = New-Object -ComObject Photoshop.Application } catch { [void](Dismiss-Dialogs 'Photoshop'); Start-Sleep 6 } }
+  for ($i = 0; $i -lt 15 -and -not $ps; $i++) { try { $ps = New-Object -ComObject Photoshop.Application } catch { [void](Dismiss-Dialogs 'Photoshop'); if ($i % 3 -eq 2) { Press-Key '{ENTER}' }; Start-Sleep 6 } }
   if (-not $ps) { throw 'Photoshop COM not available' }
   $js = @"
 app.displayDialogs = DialogModes.NO;

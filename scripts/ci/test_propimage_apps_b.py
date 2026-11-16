@@ -118,6 +118,24 @@ class T(unittest.TestCase):
                                                          "main_window": False, "alive": True}))
         self.assertFalse(B.verdict("premiere", "x", self.d, None)["ok"])
 
+    def test_sample_rows(self):
+        png(self.d / "out.png", 400, 300)
+        (self.d / "out.pdf").write_bytes(b"%PDF-1.4\n1 0 obj<</Type/Page>>endobj\n%%EOF\n")
+        self.result("illustratorsample", ["out.png", "out.pdf"], source="x.ai", js={"w0": "200", "h0": "150", "paths": "9"})
+        self.assertTrue(B.verdict("illustratorsample", "x", self.d, None)["ok"])
+        self.result("illustratorsample", ["out.png", "out.pdf"], source="x.ai", js={"w0": "999", "h0": "150"})
+        self.assertFalse(B.verdict("illustratorsample", "x", self.d, None)["ok"])
+        png(self.d / "out.png", 640, 480)
+        self.result("animatesample", ["out.png"], source="Hippo.fla", jsfl_log="opened,size=640x480,frames=10,layers=2,png")
+        self.assertTrue(B.verdict("animatesample", "x", self.d, None)["ok"])
+        self.result("animatesample", ["out.png"], source="Hippo.fla", jsfl_log="ERR boom")
+        self.assertIn("did not open", B.verdict("animatesample", "x", self.d, None)["error"])
+        png(self.d / "out.png", 1920, 1080)
+        self.result("photoshopsample", ["out.png"], source="s", js={"tw": "3840", "th": "2160", "w1": "1920", "h1": "1080", "sharpen": "4", "w0": "6000", "h0": "4000"})
+        self.assertTrue(B.verdict("photoshopsample", "x", self.d, GPU_OK)["ok"])
+        self.result("photoshopsample", ["out.png"], source="s", js={"tw": "100", "th": "2160", "w1": "1920", "h1": "1080", "sharpen": "4"})
+        self.assertIn("3840x2160", B.verdict("photoshopsample", "x", self.d, GPU_OK)["error"])
+
     def test_gpudiag(self):
         (self.d / "sniffer_premiere.txt").write_text("CUDA device found: NVIDIA GeForce RTX 4070\n")
         self.result("sniffers", ["sniffer_premiere.txt"])
