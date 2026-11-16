@@ -1934,8 +1934,11 @@ def main(argv=None):
             g = Guest(state, str(key), state["ids"]["net"]["ssh_port"])
             try:
                 while time.monotonic() - booted < 420 and q.poll() is None:
-                    if g.ssh(["echo", "up"], timeout=40).returncode == 0:
-                        break
+                    try:
+                        if g.ssh(["echo", "up"], timeout=40).returncode == 0:
+                            break
+                    except subprocess.TimeoutExpired:
+                        pass        # the forwarded port accepts before sshd answers (MEASURED on a nested-KVM box): not up yet
                     time.sleep(5)
                 else:
                     tail = ""
