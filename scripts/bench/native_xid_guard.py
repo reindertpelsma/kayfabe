@@ -7,7 +7,7 @@ EXACT source channel + EXACT VA + EXACT fault/access type and a copy-engine clie
 SW5-R2 2026-10-26 also admits Turing's HUBCLIENT_HSCE[0-9]+ spelling wherever
 HUBCLIENT_CE[0-9]+ was admitted; every other proof condition is unchanged.
 CE instance equality is not required. Extra/non-source/non-CE records still refuse.
-The native host-semaphore control uses open-driver-derived GR host/ESC spellings;
+The native host-semaphore control uses open-driver-derived spellings (Ampere+ GR host/ESC, Turing HOST<i>/HOST_CPU);
 PID, source channel, VA, fault/access type and count remain exact. Later history is frozen.
 No per-die client table. Bench only; no global Xid31 exemption. Marker addresses and
 channels come from this run's positive-control logs, never a per-die table.
@@ -182,8 +182,39 @@ def approve_native_records(journal, expected):
             engine, client = HOST_SEMAPHORE_ENGINE, HOST_SEMAPHORE_CLIENT
         actual.append((int(m['code']), int(m['channel'], 16), int(m['va'].replace('_', ''), 16), m['fault'], m['access'], engine, client, m['name'], int(m['pid'])))
     if Counter(actual) != Counter(expected):
-        raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
+        raise GuardRefused(
+            "Xid type/channel/address/source multiset differs from fault controls"
+            + refusal_detail(lines, pattern, actual, expected)
+        )
     return lines
+
+
+def refusal_detail(lines, pattern, actual, expected):
+    """Why the multiset differs: the names no table admits, and the records that did not pair up.
+
+    Diagnostic only: it reads what the matcher already read and changes no verdict. The text is
+    bounded, one line, printable ASCII (it lands in the KF_XID_REFUSED line).
+    """
+    table = HOST_FAULT_NAMES
+    revision = str(table.get('revision', ''))[:12]
+    unknown = []
+    for line in lines:
+        parsed = pattern.fullmatch(line)
+        if parsed is None:
+            continue
+        if parsed['engine'] == 'CE0' and copy_engine_client(parsed['client']):
+            continue
+        if parsed['engine'] not in table['engines']:
+            unknown.append("engine %r is not in native_fault_names.json engines (%d names, ogkm %s)"
+                           % (parsed['engine'], len(table['engines']), revision))
+        if parsed['client'] not in table['clients']:
+            unknown.append("client %r is not in native_fault_names.json clients (%d names, ogkm %s)"
+                           % (parsed['client'], len(table['clients']), revision))
+    surplus = list((Counter(actual) - Counter(expected)).elements())[:3]
+    missing = list((Counter(expected) - Counter(actual)).elements())[:3]
+    detail = "; unknown names: " + (", ".join(dict.fromkeys(unknown)) or "none (every name admitted)")
+    detail += "; unmatched actual: %s; unmatched expected: %s" % (surplus, missing)
+    return re.sub(r'[^\x20-\x7e]', '?', detail)[:900]
 
 
 def check_unchanged(journal, baseline):

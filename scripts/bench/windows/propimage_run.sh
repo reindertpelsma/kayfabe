@@ -11,6 +11,7 @@ set -euo pipefail
 MODE=${1:?mode: setup|install|offline|ci}
 D=${PROP_DIR:-/workspace/bench/propimage_20261112}
 PY=(python3 -B -I "$D/bin/propimage.py")
+PYA=(python3 -B -I "$D/bin/clocknet_assert.py")   # deployed beside propimage.py (which imports it)
 ST=$D/state.json
 [ -r "$ST" ] || { echo "no $ST" >&2; exit 2; }
 for d in tpm firmware run; do install -d -m 0700 "$D/$d"; done
@@ -29,6 +30,8 @@ DISK=$D/image.qcow2
 [ "$MODE" != ci ] || { DISK=$D/run/clone.qcow2; rm -f "$DISK"; qemu-img create -q -f qcow2 -b "$D/image.qcow2" -F qcow2 "$DISK"; }
 mapfile -t OUT < <("${PY[@]}" argv "$ST" "$MODE" --disk "$DISK" --workdir "$D" "${extra[@]}" ${PROP_QEMU:+--qemu "$PROP_QEMU"})
 QCMD=${OUT[0]}
+# 2026-11-16: the product is checked again here, from the line that is about to be exec'd (a faked clock needs the network off; internet needs the real clock)
+"${PYA[@]}" line "$QCMD" --who propimage_run.sh > /dev/null || { echo "clock/network rule refused this start" >&2; exit 3; }
 echo "CMD: $QCMD" > "$D/run/last_cmd.txt"
 as_user() { if [ "$(id -u)" = 0 ]; then runuser -u "$SU" -- "$@"; else "$@"; fi; }
 # swtpm: one process per QEMU start, state under $D/tpm

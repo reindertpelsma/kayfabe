@@ -77,6 +77,11 @@ class Instruction:
     requirement_id: object = None
     tree_sha: object = None
     artifacts: tuple = ()
+    # 2026-11-16: the images and applications of the generic proprietary-image runner (the objects of propimage_runspec.py); validated
+    # by the schema here and by propimage_runspec.validate_list in vast_payload.py (named refusals)
+    propimages: tuple = ()
+    # strict (the Worker's shape): every listed image and app must run and any skip fails the stage; false = run what can run (docs/design/V3_PROPIMAGE_RUNNER.md)
+    propimages_strict: bool = False
     # where it came from (worker / default / instruction); printed, never part of equality
     source: str = dataclasses.field(default="instruction", compare=False)
 
@@ -98,6 +103,9 @@ class Instruction:
             out["tree_sha"] = self.tree_sha
         if self.artifacts:
             out["artifacts"] = [dataclasses.asdict(a) for a in self.artifacts]
+        if self.propimages:
+            out["propimages"] = [dict(p) for p in self.propimages]
+            out["propimages_strict"] = self.propimages_strict          # always written with the list: the emitted instruction shows the policy
         return out
 
     def canonical_bytes(self):
@@ -125,6 +133,13 @@ def check_semantics(i):
         raise InstructionError("linux_apps middle needs middle or large")
     if i.linux_apps == "large" and i.tier != "large":
         raise InstructionError("linux_apps large needs large")
+    if i.propimages and i.tier != "large":
+        raise InstructionError("propimages need the large tier")
+    if i.propimages_strict and not i.propimages:
+        raise InstructionError("propimages_strict needs propimages")
+    labels = [p.get("label") for p in i.propimages if p.get("label") is not None]
+    if len(set(labels)) != len(labels):
+        raise InstructionError("duplicate propimage label")
     names = set()
     for a in i.artifacts:
         if a.name in names:
@@ -160,6 +175,8 @@ def from_dict(doc):
             requirement_id=doc.get("requirement_id"),
             tree_sha=doc.get("tree_sha"),
             artifacts=tuple(Artifact(**a) for a in doc.get("artifacts", [])),
+            propimages=tuple(doc.get("propimages", [])),
+            propimages_strict=doc.get("propimages_strict", False),
         )
     )
 

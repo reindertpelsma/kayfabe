@@ -1,6 +1,6 @@
 # Thin Vast payload
 
-STATUS: LIVE, 2026-11-16 (kfml stage, `--only kfml`, middle and large tiers, off by default; the kfml workloads ran on one Vast CUDA container, see `scripts/kfml/README.md`, but the STAGE has run on no payload box: GPU-free tests plus one end-to-end run of `kfml_stage.py` on that container); earlier: LIVE, 2026-11-15 (install_flow stage, `--only install_flow`, and propimage_apps stage, `--only propimage_apps`, large tier, GPU-free tests only, no box has run propimage_apps and it cannot PASS yet: see `scripts/ci/README.md` and `docs/design/V3_PROPIMAGE_APPS_STAGE.md`); earlier status: LIVE, 2026-11-09 (XD1 host-semaphore admission correction is GPU-free tested, not hardware-qualified; the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
+STATUS: LIVE, 2026-11-16 (kfml stage, `--only kfml`, middle and large tiers, off by default; the kfml workloads ran on one Vast CUDA container, see `scripts/kfml/README.md`, but the STAGE has run on no payload box: GPU-free tests plus one end-to-end run of `kfml_stage.py` on that container); earlier status: LIVE, 2026-11-16 (the native host-semaphore fault names now also derive the Turing spelling HOST<i> / HUBCLIENT_HOST_CPU from the pinned open driver, and `KF_XID_REFUSED` carries its reason; GPU-free tested only, the merge_bar missing-page arm has not been re-run on a Turing die since); earlier status: LIVE, 2026-11-15 (install_flow stage, `--only install_flow`, and propimage_apps stage, `--only propimage_apps`, large tier, GPU-free tests only, no box has run propimage_apps and it cannot PASS yet: see `scripts/ci/README.md` and `docs/design/V3_PROPIMAGE_APPS_STAGE.md`); earlier status: LIVE, 2026-11-09 (XD1 host-semaphore admission correction is GPU-free tested, not hardware-qualified; the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
 extras added by branch `claude/worker-tier-20261105`; the evidence bundle added by branch
 `claude/ci-evidence-bundle-20261106`; the run report added by branch `claude/report-20261107`; none has
 run on a box).
@@ -89,12 +89,29 @@ admission mandate; this update does not invent a new owner ruling.
 `kfifoPrintFaultingPbdmaEngineName_IMPL` supplies GR_HOST indices and PBDMA suffixes;
 the generated GR host set includes GR0…7_PBDMA0…1 and GR_HOST0…7.
 Ampere/Blackwell client printers and their published `dev_fault.h` definitions supply
-ESC and ESC0…11. The generated `native_fault_names.json` carries source hashes and has
+ESC and ESC0…11. Turing prints the same deliberate fault with another spelling: `kfifoPrintPbdmaId_TU102`
+in `arch/turing/kernel_fifo_tu102.c` supplies the PBDMA id strings HOST0…HOST11 (checked against
+`NV_HOST_NUM_PBDMA` in the TU102 `hwproject.h`), and the TU102 client printer plus
+`NV_PFAULT_CLIENT_HUB_HOST_CPU` in the TU102 `dev_fault.h` supply `HUBCLIENT_HOST_CPU` (the other
+HOST clients of that printer are not derived). The generated `native_fault_names.json` carries source hashes and has
 no die, board, PCI address, PID, channel, VA or captured-log input. Regenerate/check with:
 
 ```sh
 python3 scripts/bench/derive_native_fault_names.py --check
 ```
+
+**CODE READ (refusal reason, 2026-11-16):** when the host Xid delta is refused, the payload prints
+`KF_XID_REFUSED arm=<arm> reason=<one printable line>`. For a name the matcher does not admit the reason
+says `engine 'X' is not in native_fault_names.json engines (N names, ogkm <rev>)` or the same for `clients`,
+and lists the unmatched actual and expected records. The tests are `scripts/ci/test_vast_payload_native_fault.py`
+(`TuringHostNames`, `RefusalReason`) and `scripts/ci/test_derive_native_fault_names.py` (fixture layer, and an oracle
+layer that `KF_REQUIRE_ORACLES=1` makes mandatory); mutants: `payload_mutants.py` (`xd1-turing-*`,
+`xd1-refusal-*`) and `derive_fault_names_mutants.py`.
+
+**NOT MEASURED:** the Turing spelling is read from the pinned sources and replayed offline against the
+RTX 2060 (TU106) release-run record `ENGINE HOST0 HUBCLIENT_HOST_CPU` (release run 20261116 leg 2, the
+`host_missing-page-fault` log): refused by the committed table before this change, admitted after. A real
+box run of the merge_bar missing-page arm on a Turing die is still outstanding.
 
 **CODE READ:** a copied guard must carry `native_fault_names.json` beside the Python
 module. Payload, SPEC and broker mutation fixtures include both files; missing data
