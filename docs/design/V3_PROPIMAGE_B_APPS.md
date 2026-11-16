@@ -31,6 +31,11 @@ Every row carries a `lane` (`gate`: expected to pass on kf3, strict; `discovery`
 | `indesign` | gate | 2-page document with a placed photo, PDF and JPEG | PDF pages, JPEG size, one graphic placed | sampled |
 | `indesignsample` | gate | the shipped sample document: PDF and JPEG | pages, size | sampled |
 | `indesignprojects` | discovery | opens every open-licence INDD project, PDF each | 50 percent open | sampled |
+| `photoshopcpu` | discovery | the `photoshopsample` workload with Photoshop's graphics processor DENIED (PSUserConfig `GPUDeny 1`); Photoshop must report useGPU 0 | pixel statistics comparable to the GPU row (`KF_REFERENCE_DIR`) | sampled |
+| `aeadv3d` | discovery | After Effects Advanced 3D renderer, depth of field, 24 shadow-casting 3D layers, 4K 16 bit, 10 frames by `aerender` | frames 3840x2160, project notes | gpu |
+| `premieretl` | discovery | Premiere Pro imports the neutral timeline (FCPXML from the data volume) through ExtendScript, own exporter writes a 5 s H.264 1080p slice | sequence structure (12 clips, 3840x2160), MP4 codec/size/duration | gpu |
+| `amematrix` | discovery | the same sequence queued in Media Encoder: H.264 2160/1080/720, HEVC 2160/1080/8K and 10-bit PQ, ProRes 422 HQ | each output's container, codec, size, duration; NVENC vs software judged by the encoder engine of the host GPU | enc |
+| `indesign_s1` .. `indesign_s6` | discovery | InDesign crash isolation: start+COM, new document, text frames, placed photo, PDF export, JPEG export; one fresh clone per row | `id_progress.txt` names the step that was running; WER minidump and Application log entries are kept | sampled |
 | `acrobat` | gate | open a 16-page PDF through the automation interface, extract 5 pages | page counts | sampled |
 | `premiere`, `dimension`, `uxp`, `lightroomlaunch` | gate | launch, reach the main window through UI Automation, hold, close | process alive and responding | none: PASS_LIMITED, no document work |
 | `animate`, `animatesample`, `animateprojects`, `lightroom` | disabled | JSFL entry and Lightroom plugin entry | | the reasons are in the table in code and in the traces README |
@@ -47,6 +52,12 @@ Per-row measured status (PASS, PASS_LIMITED, FAIL, NOT RUN with the reason) is i
 - GPU use is judged from the HOST nvidia-smi: the guest's utilisation counters are `[N/A]` under kf3 (a GSP RPC, function 76, is not served).
 - The guest-visible VRAM is the device's `fb-mb` (4096 by default): applications report 3.8 GB. The After Effects rows were run with `--fb-mb 8192`.
 - A phantom PnP instance of the build host's GPU makes the harness's device restart fail on any other die (fixed in `propimage_check.py`).
+
+- ExtendScript hosts (After Effects, Premiere Pro, Media Encoder): `AfterFX.exe -r script` is unreliable (ignored in about half the cold starts); every host runs the `*.jsx` files of its `Scripts\Startup` folder, so the harness installs (elevated, once per row) a stub there that reads `C:\kfhw\<app>_job.txt` and runs the script named in it after a short `$.sleep`; `app.scheduleTask` never fired. The row writes a marker as its last act; the lib retries a start without a marker (3 attempts, recorded).
+- After Effects: `aerender -reuse` hangs at start (0 CPU seconds, no child process); without `-reuse` it renders in-process. A guest with less RAM than the vendor minimum shows a "System Compatibility Report" window that blocks quitting: Enter closes it, UI Automation does not see its buttons. The "Show Tip of the Day" preference is switched off in the user's Prefs.txt together with the file-access one.
+- PowerShell traps that cost hours: variable names are case-insensitive, so `$r = ...` at the top of a row script replaced the result table `$R`; `Get-Content -Raw` assigned to a result field serialises the drive and path objects too (a 47 MB result.json); `-PassThru` processes with redirected output need polling by id (`Wait-Proc`), not `WaitForExit`. Tests pin the first two.
+- Crash evidence: the harness sets WER LocalDumps (minidump, `C:\kfapps\dumps`) elevated before each row; `Finish` writes `app_events.txt` (Application log 1000/1001/1002 entries since the row started, dump names and sizes).
+- Reference compare: every row writes `output_stats.json` (sha256 and PNG pixel statistics of each pulled output); with `KF_REFERENCE_DIR/<row>.json` from another platform the statistics are compared within a tolerance and the result is recorded as `reference` (only `KF_REFERENCE_STRICT=1` makes a mismatch fail the row).
 
 ## Built-in and third-party suites
 
