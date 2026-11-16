@@ -12,7 +12,7 @@ try {
   $p = Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', "$D\ae_make_run.jsx") -PassThru
   $t0 = Get-Date
   $n = 0
-  while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 420) { [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++; if ($n % 5 -eq 0) { Press-Key '{ENTER}' } elseif ($n % 5 -eq 3) { Press-Key '{ESC}' } }
+  while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 900) { [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++; if ($n % 5 -eq 0) { Press-Key '{ENTER}' } elseif ($n % 5 -eq 3) { Press-Key '{ESC}' } }
   if (-not $p.HasExited) { $R.make_quit = Quit-App 'AfterFX'; throw 'After Effects did not finish creating the project' }
   if (-not (Test-Path "$D\kf.aep")) { throw ('project not saved: ' + (Get-Content "$D\ae_make.txt" -Raw -ErrorAction SilentlyContinue)) }
   $R.make_log = (Get-Content "$D\ae_make.txt" -Raw)

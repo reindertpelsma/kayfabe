@@ -9,7 +9,7 @@ try {
   New-Item -Force -ItemType Directory "$D\frames" | Out-Null
   $p = Start-Process "$base\AfterFX.exe" -ArgumentList @('-r', "$D\ae_make_run.jsx") -PassThru
   $t0 = Get-Date; $n = 0
-  while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 600) { [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++; if ($n % 5 -eq 0) { Press-Key '{ENTER}' } elseif ($n % 5 -eq 3) { Press-Key '{ESC}' } }
+  while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 900) { [void](Dismiss-Dialogs 'AfterFX'); Start-Sleep 3; $n++; if ($n % 5 -eq 0) { Press-Key '{ENTER}' } elseif ($n % 5 -eq 3) { Press-Key '{ESC}' } }
   if (-not (Test-Path "$D\kf.aep")) { throw 'project not created' }
   $R.t_start = Epoch
   $procs = @()

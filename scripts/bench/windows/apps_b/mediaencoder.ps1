@@ -12,7 +12,7 @@ try {
   $mp4 = "$D\ame_out.mp4"
   $t0 = Get-Date
   $last = -1; $stable = 0
-  while (((Get-Date) - $t0).TotalSeconds -lt 420) {
+  while (((Get-Date) - $t0).TotalSeconds -lt 900) {
     [void](Dismiss-Dialogs @('AfterFX', 'Adobe Media Encoder'))
     if (Test-Path $mp4) { $len = (Get-Item $mp4).Length; if ($len -gt 0 -and $len -eq $last) { $stable++ } else { $stable = 0 }; $last = $len }
     if ($stable -ge 5 -and (Test-Path "$D\ame_make.ok")) { break }
