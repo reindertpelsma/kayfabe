@@ -239,15 +239,34 @@ class WinVmVast(unittest.TestCase):
                     self.assertIn(var, r.stderr)
 
     # -- (4) env file ---------------------------------------------------------------------------------
-    def test_sample_env_file_is_the_19_flag_list_and_marked_unsure(self):
+    # The 18 live lines of the pre-2026-11-15 sample file: the measured Windows profile, now the device's
+    # default for a declared Windows guest (docs/design/V3_WINDOWS_SUPPORT_PROFILE.md). None may come back as
+    # a default of the launcher or of the sample file: a default that needs an env file is the defect.
+    PROFILE = (
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH", "KF3_WIN_TWIN_DEFAPI_OBJECT", "KF3_KERNEL_GR_CE", "KF3_KERNEL_GR_WORK",
+        "KF3_TRANSLATED_CE_RELAY", "KF3_DEFERRED_API", "KF3_PREEMPT_BIND_PROBE", "KF3_ZCULL_BIND_PROBE",
+        "KF3_ASYNC_PREEMPT", "KF3_DISPLAY_CTRL_PROBE", "KF3_DISPLAY_IMP_ENABLE", "KF3_SW_RUNLIST_PROBE",
+        "KF3_SW_RUNLIST_HOST_OWNED", "KF3_GFX_POOL_PROBE", "KF3_MEMORY_LIST_PROBE", "KF3_DISPLAY_SDR_COLOR",
+        "KF3_DISPLAY_LUT_MIRROR", "KF3_DISPLAY_ILUT_OFFSET_256",
+    )
+
+    def test_sample_env_file_is_a_measurement_example_not_the_windows_profile(self):
         text = SAMPLE.read_text()
         flags = [l for l in text.splitlines() if l and not l.startswith("#")]
-        self.assertEqual(len(flags), 19)
         for l in flags:
             self.assertRegex(l, r"^KF3_[A-Z0-9_]+=[0-9]+$")
-        self.assertEqual(len(set(flags)), 19)
-        self.assertIn("UNSURE", text)
-        self.assertIn("confirm", text)
+        self.assertEqual(flags, ["KF3_RPC_TRACE=1"], "one measurement flag, nothing of the profile")
+        for name in self.PROFILE:
+            self.assertNotIn(name + "=", text, "the profile is the device's default; it must not be an env line")
+        self.assertIn("STATUS: LIVE, 2026-11-15", text)
+        self.assertIn("Windows needs NO env file", text)
+
+    def test_a_default_run_exports_no_profile_flag_and_needs_no_env_file(self):
+        r, argv, env = self.dry("run")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(env, {"KF3_RPC_TRACE": "1"}, "the one measurement default, nothing of the profile")
+        self.assertFalse(set(self.PROFILE) & set(env))
+        self.assertNotIn("--env-file", " ".join(argv))
 
     def test_env_file_exports_exactly_its_flags(self):
         r, _, env = self.dry("run", "--env-file", str(SAMPLE))

@@ -76,7 +76,10 @@ PROFILE=${KF_WINAPPS_PROFILE:-small}
 PER_GUEST=${KF_WINAPPS_PER_GUEST:-8}
 MAX_TDR=${KF_WINAPPS_MAX_TDR:-3}
 GATE_TAG=${KF_WINAPPS_GATE_TAG:-gate_$(printf %s "$T" | tr -c 'A-Za-z0-9_' '_' | cut -c1-24)}
-FLAGS=${KF_WINGATE_FLAGS:-$WIN/kf3_flags.sample.env}
+# ★ 2026-11-15 (flag cleanup, Stage 1): no env file by default (see windows_gate.sh); KF_WINGATE_FLAGS is measurement-only.
+FLAGS=${KF_WINGATE_FLAGS:-}
+FLAGS_ARGS=()
+[ -z "$FLAGS" ] || FLAGS_ARGS=(--flags-file "$FLAGS")
 GDRV=${KF_WINGATE_GUEST_DRIVER:-580.65.06}
 ARM=${KF_WINGATE_ARM:-B}
 DEFAULT_OFFICIAL_DRIVER=580.88          # the Windows driver windows_gate.sh installs (and checks); official_fetch.json pins it
@@ -255,7 +258,7 @@ kf_dmesg > /dev/null 2>&1 || refuse dmesg-unreadable
 [ -e "$VM/installed" ] || refuse "windows-not-installed-($VM)"
 grep -q '^WINDOWS_GATE_PASS ' "$PROV/${T}_windows.log" 2> /dev/null || refuse "no-WINDOWS_GATE_PASS-in-$PROV/${T}_windows.log"
 [ -f "$VM/disk/$GATE_TAG.qcow2" ] || refuse "no-gate-overlay-disk/$GATE_TAG.qcow2"
-[ -r "$FLAGS" ] || refuse "no-flags-file-$FLAGS"
+[ -z "$FLAGS" ] || [ -r "$FLAGS" ] || refuse "no-flags-file-$FLAGS"
 [ -x "$WINVM_QEMU" ] || refuse "no-kf3-qemu-$WINVM_QEMU"
 [ -s "$VM/identity.env" ] || refuse "no-vm-identity"
 if pgrep -x qemu-system-x86 > /dev/null || run_loop_alive_any; then refuse "a-qemu-or-run-loop-is-already-running"; fi
@@ -343,7 +346,7 @@ GUEST_STARTED=1
 RUN=$EV/run
 DEADLINE=$(($(date +%s) + BUDGET_S))
 python3 -I "$APPM/winapps.py" --vm winvm --run-dir "$RUN" --apps "$IDS" --tier 3 --iso "$ISO" "${OFFICIAL_ARGS[@]}" --image-manifest "$IMGMAN" \
-    --winvm-script "$WV" --winvm-root "$WINVM_ROOT" --winvm-name "${WINVM_NAME:-kfwin}" --parent-overlay "$GATE_TAG" --flags-file "$FLAGS" \
+    --winvm-script "$WV" --winvm-root "$WINVM_ROOT" --winvm-name "${WINVM_NAME:-kfwin}" --parent-overlay "$GATE_TAG" "${FLAGS_ARGS[@]}" \
     --guest-driver "$GDRV" --arm "$ARM" --per-guest "$PER_GUEST" --max-tdr "$MAX_TDR" --deadline-epoch "$DEADLINE" > "$EV/driver.out" 2>&1
 DRC=$?
 say "APPS_NOTE winapps.py rc=$DRC (0 done, 3 repeated guest boot failures, 4 guest limit, 6 time budget ended)"

@@ -139,7 +139,7 @@ Whether each application starts and works with no internet is the next step's jo
 Shut the machine down cleanly first. Then test the way the image will be used: offline mode (user-mode network with `restrict=on`, no internet) and the deterministic clock, which the tool sets from the state file (see *Using the image afterwards*). The question for each application is whether it starts and works without internet. The test uses a disposable overlay of the disk, never the disk itself.
 
 ```text
-python3 -B -I scripts/bench/windows/propimage_check.py --dir unpacked/ --work /path/to/fresh-workdir --out results/ --qemu /path/to/kayfabe-qemu --flags kf3_flags.sample.env --broker /path/to/broker
+python3 -B -I scripts/bench/windows/propimage_check.py --dir unpacked/ --work /path/to/fresh-workdir --out results/ --qemu /path/to/kayfabe-qemu --flags kf3_flags.sample.env --broker /path/to/broker   # the flags file is optional measurement flags; Windows needs none
 ```
 
 (Use `--zip` with the archive instead of `--dir` the first time; see step 10.) The script checks that `swtpm` is 0.10 or newer, creates the overlay, boots with the network restricted, SSHes in, applies the per-boot repairs (see the deviations table), checks the machine's identity against the state file, then starts each app and records a result. A launch alone is recorded as a launch only, never as a pass.

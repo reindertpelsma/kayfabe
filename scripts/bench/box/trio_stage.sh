@@ -50,7 +50,10 @@ OVERLAY=gate_$(printf %s "$GT" | tr -c 'A-Za-z0-9_' '_' | cut -c1-24)
 WTAG=trio_$(printf %s "$T" | tr -c 'A-Za-z0-9_' '_' | cut -c1-24)
 REV=$(git -C "$SOURCE" rev-parse --short=8 HEAD 2> /dev/null || echo norev)
 QEMU=${KF_TRIO_QEMU:-$BENCH/kf3-bins/$REV/qemu-system-x86_64}
-FLAGS=${KF_WINGATE_FLAGS:-$WIN/kf3_flags.sample.env}
+# ★ 2026-11-15 (flag cleanup, Stage 1): no env file by default (see windows_gate.sh); KF_WINGATE_FLAGS is measurement-only.
+FLAGS=${KF_WINGATE_FLAGS:-}
+ENVFILE_ARGS=()
+[ -z "$FLAGS" ] || ENVFILE_ARGS=(--env-file "$FLAGS")
 GDRV=${KF_WINGATE_GUEST_DRIVER:-580.65.06}
 ARMS_STR=${KF_TRIO_ARMS:-}
 HOST_SOLO_S=${KF_TRIO_HOST_SOLO_S:-120}
@@ -341,7 +344,7 @@ vmuuid=$(sed -n 's/^VM_UUID=//p' "$VM/identity.env" 2> /dev/null | head -1)
 [[ "$vmuuid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { WHY_A="no VM_UUID in $VM/identity.env"; exit 1; }
 rm -f "$VM/run/stop-requested"
 KF_GPU_LOCK=/tmp/kf-trio-windows.lock WINVM_QEMU=$QEMU bash "$WV" run --detach --once --overlay "$OVERLAY" --arm B \
-    --guest-driver "$GDRV" --kf3-extra "gpu-uuid=GPU-$vmuuid" --env-file "$FLAGS" --tag "$WTAG" > "$EV/win_launch.txt" 2>&1 < /dev/null \
+    --guest-driver "$GDRV" --kf3-extra "gpu-uuid=GPU-$vmuuid" "${ENVFILE_ARGS[@]}" --tag "$WTAG" > "$EV/win_launch.txt" 2>&1 < /dev/null \
     || { WHY_A="win_vm.sh run did not start: $(tail -2 "$EV/win_launch.txt" | tr '\n' ' ')"; exit 1; }
 WIN_UP=1
 sleep 5

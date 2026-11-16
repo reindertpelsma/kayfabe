@@ -248,12 +248,26 @@ pub const VA_ROW_WRAPS: u32 = 0x4B78;
 /// guest input — and lies wholly below host RM's default start, so the space's host-side layout is
 /// otherwise unchanged.
 ///
-/// Default OFF: applied only when a twin can run in a `SHARED_MANAGEMENT` space at all, i.e. under
-/// `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1` (Windows per-process work, `OWNER_RULINGS.md` §V). Linux
-/// guests keep host RM's default start. It replaces the diagnostic `KF3_TWIN_VA_BASE` (runs 70-72).
+/// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`, default off): applied
+/// only to the spaces of a guest that DECLARED the measured Windows build at fn 1 with `windows-support`
+/// on (Windows per-process work, `OWNER_RULINGS.md` §V): the caller states it ([`HostRm::alloc_vaspace_at`],
+/// [`MirrorVaStart::select`]); nothing here reads the environment. Linux guests keep host RM's default
+/// start. It replaces the diagnostic `KF3_TWIN_VA_BASE` (runs 70-72).
 pub const TWIN_VA_FLOOR: u64 = 0x1_0000;
 /// Host RM's default VA-space start (`gvaspaceGetReservedVaspaceBase`, 1 MiB on a non-MIG GPU).
 pub const HOST_DEFAULT_VA_START: u64 = 0x10_0000;
+
+/// ★ 2026-11-15 (review of PR #438, F2): the start a host space is really allocated at: the caller's `start`
+/// only for a space that reserves the guest's ranges (a mirror); a bare (T-space) allocation never takes the
+/// floor, whatever the caller asked. Pure, so the rule is tested where it is applied.
+#[must_use]
+pub const fn effective_start(reserve_guest: bool, start: MirrorVaStart) -> MirrorVaStart {
+    if reserve_guest {
+        start
+    } else {
+        MirrorVaStart::HostDefault
+    }
+}
 
 /// Where a guest-mirror host space starts ([`TWIN_VA_FLOOR`] explains the rule).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -266,17 +280,8 @@ pub enum MirrorVaStart {
 
 impl MirrorVaStart {
     /// The rule's switch: [`MirrorVaStart::GuestFloor`] iff Windows per-process work may run on twins
-    /// (`KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`, default off).
-    #[must_use]
-    pub fn from_env() -> Self {
-        // Read once: this runs on the VA thread for every mirror-space alloc (an env-lock round trip each).
-        static CACHED: std::sync::OnceLock<MirrorVaStart> = std::sync::OnceLock::new();
-        *CACHED.get_or_init(|| {
-            Self::select(std::env::var("KF3_WIN_USER_CHANNELS_PASSTHROUGH").as_deref() == Ok("1"))
-        })
-    }
-
-    /// Pure form of [`MirrorVaStart::from_env`].
+    /// of this guest (`windows_user_twins`: the guest declared the Windows 580.88 build and
+    /// `windows-support` is on; [`kf_rm`'s `WindowsProfile::active`]).
     #[must_use]
     pub const fn select(windows_user_twins: bool) -> Self {
         if windows_user_twins {
@@ -675,7 +680,17 @@ impl HostRm {
     /// # Errors
     /// The host's refusal; a half-built space is freed.
     pub fn alloc_vaspace(&self) -> Result<VaSpace, RmError> {
-        self.alloc_vaspace_with(std::env::var_os("KF3_NO_GUEST_VA_RESERVE").is_none())
+        self.alloc_vaspace_at(MirrorVaStart::HostDefault)
+    }
+
+    /// ★ 2026-11-15: [`HostRm::alloc_vaspace`] with the start the caller derived from the guest's
+    /// DECLARED identity ([`MirrorVaStart::select`]). A Linux guest's spaces are always
+    /// [`MirrorVaStart::HostDefault`]; the floor is a Windows-profile behaviour (see [`TWIN_VA_FLOOR`]).
+    ///
+    /// # Errors
+    /// The host's refusal; a half-built space is freed.
+    pub fn alloc_vaspace_at(&self, start: MirrorVaStart) -> Result<VaSpace, RmError> {
+        self.alloc_vaspace_with(std::env::var_os("KF3_NO_GUEST_VA_RESERVE").is_none(), start)
     }
 
     /// ★ P1+P2 inc B (`docs/design/V3_P1P2_TSPACE.md` §2.1): a fresh host VA space with NONE of the
@@ -687,20 +702,21 @@ impl HostRm {
     /// # Errors
     /// The host's refusal; a half-built space is freed.
     pub fn alloc_vaspace_bare(&self) -> Result<VaSpace, RmError> {
-        self.alloc_vaspace_with(false)
+        self.alloc_vaspace_with(false, MirrorVaStart::HostDefault)
     }
 
-    fn alloc_vaspace_with(&self, reserve_guest: bool) -> Result<VaSpace, RmError> {
+    fn alloc_vaspace_with(
+        &self,
+        reserve_guest: bool,
+        start: MirrorVaStart,
+    ) -> Result<VaSpace, RmError> {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
         // ★ 2026-10-08 (task A): a guest-mirror space starts where the guest's page tables can map
         // ([`TWIN_VA_FLOOR`] states the rule and its evidence). ⊘ Replaces the run70-72 diagnostic
         // `KF3_TWIN_VA_BASE=<hex>` (a guest-independent but operator-chosen base, with NO reservation
         // keeping host RM's own buffers out of the low range it opened).
-        let start = if reserve_guest {
-            MirrorVaStart::from_env()
-        } else {
-            MirrorVaStart::HostDefault
-        };
+        // ★ 2026-11-15: a bare (T-space) allocation never takes the floor: no guest row lands there.
+        let start = effective_start(reserve_guest, start);
         NvVaspaceAllocationParameters {
             va_base: start.va_base(),
             ..NvVaspaceAllocationParameters::default()
@@ -2523,6 +2539,48 @@ mod twin_va_start_tests {
 
     /// ★ Task A: the rule is OFF by default (Linux keeps host RM's start, nothing reserved low), and
     /// ON it starts at one 64 KiB big page with `[64 KiB, 1 MiB)` reserved — constants, not inputs.
+    /// ★ 2026-11-15 (review of PR #438, F2): the start actually used. A mirror takes what the caller derived
+    /// from the guest's declaration; a bare (T-space) allocation never takes the floor.
+    #[test]
+    fn a_bare_space_never_takes_the_floor() {
+        use super::{MirrorVaStart, effective_start};
+        assert_eq!(
+            effective_start(false, MirrorVaStart::GuestFloor),
+            MirrorVaStart::HostDefault
+        );
+        assert_eq!(
+            effective_start(false, MirrorVaStart::HostDefault),
+            MirrorVaStart::HostDefault
+        );
+    }
+
+    /// The whole table of the rule.
+    #[test]
+    fn the_effective_start_table() {
+        use super::{MirrorVaStart as M, effective_start};
+        for (reserve, asked, want) in [
+            (false, M::HostDefault, M::HostDefault),
+            (false, M::GuestFloor, M::HostDefault),
+            (true, M::HostDefault, M::HostDefault),
+            (true, M::GuestFloor, M::GuestFloor),
+        ] {
+            assert_eq!(effective_start(reserve, asked), want, "{reserve} {asked:?}");
+        }
+    }
+
+    #[test]
+    fn a_mirror_space_takes_the_start_its_caller_derived() {
+        use super::{MirrorVaStart, effective_start};
+        assert_eq!(
+            effective_start(true, MirrorVaStart::GuestFloor),
+            MirrorVaStart::GuestFloor
+        );
+        assert_eq!(
+            effective_start(true, MirrorVaStart::HostDefault),
+            MirrorVaStart::HostDefault
+        );
+    }
+
     #[test]
     fn the_start_is_host_default_unless_windows_user_twins_are_enabled() {
         assert_eq!(MirrorVaStart::select(false), MirrorVaStart::HostDefault);
