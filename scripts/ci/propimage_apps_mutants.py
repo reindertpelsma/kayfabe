@@ -124,7 +124,7 @@ MUTANTS = [
     # reading what the harness left
     M("pass-without-proof-accepted", "pa", "        if not proven:", "        if False:",
       K + "test_a_pass_row_without_a_verdict_file_is_unproven", K + "test_a_pass_row_with_the_wrong_evidence_kind_is_unproven", K + "test_row_and_verdict_file_must_agree"),
-    M("expected-evidence-kind-dropped", "pa", 'verdict_doc.get("evidence") == rec["kind"] == EXPECTED_KIND[app]', 'verdict_doc.get("evidence") == rec["kind"]',
+    M("expected-evidence-kind-dropped", "pa", 'verdict_doc.get("evidence") == rec["kind"] == (expected or EXPECTED_KIND.get(app))', 'verdict_doc.get("evidence") == rec["kind"]',
       K + "test_a_pass_row_with_the_wrong_evidence_kind_is_unproven", R + "test_a_pass_with_the_wrong_evidence_kind_in_a_boot_is_not_a_stage_pass"),
     M("verdict-ok-flag-ignored", "pa", 'verdict_doc.get("ok") is True', "True",
       K + "test_row_and_verdict_file_must_agree", K + "test_a_verdict_file_that_says_not_ok_is_not_a_pass"),
@@ -194,11 +194,11 @@ MUTANTS = [
       RV + "test_pass_needs_every_app_to_pass_in_order", RV + "test_result_file_refuses_a_malformed_record"),
     M("report-app-order-unchecked", "report", "names == [n for n in PROPIMAGE_APPS if n in names]", "True",
       RV + "test_non_pass_record_keeps_the_app_order_and_unique_apps", RV + "test_a_failed_record_with_apps_out_of_order_is_refused_in_a_result_file"),
-    M("report-reason-optional", "report", '        ok = value["reason"] != ""', "        ok = True",
+    M("report-reason-optional", "report", '        ok = value["reason"] != ""\n    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 24576', '        ok = True\n    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 24576',
       RV + "test_non_pass_needs_an_upper_case_reason", RV + "test_a_refused_record_without_a_reason_is_rejected"),
-    M("report-extra-keys-allowed", "report", 'ok = type(value) is dict and top <= set(value) <= top | {"error"}', "ok = type(value) is dict and top <= set(value)",
+    M("report-extra-keys-allowed", "report", 'ok = type(value) is dict and top <= set(value) <= top | {"error"}\n    ok = ok and value["schema"] == 1', "ok = type(value) is dict and top <= set(value)\n    ok = ok and value[\"schema\"] == 1",
       RV + "test_shape_extra_keys_and_types", RV + "test_result_file_refuses_a_malformed_record"),
-    M("report-text-not-printable-checked", "report", r'text = re.compile(r"[\x20-\x7e]{0,200}")', 'text = re.compile(r"(?s).{0,2000}")',
+    M("report-text-not-printable-checked", "report", '    token = re.compile(r"[A-Z][A-Z0-9_]{0,31}(:[A-Za-z0-9_]{1,32})?")\n    text = re.compile(r"[\\x20-\\x7e]{0,200}")', '    token = re.compile(r"[A-Z][A-Z0-9_]{0,31}(:[A-Za-z0-9_]{1,32})?")\n    text = re.compile(r"(?s).{0,2000}")',
       RV + "test_text_fields_are_printable_and_bounded", RV + "test_xid_lines_are_printable_and_few"),
     M("report-xid-lines-unbounded", "report", 'ok = ok and len(x["lines"]) <= 8 and', "ok = ok and",
       RV + "test_xid_lines_are_printable_and_few", RV + "test_result_file_bounds_the_xid_lines"),
@@ -209,7 +209,7 @@ MUTANTS = [
     # the payload wiring
     M("payload-stage-in-the-default-plan", "payload", "PROPIMAGE_APPS_IN_LARGE = False", "PROPIMAGE_APPS_IN_LARGE = True",
       W + "test_not_in_the_default_plan_and_only_with_only_in_large", W + "test_manual_only_table_and_the_budget_guard"),
-    M("payload-stage-in-every-tier", "payload", 'if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only):', 'if (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only):',
+    M("payload-stage-in-every-tier", "payload", 'if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only or i.propimages):', 'if (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only or i.propimages):',
       W + "test_not_in_the_default_plan_and_only_with_only_in_large", W + "test_dry_run_refuses_the_stage_outside_the_large_tier"),
     M("payload-record-sha-unbound", "payload", 'if type(doc) is not dict or doc.get("sha") != sha:', "if type(doc) is not dict:",
       W + "test_rows_bind_the_record_to_the_sha", W + "test_rows_pass_fail_and_not_run"),
@@ -220,8 +220,8 @@ MUTANTS = [
       W + "test_a_nonzero_exit_with_a_pass_record_is_a_failure", W + "test_rows_pass_fail_and_not_run"),
     M("payload-record-not-kept", "payload", '    result["propimage_apps"] = doc\n', "    pass\n",
       W + "test_rows_need_exactly_one_parseable_line_and_keep_a_red_record", W + "test_rows_pass_fail_and_not_run"),
-    M("payload-stage-after-the-spec-lane", "payload", '    if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only):\n        names.append("propimage_apps")\n    if "specviewperf" in i.stages:\n        names.append("specviewperf")',
-      '    if "specviewperf" in i.stages:\n        names.append("specviewperf")\n    if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only):\n        names.append("propimage_apps")',
+    M("payload-stage-after-the-spec-lane", "payload", '    if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only or i.propimages):\n        names.append("propimage_apps")\n    if "specviewperf" in i.stages:\n        names.append("specviewperf")',
+      '    if "specviewperf" in i.stages:\n        names.append("specviewperf")\n    if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only or i.propimages):\n        names.append("propimage_apps")',
       W + "test_runs_after_every_windows_stage_and_before_the_spec_lane", W + "test_runs_before_the_spec_lane_without_windows_stages"),
 ]
 
