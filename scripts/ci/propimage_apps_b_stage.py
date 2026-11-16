@@ -87,6 +87,8 @@ def collect_app(out, app, rows, xids, expected_gpu):
     kind = pa.clean(step.get("evidence"), 8)
     rec["kind"] = kind if kind in ("FILE", "UIA", "NONE") else "NONE"
     if type(doc) is dict:
+        rec["lane"] = pa.clean(doc.get("lane"), 10)
+        rec["platform"] = pa.clean(doc.get("platform"), 6)
         secs = doc.get("secs")
         rec["secs"] = secs if type(secs) is int and 0 <= secs < 1 << 20 else 0
         g = doc.get("gpu") if type(doc.get("gpu")) is dict else {}

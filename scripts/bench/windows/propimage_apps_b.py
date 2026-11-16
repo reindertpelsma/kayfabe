@@ -17,6 +17,7 @@ HARNESS (transport lost; never an application failure).
 """
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -42,24 +43,25 @@ EXPECT = {
     "pdf": {"name": "apollo11_anomaly_report_3.pdf", "pages": 16},
 }
 
+# lane: gate = must pass on kf3 (strict); discovery = exotic or heavy, allowed to fail and crash (the failures are the product; each runs in a fresh clone).
 # name -> timeout (s), script, GPU engines that must be busy during the operation (() = informational sampling only)
 CHECKS = {
-    "gpudiag": {"timeout": 240, "script": "sniffers.ps1", "gpu": ()},
-    "photoshop": {"timeout": 480, "script": "photoshop.ps1", "gpu": ("gpu",)},
-    "illustrator": {"timeout": 480, "script": "illustrator.ps1", "gpu": ()},
-    "aftereffects": {"timeout": 1500, "script": "aftereffects.ps1", "gpu": ("gpu",)},
-    "indesign": {"timeout": 480, "script": "indesign.ps1", "gpu": ()},
-    "illustratorsample": {"timeout": 480, "script": "illustrator_sample.ps1", "gpu": ()},
-    "indesignsample": {"timeout": 480, "script": "indesign_sample.ps1", "gpu": ()},
-    "animatesample": {"timeout": 420, "script": "animate_sample.ps1", "gpu": ()},
-    "photoshopsample": {"timeout": 480, "script": "photoshop_sample.ps1", "gpu": ("gpu",)},
-    "acrobat": {"timeout": 360, "script": "acrobat.ps1", "gpu": ()},
-    "animate": {"timeout": 360, "script": "animate.ps1", "gpu": ()},
-    "premiere": {"timeout": 420, "script": "launch.ps1", "gpu": ()},
-    "mediaencoder": {"timeout": 600, "script": "mediaencoder.ps1", "gpu": ("enc",)},
-    "lightroom": {"timeout": 600, "script": "lightroom.ps1", "gpu": ("gpu",)},
-    "dimension": {"timeout": 420, "script": "launch.ps1", "gpu": ()},
-    "uxp": {"timeout": 300, "script": "launch.ps1", "gpu": ()},
+    "gpudiag": {"timeout": 240, "script": "sniffers.ps1", "gpu": (), "lane": "gate", "path": "NVIDIA driver/CUDA enumeration by the applications own sniffers"},
+    "photoshop": {"timeout": 480, "script": "photoshop.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "OpenGL/D3D12 canvas, GPU filters (smart sharpen), 16-bit/wide-gamut, large VRAM allocation (8K, 100 layers)"},
+    "illustrator": {"timeout": 480, "script": "illustrator.ps1", "gpu": (), "lane": "gate", "path": "D3D11 canvas, large path counts, raster export"},
+    "aftereffects": {"timeout": 1500, "script": "aftereffects.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "CUDA/OptiX effects, 3D layers, 16-bit float, 4K render, particle effects"},
+    "indesign": {"timeout": 480, "script": "indesign.ps1", "gpu": (), "lane": "gate", "path": "D3D11/Direct2D page rendering, PDF/JPEG export"},
+    "illustratorsample": {"timeout": 480, "script": "illustrator_sample.ps1", "gpu": (), "lane": "gate", "path": "D3D11 canvas on shipped art"},
+    "indesignsample": {"timeout": 480, "script": "indesign_sample.ps1", "gpu": (), "lane": "gate", "path": "D3D11/Direct2D on shipped documents"},
+    "animatesample": {"timeout": 420, "script": "animate_sample.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage on a shipped document"},
+    "photoshopsample": {"timeout": 480, "script": "photoshop_sample.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "GPU filters on shipped 4K+ photo, 3840x2160 template"},
+    "acrobat": {"timeout": 360, "script": "acrobat.ps1", "gpu": (), "lane": "gate", "path": "Direct2D page rendering"},
+    "animate": {"timeout": 360, "script": "animate.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage, tween export"},
+    "premiere": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Mercury engine start, CUDA/D3D12 init (launch only)"},
+    "mediaencoder": {"timeout": 600, "script": "mediaencoder.ps1", "gpu": ("enc",), "lane": "discovery", "path": "NVENC H.264 via the After Effects hand-off"},
+    "lightroom": {"timeout": 600, "script": "lightroom.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "develop pipeline GPU processing on 12/24 MP raws"},
+    "dimension": {"timeout": 420, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/OptiX init (launch only)"},
+    "uxp": {"timeout": 300, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "UXP tooling start (launch only)"},
 }
 EMBED = {"aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
 LAUNCH_ONLY = ("premiere", "dimension", "uxp")
@@ -400,7 +402,8 @@ GRADERS = {"illustratorsample": grade_illustratorsample, "indesignsample": grade
 
 def verdict(name, run_id, directory, gpu_record):
     """Grade one row from the pulled files. Returns the same row shape as propimage_check.verdict plus `limited`, `gpu`."""
-    row = {"app": name, "ok": False, "evidence": "NONE", "signal": "", "error": "", "class": "app", "limited": False}
+    row = {"app": name, "ok": False, "evidence": "NONE", "signal": "", "error": "", "class": "app", "limited": False,
+           "lane": CHECKS[name].get("lane", "gate"), "path": CHECKS[name].get("path", ""), "platform": os.environ.get("KF_PLATFORM", "kf3")}
     try:
         r = _json(directory / "result.json")
         if r.get("app") not in (name, "sniffers"):
