@@ -419,7 +419,7 @@ NAME_OK = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 # A test pins this equal to CHECKS; the validator reads lanes from here and never from the record.
 PROPIMAGE_B_ROWS = {
     "gpudiag": ("gate", True), "photoshop": ("discovery", True), "illustrator": ("gate", True), "aftereffects": ("discovery", True),
-    "indesign": ("gate", True), "illustratorsample": ("gate", True), "indesignsample": ("gate", True), "animatesample": ("gate", False),
+    "indesign": ("discovery", True), "illustratorsample": ("gate", True), "indesignsample": ("discovery", True), "animatesample": ("gate", False),
     "photoshopsample": ("discovery", True), "photoshopcpu": ("discovery", True), "photoshopprojects": ("discovery", True),
     "indesignprojects": ("discovery", True), "animateprojects": ("discovery", False), "aeprojects": ("discovery", True),
     "aetoggle": ("discovery", True), "aeadv3d": ("discovery", True), "premieretl": ("discovery", True), "amematrix": ("discovery", True),
