@@ -65,6 +65,9 @@ class T(unittest.TestCase):
         self.assertEqual(ga.evaluate(rows, [], ("mem",))["verdict"], "PASS")
         self.assertEqual(ga.evaluate(rows, [], ("gpu",))["verdict"], "FAIL")
 
+    def test_informational_row_without_samples_is_not_a_failure(self):
+        self.assertEqual(ga.evaluate([], [], ())["verdict"], "PASS")
+
     def test_unreadable_is_fail_with_reason(self):
         r = ga.evaluate([], [], ("gpu",))
         self.assertEqual(r["verdict"], "FAIL")
@@ -83,17 +86,52 @@ class T(unittest.TestCase):
     def test_assert_gpu_used_end_to_end_and_operation_error(self):
         g = FakeGuest(q(0, 500) + q(0, 500) + q(60, 1200) + q(70, 1300), DMON)
         with tempfile.TemporaryDirectory() as td:
-            res, rec = ga.assert_gpu_used(g, lambda: 42, ("gpu", "mem"), out_dir=td, name="demo", sleep=lambda s: None)
+            res, rec = ga.assert_gpu_used(g, lambda: 42, ("gpu", "mem"), out_dir=td, name="demo", sleep=lambda s: None, host=False)
             self.assertEqual((res, rec["verdict"]), (42, "PASS"))
             self.assertTrue((Path(td) / "demo_gpu.json").is_file())
 
             def boom():
                 raise RuntimeError("x")
             with self.assertRaises(RuntimeError):
-                ga.assert_gpu_used(g, boom, ("gpu",), out_dir=td, name="bad", sleep=lambda s: None)
+                ga.assert_gpu_used(g, boom, ("gpu",), out_dir=td, name="bad", sleep=lambda s: None, host=False)
             self.assertIn("operation raised", (Path(td) / "bad_gpu.json").read_text())
         with self.assertRaises(ValueError):
             ga.assert_gpu_used(g, lambda: 1, name="../x")
+
+
+class FakeProbe:
+    def __init__(self, query, dmon, ok=True):
+        self.q, self.d, self.ok = query, dmon, ok
+
+    def start(self):
+        return self.ok
+
+    def stop(self):
+        return self.q, self.d
+
+
+class HostTests(unittest.TestCase):
+    def test_host_rows_decide_when_the_guest_reports_na(self):
+        guest = FakeGuest(q("[N/A]", 437) * 4, "# gpu sm\n# Idx %\n 0 - \n")
+        host = FakeProbe(q(0, 500) + q(0, 500) + q(70, 1500) + q(80, 1600), DMON)
+        with tempfile.TemporaryDirectory() as td:
+            _, rec = ga.assert_gpu_used(guest, lambda: 1, ("gpu", "mem"), out_dir=td, name="h", sleep=lambda s: None, host_probe=host)
+            self.assertEqual((rec["verdict"], rec["source"]), ("PASS", "host"))
+            self.assertEqual(rec["guest"]["verdict"], "FAIL")
+            self.assertTrue((Path(td) / "h_host_query.csv").is_file())
+
+    def test_idle_host_fails_even_if_the_guest_looks_busy(self):
+        guest = FakeGuest(q(0, 500) + q(0, 500) + q(60, 1200) + q(70, 1300), DMON)
+        host = FakeProbe(q(0, 500) * 6, "")
+        with tempfile.TemporaryDirectory() as td:
+            _, rec = ga.assert_gpu_used(guest, lambda: 1, ("gpu",), out_dir=td, name="h", sleep=lambda s: None, host_probe=host)
+            self.assertEqual(rec["verdict"], "FAIL")
+
+    def test_no_host_nvidia_smi_falls_back_to_the_guest(self):
+        guest = FakeGuest(q(0, 500) + q(0, 500) + q(60, 1200) + q(70, 1300), DMON)
+        with tempfile.TemporaryDirectory() as td:
+            _, rec = ga.assert_gpu_used(guest, lambda: 1, ("gpu",), out_dir=td, name="h", sleep=lambda s: None, host_probe=FakeProbe("", "", ok=False))
+            self.assertEqual((rec["verdict"], rec["source"]), ("PASS", "guest"))
 
 
 if __name__ == "__main__":

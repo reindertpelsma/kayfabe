@@ -14,5 +14,6 @@ try {
     ((cmd.exe /c "`"$($e[1])`" 2>&1") | Out-String) | Set-Content -Encoding UTF8 $f
     $R.outputs += (File-Info $f)
   }
-} catch { $R.error = $_.Exception.Message }
+  $R.quit = 'process'
+} catch { $R.error = $_.Exception.Message; $R.quit = 'process' }
 Finish $R
