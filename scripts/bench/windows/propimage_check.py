@@ -818,7 +818,7 @@ CHECKS = {
         "exe": r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SLDWORKS.exe",
     },
     "resolve": {
-        "timeout": 2400,
+        "timeout": 1800,
         "exe": r"C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe",
     },
     "edrawings": {

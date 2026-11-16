@@ -1,4 +1,4 @@
-STATUS: DESIGN-ONLY, 2026-11-16. The pure logic is GPU-free tested (`scripts/ci/test_resolve_gpu.py`); the guest driver has been exercised piecewise on the RTX 4070 PC (MEASURED facts below) and the full row has run on a Vast box only as `traces/resolve_gpu_20261116/README.md` records (if that directory does not exist, it has not).
+STATUS: DESIGN-ONLY, 2026-11-16 (first box runs recorded below). The pure logic is GPU-free tested (`scripts/ci/test_resolve_gpu.py`); the guest driver was exercised piecewise on the RTX 4070 PC and on a Vast RTX 4090 box (`traces/resolve_gpu_20261116/README.md`). The five-render row has NOT passed on any platform: on the 4090 Resolve crashed before the Deliver page was reached.
 
 # DaVinci Resolve in image A: real GPU-rendering coverage with a GPU-use assertion
 
@@ -12,6 +12,16 @@ Owner instruction, 2026-11-16: extend the Resolve coverage of the proprietary im
 - Resolve's log names its device: `Selected compute API: CUDA`, `Detected 1 GPUs`, `Initializing CUDA board manager`, `Initialized MainPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4070'`; `GPUDetect` prints `NVML Error Unknown Error (999): Querying device current PCI link width`, the GPU name as `"NVIDIA "` (empty) and VRAM `3.6 GiB` (the 4096 MiB guest framebuffer).
 - A first render of a UHD 14 s H.264 timeline ran at about 2 fps overall; the physical GPU (host `nvidia-smi`) sat at 95 to 98 percent while it ran; the guest WDDM counters of the Resolve process showed video decode up to 98.7 percent, copy up to 22 percent, 3D 0, and no compute engine at all, and the process held 3.0 to 3.4 GiB of dedicated GPU memory. Guest `nvidia-smi` printed `[N/A]` for every utilisation column while `memory.used` was readable (traces README).
 - A software H.265 render of the same UHD timeline estimated over an hour in the nested guest; cancelling it hung the Resolve UI (the process had to be killed). The H.265 deliverable is therefore 720p and last.
+
+## First box runs (MEASURED 2026-11-16, Vast RTX 4090, AD102, host driver 580.159.04, kf3 `a564ba3c5`; evidence `traces/resolve_gpu_20261116/box_rtx4090/`)
+
+- The harness `gpu` step failed on RTX 4000 Ada, RTX 4060 Ti and RTX 4090 alike. Cause (MEASURED): `render_gpu_fix` restarted `Get-PnpDevice -Class Display` entries by friendly name; on any die other than the image's own RTX 4070 that list contains the 4070 as a phantom (CM_PROB_PHANTOM) which `pnputil /restart-device` cannot restart. The new device first shows as "Video Controller (VGA Compatible)" (CM_PROB_REINSTALL, device `VEN_10DE&DEV_2684`, `oem15.inf` 32.0.15.8088) and ends in CM_PROB_FAILED_POST_START (Code 43) when the key is set after its first start. Fix (commits 068680b5d, 438dfcd4f): restart only present `VEN_10DE` devices, wait for the exact seed UUID, retry once with Disable/Enable (`pnputil /scan-devices` does not clear it). With it the step passes on the 4090. The earlier INFERRED explanations (workstation die/INF coverage; kf3 refusing rows unmeasured for AD106/580, see `box_rtx4060ti_gpu_step_fail_kf3_refusals.txt`) are FALSIFIED as the cause of this step.
+- Resolve's own log on the 4090 under kf3: compute API CUDA, 1 GPU detected, device `NVIDIA GeForce RTX 4090`, CUDA board manager, NVENC/NVDEC listed, the same `NVML Error Unknown Error (999)` line. So "Resolve reports the NVIDIA GPU as its processing device" holds there.
+- Resolve.exe crashed in all three sessions that lasted about 3 to 4 minutes after the project was loaded (faulting module `nvoglv64.dll`, exception 0xc0000409, event "NVIDIA OpenGL Driver: Unable to recover from a kernel exception", `nvlddmkm` Id 153 three times just before; the guest `nvidia-smi` sampler crashed in `nvml.dll` at the same moment). Two sessions that ended earlier did not crash. The failing step differed (Color page, Deliver page, none), so this is not a page-switch bug. It is the same family as the known Windows OpenGL crash `traces/windows_gl_crash_20261011` (nvoglv64.dll under kf3). On the PC's RTX 4070 (host 595.91.07, kf3 `fb274c4b`) Resolve ran about 25 minutes including a render. Die, host driver, kf3 revision and the nested host all differ between the two, so no cause is claimed; the VFIO control (`--platform vfio`) is queued for the PC.
+- kf3 host-log census of one 4090 boot (whole boot, `driver_run_rg9/kf3_census_whole_boot.json`): 2091 unserviced GSP controls, all code 76; no ForeignClass, no DEAD channel, no Xid, no TDR. Failure class of the row: CRASH.
+- The guest `nvidia-smi` printed `[N/A]` for every utilisation column in 284 of 284 samples (the image-B lane measured the same on its 4090 box).
+
+Consequences for the row definitions: the gate lane no longer drives the Color page (grading is a discovery step), `All-Els` waits up to 120 s for the main window (Resolve is not responding for 10 to 20 s after an import), the guest script records Application and `nvlddmkm` events and Resolve's log in its `finally` so a crash leaves evidence, and the stage's Resolve budget is 1800 s (the app plan becomes four boots).
 
 ## Open assets
 
@@ -27,7 +37,9 @@ Not covered, by name: optical-flow retime (a project setting not driven; the FCP
 
 ## Falsifiers stated before the runs
 
-- H1: Resolve uses the GPU in the nested kf3 guest. Falsified if the host GPU stays idle during a render (not observed on the PC: 95 to 98 percent).
+- H1: Resolve uses the GPU in the nested kf3 guest. Falsified if the host GPU stays idle during a render (not observed on the PC: 95 to 98 percent; no render completed on the 4090).
 - H2: the guest scheduler counts CUDA compute. Falsified (MEASURED: no compute engine instance exists while CUDA kernels run), so the guest assertion cannot rely on a compute counter.
 - H3: guest `nvidia-smi` reports utilisation. Falsified (MEASURED: `[N/A]` at idle; during a render it was not sampled on the PC; the box run records it).
-- H4: a PNG sequence of 96 UHD frames, the DNxHR and ProRes movies and the H.264 movie render and verify. Open.
+- H4: a PNG sequence of 96 UHD frames, the DNxHR and ProRes movies and the H.264 movie render and verify. OPEN (the 4090 run crashed first).
+- H5: Resolve runs stably for the length of the five renders on kf3. Falsified on the 4090 (3 of 3 sessions crashed after 3 to 4 minutes); open on other dies. Control: VFIO on the PC (queued).
+- H6: the `gpu` step failure on non-4070 dies is kf3 refusing unmeasured rows. Falsified (the 4090 has measured rows and no refusals and failed identically); the cause is the phantom device restart.

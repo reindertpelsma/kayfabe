@@ -544,7 +544,7 @@ def census(lines: list[str], top: int = 12) -> dict:
         if "xid" in low and "nvrm" in low:
             out["xid"] += 1
             hit = True
-        if re.search(r"\btdr\b|timed out|timeout", low):
+        if not ln.startswith("kf3: family=") and re.search(r"\btdr\b|timed out|\btimeout\b", low):
             out["tdr_or_timeout"] += 1
             hit = True
         if "refused leaves are absent" in low:
