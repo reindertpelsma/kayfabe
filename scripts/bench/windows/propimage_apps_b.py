@@ -63,6 +63,8 @@ CHECKS = {
     "aeprojects": {"timeout": 900, "script": "aeprojects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence AEP corpus open (project load, GPU capability scan)"},
     "aetoggle": {"timeout": 1500, "script": "ae_toggle.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "CUDA <-> software renderer switch inside one After Effects session, 4K effects frame"},
     "aeadv3d": {"timeout": 1800, "script": "ae_adv3d.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "After Effects Advanced 3D renderer, depth of field, 24 shadow-casting 3D layers, 4K 16 bit"},
+    "premieretl": {"timeout": 1500, "script": "pp_timeline.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "Premiere Pro: neutral timeline (FCPXML import), Mercury CUDA playback engine, own exporter (NVENC H.264)"},
+    "amematrix": {"timeout": 2400, "script": "pp_timeline.ps1", "gpu": ("enc",), "lane": "discovery", "path": "Media Encoder export matrix (H.264/HEVC 8 and 10 bit, 720p to 8K, ProRes) of the neutral timeline: NVENC or silent software fallback"},
     "aeparallel": {"timeout": 1800, "script": "ae_parallel.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "four concurrent aerender processes (CUDA contexts x4), 4K"},
     "indesign_s1": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 1 of 6 (start and COM)"},
     "indesign_s2": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 2 of 6 (new document)"},
@@ -79,7 +81,7 @@ CHECKS = {
     "dimension": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/OptiX init (launch only)"},
     "uxp": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "UXP tooling start (launch only)"},
 }
-EMBED = {"aeadv3d": {"AE_ADV3D": "ae_adv3d.jsx"}, "aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
+EMBED = {"premieretl": {"PP_TL": "pp_timeline.jsx"}, "amematrix": {"PP_TL": "pp_timeline.jsx"}, "aeadv3d": {"AE_ADV3D": "ae_adv3d.jsx"}, "aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
 ENABLED = tuple(n for n, c in CHECKS.items() if not c.get("disabled"))
 LAUNCH_ONLY = ("premiere", "dimension", "uxp", "lightroomlaunch")
 
@@ -197,7 +199,7 @@ def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignor
         for f in ("result.json", "steps.log"):
             guest.scp(remote + "/" + f, str(d / f), False)
         res = _json(d / "result.json")
-        names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt", "ps_progress.txt", "ae_progress.txt", "id_progress.txt", "ps_log_tail.txt", "ae_stub.log", "pp_stub.log", "ame_stub.log", "app_events.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
+        names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt", "ps_progress.txt", "ae_progress.txt", "id_progress.txt", "ps_log_tail.txt", "pp_progress.txt", "pp_done.txt", "ae_stub.log", "pp_stub.log", "ame_stub.log", "app_events.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
         for fn in names:
             if not isinstance(fn, str) or not SAFE_FILE.fullmatch(fn):
                 continue
@@ -566,6 +568,70 @@ def grade_aeadv3d(r, d):
     return "Advanced 3D comp (%s; dof=%s; %s) rendered 10 frames 3840x2160" % (renderer[0] if renderer else "renderer not reported", "dof" in have, "layers3d=24" if "layers3d=24" in have else "layers?"), made
 
 
+def _pp_summary(r):
+    text = str(r.get("summary", "")).strip()
+    got = {}
+    for m in re.finditer(r"(sequences|vtracks|vclips|atracks|aclips|transitions)=(\d+)", text):
+        got[m.group(1)] = int(m.group(2))
+    sz = re.search(r"size=(\d+)x(\d+)", text)
+    if not got.get("sequences"):
+        raise ValueError("Premiere imported no sequence from the timeline spec (summary: %s)" % text[:120])
+    if got.get("vclips", 0) < 10:
+        raise ValueError("the imported sequence has %d video clips, the spec has 12" % got.get("vclips", 0))
+    return got, (int(sz[1]), int(sz[2])) if sz else None, text
+
+
+def _check_export(d, name, ext, want_codec, want_size, secs=5.0):
+    f = d / ("%s.%s" % (name, ext))
+    if not f.exists():
+        return "missing"
+    if ext == "mxf":
+        head = f.read_bytes()[:4]
+        return "ok mxf %d bytes" % f.stat().st_size if head == bytes([0x06, 0x0E, 0x2B, 0x34]) else "bad mxf header"
+    i = media_check.mp4_info(f)
+    if want_codec and i["codec"] not in want_codec:
+        return "codec %s" % i["codec"]
+    if want_size and (i["width"], i["height"]) != want_size:
+        return "size %sx%s" % (i["width"], i["height"])
+    if i["duration_s"] is None or abs(i["duration_s"] - secs) > 0.7:
+        return "duration %s" % i["duration_s"]
+    return "ok %s %dx%d %.2fs" % (i["codec"], i["width"], i["height"], i["duration_s"])
+
+
+def grade_premieretl(r, d):
+    got, size, text = _pp_summary(r)
+    if size != (3840, 2160):
+        raise ValueError("sequence is %s, the spec is 3840x2160" % (size,))
+    _outputs_fresh(r, d, ("h264_1080.mp4",))
+    res = _check_export(d, "h264_1080", "mp4", ("avc1", "avc3"), (1920, 1080))
+    if not res.startswith("ok"):
+        raise ValueError("own-exporter H.264 1080p slice: %s" % res)
+    return "imported the neutral timeline (%s video clips on %s tracks, %s transitions) and exported a 5 s H.264 1080p slice with Premiere's own exporter (%s)" % (got["vclips"], got["vtracks"], got.get("transitions", "?"), res), ""
+
+
+AME_JOBS = {"h264_2160": ("mp4", ("avc1", "avc3"), (3840, 2160)), "h264_1080": ("mp4", ("avc1", "avc3"), (1920, 1080)), "h264_720": ("mp4", ("avc1", "avc3"), (1280, 720)),
+            "hevc_2160": ("mp4", ("hvc1", "hev1"), (3840, 2160)), "hevc_1080": ("mp4", ("hvc1", "hev1"), (1920, 1080)), "hevc_pq10": ("mp4", ("hvc1", "hev1"), None),
+            "hevc_8k": ("mp4", ("hvc1", "hev1"), (7680, 4320)), "prores_hq": ("mxf", None, None)}
+
+
+def grade_amematrix(r, d):
+    got, size, text = _pp_summary(r)
+    big = {x.split(":")[0] for x in r.get("big_outputs", []) or []}
+    results, ok = {}, 0
+    for name, (ext, codec, sz) in AME_JOBS.items():
+        fn = "%s.%s" % (name, ext)
+        try:
+            res = ("ok (large file left on the guest)" if fn in big else _check_export(d, name, ext, codec, sz))
+        except ValueError as exc:
+            res = "unreadable: %s" % exc
+        results[name] = res
+        ok += res.startswith("ok")
+    summary = "; ".join("%s=%s" % kv for kv in results.items())
+    if ok < 5:
+        raise ValueError("only %d of %d Media Encoder jobs produced a verified file: %s" % (ok, len(AME_JOBS), summary[:300]))
+    return "Media Encoder matrix: %d of %d jobs verified (%s)" % (ok, len(AME_JOBS), summary), summary
+
+
 def _project_rows(r, minimum):
     rows = [x for x in str(r.get("rows", "")).strip().split("||") if x]
     ok = [x for x in rows if x.startswith("OK ")]
@@ -614,7 +680,7 @@ def grade_aeprojects(r, d):
     return "%d of %d open-licence AEP projects opened (items, comps and layers counted)" % (len(ok), len(ok) + len(bad)), ""
 
 
-GRADERS = {"aeadv3d": grade_aeadv3d, "photoshopcpu": lambda r, d: grade_photoshopcpu(r, d), **{"indesign_s%d" % i: grade_indesign_step for i in range(1, 7)}, "aetoggle": grade_aetoggle, "aeparallel": grade_aeparallel, "photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
+GRADERS = {"premieretl": grade_premieretl, "amematrix": grade_amematrix, "aeadv3d": grade_aeadv3d, "photoshopcpu": lambda r, d: grade_photoshopcpu(r, d), **{"indesign_s%d" % i: grade_indesign_step for i in range(1, 7)}, "aetoggle": grade_aetoggle, "aeparallel": grade_aeparallel, "photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
            "aeprojects": grade_aeprojects, "illustratorsample": grade_illustratorsample, "indesignsample": grade_indesignsample, "animatesample": grade_animatesample,
            "photoshopsample": grade_photoshopsample, "mediaencoder": grade_mediaencoder, "lightroom": grade_lightroom, "photoshop": grade_photoshop, "illustrator": grade_illustrator, "aftereffects": grade_aftereffects, "indesign": grade_indesign,
            "acrobat": grade_acrobat, "animate": grade_animate, "gpudiag": grade_gpudiag}

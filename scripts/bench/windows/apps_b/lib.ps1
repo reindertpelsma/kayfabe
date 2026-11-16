@@ -130,6 +130,29 @@ function Wait-Proc($p, [int]$timeoutMs) {
   }
   return $false
 }
+# aerender sometimes starts and never launches its renderer (MEASURED: 0 CPU seconds in 7 minutes, no AfterFX child, no frame). A start that has
+# produced no frame (and no new log line) after $stallS seconds is killed and started again, up to $attempts times; the attempts are recorded.
+function Run-Aerender($argList, $log, $framesDir, [int]$budgetMs = 900000, [int]$stallS = 150, [int]$attempts = 3) {
+  $R.aerender_attempts = @()
+  for ($a = 1; $a -le $attempts; $a++) {
+    Get-Process aerender -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    $r = Start-Process 'C:\Program Files\Adobe\Adobe After Effects 2027\Support Files\aerender.exe' -ArgumentList $argList -RedirectStandardOutput $log -RedirectStandardError "$log.err" -PassThru -WindowStyle Hidden
+    $t0 = Get-Date; $stalled = $false
+    while (Get-Process -Id $r.Id -ErrorAction SilentlyContinue) {
+      $el = ((Get-Date) - $t0).TotalSeconds
+      if ($el -gt ($budgetMs / 1000)) { break }
+      $fr = @(Get-ChildItem $framesDir -ErrorAction SilentlyContinue).Count
+      if ($el -gt $stallS -and $fr -eq 0 -and -not (Get-Process AfterFX -ErrorAction SilentlyContinue)) { $stalled = $true; break }
+      Start-Sleep 3
+    }
+    $R.aerender_attempts += ("{0}:{1}:{2}s" -f $a, $(if ($stalled) { 'stalled' } else { 'ran' }), [int]((Get-Date) - $t0).TotalSeconds)
+    if (-not $stalled) { return $r }
+    Stop-Process -Id $r.Id -Force -ErrorAction SilentlyContinue
+    Get-Process AfterFX -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep 5
+  }
+  return $r
+}
 function Has-Window($procNames) { (@(Win-Titles $procNames | Where-Object { $_ })).Count -gt 0 }
 function Quit-App($procNames, $comApp = $null, [int]$budget = 150) {
   # clean exit: ask politely first, then close the windows, only then end the process (and say which one happened)
