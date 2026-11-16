@@ -2,22 +2,24 @@
 // precomp, expressions, GPU-capable effects (fractal noise, glow, blur, turbulent displace, particles), optional footage and text, and a
 // render queue item. Tokens are replaced by the PowerShell caller. Every feature is recorded; the host decides what is required.
 var OUT = "@OUT@", VIDEO = "@VIDEO@", MODE = "@MODE@", log = [];
+function P(m) { try { var pf = new File(OUT + "/ae_progress.txt"); pf.open("a"); pf.writeln(new Date().getTime() + " " + m); pf.close(); } catch (e) {} }
+P("script start");
 function tryFx(layer, match, name, setup) {
   try { var fx = layer.property("Effects").addProperty(match); if (setup) setup(fx); log.push(name); return fx; } catch (e) { log.push("no_" + name); return null; }
 }
 try {
   app.beginSuppressDialogs();
-  app.newProject();
+  P("beginSuppress done"); app.newProject(); P("newProject");
   try { app.project.bitsPerChannel = 16; log.push("16bpc"); } catch (e) { log.push("no_16bpc"); }
   var W = (MODE == "ame") ? 1920 : 3840, H = (MODE == "ame") ? 1080 : 2160;
-  var comp = app.project.items.addComp("kfcomp", W, H, 1.0, 2, 30);
+  P("bpc"); var comp = app.project.items.addComp("kfcomp", W, H, 1.0, 2, 30);
   var inner = app.project.items.addComp("kfinner", W, H, 1.0, 2, 30);
-  var bg = inner.layers.addSolid([0.1, 0.2, 0.5], "bg", W, H, 1.0);
-  tryFx(bg, "ADBE Fractal Noise", "fractalnoise", function (fx) { fx.property("Complexity").setValue(8); });
-  tryFx(bg, "ADBE Turbulent Displace", "turbulent");
-  tryFx(bg, "ADBE Glo2", "glow");
-  tryFx(bg, "ADBE Gaussian Blur 2", "blur", function (fx) { fx.property("Blurriness").setValue(12); });
-  var pre = comp.layers.add(inner); log.push("precomp");
+  P("comps added"); var bg = inner.layers.addSolid([0.1, 0.2, 0.5], "bg", W, H, 1.0);
+  P("solid"); tryFx(bg, "ADBE Fractal Noise", "fractalnoise", function (fx) { fx.property("Complexity").setValue(8); });
+  P("fractal"); tryFx(bg, "ADBE Turbulent Displace", "turbulent");
+  P("turbulent"); tryFx(bg, "ADBE Glo2", "glow");
+  P("glow"); tryFx(bg, "ADBE Gaussian Blur 2", "blur", function (fx) { fx.property("Blurriness").setValue(12); });
+  P("blur"); var pre = comp.layers.add(inner); log.push("precomp");
   if (VIDEO != "") {
     try {
       var foot = app.project.importFile(new ImportOptions(new File(VIDEO)));
@@ -28,7 +30,7 @@ try {
       log.push("footage");
     } catch (e) { log.push("footagefail:" + String(e).substring(0, 60)); }
   }
-  var cam = null;
+  P("precomp+footage"); var cam = null;
   try { cam = comp.layers.addCamera("kfcam", [W / 2, H / 2]); log.push("camera"); } catch (e) {}
   try {
     var sl = comp.layers.addSolid([0.9, 0.4, 0.1], "particles", W, H, 1.0);
@@ -36,9 +38,9 @@ try {
     sl.threeDLayer = true; sl.blendingMode = BlendingMode.ADD;
   } catch (e) { log.push("no_particles"); }
   try { var tl = comp.layers.addText("kayfabe"); tl.threeDLayer = true; tl.property("Position").expression = "wiggle(3,40)"; log.push("text"); } catch (e) { log.push("no_text"); }
-  try { app.project.gpuAccelType = GpuAccelType.CUDA; log.push("cuda"); } catch (e) { log.push("gpuaccel_unavailable"); }
+  P("camera/particles/text"); try { app.project.gpuAccelType = GpuAccelType.CUDA; log.push("cuda"); } catch (e) { log.push("gpuaccel_unavailable"); }
   var types = []; try { for (var k in app.availableGPUAccelTypes) types.push(String(app.availableGPUAccelTypes[k])); } catch (e) {}
-  var rqi = app.project.renderQueue.items.add(comp);
+  P("gpuaccel set"); var rqi = app.project.renderQueue.items.add(comp); P("rq item");
   var om = rqi.outputModule(1);
   if (MODE == "ame") {
     var tlist = ["H.264 - Match Render Settings - 15 Mbps", "H.264 - Match Render Settings - 40 Mbps"], tok = false;
@@ -52,7 +54,7 @@ try {
     log.push("templates:" + tp.join("|"));
     om.file = new File(OUT + "/frames/f_[#####]." + ext);
   }
-  app.project.save(new File(OUT + "/kf.aep"));
+  P("om set"); app.project.save(new File(OUT + "/kf.aep")); P("saved");
   if (MODE == "ame") { try { app.project.renderQueue.queueInAME(true); log.push("queued_in_ame"); } catch (e) { log.push("queue_fail:" + String(e).substring(0, 80)); } }
   var f = new File(OUT + "/ae_make.txt"); f.open("w"); f.writeln(log.join(",")); f.writeln("avail=" + types.join("|")); f.writeln("renderer=" + String(app.project.gpuAccelType)); f.writeln("size=" + W + "x" + H); f.close();
 } catch (e) {
