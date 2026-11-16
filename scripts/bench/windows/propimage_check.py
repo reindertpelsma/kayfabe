@@ -157,7 +157,10 @@ Get-ChildItem $base -Name | Where-Object {$_ -match '^\d{4}$'} | ForEach-Object 
  }
 }
 if($changed){
- Get-PnpDevice -Class Display | Where-Object {$_.FriendlyName -match 'NVIDIA'} | ForEach-Object {
+ # Only PRESENT NVIDIA devices (hardware id VEN_10DE): a die other than the image's own leaves the old GPU as a phantom entry (Status Unknown,
+ # CM_PROB_PHANTOM) that cannot be restarted, and a new device is still named 'Video Controller (VGA Compatible)' until its driver binds
+ # (MEASURED 2026-11-16 on RTX 4000 Ada, RTX 4060 Ti and RTX 4090 boxes: restarting the phantom RTX 4070 failed the whole step).
+ Get-PnpDevice -Class Display | Where-Object {$_.Present -and $_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
   pnputil /restart-device $_.InstanceId | Out-Null
   if($LASTEXITCODE -ne 0){throw 'NVIDIA display device restart failed'}
  }
