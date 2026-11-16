@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """The second proprietary image's application rows as a payload stage: same runner and image format as `propimage_apps.py` (stdlib only).
 
-STATUS: DESIGN-ONLY, 2026-11-16. GPU-free tests only (test_propimage_apps_b_stage.py); not run on a box. It refuses until its three pins
-(image archive, signed boot GOP, open-asset data volume) are set (all three are, as of 2026-11-16). Wiring into vast_payload.py / vast_report.py is NOT done here: those files
-are being changed by the release-run work (#434 stack); see docs/design/V3_PROPIMAGE_B_APPS.md for the exact additions.
+STATUS: DESIGN-ONLY, 2026-11-16. GPU-free tests only (test_propimage_apps_b_stage.py); the stage ran in pieces on a box, never end to end. It
+refuses until its three pins (image archive, signed boot GOP, open-asset data volume) are set (all three are, as of 2026-11-16). Wired into
+vast_payload.py as the manual-only stage `propimage_apps_b` and validated in vast_report.py (`validate_propimage_apps_b`); see
+docs/design/V3_PROPIMAGE_B_APPS.md, section "Stage selection and the report".
 
     propimage_apps_b_stage.py run --sha SHA --checkout ROOT --prefix DIR --out FILE --urls FILE [--bench DIR] [--deadline-epoch N]
     propimage_apps_b_stage.py plan [--sha SHA]
@@ -14,7 +15,10 @@ the verified unpack, the offline proof, the host kernel log windows, cleanup) an
 timeouts (`scripts/bench/windows/propimage_apps_b.py`, selected with `propimage_check.py --app-set b`), the boot command (adds
 `--data-iso`), and the grading (PASS or PASS_LIMITED per row; a PASS row names the GPU engines it was asserted on and carries the sampled
 peaks). One-GPU boxes: the image B leg is a separate box with the same instruction shape (a leg selector A|B).
-A row that only proves a launch is PASS_LIMITED and the stage says so; the stage verdict is PASS when no row failed.
+A row that only proves a launch is PASS_LIMITED and the stage says so. LANES (2026-11-16): the lane of a row comes from the table, never
+from the guest. Only GATE rows decide the stage verdict (PASS when every gate row is PASS or PASS_LIMITED); a failing DISCOVERY row never
+fails the stage and is listed in the record's `breakages` (row, verdict, class, census counts) and printed as one
+`KF_PROPIMAGE_APPS_B_BREAKAGE` line. Disabled rows are `not_run` with their reason.
 The record is printed as `KF_PROPIMAGE_APPS_B_RESULT {json}` (scores and sampled GPU numbers are written to the record, not to the log).
 """
 import argparse
@@ -36,6 +40,9 @@ SCHEMA = 1
 APP_VERDICTS = ("PASS", "PASS_LIMITED", "FAIL", "INCONCLUSIVE", "HARNESS", "NOT_RUN", "MISSING")
 BOOT_BUDGET_S = pa.BOOT_BUDGET_S
 DATA_ROLE = "data"
+FAILURE_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")    # the generic runner's classes (propimage_images.py)
+MAX_RECORD_BYTES = 49152
+CENSUS_IDS = 8              # distinct ids kept per census keyword in the record (the evidence directory keeps the full census)
 
 
 def apps_module(root):
@@ -72,9 +79,9 @@ def boot_command(check_py, a):
     return cmd
 
 
-def collect_app(out, app, rows, xids, expected_gpu):
+def collect_app(out, app, rows, xids, expected_gpu, lane="gate"):
     """One row's record from the harness rows and its verdict.json; both must agree for a PASS or PASS_LIMITED."""
-    rec = {"app": app, "verdict": "MISSING", "kind": "NONE", "limited": False, "secs": 0, "detail": "", "evidence": [], "gpu": {},
+    rec = {"app": app, "lane": lane, "verdict": "MISSING", "kind": "NONE", "limited": False, "secs": 0, "detail": "", "evidence": [], "gpu": {}, "census": {},
            "host_xid": {"count": len(xids), "lines": [t for _, t in xids[:pa.MAX_XID_LINES]]}}
     step = next((r for r in rows if type(r) is dict and r.get("step") == "app:" + app), None)
     dirs = pa.run_dirs(out, app)
@@ -94,7 +101,6 @@ def collect_app(out, app, rows, xids, expected_gpu):
     kind = pa.clean(step.get("evidence"), 8)
     rec["kind"] = kind if kind in ("FILE", "UIA", "NONE") else "NONE"
     if type(doc) is dict:
-        rec["lane"] = pa.clean(doc.get("lane"), 10)
         rec["platform"] = pa.clean(doc.get("platform"), 6)
         secs = doc.get("secs")
         rec["secs"] = secs if type(secs) is int and 0 <= secs < 1 << 20 else 0
@@ -116,9 +122,9 @@ def collect_app(out, app, rows, xids, expected_gpu):
 
 
 def grade(apps, order):
-    """(verdict, reason, failed). PASS needs every row PASS or PASS_LIMITED."""
+    """(verdict, reason, failed). PASS needs every GATE row PASS or PASS_LIMITED; a discovery row (`lane`) never decides."""
     by = {a["app"]: a for a in apps}
-    failed = [n for n in order if by.get(n, {}).get("verdict") not in ("PASS", "PASS_LIMITED")]
+    failed = [n for n in order if by.get(n, {}).get("lane", "gate") == "gate" and by.get(n, {}).get("verdict") not in ("PASS", "PASS_LIMITED")]
     if not failed:
         return "PASS", "", []
     app_class = [n for n in failed if by.get(n, {}).get("verdict") in ("FAIL", "INCONCLUSIVE")]
@@ -127,10 +133,58 @@ def grade(apps, order):
     return "RETRY", "HARNESS:" + failed[0], failed
 
 
+def error_class(item, boot_rc=None):
+    """CRASH / HANG / TDR / XID / ASSERT / OUTPUT_MISMATCH of a row that did not pass, from what the harness and the host left."""
+    counts = (item.get("census") or {}).get("counts", {})
+    if boot_rc == 124 and item["verdict"] in ("MISSING", "HARNESS", "NOT_RUN"):
+        return "HANG"
+    if item["host_xid"]["count"] or counts.get("xid"):
+        return "XID"
+    if counts.get("tdr"):
+        return "TDR"
+    if "assert" in item["detail"].lower():
+        return "ASSERT"
+    if item["verdict"] in ("MISSING", "HARNESS", "NOT_RUN") or boot_rc not in (0, None):
+        return "CRASH"
+    return "OUTPUT_MISMATCH"
+
+
+def known_breakages(apps, boots):
+    """The discovery rows that did not pass: {row, verdict, class, census:{lines, counts}}. Never fatal by itself."""
+    rc_of = {a: b["rc"] for b in boots for a in b["apps"]}
+    return [{"row": a["app"], "verdict": a["verdict"], "class": error_class(a, rc_of.get(a["app"])),
+             "census": {"lines": (a.get("census") or {}).get("lines", 0), "counts": dict((a.get("census") or {}).get("counts", {}))}}
+            for a in apps if a.get("lane") == "discovery" and a["verdict"] not in ("PASS", "PASS_LIMITED")]
+
+
+def trim_census(c):
+    """A census as kept in the record: the counts and at most CENSUS_IDS distinct ids per keyword."""
+    if type(c) is not dict:
+        return {}
+    return {"lines": c.get("lines", 0), "counts": c.get("counts", {}), "xid": c.get("xid", 0),
+            "ids": {k: [pa.clean(x, 24) for x in v[:CENSUS_IDS]] for k, v in (c.get("ids") or {}).items()}}
+
+
+def write_record(path, rec):
+    """pa.write_record with this stage's bound (the record has up to 21 rows): shrink evidence, xid lines and census ids until it fits."""
+    for evidence, lines, ids in ((24, 8, CENSUS_IDS), (8, 2, 4), (4, 1, 0)):
+        for a in rec["apps"]:
+            a["evidence"], a["host_xid"]["lines"] = a["evidence"][:evidence], a["host_xid"]["lines"][:lines]
+            if a.get("census", {}).get("ids") is not None:
+                a["census"]["ids"] = {k: v[:ids] for k, v in a["census"]["ids"].items() if ids}
+        data = json.dumps(rec, separators=(",", ":"), sort_keys=True)
+        if len(data.encode()) <= MAX_RECORD_BYTES:
+            break
+    tmp = Path(str(path) + ".tmp")
+    tmp.write_text(data + "\n")
+    tmp.replace(path)
+    return data
+
+
 def new_record(ctx):
     return {"schema": SCHEMA, "image_set": "b", "verdict": "RETRY", "sha": ctx.sha, "reason": "INTERRUPTED", "family": None, "cpu_vendor": None,
             "preflight": [], "image": {"name": None, "sha256": None, "size": None}, "swtpm": {"version": None, "built": False},
-            "boots": [], "apps": [], "failed": [], "limited": [], "not_run": {}}
+            "boots": [], "apps": [], "failed": [], "limited": [], "breakages": [], "not_run": {}}
 
 
 def build_manifest(pins, build_swtpm):
@@ -255,8 +309,8 @@ def run(ctx, evidence_dir=None, apps=None):
             per, unattributed = pa.xid_by_window(klog, boot["apps"], label)
             censuses = mark.census() if hasattr(mark, "census") else {}
             for app in boot["apps"]:
-                item = collect_app(out, app, rows_json, per[app], mod.CHECKS[app]["gpu"])
-                item["census"] = censuses.get(app, {})
+                item = collect_app(out, app, rows_json, per[app], mod.CHECKS[app]["gpu"], mod.CHECKS[app]["lane"])
+                item["census"] = trim_census(censuses.get(app, {}))
                 item["path"] = pa.clean(mod.CHECKS[app].get("path", ""), 80)
                 if not boot["offline"] and item["verdict"] in ("PASS", "PASS_LIMITED"):
                     item["verdict"], item["detail"] = "FAIL", "OFFLINE_NOT_PROVEN: " + item["detail"][:150]
@@ -264,14 +318,16 @@ def run(ctx, evidence_dir=None, apps=None):
             if unattributed:
                 boot["host_xid_unattributed"] = {"count": len(unattributed), "lines": [t for _, t in unattributed[:pa.MAX_XID_LINES]]}
             copy_evidence(out, evidence_dir, order) if evidence_dir else None
-            pa.write_record(ctx.out, rec)
+            write_record(ctx.out, rec)
         have = {a["app"] for a in rec["apps"]}
         for app in order:
             if app not in have:
-                rec["apps"].append(dict(collect_app(ctx.prefix / "none", app, [], [], ()), verdict="NOT_RUN", detail="boot not started"))
+                rec["apps"].append(dict(collect_app(ctx.prefix / "none", app, [], [], (), mod.CHECKS[app]["lane"]), verdict="NOT_RUN",
+                                        detail="boot not started"))
         rec["apps"].sort(key=lambda a: order.index(a["app"]))
         rec["verdict"], rec["reason"], rec["failed"] = grade(rec["apps"], order)
         rec["limited"] = [a["app"] for a in rec["apps"] if a["verdict"] == "PASS_LIMITED"]
+        rec["breakages"] = known_breakages(rec["apps"], rec["boots"])
         if rec["verdict"] == "PASS" and any(not b["offline"] for b in rec["boots"]):
             rec["verdict"], rec["reason"], rec["failed"] = "FAIL", "OFFLINE_NOT_PROVEN", []
         if out_of_time and rec["verdict"] != "PASS":
@@ -306,7 +362,9 @@ def copy_evidence(out, evidence_dir, order):
 
 
 def finish(rec, out):
-    data = pa.write_record(out, rec) if out else json.dumps(rec, separators=(",", ":"), sort_keys=True)
+    data = write_record(out, rec) if out else json.dumps(rec, separators=(",", ":"), sort_keys=True)
+    for b in rec.get("breakages", []):
+        print("KF_PROPIMAGE_APPS_B_BREAKAGE row=%s verdict=%s class=%s" % (b["row"], b["verdict"], b["class"]), flush=True)
     print("KF_PROPIMAGE_APPS_B_RESULT " + data, flush=True)
     return 0 if rec["verdict"] in ("PASS", "NOT_RUN") else (3 if rec["verdict"] == "RETRY" else 1)
 

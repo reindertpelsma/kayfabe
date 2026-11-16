@@ -555,6 +555,8 @@ vm_start() {
   BOOT_EV=$VM/logs/${tag}_b${n}_qmp_events.jsonl
   local qlog=$VM/logs/${tag}_b${n}_qemu.log
   printf '%q ' "$q" "${QA[@]}" "$@" > "$VM/logs/${tag}_b${n}_cmdline.txt"
+  # 2026-11-16: a faked clock needs the network off, and a networked guest needs the real clock (clocknet_assert.py; one rule for every start)
+  python3 -B -I "$HERE/clocknet_assert.py" argv --who win_vm.sh -- "$q" "${QA[@]}" "$@" > /dev/null || die "clock/network rule refused this start (clocknet_assert.py)"
   "$q" "${QA[@]}" "$@" > "$qlog" 2>&1 &
   QPID=$!
   echo "$QPID" > "$VM/run/qemu.pid"
