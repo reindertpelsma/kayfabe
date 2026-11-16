@@ -338,7 +338,7 @@ def grade(result: dict, directory: Path, host_csv: str = "", host_t0: Optional[f
             if rr.get(key) is not True:
                 probs.append(f"{what} step failed")
         entry.update(fmt=rr.get("fmt_value"), codec=rr.get("codec_value"), encoder=rr.get("encoder_value"), resolution=rr.get("res_value"),
-                     nvidia_encoder_selectable=rr.get("nvidia_encoder_selectable"), queue=[str(x)[:60] for x in (rr.get("queue") or [])][:8])
+                     nvidia_encoder_selectable=rr.get("nvidia_encoder_selectable"), ui_speed=[re.sub(r"[^\x20-\x7e]", "?", str(x))[:120] for x in (rr.get("speed_texts") or [])][:12], queue=[str(x)[:60] for x in (rr.get("queue") or [])][:8])
         t0, t1 = rr.get("t_started"), rr.get("t_end")
         if isinstance(t0, (int, float)) and isinstance(t1, (int, float)) and t1 > t0:
             entry["seconds"] = round(t1 - t0, 1)

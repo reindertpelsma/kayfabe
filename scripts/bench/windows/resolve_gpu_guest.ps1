@@ -256,7 +256,18 @@ foreach($p in $plan.renders){
  $rr.render_pressed=Press-Btn 'Render All'
  $rr.started=Wait-Until { $x=All-Els; (Find-Btn $x 'Stop') -ne $null } 90 2
  $rr.t_started=Epoch-Now
- $rr.finished=Wait-Until { $x=All-Els; (Find-Btn $x 'Stop') -eq $null } ([int]$p.timeout_s) 3
+ $rr.speed_texts=@()
+ $dlr=(Get-Date).AddSeconds([int]$p.timeout_s); $rr.finished=$false; $lastSpeed=Get-Date
+ while((Get-Date) -lt $dlr){
+  $x=All-Els
+  if((Find-Btn $x 'Stop') -eq $null){ $rr.finished=$true; break }
+  if(((Get-Date)-$lastSpeed).TotalSeconds -ge 12 -and $rr.speed_texts.Count -lt 12){
+   $lastSpeed=Get-Date
+   $t=@($x | Where-Object { try{ $c=$_.Current; $c.ControlType.ProgrammaticName -eq 'ControlType.Text' -and $c.Name -and $c.BoundingRectangle.Y -lt 130 -and $c.BoundingRectangle.X -gt 560 -and $c.BoundingRectangle.X -lt 1440 }catch{$false} } | ForEach-Object { $_.Current.Name })
+   $rr.speed_texts += (($t -join ' | ').Substring(0,[Math]::Min(120,($t -join ' | ').Length)))
+  }
+  Start-Sleep 3
+ }
  $rr.t_end=Epoch-Now
  if(-not $rr.finished){ Press-Btn 'Stop' | Out-Null; $rr.stopped_by_driver=$true; Start-Sleep 20 }
  Start-Sleep 3
