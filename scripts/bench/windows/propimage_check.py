@@ -1690,12 +1690,6 @@ def main(argv=None):
         help="DIAGNOSTIC ARM: override the guest-visible FB size (the image's own value is the default)",
     )
     ap.add_argument(
-        "--gpu-minor",
-        type=int,
-        default=None,
-        help="host GPU to attach (the /dev/nvidia<minor> number, kf3 gpu-minor=); unset = the device default (0), argv unchanged",
-    )
-    ap.add_argument(
         "--hold-until-file",
         help="Manual iteration: after verify, keep the guest up until this file appears (max 3 h)",
     )
@@ -1766,8 +1760,6 @@ def main(argv=None):
             if not 1024 <= a.fb_mb <= 1048576:
                 raise ValueError("--fb-mb out of range")
             state["qemu"]["fb_mb"] = a.fb_mb
-        if a.gpu_minor is not None and not 0 <= a.gpu_minor <= 63:
-            raise ValueError("--gpu-minor out of range")
         work = Path(a.work).resolve()
         work.mkdir(parents=True, exist_ok=a.resume)
         (work / "run").mkdir(exist_ok=a.resume)
@@ -1804,8 +1796,6 @@ def main(argv=None):
         record("clock", "PASS", f"RTC base {PI.fmt(rtc_base)} ({kind} overlay)")
         if a.fb_mb is not None:
             record("fb-mb", "PASS", f"DIAGNOSTIC ARM: guest-visible FB {a.fb_mb} MiB (image default differs)")
-        if a.gpu_minor is not None:
-            record("gpu-minor", "PASS", f"kf3 gpu-minor={a.gpu_minor} (host /dev/nvidia{a.gpu_minor})")
         env = dict(os.environ)
         for line in Path(a.flags).read_text().splitlines():
             line = line.strip()
@@ -1884,7 +1874,7 @@ def main(argv=None):
                     "uid": 0,
                 }
             command = PI.build_argv(
-                state, "ci", str(clone), str(work), qemu=a.qemu, display=a.display, gpu_minor=a.gpu_minor, **kw
+                state, "ci", str(clone), str(work), qemu=a.qemu, display=a.display, **kw
             )
             if "restrict=on" not in " ".join(command) or str(clone) not in " ".join(command):
                 raise ValueError("Offline overlay invariant violated")

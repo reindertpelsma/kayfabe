@@ -227,11 +227,10 @@ def slirp_net(subnet):
 
 
 def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_4M.secboot.fd",
-               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker", cdroms=(), gpu_minor=None):
+               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker", cdroms=()):
     """The exact qemu argv. disk: the image path (install/offline) or the clone (ci)."""
     require(mode in MODES, "mode must be one of %s" % (MODES,))
     require(display in ("broker", "off"), "display must be broker or off")
-    require(gpu_minor is None or (type(gpu_minor) is int and 0 <= gpu_minor <= 63), "gpu_minor must be an integer 0..63 or None")
     ids, q = state["ids"], state["qemu"]
     wd = str(workdir)
     qemu = qemu or ("/usr/bin/qemu-system-x86_64" if mode == "setup" else "qemu-system-x86_64")
@@ -276,8 +275,6 @@ def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_
         kf3 = ["kf3-gpu", "id=kf0", "fb-mb=%d" % q["fb_mb"], "bar1-size=134217728", "bar2-size=33554432",
                "gpu-uuid=" + ids["gpu_uuid"],
                "guest-driver=" + q["guest_driver"]]   # display wire layout of the Windows 580.88 driver (windows-guest.md:87)
-        if gpu_minor is not None:
-            kf3.append("gpu-minor=%d" % gpu_minor)   # 2026-11-16: the host GPU (/dev/nvidia<minor>); unset = the device default 0, argv unchanged
         a += ["-vga", "none"]
         if display == "broker":
             require(broker_sock and gop_efi, "broker display needs broker_sock and gop_efi")
