@@ -794,6 +794,7 @@ impl Birth {
                     peek_defapi: None,
                     ctx: CtxBind::default(),
                     user_work: true,
+                    windows: true,
                     user_ring: true,
                     live: self.count.live.clone(),
                     twin: self.count.twin.clone(),

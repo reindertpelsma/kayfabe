@@ -77,7 +77,9 @@ use std::os::unix::ffi::OsStrExt as _;
 /// 32 (2026-11-13, `claude/secfix-raw-frame-20261113`, security review 2 C-04/D-06 = S1-03):
 /// [`Kf3Frame`] gains `len` after `serial`, and [`kf3_display_frame`] hands over only a frame whose
 /// geometry fits it (`CheckedFrame`). 31 is taken by unmerged branches.
-pub const KF3_ABI: u32 = 32;
+/// 33 (2026-11-15, `claude/flags-stage1-20261115`, `docs/design/V3_WINDOWS_SUPPORT_PROFILE.md`): `kf3_realize` gains
+/// `windows_support` (the `windows-support` property; 1 = on, the default; 0 = a Linux-only VM) after `user_view_keep`.
+pub const KF3_ABI: u32 = 33;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -257,6 +259,7 @@ pub unsafe extern "C" fn kf3_realize(
     pci_devfn: u32,
     channel_budget: u32,
     user_view_keep: u32,
+    windows_support: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -300,6 +303,7 @@ pub unsafe extern "C" fn kf3_realize(
         vm_id,
         pci_devfn,
         channel_budget,
+        windows_support: windows_support != 0,
     };
     crate::userstore::configure(user_view_keep);
     // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).

@@ -1,6 +1,8 @@
-//! Real served-chain opt-in, tested in isolated process environments.
+//! Real served chain: the memory-list descriptor is a Windows-profile behaviour, keyed on the declared identity.
 #[path = "support/ga106.rs"]
 mod ga106;
+#[path = "support/windows_fn1.rs"]
+mod support;
 use kf_arch::{
     ClientKind,
     ids::{ClassId, HClient, HObject},
@@ -23,30 +25,51 @@ impl GuestRamAuthority for Ram {
         panic!("no registration write")
     }
 }
-#[test]
-fn memory_list_full_chain_independent_optin() {
-    for enabled in ["0", "1"] {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "memory_list_child", "--nocapture"])
-            .env("KF_MEMORY_LIST_CHAIN_TEST", enabled)
-            .env("KF3_MEMORY_LIST_PROBE", enabled)
-            .env_remove("KF3_SW_RUNLIST_PROBE")
-            .env_remove("KF3_GFX_POOL_PROBE")
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{} {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-}
-#[test]
-fn memory_list_child() {
-    let Ok(enabled) = std::env::var("KF_MEMORY_LIST_CHAIN_TEST") else {
-        return;
+/// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_MEMORY_LIST_PROBE`, isolated in child processes): the
+/// contiguous-SYSRAM descriptor is served to a guest that declared the measured Windows build with
+/// `windows-support` on, and to NO other: a Linux declaration, no declaration, and `windows-support=off`
+/// with a Windows declaration all reach the refusal the descriptor always got.
+fn arm(name: &str) {
+    use kf_rm::winprofile::WindowsProfile;
+    let abi = support::abi();
+    let (declare, profile, served) = match name {
+        "windows declared" => (Some(support::windows(&abi)), WindowsProfile::on(), true),
+        "linux declared" => (Some(support::linux(&abi)), WindowsProfile::on(), false),
+        "nothing declared" => (None, WindowsProfile::on(), false),
+        "windows declared, windows-support=off" => {
+            (Some(support::windows(&abi)), WindowsProfile::off(), false)
+        }
+        other => panic!("{other}"),
     };
+    run(name, declare, profile, served);
+}
+
+#[test]
+fn memory_list_descriptor_is_served_to_a_declared_windows_guest() {
+    arm("windows declared");
+}
+
+#[test]
+fn memory_list_descriptor_is_refused_to_a_linux_guest() {
+    arm("linux declared");
+}
+
+#[test]
+fn memory_list_descriptor_is_refused_to_an_undeclared_guest() {
+    arm("nothing declared");
+}
+
+#[test]
+fn memory_list_descriptor_is_refused_on_a_windows_support_off_vm() {
+    arm("windows declared, windows-support=off");
+}
+
+fn run(
+    arm: &str,
+    declare: Option<RpcCommand>,
+    profile: kf_rm::winprofile::WindowsProfile,
+    enabled: bool,
+) {
     let driver =
         *kf_abi::versions::table_for(kf_abi::DriverVersion::parse("580.65.06").unwrap()).unwrap();
     let mut objects = kf_rm::rmrpc::GraphObjects::new(kf_chip::Family::Ampere)
@@ -99,9 +122,17 @@ fn memory_list_child() {
             channels: Some(std::sync::Arc::new(|s| {
                 panic!("unexpected channel action {s:?}")
             })),
+            windows: profile,
             ..Default::default()
         },
     );
+    if let Some(fn1) = declare {
+        assert_eq!(
+            policy.respond(&fn1).map(|r| r.rpc_result),
+            Some(0),
+            "{arm}: fn 1"
+        );
+    }
     let command = |function, payload| RpcCommand {
         function,
         code: 0,
@@ -128,9 +159,10 @@ fn memory_list_child() {
     let reply = policy.respond(&cmd);
     assert_eq!(
         reply.as_ref().is_some_and(|r| r.rpc_result == 0),
-        enabled == "1"
+        enabled,
+        "{arm}"
     );
-    if enabled == "1" {
+    if enabled {
         assert_eq!(reply.unwrap().body, payload);
     }
     let mut short = cmd.clone();
@@ -156,10 +188,15 @@ fn memory_list_child() {
         for (off, v) in [(0, 1), (4, 3), (8, control), (w.params_size_off, bytes)] {
             payload[off..off + 4].copy_from_slice(&v.to_le_bytes());
         }
-        assert!(
-            policy
-                .respond(&command(RpcFunction::RmControl, payload))
-                .is_none_or(|r| r.rpc_result != 0)
+        let reply = policy.respond(&command(RpcFunction::RmControl, payload));
+        // ★ 2026-11-15: the one control the Windows profile answers is the software-runlist submit
+        // (`0x20801111`, host-owned scheduling), and only for a declared Windows guest; the memory-list
+        // opt-in itself never widens a control.
+        let profile_answer = enabled && control == 0x2080_1111;
+        assert_eq!(
+            reply.is_some_and(|r| r.rpc_result == 0),
+            profile_answer,
+            "{arm}: control {control:#x}"
         );
     }
 }

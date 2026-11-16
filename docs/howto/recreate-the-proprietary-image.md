@@ -121,7 +121,7 @@ Whether each licence keeps working with no internet is the next step's job.
 Shut the machine down cleanly first. Then test the way the image will be used: offline mode, no internet, with the clock set from the state file. The test uses a disposable overlay of the disk, never the disk itself.
 
 ```text
-python3 -B -I scripts/bench/windows/propimage_check.py --dir unpacked/ --work /path/to/fresh-workdir --out results/ --qemu /path/to/kayfabe-qemu --flags kf3_flags.sample.env --broker /path/to/broker
+python3 -B -I scripts/bench/windows/propimage_check.py --dir unpacked/ --work /path/to/fresh-workdir --out results/ --qemu /path/to/kayfabe-qemu --flags kf3_flags.sample.env --broker /path/to/broker   # the flags file is optional measurement flags; Windows needs none
 ```
 
 (Use `--zip` with the archive instead of `--dir` the first time; see step 10.) The script checks that `swtpm` is 0.10 or newer, creates the overlay, boots with the network restricted, SSHes in, applies the per-boot repairs (see the deviations table), checks the machine's identity against the state file, then starts each app and records a result. A launch alone is recorded as a launch only, never as a pass.
