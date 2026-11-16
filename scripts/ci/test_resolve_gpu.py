@@ -5,6 +5,7 @@ asset manifest. No VM, network or third-party media (the PNG and MP4 headers are
 
 import importlib.util
 import json
+import os
 import struct
 import sys
 import tempfile
@@ -26,6 +27,8 @@ def load(name):
 
 G = load("gpu_use_assert")
 M = load("resolve_media")
+RG = load("resolve_gpu")
+FIX = Path(__file__).resolve().parent / "fixtures/resolve_gpu"
 
 
 def csv(rows, t0="2026/11/16 03:00:00"):
@@ -201,6 +204,205 @@ class Media(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             with self.assertRaises(M.MediaError):
                 M.fetch_assets(Path(d), opener=lambda req, timeout: R(b"x"))
+
+
+
+LOG = (FIX / "resolve_log_lines.txt").read_text().splitlines()
+
+
+def stamp(t):
+    import datetime
+    return datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y/%m/%d %H:%M:%S.") + f"{int((t % 1) * 1000):03d}"
+
+
+class Lane(unittest.TestCase):
+    def test_plan_is_bounded_and_scripts_parse(self):
+        plan = RG.build_plan("a" * 32)
+        self.assertEqual([r["id"] for r in plan["renders"]], list(RG.RENDER_ORDER))
+        self.assertEqual(RG.RENDER_ORDER[-1], "hevc")  # slowest last: a software HEVC stall cannot hide the other four
+        with self.assertRaises(ValueError):
+            RG.build_plan("x';calc")
+        body = RG.guest_body(plan)
+        self.assertIn(plan["project"], body)
+        self.assertNotRegex(body, r"(?i)password|Invoke-WebRequest|Invoke-RestMethod")
+        self.assertEqual(body.count("'@"), body.count("@'"))
+        import shutil, subprocess
+        pwsh = os.environ.get("KF_PWSH") or shutil.which("pwsh")
+        if pwsh:
+            f = Path(tempfile.mkdtemp()) / "x.ps1"
+            f.write_text(body)
+            chk = f.with_name("parse.ps1")
+            chk.write_text("param($f)\n$e=$null;$t=$null\n[void][System.Management.Automation.Language.Parser]::ParseFile($f,[ref]$t,[ref]$e)\n$e | ForEach-Object { $_.Message }\nexit $e.Count\n")
+            done = subprocess.run([pwsh, "-NoProfile", "-File", str(chk), str(f)], capture_output=True, text=True, timeout=60)
+            self.assertEqual(done.returncode, 0, done.stdout)
+
+    def test_timeline_clips_and_fcpxml(self):
+        x = RG.fcpxml_text()
+        doc = minidom.parseString(x)
+        self.assertEqual(len(doc.getElementsByTagName("asset-clip")), 4)
+        self.assertEqual(doc.getElementsByTagName("sequence")[0].getAttribute("duration"), f"{RG.FRAMES_TOTAL * 100}/2400s")
+
+    def test_log_judgement_on_measured_lines(self):
+        ok, problems, facts = RG.judge_log(LOG)
+        self.assertTrue(ok, problems)
+        self.assertEqual(facts["compute_api"], "CUDA")
+        self.assertIn("RTX 4070", facts["device"])
+        self.assertTrue(facts["nvenc"] and facts["gpudetect_errors"])
+        for drop, expect in (("Selected compute API", "compute API"), ("Detected 1 GPUs", "no detected GPU"), ("Let There Be CUDA", "board manager")):
+            lines = [x for x in LOG if drop not in x and not (drop == "Let There Be CUDA" and "Initializing CUDA board" in x)]
+            ok, problems, _ = RG.judge_log(lines)
+            self.assertFalse(ok)
+            self.assertIn(expect, " ".join(problems))
+        cpu = [x.replace("CUDA", "CPU") if "compute API" in x else x for x in LOG]
+        self.assertFalse(RG.judge_log(cpu)[0])
+        nonv = [x.replace("NVIDIA", "Microsoft") for x in LOG if "Detected" not in x] + [x for x in LOG if "Detected" in x]
+        self.assertFalse(RG.judge_log(nonv)[0])
+        self.assertFalse(RG.judge_log(LOG + ["INFO | Rendering with CPU only"])[0])
+        self.assertFalse(RG.judge_log([])[0])
+
+    def test_engine_csv_from_the_pc_render(self):
+        text = (FIX / "engine_h264_pc_20261116.csv").read_text()
+        samples = RG.parse_engine_csv(text)
+        self.assertGreater(len(samples), 300)
+        peaks = RG.engine_peaks(text, samples[0].t, samples[-1].t)
+        self.assertGreater(peaks["vdec"]["peak"], 90)
+        self.assertEqual(peaks["compute"]["peak"], 0)   # MEASURED: the guest scheduler showed no compute engine while CUDA ran
+        self.assertGreater(peaks["mem_pid_mb"]["max"], 3000)
+        v = G.assert_gpu_used(samples, RG.GUEST_NEED, (samples[0].t, samples[-1].t))
+        self.assertTrue(v["ok"], v["reasons"])
+        idle = text.splitlines()[:8]
+        self.assertFalse(G.assert_gpu_used(RG.parse_engine_csv("\n".join(idle)), RG.GUEST_NEED)["ok"])
+
+    def test_smi_report_na(self):
+        r = RG.smi_report("2026/11/16 03:00:00.000, [N/A], [N/A], [N/A], [N/A], 3544\n" * 3)
+        self.assertEqual((r["samples"], r["utilization_numeric"]), (3, 0))
+
+
+class Grade(unittest.TestCase):
+    """End-to-end verdict on synthetic guest results and pulled bytes; every failure arm is a counterexample."""
+    T0 = 1_794_000_000.0
+    HOST0 = 1_800_000_000.0
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.saved = {k: dict(v["expect"]) for k, v in RG.RENDERS.items()}
+        for k in ("h264", "dnxhr", "prores", "png", "hevc"):
+            RG.RENDERS[k]["expect"]["width"], RG.RENDERS[k]["expect"]["height"] = 64, 48
+        self._ffprobe = M.have_ffprobe
+        M.have_ffprobe = lambda: False
+        self._fs = M.frame_stats
+        M.frame_stats = lambda *a, **k: {"luma_std": 20.0, "luma_mean": 90.0}
+        self.result = {"kind": "RESOLVE_GPU", "t0": self.T0, "stage": "done", "grade": True, "log_lines": LOG,
+                       "steps": [{"n": n, "ok": True} for n in ("project manager", "main window", "import timeline", "deliver page")],
+                       "grade_nodes": [{"clip_x": 70, "nodes": ["01", "02", "03"]}], "renders": []}
+        rows = ["epoch,iso,pid,e3d,compute,copy,vdec,venc,ofa,mem_pid_mb,mem_all_mb,e3d_all,compute_all,venc_all,vdec_all"]
+        host = []
+        t = 0.0
+        for i, rid in enumerate(RG.RENDER_ORDER):
+            a, b = 100 + i * 100, 160 + i * 100
+            ext = RG.RENDERS[rid]["expect"]["ext"]
+            files = []
+            if RG.RENDERS[rid]["expect"]["kind"] == "movie":
+                codec = {"h264": b"avc1", "dnxhr": b"AVdh", "prores": b"apch", "hevc": b"hvc1"}[rid]
+                (self.dir / f"kf_{rid}{ext}").write_bytes(mp4(codec, 64, 48, RG.FRAMES_TOTAL, 24))
+                files = [f"kf_{rid}{ext}|{(self.dir / f'kf_{rid}{ext}').stat().st_size}|{self.T0 + b}"]
+            else:
+                (self.dir / "kf_png").mkdir()
+                for n in range(RG.FRAMES_TOTAL):
+                    files.append(f"kf_png/kf_png_{n:08d}.png|1000|{self.T0 + b}")
+                for n in (0, RG.FRAMES_TOTAL // 2, RG.FRAMES_TOTAL - 1):
+                    (self.dir / f"kf_png/kf_png_{n:08d}.png").write_bytes(png(64, 48, lambda x, y, n=n: ((x * 4 + n * 7) % 256, (y * 5) % 256, 90)))
+            self.result["renders"].append({"id": rid, "fmt_ok": True, "codec_ok": True, "name_ok": True, "loc_ok": True, "queued": True,
+                                           "render_pressed": True, "started": True, "finished": True, "t_start": self.T0 + a - 2, "t_started": self.T0 + a,
+                                           "t_end": self.T0 + b, "fmt_value": "x", "codec_value": "y", "encoder_value": "Native", "res_value": "z",
+                                           "nvidia_encoder_selectable": False, "try_nvidia": False, "files": files, "queue": ["Job 1"]})
+        for k in range(0, 800):
+            tt = self.T0 + k
+            busy = any(100 + i * 100 <= k <= 160 + i * 100 for i in range(5))
+            rows.append(f"{tt:.3f},x,1,0,0,0,{60 if busy else 0},0,0,3000,3500,0,0,0,0")
+        for k in range(0, 1600):
+            tt = self.HOST0 + k * 0.5
+            busy = any(100 + i * 100 <= k / 2 <= 160 + i * 100 for i in range(5))
+            host.append(f"{stamp(tt)}, {96 if busy else 2}, 8, 0, 0, 5300")
+        (self.dir / "engine.csv").write_text("\n".join(rows))
+        (self.dir / "smi.csv").write_text("2026/11/16 03:00:00.000, [N/A], [N/A], [N/A], [N/A], 3544\n")
+        self.host_csv = "\n".join(host)
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            RG.RENDERS[k]["expect"].update(v)
+        M.have_ffprobe = self._ffprobe
+        M.frame_stats = self._fs
+
+    def grade(self, host=True):
+        return RG.grade(self.result, self.dir, self.host_csv if host else "", self.HOST0 if host else None, 0.0)
+
+    def test_pass(self):
+        row = self.grade()
+        self.assertTrue(row["ok"], row.get("error"))
+        self.assertEqual(row["status"], "PASS")
+        self.assertTrue(any("N/A" in f for f in row["findings"]))
+        self.assertTrue(any("NVIDIA encoder" in f for f in row["findings"]))
+        self.assertIn("NOT RUN", row["other_suites"]["pugetbench"])
+
+    def test_idle_guest_engines_fail(self):
+        (self.dir / "engine.csv").write_text("\n".join(l if not l[0].isdigit() else ",".join(l.split(",")[:6] + ["0"] + l.split(",")[7:]) for l in (self.dir / "engine.csv").read_text().splitlines()))
+        row = self.grade()
+        self.assertFalse(row["ok"])
+        self.assertIn("guest:", row["error"])
+
+    def test_idle_host_gpu_fails(self):
+        self.host_csv = "\n".join(l.replace(", 96,", ", 1,") for l in self.host_csv.splitlines())
+        row = self.grade()
+        self.assertFalse(row["ok"])
+        self.assertIn("host:", row["error"])
+
+    def test_no_host_samples_fails(self):
+        row = self.grade(host=False)
+        self.assertFalse(row["ok"])
+        self.assertIn("host GPU samples missing", row["error"])
+
+    def test_wrong_codec_size_frames(self):
+        (self.dir / "kf_h264.mp4").write_bytes(mp4(b"hvc1", 64, 48, RG.FRAMES_TOTAL, 24))
+        self.result["renders"][0]["files"] = [f"kf_h264.mp4|{(self.dir / 'kf_h264.mp4').stat().st_size}|1"]
+        self.assertIn("codec", self.grade()["renders"]["h264"]["problems"][0])
+        (self.dir / "kf_h264.mp4").write_bytes(mp4(b"avc1", 64, 48, 50, 24))
+        self.result["renders"][0]["files"] = [f"kf_h264.mp4|{(self.dir / 'kf_h264.mp4').stat().st_size}|1"]
+        self.assertTrue(any("frames" in p for p in self.grade()["renders"]["h264"]["problems"]))
+
+    def test_missing_or_truncated_output(self):
+        (self.dir / "kf_dnxhr.mov").unlink()
+        self.assertFalse(self.grade()["ok"])
+        (self.dir / "kf_prores.mov").write_bytes(b"")
+        row = self.grade()
+        self.assertEqual(row["renders"]["prores"]["status"], "FAIL")
+
+    def test_sequence_count_and_identical_frames(self):
+        self.result["renders"][3]["files"] = self.result["renders"][3]["files"][:50]
+        self.assertTrue(any("sequence" in p for p in self.grade()["renders"]["png"]["problems"]))
+        self.setUp()
+        a = (self.dir / "kf_png/kf_png_00000000.png").read_bytes()
+        (self.dir / f"kf_png/kf_png_{RG.FRAMES_TOTAL - 1:08d}.png").write_bytes(a)
+        (self.dir / f"kf_png/kf_png_{RG.FRAMES_TOTAL // 2:08d}.png").write_bytes(a)
+        self.assertTrue(any("identical" in p for p in self.grade()["renders"]["png"]["problems"]))
+
+    def test_log_without_cuda_fails_and_missing_step_is_inconclusive(self):
+        self.result["log_lines"] = [x for x in LOG if "Selected compute API" not in x]
+        self.assertFalse(self.grade()["ok"])
+        self.result["log_lines"] = LOG
+        self.result["steps"][2]["ok"] = False
+        row = self.grade()
+        self.assertEqual(row["status"], "INCONCLUSIVE")
+
+    def test_unfinished_render_stops_the_row(self):
+        self.result["renders"][1]["finished"] = False
+        row = self.grade()
+        self.assertFalse(row["ok"])
+        self.assertEqual(row["renders"]["prores"]["status"], "NOT_RUN")
+
+    def test_guest_script_error_is_a_problem(self):
+        self.result["error"] = "Deliver page did not open"
+        self.assertIn("guest script error", self.grade()["error"] + " ".join(self.grade()["problems"]))
 
 
 if __name__ == "__main__":

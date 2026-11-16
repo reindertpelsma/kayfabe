@@ -36,6 +36,15 @@ def _load_propimage():
 
 PI = _load_propimage()
 
+
+def _load_resolve_gpu():
+    """The Resolve GPU lane (resolve_gpu.py, gpu_use_assert.py, resolve_media.py) loaded lazily from this directory."""
+    spec = importlib.util.spec_from_file_location("kf_resolve_gpu", HERE / "resolve_gpu.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["kf_resolve_gpu"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
 GUEST_DIR = r"C:\kfapps"
 
 
@@ -760,7 +769,7 @@ CHECKS = {
         "exe": r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SLDWORKS.exe",
     },
     "resolve": {
-        "timeout": 1200,
+        "timeout": 2400,
         "exe": r"C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe",
     },
     "edrawings": {
@@ -1151,6 +1160,7 @@ def render_check(
     accessibility_experiment=False,
     solidworks_export=True,
     superposition_run=False,
+    resolve_plan=None,
 ):
     spec = CHECKS[name]
     env_prefix(env or {})
@@ -1172,6 +1182,8 @@ def render_check(
         script += THREEDMARK_RUN
     elif name == "edrawings":
         script += EDRAWINGS_RUN
+    elif name == "resolve" and resolve_plan:
+        script += _load_resolve_gpu().guest_body(resolve_plan)
     elif name == "resolve":
         script += RESOLVE_RUN
     else:
@@ -1374,9 +1386,10 @@ def validate_wukong(r):
     )
 
 
-def verdict(name, run_id, directory, plan=None):
+def verdict(name, run_id, directory, plan=None, resolve_host=None):
     """Grade pulled bytes, never a guest-authored ok flag. Guest clocks stay guest-relative."""
     row = {"app": name, "ok": False, "evidence": "NONE", "signal": "", "secs": 0}
+    resolve_host = resolve_host or {}
     try:
         r = json.loads((directory / "result.json").read_text(encoding="utf-8-sig"))
         if r.get("app") != name or r.get("run_id") != run_id:
@@ -1390,7 +1403,7 @@ def verdict(name, run_id, directory, plan=None):
         row["secs"] = int(end - start)
         if name == "wukong":
             row["launched"] = r.get("shipping_seen") is True
-        if r.get("error"):
+        if r.get("error") and r.get("kind") != "RESOLVE_GPU":
             step = f" (script step {r['step']})" if r.get("step") else ""
             raise ValueError(str(r["error"]) + step)
         if r.get("kind") == "FILE" and name == "solidworks":
@@ -1442,6 +1455,14 @@ def verdict(name, run_id, directory, plan=None):
             if cli_refused(str(r.get("cli_output", ""))):
                 signal += "; CLI refused (Professional/Developer key needed), so the run went through UI Automation"
             row.update(ok=True, evidence="FILE", signal=signal)
+        elif name == "resolve" and r.get("kind") == "RESOLVE_GPU":
+            graded = _load_resolve_gpu().grade(r, directory, **resolve_host)
+            row["evidence"] = "FILE"
+            row.update({k: v for k, v in graded.items() if k not in ("ok", "status", "error")})
+            if not graded["ok"]:
+                row["status"] = graded["status"]
+                raise ValueError(graded["error"])
+            row.update(ok=True)
         elif name == "resolve" and r.get("kind") == "RESOLVE":
             row["evidence"] = "NONE"
             wanted = "kf" + run_id[:8]
@@ -1538,10 +1559,21 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
     d = out / name / run_id
     d.mkdir(parents=True)
     tmp = d / (name + ".ps1")
-    tmp.write_text(render_check(name, env, run_id, plan, **options))
+    resolve_cfg = options.pop("resolve_gpu", None)  # dict (media directory, ...) or None: the launch-only Resolve row
+    resolve_plan, host_sampler, host_t0 = None, None, None
+    if name != "resolve" or resolve_cfg is None:
+        tmp.write_text(render_check(name, env, run_id, plan, **options))
     task = "app_" + run_id
     t0 = clock()
     try:
+        if name == "resolve" and resolve_cfg is not None:
+            rg = _load_resolve_gpu()
+            resolve_plan = rg.prepare(guest, run_id, resolve_cfg)
+            tmp.write_text(render_check(name, env, run_id, plan, resolve_plan=resolve_plan, **options))
+            host_sampler = rg.G.HostSampler()
+            host_sampler.start()
+            time.sleep(2)
+            host_t0 = time.time()
         p = guest.interactive(task, tmp.read_text())
         if p.returncode:
             raise ValueError("Task start failed")
@@ -1585,10 +1617,20 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
                 raise ValueError("Artifact transfer failed")
         if name == "superposition" and (d / "result.png").exists():
             extract_screen_text(d)  # optional extra; the verdict is the saved log
-        row = verdict(name, run_id, d, plan)
+        resolve_host = None
+        if resolve_plan:
+            rg = _load_resolve_gpu()
+            host_csv = host_sampler.stop() if host_sampler else ""
+            host_sampler = None
+            (d / "host_smi.csv").write_text(host_csv)
+            rg.pull_outputs(guest, d, resolve_plan, remote)
+            resolve_host = {"host_csv": host_csv, "host_t0": host_t0, "host_utc_offset_s": float(time.localtime().tm_gmtoff)}
+        row = verdict(name, run_id, d, plan, resolve_host=resolve_host)
     except (ValueError, TypeError, OSError, subprocess.TimeoutExpired) as exc:
         row = {"class": "harness", "app": name, "ok": False, "evidence": "NONE", "error": str(exc)}
     finally:
+        if host_sampler is not None:
+            host_sampler.stop()
         # Stop only this authored task, never process-name sweeps.
         try:
             guest.ps(
@@ -1694,6 +1736,15 @@ def main(argv=None):
         help="Manual iteration: after verify, keep the guest up until this file appears (max 3 h)",
     )
     ap.add_argument("--plans", type=Path)
+    ap.add_argument(
+        "--resolve-launch-only",
+        action="store_true",
+        help="Resolve row: only create a project (the old weak check) instead of the GPU rendering coverage",
+    )
+    ap.add_argument(
+        "--resolve-media",
+        help="Directory for the open media of the Resolve row (fetched from the pinned sources or the public mirror when missing)",
+    )
     ap.add_argument(
         "--experiment-3dmark-accessibility",
         action="store_true",
@@ -1966,6 +2017,11 @@ def main(argv=None):
                         accessibility_experiment=a.experiment_3dmark_accessibility,
                         solidworks_export=a.solidworks_export,
                         superposition_run=a.superposition_run,
+                        **(
+                            {"resolve_gpu": {"media_dir": a.resolve_media or str(Path(a.work) / "resolve_media")}}
+                            if name == "resolve" and not a.resolve_launch_only
+                            else {}
+                        ),
                     )
                     try:
                         events = shutdown_events(g)
