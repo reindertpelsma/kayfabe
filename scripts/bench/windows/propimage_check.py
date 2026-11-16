@@ -123,9 +123,20 @@ if($changed){
  }
  Start-Sleep 15
 }
-$ids=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader)
-if($LASTEXITCODE -ne 0 -or $ids.Count -ne 1 -or $ids[0].Trim() -cne $expected){throw 'Post-fix seed GPU UUID mismatch'}
-$ids[0].Trim()
+function Read-Uuid(){ $x=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader 2>$null); if($LASTEXITCODE -eq 0 -and $x.Count -eq 1){ $x[0].Trim() } else { '' } }
+function Wait-Uuid($tries){ for($i=0;$i -lt $tries;$i++){ $u=Read-Uuid; if($u){ return $u }; Start-Sleep 5 }; return '' }
+$u=Wait-Uuid 18
+if($u -cne $expected){
+ # MEASURED 2026-11-16 (RTX 4090 box): after a plain restart the device can stay in Code 43 where Disable/Enable clears it at once
+ Get-PnpDevice -Class Display | Where-Object {$_.Present -and $_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
+  Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
+  Start-Sleep 5
+  Enable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
+ }
+ $u=Wait-Uuid 18
+}
+if($u -cne $expected){throw 'Post-fix seed GPU UUID mismatch'}
+$u
 """
     )
 
