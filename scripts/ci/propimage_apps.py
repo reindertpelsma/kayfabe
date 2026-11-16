@@ -746,6 +746,12 @@ def run(ctx, evidence_dir=None):
         klog.start()
         timeouts = {a: pi_check.CHECKS[a]["timeout"] for a in APPS}
         plan = plan_boots(timeouts)
+        # RELEASE-RUN TREE ONLY (2026-11-16, coordinator decision: Wukong has no verdict source in the harness): an operator may name apps that
+        # are NOT started. They are recorded NOT_RUN with the reason, so the verdict is never PASS while one is skipped.
+        skipped = [s for s in ctx.environ.get("KF_PROPIMAGE_SKIP_APPS", "").split(",") if s]
+        if any(s not in APPS for s in skipped) or len(set(skipped)) != len(skipped):
+            raise Refused("SKIP_APPS_INVALID")
+        plan = [b for b in ([a for a in boot if a not in skipped] for boot in plan) if b]
         rec["boots"] = [{"index": i + 1, "apps": b, "rc": None, "secs": 0, "offline": False} for i, b in enumerate(plan)]
         work, dl, imgdir, logs = ctx.prefix / "work", ctx.prefix / "dl", ctx.prefix / "unpacked", ctx.prefix / "logs"
         for d in (work, dl, imgdir, logs):
@@ -809,7 +815,8 @@ def run(ctx, evidence_dir=None):
         have = {a["app"] for a in rec["apps"]}
         for app in APPS:
             if app not in have:
-                rec["apps"].append(dict(collect_app(ctx.prefix / "none", app, [], []), verdict="NOT_RUN", detail="boot not started"))
+                rec["apps"].append(dict(collect_app(ctx.prefix / "none", app, [], []), verdict="NOT_RUN",
+                                        detail="SKIPPED by the operator (KF_PROPIMAGE_SKIP_APPS)" if app in skipped else "boot not started"))
         rec["apps"].sort(key=lambda a: APPS.index(a["app"]))
         rec["verdict"], rec["reason"], rec["failed"] = grade(rec["apps"])
         if rec["verdict"] == "PASS" and any(not b["offline"] for b in rec["boots"]):

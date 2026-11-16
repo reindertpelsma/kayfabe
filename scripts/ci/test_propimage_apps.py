@@ -801,6 +801,29 @@ class Run(unittest.TestCase):
             self.assertEqual(argv[argv.index("--display") + 1], "broker")
         json.dumps(rec)
 
+    def test_an_operator_skip_leaves_the_app_not_run_and_the_verdict_never_pass(self):
+        # release-run tree only (2026-11-16): KF_PROPIMAGE_SKIP_APPS=wukong
+        env = Env(self)
+        env.ctx.environ["KF_PROPIMAGE_SKIP_APPS"] = "wukong"
+        rec = pa.run(env.ctx)
+        self.assertEqual([b["apps"] for b in rec["boots"]], [["superposition", "3dmark"], ["solidworks", "resolve", "edrawings", "edge"]])
+        self.assertEqual(len(env.boots_seen), 2)
+        w = rec["apps"][-1]
+        self.assertEqual((w["app"], w["verdict"]), ("wukong", "NOT_RUN"))
+        self.assertIn("SKIPPED by the operator", w["detail"])
+        self.assertNotEqual(rec["verdict"], "PASS")
+        self.assertEqual(rec["failed"], ["wukong"])
+        self.assertTrue(all(a["verdict"] == "PASS" for a in rec["apps"][:-1]))
+        vast_report.validate_propimage_apps(rec)
+
+    def test_a_skip_of_an_unknown_or_repeated_app_is_refused_before_any_boot(self):
+        for bad in ("nosuch", "wukong,wukong"):
+            env = Env(self)
+            env.ctx.environ["KF_PROPIMAGE_SKIP_APPS"] = bad
+            rec = pa.run(env.ctx)
+            self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "SKIP_APPS_INVALID"))
+            self.assertEqual(env.boots_seen, [])
+
     def test_wukong_failure_is_named_and_the_record_still_validates(self):
         env = Env(self, scenario={"wukong": {"verdict": "FAIL", "detail": "Game crashed", "kernel_events": [{"event": "LiveKernelEvent", "code": "141"}],
                                              "xids": ["NVRM: Xid (PCI:0000:01:00): 31, pid=1, name=qemu"]}})
