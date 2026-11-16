@@ -113,7 +113,9 @@ Get-ChildItem $base -Name | Where-Object {$_ -match '^\d{4}$'} | ForEach-Object 
  }
 }
 if($changed){
- Get-PnpDevice -Class Display | Where-Object {$_.FriendlyName -match 'NVIDIA'} | ForEach-Object {
+ # Present devices only: a phantom NVIDIA instance left from the host the image was built on (Status Unknown, CM_PROB_PHANTOM) cannot be restarted
+ # and made `pnputil /restart-device` fail on the second image (MEASURED 2026-11-16, built on an RTX 4070, run on an RTX 4090).
+ Get-PnpDevice -Class Display -PresentOnly | Where-Object {$_.FriendlyName -match 'NVIDIA'} | ForEach-Object {
   pnputil /restart-device $_.InstanceId | Out-Null
   if($LASTEXITCODE -ne 0){throw 'NVIDIA display device restart failed'}
  }
