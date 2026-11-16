@@ -469,3 +469,41 @@ results store (`src/ingest.js`, section above) records it like any other rental,
 record carries `tier`, `family`, `source` (`github` or `admin`) and `batch`. The release verdict
 itself lives in the batch (`batch:<id>` in the ledger, shown on the admin page): per (family, die,
 platform) cells with their runs, passes and machines.
+
+## Proprietary Windows images in the instruction, and the bandwidth of a leg (built 2026-11-16, NOT DEPLOYED, wired to nothing)
+
+STATUS: DESIGN-ONLY, 2026-11-16. Design and the decisions behind it: `docs/design/V3_WORKER_PROPIMAGES.md`.
+
+`propimages.json` is the Worker's list of the private Windows images (image A and image B): per image an opaque label, the private
+object (name, size, sha256 pin; the signed GOP is the third object), its slot (1 or 2), the families it has run on, and its
+applications, each in the `gate` lane (must pass) or the `discovery` lane (may fail; the failure is a listed finding). The
+configuration is `strict: true` and a configuration that is not strict is refused: a strict run must run everything listed, and any
+skip fails it. `src/propimages.js` is pure: `buildInstruction(profile, options, ...)` returns the payload instruction of a leg (the
+same base fields `tierEnvironment` sends) and adds the `propimages` / `propimages_strict` part only for a release-profile leg that
+passes `propimages: true`, its `die` and the release's `releaseSeq` (default off; the check profile's small and middle tiers and the
+sweep are refused by name). A release rents two dies per family: slot 1's box runs image A and slot 2's box image B, exchanged when
+`config.swap` XOR (`releaseSeq` is odd), the same release number always giving the same assignment; a family with one die gets both
+images on that box. An image on a family it has not run on is emitted in the discovery lane, so an unproven family never fails a
+strict release. `propimagePlan(...).lines` is the text for the leg's log. Nothing in `src/index.js` imports the module, `tierEnvironment`
+is unchanged, and the `/bench-data` allow-list (`src/benchdata.js`) does not contain the images: that route is gated by a live run
+token only, not by profile or stage, so adding them is a decision for the owner.
+
+`test/propimages.test.js` pins the shape against the box's own parser, `vast_payload.py --instruction` and `--emit-instruction`, and the
+standalone runner's flag parser (`test/propimages_check.py`, golden files in `test/fixtures/propimages/`); `propimages-mutants.mjs`
+(two named killers per mutant) is run by CI.
+
+**Bandwidth of a leg.** `src/bandwidth.js` `estimateBandwidth(instruction, tier, options)` computes the expected download and upload of
+one leg from its instruction (only the stages and images it runs, one image per box in a split release) and a text breakdown naming
+the table entry of every line. All numbers are in `bandwidth.json`; pinned image sizes come from `propimages.json` and driver sizes
+from `release-matrix.json`. The box records the bytes it actually moved per stage (`net_bytes` in its result file).
+`bandwidthOverrides()` is the pair for `cfg.bandwidthDownOverride` / `bandwidthUpOverride`; `policy.js` takes `max(profile, override)`.
+
+### Changing the bandwidth numbers
+
+1. Calibrate: `python3 scripts/ci/bandwidth_calibrate.py --instruction instruction.json RUN/kf-result.json [...]` prints a diff of
+   `bandwidth.json` from the runs' actual rx/tx bytes (it never writes the file).
+2. Review the diff and apply it, or edit the one entry by hand (`down_bytes`, `basis`, `date`, `source`, `note`); an image size is
+   edited in `propimages.json`.
+3. Check and commit: `python3 scripts/ci/bandwidth_check.py` must print `bandwidth table: PASS` (it refuses an entry without a class,
+   source or date, an ESTIMATE older than 60 days or without a note, an unknown field, a payload stage missing from the table).
+   Example: the apps stage moved 5.2 GB, so the calibrate diff sets `apps.media` to `"down_bytes": 5200000000` and its basis no longer says ESTIMATE.

@@ -1180,6 +1180,39 @@ def persist_result(destination, result):
     temporary.replace(destination)
 
 
+NET_DEV, NET_ROUTE = "/proc/net/dev", "/proc/net/route"
+
+
+def net_counters(dev=NET_DEV, route=NET_ROUTE):
+    """(interface, rx_bytes, tx_bytes) of the box's default-route interface, or None. Read only; never an error (2026-11-16: the
+    actual transfer per stage, so ci/vast-broker/bandwidth.json can be calibrated from measurement, scripts/ci/bandwidth_calibrate.py)."""
+    try:
+        best = None
+        for line in Path(route).read_text().splitlines()[1:]:
+            f = line.split()
+            if len(f) >= 8 and f[1] == "00000000" and f[7] == "00000000" and (best is None or int(f[6]) < best[0]):
+                best = (int(f[6]), f[0])
+        if best is None:
+            return None
+        for line in Path(dev).read_text().splitlines()[2:]:
+            name, _, rest = line.partition(":")
+            if name.strip() == best[1]:
+                f = rest.split()
+                return best[1], int(f[0]), int(f[8])
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def record_net(result, name, before, after):
+    """The bytes the default interface moved while one stage ran, in the result file's `net_bytes` (validated by vast_report)."""
+    if before is None or after is None or before[0] != after[0]:
+        return
+    net = result.setdefault("net_bytes", {"interface": after[0], "stages": {}})
+    if net["interface"] == after[0]:
+        net["stages"][name] = {"rx": max(0, after[1] - before[1]), "tx": max(0, after[2] - before[2])}
+
+
 def execute_stages(stages, soft, result, destination, runner=run_bounded):
     """Persist the finished prefix even when a later suite times out or fails."""
     records = STAGE_RECORDS
@@ -1196,8 +1229,11 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
         need = stage.get("min_remaining_ms")
         # Too little time left to finish: not run (rc 125), and not a verdict on the guest.
         short = need is not None and soft - int(time.time() * 1000) < need
+        net_before = None if short else net_counters()
         rc = 125 if short else runner(stage["command"], soft, stage["output"], stage["progress"])
         elapsed = int((time.monotonic() - start) * 1000)
+        if not short:
+            record_net(result, name, net_before, net_counters())
         record.update(rc=rc, duration_ms=elapsed, result="PASS")
         print(
             "KF_PAYLOAD_STAGE_END name=" + name + " rc=" + str(rc) + " duration_ms=" + str(elapsed),
@@ -1602,7 +1638,7 @@ def plan_stage_names(i, only=()):
             names.append("windows_apps")
         if i.windows_runs == 2:
             names.append("windows_gate_2")
-    if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only or i.propimages):
+    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):
         names.append("propimage_apps")
     if "specviewperf" in i.stages:
         names.append("specviewperf")
