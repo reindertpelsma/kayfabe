@@ -15,6 +15,7 @@ KFDATA (scripts/bench/assets).
 Verdicts: PASS, PASS_LIMITED (launch/main window only, or a diagnostic output; the row says which), FAIL, INCONCLUSIVE, NOT_RUN,
 HARNESS (transport lost; never an application failure).
 """
+import hashlib
 import json
 import math
 import os
@@ -55,11 +56,13 @@ CHECKS = {
     "indesignsample": {"timeout": 480, "script": "indesign_sample.ps1", "gpu": (), "lane": "gate", "path": "D3D11/Direct2D on shipped documents"},
     "animatesample": {"timeout": 420, "script": "animate_sample.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage on a shipped document", "disabled": 'same as animate (JSFL entry)'},
     "photoshopsample": {"timeout": 900, "script": "photoshop_sample.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "GPU filters on shipped 4K+ photo, 3840x2160 template"},
+    "photoshopcpu": {"timeout": 900, "script": "photoshop_sample.ps1", "gpu": (), "lane": "discovery", "path": "Photoshop with the graphics processor DENIED (PSUserConfig GPUDeny): same filters, CPU path; output compared to the GPU row by pixel statistics"},
     "photoshopprojects": {"timeout": 900, "script": "photoshop_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence PSD corpus: layer/colour-mode decoding and GPU canvas on foreign files"},
     "indesignprojects": {"timeout": 600, "script": "indesign_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence INDD corpus open + PDF export"},
     "animateprojects": {"timeout": 600, "script": "animate_projects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence FLA corpus open + stage export", "disabled": 'same as animate (JSFL entry)'},
     "aeprojects": {"timeout": 900, "script": "aeprojects.ps1", "gpu": (), "lane": "discovery", "path": "open-licence AEP corpus open (project load, GPU capability scan)"},
     "aetoggle": {"timeout": 1500, "script": "ae_toggle.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "CUDA <-> software renderer switch inside one After Effects session, 4K effects frame"},
+    "aeadv3d": {"timeout": 1800, "script": "ae_adv3d.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "After Effects Advanced 3D renderer, depth of field, 24 shadow-casting 3D layers, 4K 16 bit"},
     "aeparallel": {"timeout": 1800, "script": "ae_parallel.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "four concurrent aerender processes (CUDA contexts x4), 4K"},
     "indesign_s1": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 1 of 6 (start and COM)"},
     "indesign_s2": {"timeout": 900, "script": "indesign_steps.ps1", "gpu": (), "lane": "discovery", "path": "InDesign crash isolation, step 2 of 6 (new document)"},
@@ -76,7 +79,7 @@ CHECKS = {
     "dimension": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/OptiX init (launch only)"},
     "uxp": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "UXP tooling start (launch only)"},
 }
-EMBED = {"aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
+EMBED = {"aeadv3d": {"AE_ADV3D": "ae_adv3d.jsx"}, "aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
 ENABLED = tuple(n for n, c in CHECKS.items() if not c.get("disabled"))
 LAUNCH_ONLY = ("premiere", "dimension", "uxp", "lightroomlaunch")
 
@@ -195,8 +198,51 @@ def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignor
             guest.ps(f"Stop-ScheduledTask -TaskName kf_{task} -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName kf_{task} -Confirm:$false -ErrorAction SilentlyContinue")
         except (OSError, subprocess.TimeoutExpired):
             pass
+    try:
+        _record_output_stats(name, d, row)
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        row["output_stats_error"] = str(exc)[:120]
     (d / "verdict.json").write_text(json.dumps(row, indent=2))
     return row
+
+
+REF_MEAN_TOL, REF_STD_REL = 2.0, 0.05
+
+
+def _record_output_stats(name, d, row):
+    """Pixel statistics and sha256 of every pulled output (written to output_stats.json) so a later run on another platform can be compared.
+    With KF_REFERENCE_DIR/<row>.json (a file written by this function on the reference platform) the PNG statistics are compared within a
+    tolerance (mean +-2 levels, std +-5 percent) and the result recorded as row["reference"]; it only fails the row when KF_REFERENCE_STRICT=1."""
+    stats = {}
+    for f in sorted(d.iterdir()):
+        if f.name in ("verdict.json", "output_stats.json") or f.name.startswith(("host_", name + "_")) or not f.is_file():
+            continue
+        e = {"bytes": f.stat().st_size, "sha256": hashlib.sha256(f.read_bytes()).hexdigest()}
+        if f.suffix == ".png":
+            try:
+                i = media_check.png_info(f)
+                e.update(width=i["width"], height=i["height"], mean=i["mean"], std=i["std"])
+            except ValueError:
+                pass
+        stats[f.name] = e
+    (d / "output_stats.json").write_text(json.dumps(stats, indent=1, sort_keys=True))
+    row["outputs_recorded"] = len(stats)
+    ref = os.environ.get("KF_REFERENCE_DIR")
+    if not ref or not (Path(ref) / (name + ".json")).is_file():
+        return
+    want = json.loads((Path(ref) / (name + ".json")).read_text())
+    diffs = []
+    for fn, w in want.items():
+        g = stats.get(fn)
+        if g is None:
+            diffs.append("%s: missing" % fn)
+        elif w.get("mean") is not None and g.get("mean") is not None:
+            if abs(g["mean"] - w["mean"]) > REF_MEAN_TOL or abs(g["std"] - w["std"]) > REF_STD_REL * max(w["std"], 1.0):
+                diffs.append("%s: mean %.2f/%.2f std %.2f/%.2f" % (fn, g["mean"], w["mean"], g["std"], w["std"]))
+    row["reference"] = {"match": not diffs, "diffs": diffs[:5]}
+    if diffs and os.environ.get("KF_REFERENCE_STRICT") == "1" and row.get("ok"):
+        row["ok"] = False
+        row["error"] = "output differs from the reference: " + diffs[0]
 
 
 # ----------------------------------------------------------------------------------------------------- grading
@@ -481,6 +527,30 @@ def grade_indesign_step(r, d):
     return "InDesign steps 1..%d completed (last: %s)" % (want, last), ""
 
 
+def grade_photoshopcpu(r, d):
+    msg, _ = grade_photoshopsample(r, d)
+    info = str((r.get("js") or {}).get("gpuinfo", ""))
+    m = re.search(r"useGPU:\s*(\d)", info)
+    if not m or m.group(1) != "0":
+        raise ValueError("GPUDeny did not take effect (Photoshop reports: %s)" % info[:160])
+    return msg + "; Photoshop reports useGPU 0 (graphics processor denied)", info
+
+
+def grade_aeadv3d(r, d):
+    made = str(r.get("make_log", ""))
+    have = set(made.strip().split(",")) if made.strip() else set()
+    if r.get("aerender_exit") != 0:
+        raise ValueError("aerender exit code %s; project notes: %s" % (r.get("aerender_exit"), made[:160]))
+    if r.get("frame_count") != 10:
+        raise ValueError("%s frames, expected 10" % r.get("frame_count"))
+    names = [o["file"] for o in r.get("outputs", []) if o["file"].endswith(".png")]
+    _outputs_fresh(r, d, names)
+    for n in names:
+        _png(d, n, 3840, 2160)
+    renderer = [h for h in have if h.startswith("renderer=")]
+    return "Advanced 3D comp (%s; dof=%s; %s) rendered 10 frames 3840x2160" % (renderer[0] if renderer else "renderer not reported", "dof" in have, "layers3d=24" if "layers3d=24" in have else "layers?"), made
+
+
 def _project_rows(r, minimum):
     rows = [x for x in str(r.get("rows", "")).strip().split("||") if x]
     ok = [x for x in rows if x.startswith("OK ")]
@@ -529,7 +599,7 @@ def grade_aeprojects(r, d):
     return "%d of %d open-licence AEP projects opened (items, comps and layers counted)" % (len(ok), len(ok) + len(bad)), ""
 
 
-GRADERS = {**{"indesign_s%d" % i: grade_indesign_step for i in range(1, 7)}, "aetoggle": grade_aetoggle, "aeparallel": grade_aeparallel, "photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
+GRADERS = {"aeadv3d": grade_aeadv3d, "photoshopcpu": lambda r, d: grade_photoshopcpu(r, d), **{"indesign_s%d" % i: grade_indesign_step for i in range(1, 7)}, "aetoggle": grade_aetoggle, "aeparallel": grade_aeparallel, "photoshopprojects": grade_photoshopprojects, "indesignprojects": grade_indesignprojects, "animateprojects": grade_animateprojects,
            "aeprojects": grade_aeprojects, "illustratorsample": grade_illustratorsample, "indesignsample": grade_indesignsample, "animatesample": grade_animatesample,
            "photoshopsample": grade_photoshopsample, "mediaencoder": grade_mediaencoder, "lightroom": grade_lightroom, "photoshop": grade_photoshop, "illustrator": grade_illustrator, "aftereffects": grade_aftereffects, "indesign": grade_indesign,
            "acrobat": grade_acrobat, "animate": grade_animate, "gpudiag": grade_gpudiag}

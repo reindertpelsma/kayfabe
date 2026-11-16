@@ -70,7 +70,7 @@ class T(unittest.TestCase):
         import re
         for name, c in B.CHECKS.items():
             text = (B.APPS_DIR / c["script"]).read_text()
-            m = re.search(r"Init-Run ('([a-z]+)'|\$APPNAME)", text)
+            m = re.search(r"Init-Run ('([a-z0-9]+)'|\$APPNAME)", text)
             self.assertTrue(m, name)
             if m.group(2):
                 self.assertIn(m.group(2), (name, "sniffers") if name == "gpudiag" else (name,), name)

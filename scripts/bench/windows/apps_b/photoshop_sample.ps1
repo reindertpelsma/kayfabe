@@ -1,12 +1,15 @@
 # Photoshop on the image's own sample files (a sky preset photo and a document-template PSD shipped with the applications): open both,
 # run GPU-class filters on the photo, save it as PNG, and report the template's size. Nothing is copied off the image.
 . 'C:\kfhw\lib.ps1'
-$R = Init-Run 'photoshopsample'
+$R = Init-Run $APPNAME
 try {
   $sky = Get-ChildItem 'C:\Program Files\Adobe\Adobe Photoshop 2027\Required\Sky_Presets' -Filter *.jpg | Sort-Object Length -Descending | Select-Object -First 1
   $psd = Get-ChildItem 'C:\Program Files\Adobe\Adobe Media Encoder 2027' -Recurse -Filter '3840x2160x1.0.psd' -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $sky -or -not $psd) { throw 'shipped sample files not found' }
   $R.source = 'sky preset + 3840x2160 template'; $R.source_bytes = $sky.Length
+  # row photoshopcpu: the same workload with Photoshop's graphics processor use denied through its user configuration file (PSUserConfig.txt)
+  $cfg = "$env:APPDATA\Adobe\Adobe Photoshop 2027\Adobe Photoshop 2027 Settings\PSUserConfig.txt"
+  if ($APPNAME -eq 'photoshopcpu') { New-Item -Force -ItemType Directory (Split-Path $cfg) | Out-Null; Set-Content $cfg 'GPUDeny 1'; $R.psuserconfig = 'GPUDeny 1' }
   Start-Process 'C:\Program Files\Adobe\Adobe Photoshop 2027\Photoshop.exe'
   [void](Wait-For { Has-Window 'Photoshop' } 'Photoshop' 150)
   [void](Wait-For { $false } 'Photoshop' 20)
@@ -31,13 +34,16 @@ for (var pass = 0; pass < 4; pass++) {
 }
 doc.resizeImage(UnitValue(1920,'px'), undefined, undefined, ResampleMethod.BICUBICSHARPER);
 var w1 = doc.width.as('px'), h1 = doc.height.as('px');
+var si = app.systemInformation.split(/[\r\n]+/), gi = [];
+for (var q = 0; q < si.length; q++) { if (/useGPU|isGPUCapable|GPUDeny|GPUForce|GPUName/.test(si[q])) gi.push(si[q].replace(/^\s+|\s+$/g, '')); }
 var po = new PNGSaveOptions(); po.compression = 6;
 doc.saveAs(new File('$($D -replace '\\','/')/out.png'), po, true, Extension.LOWERCASE);
 doc.close(SaveOptions.DONOTSAVECHANGES);
-'{"tw":"' + tw + '","th":"' + th + '","tl":"' + tl + '","w0":"' + w0 + '","h0":"' + h0 + '","w1":"' + w1 + '","h1":"' + h1 + '","sharpen":"' + done + '"}';
+'{"tw":"' + tw + '","th":"' + th + '","tl":"' + tl + '","w0":"' + w0 + '","h0":"' + h0 + '","w1":"' + w1 + '","h1":"' + h1 + '","sharpen":"' + done + '","gpuinfo":"' + gi.join(' || ').replace(/"/g, "'") + '"}';
 "@
   $R.js = ($ps.DoJavaScript($js) | ConvertFrom-Json)
   $R.outputs = @(File-Info "$D\out.png")
   $R.quit = Quit-App 'Photoshop' $ps
 } catch { $R.error = $_.Exception.Message; $R.quit = Quit-App 'Photoshop' }
+if ($APPNAME -eq 'photoshopcpu') { Remove-Item $cfg -ErrorAction SilentlyContinue }
 Finish $R
