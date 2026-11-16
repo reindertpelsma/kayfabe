@@ -90,7 +90,10 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 XID_RE = re.compile(r"NVRM: Xid")
 RUN_ID = re.compile(r"[0-9a-f]{32}")
 SWTPM_DEPS = ("build-essential", "automake", "autoconf", "libtool", "pkg-config", "libssl-dev", "libgmp-dev", "libtasn1-6-dev",
-              "libjson-glib-dev", "libgnutls28-dev", "libseccomp-dev", "libglib2.0-dev", "gawk", "socat")
+              "libjson-glib-dev", "libgnutls28-dev", "libseccomp-dev", "libglib2.0-dev", "gawk", "socat",
+              # 2026-11-16, MEASURED on a real Ubuntu 22.04 KVM box (image-B agent): swtpm's configure stops with "expect is required";
+              # the other packages are what that build had installed when it completed (only `expect` was shown to be needed)
+              "expect", "gnutls-bin", "libfuse-dev", "libtool-bin", "net-tools", "python3-cryptography", "tpm2-tools")
 
 
 class Refused(Exception):
@@ -232,6 +235,18 @@ def swtpm_version(swtpm, runner, env=None):
         return None
     m = re.search(r"\bversion\s+(\d+)\.(\d+)(?:\.(\d+))?", (done.stdout or "") + (done.stderr or ""))
     return tuple(int(x or 0) for x in m.groups()) if m else None
+
+
+def swtpm_env(environ, prefix_bin=SWTPM_PREFIX + "/bin/swtpm"):
+    """The environment `swtpm` needs: a binary built under /opt/tpm links libtpms from there (2026-11-16, MEASURED: without
+    LD_LIBRARY_PATH an already built /opt/tpm/bin/swtpm does not start and counted as absent)."""
+    if swtpm_binary(environ, prefix_bin) != prefix_bin:
+        return environ
+    lib = os.path.dirname(os.path.dirname(prefix_bin)) + "/lib"
+    old = environ.get("LD_LIBRARY_PATH")
+    if old and lib in old.split(":"):
+        return dict(environ, SWTPM=prefix_bin)
+    return dict(environ, SWTPM=prefix_bin, LD_LIBRARY_PATH=lib + (":" + old if old else ""))
 
 
 def swtpm_binary(environ, prefix_bin=SWTPM_PREFIX + "/bin/swtpm"):
@@ -571,7 +586,7 @@ def preflight(ctx, swtpm_ok=None):
     if type(mem) is int and mem:
         rows.append(row("gpu_memory", "MATCH" if mem >= 2 * WUKONG_FB_MB else "WARN",
                         "%d MiB; the Wukong boot gives the guest %d MiB of framebuffer" % (mem, WUKONG_FB_MB)))
-    version = swtpm_version(swtpm_binary(ctx.environ), ctx.runner, ctx.environ)
+    version = swtpm_version(swtpm_binary(ctx.environ), ctx.runner, swtpm_env(ctx.environ))
     build = version is None or version < (0, 10, 0)
     pins = load_pins(ctx.pins_path)
     unset = unset_roles(pins, needed_roles(build))
@@ -758,6 +773,7 @@ def run(ctx, evidence_dir=None):
             env = build_swtpm(ctx, dl, work, logs)
             ctx.environ.update(SWTPM=SWTPM_PREFIX + "/bin/swtpm", LD_LIBRARY_PATH=env["LD_LIBRARY_PATH"])
             rec["swtpm"]["built"] = True
+        ctx.environ.update(swtpm_env(ctx.environ))
         have_version = swtpm_version(swtpm_binary(ctx.environ), ctx.runner, ctx.environ)
         rec["swtpm"]["version"] = ".".join(str(x) for x in have_version) if have_version else None
         broker = ctx.checkout / "broker/nvkvm-display-broker"
