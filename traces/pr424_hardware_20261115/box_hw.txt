@@ -1,0 +1,5 @@
+NVIDIA GeForce RTX 4090, 580.159.04
+Model name:                           AMD EPYC 7V73X 64-Core Processor
+/dev/root       194G   45G  149G  24% /
+crw-rw---- 1 root kvm 10, 232 Nov 15 18:47 /dev/kvm
+6.8.0-59-generic

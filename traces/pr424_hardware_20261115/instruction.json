@@ -1,0 +1,11 @@
+{
+  "linux_apps": null,
+  "rehearsal": true,
+  "schema": "kayfabe.payload-instruction/1",
+  "spec": null,
+  "stages": [],
+  "tier": "large",
+  "winapps": null,
+  "windows": true,
+  "windows_runs": 1
+}

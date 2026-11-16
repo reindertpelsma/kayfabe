@@ -288,12 +288,50 @@ class RealDocs(unittest.TestCase):
             planned = [s for k, d, s in flow.PLAN if k == "doc" and d == name]
             self.assertEqual(planned, [s.name for s in parsed.steps], name)
 
+    def test_a_checkout_with_absent_objects_is_not_cloned_from(self):
+        self.assertTrue(flow.has_missing_objects("aaaa\n?bbbb\ncccc path\n"))
+        self.assertFalse(flow.has_missing_objects("aaaa\ncccc path\n"))
+        with tempfile.TemporaryDirectory() as d:
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+            run = lambda *a: subprocess.run(["git", "-C", d, *a], env=env, check=True, capture_output=True, text=True).stdout.strip()
+            run("init", "-q")
+            Path(d, "f").write_text("x\n")
+            run("add", "f")
+            run("commit", "-q", "-m", "c")
+            sha = run("rev-parse", "HEAD")
+            self.assertEqual(flow.mirror_source(d, sha), d)
+            blob = run("rev-parse", "HEAD:f")
+            os.remove(os.path.join(d, ".git/objects", blob[:2], blob[2:]))
+            self.assertEqual(flow.mirror_source(d, sha), flow.REPO_URL)
+
+    def test_the_mirror_clones_into_the_directory_the_docs_cd_into(self):
+        with tempfile.TemporaryDirectory() as d:
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+            src, prefix = Path(d, "src"), Path(d, "prefix")
+            src.mkdir()
+            prefix.mkdir()
+            run = lambda *a: subprocess.run(["git", "-C", str(src), *a], env=env, check=True, capture_output=True, text=True).stdout.strip()
+            run("init", "-q")
+            (src / "f").write_text("x\n")
+            run("add", "f")
+            run("commit", "-q", "-m", "c")
+            mirror = flow.make_mirror(src, prefix, run("rev-parse", "HEAD"), 1, 1)
+            out = subprocess.run(["git", "clone", "-q", "file://" + str(mirror)], cwd=d, capture_output=True, text=True, env=env)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertTrue(Path(d, "kayfabe", "f").exists(), "the documented `cd kayfabe` must find the clone")
+
+    def test_the_cup8_log_lands_beside_the_step_logs(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = flow.cup8_log(d)
+            path.write_text("x")
+            self.assertEqual(path, Path(d, "run", "logs", "cup8.out"))
+
     def test_the_documented_substitutions_apply_to_the_real_blocks(self):
         docs = self.docs()
         with tempfile.TemporaryDirectory() as d:
             clone = next(s for s in docs["building.md"].steps if s.name == "clone")
-            s, used = ds.substitute(clone, [ds.Substitution("clone", flow.REPO_URL, "file://" + d + "/mirror.git")], d)
-            self.assertIn("git clone file://" + d + "/mirror.git\n", s.text)
+            s, used = ds.substitute(clone, [ds.Substitution("clone", flow.REPO_URL, "file://" + d + "/kayfabe.git")], d)
+            self.assertIn("git clone file://" + d + "/kayfabe.git\n", s.text)
             args = next(x for x in docs["attach-to-existing-vm.md"].steps)
             subs = [ds.Substitution("qemu_args", flow.UUID_PLACEHOLDER, flow.UUID), ds.Substitution("qemu_args", flow.FB_PLACEHOLDER, "fb-mb=6144")]
             replaced, _ = ds.substitute(args, subs, d)

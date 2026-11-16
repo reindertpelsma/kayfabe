@@ -37,6 +37,16 @@ zero passes, unknown hardware or compute_cap < 750. Soft deadline: TERM, KILL af
 FAIL with the suites already written plus `timeout`. Absent payload: FAIL `payload_missing`; absent
 or invalid result file: FAIL `result_missing`/`result_invalid`. Exit text never makes a PASS.
 
+kfroot and rootless Windows (2026-11-15, OWNER_RULINGS section AR item 6; GPU-free tests and one hand run of the real sudo in a sandbox, NOT run on a box):
+`kfroot.py` installs the explicit root step (`/usr/local/bin/kfroot` = `exec sudo -n -E` on a root-owned wrapper that is the only sudoers entry; the
+sudoers file is `visudo -c` checked before it is installed), bootstraps the box for an unprivileged `ci` user in group `kvm` (device nodes, memlock,
+`/workspace`, GPU lock, sudo log), starts a command dropped (`run`: every capability set empty, `NoNewPrivs=1`), and asserts the result from `/proc`
+and the sudo log (`assert-tree`, `audit-check`). `windows_gate.sh` and `windows_apps.sh` no longer refuse non-root: they check `/dev/kvm`, `/dev/nvidiactl`,
+writable directories, cargo and a readable kernel log by name, and the root operations (apt, the swtpm AppArmor rule, `dmesg` under
+`kernel.dmesg_restrict=1`) are `kfroot <cmd>` lines (`scripts/lib/kfroot.sh`). `KF_ROOTLESS=require|record|off` (default record). Design, the
+inventory of what really needs root, the measured sudo behaviour and the first-box checklist: [V3_KFROOT_ROOTLESS](../../docs/design/V3_KFROOT_ROOTLESS.md).
+Tests `test_kfroot.py`; mutants `kfroot_mutants.py` (two named killers each, in `ci.yml`). `vast_payload.py` does not yet use it.
+
 Instruction file and stage selection (2026-11-15, OWNER_RULINGS section AR, stages S1 and S3; MEASURED by
 GPU-free tests only, not on a box): the payload also takes `--instruction FILE` (JSON, at most 64 KiB, schema
 `kayfabe.payload-instruction/1`: `ci/vast-broker/planner/schemas/instruction.schema.json`, mirrored byte for byte
@@ -127,6 +137,15 @@ Wukong INCONCLUSIVE (its benchmark menu driver is research tooling in draft PR #
 `propimage_apps.py manifest --out FILE` writes the download manifest (and refuses while pins are unset). The record is `propimage_apps` in `kf-result.json`, validated in
 `vast_report.py`. Design, refusal table and first-run checklist: `docs/design/V3_PROPIMAGE_APPS_STAGE.md`. Tests `test_propimage_apps.py`; mutants `propimage_apps_mutants.py`
 (two named killers each, in `ci.yml`).
+## Standalone run: one presigned-URL file for every private object (2026-11-16)
+
+A box that runs the payload by hand (no Worker, no run token, OWNER_RULINGS section AR item 3) needs the private objects through ONE file,
+`/run/kf-ci/download-urls.json` (mode 0600, schema `kayfabe.download-urls/1`: `{"urls": {ref: presigned https URL}}`, extra top-level keys such as the
+sizes and sha256 pins of the objects are ignored by the readers). The coordinator, which alone holds the R2 credential, writes it with
+`rclone link r2:... --expire <= 12h` per object; the box gets the file and nothing else (no key, token or rclone config).
+The readers: `box_downloader.py --urls` (the `propimage_apps` stage: refs `propimage-kfimg-<date>.zip`, `propimage-kf-gop.signed.efi`) and
+`scripts/bench/specviewperf/stream_url.py` (SPEC lane, `KF_SPEC_URL_FILE=<file>`; since 2026-11-16 it reads this shape too, object ref
+`specviewperf-15.0.0.tar.zst`, and still the PC-run flat map). Mutants: `stream_url_mutants.py`. Every other object of the rehearsal stages is public.
 
 ## Box downloader (`box_downloader.py`, 2026-11-15; step 3 of [V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN](../../docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md))
 

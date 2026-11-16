@@ -1,10 +1,20 @@
-STATUS: DESIGN-ONLY with measured first runs (sections 9-11), 2026-11-12. Owner design (binding), gap analysis against draft PRs #293/#302/#300/#303, GPU-free
+STATUS: DESIGN-ONLY with measured first runs (sections 9-11), 2026-11-12; corrections and terminology of 2026-11-15 are folded in below (see *Corrections*). Owner design (binding), gap analysis against draft PRs #293/#302/#300/#303, GPU-free
 tooling (`scripts/bench/windows/propimage.py`, tested by `scripts/ci/test_propimage.py`, 174 tests, 67 mutants in
 `scripts/ci/propimage_mutants.py`, each with at least two killers; counts from a fresh run on 2026-11-12). Sections 9 to 11 record real runs on the PC (setup VM, install mode, GPU driver); nothing was deleted on the PC and no R2 object was written.
 Labels: MEASURED = a file or command run on 2026-11-12 (named); CODE READ = read in a named file; INFERRED = reasoning,
 not tested; DESIGN INTENT = owner or coordinator decision, not built; UNTESTED = no run yet.
 
 # Reproducible proprietary Windows 11 image on the PC
+
+## Corrections (2026-11-15, owner decisions; they take precedence over the text below that they correct)
+
+1. **Name of the clock.** The clock that `offline` and `ci` modes use is called the **deterministic clock** (sometimes the fixed clock). Older text in this document and in code comments said "faked clock" or "fake clock". Only identifiers are unchanged: the test names `test_fake_clock_is_stop_time_plus_gap_never_before` and `test_fake_clock_is_after_stop_in_argv`.
+2. **Purpose of the clock.** It exists for reproducibility. The virtual machine starts at the guest time recorded at the last clean shutdown plus a small seed-derived gap (600 to 3599 s) and never starts earlier, so that boot behaviour, timestamps in results and application and certificate timers are the same on every run (CODE READ: `propimage.py` `boot_clock`). The install session uses the real clock because TLS to vendor sites needs correct dates (INFERRED). Nothing in this document is a finding that the clock affects, or is needed by, any application's licence, trial or activation. Notes below that speak of licence behaviour (the section 3 probe directory name, section 6 Q4, section 8 steps 4 and 7) are open questions or file names of the original design, not results.
+3. **Hardware identity.** The seed-derived identity (SMBIOS UUID and serials, MAC, disk serial, GPU UUID) is fixed per image so that test runs are repeatable.
+4. **Intel hosts (answers part of open items O1 and O2 in section 5b).** The host CPU vendor must match the image's CPU profile, and this image uses an AMD profile. MEASURED 2026-11-15 by the maintainers: an Intel host presenting the AMD vendor to the guest hung in Windows Boot Manager. The record of that run is not in the repository. Intel hosts are therefore not supported by this image; a second image, built on an Intel host with its own profile, would be needed. The sentence in section 5b that vendor spoofing is "UNTESTED" is superseded by this result.
+5. **Why the sign-out (sections 1 and 8).** The lifecycle order is unchanged: back up the disk and state before any sign-out (that backup is the sealed image); start the original disk online, sign out of and unregister the applications and accounts everywhere, and discard that disk; test the backup as CI would use it; pack it. PROCEDURE and DESIGN INTENT (owner, 2026-11-15): after the backup, on a separate copy, the owner signs out, unlinks the device, changes the password and ends all sessions at the vendor, so that any sign-in state still stored in the backup is revoked server-side and cannot be used to sign in anywhere. The tooling cannot see vendor-side state, so nothing here verifies it. The reasons are isolation (hostile guest, untrusted rented hosts), reproducibility (no network dependence, deterministic start) and a private store so nothing proprietary is redistributed. The user-facing statement is in `docs/howto/recreate-the-proprietary-image.md` and `docs/howto/proprietary-test-images.md`.
+6. **Scope.** The repository contains no proprietary software, installers, keys, account data or images. A maintainer-built image is private and is not shared with anyone; anyone who wants to reproduce the proprietary-application tests builds their own image with their own accounts and licences. This document makes no statement about the licence terms of any application.
+7. **Runs are offline** (user-mode network with `restrict=on`, no internet). CODE READ: `propimage.py` `build_argv` sets `restrict=on` for `offline` and `ci` and `restrict=off` for `setup` and `install`.
 
 ## 1. The owner's design in one page (DESIGN INTENT, binding)
 
@@ -15,10 +25,10 @@ not tested; DESIGN INTENT = owner or coordinator decision, not built; UNTESTED =
    UUID (`kf3-gpu,gpu-uuid=GPU-...`), a fixed slirp /24, a loopback SSH port and a clock gap. swtpm state cannot be derived
    (stock swtpm generates random keys), so its files and the OVMF variables are embedded in `state.json`.
 3. Modes with the same ids, disk serial, MAC, subnet and swtpm state: `setup` (std VGA, internet on), `install` (kf3 GPU
-   and the broker display, internet on), `offline` (slirp `restrict=on`), `ci` (clone, offline, faked clock).
+   and the broker display, internet on), `offline` (slirp `restrict=on`), `ci` (clone, offline, deterministic clock).
 4. Order: install online, then go offline and check every app starts, then stop, back up disk and state BEFORE any logout,
    then start the ORIGINAL disk online, log out and unregister everywhere, discard that disk; test the backup as CI would
-   (clone, same ids, faked clock, offline). An offline edit of the backup needs a re-backup.
+   (clone, same ids, deterministic clock, offline). An offline edit of the backup needs a re-backup.
 5. One R2 blob per image: a zip64 with STORED entries (`image.qcow2` is already `qemu-img convert -c`), `state.json`, and
    `manifest.json` (sha256 of each member). No auxiliary files outside the zip.
 6. The image stays clean: official installers in official places, OpenSSH server, virtio and NVIDIA drivers. CI sends
@@ -65,7 +75,7 @@ has a floor at the last time the disk saw. The floor is not the RTC and not the 
 
 HYPOTHESES (none tested), each with its falsifier:
 - H1 Windows keeps a persisted monotonic time floor (secure-time / last-shutdown state in the registry or the
-  licensing "trusted time" anchor; the licence probes show an anchor of 11:44 on 11/12 that did not move backwards) and raises
+  a trusted-time anchor that the probe files show at 11:44 on 11/12 and that did not move backwards) and raises
   the system time at boot to it. Recall of the exact registry names is unverified, so the tool does not read them.
   Falsifier: boot the same overlay twice with base 2025-01-15 and stop it right after each boot. If the second boot
   shows the first boot's time, the floor follows uptime (H1 holds); if it shows 04:18 again, the floor is a value stored at
@@ -81,7 +91,7 @@ Design rule that holds under all three (INFERRED to be safe): `offline`/`ci` boo
 never before (`boot_clock`; tests `test_fake_clock_is_stop_time_plus_gap_never_before`, `test_fake_clock_is_after_stop_in_argv`).
 `last_time_at_stop_utc` is recorded from the guest's own `Get-Date` just before the clean shutdown that is backed up.
 Internet modes use the real clock (TLS validation of vendor sites needs it; INFERRED), so the install clock is real and
-the faked clock continues from it. The gap is 600..3599 s from the seed, so the CI boot time is a function of the state only.
+the deterministic clock continues from it. The gap is 600..3599 s from the seed, so the CI boot time is a function of the state only.
 `-rtc ...,clock=vm` makes the guest clock independent of the host clock after boot (CODE READ: QEMU docs; UNTESTED here).
 `verify` accepts a guest date in `[base, base+1800 s]`; a guest earlier than base, which is what the floor would show if
 the base were wrong, is reported MISMATCH.
@@ -113,8 +123,8 @@ argv, the swtpm argv and the clone command. Differences by mode:
 |---|---|---|---|---|---|
 | setup | distro `/usr/bin/qemu-system-x86_64` (gtk; MEASURED on the PC on 2026-11-12: 10.2.1 lists gtk, the kf3 build lists only none) | `-vga std -display gtk` on the PC's GNOME session, xhci tablet and keyboard | restrict=off | host real | the image |
 | install | kf3 qemu | `-vga none`, kf3 GPU with `display=on,gop=on,display-broker=...`, xhci tablet and keyboard (as `windows_broker.sh`) | restrict=off | host real | the image |
-| offline | kf3 qemu | as install | restrict=on | faked | the image |
-| ci | kf3 qemu | broker, or `--display off` | restrict=on | faked | clone (`qemu-img create -b image -F qcow2`) |
+| offline | kf3 qemu | as install | restrict=on | deterministic | the image |
+| ci | kf3 qemu | broker, or `--display off` | restrict=on | deterministic | clone (`qemu-img create -b image -F qcow2`) |
 
 CODE READ for the flags: `docs/howto/display.md` (the broker properties, `display-broker-uid`, Ctrl+Alt+G releases the grab,
 a broker built-in) and `scripts/bench/windows/windows_broker.sh`. Step 0 of a run is a plain check that keyboard, mouse
@@ -297,7 +307,7 @@ the owner approves: open item O4).
 - `verify` against the setup VM over the loopback ssh forward: SMBIOS UUID, three serials, MAC and virtio disk serial as the guest sees them all MATCH the seed-derived
   ids; TPM present (swtpm CRB); CPU as the guest sees it: `AMD Virtual CPU`, `AuthenticAMD`, `AMD64 Family 23 Model 1 Stepping 2`, ProcessorId `178BFBFF00800F12`
   (CPUID leaf 1 EAX 0x00800F12 = family 23 model 1 stepping 2), 8 cores/8 logical, flags avx, avx2, cx16, rdtscp, sse4_1, sse4_2, ssse3, xsave, none of avx512f/rtm/hle/mpx/sgx.
-  GPU UUID: none yet (Basic Display only; expected). Clock: the guest ran the real clock (setup mode); the faked-clock check was not meaningful there.
+  GPU UUID: none yet (Basic Display only; expected). Clock: the guest ran the real clock (setup mode); the deterministic-clock check was not meaningful there.
   `Get-TpmEndorsementKeyInfo.PublicKeyHash` is empty in the guest, so the EK hash is now computed as sha256 over `PublicKey.RawData` (the probe was fixed).
 - Install mode: swtpm and OVMF vars unchanged except one added Secure Boot db certificate (the signing key of the boot GOP, enrolled with `virt-fw-vars --add-db`,
   backup `firmware/OVMF_VARS.before-gop.fd`); kf3 qemu `0ad35b8d`, `gop=on`, `guest-driver=580.65.06`, the gate's KF3_* flags from `kf3_flags.sample.env`, the broker as the
