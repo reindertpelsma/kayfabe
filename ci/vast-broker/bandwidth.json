@@ -130,6 +130,17 @@
      "source": "RELEASE_SHAKEOUT_20261115.md (coordinator, /root/night): 2.1 GB download measured in the apps provisioning step",
      "note": "the 2.1 GB measured plus build-time fetches that were not measured separately",
      "calibrate": true
+    },
+    {
+     "id": "apps.open_rows",
+     "what": "open FFmpeg/DCGM discovery rows: ffmpeg from the distribution, the capability probe's headers (a git fetch), the sparse repo files",
+     "class": "package",
+     "down_bytes": 141000000,
+     "url": null,
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "traces/open_rows_ffdcgm_20261117/README.md: 141.4 MB received by one Ubuntu 22.04 VM after apt update, a sparse clone, the probe build and the ffmpeg install",
+     "note": "DCGM 4.8.0 is NOT counted: under the Worker's cache-only apt shim provision.sh reports apt_shim_cache_only and does not download it (docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md section 3). A standalone machine downloads about 0.92 GB (cuda13 flavour) or 1.10 GB (cuda12 flavour), summed from the Size fields of NVIDIA's package index; add an entry when Worker runs may install it."
     }
    ],
    "upload": {

@@ -1,0 +1,5 @@
+# gpu_use_why=no diagnostic that works the GPU ran (all skipped, or DCGM not run)
+dcgm=RAN version=Version_:_4.8.0 gpus=1
+diag_r1 rc=0 secs=1 tests=1
+diag_r3 rc=0 secs=1 tests=8
+NVML_DCGM_SUMMARY nvml_fields_ok=56 nvml_fields_other=231 queries_ok=62/74 smi_ok=1048/1133 smiq_na=84 dcgm=RAN dcgm_fields_ok=159/768 diag_pass=2 diag_fail=0 diag_skip=7 gpu_use=NA secs=23

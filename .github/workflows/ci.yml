@@ -185,6 +185,9 @@ jobs:
           # Generic proprietary-image runner, 2026-11-16 (docs/design/V3_PROPIMAGE_RUNNER.md): registry, run spec, images; clock/network assert in every launch path; >=2 named killers per mutant.
           python3 scripts/ci/propimage_runner_mutants.py
           python3 scripts/ci/clocknet_assert_mutants.py
+          # Open FFmpeg NVENC/NVDEC matrix and DCGM + NVML sweep rows (2026-11-17, docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md): caps comparison,
+          # verdicts, PSNR threshold, NVML field diff, census and the trust-rule pins; >=2 named killers per mutant. The tests run in the discover above.
+          python3 scripts/ci/open_rows_mutants.py --jobs 4
           # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
           python3 scripts/ci/stream_url_mutants.py
           # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.
