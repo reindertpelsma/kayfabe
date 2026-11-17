@@ -18,7 +18,7 @@ What `run` does, in order (every step is a refusal point with a name, in the rec
      (GPU_FAMILY), pins (PIN_UNSET:<role>), the kf3 QEMU of this revision, the URL file, free disk, swtpm.
   2. Prefetch through scripts/ci/box_downloader.py (the manifest comes from the pins, the presigned-URL file from the bootstrap
      layer; this stage never sees the run token). Image and GOP are `signed` sources only (private object); the swtpm sources are
-     public mirrors, fetched only when the box's swtpm is older than 0.10.
+     a private `ref` (the coordinator's URL file) first and the public mirror as the fallback, fetched only when the box's swtpm is older than 0.10.
   3. swtpm >= 0.10 (built under /opt/tpm when the box's is older; libtpms must match: the image's TPM state is not readable by
      0.6.3, traces/hwrun_20261113/README.md), the display broker (`make -C broker`), the verified unpack (propimage_check.load_image:
      both members' sha256 and the seed), then the archive is deleted.
@@ -144,7 +144,8 @@ def load_pins(path=PINS_PATH):
         if (it["sha256"] is not None and not (type(it["sha256"]) is str and HEX64.fullmatch(it["sha256"]))) or (
                 it["size"] is not None and not (type(it["size"]) is int and 0 < it["size"] < 1 << 40)):
             raise ValueError("pins: sha256 or size")
-        if it["needed_by"] not in ("image", "tools") or ("ref" in it) == ("mirror" in it):
+        # at least one source; both are allowed (2026-11-17: the tool tarballs carry a private ref AND the public mirror)
+        if it["needed_by"] not in ("image", "tools") or not ("ref" in it or "mirror" in it):
             raise ValueError("pins: sources")
         if "ref" in it and not NAME_RE.fullmatch(str(it["ref"])):
             raise ValueError("pins: ref")
@@ -176,6 +177,12 @@ def needed_roles(build_swtpm):
     return ("image", "gop") + (("libtpms", "swtpm") if build_swtpm else ())
 
 
+def item_sources(it):
+    """The sources of one pin in fallback order: the signed ref first (the private copy, from the presigned-URL file), then the public
+    mirror. box_downloader requires private sources before mirrors; a run whose URL file lacks the ref falls through to the mirror."""
+    return ([{"kind": "signed", "ref": it["ref"]}] if "ref" in it else []) + ([{"kind": "mirror", "url": it["mirror"]}] if "mirror" in it else [])
+
+
 def build_manifest(pins, build_swtpm, roles=None):
     """kayfabe.download-manifest/1 for the needed roles. Refuses (PIN_UNSET:<first role>) when any needed item is unpinned."""
     roles = roles or needed_roles(build_swtpm)
@@ -186,9 +193,8 @@ def build_manifest(pins, build_swtpm, roles=None):
     for it in pins["items"]:
         if it["role"] not in roles:
             continue
-        source = {"kind": "signed", "ref": it["ref"]} if "ref" in it else {"kind": "mirror", "url": it["mirror"]}
         items.append({"name": it["name"], "dest": it["dest"], "sha256": it["sha256"], "size": it["size"],
-                      "needed_by": it["needed_by"], "sources": [source]})
+                      "needed_by": it["needed_by"], "sources": item_sources(it)})
     for it in items:
         if it["needed_by"] not in stages:
             stages.append(it["needed_by"])
