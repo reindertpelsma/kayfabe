@@ -1643,10 +1643,16 @@
    "reason": "network and apt mirror speed probes: nothing they fetch is used"
   },
   "scripts/bench/linux/propimage_linux.py": {
-   "count": 6,
+   "count": 7,
    "class": "native-route3",
    "row": 5,
-   "reason": "the Linux image builder: Ubuntu cloud image and noVNC/websockify with sha256 pins that trust_manifest.json holds (pin_files); not yet read through kf_trust"
+   "reason": "the Linux image builder: Ubuntu cloud image and noVNC/websockify with sha256 pins that trust_manifest.json holds (pin_files); not yet read through kf_trust; the seventh line (merged from next, 2026-11-17) is the text of the --wheelhouse help, not a download"
+  },
+  "scripts/bench/linux/propimage_linux_pkgs.py": {
+   "count": 1,
+   "class": "native-route3",
+   "row": null,
+   "reason": "an offline pip install inside the clone (--no-index --require-hashes from the host's wheelhouse): downloads nothing, every wheel is hash-checked"
   },
   "scripts/bench/provision_bare_metal.sh": {
    "count": 3,
@@ -1701,6 +1707,12 @@
    "class": "operator",
    "row": 21,
    "reason": "operator-side publication of the public bundle to the operator's object store"
+  },
+  "scripts/bench/windows/host_tools/": {
+   "count": 26,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only host tools: `git fetch origin <branch>` of this repository's own experiment branches, one raw header read from raw.githubusercontent.com and the nvkvm-pv experiment repository"
   },
   "scripts/bench/windows/resolve_media.py": {
    "count": 3,
@@ -1893,12 +1905,6 @@
    "class": "experiment-only",
    "row": null,
    "reason": "downloads a build toolchain for the Windows capture tool, which is not a product path"
-  },
-  "scripts/bench/windows/host_tools/": {
-   "count": 26,
-   "class": "experiment-only",
-   "row": 35,
-   "reason": "experiment-only host tools: `git fetch origin <branch>` of this repository's own experiment branches, one raw header read from raw.githubusercontent.com and the nvkvm-pv experiment repository"
   }
  }
 }

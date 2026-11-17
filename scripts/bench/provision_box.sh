@@ -244,7 +244,12 @@ fi
 
 # [2026-11-17] rustup is installed below, AFTER the clone: its installer is anchored by scripts/ci/kf_trust.py (a pinned rustup-init
 # checked against the official .sha256 and the vendor-published pin in scripts/ci/trust_manifest.json, audit row 3), and that file
-# comes with the tree. `curl https://sh.rustup.rs | sh` anchored nothing.
+# comes with the tree. `curl https://sh.rustup.rs | sh` anchored nothing. Only the question is asked here. ⚠ THIS LINE IS ALSO A CUT
+# POINT: scripts/ci/test_vast_setup_packages.py executes the text from `NEED=""` to the first `command -v cargo` test, so nothing above
+# it may transfer anything and nothing below it may repeat that test (PR #473: the install once sat after the clone, the cut moved
+# with it, and the tests ran a real `git clone` and hung).
+KF_RUSTUP_NEEDED=0
+if ! command -v cargo >/dev/null 2>&1; then KF_RUSTUP_NEEDED=1; fi
 # ⚠ The targets (musl, see the header; x86_64-unknown-uefi since 2026-10-03, OWNER_RULINGS §K: kf3's
 # boot-display GOP driver is built from firmware/kf-gop by crates/kf-gop-image/build.rs during every kf3
 # build) are added to the PINNED toolchain below, after the clone, where rust-toolchain.toml is.
@@ -281,7 +286,7 @@ cd ~/kayfabe
 # silently rewound the named branch to master — a box provisioned with KAYFABE_BRANCH=v3 built
 # `e24bc063` (master). Only this HEAD line exposed it. The branch is set ONCE, above.
 echo "HEAD=$(git rev-parse --short HEAD) branch=$(git branch --show-current)"
-if ! command -v cargo >/dev/null 2>&1; then
+if [ "$KF_RUSTUP_NEEDED" = 1 ]; then
   [ -f scripts/ci/kf_trust.py ] || die "branch $KF_BRANCH has no scripts/ci/kf_trust.py, so rustup cannot be anchored: use a branch that has it, or install rustup yourself"
   rustup_dir=$(mktemp -d)
   python3 -I scripts/ci/kf_trust.py fetch rustup-init-1.29.3 --out "$rustup_dir/rustup-init" || die "rustup-init did not pass its trust anchors"
