@@ -1,0 +1,23 @@
+CREDENTIAL GREP REPORT (counts only; matches are never printed)
+patterns: literal1-97f91051, regex2-8d0cb4e5, token3-0b8ee590
+whole image (raw, incl. free space and deleted data): scanned 6710906880 of 32212254720 bytes
+  image  literal1-97f91051      0
+  image  regex2-8d0cb4e5        0
+  image  token3-0b8ee590        33
+guest files: 157116 scanned, 15 path(s) with matches
+  path   /etc/ssl/certs/ca-certificates.crt  token3-0b8ee590=1
+  path   /usr/lib/cups/driver/foomatic-db-compressed-ppds  token3-0b8ee590=2
+  path   /usr/lib/cups/driver/openprinting-ppds  token3-0b8ee590=10
+  path   /usr/lib/cups/driver/postscript-hp  token3-0b8ee590=4
+  path   /usr/lib/cups/driver/ptouch  token3-0b8ee590=1
+  path   /usr/lib/python3/dist-packages/PyJWT-2.7.0.dist-info/METADATA  token3-0b8ee590=2
+  path   /usr/lib/python3/dist-packages/botocore/cacert.pem  token3-0b8ee590=1
+  path   /usr/lib/python3/dist-packages/botocore/data/ec2/2016-04-01/examples-1.json  token3-0b8ee590=2
+  path   /usr/lib/python3/dist-packages/botocore/data/ec2/2016-09-15/examples-1.json  token3-0b8ee590=2
+  path   /usr/lib/python3/dist-packages/botocore/data/ec2/2016-11-15/examples-1.json  token3-0b8ee590=2
+  path   /usr/lib/python3/dist-packages/botocore/data/s3/2006-03-01/examples-1.json  token3-0b8ee590=1
+  path   /usr/lib/python3/dist-packages/certifi/cacert.pem  token3-0b8ee590=1
+  path   /usr/share/ca-certificates/mozilla/Atos_TrustedRoot_2011.crt  token3-0b8ee590=1
+  path   /usr/share/doc/python3-jwt/README.rst  token3-0b8ee590=2
+  path   /usr/share/icons/Adwaita/scalable/mimetypes/application-x-addon.svg  token3-0b8ee590=1
+TOTAL 66

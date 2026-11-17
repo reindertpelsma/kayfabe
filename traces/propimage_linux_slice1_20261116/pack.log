@@ -1,0 +1,5 @@
+{"manifest_version": 1, "kind": "propimage-linux", "members": {"image.qcow2": "f4474d309c5e0ff81bfb97fdcdd7f94d9a6cb13f2c398a40d234ef7a103b6c52", "state.json": "4f650a49ef4d2cddb8aca2a44ae41da8fcccb170fdca74d35cca7bcc8bee055a"}, "packages": {"kernel": "6.8.0-149-generic", "count": 1645, "sha256": "e146534bc2499362c0fe570fec9571bbf4782169fe3fce5db6196ff3b62afa9b"}}
+
+real	0m12.487s
+user	0m4.348s
+sys	0m2.097s

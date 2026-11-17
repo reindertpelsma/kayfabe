@@ -1,0 +1,2 @@
+b'HTTP/1.1 101 Switching Protocols\r\nServer: WebSockify Python/3.14.4\r\nDate: Mon, 16 Nov 2026 19:45:59 GMT\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: teL53VB4EBxm4ILaCIc3oAbTUwY=\r\nSe'
+{'return': {}}
