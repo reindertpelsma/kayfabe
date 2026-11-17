@@ -1,0 +1,7 @@
+{
+  "class": "harness",
+  "app": "aetoggle",
+  "ok": false,
+  "evidence": "NONE",
+  "error": "guest script does not parse: 1794784020195 script start"
+}

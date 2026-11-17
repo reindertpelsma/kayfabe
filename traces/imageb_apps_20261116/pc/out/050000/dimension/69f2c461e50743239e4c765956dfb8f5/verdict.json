@@ -1,0 +1,33 @@
+{
+  "app": "dimension",
+  "ok": false,
+  "evidence": "UIA",
+  "signal": "",
+  "error": "application did not exit cleanly (forced)",
+  "class": "app",
+  "limited": true,
+  "lane": "gate",
+  "path": "OpenGL/OptiX init (launch only)",
+  "platform": "kf3",
+  "secs": 72,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 94.0,
+      "mem_mb": 5361.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 93.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 48
+    },
+    "baseline": {
+      "mem_mb": 5355.0,
+      "gpu": 94.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 187
+  }
+}

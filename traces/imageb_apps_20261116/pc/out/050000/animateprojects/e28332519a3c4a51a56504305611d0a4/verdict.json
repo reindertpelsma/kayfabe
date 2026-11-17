@@ -1,0 +1,31 @@
+{
+  "app": "animateprojects",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "Result identity mismatch",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "open-licence FLA corpus open + stage export",
+  "platform": "kf3",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 83.0,
+      "mem_mb": 5374.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 83.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 378
+    },
+    "baseline": {
+      "mem_mb": 5210.0,
+      "gpu": 2.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 914
+  }
+}
