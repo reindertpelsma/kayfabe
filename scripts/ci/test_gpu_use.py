@@ -324,6 +324,42 @@ def smi_for(app, busy=True):
     return gu.smi_record(q2, d, eng, min_samples=rows.policy(app)["min_samples"])
 
 
+class GuestMemoryRise(unittest.TestCase):
+    """MEASURED 2026-11-17 (first guest run, RTX 3090, kf3 04613288, blender_cycles CUDA+OPTIX): census +9512 submissions, GPU 53 percent busy, but host video memory
+    8761 -> 8792 MiB. A guest's device memory is the store the host reserves at boot (8 GiB), so a guest allocation never moves host VRAM: the `mem` observable can
+    only be required of a bare-metal run. The census and the other engines stay required of a guest."""
+
+    Q = "\n".join("2026/11/17 00:00:%02d.000, %d, 0, %d, 0, 0" % (i, 53, 8761 + (31 if i > 3 else 0)) for i in range(8))
+    D = "# gpu sm mem enc dec\n" + "\n".join("0 53 0 0 0" for _ in range(4))
+
+    def rec(self, side):
+        smi = gu.smi_record(self.Q, self.D, rows.host_engines("blender_cycles", side), min_samples=1)
+        return rows.evaluate("blender_cycles", side, fx("blender_gpu.log"), fx("kf3_window_gpu.log").splitlines(), fx("kf3_base.txt").strip(), smi)
+
+    def test_the_guest_row_does_not_need_host_video_memory_to_rise(self):
+        rec = self.rec("guest")
+        self.assertEqual(rec["verdict"], gu.PASS, rec["reasons"])
+        self.assertEqual(rows.host_engines("blender_cycles", "guest"), ("gpu",))
+
+    def test_the_bare_metal_row_still_needs_the_memory_to_rise(self):
+        self.assertEqual(rows.host_engines("blender_cycles", "host"), ("gpu", "mem"))
+        self.assertEqual(self.rec("host")["verdict"], gu.FAIL)
+
+    def test_an_idle_host_gpu_still_fails_a_guest_row(self):
+        q = "\n".join("2026/11/17 00:00:%02d.000, 0, 0, 8761, 0, 0" % i for i in range(8))
+        smi = gu.smi_record(q, "# gpu sm mem enc dec\n0 0 0 0 0\n0 0 0 0 0\n", rows.host_engines("blender_cycles", "guest"), min_samples=1)
+        rec = rows.evaluate("blender_cycles", "guest", fx("blender_gpu.log"), fx("kf3_window_gpu.log").splitlines(), fx("kf3_base.txt").strip(), smi)
+        self.assertEqual(rec["verdict"], gu.FAIL, rec["reasons"])
+
+    def test_the_sampler_files_of_a_guest_row_are_read_without_the_memory_requirement(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "host_query.csv").write_text(self.Q)
+            (Path(d) / "host_dmon.txt").write_text(self.D)
+            self.assertEqual(rows.smi_from_dir("blender_cycles", d, "guest")["required"], ["gpu"])
+            self.assertEqual(rows.smi_from_dir("blender_cycles", d, "host")["required"], ["gpu", "mem"])
+
+
 class NegativeControls(unittest.TestCase):
     """The same row with the GPU hidden must be judged FAIL, in the full judge (host census and engines in the picture), for every row with a CPU form."""
 
