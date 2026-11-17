@@ -223,3 +223,5 @@ fixture of a real log, crash and hang attribution, the block format, the host-ve
 fake `nvidia-smi`; GPU-free, no network, a Python stand-in for `deqp-vk`); mutants `vkcts_mutants.py` (two named killers each, in `ci.yml`).
 
 Open ML rows (2026-11-17, [design](../../docs/design/V3_OPEN_ML_ROWS.md), [manual](../../docs/howto/open-ml-rows.md)): `test_mlrows.py` (GPU-free tests of `scripts/apps/mlrows/`: hashed locks, flavour choice, model check, judges, environment, wiring, GPU-use judge) and `mlrows_mutants.py` (two named killers per mutant, run by `ci.yml`).
+
+The standalone full run (2026-11-17, [design](../../docs/design/V3_STANDALONE_FULL_RUN.md), [manual](../../docs/howto/full-standalone-run.md)): `test_standalone_full.py` (GPU-free: the manifest and the plan order, each named refusal, the skip record, `--full` on the command line against the committed Worker golden, the `apps_discovery` stage with a fake runner, the `windows_open_rows` grader, the MATLAB zero-skip flag, the report validators and the row bound); mutants `standalone_full_mutants.py` (two named killers each, in `ci.yml`).

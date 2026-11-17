@@ -30,7 +30,11 @@ const count = (n) => Number.isSafeInteger(n) && n >= 0;
 export function plannedStages(instruction, { only = [], skip = [] } = {}) {
   const i = instruction;
   const names = ['provision', 'cuda_host', 'merge_bar', 'cuda_guest'];
-  if (i.linux_apps !== null && i.linux_apps !== undefined) names.push('apps');
+  if (i.linux_apps !== null && i.linux_apps !== undefined) {
+    names.push('apps');
+    // manual-only (the standalone full run, scripts/ci/standalone_full.py): planned only when named by `only`
+    if (i.tier === 'large' && only.includes('apps_discovery')) names.push('apps_discovery');
+  }
   // kfml (2026-11-17): in the default plan of the middle and the large tier; the payload's --skip kfml leaves it out; small and adhoc never plan it
   if (
     (i.tier === 'middle' || i.tier === 'large') &&
@@ -42,9 +46,11 @@ export function plannedStages(instruction, { only = [], skip = [] } = {}) {
     names.push('windows_gate');
     if (i.winapps) names.push('windows_apps');
     if (i.windows_runs === 2) names.push('windows_gate_2');
+    if (i.tier === 'large' && only.includes('windows_open_rows')) names.push('windows_open_rows');
   }
   if ((i.propimages ?? []).length > 0 || (i.tier === 'large' && only.includes('propimage_apps')))
     names.push('propimage_apps');
+  if (i.tier === 'large' && only.includes('propimage_apps_b')) names.push('propimage_apps_b');
   if (i.tier === 'large' && ((i.matlab ?? null) !== null || only.includes('matlab')))
     names.push('matlab');
   if ((i.stages ?? []).includes('specviewperf')) names.push('specviewperf');

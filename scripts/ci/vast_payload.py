@@ -1540,7 +1540,7 @@ def instruction_from_file(path, environ):
 # payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
 PROPIMAGE_APPS_IN_LARGE = False
 # stages with no budget row (scripts/ci/profile_resources.py): planned only by --only; the guard refuses one whose flag is True
-MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "matlab": "MATLAB_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}
+MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "matlab": "MATLAB_IN_LARGE", "apps_discovery": "APPS_DISCOVERY_IN_LARGE", "windows_open_rows": "WINDOWS_OPEN_ROWS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}
 PROPIMAGE_APPS_MIN_REMAINING_MS = 210 * 60000   # DESIGN: download ~16 min, 4 unpacks/hashes, 3 boots, apps up to 98 min worst case
 PROPIMAGE_APPS_PREFIX = "/workspace/kf-propimage"
 PROPIMAGE_APPS_MARGIN_S = 300
@@ -1564,6 +1564,76 @@ MATLAB_IN_LARGE = False
 MATLAB_MIN_REMAINING_MS = 150 * 60000   # DESIGN: an 8 GB download, then 8 boots each with a driver build (2-4 min, ESTIMATE) and a row of up to 30 minutes
 MATLAB_PREFIX = "/workspace/kf-matlab"
 MATLAB_MARGIN_S = 300
+# 2026-11-17 apps_discovery and windows_open_rows (docs/design/V3_STANDALONE_FULL_RUN.md): the two stages that make the open rows part of ONE standalone full run. Both are
+# LARGE tier only, MANUAL-ONLY (planned by --only, or by --full which plans every stage of the manifest; no instruction field, no Worker budget row) and DISCOVERY
+# lane: a row that ran and failed is a reported breakage, a row that did not run fails the stage by name. Neither has run on a box.
+#   apps_discovery   scripts/ci/apps_discovery_stage.py: nvcodec_matrix, nvml_dcgm, vkcts, vllm, tensorrt, jax in the guest (host control when the host side is installed)
+#   windows_open_rows  scripts/bench/box/windows_apps.sh with the profile `open_source` (the VK-GL-CTS and DirectX sample rows) in the gate's LTSC guest, ONLINE with the
+#                      real clock (WINVM_NET=online; the clock rule picks the real clock from the network); the build downloads its toolchain and pinned sources
+APPS_DISCOVERY_IN_LARGE = False
+APPS_DISCOVERY_MARGIN_S = 300
+APPS_DISCOVERY_MIN_REMAINING_MS = 5 * 3600 * 1000     # DESIGN: vkcts build ~10 min, ML setups ~10 min, then six rows whose own timeouts sum to 3.75 h per side
+WINDOWS_OPEN_ROWS_IN_LARGE = False
+WINDOWS_OPEN_ROWS_MIN_REMAINING_MS = 7 * 3600 * 1000  # DESIGN: gate_profiles.py budget open_source is 6 h (toolchain, CTS builds and nine rows)
+WINDOWS_OPEN_ROWS_PROFILE = "open_source"
+WINDOWS_OPEN_ROWS_NOT_RUN_BY_DESIGN = ("dxsamples_multiadapter", "vkglcts_gl46", "vkglcts_vk")  # two GPUs needed; the two CTS rows need a native-Windows control file from a second machine
+APPS_DISCOVERY_VERDICT = re.compile(r"^KF_APPS_DISCOVERY_RESULT (\{.*\})$", re.M)
+WINAPPS_APP_LINE = re.compile(r"^WINAPPS_APP app=([A-Za-z0-9_]{1,48}) class=(pass|guest_fail|boot_fail|harness|not_run) verdict=(\S+) ", re.M)
+WINAPPS_GRADE_LINE = re.compile(r"^WINAPPS_GRADE kind=(PASS|FAIL|RETRY) expected=([0-9]{1,4}) pass=([0-9]{1,4}) guest_fail=([0-9]{1,4}) boot_fail=([0-9]{1,4}) "
+                                r"harness=([0-9]{1,4}) not_run=([0-9]{1,4}) extra=([0-9]{1,4})$", re.M)
+
+
+def apps_discovery_rows(text, rc, sha, result):
+    """One KF_APPS_DISCOVERY_RESULT line, kept in the result file even when it is red (vast_report.validate_apps_discovery). DISCOVERY lane: the stage passes when every
+    row RAN (a row that failed, crashed or hung is a listed breakage); a row that did not run, a retry (no bundle, no time) or a missing record is the stage failing, by name."""
+    found = APPS_DISCOVERY_VERDICT.findall(text)
+    if len(found) != 1:
+        raise EvidenceError("apps_discovery")
+    try:
+        doc = json.loads(found[0])
+    except ValueError:
+        raise EvidenceError("apps_discovery") from None
+    result["apps_discovery"] = doc
+    if type(doc) is not dict or doc.get("sha") != sha:
+        raise EvidenceError("apps_discovery")
+    if doc.get("verdict") == "RETRY":
+        raise EvidenceError("apps_discovery_retry")
+    if doc.get("not_run"):
+        raise EvidenceError("apps_discovery_not_run")
+    if rc or doc.get("verdict") != "PASS":
+        raise EvidenceError("apps_discovery")
+    return [row("apps_discovery", len(doc.get("rows", [])))]
+
+
+def windows_open_rows_rows(text, rc, sha, result):
+    """Grade windows_apps.sh run with the profile open_source. DISCOVERY lane, by the payload's own reading of the per-app lines (grade.py counts a failing open row as a
+    guest failure, which is right for a gate and wrong for this lane): the stage passes when the harness ended cleanly (one WINAPPS_GRADE, one WINAPPS_EXIT), no app is a
+    boot failure, and every app that did not run is one of WINDOWS_OPEN_ROWS_NOT_RUN_BY_DESIGN. A row that ran and failed is a breakage, listed in the record. Anything
+    else that did not run fails by name (windows_open_rows_not_run); a refusal or a retry class is windows_open_rows_retry."""
+    grade = WINAPPS_GRADE_LINE.findall(text)
+    exits = re.findall(r"^WINAPPS_EXIT rc=([0-9]+)\b", text, re.M)
+    apps = WINAPPS_APP_LINE.findall(text)
+    if len(grade) != 1 or len(exits) != 1 or not apps or len({a[0] for a in apps}) != len(apps):
+        if re.search(r"^WINAPPS_(RETRY|REFUSED)\b", text, re.M):
+            raise EvidenceError("windows_open_rows_retry")
+        raise EvidenceError("windows_open_rows")
+    expected = int(grade[0][1])
+    by_class = {}
+    for name, cls, verdict in apps:
+        by_class.setdefault(cls, []).append(name)
+    not_ran = [n for c in ("harness", "not_run") for n in by_class.get(c, [])]
+    unexpected = sorted(n for n in not_ran if n not in WINDOWS_OPEN_ROWS_NOT_RUN_BY_DESIGN)
+    record = {"profile": WINDOWS_OPEN_ROWS_PROFILE, "expected": expected, "ran": len(apps) - len(not_ran), "passed": len(by_class.get("pass", [])),
+              "breakages": sorted(by_class.get("guest_fail", [])), "not_run_by_design": sorted(n for n in not_ran if n in WINDOWS_OPEN_ROWS_NOT_RUN_BY_DESIGN),
+              "not_run": unexpected, "sha": sha}
+    result["windows_open_rows"] = record
+    if by_class.get("boot_fail") or len(apps) != expected or rc not in (0, 1, 3) or exits[0] not in ("0", "1", "3"):
+        raise EvidenceError("windows_open_rows")
+    if unexpected:
+        raise EvidenceError("windows_open_rows_not_run")
+    return [row("windows_open_rows", record["ran"])]
+
+
 
 
 def matlab_rows(text, rc, sha, result):
@@ -1639,11 +1709,13 @@ def matlab_refusal(instruction, args):
     """The named refusal of the matlab stage's inputs, or None: the Worker's strict object and the standalone flags are two shapes, never both; the standalone
     flags need the stage in the plan (--only matlab on the large tier); the strict object is validated by the stage's own reader (matlab_stage.validate_instruction)."""
     flags = bool(args.matlab_image or args.matlab_driver)
+    # --full plans the stage like --only matlab does, unless it is skipped by name
+    named = "matlab" in args.only or (getattr(args, "full", False) and "matlab" not in args.skip)
     if instruction.matlab is not None and flags:
         return "INSTRUCTION_AND_IMAGE_FLAG"
-    if instruction.matlab is None and "matlab" in args.only and not flags:
-        return "NO_IMAGE"          # --only matlab needs a source: the instruction's pinned image or --matlab-image
-    if flags and "matlab" not in args.only:
+    if instruction.matlab is None and named and not flags:
+        return "NO_IMAGE"          # --only matlab (or --full) needs a source: the instruction's pinned image or --matlab-image
+    if flags and not named:
         return "FLAGS_NEED_ONLY_MATLAB"
     if args.matlab_driver and not args.matlab_image:
         return "DRIVER_WITHOUT_IMAGE"
@@ -1755,11 +1827,16 @@ def kfml_rows(text, rc, sha, result, strict=False):
     return [row("kfml", 1)]
 
 
-def plan_stage_names(i, only=()):
-    """The stages main() builds for this instruction, in run order (main checks its own list against this)."""
+def plan_stage_names(i, only=(), full=False):
+    """The stages main() builds for this instruction, in run order (main checks its own list against this). full=True (`--full`, scripts/ci/standalone_full.py) plans
+    every manual-only stage as if each were named by --only: the standalone full run covers the whole manifest, and a stage whose input is missing is refused by name
+    before the first stage runs (standalone_full.refusals), never dropped."""
+    only = (*only, *MANUAL_ONLY_STAGES) if full else tuple(only)
     names = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
     if i.linux_apps is not None:
         names.append("apps")
+        if i.tier == "large" and (APPS_DISCOVERY_IN_LARGE or "apps_discovery" in only):
+            names.append("apps_discovery")
     if i.tier in KFML_TIER and (KFML_IN_MIDDLE_LARGE or "kfml" in only):
         names.append("kfml")
     if i.tier == "large" and (INSTALL_FLOW_IN_LARGE or "install_flow" in only):
@@ -1770,6 +1847,8 @@ def plan_stage_names(i, only=()):
             names.append("windows_apps")
         if i.windows_runs == 2:
             names.append("windows_gate_2")
+        if i.tier == "large" and (WINDOWS_OPEN_ROWS_IN_LARGE or "windows_open_rows" in only):
+            names.append("windows_open_rows")
     if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):
         names.append("propimage_apps")
     if i.tier == "large" and (PROPIMAGE_APPS_B_IN_LARGE or "propimage_apps_b" in only):
@@ -1812,6 +1891,9 @@ def parse_args(argv):
     p.add_argument("--instruction", metavar="FILE", help="JSON instruction (schema kayfabe.payload-instruction/1); replaces the KF_* tier variables")
     p.add_argument("--only", action="append", default=[], metavar="STAGE", help="run only this stage (repeatable)")
     p.add_argument("--skip", action="append", default=[], metavar="STAGE", help="skip this stage (repeatable)")
+    p.add_argument("--full", action="store_true", help="the standalone FULL run (docs/howto/full-standalone-run.md): plan every stage of the manifest "
+                   "(scripts/ci/standalone_full.py), refuse by name before the first stage any stage whose input is missing, and print and record every --skip; "
+                   "needs --instruction and is refused together with --only")
     p.add_argument("--matlab-image", metavar="PATH|URL", help="standalone `matlab` stage: a MATLAB Linux image zip you supply (no sha256 pin is enforced; the computed sha256 is "
                    "recorded); needs --only matlab and is refused together with an instruction that carries `matlab`")
     p.add_argument("--matlab-driver", metavar="VERSION|PATH|URL", help="standalone `matlab` stage: the NVIDIA Linux driver to install in the guest, a pinned version of "
@@ -1848,11 +1930,40 @@ def prefetch_line(manifest_path, plan):
             + " stages=" + ":".join(m.stages))
 
 
+def full_check(instruction, args, chosen, online=None):
+    """`--full`: print each named refusal and raise preflight, or return the record (standalone_full.record) after printing its one line. `chosen` is the plan after --skip."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import standalone_full
+    finally:
+        sys.path.pop(0)
+    token = standalone_full.check_flags(args.only, args.skip, bool(args.instruction))
+    tokens = [token] if token else standalone_full.refusals(instruction, args, args.skip, online)
+    if tokens:
+        for t in tokens:
+            print("KF_PAYLOAD_FULL_REFUSED " + t, flush=True)
+        raise EvidenceError("preflight")
+    rec = standalone_full.record(chosen, args.skip)
+    print(standalone_full.line(rec), flush=True)
+    return rec
+
+
+def full_online():
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import standalone_full
+    finally:
+        sys.path.pop(0)
+    return standalone_full.online_capable()
+
+
 def plan_only(args, root):
     """--dry-run / --emit-instruction: no directory, device or result file is touched."""
     try:
         inst, digest = build_instruction(args, os.environ)
-        plan = plan_stage_names(inst, args.only)
+        plan = plan_stage_names(inst, args.only, args.full)
+        if args.full:
+            full_check(inst, args, [n for n in plan if n not in args.skip])
         chosen = select_stages(plan, args.only, args.skip)
         refusal = propimages_refusal(inst)
         if refusal:
@@ -1924,7 +2035,9 @@ def main():
         windows, tier, windows_runs = instruction.windows, instruction.tier, instruction.windows_runs
         extra_stages, spec, winapps = list(instruction.stages), instruction.spec, instruction.winapps
         apps_tier, linuxapps = instruction.linux_apps, instruction.linux_apps is not None
-        plan = plan_stage_names(instruction, args.only)
+        plan = plan_stage_names(instruction, args.only, args.full)
+        if args.full:
+            result["full"] = full_check(instruction, args, [n for n in plan if n not in args.skip], full_online())
         selected = select_stages(plan, args.only, args.skip)
         refusal = propimages_refusal(instruction)
         if refusal:
@@ -2120,6 +2233,22 @@ def main():
                 WINDOWS_MIN_REMAINING_MS + (WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0) if windows else 0
             ), short_row="apps_retry_time")
             stages.append(stage)
+        if "apps_discovery" in plan:
+            # The open Linux rows that report and never gate, in the guest, right after the gate list (the bundle and the guest image the `apps` stage made are reused);
+            # scripts/ci/apps_discovery_stage.py owns the steps and the record. A row that did not run fails the stage by name.
+            output_ad = evidence / "apps_discovery.run"
+            stage = make_stage(
+                "apps_discovery",
+                [
+                    "python3", str(root / "scripts/ci/apps_discovery_stage.py"), "run", "--sha", sha, "--checkout", str(root),
+                    "--out", str(evidence / "apps_discovery.json"), "--run-id", tag + "d", "--deadline-epoch", str(soft // 1000 - APPS_DISCOVERY_MARGIN_S),
+                ],
+                output_ad,
+                [],
+                lambda rc, output=output_ad: apps_discovery_rows(bounded_text(output), rc, sha, result),
+            )
+            stage.update(min_remaining_ms=APPS_DISCOVERY_MIN_REMAINING_MS, short_row="apps_discovery_retry_time")
+            stages.append(stage)
         if "kfml" in plan:
             # Host-native, on the GPU the earlier Linux stages have released; scripts/ci/kfml_stage.py owns setup (flavour auto), the
             # pinned downloads, the run and the record. Its tier follows the payload tier. A strict instruction (propimages_strict, the only strict
@@ -2206,6 +2335,31 @@ def main():
                 min_remaining_ms=WINDOWS_REPEAT_MIN_REMAINING_MS, short_row="windows_retry_time"
             )
             stages.append(stage)
+        if "windows_open_rows" in plan:
+            # The open Windows rows (VK-GL-CTS and the DirectX samples; docs/design/V3_WINDOWS_OPEN_ROWS.md) in a fresh child of the gate's own overlay, ONLINE with the real
+            # clock (WINVM_NET=online; scripts/bench/windows/clockrule.py picks the real clock from the network, an online guest never gets a recorded one). The toolchain and the
+            # pinned sources are downloaded inside the guest. DISCOVERY lane: windows_open_rows_rows grades it, not windows_apps_rows.
+            output_wo = evidence / "windows_open_rows.run"
+            gate_tag = "gate_" + re.sub(r"[^A-Za-z0-9_]", "_", tag)[:24]
+            stage = make_stage(
+                "windows_open_rows",
+                [
+                    "env",
+                    "KF_WINAPPS_PROFILE=" + WINDOWS_OPEN_ROWS_PROFILE,
+                    "KF_WINAPPS_GATE_TAG=" + gate_tag,
+                    "WINVM_NET=online",
+                    "bash",
+                    str(root / "scripts/bench/box/windows_apps.sh"),
+                    tag + "o",
+                    PROV_DIR,
+                ],
+                output_wo,
+                [],
+                lambda rc, output=output_wo: windows_open_rows_rows(bounded_text(output), rc, sha, result),
+                [Path(PROV_DIR) / (tag + "o_winapps.log")],
+            )
+            stage.update(min_remaining_ms=WINDOWS_OPEN_ROWS_MIN_REMAINING_MS, short_row="windows_open_rows_retry_time")
+            stages.append(stage)
         if "propimage_apps" in plan:
             # After every other Linux and Windows stage (the GPU is free again) and before the SPEC lane. The image is private and runs
             # only offline; scripts/ci/propimage_apps.py owns the download, the swtpm build, the boots and the record.
@@ -2262,6 +2416,8 @@ def main():
                 matlab_argv += ["--instruction-matlab", str(instruction_file)]
             else:
                 matlab_argv += ["--matlab-image", args.matlab_image or "", "--matlab-driver", args.matlab_driver or ""]
+                if args.full:
+                    matlab_argv.append("--strict-rows")     # the standalone shape is permissive (a skipped row is exit 0); a full run has no skips
             stage = make_stage(
                 "matlab",
                 matlab_argv,

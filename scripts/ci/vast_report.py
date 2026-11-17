@@ -45,6 +45,10 @@ LINE_MARK = b"...[line truncated, %d bytes dropped]"
 UNKNOWN_HW = {"gpu_name": "unknown", "compute_cap": 0, "driver_version": "unknown"}
 EPOCH_LO, EPOCH_HI = 1_000_000_000, 4_102_444_800
 SUITE_NAME = re.compile(r"[a-z][a-z0-9_]{0,47}")
+# 2026-11-17: the standalone full run plans 16 stages and each stage returns one to six rows (merge_bar six, specviewperf three, the others one), so one full run reports up to
+# 26 rows plus the failure row of a red stage. The bound was 19 (and the Worker's 20) when a run had fewer stages. ci/vast-broker/src/results.js has the same number
+# (test_vast_report_rows pins both).
+MAX_SUITE_ROWS = 32
 GPU_NAME = re.compile(r"[A-Za-z0-9_. -]{1,100}")
 DRIVER = re.compile(r"unknown|[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,2})?")
 REASONS = {"payload_missing"}
@@ -799,6 +803,66 @@ def validate_kfml(value):
         raise ValueError("kfml")
 
 
+def validate_apps_discovery(value):
+    """The apps_discovery stage's record (scripts/ci/apps_discovery_stage.py): bounded, strictly read, not forwarded. DISCOVERY lane: a row that RAN and failed is a
+    KNOWN_BREAKAGE, a row that did not run is NOT_RUN and is named in `not_run`; a PASS verdict has no NOT_RUN row."""
+    name = re.compile(r"[a-z][a-z0-9_]{0,39}")
+    text = re.compile(r"[\x20-\x7e]{0,120}")
+    keys = {"schema", "verdict", "sha", "run_id", "rows", "steps", "not_run", "breakages", "host_control", "reason", "guest_rc"}
+    ok = type(value) is dict and {"schema", "verdict", "sha", "run_id", "steps"} <= set(value) <= keys
+    ok = ok and value["schema"] == 1 and value["verdict"] in ("PASS", "FAIL", "RETRY", "PARTIAL")
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    ok = ok and type(value["run_id"]) is str and re.fullmatch("[A-Za-z0-9_.-]{1,48}", value["run_id"]) is not None
+    ok = ok and type(value.get("reason", "")) is str and text.fullmatch(value.get("reason", "")) is not None
+    ok = ok and value.get("host_control", "absent") in ("present", "absent")
+    steps = value["steps"]
+    ok = ok and type(steps) is list and len(steps) <= 8 and all(
+        type(x) is dict and set(x) == {"step", "rc", "s"} and name.fullmatch(x["step"]) and type(x["rc"]) is int and type(x["s"]) is int for x in steps)
+    rows = value.get("rows", [])
+    most = 8                                              # six rows today; the bound is a little above
+    ok = ok and type(rows) is list and len(rows) <= most
+    if ok:
+        for r in rows:
+            ok = ok and type(r) is dict and {"name", "status", "guest", "host", "reason"} <= set(r) <= {"name", "status", "guest", "host", "reason", "dcgm"}
+            ok = ok and name.fullmatch(str(r.get("name"))) is not None and r.get("status") in ("PASS", "KNOWN_BREAKAGE", "NOT_RUN")
+            ok = ok and all(type(r.get(k)) is str and text.fullmatch(r[k]) is not None for k in ("guest", "host", "reason"))
+            ok = ok and (r["status"] == "PASS" or r["reason"] != "")
+    for key in ("not_run", "breakages"):
+        ok = ok and type(value.get(key, [])) is list and len(value.get(key, [])) <= 8 and all(type(x) is str and name.fullmatch(x) for x in value.get(key, []))
+    ok = ok and (value["verdict"] != "PASS" or not value.get("not_run"))
+    ok = ok and (value["verdict"] != "PASS" or bool(rows))
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 8192
+    if not ok:
+        raise ValueError("apps_discovery")
+
+
+def validate_windows_open_rows(value):
+    """The windows_open_rows stage's record (vast_payload.windows_open_rows_rows): bounded, strictly read, not forwarded."""
+    name = re.compile(r"[a-z][a-z0-9_]{0,47}")
+    keys = {"profile", "expected", "ran", "passed", "breakages", "not_run_by_design", "not_run", "sha"}
+    ok = type(value) is dict and set(value) == keys and value["profile"] == "open_source"
+    ok = ok and all(type(value[k]) is int and 0 <= value[k] <= 64 for k in ("expected", "ran", "passed"))
+    ok = ok and value["passed"] <= value["ran"] <= value["expected"]
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    for key in ("breakages", "not_run_by_design", "not_run"):
+        ok = ok and type(value[key]) is list and len(value[key]) <= 16 and all(type(x) is str and name.fullmatch(x) for x in value[key])
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 4096
+    if not ok:
+        raise ValueError("windows_open_rows")
+
+
+def validate_full(value):
+    """The `full` record of a --full run (scripts/ci/standalone_full.record): the stages planned, the stages explicitly skipped, whether the run is complete."""
+    name = re.compile(r"[a-z][a-z0-9_]{0,31}")
+    ok = type(value) is dict and set(value) == {"manifest", "stages", "skipped", "complete", "by_design"} and type(value["manifest"]) is int and 1 <= value["manifest"] <= 99
+    ok = ok and type(value["complete"]) is bool
+    for key in ("stages", "skipped", "by_design"):
+        ok = ok and type(value[key]) is list and len(value[key]) <= 24 and all(type(x) is str and name.fullmatch(x) for x in value[key])
+    ok = ok and (not value["complete"] or not value["skipped"])
+    if not ok:
+        raise ValueError("full")
+
+
 def validate_net_bytes(value):
     """The bytes the box's default interface moved while each stage ran (vast_payload.record_net). Read, validated and not forwarded:
     it only calibrates ci/vast-broker/bandwidth.json (scripts/ci/bandwidth_calibrate.py)."""
@@ -840,6 +904,9 @@ def read_result_file(path):
             "matlab",
             "install_flow",
             "kfml",
+            "apps_discovery",
+            "windows_open_rows",
+            "full",
             "net_bytes",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
@@ -877,6 +944,16 @@ def read_result_file(path):
             validate_kfml(doc["kfml"])
             if doc["verdict"] == "PASS" and doc["kfml"]["verdict"] == "FAIL":
                 raise ValueError("kfml verdict")
+        if "apps_discovery" in doc:
+            validate_apps_discovery(doc["apps_discovery"])
+            if doc["verdict"] == "PASS" and doc["apps_discovery"]["verdict"] != "PASS":
+                raise ValueError("apps_discovery verdict")
+        if "windows_open_rows" in doc:
+            validate_windows_open_rows(doc["windows_open_rows"])
+            if doc["verdict"] == "PASS" and doc["windows_open_rows"]["not_run"]:
+                raise ValueError("windows_open_rows verdict")
+        if "full" in doc:
+            validate_full(doc["full"])
         if "net_bytes" in doc:
             validate_net_bytes(doc["net_bytes"])
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):
@@ -892,7 +969,7 @@ def read_result_file(path):
         ):
             raise ValueError("host reference")
         rows = doc["suites"]
-        if type(rows) is not list or not 1 <= len(rows) <= 19:
+        if type(rows) is not list or not 1 <= len(rows) <= MAX_SUITE_ROWS:
             raise ValueError("suites")
         for row in rows:
             if type(row) is not dict or set(row) != {"name", "pass", "fail", "skip"}:

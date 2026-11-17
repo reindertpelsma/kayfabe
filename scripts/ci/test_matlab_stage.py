@@ -343,6 +343,27 @@ class RunTests(unittest.TestCase):
         self.assertTrue(image.exists())                              # the caller's file is never deleted
         vast_report.validate_matlab(rec)
 
+    def test_strict_rows_makes_a_skipped_row_a_failure_without_any_pin(self):
+        # --strict-rows (vast_payload.py --full): the standalone shape with the Worker's zero-skip rule and none of its pins
+        results = tm.all_good()
+        a, hooks, seen, klog, d, prefix, image = self.standalone(results=results)
+        a.strict_rows = True
+        rec, code = ms.run(a, hooks)
+        self.assertTrue(seen["strict"])
+        self.assertEqual((rec["image"]["source"], rec["image"]["pin_enforced"]), ("user", False))
+        self.assertIsNone(seen["kw"]["image_sha256"])
+        a, hooks, seen, klog, d, prefix, image = self.standalone(driver="580.94.02")
+        a.strict_rows = True
+        rec, code = ms.run(a, hooks)
+        self.assertEqual({r["reason"] for r in rec["rows"]}, {"DRIVER_UNPINNED:580.94.02"})
+        self.assertEqual(rec["verdict"], "FAIL")
+        self.assertEqual(code, 4)                                    # strict: the refusal of every row is a STRICT_SKIP, not exit 0
+
+    def test_standalone_without_strict_rows_is_still_permissive(self):
+        a, hooks, seen, klog, d, prefix, image = self.standalone(driver="580.94.02")
+        rec, code = ms.run(a, hooks)
+        self.assertEqual(code, 0)
+
     def test_standalone_driver_version_is_downloaded_through_the_pinned_manifest(self):
         a, hooks, seen, klog, d, prefix, image = self.standalone(driver="580.173.02")
         ms.run(a, hooks)

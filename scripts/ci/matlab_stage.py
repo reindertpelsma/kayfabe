@@ -149,9 +149,9 @@ def fetch_standalone(src, dest_dir, name, fetch_url, sha256_file):
     return path, sha256_file(path)
 
 
-def record_for(mr, reason, verdict, sha, strict, rows, lanes, hw, image=None, driver=None, family=None, isolation="row"):
+def record_for(mr, reason, verdict, sha, strict, rows, lanes, hw, image=None, driver=None, family=None, isolation="row", rows_strict=False):
     """A record with every row refused for one named reason (the shape the report validator reads)."""
-    ctx = mr.Context(lanes=lanes, hw=hw, strict=strict, isolation=isolation)
+    ctx = mr.Context(lanes=lanes, hw=hw, strict=strict or rows_strict, isolation=isolation)
     refusal = mr.BootRefusal(reason, verdict)
     result = {"rows": [mr.refused_record(r, lanes.get(r, "discovery"), refusal) for r in [mr.PREAMBLE] + list(rows)], "boots": []}
     return mr.build_record(result, ctx, sha, image or {"sha256": None, "size": None, "source": "pin" if strict else "user", "pin_enforced": strict},
@@ -164,6 +164,9 @@ def run(a, hooks=None):
     root = Path(a.checkout)
     mr = rows_module(root)
     strict = bool(a.instruction_matlab)
+    # --strict-rows (standalone shape, 2026-11-17, `vast_payload.py --full`): the Worker's zero-skip rule for the rows (a row that did not run is STRICT_SKIP, exit 4)
+    # WITHOUT its pins: the caller's image and driver are still the caller's, nothing is enforced against a sha256 of ours, the computed sha256 is recorded
+    rows_strict = bool(getattr(a, "strict_rows", False)) and not strict
     instruction = json.loads(Path(a.instruction_matlab).read_text()) if strict else None
     prefix = Path(a.prefix)
     rows = mr.select_rows(a.rows) if not strict else [r for r in mr.ROW_ORDER if r in instruction["rows"] and r != mr.PREAMBLE]
@@ -175,7 +178,7 @@ def run(a, hooks=None):
     family = pa.FAMILY_BY_CC.get(hw.get("compute_cap"))
     image_rec = {"sha256": None, "size": None, "source": "pin" if strict else "user", "pin_enforced": strict}
     driver_rec = {"version": None, "sha256": None, "source": "pin" if strict else "user"}
-    ctx_args = dict(lanes=lanes, hw=hw, evidence_dir=a.evidence_dir, workdir=str(prefix / "work"), isolation=isolation, strict=strict, deadline_epoch=a.deadline_epoch,
+    ctx_args = dict(lanes=lanes, hw=hw, evidence_dir=a.evidence_dir, workdir=str(prefix / "work"), isolation=isolation, strict=strict or rows_strict, deadline_epoch=a.deadline_epoch,
                     matlab=a.matlab)
     mctx = mr.Context(**ctx_args)
     started, klog = False, None
@@ -228,9 +231,9 @@ def run(a, hooks=None):
         rec["family"] = family
     except pa.Refused as r:
         harness = r.reason in ("DOWNLOAD",) or r.reason.startswith("KERNEL_LOG")
-        rec = record_for(mr, r.reason, "HARNESS" if harness else "NOT_RUN", a.sha, strict, rows, lanes, hw, image_rec, driver_rec, family, isolation)
+        rec = record_for(mr, r.reason, "HARNESS" if harness else "NOT_RUN", a.sha, strict, rows, lanes, hw, image_rec, driver_rec, family, isolation, rows_strict)
     except (ValueError, OSError, KeyError, subprocess.SubprocessError) as exc:
-        rec = record_for(mr, "INTERNAL", "HARNESS", a.sha, strict, rows, lanes, hw, image_rec, driver_rec, family, isolation)
+        rec = record_for(mr, "INTERNAL", "HARNESS", a.sha, strict, rows, lanes, hw, image_rec, driver_rec, family, isolation, rows_strict)
         rec["summary"] = (rec["summary"] + " (" + pa.clean(exc, 80) + ")")[:200]
     finally:
         if klog is not None:
@@ -289,6 +292,8 @@ def main(argv=None):
     r.add_argument("--instruction-matlab", help="the instruction's `matlab` object as a JSON file (the Worker's strict shape)")
     r.add_argument("--matlab-image", default="")
     r.add_argument("--matlab-driver", default="")
+    r.add_argument("--strict-rows", action="store_true", help="standalone shape: a row that did not run fails the stage (STRICT_SKIP, exit 4) as in the Worker's shape, "
+                   "without its pins (used by `vast_payload.py --full`)")
     r.add_argument("--rows")
     r.add_argument("--isolation", choices=("row", "shared"), default="row")
     r.add_argument("--lane", action="append", default=[])

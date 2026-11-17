@@ -594,6 +594,51 @@
     "source": "ci/vast-broker/bandwidth.json stage propimage_apps_b",
     "note": "evidence pull-back: text only (verdicts, host GPU samples, per-row results of a few KB each); the split per stage is a guess"
    }
+  },
+  "apps_discovery": {
+   "note": "open Linux discovery rows of the standalone full run (stage `apps_discovery`, manual-only: `--full` or `--only apps_discovery`): the Vulkan CTS source and externals, and the three open ML environments built from hashed locks. The FFmpeg and DCGM rows are charged to `apps` (apps.open_rows). The stage is not in a Worker plan, so nothing here is a Worker budget.",
+   "entries": [
+    {
+     "id": "apps_discovery.vkcts_sources",
+     "what": "Vulkan CTS: shallow fetch of the pinned commit and the CTS fetch scripts' externals",
+     "class": "package",
+     "down_bytes": 1800000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "docs/design/V3_VULKAN_CTS_ROW.md section 3: about 1.8 GB checkout, fetch 237 s on a native container (traces/vkcts_host_20261117)",
+     "note": "the checkout size, not the bytes received; the fetch scripts' externals are inside the 1.8 GB figure the design records"
+    },
+    {
+     "id": "apps_discovery.ml_venvs",
+     "what": "open ML rows: the JAX, TensorRT and vLLM venvs from hashed locks (PyPI and NVIDIA's open index) and the 135M model, cu13 flavour",
+     "class": "package",
+     "down_bytes": 21570000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "traces/open_ml_rows_20261117/README.md: venv sizes JAX 4.4 GB, TensorRT 7.3 GB, vLLM 9.6 GB plus a 272 MB model",
+     "note": "installed venv size is an upper bound of the wheels received; the stage's own `net_bytes` settles it on the first box"
+    }
+   ],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-17",
+    "source": "scripts/ci/apps_discovery_stage.py",
+    "note": "text evidence of six rows and their host-vs-guest comparison, a few hundred KB; not measured"
+   }
+  },
+  "windows_open_rows": {
+   "note": "open Windows rows (stage `windows_open_rows`, manual-only: `--full` or `--only windows_open_rows`): the toolchain and pinned sources the online guest downloads for the VK-GL-CTS and DirectX sample rows are the `windows_apps.open_*` entries (tagged `open_online`, scripts/bench/windows/open_rows, docs/design/V3_WINDOWS_OPEN_ROWS.md); they are not repeated here. The stage is not in a Worker plan, so nothing here is a Worker budget.",
+   "entries": [],
+   "upload": {
+    "up_bytes": 3000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-17",
+    "source": "scripts/bench/box/windows_apps.sh",
+    "note": "text evidence of nine rows and the build receipts, a few MB; not measured"
+   }
   }
  }
 }
