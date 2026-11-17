@@ -118,6 +118,7 @@ fn rig(seat: bool) -> Rig {
             display: None,
             console: None,
             windows: Default::default(),
+            utilization: None,
         },
     );
     let root = rpc(

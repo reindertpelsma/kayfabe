@@ -1,10 +1,31 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-16 (§AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-17 (§AV: the guest may read the physical GPU's utilisation, `report-utilization`, default on); 2026-11-16 (§AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §AV. The guest may read the physical GPU's utilisation: `report-utilization=on|off`, default on, read-only and one way, 2026-11-17
+
+**STATUS: LIVE, 2026-11-17; owner decision (stated in conversation, recorded by the coordinator).** Design, evidence split and the
+hostile-guest analysis: `docs/design/V3_UTILIZATION_FLAG.md`. Implemented GPU-free (generated layouts, the chain link, the sampler,
+the RUSD publisher, tests and mutants); **not run on hardware** (the plan and the falsifiers are in section 9 of that document).
+
+1. **Build it.** A guest can read GPU utilisation (NVML and `nvidia-smi`: `utilization.gpu`, `utilization.memory`, encoder, decoder),
+   which reads `[N/A]` without it.
+2. **A device property, default on.** `report-utilization=on|off`, declared next to `windows-support` (KF3_ABI 34). A user can turn it off
+   to avoid host leakage. The guest cannot change it, and it is neither an environment variable nor inferred from the guest.
+3. **Read-only and one way.** No guest-supplied byte is sent to the NVIDIA host or driver on behalf of this feature: the host read is one
+   fixed request that the host builds itself, and the answer goes to the guest only. Enabling it therefore has little effect on the VM's
+   security; what remains is the exposure in item 4.
+4. **What changes in an earlier open direction.** §W recorded the owner's wish for `utilization.gpu` as "this VM's own, never host-wide".
+   For utilisation only, the values the guest sees are the PHYSICAL GPU's whole-device values. On a GPU shared by several VMs that is a
+   cross-tenant load side channel, which is why the property exists. Power, clocks, P-state, thermals and process identity stay
+   unexposed (§S item 6).
+5. **The RUSD answer needs a publisher, so it has one.** `sweep.rs` refused `0x20800afe`/`0x20800aff` because an `NV_OK` would promise a page
+   that is never written; with the property on, kayfabe writes the utilisation record of that page itself (from its own sample), and
+   nothing else of it.
 
 ## §AU. The guest clock depends only on the network; a recorded clock is never earlier than the software loaded into the image, 2026-11-16
 
@@ -1177,6 +1198,9 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   served read-only (`nvidia-smi` is unprivileged on bare metal); power is not important. Direction: the
   values the guest sees are this VM's own, never host-wide quantities (§S exposure rule); the design
   and its measurements are open work (`docs/STATUS_AND_HANDOFF.md`).
+  ⊘ *Superseded 2026-11-17 for utilisation (§AV, owner): the guest sees the PHYSICAL GPU's whole-device values, behind the
+  device property `report-utilization` (default on), read-only and one way; the "this VM's own" direction no longer applies
+  to utilisation.*
 - ⊘ **REVERSED 2026-11-15 (owner, §AT: "set the measured Windows profile as the default"): the
   software-runlist host-owned scheduling (`KF3_SW_RUNLIST_HOST_OWNED`, now no flag) is ON for a guest that
   declares the measured Windows driver, and off for every other guest.** "Undecided" was never a decision to

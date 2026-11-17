@@ -10,6 +10,9 @@
 //! no TDR); with the act thread dead every queued RM call stays unresolved. A poisoned mutex does
 //! the rest quietly.
 //!
+//! Deliberately NOT covered: `kf3-util` (the GPU-utilisation sampler, `report-utilization`). Nothing waits on it and
+//! nothing depends on it: if it dies the snapshot ages out and the guest reads N/A, so a panic there must not stop the VM.
+//!
 //! Coverage (2026-10-10, review 2 item 6): the drainer, the workers, the VA manager, the display
 //! worker, the act thread, and the helpers `kf3-pramin-reaper`, `kf3-vram-provision` and
 //! `kf-view-reaper`. NOT covered, each for a stated reason: `kf3-probe` (the completion probe,

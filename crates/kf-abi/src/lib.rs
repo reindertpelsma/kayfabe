@@ -159,6 +159,7 @@ pub mod smcmode;
 pub mod submit;
 pub mod timer;
 pub mod transcribed;
+pub mod utilization;
 pub mod vbios;
 pub mod versions;
 pub mod view;

@@ -167,6 +167,7 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
             display: None,
             console: None,
             windows: Default::default(),
+            utilization: None,
         },
     );
     // The publication: carried, held, and answered exactly as before.
@@ -260,6 +261,7 @@ fn a_server_context_only_publication_is_answered_and_states_no_root() {
             display: None,
             console: None,
             windows: Default::default(),
+            utilization: None,
         },
     );
     let mut b = vec![0u8; COPY_SERVER_RESERVED_PDES_PARAMS_SIZE];
