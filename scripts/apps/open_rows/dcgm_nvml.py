@@ -158,7 +158,8 @@ class Row:
     def run(self):
         stream = census.SmiStream().start()
         t0 = time.time()
-        rows, meta = S.sweep("libnvidia-ml.so.1", 1023, None)
+        header = self.bundle / "cuda/include/nvml.h" if self.bundle else None   # labels only; the bundle carries the toolkit headers
+        rows, meta = S.sweep(self.a.nvml_lib, 1023, str(header) if header and header.is_file() else None)
         rows += S.smi_sections()
         (self.out / "nvml_sweep.tsv").write_text("".join("# %s\n" % m for m in meta) + "\n".join(rows) + "\n")
         if not self.a.no_dcgm:
@@ -180,8 +181,8 @@ class Row:
         line = ("NVML_DCGM_SUMMARY nvml_fields_ok=%d nvml_fields_other=%d queries_ok=%d/%d smi_ok=%d/%d smiq_na=%d %s dcgm_fields_ok=%d/%d "
                 "diag_pass=%d diag_fail=%d diag_skip=%d gpu_use=%s secs=%d" % (
                     count("field"), total("field") - count("field"), count("query"), total("query"), count("smi"), total("smi"), count("smiq", "NA"),
-                    dstate, sum(1 for (k, _), r in dparsed.items() if k == "dcgm" and r["status"] == "OK"),
-                    sum(1 for (k, _) in dparsed if k == "dcgm"), dcount("PASS"), dcount("FAIL"), dcount("SKIP"), use, t1 - t0))
+                    dstate, sum(1 for (k, key), r in dparsed.items() if k == "dcgm" and not key.startswith("discovery.") and r["status"] == "OK"),
+                    sum(1 for (k, key) in dparsed if k == "dcgm" and not key.startswith("discovery.")), dcount("PASS"), dcount("FAIL"), dcount("SKIP"), use, t1 - t0))
         (self.out / "summary.txt").write_text(census.scrub("# gpu_use_why=%s\n%s\n" % (why, "\n".join(self.status) + "\n" + line)))
         if self.a.emit:
             for name in ("nvml_sweep.tsv", "dcgm.tsv", "dcgm_status.txt", "summary.txt"):
@@ -228,6 +229,7 @@ def main(argv):
     r.add_argument("--diag-timeout", type=int, default=1800)
     r.add_argument("--no-dcgm", action="store_true")
     r.add_argument("--emit", action="store_true")
+    r.add_argument("--nvml-lib", default="libnvidia-ml.so.1", help="the NVML library to sweep (the tests point it at a fake)")
     c = sub.add_parser("compare")
     c.add_argument("host")
     c.add_argument("guest")

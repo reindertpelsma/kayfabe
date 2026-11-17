@@ -212,7 +212,9 @@ class Runner:
         elif case["op"] != "dec" and L.ENCODERS[case["codec"]] not in enc_names:
             forced = "unknown_encoder"
         elif expect == "UNKNOWN":
-            forced = "no_probe"
+            forced, why_not = L.unavailable_reason(case, self.probe)
+            forced = forced or "no_probe"
+            note = (note + "; " + why_not).strip("; ") if why_not else note
         if forced is None:
             if case["op"] == "enc":
                 ok, reason, extra = self.attempt_encode(case, w)

@@ -66,7 +66,10 @@ class Probe:
         return bool(self.enc_codec) and "nvenc" not in self.error_keys()
 
     def dec_available(self):
-        return bool(self.dec) and "nvdec" not in self.error_keys()
+        return any(not d["error"] for d in self.dec.values()) and "nvdec" not in self.error_keys()
+
+    def error_text(self, key):
+        return "; ".join(v for k, v in self.errors if k == key)
 
     def error_keys(self):
         return {k for k, _ in self.errors}
@@ -119,7 +122,7 @@ def parse_probe(text):
             m = re.fullmatch(r"([a-z0-9]+)\.(\d{3})\.(\d+)", key)
             if not m:
                 continue
-            d = {"raw": val, "supported": False, "maxw": 0, "maxh": 0, "minw": 0, "minh": 0}
+            d = {"raw": val, "supported": False, "maxw": 0, "maxh": 0, "minw": 0, "minh": 0, "error": val.startswith("ERR:")}
             kvs = dict(re.findall(r"(\w+)=(\S+)", val))
             if kvs.get("supported") is not None:
                 d["supported"] = kvs["supported"] == "1"
@@ -286,7 +289,7 @@ def evaluate_needs(case, probe):
                     failed.append("enc:%s:%s=%d need %s%d" % (atom[1], atom[2], v, atom[3], atom[4]))
         else:  # dec, dec_dim
             d = probe.dec.get((atom[1], atom[2], atom[3]))
-            if d is None:
+            if d is None or d["error"]:
                 unknown.append("dec:%s:%s:%d" % atom[1:4])
             elif not d["supported"]:
                 failed.append("dec:%s:%s:%d unsupported" % atom[1:4])
@@ -368,6 +371,18 @@ def decode_compare_argv(ffmpeg, case, stream):
     return argv + ["-filter_complex", graph, "-frames:v", str(case["frames"]), "-f", "null", "-"]
 
 
+def unavailable_reason(case, probe):
+    """When the probe could not reach the engine the case needs, the case is NOT_RUN with a named reason (and the probe's own words in the
+    detail), never a guess about what the die can do. -> (reason, detail) or (None, "")."""
+    if case["op"] in ("enc", "sessions"):
+        if not probe.enc_available():
+            return "nvenc_unavailable", probe.error_text("nvenc") or "the probe printed no NVENC rows"
+    elif not probe.dec_available():
+        return "nvdec_unavailable", probe.error_text("nvdec") or "cuvidGetDecoderCaps answered an error for every codec (%s)" % next(
+            (d["raw"] for d in probe.dec.values() if d["error"]), "no rows")
+    return None, ""
+
+
 # ----------------------------------------------------------------------------------------- reading ffmpeg's own output
 PSNR_RE = re.compile(r"PSNR y:\S+ u:\S+ v:\S+ average:(inf|[0-9.]+)")
 
@@ -398,7 +413,8 @@ def parse_stream_json(text):
 # first match wins; every id is a short word that goes into the result file
 REASONS = (
     ("driver_api_too_old", re.compile(r"Driver does not support the required nvenc API version|minimum required Nvidia driver", re.I)),
-    ("no_encode_device", re.compile(r"No NVENC capable devices found|Cannot load libnvidia-encode|OpenEncodeSessionEx failed: no encode device", re.I)),
+    ("no_encode_device", re.compile(r"No (NVENC )?capable devices found|Cannot load libnvidia-encode|OpenEncodeSessionEx failed: (no encode device|unsupported device)", re.I)),
+    ("no_decode_device", re.compile(r"CUDA_ERROR_NO_DEVICE|no CUDA-capable device", re.I)),
     ("session_limit", re.compile(r"OpenEncodeSessionEx failed: out of memory|OpenEncodeSessionEx failed: .*(10)|incompatible client key", re.I)),
     ("unknown_encoder", re.compile(r"Unknown encoder|Encoder .* not found|Unrecognized option", re.I)),
     ("unknown_decoder", re.compile(r"Unknown decoder|Decoder .* not found", re.I)),
@@ -409,7 +425,8 @@ REASONS = (
     ("cuda_error", re.compile(r"CUDA_ERROR_|cuCtxCreate|Failed to create .*CUDA|cuInit", re.I)),
     ("out_of_memory", re.compile(r"out of memory|Cannot allocate memory|OUT_OF_MEMORY", re.I)),
 )
-CONFIG_REASONS = ("driver_api_too_old", "no_encode_device", "unknown_encoder", "unknown_decoder", "no_cuvid", "no_sw_encoder",
+CONFIG_REASONS = ("driver_api_too_old", "no_encode_device", "no_decode_device", "nvenc_unavailable", "nvdec_unavailable", "unknown_encoder",
+                  "unknown_decoder", "no_cuvid", "no_sw_encoder",
                   "source_generation_failed", "no_ffmpeg", "no_probe", "no_gpu")
 
 

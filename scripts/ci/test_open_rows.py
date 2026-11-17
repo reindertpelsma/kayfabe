@@ -211,12 +211,46 @@ class CapsComparison(unittest.TestCase):
         self.assertEqual(self.expect("enc_hevc_420_8_1080p", L.parse_probe("")), "UNKNOWN")
 
 
+class UnavailableEngines(unittest.TestCase):
+    """A Vast container whose NVENC/NVDEC cannot be reached (measured 2026-11-17: OpenEncodeSessionEx unsupported device, cuvid NO_DEVICE) is a
+    named NOT_RUN, never an `unsupported` expectation."""
+
+    def test_nvenc_unavailable_names_the_probe_error(self):
+        p = L.parse_probe("meta\tdevice_name\tX\nerror\tnvenc\topen session NV_ENC_ERR_UNSUPPORTED_DEVICE\n")
+        c = next(c for c in L.load_cases(CASES_TEXT) if c["id"] == "enc_hevc_420_8_1080p")
+        self.assertEqual(L.unavailable_reason(c, p), ("nvenc_unavailable", "open session NV_ENC_ERR_UNSUPPORTED_DEVICE"))
+
+    def test_decoder_rows_that_are_errors_are_unknown_not_unsupported(self):
+        p = L.parse_probe("dec_cap\thevc.420.8\tERR:cuda100\ndec_cap\th264.420.8\tERR:cuda100\n")
+        c = next(c for c in L.load_cases(CASES_TEXT) if c["id"] == "dec_hevc_420_8_hw")
+        self.assertEqual(L.evaluate_needs(c, p)[0], "UNKNOWN")
+        self.assertEqual(L.unavailable_reason(c, p)[0], "nvdec_unavailable")
+        self.assertFalse(p.dec_available())
+
+    def test_a_working_probe_has_no_unavailable_reason(self):
+        p = L.parse_probe(probe_text())
+        for c in L.load_cases(CASES_TEXT):
+            self.assertEqual(L.unavailable_reason(c, p), (None, ""), c["id"])
+
+    def test_the_reasons_are_configuration_errors(self):
+        for r in ("nvenc_unavailable", "nvdec_unavailable", "no_encode_device", "no_decode_device"):
+            self.assertEqual(L.verdict("SUPPORTED", False, r)[0], "NOT_RUN")
+
+
 class Verdicts(unittest.TestCase):
-    def test_the_five_outcomes(self):
+    def test_supported_and_worked_is_pass(self):
         self.assertEqual(L.verdict("SUPPORTED", True, "ok"), ("PASS", "ok"))
+
+    def test_supported_and_failed_is_fail(self):
         self.assertEqual(L.verdict("SUPPORTED", False, "encoder_params_rejected"), ("FAIL", "encoder_params_rejected"))
+
+    def test_unsupported_and_failed_is_not_supported(self):
         self.assertEqual(L.verdict("UNSUPPORTED", False, "encoder_params_rejected"), ("NOT_SUPPORTED", "encoder_params_rejected"))
+
+    def test_unsupported_and_worked_is_a_mismatch(self):
         self.assertEqual(L.verdict("UNSUPPORTED", True, "ok"), ("MISMATCH", "unexpected_success"))
+
+    def test_no_attempt_is_not_run(self):
         self.assertEqual(L.verdict("SUPPORTED", None, "no_sw_encoder"), ("NOT_RUN", "no_sw_encoder"))
 
     def test_our_own_configuration_errors_are_not_run_not_fail(self):
@@ -244,13 +278,19 @@ class Verdicts(unittest.TestCase):
 
 
 class Psnr(unittest.TestCase):
-    def test_parse(self):
+    def test_parse_average(self):
         txt = "[Parsed_psnr_2 @ 0x1] PSNR y:40.1 u:42.0 v:43.0 average:40.9 min:39.0 max:45.0\n"
         self.assertAlmostEqual(L.parse_psnr(txt), 40.9)
+
+    def test_parse_inf_is_identical_frames(self):
         self.assertEqual(L.parse_psnr("PSNR y:inf u:inf v:inf average:inf min:inf max:inf"), float("inf"))
-        self.assertIsNone(L.parse_psnr("no summary here"))
+
+    def test_parse_the_last_summary_wins(self):
         two = "PSNR y:1 u:1 v:1 average:10.0\nPSNR y:1 u:1 v:1 average:33.5\n"
         self.assertEqual(L.parse_psnr(two), 33.5)
+
+    def test_parse_without_a_summary_is_none(self):
+        self.assertIsNone(L.parse_psnr("no summary here"))
 
     def test_threshold_boundary(self):
         self.assertTrue(L.psnr_ok(28.0, 28.0))
@@ -319,19 +359,28 @@ class Commands(unittest.TestCase):
 
 
 class ReasonsAndCompare(unittest.TestCase):
-    def test_reasons(self):
-        cases = {
-            "[h264_nvenc @ 0x5] Driver does not support the required nvenc API version. Required: 13.0 Found: 12.2": "driver_api_too_old",
-            "[hevc_nvenc @ 0x5] OpenEncodeSessionEx failed: out of memory (10)": "session_limit",
-            "[av1_nvenc @ 0x5] InitializeEncoder failed: invalid param (8)": "encoder_params_rejected",
-            "Unknown encoder 'av1_nvenc'": "unknown_encoder",
-            "[hevc @ 0x1] Hardware is lacking required capabilities": "hw_decode_unsupported",
-            "Failed setup for format cuda: hwaccel initialisation returned error.": "hw_decode_unsupported",
-            "Cannot load libnvidia-encode.so.1": "no_encode_device",
-            "something else entirely": "other",
-        }
-        for text, want in cases.items():
-            self.assertEqual(L.classify_reason(text), want, text)
+    def test_reason_driver_api(self):
+        self.assertEqual(L.classify_reason("[h264_nvenc @ 0x5] Driver does not support the required nvenc API version. Required: 13.0 Found: 12.2"), "driver_api_too_old")
+
+    def test_reason_session_limit(self):
+        self.assertEqual(L.classify_reason("[hevc_nvenc @ 0x5] OpenEncodeSessionEx failed: out of memory (10)"), "session_limit")
+
+    def test_reason_params(self):
+        self.assertEqual(L.classify_reason("[av1_nvenc @ 0x5] InitializeEncoder failed: invalid param (8)"), "encoder_params_rejected")
+
+    def test_reason_missing_encoder(self):
+        self.assertEqual(L.classify_reason("Unknown encoder 'av1_nvenc'"), "unknown_encoder")
+
+    def test_reason_hw_decode(self):
+        self.assertEqual(L.classify_reason("[hevc @ 0x1] Hardware is lacking required capabilities"), "hw_decode_unsupported")
+        self.assertEqual(L.classify_reason("Failed setup for format cuda: hwaccel initialisation returned error."), "hw_decode_unsupported")
+
+    def test_reason_no_device_as_a_vast_container_reports_it(self):
+        self.assertEqual(L.classify_reason("[h264_nvenc @ 0x1] OpenEncodeSessionEx failed: unsupported device (2): (no details)"), "no_encode_device")
+        self.assertEqual(L.classify_reason("cuvidGetDecoderCaps(&caps) failed -> CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected"), "no_decode_device")
+
+    def test_reason_other(self):
+        self.assertEqual(L.classify_reason("something else entirely"), "other")
 
     def _row(self, cid, result, reason="-"):
         return {"case_id": cid, "result": result, "reason": reason}
@@ -349,13 +398,32 @@ class ReasonsAndCompare(unittest.TestCase):
         self.assertEqual(c(NR, NR), ("AGREE", L.BUCKET_CONFIG))
         self.assertEqual(c(P, None), ("MISSING", L.BUCKET_CONFIG))
 
+    LIMITS = "case_glob\tresult\treason\nenc_*_8k\tFAIL\tV3_VIDEO_ENGINES.md section 6\n"
+
     def test_a_documented_limit_moves_a_disagreement_out_of_candidates(self):
-        limits = L.load_known_limits("case_glob\tresult\treason\nenc_*_8k\tFAIL\tV3_VIDEO_ENGINES.md section 6\n")
         h, g = self._row("enc_hevc_8k", "PASS"), self._row("enc_hevc_8k", "FAIL")
-        self.assertEqual(L.classify_pair(h, g, limits), ("DISAGREE", L.BUCKET_KNOWN))
-        self.assertEqual(L.classify_pair(h, dict(g, result="MISMATCH"), limits), ("DISAGREE", L.BUCKET_CANDIDATE))  # the limit explains FAIL only
+        self.assertEqual(L.classify_pair(h, g, L.load_known_limits(self.LIMITS)), ("DISAGREE", L.BUCKET_KNOWN))
+
+    def test_a_limit_explains_only_the_result_it_names(self):
+        h, g = self._row("enc_hevc_8k", "PASS"), self._row("enc_hevc_8k", "MISMATCH")
+        self.assertEqual(L.classify_pair(h, g, L.load_known_limits(self.LIMITS)), ("DISAGREE", L.BUCKET_CANDIDATE))
+
+    def test_a_limit_for_fail_does_not_explain_not_supported(self):
+        h, g = self._row("enc_hevc_8k", "PASS"), self._row("enc_hevc_8k", "NOT_SUPPORTED")
+        self.assertEqual(L.classify_pair(h, g, L.load_known_limits(self.LIMITS)), ("DISAGREE", L.BUCKET_CANDIDATE))
+
+    def test_a_failing_host_control_is_not_a_kayfabe_candidate(self):
+        h, g = self._row("enc_x", "FAIL"), self._row("enc_x", "PASS")
+        self.assertEqual(L.classify_pair(h, g), ("DISAGREE", L.BUCKET_HARNESS))
+
+    def test_a_limit_names_its_cases_by_glob(self):
+        limits = L.load_known_limits("case_glob\tresult\treason\ndec_av1_*\tFAIL\tsome document\n")
+        self.assertEqual(L.classify_pair(self._row("dec_av1_420_8_hw", "PASS"), self._row("dec_av1_420_8_hw", "FAIL"), limits), ("DISAGREE", L.BUCKET_KNOWN))
+        self.assertEqual(L.classify_pair(self._row("dec_vp9_420_8_hw", "PASS"), self._row("dec_vp9_420_8_hw", "FAIL"), limits), ("DISAGREE", L.BUCKET_CANDIDATE))
+
+    def test_a_limit_explains_only_the_cases_it_names(self):
         h2, g2 = self._row("enc_hevc_5k", "PASS"), self._row("enc_hevc_5k", "FAIL")
-        self.assertEqual(L.classify_pair(h2, g2, limits), ("DISAGREE", L.BUCKET_CANDIDATE))
+        self.assertEqual(L.classify_pair(h2, g2, L.load_known_limits(self.LIMITS)), ("DISAGREE", L.BUCKET_CANDIDATE))
 
     def test_limits_need_a_reason(self):
         with self.assertRaises(L.TableError):
@@ -446,6 +514,18 @@ class NvmlValues(unittest.TestCase):
         self.assertNotIn("fa4efa4e", text)
         self.assertIn("smi\tnvidia_smi_log/gpu/utilization/memory_util\t-\tNA\tN/A", text)
 
+    def test_the_identity_of_a_smi_xml_never_reaches_a_row(self):
+        text = "\n".join(N.smi_rows(N.flatten_smi_xml(SMI_XML)))
+        for needle in (FAKE_UUID, "fa4efa4e", "00000000:01:00.0"):
+            self.assertNotIn(needle, text)
+
+    def test_the_identity_of_a_query_property_never_reaches_a_row(self):
+        rows = N.smiq_rows(["uuid", "serial", "pci.bus_id", "name"], "%s, 123456, 00000000:01:00.0, Fake Die" % FAKE_UUID)
+        text = "\n".join(rows)
+        for needle in ("fa4efa4e", "123456", "00000000:01:00.0"):
+            self.assertNotIn(needle, text)
+        self.assertIn("name\t-\tOK\tFake Die", text)
+
     def test_help_query_gpu_and_the_csv_line(self):
         help_text = 'Section about timestamp.\n"timestamp"\nThe timestamp.\n"utilization.gpu"\nPercent.\n"uuid"\n"memory.total"\n'
         names = N.parse_help_query_gpu(help_text)
@@ -497,27 +577,77 @@ class NvmlDiff(unittest.TestCase):
         g = rows_of(R("query", "power.usage_mw", "NOT_SUPPORTED", "-"))[("query", "power.usage_mw")]
         self.assertEqual(self.cmp(h, g)[0], "FINDING_NA_IN_GUEST")  # power is deliberately not in the table
 
-    def test_live_counters_use_a_tolerance_and_static_values_do_not(self):
+    def test_a_live_counter_within_its_tolerance_is_ok(self):
         h = rows_of(R("query", "utilization.rates", "OK", "gpu=3;memory=1"))[("query", "utilization.rates")]
         near = rows_of(R("query", "utilization.rates", "OK", "gpu=20;memory=1"))[("query", "utilization.rates")]
-        far = rows_of(R("query", "utilization.rates", "OK", "gpu=90;memory=1"))[("query", "utilization.rates")]
         self.assertEqual(self.cmp(h, near)[0], "OK")
+
+    def test_a_live_counter_beyond_its_tolerance_is_a_finding(self):
+        h = rows_of(R("query", "utilization.rates", "OK", "gpu=3;memory=1"))[("query", "utilization.rates")]
+        far = rows_of(R("query", "utilization.rates", "OK", "gpu=90;memory=1"))[("query", "utilization.rates")]
         self.assertEqual(self.cmp(h, far)[0], "FINDING_DIFF_LIVE")
+
+    def test_a_static_value_must_be_equal(self):
         hs = rows_of(R("query", "static.num_cores", "OK", "3584"))[("query", "static.num_cores")]
         gs = rows_of(R("query", "static.num_cores", "OK", "3583"))[("query", "static.num_cores")]
         self.assertEqual(self.cmp(hs, gs)[0], "FINDING_DIFF_STATIC")
         self.assertEqual(self.cmp(hs, hs)[0], "OK")
+
+    def test_a_static_smi_property_must_be_equal(self):
+        k = ("smiq", "compute_cap")
+        h, g = rows_of(R("smiq", "compute_cap", "OK", "8.6"))[k], rows_of(R("smiq", "compute_cap", "OK", "8.9"))[k]
+        self.assertEqual(self.cmp(h, g)[0], "FINDING_DIFF_STATIC")
+
+    def test_a_leaf_no_table_line_names_is_only_asked_to_be_a_number(self):
+        k = ("smi", "nvidia_smi_log/gpu/unlisted_leaf")
+        h, g = rows_of(R("smi", k[1], "OK", "5"))[k], rows_of(R("smi", k[1], "OK", "6"))[k]
+        self.assertEqual(self.cmp(h, g)[0], "OK")
 
     def test_numeric_class_only_asks_for_a_number(self):
         h = rows_of(R("query", "memory.info", "OK", "total=12884901888;free=1;used=1"))[("query", "memory.info")]
         g = rows_of(R("query", "memory.info", "OK", "total=4294967296;free=1;used=1"))[("query", "memory.info")]
         self.assertEqual(self.cmp(h, g)[0], "OK")  # kayfabe's frame-buffer policy: the number is what is owed
 
-    def test_a_missing_part_and_a_missing_row(self):
+    def test_a_missing_part_is_a_finding(self):
         h = rows_of(R("query", "memory.info", "OK", "total=1;free=1;used=1"))[("query", "memory.info")]
         g = rows_of(R("query", "memory.info", "OK", "total=1"))[("query", "memory.info")]
         self.assertEqual(self.cmp(h, g)[0], "FINDING_PART_MISSING")
+
+    def test_a_missing_encoder_stat_part_is_a_finding(self):
+        h = rows_of(R("query", "encoder.stats", "OK", "v0=0;v1=0;v2=0"))[("query", "encoder.stats")]
+        g = rows_of(R("query", "encoder.stats", "OK", "v0=0;v1=0"))[("query", "encoder.stats")]
+        self.assertEqual(self.cmp(h, g)[0], "FINDING_PART_MISSING")
+
+    def test_a_missing_row_is_a_finding(self):
+        h = rows_of(R("query", "memory.info", "OK", "total=1;free=1;used=1"))[("query", "memory.info")]
         self.assertEqual(self.cmp(h, None)[0], "FINDING_GUEST_MISSING")
+
+    def test_a_field_missing_from_the_guest_is_a_finding_in_the_sweep(self):
+        host = rows_of(R("field", "fi1", "OK", "5"))
+        res, counts = N.compare_sweeps(host, {}, CLASSES, EXPECTED)
+        self.assertEqual(counts, {"FINDING_GUEST_MISSING": 1})
+
+    def test_the_sweep_marks_documented_not_supported_rows_expected(self):
+        host = rows_of(R("query", "nvlink.state.0", "OK", "1"))
+        guest = rows_of(R("query", "nvlink.state.0", "NOT_SUPPORTED", "-"))
+        res, counts = N.compare_sweeps(host, guest, CLASSES, EXPECTED)
+        self.assertEqual(counts, {"EXPECTED_NS": 1})
+        self.assertEqual(N.findings(counts), 0)
+
+    def test_a_live_value_exactly_at_the_tolerance_is_ok(self):
+        h = rows_of(R("query", "utilization.rates", "OK", "gpu=3;memory=1"))[("query", "utilization.rates")]
+        g = rows_of(R("query", "utilization.rates", "OK", "gpu=38;memory=1"))[("query", "utilization.rates")]  # abs:35
+        self.assertEqual(self.cmp(h, g)[0], "OK")
+
+    def test_a_live_smi_value_beyond_its_tolerance_is_a_finding(self):
+        k = ("smi", "nvidia_smi_log/gpu/utilization/gpu_util")
+        h, g = rows_of(R("smi", k[1], "OK", "3 %"))[k], rows_of(R("smi", k[1], "OK", "90 %"))[k]
+        self.assertEqual(self.cmp(h, g)[0], "FINDING_DIFF_LIVE")
+
+    def test_process_ids_are_not_compared(self):
+        k = ("smi", "nvidia_smi_log/gpu/processes/process_info[0]/pid")
+        h, g = rows_of(R("smi", k[1], "OK", "123"))[k], rows_of(R("smi", k[1], "OK", "999"))[k]
+        self.assertEqual(self.cmp(h, g)[0], "IGNORED")
 
     def test_the_guest_serving_more_than_the_host_is_listed_not_failed(self):
         h = rows_of(R("query", "power.usage_mw", "NOT_SUPPORTED", "-"))[("query", "power.usage_mw")]
@@ -554,9 +684,12 @@ class NvmlDiff(unittest.TestCase):
             N.load_expected_ns("query:x\tgroup\t \n")
         for glob, group, reason in EXPECTED:
             self.assertGreater(len(reason), 20, glob)
-        self.assertTrue(N.within(10, 14, "abs:5"))
+
+    def test_tolerance_boundaries(self):
+        self.assertTrue(N.within(10, 15, "abs:5"))
         self.assertFalse(N.within(10, 16, "abs:5"))
         self.assertTrue(N.within(100, 130, "rel:0.3"))
+        self.assertFalse(N.within(100, 170, "rel:0.3"))
 
 
 DISCOVERY = "1 GPU found.\n+--------+----------------------------------------------------------------------+\n| GPU ID | Device Information                                                   |\n"
@@ -568,6 +701,7 @@ SM Utilization                              GPUTL        203
 DMON = """#Entity   ID   TMPTR   SMCLK   GPUTL
 GPU       0    41      210     N/A
 GPU       0    42      210     N/A
+GPU       1    99      9       9
 """
 DIAG_V4 = json.dumps({"DCGM Diagnostic": {"test_categories": [
     {"category": "Deployment", "tests": [{"name": "software", "results": [{"gpu_id": "0", "status": "Pass"}]}]},
@@ -592,6 +726,17 @@ class DcgmParsers(unittest.TestCase):
         self.assertIn("dcgm\tGPUTL\t-\tNA\tN/A", rows)
         self.assertEqual(N.dmon_rows({"X": []})[0], "dcgm\tX\t-\tNA\tno sample")
 
+    def test_dmon_blank_and_not_found_cells_are_none_not_zero(self):
+        text = "#Entity ID TMPTR SMCLK\nGPU 0 Blank 7\n"
+        self.assertEqual(N.parse_dcgm_dmon(text, ["TMPTR", "SMCLK"]), {"TMPTR": [None], "SMCLK": [7.0]})
+
+    def test_a_dmon_field_with_only_na_cells_is_listed_na(self):
+        rows = N.dmon_rows(N.parse_dcgm_dmon("GPU 0 N/A 5\nGPU 0 N/A 6\n", ["A", "B"]))
+        self.assertEqual(rows, ["dcgm\tA\t-\tNA\tN/A", "dcgm\tB\t-\tOK\t6"])
+
+    def test_dmon_ignores_other_gpus(self):
+        self.assertEqual(N.parse_dcgm_dmon("GPU 1 99\nGPU 0 5\n", ["A"]), {"A": [5.0]})
+
     def test_diag_json_both_layouts(self):
         t4 = N.parse_diag_json(DIAG_V4)
         self.assertEqual([(c, n, s) for c, n, g, s, i in t4], [("Deployment", "software", "Pass"), ("Hardware", "memory", "Skip"), ("Hardware", "pcie", "Fail")])
@@ -600,6 +745,15 @@ class DcgmParsers(unittest.TestCase):
         self.assertEqual(t3[0][2], "0")
         self.assertEqual(N.parse_diag_json("not json"), [])
         self.assertEqual(N.parse_diag_json(""), [])
+
+    def test_a_test_the_host_passes_that_fails_in_the_guest_is_a_finding(self):
+        host = N.parse_rows("\n".join(N.diag_rows(N.parse_diag_json(DIAG_V4))) + "\n")
+        guest_doc = json.loads(DIAG_V4)
+        guest_doc["DCGM Diagnostic"]["test_categories"][0]["tests"][0]["results"][0]["status"] = "Fail"
+        guest = N.parse_rows("\n".join(N.diag_rows(N.parse_diag_json(json.dumps(guest_doc)))) + "\n")
+        out = {k: v for k, _, _, v in N.compare_diag(host, guest)}
+        self.assertEqual(out["Deployment/software/gpu0"], "FINDING_DIAG_FAIL_IN_GUEST")
+        self.assertEqual(out["Hardware/pcie/gpu0"], "AGREE")
 
     def test_diag_rows_and_comparison(self):
         host = N.parse_rows("\n".join(N.diag_rows(N.parse_diag_json(DIAG_V4))) + "\n")
@@ -623,8 +777,10 @@ class Census(unittest.TestCase):
         self.assertNotIn("0000:01:00.0", s)
         self.assertIn("580.159.04", s)
 
-    def test_smi_lines(self):
+    def test_smi_numbers(self):
         self.assertEqual(census.parse_smi_line("2, 40, 0, 55, 1200"), {"sess": 2.0, "enc": 40.0, "dec": 0.0, "gpu": 55.0, "mem": 1200.0})
+
+    def test_smi_na_is_not_zero(self):
         self.assertEqual(census.parse_smi_line("0, [N/A], [N/A], [N/A], 12")["enc"], None)
         self.assertIsNone(census.parse_smi_line("garbage"))
 
@@ -639,7 +795,38 @@ class Census(unittest.TestCase):
         na = census.gpu_use_verdict(census.peaks(self.S((None, None, None, None, 100), (None, None, None, None, 101))), "enc")
         self.assertEqual(na[0], "UNPROVEN")
         self.assertIn("N/A", na[1])
-        self.assertEqual(census.gpu_use_verdict(census.peaks([]), "gpu")[0], "UNPROVEN")  # no data is never a pass
+
+    def test_no_data_is_never_a_pass(self):
+        self.assertEqual(census.gpu_use_verdict(census.peaks([]), "gpu")[0], "UNPROVEN")
+        self.assertEqual(census.gpu_use_verdict(census.peaks([]), "enc")[0], "UNPROVEN")
+
+    def test_na_counters_are_unproven_not_failed(self):
+        p = census.peaks(self.S((None, None, None, None, 100), (None, None, None, None, 100)))
+        self.assertEqual(census.gpu_use_verdict(p, "gpu")[0], "UNPROVEN")
+
+    def test_a_single_busy_sample_is_not_enough_for_the_encoder(self):
+        p = census.peaks(self.S((None, 0, None, None, 1), (None, 60, None, None, 1), (None, 0, None, None, 1)))
+        self.assertEqual(census.gpu_use_verdict(p, "enc")[0], "FAILED")
+
+    def test_cli_verdict_without_samples_is_not_proven(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "s.csv").write_text("")
+            p = subprocess.run([sys.executable, str(OR / "census.py"), "verdict", "--csv", str(Path(d) / "s.csv"), "--need", "gpu"], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 1)
+            self.assertIn("host_gpu_use=UNPROVEN", p.stdout)
+
+    def test_cli_verdict_accepts_the_session_counter_alone(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "s.csv").write_text(census.samples_to_csv(self.S((0, None, None, None, 1), (4, None, None, None, 1))))
+            p = subprocess.run([sys.executable, str(OR / "census.py"), "verdict", "--csv", str(Path(d) / "s.csv"), "--need", "enc"], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stdout)
+
+    def test_cli_kf3_counts_only_the_row_in_the_row(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "q.log"
+            log.write_text("kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1 }\nboot line\nkf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 2 }\n")
+            p = subprocess.run([sys.executable, str(OR / "census.py"), "kf3", "--log", str(log), "--before", "2"], capture_output=True, text=True)
+            self.assertIn("unserviced_before=1 unserviced_after=2 unserviced_in_row=1", p.stdout)
 
     def test_session_counter_alone_proves_an_encode(self):
         p = census.peaks(self.S((0, None, None, None, 100), (3, None, None, None, 100)))
@@ -683,11 +870,48 @@ class Census(unittest.TestCase):
 
 
 class RowIo(unittest.TestCase):
-    def test_round_trip_and_corruption(self):
-        log = "noise\n" + rowio.emit("a.tsv", "x\ty\n") + "more noise\n" + rowio.emit("b.tsv", "z\n")
-        self.assertEqual(rowio.extract(log), {"a.tsv": "x\ty\n", "b.tsv": "z\n"})
-        self.assertEqual(rowio.extract(log.replace("x\ty", "x\tq")), {"b.tsv": "z\n"})
-        self.assertEqual(rowio.extract(log.replace("@@END b.tsv\n", "")), {"a.tsv": "x\ty\n"})  # truncated: dropped, never repaired
+    LOG = "noise\n" + rowio.emit("a.tsv", "x\ty\n") + "more noise\n" + rowio.emit("b.tsv", "z\n")
+
+    def test_round_trip(self):
+        self.assertEqual(rowio.extract(self.LOG), {"a.tsv": "x\ty\n", "b.tsv": "z\n"})
+
+    def test_an_edited_block_is_dropped(self):
+        self.assertEqual(rowio.extract(self.LOG.replace("x\ty", "x\tq")), {"b.tsv": "z\n"})
+
+    def test_a_same_length_edit_is_still_dropped_by_the_digest(self):
+        self.assertEqual(rowio.extract(self.LOG.replace("z\n@@END", "y\n@@END")), {"a.tsv": "x\ty\n"})
+
+    def test_a_truncated_block_is_dropped_never_repaired(self):
+        self.assertEqual(rowio.extract(self.LOG.replace("@@END b.tsv\n", "")), {"a.tsv": "x\ty\n"})
+
+    def test_a_block_with_a_wrong_declared_length_is_dropped(self):
+        good = rowio.emit("a.tsv", "x\ty\n")
+        bad = good.replace("bytes=4", "bytes=5")
+        self.assertNotEqual(good, bad)
+        self.assertEqual(rowio.extract(bad), {})
+
+    def test_load_refuses_a_log_with_an_edited_block(self):
+        with tempfile.TemporaryDirectory() as d:
+            lg = Path(d) / "row.log"
+            lg.write_text(rowio.emit("a.tsv", "aaaa\n").replace("aaaa", "aaab"))
+            self.assertIsNone(rowio.load(str(lg), "a.tsv"))
+
+    def test_a_missing_end_marker_drops_the_block_even_when_the_next_block_follows(self):
+        text = rowio.emit("a.tsv", "x\n").replace("@@END a.tsv\n", "") + rowio.emit("b.tsv", "y\n")
+        self.assertNotIn("a.tsv", rowio.extract(text))
+
+    def test_load_refuses_a_block_with_a_wrong_declared_length(self):
+        with tempfile.TemporaryDirectory() as d:
+            lg = Path(d) / "row.log"
+            lg.write_text(rowio.emit("a.tsv", "x\ty\n").replace("bytes=4", "bytes=5"))
+            self.assertIsNone(rowio.load(str(lg), "a.tsv"))
+
+    def test_load_drops_a_block_whose_end_marker_is_missing(self):
+        with tempfile.TemporaryDirectory() as d:
+            lg = Path(d) / "row.log"
+            lg.write_text(rowio.emit("a.tsv", "x\n").replace("@@END a.tsv\n", "") + rowio.emit("b.tsv", "y\n"))
+            self.assertIsNone(rowio.load(str(lg), "a.tsv"))
+            self.assertEqual(rowio.load(str(lg), "b.tsv"), "y\n")
 
     def test_load_from_directory_or_log(self):
         with tempfile.TemporaryDirectory() as d:
@@ -727,6 +951,7 @@ int nvmlDeviceGetComputeRunningProcesses_v3(void *h, unsigned *n, void *p) { *n 
 int nvmlDeviceGetTotalEccErrors(void *h, unsigned e, unsigned c, unsigned long long *o) { *o = 0; return 0; }
 int nvmlDeviceGetCudaComputeCapability(void *h, int *a, int *b) { *a = 8; *b = 6; return 0; }
 int nvmlSystemGetDriverVersion(char *b, unsigned n) { strcpy(b, "580.126.20"); return 0; }
+int nvmlSystemGetNVMLVersion(char *b, unsigned n) { strcpy(b, "13.0.19.2"); return 0; }
 int nvmlSystemGetCudaDriverVersion(int *v) { *v = 13000; return 0; }
 """
 
@@ -747,13 +972,21 @@ class SweepAgainstFakeLibrary(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def test_field_ids_come_from_the_driver_answer(self):
-        self.assertEqual(self.parsed[("field", "fi7")]["status"], "OK")
-        self.assertEqual(self.parsed[("field", "fi7")]["value"], "1234")
+    def test_an_unsigned_field_is_decoded_by_its_value_type(self):
+        self.assertEqual((self.parsed[("field", "fi7")]["status"], self.parsed[("field", "fi7")]["value"]), ("OK", "1234"))
+
+    def test_a_double_field_is_decoded_by_its_value_type(self):
         self.assertEqual(self.parsed[("field", "fi9")]["value"], "2.5")
+
+    def test_a_field_the_driver_calls_not_supported_is_listed_so(self):
         self.assertEqual(self.parsed[("field", "fi11")]["status"], "NOT_SUPPORTED")
-        self.assertNotIn(("field", "fi8"), self.parsed)  # INVALID_ARGUMENT = the library does not know the id: not listed
+
+    def test_an_id_the_library_does_not_know_is_not_listed(self):
+        self.assertNotIn(("field", "fi8"), self.parsed)  # INVALID_ARGUMENT = the library does not know the id
+
+    def test_unknown_and_known_ids_are_counted(self):
         self.assertIn("known_ids=3 ", self.meta[0])
+        self.assertIn("unknown_ids=125 ", self.meta[0])
 
     def test_typed_queries(self):
         self.assertEqual(self.parsed[("query", "utilization.rates")]["value"], "gpu=42;memory=7")
@@ -764,10 +997,18 @@ class SweepAgainstFakeLibrary(unittest.TestCase):
         self.assertEqual(self.parsed[("query", "processes.compute")]["value"], "count=2")
         self.assertEqual(self.parsed[("query", "static.cuda_cc")]["value"], "v0=8;v1=6")
         self.assertEqual(self.parsed[("query", "system.driver_version")]["value"], "580.126.20")
+
+    def test_a_version_string_that_looks_like_an_address_is_kept(self):
+        self.assertEqual(self.parsed[("query", "system.nvml_version")]["value"], "13.0.19.2")
         self.assertEqual(self.parsed[("query", "system.cuda_driver_version")]["value"], "13000")
 
     def test_a_missing_symbol_is_a_row_not_a_crash(self):
         self.assertEqual(self.parsed[("query", "power.usage_mw")]["status"], "NO_SYMBOL")
+
+    def test_every_query_the_library_lacks_is_listed_by_name(self):
+        missing = [k for (kind, k), r in self.parsed.items() if kind == "query" and r["status"] == "NO_SYMBOL"]
+        self.assertIn("clock.app.graphics", missing)
+        self.assertGreater(len(missing), 30)
 
     def test_the_sweep_compared_with_itself_has_no_findings(self):
         _, counts = N.compare_sweeps(self.parsed, self.parsed, CLASSES, EXPECTED)
@@ -790,10 +1031,30 @@ if "-hwaccels" in a:
     print("Hardware acceleration methods:\ncuda\nvaapi")
     sys.exit(0)
 if "-filter_complex" in a and any("psnr" in x for x in a):
-    codec_fail = mode == "psnr_low"
-    say("[Parsed_psnr_2 @ 0x1] PSNR y:%s u:1 v:1 average:%s min:1 max:1" % (("20.0", "20.0") if codec_fail else ("41.0", "41.0")))
+    if mode == "psnr_missing":
+        sys.exit(0)
+    decode = "-hwaccel" in a or any(x.endswith("_cuvid") for x in a)
+    v = {"psnr_low": "20.0", "psnr_edge": "28.00", "psnr_just_under": "27.99", "psnr_inf": "inf"}.get(mode, "inf" if decode else "41.0")
+    if mode == "psnr_two":
+        say("[Parsed_psnr_2 @ 0x1] PSNR y:1 u:1 v:1 average:20.0 min:1 max:1")
+    say("[Parsed_psnr_2 @ 0x1] PSNR y:%s u:1 v:1 average:%s min:1 max:1" % (v, v))
+    sys.exit(0)
+if "-f" in a and a[-3:] == ["-f", "null", "-"] and os.environ.get("FAKE_SESS_OK") is not None:
+    d = os.environ["FAKE_SESS_DIR"]
+    n = len(os.listdir(d)) + 1
+    open(os.path.join(d, "%d.%d" % (os.getpid(), n)), "w").close()
+    nth = len([x for x in os.listdir(d)])
+    if nth > int(os.environ["FAKE_SESS_OK"]):
+        say("[h264_nvenc @ 0x1] OpenEncodeSessionEx failed: out of memory (10)")
+        sys.exit(1)
     sys.exit(0)
 enc = next((x for x in a if x.endswith("_nvenc")), "")
+if mode == "leaky":
+    say("[x @ 0x1] device GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 at 10.20.30.40 failed")
+    sys.exit(1)
+if mode == "no_device" and enc:
+    say("[%s @ 0x1] OpenEncodeSessionEx failed: unsupported device (2): (no details)" % enc)
+    sys.exit(1)
 if mode == "no_av1" and enc == "av1_nvenc":
     say("[av1_nvenc @ 0x1] InitializeEncoder failed: invalid param (8)")
     sys.exit(1)
@@ -832,12 +1093,12 @@ class RunnerEndToEnd(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def run_row(self, probe, mode="all_ok", only="enc_*,sess_h264_n01,dec_hevc_420_8_hw,dec_hevc_420_10_hw"):
+    def run_row(self, probe, mode="all_ok", only="enc_*,sess_h264_n01,dec_hevc_420_8_hw,dec_hevc_420_10_hw", extra_env=None):
         t = Path(self.tmp.name)
         (t / "probe.txt").write_text(probe)
         self.probe.write_text("#!/bin/sh\ncat %s\n" % (t / "probe.txt"))
         self.probe.chmod(0o755)
-        env = dict(os.environ, FAKE_MODE=mode, OR=str(OR))
+        env = dict(os.environ, FAKE_MODE=mode, OR=str(OR), **(extra_env or {}))
         p = subprocess.run([sys.executable, str(OR / "nvcodec_matrix.py"), "run", "--out", str(t / "out"), "--ffmpeg", str(t / "ffmpeg"),
                             "--ffprobe", str(t / "ffprobe"), "--probe", str(self.probe), "--only", only, "--emit"], capture_output=True, text=True, env=env, timeout=240)
         rows = {r["case_id"]: r for r in L.parse_results((t / "out/results.tsv").read_text())}
@@ -856,19 +1117,120 @@ class RunnerEndToEnd(unittest.TestCase):
         self.assertEqual(rows["enc_hevc_420_8_1080p"]["reason"], "encoder_params_rejected")
         self.assertEqual(p.returncode, 1)
         self.assertRegex(p.stdout, r"NVCODEC_MATRIX_SUMMARY pass=\d+ not_supported=\d+ fail=[1-9]")
+        pattern = next(l for l in (ROOT / "scripts/apps/run_apps.sh").read_text().splitlines() if l.startswith("nvcodec_matrix|")).split("|")[2]
+        self.assertNotRegex([l for l in p.stdout.splitlines() if l.startswith("NVCODEC_MATRIX_SUMMARY")][-1], pattern)  # run_apps.sh must grade it FAIL
 
     def test_psnr_below_the_threshold_fails_the_case(self):
         p, rows = self.run_row(probe_text(av1=True), mode="psnr_low")
         r = rows["enc_h264_420_8_1080p"]
         self.assertEqual((r["result"], r["reason"]), ("FAIL", "psnr_below_threshold"))
 
+    def test_psnr_exactly_at_the_threshold_passes_and_just_under_fails(self):
+        p, rows = self.run_row(probe_text(av1=True), mode="psnr_edge", only="enc_h264_420_8_1080p")
+        self.assertEqual(rows["enc_h264_420_8_1080p"]["result"], "PASS")
+        p, rows = self.run_row(probe_text(av1=True), mode="psnr_just_under", only="enc_h264_420_8_1080p")
+        self.assertEqual(rows["enc_h264_420_8_1080p"]["result"], "FAIL")
+
+    def test_the_last_psnr_summary_wins_end_to_end(self):
+        p, rows = self.run_row(probe_text(av1=True), mode="psnr_two", only="enc_h264_420_8_1080p")
+        self.assertEqual(rows["enc_h264_420_8_1080p"]["result"], "PASS")  # the first summary line says 20 dB, the last says 41
+
+    def test_identical_frames_pass_end_to_end(self):
+        p, rows = self.run_row(probe_text(av1=True), mode="psnr_inf", only="enc_h264_420_8_1080p")
+        self.assertEqual(rows["enc_h264_420_8_1080p"]["result"], "PASS")
+
+    def test_a_missing_psnr_summary_fails_the_case(self):
+        p, rows = self.run_row(probe_text(av1=True), mode="psnr_missing", only="enc_h264_420_8_1080p")
+        r = rows["enc_h264_420_8_1080p"]
+        self.assertEqual((r["result"], r["reason"]), ("FAIL", "output_not_decodable"))
+
+    def test_an_unreachable_encoder_is_not_run_with_its_reason(self):
+        p, rows = self.run_row(probe_text(av1=True), mode="no_device", only="enc_h264_420_8_1080p")
+        r = rows["enc_h264_420_8_1080p"]
+        self.assertEqual((r["result"], r["reason"]), ("NOT_RUN", "no_encode_device"))
+
+    def test_a_size_the_probe_forbids_that_encodes_anyway_is_a_mismatch(self):
+        p, rows = self.run_row(probe_text(av1=True, wmax=4096, hmax=4096), only="enc_hevc_8k")
+        self.assertEqual(rows["enc_hevc_8k"]["result"], "MISMATCH")
+
+    def test_a_decode_size_the_probe_forbids_that_decodes_anyway_is_a_mismatch(self):
+        p, rows = self.run_row(probe_text(av1=True), only="dec_h264_above4096_hw")
+        self.assertEqual(rows["dec_h264_above4096_hw"]["result"], "MISMATCH")
+
+    def test_a_hardware_decode_that_differs_from_software_fails_the_case(self):
+        p, rows = self.run_row(probe_text(av1=True), mode="psnr_low", only="dec_hevc_420_8_hw")
+        r = rows["dec_hevc_420_8_hw"]
+        self.assertEqual((r["result"], r["reason"]), ("FAIL", "psnr_below_threshold"))
+
+    def test_a_supported_decode_passes_in_both_modes(self):
+        p, rows = self.run_row(probe_text(av1=True), only="dec_hevc_420_8_hw,dec_hevc_420_8_cuvid")
+        self.assertEqual({k: r["result"] for k, r in rows.items()}, {"dec_hevc_420_8_hw": "PASS", "dec_hevc_420_8_cuvid": "PASS"})
+
+    def test_decoder_rows_that_are_errors_make_decode_cases_not_run(self):
+        dead = probe_text(av1=True, dec={}).replace("supported=0 max=0x0 min=0x0 mbmax=0 nvdecs=0 fmtmask=0x0", "ERR:cuda100")
+        p, rows = self.run_row(dead, only="dec_hevc_420_8_hw")
+        r = rows["dec_hevc_420_8_hw"]
+        self.assertEqual((r["result"], r["reason"]), ("NOT_RUN", "nvdec_unavailable"))
+
+    def test_logs_never_keep_a_uuid_or_an_address(self):
+        p, rows = self.run_row(probe_text(av1=True), mode="leaky", only="enc_h264_420_8_1080p")
+        log = (Path(self.tmp.name) / "out/logs/enc_h264_420_8_1080p.log").read_text()
+        self.assertIn("failed", log)
+        self.assertNotIn("fa4efa4e", log)
+        self.assertNotIn("10.20.30.40", log)
+
+    def test_two_runs_that_fail_alike_blame_the_harness_not_kayfabe(self):
+        t = Path(self.tmp.name)
+        ph, _ = self.run_row(probe_text(av1=True), mode="hevc_fails")
+        (t / "host.log").write_text(ph.stdout)
+        shutil.rmtree(t / "out")
+        pg, _ = self.run_row(probe_text(av1=True), mode="hevc_fails")
+        (t / "guest.log").write_text(pg.stdout)
+        c = subprocess.run([sys.executable, str(OR / "compare_logs.py"), "nvcodec_matrix", str(t / "host.log"), str(t / "guest.log")], capture_output=True, text=True)
+        self.assertEqual(c.returncode, 0)
+        self.assertRegex(c.stdout, r"CMP enc_hevc_420_8_1080p host=FAIL guest=FAIL AGREE bucket=harness_or_app_bug_confirmed_by_host_control")
+
+    def test_a_guest_that_says_not_supported_where_the_host_passes_is_a_candidate(self):
+        t = Path(self.tmp.name)
+        ph, _ = self.run_row(probe_text(av1=True), only="enc_av1_420_8_1080p")
+        (t / "host.log").write_text(ph.stdout)
+        shutil.rmtree(t / "out")
+        pg, _ = self.run_row(probe_text(av1=False), mode="no_av1", only="enc_av1_420_8_1080p")
+        (t / "guest.log").write_text(pg.stdout)
+        c = subprocess.run([sys.executable, str(OR / "compare_logs.py"), "nvcodec_matrix", str(t / "host.log"), str(t / "guest.log")], capture_output=True, text=True)
+        self.assertEqual(c.returncode, 1)
+        self.assertRegex(c.stdout, r"host=PASS guest=NOT_SUPPORTED DISAGREE bucket=kayfabe_candidate")
+        self.assertIn("CAPDIFF enc_codec.av1 host=1 guest=0", c.stdout)
+
+    def sessions(self, n, ok, cap=3):
+        d = Path(self.tmp.name) / ("sess%d_%d" % (n, ok))
+        d.mkdir(exist_ok=True)
+        p, rows = self.run_row(probe_text(sessions=cap), only="sess_h264_n%02d" % n, extra_env={"FAKE_SESS_OK": str(ok), "FAKE_SESS_DIR": str(d)})
+        return rows["sess_h264_n%02d" % n]
+
+    def test_sessions_up_to_the_cap_pass(self):
+        self.assertEqual(self.sessions(3, 3)["result"], "PASS")
+
+    def test_sessions_above_the_cap_are_not_supported_when_exactly_the_cap_worked(self):
+        r = self.sessions(5, 3)
+        self.assertEqual((r["result"], r["reason"]), ("NOT_SUPPORTED", "session_limit"))
+        self.assertEqual(r["n_ok"], "3/5")
+
+    def test_sessions_above_the_cap_with_another_count_are_a_mismatch(self):
+        r = self.sessions(5, 2)
+        self.assertEqual((r["result"], r["reason"]), ("MISMATCH", "partial_sessions"))
+        self.assertIn("n_ok=2 but cap 3", r["detail"])  # the cap is the one the probe discovered
+
+    def test_a_session_failing_under_the_cap_is_a_fail(self):
+        self.assertEqual(self.sessions(3, 2)["result"], "FAIL")
+
     def test_an_unexpected_success_is_a_mismatch(self):
         p, rows = self.run_row(probe_text(av1=False))  # the fake encodes AV1 fine although the probe says the die cannot
         self.assertEqual(rows["enc_av1_420_8_1080p"]["result"], "MISMATCH")
 
     def test_a_probe_that_cannot_ask_makes_everything_not_run(self):
-        p, rows = self.run_row(probe_text(nvenc_error=True))
-        self.assertTrue(all(r["result"] == "NOT_RUN" for k, r in rows.items() if k.startswith("enc_")), p.stdout[-400:])
+        p, rows = self.run_row(probe_text(nvenc_error=True), only="enc_*,sess_h264_n01")
+        self.assertTrue(all(r["result"] == "NOT_RUN" and r["reason"] == "nvenc_unavailable" for r in rows.values()), p.stdout[-400:])
         self.assertEqual(p.returncode, 1)  # nothing passed
 
     def test_the_summary_line_matches_the_row_pattern_of_run_apps(self):
@@ -901,6 +1263,113 @@ class RunnerEndToEnd(unittest.TestCase):
         self.assertRegex(c.stdout, r"CMP enc_hevc_420_8_1080p host=PASS guest=FAIL DISAGREE bucket=kayfabe_candidate_bug_undocumented")
 
 
+FAKE_DCGMI = r"""#!/usr/bin/env python3
+import os, sys
+a = sys.argv[1:]
+mode = os.environ.get("FAKE_DCGM", "ok")
+if a[:2] == ["discovery", "-l"]:
+    print("1 GPU found.")
+elif a == ["-v"]:
+    print("dcgmi  version: 4.8.0")
+elif a[:2] == ["dmon", "-l"]:
+    print("Long Name                                   Short Name   Field ID")
+    print("GPU Temperature                             TMPTR        150")
+    print("SM Utilization                              GPUTL        203")
+elif a[:1] == ["dmon"]:
+    print("#Entity   ID   TMPTR   GPUTL")
+    print("GPU       0    41      %s" % ("N/A" if mode == "na" else "12"))
+elif a[:1] == ["diag"]:
+    st = "Fail" if mode == "diagfail" else "Pass"
+    print('{"DCGM Diagnostic": {"test_categories": [{"category": "Hardware", "tests": [{"name": "memory", "results": [{"gpu_id": "0", "status": "%s"}]}]}]}}' % st)
+"""
+FAKE_HOSTENGINE = "#!/usr/bin/env python3\nimport time\ntime.sleep(300)\n"
+
+
+@unittest.skipUnless(shutil.which("gcc"), "needs gcc to build a fake libnvidia-ml")
+class DcgmRowEndToEnd(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        t = Path(cls.tmp.name)
+        (t / "fake.c").write_text(FAKE_NVML_C)
+        cls.lib = str(t / "libfakenvml.so")
+        subprocess.run(["gcc", "-shared", "-fPIC", "-o", cls.lib, str(t / "fake.c")], check=True)
+        cls.bundle = t / "bundle"
+        (cls.bundle / "dcgm/usr/bin").mkdir(parents=True)
+        for name, body in (("dcgmi", FAKE_DCGMI), ("nv-hostengine", FAKE_HOSTENGINE)):
+            (cls.bundle / "dcgm/usr/bin" / name).write_text(body)
+            (cls.bundle / "dcgm/usr/bin" / name).chmod(0o755)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def run_row(self, out, bundle=None, mode="ok", extra=()):
+        env = dict(os.environ, FAKE_DCGM=mode, PATH="/usr/bin:/bin")
+        p = subprocess.run([sys.executable, str(OR / "dcgm_nvml.py"), "run", "--out", str(out), "--nvml-lib", self.lib, "--diag-level", "1",
+                            "--diag-timeout", "30", "--emit"] + (["--bundle", str(bundle)] if bundle else []) + list(extra), capture_output=True, text=True, env=env, timeout=120)
+        return p
+
+    def test_a_run_with_dcgm_records_everything_and_matches_the_run_apps_pattern(self):
+        out = Path(self.tmp.name) / "o1"
+        p = self.run_row(out, self.bundle)
+        self.assertEqual(p.returncode, 0, p.stdout[-500:] + p.stderr[-500:])
+        line = [l for l in p.stdout.splitlines() if l.startswith("NVML_DCGM_SUMMARY")][-1]
+        pattern = next(l for l in (ROOT / "scripts/apps/run_apps.sh").read_text().splitlines() if l.startswith("nvml_dcgm|")).split("|")[2]
+        self.assertRegex(line, pattern)
+        self.assertIn("dcgm=RAN", line)
+        self.assertIn("diag_pass=1", line)
+        self.assertIn("dcgm_fields_ok=2/2", line)
+        self.assertEqual(set(rowio.extract(p.stdout)), {"nvml_sweep.tsv", "dcgm.tsv", "dcgm_status.txt", "summary.txt"})
+
+    def test_a_machine_without_dcgm_says_so_by_name(self):
+        out = Path(self.tmp.name) / "o2"
+        p = self.run_row(out)
+        self.assertEqual(p.returncode, 0)
+        self.assertIn("dcgm=NOT_RUN reason=dcgmi_not_installed", (out / "dcgm_status.txt").read_text())
+        self.assertIn("dcgm=NOT_RUN", p.stdout)
+
+    def test_the_flag_disables_dcgm_by_name(self):
+        out = Path(self.tmp.name) / "o3"
+        self.run_row(out, self.bundle, extra=["--no-dcgm"])
+        self.assertIn("reason=disabled_by_flag", (out / "dcgm_status.txt").read_text())
+
+    def test_the_nvml_part_runs_without_dcgm(self):
+        out = Path(self.tmp.name) / "o4"
+        self.run_row(out)
+        rows = N.parse_rows((out / "nvml_sweep.tsv").read_text())
+        self.assertEqual(rows[("query", "utilization.rates")]["value"], "gpu=42;memory=7")
+
+    def test_compare_of_the_run_with_itself_has_no_finding(self):
+        out = Path(self.tmp.name) / "o5"
+        self.run_row(out, self.bundle)
+        c = subprocess.run([sys.executable, str(OR / "compare_logs.py"), "nvml_dcgm", str(out), str(out)], capture_output=True, text=True)
+        self.assertEqual(c.returncode, 0, c.stdout[-500:])
+        self.assertIn("NVML_COMPARE findings=0 dcgm_findings=0", c.stdout)
+
+    def test_na_in_the_guest_where_the_host_has_a_number_fails_the_comparison(self):
+        host, guest = Path(self.tmp.name) / "o6h", Path(self.tmp.name) / "o6g"
+        self.run_row(host, self.bundle)
+        self.run_row(guest, self.bundle, mode="na")
+        c = subprocess.run([sys.executable, str(OR / "compare_logs.py"), "nvml_dcgm", str(host), str(guest)], capture_output=True, text=True)
+        self.assertEqual(c.returncode, 1)
+        self.assertRegex(c.stdout, r"DCGM_ROW FINDING_NA_IN_GUEST GPUTL")
+
+    def test_a_diag_test_that_passes_on_the_host_and_fails_in_the_guest_fails_the_comparison(self):
+        host, guest = Path(self.tmp.name) / "o7h", Path(self.tmp.name) / "o7g"
+        self.run_row(host, self.bundle)
+        self.run_row(guest, self.bundle, mode="diagfail")
+        c = subprocess.run([sys.executable, str(OR / "compare_logs.py"), "nvml_dcgm", str(host), str(guest)], capture_output=True, text=True)
+        self.assertEqual(c.returncode, 1)
+        self.assertIn("FINDING_DIAG_FAIL_IN_GUEST", c.stdout)
+
+    def test_the_host_engine_is_stopped_at_the_end(self):
+        out = Path(self.tmp.name) / "o8"
+        self.run_row(out, self.bundle)
+        ps = subprocess.run(["pgrep", "-f", str(self.bundle / "dcgm/usr/bin/nv-hostengine")], capture_output=True, text=True)
+        self.assertEqual(ps.stdout.strip(), "")
+
+
 class StaticContracts(unittest.TestCase):
     """The trust rules of the owner (2026-11-17) and the wiring, pinned as text. These are text pins: they prove the line is there, not that it works."""
 
@@ -913,6 +1382,56 @@ class StaticContracts(unittest.TestCase):
         self.assertRegex(pins, r"OPENROWS_NVCH_COMMIT=[0-9a-f]{40}\n")
         self.assertIn("OPENROWS_DCGM_VERSION=", pins)
         self.assertIn("https://developer.download.nvidia.com/compute/cuda/repos", pins)
+
+    def test_pins_env_names_a_commit_and_a_version_never_a_hash(self):
+        keys = {l.split("=", 1)[0] for l in (OR / "pins.env").read_text().splitlines() if "=" in l and not l.startswith("#")}
+        self.assertEqual(keys, {"OPENROWS_NVCH_URL", "OPENROWS_NVCH_TAG", "OPENROWS_NVCH_COMMIT", "OPENROWS_NVIDIA_REPO_BASE", "OPENROWS_NVIDIA_KEY_FILE",
+                                "OPENROWS_DCGM_VERSION", "OPENROWS_DCGM_PACKAGES"})
+
+    def test_provision_never_trusts_an_unsigned_repository(self):
+        text = (OR / "provision.sh").read_text()
+        for bad in ("trusted=yes", "allow-insecure", "--allow-unauthenticated", "AllowUnauthenticated"):
+            self.assertNotIn(bad, text)
+
+    def test_the_probe_headers_come_only_through_the_pin_helper(self):
+        text = (OR / "provision.sh").read_text()
+        self.assertNotIn("git clone", text)
+        self.assertNotIn("wget", text)
+
+    def test_the_nv_codec_headers_are_pinned_by_a_full_upstream_commit(self):
+        pins = dict(l.split("=", 1) for l in (OR / "pins.env").read_text().splitlines() if "=" in l and not l.startswith("#"))
+        self.assertRegex(pins["OPENROWS_NVCH_COMMIT"], r"^[0-9a-f]{40}$")
+        self.assertEqual(pins["OPENROWS_NVCH_URL"], "https://github.com/FFmpeg/nv-codec-headers.git")
+        self.assertRegex(pins["OPENROWS_NVCH_TAG"], r"^n\d+\.\d+\.\d+\.\d+$")
+
+    def test_provision_names_the_apt_shim_instead_of_bypassing_it(self):
+        text = (OR / "provision.sh").read_text()
+        self.assertIsNone(re.search(r"command\s+apt-get", text))
+        self.assertIn("apt_shim_cache_only", text)
+        self.assertIn('type -t apt-get', text)
+
+    def test_no_apt_script_but_pin_lib_bypasses_the_shim(self):
+        found = {}
+        for path in sorted((ROOT / "scripts/apps").rglob("*.sh")):
+            n = len(re.findall(r"command\s+apt-get", path.read_text()))
+            if n:
+                found[path.name] = n
+        self.assertEqual(found, {"pin_lib.sh": 2})
+
+    def test_gate_lists_do_not_name_discovery_rows(self):
+        for name in ("gate_list.txt", "gate_list_middle.txt"):
+            lines = [l.strip() for l in (ROOT / "scripts/apps" / name).read_text().splitlines() if l.strip() and not l.startswith("#")]
+            self.assertFalse({"nvcodec_matrix", "nvml_dcgm"} & set(lines), name)
+
+    def test_the_hook_takes_the_before_count_before_the_row_runs(self):
+        hook = (ROOT / "scripts/apps/apps_hook.sh").read_text()
+        self.assertLess(hook.index('q0=$(wc -l < "$QLOG"'), hook.index("census.py\" sample"))
+        self.assertRegex(hook, r'census\.py" kf3 --log "\$QLOG" --before "\$q0"')
+
+    def test_a_failed_open_rows_step_only_prints_a_line_in_the_bundle_build(self):
+        b = (ROOT / "scripts/apps/build_bundle.sh").read_text()
+        self.assertRegex(b, r'provision\.sh" "\$B" \|\| say "open rows')
+        self.assertLess(b.index("open_rows/provision.sh"), b.index("bundle_fail()"))
 
     def test_the_apt_shim_is_not_bypassed_here(self):
         for p in OR.iterdir():
@@ -963,6 +1482,12 @@ class StaticContracts(unittest.TestCase):
     def test_the_run_apps_regex_of_the_dcgm_row_matches_its_summary(self):
         pattern = next(l for l in (ROOT / "scripts/apps/run_apps.sh").read_text().splitlines() if l.startswith("nvml_dcgm|")).split("|")[2]
         self.assertRegex("NVML_DCGM_SUMMARY nvml_fields_ok=12 nvml_fields_other=3", pattern)
+
+    def test_the_run_apps_regex_of_the_matrix_row_demands_no_failures(self):
+        pattern = next(l for l in (ROOT / "scripts/apps/run_apps.sh").read_text().splitlines() if l.startswith("nvcodec_matrix|")).split("|")[2]
+        self.assertRegex("NVCODEC_MATRIX_SUMMARY pass=3 not_supported=2 fail=0 mismatch=0 not_run=1", pattern)
+        self.assertNotRegex("NVCODEC_MATRIX_SUMMARY pass=3 not_supported=2 fail=1 mismatch=0 not_run=1", pattern)
+        self.assertNotRegex("NVCODEC_MATRIX_SUMMARY pass=3 not_supported=2 fail=0 mismatch=2 not_run=1", pattern)
 
 
 if __name__ == "__main__":

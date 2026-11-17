@@ -30,6 +30,10 @@ IDENTITY = re.compile(r"(^|/)(uuid|serial|serial_number|board_id|minor_number|pc
                       r"pci_sub_system_id|multigpu_board|gpu_uuid|pci_device_id|domain|bus|device|function|id)$|pci_bus_id|uuid", re.I)
 
 
+PCI_ADDRESS = re.compile(r"\b[0-9a-fA-F]{4,8}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]\b")
+UUID_LIKE = re.compile(r"\b(?:GPU|MIG)-[0-9a-fA-F-]{8,}|\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
+
+
 class TableError(ValueError):
     pass
 
@@ -107,7 +111,9 @@ def flatten_smi_xml(text):
 
     walk(root, root.tag)
     for k in list(out):
-        if IDENTITY.search(k.split("/@")[0].rsplit("/", 1)[-1]) or IDENTITY.search(k):
+        attr = k.rpartition("/@")[2] if "/@" in k else ""
+        if IDENTITY.search(k.split("/@")[0].rsplit("/", 1)[-1]) or IDENTITY.search(k) or attr and IDENTITY.search("/" + attr) \
+                or PCI_ADDRESS.search(out[k]) or UUID_LIKE.search(out[k]):
             out[k] = "<scrubbed>"
     return out
 

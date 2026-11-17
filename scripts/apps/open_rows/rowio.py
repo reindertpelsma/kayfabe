@@ -25,11 +25,11 @@ def emit(name, text):
 
 
 def extract(log_text):
-    """-> {name: text} for every complete block whose byte count and digest match. A truncated or edited block is dropped, never repaired."""
+    """-> {name: text} for every complete block whose byte count and digest match. A truncated or edited block is dropped, never repaired; the blocks after it are kept."""
     out, cur, buf, want = {}, None, [], None
     for line in log_text.splitlines():
         m = BEGIN.match(line)
-        if m and cur is None:
+        if m:  # a header always starts a block; one still open here lost its END marker and is dropped, the next block is kept
             cur, buf, want = m[1], [], (m[2], int(m[3]))
             continue
         if cur is not None and line == "@@END " + cur:
