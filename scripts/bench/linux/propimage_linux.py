@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Proprietary Linux image (image C): seed -> identity, setup VM, seal, offline clone, R2 zip.
 
-STATUS: LIVE as tooling, 2026-11-16 (GPU-free; what ran on a box is listed in docs/design/V3_PROPIMAGE_LINUX.md, section 12,
-and nothing else is measured). Design: docs/design/V3_PROPIMAGE_LINUX.md. Logic lives here; shell is glue only.
+STATUS: LIVE as tooling, 2026-11-17 (GPU-free; what ran on a box is listed in docs/design/V3_PROPIMAGE_LINUX.md, section 12,
+and nothing else is measured; the commands of section 13 are unit-tested with scripted guests and have NOT run on a guest). Design: docs/design/V3_PROPIMAGE_LINUX.md. Logic lives here; shell is glue only.
 
   propimage_linux.py ids SEED
   propimage_linux.py init --seed S --dir D [--ram-mb N --smp N --disk-gb N --nic virtio-net-pci|e1000e]
@@ -13,7 +13,17 @@ and nothing else is measured). Design: docs/design/V3_PROPIMAGE_LINUX.md. Logic 
                                                           VNC on 127.0.0.1 only), unattended provisioning on the first call
   propimage_linux.py novnc --dir D                        websockify (hash-pinned venv) bound to 127.0.0.1 only
   propimage_linux.py inventory --dir D                    read-only listing of files created after provisioning (no contents)
-  propimage_linux.py seal --dir D [--grep-*]              clean stop, record the guest UTC, trim, convert, manifest, grep REPORT
+  propimage_linux.py harden-offline --dir D               SETUP VM, before the seal: nftables default drop on output and forward (loopback and
+                                                          established/related only), apt timers masked, apt sources recorded then removed
+  propimage_linux.py unharden --dir D [--clone N]         a THROWAWAY clone only (never the sealed image): flush the ruleset (online logout step)
+  propimage_linux.py seal --dir D [--grep-*] [--vendor-entry 'name=X release=Y products=A,B installer_sha256=H installed_via=V']...
+                          [--compare PREV.json] [--require-hardened]
+                                                          clean stop, record the guest UTC, trim, convert, packages.manifest.json, grep REPORT
+  propimage_linux.py diff-packages A.json|A.zip B.json|B.zip   what changed between two seals' package manifests (exit 1 if anything)
+  propimage_linux.py inject --dir D [--name N] --src PATH --dest GUESTPATH [--max-gb 20] [--replace]
+                                                          tar over ssh into a RUNNING offline clone (dest under /home/kfimage or /opt/kf)
+  propimage_linux.py inject --dir D [--name N] --wheelhouse DIR --lock FILE [--dest GUESTPATH]
+                                                          copy a wheelhouse, then pip install --no-index --require-hashes INSIDE the clone
   propimage_linux.py scan-image IMAGE|ZIP [--grep-*]      independent credential grep over a sealed image (counts only)
   propimage_linux.py run --dir D [--check]                offline clone: restrict=on, RECORDED clock, same identity
   propimage_linux.py offline-check --dir D                MATLAB-free command set in an offline clone; exit codes and hashes only
@@ -22,6 +32,9 @@ and nothing else is measured). Design: docs/design/V3_PROPIMAGE_LINUX.md. Logic 
   propimage_linux.py auth-selftest --dir D                the stub app end to end on an offline clone (no MathWorks traffic)
   propimage_linux.py install-driver --dir D --run F ...   stage and build an NVIDIA .run on a running clone, offline
   propimage_linux.py pack STATE IMAGE --out ZIP | unpack ZIP --dir D
+
+Owner rules, 2026-11-17: no apt (and no other network) in a clone; every package of the sealed image is documented in
+packages.manifest.json; no Python dependencies in the image (environments are built at run time and copied into the clone).
 
 The clock rule (docs/design/V3_CLOCK_RULE.md, scripts/bench/windows/clockrule.py) is the only clock logic: network off ->
 recorded clock from state.json, network on -> real clock, a recorded clock with network on is refused.
@@ -59,6 +72,7 @@ def _load(name, rel):
 
 W = _load("kf_propimage_windows", "../windows/propimage.py")  # derive_ids, derive_password, CPU profile: reused unchanged
 CR = _load("kf_clockrule", "../windows/clockrule.py")          # the one clock rule
+P = _load("kf_propimage_linux_pkgs", "propimage_linux_pkgs.py")  # package manifest, harden-offline, inject (pure; ssh is passed in)
 
 PropError = W.PropError
 require = W.require
@@ -297,7 +311,7 @@ cloud-init status --wait >/dev/null 2>&1 || true
 ( while sleep 15; do sync; echo 3 > /proc/sys/vm/drop_caches; done ) >/dev/null 2>&1 &
 printf 'Package: firefox thunderbird\nPin: release *\nPin-Priority: -1\n' > /etc/apt/preferences.d/kf-no-snap-browsers
 apt-get update -qq
-apt-get install -y -qq linux-image-generic linux-headers-generic build-essential dkms pkg-config libglvnd-dev unzip curl tmux python3 @@DESKTOP_PKGS@@
+apt-get install -y -qq linux-image-generic linux-headers-generic build-essential dkms pkg-config libglvnd-dev unzip curl tmux python3 python3-venv nftables @@DESKTOP_PKGS@@
 echo STAGE_A_OK
 """
 DESKTOP_PKGS = "ubuntu-desktop-minimal"
@@ -1103,6 +1117,9 @@ def pack(state_path, image, out, extra=()):
     members = {"image.qcow2": sha256_file(image), "state.json": hashlib.sha256(Path(state_path).read_bytes()).hexdigest()}
     for p in extra:
         members[Path(p).name] = sha256_file(p)
+    want = (state.get("packages") or {}).get("manifest_sha256")
+    if want:
+        require(members.get(P.MANIFEST_NAME) == want, "PACKAGES_MANIFEST_MISSING_OR_CHANGED: the state records %s sha256 %s; pass that file (it sits next to the sealed image)" % (P.MANIFEST_NAME, want[:12]))
     manifest = {"manifest_version": 1, "kind": "propimage-linux", "members": members, "packages": state.get("packages")}
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as z:
         z.write(image, "image.qcow2")
@@ -1128,7 +1145,13 @@ def unpack(zpath, dest):
         for name, want in manifest["members"].items():
             z.extract(name, dest)
             require(sha256_file(dest / name) == want, "sha256 mismatch for " + name)
-    return load_state(dest / "state.json")
+    st = load_state(dest / "state.json")
+    pk_want = (st.get("packages") or {}).get("manifest_sha256")
+    if pk_want:
+        require(manifest["members"].get(P.MANIFEST_NAME) == pk_want, "PACKAGES_MANIFEST_MISMATCH: the zip's %s is not the one the state records" % P.MANIFEST_NAME)
+    if P.MANIFEST_NAME in manifest["members"]:
+        P.validate_manifest(json.loads((dest / P.MANIFEST_NAME).read_text()))
+    return st
 
 
 def qemu_img_convert_cmd(src, dst, compress=True):
@@ -1288,11 +1311,35 @@ def cmd_setup(a):
     print("the setup VM keeps running; install/sign in through the console, then `seal`")
 
 
+def make_ssh(st, key, runner=subprocess.run):
+    """The `ssh(remote, stdin=None, timeout=600)` callable the package module takes: this module's own transport."""
+    def ssh(remote, stdin=None, timeout=600):
+        return run_ssh(st, key, remote, stdin=stdin, timeout=timeout, runner=runner)
+    return ssh
+
+
+def load_recorded_apt(setup_dir):
+    f = Path(setup_dir) / P.APT_RECORD_NAME
+    return json.loads(f.read_text()) if f.exists() else None
+
+
+def package_manifest(st, p, vendor, ssh=None, runner=subprocess.run):
+    """The guest's complete package record (dpkg, apt sources, kernel, snaps, pip/npm/gem, vendor entries, inventory counts)."""
+    ssh = ssh or make_ssh(st, p["key"], runner)
+    try:
+        inv = P.summarize_inventory(inventory(st, p["key"], runner=runner))
+    except PropError as e:
+        inv = {"unavailable": str(e)[:120]}
+    return P.collect_manifest(ssh, vendor, inv, st["base"], dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), load_recorded_apt(p["setup_dir"]))
+
+
 def cmd_seal(a):
     p = paths(a.dir)
     st = load_state(p["state"])
     key = p["key"]
     pats = parse_patterns(a.grep_literal, a.grep_regex, a.grep_token, a.grep_file)
+    vendor = [P.parse_vendor_entry(v) for v in a.vendor_entry]   # a bad entry stops here, before the long steps
+    prev = P.load_manifest(a.compare) if a.compare else None
     pid = qemu_pid(p["setup_dir"])
     require(pid, "no running setup VM")
     t0 = time.monotonic()
@@ -1306,12 +1353,22 @@ def cmd_seal(a):
     st["packages"] = {"kernel": run_ssh(st, key, "uname -r").stdout.strip(), "count": len(pk.splitlines()), "sha256": hashlib.sha256(pk.encode()).hexdigest()}
     left = run_ssh(st, key, "ls /var/tmp/kf-auth-* 2>/dev/null | wc -l").stdout.strip()
     require(left == "0", "AUTH_FILES_LEFT: %s /var/tmp/kf-auth-* file(s) survived the seal cleanup" % left)
+    man = package_manifest(st, p, vendor)   # while the guest still runs: a refusal below leaves the setup VM usable
+    for w in P.seal_warnings(man):
+        print(w)
+    require(man["hardening"]["hardened"] or not a.require_hardened, "NOT_HARDENED: " + "; ".join(man["hardening"]["problems"]))
     guest_utc = run_ssh(st, key, "date -u +%Y-%m-%dT%H:%M:%SZ").stdout.strip()
     W.utc(guest_utc)
     st["clock"]["last_time_at_stop_utc"] = guest_utc
     run_ssh(st, key, "sudo systemctl poweroff", timeout=60)
     print("clean stop requested; guest UTC recorded %s; stopped after %ss" % (guest_utc, wait_exit(pid, 300)))
     p["sealed"].mkdir(parents=True, exist_ok=True)
+    st["packages"]["manifest_sha256"] = P.write_manifest(man, p["sealed"] / P.MANIFEST_NAME)
+    print("package manifest: %d dpkg, %d snap, %d pip, %d npm, %d gem, %d vendor entr%s; hardened=%s; sha256 %s" % (
+        man["counts"]["dpkg"], man["counts"]["snaps"], man["counts"]["pip"], man["counts"]["npm"], man["counts"]["gem"], man["counts"]["vendor"],
+        "y" if man["counts"]["vendor"] == 1 else "ies", man["hardening"]["hardened"], st["packages"]["manifest_sha256"]))
+    if prev:
+        print(P.format_diff(P.diff_manifests(prev, man)), end="")
     final = p["sealed"] / "image.qcow2"
     raw = p["sealed"] / "scan.raw"
     rawres = None
@@ -1418,6 +1475,79 @@ def cmd_install_driver(a):
     for line in clock["lines"]:
         print(line)
     print(json.dumps(install_driver(st, p["key"], a.run, a.sha256, a.created_utc, load_module=not a.skip_module_load)))
+
+
+CLONE_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,39}")
+OFFLINE_ROWS_IGNORED = ("kernel_headers", "driver_build_tools", "cloud_init_disabled", "cpu_no_forbidden_flags")
+
+
+def resolve_clone(p, name, runner=subprocess.run):
+    """A RUNNING throwaway clone of this directory: <dir>/run/<name>/clone.qcow2, an overlay whose backing file is the sealed image.
+    Refuses a name that leaves <dir>/run, one that resolves into the sealed directory, a file that is the sealed image itself or is not
+    an overlay of it, and a clone that is not running. -> (workdir, pid)."""
+    require(CLONE_NAME_RE.fullmatch(name or ""), "CLONE_NAME_REFUSED: %r" % (name,))
+    sealed_dir, sealed_img = p["sealed"].resolve(), (p["sealed"] / "image.qcow2").resolve()
+    wd = (p["run"] / name).resolve()
+    require(wd.parent == p["run"].resolve() and wd != sealed_dir and sealed_dir not in wd.parents, "CLONE_REFUSED_SEALED: %s is not a clone directory" % name)
+    img = wd / "clone.qcow2"
+    require(img.is_file() and img.resolve() != sealed_img, "NOT_A_CLONE: no clone overlay in %s (the sealed image is never a target)" % wd)
+    info = runner(["qemu-img", "info", "-U", "--output=json", str(img)], capture_output=True, text=True)
+    require(info.returncode == 0, "NOT_A_CLONE: qemu-img info failed: " + (info.stderr or "")[-120:])
+    j = json.loads(info.stdout)
+    backing = j.get("full-backing-filename") or j.get("backing-filename")
+    require(backing and Path(backing).resolve() == sealed_img, "NOT_AN_OVERLAY_OF_THE_SEALED_IMAGE: %s" % img)
+    pid = qemu_pid(wd)
+    require(pid, "CLONE_NOT_RUNNING: no live qemu in %s (start one with `run --keep`)" % wd)
+    return wd, pid
+
+
+def clone_preflight(st, p, name, runner=subprocess.run, now=time.time):
+    """The same identity, network and clock checks `run` makes, against the running clone: refuses the setup VM (it has a network),
+    a clone with another identity, and a clock outside the recorded window. -> (workdir, rows)."""
+    wd, pid = resolve_clone(p, name, runner)
+    elapsed = max(0.0, now() - (wd / "qemu.pid").stat().st_mtime)
+    rows = compare(st, run_probe(st, p["key"], runner=runner), elapsed_s=elapsed, net="offline")
+    bad = [r for r in rows if r[1] == "MISMATCH" and r[0] not in OFFLINE_ROWS_IGNORED]
+    require(not bad, "CLONE_CHECK_FAILED: " + "; ".join("%s (%s)" % (r[0], r[2]) for r in bad))
+    return wd, rows
+
+
+def cmd_harden_offline(a):
+    p = paths(a.dir)
+    st = load_state(p["state"])
+    require(qemu_pid(p["setup_dir"]), "no running setup VM (harden-offline is the last step before the seal, on the setup VM)")
+    P.harden_offline(make_ssh(st, p["key"]), p["setup_dir"])
+    print("HARDENED: the guest cannot reach any network. Do the online work (sign-in, installs) BEFORE this step; `seal` records the state.")
+
+
+def cmd_unharden(a):
+    p = paths(a.dir)
+    st = load_state(p["state"])
+    wd, pid = resolve_clone(p, a.clone)
+    res = P.unharden(make_ssh(st, p["key"]))
+    print("unhardened throwaway clone %s (runtime ruleset flushed: %d table(s) left; the sealed image is untouched)" % (a.clone, res["tables"]))
+
+
+def cmd_inject(a):
+    p = paths(a.dir)
+    st = load_state(p["state"])
+    wd, rows = clone_preflight(st, p, a.name)
+    user = st["guest"]["user"]
+    ssh = make_ssh(st, p["key"])
+    argv_for = lambda remote: ssh_argv(st, p["key"], remote)
+    if a.wheelhouse:
+        require(a.lock and not a.src, "give --wheelhouse DIR with --lock FILE and no --src")
+        res = P.inject_wheelhouse(ssh, argv_for, a.wheelhouse, a.lock, a.dest or P.INJECT_EXTRA_ROOT + "/pyenv", user, a.max_gb, a.replace)
+    else:
+        require(a.src and a.dest and not a.lock, "give --src and --dest (or --wheelhouse with --lock)")
+        res = P.inject_path(argv_for, a.src, a.dest, user, a.max_gb, a.replace)
+    print("tar stream sha256 %s (%d bytes) -> %s on clone %s" % (res["sha256"], res["bytes"], res["dest"], a.name))
+
+
+def cmd_diff_packages(a):
+    d = P.diff_manifests(P.load_manifest(a.a), P.load_manifest(a.b))
+    print(P.format_diff(d), end="")
+    return 1 if d else 0
 
 
 def private_logger(p, name="auth-capture.log"):
@@ -1573,6 +1703,21 @@ def main(argv=None):
     s.add_argument("--grep-literal", action="append", default=[]); s.add_argument("--grep-regex", action="append", default=[], help="e-mail pattern list")
     s.add_argument("--grep-token", action="append", default=[], help="token-like pattern list"); s.add_argument("--grep-file")
     s.add_argument("--no-guest-grep", action="store_true")
+    s.add_argument("--vendor-entry", action="append", default=[], metavar="'k=v ...'",
+                   help="a vendor install, free-form key=value (name= required), repeatable: name=MATLAB release=R2026b products=MATLAB,Parallel_Computing_Toolbox "
+                        "installer_sha256=<64 hex> installed_via=<installer|mpm>; keys that look like secrets are refused")
+    s.add_argument("--compare", metavar="PREV", help="a previous packages.manifest.json (or packed zip): print what changed")
+    s.add_argument("--require-hardened", action="store_true", help="refuse to seal unless harden-offline's state is live (default: WARN)")
+    s = sub.add_parser("harden-offline", help="setup VM, before the seal: persistent nftables default drop (no apt, no mirrors), apt timers masked, sources removed"); s.add_argument("--dir", required=True)
+    s = sub.add_parser("unharden", help="throwaway clone only: flush the ruleset (online logout step); refuses the sealed image"); s.add_argument("--dir", required=True)
+    s.add_argument("--clone", default="clone1", help="name of the RUNNING clone under <dir>/run (a `run --keep` clone)")
+    s = sub.add_parser("diff-packages", help="what changed between two seals"); s.add_argument("a", help="packages.manifest.json or packed zip"); s.add_argument("b")
+    s = sub.add_parser("inject", help="copy a file or directory, or a wheelhouse, into a RUNNING offline clone over ssh (tar, no scp)")
+    s.add_argument("--dir", required=True); s.add_argument("--name", default="clone1", help="the running clone under <dir>/run")
+    s.add_argument("--src"); s.add_argument("--dest", help="guest path: relative = under /home/kfimage; absolute only under /home/kfimage or /opt/kf")
+    s.add_argument("--wheelhouse", help="host dir of wheels (kfml build-wheels / pip download -r LOCK); installed inside the clone, --no-index --require-hashes")
+    s.add_argument("--lock", help="the hashed requirements lock the wheelhouse was built from"); s.add_argument("--max-gb", type=float, default=P.DEFAULT_MAX_INJECT_GB)
+    s.add_argument("--replace", action="store_true", help="remove an existing destination first")
     s = sub.add_parser("scan-image"); s.add_argument("image", help="a sealed qcow2 or a packed zip"); s.add_argument("--tmpdir")
     s.add_argument("--grep-literal", action="append", default=[]); s.add_argument("--grep-regex", action="append", default=[])
     s.add_argument("--grep-token", action="append", default=[]); s.add_argument("--grep-file")
@@ -1616,6 +1761,14 @@ def main(argv=None):
             cmd_inventory(a)
         elif a.verb == "seal":
             cmd_seal(a)
+        elif a.verb == "harden-offline":
+            cmd_harden_offline(a)
+        elif a.verb == "unharden":
+            cmd_unharden(a)
+        elif a.verb == "inject":
+            cmd_inject(a)
+        elif a.verb == "diff-packages":
+            return cmd_diff_packages(a)
         elif a.verb == "scan-image":
             return cmd_scan_image(a)
         elif a.verb == "run":
@@ -1631,7 +1784,13 @@ def main(argv=None):
         elif a.verb == "auth-selftest":
             return cmd_auth_selftest(a)
         elif a.verb == "pack":
-            print(json.dumps(pack(a.state, a.image, a.out, a.extra)))
+            extra = list(a.extra)
+            side = Path(a.image).parent / P.MANIFEST_NAME   # the seal's manifest sits next to the image and always travels with it
+            if side.is_file() and P.MANIFEST_NAME not in [Path(x).name for x in extra]:
+                extra.append(str(side))
+            elif not side.is_file() and P.MANIFEST_NAME not in [Path(x).name for x in extra]:
+                print("WARN: no %s next to the image: the zip carries no package record" % P.MANIFEST_NAME, file=sys.stderr)
+            print(json.dumps(pack(a.state, a.image, a.out, extra)))
         else:
             st = unpack(a.zip, a.dir)
             if a.workdir:
@@ -1640,7 +1799,7 @@ def main(argv=None):
     except ClockError as e:
         print("KF_CLOCK_REFUSED reason=%s %s" % (e.reason, e.detail), file=sys.stderr)
         return 2
-    except (PropError, OSError, KeyError, json.JSONDecodeError, subprocess.SubprocessError) as e:
+    except (PropError, P.PkgError, OSError, KeyError, json.JSONDecodeError, subprocess.SubprocessError) as e:
         print("propimage_linux: %s" % e, file=sys.stderr)
         return 2
     return 0
