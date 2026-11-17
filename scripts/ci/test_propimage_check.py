@@ -1357,8 +1357,11 @@ class T(unittest.TestCase):
         resume=False,
         clock_query_ok=True,
         resume_last="2026-11-12T00:10:00Z",
+        extra=(),
+        mem_mb=65536,
     ):
         """Deterministic complete pipeline: no VM, keys, SSH, GPU or sleeps."""
+        self.argv_kw = []
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             work = root / "work"
@@ -1448,8 +1451,10 @@ class T(unittest.TestCase):
                 compare=lambda s, f: (
                     used_bases.append(m.PI.boot_clock(s, "ci")) or [("ids", "MATCH", "")]
                 ),
-                build_argv=lambda *a, **k: ["qemu", str(work / "run/clone.qcow2")]
-                + (["restrict=on"] if offline else []),
+                build_argv=lambda *a, **k: self.argv_kw.append(k)
+                or ["qemu", str(work / "run/clone.qcow2")] + (["restrict=on"] if offline else []),
+                check_ram_override=m.PI.check_ram_override,
+                mem_available_mb=lambda: mem_mb,
             )
             with (
                 patch.object(m, "PI", pi),
@@ -1497,6 +1502,7 @@ class T(unittest.TestCase):
                         "resolve",
                     ]
                     + (["--resume"] if resume else [])
+                    + list(extra)
                 )
             rows = json.loads((out / "result.json").read_text())
             if used_bases:
@@ -1534,6 +1540,46 @@ class T(unittest.TestCase):
         app = next(r for r in rows if r["step"] == "app:resolve")
         self.assertNotEqual(app["verdict"], "PASS")
         self.assertEqual(app["class"], "harness")
+
+    def test_pipeline_passes_no_overrides_by_default(self):
+        rc, rows, apps = self.pipeline()
+        self.assertEqual((rc, apps), (0, 1))
+        self.assertEqual(self.argv_kw[-1].get("ram_mb"), None)
+        self.assertEqual(self.argv_kw[-1].get("audio"), False)
+        self.assertNotIn("ram-mb", [r["step"] for r in rows])
+        self.assertNotIn("audio", [r["step"] for r in rows])
+
+    def test_pipeline_passes_the_ram_and_audio_overrides_to_the_argv(self):
+        rc, rows, apps = self.pipeline(extra=["--ram-mb", "16384", "--audio"])
+        self.assertEqual((rc, apps), (0, 1))
+        self.assertEqual((self.argv_kw[-1]["ram_mb"], self.argv_kw[-1]["audio"]), (16384, True))
+        by = {r["step"]: r for r in rows}
+        self.assertEqual((by["ram-mb"]["verdict"], by["audio"]["verdict"]), ("PASS", "PASS"))
+        self.assertIn("16384 MiB", by["ram-mb"]["detail"])
+
+    def test_pipeline_audio_alone_sets_no_ram_override(self):
+        rc, rows, apps = self.pipeline(extra=["--audio"])
+        self.assertEqual((rc, apps), (0, 1))
+        self.assertEqual((self.argv_kw[-1]["ram_mb"], self.argv_kw[-1]["audio"]), (None, True))
+        self.assertNotIn("ram-mb", [r["step"] for r in rows])
+
+    def test_pipeline_ram_alone_sets_no_sound_card(self):
+        rc, rows, apps = self.pipeline(extra=["--ram-mb", "12288"])
+        self.assertEqual((rc, apps), (0, 1))
+        self.assertEqual((self.argv_kw[-1]["ram_mb"], self.argv_kw[-1]["audio"]), (12288, False))
+        self.assertNotIn("audio", [r["step"] for r in rows])
+
+    def test_pipeline_refuses_a_ram_override_above_75_percent_of_memavailable_before_any_boot(self):
+        rc, rows, apps = self.pipeline(extra=["--ram-mb", "16384"], mem_mb=20000, clock_query_ok=False)
+        self.assertEqual((rc, apps), (1, 0))
+        self.assertEqual(self.argv_kw, [])
+        self.assertIn("RAM_OVERRIDE_EXCEEDS_HOST", rows[-1]["detail"])
+        self.assertEqual(rows[-1]["class"], "harness")
+
+    def test_pipeline_refuses_an_invalid_ram_override(self):
+        rc, rows, apps = self.pipeline(extra=["--ram-mb", "5000"], clock_query_ok=False)
+        self.assertEqual((rc, self.argv_kw), (1, []))
+        self.assertIn("RAM_OVERRIDE_INVALID", rows[-1]["detail"])
 
     def test_pipeline_rejects_online_argv_and_cleans_helpers(self):
         rc, rows, apps = self.pipeline(offline=False)

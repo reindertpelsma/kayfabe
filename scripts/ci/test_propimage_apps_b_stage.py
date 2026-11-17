@@ -90,6 +90,28 @@ class Plan(unittest.TestCase):
         self.assertEqual(c[c.index("--data-iso") + 1], "/d.iso")
         self.assertNotIn("--gpu-minor", c)
 
+    BOOT = {"dir": "/i", "work": "/w", "out": "/o", "qemu": "/q", "flags": "/f", "broker": "/b", "gop": "/g", "data": "/d.iso", "apps": ["premiere"]}
+
+    def test_boot_command_carries_the_guest_ram_and_the_sound_card_by_default(self):
+        c = sb.boot_command(Path("/c.py"), self.BOOT)
+        self.assertEqual((sb.GUEST_RAM_MB, sb.AUDIO), (16384, True))
+        self.assertEqual(c[c.index("--ram-mb") + 1], "16384")
+        self.assertIn("--audio", c)
+        self.assertEqual(c[c.index("--fb-mb") + 1], "8192")       # the framebuffer pin is a separate fact and stays
+
+    def test_boot_command_override_fields_change_or_drop_them(self):
+        c = sb.boot_command(Path("/c.py"), dict(self.BOOT, ram_mb=32768, audio=False))
+        self.assertEqual(c[c.index("--ram-mb") + 1], "32768")
+        self.assertNotIn("--audio", c)
+        c = sb.boot_command(Path("/c.py"), dict(self.BOOT, ram_mb=0))
+        self.assertNotIn("--ram-mb", c)
+
+    def test_image_a_boots_keep_the_default_ram_and_no_sound_card(self):
+        a = dict(self.BOOT, apps=["wukong", "superposition"])
+        for cmd in (pa.boot_command("/c.py", a), pa.boot_command("/c.py", dict(a, apps=["3dmark"]))):
+            self.assertNotIn("--ram-mb", cmd)
+            self.assertNotIn("--audio", cmd)
+
 
 class Collect(unittest.TestCase):
     def setUp(self):
@@ -169,6 +191,10 @@ class RunBase:
 
     def make(self, **scenario):
         env = tpa.Env(self, pins=self.pins())
+        self.mem_mb = scenario.pop("_mem_mb", 65536)
+        patcher = unittest.mock.patch.object(sb, "host_mem_available_mb", lambda pi_check: self.mem_mb)    # the box's MemAvailable, named by the test
+        patcher.start()
+        self.addCleanup(patcher.stop)
         env.ctx.pins_path = self.pins_path
         env.ctx.boot_runner = lambda ctx, argv, log, timeout, mark: self.boot(env, scenario, ctx, argv, mark)
         return env
@@ -263,6 +289,56 @@ class Run(RunBase, unittest.TestCase):
         self.pins_path.write_text(json.dumps(doc))
         rec = sb.run(env.ctx)
         self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "PIN_UNSET:data"))
+
+
+class GuestRam(RunBase, unittest.TestCase):
+    """The per-run overrides of image B boots: 16384 MiB and the sound card by default, refused above 75 percent of MemAvailable, switchable per run."""
+
+    def test_every_boot_gets_the_ram_and_audio_flags_and_the_stage_passes(self):
+        seen = []
+        env = self.make()
+        inner = env.ctx.boot_runner
+        env.ctx.boot_runner = lambda ctx, argv, log, timeout, mark: (seen.append(list(argv)), inner(ctx, argv, log, timeout, mark))[1]
+        rec = sb.run(env.ctx)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertGreaterEqual(len(seen), 2)
+        for argv in seen:
+            self.assertEqual(argv[argv.index("--ram-mb") + 1], "16384")
+            self.assertIn("--audio", argv)
+
+    def test_run_arguments_switch_both_off(self):
+        env = self.make()
+        rec = sb.run(env.ctx, guest_ram_mb=0, audio=False)
+        self.assertEqual(rec["verdict"], "PASS", rec)
+        self.assertNotIn("--ram-mb", self.argv)
+        self.assertNotIn("--audio", self.argv)
+
+    def test_an_override_above_75_percent_of_memavailable_is_refused_before_anything_is_fetched(self):
+        env = self.make(_mem_mb=20000)          # 75 percent of 20000 is 15000 < 16384
+        rec = sb.run(env.ctx)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "RAM_OVERRIDE_EXCEEDS_HOST"))
+        self.assertEqual(rec["boots"], [])
+        self.assertFalse(hasattr(self, "argv"))
+        self.assertFalse((env.ctx.prefix / "dl").exists())
+
+    def test_the_boundary_is_exactly_75_percent(self):
+        self.assertEqual(sb.run(self.make(_mem_mb=21846).ctx)["verdict"], "PASS")
+        self.assertEqual(sb.run(self.make(_mem_mb=21845).ctx)["reason"], "RAM_OVERRIDE_EXCEEDS_HOST")
+
+    def test_an_invalid_override_is_refused_by_name_and_zero_skips_the_check(self):
+        rec = sb.run(self.make().ctx, guest_ram_mb=5000)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "RAM_OVERRIDE_INVALID"))
+        rec = sb.run(self.make(_mem_mb=1000).ctx, guest_ram_mb=0)
+        self.assertEqual(rec["verdict"], "PASS", rec)
+
+    def test_cli_defaults_and_switches(self):
+        calls = []
+        with unittest.mock.patch.object(sb, "run", lambda ctx, ev, apps, ram, audio: (calls.append((ram, audio)), {"verdict": "NOT_RUN"})[1]), \
+                unittest.mock.patch.object(sb, "finish", lambda rec, out: 0), unittest.mock.patch.object(pa, "hardware_now", lambda: {}):
+            base = ["run", "--sha", SHA, "--out", "/dev/null"]
+            sb.main(base)
+            sb.main(base + ["--guest-ram-mb", "0", "--no-audio"])
+        self.assertEqual(calls, [(16384, True), (0, False)])
 
 
 class Report(RunBase, unittest.TestCase):
