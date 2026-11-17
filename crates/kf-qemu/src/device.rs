@@ -2649,7 +2649,12 @@ impl Device {
             // ★ 2026-11-17: the guest's RUSD utilisation record (`report-utilization`), on this thread (never a
             // vCPU): relaxed loads when nothing is wanted or due, otherwise three guarded writes of one 56-byte
             // record into a guest page the guest named. No host call, no lock a vCPU takes.
-            if let Some(u) = &self.util {
+            // Not while a reset is pending: the reset request has come in, the guest life that offered the page is
+            // ending, and the link is forgotten only when the reset reaches its drainer stage (security review 2 of
+            // PR #459, R2). One relaxed load, on this thread.
+            if !self.reset.pending()
+                && let Some(u) = &self.util
+            {
                 u.state
                     .publish(&mut |gpa, bytes| self.ram.write_gpa(gpa, bytes));
             }

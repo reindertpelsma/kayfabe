@@ -91,7 +91,7 @@ CASES = [
     ("publish-ignores-the-address-wrap", ed(RU, "let at = |off: u64| phys.checked_add(off);", "let at = |off: u64| Some(phys.wrapping_add(off));"), RM),
     ("publish-continues-after-a-refused-write", ed(RU, "if !write(a1, &w.begin.1) || !write(a2, &w.info.1) || !write(a3, &w.finish.1) {", "let (w1, w2, w3) = (write(a1, &w.begin.1), write(a2, &w.info.1), write(a3, &w.finish.1));\n        if !(w1 && w2 && w3) {"), RM),
     ("unlink-keeps-the-page", ed(RU, "            Some(RusdInit::Unlink) => {\n                self.state.rusd_phys.store(0, Ordering::Relaxed);", "            Some(RusdInit::Unlink) => {"), RM),
-    ("a-new-chain-keeps-the-old-link", ed(RU, "        self.rusd_phys.store(0, Ordering::Relaxed);\n        self.rusd_wants.store(false, Ordering::Relaxed);\n        self.publish_pending.store(false, Ordering::Relaxed);\n        *self", "        *self"), RM),
+    ("a-new-chain-keeps-the-old-link", ed(RU, "    fn reset_guest(&self, rusd: Option<&'static Layout>) {\n        self.clear_link();\n        *self", "    fn reset_guest(&self, rusd: Option<&'static Layout>) {\n        *self"), RM),
     ("poll-leaves-the-wish-set", ed(RU, "self.state.rusd_wants.store(wants, Ordering::Relaxed);", "if wants {\n            self.state.rusd_wants.store(true, Ordering::Relaxed);\n        }"), RM),
     ("serialized-envelope-is-served", ed(RU, "        if kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {\n            return None;\n        }\n        let size = req.params_size as usize;", "        let size = req.params_size as usize;"), RM),
     ("gpumon-served-without-the-bucket", ed(RU, "        if !self.bucket.take(self.state.now_ns()) {", "        if false {"), RM),
@@ -100,10 +100,13 @@ CASES = [
     ("link-seated-after-the-ledger-never-reached", ed(LIB, "    if let Some(seat) = &utilization\n        && let Some(link) = utilization::UtilizationPolicy::new(driver, seat)\n    {\n        chain.push(Box::new(link));\n    }\n", ""), RM),
     # --- security review of PR #459 (F1, F3)
     ("new-resets-the-link-only-after-the-early-return", ed(RU, "        seat.state.reset_guest(rusd);\n        if gpumon.is_none() && rusd.is_none() {\n            return None;\n        }", "        if gpumon.is_none() && rusd.is_none() {\n            return None;\n        }\n        seat.state.reset_guest(rusd);"), RM),
-    ("forget-guest-forgets-nothing", ed(RU, "    pub fn forget_guest(&self) {\n        self.reset_guest(None);\n    }", "    pub fn forget_guest(&self) {}"), RM),
+    ("forget-guest-forgets-nothing", ed(RU, "    pub fn forget_guest(&self) {\n        self.clear_link();\n    }", "    pub fn forget_guest(&self) {}"), RM),
     ("a-stale-record-stays-valid", ed(RU, "if self.record_valid.swap(false, Ordering::Relaxed) {", "if false {"), RM),
     ("a-host-timer-restart-is-a-stall", ed(RU, "if r.host_timestamp == self.last_host_ts {", "if r.host_timestamp <= self.last_host_ts {"), RM),
     ("the-reset-path-keeps-the-link", ed(DEV, "        if let Some(u) = &self.util {\n            u.state.forget_guest();\n        }\n", ""), QEMU),
+    # --- security review 2 of PR #459 (R1, R2)
+    ("forget-guest-also-clears-the-chains-layout", ed(RU, "    pub fn forget_guest(&self) {\n        self.clear_link();\n    }", "    pub fn forget_guest(&self) {\n        self.reset_guest(None);\n    }"), RM),
+    ("the-drainer-publishes-during-a-pending-reset", ed(DEV, "            if !self.reset.pending()\n                && let Some(u) = &self.util\n            {", "            if let Some(u) = &self.util\n            {"), QEMU),
     # --- kf-qemu: the host read, the property
     ("classify-treats-not-supported-as-transient", ed(UH, "RmError::InsufficientPermissions | RmError::Other(NV_ERR_NOT_SUPPORTED) => {", "RmError::InsufficientPermissions => {"), QEMU),
     ("read-via-sends-guest-shaped-junk", ed(UH, "let mut params = ku::host_request(layout);", "let mut params = vec![0xa5u8; layout.params_len()];"), QEMU),
@@ -111,7 +114,7 @@ CASES = [
     ("property-off-still-builds-the-host", ed(UH, "    if !on {\n        return None;\n    }\n    enable(make_host())", "    enable(make_host())"), QEMU),
     ("realize-hardwires-the-property-on", ed(DEV, "crate::utilhost::enable_if(cfg.report_utilization, ||", "crate::utilhost::enable_if(true, ||"), QEMU),
     ("the-seat-ignores-the-runtime", ed(DEV, "let util_seat = util.as_ref().map(crate::utilhost::UtilRuntime::seat);", "let util_seat = None::<kf_rm::utilization::UtilizationSeat>;"), QEMU),
-    ("drainer-never-publishes", ed(DEV, "u.state\n                    .publish(&mut |gpa, bytes| self.ram.write_gpa(gpa, bytes));", "let _ = u;"), QEMU),
+    ("drainer-never-publishes", ed(DEV, "            if !self.reset.pending()\n                && let Some(u) = &self.util\n            {\n                u.state\n                    .publish(&mut |gpa, bytes| self.ram.write_gpa(gpa, bytes));\n            }", "            if let Some(u) = &self.util {\n                let _ = u;\n            }"), QEMU),
     ("the-abi-word-is-inverted", ed(FFI, "report_utilization: report_utilization != 0,", "report_utilization: report_utilization == 0,"), QEMU),
     ("sampler-thread-starts-without-a-runtime", ed(FFI, "            if d.util.is_some()\n                && std::thread::Builder::new()\n                    .name(\"kf3-util\".into())", "            if true\n                && std::thread::Builder::new()\n                    .name(\"kf3-util\".into())"), QEMU),
 ]

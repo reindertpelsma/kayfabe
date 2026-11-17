@@ -52,7 +52,7 @@ fn the_use_sites_read_the_property() {
         (
             "the drainer publishes only with a runtime",
             &dev,
-            "if let Some(u) = &self.util { u.state.publish(&mut |gpa, bytes| self.ram.write_gpa(gpa, bytes)); }",
+            "if !self.reset.pending() && let Some(u) = &self.util { u.state.publish(&mut |gpa, bytes| self.ram.write_gpa(gpa, bytes)); }",
         ),
         (
             "a device reset forgets the guest's RUSD link",
@@ -116,10 +116,13 @@ fn no_use_site_hardwires_the_property() {
     }
 }
 
-/// ★ Security review of PR #459, F1: the link of a dead guest life is forgotten in the reset path itself, before the
-/// reset's own bookkeeping, not only by the chain rebuild (which seats nothing for a version with no layout row).
+/// ★ Security reviews of PR #459, F1 and R1: the link of a dead guest life is forgotten in the reset path itself (not
+/// only by the chain rebuild, which seats nothing for a version with no layout row). `forget_guest` clears the LINK
+/// only and keeps the layout the rebuilt chain seated, so the position relative to `reset_life` does not matter for
+/// correctness (the behaviour is `utilization_chain`'s reset replay); here the line must exist, run after the wake
+/// path returned (an S3 wake keeps its link) and before the reset's other bookkeeping.
 #[test]
-fn the_reset_path_forgets_the_link_before_its_other_bookkeeping() {
+fn the_reset_path_forgets_the_link_after_the_wake_return_and_before_its_other_bookkeeping() {
     let dev = flat(&read("src/device.rs"));
     let reset = dev
         .split("fn reset_drainer_state(")
@@ -128,19 +131,32 @@ fn the_reset_path_forgets_the_link_before_its_other_bookkeeping() {
     let forget = reset
         .find("u.state.forget_guest()")
         .expect("the reset forgets the util link");
-    let chain = reset
-        .find("g.policy.reset_life()")
-        .expect("the reset rebuilds the chain");
     let held = reset
         .find("self.hotplug_pending.store(0")
         .expect("the reset clears hotplug");
-    assert!(
-        chain < forget && forget < held,
-        "forget_guest sits right after the chain rebuild"
-    );
-    // and the wake path (S3: the guest life is KEPT) returns before it, so a resumed guest keeps its link
     let wake = reset
         .find("return crate::reset::Life::Kept")
         .expect("the wake path");
-    assert!(wake < forget);
+    assert!(wake < forget && forget < held);
+}
+
+/// ★ R2: the drainer does not publish while a reset is pending (the guest life that offered the page is ending).
+/// Pinned twice: the guard is part of the publish statement, and it is the `reset.pending()` the drainer's own reset
+/// block uses.
+#[test]
+fn the_drainer_publishes_only_while_no_reset_is_pending() {
+    let dev = flat(&read("src/device.rs"));
+    let at = dev.find("u.state.publish(").expect("the publish call");
+    let before = &dev[at.saturating_sub(120)..at];
+    assert!(
+        before.contains("if !self.reset.pending() && let Some(u) = &self.util {"),
+        "the publish call is not guarded by `!self.reset.pending()`: {before}"
+    );
+    let reset_block = dev
+        .find("if self.reset.pending() { if let crate::reset::Progress::Completed")
+        .expect("the reset block");
+    assert!(
+        at < reset_block,
+        "the publish call sits ahead of the reset block, which is why it needs the guard"
+    );
 }

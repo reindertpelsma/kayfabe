@@ -909,3 +909,104 @@ fn rusd_forgetting_the_guest_stops_the_publication() {
         PublishOutcome::NotWanted
     );
 }
+
+// ---------------------------------------------------------------- security review 2 of PR #459 (R1)
+
+/// The device's reset, as `reset_drainer_state` does it: a fresh chain for the realize-time table over the same
+/// state, THEN `forget_guest` (the order the device has).
+fn reset_to(state: &Arc<UtilizationState>, version: DriverVersion) -> Box<dyn CommandPolicy> {
+    let chain = kf_rm::served_policy(
+        ga106::board(),
+        ga106::host(),
+        abi(version),
+        ChainLogs::default(),
+        Default::default(),
+        kf_rm::ObjectLinks {
+            utilization: Some(UtilizationSeat {
+                state: state.clone(),
+            }),
+            ..Default::default()
+        },
+    );
+    state.forget_guest();
+    chain
+}
+
+/// ★ R1, replayed: boot -> record written; reboot (the rebuilt chain is for the SAME table, which is every
+/// `guest-driver`-declared VM and every VM whose guest driver equals the host's) -> the record is written again,
+/// every time; reboot into a driver with no layout row -> no link and no write; reboot back -> written again.
+#[test]
+fn rusd_reboots_keep_publishing_and_an_unknown_driver_publishes_nothing() {
+    for (a, b, c) in [(580, 159, 4), (595, 84, 0)] {
+        let version = v(a, b, c);
+        let mut life = rig(version, true);
+        let l = life.l();
+        let state = life.state.clone().unwrap();
+        let mut ram = Ram {
+            base: 0x10_0000,
+            mem: vec![0u8; 4096],
+            writes: Vec::new(),
+        };
+        let mut serve =
+            |life: &mut Rig, state: &Arc<UtilizationState>, ram: &mut Ram, gpu: u8, at: u64| {
+                life.push(gpu, at);
+                assert!(
+                    life.chain
+                        .respond(&life.init(1, 0x10_0000))
+                        .is_some_and(|r| r.rpc_result == NV_OK)
+                );
+                assert!(
+                    life.chain
+                        .respond(&life.poll(2))
+                        .is_some_and(|r| r.rpc_result == NV_OK)
+                );
+                assert_eq!(
+                    state.publish(&mut |g, d| ram.write(g, d)),
+                    PublishOutcome::Written,
+                    "{a}.{b}.{c}"
+                );
+                assert_eq!(read_record(&ram.mem, l).unwrap().1, u32::from(gpu));
+            };
+        // boot A
+        serve(&mut life, &state, &mut ram, 41, 2_000_000_000);
+        // three reboots at the same table
+        for (i, gpu) in [52u8, 63, 74].into_iter().enumerate() {
+            ram.mem.fill(0);
+            life.chain = reset_to(&state, version);
+            assert_eq!(
+                state.rusd_page(),
+                None,
+                "the dead life's link is gone after reboot {i}"
+            );
+            serve(
+                &mut life,
+                &state,
+                &mut ram,
+                gpu,
+                3_000_000_000 + i as u64 * 1_000_000_000,
+            );
+        }
+        // a reboot into a driver with no layout row: no link, no write, whatever is sampled
+        let no_row = v(570, 86, 15);
+        assert!(ku::layout(no_row).is_none());
+        let _unknown = reset_to(&state, no_row);
+        assert_eq!(state.rusd_page(), None);
+        for k in 0..3u64 {
+            life.clock.0.fetch_add(300_000_000, Ordering::Relaxed);
+            state.push(GuestSample {
+                timestamp_ns: life.clock.0.load(Ordering::Relaxed),
+                percents: Percents::default(),
+            });
+            assert_eq!(
+                state.publish(&mut |g, _| panic!(
+                    "write at {g:#x} into an unknown-driver life (step {k})"
+                )),
+                PublishOutcome::NotWanted
+            );
+        }
+        // and back to a known driver: the record returns
+        ram.mem.fill(0);
+        life.chain = reset_to(&state, version);
+        serve(&mut life, &state, &mut ram, 85, 9_000_000_000);
+    }
+}

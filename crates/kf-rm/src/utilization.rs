@@ -298,18 +298,26 @@ impl UtilizationState {
         self.rusd_wants.load(Ordering::Relaxed)
     }
 
-    /// ★ The guest is gone (a device reset): forget its RUSD link, mask and layout at once, keep the samples. The
-    /// device calls this on every non-wake reset, besides the chain rebuild, so no path leaves a link.
+    /// ★ The guest is gone (a device reset): forget its RUSD link, mask, pending publication and written record at
+    /// once, keep the samples. The device calls this on every non-wake reset, besides the chain rebuild, so no path
+    /// leaves a link. It deliberately keeps the LAYOUT: that belongs to the chain, which the reset has already
+    /// rebuilt (and seated) for the next life, and clearing it here would stop the next life's record from ever
+    /// being published (security review 2 of PR #459, R1). Only the chain build sets the layout.
     pub fn forget_guest(&self) {
-        self.reset_guest(None);
+        self.clear_link();
     }
 
-    /// A new guest life (the chain was rebuilt): forget the guest's RUSD link and mask, keep the samples.
-    fn reset_guest(&self, rusd: Option<&'static Layout>) {
+    /// The link-side fields: no page, no wish, nothing owed, no record of ours left to invalidate.
+    fn clear_link(&self) {
         self.record_valid.store(false, Ordering::Relaxed);
         self.rusd_phys.store(0, Ordering::Relaxed);
         self.rusd_wants.store(false, Ordering::Relaxed);
         self.publish_pending.store(false, Ordering::Relaxed);
+    }
+
+    /// A new guest life (the chain was rebuilt): forget the guest's RUSD link and mask, keep the samples.
+    fn reset_guest(&self, rusd: Option<&'static Layout>) {
+        self.clear_link();
         *self
             .rusd_layout
             .lock()
@@ -1304,7 +1312,7 @@ mod tests {
     }
 
     #[test]
-    fn forgetting_the_guest_leaves_no_link_no_wish_no_layout_and_no_record() {
+    fn forgetting_the_guest_leaves_no_link_no_wish_and_no_record() {
         let clock = FakeClock::at(5_000);
         let state = linked(&clock, 0x40_0000, l580(), true);
         state.push(GuestSample {
@@ -1372,6 +1380,22 @@ mod tests {
             clock.advance(SAMPLE_PERIOD);
         }
         assert_eq!(state.fresh_samples().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn forgetting_the_guest_keeps_the_layout_the_chain_seated_for_the_next_life() {
+        let clock = FakeClock::at(5_000);
+        let state = linked(&clock, 0x40_0000, l580(), true);
+        state.forget_guest();
+        // the next life links and polls: the record must be written (the layout is still the chain's)
+        state.rusd_phys.store(0x80_0000, Ordering::Relaxed);
+        state.rusd_wants.store(true, Ordering::Relaxed);
+        state.publish_pending.store(true, Ordering::Relaxed);
+        state.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
+        assert_eq!(state.publish(&mut |_, _| true), PublishOutcome::Written);
     }
 
     #[test]
