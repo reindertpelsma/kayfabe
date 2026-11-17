@@ -1,6 +1,6 @@
 {
  "schema": "kayfabe.propimage-pins/1",
- "status": "Image A, the signed GOP and the swtpm sources are pinned (2026-11-16, values MEASURED from the objects, see each recorded_in). A pin that is unset (null) still refuses by name (PIN_UNSET:<role>) and the stage never fetches or runs an unpinned object; image B's pin is added with its role by the image-B change. The stage never reads a pin from a server.",
+ "status": "Image A, the signed GOP and the swtpm sources are pinned (2026-11-16, values MEASURED from the objects, see each recorded_in). 2026-11-17: the libtpms and swtpm items carry a private `ref` (a private copy of the same public tarball, in the URL file) AND the public `mirror`; the signed ref is tried first and a run whose URL file lacks it falls through to the mirror. A pin that is unset (null) still refuses by name (PIN_UNSET:<role>) and the stage never fetches or runs an unpinned object; image B's pin is added with its role by the image-B change. The stage never reads a pin from a server.",
  "items": [
   {
    "role": "image",
@@ -29,8 +29,9 @@
    "sha256": "ebc24f3191d90f6cf0b4d4200cd876db4bd224b3c565708bbea0a82ee275e0fb",
    "size": 1399253,
    "needed_by": "tools",
+   "ref": "propimage-tools-libtpms-0.10.1.tar.gz",
    "mirror": "https://github.com/stefanberger/libtpms/archive/refs/tags/v0.10.1.tar.gz",
-   "recorded_in": "traces/hwrun_20261113/README.md (swtpm/libtpms 0.10.1 built from source under /opt/tpm worked; the recipe is not recorded). Needed only when the box's swtpm is older than 0.10. sha256 and size MEASURED 2026-11-16 from the GitHub archive tarball (two downloads gave the same hash; GitHub does not promise archive tarballs are byte-stable forever: a mismatch refuses by name)."
+   "recorded_in": "2026-11-17: `ref` names a private copy of the same public BSD tarball (a name in the presigned-URL file kayfabe.download-urls/1, minted on the coordinator from a private R2 prefix); same sha256 and size, MEASURED by the coordinator 2026-11-17 by sha256sum against this pin. The public `mirror` stays the fallback when the URL file has no such ref (MEASURED 2026-11-16 on a Vast box: the mirror alone fails, the GitHub archive redirects to a host without Content-Length, reason=SIZE). traces/hwrun_20261113/README.md (swtpm/libtpms 0.10.1 built from source under /opt/tpm worked; the recipe is not recorded). Needed only when the box's swtpm is older than 0.10. sha256 and size MEASURED 2026-11-16 from the GitHub archive tarball (two downloads gave the same hash; GitHub does not promise archive tarballs are byte-stable forever: a mismatch refuses by name)."
   },
   {
    "role": "swtpm",
@@ -39,8 +40,9 @@
    "sha256": "f8da11cadfed27e26d26c5f58a7b8f2d14d684e691927348906b5891f525c684",
    "size": 415992,
    "needed_by": "tools",
+   "ref": "propimage-tools-swtpm-0.10.1.tar.gz",
    "mirror": "https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.1.tar.gz",
-   "recorded_in": "same as libtpms sha256 and size MEASURED 2026-11-16 (as libtpms)."
+   "recorded_in": "same as libtpms: sha256 and size MEASURED 2026-11-16 from the GitHub archive tarball; 2026-11-17 the private copy named by `ref` is the same public BSD tarball, same sha256 and size, MEASURED by the coordinator by sha256sum against this pin; the public mirror stays the fallback."
   }
  ]
 }
