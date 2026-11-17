@@ -65,7 +65,7 @@ MUTANTS = [
     M("schema-propimages-strict-not-boolean", "schema", '"propimages_strict": {\n      "type": "boolean"\n    }', '"propimages_strict": {\n      "type": "string"\n    }'),
     M("inst-strict-needs-a-list-dropped", "inst", "if i.propimages_strict and not i.propimages:", "if False:"),
     M("schema-lane-open", "schema", '"lane": {\n          "enum": [\n            "gate",\n            "discovery"\n          ]\n        }', '"lane": {\n          "type": "string"\n        }'),
-    M("inst-propimages-large-tier-dropped", "inst", 'if i.propimages and i.tier != "large":', "if False:"),
+    M("inst-propimages-tier-rule-dropped", "inst", 'if i.propimages and i.tier not in ("middle", "large"):', "if False:"),
     M("inst-propimage-duplicate-label-allowed", "inst", "if len(set(labels)) != len(labels):", "if False:"),
     M("schema-tier-name-opened", "schema", '"unknown"\n      ]', '"unknown",\n        "huge"\n      ]'),
     M("schema-required-dropped", "schema", '"required": [\n    "schema",\n    "tier",', '"required": [\n    "schema",'),

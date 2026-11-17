@@ -1,0 +1,48 @@
+# STATUS: LIVE 2026-11-16 -- regression-fixture inputs for crates/kf-cuda/tests/replay_slot_ceiling.rs
+# (the trace -> fixture -> test pattern: docs/design/V3_REPLAY_TESTS.md).
+#
+# Every `logged-*` line is MEASURED: copied verbatim from the kf3 log of the named boot. Everything
+# else is a regression-fixture input derived from those lines, labelled so:
+#   measured  = a region the log names (the slot that hit the ceiling, its left neighbour);
+#   synthetic = a filler slot the log does NOT name. The log gives the free blocks, so the used spans
+#               are their complement; `span OFF CAP N` splits one used span into N filler slots
+#               (N-1 of slot_default runs, the last takes the rest). Only the spans are derived from
+#               the log; the split inside a span is invented and does not change any decision here.
+# This is not a captured per-die table: it is one pool layout and one growth request, replayed.
+#
+# Evidence (not committed: the qemu logs hold the host GPU UUID): /workspace/bench/pc_wukong_20261115/
+# Build 68173023a6dd = branch claude/va-profile-20261116 (PR #443, the first build that logs the
+# geometry line). Boots: image A offline, Black Myth: Wukong benchmark, FG off, fb-mb 4096, Very High.
+# Line numbers are of the `qemu_<boot>_copy.log` copy.
+
+case p1-slot32
+source boot=p1 attempt=1 build=68173023a6dd log=p1/qemu_p1_copy.log:21721-21725
+config max_slots=128 walk_pool=1048576 slot_pool=2097152 max_cap=1048576 slot_default=1024
+# need: the log carries required/preferred, not need. Any need in [need_lo, need_hi] gives exactly the logged pair.
+event slot=32 need_lo=606209 need_hi=606379
+logged-ceiling slot pool exhausted: slot 32 grows 601088 → 606464 required runs (909568 preferred), 1203456 free (largest 589824) of 2097152
+logged-geometry slot 32 region 1286400+601088 required 606464 pool 2097152 free 1203456 in 6 region(s), largest [36864+589824 887040+399360 1887488+209664 10240+2560 5120+1024 7168+1024]; adjacent free: head 399360 tail 209664 (in-place growth would fit); neighbours left s8@626688+260352 right none; slots held 21
+logged-consequence kf3: chan token 0x80b (VasKey(13965662586193053776)) DEAD: split: split walk (pdb Some(ece53000)): split Some(ece53000): VasKey(13965663118768998480) did not apply
+measured slot 32 1286400 601088
+measured slot 8 626688 260352
+synthetic span 0 5120 5
+synthetic span 6144 1024 1
+synthetic span 8192 2048 2
+synthetic span 12800 24064 11
+end
+
+case p2-slot32
+source boot=p2 attempt=1 build=68173023a6dd log=p2/qemu_p2_copy.log:21094-21098
+config max_slots=128 walk_pool=1048576 slot_pool=2097152 max_cap=1048576 slot_default=1024
+event slot=32 need_lo=590508 need_hi=590592
+logged-ceiling slot pool exhausted: slot 32 grows 580608 → 590592 required runs (886016 preferred), 1206016 free (largest 566016) of 2097152
+logged-geometry slot 32 region 1293824+580608 required 590592 pool 2097152 free 1206016 in 7 region(s), largest [727808+566016 37376+412928 1874432+222720 11008+1280 5120+1024 8192+1024 35328+1024]; adjacent free: head 566016 tail 222720 (in-place growth would fit); neighbours left s8@450304+277504 right none; slots held 21
+logged-consequence kf3: chan token 0x80b (VasKey(13965662586193053776)) DEAD: split: split walk (pdb Some(ece53000)): split Some(ece53000): VasKey(13965663118768998480) did not apply
+measured slot 32 1293824 580608
+measured slot 8 450304 277504
+synthetic span 0 5120 5
+synthetic span 6144 2048 2
+synthetic span 9216 1792 1
+synthetic span 12288 23040 10
+synthetic span 36352 1024 1
+end
