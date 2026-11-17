@@ -297,7 +297,7 @@ def judge_vllm(res, expected_sha=None):
 
 
 # --- tensorrt
-TRT_REL_TOL = 0.05               # engine output versus the ONNX Runtime CPU reference, as a fraction of the reference's largest magnitude (FP16)  UNCALIBRATED
+TRT_REL_TOL = 0.01               # engine output versus the ONNX Runtime CPU reference, as a fraction of the reference's largest magnitude (FP16). MEASURED on an RTX 3060: 8.4e-4 (engine), 1.8e-3 (ORT TensorRT EP)
 
 
 def judge_tensorrt(res, expected=None):

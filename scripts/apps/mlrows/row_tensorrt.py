@@ -7,7 +7,8 @@ torch), run once by ONNX Runtime on the CPU (the reference), then built by Tenso
 device: the autotuner of GAPS 19), the serialized engine is deserialized and run through the CUDA runtime, and its output is compared with the reference. The same model is
 also run through ONNX Runtime's TensorRT execution provider when the installed onnxruntime wheel has one (the CUDA 13 flavour); the provider's own profile says which
 provider ran each node, because ONNX Runtime falls back to the CPU silently. `trtexec` is not in any pip wheel (checked 2026-11-17, design doc section 3): the row records
-that as NOT_RUN with the reason, and uses `--trtexec PATH` only when the user passes one (always trusted and recorded). `--negctl`: the CPU reference only, no TensorRT.
+that as NOT_RUN with the reason; its builder code path (ONNX parser, builder, FP16, optimization profile, timing) is the one this script drives through the Python API.
+`--negctl`: the CPU reference only, no TensorRT.
 """
 import argparse
 import ctypes
@@ -228,7 +229,6 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--work", required=True)
     ap.add_argument("--negctl", action="store_true")
-    ap.add_argument("--trtexec")
     a = ap.parse_args()
     os.makedirs(a.work, exist_ok=True)
     t0 = time.time()
@@ -238,10 +238,7 @@ def main():
     ref, ort_ver = reference(onnx_bytes, x)
     res = {"row": "tensorrt", "onnx_sha256": hashlib.sha256(onnx_bytes).hexdigest(), "onnx_bytes": len(onnx_bytes), "onnx_params": nparams, "ref_sha256": hashlib.sha256(ref.tobytes()).hexdigest(),
            "ref_max_abs": float(np.max(np.abs(ref))), "ort_cpu": ort_ver, "batch": [BATCH_MIN, BATCH_OPT, BATCH_MAX]}
-    if a.trtexec:
-        res["trtexec"] = {"status": "NOT_RUN", "reason": "trtexec_given_by_the_user_is_recorded_not_run_by_this_script: %s" % a.trtexec}
-    else:
-        res["trtexec"] = {"status": "NOT_RUN", "reason": "trtexec_is_not_in_the_pypi_wheels"}
+    res["trtexec"] = {"status": "NOT_RUN", "reason": "trtexec_is_not_in_the_pypi_wheels"}
     if a.negctl:
         res.update({"platform": "cpu", "builder": {"built": False, "fp16": False}, "engine": {"ran": False}, "ort_trt": {"status": "NOT_RUN", "reason": "negctl: the CPU form of the row"}, "wall_s": round(time.time() - t0, 1)})
         emit(res)
