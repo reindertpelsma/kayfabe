@@ -48,6 +48,10 @@ An image without `state.json` needs a login for the guest (an ssh key with acces
 ... --image prebuilt:/data/mydisk.qcow2 --ssh-user me --ssh-key ~/.ssh/id_ed25519 --net on --apps 3dmark
 ```
 
+## swtpm 0.10 or newer
+
+The images' TPM state needs swtpm 0.10 or newer; Ubuntu 22.04 ships 0.6.3. If the box's `swtpm` is older (or missing), the runner builds swtpm 0.10.1 under `/opt/tpm` before the first image starts, as the legacy stage does, instead of refusing the run (not run on a box yet: the build recipe is unproven). This needs root, `apt-get`, `git` and network access to the upstream source repositories, and takes several minutes. A failed step ends the run as REFUSED with a name (`SWTPM_SOURCE`, `SWTPM_SOURCE_COMMIT`, `SWTPM_BUILD`, `DOWNLOAD`, `PIN_UNSET:<role>`), never as a failed application. A swtpm of 0.10 or newer, including one already built under `/opt/tpm`, is used as it is.
+
 ## Which applications run
 
 Each application has a short name (`resolve`, `3dmark`, `superposition`, `solidworks`, `edrawings`, `edge`, `wukong`; more can be added, see `docs/design/V3_PROPIMAGE_RUNNER.md`). For an image the runner uses, in this order: the applications you declare with `--app NAME=present`; else the `software` list of the `state.json`; else the installed programs it reads from the guest (plain images only); else the names in `--apps`. `--app NAME=skip` removes one; `--apps` restricts the set.
