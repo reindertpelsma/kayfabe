@@ -1,0 +1,59 @@
+{
+  "schema": "kayfabe.mlrows.pins/1",
+  "status": "LIVE, 2026-11-17: pins of the three open ML rows (docs/design/V3_OPEN_ML_ROWS.md). Nothing here is a hash of a binary we host or build: the packages are pinned by the hashed locks in locks/ (PyPI's own digests, and NVIDIA's own index for TensorRT), the model by the upstream git commit of its repository, the OSS sources by an upstream commit.",
+  "python": {"min": [3, 12], "max_exclusive": [3, 15], "why": "vllm needs >=3.11, jax 0.12 needs >=3.12; the open Linux guest is Ubuntu 24.04 (CPython 3.12)"},
+  "min_compute_capability": [7, 5],
+  "min_compute_capability_why": "Turing and newer: the TensorRT 10.16 wheels carry builder resources for sm75 and up only, the torch 2.14 CUDA 13 wheels start at sm75, vllm 0.34 and jax 0.12 target the same range",
+  "indexes": {
+    "pypi": "https://pypi.org/simple",
+    "nvidia": "https://pypi.nvidia.com/"
+  },
+  "model": {
+    "repo": "HuggingFaceTB/SmolLM2-135M",
+    "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+    "license": "Apache-2.0",
+    "origin": "https://huggingface.co",
+    "files": ["config.json", "generation_config.json", "merges.txt", "model.safetensors", "special_tokens_map.json", "tokenizer.json", "tokenizer_config.json", "vocab.json"],
+    "max_bytes": 300000000,
+    "note": "the revision is the commit of the model repository (a git object id, reviewable at the origin); the bytes are checked against the sizes and the sha256 (LFS) or git blob ids the origin's tree API reports for exactly that revision"
+  },
+  "rows": {
+    "vllm": {
+      "title": "vLLM offline LLM(...), temperature 0, CUDA graph capture, engine subprocess",
+      "flavours": {
+        "cu13": {"driver_cuda_min": [13, 0], "lock": "locks/vllm_cu13.lock.txt", "packages": {"vllm": "0.34.0", "torch": "2.14.0"}}
+      },
+      "min_vram_mib": 3000,
+      "need_disk_gb": 30,
+      "setup_download_gb": 11,
+      "timeout_s": 1500,
+      "needs_c_compiler": true,
+      "expected_token_sha256": null
+    },
+    "tensorrt": {
+      "title": "TensorRT builder + engine (FP16), ONNX Runtime CPU as the reference, ONNX Runtime TensorRT EP",
+      "flavours": {
+        "cu13": {"driver_cuda_min": [13, 0], "lock": "locks/tensorrt_cu13.lock.txt", "packages": {"tensorrt-cu13-libs": "10.16.1.11", "onnxruntime-gpu": "1.32.0"}},
+        "cu12": {"driver_cuda_min": [12, 0], "lock": "locks/tensorrt_cu12.lock.txt", "packages": {"tensorrt-cu12-libs": "10.16.1.11", "onnxruntime": "1.32.0"}}
+      },
+      "min_vram_mib": 2500,
+      "need_disk_gb": 20,
+      "setup_download_gb": 5,
+      "timeout_s": 1200,
+      "needs_c_compiler": false,
+      "trtexec": {"in_pypi_wheels": false, "oss_repo": "https://github.com/NVIDIA/TensorRT", "oss_tag": "v10.16", "oss_commit": "52399f555c2f80cb690a4a558b604e1a5f227e7c"}
+    },
+    "jax": {
+      "title": "JAX / XLA GPU: jit matmul, conv, scan against the CPU, the default memory preallocation, the autotuner",
+      "flavours": {
+        "cu13": {"driver_cuda_min": [13, 0], "lock": "locks/jax_cu13.lock.txt", "packages": {"jax": "0.12.0.1", "jax-cuda13-plugin": "0.12.0.1"}},
+        "cu12": {"driver_cuda_min": [12, 0], "lock": "locks/jax_cu12.lock.txt", "packages": {"jax": "0.12.0.1", "jax-cuda12-plugin": "0.12.0.1"}}
+      },
+      "min_vram_mib": 2000,
+      "need_disk_gb": 15,
+      "setup_download_gb": 3,
+      "timeout_s": 900,
+      "needs_c_compiler": false
+    }
+  }
+}
