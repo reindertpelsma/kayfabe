@@ -28,8 +28,11 @@ if [ "$SIDE" = host ]; then
   mkdir -p /opt/apps/bundle/vkcts_tool && cp -f "$HERE"/vkcts/{vkcts.py,vkcts_lib.py,pins.json,caselist.tsv} "$REPO/scripts/bench/windows/gpu_assert.py" /opt/apps/bundle/vkcts_tool/
   [ -d "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current" ] && ln -sfn "$(readlink -f "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current")" /opt/apps/bundle/vkcts
   exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9   # the host GPU is the bench GPU
-  bash "$HERE/run_apps.sh" host "$@" | tee -a "$R/host.res"
+  # GPU use on the bare-metal baseline: the app's own proof only (no kf3 log here). KF_NEGCTL=1 runs the CPU form of each row into host_negctl.res.
+  RES=host.res; [ "${KF_NEGCTL:-0}" = 1 ] && RES=host_negctl.res
+  bash "$HERE/run_apps.sh" host "$@" | tee -a "$R/$RES"
   flock -u 9
+  python3 -B -I "$HERE/gpu_use_rows.py" annotate-res --side host --res "$R/$RES" --logs /opt/apps/out/host $([ "${KF_NEGCTL:-0}" = 1 ] && echo --negctl)
   for f in /opt/apps/out/host/*.log; do cp -f "$f" "$R/$(basename "$f" .log).host.log"; done
   dmesg | grep -E 'Xid|NVRM' | tail -50 > "$R/host_dmesg_tail.log"
   say "HOST_DONE $(grep -c 'verdict=PASS' "$R/host.res") pass / $(wc -l < "$R/host.res") rows"

@@ -18,7 +18,8 @@ known-unsupported policy takes precedence; raw observed columns remain visible:
   DISCOVERY        a row that reports and never gates (vkcts: docs/design/V3_VULKAN_CTS_ROW.md); its
                    host-versus-guest comparison is the per-case diff (vkcts_diff.tsv), not this table
   UNATTRIBUTED     host PASS but the guest has no usable row (boot failure, guest dead,
-                   no isolated re-run)                                                  -> re-run, never counted
+                   no isolated re-run, or a GPU-use proof that could not be judged:
+                   NOTRUN with `gpu-use:NOT_RUN` in its note)                           -> re-run, never counted
 
 Last row per (side, app) wins in each file. The guest verdict of record is the isolated re-run when there is
 one. `--gate-list` writes the GATE apps (one per line, run order of `run_apps.sh list`).
@@ -121,6 +122,10 @@ def classify(app, host, guest, isolated):
         return "GATE", PASS, ""
     if alone == PASS:
         return "ORDER_SENSITIVE", PASS, "guest batched %s, alone PASS" % batched
+    unjudged = [r for r in (isolated, guest) if r and r.get("verdict") == "NOTRUN" and "gpu-use:NOT_RUN" in r.get("note", "")]
+    if unjudged and not (alone == PASS):
+        # scripts/apps/gpu_use_rows.py could not judge whether the GPU was used (no kf3 window, no baseline, an unreadable sampler): neither a pass nor a defect
+        return "UNATTRIBUTED", "NOTRUN", "GPU-use proof not judged: " + unjudged[0]["note"][:120]
     if alone is not None and alone not in ("BOOT_FAIL", "GUEST_DEAD"):
         return "KAYFABE_DEFECT", alone, "host PASS, guest %s alone in a fresh boot" % alone
     if batched is None and alone is None:

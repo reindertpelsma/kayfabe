@@ -13,8 +13,12 @@ import time
 
 import torch
 
-# KF_EQ_DEVICE=cpu runs the same checks against the CPU (logic test of this file on a GPU-less machine; the matrix never sets it)
+# KF_EQ_DEVICE=cpu runs the same checks against the CPU (logic test of this file on a GPU-less machine; the matrix never sets it). A CPU run prints the device
+# line and WINEQ_DONE like a GPU run, so the matrix must never reach it by accident: it needs the explicit second switch KF_EQ_ALLOW_CPU=1 and says so.
 DEV = os.environ.get("KF_EQ_DEVICE", "cuda")
+if DEV != "cuda" and os.environ.get("KF_EQ_ALLOW_CPU") != "1":
+    print("KF_EQ_DEVICE=%s refused: the GPU-use rule (OWNER 2026-11-17) forbids a CPU run of a matrix row; set KF_EQ_ALLOW_CPU=1 for a logic test only" % DEV, file=sys.stderr)
+    sys.exit(3)
 G = torch.Generator().manual_seed(2026)
 
 

@@ -1,0 +1,7 @@
+kf3: GSP command service REFUSED: QueueNotBound
+kf3: GSP command service REFUSED: QueueNotBound
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset=0x1ffe00000 → served WPR2_ADDR_LO=Some(Ok("0x1ffe000"))
+kayfabe: GSP-PUBLISH gpa=0x12b400000 gpa_same=false seq_last=Some(1) cmd_seq=521 ⇒ same_instance=false
+kf3: GSP rpc GspSetSystemInfo seq=0
+kf3: GSP rpc SetRegistry seq=0
