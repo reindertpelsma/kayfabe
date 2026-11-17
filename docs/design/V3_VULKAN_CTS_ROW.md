@@ -1,6 +1,6 @@
 # V3 Vulkan CTS row (open Linux row, `deqp-vk`, discovery lane)
 
-**STATUS: LIVE as tooling and discovery lane, 2026-11-17. MEASURED natively once (RTX 3060 container, `traces/vkcts_host_20261117/`): build, host run, GPU-use assertion and the host-versus-host control. NOT RUN: any kf3 guest, so the host-versus-guest diff has no guest data yet (section 9 lists what that run must confirm).** Owner rulings that bind this row (2026-11-17): open first; a standalone third party trusts git only, builds from the repository alone and needs no private object, account, secret or licence; integrity of repository-fetched third-party sources is an upstream commit or an upstream-published digest; no sha256 of a binary or artifact of ours is a pin; no remote cache of a built binary in this change.
+**STATUS: LIVE as tooling and discovery lane, 2026-11-17. MEASURED natively once (RTX 3060 container, `traces/vkcts_host_20261117/`): build, host run, GPU-use assertion and the host-versus-host control. FIRST GUEST RUN the same day (RTX 3090, kf3 `04613288`, `traces/open_rows_guest_20261117/`, section 12): 3 reproducible `GUEST_ONLY_FAIL` candidates, each with a host Xid from the guest's QEMU, none documented as a limitation.** Owner rulings that bind this row (2026-11-17): open first; a standalone third party trusts git only, builds from the repository alone and needs no private object, account, secret or licence; integrity of repository-fetched third-party sources is an upstream commit or an upstream-published digest; no sha256 of a binary or artifact of ours is a pin; no remote cache of a built binary in this change.
 
 Labels (the only run behind a MEASURED below is the one of 2026-11-17 in `traces/vkcts_host_20261117/`): **MEASURED** = ran, and the sentence names the evidence. **CODE READ** = read in the pinned upstream source or in this repository. **INFERRED** = reasoning, not a run. **DESIGN** = intent.
 
@@ -78,7 +78,7 @@ Each was stated with its falsifier before the run (2026-11-17, in the session th
 | H4 | the host counters show GPU use (at least 2 samples at or above 3 % and a memory rise of at least 64 MiB) | `verdict FAIL` | held: run 1 26 busy samples, peak 16 %, +494 MB; run 2 20 busy, peak 54 %, +494 MB |
 | H5 | every case of the list exists in the binary | any `NotRun` | held: 0 `NotRun` |
 | H6 | two host runs give the same class list (noise floor of the row is zero) | different digests | held: `70d5ed8f0ca07431` twice, and again through `run_apps.sh` |
-| H7 | in a kf3 guest the same list has no `GUEST_ONLY_FAIL` and no `GUEST_LOSES_SUPPORT` | any candidate | **not run** |
+| H7 | in a kf3 guest the same list has no `GUEST_ONLY_FAIL` and no `GUEST_LOSES_SUPPORT` | any candidate | **falsified** (2026-11-17, section 12): 3 `GUEST_ONLY_FAIL`, 0 `GUEST_LOSES_SUPPORT`; two of three runs of the guest give the same three |
 
 ## 9. Native first run (MEASURED, 2026-11-17, RTX 3060 GA106, driver 580.159.03, `traces/vkcts_host_20261117/host_run1_results.tsv`)
 
@@ -103,7 +103,7 @@ Each was stated with its falsifier before the run (2026-11-17, in the session th
 
 Observation (MEASURED 2026-11-17, `traces/vkcts_host_20261117/host_run1_results.tsv`): a die with the host's driver reports these classes as supported, so a `GUEST_LOSES_SUPPORT` in the guest names a feature kayfabe hides; the 102 not-supported cases are the host's baseline, not a finding.
 
-## 10. What the guest run still has to confirm
+## 10. What the guest run still has to confirm (answered in section 12)
 
 1. The guest run completes on a kf3 guest: the tool and the 209 MB artifact push over `ssh`, the row finishes inside its 2700 s, the diff runs.
 2. `VKCTS_GPU side=guest source=host` PASS: the host counters show work while the guest runs the list (the sampler is bracketed by the hook; written and unit-tested, never run against a guest).
@@ -114,3 +114,25 @@ Observation (MEASURED 2026-11-17, `traces/vkcts_host_20261117/host_run1_results.
 ## 11. Files
 
 `scripts/apps/vkcts/`: `pins.json`, `vkcts_lib.py` (pure logic), `vkcts.py` (fetch, build, run, census, diff), `caselist.tsv`, `caselist_spec.json`, `gen_caselist.py`. Tests `scripts/ci/test_vkcts.py` (fixtures in `scripts/ci/fixtures/vkcts_real_*.txt`); mutants `scripts/ci/vkcts_mutants.py` (two named killers each, in `ci.yml`). Usage: `docs/howto/vulkan-cts.md`.
+
+## 12. First guest data (2026-11-17, RTX 3090 GA102, host and guest driver 580.159.04, kf3 `04613288`, Vast KVM box)
+
+Commands exactly as in section 7 (`vkcts.py build`, `apps_matrix.sh host V1 vkcts`, `apps_matrix.sh guest V1 vkcts`, `vkcts.py diff`), plus the host control (V1c) and a repeat of the guest run (V1b). Evidence: `traces/open_rows_guest_20261117/runs/V1`, `V1b`, `V1c`, `V2`, `V3`. Build: 5 minutes on 30 cores.
+
+| run | cases | pass | not supported | fail | crash | timeout | time | digest |
+|---|---|---|---|---|---|---|---|---|
+| host V1 | 291 | 189 | 102 | 0 | 0 | 0 | 104 s | `70d5ed8f0ca07431` |
+| host control V1c | 291 | 189 | 102 | 0 | 0 | 0 | 91 s | `70d5ed8f0ca07431` (the same as V1 and as the RTX 3060 run of section 9) |
+| guest V1 | 291 | 186 | 102 | 1 (`DeviceLost`) | 0 | 2 | 877 s | `688c33b1ebe96264` |
+| guest repeat V1b | 291 | 186 | 102 | 1 | 0 | 2 | 868 s | `688c33b1ebe96264` |
+
+`VKCTS_DIFF` host against guest: 186 `SAME_OK`, 102 `SAME_NOT_SUPPORTED`, **3 `GUEST_ONLY_FAIL`**, 0 `GUEST_LOSES_SUPPORT`, 0 `GUEST_GAINS_SUPPORT`, 0 `INCOMPLETE`, `VKCTS_EXT_DIFF` empty (the extension set is identical, 250). `VKCTS_GPU side=guest source=host` PASS (1529 busy samples of 1758, peak 100 percent). Guest against guest (V1 against V1b): the same three, `BOTH_FAIL`, equal digests. The 43 `video_*` cases all agree (H5 of the first plan, "the first candidates are in `video_*`", was wrong).
+
+| case | host | guest | host kernel log at that time |
+|---|---|---|---|
+| `dEQP-VK.sparse_resources.buffer.texel_buffers.sparse_residency.storage_texel_buffer_read_size_2_24_r32ui` (area `sparse`) | Pass | Timeout (killed after the 300 s of QPA silence) | Xid 109 `CTX SWITCH TIMEOUT`, channel 0x31, process = the guest's QEMU |
+| `dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba16ui.samples_4` (`sparse`) | Pass | Timeout | Xid 109, the same channel, the same process |
+| `dEQP-VK.dgc.ext.graphics.multiview.view_mask_2.no_ies_gpl.indexed_draw_buffer_tokens` (`dgc`) | Pass | DeviceLost (`vkWaitForFences`) | Xid 13 `Graphics Exception: 3D-Z SYSMEM KIND Violation` on GPC 1 and 2, class `0xc797`, channel 0x25; kf3: `RC host twin 0x25 ... except_type=0xd (Xid 13) - forwarding RC_TRIGGERED` |
+
+The host runs (4 of them, 2 full and 2 alone) had no Xid; the guest runs have exactly these. **Classification: not bucket 2** (the host control passes the same cases twice, with equal digests), not a harness error; **bucket 1 is not available** (nothing in `docs/` says sparse residency or a depth buffer in a DGC multiview draw is unsupported); bucket 3 (our configuration) is not excluded for the guest's memory placement, so these are **candidates**, not claimed bugs. Leads, not conclusions: the Xid 13 text is the one `crates/kf-mem/src/apply.rs` `host_pte_kind` names for a depth/stencil kind mapped on guest RAM (it keeps PITCH there: "sysmem holds no depth/stencil surface kinds"), so the question is why this guest depth surface sits in guest RAM; the two sparse cases are the Vulkan sparse-binding path `NV_MEMORY_MAPPER` of `V3_HEADLESS_GRAPHICS.md`, which "lands as a walker diff". A GPU-free regression test for either needs the root cause first; this run did not find it.
+

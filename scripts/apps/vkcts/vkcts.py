@@ -346,8 +346,12 @@ def census_start(directory):
     return True
 
 
-def census_stop(directory, side, require=("gpu", "mem")):
-    """Stop the samplers, judge GPU use from the host counters (gpu_assert.evaluate), write <dir>/gpu.json, return the record."""
+def census_stop(directory, side, require=None):
+    """Stop the samplers, judge GPU use from the host counters (gpu_assert.evaluate), write <dir>/gpu.json, return the record. The host video memory has to RISE only for a
+    bare-metal run: a guest's device memory is the store the host reserves at boot (MEASURED 2026-11-17, RTX 3090: 8761 -> 8814 MiB with the GPU busy), so a guest run is
+    judged on the engine alone."""
+    if require is None:
+        require = ("gpu",) if side == "guest" else ("gpu", "mem")
     ga = load_gpu_assert()
     d = Path(directory)
     try:
