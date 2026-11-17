@@ -47,6 +47,8 @@ body = {
 sys.stdout.write("dEQP Core fake starting..\n")
 for c in cases:
     mode = plan.get("cases", {}).get(c, plan.get("default", "Pass"))
+    if mode == "UNKNOWN":
+        continue
     sys.stdout.write("\nTest case '%s'..\n" % c); sys.stdout.flush()
     out.write("\n#beginTestCaseResult %s\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<TestCaseResult Version=\"0.3.4\" CasePath=\"%s\" CaseType=\"SelfValidate\">\n" % (c, c))
     for line in body.get(c, ["<Message>checking</Message>"]):
@@ -56,6 +58,8 @@ for c in cases:
         os.kill(os.getpid(), signal.SIGKILL)
     if mode == "TERMINATE":
         out.write("\n#terminateTestCaseResult Crash\n"); out.flush(); sys.exit(1)
+    if mode == "TERMINATE_TIMEOUT":
+        out.write("\n#terminateTestCaseResult Timeout\n"); out.flush(); sys.exit(1)
     if mode == "HANG":
         time.sleep(600)
     if mode == "BADEND":
@@ -202,6 +206,20 @@ class PinsTests(unittest.TestCase):
             with self.subTest(change), self.assertRaises(L.PinRefused):
                 L.check_fetch_sources(self.fetch_text(**change), PINS)
 
+    def test_a_changed_origin_in_the_fetch_script_is_refused(self):
+        with self.assertRaises(L.PinRefused):
+            L.check_fetch_sources(self.fetch_text(url_jsoncpp="https://github.com/evil/jsoncpp.git"), PINS)
+
+    def test_a_changed_digest_of_a_file_external_is_refused(self):
+        with self.assertRaises(L.PinRefused):
+            L.check_fetch_sources(self.fetch_text(sha_libpng="1" * 64), PINS)
+
+    def test_an_unpinned_external_with_a_valid_commit_is_still_refused(self):
+        text = self.fetch_text(extra=True)
+        self.assertIn("newthing", text)
+        with self.assertRaisesRegex(L.PinRefused, "does not pin"):
+            L.check_fetch_sources(text, PINS)
+
     def test_a_git_external_this_repository_does_not_pin_is_refused(self):
         with self.assertRaises(L.PinRefused):
             L.check_fetch_sources(self.fetch_text(extra=True), PINS)
@@ -224,6 +242,16 @@ class PinsTests(unittest.TestCase):
             L.head_matches("b" * 40, "a" * 40)
         with self.assertRaises(L.PinRefused):
             L.head_matches("a" * 40, "")
+
+    def test_a_changed_cmake_argument_changes_the_key(self):
+        p = json.loads(json.dumps(PINS))
+        p["build"]["cmake_args"][0] = "-DDEQP_TARGET=default"
+        self.assertNotEqual(L.content_key(p), L.content_key(PINS))
+
+    def test_a_changed_external_commit_changes_the_key(self):
+        p = json.loads(json.dumps(PINS))
+        p["externals_git"]["glslang"]["commit"] = "2" * 40
+        self.assertNotEqual(L.content_key(p), L.content_key(PINS))
 
     def test_the_content_key_follows_the_pins_and_the_build_configuration_only(self):
         k = L.content_key(PINS)
@@ -320,6 +348,21 @@ class GitFetchTests(unittest.TestCase):
             with self.assertRaises(L.PinRefused):
                 V.verify_externals(src, bad)
             shutil.rmtree(src / "external/amber/src/.git")
+            with self.assertRaises(L.PinRefused):
+                V.verify_externals(src, pins)
+
+    def test_a_fetched_file_external_with_another_digest_is_refused_on_its_own(self):
+        with tempfile.TemporaryDirectory() as t:
+            src = Path(t)
+            pins = json.loads(json.dumps(PINS))
+            pins["externals_git"] = {}
+            pins["externals_files"] = {"zlib": dict(pins["externals_files"]["zlib"])}
+            f = src / "external/zlib/packages"
+            f.mkdir(parents=True)
+            (f / "zlib-1.2.13.tar.gz").write_bytes(b"x")
+            pins["externals_files"]["zlib"]["sha256"] = hashlib.sha256(b"x").hexdigest()
+            V.verify_externals(src, pins)
+            (f / "zlib-1.2.13.tar.gz").write_bytes(b"y")
             with self.assertRaises(L.PinRefused):
                 V.verify_externals(src, pins)
 
@@ -513,6 +556,11 @@ class ClassifyTests(unittest.TestCase):
         for status in ("Passed", "pass", "", "Unknown", "NotSupported ", "OK"):
             self.assertEqual(L.classify(status), "fail", status)
 
+    def test_an_unknown_status_counts_as_fail_in_the_summary(self):
+        rows = L.case_rows({"dEQP-VK.a.x": ("Weird", "d"), "dEQP-VK.a.y": ("Pass", "d")}, {"dEQP-VK.a.x": "aa", "dEQP-VK.a.y": "aa"})
+        self.assertEqual(L.summarize(rows)["total"]["fail"], 1)
+        self.assertEqual(L.summarize(rows)["total"]["pass"], 1)
+
     def test_not_supported_is_not_a_failure_and_a_pass_is_not_a_not_supported(self):
         self.assertNotIn(L.classify("NotSupported"), L.BAD_CLASSES)
         self.assertNotIn(L.classify("NotSupported"), L.OK_CLASSES)
@@ -632,6 +680,43 @@ class ExecuteTests(unittest.TestCase):
         self.assertEqual(list(res), self.CASES)
         self.assertIn("unexpected case in log", notes)
 
+    def test_a_spent_budget_runs_nothing_and_marks_every_case_not_run(self):
+        rb = self.scripted({})
+        res, _, notes = L.execute(self.CASES, rb, 4, 0, self.clock(), 3)
+        self.assertEqual(rb.calls, [])
+        self.assertTrue(all(v[0] == "NotRun" for v in res.values()))
+        self.assertIn("stopped=budget", notes)
+
+    def test_the_idle_limit_is_the_argument_given(self):
+        n = [0]
+
+        def run_batch(batch):
+            n[0] += 1
+            return outcome([], None, rc=-9, killed=True)
+        L.execute(self.CASES, run_batch, 4, 1000, self.clock(), 0)
+        self.assertEqual(n[0], 1)
+
+    def test_progress_resets_the_idle_counter_so_a_flaky_start_does_not_end_the_run(self):
+        state = {"n": 0}
+
+        def run_batch(batch):
+            state["n"] += 1
+            if state["n"] % 2 == 1:
+                return outcome([], None, rc=-9, killed=True)
+            return outcome([(c, "Pass", "", True) for c in batch[:2]], None, rc=-11)
+        res, _, _ = L.execute(self.CASES, run_batch, 3, 1000, self.clock(), 1)
+        self.assertTrue(all(v[0] == "Pass" for v in res.values()), res)
+
+    def test_two_wedged_starts_then_progress_is_still_within_a_limit_of_two(self):
+        seq = iter([False, False, True, False, False, True, True, True, True, True, True, True])
+
+        def run_batch(batch):
+            if next(seq, True):
+                return outcome([(c, "Pass", "", True) for c in batch[:1]], None, rc=-11)
+            return outcome([], None, rc=-9, killed=True)
+        res, _, _ = L.execute(self.CASES[:4], run_batch, 2, 1000, self.clock(), 2)
+        self.assertTrue(all(v[0] == "Pass" for v in res.values()), res)
+
     def test_the_first_result_of_a_case_wins(self):
         def run_batch(batch):
             return outcome([(batch[0], "Pass", "", True), (batch[0], "Fail", "", True)] + [(c, "Pass", "", True) for c in batch[1:]], None)
@@ -694,6 +779,19 @@ class BlockTests(unittest.TestCase):
 
     def render_lines(self):
         return L.render_block("guest", rows_of({"dEQP-VK.a.p": "Pass", "dEQP-VK.a.f": "Fail"})).splitlines()
+
+    def test_a_block_with_a_wrong_count_is_refused(self):
+        with self.assertRaises(L.CaselistError):
+            L.parse_block("\n".join(self.render_lines()).replace("n=2", "n=1") + "\n")
+
+    def test_a_block_with_a_wrong_digest_is_refused(self):
+        with self.assertRaises(L.CaselistError):
+            L.parse_block(re.sub(r"digest=[0-9a-f]{16}", "digest=" + "f" * 16, "\n".join(self.render_lines())) + "\n")
+
+    def test_the_digest_does_not_depend_on_areas_or_details(self):
+        a = [("dEQP-VK.a.p", "Pass", "pass", "xx", "one")]
+        b = [("dEQP-VK.a.p", "Pass", "pass", "yy", "two")]
+        self.assertEqual(L.digest(a), L.digest(b))
 
     def test_every_tampering_of_a_block_is_refused(self):
         lines = self.render_lines()
@@ -848,6 +946,35 @@ class RunIntegrationTests(unittest.TestCase):
             self.assertEqual(st[self.CASES[7]], "Pass")
             self.assertRegex(p.stdout, r"crash=2 timeout=1")
 
+    def test_a_terminated_timeout_a_block_without_result_and_an_unknown_case_are_classified(self):
+        with tempfile.TemporaryDirectory() as t:
+            p, _ = self.run_row({"cases": {self.CASES[0]: "TERMINATE_TIMEOUT", self.CASES[3]: "BADEND", self.CASES[5]: "UNKNOWN"}}, t)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            _, rows, _ = L.parse_block(p.stdout)
+            st = {r[0]: r[1] for r in rows}
+            self.assertEqual(st[self.CASES[0]], "Timeout")
+            self.assertEqual(st[self.CASES[3]], "Crash")
+            self.assertEqual(st[self.CASES[5]], "NotRun")
+            self.assertEqual(st[self.CASES[6]], "Pass")
+
+    def test_a_forged_detail_never_reaches_the_block_unsanitised(self):
+        with tempfile.TemporaryDirectory() as t:
+            p, _ = self.run_row({"cases": {self.CASES[1]: "Fail"}}, t)
+            _, rows, _ = L.parse_block(p.stdout)
+            detail = {r[0]: r[4] for r in rows}[self.CASES[1]]
+            self.assertNotIn("<", detail)
+            self.assertNotIn("&", detail)
+
+    def test_a_cpu_device_type_fails_even_with_a_gpu_like_name(self):
+        with tempfile.TemporaryDirectory() as t:
+            p, _ = self.run_row({"device": "NVIDIA GeForce RTX 3060", "type": "CPU"}, t)
+            self.assertEqual(p.returncode, V.EXIT_DEVICE)
+
+    def test_a_software_name_fails_even_with_a_gpu_type(self):
+        with tempfile.TemporaryDirectory() as t:
+            p, _ = self.run_row({"device": "llvmpipe (LLVM 15)", "type": "DISCRETE_GPU"}, t)
+            self.assertEqual(p.returncode, V.EXIT_DEVICE)
+
     def test_a_missing_artifact_is_not_run_not_a_failure_of_the_gpu(self):
         with tempfile.TemporaryDirectory() as t:
             p = run_tool(["run", "--side", "guest", "--artifact", str(Path(t) / "nope"), "--out", str(Path(t) / "o"), "--caselist", str(caselist_file(t, self.CASES)),
@@ -952,6 +1079,15 @@ class DiffCommandTests(unittest.TestCase):
             self.assertTrue((Path(t) / "vkcts_diff.tsv").is_file())
             self.assertEqual(run_tool(["diff", t, "--strict"]).returncode, 1)
 
+    def test_strict_exits_one_when_there_is_a_candidate(self):
+        with tempfile.TemporaryDirectory() as t:
+            for n in ("h", "g"):
+                (Path(t) / n).mkdir()
+            self.log(t, "h", "host", {})
+            self.log(t, "g", "guest", {"cases": {self.CASES[0]: "Crash"}})
+            self.assertEqual(run_tool(["diff", t, "--strict"]).returncode, 1)
+            self.assertEqual(run_tool(["diff", t]).returncode, 0)
+
     def test_identical_runs_have_no_candidates_and_strict_exits_zero(self):
         with tempfile.TemporaryDirectory() as t:
             for n in ("h", "g"):
@@ -990,6 +1126,12 @@ class MatrixRowTests(unittest.TestCase):
             self.assertIn("nvidia_smi", self.bash(["x", "listall"], t).stdout.split())
         for f in ("gate_list.txt", "gate_list_middle.txt"):
             self.assertNotIn("vkcts", (ROOT / "scripts/apps" / f).read_text().split())
+
+    def test_apps_matrix_expands_all_from_listall_which_is_list_minus_the_discovery_row(self):
+        with tempfile.TemporaryDirectory() as t:
+            full = self.bash(["x", "list"], t).stdout.split()
+            allnames = self.bash(["x", "listall"], t).stdout.split()
+            self.assertEqual([n for n in full if n != "vkcts"], allnames)
 
     def test_the_row_is_not_in_the_expected_provisioning_rows(self):
         self.assertNotIn("vkcts", (ROOT / "scripts/apps/expected_rows.txt").read_text())
@@ -1040,13 +1182,20 @@ class MatrixRowTests(unittest.TestCase):
             res = [l for l in self.bash(["guest", "vkcts"], t, {"FAKE_PLAN": json.dumps({"type": "CPU", "device": "llvmpipe"})}).stdout.splitlines() if l.startswith("APPRES")][0]
             self.assertIn("verdict=FAIL", res)
             self.assertIn("rc=3", res)
+            self.assertIn("note=CONFIG", res)
 
-    def test_matrix_table_calls_it_discovery_and_keeps_it_out_of_the_generated_gate_list(self):
+    def test_matrix_table_calls_it_discovery(self):
         sys.path.insert(0, str(ROOT / "scripts/apps"))
         import matrix_table as mt
         cls, final, reason = mt.classify("vkcts", {"verdict": "PASS"}, {"verdict": "PASS"}, None)
         self.assertEqual(cls, "DISCOVERY")
         self.assertIn("docs/design/V3_VULKAN_CTS_ROW.md", reason)
+        self.assertEqual(mt.classify("vkcts", {"verdict": "FAIL"}, {"verdict": "FAIL"}, None)[0], "DISCOVERY")
+        self.assertEqual(mt.classify("deviceQuery", {"verdict": "PASS"}, {"verdict": "PASS"}, None)[0], "GATE")
+
+    def test_the_discovery_row_stays_out_of_the_generated_gate_list_even_when_it_passes_everywhere(self):
+        sys.path.insert(0, str(ROOT / "scripts/apps"))
+        import matrix_table as mt
         with tempfile.TemporaryDirectory() as t:
             Path(t, "host.res").write_text("APPRES side=host app=vkcts verdict=PASS rc=0 secs=1 quiet=0 note=-\nAPPRES side=host app=deviceQuery verdict=PASS rc=0 secs=1 quiet=0 note=-\n")
             Path(t, "guest.res").write_text("APPRES side=guest app=vkcts verdict=PASS rc=0 secs=1 quiet=0 note=-\nAPPRES side=guest app=deviceQuery verdict=PASS rc=0 secs=1 quiet=0 note=-\n")
