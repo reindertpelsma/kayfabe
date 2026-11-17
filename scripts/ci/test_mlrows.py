@@ -1522,6 +1522,66 @@ class GpuUseJudge(unittest.TestCase):
             self.assertTrue(gur.control_line(row, rec).startswith("NEGCTL app=%s control=CONTROL_OK" % row), gur.control_line(row, rec))
 
 
+class Standalone(unittest.TestCase):
+    """run_standalone.sh with a fake tool next to it, a fake apt-get and a fake id: what it runs, in which order, and how it ends."""
+    script = ML / "run_standalone.sh"
+
+    def run_it(self, tool_body, uid="0"):
+        t = Path(tempfile.mkdtemp())
+        (t / "tool").mkdir()
+        shutil_copy = __import__("shutil").copyfile
+        shutil_copy(self.script, t / "tool" / "run_standalone.sh")
+        (t / "tool" / "mlrows.py").write_text(tool_body)
+        fake = t / "bin"
+        fake.mkdir()
+        (fake / "apt-get").write_text("#!/bin/sh\necho \"apt-get $*\" >> %s\n" % (t / "calls"))
+        (fake / "id").write_text("#!/bin/sh\necho %s\n" % uid)
+        for f in fake.iterdir():
+            f.chmod(0o755)
+        env = dict(os.environ, PATH="%s:%s" % (fake, os.environ["PATH"]), DEBIAN_FRONTEND="")
+        done = subprocess.run(["bash", str(t / "tool" / "run_standalone.sh"), str(t / "out")], capture_output=True, text=True, env=env, timeout=60)
+        calls = (t / "calls").read_text() if (t / "calls").exists() else ""
+        return done, calls, t
+
+    TOOL = ("import sys\nprint('MLROWS %s' % ' '.join(sys.argv[1:]), flush=True)\n"
+            "row = sys.argv[2] if sys.argv[1] == 'run' else None\n"
+            "if row: print({'jax': 'JAX_SUMMARY status=PASS', 'tensorrt': 'TENSORRT_SUMMARY status=FAIL reason=x', 'vllm': 'APPNOTRUN driver_cuda_below_every_wheel'}[row])\n"
+            "sys.exit(1 if row == 'tensorrt' else 0)\n")
+
+    def test_it_installs_the_prerequisites_as_root_checks_sets_up_then_runs_every_row(self):
+        done, calls, t = self.run_it(self.TOOL)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("apt-get install -y -qq python3 python3-venv python3-dev gcc ca-certificates", calls)
+        order = [l.split()[1] for l in done.stdout.splitlines() if l.startswith("MLROWS ")]
+        self.assertEqual(order, ["check", "setup"])
+        for row in ("jax", "tensorrt", "vllm"):
+            self.assertIn("MLROWS run %s --root %s --out %s" % (row, t / "out" / "root", t / "out" / row), (t / "out" / (row + ".log")).read_text())
+        self.assertIn("JAX_SUMMARY status=PASS", done.stdout)
+        self.assertIn("TENSORRT_SUMMARY status=FAIL", done.stdout)               # a failing row does not stop the others
+        self.assertIn("APPNOTRUN driver_cuda_below_every_wheel", done.stdout)
+
+    def test_a_non_root_user_gets_no_apt_call(self):
+        done, calls, _ = self.run_it(self.TOOL, uid="1000")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(calls, "")
+
+    def test_a_failed_setup_stops_the_run(self):
+        done, _, _ = self.run_it("import sys\nprint('MLROWS', sys.argv[1])\nsys.exit(3 if sys.argv[1] == 'setup' else 0)\n")
+        self.assertEqual(done.returncode, 3)
+        self.assertNotIn("MLROWS run", done.stdout)
+
+    def test_a_row_that_printed_no_summary_is_named(self):
+        done, _, t = self.run_it("import sys\nsys.exit(0)\n")
+        self.assertIn("jax: no summary line", done.stdout)
+
+    def test_it_is_short_linear_shell(self):
+        text = self.script.read_text()
+        self.assertIn("set -euo pipefail", text)
+        self.assertLessEqual(len(text.splitlines()), 30)
+        for bad in ("curl", "wget", "pip install", "git clone", "sudo"):
+            self.assertNotIn(bad, text)
+
+
 # ------------------------------------------------------------------------------------------------ the trust rules, as text pins
 PY_FILES = sorted(ML.glob("*.py"))
 
