@@ -328,8 +328,8 @@ def judge_tensorrt(res, expected=None):
 
 # --- jax
 JAX_STRICT_REL = 1e-4            # float32 at HIGHEST precision, as a fraction of the CPU result's largest magnitude
-JAX_DEFAULT_REL = 2e-2           # the default (TF32-capable) precision
-JAX_PREALLOC_LOW, JAX_PREALLOC_HIGH = 0.70, 0.78   # XLA_PYTHON_CLIENT_MEM_FRACTION defaults to 0.75
+JAX_DEFAULT_REL = 3e-3           # the default (TF32-capable) precision; MEASURED 2.9e-4 on an RTX 3060 (TF32), 10x margin
+JAX_PREALLOC_LOW, JAX_PREALLOC_HIGH = 0.68, 0.78   # XLA_PYTHON_CLIENT_MEM_FRACTION defaults to 0.75 of the memory CUDA reports; nvidia-smi's total is larger by the driver's reserve (MEASURED 0.727 on a 12 GB card)
 JAX_MIN_PEAK_MIB = 32            # UNCALIBRATED
 
 
@@ -351,7 +351,9 @@ def judge_jax(res, expected=None):
     checks.append(_chk("preallocation_is_75_percent", ratio is not None and JAX_PREALLOC_LOW <= ratio <= JAX_PREALLOC_HIGH, "bytes_limit %s MiB of %s MiB = %s" % (lim, tot, None if ratio is None else round(ratio, 3))))
     grown = res.get("mem_growth_mib")
     checks.append(_chk("preallocation_observed_on_the_device", _num(grown) and _num(tot) and grown >= 0.6 * tot, "device memory grew %s MiB of %s MiB" % (grown, tot)))
-    checks.append(_chk("autotuner_ran", _num(res.get("autotune_bytes")) and res["autotune_bytes"] > 0, "autotune results %s bytes" % res.get("autotune_bytes")))
+    back = res.get("autotune_backends") or {}
+    tuned = sum(v for k, v in back.items() if k != "NATIVE_EMITTER" and _num(v))
+    checks.append(_chk("autotuner_ran", _num(res.get("autotune_bytes")) and res["autotune_bytes"] > 0 and tuned >= 1, "autotune results %s bytes, %d tuned entries %s" % (res.get("autotune_bytes"), tuned, dict(sorted(back.items())))))
     peak = res.get("peak_bytes_in_use_mib")
     checks.append(_chk("work_allocated_on_the_device", _num(peak) and peak >= JAX_MIN_PEAK_MIB, "peak_bytes_in_use %s MiB, floor %d" % (peak, JAX_MIN_PEAK_MIB)))
     bad = next((c for c in checks if not c["ok"]), None)

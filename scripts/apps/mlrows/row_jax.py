@@ -23,6 +23,28 @@ def emit(res):
     print("MLROW_JSON " + json.dumps(res, sort_keys=True, separators=(",", ":")), flush=True)
 
 
+def autotune_summary(path):
+    """The dump is protobuf text: `entries { key {...} value { optimal_config { backend: CUDNN ... } } }`. -> (bytes, entries, {backend: count}). A backend other than
+    NATIVE_EMITTER (the emitter's own kernel, nothing timed) is a choice the autotuner made between candidates on the device: CUDNN, CUBLAS, CUBLASLT_FISSION, TRITON."""
+    try:
+        size = os.path.getsize(path)
+        entries, backends, nxt = 0, {}, False
+        with open(path, errors="replace") as f:
+            for line in f:
+                t = line.strip()
+                if line.startswith("entries {"):
+                    entries += 1
+                if t == "optimal_config {":
+                    nxt = True
+                elif nxt and t.startswith("backend:"):
+                    b = t.split(":", 1)[1].strip()
+                    backends[b] = backends.get(b, 0) + 1
+                    nxt = False
+        return size, entries, backends
+    except OSError:
+        return 0, 0, {}
+
+
 def main():
     t0 = time.time()
     import jax
@@ -87,12 +109,7 @@ def main():
     res["peak_bytes_in_use_mib"] = round(st["peak_bytes_in_use"] / mib, 2) if "peak_bytes_in_use" in st else None
     res["pool_bytes_mib"] = round(st["pool_bytes"] / mib, 1) if "pool_bytes" in st else None
     # the autotuner's dump is written when the compilations are done; the file is small text
-    try:
-        res["autotune_bytes"] = os.path.getsize(AUTOTUNE_FILE)
-        with open(AUTOTUNE_FILE, errors="replace") as f:
-            res["autotune_entries"] = sum(1 for line in f if line.startswith("results {") or line.strip().startswith("results {"))
-    except OSError:
-        res["autotune_bytes"], res["autotune_entries"] = 0, 0
+    res["autotune_bytes"], res["autotune_entries"], res["autotune_backends"] = autotune_summary(AUTOTUNE_FILE)
     # nvidia-smi's total comes from the runner (the sampler); the row prints what XLA itself says
     res["wall_s"] = round(time.time() - t0, 1)
     emit(res)

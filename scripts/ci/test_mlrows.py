@@ -423,7 +423,7 @@ def trt_result(**kw):
 def jax_result(**kw):
     ops = [{"name": n, "precision": p, "max_abs_err": 1e-3, "ref_max_abs": 100.0, "on_gpu": True} for n, p in (("matmul_f32_highest", "highest"), ("matmul_default", "default"), ("conv", "highest"), ("scan", "highest"))]
     r = {"row": "jax", "default_backend": "gpu", "devices": [{"id": 0, "platform": "gpu"}], "ops": ops, "bytes_limit_mib": 9200.0, "total_mib": 12288, "mem_growth_mib": 9300,
-         "autotune_bytes": 4000, "peak_bytes_in_use_mib": 300.0}
+         "autotune_bytes": 4000, "autotune_entries": 6, "autotune_backends": {"CUDNN": 1, "CUBLASLT_FISSION": 2, "NATIVE_EMITTER": 3}, "peak_bytes_in_use_mib": 300.0}
     r.update(kw)
     return r
 
@@ -531,6 +531,8 @@ class JudgeJax(unittest.TestCase):
             ("limit unknown", {"bytes_limit_mib": None}, "preallocation_is_75_percent"),
             ("device memory did not grow", {"mem_growth_mib": 500}, "preallocation_observed_on_the_device"),
             ("no autotune results", {"autotune_bytes": 0}, "autotuner_ran"),
+            ("only the emitter's own kernels in the dump", {"autotune_backends": {"NATIVE_EMITTER": 5}}, "autotuner_ran"),
+            ("an empty dump table", {"autotune_backends": {}}, "autotuner_ran"),
             ("nothing allocated", {"peak_bytes_in_use_mib": 1.0}, "work_allocated_on_the_device"),
         ):
             st, why, _ = lib.judge_jax(jax_result(**kw))
@@ -539,12 +541,12 @@ class JudgeJax(unittest.TestCase):
 
     def test_the_strict_and_the_default_precision_have_their_own_tolerances(self):
         ops = jax_result()["ops"]
-        e = 5e-3 * 100.0                                   # 5e-3 of the scale: fine for the default precision, far too much for HIGHEST
+        e = 2e-3 * 100.0                                   # 2e-3 of the scale: fine for the default precision (TF32 gives 3e-4), far too much for HIGHEST
         self.assertEqual(lib.judge_jax(jax_result(ops=[dict(ops[0]), dict(ops[1], max_abs_err=e), ops[2], ops[3]]))[0], lib.PASS)
         self.assertEqual(lib.judge_jax(jax_result(ops=[dict(ops[0], max_abs_err=e)] + ops[1:]))[0], lib.FAIL)
 
     def test_the_preallocation_window_boundaries(self):
-        for ratio, ok in ((0.70, True), (0.78, True), (0.699, False), (0.781, False)):
+        for ratio, ok in ((0.68, True), (0.78, True), (0.679, False), (0.781, False)):
             r = jax_result(bytes_limit_mib=12288 * ratio)
             self.assertEqual(lib.judge_jax(r)[0] == lib.PASS, ok, ratio)
 
