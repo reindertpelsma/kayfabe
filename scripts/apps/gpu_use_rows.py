@@ -73,6 +73,14 @@ def row_class(app):
     return "a-info" if app in INFO else "a"
 
 
+def host_engines(app, side):
+    """The host observables a row must show: `mem` (host video memory rises by a floor) is required of a BARE-METAL run only. MEASURED 2026-11-17 (first guest run,
+    RTX 3090, blender_cycles): the guest's device memory is the store the host reserves at boot (8 GiB), so a guest allocation never moves host VRAM (8761 -> 8792 MiB
+    with 9512 submissions and the GPU 53 percent busy). The census and the other engines stay required of a guest."""
+    engines = ROWS[app][3]
+    return tuple(e for e in engines if not (side == "guest" and e == "mem"))
+
+
 def policy(app):
     cls, proof, params, engines, sampler, missing = ROWS[app]
     return {"class": cls, "proof": proof, "params": params, "engines": engines, "interval_ms": sampler["interval_ms"], "min_samples": sampler["min_samples"],
@@ -100,13 +108,13 @@ def evaluate(app, side, app_text, kf3_lines=None, kf3_base=None, smi=None):
         return {"row": app, "class": cls, "verdict": "NA", "reasons": [], "authority": "none", "census": census, "smi": None, "app": None}
     p = policy(app)
     appp = None if app_text is None else gu.PROOFS[p["proof"]](app_text, **p["params"])
-    engines = p["engines"] if (side == "guest" or smi is not None) else ()      # a bare-metal baseline is not sampled unless a sampler record is given
+    engines = host_engines(app, side) if (side == "guest" or smi is not None) else ()      # a bare-metal baseline is not sampled unless a sampler record is given
     rec = gu.judge(app, census=census, smi=smi, app=appp, need_census=(side == "guest"), need_engines=engines, side=side, app_missing=p["app_missing"])
     rec["class"], rec["thresholds"] = cls, {"min_samples": p["min_samples"], "interval_ms": p["interval_ms"]}
     return rec
 
 
-def smi_from_dir(app, directory):
+def smi_from_dir(app, directory, side="guest"):
     """The sampler's files of one row -> the gpu_assert record, or None when the row was not sampled (no directory / no files)."""
     if not directory:
         return None
@@ -115,7 +123,8 @@ def smi_from_dir(app, directory):
     if q is None and m is None:
         return None
     p = policy(app) if app in ROWS else {"engines": (), "min_samples": 1}
-    return gu.smi_record(q or "", m or "", p["engines"], min_samples=p["min_samples"]) if p["engines"] else None
+    engines = host_engines(app, side) if app in ROWS else ()
+    return gu.smi_record(q or "", m or "", engines, min_samples=p["min_samples"]) if engines else None
 
 
 def rewrite(line, verdict, note):
@@ -158,7 +167,7 @@ def cmd_annotate(a):
         kf3 = window_lines(a.kf3_log) if a.side == "guest" else None
         base_text = read_text(a.kf3_base) if a.kf3_base else None
         base = gu.last_status_line((base_text or "").splitlines()) if base_text else None
-        new, rec = annotate_line(a.line, a.side, app_text, kf3, base, smi_from_dir(a.app, a.smi_dir), a.negctl)
+        new, rec = annotate_line(a.line, a.side, app_text, kf3, base, smi_from_dir(a.app, a.smi_dir, a.side), a.negctl)
         out = control_line(a.app, rec) if a.negctl else new
     except Exception as exc:  # noqa: BLE001 - fail closed: a judge that crashed must not leave a PASS of a wired row standing
         rec = None
