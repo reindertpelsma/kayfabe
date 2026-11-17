@@ -43,7 +43,7 @@ def tmpdir(case):
 
 def sample_record(strict=True, rows=None, image=None, driver=None):
     out, ctx, _ = tm.run(tm.all_good(), ctx=tm.make_ctx(strict=strict))
-    rec = MR.build_record(out, ctx, SHA, image or {"sha256": "a" * 64, "size": 8147790579, "source": "pin", "pin_enforced": True, "ref": "x.zip"},
+    rec = MR.build_record(out, ctx, SHA, image or {"sha256": "a" * 64, "size": 8128391922, "source": "pin", "pin_enforced": True, "ref": "x.zip"},
                           driver or {"version": "580.173.02", "sha256": "b" * 64, "source": "pin", "ref": "linux/580.173.02"}, "ada")
     return rec
 
@@ -51,8 +51,8 @@ def sample_record(strict=True, rows=None, image=None, driver=None):
 class PinsTests(unittest.TestCase):
     def test_the_committed_pin_is_the_owners_object(self):
         item = ms.load_pins()["items"][0]
-        self.assertEqual((item["ref"], item["size"], item["sha256"]), ("propimage-kfimg-matlab-20261117.zip", 8147790579,
-                                                                      "81f7408f19bcb332ab31fd36b5922ff70f11d342a71166c67b538e764b285dcc"))
+        self.assertEqual((item["ref"], item["size"], item["sha256"]), ("propimage-kfimg-matlab-20261117.zip", 8128391922,
+                                                                      "30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a"))
 
     def test_it_equals_the_workers_object(self):
         cfg = json.loads((ROOT / "ci/vast-broker/propimages.json").read_text())
@@ -132,8 +132,8 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(len(m["items"]), 1)
 
     def test_disk_rule(self):
-        self.assertTrue(ms.free_row(200 << 30, 8147790579)[0])
-        self.assertFalse(ms.free_row(10 << 30, 8147790579)[0])
+        self.assertTrue(ms.free_row(200 << 30, 8128391922)[0])
+        self.assertFalse(ms.free_row(10 << 30, 8128391922)[0])
 
 
 def namespace(**over):

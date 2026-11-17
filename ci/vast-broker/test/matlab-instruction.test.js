@@ -70,8 +70,8 @@ test('the committed configuration holds the MATLAB image: the object, every row 
   const o = PROPIMAGES.objects.find((x) => x.id === m.object);
   assert.equal(o.role, 'linux_image');
   assert.equal(o.object, 'linux-proprietary/kfimg-matlab-20261117/image.zip');
-  assert.equal(o.size, 8147790579);
-  assert.equal(o.sha256, '81f7408f19bcb332ab31fd36b5922ff70f11d342a71166c67b538e764b285dcc');
+  assert.equal(o.size, 8128391922);
+  assert.equal(o.sha256, '30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a');
   assert.equal(m.families, 'generic');
   assert.deepEqual(Object.keys(m.rows), [...MATLAB_ROWS]);
   assert.ok(Object.values(m.rows).every((r) => r.lane === 'discovery'));
@@ -200,7 +200,7 @@ test('the part: a pinned image, the die guest driver, every row in the discovery
   assert.deepEqual(part.matlab.image, {
     from: 'pin',
     ref: 'propimage-kfimg-matlab-20261117.zip',
-    sha256: '81f7408f19bcb332ab31fd36b5922ff70f11d342a71166c67b538e764b285dcc',
+    sha256: '30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a',
   });
   assert.deepEqual(part.matlab.driver, { version: '580.173.02' });
   assert.equal(part.matlab.isolation, 'row');
@@ -372,7 +372,7 @@ test('bandwidth: the stage is planned from the instruction and charges the pinne
   const est = estimateBandwidth(doc, doc.tier);
   assert.ok(est.stages.includes('matlab'));
   const image = est.items.find((i) => i.id === 'matlab.image');
-  assert.equal(image.down, 8147790579);
+  assert.equal(image.down, 8128391922);
   assert.equal(image.from, 'propimages.json:imgc');
   assert.equal(est.items.find((i) => i.id === 'matlab.driver').down, 398000000);
   const { matlab, ...base } = doc;

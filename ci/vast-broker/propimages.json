@@ -34,8 +34,8 @@
       "role": "linux_image",
       "ref": "propimage-kfimg-matlab-20261117.zip",
       "object": "linux-proprietary/kfimg-matlab-20261117/image.zip",
-      "size": 8147790579,
-      "sha256": "81f7408f19bcb332ab31fd36b5922ff70f11d342a71166c67b538e764b285dcc"
+      "size": 8128391922,
+      "sha256": "30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a"
     }
   ],
   "images": [
