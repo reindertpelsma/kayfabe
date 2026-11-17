@@ -13,6 +13,7 @@ import {
   MATLAB_ROWS,
   propimagesConfigProblems,
   matlabPlan,
+  compareDottedVersions,
   buildLeg,
   buildInstruction,
   canonicalInstruction,
@@ -76,6 +77,18 @@ test('the committed configuration holds the MATLAB image: the object, every row 
   assert.deepEqual(Object.keys(m.rows), [...MATLAB_ROWS]);
   assert.ok(Object.values(m.rows).every((r) => r.lane === 'discovery'));
   assert.equal(m.measured_families, undefined);
+});
+test('the committed image carries the minimum guest driver MATLAB needs, a pinned Linux installer, with its measured basis', () => {
+  const m = linux(PROPIMAGES);
+  assert.equal(m.min_guest_driver, '590.48.01');
+  assert.ok(
+    RELEASE_MATRIX.driver_installers.some(
+      (p) => p.os === 'linux' && p.version === m.min_guest_driver && p.status === 'PINNED',
+    ),
+  );
+  assert.match(m.min_guest_driver_basis, /traces\/matlab_gpu_20261117/);
+  assert.match(m.min_guest_driver_basis, /MEASURED/);
+  assert.match(m.min_guest_driver_basis, /580\.159\.04/);
 });
 test('the row ids are the box own table (scripts/bench/linux/matlab_rows.py plan)', () => {
   const run = python('scripts/bench/linux/matlab_rows.py', ['plan']);
@@ -179,6 +192,66 @@ test('a Linux image with no rows, an extra key, a clashing label, bad families o
     'LINUX_IMAGES',
   );
 });
+test('the minimum guest driver is optional', () => {
+  const c = edit((x) => {
+    delete linux(x).min_guest_driver;
+    delete linux(x).min_guest_driver_basis;
+  });
+  assert.deepEqual(propimagesConfigProblems(c), []);
+});
+test('a minimum guest driver that is not a dotted version is refused', () => {
+  for (const bad of ['abc', '590', '590.48.01.2.3', ' 590.48.01', '', 590.48, null, ['590.48.01']])
+    refuses(
+      edit((c) => (linux(c).min_guest_driver = bad)),
+      'MIN_GUEST_DRIVER:matlab',
+    );
+});
+test('a minimum guest driver that is dotted but not a PINNED Linux installer of the release matrix is refused', () => {
+  // listed and UNPINNED, absent from the matrix, or a Windows installer
+  for (const bad of ['580.94.02', '9.9.9', '580.97'])
+    refuses(
+      edit((c) => (linux(c).min_guest_driver = bad)),
+      'MIN_GUEST_DRIVER:matlab',
+    );
+  // the check is against the matrix handed in: a matrix without the pin refuses the committed value
+  const m = structuredClone(RELEASE_MATRIX);
+  m.driver_installers = m.driver_installers.filter((p) => p.version !== '590.48.01');
+  assert.ok(
+    propimagesConfigProblems(PROPIMAGES, { releaseMatrix: m }).includes('MIN_GUEST_DRIVER:matlab'),
+  );
+});
+test('the plan refuses a configuration whose minimum is not a pinned installer, with the configuration error, before it builds anything', () => {
+  const c = edit((x) => (linux(x).min_guest_driver = '9.9.9'));
+  assert.throws(
+    () => matlabPlan({ profile: 'release', tierName: 'large', die: 'AD102' }, { config: c }),
+    /propimages config: MIN_GUEST_DRIVER:matlab/,
+  );
+});
+test('a minimum guest driver with no basis, or an empty one, is refused', () => {
+  refuses(
+    edit((c) => delete linux(c).min_guest_driver_basis),
+    'MIN_GUEST_DRIVER_BASIS:matlab',
+  );
+  refuses(
+    edit((c) => (linux(c).min_guest_driver_basis = '')),
+    'MIN_GUEST_DRIVER_BASIS:matlab',
+  );
+});
+test('a basis with no minimum is a stray key, not a free note, and is refused', () => {
+  refuses(
+    edit((c) => delete linux(c).min_guest_driver),
+    'MIN_GUEST_DRIVER_BASIS:matlab',
+  );
+});
+test('dotted versions compare field by field as numbers, a missing field is zero', () => {
+  assert.ok(compareDottedVersions('580.173.02', '590.48.01') < 0);
+  assert.ok(compareDottedVersions('590.48.01', '580.173.02') > 0);
+  assert.ok(compareDottedVersions('1000.2.3', '590.48.01') > 0); // as text it is smaller
+  assert.ok(compareDottedVersions('590.9', '590.10') < 0); // as text it is larger
+  assert.equal(compareDottedVersions('590.48.01', '590.48.1'), 0);
+  assert.equal(compareDottedVersions('590.48', '590.48.0'), 0);
+  assert.ok(compareDottedVersions('590.48', '590.48.1') < 0);
+});
 test('a Windows image cannot take the Linux object, and the slot rule is untouched', () => {
   refuses(
     edit((c) => (c.images[0].object = 'imgc')),
@@ -202,23 +275,132 @@ test('the part: a pinned image, the die guest driver, every row in the discovery
     ref: 'propimage-kfimg-matlab-20261117.zip',
     sha256: '30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a',
   });
-  assert.deepEqual(part.matlab.driver, { version: '580.173.02' });
+  assert.deepEqual(part.matlab.driver, { version: '590.48.01' });
   assert.equal(part.matlab.isolation, 'row');
   assert.deepEqual(Object.keys(part.matlab.rows), [...MATLAB_ROWS]);
   assert.ok(Object.values(part.matlab.rows).every((r) => r.lane === 'discovery'));
   assert.equal(JSON.stringify(part).includes('slot'), false);
   assert.equal(JSON.stringify(part).includes('strict'), false);
-  assert.match(lines[0], /matlab on AD102 \(ada\): guest driver 580\.173\.02/);
+  assert.match(lines[0], /matlab on AD102 \(ada\): guest driver 590\.48\.01 /);
+  assert.match(
+    lines[0],
+    /\(the image needs at least 590\.48\.01; the die's default 580\.173\.02 is older\)/,
+  );
   assert.match(lines[0], /not part of the A\/B slot rotation/);
 });
-test('the driver is the die own pinned guest driver from the release matrix', () => {
+const LARGE = (die) => ({ profile: 'release', tierName: 'large', die });
+// a release matrix in which the die AD102 has the given default guest driver and the given Linux installers are PINNED
+const matrixWith = (defaultDriver, pinned, extra = []) => {
+  const m = structuredClone(RELEASE_MATRIX);
+  m.dies.find((d) => d.die === 'AD102').drivers.linux_guest_driver = defaultDriver;
+  const real = new Map(m.driver_installers.map((p) => [p.os + '/' + p.version, p]));
+  m.driver_installers = [...pinned, ...extra].map((v) => {
+    const base = real.get('linux/580.173.02');
+    return { ...base, version: v, status: 'PINNED', size: 400000000 + Number(v.split('.')[0]) };
+  });
+  return m;
+};
+test('the driver is the die own pinned guest driver from the release matrix, raised to the image minimum when older', () => {
+  const min = linux(PROPIMAGES).min_guest_driver;
   for (const die of ['TU106', 'GA102', 'AD102', 'GB202']) {
     const row = RELEASE_MATRIX.dies.find((d) => d.die === die);
+    const older = row.drivers.linux_guest_driver.split('.')[0] < min.split('.')[0];
     assert.equal(
-      matlabPlan({ profile: 'release', tierName: 'large', die }).part.matlab.driver.version,
-      row.drivers.linux_guest_driver,
+      matlabPlan(LARGE(die)).part.matlab.driver.version,
+      older ? min : row.drivers.linux_guest_driver,
+      die,
     );
   }
+});
+test('a die whose default guest driver is older than the image minimum gets the pinned minimum, never anything higher, and the line says why', () => {
+  // 580.173.02 < 590.48.01 < 595.10.01: all three pinned, the minimum is picked, not the newest
+  const releaseMatrix = matrixWith('580.173.02', ['580.173.02', '590.48.01', '595.10.01']);
+  const { part, lines } = matlabPlan(LARGE('AD102'), { releaseMatrix });
+  assert.deepEqual(part.matlab.driver, { version: '590.48.01' });
+  assert.equal(
+    lines[0].includes(
+      "guest driver 590.48.01 (the image needs at least 590.48.01; the die's default 580.173.02 is older)",
+    ),
+    true,
+    lines[0],
+  );
+});
+test('versions are compared as dotted numbers, not as text: 580.173.02 is older than 590.48.01, 600.1.0 and 1000.2.3 are not', () => {
+  const pinned = ['580.173.02', '590.48.01', '600.1.0', '1000.2.3'];
+  const raised = matlabPlan(LARGE('AD102'), { releaseMatrix: matrixWith('580.173.02', pinned) });
+  assert.equal(raised.part.matlab.driver.version, '590.48.01');
+  // as text '600.1.0' < '590.48.01' is false but '1000.2.3' < '590.48.01' is true: a text compare would raise it
+  for (const v of ['600.1.0', '1000.2.3']) {
+    const kept = matlabPlan(LARGE('AD102'), { releaseMatrix: matrixWith(v, pinned) });
+    assert.equal(kept.part.matlab.driver.version, v);
+  }
+});
+test('a default that is newer by number but older as text (590.100.01 against 590.48.01) is left alone', () => {
+  const pinned = ['590.48.01', '590.100.01'];
+  const { part } = matlabPlan(LARGE('AD102'), { releaseMatrix: matrixWith('590.100.01', pinned) });
+  assert.deepEqual(part.matlab.driver, { version: '590.100.01' });
+});
+test('a missing field counts as zero: 590.48 is older than 590.48.01, 590.48.1 is the same number as 590.48.01', () => {
+  const pinned = ['590.48', '590.48.01', '590.48.1'];
+  const short = matlabPlan(LARGE('AD102'), { releaseMatrix: matrixWith('590.48', pinned) });
+  assert.deepEqual(short.part.matlab.driver, { version: '590.48.01' });
+  const same = matlabPlan(LARGE('AD102'), { releaseMatrix: matrixWith('590.48.1', pinned) });
+  assert.deepEqual(same.part.matlab.driver, { version: '590.48.1' });
+});
+test('a die whose default guest driver is already at or above the image minimum is left alone, with no raise line', () => {
+  const pinned = ['580.173.02', '590.48.01', '595.10.01'];
+  for (const v of ['590.48.01', '595.10.01']) {
+    const { part, lines } = matlabPlan(LARGE('AD102'), { releaseMatrix: matrixWith(v, pinned) });
+    assert.deepEqual(part.matlab.driver, { version: v });
+    assert.match(
+      lines[0],
+      new RegExp('matlab on AD102 \\(ada\\): guest driver ' + v.replace(/\./g, '\\.') + ', '),
+    );
+    assert.equal(lines[0].includes('older'), false, lines[0]);
+    assert.equal(lines[0].includes('needs at least'), false, lines[0]);
+  }
+});
+test('an image with no minimum takes the die default as before, whatever it is', () => {
+  const c = edit((x) => {
+    delete linux(x).min_guest_driver;
+    delete linux(x).min_guest_driver_basis;
+  });
+  const { part, lines } = matlabPlan(LARGE('AD102'), { config: c });
+  assert.deepEqual(part.matlab.driver, { version: '580.173.02' });
+  assert.equal(lines[0].includes('needs at least'), false, lines[0]);
+});
+test('a minimum absent from the release matrix in use is refused by name, whether the die default is older or above it', () => {
+  // the committed config is valid against the committed matrix; the matrix handed to the plan lacks the minimum
+  const missing = matrixWith('580.173.02', ['580.173.02']);
+  assert.throws(
+    () => matlabPlan(LARGE('AD102'), { releaseMatrix: missing }),
+    /matlab min driver:590\.48\.01/,
+  );
+  const above = matrixWith('595.10.01', ['595.10.01']);
+  assert.throws(
+    () => matlabPlan(LARGE('AD102'), { releaseMatrix: above }),
+    /matlab min driver:590\.48\.01/,
+  );
+});
+test('a minimum that is listed but UNPINNED in the release matrix in use is refused by name', () => {
+  const unpinned = matrixWith('580.173.02', ['580.173.02', '590.48.01']);
+  unpinned.driver_installers.find((p) => p.version === '590.48.01').status = 'UNPINNED';
+  assert.throws(
+    () => matlabPlan(LARGE('AD102'), { releaseMatrix: unpinned }),
+    /matlab min driver:590\.48\.01/,
+  );
+});
+test('a minimum that is only a Windows installer of that number is refused by name', () => {
+  const windows = matrixWith('580.173.02', ['580.173.02', '590.48.01']);
+  windows.driver_installers.find((p) => p.version === '590.48.01').os = 'windows';
+  assert.throws(
+    () => matlabPlan(LARGE('AD102'), { releaseMatrix: windows }),
+    /matlab min driver:590\.48\.01/,
+  );
+});
+test('a die whose own default driver is not pinned is still refused by name, before the minimum is considered', () => {
+  const m = matrixWith('580.173.02', ['590.48.01']);
+  assert.throws(() => matlabPlan(LARGE('AD102'), { releaseMatrix: m }), /matlab driver:AD102/);
 });
 test('refusals: not a release, not the large tier, a die with an unpinned driver, an unknown die, an unknown image', () => {
   assert.throws(
@@ -324,7 +506,7 @@ test('the box reads the golden and writes the same bytes back; its dry run plans
   });
   const run = python('scripts/ci/vast_payload.py', ['--instruction', GOLDEN, '--dry-run']);
   assert.equal(run.status, 0, run.stdout + run.stderr);
-  assert.match(run.stdout, /^KF_PAYLOAD_MATLAB strict=1 rows=8 driver=580\.173\.02$/m);
+  assert.match(run.stdout, /^KF_PAYLOAD_MATLAB strict=1 rows=8 driver=590\.48\.01$/m);
   assert.match(run.stdout, /^KF_PAYLOAD_PLAN stages=.*:matlab planned=.*:matlab$/m);
 });
 test('the box refuses the part by name: a changed sha256, an unpinned driver, an unknown row, the middle tier, a flag beside it', () => {
@@ -374,7 +556,12 @@ test('bandwidth: the stage is planned from the instruction and charges the pinne
   const image = est.items.find((i) => i.id === 'matlab.image');
   assert.equal(image.down, 8128391922);
   assert.equal(image.from, 'propimages.json:imgc');
-  assert.equal(est.items.find((i) => i.id === 'matlab.driver').down, 398000000);
+  // the installer the instruction carries is the pinned 590.48.01 (the image minimum): the table estimate is its pinned size
+  const pinned = RELEASE_MATRIX.driver_installers.find(
+    (p) => p.os === 'linux' && p.version === doc.matlab.driver.version,
+  );
+  assert.equal(doc.matlab.driver.version, '590.48.01');
+  assert.equal(est.items.find((i) => i.id === 'matlab.driver').down, pinned.size);
   const { matlab, ...base } = doc;
   assert.equal(estimateBandwidth(base, base.tier).stages.includes('matlab'), false);
   assert.ok(estimateBandwidth(base, base.tier, { only: ['matlab'] }).stages.includes('matlab'));
