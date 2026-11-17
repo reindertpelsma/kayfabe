@@ -1540,7 +1540,7 @@ def instruction_from_file(path, environ):
 # payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
 PROPIMAGE_APPS_IN_LARGE = False
 # stages with no budget row (scripts/ci/profile_resources.py): planned only by --only; the guard refuses one whose flag is True
-MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE", "kfml": "KFML_IN_MIDDLE_LARGE"}
+MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}
 PROPIMAGE_APPS_MIN_REMAINING_MS = 210 * 60000   # DESIGN: download ~16 min, 4 unpacks/hashes, 3 boots, apps up to 98 min worst case
 PROPIMAGE_APPS_PREFIX = "/workspace/kf-propimage"
 PROPIMAGE_APPS_MARGIN_S = 300
@@ -1625,12 +1625,12 @@ def install_flow_rows(text, rc, sha, result):
     return [row("install_flow", 1)]
 
 
-# 2026-11-16 kfml (scripts/kfml, ML research workloads; scripts/ci/kfml_stage.py): the six ML workloads run natively on the box's own
-# single NVIDIA GPU, with the wheel flavour derived from the box (no die and no driver is named anywhere). MIDDLE and LARGE tiers (the
-# kfml tier is mid for `middle`, large for `large`), planned only when named by --only: it has run on one container box (see
-# traces/kfml_run_20261116/) and on no kf3 box. Joining the default plan = flip KFML_IN_MIDDLE_LARGE in the commit that records its first
-# green box run under this payload, with a payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
-KFML_IN_MIDDLE_LARGE = False
+# 2026-11-17 kfml (scripts/kfml, ML research workloads; scripts/ci/kfml_stage.py): the ML workloads run natively on the box's own single NVIDIA
+# GPU, with the wheel flavour derived from the box (no die and no driver is named anywhere). IN THE DEFAULT PLAN of the MIDDLE and the LARGE tier
+# (owner, 2026-11-17: it joins the middle tier if it is not too big; measured: traces/kfml_run_20261117_tier_decision/README.md); `--skip kfml` leaves it out.
+# The kfml tier is `mid` for `middle` (the five gated rows, about 2 minutes warm) and `large` for `large` (all six rows). SMALL and ADHOC never plan it.
+# Its budget row is payloadStageResources.kfml in ci/vast-broker/defaults.json (a Worker bundle change) and its download numbers are bandwidth.json `kfml`.
+KFML_IN_MIDDLE_LARGE = True
 KFML_MIN_REMAINING_MS = {"middle": 60 * 60000, "large": 150 * 60000}   # DESIGN: setup downloads several GB of wheels; budgets in kfml specs
 KFML_PREFIX = "/workspace/kf-kfml"
 KFML_TIER = {"middle": "mid", "large": "large"}

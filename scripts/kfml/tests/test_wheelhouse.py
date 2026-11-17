@@ -384,3 +384,47 @@ class ParallelDownload(unittest.TestCase):
     def test_cifar_pin_asks_for_six_connections_not_more(self):
         self.assertEqual(PINS["datasets"]["cifar10_binary"]["parallel"], 6)
         self.assertNotIn("parallel", PINS["datasets"]["tinyshakespeare"])
+
+
+class Licenses(unittest.TestCase):
+    """wheelhouse-licenses.json: information from METADATA, proprietary flagged, never a build failure, never an upload."""
+
+    def make(self, d):
+        from tests.test_licenses_bundle import make_wheel
+        w = d / "cu126" / "wheels"
+        w.mkdir(parents=True)
+        make_wheel(w, "torch", "2.7.1+cu126", ["License: BSD-3-Clause"], tags="cp310-cp310-manylinux_2_28_x86_64")
+        make_wheel(w, "numpy", "2.2.6", ["License-Expression: BSD-3-Clause"], tags="cp310-cp310-manylinux_2_28_x86_64")
+        make_wheel(w, "nvidia_cublas_cu12", "12.6.4.1", ["License: NVIDIA Proprietary Software"], {"nvidia/cublas/lib/libcublas.so.12": b"x"})
+        make_wheel(w, "triton", "3.3.1", ["License: MIT"], {"triton/backends/nvidia/bin/ptxas": b"x", "triton/x.py": b"y"})
+        make_wheel(w, "mystery", "1.0", ["Summary: no licence anywhere"])
+        return d
+
+    def test_every_wheel_is_listed_with_its_licence_and_the_proprietary_ones_are_flagged(self):
+        with tempfile.TemporaryDirectory() as d:
+            doc = wh.licenses_manifest(self.make(Path(d)), ["cu126"])
+        by = {w["name"]: w for w in doc["wheels"]}
+        self.assertEqual(by["torch"]["license_spdx"], "BSD-3-Clause")
+        self.assertFalse(by["torch"]["proprietary"])  # a +cu local tag is a build, not a vendor binary
+        self.assertFalse(by["numpy"]["proprietary"])
+        self.assertTrue(by["nvidia_cublas_cu12"]["proprietary"])
+        self.assertTrue(by["triton"]["proprietary"])
+        self.assertIn("ptxas", by["triton"]["proprietary_reason"])
+        self.assertEqual(by["triton"]["license_spdx"], "MIT")  # MIT itself, proprietary only in what it bundles
+        self.assertEqual(doc["proprietary_count"], 2)
+        self.assertFalse(doc["stored_by_us"])
+
+    def test_an_unclassified_wheel_is_listed_not_a_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            doc = wh.licenses_manifest(self.make(Path(d)), ["cu126"])
+        self.assertIn("mystery", doc["unclassified"])
+
+    def test_build_writes_the_file_next_to_the_manifest_and_verify_ignores_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "wh"
+            m = wh.build(root, ["cu126"], PINS, run=FakePip(), with_redist=False)
+            self.assertTrue((root / "wheelhouse-licenses.json").is_file())
+            self.assertEqual(m["licenses"]["file"], "wheelhouse-licenses.json")
+            wh.verify(root)
+            (root / "wheelhouse-licenses.json").write_text("{}")  # information only: not part of the integrity check
+            wh.verify(root)

@@ -146,12 +146,15 @@ def run(args, runner=subprocess.run):
     s = run_step("plan", [py, "-m", "kfml", "setup", "--venv", str(venv), "--plan"], kdir, logs / "plan.log", env, runner)
     steps.append(s)
     if s["rc"] == 3:
-        reason = "no pinned flavour can run on this box"
+        reason, facts = "no pinned flavour can run on this box", {}
         try:
-            reason = json.loads((logs / "plan.log").read_text().splitlines()[-1])["reason"]
-        except (OSError, ValueError, KeyError, IndexError):
+            plan = json.loads((logs / "plan.log").read_text().splitlines()[-1])
+            reason, facts = plan["reason"], plan.get("facts") or {}
+        except (OSError, ValueError, KeyError, IndexError, AttributeError):
             pass
-        return not_run(args.sha, args.tier, steps, reason, test_names(kdir, args.tier, runner), args.run_id)
+        doc = not_run(args.sha, args.tier, steps, reason, test_names(kdir, args.tier, runner), args.run_id)
+        doc["facts"] = {k: (scrub(v, 64) if type(v) is str else v) for k, v in facts.items() if k in FACT_KEYS and type(v) in (str, int, float)}
+        return doc
     if s["rc"] != 0:
         return failure(args.sha, args.tier, steps, "flavour plan failed rc=%d" % s["rc"], args.run_id)
     # 2. the venv shell exists first so the datasets (stdlib only, the slow server) download WHILE the wheels install

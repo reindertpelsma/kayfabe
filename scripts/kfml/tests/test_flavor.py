@@ -39,6 +39,35 @@ class Choose(unittest.TestCase):
         self.assertIn("no pinned flavour can run", c.reason)
         self.assertIn("cu126: its wheels cover", c.reason)  # the old flavour has no sm_120 kernels
 
+    def test_an_older_12_x_driver_runs_the_older_flavour_by_minor_version_compatibility(self):
+        """MEASURED (kfml_run_20261117_ampere_older_driver): cu126 wheels ran on a CUDA 12.2 driver."""
+        c = self.pick("12.2", (8, 6))
+        self.assertEqual(c.flavor, "cu126")
+        self.assertIn("minor-version compatibility", c.reason)
+        self.assertIn("kfml_run_20261117_ampere_older_driver", c.reason)
+
+    def test_strict_beats_compat_when_a_flavour_fits_strictly(self):
+        self.assertNotIn("compatibility", self.pick("12.6", (8, 9)).reason)
+        self.assertNotIn("compatibility", self.pick("13.2", (7, 5)).reason)
+
+    def test_compat_needs_the_same_cuda_major_and_the_compat_minimum(self):
+        self.assertIsNone(self.pick("11.8", (8, 6)).flavor)  # another CUDA major
+
+        import copy
+        p = copy.deepcopy(PINS)
+        for m in p["flavors"].values():
+            m["compat_min_driver_cuda"] = "12.4"
+        self.assertIsNone(flavor.choose(p, "12.2", (8, 6)).flavor)  # below the compat minimum
+
+    def test_compat_never_applies_to_a_gpu_newer_than_compat_cc_max(self):
+        c = self.pick("12.2", (12, 0))  # a driver generation cannot drive an architecture it predates
+        self.assertIsNone(c.flavor)
+        self.assertIn("no pinned flavour can run", c.reason)
+
+    def test_compat_picks_the_lowest_cuda_flavour_that_covers_the_gpu(self):
+        self.assertEqual(self.pick("12.3", (7, 5)).flavor, "cu126")
+        self.assertEqual(self.pick("12.0", (9, 0)).flavor, "cu126")
+
     def test_driver_too_old_for_any_flavour(self):
         c = self.pick("11.8", (8, 6))
         self.assertIsNone(c.flavor)
@@ -205,3 +234,34 @@ class CheckSays(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlanCli(unittest.TestCase):
+    def run_plan(self, smi_dict):
+        real = envmod.nvidia_smi
+        envmod.nvidia_smi = lambda: smi_dict
+        try:
+            out = io.StringIO()
+            rc = cli.main(["setup", "--venv", "/nonexistent/never", "--plan"], out)
+        finally:
+            envmod.nvidia_smi = real
+        return rc, json.loads(out.getvalue())
+
+    def test_plan_says_the_flavour_and_the_facts_and_creates_nothing(self):
+        rc, doc = self.run_plan(smi("12.6", (8, 9), "560.35"))
+        self.assertEqual((rc, doc["flavor"]), (0, "cu126"))
+        self.assertEqual(doc["facts"]["compute_cap"], "8.9")
+        self.assertEqual(doc["facts"]["driver_cuda"], "12.6")
+        self.assertFalse(Path("/nonexistent/never").exists())
+
+    def test_plan_on_a_box_no_flavour_fits_is_exit_3_with_facts(self):
+        rc, doc = self.run_plan(smi("11.8", (8, 6), "535.154"))
+        self.assertEqual(rc, 3)
+        self.assertEqual(doc["status"], "NOT_RUN")
+        self.assertIn("driver supports CUDA 11.8 < 12.6", doc["reason"])
+        self.assertEqual((doc["facts"]["driver"], doc["facts"]["compute_cap"]), ("535.154", "8.6"))
+
+    def test_plan_for_a_pascal_card_names_the_compute_capability(self):
+        rc, doc = self.run_plan(smi("13.0", (6, 1), "580.1"))
+        self.assertEqual(rc, 3)
+        self.assertIn("the GPU is sm_61", doc["reason"])

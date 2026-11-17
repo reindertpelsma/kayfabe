@@ -1390,7 +1390,7 @@ class PayloadWiring(unittest.TestCase):
         self.assertEqual(vast_payload.plan_stage_names(inst, ["propimage_apps"])[-2:], ["propimage_apps", "specviewperf"])
 
     def test_manual_only_table_and_the_budget_guard(self):
-        self.assertEqual(vast_payload.MANUAL_ONLY_STAGES, {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE", "kfml": "KFML_IN_MIDDLE_LARGE"})
+        self.assertEqual(vast_payload.MANUAL_ONLY_STAGES, {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"})
         data = json.loads((profile_resources.ROOT / "ci/vast-broker/defaults.json").read_text())
         for stage in data["payloadStageResources"].values():
             stage["source"] = "scripts/ci/vast_payload.py"      # only the manual-only logic is under test, not the provenance files

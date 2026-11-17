@@ -16,6 +16,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import json
+import kfml_stage
 import test_vast_payload_v7 as v7
 
 HERE = Path(__file__).resolve().parent
@@ -329,7 +331,15 @@ class AppsStageInThePayload(unittest.TestCase):
     setUp = v7.V7Tests.setUp
     _main_fixture = v7.V7Tests._main_fixture
 
+    @staticmethod
+    def kfml_log():
+        """The kfml stage is in the default plan of middle and large since 2026-11-17: its stage log for the fixture's sha."""
+        row = {"name": "nanogpt_compile", "status": "PASS", "reason": "", "wall_s": 1.0, "gpu_name": "RTX 3060", "compute_cap": "8.6",
+               "driver": "580.159.04", "metrics": {}}
+        return "KF_KFML_RESULT " + json.dumps(kfml_stage.summarize([row], v7.SHA, "mid", [{"step": "run", "rc": 0, "s": 1.0}])) + "\n"
+
     def run_tier(self, tier, enabled=True, logs=None, windows="0", soft_ms=300 * 60000):
+        logs = dict({"kfml": (self.kfml_log(), 0)}, **(logs or {}))
         env = {"KF_TIER": tier}
         self.listed = []
         self.commands = []
@@ -368,7 +378,7 @@ class AppsStageInThePayload(unittest.TestCase):
                 self.assertEqual(rc, 0, result)
                 self.assertEqual(
                     calls,
-                    ["provision", "cuda_host", "merge_bar", "cuda_guest", "apps", "windows_gate"],
+                    ["provision", "cuda_host", "merge_bar", "cuda_guest", "apps", "kfml", "windows_gate"],
                 )
                 self.assertIn({"name": "apps", "pass": 3, "fail": 0, "skip": 0}, result["suites"])
                 self.assertEqual(self.listed, [tier])  # each tier reads ITS list

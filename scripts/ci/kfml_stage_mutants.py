@@ -49,11 +49,14 @@ def M(name, key, old, new, *tests):
 
 
 MUTANTS = [
-    M("stage-in-the-default-plan", "payload", "KFML_IN_MIDDLE_LARGE = False", "KFML_IN_MIDDLE_LARGE = True",
-      PL + "test_off_by_default_in_every_tier", PL + "test_dry_run_selects_it_and_touches_nothing"),
-    M("stage-allowed-in-the-small-tier", "payload", 'if i.tier in KFML_TIER and (KFML_IN_MIDDLE_LARGE or "kfml" in only):',
+    M("stage-dropped-from-the-default-plan", "payload", "KFML_IN_MIDDLE_LARGE = True", "KFML_IN_MIDDLE_LARGE = False",
+      PL + "test_in_the_default_plan_of_middle_and_large_only", PL + "test_dry_run_plans_it_by_default_and_skip_removes_it_and_touches_nothing"),
+    M("stage-planned-in-the-small-tier", "payload", 'if i.tier in KFML_TIER and (KFML_IN_MIDDLE_LARGE or "kfml" in only):',
       'if (KFML_IN_MIDDLE_LARGE or "kfml" in only):',
-      PL + "test_selectable_by_only_in_middle_and_large_not_small_or_adhoc", PL + "test_flag_true_puts_it_in_both_tiers_only"),
+      PL + "test_in_the_default_plan_of_middle_and_large_only", PL + "test_only_kfml_cannot_pull_it_into_small_or_adhoc"),
+    M("stage-back-in-the-manual-only-table", "payload", 'MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}',
+      'MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE", "kfml": "KFML_IN_MIDDLE_LARGE"}',
+      PL + "test_it_is_not_manual_only_and_has_a_budget_row", PL + "test_it_is_not_manual_only_and_has_a_budget_row"),
     M("not-run-verdict-is-a-failing-stage", "payload", 'if rc == 0 and doc.get("verdict") == "NOT_RUN":', "if False:",
       PL + "test_not_run_with_rc0_is_a_skipped_row_never_a_pass_never_a_fail", PL + "test_stage_not_run_flows_through_to_a_skipped_row_and_a_valid_report"),
     M("not-run-counted-as-a-pass", "payload", 'return [row("kfml", skipped=1)]', 'return [row("kfml", 1)]',
@@ -74,8 +77,7 @@ MUTANTS = [
       RU + "test_provider_and_cloud_secrets_never_reach_the_children", RU + "test_generic_token_secret_password_key_names_never_reach_the_children"),
     M("uuid-scrub-removed-from-reasons", "ks", '    t = re.sub(r"(?i)\\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\\b", "<uuid>", t)\n', "",
       S + "test_uuids_are_scrubbed", S + "test_failure_and_not_run_reasons_are_scrubbed_too"),
-    M("failed-fetch-ignored", "ks", 'if s["rc"] != 0:\n        return failure(args.sha, args.tier, steps, "fetch-data failed',
-      'if False:\n        return failure(args.sha, args.tier, steps, "fetch-data failed',
+    M("failed-fetch-ignored", "ks", 'if done["fetch-data"]["rc"] != 0:', 'if False:',
       RU + "test_failed_setup_or_fetch_is_fail", RU + "test_main_prints_one_result_line_and_exit_codes"),
     M("crash-exit-code-can-pass", "ks", 'if s["rc"] not in (0, 1) and doc["verdict"] == "PASS":', 'if False:',
       RU + "test_crash_exit_code_cannot_pass", RU + "test_main_prints_one_result_line_and_exit_codes"),

@@ -128,15 +128,20 @@ def _run(args, out, probe=envmod.probe_env):
 
 def _setup(args, out):
     if args.plan:  # the flavour decision only: nothing is created, nothing is downloaded (the stage uses it to start downloads only when a flavour fits)
+        smi = envmod.nvidia_smi()
+        facts = {"gpu_name": smi.get("name"), "compute_cap": "%d.%d" % tuple(smi["cc"]) if smi.get("cc") else None,
+                 "driver": smi.get("driver"), "driver_cuda": smi.get("driver_cuda"),
+                 "vram_gb": round(smi["total"], 2) if smi.get("total") else None}
+        facts = {k: v for k, v in facts.items() if v is not None}
         try:
-            f, why = setup_venv.resolve_flavor(args.flavor)
+            f, why = setup_venv.resolve_flavor(args.flavor, smi=smi)
         except setup_venv.NoFlavor as e:
-            out.write(json.dumps({"status": "NOT_RUN", "reason": str(e)}) + "\n")
+            out.write(json.dumps({"status": "NOT_RUN", "reason": str(e), "facts": facts}) + "\n")
             return 3
         except setup_venv.SetupError as e:
             sys.stderr.write("error: %s\n" % e)
             return 2
-        out.write(json.dumps({"flavor": f, "flavor_reason": why}) + "\n")
+        out.write(json.dumps({"flavor": f, "flavor_reason": why, "facts": facts}) + "\n")
         return 0
     try:
         r = setup_venv.setup(args.venv, args.flavor, args.python, args.with_nvcc, args.allow_unhashed, args.installer,

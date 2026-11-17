@@ -173,6 +173,18 @@ class Run(unittest.TestCase):
         self.assertTrue(all(r["status"] == "NOT_RUN" and r["reason"] for r in doc["rows"]))
         self.assertEqual(len(fr.calls), 2)  # the plan, then only the test list
 
+    def test_the_not_run_record_names_the_die_and_driver_from_the_plan(self):
+        plan = {"status": "NOT_RUN", "reason": "no pinned flavour can run on this box: x",
+                "facts": {"gpu_name": "Some Card", "compute_cap": "8.6", "driver": "535.1.1", "driver_cuda": "12.2", "vram_gb": 12.0, "junk": "dropped"}}
+        doc, _ = self.go(plan_rc=3, plan_line=json.dumps(plan))
+        self.assertEqual(doc["facts"], {"gpu_name": "Some Card", "compute_cap": "8.6", "driver": "535.1.1", "driver_cuda": "12.2", "vram_gb": 12.0})
+        vast_report.validate_kfml(doc)
+
+    def test_a_plan_without_facts_still_gives_a_valid_not_run_record(self):
+        doc, _ = self.go(plan_rc=3, plan_line="not json")
+        self.assertEqual(doc["verdict"], "NOT_RUN")
+        self.assertEqual(doc["facts"], {})
+
     def test_a_box_no_flavour_fits_downloads_nothing_and_creates_no_venv(self):
         doc, fr = self.go(plan_rc=3, plan_line=json.dumps({"status": "NOT_RUN", "reason": "r"}))
         self.assertFalse([c for c in fr.calls if "fetch-data" in c[0] or c[0][1:3] == ["-m", "venv"]
@@ -255,46 +267,62 @@ class Payload(unittest.TestCase):
         doc.update(over)
         return pi.Instruction(**doc)
 
-    def test_off_by_default_in_every_tier(self):
+    def test_in_the_default_plan_of_middle_and_large_only(self):
         m = self.m
-        self.assertFalse(m.KFML_IN_MIDDLE_LARGE)
-        for tier in ("small", "middle", "large", "adhoc"):
-            self.assertNotIn("kfml", m.plan_stage_names(self.inst(tier=tier)))
+        self.assertTrue(m.KFML_IN_MIDDLE_LARGE)
+        for tier, want in (("small", False), ("middle", True), ("large", True), ("adhoc", False)):
+            self.assertEqual("kfml" in m.plan_stage_names(self.inst(tier=tier)), want, tier)
 
-    def test_selectable_by_only_in_middle_and_large_not_small_or_adhoc(self):
+    def test_only_kfml_cannot_pull_it_into_small_or_adhoc(self):
         m = self.m
-        for tier in ("middle", "large"):
-            self.assertEqual(m.plan_stage_names(self.inst(tier=tier), ("kfml",))[-1], "kfml")
         for tier in ("small", "adhoc"):
             self.assertNotIn("kfml", m.plan_stage_names(self.inst(tier=tier), ("kfml",)))
         with self.assertRaises(m.EvidenceError):
             m.select_stages(m.plan_stage_names(self.inst(tier="small"), ("kfml",)), ["kfml"], [])
         self.assertEqual(m.KFML_TIER, {"middle": "mid", "large": "large"})
 
+    def test_skip_kfml_leaves_it_out_and_the_rest_in_order(self):
+        m = self.m
+        for tier in ("middle", "large"):
+            plan = m.plan_stage_names(self.inst(tier=tier, linux_apps="middle"))
+            chosen = m.select_stages(plan, [], ["kfml"])
+            self.assertNotIn("kfml", chosen)
+            self.assertEqual(chosen, [n for n in plan if n != "kfml"])
+        with self.assertRaises(m.EvidenceError):
+            m.select_stages(m.plan_stage_names(self.inst(tier="small")), [], ["kfml"])  # a stage that is not planned is refused
+
     def test_runs_after_the_linux_guests_and_before_install_flow_and_windows(self):
         m = self.m
-        names = m.plan_stage_names(self.inst(windows=True, linux_apps="middle"), ("kfml", "install_flow"))
+        names = m.plan_stage_names(self.inst(windows=True, linux_apps="middle"), ("install_flow",))
         self.assertEqual(names[names.index("kfml") - 1], "apps")
         self.assertEqual(names[names.index("kfml") + 1], "install_flow")
         self.assertLess(names.index("kfml"), names.index("windows_gate"))
+        self.assertEqual(m.plan_stage_names(self.inst(tier="middle"))[-1], "kfml")
 
-    def test_flag_true_puts_it_in_both_tiers_only(self):
-        m = self.m
-        with patch.object(m, "KFML_IN_MIDDLE_LARGE", True):
-            for tier, want in (("small", False), ("middle", True), ("large", True), ("adhoc", False)):
-                self.assertEqual("kfml" in m.plan_stage_names(self.inst(tier=tier)), want, tier)
+    def test_it_is_not_manual_only_and_has_a_budget_row(self):
+        import json as _json
+        self.assertNotIn("kfml", self.m.MANUAL_ONLY_STAGES)
+        table = _json.loads((ROOT / "ci/vast-broker/defaults.json").read_text())["payloadStageResources"]
+        self.assertIn("kfml", table)
+        self.assertEqual(sorted(table["kfml"]["profiles"]), ["large", "middle"])
 
-    def test_dry_run_selects_it_and_touches_nothing(self):
+    def test_the_stage_minimum_time_is_known_for_both_tiers(self):
+        self.assertEqual(sorted(self.m.KFML_MIN_REMAINING_MS), ["large", "middle"])
+        self.assertLess(self.m.KFML_MIN_REMAINING_MS["middle"], self.m.KFML_MIN_REMAINING_MS["large"])
+
+    def test_dry_run_plans_it_by_default_and_skip_removes_it_and_touches_nothing(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "i.json"
             pi.write(self.inst(tier="middle"), str(path))
             env = {k: v for k, v in os.environ.items() if not k.startswith("KF_")}
             cmd = [sys.executable, str(HERE / "vast_payload.py"), "--dry-run", "--instruction", str(path)]
-            ok = subprocess.run([*cmd, "--only", "kfml"], env=env, capture_output=True, text=True, cwd=d)
-            self.assertEqual(ok.returncode, 0, ok.stderr)
-            self.assertIn("KF_PAYLOAD_PLAN stages=kfml planned=provision:cuda_host:merge_bar:cuda_guest:kfml", ok.stdout)
             plain = subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=d)
-            self.assertNotIn("kfml", plain.stdout)
+            self.assertEqual(plain.returncode, 0, plain.stderr)
+            self.assertIn("KF_PAYLOAD_PLAN stages=provision:cuda_host:merge_bar:cuda_guest:kfml planned=provision:cuda_host:merge_bar:cuda_guest:kfml", plain.stdout)
+            skipped = subprocess.run([*cmd, "--skip", "kfml"], env=env, capture_output=True, text=True, cwd=d)
+            self.assertIn("KF_PAYLOAD_PLAN stages=provision:cuda_host:merge_bar:cuda_guest planned=provision:cuda_host:merge_bar:cuda_guest:kfml", skipped.stdout)
+            only = subprocess.run([*cmd, "--only", "kfml"], env=env, capture_output=True, text=True, cwd=d)
+            self.assertIn("KF_PAYLOAD_PLAN stages=kfml planned=", only.stdout)
             self.assertEqual(sorted(os.listdir(d)), ["i.json"])
 
     def line(self, **over):
@@ -358,9 +386,6 @@ class Payload(unittest.TestCase):
         with self.assertRaises(m.EvidenceError):
             m.kfml_rows("KF_KFML_RESULT " + json.dumps(red) + "\n", 1, SHA, result)
         self.assertEqual(result["kfml"]["reason"], "setup failed rc=1")
-
-    def test_manual_only_table_names_it(self):
-        self.assertEqual(self.m.MANUAL_ONLY_STAGES["kfml"], "KFML_IN_MIDDLE_LARGE")
 
 
 class Report(unittest.TestCase):

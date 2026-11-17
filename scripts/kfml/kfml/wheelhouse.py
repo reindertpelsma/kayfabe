@@ -22,6 +22,7 @@ import re
 import subprocess
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 SCHEMA = "kfml.wheelhouse/1"
@@ -115,12 +116,46 @@ def build(out, flavors, pins, guest_python=None, python=None, guest_glibc=DEFAUL
             ds.fetch(name, out / "data", pins)
     for sub in sorted(manifest["flavors"]) + (["data"] if datasets else []):
         manifest["files"].update(_scan(out, sub))
+    manifest["licenses"] = {"file": "wheelhouse-licenses.json", "proprietary_count": licenses_manifest(out, manifest["flavors"])["proprietary_count"]}
     manifest["total_bytes"] = sum(f["size"] for f in manifest["files"].values())
     manifest["build_s"] = round(now() - t0, 1)
     tmp = out / "MANIFEST.json.tmp"
     tmp.write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n")
     os.replace(tmp, out / "MANIFEST.json")
     return manifest
+
+
+def licenses_manifest(root, flavors) -> dict:
+    """wheelhouse-licenses.json: INFORMATION produced at build time from each wheel's own METADATA (licenses.scan_wheel). Nothing is uploaded or
+    mirrored by us (owner, 2026-11-17: the wheelhouse is built at runtime on the box from the vendors' indexes). `proprietary: true` marks
+    vendor-proprietary wheels (the nvidia-* runtime wheels, anything that bundles NVIDIA-origin binaries such as Triton's ptxas): downloading them
+    into a venv is allowed, storing or publishing them is not. `license_spdx: null` = not classified (information, not a build failure)."""
+    from . import licenses
+    root = Path(root)
+    wheels = []
+    for fl in flavors:
+        for p in sorted(wheels_dir(root, fl).glob("*.whl")):
+            try:
+                r = licenses.scan_wheel(str(p))
+            except (zipfile.BadZipFile, OSError):
+                r = {"name": p.name.split("-")[0], "version": "", "filename": p.name, "license_spdx": None,
+                     "license_evidence": "unreadable as a wheel", "nvidia_origin_libs": []}
+            prop = bool(licenses.NVIDIA_NAME.match(r["name"]) and not r["name"].lower().startswith("triton")) or bool(r["nvidia_origin_libs"])
+            why = []
+            if licenses.NVIDIA_NAME.match(r["name"]) and not r["name"].lower().startswith("triton"):
+                why.append("NVIDIA package")
+            if r["nvidia_origin_libs"]:
+                why.append("bundles " + ", ".join(r["nvidia_origin_libs"][:6]))
+            wheels.append({"flavor": fl, "file": r["filename"], "name": r["name"], "version": r["version"], "license_spdx": r["license_spdx"],
+                           "license_evidence": r["license_evidence"][:160], "proprietary": prop, "proprietary_reason": "; ".join(why),
+                           "size": p.stat().st_size})
+    doc = {"schema": "kfml.wheelhouse-licenses/1", "stored_by_us": False, "wheels": wheels,
+           "proprietary_count": sum(1 for w in wheels if w["proprietary"]),
+           "unclassified": sorted({w["name"] for w in wheels if not w["license_spdx"]})}
+    tmp = root / "wheelhouse-licenses.json.tmp"
+    tmp.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, root / "wheelhouse-licenses.json")
+    return doc
 
 
 def load(root) -> dict:

@@ -36,7 +36,15 @@ def table(pins: dict) -> list:
 
 
 def choose(pins: dict, driver_cuda, cc) -> Choice:
-    """driver_cuda: highest CUDA version the driver supports ('12.6'), or None when unknown. cc: (major, minor)."""
+    """driver_cuda: highest CUDA version the driver supports ('12.6'), or None when unknown. cc: (major, minor).
+
+    1. STRICT: the newest flavour whose CUDA version the driver supports and whose wheels cover the GPU's sm.
+    2. MINOR-VERSION COMPATIBILITY (added 2026-11-17): none is strict, but the driver is of the same CUDA major as a flavour and at least its
+       `compat_min_driver_cuda`, and the GPU is not newer than `compat_cc_max` (a driver generation cannot drive an architecture it predates): the
+       flavour with the LOWEST CUDA version that covers the sm is chosen. MEASURED (run kfml_run_20261117_ampere_older_driver): the cu126 wheels ran all
+       six rows on an Ampere card under a CUDA 12.2 driver, which the strict rule alone calls NOT_RUN; the cu128 wheels did the same under a CUDA 12.6
+       driver (run kfml_run_20261116). The reason says which rule picked the flavour.
+    Anything else (another CUDA major, a driver older than the compat minimum, a GPU outside every wheel range) is NOT_RUN with the named reason."""
     tried = []
     if not pins.get("flavors"):
         return Choice(None, "no flavours pinned in pins.json", ())
@@ -46,21 +54,32 @@ def choose(pins: dict, driver_cuda, cc) -> Choice:
     if dc is None:
         return Choice(None, "driver CUDA version unknown (nvidia-smi gave none): cannot pick a flavour", ())
     cc = tuple(cc)
+    compat = []
     for name, meta in table(pins):
         need = _cuda_tuple(meta["cuda"])
         lo, hi = tuple(meta["cc_min"]), tuple(meta["cc_max"])
-        if dc < need:
-            tried.append((name, False, "driver supports CUDA %s.%s < %s" % (dc[0], dc[1], meta["cuda"])))
-        elif cc < lo or cc > hi:
+        if cc < lo or cc > hi:
             tried.append((name, False, "its wheels cover sm_%d%d..sm_%d%d, the GPU is sm_%d%d" % (lo + hi + cc)))
-        else:
+        elif dc >= need:
             tried.append((name, True, "driver CUDA %s.%s >= %s and sm_%d%d is inside sm_%d%d..sm_%d%d" % (
                 (dc[0], dc[1], meta["cuda"]) + cc + lo + hi)))
             why = "; ".join("%s: %s" % (n, w) for n, ok, w in tried if not ok)
-            return Choice(name, "chose %s (%s)%s" % (name, tried[-1][2], ("; rejected " + why) if why else ""),
-                          tuple(tried))
-    return Choice(None, "no pinned flavour can run on this box: " + "; ".join("%s: %s" % (n, w) for n, ok, w in tried),
-                  tuple(tried))
+            return Choice(name, "chose %s (%s)%s" % (name, tried[-1][2], ("; rejected " + why) if why else ""), tuple(tried))
+        else:
+            tried.append((name, False, "driver supports CUDA %s.%s < %s" % (dc[0], dc[1], meta["cuda"])))
+            cmin = _cuda_tuple(meta.get("compat_min_driver_cuda"))
+            cmax = tuple(meta["compat_cc_max"]) if meta.get("compat_cc_max") else None
+            if cmin and cmax and dc[0] == need[0] and dc >= cmin and cc <= cmax:
+                compat.append((need, name, meta))
+    if compat:
+        need, name, meta = sorted(compat, key=lambda c: c[0])[0]
+        why = "; ".join("%s: %s" % (n, w) for n, ok, w in tried if not ok and n != name)
+        return Choice(name, "chose %s by minor-version compatibility (driver CUDA %s.%s < %s but the same CUDA major and >= %s, sm_%d%d <= sm_%d%d; "
+                      "measured to run: kfml_run_20261117_ampere_older_driver)%s" % (
+                          (name, dc[0], dc[1], meta["cuda"], meta["compat_min_driver_cuda"]) + cc + tuple(meta["compat_cc_max"]) +
+                          (("; rejected " + why if why else ""),)),
+                      tuple(tried) + ((name, True, "minor-version compatibility"),))
+    return Choice(None, "no pinned flavour can run on this box: " + "; ".join("%s: %s" % (n, w) for n, ok, w in tried), tuple(tried))
 
 
 SMI_CUDA = re.compile(r"CUDA Version:\s*(\d+\.\d+)")
