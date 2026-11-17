@@ -1,0 +1,32 @@
+{
+  "app": "photoshopprojects",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "17 of 17 open-licence PSD projects opened (layers/mode read), 6 flattened PNGs (0 flat); errors: 0",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "open-licence PSD corpus: layer/colour-mode decoding and GPU canvas on foreign files",
+  "platform": "kf3",
+  "secs": 330,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 43.0,
+      "mem_mb": 9663.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 43.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 112
+    },
+    "baseline": {
+      "mem_mb": 9553.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 806
+  }
+}

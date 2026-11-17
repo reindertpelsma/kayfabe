@@ -1,0 +1,35 @@
+﻿{
+    "app":  "aeparallel",
+    "started":  1794787816.343,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "f_00000.tif",
+                        "bytes":  33204340,
+                        "modified":  1794788094.828
+                    },
+                    {
+                        "file":  "f_00059.tif",
+                        "bytes":  33204248,
+                        "modified":  1794788161.351
+                    }
+                ],
+    "ae_file_scripts":  "already on",
+    "startup_attempts":  [
+                             "1:marker:79s"
+                         ],
+    "make_quit":  "clean",
+    "t_start":  1794788028.964,
+    "exit_codes":  [
+                       null,
+                       null
+                   ],
+    "frame_count":  60,
+    "quit":  "process",
+    "ended":  1794788164.823,
+    "crash_events":  2,
+    "crash_dumps":  0,
+    "dismissed":  [
+
+                  ]
+}

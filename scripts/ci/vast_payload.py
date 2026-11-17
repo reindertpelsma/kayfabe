@@ -1540,10 +1540,18 @@ def instruction_from_file(path, environ):
 # payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
 PROPIMAGE_APPS_IN_LARGE = False
 # stages with no budget row (scripts/ci/profile_resources.py): planned only by --only; the guard refuses one whose flag is True
-MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}
+MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}
 PROPIMAGE_APPS_MIN_REMAINING_MS = 210 * 60000   # DESIGN: download ~16 min, 4 unpacks/hashes, 3 boots, apps up to 98 min worst case
 PROPIMAGE_APPS_PREFIX = "/workspace/kf-propimage"
 PROPIMAGE_APPS_MARGIN_S = 300
+# 2026-11-16 propimage_apps_b: the second image's application rows (scripts/ci/propimage_apps_b_stage.py, docs/design/V3_PROPIMAGE_B_APPS.md).
+# Manual-only like propimage_apps (named by --only; no instruction field), its own prefix, record, evidence directory and result key. Only the
+# gate-lane rows decide its verdict (vast_report.validate_propimage_apps_b); discovery rows are a known-breakages table. It does not run on the
+# same box as the first image by design (one image per one-GPU box), but nothing here forbids both in one plan: B runs after A.
+PROPIMAGE_APPS_B_IN_LARGE = False
+PROPIMAGE_APPS_B_MIN_REMAINING_MS = 240 * 60000   # DESIGN: a bigger download than image A, up to 17 boots-worth of row timeouts in ~55-minute boots
+PROPIMAGE_APPS_B_PREFIX = "/workspace/kf-propimage-b"
+PROPIMAGE_APPS_B_MARGIN_S = 300
 
 
 def propimage_apps_rows(text, rc, sha, result):
@@ -1564,6 +1572,22 @@ def propimage_apps_rows(text, rc, sha, result):
     if rc or doc.get("verdict") != "PASS":
         raise EvidenceError("propimage_apps")
     return [row("propimage_apps", 1)]
+
+
+def propimage_apps_b_rows(text, rc, sha, result):
+    """One KF_PROPIMAGE_APPS_B_RESULT line, kept in the result file even when it is red (vast_report.py validates it). Only a PASS record with
+    rc 0 is a pass: the verdict already counts gate rows only, so a failing discovery row (listed in `breakages`) does not fail the stage."""
+    found = re.findall(r"^KF_PROPIMAGE_APPS_B_RESULT (\{.*\})$", text, re.M)
+    if len(found) != 1:
+        raise EvidenceError("propimage_apps_b")
+    try:
+        doc = json.loads(found[0])
+    except ValueError:
+        raise EvidenceError("propimage_apps_b") from None
+    result["propimage_apps_b"] = doc
+    if type(doc) is not dict or doc.get("sha") != sha or rc or doc.get("verdict") != "PASS":
+        raise EvidenceError("propimage_apps_b")
+    return [row("propimage_apps_b", 1)]
 
 
 def propimage_run_rows(text, rc, sha, result):
@@ -1689,6 +1713,8 @@ def plan_stage_names(i, only=()):
             names.append("windows_gate_2")
     if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):
         names.append("propimage_apps")
+    if i.tier == "large" and (PROPIMAGE_APPS_B_IN_LARGE or "propimage_apps_b" in only):
+        names.append("propimage_apps_b")
     if "specviewperf" in i.stages:
         names.append("specviewperf")
     return names
@@ -2128,6 +2154,23 @@ def main():
                 lambda rc, output=output_pa, fn=rows_fn: fn(bounded_text(output), rc, sha, result),
             )
             stage.update(min_remaining_ms=PROPIMAGE_APPS_MIN_REMAINING_MS, short_row="propimage_apps_retry_time")
+            stages.append(stage)
+        if "propimage_apps_b" in plan:
+            # Right after the first image's stage, before the SPEC lane. Its own record, evidence directory and soft-deadline margin;
+            # scripts/ci/propimage_apps_b_stage.py owns the download (image, boot GOP, open-asset data volume), the boots and the record.
+            output_pb = evidence / "propimage_apps_b.run"
+            stage = make_stage(
+                "propimage_apps_b",
+                [
+                    "python3", str(root / "scripts/ci/propimage_apps_b_stage.py"), "run", "--sha", sha, "--checkout", str(root),
+                    "--prefix", PROPIMAGE_APPS_B_PREFIX, "--out", str(evidence / "propimage_apps_b.json"),
+                    "--evidence-dir", str(evidence / "propimage_apps_b"), "--deadline-epoch", str(soft // 1000 - PROPIMAGE_APPS_B_MARGIN_S),
+                ],
+                output_pb,
+                [],
+                lambda rc, output=output_pb: propimage_apps_b_rows(bounded_text(output), rc, sha, result),
+            )
+            stage.update(min_remaining_ms=PROPIMAGE_APPS_B_MIN_REMAINING_MS, short_row="propimage_apps_b_retry_time")
             stages.append(stage)
         if "specviewperf" in extra_stages:
             # DISABLED BY DEFAULT (docs/design/V3_SPEC_GATE.md): the wrapper runs scripts/bench/box/specviewperf_stage.sh,

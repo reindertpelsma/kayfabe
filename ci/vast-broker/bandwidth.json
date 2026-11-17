@@ -393,6 +393,17 @@
     "source": "traces/kfml_run_20261116, traces/kfml_run_20261117_second_die, traces/kfml_run_20261117_tier_decision",
     "note": "text rows and logs of six workloads, a few MB"
    }
+  },
+  "propimage_apps_b": {
+   "note": "image B's own rows (propimage_apps_b): the image zip and the test assets are charged to propimage_apps for the same instruction; this stage fetches nothing more than that first stage's downloader does (UNVERIFIED until a box runs both stages: net_bytes of that run settles it)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 5000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/imageb_apps_20261116",
+    "note": "evidence pull-back of the image B rows: text evidence, a few MB (second Adobe pass collect archives 6 to 9 MB)"
+   }
   }
  }
 }

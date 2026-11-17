@@ -1,0 +1,20 @@
+﻿{
+    "app":  "uxp",
+    "started":  1794786384.645,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "main_window":  true,
+    "titles":  [
+                   "Adobe UXP Developer Tools"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  105,
+    "quit":  "clean",
+    "ended":  1794786419.994,
+    "dismissed":  [
+
+                  ]
+}

@@ -1,0 +1,7 @@
+{
+  "class": "harness",
+  "app": "mediaencoder",
+  "ok": false,
+  "evidence": "NONE",
+  "error": "Task start failed"
+}

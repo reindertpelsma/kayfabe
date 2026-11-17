@@ -1,0 +1,32 @@
+{
+  "app": "animatesample",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "script did not open and export: None",
+  "class": "app",
+  "limited": false,
+  "lane": "gate",
+  "path": "OpenGL/D3D11 stage on a shipped document",
+  "platform": "kf3",
+  "secs": 202,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 14.0,
+      "mem_mb": 5355.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 14.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 53
+    },
+    "baseline": {
+      "mem_mb": 5312.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 540
+  }
+}

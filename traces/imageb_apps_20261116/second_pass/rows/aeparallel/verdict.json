@@ -1,0 +1,35 @@
+{
+  "app": "aeparallel",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "aerender exit codes [None, None]",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "two concurrent aerender processes (CUDA contexts x2), 4K",
+  "platform": "kf3",
+  "secs": 348,
+  "gpu": {
+    "required": [
+      "gpu"
+    ],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 38.0,
+      "mem_mb": 9700.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 34.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 148
+    },
+    "baseline": {
+      "mem_mb": 9417.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 880
+  },
+  "outputs_recorded": 6
+}

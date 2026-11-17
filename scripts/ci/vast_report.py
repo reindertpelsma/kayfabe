@@ -415,6 +415,130 @@ def validate_propimage_apps(value):
 NAME_OK = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 
 
+# propimage_apps_b_stage.py's application table (scripts/bench/windows/propimage_apps_b.CHECKS, in table order): name -> (lane, enabled).
+# A test pins this equal to CHECKS; the validator reads lanes from here and never from the record.
+PROPIMAGE_B_ROWS = {
+    "gpudiag": ("gate", True), "photoshop": ("discovery", True), "illustrator": ("gate", True), "aftereffects": ("discovery", True),
+    "indesign": ("discovery", True), "illustratorsample": ("gate", True), "indesignsample": ("discovery", True), "animatesample": ("gate", False),
+    "photoshopsample": ("discovery", True), "photoshopcpu": ("discovery", True), "photoshopprojects": ("discovery", True),
+    "indesignprojects": ("discovery", True), "animateprojects": ("discovery", False), "aeprojects": ("discovery", True),
+    "aetoggle": ("discovery", True), "aeadv3d": ("discovery", True), "premieretl": ("discovery", True), "amematrix": ("discovery", True),
+    "aeparallel4": ("discovery", True), "aeparallel": ("discovery", True), "indesign_s1": ("discovery", True), "indesign_s2": ("discovery", True),
+    "indesign_s3": ("discovery", True), "indesign_s4": ("discovery", True), "indesign_s5": ("discovery", True), "indesign_s6": ("discovery", True),
+    "acrobat": ("gate", True), "animate": ("gate", False), "premiere": ("gate", True), "mediaencoder": ("discovery", True),
+    "lightroom": ("discovery", False), "lightroomlaunch": ("gate", True), "dimension": ("gate", True), "uxp": ("gate", True),
+}
+PROPIMAGE_B_PASS = ("PASS", "PASS_LIMITED")
+PROPIMAGE_B_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")
+CENSUS_KEYWORDS = ("unserviced", "foreign_class", "refused", "dead_channel", "walk", "derived_miss", "xid", "tdr")
+
+
+def validate_propimage_apps_b(value):
+    """The propimage_apps_b stage's record (scripts/ci/propimage_apps_b_stage.py): bounded, strictly read, not forwarded. ONLY gate-lane rows
+    decide the verdict: a PASS needs every enabled gate row present and PASS or PASS_LIMITED; a discovery row of any verdict never fails
+    it and is listed in `breakages` (exactly the discovery rows that did not pass). Disabled rows are `not_run` with their reason. Lanes
+    come from PROPIMAGE_B_ROWS, a record's own `lane` must agree with it."""
+    token = re.compile(r"[A-Z][A-Z0-9_]{0,40}(:[A-Za-z0-9_]{1,40})?")
+    text = re.compile(r"[\x20-\x7e]{0,200}")
+    num = lambda v, hi=1 << 40: type(v) is int and 0 <= v <= hi  # noqa: E731
+    top = {"schema", "image_set", "verdict", "sha", "reason", "family", "cpu_vendor", "preflight", "image", "swtpm", "boots", "apps", "failed",
+           "limited", "breakages", "not_run"}
+    ok = type(value) is dict and top | {"error"} >= set(value) >= top
+    ok = ok and value["schema"] == 1 and value["image_set"] == "b" and value["verdict"] in ("PASS", "FAIL", "RETRY", "REFUSED")
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    ok = ok and type(value["reason"]) is str and (token.fullmatch(value["reason"]) is not None or value["reason"] == "")
+    ok = ok and ("error" not in value or text.fullmatch(str(value["error"])) is not None)
+    ok = ok and value["family"] in (None, "turing", "ampere", "ada", "blackwell") and value["cpu_vendor"] in (None, "amd", "intel", "other")
+    ok = ok and type(value["preflight"]) is list and len(value["preflight"]) <= 16 and all(
+        type(r) is dict and set(r) == {"name", "status", "detail"} and re.fullmatch(r"[a-z0-9_]{1,24}", str(r["name"]))
+        and r["status"] in ("MATCH", "MISMATCH", "WARN") and text.fullmatch(str(r["detail"])) for r in value["preflight"])
+    image = value["image"] if ok else None
+    ok = ok and type(image) is dict and set(image) == {"name", "sha256", "size"} and (image["name"] is None or NAME_OK.fullmatch(str(image["name"])))
+    ok = ok and (image["sha256"] is None or re.fullmatch("[0-9a-f]{64}", str(image["sha256"]))) and (image["size"] is None or num(image["size"]))
+    sw = value["swtpm"] if ok else None
+    ok = ok and type(sw) is dict and set(sw) == {"version", "built"} and type(sw["built"]) is bool
+    ok = ok and (sw["version"] is None or re.fullmatch(r"[0-9.]{0,16}", str(sw["version"])) is not None)
+    boots = value["boots"] if ok else None
+    ok = ok and type(boots) is list and len(boots) <= 40
+    ok = ok and all(
+        type(b) is dict and {"index", "apps", "rc", "secs", "offline"} <= set(b) <= {"index", "apps", "rc", "secs", "offline", "harness", "host_xid_unattributed"}
+        and num(b["index"], 40) and type(b["apps"]) is list and len(b["apps"]) <= 32 and all(a in PROPIMAGE_B_ROWS for a in b["apps"])
+        and (b["rc"] is None or (type(b["rc"]) is int and -256 <= b["rc"] <= 256)) and num(b["secs"], 1 << 20) and type(b["offline"]) is bool
+        and type(b.get("harness", [])) is list and len(b.get("harness", [])) <= 6 and all(
+            type(h) is dict and set(h) == {"step", "verdict", "detail"} and all(text.fullmatch(str(v)) for v in h.values()) for h in b.get("harness", []))
+        and ("host_xid_unattributed" not in b or (type(b["host_xid_unattributed"]) is dict and set(b["host_xid_unattributed"]) == {"count", "lines"}
+                                                 and num(b["host_xid_unattributed"]["count"], 1 << 30) and type(b["host_xid_unattributed"]["lines"]) is list
+                                                 and len(b["host_xid_unattributed"]["lines"]) <= 8
+                                                 and all(text.fullmatch(str(x)) for x in b["host_xid_unattributed"]["lines"])))
+        for b in boots)
+    apps = value["apps"] if ok else None
+    ok = ok and type(apps) is list and len(apps) <= len(PROPIMAGE_B_ROWS)
+    names = [a.get("app") for a in apps] if ok and all(type(a) is dict for a in apps) else None
+    table = list(PROPIMAGE_B_ROWS)
+    ok = ok and names is not None and names == [n for n in table if n in names]
+    for a in apps if ok else ():
+        ok = ok and {"app", "lane", "verdict", "kind", "limited", "secs", "detail", "evidence", "gpu", "host_xid", "census"} <= set(a) <= {
+            "app", "lane", "verdict", "kind", "limited", "secs", "detail", "evidence", "gpu", "host_xid", "census", "platform", "path"}
+        ok = ok and a["lane"] == PROPIMAGE_B_ROWS[a["app"]][0]
+        ok = ok and a["verdict"] in ("PASS", "PASS_LIMITED", "FAIL", "INCONCLUSIVE", "HARNESS", "NOT_RUN", "MISSING")
+        ok = ok and a["kind"] in ("FILE", "UIA", "NONE") and type(a["limited"]) is bool and a["limited"] == (a["verdict"] == "PASS_LIMITED")
+        ok = ok and num(a["secs"], 1 << 20) and text.fullmatch(str(a["detail"])) is not None
+        ok = ok and ("platform" not in a or text.fullmatch(str(a["platform"])) is not None) and ("path" not in a or text.fullmatch(str(a["path"])) is not None)
+        ok = ok and type(a["evidence"]) is list and len(a["evidence"]) <= 24 and all(
+            type(e) is dict and set(e) == {"file", "bytes", "sha256"} and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", str(e["file"]))
+            and re.fullmatch("[0-9a-f]{64}", str(e["sha256"])) and num(e["bytes"]) for e in a["evidence"])
+        g = a["gpu"]
+        ok = ok and type(g) is dict and set(g) <= {"required", "verdict", "peak"}
+        ok = ok and (not g or (set(g) == {"required", "verdict", "peak"} and type(g["required"]) is list and len(g["required"]) <= 4
+                               and all(re.fullmatch(r"[a-z0-9_]{1,8}", str(r)) for r in g["required"]) and re.fullmatch(r"[A-Z]{0,8}", str(g["verdict"]))
+                               and type(g["peak"]) is dict and len(g["peak"]) <= 12 and all(
+                                   re.fullmatch(r"[a-z0-9_]{1,16}", str(k)) and (v is None or (type(v) in (int, float) and -(1 << 40) < v < 1 << 40))
+                                   for k, v in g["peak"].items())))
+        ok = ok and (a["verdict"] not in PROPIMAGE_B_PASS or a["kind"] in ("FILE", "UIA"))
+        x = a["host_xid"]
+        ok = ok and type(x) is dict and set(x) == {"count", "lines"} and num(x["count"], 1 << 30) and type(x["lines"]) is list
+        ok = ok and all(text.fullmatch(str(t)) for t in x["lines"]) and len(x["lines"]) <= 8
+        ok = ok and census_ok(a["census"], num, text)
+    failed = value["failed"] if ok else None
+    gate = [n for n in (names or ()) if PROPIMAGE_B_ROWS[n][0] == "gate"] if ok else []
+    bad_gate = [a["app"] for a in apps if a["lane"] == "gate" and a["verdict"] not in PROPIMAGE_B_PASS] if ok else []
+    ok = ok and type(failed) is list and len(failed) <= len(PROPIMAGE_B_ROWS) and all(f in gate for f in failed)
+    lim = value["limited"] if ok else None
+    ok = ok and type(lim) is list and lim == [a["app"] for a in apps if a["verdict"] == "PASS_LIMITED"]
+    br = value["breakages"] if ok else None
+    ok = ok and type(br) is list and len(br) <= len(PROPIMAGE_B_ROWS)
+    want = [a["app"] for a in apps if a["lane"] == "discovery" and a["verdict"] not in PROPIMAGE_B_PASS] if ok else []
+    ok = ok and [b.get("row") if type(b) is dict else None for b in br] == want and all(
+        type(b) is dict and set(b) == {"row", "verdict", "class", "census"} and b["class"] in PROPIMAGE_B_CLASSES
+        and b["verdict"] == next(a["verdict"] for a in apps if a["app"] == b["row"]) and type(b["census"]) is dict
+        and set(b["census"]) == {"lines", "counts"} and num(b["census"]["lines"], 1 << 30) and type(b["census"]["counts"]) is dict
+        and set(b["census"]["counts"]) <= set(CENSUS_KEYWORDS) and all(num(v, 1 << 30) for v in b["census"]["counts"].values()) for b in br)
+    nr = value["not_run"] if ok else None
+    ok = ok and type(nr) is dict and len(nr) <= len(PROPIMAGE_B_ROWS) and all(
+        k in PROPIMAGE_B_ROWS and not PROPIMAGE_B_ROWS[k][1] and k not in names and type(v) is str and 0 < len(v) <= 160 and text.fullmatch(v)
+        for k, v in nr.items())
+    if ok and value["verdict"] == "PASS":
+        # only gate rows decide: every enabled gate row present and passing, none failed, every disabled row listed as not_run with its reason
+        ok = (all(n in names for n in table if PROPIMAGE_B_ROWS[n] == ("gate", True)) and not bad_gate and value["reason"] == "" and not failed
+              and set(nr) == {n for n in table if not PROPIMAGE_B_ROWS[n][1] and n not in names}
+              and len(boots) >= 1 and all(b["offline"] for b in boots))
+    elif ok:
+        ok = value["reason"] != ""
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 49152
+    if not ok:
+        raise ValueError("propimage_apps_b")
+
+
+def census_ok(c, num, text):
+    """A row's census as the stage records it: {} (none taken) or {lines, counts, xid, ids} with the fixed keyword set, at most 8 ids per keyword."""
+    if c == {}:
+        return True
+    return (type(c) is dict and set(c) == {"lines", "counts", "xid", "ids"} and num(c["lines"], 1 << 30) and num(c["xid"], 1 << 30)
+            and type(c["counts"]) is dict and set(c["counts"]) <= set(CENSUS_KEYWORDS) and all(num(v, 1 << 30) for v in c["counts"].values())
+            and type(c["ids"]) is dict and set(c["ids"]) <= set(CENSUS_KEYWORDS) and all(
+                type(v) is list and len(v) <= 8 and all(type(i) is str and text.fullmatch(i) and len(i) <= 24 for i in v) for v in c["ids"].values()))
+
+
 def validate_propimage_run(value):
     """The generic proprietary-image runner's record (scripts/ci/propimage_images.py, schema kayfabe.propimage-run/1): bounded, strictly read,
     not forwarded. PASS needs at least one PASS image, every image PASS or NOT_RUN, and for a PASS image every app PASS and every boot's
@@ -630,6 +754,7 @@ def read_result_file(path):
             "instruction_sha256",
             "selection",
             "propimage_apps",
+            "propimage_apps_b",
             "propimage_run",
             "install_flow",
             "kfml",
@@ -652,6 +777,10 @@ def read_result_file(path):
             validate_propimage_apps(doc["propimage_apps"])
             if doc["verdict"] == "PASS" and doc["propimage_apps"]["verdict"] not in ("PASS", "NOT_RUN"):
                 raise ValueError("propimage_apps verdict")
+        if "propimage_apps_b" in doc:
+            validate_propimage_apps_b(doc["propimage_apps_b"])
+            if doc["verdict"] == "PASS" and doc["propimage_apps_b"]["verdict"] != "PASS":
+                raise ValueError("propimage_apps_b verdict")
         if "propimage_run" in doc:
             validate_propimage_run(doc["propimage_run"])
             if doc["verdict"] == "PASS" and doc["propimage_run"]["verdict"] != "PASS":

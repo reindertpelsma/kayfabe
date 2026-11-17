@@ -1,0 +1,44 @@
+﻿{
+    "app":  "photoshopprojects",
+    "started":  1794788291.656,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "p0.png",
+                        "bytes":  510459,
+                        "modified":  1794788440.733
+                    },
+                    {
+                        "file":  "p1.png",
+                        "bytes":  1751344,
+                        "modified":  1794788475.023
+                    },
+                    {
+                        "file":  "p2.png",
+                        "bytes":  123076,
+                        "modified":  1794788505.253
+                    },
+                    {
+                        "file":  "p3.png",
+                        "bytes":  62626,
+                        "modified":  1794788537.722
+                    },
+                    {
+                        "file":  "p4.png",
+                        "bytes":  236487,
+                        "modified":  1794788549.177
+                    },
+                    {
+                        "file":  "p5.png",
+                        "bytes":  6297902,
+                        "modified":  1794788555.744
+                    }
+                ],
+    "count":  17,
+    "rows":  "OK Adobe Photoshop:500x336:L2:DocumentMode.RGB||OK Adobe Photoshop:2264x1257:L3:DocumentMode.RGB||OK Adobe Photoshop:200x200:L7:DocumentMode.RGB||OK Adobe Photoshop:200x100:L1:DocumentMode.RGB||OK Adobe Photoshop:360x216:L2:DocumentMode.RGB||OK Adobe Photoshop:1052x2104:L3:DocumentMode.RGB||OK Adobe Photoshop:64x64:L3:DocumentMode.RGB||OK Adobe Photoshop:4x4:L2:DocumentMode.LAB||OK Adobe Photoshop:32x32:L1:DocumentMode.RGB||OK Adobe Photoshop:8x24:L4:DocumentMode.CMYK||OK Adobe Photoshop:32x32:L1:DocumentMode.RGB||OK Adobe Photoshop:32x32:L1:DocumentMode.RGB||OK Adobe Photoshop:32x32:L1:DocumentMode.RGB||OK Adobe Photoshop:32x32:L1:DocumentMode.RGB||OK Adobe Photoshop:32x32:L1:DocumentMode.RGB||OK Adobe Photoshop:32x32:L1:DocumentMode.RGB||OK Adobe Photoshop:32x32:L1:DocumentMode.RGB",
+    "quit":  "clean",
+    "ended":  1794788622.333,
+    "dismissed":  [
+
+                  ]
+}

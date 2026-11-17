@@ -1,0 +1,33 @@
+{
+  "app": "lightroomlaunch",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "LIMITED: launched, main window reached (1 windows), process responding=True, 2829 MB; no document work",
+  "error": "",
+  "class": "app",
+  "limited": true,
+  "lane": "gate",
+  "path": "Lightroom Classic start: catalog open, GPU capability scan (launch only)",
+  "platform": "kf3",
+  "secs": 67,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 12.0,
+      "mem_mb": 9504.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 12.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 40
+    },
+    "baseline": {
+      "mem_mb": 9416.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 272
+  }
+}
