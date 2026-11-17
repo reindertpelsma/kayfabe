@@ -28,7 +28,7 @@ FILES = {
     "report": "scripts/ci/vast_report.py",
 }
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
-SUITES = ["test_propimage_runspec", "test_propimage_images", "test_payload_instruction.Propimages"]
+SUITES = ["test_propimage_runspec", "test_propimage_images", "test_propimage_pins", "test_payload_instruction.Propimages"]
 COPY_DIRS = ["scripts/ci", "scripts/kfci"]
 COPY_FILES = [
     "scripts/bench/native_xid_guard.py",
@@ -60,6 +60,8 @@ TI, SE, CN, SO, MR, GR, RV, PR, CL, PF = ("test_propimage_images." + n for n in 
 PO = "test_propimage_images.Policies."
 LN = "test_propimage_images.Lanes."
 RR = "test_propimage_images.ResultRows."
+# the identity-pin rule (docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md), scripts/ci/test_propimage_pins.py
+MX, PS, EX, RI, PF2, NT = ("test_propimage_pins." + n for n in ("Matrix.", "Sources.", "ExpectSha256.", "ReportInvariants.", "PinsFlag.", "Notes."))
 
 
 def M(name, key, old, new, *tests):
@@ -108,10 +110,10 @@ MUTANTS = [
       SE + "test_a_state_image_with_nothing_declared_is_refused_by_name", MR + "test_a_state_image_with_nothing_declared_boots_nothing"),
     M("clock-network-proof-not-enforced", "images", '                if not got["ok"] and item["verdict"] == "PASS":', "                if False:",
       CN + "test_a_state_image_with_internet_in_its_argv_is_not_a_pass", CN + "test_a_plain_image_that_asked_for_the_network_off_but_got_internet_is_not_a_pass"),
-    M("source-sha256-not-compared", "images", '        if loc.sha256 != src["sha256"]:', "        if False:",
-      SO + "test_a_file_with_the_wrong_sha256_is_refused_and_the_right_one_runs", MR + "test_a_bare_disk_with_the_wrong_sha256_is_refused"),
+    M("source-sha256-not-refused", "images", '    if enforced and srec["identity"] == "differs":\n        raise pa.Refused("SOURCE_SHA256_MISMATCH")', '    if enforced and srec["identity"] == "differs":\n        pass',
+      SO + "test_a_file_with_the_wrong_sha256_is_refused_in_a_strict_run_and_the_right_one_runs", MR + "test_a_bare_disk_with_the_wrong_sha256_is_refused_only_in_a_strict_run"),
     M("unpacked-image-left-behind", "images", "        loc.created.append(out)", "        pass",
-      SO + "test_a_file_with_the_wrong_sha256_is_refused_and_the_right_one_runs", SO + "test_a_pin_is_fetched_through_the_downloader_and_unpacked"),
+      SO + "test_a_file_with_the_wrong_sha256_is_refused_in_a_strict_run_and_the_right_one_runs", SO + "test_a_pin_is_fetched_through_the_downloader_and_unpacked"),
     M("failed-images-do-not-fail-the-run", "images", 'for want in ("FAIL", "RETRY", "REFUSED"):', 'for want in ("RETRY", "REFUSED"):',
       GR + "test_the_run_verdict_order", TI + "test_one_failing_image_does_not_stop_the_other_and_fails_the_run_by_name"),
     M("failed-apps-do-not-fail-the-image", "images", "    if hard:\n        return \"FAIL\", \"APP_FAIL:\" + hard[0][\"app\"]", "    if False:\n        pass",
@@ -187,6 +189,71 @@ MUTANTS = [
       PR + "test_only_a_pass_with_rc_zero_for_this_sha_is_a_pass", PR + "test_a_refused_run_is_the_stage_failing"),
     M("images-file-and-flags-allowed", "pa", '            if spec:\n                raise spec_mod.SpecError("IMAGES_FILE_AND_FLAGS")', "            if False:\n                pass",
       CL + "test_images_file_and_flags_together_are_refused_and_a_file_is_read", CL + "test_images_file_and_a_propimage_flag_together_are_refused_too"),
+    # identity pins are strict-only; the user's own --expect-sha256 holds everywhere (test_propimage_pins.py)
+    M("pins-always-enforced", "spec", '    return bool(spec.get("strict"))', "    return True",
+      MX + "test_standalone_with_a_differing_pin_runs_and_records_the_difference", NT + "test_the_switch_is_the_strict_flag_and_nothing_else",
+      PS + "test_a_directory_has_no_hash_so_a_pin_on_it_is_recorded_standalone_and_refused_strict"),
+    M("pins_never_enforced", "spec", '    return bool(spec.get("strict"))', "    return False",
+      MX + "test_strict_with_a_differing_pin_is_refused_before_any_boot", NT + "test_the_switch_is_the_strict_flag_and_nothing_else"),
+    M("standalone-refuses-a-differing-pin", "images", '    if enforced and srec["identity"] == "differs":', '    if srec["identity"] == "differs":',
+      MX + "test_standalone_with_a_differing_pin_runs_and_records_the_difference", NT + "test_a_standalone_run_with_a_differing_pin_says_so_on_one_line_and_exits_0"),
+    M("strict-ignores-a-differing-pin", "images", '    if enforced and srec["identity"] == "differs":', '    if False and srec["identity"] == "differs":',
+      MX + "test_strict_with_a_differing_pin_is_refused_before_any_boot", PS + "test_a_url_standalone_is_fetched_without_a_pin_check_and_the_hash_is_recorded"),
+    M("identity-always-match", "images", '"match" if computed == pin else "differs"', '"match"',
+      MX + "test_standalone_with_a_differing_pin_runs_and_records_the_difference", MX + "test_strict_with_a_differing_pin_is_refused_before_any_boot"),
+    M("strict-accepts-a-pin-on-a-directory", "images", '    if enforced and srec["identity"] == "unverifiable":', '    if False and srec["identity"] == "unverifiable":',
+      PS + "test_a_directory_has_no_hash_so_a_pin_on_it_is_recorded_standalone_and_refused_strict", SO + "test_a_sha256_on_a_directory_is_refused_in_a_strict_run"),
+    M("standalone-refuses-a-pin-on-a-directory", "images", '    if enforced and srec["identity"] == "unverifiable":', '    if srec["identity"] == "unverifiable":',
+      PS + "test_a_directory_has_no_hash_so_a_pin_on_it_is_recorded_standalone_and_refused_strict", PS + "test_the_computed_hash_and_size_are_recorded_for_every_run_and_it_validates",
+      PS + "test_a_standalone_directory_pin_is_noted_on_one_line_and_exits_0"),
+    M("expect-not-enforced", "images", "        if computed != expect:", "        if False:",
+      EX + "test_a_differing_expectation_is_refused_standalone_too_before_any_boot", EX + "test_the_file_name_of_the_source_names_it_too"),
+    M("expect-only-when-strict", "images", "    if expect is not None:\n        if computed is None:", "    if expect is not None and enforced:\n        if computed is None:",
+      EX + "test_a_differing_expectation_is_refused_standalone_too_before_any_boot", EX + "test_the_cli_runs_with_an_expectation_standalone_and_refuses_a_wrong_one"),
+    M("expect-on-directory-passes", "images", '            raise pa.Refused("EXPECT_SHA256_ON_DIRECTORY")', "            pass",
+      EX + "test_an_expectation_on_a_directory_cannot_be_checked_and_is_refused", EX + "test_a_matching_expectation_runs_standalone_and_strict",
+      EX + "test_an_expectation_on_a_directory_is_refused_in_a_strict_run_too"),
+    M("hash-recorded-only-when-pinned", "images", "    if loc.sha256 is None:\n        loc.sha256 = hooks.sha256_file(path)", '    if loc.sha256 is None and src["sha256"]:\n        loc.sha256 = hooks.sha256_file(path)',
+      MX + "test_standalone_without_a_pin_runs_and_records_the_hash", PS + "test_the_computed_hash_and_size_are_recorded_for_every_run_and_it_validates"),
+    M("size-not-recorded", "images", '    srec["size"] = path.stat().st_size\n', '    srec["size"] = None\n',
+      MX + "test_standalone_with_a_matching_pin_runs", PS + "test_the_computed_hash_and_size_are_recorded_for_every_run_and_it_validates"),
+    M("url-pin-checked-in-a-standalone-run", "images", 'src["sha256"] if enforced else None', 'src["sha256"]',
+      PS + "test_a_url_standalone_is_fetched_without_a_pin_check_and_the_hash_is_recorded",
+      PS + "test_a_url_with_a_differing_pin_runs_standalone_and_is_noted"),
+    M("pin-object-spec-hash-checked-standalone", "images", 'if enforced and src["sha256"] and src["sha256"] != item["sha256"]:', 'if src["sha256"] and src["sha256"] != item["sha256"]:',
+      PS + "test_a_pin_object_standalone_ignores_a_spec_hash_that_differs_from_the_deployments_pin_and_records_it",
+      NT + "test_a_standalone_pin_object_with_a_differing_spec_hash_exits_zero_with_the_note"),
+    M("state-file-pin-always-checked", "images", 'if enforced and sf["sha256"] and sf["sha256"] != members["state.json"]:', 'if sf["sha256"] and sf["sha256"] != members["state.json"]:',
+      PS + "test_a_state_file_pin_is_enforced_only_when_strict_and_its_hash_is_recorded",
+      NT + "test_a_standalone_state_file_with_a_differing_pin_runs_and_validates"),
+    M("pin-unknown-accepted", "images", '            raise pa.Refused("PIN_UNKNOWN")', "            pass",
+      PS + "test_a_pin_that_the_deployment_does_not_know_is_refused_in_both_modes", SO + "test_pins_of_every_pins_file_are_known_by_ref_and_an_unknown_or_unset_one_is_refused"),
+    M("own-pins-file-ignored", "images", "    if extra is not None:\n        mine = {}", "    if False:\n        mine = {}",
+      PS + "test_your_own_pins_file_adds_its_objects", PS + "test_your_own_pins_file_reaches_the_runner_and_its_object_is_the_one_fetched"),
+    M("repository-pin-beats-your-pin", "images", "        out.update(mine)", "        out = dict(mine, **out)",
+      PS + "test_your_own_pins_file_wins_over_the_repositorys_of_the_same_name", PS + "test_your_own_pins_file_reaches_the_runner_and_its_object_is_the_one_fetched",
+      PS + "test_your_pin_of_the_repositorys_ref_is_the_one_fetched"),
+    M("expect-name-typo-silent", "spec", '            raise SpecError("EXPECT_SHA256_UNKNOWN", str(name)[:32])\n        label = names[name]', "            continue\n        label = names[name]",
+      EX + "test_a_name_that_calls_no_image_is_a_spec_error_never_silent", EX + "test_spec_validation_names_its_refusals"),
+    M("expect-bad-hash-accepted-on-the-cli", "spec", "            if not sep or not name or not HEX64.fullmatch(sha):", "            if not sep or not name:",
+      EX + "test_the_command_line_flag_builds_the_expectation", EX + "test_the_cli_runs_with_an_expectation_standalone_and_refuses_a_wrong_one",
+      EX + "test_a_malformed_expectation_on_the_command_line_is_a_usage_error"),
+    M("expect-without-images-allowed", "spec", '    if expect and not images:\n        raise SpecError("EXPECT_WITHOUT_IMAGES")', "    if False:\n        raise SpecError('EXPECT_WITHOUT_IMAGES')",
+      EX + "test_the_command_line_flag_builds_the_expectation", PF2 + "test_the_pins_flag_reaches_the_context_and_defaults_to_the_repositorys_file",
+      EX + "test_an_expectation_without_an_image_never_starts_the_legacy_stage"),
+    M("strict-flag-dropped-when-expect-given", "spec", "    if strict:\n        doc[\"strict\"] = True", "    if strict and not expect:\n        doc[\"strict\"] = True",
+      EX + "test_strict_and_an_expectation_together_from_the_command_line", EX + "test_the_command_line_flag_builds_the_expectation",
+      EX + "test_strict_with_an_expectation_reaches_the_runner"),
+    M("report-pins-enforced-free", "report", 'value["pins_enforced"] is value["strict"]', "True",
+      RI + "test_pins_enforced_must_equal_strict", RI + "test_a_strict_record_that_did_not_enforce_is_refused"),
+    M("report-enforced-differs-passes", "report", '(not value["pins_enforced"] or src["identity"] in ("none", "match") or im["verdict"] == "REFUSED")', "True",
+      RI + "test_a_differing_pin_under_enforcement_cannot_sit_under_a_pass", RI + "test_an_unverifiable_pin_under_enforcement_cannot_sit_under_a_pass"),
+    M("report-match-without-equal-hashes", "report", '(src["identity"] != "match" or src["sha256"] == src["pin_sha256"])', "True",
+      RI + "test_a_claimed_match_needs_equal_hashes", RI + "test_a_match_with_no_computed_hash_is_a_contradiction"),
+    M("report-identity-none-with-a-pin", "report", '(src["identity"] == "none") == (src["pin_sha256"] is None)', "True",
+      RI + "test_a_pin_less_source_says_none", RI + "test_a_source_with_identity_none_cannot_carry_a_pin"),
+    M("report-differs-with-equal-hashes", "report", '(src["identity"] != "differs" or src["sha256"] not in (None, src["pin_sha256"]))', "True",
+      RI + "test_a_differing_pin_whose_hashes_are_equal_is_a_contradiction", RI + "test_a_differing_pin_whose_hashes_are_equal_is_a_contradiction"),
 ]
 
 
