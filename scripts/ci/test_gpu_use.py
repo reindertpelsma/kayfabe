@@ -729,6 +729,11 @@ echo "Press [q] to stop, [?] for help"; echo "frame=  600 fps=398 q=12.0 Lsize= 
         res, log, calls = self.run_row("nvdec_h264", True)
         self.assertEqual(rows.evaluate("nvdec_h264", "host", log)["verdict"], gu.FAIL)
 
+    def test_the_real_ffmpeg_4_4_2_rows_of_the_fixed_commands_are_proved(self):
+        # REAL: lines of the fixed nvenc and nvdec rows on bare metal (RTX 3090, Ubuntu 22.04 ffmpeg 4.4.2), traces/open_rows_guest_20261117/runs/F1/
+        self.assertIs(gu.proof_nvenc(fx("nvenc_gpu_ffmpeg44.log"), codec="h264")["ok"], True)
+        self.assertIs(gu.proof_nvdec(fx("nvdec_gpu_ffmpeg44.log"))["ok"], True)
+
     def test_the_mapping_line_with_nested_parentheses_names_the_encoder(self):
         line = "  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (h264_nvenc))\nENCODER_TAG \n"
         self.assertIs(gu.proof_nvenc(line, codec="h264")["ok"], True)
