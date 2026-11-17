@@ -1985,7 +1985,7 @@ def mutants():
         ),
         ("power-native", 'errors.extend(str(error) for error in data["errors"])', "pass"),
         ("power-integration", 'if not power["ok"]:', "if False:"),
-        ("power-aggregate", 'r["verdict"] in ("PASS", "OK")', 'r["verdict"] == "PASS"'),
+        ("power-aggregate", 'r["verdict"] in ("PASS", "OK", "PASS_LIMITED")', 'r["verdict"] == "PASS"'),
         ("harness-class", 'return "HARNESS", "harness"', 'return "FAIL", "app"'),
         (
             "wlms-postrun",
