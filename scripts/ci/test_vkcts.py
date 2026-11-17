@@ -236,6 +236,11 @@ class PinsTests(unittest.TestCase):
             L.check_fetch_sources(self.fetch_text(), PINS, {"video_generator": "e" * 40})
         self.assertTrue(L.check_fetch_sources(self.fetch_text(), PINS, {"video_generator": PINS["externals_git"]["video_generator"]["commit"]}))
 
+    def test_a_short_pin_is_refused_even_when_the_head_equals_it(self):
+        for short in ("abcd", "a" * 39, "A" * 40, "g" * 40):
+            with self.subTest(short), self.assertRaises(L.PinRefused):
+                L.head_matches(short, short)
+
     def test_head_must_equal_the_pinned_commit(self):
         self.assertTrue(L.head_matches("a" * 40, "a" * 40))
         with self.assertRaises(L.PinRefused):
@@ -261,6 +266,9 @@ class PinsTests(unittest.TestCase):
         self.assertNotEqual(k, L.content_key(p))
         p = json.loads(json.dumps(PINS))
         p["build"]["cmake_args"] = p["build"]["cmake_args"] + ["-DX=1"]
+        self.assertNotEqual(k, L.content_key(p))
+        p = json.loads(json.dumps(PINS))
+        p["externals_git"]["amber"]["commit"] = "3" * 40
         self.assertNotEqual(k, L.content_key(p))
         p = json.loads(json.dumps(PINS))
         p["run"]["budget_s"] = 1
@@ -309,6 +317,21 @@ class GitFetchTests(unittest.TestCase):
             r, _ = self.remote(t, "one")
             with self.assertRaises(L.PinRefused):
                 V.fetch_cts(Path(t) / "src", self.pins_for(r, "c" * 40), sleep=lambda s: None)
+
+    def test_a_tag_moved_to_another_commit_is_refused_when_the_pinned_commit_cannot_be_fetched(self):
+        with tempfile.TemporaryDirectory() as t:
+            r, c1 = self.remote(t, "one")
+            self.git(r, "tag", "vulkan-cts-test", c1)
+            with self.assertRaises(L.PinRefused):
+                V.fetch_cts(Path(t) / "src", self.pins_for(r, "d" * 40), sleep=lambda s: None)
+
+    def test_a_second_moved_tag_is_refused_the_same_way(self):
+        with tempfile.TemporaryDirectory() as t:
+            r, _ = self.remote(t, "one")
+            _, c2 = self.remote(t, "two")
+            self.git(r, "tag", "-a", "-m", "annotated", "vulkan-cts-test", c2)
+            with self.assertRaises(L.PinRefused):
+                V.fetch_cts(Path(t) / "src", self.pins_for(r, "e" * 40), sleep=lambda s: None)
 
     def test_a_tree_left_at_another_commit_is_replaced_not_trusted(self):
         with tempfile.TemporaryDirectory() as t:
@@ -717,6 +740,18 @@ class ExecuteTests(unittest.TestCase):
         res, _, _ = L.execute(self.CASES[:4], run_batch, 2, 1000, self.clock(), 2)
         self.assertTrue(all(v[0] == "Pass" for v in res.values()), res)
 
+    def test_an_open_case_without_a_parsed_result_is_still_attributed(self):
+        def run_batch(batch):
+            return L.BatchOutcome([], batch[0], -11, False) if batch[0] == self.CASES[0] else outcome([(c, "Pass", "", True) for c in batch], None)
+        res, _, _ = L.execute(self.CASES[:3], run_batch, 3, 100, self.clock(), 3)
+        self.assertEqual(res[self.CASES[0]][0], "Crash")
+        killed = L.execute(self.CASES[:1], lambda b: L.BatchOutcome([], b[0], -9, True), 3, 100, self.clock(), 3)[0]
+        self.assertEqual(killed[self.CASES[0]][0], "Timeout")
+
+    def test_an_open_case_without_a_parsed_result_that_was_killed_is_a_timeout(self):
+        res, _, _ = L.execute(self.CASES[:2], lambda b: L.BatchOutcome([], b[0], -9, True), 3, 100, self.clock(), 0)
+        self.assertEqual(res[self.CASES[0]][0], "Timeout")
+
     def test_the_first_result_of_a_case_wins(self):
         def run_batch(batch):
             return outcome([(batch[0], "Pass", "", True), (batch[0], "Fail", "", True)] + [(c, "Pass", "", True) for c in batch[1:]], None)
@@ -825,6 +860,13 @@ class BlockTests(unittest.TestCase):
         self.assertEqual(text.count("VKCTS_RESULTS_END"), 1)
         L.parse_block(text)
 
+    def test_render_block_never_emits_a_tab_or_newline_or_markup_inside_a_detail(self):
+        rows = [("dEQP-VK.a.f", "Fail", "fail", "aa", "one\ttwo\nthree <b> `x` $(y) |z")]
+        line = [l for l in L.render_block("host", rows).splitlines() if l.startswith("dEQP")][0]
+        self.assertEqual(len(line.split("\t")), 5)
+        for ch in "<>`$|":
+            self.assertNotIn(ch, line)
+
     def test_the_summary_counts_by_class_and_area(self):
         rows = [("dEQP-VK.a.%d" % i, s, L.classify(s), "x" if i < 2 else "y", "-") for i, s in enumerate(["Pass", "Fail", "NotSupported", "Crash"])]
         s = L.summarize(rows)
@@ -888,6 +930,12 @@ class DiffTests(unittest.TestCase):
         rows, summary = L.diff_rows(rows_of({"dEQP-VK.a.1": "Pass"}), rows_of({"dEQP-VK.a.2": "Pass"}))
         self.assertEqual({r[0]: r[4] for r in rows}, {"dEQP-VK.a.1": "INCOMPLETE", "dEQP-VK.a.2": "INCOMPLETE"})
         self.assertEqual(summary["categories"]["SAME_OK"], 0)
+
+    def test_a_case_missing_in_the_guest_is_incomplete_not_same_and_not_a_candidate(self):
+        rows, summary = L.diff_rows(rows_of({"dEQP-VK.a.1": "Pass", "dEQP-VK.a.2": "Pass"}), rows_of({"dEQP-VK.a.1": "Pass"}))
+        self.assertEqual(summary["categories"]["SAME_OK"], 1)
+        self.assertEqual(summary["categories"]["INCOMPLETE"], 1)
+        self.assertEqual(summary["candidates"], 0)
 
     def test_the_diff_text_lists_only_the_differences_and_has_one_summary_line(self):
         rows, summary = L.diff_rows(rows_of({"dEQP-VK.a.1": "Pass", "dEQP-VK.a.2": "Pass"}), rows_of({"dEQP-VK.a.1": "Pass", "dEQP-VK.a.2": "Crash"}))
@@ -955,6 +1003,7 @@ class RunIntegrationTests(unittest.TestCase):
             self.assertEqual(st[self.CASES[0]], "Timeout")
             self.assertEqual(st[self.CASES[3]], "Crash")
             self.assertEqual(st[self.CASES[5]], "NotRun")
+            self.assertIn("no result from a clean run", {r[0]: r[4] for r in rows}[self.CASES[5]])
             self.assertEqual(st[self.CASES[6]], "Pass")
 
     def test_a_forged_detail_never_reaches_the_block_unsanitised(self):

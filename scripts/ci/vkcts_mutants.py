@@ -44,8 +44,10 @@ CASES = [
      "test_a_new_case_while_one_is_open_closes_the_open_one_as_a_crash", "test_a_forged_result_in_the_body_of_another_case_is_only_data", ["QpaTests"]),
     ("lost-cases-after-a-crash", LIB, '        remaining = [c for c in remaining if c not in results]\n        if got:', '        remaining = remaining[len(batch):]\n        if got:',
      "test_a_crash_is_attributed_to_the_running_case_and_the_run_continues_after_it", "test_every_crash_is_counted_and_many_crashes_do_not_stop_a_run_that_progresses", ["ExecuteTests"]),
-    ("hang-recorded-as-crash", LIB, '"Timeout", "killed by the harness") if out.killed else ("Crash"', '"Crash", "killed by the harness") if out.killed else ("Crash"',
+    ("hang-recorded-as-crash", LIB, 'status, detail = "Timeout", "killed by the harness"', 'status, detail = "Crash", "killed by the harness"',
      "test_a_hang_killed_by_the_harness_is_a_timeout_not_a_crash", "test_a_crash_and_a_hang_are_attributed_and_the_rest_still_runs", ["ExecuteTests", "RunIntegrationTests"]),
+    ("open-case-hang-fallback-recorded-as-crash", LIB, 'results[out.open_case] = ("Timeout", "killed by the harness") if out.killed else', 'results[out.open_case] = ("Crash", "killed by the harness") if out.killed else',
+     "test_an_open_case_without_a_parsed_result_is_still_attributed", "test_an_open_case_without_a_parsed_result_that_was_killed_is_a_timeout", ["ExecuteTests"]),
     ("budget-never-checked", LIB, "        if clock() - start >= budget_s:", "        if False:",
      "test_the_budget_is_checked_before_every_batch_and_the_rest_is_not_run", "test_a_spent_budget_runs_nothing_and_marks_every_case_not_run", ["ExecuteTests"]),
     ("idle-limit-lost", LIB, "            if idle > max_idle_restarts:", "            if idle > max_idle_restarts + 1000:",
@@ -60,8 +62,8 @@ CASES = [
      "test_a_block_with_a_wrong_count_is_refused", "test_every_tampering_of_a_block_is_refused", ["BlockTests"]),
     ("block-digest-unchecked", LIB, "    if ended[0] != len(rows) or ended[1] != digest(rows):", "    if ended[0] != len(rows):",
      "test_a_block_with_a_wrong_digest_is_refused", "test_every_tampering_of_a_block_is_refused", ["BlockTests"]),
-    ("sanitize-keeps-control-characters", LIB, r'[^A-Za-z0-9 _.,:;()/=+\-]", "?"', r'[^A-Za-z0-9 _.,:;()/=+\-\n\t]", "?"',
-     "test_sanitize_removes_everything_that_could_forge_a_line", "test_details_cannot_forge_markers_or_columns", ["ClassifyTests", "BlockTests"]),
+    ("sanitize-keeps-markup-and-shell-characters", LIB, '    text = re.sub(r"[^A-Za-z0-9 _.,:;()/=+\\-]", "?", str(text))\n', "    text = str(text)\n",
+     "test_sanitize_removes_everything_that_could_forge_a_line", "test_a_forged_detail_never_reaches_the_block_unsanitised", ["ClassifyTests", "RunIntegrationTests"]),
     ("cpu-type-accepted", LIB, '    if info.get("type") not in GPU_TYPES:\n        return False\n', "",
      "test_a_software_rasteriser_or_a_cpu_device_is_not_a_gpu", "test_a_cpu_device_type_fails_even_with_a_gpu_like_name", ["DeviceTests", "RunIntegrationTests"]),
     ("software-name-accepted", LIB, '    return not re.search(r"llvmpipe|lavapipe|swiftshader|softpipe", info.get("name", ""), re.I)', "    return True",
@@ -73,13 +75,13 @@ CASES = [
     ("incomplete-counts-as-same", LIB, '    if h == "not_run" or g == "not_run":\n        return "INCOMPLETE"', '    if h == "not_run" or g == "not_run":\n        return "SAME_OK"',
      "test_the_comparison_table", "test_a_case_on_one_side_only_is_incomplete_never_a_pass", ["DiffTests"]),
     ("missing-guest-case-counts-as-pass", LIB, 'hs, gs = (hr[1] if hr else "NotRun"), (gr[1] if gr else "NotRun")', 'hs, gs = (hr[1] if hr else "NotRun"), (gr[1] if gr else "Pass")',
-     "test_a_case_on_one_side_only_is_incomplete_never_a_pass", "test_diff_rows_counts_candidates_and_areas", ["DiffTests"]),
+     "test_a_case_on_one_side_only_is_incomplete_never_a_pass", "test_a_case_missing_in_the_guest_is_incomplete_not_same_and_not_a_candidate", ["DiffTests"]),
     ("candidates-not-counted", LIB, "    cand = sum(count[c] for c in CANDIDATES)", "    cand = 0",
      "test_diff_rows_counts_candidates_and_areas", "test_the_diff_text_lists_only_the_differences_and_has_one_summary_line", ["DiffTests"]),
     ("strict-never-fails", TOOL, 'return 1 if (a.strict and summary["candidates"]) else 0', "return 0",
      "test_strict_exits_one_when_there_is_a_candidate", "test_the_results_directory_form_writes_the_diff_and_the_summary", ["DiffCommandTests"]),
     ("short-commit-accepted", LIB, 'COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")', 'COMMIT_RE = re.compile(r"^[0-9a-f]{4,40}$")',
-     "test_a_cts_pin_that_is_a_tag_or_short_or_empty_is_refused", "test_head_must_equal_the_pinned_commit", ["PinsTests"]),
+     "test_a_cts_pin_that_is_a_tag_or_short_or_empty_is_refused", "test_a_short_pin_is_refused_even_when_the_head_equals_it", ["PinsTests"]),
     ("fetch-script-origin-unchecked", LIB, '        if url != row["url"]:', "        if False:",
      "test_a_changed_origin_in_the_fetch_script_is_refused", "test_a_moved_revision_url_or_digest_in_the_fetch_script_is_refused", ["PinsTests"]),
     ("fetch-script-file-digest-unchecked", LIB, '        if url != row["url"] or digest != row["sha256"]:', '        if url != row["url"]:',
@@ -87,7 +89,7 @@ CASES = [
     ("unpinned-external-accepted", LIB, '    unpinned = sorted(set(git) - set(pins["externals_git"]) - {"vulkan-validationlayers"})', "    unpinned = []",
      "test_a_git_external_this_repository_does_not_pin_is_refused", "test_an_unpinned_external_with_a_valid_commit_is_still_refused", ["PinsTests"]),
     ("head-never-compared", LIB, "    if have != want:\n        raise PinRefused", "    if False:\n        raise PinRefused",
-     "test_head_must_equal_the_pinned_commit", "test_a_server_that_does_not_have_the_pinned_commit_is_refused", ["PinsTests", "GitFetchTests"]),
+     "test_head_must_equal_the_pinned_commit", "test_externals_are_verified_by_head_and_by_file_digest", ["PinsTests", "GitFetchTests"]),
     ("key-ignores-the-build-configuration", LIB, '"fetch_scripts": pins.get("fetch_scripts", []), "build": pins["build"]}', '"fetch_scripts": pins.get("fetch_scripts", []), "build": {}}',
      "test_a_changed_cmake_argument_changes_the_key", "test_the_content_key_follows_the_pins_and_the_build_configuration_only", ["PinsTests"]),
     ("key-ignores-external-commits", LIB, '"externals_git": pins["externals_git"], "externals_files"', '"externals_git": {}, "externals_files"',
@@ -95,13 +97,13 @@ CASES = [
     ("external-file-digest-unchecked", TOOL, '        if hashlib.sha256(found[0].read_bytes()).hexdigest() != row["sha256"]:', "        if False:",
      "test_a_fetched_file_external_with_another_digest_is_refused_on_its_own", "test_externals_are_verified_by_head_and_by_file_digest", ["GitFetchTests"]),
     ("fetched-cts-head-unchecked", TOOL, '    L.head_matches(git_out(["rev-parse", "HEAD"], src), want)\n\n\ndef verify_externals', "    pass\n\n\ndef verify_externals",
-     "test_a_server_that_does_not_have_the_pinned_commit_is_refused", "test_the_checkout_ends_at_exactly_the_pinned_commit", ["GitFetchTests"]),
+     "test_a_tag_moved_to_another_commit_is_refused_when_the_pinned_commit_cannot_be_fetched", "test_a_second_moved_tag_is_refused_the_same_way", ["GitFetchTests"]),
     ("committed-list-digest-unchecked", TOOL, "    if not trusted and sha != want:", "    if False:",
      "test_a_changed_list_is_refused_unless_it_is_the_users_own", "test_a_user_caselist_is_trusted_and_the_committed_one_is_checked", ["CaselistTests", "RunIntegrationTests"]),
     ("gpu-use-not-enforced", TOOL, '    if rec and rec["verdict"] != "PASS":', "    if False:",
      "test_an_idle_gpu_fails_the_row_and_names_the_reason", "test_a_host_run_without_nvidia_smi_cannot_claim_gpu_use", ["RunIntegrationTests"]),
     ("detail-not-sanitised-in-the-block", LIB, '        out.append("%s\\t%s\\t%s\\t%s\\t%s" % (case, status, cls, area, sanitize(detail)))', '        out.append("%s\\t%s\\t%s\\t%s\\t%s" % (case, status, cls, area, detail))',
-     "test_details_cannot_forge_markers_or_columns", "test_a_forged_detail_never_reaches_the_block_unsanitised", ["BlockTests", "RunIntegrationTests"]),
+     "test_details_cannot_forge_markers_or_columns", "test_render_block_never_emits_a_tab_or_newline_or_markup_inside_a_detail", ["BlockTests"]),
     ("discovery-row-gates", TABLE, '    if app in DISCOVERY:\n        return "DISCOVERY"', '    if False:\n        return "DISCOVERY"',
      "test_matrix_table_calls_it_discovery", "test_the_discovery_row_stays_out_of_the_generated_gate_list_even_when_it_passes_everywhere", ["MatrixRowTests"]),
     ("discovery-row-in-the-all-list", RUNAPPS, """[ "${1:-}" = listall ] && { echo "$APPS" | cut""", """[ "${1:-}" = listall ] && { { echo "$APPS"; echo "$DISCOVERY"; } | cut""",
@@ -119,6 +121,7 @@ def run(tree, classes):
 
 def main():
     weak = 0
+    only = sys.argv[1:]
     with tempfile.TemporaryDirectory(prefix="vkcts-mutants-") as tmp:
         tree = Path(tmp)
         for rel in COPY:
@@ -138,6 +141,8 @@ def main():
             return 2
         print("PASS baseline", flush=True)
         for name, rel, old, new, k1, k2, classes in CASES:
+            if only and not any(o in name for o in only):
+                continue
             target = tree / rel
             target.write_text(texts[rel].replace(old, new))
             try:
