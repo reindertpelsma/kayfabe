@@ -37,7 +37,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use kf_abi::utilization::{self as ku, GuestSample, HostReading, Layout, Percents, RusdInit};
+use kf_abi::utilization::{self as ku, GuestSample, HostReading, Layout, RusdInit};
 use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 
 const NV_OK: u32 = 0;
@@ -720,6 +720,7 @@ kf_util::assert_send_sync!(UtilizationPolicy);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kf_abi::utilization::Percents;
     use std::sync::atomic::AtomicU64;
 
     /// A hand-wound clock.
@@ -1104,6 +1105,93 @@ mod tests {
             true
         });
         assert_eq!(first, 0x8000 + 1992);
+    }
+
+    #[test]
+    fn a_host_that_repeats_its_timestamp_never_refreshes_the_snapshot() {
+        let (clock, state, mut s, _) = rig((0..6).map(|_| Ok(reading(9, 50))).collect());
+        state.note_interest();
+        let _ = s.tick();
+        for _ in 0..5 {
+            clock.advance(SAMPLE_PERIOD);
+            let _ = s.tick();
+        }
+        assert_eq!(
+            state.fresh_samples().map(|v| v.len()),
+            Some(1),
+            "five repeats of the same host timestamp stored nothing"
+        );
+        assert_eq!(state.counters().host_stalled, 5);
+    }
+
+    #[test]
+    fn publish_refuses_a_clock_in_the_seqlocks_reserved_range() {
+        let clock = FakeClock::at(0xFF00_0000_0000_0000);
+        let state = linked(&clock, 0x40_0000, l580(), true);
+        state.push(GuestSample {
+            timestamp_ns: clock.now_ns(),
+            percents: Percents::default(),
+        });
+        assert_eq!(
+            state.publish(&mut |_, _| panic!("no write")),
+            PublishOutcome::NoSample
+        );
+    }
+
+    #[test]
+    fn an_address_that_wraps_to_zero_at_a_generated_offset_is_refused() {
+        let clock = FakeClock::at(5_000);
+        for phys in [u64::MAX - 1975, u64::MAX - 1980, u64::MAX - 1000, u64::MAX] {
+            let state = linked(&clock, phys, l580(), true);
+            state.push(GuestSample {
+                timestamp_ns: 5_000,
+                percents: Percents::default(),
+            });
+            assert_eq!(
+                state.publish(&mut |g, _| panic!("wrapped write to {g:#x}")),
+                PublishOutcome::Refused,
+                "{phys:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_refused_info_write_stops_before_the_valid_timestamp() {
+        let clock = FakeClock::at(5_000);
+        let state = linked(&clock, 0x40_0000, l580(), true);
+        state.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
+        let mut seen = Vec::new();
+        let out = state.publish(&mut |g, b| {
+            seen.push((g, b.len()));
+            seen.len() < 2
+        });
+        assert_eq!(out, PublishOutcome::Refused);
+        assert_eq!(
+            seen.len(),
+            2,
+            "begin, then the refused info write; the valid timestamp is never written"
+        );
+    }
+
+    #[test]
+    fn the_ring_never_holds_more_than_72_whatever_is_pushed() {
+        let clock = FakeClock::at(1);
+        let state = UtilizationState::new(clock.clone());
+        for i in 0..10_000u64 {
+            clock.advance(Duration::from_nanos(1));
+            state.push(GuestSample {
+                timestamp_ns: clock.now_ns(),
+                percents: Percents::default(),
+            });
+            assert!(
+                state.fresh_samples().is_some_and(|v| v.len() <= RING_MAX),
+                "after {i} pushes"
+            );
+        }
+        assert_eq!(state.fresh_samples().unwrap().len(), RING_MAX);
     }
 
     #[test]

@@ -160,8 +160,9 @@ impl Layout {
             && self.rusd_class == 0xde
     }
 
-    /// Whether the driver matrix's own measured `PERFMON_UTIL_BUFFER_SIZE` at `version` equals the buffer this
-    /// row derives (two independent measurements of one number).
+    /// Whether the driver matrix's own `PERFMON_UTIL_BUFFER_SIZE` value at `version` (`generated::matrix`,
+    /// compiled per tag by `tools/drivermatrix`) equals the buffer this row derives (two independent compilations of
+    /// one number).
     #[must_use]
     pub fn matrix_agrees(&self, version: DriverVersion) -> bool {
         m::CTRL_LIMITS_NV2080_CTRL_PERF_GPUMON_PERFMON_UTIL_BUFFER_SIZE
@@ -949,6 +950,95 @@ mod tests {
             );
         }
         assert!(encode_rusd_record(l, &Percents::default(), 0xFEFF_FFFF_FFFF_FFFF, 1).is_some());
+    }
+
+    #[test]
+    fn the_newest_sample_wins_whatever_order_the_host_ring_is_in() {
+        let l = l580();
+        for stamps in [[1u64, 2, 3], [3, 2, 1], [2, 3, 1]] {
+            let mut p = host_reply(l, &stamps, [0; 6]);
+            // the sample stamped 3 carries gpu 80, the others 1
+            for (i, ts) in stamps.iter().enumerate() {
+                let at = off(l.off_samples) + i * off(l.sample_size);
+                let util = if *ts == 3 { 8_000 } else { 100 };
+                put_u32(&mut p, at + off(l.off_gr) + off(l.eng_off_util), util).unwrap();
+            }
+            let r = decode_host_newest(l, &p).unwrap();
+            assert_eq!((r.host_timestamp, r.percents.gpu), (3, 80), "{stamps:?}");
+        }
+    }
+
+    #[test]
+    fn a_host_reply_that_echoes_another_sample_type_is_not_read() {
+        let l = l580();
+        let mut p = host_reply(l, &[5], [1_000; 6]);
+        assert!(decode_host_newest(l, &p).is_some());
+        p[0] = 1;
+        assert!(decode_host_newest(l, &p).is_none());
+    }
+
+    #[test]
+    fn a_host_reply_that_echoes_another_buffer_size_is_not_read() {
+        let l = l580();
+        let mut p = host_reply(l, &[5], [1_000; 6]);
+        put_u32(&mut p, 4, 0).unwrap();
+        assert!(decode_host_newest(l, &p).is_none());
+    }
+
+    #[test]
+    fn exactly_72_samples_put_the_tracker_at_zero_and_keep_every_one() {
+        let l = l580();
+        let exactly: Vec<GuestSample> = (1..=72)
+            .map(|i| GuestSample {
+                timestamp_ns: i,
+                percents: Percents::default(),
+            })
+            .collect();
+        let p = encode_gpumon_reply(l, &exactly).unwrap();
+        assert_eq!(get_u32(&p, 8), Some(72));
+        assert_eq!(get_u32(&p, 12), Some(0), "72 % 72");
+        assert_eq!(
+            get_u64(&p, off(l.off_samples)),
+            Some(1),
+            "the oldest of 72 is the first"
+        );
+        let one_more: Vec<GuestSample> = (1..=73)
+            .map(|i| GuestSample {
+                timestamp_ns: i,
+                percents: Percents::default(),
+            })
+            .collect();
+        let p = encode_gpumon_reply(l, &one_more).unwrap();
+        assert_eq!(
+            get_u64(&p, off(l.off_samples)),
+            Some(2),
+            "the newest 72 of 73"
+        );
+        assert_eq!(
+            get_u64(&p, off(l.off_samples) + 71 * off(l.sample_size)),
+            Some(73),
+            "and the newest is last"
+        );
+    }
+
+    #[test]
+    fn a_timestamp_in_the_seqlocks_reserved_range_is_refused_whichever_edge() {
+        let l = l580();
+        assert!(encode_rusd_record(l, &Percents::default(), 0xFF00_0000_0000_0000, 1).is_none());
+        assert!(encode_rusd_record(l, &Percents::default(), 0xFFFF_FFFF_FFFF_FFFE, 1).is_none());
+        assert!(encode_rusd_record(l, &Percents::default(), l.ts_in_progress, 1).is_none());
+        assert!(encode_rusd_record(l, &Percents::default(), l.ts_invalid, 1).is_none());
+        assert!(encode_rusd_record(l, &Percents::default(), 1, 1).is_some());
+    }
+
+    #[test]
+    fn the_seqlocks_first_write_is_never_a_valid_timestamp() {
+        for (_, l) in ROWS {
+            let w = encode_rusd_record(l, &Percents::default(), 12345, 1).unwrap();
+            assert_eq!(u64::from_le_bytes(w.begin.1), l.ts_in_progress);
+            assert_ne!(w.begin.1, w.finish.1);
+            assert_eq!(u64::from_le_bytes(w.finish.1), 12345);
+        }
     }
 
     #[test]

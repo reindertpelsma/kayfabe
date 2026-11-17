@@ -15,7 +15,7 @@ at every version today, so no input distinguishes them; `every_row_is_coherent_a
 `Sampler::period`'s `.max(SAMPLE_PERIOD_MIN)` (both periods already exceed the floor; `however_often_it_is_ticked` kills the
 real floor mutant below).
 
-Run: python3 scripts/ci/util_flag_mutants.py [CASE ...]   (exit 0 only if no mutant is weak; `--check` only validates anchors)
+Run: python3 scripts/ci/util_flag_mutants.py [CASE ...]   (exit 0 only if no mutant is weak; `--check` only validates anchors; `--skip-baseline` for a re-run of named cases)
 """
 
 import os
@@ -148,16 +148,17 @@ def restore():
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a != "--check"]
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if "--check" in sys.argv[1:]:
         print("anchors ok: %d mutants" % len(CASES))
         return 0
     want = set(args)
     cases = [c for c in CASES if not want or c[0] in want]
     try:
-        base = run({}, ABI + RM + QEMU)
-        assert not base, "baseline is not green: %s" % base
-        print("baseline: green")
+        if "--skip-baseline" not in sys.argv[1:]:
+            base = run({}, ABI + RM + QEMU)
+            assert not base, "baseline is not green: %s" % base
+            print("baseline: green")
         weak = []
         for name, (rel, text), cmds in cases:
             killers = run({rel: text}, cmds)

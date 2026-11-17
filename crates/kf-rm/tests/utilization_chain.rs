@@ -387,7 +387,7 @@ fn hostile_rusd_init_and_poll_shapes_are_refused_and_change_nothing() {
         ("a zero address", 0u64),
         ("an unaligned address", 0x10_0001),
         ("an address at 2^52", 1 << 52),
-        ("the top of the address space", u64::MAX & !0xfff),
+        ("the top of the address space", 0xffff_ffff_ffff_f000),
     ] {
         assert!(r.chain.respond(&r.init(1, phys)).is_none(), "{name}");
         assert_eq!(state.rusd_page(), None, "{name} must not be remembered");
@@ -668,4 +668,135 @@ fn derived_rows_the_link_exists_exactly_where_both_measurements_agree() {
             assert!(l.matrix_agrees(*ver), "{ver}");
         }
     }
+}
+
+// ---------------------------------------------------------------- the weak-mutant additions
+
+/// The cache never holds more than the control's 72 samples, and the reply shows the newest 72 with the tracker
+/// at the oldest.
+#[test]
+fn on_gpumon_after_100_samples_replies_72_with_the_tracker_at_the_oldest() {
+    let mut r = rig(v(580, 159, 4), true);
+    for i in 0..100u64 {
+        r.push(u8::try_from(i % 100).unwrap(), 2_000_000_000 + i);
+    }
+    let l = r.l();
+    let reply = r.chain.respond(&r.gpumon_request(0)).unwrap();
+    let p = r.reply_params(&reply, l.params_len());
+    let u32_at = |o: u64| u32::from_le_bytes(p[o as usize..o as usize + 4].try_into().unwrap());
+    let u64_at = |o: u64| u64::from_le_bytes(p[o as usize..o as usize + 8].try_into().unwrap());
+    assert_eq!(u32_at(8), 72, "count");
+    assert_eq!(u32_at(12), 0, "tracker 0: the oldest is index 0");
+    assert_eq!(
+        u64_at(l.off_samples + l.off_timestamp),
+        2_000_000_028,
+        "the 29th of 100 is the oldest kept"
+    );
+    assert_eq!(
+        u64_at(l.off_samples + 71 * l.sample_size + l.off_timestamp),
+        2_000_000_099,
+        "the newest is last"
+    );
+}
+
+/// Two publications at one clock value still carry strictly increasing timestamps (a reader that compares the
+/// timestamp before and after a copy must see a change).
+#[test]
+fn rusd_two_publishes_at_one_clock_value_have_increasing_timestamps() {
+    let mut r = rig(v(580, 159, 4), true);
+    let l = r.l();
+    let state = r.state.clone().unwrap();
+    r.push(10, 2_000_000_000);
+    let mut ram = Ram {
+        base: 0x10_0000,
+        mem: vec![0u8; 4096],
+        writes: Vec::new(),
+    };
+    assert!(r.chain.respond(&r.init(1, 0x10_0000)).is_some());
+    assert!(r.chain.respond(&r.poll(2)).is_some());
+    assert_eq!(
+        state.publish(&mut |g, b| ram.write(g, b)),
+        PublishOutcome::Written
+    );
+    let t1 = read_record(&ram.mem, l).unwrap().0;
+    assert!(
+        r.chain.respond(&r.poll(2)).is_some(),
+        "a new poll makes a publication due at once"
+    );
+    assert_eq!(
+        state.publish(&mut |g, b| ram.write(g, b)),
+        PublishOutcome::Written
+    );
+    let t2 = read_record(&ram.mem, l).unwrap().0;
+    assert!(t2 > t1, "{t2} must exceed {t1}");
+}
+
+/// A later poll that no longer asks for the utilisation record withdraws the wish: nothing is published after it.
+#[test]
+fn rusd_a_later_poll_without_the_bit_withdraws_the_wish() {
+    let mut r = rig(v(580, 159, 4), true);
+    let state = r.state.clone().unwrap();
+    r.push(10, 2_000_000_000);
+    assert!(r.chain.respond(&r.init(1, 0x10_0000)).is_some());
+    assert!(r.chain.respond(&r.poll(2)).is_some());
+    assert!(state.rusd_wants_utilization());
+    assert!(r.chain.respond(&r.poll(0)).is_some());
+    assert!(!state.rusd_wants_utilization(), "mask 0 withdraws it");
+    assert_eq!(
+        state.publish(&mut |_, _| panic!("no write")),
+        PublishOutcome::NotWanted
+    );
+    assert!(r.chain.respond(&r.poll(2)).is_some());
+    assert!(r.chain.respond(&r.poll(!2)).is_some());
+    assert!(
+        !state.rusd_wants_utilization(),
+        "a mask without the PERF bit withdraws it too"
+    );
+}
+
+/// A new chain (reset, fn-1 re-selection) forgets a wish and a publication that was already owed.
+#[test]
+fn rusd_a_rebuilt_chain_forgets_a_wish_and_an_owed_publication() {
+    let mut first = rig(v(580, 159, 4), true);
+    let state = first.state.clone().unwrap();
+    first.push(10, 2_000_000_000);
+    assert!(first.chain.respond(&first.init(1, 0x10_0000)).is_some());
+    assert!(first.chain.respond(&first.poll(2)).is_some());
+    let abi = first.abi;
+    let _second = kf_rm::served_policy(
+        ga106::board(),
+        ga106::host(),
+        abi,
+        ChainLogs::default(),
+        Default::default(),
+        kf_rm::ObjectLinks {
+            utilization: Some(UtilizationSeat {
+                state: state.clone(),
+            }),
+            ..Default::default()
+        },
+    );
+    assert!(!state.rusd_wants_utilization());
+    assert_eq!(
+        state.publish(&mut |_, _| panic!("no write for a dead guest life")),
+        PublishOutcome::NotWanted
+    );
+}
+
+/// The bucket is per second of the state's clock: a burst, then nothing until the clock moves.
+#[test]
+fn hostile_a_frozen_clock_serves_one_burst_and_a_moving_one_the_rate() {
+    let mut r = rig(v(595, 84, 0), true);
+    r.push(10, 2_000_000_000);
+    let req = r.gpumon_request(0);
+    let first = (0..64).filter(|_| r.chain.respond(&req).is_some()).count() as u64;
+    assert_eq!(first, GPUMON_REPLIES_PER_SEC);
+    // 100 ms later: one more token at most (16 per second)
+    r.clock.0.fetch_add(100_000_000, Ordering::Relaxed);
+    r.state.as_ref().unwrap().push(GuestSample {
+        timestamp_ns: r.clock.0.load(Ordering::Relaxed),
+        percents: Percents::default(),
+    });
+    let next = (0..64).filter(|_| r.chain.respond(&req).is_some()).count() as u64;
+    assert_eq!(next, 1, "100 ms at 16/s is one token");
 }

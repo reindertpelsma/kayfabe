@@ -95,6 +95,10 @@ fn no_use_site_hardwires_the_property() {
             "report_utilization: report_utilization == 0",
             "report_utilization: false,",
             "utilization: Some(",
+            "let util_seat = None",
+            "let _ = u;",
+            "if true && std::thread::Builder",
+            "if d.util.is_none()",
         ] {
             // the test-config literal in device.rs's own test module is the one allowed `report_utilization: true`
             let n = text.matches(bad).count();

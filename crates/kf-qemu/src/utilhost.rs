@@ -40,6 +40,9 @@ pub fn classify(e: &RmError) -> UtilRefusal {
     }
 }
 
+/// The control call as `read_via` takes it: `(cmd, params)` in and out on the host subdevice.
+pub type HostControl<'a> = dyn FnMut(u32, &mut [u8]) -> Result<(), RmError> + 'a;
+
 /// One host reading, with the control call abstracted: `host_version` is the host driver's version string and
 /// `control(cmd, params)` issues the control on the host subdevice with `params` in and out.
 ///
@@ -48,7 +51,7 @@ pub fn classify(e: &RmError) -> UtilRefusal {
 /// will never answer; `Failed` for a transient failure; `Empty` when the host answered with no sample.
 pub fn read_via(
     host_version: &str,
-    control: &mut dyn FnMut(u32, &mut [u8]) -> Result<(), RmError>,
+    control: &mut HostControl<'_>,
 ) -> Result<ku_reading::HostReading, UtilRefusal> {
     let version = DriverVersion::parse(host_version).ok_or_else(|| {
         UtilRefusal::NoSource(format!(
@@ -231,27 +234,21 @@ mod tests {
 
     #[test]
     fn a_host_that_will_never_answer_is_no_source_and_a_transient_failure_is_not() {
-        let call = |e: RmError| read_via("580.159.04", &mut |_, _| Err(e.clone()));
+        let call = |e: RmError| read_via("580.159.04", &mut |_, _| Err(e));
         for e in [
             RmError::InsufficientPermissions,
             RmError::Other(0x56),
             RmError::Other(kf_host::ABI_ENCODE_FAILED),
             RmError::Other(kf_host::ABI_DECODE_FAILED),
         ] {
-            assert!(
-                matches!(call(e.clone()), Err(UtilRefusal::NoSource(_))),
-                "{e:?}"
-            );
+            assert!(matches!(call(e), Err(UtilRefusal::NoSource(_))), "{e:?}");
         }
         for e in [
             RmError::Other(0x1f),
             RmError::NoMemory,
             RmError::Interrupted,
         ] {
-            assert!(
-                matches!(call(e.clone()), Err(UtilRefusal::Failed(_))),
-                "{e:?}"
-            );
+            assert!(matches!(call(e), Err(UtilRefusal::Failed(_))), "{e:?}");
         }
     }
 
@@ -363,6 +360,43 @@ mod tests {
         assert!(rt.state.fresh_samples().is_some(), "a sample was stored");
         // a second run() finds the sampler already taken and returns at once
         rt.run(&AtomicBool::new(false));
+    }
+
+    #[test]
+    fn a_host_with_no_derived_layout_is_never_called() {
+        for v in ["535.309.01", "595.91.8", "581.0"] {
+            let mut called = false;
+            let r = read_via(v, &mut |_, _| {
+                called = true;
+                Ok(())
+            });
+            assert!(!called, "{v}: the host must not be asked");
+            assert!(matches!(r, Err(UtilRefusal::NoSource(_))), "{v}");
+        }
+    }
+
+    #[test]
+    fn the_property_off_never_runs_the_host_factory() {
+        let r = enable_if(false, || -> Box<dyn HostUtilization> {
+            panic!("the factory must not run")
+        });
+        assert!(r.is_none());
+    }
+
+    #[test]
+    fn a_host_reply_that_echoes_another_sample_type_is_empty() {
+        let l = ku::host_layout(DriverVersion {
+            major: 580,
+            minor: 159,
+            patch: 4,
+        })
+        .unwrap();
+        let r = read_via("580.159.04", &mut |_, p| {
+            p.copy_from_slice(&reply(l, 9, 4_200));
+            p[0] = 1;
+            Ok(())
+        });
+        assert_eq!(r, Err(UtilRefusal::Empty));
     }
 
     #[test]

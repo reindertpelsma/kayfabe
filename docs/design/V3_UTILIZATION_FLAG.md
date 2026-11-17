@@ -8,7 +8,7 @@ Evidence labels used throughout (a design note written before the code is `/root
 
 The stack, bottom to top: the guest's NVML (`libnvidia-ml`, closed source) and `nvidia-smi` ask the guest's kernel RM; the guest's kernel RM talks to the emulated GSP with `GSP_RM_CONTROL` RPCs. **Function 76 IS `GSP_RM_CONTROL`** [ogkm: `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:86`, `X(GSP, GSP_RM_CONTROL, 76)`]. The census line `GSP rpc UNSERVICED Unserviced { code: 76 }` is therefore "a `GSP_RM_CONTROL` no link answered" and carries no control id: `kf_gsp::Unserviced` holds `code` and `sequence` only (`crates/kf-gsp/src/boot.rs:341`; the id is attached by the `kf_rm::unserviced` ledger and by the `GSP REFUSED fn76/<cmd>=0x56` lines). So the logs name the refused controls, and the list of refused ids in `evidence/refused_rm_controls_h2.txt` (58 ids, Windows image-B session) is the thing to read, not the "76".
 
-Two producers of the same numbers exist in the open headers, and both are derivable. Nothing in the open sources says which one the closed NVML reads on a given OS; the table separates what is measured from what is only the header's say.
+Two producers of the same numbers exist in the open headers, and both are derivable. Nothing in the open sources says which one the closed NVML reads on a given OS; the table separates what a committed log shows (paths named) from what is only the header's say.
 
 | carrier | control / object | ogkm | what it is | guest evidence |
 |---|---|---|---|---|
@@ -107,8 +107,8 @@ Carrier C (`0x2080a097`, `0x20810108` with class `0x2081`, `0x00800294`) has no 
 | link, state, sampler, publisher | `crates/kf-rm/src/utilization.rs`; seated in `served_chain` (`ObjectLinks::utilization`) |
 | host read, property decision, thread body | `crates/kf-qemu/src/utilhost.rs` (`read_via`, `enable_if`, `UtilRuntime::run`); `Device::util`; drainer publish in `drainer_loop`; `kf3-util` thread in `ffi_unsafe.rs` |
 | property, ABI 34 | `qemu/hw/misc/kf3/kf3.c` (`report-utilization`), `kf3.h`, `ffi_unsafe.rs` (`KF3_ABI`), `Config::report_utilization` |
-| tests | kf-abi unit tests (21) and `utilization_layout_is_current.rs`; kf-rm unit (13), `tests/utilization_chain.rs` (14), `tests/utilization_replay.rs` (3, fixture `tests/fixtures/utilization_logged_shapes.txt`); kf-qemu `utilhost` (9) and `tests/utilization_use_sites.rs` (2, source-text pins, honest about it) |
-| mutants | `scripts/ci/util_flag_mutants.py`, MUTANT_SUMMARY |
+| tests | kf-abi unit tests (26) and `utilization_layout_is_current.rs`; kf-rm unit (18), `tests/utilization_chain.rs` (19), `tests/utilization_replay.rs` (4, fixture `tests/fixtures/utilization_logged_shapes.txt`); kf-qemu `utilhost` (12) and `tests/utilization_use_sites.rs` (2, source-text pins, honest about it) |
+| mutants | `scripts/ci/util_flag_mutants.py`: 47 mutants, each killed by at least two named tests (the first run left 18 with fewer; tests were added for each and those 18 re-run; two equivalent mutants are documented in the script header and not run) |
 
 Deviations from the first draft of the design: the sampler reads once a second when nobody asked (so a one-shot query is answerable from a young cache) instead of not at all; the realize-time probe decides whether the host has a source; `sweep.rs` rows for `0x20800afe`/`0x20800aff` carry a supersession note in their own text.
 

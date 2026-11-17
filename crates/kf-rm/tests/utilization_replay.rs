@@ -251,3 +251,24 @@ fn the_windows_utilization_query_gets_the_poll_and_the_closed_controls_stay_refu
     }
     assert_eq!(logs.unserviced.total(), 3);
 }
+
+/// ★ The logged mask-0 poll (logged-2) AFTER a poll that asked for the record withdraws it: a guest that stops
+/// asking stops being published to.
+#[test]
+fn the_logged_mask_zero_poll_after_a_poll_for_the_record_withdraws_it() {
+    let l = ku::layout(GUEST).unwrap();
+    let (mut on, _logs, state, abi) = chain(true);
+    let reqs = logged_requests();
+    let mut wants = vec![0u8; 16];
+    wants[..8].copy_from_slice(&l.poll_perf.to_le_bytes());
+    assert!(
+        on.respond(&control(&abi, l.rusd_poll_cmd as u32, &wants))
+            .is_some()
+    );
+    assert!(state.rusd_wants_utilization());
+    assert!(
+        on.respond(&control(&abi, reqs[1].0, &reqs[1].1)).is_some(),
+        "the logged poll, mask 0"
+    );
+    assert!(!state.rusd_wants_utilization(), "mask 0 withdraws the wish");
+}
