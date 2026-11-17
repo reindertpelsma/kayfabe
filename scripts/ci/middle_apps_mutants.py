@@ -388,15 +388,15 @@ CASES = [
     (
         "deployed-switch-not-boolean",
         BROKER + "deploy.mjs",
-        "  'MIDDLE_APPS_ENABLED',\n]);\nexport const ALLOWED",
-        "]);\nexport const ALLOWED",
+        "  'MIDDLE_APPS_ENABLED',\n  'PROPIMAGES_ENABLED',\n]);\nexport const ALLOWED",
+        "  'PROPIMAGES_ENABLED',\n]);\nexport const ALLOWED",
         "config",
     ),
     (
         "deployed-switch-not-allowed",
         BROKER + "deploy.mjs",
-        "  'MIDDLE_APPS_ENABLED',\n  // Custom hosts",
-        "  // Custom hosts",
+        "  'MIDDLE_APPS_ENABLED',\n  // Release legs build, store and serve a payload instruction (src/legs.js); default off.",
+        "  // Release legs build, store and serve a payload instruction (src/legs.js); default off.",
         "config",
     ),
     # ---- Linux apps media on a fresh Worker box (2026-11-10): test_apps_media.py and test_apps_pins.py ----------
