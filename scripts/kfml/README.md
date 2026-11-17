@@ -1,12 +1,12 @@
 # kfml: ML research-style GPU workloads as gate tests
 
-**STATUS: LIVE, 2026-11-17. MEASURED natively on two Vast CUDA containers, no kayfabe in the path, ONE box per die: run `kfml_run_20261116` (GeForce RTX
-4070, sm_89, driver 560.35.03 = CUDA 12.6, flavour cu126, Ubuntu 22.04, CPython 3.10.12, gcc 11.4, nvcc 12.6.85, torch 2.7.1+cu126, triton 3.3.1; all six workloads
-PASS) and run `kfml_run_20261117_second_die` (GeForce RTX 2080 Ti, Turing sm_75, driver 595.91.07 = CUDA 13.2, flavour cu128 chosen automatically, nvcc 12.8 from the
-pinned redist archives, torch 2.7.1+cu128; all six PASS after one fix, below). The flavour was derived from the box both times; no die and no driver is pinned. Evidence:
-`traces/kfml_run_20261116/`, `traces/kfml_run_20261117_second_die/`. Never run: an Ampere or Blackwell die, a driver older than CUDA 12.6 (the NOT_RUN path is covered only by GPU-free tests
-with made-up facts), CPython 3.12 installs, Docker, and any kayfabe guest (guest mode below is design plus GPU-free tests).** The GPU-free unit tests run in CI
-(`cd scripts/kfml && python3 -m unittest discover -s tests -t .`).
+**STATUS: LIVE, 2026-11-17. MEASURED natively on five Vast CUDA containers (one box per die, no kayfabe in the path), every flavour chosen by kfml from the box:
+`kfml_run_20261116` (RTX 4070, sm_89, driver 560.35.03 = CUDA 12.6 -> cu126; all six PASS); `kfml_run_20261117_second_die` (RTX 2080 Ti, sm_75, driver 595.91.07 = CUDA 13.2 -> cu128; all six PASS
+after one Triton fix); and the third wave `kfml_run_20261117_tier_decision`: RTX 5070 (Blackwell sm_120, driver 580.178.04 = CUDA 13.0 -> cu128; all six PASS), RTX 3060 (Ampere sm_86, driver 535.154.05 = CUDA 12.2:
+first NOT_RUN under the strict rule, then cu126 by minor-version compatibility, all six PASS: `kfml_run_20261117_ampere_older_driver`), and GTX 1080 Ti (Pascal sm_61, driver 580.178.04 -> NOT_RUN with the named reason, nothing downloaded).
+No die and no driver is pinned. kfml is in the DEFAULT plan of the payload's middle tier (the five gated rows) and large tier (all six): `--skip kfml` leaves it out (tier decision below).
+Never run: a driver below CUDA 12.0 (the NOT_RUN path for a too-old driver is covered by GPU-free tests only), CPython 3.12 installs, Docker, and any kayfabe guest (guest mode below is design plus GPU-free tests).**
+The GPU-free unit tests run in CI (`cd scripts/kfml && python3 -m unittest discover -s tests -t .`).
 
 A standalone Python package. The runner (`python3 -m kfml`) is stdlib-only; torch, triton and the rest
 are imported only inside the per-test child processes. Linux only.
@@ -95,25 +95,29 @@ the lock.
 `setup` (default `--flavor auto`) and `check` derive the wheel flavour from two facts of the box: the highest CUDA
 version the driver supports (the `CUDA Version` of `nvidia-smi`; fallback: the driver version against
 `MIN_DRIVER_FOR_CUDA`) and the GPU's compute capability. The table is `pins.json` `flavors` (CUDA version, the
-compute-capability range its wheels carry kernels for, the lock file and its sha256). The newest flavour wins that
-satisfies both: driver CUDA >= the flavour's CUDA **and** the GPU's sm inside the flavour's range.
+compute-capability range its wheels carry kernels for, the compat limits, the lock file and its sha256). The rule has two steps:
 
-| flavour | needs driver CUDA | wheels carry | lock |
-|---|---|---|---|
-| cu128 | >= 12.8 | sm_75 .. sm_120 (Blackwell) | `requirements.lock.txt` |
-| cu126 | >= 12.6 | sm_50 .. sm_90 in the wheel; kfml declares 7.5 .. 9.0 | `requirements.cu126.lock.txt` |
+1. STRICT: the newest flavour that satisfies both: driver CUDA >= the flavour's CUDA **and** the GPU's sm inside the flavour's range.
+2. MINOR-VERSION COMPATIBILITY: when none is strict, the flavour with the lowest CUDA version of the driver's CUDA major, if the driver supports at least `compat_min_driver_cuda`
+   (12.0, driver 525) and the GPU is not newer than `compat_cc_max` (sm_90: a driver generation cannot drive an architecture it predates). The reason line says so. MEASURED:
+   the cu126 wheels ran all six rows on an Ampere card under a CUDA 12.2 driver (run `kfml_run_20261117_ampere_older_driver`), and the cu128 wheels on a CUDA 12.6 driver (run `kfml_run_20261116`).
+   Before this step existed the same box was NOT_RUN under the strict rule (same run id family, `stage_cold_large.json` of the 535 box: "cu126: driver supports CUDA 12.2 < 12.6").
+
+| flavour | strict: driver CUDA | compat: driver CUDA | wheels carry | lock |
+|---|---|---|---|---|
+| cu128 | >= 12.8 | 12.0 .. 12.7 (sm <= 90) | sm_75 .. sm_120 (Blackwell) | `requirements.lock.txt` |
+| cu126 | >= 12.6 | 12.0 .. 12.5 (sm <= 90) | sm_50 .. sm_90 in the wheel; kfml declares 7.5 .. 9.0 | `requirements.cu126.lock.txt` |
 
 `kfml check` prints the choice and why (`flavor: cu126  (chose cu126 (driver CUDA 12.6 >= 12.6 and sm_89 is inside
 sm_75..sm_90); rejected cu128: driver supports CUDA 12.6 < 12.8)`). When no pinned flavour fits (a Blackwell card on
-a CUDA 12.6 driver, or a driver older than CUDA 12.6) the box is **NOT_RUN with the named reason, never FAIL**:
+a Pascal card, a driver of another CUDA major or older than CUDA 12.0) the box is **NOT_RUN with the named reason, never FAIL**:
 `setup` exits 3, `run` emits NOT_RUN rows (`no pinned flavour can run on this box: cu128: driver supports CUDA 12.6
 < 12.8; cu126: its wheels cover sm_75..sm_90, the GPU is sm_120`). Unknown facts (no `nvidia-smi` CUDA version and
 a driver not in the table, no compute capability) are not NOT_RUN: they are `env-missing` (FAIL), because nothing is
 known to be unsupported. `--flavor cu126|cu128` still forces one (dev, comparisons).
-MEASURED (`kfml_run_20261116`): the rule picked cu126 on driver 560.35.03 / sm_89. UNVERIFIED: every other branch (the
-selection and the NOT_RUN path are covered by GPU-free tests with made-up facts, not by another box).
-Observation, not a rule: on that same driver the cu128 wheels also imported and ran kernels (minor-version
-compatibility; see the supplementary run in the trace), so the CUDA-version rule is conservative.
+MEASURED: cu126 on driver 560.35.03 / sm_89 (`kfml_run_20261116`), cu128 on 595.91.07 / sm_75 (`kfml_run_20261117_second_die`), cu128 on 580.178.04 / sm_120 and NOT_RUN with the reason
+`cu128: its wheels cover sm_75..sm_120, the GPU is sm_61; cu126: ... sm_75..sm_90` on a Pascal card with that driver (`kfml_run_20261117_tier_decision`), cu126 by compatibility on 535.154.05 / sm_86.
+UNVERIFIED: a driver below CUDA 12.0 on a real box (GPU-free tests only).
 
 ### Locks are hashed
 

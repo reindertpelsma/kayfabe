@@ -158,17 +158,20 @@ def _setup(args, out):
 
 
 def _fetch(args, out):
-    root = envmod.venv_root()
-    if root is None:
-        sys.stderr.write("error: run inside the venv (or set KF_ML_HOME)\n")
-        return 2
+    if args.into:
+        data = args.into  # datasets only, no venv needed (the payload prefetches while earlier stages run)
+    else:
+        root = envmod.venv_root()
+        if root is None:
+            sys.stderr.write("error: run inside the venv (or set KF_ML_HOME), or pass --into DIR\n")
+            return 2
+        data = envmod.cache_env(root)["KF_ML_DATA"]
     pins = datasets.load_pins()
-    data = envmod.cache_env(root)["KF_ML_DATA"]
     rc = 0
     for name in sorted(pins["datasets"]):
         try:
             out.write(json.dumps(dict(name=name, **datasets.fetch(name, data, pins, source_dir=args.source_dir))) + "\n")
-        except (datasets.PinMe, datasets.HashMismatch, FileNotFoundError) as e:
+        except (datasets.PinMe, datasets.HashMismatch, FileNotFoundError, OSError) as e:
             sys.stderr.write("%s\n" % e)
             rc = 1
     return rc
@@ -270,6 +273,7 @@ def build_parser():
     s.add_argument("--wheelhouse", metavar="DIR", help="offline install from a wheelhouse (no index, hashes required)")
     s.add_argument("--installer", choices=("pip", "uv"), default="pip")
     s = sub.add_parser("fetch-data")
+    s.add_argument("--into", metavar="DIR", help="download into DIR instead of the venv's data directory (no venv needed)")
     s.add_argument("--from", dest="source_dir", metavar="DIR",
                    help="offline: take the datasets from DIR (a wheelhouse's data/); still verified against pins.json")
     s = sub.add_parser("wheelhouse", help="build or verify the offline wheelhouse (host side; the guest installs from it)")

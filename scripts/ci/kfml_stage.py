@@ -127,6 +127,54 @@ def test_names(kdir, tier, runner=subprocess.run):
         return ["kfml"]
 
 
+PREFETCH_WAIT_S = 5400
+
+
+def prefetch_dir(prefix):
+    return Path(prefix) / "prefetch"
+
+
+def prefetch(args, runner=subprocess.run, clock=time.time):
+    """Download the pinned datasets into PREFIX/prefetch (no venv, no GPU), recording PREFIX/prefetch.status. The payload starts this at the
+    beginning of the run, while provision and the other stages keep the machine busy and the network idle: the slow dataset server (CIFAR-10,
+    about 8 minutes with 6 ranged connections, MEASURED kfml_run_20261117_tier_decision) then costs the kfml stage nothing."""
+    kdir = kfml_dir(args.checkout)
+    prefix = Path(args.prefix)
+    prefix.mkdir(parents=True, exist_ok=True)
+    status = prefix / "prefetch.status"
+    status.write_text(json.dumps({"state": "running", "pid": os.getpid()}) + "\n")
+    t0 = clock()
+    env = dict(os.environ, PYTHONPATH=str(kdir))
+    with open(prefix / "prefetch.log", "wb") as log:
+        p = runner([sys.executable, "-m", "kfml", "fetch-data", "--into", str(prefetch_dir(prefix))], cwd=str(kdir), env=env,
+                   stdout=log, stderr=subprocess.STDOUT)
+    status.write_text(json.dumps({"state": "done", "rc": p.returncode, "s": round(clock() - t0, 1)}) + "\n")
+    return p.returncode
+
+
+def prefetch_state(prefix, alive=lambda pid: os.path.exists("/proc/%d" % pid)):
+    """'none' | 'running' | 'ok' | 'failed' from PREFIX/prefetch.status (a dead pid with a running state is a failed prefetch)."""
+    try:
+        st = json.loads((Path(prefix) / "prefetch.status").read_text())
+    except (OSError, ValueError):
+        return "none"
+    if st.get("state") == "done":
+        return "ok" if st.get("rc") == 0 else "failed"
+    if st.get("state") == "running":
+        return "running" if type(st.get("pid")) is int and alive(st["pid"]) else "failed"
+    return "none"
+
+
+def wait_for_prefetch(prefix, sleep=time.sleep, clock=time.time, limit=PREFETCH_WAIT_S, alive=lambda pid: os.path.exists("/proc/%d" % pid)):
+    """Wait for a running prefetch; returns its final state ('none' if none was started)."""
+    t0 = clock()
+    while True:
+        st = prefetch_state(prefix, alive)
+        if st != "running" or clock() - t0 > limit:
+            return st
+        sleep(5)
+
+
 def run(args, runner=subprocess.run):
     kdir = kfml_dir(args.checkout)
     prefix = Path(args.prefix)
@@ -163,13 +211,16 @@ def run(args, runner=subprocess.run):
         if v.returncode != 0:
             return failure(args.sha, args.tier, steps, "venv creation failed rc=%d" % v.returncode, args.run_id)
     fenv = dict(env, KF_ML_HOME=str(venv))
+    fetch_cmd = [py, "-m", "kfml", "fetch-data"]
+    if wait_for_prefetch(prefix) == "ok":  # the datasets are already here and were sha256-checked when they arrived; fetch-data checks them again
+        fetch_cmd += ["--from", str(prefetch_dir(prefix))]
     done = {}
 
     def go(name, cmd, e):
         done[name] = run_step(name, cmd, kdir, logs / (name + ".log"), e, runner)
 
     threads = [threading.Thread(target=go, args=("setup", [py, "-m", "kfml", "setup", "--venv", str(venv), "--nvcc-if-needed"], env)),
-               threading.Thread(target=go, args=("fetch-data", [py, "-m", "kfml", "fetch-data"], fenv))]
+               threading.Thread(target=go, args=("fetch-data", fetch_cmd, fenv))]
     for t in threads:
         t.start()
     for t in threads:
@@ -215,6 +266,9 @@ def parse_args(argv):
     r.add_argument("--reference")
     r.add_argument("--record-reference")
     r.add_argument("--run-id", default="")
+    q = sub.add_parser("prefetch")
+    q.add_argument("--checkout", required=True)
+    q.add_argument("--prefix", required=True)
     r.add_argument("--where", choices=("host", "guest"), default="host",
                    help="host (default): on this box's own GPU. guest: inside the offline open Linux guest, over --guest-ssh (kfml_guest.py)")
     r.add_argument("--guest-ssh", metavar="CMD", help="the guest transport, e.g. scripts/bench/gssh_nv (default: $KF_GUEST_SSH, else that script)")
@@ -223,8 +277,16 @@ def parse_args(argv):
 
 def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    if args.cmd == "prefetch":
+        try:
+            rc = prefetch(args)
+        except StageError as error:
+            print("KF_KFML_REFUSED reason=" + error.reason, flush=True)
+            return 2
+        print("KF_KFML_PREFETCH rc=%d" % rc, flush=True)
+        return rc
     if args.cmd == "plan":
-        print("kfml_stage: setup (flavour auto) -> fetch-data -> run --tier mid|large; rows = one per test; NOT_RUN when no flavour fits")
+        print("kfml_stage: plan (flavour auto) -> setup + fetch-data together (datasets may be prefetched) -> run --tier mid|large; one row per test; NOT_RUN when no flavour fits")
         return 0
     if not re.fullmatch("[0-9a-f]{40}", args.sha):
         print("KF_KFML_REFUSED reason=sha", flush=True)

@@ -1631,9 +1631,24 @@ def install_flow_rows(text, rc, sha, result):
 # The kfml tier is `mid` for `middle` (the five gated rows, about 2 minutes warm) and `large` for `large` (all six rows). SMALL and ADHOC never plan it.
 # Its budget row is payloadStageResources.kfml in ci/vast-broker/defaults.json (a Worker bundle change) and its download numbers are bandwidth.json `kfml`.
 KFML_IN_MIDDLE_LARGE = True
-KFML_MIN_REMAINING_MS = {"middle": 60 * 60000, "large": 150 * 60000}   # DESIGN: setup downloads several GB of wheels; budgets in kfml specs
+KFML_MIN_REMAINING_MS = {"middle": 20 * 60000, "large": 30 * 60000}   # MEASURED stage wall: about 4 and 5 minutes with the datasets prefetched, about 10 without (kfml_run_20261117_tier_decision), with margin
 KFML_PREFIX = "/workspace/kf-kfml"
 KFML_TIER = {"middle": "mid", "large": "large"}
+
+
+def start_kfml_prefetch(root, evidence, popen=subprocess.Popen):
+    """Start the kfml dataset prefetch in the background before the first stage (2026-11-17): the CIFAR-10 server is slow (about 8 minutes with six ranged
+    connections), provision and the other stages leave the network idle, and the kfml stage waits for the prefetch only if it is still running. Failure to
+    start is not an error (the stage then downloads for itself); nothing here touches the stage verdicts. Returns the process or None."""
+    script = Path(root) / "scripts/ci/kfml_stage.py"
+    if not script.is_file():
+        return None
+    try:
+        with open(evidence / "kfml_prefetch.run", "wb") as log:
+            return popen(["python3", str(script), "prefetch", "--checkout", str(root), "--prefix", KFML_PREFIX], stdout=log,
+                         stderr=subprocess.STDOUT, start_new_session=True)
+    except OSError:
+        return None
 
 
 def kfml_rows(text, rc, sha, result):
@@ -2146,6 +2161,8 @@ def main():
         if [s["name"] for s in stages] != plan:
             raise EvidenceError("infrastructure")
         stages = [s for s in stages if s["name"] in selected]
+        if "kfml" in selected:
+            start_kfml_prefetch(root, evidence)
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):

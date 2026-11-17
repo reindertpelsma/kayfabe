@@ -306,6 +306,17 @@ class Payload(unittest.TestCase):
         self.assertIn("kfml", table)
         self.assertEqual(sorted(table["kfml"]["profiles"]), ["large", "middle"])
 
+    def test_the_live_budget_guard_accepts_kfml_as_a_budgeted_default_stage(self):
+        import json as _json
+        import profile_resources
+        data = _json.loads((ROOT / "ci/vast-broker/defaults.json").read_text())
+        source = (HERE / "vast_payload.py").read_text()
+        manual, flags = profile_resources.manual_only(source)
+        self.assertNotIn("kfml", manual)  # a manual-only stage may not carry a budget row, and a default stage must
+        self.assertIn("kfml", profile_resources.stage_names(source))
+        self.assertIn("kfml", data["payloadStageResources"])
+        self.assertIn("middle", data["payloadStageResources"]["kfml"]["profiles"])
+
     def test_the_stage_minimum_time_is_known_for_both_tiers(self):
         self.assertEqual(sorted(self.m.KFML_MIN_REMAINING_MS), ["large", "middle"])
         self.assertLess(self.m.KFML_MIN_REMAINING_MS["middle"], self.m.KFML_MIN_REMAINING_MS["large"])
@@ -467,3 +478,94 @@ class Report(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Prefetch(unittest.TestCase):
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("vast_payload_kfml_pf", HERE / "vast_payload.py")
+        self.m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.m)
+
+    def test_prefetch_downloads_into_its_own_dir_and_records_status(self):
+        class P:
+            returncode = 0
+        calls = []
+
+        def runner(cmd, **kw):
+            calls.append(cmd)
+            return P()
+        with tempfile.TemporaryDirectory() as d:
+            args = Args(d)
+            rc = ks.prefetch(args, runner=runner)
+            self.assertEqual(rc, 0)
+            self.assertEqual(ks.prefetch_state(args.prefix), "ok")
+            self.assertEqual(calls[0][1:5], ["-m", "kfml", "fetch-data", "--into"])
+            self.assertTrue(calls[0][-1].endswith("/prefetch"))
+
+    def test_failed_and_dead_prefetches_are_failed_and_a_missing_one_is_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(ks.prefetch_state(d), "none")
+            Path(d, "prefetch.status").write_text(json.dumps({"state": "done", "rc": 1}))
+            self.assertEqual(ks.prefetch_state(d), "failed")
+            Path(d, "prefetch.status").write_text(json.dumps({"state": "running", "pid": 99999999}))
+            self.assertEqual(ks.prefetch_state(d, alive=lambda pid: False), "failed")  # a killed prefetch never hangs the stage
+            self.assertEqual(ks.prefetch_state(d, alive=lambda pid: True), "running")
+
+    def test_the_wait_ends_when_the_prefetch_does_and_is_bounded(self):
+        with tempfile.TemporaryDirectory() as d:
+            st = Path(d, "prefetch.status")
+            st.write_text(json.dumps({"state": "running", "pid": 1}))
+            ticks = []
+
+            def sleep(n):
+                ticks.append(n)
+                if len(ticks) == 3:
+                    st.write_text(json.dumps({"state": "done", "rc": 0}))
+            self.assertEqual(ks.wait_for_prefetch(d, sleep=sleep, alive=lambda p: True), "ok")
+            self.assertEqual(len(ticks), 3)
+            st.write_text(json.dumps({"state": "running", "pid": 1}))
+            now = [0.0]
+            self.assertEqual(ks.wait_for_prefetch(d, sleep=lambda n: now.__setitem__(0, now[0] + 100), clock=lambda: now[0], limit=250, alive=lambda p: True), "running")
+
+    def test_a_finished_prefetch_is_used_by_the_stage_as_an_offline_source(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "p").mkdir()
+            Path(d, "p", "prefetch.status").write_text(json.dumps({"state": "done", "rc": 0}))
+            fr = FakeRunner()
+            ks.run(Args(d), runner=fr)
+            f = next(c[0] for c in fr.calls if "fetch-data" in c[0])
+            self.assertIn("--from", f)
+            self.assertTrue(f[f.index("--from") + 1].endswith("/prefetch"))
+
+    def test_no_prefetch_or_a_failed_one_means_the_stage_downloads_for_itself(self):
+        for status in (None, {"state": "done", "rc": 1}):
+            with tempfile.TemporaryDirectory() as d:
+                Path(d, "p").mkdir()
+                if status:
+                    Path(d, "p", "prefetch.status").write_text(json.dumps(status))
+                fr = FakeRunner()
+                doc = ks.run(Args(d), runner=fr)
+                f = next(c[0] for c in fr.calls if "fetch-data" in c[0])
+                self.assertNotIn("--from", f)
+                self.assertEqual(doc["verdict"], "PASS")
+
+    def test_the_payload_starts_the_prefetch_only_when_the_script_exists_and_never_fails_on_it(self):
+        started = []
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "repo"
+            (root / "scripts/ci").mkdir(parents=True)
+            ev = Path(d) / "ev"
+            ev.mkdir()
+            self.assertIsNone(self.m.start_kfml_prefetch(root, ev, popen=lambda *a, **k: started.append(a)))
+            self.assertEqual(started, [])
+            (root / "scripts/ci/kfml_stage.py").write_text("#")
+            self.m.start_kfml_prefetch(root, ev, popen=lambda *a, **k: started.append((a, k)))
+            argv = started[0][0][0]
+            self.assertEqual(argv[2:3], ["prefetch"])
+            self.assertTrue(started[0][1]["start_new_session"])
+            self.assertIsNone(self.m.start_kfml_prefetch(root, ev, popen=lambda *a, **k: (_ for _ in ()).throw(OSError("no python3"))))
+
+    def test_the_payload_main_starts_it_for_a_default_plan_and_not_with_skip(self):
+        src = (HERE / "vast_payload.py").read_text()
+        self.assertIn('if "kfml" in selected:\n            start_kfml_prefetch(root, evidence)', src)  # after select_stages: --skip kfml removes it
+        self.assertLess(src.index("selected = select_stages(plan, args.only, args.skip)"), src.index("start_kfml_prefetch(root, evidence)"))

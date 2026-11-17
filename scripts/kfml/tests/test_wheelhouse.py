@@ -428,3 +428,44 @@ class Licenses(unittest.TestCase):
             wh.verify(root)
             (root / "wheelhouse-licenses.json").write_text("{}")  # information only: not part of the integrity check
             wh.verify(root)
+
+
+class FetchInto(unittest.TestCase):
+    def run_cli(self, argv, environ=None):
+        calls = []
+        real = datasets.fetch
+        datasets.fetch = lambda name, data, pins=None, **kw: calls.append((name, str(data), kw.get("source_dir"))) or {"path": "x", "sha256": "y", "pinned": True}
+        old = os.environ.pop("KF_ML_HOME", None)
+        try:
+            out = io.StringIO()
+            rc = cli.main(argv, out)
+        finally:
+            datasets.fetch = real
+            if old is not None:
+                os.environ["KF_ML_HOME"] = old
+        return rc, calls
+
+    def test_into_needs_no_venv_and_fetches_every_pinned_dataset_there(self):
+        rc, calls = self.run_cli(["fetch-data", "--into", "/some/prefetch"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(sorted(c[0] for c in calls), sorted(PINS["datasets"]))
+        self.assertTrue(all(c[1] == "/some/prefetch" for c in calls))
+
+    def test_without_into_and_without_a_venv_it_is_still_a_usage_error(self):
+        import sys
+        if sys.prefix != getattr(sys, "base_prefix", sys.prefix):
+            self.skipTest("running inside a venv: venv_root() is not None")
+        rc, calls = self.run_cli(["fetch-data"])
+        self.assertEqual(rc, 2)
+        self.assertEqual(calls, [])
+
+    def test_a_network_error_is_a_failed_step_not_a_traceback(self):
+        real = datasets.fetch
+
+        def boom(*a, **k):
+            raise OSError("parallel download failed: bytes 0-1: reset")
+        datasets.fetch = boom
+        try:
+            self.assertEqual(cli.main(["fetch-data", "--into", "/x"], io.StringIO()), 1)
+        finally:
+            datasets.fetch = real

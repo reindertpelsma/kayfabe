@@ -56,7 +56,7 @@ MUTANTS = [
       PL + "test_in_the_default_plan_of_middle_and_large_only", PL + "test_only_kfml_cannot_pull_it_into_small_or_adhoc"),
     M("stage-back-in-the-manual-only-table", "payload", 'MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}',
       'MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE", "kfml": "KFML_IN_MIDDLE_LARGE"}',
-      PL + "test_it_is_not_manual_only_and_has_a_budget_row", PL + "test_it_is_not_manual_only_and_has_a_budget_row"),
+      PL + "test_it_is_not_manual_only_and_has_a_budget_row", PL + "test_the_live_budget_guard_accepts_kfml_as_a_budgeted_default_stage"),
     M("not-run-verdict-is-a-failing-stage", "payload", 'if rc == 0 and doc.get("verdict") == "NOT_RUN":', "if False:",
       PL + "test_not_run_with_rc0_is_a_skipped_row_never_a_pass_never_a_fail", PL + "test_stage_not_run_flows_through_to_a_skipped_row_and_a_valid_report"),
     M("not-run-counted-as-a-pass", "payload", 'return [row("kfml", skipped=1)]', 'return [row("kfml", 1)]',

@@ -1,6 +1,6 @@
 # Thin Vast payload
 
-STATUS: LIVE, 2026-11-16 (kfml stage, `--only kfml`, middle and large tiers, off by default; the kfml workloads ran on one Vast CUDA container, see `scripts/kfml/README.md`, but the STAGE has run on no payload box: GPU-free tests plus one end-to-end run of `kfml_stage.py` on that container); earlier status: LIVE, 2026-11-16 (the native host-semaphore fault names now also derive the Turing spelling HOST<i> / HUBCLIENT_HOST_CPU from the pinned open driver, and `KF_XID_REFUSED` carries its reason; GPU-free tested only, the merge_bar missing-page arm has not been re-run on a Turing die since); earlier status: LIVE, 2026-11-15 (install_flow stage, `--only install_flow`, and propimage_apps stage, `--only propimage_apps`, large tier, GPU-free tests only, no box has run propimage_apps and it cannot PASS yet: see `scripts/ci/README.md` and `docs/design/V3_PROPIMAGE_APPS_STAGE.md`); earlier status: LIVE, 2026-11-09 (XD1 host-semaphore admission correction is GPU-free tested, not hardware-qualified; the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
+STATUS: LIVE, 2026-11-17 (kfml stage IN THE DEFAULT PLAN of the middle and large tiers, `--skip kfml` leaves it out; the kfml workloads and `kfml_stage.py` ran on five Vast CUDA containers, see `scripts/kfml/README.md`, but the STAGE has run on no payload box: GPU-free tests plus end-to-end runs of `kfml_stage.py` on those containers); earlier status: LIVE, 2026-11-16 (the native host-semaphore fault names now also derive the Turing spelling HOST<i> / HUBCLIENT_HOST_CPU from the pinned open driver, and `KF_XID_REFUSED` carries its reason; GPU-free tested only, the merge_bar missing-page arm has not been re-run on a Turing die since); earlier status: LIVE, 2026-11-15 (install_flow stage, `--only install_flow`, and propimage_apps stage, `--only propimage_apps`, large tier, GPU-free tests only, no box has run propimage_apps and it cannot PASS yet: see `scripts/ci/README.md` and `docs/design/V3_PROPIMAGE_APPS_STAGE.md`); earlier status: LIVE, 2026-11-09 (XD1 host-semaphore admission correction is GPU-free tested, not hardware-qualified; the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
 extras added by branch `claude/worker-tier-20261105`; the evidence bundle added by branch
 `claude/ci-evidence-bundle-20261106`; the run report added by branch `claude/report-20261107`; none has
 run on a box).
@@ -480,37 +480,27 @@ become `apps[]` and `tests[]` rows (suite `apps_linux`) in `report.json` through
 GPU-free checks: `test_vast_payload_apps.py`, `test_apps_matrix_table.py`, the `apps-*` cases of
 `payload_mutants.py` (two killers each).
 
-## The kfml stage (optional, 2026-11-16)
+## The kfml stage (default in the middle and large tiers, 2026-11-17)
 
-[CODE READ: vast_payload.py `kfml_rows`, `plan_stage_names`; kfml_stage.py; vast_report.py `validate_kfml`] Selection:
-`vast_payload.py --instruction FILE --only kfml` with a `middle` or a `large` instruction. It is NOT in a default plan
-(`KFML_IN_MIDDLE_LARGE = False`, and the name is in `MANUAL_ONLY_STAGES`, so it carries no `payloadStageResources`
-row and `profile_resources.py` refuses the flag if it is flipped without one); `small` and `adhoc` cannot select it
-(`--only kfml` there is `KF_PAYLOAD_FAIL suite=preflight`). It runs after `cuda_guest`/`apps` and before `install_flow`
-and the Windows gate, on the box's own single NVIDIA GPU, host-native (no guest): the baseline whose passing rows are
-the ones to run in the kf3 guest later (`KF_ML_GUEST=1`).
+[CODE READ: vast_payload.py `kfml_rows`, `plan_stage_names`, `start_kfml_prefetch`; kfml_stage.py; vast_report.py `validate_kfml`] Membership (owner, 2026-11-17: kfml joins the
+middle tier if it is not too big; the numbers are in `traces/kfml_run_20261117_tier_decision/README.md`): the stage is in the DEFAULT plan of `middle` (kfml tier `mid`: the five gated rows) and `large`
+(kfml tier `large`: all six rows, adding `managed_oversub`) (`KFML_IN_MIDDLE_LARGE = True`); `small` and `adhoc` never plan it (`--only kfml` there is `KF_PAYLOAD_FAIL suite=preflight`);
+`--skip kfml` removes it from the chosen stages (the plan still lists it). It is not manual-only: its budget row is `payloadStageResources.kfml` in `ci/vast-broker/defaults.json`
+(4.2 GB of downloads, 15 GB disk floor, MEASURED; the middle and large profile sums moved by that, a Worker bundle change) and its download lines are `bandwidth.json` `kfml`. It runs after `cuda_guest`/`apps` and before `install_flow` and the Windows gate, on the box's
+own single NVIDIA GPU, host-native (no guest): the baseline whose passing rows are the ones to run in the kf3 guest later (`KF_ML_GUEST=1`).
 
-`scripts/ci/kfml_stage.py run --sha S --checkout DIR --prefix /workspace/kf-kfml --out FILE --tier mid|large` does three
-steps, each a child with its own budget (`setup` 1 h, `fetch-data` 15 min, `run` 2 h): `kfml setup --venv PREFIX/venv
---nvcc-if-needed` (the wheel flavour is DERIVED from the box: the stage never passes a flavour, and no die or driver is
-named in it; a unit test greps for that), `kfml fetch-data` (sha256-pinned public URLs; nothing secret, no presigned
-URL is needed) and `kfml run --tier T --json`. The tier follows the payload tier (`middle` runs kfml `mid`, `large`
-runs kfml `large`, which adds the non-gate `managed_oversub`). Environment variables whose names look like secrets
+`scripts/ci/kfml_stage.py run --sha S --checkout DIR --prefix /workspace/kf-kfml --out FILE --tier mid|large` does these steps, each a child with its own budget: `plan` (`kfml setup --plan`: the wheel flavour is DERIVED
+from the box, no flavour is passed in and no die or driver is named; a box no flavour fits is NOT_RUN here, before anything is downloaded), then `setup` (`--nvcc-if-needed`, about 2 minutes: the hashed wheels, about 4 GB) and `fetch-data`
+(sha256-pinned public URLs, nothing secret) AT THE SAME TIME, then `run --tier T --json`. The dataset server is slow (CIFAR-10: about 8 minutes even with six ranged connections), so the payload starts `kfml_stage.py prefetch` in the BACKGROUND before the
+first stage (`start_kfml_prefetch`, only when `kfml` is among the chosen stages; failure to start is ignored) and the stage waits for it only if it is still running, then verifies the files again. Environment variables whose names look like secrets
 (`TOKEN`, `SECRET`, `PASSWORD`, `API_KEY`, `AWS_`) are removed from the children.
 
-Grading (`kfml_rows`): one `KF_KFML_RESULT {...}` line, rc 0, verdict PASS (at least one PASS row, no FAIL row, the
-others NOT_RUN for a named hardware reason) and the payload's sha gives the row `kfml` PASS. Verdict NOT_RUN (setup
-exit 3, no pinned flavour fits the box, or every test NOT_RUN) with rc 0 is a **skipped** row, never a pass and never a fail.
-A FAIL row, a failed setup or fetch step, a crash exit code, a missing or duplicated line or another sha is the stage
-failing (`KF_PAYLOAD_FAIL suite=kfml`). The record is kept in `kf-result.json` under `kfml` even when red: per-row name,
-status, reason, wall_s, scalar metrics, and the die, compute capability, driver, driver CUDA, torch CUDA runtime and flavour
-(`vast_report.py validate_kfml`: bounded to 8 KiB, 8 rows, printable text, no UUID). `min_remaining_ms`: 60 min for
-`middle`, 150 min for `large` (DESIGN: setup downloads about 4 GB of wheels, MEASURED 2026-11-16 at about 3 min on a
-500 Mbit link, and a CIFAR-10 download of about 15 min from the dataset's own server). The stage installs no system package: it needs
+Grading (`kfml_rows`): one `KF_KFML_RESULT {...}` line, rc 0, verdict PASS (at least one PASS row, no FAIL row, the others NOT_RUN for a named hardware reason) and the payload's sha gives the row `kfml` PASS.
+Verdict NOT_RUN (the plan exit 3, no pinned flavour fits the box, or every test NOT_RUN) with rc 0 is a **skipped** row, never a pass and never a fail; the NOT_RUN record carries the die and driver. A FAIL row, a failed step, a crash exit code, a missing or duplicated line or another sha is
+the stage failing (`KF_PAYLOAD_FAIL suite=kfml`). The record is kept in `kf-result.json` under `kfml` even when red: per-row name, status, reason, wall_s, scalar metrics, and the die, compute capability, driver, driver CUDA, torch CUDA runtime and flavour
+(`vast_report.py validate_kfml`: bounded to 8 KiB, 8 rows, printable text, no UUID). `min_remaining_ms`: 20 min for `middle`, 30 min for `large` (MEASURED stage wall, prefetched: about 4 and 5 minutes; see the trace). The stage installs no system package: it needs
 `python3-venv`, `python3-dev` and a C++ compiler on the box (UNVERIFIED for the KVM image; `kfml check` names what is missing).
-GPU-free checks: `test_kfml_stage.py` (37 tests), mutants `kfml_stage_mutants.py` (16 mutants, two named killers each, in `ci.yml`).
-Joining a default plan = flip `KFML_IN_MIDDLE_LARGE`, add the `payloadStageResources` row (a Worker bundle change) and
-take the name out of `MANUAL_ONLY_STAGES`, in the commit that records its first green run under this payload.
+GPU-free checks: `test_kfml_stage.py`, mutants `kfml_stage_mutants.py` (two named killers each, in `ci.yml`).
 
 ### kfml in the offline guest (design 2026-11-17, not wired into a plan, never run in a guest)
 
