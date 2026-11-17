@@ -930,5 +930,1181 @@ class SealTests(Base):
         self.assertIn("AUTH_FILES_LEFT", src)
 
 
+# ---------------------------------------------------------------- package manifest, harden-offline, inject (section 13)
+REAL_NFT = ('{"nftables": [{"metainfo": {"version": "1.1.6", "release_name": "Commodore Bullmoose #7", "json_schema_version": 1}}, '
+            '{"table": {"family": "inet", "name": "kf_offline", "handle": 4}}, '
+            '{"chain": {"family": "inet", "table": "kf_offline", "name": "input", "handle": 1, "type": "filter", "hook": "input", "prio": 0, "policy": "accept"}}, '
+            '{"chain": {"family": "inet", "table": "kf_offline", "name": "forward", "handle": 2, "type": "filter", "hook": "forward", "prio": 0, "policy": "drop"}}, '
+            '{"chain": {"family": "inet", "table": "kf_offline", "name": "output", "handle": 3, "type": "filter", "hook": "output", "prio": 0, "policy": "drop"}}, '
+            '{"rule": {"family": "inet", "table": "kf_offline", "chain": "output", "handle": 4, "expr": [{"match": {"op": "==", "left": {"meta": {"key": "oifname"}}, "right": "lo"}}, {"accept": null}]}}, '
+            '{"rule": {"family": "inet", "table": "kf_offline", "chain": "output", "handle": 5, "expr": [{"match": {"op": "in", "left": {"ct": {"key": "state"}}, "right": ["established", "related"]}}, {"accept": null}]}}]}')
+UNITS_MASKED = "".join("%s\tmasked\n" % u for u in (
+    "apt-daily.timer", "apt-daily-upgrade.timer", "apt-daily.service", "apt-daily-upgrade.service", "unattended-upgrades.service"))
+DPKG = ("bash\t5.2.21-2ubuntu4\tamd64\tii \nlinux-image-6.8.0-149-generic\t6.8.0-149.150\tamd64\tii \nlinux-headers-6.8.0-149\t6.8.0-149.150\tall\tii \n"
+        "linux-headers-6.8.0-149-generic\t6.8.0-149.150\tamd64\tii \nlinux-image-generic\t6.8.0.149.150\tamd64\thi \nold-pkg\t1.0\tamd64\trc \n"
+        "nftables\t1.0.9-1build1\tamd64\tii \npython3-venv\t3.12.3-0ubuntu2\tamd64\tii \n")
+SRC_FILE = {"path": "/etc/apt/sources.list.d/ubuntu.sources", "content": "Types: deb\nURIs: http://archive.ubuntu.com/ubuntu\nSuites: noble\n"}
+CRED_SRC = {"path": "/etc/apt/sources.list", "content": "deb http://mirroruser:secretpass@mirror.example/ubuntu noble main\n"}
+
+
+def ok(out=""):
+    return {"rc": 0, "out": out}
+
+
+def raw_guest(hardened=True, sources=(SRC_FILE,), du="", pip="[]", **over):
+    r = {"dpkg": ok(DPKG), "manual": ok("bash\nnftables\npython3-venv\n"), "holds": ok("linux-image-generic\n"), "uname": ok("6.8.0-149-generic\n"),
+         "proc_version": ok("Linux version 6.8.0-149-generic (gcc-13)\n"), "headers_present": ok("yes\n"),
+         "os_release": ok('ID=ubuntu\nVERSION_ID="24.04"\nVERSION_CODENAME=noble\n'), "python3": ok("Python 3.12.3\n"),
+         "snap": ok("Name  Version  Rev  Tracking  Publisher  Notes\ncore22  20240111  1380  latest/stable  canonical  base\n"), "pip": ok(pip),
+         "npm": ok(""), "gem": ok("rake (13.0.6)\n"), "apt_files": ok(json.dumps(list(sources))), "pyenvs": ok(""), "du": ok(du),
+         "nft": ok(REAL_NFT if hardened else '{"nftables": [{"metainfo": {}}]}'), "nft_conf_sha": ok("ab" * 32 + "  /etc/nftables.conf\n" if hardened else ""),
+         "nft_enabled": ok("enabled\n" if hardened else "disabled\n"), "unit_states": ok(UNITS_MASKED if hardened else ""),
+         "sources_present": ok("0\n" if hardened else "1\n")}
+    r.update(over)
+    return r
+
+
+def collector_ssh(raw, log=None):
+    def ssh(remote, stdin=None, timeout=600):
+        if log is not None:
+            log.append(remote)
+        cmds = json.loads(stdin)
+        return cp(0, json.dumps({k: raw.get(k, ok("")) for k in cmds}) + "\n")
+    return ssh
+
+
+class ManifestBase(Base):
+    def man(self, vendor=(), **kw):
+        raw = raw_guest(**kw)
+        return self.p.P.build_manifest(raw, list(vendor), {"entries": 3}, self.st["base"], "2026-11-17T10:00:00Z")
+
+
+class VendorEntryTests(ManifestBase):
+    def test_parses_a_free_form_entry(self):
+        e = self.p.P.parse_vendor_entry("name=MATLAB release=R2026b products=MATLAB,Parallel_Computing_Toolbox,Deep_Learning_Toolbox "
+                                        "installer_sha256=" + "AB" * 32 + " installed_via=mpm extra_field='two words'")
+        self.assertEqual(e["products"], ["MATLAB", "Parallel_Computing_Toolbox", "Deep_Learning_Toolbox"])
+        self.assertEqual(e["installer_sha256"], "ab" * 32)
+        self.assertEqual(e["extra_field"], "two words")
+
+    def test_a_key_that_names_a_secret_is_refused(self):
+        for k in ("password", "token", "license_file", "activation_code", "api_key", "key", "client_secret"):
+            with self.assertRaises(self.p.P.PkgError, msg=k) as e:
+                self.p.P.parse_vendor_entry("name=X %s=abc" % k)
+            self.assertIn("VENDOR_ENTRY_SECRET_KEY", str(e.exception))
+
+    def test_a_credential_url_in_a_value_is_refused(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.parse_vendor_entry("name=X source=https://user:pw@host.example/x")
+        self.assertIn("VENDOR_ENTRY_CREDENTIAL", str(e.exception))
+
+    def test_name_and_hash_are_checked(self):
+        for bad in ("release=1", "name=X installer_sha256=abc", "name=X name=Y", "Name=X", "name=", "", "name=X noequals"):
+            with self.assertRaises(self.p.P.PkgError, msg=bad):
+                self.p.P.parse_vendor_entry(bad)
+
+
+class ManifestTests(ManifestBase):
+    def test_dpkg_keeps_installed_packages_with_versions_manual_and_held(self):
+        m = self.man()
+        names = {r["name"]: r for r in m["dpkg"]}
+        self.assertNotIn("old-pkg", names)                   # status rc: removed, config files only
+        self.assertEqual(names["bash"]["version"], "5.2.21-2ubuntu4")
+        self.assertTrue(names["bash"]["manual"] and not names["linux-image-6.8.0-149-generic"]["manual"])
+        self.assertTrue(names["linux-image-generic"]["held"])    # status hi: hold, installed
+        self.assertEqual(m["counts"]["dpkg"], 7)
+
+    def test_a_removed_package_is_not_in_the_manifest(self):
+        rows = self.p.P.parse_dpkg("a\t1\tamd64\tii \nb\t2\tamd64\trc \nc\t3\tamd64\tun \n")
+        self.assertEqual([r["name"] for r in rows], ["a"])
+
+    def test_kernel_headers_snaps_pip_npm_gem(self):
+        pip = json.dumps([{"name": "requests", "version": "2.31.0", "location": "/usr/local/lib/python3.12/dist-packages"}])
+        m = self.man(pip=pip, npm=ok(json.dumps({"dependencies": {"left-pad": {"version": "1.3.0"}}})))
+        self.assertEqual(m["kernel"]["release"], "6.8.0-149-generic")
+        self.assertTrue(m["kernel"]["headers_present"])
+        self.assertEqual({k["name"] for k in m["kernel"]["packages"]},
+                         {"linux-image-6.8.0-149-generic", "linux-headers-6.8.0-149", "linux-headers-6.8.0-149-generic", "linux-image-generic"})
+        self.assertEqual(m["snaps"], [{"name": "core22", "version": "20240111", "revision": "1380", "channel": "latest/stable"}])
+        self.assertEqual(m["pip"][0]["name"], "requests")
+        self.assertEqual(m["npm"], [{"name": "left-pad", "version": "1.3.0"}])
+        self.assertEqual(m["gem"], [{"name": "rake", "version": "13.0.6"}])
+        self.assertEqual(m["os"]["version_codename"], "noble")
+
+    def test_apt_source_credentials_are_redacted(self):
+        m = self.man(sources=(CRED_SRC,))
+        txt = json.dumps(m)
+        self.assertNotIn("secretpass", txt)
+        self.assertNotIn("mirroruser", txt)
+        self.assertIn("http://REDACTED@mirror.example/ubuntu", m["apt"]["sources"][0]["content"])
+
+    def test_redaction_helper_alone(self):
+        self.assertEqual(self.p.P.redact_userinfo("deb https://u:p@h/x\nURIs: http://plain/y"), "deb https://REDACTED@h/x\nURIs: http://plain/y")
+
+    def test_large_dir_threshold_is_one_gb_and_caches_are_not_applications(self):
+        gb = 1 << 30
+        rows = [{"path": "/usr/local/MATLAB", "bytes": gb + 1}, {"path": "/opt/edge", "bytes": gb}, {"path": "/home/kfimage/.cache", "bytes": 9 * gb},
+                {"path": "/home/kfimage/tools", "bytes": 2 * gb}]
+        self.assertEqual([r["path"] for r in self.p.P.large_app_dirs(rows)], ["/home/kfimage/tools", "/usr/local/MATLAB"])
+
+    def test_seal_warns_naming_large_dirs_without_a_vendor_entry(self):
+        m = self.man(du="3221225472\t/usr/local/MATLAB\n100\t/opt/small\n")
+        w = self.p.P.seal_warnings(m)
+        self.assertTrue(any("LARGE_DIRS_WITHOUT_VENDOR_ENTRY" in x and "/usr/local/MATLAB" in x for x in w), w)
+        self.assertFalse(any("/opt/small" in x for x in w))
+
+    def test_a_vendor_entry_silences_the_large_dir_warning(self):
+        m = self.man(vendor=[{"name": "MATLAB"}], du="3221225472\t/usr/local/MATLAB\n")
+        self.assertFalse(any("LARGE_DIRS" in x for x in self.p.P.seal_warnings(m)))
+
+    def test_package_manifest_through_a_scripted_guest_and_vendor_entries(self):
+        raw = raw_guest(du="3221225472\t/opt/app\n")
+        runner = lambda argv, **kw: cp(0, "2026-11-16T20:00:00Z\n") if argv[-1].startswith("cat /var/lib/kf-provisioned") else cp(0, "[]\n")
+        p = {"key": self.tmp / "k", "setup_dir": self.tmp}
+        m = self.p.package_manifest(self.st, p, [{"name": "App", "release": "1"}], ssh=collector_ssh(raw), runner=runner)
+        self.assertEqual(m["vendor"], [{"name": "App", "release": "1"}])
+        self.assertEqual(m["inventory"]["entries"], 0)
+        self.assertFalse(any("LARGE_DIRS" in x for x in self.p.P.seal_warnings(m)))
+        self.p.P.validate_manifest(m)
+
+    def seal_dir(self):
+        d = self.tmp / "D"
+        d.mkdir(exist_ok=True)
+        self.p.save_state(self.p.init_state(SEED, keypair=("PRIVATE", PUB)), d / "state.json")
+        return str(d)
+
+    def test_cli_seal_refuses_a_secret_vendor_key_before_touching_the_guest(self):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = self.p.main(["seal", "--dir", self.seal_dir(), "--vendor-entry", "name=X password=hunter2"])
+        self.assertEqual(rc, 2)
+        self.assertIn("VENDOR_ENTRY_SECRET_KEY", err.getvalue())
+        self.assertNotIn("hunter2", err.getvalue())
+
+    def test_cli_seal_refuses_a_credential_url_in_a_vendor_value(self):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = self.p.main(["seal", "--dir", self.seal_dir(), "--vendor-entry", "name=X src=https://u:pw@h.example/x"])
+        self.assertEqual(rc, 2)
+        self.assertIn("VENDOR_ENTRY_CREDENTIAL", err.getvalue())
+
+    def test_manifest_uses_the_host_record_after_harden(self):
+        rec = {"schema": self.p.P.SCHEMA, "sources": self.p.P.sources_from_files([SRC_FILE]), "preferences": []}
+        (self.tmp / "apt_sources.recorded.json").write_text(json.dumps(rec))
+        runner = lambda argv, **kw: cp(0, "2026-11-16T20:00:00Z\n") if argv[-1].startswith("cat /var/lib/kf-provisioned") else cp(0, "[]\n")
+        m = self.p.package_manifest(self.st, {"key": self.tmp / "k", "setup_dir": self.tmp}, [], ssh=collector_ssh(raw_guest(sources=())), runner=runner)
+        self.assertEqual(m["apt"]["sources_origin"], "recorded-by-harden-offline")
+        self.assertEqual(m["apt"]["sources"][0]["path"], SRC_FILE["path"])
+
+    def test_an_unmasked_unattended_upgrades_service_is_not_hardened(self):
+        states = UNITS_MASKED.replace("unattended-upgrades.service\tmasked", "unattended-upgrades.service\tenabled")
+        h = self.man(unit_states=ok(states))["hardening"]
+        self.assertFalse(h["hardened"])
+        self.assertIn("unattended-upgrades.service", " ".join(h["problems"]))
+
+    def test_python_environments_in_the_image_are_a_warning(self):
+        m = self.man(pyenvs=ok("/opt/x/venv/pyvenv.cfg\n"))
+        self.assertTrue(any("PYTHON_ENV_IN_IMAGE" in x for x in self.p.P.seal_warnings(m)))
+
+    def test_sources_recorded_by_harden_are_used_when_the_guest_has_none(self):
+        rec = {"sources": self.p.P.sources_from_files([SRC_FILE]), "preferences": []}
+        m = self.p.P.build_manifest(raw_guest(sources=()), [], {}, self.st["base"], "t", recorded_apt=rec)
+        self.assertEqual(m["apt"]["sources_origin"], "recorded-by-harden-offline")
+        self.assertEqual(m["apt"]["sources"][0]["path"], SRC_FILE["path"])
+
+    def test_live_sources_win_over_a_record_and_none_is_flagged(self):
+        rec = {"sources": self.p.P.sources_from_files([CRED_SRC]), "preferences": []}
+        self.assertEqual(self.p.P.build_manifest(raw_guest(), [], {}, self.st["base"], "t", recorded_apt=rec)["apt"]["sources_origin"], "guest-live")
+        m = self.man(sources=())
+        self.assertEqual(m["apt"]["sources_origin"], "none")
+        self.assertTrue(any("NO_APT_SOURCES_RECORDED" in x for x in self.p.P.seal_warnings(m)))
+
+    def test_hardened_flag_needs_every_part(self):
+        self.assertTrue(self.man()["hardening"]["hardened"])
+        self.assertEqual(self.man()["hardening"]["problems"], [])
+        for name, over in (("ruleset", {"nft": ok('{"nftables": []}')}), ("conf", {"nft_conf_sha": ok("")}), ("enabled", {"nft_enabled": ok("disabled\n")}),
+                           ("unmasked", {"unit_states": ok(UNITS_MASKED.replace("masked", "enabled", 1))}), ("sources", {"sources_present": ok("2\n")})):
+            h = self.man(**over)["hardening"]
+            self.assertFalse(h["hardened"], name)
+            self.assertTrue(h["problems"], name)
+
+    def test_remaining_apt_sources_make_the_image_not_hardened_and_warn(self):
+        m = self.man(sources_present=ok("1\n"))
+        self.assertFalse(m["hardening"]["hardened"])
+        self.assertTrue(any("NOT_HARDENED" in x and "apt source" in x for x in self.p.P.seal_warnings(m)))
+
+    def test_schema_validation(self):
+        m = self.man(vendor=[{"name": "A"}])
+        self.assertTrue(self.p.P.validate_manifest(m))
+        bad = json.loads(json.dumps(m))
+        bad["counts"]["dpkg"] += 1
+        with self.assertRaises(self.p.P.PkgError):
+            self.p.P.validate_manifest(bad)
+        with self.assertRaises(self.p.P.PkgError):
+            self.p.P.validate_manifest({"schema": "x"})
+
+    def test_pip_and_apt_snippets_are_valid_python_and_json(self):
+        for name in ("pip", "apt_files"):
+            r = subprocess.run(self.p.P.COMMANDS[name], shell=True, capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIsInstance(json.loads(r.stdout.strip().splitlines()[-1]), list)
+
+    def test_inventory_summary_has_counts_not_paths(self):
+        rows = [{"path": "/opt/a", "size": 5, "type": "f", "why": "named-root"}, {"path": "/home/x/b", "size": 0, "type": "d", "why": "changed-since-provisioning"}]
+        s = self.p.P.summarize_inventory(rows)
+        self.assertEqual((s["entries"], s["files"], s["dirs"], s["bytes"]), (2, 1, 1, 5))
+        self.assertNotIn("/opt/a", json.dumps(s))
+        self.assertEqual(s["by_top"], {"/home": 1, "/opt": 1})
+
+    def test_stage_a_installs_what_a_clone_cannot(self):
+        src = self.p.render_stage_a(self.st)
+        self.assertIn("python3-venv", src)
+        self.assertIn("nftables", src)
+
+    def test_seal_parses_vendor_entries_before_any_long_step(self):
+        body = SOURCE.read_text().split("def cmd_seal(a):")[1].split("\ndef boot_clone")[0]
+        self.assertLess(body.index("parse_vendor_entry"), body.index("guest_grep("))
+        self.assertIn("man = package_manifest(", body)
+        self.assertLess(body.index("man = package_manifest("), body.index("systemctl poweroff"))
+
+
+class DiffTests(ManifestBase):
+    def two(self):
+        a = self.man()
+        b = json.loads(json.dumps(a))
+        return a, b
+
+    def test_identical_manifests_have_no_difference_and_the_timestamp_is_ignored(self):
+        a, b = self.two()
+        b["generated_utc"] = "2030-01-01T00:00:00Z"
+        self.assertEqual(self.p.P.diff_manifests(a, b), {})
+        self.assertIn("no package-level difference", self.p.P.format_diff({}))
+
+    def test_added_removed_and_changed_packages(self):
+        a, b = self.two()
+        b["dpkg"] = [r for r in b["dpkg"] if r["name"] != "nftables"] + [{"name": "newpkg", "version": "1", "arch": "amd64", "manual": True, "held": False}]
+        for r in b["dpkg"]:
+            if r["name"] == "bash":
+                r["version"] = "9.9"
+        d = self.p.P.diff_manifests(a, b)["dpkg"]
+        self.assertEqual([x[0] for x in d["added"]], ["newpkg"])
+        self.assertEqual([x[0] for x in d["removed"]], ["nftables"])
+        self.assertEqual(d["changed"][0][0], "bash")
+        txt = self.p.P.format_diff(self.p.P.diff_manifests(a, b))
+        self.assertIn("+ newpkg", txt)
+        self.assertIn("- nftables", txt)
+        self.assertIn("~ bash: 5.2.21-2ubuntu4 amd64".split(" amd64")[0], txt)
+
+    def test_vendor_apt_kernel_and_hardening_changes(self):
+        a, b = self.two()
+        b["vendor"] = [{"name": "MATLAB", "release": "R2026b"}]
+        b["counts"]["vendor"] = 1
+        b["kernel"]["release"] = "6.8.0-150-generic"
+        b["apt"]["sources"][0]["sha256"] = "0" * 64
+        b["hardening"]["hardened"] = False
+        d = self.p.P.diff_manifests(a, b)
+        self.assertEqual({"vendor", "kernel", "apt_sources", "hardening"}, set(d))
+
+    def test_cli_diff_exit_code_and_zip_input(self):
+        a, b = self.two()
+        b["pip"] = [{"name": "x", "version": "1", "location": "/l"}]
+        b["counts"]["pip"] = 1
+        fa, fb = self.tmp / "a.json", self.tmp / "b.json"
+        self.p.P.write_manifest(a, fa)
+        self.p.P.write_manifest(b, fb)
+        main = lambda *a: quiet_main(self.p, list(a))
+        self.assertEqual(main("diff-packages", str(fa), str(fa)), 0)
+        self.assertEqual(main("diff-packages", str(fa), str(fb)), 1)
+        z = self.tmp / "p.zip"
+        with zipfile.ZipFile(z, "w") as zz:
+            zz.write(fb, "packages.manifest.json")
+        self.assertEqual(main("diff-packages", str(fa), str(z)), 1)
+        self.assertEqual(main("diff-packages", str(fb), str(z)), 0)
+
+
+class PackManifestTests(ManifestBase):
+    def make(self, with_sha=True):
+        mf = self.tmp / "packages.manifest.json"
+        sha = self.p.P.write_manifest(self.man(), mf)
+        if with_sha:
+            self.st["packages"] = {"kernel": "k", "count": 1, "sha256": "x", "manifest_sha256": sha}
+        st = self.tmp / "state.json"
+        self.p.save_state(self.st, st)
+        img = self.tmp / "image.qcow2"
+        img.write_bytes(b"qcow-ish")
+        return st, img, mf, self.tmp / "p.zip"
+
+    def test_the_manifest_is_a_hashed_member(self):
+        st, img, mf, z = self.make()
+        m = self.p.pack(st, img, z, [mf])
+        self.assertEqual(m["members"]["packages.manifest.json"], self.p.sha256_file(mf))
+        st2 = self.p.unpack(z, self.tmp / "u")
+        self.assertTrue((self.tmp / "u" / "packages.manifest.json").exists())
+        self.assertEqual(st2["packages"]["manifest_sha256"], self.p.sha256_file(mf))
+
+    def test_pack_refuses_a_missing_package_manifest(self):
+        st, img, mf, z = self.make()
+        with self.assertRaises(self.p.PropError) as e:
+            self.p.pack(st, img, z, [])
+        self.assertIn("PACKAGES_MANIFEST_MISSING_OR_CHANGED", str(e.exception))
+
+    def test_pack_refuses_a_changed_package_manifest(self):
+        st, img, mf, z = self.make()
+        mf.write_text(mf.read_text().replace("noble", "jammy"))
+        with self.assertRaises(self.p.PropError) as e:
+            self.p.pack(st, img, z, [mf])
+        self.assertIn("PACKAGES_MANIFEST_MISSING_OR_CHANGED", str(e.exception))
+
+    def test_unpack_validates_the_manifest_member(self):
+        st, img, mf, z = self.make(with_sha=False)
+        mf.write_text('{"schema": "wrong"}\n')
+        self.p.pack(st, img, z, [mf])
+        with self.assertRaises(self.p.P.PkgError):
+            self.p.unpack(z, self.tmp / "u")
+
+    def test_unpack_refuses_a_manifest_the_state_does_not_record(self):
+        st, img, mf, z = self.make(with_sha=False)
+        self.p.pack(st, img, z, [mf])
+        # a state that records another manifest hash cannot be packed with this manifest, so no such zip exists to unpack: the
+        # unpack side is checked by building the zip by hand
+        s2 = self.p.load_state(st)
+        s2["packages"] = {"manifest_sha256": "0" * 64}
+        self.p.save_state(s2, st)
+        with self.assertRaises(self.p.PropError):
+            self.p.pack(st, img, self.tmp / "q.zip", [mf])
+        manifest = {"manifest_version": 1, "kind": "propimage-linux", "packages": s2["packages"], "members": {
+            "image.qcow2": self.p.sha256_file(img), "state.json": self.p.sha256_file(st), "packages.manifest.json": self.p.sha256_file(mf)}}
+        z2 = self.tmp / "hand.zip"
+        with zipfile.ZipFile(z2, "w", zipfile.ZIP_STORED) as zz:
+            zz.write(img, "image.qcow2")
+            zz.write(st, "state.json")
+            zz.write(mf, "packages.manifest.json")
+            zz.writestr("manifest.json", json.dumps(manifest))
+        with self.assertRaises(self.p.PropError) as e:
+            self.p.unpack(z2, self.tmp / "u2")
+        self.assertIn("PACKAGES_MANIFEST_MISMATCH", str(e.exception))
+
+    def test_the_pack_cli_adds_the_sidecar_manifest(self):
+        d = self.tmp / "sealed"
+        d.mkdir()
+        st, img, mf, z = self.make()
+        (d / "image.qcow2").write_bytes(b"x")
+        (d / "packages.manifest.json").write_bytes(mf.read_bytes())
+        self.assertEqual(quiet_main(self.p, ["pack", str(st), str(d / "image.qcow2"), "--out", str(z)]), 0)
+        self.assertIn("packages.manifest.json", zipfile.ZipFile(z).namelist())
+
+
+class HardenGuest:
+    """A scripted guest for harden-offline: what it answers depends on whether the harden script has run."""
+
+    def __init__(self, before_open=("tcp_1.1.1.1_443",), after_open=(), loopback=True, nft_after=REAL_NFT, harden_ok=True):
+        self.log, self.hardened = [], False
+        self.before_open, self.after_open, self.loopback, self.nft_after, self.harden_ok = before_open, after_open, loopback, nft_after, harden_ok
+        self.keys = ("tcp_1.1.1.1_443", "tcp_9.9.9.9_53", "udp_dns_1.1.1.1", "ping_1.1.1.1")
+
+    def __call__(self, remote, stdin=None, timeout=600):
+        self.log.append(("bash" if remote.startswith("sudo bash -s") else remote[:40], stdin if remote.startswith("sudo bash -s") else None))
+        if remote.startswith("sudo bash -s"):
+            self.hardened = self.harden_ok
+            return cp(0, "HARDEN_OK\n" if self.harden_ok else "", "" if self.harden_ok else "boom")
+        if "tcp_1.1.1.1_443" in remote:
+            opened = self.after_open if self.hardened else self.before_open
+            res = {k: k in opened for k in self.keys}
+            res["loopback_ssh"] = self.loopback
+            return cp(0, json.dumps(res) + "\n")
+        if remote.startswith("sudo nft flush"):
+            self.hardened = False
+            return cp(0)
+        cmds = json.loads(stdin)
+        if set(cmds) == {"apt_files"}:
+            out = {"apt_files": ok(json.dumps([CRED_SRC, SRC_FILE] if not self.hardened else []))}
+        else:
+            nft = self.nft_after if self.hardened else '{"nftables": []}'
+            out = {"nft": ok(nft), "sha": ok("cd" * 32 + "  /etc/nftables.conf\n"), "en": ok("enabled\n"), "units": ok(UNITS_MASKED), "src": ok("0\n")}
+        return cp(0, json.dumps(out) + "\n")
+
+
+class HardenTests(Base):
+    def test_ruleset_is_default_drop_with_loopback_and_established_only(self):
+        r = self.p.P.RULESET
+        self.assertIn("hook output priority 0; policy drop", r)
+        self.assertIn("hook forward priority 0; policy drop", r)
+        out = r.split("chain output")[1]
+        self.assertEqual([l.strip() for l in out.splitlines() if "accept" in l], ['oifname "lo" accept', "ct state established,related accept"])
+        self.assertNotIn("dport", r)
+        self.assertNotIn("apt", "\n".join(l for l in r.splitlines() if not l.startswith("#")))
+
+    def test_the_real_nft_json_is_analysed_ok(self):
+        a = self.p.P.check_ruleset(self.p.P.analyze_nft(REAL_NFT))
+        self.assertEqual((a["tables"], a["chains"], a["rules"]), (1, 3, 2))
+        self.assertEqual(a["drop_hooks"], ["forward", "output"])
+        self.assertEqual(a["rule_kinds"], {"loopback": 1, "established": 1, "other": 0})
+        self.assertTrue(a["ok"])
+
+    def exception_json(self, expr):
+        j = json.loads(REAL_NFT)
+        j["nftables"].append({"rule": {"family": "inet", "table": "kf_offline", "chain": "output", "handle": 9, "expr": expr}})
+        return json.dumps(j)
+
+    def test_a_port_accept_is_an_exception(self):
+        t = self.exception_json([{"match": {"op": "==", "left": {"payload": {"protocol": "tcp", "field": "dport"}}, "right": 443}}, {"accept": None}])
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.check_ruleset(self.p.P.analyze_nft(t))
+        self.assertIn("HARDEN_EXCEPTION", str(e.exception))
+
+    def test_accepting_new_connections_is_an_exception(self):
+        t = self.exception_json([{"match": {"op": "in", "left": {"ct": {"key": "state"}}, "right": ["established", "new"]}}, {"accept": None}])
+        a = self.p.P.analyze_nft(t)
+        self.assertEqual(a["rule_kinds"]["other"], 1)
+        with self.assertRaises(self.p.P.PkgError):
+            self.p.P.check_ruleset(a)
+
+    def test_a_bare_accept_rule_is_an_exception(self):
+        with self.assertRaises(self.p.P.PkgError):
+            self.p.P.check_ruleset(self.p.P.analyze_nft(self.exception_json([{"accept": None}])))
+
+    def test_output_policy_accept_is_refused(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.check_ruleset(self.p.P.analyze_nft(REAL_NFT.replace('"hook": "output", "prio": 0, "policy": "drop"', '"hook": "output", "prio": 0, "policy": "accept"')))
+        self.assertIn("HARDEN_NO_DEFAULT_DROP", str(e.exception))
+
+    def test_forward_policy_accept_is_refused(self):
+        with self.assertRaises(self.p.P.PkgError):
+            self.p.P.check_ruleset(self.p.P.analyze_nft(REAL_NFT.replace('"hook": "forward", "prio": 0, "policy": "drop"', '"hook": "forward", "prio": 0, "policy": "accept"')))
+
+    def test_an_empty_ruleset_is_refused(self):
+        with self.assertRaises(self.p.P.PkgError):
+            self.p.P.check_ruleset(self.p.P.analyze_nft('{"nftables": []}'))
+        with self.assertRaises(self.p.P.PkgError):
+            self.p.P.analyze_nft("not json")
+
+    def test_the_ruleset_loads_in_a_real_nftables_when_the_box_allows_it(self):
+        if not shutil_which("nft") or not shutil_which("unshare"):
+            self.skipTest("no nft or unshare")
+        f = self.tmp / "r.nft"
+        f.write_text(self.p.P.RULESET)
+        r = subprocess.run(["unshare", "-rn", "sh", "-c", "nft -c -f %s && nft -f %s && nft -j list ruleset" % (f, f)], capture_output=True, text=True)
+        if r.returncode != 0:
+            self.skipTest("no user namespace or nftables kernel support here: " + r.stderr[-120:])
+        a = self.p.P.check_ruleset(self.p.P.analyze_nft(r.stdout))
+        self.assertEqual(a["rule_kinds"]["other"], 0)
+
+    def test_mask_units_are_the_named_five(self):
+        self.assertEqual(set(self.p.P.MASK_UNITS), {"apt-daily.timer", "apt-daily-upgrade.timer", "apt-daily.service", "apt-daily-upgrade.service",
+                                                     "unattended-upgrades.service"})
+
+    def test_harden_script_masks_removes_and_checks(self):
+        s = self.p.P.render_harden_script()
+        self.assertIn("nft -c -f /etc/nftables.conf", s)
+        self.assertIn("systemctl enable nftables.service", s)
+        for u in ("apt-daily.timer", "apt-daily-upgrade.timer", "apt-daily.service", "apt-daily-upgrade.service", "unattended-upgrades.service"):
+            self.assertIn(u, s.split("systemctl mask")[1].splitlines()[0])
+        self.assertIn("rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*", s)
+        self.assertIn("rm -rf /var/lib/apt/lists/*", s)
+        self.assertIn(self.p.P.RULESET.strip().splitlines()[-1], s)
+        self.assertEqual(subprocess.run(["bash", "-n"], input=s, text=True, capture_output=True).returncode, 0)
+
+    def test_the_harden_script_embeds_the_default_drop_ruleset(self):
+        s = self.p.P.render_harden_script()
+        self.assertIn("hook output priority 0; policy drop;", s)
+        self.assertIn("hook forward priority 0; policy drop;", s)
+        self.assertIn("flush ruleset", s)
+
+    def test_a_ct_state_invalid_accept_is_an_exception(self):
+        t = self.exception_json([{"match": {"op": "==", "left": {"ct": {"key": "state"}}, "right": "invalid"}}, {"accept": None}])
+        self.assertEqual(self.p.P.analyze_nft(t)["rule_kinds"]["other"], 1)
+
+    def test_harden_offline_with_a_scripted_guest(self):
+        g, out = HardenGuest(), []
+        rec = self.p.P.harden_offline(g, self.tmp, log=out.append)
+        recorded = json.loads((self.tmp / "apt_sources.recorded.json").read_text())
+        self.assertEqual({s["path"] for s in recorded["sources"]}, {CRED_SRC["path"], SRC_FILE["path"]})
+        self.assertNotIn("secretpass", json.dumps(recorded))
+        self.assertEqual(rec["ruleset"]["rules"], 2)
+        self.assertEqual(rec["outbound_after"]["ping_1.1.1.1"], False)
+        text = "\n".join(out)
+        self.assertIn("1 table(s), 3 chain(s), 2 rule(s)", text)
+        self.assertIn("drop on forward+output", text)
+        self.assertTrue((self.tmp / "hardening.json").exists())
+
+    def test_the_sources_are_recorded_before_the_script_removes_them(self):
+        seen = []
+
+        class G(HardenGuest):
+            def __call__(g, remote, stdin=None, timeout=600):
+                if remote.startswith("sudo bash -s"):
+                    seen.append((self.tmp / "apt_sources.recorded.json").exists())
+                return HardenGuest.__call__(g, remote, stdin, timeout)
+        self.p.P.harden_offline(G(), self.tmp, log=lambda *a: None)
+        self.assertEqual(seen, [True])
+
+    def test_a_second_run_never_overwrites_the_record_with_nothing(self):
+        self.p.P.harden_offline(HardenGuest(), self.tmp, log=lambda *a: None)
+        first = (self.tmp / "apt_sources.recorded.json").read_text()
+        g = HardenGuest()
+        g.hardened = True    # sources already gone on the guest
+        self.p.P.harden_offline(g, self.tmp, log=lambda *a: None)
+        self.assertEqual((self.tmp / "apt_sources.recorded.json").read_text(), first)
+
+    def test_a_tcp_path_still_open_after_the_rules_refuses(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.harden_offline(HardenGuest(after_open=("tcp_1.1.1.1_443",)), self.tmp, log=lambda *a: None)
+        self.assertIn("HARDEN_OUTBOUND_OPEN", str(e.exception))
+
+    def test_a_ping_path_still_open_after_the_rules_refuses(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.harden_offline(HardenGuest(after_open=("ping_1.1.1.1",)), self.tmp, log=lambda *a: None)
+        self.assertIn("ping_1.1.1.1", str(e.exception))
+
+    def test_a_broken_loopback_refuses(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.harden_offline(HardenGuest(loopback=False), self.tmp, log=lambda *a: None)
+        self.assertIn("HARDEN_LOOPBACK_BROKEN", str(e.exception))
+
+    def test_nothing_reachable_before_the_rules_is_called_out(self):
+        out = []
+        self.p.P.harden_offline(HardenGuest(before_open=()), self.tmp, log=out.append)
+        self.assertTrue(any("cannot show the rules did it" in x for x in out))
+        out2 = []
+        (self.tmp / "x").mkdir()
+        self.p.P.harden_offline(HardenGuest(), self.tmp / "x", log=out2.append)
+        self.assertFalse(any("cannot show" in x for x in out2))
+
+    def test_a_failing_harden_script_is_named(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.harden_offline(HardenGuest(harden_ok=False), self.tmp, log=lambda *a: None)
+        self.assertIn("HARDEN_FAILED", str(e.exception))
+
+    def test_a_ruleset_with_an_exception_after_apply_refuses(self):
+        t = HardenTests.exception_json(self, [{"accept": None}])
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.harden_offline(HardenGuest(nft_after=t), self.tmp, log=lambda *a: None)
+        self.assertIn("HARDEN_EXCEPTION", str(e.exception))
+
+
+def quiet_main(mod, argv):
+    import contextlib
+    import io
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        return mod.main(argv)
+
+
+def shutil_which(x):
+    import shutil
+    return shutil.which(x)
+
+
+class CloneGuardTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.d = self.tmp / "D"
+        self.pp = self.p.paths(self.d)
+        (self.pp["sealed"]).mkdir(parents=True)
+        (self.pp["sealed"] / "image.qcow2").write_bytes(b"sealed")
+        self.wd = self.pp["run"] / "clone1"
+        self.wd.mkdir(parents=True)
+        (self.wd / "clone.qcow2").write_bytes(b"overlay")
+        self.sealed_img = str((self.pp["sealed"] / "image.qcow2").resolve())
+
+    def info(self, backing="SEALED", rc=0):
+        b = self.sealed_img if backing == "SEALED" else backing
+        j = {"format": "qcow2"}
+        if b:
+            j["full-backing-filename"] = b
+        return lambda argv, **kw: cp(rc, json.dumps(j), "" if rc == 0 else "boom")
+
+    def alive(self, wd=None):
+        (wd or self.wd).joinpath("qemu.pid").write_text(str(os.getpid()))
+
+    def test_a_running_overlay_of_the_sealed_image_is_accepted(self):
+        self.alive()
+        wd, pid = self.p.resolve_clone(self.pp, "clone1", self.info())
+        self.assertEqual(wd, self.wd.resolve())
+        self.assertEqual(pid, os.getpid())
+
+    def test_an_image_without_a_backing_file_is_refused(self):
+        self.alive()
+        with self.assertRaises(self.p.PropError) as e:
+            self.p.resolve_clone(self.pp, "clone1", self.info(backing=None))
+        self.assertIn("NOT_AN_OVERLAY_OF_THE_SEALED_IMAGE", str(e.exception))
+
+    def test_an_overlay_of_some_other_image_is_refused(self):
+        self.alive()
+        with self.assertRaises(self.p.PropError):
+            self.p.resolve_clone(self.pp, "clone1", self.info(backing="/tmp/other.qcow2"))
+
+    def test_the_sealed_image_itself_is_never_a_target(self):
+        self.alive()
+        (self.wd / "clone.qcow2").unlink()
+        (self.wd / "clone.qcow2").symlink_to(self.pp["sealed"] / "image.qcow2")
+        with self.assertRaises(self.p.PropError) as e:
+            self.p.resolve_clone(self.pp, "clone1", self.info(backing=None))
+        self.assertIn("NOT_A_CLONE", str(e.exception))
+
+    def test_a_name_that_leaves_the_run_directory_or_points_at_sealed_is_refused(self):
+        for bad in ("../sealed", "..", "a/b", "", "/etc"):
+            with self.assertRaises(self.p.PropError, msg=bad):
+                self.p.resolve_clone(self.pp, bad, self.info())
+        (self.pp["run"] / "link").symlink_to(self.pp["sealed"])
+        with self.assertRaises(self.p.PropError) as e:
+            self.p.resolve_clone(self.pp, "link", self.info())
+        self.assertIn("CLONE_REFUSED_SEALED", str(e.exception))
+
+    def test_a_stopped_clone_is_refused_by_unharden(self):
+        (self.wd / "qemu.pid").write_text("999999999")
+        with self.assertRaises(self.p.PropError) as e:
+            self.p.resolve_clone(self.pp, "clone1", self.info())
+        self.assertIn("CLONE_NOT_RUNNING", str(e.exception))
+
+    def test_a_stopped_clone_is_refused_by_inject(self):
+        (self.wd / "qemu.pid").write_text("999999999")
+
+        def never(*a, **k):
+            raise AssertionError("the guest must not be reached for a stopped clone")
+        with mock_patch(self.p, "run_probe", never):
+            with self.assertRaises(self.p.PropError) as e:
+                self.p.clone_preflight(self.st, self.pp, "clone1", runner=self.info())
+        self.assertIn("CLONE_NOT_RUNNING", str(e.exception))
+
+    def test_unharden_flushes_the_ruleset_and_checks_it_is_gone(self):
+        g = HardenGuest()
+        g.hardened = True
+        a = self.p.P.unharden(g)
+        self.assertEqual(a["drop_hooks"], [])
+        self.assertTrue(any(k.startswith("sudo nft flush") for k, _ in g.log))
+
+    def test_unharden_fails_when_the_ruleset_survives(self):
+        def ssh(remote, stdin=None, timeout=600):
+            if remote.startswith("sudo nft flush"):
+                return cp(0)
+            return cp(0, json.dumps({"nft": ok(REAL_NFT)}) + "\n")
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.unharden(ssh)
+        self.assertIn("UNHARDEN_STILL_DROPPING", str(e.exception))
+
+    def test_the_cli_unharden_checks_the_clone_before_touching_the_guest(self):
+        self.p.save_state(self.p.init_state(SEED, keypair=("PRIVATE", PUB)), self.pp["state"])
+        (self.wd / "qemu.pid").write_text("999999999")
+        self.assertEqual(quiet_main(self.p, ["unharden", "--dir", str(self.d), "--clone", "clone1"]), 2)
+        self.assertEqual(quiet_main(self.p, ["unharden", "--dir", str(self.d), "--clone", "../sealed"]), 2)
+
+    def test_preflight_refuses_another_identity(self):
+        self.alive()
+        guest = good_guest(self.st)
+        guest["machine_id"] = "0" * 32
+        with mock_patch(self.p, "run_probe", lambda *a, **k: guest):
+            with self.assertRaises(self.p.PropError) as e:
+                self.p.clone_preflight(self.st, self.pp, "clone1", runner=self.info())
+        self.assertIn("machine_id", str(e.exception))
+
+    def test_preflight_refuses_a_guest_with_network_like_the_setup_vm(self):
+        self.alive()
+        guest = good_guest(self.st)
+        guest["internet"] = True
+        with mock_patch(self.p, "run_probe", lambda *a, **k: guest):
+            with self.assertRaises(self.p.PropError) as e:
+                self.p.clone_preflight(self.st, self.pp, "clone1", runner=self.info())
+        self.assertIn("no_network", str(e.exception))
+
+    def test_preflight_accepts_a_matching_offline_clone_on_the_recorded_clock(self):
+        self.alive()
+        guest = good_guest(self.st)
+        t0 = (self.wd / "qemu.pid").stat().st_mtime
+        with mock_patch(self.p, "run_probe", lambda *a, **k: guest):
+            wd, rows = self.p.clone_preflight(self.st, self.pp, "clone1", runner=self.info(), now=lambda: t0 + 120)
+        self.assertTrue(all(r[1] != "MISMATCH" for r in rows))
+
+
+def mock_patch(obj, name, value):
+    import unittest.mock
+    return unittest.mock.patch.object(obj, name, value)
+
+
+class InjectDestTests(Base):
+    def test_destinations(self):
+        P = self.p.P
+        self.assertEqual(P.check_dest("work/env", "kfimage"), "/home/kfimage/work/env")
+        self.assertEqual(P.check_dest("/home/kfimage/a/b", "kfimage"), "/home/kfimage/a/b")
+        self.assertEqual(P.check_dest("/opt/kf/venv", "kfimage"), "/opt/kf/venv")
+        self.assertEqual(P.check_dest("/opt/kf//a/./b", "kfimage"), "/opt/kf/a/b")
+
+    def test_everything_else_is_refused(self):
+        for bad in ("/etc/passwd", "/usr/local/x", "/", "/root/x", "/home/other/x", "../x", "a/../../x", "/opt/kf/../../etc", "", "a\nb", "/tmp/x"):
+            with self.assertRaises(self.p.P.PkgError, msg=bad) as e:
+                self.p.P.check_dest(bad, "kfimage")
+            self.assertIn("INJECT_DEST_REFUSED", str(e.exception))
+
+    def test_a_sibling_directory_with_the_same_prefix_is_refused(self):
+        for bad in ("/opt/kfx/y", "/opt/kf-other/y", "/home/kfimage2/y", "/home/kfimageevil/z"):
+            with self.assertRaises(self.p.P.PkgError, msg=bad):
+                self.p.P.check_dest(bad, "kfimage")
+
+    def test_the_root_itself_is_refused(self):
+        for bad in ("/opt/kf", "/home/kfimage", "/opt/kf/", "."):
+            with self.assertRaises(self.p.P.PkgError, msg=bad):
+                self.p.P.check_dest(bad, "kfimage")
+
+
+class FakePopen:
+    """Runs a local `tar -x` in place of `ssh ... tar -x`; records argv and the bytes sent."""
+    last = None
+
+    def __init__(self, argv, stdin=None, stdout=None, stderr=None, exists=False, fail=False):
+        FakePopen.last = self
+        self.argv, self.exists = argv, exists
+        self.dst = Path(FakePopen.dst)
+        self.dst.mkdir(parents=True, exist_ok=True)
+        self.sent = bytearray()
+        self.proc = subprocess.Popen(["tar", "-x", "-p", "--no-same-owner", "-C", str(self.dst)] if not exists else ["sh", "-c", "exit 3"],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        outer = self
+
+        class Tee:
+            def write(s, b):
+                outer.sent += b
+                return outer.proc.stdin.write(b)
+
+            def flush(s):
+                outer.proc.stdin.flush()
+
+            def close(s):
+                try:
+                    outer.proc.stdin.close()
+                except Exception:
+                    pass
+        self.stdin = Tee()
+        self.stdout = types.SimpleNamespace(read=self._read)
+
+    def _read(self):
+        out = self.proc.stdout.read()
+        return out + (b"INJECT_EXISTS\n" if self.exists else b"INJECT_OK\n")
+
+    def wait(self):
+        return self.proc.wait()
+
+
+class InjectTreeTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.src = self.tmp / "src"
+        (self.src / "bin").mkdir(parents=True)
+        (self.src / "bin" / "run.sh").write_text("#!/bin/sh\necho hi\n")
+        (self.src / "bin" / "run.sh").chmod(0o755)
+        (self.src / "secret.txt").write_text("s")
+        (self.src / "secret.txt").chmod(0o600)
+        (self.src / "lib").mkdir()
+        (self.src / "lib" / "libx.so.1").write_text("x")
+        (self.src / "lib" / "libx.so").symlink_to("libx.so.1")
+        FakePopen.dst = str(self.tmp / "guest")
+        self.argv_for = lambda remote: ["ssh", "guest", remote]
+
+    def run_inject(self, src=None, dest="/opt/kf/env", **kw):
+        return self.p.P.inject_path(self.argv_for, src or self.src, dest, "kfimage", popen=kw.pop("popen", FakePopen), log=lambda *a: None, **kw)
+
+    def test_a_directory_arrives_with_modes_and_symlinks(self):
+        res = self.run_inject()
+        g = Path(FakePopen.dst)
+        self.assertEqual(stat.S_IMODE((g / "bin/run.sh").stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((g / "secret.txt").stat().st_mode), 0o600)
+        self.assertTrue((g / "lib/libx.so").is_symlink())
+        self.assertEqual(os.readlink(g / "lib/libx.so"), "libx.so.1")
+        self.assertEqual((res["files"], res["dirs"], res["links"]), (3, 3, 1))
+        self.assertEqual(res["dest"], "/opt/kf/env")
+
+    def test_the_printed_hash_is_the_hash_of_the_bytes_sent(self):
+        res = self.run_inject()
+        self.assertEqual(res["sha256"], hashlib.sha256(bytes(FakePopen.last.sent)).hexdigest())
+        self.assertEqual(res["bytes"], len(FakePopen.last.sent))
+
+    def test_the_hash_follows_the_content_and_is_reproducible(self):
+        a = self.run_inject()["sha256"]
+        shutil_rmtree(FakePopen.dst)
+        self.assertEqual(self.run_inject()["sha256"], a)
+        (self.src / "secret.txt").write_text("changed")
+        shutil_rmtree(FakePopen.dst)
+        self.assertNotEqual(self.run_inject()["sha256"], a)
+
+    def tar_members(self):
+        import io
+        import tarfile
+        return {m.name: m for m in tarfile.open(fileobj=io.BytesIO(bytes(FakePopen.last.sent)))}
+
+    def test_the_tar_stream_drops_the_setuid_bit(self):
+        (self.src / "bin" / "suid").write_text("x")
+        (self.src / "bin" / "suid").chmod(0o4755)
+        self.run_inject()
+        self.assertEqual(self.tar_members()["./bin/suid"].mode, 0o755)
+
+    def test_the_tar_stream_drops_the_setgid_bit_and_owner(self):
+        (self.src / "bin" / "sgid").write_text("x")
+        (self.src / "bin" / "sgid").chmod(0o2755)
+        self.run_inject()
+        m = self.tar_members()["./bin/sgid"]
+        self.assertEqual(m.mode, 0o755)
+        self.assertEqual((m.uid, m.gid, m.uname, m.gname), (0, 0, "", ""))
+
+    def test_a_single_file_takes_the_destination_name(self):
+        res = self.run_inject(src=self.src / "secret.txt", dest="/home/kfimage/conf/renamed.txt")
+        self.assertEqual((Path(FakePopen.dst) / "renamed.txt").read_text(), "s")
+        self.assertEqual(res["files"], 1)
+        self.assertIn("/home/kfimage/conf", FakePopen.last.argv[-1])
+
+    def test_an_absolute_symlink_is_refused(self):
+        (self.src / "bin" / "python").symlink_to("/usr/bin/python3")
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.run_inject(popen=self.no_popen)
+        self.assertIn("INJECT_SYMLINK_ESCAPES", str(e.exception))
+        self.assertIn("(absolute)", str(e.exception))
+
+    def test_an_absolute_symlink_pointing_inside_the_source_is_refused_too(self):
+        (self.src / "lib" / "abs").symlink_to(str(self.src / "lib" / "libx.so.1"))   # would dangle once relocated
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.run_inject(popen=self.no_popen)
+        self.assertIn("(absolute)", str(e.exception))
+
+    def test_a_venv_style_interpreter_link_is_refused(self):
+        (self.src / "pyvenv.cfg").write_text("home = /usr/bin\n")
+        (self.src / "bin" / "python3").symlink_to("/usr/bin/python3.12")
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.run_inject(popen=self.no_popen)
+        self.assertIn("/usr/bin/python3.12", str(e.exception))
+        self.assertIn("(absolute)", str(e.exception))
+
+    def test_a_relative_symlink_leaving_the_source_is_refused(self):
+        (self.src / "lib" / "out").symlink_to("../../outside")
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.run_inject(popen=self.no_popen)
+        self.assertIn("leaves the source", str(e.exception))
+
+    def test_a_symlink_chain_that_escapes_is_refused(self):
+        (self.tmp / "outside").mkdir()
+        (self.src / "hop2").symlink_to("../outside")
+        (self.src / "hop1").symlink_to("hop2")
+        with self.assertRaises(self.p.P.PkgError):
+            self.run_inject(popen=self.no_popen)
+
+    def test_the_source_itself_a_symlink_is_refused(self):
+        l = self.tmp / "srclink"
+        l.symlink_to(self.src)
+        with self.assertRaises(self.p.P.PkgError):
+            self.run_inject(src=l, popen=self.no_popen)
+
+    @staticmethod
+    def no_popen(*a, **k):
+        raise AssertionError("nothing may be sent")
+
+    def test_a_fifo_is_refused(self):
+        os.mkfifo(self.src / "pipe")
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.run_inject(popen=self.no_popen)
+        self.assertIn("INJECT_SPECIAL_FILE", str(e.exception))
+
+    def test_a_socket_is_refused(self):
+        import socket
+        s = socket.socket(socket.AF_UNIX)
+        s.bind(str(self.src / "sock"))
+        self.addCleanup(s.close)
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.run_inject(popen=self.no_popen)
+        self.assertIn("INJECT_SPECIAL_FILE", str(e.exception))
+
+    def test_the_default_cap_is_20_gb(self):
+        self.assertEqual(self.p.P.DEFAULT_MAX_INJECT_GB, 20)
+
+    def test_over_the_cap_is_refused_before_anything_is_sent(self):
+        with open(self.src / "big", "wb") as f:
+            f.truncate(3 << 30)   # sparse: no disk used
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.run_inject(popen=self.no_popen, max_gb=1)
+        self.assertIn("INJECT_TOO_LARGE", str(e.exception))
+
+    def test_the_cap_boundary(self):
+        entries, total, _ = self.p.P.plan_tree(self.src, 1 << 30)
+        self.p.P.plan_tree(self.src, total)             # exactly at the cap: fine
+        with self.assertRaises(self.p.P.PkgError):
+            self.p.P.plan_tree(self.src, total - 1)
+
+    def test_the_stream_writer_refuses_past_its_cap(self):
+        import io
+        w = self.p.P.HashingWriter(io.BytesIO(), 10)
+        w.write(b"0123456789")
+        with self.assertRaises(self.p.P.PkgError):
+            w.write(b"x")
+
+    def test_an_existing_destination_is_named_not_overwritten(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.run_inject(popen=lambda *a, **k: FakePopen(*a, exists=True, **k))
+        self.assertIn("INJECT_DEST_EXISTS", str(e.exception))
+
+    def test_a_remote_failure_is_reported(self):
+        class Bad(FakePopen):
+            def _read(s):
+                s.proc.stdout.read()
+                return b"tar: boom\n"
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.run_inject(popen=Bad)
+        self.assertIn("INJECT_FAILED", str(e.exception))
+
+    def test_the_remote_command_is_tar_over_ssh_with_modes_kept_and_safe_quoting(self):
+        c = self.p.P.remote_extract_command("/home/kfimage/my dir/it's", "kfimage")
+        inner = shlex_split(c)
+        self.assertEqual(inner[:2], ["bash", "-c"])
+        self.assertIn("tar -x -p --no-same-owner", inner[2])
+        self.assertEqual(shlex_split(inner[2].split("d=")[1].splitlines()[0])[0], "/home/kfimage/my dir/it's")
+        self.assertNotIn("sudo", inner[2])
+        self.assertNotIn("scp", c)
+        self.assertEqual(subprocess.run(["bash", "-n", "-c", inner[2]], capture_output=True).returncode, 0)
+
+    def test_opt_kf_gets_its_root_directory_owned_by_the_user_and_replace_removes_first(self):
+        s = shlex_split(self.p.P.remote_extract_command("/opt/kf/env", "kfimage", replace=True))[2]
+        self.assertIn("sudo install -d -o kfimage -g kfimage /opt/kf", s)
+        self.assertIn('rm -rf -- "$d"', s)
+        self.assertIn("INJECT_EXISTS", shlex_split(self.p.P.remote_extract_command("/opt/kf/env", "kfimage"))[2])
+
+
+def shlex_split(x):
+    import shlex
+    return shlex.split(x)
+
+
+def shutil_rmtree(p):
+    import shutil
+    shutil.rmtree(p, ignore_errors=True)
+
+
+def whl(name, ver, tags="py3-none-any"):
+    return "%s-%s-%s.whl" % (name, ver, tags)
+
+
+class WheelhouseTests(Base):
+    def lock_text(self, reqs, extra=""):
+        out = extra
+        for name, ver, hashes, *rest in reqs:
+            out += "%s==%s%s \\\n" % (name, ver, rest[0] if rest else "") + " \\\n".join("    --hash=sha256:%s" % h for h in hashes) + "\n"
+        return out
+
+    def build(self, reqs=(("alpha", "1.0", b"A"), ("Beta_pkg", "2.1", b"B")), tags="py3-none-any", extra=""):
+        wh = self.tmp / "wheels"
+        wh.mkdir(exist_ok=True)
+        rows = []
+        for name, ver, content in reqs:
+            f = wh / whl(name, ver, tags)
+            f.write_bytes(content)
+            rows.append((name, ver, [hashlib.sha256(content).hexdigest()]))
+        lock = self.tmp / "lock.txt"
+        lock.write_text(self.lock_text(rows, extra))
+        return wh, lock
+
+    GUEST = {"py_minor": 12, "py_major": 3, "machine": "x86_64", "glibc": [2, 39], "venv_ok": True}
+
+    def test_parse_lock_requirements_hashes_markers_and_dropped_options(self):
+        text = ("--index-url https://download.pytorch.org/whl/cu128\n# comment\n--extra-index-url https://x/simple\n"
+                "torch==2.7.0+cu128 \\\n    --hash=sha256:%s \\\n    --hash=sha256:%s\nnumpy==2.0.1 ; python_version < \"3.13\" \\\n    --hash=sha256:%s\n"
+                % ("a" * 64, "b" * 64, "c" * 64))
+        lk = self.p.P.parse_lock(text)
+        self.assertEqual([(r["name"], r["version"], len(r["hashes"]), r["marker"]) for r in lk["reqs"]],
+                         [("torch", "2.7.0+cu128", 2, None), ("numpy", "2.0.1", 1, 'python_version < "3.13"')])
+        self.assertEqual(len(lk["dropped"]), 2)
+        staged = self.p.P.staged_lock_text(text)
+        self.assertNotIn("index-url", staged)
+        self.assertIn("--hash=sha256:" + "a" * 64, staged)
+
+    def test_an_unhashed_lock_is_refused_by_name(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.parse_lock("torch==2.7.0\nnumpy==2.0.1\n")
+        self.assertIn("LOCK_NOT_HASHED", str(e.exception))
+
+    def test_one_unhashed_line_among_hashed_ones_is_refused(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.parse_lock("a==1 \\\n  --hash=sha256:%s\nb==2\n" % ("a" * 64))
+        self.assertIn("LOCK_NOT_HASHED", str(e.exception))
+        self.assertIn("b==2", str(e.exception))
+
+    def test_requirements_that_need_an_index_or_a_url_are_refused_by_name(self):
+        for bad in ("pkg @ https://example.org/pkg-1.0-py3-none-any.whl", "git+https://example.org/x.git#egg=x", "-r other.txt", "-e ./local", "./pkg.whl"):
+            with self.assertRaises(self.p.P.PkgError, msg=bad) as e:
+                self.p.P.parse_lock(bad + "\n")
+            self.assertIn("LOCK_NEEDS_INDEX", str(e.exception))
+
+    def test_an_unpinned_requirement_is_refused(self):
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.parse_lock("torch>=2 \\\n --hash=sha256:%s\n" % ("a" * 64))
+        self.assertIn("LOCK_NOT_PINNED", str(e.exception))
+
+    def test_wheel_tag_compatibility(self):
+        c = lambda f, **k: self.p.P.wheel_compatible(f, 12, **k)
+        self.assertTrue(c("x-1-py3-none-any.whl"))
+        self.assertTrue(c("x-1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"))
+        self.assertTrue(c("x-1-cp39-abi3-manylinux2014_x86_64.whl"))
+        self.assertTrue(c("x-1-cp312-none-linux_x86_64.whl"))
+        self.assertFalse(c("x-1-cp311-cp311-manylinux2014_x86_64.whl"))
+        self.assertFalse(c("x-1-cp313-cp313-manylinux2014_x86_64.whl"))
+        self.assertFalse(c("x-1-cp312-cp312-win_amd64.whl"))
+        self.assertFalse(c("x-1-cp312-cp312-manylinux2014_aarch64.whl"))
+        self.assertFalse(c("x-1-cp312-cp312-musllinux_1_2_x86_64.whl"))
+        self.assertFalse(c("x-1-cp312-cp312-manylinux_2_40_x86_64.whl"))   # newer glibc than the guest's 2.39
+        self.assertFalse(c("not-a-wheel.whl"))
+
+    def test_a_complete_wheelhouse_passes_and_unrelated_wheels_are_not_sent(self):
+        wh, lock = self.build()
+        (wh / whl("unrelated", "9")).write_bytes(b"U")
+        chk = self.p.P.check_wheelhouse(wh, self.p.P.parse_lock(lock.read_text()), self.GUEST)
+        self.assertEqual([w.name for w in chk["wheels"]], sorted([whl("alpha", "1.0"), whl("Beta_pkg", "2.1")]))
+
+    def test_a_missing_wheel_is_named(self):
+        wh, lock = self.build()
+        (wh / whl("alpha", "1.0")).unlink()
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.check_wheelhouse(wh, self.p.P.parse_lock(lock.read_text()), self.GUEST)
+        self.assertIn("WHEEL_MISSING: alpha==1.0", str(e.exception))
+
+    def test_a_wheel_of_the_wrong_version_counts_as_missing(self):
+        wh, lock = self.build()
+        (wh / whl("Beta_pkg", "2.1")).rename(wh / whl("Beta_pkg", "2.2"))
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.check_wheelhouse(wh, self.p.P.parse_lock(lock.read_text()), self.GUEST)
+        self.assertIn("WHEEL_MISSING: Beta_pkg==2.1", str(e.exception))
+
+    def test_a_changed_wheel_is_a_hash_mismatch(self):
+        wh, lock = self.build()
+        (wh / whl("alpha", "1.0")).write_bytes(b"tampered")
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.check_wheelhouse(wh, self.p.P.parse_lock(lock.read_text()), self.GUEST)
+        self.assertIn("WHEEL_HASH_MISMATCH: alpha==1.0", str(e.exception))
+
+    def test_a_wrong_hash_in_the_lock_is_a_hash_mismatch(self):
+        wh, lock = self.build()
+        lock.write_text(lock.read_text().replace(hashlib.sha256(b"B").hexdigest(), "f" * 64))
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.check_wheelhouse(wh, self.p.P.parse_lock(lock.read_text()), self.GUEST)
+        self.assertIn("WHEEL_HASH_MISMATCH: Beta_pkg==2.1", str(e.exception))
+
+    def test_a_wheel_for_another_python_is_a_tag_mismatch(self):
+        wh, lock = self.build(tags="cp311-cp311-manylinux2014_x86_64")
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.check_wheelhouse(wh, self.p.P.parse_lock(lock.read_text()), self.GUEST)
+        self.assertIn("WHEEL_TAG_MISMATCH", str(e.exception))
+
+    def test_a_wheel_for_another_platform_is_a_tag_mismatch(self):
+        wh, lock = self.build(tags="cp312-cp312-win_amd64")
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.p.P.check_wheelhouse(wh, self.p.P.parse_lock(lock.read_text()), self.GUEST)
+        self.assertIn("WHEEL_TAG_MISMATCH", str(e.exception))
+
+    def test_a_marker_line_without_a_wheel_is_a_warning_not_a_failure(self):
+        wh = self.tmp / "w"
+        wh.mkdir()
+        lk = self.p.P.parse_lock('only-on-old==1.0 ; python_version < "3.9" \\\n --hash=sha256:%s\n' % ("a" * 64))
+        chk = self.p.P.check_wheelhouse(wh, lk, self.GUEST)
+        self.assertEqual(chk["wheels"], [])
+        self.assertTrue(chk["warnings"])
+
+    def guest_ssh(self, info=None, pip_rc=0, log=None):
+        info = dict(self.GUEST, **(info or {}))
+
+        def ssh(remote, stdin=None, timeout=600):
+            if log is not None:
+                log.append(remote)
+            if "CS_GNU_LIBC_VERSION" in remote:
+                return cp(0, json.dumps(info) + "\n")
+            if "pip install" in remote:
+                return cp(pip_rc, "INSTALL_OK 2\n" if pip_rc == 0 else "", "" if pip_rc == 0 else "ERROR: No matching distribution found for alpha==1.0")
+            return cp(0)
+        return ssh
+
+    def inject(self, wh, lock, ssh, popen=FakePopen, dest="/opt/kf/pyenv"):
+        FakePopen.dst = str(self.tmp / "guest")
+        return self.p.P.inject_wheelhouse(ssh, lambda r: ["ssh", r], wh, lock, dest, "kfimage", popen=popen, log=lambda *a: None)
+
+    def test_end_to_end_copies_the_wheels_and_the_staged_lock_and_installs_offline_with_hashes(self):
+        wh, lock = self.build(extra="--extra-index-url https://download.pytorch.org/whl/cu128\n")
+        log = []
+        res = self.inject(wh, lock, self.guest_ssh(log=log))
+        g = Path(FakePopen.dst)
+        self.assertEqual(sorted(p.name for p in (g / "wheelhouse").iterdir()), sorted([whl("alpha", "1.0"), whl("Beta_pkg", "2.1")]))
+        staged = (g / "requirements.lock.txt").read_text()
+        self.assertNotIn("extra-index-url", staged)
+        self.assertIn("alpha==1.0", staged)
+        install = [c for c in log if "pip install" in c][0]
+        for flag in ("--no-index", "--require-hashes", "--only-binary=:all:", "--find-links", "-r"):
+            self.assertIn(flag, install)
+        self.assertNotIn("--index-url", install)
+        self.assertEqual((res["wheels"], res["requirements"], res["dropped_options"]), (2, 2, 1))
+        self.assertEqual(res["lock_sha256"], hashlib.sha256(lock.read_bytes()).hexdigest())
+
+    def test_the_install_command_never_reaches_for_an_index_or_apt(self):
+        s = self.p.P.WHEEL_INSTALL
+        self.assertIn("--no-index", s)
+        self.assertIn("--require-hashes", s)
+        self.assertIn("--only-binary=:all:", s)
+        self.assertNotIn("apt", s)
+        self.assertNotIn("--index-url", s)
+        self.assertNotIn("--extra-index-url", s)
+        self.assertEqual(subprocess.run(["bash", "-n"], input=s.replace("@@DEST@@", "/x"), text=True, capture_output=True).returncode, 0)
+
+    def test_a_guest_without_venv_support_is_named(self):
+        wh, lock = self.build()
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.inject(wh, lock, self.guest_ssh(info={"venv_ok": False}), popen=NoPopen)
+        self.assertIn("GUEST_NO_VENV", str(e.exception))
+
+    def test_a_pip_failure_in_the_guest_is_named_with_its_reason(self):
+        wh, lock = self.build()
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.inject(wh, lock, self.guest_ssh(pip_rc=1))
+        self.assertIn("PIP_INSTALL_FAILED", str(e.exception))
+        self.assertIn("No matching distribution", str(e.exception))
+
+    def test_a_missing_wheel_stops_before_anything_is_sent(self):
+        wh, lock = self.build()
+        (wh / whl("alpha", "1.0")).unlink()
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.inject(wh, lock, self.guest_ssh(), popen=NoPopen)
+        self.assertIn("WHEEL_MISSING", str(e.exception))
+
+    def test_a_hash_mismatch_stops_before_anything_is_sent(self):
+        wh, lock = self.build()
+        (wh / whl("alpha", "1.0")).write_bytes(b"other")
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.inject(wh, lock, self.guest_ssh(), popen=NoPopen)
+        self.assertIn("WHEEL_HASH_MISMATCH", str(e.exception))
+
+    def test_a_lock_that_needs_an_index_stops_before_the_guest_is_asked(self):
+        wh, lock = self.build()
+        lock.write_text("pkg @ https://example.org/pkg.whl\n")
+        calls = []
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.inject(wh, lock, lambda *a, **k: calls.append(a) or cp(0), popen=NoPopen)
+        self.assertIn("LOCK_NEEDS_INDEX", str(e.exception))
+        self.assertEqual(calls, [])
+
+    def test_the_destination_rules_apply_to_the_wheelhouse_too(self):
+        wh, lock = self.build()
+        with self.assertRaises(self.p.P.PkgError) as e:
+            self.inject(wh, lock, self.guest_ssh(), popen=NoPopen, dest="/usr/lib/python3/x")
+        self.assertIn("INJECT_DEST_REFUSED", str(e.exception))
+
+    def test_the_cli_wheelhouse_needs_a_lock_and_no_src(self):
+        pp = self.p.paths(self.tmp / "D")
+        pp["dir"].mkdir()
+        self.p.save_state(self.p.init_state(SEED, keypair=("PRIVATE", PUB)), pp["state"])
+        ns = types.SimpleNamespace(dir=str(self.tmp / "D"), name="clone1", wheelhouse=str(self.tmp), lock=None, src=None, dest=None, max_gb=20, replace=False)
+        with mock_patch(self.p, "clone_preflight", lambda *a, **k: (None, [])):
+            with self.assertRaises(self.p.PropError):
+                self.p.cmd_inject(ns)
+            ns.lock, ns.src = "x", "y"
+            with self.assertRaises(self.p.PropError):
+                self.p.cmd_inject(ns)
+
+
+class NoPopen:
+    def __init__(self, *a, **k):
+        raise AssertionError("nothing may be sent")
+
+
 if __name__ == "__main__":
     unittest.main()
