@@ -29,10 +29,12 @@ LANE_A = ["energy-04", "creo-04", "blender-01", "enscape-01"]
 LANE_B = ["medical-04", "maya-07", "catia-07", "solidworks-08", "unreal_engine-01"]
 PUBLIC = re.compile(
     r"^(?:SPEC_STAGE_LIST lane=(?:lanea|laneb|both) n=[0-9]{1,2}"
-    r"|SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(?:PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=(?:[A-Z_]{1,16}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)"
+    r"|SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(?:PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=(?:[A-Z_]{1,24}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)"
     r"|[a-z][a-z_]*_[0-9]{2} --- FAILED"
     r"|SPEC_STAGE_COUNTS pass=[0-9]+ fail=[0-9]+ not_run=[0-9]+ of=[0-9]+"
     r"|SPEC_COPY_DELETED removed=(?:archive|overlay|archive,overlay|nothing)"
+    r"|SPEC_LICENCE_STATE at=[A-Za-z0-9_]{1,40}(?: [a-z0-9_]{1,12}=[A-Za-z0-9_.,:;()/+-]{1,160}){1,12}"
+    r"|SPEC_GUEST_SHUTDOWN_LICENCE viewset=[a-z][a-z_]*-[0-9]{2} event=1074 time=[0-9TZ:-]{1,24} process=[A-Za-z0-9_.-]{1,40} text=[A-Za-z0-9_.,:;()/+-]{1,240}"
     r"|SPEC_STAGE_START lane=(?:lanea|laneb|both|none)"
     r"|SPEC_NOTE .*"
     r"|SPECVIEWPERF_STAGE_(?:PASS|FAIL|RETRY class=[A-Z0-9_]+)|SPECVIEWPERF_STAGE_EXIT rc=[0-9]+)$"
