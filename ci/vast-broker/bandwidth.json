@@ -571,7 +571,7 @@
      "url": "private object named in propimages.json",
      "basis": "measured",
      "date": "2026-11-17",
-     "source": "ci/vast-broker/propimages.json objects (size read back after the owner's upload: 8,147,790,579 B)",
+     "source": "ci/vast-broker/propimages.json objects (size read back after the owner's upload: 8,128,391,922 B)",
      "note": "the size is the pinned size, edit it in propimages.json"
     },
     {
