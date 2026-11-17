@@ -20,7 +20,7 @@ TENSORRT_SUMMARY status=PASS ...
 VLLM_SUMMARY status=PASS ...
 ```
 
-Each row also prints one `GPU_USE_PROOF` line (the device and how far its memory grew) and a `MLROWS_CHECK` line per check, and keeps its full log in `OUT/<row>/`. `rm -rf /tmp/mlrows_out` removes everything. Setup is the slow part (JAX about 3 minutes, TensorRT about 6, vLLM about 10 on a 500 Mbit link; 4 to 11 GB each); a run is 10 seconds (JAX), 2 minutes (TensorRT) and a few minutes (vLLM). To work on one row: `python3 scripts/apps/mlrows/mlrows.py setup --root DIR --rows jax` then `... run jax --root DIR`; `mlrows.py check` says which flavour this machine takes and why.
+Each row also prints one `GPU_USE_PROOF` line (the device and how far its memory grew) and a `MLROWS_CHECK` line per check, and keeps its full log in `OUT/<row>/`. `rm -rf /tmp/mlrows_out` removes everything. Setup is the slow part (on a 500 Mbit link JAX took 3 minutes, TensorRT 6 and vLLM 8; on a gigabit link 1, 1.5 and 4; 4.4, 7.3 and 9.6 GB of venv); a run is 3 to 10 seconds (JAX), 1 to 2 minutes (TensorRT) and 1 to 1.5 minutes (vLLM) on the three cards it was measured on. To work on one row: `python3 scripts/apps/mlrows/mlrows.py setup --root DIR --rows jax` then `... run jax --root DIR`; `mlrows.py check` says which flavour this machine takes and why.
 
 `NOT_RUN` is never a result about the GPU: the card is older than Turing, the driver cannot take the wheel, there is no C compiler, too little disk or video memory, or the row was not set up. `FAIL` names the check (for example `engine_equals_onnxruntime_cpu`, `jax_devices_are_gpu`, `greedy_repeat_identical`).
 

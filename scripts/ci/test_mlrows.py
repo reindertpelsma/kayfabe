@@ -558,7 +558,7 @@ class JudgeTensorrt(unittest.TestCase):
                 self.assertTrue(why.startswith(name + ":"), "%s: %s" % (what, why))
 
     def test_the_tolerance_boundary_is_a_fraction_of_the_reference(self):
-        tol = lib.TRT_REL_TOL * 3.0
+        tol = 0.01 * 3.0                                    # the bound is written out: a test that read the constant would follow it wherever it went
         ok = trt_result(engine={"ran": True, "max_abs_err": tol, "ref_max_abs": 3.0, "repeat_identical": True})
         bad = trt_result(engine={"ran": True, "max_abs_err": tol * 1.001, "ref_max_abs": 3.0, "repeat_identical": True})
         self.assertEqual(lib.judge_tensorrt(ok)[0], lib.PASS)
