@@ -75,7 +75,7 @@ MUTANTS = [
       K("Verdicts.unsupported_and_worked_is_a_mismatch", "RunnerEndToEnd.an_unexpected_success_is_a_mismatch")),
     M("config-errors-count-as-failures", "lib", "    if attempt_reason in CONFIG_REASONS and not attempt_ok:", "    if False:",
       K("Verdicts.our_own_configuration_errors_are_not_run_not_fail", "UnavailableEngines.the_reasons_are_configuration_errors", "RunnerEndToEnd.an_unreachable_encoder_is_not_run_with_its_reason")),
-    M("unknown-probe-counts-as-supported", "lib", '    if unknown and not failed:\n        return "UNKNOWN", unknown', '    if unknown and not failed:\n        return "SUPPORTED", unknown',
+    M("unknown-probe-counts-as-supported", "lib", '    if unknown and not failed:\n        return "UNKNOWN", list(dict.fromkeys(unknown))', '    if unknown and not failed:\n        return "SUPPORTED", unknown',
       K("CapsComparison.a_probe_that_could_not_ask_is_unknown_never_a_guess", "RunnerEndToEnd.a_probe_that_cannot_ask_makes_everything_not_run")),
     M("failed-atoms-ignored", "lib", '    if failed:\n        return "UNSUPPORTED", failed', '    if False:\n        return "UNSUPPORTED", failed',
       K("CapsComparison.av1_encode_follows_the_die", "CapsComparison.decode_follows_cuvid_caps")),

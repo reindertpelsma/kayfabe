@@ -25,7 +25,7 @@ Both are **discovery rows** of the open Linux matrix: they are in `scripts/apps/
 | `nvml_field_classes.tsv`, `nvml_expected_not_supported.tsv` | how each value is compared (static, live with a tolerance, only-a-number); the documented NOT_SUPPORTED table, each line with its reason |
 | `census.py`, `rowio.py`, `compare_logs.py` | the host census (GPU use, unserviced-RPC count), the `@@FILE` hand-off of result files through a log, the comparison front end |
 | `provision.sh`, `pins.env`, `run_standalone.sh` | fetch and build on one machine (glue, under 100 lines); the pins; the standalone entry |
-| `scripts/ci/test_open_rows.py`, `scripts/ci/open_rows_mutants.py` | GPU-free tests (fixtures with the fake UUID prefix `fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e....`) and 70 mutants with two named killers each |
+| `scripts/ci/test_open_rows.py`, `scripts/ci/open_rows_mutants.py` | GPU-free tests (fixtures with the fake UUID prefix `fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e....`) and 82 mutants with two named killers each |
 
 Wiring: `run_apps.sh` (two rows), `build_bundle.sh` (a non-fatal `provision.sh` call and the copy of `open_rows/` into the bundle), `apps_hook.sh` (pushes `open_rows/` into the guest, samples the HOST for each of the two rows, prints the unserviced-RPC census), `apps_matrix.sh` (the compare at the end), `image/recipe.json` (the new sha256 of `run_apps.sh`, which the open image recipe pins).
 
@@ -109,7 +109,7 @@ The matrix row's own time limit is 3000 s and the DCGM row's 3300 s (the diag le
 
 ## 9. Tests and mutants (GPU-free)
 
-`scripts/ci/test_open_rows.py` (about 190 tests): table validity and its tamper cases; the probe parser; the caps comparison on made-up Ampere-like and Ada-like probes; the NOT_SUPPORTED, MISMATCH and NOT_RUN handling; PSNR threshold boundaries; command construction (argument vectors, never shells); ffmpeg error classification; the host/guest buckets; the NVML diff (every status, tolerances at their boundaries); the DCGM parsers on both JSON layouts; the census with known positives; the `@@FILE` hand-off with corruption; the sweep against a fake `libnvidia-ml` built from C in the test; the FFmpeg runner end to end against a fake `ffmpeg` and a fake probe; the DCGM runner end to end against a fake `dcgmi`; and text pins for the trust rules and the wiring (marked as pins: they prove the line is there, not that it works). `scripts/ci/open_rows_mutants.py` runs 70 mutants, each killed by at least two named tests; it is part of the `scripts/ci` step of `ci.yml`.
+`scripts/ci/test_open_rows.py` (224 tests): table validity and its tamper cases; the probe parser; the caps comparison on made-up Ampere-like and Ada-like probes; the NOT_SUPPORTED, MISMATCH and NOT_RUN handling; PSNR threshold boundaries; command construction (argument vectors, never shells); ffmpeg error classification; the host/guest buckets; the NVML diff (every status, tolerances at their boundaries); the DCGM parsers on both JSON layouts; the census with known positives; the `@@FILE` hand-off with corruption; the sweep against a fake `libnvidia-ml` built from C in the test; the FFmpeg runner end to end against a fake `ffmpeg` and a fake probe; the DCGM runner end to end against a fake `dcgmi`; and text pins for the trust rules and the wiring (marked as pins: they prove the line is there, not that it works). `scripts/ci/open_rows_mutants.py` runs 82 mutants, each killed by at least two named tests; it is part of the `scripts/ci` step of `ci.yml`.
 
 ## 10. Native results
 
