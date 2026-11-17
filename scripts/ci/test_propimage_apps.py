@@ -194,7 +194,9 @@ class Pins(unittest.TestCase):
         self.assertEqual(m.stages, ("tools", "image"))
         by = {i.name: i for i in m.items}
         self.assertEqual([s.kind for s in by["propimage-kfimg-20261112.zip"].sources], ["signed"])
-        self.assertEqual([s.kind for s in by["libtpms-0.10.1.tar.gz"].sources], ["mirror"])
+        # 2026-11-17: the tools carry a private ref AND the public mirror, in that order (the downloader refuses a private source after a mirror)
+        self.assertEqual([s.kind for s in by["libtpms-0.10.1.tar.gz"].sources], ["signed", "mirror"])
+        self.assertEqual([s.kind for s in by["swtpm-0.10.1.tar.gz"].sources], ["signed", "mirror"])
         self.assertEqual(by["kf-gop.signed.efi"].sha256, H64)
 
     def test_half_pinned_roles_refuse_the_manifest(self):
@@ -253,6 +255,110 @@ class Pins(unittest.TestCase):
             p.write_text(json.dumps(doc))
             with self.assertRaises(ValueError):
                 pa.load_pins(p)
+
+    # ---- 2026-11-17: the tool tarballs carry a private ref (the coordinator's URL file) AND the public mirror
+    TOOL_REFS = {"libtpms": "propimage-tools-libtpms-0.10.1.tar.gz", "swtpm": "propimage-tools-swtpm-0.10.1.tar.gz"}
+
+    @staticmethod
+    def loaded(doc):
+        """pins JSON -> load_pins (the real validator) -> the strict result."""
+        with tempfile.TemporaryDirectory() as t:
+            p = Path(t) / "pins.json"
+            p.write_text(json.dumps(doc))
+            return pa.load_pins(p)
+
+    @staticmethod
+    def tool(doc, role):
+        return next(i for i in doc["items"] if i["role"] == role)
+
+    def test_an_item_with_ref_and_mirror_lists_the_signed_source_first(self):
+        doc = pins_doc()
+        for role, ref in self.TOOL_REFS.items():
+            self.tool(doc, role)["ref"] = ref          # the mirror stays: both are allowed
+        pins = self.loaded(doc)
+        by = {i["name"]: i["sources"] for i in pa.build_manifest(pins, True)["items"]}
+        for role, ref in self.TOOL_REFS.items():
+            item = self.tool(pins, role)
+            self.assertEqual(by[item["name"]], [{"kind": "signed", "ref": ref}, {"kind": "mirror", "url": item["mirror"]}], role)
+
+    def test_a_mirror_only_item_is_unchanged(self):
+        doc = pins_doc()
+        for role in self.TOOL_REFS:
+            self.tool(doc, role).pop("ref", None)
+        pins = self.loaded(doc)
+        by = {i["name"]: i["sources"] for i in pa.build_manifest(pins, True)["items"]}
+        for role in self.TOOL_REFS:
+            item = self.tool(pins, role)
+            self.assertEqual(by[item["name"]], [{"kind": "mirror", "url": item["mirror"]}], role)
+
+    def test_a_ref_only_item_is_unchanged(self):
+        pins = self.loaded(pins_doc())
+        image = self.tool(pins, "image")
+        self.assertNotIn("mirror", image)
+        self.assertEqual(next(i for i in pa.build_manifest(pins, False)["items"] if i["name"] == image["name"])["sources"],
+                         [{"kind": "signed", "ref": image["ref"]}])
+
+    def test_a_pin_with_neither_ref_nor_mirror_is_refused(self):
+        doc = pins_doc()
+        for role in self.TOOL_REFS:
+            it = self.tool(doc, role)
+            it.pop("ref", None), it.pop("mirror", None)
+            with self.subTest(role), self.assertRaises(ValueError) as ctx:
+                self.loaded(doc)
+            self.assertEqual(str(ctx.exception), "pins: sources")
+            it["mirror"] = "https://example.org/x"        # restore a source before the next role
+
+    def test_an_image_pin_with_neither_ref_nor_mirror_is_refused(self):
+        doc = pins_doc()
+        image = self.tool(doc, "image")
+        image.pop("ref", None), image.pop("mirror", None)
+        with self.assertRaises(ValueError) as ctx:
+            self.loaded(doc)
+        self.assertEqual(str(ctx.exception), "pins: sources")
+
+    def test_the_ref_and_the_mirror_of_an_item_are_each_validated(self):
+        for key, value in (("ref", "a/b"), ("ref", ""), ("mirror", "http://example.org/x"), ("mirror", "https://exa mple.org")):
+            doc = pins_doc()
+            self.tool(doc, "libtpms")["ref"] = self.TOOL_REFS["libtpms"]
+            self.tool(doc, "libtpms")[key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                self.loaded(doc)
+
+    def test_both_committed_pins_files_give_the_tools_signed_then_mirror_with_unchanged_pins(self):
+        expected = {"libtpms": ("ebc24f3191d90f6cf0b4d4200cd876db4bd224b3c565708bbea0a82ee275e0fb", 1399253),
+                    "swtpm": ("f8da11cadfed27e26d26c5f58a7b8f2d14d684e691927348906b5891f525c684", 415992)}
+        for path in (pa.PINS_PATH, HERE / "propimage_apps_b_pins.json"):
+            pins = pa.load_pins(path)
+            by = {i["name"]: i["sources"] for i in pa.build_manifest(pins, True)["items"]}
+            for role, ref in self.TOOL_REFS.items():
+                item = self.tool(pins, role)
+                with self.subTest(file=path.name, role=role):
+                    self.assertEqual((item["sha256"], item["size"]), expected[role])      # the private copy is the same public tarball
+                    self.assertEqual(item["ref"], ref)
+                    self.assertEqual(by[item["name"]], [{"kind": "signed", "ref": ref}, {"kind": "mirror", "url": item["mirror"]}])
+                    self.assertTrue(item["mirror"].startswith("https://"))
+
+    def test_a_urls_file_without_the_tool_refs_has_no_private_url_so_the_downloader_falls_through_to_the_mirror(self):
+        # the fall-through itself (a signed ref missing from the URL file -> the mirror is fetched) is
+        # test_box_downloader.PrivateSources.test_missing_signed_url_falls_through_to_mirror; here: the real manifest's tool refs are missing from a
+        # URL file that carries only the image and the GOP, which is the signed source's failure that triggers it
+        pins = pa.load_pins()
+        manifest = pa.build_manifest(pins, True)
+        with tempfile.TemporaryDirectory() as t:
+            urls = Path(t) / "urls.json"
+            have = {i["sources"][0]["ref"]: "https://example.org/private" for i in manifest["items"] if i["needed_by"] == "image"}
+            urls.write_text(json.dumps({"schema": box_downloader.URLS_SCHEMA, "urls": have}))
+            os.chmod(urls, 0o600)
+            provider = box_downloader.UrlFileProvider(urls)
+            for it in manifest["items"]:
+                signed, mirror = it["sources"][0], it["sources"][-1]
+                with self.subTest(it["name"]):
+                    if it["needed_by"] == "tools":
+                        self.assertEqual((signed["kind"], mirror["kind"]), ("signed", "mirror"))
+                        with self.assertRaises(box_downloader.ProviderError):
+                            provider(signed["ref"])
+                    else:
+                        self.assertEqual(provider(signed["ref"]), "https://example.org/private")
 
 
 

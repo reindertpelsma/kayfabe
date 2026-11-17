@@ -68,6 +68,8 @@ Verified offline in the image: the sniffers above (`gpudiag`). Not driven: Photo
 
 ## The stage
 
+**Correction, 2026-11-17:** the swtpm and libtpms sources of `propimage_apps_b_pins.json` now carry the first image's private `ref` in front of the public `mirror` (the mirror stays the fallback; the sha256 and size values did not change); the stage's `build_manifest` gets the signed-then-mirror order from `propimage_apps.build_manifest`. Details and the measurement behind it: `V3_PROPIMAGE_APPS_STAGE.md`, "What is not done", item 00.
+
 `scripts/ci/propimage_apps_b_stage.py` is the first stage's companion: same preflight, pins, manifest, downloader, swtpm, checksum-checked unpack, offline proof and kernel-log windows (imported from `propimage_apps.py`), its own application list, boot command (`--app-set b --data-iso`), record (`KF_PROPIMAGE_APPS_B_RESULT`, `image_set: "b"`) and grading (PASS needs every row PASS or PASS_LIMITED and every asserted row to carry a PASS GPU record that names its engines). Pins: `scripts/ci/propimage_apps_b_pins.json` (image archive, data volume, signed boot GOP and swtpm sources all pinned; the GOP and swtpm values are the first image's).
 
 Wired 2026-11-16: the `vast_payload.py` stage entry and the `vast_report.py` validator for the B record (next section). Not done: the Worker allow-list entry for the image's opaque ref (`propimage-kfimg-20261116.zip`) and a Worker budget row (the stage is manual-only, so it has none). The B leg runs on its own one-GPU box (a leg selector A|B in the instruction); this stage does not need a die index.
