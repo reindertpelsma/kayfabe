@@ -1,6 +1,6 @@
 # GPU use is asserted, never assumed: the audit of every row that can run on the CPU, and the shared judge
 
-**STATUS: LIVE, 2026-11-17 (owner requirement of 2026-11-17, binding; implemented and tested GPU-free; NOT run on any hardware when this line was written: every
+**STATUS: LIVE, 2026-11-17 (owner requirement of 2026-11-17, binding; implemented and tested GPU-free; FIRST HARDWARE RUN the same day, RTX 3090, section 10: three thresholds and proofs were wrong and are fixed; NOT run on any hardware when this line was first written: every
 statement marked INFERRED or UNCALIBRATED below is a hypothesis with a falsifier in section 7).** The requirement, verbatim in substance: for MATLAB, Blender and
 every other application that CAN run on the CPU, a row must ASSERT that the GPU was used; a row that passes because the application silently fell back to the
 CPU is a false pass and hides exactly the bugs kayfabe exists to find.
@@ -185,3 +185,24 @@ after this merges is the calibration (section 7).
 
 Windows host sampler (needs the supervisor, section 2.2); kfml scrub and #470/#471 gating (open PRs, not edited); multi-GPU boxes (all GPUs are sampled together); the percent of
 PR #459 in the kf3 log; `geekbench_gpu` (policy skip); the thresholds of section 3 are UNCALIBRATED; the census is lower-bounded and cannot separate a CUDA context from compute.
+
+## 10. First hardware data (2026-11-17)
+
+Run on one Vast KVM box (RTX 3090 GA102, host and guest driver 580.159.04, Ubuntu 22.04 host with ffmpeg 4.4.2, kf3 `04613288`), strictly serial, host first then guest; evidence in `traces/open_rows_guest_20261117/` (runs G1, G1n, F1). The rows of section 7 except `torch_ai_bench`, MATLAB and the vkpeak negative control; the guest positives in ONE boot (`APPS_PER_BOOT=100`, the matrix re-runs every non-PASS row alone in a fresh boot: all three reproduced alone). Section 7 asked for one app per boot; the batch is the matrix default of the gate and was chosen for time.
+
+| id | result | evidence |
+|---|---|---|
+| V1 | **held for 10 of 13 guest rows**: `llama_cpp_gen`, `llama_bench`, `torch_correct`, `hf_generate`, `cupy`, `nvenc_h264`, `nvenc_hevc`, `clpeak`, `vkpeak`, `egl_offscreen` are `PASS gpu_use=PASS gpu_auth=host`, `gpu_subs` 56 to 23263 (the floor 32 holds; `egl_offscreen` is the closest, +56). **Three rows failed on their first run, each also or only because of a wrong threshold or proof, and are fixed** (below). After the fixes (run F1, revision `6f9124b48`) `nvenc_h264`, `nvenc_hevc`, `nvdec_h264`, `hashcat` and `blender_cycles` are `PASS gpu_use=PASS` on the host (`gpu_auth=guest`) and in the guest (`gpu_auth=host`, `gpu_subs` 1192 to 23253) | `runs/G1`, `runs/F1` |
+| V2 | **held, 9 of 9 on the host and 9 of 9 in the guest**: every `NEGCTL` line is `CONTROL_OK judged=FAIL`. Two controls are weaker than they look: the `egl_offscreen` switch (the Mesa vendor file) does not select a software renderer on this box, `eglInitialize` fails, so the control exercises the missing proof line only (fixture-only for the CPU renderer); in the guest seven of nine controls are judged by the host census (`no GPU work in the window`), which is the intended authority. `vkpeak` was left out (7.4 minutes per side). `clpeak -p 1` ran on the pocl platform and `hashcat -D 1` on the CPU device | `runs/G1n` |
+| V3 | held after the fix: the second `Reinit context ... pix_fmt: cuda` line is there on both sides (ffmpeg 4.4.2 and the guest's ffmpeg) | `runs/F1` |
+| V4 | held with a correction: hashcat's device line is `* Device #1: NVIDIA GeForce RTX 3090, 7552/7871 MB (1967 MB allocatable), 82MCU` in the guest, but through OpenCL: the CUDA backend is unusable there (`* Device #1: CUDA SDK Toolkit not installed or incorrectly installed.`, bucket 3, the guest image has no toolkit for NVRTC), while the host uses CUDA. The `ENCODER_TAG` is only there with ffmpeg 6 (the guest); ffmpeg 4.4.2 writes no `encoder` stream tag | `runs/G1`, `runs/F1` |
+| V5 | held: the host GPU engine counter is at or above 3 percent in at least one 100 ms sample for every rated row (blender in the guest: 12 busy samples, peak 53 percent) | `runs/G1` |
+| V6 | held: every guest window had a status line before and inside it (no `NOTRUN` from an empty base) | `runs/G1`, `runs/F1` |
+| V7 | not run (MATLAB) | |
+
+The three defects (each a harness or threshold error, shown by the host control or by the measured numbers; each fixed test-first on this branch):
+1. **`mem` cannot be required of a guest.** `blender_cycles` in the guest: census +9512 submissions, GPU 53 percent busy, host video memory 8761 to 8792 MiB (floor 64 MiB): a guest's device memory is the 8 GiB store the host reserves at boot, so a guest allocation never moves host VRAM. `host_engines(app, side)` drops `mem` for `side=guest`; the bare-metal run still needs the rise, the census and the other engines stay required of a guest.
+2. **ffmpeg 4.4.2 rows.** On the bare-metal host `nvenc_h264`, `nvenc_hevc` and `nvdec_h264` were judged FAIL: the nvenc rows filtered the indented stream-mapping line (the only place 4.4 names the encoder; its mp4 has no `encoder` stream tag) and `MAPPING_RX` stopped at the first `)` of `(rawvideo (native) -> h264 (h264_nvenc))`; the nvdec row kept only the first `Reinit context` line (software format), the second says `pix_fmt: cuda`. The nvdec row failed in the guest for the same reason.
+3. **hashcat notice.** `* Device #1: CUDA SDK Toolkit not installed ...` has the shape of a device line and was read as a non-NVIDIA device; a device line ends in `, skipped` or `, <used>/<total> MB`.
+No threshold was relaxed to make a row pass: the proofs now read the line that is really printed, and the `mem` observable is dropped where it cannot exist, with the measured numbers as the test fixture.
+
