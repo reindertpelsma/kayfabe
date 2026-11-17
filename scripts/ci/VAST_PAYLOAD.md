@@ -520,4 +520,4 @@ transport (`gssh_nv`, `tar | ssh tar -x`), and the guest installs it with `pip i
 named failures (`guest-disk`, `wheelhouse-flavour-mismatch`, a failed manifest check) and the NOT_RUN case are in `scripts/kfml/README.md` ("Guest
 mode"); the record is the same `kfml` object with `where: "guest"` and a `transfer` block (`validate_kfml` bounds both). No stage in a plan uses it
 yet: the payload stage would be `boot_capture.sh` with `POST_CAPTURE_HOOK=scripts/ci/kfml_guest_hook.sh KF_KFML_SHA=<sha>`, like the `cuda_guest` rungs,
-and joins `plan_stage_names` only after a KVM box run. Tests `test_kfml_guest.py` (46), mutants `kfml_guest_mutants.py` (18, two named killers each).
+and joins `plan_stage_names` only after a KVM box run. Tests `test_kfml_guest.py` (47), mutants `kfml_guest_mutants.py` (18, two named killers each).

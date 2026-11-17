@@ -1,11 +1,12 @@
 # kfml: ML research-style GPU workloads as gate tests
 
-**STATUS: LIVE, 2026-11-16. MEASURED on one box (run id `kfml_run_20261116`; evidence `traces/kfml_run_20261116/`):
-all six workloads PASS natively on a Vast CUDA container, GeForce RTX 4070 (sm_89, 12 GB), driver 560.35.03
-(CUDA 12.6), wheel flavour cu126 chosen automatically, Ubuntu 22.04, Python 3.10.12, gcc 11.4, nvcc 12.6.85, torch
-2.7.1+cu126, triton 3.3.1.** That is ONE die and ONE driver: nothing here was run on another die, on Blackwell, on
-another driver, on Python 3.12, in Docker, or inside a kayfabe guest (every such claim below stays UNVERIFIED). The
-GPU-free unit tests run in CI (`cd scripts/kfml && python3 -m unittest discover -s tests -t .`).
+**STATUS: LIVE, 2026-11-17. MEASURED natively on two Vast CUDA containers, no kayfabe in the path, ONE box per die: run `kfml_run_20261116` (GeForce RTX
+4070, sm_89, driver 560.35.03 = CUDA 12.6, flavour cu126, Ubuntu 22.04, CPython 3.10.12, gcc 11.4, nvcc 12.6.85, torch 2.7.1+cu126, triton 3.3.1; all six workloads
+PASS) and run `kfml_run_20261117_second_die` (GeForce RTX 2080 Ti, Turing sm_75, driver 595.91.07 = CUDA 13.2, flavour cu128 chosen automatically, nvcc 12.8 from the
+pinned redist archives, torch 2.7.1+cu128; all six PASS after one fix, below). The flavour was derived from the box both times; no die and no driver is pinned. Evidence:
+`traces/kfml_run_20261116/`, `traces/kfml_run_20261117_second_die/`. Never run: an Ampere or Blackwell die, a driver older than CUDA 12.6 (the NOT_RUN path is covered only by GPU-free tests
+with made-up facts), CPython 3.12 installs, Docker, and any kayfabe guest (guest mode below is design plus GPU-free tests).** The GPU-free unit tests run in CI
+(`cd scripts/kfml && python3 -m unittest discover -s tests -t .`).
 
 A standalone Python package. The runner (`python3 -m kfml`) is stdlib-only; torch, triton and the rest
 are imported only inside the per-test child processes. Linux only.
@@ -15,8 +16,9 @@ python3 -m kfml list [--tier mid|large] [--json]
 python3 -m kfml check                      # what is missing and how to install it; changes nothing
 python3 -m kfml run [--only a,b] [--all] [--tier mid|large] [--json out.json] [--record-reference DIR]
                     [--reference DIR] [--log-dir DIR] [--budget-scale X]
-python3 -m kfml setup --venv DIR [--flavor auto|cu128|cu126] [--with-nvcc | --nvcc-if-needed] [--allow-unhashed]
-python3 -m kfml fetch-data                 # datasets only, into the venv
+python3 -m kfml setup --venv DIR [--flavor auto|cu128|cu126] [--with-nvcc | --nvcc-if-needed] [--wheelhouse DIR] [--allow-unhashed]
+python3 -m kfml fetch-data [--from DIR]    # datasets only, into the venv (--from: an offline copy, still sha256-checked)
+python3 -m kfml wheelhouse --out DIR [--flavor auto|all|cu126,cu128] [--flavor-for DRIVER_CUDA:CC] [--guest-python 3.12] [--guest-glibc 2.39] [--with-data] [--verify]
 python3 -m kfml bundle --out DIR [--wheels DIR]
 python3 -m kfml build-wheels --out DIR
 ```
@@ -226,12 +228,14 @@ The Linux propimage tooling has an `inject --wheelhouse` command for the proprie
 branch `claude/linux-image-manifest-inject-20261117` was not pushed), so this module uses the payload's own transport. The wheelhouse layout is plain
 (`<flavor>/wheels/*.whl`, `pip --find-links` compatible), so that command can take the same directory.
 
-GPU-free tests: `scripts/ci/test_kfml_guest.py` (fake transport, 46 tests), `kfml_guest_mutants.py` (18 mutants, two named killers each), and in this
-package `tests/test_wheelhouse.py`. WHAT IS NOT PROVEN (needs a KVM box, see the list at the end of this section): every step above in a real guest.
+GPU-free tests: `scripts/ci/test_kfml_guest.py` (fake transport, 47 tests), `kfml_guest_mutants.py` (18 mutants, two named killers each), and in this
+package `tests/test_wheelhouse.py`. Not run in any guest; that needs a KVM box (list at the end of this section).
 
-Sizes and times: see `traces/kfml_run_20261117_second_die/` (MEASURED wheelhouse sizes per flavour on the second die's box) and
-`ci/vast-broker/bandwidth.json` (the `kfml` entry). Copy speed and guest install time are ESTIMATES until a guest run (the copy is `tar | ssh`, bound
-by the guest's ssh CPU; a virtfs share, as `llm_parity` uses, is the fallback if it is too slow).
+Sizes and times, MEASURED in `kfml_run_20261117_second_die` on a normal container (not a guest): the wheelhouse of ONE flavour for CPython 3.12 is 3.08 GB for cu126
+(wheels 3 026 998 392 B + redist nvcc 52 057 232 B) and 3.96 GB for cu128 (3 881 029 847 B + 81 298 228 B); both together 7.04 GB (64 files) built in 112 s; the cu128 CPython 3.10 wheelhouse with both
+datasets is 4 133 802 925 B (34 files). The guest-side steps ran offline on that box in 7 s (verify) + 67 s (install) + 1 s (data) + 82 s (the mid tier, warm; the large tier adds
+`managed_oversub`, about 35 s). The copy host to guest is NOT measured: it is `tar | ssh` of about 4.1 GB; at 9 MB/s (what a plain scp to a Vast box reached, a lower bound for an ssh stream) it is 8 minutes, at
+100 MB/s 40 seconds: ESTIMATE, bound by the guest's ssh CPU; a virtfs share, as `llm_parity` uses, is the fallback if it is slow. The stage needs the guest to keep about 2x the wheelhouse plus 6 GB free (about 14 GB).
 
 What needs a KVM box (nothing of this has run): (1) the fat guest has `python3-venv`, `python3-dev`, a C++ compiler and the matching nvcc (else
 `--nvcc-if-needed` installs the redist one: the copy of its three archives is in the wheelhouse), and enough disk (the stage refuses with
@@ -285,19 +289,33 @@ Six workloads, one box. Findings, each with its decision:
 * CIFAR-10: the pin in `pins.json` was compared with a second download from the dataset's own server (sha256 identical to the one the PC run
   printed on 2026-11-12), about 15 min at roughly 0.2 MB/s: that server, not the box, is the slow step.
 
+## Second die, 2026-11-17 (`kfml_run_20261117_second_die`): what broke, and what it was
+
+RTX 2080 Ti (sm_75), driver 595.91.07, flavour cu128 chosen automatically (the first die got cu126). Findings:
+
+* `triton_kernels` FAIL `RuntimeError: PassManager::run failed` (`Unsupported conversion from f16 to f16`). Run `kfml_run_20261117_second_die` showed: Triton 3.3.1 fails to
+  compile the matmul kernel with fp16 or bf16 inputs for sm_75 for every configuration tried (nine), and compiles it with fp32 inputs. A toolchain limit of the pinned
+  Triton on Turing: not a test bug, not the driver, not kayfabe, worth an upstream report (not filed; not looked up). Decision: below sm_80 a compile failure of the fp16
+  variant is recorded (`metrics.fp16_dot_compile`) and the kernel is checked with fp32 inputs (`matmul_input_dtype`); at or above sm_80 it stays a FAIL. The row is
+  PASS with that metric, so a Triton that fixes it flips the metric without a change here. This closes the "Triton autotune on sm_75" item as far as that one kernel goes; the
+  autotune shared-memory limits of the other configs were not the cause (they all failed the same way at compile time).
+* nanogpt_compile took the fp16 + GradScaler path (no bf16 on Turing) and matches the 4070's bf16 path within 0.0015 nats (tolerance 0.25); the ConvNet accuracy is 0.7275 against
+  0.7375 on the 4070 (tolerance 0.10, seeds and the algorithm are the same; the difference is numerics, not a defect). `torch.compile` on Turing works (answers the old
+  "`torch.compile` behavior on Turing" question for this torch and triton).
+* The offline wheelhouse proof found two bugs (pip honours `--index-url` inside a requirements file even with `--no-index`; `pip download --platform` does not expand manylinux tags):
+  both fixed with unit tests (guest mode below).
+* The CIFAR-10 server gave about 45 KB/s per connection. The archive was copied in after six parallel ranged downloads (sha256 equal to the pin; a third confirmation), so the stage's own
+  fetch of that file was not exercised on this box.
+
 ## What is not verified
 
-* Everything on a second die, on Blackwell, on another driver or distro, and on CPython 3.12/3.13: ONE die (RTX 4070 sm_89), ONE driver
-  (560.35.03), one container (Ubuntu 22.04, CPython 3.10.12, gcc 11.4) were measured. The cu128 wheels were also run on that same
-  driver as a supplement (all six PASS, cu128 redist nvcc 12.8): that is a statement about cu128 wheels with a CUDA 12.6 driver, not
-  about a CUDA 12.8 driver.
-* The loss/accuracy thresholds on any die but this one (the measured values sit far inside them: compiled-vs-eager window diff
-  0.0003..0.0019 against 0.15, amp-vs-fp32 0.0026 against 0.25, ConvNet accuracy 0.7425 amp vs 0.744 fp32).
-* `torch.compile` on Turing; the Triton autotune configs on sm_75 shared-memory limits (OutOfResources configs should be
-  skipped by the autotuner); `managed_oversub` on anything but this card; the guest behaviour of every row (`KF_ML_GUEST=1`).
-* The driver minimum table `MIN_DRIVER_FOR_CUDA`: only 12.6 -> 560.x is consistent with the measured driver; the others are NVIDIA's
-  numbers from memory of the release notes. The selection reads `nvidia-smi`'s `CUDA Version` first, so the table matters only
-  as a fallback and for the wording of the old "driver too old" message.
-* Docker; `build-wheels`; the lock resolved for CPython 3.12/3.13; the assembled `--with-nvcc` tree with a host compiler
-  that nvcc does not support; the stage under the payload on a kayfabe box (`python3-venv`, `python3-dev` and a C++ compiler on the
-  KVM image).
+* Everything on a third die class, on Blackwell, on a driver older than CUDA 12.6 (so the NOT_RUN-because-no-flavour path on a real box), on another distro, and on CPython
+  3.12/3.13: TWO dies (RTX 4070 sm_89 / driver 560.35.03 / cu126; RTX 2080 Ti sm_75 / driver 595.91.07 / cu128), one container image family (Ubuntu 22.04, CPython 3.10.12, gcc 11.4)
+  were measured. The cu128 wheels were also run on the 560.35.03 driver (supplement of the first run: all six PASS), which says nothing about other CUDA 12.8 drivers.
+* The loss/accuracy thresholds on any die but these two (the measured values sit far inside them; see the traces).
+* `torch.compile` and Triton on anything but sm_75 and sm_89 (the fp16 `tl.dot` fallback is only exercised on sm_75); `managed_oversub` on anything but these two cards; the guest behaviour of every row
+  (`KF_ML_GUEST=1`), guest mode included.
+* The driver minimum table `MIN_DRIVER_FOR_CUDA`: 12.6 -> 560.x and 13.2 (driver 595.91.07) are consistent with the measured drivers; the others are NVIDIA's numbers from memory of the release
+  notes. The selection reads `nvidia-smi`'s `CUDA Version` first, so the table matters only as a fallback and for the wording of the old "driver too old" message.
+* Docker; `build-wheels`; the lock resolved for CPython 3.12/3.13 (a 3.12 wheelhouse was built and hashed, not installed); the assembled `--with-nvcc` tree with a host compiler that nvcc does not
+  support; the stage under the payload on a kayfabe box (`python3-venv`, `python3-dev` and a C++ compiler on the KVM image); everything in guest mode that needs a guest.

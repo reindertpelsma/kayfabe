@@ -370,7 +370,7 @@
      "url": null,
      "basis": "measured",
      "date": "2026-11-17",
-     "source": "run kfml_run_20261117_second_die (traces/kfml_run_20261117_second_die/wheelhouse_manifest_summary.txt): `kfml wheelhouse --flavor all --guest-python 3.12` on a Vast container, MANIFEST.json file sizes: cu126 wheels 3026998392 + redist 52057232, cu128 wheels 3881029847 + redist 81298228 (both flavours together 7041383699 bytes, 64 files, 112 s)",
+     "source": "run kfml_run_20261117_second_die (traces/kfml_run_20261117_second_die/wheelhouse/wheelhouse_manifest_summary.txt): `kfml wheelhouse --flavor all --guest-python 3.12` on a Vast container, MANIFEST.json file sizes: cu126 wheels 3026998392 + redist 52057232, cu128 wheels 3881029847 + redist 81298228 (both flavours together 7041383699 bytes, 64 files, 112 s)",
      "note": "the host stage downloads one flavour; the largest is charged. CPython 3.10 wheels (the box's own interpreter) differ by a few MB (triton, numpy, pillow), not measured byte for byte",
      "calibrate": true
     },

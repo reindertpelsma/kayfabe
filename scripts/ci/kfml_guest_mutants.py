@@ -30,6 +30,7 @@ SUITE = "test_kfml_guest."
 COPY_DIRS = ["scripts/ci", "scripts/kfci", "scripts/kfml"]
 COPY_FILES = [
     "scripts/bench/native_xid_guard.py",
+    "scripts/bench/gssh_nv",
     "scripts/bench/native_fault_names.json",
     "scripts/bench/specviewperf/lanes.json",
     "ci/vast-broker/planner/schemas/instruction.schema.json",
