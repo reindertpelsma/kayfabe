@@ -1,0 +1,12 @@
+W349AUTHORED key=rm.0x20802a08 die=AD106 branch=580: rm.0x20802a08: unmeasured on AD106 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (CE fault-method buffer size: AUTHORED, 20 KiB (authored::CE_FAULT_METHOD_BUFFER_SIZE_WHY)) - labelled, not a measurement
+W349AUTHORED key=rm.0x20800a59 die=AD106 branch=580: rm.0x20800a59: unmeasured on AD106 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (GMMU fault-buffer sizes: AUTHORED, chosen equal to a stock GA106 GSP (authored::GMMU_STATIC_WHY); the AD104 states other numbers (matrix D-1)) - labelled, not a measurement
+W349REFUSE key=rm.0x20802801 die=AD106 branch=580: rm.0x20802801: unmeasured on AD106 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595, AD102/580, TU106/580) — refused, a neighbour's row is never served (refusals so far: 5)
+W349REFUSE key=rm.0x20802806 die=AD106 branch=580: rm.0x20802806: unmeasured on AD106 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595, AD102/580, TU106/580) — refused, a neighbour's row is never served (refusals so far: 6)
+---
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+---
+391

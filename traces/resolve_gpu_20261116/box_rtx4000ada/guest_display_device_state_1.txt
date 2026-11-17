@@ -1,0 +1,60 @@
+
+
+FriendlyName       : Video Controller (VGA Compatible)
+Status             : Error
+Problem            : CM_PROB_REINSTALL
+ProblemDescription : 
+
+FriendlyName       : Microsoft Basic Display Adapter
+Status             : Unknown
+Problem            : CM_PROB_PHANTOM
+ProblemDescription : 
+
+FriendlyName       : NVIDIA GeForce RTX 4070
+Status             : Unknown
+Problem            : CM_PROB_PHANTOM
+ProblemDescription : 
+
+
+
+
+
+
+TimeCreated : 11/12/2026 4:17:56 PM
+Id          : 153
+Message     : 
+
+TimeCreated : 11/12/2026 4:17:56 PM
+Id          : 153
+Message     : 
+
+TimeCreated : 11/12/2026 4:17:54 PM
+Id          : 153
+Message     : 
+
+
+
+
+
+TimeCreated           ProviderName                             Id
+-----------           ------------                             --
+11/12/2026 5:07:33 PM Service Control Manager                7000
+11/12/2026 5:07:33 PM Service Control Manager                7031
+11/12/2026 5:07:28 PM Service Control Manager                7031
+11/12/2026 5:01:56 PM Microsoft-Windows-WindowsUpdateClient    20
+11/12/2026 4:17:56 PM nvlddmkm                                153
+11/12/2026 4:17:56 PM nvlddmkm                                153
+11/12/2026 4:17:54 PM nvlddmkm                                153
+11/12/2026 3:17:19 PM Service Control Manager                7000
+11/12/2026 3:17:19 PM Service Control Manager                7009
+11/12/2026 3:11:52 PM Microsoft-Windows-DistributedCOM      10010
+11/12/2026 2:56:44 PM Service Control Manager                7000
+11/12/2026 2:56:44 PM Service Control Manager                7031
+
+
+
+NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NV
+
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm
+    EnableGpuFirmware    REG_DWORD    0x1

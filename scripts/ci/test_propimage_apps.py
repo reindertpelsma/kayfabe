@@ -400,9 +400,9 @@ class Boots(unittest.TestCase):
         self.assertEqual(vast_report.PROPIMAGE_APPS, pa.APPS)
         self.assertEqual(vast_report.PROPIMAGE_EXPECTED_KIND, pa.EXPECTED_KIND)
 
-    def test_real_timeouts_make_three_boots_each_under_the_budget(self):
+    def test_real_timeouts_make_three_boots_each_under_the_budget(self):  # four since the Resolve row got a 1800 s budget (2026-11-16)
         boots = pa.plan_boots(self.timeouts)
-        self.assertEqual(boots, [["superposition", "3dmark"], ["solidworks", "resolve", "edrawings", "edge"], ["wukong"]])
+        self.assertEqual(boots, [["superposition", "3dmark"], ["solidworks", "resolve"], ["edrawings", "edge"], ["wukong"]])
         for b in boots:
             self.assertLessEqual(sum(self.timeouts[a] for a in b), pa.BOOT_BUDGET_S)
         self.assertLess(pa.BOOT_BUDGET_S + 600, 55 * 60 + 1)
@@ -784,18 +784,18 @@ class Run(unittest.TestCase):
         rec = pa.run(env.ctx)
         self.assertEqual((rec["verdict"], rec["reason"], rec["failed"]), ("PASS", "", []), rec["apps"])
         self.assertEqual([a["app"] for a in rec["apps"]], list(pa.APPS))
-        self.assertEqual([b["apps"] for b in rec["boots"]], [["superposition", "3dmark"], ["solidworks", "resolve", "edrawings", "edge"], ["wukong"]])
+        self.assertEqual([b["apps"] for b in rec["boots"]], [["superposition", "3dmark"], ["solidworks", "resolve"], ["edrawings", "edge"], ["wukong"]])
         self.assertTrue(all(b["offline"] for b in rec["boots"]))
         self.assertEqual(rec["family"], "ada")
         three = next(a for a in rec["apps"] if a["app"] == "3dmark")
         self.assertEqual(three["scores"], {"3dmark": 7297, "graphics": 7387})
         self.assertTrue(all(a["kind"] == pa.EXPECTED_KIND[a["app"]] for a in rec["apps"]))
         vast_report.validate_propimage_apps(rec)
-        self.assertEqual(env.boots_seen[2][env.boots_seen[2].index("--fb-mb") + 1], "8192")
+        self.assertEqual(env.boots_seen[3][env.boots_seen[3].index("--fb-mb") + 1], "8192")  # the Wukong boot is the last
         self.assertIn("--superposition-run", env.boots_seen[0])
         self.assertNotIn("--superposition-run", env.boots_seen[1])
         self.assertNotIn("--fb-mb", env.boots_seen[0])
-        self.assertEqual(env.zip_at_boot, [False, False, False])
+        self.assertEqual(env.zip_at_boot, [False, False, False, False])
         for argv in env.boots_seen:
             self.assertNotIn("--zip", argv)
             self.assertEqual(argv[argv.index("--display") + 1], "broker")
@@ -968,7 +968,7 @@ class Run(unittest.TestCase):
             return orig(ctx, argv, log, timeout, mark)
         env.ctx.boot_runner = boot
         pa.run(env.ctx)
-        self.assertEqual(seen, [False, True, True])
+        self.assertEqual(seen, [False, True, True, True])
 
     def test_only_text_evidence_is_copied(self):
         env = Env(self)
@@ -1023,7 +1023,7 @@ class Run(unittest.TestCase):
         env = Env(self)
         env.ctx.deadline_epoch = time.time() + 10 * 3600
         self.assertEqual(pa.run(env.ctx)["verdict"], "PASS")
-        self.assertEqual(len(env.boots_seen), 3)
+        self.assertEqual(len(env.boots_seen), 4)
 
     def test_a_silent_kernel_log_refuses_the_run_before_any_download(self):
         env = Env(self)

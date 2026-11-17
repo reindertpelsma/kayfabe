@@ -1,0 +1,14 @@
+{
+ "lines": 21357,
+ "unserviced": 2091,
+ "unserviced_codes": {
+  "76": 2091
+ },
+ "foreign_class": 0,
+ "dead_channels": 0,
+ "channels_retired": 17,
+ "xid": 0,
+ "tdr_or_timeout": 0,
+ "refused_leaves_absent": 109,
+ "patterns": []
+}

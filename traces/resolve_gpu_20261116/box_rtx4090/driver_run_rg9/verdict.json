@@ -1,0 +1,129 @@
+{
+ "app": "resolve",
+ "ok": false,
+ "evidence": "FILE",
+ "signal": "",
+ "secs": 661,
+ "platform": "kf3",
+ "renders": {
+  "h264": {
+   "label": "H.264 MP4, UHD",
+   "status": "NOT_RUN",
+   "reason": "not reached"
+  },
+  "dnxhr": {
+   "label": "Avid DNxHR MOV, UHD",
+   "status": "NOT_RUN",
+   "reason": "not reached"
+  },
+  "prores": {
+   "label": "Apple ProRes MOV, UHD",
+   "status": "NOT_RUN",
+   "reason": "not reached"
+  },
+  "png": {
+   "label": "PNG image sequence, UHD",
+   "status": "NOT_RUN",
+   "reason": "not reached"
+  },
+  "hevc": {
+   "label": "H.265 MP4, 720p (software HEVC)",
+   "status": "NOT_RUN",
+   "reason": "not reached"
+  }
+ },
+ "findings": [
+  "guest nvidia-smi reported N/A for utilization.gpu/memory/encoder/decoder in every sample; the guest assertion therefore uses the WDDM per-engine counters of the Resolve process",
+  "grading was driven but fewer than three nodes could be read back on any clip: grade not proven"
+ ],
+ "problems": [
+  "driver step 'deliver page' did not complete (stage init)",
+  "driver step 'timeline on deliver page' did not complete (stage init)",
+  "guest script error: Deliver page did not open",
+  "Resolve.exe died during the row: Application Error id=1000 Faulting application name: Resolve.exe, version: 21.2.0.6, time stamp: 0x00000000? | Faulting module name: nvoglv64.dll, version: 32.0",
+  "render h264 was not reached",
+  "render dnxhr was not reached",
+  "render prores was not reached",
+  "render png was not reached",
+  "render hevc was not reached"
+ ],
+ "census_whole_row": {
+  "lines": 12530,
+  "unserviced": 1596,
+  "unserviced_codes": {
+   "76": 1596
+  },
+  "foreign_class": 0,
+  "dead_channels": 0,
+  "channels_retired": 16,
+  "xid": 0,
+  "tdr_or_timeout": 403,
+  "refused_leaves_absent": 3,
+  "patterns": [
+   {
+    "n": 372,
+    "pattern": "kfN: family=Ada phase=Running trapped=N applied=N refused=N serviced=N ram_refused=N unshadowed_writes=N read_exits=N last_off=NxbN mem[inva"
+   },
+   {
+    "n": 13,
+    "pattern": "kfN: family=Ada phase=Running trapped=N applied=N refused=N serviced=N ram_refused=N unshadowed_writes=N read_exits=N last_off=NxNcN mem[inv"
+   },
+   {
+    "n": 9,
+    "pattern": "kfN: family=Ada phase=Running trapped=N applied=N refused=N serviced=N ram_refused=N unshadowed_writes=N read_exits=N last_off=NxN mem[inval"
+   },
+   {
+    "n": 4,
+    "pattern": "kfN: family=Ada phase=Running trapped=N applied=N refused=N serviced=N ram_refused=N unshadowed_writes=N read_exits=N last_off=NxbbN mem[inv"
+   },
+   {
+    "n": 4,
+    "pattern": "kfN: family=Ada phase=Running trapped=N applied=N refused=N serviced=N ram_refused=N unshadowed_writes=N read_exits=N last_off=NxbNbN mem[in"
+   },
+   {
+    "n": 1,
+    "pattern": "kfN: family=Ada phase=Running trapped=N applied=N refused=N serviced=N ram_refused=N unshadowed_writes=N read_exits=N last_off=NxNdN mem[inv"
+   }
+  ]
+ },
+ "guest_nvidia_smi": {
+  "samples": 284,
+  "all_na": 284,
+  "utilization_numeric": 0
+ },
+ "resolve_log": {
+  "compute_api": "CUDA",
+  "gpus_detected": 1,
+  "device": "NVIDIA GeForce RTX 4090",
+  "cuda_board_manager": true,
+  "nvenc": true,
+  "nvdec": true,
+  "gpudetect_errors": [
+   "ct            | ERROR | 2026-11-12 17:58:00,725 | NVML Error Unknown Error (999): Querying device current PCI link width"
+  ]
+ },
+ "grade_nodes": [],
+ "guest_goto_debug": [
+  "page=Deliver elements=220 main=True button=True",
+  "invoked",
+  "marker=Render Queue found=False elements=0 like="
+ ],
+ "guest_app_events": [
+  "Application Error id=1000 Faulting application name: Resolve.exe, version: 21.2.0.6, time stamp: 0x00000000? | Faulting module name: nvoglv64.dll, version: 32.0.15.8088, time stamp: 0x6885c454? | Exception code: 0xc0000409? | Fault offset: ",
+  "Application Error id=1000 Faulting application name: nvidia-smi.exe, version: 8.17.15.8088, time stamp: 0x6885c44f? | Faulting module name: nvml.dll, version: 8.17.15.8088, time stamp: 0x6885c42f? | Exception code: 0xc0000005? | Fault offse",
+  "NVIDIA OpenGL Driver id=1 Unable to recover from a kernel exception. The application must close. |  |  | Error code: 3 (subcode 2)"
+ ],
+ "guest_nvlddmkm_events": [
+  "id=153 2026-11-12T18:02:45.2826006+00:00",
+  "id=153 2026-11-12T18:02:44.9966045+00:00",
+  "id=153 2026-11-12T18:02:42.0016784+00:00"
+ ],
+ "failure_class": "CRASH",
+ "lane": "gate",
+ "other_suites": {
+  "pugetbench": "NOT RUN: package not pinned (private object, owner to supply); PugetBench for DaVinci Resolve supports the free edition only up to v21.0 and the image has 21.2.0.6 (scripting was removed from free in 21.1)",
+  "resolve_builtin_benchmark": "none exists in Resolve; the Deliver page's render speed is a UI readout only (not parsed)"
+ },
+ "status": "INCONCLUSIVE",
+ "error": "driver step 'deliver page' did not complete (stage init); driver step 'timeline on deliver page' did not complete (stage init); guest script error: Deliver page did not open; Resolve.exe died during the row: Application Error id=1000 Faulting application name: Resolve.exe, version: 21.2.0.6, time stamp: 0x00000000? | Faulting module name: nvoglv64.dll, version: 32.0; render h264 was not reached; render dnxhr was not reached"
+}
