@@ -15,8 +15,8 @@ known-unsupported policy takes precedence; raw observed columns remain visible:
   HOST_LIMIT       host FAIL / TIMEOUT / NOTRUN on the same box (bare metal first)      -> documented exception
   KNOWN_UNSUPPORTED UVM: explicitly unsupported until the per-fault GR hold is measured and bounded
   POLICY_SKIP      not run by policy (docs/DOWNLOADS.md terms status)                   -> not a result
-  DISCOVERY        a row that reports and never gates (vkcts: docs/design/V3_VULKAN_CTS_ROW.md); its
-                   host-versus-guest comparison is the per-case diff (vkcts_diff.tsv), not this table
+  DISCOVERY        a row that reports and never gates (vkcts: docs/design/V3_VULKAN_CTS_ROW.md; vllm, tensorrt, jax: docs/design/V3_OPEN_ML_ROWS.md); the
+                   host-versus-guest comparison is the per-case diff (vkcts_diff.tsv) or `mlrows.py compare`, not this table
   UNATTRIBUTED     host PASS but the guest has no usable row (boot failure, guest dead,
                    no isolated re-run, or a GPU-use proof that could not be judged:
                    NOTRUN with `gpu-use:NOT_RUN` in its note)                           -> re-run, never counted
@@ -38,6 +38,9 @@ POLICY_SKIP = {
 }
 DISCOVERY = {
     "vkcts": "discovery lane (docs/design/V3_VULKAN_CTS_ROW.md): the row reports and never gates; the host-vs-guest per-case diff is vkcts_diff.tsv",
+    "vllm": "discovery lane (docs/design/V3_OPEN_ML_ROWS.md): the row reports and never gates; the host-versus-guest comparison is mlrows.py compare (ML_COMPARE lines)",
+    "tensorrt": "discovery lane (docs/design/V3_OPEN_ML_ROWS.md): the row reports and never gates; the host-versus-guest comparison is mlrows.py compare (ML_COMPARE lines)",
+    "jax": "discovery lane (docs/design/V3_OPEN_ML_ROWS.md): the row reports and never gates; the host-versus-guest comparison is mlrows.py compare (ML_COMPARE lines)",
 }
 KNOWN_UNSUPPORTED = json.loads((Path(__file__).resolve().parent / "known_unsupported.json").read_text())["known_unsupported"]
 PASS = "PASS"

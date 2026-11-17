@@ -1,0 +1,42 @@
+{
+ "driver_cuda": [
+  13,
+  0
+ ],
+ "flavour": "cu13",
+ "lock_sha256": "6ce8b6642df9849b7c71794f5dbebd715c0446725b9076810a2c694b8c5fb1dc",
+ "model": null,
+ "pip_seconds": 176.8,
+ "python": "3.12.3",
+ "row": "jax",
+ "status": "ok",
+ "venv_bytes": 4381805545
+}
+{
+ "driver_cuda": [
+  13,
+  0
+ ],
+ "flavour": "cu13",
+ "lock_sha256": "cffe3e1b953acd8cf909e199d9ee4dde65e3244e60d0add68d624d69bc13cbdc",
+ "model": null,
+ "pip_seconds": 335.3,
+ "python": "3.12.3",
+ "row": "tensorrt",
+ "status": "ok",
+ "venv_bytes": 7335050756
+}
+{
+ "driver_cuda": [
+  13,
+  0
+ ],
+ "flavour": "cu13",
+ "lock_sha256": "b170c21f4d74462cd26f152f979825d931b522be1a76b802d0c5916fceac7f77",
+ "model": "8 files, 272437465 bytes",
+ "pip_seconds": 465.1,
+ "python": "3.12.3",
+ "row": "vllm",
+ "status": "ok",
+ "venv_bytes": 9633370622
+}

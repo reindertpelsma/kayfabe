@@ -14,7 +14,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../.." && pwd)"
 SIDE=${1:?host|guest}; RUN=${2:?run}; shift 2
 R=/workspace/apps/results/$RUN; mkdir -p "$R"
 say(){ echo "[apps_matrix $(date -Is)] $*"; }
-ALL=$(bash "$HERE/run_apps.sh" x listall)   # `all` leaves out the discovery rows (vkcts): name them to run them
+ALL=$(bash "$HERE/run_apps.sh" x listall)   # `all` leaves out the discovery rows (vkcts vllm tensorrt jax): name them to run them
+MLROWS=${KF_APPS_ROOT:-/workspace/apps}/mlrows   # the open ML rows' staged venvs and model (docs/design/V3_OPEN_ML_ROWS.md); `mlrows.py setup` makes them
 [ "${1:-}" = all ] && set -- $ALL
 say "START side=$SIDE run=$RUN rev=$(git -C "$REPO" rev-parse --short=8 HEAD) apps=$#"
 busy(){ pgrep -x qemu-system-x86 >/dev/null || pgrep -x cargo >/dev/null || pgrep -x rustc >/dev/null; }
@@ -27,6 +28,12 @@ if [ "$SIDE" = host ]; then
   # discovery row vkcts (docs/design/V3_VULKAN_CTS_ROW.md): the tool dir, and the artifact `vkcts.py build` made
   mkdir -p /opt/apps/bundle/vkcts_tool && cp -f "$HERE"/vkcts/{vkcts.py,vkcts_lib.py,pins.json,caselist.tsv} "$REPO/scripts/bench/windows/gpu_assert.py" /opt/apps/bundle/vkcts_tool/
   [ -d "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current" ] && ln -sfn "$(readlink -f "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current")" /opt/apps/bundle/vkcts
+  # discovery rows vllm / tensorrt / jax: the tool dir, and `mlrows.py setup` (network, hashed locks) before the GPU lock is taken; run_apps.sh finds the venvs at $B/mlrows
+  MLR=$(for a in "$@"; do case $a in vllm|tensorrt|jax) printf '%s,' "$a";; esac; done); MLR=${MLR%,}
+  if [ -n "$MLR" ]; then
+    rm -rf /opt/apps/bundle/mlrows_tool && cp -r "$HERE/mlrows" /opt/apps/bundle/mlrows_tool && ln -sfn "$MLROWS" /opt/apps/bundle/mlrows
+    python3 -B -I "$HERE/mlrows/mlrows.py" setup --root "$MLROWS" --rows "$MLR" | tee -a "$R/mlrows_setup.log"
+  fi
   exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9   # the host GPU is the bench GPU
   # GPU use on the bare-metal baseline: the app's own proof only (no kf3 log here). KF_NEGCTL=1 runs the CPU form of each row into host_negctl.res.
   RES=host.res; [ "${KF_NEGCTL:-0}" = 1 ] && RES=host_negctl.res
@@ -91,4 +98,8 @@ for row in nvcodec_matrix nvml_dcgm; do
   fi
 done
 [ -f "$R/vkcts.host.log" ] && [ -f "$R/vkcts.guest.log" ] && python3 "$HERE/vkcts/vkcts.py" diff "$R" | grep -a '^VKCTS_DIFF'
+# the open ML rows: host control against guest (mlrows.py compare reads the MLROWS_RESULT lines; a CANDIDATE is a finding, not a failure of the run)
+for row in vllm tensorrt jax; do
+  [ -f "$R/$row.host.log" ] && [ -f "$R/$row.guest.log" ] && { python3 -B -I "$HERE/mlrows/mlrows.py" compare "$row" "$R/$row.host.log" "$R/$row.guest.log" > "$R/$row.compare.txt" 2>&1; say "COMPARE $row: $(tail -n 1 "$R/$row.compare.txt")"; }
+done
 say "GUEST_DONE batched: $(grep -c 'verdict=PASS' "$R/guest.res") pass / $(wc -l < "$R/guest.res");  isolated re-runs: $(grep -c 'verdict=PASS' "$R/guest_isolated.res" 2>/dev/null || echo 0) pass / $(wc -l < "$R/guest_isolated.res" 2>/dev/null || echo 0)"

@@ -221,3 +221,5 @@ The open Vulkan CTS row (2026-11-17; design `docs/design/V3_VULKAN_CTS_ROW.md`, 
 `traces/vkcts_host_20261117/`, never in a guest): `test_vkcts.py` (pins and the CTS fetch script check, the committed case list and its digest, the QPA parser against a
 fixture of a real log, crash and hang attribution, the block format, the host-versus-guest diff table, the row inside `scripts/apps/run_apps.sh`, GPU-use assertion with a
 fake `nvidia-smi`; GPU-free, no network, a Python stand-in for `deqp-vk`); mutants `vkcts_mutants.py` (two named killers each, in `ci.yml`).
+
+Open ML rows (2026-11-17, [design](../../docs/design/V3_OPEN_ML_ROWS.md), [manual](../../docs/howto/open-ml-rows.md)): `test_mlrows.py` (GPU-free tests of `scripts/apps/mlrows/`: hashed locks, flavour choice, model check, judges, environment, wiring, GPU-use judge) and `mlrows_mutants.py` (two named killers per mutant, run by `ci.yml`).

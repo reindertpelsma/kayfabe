@@ -30,6 +30,9 @@ case " $APPS " in *" vkcts "*)
   tar -C "$HERE/vkcts" -cf - vkcts.py vkcts_lib.py pins.json caselist.tsv | $G 'sudo mkdir -p /opt/apps/bundle/vkcts_tool && sudo tar -C /opt/apps/bundle/vkcts_tool -xf -'
   tar -C "$(readlink -f "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current")" -cf - . | $G 'sudo mkdir -p /opt/apps/bundle/vkcts && sudo tar -C /opt/apps/bundle/vkcts -xf -';;
 esac
+# discovery rows vllm / tensorrt / jax (docs/design/V3_OPEN_ML_ROWS.md): the tool dir and the venvs (and the model) `mlrows.py setup` staged on the host; the guest has no network
+MLR=$(for a in $APPS; do case $a in vllm|tensorrt|jax) printf '%s,' "$a";; esac; done); MLR=${MLR%,}
+[ -n "$MLR" ] && python3 -B -I "$HERE/mlrows/mlrows.py" push --root "${KF_APPS_ROOT:-/workspace/apps}/mlrows" --rows "$MLR" --transport "$G"
 $G 'sudo rm -rf /opt/apps/out/guest'
 echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,driver_version,persistence_mode --format=csv,noheader' 2>&1 | head -1)"
 # ⊘ boot_capture.sh reloads ONLY `nvidia`; the host has nvidia_modeset + nvidia_drm loaded, and the

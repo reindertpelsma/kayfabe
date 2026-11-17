@@ -210,6 +210,8 @@ jobs:
           python3 scripts/ci/open_rows_mutants.py --jobs 4
           # GPU-use assertion (owner requirement 2026-11-17, docs/design/V3_GPU_USE_ASSERTION.md): the judge, the Linux wiring and the Windows llama proofs; >=2 named killers per mutant.
           python3 scripts/ci/gpu_use_mutants.py --jobs 4
+          # Open ML rows (vllm, tensorrt, jax; 2026-11-17, docs/design/V3_OPEN_ML_ROWS.md): hashed locks, flavour choice, model check, judges, environment, wiring; >=2 named killers per mutant. The tests run in the discover above.
+          python3 -B -I scripts/ci/mlrows_mutants.py --jobs 4
           # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
           python3 scripts/ci/stream_url_mutants.py
           # Standalone trust helper and lint (2026-11-17): anchors, the default mode, the explicit lift, user input, evidence; the lint's rules: two named killers per mutant.

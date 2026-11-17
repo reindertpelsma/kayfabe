@@ -109,8 +109,12 @@ EOF
 )
 # DISCOVERY rows report and never gate: they are in `list` (so the names are known) but not in `listall` / `all`, and in no gate list.
 # vkcts: the open Vulkan CTS subset (docs/design/V3_VULKAN_CTS_ROW.md). Needs `vkcts.py build` once ($B/vkcts) and the tool dir $B/vkcts_tool.
+# vllm, tensorrt, jax: the open ML rows (docs/design/V3_OPEN_ML_ROWS.md). Each needs `mlrows.py setup` once ($B/mlrows: one venv per row from a hashed lock) and the tool dir $B/mlrows_tool.
 DISCOVERY=$(cat <<'EOF'
 vkcts|2700|VKCTS_SUMMARY|python3 $B/vkcts_tool/vkcts.py run --side $SIDE --artifact $B/vkcts --out $O/vkcts
+vllm|1800|VLLM_SUMMARY status=PASS|python3 -B -I $B/mlrows_tool/mlrows.py run vllm --root $B/mlrows --out $O/vllm
+tensorrt|1500|TENSORRT_SUMMARY status=PASS|python3 -B -I $B/mlrows_tool/mlrows.py run tensorrt --root $B/mlrows --out $O/tensorrt
+jax|1200|JAX_SUMMARY status=PASS|python3 -B -I $B/mlrows_tool/mlrows.py run jax --root $B/mlrows --out $O/jax
 EOF
 )
 [ "${1:-}" = list ] && { { echo "$APPS"; echo "$DISCOVERY"; } | cut -d'|' -f1 | tr '\n' ' '; echo; exit 0; }
@@ -142,6 +146,8 @@ for app in "$@"; do
   [ "$name" = clpeak ] && [ $v = PASS ] && grep -qaE 'clFinish \(-|Tests skipped' "$log" && { v=FAIL; note="clpeak: $(grep -aE -c 'Tests skipped' "$log") test groups skipped ($(grep -aoE -m1 'cl[A-Za-z]+ \(-[0-9]+\)' "$log"))"; }
   # an app may state its own note in one line, `APPNOTE <text>` (case names in its log would match the generic grep above)
   appnote=$(grep -a -m1 '^APPNOTE ' "$log" | cut -c9-160 | tr '|' '/'); [ -n "$appnote" ] && note=$appnote
+  # an app may say it was NOT RUN for a named reason (the hardware or its own configuration cannot take it): `APPNOTRUN <reason>` with exit 0; never a result about the GPU
+  appnr=$(grep -a -m1 '^APPNOTRUN ' "$log" | cut -c11-160 | tr '|' '/'); [ -n "$appnr" ] && [ "$rc" -eq 0 ] && { v=NOTRUN; note="not-run:$appnr"; }
   echo "APPRES side=$SIDE app=$name verdict=$v rc=$rc secs=$((t1-t0)) quiet=$quiet note=${note:--}"
   grep -a -E '^(OUTSHA|DIGEST) ' "$log" | sed "s/^/APPDIG side=$SIDE app=$name /"
 done

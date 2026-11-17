@@ -97,6 +97,10 @@ on every GPU-versus-CPU comparison plus a `kf_gpu.m` proof item in `cuda_kernel`
 - **#470 Windows open rows**: all nine are pure PDH (guest self-report), none names the adapter; `deqp-vk` takes device 0, the DX samples never pass `-warp` but the harness
   checks are adapter-blind (WARP renders non-blank frames). Recommended: the host sampler fact once the Windows supervisor can ask for it.
 
+### 2.5 Rows added after this audit (2026-11-17)
+
+The open ML rows of [V3_OPEN_ML_ROWS.md](V3_OPEN_ML_ROWS.md) are wired from the start: `vllm` (class a+proof: the PyPI wheel has no CPU path), `tensorrt` (class b: ONNX Runtime falls back from its TensorRT provider to the CUDA and CPU providers without an error, so the row reads the provider's profile for the provider that ran each node) and `jax` (class b: JAX falls back to its CPU backend when the CUDA plugin does not load). Each prints `GPU_USE_PROOF <row> device=... name=... peak_mib=<device memory growth>` from `nvidia-smi` on the machine that runs it (a guest self-report); the host census and the host engine counters are the authority. Their CPU forms (`KF_NEGCTL=1`: GPU hidden, `JAX_PLATFORMS=cpu`, the CPU reference only) are judged `FAIL` natively (MEASURED, V3_OPEN_ML_ROWS.md section 8). `test_every_row_of_run_apps_is_classified_and_the_counts_are_pinned` counts 74 rows.
+
 ## 3. The observables
 
 **Host census (authority).** The kf3 status line is printed by the drainer about every 2 s on change: `kf3: family=... chan[births=N ... nsi=[GR0:101/0raised ...] served=N

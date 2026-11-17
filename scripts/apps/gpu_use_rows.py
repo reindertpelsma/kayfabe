@@ -62,6 +62,11 @@ ROWS = {
     "torch_ai_bench": ("a+proof", "framework", {"framework": "torch", "min_mib": 500}, ("gpu",), dict(LONG), "FAIL"),
     "hf_generate": ("a+proof", "framework", {"framework": "torch", "min_mib": 400}, ("gpu",), dict(SHORT), "FAIL"),
     "cupy": ("a+proof", "framework", {"framework": "cupy", "min_mib": 4}, (), dict(SHORT), "FAIL"),
+    # the open ML rows (docs/design/V3_OPEN_ML_ROWS.md, discovery lane). The proof line is printed by mlrows.py from the device-memory growth it measured while the row ran
+    # (nvidia-smi on the machine that runs it: a guest self-report); the host census and the host engine counters are the authority. UNCALIBRATED floors.
+    "vllm": ("a+proof", "framework", {"framework": "vllm", "min_mib": 300}, ("gpu",), dict(LONG), "FAIL"),
+    "tensorrt": ("b", "framework", {"framework": "tensorrt", "min_mib": 200}, ("gpu",), dict(LONG), "FAIL"),
+    "jax": ("b", "framework", {"framework": "jax", "min_mib": 1000}, ("gpu",), dict(LONG), "FAIL"),
 }
 INFO = ("nvidia_smi", "deviceQuery", "vulkaninfo", "clinfo")
 WIRED = tuple(r for r, v in ROWS.items() if v[0] in ("b", "a+proof"))      # rows whose verdict the judge may rewrite
