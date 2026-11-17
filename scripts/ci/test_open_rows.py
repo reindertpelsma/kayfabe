@@ -1548,6 +1548,83 @@ class DcgmRowEndToEnd(unittest.TestCase):
         self.assertEqual(ps.stdout.strip(), "")
 
 
+FIX = Path(__file__).resolve().parent / "fixtures/open_rows"
+
+
+class RealOutputs(unittest.TestCase):
+    """Outputs of the native runs on two Vast boxes (traces/open_rows_ffdcgm_20261117), read by the parsers as they came from the tools."""
+
+    def test_the_probe_of_a_geforce_rtx_3060_vm(self):
+        p = L.parse_probe((FIX / "probe_geforce_rtx3060_ga104_575.tsv").read_text())
+        self.assertEqual((p.meta["device_name"], p.meta["driver_api_max"]), ("NVIDIA GeForce RTX 3060", "13.0"))
+        self.assertEqual(p.enc_codec, {"h264": True, "hevc": True, "av1": False})  # no AV1 encode on Ampere
+        self.assertEqual((p.enc_caps["h264"]["WIDTH_MAX"], p.enc_caps["hevc"]["WIDTH_MAX"], p.enc_caps["hevc"]["SUPPORT_YUV444_ENCODE"]), (4096, 8192, 1))
+        self.assertEqual(p.sessions, {"opened": "8", "limit_hit": "1", "stopped_by": "NV_ENC_ERR_INCOMPATIBLE_CLIENT_KEY"})
+        self.assertTrue(p.dec[("av1", "420", 10)]["supported"] and not p.dec[("h264", "420", 10)]["supported"])
+        self.assertEqual(p.dec[("hevc", "420", 8)]["maxw"], 8192)
+        self.assertTrue(p.enc_available() and p.dec_available())
+
+    def test_the_table_against_that_probe_reproduces_the_logged_expectations(self):
+        p = L.parse_probe((FIX / "probe_geforce_rtx3060_ga104_575.tsv").read_text())
+        logged = {r["case_id"]: r for r in L.parse_results((FIX / "matrix_results_geforce_rtx3060_ga104.tsv").read_text())}
+        cases = L.load_cases(CASES_TEXT)
+        self.assertEqual({c["id"] for c in cases}, set(logged))
+        for c in cases:
+            self.assertEqual(L.evaluate_needs(c, p)[0], logged[c["id"]]["expect"], c["id"])
+
+    def test_the_logged_results_are_green_and_count_as_logged(self):
+        rows = L.parse_results((FIX / "matrix_results_geforce_rtx3060_ga104.tsv").read_text())
+        counts, ok = L.summarize(rows)
+        self.assertEqual((counts["PASS"], counts["NOT_SUPPORTED"], counts["FAIL"], counts["MISMATCH"], counts["NOT_RUN"]), (35, 7, 0, 0, 5))
+        self.assertTrue(ok)
+        by = {r["case_id"]: r for r in rows}
+        self.assertEqual(by["sess_h264_n09"]["reason"], "session_limit")
+        self.assertEqual(by["enc_av1_420_8_1080p"]["reason"], "unknown_encoder")  # ffmpeg 4.4.2 of Ubuntu 22.04 has no av1_nvenc
+
+    def test_a_logged_run_compared_with_itself_has_no_candidate(self):
+        rows = L.parse_results((FIX / "matrix_results_geforce_rtx3060_ga104.tsv").read_text())
+        self.assertTrue(all(r["agreement"] == "AGREE" for r in L.compare_results(rows, rows)))
+
+    def test_a_vast_container_without_video_is_not_run_by_name(self):
+        rows = L.parse_results((FIX / "matrix_in_a_vast_container_without_video.txt").read_text())
+        self.assertTrue(rows and all(r["result"] == "NOT_RUN" for r in rows))
+        self.assertEqual({r["reason"] for r in rows}, {"nvenc_unavailable", "nvdec_unavailable"})
+
+    def test_the_real_diag_json_parses_into_one_pass_and_seven_skips(self):
+        tests = N.parse_diag_json((FIX / "dcgm_diag_r3_geforce_rtx3060.json").read_text())
+        self.assertEqual([t[3] for t in tests], ["Pass"] + ["Skip"] * 7)
+        self.assertEqual(tests[0][:3], ("Deployment", "software", "0"))
+        self.assertFalse(N.gpu_work_ran(tests))  # every diagnostic that works the GPU skipped on a GeForce
+
+    def test_the_real_nvvs_log_says_why_the_tests_were_skipped(self):
+        info = N.parse_nvvs_test_info((FIX / "nvvs_test_lines_geforce_rtx3060.txt").read_text())
+        self.assertIn("targeted_stress", info)
+        self.assertTrue(info["memory"].startswith("The Memory test is skipped. Check DCGM and system configuration."))
+
+    def test_the_real_dmon_field_list(self):
+        fields = N.parse_dcgm_dmon_list((FIX / "dcgmi_dmon_list_head.txt").read_text())
+        self.assertEqual(fields[:3], [(1, "driver_version"), (2, "nvml_version"), (3, "process_name")])
+        self.assertIn((57, "pci_busid"), fields)
+
+    def test_the_real_sweep_rows_are_well_formed_and_equal_to_themselves(self):
+        rows = N.parse_rows((FIX / "nvml_sweep_fields_and_queries_geforce_rtx3060.tsv").read_text())
+        self.assertEqual(sum(1 for k, r in rows.items() if k[0] == "field" and r["status"] == "OK"), 56)
+        self.assertEqual(rows[("query", "utilization.rates")]["status"], "OK")
+        self.assertEqual(rows[("query", "ecc.mode")]["status"], "NOT_SUPPORTED")  # a GeForce has no ECC: the host answers no number, so none is owed
+        res, counts = N.compare_sweeps(rows, rows, CLASSES, EXPECTED)
+        self.assertEqual(N.findings(counts), 0)
+        for r in rows.values():
+            self.assertNotRegex(r["value"], r"[0-9a-f]{8}-[0-9a-f]{4}-")
+
+    def test_a_guest_that_loses_the_real_utilization_rows_is_caught(self):
+        rows = N.parse_rows((FIX / "nvml_sweep_fields_and_queries_geforce_rtx3060.tsv").read_text())
+        guest = dict(rows)
+        for key in ("utilization.rates", "utilization.encoder", "utilization.decoder"):
+            guest[("query", key)] = dict(rows[("query", key)], status="NOT_SUPPORTED", value="-")
+        res, counts = N.compare_sweeps(rows, guest, CLASSES, EXPECTED)
+        self.assertEqual(counts.get("FINDING_NA_IN_GUEST"), 3)  # the known gap of PR #459: guest utilization.* was [N/A]
+
+
 class StaticContracts(unittest.TestCase):
     """The trust rules of the owner (2026-11-17) and the wiring, pinned as text. These are text pins: they prove the line is there, not that it works."""
 

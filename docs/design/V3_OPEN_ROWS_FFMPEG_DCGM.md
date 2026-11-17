@@ -113,11 +113,52 @@ The matrix row's own time limit is 3000 s and the DCGM row's 3300 s (the diag le
 
 ## 10. Native results
 
-[RESULTS-PENDING]
+Evidence: `traces/open_rows_ffdcgm_20261117/` (text only; every file passed `scripts/ci/no_gpu_uuids.py` and the scrubbing of `census.py`). Revision under test: `da4fa3b3e` (branch `claude/open-ffmpeg-dcgm-20261117`); earlier runs at older revisions found the defects listed below and are not kept. Two machines:
+
+| | machine | driver | notes |
+|---|---|---|---|
+| B1 | Vast **container** box, RTX 3060 (GA106), Ubuntu 24.04 image `nvidia/cuda:12.6.3-base-ubuntu24.04`, no KVM | 580.126.20 | ffmpeg 6.1.1 (distribution), DCGM 4.8.0 |
+| B2 | Vast **KVM VM**, RTX 3060 (GA104) passed through, Ubuntu 22.04 | 575.51.03 | ffmpeg 4.4.2 (distribution) |
+
+**Vast containers do not give a process NVENC or NVDEC** [run: traces/open_rows_ffdcgm_20261117/container_rtx3060_ga106_driver_580.126.20/matrix_in_container.txt]. On B1 the probe's `NvEncOpenEncodeSessionEx` answers `NV_ENC_ERR_UNSUPPORTED_DEVICE` and `cuvidGetDecoderCaps` answers `CUDA_ERROR_NO_DEVICE`, although `libnvidia-encode` and `libnvcuvid` of the matching driver are in the image and the instance's environment lists `NVIDIA_DRIVER_CAPABILITIES=all`; ffmpeg says the same (`OpenEncodeSessionEx failed: unsupported device (2)`). A second container host with an RTX 4070 (Ada, driver 580.126.09) gave the same probe error at the first probe; its output was not kept. The row reports every case `NOT_RUN` with `nvenc_unavailable` or `nvdec_unavailable` (the harness behaves as designed; it never guesses an expectation) and the FFmpeg row was therefore run on a KVM VM (B2). The reason is not established [inferred: the container runtime or the host's device handling]. The ask "validate natively on a container box" holds for the NVML and DCGM row only.
+
+**FFmpeg matrix on B2** [run: traces/open_rows_ffdcgm_20261117/vm_rtx3060_ga104_driver_575.51.03/results.tsv, summary.txt, probe.tsv]: `pass=35 not_supported=7 fail=0 mismatch=0 not_run=5 cases=47`; the summary's `gpu_use` field is set because the encoder session counter reached 8; 159 s for the whole row.
+
+- NOT_SUPPORTED, each shown by the failing attempt: `enc_h264_10bit_1080p` (`10 bit encode not supported`), `enc_h264_above4096` and `enc_h264_8k` (`Width ... exceeds 4096`), `sess_h264_n09` and `sess_h264_n12` (exactly 8 of N sessions worked, then `incompatible client key`), `dec_h264_420_10_hw` and `dec_h264_above4096_hw` (NVDEC reports no H.264 10-bit and a 4096 maximum).
+- NOT_RUN: the five AV1 encode cases, reason `unknown_encoder`: the die has no AV1 encode (probe: `enc_codec av1 0`) and Ubuntu 22.04's ffmpeg 4.4.2 has no `av1_nvenc`, so a die that does have AV1 encode is **not exercised by any run**: no Ada die with a working NVENC was available (the one KVM Ada offer failed to pull its image; the container Ada box has no NVENC). This is the largest hole of the native evidence.
+- The session cap on this driver is 8 and the driver words it `NV_ENC_ERR_INCOMPATIBLE_CLIENT_KEY`, not out-of-memory; N parallel sessions around it behave as the probe predicted.
+- Encode PSNR against the lavfi source was 27.9 to 30.0 dB at constant QP 24 (H.264 27.90, HEVC 28.06 to 29.97), so the committed threshold is 24 dB; the first draft's 28 dB failed the H.264 case by 0.1 dB.
+- Decode: NVDEC and software agree bit for bit (PSNR `inf`) for H.264, HEVC (8, 10 bit, 4:4:4 8 and 10 bit), VP9 (8, 10 bit) and AV1 (8, 10 bit), through `-hwaccel cuda` and through `cuvid`. AV1 through `-hwaccel cuda` needs `-c:v av1`: ffmpeg prefers `libdav1d`, which has no NVDEC hwaccel (the first run failed with `Impossible to convert between the formats`).
+
+**NVML and nvidia-smi on B1** [run: traces/open_rows_ffdcgm_20261117/container_rtx3060_ga106_driver_580.126.20/nvml_sweep.tsv, summary.txt]: the driver knows 287 field ids of the 1024 asked (56 answer a number, 231 `NOT_SUPPORTED`); of 74 typed queries 62 answer; `nvidia-smi -q -x` has 1133 leaves (85 `N/A` on this GeForce, for example ECC, remapped rows, module power); `nvidia-smi --query-gpu` has 154 properties (84 `[N/A]` on the host: the same ECC, retired and remapped rows, module power and power smoothing, tlimit). The twelve typed queries the HOST refuses are: `ecc.mode`, the four `ecc.total_errors.*`, `static.mig_mode`, the four `clock.app*`, `temperature.threshold.2` and `nvlink.state.0`. These are not owed by a guest (the host answers no number). B2 shows the same twelve.
+
+**DCGM 4.8.0 on B1** [run: traces/open_rows_ffdcgm_20261117/container_rtx3060_ga106_driver_580.126.20/dcgm.tsv, dcgm_status.txt, diag_r3.json, nvvs_test_lines.txt]: it installs from NVIDIA's repository with the key from NVIDIA's official URL, no login. The first install was the `cuda12` flavour and `dcgmi diag` failed with `Cannot load plugins ... plugins/cuda13/` because the driver reports CUDA 13.0: the flavour must follow the driver, which `provision.sh` now reads from `nvidia-smi` (the cuda13 flavour was then installed beside it). `dcgmi dmon -l` lists 768 fields; 159 answer, 97 are refused (`Profiling is not supported for this group of GPUs or GPU`, -36, which fails a whole group, so the row splits a failing group until the refused field stands alone) and 513 print `N/A`. `dcgmi diag -r 3 -j` ran in about one second and returned one `Pass` (`Deployment/software`) and seven `Skip` (`memory`, `diagnostic`, `nvbandwidth`, `pcie`, `memory_bandwidth`, `targeted_stress`, `targeted_power`); DCGM's log says only "The <name> test is skipped. Check DCGM and system configuration." The whole DCGM + NVML row took 24 s. **On a GeForce the DCGM diagnostics do no GPU work**, so they are not the self-checking stress suite hoped for [the reason, that a GeForce is outside the SKUs DCGM's diagnostics support, is inferred]; the row records `gpu_use=NA` instead of failing. Whether they run on a data-center die is not tested.
+
+[STANDALONE-PENDING]
+
+**The comparison on real data.** B1 against B2 (different die, driver and clock state) was used only to exercise `compare`: it flagged clocks that follow the P-state (210 against 1777 MHz), the persistence and virtualization modes, the supported-clock lists (index-keyed), the device identifier `pdi` and the part number; each was classified (`numeric`, `ignore`, scrubbed) from that run, and a test pins every one. Nothing in this comparison is a statement about kayfabe.
+
+**Not measured:** a kayfabe guest; the unserviced-RPC census (`unserviced_before/after`) and the host GPU-use record need kf3 and were exercised only against fixtures; AV1 encode on a die that has it; DCGM on a data-center die; the Worker path (the apt shim).
 
 ## 11. Hypotheses and falsifiers (stated before the run)
 
-[FALSIFIERS-PENDING]
+Native, now answered:
+
+| hypothesis | falsifier | result |
+|---|---|---|
+| a Vast container with `NVIDIA_DRIVER_CAPABILITIES=all` gives NVENC/NVDEC | the probe's `NvEncOpenEncodeSessionEx` or `cuvidGetDecoderCaps` fails | FALSIFIED on two hosts (section 10) |
+| the expectation derived from the machine's own caps agrees with the attempt for every table case | any MISMATCH, or any FAIL that is not a harness defect | 0 and 0 on B2 after three harness fixes (PSNR threshold, ffmpeg capability wording, AV1 decoder choice); every fix started from a native log |
+| DCGM installs from NVIDIA's apt repository with only the key from the official URL | apt cannot resolve the pinned version, or the key URL fails | held (4.8.0, `1:4.8.0-1`) |
+| `dcgmi diag -r 3` exercises the GPU on a GeForce | all stress tests skip | FALSIFIED: 7 of 8 skip |
+| the GeForce session cap is 8 on a current driver | the probe's session discovery opens another number | held on driver 575.51.03 [one die, one driver] |
+
+For the guest run (not done); a result that contradicts one of these says kayfabe differs from the host:
+
+- **G1** the guest's probe equals the host's (`CAPDIFF` lines of `compare_logs.py`): falsified by any cap id, decoder row or session count that differs.
+- **G2** every case that is PASS or NOT_SUPPORTED on the host is the same in the guest: falsified by any `kayfabe_candidate_bug_undocumented` line.
+- **G3** with `report-utilization=on` (PR #459) the guest answers `utilization.*` and the encoder and decoder utilisation with numbers: falsified by `FINDING_NA_IN_GUEST` on `utilization.*` or by `host_gpu_use=UNPROVEN` with a readable host counter.
+- **G4** the next unserviced fields are named by the rows that stay `FINDING_*` (power, clocks, P-state, thermals are expected there, see section 5); `unserviced_in_row` for `nvml_dcgm` is the census count the row adds to the roughly 1955 lines per boot recorded before PR #459 [read: GPUPV_FEATURE_GAPS note; not run again here].
+- **G5** every probe session the guest opens is counted by the HOST's `encoder.stats.sessionCount` (`sess_peak` of the sessions cases equals the host's): falsified by a count that is lower.
 
 ## 12. Not done
 

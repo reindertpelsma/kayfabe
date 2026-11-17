@@ -296,7 +296,7 @@ def evaluate_needs(case, probe):
             elif kind == "dec_dim" and not (d["minw"] <= w <= d["maxw"] and d["minh"] <= h <= d["maxh"]):
                 failed.append("dec:%s:%s:%d %dx%d outside %dx%d..%dx%d" % (atom[1:4] + (w, h, d["minw"], d["minh"], d["maxw"], d["maxh"])))
     if unknown and not failed:
-        return "UNKNOWN", unknown
+        return "UNKNOWN", list(dict.fromkeys(unknown))
     if failed:
         return "UNSUPPORTED", failed
     return "SUPPORTED", []
