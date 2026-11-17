@@ -13,6 +13,8 @@ retry row of the table in section 6 except `NOT_RUN SETUP`, and any other die. T
 [`../SPEC_RESULTS.md`](../SPEC_RESULTS.md) (what may be published). Measurements it rests on:
 `traces/specviewperf_native_20261107/README.md` (the native reference, branch of PR #289; **not on `next` yet**, so not linked) and [`traces/specviewperf_vast_20261105/`](../../traces/specviewperf_vast_20261105/README.md) (kayfabe, PR #265).
 
+**2026-11-17 (owner): the guest of the lanes now has the network and the real clock (`KF_SPEC_NET`, default online) and the licence probe is on by default: section 5a. CODE and GPU-free tests only.**
+
 ## First real run, 2026-11-09 (MEASURED; evidence `traces/spec_stage_proof_20261109/`)
 
 Box: Vast RTX 4090 (AD102), label `kf-spec1`, host driver 595.91.07, Windows 11 LTSC 26100 with guest driver 580.88, kayfabe `next` tip
@@ -157,6 +159,61 @@ minutes left; **INFERRED** about 225 are left after the Windows gate).
    evidence for the next viewset; on 2026-11-05 every viewset after catia-07 also ran in a fresh kf3 boot), at most 3 kf3 boots in all.
 7. **Host reference after** (after the guest stopped, as in the gate), the host Xid delta, the verdict, the teardown.
 
+## 5a. The guest's network, the real clock and the licence probe (owner, 2026-11-17)
+
+**STATUS: CODE, 2026-11-17; GPU-free tests only** (`scripts/ci/test_vast_spec_online_ltsc.py`, mutants in `spec_stage_mutants.py`). No box has
+run it. Labels: MEASURED = a run or test named here; INFERRED = a reading that no run has confirmed.
+
+**The decision.** The open Windows 11 LTSC guest that the SPECviewperf lanes run on has the **network and the real clock**. The Windows
+evaluation guest needs the network and the real time to complete its own start-up validation. This applies to the open LTSC image of this
+stage only: the proprietary images stay offline with the clock of their `state.json` (`OWNER_RULINGS.md` section AR, section AU), and
+`windows_gate.sh`, `windows_apps.sh` and the second Windows run keep their network mode (they end well inside an hour).
+
+**Why (MEASURED, then INFERRED).** Two SPEC viewsets, `blender-01` and `enscape-01`, ended `guest-shutdown` with no host Xid at 63 and 64 minutes
+of boot age (the acceptance run plan of 2026-11-17 records them; it is not in the repository). On 2026-11-13 the same kind of guest shut itself down 60 and 62 minutes after boot with System
+event 1074 from `wlms.exe` ("The license period for this installation of Windows has expired",
+[`recreate-the-proprietary-image.md`](../howto/recreate-the-proprietary-image.md)). INFERRED, not confirmed from this guest's own licence
+log: the evaluation guest completes its validation only with the network and the real time; offline, on the recorded clock, it ends about an
+hour after boot. The hardware run below is what confirms or refutes it.
+
+**The setting.** `KF_SPEC_NET=online|offline`, default `online`; anything else is `SPECVIEWPERF_STAGE_RETRY class=USAGE` and no boot. The stage
+passes it as `WINVM_NET` to **every** boot it makes (the copy boot and the lane's boots; an inherited `WINVM_NET` never wins), and the
+payload's stage command states `KF_SPEC_NET=online` itself. `online` is slirp `restrict=off`; the clock rule
+([`V3_CLOCK_RULE.md`](V3_CLOCK_RULE.md), `scripts/bench/windows/clockrule.py`, unchanged) then runs the real clock by itself. `offline` is
+`restrict=on` with the recorded clock (`disk/clock.json`), for a proof run that wants the old behaviour. MEASURED (GPU-free): the fake launcher
+of the stage tests runs the real `clockrule.py` and the tests see `base=utc,driftfix=slew` for every online boot and
+`base=<recorded>,clock=vm,driftfix=slew` for every offline one. Win_vm.sh itself was not changed.
+
+**Hostile guest, unchanged.** The guest is still untrusted and the box holds no secrets. The network of this stage is for the operating
+system's own validation and incidental traffic; the stage still executes nothing the guest sends, parses status lines with fixed patterns
+and prints only them (the wrapper's patterns, section 8). Nothing in the verdict reads the network.
+
+**The licence probe (`KF_SPEC_LICENCE_PROBE`, default ON; `0`, `off` or `no` switches it off).** Read-only
+(`scripts/bench/windows/spec/licence_probe.ps1`: `slmgr /xpr` and `/dlv`, the licence services, the clock and the System log's event 1074).
+The stage reads it at each boot, whenever a viewset's poll finds the last probe 15 minutes old, after each viewset and at the end, and
+`scripts/bench/specviewperf/licence.py` turns the raw readout (kept in the private directory) into one status line per probe:
+`SPEC_LICENCE_STATE at=<label> up_min=<n> status=<text> remaining=<text> expiry=<text> wlms=<s> sppsvc=<s> w32time=<s> net=<online|offline>`.
+State text only: a product key, an activation id, a computer name and an account never appear (the extractor reads named fields, cuts every
+value to a safe alphabet and removes key-shaped, id-shaped and `DOMAIN\user`-shaped groups). The lines go to the stage's output (through the
+wrapper's strict patterns) and to `<prov>/<tag>_spec/licence_states.txt`.
+
+**`GUEST_SHUTDOWN_LICENCE`.** A viewset after which the VM process is gone is the guest's failure, as before (`reason=GUEST`). The row of such
+a guest is now held until the next boot's probe has been read (that boot comes anyway for the next viewset; for the last viewset the stage
+makes one more boot, within `max_guest_boots` and the time left, only to read). If that readout holds a System event 1074 that is not older
+than the previous boot's start (the guest's own clock) and whose process is `wlms` or whose reason or comment names a licence, an
+evaluation, wlms or an activation, the stage prints `SPEC_GUEST_SHUTDOWN_LICENCE viewset=<v> event=1074 time=<utc> process=<exe> text=<the
+event's reason text>` and the row is `FAIL ... reason=GUEST_SHUTDOWN_LICENCE` instead of a bare `GUEST 0/0`. The computer name and the
+account of the event are never read. Any other 1074, or none, leaves the row `GUEST`. The verdict is unchanged: the row is a FAIL either way
+(a licence shutdown of the stage's own guest is still a guest that did not finish the viewset; the report now says why).
+
+**Fallback (DESIGN INTENT, not built).** If the online boot does not validate the guest, the proposal of the acceptance plan applies:
+validate once at the end of `win_vm.sh install` (an online boot with the real clock, the licence readout, `validated_utc` in `clock.json`),
+then seal. `KF_SPEC_REBOOT_AFTER` (a fresh boot after a named viewset) stays as the smaller mitigation.
+
+**What needs hardware.** One SPEC boot of the gate's LTSC disk held 75 minutes with `KF_SPEC_NET=online` and the probe every 15 minutes: no
+event 1074 and a validated state in every `SPEC_LICENCE_STATE` line confirms the reading above; a `SPEC_GUEST_SHUTDOWN_LICENCE` line (or a
+bare `GUEST` row with `net=online` states) refutes it. Also unmeasured: that `win_vm.sh` online boots reach the internet on a Vast box.
+
 ## 6. Verdict rules
 
 The rule is the apps stage's and the gate's: **the gate is the guest passing** (owner, 2026-11-01). `lane.py` holds them as pure
@@ -170,6 +227,7 @@ functions; each has at least two tests and a mutant killed by at least two of th
 | refused by SPEC's own validation (`Requirement:`, memory requirement, no compatible resolution) | FAIL `REFUSED` / `DISPLAY` | FAIL, never an exclusion |
 | the CLI did not end inside the viewset's own budget (`budget_s`) | FAIL `TIMEOUT` | FAIL (a hang is kayfabe's) |
 | the guest died or stopped answering during the run | FAIL `GUEST` | FAIL |
+| the guest died during the run and the next boot's licence readout holds a System event 1074 of the Windows licensing service (section 5a) | FAIL `GUEST_SHUTDOWN_LICENCE`, with the 1074 text in a `SPEC_GUEST_SHUTDOWN_LICENCE` line | FAIL |
 | a kf3 boot that fails minutes after the gate booted the same image on kf3 | FAIL `GUEST` for the first viewset not run | FAIL |
 | the CLI exit code is not 0 under an otherwise `Completed` viewset | FAIL `RC` | FAIL |
 | cut by the clock (the time left minus the tail reserve was below its own budget and it did not end) | NOT_RUN `TIME` | RETRY class TIME |
@@ -268,12 +326,18 @@ GPU-free, all in `scripts/ci/` (run by the `Vast box scripts` workflow, which di
   a fake fetch helper, a clock that moves only when the stage sleeps): happy path for each lane, inputs and media, preflight, copy
   (the filtered stream is captured and inspected), teardown (the archive and the overlay are gone after a pass, a failure, a setup
   failure and a TERM), every verdict row, the gather retry, the settle wait, the time guard, scores, the wrapper and a TERM.
+- `test_vast_spec_online_ltsc.py` (48 tests, 2026-11-17, section 5a): `KF_SPEC_NET` (default online, offline override, the stage setting beats an
+  inherited `WINVM_NET`, usage errors) with the REAL `clockrule.py` behind the fake launcher (online: `base=utc`; offline: the recorded clock), the
+  licence probe (on by default; at boot, every 15 minutes, after each viewset, at the end; off with `0`; nothing secret in the lines, the evidence
+  or the streamed log; the raw readout stays private), the `GUEST_SHUTDOWN_LICENCE` classification (a fixture event log with a `wlms` 1074, a
+  1074 of another process, an old 1074, no 1074; the held row and its order; the extra boot for the last viewset and the boot limit) and
+  `licence.py` as a module.
 - `test_vast_payload_spec.py` (72 tests): the grading contract, `KF_SPEC` requests and refusals, the lane table, the whole-lane time
   check, the stage through `main()` (order, command, disk size, retry rows).
 - `test_vast_run_report.py`: the new `SpecStatusRows` class. `test_vast_payload_tiers.py` and `test_vast_payload_v7.py` were adapted
   (the lane is required).
 - Mutants, each killed by at least two tests: `payload_mutants.py` (the 19 `spec-*` cases), `spec_stage_mutants.py` (74: the lane,
-  filter, stage and wrapper rules), `run_report_mutants.py` (8 `spec-*` cases), plus the node tests of `tier.js`
+  filter, stage and wrapper rules; 28 more on 2026-11-17 for the network, the probe, the classification and `licence.py`), `run_report_mutants.py` (8 `spec-*` cases), plus the node tests of `tier.js`
   (`ci/vast-broker/test/tiers-release.test.js`).
 
 CI (`.github/workflows/vast-box-scripts.yml`): the job `gpu-free` runs these tests with the rest of `test_vast*.py`; the stage mutants

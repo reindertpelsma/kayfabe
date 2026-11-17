@@ -11,10 +11,15 @@ The fake guest answers the guest script's actions from the files under <root>/sc
 pass, fail_subtest, reset, refused, gather, gather_once, no_tdr, hang, dead, silent, scoreleak),
 `wall.<W>` (seconds the run takes on the fake clock), `polls.<W>`, `boot_fail.<kind><n>` (refused, bar1,
 nossh), `tar_rc`, `verify`, `cli_absent`, `scp_fail`, `fetch`, `cup8_fail_after`, `xid_new`, `block.<W>`.
+`die_mid` (a viewset mode): the guest is up for `polls.<W>` polls, then the VM process is gone (what a guest that shuts itself
+down looks like). The licence probe (scripts/bench/windows/spec/licence_probe.ps1) answers from `licence.<kind><n>` (the boot
+number counts the copy boot too: copy1, run2, run3, ...), else `licence.default`, else a healthy readout; `runs.log` records the network (`net=`) and the clock
+the REAL clockrule.py picks for it (`rtc=`) at every launch.
 """
 
 import hashlib
 import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -28,6 +33,7 @@ IDS = [
     "creo-04", "unreal_engine-01", "blender-01", "enscape-01",
 ]
 REAL_DATE = shutil.which("date") or "/usr/bin/date"
+RECORDED_UTC = "2026-11-16T10:00:00Z"  # the fake image's recorded clock (clock.json), what an offline launch must run
 VM_UUID = "0a1b2c3d-0000-4000-8000-0123456789ab"  # the fake VM's own identity (a synthetic value)
 
 FAKE_WIN_VM = r'''#!/bin/bash
@@ -103,7 +109,8 @@ run)
             *) shift ;;
         esac
     done
-    echo "RUN tag=$tag nokf3=$nokf3 overlay=$overlay ram=${WINVM_RAM_MB:-unset} fb=${WINVM_KF3_FB_MB:-unset} :: ${args[*]}" >> "$R/runs.log"
+    rtc=$(python3 -I "$R/src/scripts/bench/windows/clockrule.py" rtc --net "${WINVM_NET:-offline}" --image kfwin --sidecar "$VMD/disk/clock.json" 2> /dev/null)
+    echo "RUN tag=$tag nokf3=$nokf3 overlay=$overlay ram=${WINVM_RAM_MB:-unset} fb=${WINVM_KF3_FB_MB:-unset} net=${WINVM_NET:-unset} rtc=${rtc:-refused} :: ${args[*]}" >> "$R/runs.log"
     kind=$(sed 's/.*_\(copy\|run\)\([0-9]*\)$/\1\2/' <<< "$tag")
     echo "$kind" > "$R/current_kind"
     rm -f "$R/nossh"
@@ -150,6 +157,12 @@ ssh)
             echo SPEC_VERIFY_DONE ;;
         *'-Action post'*)
             if [ -e "$S/cli_absent" ]; then echo "SPEC_POST cli=absent"; else printf 'SPEC_POST cli=present\nSPEC_POST icacls_rc=0\nSPEC_POST vcredist_rc=0\n'; fi ;;
+        *licence_probe.ps1*)
+            echo "probe $(cat "$R/current_kind" 2> /dev/null)" >> "$R/calls.log"
+            f="$S/licence.$(cat "$R/current_kind" 2> /dev/null)"
+            [ -f "$f" ] || f="$S/licence.default"
+            [ -f "$f" ] || f="$R/licence_default.txt"
+            cat "$f" ;;
         *'-Action launch'*)
             w=$(sed 's/.*-Workload \([a-z_0-9-]*\).*/\1/' <<< "$cmd")
             echo "$w" > "$R/active"
@@ -167,6 +180,12 @@ ssh)
             mode=$(cat "$R/mode.$w" 2> /dev/null)
             if [ -e "$S/block.$w" ]; then touch "$R/blocked"; /bin/sleep 30; fi
             [ "$mode" != silent ] || exit 255
+            if [ "$mode" = die_mid ]; then
+                polls=$(rd "polls.$w"); polls=${polls:-0}
+                n=$(cat "$R/polls.$w.n" 2> /dev/null || echo 0)
+                if [ "$n" -lt "$polls" ]; then echo $((n + 1)) > "$R/polls.$w.n"; echo "SPEC_STATE end=0 running=1"; exit 0; fi
+                killq; exit 255
+            fi
             [ "$mode" != hang ] || { echo "SPEC_STATE end=0 running=1"; exit 0; }
             polls=$(rd "polls.$w"); polls=${polls:-0}
             n=$(cat "$R/polls.$w.n" 2> /dev/null || echo 0)
@@ -240,6 +259,23 @@ FAKES = {
 }
 
 
+def healthy_licence(tag="x", up_min=5):
+    """A licence_probe.ps1 readout of a guest that is up for `up_min` minutes. It carries what the status lines must NOT
+    print: a partial product key, an activation id, a computer name and an account name (test_vast_spec_online_ltsc.py)."""
+    return (
+        "LIC_TIME utc=2026-11-17T10:%02d:00.0000000Z local=x tz=UTC\n"
+        "LIC_OS caption='Windows 11 Enterprise LTSC Evaluation' build=26100 install=2026-11-10T09:00:00.0000000Z lastboot=2026-11-17T10:00:00.0000000Z\n"
+        "LIC_SERVICE wlms status=Running start=Automatic\nLIC_SERVICE sppsvc status=Running start=Manual\nLIC_SERVICE W32Time status=Running start=Manual\n"
+        "LIC_XPR_BEGIN\n  Windows(R) Operating System, EVALUATION channel: Timebased activation will expire 2027-02-01\n"
+        "LIC_DLV_BEGIN\n  Name: Windows(R), Enterprise LTSC edition\n  Activation ID: 0a1b2c3d-1111-4222-8333-444455556666\n"
+        "  Partial Product Key: ABCDE\n  Product Key Channel: EVAL:ABCDE-FGHIJ-KLMNO-PQRST-UVWXY\n  License Status: Licensed\n"
+        "  Time remaining: 129600 minute(s) (90 day(s))\n  Computer: KFWIN-%s\n"
+        "LIC_W32TM_BEGIN\n  Leap Indicator: 0\n"
+        "LIC_REG wlms ImagePath='C:\\Windows\\System32\\wlms\\wlms.exe' Start=2\n"
+        "LIC_DONE\n" % (up_min, tag)
+    )
+
+
 def make_archive(root, members=None, bad=None):
     """The fake private copy: a zstd-compressed tar with the nine viewset directories. `bad` adds one member that
     a tree of ours never holds ("symlink", "absolute", "dotdot")."""
@@ -299,10 +335,11 @@ class Sandbox:
         for d in (box, specd, win / "spec"):
             d.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(BENCH / "box/specviewperf_stage.sh", box / "specviewperf_stage.sh")
-        for name in ("lane.py", "lanes.json", "tarfilter.py"):
+        for name in ("lane.py", "licence.py", "lanes.json", "tarfilter.py"):
             shutil.copyfile(BENCH / "specviewperf" / name, specd / name)
-        for name in ("spec_guest.ps1", "spec_run.ps1"):
+        for name in ("spec_guest.ps1", "spec_run.ps1", "licence_probe.ps1"):
             shutil.copyfile(BENCH / "windows/spec" / name, win / "spec" / name)
+        shutil.copyfile(BENCH / "windows/clockrule.py", win / "clockrule.py")
         (win / "gate_state.ps1").write_text("# fake\n")
         (win / "kf3_flags.sample.env").write_text("KF3_FAKE=1\n")
         (win / "win_vm.sh").write_text(FAKE_WIN_VM)
@@ -325,6 +362,8 @@ class Sandbox:
         (vm / "disk" / ("gate_" + tag + ".qcow2")).write_text("fake gate overlay\n")
         if gate_pass:
             (self.prov / (tag + "_windows.log")).write_text("WINDOWS_GATE_PASS rev=deadbeef gpu=x\nWINDOWS_GATE_EXIT rc=0 now\n")
+        (vm / "disk" / "clock.json").write_text(json.dumps({"schema": 1, "recorded_utc": RECORDED_UTC, "source": "fake", "tool_rev": "r"}))
+        (self.root / "licence_default.txt").write_text(healthy_licence(self.tag))
         qemu = self.root / "bench/qemu"
         qemu.write_text("#!/bin/sh\n")
         qemu.chmod(0o755)

@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-17 (§AW: pins are deployment data, identity pins strict-only; §AV: the guest may read the physical GPU's utilisation, `report-utilization`, default on; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-17 (§AW: pins are deployment data, identity pins strict-only; §AY: the SPEC lanes' open LTSC guest has the network and the real clock; §AV: the guest may read the physical GPU's utilisation, `report-utilization`, default on; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -43,6 +43,24 @@ the RUSD publisher, tests and mutants); **not run on hardware** (the plan and th
 5. **The RUSD answer needs a publisher, so it has one.** `sweep.rs` refused `0x20800afe`/`0x20800aff` because an `NV_OK` would promise a page
    that is never written; with the property on, kayfabe writes the utilisation record of that page itself (from its own sample), and
    nothing else of it.
+
+## §AY. The open LTSC guest of the SPECviewperf lanes has the network and the real clock, 2026-11-17
+
+**STATUS: LIVE, 2026-11-17; owner decision (stated in conversation, recorded by the coordinator).** Design and what needs hardware:
+`docs/design/V3_SPEC_GATE.md` section 5a. Implemented GPU-free in `scripts/bench/box/specviewperf_stage.sh`; nothing here has run on hardware yet.
+
+1. The open Windows LTSC guest that the SPECviewperf lanes run on has **internet and the real clock** (`KF_SPEC_NET=online`, the default of
+   the stage): the Windows evaluation guest needs the network and the real time to complete its own start-up validation. By §AU the real
+   clock follows from the network. SPEC does not mind having internet.
+2. It does **not** apply to the proprietary images (A, B, C): they stay offline with the clock of their `state.json` (§AR, §AU). The Windows
+   gate, the Windows apps stage and the second Windows run keep their network mode (they are shorter than 60 minutes).
+3. The guest stays untrusted and the box holds no secrets; the network of this stage is for the operating system's own validation and
+   incidental traffic.
+4. The licence probe is on by default for this stage and the stage reports a guest that went down with a licence event 1074 as
+   `GUEST_SHUTDOWN_LICENCE`. The "validate once, then seal" proposal of the acceptance plan is the fallback and is not needed if the online
+   boot validates.
+
+<!-- src: owner, 2026-11-17: "the open Windows LTSC guest that the SPECviewperf lanes run on must have INTERNET and the REAL CLOCK" -->
 
 ## §AU. The guest clock depends only on the network; a recorded clock is never earlier than the software loaded into the image, 2026-11-16
 
