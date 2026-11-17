@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-17 (§AW: pins are deployment data, identity pins strict-only; §AV: the SPEC lanes' open LTSC guest has the network and the real clock; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-17 (§AW: pins are deployment data, identity pins strict-only; §AY: the SPEC lanes' open LTSC guest has the network and the real clock; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -23,7 +23,7 @@ recipe: `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`. Built GPU-free; no box ran
    config and pins. Storage is plain S3 semantics (R2 is S3-compatible; no R2-only features; presign with any S3-compatible API).
 5. The Worker's own behaviour (`ci/vast-broker/propimages.json`, strict always) does not change.
 
-## §AV. The open LTSC guest of the SPECviewperf lanes has the network and the real clock, 2026-11-17
+## §AY. The open LTSC guest of the SPECviewperf lanes has the network and the real clock, 2026-11-17
 
 **STATUS: LIVE, 2026-11-17; owner decision (stated in conversation, recorded by the coordinator).** Design and what needs hardware:
 `docs/design/V3_SPEC_GATE.md` section 5a. Implemented GPU-free in `scripts/bench/box/specviewperf_stage.sh`; nothing here has run on hardware yet.
