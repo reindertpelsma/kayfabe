@@ -488,6 +488,8 @@ strict release. `propimagePlan(...).lines` is the text for the leg's log. Nothin
 is unchanged, and the `/bench-data` allow-list (`src/benchdata.js`) does not contain the images: that route is gated by a live run
 token only, not by profile or stage, so adding them is a decision for the owner.
 
+2026-11-17: `propimages.json` also lists the MATLAB Linux image (object `imgc`, role `linux_image`; `linux_images`: label `matlab`, every row in the discovery lane, no per-family list). `matlabPlan` builds the instruction's `matlab` part (a pinned image, the die's pinned guest driver from `release-matrix.json`, the rows with their lanes) for a large-tier release leg; `buildInstruction(..., {matlab: true})` adds it (default off). It has no slot: it is not part of the A/B rotation (docs/design/V3_PROPIMAGE_LINUX.md section 14.6 proposes one run per release box). `test/matlab-instruction.test.js` pins it against the box (`scripts/ci/matlab_stage.py`, `payload_instruction.py`) and a golden file in `test/fixtures/matlab/`. Nothing imports `matlabPlan`; nothing is deployed.
+
 `test/propimages.test.js` pins the shape against the box's own parser, `vast_payload.py --instruction` and `--emit-instruction`, and the
 standalone runner's flag parser (`test/propimages_check.py`, golden files in `test/fixtures/propimages/`); `propimages-mutants.mjs`
 (two named killers per mutant) is run by CI.

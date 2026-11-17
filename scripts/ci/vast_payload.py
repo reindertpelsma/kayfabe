@@ -1540,7 +1540,7 @@ def instruction_from_file(path, environ):
 # payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
 PROPIMAGE_APPS_IN_LARGE = False
 # stages with no budget row (scripts/ci/profile_resources.py): planned only by --only; the guard refuses one whose flag is True
-MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}
+MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "matlab": "MATLAB_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}
 PROPIMAGE_APPS_MIN_REMAINING_MS = 210 * 60000   # DESIGN: download ~16 min, 4 unpacks/hashes, 3 boots, apps up to 98 min worst case
 PROPIMAGE_APPS_PREFIX = "/workspace/kf-propimage"
 PROPIMAGE_APPS_MARGIN_S = 300
@@ -1552,6 +1552,35 @@ PROPIMAGE_APPS_B_IN_LARGE = False
 PROPIMAGE_APPS_B_MIN_REMAINING_MS = 240 * 60000   # DESIGN: a bigger download than image A, up to 17 boots-worth of row timeouts in ~55-minute boots
 PROPIMAGE_APPS_B_PREFIX = "/workspace/kf-propimage-b"
 PROPIMAGE_APPS_B_MARGIN_S = 300
+
+
+# 2026-11-17 matlab: the MATLAB GPU rows of the Linux proprietary image (scripts/ci/matlab_stage.py, scripts/bench/linux/matlab_rows.py,
+# docs/design/V3_PROPIMAGE_LINUX.md section 14). LARGE tier only, OFF BY DEFAULT: planned only when named by --only or when the instruction carries a `matlab`
+# object (the Worker's strict shape: a pinned image and a driver version; a standalone run uses --matlab-image PATH|URL instead and no pin). It needs a KVM box
+# with a GPU like every Linux-guest stage; it is a separate stage from the Windows image stages and does not take part in their A/B slot rotation. The stage
+# runs after them (the GPU is free again). It has never run on a box. Joining the release tier = flip MATLAB_IN_LARGE in the commit that records its first
+# green box run, with a payloadStageResources row (a Worker bundle change) and its name taken out of MANUAL_ONLY_STAGES.
+MATLAB_IN_LARGE = False
+MATLAB_MIN_REMAINING_MS = 150 * 60000   # DESIGN: an 8 GB download, then 8 boots each with a driver build (2-4 min, ESTIMATE) and a row of up to 30 minutes
+MATLAB_PREFIX = "/workspace/kf-matlab"
+MATLAB_MARGIN_S = 300
+
+
+def matlab_rows(text, rc, sha, result):
+    """One KF_MATLAB_RESULT line, kept in the result file even when it is red (vast_report.py validates it). Only a PASS record with rc 0 is a pass; the
+    record's verdict already follows the lanes (a failing discovery row is a listed breakage, never a failure) and, under the instruction's strict shape,
+    treats any skipped row as a failure."""
+    found = re.findall(r"^KF_MATLAB_RESULT (\{.*\})$", text, re.M)
+    if len(found) != 1:
+        raise EvidenceError("matlab")
+    try:
+        doc = json.loads(found[0])
+    except ValueError:
+        raise EvidenceError("matlab") from None
+    result["matlab"] = doc
+    if type(doc) is not dict or doc.get("sha") != sha or rc or doc.get("verdict") != "PASS":
+        raise EvidenceError("matlab")
+    return [row("matlab", 1)]
 
 
 def propimage_apps_rows(text, rc, sha, result):
@@ -1604,6 +1633,28 @@ def propimage_run_rows(text, rc, sha, result):
     if type(doc) is not dict or doc.get("sha") != sha or rc or doc.get("verdict") != "PASS":
         raise EvidenceError("propimage_apps")
     return [row("propimage_apps", 1)]
+
+
+def matlab_refusal(instruction, args):
+    """The named refusal of the matlab stage's inputs, or None: the Worker's strict object and the standalone flags are two shapes, never both; the standalone
+    flags need the stage in the plan (--only matlab on the large tier); the strict object is validated by the stage's own reader (matlab_stage.validate_instruction)."""
+    flags = bool(args.matlab_image or args.matlab_driver)
+    if instruction.matlab is not None and flags:
+        return "INSTRUCTION_AND_IMAGE_FLAG"
+    if instruction.matlab is None and "matlab" in args.only and not flags:
+        return "NO_IMAGE"          # --only matlab needs a source: the instruction's pinned image or --matlab-image
+    if flags and "matlab" not in args.only:
+        return "FLAGS_NEED_ONLY_MATLAB"
+    if args.matlab_driver and not args.matlab_image:
+        return "DRIVER_WITHOUT_IMAGE"
+    if instruction.matlab is not None:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        try:
+            import matlab_stage
+            return matlab_stage.instruction_refusal(instruction.matlab)
+        finally:
+            sys.path.pop(0)
+    return None
 
 
 def propimages_refusal(instruction):
@@ -1666,6 +1717,8 @@ def plan_stage_names(i, only=()):
         names.append("propimage_apps")
     if i.tier == "large" and (PROPIMAGE_APPS_B_IN_LARGE or "propimage_apps_b" in only):
         names.append("propimage_apps_b")
+    if i.tier == "large" and (i.matlab is not None or MATLAB_IN_LARGE or "matlab" in only):
+        names.append("matlab")
     if "specviewperf" in i.stages:
         names.append("specviewperf")
     return names
@@ -1702,6 +1755,10 @@ def parse_args(argv):
     p.add_argument("--instruction", metavar="FILE", help="JSON instruction (schema kayfabe.payload-instruction/1); replaces the KF_* tier variables")
     p.add_argument("--only", action="append", default=[], metavar="STAGE", help="run only this stage (repeatable)")
     p.add_argument("--skip", action="append", default=[], metavar="STAGE", help="skip this stage (repeatable)")
+    p.add_argument("--matlab-image", metavar="PATH|URL", help="standalone `matlab` stage: a MATLAB Linux image zip you supply (no sha256 pin is enforced; the computed sha256 is "
+                   "recorded); needs --only matlab and is refused together with an instruction that carries `matlab`")
+    p.add_argument("--matlab-driver", metavar="VERSION|PATH|URL", help="standalone `matlab` stage: the NVIDIA Linux driver to install in the guest, a pinned version of "
+                   "release-matrix.json or a .run file you supply")
     p.add_argument("--dry-run", action="store_true", help="print the stage plan and run nothing")
     p.add_argument("--emit-instruction", metavar="FILE", help="write the instruction built from the source and exit")
     p.add_argument("--prefetch", metavar="MANIFEST", help="DRY-RUN ONLY (not wired into the executor yet): validate a download manifest "
@@ -1745,6 +1802,11 @@ def plan_only(args, root):
             print("KF_PAYLOAD_PROPIMAGES_REFUSED " + refusal, flush=True)
             print("KF_PAYLOAD_FAIL suite=preflight", flush=True)
             return 1
+        refusal = matlab_refusal(inst, args)
+        if refusal:
+            print("KF_PAYLOAD_MATLAB_REFUSED " + refusal, flush=True)
+            print("KF_PAYLOAD_FAIL suite=preflight", flush=True)
+            return 1
         if inst.spec:
             spec_table(root)
         prefetch = prefetch_line(args.prefetch, chosen) if args.prefetch else None
@@ -1758,6 +1820,8 @@ def plan_only(args, root):
         if inst.propimages:
             print("KF_PAYLOAD_PROPIMAGES strict=%d images=%s" % (int(inst.propimages_strict), ",".join(
                 str(p.get("label", "image%d" % (n + 1))) for n, p in enumerate(inst.propimages))), flush=True)
+        if inst.matlab is not None:
+            print("KF_PAYLOAD_MATLAB strict=1 rows=%d driver=%s" % (len(inst.matlab["rows"]), inst.matlab["driver"]["version"]), flush=True)
         if digest:
             print("KF_PAYLOAD_INSTRUCTION sha256=" + digest, flush=True)
         print("KF_PAYLOAD_PLAN stages=" + ":".join(chosen) + " planned=" + ":".join(plan), flush=True)
@@ -1808,6 +1872,10 @@ def main():
         refusal = propimages_refusal(instruction)
         if refusal:
             print("KF_PAYLOAD_PROPIMAGES_REFUSED " + refusal, flush=True)
+            raise EvidenceError("preflight")
+        refusal = matlab_refusal(instruction, args)
+        if refusal:
+            print("KF_PAYLOAD_MATLAB_REFUSED " + refusal, flush=True)
             raise EvidenceError("preflight")
         if args.only or args.skip:
             result["selection"] = {"only": args.only, "skip": args.skip}
@@ -2105,6 +2173,28 @@ def main():
                 lambda rc, output=output_pb: propimage_apps_b_rows(bounded_text(output), rc, sha, result),
             )
             stage.update(min_remaining_ms=PROPIMAGE_APPS_B_MIN_REMAINING_MS, short_row="propimage_apps_b_retry_time")
+            stages.append(stage)
+        if "matlab" in plan:
+            # After the Windows image stages (the GPU is free again), before the SPEC lane. A Linux guest on its own KVM and GPU, one boot per row; the image is
+            # private (a pinned object through the presigned-URL file, the Worker's strict shape) or the caller's own (--matlab-image). scripts/ci/matlab_stage.py
+            # owns the download, the unpack, the boots and the record.
+            output_ml = evidence / "matlab.run"
+            matlab_argv = ["python3", str(root / "scripts/ci/matlab_stage.py"), "run", "--sha", sha, "--checkout", str(root), "--prefix", MATLAB_PREFIX,
+                           "--out", str(evidence / "matlab.json"), "--evidence-dir", str(evidence / "matlab"), "--deadline-epoch", str(soft // 1000 - MATLAB_MARGIN_S)]
+            if instruction.matlab is not None:
+                instruction_file = evidence / "matlab_instruction.json"
+                instruction_file.write_text(json.dumps(instruction.matlab))
+                matlab_argv += ["--instruction-matlab", str(instruction_file)]
+            else:
+                matlab_argv += ["--matlab-image", args.matlab_image or "", "--matlab-driver", args.matlab_driver or ""]
+            stage = make_stage(
+                "matlab",
+                matlab_argv,
+                output_ml,
+                [],
+                lambda rc, output=output_ml: matlab_rows(bounded_text(output), rc, sha, result),
+            )
+            stage.update(min_remaining_ms=MATLAB_MIN_REMAINING_MS, short_row="matlab_retry_time")
             stages.append(stage)
         if "specviewperf" in extra_stages:
             # DISABLED BY DEFAULT (docs/design/V3_SPEC_GATE.md): the wrapper runs scripts/bench/box/specviewperf_stage.sh,
