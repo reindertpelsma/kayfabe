@@ -123,15 +123,6 @@ def lib_dirs(venv):
     return out
 
 
-def venv_toolkit(venv):
-    """The CUDA toolkit root the pip wheels carry (`site-packages/nvidia/cu13` holds bin/nvcc), or None. Used for the JIT that vLLM's FlashInfer does with nvcc."""
-    for sp in sorted(glob.glob(os.path.join(str(venv), "lib", "python3*", "site-packages"))):
-        for root in sorted(glob.glob(os.path.join(sp, "nvidia", "*"))):
-            if os.path.isfile(os.path.join(root, "bin", "nvcc")):
-                return root
-    return None
-
-
 def row_env(row, venv, cache, base_env, negctl=False, extra=None):
     """The environment of one row's process: an allowlist of the caller's (no token, no key), every cache under `cache` (a fresh directory per run, so a JIT or
     compile step really runs), telemetry off, offline for the model hub. GPU 0 only unless the caller chose."""
@@ -146,12 +137,6 @@ def row_env(row, venv, cache, base_env, negctl=False, extra=None):
                 "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUNBUFFERED": "1",
                 "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "HF_HOME": str(c / "home"), "VLLM_NO_USAGE_STATS": "1", "DO_NOT_TRACK": "1",
                 "CUDA_VISIBLE_DEVICES": base_env.get("CUDA_VISIBLE_DEVICES", "0")})
-    if row == "vllm":
-        # the venv's own tools first (ninja), and the toolkit the wheels carry (nvcc): FlashInfer builds its kernels with them at the first start, as it does in an activated venv
-        tk = venv_toolkit(venv)
-        env["PATH"] = ":".join([os.path.join(str(venv), "bin")] + ([os.path.join(tk, "bin")] if tk else []) + [env["PATH"]])
-        if tk:
-            env["CUDA_HOME"] = tk
     dirs = lib_dirs(venv)
     rest = [d for d in base_env.get("LD_LIBRARY_PATH", "").split(":") if d]       # the driver's directory in a container (the venv's libraries come first)
     if dirs or rest:
