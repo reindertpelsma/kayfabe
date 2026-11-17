@@ -1,0 +1,16 @@
+﻿{
+    "app":  "acrobat",
+    "started":  1794785598.866,
+    "error":  "Exception calling \"Substring\" with \"2\" argument(s): \"Index and length must refer to a location within the string.\r\nParameter name: length\"",
+    "outputs":  [
+
+                ],
+    "source":  "apollo11_anomaly_report_3.pdf",
+    "opened":  true,
+    "pages":  16,
+    "quit":  "forced",
+    "ended":  1794785652.712,
+    "dismissed":  [
+
+                  ]
+}

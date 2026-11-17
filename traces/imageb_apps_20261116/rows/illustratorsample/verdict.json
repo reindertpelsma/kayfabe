@@ -1,0 +1,32 @@
+{
+  "app": "illustratorsample",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "PNG too large to decode",
+  "class": "app",
+  "limited": false,
+  "lane": "gate",
+  "path": "D3D11 canvas on shipped art",
+  "platform": "kf3",
+  "secs": 143,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 67.0,
+      "mem_mb": 9513.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 67.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 43
+    },
+    "baseline": {
+      "mem_mb": 9416.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 430
+  }
+}

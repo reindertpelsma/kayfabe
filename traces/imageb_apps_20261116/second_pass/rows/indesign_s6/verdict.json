@@ -1,0 +1,8 @@
+{
+  "class": "harness",
+  "app": "indesign_s6",
+  "ok": false,
+  "evidence": "NONE",
+  "error": "Task timeout; no verdict",
+  "outputs_recorded": 0
+}

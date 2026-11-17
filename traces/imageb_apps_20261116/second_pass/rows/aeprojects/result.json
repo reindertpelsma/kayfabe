@@ -1,0 +1,23 @@
+﻿{
+    "app":  "aeprojects",
+    "started":  1794790737.786,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "ae_open.txt",
+                        "bytes":  553,
+                        "modified":  1794790855.948
+                    }
+                ],
+    "count":  14,
+    "ae_file_scripts":  "already on",
+    "startup_attempts":  [
+                             "1:marker:119s"
+                         ],
+    "quit":  "clean",
+    "rows":  "OK lottie-Benchmark.aep:I4:C1:L5||OK lottie-DynamicGradient.aep:I1:C1:L2||OK lottie-Masks.aep:I12:C12:L25||OK lottie-MatteTimeStretch.aep:I2:C2:L6||OK lottie-Miter_Limit.aep:I4:C1:L1||OK lottie-Multiline.aep:I2:C2:L17||OK lottie-PointText.aep:I6:C3:L8||OK pyaep-ae2018-complete.aep:I36:C6:L33||OK pyaep-ae2022-complete.aep:I36:C6:L33||OK pyaep-ae2026-complete.aep:I36:C6:L33||OK pyaep-essential_graphics-base.aep:I4:C2:L2||OK pyaep-layer-shape_source_rect.aep:I3:C1:L83||OK pyaep-marker-layer_marker.aep:I11:C5:L5||OK pyaep-text-box_matrix.aep:I1:C1:L45",
+    "ended":  1794790995.807,
+    "dismissed":  [
+
+                  ]
+}

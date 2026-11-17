@@ -1,0 +1,17 @@
+{
+  "app": "illustrator",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "out.png is 3088x5844, expected 2880x2820",
+  "class": "app",
+  "limited": false,
+  "secs": 32,
+  "gpu": {
+    "required": [],
+    "verdict": "FAIL",
+    "peak": {},
+    "baseline": {},
+    "samples": 0
+  }
+}
