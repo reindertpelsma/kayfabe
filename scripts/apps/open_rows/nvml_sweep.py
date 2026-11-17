@@ -163,7 +163,7 @@ def run_query(lib, handle, key, syms, extras, out):
             buf = ctypes.create_string_buffer(96)
             fn.argtypes = ([c_void_p] if handle is not None else []) + [ctypes.c_char_p, c_uint]
             rc = fn(*(([handle] if handle is not None else []) + [buf, 96]))
-            val = census.scrub(buf.value.decode(errors="replace"))
+            val = census.scrub(buf.value.decode(errors="replace"), ips=False)
             return N.row_line("query", key, used, rc_status(lib, rc), val if rc == 0 else "-")
         outs = [out()] if isinstance(out, type) and issubclass(out, ctypes.Structure) else [t() for t in out]
         fn.argtypes = ([c_void_p] if handle is not None else []) + [c_uint] * len(extras) + [ctypes.POINTER(type(o)) for o in outs]

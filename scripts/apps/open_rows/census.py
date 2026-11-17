@@ -37,18 +37,18 @@ ENGINE_FLOOR = 1.0
 ENGINE_SAMPLES = 2
 
 UUID = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b|GPU-[0-9a-fA-F-]{8,}|MIG-[0-9a-fA-F-]{8,}")
-IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+IPV4 = re.compile(r"(?<!\w)(?<!\d\.)(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?!\w)(?!\.\d)")
 PCI = re.compile(r"\b[0-9a-fA-F]{4,8}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]\b")
 MAC = re.compile(r"\b(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b")
 
 
-def scrub(text):
-    """Evidence leaves a box only after this: GPU UUIDs, IPv4 addresses (version strings like 580.159.04 have three dots and stay),
-    PCI bus addresses and MACs are replaced."""
+def scrub(text, ips=True):
+    """Evidence leaves a box only after this: GPU UUIDs, MACs, PCI bus addresses and IPv4 addresses are replaced. `ips=False` is for
+    structured values (driver, NVML and VBIOS versions look like addresses: 13.580.126.20) that come from a query, not from a log."""
     text = UUID.sub("<uuid>", text)
     text = MAC.sub("<mac>", text)
     text = PCI.sub("<pci>", text)
-    return IPV4.sub("<ip>", text)
+    return IPV4.sub("<ip>", text) if ips else text
 
 
 def _num(cell):

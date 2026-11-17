@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# provision.sh [ROOT]: fetch and build what the open FFmpeg/DCGM rows need, on THIS machine, from the repo only (needs root, network).
+# provision.sh [ROOT] ["steps"]: fetch and build what the open FFmpeg/DCGM rows need, on THIS machine, from the repo only (needs root, network).
 #   nvcodec_probe   built with gcc against nv-codec-headers at the pinned upstream commit      -> ROOT/bin/nvcodec_probe
 #   ffmpeg          the distribution's package (signed by the distribution), nothing downloaded by us
 #   DCGM            NVIDIA's apt repository, key from NVIDIA's official URL, exact version      -> installed, and ROOT/dcgm_root.tar
@@ -49,7 +49,9 @@ dcgm() {
   tar -C / -cf "$ROOT/dcgm_root.tar" -T "$ROOT/dcgm_files.txt" || return 1
   command -v dcgmi nv-hostengine
 }
-step nvcodec_probe probe
-step ffmpeg ffmpeg_pkg
-step dcgm dcgm
+STEPS=${2:-nvcodec_probe ffmpeg dcgm}   # provision.sh ROOT "nvcodec_probe ffmpeg" runs a subset
+want() { case " $STEPS " in *" $1 "*) return 0;; esac; return 1; }
+want nvcodec_probe && step nvcodec_probe probe
+want ffmpeg && step ffmpeg ffmpeg_pkg
+want dcgm && step dcgm dcgm
 [ "$FAILS" -eq 0 ]
