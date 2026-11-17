@@ -25,7 +25,8 @@ and nothing else is measured; the commands of section 13 are unit-tested with sc
   propimage_linux.py inject --dir D [--name N] --wheelhouse DIR --lock FILE [--dest GUESTPATH]
                                                           copy a wheelhouse, then pip install --no-index --require-hashes INSIDE the clone
   propimage_linux.py scan-image IMAGE|ZIP [--grep-*]      independent credential grep over a sealed image (counts only)
-  propimage_linux.py run --dir D [--check]                offline clone: restrict=on, RECORDED clock, same identity
+  propimage_linux.py run --dir D [--keep] [--gpu kf3 --qemu Q --driver-version V]
+                                                          offline clone: restrict=on, RECORDED clock, same identity (kf3: Q is a build_kf3.sh binary)
   propimage_linux.py offline-check --dir D                MATLAB-free command set in an offline clone; exit codes and hashes only
   propimage_linux.py auth-capture --dir D [--cmd C]       sign-in helper: URL + forward command (loopback) or paste-code; never a code
   propimage_linux.py auth-paste --dir D                   hidden prompt; sends the code over ssh stdin to the guest pane, stores nothing
@@ -1388,7 +1389,7 @@ def cmd_seal(a):
     print("READ the report above yourself before any upload: a cached sign-in is a credential")
 
 
-def boot_clone(st, p, name, net="offline", offset_s=0, driver=None, gpu="none", vnc=None, log=print):
+def boot_clone(st, p, name, net="offline", offset_s=0, driver=None, gpu="none", vnc=None, log=print, qemu=None, driver_version=None):
     """A throwaway overlay of the sealed image, the pinned identity, the clock rule. -> (workdir, pid, start monotonic)."""
     guard_memory()
     wd = p["run"] / name
@@ -1399,7 +1400,8 @@ def boot_clone(st, p, name, net="offline", offset_s=0, driver=None, gpu="none", 
     clock = clock_for_mode(st, "run", net, loaded_software=[driver] if driver else (), offset_s=offset_s)
     for line in clock["lines"]:
         log(line)
-    argv = build_argv(st, "run", wd / "clone.qcow2", wd, net=net, clock=clock, vnc_display=vnc, gpu=gpu)
+    extra = {"qemu": qemu} if qemu else {}
+    argv = build_argv(st, "run", wd / "clone.qcow2", wd, net=net, clock=clock, vnc_display=vnc, gpu=gpu, driver_version=driver_version, **extra)
     (wd / "argv.txt").write_text(shlex.join(argv) + "\n")
     t = time.monotonic()
     return wd, start_qemu(argv, wd), t
@@ -1419,7 +1421,8 @@ def stop_clone(st, p, wd, pid):
 def cmd_run(a):
     p = paths(a.dir)
     st = load_state(p["state"])
-    wd, pid, t = boot_clone(st, p, a.name, net=a.net, offset_s=a.offset_days * 86400, vnc=a.vnc_display)
+    wd, pid, t = boot_clone(st, p, a.name, net=a.net, offset_s=a.offset_days * 86400, vnc=a.vnc_display, gpu=a.gpu,
+                            qemu=a.qemu, driver_version=a.driver_version)
     try:
         print("clone %s pid %d; ssh up after %ss" % (a.name, pid, wait_ssh(st, p["key"])))
         rows = compare(st, run_probe(st, p["key"]), elapsed_s=time.monotonic() - t, net=a.net)
@@ -1724,6 +1727,8 @@ def main(argv=None):
     s = sub.add_parser("run"); s.add_argument("--dir", required=True); s.add_argument("--name", default="clone1")
     s.add_argument("--net", choices=("online", "offline"), default="offline"); s.add_argument("--offset-days", type=float, default=0)
     s.add_argument("--vnc-display", type=int); s.add_argument("--keep", action="store_true")
+    s.add_argument("--gpu", choices=("none", "kf3"), default="none", help="kf3: the virtual GPU (needs --qemu of a kf3 build and --driver-version, the run's NVIDIA version)")
+    s.add_argument("--qemu", help="qemu-system-x86_64 binary (the kf3 build: scripts/bench/build_kf3.sh)"); s.add_argument("--driver-version")
     s = sub.add_parser("offline-check"); s.add_argument("--dir", required=True); s.add_argument("--name", default="check1")
     s.add_argument("--reboots", type=int, default=0, help="E1: reboot the clone this many times and re-check")
     s.add_argument("--advance-days", type=float, default=0, help="E3: throwaway clone only; start the recorded clock this many days later")
