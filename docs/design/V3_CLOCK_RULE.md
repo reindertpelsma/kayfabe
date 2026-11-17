@@ -52,6 +52,10 @@ effective offline clock is the floor. With no software loaded the floor is the r
 
 ## Network and strictness
 
+- 2026-11-17 (owner): the SPECviewperf stage launches its open LTSC guest online (`KF_SPEC_NET=online`, default; `docs/design/V3_SPEC_GATE.md`
+  section 5a), so by this rule it runs the real clock. `KF_SPEC_NET=offline` gives the recorded clock again. `win_vm.sh` and `clockrule.py` are
+  unchanged; the stage only sets `WINVM_NET`. The proprietary images still stay offline.
+
 - Online with a recorded clock is always refused (`online_recorded_clock`).
 - Offline on the real clock: with no `clock.json` (older or mid-build images) the launcher falls back to the real clock, prints one
   line `KF_CLOCK_NO_RECORD image=<name> using=real` and writes verdict WARN to `logs/clock_verdict.json`. `WINVM_CLOCK_STRICT=1`

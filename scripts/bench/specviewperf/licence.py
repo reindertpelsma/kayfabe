@@ -3,7 +3,7 @@
 """The licence readout of the SPECviewperf stage's guest, as pure functions (stdlib only, GPU-free).
 
 STATUS: CODE, 2026-11-17 (claude/spec-online-ltsc-20261117; docs/design/V3_SPEC_GATE.md, section "Guest network and licence
-probe"). GPU-free tests only (scripts/ci/test_spec_online_ltsc.py, scripts/ci/spec_stage_mutants.py); no box has run it.
+probe"). GPU-free tests only (scripts/ci/test_vast_spec_online_ltsc.py, scripts/ci/spec_stage_mutants.py); no box has run it.
 
 The Windows evaluation guest needs the network and the real time to complete its own start-up validation. The stage probes the
 guest at boot, about every 15 minutes and at the end with scripts/bench/windows/spec/licence_probe.ps1 (read-only), and this

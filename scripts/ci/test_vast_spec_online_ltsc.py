@@ -125,6 +125,11 @@ class GuestNetwork(Case):
         self.go(KF_SPEC_NET="offline")
         self.assertIn("SPEC_NOTE guest network=offline", self.p.stdout)
 
+    def test_the_network_is_recorded_in_the_stage_log_of_the_evidence(self):
+        self.go()
+        self.assertIn("guest network=online", self.evidence("stage.log"))
+        self.assertIn("the Windows evaluation guest needs the network and the real time", self.evidence("stage.log"))
+
 
 class LicenceProbe(Case):
     def test_the_probe_is_on_by_default_at_boot_after_each_viewset_and_at_the_end(self):
@@ -135,14 +140,23 @@ class LicenceProbe(Case):
         self.assertEqual(len([x for x in labels if x.startswith("after_")]), 4, labels)
         self.assertEqual(labels[-1], "end", labels)
 
+    def test_one_probe_per_moment_and_no_more(self):
+        self.go()
+        # the boot, one after each of the four viewsets, the end
+        self.assertEqual(len(re.findall(r"^probe run", self.sb.calls(), re.M)), 6, self.sb.calls())
+        self.go(KF_SPEC_LICENCE_PROBE="1", KF_SPEC_NET="offline")
+        self.assertEqual(len(re.findall(r"^probe run", self.sb.calls(), re.M)), 6)
+
     def test_every_state_line_says_state_and_network(self):
         self.go()
+        self.assertGreaterEqual(len(self.states()), 6)
         for label, rest in self.states():
             self.assertIn("status=Licensed", rest)
             self.assertIn("up_min=5", rest)
             self.assertIn("wlms=Running", rest)
             self.assertTrue(rest.endswith("net=online"), rest)
         self.go(KF_SPEC_NET="offline")
+        self.assertGreaterEqual(len(self.states()), 6)
         self.assertTrue(all(rest.endswith("net=offline") for _, rest in self.states()))
 
     def test_zero_and_off_switch_the_probe_off(self):
@@ -167,6 +181,12 @@ class LicenceProbe(Case):
         periodic = [rest for a, rest in self.states() if "_up" in a]
         self.assertGreaterEqual(len(periodic), 2)
         self.assertTrue(all("status=Licensed" in r and r.endswith("net=online") for r in periodic), periodic)
+
+    def test_the_wrapper_passes_every_state_line_the_stage_keeps(self):
+        self.go(wrapper=True)
+        kept = self.evidence("licence_states.txt").splitlines()
+        self.assertGreaterEqual(len(kept), 6)
+        self.assertEqual([l for l in self.p.stdout.splitlines() if l.startswith("SPEC_LICENCE_STATE ")], kept)
 
     def test_a_short_viewset_needs_no_repeat(self):
         self.go()
@@ -266,6 +286,17 @@ class ShutdownClassification(Case):
         self.assertEqual(self.rows["blender-01"]["reason"], "GUEST")
         self.assertEqual(self.line(), [])
 
+    def test_the_forensic_boot_is_probed_like_any_other_and_says_so(self):
+        self.die(viewset="enscape-01", boot="run3")
+        self.assertIn("forensic_boot2", [a for a, _ in STATE.findall(self.p.stdout)])
+        self.assertEqual(self.p.stdout.count("SPEC_ROW name=enscape-01 "), 1)
+
+    def test_an_old_1074_is_not_the_cause_of_the_last_viewset_either(self):
+        self.die(viewset="enscape-01", fixture=OLD_WLMS)
+        self.assertEqual(self.rows["enscape-01"]["reason"], "GUEST")
+        self.assertEqual(self.line(), [])
+        self.assertEqual(self.p.stdout.count("SPEC_ROW name=enscape-01 "), 1)
+
     def test_the_last_viewset_that_dies_gets_one_more_boot_to_be_read(self):
         # enscape-01 is the last viewset of lane A: boots copy1, run2 (energy, creo, blender), the forensic boot is run3
         p = self.die(viewset="enscape-01", boot="run3")
@@ -274,17 +305,36 @@ class ShutdownClassification(Case):
         self.assertIn("one more boot to read why the guest went down during enscape-01", p.stdout)
         self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_FAIL")
 
+    def limit_run(self):
+        # max_guest_boots is 3: energy dies on the 1st lane boot (read by the 2nd), creo on the 2nd (read by the 3rd), blender passes
+        # on the 3rd, enscape (the last) dies on it, and no boot is left to read why
+        scn = {"viewset__%s" % n: "die_mid" for n in ("energy-04", "creo-04", "enscape-01")}
+        scn.update({"polls__%s" % n: 1 for n in ("energy-04", "creo-04", "enscape-01")})
+        scn.update({"licence__run3": readout(WLMS, 5), "licence__run4": readout(WLMS, 5), "licence__run5": readout(WLMS, 5)})
+        return self.go(**scn)
+
     def test_no_forensic_boot_beyond_the_boot_limit(self):
-        # max_guest_boots is 3: blender dies on the 1st lane boot, enscape on the 2nd, a 3rd is the forensic one
-        self.go(**{"viewset__blender-01": "die_mid", "viewset__enscape-01": "die_mid", "polls__blender-01": 1, "polls__enscape-01": 1,
-                   "licence__run3": readout(WLMS, 5), "licence__run4": readout(WLMS, 5)})
-        self.assertLessEqual(len(self.runs()) - 1, 3)  # the copy boot is not a lane boot
+        self.limit_run()
+        self.assertEqual(len(self.runs()) - 1, 3, self.p.stdout)  # the copy boot is not a lane boot
+        self.assertNotIn("one more boot", self.p.stdout)
+
+    def test_a_row_without_a_boot_left_to_read_it_stays_a_bare_guest_row_once(self):
+        self.limit_run()
+        self.assertEqual({n: r["reason"] for n, r in self.rows.items()},
+                         {"energy-04": "GUEST_SHUTDOWN_LICENCE", "creo-04": "GUEST_SHUTDOWN_LICENCE", "blender-01": "-", "enscape-01": "GUEST"})
+        self.assertEqual(self.order, ["energy-04", "creo-04", "blender-01", "enscape-01"])
 
     def test_without_the_probe_the_row_is_emitted_at_once_as_a_bare_guest(self):
         self.die(KF_SPEC_LICENCE_PROBE="0")
         self.assertEqual(self.rows["blender-01"]["reason"], "GUEST")
         self.assertEqual(self.line(), [])
         self.assertNotIn("one more boot", self.p.stdout)
+
+    def test_the_wrapper_keeps_the_licence_row_and_puts_the_shutdown_line_before_it(self):
+        self.die(wrapper=True)
+        lines = self.p.stdout.splitlines()
+        row = next(i for i, l in enumerate(lines) if l.startswith("SPEC_ROW name=blender-01 result=FAIL subtests=0/0 reason=GUEST_SHUTDOWN_LICENCE "))
+        self.assertTrue(lines[row - 1].startswith("SPEC_GUEST_SHUTDOWN_LICENCE viewset=blender-01 event=1074 "), lines[row - 1])
 
     def test_the_classification_passes_the_wrapper_and_the_payload_pattern(self):
         self.die(wrapper=True)
@@ -340,6 +390,24 @@ class LicenceModule(unittest.TestCase):
         older = event("2026-11-17T10:30:00Z", r"C:\w\wlms.exe", "Other", "evaluation first")
         newer = event("2026-11-17T11:30:00Z", r"C:\w\wlms.exe", "Other", "evaluation second")
         self.assertIn("evaluation_second", L.shutdown_line(readout(newer + older), "blender-01"))
+
+    def test_the_newest_licence_event_is_reported_whatever_the_order_of_the_readout(self):
+        older = event("2026-11-17T10:30:00Z", r"C:\w\wlms.exe", "Other", "evaluation first")
+        newer = event("2026-11-17T11:30:00Z", r"C:\w\wlms.exe", "Other", "evaluation second")
+        self.assertIn("evaluation_second", L.shutdown_line(readout(older + newer), "blender-01"))
+
+    def test_the_newest_of_three_licence_events_is_reported(self):
+        mid = event("2026-11-17T10:45:00Z", r"C:\w\wlms.exe", "Other", "evaluation middle")
+        old = event("2026-11-17T10:30:00Z", r"C:\w\wlms.exe", "Other", "evaluation oldest")
+        new = event("2026-11-17T11:30:00Z", r"C:\w\wlms.exe", "Other", "evaluation newest")
+        self.assertIn("evaluation_newest", L.shutdown_line(readout(old + new + mid), "blender-01"))
+        self.assertIn("evaluation_newest", L.shutdown_line(readout(mid + old + new), "blender-01"))
+
+    def test_a_product_key_in_the_expiry_text_is_dropped(self):
+        raw = readout().replace("LIC_DLV_BEGIN", "  Key ABCDE-FGHIJ-KLMNO-PQRST-UVWXY activation 0a1b2c3d-1111-4222-8333-444455556666\nLIC_DLV_BEGIN")
+        line = L.state_line(raw, "end", "online")
+        self.assertNotRegex(line, "ABCDE|FGHIJ|0a1b2c3d")
+        self.assertIn("expiry=Windows", line)
 
     def test_last_boot(self):
         self.assertEqual(L.last_boot(readout()), "2026-11-17T10:00:00Z")

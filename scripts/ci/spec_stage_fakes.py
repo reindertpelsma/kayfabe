@@ -261,7 +261,7 @@ FAKES = {
 
 def healthy_licence(tag="x", up_min=5):
     """A licence_probe.ps1 readout of a guest that is up for `up_min` minutes. It carries what the status lines must NOT
-    print: a partial product key, an activation id, a computer name and an account name (test_spec_online_ltsc.py)."""
+    print: a partial product key, an activation id, a computer name and an account name (test_vast_spec_online_ltsc.py)."""
     return (
         "LIC_TIME utc=2026-11-17T10:%02d:00.0000000Z local=x tz=UTC\n"
         "LIC_OS caption='Windows 11 Enterprise LTSC Evaluation' build=26100 install=2026-11-10T09:00:00.0000000Z lastboot=2026-11-17T10:00:00.0000000Z\n"
