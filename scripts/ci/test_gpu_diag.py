@@ -24,9 +24,9 @@ import test_propimage_apps_b_stage as tb  # noqa: E402
 import test_propimage_check as tpc  # noqa: E402
 
 m = tpc.m
-EXPECTED = "GPU-11111111-2222-5333-8444-555555555555"
-OTHER = "GPU-99999999-8888-5777-8666-555555555555"
-HOST = "GPU-aaaaaaaa-bbbb-5ccc-8ddd-eeeeeeeeeeee"
+EXPECTED = "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001"
+OTHER = "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0002"
+HOST = "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003"
 STARTED = {"class": "Display", "present": True, "status": "OK", "problem": 0, "service": "nvlddmkm"}
 BASIC = {"class": "Display", "present": True, "status": "OK", "problem": 0, "service": "BasicDisplay"}
 CODE43 = {"class": "Display", "present": True, "status": "Error", "problem": 43, "service": "nvlddmkm"}
