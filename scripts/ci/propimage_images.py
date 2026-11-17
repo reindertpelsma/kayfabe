@@ -50,8 +50,10 @@ PLAIN_ARGS = ("--superposition-run", "--fb-mb")            # the harness switche
 
 
 # ---------------------------------------------------------------- sources
-def all_pins(directory=HERE):
-    """{ref: item} over every pins file next to this module (a definition set may add its own file; refs must be unique)."""
+def all_pins(directory=HERE, extra=None):
+    """{ref: item} over every pins file next to this module (a definition set may add its own file; refs must be unique among them).
+    `extra` is the deployment's own pins file (`--pins FILE`: YOUR objects, YOUR sha256 and size, the same format): its refs ADD to the list and
+    WIN over a repository ref of the same name, because the repository's pins describe the repository's own deployment, not yours."""
     out = {}
     for path in sorted(Path(directory).glob(PINS_GLOB)):
         for item in pa.load_pins(path)["items"]:
@@ -60,6 +62,15 @@ def all_pins(directory=HERE):
                 if ref in out:
                     raise pa.Refused("PIN_DUPLICATE")
                 out[ref] = dict(item, pins_file=path.name)
+    if extra is not None:
+        mine = {}
+        for item in pa.load_pins(extra)["items"]:
+            ref = item.get("ref")
+            if ref:
+                if ref in mine:
+                    raise pa.Refused("PIN_DUPLICATE")
+                mine[ref] = dict(item, pins_file=Path(extra).name)
+        out.update(mine)
     return out
 
 
@@ -171,9 +182,42 @@ class Hooks:
         return (self._load_dir or (lambda d: self.pi_check.load_image(None, d)))(directory)
 
 
-def materialize(ctx, img, base, pins, logs, hooks):
-    """Source -> Local. Every failure is a pa.Refused with a name."""
+def tree_size(path):
+    """Bytes of the regular files under a directory (no symlinks followed)."""
+    return sum(f.stat().st_size for f in Path(path).rglob("*") if f.is_file() and not f.is_symlink())
+
+
+def settle_identity(srec, pin, computed, enforced, expect):
+    """The ONE place an identity pin is judged (docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md).
+
+    `pin` is the sha256 the spec or the deployment names for this object (or None), `computed` the sha256 of the bytes that were read (None for a
+    directory, which has no single hash), `enforced` is `propimage_runspec.pins_enforced(spec)`, `expect` the user's own `--expect-sha256`.
+    The record `srec` always gets what was computed and the verdict of the pin: identity none (no pin), match, differs, unverifiable.
+    A pin that differs or cannot be checked refuses ONLY when enforced; a standalone run records it and goes on. An `expect` refuses always."""
+    srec["pin_sha256"] = pin
+    if pin is None:
+        srec["identity"] = "none"
+    elif computed is None:
+        srec["identity"] = "unverifiable"
+    else:
+        srec["identity"] = "match" if computed == pin else "differs"
+    srec["expect_sha256"] = expect
+    if expect is not None:
+        if computed is None:
+            raise pa.Refused("EXPECT_SHA256_ON_DIRECTORY")
+        if computed != expect:
+            raise pa.Refused("EXPECT_SHA256_MISMATCH")
+    if enforced and srec["identity"] == "differs":
+        raise pa.Refused("SOURCE_SHA256_MISMATCH")
+    if enforced and srec["identity"] == "unverifiable":
+        raise pa.Refused("SHA256_ON_DIRECTORY")
+
+
+def materialize(ctx, img, base, pins, logs, hooks, srec=None, enforced=True, expect=None):
+    """Source -> Local. Every failure is a pa.Refused with a name. `srec` (the image record's `source`) is filled as soon as a hash is known, so a
+    refused run still says what it read; `enforced` and `expect`: see settle_identity. The defaults are the strict behaviour."""
     loc, src = Local(), img["disk"]
+    srec = srec if srec is not None else {}
     base.mkdir(parents=True, exist_ok=True)
     if src["from"] == "file":
         path = Path(src["ref"])
@@ -184,16 +228,17 @@ def materialize(ctx, img, base, pins, logs, hooks):
         path.parent.mkdir(exist_ok=True)
         loc.created.append(base / "dl")
         try:
-            loc.sha256 = hooks.fetch_url(src["ref"], path, src["sha256"])
+            # strict: the pin is checked while the bytes arrive; standalone: nothing is asserted, the hash is only computed
+            loc.sha256 = hooks.fetch_url(src["ref"], path, src["sha256"] if enforced else None)
         except OSError:
             raise pa.Refused("DOWNLOAD") from None
-    else:   # pin
+    else:   # pin: a named object of a deployment's pins file; its sha256 and size are the transfer manifest (the downloader verifies them)
         item = pins.get(src["ref"])
         if item is None:
             raise pa.Refused("PIN_UNKNOWN")
         if item["sha256"] is None or item["size"] is None:
             raise pa.Refused("PIN_UNSET:" + item["role"])
-        if src["sha256"] and src["sha256"] != item["sha256"]:
+        if enforced and src["sha256"] and src["sha256"] != item["sha256"]:
             raise pa.Refused("PIN_SHA256_MISMATCH")
         dl = base / "dl"
         dl.mkdir(exist_ok=True)
@@ -203,13 +248,14 @@ def materialize(ctx, img, base, pins, logs, hooks):
         pa.fetch(ctx, mpath, dl, logs)
         path, loc.sha256 = dl / item["dest"], item["sha256"]
     if path.is_dir():
-        if src["sha256"]:
-            raise pa.Refused("SHA256_ON_DIRECTORY")
+        srec["size"] = tree_size(path)
+        settle_identity(srec, src["sha256"], None, enforced, expect)
         return _from_dir(img, path, loc, hooks)
-    if src["sha256"] and loc.sha256 is None:
-        loc.sha256 = hooks.sha256_file(path)
-        if loc.sha256 != src["sha256"]:
-            raise pa.Refused("SOURCE_SHA256_MISMATCH")
+    srec["size"] = path.stat().st_size
+    if loc.sha256 is None:
+        loc.sha256 = hooks.sha256_file(path)                 # always: the record carries what was read, pinned or not
+    srec["sha256"] = loc.sha256
+    settle_identity(srec, src["sha256"], loc.sha256, enforced, expect)
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as z:
             names = set(z.namelist())
@@ -223,7 +269,7 @@ def materialize(ctx, img, base, pins, logs, hooks):
             raise pa.Refused("UNPACK", pa.clean(exc, 120)) from None
         return _from_dir(img, out, loc, hooks)
     if img["state"] == "auto" and img["state_file"] is not None:
-        return _synth_dir(img, path, loc, base, hooks)
+        return _synth_dir(img, path, loc, base, hooks, enforced, srec)
     loc.kind, loc.disk = "plain", path
     return loc
 
@@ -245,7 +291,7 @@ def _from_dir(img, d, loc, hooks):
     return loc
 
 
-def _synth_dir(img, disk, loc, base, hooks):
+def _synth_dir(img, disk, loc, base, hooks, enforced=True, srec=None):
     """A bare disk plus an explicit state.json: a directory the harness accepts (the manifest is made here, from the two files)."""
     sf = img["state_file"]
     if sf["from"] != "file" or not Path(sf["ref"]).is_file():
@@ -256,6 +302,10 @@ def _synth_dir(img, disk, loc, base, hooks):
     (d / "image.qcow2").symlink_to(Path(disk).resolve())
     shutil.copyfile(sf["ref"], d / "state.json")
     members = {"image.qcow2": hooks.sha256_file(d / "image.qcow2"), "state.json": hooks.sha256_file(d / "state.json")}
+    if srec is not None:
+        srec["state_sha256"] = members["state.json"]                  # the user's state.json: recorded always, pinned only when enforced
+    if enforced and sf["sha256"] and sf["sha256"] != members["state.json"]:
+        raise pa.Refused("STATE_FILE_SHA256_MISMATCH")
     (d / "manifest.json").write_text(json.dumps({"manifest_version": 1, "members": members}))
     return _from_dir(img, d, loc, hooks)
 
@@ -327,7 +377,7 @@ def new_image_record(img):
     src = img["disk"] or img["iso"]
     ref = src.get("ref") or ""
     name = Path(ref).name if src["from"] == "file" else ref.split("?")[0].rsplit("/", 1)[-1]
-    return {"label": img["label"], "kind": img["kind"], "mode": None, "source": {"from": src["from"], "name": pa.clean(name, 60), "sha256": None},
+    return {"label": img["label"], "kind": img["kind"], "mode": None, "source": {"from": src["from"], "name": pa.clean(name, 60), "sha256": None, "size": None, "pin_sha256": None, "identity": "none", "expect_sha256": None},
             "verdict": "RETRY", "reason": "INTERRUPTED", "skip_class": None, "guest_driver": None, "decided": None, "boots": [], "apps": [], "not_run": [], "breakages": [], "unsupported": []}
 
 
@@ -356,15 +406,14 @@ def copy_evidence_for(out, evidence_dir, apps, label):
                     shutil.copyfile(src, dst / name)
 
 
-def run_image(ctx, img, index, reg, pins, flags, broker, hooks, klog, evidence_dir, cpu_rows, gop):
+def run_image(ctx, img, index, reg, pins, flags, broker, hooks, klog, evidence_dir, cpu_rows, gop, enforced=True, expect=None):
     """One image's record. Never raises for a named refusal: the record says so."""
     rec = new_image_record(img)
     base, logs, loc = ctx.prefix / ("img%d" % (index + 1)), ctx.prefix / "logs", None
     try:
         if img["kind"] == "built":
             raise pa.Refused("BUILT_NOT_IMPLEMENTED")        # phase 2: install an ISO, then the applications
-        loc = materialize(ctx, img, base, pins, logs, hooks)
-        rec["source"]["sha256"] = loc.sha256
+        loc = materialize(ctx, img, base, pins, logs, hooks, rec["source"], enforced, expect)
         rec["mode"] = "ci" if loc.kind == "state" else "plain"
         guest = (loc.state or {}).get("qemu", {}).get("guest_driver") if type(loc.state) is dict else None
         rec["guest_driver"] = guest if type(guest) is str and pa.re.fullmatch(r"\d+\.\d+(\.\d+)?", guest) else None
@@ -533,7 +582,7 @@ def summary_line(rec):
 
 def run_images(ctx, spec, evidence_dir=None, hooks=None, gop=None):
     """The generic stage. Returns the record; never raises for a named refusal."""
-    rec = {"schema": SCHEMA, "verdict": "RETRY", "reason": "INTERRUPTED", "sha": ctx.sha, "strict": False, "family": None, "cpu_vendor": None,
+    rec = {"schema": SCHEMA, "verdict": "RETRY", "reason": "INTERRUPTED", "sha": ctx.sha, "strict": False, "pins_enforced": False, "family": None, "cpu_vendor": None,
            "preflight": [], "images": [], "summary": {"ran": 0, "passed": 0, "failed": 0, "skipped": 0, "classes": {}, "lanes": {"gate": {"ran": 0, "passed": 0}, "discovery": {"ran": 0, "passed": 0}}},
            "strict_failures": [], "breakages": [], "platform": "kf3", "rows": []}
     klog = None
@@ -541,12 +590,14 @@ def run_images(ctx, spec, evidence_dir=None, hooks=None, gop=None):
         pa.check_prefix(ctx.prefix)
         spec = S.validate(spec)
         rec["strict"] = spec["strict"]
+        enforced, expect = S.pins_enforced(spec), spec["expect_sha256"]
+        rec["pins_enforced"] = enforced
         if any(i["kind"] == "built" for i in spec["images"]):
             raise pa.Refused("BUILT_NOT_IMPLEMENTED")        # phase 2: refused before anything else, on any machine
         reg = R.load_registry()
         if spec["strict"]:
             S.strict_unknown_app(spec, reg)                 # a strict instruction naming an app with no definition fails by name, before any boot
-        pins = all_pins() if any(i["disk"] and i["disk"]["from"] == "pin" for i in spec["images"]) else {}
+        pins = all_pins(extra=ctx.pins_path if Path(ctx.pins_path) != pa.PINS_PATH else None) if any(i["disk"] and i["disk"]["from"] == "pin" for i in spec["images"]) else {}
         hooks = hooks or Hooks(pa.harness(ctx.checkout))
         pi = hooks.pi_check.PI if hooks.pi_check else pa.harness(ctx.checkout).PI
         try:
@@ -579,7 +630,7 @@ def run_images(ctx, spec, evidence_dir=None, hooks=None, gop=None):
         flags = str(ctx.checkout / "scripts/bench/windows/kf3_flags.sample.env")
         for n, img in enumerate(spec["images"]):
             rec["images"].append(run_image(ctx, img, n, reg, pins, flags, str(broker), hooks, klog, evidence_dir, rows,
-                                           gop or ctx.prefix / "gop/kf-gop.signed.efi"))
+                                           gop or ctx.prefix / "gop/kf-gop.signed.efi", enforced, expect.get(img["label"])))
             write_record(ctx.out, rec)
         rec["verdict"], rec["reason"] = grade_run(rec["images"], spec["strict"])
         if spec["strict"]:
@@ -631,6 +682,11 @@ def finish(rec, out):
     data = write_record(out, rec) if out else json.dumps(rec, separators=(",", ":"), sort_keys=True)
     print("KF_PROPIMAGE_RUN_RESULT " + data, flush=True)
     print("KF_PROPIMAGE_RUN_SUMMARY verdict=%s %s" % (rec["verdict"], summary_line(rec)), flush=True)
+    for i in rec.get("images", []):
+        src = i["source"]
+        if src["identity"] in ("differs", "unverifiable") and not rec.get("pins_enforced"):
+            print("KF_PROPIMAGE_RUN_PIN_NOTE image=%s identity=%s computed=%s pin=%s (recorded, not enforced outside strict)" % (
+                i["label"], src["identity"], (src["sha256"] or "-")[:16], (src["pin_sha256"] or "-")[:16]), flush=True)
     for b in rec.get("breakages", []):
         print("KF_PROPIMAGE_RUN_BREAKAGE row=%s class=%s reason=%s" % (b["row"], b["class"], b["reason"].replace(" ", "_")[:80]), flush=True)
     return exit_code(rec)

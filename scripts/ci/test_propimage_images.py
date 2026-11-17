@@ -229,11 +229,11 @@ class MoreRefusals(unittest.TestCase):
         env.run(doc({"kind": "prebuilt", "disk": src(env.state_dir())}))
         self.assertEqual(env.cmds, [])
 
-    def test_a_bare_disk_with_the_wrong_sha256_is_refused(self):
+    def test_a_bare_disk_with_the_wrong_sha256_is_refused_only_in_a_strict_run(self):
         env = Env(self)
         d = env.tmp / "bare.qcow2"
         d.write_text("x")
-        rec = env.run(doc({"kind": "prebuilt", "disk": src(d, sha256="f" * 64), "ssh": SSH, "apps": {"3dmark": {"mode": "present"}}}))
+        rec = env.run(dict(doc({"kind": "prebuilt", "disk": src(d, sha256="f" * 64), "ssh": SSH, "apps": {"3dmark": {"mode": "present"}}}), strict=True))
         self.assertEqual((rec["images"][0]["reason"], env.cmds), ("SOURCE_SHA256_MISMATCH", []))
 
     def test_every_planned_app_is_in_exactly_one_boot(self):
@@ -380,25 +380,25 @@ class Sources(unittest.TestCase):
         rec = env.run(doc({"kind": "prebuilt"}))
         self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "SPEC:DISK_REQUIRED:image1"))
 
-    def test_a_file_with_the_wrong_sha256_is_refused_and_the_right_one_runs(self):
+    def test_a_file_with_the_wrong_sha256_is_refused_in_a_strict_run_and_the_right_one_runs(self):
         env = Env(self)
         zpath = env.tmp / "img.zip"
         with zipfile.ZipFile(zpath, "w") as z:
             for n in ("image.qcow2", "state.json", "manifest.json"):
                 z.writestr(n, "x")
-        bad = env.run(doc({"kind": "prebuilt", "disk": src(zpath, sha256="e" * 64), "only": ["3dmark"]}))
+        bad = env.run(dict(doc({"kind": "prebuilt", "disk": src(zpath, sha256="e" * 64), "apps": {"3dmark": {"mode": "present"}}}), strict=True))
         self.assertEqual((bad["images"][0]["verdict"], bad["images"][0]["reason"]), ("REFUSED", "SOURCE_SHA256_MISMATCH"))
         env2 = Env(self)
         zpath2 = env2.tmp / "img.zip"
         shutil.copyfile(zpath, zpath2)
-        good = env2.run(doc({"kind": "prebuilt", "disk": src(zpath2, sha256=H64), "only": ["3dmark"]}))
+        good = env2.run(dict(doc({"kind": "prebuilt", "disk": src(zpath2, sha256=H64), "apps": {"3dmark": {"mode": "present"}}}), strict=True))
         self.assertEqual((good["images"][0]["verdict"], good["images"][0]["source"]["sha256"]), ("PASS", H64))
         self.assertTrue(zpath2.is_file())                                         # the input zip stays
         self.assertFalse((env2.ctx.prefix / "img1/unpacked").exists())            # what the run unpacked is gone
 
-    def test_a_sha256_on_a_directory_is_refused(self):
+    def test_a_sha256_on_a_directory_is_refused_in_a_strict_run(self):
         env = Env(self)
-        rec = env.run(doc({"kind": "prebuilt", "disk": src(env.state_dir(), sha256=H64), "only": ["3dmark"]}))
+        rec = env.run(dict(doc({"kind": "prebuilt", "disk": src(env.state_dir(), sha256=H64), "apps": {"3dmark": {"mode": "present"}}}), strict=True))
         self.assertEqual(rec["images"][0]["reason"], "SHA256_ON_DIRECTORY")
 
     def test_missing_sources_and_odd_zips_are_named(self):
@@ -441,8 +441,9 @@ class Sources(unittest.TestCase):
                     z.writestr(n, "x")
             return H64
         env.hooks.fetch_url = fake_fetch
-        rec = env.run(doc({"kind": "prebuilt", "disk": {"from": "url", "ref": "https://example.invalid/a.zip", "sha256": H64}, "only": ["3dmark"]}))
-        self.assertEqual(got, [("https://example.invalid/a.zip", H64)])
+        rec = env.run(dict(doc({"kind": "prebuilt", "disk": {"from": "url", "ref": "https://example.invalid/a.zip", "sha256": H64}, "apps": {"3dmark": {"mode": "present"}}}),
+                           strict=True))
+        self.assertEqual(got, [("https://example.invalid/a.zip", H64)])                # strict: the pin is checked while the bytes arrive
         self.assertEqual(rec["images"][0]["verdict"], "PASS")
         self.assertFalse((env.ctx.prefix / "img1/dl").exists())
 
@@ -669,7 +670,7 @@ class ReportPolicy(unittest.TestCase):
         rec["summary"].update(skipped=1, classes={"CONSTRAINT": 1})
         with self.assertRaises(ValueError):
             vast_report.validate_propimage_run(rec)
-        rec["strict"] = False
+        rec["strict"] = rec["pins_enforced"] = False
         vast_report.validate_propimage_run(rec)
 
     def test_the_same_skip_under_a_permissive_pass_validates(self):

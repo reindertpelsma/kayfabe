@@ -424,7 +424,7 @@ def validate_propimage_run(value):
     num = lambda v, hi=1 << 40: type(v) is int and 0 <= v <= hi  # noqa: E731
     verdicts = ("PASS", "FAIL", "RETRY", "REFUSED", "SKIPPED")
     classes = ("MISSING_INPUT", "NO_DRIVER", "NOT_INSTALLED", "NOT_PROVIDED", "CONSTRAINT")
-    top = {"schema", "verdict", "sha", "reason", "family", "cpu_vendor", "preflight", "images", "strict", "summary", "strict_failures", "breakages", "platform", "rows"}
+    top = {"schema", "verdict", "sha", "reason", "family", "cpu_vendor", "preflight", "images", "strict", "pins_enforced", "summary", "strict_failures", "breakages", "platform", "rows"}
     ok = type(value) is dict and top <= set(value) <= top | {"error"} and value["schema"] == "kayfabe.propimage-run/1"
     ok = ok and value["verdict"] in verdicts and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
     ok = ok and type(value["reason"]) is str and word.fullmatch(value["reason"]) is not None and ("error" not in value or text.fullmatch(str(value["error"])))
@@ -433,7 +433,7 @@ def validate_propimage_run(value):
         type(r) is dict and set(r) == {"name", "status", "detail"} and re.fullmatch(r"[a-z0-9_]{1,24}", str(r["name"]))
         and r["status"] in ("MATCH", "MISMATCH", "WARN") and text.fullmatch(str(r["detail"])) for r in value["preflight"])
     sm = value["summary"] if ok else None
-    ok = ok and type(value["strict"]) is bool and type(sm) is dict and set(sm) == {"ran", "passed", "failed", "skipped", "classes", "lanes"}
+    ok = ok and type(value["strict"]) is bool and value["pins_enforced"] is value["strict"] and type(sm) is dict and set(sm) == {"ran", "passed", "failed", "skipped", "classes", "lanes"}
     ok = ok and all(num(sm[k], 4096) for k in ("ran", "passed", "failed", "skipped")) and sm["passed"] + sm["failed"] == sm["ran"]
     ok = ok and type(sm["classes"]) is dict and set(sm["classes"]) <= set(classes) and all(num(v, 4096) for v in sm["classes"].values())
     ok = ok and sum(sm["classes"].values()) == sm["skipped"]
@@ -470,8 +470,17 @@ def validate_propimage_run(value):
         ok = ok and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}", str(im["label"])) and im["mode"] in (None, "ci", "plain")
         ok = ok and type(im["reason"]) is str and word.fullmatch(im["reason"]) is not None and (im["verdict"] in ("PASS",) or im["reason"] != "")
         src = im["source"] if ok else None
-        ok = ok and type(src) is dict and set(src) == {"from", "name", "sha256"} and src["from"] in ("official", "file", "url", "pin")
-        ok = ok and text.fullmatch(str(src["name"])) and (src["sha256"] is None or re.fullmatch("[0-9a-f]{64}", str(src["sha256"])))
+        skeys = {"from", "name", "sha256", "size", "pin_sha256", "identity", "expect_sha256"}
+        ok = ok and type(src) is dict and skeys <= set(src) <= skeys | {"state_sha256"} and src["from"] in ("official", "file", "url", "pin")
+        ok = ok and text.fullmatch(str(src["name"])) and all(src[k] is None or re.fullmatch("[0-9a-f]{64}", str(src[k]))
+                                                              for k in ("sha256", "pin_sha256", "expect_sha256", "state_sha256") if k in src)
+        # identity pins (docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md): the record always says what was read and what the pin said; a pin that did
+        # not match is only possible in a run that did not enforce pins, and a pin that matched needs a computed hash equal to it
+        ok = ok and src["identity"] in ("none", "match", "differs", "unverifiable") and (src["size"] is None or num(src["size"], 1 << 50))
+        ok = ok and (src["identity"] == "none") == (src["pin_sha256"] is None)
+        ok = ok and (src["identity"] != "match" or src["sha256"] == src["pin_sha256"]) and (src["identity"] != "differs" or src["sha256"] not in (None, src["pin_sha256"]))
+        ok = ok and (not value["pins_enforced"] or src["identity"] in ("none", "match") or im["verdict"] == "REFUSED")
+        ok = ok and (src["expect_sha256"] is None or im["verdict"] == "REFUSED" or src["sha256"] == src["expect_sha256"])
         ok = ok and type(im["boots"]) is list and len(im["boots"]) <= 16 and all(
             type(b) is dict and {"index", "apps", "rc", "secs", "clock", "net", "proven"} <= set(b) <= {"index", "apps", "rc", "secs", "clock", "net",
                                                                                                  "proven", "host_xid_unattributed", "started_utc", "ended_utc"}
