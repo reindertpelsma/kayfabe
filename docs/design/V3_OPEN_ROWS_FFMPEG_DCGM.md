@@ -44,7 +44,7 @@ Owner rule 2026-11-17: a sha256 of a downloaded binary pinned in git is not an a
 
 DCGM exists in NVIDIA's public repository without a login [read: the repository's `Packages` index, 2026-11-17, versions 2.4.5 to 4.8.0 for Ubuntu 22.04 and 24.04]. Redistribution is not needed: each machine installs it itself.
 
-**Open decision for the owner (not taken here).** Under the Vast payload `apt-get` is a cache-only shell function that holds no NVIDIA package, and the one sanctioned bypass is in `pin_lib.sh` (`test_apps_pins.py` pins it to exactly one place). `provision.sh` therefore does NOT bypass it: under the payload the DCGM step reports `OPENROWS_dcgm=FAIL reason=apt_shim_cache_only` and the row reports `dcgm=NOT_RUN reason=dcgmi_not_installed`, while the NVML sweep, the nvidia-smi sweep and the FFmpeg row run. Letting Worker runs install DCGM needs a third bypass call in `pin_lib.sh` and the test's expected count changed; that is the owner's call.
+**Decided 2026-11-17 (coordinator): Worker runs stay at `dcgm=NOT_RUN`.** Under the Vast payload `apt-get` is a cache-only shell function that holds no NVIDIA package. No bypass is added: the sanctioned one is in `pin_lib.sh` and `test_apps_pins.py` pins it to that one place. Making DCGM a member of the cache-only package set was examined and not done, because it would weaken that set: the set is `provision_box.sh --packages <profile>` and a test fails on any cuda or nvidia package in it (owner ruling 2026-11-07, nothing from NVIDIA is stored in our images, R2 or release assets); the cache builder `setup_cache_build.py` fetches from Ubuntu archive hosts only, and the cache is a stored blob, so DCGM's `.deb` files would be stored NVIDIA binaries from a new host. So `provision.sh` reports `OPENROWS_dcgm=FAIL reason=apt_shim_cache_only` under the payload and the row reports `dcgm=NOT_RUN reason=dcgmi_not_installed`, while the NVML sweep, the nvidia-smi sweep and the FFmpeg row run; a third-party standalone run installs DCGM from NVIDIA's signed repository as above.
 
 Bandwidth: a standalone machine downloads the distribution's `ffmpeg` and its dependencies and DCGM (section 10 gives the sizes the boxes logged); `ci/vast-broker/bandwidth.json` carries both under the `apps` stage.
 
@@ -165,7 +165,7 @@ For the guest run (not done); a result that contradicts one of these says kayfab
 ## 12. Not done
 
 - No kayfabe guest has run either row; the tolerances of `nvml_field_classes.tsv` and every guest expectation are [inferred].
-- The apt bypass for Worker runs (section 3) and the DCGM bandwidth under the Worker are open.
+- DCGM under the Worker is NOT_RUN by decision (section 3); its bandwidth is therefore not counted for the Worker.
 - `dcgm_root.tar` is 2.0 GB uncompressed for the cuda12 flavour [run: traces/open_rows_ffdcgm_20261117/vm_rtx3060_ga104_driver_575.51.03/bundle_tar_facts.txt]; what it adds to `bundle.tgz` is not measured.
 - No R2 cache of any fetched artifact exists in this change; if one is added it must be optional, and a value the user passes is trusted as given (owner addendum 2026-11-17).
 - Hopper and Blackwell codec tables are not asserted: the matrix derives them; the video-engine document says they were not measured on hardware.
