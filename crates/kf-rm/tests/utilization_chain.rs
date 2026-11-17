@@ -947,7 +947,7 @@ fn rusd_reboots_keep_publishing_and_an_unknown_driver_publishes_nothing() {
             mem: vec![0u8; 4096],
             writes: Vec::new(),
         };
-        let mut serve =
+        let serve =
             |life: &mut Rig, state: &Arc<UtilizationState>, ram: &mut Ram, gpu: u8, at: u64| {
                 life.push(gpu, at);
                 assert!(
