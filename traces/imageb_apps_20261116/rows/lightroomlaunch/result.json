@@ -1,0 +1,20 @@
+﻿{
+    "app":  "lightroomlaunch",
+    "started":  1794785253.719,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "main_window":  true,
+    "titles":  [
+                   "Lightroom Catalog - Adobe Photoshop Lightroom Classic - Library"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  2829,
+    "quit":  "clean",
+    "ended":  1794785321.186,
+    "dismissed":  [
+
+                  ]
+}

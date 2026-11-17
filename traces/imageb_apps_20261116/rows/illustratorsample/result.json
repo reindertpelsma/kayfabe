@@ -1,0 +1,30 @@
+﻿{
+    "app":  "illustratorsample",
+    "started":  1794784964.764,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "out.png",
+                        "bytes":  174741,
+                        "modified":  1794785095.071
+                    },
+                    {
+                        "file":  "out.pdf",
+                        "bytes":  4607200,
+                        "modified":  1794785098.037
+                    }
+                ],
+    "source":  "Dot Pattern Vector Pack.ai",
+    "source_bytes":  3630817,
+    "js":  {
+               "w0":  "3791.2417",
+               "h0":  "3569.2861",
+               "paths":  "0",
+               "symbols":  "15"
+           },
+    "quit":  "clean",
+    "ended":  1794785108.616,
+    "dismissed":  [
+
+                  ]
+}

@@ -1,0 +1,24 @@
+﻿{
+    "app":  "premiere",
+    "started":  1794788885.265,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "sniffer.txt",
+                        "bytes":  1789,
+                        "modified":  1794788906.41
+                    }
+                ],
+    "main_window":  true,
+    "titles":  [
+                   "TopLevelWindow"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  4567,
+    "quit":  "clean",
+    "ended":  1794789021.46,
+    "dismissed":  [
+
+                  ]
+}

@@ -1,0 +1,17 @@
+{
+  "app": "photoshop",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "Retrieving the COM class factory for component with CLSID {1271048C-E6B0-4EB2-96C5-F5EEC769A313} failed due to the following error: 80080005 Server execution failed (Exception from HRESULT: 0x80080005",
+  "class": "app",
+  "limited": false,
+  "secs": 100,
+  "gpu": {
+    "required": [],
+    "verdict": "FAIL",
+    "peak": {},
+    "baseline": {},
+    "samples": 0
+  }
+}

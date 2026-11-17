@@ -1,0 +1,34 @@
+{
+  "app": "photoshop",
+  "ok": false,
+  "evidence": "FILE",
+  "signal": "",
+  "error": "application did not exit cleanly (forced)",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "OpenGL/D3D12 canvas, GPU filters (smart sharpen), 16-bit/wide-gamut, large VRAM allocation (8K, 100 layers)",
+  "platform": "kf3",
+  "secs": 534,
+  "gpu": {
+    "required": [
+      "gpu"
+    ],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 17.0,
+      "mem_mb": 5442.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 17.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 144
+    },
+    "baseline": {
+      "mem_mb": 5338.0,
+      "gpu": 5.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 1202
+  }
+}

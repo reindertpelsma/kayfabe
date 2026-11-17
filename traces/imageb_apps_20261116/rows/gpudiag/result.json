@@ -1,0 +1,32 @@
+﻿{
+    "app":  "sniffers",
+    "started":  1794783719.164,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "sniffer_premiere.txt",
+                        "bytes":  1789,
+                        "modified":  1794783748.463
+                    },
+                    {
+                        "file":  "sniffer_aftereffects.txt",
+                        "bytes":  1790,
+                        "modified":  1794783778.468
+                    },
+                    {
+                        "file":  "sniffer_mediaencoder.txt",
+                        "bytes":  1790,
+                        "modified":  1794783801.517
+                    },
+                    {
+                        "file":  "sniffer_photoshop.txt",
+                        "bytes":  3723,
+                        "modified":  1794783809.065
+                    }
+                ],
+    "quit":  "process",
+    "ended":  1794783809.074,
+    "dismissed":  [
+
+                  ]
+}
