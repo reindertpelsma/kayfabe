@@ -1,0 +1,35 @@
+{
+  "app": "aeadv3d",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "aerender exit code -1; project notes: 16bpc,renderers=ADBE Advanced 3d|ADBE Calder|ADBE Ernst,renderer=ADBE Advanced 3d,dof,light,layers3d=24,om:TIFF Sequence with Alpha\r\n",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "After Effects Advanced 3D renderer, depth of field, 24 shadow-casting 3D layers, 4K 16 bit",
+  "platform": "kf3",
+  "secs": 266,
+  "gpu": {
+    "required": [
+      "gpu"
+    ],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 42.0,
+      "mem_mb": 9610.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 42.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 102
+    },
+    "baseline": {
+      "mem_mb": 9417.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 692
+  },
+  "outputs_recorded": 7
+}

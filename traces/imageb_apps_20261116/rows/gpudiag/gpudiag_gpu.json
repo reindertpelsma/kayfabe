@@ -1,0 +1,32 @@
+{
+ "required": [],
+ "verdict": "PASS",
+ "reasons": [],
+ "baseline": {
+  "mem_mb": 5304.0,
+  "gpu": 2.0,
+  "enc_sessions": 0.0
+ },
+ "peak": {
+  "gpu": 11.0,
+  "mem_mb": 5398.0,
+  "enc_sessions": 0.0,
+  "gpu_dmon_sm": 11.0,
+  "enc": 0.0,
+  "dec": 0.0,
+  "busy_samples": 60
+ },
+ "samples": 331,
+ "dmon_samples": 166,
+ "source": "host",
+ "guest": {
+  "verdict": "PASS",
+  "reasons": [
+   "no samples: the GPU could not be read (nvidia-smi missing, no GPU or empty output)"
+  ],
+  "peak": {},
+  "baseline": {},
+  "samples": 0
+ },
+ "name": "gpudiag"
+}

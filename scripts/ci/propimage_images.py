@@ -57,9 +57,10 @@ def all_pins(directory=HERE):
         for item in pa.load_pins(path)["items"]:
             ref = item.get("ref")
             if ref:
-                if ref in out:
+                # the same object may be pinned by two image sets (the signed boot GOP is shared); two different objects under one ref are refused
+                if ref in out and any(out[ref].get(k) != item.get(k) for k in ("sha256", "size", "name", "dest")):
                     raise pa.Refused("PIN_DUPLICATE")
-                out[ref] = dict(item, pins_file=path.name)
+                out.setdefault(ref, dict(item, pins_file=path.name))
     return out
 
 

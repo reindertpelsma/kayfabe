@@ -468,6 +468,18 @@ class Sources(unittest.TestCase):
         rec = env.run(doc({"kind": "prebuilt", "disk": {"from": "pin", "ref": "no-such-pin.zip"}}))
         self.assertEqual(rec["images"][0]["reason"], "PIN_UNKNOWN")
 
+    def test_a_shared_pin_is_one_entry_and_a_conflicting_duplicate_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            item = {"role": "gop", "ref": "shared.efi", "name": "g.efi", "dest": "image/g.efi", "sha256": H64, "size": 5}
+            for n, it in (("a", item), ("b", item)):
+                (Path(d) / ("propimage_apps%s_pins.json" % ("_" + n))).write_text(json.dumps({"items": [it]}))
+            with unittest.mock.patch.object(pa, "load_pins", lambda path: json.loads(Path(path).read_text())):
+                self.assertEqual(list(images.all_pins(d)), ["shared.efi"])
+                (Path(d) / "propimage_apps_b_pins.json").write_text(json.dumps({"items": [dict(item, sha256="1" * 64)]}))
+                with self.assertRaises(pa.Refused) as c:
+                    images.all_pins(d)
+                self.assertEqual(c.exception.reason, "PIN_DUPLICATE")
+
     def test_a_pin_is_fetched_through_the_downloader_and_unpacked(self):
         env = Env(self)
         rec = env.run(doc({"kind": "prebuilt", "disk": {"from": "pin", "ref": "propimage-kfimg-20261112.zip"}, "only": ["3dmark"]}))

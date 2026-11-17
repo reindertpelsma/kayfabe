@@ -1,0 +1,34 @@
+{
+  "app": "aeparallel",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "After Effects did not finish the script (no marker)",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "four concurrent aerender processes (CUDA contexts x4), 4K",
+  "platform": "kf3",
+  "secs": 1028,
+  "gpu": {
+    "required": [
+      "gpu"
+    ],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 41.0,
+      "mem_mb": 9602.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 41.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 68
+    },
+    "baseline": {
+      "mem_mb": 9416.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 2210
+  }
+}

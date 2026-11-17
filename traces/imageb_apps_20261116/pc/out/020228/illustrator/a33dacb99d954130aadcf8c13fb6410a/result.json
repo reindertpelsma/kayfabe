@@ -1,0 +1,29 @@
+﻿{
+    "app":  "illustrator",
+    "started":  1794786305.278,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "out.png",
+                        "bytes":  661472,
+                        "modified":  1794786334.981
+                    },
+                    {
+                        "file":  "out.pdf",
+                        "bytes":  805210,
+                        "modified":  1794786335.308
+                    }
+                ],
+    "source":  "gradient_3d_colored.svg",
+    "version":  "31.0.0",
+    "js":  {
+               "w0":  "720",
+               "h0":  "705",
+               "paths":  "400"
+           },
+    "quit":  "clean",
+    "ended":  1794786338.313,
+    "dismissed":  [
+
+                  ]
+}

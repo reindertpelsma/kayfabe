@@ -1,0 +1,43 @@
+﻿{
+    "app":  "photoshop",
+    "started":  1794788170.794,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "out.png",
+                        "bytes":  2460965,
+                        "modified":  1794788639.712
+                    },
+                    {
+                        "file":  "out.psd",
+                        "bytes":  7207896,
+                        "modified":  1794788655.644
+                    }
+                ],
+    "source":  "ktiponissi_dirfys_4480x2928.jpg",
+    "version":  "28.0.0",
+    "js":  {
+               "gpuinfo":  "======= GPU || GPUDeny:               0 || GPUForce:              0 || useGPU:                1 || isGPUCapable:          1 || isGPUAllowed:          1 || GPUName:               NVIDIA GeForce RTX 4090 || GPUVendor:             NVIDIA || IsNativeGPUCapable:    1 || IsOpenCLGPUCapable:    1 || GPU accessible RAM:                 3,757 MB || Required GPU accessible RAM:        1,500 MB || UseGraphicsProcessorChecked:   1 || Launch GPUSnifferThread || GPU accessible RAM:                3,757 MB || VRAM:                              3,757 MB || Driver date:                  2025-07-27  000000.000000-000 || Driver age:                   16 months || Driver version:               32.0.15.8088 || GPU accessible RAM:                4,022 MB || VRAM:                              4,022 MB || Driver date:                  UNKNOWN || Driver age:                   UNKNOWN || Driver version:               UNKNOWN || Compute score:                2,100.7 || ======= GPU || Composite Core GPU (comp_core_gpu): on || assay-svc.dll   Windows (R) Win 7 DDK driver   10.0.10011.16384 || AzureAttest.dll   Windows (R) Win 7 DDK driver   10.0.10011.16384 || AzureAttestManager.dll   Windows (R) Win 7 DDK driver   10.0.10011.16384 || AzureAttestNormal.dll   Windows (R) Win 7 DDK driver   10.0.10011.16384 || ippcv.dll   ippCV. Intel(R) Integrated Performance Primitives. Computer Vision.   2021.6 (r0xbffe3c5b) || ippcvk0.dll   ippCV. Intel(R) Integrated Performance Primitives. Computer Vision.   2021.6 (r0xbffe3c5b) || ippcvl9.dll   ippCV. Intel(R) Integrated Performance Primitives. Computer Vision.   2021.6 (r0xbffe3c5b) || ippcvy8.dll   ippCV. Intel(R) Integrated Performance Primitives. Computer Vision.   2021.6 (r0xbffe3c5b)",
+               "w0":  "4480",
+               "h0":  "2928",
+               "w_big":  "7680",
+               "h_big":  "5019",
+               "err_icc":  "Error: General Photoshop error occurred. This functionality may not be available",
+               "layers":  "101",
+               "blend_modes":  "10",
+               "adjustments":  "5",
+               "smart_sharpen":  "6",
+               "filters":  "smartSharpen,smartSharpen,smartSharpen,smartSharpen,smartSharpen,smartSharpen,",
+               "strokes":  "40",
+               "features":  "canvas8k,16bit,layers100,adjustment_layers,smart_object,smart_sharpen,brush_strokes",
+               "w1":  "2048",
+               "h1":  "1338",
+               "ms":  "374901",
+               "end":  "1"
+           },
+    "quit":  "forced",
+    "ended":  1794788705.153,
+    "dismissed":  [
+
+                  ]
+}

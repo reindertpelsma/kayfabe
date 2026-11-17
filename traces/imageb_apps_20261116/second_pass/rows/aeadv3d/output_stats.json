@@ -1,0 +1,30 @@
+{
+ "ae_make.txt": {
+  "bytes": 133,
+  "sha256": "b66636ea8183e1b76ad537d5397dcc30094bb842b4b1bb1f6fbaeac640683626"
+ },
+ "ae_progress.txt": {
+  "bytes": 49,
+  "sha256": "89308e745f8ea0d0ea42f9e04c6dcc037ba23468fbe0606789c2380c266530d3"
+ },
+ "ae_stub.log": {
+  "bytes": 552,
+  "sha256": "0df927a2d453a86167cc250876dfcee99308e30a85378452771554a1901752bd"
+ },
+ "aerender.log": {
+  "bytes": 1862,
+  "sha256": "46e8e3bb41409ee8a5c665fe3806ab077bd5071e6dbb607f94b44ce4d406e703"
+ },
+ "f_00000.tif": {
+  "bytes": 33195956,
+  "sha256": "30b0cc1096a600d69ce7581ab74ca58518acbc750525fbac8164b1235dd47054"
+ },
+ "f_00009.tif": {
+  "bytes": 33195956,
+  "sha256": "f2c50fda5cb666c70f55e5bf45f0b8d21c7f9ef9cbf1b1d74ef088f00cc8e6fb"
+ },
+ "result.json": {
+  "bytes": 1470,
+  "sha256": "065ecefdb6c9b66b9b0b738276cf219070c0ad13850b1006b21754c62c65b705"
+ }
+}

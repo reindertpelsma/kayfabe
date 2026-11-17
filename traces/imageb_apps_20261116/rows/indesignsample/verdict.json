@@ -1,0 +1,7 @@
+{
+  "class": "harness",
+  "app": "indesignsample",
+  "ok": false,
+  "evidence": "NONE",
+  "error": "Task timeout; no verdict"
+}

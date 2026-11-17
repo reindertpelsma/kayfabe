@@ -1,0 +1,2 @@
+﻿00:15:52 id=1001 Windows Error Reporting: Fault bucket , type 0 Event Name: RADAR_PRE_LEAK_64 Response: Not available Cab Id: 0 Problem signature: P1: AfterFX.com P2: 27.0.0.78 P3: 10.0.26200.2.0.0 P4: P5: P6: P7: P8: P9: P10: 
+00:32:03 id=4097 Microsoft-Windows-CAPI2: Successful auto update of third-party root certificate:: Subject: <CN=VeriSign Universal Root Certification Authority, OU="(c) 2008 VeriSign, Inc. - For authorized use only", OU=VeriSign Trust Network, O="VeriSign, Inc.", C=US> Sha1 thumbprint: <3679CA35668772304D30A5FB873B0FA77BB70D54>.

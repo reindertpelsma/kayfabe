@@ -1,0 +1,26 @@
+{
+ "ae_stub.log": {
+  "bytes": 691,
+  "sha256": "e0096ca6e7e6e17bb7e326379e7370cbd785d18a09fd2ff6ddaba497ca67f5df"
+ },
+ "ae_toggle.txt": {
+  "bytes": 151,
+  "sha256": "6e0f573fe2692014258187e50bb891ed6584fa2ddf03d36aa896eaf0862c89fa"
+ },
+ "result.json": {
+  "bytes": 1339,
+  "sha256": "c9e51900fe121551ba453619d3b271795e4b5159d6106b230b0544126ee6e548"
+ },
+ "toggle_cuda1_00015.tif": {
+  "bytes": 33204028,
+  "sha256": "0586d079a417a7dd4ef0e6004db72f3313983376cb9b5b09893bd6c49342b838"
+ },
+ "toggle_cuda2_00015.tif": {
+  "bytes": 33204036,
+  "sha256": "ba6fe8c850a02760ca2667cfb939f9a7503d0017f4525b76ae61271b9ffced13"
+ },
+ "toggle_soft_00015.tif": {
+  "bytes": 33204032,
+  "sha256": "1676402e40b1aab53134f6dcbabd25ec9b2badc00d2386357b785d91d53a0613"
+ }
+}
