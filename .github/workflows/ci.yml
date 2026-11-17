@@ -184,6 +184,8 @@ jobs:
           python3 scripts/ci/propimage_apps_mutants.py
           # Generic proprietary-image runner, 2026-11-16 (docs/design/V3_PROPIMAGE_RUNNER.md): registry, run spec, images; clock/network assert in every launch path; >=2 named killers per mutant.
           python3 scripts/ci/propimage_runner_mutants.py
+          # Image B gpu step diagnostics, 2026-11-17 (docs/design/V3_PROPIMAGE_B_APPS.md): the case is named, bounded poll after a started-wait, log tail kept, honest detail; >=2 named killers per mutant.
+          python3 scripts/ci/propimage_gpu_diag_mutants.py --jobs 4
           python3 scripts/ci/clocknet_assert_mutants.py
           # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
           python3 scripts/ci/stream_url_mutants.py
