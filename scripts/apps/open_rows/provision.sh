@@ -14,8 +14,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT=${1:-/opt/open_rows}; FAILS=0
 mkdir -p "$ROOT/bin" "$ROOT/src"
 step() { local n=$1; shift; if "$@" >"$ROOT/$n.log" 2>&1; then echo "OPENROWS_$n=ok"; else echo "OPENROWS_$n=FAIL reason=$(tail -n 1 "$ROOT/$n.log" | tr ' =' '__' | cut -c1-120)"; FAILS=$((FAILS+1)); fi; }
-# a fresh Ubuntu machine runs unattended-upgrades for a while, which holds the dpkg lock (a native run lost the DCGM step to it): wait, at most 20 minutes
-wait_apt() { local i=0; while pgrep -x 'apt|apt-get|dpkg|unattended-upgr|apt.systemd.dai' >/dev/null && [ "$i" -lt 240 ]; do sleep 5; i=$((i+1)); done; }
+# a fresh Ubuntu machine runs unattended-upgrades for a while, which holds the dpkg lock (a native run lost the DCGM step to it): wait while a process
+# holds the lock file, at most 20 minutes (no fuser, no wait: apt's own DPkg::Lock::Timeout then applies)
+wait_apt() { local i=0; while command -v fuser >/dev/null && fuser -s /var/lib/dpkg/lock-frontend 2>/dev/null && [ "$i" -lt 240 ]; do sleep 5; i=$((i+1)); done; }
 apt_install() {
   wait_apt
   # a fresh machine has no package lists; under the box's cache-only shim apt-get is a function that does its own lookup, so do not update there

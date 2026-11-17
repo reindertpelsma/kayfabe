@@ -1653,7 +1653,7 @@ class StaticContracts(unittest.TestCase):
 
     def test_provision_waits_for_a_busy_package_manager_before_every_apt_call(self):
         text = (OR / "provision.sh").read_text()
-        self.assertIn("unattended-upgr", text)  # a fresh Ubuntu machine holds the dpkg lock for a while (it cost a native run its DCGM step)
+        self.assertIn("lock-frontend", text)  # a fresh Ubuntu machine holds the dpkg lock for a while (it cost a native run its DCGM step); waiting is by the lock file, never by process name
         self.assertEqual(len(re.findall(r"wait_apt; apt-get ", text)), 2)  # the DCGM update and the DCGM install
         self.assertEqual(len(re.findall(r"\bwait_apt\b", text)), 4)  # its definition, the helper's install and those two
 
