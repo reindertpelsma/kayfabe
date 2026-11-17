@@ -315,7 +315,7 @@ def proof_framework(text, framework="torch", min_mib=1, **_):
 SOFT_ENCODERS_RX = re.compile(r"\b(libx26[45]|libsvtav1|libaom-av1|libopenh264|libvpx(?:-vp9)?|libkvazaar)\b")
 NVENC_RX = re.compile(r"\b(h264|hevc|av1)_nvenc\b")
 ENCODER_TAG_RX = re.compile(r"^ENCODER_TAG (.*)$", re.M)
-MAPPING_RX = re.compile(r"Stream #\d+:\d+ -> #\d+:\d+ \(.*?\)")
+MAPPING_RX = re.compile(r"Stream #\d+:\d+ -> #\d+:\d+ \(.*\)")     # greedy to the end of the line: `(wrapped_avframe (native) -> h264 (h264_nvenc))` nests parentheses
 
 
 def proof_nvenc(text, codec="h264", **_):

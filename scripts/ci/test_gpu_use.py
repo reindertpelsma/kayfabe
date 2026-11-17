@@ -648,6 +648,41 @@ echo "$enc" > "$out"; echo "frame=  600 fps=186 q=17.0"''')
         self.tool("bin/ffprobe", r'''f="${@: -1}"
 case "$*" in *stream_tags=encoder*) echo "Lavc60.31.102 $(cat "$f")";; *) echo 600;; esac''')
 
+    def ffmpeg44(self):
+        """What the Ubuntu 22.04 package (ffmpeg 4.4.2, the box host) prints, MEASURED 2026-11-17 on a Vast RTX 3090 box (traces/open_rows_guest_20261117/): the mp4 has NO
+        `encoder` stream tag, the encoder is named only in the (indented) stream-mapping line, and the h264 decoder prints a `Reinit context` line with the SOFTWARE
+        format first and a second one with `pix_fmt: cuda` when the hwaccel took over."""
+        self.tool("bin/ffmpeg", r'''out="${@: -1}"; enc=$(echo "$@" | sed -n 's/.*-c:v \([a-z0-9_]*\).*/\1/p')
+case "$*" in *"-f null"*) echo "[h264 @ 0x1] Reinit context to 1280x720, pix_fmt: yuv420p"; echo "Stream mapping:"; echo "  Stream #0:0 -> #0:0 (h264 (native) -> wrapped_avframe (native))"
+  echo "$*" | grep -q 'hwaccel none' || { echo "[h264 @ 0x2] format supported: yes, max_mb_count: 65536"; echo "[h264 @ 0x2] Reinit context to 1280x720, pix_fmt: cuda"; }
+  echo "frame=  600 fps=0.0"; exit 0;; esac
+echo "$enc" > "$out"; echo "Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':"; echo "Stream mapping:"; echo "  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 ($enc))"
+echo "Press [q] to stop, [?] for help"; echo "frame=  600 fps=398 q=12.0 Lsize=     890kB time=00:00:19.86"''')
+        self.tool("bin/ffprobe", r'''case "$*" in *stream_tags=encoder*) echo "";; *) echo 600;; esac''')
+
+    def test_nvenc_on_ffmpeg_4_4_is_proved_by_the_stream_mapping_line(self):
+        self.ffmpeg44()
+        res, log, calls = self.run_row("nvenc_h264")
+        self.assertIn("verdict=PASS", res)
+        self.assertIn("Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (h264_nvenc))", log)     # the row's own `grep -v "^  "` used to drop it
+        self.assertEqual(rows.evaluate("nvenc_h264", "host", log)["app"]["ok"], True)
+        res, log, calls = self.run_row("nvenc_h264", True)
+        self.assertEqual(rows.evaluate("nvenc_h264", "host", log)["verdict"], gu.FAIL)
+
+    def test_nvdec_on_ffmpeg_4_4_keeps_the_second_reinit_line(self):
+        self.ffmpeg44()
+        res, log, calls = self.run_row("nvdec_h264")
+        self.assertIn("pix_fmt: cuda", log)                                   # `grep -m1` kept only the first (software) line and the proof called a GPU decode CPU
+        self.assertEqual(rows.evaluate("nvdec_h264", "host", log)["app"]["ok"], True)
+        res, log, calls = self.run_row("nvdec_h264", True)
+        self.assertEqual(rows.evaluate("nvdec_h264", "host", log)["verdict"], gu.FAIL)
+
+    def test_the_mapping_line_with_nested_parentheses_names_the_encoder(self):
+        line = "  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (h264_nvenc))\nENCODER_TAG \n"
+        self.assertIs(gu.proof_nvenc(line, codec="h264")["ok"], True)
+        self.assertIs(gu.proof_nvenc(line.replace("h264_nvenc", "libx264"), codec="h264")["ok"], False)
+        self.assertIs(gu.proof_nvenc(line.replace("h264_nvenc", "hevc_nvenc"), codec="h264")["ok"], False)
+
     def test_nvenc_encoder_tag(self):
         self.ffmpeg()
         res, log, calls = self.run_row("nvenc_h264")
