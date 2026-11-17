@@ -17,6 +17,8 @@ Classes (every row of `run_apps.sh list` must have one; test_every_row_is_classi
           edit to `device = "cuda" if ... else "cpu"` or a software encoder would be caught).
   b       CAN silently fall back (Cycles to CPU, llama.cpp -ngl 0, hashcat or clpeak on a CPU OpenCL device, vkpeak/EGL on a software rasteriser, ffmpeg
           software decode): the row's PASS needs the app proof AND (guest side) the host census AND the host engine counters named in ROWS.
+  own     the open discovery rows of PRs 471 and 474 (nvcodec_matrix, nvml_dcgm, vkcts): GPU use is asserted inside their own driver from the host's counters;
+          recorded here, never judged here (verdict NA).
   b-skip  class (b) and not run by policy (geekbench_gpu): the proof is required before the policy skip is ever lifted.
 A PASS is rewritten to FAIL (reason named) when the judge says FAIL and to NOTRUN when it says NOT_RUN: a row never passes without its proof. A row that
 was not PASS stays as it was. Negative controls: KF_NEGCTL=1 makes run_apps.sh run the CPU form of each class (b) row; `--negctl` judges that run and
@@ -64,13 +66,17 @@ ROWS = {
     "cupy": ("a+proof", "framework", {"framework": "cupy", "min_mib": 4}, (), dict(SHORT), "FAIL"),
 }
 INFO = ("nvidia_smi", "deviceQuery", "vulkaninfo", "clinfo")
+# Open discovery rows of PRs 471 and 474 that assert GPU use INSIDE their own driver, from the host's counters (`open_rows/census.py`: `host_gpu_use=PROVEN|UNPROVEN|FAILED`;
+# `vkcts.py`: `VKCTS_GPU`, exit 4 on an idle GPU). They are recorded here (census, never judged: verdict NA) and are not rewritten by this module; promoting one into ROWS is
+# the follow-up that gives it a proof kind and calibrated engines.
+OWN = ("nvcodec_matrix", "nvml_dcgm", "vkcts")
 WIRED = tuple(r for r, v in ROWS.items() if v[0] in ("b", "a+proof"))      # rows whose verdict the judge may rewrite
 
 
 def row_class(app):
     if app in ROWS:
         return ROWS[app][0]
-    return "a-info" if app in INFO else "a"
+    return "a-info" if app in INFO else "own" if app in OWN else "a"
 
 
 def policy(app):

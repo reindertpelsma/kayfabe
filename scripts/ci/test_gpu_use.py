@@ -377,11 +377,13 @@ class NegativeControls(unittest.TestCase):
 class Rows(unittest.TestCase):
     def test_every_row_of_run_apps_is_classified_and_the_counts_are_pinned(self):
         names = rows.run_apps_names()
-        self.assertEqual(len(names), 71)
+        self.assertEqual(len(names), 74)
         counts = {}
         for n in names:
             counts[rows.row_class(n)] = counts.get(rows.row_class(n), 0) + 1
-        self.assertEqual(counts, {"a": 52, "a-info": 4, "a+proof": 6, "b": 8, "b-skip": 1})
+        # 71 rows of the audit (PR 475) + the three open discovery rows of PRs 471 and 474, which assert GPU use inside their own driver
+        self.assertEqual(counts, {"a": 52, "a-info": 4, "a+proof": 6, "b": 8, "b-skip": 1, "own": 3})
+        self.assertEqual(sorted(n for n in names if rows.row_class(n) == "own"), ["nvcodec_matrix", "nvml_dcgm", "vkcts"])
         for n in rows.ROWS:
             self.assertIn(n, names, "a classified row that run_apps.sh does not have: " + n)
 
