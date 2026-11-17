@@ -66,7 +66,7 @@ class Env:
         q.chmod(0o755)
         (self.tmp / "cpuinfo").write_text(cpuinfo)
         (self.tmp / "urls.json").write_text("{}")
-        self.scenario, self.cmds, self.runner, self.timeouts = scenario or {}, [], Runner(), []
+        self.scenario, self.cmds, self.runner, self.timeouts, self.boot_env = scenario or {}, [], Runner(), [], []
         self.ctx = pa.Context(SHA, pa.ROOT, self.tmp / "p/kf-propimage", self.tmp / "result.json", self.tmp / "urls.json", bench=self.tmp / "bench",
                               cpuinfo=str(self.tmp / "cpuinfo"), environ=dict(os.environ, SWTPM="swtpm"), hardware=hardware or GOOD_HW, free_bytes=10 ** 12,
                               runner=self.runner, boot_runner=self.boot, klog_source=["sh", "-c", "echo start-line; sleep 300"], deadline_epoch=deadline)
@@ -100,6 +100,8 @@ class Env:
         out, work = Path(arg("--out")), Path(arg("--work"))
         apps = arg("--apps").split(",")
         self.cmds.append(argv)
+        self.boot_env.append((ctx.environ.get("SWTPM"), ctx.environ.get("LD_LIBRARY_PATH")))
+        getattr(self.runner, "events", []).append("boot")
         plain = any(str(a).endswith("propimage_plain.py") for a in argv)
         (work / "run").mkdir(parents=True)
         net = arg("--net") if plain else "off"
@@ -1065,6 +1067,354 @@ class CommandLine(unittest.TestCase):
     def test_the_legacy_run_without_image_flags_still_needs_the_pinned_image(self):
         rc, out = self.main("manifest", "--out", "/dev/null")
         self.assertIn(rc, (0, 2))
+
+
+PREFIX_BIN = pa.SWTPM_PREFIX + "/bin/swtpm"
+TOOL_REFS = {i["role"]: i["ref"] for i in pa.load_pins()["items"] if i["role"] in ("libtpms", "swtpm")}
+
+
+class OldSwtpmRunner(Runner):
+    """A box whose swtpm is 0.6.3 (2026-11-17, MEASURED on a Vast Ubuntu 22.04 box). Nothing is installed anywhere: `make install` only flips what
+    `/opt/tpm/bin/swtpm --version` answers. `fail(argv)` makes a command exit 1, `missing` names programs that are not on the box (OSError),
+    `rev` overrides what `git rev-parse HEAD` answers (one commit, or {project: commit}), `tools_fetch_rc` is the downloader's exit code for the tools manifest, `built_version`
+    what the build ends up installing and `need_ld` that the prefix binary only starts with /opt/tpm/lib on LD_LIBRARY_PATH (MEASURED 2026-11-16)."""
+
+    def __init__(self, fail=None, missing=(), rev=None, tools_fetch_rc=0, built_version="0.10.1", installed=False, need_ld=False):
+        super().__init__()
+        self.fail, self.missing, self.rev, self.tools_fetch_rc = fail or (lambda argv: False), set(missing), rev, tools_fetch_rc
+        self.built_version, self.installed, self.need_ld = built_version, installed, need_ld
+        self.events, self.manifests, self.fetched, self.cwds = [], [], {}, []
+
+    def __call__(self, argv, **kw):
+        argv = [str(a) for a in argv]
+        if argv[0] in self.missing:
+            raise FileNotFoundError(argv[0])
+        if len(argv) > 5 and argv[3].endswith("box_downloader.py"):
+            if argv[4] == "fetch":
+                manifest = json.loads(Path(argv[5]).read_text())
+                self.manifests.append(manifest)
+                tools = any(i["dest"].startswith("tools/") for i in manifest["items"])
+                self.events.append("fetch:tools" if tools else "fetch:image")
+                if tools and self.tools_fetch_rc:
+                    self.calls.append(argv)
+                    return subprocess.CompletedProcess(argv, self.tools_fetch_rc, "", "")
+            return super().__call__(argv, **kw)
+        self.calls.append(argv)
+        self.events.append(Path(argv[0]).name if argv[0] != "make" else " ".join(argv[:2]))
+        if argv[-1] == "--version":
+            if argv[0] != PREFIX_BIN:
+                return subprocess.CompletedProcess(argv, 0, "swtpm version 0.6.3", "")
+            if not self.installed or (self.need_ld and pa.SWTPM_PREFIX + "/lib" not in (kw.get("env") or {}).get("LD_LIBRARY_PATH", "").split(":")):
+                raise FileNotFoundError(argv[0])
+            return subprocess.CompletedProcess(argv, 0, "swtpm version " + self.built_version, "")
+        if self.fail(argv):
+            return subprocess.CompletedProcess(argv, 1, "", "")
+        if argv[0] == "make" and argv[1:2] == ["install"]:
+            self.installed = True
+        if argv[0] == "./autogen.sh":
+            self.cwds.append(str(kw.get("cwd")))
+        if argv[:2] == ["git", "-C"] and argv[3] == "fetch":
+            self.fetched[argv[2]] = argv[-1]
+        if argv[:2] == ["git", "-C"] and argv[3] == "rev-parse":
+            rev = self.rev.get(Path(argv[2]).name) if type(self.rev) is dict else self.rev
+            return subprocess.CompletedProcess(argv, 0, (rev or self.fetched.get(argv[2], "")) + "\n", "")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    def ran(self, program):
+        return [c for c in self.calls if c[0] == program]
+
+    def tools_fetched(self):
+        return [m for m in self.manifests if any(i["dest"].startswith("tools/") for i in m["items"])]
+
+    def image_fetches(self):
+        return [m for m in self.manifests if not any(i["dest"].startswith("tools/") for i in m["items"])]
+
+
+class SwtpmTools(unittest.TestCase):
+    """2026-11-17, MEASURED: the first strict run on a stock Vast box (swtpm 0.6.3) was refused SWTPM_VERSION after 7 seconds, before any download.
+    The generic runner now does what the legacy stage does: it builds swtpm 0.10.1 under /opt/tpm before the first boot, from the private signed tarballs
+    when the URL file names their refs (route signed) and from the pinned upstream commits otherwise (route git: the GitHub archive tarballs fail the
+    size check). Every failure on the way is a named refusal and no boot happens."""
+
+    def box(self, urls="none", **kw):
+        env = Env(self)
+        env.runner = env.ctx.runner = OldSwtpmRunner(**kw)
+        if urls == "refs":
+            (env.tmp / "urls.json").write_text(json.dumps({"schema": "kayfabe.download-urls/1", "urls": {r: "placeholder" for r in TOOL_REFS.values()}}))
+        elif urls == "missing":
+            (env.tmp / "urls.json").unlink()
+        return env
+
+    def one(self, env, pin=False):
+        disk = {"from": "pin", "ref": "propimage-kfimg-20261112.zip"} if pin else src(env.plain_dir())
+        return env.run(doc({"kind": "prebuilt", "disk": disk, "ssh": SSH, "apps": {"3dmark": {"mode": "present"}}}))
+
+    @staticmethod
+    def build_calls(env):
+        """What building swtpm runs (the display broker's own `make -C broker` is not part of it)."""
+        return [c for c in env.runner.calls if c[0] in ("git", "apt-get", "tar", "./autogen.sh") or (c[0] == "make" and "-C" not in c)]
+
+    def assertPinnedCommitsBuilt(self, env):
+        """Route git: no tarball, one shallow fetch of exactly the pinned commit per project, and the recipe runs inside those checkouts."""
+        self.assertEqual((env.runner.tools_fetched(), env.runner.ran("tar")), ([], []))
+        fetches = [c for c in env.runner.ran("git") if c[3] == "fetch"]
+        self.assertEqual([(c[-2], c[-1]) for c in fetches], [tuple(images.SWTPM_GIT[r]) for r in ("libtpms", "swtpm")])
+        self.assertTrue(all(c[c.index("--depth") + 1] == "1" for c in fetches))
+        self.assertEqual([Path(w).name for w in env.runner.cwds], ["libtpms", "swtpm"])
+
+    def assertSignedTarballsBuilt(self, env):
+        """Route signed: the two private tarballs by their refs (never the GitHub archive mirror), unpacked and built; no git."""
+        (manifest,) = env.runner.tools_fetched()
+        self.assertEqual(sorted(i["name"] for i in manifest["items"]), ["libtpms-0.10.1.tar.gz", "swtpm-0.10.1.tar.gz"])
+        self.assertEqual([[s["kind"] for s in i["sources"]] for i in manifest["items"]], [["signed"], ["signed"]])
+        self.assertEqual(sorted(s["ref"] for i in manifest["items"] for s in i["sources"]), sorted(TOOL_REFS.values()))
+        self.assertEqual(env.runner.ran("git"), [])
+        self.assertEqual([Path(c[c.index("-xzf") + 1]).name for c in env.runner.ran("tar")], ["libtpms-0.10.1.tar.gz", "swtpm-0.10.1.tar.gz"])
+
+    def assertRefusedBeforeAnyBoot(self, env, rec, reason):
+        self.assertEqual((rec["verdict"], rec["reason"], rec["images"], env.cmds), ("REFUSED", reason, [], []), rec)
+        self.assertEqual(images.exit_code(rec), 2)                   # a refusal is never a guest failure (FAIL is 1)
+        self.assertNotIn("boot", env.runner.events)
+        self.assertNotIn("fetch:image", env.runner.events)
+
+    # ------------------------------------------------------------ nothing changes when the box is fine
+    def test_a_new_enough_swtpm_fetches_and_builds_nothing(self):
+        env = Env(self)
+        rec = self.one(env)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertEqual(self.build_calls(env), [])
+        self.assertFalse(any(str(c[3]).endswith("box_downloader.py") for c in env.runner.calls if len(c) > 3))
+        self.assertEqual(next(r for r in rec["preflight"] if r["name"] == "swtpm"), {"name": "swtpm", "status": "MATCH", "detail": "0.10.1"})
+        self.assertEqual(rec["swtpm"], {"version": "0.10.1", "built": False})
+        self.assertEqual(env.boot_env, [("swtpm", os.environ.get("LD_LIBRARY_PATH"))])       # the environment is the caller's, untouched
+
+    def built_prefix(self):
+        env = self.box(installed=True, need_ld=True)
+        env.ctx.environ["SWTPM"] = PREFIX_BIN
+        return env, self.one(env)
+
+    def test_an_already_built_prefix_is_used_and_not_built_again(self):
+        env, rec = self.built_prefix()
+        self.assertEqual((rec["verdict"], rec["swtpm"]), ("PASS", {"version": "0.10.1", "built": False}), rec)
+        self.assertEqual(self.build_calls(env), [])
+        self.assertEqual(env.runner.tools_fetched(), [])
+
+    def test_an_already_built_prefix_starts_with_its_library_path(self):
+        env, rec = self.built_prefix()
+        self.assertEqual([e[0] for e in env.boot_env], [PREFIX_BIN])
+        self.assertIn(pa.SWTPM_PREFIX + "/lib", env.boot_env[0][1].split(":"))
+        self.assertEqual(next(r for r in rec["preflight"] if r["name"] == "swtpm")["status"], "MATCH")
+        self.assertEqual(rec["swtpm"], {"version": "0.10.1", "built": False})
+
+    # ------------------------------------------------------------ route signed
+    def test_an_old_swtpm_with_the_refs_builds_from_the_private_tarballs_and_continues(self):
+        env = self.box("refs")
+        rec = self.one(env)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertSignedTarballsBuilt(env)
+        self.assertEqual([c[1:] for c in env.runner.ran("./autogen.sh")][0][:1], ["--prefix=" + pa.SWTPM_PREFIX])
+        self.assertEqual(rec["swtpm"], {"version": "0.10.1", "built": True})
+        row = next(r for r in rec["preflight"] if r["name"] == "swtpm")
+        self.assertEqual(row["status"], "MATCH")
+        self.assertIn("built 0.10.1", row["detail"])
+        self.assertIn(pa.SWTPM_PREFIX, row["detail"])
+        self.assertEqual(env.boot_env[0][0], PREFIX_BIN)
+        self.assertIn(pa.SWTPM_PREFIX + "/lib", env.boot_env[0][1].split(":"))
+        self.assertEqual(env.ctx.environ["SWTPM"], PREFIX_BIN)
+        vast_report.validate_propimage_run(rec)
+
+    def test_the_tools_come_first_and_the_image_is_downloaded_once_after_them(self):
+        env = self.box("refs")
+        rec = self.one(env, pin=True)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        ev = env.runner.events
+        self.assertEqual((ev.count("fetch:tools"), ev.count("fetch:image"), ev.count("boot")), (1, 1, 1), ev)
+        self.assertLess(ev.index("fetch:tools"), ev.index("make install"))
+        self.assertLess(ev.index("make install"), ev.index("boot"))
+        self.assertEqual(len(env.runner.image_fetches()), 1)
+        self.assertSignedTarballsBuilt(env)
+        self.assertFalse(any(Path(c[c.index("-xzf") + 1]).exists() for c in env.runner.ran("tar")))      # nothing of the tools stays on the box
+        self.assertFalse((env.ctx.prefix / "work").exists())
+
+    # ------------------------------------------------------------ route git
+    def test_an_old_swtpm_without_refs_builds_from_the_pinned_upstream_commits(self):
+        env = self.box()
+        rec = self.one(env)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertPinnedCommitsBuilt(env)                                                # no tarball, no GitHub archive
+        verbs = [next(w for w in c[1:] if w in ("init", "fetch", "checkout", "rev-parse")) for c in env.runner.ran("git")]
+        self.assertEqual(verbs, ["init", "fetch", "checkout", "rev-parse"] * 2)
+        self.assertEqual(rec["swtpm"], {"version": "0.10.1", "built": True})
+        row = next(r for r in rec["preflight"] if r["name"] == "swtpm")
+        self.assertEqual((row["status"], "built 0.10.1" in row["detail"], pa.SWTPM_PREFIX in row["detail"]), ("MATCH", True, True))
+        self.assertEqual(env.boot_env[0][0], PREFIX_BIN)
+        vast_report.validate_propimage_run(rec)
+
+    def git_route_with_url_file(self, text):
+        env = self.box("missing" if text is None else "none")
+        if text is not None:
+            (env.tmp / "urls.json").write_text(text)
+        rec = self.one(env)
+        self.assertEqual((rec["verdict"], rec["swtpm"]), ("PASS", {"version": "0.10.1", "built": True}), rec)
+        self.assertPinnedCommitsBuilt(env)
+
+    def urls_doc(self, **urls):
+        return json.dumps({"schema": "kayfabe.download-urls/1", "urls": urls})
+
+    def test_no_url_file_or_an_unreadable_one_takes_the_git_route(self):
+        for name, text in {"missing file": None, "not json": "not json", "wrong schema": json.dumps({"schema": "x", "urls": {r: "u" for r in TOOL_REFS.values()}}),
+                           "not an object": "[]"}.items():
+            with self.subTest(name):
+                self.git_route_with_url_file(text)
+
+    def test_a_url_file_with_the_libtpms_ref_alone_takes_the_git_route(self):
+        self.git_route_with_url_file(self.urls_doc(**{TOOL_REFS["libtpms"]: "u"}))
+
+    def test_a_url_file_with_the_swtpm_ref_alone_takes_the_git_route(self):
+        self.git_route_with_url_file(self.urls_doc(**{TOOL_REFS["swtpm"]: "u"}))
+
+    def test_a_swtpm_ref_without_a_string_url_is_not_named(self):
+        self.git_route_with_url_file(self.urls_doc(**{TOOL_REFS["libtpms"]: "u", TOOL_REFS["swtpm"]: 5}))
+
+    def test_a_libtpms_ref_without_a_string_url_is_not_named(self):
+        self.git_route_with_url_file(self.urls_doc(**{TOOL_REFS["libtpms"]: None, TOOL_REFS["swtpm"]: "u"}))
+
+    def test_the_git_pins_are_the_commits_the_upstream_v0_10_1_tags_point_at(self):
+        self.assertEqual(sorted(images.SWTPM_GIT), ["libtpms", "swtpm"])
+        for role, (url, commit) in images.SWTPM_GIT.items():
+            self.assertEqual(url, "https://github.com/stefanberger/" + role)
+            self.assertRegex(commit, r"^[0-9a-f]{40}$")
+        self.assertEqual(images.SWTPM_GIT["libtpms"][1], "56c9f8b0b816391135f5a3112cb2feac4298caac")     # git ls-remote <repo> 'refs/tags/v0.10.1^{}', 2026-11-17
+        self.assertEqual(images.SWTPM_GIT["swtpm"][1], "53841482b0a9a1dfe63a120b00283acfe588ee72")
+        self.assertEqual(len({c for _, c in images.SWTPM_GIT.values()}), 2)
+
+    # ------------------------------------------------------------ named refusals, never a guest failure, never a boot
+    def test_a_failed_tarball_fetch_is_download(self):
+        env = self.box("refs", tools_fetch_rc=1)
+        rec = self.one(env)
+        self.assertRefusedBeforeAnyBoot(env, rec, "DOWNLOAD")
+        self.assertEqual(env.runner.ran("tar"), [])
+        self.assertFalse(rec["swtpm"]["built"])
+
+    def test_a_failed_git_fetch_is_swtpm_source(self):
+        env = self.box(fail=lambda a: a[0] == "git" and a[3] == "fetch")
+        self.assertRefusedBeforeAnyBoot(env, self.one(env), "SWTPM_SOURCE")
+        self.assertEqual(env.runner.ran("./autogen.sh"), [])
+
+    def test_no_git_on_the_box_is_swtpm_source(self):
+        env = self.box(missing=("git",))
+        self.assertRefusedBeforeAnyBoot(env, self.one(env), "SWTPM_SOURCE")
+
+    def test_a_checkout_that_is_not_the_pinned_commit_is_never_built(self):
+        env = self.box(rev="0" * 40)
+        rec = self.one(env)
+        self.assertRefusedBeforeAnyBoot(env, rec, "SWTPM_SOURCE_COMMIT")
+        self.assertEqual([c for c in self.build_calls(env) if c[0] != "git"], [])
+
+    def test_a_checkout_of_the_other_project_is_never_built(self):
+        env = self.box(rev={"libtpms": images.SWTPM_GIT["swtpm"][1]})
+        self.assertRefusedBeforeAnyBoot(env, self.one(env), "SWTPM_SOURCE_COMMIT")
+        self.assertEqual([c for c in self.build_calls(env) if c[0] != "git"], [])
+
+    def test_a_failed_build_step_is_swtpm_build_on_both_routes(self):
+        for urls in ("refs", "none"):
+            for step in ("apt-get", "./autogen.sh", "make"):
+                with self.subTest(route=urls, step=step):
+                    env = self.box(urls, fail=lambda a, step=step: a[0] == step)
+                    rec = self.one(env)
+                    self.assertRefusedBeforeAnyBoot(env, rec, "SWTPM_BUILD")
+                    row = next(r for r in rec["preflight"] if r["name"] == "swtpm")
+                    self.assertEqual(row["status"], "MISMATCH")
+                    self.assertFalse(rec["swtpm"]["built"])
+                    vast_report.validate_propimage_run(rec)
+
+    def failed_build_row(self, urls):
+        env = self.box(urls, fail=lambda a: a[0] == "make")
+        rec = self.one(env)
+        self.assertRefusedBeforeAnyBoot(env, rec, "SWTPM_BUILD")
+        row = next(r for r in rec["preflight"] if r["name"] == "swtpm")
+        self.assertEqual((row["status"], row["detail"]), ("MISMATCH", "build failed: SWTPM_BUILD"))
+
+    def test_a_failed_build_on_the_signed_route_says_so_in_the_swtpm_row(self):
+        self.failed_build_row("refs")
+
+    def test_a_failed_build_on_the_git_route_says_so_in_the_swtpm_row(self):
+        self.failed_build_row("none")
+
+    def test_a_build_that_is_still_older_than_0_10_is_swtpm_build(self):
+        for urls in ("refs", "none"):
+            with self.subTest(urls):
+                env = self.box(urls, built_version="0.9.9")
+                self.assertRefusedBeforeAnyBoot(env, self.one(env), "SWTPM_BUILD")
+
+    def unpinned(self, role, urls):
+        env = self.box(urls)
+        pins = json.loads(Path(pa.PINS_PATH).read_text())
+        next(i for i in pins["items"] if i["role"] == role)["sha256"] = None
+        (env.tmp / "pins.json").write_text(json.dumps(pins))
+        env.ctx.pins_path = env.tmp / "pins.json"
+        return env
+
+    def test_an_unpinned_libtpms_tarball_refuses_before_anything_is_fetched(self):
+        env = self.unpinned("libtpms", "refs")
+        self.assertRefusedBeforeAnyBoot(env, self.one(env), "PIN_UNSET:libtpms")
+        self.assertEqual((env.runner.manifests, self.build_calls(env)), ([], []))
+
+    def test_an_unpinned_swtpm_tarball_refuses_before_anything_is_fetched(self):
+        env = self.unpinned("swtpm", "refs")
+        self.assertRefusedBeforeAnyBoot(env, self.one(env), "PIN_UNSET:swtpm")
+        self.assertEqual((env.runner.manifests, self.build_calls(env)), ([], []))
+
+    def test_the_git_route_needs_no_sha256_pin_of_a_tarball(self):
+        env = self.box()
+        pins = json.loads(Path(pa.PINS_PATH).read_text())
+        for i in pins["items"]:
+            if i["role"] in ("libtpms", "swtpm"):
+                i["sha256"] = None
+        (env.tmp / "pins.json").write_text(json.dumps(pins))
+        env.ctx.pins_path = env.tmp / "pins.json"
+        self.assertEqual(self.one(env)["swtpm"], {"version": "0.10.1", "built": True})
+
+    def other_refusal_first(self, reason, tweak):
+        env = self.box("refs")
+        tweak(env)
+        rec = self.one(env)
+        self.assertRefusedBeforeAnyBoot(env, rec, reason)
+        self.assertEqual((self.build_calls(env), env.runner.manifests), ([], []))
+        self.assertEqual(next(r for r in rec["preflight"] if r["name"] == "swtpm")["status"], "WARN")
+
+    def test_a_wrong_gpu_family_comes_before_the_build(self):
+        self.other_refusal_first("GPU_FAMILY", lambda e: setattr(e.ctx, "hardware", {"gpu_name": "x", "compute_cap": 0, "memory_mib": 0}))
+
+    def test_a_missing_kf3_qemu_comes_before_the_build(self):
+        self.other_refusal_first("NO_KF3_QEMU", lambda e: setattr(e.ctx, "qemu", e.tmp / "nope"))
+
+    def test_too_little_disk_comes_before_the_build(self):
+        self.other_refusal_first("DISK_FREE", lambda e: setattr(e.ctx, "free_bytes", 1 << 30))
+
+    BAD_SWTPM = ({"version": "0.10.1"}, {"built": True}, {"version": "x" * 40, "built": True}, {"version": "0.10.1 ", "built": True},
+                 {"version": None, "built": "yes"}, {"version": 10, "built": True}, {"version": "0.10.1", "built": True, "z": 1}, None, [])
+
+    def assertSwtpmValidated(self, rec):
+        rec = json.loads(json.dumps(rec))
+        vast_report.validate_propimage_run(rec)
+        for bad in self.BAD_SWTPM:
+            try:
+                vast_report.validate_propimage_run(dict(rec, swtpm=bad))
+            except ValueError:
+                continue
+            self.fail("accepted a swtpm part of %r" % (bad,))
+
+    def test_the_swtpm_part_of_a_built_record_is_validated(self):
+        self.assertSwtpmValidated(self.one(self.box()))
+
+    def test_the_swtpm_part_of_a_refusal_record_is_validated(self):
+        self.assertSwtpmValidated(self.one(self.box(fail=lambda a: a[0] == "make")))
+
+    def test_a_record_without_a_swtpm_part_is_still_valid(self):
+        rec = json.loads(json.dumps(self.one(Env(self))))
+        del rec["swtpm"]
+        vast_report.validate_propimage_run(rec)
 
 
 if __name__ == "__main__":
