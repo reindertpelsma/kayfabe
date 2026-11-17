@@ -33,6 +33,7 @@ export const BOOLEAN_VARS = Object.freeze([
   'ALLOW_UNKNOWN_COUNTRY',
   'TREE_KEY_CARRY_OVER',
   'MIDDLE_APPS_ENABLED',
+  'PROPIMAGES_ENABLED',
 ]);
 export const ALLOWED = new Set([
   'WORKER_URL',
@@ -67,6 +68,8 @@ export const ALLOWED = new Set([
   // commit. Keep it unset/'false' until boxes delete ignored files after cloning (review of #258).
   'TREE_KEY_CARRY_OVER',
   'MIDDLE_APPS_ENABLED',
+  // Release legs build, store and serve a payload instruction (src/legs.js); default off.
+  'PROPIMAGES_ENABLED',
   // Custom hosts (docs/design/V3_CUSTOM_HOSTS.md): the 40-hex commit of scripts/kfhost that the admin
   // enrol route pins in its bootstrap command. No default: the route refuses while it is unset.
   'HOST_DAEMON_COMMIT',
