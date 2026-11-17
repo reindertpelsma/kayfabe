@@ -158,6 +158,7 @@ pub mod regaccessmap;
 pub mod smcmode;
 pub mod submit;
 pub mod timer;
+pub mod utilization;
 pub mod transcribed;
 pub mod vbios;
 pub mod versions;
