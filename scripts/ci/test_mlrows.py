@@ -258,12 +258,20 @@ class Locks(unittest.TestCase):
         for bad in ("bar>=1.0\n", "bar @ https://example.org/bar.whl\n", "git+https://example.org/x.git\n", "-e .\n"):
             self.assertTrue(lib.lock_problems(base + bad), bad)
 
-    def test_a_foreign_or_plain_http_index_is_refused(self):
-        h = "foo==1.0 \\\n    --hash=sha256:" + "a" * 64 + "\n"
-        self.assertTrue(lib.lock_problems("--index-url https://pypi.org/simple\n--extra-index-url https://evil.example/simple\n" + h))
-        self.assertTrue(lib.lock_problems("--index-url http://pypi.org/simple\n" + h))
-        self.assertTrue(lib.lock_problems(h))                               # no index line: pip would use the machine's
-        self.assertTrue(lib.lock_problems("--index-url https://pypi.org/simple\n" + h, require_nvidia_index=True))
+    HASHED = "foo==1.0 \\\n    --hash=sha256:" + "a" * 64 + "\n"
+
+    def test_a_foreign_index_is_refused(self):
+        self.assertTrue(lib.lock_problems("--index-url https://pypi.org/simple\n--extra-index-url https://evil.example/simple\n" + self.HASHED))
+
+    def test_a_plain_http_index_is_refused(self):
+        self.assertTrue(lib.lock_problems("--index-url http://pypi.org/simple\n" + self.HASHED))
+
+    def test_a_lock_without_an_index_line_is_refused(self):
+        self.assertTrue(lib.lock_problems(self.HASHED))                   # no index line: pip would use the machine's
+
+    def test_a_tensorrt_lock_without_nvidia_s_index_is_refused(self):
+        self.assertTrue(lib.lock_problems("--index-url https://pypi.org/simple\n" + self.HASHED, require_nvidia_index=True))
+        self.assertEqual(lib.lock_problems("--index-url https://pypi.org/simple\n--extra-index-url https://pypi.nvidia.com/\n" + self.HASHED, require_nvidia_index=True), [])
 
     def test_a_duplicate_name_is_refused_and_an_empty_lock_too(self):
         h = "foo==1.0 \\\n    --hash=sha256:" + "a" * 64 + "\n"
@@ -349,7 +357,7 @@ class Model(unittest.TestCase):
             files[e["path"]] = data
             tree.append({"type": "file", "path": e["path"], "size": len(data), "oid": lib.git_blob_sha1(data)})
         if tamper:
-            files[tamper] = files[tamper] + b"!"
+            files[tamper] = b"X" + files[tamper][1:]               # the same size, other bytes: only the digest can notice
         calls = []
 
         def get(url, timeout=60, limit=1 << 30):
@@ -382,6 +390,31 @@ class Model(unittest.TestCase):
             self.assertIn("model.safetensors", detail)
             self.assertFalse((Path(t) / "model" / "model.safetensors").exists())
             self.assertFalse((Path(t) / "model" / "model.json").exists())
+
+    def test_size_is_checked_even_when_the_digest_matches(self):
+        data = b"abc"
+        e = {"path": "x", "size": len(data) + 1, "kind": "sha256", "digest": hashlib.sha256(data).hexdigest()}
+        self.assertIn("bytes", lib.check_model_bytes(e, data))
+
+    def test_an_oversized_listing_fails_the_fetch_before_any_download(self):
+        pins = json.loads(json.dumps(PINS))
+        pins["model"]["max_bytes"] = 10
+        get, calls = self.fake_origin()
+        with tempfile.TemporaryDirectory() as t:
+            ok, detail = mr.fetch_model(Path(t) / "m", pins, get)
+        self.assertFalse(ok)
+        self.assertIn("more than the", detail)
+        self.assertFalse(any("/resolve/" in c for c in calls))
+
+    def test_a_path_traversal_in_the_pins_is_refused_by_the_fetch_too(self):
+        pins = json.loads(json.dumps(PINS))
+        pins["model"]["files"] = ["../evil.txt"]
+        get, _ = self.fake_origin()
+        with tempfile.TemporaryDirectory() as t:
+            ok, detail = mr.fetch_model(Path(t) / "m", pins, get)
+            self.assertFalse(ok)
+            self.assertIn("unsafe", detail)
+            self.assertFalse((Path(t) / "evil.txt").exists())
 
     def test_a_missing_file_or_an_unreachable_origin_is_a_named_failure(self):
         with tempfile.TemporaryDirectory() as t:
@@ -428,6 +461,21 @@ def jax_result(**kw):
     return r
 
 
+VLLM_CASES = (
+    ("no tokens", {"token_ids": None}, "tokens_for_every_prompt"),
+    ("seven prompts", {"token_ids": [[1]] * 7}, "tokens_for_every_prompt"),
+    ("an empty answer", {"token_ids": [[1]] * 7 + [[]]}, "tokens_for_every_prompt"),
+    ("a negative id", {"token_ids": [[1]] * 7 + [[-1]]}, "tokens_for_every_prompt"),
+    ("the hash does not match the ids", {"token_sha256": "0" * 64}, "token_sha256_matches_ids"),
+    ("the repeat differs", {"repeat_identical": False}, "greedy_repeat_identical"),
+    ("no engine process", {"engine_children": []}, "engine_in_its_own_process"),
+    ("seven graph sizes", {"cudagraph_n_sizes": 7}, "cuda_graph_sizes"),
+    ("unknown graph sizes", {"cudagraph_n_sizes": None}, "cuda_graph_sizes"),
+    ("memory did not grow", {"mem_growth_mib": 299}, "device_memory_grew"),
+    ("memory unknown", {"mem_growth_mib": None}, "device_memory_grew"),
+)
+
+
 class JudgeVllm(unittest.TestCase):
     def test_a_good_result_passes(self):
         st, why, checks = lib.judge_vllm(vllm_result())
@@ -435,22 +483,11 @@ class JudgeVllm(unittest.TestCase):
         self.assertTrue(all(c["ok"] for c in checks))
 
     def test_each_missing_property_fails_by_its_own_name(self):
-        for what, kw, name in (
-            ("no tokens", {"token_ids": None}, "tokens_for_every_prompt"),
-            ("seven prompts", {"token_ids": [[1]] * 7}, "tokens_for_every_prompt"),
-            ("an empty answer", {"token_ids": [[1]] * 7 + [[]]}, "tokens_for_every_prompt"),
-            ("a negative id", {"token_ids": [[1]] * 7 + [[-1]]}, "tokens_for_every_prompt"),
-            ("the hash does not match the ids", {"token_sha256": "0" * 64}, "token_sha256_matches_ids"),
-            ("the repeat differs", {"repeat_identical": False}, "greedy_repeat_identical"),
-            ("no engine process", {"engine_children": []}, "engine_in_its_own_process"),
-            ("seven graph sizes", {"cudagraph_n_sizes": 7}, "cuda_graph_sizes"),
-            ("unknown graph sizes", {"cudagraph_n_sizes": None}, "cuda_graph_sizes"),
-            ("memory did not grow", {"mem_growth_mib": 299}, "device_memory_grew"),
-            ("memory unknown", {"mem_growth_mib": None}, "device_memory_grew"),
-        ):
-            st, why, _ = lib.judge_vllm(vllm_result(**kw))
-            self.assertEqual(st, lib.FAIL, what)
-            self.assertTrue(why.startswith(name + ":"), "%s: %s" % (what, why))
+        for what, kw, name in VLLM_CASES:
+            with self.subTest(what):
+                st, why, _ = lib.judge_vllm(vllm_result(**kw))
+                self.assertEqual(st, lib.FAIL, what)
+                self.assertTrue(why.startswith(name + ":"), "%s: %s" % (what, why))
 
     def test_the_boundaries(self):
         self.assertEqual(lib.judge_vllm(vllm_result(cudagraph_n_sizes=8))[0], lib.PASS)
@@ -476,31 +513,36 @@ class JudgeVllm(unittest.TestCase):
         self.assertNotEqual(lib.canon_sha256([[1, 2], [3]]), lib.canon_sha256([[1], [2, 3]]))
 
 
+def trt_cases():
+    b, e, o = trt_result()["builder"], trt_result()["engine"], trt_result()["ort_trt"]
+    return (
+        ("no model", {"onnx_sha256": None}, "onnx_model_generated"),
+        ("not built", {"builder": dict(b, built=False)}, "builder_ran_fp16"),
+        ("no fp16", {"builder": dict(b, fp16=False)}, "builder_ran_fp16"),
+        ("no tactics timed", {"builder": dict(b, timing_cache_bytes=0)}, "tactics_were_timed"),
+        ("engine did not run", {"engine": dict(e, ran=False, error="boom")}, "engine_deserialized_and_ran"),
+        ("engine output off", {"engine": dict(e, max_abs_err=0.2)}, "engine_equals_onnxruntime_cpu"),
+        ("engine output unknown", {"engine": dict(e, max_abs_err=None)}, "engine_equals_onnxruntime_cpu"),
+        ("not repeatable", {"engine": dict(e, repeat_identical=False)}, "engine_repeat_identical"),
+        ("ort ran on the cuda ep", {"ort_trt": dict(o, first_provider="CUDAExecutionProvider")}, "ort_trt_ep_ran_on_tensorrt"),
+        ("ort ran no trt nodes", {"ort_trt": dict(o, trt_node_events=0)}, "ort_trt_ep_ran_on_tensorrt"),
+        ("ort output off", {"ort_trt": dict(o, max_abs_err=1.0)}, "ort_trt_equals_onnxruntime_cpu"),
+        ("ort failed", {"ort_trt": {"status": "FAIL", "reason": "x"}}, "ort_trt_ep"),
+        ("ort status missing", {"ort_trt": {}}, "ort_trt_status_stated"),
+    )
+
+
 class JudgeTensorrt(unittest.TestCase):
     def test_a_good_result_passes_and_a_not_run_ort_ep_does_not_fail_it(self):
         self.assertEqual(lib.judge_tensorrt(trt_result())[0], lib.PASS)
         self.assertEqual(lib.judge_tensorrt(trt_result(ort_trt={"status": "NOT_RUN", "reason": "cpu wheel"}))[0], lib.PASS)
 
     def test_each_missing_property_fails_by_its_own_name(self):
-        b, e, o = trt_result()["builder"], trt_result()["engine"], trt_result()["ort_trt"]
-        for what, kw, name in (
-            ("no model", {"onnx_sha256": None}, "onnx_model_generated"),
-            ("not built", {"builder": dict(b, built=False)}, "builder_ran_fp16"),
-            ("no fp16", {"builder": dict(b, fp16=False)}, "builder_ran_fp16"),
-            ("no tactics timed", {"builder": dict(b, timing_cache_bytes=0)}, "tactics_were_timed"),
-            ("engine did not run", {"engine": dict(e, ran=False, error="boom")}, "engine_deserialized_and_ran"),
-            ("engine output off", {"engine": dict(e, max_abs_err=0.2)}, "engine_equals_onnxruntime_cpu"),
-            ("engine output unknown", {"engine": dict(e, max_abs_err=None)}, "engine_equals_onnxruntime_cpu"),
-            ("not repeatable", {"engine": dict(e, repeat_identical=False)}, "engine_repeat_identical"),
-            ("ort ran on the cuda ep", {"ort_trt": dict(o, first_provider="CUDAExecutionProvider")}, "ort_trt_ep_ran_on_tensorrt"),
-            ("ort ran no trt nodes", {"ort_trt": dict(o, trt_node_events=0)}, "ort_trt_ep_ran_on_tensorrt"),
-            ("ort output off", {"ort_trt": dict(o, max_abs_err=1.0)}, "ort_trt_equals_onnxruntime_cpu"),
-            ("ort failed", {"ort_trt": {"status": "FAIL", "reason": "x"}}, "ort_trt_ep"),
-            ("ort status missing", {"ort_trt": {}}, "ort_trt_status_stated"),
-        ):
-            st, why, _ = lib.judge_tensorrt(trt_result(**kw))
-            self.assertEqual(st, lib.FAIL, what)
-            self.assertTrue(why.startswith(name + ":"), "%s: %s" % (what, why))
+        for what, kw, name in trt_cases():
+            with self.subTest(what):
+                st, why, _ = lib.judge_tensorrt(trt_result(**kw))
+                self.assertEqual(st, lib.FAIL, what)
+                self.assertTrue(why.startswith(name + ":"), "%s: %s" % (what, why))
 
     def test_the_tolerance_boundary_is_a_fraction_of_the_reference(self):
         tol = lib.TRT_REL_TOL * 3.0
@@ -509,8 +551,31 @@ class JudgeTensorrt(unittest.TestCase):
         self.assertEqual(lib.judge_tensorrt(ok)[0], lib.PASS)
         self.assertEqual(lib.judge_tensorrt(bad)[0], lib.FAIL)
 
+    def test_an_unknown_reference_cannot_pass(self):
+        self.assertEqual(lib.judge_tensorrt(trt_result(engine={"ran": True, "max_abs_err": 0.0, "ref_max_abs": None, "repeat_identical": True}))[0], lib.FAIL)
+
     def test_a_zero_reference_cannot_pass(self):
         self.assertEqual(lib.judge_tensorrt(trt_result(engine={"ran": True, "max_abs_err": 0.0, "ref_max_abs": 0.0, "repeat_identical": True}))[0], lib.FAIL)
+
+
+def jax_cases():
+    ops = jax_result()["ops"]
+    return (
+        ("cpu backend", {"default_backend": "cpu", "devices": [{"platform": "cpu"}]}, "jax_devices_are_gpu"),
+        ("no devices", {"devices": []}, "jax_devices_are_gpu"),
+        ("a cpu device among gpus", {"devices": [{"platform": "gpu"}, {"platform": "cpu"}]}, "jax_devices_are_gpu"),
+        ("matmul off", {"ops": [dict(ops[0], max_abs_err=1.0)] + ops[1:]}, "matmul_f32_highest_equals_cpu"),
+        ("result not on the gpu", {"ops": ops[:3] + [dict(ops[3], on_gpu=False)]}, "scan_equals_cpu"),
+        ("conv missing", {"ops": [o for o in ops if o["name"] != "conv"]}, "matmul_conv_scan_all_ran"),
+        ("preallocation 50 percent", {"bytes_limit_mib": 6144.0}, "preallocation_is_75_percent"),
+        ("preallocation 100 percent", {"bytes_limit_mib": 12288.0}, "preallocation_is_75_percent"),
+        ("limit unknown", {"bytes_limit_mib": None}, "preallocation_is_75_percent"),
+        ("device memory did not grow", {"mem_growth_mib": 500}, "preallocation_observed_on_the_device"),
+        ("no autotune results", {"autotune_bytes": 0}, "autotuner_ran"),
+        ("only the emitter's own kernels in the dump", {"autotune_backends": {"NATIVE_EMITTER": 5}}, "autotuner_ran"),
+        ("an empty dump table", {"autotune_backends": {}}, "autotuner_ran"),
+        ("nothing allocated", {"peak_bytes_in_use_mib": 1.0}, "work_allocated_on_the_device"),
+    )
 
 
 class JudgeJax(unittest.TestCase):
@@ -518,26 +583,11 @@ class JudgeJax(unittest.TestCase):
         self.assertEqual(lib.judge_jax(jax_result())[0], lib.PASS)
 
     def test_each_missing_property_fails_by_its_own_name(self):
-        ops = jax_result()["ops"]
-        for what, kw, name in (
-            ("cpu backend", {"default_backend": "cpu", "devices": [{"platform": "cpu"}]}, "jax_devices_are_gpu"),
-            ("no devices", {"devices": []}, "jax_devices_are_gpu"),
-            ("a cpu device among gpus", {"devices": [{"platform": "gpu"}, {"platform": "cpu"}]}, "jax_devices_are_gpu"),
-            ("matmul off", {"ops": [dict(ops[0], max_abs_err=1.0)] + ops[1:]}, "matmul_f32_highest_equals_cpu"),
-            ("result not on the gpu", {"ops": ops[:3] + [dict(ops[3], on_gpu=False)]}, "scan_equals_cpu"),
-            ("conv missing", {"ops": [o for o in ops if o["name"] != "conv"]}, "matmul_conv_scan_all_ran"),
-            ("preallocation 50 percent", {"bytes_limit_mib": 6144.0}, "preallocation_is_75_percent"),
-            ("preallocation 100 percent", {"bytes_limit_mib": 12288.0}, "preallocation_is_75_percent"),
-            ("limit unknown", {"bytes_limit_mib": None}, "preallocation_is_75_percent"),
-            ("device memory did not grow", {"mem_growth_mib": 500}, "preallocation_observed_on_the_device"),
-            ("no autotune results", {"autotune_bytes": 0}, "autotuner_ran"),
-            ("only the emitter's own kernels in the dump", {"autotune_backends": {"NATIVE_EMITTER": 5}}, "autotuner_ran"),
-            ("an empty dump table", {"autotune_backends": {}}, "autotuner_ran"),
-            ("nothing allocated", {"peak_bytes_in_use_mib": 1.0}, "work_allocated_on_the_device"),
-        ):
-            st, why, _ = lib.judge_jax(jax_result(**kw))
-            self.assertEqual(st, lib.FAIL, what)
-            self.assertTrue(why.startswith(name + ":"), "%s: %s" % (what, why))
+        for what, kw, name in jax_cases():
+            with self.subTest(what):
+                st, why, _ = lib.judge_jax(jax_result(**kw))
+                self.assertEqual(st, lib.FAIL, what)
+                self.assertTrue(why.startswith(name + ":"), "%s: %s" % (what, why))
 
     def test_the_strict_and_the_default_precision_have_their_own_tolerances(self):
         ops = jax_result()["ops"]
@@ -552,6 +602,20 @@ class JudgeJax(unittest.TestCase):
 
     def test_no_result_is_a_fail(self):
         self.assertEqual(lib.judge_jax(None)[0], lib.FAIL)
+
+
+def _per_case(cls, judge, base, cases):
+    for what, kw, name in cases:
+        def t(self, kw=kw, name=name, what=what):
+            st, why, _ = judge(base(**kw))
+            self.assertEqual(st, lib.FAIL, what)
+            self.assertTrue(why.startswith(name + ":"), "%s: %s" % (what, why))
+        setattr(cls, "test_case_" + re.sub(r"\W+", "_", what).strip("_"), t)
+
+
+_per_case(JudgeVllm, lib.judge_vllm, vllm_result, VLLM_CASES)
+_per_case(JudgeTensorrt, lib.judge_tensorrt, trt_result, trt_cases())
+_per_case(JudgeJax, lib.judge_jax, jax_result, jax_cases())
 
 
 class Proof(unittest.TestCase):
@@ -736,6 +800,67 @@ class RunRow(unittest.TestCase):
         self.run_row("jax", self.good_lines("jax"))
         self.assertFalse((self.out / "cache" / "triton" / "stale").exists())
 
+    def test_the_working_directory_is_empty_at_the_start_of_every_run(self):
+        (self.out / "work").mkdir(parents=True)
+        (self.out / "work" / "xla_autotune_results.textproto").write_text("entries {}")       # what the previous run left behind
+        seen = {}
+
+        def make(argv, **kw):
+            seen["files"] = sorted(os.listdir(kw["cwd"]))
+            return FakeProc(self.good_lines("jax"))
+        mr.run_row("jax", self.root, self.out, facts(), PINS, popen=make)
+        self.assertEqual(seen["files"], [])
+
+    def test_a_second_run_in_the_same_directory_starts_with_empty_caches(self):
+        seen = []
+
+        def make(argv, **kw):
+            seen.append(sorted(p.name for d in Path(kw["env"]["HOME"]).parent.iterdir() for p in d.iterdir()))
+            (Path(kw["env"]["TRITON_CACHE_DIR"]) / "kernel.bin").write_text("x")
+            return FakeProc(self.good_lines("jax"))
+        for _ in range(2):
+            mr.run_row("jax", self.root, self.out, facts(), PINS, popen=make)
+        self.assertEqual(seen[1], [])
+
+    def test_the_working_directory_of_every_row_starts_empty(self):
+        for row in lib.ROWS:
+            (self.out / "work").mkdir(parents=True, exist_ok=True)
+            (self.out / "work" / "left_over").write_text("x")
+            seen = []
+
+            def make(argv, **kw):
+                seen.append(os.listdir(kw["cwd"]))
+                return FakeProc(self.good_lines(row))
+            mr.run_row(row, self.root, self.out, facts(), PINS, popen=make)
+            self.assertEqual(seen, [[]], row)
+
+    def test_the_row_runs_with_the_hub_offline_and_no_secret(self):
+        with mock.patch.dict(os.environ, {"HF_TOKEN": "x", "GITHUB_TOKEN": "y"}):
+            mr.run_row("vllm", self.root, self.out, facts(), PINS, popen=self.popen(self.good_lines()))
+        env = self.captured["env"]
+        self.assertEqual((env["HF_HUB_OFFLINE"], env["TRANSFORMERS_OFFLINE"]), ("1", "1"))
+        self.assertNotIn("HF_TOKEN", env)
+        self.assertNotIn("GITHUB_TOKEN", env)
+
+    def test_the_timeout_fail_names_the_limit(self):
+        pins = json.loads(json.dumps(PINS))
+        pins["rows"]["jax"]["timeout_s"] = 0.2
+        with mock.patch.object(mr, "_kill", lambda proc: proc.release.set()):
+            st, why, *_ = self.run_row("jax", ["working"], pins=pins, hold=5)
+        self.assertIn("did not finish in 0.2 s", why)
+
+    def test_a_committed_expected_token_hash_reaches_the_judge(self):
+        pins = json.loads(json.dumps(PINS))
+        pins["rows"]["vllm"]["expected_token_sha256"] = "f" * 64
+        st, why, *_ = self.run_row("vllm", self.good_lines(), pins=pins)
+        self.assertEqual(st, lib.FAIL)
+        self.assertTrue(why.startswith("tokens_equal_committed_hash"), why)
+
+    def test_a_forced_flavour_the_driver_cannot_take_is_not_run(self):
+        st, why, *_ = self.run_row("jax", [], facts=facts(driver_cuda=(12, 9)), forced="cu13")
+        self.assertEqual(st, lib.NOT_RUN)
+        self.assertIn("driver_cuda_below_forced_flavour", why)
+
     def test_not_set_up_is_not_run_with_the_command_to_run(self):
         (self.root / "jax" / "setup.json").unlink()
         st, why, *_ = self.run_row("jax", [])
@@ -781,6 +906,7 @@ class RunRow(unittest.TestCase):
     def test_the_negative_control_runs_the_cpu_form(self):
         self.run_row("jax", self.good_lines("jax"), negctl=True)
         self.assertEqual(self.captured["env"]["JAX_PLATFORMS"], "cpu")
+        self.assertEqual(self.captured["env"]["CUDA_VISIBLE_DEVICES"], "")
         self.run_row("tensorrt", self.good_lines("tensorrt"), negctl=True)
         self.assertIn("--negctl", self.captured["argv"])
 
@@ -853,6 +979,12 @@ class CmdRun(unittest.TestCase):
         self.assertFalse(any("status=PASS" in l for l in lines))
         self.assertFalse(any(l.startswith("GPU_USE_PROOF") for l in lines))
 
+    def test_the_exit_code_is_one_only_for_a_fail(self):
+        res = vllm_result()
+        for status, want in ((lib.PASS, 0), (lib.NOT_RUN, 0), (lib.FAIL, 1)):
+            rc, _ = self.run_main("vllm", (status, "x", "cu13", [], res, []))
+            self.assertEqual(rc, want, status)
+
     def test_the_judged_line_round_trips_through_extract(self):
         rc, lines = self.run_main("jax", self.passed("jax"))
         got = lib.extract_judged("\n".join(lines), "jax")
@@ -880,6 +1012,8 @@ class Setup(unittest.TestCase):
         if "pip" in argv:
             if self.fail_pip:
                 return 1, "ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE.\n    jaxlib==0.12.0.1 from x\n", False
+            if getattr(self, "pip_output", None):
+                return 1, self.pip_output, False
             return 0, "Successfully installed jax\n", False
         return 0, "", False
 
@@ -923,14 +1057,38 @@ class Setup(unittest.TestCase):
         self.assertTrue(why.startswith("hash_mismatch"), why)
         self.assertFalse((self.t / "jax" / "setup.json").exists())
 
+    def not_run(self, f, frag, row="vllm"):
+        self.calls.clear()
+        st, why = self.setup(row, f)
+        self.assertEqual(st, lib.NOT_RUN, frag)
+        self.assertIn(frag, why)
+        self.assertEqual(self.calls, [], frag)
+
     def test_hardware_and_environment_preconditions_are_named_not_runs_and_nothing_runs(self):
         for f, frag in ((facts(driver_cuda=(11, 8)), "driver_cuda_below"), (facts(cc=(6, 1)), "gpu_older_than_turing"), (facts(gcc=False), "no_c_compiler"), (facts(python_h=False), "no_c_compiler"),
-                        (facts(disk_free_gb=3.0), "disk_free_below_need")):
-            self.calls.clear()
-            st, why = self.setup("vllm", f)
-            self.assertEqual(st, lib.NOT_RUN, frag)
-            self.assertIn(frag, why)
-            self.assertEqual(self.calls, [], frag)
+                        (facts(disk_free_gb=3.0), "disk_free_below_need"), (facts(total_mib=2048), "vram_below_floor"), (facts(python=(3, 11, 9)), "python_too_old")):
+            self.not_run(f, frag)
+
+    def test_no_c_compiler_is_not_run_for_vllm(self):
+        self.not_run(facts(gcc=False), "no_c_compiler")
+
+    def test_no_python_headers_is_not_run_for_vllm(self):
+        self.not_run(facts(python_h=False), "no_c_compiler")
+
+    def test_too_little_disk_is_not_run_with_the_numbers(self):
+        self.not_run(facts(disk_free_gb=3.0), "3 GB free, 30 GB needed")
+
+    def test_too_little_video_memory_is_not_run(self):
+        self.not_run(facts(total_mib=2048), "vram_below_floor")
+
+    def test_an_old_python_is_not_run(self):
+        self.not_run(facts(python=(3, 11, 9)), "python_too_old", "jax")
+
+    def test_an_unknown_driver_cuda_is_a_fail_with_the_reason_not_a_not_run(self):
+        st, why = self.setup("jax", facts(driver_cuda=None))
+        self.assertEqual(st, lib.FAIL)
+        self.assertIn("driver_cuda_unknown", why)
+        self.assertEqual(self.calls, [])
 
     def test_only_vllm_needs_a_c_compiler(self):
         self.assertEqual(self.setup("jax", facts(gcc=False, python_h=False))[0], "ok")
@@ -945,18 +1103,76 @@ class Setup(unittest.TestCase):
         self.assertTrue(why.startswith("lock_refused"))
         self.assertEqual(self.calls, [])
 
+    def refused(self, edit, frag):
+        text = edit((ML / "locks/jax_cu13.lock.txt").read_text())
+        (self.t / "bad.lock").write_text(text)
+        with mock.patch.object(mr, "lock_path", lambda *a: self.t / "bad.lock"):
+            st, why = self.setup("jax")
+        self.assertEqual(st, lib.FAIL)
+        self.assertTrue(why.startswith("lock_refused"), why)
+        self.assertIn(frag, why)
+        self.assertEqual(self.calls, [])
+
+    def test_a_lock_from_a_foreign_index_is_refused_before_pip_runs(self):
+        self.refused(lambda t: t.replace("--index-url https://pypi.org/simple", "--index-url https://evil.example/simple"), "index host")
+
+    def test_a_lock_that_names_a_plain_http_index_is_refused_before_pip_runs(self):
+        self.refused(lambda t: t.replace("--index-url https://pypi.org/simple", "--index-url http://pypi.org/simple"), "not https")
+
+    def test_a_lock_without_an_index_is_refused_before_pip_runs(self):
+        self.refused(lambda t: t.replace("--index-url https://pypi.org/simple\n", ""), "--index-url")
+
+    def test_a_lock_with_a_duplicate_package_is_refused_before_pip_runs(self):
+        def dup(t):
+            m = re.search(r"^(numpy==[^\n]*\\\n(?:\s+--hash=sha256:[0-9a-f]{64}(?: \\)?\n)+)", t, re.M)
+            return t + m.group(1)
+        self.refused(dup, "twice")
+
+    def test_a_lock_that_disagrees_with_the_pins_is_refused_before_pip_runs(self):
+        self.refused(lambda t: t.replace("jax==0.12.0.1", "jax==0.11.0", 1), "pins.json says 0.12.0.1")
+
+    def test_a_pip_failure_other_than_hashes_is_named_and_leaves_no_ok_state(self):
+        self.pip_output = "ERROR: Could not find a version that satisfies the requirement x\n"
+        st, why = self.setup("jax")
+        self.assertEqual(st, lib.FAIL)
+        self.assertTrue(why.startswith("pip_failed"), why)
+        self.assertFalse((self.t / "jax" / "setup.json").exists())
+
+    def test_a_second_setup_does_not_touch_the_staged_files(self):
+        self.setup("jax")
+        marker = self.t / "jax" / "venv" / "bin" / "marker"
+        marker.write_text("x")
+        self.setup("jax")
+        self.assertTrue(marker.exists())
+
+    def test_a_changed_lock_starts_clean(self):
+        self.setup("jax")
+        (self.t / "jax" / "venv" / "bin" / "old").write_text("x")
+        changed = (ML / "locks/jax_cu13.lock.txt").read_text() + "\n# a comment changes the bytes\n"
+        (self.t / "changed.lock").write_text(changed)
+        with mock.patch.object(mr, "lock_path", lambda *a: self.t / "changed.lock"):
+            st, _ = self.setup("jax")
+        self.assertEqual(st, "ok")
+        self.assertFalse((self.t / "jax" / "venv" / "bin" / "old").exists())
+        self.assertEqual(json.loads((self.t / "jax" / "setup.json").read_text())["lock_sha256"], lib.lock_sha256(changed))
+
+    def test_a_changed_lock_removes_what_the_old_one_installed(self):
+        self.setup("jax")
+        n = len([c for c in self.calls if "pip" in c])
+        (self.t / "changed.lock").write_text((ML / "locks/jax_cu13.lock.txt").read_text() + "\n# changed\n")
+        with mock.patch.object(mr, "lock_path", lambda *a: self.t / "changed.lock"):
+            self.setup("jax")
+        self.assertEqual(len([c for c in self.calls if "pip" in c]), n + 1)
+
     def test_vllm_fetches_the_model_after_pip_and_a_bad_model_fails_the_setup(self):
-        get, _ = Model().fake_origin(tamper="model.safetensors") if False else (None, None)
-        m = Model()
-        m.tree = Model.tree
-        good, _ = m.fake_origin()
+        origin = Model()
+        good, _ = origin.fake_origin()
         st, why = self.setup("vllm", get=good)
         self.assertEqual(st, "ok", why)
         self.assertTrue((self.t / "vllm" / "model" / "model.json").is_file())
-        bad, _ = m.fake_origin(tamper="model.safetensors")
-        st, why = self.setup("vllm", facts(driver_cuda=(13, 1)), get=bad) if False else (None, None)
-        shutil_rm = __import__("shutil").rmtree
-        shutil_rm(self.t / "vllm")
+        self.assertEqual(json.loads((self.t / "vllm" / "setup.json").read_text())["model"][:1], "8")
+        bad, _ = origin.fake_origin(tamper="model.safetensors")
+        __import__("shutil").rmtree(self.t / "vllm")
         st, why = self.setup("vllm", get=bad)
         self.assertEqual(st, lib.FAIL)
         self.assertTrue(why.startswith("model_fetch_failed: hash_mismatch"), why)
@@ -1011,6 +1227,32 @@ class Compare(unittest.TestCase):
         self.assertEqual(self.kinds("tensorrt", judged("tensorrt"), judged("tensorrt", builder=b)), ["CANDIDATE"])
         self.assertEqual(self.kinds("tensorrt", judged("tensorrt"), judged("tensorrt", ort_trt={"status": "NOT_RUN"})), ["CANDIDATE"])
         self.assertEqual(self.kinds("tensorrt", judged("tensorrt"), judged("tensorrt", onnx_sha256="c" * 64)), ["NOTE"])
+
+    def test_the_autotuner_loss_alone_is_a_candidate(self):
+        self.assertEqual(self.kinds("jax", judged("jax"), judged("jax", autotune_bytes=0)), ["CANDIDATE"])
+
+    def test_cmd_compare_sees_different_tokens_in_two_logs(self):
+        t = Path(tempfile.mkdtemp())
+        h, g = judged("vllm"), judged("vllm")
+        ids = [list(x) for x in g["result"]["token_ids"]]
+        ids[0][0] += 1
+        g["result"]["token_ids"], g["result"]["token_sha256"] = ids, lib.canon_sha256(ids)
+        for name, j in (("h.log", h), ("g.log", g)):
+            (t / name).write_text(lib.judged_line("vllm", j["status"], j["reason"], "cu13", [], j["result"]) + "\n")
+        buf = io.StringIO()
+        with mock.patch("sys.stdout", buf):
+            rc = mr.main(["compare", "vllm", str(t / "h.log"), str(t / "g.log")])
+        self.assertEqual(rc, 1)
+        self.assertIn("greedy token ids differ", buf.getvalue())
+
+    def test_a_forged_status_in_a_log_is_not_a_result(self):
+        self.assertIsNone(lib.extract_judged(lib.RESULT_PREFIX + '{"row":"jax","status":"GREAT"}\n', "jax"))
+        self.assertIsNone(lib.extract_judged(lib.RESULT_PREFIX + '{"row":"jax","status":"pass"}\n', None))
+
+    def test_a_log_with_another_row_s_result_gives_nothing(self):
+        text = lib.judged_line("vllm", lib.PASS, "ok", "cu13", [], {}) + "\n"
+        self.assertIsNone(lib.extract_judged(text, "jax"))
+        self.assertIsNotNone(lib.extract_judged(text, None))
 
     def test_cmd_compare_reads_two_logs_and_exits_one_on_a_candidate(self):
         t = Path(tempfile.mkdtemp())
@@ -1135,6 +1377,64 @@ class MatrixWiring(unittest.TestCase):
         m = self.row_verdict("print('VLLM_SUMMARY status=FAIL reason=x')\n")
         self.assertEqual(m.group(1), "FAIL")
 
+    def test_a_nonzero_exit_that_printed_appnotrun_is_still_a_fail(self):
+        m = self.row_verdict("print('APPNOTRUN x')\nraise SystemExit(2)\n")
+        self.assertEqual((m.group(1), m.group(2)), ("FAIL", "2"))
+
+    def test_the_real_tool_with_no_gpu_is_notrun_through_run_apps(self):
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "bundle").mkdir()
+            os.symlink(ML, Path(t) / "bundle" / "mlrows_tool")
+            fake = Path(t) / "fakebin"
+            fake.mkdir()
+            (fake / "nvidia-smi").write_text("#!/bin/sh\nexit 9\n")
+            (fake / "nvidia-smi").chmod(0o755)
+            out = self.bash(["host", "vllm"], t, {"PATH": "%s:%s" % (fake, os.environ["PATH"])}).stdout
+        m = re.search(r"APPRES side=host app=vllm verdict=(\w+) rc=(\d+) .* note=(.*)$", out, re.M)
+        self.assertEqual(m.group(1), "NOTRUN", out)
+        self.assertIn("not-run:no_gpu_or_no_nvidia_smi", m.group(3))
+
+    def test_list_is_listall_plus_exactly_the_three_rows(self):
+        with tempfile.TemporaryDirectory() as t:
+            lst = self.bash(["x", "list"], t).stdout.split()
+            allr = self.bash(["x", "listall"], t).stdout.split()
+        self.assertEqual(sorted(set(lst) - set(allr)), sorted(lib.ROWS))
+        self.assertLessEqual(set(allr), set(lst))
+
+    def test_all_and_listall_leave_the_discovery_rows_out(self):
+        self.assertIn('[ "${1:-}" = all ] && set -- $(echo "$APPS" | cut', RUN_APPS)
+        self.assertIn('[ "${1:-}" = listall ] && { echo "$APPS" | cut', RUN_APPS)
+
+    def test_all_runs_no_discovery_row(self):
+        with tempfile.TemporaryDirectory() as t:
+            out = self.bash(["host", "all"], t, {"PATH": "/usr/bin:/bin"}).stdout
+            n = len(self.bash(["x", "listall"], t).stdout.split())
+        apps = re.findall(r"^APPRES side=host app=(\w+) ", out, re.M)
+        self.assertEqual(len(apps), n)
+        self.assertFalse(set(apps) & set(lib.ROWS))
+
+    def test_a_discovery_row_never_reaches_the_gate_list(self):
+        mt = load("kf_matrix_table_ml2", ROOT / "scripts/apps/matrix_table.py")
+        for row in lib.ROWS:
+            self.assertNotEqual(mt.classify(row, {"verdict": "PASS"}, {"verdict": "PASS"}, None)[0], "GATE", row)
+
+    def test_the_hook_pushes_the_rows_it_was_asked_for_before_the_guest_runs_anything(self):
+        hook = (ROOT / "scripts/apps/apps_hook.sh").read_text()
+        push = hook.index('mlrows/mlrows.py" push')
+        self.assertLess(push, hook.index("sudo rm -rf /opt/apps/out/guest"))
+        self.assertLess(push, hook.index("for app in $APPS; do"))
+        self.assertIn("case $a in vllm|tensorrt|jax)", hook)
+
+    def test_the_host_run_sets_the_rows_up_before_it_takes_the_gpu_lock(self):
+        matrix = (ROOT / "scripts/apps/apps_matrix.sh").read_text()
+        self.assertLess(matrix.index('mlrows/mlrows.py" setup'), matrix.index("flock 9   # the host GPU is the bench GPU"))
+
+    def test_the_matrix_compares_host_and_guest_for_each_row_after_the_guest_runs(self):
+        matrix = (ROOT / "scripts/apps/apps_matrix.sh").read_text()
+        self.assertIn("for row in vllm tensorrt jax; do", matrix)
+        self.assertLess(matrix.index('mlrows/mlrows.py" compare'), matrix.index('say "GUEST_DONE batched:'))
+        self.assertGreater(matrix.index('mlrows/mlrows.py" compare'), matrix.index("phase 2"))
+
     def test_the_matrix_table_classes_them_discovery_and_the_gpu_judge_has_a_class_for_each(self):
         mt = load("kf_matrix_table_ml", ROOT / "scripts/apps/matrix_table.py")
         for row in lib.ROWS:
@@ -1189,6 +1489,16 @@ class GpuUseJudge(unittest.TestCase):
             rec = self.evaluate(row, self.log(row, self.good(row)), busy=False, kf3=False)       # the guest printed a perfect GPU proof; the host saw no work
             self.assertEqual(rec["verdict"], gu.FAIL, (row, rec["reasons"]))
             self.assertTrue(any("[host-" in r and "FAIL" in r for r in rec["reasons"]), rec["reasons"])
+
+    def test_a_jax_run_the_host_saw_idle_is_a_fail(self):
+        rec = gur.evaluate("jax", "guest", self.log("jax", jax_result()), self.window, self.base, tg.smi_for("jax", False))
+        self.assertEqual(rec["verdict"], gu.FAIL, rec["reasons"])
+        self.assertTrue(any("[host-smi]" in r and "FAIL" in r for r in rec["reasons"]), rec["reasons"])
+
+    def test_an_idle_host_engine_fails_every_row_whose_census_is_fine(self):
+        for row in lib.ROWS:
+            rec = gur.evaluate(row, "guest", self.log(row, self.good(row)), self.window, self.base, tg.smi_for(row, False))
+            self.assertEqual(rec["verdict"], gu.FAIL, (row, rec["reasons"]))
 
     def test_a_row_that_dropped_its_proof_is_a_fail_not_a_pass(self):
         for row in lib.ROWS:

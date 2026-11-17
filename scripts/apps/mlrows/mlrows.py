@@ -340,6 +340,8 @@ def run_row(row, root, out, facts, pins, forced=None, negctl=False, base_env=Non
         shutil.rmtree(cache)                                   # fresh caches every run: the JIT and compile steps are part of what the row asks of the driver
     env = row_env(row, Path(root) / row / "venv", cache, base_env if base_env is not None else os.environ, negctl=negctl)
     work = out / "work"
+    if work.exists():
+        shutil.rmtree(work)                                    # a row reads files it wrote (the XLA autotuner dump): a stale one from an earlier run must never count
     work.mkdir(parents=True, exist_ok=True)
     argv = [str(py), "-B", str(HERE / SCRIPTS[row])] + row_args(row, root, out) + (["--negctl"] if negctl else [])
     sampler = Sampler()
@@ -376,7 +378,7 @@ def run_row(row, root, out, facts, pins, forced=None, negctl=False, base_env=Non
         if row == "vllm":
             result["log_facts"] = lib.vllm_log_facts(full)
     if timed_out:
-        return lib.FAIL, "timeout: the row did not finish in %d s" % spec["timeout_s"], flavour, [], result, list(lines)
+        return lib.FAIL, "timeout: the row did not finish in %g s" % spec["timeout_s"], flavour, [], result, list(lines)
     if result is None:
         last = next((l for l in reversed(list(lines)) if l.strip()), "no output")
         return lib.FAIL, "no_result: rc=%s, last line: %s" % (rc, re.sub(r"\s+", " ", last)[:160]), flavour, [], None, list(lines)
