@@ -203,3 +203,7 @@ downloader from the payload, a stage calling `wait`, apt (design source c), seed
 SPEC and Windows media, disk reservation of unpack space beyond `--reserve-gb`.
 
 The open FFmpeg NVENC/NVDEC matrix and DCGM + NVML sweep rows (2026-11-17, `docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md`, `docs/howto/open-linux-rows.md`; the rows live in `scripts/apps/open_rows/`): `test_open_rows.py` (GPU-free: table validity, caps comparison, verdicts, PSNR thresholds, the NVML field diff, DCGM parsers, the host census, the sweep against a fake `libnvidia-ml`, both runners end to end against fake tools, outputs of the native runs under `fixtures/open_rows/`, and the trust-rule pins) and `open_rows_mutants.py` (two named killers per mutant, in `ci.yml`).
+The open Vulkan CTS row (2026-11-17; design `docs/design/V3_VULKAN_CTS_ROW.md`, usage `docs/howto/vulkan-cts.md`; MEASURED once on a native RTX 3060 container,
+`traces/vkcts_host_20261117/`, never in a guest): `test_vkcts.py` (pins and the CTS fetch script check, the committed case list and its digest, the QPA parser against a
+fixture of a real log, crash and hang attribution, the block format, the host-versus-guest diff table, the row inside `scripts/apps/run_apps.sh`, GPU-use assertion with a
+fake `nvidia-smi`; GPU-free, no network, a Python stand-in for `deqp-vk`); mutants `vkcts_mutants.py` (two named killers each, in `ci.yml`).

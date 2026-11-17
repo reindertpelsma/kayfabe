@@ -195,6 +195,8 @@ jobs:
           # Native fault-name derivation (2026-11-16): the fixture and committed-JSON layers run here with no oracle (the oracle
           # layer skips; the vast-box-scripts job fetches the pin and requires it). >=2 named killers per mutant.
           python3 scripts/ci/derive_fault_names_mutants.py
+          # Open Vulkan CTS row (2026-11-17, docs/design/V3_VULKAN_CTS_ROW.md): pins, case list, QPA parser, crash attribution, host-vs-guest diff; >=2 named killers per mutant.
+          python3 -B -I scripts/ci/vkcts_mutants.py
           python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           python3 -I scripts/bench/va_profile_table.py --self-test

@@ -1628,7 +1628,7 @@
     },
     {
       "path": "scripts/apps/run_apps.sh",
-      "sha256": "bd4cdfab6217391aeb5c82a61a3bf6ba5cf656a27a090f2cae156ce3f73dac83",
+      "sha256": "784e6a0f9e33ea526398fd22404c3e2d2487761c1876597b0f64b860e3893eb3",
       "target": "/opt/apps/bundle/run_apps.sh",
       "permissions": "0755"
     }

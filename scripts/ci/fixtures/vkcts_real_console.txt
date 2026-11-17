@@ -1,0 +1,24 @@
+Writing test log into LOG
+dEQP Core 0d18b347943e5e843529a05c95220e27fe30c538 (0x0d18b347) starting..
+  target implementation = 'Vulkan Headless'
+
+Test case 'dEQP-VK.dgc.ext.compute.layout.complementary_push_index_dispatch_shader_objects_descriptor_heap'..
+  NotSupported (VK_EXT_descriptor_heap is not supported at vktTestCase.cpp:1395)
+
+Test case 'dEQP-VK.dgc.ext.compute.misc.execute_many_1024_compute_queue'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.info.device_extensions'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.info.device_properties'..
+  Pass (DeviceProperites query succeeded)
+
+DONE!
+
+Test run totals:
+  Passed:        3/4 (75.0%)
+  Failed:        0/4 (0.0%)
+  Not supported: 1/4 (25.0%)
+  Warnings:      0/4 (0.0%)
+  Waived:        0/4 (0.0%)

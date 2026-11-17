@@ -14,7 +14,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../.." && pwd)"
 SIDE=${1:?host|guest}; RUN=${2:?run}; shift 2
 R=/workspace/apps/results/$RUN; mkdir -p "$R"
 say(){ echo "[apps_matrix $(date -Is)] $*"; }
-ALL=$(bash "$HERE/run_apps.sh" x list)
+ALL=$(bash "$HERE/run_apps.sh" x listall)   # `all` leaves out the discovery rows (vkcts): name them to run them
 [ "${1:-}" = all ] && set -- $ALL
 say "START side=$SIDE run=$RUN rev=$(git -C "$REPO" rev-parse --short=8 HEAD) apps=$#"
 busy(){ pgrep -x qemu-system-x86 >/dev/null || pgrep -x cargo >/dev/null || pgrep -x rustc >/dev/null; }
@@ -24,12 +24,16 @@ if [ "$SIDE" = host ]; then
   mkdir -p /opt/apps
   cp -f "$HERE"/src/*.py /opt/apps/bundle/share/
   cp -rf "$HERE/open_rows" /opt/apps/bundle/share/
+  # discovery row vkcts (docs/design/V3_VULKAN_CTS_ROW.md): the tool dir, and the artifact `vkcts.py build` made
+  mkdir -p /opt/apps/bundle/vkcts_tool && cp -f "$HERE"/vkcts/{vkcts.py,vkcts_lib.py,pins.json,caselist.tsv} "$REPO/scripts/bench/windows/gpu_assert.py" /opt/apps/bundle/vkcts_tool/
+  [ -d "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current" ] && ln -sfn "$(readlink -f "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current")" /opt/apps/bundle/vkcts
   exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9   # the host GPU is the bench GPU
   bash "$HERE/run_apps.sh" host "$@" | tee -a "$R/host.res"
   flock -u 9
   for f in /opt/apps/out/host/*.log; do cp -f "$f" "$R/$(basename "$f" .log).host.log"; done
   dmesg | grep -E 'Xid|NVRM' | tail -50 > "$R/host_dmesg_tail.log"
   say "HOST_DONE $(grep -c 'verdict=PASS' "$R/host.res") pass / $(wc -l < "$R/host.res") rows"
+  [ -f "$R/vkcts.guest.log" ] && python3 "$HERE/vkcts/vkcts.py" diff "$R" | grep -a '^VKCTS_DIFF'
   exit 0
 fi
 
@@ -83,4 +87,5 @@ for row in nvcodec_matrix nvml_dcgm; do
     python3 "$HERE/open_rows/compare_logs.py" "$row" "$R/$row.host.log" "$R/$row.guest.log" > "$R/$row.compare.txt" 2>&1; say "COMPARE $row: $(tail -n 1 "$R/$row.compare.txt")"
   fi
 done
+[ -f "$R/vkcts.host.log" ] && [ -f "$R/vkcts.guest.log" ] && python3 "$HERE/vkcts/vkcts.py" diff "$R" | grep -a '^VKCTS_DIFF'
 say "GUEST_DONE batched: $(grep -c 'verdict=PASS' "$R/guest.res") pass / $(wc -l < "$R/guest.res");  isolated re-runs: $(grep -c 'verdict=PASS' "$R/guest_isolated.res" 2>/dev/null || echo 0) pass / $(wc -l < "$R/guest_isolated.res" 2>/dev/null || echo 0)"
