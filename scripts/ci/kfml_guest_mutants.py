@@ -51,10 +51,10 @@ def M(name, key, old, new, *tests):
 
 MUTANTS = [
     M("flavour-chosen-without-the-guest-facts", "kg",
-      '"--flavor", "auto", "--flavor-for",\n           "%s:%d.%d" % (facts["driver_cuda"], facts["cc"][0], facts["cc"][1]), "--guest-python", facts["python"]]',
-      '"--flavor", "auto", "--guest-python", facts["python"]]',
+      '"--flavor", "auto", "--flavor-for",\n           "%s:%d.%d" % (facts["driver_cuda"], facts["cc"][0], facts["cc"][1]), "--guest-python", facts["python"],\n           "--guest-glibc", facts["glibc"]]',
+      '"--flavor", "auto", "--guest-python", facts["python"], "--guest-glibc", facts["glibc"]]',
       F + "test_the_flavour_comes_from_the_guests_facts_not_the_hosts", F + "test_wheelhouse_command_carries_the_guest_facts_of_the_default_fake"),
-    M("wheelhouse-for-the-host-interpreter", "kg", ', "--guest-python", facts["python"]]', ']',
+    M("wheelhouse-for-the-host-interpreter", "kg", '"--guest-python", facts["python"],\n           "--guest-glibc", facts["glibc"]]', '"--guest-glibc", facts["glibc"]]',
       F + "test_the_flavour_comes_from_the_guests_facts_not_the_hosts", F + "test_wheelhouse_command_carries_the_guest_facts_of_the_default_fake"),
     M("no-flavour-is-a-failure", "kg", "    if p.returncode == 3:", "    if False:",
       F + "test_no_flavour_fits_is_a_not_run_verdict_with_the_reason", F + "test_no_flavour_fits_still_says_which_guest_it_was"),

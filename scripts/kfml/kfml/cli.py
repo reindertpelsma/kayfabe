@@ -211,12 +211,17 @@ def _wheelhouse(args, out):
     else:
         flavors = args.flavor.split(",")
     try:
-        doc = wh.build(args.out, flavors, pins, guest_python=args.guest_python, with_redist=not args.no_redist, datasets=args.with_data)
+        doc = wh.build(args.out, flavors, pins, guest_python=args.guest_python, guest_glibc=args.guest_glibc, with_redist=not args.no_redist, datasets=args.with_data)
     except (wh.WheelhouseError, setup_venv.SetupError) as e:
         sys.stderr.write("error: %s\n" % e)
         return 1
     out.write(json.dumps({"flavors": flavors, "files": len(doc["files"]), "total_bytes": doc["total_bytes"], "build_s": doc["build_s"]}) + "\n")
     return 0
+
+
+def wheelhouse_default_glibc():
+    from . import wheelhouse as wh
+    return wh.DEFAULT_GLIBC
 
 
 def build_parser():
@@ -254,6 +259,7 @@ def build_parser():
     s.add_argument("--out", required=True)
     s.add_argument("--flavor", default="auto", help="auto (this box), all, or cu126|cu128 (comma separated)")
     s.add_argument("--guest-python", help="the CPython (3.12) of the machine that will install it; default: this interpreter")
+    s.add_argument("--guest-glibc", default=wheelhouse_default_glibc(), help="glibc of the guest (2.39): the newest manylinux tag accepted")
     s.add_argument("--no-redist", action="store_true")
     s.add_argument("--with-data", action="store_true", help="also fetch the pinned datasets into OUT/data")
     s.add_argument("--verify", action="store_true", help="only re-hash OUT against its MANIFEST.json")

@@ -86,7 +86,7 @@ class SshTransport:
 def parse_facts(smi_csv, smi_header, python_version, have, disk_kb):
     """Guest facts from raw command output. Anything that cannot be read is None (the caller turns that into a named FAIL)."""
     f = {"gpu_name": None, "driver": None, "vram_gb": None, "cc": None, "driver_cuda": None, "python": None, "gcc": bool(have.get("gcc")),
-         "python_h": bool(have.get("python_h")), "venv": bool(have.get("venv")), "disk_free_bytes": None}
+         "glibc": None, "python_h": bool(have.get("python_h")), "venv": bool(have.get("venv")), "disk_free_bytes": None}
     line = (smi_csv or "").strip().splitlines()[0] if (smi_csv or "").strip() else ""
     parts = [p.strip() for p in line.split(",")]
     if len(parts) >= 4:
@@ -102,6 +102,8 @@ def parse_facts(smi_csv, smi_header, python_version, have, disk_kb):
     f["driver_cuda"] = m.group(1) if m else None
     m = re.fullmatch(r"(\d+\.\d+)", (python_version or "").strip())
     f["python"] = m.group(1) if m else None
+    m = re.fullmatch(r"glibc (2\.\d+)(?:\.\d+)?", (have.get("glibc") or "").strip())
+    f["glibc"] = m.group(1) if m else None
     try:
         f["disk_free_bytes"] = int(str(disk_kb).strip()) * 1024
     except ValueError:
@@ -117,6 +119,7 @@ def probe(tr):
         "echo gcc=$(command -v g++ >/dev/null && echo 1); "
         "echo python_h=$(python3 -c 'import os,sysconfig; print(1 if os.path.exists(os.path.join(sysconfig.get_paths()[\"include\"], \"Python.h\")) else \"\")'); "
         "echo venv=$(python3 -c 'import ensurepip, venv; print(1)' 2>/dev/null); "
+        "echo glibc=$(getconf GNU_LIBC_VERSION); "
         "echo disk_kb=$(df -Pk /opt | awk 'NR==2{print $4}')", STEP_BUDGET_S["probe"])
     kv = dict(l.split("=", 1) for l in have.splitlines() if "=" in l)
     if rc1 != 0:
@@ -133,6 +136,8 @@ def fact_problems(f):
         out.append("guest-driver-cuda: nvidia-smi printed no 'CUDA Version'")
     if f["python"] is None:
         out.append("guest-python: python3 not usable")
+    if f["glibc"] is None:
+        out.append("guest-glibc: getconf GNU_LIBC_VERSION not understood")
     for key, what in (("gcc", "a C++ compiler"), ("python_h", "Python.h (python3-dev)"), ("venv", "python3-venv")):
         if not f[key]:
             out.append("guest-missing: " + what)
@@ -142,7 +147,8 @@ def fact_problems(f):
 def host_wheelhouse(host_py, kfml_dir, out, facts, run=subprocess.run, with_data=True):
     """Run the host side of the wheelhouse. Returns (doc|None, not_run_reason|None, rc)."""
     cmd = [host_py, "-m", "kfml", "wheelhouse", "--out", str(out), "--flavor", "auto", "--flavor-for",
-           "%s:%d.%d" % (facts["driver_cuda"], facts["cc"][0], facts["cc"][1]), "--guest-python", facts["python"]]
+           "%s:%d.%d" % (facts["driver_cuda"], facts["cc"][0], facts["cc"][1]), "--guest-python", facts["python"],
+           "--guest-glibc", facts["glibc"]]
     if with_data:
         cmd.append("--with-data")
     p = run(cmd, cwd=str(kfml_dir), capture_output=True, text=True, timeout=STEP_BUDGET_S["wheelhouse"])

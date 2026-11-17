@@ -68,6 +68,20 @@ class Build(unittest.TestCase):
         with self.assertRaises(wh.WheelhouseError):
             wh.py_tag("three")
 
+    def test_every_manylinux_minor_up_to_the_guests_is_listed(self):
+        """Measured 2026-11-17: pip does not expand --platform manylinux_2_28 to 2_27, and nvidia-*-cu12 12.8 wheels are tagged 2_27."""
+        pl = wh.platforms("2.39")
+        for n in (17, 24, 27, 28, 34, 39):
+            self.assertIn("manylinux_2_%d_x86_64" % n, pl)
+        self.assertNotIn("manylinux_2_40_x86_64", pl)
+        self.assertIn("manylinux2014_x86_64", pl)
+        self.assertNotIn("manylinux_2_36_x86_64", wh.platforms("2.35"))
+        with self.assertRaises(wh.WheelhouseError):
+            wh.platforms("3.1")
+        cmd = wh.download_cmd("py", Path("l"), Path("d"), "3.12", "2.35")
+        self.assertIn("manylinux_2_27_x86_64", cmd)
+        self.assertNotIn("manylinux_2_36_x86_64", cmd)
+
     def test_build_writes_a_manifest_with_sizes_and_hashes(self):
         run = FakePip()
         m = wh.build(self.t / "wh", ["cu126", "cu128"], self.pins_with_redist_files(), guest_python="3.12", run=run, fetch_fn=fake_fetch)

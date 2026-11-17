@@ -32,7 +32,7 @@ WH_DOC = {"flavors": ["cu126"], "files": 40, "total_bytes": 4_000_000_000, "buil
 class FakeGuest:
     """A transport that answers by command content; records everything the stage sends."""
 
-    def __init__(self, smi=SMI, head=HEAD, py="3.12\n", have="gcc=1\npython_h=1\nvenv=1\ndisk_kb=%d\n" % (200 * 2**20), rows=None,
+    def __init__(self, smi=SMI, head=HEAD, py="3.12\n", have="gcc=1\npython_h=1\nvenv=1\nglibc=glibc 2.39\ndisk_kb=%d\n" % (200 * 2**20), rows=None,
                  verify_rc=0, setup_rc=0, setup_out="", fetch_rc=0, run_rc=0, smi_rc=0):
         self.cmds, self.puts = [], []
         self.smi, self.head, self.py, self.have, self.smi_rc = smi, head, py, have, smi_rc
@@ -130,6 +130,7 @@ class Flow(unittest.TestCase):
         cmd = next(c for c in h.calls if "wheelhouse" in c)
         self.assertEqual(cmd[cmd.index("--flavor-for") + 1], "13.0:12.0")
         self.assertEqual(cmd[cmd.index("--guest-python") + 1], "3.10")
+        self.assertEqual(cmd[cmd.index("--guest-glibc") + 1], "2.39")
         self.assertIn("--with-data", cmd)
         self.assertIn("auto", cmd)
         self.assertFalse([a for a in cmd if re.fullmatch(r"cu1\d\d", a)])
@@ -159,9 +160,9 @@ class Flow(unittest.TestCase):
         self.assertFalse([c for c in g.cmds if " setup " in c or " run --tier" in c])
 
     def test_missing_guest_pieces_are_named_fails_before_any_download(self):
-        for kw, word in (({"have": "gcc=\npython_h=1\nvenv=1\ndisk_kb=999999999\n"}, "C++ compiler"),
-                         ({"have": "gcc=1\npython_h=\nvenv=1\ndisk_kb=999999999\n"}, "python3-dev"),
-                         ({"have": "gcc=1\npython_h=1\nvenv=\ndisk_kb=999999999\n"}, "python3-venv"),
+        for kw, word in (({"have": "gcc=\npython_h=1\nvenv=1\nglibc=glibc 2.39\ndisk_kb=999999999\n"}, "C++ compiler"),
+                         ({"have": "gcc=1\npython_h=\nvenv=1\nglibc=glibc 2.39\ndisk_kb=999999999\n"}, "python3-dev"),
+                         ({"have": "gcc=1\npython_h=1\nvenv=\nglibc=glibc 2.39\ndisk_kb=999999999\n"}, "python3-venv"),
                          ({"head": "no cuda line"}, "CUDA Version"), ({"py": "oops"}, "python3 not usable")):
             doc, g, h = self.go(FakeGuest(**kw))
             self.assertEqual(doc["verdict"], "FAIL", kw)
@@ -182,13 +183,13 @@ class Flow(unittest.TestCase):
         self.assertEqual(h.calls, [])
 
     def test_a_guest_disk_that_cannot_hold_it_is_refused_before_copying(self):
-        doc, g, _ = self.go(FakeGuest(have="gcc=1\npython_h=1\nvenv=1\ndisk_kb=%d\n" % (5 * 2**20)))
+        doc, g, _ = self.go(FakeGuest(have="gcc=1\npython_h=1\nvenv=1\nglibc=glibc 2.39\ndisk_kb=%d\n" % (5 * 2**20)))
         self.assertEqual(doc["verdict"], "FAIL")
         self.assertIn("guest-disk", doc["reason"])
         self.assertEqual(g.puts, [])
 
     def test_the_disk_need_scales_with_the_wheelhouse(self):
-        have = "gcc=1\npython_h=1\nvenv=1\ndisk_kb=%d\n" % (12 * 2**20)  # 12 GiB free
+        have = "gcc=1\npython_h=1\nvenv=1\nglibc=glibc 2.39\ndisk_kb=%d\n" % (12 * 2**20)  # 12 GiB free
         small = dict(WH_DOC, total_bytes=1_000_000_000)
         doc, _, _ = self.go(FakeGuest(have=have), FakeHost(doc=small))
         self.assertEqual(doc["verdict"], "PASS")
@@ -303,11 +304,16 @@ class Flow(unittest.TestCase):
 
 class Facts(unittest.TestCase):
     def test_parse(self):
-        f = kg.parse_facts(SMI, HEAD, "3.12\n", {"gcc": "1", "python_h": "1", "venv": "1"}, "1048576")
+        f = kg.parse_facts(SMI, HEAD, "3.12\n", {"gcc": "1", "python_h": "1", "venv": "1", "glibc": "glibc 2.35"}, "1048576")
+        self.assertEqual(f["glibc"], "2.35")
         self.assertEqual((f["gpu_name"], f["driver"], f["cc"], f["driver_cuda"], f["python"], f["vram_gb"]),
                          ("NVIDIA Test Card", "555.55.01", (8, 9), "12.6", "3.12", 11.99))
         self.assertEqual(f["disk_free_bytes"], 1048576 * 1024)
         self.assertEqual(kg.fact_problems(f), [])
+
+    def test_a_guest_whose_glibc_is_unreadable_is_a_named_fail(self):
+        f = kg.parse_facts(SMI, HEAD, "3.12\n", {"gcc": "1", "python_h": "1", "venv": "1", "glibc": "musl"}, "1048576")
+        self.assertIn("guest-glibc", " ".join(kg.fact_problems(f)))
 
     def test_unreadable_output_is_none_not_a_guess(self):
         f = kg.parse_facts("", "", "", {}, "x")

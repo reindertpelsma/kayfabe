@@ -25,7 +25,17 @@ import time
 from pathlib import Path
 
 SCHEMA = "kfml.wheelhouse/1"
-PLATFORMS = ("manylinux_2_28_x86_64", "manylinux_2_17_x86_64", "manylinux2014_x86_64", "linux_x86_64")
+LEGACY_PLATFORMS = ("manylinux2014_x86_64", "manylinux2010_x86_64", "manylinux1_x86_64", "linux_x86_64")
+DEFAULT_GLIBC = "2.39"  # Ubuntu 24.04; the guest probe reads the real one
+
+
+def platforms(glibc=DEFAULT_GLIBC):
+    """pip's --platform does NOT expand a manylinux tag to the older ones (measured 2026-11-17: pip 22.0.2 with only manylinux_2_28 found
+    no nvidia-*-cu12 12.8 wheel, which is tagged manylinux_2_27), so every glibc minor from 2.17 up to the guest's is listed."""
+    m = re.fullmatch(r"2\.(\d+)", glibc or "")
+    if not m:
+        raise WheelhouseError("bad glibc version %r (want 2.39)" % glibc)
+    return tuple("manylinux_2_%d_x86_64" % n for n in range(int(m.group(1)), 16, -1)) + LEGACY_PLATFORMS
 
 
 class WheelhouseError(Exception):
@@ -44,7 +54,7 @@ def py_tag(version: str):
     return "%s.%s" % m.groups(), "cp%s%s" % m.groups()
 
 
-def download_cmd(python, lock: Path, dest: Path, guest_python=None):
+def download_cmd(python, lock: Path, dest: Path, guest_python=None, guest_glibc=DEFAULT_GLIBC):
     """pip download of the hashed lock. For another interpreter than the host's (the guest's) the tag, ABI and platform are named
     explicitly and only binary wheels are accepted: nothing is built, nothing runs setup.py."""
     cmd = [python, "-m", "pip", "download", "--no-input", "--disable-pip-version-check", "--require-hashes",
@@ -52,7 +62,7 @@ def download_cmd(python, lock: Path, dest: Path, guest_python=None):
     if guest_python:
         ver, tag = py_tag(guest_python)
         cmd += ["--python-version", ver, "--implementation", "cp", "--abi", tag]
-        for p in PLATFORMS:
+        for p in platforms(guest_glibc):
             cmd += ["--platform", p]
     return cmd
 
@@ -76,7 +86,7 @@ def _scan(root: Path, sub: str) -> dict:
     return out
 
 
-def build(out, flavors, pins, guest_python=None, python=None, run=subprocess.run, with_redist=True, datasets=False,
+def build(out, flavors, pins, guest_python=None, python=None, guest_glibc=DEFAULT_GLIBC, run=subprocess.run, with_redist=True, datasets=False,
           fetch_fn=None, lock_for=None, now=time.time) -> dict:
     """Fill OUT for each flavour (idempotent: pip skips what is there) and write MANIFEST.json. Returns the manifest."""
     from . import datasets as ds
@@ -93,7 +103,7 @@ def build(out, flavors, pins, guest_python=None, python=None, run=subprocess.run
             raise WheelhouseError("%s has no hashes: a wheelhouse is only built from a hashed lock" % lock.name)
         wd = wheels_dir(out, fl)
         wd.mkdir(parents=True, exist_ok=True)
-        p = run(download_cmd(python, lock, wd, guest_python))
+        p = run(download_cmd(python, lock, wd, guest_python, guest_glibc))
         if p.returncode != 0:
             raise WheelhouseError("pip download failed for %s (rc=%s)" % (fl, p.returncode))
         manifest["flavors"][fl] = {"lock": lock.name, "lock_sha256": hashlib.sha256(lock.read_bytes()).hexdigest(),
