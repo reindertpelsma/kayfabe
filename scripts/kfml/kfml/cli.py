@@ -6,7 +6,7 @@ import json
 import os
 import sys
 
-from . import buildwheels, bundle, datasets, gating, registry, runner, setup_venv, versions
+from . import buildwheels, bundle, datasets, flavor, gating, registry, runner, setup_venv, versions
 from . import env as envmod
 from .spec import MID_TOTAL_LIMIT_S, guest_estimate_s, tier_problems
 
@@ -129,7 +129,7 @@ def _run(args, out, probe=envmod.probe_env):
 def _setup(args, out):
     try:
         r = setup_venv.setup(args.venv, args.flavor, args.python, args.with_nvcc, args.allow_unhashed, args.installer,
-                             nvcc_if_needed=args.nvcc_if_needed)
+                             nvcc_if_needed=args.nvcc_if_needed, wheelhouse=args.wheelhouse)
     except setup_venv.NoFlavor as e:
         sys.stderr.write("NOT_RUN: %s\n" % e)
         out.write(json.dumps({"status": "NOT_RUN", "reason": str(e)}) + "\n")
@@ -151,8 +151,8 @@ def _fetch(args, out):
     rc = 0
     for name in sorted(pins["datasets"]):
         try:
-            out.write(json.dumps(dict(name=name, **datasets.fetch(name, data, pins))) + "\n")
-        except (datasets.PinMe, datasets.HashMismatch) as e:
+            out.write(json.dumps(dict(name=name, **datasets.fetch(name, data, pins, source_dir=args.source_dir))) + "\n")
+        except (datasets.PinMe, datasets.HashMismatch, FileNotFoundError) as e:
             sys.stderr.write("%s\n" % e)
             rc = 1
     return rc
@@ -176,6 +176,47 @@ def _build_wheels(args, out):
     recs = buildwheels.build_all(args.out, builds, {"python": e.python, "torch": e.torch, "cuda": e.cuda})
     out.write(json.dumps(recs, indent=1) + "\n")
     return 1 if any("error" in r or r.get("refused") for r in recs) else 0
+
+
+def _wheelhouse(args, out):
+    from . import wheelhouse as wh
+    pins = datasets.load_pins()
+    if args.verify:
+        try:
+            doc = wh.verify(args.out)
+        except wh.WheelhouseError as e:
+            sys.stderr.write("error: %s\n" % e)
+            return 1
+        out.write(json.dumps({"verified": len(doc["files"]), "total_bytes": doc["total_bytes"], "flavors": sorted(doc["flavors"])}) + "\n")
+        return 0
+    if args.flavor == "all":
+        flavors = [n for n, _ in flavor.table(pins)]
+    elif args.flavor == "auto":
+        if args.flavor_for:
+            dc, cc = args.flavor_for.split(":")
+            c = flavor.choose(pins, dc, tuple(int(x) for x in cc.split(".")))
+            if c.flavor is None:
+                sys.stderr.write("NOT_RUN: %s\n" % c.reason)
+                out.write(json.dumps({"status": "NOT_RUN", "reason": c.reason}) + "\n")
+                return 3
+            flavors = [c.flavor]
+        else:
+            try:
+                f, _ = setup_venv.resolve_flavor("auto", pins)
+            except setup_venv.NoFlavor as e:
+                sys.stderr.write("NOT_RUN: %s\n" % e)
+                out.write(json.dumps({"status": "NOT_RUN", "reason": str(e)}) + "\n")
+                return 3
+            flavors = [f]
+    else:
+        flavors = args.flavor.split(",")
+    try:
+        doc = wh.build(args.out, flavors, pins, guest_python=args.guest_python, with_redist=not args.no_redist, datasets=args.with_data)
+    except (wh.WheelhouseError, setup_venv.SetupError) as e:
+        sys.stderr.write("error: %s\n" % e)
+        return 1
+    out.write(json.dumps({"flavors": flavors, "files": len(doc["files"]), "total_bytes": doc["total_bytes"], "build_s": doc["build_s"]}) + "\n")
+    return 0
 
 
 def build_parser():
@@ -204,8 +245,20 @@ def build_parser():
     s.add_argument("--nvcc-if-needed", action="store_true",
                    help="like --with-nvcc, but only when no nvcc with the flavour's CUDA major.minor is on the box")
     s.add_argument("--allow-unhashed", action="store_true")
+    s.add_argument("--wheelhouse", metavar="DIR", help="offline install from a wheelhouse (no index, hashes required)")
     s.add_argument("--installer", choices=("pip", "uv"), default="pip")
-    sub.add_parser("fetch-data")
+    s = sub.add_parser("fetch-data")
+    s.add_argument("--from", dest="source_dir", metavar="DIR",
+                   help="offline: take the datasets from DIR (a wheelhouse's data/); still verified against pins.json")
+    s = sub.add_parser("wheelhouse", help="build or verify the offline wheelhouse (host side; the guest installs from it)")
+    s.add_argument("--out", required=True)
+    s.add_argument("--flavor", default="auto", help="auto (this box), all, or cu126|cu128 (comma separated)")
+    s.add_argument("--guest-python", help="the CPython (3.12) of the machine that will install it; default: this interpreter")
+    s.add_argument("--no-redist", action="store_true")
+    s.add_argument("--with-data", action="store_true", help="also fetch the pinned datasets into OUT/data")
+    s.add_argument("--verify", action="store_true", help="only re-hash OUT against its MANIFEST.json")
+    s.add_argument("--flavor-for", metavar="DRIVER_CUDA:CC",
+                   help="choose the flavour for these guest facts instead of this box (e.g. 12.6:8.9)")
     s = sub.add_parser("bundle")
     s.add_argument("--out", required=True)
     s.add_argument("--wheels")
@@ -218,4 +271,4 @@ def main(argv=None, out=None):
     out = out or sys.stdout
     args = build_parser().parse_args(argv)
     return {"list": _list, "check": _check, "run": _run, "setup": _setup, "fetch-data": _fetch,
-            "bundle": _bundle, "build-wheels": _build_wheels}[args.cmd](args, out)
+            "bundle": _bundle, "build-wheels": _build_wheels, "wheelhouse": _wheelhouse}[args.cmd](args, out)

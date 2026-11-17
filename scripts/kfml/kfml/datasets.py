@@ -33,8 +33,9 @@ def _sha256(path) -> str:
     return h.hexdigest()
 
 
-def fetch(name: str, data_dir, pins=None, environ=None, opener=None) -> dict:
-    """Return {'path', 'sha256', 'pinned'}; downloads on first use."""
+def fetch(name: str, data_dir, pins=None, environ=None, opener=None, source_dir=None) -> dict:
+    """Return {'path', 'sha256', 'pinned'}; downloads on first use. source_dir: an offline copy (a wheelhouse's data/): the file is
+    taken from there instead of the network and is verified against the pin exactly like a download."""
     environ = os.environ if environ is None else environ
     pins = pins if pins is not None else load_pins()
     ent = pins["datasets"][name]
@@ -48,7 +49,13 @@ def fetch(name: str, data_dir, pins=None, environ=None, opener=None) -> dict:
         if src is None:
             tmp = Path(str(dest) + ".part")
             op = opener or urllib.request.urlopen
-            with op(ent["url"]) as r, open(tmp, "wb") as f:
+            target = ent["url"]
+            if source_dir is not None:
+                local = Path(source_dir) / ent["filename"]
+                if not local.is_file():
+                    raise FileNotFoundError("offline: %s is not in %s" % (ent["filename"], source_dir))
+                op, target = (lambda path: open(path, "rb")), str(local)
+            with op(target) as r, open(tmp, "wb") as f:
                 while True:
                     b = r.read(1 << 20)
                     if not b:

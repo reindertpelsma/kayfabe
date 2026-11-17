@@ -3,6 +3,7 @@
 """The `kfml` payload stage (2026-11-16): ML research workloads (scripts/kfml) as an OPTIONAL stage of vast_payload.py.
 
     kfml_stage.py run --sha SHA --checkout DIR --prefix DIR --out FILE [--tier mid|large] [--reference DIR] [--record-reference DIR]
+    kfml_stage.py run ... --where guest [--guest-ssh CMD]   (inside the offline guest: kfml_guest.py)
     kfml_stage.py plan
 
 It runs on the box's own GPU, whatever single NVIDIA die and driver the box has: nothing here names a die or a driver. The wheel flavour is
@@ -21,6 +22,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -29,6 +31,8 @@ from pathlib import Path
 SCHEMA = 1
 TIERS = ("mid", "large")
 STEP_BUDGET_S = {"setup": 3600, "fetch-data": 900, "run": 7200}
+STEP_NAMES = ("probe", "wheelhouse", "copy", "verify", "setup", "fetch-data", "run")  # the guest flow adds the first four
+TRANSFER_KEYS = ("wheelhouse_bytes", "wheelhouse_build_s", "src_bytes", "copy_bytes", "copy_s", "install_s")
 MAX_ROWS = 8
 FACT_KEYS = ("gpu_name", "compute_cap", "vram_gb", "driver", "driver_cuda", "cuda", "torch", "flavor")
 ROW_KEYS = {"name", "status", "reason", "wall_s", "metrics"}
@@ -187,6 +191,9 @@ def parse_args(argv):
     r.add_argument("--reference")
     r.add_argument("--record-reference")
     r.add_argument("--run-id", default="")
+    r.add_argument("--where", choices=("host", "guest"), default="host",
+                   help="host (default): on this box's own GPU. guest: inside the offline open Linux guest, over --guest-ssh (kfml_guest.py)")
+    r.add_argument("--guest-ssh", metavar="CMD", help="the guest transport, e.g. scripts/bench/gssh_nv (default: $KF_GUEST_SSH, else that script)")
     return p.parse_args(argv)
 
 
@@ -199,7 +206,12 @@ def main(argv=None):
         print("KF_KFML_REFUSED reason=sha", flush=True)
         return 2
     try:
-        doc = run(args)
+        if args.where == "guest":
+            import kfml_guest
+            ssh = args.guest_ssh or os.environ.get("KF_GUEST_SSH") or str(Path(args.checkout) / "scripts" / "bench" / "gssh_nv")
+            doc = kfml_guest.run_guest(args, kfml_guest.SshTransport(shlex.split(ssh)))
+        else:
+            doc = run(args)
     except StageError as error:
         print("KF_KFML_REFUSED reason=" + error.reason, flush=True)
         return 2

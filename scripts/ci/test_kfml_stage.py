@@ -365,7 +365,7 @@ class Report(unittest.TestCase):
         with self.assertRaises(ValueError):
             vast_report.validate_kfml(d)
         d = copy.deepcopy(self.good())
-        d["steps"] = [d["steps"][0]] * 5
+        d["steps"] = [d["steps"][0]] * 9
         with self.assertRaises(ValueError):
             vast_report.validate_kfml(d)
 

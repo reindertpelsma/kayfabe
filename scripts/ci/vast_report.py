@@ -552,8 +552,12 @@ def validate_kfml(value):
     and no FAIL row; NOT_RUN needs every row NOT_RUN; a FAIL verdict needs a reason or a FAIL row."""
     name = re.compile(r"[a-z][a-z0-9_.-]{0,47}")
     text = re.compile(r"[\x20-\x7e]{0,200}")
-    keys = {"schema", "verdict", "sha", "tier", "run_id", "facts", "steps", "rows", "reason"}
+    keys = {"schema", "verdict", "sha", "tier", "run_id", "facts", "steps", "rows", "reason", "where", "transfer"}
     ok = type(value) is dict and {"schema", "verdict", "sha", "tier", "facts", "steps", "rows"} <= set(value) <= keys
+    ok = ok and value.get("where", "host") in ("host", "guest")
+    transfer = value.get("transfer", {})
+    ok = ok and type(transfer) is dict and set(transfer) <= {"wheelhouse_bytes", "wheelhouse_build_s", "src_bytes", "copy_bytes", "copy_s", "install_s"}
+    ok = ok and all(type(v) in (int, float) and 0 <= v < 1e13 for v in transfer.values())
     ok = ok and value["schema"] == 1 and value["verdict"] in ("PASS", "FAIL", "NOT_RUN") and value["tier"] in ("mid", "large")
     ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
     ok = ok and type(value.get("run_id", "")) is str and re.fullmatch("[A-Za-z0-9_.-]{0,48}", value.get("run_id", "")) is not None
@@ -563,8 +567,8 @@ def validate_kfml(value):
         "gpu_name", "compute_cap", "vram_gb", "driver", "driver_cuda", "cuda", "torch", "flavor"}
     ok = ok and all(type(v) in (int, float) or (type(v) is str and text.fullmatch(v)) for v in facts.values())
     steps = value["steps"]
-    ok = ok and type(steps) is list and len(steps) <= 4 and all(
-        type(s) is dict and set(s) == {"step", "rc", "s"} and s["step"] in ("setup", "fetch-data", "run")
+    ok = ok and type(steps) is list and len(steps) <= 8 and all(
+        type(s) is dict and set(s) == {"step", "rc", "s"} and s["step"] in ("probe", "wheelhouse", "copy", "verify", "setup", "fetch-data", "run")
         and type(s["rc"]) is int and type(s["s"]) in (int, float) for s in steps)
     rows = value["rows"]
     ok = ok and type(rows) is list and len(rows) <= 8

@@ -511,3 +511,13 @@ status, reason, wall_s, scalar metrics, and the die, compute capability, driver,
 GPU-free checks: `test_kfml_stage.py` (37 tests), mutants `kfml_stage_mutants.py` (16 mutants, two named killers each, in `ci.yml`).
 Joining a default plan = flip `KFML_IN_MIDDLE_LARGE`, add the `payloadStageResources` row (a Worker bundle change) and
 take the name out of `MANUAL_ONLY_STAGES`, in the commit that records its first green run under this payload.
+
+### kfml in the offline guest (design 2026-11-17, not wired into a plan, never run in a guest)
+
+`kfml_stage.py run --where guest` (module `kfml_guest.py`, hook `kfml_guest_hook.sh` for `POST_CAPTURE_HOOK` of `boot_capture.sh`) runs the same rows
+inside the open Linux guest, which is offline: the host builds a hashed wheelhouse for the guest's own facts, copies it over the payload's guest
+transport (`gssh_nv`, `tar | ssh tar -x`), and the guest installs it with `pip install --no-index --find-links ... --require-hashes`. The flow, the
+named failures (`guest-disk`, `wheelhouse-flavour-mismatch`, a failed manifest check) and the NOT_RUN case are in `scripts/kfml/README.md` ("Guest
+mode"); the record is the same `kfml` object with `where: "guest"` and a `transfer` block (`validate_kfml` bounds both). No stage in a plan uses it
+yet: the payload stage would be `boot_capture.sh` with `POST_CAPTURE_HOOK=scripts/ci/kfml_guest_hook.sh KF_KFML_SHA=<sha>`, like the `cuda_guest` rungs,
+and joins `plan_stage_names` only after a KVM box run. Tests `test_kfml_guest.py` (46), mutants `kfml_guest_mutants.py` (18, two named killers each).

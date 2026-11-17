@@ -39,11 +39,14 @@ def check_target(venv: Path):
         raise SetupError("%s exists, is not empty and is not a venv; refusing to touch it" % venv)
 
 
-def install_cmd(venv: Path, lock: Path, hashed: bool, installer: str):
+def install_cmd(venv: Path, lock: Path, hashed: bool, installer: str, find_links=None):
+    """find_links: an offline wheelhouse directory: nothing is fetched (--no-index), every wheel must match its lock hash."""
     if installer == "uv":
         return ["uv", "pip", "sync", "--python", str(venv / "bin" / "python")] + \
-               (["--require-hashes"] if hashed else []) + [str(lock)]
+               (["--require-hashes"] if hashed else []) + \
+               (["--no-index", "--find-links", str(find_links)] if find_links else []) + [str(lock)]
     return [str(venv / "bin" / "python"), "-m", "pip", "install", "--no-input"] + \
+           (["--no-index", "--find-links", str(find_links)] if find_links else []) + \
            (["--require-hashes"] if hashed else []) + ["-r", str(lock)]
 
 
@@ -71,24 +74,43 @@ def merge_dir(src: Path, dst: Path):
                 shutil.copy2(p, t)
 
 
-def install_nvcc(venv: Path, flavor: str, pins: dict, fetch_fn=None):
-    """Official NVIDIA redist archives (cuda_nvcc, cuda_cudart, cuda_cccl), sha256 from pins.json,
-    merged into <venv>/cuda_home. The pip nvidia-cuda-nvcc wheel has NO nvcc binary (measured:
-    only ptxas, libnvvm, libdevice, headers), so it is not used. UNVERIFIED: that this assembled
-    tree compiles load_inline extensions; measure on a Vast container."""
+def fetch_redist(dest: Path, flavor: str, pins: dict, fetch_fn=None) -> list:
+    """The official NVIDIA redist archives (cuda_nvcc, cuda_cudart, cuda_cccl) of a flavour into DEST, sha256-verified against
+    pins.json (a mismatch deletes the file and raises). Returns [{name, file, size, sha256}]."""
     import urllib.request
     red = pins["cuda_redist"][flavor]
-    home = venv / "cuda_home"
-    stage = venv / "kfml-cache" / "tmp" / "nvcc-stage"
-    stage.mkdir(parents=True, exist_ok=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    out = []
     for name, c in sorted(red["components"].items()):
-        arc = stage / os.path.basename(c["path"])
+        arc = dest / os.path.basename(c["path"])
         if not arc.exists():
             (fetch_fn or (lambda u, d: urllib.request.urlretrieve(u, str(d))))(red["base_url"] + c["path"], arc)
         h = hashlib.sha256(arc.read_bytes()).hexdigest()
         if h != c["sha256"]:
             arc.unlink()
             raise SetupError("%s: sha256 %s != pinned %s" % (name, h, c["sha256"]))
+        out.append({"name": name, "file": arc.name, "size": arc.stat().st_size, "sha256": h})
+    return out
+
+
+def install_nvcc(venv: Path, flavor: str, pins: dict, fetch_fn=None, archive_dir=None):
+    """Official NVIDIA redist archives (cuda_nvcc, cuda_cudart, cuda_cccl), sha256 from pins.json, merged into
+    <venv>/cuda_home. The pip nvidia-cuda-nvcc wheel has NO nvcc binary (measured: only ptxas, libnvvm, libdevice,
+    headers), so it is not used. MEASURED (kfml_run_20261116): the assembled cu126 and cu128 trees compile load_inline
+    extensions. archive_dir: archives already on disk (an offline wheelhouse's redist/), verified the same way and never fetched."""
+    red = pins["cuda_redist"][flavor]
+    home = venv / "cuda_home"
+    stage = venv / "kfml-cache" / "tmp" / "nvcc-stage"
+    if archive_dir is not None:
+        def local(url, dest):
+            src = Path(archive_dir) / os.path.basename(url)
+            if not src.is_file():
+                raise SetupError("offline: %s is not in %s" % (src.name, archive_dir))
+            shutil.copyfile(src, dest)
+        fetch_fn = local
+    fetch_redist(stage, flavor, pins, fetch_fn)
+    for name, c in sorted(red["components"].items()):
+        arc = stage / os.path.basename(c["path"])
         ex = stage / ("x-" + name)
         shutil.rmtree(ex, ignore_errors=True)
         ex.mkdir()
@@ -127,7 +149,7 @@ def nvcc_matches_flavor(flavor, pins, environ=None, root=None):
 
 
 def setup(venv, flavor="auto", python=None, with_nvcc=False, allow_unhashed=False, installer="pip",
-          pins=None, run=subprocess.run, fetch_fn=None, nvcc_if_needed=False, smi=None):
+          pins=None, run=subprocess.run, fetch_fn=None, nvcc_if_needed=False, smi=None, wheelhouse=None):
     venv = Path(venv).resolve()
     flavor, flavor_reason = resolve_flavor(flavor, pins, smi)
     lock = lock_path(flavor)
@@ -144,7 +166,14 @@ def setup(venv, flavor="auto", python=None, with_nvcc=False, allow_unhashed=Fals
     cenv = dict(os.environ)
     cenv.update(envmod.cache_env(venv))
     envmod.ensure_dirs(envmod.cache_env(venv))
-    p = run(install_cmd(venv, lock, hashed, installer), env=cenv)
+    links = None
+    if wheelhouse:
+        if not hashed:
+            raise SetupError("an offline install needs the hashed lock (it is the only thing that vouches for the copied wheels)")
+        from . import wheelhouse as wh
+        wh.verify(wheelhouse, flavor)  # every copied file against the manifest the host wrote
+        links = wh.wheels_dir(wheelhouse, flavor)
+    p = run(install_cmd(venv, lock, hashed, installer, links), env=cenv)
     if p.returncode != 0:
         raise SetupError("dependency install failed (rc=%s)" % p.returncode)
     sha = hashlib.sha256(lock.read_bytes()).hexdigest()
@@ -157,7 +186,7 @@ def setup(venv, flavor="auto", python=None, with_nvcc=False, allow_unhashed=Fals
     nvcc = "none"
     if with_nvcc or nvcc_if_needed:
         if with_nvcc or not nvcc_matches_flavor(flavor, pins, None, venv):
-            install_nvcc(venv, flavor, pins, fetch_fn)
+            install_nvcc(venv, flavor, pins, fetch_fn, archive_dir=(Path(wheelhouse) / flavor / "redist") if wheelhouse else None)
             nvcc = "redist"
         else:
             nvcc = "system"

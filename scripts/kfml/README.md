@@ -201,6 +201,45 @@ MEASURED on the run-id box (below), wall seconds: setup about 3 min (hashed cu12
 `run --tier large` step 190 s warm. The payload stage (`scripts/ci/kfml_stage.py`, `--only kfml`) runs the same three
 steps. The Dockerfile derives the flavour at container start (no GPU at build time); UNVERIFIED, never built.
 
+## Guest mode: the same rows inside the offline open Linux guest (design 2026-11-17, never run in a guest)
+
+The payload's open Linux guest (the fat guest `boot_capture.sh` boots, entered by `scripts/bench/gssh_nv`, the transport `apps_hook.sh` already
+uses: `tar | ssh tar -x`) has no internet. So nothing is fetched in the guest: the environment is built on the HOST at run time from this
+directory's hashed locks, copied in, and installed offline with hashes. Code: `scripts/ci/kfml_guest.py` (flow and transport),
+`scripts/ci/kfml_stage.py run --where guest`, the hook `scripts/ci/kfml_guest_hook.sh` (for `POST_CAPTURE_HOOK`), and in this package
+`kfml wheelhouse`, `kfml setup --wheelhouse DIR`, `kfml fetch-data --from DIR`.
+
+| step | where | what |
+|---|---|---|
+| probe | guest | `nvidia-smi` (die, compute capability, driver, the CUDA the driver supports), CPython, compiler, `python3-venv`, `Python.h`, free disk. The flavour is chosen from THE GUEST's facts: its driver is the operator's choice and is never pinned |
+| wheelhouse | host | `kfml wheelhouse --flavor auto --flavor-for <driver CUDA>:<cc> --guest-python <X.Y> --with-data`: `pip download --require-hashes --only-binary=:all:` of the chosen flavour's closure for the guest's interpreter, the sha256-pinned redist nvcc archives, the pinned datasets; `MANIFEST.json` with size and sha256 of every file. No flavour fits = NOT_RUN with the named reason (exit 3), nothing is copied. Idempotent and resumable, so it can run before the guest boots |
+| copy | host to guest | `scripts/kfml` (without tests and references) and the wheelhouse into `/opt/kfml`, bytes and seconds recorded |
+| verify | guest | `kfml wheelhouse --verify` re-hashes every copied file (truncation, tampering and unlisted files are refused before pip runs) |
+| setup | guest | `kfml setup --venv /opt/kfml/venv --wheelhouse /opt/kfml/wheelhouse --nvcc-if-needed` = `pip install --no-index --find-links <wheelhouse> --require-hashes -r <hashed lock>`; a guest that derives another flavour than the host shipped is a named FAIL `wheelhouse-flavour-mismatch` |
+| fetch-data | guest | `kfml fetch-data --from <wheelhouse>/data` (still checked against `pins.json`) |
+| run | guest | `kfml run --tier T --json` with `KF_ML_GUEST=1`; the rows are read back over the transport |
+
+The result is the host stage's `KF_KFML_RESULT` document with `where: "guest"` and a `transfer` record (wheelhouse bytes and build seconds, copy bytes and
+seconds, install seconds). Nothing secret enters the guest and no NVIDIA binary is stored by us: the wheelhouse is a transient directory on the box.
+`kfml bundle`/`build-wheels` are for the licence-checked redistribution bundle and are not used here (they would mirror NVIDIA binaries).
+The Linux propimage tooling has an `inject --wheelhouse` command for the proprietary Linux image; it was not on any branch available here (the
+branch `claude/linux-image-manifest-inject-20261117` was not pushed), so this module uses the payload's own transport. The wheelhouse layout is plain
+(`<flavor>/wheels/*.whl`, `pip --find-links` compatible), so that command can take the same directory.
+
+GPU-free tests: `scripts/ci/test_kfml_guest.py` (fake transport, 46 tests), `kfml_guest_mutants.py` (18 mutants, two named killers each), and in this
+package `tests/test_wheelhouse.py`. WHAT IS NOT PROVEN (needs a KVM box, see the list at the end of this section): every step above in a real guest.
+
+Sizes and times: see `traces/kfml_run_20261117_second_die/` (MEASURED wheelhouse sizes per flavour on the second die's box) and
+`ci/vast-broker/bandwidth.json` (the `kfml` entry). Copy speed and guest install time are ESTIMATES until a guest run (the copy is `tar | ssh`, bound
+by the guest's ssh CPU; a virtfs share, as `llm_parity` uses, is the fallback if it is too slow).
+
+What needs a KVM box (nothing of this has run): (1) the fat guest has `python3-venv`, `python3-dev`, a C++ compiler and the matching nvcc (else
+`--nvcc-if-needed` installs the redist one: the copy of its three archives is in the wheelhouse), and enough disk (the stage refuses with
+`guest-disk` below about 2x the wheelhouse plus 6 GB); (2) the Python of the guest matches `--guest-python` (the wheel tags); (3) `tar | ssh` copy of a
+multi-GB wheelhouse through the tap network completes in reasonable time and does not disturb the device; (4) the six rows PASS in the guest under
+kf3 (managed memory is `NOT_RUN managed-memory paging not supported` with `KF_ML_GUEST=1` by design; `torch.compile`, Triton autotune, `cudaGraph` replay and
+the CUDA IPC round trip under kf3 are all unknown); (5) rows compared with the same-die native baseline by `--reference` on the same box.
+
 ## The recorded baseline, and how it is compared
 
 `reference/<die>/<test>.json` holds the per-row baseline of run `kfml_run_20261116` (RTX 4070, sm_89, driver
