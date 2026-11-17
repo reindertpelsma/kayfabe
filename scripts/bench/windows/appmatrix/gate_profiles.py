@@ -4,10 +4,10 @@
 
 STATUS: LIVE, 2026-11-08 (GPU-free; tests/test_gate_profiles.py).
 
-  gate_profiles.py ids PROFILE      comma list of app ids (small | mid | full | release | ids:a,b,c)
+  gate_profiles.py ids PROFILE      comma list of app ids (small | mid | full | release | open_source | ids:a,b,c)
   gate_profiles.py budget PROFILE   the default wall-clock budget in seconds for the apps of that profile
   gate_profiles.py open             apps whose packages are public or official-fetch (the automatable set)
-  gate_profiles.py classes          four app classes (open / owner decision / manual / unsupported)
+  gate_profiles.py classes          the app classes (open / owner decision / manual / unsupported, and online_source)
   gate_profiles.py check            consistency of gate_profiles.json with apps.json and manifest.json (exit 1 on a problem)
 
 The public bundle holds only public-ok open_packages; official_packages use transient per-run media.
@@ -43,10 +43,15 @@ def closure(pkgs, needs):
     return out
 
 
+def online_source(prof):
+    """Open rows built from pinned upstream sources inside an ONLINE Windows guest (scripts/bench/windows/open_rows, 2026-11-17). Outside small, mid and full."""
+    return set(prof.get("online_source", {}).get("apps", []))
+
+
 def open_apps(apps, manifest, prof):
     needs = {p["id"]: p.get("needs", []) for p in manifest["packages"]}
     allowed = set(prof["open_packages"]) | set(prof.get("official_packages", []))
-    non_gating = set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {}))
+    non_gating = set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {})) | online_source(prof)
     return [a["id"] for a in apps["apps"] if closure(a["pkgs"] + a.get("official_pkgs", []), needs) <= allowed and a["id"] not in non_gating]
 
 
@@ -54,6 +59,11 @@ def resolve(profile, apps=None, manifest=None, prof=None):
     apps, manifest, prof = apps or load("apps.json"), manifest or load("manifest.json"), prof or load("gate_profiles.json")
     known = {a["id"] for a in apps["apps"]}
     non_gating = set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {}))
+    if profile == "open_source":
+        ids = prof["online_source"]["apps"]
+        if not ids or len(ids) != len(set(ids)) or not set(ids) <= known or set(ids) & set(prof["manual"]["apps"]) or set(ids) & set(prof.get("known_unsupported", {})):
+            raise SystemExit("invalid open_source definition list")
+        return list(ids)
     if profile == "release":
         ids = prof["release_software"]["apps"]
         if not ids or len(ids) != len(set(ids)) or not set(ids) <= known or set(ids) & non_gating:
@@ -77,13 +87,15 @@ def resolve(profile, apps=None, manifest=None, prof=None):
         if bad:
             raise SystemExit(f"profile {profile} names apps outside the open bundle: {bad}")
         return list(ids)
-    raise SystemExit(f"unknown profile {profile!r} (small, mid, full, ids:...)")
+    raise SystemExit(f"unknown profile {profile!r} (small, mid, full, release, open_source, ids:...)")
 
 
 def budget(profile, prof=None):
     prof = prof or load("gate_profiles.json")
     if profile == "release":
         return prof["release_software"]["budget_s"]
+    if profile == "open_source":
+        return prof["online_source"]["budget_s"]
     if profile.startswith("ids:"):
         return prof["profiles"]["full"]["budget_s"]
     return prof["profiles"][profile]["budget_s"]
@@ -136,7 +148,18 @@ def check():
         item = items.get(name, {})
         if name.startswith("overlay_yuv_") and (item.get("reason") != "needs real display" or not item.get("evidence_template")):
             problems.append("manual overlay needs a real-display reason and evidence template: " + name)
-    rest = known - opn - owner - manual - unsupported
+    online = online_source(prof)
+    block = prof.get("online_source", {})
+    if online - known or len(block.get("apps", [])) != len(online):
+        problems.append("online_source lists an unknown or repeated app")
+    if online & (opn | owner | manual | unsupported):
+        problems.append(f"online_source overlaps another class: {sorted(online & (opn | owner | manual | unsupported))}")
+    if online and (block.get("lane") != "discovery" or len(block.get("reason", "")) < 40 or not block.get("budget_s")):
+        problems.append("online_source needs lane=discovery, a reason and a budget")
+    for name, why in block.get("not_run", {}).items():
+        if name not in online or not isinstance(why, str) or len(why) < 20:
+            problems.append("online_source not_run needs a listed app and a named reason: " + name)
+    rest = known - opn - owner - manual - unsupported - online
     if rest:
         problems.append(f"apps in no class: {sorted(rest)}")
     for x in owner | manual | unsupported:
@@ -171,7 +194,8 @@ def main(argv):
         print(",".join(open_apps(load("apps.json"), load("manifest.json"), load("gate_profiles.json"))))
     elif cmd == "classes":
         o, w, m, u = classes()
-        print(f"open={len(o)} owner_decision={len(w)} manual={len(m)} unsupported={len(u)} total={len(o) + len(w) + len(m) + len(u)}")
+        s = online_source(load("gate_profiles.json"))
+        print(f"open={len(o)} owner_decision={len(w)} manual={len(m)} unsupported={len(u)} online_source={len(s)} total={len(o) + len(w) + len(m) + len(u) + len(s)}")
     elif cmd == "check":
         pr = check()
         for p in pr:

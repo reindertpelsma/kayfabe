@@ -235,6 +235,150 @@
      "date": "2026-11-16",
      "source": "docs/DOWNLOADS.md (6 to 7 GB bundle estimate); defaults.json payloadStageResources.windows_apps (8 GB ceiling)",
      "note": "the Worker passes the real size from an R2 list; this is the fallback"
+    },
+    {
+     "id": "windows_apps.open_buildtools",
+     "what": "MSVC v143, MSBuild, Windows SDK and CMake through the Visual Studio 2022 Build Tools bootstrapper (open rows, online guest)",
+     "class": "official-url",
+     "down_bytes": 4500000000,
+     "url": "https://aka.ms/vs/17/release/vs_BuildTools.exe",
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "docs/design/V3_WINDOWS_OPEN_ROWS.md section 3 (component list of the VCTools workload)",
+     "note": "INFERRED from the component list, not measured; the bootstrapper itself is 4.47 MB (HEAD, 2026-11-17); the installer downloads the rest from Microsoft and verifies it",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_mingit",
+     "what": "MinGit 64-bit zip of the pinned Git for Windows release",
+     "class": "official-url",
+     "down_bytes": 39849768,
+     "url": "https://github.com/git-for-windows/git/releases/tag/v2.56.1.windows.1",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "GitHub release API asset size of MinGit-2.56.1-64-bit.zip, 2026-11-17",
+     "note": "anchored by the SHA-256 table in the upstream release notes",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_python",
+     "what": "python.org installer 3.12.10 (pip is needed for lxml)",
+     "class": "official-url",
+     "down_bytes": 26964224,
+     "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "HEAD Content-Length of the installer, 2026-11-17",
+     "note": "anchored by its Authenticode signature",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_lxml",
+     "what": "lxml 6.1.3 cp312 win_amd64 wheel (Vulkan CTS gen_framework.py)",
+     "class": "official-url",
+     "down_bytes": 4005999,
+     "url": "https://pypi.org/pypi/lxml/6.1.3/json",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "PyPI JSON size of the wheel, 2026-11-17",
+     "note": "pip --require-hashes with the digest of the PyPI JSON",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_nuget_cli",
+     "what": "nuget.exe v7.9.0",
+     "class": "official-url",
+     "down_bytes": 8695632,
+     "url": "https://dist.nuget.org/win-x86-commandline/v7.9.0/nuget.exe",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "HEAD Content-Length, 2026-11-17",
+     "note": "anchored by its Authenticode signature",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_nuget_packages",
+     "what": "Microsoft.Direct3D.D3D12 1.618.3, Microsoft.Direct3D.DXC 1.8.2505.32, WinPixEventRuntime 1.0.240308001",
+     "class": "package",
+     "down_bytes": 82942387,
+     "url": "https://api.nuget.org/v3/index.json",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "HEAD Content-Length of the three nupkg files on api.nuget.org flatcontainer, 2026-11-17",
+     "note": "restored with signatureValidationMode=require; each sample project restores its own copy",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_cts_clone",
+     "what": "VK-GL-CTS at the pinned commit, depth 1",
+     "class": "repo",
+     "down_bytes": 65000000,
+     "url": "https://github.com/KhronosGroup/VK-GL-CTS",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "size of .git after a depth-1 clone of vulkan-cts-1.4.7.1, 2026-11-17",
+     "note": "the full repository is 2.2 GB (GitHub API); a depth-1 fetch of the pinned commit is what the row does",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_cts_externals",
+     "what": "external/fetch_sources.py of the pinned CTS: nine git clones (no --depth) and two source archives",
+     "class": "repo",
+     "down_bytes": 176000000,
+     "url": "https://github.com/KhronosGroup/glslang",
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "sum of the GitHub API repository sizes of glslang, SPIRV-Tools, SPIRV-Headers, Vulkan-Docs, amber, jsoncpp, VulkanSC-pcutil, Vulkan-Video-Samples and video_generator, plus zlib and libpng archives, 2026-11-17",
+     "note": "an upper bound of what the upstream script transfers; it clones with full history, so this is not reduced by the row",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
+    },
+    {
+     "id": "windows_apps.open_dxs_clone",
+     "what": "DirectX-Graphics-Samples at the pinned commit, blobless and sparse (the five sample directories)",
+     "class": "repo",
+     "down_bytes": 1400000,
+     "url": "https://github.com/microsoft/DirectX-Graphics-Samples",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "size of the clone after a depth-1, filter=blob:none, sparse checkout of the pinned commit, 2026-11-17",
+     "note": "a plain depth-1 fetch of the same commit is 685 MB (measured), which is why the row does not do that",
+     "when": {
+      "winapps": [
+       "open_online"
+      ]
+     }
     }
    ],
    "upload": {

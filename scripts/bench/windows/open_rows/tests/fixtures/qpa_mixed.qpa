@@ -1,0 +1,50 @@
+#beginSession
+#sessionInfo releaseName git-0d18b347943e5e843529a05c95220e27fe30c538
+#sessionInfo releaseId 0x00000000
+#sessionInfo targetName Default
+#sessionInfo gpuUuid fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001
+#beginTestCaseResult KHR-GL46.compute_shader.simple-compute
+
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult Version="0.3.2" CasePath="KHR-GL46.compute_shader.simple-compute" CaseType="SelfValidate">
+ <Text>device fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001</Text>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Unit="us" Tag="Time">1234</Number>
+ <Result StatusCode="Pass">Passed</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+#beginTestCaseResult KHR-GL46.compute_shader.dispatch-indirect
+
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult Version="0.3.2" CasePath="KHR-GL46.compute_shader.dispatch-indirect" CaseType="SelfValidate">
+ <Result StatusCode="Fail">Image comparison failed on fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0002</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+#beginTestCaseResult KHR-GL46.tessellation_shader.tessellation_control_to_tessellation_evaluation.data_pass_through
+
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult Version="0.3.2" CasePath="KHR-GL46.tessellation_shader.tessellation_control_to_tessellation_evaluation.data_pass_through" CaseType="SelfValidate">
+ <Result StatusCode="NotSupported">GL_ARB_tessellation_shader not supported</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+#beginTestCaseResult KHR-GL46.copy_image.functional
+
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult Version="0.3.2" CasePath="KHR-GL46.copy_image.functional" CaseType="SelfValidate">
+ <Result StatusCode="QualityWarning">Low quality</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+#beginTestCaseResult KHR-GL46.gl_spirv.spirv_modules_test
+
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult Version="0.3.2" CasePath="KHR-GL46.gl_spirv.spirv_modules_test" CaseType="SelfValidate">
+
+#terminateTestCaseResult Crash
+#beginTestCaseResult KHR-GL46.sparse_buffer_tests.BufferStorageTest
+
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult Version="0.3.2" CasePath="KHR-GL46.sparse_buffer_tests.BufferStorageTest" CaseType="SelfValidate">
+ <Text>started, then the process died here

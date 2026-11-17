@@ -1,0 +1,12 @@
+dEQP Core git-0d18b347943e5e843529a05c95220e27fe30c538 initialized
+Test case 'dEQP-VK.api.smoke.create_sampler'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.ray_query.acceleration_structures.empty.sparse_binding_structures.ahit_shader.gpu_built.index_none.inactive_instances'..
+  NotSupported (VK_KHR_ray_query not supported)
+
+Test case 'dEQP-VK.mesh_shader.ext.smoke.monolithic'..
+  Fail (Mesh shader draw produced no fragments on fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003)
+
+Test run totals:
+  Passed:        1/3 (33.3%)

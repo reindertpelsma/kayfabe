@@ -10,7 +10,7 @@ import unittest
 import bandwidth_calibrate as cal
 import bandwidth_check as chk
 
-TODAY = datetime.date(2026, 11, 16)
+TODAY = datetime.date(2026, 11, 17)
 DATA = chk.load()
 PROPS = json.loads(chk.PROPS.read_text())
 MATRIX = json.loads(chk.MATRIX.read_text())
@@ -218,7 +218,7 @@ class Calibrate(unittest.TestCase):
         others = sum(i["down"] for i in self.items if i["stage"] == "provision" and i["id"] != "provision.packages")
         new, notes = self.run_for({"provision": {"rx": others + 5_000_000_000, "tx": 123456}})
         e = entry(new, "provision.packages")
-        self.assertEqual((e["down_bytes"], e["basis"], e["date"]), (5_000_000_000, "measured", "2026-11-16"))
+        self.assertEqual((e["down_bytes"], e["basis"], e["date"]), (5_000_000_000, "measured", TODAY.isoformat()))
         self.assertIn("calibrated from 1 run(s)", e["source"])
         self.assertEqual(notes, [])
 
@@ -275,7 +275,7 @@ class Calibrate(unittest.TestCase):
     def test_the_upload_is_marked_measured_with_its_source(self):
         new, _ = self.run_for({"provision": {"rx": 1, "tx": 1}})
         up = new["stages"]["provision"]["upload"]
-        self.assertEqual((up["basis"], up["date"]), ("measured", "2026-11-16"))
+        self.assertEqual((up["basis"], up["date"]), ("measured", TODAY.isoformat()))
         self.assertIn("calibrated from 1 run(s)", up["source"])
 
     def test_the_source_names_the_mean_the_proposal_rests_on(self):

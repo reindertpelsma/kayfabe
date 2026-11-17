@@ -1,0 +1,31 @@
+{
+ "info": {
+  "version": "6.1.3"
+ },
+ "urls": [
+  {
+   "filename": "lxml-6.1.3-cp312-cp312-win_amd64.whl",
+   "packagetype": "bdist_wheel",
+   "url": "https://files.pythonhosted.org/packages/3a/5b/lxml-6.1.3-cp312-cp312-win_amd64.whl",
+   "digests": {
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+   }
+  },
+  {
+   "filename": "lxml-6.1.3-cp311-cp311-win_amd64.whl",
+   "packagetype": "bdist_wheel",
+   "url": "https://files.pythonhosted.org/packages/aa/bb/lxml-6.1.3-cp311-cp311-win_amd64.whl",
+   "digests": {
+    "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+   }
+  },
+  {
+   "filename": "lxml-6.1.3.tar.gz",
+   "packagetype": "sdist",
+   "url": "https://files.pythonhosted.org/packages/cc/dd/lxml-6.1.3.tar.gz",
+   "digests": {
+    "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+   }
+  }
+ ]
+}
