@@ -11,12 +11,19 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = (ROOT / "scripts/bench/linux/propimage_linux.py").read_text()
+MAIN = "scripts/bench/linux/propimage_linux.py"
+PKGS = "scripts/bench/linux/propimage_linux_pkgs.py"   # section 13: manifest, harden-offline, inject (imported by MAIN: must be in the copy list)
+SRCS = {rel: (ROOT / rel).read_text() for rel in (MAIN, PKGS)}
 
 
-def case(name, old, new, *tests, count=1):
-    assert SRC.count(old) == count, (name, old, SRC.count(old))
-    return name, SRC.replace(old, new), tests
+def case(name, old, new, *tests, count=1, file=MAIN):
+    src = SRCS[file]
+    assert src.count(old) == count, (name, old, src.count(old))
+    return name, file, src.replace(old, new), tests
+
+
+def pkg(name, old, new, *tests, count=1):
+    return case(name, old, new, *tests, count=count, file=PKGS)
 
 
 CASES = [
@@ -86,6 +93,79 @@ CASES = [
          "test_memory_guard", "test_memory_guard_boundary"),
     case("kf3-driver-required", 'require(driver_version or q["guest_driver"], "GUEST_DRIVER_REQUIRED', 'require(True, "GUEST_DRIVER_REQUIRED',
          "test_kf3_needs_a_run_supplied_driver", "test_cli_argv_refuses_kf3_without_a_driver"),
+
+    # ---- section 13: package manifest, harden-offline, inject (propimage_linux_pkgs.py unless marked main)
+    pkg("vendor-secret-key", 'require(not SECRET_KEY_RE.search(k),', 'require(True,',
+        "test_a_key_that_names_a_secret_is_refused", "test_cli_seal_refuses_a_secret_vendor_key_before_touching_the_guest"),
+    pkg("vendor-credential-url", 'require(not CRED_VALUE_RE.search(v),', 'require(True,',
+        "test_a_credential_url_in_a_value_is_refused", "test_cli_seal_refuses_a_credential_url_in_a_vendor_value"),
+    pkg("dpkg-status-filter", 'f[3][1:2] != "i"', 'False',
+        "test_a_removed_package_is_not_in_the_manifest", "test_dpkg_keeps_installed_packages_with_versions_manual_and_held"),
+    pkg("apt-credentials-not-redacted", 'return USERINFO_RE.sub("REDACTED@", text)', 'return text',
+        "test_apt_source_credentials_are_redacted", "test_redaction_helper_alone"),
+    pkg("large-dir-any-size", 'r["bytes"] > threshold', 'r["bytes"] > 0',
+        "test_large_dir_threshold_is_one_gb_and_caches_are_not_applications", "test_seal_warns_naming_large_dirs_without_a_vendor_entry"),
+    pkg("large-dir-warns-despite-vendor", 'if m["large_dirs"] and not m["vendor"]:', 'if m["large_dirs"]:',
+        "test_a_vendor_entry_silences_the_large_dir_warning", "test_package_manifest_through_a_scripted_guest_and_vendor_entries"),
+    pkg("harden-record-ignored", 'elif recorded_apt and recorded_apt.get("sources"):', 'elif False:',
+        "test_sources_recorded_by_harden_are_used_when_the_guest_has_none", "test_manifest_uses_the_host_record_after_harden"),
+    pkg("hardened-ignores-sources", 'if n_src != "0":', 'if False:',
+        "test_hardened_flag_needs_every_part", "test_remaining_apt_sources_make_the_image_not_hardened_and_warn"),
+    pkg("hardened-ignores-masks", 'if unmasked:\n        problems.append("not masked: "', 'if False:\n        problems.append("not masked: "',
+        "test_hardened_flag_needs_every_part", "test_an_unmasked_unattended_upgrades_service_is_not_hardened"),
+    pkg("diff-drops-changed", 'chg = sorted((k, ma[k], mb[k]) for k in ma if k in mb and ma[k] != mb[k])', 'chg = []',
+        "test_added_removed_and_changed_packages", "test_vendor_apt_kernel_and_hardening_changes"),
+    case("pack-ignores-manifest-hash", 'require(members.get(P.MANIFEST_NAME) == want,', 'require(True,',
+         "test_pack_refuses_a_missing_package_manifest", "test_pack_refuses_a_changed_package_manifest"),
+    pkg("ruleset-output-accepts", 'type filter hook output priority 0; policy drop;', 'type filter hook output priority 0; policy accept;',
+        "test_ruleset_is_default_drop_with_loopback_and_established_only", "test_the_harden_script_embeds_the_default_drop_ruleset"),
+    pkg("classify-any-ct-state", 'if states and states <= {"established", "related"}:', 'if states:',
+        "test_accepting_new_connections_is_an_exception", "test_a_ct_state_invalid_accept_is_an_exception"),
+    pkg("analyze-any-policy", 'c.get("policy") == "drop"', 'c.get("policy") is not None',
+        "test_output_policy_accept_is_refused", "test_forward_policy_accept_is_refused"),
+    pkg("exceptions-allowed", 'require(not a["exceptions"],', 'require(True,',
+        "test_a_port_accept_is_an_exception", "test_a_ruleset_with_an_exception_after_apply_refuses"),
+    pkg("outbound-open-allowed", 'require(not open_,', 'require(True,',
+        "test_a_tcp_path_still_open_after_the_rules_refuses", "test_a_ping_path_still_open_after_the_rules_refuses"),
+    pkg("unattended-upgrades-not-masked", 'MASK_UNITS = ("apt-daily.timer", "apt-daily-upgrade.timer", "apt-daily.service", "apt-daily-upgrade.service", "unattended-upgrades.service")',
+        'MASK_UNITS = ("apt-daily.timer", "apt-daily-upgrade.timer", "apt-daily.service", "apt-daily-upgrade.service")',
+        "test_mask_units_are_the_named_five", "test_harden_script_masks_removes_and_checks"),
+    case("clone-backing-unchecked", 'require(backing and Path(backing).resolve() == sealed_img,', 'require(True,',
+         "test_an_image_without_a_backing_file_is_refused", "test_an_overlay_of_some_other_image_is_refused"),
+    case("clone-running-unchecked", 'require(pid, "CLONE_NOT_RUNNING', 'require(True, "CLONE_NOT_RUNNING',
+         "test_a_stopped_clone_is_refused_by_unharden", "test_a_stopped_clone_is_refused_by_inject"),
+    case("preflight-ignores-mismatch", 'require(not bad, "CLONE_CHECK_FAILED', 'require(True, "CLONE_CHECK_FAILED',
+         "test_preflight_refuses_another_identity", "test_preflight_refuses_a_guest_with_network_like_the_setup_vm"),
+    pkg("dest-prefix-only", 'ok = any(full.startswith(r + "/") for r in roots)', 'ok = any(full.startswith(r) for r in roots)',
+        "test_a_sibling_directory_with_the_same_prefix_is_refused", "test_the_root_itself_is_refused"),
+    pkg("symlink-absolute-allowed", 'require(not os.path.isabs(t),', 'require(True,',
+        "test_an_absolute_symlink_is_refused", "test_an_absolute_symlink_pointing_inside_the_source_is_refused_too"),
+    pkg("symlink-escape-allowed", 'require(_inside(real, root if src.is_dir() else os.path.dirname(root)),', 'require(True,',
+        "test_a_relative_symlink_leaving_the_source_is_refused", "test_a_symlink_chain_that_escapes_is_refused"),
+    pkg("special-files-allowed", 'raise PkgError("INJECT_SPECIAL_FILE: %s is not a regular file, directory or symlink" % p)', 'pass',
+        "test_a_fifo_is_refused", "test_a_socket_is_refused"),
+    pkg("size-cap-unchecked", 'require(total <= max_bytes, "INJECT_TOO_LARGE: %d bytes of files', 'require(True, "INJECT_TOO_LARGE: %d bytes of files',
+        "test_over_the_cap_is_refused_before_anything_is_sent", "test_the_cap_boundary"),
+    pkg("setuid-travels", '    ti.mode &= 0o1777   # no setuid/setgid bits travel', '    pass',
+        "test_the_tar_stream_drops_the_setuid_bit", "test_the_tar_stream_drops_the_setgid_bit_and_owner"),
+    pkg("stream-hash-not-updated", '        self.h.update(b)\n', '        pass\n',
+        "test_the_printed_hash_is_the_hash_of_the_bytes_sent", "test_the_hash_follows_the_content_and_is_reproducible"),
+    pkg("lock-hashes-optional", 'require(hashes, "LOCK_NOT_HASHED', 'require(True, "LOCK_NOT_HASHED',
+        "test_an_unhashed_lock_is_refused_by_name", "test_one_unhashed_line_among_hashed_ones_is_refused"),
+    pkg("lock-direct-reference-allowed", 'require(not re.search(r"@|://|^git\\+|^\\.|^/", spec), "LOCK_NEEDS_INDEX', 'require(True, "LOCK_NEEDS_INDEX',
+        "test_requirements_that_need_an_index_or_a_url_are_refused_by_name", "test_a_lock_that_needs_an_index_stops_before_the_guest_is_asked"),
+    pkg("missing-wheel-skipped", '            raise PkgError("WHEEL_MISSING: %s has no wheel in %s" % (label, wh))', '            continue',
+        "test_a_missing_wheel_is_named", "test_a_wheel_of_the_wrong_version_counts_as_missing"),
+    pkg("wheel-hash-unchecked", 'require(good, "WHEEL_HASH_MISMATCH', 'require(True, "WHEEL_HASH_MISMATCH',
+        "test_a_changed_wheel_is_a_hash_mismatch", "test_a_wrong_hash_in_the_lock_is_a_hash_mismatch"),
+    pkg("wheel-tag-unchecked", 'require(fit, "WHEEL_TAG_MISMATCH', 'require(True, "WHEEL_TAG_MISMATCH',
+        "test_a_wheel_for_another_python_is_a_tag_mismatch", "test_a_wheel_for_another_platform_is_a_tag_mismatch"),
+    pkg("install-uses-an-index", '--no-index --no-input', '--no-input',
+        "test_end_to_end_copies_the_wheels_and_the_staged_lock_and_installs_offline_with_hashes", "test_the_install_command_never_reaches_for_an_index_or_apt"),
+    pkg("install-without-hashes", '--require-hashes -r "$D/requirements.lock.txt"', '-r "$D/requirements.lock.txt"',
+        "test_end_to_end_copies_the_wheels_and_the_staged_lock_and_installs_offline_with_hashes", "test_the_install_command_never_reaches_for_an_index_or_apt"),
+    pkg("staged-lock-keeps-index-lines", 'if not LOCK_OPTION_RE.match(l.strip())]', 'if True]',
+        "test_parse_lock_requirements_hashes_markers_and_dropped_options", "test_end_to_end_copies_the_wheels_and_the_staged_lock_and_installs_offline_with_hashes"),
 ]
 
 
@@ -99,28 +179,29 @@ def main():
     argparse.ArgumentParser(description=__doc__).parse_args()
     test_src = ROOT / "scripts/ci/test_propimage_linux.py"
     known = {n.name for n in ast.walk(ast.parse(test_src.read_text())) if isinstance(n, ast.FunctionDef)}
-    assert not {t for c in CASES for t in c[2]} - known, "unknown test selector: %s" % ({t for c in CASES for t in c[2]} - known)
+    assert not {t for c in CASES for t in c[3]} - known, "unknown test selector: %s" % ({t for c in CASES for t in c[3]} - known)
     weak = 0
     with tempfile.TemporaryDirectory(prefix="propimage-linux-mutants-") as tmp:
         tree = Path(tmp)
-        for rel in ("scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py", "scripts/bench/linux/auth_stub_app.py"):
+        for rel in ("scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py", "scripts/bench/linux/auth_stub_app.py",
+                    PKGS):   # every file propimage_linux.py imports or loads: a missing one fails the baseline, never a mutant
             (tree / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / rel, tree / rel)
         (tree / "scripts/ci").mkdir(parents=True)
         shutil.copy(test_src, tree / "scripts/ci/test_propimage_linux.py")
-        target = tree / "scripts/bench/linux/propimage_linux.py"
-        target.write_text(SRC)
+        (tree / MAIN).write_text(SRCS[MAIN])
         code, _, out = run(tree)
         if code:
             print("FAIL unmutated baseline\n" + out[-4000:])
             return 2
         print("PASS baseline: " + re.search(r"Ran (\d+) tests", out).group(1), flush=True)
-        for name, mutated, tests in CASES:
+        for name, file, mutated, tests in CASES:
+            target = tree / file
             target.write_text(mutated)
             try:
                 code, killers, out = run(tree)
             finally:
-                target.write_text(SRC)
+                target.write_text(SRCS[file])
             names = [k.split(".")[-1] for k in killers]
             ok = code != 0 and len(set(names)) >= 2 and bool(set(tests) & set(names))
             print("%s %s: %d killers %s" % ("PASS" if ok else "WEAK", name, len(set(names)), names[:4]), flush=True)
