@@ -1,0 +1,37 @@
+﻿{
+    "app":  "aetoggle",
+    "started":  1794790299.106,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "toggle_cuda1_00015.tif",
+                        "bytes":  33204028,
+                        "modified":  1794790352.545
+                    },
+                    {
+                        "file":  "toggle_cuda2_00015.tif",
+                        "bytes":  33204036,
+                        "modified":  1794790355.088
+                    },
+                    {
+                        "file":  "toggle_soft_00015.tif",
+                        "bytes":  33204032,
+                        "modified":  1794790354.086
+                    },
+                    {
+                        "file":  "ae_toggle.txt",
+                        "bytes":  151,
+                        "modified":  1794790355.24
+                    }
+                ],
+    "ae_file_scripts":  "already on",
+    "startup_attempts":  [
+                             "1:marker:64s"
+                         ],
+    "quit":  "clean",
+    "log":  "fractalnoise,glow,blur,avail=1813|1816,cuda1:set=1813,cuda1:rendered_ms=7525,soft:set=1816,soft:rendered_ms=1363,cuda2:set=1813,cuda2:rendered_ms=856\r\n",
+    "ended":  1794790520.037,
+    "dismissed":  [
+
+                  ]
+}

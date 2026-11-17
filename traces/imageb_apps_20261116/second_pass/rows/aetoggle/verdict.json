@@ -1,0 +1,35 @@
+{
+  "app": "aetoggle",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "CUDA -> software -> CUDA renderer switch in one session: three 3840x2160 TIFF frames, sizes {'cuda1': 33204028, 'soft': 33204032, 'cuda2': 33204036}, byte-identical=False",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "CUDA <-> software renderer switch inside one After Effects session, 4K effects frame",
+  "platform": "kf3",
+  "secs": 220,
+  "gpu": {
+    "required": [
+      "gpu"
+    ],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 34.0,
+      "mem_mb": 9610.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 34.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 90
+    },
+    "baseline": {
+      "mem_mb": 9417.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 610
+  },
+  "outputs_recorded": 6
+}

@@ -1,0 +1,28 @@
+﻿{
+    "app":  "indesign",
+    "started":  1794785463.862,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "out.pdf",
+                        "bytes":  17201,
+                        "modified":  1794785541.503
+                    },
+                    {
+                        "file":  "out.jpg",
+                        "bytes":  158172,
+                        "modified":  1794785541.61
+                    }
+                ],
+    "source":  "lady_fern_4845x2980.jpg",
+    "version":  "22.0.0.104",
+    "js":  {
+               "pages":  "2",
+               "graphics":  "1"
+           },
+    "quit":  "clean",
+    "ended":  1794785555.137,
+    "dismissed":  [
+
+                  ]
+}

@@ -1,0 +1,31 @@
+{
+  "app": "animatesample",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "Result identity mismatch",
+  "class": "app",
+  "limited": false,
+  "lane": "gate",
+  "path": "OpenGL/D3D11 stage on a shipped document",
+  "platform": "kf3",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 65.0,
+      "mem_mb": 9453.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 65.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 231
+    },
+    "baseline": {
+      "mem_mb": 337.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 743
+  }
+}
