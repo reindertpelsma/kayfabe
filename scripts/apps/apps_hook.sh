@@ -23,6 +23,9 @@ $G 'sudo tee /opt/apps/bundle/run_apps.sh >/dev/null' < "$HERE/run_apps.sh"
 tar -C /workspace/apps/bundle -cf - bin | $G 'sudo tar -C /opt/apps/bundle -xf -'
 $G 'test -d /opt/apps/bundle/cuda/include' || tar -C /workspace/apps/bundle -czf - cuda | $G 'sudo tar -C /opt/apps/bundle -xzf -'
 for f in "$HERE"/src/*.py; do $G "sudo tee /opt/apps/bundle/share/$(basename "$f") >/dev/null" < "$f"; done
+# discovery rows vllm / tensorrt / jax (docs/design/V3_OPEN_ML_ROWS.md): the tool dir and the venvs (and the model) `mlrows.py setup` staged on the host; the guest has no network
+MLR=$(for a in $APPS; do case $a in vllm|tensorrt|jax) printf '%s,' "$a";; esac; done); MLR=${MLR%,}
+[ -n "$MLR" ] && python3 -B -I "$HERE/mlrows/mlrows.py" push --root "${KF_APPS_ROOT:-/workspace/apps}/mlrows" --rows "$MLR" --transport "$G"
 $G 'sudo rm -rf /opt/apps/out/guest'
 echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,driver_version,persistence_mode --format=csv,noheader' 2>&1 | head -1)"
 # ⊘ boot_capture.sh reloads ONLY `nvidia`; the host has nvidia_modeset + nvidia_drm loaded, and the

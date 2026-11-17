@@ -300,7 +300,7 @@ def judge_vllm(res, expected_sha=None):
 TRT_REL_TOL = 0.05               # engine output versus the ONNX Runtime CPU reference, as a fraction of the reference's largest magnitude (FP16)  UNCALIBRATED
 
 
-def judge_tensorrt(res):
+def judge_tensorrt(res, expected=None):
     if not isinstance(res, dict):
         return FAIL, "no_result: the row script printed no MLROW_JSON", [_chk("result_present", False)]
     b, run, ort = res.get("builder") or {}, res.get("engine") or {}, res.get("ort_trt") or {}
@@ -333,7 +333,7 @@ JAX_PREALLOC_LOW, JAX_PREALLOC_HIGH = 0.70, 0.78   # XLA_PYTHON_CLIENT_MEM_FRACT
 JAX_MIN_PEAK_MIB = 32            # UNCALIBRATED
 
 
-def judge_jax(res):
+def judge_jax(res, expected=None):
     if not isinstance(res, dict):
         return FAIL, "no_result: the row script printed no MLROW_JSON", [_chk("result_present", False)]
     checks = [_chk("result_present", True)]
@@ -347,7 +347,7 @@ def judge_jax(res):
     names = {op.get("name") for op in res.get("ops") or []}
     checks.append(_chk("matmul_conv_scan_all_ran", {"matmul_f32_highest", "matmul_default", "conv", "scan"} <= names, sorted(n for n in names if n)))
     lim, tot = res.get("bytes_limit_mib"), res.get("total_mib")
-    ratio = (lim / tot) if _num(lim) and _num(tot) and tot > 0 else None
+    ratio = round(lim / tot, 6) if _num(lim) and _num(tot) and tot > 0 else None
     checks.append(_chk("preallocation_is_75_percent", ratio is not None and JAX_PREALLOC_LOW <= ratio <= JAX_PREALLOC_HIGH, "bytes_limit %s MiB of %s MiB = %s" % (lim, tot, None if ratio is None else round(ratio, 3))))
     grown = res.get("mem_growth_mib")
     checks.append(_chk("preallocation_observed_on_the_device", _num(grown) and _num(tot) and grown >= 0.6 * tot, "device memory grew %s MiB of %s MiB" % (grown, tot)))

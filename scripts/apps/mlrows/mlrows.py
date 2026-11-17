@@ -10,7 +10,7 @@ STATUS: LIVE, 2026-11-17 (docs/design/V3_OPEN_ML_ROWS.md, manual docs/howto/open
     mlrows.py setup   --root DIR [--rows ...] [--flavor auto|cu12|cu13]    one venv per row from the hashed lock (pip --require-hashes), the model (vllm) from its origin
     mlrows.py run     ROW --root DIR [--out DIR] [--flavor ...]      run one row, judge it, print the summary, the GPU_USE_PROOF line and one MLROWS_RESULT line
     mlrows.py compare ROW HOST_LOG GUEST_LOG                         host against guest, from the MLROWS_RESULT lines of two logs
-    mlrows.py push    --root DIR --rows ... --transport CMD...       copy the tool dir and the staged rows into a guest (tar | transport)
+    mlrows.py push    --root DIR --rows ... --transport CMD...       copy the tool dir and the staged rows into a guest (tar | transport; --transport is last)
 
 Trust (owner rulings 2026-11-17, open first, trust git only): no private object, no account, no secret. The packages are pinned by hashed locks (PyPI's own digests;
 NVIDIA's own index for TensorRT) and installed with `pip --require-hashes --only-binary=:all: --no-deps`; the model is pinned by the upstream git commit of its repository
@@ -86,7 +86,10 @@ def collect_facts(disk_path="."):
     rc1, head, _ = run_cmd([SMI], timeout=30)
     rc2, query, _ = run_cmd([SMI, "--query-gpu=name,driver_version,compute_cap,memory.total", "--format=csv,noheader,nounits"], timeout=30)
     inc = sysconfig.get_paths().get("include") or ""
-    free = shutil.disk_usage(disk_path).free / 1e9 if os.path.isdir(disk_path) else None
+    near = Path(disk_path).resolve()
+    while not near.exists() and near != near.parent:
+        near = near.parent                      # the root may not exist yet: the filesystem it will be on is the nearest parent's
+    free = shutil.disk_usage(str(near)).free / 1e9
     return lib.machine_facts(head if rc1 == 0 else "", query if rc2 == 0 else "", sys.version_info[:3],
                              has_gcc=bool(shutil.which("gcc") or shutil.which("cc")), has_python_h=os.path.exists(os.path.join(inc, "Python.h")), disk_free_gb=free)
 
@@ -135,8 +138,9 @@ def row_env(row, venv, cache, base_env, negctl=False, extra=None):
                 "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "HF_HOME": str(c / "home"), "VLLM_NO_USAGE_STATS": "1", "DO_NOT_TRACK": "1",
                 "CUDA_VISIBLE_DEVICES": base_env.get("CUDA_VISIBLE_DEVICES", "0")})
     dirs = lib_dirs(venv)
-    if dirs:
-        env["LD_LIBRARY_PATH"] = ":".join(dirs)
+    rest = [d for d in base_env.get("LD_LIBRARY_PATH", "").split(":") if d]       # the driver's directory in a container (the venv's libraries come first)
+    if dirs or rest:
+        env["LD_LIBRARY_PATH"] = ":".join(dirs + rest)
     if negctl:
         # the CPU form of the row: the GPU is hidden (vllm has no CPU path in its wheel, so it fails by itself), jax is told to use its CPU backend, tensorrt runs its CPU reference only
         env["CUDA_VISIBLE_DEVICES"] = ""
@@ -528,7 +532,7 @@ def main(argv=None):
     p.add_argument("--root", required=True)
     p.add_argument("--rows", default=",".join(lib.ROWS))
     p.add_argument("--dest", default="/opt/apps/bundle")
-    p.add_argument("--transport", nargs="+", required=True)
+    p.add_argument("--transport", nargs=argparse.REMAINDER, required=True, help="the argv that runs one shell command in the guest; everything after it")
     a = ap.parse_args(argv)
     return {"list": cmd_list, "check": cmd_check, "lockcheck": cmd_lockcheck, "setup": cmd_setup, "run": cmd_run, "compare": cmd_compare, "push": cmd_push}[a.verb](a)
 
