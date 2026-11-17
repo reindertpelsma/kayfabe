@@ -286,20 +286,30 @@ DCGM_NA = {"n/a", "blank", "not", "found", "-", "[n/a]"}
 
 
 def parse_dcgm_dmon(text, tags):
-    """`dcgmi dmon -e ids -c N`: -> {tag: [raw cell per sample]} for GPU 0. `tags` name the columns in the order of -e. The header lines
-    (`#Entity 50 150 ...` and the units row `ID C W`) are skipped; a data row is `GPU 0 <one cell per field>`, an unavailable value
-    is printed `N/A`."""
+    """`dcgmi dmon -e ids -c N`: -> {tag: [raw cell per sample]} for GPU 0. `tags` name the columns in the order of -e. The header `#Entity 50 150 ...`
+    gives the column offsets: a cell may hold spaces (`NVIDIA GeForce RTX 3060`); a row whose whitespace tokens do not match the columns is cut at the
+    header's offsets. The units row `ID C W` is skipped; an unavailable value is printed `N/A`."""
     series = {t: [] for t in tags}
+    offsets = []
     for line in text.splitlines():
+        if line.startswith("#Entity"):
+            offsets = [m.start() for m in re.finditer(r"\S+", line)][1:]
+            continue
         m = re.match(r"^\s*GPU\s+(\d+)\s+(.*)$", line)
         if not m or m[1] != "0":
             continue
         cells = m[2].split()
+        if len(cells) != len(tags) and len(offsets) == len(tags):  # a cell holds spaces: cut at the header's columns instead
+            bounds = offsets + [len(line) + 1]
+            cells = [line[bounds[i]:bounds[i + 1]].strip() for i in range(len(tags))]
         if len(cells) < len(tags):
             continue
         for t, c in zip(tags, cells):
             series[t].append(c)
     return series
+
+
+DCGM_IDENTITY = re.compile(r"uuid|serial|pci_busid|pci_combined_id|pci_subsys_id|system_topology|minor_number|board_id", re.I)
 
 
 def dmon_error(text):
@@ -319,6 +329,9 @@ def dmon_error_row(tag, text):
 def dmon_rows(series):
     rows = []
     for tag, cells in series.items():
+        if DCGM_IDENTITY.search(tag):
+            rows.append(row_line("dcgm", tag, "-", "OK", "<scrubbed>"))
+            continue
         real = [c for c in cells if c.lower() not in DCGM_NA]
         if not cells:
             rows.append(row_line("dcgm", tag, "-", "NA", "no sample"))

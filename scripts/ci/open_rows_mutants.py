@@ -175,6 +175,10 @@ MUTANTS = [
       K("DcgmParsers.gpu_work_ran_only_for_tests_outside_deployment_that_gave_a_verdict", "DcgmRowEndToEnd.a_diagnostic_that_skips_everything_claims_no_gpu_work")),
     M("info-need-asserts-use", "census", '    if need == "info":', '    if False:',
       K("Census.an_informational_need_records_the_peaks_and_never_fails", "Census.cli_info_need_exits_zero_on_an_idle_gpu")),
+    M("dmon-cells-split-at-whitespace", "nvml", "        if len(cells) != len(tags) and len(offsets) == len(tags):", "        if False:",
+      K("DcgmParsers.a_cell_with_spaces_stays_in_its_column", "DcgmParsers.a_real_dmon_row_of_a_geforce")),
+    M("dmon-identity-kept", "nvml", '        if DCGM_IDENTITY.search(tag):', '        if False:',
+      K("DcgmParsers.identity_fields_are_never_recorded", "DcgmParsers.a_real_dmon_row_of_a_geforce")),
     # ---- census (census.py)
     M("no-samples-is-proven", "census", '    if p["n"] == 0:\n        return "UNPROVEN", "no samples (nvidia-smi absent or silent)"', '    if p["n"] == 0:\n        return "PROVEN", "no samples"',
       K("Census.no_data_is_never_a_pass", "Census.cli_verdict_without_samples_is_not_proven")),

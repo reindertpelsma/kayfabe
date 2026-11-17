@@ -791,6 +791,32 @@ class DcgmParsers(unittest.TestCase):
         self.assertEqual(N.dmon_error_row("A", "Error setting watches. Result: -7: Something else\n").split("\t")[3], "ERR_-7")
         self.assertEqual(N.dmon_error_row("A", "").split("\t")[3], "ERR_NO_TABLE")
 
+    def test_a_cell_with_spaces_stays_in_its_column(self):
+        text = ("#Entity         50                        51          52\n"
+                "ID                                                    \n"
+                "GPU 0           NVIDIA GeForce RTX 3060   GeForce     0\n")
+        series = N.parse_dcgm_dmon(text, ["name", "brand", "nvml_index"])
+        self.assertEqual(series, {"name": ["NVIDIA GeForce RTX 3060"], "brand": ["GeForce"], "nvml_index": ["0"]})
+
+    def test_a_real_dmon_row_of_a_geforce(self):
+        # the output of `dcgmi dmon -e 50,51,52,54,150,203 -c 1` of DCGM 4.8.0 on an RTX 3060 (traces/open_rows_ffdcgm_20261117), the UUID replaced by the fake one
+        text = ("#Entity         50                          51                52           54                                              150          203               \n"
+                "ID                                                                                                                          C                             \n"
+                "GPU 0           NVIDIA GeForce RTX 3060     GeForce           0            GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001        38           0                 \n")
+        series = N.parse_dcgm_dmon(text, ["name", "brand", "nvml_index", "uuid", "gpu_temp", "gpu_utilization"])
+        self.assertEqual(series["name"], ["NVIDIA GeForce RTX 3060"])
+        self.assertEqual((series["brand"], series["nvml_index"], series["gpu_temp"], series["gpu_utilization"]), (["GeForce"], ["0"], ["38"], ["0"]))
+        rows = N.dmon_rows(series)
+        self.assertIn("dcgm\tname\t-\tOK\tNVIDIA GeForce RTX 3060", rows)
+        self.assertNotIn("fa4efa4e", "\n".join(rows))
+
+    def test_identity_fields_are_never_recorded(self):
+        rows = N.dmon_rows({"uuid": ["GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001"], "serial_number": ["12345"], "pci_busid": ["00000000:01:00.0"], "gpu_temp": ["41"]})
+        text = "\n".join(rows)
+        for needle in ("fa4efa4e", "12345", "00000000:01:00.0"):
+            self.assertNotIn(needle, text)
+        self.assertIn("dcgm\tgpu_temp\t-\tOK\t41", rows)
+
     def test_dmon_ignores_other_gpus(self):
         self.assertEqual(N.parse_dcgm_dmon("GPU 1 99\nGPU 0 5\n", ["A"]), {"A": ["5"]})
 
@@ -1140,9 +1166,14 @@ if "-filter_complex" in a and any("psnr" in x for x in a):
     sys.exit(0)
 if "-f" in a and a[-3:] == ["-f", "null", "-"] and os.environ.get("FAKE_SESS_OK") is not None:
     d = os.environ["FAKE_SESS_DIR"]
-    n = len(os.listdir(d)) + 1
-    open(os.path.join(d, "%d.%d" % (os.getpid(), n)), "w").close()
-    nth = len([x for x in os.listdir(d)])
+    nth = 0
+    while True:  # claim the next free slot atomically: the session processes start together
+        nth += 1
+        try:
+            os.close(os.open(os.path.join(d, str(nth)), os.O_CREAT | os.O_EXCL))
+            break
+        except FileExistsError:
+            continue
     if nth > int(os.environ["FAKE_SESS_OK"]):
         say("[h264_nvenc @ 0x1] OpenEncodeSessionEx failed: out of memory (10)")
         sys.exit(1)

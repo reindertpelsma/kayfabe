@@ -182,7 +182,7 @@ class Row:
         samples = stream.stop()
         t1 = time.time()
         (self.out / "hostsmi.csv").write_text(census.samples_to_csv(samples))
-        (self.out / "dcgm.tsv").write_text("\n".join(self.dcgm_rows) + ("\n" if self.dcgm_rows else ""))
+        (self.out / "dcgm.tsv").write_text(census.scrub("\n".join(self.dcgm_rows), ips=False) + ("\n" if self.dcgm_rows else ""))
         (self.out / "dcgm_status.txt").write_text(census.scrub("\n".join(self.status) + "\n"))
         parsed = N.parse_rows((self.out / "nvml_sweep.tsv").read_text())
         count = lambda kind, st="OK": sum(1 for (k, _), r in parsed.items() if k == kind and r["status"] == st)
