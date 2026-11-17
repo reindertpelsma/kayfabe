@@ -1550,6 +1550,9 @@ PROPIMAGE_APPS_MARGIN_S = 300
 # same box as the first image by design (one image per one-GPU box), but nothing here forbids both in one plan: B runs after A.
 PROPIMAGE_APPS_B_IN_LARGE = False
 PROPIMAGE_APPS_B_MIN_REMAINING_MS = 240 * 60000   # DESIGN: a bigger download than image A, up to 17 boots-worth of row timeouts in ~55-minute boots
+# 2026-11-17 `--propimage-b-lane gate` (the owner's acceptance run: the enabled gate rows only, `propimage_apps_b_stage.py run --lane gate`): the floor is lower because the
+# discovery rows are not run. DESIGN estimate, not measured: image download about 0.5 h, then up to 2 h of gate-row timeouts (the seven gate rows' timeouts add up to 93 minutes).
+PROPIMAGE_APPS_B_GATE_MIN_REMAINING_MS = 150 * 60000
 PROPIMAGE_APPS_B_PREFIX = "/workspace/kf-propimage-b"
 PROPIMAGE_APPS_B_MARGIN_S = 300
 
@@ -1617,6 +1620,34 @@ def propimage_apps_b_rows(text, rc, sha, result):
     if type(doc) is not dict or doc.get("sha") != sha or rc or doc.get("verdict") != "PASS":
         raise EvidenceError("propimage_apps_b")
     return [row("propimage_apps_b", 1)]
+
+
+def propimage_apps_b_lane_args(lane):
+    """The stage arguments of --propimage-b-lane: only `gate` adds `--lane gate` (the stage's default is every enabled row, so `all` and no flag give the same command
+    as before the flag existed)."""
+    return ["--lane", "gate"] if lane == "gate" else []
+
+
+def propimage_apps_b_command(root, sha, evidence, deadline_epoch, lane=None):
+    """The propimage_apps_b stage's command line (`lane`: the payload's --propimage-b-lane)."""
+    return [
+        "python3", str(root / "scripts/ci/propimage_apps_b_stage.py"), "run", "--sha", sha, "--checkout", str(root),
+        "--prefix", PROPIMAGE_APPS_B_PREFIX, "--out", str(evidence / "propimage_apps_b.json"),
+        "--evidence-dir", str(evidence / "propimage_apps_b"), "--deadline-epoch", str(deadline_epoch),
+        *propimage_apps_b_lane_args(lane),
+    ]
+
+
+def propimage_apps_b_min_remaining_ms(lane=None):
+    return PROPIMAGE_APPS_B_GATE_MIN_REMAINING_MS if lane == "gate" else PROPIMAGE_APPS_B_MIN_REMAINING_MS
+
+
+def propimage_b_refusal(chosen, args):
+    """The named refusal of --propimage-b-lane given while the stage will not run (`chosen`: the selected stage names), or None. The flag only chooses rows of that
+    stage; accepting it silently when the stage is not selected would let a run that looks like an image B gate run run nothing of the kind."""
+    if args.propimage_b_lane is not None and "propimage_apps_b" not in chosen:
+        return "LANE_NEEDS_ONLY_PROPIMAGE_APPS_B"
+    return None
 
 
 def propimage_run_rows(text, rc, sha, result):
@@ -1808,6 +1839,8 @@ def parse_args(argv):
                    "recorded); needs --only matlab and is refused together with an instruction that carries `matlab`")
     p.add_argument("--matlab-driver", metavar="VERSION|PATH|URL", help="standalone `matlab` stage: the NVIDIA Linux driver to install in the guest, a pinned version of "
                    "release-matrix.json or a .run file you supply")
+    p.add_argument("--propimage-b-lane", choices=("gate", "all"), default=None, help="`propimage_apps_b` stage only (needs --only propimage_apps_b): `gate` runs the "
+                   "enabled gate-lane rows of image B and not the discovery rows (shorter, the acceptance run); `all` (the default) runs every enabled row")
     p.add_argument("--dry-run", action="store_true", help="print the stage plan and run nothing")
     p.add_argument("--emit-instruction", metavar="FILE", help="write the instruction built from the source and exit")
     p.add_argument("--prefetch", metavar="MANIFEST", help="DRY-RUN ONLY (not wired into the executor yet): validate a download manifest "
@@ -1856,6 +1889,11 @@ def plan_only(args, root):
             print("KF_PAYLOAD_MATLAB_REFUSED " + refusal, flush=True)
             print("KF_PAYLOAD_FAIL suite=preflight", flush=True)
             return 1
+        refusal = propimage_b_refusal(chosen, args)
+        if refusal:
+            print("KF_PAYLOAD_PROPIMAGE_B_REFUSED " + refusal, flush=True)
+            print("KF_PAYLOAD_FAIL suite=preflight", flush=True)
+            return 1
         if inst.spec:
             spec_table(root)
         prefetch = prefetch_line(args.prefetch, chosen) if args.prefetch else None
@@ -1871,6 +1909,10 @@ def plan_only(args, root):
                 str(p.get("label", "image%d" % (n + 1))) for n, p in enumerate(inst.propimages))), flush=True)
         if inst.matlab is not None:
             print("KF_PAYLOAD_MATLAB strict=1 rows=%d driver=%s" % (len(inst.matlab["rows"]), inst.matlab["driver"]["version"]), flush=True)
+        if args.propimage_b_lane is not None:
+            print("KF_PAYLOAD_PROPIMAGE_B lane=%s stage_args=%s min_remaining_min=%d" % (
+                args.propimage_b_lane, ":".join(propimage_apps_b_lane_args(args.propimage_b_lane)) or "none",
+                propimage_apps_b_min_remaining_ms(args.propimage_b_lane) // 60000), flush=True)
         if digest:
             print("KF_PAYLOAD_INSTRUCTION sha256=" + digest, flush=True)
         print("KF_PAYLOAD_PLAN stages=" + ":".join(chosen) + " planned=" + ":".join(plan), flush=True)
@@ -1925,6 +1967,10 @@ def main():
         refusal = matlab_refusal(instruction, args)
         if refusal:
             print("KF_PAYLOAD_MATLAB_REFUSED " + refusal, flush=True)
+            raise EvidenceError("preflight")
+        refusal = propimage_b_refusal(selected, args)
+        if refusal:
+            print("KF_PAYLOAD_PROPIMAGE_B_REFUSED " + refusal, flush=True)
             raise EvidenceError("preflight")
         if args.only or args.skip:
             result["selection"] = {"only": args.only, "skip": args.skip}
@@ -2229,16 +2275,12 @@ def main():
             output_pb = evidence / "propimage_apps_b.run"
             stage = make_stage(
                 "propimage_apps_b",
-                [
-                    "python3", str(root / "scripts/ci/propimage_apps_b_stage.py"), "run", "--sha", sha, "--checkout", str(root),
-                    "--prefix", PROPIMAGE_APPS_B_PREFIX, "--out", str(evidence / "propimage_apps_b.json"),
-                    "--evidence-dir", str(evidence / "propimage_apps_b"), "--deadline-epoch", str(soft // 1000 - PROPIMAGE_APPS_B_MARGIN_S),
-                ],
+                propimage_apps_b_command(root, sha, evidence, soft // 1000 - PROPIMAGE_APPS_B_MARGIN_S, args.propimage_b_lane),
                 output_pb,
                 [],
                 lambda rc, output=output_pb: propimage_apps_b_rows(bounded_text(output), rc, sha, result),
             )
-            stage.update(min_remaining_ms=PROPIMAGE_APPS_B_MIN_REMAINING_MS, short_row="propimage_apps_b_retry_time")
+            stage.update(min_remaining_ms=propimage_apps_b_min_remaining_ms(args.propimage_b_lane), short_row="propimage_apps_b_retry_time")
             stages.append(stage)
         if "matlab" in plan:
             # After the Windows image stages (the GPU is free again), before the SPEC lane. A Linux guest on its own KVM and GPU, one boot per row; the image is
