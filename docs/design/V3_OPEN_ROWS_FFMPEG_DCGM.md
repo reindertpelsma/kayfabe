@@ -20,7 +20,7 @@ Both are **discovery rows** of the open Linux matrix: they are in `scripts/apps/
 | `nvcodec_probe.c` | asks the driver: `NvEncGetEncodeCaps` for every cap id of H.264/HEVC/AV1, the profiles and input formats, `cuvidGetDecoderCaps` for 10 codecs x 4 chroma formats x 3 depths, and how many encode sessions the driver lets this machine open at once. Prints TSV; never the UUID, serial or bus id |
 | `nvcodec_cases.tsv` | the case table (id, group, op, codec, profile, pix_fmt, chroma, depth, size, frames, sessions, mode, flags, `needs`, PSNR threshold) |
 | `nvcodec_lib.py`, `nvcodec_matrix.py` | the decisions (pure functions) and the runner; `compare` of a host and a guest run |
-| `nvcodec_known_limits.tsv` | documented kayfabe limitations of the FFmpeg row (empty on purpose) |
+| `nvcodec_known_limits.tsv` | documented kayfabe limitations of the FFmpeg row: since the first guest run (2026-11-17, `traces/open_rows_guest_20261117/`) the per-VM NVENC session cap of 3 (`encquota.rs`, S1-42), cases `sess_*_n04` and above |
 | `nvml_sweep.py`, `nvml_lib.py`, `dcgm_nvml.py` | the NVML sweep over ctypes, the row diff and the DCGM parsers, the DCGM runner and its `compare` |
 | `nvml_field_classes.tsv`, `nvml_expected_not_supported.tsv` | how each value is compared (static, live with a tolerance, only-a-number); the documented NOT_SUPPORTED table, each line with its reason |
 | `census.py`, `rowio.py`, `compare_logs.py` | the host census (GPU use, unserviced-RPC count), the `@@FILE` hand-off of result files through a log, the comparison front end |
