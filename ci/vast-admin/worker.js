@@ -10,6 +10,9 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
         "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; " +
         "base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
     };
+    const isJson = () =>
+      request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() ===
+      'application/json';
     const json = (data, status = 200) => Response.json(data, { status, headers });
     if (
       !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.cloudflareaccess\.com$/.test(
@@ -41,8 +44,26 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
     } catch {
       return json({ error: 'Unauthorized' }, 401);
     }
-    if (identity.email !== env.OWNER_EMAIL) return json({ error: 'Forbidden' }, 403);
+    // 2026-11-13 owner decision: ONE Access service token (the coordinator) may use a narrow part of
+    // the API. Fails closed: the var must be a well-formed Client ID, the JWT must carry no email at all
+    // (a user JWT never takes the service path), type "app" and common_name equal to the Client ID.
+    const coordinatorId = env.COORDINATOR_CLIENT_ID;
+    let kind = null;
+    if (identity.email === env.OWNER_EMAIL) kind = 'owner';
+    else if (
+      typeof coordinatorId === 'string' &&
+      /^[a-f0-9]{32}\.access$/.test(coordinatorId) &&
+      identity.email === undefined &&
+      identity.type === 'app' &&
+      identity.sub === '' &&
+      identity.common_name === coordinatorId
+    )
+      kind = 'coordinator';
+    if (!kind) return json({ error: 'Forbidden' }, 403);
+    headers['X-Kf-Identity'] = kind;
     const url = new URL(request.url);
+    // 2026-11-13 owner decision: once established, the coordinator identity may use every route the
+    // owner can (the Worker is not the security boundary against the coordinator).
     if (url.pathname === '/log' && request.method === 'GET') {
       const params = url.searchParams,
         run = params.get('run'),
@@ -110,10 +131,10 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
       const mutating = request.method !== 'GET';
       if (mutating && request.headers.has('Origin') && request.headers.get('Origin') !== url.origin)
         return json({ error: 'Forbidden' }, 403);
+      // Every mutating admin route (also the bodyless ones) needs a JSON content type: 415 otherwise.
+      if (mutating && !isJson()) return json({ error: 'Unsupported media type' }, 415);
       let body;
       if (request.method === 'PUT' || sub === '/cmd') {
-        if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json')
-          return json({ error: 'Invalid request' }, 400);
         try {
           const reader = request.body?.getReader();
           if (!reader) throw Error();
@@ -166,8 +187,7 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
     if (start || plan) {
       if (request.headers.has('Origin') && request.headers.get('Origin') !== url.origin)
         return json({ error: 'Forbidden' }, 403);
-      if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json')
-        return json({ error: 'Invalid request' }, 400);
+      if (!isJson()) return json({ error: 'Unsupported media type' }, 415);
       try {
         const reader = request.body?.getReader();
         if (!reader) throw Error();
@@ -226,8 +246,7 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
     if (stop) {
       if (request.headers.has('Origin') && request.headers.get('Origin') !== url.origin)
         return json({ error: 'Forbidden' }, 403);
-      if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json')
-        return json({ error: 'Invalid selection' }, 400);
+      if (!isJson()) return json({ error: 'Unsupported media type' }, 415);
       try {
         const reader = request.body?.getReader();
         if (!reader) throw Error();

@@ -62,7 +62,9 @@ const fixture = async (patch = {}) => {
           method: method ?? (body === undefined ? 'GET' : 'POST'),
           headers: {
             ...(bearer === undefined ? {} : { 'Cf-Access-Jwt-Assertion': bearer }),
-            ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+            ...(body === undefined && (method ?? 'GET') === 'GET'
+              ? {}
+              : { 'Content-Type': 'application/json' }),
             ...headers,
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -208,7 +210,7 @@ test('admin UI rejects foreign-origin stop and wrong media type', async () => {
       body: { all: true },
       headers,
     });
-    assert.equal(response.status, headers.Origin ? 403 : 400);
+    assert.equal(response.status, headers.Origin ? 403 : 415);
   }
   assert.equal(h.calls.length, 0);
 });
@@ -395,7 +397,7 @@ test('admin UI start refuses foreign origin and wrong media type, and relays DO 
       body: { commit_sha: sha, tier: 'large' },
       headers,
     });
-    assert.equal(response.status, headers.Origin ? 403 : 400);
+    assert.equal(response.status, headers.Origin ? 403 : 415);
   }
   assert.equal(h.calls.length, 0);
   const refusal = {
@@ -529,7 +531,7 @@ test('hosts admin: foreign origin, content type and size are refused for writes'
   );
   assert.equal(
     (await put({ body: { a: 1 }, headers: { 'Content-Type': 'text/plain' } })).status,
-    400,
+    415,
   );
   assert.equal((await put({ body: { a: 'x'.repeat(9000) } })).status, 400);
   const del = await h.call('/api/hosts/rack-1', {
