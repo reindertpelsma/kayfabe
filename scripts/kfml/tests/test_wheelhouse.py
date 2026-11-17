@@ -196,6 +196,29 @@ class OfflineSetup(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--find-links") + 1], str(self.root / "cu126" / "wheels"))
         self.assertIn("--require-hashes", cmd)
 
+    def test_the_offline_lock_has_no_index_option_and_every_other_line_unchanged(self):
+        """pip honours --index-url inside a requirements file even with --no-index on the command line (measured)."""
+        _, fr = self.run_setup()
+        used = Path(fr.calls[-1][0][-1])
+        self.assertNotEqual(used.name, "requirements.cu126.lock.txt")
+        text = used.read_text()
+        self.assertNotRegex(text, r"(?m)^\s*(--index-url|--extra-index-url|-i|--find-links|-f)\b")
+        orig = (setup_venv.ROOT / "requirements.cu126.lock.txt").read_text().splitlines(True)
+        self.assertEqual(text.splitlines(True), [l for l in orig if not l.startswith("--index-url") and not l.startswith("--extra-index-url")])
+        self.assertIn("--hash=sha256:", text)
+        self.assertTrue(setup_venv.has_hashes(text))
+
+    def test_the_recorded_lock_hash_is_the_repository_locks_not_the_offline_copys(self):
+        r, _ = self.run_setup()
+        self.assertEqual(r["lock_sha256"], PINS["flavors"]["cu126"]["lock_sha256"])
+        self.assertTrue((self.t / "v" / "kfml-lock.sha256").read_text().startswith(PINS["flavors"]["cu126"]["lock_sha256"]))
+
+    def test_the_online_install_still_reads_the_lock_itself(self):
+        from tests.test_setup_cli import FakeRun
+        fr = FakeRun()
+        setup_venv.setup(self.t / "v-on", flavor="cu126", run=fr)
+        self.assertTrue(fr.calls[-1][0][-1].endswith("requirements.cu126.lock.txt"))
+
     def test_a_tampered_wheelhouse_is_refused_before_pip_runs(self):
         from tests.test_setup_cli import FakeRun
         next((self.root / "cu126" / "wheels").glob("numpy*")).write_bytes(b"bad")

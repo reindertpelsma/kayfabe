@@ -360,26 +360,37 @@
    }
   },
   "kfml": {
-   "note": "optional ML research workloads (middle and large tiers, off by default): the hashed wheel lock of the chosen CUDA flavour and the CIFAR-10 archive are downloaded into a venv on the box",
+   "note": "optional ML research workloads (middle and large tiers, off by default): the hashed wheel lock of the chosen CUDA flavour, the redist nvcc when the box has none, and the CIFAR-10 archive are downloaded into a venv on the box. The kfml guest mode (not in a plan) copies the same files host to guest instead; it adds no internet download in the guest",
    "entries": [
     {
      "id": "kfml.wheels",
-     "what": "torch, triton, CUDA runtime wheels (hashed lock) and the pinned CIFAR-10 archive",
+     "what": "torch, triton, CUDA runtime wheels of the LARGEST pinned flavour (cu128, CPython 3.12 wheels) plus its three redist nvcc archives (the nvcc archives only when the box has no matching nvcc)",
      "class": "package",
-     "down_bytes": 8000000000,
+     "down_bytes": 3962328075,
      "url": null,
-     "basis": "ESTIMATE",
-     "date": "2026-11-16",
-     "source": "scripts/kfml/requirements.cu126.lock.txt (wheel sizes not totalled); run kfml_run_20261116 (traces/kfml_run_20261116/README.md) did not record transferred bytes",
-     "note": "no measured total: net_bytes of the first payload run with --only kfml replaces it",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "run kfml_run_20261117_second_die (traces/kfml_run_20261117_second_die/wheelhouse_manifest_summary.txt): `kfml wheelhouse --flavor all --guest-python 3.12` on a Vast container, MANIFEST.json file sizes: cu126 wheels 3026998392 + redist 52057232, cu128 wheels 3881029847 + redist 81298228 (both flavours together 7041383699 bytes, 64 files, 112 s)",
+     "note": "the host stage downloads one flavour; the largest is charged. CPython 3.10 wheels (the box's own interpreter) differ by a few MB (triton, numpy, pillow), not measured byte for byte",
      "calibrate": true
+    },
+    {
+     "id": "kfml.datasets",
+     "what": "the pinned CIFAR-10 binary archive and tinyshakespeare",
+     "class": "official-url",
+     "down_bytes": 171167565,
+     "url": "https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "scripts/kfml/pins.json filenames; run kfml_run_20261116 and kfml_run_20261117_second_die fetch-data: cifar-10-binary.tar.gz 170052171 bytes + tinyshakespeare-input.txt 1115394 bytes",
+     "note": "the dataset server is slow (about 15 min for CIFAR-10 at roughly 0.2 MB/s); the bytes are small"
     }
    ],
    "upload": {
     "up_bytes": 2000000,
     "basis": "ESTIMATE",
     "date": "2026-11-16",
-    "source": "traces/kfml_run_20261116",
+    "source": "traces/kfml_run_20261116, traces/kfml_run_20261117_second_die",
     "note": "text rows and logs of six workloads, a few MB"
    }
   }

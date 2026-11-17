@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -32,6 +33,20 @@ def lock_path(flavor: str) -> Path:
 
 def has_hashes(lock_text: str) -> bool:
     return any("--hash=sha256:" in l for l in lock_text.splitlines() if not l.lstrip().startswith("#"))
+
+
+INDEX_OPTION = re.compile(r"^\s*(--index-url|--extra-index-url|-i|--find-links|-f)\b")
+
+
+def offline_lock(lock: Path, venv: Path) -> Path:
+    """A copy of the hashed lock without its index options. MEASURED 2026-11-17 (kfml_run_20261117_second_die): pip honours an
+    `--index-url` line INSIDE a requirements file even when `--no-index` is on the command line, so an offline install of the lock itself
+    still contacted the indexes (and retried for minutes on a machine with no route). The requirement and hash lines are copied byte for byte."""
+    keep = [l for l in lock.read_text().splitlines(True) if not INDEX_OPTION.match(l)]
+    dest = venv / "kfml-cache" / "tmp" / "offline-lock.txt"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("".join(keep))
+    return dest
 
 
 def check_target(venv: Path):
@@ -173,7 +188,7 @@ def setup(venv, flavor="auto", python=None, with_nvcc=False, allow_unhashed=Fals
         from . import wheelhouse as wh
         wh.verify(wheelhouse, flavor)  # every copied file against the manifest the host wrote
         links = wh.wheels_dir(wheelhouse, flavor)
-    p = run(install_cmd(venv, lock, hashed, installer, links), env=cenv)
+    p = run(install_cmd(venv, offline_lock(lock, venv) if links else lock, hashed, installer, links), env=cenv)
     if p.returncode != 0:
         raise SetupError("dependency install failed (rc=%s)" % p.returncode)
     sha = hashlib.sha256(lock.read_bytes()).hexdigest()

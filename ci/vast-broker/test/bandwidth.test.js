@@ -344,7 +344,7 @@ test('the Python reading of the table selects the same lines and bytes as the Ja
   }
 });
 test('the table passes the guard: every stage of the payload, provenance on every number', () => {
-  const run = python(['scripts/ci/bandwidth_check.py', '--today', '2026-11-16']);
+  const run = python(['scripts/ci/bandwidth_check.py', '--today', '2026-11-17']);
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.match(run.stdout, /bandwidth table: PASS/);
 });
