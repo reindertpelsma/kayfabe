@@ -222,7 +222,7 @@ Get-Content C:\Windows\INF\setupapi.dev.log -Tail 60 -ErrorAction SilentlyContin
 
 GPU_ID = re.compile(r"GPU-[0-9A-Za-z-]+")
 BARE_UUID = re.compile(r"(?<![{0-9A-Za-z])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}(?![}0-9A-Za-z])")
-GPU_WAIT_STARTED_S = 120  # bound of the wait for the NVIDIA device to be started before the restart
+GPU_WAIT_SETTLED_S = 120  # bound of the wait for the NVIDIA device to finish its first-boot install before the restart
 GPU_POLL_S = 240  # bound of the poll after the restart (the Disable/Enable retry comes at half of it)
 GPU_POLL_EVERY_S = 10
 
@@ -285,10 +285,13 @@ def classify_gpu_query(q, expected, host_uuids=None):
     return res
 
 
-def gpu_device_started(devices):
-    """Exactly one present NVIDIA display device, Status OK, problem code 0, bound to the NVIDIA service (not the basic display driver)."""
+def gpu_device_settled(devices):
+    """Exactly one present NVIDIA display device, bound to the NVIDIA service (not the basic display driver), and out of the install states.
+    Problem code 43 counts as settled: on a die other than the image's own the new device instance sits in Code 43 (no EnableGpuFirmware yet)
+    until the repair and the restart, so waiting for Status OK first would only burn the whole wait (MEASURED 2026-11-17 on an RTX 4090 box:
+    Code 43 and the NVIDIA service from the first query on, 135 s wait for nothing, the restart then fixed it at once)."""
     shown = [d for d in devices if d["present"] and d["class"] == "Display"]
-    return len(shown) == 1 and shown[0]["status"] == "OK" and shown[0]["problem"] == 0 and shown[0]["service"].lower() == "nvlddmkm"
+    return len(shown) == 1 and shown[0]["service"].lower() == "nvlddmkm" and shown[0]["problem"] in (0, 43)
 
 
 def problem_codes(devices):
@@ -330,23 +333,24 @@ GPU_TERMINAL = ("expected", "wrong_value", "multi")
 
 
 def gpu_fix(g, expected, sleep=time.sleep, clock=time.monotonic, wait_s=None, poll_s=None, host_fn=host_gpu_uuids):
-    """Wait (bounded) for the NVIDIA device to be STARTED, repair and restart it, then poll from here (bounded) until the guest answers with
+    """Wait (bounded) for the NVIDIA device to SETTLE (installed, driver bound), repair and restart it, then poll from here (bounded) until the guest answers with
     one GPU line. Returns (ok, JSON text): the case (`kind`), counts, PnP problem codes, timings and, on failure, the guest's event text
     under "events". The JSON holds no UUID value."""
     if not re.fullmatch(r"GPU-[A-Za-z0-9-]+", expected):
         raise ValueError("Invalid expected GPU UUID")
-    wait_s = GPU_WAIT_STARTED_S if wait_s is None else wait_s
+    wait_s = GPU_WAIT_SETTLED_S if wait_s is None else wait_s
     poll_s = GPU_POLL_S if poll_s is None else poll_s
     t0 = clock()
     diag = {"schema": "kayfabe.gpu-step/1", "waited": [], "polls": []}
     while True:
         q = gpu_query(g, expected, host_fn, t0, clock)
-        diag["waited"].append({k: q.get(k) for k in ("t", "kind", "devices")})
-        started = gpu_device_started(q["devices"])
-        if started or clock() - t0 >= wait_s:
+        diag["waited"].append({k: q.get(k) for k in ("t", "kind", "devices", "text") if k in q})
+        settled = gpu_device_settled(q["devices"])
+        if settled or clock() - t0 >= wait_s:
             break
         sleep(5)
-    diag["started_before_restart"] = started
+    diag["settled_before_restart"] = settled
+    diag["pnp_before_restart"] = q["devices"]
     diag["wait_s"] = int(clock() - t0)
     diag["waited"] = diag["waited"][-6:]
     try:
@@ -401,11 +405,11 @@ def gpu_step_detail(ok, detail):
         return redact(detail, 300).strip() or ("PASS" if ok else "FAIL")  # a stub or the VFIO control says what it is
     codes = ",".join(str(c) for c in d.get("problem_codes") or []) or "none"
     if ok:
-        return "post-fix seed UUID exact match after %ss (expected=1 observed=1 host=n/a), problem code %s, started before restart=%s" % (
-            d.get("total_s"), codes, d.get("started_before_restart"))
+        return "post-fix seed UUID exact match after %ss (expected=1 observed=1 host=n/a), problem code %s, settled before restart=%s" % (
+            d.get("total_s"), codes, d.get("settled_before_restart"))
     host = {True: "same-as-host", False: "not-host", None: "unknown"}[d.get("observed_is_host")]
-    return "observed UUID %s: expected=1 observed=%s host=%s, problem code %s, after %ss, started before restart=%s; see gpu_diag.json" % (
-        d.get("kind"), d.get("gpu_lines"), host, codes, d.get("total_s"), d.get("started_before_restart"))
+    return "observed UUID %s: expected=1 observed=%s host=%s, problem code %s, after %ss, settled before restart=%s; see gpu_diag.json" % (
+        d.get("kind"), d.get("gpu_lines"), host, codes, d.get("total_s"), d.get("settled_before_restart"))
 
 
 def save_qemu_tail(out, qemu_log):

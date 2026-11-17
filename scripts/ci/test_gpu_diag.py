@@ -106,35 +106,52 @@ class Classify(unittest.TestCase):
         self.assertEqual(self.kind([EXPECTED, OTHER])["gpu_lines"], 2)
         self.assertEqual(self.kind([OTHER])["devices"][0]["problem"], 0)
 
-    def test_started_means_one_present_nvidia_service_device_with_status_ok(self):
-        self.assertTrue(m.gpu_device_started([STARTED, PHANTOM]))  # a phantom is not present and not counted
-        self.assertFalse(m.gpu_device_started([BASIC]))  # the basic display driver is not the NVIDIA driver
-        self.assertFalse(m.gpu_device_started([CODE43]))
-        self.assertFalse(m.gpu_device_started([INSTALLING]))
-        self.assertFalse(m.gpu_device_started([]))
-        self.assertFalse(m.gpu_device_started([STARTED, STARTED]))
+    def test_settled_means_one_present_nvidia_service_device_out_of_the_install_states(self):
+        self.assertTrue(m.gpu_device_settled([STARTED, PHANTOM]))  # a phantom is not present and not counted
+        self.assertFalse(m.gpu_device_settled([BASIC]))  # the basic display driver is not the NVIDIA driver
+        self.assertFalse(m.gpu_device_settled([INSTALLING]))
+        self.assertFalse(m.gpu_device_settled([dict(CODE43, problem=18)]))  # needs a reinstall: still installing
+        self.assertFalse(m.gpu_device_settled([]))
+        self.assertFalse(m.gpu_device_settled([STARTED, STARTED]))
+
+    def test_code_43_counts_as_settled_because_a_new_die_sits_in_it_until_the_repair(self):
+        self.assertTrue(m.gpu_device_settled([CODE43]))
 
 
 class Loop(unittest.TestCase):
-    def test_waits_for_the_device_to_be_started_before_the_restart(self):
-        fake = Fake([query(devices=[INSTALLING]), query(devices=[BASIC]), query(devices=[STARTED]), query([EXPECTED])])
+    def test_waits_for_the_device_to_settle_before_the_restart(self):
+        fake = Fake([query(devices=[dict(INSTALLING, service="nvlddmkm")]), query(devices=[BASIC]), query(devices=[STARTED]), query([EXPECTED])])
         ok, text = fake.fix()
         d = json.loads(text)
         self.assertTrue(ok, d)
         self.assertEqual(fake.calls, ["query", "query", "query", "repair", "query"])
-        self.assertTrue(d["started_before_restart"])
+        self.assertTrue(d["settled_before_restart"])
         self.assertGreaterEqual(d["wait_s"], 10)
+        self.assertEqual([x["problem"] for x in d["pnp_before_restart"]], [0])
 
-    def test_gives_up_waiting_when_the_device_never_starts_and_says_so(self):
-        fake = Fake([query(devices=[INSTALLING])])
+    def test_a_new_die_in_code_43_is_restarted_at_once_not_after_the_whole_wait(self):
+        smi_text = "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver."
+        fake = Fake([query([smi_text], rc=9, devices=[CODE43]), query(devices=[CODE43]), query([EXPECTED])])
         ok, text = fake.fix()
         d = json.loads(text)
+        self.assertTrue(ok, d)
+        self.assertEqual(d["waited"][0]["kind"], "error_text")
+        self.assertIn("couldn't communicate", d["waited"][0]["text"])  # what nvidia-smi said BEFORE the restart is evidence too
+        self.assertEqual(fake.calls[:2], ["query", "repair"])
+        self.assertLess(d["wait_s"], 10)
+        self.assertEqual([x["problem"] for x in d["pnp_before_restart"]], [43])
+
+    def test_gives_up_waiting_when_the_device_never_starts_and_says_so(self):
+        fake = Fake([query(["driver install pending"], rc=1, devices=[INSTALLING])])
+        ok, text = fake.fix()
+        d = json.loads(text)
+        self.assertEqual(d["waited"][-1]["text"], "driver install pending")
         self.assertFalse(ok)
-        self.assertFalse(d["started_before_restart"])
+        self.assertFalse(d["settled_before_restart"])
         self.assertEqual(fake.calls.count("repair"), 1)  # still restarted once: the wait is bounded, not a gate that hangs the step
-        self.assertLessEqual(fake.calls.index("repair"), 2 + m.GPU_WAIT_STARTED_S // 5)
-        self.assertGreaterEqual(d["wait_s"], m.GPU_WAIT_STARTED_S)
-        self.assertLess(d["wait_s"], m.GPU_WAIT_STARTED_S + 30)
+        self.assertLessEqual(fake.calls.index("repair"), 2 + m.GPU_WAIT_SETTLED_S // 5)
+        self.assertGreaterEqual(d["wait_s"], m.GPU_WAIT_SETTLED_S)
+        self.assertLess(d["wait_s"], m.GPU_WAIT_SETTLED_S + 30)
 
     def test_repolls_after_the_restart_until_the_guest_answers(self):
         fake = Fake(lambda n: query(devices=[STARTED]) if n < 1 else (query([EXPECTED]) if n >= 6 else query([])))
@@ -208,8 +225,8 @@ class Loop(unittest.TestCase):
         ok, text = fake.fix()
         d = json.loads(text)
         self.assertFalse(ok)
-        self.assertLess(d["total_s"], m.GPU_WAIT_STARTED_S + m.GPU_POLL_S + 120)
-        self.assertGreaterEqual(d["total_s"], m.GPU_WAIT_STARTED_S + m.GPU_POLL_S)
+        self.assertLess(d["total_s"], m.GPU_WAIT_SETTLED_S + m.GPU_POLL_S + 120)
+        self.assertGreaterEqual(d["total_s"], m.GPU_WAIT_SETTLED_S + m.GPU_POLL_S)
 
     def test_a_wrong_value_is_final_and_does_not_burn_the_poll_budget(self):
         fake = Fake([query(devices=[STARTED]), query([OTHER])])

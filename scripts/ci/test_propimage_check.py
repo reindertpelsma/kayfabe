@@ -1469,7 +1469,7 @@ class T(unittest.TestCase):
                 patch.object(m, "Guest", return_value=g),
                 patch.object(m.time, "sleep"),
                 patch.object(m, "gpu_fix", new=patch_gpu_fix or m.gpu_fix),
-                patch.object(m, "GPU_WAIT_STARTED_S", 0),
+                patch.object(m, "GPU_WAIT_SETTLED_S", 0),
                 patch.object(m, "GPU_POLL_S", 0),
                 patch.object(
                     m.time,
