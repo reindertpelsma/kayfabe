@@ -15,6 +15,8 @@ known-unsupported policy takes precedence; raw observed columns remain visible:
   HOST_LIMIT       host FAIL / TIMEOUT / NOTRUN on the same box (bare metal first)      -> documented exception
   KNOWN_UNSUPPORTED UVM: explicitly unsupported until the per-fault GR hold is measured and bounded
   POLICY_SKIP      not run by policy (docs/DOWNLOADS.md terms status)                   -> not a result
+  DISCOVERY        a row that reports and never gates (vkcts: docs/design/V3_VULKAN_CTS_ROW.md); its
+                   host-versus-guest comparison is the per-case diff (vkcts_diff.tsv), not this table
   UNATTRIBUTED     host PASS but the guest has no usable row (boot failure, guest dead,
                    no isolated re-run)                                                  -> re-run, never counted
 
@@ -32,6 +34,9 @@ import sys
 
 POLICY_SKIP = {
     "geekbench_gpu": "Geekbench: docs/DOWNLOADS.md says not allowed for scripted use (Pro licence); the free mode uploads the result",
+}
+DISCOVERY = {
+    "vkcts": "discovery lane (docs/design/V3_VULKAN_CTS_ROW.md): the row reports and never gates; the host-vs-guest per-case diff is vkcts_diff.tsv",
 }
 KNOWN_UNSUPPORTED = json.loads((Path(__file__).resolve().parent / "known_unsupported.json").read_text())["known_unsupported"]
 PASS = "PASS"
@@ -103,6 +108,8 @@ def classify(app, host, guest, isolated):
         return "KNOWN_UNSUPPORTED", "-", KNOWN_UNSUPPORTED[app]
     if app in POLICY_SKIP:
         return "POLICY_SKIP", "-", POLICY_SKIP[app]
+    if app in DISCOVERY:
+        return "DISCOVERY", (isolated or guest or {}).get("verdict", "-"), DISCOVERY[app]
     hv = host.get("verdict") if host else None
     if hv is None:
         return "UNATTRIBUTED", "-", "no host row: no bare-metal baseline for this app"

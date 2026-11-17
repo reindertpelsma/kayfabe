@@ -120,8 +120,6 @@ for app in "$@"; do
   quiet=$(( t1 - $(stat -c %Y "$log") ))
   echo "=== end rc=$rc secs=$((t1-t0)) $(date -Is)" >> "$log"
   note=$(grep -a -m1 -iE 'error|fail|illegal|cannot|unable|Xid|timeout|abort|segmentation|core dumped|no CUDA|not found|No such' "$log" | grep -v -E '^=== |errors: 0|CHECK .* ok' | head -1 | tr -s ' \t' ' ' | cut -c1-160 | tr '|' '/')
-  # an app may state its own note in one line, `APPNOTE <text>` (case names in its log would match the generic grep above)
-  appnote=$(grep -a -m1 '^APPNOTE ' "$log" | cut -c9-160 | tr '|' '/'); [ -n "$appnote" ] && note=$appnote
   if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then v=TIMEOUT
   elif grep -qaE 'command not found|No such file or directory' "$log" && ! grep -qaE "$rx" "$log"; then v=NOTRUN
   elif [ $rc -eq 0 ] && grep -qaE "$rx" "$log" && ! grep -qaE '^CHECK .*FAIL' "$log"; then v=PASS; note=${note:+warn:$note}
@@ -131,6 +129,8 @@ for app in "$@"; do
   # integer / transfer / launch-latency tests aborted with `clFinish (-36)` after a host Xid 31 —
   # a false PASS. clpeak reports a failed test as "Tests skipped"; the host baseline has none.
   [ "$name" = clpeak ] && [ $v = PASS ] && grep -qaE 'clFinish \(-|Tests skipped' "$log" && { v=FAIL; note="clpeak: $(grep -aE -c 'Tests skipped' "$log") test groups skipped ($(grep -aoE -m1 'cl[A-Za-z]+ \(-[0-9]+\)' "$log"))"; }
+  # an app may state its own note in one line, `APPNOTE <text>` (case names in its log would match the generic grep above)
+  appnote=$(grep -a -m1 '^APPNOTE ' "$log" | cut -c9-160 | tr '|' '/'); [ -n "$appnote" ] && note=$appnote
   echo "APPRES side=$SIDE app=$name verdict=$v rc=$rc secs=$((t1-t0)) quiet=$quiet note=${note:--}"
   grep -a -E '^(OUTSHA|DIGEST) ' "$log" | sed "s/^/APPDIG side=$SIDE app=$name /"
 done

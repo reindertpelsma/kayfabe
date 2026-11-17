@@ -36,7 +36,7 @@ def select(names, bucket):
     fil = re.compile(bucket["filter"]) if bucket.get("filter") else None
     exf = re.compile(bucket["exclude_filter"]) if bucket.get("exclude_filter") else None
     strata = collections.OrderedDict()
-    for n in names:
+    for n in sorted(set(names)):
         p = next((p for p in inc if n.startswith(p)), None)
         if p is None or any(n.startswith(e) for e in exc) or (fil and not fil.search(n)) or (exf and exf.search(n)):
             continue

@@ -285,7 +285,7 @@ def make_batch_runner(artifact, out, run_pins, env, keep, popen=subprocess.Popen
                   stdin=subprocess.DEVNULL, start_new_session=True)
         killed, last, mark = False, -1, clock()
         while p.poll() is None:
-            sleep(1.0)
+            sleep(0.25)
             size = qpa.stat().st_size if qpa.exists() else 0
             if size != last:
                 last, mark = size, clock()
@@ -301,9 +301,21 @@ def make_batch_runner(artifact, out, run_pins, env, keep, popen=subprocess.Popen
             if lines != []:
                 lines.close()
         qpa.unlink(missing_ok=True)  # the evidence is the compact block and the failure details, not the full XML
-        return L.BatchOutcome(results, open_case, p.returncode, killed)
+        # the console's own totals are a second witness of the same run: a QPA that was cut or edited does not agree with them
+        agree = None if killed or p.returncode != 0 else L.totals_agree(results, L.parse_totals(read_tail(con)))
+        return L.BatchOutcome(results, open_case, p.returncode, killed, agree)
 
     return run_batch
+
+
+def read_tail(path, limit=65536):
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - limit))
+            return f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
 
 
 def load_gpu_assert():
@@ -417,6 +429,10 @@ def cmd_run(a):
         print(line)
     sys.stdout.write(L.render_block(a.side, rows))
     print("DIGEST vkcts_cases %s" % L.digest(rows))
+    c = L.summarize(rows)["total"]
+    print("APPNOTE %s cases=%d pass=%d warn=%d ns=%d fail=%d crash=%d timeout=%d notrun=%d gpu=%s" % (
+        "ok" if L.device_is_gpu(dev) and (not rec or rec["verdict"] == "PASS") else "CONFIG", len(rows), c["pass"], c["warn"], c["not_supported"], c["fail"],
+        c["crash"], c["timeout"], c["not_run"], gpu_verdict))
     (out / "results.tsv").write_text(L.render_block(a.side, rows))
     sys.stdout.flush()
     if not L.device_is_gpu(dev):

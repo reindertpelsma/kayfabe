@@ -69,6 +69,7 @@ def classify(status):
 def sanitize(text, limit=DETAIL_MAX):
     """Untrusted text -> one short printable line (no tab, no newline, no markers): the only form that reaches a log or a TSV."""
     text = re.sub(r"[^A-Za-z0-9 _.,:;()/=+\-]", "?", str(text))
+    text = text.replace("VKCTS_", "vkcts-")  # no marker of this row survives inside data
     text = re.sub(r"\s+", " ", text).strip()
     return text[:limit] or "-"
 
@@ -325,8 +326,8 @@ class BatchOutcome:
     """What one deqp-vk process did: results parsed from its QPA (QpaResult list), the case that was running when it ended (or None),
     the exit code, and whether the harness killed it (a hang) rather than the process dying by itself."""
 
-    def __init__(self, results, open_case, rc, killed):
-        self.results, self.open_case, self.rc, self.killed = results, open_case, rc, killed
+    def __init__(self, results, open_case, rc, killed, totals_ok=None):
+        self.results, self.open_case, self.rc, self.killed, self.totals_ok = results, open_case, rc, killed, totals_ok
 
 
 def execute(cases, run_batch, batch_size, budget_s, clock, max_idle_restarts=6, keep_bodies=()):
@@ -349,6 +350,8 @@ def execute(cases, run_batch, batch_size, budget_s, clock, max_idle_restarts=6, 
         batch = remaining[:batch_size]
         out = run_batch(batch)
         batches += 1
+        if out.totals_ok is False and "console_totals_disagree" not in notes:
+            notes.append("console_totals_disagree")
         inbatch = set(batch)
         got = 0
         for r in out.results:
