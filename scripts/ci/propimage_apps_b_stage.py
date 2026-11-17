@@ -7,7 +7,7 @@ refuses until its three pins (image archive, signed boot GOP, open-asset data vo
 vast_payload.py as the manual-only stage `propimage_apps_b` and validated in vast_report.py (`validate_propimage_apps_b`); see
 docs/design/V3_PROPIMAGE_B_APPS.md, section "Stage selection and the report".
 
-    propimage_apps_b_stage.py run --sha SHA --checkout ROOT --prefix DIR --out FILE --urls FILE [--bench DIR] [--deadline-epoch N]
+    propimage_apps_b_stage.py run --sha SHA --checkout ROOT --prefix DIR --out FILE --urls FILE [--bench DIR] [--deadline-epoch N] [--lane gate|all | --apps a,b,c]
     propimage_apps_b_stage.py plan [--sha SHA]
 
 It reuses `propimage_apps.py` for everything that does not depend on the application list (preflight rows, pins and manifest, swtpm,
@@ -20,6 +20,9 @@ from the guest. Only GATE rows decide the stage verdict (PASS when every gate ro
 fails the stage and is listed in the record's `breakages` (row, verdict, class, census counts) and printed as one
 `KF_PROPIMAGE_APPS_B_BREAKAGE` line. Disabled rows are `not_run` with their reason.
 The record is printed as `KF_PROPIMAGE_APPS_B_RESULT {json}` (scores and sampled GPU numbers are written to the record, not to the log).
+SELECTION (2026-11-17): `--lane all` (the default) runs every enabled row; `--lane gate` runs the enabled GATE rows only (the owner's acceptance run through the payload,
+`vast_payload.py --propimage-b-lane gate`); `--apps` names rows. `--lane` and `--apps` are mutually exclusive (a usage error). The record's `lane_selection` says which
+one ran (`all`, `gate` or `apps`); a row that was not selected is not in `apps`, `failed`, `breakages` or `not_run` (only the disabled rows are `not_run`).
 """
 import argparse
 import json
@@ -42,12 +45,29 @@ BOOT_BUDGET_S = pa.BOOT_BUDGET_S
 DATA_ROLE = "data"
 FAILURE_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")    # the generic runner's classes (propimage_images.py)
 MAX_RECORD_BYTES = 49152
+LANE_SELECTIONS = ("all", "gate")        # `run --lane`; the record's `lane_selection` adds "apps" (a --apps subset)
 CENSUS_IDS = 8              # distinct ids kept per census keyword in the record (the evidence directory keeps the full census)
 
 
 def apps_module(root):
     """scripts/bench/windows/propimage_apps_b.py as a module (the application table and the grading)."""
     return pa.load_module(Path(root) / "scripts/bench/windows/propimage_apps_b.py", "kf_propimage_apps_b_for_stage")
+
+
+def check_selection(apps, lane):
+    """ValueError (the usage error) for an unknown lane selection or for `--lane` together with `--apps`; the two are different ways to say which rows run."""
+    if lane not in LANE_SELECTIONS:
+        raise ValueError("--lane must be one of " + "|".join(LANE_SELECTIONS))
+    if apps and lane != "all":
+        raise ValueError("--lane and --apps are mutually exclusive")
+
+
+def select_rows(checks, apps=None, lane="all"):
+    """The rows a run covers, in table order: the named rows (`apps`, a disabled one too), else the enabled rows, else (`lane == "gate"`) the enabled rows whose
+    table lane is gate. The lane comes from the table, never from the guest."""
+    if apps:
+        return tuple(a for a in checks if a in apps)
+    return tuple(a for a, c in checks.items() if not c.get("disabled") and (lane == "all" or c.get("lane") == lane))
 
 
 # Guest-visible framebuffer in MiB. MEASURED 2026-11-16 (RTX 4090 box): at the image default of 4096 the GPU step failed on 2 of 2 stage boots (no matching UUID
@@ -213,8 +233,8 @@ def write_record(path, rec):
     return data
 
 
-def new_record(ctx):
-    return {"schema": SCHEMA, "image_set": "b", "verdict": "RETRY", "sha": ctx.sha, "reason": "INTERRUPTED", "family": None, "cpu_vendor": None,
+def new_record(ctx, lane_selection="all"):
+    return {"schema": SCHEMA, "image_set": "b", "lane_selection": lane_selection, "verdict": "RETRY", "sha": ctx.sha, "reason": "INTERRUPTED", "family": None, "cpu_vendor": None,
             "preflight": [], "image": {"name": None, "sha256": None, "size": None}, "swtpm": {"version": None, "built": False},
             "boots": [], "apps": [], "failed": [], "limited": [], "breakages": [], "not_run": {}}
 
@@ -260,8 +280,9 @@ def census_module(root):
     return pa.load_module(Path(root) / "scripts/bench/windows/kf3_census.py", "kf_census_for_stage")
 
 
-def run(ctx, evidence_dir=None, apps=None, guest_ram_mb=GUEST_RAM_MB, audio=AUDIO):
-    rec = new_record(ctx)
+def run(ctx, evidence_dir=None, apps=None, guest_ram_mb=GUEST_RAM_MB, audio=AUDIO, lane="all"):
+    check_selection(apps, lane)
+    rec = new_record(ctx, "apps" if apps else lane)
     klog, started, out_of_time = None, False, False
     try:
         pa.check_prefix(ctx.prefix)
@@ -279,7 +300,7 @@ def run(ctx, evidence_dir=None, apps=None, guest_ram_mb=GUEST_RAM_MB, audio=AUDI
         pi_check = pa.harness(ctx.checkout)
         check_guest_ram(pi_check, guest_ram_mb)
         mod = apps_module(ctx.checkout)
-        order = tuple(a for a in mod.CHECKS if (a in apps if apps else not mod.CHECKS[a].get("disabled")))
+        order = select_rows(mod.CHECKS, apps, lane)
         rec["not_run"] = {a: pa.clean(c["disabled"], 160) for a, c in mod.CHECKS.items() if c.get("disabled") and a not in order}
         if not order:
             raise pa.Refused("APPS")
@@ -453,7 +474,8 @@ def main(argv=None):
     r.add_argument("--bench", default="/workspace/bench")
     r.add_argument("--deadline-epoch", type=float, default=0.0)
     r.add_argument("--evidence-dir")
-    r.add_argument("--apps", help="comma list: run only these rows (default: all)")
+    r.add_argument("--apps", help="comma list: run only these rows (default: all; mutually exclusive with --lane)")
+    r.add_argument("--lane", choices=LANE_SELECTIONS, help="gate: run the enabled gate-lane rows only; all: every enabled row (the default); mutually exclusive with --apps")
     r.add_argument("--guest-ram-mb", type=int, default=GUEST_RAM_MB, help="guest RAM of every boot in MiB; 0 keeps the image's own 8192 (default %d)" % GUEST_RAM_MB)
     r.add_argument("--no-audio", action="store_true", help="boot without the virtual sound card")
     q = sub.add_parser("plan")
@@ -467,9 +489,11 @@ def main(argv=None):
             return 0
         if not pa.SHA_RE.fullmatch(a.sha):
             return 2
+        if a.apps and a.lane:           # any explicit --lane, `all` too: the two ways to say which rows run are never mixed
+            raise ValueError("--lane and --apps are mutually exclusive")
         ctx = pa.Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=pa.hardware_now())
         ctx.pins_path = PINS_PATH
-        return finish(run(ctx, a.evidence_dir, a.apps.split(",") if a.apps else None, a.guest_ram_mb, AUDIO and not a.no_audio), a.out)
+        return finish(run(ctx, a.evidence_dir, a.apps.split(",") if a.apps else None, a.guest_ram_mb, AUDIO and not a.no_audio, a.lane or "all"), a.out)
     except pa.Refused as exc:
         print("KF_PROPIMAGE_APPS_B_REFUSED " + pa.clean(exc.reason, 80), flush=True)
         return 2

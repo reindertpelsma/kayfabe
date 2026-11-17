@@ -419,7 +419,7 @@ NAME_OK = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 # A test pins this equal to CHECKS; the validator reads lanes from here and never from the record.
 PROPIMAGE_B_ROWS = {
     "gpudiag": ("gate", True), "photoshop": ("discovery", True), "illustrator": ("gate", True), "aftereffects": ("discovery", True),
-    "indesign": ("discovery", True), "illustratorsample": ("gate", True), "indesignsample": ("discovery", True), "animatesample": ("gate", False),
+    "indesign": ("discovery", True), "illustratorsample": ("discovery", True), "indesignsample": ("discovery", True), "animatesample": ("gate", False),
     "photoshopsample": ("discovery", True), "photoshopcpu": ("discovery", True), "photoshopprojects": ("discovery", True),
     "indesignprojects": ("discovery", True), "animateprojects": ("discovery", False), "aeprojects": ("discovery", True),
     "aetoggle": ("discovery", True), "aeadv3d": ("discovery", True), "premieretl": ("discovery", True), "amematrix": ("discovery", True),
@@ -429,6 +429,7 @@ PROPIMAGE_B_ROWS = {
     "lightroom": ("discovery", False), "lightroomlaunch": ("gate", True), "dimension": ("gate", True), "uxp": ("gate", True),
 }
 PROPIMAGE_B_PASS = ("PASS", "PASS_LIMITED")
+PROPIMAGE_B_SELECTIONS = ("all", "gate", "apps")    # the record's `lane_selection`: `run --lane all` (default), `run --lane gate`, `run --apps ...`
 PROPIMAGE_B_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")
 CENSUS_KEYWORDS = ("unserviced", "foreign_class", "refused", "dead_channel", "walk", "derived_miss", "xid", "tdr")
 
@@ -437,14 +438,18 @@ def validate_propimage_apps_b(value):
     """The propimage_apps_b stage's record (scripts/ci/propimage_apps_b_stage.py): bounded, strictly read, not forwarded. ONLY gate-lane rows
     decide the verdict: a PASS needs every enabled gate row present and PASS or PASS_LIMITED; a discovery row of any verdict never fails
     it and is listed in `breakages` (exactly the discovery rows that did not pass). Disabled rows are `not_run` with their reason. Lanes
-    come from PROPIMAGE_B_ROWS, a record's own `lane` must agree with it."""
+    come from PROPIMAGE_B_ROWS, a record's own `lane` must agree with it. 2026-11-17: the record names its selection (`lane_selection`: all, gate or apps). A
+    `gate` record (`run --lane gate`, the acceptance run) holds the enabled gate rows only, in `apps` and in every boot, so a PASS of it needs exactly those rows;
+    a row that was not selected is not in `apps`, `failed`, `breakages` or `not_run` and reads as nothing, never as failed or skipped."""
     token = re.compile(r"[A-Z][A-Z0-9_]{0,40}(:[A-Za-z0-9_]{1,40})?")
     text = re.compile(r"[\x20-\x7e]{0,200}")
     num = lambda v, hi=1 << 40: type(v) is int and 0 <= v <= hi  # noqa: E731
-    top = {"schema", "image_set", "verdict", "sha", "reason", "family", "cpu_vendor", "preflight", "image", "swtpm", "boots", "apps", "failed",
-           "limited", "breakages", "not_run"}
+    top = {"schema", "image_set", "lane_selection", "verdict", "sha", "reason", "family", "cpu_vendor", "preflight", "image", "swtpm", "boots", "apps",
+           "failed", "limited", "breakages", "not_run"}
     ok = type(value) is dict and top | {"error"} >= set(value) >= top
     ok = ok and value["schema"] == 1 and value["image_set"] == "b" and value["verdict"] in ("PASS", "FAIL", "RETRY", "REFUSED")
+    selection = value["lane_selection"] if ok else None
+    ok = ok and type(selection) is str and selection in PROPIMAGE_B_SELECTIONS
     ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
     ok = ok and type(value["reason"]) is str and (token.fullmatch(value["reason"]) is not None or value["reason"] == "")
     ok = ok and ("error" not in value or text.fullmatch(str(value["error"])) is not None)
@@ -471,11 +476,13 @@ def validate_propimage_apps_b(value):
                                                  and len(b["host_xid_unattributed"]["lines"]) <= 8
                                                  and all(text.fullmatch(str(x)) for x in b["host_xid_unattributed"]["lines"])))
         for b in boots)
+    ok = ok and (selection != "gate" or all(PROPIMAGE_B_ROWS[a] == ("gate", True) for b in boots for a in b["apps"]))
     apps = value["apps"] if ok else None
     ok = ok and type(apps) is list and len(apps) <= len(PROPIMAGE_B_ROWS)
     names = [a.get("app") for a in apps] if ok and all(type(a) is dict for a in apps) else None
     table = list(PROPIMAGE_B_ROWS)
     ok = ok and names is not None and names == [n for n in table if n in names]
+    ok = ok and (selection != "gate" or all(PROPIMAGE_B_ROWS[n] == ("gate", True) for n in names))
     for a in apps if ok else ():
         ok = ok and {"app", "lane", "verdict", "kind", "limited", "secs", "detail", "evidence", "gpu", "host_xid", "census"} <= set(a) <= {
             "app", "lane", "verdict", "kind", "limited", "secs", "detail", "evidence", "gpu", "host_xid", "census", "platform", "path"}

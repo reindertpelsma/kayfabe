@@ -7,8 +7,10 @@ the payload wiring of the manual-only stage `propimage_apps_b`."""
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
+import types
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -25,6 +27,7 @@ import vast_report  # noqa: E402
 
 MOD = sb.apps_module(pa.ROOT)
 ORDER = tuple(MOD.ENABLED)
+GATE_ORDER = tuple(n for n in ORDER if MOD.CHECKS[n]["lane"] == "gate")      # the rows `--lane gate` runs
 H64 = "c" * 64
 SHA = "a" * 40
 
@@ -333,12 +336,138 @@ class GuestRam(RunBase, unittest.TestCase):
 
     def test_cli_defaults_and_switches(self):
         calls = []
-        with unittest.mock.patch.object(sb, "run", lambda ctx, ev, apps, ram, audio: (calls.append((ram, audio)), {"verdict": "NOT_RUN"})[1]), \
+        with unittest.mock.patch.object(sb, "run", lambda ctx, ev, apps, ram, audio, lane="all": (calls.append((ram, audio)), {"verdict": "NOT_RUN"})[1]), \
                 unittest.mock.patch.object(sb, "finish", lambda rec, out: 0), unittest.mock.patch.object(pa, "hardware_now", lambda: {}):
             base = ["run", "--sha", SHA, "--out", "/dev/null"]
             sb.main(base)
             sb.main(base + ["--guest-ram-mb", "0", "--no-audio"])
         self.assertEqual(calls, [(16384, True), (0, False)])
+
+
+class LaneSelection(RunBase, unittest.TestCase):
+    """2026-11-17: `run --lane gate` runs the enabled GATE rows only (the owner's acceptance run through the payload); the default `all` is unchanged.
+    The record says which selection ran (`lane_selection`: all, gate or apps) and a gate-only run is a PASS the report accepts."""
+
+    def seen_boots(self, env):
+        seen = []
+        inner = env.ctx.boot_runner
+        env.ctx.boot_runner = lambda ctx, argv, log, timeout, mark: (seen.append(list(argv)), inner(ctx, argv, log, timeout, mark))[1]
+        return seen
+
+    def test_the_gate_rows_are_the_enabled_rows_whose_table_lane_is_gate(self):
+        self.assertEqual(GATE_ORDER, ("gpudiag", "illustrator", "acrobat", "premiere", "lightroomlaunch", "dimension", "uxp"))
+        self.assertEqual(sb.select_rows(MOD.CHECKS, None, "gate"), GATE_ORDER)
+        self.assertEqual(sb.select_rows(MOD.CHECKS, None, "all"), ORDER)
+        self.assertEqual(sb.select_rows(MOD.CHECKS, ["acrobat", "photoshop"], "all"), ("photoshop", "acrobat"))
+
+    def test_the_default_selection_is_all_and_the_record_says_so(self):
+        rec = sb.run(self.make().ctx)
+        self.assertEqual(rec["lane_selection"], "all")
+        self.assertEqual([a["app"] for a in rec["apps"]], list(ORDER))
+
+    def test_an_apps_subset_says_apps(self):
+        rec = sb.run(self.make().ctx, apps=["acrobat"])
+        self.assertEqual(rec["lane_selection"], "apps")
+        self.assertEqual([a["app"] for a in rec["apps"]], ["acrobat"])
+
+    def test_gate_runs_only_the_enabled_gate_rows_in_table_order(self):
+        env = self.make()
+        seen = self.seen_boots(env)
+        rec = sb.run(env.ctx, lane="gate")
+        self.assertEqual((rec["verdict"], rec["reason"], rec["failed"]), ("PASS", "", []), rec)
+        self.assertEqual(rec["lane_selection"], "gate")
+        self.assertEqual([a["app"] for a in rec["apps"]], list(GATE_ORDER))
+        self.assertEqual({a["lane"] for a in rec["apps"]}, {"gate"})
+        self.assertEqual([a for b in rec["boots"] for a in b["apps"]], list(GATE_ORDER))
+        self.assertEqual([a for argv in seen for a in argv[argv.index("--apps") + 1].split(",")], list(GATE_ORDER))
+
+    def test_rows_that_were_not_selected_are_neither_failed_nor_skipped(self):
+        rec = sb.run(self.make(aftereffects="FAIL", photoshop="HARNESS").ctx, lane="gate")      # a scenario for rows the run never boots
+        discovery = {n for n in ORDER if MOD.CHECKS[n]["lane"] == "discovery"}
+        self.assertEqual(rec["verdict"], "PASS", rec)
+        self.assertEqual(rec["breakages"], [])
+        self.assertEqual(rec["limited"], [a for a in GATE_ORDER if a in MOD.LAUNCH_ONLY])
+        self.assertFalse(discovery & {a["app"] for a in rec["apps"]})
+        self.assertFalse(discovery & set(rec["not_run"]))
+        self.assertEqual(sorted(rec["not_run"]), ["animate", "animateprojects", "animatesample", "lightroom"])     # the disabled rows, as in every run
+
+    def test_a_gate_only_record_validates_as_pass(self):
+        rec = json.loads(json.dumps(sb.run(self.make().ctx, lane="gate")))
+        vast_report.validate_propimage_apps_b(rec)
+        self.assertEqual(rec["verdict"], "PASS")
+
+    def test_a_failing_gate_row_still_fails_a_gate_run_and_the_red_record_validates(self):
+        rec = json.loads(json.dumps(sb.run(self.make(illustrator="FAIL").ctx, lane="gate")))
+        self.assertEqual((rec["verdict"], rec["reason"], rec["failed"]), ("FAIL", "APP_FAIL:illustrator", ["illustrator"]))
+        vast_report.validate_propimage_apps_b(rec)
+
+    def test_a_gate_row_with_no_verdict_is_a_retry_not_a_pass(self):
+        rec = json.loads(json.dumps(sb.run(self.make(uxp="MISSING").ctx, lane="gate")))
+        self.assertEqual((rec["verdict"], rec["reason"]), ("RETRY", "HARNESS:uxp"))
+        vast_report.validate_propimage_apps_b(rec)
+
+    def test_the_gate_selection_is_planned_in_fewer_boots_than_the_whole_table(self):
+        gate = sb.plan_boots({a: MOD.CHECKS[a]["timeout"] for a in GATE_ORDER}, GATE_ORDER, lanes={a: MOD.CHECKS[a]["lane"] for a in GATE_ORDER})
+        whole = sb.plan_boots({a: MOD.CHECKS[a]["timeout"] for a in ORDER}, ORDER, lanes={a: MOD.CHECKS[a]["lane"] for a in ORDER})
+        self.assertEqual([a for b in gate for a in b], list(GATE_ORDER))
+        self.assertLess(len(gate), len(whole))
+
+    def test_lane_and_apps_together_are_a_usage_error_and_an_unknown_lane_too(self):
+        env = self.make()
+        for kwargs in ({"apps": ["acrobat"], "lane": "gate"}, {"lane": "discovery"}, {"lane": ""}, {"lane": None}):
+            with self.subTest(**kwargs), self.assertRaises(ValueError):
+                sb.run(env.ctx, **kwargs)
+        self.assertFalse(hasattr(self, "argv"))          # nothing was booted
+        self.assertFalse((env.ctx.prefix / "dl").exists())
+
+    def test_check_selection_names_the_two_usage_errors(self):
+        for apps, lane in ((None, "all"), (None, "gate"), (["acrobat"], "all")):
+            sb.check_selection(apps, lane)
+        for apps, lane, text in ((["acrobat"], "gate", "mutually exclusive"), (None, "discovery", "must be one of"), (None, "", "must be one of"),
+                                 (None, None, "must be one of"), (None, "GATE", "must be one of")):
+            with self.subTest(apps=apps, lane=lane), self.assertRaises(ValueError) as c:
+                sb.check_selection(apps, lane)
+            self.assertIn(text, str(c.exception))
+
+    def cli(self, *extra):
+        import contextlib
+        import io
+        calls, buf = [], io.StringIO()
+        fake = lambda ctx, ev, apps, ram, audio, lane="all": (calls.append((apps, lane)), {"verdict": "NOT_RUN"})[1]  # noqa: E731
+        with unittest.mock.patch.object(sb, "run", fake), unittest.mock.patch.object(sb, "finish", lambda rec, out: 0), \
+                unittest.mock.patch.object(pa, "hardware_now", lambda: {}), contextlib.redirect_stdout(buf):
+            rc = sb.main(["run", "--sha", SHA, "--out", "/dev/null", *extra])
+        return rc, calls, buf.getvalue()
+
+    def test_cli_passes_the_lane_and_defaults_to_all(self):
+        self.assertEqual(self.cli()[1], [(None, "all")])
+        self.assertEqual(self.cli("--lane", "gate")[1], [(None, "gate")])
+        self.assertEqual(self.cli("--lane", "all")[1], [(None, "all")])
+        self.assertEqual(self.cli("--apps", "acrobat,uxp")[1], [(["acrobat", "uxp"], "all")])
+
+    def refused_cli(self, lane):
+        rc, calls, out = self.cli("--lane", lane, "--apps", "acrobat")
+        self.assertEqual((rc, calls), (2, []))
+        self.assertTrue(out.startswith("KF_PROPIMAGE_APPS_B_USAGE "), out)
+        self.assertIn("--lane", out)
+        self.assertIn("--apps", out)
+
+    def test_cli_refuses_lane_gate_with_apps_as_a_usage_error_before_running(self):
+        self.refused_cli("gate")
+
+    def test_cli_refuses_lane_all_with_apps_too(self):
+        self.refused_cli("all")
+
+    def test_the_lane_is_independent_of_the_ram_and_audio_switches(self):
+        rc, calls, out = self.cli("--lane", "gate", "--no-audio", "--guest-ram-mb", "0")
+        self.assertEqual((rc, calls), (0, [(None, "gate")]))
+
+    def test_cli_refuses_an_unknown_lane(self):
+        import contextlib
+        import io
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as c:
+            self.cli("--lane", "discovery")
+        self.assertEqual(c.exception.code, 2)
 
 
 class Report(RunBase, unittest.TestCase):
@@ -355,6 +484,74 @@ class Report(RunBase, unittest.TestCase):
     def test_the_row_table_equals_the_application_table(self):
         self.assertEqual({n: (c["lane"], not c.get("disabled")) for n, c in MOD.CHECKS.items()}, vast_report.PROPIMAGE_B_ROWS)
         self.assertEqual(list(MOD.CHECKS), list(vast_report.PROPIMAGE_B_ROWS))
+
+    def gate_record(self, **scenario):
+        return json.loads(json.dumps(sb.run(self.make(**scenario).ctx, lane="gate")))
+
+    def test_the_record_names_its_selection_and_only_the_known_ones_validate(self):
+        for lane, want in (("all", "all"), ("gate", "gate")):
+            rec = json.loads(json.dumps(sb.run(self.make().ctx, lane=lane)))
+            with self.subTest(lane):
+                self.assertEqual(rec["lane_selection"], want)
+                vast_report.validate_propimage_apps_b(rec)
+        r = self.record()
+        r["lane_selection"] = "apps"           # the --apps subset label is a known one (a PASS that holds every gate row is not refused for it)
+        vast_report.validate_propimage_apps_b(r)
+        r = self.record()
+        r.pop("lane_selection")
+        self.refused(r, "missing")
+
+    def test_an_unknown_selection_label_is_refused(self):
+        rec = self.record()
+        for label, value in (("discovery", "discovery"), ("empty", ""), ("upper case", "GATE"), ("list", ["all"]), ("None", None), ("number", 1)):
+            r = json.loads(json.dumps(rec))
+            r["lane_selection"] = value
+            self.refused(r, label)
+
+    def test_a_gate_selection_pass_holds_exactly_the_gate_rows_and_validates(self):
+        rec = self.gate_record()
+        vast_report.validate_propimage_apps_b(rec)
+        self.assertEqual([a["app"] for a in rec["apps"]], list(GATE_ORDER))
+        self.assertEqual((rec["breakages"], rec["failed"]), ([], []))
+        self.assertEqual(sorted(rec["not_run"]), ["animate", "animateprojects", "animatesample", "lightroom"])
+
+    def test_a_gate_selection_record_with_a_discovery_row_or_boot_is_refused(self):
+        rec = self.gate_record()
+        full = self.record()
+        extra = json.loads(json.dumps(next(a for a in full["apps"] if a["app"] == "photoshop")))
+        r = json.loads(json.dumps(rec))
+        r["apps"] = sorted(r["apps"] + [extra], key=lambda a: list(vast_report.PROPIMAGE_B_ROWS).index(a["app"]))
+        self.refused(r, "a discovery row in a gate-selection record")
+        r = json.loads(json.dumps(rec))
+        r["boots"][0]["apps"] = r["boots"][0]["apps"] + ["photoshop"]
+        self.refused(r, "a discovery row in a gate-selection boot")
+
+    def test_a_gate_selection_boot_naming_a_disabled_row_is_refused(self):
+        rec = self.gate_record()
+        rec["boots"][0]["apps"] = rec["boots"][0]["apps"] + ["animate"]       # a gate-lane row, but disabled: never booted by `--lane gate`
+        self.refused(rec, "a disabled row in a gate-selection boot")
+        rec = self.record()
+        rec["boots"][0]["apps"] = rec["boots"][0]["apps"] + ["animate"]       # the same row is not refused by this rule outside a gate selection
+        vast_report.validate_propimage_apps_b(rec)
+
+    def test_a_red_gate_selection_record_also_holds_gate_rows_only(self):
+        rec = self.gate_record(illustrator="FAIL")
+        vast_report.validate_propimage_apps_b(rec)
+        extra = json.loads(json.dumps(next(a for a in self.record()["apps"] if a["app"] == "aftereffects")))
+        rec["apps"] = sorted(rec["apps"] + [extra], key=lambda a: list(vast_report.PROPIMAGE_B_ROWS).index(a["app"]))
+        self.refused(rec, "a discovery row in a red gate-selection record")
+
+    def test_a_gate_selection_pass_still_needs_every_enabled_gate_row_and_no_failed_one(self):
+        for app in GATE_ORDER:
+            rec = self.gate_record()
+            rec["apps"] = [a for a in rec["apps"] if a["app"] != app]
+            self.refused(rec, "gate row missing: " + app)
+        rec = self.gate_record(illustrator="FAIL")
+        rec["verdict"], rec["reason"], rec["failed"] = "PASS", "", []
+        self.refused(rec, "PASS over a failed gate row of a gate run")
+        rec = self.gate_record()
+        rec["not_run"].pop("animate")
+        self.refused(rec, "disabled row dropped from not_run of a gate run")
 
     def test_a_clean_run_validates_and_lists_the_disabled_rows_as_not_run(self):
         rec = self.record()
@@ -423,6 +620,7 @@ class Report(RunBase, unittest.TestCase):
                           ("app key", lambda r: row(r, "photoshop").update(extra=1)),
                           ("unknown app", lambda r: r["apps"].append(dict(r["apps"][0], app="notepad"))),
                           ("schema", lambda r: r.update(schema=2)), ("image_set", lambda r: r.update(image_set="a")),
+                          ("lane_selection", lambda r: r.update(lane_selection="discovery")),
                           ("detail length", lambda r: row(r, "photoshop").update(detail="x" * 201)),
                           ("detail non-ascii", lambda r: row(r, "photoshop").update(detail="caf\u00e9")),
                           ("error length", lambda r: r.update(error="x" * 201)),
@@ -463,7 +661,7 @@ class Report(RunBase, unittest.TestCase):
         rec = self.record(illustrator="FAIL")
         rec["reason"] = ""
         self.refused(rec, "FAIL without reason")
-        refused = {"schema": 1, "image_set": "b", "verdict": "REFUSED", "sha": "a" * 40, "reason": "PIN_UNSET:data", "family": None, "cpu_vendor": None,
+        refused = {"schema": 1, "image_set": "b", "lane_selection": "all", "verdict": "REFUSED", "sha": "a" * 40, "reason": "PIN_UNSET:data", "family": None, "cpu_vendor": None,
                    "preflight": [], "image": {"name": None, "sha256": None, "size": None}, "swtpm": {"version": None, "built": False}, "boots": [],
                    "apps": [], "failed": [], "limited": [], "breakages": [], "not_run": {}}
         vast_report.validate_propimage_apps_b(refused)
@@ -508,11 +706,139 @@ class Report(RunBase, unittest.TestCase):
             vast_report.read_result_file(self.file_with(self.doc(bad, "FAIL")))
 
 
+class WorkerLanes(unittest.TestCase):
+    """2026-11-17: the lane of a row is stated twice, in the harness table (`propimage_apps_b.CHECKS`, which the stage runs and `vast_report.PROPIMAGE_B_ROWS` repeats)
+    and in the Worker's list (`ci/vast-broker/propimages.json`, image `imgb`). For every row in both they must agree: a row the Worker calls discovery
+    but the harness calls gate decides the acceptance verdict (`--lane gate`) while the Worker's strict list does not even require it."""
+
+    # Rows the Worker excludes (propimages.json `excluded`) that are still ENABLED in the harness table, with the reason they are tolerated. This is a finding, not a
+    # baseline: the test fails when a row leaves the exclusion or is disabled, so the entry has to go in the same change. Owner decision pending: disable the row
+    # in CHECKS or take it out of `excluded`.
+    EXCLUDED_BUT_ENABLED = {"indesignprojects": "discovery row; the Worker's list has no result of a final driver for it yet"}
+
+    @classmethod
+    def worker_image(cls):
+        doc = json.loads((pa.ROOT / "ci/vast-broker/propimages.json").read_text())
+        return next(i for i in doc["images"] if i["label"] == "imgb")
+
+    def test_every_row_in_both_lists_has_the_same_lane(self):
+        apps = self.worker_image()["apps"]
+        both = {n: (row["lane"], MOD.CHECKS[n]["lane"]) for n, row in apps.items() if n in MOD.CHECKS}
+        self.assertTrue(both)
+        self.assertEqual({n: lanes for n, lanes in both.items() if lanes[0] != lanes[1]}, {}, "(Worker lane, harness lane) of a row that differs")
+
+    def test_a_listed_row_exists_in_the_table_and_is_enabled(self):
+        for n in self.worker_image()["apps"]:
+            with self.subTest(n):
+                self.assertIn(n, MOD.CHECKS)
+                self.assertFalse(MOD.CHECKS[n].get("disabled"), n)
+
+    def test_an_excluded_row_is_disabled_in_the_table_or_a_named_exception(self):
+        excluded = self.worker_image()["excluded"]
+        enabled = {n for n in excluded if n in MOD.CHECKS and not MOD.CHECKS[n].get("disabled")}
+        self.assertEqual(enabled, set(self.EXCLUDED_BUT_ENABLED))
+        for n in self.EXCLUDED_BUT_ENABLED:
+            self.assertIn(n, excluded)
+
+    def test_a_row_is_never_listed_and_excluded(self):
+        image = self.worker_image()
+        self.assertEqual(set(image["apps"]) & set(image["excluded"]), set())
+
+    def test_the_gate_selection_is_exactly_the_workers_gate_rows(self):
+        worker_gate = tuple(n for n, row in self.worker_image()["apps"].items() if row["lane"] == "gate")
+        self.assertEqual(sorted(GATE_ORDER), sorted(worker_gate))
+
+
 class PayloadWiring(unittest.TestCase):
     def instruction(self, tier="large"):
         import payload_instruction as pi
         return pi.Instruction(tier=tier, windows=True, windows_runs=1, stages=(), spec=None, winapps=None, linux_apps="middle", rehearsal=False,
                               source="default")
+
+    # 2026-11-17: --propimage-b-lane gate|all (default all): the payload cannot pass the stage's own --apps, so the acceptance run selects the GATE rows here
+    def args(self, **kw):
+        return types.SimpleNamespace(**dict({"propimage_b_lane": None}, **kw))
+
+    def test_the_lane_flag_is_refused_by_name_when_the_stage_is_not_selected(self):
+        for chosen in ([], ["propimage_apps"], ["provision", "cuda_host", "windows_gate"], ["matlab"]):
+            for lane in ("gate", "all"):
+                with self.subTest(chosen=chosen, lane=lane):
+                    self.assertEqual(vast_payload.propimage_b_refusal(chosen, self.args(propimage_b_lane=lane)), "LANE_NEEDS_ONLY_PROPIMAGE_APPS_B")
+
+    def test_no_flag_or_the_stage_selected_is_not_refused(self):
+        for chosen in ([], ["propimage_apps"], ["propimage_apps_b"], ["windows_gate", "propimage_apps_b", "matlab"]):
+            self.assertIsNone(vast_payload.propimage_b_refusal(chosen, self.args()), chosen)
+        for lane in ("gate", "all"):
+            self.assertIsNone(vast_payload.propimage_b_refusal(["propimage_apps_b"], self.args(propimage_b_lane=lane)), lane)
+            self.assertIsNone(vast_payload.propimage_b_refusal(["windows_gate", "propimage_apps_b"], self.args(propimage_b_lane=lane)), lane)
+
+    def test_the_stage_command_is_unchanged_without_the_flag_and_gets_lane_gate_with_it(self):
+        def command(lane=None):
+            return vast_payload.propimage_apps_b_command(Path("/r"), SHA, Path("/e"), 1000, lane)
+        self.assertEqual(command(), ["python3", "/r/scripts/ci/propimage_apps_b_stage.py", "run", "--sha", SHA, "--checkout", "/r", "--prefix",
+                                     "/workspace/kf-propimage-b", "--out", "/e/propimage_apps_b.json", "--evidence-dir", "/e/propimage_apps_b",
+                                     "--deadline-epoch", "1000"])
+        self.assertEqual(command("all"), command())
+        self.assertEqual(command("gate"), command() + ["--lane", "gate"])
+
+    def test_only_gate_adds_stage_arguments(self):
+        self.assertEqual(vast_payload.propimage_apps_b_lane_args("gate"), ["--lane", "gate"])
+        self.assertEqual(vast_payload.propimage_apps_b_lane_args("all"), [])
+        self.assertEqual(vast_payload.propimage_apps_b_lane_args(None), [])
+
+    def test_the_gate_lane_has_its_own_lower_time_floor(self):
+        floor = vast_payload.propimage_apps_b_min_remaining_ms
+        self.assertEqual(floor(None), 240 * 60000)
+        self.assertEqual(floor("all"), vast_payload.PROPIMAGE_APPS_B_MIN_REMAINING_MS)
+        self.assertEqual(floor("gate"), 150 * 60000)
+        self.assertEqual(floor("gate"), vast_payload.PROPIMAGE_APPS_B_GATE_MIN_REMAINING_MS)
+
+    def test_main_builds_the_stage_from_those_two_helpers_and_the_flag(self):
+        source = (HERE / "vast_payload.py").read_text()
+        self.assertIn("propimage_apps_b_command(root, sha, evidence, soft // 1000 - PROPIMAGE_APPS_B_MARGIN_S, args.propimage_b_lane)", source)
+        self.assertIn("min_remaining_ms=propimage_apps_b_min_remaining_ms(args.propimage_b_lane)", source)
+        self.assertEqual(source.count("refusal = propimage_b_refusal(selected, args)"), 1)
+        self.assertEqual(source.count("refusal = propimage_b_refusal(chosen, args)"), 1)       # main() and plan_only() both refuse
+
+    def dry(self, *argv):
+        env = {k: v for k, v in os.environ.items() if not k.startswith("KF_")}
+        env.update(KF_TIER="large", KF_MERGE_WINDOWS="1")
+        done = subprocess.run([sys.executable, "-B", "-I", str(HERE / "vast_payload.py"), *argv, "--dry-run"], capture_output=True, text=True, env=env,
+                              timeout=120)
+        return done.returncode, done.stdout.splitlines(), done.stderr
+
+    def test_dry_run_without_the_flag_prints_exactly_the_old_lines(self):
+        rc, lines, err = self.dry("--only", "propimage_apps_b")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(lines), 2, lines)
+        self.assertTrue(lines[0].startswith("KF_PAYLOAD_TIER "), lines)
+        self.assertEqual(lines[1], "KF_PAYLOAD_PLAN stages=propimage_apps_b planned=" + lines[1].split("planned=")[1])
+        self.assertTrue(lines[1].split("planned=")[1].endswith(":propimage_apps_b"), lines)
+        self.assertFalse([x for x in lines if "PROPIMAGE_B" in x])
+
+    def test_dry_run_with_the_flag_adds_one_line_and_changes_no_other(self):
+        rc, base, err = self.dry("--only", "propimage_apps_b")
+        self.assertEqual(rc, 0, err)
+        for lane, stage_args, floor in (("gate", "--lane:gate", 150), ("all", "none", 240)):
+            rc, lines, err = self.dry("--only", "propimage_apps_b", "--propimage-b-lane", lane)
+            with self.subTest(lane):
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(lines, base[:-1] + ["KF_PAYLOAD_PROPIMAGE_B lane=%s stage_args=%s min_remaining_min=%d" % (lane, stage_args, floor)] + base[-1:])
+
+    def test_dry_run_refuses_the_flag_without_the_stage_by_name(self):
+        for argv in (("--propimage-b-lane", "gate"), ("--only", "propimage_apps", "--propimage-b-lane", "gate"), ("--only", "install_flow", "--propimage-b-lane", "all")):
+            rc, lines, err = self.dry(*argv)
+            with self.subTest(argv):
+                self.assertEqual(rc, 1, (lines, err))
+                self.assertIn("KF_PAYLOAD_PROPIMAGE_B_REFUSED LANE_NEEDS_ONLY_PROPIMAGE_APPS_B", lines)
+                self.assertEqual(lines[-1], "KF_PAYLOAD_FAIL suite=preflight")
+                self.assertFalse([x for x in lines if x.startswith("KF_PAYLOAD_PLAN")])
+
+    def test_an_unknown_lane_value_is_a_usage_error(self):
+        rc, lines, err = self.dry("--only", "propimage_apps_b", "--propimage-b-lane", "discovery")
+        self.assertEqual((rc, lines), (2, []))
+        self.assertIn("--propimage-b-lane", err)
+
 
     def test_manual_only_and_planned_only_with_only_in_large(self):
         self.assertFalse(vast_payload.PROPIMAGE_APPS_B_IN_LARGE)
