@@ -1,0 +1,120 @@
+#sessionInfo releaseName 0d18b347943e5e843529a05c95220e27fe30c538
+#sessionInfo releaseId 0x0d18b347
+#sessionInfo targetName "Vulkan Headless"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x10de
+#sessionInfo deviceID 0x2487
+#sessionInfo deviceName NVIDIA GeForce RTX 3060
+#sessionInfo commandLineParameters "--deqp-caselist-file=CASELIST --deqp-log-filename=LOG --deqp-archive-dir=DATA --deqp-log-images=disable --deqp-log-shader-sources=disable --deqp-log-decompiled-spirv=disable --deqp-shadercache=disable --deqp-crashhandler=enable"
+
+
+#beginTestCaseResult dEQP-VK.dgc.ext.compute.layout.complementary_push_index_dispatch_shader_objects_descriptor_heap
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.dgc.ext.compute.layout.complementary_push_index_dispatch_shader_objects_descriptor_heap" Version="0.3.4" CaseType="SelfValidate">
+ <Text>VK_EXT_descriptor_heap is not supported at vktTestCase.cpp:1395</Text>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">123</Number>
+ <Result StatusCode="NotSupported">VK_EXT_descriptor_heap is not supported at vktTestCase.cpp:1395</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+
+#beginTestCaseResult dEQP-VK.dgc.ext.compute.misc.execute_many_1024_compute_queue
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.dgc.ext.compute.misc.execute_many_1024_compute_queue" Version="0.3.4" CaseType="SelfValidate">
+ <Section Name="comp" Description="Program: comp">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <ComputeShader CompileStatus="OK">
+    <ShaderSource></ShaderSource>
+    <InfoLog></InfoLog>
+</ComputeShader>
+</ShaderProgram>
+  <Number Name="ComputeCompileTime" Description="Compute shader compile time" Tag="Time" Unit="ms">167.550995</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.007000</Number>
+</Section>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">224069</Number>
+ <Result StatusCode="Pass">Pass</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+
+#beginTestCaseResult dEQP-VK.info.device_extensions
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.info.device_extensions" Version="0.3.4" CaseType="SelfValidate">
+ <Section Name="Global" Description="Global Extensions">
+  <Text>0: VkExtensionProperties = {
+	extensionName = VK_KHR_16bit_storage
+	specVersion = 1
+}</Text>
+  <Text>1: VkExtensionProperties = {
+	extensionName = VK_KHR_8bit_storage
+	specVersion = 1
+}</Text>
+  <Text>2: VkExtensionProperties = {
+	extensionName = VK_KHR_acceleration_structure
+	specVersion = 13
+}</Text>
+  <Text>3: VkExtensionProperties = {
+	extensionName = VK_KHR_bind_memory2
+	specVersion = 1
+}</Text>
+  <Text>4: VkExtensionProperties = {
+	extensionName = VK_KHR_buffer_device_address
+	specVersion = 1
+}</Text>
+  <Text>5: VkExtensionProperties = {
+	extensionName = VK_KHR_calibrated_timestamps
+	specVersion = 1
+}</Text>
+  <Text>6: VkExtensionProperties = {
+	extensionName = VK_KHR_compute_shader_derivatives
+	specVersion = 1
+}</Text>
+  <Text>7: VkExtensionProperties = {
+	extensionName = VK_KHR_cooperative_matrix
+	specVersion = 2
+}</Text>
+  <Text>8: VkExtensionProperties = {
+	extensionName = VK_KHR_copy_commands2
+	specVersion = 1
+}</Text>
+  <Text>9: VkExtensionProperties = {
+	extensionName = VK_KHR_create_renderpass2
+	specVersion = 1
+}</Text>
+  <Text>10: VkExtensionProperties = {
+	extensionName = VK_KHR_dedicated_allocation
+	specVersion = 3
+}</Text>
+  <Text>11: VkExtensionProperties = {
+	extensionName = VK_KHR_deferred_host_operations
+	specVersion = 4
+}</Text>
+</Section>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">2014</Number>
+ <Result StatusCode="Pass">Pass</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+
+#beginTestCaseResult dEQP-VK.info.device_properties
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.info.device_properties" Version="0.3.4" CaseType="SelfValidate">
+ <Text>VkPhysicalDeviceProperties = {
+	apiVersion = 4211000
+	driverVersion = 2435301568
+	vendorID = 4318
+	deviceID = 9351
+	deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+	deviceName = NVIDIA GeForce RTX 3060
+	[... the rest of the properties dump is left out of this fixture]}</Text>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">211</Number>
+ <Result StatusCode="Pass">DeviceProperites query succeeded</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+#endSession

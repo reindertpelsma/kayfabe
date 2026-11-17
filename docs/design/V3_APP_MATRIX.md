@@ -20,6 +20,10 @@ on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failur
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
 
+## Discovery rows (2026-11-17)
+
+`run_apps.sh` has a second list for rows that report and never gate. The first is `vkcts`, the open Vulkan CTS subset (`deqp-vk`, a committed 291-case list, host-versus-guest per-case diff): [design](V3_VULKAN_CTS_ROW.md), [manual](../howto/vulkan-cts.md). It is in `list`, not in `listall` or `all`, and in no gate list.
+
 ## Reproducing the image (DESIGN-ONLY, 2026-11-07)
 
 **RESEARCH, 2026-11-08:** [chroot construction without KVM](V3_APPS_IMAGE_CHROOT_EVALUATION.md) is evaluated as an additional backend for independent release-box builds. It is not implemented or qualified; the working QEMU path and old bash paths remain available.

@@ -1,0 +1,19 @@
+#case	area	host	guest	category
+VKCTS_DIFF cases=291 candidates=0 same_ok=189 same_not_supported=102 both_fail=0 both_fail_different=0 guest_only_fail=0 guest_loses_support=0 guest_fail_host_ns=0 guest_gains_support=0 host_only_fail=0 host_fail_guest_not_supported=0 incomplete=0 host_digest=70d5ed8f0ca07431 guest_digest=70d5ed8f0ca07431
+VKCTS_EXT_DIFF host_only=- guest_only=-
+VKCTS_GPU side=host source=host verdict=PASS samples=215 busy_samples=26 peak_gpu_pct=16.0 mem_rise_mb=494 reasons=-
+VKCTS_GPU side=host source=host verdict=PASS samples=183 busy_samples=20 peak_gpu_pct=54.0 mem_rise_mb=494 reasons=-
+VKCTS_AREA info SAME_OK=2
+VKCTS_AREA rt_pipeline SAME_NOT_SUPPORTED=6 SAME_OK=22
+VKCTS_AREA accel_structure SAME_NOT_SUPPORTED=22 SAME_OK=22
+VKCTS_AREA ray_query SAME_NOT_SUPPORTED=2 SAME_OK=20
+VKCTS_AREA mesh_task SAME_NOT_SUPPORTED=3 SAME_OK=27
+VKCTS_AREA sparse SAME_NOT_SUPPORTED=13 SAME_OK=17
+VKCTS_AREA video_decode SAME_NOT_SUPPORTED=13 SAME_OK=3
+VKCTS_AREA video_encode SAME_NOT_SUPPORTED=11 SAME_OK=4
+VKCTS_AREA video_other SAME_NOT_SUPPORTED=5 SAME_OK=7
+VKCTS_AREA timeline SAME_OK=15
+VKCTS_AREA sync2 SAME_NOT_SUPPORTED=8 SAME_OK=10
+VKCTS_AREA descriptor_buffer SAME_OK=18
+VKCTS_AREA dgc SAME_NOT_SUPPORTED=5 SAME_OK=15
+VKCTS_AREA coop_matrix SAME_NOT_SUPPORTED=14 SAME_OK=7
