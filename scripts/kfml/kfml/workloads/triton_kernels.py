@@ -16,6 +16,19 @@ SPEC = Spec(
     needs_triton=True, needs_compiler=True, upstreams=(TRITON_TUTORIALS,),
     download_note="first run downloads several GB of torch/CUDA wheels (setup)")
 
+FP16_DOT_BELOW_CC = (8, 0)  # below this a Triton compile failure of the fp16 tl.dot is recorded and fp32 inputs are checked instead
+
+
+def fp16_dot_fallback(err, cc, is_fp16):
+    """The note to record when the fp16 matmul variant failed to COMPILE and fp32 inputs are to be checked instead; None when the error
+    must propagate (a different error, an fp32 failure, an unknown cc, or a die at or above FP16_DOT_BELOW_CC, where it is a real FAIL).
+    MEASURED 2026-11-17 (kfml_run_20261117_second_die): Triton 3.3.1 cannot compile a fp16 tl.dot for sm_75 (every config:
+    "PassManager::run failed", "Unsupported conversion from f16 to f16"); the same kernel compiles on sm_89 and fp32 inputs compile on sm_75."""
+    if not is_fp16 or cc is None or tuple(cc) >= FP16_DOT_BELOW_CC or "PassManager" not in str(err):
+        return None
+    return "failed on sm_%d%d: %s" % (cc[0], cc[1], str(err)[:80])
+
+
 ADD_SIZES = [1, 7, 1000, 98432, 2**20 + 3]
 SOFTMAX_SHAPES = [(1, 1), (7, 33), (130, 781), (1823, 1000), (257, 4097), (64, 8191)]
 LN_SHAPES = [(1, 5), (9, 33), (130, 781), (513, 1024), (257, 4093)]
@@ -91,13 +104,23 @@ def run(ctx):
     scale = ctx.vram_free_gb and ctx.vram_free_gb >= 16
     shapes = MATMUL_SHAPES + ([(4096, 4096, 2048)] if scale else [])
     t_mm = {}
+    mm_dtype = torch.float16
+    fp16_dot = "ok"
     for M, N, Kd in shapes:
-        a = rnd(M, Kd, dtype=torch.float16, scale=0.5)
-        b = rnd(Kd, N, dtype=torch.float16, scale=0.5)
-        c = torch.empty((M, N), dtype=torch.float32, device=dev)
-        grid = lambda meta: (triton.cdiv(M, meta["BLOCK_M"]) * triton.cdiv(N, meta["BLOCK_N"]),)  # noqa: E731
-        K.matmul_kernel[grid](a, b, c, M, N, Kd, a.stride(0), a.stride(1), b.stride(0), b.stride(1),
-                              c.stride(0), c.stride(1))
+        while True:
+            a = rnd(M, Kd, dtype=mm_dtype, scale=0.5)
+            b = rnd(Kd, N, dtype=mm_dtype, scale=0.5)
+            c = torch.empty((M, N), dtype=torch.float32, device=dev)
+            grid = lambda meta: (triton.cdiv(M, meta["BLOCK_M"]) * triton.cdiv(N, meta["BLOCK_N"]),)  # noqa: E731
+            try:
+                K.matmul_kernel[grid](a, b, c, M, N, Kd, a.stride(0), a.stride(1), b.stride(0), b.stride(1),
+                                      c.stride(0), c.stride(1))
+                break
+            except RuntimeError as e:
+                note = fp16_dot_fallback(e, ctx.cc, mm_dtype == torch.float16)
+                if note is None:
+                    raise
+                fp16_dot, mm_dtype = note, torch.float32
         ref = a.float() @ b.float()
         e = float((c - ref).abs().max() / (ref.abs().max() + 1e-6))
         mm_worst = max(mm_worst, e)
@@ -106,9 +129,11 @@ def run(ctx):
         t_mm["%dx%dx%d" % (M, N, Kd)] = dict(rel_err=e, best_config=str(K.matmul_kernel.best_config))
     metrics["matmul"] = t_mm
     metrics["matmul_worst_rel_err"] = mm_worst
+    metrics["matmul_input_dtype"] = str(mm_dtype)
+    metrics["fp16_dot_compile"] = fp16_dot
     # determinism: same inputs twice give the same bytes
-    a = rnd(300, 200, dtype=torch.float16, scale=0.5)
-    b = rnd(200, 100, dtype=torch.float16, scale=0.5)
+    a = rnd(300, 200, dtype=mm_dtype, scale=0.5)
+    b = rnd(200, 100, dtype=mm_dtype, scale=0.5)
     outs = []
     for _ in range(2):
         c = torch.empty((300, 100), dtype=torch.float32, device=dev)

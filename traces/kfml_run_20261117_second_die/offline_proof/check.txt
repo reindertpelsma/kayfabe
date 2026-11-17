@@ -1,0 +1,39 @@
+ok   python 3.10.12
+ok   NVIDIA GPU: NVIDIA GeForce RTX 2080 Ti, cc 7.5, 10.6 GB, driver 595.91.07
+flavor: cu128  (chose cu128 (driver CUDA 13.2 >= 12.8 and sm_75 is inside sm_75..sm_120))
+       driver 595.91.07 supports CUDA 13.2; GPU sm_75
+ok   VRAM >= 8 GB (documented floor)
+ok   torch 2.7.1+cu128 (cuda 12.8, cudnn 90701, triton 3.3.1)
+ok   torch >= 2.7
+ok   nvcc 12.8 (must equal torch cuda 12.8 major.minor) /root/venv_off/cuda_home/bin/nvcc
+ok   C compiler
+ok   Python.h (python3-dev)
+ok   disk free 64.1 GB (>= 20 recommended: CUDA wheels are several GB)
+ok   venv/KF_ML_HOME: /root/venv_off
+ok   venv lock sha256: 41eda0847699c9e91ef1a3c27b550be332a415e64ee2e54c968a6b16e5a5118a
+cache paths (delete the venv dir = full cleanup):
+       CUDA_CACHE_PATH=/root/venv_off/kfml-cache/nv-compute-cache
+       HF_HOME=/root/venv_off/kfml-cache/hf
+       HF_HUB_CACHE=/root/venv_off/kfml-cache/hf/hub
+       HOME=/root/venv_off/kfml-cache/home
+       KF_ML_DATA=/root/venv_off/kfml-cache/data
+       MPLCONFIGDIR=/root/venv_off/kfml-cache/mpl
+       PIP_CACHE_DIR=/root/venv_off/kfml-cache/pip
+       PYTHONPYCACHEPREFIX=/root/venv_off/kfml-cache/pycache
+       TEMP=/root/venv_off/kfml-cache/tmp
+       TMP=/root/venv_off/kfml-cache/tmp
+       TMPDIR=/root/venv_off/kfml-cache/tmp
+       TORCHINDUCTOR_CACHE_DIR=/root/venv_off/kfml-cache/inductor
+       TORCH_EXTENSIONS_DIR=/root/venv_off/kfml-cache/torch-ext
+       TORCH_HOME=/root/venv_off/kfml-cache/torch
+       TRITON_CACHE_DIR=/root/venv_off/kfml-cache/triton
+       UV_CACHE_DIR=/root/venv_off/kfml-cache/uv
+       XDG_CACHE_HOME=/root/venv_off/kfml-cache/xdg-cache
+       XDG_CONFIG_HOME=/root/venv_off/kfml-cache/xdg-config
+       XDG_DATA_HOME=/root/venv_off/kfml-cache/xdg-data
+test nanogpt_compile    OK
+test triton_kernels     OK
+test cuda_ext_inline    OK
+test amp_convnet_cifar  OK
+test stress_alloc       OK
+test managed_oversub    NOT_RUN: managed-memory paging not supported
