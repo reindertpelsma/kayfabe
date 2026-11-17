@@ -132,6 +132,23 @@ class PinsFile(unittest.TestCase):
         self.assertRegex(self.pins["PIN_GGUF_REV"], r"^[0-9a-f]{40}$")
 
 
+class BundleBuildFetchesNothingUnpinned(unittest.TestCase):
+    """FALSIFIER (written before the fix): the llama.cpp configure line of build_bundle.sh lets the pinned llama.cpp download its Web UI assets from a
+    Hugging Face bucket at build time. MEASURED 2026-11-17 on a Vast box (apps stage, rc 3 `apps_retry_media`): the `b1` asset answered an HTTP error, the
+    `latest` fallback did not match the asset list the pinned commit validates, and the configure step failed with `UI: current asset files`. The
+    stage builds llama-cli, llama-bench and llama-simple only; none needs the embedded UI, and an unpinned download is not an input we pinned."""
+
+    def test_llama_is_configured_without_the_prebuilt_ui_download(self):
+        text = (APPS / "build_bundle.sh").read_text().replace("\\\n", " ")
+        line = next(l for l in text.splitlines() if "cmake -B build -DGGML_CUDA=ON" in l)
+        self.assertIn("-DLLAMA_USE_PREBUILT_UI=OFF", line)
+
+    def test_the_other_cmake_flags_of_that_line_are_unchanged(self):
+        text = (APPS / "build_bundle.sh").read_text()
+        for flag in ("-DGGML_CUDA=ON", "-DCMAKE_CUDA_ARCHITECTURES=86", "-DLLAMA_CURL=OFF", "-DCMAKE_BUILD_TYPE=Release"):
+            self.assertIn(flag, text)
+
+
 class AgreesWithTheOpenImageRecipe(unittest.TestCase):
     """scripts/apps/image/recipe.json pins the same inputs for the open image; the two must not drift."""
 
