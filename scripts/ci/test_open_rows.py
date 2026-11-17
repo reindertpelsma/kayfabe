@@ -692,17 +692,35 @@ class NvmlDiff(unittest.TestCase):
         self.assertFalse(N.within(100, 170, "rel:0.3"))
 
 
-DISCOVERY = "1 GPU found.\n+--------+----------------------------------------------------------------------+\n| GPU ID | Device Information                                                   |\n"
-DMON_LIST = """Long Name                                   Short Name   Field ID
-GPU Temperature                             TMPTR        150
-SM Clock                                    SMCLK        100
-SM Utilization                              GPUTL        203
+DISCOVERY = """1 GPU found (Active).
++--------+----------------------------------------------------------------------+
+| GPU ID | Device Information                                                   |
++--------+----------------------------------------------------------------------+
+| 0      | Name: Fake Die FA4E                                                  |
+|        | PCI Bus ID: 00000000:01:00.0                                         |
+|        | Device UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001                |
++--------+----------------------------------------------------------------------+
+0 NvSwitches found.
 """
-DMON = """#Entity   ID   TMPTR   SMCLK   GPUTL
-GPU       0    41      210     N/A
-GPU       0    42      210     N/A
-GPU       1    99      9       9
+DMON_LIST = """________________________________________________________________________________
+Long Name                                                             Field ID
+________________________________________________________________________________
+driver_version                                                        1
+nvml_version                                                          2
+gpu_temp                                                              150
+gpu_utilization                                                       203
 """
+DMON = """#Entity         150            203
+ID              C
+GPU 0           41             N/A
+GPU 0           42             N/A
+GPU 1           99             9
+"""
+DMON_TEXT = """#Entity         1              2              52
+ID              #              #
+GPU 0           580.126.20     13.580.126.20  0
+"""
+DMON_REFUSED = "Error setting watches. Result: -36: Profiling is not supported for this group of GPUs or GPU\n"
 DIAG_V4 = json.dumps({"DCGM Diagnostic": {"test_categories": [
     {"category": "Deployment", "tests": [{"name": "software", "results": [{"gpu_id": "0", "status": "Pass"}]}]},
     {"category": "Hardware", "tests": [{"name": "memory", "results": [{"gpu_id": "0", "status": "Skip", "info": "not supported on this GPU"}]},
@@ -715,27 +733,40 @@ class DcgmParsers(unittest.TestCase):
     def test_discovery_and_lists(self):
         self.assertEqual(N.parse_dcgm_discovery(DISCOVERY), 1)
         self.assertIsNone(N.parse_dcgm_discovery("Error: unable to connect"))
-        self.assertEqual(N.parse_dcgm_dmon_list(DMON_LIST), [(150, "TMPTR", "GPU Temperature"), (100, "SMCLK", "SM Clock"), (203, "GPUTL", "SM Utilization")])
+        self.assertEqual(N.parse_dcgm_dmon_list(DMON_LIST), [(1, "driver_version"), (2, "nvml_version"), (150, "gpu_temp"), (203, "gpu_utilization")])
 
     def test_dmon_values_and_na(self):
-        series = N.parse_dcgm_dmon(DMON, ["TMPTR", "SMCLK", "GPUTL"])
-        self.assertEqual(series["TMPTR"], [41.0, 42.0])
-        self.assertEqual(series["GPUTL"], [None, None])
+        series = N.parse_dcgm_dmon(DMON, ["gpu_temp", "gpu_utilization"])
+        self.assertEqual(series["gpu_temp"], ["41", "42"])
+        self.assertEqual(series["gpu_utilization"], ["N/A", "N/A"])
         rows = N.dmon_rows(series)
-        self.assertIn("dcgm\tTMPTR\t-\tOK\t42", rows)
-        self.assertIn("dcgm\tGPUTL\t-\tNA\tN/A", rows)
+        self.assertIn("dcgm\tgpu_temp\t-\tOK\t42", rows)
+        self.assertIn("dcgm\tgpu_utilization\t-\tNA\tN/A", rows)
         self.assertEqual(N.dmon_rows({"X": []})[0], "dcgm\tX\t-\tNA\tno sample")
 
+    def test_a_text_field_is_kept_as_text(self):
+        rows = N.dmon_rows(N.parse_dcgm_dmon(DMON_TEXT, ["driver_version", "nvml_version", "nvml_index"]))
+        self.assertEqual(rows, ["dcgm\tdriver_version\t-\tOK\t580.126.20", "dcgm\tnvml_version\t-\tOK\t13.580.126.20", "dcgm\tnvml_index\t-\tOK\t0"])
+
     def test_dmon_blank_and_not_found_cells_are_none_not_zero(self):
-        text = "#Entity ID TMPTR SMCLK\nGPU 0 Blank 7\n"
-        self.assertEqual(N.parse_dcgm_dmon(text, ["TMPTR", "SMCLK"]), {"TMPTR": [None], "SMCLK": [7.0]})
+        text = "#Entity A B\nGPU 0 Blank 7\n"
+        rows = N.dmon_rows(N.parse_dcgm_dmon(text, ["A", "B"]))
+        self.assertEqual(rows, ["dcgm\tA\t-\tNA\tN/A", "dcgm\tB\t-\tOK\t7"])
 
     def test_a_dmon_field_with_only_na_cells_is_listed_na(self):
         rows = N.dmon_rows(N.parse_dcgm_dmon("GPU 0 N/A 5\nGPU 0 N/A 6\n", ["A", "B"]))
         self.assertEqual(rows, ["dcgm\tA\t-\tNA\tN/A", "dcgm\tB\t-\tOK\t6"])
 
+    def test_a_refused_watch_is_a_not_supported_row(self):
+        self.assertEqual(N.dmon_error(DMON_REFUSED), (-36, "Profiling is not supported for this group of GPUs or GPU"))
+        self.assertEqual(N.dmon_error_row("PROF_X", DMON_REFUSED), "dcgm\tPROF_X\t-\tNOT_SUPPORTED\t-36: Profiling is not supported for this group of GPUs or GPU")
+
+    def test_another_error_is_an_error_row_and_no_output_is_named(self):
+        self.assertEqual(N.dmon_error_row("A", "Error setting watches. Result: -7: Something else\n").split("\t")[3], "ERR_-7")
+        self.assertEqual(N.dmon_error_row("A", "").split("\t")[3], "ERR_NO_TABLE")
+
     def test_dmon_ignores_other_gpus(self):
-        self.assertEqual(N.parse_dcgm_dmon("GPU 1 99\nGPU 0 5\n", ["A"]), {"A": [5.0]})
+        self.assertEqual(N.parse_dcgm_dmon("GPU 1 99\nGPU 0 5\n", ["A"]), {"A": ["5"]})
 
     def test_diag_json_both_layouts(self):
         t4 = N.parse_diag_json(DIAG_V4)
@@ -997,6 +1028,7 @@ class SweepAgainstFakeLibrary(unittest.TestCase):
         self.assertEqual(self.parsed[("query", "processes.compute")]["value"], "count=2")
         self.assertEqual(self.parsed[("query", "static.cuda_cc")]["value"], "v0=8;v1=6")
         self.assertEqual(self.parsed[("query", "system.driver_version")]["value"], "580.126.20")
+        self.assertEqual(self.parsed[("query", "system.nvml_version")]["value"], "13.0.19.2")  # four numbers that look like an address stay
 
     def test_a_version_string_that_looks_like_an_address_is_kept(self):
         self.assertEqual(self.parsed[("query", "system.nvml_version")]["value"], "13.0.19.2")
@@ -1272,12 +1304,19 @@ if a[:2] == ["discovery", "-l"]:
 elif a == ["-v"]:
     print("dcgmi  version: 4.8.0")
 elif a[:2] == ["dmon", "-l"]:
-    print("Long Name                                   Short Name   Field ID")
-    print("GPU Temperature                             TMPTR        150")
-    print("SM Utilization                              GPUTL        203")
+    print("Long Name                                                             Field ID")
+    print("gpu_temp                                                              150")
+    print("gpu_utilization                                                       203")
+    if mode == "refused":
+        print("prof_sm_active                                                        1002")
 elif a[:1] == ["dmon"]:
-    print("#Entity   ID   TMPTR   GPUTL")
-    print("GPU       0    41      %s" % ("N/A" if mode == "na" else "12"))
+    ids = a[a.index("-e") + 1].split(",")
+    if "1002" in ids:
+        print("Error setting watches. Result: -36: Profiling is not supported for this group of GPUs or GPU")
+        sys.exit(1)
+    vals = {"150": "41", "203": "N/A" if mode == "na" else "12"}
+    print("#Entity         " + "  ".join(ids))
+    print("GPU 0           " + "  ".join(vals[i] for i in ids))
 elif a[:1] == ["diag"]:
     st = "Fail" if mode == "diagfail" else "Pass"
     print('{"DCGM Diagnostic": {"test_categories": [{"category": "Hardware", "tests": [{"name": "memory", "results": [{"gpu_id": "0", "status": "%s"}]}]}]}}' % st)
@@ -1320,7 +1359,21 @@ class DcgmRowEndToEnd(unittest.TestCase):
         self.assertIn("dcgm=RAN", line)
         self.assertIn("diag_pass=1", line)
         self.assertIn("dcgm_fields_ok=2/2", line)
+        self.assertIn("dcgm_fields_ok=2/2", line)
         self.assertEqual(set(rowio.extract(p.stdout)), {"nvml_sweep.tsv", "dcgm.tsv", "dcgm_status.txt", "summary.txt"})
+
+    def test_a_refused_field_gets_its_own_not_supported_row(self):
+        out = Path(self.tmp.name) / "o9"
+        self.run_row(out, self.bundle, mode="refused")
+        rows = N.parse_rows((out / "dcgm.tsv").read_text())
+        self.assertEqual(rows[("dcgm", "prof_sm_active")]["status"], "NOT_SUPPORTED")
+
+    def test_a_refused_field_does_not_hide_the_fields_beside_it(self):
+        out = Path(self.tmp.name) / "o10"
+        self.run_row(out, self.bundle, mode="refused")
+        rows = N.parse_rows((out / "dcgm.tsv").read_text())
+        self.assertEqual((rows[("dcgm", "gpu_temp")]["status"], rows[("dcgm", "gpu_temp")]["value"]), ("OK", "41"))
+        self.assertEqual(rows[("dcgm", "gpu_utilization")]["status"], "OK")
 
     def test_a_machine_without_dcgm_says_so_by_name(self):
         out = Path(self.tmp.name) / "o2"
@@ -1353,7 +1406,7 @@ class DcgmRowEndToEnd(unittest.TestCase):
         self.run_row(guest, self.bundle, mode="na")
         c = subprocess.run([sys.executable, str(OR / "compare_logs.py"), "nvml_dcgm", str(host), str(guest)], capture_output=True, text=True)
         self.assertEqual(c.returncode, 1)
-        self.assertRegex(c.stdout, r"DCGM_ROW FINDING_NA_IN_GUEST GPUTL")
+        self.assertRegex(c.stdout, r"DCGM_ROW FINDING_NA_IN_GUEST gpu_utilization")
 
     def test_a_diag_test_that_passes_on_the_host_and_fails_in_the_guest_fails_the_comparison(self):
         host, guest = Path(self.tmp.name) / "o7h", Path(self.tmp.name) / "o7g"
@@ -1386,7 +1439,7 @@ class StaticContracts(unittest.TestCase):
     def test_pins_env_names_a_commit_and_a_version_never_a_hash(self):
         keys = {l.split("=", 1)[0] for l in (OR / "pins.env").read_text().splitlines() if "=" in l and not l.startswith("#")}
         self.assertEqual(keys, {"OPENROWS_NVCH_URL", "OPENROWS_NVCH_TAG", "OPENROWS_NVCH_COMMIT", "OPENROWS_NVIDIA_REPO_BASE", "OPENROWS_NVIDIA_KEY_FILE",
-                                "OPENROWS_DCGM_VERSION", "OPENROWS_DCGM_PACKAGES"})
+                                "OPENROWS_DCGM_VERSION", "OPENROWS_DCGM_PACKAGE_STEMS"})
 
     def test_provision_never_trusts_an_unsigned_repository(self):
         text = (OR / "provision.sh").read_text()

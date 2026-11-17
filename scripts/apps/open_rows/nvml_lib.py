@@ -273,18 +273,22 @@ def parse_dcgm_discovery(text):
 
 
 def parse_dcgm_dmon_list(text):
-    """`dcgmi dmon -l`: -> [(field id, short tag, long name)]. Lines are `<long name>  <tag>  <id>` in columns."""
+    """`dcgmi dmon -l`: -> [(field id, name)]. Lines are `<name>   <id>` under a `Long Name  Field ID` header (DCGM 4.8, a native run)."""
     out = []
     for line in text.splitlines():
-        m = re.match(r"^\s*(.+?)\s{2,}([A-Za-z0-9_]+)\s{2,}(\d+)\s*$", line)
-        if m:
-            out.append((int(m[3]), m[2], m[1].strip()))
+        m = re.match(r"^\s*([A-Za-z][A-Za-z0-9_.]*)\s+(\d+)\s*$", line)
+        if m and m[1] != "Field":
+            out.append((int(m[2]), m[1]))
     return out
 
 
+DCGM_NA = {"n/a", "blank", "not", "found", "-", "[n/a]"}
+
+
 def parse_dcgm_dmon(text, tags):
-    """`dcgmi dmon -e ... -c N`: -> {tag: [values per sample]} for GPU 0. `tags` are the column tags in the order of -e. A `N/A` /
-    `Blank` / `Not Found` cell is None. Rows look like `GPU    0      35   1410 ...`; the header line starts with `#Entity`."""
+    """`dcgmi dmon -e ids -c N`: -> {tag: [raw cell per sample]} for GPU 0. `tags` name the columns in the order of -e. The header lines
+    (`#Entity 50 150 ...` and the units row `ID C W`) are skipped; a data row is `GPU 0 <one cell per field>`, an unavailable value
+    is printed `N/A`."""
     series = {t: [] for t in tags}
     for line in text.splitlines():
         m = re.match(r"^\s*GPU\s+(\d+)\s+(.*)$", line)
@@ -294,18 +298,32 @@ def parse_dcgm_dmon(text, tags):
         if len(cells) < len(tags):
             continue
         for t, c in zip(tags, cells):
-            series[t].append(number_of(c) if c.lower() not in ("n/a", "blank", "not", "found", "-") and number_of(c) is not None else None)
+            series[t].append(c)
     return series
+
+
+def dmon_error(text):
+    """The refusal `dcgmi dmon` prints when a watch cannot be set (a whole group fails with it): -> (code, message) or None."""
+    m = re.search(r"Error[^\n]*?Result:\s*(-?\d+):\s*([^\n]*)", text)
+    return (int(m[1]), m[2].strip()[:120]) if m else None
+
+
+def dmon_error_row(tag, text):
+    err = dmon_error(text)
+    if err is None:
+        return row_line("dcgm", tag, "-", "ERR_NO_TABLE", (text.strip().splitlines() or ["no output"])[-1][:100])
+    code, msg = err
+    return row_line("dcgm", tag, "-", "NOT_SUPPORTED" if "not supported" in msg.lower() else "ERR_%d" % code, "%d: %s" % (code, msg))
 
 
 def dmon_rows(series):
     rows = []
-    for tag, vals in series.items():
-        nums = [v for v in vals if v is not None]
-        if not vals:
+    for tag, cells in series.items():
+        real = [c for c in cells if c.lower() not in DCGM_NA]
+        if not cells:
             rows.append(row_line("dcgm", tag, "-", "NA", "no sample"))
-        elif nums:
-            rows.append(row_line("dcgm", tag, "-", "OK", "%g" % nums[-1]))
+        elif real:
+            rows.append(row_line("dcgm", tag, "-", "OK", real[-1]))
         else:
             rows.append(row_line("dcgm", tag, "-", "NA", "N/A"))
     return rows

@@ -256,7 +256,7 @@ class Runner:
             d.unlink()
         self.work.rmdir()
         counts, ok = L.summarize(rows)
-        use, why = census.gpu_use_verdict(census.peaks(samples), "enc")
+        use, why = census.gpu_use_verdict(census.peaks(samples), "enc") if counts["PASS"] else ("NA", "no case passed, so there was no work to prove")
         line = ("NVCODEC_MATRIX_SUMMARY pass=%d not_supported=%d fail=%d mismatch=%d not_run=%d cases=%d gpu_use=%s device=%s driver_api=%s "
                 "sessions_opened=%s" % (counts["PASS"], counts["NOT_SUPPORTED"], counts["FAIL"], counts["MISMATCH"], counts["NOT_RUN"],
                                          len(rows), use, header["device"].replace(" ", "_"), header["driver_api"], header["sessions_opened"]))

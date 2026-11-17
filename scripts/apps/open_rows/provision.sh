@@ -27,7 +27,8 @@ probe() {
 }
 ffmpeg_pkg() { command -v ffmpeg >/dev/null || apt_install ffmpeg || return 1; ffmpeg -version | head -n 1; }
 dcgm() {
-  local rel base keyring list
+  local rel base keyring list cuda
+  cuda=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: *\([0-9][0-9]*\)\..*/\1/p' | head -n 1); cuda=${cuda:-12}   # the flavour the driver wants
   rel=$(. /etc/os-release && echo "${ID}${VERSION_ID//./}"); base=$OPENROWS_NVIDIA_REPO_BASE/$rel/x86_64
   keyring=/usr/share/keyrings/kayfabe-nvidia-cuda.gpg; list=/etc/apt/sources.list.d/kayfabe-nvidia-cuda.list
   if ! grep -rqs "developer.download.nvidia.com/compute/cuda/repos/$rel" /etc/apt/sources.list /etc/apt/sources.list.d; then
@@ -42,7 +43,7 @@ dcgm() {
   [ "$(type -t apt-get)" != function ] || { echo "dcgm: apt_shim_cache_only (the box's apt-get holds no NVIDIA packages)"; return 1; }
   apt-get -o DPkg::Lock::Timeout=300 -o Acquire::Retries=3 update -qq || return 1
   # shellcheck disable=SC2046
-  apt-get -o DPkg::Lock::Timeout=300 -o Acquire::Retries=3 install -y -qq --no-install-recommends $(for p in $OPENROWS_DCGM_PACKAGES; do echo "$p=$OPENROWS_DCGM_VERSION"; done) || return 1
+  apt-get -o DPkg::Lock::Timeout=300 -o Acquire::Retries=3 install -y -qq --no-install-recommends $(for p in $OPENROWS_DCGM_PACKAGE_STEMS; do echo "$p$cuda=$OPENROWS_DCGM_VERSION"; done) || return 1
   local pkgs; pkgs=$(dpkg-query -W -f='${Package}\n' 'datacenter-gpu-manager-4*' dcgmi libdcgm nv-hostengine 2>/dev/null | sort -u)
   # the installed files, for a guest that cannot reach the network: the bundle carries them and the row unpacks them
   dpkg -L $pkgs | sort -u | while read -r f; do if [ -f "$f" ] || [ -L "$f" ]; then echo "${f#/}"; fi; done > "$ROOT/dcgm_files.txt"

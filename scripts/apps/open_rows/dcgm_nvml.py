@@ -34,7 +34,7 @@ import rowio  # noqa: E402
 
 CLASSES = HERE / "nvml_field_classes.tsv"
 EXPECTED = HERE / "nvml_expected_not_supported.tsv"
-DMON_BATCH = 8
+DMON_BATCH = 16
 
 
 def run(argv, timeout, env=None):
@@ -113,6 +113,23 @@ class Row:
             except subprocess.TimeoutExpired:
                 os.killpg(self.host_engine.pid, signal.SIGKILL)
 
+    def dmon_fields(self, dcgmi, fields, deadline):
+        """Every field of `dcgmi dmon -l`, in groups. One field the GPU cannot watch makes the whole group fail ("Profiling is not supported
+        for this group of GPUs", a native run), so a group with no table is split in halves until the refused field stands alone and gets its own
+        NOT_SUPPORTED row."""
+        if not fields:
+            return []
+        if time.time() > deadline:
+            return [N.row_line("dcgm", n, "-", "NA", "not run: dmon time box") for _, n in fields]
+        rc, text, _ = run([dcgmi, "dmon", "-e", ",".join(str(f) for f, _ in fields), "-c", "2", "-d", "300"], 60)
+        series = N.parse_dcgm_dmon(text, [n for _, n in fields])
+        if any(series.values()):
+            return N.dmon_rows(series)
+        if len(fields) == 1:
+            return [N.dmon_error_row(fields[0][1], text)]
+        mid = len(fields) // 2
+        return self.dmon_fields(dcgmi, fields[:mid], deadline) + self.dmon_fields(dcgmi, fields[mid:], deadline)
+
     def dcgm_part(self):
         self.ensure_dcgm_files()
         dcgmi = self.locate("dcgmi")
@@ -134,15 +151,7 @@ class Row:
         fields = N.parse_dcgm_dmon_list(text)
         deadline = time.time() + 900
         for i in range(0, len(fields), DMON_BATCH):
-            batch = fields[i:i + DMON_BATCH]
-            if time.time() > deadline:
-                self.dcgm_rows += [N.row_line("dcgm", t, "-", "NA", "not run: dmon time box") for _, t, _ in batch]
-                continue
-            rc, text, _ = run([dcgmi, "dmon", "-e", ",".join(str(f) for f, _, _ in batch), "-c", "3", "-d", "400"], 60)
-            if i == 0:
-                self.save_raw("dmon_first_batch.txt", text)
-            series = N.parse_dcgm_dmon(text, [t for _, t, _ in batch])
-            self.dcgm_rows += N.dmon_rows(series)
+            self.dcgm_rows += self.dmon_fields(dcgmi, fields[i:i + DMON_BATCH], deadline)
         level = self.a.diag_level
         for lvl in sorted({1, level}):
             rc, text, secs = run([dcgmi, "diag", "-r", str(lvl), "-j"], self.a.diag_timeout)
