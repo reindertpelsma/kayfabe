@@ -103,7 +103,7 @@ def main():
     weak = 0
     with tempfile.TemporaryDirectory(prefix="propimage-linux-mutants-") as tmp:
         tree = Path(tmp)
-        for rel in ("scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/linux/auth_stub_app.py"):
+        for rel in ("scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py", "scripts/bench/linux/auth_stub_app.py"):
             (tree / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / rel, tree / rel)
         (tree / "scripts/ci").mkdir(parents=True)
