@@ -44,6 +44,8 @@ def kind_of(name):
         return "series"
     if name == "final_mse":
         return "pair"
+    if name in ("kernel_output_gpuarray", "chunks_gpuarray", "train_env_gpu"):
+        return "gpuarray"
     return "cmp"
 
 
@@ -62,13 +64,16 @@ def item(name, **over):
     kind = kind_of(name)
     if kind == "cmp":
         it = {"name": name, "kind": "cmp", "dtype": dtype_of(name), "numel": 1000, "tol": 0, "gpu": [10.0, 5.0, 1.0, 2.0], "cpu": [10.0, 5.0, 1.0, 2.0],
-              "diff": 0.0, "ref": 10.0, "guest_pass": True}
+              "diff": 0.0, "ref": 10.0, "guest_pass": True, "on_gpu": True, "exists_on_gpu": True}
     elif kind == "resid":
         it = {"name": name, "kind": "resid", "value": 1e-13, "tol": 1e-10, "guest_pass": True}
     elif kind == "count":
         it = {"name": name, "kind": "count", "value": 0, "expected": 0, "guest_pass": True}
     elif kind == "atleast":
         it = {"name": name, "kind": "atleast", "value": 2, "min": 2, "guest_pass": True}
+    elif kind == "gpuarray":
+        it = {"name": name, "kind": "gpuarray", "on_gpu": True, "exists_on_gpu": True, "underlying": "single", "device_index": 1, "device_name": "NVIDIA GeForce RTX 4090",
+              "guest_pass": True}
     elif kind == "series":
         it = {"name": name, "kind": "series", "gpu": [1.0, 0.5, 0.2, 0.1], "cpu": [1.0, 0.5, 0.2, 0.1]}
     else:
@@ -85,7 +90,8 @@ HW = {"gpu_name": "NVIDIA GeForce RTX 4090", "compute_cap": 890, "memory_mib": 2
 
 
 def good(row):
-    doc = {"schema": M.SCHEMA_ROW, "row": row, "status": "done", "checks": [item(n) for n in M.ROWS[row][3]]}
+    doc = {"schema": M.SCHEMA_ROW, "row": row, "status": "done", "checks": [item(n) for n in M.ROWS[row][3]],
+           "gpu_device": {"name": "NVIDIA GeForce RTX 4090", "index": 1, "can_use_gpu": True}}
     if row == "gpu_info":
         doc["info"] = dict(INFO)
     if row == "mem_oversub":
@@ -132,17 +138,29 @@ class FakeProbe:
         return self.text, ""
 
 
-class FakeCensus:
-    """kf3_census with a canned QEMU log (the module is the real one; only the file reading is canned)."""
+def status_line(births, live=""):
+    return ("kf3: family=Ampere phase=Running trapped=1 chan[births=%d pt_births=0 acts=1/0refused nsi=[] served=1 parks=1 host_rings=0 contended=0 poisoned=0 "
+            "tokens=[%s]] unserviced=[]" % (births, live))
 
-    def __init__(self, lines=()):
-        self.lines, self.real = list(lines), M.census_mod()
+
+BASE_LINE = status_line(2)
+WORK_LINES = ["kf3: chan token 0x801 (host 0x1001d) RETIRED, forwarded=40 submissions=411 splits=0/0 serves=9 last_put=Some(1) gp_get=Some(1) dead=None",
+              status_line(8)]
+
+
+class FakeCensus:
+    """kf3_census with a canned QEMU log (the module is the real one; only the file reading is canned). The window holds GPU work and a baseline line
+    precedes it unless `work=False` (a window where nothing was submitted) or `base=False` (no status line before the window)."""
+
+    def __init__(self, lines=(), work=True, base=True):
+        self.lines, self.real = list(lines) + (WORK_LINES if work else [status_line(8)]), M.census_mod()
+        self.base_lines = [BASE_LINE] if base else ["kf3: booting"]
 
     def count_lines(self, path):
-        return 0
+        return 3
 
     def window(self, path, lo, hi):
-        return self.lines
+        return self.base_lines if hi is not None else self.lines
 
     def census(self, lines):
         return self.real.census(lines)
@@ -447,11 +465,26 @@ class JudgeTests(unittest.TestCase):
     OK = {"ok": True, "klass": None, "findings": [], "n_checks": 1, "failed": [], "flag_disagrees": 0, "facts": {}}
     USED = {"verdict": "PASS", "unreadable": False, "reasons": []}
 
-    def j(self, row="gpu_matmul", rc=0, timed_out=False, lost=False, parsed=True, verified=OK, gpu=USED, census=None, xid=None):
-        return M.judge(row, {"rc": rc, "timed_out": timed_out, "lost": lost}, {"x": 1} if parsed else None, verified, gpu, census or {}, xid)
+    WORK = {"verdict": "PASS", "why": "host census: +411 submission(s)"}
+
+    def j(self, row="gpu_matmul", rc=0, timed_out=False, lost=False, parsed=True, verified=OK, gpu=USED, census=None, xid=None, work=WORK):
+        return M.judge(row, {"rc": rc, "timed_out": timed_out, "lost": lost}, {"x": 1} if parsed else None, verified, gpu, census or {}, xid, work)
 
     def test_pass(self):
         self.assertEqual(self.j(), ("PASS", None, ""))
+
+    def test_the_host_census_saying_no_work_fails_a_row_whose_guest_numbers_and_engines_are_fine(self):
+        no_work = {"verdict": "FAIL", "why": "host census: no GPU work in the window"}
+        self.assertEqual(self.j(work=no_work)[:2], ("FAIL", "GPU_NOT_USED"))
+        self.assertEqual(self.j(work=no_work, gpu=None)[:2], ("FAIL", "GPU_NOT_USED"))       # the census is the authority even when the sampler is unreadable
+
+    def test_a_census_that_could_not_be_read_is_harness_never_a_pass(self):
+        for work in (None, {"verdict": "NOT_RUN", "why": "no status line"}):
+            self.assertEqual(self.j(work=work), ("HARNESS", None, "HOST_CENSUS_MISSING"))
+
+    def test_every_row_needs_the_census_even_the_preamble_and_the_memory_row(self):
+        for row in ("gpu_info", "mem_oversub"):
+            self.assertEqual(self.j(row=row, work=None, gpu={"verdict": "PASS", "unreadable": False, "reasons": []})[0], "HARNESS")
 
     def test_lost_guest_is_a_crash_before_anything_else(self):
         self.assertEqual(self.j(lost=True, parsed=False, verified=None)[:2], ("FAIL", "CRASH"))
@@ -612,9 +645,9 @@ class RunTests(unittest.TestCase):
 
             def window(self, path, lo, hi):
                 Boom.calls += 1
-                if Boom.calls == 2:
+                if Boom.calls == 3:         # per row: the window read, then the baseline read; the third read is gpu_fft's window
                     raise RuntimeError("census broke")
-                return []
+                return self.base_lines if hi is not None else self.lines
 
         ctx = make_ctx()
         ctx.census = Boom()
@@ -1126,6 +1159,126 @@ class EvidenceTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------- the MATLAB scripts themselves, read as text
+class GpuUseProofTests(unittest.TestCase):
+    """The owner requirement of 2026-11-17: a row never passes because MATLAB computed on the CPU. gpuDevice present, an operation on a gpuArray (recorded
+    before the gather), and the host's kf3 census window showing GPU work: each is a separate check with its own failure."""
+
+    def verify(self, row, doc, hw=HW):
+        return M.verify_doc(row, doc, hw)
+
+    def test_a_cpu_result_compared_with_the_cpu_result_agrees_numerically_and_still_fails(self):
+        doc = good("gpu_matmul")
+        for it in doc["checks"]:
+            it["on_gpu"] = False                     # kf_cmp.m saw a regular array: gather() of it is a no-op, so the numbers agree trivially
+        v = self.verify("gpu_matmul", doc)
+        self.assertEqual((v["ok"], v["klass"]), (False, "GPU_NOT_USED"))
+        self.assertTrue(any("not a gpuArray" in f for f in v["findings"]))
+
+    def test_a_script_that_does_not_record_on_gpu_fails_closed(self):
+        doc = good("gpu_fft")
+        for it in doc["checks"]:
+            del it["on_gpu"]
+            del it["exists_on_gpu"]
+        v = self.verify("gpu_fft", doc)
+        self.assertEqual(v["klass"], "GPU_NOT_USED")
+
+    def test_one_comparison_on_the_cpu_among_gpu_ones_is_enough_to_fail(self):
+        doc = set_check(good("gpu_solve"), "lstsq_single_2000x500", on_gpu=False)
+        self.assertEqual(self.verify("gpu_solve", doc)["klass"], "GPU_NOT_USED")
+
+    def test_a_gpuarray_proof_item_that_says_cpu_fails_for_the_three_rows_that_have_one(self):
+        for row, name in (("cuda_kernel", "kernel_output_gpuarray"), ("mem_oversub", "chunks_gpuarray"), ("dl_train", "train_env_gpu")):
+            doc = set_check(good(row), name, on_gpu=False)
+            self.assertEqual(self.verify(row, doc)["klass"], "GPU_NOT_USED", row)
+            doc = set_check(good(row), name, exists_on_gpu=False)
+            self.assertEqual(self.verify(row, doc)["klass"], "GPU_NOT_USED", row)
+            self.assertTrue(self.verify(row, good(row))["ok"], row)
+
+    def test_a_false_gpuarray_item_is_named_in_the_findings(self):
+        doc = set_check(good("cuda_kernel"), "kernel_output_gpuarray", on_gpu=False, exists_on_gpu=False)
+        self.assertIn("kernel_output_gpuarray: on_gpu=False exists_on_gpu=False", self.verify("cuda_kernel", doc)["findings"])
+
+    def test_a_document_of_counts_only_has_no_gpu_proof_and_says_so(self):
+        doc = good("gpu_info")
+        doc["checks"] = [item("content_mismatches")]
+        self.assertIn("NO_GPU_ARRAY_PROOF", self.verify("gpu_info", doc)["findings"])
+
+    def test_gpuarray_flags_must_be_booleans(self):
+        doc = set_check(good("cuda_kernel"), "kernel_output_gpuarray", on_gpu="true")
+        self.assertEqual(self.verify("cuda_kernel", doc)["klass"], "GPU_NOT_USED")
+
+    def test_no_gpu_proof_item_at_all_is_a_failure_even_when_every_check_passes(self):
+        doc = good("gpu_info")
+        doc["checks"] = [{k: v for k, v in c.items() if k not in ("on_gpu", "exists_on_gpu")} for c in doc["checks"]]
+        v = self.verify("gpu_info", doc)
+        self.assertIn("NO_GPU_ARRAY_PROOF", v["findings"])
+
+    def test_gpudevice_must_be_present_usable_and_the_hosts_gpu(self):
+        for bad in (None, {}, {"name": "", "index": 0, "can_use_gpu": False}, {"name": "NVIDIA GeForce RTX 4090", "index": 1, "can_use_gpu": False},
+                    {"name": "NVIDIA GeForce RTX 4090", "index": 0, "can_use_gpu": True}):
+            doc = good("gpu_matmul")
+            if bad is None:
+                del doc["gpu_device"]
+            else:
+                doc["gpu_device"] = bad
+            self.assertEqual(self.verify("gpu_matmul", doc)["klass"], "GPU_NOT_USED", bad)
+        doc = good("gpu_matmul")
+        doc["gpu_device"]["name"] = "NVIDIA GeForce RTX 3060"
+        self.assertTrue(any("GPU_DEVICE_NAME_DIFFERS" in f for f in self.verify("gpu_matmul", doc)["findings"]))
+        self.assertTrue(self.verify("gpu_matmul", doc, hw={})["ok"])        # no host name known: the block alone is checked
+
+    def test_the_scripts_write_a_device_block_and_the_host_requires_it(self):
+        self.assertIn("doc.gpu_device = struct(", (MATLAB_DIR / "kf_write.m").read_text())
+        doc = good("cuda_kernel")
+        del doc["gpu_device"]
+        self.assertIn("NO_GPU_DEVICE_BLOCK", self.verify("cuda_kernel", doc)["findings"])
+
+    def test_gpu_not_used_outranks_a_numeric_miss_for_a_foreign_device(self):
+        doc = set_check(good("gpu_fft"), "fft_single_65536", diff=9.0)
+        doc["gpu_device"]["name"] = "NVIDIA GeForce RTX 3060"
+        self.assertEqual(self.verify("gpu_fft", doc)["klass"], "GPU_NOT_USED")
+
+    def test_gpu_not_used_outranks_a_numeric_miss(self):
+        doc = set_check(good("gpu_matmul"), "matmul_single_256", on_gpu=False, diff=5.0)
+        self.assertEqual(self.verify("gpu_matmul", doc)["klass"], "GPU_NOT_USED")
+
+    def test_the_census_window_with_no_submissions_fails_the_row_end_to_end(self):
+        ctx = make_ctx()
+        ctx.census = FakeCensus(work=False)
+        r, _ = M.run_row(FakeSession(all_good()), "gpu_matmul", ctx)
+        self.assertEqual((r["verdict"], r["failure_class"]), ("FAIL", "GPU_NOT_USED"))
+        self.assertIn("no GPU work in the window", r["reason"])
+        self.assertEqual(r["census"]["work"]["verdict"], "FAIL")
+
+    def test_a_missing_baseline_line_is_a_harness_matter_not_a_pass_and_not_a_failure(self):
+        ctx = make_ctx()
+        ctx.census = FakeCensus(work=False, base=False)
+        r, _ = M.run_row(FakeSession(all_good()), "gpu_matmul", ctx)
+        self.assertEqual((r["verdict"], r["reason"]), ("HARNESS", "HOST_CENSUS_MISSING"))
+
+    def test_the_good_run_records_the_census_work(self):
+        out, ctx, _ = run(all_good())
+        r = by_row(out)["gpu_matmul"]
+        self.assertEqual((r["verdict"], r["census"]["work"]["verdict"]), ("PASS", "PASS"))
+        self.assertEqual(r["census"]["work"]["submissions"], 411)
+
+    def test_a_guest_claiming_gpu_work_cannot_beat_a_host_that_saw_none_for_any_row(self):
+        for row in M.ROW_ORDER:
+            ctx = make_ctx()
+            ctx.census = FakeCensus(work=False)
+            rec, _ = M.run_row(FakeSession(all_good()), row, ctx)
+            self.assertEqual((rec["verdict"], rec["failure_class"]), ("FAIL", "GPU_NOT_USED"), row)
+
+    def test_evidence_keeps_the_gpu_proof_fields_and_nothing_else_of_the_device_block(self):
+        doc = good("cuda_kernel")
+        doc["gpu_device"]["extra_secret"] = "x"
+        doc["gpu_device"]["path"] = "/home/u"
+        out = M.sanitize_result(doc)
+        self.assertEqual(set(out["gpu_device"]), {"name", "index", "can_use_gpu"})
+        kept = {c["name"]: c for c in out["checks"]}["kernel_output_gpuarray"]
+        self.assertTrue(kept["on_gpu"] and kept["exists_on_gpu"])
+
+
 class ScriptTests(unittest.TestCase):
     FORBIDDEN = (r"\blicen[sc]e\b", r"\bver\b", r"\bwhoami\b", r"\busername\b", r"\buserpath\b", r"\bprefdir\b", r"\bmatlabroot\b", r"\bdisp\s*\(", r"\bfprintf\s*\(",
                  r"\bdisplay\s*\(", r"\bsystem\s*\(", r"\bunix\s*\(", r"\bdos\s*\(", r"getenv\s*\(\s*['\"](USER|LOGNAME|USERNAME)", r"\bnet\.|\bweb(read|write|save)\b|\burlread\b|\bhttp",
@@ -1153,6 +1306,38 @@ class ScriptTests(unittest.TestCase):
             self.assertIn("kf_write(row, doc)", body)
             self.assertIn("kf_fail(row, ME)", body)
             self.assertIn("rethrow(ME)", body)
+
+    def test_kf_cmp_records_the_gpuarray_flags_before_it_gathers(self):
+        body = self.text("kf_cmp.m")
+        self.assertLess(body.index("isa(xg, 'gpuArray')"), body.index("gather(xg)"))
+        self.assertIn("existsOnGPU(xg)", body)
+        self.assertIn("c.on_gpu = on_gpu", body)
+
+    def test_the_writer_records_gpudevice_and_the_proof_helper_exists(self):
+        self.assertIn("gpuDevice()", self.text("kf_write.m"))
+        self.assertIn("canUseGPU", self.text("kf_write.m"))
+        body = self.text("kf_gpu.m")
+        self.assertIn("existsOnGPU", body)
+        self.assertIn("kf_gpu.m", M.SUPPORT_FILES)
+
+    def test_no_row_gathers_the_gpu_side_before_kf_cmp(self):
+        for row, spec in M.ROWS.items():
+            for line in self.text(spec[0]).splitlines():
+                code = line.split("%")[0]
+                if "kf_cmp(" in code:
+                    first_arg = code.split("kf_cmp(", 1)[1]
+                    self.assertNotIn("gather(", first_arg.split(",", 2)[1] if first_arg.count(",") >= 2 else "", "%s: %s" % (row, line.strip()))
+
+    def test_the_rows_that_need_a_proof_item_call_kf_gpu(self):
+        for row, name in (("cuda_kernel", "kernel_output_gpuarray"), ("mem_oversub", "chunks_gpuarray"), ("dl_train", "train_env_gpu")):
+            self.assertIn("kf_gpu('%s'" % name, self.text(M.ROWS[row][0]))
+            self.assertIn(name, M.ROWS[row][3])
+
+    def test_dl_train_trains_with_an_explicit_gpu_environment_never_auto(self):
+        body = self.text("dl_train.m")
+        self.assertIn("'ExecutionEnvironment', envs{e}", body)
+        self.assertIn("envs = {'gpu', 'cpu'}", body)
+        self.assertNotIn("'auto'", body)
 
     def test_the_error_writer_records_only_the_identifier(self):
         body = self.text("kf_fail.m")

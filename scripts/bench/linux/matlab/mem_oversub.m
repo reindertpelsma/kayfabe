@@ -22,9 +22,10 @@ try
         mism(i) = gather(sum(chunks{i} ~= uint32(i)));
     end
     checks = {};
+    checks{end+1} = kf_gpu('chunks_gpuarray', chunks{1});
     checks{end+1} = kf_count('content_mismatches', sum(mism), 0);
     for i = unique([1, ceil(nchunks / 2), nchunks])
-        s = gather(chunks{i}([1, nel / 2, nel]));
+        s = chunks{i}([1, nel / 2, nel]);
         checks{end+1} = kf_cmp(sprintf('sample_chunk_%d', i), s, uint32([i; i; i]), 0); %#ok<SAGROW>
     end
     clear chunks

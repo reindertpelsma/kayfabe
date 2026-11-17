@@ -29,9 +29,10 @@ try
     b = rand(m + 3000, 1, 'single');
     sentinel = -7 * ones(m + 3000, 1, 'single');
     og = feval(k, gpuArray(a), gpuArray(b), gpuArray(sentinel), int32(m));
+    checks{end+1} = kf_gpu('kernel_output_gpuarray', og);
     oh = gather(og);
     checks{end+1} = kf_count('no_write_past_n', sum(oh(m+1:end) ~= -7), 0);
-    checks{end+1} = kf_cmp('vecadd_first_n_of_guarded', oh(1:m), a(1:m) + b(1:m), 0);
+    checks{end+1} = kf_cmp('vecadd_first_n_of_guarded', og(1:m), a(1:m) + b(1:m), 0);
     doc = struct();
     doc.status = 'done';
     doc.checks = checks;

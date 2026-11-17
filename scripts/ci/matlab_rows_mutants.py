@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REL = "scripts/bench/linux/matlab_rows.py"
 SRC = (ROOT / REL).read_text()
 COPIES = ("scripts/bench/linux/propimage_linux.py", "scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py",
-          "scripts/bench/windows/gpu_assert.py", "scripts/bench/windows/kf3_census.py", "scripts/bench/linux/auth_stub_app.py")
+          "scripts/bench/windows/gpu_assert.py", "scripts/bench/windows/kf3_census.py", "scripts/bench/linux/auth_stub_app.py", "scripts/bench/gpu_use.py")
 
 
 def case(name, old, new, *tests, count=1):
@@ -104,6 +104,27 @@ CASES = [
          "test_fetch_reads_only_the_rows_own_json_and_bounds_it", "test_fetch_path_whitelist_is_the_rows_output_directory"),
     case("shell-metacharacters-allowed", 'BIN_RE = re.compile(r"[A-Za-z0-9_./-]{1,120}")', 'BIN_RE = re.compile(r".*")',
          "test_nothing_unquoted_reaches_the_shell", "test_matlab_binary_option_is_validated"),
+    # GPU use (owner requirement of 2026-11-17): gpuDevice present, a gpuArray operation, the host census window
+    case("census-no-work-ignored", '    if census_verdict == "FAIL":\n        return "FAIL", "GPU_NOT_USED",', '    if False:\n        return "FAIL", "GPU_NOT_USED",',
+         "test_the_host_census_saying_no_work_fails_a_row_whose_guest_numbers_and_engines_are_fine", "test_the_census_window_with_no_submissions_fails_the_row_end_to_end"),
+    case("census-missing-passes", '    if census_verdict != "PASS":\n        return "HARNESS", None, "HOST_CENSUS_MISSING"', '    if False:\n        return "HARNESS", None, "HOST_CENSUS_MISSING"',
+         "test_a_census_that_could_not_be_read_is_harness_never_a_pass", "test_a_missing_baseline_line_is_a_harness_matter_not_a_pass_and_not_a_failure"),
+    case("census-window-not-passed-to-the-judge", "verified, gpu, census, xid, work)", "verified, gpu, census, xid, None)",
+         "test_the_census_window_with_no_submissions_fails_the_row_end_to_end", "test_the_good_run_records_the_census_work"),
+    case("baseline-line-not-read", "if qlog and edge0 else None\n    work = assess_work", "if False else None\n    work = assess_work",
+         "test_the_census_window_with_no_submissions_fails_the_row_end_to_end", "test_a_guest_claiming_gpu_work_cannot_beat_a_host_that_saw_none_for_any_row"),
+    case("on-gpu-flag-not-required", '        if raw["kind"] == "cmp" and not on_gpu:\n', '        if False:\n',
+         "test_a_cpu_result_compared_with_the_cpu_result_agrees_numerically_and_still_fails", "test_one_comparison_on_the_cpu_among_gpu_ones_is_enough_to_fail"),
+    case("gpuarray-item-always-ok", '    return on and exists, "on_gpu=%s exists_on_gpu=%s" % (on, exists)', '    return True, "on_gpu=%s exists_on_gpu=%s" % (on, exists)',
+         "test_a_gpuarray_proof_item_that_says_cpu_fails_for_the_three_rows_that_have_one", "test_a_false_gpuarray_item_is_named_in_the_findings"),
+    case("no-proof-item-needed", '    if not any(i.get("gpu_proof") for i in items):\n', '    if False:\n',
+         "test_no_gpu_proof_item_at_all_is_a_failure_even_when_every_check_passes", "test_a_document_of_counts_only_has_no_gpu_proof_and_says_so"),
+    case("gpu-device-block-ignored", "    found += verify_gpu_device(doc, hw)\n", "",
+         "test_gpudevice_must_be_present_usable_and_the_hosts_gpu", "test_the_scripts_write_a_device_block_and_the_host_requires_it"),
+    case("device-name-not-compared", '    if hw and hw.get("gpu_name") and _norm_gpu_name(hw["gpu_name"]) != _norm_gpu_name(name):\n        return [("GPU_NOT_USED"', '    if False:\n        return [("GPU_NOT_USED"',
+         "test_gpudevice_must_be_present_usable_and_the_hosts_gpu", "test_gpu_not_used_outranks_a_numeric_miss_for_a_foreign_device"),
+    case("numeric-miss-outranks-gpu-not-used", 'else "GPU_NOT_USED" if any(k == "GPU_NOT_USED" for k, _ in found)\n             else ("OUTPUT_MISMATCH" if found else None))', 'else ("OUTPUT_MISMATCH" if found else None))',
+         "test_gpu_not_used_outranks_a_numeric_miss", "test_a_cpu_result_compared_with_the_cpu_result_agrees_numerically_and_still_fails"),
 ]
 
 

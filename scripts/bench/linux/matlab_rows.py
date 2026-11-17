@@ -21,7 +21,10 @@ or licence data (a test scans them), and this module never reads or prints any.
 Verdict classes (per row): PASS; FAIL with a class (CRASH, HANG, XID, TDR, ASSERT, OUTPUT_MISMATCH, GPU_NOT_USED, BAD_RESULT); HARNESS (the run could not be
 judged: transport, driver build, host counters missing, identity mismatch: never an application failure); NOT_RUN with a named reason (IMAGE_MISSING,
 NO_GPU, GUEST_NO_DRIVER, GPU_UNSUPPORTED, DRIVER_MISSING, INJECT_UNAVAILABLE, GPU_INFO_FAILED, TIME, HOST_MEMORY_LOW...). GPU use is asserted from
-HOST-side `nvidia-smi` counters (scripts/bench/windows/gpu_assert.py: HostProbe and evaluate, the record format of the Windows rows), never from the guest.
+the HOST: the kf3 device's own log window of the row (scripts/bench/gpu_use.py: channels born and GPFIFO entries submitted while the row ran) is the authority, the
+HOST-side `nvidia-smi` counters (scripts/bench/windows/gpu_assert.py: HostProbe and evaluate, the record format of the Windows rows) the second observable.
+The guest's own proof (gpuDevice present, every GPU-side value a gpuArray before it is gathered) can only ADD a failure (GPU_NOT_USED): it never overrides a host
+"no work". A row whose host observables cannot be read is HARNESS, never PASS.
 Every row is in the discovery lane unless told otherwise (`--lane ROW=gate`): a discovery failure is a listed breakage and never fails the run by itself;
 a gate failure always fails it; strict policy (the Worker) additionally fails on any NOT_RUN. Timing is never a pass criterion.
 """
@@ -110,6 +113,10 @@ def gpu_assert():
     return _mod("gpu_assert", WINDOWS / "gpu_assert.py")
 
 
+def gpu_use():
+    return _mod("gpu_use", HERE.parent / "gpu_use.py")
+
+
 def census_mod():
     return _mod("census", WINDOWS / "kf3_census.py")
 
@@ -151,16 +158,16 @@ ROWS = {
     "gpu_matmul": ("gpu_matmul.m", 900, ("gpu", "mem"), tuple(_names_matmul())),
     "gpu_fft": ("gpu_fft.m", 900, ("gpu", "mem"), tuple(_names_fft())),
     "gpu_solve": ("gpu_solve.m", 1200, ("gpu", "mem"), tuple(_names_solve())),
-    "dl_train": ("dl_train.m", 1800, ("gpu", "mem"), ("train_loss_curve", "final_mse")),
+    "dl_train": ("dl_train.m", 1800, ("gpu", "mem"), ("train_env_gpu", "train_loss_curve", "final_mse")),
     "parpool_gpu": ("parpool_gpu.m", 1200, ("gpu", "mem"), ("num_workers", "distinct_pids", "workers_with_a_device", "worker_task_1", "worker_task_2",
                                                               "worker_task_3", "worker_task_4")),
     "cuda_kernel": ("cuda_kernel.m", 900, ("gpu",), ("vecadd_1000", "vecadd_1048573", "vecadd_10000000", "vecadd_after_40000_launches", "no_write_past_n",
-                                                    "vecadd_first_n_of_guarded")),
-    "mem_oversub": ("mem_oversub.m", 900, ("mem",), ("content_mismatches", "sample_chunk_1")),
+                                                    "vecadd_first_n_of_guarded", "kernel_output_gpuarray")),
+    "mem_oversub": ("mem_oversub.m", 900, ("mem",), ("chunks_gpuarray", "content_mismatches", "sample_chunk_1")),
 }
 PREAMBLE = "gpu_info"
 ROW_ORDER = tuple(ROWS)
-SUPPORT_FILES = ("kf_atleast.m", "kf_cmp.m", "kf_count.m", "kf_fail.m", "kf_fp.m", "kf_outdir.m", "kf_resid.m", "kf_tol.m", "kf_worker_task.m",
+SUPPORT_FILES = ("kf_atleast.m", "kf_cmp.m", "kf_count.m", "kf_fail.m", "kf_fp.m", "kf_gpu.m", "kf_outdir.m", "kf_resid.m", "kf_tol.m", "kf_worker_task.m",
                  "kf_write.m", "vecadd.ptx")
 
 
@@ -329,7 +336,16 @@ def check_pair(item):
     return abs(g - c) <= PAIR_ABS + PAIR_REL * max(abs(c), abs(g)), "gpu=%.4g cpu=%.4g" % (g, c)
 
 
-KINDS = {"cmp": check_cmp, "resid": check_resid, "count": check_count, "atleast": host_atleast, "series": check_series, "pair": check_pair}
+def check_gpuarray(item):
+    """The operation-on-a-gpuArray proof (kf_gpu.m): the value lived on the device before it was gathered. A guest flag: it can only add a failure."""
+    on, exists = item.get("on_gpu"), item.get("exists_on_gpu")
+    if not isinstance(on, bool) or not isinstance(exists, bool):
+        return False, "malformed gpuarray"
+    return on and exists, "on_gpu=%s exists_on_gpu=%s" % (on, exists)
+
+
+KINDS = {"cmp": check_cmp, "resid": check_resid, "count": check_count, "atleast": host_atleast, "series": check_series, "pair": check_pair,
+         "gpuarray": check_gpuarray}
 
 
 def verify_checks(row, doc):
@@ -349,10 +365,16 @@ def verify_checks(row, doc):
             continue
         ok, why = fn(raw)
         flag = raw.get("guest_pass")
-        items.append({"name": name, "kind": raw["kind"], "ok": bool(ok), "why": clean(why, 80),
+        # a GPU-versus-CPU comparison must have been made on a gpuArray (kf_cmp.m records it BEFORE the gather); a gpuarray item is that proof by itself
+        on_gpu = raw["kind"] == "gpuarray" and bool(ok) or (raw["kind"] == "cmp" and raw.get("on_gpu") is True and raw.get("exists_on_gpu") is True)
+        items.append({"name": name, "kind": raw["kind"], "ok": bool(ok), "why": clean(why, 80), "gpu_proof": on_gpu,
                       "flag_disagrees": isinstance(flag, bool) and flag != bool(ok) if raw["kind"] != "series" and raw["kind"] != "pair" else False})
-        if not ok:
+        if raw["kind"] == "gpuarray" and not ok:
+            findings.append(("GPU_NOT_USED", "%s: %s" % (name, clean(why, 80))))
+        elif not ok:
             findings.append(("OUTPUT_MISMATCH", "%s: %s" % (name, clean(why, 80))))
+        if raw["kind"] == "cmp" and not on_gpu:
+            findings.append(("GPU_NOT_USED", "%s: the GPU side of the comparison was not a gpuArray on the device" % name))
     for name in ROWS[row][3]:
         if name not in seen:
             findings.append(("BAD_RESULT", "MISSING_CHECK:" + name))
@@ -415,6 +437,19 @@ def verify_mem(doc):
     return out
 
 
+def verify_gpu_device(doc, hw):
+    """gpuDevice present: the device block kf_write.m adds to every result (the device MATLAB reports, canUseGPU), and the same device as the host's GPU."""
+    dev = doc.get("gpu_device")
+    if not isinstance(dev, dict):
+        return [("GPU_NOT_USED", "NO_GPU_DEVICE_BLOCK")]
+    name, idx = dev.get("name"), num(dev.get("index"))
+    if not (isinstance(name, str) and name and idx is not None and idx >= 1 and dev.get("can_use_gpu") is True):
+        return [("GPU_NOT_USED", "NO_GPU_DEVICE")]
+    if hw and hw.get("gpu_name") and _norm_gpu_name(hw["gpu_name"]) != _norm_gpu_name(name):
+        return [("GPU_NOT_USED", "GPU_DEVICE_NAME_DIFFERS host=%s guest=%s" % (clean(hw["gpu_name"], 40), clean(name, 40)))]
+    return []
+
+
 def verify_doc(row, doc, hw=None):
     """One row's result document -> {ok, klass, findings (at most 8), n_checks, failed, flag_disagrees, facts}. klass: None, ASSERT (the script threw),
     BAD_RESULT (unusable) or OUTPUT_MISMATCH (a recomputed number missed). An error document is an ASSERT with the error id only."""
@@ -423,6 +458,9 @@ def verify_doc(row, doc, hw=None):
         return {"ok": False, "klass": "ASSERT", "findings": ["ERROR_ID:" + (clean(eid, 80) if isinstance(eid, str) and re.fullmatch(r"[A-Za-z0-9:_.]{0,80}", eid) else "?")],
                 "n_checks": 0, "failed": [], "flag_disagrees": 0, "facts": {}}
     items, found = verify_checks(row, doc)
+    found += verify_gpu_device(doc, hw)
+    if not any(i.get("gpu_proof") for i in items):
+        found.append(("GPU_NOT_USED", "NO_GPU_ARRAY_PROOF"))
     facts = {}
     if row == "gpu_info":
         extra, facts = verify_gpu_info(doc, hw)
@@ -433,7 +471,8 @@ def verify_doc(row, doc, hw=None):
         ep = num(doc.get("epochs"))
         if ep is None or ep < 3:
             found.append(("BAD_RESULT", "BAD_EPOCHS"))
-    klass = "BAD_RESULT" if any(k == "BAD_RESULT" for k, _ in found) else ("OUTPUT_MISMATCH" if found else None)
+    klass = ("BAD_RESULT" if any(k == "BAD_RESULT" for k, _ in found) else "GPU_NOT_USED" if any(k == "GPU_NOT_USED" for k, _ in found)
+             else ("OUTPUT_MISMATCH" if found else None))
     return {"ok": not found, "klass": klass, "findings": [clean(t, 100) for _, t in found][:8], "n_checks": len(items),
             "failed": [i["name"] for i in items if not i["ok"]][:8], "flag_disagrees": sum(1 for i in items if i["flag_disagrees"]), "facts": facts}
 
@@ -453,7 +492,15 @@ def assess_gpu_use(row, query_text, dmon_text, **thresholds):
 
 
 # ---------------------------------------------------------------- the verdict of one row
-def judge(row, execution, parsed, verified, gpu, census, host_xid):
+def assess_work(window, base_line):
+    """The host census of the row's window (gpu_use.window_census) and its verdict. `base_line`: the last kf3 status line before the window, or None."""
+    gu = gpu_use()
+    work = gu.window_census(window, base_line)
+    work["verdict"], work["why"] = gu.judge_census(work)
+    return work
+
+
+def judge(row, execution, parsed, verified, gpu, census, host_xid, work=None):
     """-> (verdict, failure_class, reason). The order is the point: a guest that is gone or hung is judged before its numbers, host Xids before a
     PASS, the numbers before the GPU-use assertion, and a GPU counter that could not be read is HARNESS (the row could not be judged).
     execution {rc, timed_out, lost}; parsed: the document or None; verified: verify_doc's dict or None; gpu: assess_gpu_use record or None."""
@@ -471,11 +518,17 @@ def judge(row, execution, parsed, verified, gpu, census, host_xid):
         return "FAIL", verified["klass"], (verified["findings"] or ["?"])[0]
     if execution.get("rc") not in (0, None):
         return "FAIL", "ASSERT", "MATLAB_EXIT:%s" % execution["rc"]
+    # the host-authored GPU-use assertion: the kf3 census window first (the authority: the guest never submitted work to the GPU), then the host's engines
+    census_verdict = (work or {}).get("verdict", "NOT_RUN")
+    if census_verdict == "FAIL":
+        return "FAIL", "GPU_NOT_USED", clean((work or {}).get("why", "no GPU work in the window"), 120)
     if row_require(row):
         if gpu is None or gpu.get("unreadable"):
             return "HARNESS", None, "HOST_COUNTERS_MISSING"
         if gpu["verdict"] != "PASS":
             return "FAIL", "GPU_NOT_USED", clean((gpu.get("reasons") or ["?"])[0], 100)
+    if census_verdict != "PASS":
+        return "HARNESS", None, "HOST_CENSUS_MISSING"
     return "PASS", None, ""
 
 
@@ -550,6 +603,8 @@ def run_row(sess, row, ctx):
     texts = probe.stop() if started_probe else None
     window = ctx.census.window(qlog, edge0 + 1, None) if qlog else []
     census = ctx.census.census(window)
+    base_line = gpu_use().last_status_line(ctx.census.window(qlog, 1, edge0)) if qlog and edge0 else None
+    work = assess_work(window, base_line)
     xid = ctx.xid_since(xid0)
     parsed, verified, raw = None, None, None
     if not execution["lost"]:
@@ -566,7 +621,7 @@ def run_row(sess, row, ctx):
             verified = {"ok": False, "klass": "BAD_RESULT", "findings": [exc.reason], "n_checks": 0, "failed": [], "flag_disagrees": 0, "facts": {}}
             parsed = None
     gpu = assess_gpu_use(row, texts[0], texts[1]) if texts is not None else None
-    verdict, klass, reason = judge(row, execution, parsed, verified, gpu, census, xid)
+    verdict, klass, reason = judge(row, execution, parsed, verified, gpu, census, xid, work)
     rec.update(verdict=verdict, failure_class=klass, reason=clean(reason, 120), rc=execution["rc"], secs=execution["secs"], host_xid=xid)
     if verified:
         rec["checks"] = {"n": verified["n_checks"], "failed": verified["failed"], "flag_disagrees": verified["flag_disagrees"]}
@@ -575,7 +630,8 @@ def run_row(sess, row, ctx):
     if gpu:
         rec["gpu"] = {"required": list(gpu.get("required", [])), "verdict": gpu.get("verdict"), "samples": gpu.get("samples"), "peak": {k: v for k, v in (gpu.get("peak") or {}).items() if num(v) is not None or v is None},
                       "baseline": gpu.get("baseline"), "reasons": [clean(x, 100) for x in (gpu.get("reasons") or [])][:4], "source": "host"}
-    rec["census"] = {"lines": census.get("lines", 0), "counts": census.get("counts", {}), "xid": census.get("xid", 0)}
+    rec["census"] = {"lines": census.get("lines", 0), "counts": census.get("counts", {}), "xid": census.get("xid", 0),
+                     "work": {k: work.get(k) for k in ("verdict", "status_lines", "base_missing", "births", "submissions", "doorbells", "retired")}}
     if ctx.evidence_dir:
         write_evidence(Path(ctx.evidence_dir) / row, rec, parsed, texts)
     return rec, execution
@@ -584,7 +640,8 @@ def run_row(sess, row, ctx):
 KEEP_INFO = ("name", "compute_capability", "driver_version", "toolkit_version", "total_memory", "available_memory", "multiprocessors", "device_count", "matlab_release",
              "can_use_gpu")
 KEEP_MEMORY = ("total", "avail_start", "avail_after_alloc", "avail_end", "chunk_bytes", "chunks", "allocated_bytes")
-KEEP_ITEM = ("name", "kind", "dtype", "numel", "tol", "gpu", "cpu", "diff", "ref", "value", "expected", "min", "guest_pass")
+KEEP_ITEM = ("name", "kind", "dtype", "numel", "tol", "gpu", "cpu", "diff", "ref", "value", "expected", "min", "guest_pass", "on_gpu", "exists_on_gpu", "underlying",
+             "device_index", "device_name", "env_requested")
 
 
 def _plain(v):
@@ -604,6 +661,8 @@ def sanitize_result(doc):
     """The part of a USABLE result worth keeping as evidence, rebuilt from a whitelist of keys: the guest may have added anything, and none of it is kept."""
     out = {"schema": SCHEMA_ROW, "row": doc.get("row"), "status": doc.get("status"),
            "checks": [{k: _plain(c.get(k)) for k in KEEP_ITEM if k in c} for c in doc.get("checks", [])[:MAX_CHECKS]]}
+    if isinstance(doc.get("gpu_device"), dict):
+        out["gpu_device"] = {k: _plain(v) for k, v in doc["gpu_device"].items() if k in ("name", "index", "can_use_gpu") and not isinstance(v, (dict, list))}
     for key, keep in (("info", KEEP_INFO), ("memory", KEEP_MEMORY)):
         if isinstance(doc.get(key), dict):
             out[key] = {k: _plain(v) for k, v in doc[key].items() if k in keep and not isinstance(v, (dict, list))}
