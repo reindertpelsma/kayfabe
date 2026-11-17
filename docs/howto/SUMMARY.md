@@ -13,6 +13,7 @@
 - [Attach to a VM you already have](attach-to-existing-vm.md)
 - [Linux guest](linux-guest.md)
 - [Rebuild the Linux apps image](linux-apps-image.md)
+- [Run the Vulkan conformance subset](vulkan-cts.md)
 - [Windows guest](windows-guest.md)
 - [Proprietary test images](proprietary-test-images.md)
 - [Recreate the proprietary Windows image](recreate-the-proprietary-image.md)

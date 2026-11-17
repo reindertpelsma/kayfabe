@@ -1,0 +1,6 @@
+VKCTS_SUMMARY side=host cases=291 pass=189 warn=0 not_supported=102 fail=0 crash=0 timeout=0 not_run=0 device=NVIDIA_GeForce_RTX_3060 type=DISCRETE_GPU gpu_use=PASS
+VKCTS_DEVICE side=host name=NVIDIA_GeForce_RTX_3060 type=DISCRETE_GPU vendor=4318 api=4211000 driver=2435301568 extensions=250
+VKCTS_RUN side=host secs=103 caselist_sha256=a6e3d642a1e5b2fe notes=batches=8
+VKCTS_GPU side=host source=host verdict=PASS samples=215 busy_samples=26 peak_gpu_pct=16.0 mem_rise_mb=494 reasons=-
+DIGEST vkcts_cases 70d5ed8f0ca07431
+APPNOTE ok cases=291 pass=189 warn=0 ns=102 fail=0 crash=0 timeout=0 notrun=0 gpu=PASS

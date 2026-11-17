@@ -566,6 +566,48 @@ class QpaTests(unittest.TestCase):
         self.assertIsNone(L.totals_agree(res, None))
 
 
+class RealOutputTests(unittest.TestCase):
+    """The QPA log and the console of a real deqp-vk (vulkan-cts-1.4.7.1, RTX 3060, driver 580.159.03, 2026-11-17, traces/vkcts_host_20261117/),
+    cut down: two dgc cases in full, 12 of 250 extensions and the head of the properties dump of the info cases. No GPU, no UUID."""
+
+    QPA = (ROOT / "scripts/ci/fixtures/vkcts_real_qpa.txt").read_text()
+    CONSOLE = (ROOT / "scripts/ci/fixtures/vkcts_real_console.txt").read_text()
+    INFO = {"dEQP-VK.info.device_properties", "dEQP-VK.info.device_extensions"}
+
+    def test_the_real_log_parses_to_the_real_statuses(self):
+        res, open_case = L.parse_qpa(self.QPA.splitlines(True), keep_bodies=self.INFO)
+        self.assertIsNone(open_case)
+        got = {r.case: (r.status, r.complete) for r in res}
+        self.assertEqual(got["dEQP-VK.dgc.ext.compute.layout.complementary_push_index_dispatch_shader_objects_descriptor_heap"], ("NotSupported", True))
+        self.assertEqual(got["dEQP-VK.dgc.ext.compute.misc.execute_many_1024_compute_queue"], ("Pass", True))
+        self.assertEqual(len(res), 4)
+        self.assertIn("VK_EXT_descriptor_heap is not supported", res[0].detail)
+
+    def test_the_real_device_properties_and_extensions_give_the_device_identity(self):
+        res, _ = L.parse_qpa(self.QPA.splitlines(True), keep_bodies=self.INFO)
+        body = {r.case: r.body for r in res}
+        info = L.device_info(body["dEQP-VK.info.device_properties"], body["dEQP-VK.info.device_extensions"])
+        self.assertEqual((info["name"], info["type"], info["vendor"], info["api"]), ("NVIDIA GeForce RTX 3060", "DISCRETE_GPU", "4318", "4211000"))
+        self.assertEqual(len(info["extensions"]), 12)
+        self.assertIn("VK_KHR_acceleration_structure", info["extensions"])
+        self.assertTrue(L.device_is_gpu(info))
+
+    def test_the_real_console_totals_agree_with_the_real_log(self):
+        res, _ = L.parse_qpa(self.QPA.splitlines(True))
+        totals = L.parse_totals(self.CONSOLE)
+        self.assertEqual((totals["passed"], totals["not_supported"], totals["executed"]), (3, 1, 4))
+        self.assertTrue(L.totals_agree(res, totals))
+        self.assertFalse(L.totals_agree(res[:3], totals))
+
+    def test_cases_run_in_the_trees_order_not_the_case_list_order_and_the_results_follow_the_list(self):
+        order = [l.split("'")[1] for l in self.CONSOLE.splitlines() if l.startswith("Test case '")]
+        self.assertEqual(order[0].split(".")[1], "dgc")  # the real binary runs the info cases last although the list names them first
+        res, _ = L.parse_qpa(self.QPA.splitlines(True))
+        listed = ["dEQP-VK.info.device_properties", "dEQP-VK.info.device_extensions"] + [r.case for r in res if ".dgc." in r.case]
+        results, _, _ = L.execute(listed, lambda b: L.BatchOutcome(res, None, 0, False), 10, 100, lambda: 0.0, 3)
+        self.assertEqual(list(results), listed)
+
+
 class ClassifyTests(unittest.TestCase):
     TABLE = {"Pass": "pass", "QualityWarning": "warn", "CompatibilityWarning": "warn", "Waiver": "warn", "NotSupported": "not_supported", "Fail": "fail",
              "ResourceError": "fail", "InternalError": "fail", "DeviceLost": "fail", "Pending": "fail", "EnforceDefaultContext": "fail",

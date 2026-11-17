@@ -32,7 +32,7 @@ if [ "$SIDE" = host ]; then
   for f in /opt/apps/out/host/*.log; do cp -f "$f" "$R/$(basename "$f" .log).host.log"; done
   dmesg | grep -E 'Xid|NVRM' | tail -50 > "$R/host_dmesg_tail.log"
   say "HOST_DONE $(grep -c 'verdict=PASS' "$R/host.res") pass / $(wc -l < "$R/host.res") rows"
-  [ -f "$R/vkcts.guest.log" ] && python3 "$HERE/vkcts/vkcts.py" diff "$R" | tail -3
+  [ -f "$R/vkcts.guest.log" ] && python3 "$HERE/vkcts/vkcts.py" diff "$R" | grep -a '^VKCTS_DIFF'
   exit 0
 fi
 
@@ -80,5 +80,5 @@ if [ "$PER" -gt 1 ] && [ "${APPS_NO_ISOLATE:-0}" != 1 ]; then
   done
   [ -f "$R/iso/guest.res" ] && cp "$R/iso/guest.res" "$R/guest_isolated.res"
 fi
-[ -f "$R/vkcts.host.log" ] && [ -f "$R/vkcts.guest.log" ] && python3 "$HERE/vkcts/vkcts.py" diff "$R" | tail -3
+[ -f "$R/vkcts.host.log" ] && [ -f "$R/vkcts.guest.log" ] && python3 "$HERE/vkcts/vkcts.py" diff "$R" | grep -a '^VKCTS_DIFF'
 say "GUEST_DONE batched: $(grep -c 'verdict=PASS' "$R/guest.res") pass / $(wc -l < "$R/guest.res");  isolated re-runs: $(grep -c 'verdict=PASS' "$R/guest_isolated.res" 2>/dev/null || echo 0) pass / $(wc -l < "$R/guest_isolated.res" 2>/dev/null || echo 0)"
