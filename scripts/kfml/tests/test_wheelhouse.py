@@ -277,3 +277,110 @@ class OfflineData(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ParallelDownload(unittest.TestCase):
+    """Ranged parallel download against a local HTTP server that honours Range (stdlib), including resets and a server without ranges."""
+
+    @classmethod
+    def serve(cls, payload, ranges=True, fail_first=0):
+        import http.server
+        import threading
+
+        state = {"fail": fail_first, "hits": 0}
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def head(self):
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(payload)))
+                if ranges:
+                    self.send_header("Accept-Ranges", "bytes")
+                self.end_headers()
+
+            def do_HEAD(self):
+                self.head()
+
+            def do_GET(self):
+                state["hits"] += 1
+                rng = self.headers.get("Range")
+                if rng and ranges:
+                    if state["fail"] > 0:
+                        state["fail"] -= 1
+                        self.connection.close()  # a reset in the middle of the transfer
+                        return
+                    a, b = [int(x) for x in rng.split("=")[1].split("-")]
+                    body = payload[a:b + 1]
+                    self.send_response(206)
+                    self.send_header("Content-Range", "bytes %d-%d/%d" % (a, b, len(payload)))
+                else:
+                    body = payload
+                    self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        return srv, state
+
+    def test_parts_are_reassembled_in_order(self):
+        payload = bytes(range(256)) * 4001
+        srv, st = self.serve(payload)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                n = datasets.download_parallel("http://127.0.0.1:%d/x" % srv.server_address[1], Path(d) / "f", 6, sleep=lambda s: None)
+                self.assertEqual(n, len(payload))
+                self.assertEqual((Path(d) / "f").read_bytes(), payload)
+            self.assertGreaterEqual(st["hits"], 6)
+        finally:
+            srv.shutdown()
+
+    def test_a_reset_is_retried_and_the_result_is_still_correct(self):
+        payload = os.urandom(300000)
+        srv, st = self.serve(payload, fail_first=3)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                datasets.download_parallel("http://127.0.0.1:%d/x" % srv.server_address[1], Path(d) / "f", 4, sleep=lambda s: None)
+                self.assertEqual((Path(d) / "f").read_bytes(), payload)
+        finally:
+            srv.shutdown()
+
+    def test_a_server_that_keeps_failing_is_an_error_not_a_short_file(self):
+        srv, _ = self.serve(os.urandom(1000), fail_first=10 ** 6)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                with self.assertRaises(OSError):
+                    datasets.download_parallel("http://127.0.0.1:%d/x" % srv.server_address[1], Path(d) / "f", 3, retries=2, sleep=lambda s: None)
+        finally:
+            srv.shutdown()
+
+    def test_no_range_support_means_none_so_the_caller_downloads_sequentially(self):
+        srv, _ = self.serve(b"abc" * 100, ranges=False)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                self.assertIsNone(datasets.download_parallel("http://127.0.0.1:%d/x" % srv.server_address[1], Path(d) / "f", 4))
+        finally:
+            srv.shutdown()
+
+    def test_fetch_uses_parallel_for_a_pin_that_asks_and_still_checks_the_sha(self):
+        payload = os.urandom(120000)
+        srv, _ = self.serve(payload)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                url = "http://127.0.0.1:%d/x" % srv.server_address[1]
+                pins = {"datasets": {"x": {"url": url, "filename": "x.bin", "sha256": hashlib.sha256(payload).hexdigest(), "parallel": 4}}}
+                r = datasets.fetch("x", Path(d) / "data", pins)
+                self.assertEqual(Path(r["path"]).read_bytes(), payload)
+                bad = {"datasets": {"x": dict(pins["datasets"]["x"], sha256="0" * 64)}}
+                with self.assertRaises(datasets.HashMismatch):
+                    datasets.fetch("x", Path(d) / "data2", bad)
+                self.assertFalse(list((Path(d) / "data2").glob("x.bin*")))  # nothing unverified is left behind as the dataset
+        finally:
+            srv.shutdown()
+
+    def test_cifar_pin_asks_for_six_connections_not_more(self):
+        self.assertEqual(PINS["datasets"]["cifar10_binary"]["parallel"], 6)
+        self.assertNotIn("parallel", PINS["datasets"]["tinyshakespeare"])

@@ -77,10 +77,10 @@ class Summarize(unittest.TestCase):
 class FakeRunner:
     """subprocess.run stand-in: serves setup/fetch/run by the `kfml` subcommand and writes what the real command would."""
 
-    def __init__(self, setup_rc=0, fetch_rc=0, run_rc=0, rows=None, setup_line=None):
+    def __init__(self, setup_rc=0, fetch_rc=0, run_rc=0, rows=None, plan_rc=0, plan_line=None, venv_rc=0):
         self.calls, self.setup_rc, self.fetch_rc, self.run_rc = [], setup_rc, fetch_rc, run_rc
         self.rows = [ml_row()] if rows is None else rows
-        self.setup_line = setup_line
+        self.plan_rc, self.plan_line, self.venv_rc = plan_rc, plan_line, venv_rc
 
     def __call__(self, cmd, **kw):
         self.calls.append((cmd, kw))
@@ -89,10 +89,14 @@ class FakeRunner:
             returncode, stdout, stderr = 0, "", ""
         p = P()
         sub = cmd[cmd.index("kfml") + 1] if "kfml" in cmd else ""
-        if sub == "setup":
+        if cmd[1:4] == ["-m", "venv", cmd[3]]:
+            p.returncode = self.venv_rc
+        elif sub == "setup" and "--plan" in cmd:
+            p.returncode = self.plan_rc
+            if self.plan_line and "stdout" in kw:
+                kw["stdout"].write((self.plan_line + "\n").encode())
+        elif sub == "setup":
             p.returncode = self.setup_rc
-            if self.setup_line and "stdout" in kw:
-                kw["stdout"].write((self.setup_line + "\n").encode())
         elif sub == "fetch-data":
             p.returncode = self.fetch_rc
         elif sub == "run":
@@ -116,24 +120,75 @@ class Run(unittest.TestCase):
             fr = FakeRunner(**kw)
             return ks.run(Args(d), runner=fr), fr
 
-    def test_green_run_does_setup_fetch_run_in_order_with_auto_flavour(self):
+    @staticmethod
+    def subs(fr):
+        return [c[0][c[0].index("kfml") + 1] + (" --plan" if "--plan" in c[0] else "") for c in fr.calls if "kfml" in c[0]]
+
+    def test_green_run_plans_then_sets_up_and_fetches_together_then_runs_with_auto_flavour(self):
         doc, fr = self.go()
         self.assertEqual(doc["verdict"], "PASS")
-        subs = [c[0][c[0].index("kfml") + 1] for c in fr.calls]
-        self.assertEqual(subs, ["setup", "fetch-data", "run"])
-        setup_cmd = fr.calls[0][0]
+        subs = self.subs(fr)
+        self.assertEqual(subs[0], "setup --plan")
+        self.assertEqual(sorted(subs[1:3]), ["fetch-data", "setup"])  # concurrent: either order
+        self.assertEqual(subs[3], "run")
+        setup_cmd = next(c[0] for c in fr.calls if "setup" in c[0] and "--plan" not in c[0] and "kfml" in c[0])
         self.assertNotIn("--flavor", setup_cmd)  # the flavour is never passed in: kfml derives it from the box
         self.assertIn("--nvcc-if-needed", setup_cmd)
-        self.assertIn("--tier", fr.calls[2][0])
-        self.assertEqual([s["step"] for s in doc["steps"]], ["setup", "fetch-data", "run"])
+        self.assertIn("--tier", fr.calls[-1][0])
+        self.assertEqual([s["step"] for s in doc["steps"]], ["plan", "setup", "fetch-data", "run"])
+
+    def test_the_datasets_download_while_the_wheels_install_not_after_them(self):
+        """Both children are started before either is waited for: the fetch child must be able to finish before the setup child does."""
+        import threading
+        gate = threading.Event()
+        order = []
+
+        class Slow(FakeRunner):
+            def __call__(self, cmd, **kw):
+                sub = cmd[cmd.index("kfml") + 1] if "kfml" in cmd else ""
+                if sub == "setup" and "--plan" not in cmd:
+                    if not gate.wait(10):
+                        order.append("setup waited in vain")
+                    order.append("setup done")
+                elif sub == "fetch-data":
+                    order.append("fetch done")
+                    gate.set()
+                return super().__call__(cmd, **kw)
+        with tempfile.TemporaryDirectory() as d:
+            doc = ks.run(Args(d), runner=Slow())
+        self.assertEqual(order, ["fetch done", "setup done"])
+        self.assertEqual(doc["verdict"], "PASS")
+
+    def test_fetch_data_runs_against_the_venv_directory_without_the_venv_python(self):
+        _, fr = self.go()
+        f = next(c for c in fr.calls if "fetch-data" in c[0])
+        self.assertEqual(f[1]["env"]["KF_ML_HOME"], str(Path(f[1]["env"]["KF_ML_HOME"])))
+        self.assertTrue(f[1]["env"]["KF_ML_HOME"].endswith("/venv"))
+        self.assertNotIn("/venv/bin/python", f[0][0])
 
     def test_no_flavour_fits_is_a_not_run_verdict_with_the_named_reason(self):
-        doc, fr = self.go(setup_rc=3, setup_line=json.dumps({"status": "NOT_RUN", "reason": "no pinned flavour can run on this box: x"}))
+        doc, fr = self.go(plan_rc=3, plan_line=json.dumps({"status": "NOT_RUN", "reason": "no pinned flavour can run on this box: x"}))
         self.assertEqual(doc["verdict"], "NOT_RUN")
         self.assertIn("no pinned flavour can run", doc["reason"])
         self.assertTrue(all(r["status"] == "NOT_RUN" and r["reason"] for r in doc["rows"]))
-        self.assertEqual(len(fr.calls), 2)  # setup, then only the test list: nothing was fetched or run
+        self.assertEqual(len(fr.calls), 2)  # the plan, then only the test list
+
+    def test_a_box_no_flavour_fits_downloads_nothing_and_creates_no_venv(self):
+        doc, fr = self.go(plan_rc=3, plan_line=json.dumps({"status": "NOT_RUN", "reason": "r"}))
+        self.assertFalse([c for c in fr.calls if "fetch-data" in c[0] or c[0][1:3] == ["-m", "venv"]
+                          or ("setup" in c[0] and "--plan" not in c[0])])
         vast_report.validate_kfml(doc)
+
+    def test_a_failed_plan_other_than_no_flavour_is_a_fail(self):
+        doc, fr = self.go(plan_rc=2)
+        self.assertEqual(doc["verdict"], "FAIL")
+        self.assertIn("flavour plan failed", doc["reason"])
+
+    def test_a_failed_venv_creation_is_a_fail_before_any_download(self):
+        doc, fr = self.go(venv_rc=1)
+        self.assertEqual(doc["verdict"], "FAIL")
+        self.assertIn("venv creation failed", doc["reason"])
+        self.assertFalse([c for c in fr.calls if "fetch-data" in c[0]])
 
     def test_failed_setup_or_fetch_is_fail(self):
         for kw, word in (({"setup_rc": 1}, "setup failed"), ({"fetch_rc": 1}, "fetch-data failed")):
@@ -175,7 +230,7 @@ class Run(unittest.TestCase):
         import io
         import contextlib
         real_run = ks.run
-        for kw, rc in (({}, 0), ({"setup_rc": 3}, 0), ({"fetch_rc": 1}, 1), ({"run_rc": 2}, 1), ({"run_rc": 1, "rows": [ml_row("b", "FAIL", "boom")]}, 1)):
+        for kw, rc in (({}, 0), ({"plan_rc": 3}, 0), ({"fetch_rc": 1}, 1), ({"run_rc": 2}, 1), ({"run_rc": 1, "rows": [ml_row("b", "FAIL", "boom")]}, 1)):
             with tempfile.TemporaryDirectory() as d:
                 out = io.StringIO()
                 with patch.object(ks, "run", lambda a, kw=kw: real_run(a, runner=FakeRunner(**kw))), contextlib.redirect_stdout(out):
@@ -273,7 +328,7 @@ class Payload(unittest.TestCase):
     def test_stage_not_run_flows_through_to_a_skipped_row_and_a_valid_report(self):
         m = self.m
         with tempfile.TemporaryDirectory() as d:
-            doc = ks.run(Args(d), runner=FakeRunner(setup_rc=3, setup_line=json.dumps({"status": "NOT_RUN", "reason": "no pinned flavour can run on this box: y"})))
+            doc = ks.run(Args(d), runner=FakeRunner(plan_rc=3, plan_line=json.dumps({"status": "NOT_RUN", "reason": "no pinned flavour can run on this box: y"})))
             result = {}
             self.assertEqual(m.kfml_rows("KF_KFML_RESULT " + json.dumps(doc) + "\n", 0, SHA, result), [m.row("kfml", skipped=1)])
             Path(d, "r.json").write_text(json.dumps({"verdict": "PASS", "suites": [{"name": "a", "pass": 1, "fail": 0, "skip": 0}], "kfml": result["kfml"]}))

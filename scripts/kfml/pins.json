@@ -13,7 +13,9 @@
    "filename": "cifar-10-binary.tar.gz",
    "sha256": "c4a38c50a1bc5f3a1c5537f2155ab9d68f9f25eb1ed8d9ddda3db29a59bca1dd",
    "license": "LicenseRef-no-licence-stated",
-   "redistribution_ok": false
+   "redistribution_ok": false,
+   "parallel": 6,
+   "parallel_note": "the server gives about 45 KB/s per connection and resets 8 or more at once (kfml_run_20261117_second_die); 6 ranged connections, sha256 still verified"
   }
  },
  "flavors": {

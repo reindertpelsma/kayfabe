@@ -568,7 +568,7 @@ def validate_kfml(value):
     ok = ok and all(type(v) in (int, float) or (type(v) is str and text.fullmatch(v)) for v in facts.values())
     steps = value["steps"]
     ok = ok and type(steps) is list and len(steps) <= 8 and all(
-        type(s) is dict and set(s) == {"step", "rc", "s"} and s["step"] in ("probe", "wheelhouse", "copy", "verify", "setup", "fetch-data", "run")
+        type(s) is dict and set(s) == {"step", "rc", "s"} and s["step"] in ("plan", "probe", "wheelhouse", "copy", "verify", "setup", "fetch-data", "run")
         and type(s["rc"]) is int and type(s["s"]) in (int, float) for s in steps)
     rows = value["rows"]
     ok = ok and type(rows) is list and len(rows) <= 8

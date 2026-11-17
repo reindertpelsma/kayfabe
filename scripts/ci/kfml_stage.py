@@ -9,8 +9,9 @@
 It runs on the box's own GPU, whatever single NVIDIA die and driver the box has: nothing here names a die or a driver. The wheel flavour is
 derived by `kfml setup --flavor auto` from the driver's CUDA version and the GPU's compute capability. Steps, each a child process:
 
-  1. setup      python3 -m kfml setup --venv PREFIX/venv --nvcc-if-needed      rc 3 = no pinned flavour fits: every row NOT_RUN
-  2. fetch-data PREFIX/venv/bin/python -m kfml fetch-data                      sha256-pinned datasets (tinyshakespeare, CIFAR-10 binary)
+  1. plan       python3 -m kfml setup --plan                                   rc 3 = no pinned flavour fits: every row NOT_RUN, nothing downloaded
+  2. setup      python3 -m kfml setup --venv PREFIX/venv --nvcc-if-needed      the wheels (about 4 GB), AT THE SAME TIME as
+     fetch-data python3 -m kfml fetch-data (KF_ML_HOME=PREFIX/venv)            the sha256-pinned datasets (CIFAR-10 is slow: parallel ranges)
   3. run        PREFIX/venv/bin/python -m kfml run --tier T --json PREFIX/rows.json
 
 and prints one line `KF_KFML_RESULT {...}` (the file given by --out has the same text) that vast_payload.py grades: verdict PASS (no row FAIL, at
@@ -25,13 +26,14 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
 SCHEMA = 1
 TIERS = ("mid", "large")
-STEP_BUDGET_S = {"setup": 3600, "fetch-data": 900, "run": 7200}
-STEP_NAMES = ("probe", "wheelhouse", "copy", "verify", "setup", "fetch-data", "run")  # the guest flow adds the first four
+STEP_BUDGET_S = {"plan": 120, "setup": 3600, "fetch-data": 5400, "run": 7200}
+STEP_NAMES = ("plan", "probe", "wheelhouse", "copy", "verify", "setup", "fetch-data", "run")  # the guest flow adds the first four
 TRANSFER_KEYS = ("wheelhouse_bytes", "wheelhouse_build_s", "src_bytes", "copy_bytes", "copy_s", "install_s")
 MAX_ROWS = 8
 FACT_KEYS = ("gpu_name", "compute_cap", "vram_gb", "driver", "driver_cuda", "cuda", "torch", "flavor")
@@ -140,23 +142,42 @@ def run(args, runner=subprocess.run):
     env["KF_ML_RUN_ID"] = args.run_id or ""
     steps = []
     py = sys.executable
-    s = run_step("setup", [py, "-m", "kfml", "setup", "--venv", str(venv), "--nvcc-if-needed"], kdir, logs / "setup.log", env, runner)
+    # 1. the flavour decision alone: a box that no flavour fits is NOT_RUN before anything is created or downloaded
+    s = run_step("plan", [py, "-m", "kfml", "setup", "--venv", str(venv), "--plan"], kdir, logs / "plan.log", env, runner)
     steps.append(s)
     if s["rc"] == 3:
         reason = "no pinned flavour can run on this box"
         try:
-            reason = json.loads((logs / "setup.log").read_text().splitlines()[-1])["reason"]
+            reason = json.loads((logs / "plan.log").read_text().splitlines()[-1])["reason"]
         except (OSError, ValueError, KeyError, IndexError):
             pass
         return not_run(args.sha, args.tier, steps, reason, test_names(kdir, args.tier, runner), args.run_id)
     if s["rc"] != 0:
-        return failure(args.sha, args.tier, steps, "setup failed rc=%d" % s["rc"], args.run_id)
+        return failure(args.sha, args.tier, steps, "flavour plan failed rc=%d" % s["rc"], args.run_id)
+    # 2. the venv shell exists first so the datasets (stdlib only, the slow server) download WHILE the wheels install
+    if not (venv / "pyvenv.cfg").exists():
+        v = runner([py, "-m", "venv", str(venv)], cwd=str(kdir), env=env, capture_output=True, text=True)
+        if v.returncode != 0:
+            return failure(args.sha, args.tier, steps, "venv creation failed rc=%d" % v.returncode, args.run_id)
+    fenv = dict(env, KF_ML_HOME=str(venv))
+    done = {}
+
+    def go(name, cmd, e):
+        done[name] = run_step(name, cmd, kdir, logs / (name + ".log"), e, runner)
+
+    threads = [threading.Thread(target=go, args=("setup", [py, "-m", "kfml", "setup", "--venv", str(venv), "--nvcc-if-needed"], env)),
+               threading.Thread(target=go, args=("fetch-data", [py, "-m", "kfml", "fetch-data"], fenv))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    steps += [done["setup"], done["fetch-data"]]
+    if done["setup"]["rc"] != 0:
+        return failure(args.sha, args.tier, steps, "setup failed rc=%d" % done["setup"]["rc"], args.run_id)
+    if done["fetch-data"]["rc"] != 0:
+        return failure(args.sha, args.tier, steps, "fetch-data failed rc=%d (pin mismatch or unreachable)" % done["fetch-data"]["rc"], args.run_id)
     vpy = str(venv / "bin" / "python")
     env["PYTHONPATH"] = str(kdir)
-    s = run_step("fetch-data", [vpy, "-m", "kfml", "fetch-data"], kdir, logs / "fetch-data.log", env, runner)
-    steps.append(s)
-    if s["rc"] != 0:
-        return failure(args.sha, args.tier, steps, "fetch-data failed rc=%d (pin mismatch or unreachable)" % s["rc"], args.run_id)
     rows_json = prefix / "rows.json"
     cmd = [vpy, "-m", "kfml", "run", "--tier", args.tier, "--json", str(rows_json), "--log-dir", str(logs)]
     if args.reference:

@@ -127,6 +127,17 @@ def _run(args, out, probe=envmod.probe_env):
 
 
 def _setup(args, out):
+    if args.plan:  # the flavour decision only: nothing is created, nothing is downloaded (the stage uses it to start downloads only when a flavour fits)
+        try:
+            f, why = setup_venv.resolve_flavor(args.flavor)
+        except setup_venv.NoFlavor as e:
+            out.write(json.dumps({"status": "NOT_RUN", "reason": str(e)}) + "\n")
+            return 3
+        except setup_venv.SetupError as e:
+            sys.stderr.write("error: %s\n" % e)
+            return 2
+        out.write(json.dumps({"flavor": f, "flavor_reason": why}) + "\n")
+        return 0
     try:
         r = setup_venv.setup(args.venv, args.flavor, args.python, args.with_nvcc, args.allow_unhashed, args.installer,
                              nvcc_if_needed=args.nvcc_if_needed, wheelhouse=args.wheelhouse)
@@ -250,6 +261,7 @@ def build_parser():
     s.add_argument("--nvcc-if-needed", action="store_true",
                    help="like --with-nvcc, but only when no nvcc with the flavour's CUDA major.minor is on the box")
     s.add_argument("--allow-unhashed", action="store_true")
+    s.add_argument("--plan", action="store_true", help="print the flavour decision and exit (3 = no flavour fits); installs and creates nothing")
     s.add_argument("--wheelhouse", metavar="DIR", help="offline install from a wheelhouse (no index, hashes required)")
     s.add_argument("--installer", choices=("pip", "uv"), default="pip")
     s = sub.add_parser("fetch-data")
