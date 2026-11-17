@@ -43,6 +43,8 @@ mr = load("mlrows_runner", ML / "mlrows.py")
 gu = load("kf_gpu_use_ml", ROOT / "scripts" / "bench" / "gpu_use.py")
 gur = load("kf_gpu_use_rows_ml", ROOT / "scripts" / "apps" / "gpu_use_rows.py")
 PINS = lib.load_pins()
+NOHASH = json.loads(json.dumps(PINS))
+NOHASH["rows"]["vllm"]["expected_token_sha256"] = None          # the tests with made-up token ids run without the committed hash; the real run has its own tests
 
 
 def fx(name):
@@ -790,7 +792,7 @@ class RunRow(unittest.TestCase):
         return make
 
     def run_row(self, row, lines, **kw):
-        return mr.run_row(row, self.root, self.out, kw.pop("facts", facts()), kw.pop("pins", PINS), popen=self.popen(lines, kw.pop("rc", 0), kw.pop("hold", None)), **kw)
+        return mr.run_row(row, self.root, self.out, kw.pop("facts", facts()), kw.pop("pins", NOHASH), popen=self.popen(lines, kw.pop("rc", 0), kw.pop("hold", None)), **kw)
 
     def good_lines(self, row="vllm"):
         res = {"vllm": vllm_result(), "tensorrt": trt_result(), "jax": jax_result()}[row]
@@ -1743,6 +1745,23 @@ class RealRuns(unittest.TestCase):
         self.assertIn("status=PASS", vl)
         self.assertIn("token_sha256=%s" % res["token_sha256"], vl)
         self.assertEqual(res["token_sha256"], lib.canon_sha256(res["token_ids"]))
+
+    def test_the_real_tokens_pass_the_committed_hash_through_the_runner_and_made_up_ones_do_not(self):
+        t = Path(tempfile.mkdtemp())
+        (t / "root" / "vllm" / "venv" / "bin").mkdir(parents=True)
+        (t / "root" / "vllm" / "venv" / "bin" / "python").write_text("")
+        (t / "root" / "vllm" / "setup.json").write_text(json.dumps({"status": "ok", "flavour": "cu13"}))
+        res = lib.extract_result(REAL["vllm"])
+        for k in ("mem_base_mib", "mem_peak_mib", "mem_growth_mib", "total_mib", "secs", "negctl", "log_facts"):
+            res.pop(k, None)
+        with mock.patch.object(mr, "Sampler", FakeSampler), mock.patch.object(mr.time, "sleep", lambda s: None):
+            ok = mr.run_row("vllm", t / "root", t / "out", REAL_FACTS, PINS, popen=lambda argv, **kw: FakeProc([lib.JSON_PREFIX + json.dumps(res)]))
+            fake = dict(res, token_ids=[[1, 2, 3]] * 8)
+            fake["token_sha256"] = lib.canon_sha256(fake["token_ids"])
+            bad = mr.run_row("vllm", t / "root", t / "out2", REAL_FACTS, PINS, popen=lambda argv, **kw: FakeProc([lib.JSON_PREFIX + json.dumps(fake)]))
+        self.assertEqual((ok[0], ok[1]), (lib.PASS, "ok"), ok[1])
+        self.assertEqual(bad[0], lib.FAIL)
+        self.assertTrue(bad[1].startswith("tokens_equal_committed_hash"), bad[1])
 
     def test_the_committed_token_hash_if_any_is_what_the_real_run_produced(self):
         want = PINS["rows"]["vllm"].get("expected_token_sha256")
