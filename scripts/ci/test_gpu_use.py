@@ -210,6 +210,22 @@ class AppProofs(unittest.TestCase):
         self.assertIs(p["ok"], True)
         self.assertEqual((p["facts"]["devices"], p["facts"]["used"]), (3, 1))
 
+    def test_hashcat_cuda_notice_line_is_not_a_device(self):
+        # MEASURED 2026-11-17, kf3 guest, RTX 3090, hashcat 6.2.6: the CUDA backend is not usable in the guest (no toolkit) and hashcat says so in the SAME
+        # `* Device #1:` form as a device, then runs on the NVIDIA GPU through OpenCL. The notice is not a device; the GPU run is a pass.
+        text = ("* Device #1: CUDA SDK Toolkit not installed or incorrectly installed.\n"
+                "OpenCL API (OpenCL 3.0 CUDA 13.0.98) - Platform #1 [NVIDIA Corporation]\n"
+                "* Device #1: NVIDIA GeForce RTX 3090, 7552/7871 MB (1967 MB allocatable), 82MCU\n"
+                "OpenCL API (OpenCL 3.0 PoCL 5.0+debian  Linux) - Platform #2 [The pocl project]\n"
+                "* Device #2: cpu-haswell-AMD EPYC 7B13 64-Core Processor, skipped\n")
+        p = gu.proof_hashcat(text)
+        self.assertIs(p["ok"], True, p["reasons"])
+        self.assertEqual(p["facts"]["devices"], 2)
+        # a notice and nothing else proves nothing; a notice followed by a CPU device is still the CPU
+        self.assertIsNone(gu.proof_hashcat("* Device #1: CUDA SDK Toolkit not installed or incorrectly installed.\n")["ok"])
+        cpu = text.replace("NVIDIA GeForce RTX 3090, 7552/7871 MB (1967 MB allocatable), 82MCU", "cpu-haswell-AMD EPYC 7B13, 1024/2048 MB, 6MCU")
+        self.assertIs(gu.proof_hashcat(cpu)["ok"], False)
+
     def test_hashcat_without_device_lines_is_unproven_none(self):
         self.assertIsNone(gu.proof_hashcat("Session..........: hashcat\nSpeed.#1.........:  5296.5 MH/s")["ok"])
 

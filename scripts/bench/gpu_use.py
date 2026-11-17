@@ -357,7 +357,7 @@ def proof_nvdec(text, **_):
     return _proof(None, "", ["no positive hwaccel marker (`pix_fmt: cuda`) in the log: hardware decoding is not proven"])
 
 
-HASHCAT_DEV_RX = re.compile(r"^\* Device #(\d+): (.+?)(?:, (skipped|\d+/\d+ MB.*|\d+ MB.*))?$", re.M)
+HASHCAT_DEV_RX = re.compile(r"^\* Device #(\d+): (.+?), (skipped|\d+/\d+ MB.*|\d+ MB.*)$", re.M)     # a device line ends in `, skipped` or `, <used>/<total> MB`: hashcat also prints NOTICES as `* Device #1: <text>`
 
 
 def proof_hashcat(text, **_):
