@@ -1,4 +1,4 @@
-STATUS: DESIGN-ONLY, 2026-11-16, except section 12 (slice 1: the local build tooling and its measured proof on one coordinator box, LIVE as tooling). Sections 1 to 11 are unchanged design and proposals; every "NEW" item outside section 12 is a proposal.
+STATUS: DESIGN-ONLY, 2026-11-16, except section 12 (slice 1: the local build tooling and its measured proof on one coordinator box, LIVE as tooling) and section 14 (2026-11-17: the MATLAB rows, their host-side runner and the optional payload stage `matlab`: built and GPU-free tested, run on no box; it uses the `inject` verb of section 13, which is on PR 457 and not in this tree). Sections 1 to 11 are unchanged design and proposals; every "NEW" item outside sections 12 and 14 is a proposal.
 
 # A Linux proprietary image (image C): design and first slice
 
@@ -102,6 +102,8 @@ Build (on the pc, by the owner, for the install step; GPU not required):
 Consume on a box: download by presigned URL, `unpack` (member and sha256 checks), `qemu-img create -b image.base.qcow2` clone (the immutable backing alias of the Windows pipeline), swtpm not needed, the data disk with the pinned driver `.run`, boot `ci` shape, first check (`verify`: ids, clock, GPU UUID equal to the seed UUID, driver version equal to the request), rows. Every row boots in its own fresh clone in the discovery lane (the runner's rule); gate rows may share a boot.
 
 ## 7. First slice: six MATLAB rows
+
+2026-11-17 CORRECTION (read first): the rows this section proposes were built differently, see section 14. There are eight rows (`gpu_info` plus seven: `gpu_matmul`, `gpu_fft`, `gpu_solve`, `dl_train`, `parpool_gpu`, `cuda_kernel`, `mem_oversub`); every script computes its numbers on the GPU AND on the CPU in the same script and writes the raw numbers as JSON, and the host recomputes every agreement flag from them (no host numpy reference, no host-supplied input files); a `parpool` row with one GPU context per worker is in the first set (it was "not in the first six" below). The text below is the original proposal, kept for its reasoning.
 
 All six enter the **discovery lane** first. A row is promoted to the gate lane after three consecutive clean runs on at least two dies (proposal). Every row boots `matlab -batch "<statement>"` (CITED, https://www.mathworks.com/help/matlab/ref/matlablinux.html: no desktop, exits 0 on success and non-zero on error, output on stdout and stderr, a dialog needing input is an error; `-logfile` copies the command window) from a script placed in `/var/kfapps/<run-id>/matlab/`. Inputs are generated on the **host** by numpy from a fixed seed and delivered in the row's input directory (MATLAB's random generators are never the reference). Outputs are written as raw binary plus a JSON of scalars; the **host** recomputes the references and judges. Exit status zero alone is never a pass (owner rule, `OWNER_RULINGS.md` AP item 5).
 
@@ -237,3 +239,81 @@ A cached sign-in is a credential: a token, not only an e-mail address. A run box
 2. The sign-in flow and the offline behaviour of the application (12.3, 12.4).
 3. Whether `-cpu` with the fixed AMD profile changes what the application checks (falsifier 4 of section 8).
 4. UEFI without Secure Boot was used and booted; the GOP option ROM for kf3 was not tried.
+
+## 14. The MATLAB rows, their runner and the payload stage (built 2026-11-17)
+
+STATUS: built and GPU-free tested, run on NO box and never booted. Labels: **TESTED** = unit tests and mutants with a fake guest transport and fixture results (`scripts/ci/test_matlab_rows.py`, `test_matlab_stage.py`, `ci/vast-broker/test/matlab-instruction.test.js`; mutants `matlab_rows_mutants.py` 40, `matlab_stage_mutants.py` 21, the Worker's `propimages-mutants.mjs` 7 more, two named killers each); **CODE READ** = read in the tree, not run; **NOT RUN** = needs a KVM box with a GPU (14.8). Owner context, 2026-11-17: the MATLAB Linux image is sealed and uploaded to the private bucket (the zip is 8,147,790,579 bytes, sha256 `81f7408f19bcb332ab31fd36b5922ff70f11d342a71166c67b538e764b285dcc`; members `image.qcow2`, `state.json`, `packages.manifest.json`, `manifest.json`). The image carries a cached sign-in that the owner has REVOKED on the vendor's side; nothing in the rows depends on it, and no row prints, records or reads account or licence data (14.3). The image holds no NVIDIA driver; it is installed at run time (section 12.5). This document makes no statement about how the application behaves offline or about its licence: what the owner observed is recorded privately, outside git.
+
+### 14.1 What exists
+
+| Piece | File | Role |
+|---|---|---|
+| Row scripts | `scripts/bench/linux/matlab/*.m`, `vecadd.ptx` | Eight rows and ten helper functions, in the repository; COPIED INTO the running offline clone at run time with `propimage_linux.py inject --src scripts/bench/linux/matlab --dest kfrows/scripts`; never baked into the image, never stored in R2 |
+| Runner | `scripts/bench/linux/matlab_rows.py` | Boot, driver, inject, run, pull, judge on the host; `plan`, `verify RESULT.json --row R` (re-judge a pulled file, no VM), `run` |
+| Stage | `scripts/ci/matlab_stage.py`, `scripts/ci/matlab_pins.json` | Pins, download, the strict and the standalone shape, one record line `KF_MATLAB_RESULT {json}` |
+| Payload | `scripts/ci/vast_payload.py` stage `matlab`, `payload_instruction.py` field `matlab`, both copies of `instruction.schema.json`, `vast_report.validate_matlab` | Optional, large tier, OFF by default |
+| Worker | `ci/vast-broker/propimages.json` (`imgc`, `linux_images`), `src/propimages.js` (`matlabPlan`, `linuxImageProblems`), `bandwidth.json`, `src/bandwidth.js` | The configuration, the instruction part, the bandwidth entry; nothing deployed |
+
+### 14.2 The rows
+
+Every row runs as `timeout -k 20 <box> matlab -batch "run('$HOME/kfrows/scripts/<row>.m')"`; its stdout and stderr go to a file in the guest that is never read; only the exit code (one `KF_RC=` line) and the row's JSON come back. Loops have fixed iteration counts; no pass criterion is a time. The time-boxes are DESIGN values (an estimate for a nested box, not measured). All eight are in the discovery lane.
+
+| Row | What it does (GPU and CPU in the same script) | Host-asserted use | Time-box |
+|---|---|---|---|
+| `gpu_info` (preamble) | `gpuDevice`: name, compute capability, driver and toolkit versions, total and available memory, device count, release; a `sum(ones(1e6))` on both | none | 300 s |
+| `gpu_matmul` | `gpuArray` products, single and double, n 256/512/1024, against the CPU; 300 products of 4096 (single) and 60 of 2048 (double), last result against the CPU | gpu, mem | 900 s |
+| `gpu_fft` | `fft`/`ifft` of 65536, 1048576, 30030 and 10007 points and `fft2`/`ifft2` of 1024 squared, both precisions, round trips and CPU comparisons; 200 `fft2` of 2048 squared | gpu, mem | 900 s |
+| `gpu_solve` | `mldivide`, `lu`, `qr`, `chol` for n 512/1024 in both precisions (solutions against the CPU, factorisation residuals), a tall least-squares problem, 100 solves of 2048 | gpu, mem | 1200 s |
+| `dl_train` | A small fully connected network trained with `trainnet` on synthetic data, once with `ExecutionEnvironment` gpu and once cpu, same data, seed and options | gpu, mem | 1800 s |
+| `parpool_gpu` | A local pool of two process workers, each selecting the GPU (two CUDA contexts on one die), four `parfeval` tasks of repeated `gpuArray` products against the CPU | gpu, mem | 1200 s |
+| `cuda_kernel` | `parallel.gpu.CUDAKernel` from the committed PTX text `vecadd.ptx` (JIT by the driver, no `nvcc`), three sizes, 40000 launches, and a check that nothing is written past `n` | gpu | 900 s |
+| `mem_oversub` | `gpuArray` chunks of 128 MiB up to about 85 percent of the memory MATLAB reports free (at most 512 chunks), contents checked, then freed | mem | 900 s |
+
+### 14.3 How a result is judged (the guest is hostile)
+
+- **Bounded and strict.** The JSON is read as at most 262,144 bytes, UTF-8, no `NaN` or `Infinity`, no duplicate keys, bounded depth, list length and string length, schema `kayfabe.matlab-row/1` and the row's own name, at most 64 checks. Anything else is `BAD_RESULT`. Nothing else of the guest's output is kept; evidence is rebuilt from a whitelist of keys (`sanitize_result`), never the raw bytes.
+- **Recomputed, never trusted.** A check carries the raw numbers (GPU and CPU fingerprints: 2-norm, sum, first, last element; the 2-norm of the difference and of the reference). The host recomputes the relative error and the fingerprint error and compares them with ITS OWN tolerances: relative 1e-4 (single), 1e-10 (double), zero for the exact checks (element-wise float add, integer content). The guest's stated tolerance and its own pass flag are ignored (a disagreement is counted as `flag_disagrees`). Residual precision comes from the check name; the minimums of `parpool_gpu` and the zero of the mismatch counts are the host's. `dl_train`: both loss curves must fall below half their first epoch and the final losses agree within 10 percent plus 2e-3.
+- **GPU use from the host.** Under kf3 the guest's own utilisation is not the evidence. The host samples its `nvidia-smi` (`gpu_assert.HostProbe`, the Windows rows' record format, `source: host`) for the row's window and `gpu_assert.evaluate` judges the engines the row requires. No sample at all is `HARNESS HOST_COUNTERS_MISSING`, never a pass. On a host with several GPUs the sampler reads all of them (NOT handled; one GPU per box today).
+- **Census.** The QEMU log lines of the row's window go through `kf3_census` (UNSERVICED, foreign classes, refusals, dead channels, Xid; UUIDs and MACs stripped); host kernel Xid lines of the window come from the stage's kernel log. A row with an Xid in its window FAILS with class `XID`, whatever its numbers.
+- **Classes.** PASS; FAIL with `CRASH` (guest lost, or no result after a non-zero exit), `HANG` (the time-box), `XID`, `TDR`, `ASSERT` (the script threw: only the error identifier is kept, never the message), `OUTPUT_MISMATCH`, `GPU_NOT_USED`, `BAD_RESULT`; HARNESS (could not be judged); NOT_RUN with a reason (`IMAGE_MISSING`, `NO_GPU`, `KVM_MISSING`, `QEMU_MISSING`, `DRIVER_MISSING`, `GUEST_NO_DRIVER`, `GPU_UNSUPPORTED` for a compute capability below 7.5, `GPU_INFO_FAILED`, `INJECT_UNAVAILABLE`, `TIME`, `HOST_MEMORY_LOW`, `PIN_*`, `DRIVER_UNPINNED:<v>`...). The order of judging is fixed: a lost or hung guest, then Xid, then the numbers, then GPU use.
+- **Lanes and policy.** Discovery rows (all of them today) never fail the run by themselves; each failure is listed in `breakages`. A gate row failure always fails. HARNESS is RETRY (exit 3), time is RETRY, a strict run fails on any NOT_RUN (exit 4, zero skips), a standalone run reports it as a skip (exit 0).
+- **No account data.** A test scans every `.m` file for licence, `ver`, user-name, path, `disp`/`fprintf`, shell and network calls and for e-mail-like text; the JSON holds no paths. `kf_fail.m` writes the error identifier only.
+
+### 14.4 The boot, the driver and the clock
+
+One fresh throwaway clone per row (`--isolation row`, the generic runner's discovery rule: a crashed or hung guest fails only its row); `--isolation shared` runs all rows in one boot and sends the rest to a fresh boot after a CRASH, HANG or XID. Each boot: `build_argv(... gpu="kf3", driver_version=<the run's>, daemonize=False)` with QEMU's stderr in `qemu.log` (a daemonised QEMU would lose the kf3 device's log lines), offline (`restrict=on`), the recorded clock through `driver_clock` (never earlier than the installer's creation time: for a pinned release-matrix installer the matrix's `checked` date is used, an upper bound of the real date; a caller's own installer falls back to its mtime with the clock rule's WARN), the seed identity, an identity comparison before the driver and again after it (the guest GPU UUID must equal the seed's), `install_driver` (named failures: `DRIVER_SHA_MISMATCH`, `KERNEL_CC_MISSING` HARNESS; `GUEST_DRIVER_MISMATCH` is NOT_RUN `GUEST_NO_DRIVER`), then `inject`. Two boots in a row refused for a harness reason stop the run (`HARNESS_REPEATED`).
+
+Dependency: `inject` is section 13 of this document, on PR 457 (`propimage_linux.py inject`, which also needs a clone started with its `run --keep` layout and which this runner reproduces: `<dir>/run/<name>/clone.qcow2`). Until it is in the tree the runner reports `NOT_RUN INJECT_UNAVAILABLE` for every row rather than copying the scripts another way. The packed image is unpacked into `<work>/sealed` with its state and a 0600 copy of the throwaway key written from `state.json` (`prepare_dir`).
+
+### 14.5 The stage `matlab`
+
+`vast_payload.py`: large tier only, OFF by default (`MATLAB_IN_LARGE = False`, in `MANUAL_ONLY_STAGES`, no budget row): planned by `--only matlab` or when the instruction carries a `matlab` object; after the Windows image stages and before the SPEC lane. Two shapes, never both (`KF_PAYLOAD_MATLAB_REFUSED INSTRUCTION_AND_IMAGE_FLAG`):
+
+- **Strict (the Worker).** Instruction field `matlab`: `{label?, image: {from: "pin", ref, sha256}, driver: {version}, rows: {row: {lane}}, isolation?}`. There is no strict switch: this shape is strict by definition. The ref is looked up in `scripts/ci/matlab_pins.json`; the sha256 must equal the pin (`PIN_SHA256_MISMATCH`), the driver must be a PINNED Linux installer of `ci/vast-broker/release-matrix.json` (`DRIVER_UNPINNED:<v>`; its official URL, sha256 and size are pinned there), the rows must be known. The private object comes through the presigned-URL file (`--urls`, `box_downloader.py`, signed source, size and sha256 checked); the instruction carries no object name. Every listed row must run.
+- **Standalone.** `vast_payload.py --only matlab --matlab-image PATH|URL --matlab-driver VERSION|PATH|URL`, or `matlab_stage.py run`: the image is the caller's own, NO sha256 pin is enforced (the computed sha256 is recorded; `matlab_rows.py run --image-sha256` is enforced only with `--strict`), the driver is a pinned version or the caller's own `.run`, the policy is permissive, every row discovery unless `--lane ROW=gate`. A path must be absolute, a URL `https://`.
+
+The record (`kayfabe.matlab-rows/1`, at most 48 KiB, validated by `vast_report.validate_matlab` and kept in the result file even when red): per row the verdict, class, reason, lane, exit code, seconds, check counts and failed names, the host GPU record, the census counts, the Xid count and the result's sha256 and size; `breakages`, `boots`, the image and driver provenance (`source` pin or user, `pin_enforced`). The image never stays on the box (`pa.cleanup`).
+
+### 14.6 The Worker's configuration and how a Linux image is scheduled (PROPOSAL)
+
+`propimages.json`: object `imgc` (role `linux_image`, the zip's size and sha256) and `linux_images: [{label: "matlab", object: "imgc", families: "generic", isolation: "row", scheduling, rows}]`, every row `discovery`; `matlabPlan` builds the instruction part from the leg's die (its pinned `linux_guest_driver` of the release matrix; a die whose driver is not pinned refuses by name). The slot and rotation logic of the Windows images is untouched (the existing tests and goldens pass unchanged). `bandwidth.json` has a stage entry (the pinned image size read from `propimages.json`, the installer as an official-URL ESTIMATE of about 0.4 GB).
+
+Scheduling PROPOSAL (not built): the Windows images are split A and B across a family's two boxes and rotate by release number. A Linux image needs a KVM host and a GPU like every Linux-guest stage and has no Windows pairing, so it should not take a slot: it runs ONCE PER RELEASE BOX, independent of which Windows image the box holds. Today the stage is planned on tier `large` only (the flagship box of each family); covering the second die too is the one-line change of `plan_stage_names` and `check_semantics` (tier `middle` allowed), which does not touch the slot rule. The stage does not share a boot with any Windows stage; its time (an estimate of 8 boots with a driver build each, then the rows) is added to a leg whose other stages already take most of the box limit, so a leg that carries it should drop another stage or take a longer lease. How the Worker's route chooses `matlab: true` for a leg is not built (nothing imports `matlabPlan`).
+
+### 14.7 Rules this slice keeps
+
+No email, institution or account string anywhere in the repository or its evidence. Vendor behaviour is not described here. The scripts are in the repository and copied at run time; the image is not changed by them. Shell is glue (one command line per row); the logic is Python. No unsafe code.
+
+### 14.8 What needs a KVM box with a GPU to confirm (NOT RUN)
+
+1. That the eight scripts run under the image's MATLAB release: every API used (`trainnet`, `minibatchpredict`, `parpool('Processes')`, `parallel.gpu.CUDAKernel` with a PTX file and a prototype string, `addAttachedFiles`, `jsonencode`) is CODE READ from the author's knowledge, not executed; syntax was not checked by a MATLAB.
+2. That the PTX (`.version 7.0`, `.target sm_75`, hand-written) is accepted by the driver's JIT and by MATLAB (it is structurally checked by a test; `ptxas` was not available).
+3. The boot sequence on a kf3 clone: argv, `qemu.log`, the identity comparison after the driver install, the clock floor with the matrix date, the per-boot driver build time (an estimate of 2 to 4 minutes), the time-boxes.
+4. The host counters: that `gpu_assert.HostProbe` sees the box's GPU and that the thresholds (3 percent for 2 samples, 64 MiB of memory rise) are right for these rows (they are the Windows rows' thresholds, INFERRED).
+5. `inject` into a running kf3 clone (needs PR 457).
+6. The 8 GB download time and the bandwidth ESTIMATE; the stage's real `net_bytes`.
+7. Whether each row passes. Any number printed here about rows is a design number.
+
+### 14.9 Not done
+
+The Worker route that sets `matlab: true`; the gate-lane promotion rule (a row is promoted after three clean runs on two dies: a proposal of section 7); a per-family list; multi-GPU boxes; the `--desktop` rows; the `/bench-data` allow-list entry for the image (a Worker change, left to the owner: the route is gated by a run token only).

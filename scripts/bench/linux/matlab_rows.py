@@ -681,7 +681,8 @@ def run_rows(rows, make_session, ctx, log=print):
                 sess.boot()
                 sess.install_driver()
                 sess.inject(SCRIPTS_DIR)
-            except BootRefusal as refusal:
+            except Exception as exc:  # noqa: BLE001 - a boot that fails in any unforeseen way is a harness refusal of its rows, never a crashed run
+                refusal = exc if isinstance(exc, BootRefusal) else BootRefusal("BOOT_FAILED", "HARNESS")
                 boot["refused"] = refusal.reason
                 out += [refused_record(r, ctx.lanes.get(r, "discovery"), refusal) for r in group]
                 harness_refusals = harness_refusals + 1 if refusal.verdict == "HARNESS" else 0
@@ -691,7 +692,11 @@ def run_rows(rows, make_session, ctx, log=print):
                     gate_reason = "HARNESS_REPEATED"      # two boots in a row could not be set up: stop paying for boots
                 continue
             for i, row in enumerate(group):
-                rec, execution = run_row(sess, row, ctx)
+                try:
+                    rec, execution = run_row(sess, row, ctx)
+                except Exception:  # noqa: BLE001 - one row's unforeseen failure must not lose the records of the others
+                    rec, execution = not_run_record(row, ctx.lanes.get(row, "discovery"), "INTERNAL"), {}
+                    rec["verdict"] = "HARNESS"
                 out.append(rec)
                 log("KF_MATLAB_ROW %s lane=%s verdict=%s class=%s reason=%s" % (row, rec["lane"], rec["verdict"], rec["failure_class"] or "-", rec["reason"] or "-"))
                 if row == PREAMBLE:
@@ -936,6 +941,34 @@ def cmd_verify(a):
     return 0 if v["ok"] else 1
 
 
+def execute(image, directory, workdir, qemu, driver_run, driver_sha256, rows, lanes, ctx, sha, image_sha256=None, driver_created_utc=None, image_rec=None, driver_rec=None,
+            family=None, make_session=None):
+    """The whole run, shared by the CLI and the payload stage: preflight, (optionally) pin check, unpack, boots, rows, record. `image` is a packed zip,
+    `directory` an already prepared state directory (one of the two). -> the record (matlab_rows grade() inside)."""
+    path = image or str(Path(directory) / "sealed" / "image.qcow2")
+    image_rec = image_rec if image_rec is not None else {"sha256": None, "size": None, "source": "user", "pin_enforced": False}
+    driver_rec = driver_rec if driver_rec is not None else {"version": None, "sha256": driver_sha256, "source": "user"}
+    refusal = preflight_refusal(path, ctx.hw, qemu)
+    if refusal is None and not Path(driver_run).is_file():
+        refusal = "DRIVER_MISSING"
+    if refusal is None and image:
+        image_rec.update(sha256=image_rec.get("sha256") or sha256_file(image), size=Path(image).stat().st_size)     # computed and recorded when no pin gave it
+        refusal = check_pin(image_rec["sha256"], image_sha256, ctx.strict)
+    if refusal is not None:
+        result = {"rows": [not_run_record(r, ctx.lanes.get(r, "discovery"), refusal) for r in [PREAMBLE] + list(rows)], "boots": []}
+    else:
+        if image:
+            st, p = prepare_dir(image, workdir)
+        else:
+            pl = prop()
+            p = pl.paths(directory)
+            st = pl.load_state(p["state"])
+        driver_rec["version"] = prop().driver_version_from_name(driver_run)
+        make = make_session or (lambda index: LinuxSession(st, p, "matlab%d" % index, qemu, driver_run, driver_sha256, driver_created_utc))
+        result = run_rows(rows, make, ctx)
+    return build_record(result, ctx, sha, image_rec, driver_rec, family)
+
+
 def check_pin(image_sha, pin, strict):
     """A user-supplied pin on an image is enforced under --strict only; otherwise the computed sha256 is recorded and nothing is refused."""
     return "IMAGE_SHA_MISMATCH" if (strict and pin and image_sha != pin) else None
@@ -943,30 +976,11 @@ def check_pin(image_sha, pin, strict):
 
 def cmd_run(a):
     rows = select_rows(a.rows)
-    lanes = parse_lanes(a.lane, ROW_ORDER)
-    hw = host_gpu_facts()
-    image = a.image or str(Path(a.dir) / "sealed" / "image.qcow2")
-    ctx = Context(lanes=lanes, hw=hw, evidence_dir=a.evidence_dir, workdir=a.workdir, isolation=a.isolation, strict=a.strict, deadline_epoch=a.deadline_epoch or 0.0, matlab=a.matlab)
-    refusal = preflight_refusal(image, hw, a.qemu)
+    ctx = Context(lanes=parse_lanes(a.lane, ROW_ORDER), hw=host_gpu_facts(), evidence_dir=a.evidence_dir, workdir=a.workdir, isolation=a.isolation, strict=a.strict,
+                  deadline_epoch=a.deadline_epoch or 0.0, matlab=a.matlab)
     image_rec = {"sha256": None, "size": None, "source": "user", "pin_enforced": bool(a.image_sha256 and a.strict)}
-    driver_rec = {"version": None, "sha256": a.driver_sha256, "source": "user"}
-    if refusal is None and not Path(a.driver_run).is_file():
-        refusal = "DRIVER_MISSING"
-    if refusal is None and a.image:
-        image_rec.update(sha256=sha256_file(a.image), size=Path(a.image).stat().st_size)     # computed and recorded: a user-supplied image is not pinned
-        refusal = check_pin(image_rec["sha256"], a.image_sha256, a.strict)
-    if refusal is not None:
-        result = {"rows": [not_run_record(r, lanes.get(r, "discovery"), refusal) for r in [PREAMBLE] + rows], "boots": []}
-    else:
-        if a.image:
-            st, p = prepare_dir(a.image, a.workdir)
-        else:
-            pl = prop()
-            p = pl.paths(a.dir)
-            st = pl.load_state(p["state"])
-        driver_rec["version"] = prop().driver_version_from_name(a.driver_run)
-        result = run_rows(rows, lambda index: LinuxSession(st, p, "matlab%d" % index, a.qemu, a.driver_run, a.driver_sha256, a.driver_created_utc), ctx)
-    rec = build_record(result, ctx, a.sha, image_rec, driver_rec)
+    rec = execute(a.image, a.dir, a.workdir, a.qemu, a.driver_run, a.driver_sha256, rows, ctx.lanes, ctx, a.sha, image_sha256=a.image_sha256,
+                  driver_created_utc=a.driver_created_utc, image_rec=image_rec)
     data = serialise(rec)
     if a.out:
         Path(a.out).write_text(data + "\n")

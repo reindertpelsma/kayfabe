@@ -600,6 +600,29 @@ class RunTests(unittest.TestCase):
             self.assertEqual(got, M.sanitize_result(M.parse_row_json(raw(d), "gpu_matmul")))
             self.assertNotIn("extra", got)
 
+    def test_an_unforeseen_boot_error_is_a_harness_refusal_not_a_crashed_run(self):
+        out, ctx, calls = run(all_good(), refuse=("boot", RuntimeError("boom with /secret/path")))
+        self.assertEqual({r["verdict"] for r in out["rows"]}, {"HARNESS", "NOT_RUN"})
+        self.assertIn("BOOT_FAILED", {r["reason"] for r in out["rows"]})
+        self.assertNotIn("secret", json.dumps(out))
+
+    def test_an_unforeseen_row_error_keeps_the_other_rows(self):
+        class Boom(FakeCensus):
+            calls = 0
+
+            def window(self, path, lo, hi):
+                Boom.calls += 1
+                if Boom.calls == 2:
+                    raise RuntimeError("census broke")
+                return []
+
+        ctx = make_ctx()
+        ctx.census = Boom()
+        out = M.run_rows(["gpu_fft", "gpu_solve"], lambda i: FakeSession(all_good(), index=i), ctx, log=lambda *_: None)
+        r = by_row(out)
+        self.assertEqual((r["gpu_fft"]["verdict"], r["gpu_fft"]["reason"]), ("HARNESS", "INTERNAL"))
+        self.assertEqual((r["gpu_info"]["verdict"], r["gpu_solve"]["verdict"]), ("PASS", "PASS"))
+
     def test_inject_missing_is_a_named_not_run(self):
         out, ctx, _ = run(all_good(), refuse=("inject", M.BootRefusal("INJECT_UNAVAILABLE", "NOT_RUN")))
         self.assertEqual({r["reason"] for r in out["rows"]}, {"INJECT_UNAVAILABLE"})
@@ -644,11 +667,11 @@ class RunTests(unittest.TestCase):
             self.assertEqual({v["reason"] for k, v in r.items() if k != "gpu_info"}, {"GPU_INFO_FAILED"})
 
     def test_census_counts_are_kept_and_uuids_stripped(self):
-        lines = ["GSP rpc UNSERVICED code 76 for GPU-12345678-1234-1234-1234-123456789abc", "ForeignClass 0xcafe refused"]
+        lines = ["GSP rpc UNSERVICED code 76 for GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001", "ForeignClass 0xcafe refused"]
         out, ctx, _ = run(all_good(), ctx=make_ctx(census_lines=lines))
         c = by_row(out)["gpu_matmul"]["census"]
         self.assertEqual(c["counts"]["unserviced"], 1)
-        self.assertNotIn("GPU-1234", json.dumps(out))
+        self.assertNotIn("GPU-fa4efa4e", json.dumps(out))
 
     def test_deadline_gives_not_run_time_and_a_retry(self):
         ctx = make_ctx(deadline_epoch=1000.0, now=lambda: 990.0)

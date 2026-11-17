@@ -369,6 +369,41 @@
     "source": "/workspace/bench/imageb_apps_20261116",
     "note": "evidence pull-back of the image B rows: text evidence, a few MB (second Adobe pass collect archives 6 to 9 MB)"
    }
+  },
+  "matlab": {
+   "note": "MATLAB rows of the Linux proprietary image (stage `matlab`): the private image zip and the NVIDIA installer of the lane's guest driver; nothing else is fetched (the row scripts come with the repository clone and are copied into the guest at run time)",
+   "entries": [
+    {
+     "id": "matlab.image",
+     "what": "the MATLAB Linux image zip",
+     "class": "r2-pinned",
+     "size_from": "propimage:imgc",
+     "url": "private object named in propimages.json",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "ci/vast-broker/propimages.json objects (size read back after the owner's upload: 8,147,790,579 B)",
+     "note": "the size is the pinned size, edit it in propimages.json"
+    },
+    {
+     "id": "matlab.driver",
+     "what": "NVIDIA Linux installer of the lane's guest driver (official URL, pinned by sha256 in release-matrix.json)",
+     "class": "official-url",
+     "down_bytes": 398000000,
+     "url": "https://download.nvidia.com/XFree86/Linux-x86_64/",
+     "basis": "ESTIMATE",
+     "date": "2026-11-17",
+     "source": "ci/vast-broker/release-matrix.json driver_installers (396.6 to 398.3 MB for the 580 installers)",
+     "note": "one installer of about 0.4 GB; the version is per die (linux_guest_driver in the release matrix), so the size is an estimate",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-17",
+    "source": "ci/vast-broker/bandwidth.json stage propimage_apps_b",
+    "note": "evidence pull-back: text only (verdicts, host GPU samples, per-row results of a few KB each); the split per stage is a guess"
+   }
   }
  }
 }
