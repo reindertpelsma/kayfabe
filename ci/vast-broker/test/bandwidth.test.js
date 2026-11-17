@@ -278,7 +278,11 @@ test("the plan of stages is the payload's own plan (every leg of this file, with
   try {
     const legs = { CHECK_SMALL, CHECK_MIDDLE, A_ONLY, B_ONLY, BOTH };
     for (const [name, leg] of Object.entries(legs))
-      for (const [only, skip] of [[[], []], [['install_flow'], []], [[], ['kfml']]]) {
+      for (const [only, skip] of [
+        [[], []],
+        [['install_flow'], []],
+        [[], ['kfml']],
+      ]) {
         const doc = make(leg);
         if (only.includes('install_flow') && doc.tier !== 'large') continue;
         if (skip.includes('kfml') && !['middle', 'large'].includes(doc.tier)) continue; // the payload refuses a --skip of a stage that is not planned
@@ -289,13 +293,19 @@ test("the plan of stages is the payload's own plan (every leg of this file, with
         for (const o of skip) args.push('--skip', o);
         const run = python(args);
         // `planned=` is the whole plan; `stages=` is what --only/--skip chose out of it (a --skip leg is compared with the chosen list)
-        const planned = (skip.length ? /stages=(\S+) planned=/ : /planned=(\S+)/).exec(run.stdout)?.[1];
+        const planned = (skip.length ? /stages=(\S+) planned=/ : /planned=(\S+)/).exec(
+          run.stdout,
+        )?.[1];
         // image B's definitions are another change: a strict refusal there is not a plan to compare
         if (!planned) {
           assert.match(run.stdout, /STRICT_UNKNOWN_APP/, name);
           continue;
         }
-        assert.deepEqual(plannedStages(doc, { only, skip }), planned.split(':'), name + only + skip);
+        assert.deepEqual(
+          plannedStages(doc, { only, skip }),
+          planned.split(':'),
+          name + only + skip,
+        );
       }
   } finally {
     rmSync(dir, { recursive: true, force: true });

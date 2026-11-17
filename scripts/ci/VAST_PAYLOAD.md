@@ -495,6 +495,14 @@ from the box, no flavour is passed in and no die or driver is named; a box no fl
 first stage (`start_kfml_prefetch`, only when `kfml` is among the chosen stages; failure to start is ignored) and the stage waits for it only if it is still running, then verifies the files again. Environment variables whose names look like secrets
 (`TOKEN`, `SECRET`, `PASSWORD`, `API_KEY`, `AWS_`) are removed from the children.
 
+**2026-11-17 correction to the Grading paragraph below (strict instruction; GPU-free tested only, not yet run on a box).** MEASURED in the 2026-11-17 acceptance run on a Vast box: the stage graded PASS although one of the six rows,
+`managed_oversub`, was NOT_RUN (`host RAM too small to oversubscribe VRAM by 25%`: the VM had 47.6 GiB MemAvailable and the rule needs 1.25 x VRAM <= 60% of MemAvailable); a PASS record with a NOT_RUN row is a pass below, and a whole-stage
+NOT_RUN is a skipped row. Under a **strict** instruction that is now a failure BY NAME: `kfml_rows(text, rc, sha, result, strict=True)` raises `kfml_not_run` (`KF_PAYLOAD_FAIL suite=kfml_not_run`, a failing suite row) for a whole-stage NOT_RUN
+with rc 0 and for any NOT_RUN row of a PASS record, after the record is stored under `kfml` in `kf-result.json` (the evidence stays; `vast_report.py` needs no change, `kfml_not_run` is an ordinary suite name and the kept record validates).
+A FAIL row, a bad exit code, another sha or a missing line are still `kfml`. "Strict" here means `propimages_strict` (`payload_instruction.py`), the instruction's ONLY strict switch (it needs `propimages`, so it is a large-tier instruction
+that lists images); `main()` passes it as `strict=instruction.propimages_strict`. Without it nothing changed: the paragraph below is the default. **OWNER DECISION, open and not made here: whether kfml deserves its own strict field** (a strict kfml
+run without an image list cannot be expressed today). Tests `test_kfml_stage.py` (`Payload`, `StrictInMain`); mutants `kfml_stage_mutants.py` (`strict-*`, two named killers each).
+
 Grading (`kfml_rows`): one `KF_KFML_RESULT {...}` line, rc 0, verdict PASS (at least one PASS row, no FAIL row, the others NOT_RUN for a named hardware reason) and the payload's sha gives the row `kfml` PASS.
 Verdict NOT_RUN (the plan exit 3, no pinned flavour fits the box, or every test NOT_RUN) with rc 0 is a **skipped** row, never a pass and never a fail; the NOT_RUN record carries the die and driver. A FAIL row, a failed step, a crash exit code, a missing or duplicated line or another sha is
 the stage failing (`KF_PAYLOAD_FAIL suite=kfml`). The record is kept in `kf-result.json` under `kfml` even when red: per-row name, status, reason, wall_s, scalar metrics, and the die, compute capability, driver, driver CUDA, torch CUDA runtime and flavour
