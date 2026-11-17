@@ -1,0 +1,35 @@
+{
+  "app": "aftereffects",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "generated 4K 16-bit project (3d_layer,camera,cuda,expression,footage,glow,lumetri,particles,turbulent) rendered by aerender: 60 frames 3840x2160",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "CUDA/OptiX effects, 3D layers, 16-bit float, 4K render, particle effects",
+  "platform": "kf3",
+  "secs": 591,
+  "gpu": {
+    "required": [
+      "gpu"
+    ],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 40.0,
+      "mem_mb": 9853.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 40.0,
+      "enc": 0.0,
+      "dec": 13.0,
+      "busy_samples": 194
+    },
+    "baseline": {
+      "mem_mb": 9430.0,
+      "gpu": 1.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 1353
+  },
+  "outputs_recorded": 8
+}

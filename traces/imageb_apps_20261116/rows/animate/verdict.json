@@ -1,0 +1,32 @@
+{
+  "app": "animate",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "Animate did not finish the script",
+  "class": "app",
+  "limited": false,
+  "lane": "gate",
+  "path": "OpenGL/D3D11 stage, tween export",
+  "platform": "kf3",
+  "secs": 282,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 13.0,
+      "mem_mb": 5355.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 13.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 26
+    },
+    "baseline": {
+      "mem_mb": 5312.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 717
+  }
+}

@@ -1,0 +1,34 @@
+{
+ "required": [
+  "gpu"
+ ],
+ "verdict": "PASS",
+ "reasons": [],
+ "baseline": {
+  "mem_mb": 9417.0,
+  "gpu": 0.0,
+  "enc_sessions": 0.0
+ },
+ "peak": {
+  "gpu": 34.0,
+  "mem_mb": 9610.0,
+  "enc_sessions": 0.0,
+  "gpu_dmon_sm": 34.0,
+  "enc": 0.0,
+  "dec": 0.0,
+  "busy_samples": 90
+ },
+ "samples": 610,
+ "dmon_samples": 304,
+ "source": "host",
+ "guest": {
+  "verdict": "FAIL",
+  "reasons": [
+   "no samples: the GPU could not be read (nvidia-smi missing, no GPU or empty output)"
+  ],
+  "peak": {},
+  "baseline": {},
+  "samples": 0
+ },
+ "name": "aetoggle"
+}
