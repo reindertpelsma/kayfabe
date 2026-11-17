@@ -35,7 +35,7 @@ TABLE = HERE / "lanes.json"
 
 RETRY_CLASSES = ("NOT_BUILT", "MEDIA", "PROVIDER", "TRANSPORT", "TIME", "HOSTREF", "BAR1_EXCEPTION", "OPERATOR", "USAGE")
 ROW_RESULTS = ("PASS", "FAIL", "NOT_RUN")
-FAIL_REASONS = ("RESET", "TIMEOUT", "REFUSED", "SUBTEST", "NOTDONE", "RC", "DISPLAY", "GUEST")
+FAIL_REASONS = ("RESET", "TIMEOUT", "REFUSED", "SUBTEST", "NOTDONE", "RC", "DISPLAY", "GUEST", "GUEST_SHUTDOWN_LICENCE")
 NOT_RUN_REASONS = ("TIME", "GATHER", "NO_TDR", "BOOT", "SETUP", "LAUNCH")
 WORKLOAD = re.compile(r"[a-z][a-z_]*-[0-9]{2}")
 SUBTEST = re.compile(r"[A-Za-z0-9_]{1,48}")
@@ -222,7 +222,7 @@ def row_line(row):
 
 ROW_PATTERN = re.compile(
     r"^SPEC_ROW name=([a-z][a-z_]*-[0-9]{2}) result=(PASS|FAIL|NOT_RUN) subtests=([0-9]{1,3})/([0-9]{1,3})"
-    r" reason=([A-Z_]{1,16}|-) failed=([A-Za-z0-9_,]{1,120}|-)$"
+    r" reason=([A-Z_]{1,24}|-) failed=([A-Za-z0-9_,]{1,120}|-)$"
 )
 
 

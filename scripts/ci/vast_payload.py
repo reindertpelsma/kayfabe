@@ -382,7 +382,7 @@ SPEC_RETRY_CLASSES = {
 }
 SPEC_ROW = re.compile(
     r"^SPEC_ROW name=([a-z][a-z_]*-[0-9]{2}) result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3}"
-    r" reason=(?:[A-Z_]{1,16}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)$",
+    r" reason=(?:[A-Z_]{1,24}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)$",
     re.M,
 )
 SPEC_LIST = re.compile(r"^SPEC_STAGE_LIST lane=(lanea|laneb|both) n=([0-9]{1,2})$", re.M)
@@ -2277,6 +2277,9 @@ def main():
                     "KF_SPEC_TABLE",
                     "KF_SPEC_LANE=" + spec,
                     "KF_SPEC_DEADLINE_EPOCH=" + str(soft // 1000 - SPEC_DEADLINE_MARGIN_S),
+                    # the guest has the network and the real clock (owner, 2026-11-17): the stage's own default, said here
+                    # so that no inherited setting can turn it off on a lane run
+                    "KF_SPEC_NET=online",
                     "bash",
                     str(root / "scripts/ci/vast_stage_specviewperf.sh"),
                     tag,
