@@ -55,6 +55,11 @@ fn the_use_sites_read_the_property() {
             "if let Some(u) = &self.util { u.state.publish(&mut |gpa, bytes| self.ram.write_gpa(gpa, bytes)); }",
         ),
         (
+            "a device reset forgets the guest's RUSD link",
+            &dev,
+            "if let Some(u) = &self.util { u.state.forget_guest(); }",
+        ),
+        (
             "the ABI call maps the word to the Config field",
             &ffi,
             "report_utilization: report_utilization != 0,",
@@ -109,4 +114,33 @@ fn no_use_site_hardwires_the_property() {
             );
         }
     }
+}
+
+/// ★ Security review of PR #459, F1: the link of a dead guest life is forgotten in the reset path itself, before the
+/// reset's own bookkeeping, not only by the chain rebuild (which seats nothing for a version with no layout row).
+#[test]
+fn the_reset_path_forgets_the_link_before_its_other_bookkeeping() {
+    let dev = flat(&read("src/device.rs"));
+    let reset = dev
+        .split("fn reset_drainer_state(")
+        .nth(1)
+        .expect("reset_drainer_state");
+    let forget = reset
+        .find("u.state.forget_guest()")
+        .expect("the reset forgets the util link");
+    let chain = reset
+        .find("g.policy.reset_life()")
+        .expect("the reset rebuilds the chain");
+    let held = reset
+        .find("self.hotplug_pending.store(0")
+        .expect("the reset clears hotplug");
+    assert!(
+        chain < forget && forget < held,
+        "forget_guest sits right after the chain rebuild"
+    );
+    // and the wake path (S3: the guest life is KEPT) returns before it, so a resumed guest keeps its link
+    let wake = reset
+        .find("return crate::reset::Life::Kept")
+        .expect("the wake path");
+    assert!(wake < forget);
 }

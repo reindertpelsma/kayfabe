@@ -800,3 +800,112 @@ fn hostile_a_frozen_clock_serves_one_burst_and_a_moving_one_the_rate() {
     let next = (0..64).filter(|_| r.chain.respond(&req).is_some()).count() as u64;
     assert_eq!(next, 1, "100 ms at 16/s is one token");
 }
+
+// ---------------------------------------------------------------- security review of PR #459 (F1, F3)
+
+/// ★ F1, replayed: boot A seats the link, then the device resets and rebuilds the chain for a driver version that
+/// has a table but NO layout row. The rebuild must leave no link: no write is ever issued into the memory of the
+/// next guest life, whatever is sampled.
+#[test]
+fn rusd_a_reset_into_a_version_without_a_row_leaves_no_link_and_issues_no_write() {
+    let mut a = rig(v(580, 159, 4), true);
+    let state = a.state.clone().unwrap();
+    a.push(70, 2_000_000_000);
+    assert!(a.chain.respond(&a.init(1, 0x10_0000)).is_some());
+    assert!(a.chain.respond(&a.poll(2)).is_some());
+    assert_eq!(state.rusd_page(), Some(0x10_0000));
+    // the reset: a fresh chain for a version the probe has no row for (570.86.15: an older INIT struct)
+    let no_row = v(570, 86, 15);
+    assert!(ku::layout(no_row).is_none());
+    let _boot_b = kf_rm::served_policy(
+        ga106::board(),
+        ga106::host(),
+        abi(no_row),
+        ChainLogs::default(),
+        Default::default(),
+        kf_rm::ObjectLinks {
+            utilization: Some(UtilizationSeat {
+                state: state.clone(),
+            }),
+            ..Default::default()
+        },
+    );
+    assert_eq!(state.rusd_page(), None, "the link is gone");
+    assert!(!state.rusd_wants_utilization());
+    for step in 0..4u64 {
+        a.clock.0.fetch_add(300_000_000, Ordering::Relaxed);
+        state.push(GuestSample {
+            timestamp_ns: a.clock.0.load(Ordering::Relaxed),
+            percents: Percents::default(),
+        });
+        assert_eq!(
+            state.publish(&mut |g, _| panic!(
+                "a write into the next guest life at {g:#x} (step {step})"
+            )),
+            PublishOutcome::NotWanted
+        );
+    }
+}
+
+/// ★ F3: when the host stops answering, the guest's record does not keep a valid timestamp and a frozen number:
+/// it is invalidated (timestamp 0, the header's "not available"), once, and the reader sees no record.
+#[test]
+fn rusd_a_host_that_stops_answering_ages_the_record_out_visibly() {
+    let mut r = rig(v(580, 159, 4), true);
+    let l = r.l();
+    let state = r.state.clone().unwrap();
+    let mut ram = Ram {
+        base: 0x10_0000,
+        mem: vec![0u8; 4096],
+        writes: Vec::new(),
+    };
+    r.push(97, 2_000_000_000);
+    assert!(r.chain.respond(&r.init(1, 0x10_0000)).is_some());
+    assert!(r.chain.respond(&r.poll(2)).is_some());
+    assert_eq!(
+        state.publish(&mut |g, b| ram.write(g, b)),
+        PublishOutcome::Written
+    );
+    assert_eq!(read_record(&ram.mem, l).unwrap().1, 97);
+    // the host goes quiet: no new sample for longer than the freshness window
+    r.clock.0.fetch_add(4_000_000_000, Ordering::Relaxed);
+    assert_eq!(
+        state.publish(&mut |g, b| ram.write(g, b)),
+        PublishOutcome::Invalidated
+    );
+    assert!(
+        read_record(&ram.mem, l).is_none(),
+        "the frozen 97 % is no longer readable"
+    );
+    // and it stays quiet: nothing more is written
+    r.clock.0.fetch_add(1_000_000_000, Ordering::Relaxed);
+    let n = ram.writes.len();
+    assert_eq!(
+        state.publish(&mut |g, b| ram.write(g, b)),
+        PublishOutcome::NoSample
+    );
+    assert_eq!(ram.writes.len(), n);
+    // when samples return, the record returns
+    r.push(12, 8_000_000_000);
+    assert_eq!(
+        state.publish(&mut |g, b| ram.write(g, b)),
+        PublishOutcome::Written
+    );
+    assert_eq!(read_record(&ram.mem, l).unwrap().1, 12);
+}
+
+/// Forgetting the guest (what the device does at a reset) stops the publication of a linked, polled page.
+#[test]
+fn rusd_forgetting_the_guest_stops_the_publication() {
+    let mut r = rig(v(595, 84, 0), true);
+    let state = r.state.clone().unwrap();
+    r.push(33, 2_000_000_000);
+    assert!(r.chain.respond(&r.init(1, 0x10_0000)).is_some());
+    assert!(r.chain.respond(&r.poll(2)).is_some());
+    state.forget_guest();
+    assert_eq!(state.rusd_page(), None);
+    assert_eq!(
+        state.publish(&mut |_, _| panic!("no write")),
+        PublishOutcome::NotWanted
+    );
+}

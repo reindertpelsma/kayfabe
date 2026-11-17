@@ -1041,6 +1041,73 @@ mod tests {
         }
     }
 
+    /// `major.minor.patch` as the matrix and the receipts spell a tag (`580.159.04`, `595.84`).
+    fn tag_name(v: DriverVersion) -> String {
+        if v.patch == 0 {
+            format!("{}.{}", v.major, v.minor)
+        } else {
+            format!("{}.{}.{:02}", v.major, v.minor, v.patch)
+        }
+    }
+
+    /// ★ Security review of PR #459, F2: the tag set must not be a hand-typed list. Every driver version in the driver
+    /// matrix's tag list (`generated::matrix`) from the first with the GPUMON v2 geometry up has either a layout row or a
+    /// receipt that says why not (`unprobeable`); a listed version with neither fails here, so a missing row is a visible refusal and
+    /// never a silent gap.
+    #[test]
+    fn every_measured_tag_has_a_row_or_an_unprobeable_receipt() {
+        let sources = include_str!("../../../traces/util_layout_20261117/sources.json");
+        let first = DriverVersion {
+            major: 570,
+            minor: 86,
+            patch: 15,
+        };
+        let mut covered = 0;
+        for v in m::MEASURED.iter().filter(|v| **v >= first) {
+            let tag = tag_name(*v);
+            let entry = sources
+                .split(&format!("\"{tag}\": {{"))
+                .nth(1)
+                .unwrap_or_else(|| {
+                    panic!("{tag} is a measured driver version with NO receipt in sources.json")
+                })
+                .split('}')
+                .next()
+                .unwrap();
+            let has_row = layout(*v).is_some();
+            let unprobeable = entry.contains("\"unprobeable\"");
+            assert!(
+                has_row != unprobeable,
+                "{tag}: exactly one of a layout row ({has_row}) and an unprobeable receipt ({unprobeable})"
+            );
+            covered += 1;
+        }
+        assert!(covered >= 20, "{covered}");
+        // the version the review found missing
+        assert!(
+            layout(DriverVersion {
+                major: 580,
+                minor: 178,
+                patch: 4
+            })
+            .is_some()
+        );
+    }
+
+    #[test]
+    fn a_guest_version_with_no_row_is_refused_never_guessed() {
+        // the one a neighbouring row would have lent: 580.178.04's neighbours are 580.173.02 and 590.48.01
+        for (maj, min, pat) in [(580, 174, 0), (580, 179, 1), (590, 47, 9), (575, 51, 1)] {
+            let v = DriverVersion {
+                major: maj,
+                minor: min,
+                patch: pat,
+            };
+            assert!(layout(v).is_none(), "{v}");
+            assert!(gpumon_at(v).is_none() && rusd_at(v).is_none(), "{v}");
+        }
+    }
+
     #[test]
     fn reduce_rounds_to_nearest_and_clamps() {
         assert_eq!(reduce(0), (0, false));

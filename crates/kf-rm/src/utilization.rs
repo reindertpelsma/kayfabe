@@ -124,6 +124,7 @@ struct Counters {
     init_refused: AtomicU64,
     poll_seen: AtomicU64,
     published: AtomicU64,
+    invalidated: AtomicU64,
     publish_refused: AtomicU64,
     host_reads: AtomicU64,
     host_refused: AtomicU64,
@@ -153,6 +154,8 @@ pub struct CounterSnapshot {
     pub poll_seen: u64,
     /// RUSD records published.
     pub published: u64,
+    /// RUSD records invalidated because the samples went stale.
+    pub invalidated: u64,
     /// RUSD publications the guest-RAM writer refused (address not registered RAM).
     pub publish_refused: u64,
     /// Host reads made.
@@ -196,6 +199,9 @@ pub struct UtilizationState {
     last_published_ns: AtomicU64,
     /// The last timestamp written to the RUSD record (strictly increasing).
     last_ts: AtomicU64,
+    /// Whether the guest's page holds a record this module wrote with a valid timestamp (so it must be
+    /// invalidated, not left to look current, when the samples go stale).
+    record_valid: AtomicBool,
     counters: Counters,
 }
 
@@ -221,6 +227,7 @@ impl UtilizationState {
             publish_pending: AtomicBool::new(false),
             last_published_ns: AtomicU64::new(0),
             last_ts: AtomicU64::new(0),
+            record_valid: AtomicBool::new(false),
             counters: Counters::default(),
         })
     }
@@ -291,8 +298,15 @@ impl UtilizationState {
         self.rusd_wants.load(Ordering::Relaxed)
     }
 
+    /// ★ The guest is gone (a device reset): forget its RUSD link, mask and layout at once, keep the samples. The
+    /// device calls this on every non-wake reset, besides the chain rebuild, so no path leaves a link.
+    pub fn forget_guest(&self) {
+        self.reset_guest(None);
+    }
+
     /// A new guest life (the chain was rebuilt): forget the guest's RUSD link and mask, keep the samples.
     fn reset_guest(&self, rusd: Option<&'static Layout>) {
+        self.record_valid.store(false, Ordering::Relaxed);
         self.rusd_phys.store(0, Ordering::Relaxed);
         self.rusd_wants.store(false, Ordering::Relaxed);
         self.publish_pending.store(false, Ordering::Relaxed);
@@ -316,6 +330,7 @@ impl UtilizationState {
             init_refused: load(&c.init_refused),
             poll_seen: load(&c.poll_seen),
             published: load(&c.published),
+            invalidated: load(&c.invalidated),
             publish_refused: load(&c.publish_refused),
             host_reads: load(&c.host_reads),
             host_refused: load(&c.host_refused),
@@ -374,6 +389,20 @@ impl UtilizationState {
             return PublishOutcome::NotDue;
         }
         let Some(samples) = self.fresh_samples() else {
+            // ★ The samples went stale (the host stopped answering). A record already written must not keep a
+            // valid timestamp and a frozen number: write the control's own "not available" (timestamp 0), once.
+            if self.record_valid.swap(false, Ordering::Relaxed) {
+                let wrote = phys
+                    .checked_add(layout.rusd_off_util + layout.util_off_ts)
+                    .is_some_and(|at| write(at, &layout.ts_invalid.to_le_bytes()));
+                self.publish_pending.store(false, Ordering::Relaxed);
+                if !wrote {
+                    bump(&self.counters.publish_refused);
+                    return PublishOutcome::Refused;
+                }
+                bump(&self.counters.invalidated);
+                return PublishOutcome::Invalidated;
+            }
             return PublishOutcome::NoSample;
         };
         let Some(newest) = samples.last() else {
@@ -399,6 +428,7 @@ impl UtilizationState {
             return PublishOutcome::Refused;
         }
         self.last_ts.store(ts, Ordering::Relaxed);
+        self.record_valid.store(true, Ordering::Relaxed);
         self.last_published_ns.store(now, Ordering::Relaxed);
         self.publish_pending.store(false, Ordering::Relaxed);
         bump(&self.counters.published);
@@ -417,6 +447,9 @@ pub enum PublishOutcome {
     NoSample,
     /// The record was written.
     Written,
+    /// The samples went stale: the record was invalidated (timestamp `RUSD_TIMESTAMP_INVALID`) instead of left
+    /// looking current.
+    Invalidated,
     /// The guest-RAM writer refused (the page is not registered RAM), or the address would wrap.
     Refused,
 }
@@ -479,7 +512,9 @@ impl Sampler {
         bump(&self.state.counters.host_reads);
         match self.host.read() {
             Ok(r) => {
-                if r.host_timestamp <= self.last_host_ts {
+                // Equal = the host produced nothing new. A SMALLER one means the host's timer restarted (a host GPU
+                // reset): accepted, with the new baseline, instead of dropping every sample until it catches up.
+                if r.host_timestamp == self.last_host_ts {
                     bump(&self.state.counters.host_stalled);
                     return TickOutcome::Stalled;
                 }
@@ -571,11 +606,13 @@ impl UtilizationPolicy {
     ) -> Option<UtilizationPolicy> {
         let v = driver.driver_version();
         let (gpumon, rusd) = (ku::gpumon_at(v), ku::rusd_at(v));
+        // ★ A new chain is a new guest life: its RUSD link and mask start empty, and this happens BEFORE any early
+        // return. A rebuild for a driver version with no row must leave NO link behind, or the drainer would keep
+        // writing into the memory of the next guest life (security review of PR #459, F1).
+        seat.state.reset_guest(rusd);
         if gpumon.is_none() && rusd.is_none() {
             return None;
         }
-        // A new chain is a new guest life: its RUSD link and mask start empty.
-        seat.state.reset_guest(rusd);
         let now = seat.state.now_ns();
         Some(UtilizationPolicy {
             driver,
@@ -840,7 +877,7 @@ mod tests {
         let (clock, state, mut s, _) = rig(vec![
             Ok(reading(7, 40)),
             Ok(reading(7, 41)),
-            Ok(reading(6, 42)),
+            Ok(reading(7, 42)),
         ]);
         state.note_interest();
         assert_eq!(s.tick(), TickOutcome::Sampled);
@@ -1192,6 +1229,149 @@ mod tests {
             );
         }
         assert_eq!(state.fresh_samples().unwrap().len(), RING_MAX);
+    }
+
+    #[test]
+    fn a_host_timestamp_that_goes_backwards_is_a_restart_not_a_stall() {
+        let (clock, state, mut s, _) = rig(vec![
+            Ok(reading(1_000, 40)),
+            Ok(reading(5, 60)),
+            Ok(reading(5, 61)),
+        ]);
+        state.note_interest();
+        assert_eq!(s.tick(), TickOutcome::Sampled);
+        clock.advance(SAMPLE_PERIOD);
+        assert_eq!(
+            s.tick(),
+            TickOutcome::Sampled,
+            "a restarted host timer is a new baseline"
+        );
+        clock.advance(SAMPLE_PERIOD);
+        assert_eq!(
+            s.tick(),
+            TickOutcome::Stalled,
+            "and the same value again is a stall"
+        );
+        assert_eq!(
+            state.fresh_samples().unwrap().last().unwrap().percents.gpu,
+            60
+        );
+    }
+
+    #[test]
+    fn a_stale_snapshot_invalidates_the_published_record_once() {
+        let clock = FakeClock::at(5_000);
+        let state = linked(&clock, 0x40_0000, l580(), true);
+        state.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
+        let writes = std::cell::RefCell::new(Vec::<(u64, Vec<u8>)>::new());
+        let mut w = |g: u64, b: &[u8]| {
+            writes.borrow_mut().push((g, b.to_vec()));
+            true
+        };
+        assert_eq!(state.publish(&mut w), PublishOutcome::Written);
+        writes.borrow_mut().clear();
+        clock.advance(FRESH_FOR + Duration::from_secs(1));
+        assert_eq!(state.publish(&mut w), PublishOutcome::Invalidated);
+        assert_eq!(
+            *writes.borrow(),
+            vec![(0x40_0000 + 1976, 0u64.to_le_bytes().to_vec())],
+            "the timestamp word only, set to 0"
+        );
+        clock.advance(Duration::from_secs(1));
+        assert_eq!(state.publish(&mut w), PublishOutcome::NoSample, "once");
+        assert_eq!(writes.borrow().len(), 1);
+        assert_eq!(state.counters().invalidated, 1);
+    }
+
+    #[test]
+    fn a_refused_invalidation_is_counted_and_not_retried() {
+        let clock = FakeClock::at(5_000);
+        let state = linked(&clock, 0x40_0000, l580(), true);
+        state.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
+        assert_eq!(state.publish(&mut |_, _| true), PublishOutcome::Written);
+        clock.advance(FRESH_FOR + Duration::from_secs(1));
+        assert_eq!(state.publish(&mut |_, _| false), PublishOutcome::Refused);
+        assert_eq!(
+            state.publish(&mut |_, _| panic!("not retried")),
+            PublishOutcome::NoSample
+        );
+    }
+
+    #[test]
+    fn forgetting_the_guest_leaves_no_link_no_wish_no_layout_and_no_record() {
+        let clock = FakeClock::at(5_000);
+        let state = linked(&clock, 0x40_0000, l580(), true);
+        state.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
+        assert_eq!(state.publish(&mut |_, _| true), PublishOutcome::Written);
+        state.forget_guest();
+        assert_eq!(state.rusd_page(), None);
+        assert!(!state.rusd_wants_utilization());
+        clock.advance(FRESH_FOR + Duration::from_secs(1));
+        assert_eq!(
+            state.publish(&mut |_, _| panic!("a gone guest is never written to")),
+            PublishOutcome::NotWanted
+        );
+    }
+
+    #[test]
+    fn a_rebuild_for_a_version_without_a_row_clears_the_link_and_seats_nothing() {
+        let clock = FakeClock::at(5_000);
+        let state = linked(&clock, 0x40_0000, l580(), true);
+        assert_eq!(state.rusd_page(), Some(0x40_0000));
+        let no_row = kf_abi::versions::table_for(kf_abi::DriverVersion {
+            major: 570,
+            minor: 86,
+            patch: 15,
+        })
+        .expect("a wire table");
+        assert!(
+            UtilizationPolicy::new(
+                *no_row,
+                &UtilizationSeat {
+                    state: state.clone()
+                }
+            )
+            .is_none()
+        );
+        assert_eq!(
+            state.rusd_page(),
+            None,
+            "no link survives a rebuild that seats nothing"
+        );
+        assert!(!state.rusd_wants_utilization());
+        state.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
+        assert_eq!(
+            state.publish(&mut |_, _| panic!("no write")),
+            PublishOutcome::NotWanted
+        );
+    }
+
+    #[test]
+    fn after_a_host_timer_restart_the_snapshot_keeps_following_the_host() {
+        let (clock, state, mut s, _) = rig(vec![
+            Ok(reading(900, 10)),
+            Ok(reading(2, 20)),
+            Ok(reading(3, 30)),
+            Ok(reading(4, 40)),
+        ]);
+        state.note_interest();
+        for _ in 0..4 {
+            assert_eq!(s.tick(), TickOutcome::Sampled);
+            clock.advance(SAMPLE_PERIOD);
+        }
+        assert_eq!(state.fresh_samples().unwrap().len(), 4);
     }
 
     #[test]

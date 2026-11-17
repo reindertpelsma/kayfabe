@@ -81,7 +81,7 @@ CASES = [
     # --- kf-rm: the state, the sampler, the publisher, the link
     ("bucket-never-limits", ed(RU, "        if self.tokens == 0 {\n            return false;\n        }", "        if false {\n            return false;\n        }"), RM),
     ("sampler-ignores-the-period-and-floor", ed(RU, "if self.last_call_ns != 0 && now.saturating_sub(self.last_call_ns) < need {", "if false && now.saturating_sub(self.last_call_ns) < need {"), RM),
-    ("sampler-keeps-a-stalled-sample", ed(RU, "if r.host_timestamp <= self.last_host_ts {", "if false {"), RM),
+    ("sampler-keeps-a-stalled-sample", ed(RU, "if r.host_timestamp == self.last_host_ts {", "if false {"), RM),
     ("sampler-always-slow", ed(RU, "        if self.state.interested() {\n            SAMPLE_PERIOD.max(SAMPLE_PERIOD_MIN)", "        if false {\n            SAMPLE_PERIOD.max(SAMPLE_PERIOD_MIN)"), RM),
     ("stale-snapshots-are-served", ed(RU, "(age <= u64::try_from(FRESH_FOR.as_nanos()).unwrap_or(u64::MAX)).then(|| ring.clone())", "Some(ring.clone())"), RM),
     ("ring-grows-without-bound", ed(RU, "        if ring.len() == RING_MAX {\n            ring.remove(0);\n        }\n", ""), RM),
@@ -98,6 +98,12 @@ CASES = [
     ("gpumon-reply-echoes-the-guests-bytes", ed(RU, "let reply = ku::encode_gpumon_reply(l, &samples)?;", "let mut reply = ku::encode_gpumon_reply(l, &samples)?;\n        reply[16..64].copy_from_slice(&params[16..64]);"), RM),
     ("link-not-seated", ed(LIB, "    if let Some(seat) = &utilization\n        && let Some(link) = utilization::UtilizationPolicy::new(driver, seat)\n    {", "    if let Some(seat) = &utilization\n        && false\n        && let Some(link) = utilization::UtilizationPolicy::new(driver, seat)\n    {"), RM),
     ("link-seated-after-the-ledger-never-reached", ed(LIB, "    if let Some(seat) = &utilization\n        && let Some(link) = utilization::UtilizationPolicy::new(driver, seat)\n    {\n        chain.push(Box::new(link));\n    }\n", ""), RM),
+    # --- security review of PR #459 (F1, F3)
+    ("new-resets-the-link-only-after-the-early-return", ed(RU, "        seat.state.reset_guest(rusd);\n        if gpumon.is_none() && rusd.is_none() {\n            return None;\n        }", "        if gpumon.is_none() && rusd.is_none() {\n            return None;\n        }\n        seat.state.reset_guest(rusd);"), RM),
+    ("forget-guest-forgets-nothing", ed(RU, "    pub fn forget_guest(&self) {\n        self.reset_guest(None);\n    }", "    pub fn forget_guest(&self) {}"), RM),
+    ("a-stale-record-stays-valid", ed(RU, "if self.record_valid.swap(false, Ordering::Relaxed) {", "if false {"), RM),
+    ("a-host-timer-restart-is-a-stall", ed(RU, "if r.host_timestamp == self.last_host_ts {", "if r.host_timestamp <= self.last_host_ts {"), RM),
+    ("the-reset-path-keeps-the-link", ed(DEV, "        if let Some(u) = &self.util {\n            u.state.forget_guest();\n        }\n", ""), QEMU),
     # --- kf-qemu: the host read, the property
     ("classify-treats-not-supported-as-transient", ed(UH, "RmError::InsufficientPermissions | RmError::Other(NV_ERR_NOT_SUPPORTED) => {", "RmError::InsufficientPermissions => {"), QEMU),
     ("read-via-sends-guest-shaped-junk", ed(UH, "let mut params = ku::host_request(layout);", "let mut params = vec![0xa5u8; layout.params_len()];"), QEMU),

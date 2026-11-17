@@ -234,6 +234,11 @@ pub const ROWS: &[(&[DriverVersion], Layout)] = &[
                 minor: 173,
                 patch: 2,
             },
+            DriverVersion {
+                major: 580,
+                minor: 178,
+                patch: 4,
+            },
         ],
         Layout {
             gpumon_cmd: 545267862,

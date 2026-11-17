@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -30,11 +31,29 @@ PROBE = ROOT / "tools/util-probe/probe.c"
 RECEIPTS = ROOT / "traces/util_layout_20261117"
 OUT = ROOT / "crates/kf-abi/src/utilization_generated.rs"
 URL = "https://github.com/NVIDIA/open-gpu-kernel-modules"
-# The tags worth a row: every measured driver-matrix tag from the first one that has the GPUMON v2 geometry
-# (570.86.15) up. RUSD's own layout moves between tags (580.159.04 -> 595.84 moves perfDevUtil), so each tag is
-# probed on its own and a tag nobody probed is refused.
-TAGS = """570.86.15 570.124.06 570.148.08 575.51.02 575.51.03 575.57.08 575.64.05 580.65.06 580.82.07 580.94.02
-580.95.05 580.105.08 580.126.09 580.159.04 580.173.02 590.48.01 595.84 595.91.07 610.43.02 610.57.04 615.71.09""".split()
+MATRIX = ROOT / "crates/kf-abi/src/generated/matrix.rs"
+FIRST = (570, 86, 15)  # the first measured tag with the GPUMON v2 geometry
+
+
+def version_key(tag):
+    parts = [int(x) for x in tag.split(".")]
+    return tuple(parts + [0] * (3 - len(parts)))
+
+
+def measured_tags():
+    """The tags worth a row, DERIVED, never typed: every driver-matrix MEASURED tag from FIRST up, read from the
+    `// <tag>` comments of `kf_abi::generated::matrix::MEASURED`. RUSD's own layout moves between tags (580.159.04 ->
+    595.84 moves perfDevUtil), so each tag is probed on its own, and a tag nobody probed is refused. The Rust test
+    `every_measured_tag_has_a_row_or_an_unprobeable_receipt` fails when a measured tag has neither."""
+    text = MATRIX.read_text()
+    block = text[text.index("pub const MEASURED") :]
+    block = block[: block.index("];")]
+    tags = re.findall(r"//\s*(\d+\.\d+(?:\.\d+)?)\s*$", block, re.M)
+    assert len(tags) >= 20, "could not read MEASURED from the generated matrix"
+    return [t for t in sorted(set(tags), key=version_key) if version_key(t) >= FIRST]
+
+
+TAGS = measured_tags()
 INC = ("src/common/sdk/nvidia/inc",)
 
 # TSV key -> Rust field of `Layout`. Every field is a number the compiler printed.
@@ -210,6 +229,11 @@ def cmd_emit():
 
 def cmd_check(o580, o595):
     sources = json.loads((RECEIPTS / "sources.json").read_text())
+    if sorted(sources, key=version_key) != TAGS:
+        raise SystemExit(
+            "sources.json does not cover exactly the measured tags: missing %s, extra %s (run generate.py all)"
+            % (sorted(set(TAGS) - set(sources)), sorted(set(sources) - set(TAGS)))
+        )
     for tag, tree in (("580.159.04", o580), ("595.84", o595)):
         raw, _ = probe(tree)
         want = (RECEIPTS / f"{tag}.tsv").read_bytes()

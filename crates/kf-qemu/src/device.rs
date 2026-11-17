@@ -3941,6 +3941,11 @@ impl crate::reset::Owners for Device {
             }
             Err(_) => (kf_arch::BootPhase::Cold, 0),
         };
+        // ★ The utilisation link of the dead guest life goes with it, whatever the rebuilt chain is for (a
+        // version with no layout row seats no link and would otherwise never clear it).
+        if let Some(u) = &self.util {
+            u.state.forget_guest();
+        }
         if let Ok(mut q) = self.held_stamps.lock() {
             q.clear();
         }
