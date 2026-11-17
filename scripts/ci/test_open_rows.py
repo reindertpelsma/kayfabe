@@ -456,7 +456,25 @@ class ReasonsAndCompare(unittest.TestCase):
             L.load_known_limits("enc_x\tFAIL\t \n")
         with self.assertRaises(L.TableError):
             L.load_known_limits("enc_x\tBROKEN\tbecause\n")
-        self.assertEqual(L.load_known_limits((OR / "nvcodec_known_limits.tsv").read_text()), [])
+
+    def test_the_committed_limits_are_the_per_vm_encode_session_cap_and_nothing_else(self):
+        # MEASURED 2026-11-17 (first guest run, RTX 3090): the host opens 8 NVENC sessions, the kf3 guest 3 (kf-qemu encquota ENC_SESSIONS_PER_VM = 3,
+        # security review S1-42, docs/design/V3_SECURITY_MODEL.md): a documented limit, so sessions above 3 that the host serves are bucket 1, not a candidate.
+        limits = L.load_known_limits((OR / "nvcodec_known_limits.tsv").read_text())
+        self.assertTrue(limits)
+        for glob, result, reason in limits:
+            self.assertEqual(result, "NOT_SUPPORTED")
+            self.assertIn("encquota", reason)
+            self.assertIn("S1-42", reason)
+        P, NS = "PASS", "NOT_SUPPORTED"
+        for n in ("04", "05", "06", "08", "09", "12"):
+            cid = "sess_h264_n" + n
+            self.assertEqual(L.classify_pair(self._row(cid, P), self._row(cid, NS), limits), ("DISAGREE", L.BUCKET_KNOWN), cid)
+        for n in ("01", "02", "03"):  # up to the cap the guest must serve what the host serves
+            cid = "sess_h264_n" + n
+            self.assertEqual(L.classify_pair(self._row(cid, P), self._row(cid, NS), limits), ("DISAGREE", L.BUCKET_CANDIDATE), cid)
+        self.assertEqual(L.classify_pair(self._row("sess_h264_n05", P), self._row("sess_h264_n05", "FAIL"), limits), ("DISAGREE", L.BUCKET_CANDIDATE))
+        self.assertEqual(L.classify_pair(self._row("enc_hevc_8k", P), self._row("enc_hevc_8k", NS), limits), ("DISAGREE", L.BUCKET_CANDIDATE))
 
     def test_probe_differences_are_reported_per_key(self):
         a, b = L.parse_probe(probe_text(av1=True)), L.parse_probe(probe_text(av1=True, sessions=5))
