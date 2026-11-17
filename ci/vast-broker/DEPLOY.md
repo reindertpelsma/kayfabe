@@ -404,6 +404,15 @@ The Worker uses no R2 binding and has no write capability to the bucket. The box
 captured with `-w '%{redirect_url}'` and handed to the download on stdin, so neither the token
 nor the presigned URL reaches a command line or a log).
 
+#### Private objects (`GET /bench-data/<run>-<attempt>/private/<prefix>/<path>`, 2026-11-17, NOT deployed)
+
+[CODE READ: src/privatedata.js, src/trust.js, private-objects.json, trust.json] A second namespace of the route above, for the licence-restricted
+objects (the proprietary images; private is not sensitive). It needs no new secret or var: it uses the same read-only key pair and `R2_ACCOUNT_ID` /
+`R2_BUCKET`. It answers only a run token that carries the `private` scope, decided when the token was issued; a run that was admitted before this
+Worker was deployed has a token without the claim and is refused `TRUST_SCOPE_MISSING`. The one new public var, `PROPIMAGES_ENABLED` (exactly `true`
+or `false`, default off), makes release legs build and serve their instruction (`GET /instruction/<run>-<attempt>`); leave it unset until the
+payload accepts a release leg. The change alters the bundle, and the pin (`deployment.json`, `DEPLOYED_BUNDLE_SHA256`) is NOT regenerated in it: a dry run on the coordinator box did not reproduce the committed pin even for unmodified source, so regenerate it in the reviewed deployment environment before deploying (the deploy helper refuses a mismatch). Details: `docs/design/V3_WORKER_PRIVATE_PRESIGN.md`.
+
 [CODE READ: gpu-vast.yml, gpu-vast-sweep.yml, workflow-guard.js] GitHub environment gpu-vast holds
 public variable VAST_BROKER_URL=https://ci.kayfabe.dev, secret VAST_BROKER_PATH, and optional
 runner token A secrets (VAST_BROKER_ACCESS_ID and

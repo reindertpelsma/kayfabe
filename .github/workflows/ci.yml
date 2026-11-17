@@ -100,6 +100,8 @@ jobs:
           node ci/vast-broker/denied-countries-mutants.mjs
           # Worker proprietary-image configuration and instruction part, the /bench-data allow-list stays closed (2026-11-16): two named killers per mutant.
           node ci/vast-broker/propimages-mutants.mjs
+          # Private-object presign route, lease-time trust scope, estimate as the price and releaseSeq (2026-11-17): two named killers per mutant.
+          node ci/vast-broker/private-presign-mutants.mjs
           # Bandwidth table guard (fails on a stale ESTIMATE: edit ci/vast-broker/bandwidth.json) and the mutants of the guard, the calibration and the transferred-bytes record (2026-11-16): two named killers per mutant; their tests run in the scripts/ci suite.
           python3 -B -I scripts/ci/bandwidth_check.py
           python3 -B -I scripts/ci/bandwidth_mutants.py
