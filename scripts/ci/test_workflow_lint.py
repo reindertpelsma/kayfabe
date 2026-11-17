@@ -236,10 +236,10 @@ class GateNeeds(unittest.TestCase):
         self.assertEqual(self.lint_ci(self.ci()), [])
 
     def test_a_job_the_gate_does_not_wait_for_is_a_finding(self):
-        text = mutate(self.ci(), ", rust-mutants-b]", "]")
+        text = mutate(self.ci(), ", open-rows-mutants]", "]")
         out = self.lint_ci(text)
         self.assertEqual(len(out), 1, out)
-        self.assertIn("rust-mutants-b", out[0])
+        self.assertIn("open-rows-mutants", out[0])
 
     def test_a_new_job_that_nobody_added_to_the_gate_is_a_finding(self):
         text = mutate(self.ci(), "\n  gate:\n", "\n  shard-x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n\n  gate:\n")

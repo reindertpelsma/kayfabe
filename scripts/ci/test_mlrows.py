@@ -1496,7 +1496,7 @@ class MatrixWiring(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             lst = self.bash(["x", "list"], t).stdout.split()
             allr = self.bash(["x", "listall"], t).stdout.split()
-        self.assertEqual(sorted(set(lst) - set(allr)), sorted(lib.ROWS))
+        self.assertEqual(sorted(set(lst) - set(allr)), sorted([*lib.ROWS, "vkcts"]))   # the union: the Vulkan CTS row is the fourth discovery row
         self.assertLessEqual(set(allr), set(lst))
 
     def test_all_and_listall_leave_the_discovery_rows_out(self):

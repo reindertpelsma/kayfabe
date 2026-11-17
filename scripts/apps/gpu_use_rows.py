@@ -68,7 +68,7 @@ ROWS = {
     "tensorrt": ("b", "framework", {"framework": "tensorrt", "min_mib": 200}, ("gpu",), dict(LONG), "FAIL"),
     "jax": ("b", "framework", {"framework": "jax", "min_mib": 1000}, ("gpu",), dict(LONG), "FAIL"),
 }
-INFO = ("nvidia_smi", "deviceQuery", "vulkaninfo", "clinfo")
+INFO = ("nvidia_smi", "deviceQuery", "vulkaninfo", "clinfo", "nvml_dcgm")   # nvml_dcgm reads fields (its own census asserts what work it did)
 WIRED = tuple(r for r, v in ROWS.items() if v[0] in ("b", "a+proof"))      # rows whose verdict the judge may rewrite
 
 

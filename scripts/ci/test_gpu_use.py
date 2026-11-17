@@ -429,11 +429,11 @@ class NegativeControls(unittest.TestCase):
 class Rows(unittest.TestCase):
     def test_every_row_of_run_apps_is_classified_and_the_counts_are_pinned(self):
         names = rows.run_apps_names()
-        self.assertEqual(len(names), 74)                       # 71 gate rows plus the three open ML rows of docs/design/V3_OPEN_ML_ROWS.md (vllm a+proof, tensorrt and jax class b)
+        self.assertEqual(len(names), 77)                       # 71 gate rows, the three open ML rows (vllm a+proof, tensorrt and jax class b), and the open nvcodec_matrix, nvml_dcgm (info) and vkcts rows, which carry their own GPU-use proof
         counts = {}
         for n in names:
             counts[rows.row_class(n)] = counts.get(rows.row_class(n), 0) + 1
-        self.assertEqual(counts, {"a": 52, "a-info": 4, "a+proof": 7, "b": 10, "b-skip": 1})
+        self.assertEqual(counts, {"a": 54, "a-info": 5, "a+proof": 7, "b": 10, "b-skip": 1})
         for n in rows.ROWS:
             self.assertIn(n, names, "a classified row that run_apps.sh does not have: " + n)
 
