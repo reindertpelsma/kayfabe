@@ -30,7 +30,7 @@ echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,dr
 [ "${APPS_GUEST_PM:-0}" = 1 ] && echo "APPS_GUEST_PM=$($G 'sudo nvidia-smi -pm 1 2>&1 | tail -1')"
 # ⊘ the open rows read the HOST census: GPU use from the host's nvidia-smi (a guest cannot prove it until the utilisation flag serves the
 #   counters) and the unserviced-RPC count of the kf3 log before and after the row (open_rows/census.py; the same census the other rows read)
-census_need(){ case "$1" in nvcodec_matrix) echo enc;; nvml_dcgm) echo gpu;; esac; }
+census_need(){ case "$1" in nvcodec_matrix) echo enc;; nvml_dcgm) echo info;; esac; }
 for app in $APPS; do
   q0=$(wc -l < "$QLOG" 2>/dev/null || echo 0)
   need=$(census_need "$app"); cpid=""

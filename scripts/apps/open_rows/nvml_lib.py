@@ -364,9 +364,31 @@ def parse_diag_json(text):
     return out
 
 
-def diag_rows(tests):
+NVVS_TEST_INFO = re.compile(r"\bINFO\s+\[[^\]]*\]\s+Test ([a-z_0-9]+): (.+?)\s+\[\./nvvs/src/PluginTest\.cpp:\d+\]")
+
+
+def parse_nvvs_test_info(log_text):
+    """`nvvs.log` (DCGM's diagnostic engine): -> {test name: the last message it logged for that test}. The JSON of a SKIPPED test carries no
+    reason; this is where DCGM says it ("The diagnostic test is skipped. Check DCGM and system configuration.")."""
+    out = {}
+    for line in log_text.splitlines():
+        m = NVVS_TEST_INFO.search(line)
+        if m:
+            out[m[1]] = m[2][:160]
+    return out
+
+
+def gpu_work_ran(tests):
+    """True when a diagnostic that exercises the GPU produced a verdict: anything outside the `Deployment` category (software and driver
+    checks) that passed, failed or warned. A skipped test did no work, so there is nothing for the GPU-use census to prove."""
+    return any(cat != "Deployment" and status.strip().upper() in ("PASS", "FAIL", "WARN") for cat, name, gpu, status, info in tests)
+
+
+def diag_rows(tests, info_by_test=None):
     rows = []
+    info_by_test = info_by_test or {}
     for cat, name, gpu, status, info in tests:
+        info = info or info_by_test.get(name, "")
         st = status.strip().upper()
         st = {"PASS": "PASS", "FAIL": "FAIL", "WARN": "WARN", "SKIP": "SKIP", "SKIPPED": "SKIP", "NOT RUN": "SKIP"}.get(st, "FAIL" if "FAIL" in st else st)
         rows.append(row_line("diag", "%s/%s/gpu%s" % (cat, name, gpu), "-", st, info or "-"))

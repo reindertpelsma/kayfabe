@@ -786,6 +786,33 @@ class DcgmParsers(unittest.TestCase):
         self.assertEqual(out["Deployment/software/gpu0"], "FINDING_DIAG_FAIL_IN_GUEST")
         self.assertEqual(out["Hardware/pcie/gpu0"], "AGREE")
 
+    NVVS_LOG = ("2026-11-17 15:05:42.357 INFO  [7038:7038] Test memory: The Memory test is skipped. Check DCGM and system configuration. This error may be "
+                "eliminated with an updated configuration. [./nvvs/src/PluginTest.cpp:221] [PluginTest::AddInfo]\n"
+                "2026-11-17 15:05:42.358 DEBUG [7038:7038] Added info for test 0:diagnostic [./nvvs/src/PluginLib.cpp:327] [PluginLib::GetPluginInfo]\n"
+                "2026-11-17 15:05:42.359 INFO  [7038:7038] Test pcie: Not enough bandwidth. [./nvvs/src/PluginTest.cpp:221] [PluginTest::AddInfo]\n")
+
+    def test_the_skip_reason_comes_from_nvvs_log(self):
+        info = N.parse_nvvs_test_info(self.NVVS_LOG)
+        self.assertEqual(sorted(info), ["memory", "pcie"])
+        self.assertTrue(info["memory"].startswith("The Memory test is skipped."))
+
+    def test_diag_rows_carry_the_skip_reason(self):
+        doc = json.loads(DIAG_V4)
+        for c in doc["DCGM Diagnostic"]["test_categories"]:
+            for t in c["tests"]:
+                for r in t["results"]:
+                    r.pop("info", None)  # the real JSON of a skipped test carries no reason
+        rows = N.diag_rows(N.parse_diag_json(json.dumps(doc)), N.parse_nvvs_test_info(self.NVVS_LOG))
+        skip = next(r for r in rows if "Hardware/memory" in r)
+        self.assertIn("SKIP\tThe Memory test is skipped.", skip)
+
+    def test_gpu_work_ran_only_for_tests_outside_deployment_that_gave_a_verdict(self):
+        self.assertTrue(N.gpu_work_ran(N.parse_diag_json(DIAG_V4)))  # pcie failed: it worked the GPU
+        only_deploy = json.dumps({"DCGM Diagnostic": {"test_categories": [{"category": "Deployment", "tests": [{"name": "software", "results": [{"entity_id": 0, "status": "Pass"}]}]}]}})
+        self.assertFalse(N.gpu_work_ran(N.parse_diag_json(only_deploy)))
+        all_skipped = json.dumps({"DCGM Diagnostic": {"test_categories": [{"category": "Stress", "tests": [{"name": "targeted_stress", "results": [{"entity_id": 0, "status": "Skip"}]}]}]}})
+        self.assertFalse(N.gpu_work_ran(N.parse_diag_json(all_skipped)))
+
     def test_diag_rows_and_comparison(self):
         host = N.parse_rows("\n".join(N.diag_rows(N.parse_diag_json(DIAG_V4))) + "\n")
         guest_doc = json.loads(DIAG_V4)
@@ -858,6 +885,20 @@ class Census(unittest.TestCase):
             log.write_text("kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1 }\nboot line\nkf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 2 }\n")
             p = subprocess.run([sys.executable, str(OR / "census.py"), "kf3", "--log", str(log), "--before", "2"], capture_output=True, text=True)
             self.assertIn("unserviced_before=1 unserviced_after=2 unserviced_in_row=1", p.stdout)
+
+    def test_an_informational_need_records_the_peaks_and_never_fails(self):
+        p = census.peaks(self.S((0, 0, 0, 0, 100), (0, 0, 0, 0, 100)))
+        verdict, why = census.gpu_use_verdict(p, "info")
+        self.assertEqual(verdict, "INFO")
+        self.assertIn("gpu=0", why)
+        self.assertEqual(census.gpu_use_verdict(census.peaks([]), "info")[0], "UNPROVEN")  # no data is still never a pass
+
+    def test_cli_info_need_exits_zero_on_an_idle_gpu(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "s.csv").write_text(census.samples_to_csv(self.S((0, 0, 0, 0, 100), (0, 0, 0, 0, 100))))
+            p = subprocess.run([sys.executable, str(OR / "census.py"), "verdict", "--csv", str(Path(d) / "s.csv"), "--need", "info"], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stdout)
+            self.assertIn("host_gpu_use=INFO", p.stdout)
 
     def test_session_counter_alone_proves_an_encode(self):
         p = census.peaks(self.S((0, None, None, None, 100), (3, None, None, None, 100)))
@@ -1318,7 +1359,7 @@ elif a[:1] == ["dmon"]:
     print("#Entity         " + "  ".join(ids))
     print("GPU 0           " + "  ".join(vals[i] for i in ids))
 elif a[:1] == ["diag"]:
-    st = "Fail" if mode == "diagfail" else "Pass"
+    st = "Fail" if mode == "diagfail" else "Skip" if mode == "diagskip" else "Pass"
     print('{"DCGM Diagnostic": {"test_categories": [{"category": "Hardware", "tests": [{"name": "memory", "results": [{"gpu_id": "0", "status": "%s"}]}]}]}}' % st)
 """
 FAKE_HOSTENGINE = "#!/usr/bin/env python3\nimport time\ntime.sleep(300)\n"
@@ -1374,6 +1415,12 @@ class DcgmRowEndToEnd(unittest.TestCase):
         rows = N.parse_rows((out / "dcgm.tsv").read_text())
         self.assertEqual((rows[("dcgm", "gpu_temp")]["status"], rows[("dcgm", "gpu_temp")]["value"]), ("OK", "41"))
         self.assertEqual(rows[("dcgm", "gpu_utilization")]["status"], "OK")
+
+    def test_a_diagnostic_that_skips_everything_claims_no_gpu_work(self):
+        out = Path(self.tmp.name) / "o11"
+        p = self.run_row(out, self.bundle, mode="diagskip")
+        self.assertIn("gpu_use=NA", [l for l in p.stdout.splitlines() if l.startswith("NVML_DCGM_SUMMARY")][-1])
+        self.assertIn("no diagnostic that works the GPU ran", (out / "summary.txt").read_text())
 
     def test_a_machine_without_dcgm_says_so_by_name(self):
         out = Path(self.tmp.name) / "o2"
@@ -1517,7 +1564,7 @@ class StaticContracts(unittest.TestCase):
 
     def test_the_hook_reads_the_host_census(self):
         hook = (ROOT / "scripts/apps/apps_hook.sh").read_text()
-        for frag in ("open_rows/census.py", "--before \"$q0\"", "cextra", "nvcodec_matrix) echo enc", "nvml_dcgm) echo gpu"):
+        for frag in ("open_rows/census.py", "--before \"$q0\"", "cextra", "nvcodec_matrix) echo enc", "nvml_dcgm) echo info"):
             self.assertIn(frag, hook)
         self.assertIn("compare_logs.py", (ROOT / "scripts/apps/apps_matrix.sh").read_text())
 

@@ -15,7 +15,7 @@ Two things, both read on the HOST of a guest run (or on the machine itself in a 
      the end (AFTER it), counted by scripts/bench/windows/kf3_census.py, the census the other rows read.
 
     census.py sample --out FILE            stream nvidia-smi into FILE until SIGTERM, then print one JSON line of peaks
-    census.py verdict --csv FILE --need enc|dec|gpu|mem [--window T0 T1]
+    census.py verdict --csv FILE --need enc|dec|gpu|mem|session|info
     census.py kf3 --log QLOG --before N    print `unserviced_before=.. unserviced_after=.. unserviced_in_row=..` (N = log lines before the row)
 """
 import argparse
@@ -31,7 +31,7 @@ import time
 
 SMI_FIELDS = ("encoder.stats.sessionCount", "utilization.encoder", "utilization.decoder", "utilization.gpu", "memory.used")
 SMI_ARGV = ["nvidia-smi", "--query-gpu=" + ",".join(SMI_FIELDS), "--format=csv,noheader,nounits", "-lms", "250"]
-NEED_FIELD = {"enc": "enc", "dec": "dec", "gpu": "gpu", "mem": "mem_rise", "session": "sess"}
+NEED_FIELD = {"enc": "enc", "dec": "dec", "gpu": "gpu", "mem": "mem_rise", "session": "sess", "info": "info"}
 # thresholds (INFERRED, not measured on a guest): an engine counts as used when the host saw this much, in this many samples
 ENGINE_FLOOR = 1.0
 ENGINE_SAMPLES = 2
@@ -83,6 +83,8 @@ def gpu_use_verdict(p, need):
     samples (a statement about the platform, never a pass). FAILED: counters were readable and stayed idle through the whole window."""
     if p["n"] == 0:
         return "UNPROVEN", "no samples (nvidia-smi absent or silent)"
+    if need == "info":  # a row that may legitimately do no GPU work (the DCGM diagnostics skip on a GeForce): peaks are recorded, nothing is asserted
+        return "INFO", " ".join("%s=%s" % (k, "-" if p[k] is None else "%g" % p[k]) for k in ("gpu", "enc", "dec", "sess", "mem_rise"))
     keys = ("sess", "enc") if need == "enc" else {"dec": ("dec",), "gpu": ("gpu",), "mem": ("mem_rise",), "session": ("sess",)}[need]
     readable = [k for k in keys if p[k] is not None]
     if not readable:
@@ -211,7 +213,7 @@ def main(argv):
         samples = csv_to_samples(Path(a.csv).read_text())
         res, why = gpu_use_verdict(peaks(samples), a.need)
         print("host_gpu_use=%s need=%s why=%s" % (res, a.need, why.replace(" ", "_")))
-        return 0 if res == "PROVEN" else 1
+        return 0 if res in ("PROVEN", "INFO") else 1
     with open(a.log, "rb") as f:
         lines = [l.decode("utf-8", "replace").rstrip("\n") for l in f]
     print(format_unserviced(unserviced_counts(lines, a.before)))

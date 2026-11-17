@@ -63,6 +63,7 @@ class Row:
         self.status = []
         self.dcgm_rows = []
         self.host_engine = None
+        self.gpu_work = False
 
     def save_raw(self, name, text):
         (self.raw / name).write_text(census.scrub(text)[-200000:])
@@ -157,11 +158,14 @@ class Row:
             rc, text, secs = run([dcgmi, "diag", "-r", str(lvl), "-j"], self.a.diag_timeout)
             self.save_raw("diag_r%d.json" % lvl, text)
             tests = N.parse_diag_json(text)
+            nvvs = self.raw / "nvvs" / "nvvs.log"
+            info = N.parse_nvvs_test_info(nvvs.read_text(errors="replace")) if nvvs.is_file() else {}
             self.status.append("diag_r%d rc=%d secs=%d tests=%d" % (lvl, rc, secs, len(tests)))
             if lvl == level:
-                self.dcgm_rows += N.diag_rows(tests)
+                self.dcgm_rows += N.diag_rows(tests, info)
+                self.gpu_work = N.gpu_work_ran(tests)
             else:
-                self.dcgm_rows += [r.replace("diag\t", "diag\t[r%d] " % lvl, 1) for r in N.diag_rows(tests)]
+                self.dcgm_rows += [r.replace("diag\t", "diag\t[r%d] " % lvl, 1) for r in N.diag_rows(tests, info)]
         self.stop_engine()
 
     def run(self):
@@ -185,7 +189,7 @@ class Row:
         total = lambda kind: sum(1 for (k, _) in parsed if k == kind)
         dparsed = N.parse_rows((self.out / "dcgm.tsv").read_text())
         dcount = lambda st: sum(1 for (k, _), r in dparsed.items() if k == "diag" and r["status"] == st)
-        use, why = census.gpu_use_verdict(census.peaks(samples), "gpu")
+        use, why = census.gpu_use_verdict(census.peaks(samples), "gpu") if self.gpu_work else ("NA", "no diagnostic that works the GPU ran (all skipped, or DCGM not run)")
         dstate = next((s.split()[0] for s in self.status if s.startswith("dcgm=")), "dcgm=NOT_RUN")
         line = ("NVML_DCGM_SUMMARY nvml_fields_ok=%d nvml_fields_other=%d queries_ok=%d/%d smi_ok=%d/%d smiq_na=%d %s dcgm_fields_ok=%d/%d "
                 "diag_pass=%d diag_fail=%d diag_skip=%d gpu_use=%s secs=%d" % (

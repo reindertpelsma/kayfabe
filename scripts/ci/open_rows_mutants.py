@@ -167,6 +167,12 @@ MUTANTS = [
       K("DcgmRowEndToEnd.a_refused_field_does_not_hide_the_fields_beside_it", "DcgmRowEndToEnd.a_refused_field_gets_its_own_not_supported_row")),
     M("text-fields-recorded-as-na", "nvml", '            rows.append(row_line("dcgm", tag, "-", "OK", real[-1]))', '            rows.append(row_line("dcgm", tag, "-", "NA", "N/A"))',
       K("DcgmParsers.a_text_field_is_kept_as_text", "DcgmParsers.dmon_values_and_na")),
+    M("skip-reason-not-read-from-nvvs", "nvml", "            out[m[1]] = m[2][:160]", "            pass",
+      K("DcgmParsers.the_skip_reason_comes_from_nvvs_log", "DcgmParsers.diag_rows_carry_the_skip_reason")),
+    M("skipped-diagnostics-count-as-gpu-work", "nvml", 'status.strip().upper() in ("PASS", "FAIL", "WARN") for cat', 'status.strip().upper() in ("PASS", "FAIL", "WARN", "SKIP") for cat',
+      K("DcgmParsers.gpu_work_ran_only_for_tests_outside_deployment_that_gave_a_verdict", "DcgmRowEndToEnd.a_diagnostic_that_skips_everything_claims_no_gpu_work")),
+    M("info-need-asserts-use", "census", '    if need == "info":', '    if False:',
+      K("Census.an_informational_need_records_the_peaks_and_never_fails", "Census.cli_info_need_exits_zero_on_an_idle_gpu")),
     # ---- census (census.py)
     M("no-samples-is-proven", "census", '    if p["n"] == 0:\n        return "UNPROVEN", "no samples (nvidia-smi absent or silent)"', '    if p["n"] == 0:\n        return "PROVEN", "no samples"',
       K("Census.no_data_is_never_a_pass", "Census.cli_verdict_without_samples_is_not_proven")),
