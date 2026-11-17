@@ -37,6 +37,12 @@ zero passes, unknown hardware or compute_cap < 750. Soft deadline: TERM, KILL af
 FAIL with the suites already written plus `timeout`. Absent payload: FAIL `payload_missing`; absent
 or invalid result file: FAIL `result_missing`/`result_invalid`. Exit text never makes a PASS.
 
+Standalone trust (2026-11-17, OWNER_RULINGS section AX; GPU-free tests only, NOT run on a box): `kf_trust.py` is the one place where a repo-defined
+download gets its anchor (an upstream checksum fetched from upstream, a pin in git of an upstream-authored identifier, user input trusted and recorded,
+an explicit recorded lift; the attestation anchor refuses by name); `trust_manifest.json` lists every artifact with its anchors and the ratcheted
+`unrouted` downloads; `trust_lint.py` is the gate (stable job). Tests `test_kf_trust.py`, `test_trust_lint.py`; mutants `kf_trust_mutants.py`,
+`trust_lint_mutants.py` (two named killers each, in `ci.yml`). Design: [V3_STANDALONE_TRUST](../../docs/design/V3_STANDALONE_TRUST.md).
+
 kfroot and rootless Windows (2026-11-15, OWNER_RULINGS section AR item 6; GPU-free tests and one hand run of the real sudo in a sandbox, NOT run on a box):
 `kfroot.py` installs the explicit root step (`/usr/local/bin/kfroot` = `exec sudo -n -E` on a root-owned wrapper that is the only sudoers entry; the
 sudoers file is `visudo -c` checked before it is installed), bootstraps the box for an unprivileged `ci` user in group `kvm` (device nodes, memlock,

@@ -48,6 +48,8 @@ COPY = [
     "scripts/bench/native_xid_guard.py",
     "scripts/bench/native_fault_names.json",
     "scripts/bench/specviewperf/lanes.json",
+    "scripts/bench/specviewperf/stream_url.py",   # the stage's user-URL-file path (the sandbox copies it, 2026-11-17)
+    "scripts/ci/kf_trust.py",                     # and records the user's archive with it
     "scripts/bench/windows/spec/spec_guest.ps1",
     "scripts/bench/windows/spec/spec_run.ps1",
     *FILES.values(),

@@ -12,7 +12,9 @@
 # DISABLED BY DEFAULT: nothing starts it until the Worker sends KF_STAGES=specviewperf with KF_SPEC.
 # Proof runs narrow a lane with KF_SPEC_TABLE=<file shaped like lanes.json> (read by lane.py and tarfilter.py).
 # PC runs (no Vast; 2026-11-12): KF_SPEC_TABLE=scripts/bench/specviewperf/lanes_pc.json KF_SPEC_LANE=pcp1|pcp2|pcp3 (verdicts end in NARROWED), plus the
-# opt-in knobs KF_SPEC_URL_FILE (stream the archive from a presigned-URL JSON, sha256 checked on the fly: scripts/bench/specviewperf/stream_url.py),
+# opt-in knobs KF_SPEC_URL_FILE (stream the archive from a presigned-URL JSON: scripts/bench/specviewperf/stream_url.py; since 2026-11-17 the file is
+# the USER'S input, trusted and recorded (sha256 and size in the stage notes and trust.jsonl), and our git pin is only compared, never a refusal,
+# unless KF_TRUST_MODE=strict; KF_SPEC_EXPECT_SHA256 is the user's own enforced pin; docs/OWNER_RULINGS.md section AX),
 # KF_SPEC_DISK_GB (grow the guest disk), KF_SPEC_COPY_ONLY, KF_SPEC_REUSE, KF_SPEC_KEEP_ON_FAIL (1 default | 0 | always), KF_SPEC_REBOOT_AFTER,
 # KF_SPEC_PAUSE_FILE. Unset, the Vast path is unchanged.
 # 2026-11-17 (owner): the guest has the network and the real clock. KF_SPEC_NET=online|offline (default online) is the WINVM_NET of every
@@ -511,7 +513,20 @@ fi
 note "guest network=$SPEC_NET (online: slirp restrict=off and the real clock, offline: restrict=on and the recorded clock; the Windows evaluation guest needs the network and the real time to complete its own start-up validation); licence probe=${LIC_PROBE:-off}"
 note "host: gpu=\"$GPU_NAME\" cpus=$(nproc) ram_gb=$mem_gb disk_free_gb=$avail_gb need_gb=$need_gb"
 PIN=$(sed -n 's/^specviewperf-15\.0\.0\.tar\.zst sha256=\([0-9a-f]\{64\}\)$/\1/p' "$PINFILE" 2> /dev/null | head -1)
-[ -n "$PIN" ] || abort MEDIA "no sha256 pin for $OBJECT in $PINFILE (the owner pins it)"
+# [2026-11-17] The git pin is OUR copy's identity (a repack we host): the Worker/strict path enforces it, a standalone user's own URL file is trusted.
+# strict = the Worker's /bench-data route (no URL file) or KF_TRUST_MODE=strict; a user's URL file in the default mode records instead of refusing.
+case "${KF_TRUST_MODE:-trust-git-only}" in
+    strict | trust-git-only) ;;
+    *) abort OPERATOR "KF_TRUST_MODE must be trust-git-only or strict" ;;
+esac
+PIN_ENFORCED=1
+if [ -n "${KF_SPEC_URL_FILE:-}" ] && [ "${KF_TRUST_MODE:-trust-git-only}" != strict ]; then PIN_ENFORCED=0; fi
+if [ "$PIN_ENFORCED" = 1 ]; then
+    [ -n "$PIN" ] || abort MEDIA "no sha256 pin for $OBJECT in $PINFILE (the owner pins it)"
+fi
+if [ -n "${KF_SPEC_EXPECT_SHA256:-}" ]; then
+    [[ $KF_SPEC_EXPECT_SHA256 =~ ^[0-9a-f]{64}$ ]] || abort OPERATOR "KF_SPEC_EXPECT_SHA256 must be 64 lowercase hex"
+fi
 [ -f "$FETCH" ] || abort OPERATOR "no fetch helper"
 
 # win_vm.sh APPENDS to logs/<tag>_run.log, and wait_qemu_start reads that file for this boot's QEMU_START: a stale line of an
@@ -579,8 +594,14 @@ gspec 120 prep > "$WORK/prep.txt"
 grep -q '^SPEC_PREP ' "$WORK/prep.txt" || abort TRANSPORT "spec_guest.ps1 -Action prep gave no answer"
 note "guest prep: $(grep '^SPEC_PREP ' "$WORK/prep.txt")"
 
-stream_src() { # the archive on stdout: the URL file's stream (sha256 checked on the fly, rc 3 = pin mismatch) or the verified file
-    python3 -I "$SPECD/stream_url.py" --url-file "$KF_SPEC_URL_FILE" --key "specviewperf-15.0.0/$OBJECT" --sha256 "$PIN" --status "$WORK/stream_status.txt"
+stream_src() { # the archive on stdout: the URL file's stream (rc 3 = an ENFORCED pin differs) or the verified file
+    local pins=()
+    if [ "$PIN_ENFORCED" = 1 ]; then pins=(--sha256 "$PIN")        # the Worker/strict path: our pin is the identity
+    else
+        [ -z "$PIN" ] || pins=(--note-pin "$PIN")                  # the user's own file: our pin is only compared
+        [ -z "${KF_SPEC_EXPECT_SHA256:-}" ] || pins+=(--sha256 "$KF_SPEC_EXPECT_SHA256")   # the user's own opt-in is enforced
+    fi
+    python3 -I "$SPECD/stream_url.py" --url-file "$KF_SPEC_URL_FILE" --key "specviewperf-15.0.0/$OBJECT" "${pins[@]}" --status "$WORK/stream_status.txt"
 }
 if [ -z "${KF_SPEC_URL_FILE:-}" ]; then
 stage fetch_wait
@@ -612,6 +633,14 @@ note "copy: src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} ssh_tar=${cps[3]} $
 [ "${cps[0]}" != 3 ] || abort MEDIA "the streamed archive does not match its sha256 pin"
 [ "${cps[2]}" != 3 ] || abort MEDIA "the archive holds a member this tree never holds (tarfilter refused it)"
 [ "${cps[3]}" != 124 ] || abort TIME "the copy into the guest did not finish inside its budget"
+if [ -n "${KF_SPEC_URL_FILE:-}" ] && [ -s "$WORK/stream_status.txt" ]; then
+    # the user's URL file: its archive is trusted and RECORDED (sha256, size, how our pin compared), never refused on our pin
+    read -r _kst kbytes _ksecs ksha kpin < "$WORK/stream_status.txt"
+    note "your archive: sha256=${ksha#sha256=} bytes=${kbytes#bytes=} our git pin ${kpin#pin=} (enforced=$PIN_ENFORCED; docs/OWNER_RULINGS.md section AX)"
+    python3 -I "$SOURCE/scripts/ci/kf_trust.py" record --name "$OBJECT" --sha256 "${ksha#sha256=}" --size "${kbytes#bytes=}" \
+        --source user-url-file --mode "${KF_TRUST_MODE:-trust-git-only}" --evidence-dir "$EVD" >> "$LOG" 2>&1 \
+        || note "could not write the trust record (the numbers above are the record)"
+fi
 if [ "${cps[0]}" != 0 ] || [ "${cps[1]}" != 0 ] || [ "${cps[2]}" != 0 ] || [ "${cps[3]}" != 0 ]; then
     abort TRANSPORT "the copy into the guest failed (src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} ssh_tar=${cps[3]})"
 fi

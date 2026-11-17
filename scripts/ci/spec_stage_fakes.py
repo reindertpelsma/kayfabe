@@ -335,8 +335,10 @@ class Sandbox:
         for d in (box, specd, win / "spec"):
             d.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(BENCH / "box/specviewperf_stage.sh", box / "specviewperf_stage.sh")
-        for name in ("lane.py", "licence.py", "lanes.json", "tarfilter.py"):
+        for name in ("lane.py", "licence.py", "lanes.json", "tarfilter.py", "stream_url.py"):
             shutil.copyfile(BENCH / "specviewperf" / name, specd / name)
+        (self.src / "scripts/ci").mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(HERE / "kf_trust.py", self.src / "scripts/ci/kf_trust.py")
         for name in ("spec_guest.ps1", "spec_run.ps1", "licence_probe.ps1"):
             shutil.copyfile(BENCH / "windows/spec" / name, win / "spec" / name)
         shutil.copyfile(BENCH / "windows/clockrule.py", win / "clockrule.py")

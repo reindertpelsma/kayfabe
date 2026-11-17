@@ -455,7 +455,7 @@ class StaticContracts(unittest.TestCase):
         self.assertIn('"$PIN_BLENDER_SHA256"', code)
 
     def test_the_guest_side_downloads_only_through_the_pin_helpers(self):
-        # the one raw curl left is the manual, owner-approved Geekbench fetch (KF_APPS_GEEKBENCH=1, docs/DOWNLOADS.md)
+        # no raw curl is left: the manual, owner-approved Geekbench fetch (KF_APPS_GEEKBENCH=1, docs/DOWNLOADS.md) is pinned too (2026-11-17)
         raw = [
             l for l in self.guest.splitlines()
             if "curl" in l and not l.lstrip().startswith("#") and "cdn.geekbench.com" not in l
