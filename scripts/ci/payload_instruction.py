@@ -82,6 +82,9 @@ class Instruction:
     propimages: tuple = ()
     # strict (the Worker's shape): every listed image and app must run and any skip fails the stage; false = run what can run (docs/design/V3_PROPIMAGE_RUNNER.md)
     propimages_strict: bool = False
+    # 2026-11-17: the MATLAB GPU rows of the Linux proprietary image (scripts/ci/matlab_stage.py): {label?, image {from: pin, ref, sha256}, driver {version}, rows
+    # {row: {lane}}, isolation?}. Always strict (the Worker's shape); a standalone run uses the stage's own flags instead. None = no such stage.
+    matlab: object = None
     # where it came from (worker / default / instruction); printed, never part of equality
     source: str = dataclasses.field(default="instruction", compare=False)
 
@@ -106,6 +109,8 @@ class Instruction:
         if self.propimages:
             out["propimages"] = [dict(p) for p in self.propimages]
             out["propimages_strict"] = self.propimages_strict          # always written with the list: the emitted instruction shows the policy
+        if self.matlab is not None:
+            out["matlab"] = json.loads(json.dumps(self.matlab))
         return out
 
     def canonical_bytes(self):
@@ -139,6 +144,8 @@ def check_semantics(i):
         raise InstructionError("propimages need the middle or large tier")
     if i.propimages_strict and not i.propimages:
         raise InstructionError("propimages_strict needs propimages")
+    if i.matlab is not None and i.tier != "large":
+        raise InstructionError("matlab needs the large tier")      # a Linux image needs a KVM box with a GPU; one per release box, never the small tier
     labels = [p.get("label") for p in i.propimages if p.get("label") is not None]
     if len(set(labels)) != len(labels):
         raise InstructionError("duplicate propimage label")
@@ -179,6 +186,7 @@ def from_dict(doc):
             artifacts=tuple(Artifact(**a) for a in doc.get("artifacts", [])),
             propimages=tuple(doc.get("propimages", [])),
             propimages_strict=doc.get("propimages_strict", False),
+            matlab=doc.get("matlab"),
         )
     )
 

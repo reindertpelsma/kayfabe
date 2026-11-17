@@ -269,7 +269,7 @@ MUTANTS = [
       W + "test_a_nonzero_exit_with_a_pass_record_is_a_failure", W + "test_rows_pass_fail_and_not_run"),
     M("payload-record-not-kept", "payload", '    result["propimage_apps"] = doc\n', "    pass\n",
       W + "test_rows_need_exactly_one_parseable_line_and_keep_a_red_record", W + "test_rows_pass_fail_and_not_run"),
-    M("payload-stage-after-the-spec-lane", "payload", '    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")\n    if i.tier == "large" and (PROPIMAGE_APPS_B_IN_LARGE or "propimage_apps_b" in only):\n        names.append("propimage_apps_b")\n    if "specviewperf" in i.stages:\n        names.append("specviewperf")',
+    M("payload-stage-after-the-spec-lane", "payload", '    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")\n    if i.tier == "large" and (PROPIMAGE_APPS_B_IN_LARGE or "propimage_apps_b" in only):\n        names.append("propimage_apps_b")\n    if i.tier == "large" and (i.matlab is not None or MATLAB_IN_LARGE or "matlab" in only):\n        names.append("matlab")\n    if "specviewperf" in i.stages:\n        names.append("specviewperf")',
       '    if "specviewperf" in i.stages:\n        names.append("specviewperf")\n    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")',
       W + "test_runs_after_every_windows_stage_and_before_the_spec_lane", W + "test_runs_before_the_spec_lane_without_windows_stages"),
 ]
