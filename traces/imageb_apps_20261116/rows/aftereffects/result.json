@@ -1,0 +1,15 @@
+﻿{
+    "app":  "aftereffects",
+    "started":  1794783667.069,
+    "error":  "After Effects did not finish the script (no marker)",
+    "outputs":  [
+
+                ],
+    "footage":  "sintel_trailer_1080p.mp4",
+    "ae_file_scripts":  "switched on",
+    "quit":  "clean",
+    "ended":  1794784764.099,
+    "dismissed":  [
+
+                  ]
+}

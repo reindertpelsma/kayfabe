@@ -1,0 +1,30 @@
+{
+ "app_events.txt": {
+  "bytes": 566,
+  "sha256": "bce80672ad8280cfd22e915a29bd0a237d2be8f9867fd115e183bafc79a688fd"
+ },
+ "out.png": {
+  "bytes": 2460419,
+  "height": 1338,
+  "mean": 140.36,
+  "sha256": "0b9f621c921a7f063632d7512cef2e1c2417255eec868375f78fe5ba196c86e1",
+  "std": 50.6,
+  "width": 2048
+ },
+ "out.psd": {
+  "bytes": 7211023,
+  "sha256": "8c18caea0e59b7666e4c4968d68b5a11aed59128bf393235ada58b4680be4429"
+ },
+ "ps_log_tail.txt": {
+  "bytes": 26143,
+  "sha256": "bf528865c4bae1976f6978f7654ece445128744dba03a5c0866e7570b76510a3"
+ },
+ "ps_progress.txt": {
+  "bytes": 265,
+  "sha256": "f2afc905ab6ba8f7660ded22b615f695b60d2a3bd60c0c88ed9338827021854e"
+ },
+ "result.json": {
+  "bytes": 3575,
+  "sha256": "0f1e7d8f3fe291b8045f44915bd74c483eceaffbb523a96b27c0dc88ad3cf12c"
+ }
+}

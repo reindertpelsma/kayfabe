@@ -1,0 +1,29 @@
+﻿{
+    "app":  "photoshopsample",
+    "started":  1794785209.274,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "out.png",
+                        "bytes":  3223289,
+                        "modified":  1794785388.459
+                    }
+                ],
+    "source":  "sky preset + 3840x2160 template",
+    "source_bytes":  12711475,
+    "js":  {
+               "tw":  "3840",
+               "th":  "2160",
+               "tl":  "1",
+               "w0":  "6533",
+               "h0":  "4355",
+               "w1":  "1920",
+               "h1":  "1280",
+               "sharpen":  "4"
+           },
+    "quit":  "clean",
+    "ended":  1794785418.221,
+    "dismissed":  [
+
+                  ]
+}

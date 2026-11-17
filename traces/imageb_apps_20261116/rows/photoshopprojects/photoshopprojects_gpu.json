@@ -1,0 +1,32 @@
+{
+ "required": [],
+ "verdict": "PASS",
+ "reasons": [],
+ "baseline": {
+  "mem_mb": 9553.0,
+  "gpu": 0.0,
+  "enc_sessions": 0.0
+ },
+ "peak": {
+  "gpu": 43.0,
+  "mem_mb": 9663.0,
+  "enc_sessions": 0.0,
+  "gpu_dmon_sm": 43.0,
+  "enc": 0.0,
+  "dec": 0.0,
+  "busy_samples": 112
+ },
+ "samples": 806,
+ "dmon_samples": 403,
+ "source": "host",
+ "guest": {
+  "verdict": "PASS",
+  "reasons": [
+   "no samples: the GPU could not be read (nvidia-smi missing, no GPU or empty output)"
+  ],
+  "peak": {},
+  "baseline": {},
+  "samples": 0
+ },
+ "name": "photoshopprojects"
+}

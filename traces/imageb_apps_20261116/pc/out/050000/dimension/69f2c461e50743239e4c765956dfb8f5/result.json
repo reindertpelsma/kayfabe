@@ -1,0 +1,24 @@
+﻿{
+    "app":  "dimension",
+    "started":  1794786270.044,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "sniffer.txt",
+                        "bytes":  1151,
+                        "modified":  1794786270.308
+                    }
+                ],
+    "main_window":  true,
+    "titles":  [
+                   "Adobe Dimension"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  53,
+    "quit":  "forced",
+    "ended":  1794786343.043,
+    "dismissed":  [
+
+                  ]
+}
