@@ -1,0 +1,7 @@
+OPENROWS_nvcodec_probe=ok
+OPENROWS_ffmpeg=ok
+OPENROWS_dcgm=FAIL reason=E:_Unable_to_acquire_the_dpkg_frontend_lock_(/var/lib/dpkg/lock-frontend),_is_another_process_using_it?
+NVCODEC_MATRIX_SUMMARY pass=35 not_supported=7 fail=0 mismatch=0 not_run=5 cases=47 gpu_use=PROVEN device=NVIDIA_GeForce_RTX_3060 driver_api=13.0 sessions_opened=8
+NVML_DCGM_SUMMARY nvml_fields_ok=53 nvml_fields_other=220 queries_ok=62/74 smi_ok=1035/1118 smiq_na=61 dcgm=NOT_RUN dcgm_fields_ok=0/0 diag_pass=0 diag_fail=0 diag_skip=0 gpu_use=NA secs=0
+rc=0
+total_secs=472

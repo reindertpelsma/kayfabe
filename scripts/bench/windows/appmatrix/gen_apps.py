@@ -546,6 +546,8 @@ app("dxsamples_multiadapter", "d3d", OPEN_PS.replace("@@CTL@@", "none"), r"^KFOP
 NO_EQUIVALENT = {
     "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
     "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time",
+    "nvcodec_matrix": "Linux ffmpeg capability matrix (open Linux row, 2026-11-17); the Windows NVENC/NVDEC rows are the existing ffmpeg and gate rows, a Windows matrix is not built yet",
+    "nvml_dcgm": "DCGM is a Linux data-centre tool and the NVML field sweep is the Linux guest's nvidia-smi surface; the Windows NVAPI/NVML readers are a separate candidate (hardware monitors), not this row",
 }
 
 

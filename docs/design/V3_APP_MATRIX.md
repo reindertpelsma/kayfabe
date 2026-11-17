@@ -7,6 +7,8 @@ with one host Xid 31 and a bare-metal PASS. The per-app table, the gate lists, t
 [`traces/apps_linux_20261107/README.md`](../../traces/apps_linux_20261107/README.md).** The text below is the history of R1-R4.
 The result of record before R5 was §R3, below: 61/65 apps at kf3 `2830988f` (RTX 3060).
 
+★ *2026-11-17 (open discovery rows, not gate rows): `nvcodec_matrix` (FFmpeg NVENC/NVDEC capability matrix, 47 cases) and `nvml_dcgm` (every NVML field, the common NVML queries, `nvidia-smi -q -x`, DCGM) were added to `run_apps.sh`; they are in no gate list, derive what each case should do from the machine's own caps, and are described, with their trust anchors, in [`V3_OPEN_ROWS_FFMPEG_DCGM.md`](V3_OPEN_ROWS_FFMPEG_DCGM.md).*
+
 ★ *2026-09-30 (§R4, partial): the same matrix at kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix) on an RTX 3070 —
 guest OFF 60/65 + 6/6, identical to R3; PM, 100-process and fast-path-ON runs not run.*
 ⊘ *Superseded 2026-11-07 by the STATUS above (this was the STATUS of 2026-09-28):* **current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,

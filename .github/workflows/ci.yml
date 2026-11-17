@@ -205,6 +205,9 @@ jobs:
           # Image B gpu step diagnostics, 2026-11-17 (docs/design/V3_PROPIMAGE_B_APPS.md): the case is named, bounded poll after a started-wait, log tail kept, honest detail; >=2 named killers per mutant.
           python3 scripts/ci/propimage_gpu_diag_mutants.py --jobs 4
           python3 scripts/ci/clocknet_assert_mutants.py
+          # Open FFmpeg NVENC/NVDEC matrix and DCGM + NVML sweep rows (2026-11-17, docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md): caps comparison,
+          # verdicts, PSNR threshold, NVML field diff, census and the trust-rule pins; >=2 named killers per mutant. The tests run in the discover above.
+          python3 scripts/ci/open_rows_mutants.py --jobs 4
           # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
           python3 scripts/ci/stream_url_mutants.py
           # Standalone trust helper and lint (2026-11-17): anchors, the default mode, the explicit lift, user input, evidence; the lint's rules: two named killers per mutant.

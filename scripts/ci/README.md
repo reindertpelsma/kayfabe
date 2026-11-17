@@ -214,3 +214,5 @@ root payload, which can read `/run/kf-ci/env` today. The payload's only hook is 
 MANIFEST` (prints `KF_PAYLOAD_PREFETCH ...` for the planned stages); without `--dry-run` it is refused. Not done: starting the
 downloader from the payload, a stage calling `wait`, apt (design source c), seeders (deferred), the real manifest for the
 SPEC and Windows media, disk reservation of unpack space beyond `--reserve-gb`.
+
+The open FFmpeg NVENC/NVDEC matrix and DCGM + NVML sweep rows (2026-11-17, `docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md`, `docs/howto/open-linux-rows.md`; the rows live in `scripts/apps/open_rows/`): `test_open_rows.py` (GPU-free: table validity, caps comparison, verdicts, PSNR thresholds, the NVML field diff, DCGM parsers, the host census, the sweep against a fake `libnvidia-ml`, both runners end to end against fake tools, outputs of the native runs under `fixtures/open_rows/`, and the trust-rule pins) and `open_rows_mutants.py` (two named killers per mutant, in `ci.yml`).
