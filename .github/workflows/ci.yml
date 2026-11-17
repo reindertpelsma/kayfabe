@@ -43,6 +43,28 @@ on:
 permissions:
   contents: read
 
+# 2026-11-17 (docs/CI_V3.md, "Job layout, concurrency and caches"): a newer push to the same branch, or a
+# newer commit of the same pull request, cancels the run it supersedes. A stale run stops costing runner
+# minutes and the newer run decides.
+# Never cancelled: pushes to `next` and `master` (every merge keeps its own run), tags, schedule,
+# workflow_dispatch and merge_group. Those get a group that holds only their own run id, so no other run
+# can queue behind or cancel them. `cancel-in-progress` is true only where the group is shared per branch
+# or per pull request. scripts/ci/test_ci_concurrency.py evaluates both expressions for each event kind.
+# The `CI` gate job below keeps `if: always()`: the gate of a cancelled run fails, which marks the
+# superseded commit red and nothing else, because a pull request is judged by the checks of its head commit.
+concurrency:
+  group: >-
+    ci-${{
+    (github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number))
+    || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+    && github.ref != 'refs/heads/next' && github.ref != 'refs/heads/master'
+    && format('push-{0}', github.ref))
+    || format('run-{0}', github.run_id) }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request'
+    || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+    && github.ref != 'refs/heads/next' && github.ref != 'refs/heads/master') }}
+
 env:
   CARGO_TERM_COLOR: always
 
