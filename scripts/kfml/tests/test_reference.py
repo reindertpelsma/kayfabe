@@ -125,7 +125,7 @@ class CommittedReference(unittest.TestCase):
     def test_a_box_of_another_die_still_finds_them(self):
         from pathlib import Path
         base = Path(__file__).resolve().parent.parent / "reference"
-        doc, how = reference.find(str(base), "nanogpt_compile", fake_env(gpu_name="Never Seen Card", cc=(12, 0)))
+        doc, how = reference.find(str(base), "nanogpt_compile", fake_env(gpu_name="Never Seen Card", cc=(10, 0)))
         self.assertEqual(how, "other_die")
         self.assertTrue(doc["data"])  # the loss windows
         self.assertIsNone(reference.wall_ratio(doc, how, 99.0))

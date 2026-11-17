@@ -99,8 +99,8 @@ compute-capability range its wheels carry kernels for, the compat limits, the lo
 
 1. STRICT: the newest flavour that satisfies both: driver CUDA >= the flavour's CUDA **and** the GPU's sm inside the flavour's range.
 2. MINOR-VERSION COMPATIBILITY: when none is strict, the flavour with the lowest CUDA version of the driver's CUDA major, if the driver supports at least `compat_min_driver_cuda`
-   (12.0, driver 525) and the GPU is not newer than `compat_cc_max` (sm_90: a driver generation cannot drive an architecture it predates). The reason line says so. MEASURED:
-   the cu126 wheels ran all six rows on an Ampere card under a CUDA 12.2 driver (run `kfml_run_20261117_ampere_older_driver`), and the cu128 wheels on a CUDA 12.6 driver (run `kfml_run_20261116`).
+   (12.0, driver 525) and the GPU is not newer than `compat_cc_max` (sm_90: a driver generation cannot drive an architecture it predates). The reason line says so. Run
+   `kfml_run_20261117_tier_decision` and run `kfml_run_20261116` showed it: the cu126 wheels ran all six rows on an Ampere card under a CUDA 12.2 driver (run `kfml_run_20261117_ampere_older_driver`), and the cu128 wheels on a CUDA 12.6 driver (run `kfml_run_20261116`).
    Before this step existed the same box was NOT_RUN under the strict rule (same run id family, `stage_cold_large.json` of the 535 box: "cu126: driver supports CUDA 12.2 < 12.6").
 
 | flavour | strict: driver CUDA | compat: driver CUDA | wheels carry | lock |
@@ -226,7 +226,12 @@ directory's hashed locks, copied in, and installed offline with hashes. Code: `s
 | run | guest | `kfml run --tier T --json` with `KF_ML_GUEST=1`; the rows are read back over the transport |
 
 The result is the host stage's `KF_KFML_RESULT` document with `where: "guest"` and a `transfer` record (wheelhouse bytes and build seconds, copy bytes and
-seconds, install seconds). Nothing secret enters the guest and no NVIDIA binary is stored by us: the wheelhouse is a transient directory on the box.
+seconds, install seconds). Nothing secret enters the guest. The wheelhouse is built AT RUNTIME on the box host from the vendors' own indexes (PyPI and the PyTorch wheel index) by `pip download
+--require-hashes` of the hashed lock, copied into the offline guest and installed there from it; WE STORE AND PUBLISH NONE OF IT (no R2 object, no artifact, no mirror; owner, 2026-11-17). The pip-bundled NVIDIA
+runtime wheels (`nvidia-*`) and Triton's own `ptxas` are therefore part of the guest's venv, exactly as on a normal install: the guest's CUDA runtime is independent of any guest toolkit and only the DRIVER under
+test matters. `wheelhouse-licenses.json` (written at build time from each wheel's METADATA, never uploaded) lists every wheel with its licence and marks vendor-proprietary wheels `proprietary: true` for information.
+Trade-off: the run depends on the availability of PyPI and the PyTorch index; the lock hashes make a tampered or substituted index fail closed (`--require-hashes`), and an optional mirror of ours could be added later
+(not now). `uv pip` versus `pip download` was not measured; `pip download` of both flavours took 112 s on a 500 Mbit box (`kfml_run_20261117_second_die`).
 `kfml bundle`/`build-wheels` are for the licence-checked redistribution bundle and are not used here (they would mirror NVIDIA binaries).
 The Linux propimage tooling has an `inject --wheelhouse` command for the proprietary Linux image; it was not on any branch available here (the
 branch `claude/linux-image-manifest-inject-20261117` was not pushed), so this module uses the payload's own transport. The wheelhouse layout is plain
@@ -311,11 +316,26 @@ RTX 2080 Ti (sm_75), driver 595.91.07, flavour cu128 chosen automatically (the f
 * The CIFAR-10 server gave about 45 KB/s per connection. The archive was copied in after six parallel ranged downloads (sha256 equal to the pin; a third confirmation), so the stage's own
   fetch of that file was not exercised on this box.
 
+## Tier membership (2026-11-17, run `kfml_run_20261117_tier_decision`)
+
+Owner rule: into the payload's middle tier if it is not too big (guide: at most about 8 minutes of rows and about 5 GB of downloads on top of the mid tier's `bandwidth.json` budget), else a smaller mid subset and everything in the large tier.
+MEASURED on five dies: the five gated rows take 57 to 154 s cold (at most 2.6 minutes on the slowest die, RTX 4070) and 40 to 54 s warm; all six take 89 to 206 s; the downloads are 4.13 GB (cu128 wheels 3.96 GB + redist nvcc 0.08 GB + datasets 0.17 GB; the middle estimate
+in `bandwidth.json` goes from 29.17 to 33.92 GB with the margin); the venv is 8.8 to 10.2 GB on disk. The one slow part is the CIFAR-10 server (about 8.7 minutes with six ranged connections, about 60 with one), so the payload prefetches the datasets in the background at its start;
+the stage then takes 215 s cold (3.6 minutes: setup 145 s, rows 68 s) and 39 s warm in the middle tier, 601 s if nothing was prefetched. **Decision: kfml is in the DEFAULT plan of the middle tier with its five gated rows (no subset needed) and of the large tier with all six; `--skip kfml` leaves it out.**
+Numbers and per-die tables: `traces/kfml_run_20261117_tier_decision/README.md`; payload side: `scripts/ci/VAST_PAYLOAD.md`.
+
+## Third wave, 2026-11-17 (`kfml_run_20261117_tier_decision`): what it showed
+
+* **Blackwell** (RTX 5070, sm_120, driver 580.178.04): cu128 chosen automatically, all six rows PASS, Triton's fp16 `tl.dot` compiles there (`fp16_dot_compile: ok`).
+* **Ampere under an older driver** (RTX 3060, sm_86, driver 535.154.05 = CUDA 12.2): the strict rule gave NOT_RUN with the named reason; forcing cu126 on the same box passed all six rows, so the rule gained the minor-version-compatibility step (flavour section). The rows carry die, driver and the installed flavour.
+* **Pascal** (GTX 1080 Ti, sm_61, driver 580.178.04): NOT_RUN at the plan step with the named reason (sm_61 is outside every wheel range), nothing downloaded.
+* **Datasets**: `fetch-data` downloads CIFAR-10 with six ranged connections (`pins.json` `parallel`; the server resets eight or more), `fetch-data --into DIR` needs no venv, and the stage runs the dataset fetch at the same time as the wheel install.
+* `uv` (65 s) beat `pip` (98 s) for the cu126 lock on one box; not the default (an unpinned `pip install uv` bootstrap); `--installer uv` now passes `--index-strategy unsafe-best-match`, which the two-index lock needs.
+
 ## What is not verified
 
-* Everything on a third die class, on Blackwell, on a driver older than CUDA 12.6 (so the NOT_RUN-because-no-flavour path on a real box), on another distro, and on CPython
-  3.12/3.13: TWO dies (RTX 4070 sm_89 / driver 560.35.03 / cu126; RTX 2080 Ti sm_75 / driver 595.91.07 / cu128), one container image family (Ubuntu 22.04, CPython 3.10.12, gcc 11.4)
-  were measured. The cu128 wheels were also run on the 560.35.03 driver (supplement of the first run: all six PASS), which says nothing about other CUDA 12.8 drivers.
+* A driver below CUDA 12.0 on a real box (the NOT_RUN-because-the-driver-is-too-old path is GPU-free tested only; the measured NOT_RUN boxes are a Pascal card and, under the old strict rule, a CUDA 12.2 driver), another distro, and CPython
+  3.12/3.13: FIVE dies (RTX 4070 sm_89, RTX 2080 Ti sm_75, RTX 5070 sm_120, RTX 3060 sm_86, GTX 1080 Ti sm_61), ONE box each, one container image family (Ubuntu 22.04, CPython 3.10.12, gcc 11.4) were measured.
 * The loss/accuracy thresholds on any die but these two (the measured values sit far inside them; see the traces).
 * `torch.compile` and Triton on anything but sm_75 and sm_89 (the fp16 `tl.dot` fallback is only exercised on sm_75); `managed_oversub` on anything but these two cards; the guest behaviour of every row
   (`KF_ML_GUEST=1`), guest mode included.

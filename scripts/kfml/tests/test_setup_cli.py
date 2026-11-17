@@ -86,7 +86,10 @@ class Setup(unittest.TestCase):
         self.assertTrue(setup_venv.has_hashes(lock.read_text()))
         c = setup_venv.install_cmd(self.t / "v", lock, True, "pip")
         self.assertIn("--require-hashes", c)
-        self.assertIn("--require-hashes", setup_venv.install_cmd(self.t / "v", lock, True, "uv"))
+        uv = setup_venv.install_cmd(self.t / "v", lock, True, "uv")
+        self.assertIn("--require-hashes", uv)
+        self.assertEqual(uv[uv.index("--index-strategy") + 1], "unsafe-best-match")  # torch+cuNNN lives on the second of the two indexes
+        self.assertNotIn("--index-strategy", setup_venv.install_cmd(self.t / "v", lock, True, "pip"))
 
     def test_lock_files(self):
         for fl, fn in setup_venv.FLAVORS.items():

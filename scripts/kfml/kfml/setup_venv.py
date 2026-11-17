@@ -57,7 +57,9 @@ def check_target(venv: Path):
 def install_cmd(venv: Path, lock: Path, hashed: bool, installer: str, find_links=None):
     """find_links: an offline wheelhouse directory: nothing is fetched (--no-index), every wheel must match its lock hash."""
     if installer == "uv":
-        return ["uv", "pip", "sync", "--python", str(venv / "bin" / "python")] + \
+        # unsafe-best-match: the lock names two indexes (the PyTorch index and PyPI) and torch==X+cuNNN exists only on the first; uv's default
+        # first-index rule fails without it (measured 2026-11-17). The hashes, not the index order, are the integrity control.
+        return ["uv", "pip", "sync", "--python", str(venv / "bin" / "python"), "--index-strategy", "unsafe-best-match"] + \
                (["--require-hashes"] if hashed else []) + \
                (["--no-index", "--find-links", str(find_links)] if find_links else []) + [str(lock)]
     return [str(venv / "bin" / "python"), "-m", "pip", "install", "--no-input"] + \
