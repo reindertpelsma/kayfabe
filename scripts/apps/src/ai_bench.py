@@ -92,4 +92,7 @@ if __name__ == "__main__":
     cnn("resnet50", True,  "resnet50_train_imgs")
     vit("vit_b16_infer_imgs")
     transformer("bert_infer_seqs")
+    # the device proof the GPU-use judge reads (scripts/bench/gpu_use.py): torch's own allocator peak after the work above
+    print("GPU_USE_PROOF torch device=cuda:%d name=%s peak_mib=%d" % (torch.cuda.current_device(), torch.cuda.get_device_name(0),
+                                                                    torch.cuda.max_memory_allocated() >> 20), flush=True)
     log("done")

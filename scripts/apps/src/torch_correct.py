@@ -62,4 +62,6 @@ for i, s_ in enumerate(st):
         outs.append((torch.full((1 << 20,), float(i), device="cuda") * 2).sum())
 torch.cuda.synchronize(); vals = [o.item() for o in outs]
 chk("multi_stream", vals == [2.0 * i * (1 << 20) for i in range(4)])
+# the device proof the GPU-use judge reads (scripts/bench/gpu_use.py): from the model that was really trained on the GPU and torch's own allocator
+print("GPU_USE_PROOF torch device=%s name=%s peak_mib=%d" % (next(net_g.parameters()).device, torch.cuda.get_device_name(0), torch.cuda.max_memory_allocated() >> 20), flush=True)
 print("TORCH_CORRECT_DONE", flush=True)

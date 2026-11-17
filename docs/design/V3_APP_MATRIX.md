@@ -9,6 +9,11 @@ The result of record before R5 was §R3, below: 61/65 apps at kf3 `2830988f` (RT
 
 ★ *2026-11-17 (open discovery rows, not gate rows): `nvcodec_matrix` (FFmpeg NVENC/NVDEC capability matrix, 47 cases) and `nvml_dcgm` (every NVML field, the common NVML queries, `nvidia-smi -q -x`, DCGM) were added to `run_apps.sh`; they are in no gate list, derive what each case should do from the machine's own caps, and are described, with their trust anchors, in [`V3_OPEN_ROWS_FFMPEG_DCGM.md`](V3_OPEN_ROWS_FFMPEG_DCGM.md).*
 
+**UPDATE 2026-11-17 (owner requirement): a row whose application can run on the CPU now asserts that the GPU was used.** Eight rows have a CPU path, six more carry a device
+proof, and `scripts/apps/gpu_use_rows.py` rewrites a PASS to FAIL (or NOTRUN when the proof cannot be judged) from the application's own proof, the kf3 log window of the app and the
+box's `nvidia-smi`; `KF_NEGCTL=1` runs the CPU form of each row as a control. The R1-R5 results below predate it. Audit, rules and the hardware validation request:
+[`V3_GPU_USE_ASSERTION.md`](V3_GPU_USE_ASSERTION.md).
+
 ★ *2026-09-30 (§R4, partial): the same matrix at kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix) on an RTX 3070 —
 guest OFF 60/65 + 6/6, identical to R3; PM, 100-process and fast-path-ON runs not run.*
 ⊘ *Superseded 2026-11-07 by the STATUS above (this was the STATUS of 2026-09-28):* **current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,

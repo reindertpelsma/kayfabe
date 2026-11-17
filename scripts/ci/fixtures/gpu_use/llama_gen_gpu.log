@@ -1,0 +1,6 @@
+=== llama_cpp_gen side=guest start=2026-11-07T02:47:12+00:00 host=ubuntu cmd: /opt/apps/bundle/llama/llama-simple -m /opt/apps/data/qwen2.5-1.5b-instruct-q4_k_m.gguf -n 64 -ngl 99 "Explain in three sentences why the sky is blue." > /opt/apps/out/guest/llama_gen.txt 2>&1; rc=$?; cat /opt/apps/out/guest/llama_gen.txt; echo "OUTSHA llama_cpp $(sed -n '/sky is blue\./,/main: decoded/p' /opt/apps/out/guest/llama_gen.txt | grep -v 'main: decoded' | sed -E 's/CUDA Graph id [0-9]+ reused//g' | grep -v -E '^[a-z_]+: ' | tr -d '\n' | sha256sum | cut -c1-16)"; exit $rc
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 7871 MiB):
+  Device 0: NVIDIA GeForce RTX 4090, compute capability 8.9, VMM: yes, VRAM: 7871 MiB
+llama_prepare_model_devices: using device CUDA0 (NVIDIA GeForce RTX 4090) (0000:00:03.0) - 7477 MiB free
+load_tensors: offloaded 29/29 layers to GPU
+=== end rc=0 secs=3 2026-11-17T00:00:03+00:00

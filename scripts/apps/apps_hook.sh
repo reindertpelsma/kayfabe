@@ -7,6 +7,10 @@
 # and append its APPRES line (plus KF3/XID counters) to $APPS_OUT/guest.res.
 # Stops at the first app after which the guest no longer answers (verdict GUEST_DEAD);
 # apps_matrix.sh reboots and continues with the rest.
+# GPU use (owner requirement 2026-11-17, docs/design/V3_GPU_USE_ASSERTION.md): around each app the BOX's nvidia-smi is sampled ($app.smi/), the kf3 window and
+# its baseline status line are kept ($app.kf3.log, $app.kf3.base) and gpu_use_rows.py rewrites a PASS of a row that can fall back to the CPU into FAIL
+# (or NOTRUN when it cannot be judged) unless the host census, the host engine counters and the app's own proof agree. KF_NEGCTL=1 runs the CPU form of
+# each such row instead and writes CONTROL_OK / CONTROL_BROKEN lines to $APPS_OUT/negctl.res (the row line in guest.res stays unannotated).
 set -uo pipefail
 TAG=${1:?tag}
 HERE="$(cd "$(dirname "$0")" && pwd)"; G="$HERE/../bench/gssh_nv"
@@ -36,13 +40,15 @@ echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,dr
 # ⊘ the open rows read the HOST census: GPU use from the host's nvidia-smi (a guest cannot prove it until the utilisation flag serves the
 #   counters) and the unserviced-RPC count of the kf3 log before and after the row (open_rows/census.py; the same census the other rows read)
 census_need(){ case "$1" in nvcodec_matrix) echo enc;; nvml_dcgm) echo info;; esac; }
+GU="$HERE/gpu_use_rows.py"
 for app in $APPS; do
   q0=$(wc -l < "$QLOG" 2>/dev/null || echo 0)
+  head -n "$q0" "$QLOG" 2>/dev/null | grep -a 'kf3: family=' | tail -1 > "$OUT/$app.kf3.base"
   need=$(census_need "$app"); cpid=""
   if [ -n "$need" ]; then python3 "$HERE/open_rows/census.py" sample --out "$OUT/$app.hostsmi.csv" > "$OUT/$app.hostsmi.json" 2>/dev/null & cpid=$!; fi
   d0=$($G 'sudo dmesg | wc -l' 2>/dev/null | tr -d '\r'); d0=${d0:-0}
   [ "$app" = vkcts ] && python3 "$HERE/vkcts/vkcts.py" census start --dir "$OUT/vkcts.guest.census" >/dev/null 2>&1
-  res=$(timeout "${APPS_APP_TMO:-2400}" "$G" "sudo bash /opt/apps/bundle/run_apps.sh guest $app" 2>&1 | tr -d '\r')
+  res=$(timeout "${APPS_APP_TMO:-2400}" python3 -B -I "$GU" sample --out "$OUT" --app "$app" -- "$G" "sudo env KF_NEGCTL=${KF_NEGCTL:-0} bash /opt/apps/bundle/run_apps.sh guest $app" 2>&1 | tr -d '\r')
   src=$?
   [ "$app" = vkcts ] && python3 "$HERE/vkcts/vkcts.py" census stop --dir "$OUT/vkcts.guest.census" --side guest > "$OUT/vkcts.guest.gpu.txt" 2>&1
   alive=1; $G true >/dev/null 2>&1 || { sleep 20; $G true >/dev/null 2>&1 || alive=0; }
@@ -60,7 +66,11 @@ for app in $APPS; do
     kill -TERM "$cpid" 2>/dev/null; wait "$cpid" 2>/dev/null
     cextra=" $(python3 "$HERE/open_rows/census.py" verdict --csv "$OUT/$app.hostsmi.csv" --need "$need" 2>&1 | tail -1) $(python3 "$HERE/open_rows/census.py" kf3 --log "$QLOG" --before "$q0" 2>&1 | tail -1)"
   fi
+  sleep "${APPS_KF3_SETTLE:-3}"   # the device prints its status line about every 2 s (on change): let the last one of this app land before the slice
   tail -n +"$((q0+1))" "$QLOG" 2>/dev/null | tail -3000 > "$OUT/$app.kf3.log"
+  gu_args=(--side guest --app "$app" --line "$line" --app-log "$OUT/$app.guest.log" --kf3-log "$OUT/$app.kf3.log" --kf3-base "$OUT/$app.kf3.base" --smi-dir "$OUT/$app.smi" --record-dir "$OUT")
+  if [ "${KF_NEGCTL:-0}" = 1 ]; then python3 -B -I "$GU" annotate "${gu_args[@]}" --negctl | tee -a "$OUT/negctl.res"
+  else new=$(python3 -B -I "$GU" annotate "${gu_args[@]}") && [ -n "$new" ] && line=$new; fi
   nx=$(grep -c 'Xid' "$OUT/$app.guest_dmesg.log" 2>/dev/null); nx=${nx:-0}
   nr=$(grep -v 'kf3: family=' "$OUT/$app.kf3.log" 2>/dev/null | grep -ciE 'refus'); nr=${nr:-0}
   nk=$(wc -l < "$OUT/$app.kf3.log")
