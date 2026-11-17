@@ -41,7 +41,7 @@ r = unittest.TextTestRunner(stream=io.StringIO()).run(suite)
 print('KF_MUTATION_RESULT=' + json.dumps({'tests': r.testsRun, 'killers': [t.id() for t, _ in r.failures + r.errors]}))
 """
 
-S, PL, RU, RP = (SUITE + n for n in ("Summarize.", "Payload.", "Run.", "Report."))
+S, PL, RU, RP, SM = (SUITE + n for n in ("Summarize.", "Payload.", "Run.", "Report.", "StrictInMain."))
 
 
 def M(name, key, old, new, *tests):
@@ -63,6 +63,25 @@ MUTANTS = [
       PL + "test_not_run_with_rc0_is_a_skipped_row_never_a_pass_never_a_fail", PL + "test_stage_not_run_flows_through_to_a_skipped_row_and_a_valid_report"),
     M("not-run-with-bad-exit-code-accepted", "payload", 'if rc == 0 and doc.get("verdict") == "NOT_RUN":', 'if doc.get("verdict") == "NOT_RUN":',
       PL + "test_not_run_line_with_a_bad_exit_code_is_still_a_failing_stage", PL + "test_not_run_line_from_a_killed_stage_is_a_failure"),
+    # 2026-11-17 strict grading: under a strict instruction (propimages_strict) a row that did not run fails by name `kfml_not_run`
+    M("strict-ignored-by-the-grader", "payload", '    result["kfml"] = doc\n', '    result["kfml"] = doc\n    strict = False\n',
+      PL + "test_strict_a_not_run_row_fails_by_name_and_the_record_is_kept", PL + "test_strict_a_whole_stage_not_run_fails_by_name_and_the_record_is_kept",
+      SM + "test_a_strict_instruction_fails_a_not_run_row_by_name_and_keeps_the_record"),
+    M("strict-only-checks-the-whole-stage", "payload", 'if strict and type(rows) is list and any(', 'if False and type(rows) is list and any(',
+      PL + "test_strict_a_not_run_row_fails_by_name_and_the_record_is_kept", SM + "test_a_strict_instruction_fails_a_not_run_row_by_name_and_keeps_the_record"),
+    M("strict-only-checks-the-rows", "payload", '        if strict:\n            raise EvidenceError("kfml_not_run")\n        return [row("kfml", skipped=1)]',
+      '        return [row("kfml", skipped=1)]',
+      PL + "test_strict_a_whole_stage_not_run_fails_by_name_and_the_record_is_kept", SM + "test_a_strict_instruction_fails_a_whole_stage_not_run_by_name_and_keeps_the_record"),
+    M("strict-not-wired-to-the-instruction", "payload", "kfml_rows(bounded_text(output), rc, sha, result, strict=instruction.propimages_strict)",
+      "kfml_rows(bounded_text(output), rc, sha, result)",
+      SM + "test_a_strict_instruction_fails_a_not_run_row_by_name_and_keeps_the_record", SM + "test_a_strict_instruction_fails_a_whole_stage_not_run_by_name_and_keeps_the_record"),
+    M("strict-on-for-every-instruction", "payload", "kfml_rows(bounded_text(output), rc, sha, result, strict=instruction.propimages_strict)",
+      "kfml_rows(bounded_text(output), rc, sha, result, strict=True)",
+      SM + "test_a_non_strict_instruction_still_passes_a_not_run_row", SM + "test_a_non_strict_instruction_still_skips_a_whole_stage_not_run"),
+    M("strict-row-check-before-the-exit-code", "payload",
+      '    if rc or doc.get("verdict") != "PASS":\n        raise EvidenceError("kfml")\n    rows = doc.get("rows")\n    if strict and type(rows) is list and any(type(r) is dict and r.get("status") == "NOT_RUN" for r in rows):\n        raise EvidenceError("kfml_not_run")\n',
+      '    rows = doc.get("rows")\n    if strict and type(rows) is list and any(type(r) is dict and r.get("status") == "NOT_RUN" for r in rows):\n        raise EvidenceError("kfml_not_run")\n    if rc or doc.get("verdict") != "PASS":\n        raise EvidenceError("kfml")\n',
+      PL + "test_strict_a_not_run_row_with_a_bad_exit_code_is_the_stage_failing_not_a_not_run", PL + "test_strict_a_not_run_row_from_a_killed_stage_is_the_stage_failing_not_a_not_run"),
     M("result-for-another-sha-accepted", "payload", 'if type(doc) is not dict or doc.get("sha") != sha:\n        raise EvidenceError("kfml")',
       'if type(doc) is not dict:\n        raise EvidenceError("kfml")',
       PL + "test_a_result_for_another_sha_is_refused", PL + "test_rows_refuse_everything_else"),
