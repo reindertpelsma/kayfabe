@@ -1,0 +1,57 @@
+{
+ "compute_cap": "8.9",
+ "cuda": "12.6",
+ "data": {},
+ "driver": "560.35.03",
+ "gpu_name": "NVIDIA GeForce RTX 4070",
+ "measured_on": {
+  "compute_cap": "8.9",
+  "cuda": "12.6",
+  "driver": "560.35.03",
+  "driver_cuda": "12.6",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "run_id": "kfml_run_20261116",
+  "torch": "2.7.1+cu126"
+ },
+ "metrics": {
+  "add_sizes": [
+   1,
+   7,
+   1000,
+   98432,
+   1048579,
+   134217733
+  ],
+  "cases_checked": 28,
+  "layernorm_max_abs_err": 0.0039014816284179688,
+  "matmul": {
+   "1000x777x333": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 128, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.3466579957821523e-06
+   },
+   "127x129x65": {
+    "best_config": "BLOCK_M: 32, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 2, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 4.593839548761025e-07
+   },
+   "17x33x19": {
+    "best_config": "BLOCK_M: 32, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 2, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.5800623032191652e-07
+   },
+   "2049x513x1025": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 128, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 3.422256668272894e-06
+   },
+   "512x512x512": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.4199212046150933e-06
+   }
+  },
+  "matmul_worst_rel_err": 3.422256668272894e-06,
+  "softmax_max_abs_err": 4.172325134277344e-07,
+  "triton": "3.3.1"
+ },
+ "test": "triton_kernels",
+ "torch": "2.7.1+cu126",
+ "wall_s": 17.012
+}

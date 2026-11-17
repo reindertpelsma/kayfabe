@@ -1,0 +1,1 @@
+{"status": "NOT_RUN", "reason": "no pinned flavour can run on this box: cu128: its wheels cover sm_75..sm_120, the GPU is sm_61; cu126: its wheels cover sm_75..sm_90, the GPU is sm_61", "facts": {"gpu_name": "NVIDIA GeForce GTX 1080 Ti", "compute_cap": "6.1", "driver": "580.178.04", "driver_cuda": "13.0", "vram_gb": 11.0}}

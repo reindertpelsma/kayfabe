@@ -1,0 +1,39 @@
+{
+ "compute_cap": "8.9",
+ "cuda": "12.6",
+ "data": {
+  "acc": 0.7375
+ },
+ "driver": "560.35.03",
+ "gpu_name": "NVIDIA GeForce RTX 4070",
+ "measured_on": {
+  "compute_cap": "8.9",
+  "cuda": "12.6",
+  "driver": "560.35.03",
+  "driver_cuda": "12.6",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "run_id": "kfml_run_20261116",
+  "torch": "2.7.1+cu126"
+ },
+ "metrics": {
+  "acc_amp": 0.7375,
+  "acc_fp32": 0.7365,
+  "amp_dtype": "torch.bfloat16",
+  "cuda_ipc": true,
+  "epoch_loss": [
+   1.6959273509490185,
+   1.2690887451171875,
+   1.0456190842848558,
+   0.8885770944448618,
+   0.749664062108749
+  ],
+  "grad_scaler": false,
+  "pred_agreement": 0.9975,
+  "reference_diff": null,
+  "train_s": 26.979997873306274
+ },
+ "test": "amp_convnet_cifar",
+ "torch": "2.7.1+cu126",
+ "wall_s": 38.607
+}

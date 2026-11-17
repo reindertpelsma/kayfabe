@@ -407,7 +407,7 @@ class Stage(unittest.TestCase):
         for tier in ("small", "middle", "adhoc"):
             self.assertNotIn("install_flow", m.plan_stage_names(self.inst(tier=tier), ("install_flow",)))
         # it runs after the Linux guests and before the Windows gate, which owns the GPU last
-        names = m.plan_stage_names(self.inst(windows=True, linux_apps="middle"), ("install_flow",))
+        names = [n for n in m.plan_stage_names(self.inst(windows=True, linux_apps="middle"), ("install_flow",)) if n != "kfml"]  # kfml is a default stage since 2026-11-17
         self.assertEqual(names[names.index("install_flow") - 1], "apps")
         self.assertEqual(names[names.index("install_flow") + 1], "windows_gate")
         with patch.object(m, "INSTALL_FLOW_IN_LARGE", True):
@@ -429,9 +429,9 @@ class Stage(unittest.TestCase):
             cmd = [sys.executable, str(HERE / "vast_payload.py"), "--dry-run", "--instruction", str(path)]
             ok = subprocess.run([*cmd, "--only", "install_flow"], env=env, capture_output=True, text=True, cwd=d)
             self.assertEqual(ok.returncode, 0, ok.stderr)
-            self.assertIn("KF_PAYLOAD_PLAN stages=install_flow planned=provision:cuda_host:merge_bar:cuda_guest:install_flow", ok.stdout)
+            self.assertIn("KF_PAYLOAD_PLAN stages=install_flow planned=provision:cuda_host:merge_bar:cuda_guest:kfml:install_flow", ok.stdout)
             plain = subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=d)
-            self.assertIn("planned=provision:cuda_host:merge_bar:cuda_guest\n", plain.stdout)
+            self.assertIn("planned=provision:cuda_host:merge_bar:cuda_guest:kfml\n", plain.stdout)
             pi.write(self.inst(tier="small"), str(path))
             bad = subprocess.run([*cmd, "--only", "install_flow"], env=env, capture_output=True, text=True, cwd=d)
             self.assertEqual(bad.returncode, 1)
@@ -964,7 +964,7 @@ class SecondAngle(unittest.TestCase):
     def test_the_stage_comes_after_cuda_guest(self):
         m = self.payload_module()
         doc = dict(tier="large", windows=False, windows_runs=1, stages=(), spec=None, winapps=None, linux_apps=None, rehearsal=False)
-        names = m.plan_stage_names(pi.Instruction(**doc), ("install_flow",))
+        names = [n for n in m.plan_stage_names(pi.Instruction(**doc), ("install_flow",)) if n != "kfml"]
         self.assertEqual(names[-2:], ["cuda_guest", "install_flow"])
 
     def test_the_stage_needs_hours_left(self):
