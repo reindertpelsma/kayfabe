@@ -1,0 +1,34 @@
+{
+  "app": "photoshopsample",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "opened the shipped 3840x2160 PSD template and a 6533x4355 sky photo, 4 filter passes, saved 1920x1280 PNG (std 35.8)",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "GPU filters on shipped 4K+ photo, 3840x2160 template",
+  "platform": "kf3",
+  "secs": 208,
+  "gpu": {
+    "required": [
+      "gpu"
+    ],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 21.0,
+      "mem_mb": 9532.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 21.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 62
+    },
+    "baseline": {
+      "mem_mb": 9416.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 572
+  }
+}

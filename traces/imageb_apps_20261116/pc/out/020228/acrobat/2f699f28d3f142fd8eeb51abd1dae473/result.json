@@ -1,0 +1,24 @@
+﻿{
+    "app":  "acrobat",
+    "started":  1794786211.19,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "out.pdf",
+                        "bytes":  649302,
+                        "modified":  1794786223.403
+                    }
+                ],
+    "source":  "apollo11_anomaly_report_3.pdf",
+    "opened":  true,
+    "pages":  16,
+    "words_error":  "Value does not fall within the expected range.",
+    "extract_ok":  true,
+    "extracted_pages":  5,
+    "saved":  true,
+    "quit":  "forced",
+    "ended":  1794786264.257,
+    "dismissed":  [
+
+                  ]
+}

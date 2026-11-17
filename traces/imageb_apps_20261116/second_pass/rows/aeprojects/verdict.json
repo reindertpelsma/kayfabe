@@ -1,0 +1,33 @@
+{
+  "app": "aeprojects",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "14 of 14 open-licence AEP projects opened (items, comps and layers counted)",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "open-licence AEP corpus open (project load, GPU capability scan)",
+  "platform": "kf3",
+  "secs": 258,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 33.0,
+      "mem_mb": 9611.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 33.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 158
+    },
+    "baseline": {
+      "mem_mb": 9417.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 678
+  },
+  "outputs_recorded": 3
+}

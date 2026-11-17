@@ -1,0 +1,34 @@
+{
+ "ae_make.txt": {
+  "bytes": 602,
+  "sha256": "bfe5f7d2d8692e58d63f13a11141bbde982c474ef44dc7001cc70f22ae10e512"
+ },
+ "ae_progress.txt": {
+  "bytes": 405,
+  "sha256": "ed1c40d163479119633c3b7561451bc052c1e9a39c46efcde35c2f051e6f9259"
+ },
+ "ae_stub.log": {
+  "bytes": 1325,
+  "sha256": "a0c3cabcaf64a3b629a51618bb584f0d58a3af3c420461f5d408bcadc4202a17"
+ },
+ "aerender.log": {
+  "bytes": 3847,
+  "sha256": "993fa91bf62757cd282b326e2bc244b4b0e3bfa81f9e06d393c7e7d5751f3b07"
+ },
+ "f_00000.tif": {
+  "bytes": 33203548,
+  "sha256": "a197cac58e6e1ada6fcbbedf93e452e531e1bc9eb0f5be40ec89390cd85c8307"
+ },
+ "f_00059.tif": {
+  "bytes": 33203644,
+  "sha256": "d31d837ac0a2d1362f0b5ff25eec5ac562c131863d685f674198cbdcde786971"
+ },
+ "kf.aep": {
+  "bytes": 432596,
+  "sha256": "bbd3d4b3c9ce7195840bad7754864c51d4065bbc56b157e6186d5e8122b4df3f"
+ },
+ "result.json": {
+  "bytes": 2277,
+  "sha256": "663d8faab693a659169095682cae36106c4ed84c8da9e834e7d27e9c8f644a36"
+ }
+}
