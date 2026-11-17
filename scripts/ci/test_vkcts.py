@@ -1139,6 +1139,19 @@ class RunIntegrationTests(unittest.TestCase):
             (d / "host_dmon.txt").write_text("")
             self.assertEqual(V.census_stop(d, "guest")["verdict"], "FAIL")
 
+    def test_a_guest_run_does_not_need_host_video_memory_to_rise_but_a_host_run_does(self):
+        # MEASURED 2026-11-17 (RTX 3090, kf3): a guest's device memory is the store the host reserves at boot, so host VRAM does not rise with a guest run
+        # (8761 -> 8814 MiB while the GPU was busy for 11 samples); the bare-metal run still has to show the rise.
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            (d / "host_query.csv").write_text("".join("2026/11/17 10:00:%02d.000, 60, 10, %d, 0, 0\n" % (i, 8761 + (30 if i > 3 else 0)) for i in range(6)))
+            (d / "host_dmon.txt").write_text("# gpu sm mem enc dec\n# Idx % % % %\n 0 50 10 0 0\n 0 50 10 0 0\n")
+            self.assertEqual(V.census_stop(d, "guest")["verdict"], "PASS")
+            self.assertEqual(V.census_stop(d, "host")["verdict"], "FAIL")
+            (d / "host_query.csv").write_text("".join("2026/11/17 10:00:%02d.000, 0, 0, 8761, 0, 0\n" % i for i in range(6)))
+            (d / "host_dmon.txt").write_text("# gpu sm mem enc dec\n# Idx % % % %\n 0 0 0 0 0\n")
+            self.assertEqual(V.census_stop(d, "guest")["verdict"], "FAIL")      # an idle GPU still fails a guest run
+
 
 class DiffCommandTests(unittest.TestCase):
     CASES = ["dEQP-VK.m.c%02d" % i for i in range(6)]
