@@ -1,0 +1,13 @@
+[2026-11-17T11:04:18Z] image.zip: 1678770176 bytes
+[2026-11-17T11:04:48Z] image.zip: 3436183552 bytes
+[2026-11-17T11:05:23Z] image.zip: 3738173440 bytes
+[2026-11-17T11:05:56Z] image.zip: 3746562048 bytes
+[2026-11-17T11:08:00Z] image.zip: 3822997157 bytes
+[2026-11-17T11:08:00Z] image.zip: short (3822997157 of 8128391922), retry
+[2026-11-17T11:08:35Z] image.zip: 5527981733 bytes
+[2026-11-17T11:09:05Z] image.zip: 7200460453 bytes
+[2026-11-17T11:09:22Z] DOWNLOAD_DONE bytes=8128391922 seconds=335
+[2026-11-17T11:09:32Z] SHA256 30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a want=30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a OK
+[2026-11-17T11:10:35Z] UNPACK rc=0 unpacked and verified seconds=63
+[2026-11-17T11:10:36Z] LAYOUT_DONE dir=/workspace/matlab_gpu/img ram_mb=4096 smp=2 fb_mb=4096 seal_utc=2026-11-17T08:16:48Z
+EXIT rc=0 11:10:36

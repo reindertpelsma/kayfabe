@@ -1,0 +1,33 @@
+bash: line 2: cd: /home/kfimage/kftest: No such file or directory
+KFM_START 08:55:17 uptime=334.62
+NVIDIA GeForce RTX 3080
+   1
+
+	Command being timed: "timeout 2400 matlab -batch g=gpuDevice; disp(g.Name); a=gpuArray.rand(4000); b=a*a; disp(gather(sum(b(:)))>0)"
+	User time (seconds): 7.69
+	System time (seconds): 6.15
+	Percent of CPU this job got: 51%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:26.78
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1316216
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 5959
+	Minor (reclaiming a frame) page faults: 203521
+	Voluntary context switches: 41543
+	Involuntary context switches: 6797
+	Swaps: 0
+	File system inputs: 1831112
+	File system outputs: 6624
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+KFM_REQUESTED_CMD_RC=0 08:55:44
+{Unrecognized function or variable 'matlab_gpu_test'.
+} 
+KFM_FULL_TEST_RC=1 08:57:04
+EXIT rc=0 11:36:00

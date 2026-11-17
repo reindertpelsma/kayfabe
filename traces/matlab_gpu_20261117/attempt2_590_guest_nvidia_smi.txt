@@ -1,0 +1,2 @@
+NVIDIA GeForce RTX 3080, 590.48.01, 4096 MiB
+| NVIDIA-SMI 590.48.01              Driver Version: 590.48.01      CUDA Version: 13.1     

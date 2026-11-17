@@ -25,7 +25,8 @@ and nothing else is measured; the commands of section 13 are unit-tested with sc
   propimage_linux.py inject --dir D [--name N] --wheelhouse DIR --lock FILE [--dest GUESTPATH]
                                                           copy a wheelhouse, then pip install --no-index --require-hashes INSIDE the clone
   propimage_linux.py scan-image IMAGE|ZIP [--grep-*]      independent credential grep over a sealed image (counts only)
-  propimage_linux.py run --dir D [--check]                offline clone: restrict=on, RECORDED clock, same identity
+  propimage_linux.py run --dir D [--keep] [--gpu kf3 --qemu Q --driver-version V]
+                                                          offline clone: restrict=on, RECORDED clock, same identity (kf3: Q is a build_kf3.sh binary)
   propimage_linux.py offline-check --dir D                MATLAB-free command set in an offline clone; exit codes and hashes only
   propimage_linux.py auth-capture --dir D [--cmd C]       sign-in helper: URL + forward command (loopback) or paste-code; never a code
   propimage_linux.py auth-paste --dir D                   hidden prompt; sends the code over ssh stdin to the guest pane, stores nothing
