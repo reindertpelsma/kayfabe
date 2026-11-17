@@ -358,6 +358,30 @@
     "source": "/workspace/bench/release_run_20261116",
     "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
    }
+  },
+  "kfml": {
+   "note": "optional ML research workloads (middle and large tiers, off by default): the hashed wheel lock of the chosen CUDA flavour and the CIFAR-10 archive are downloaded into a venv on the box",
+   "entries": [
+    {
+     "id": "kfml.wheels",
+     "what": "torch, triton, CUDA runtime wheels (hashed lock) and the pinned CIFAR-10 archive",
+     "class": "package",
+     "down_bytes": 8000000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "scripts/kfml/requirements.cu126.lock.txt (wheel sizes not totalled); run kfml_run_20261116 (traces/kfml_run_20261116/README.md) did not record transferred bytes",
+     "note": "no measured total: net_bytes of the first payload run with --only kfml replaces it",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "traces/kfml_run_20261116",
+    "note": "text rows and logs of six workloads, a few MB"
+   }
   }
  }
 }
