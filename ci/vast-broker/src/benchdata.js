@@ -40,7 +40,7 @@ export function benchCount(record, name, used) {
   record.benchMints = { ...(record.benchMints ?? {}), [name]: used + 1 };
 }
 // Validated lazily so a missing R2 setting only breaks this route.
-function benchEndpoint(env) {
+export function benchEndpoint(env) {
   const good = (value, re) => typeof value === 'string' && re.test(value);
   if (
     !good(env.R2_ACCOUNT_ID, /^[0-9a-f]{32}$/) ||

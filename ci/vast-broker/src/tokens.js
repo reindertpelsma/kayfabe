@@ -1,5 +1,6 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, decodeJwt } from 'jose';
 import { numericId, hexSha, refuse } from './policy.js';
+import { normalizeScopes } from './trust.js';
 const tokenEncoder = new TextEncoder();
 export const validSecret = (value) =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{32,256}$/.test(value);
@@ -59,7 +60,10 @@ export class RunTokens {
       (r.box === undefined) !== (r.hp === undefined) ||
       (r.box !== undefined &&
         (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(r.box) ||
-          !['owned', 'container', 'standard', 'borrowed'].includes(r.hp)))
+          !['owned', 'container', 'standard', 'borrowed'].includes(r.hp))) ||
+      // the scope list is decided at lease time (src/trust.js); a value that is not already in normal form is a bug, not a token
+      (r.scopes !== undefined &&
+        JSON.stringify(normalizeScopes(r.scopes)) !== JSON.stringify(r.scopes))
     )
       refuse();
     return new SignJWT({
@@ -68,6 +72,7 @@ export class RunTokens {
       sha: r.sha,
       nonce: r.nonce,
       ...(r.box === undefined ? {} : { box: r.box, hp: r.hp }),
+      ...(r.scopes === undefined ? {} : { scopes: r.scopes }),
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime(r.reportExpiry)
@@ -89,9 +94,33 @@ export class RunTokens {
       )
         return null;
       const key = c.run + '-' + c.attempt;
-      return { ...c, key, label: 'kf-ci-' + key, reportExpiry: c.exp };
+      // `scopes`: a token without the claim (issued before it existed) or with a malformed one carries only ['public']
+      return {
+        ...c,
+        scopes: normalizeScopes(c.scopes),
+        key,
+        label: 'kf-ci-' + key,
+        reportExpiry: c.exp,
+      };
     } catch {
       return null;
+    }
+  }
+  // True only for a token whose signature is good and whose `exp` has passed: the one case a refusal may call EXPIRED rather than invalid
+  // (a forged or foreign token learns nothing from it).
+  async expired(token) {
+    if (typeof token !== 'string' || token.length > 1024) return false;
+    try {
+      const exp = decodeJwt(token).exp;
+      if (!Number.isSafeInteger(exp) || this.now() < exp * 1000) return false;
+      await jwtVerify(token, this.key(), {
+        algorithms: ['HS256'],
+        currentDate: new Date((exp - 1) * 1000),
+        requiredClaims: ['exp'],
+      });
+      return true;
+    } catch {
+      return false;
     }
   }
   async verify(token, r) {

@@ -26,6 +26,24 @@
       "maxInetUsdPerGb": 0.005
     }
   },
+  "payloadBandwidthMax": {
+    "small": {
+      "downGb": 150,
+      "upGb": 10
+    },
+    "middle": {
+      "downGb": 180,
+      "upGb": 10
+    },
+    "large": {
+      "downGb": 260,
+      "upGb": 10
+    },
+    "adhoc": {
+      "downGb": 100,
+      "upGb": 10
+    }
+  },
   "payloadStageResources": {
     "setup_cache": {
       "profiles": [

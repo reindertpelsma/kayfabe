@@ -49,10 +49,6 @@
           "lane": "gate",
           "basis": "PASS on the pc and on Vast boxes"
         },
-        "edge": {
-          "lane": "gate",
-          "basis": "PASS on the pc and on Vast boxes"
-        },
         "3dmark": {
           "lane": "discovery",
           "basis": "PASS on the pc; failed twice on a Vast box (no RUN link found); unsure, so discovery"
