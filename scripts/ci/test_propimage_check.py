@@ -1357,6 +1357,7 @@ class T(unittest.TestCase):
         resume=False,
         clock_query_ok=True,
         resume_last="2026-11-12T00:10:00Z",
+        apps="resolve",
     ):
         """Deterministic complete pipeline: no VM, keys, SSH, GPU or sleeps."""
         with tempfile.TemporaryDirectory() as td:
@@ -1494,7 +1495,7 @@ class T(unittest.TestCase):
                         "--display",
                         "off",
                         "--apps",
-                        "resolve",
+                        apps,
                     ]
                     + (["--resume"] if resume else [])
                 )
@@ -1546,6 +1547,30 @@ class T(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(apps, 0)
         self.assertTrue(any(r["verdict"] == "NOT_RUN" and r["class"] == "harness" for r in rows))
+
+    def test_pipeline_apps_none_checks_a_blank_image_without_any_app(self):
+        """A blank image has no application: `--apps none` runs the power, GPU and identity rows and ends (2026-11-17)."""
+        rc, rows, apps = self.pipeline(apps="none")
+        self.assertEqual(rc, 0)
+        self.assertEqual(apps, 0)
+        steps = [r["step"] for r in rows]
+        for step in ("power", "gpu", "verify", "stop"):
+            self.assertIn(step, steps)
+        self.assertFalse(any(s.startswith("app:") for s in steps))
+        self.assertTrue(all(r["verdict"] in ("PASS", "OK") for r in rows))
+
+    def test_pipeline_apps_none_does_not_hide_a_failed_prerequisite(self):
+        rc, rows, apps = self.pipeline(apps="none", power_ok=False)
+        self.assertEqual(rc, 1)
+        self.assertEqual(apps, 0)
+        self.assertTrue(any(r["step"] == "power" and r["verdict"] == "NOT OK" for r in rows))
+
+    def test_pipeline_apps_none_cannot_be_mixed_with_a_name(self):
+        for spelling in ("none,resolve", "resolve,none", "none,none"):
+            rc, rows, apps = self.pipeline(apps=spelling, clock_query_ok=False)
+            self.assertEqual(rc, 1, spelling)
+            self.assertEqual(apps, 0, spelling)
+            self.assertIn("Unknown or duplicate app", rows[-1]["detail"], spelling)
 
     def test_pipeline_work_pass_has_evidence(self):
         rc, rows, apps = self.pipeline()
