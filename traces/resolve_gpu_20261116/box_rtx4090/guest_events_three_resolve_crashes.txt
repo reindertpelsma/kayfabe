@@ -1,0 +1,40 @@
+--- Application errors/hangs
+11/12/2026 6:17:27 PM Application Error 1000 Faulting application name: Resolve.exe, version: 21.2.0.6, time stamp: 0x00000000
+ | Faulting module name: nvoglv64.dll, version: 32.0.15.8088, time stamp: 0x6885c454
+ | Exception code: 0xc0000409
+ | Fault offset: 0x00000000010816ad
+
+11/12/2026 6:17:23 PM NVIDIA OpenGL Driver 1 Unable to recover from a kernel exception. The application must close. |  |  | Error code: 3 (subcode 2)
+11/12/2026 6:02:53 PM Application Error 1000 Faulting application name: Resolve.exe, version: 21.2.0.6, time stamp: 0x00000000
+ | Faulting module name: nvoglv64.dll, version: 32.0.15.8088, time stamp: 0x6885c454
+ | Exception code: 0xc0000409
+ | Fault offset: 0x00000000010816ad
+
+11/12/2026 6:02:52 PM Application Error 1000 Faulting application name: nvidia-smi.exe, version: 8.17.15.8088, time stamp: 0x6885c44f
+ | Faulting module name: nvml.dll, version: 8.17.15.8088, time stamp: 0x6885c42f
+ | Exception code: 0xc0000005
+ | Fault offset: 0x00000000000eb680
+
+11/12/2026 6:02:49 PM NVIDIA OpenGL Driver 1 Unable to recover from a kernel exception. The application must close. |  |  | Error code: 3 (subcode 2)
+
+
+
+
+--- System GPU events
+11/12/2026 6:17:19 PM nvlddmkm 153 
+11/12/2026 6:17:18 PM nvlddmkm 153 
+11/12/2026 6:17:16 PM nvlddmkm 153 
+11/12/2026 6:02:45 PM nvlddmkm 153 
+11/12/2026 6:02:44 PM nvlddmkm 153 
+11/12/2026 6:02:42 PM nvlddmkm 153 
+11/12/2026 5:53:59 PM Microsoft-Windows-UserModePowerService 12 Process C:\Windows\System32\powercfg.exe (process ID:5540) reset policy scheme from {381b4222-f694-41f0-9685-ff5bb260df2e} to {381b4222-f694-41f0-9685-ff5bb260df2e}
+
+
+
+
+
+
+
+
+--- Resolve log tail
+[0x000022f0] | SyManager.Signals    | INFO  | 2026-11-12 18:16:04,884 | Current project pointer changed to (kfdddddddd) from project library (Local Database : Local)

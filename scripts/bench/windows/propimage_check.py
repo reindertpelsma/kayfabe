@@ -36,6 +36,50 @@ def _load_propimage():
 
 PI = _load_propimage()
 
+
+def _load_resolve_gpu():
+    """The Resolve GPU lane (resolve_gpu.py, gpu_use_assert.py, resolve_media.py) loaded lazily from this directory."""
+    spec = importlib.util.spec_from_file_location("kf_resolve_gpu", HERE / "resolve_gpu.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["kf_resolve_gpu"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+PLATFORM = "kf3"
+
+
+def enable_vfio(bdf):
+    """Differential-test platform `vfio`: the same harness, image, overlay, offline slirp, clock, CPU profile and in-guest scripts, but the
+    kf3 device is replaced by the real GPU (function 0 and its audio function .1) through vfio-pci, and the kf3-only checks (seed UUID
+    repair/compare) are not applicable: they are recorded as VFIO_DIFF, never as a pass of kf3. The caller (the PC) has bound the GPU to
+    vfio-pci and holds the GPU lock (traces/pcnight_20261114 vfio_host.sh)."""
+    global PLATFORM
+    if not re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.0", bdf):
+        raise ValueError("--vfio-gpu must be a PCI address of function 0, for example 0000:01:00.0")
+    audio = bdf[:-1] + "1"
+    original = PI.build_argv
+
+    def build_argv(*a, **k):
+        argv = original(*a, **k)
+        i = next(n for n, v in enumerate(argv) if v == "-device" and argv[n + 1].startswith("kf3-gpu"))
+        del argv[i : i + 2]
+        argv[i:i] = [
+            "-device",
+            f"vfio-pci,host={bdf},multifunction=on,addr=0x4.0",
+            "-device",
+            f"vfio-pci,host={audio},addr=0x4.1",
+        ]
+        return argv
+
+    PI.build_argv = build_argv
+    globals()["gpu_fix"] = lambda g, uuid: (True, "VFIO platform: kf3 seed repair/UUID check not applicable (real GPU)")
+    compare = PI.compare
+    PI.compare = lambda st, facts: [
+        tuple("VFIO_DIFF" if (j == 1 and v == "MISMATCH") else v for j, v in enumerate(r)) for r in compare(st, facts)
+    ]
+    PLATFORM = "vfio"
+
+
 GUEST_DIR = r"C:\kfapps"
 
 
@@ -122,12 +166,20 @@ if($changed){
  }
  Start-Sleep 15
 }
-# The driver can take longer than the fixed pause to come up after the restart under kf3 (MEASURED 2026-11-16: 1 of 5 fresh boots had no UUID
-# yet at the first query): poll for up to 45 s (the harness call has a 120 s limit); a UUID that is present and DIFFERENT is still an immediate failure.
-$ids=@()
-for($n=0;$n -lt 9;$n++){ $ids=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader 2>$null); if($LASTEXITCODE -eq 0 -and $ids.Count -eq 1 -and $ids[0].Trim() -match '^GPU-'){break}; Start-Sleep 5 }
-if($ids.Count -ne 1 -or $ids[0].Trim() -cne $expected){throw 'Post-fix seed GPU UUID mismatch'}
-$ids[0].Trim()
+function Read-Uuid(){ $x=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader 2>$null); if($LASTEXITCODE -eq 0 -and $x.Count -eq 1){ $x[0].Trim() } else { '' } }
+function Wait-Uuid($tries){ for($i=0;$i -lt $tries;$i++){ $u=Read-Uuid; if($u){ return $u }; Start-Sleep 5 }; return '' }
+$u=Wait-Uuid 18
+if($u -cne $expected){
+ # MEASURED 2026-11-16 (RTX 4090 box): after a plain restart the device can stay in Code 43 where Disable/Enable clears it at once
+ Get-PnpDevice -Class Display | Where-Object {$_.Present -and $_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
+  Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
+  Start-Sleep 5
+  Enable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
+ }
+ $u=Wait-Uuid 18
+}
+if($u -cne $expected){throw 'Post-fix seed GPU UUID mismatch'}
+$u
 """
     )
 
@@ -766,7 +818,7 @@ CHECKS = {
         "exe": r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SLDWORKS.exe",
     },
     "resolve": {
-        "timeout": 1200,
+        "timeout": 1800,
         "exe": r"C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe",
     },
     "edrawings": {
@@ -1157,6 +1209,7 @@ def render_check(
     accessibility_experiment=False,
     solidworks_export=True,
     superposition_run=False,
+    resolve_plan=None,
 ):
     spec = CHECKS[name]
     env_prefix(env or {})
@@ -1178,6 +1231,8 @@ def render_check(
         script += THREEDMARK_RUN
     elif name == "edrawings":
         script += EDRAWINGS_RUN
+    elif name == "resolve" and resolve_plan:
+        script += _load_resolve_gpu().guest_body(resolve_plan)
     elif name == "resolve":
         script += RESOLVE_RUN
     else:
@@ -1380,9 +1435,10 @@ def validate_wukong(r):
     )
 
 
-def verdict(name, run_id, directory, plan=None):
+def verdict(name, run_id, directory, plan=None, resolve_host=None):
     """Grade pulled bytes, never a guest-authored ok flag. Guest clocks stay guest-relative."""
     row = {"app": name, "ok": False, "evidence": "NONE", "signal": "", "secs": 0}
+    resolve_host = resolve_host or {}
     try:
         r = json.loads((directory / "result.json").read_text(encoding="utf-8-sig"))
         if r.get("app") != name or r.get("run_id") != run_id:
@@ -1396,7 +1452,7 @@ def verdict(name, run_id, directory, plan=None):
         row["secs"] = int(end - start)
         if name == "wukong":
             row["launched"] = r.get("shipping_seen") is True
-        if r.get("error"):
+        if r.get("error") and r.get("kind") != "RESOLVE_GPU":
             step = f" (script step {r['step']})" if r.get("step") else ""
             raise ValueError(str(r["error"]) + step)
         if r.get("kind") == "FILE" and name == "solidworks":
@@ -1448,6 +1504,14 @@ def verdict(name, run_id, directory, plan=None):
             if cli_refused(str(r.get("cli_output", ""))):
                 signal += "; CLI refused (Professional/Developer key needed), so the run went through UI Automation"
             row.update(ok=True, evidence="FILE", signal=signal)
+        elif name == "resolve" and r.get("kind") == "RESOLVE_GPU":
+            graded = _load_resolve_gpu().grade(r, directory, **resolve_host)
+            row["evidence"] = "FILE"
+            row.update({k: v for k, v in graded.items() if k not in ("ok", "status", "error")})
+            if not graded["ok"]:
+                row["status"] = graded["status"]
+                raise ValueError(graded["error"])
+            row.update(ok=True)
         elif name == "resolve" and r.get("kind") == "RESOLVE":
             row["evidence"] = "NONE"
             wanted = "kf" + run_id[:8]
@@ -1544,10 +1608,23 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
     d = out / name / run_id
     d.mkdir(parents=True)
     tmp = d / (name + ".ps1")
-    tmp.write_text(render_check(name, env, run_id, plan, **options))
+    resolve_cfg = options.pop("resolve_gpu", None)  # dict (media directory, ...) or None: the launch-only Resolve row
+    qlog = options.pop("qemu_log", None)
+    resolve_plan, host_sampler, host_t0, qlines0 = None, None, None, None
+    if name != "resolve" or resolve_cfg is None:
+        tmp.write_text(render_check(name, env, run_id, plan, **options))
     task = "app_" + run_id
     t0 = clock()
     try:
+        if name == "resolve" and resolve_cfg is not None:
+            rg = _load_resolve_gpu()
+            resolve_plan = rg.prepare(guest, run_id, resolve_cfg)
+            tmp.write_text(render_check(name, env, run_id, plan, resolve_plan=resolve_plan, **options))
+            host_sampler = rg.G.HostSampler()
+            host_sampler.start()
+            time.sleep(2)
+            host_t0 = time.time()
+            qlines0 = len(Path(qlog).read_text(errors="replace").splitlines()) if qlog and Path(qlog).is_file() else None
         p = guest.interactive(task, tmp.read_text())
         if p.returncode:
             raise ValueError("Task start failed")
@@ -1591,10 +1668,25 @@ def run_check(name, env, out, guest, plan=None, sleep=time.sleep, clock=time.mon
                 raise ValueError("Artifact transfer failed")
         if name == "superposition" and (d / "result.png").exists():
             extract_screen_text(d)  # optional extra; the verdict is the saved log
-        row = verdict(name, run_id, d, plan)
+        resolve_host = None
+        if resolve_plan:
+            rg = _load_resolve_gpu()
+            host_csv = host_sampler.stop() if host_sampler else ""
+            host_sampler = None
+            (d / "host_smi.csv").write_text(host_csv)
+            rg.pull_outputs(guest, d, resolve_plan, remote)
+            resolve_host = {"host_csv": host_csv, "host_t0": host_t0, "host_utc_offset_s": float(time.localtime().tm_gmtoff),
+                            "platform": PLATFORM}
+            if PLATFORM == "kf3" and qlog and qlines0 is not None and Path(qlog).is_file():
+                window = Path(qlog).read_text(errors="replace").splitlines()[qlines0:]
+                resolve_host["census_lines"] = window
+                (d / "kf3_census.json").write_text(json.dumps(rg.census(window), indent=1))
+        row = verdict(name, run_id, d, plan, resolve_host=resolve_host)
     except (ValueError, TypeError, OSError, subprocess.TimeoutExpired) as exc:
         row = {"class": "harness", "app": name, "ok": False, "evidence": "NONE", "error": str(exc)}
     finally:
+        if host_sampler is not None:
+            host_sampler.stop()
         # Stop only this authored task, never process-name sweeps.
         try:
             guest.ps(
@@ -1713,9 +1805,6 @@ def main(argv=None):
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
     ap.add_argument("--apps", default=",".join(CHECKS))
     ap.add_argument("--app-set", choices=("a", "b"), default="a", help="a: the first image's applications (default); b: the second image's creative applications")
-    ap.add_argument("--platform", choices=("kf3", "vfio"), default="kf3",
-                    help="kf3 (default): the kayfabe device. vfio: the same image, script and verification with the real GPU passed through (the control of a differential test; only where the host GPU is bound to vfio-pci; kf3-only repair and UUID checks are skipped)")
-    ap.add_argument("--vfio-gpu", default="0000:01:00.0", help="PCI address of the GPU function for --platform vfio (its audio function is .1)")
     ap.add_argument("--data-iso", help="read-only data volume (label KFDATA) attached on the AHCI cd port; required by --app-set b")
     ap.add_argument(
         "--fb-mb",
@@ -1727,6 +1816,28 @@ def main(argv=None):
         help="Manual iteration: after verify, keep the guest up until this file appears (max 3 h)",
     )
     ap.add_argument("--plans", type=Path)
+    ap.add_argument(
+        "--platform",
+        choices=("kf3", "vfio"),
+        default="kf3",
+        help="how the guest GPU is provided: kf3 (the product) or vfio (the real GPU, control for differential tests; PC only)",
+    )
+    ap.add_argument("--vfio-gpu", default="0000:01:00.0", help="PCI address of the GPU function 0 for --platform vfio")
+    ap.add_argument(
+        "--resolve-launch-only",
+        action="store_true",
+        help="Resolve row: only create a project (the old weak check) instead of the GPU rendering coverage",
+    )
+    ap.add_argument(
+        "--resolve-lane",
+        choices=("gate", "discovery"),
+        default="gate",
+        help="Resolve row set: gate (must pass on kf3, in the app boot) or discovery (exotic deliverables meant to break kf3; own clone, time-boxed)",
+    )
+    ap.add_argument(
+        "--resolve-media",
+        help="Directory for the open media of the Resolve row (fetched from the pinned sources or the public mirror when missing)",
+    )
     ap.add_argument(
         "--experiment-3dmark-accessibility",
         action="store_true",
@@ -1744,6 +1855,8 @@ def main(argv=None):
         help="Repeat measured rectangle-derived RUN click; requires local tesseract for result-screen validation",
     )
     a = ap.parse_args(argv)
+    if a.platform == "vfio":
+        enable_vfio(a.vfio_gpu)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -1975,6 +2088,12 @@ def main(argv=None):
                     "post-fix seed UUID exact match" if fixed else "repair or UUID check failed",
                 )
                 if not fixed:
+                    if a.hold_until_file:  # manual investigation: keep the guest up (max 1 h) so the PnP state can be inspected
+                        record(
+                            "hold",
+                            hold_for_release(a.hold_until_file, 3600),
+                            "guest held after the GPU prerequisite failed; ssh port %s" % g.port,
+                        )
                     raise ValueError("GPU prerequisite failed; app checks not run")
                 facts = PI.run_guest_probe(state, str(key))
                 matches = PI.compare(state, facts)
@@ -2019,6 +2138,14 @@ def main(argv=None):
                             accessibility_experiment=a.experiment_3dmark_accessibility,
                             solidworks_export=a.solidworks_export,
                             superposition_run=a.superposition_run,
+                            **(
+                                {
+                                    "resolve_gpu": {"media_dir": a.resolve_media or str(Path(a.work) / "resolve_media"), "lane": a.resolve_lane},
+                                    "qemu_log": str(r / "qemu.log"),
+                                }
+                                if name == "resolve" and not a.resolve_launch_only
+                                else {}
+                            ),
                         )
                     try:
                         events = shutdown_events(g)

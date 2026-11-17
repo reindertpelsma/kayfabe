@@ -1,0 +1,14 @@
+before
+NVIDIA GeForce RTX 4090 status=Error problem=CM_PROB_FAILED_POST_START
+--- pnputil /scan-devices
+Microsoft PnP Utility
+
+Scanning for device hardware changes.
+Scan complete.
+
+
+NVIDIA GeForce RTX 4090 status=Error problem=CM_PROB_FAILED_POST_START
+--- Disable/Enable-PnpDevice
+enabled
+NVIDIA GeForce RTX 4090 status=OK problem=CM_PROB_NONE
+GPU 0: NVIDIA GeForce RTX 4090 (UUID: GPU-UUID)
