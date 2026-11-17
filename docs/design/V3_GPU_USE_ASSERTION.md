@@ -204,9 +204,9 @@ Run on one Vast KVM box (RTX 3090 GA102, host and guest driver 580.159.04, Ubunt
 | V6 | held: every guest window had a status line before and inside it (no `NOTRUN` from an empty base) | `runs/G1`, `runs/F1` |
 | V7 | not run (MATLAB) | |
 
-The three defects (each a harness or threshold error, shown by the host control or by the measured numbers; each fixed test-first on this branch):
+The three defects (each a harness or threshold error, shown by the host control or by the numbers recorded in section 10; each fixed test-first on this branch):
 1. **`mem` cannot be required of a guest.** `blender_cycles` in the guest: census +9512 submissions, GPU 53 percent busy, host video memory 8761 to 8792 MiB (floor 64 MiB): a guest's device memory is the 8 GiB store the host reserves at boot, so a guest allocation never moves host VRAM. `host_engines(app, side)` drops `mem` for `side=guest`; the bare-metal run still needs the rise, the census and the other engines stay required of a guest.
 2. **ffmpeg 4.4.2 rows.** On the bare-metal host `nvenc_h264`, `nvenc_hevc` and `nvdec_h264` were judged FAIL: the nvenc rows filtered the indented stream-mapping line (the only place 4.4 names the encoder; its mp4 has no `encoder` stream tag) and `MAPPING_RX` stopped at the first `)` of `(rawvideo (native) -> h264 (h264_nvenc))`; the nvdec row kept only the first `Reinit context` line (software format), the second says `pix_fmt: cuda`. The nvdec row failed in the guest for the same reason.
 3. **hashcat notice.** `* Device #1: CUDA SDK Toolkit not installed ...` has the shape of a device line and was read as a non-NVIDIA device; a device line ends in `, skipped` or `, <used>/<total> MB`.
-No threshold was relaxed to make a row pass: the proofs now read the line that is really printed, and the `mem` observable is dropped where it cannot exist, with the measured numbers as the test fixture.
+No threshold was relaxed to make a row pass: the proofs now read the line that is really printed, and the `mem` observable is dropped where it cannot exist, with the numbers of section 10 (2026-11-17) as the test fixture.
 

@@ -110,7 +110,7 @@ Not covered, said plainly: nothing in the tests exercises the ctypes layer (`dxs
 
 ## 7. Where a cache plugs in later (not in this PR)
 
-A Worker may keep an R2 copy of a built tree (`build/cts`, the sample `bin/x64/Release` directories). Per the owner rule that cache may only be trusted if a CI workflow built it with a GitHub attestation: the plug-in point is `kfopen.prepare`, where a verified artifact would take the place of `build_cts`/`build_dxs` after `gh attestation verify` of pinned repo, workflow and source commit; the recipe hash of `kfopen_build.recipe_hash` is the cache key. Until that workflow exists the only cache is the user's own `--prebuilt DIR`, trusted and hash-recorded. The default stays "build from the pinned upstream source".
+A Worker may keep an R2 copy of a built tree (`build/cts`, the sample `bin/x64/Release` directories). Per the owner rule that cache may only be trusted if a CI workflow built it with a GitHub attestation: the plug-in point is `kfopen.prepare`, where an attested artifact would take the place of `build_cts`/`build_dxs` after `gh attestation verify` of pinned repo, workflow and source commit; the recipe hash of `kfopen_build.recipe_hash` is the cache key. Until that workflow exists the only cache is the user's own `--prebuilt DIR`, trusted and hash-recorded. The default stays "build from the pinned upstream source".
 
 ## 8. Validation request (what a person with a box must do; nothing here has run)
 

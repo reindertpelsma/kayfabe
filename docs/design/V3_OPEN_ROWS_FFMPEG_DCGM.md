@@ -176,7 +176,7 @@ Evidence: `traces/open_rows_guest_20261117/` (runs R1, R1c, R1p). Commands: the 
 
 | | host (R1, control R1c identical) | guest (R1) |
 |---|---|---|
-| `nvcodec_matrix` | pass 35, not_supported 7, fail 0, mismatch 0, not_run 5 (AV1 encode: `unknown_encoder`), 143 s, `gpu_use=PROVEN` | pass 31, not_supported 16, fail 0, mismatch 0, not_run 0, 245 s, `host_gpu_use=PROVEN` (encoder 100 percent in 28 samples) |
+| `nvcodec_matrix` | pass 35, not_supported 7, fail 0, mismatch 0, not_run 5 (AV1 encode: `unknown_encoder`), 143 s, `gpu_use=PROVEN` | pass 31, not_supported 16, fail 0, mismatch 0, not_run 0, 245 s, `host_gpu_use=PROVEN` (encoder 100 percent in 28 samples, 2026-11-17) |
 | compare | host against host: 47 of 47 agree, 0 capdiffs (noise floor zero) | 38 agree, 9 disagree, 4 candidates, 1 capdiff |
 | `nvml_dcgm` | nvml_fields_ok 57, queries 63/74, smi 647/734, dcgm_fields 159/768 | NVML compare: 132 `FINDING_NA_IN_GUEST`, DCGM 74; host against host: 0 |
 
