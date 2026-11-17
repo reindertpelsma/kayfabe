@@ -413,9 +413,9 @@ def parse_stream_json(text):
 # first match wins; every id is a short word that goes into the result file
 REASONS = (
     ("driver_api_too_old", re.compile(r"Driver does not support the required nvenc API version|minimum required Nvidia driver", re.I)),
+    ("session_limit", re.compile(r"OpenEncodeSessionEx failed: (out of memory|incompatible client key)|OpenEncodeSessionEx failed: .*\(10\)", re.I)),
     ("no_encode_device", re.compile(r"No (NVENC )?capable devices found|Cannot load libnvidia-encode|OpenEncodeSessionEx failed: (no encode device|unsupported device)", re.I)),
     ("no_decode_device", re.compile(r"CUDA_ERROR_NO_DEVICE|no CUDA-capable device", re.I)),
-    ("session_limit", re.compile(r"OpenEncodeSessionEx failed: out of memory|OpenEncodeSessionEx failed: .*(10)|incompatible client key", re.I)),
     ("unknown_encoder", re.compile(r"Unknown encoder|Encoder .* not found|Unrecognized option", re.I)),
     ("unknown_decoder", re.compile(r"Unknown decoder|Decoder .* not found", re.I)),
     ("no_cuvid", re.compile(r"Cannot load libnvcuvid|cuvid.*not (found|available)|Cannot load cuvid", re.I)),

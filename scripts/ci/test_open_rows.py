@@ -365,6 +365,11 @@ class ReasonsAndCompare(unittest.TestCase):
     def test_reason_session_limit(self):
         self.assertEqual(L.classify_reason("[hevc_nvenc @ 0x5] OpenEncodeSessionEx failed: out of memory (10)"), "session_limit")
 
+    def test_reason_session_limit_as_a_580_driver_words_it(self):
+        # measured on a native RTX 3060 (traces/open_rows_ffdcgm_20261117): the cap is reported as an incompatible client key, then ffmpeg adds a second line
+        text = "[h264_nvenc @ 0x1] OpenEncodeSessionEx failed: incompatible client key (21): (no details)\n[h264_nvenc @ 0x1] No capable devices found\n"
+        self.assertEqual(L.classify_reason(text), "session_limit")
+
     def test_reason_params(self):
         self.assertEqual(L.classify_reason("[av1_nvenc @ 0x5] InitializeEncoder failed: invalid param (8)"), "encoder_params_rejected")
 
