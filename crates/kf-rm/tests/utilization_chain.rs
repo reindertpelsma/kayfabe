@@ -175,13 +175,26 @@ fn off_refuses_all_three_and_counts_them_unserviced() {
             ("POLL", r.poll(u64::MAX)),
         ];
         for (name, cmd) in &reqs {
-            assert!(r.chain.respond(cmd).is_none(), "{a}.{b}.{c}: {name} must be refused with the property off");
+            assert!(
+                r.chain.respond(cmd).is_none(),
+                "{a}.{b}.{c}: {name} must be refused with the property off"
+            );
         }
         assert_eq!(r.logs.unserviced.total(), 3, "{a}.{b}.{c}");
-        let seen: Vec<_> = r.logs.unserviced.sample().iter().filter_map(|u| u.cmd).collect();
+        let seen: Vec<_> = r
+            .logs
+            .unserviced
+            .sample()
+            .iter()
+            .filter_map(|u| u.cmd)
+            .collect();
         assert_eq!(
             seen,
-            vec![ku::GPUMON_CMD, l.rusd_init_cmd as u32, l.rusd_poll_cmd as u32],
+            vec![
+                ku::GPUMON_CMD,
+                l.rusd_init_cmd as u32,
+                l.rusd_poll_cmd as u32
+            ],
             "{a}.{b}.{c}"
         );
     }
@@ -208,23 +221,31 @@ fn on_gpumon_reply_is_the_cache_and_none_of_the_guests_bytes() {
         let mut r = rig(v(a, b, c), true);
         r.push(42, 2_000_000_000);
         let l = r.l();
-        let expected = ku::encode_gpumon_reply(
-            l,
-            &r.state.as_ref().unwrap().fresh_samples().unwrap(),
-        )
-        .unwrap();
+        let expected =
+            ku::encode_gpumon_reply(l, &r.state.as_ref().unwrap().fresh_samples().unwrap())
+                .unwrap();
         let mut seen = Vec::new();
         for junk in [0x00u8, 0xa5, 0xff] {
-            let reply = r.chain.respond(&r.gpumon_request(junk)).unwrap_or_else(|| panic!("{a}.{b}.{c}: not answered"));
+            let reply = r
+                .chain
+                .respond(&r.gpumon_request(junk))
+                .unwrap_or_else(|| panic!("{a}.{b}.{c}: not answered"));
             assert_eq!(reply.rpc_result, NV_OK);
             let w = r.abi.rm_control_wire();
             assert_eq!(
-                u32::from_le_bytes(reply.body[w.status_off..w.status_off + 4].try_into().unwrap()),
+                u32::from_le_bytes(
+                    reply.body[w.status_off..w.status_off + 4]
+                        .try_into()
+                        .unwrap()
+                ),
                 NV_OK,
                 "the control's own status word"
             );
             let params = r.reply_params(&reply, l.params_len());
-            assert_eq!(params, expected, "{a}.{b}.{c}: junk {junk:#x} reached the reply");
+            assert_eq!(
+                params, expected,
+                "{a}.{b}.{c}: junk {junk:#x} reached the reply"
+            );
             seen.push(reply.body.len());
         }
         assert!(seen.iter().all(|n| *n == seen[0]), "a fixed size");
@@ -242,11 +263,26 @@ fn on_gpumon_carries_the_percentages_and_no_process() {
     let u32_at = |o: u64| u32::from_le_bytes(p[o as usize..o as usize + 4].try_into().unwrap());
     let s = l.off_samples;
     assert_eq!(u32_at(8), 1, "count");
-    assert_eq!(u32_at(s + l.off_gr + l.eng_off_util), 4_200, "gpu 42 % in pct x 100");
+    assert_eq!(
+        u32_at(s + l.off_gr + l.eng_off_util),
+        4_200,
+        "gpu 42 % in pct x 100"
+    );
     assert_eq!(u32_at(s + l.off_fb + l.eng_off_util), 1_100);
     assert_eq!(u32_at(s + l.off_nvdec + l.eng_off_util), 300);
-    for eng in [l.off_gr, l.off_fb, l.off_nvenc, l.off_nvdec, l.off_nvjpg, l.off_nvofa] {
-        assert_eq!(u32_at(s + eng + l.eng_off_proc_id), u32::MAX, "no process id");
+    for eng in [
+        l.off_gr,
+        l.off_fb,
+        l.off_nvenc,
+        l.off_nvdec,
+        l.off_nvjpg,
+        l.off_nvofa,
+    ] {
+        assert_eq!(
+            u32_at(s + eng + l.eng_off_proc_id),
+            u32::MAX,
+            "no process id"
+        );
         assert_eq!(u32_at(s + eng + l.eng_off_sub_proc_id), u32::MAX);
     }
 }
@@ -255,10 +291,18 @@ fn on_gpumon_carries_the_percentages_and_no_process() {
 #[test]
 fn on_without_a_fresh_sample_gpumon_is_refused_as_before() {
     let mut r = rig(v(580, 159, 4), true);
-    assert!(r.chain.respond(&r.gpumon_request(0)).is_none(), "empty cache");
+    assert!(
+        r.chain.respond(&r.gpumon_request(0)).is_none(),
+        "empty cache"
+    );
     r.push(10, 2_000_000_000);
-    r.clock.0.store(2_000_000_000 + 4_000_000_000, Ordering::Relaxed);
-    assert!(r.chain.respond(&r.gpumon_request(0)).is_none(), "a 4 s old cache is not served");
+    r.clock
+        .0
+        .store(2_000_000_000 + 4_000_000_000, Ordering::Relaxed);
+    assert!(
+        r.chain.respond(&r.gpumon_request(0)).is_none(),
+        "a 4 s old cache is not served"
+    );
     let c = r.state.as_ref().unwrap().counters();
     assert_eq!((c.gpumon_served, c.gpumon_no_sample), (0, 2));
     assert_eq!(r.logs.unserviced.total(), 2, "both reached the ledger");
@@ -271,13 +315,18 @@ fn hostile_flood_is_rate_limited() {
     let mut r = rig(v(580, 159, 4), true);
     r.push(10, 2_000_000_000);
     let req = r.gpumon_request(0);
-    let served = (0..1000).filter(|_| r.chain.respond(&req).is_some()).count() as u64;
+    let served = (0..1000)
+        .filter(|_| r.chain.respond(&req).is_some())
+        .count() as u64;
     assert_eq!(served, GPUMON_REPLIES_PER_SEC);
     let c = r.state.as_ref().unwrap().counters();
     assert_eq!(c.gpumon_rate_limited, 1000 - GPUMON_REPLIES_PER_SEC);
     // a second later the bucket is full again
     r.clock.0.fetch_add(1_000_000_000, Ordering::Relaxed);
-    r.state.as_ref().unwrap().push(GuestSample { timestamp_ns: r.clock.0.load(Ordering::Relaxed), percents: Percents::default() });
+    r.state.as_ref().unwrap().push(GuestSample {
+        timestamp_ns: r.clock.0.load(Ordering::Relaxed),
+        percents: Percents::default(),
+    });
     assert!(r.chain.respond(&req).is_some());
 }
 
@@ -306,17 +355,26 @@ fn hostile_gpumon_shapes_are_refused_not_answered() {
     p[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
     cases.push(("a huge bufSize", r.control(ku::GPUMON_CMD, &p, 0)));
     let p = good(&r);
-    cases.push(("truncated params", r.control(ku::GPUMON_CMD, &p[..p.len() - 1], 0)));
+    cases.push((
+        "truncated params",
+        r.control(ku::GPUMON_CMD, &p[..p.len() - 1], 0),
+    ));
     let mut long = good(&r);
     long.push(0);
     cases.push(("oversized params", r.control(ku::GPUMON_CMD, &long, 0)));
     cases.push(("empty params", r.control(ku::GPUMON_CMD, &[], 0)));
-    cases.push(("a serialized envelope", r.control(ku::GPUMON_CMD, &good(&r), 1 << 1)));
+    cases.push((
+        "a serialized envelope",
+        r.control(ku::GPUMON_CMD, &good(&r), 1 << 1),
+    ));
     let mut not_control = r.control(ku::GPUMON_CMD, &good(&r), 0);
     not_control.function = RpcFunction::RmAlloc;
     cases.push(("not GSP_RM_CONTROL", not_control));
     for (name, cmd) in cases {
-        assert!(r.chain.respond(&cmd).is_none(), "{name} must not be answered");
+        assert!(
+            r.chain.respond(&cmd).is_none(),
+            "{name} must not be answered"
+        );
     }
     assert_eq!(r.state.as_ref().unwrap().counters().gpumon_served, 0);
 }
@@ -335,7 +393,10 @@ fn hostile_rusd_init_and_poll_shapes_are_refused_and_change_nothing() {
         assert_eq!(state.rusd_page(), None, "{name} must not be remembered");
     }
     assert!(r.chain.respond(&r.init(2, 0x10_0000)).is_none(), "bInit 2");
-    assert!(r.chain.respond(&r.init(0xff, 0x10_0000)).is_none(), "bInit 255");
+    assert!(
+        r.chain.respond(&r.init(0xff, 0x10_0000)).is_none(),
+        "bInit 255"
+    );
     let l = r.l();
     let short = r.control(l.rusd_init_cmd as u32, &[1u8; 15], 0);
     assert!(r.chain.respond(&short).is_none());
@@ -388,7 +449,11 @@ fn read_record(page: &[u8], l: &Layout) -> Option<(u64, u32, u32, [u32; 4])> {
     let mem = u32_at(info + l.info_off_mem as usize);
     let mut eng = [0u32; 4];
     for (i, e) in eng.iter_mut().enumerate() {
-        *e = u32_at(info + l.info_off_eng as usize + i * l.eng_util_size as usize + l.eng_util_off_busy as usize);
+        *e = u32_at(
+            info + l.info_off_eng as usize
+                + i * l.eng_util_size as usize
+                + l.eng_util_off_busy as usize,
+        );
     }
     (ts(page) == t0).then_some((t0, gpu, mem, eng))
 }
@@ -410,35 +475,73 @@ fn rusd_link_poll_publish_read_unlink() {
         r.push(64, 2_000_000_000);
 
         // Before INIT and POLL nothing is written and the record is invalid (timestamp 0).
-        assert_eq!(state.publish(&mut |g, b| ram.write(g, b)), PublishOutcome::NotWanted);
+        assert_eq!(
+            state.publish(&mut |g, b| ram.write(g, b)),
+            PublishOutcome::NotWanted
+        );
         assert!(read_record(&ram.mem, l).is_none());
 
-        assert!(r.chain.respond(&r.init(1, base)).is_some_and(|x| x.rpc_result == NV_OK));
+        assert!(
+            r.chain
+                .respond(&r.init(1, base))
+                .is_some_and(|x| x.rpc_result == NV_OK)
+        );
         assert_eq!(state.rusd_page(), Some(base));
         // linked but not polled for the record: still nothing
-        assert_eq!(state.publish(&mut |g, b| ram.write(g, b)), PublishOutcome::NotWanted);
+        assert_eq!(
+            state.publish(&mut |g, b| ram.write(g, b)),
+            PublishOutcome::NotWanted
+        );
         // a poll for CLOCK only is accepted and publishes nothing
-        assert!(r.chain.respond(&r.poll(1)).is_some_and(|x| x.rpc_result == NV_OK));
-        assert_eq!(state.publish(&mut |g, b| ram.write(g, b)), PublishOutcome::NotWanted);
+        assert!(
+            r.chain
+                .respond(&r.poll(1))
+                .is_some_and(|x| x.rpc_result == NV_OK)
+        );
+        assert_eq!(
+            state.publish(&mut |g, b| ram.write(g, b)),
+            PublishOutcome::NotWanted
+        );
         assert!(ram.writes.is_empty());
         // a poll with every bit set asks for it
-        assert!(r.chain.respond(&r.poll(u64::MAX)).is_some_and(|x| x.rpc_result == NV_OK));
-        assert_eq!(state.publish(&mut |g, b| ram.write(g, b)), PublishOutcome::Written, "{a}.{b}.{c}");
+        assert!(
+            r.chain
+                .respond(&r.poll(u64::MAX))
+                .is_some_and(|x| x.rpc_result == NV_OK)
+        );
+        assert_eq!(
+            state.publish(&mut |g, b| ram.write(g, b)),
+            PublishOutcome::Written,
+            "{a}.{b}.{c}"
+        );
         let (ts, gpu, mem, eng) = read_record(&ram.mem, l).expect("a consistent record");
         assert_ne!(ts, 0);
         assert_eq!((gpu, mem, eng), (64, 11, [0, 3, 0, 0]), "{a}.{b}.{c}");
         // only perfDevUtil was touched, only inside the page
         let lo = base + l.rusd_off_util;
         let hi = lo + l.util_size;
-        assert!(ram.writes.iter().all(|(g, n)| *g >= lo && g + *n as u64 <= hi), "{a}.{b}.{c}: {:?}", ram.writes);
+        assert!(
+            ram.writes
+                .iter()
+                .all(|(g, n)| *g >= lo && g + *n as u64 <= hi),
+            "{a}.{b}.{c}: {:?}",
+            ram.writes
+        );
         let touched: usize = ram.mem.iter().filter(|b| **b != 0).count();
         assert!(touched <= l.util_size as usize, "{touched} non-zero bytes");
 
         // unlink
-        assert!(r.chain.respond(&r.init(0, 0)).is_some_and(|x| x.rpc_result == NV_OK));
+        assert!(
+            r.chain
+                .respond(&r.init(0, 0))
+                .is_some_and(|x| x.rpc_result == NV_OK)
+        );
         assert_eq!(state.rusd_page(), None);
         let n = ram.writes.len();
-        assert_eq!(state.publish(&mut |g, b| ram.write(g, b)), PublishOutcome::NotWanted);
+        assert_eq!(
+            state.publish(&mut |g, b| ram.write(g, b)),
+            PublishOutcome::NotWanted
+        );
         assert_eq!(ram.writes.len(), n);
     }
 }
@@ -456,7 +559,10 @@ fn rusd_a_page_outside_guest_ram_is_refused_by_the_writer() {
         mem: vec![0u8; 4096],
         writes: Vec::new(),
     };
-    assert_eq!(state.publish(&mut |g, b| ram.write(g, b)), PublishOutcome::Refused);
+    assert_eq!(
+        state.publish(&mut |g, b| ram.write(g, b)),
+        PublishOutcome::Refused
+    );
     assert!(ram.writes.is_empty());
     assert_eq!(state.counters().publish_refused, 1);
 }
@@ -479,7 +585,9 @@ fn rusd_a_rebuilt_chain_forgets_the_old_link() {
         ChainLogs::default(),
         Default::default(),
         kf_rm::ObjectLinks {
-            utilization: Some(UtilizationSeat { state: state.clone() }),
+            utilization: Some(UtilizationSeat {
+                state: state.clone(),
+            }),
             ..Default::default()
         },
     );
@@ -505,8 +613,16 @@ fn derived_rows_a_version_without_a_row_gets_no_link() {
     p[0] = 2;
     p[4..8].copy_from_slice(&55_872u32.to_le_bytes());
     assert!(r.chain.respond(&r.control(ku::GPUMON_CMD, &p, 0)).is_none());
-    assert!(r.chain.respond(&r.control(0x2080_0afe, &[0u8; 16], 0)).is_none());
-    assert!(r.chain.respond(&r.control(0x2080_0aff, &[0u8; 16], 0)).is_none());
+    assert!(
+        r.chain
+            .respond(&r.control(0x2080_0afe, &[0u8; 16], 0))
+            .is_none()
+    );
+    assert!(
+        r.chain
+            .respond(&r.control(0x2080_0aff, &[0u8; 16], 0))
+            .is_none()
+    );
     assert_eq!(r.logs.unserviced.total(), 3);
 }
 
@@ -543,8 +659,12 @@ fn derived_rows_the_link_exists_exactly_where_both_measurements_agree() {
             let Ok(table) = kf_abi::versions::table_for(*ver) else {
                 continue;
             };
-            let link = kf_rm::utilization::UtilizationPolicy::new(*table, &UtilizationSeat { state });
-            assert_eq!(link.is_some(), ku::gpumon_at(*ver).is_some() || ku::rusd_at(*ver).is_some());
+            let link =
+                kf_rm::utilization::UtilizationPolicy::new(*table, &UtilizationSeat { state });
+            assert_eq!(
+                link.is_some(),
+                ku::gpumon_at(*ver).is_some() || ku::rusd_at(*ver).is_some()
+            );
             assert!(l.matrix_agrees(*ver), "{ver}");
         }
     }

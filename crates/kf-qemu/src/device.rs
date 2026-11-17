@@ -109,6 +109,14 @@ pub struct Config {
     /// then fails by name at its first Windows-only control). The only opt-out; never an environment
     /// variable and never inferred from the guest.
     pub windows_support: bool,
+    /// ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`, OWNER_RULINGS §AV): the `report-utilization`
+    /// property, default ON. On, the guest's GPU-utilisation controls (NVML / `nvidia-smi`
+    /// `utilization.gpu` and friends) are answered with the PHYSICAL GPU's whole-device load, read by ONE fixed,
+    /// host-authored, unprivileged host control on the `kf3-util` thread; no guest byte is ever sent to the host
+    /// for this. On a shared GPU that is a cross-tenant load side channel: this is the switch. Off, nothing is
+    /// seated, no thread starts, no host call is made: exactly the behaviour before the feature. Never an
+    /// environment variable, never inferred from the guest.
+    pub report_utilization: bool,
 }
 
 impl Config {
@@ -250,6 +258,9 @@ pub const MSIX_VECTORS: usize = 32;
 pub struct Device {
     /// The host RM session (process-lifetime: the memory plane's views borrow it).
     pub rm: &'static kf_host::HostRm,
+    /// ★ 2026-11-17: GPU-utilisation reporting (`report-utilization`); `None` with the property off, or when the
+    /// host has no unprivileged source ([`crate::utilhost::enable`]).
+    pub util: Option<crate::utilhost::UtilRuntime>,
     /// Opt-in native timer backing; present only after host/guest layout and map validation.
     pub timer: Option<kf_host::timer::TimerWindow<'static>>,
     /// The host's family.
@@ -894,6 +905,12 @@ impl Device {
         // records the guest's fn-1 identity), the memory plane (the mirror-space start) and the display
         // plane (the SDR colour path).
         let windows = kf_rm::winprofile::WindowsProfile::new(cfg.windows_support);
+        // ★ 2026-11-17: GPU-utilisation reporting. One host reading on THIS thread (realize, never a vCPU) says
+        // whether the host has an unprivileged source; the `kf3-util` thread (`ffi_unsafe`) then samples.
+        let util = crate::utilhost::enable_if(cfg.report_utilization, || {
+            Box::new(crate::utilhost::HostUtil::new(rm))
+        });
+        let util_seat = util.as_ref().map(crate::utilhost::UtilRuntime::seat);
         let display_plane: Option<&'static crate::display::DisplayPlane> = match display_row {
             Some(row) => {
                 let export = rm
@@ -972,7 +989,7 @@ impl Device {
             let memory_access = chans.memory_access.clone();
             let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
-            let (board, host, chain_logs, census, inbox, console, defapi_reg, windows) = (
+            let (board, host, chain_logs, census, inbox, console, defapi_reg, windows, util_seat) = (
                 board.clone(),
                 host.clone(),
                 chain_logs.clone(),
@@ -981,6 +998,7 @@ impl Device {
                 console.clone(),
                 defapi_reg.clone(),
                 windows.clone(),
+                util_seat.clone(),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
                 let objects = kf_rm::rmrpc::ObjectPolicy::over(
@@ -1025,6 +1043,7 @@ impl Device {
                         // console with `gop=on`; with `gop=off` there is no seat (today's table).
                         console: console.seat(),
                         windows: windows.clone(),
+                        utilization: util_seat.clone(),
                     },
                 )
             })
@@ -1199,6 +1218,7 @@ impl Device {
 
         Ok(Device {
             rm,
+            util,
             timer,
             family,
             identity: Identity { pci, bar0_bytes },
@@ -2626,6 +2646,13 @@ impl Device {
             if let Some(dp) = self.display {
                 dp.sync_caps_page(&|o, v| self.shadow_store(o, u64::from(v), 4));
             }
+            // ★ 2026-11-17: the guest's RUSD utilisation record (`report-utilization`), on this thread (never a
+            // vCPU): relaxed loads when nothing is wanted or due, otherwise three guarded writes of one 56-byte
+            // record into a guest page the guest named. No host call, no lock a vCPU takes.
+            if let Some(u) = &self.util {
+                u.state
+                    .publish(&mut |gpa, bytes| self.ram.write_gpa(gpa, bytes));
+            }
             if let Some([gsprm, libos]) = heartbeat
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
             {
@@ -3125,7 +3152,11 @@ impl Device {
         });
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
-        let db = format!(" {}", self.dbfast.status());
+        let db = format!(" {}", self.dbfast.status())
+            + &self
+                .util
+                .as_ref()
+                .map_or_else(String::new, |u| format!(" {}", u.state.status()));
         // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`: `""` with the switch off (the line is the line it was).
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
@@ -4424,6 +4455,7 @@ mod config_tests {
             vm_id: None,
             pci_devfn: 0,
             windows_support: true,
+            report_utilization: true,
         }
     }
 

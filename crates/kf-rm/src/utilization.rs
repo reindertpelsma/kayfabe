@@ -248,13 +248,19 @@ impl UtilizationState {
     pub fn interested(&self) -> bool {
         let at = self.interest_ns.load(Ordering::Relaxed);
         let recent = at != 0
-            && self.now_ns().saturating_sub(at) <= u64::try_from(INTEREST_WINDOW.as_nanos()).unwrap_or(u64::MAX);
-        recent || (self.rusd_wants.load(Ordering::Relaxed) && self.rusd_phys.load(Ordering::Relaxed) != 0)
+            && self.now_ns().saturating_sub(at)
+                <= u64::try_from(INTEREST_WINDOW.as_nanos()).unwrap_or(u64::MAX);
+        recent
+            || (self.rusd_wants.load(Ordering::Relaxed)
+                && self.rusd_phys.load(Ordering::Relaxed) != 0)
     }
 
     /// Append a sample (the sampler's, under the lock only for the copy).
     pub fn push(&self, s: GuestSample) {
-        let mut ring = self.ring.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut ring = self
+            .ring
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if ring.len() == RING_MAX {
             ring.remove(0);
         }
@@ -264,7 +270,10 @@ impl UtilizationState {
     /// The ring if its newest sample is at most [`FRESH_FOR`] old; `None` otherwise (and when empty).
     #[must_use]
     pub fn fresh_samples(&self) -> Option<Vec<GuestSample>> {
-        let ring = self.ring.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ring = self
+            .ring
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let newest = ring.last()?;
         let age = self.now_ns().saturating_sub(newest.timestamp_ns);
         (age <= u64::try_from(FRESH_FOR.as_nanos()).unwrap_or(u64::MAX)).then(|| ring.clone())
@@ -591,7 +600,13 @@ impl UtilizationPolicy {
         })
     }
 
-    fn gpumon(&mut self, l: &Layout, cmd: &RpcCommand, params_at: usize, size: usize) -> Option<Reply> {
+    fn gpumon(
+        &mut self,
+        l: &Layout,
+        cmd: &RpcCommand,
+        params_at: usize,
+        size: usize,
+    ) -> Option<Reply> {
         let params = cmd.payload.get(params_at..params_at.checked_add(size)?)?;
         if !ku::gpumon_request_is_served(l, params) {
             bump(&self.state.counters.gpumon_refused_shape);
@@ -612,7 +627,8 @@ impl UtilizationPolicy {
             return None;
         }
         let mut body = cmd.payload.clone();
-        body.get_mut(params_at..params_at + size)?.copy_from_slice(&reply);
+        body.get_mut(params_at..params_at + size)?
+            .copy_from_slice(&reply);
         let st = self.driver.rm_control_wire().status_off;
         body.get_mut(st..st.checked_add(4)?)?
             .copy_from_slice(&NV_OK.to_le_bytes());
@@ -624,7 +640,13 @@ impl UtilizationPolicy {
         })
     }
 
-    fn rusd_init(&self, l: &Layout, cmd: &RpcCommand, params_at: usize, size: usize) -> Option<Reply> {
+    fn rusd_init(
+        &self,
+        l: &Layout,
+        cmd: &RpcCommand,
+        params_at: usize,
+        size: usize,
+    ) -> Option<Reply> {
         let params = cmd.payload.get(params_at..params_at.checked_add(size)?)?;
         match ku::parse_init(l, params) {
             Some(RusdInit::Link(phys)) => {
@@ -645,7 +667,13 @@ impl UtilizationPolicy {
         self.ok_echo(cmd)
     }
 
-    fn rusd_poll(&self, l: &Layout, cmd: &RpcCommand, params_at: usize, size: usize) -> Option<Reply> {
+    fn rusd_poll(
+        &self,
+        l: &Layout,
+        cmd: &RpcCommand,
+        params_at: usize,
+        size: usize,
+    ) -> Option<Reply> {
         let params = cmd.payload.get(params_at..params_at.checked_add(size)?)?;
         let mask = ku::parse_poll(l, params)?;
         let wants = ku::mask_wants_utilization(l, mask);
@@ -744,7 +772,12 @@ mod tests {
 
     fn rig(
         script: Vec<Result<HostReading, UtilRefusal>>,
-    ) -> (Arc<FakeClock>, Arc<UtilizationState>, Sampler, Arc<AtomicU64>) {
+    ) -> (
+        Arc<FakeClock>,
+        Arc<UtilizationState>,
+        Sampler,
+        Arc<AtomicU64>,
+    ) {
         let clock = FakeClock::at(1_000_000_000);
         let state = UtilizationState::new(clock.clone());
         let calls = Arc::new(AtomicU64::new(0));
@@ -768,7 +801,11 @@ mod tests {
         assert_eq!(s.tick(), TickOutcome::Sampled);
         state.note_interest();
         clock.advance(Duration::from_millis(100));
-        assert_eq!(s.tick(), TickOutcome::NotDue, "never below 250 ms while asked, and 100 ms is the floor");
+        assert_eq!(
+            s.tick(),
+            TickOutcome::NotDue,
+            "never below 250 ms while asked, and 100 ms is the floor"
+        );
         clock.advance(Duration::from_millis(150));
         assert_eq!(s.tick(), TickOutcome::Sampled);
         assert_eq!(calls.load(Ordering::Relaxed), 3);
@@ -789,7 +826,10 @@ mod tests {
             simulated += Duration::from_millis(1);
         }
         let n = calls.load(Ordering::Relaxed);
-        assert!(n <= 10 * 1000 / u64::try_from(SAMPLE_PERIOD_MIN.as_millis()).unwrap(), "{n} calls in 10 s");
+        assert!(
+            n <= 10 * 1000 / u64::try_from(SAMPLE_PERIOD_MIN.as_millis()).unwrap(),
+            "{n} calls in 10 s"
+        );
         assert!(n <= 41, "{n} calls in 10 s at 250 ms");
         assert!(SAMPLE_PERIOD >= SAMPLE_PERIOD_MIN && IDLE_PERIOD >= SAMPLE_PERIOD_MIN);
     }
@@ -808,9 +848,16 @@ mod tests {
             assert_eq!(s.tick(), TickOutcome::Stalled);
         }
         assert_eq!(state.counters().host_stalled, 2);
-        assert_eq!(state.fresh_samples().unwrap().len(), 1, "one sample, the first");
+        assert_eq!(
+            state.fresh_samples().unwrap().len(),
+            1,
+            "one sample, the first"
+        );
         clock.advance(FRESH_FOR + Duration::from_millis(1));
-        assert!(state.fresh_samples().is_none(), "a frozen number is not served");
+        assert!(
+            state.fresh_samples().is_none(),
+            "a frozen number is not served"
+        );
     }
 
     #[test]
@@ -820,7 +867,10 @@ mod tests {
             Err(UtilRefusal::Empty),
         ]);
         state.note_interest();
-        assert!(matches!(s.tick(), TickOutcome::Refused(UtilRefusal::Failed(_))));
+        assert!(matches!(
+            s.tick(),
+            TickOutcome::Refused(UtilRefusal::Failed(_))
+        ));
         clock.advance(SAMPLE_PERIOD);
         assert_eq!(s.tick(), TickOutcome::Empty);
         assert!(state.fresh_samples().is_none());
@@ -851,10 +901,16 @@ mod tests {
         assert_eq!(burst as u64, GPUMON_REPLIES_PER_SEC);
         // one second later, one second's worth again
         now += 1_000_000_000;
-        assert_eq!((0..100).filter(|_| b.take(now)).count() as u64, GPUMON_REPLIES_PER_SEC);
+        assert_eq!(
+            (0..100).filter(|_| b.take(now)).count() as u64,
+            GPUMON_REPLIES_PER_SEC
+        );
         // half a second: half
         now += 500_000_000;
-        assert_eq!((0..100).filter(|_| b.take(now)).count() as u64, GPUMON_REPLIES_PER_SEC / 2);
+        assert_eq!(
+            (0..100).filter(|_| b.take(now)).count() as u64,
+            GPUMON_REPLIES_PER_SEC / 2
+        );
     }
 
     // ---- the publisher
@@ -900,12 +956,24 @@ mod tests {
         });
         assert_eq!(out, PublishOutcome::Written);
         assert_eq!(writes.len(), 3);
-        assert_eq!(writes[0], (0x40_0000 + 1976, u64::MAX.to_le_bytes().to_vec()), "in progress");
+        assert_eq!(
+            writes[0],
+            (0x40_0000 + 1976, u64::MAX.to_le_bytes().to_vec()),
+            "in progress"
+        );
         assert_eq!(writes[1].0, 0x40_0000 + 1984);
         assert_eq!(&writes[1].1[0..4], &77u32.to_le_bytes());
         assert_eq!(writes[2].0, 0x40_0000 + 1976);
-        assert_eq!(writes[2].1, 5_000u64.to_le_bytes().to_vec(), "a valid timestamp, last");
-        assert!(writes.iter().all(|(a, b)| a + b.len() as u64 <= 0x40_0000 + 4096));
+        assert_eq!(
+            writes[2].1,
+            5_000u64.to_le_bytes().to_vec(),
+            "a valid timestamp, last"
+        );
+        assert!(
+            writes
+                .iter()
+                .all(|(a, b)| a + b.len() as u64 <= 0x40_0000 + 4096)
+        );
         assert_eq!(state.counters().published, 1);
     }
 
@@ -945,24 +1013,36 @@ mod tests {
         let mut never = |_: u64, _: &[u8]| -> bool { panic!("no write may happen") };
         // no page
         let s = linked(&clock, 0, l580(), true);
-        s.push(GuestSample { timestamp_ns: 5_000, percents: Percents::default() });
+        s.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
         assert_eq!(s.publish(&mut never), PublishOutcome::NotWanted);
         // the guest did not ask for the record
         let s = linked(&clock, 0x1000, l580(), false);
-        s.push(GuestSample { timestamp_ns: 5_000, percents: Percents::default() });
+        s.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
         assert_eq!(s.publish(&mut never), PublishOutcome::NotWanted);
         // no sample yet: the record stays invalid
         let s = linked(&clock, 0x1000, l580(), true);
         assert_eq!(s.publish(&mut never), PublishOutcome::NoSample);
         // a stale sample
-        s.push(GuestSample { timestamp_ns: 1, percents: Percents::default() });
+        s.push(GuestSample {
+            timestamp_ns: 1,
+            percents: Percents::default(),
+        });
         clock.advance(FRESH_FOR + Duration::from_secs(1));
         assert_eq!(s.publish(&mut never), PublishOutcome::NoSample);
         // no layout (a guest version without a RUSD row)
         let s = UtilizationState::new(clock.clone());
         s.rusd_phys.store(0x1000, Ordering::Relaxed);
         s.rusd_wants.store(true, Ordering::Relaxed);
-        s.push(GuestSample { timestamp_ns: clock.now_ns(), percents: Percents::default() });
+        s.push(GuestSample {
+            timestamp_ns: clock.now_ns(),
+            percents: Percents::default(),
+        });
         assert_eq!(s.publish(&mut never), PublishOutcome::NotWanted);
     }
 
@@ -970,7 +1050,10 @@ mod tests {
     fn a_refused_write_is_counted_and_never_retried_in_a_loop() {
         let clock = FakeClock::at(5_000);
         let state = linked(&clock, 0xdead_0000, l580(), true);
-        state.push(GuestSample { timestamp_ns: 5_000, percents: Percents::default() });
+        state.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
         let mut n = 0;
         let out = state.publish(&mut |_, _| {
             n += 1;
@@ -979,23 +1062,40 @@ mod tests {
         assert_eq!(out, PublishOutcome::Refused);
         assert_eq!(n, 1, "the first refusal ends the attempt");
         assert_eq!(state.counters().publish_refused, 1);
-        assert_eq!(state.publish(&mut |_, _| panic!("not due until the next period")), PublishOutcome::NotDue);
+        assert_eq!(
+            state.publish(&mut |_, _| panic!("not due until the next period")),
+            PublishOutcome::NotDue
+        );
     }
 
     #[test]
     fn an_address_near_the_top_of_u64_cannot_wrap() {
         let clock = FakeClock::at(5_000);
         let state = linked(&clock, u64::MAX - 100, l580(), true);
-        state.push(GuestSample { timestamp_ns: 5_000, percents: Percents::default() });
-        assert_eq!(state.publish(&mut |_, _| panic!("no write")), PublishOutcome::Refused);
+        state.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
+        assert_eq!(
+            state.publish(&mut |_, _| panic!("no write")),
+            PublishOutcome::Refused
+        );
     }
 
     #[test]
     fn the_595_layout_is_published_at_its_own_offset() {
         let clock = FakeClock::at(5_000);
-        let l = ku::layout(kf_abi::DriverVersion { major: 595, minor: 84, patch: 0 }).unwrap();
+        let l = ku::layout(kf_abi::DriverVersion {
+            major: 595,
+            minor: 84,
+            patch: 0,
+        })
+        .unwrap();
         let state = linked(&clock, 0x8000, l, true);
-        state.push(GuestSample { timestamp_ns: 5_000, percents: Percents::default() });
+        state.push(GuestSample {
+            timestamp_ns: 5_000,
+            percents: Percents::default(),
+        });
         let mut first = 0;
         state.publish(&mut |gpa, _| {
             if first == 0 {

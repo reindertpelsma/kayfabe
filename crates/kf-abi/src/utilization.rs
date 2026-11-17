@@ -185,6 +185,32 @@ pub fn rusd_at(version: DriverVersion) -> Option<&'static Layout> {
     layout(version).filter(|l| l.rusd_is_coherent())
 }
 
+/// The row to READ THE HOST with: the host driver's own probed row, or, for a host inside the interval the host
+/// encoders are written for (`[580.65.06, 581)`, [`crate::host_driver`]) that has no row of its own, the first
+/// probed row inside that interval. That is sound because every probed row inside the interval prints the same
+/// GPUMON layout (a test compares every field), and it is the interval rule the host controls already follow.
+/// A host outside the interval with no row of its own gets `None` (refused by name).
+#[must_use]
+pub fn host_layout(host: DriverVersion) -> Option<&'static Layout> {
+    let in_interval = |v: &DriverVersion| {
+        crate::host_driver::HostDriverVersion {
+            major: v.major,
+            minor: v.minor,
+            patch: v.patch,
+        }
+        .is_encoded_for()
+    };
+    layout(host).filter(|l| l.gpumon_is_coherent()).or_else(|| {
+        in_interval(&host)
+            .then(|| {
+                ROWS.iter()
+                    .find(|(vs, l)| vs.iter().any(in_interval) && l.gpumon_is_coherent())
+                    .map(|(_, l)| l)
+            })
+            .flatten()
+    })
+}
+
 /// The GPUMON control id, identical at every probed tag (a test pins it).
 pub const GPUMON_CMD: u32 = ROWS[0].1.gpumon_cmd as u32;
 /// The host-side params size (the HOST read is only ever made at layouts that print this size; a test pins that
@@ -359,7 +385,11 @@ pub fn encode_gpumon_reply(l: &Layout, samples: &[GuestSample]) -> Option<Vec<u8
     let samples = &samples[samples.len().saturating_sub(n)..];
     let mut p = vec![0u8; l.params_len()];
     *p.get_mut(off(l.off_type))? = u8::try_from(l.gpumon_type_util).ok()?;
-    put_u32(&mut p, off(l.off_buf_size), u32::try_from(l.buffer_size()).ok()?)?;
+    put_u32(
+        &mut p,
+        off(l.off_buf_size),
+        u32::try_from(l.buffer_size()).ok()?,
+    )?;
     let count = u32::try_from(samples.len()).ok()?;
     put_u32(&mut p, off(l.off_count), count)?;
     put_u32(
@@ -479,10 +509,7 @@ pub fn encode_rusd_record(
         put_u32(&mut info, e + off(l.eng_util_off_period), period_us)?;
     }
     Some(RusdWrites {
-        begin: (
-            base + l.util_off_ts,
-            l.ts_in_progress.to_le_bytes(),
-        ),
+        begin: (base + l.util_off_ts, l.ts_in_progress.to_le_bytes()),
         info: (base + l.util_off_info, info),
         finish: (base + l.util_off_ts, timestamp.to_le_bytes()),
     })
@@ -528,7 +555,10 @@ mod tests {
                 (w.info.0, w.info.1.len() as u64),
                 (w.finish.0, 8),
             ] {
-                assert!(at + len <= PAGE, "{versions:?}: write {at}+{len} leaves the page");
+                assert!(
+                    at + len <= PAGE,
+                    "{versions:?}: write {at}+{len} leaves the page"
+                );
                 assert!(at >= l.rusd_off_util, "{versions:?}");
                 assert!(
                     at + len <= l.rusd_off_util + l.util_size,
@@ -561,6 +591,63 @@ mod tests {
     }
 
     #[test]
+    fn every_row_prints_the_same_gpumon_layout_so_an_unprobed_host_in_the_interval_may_borrow_one()
+    {
+        let first = ROWS[0].1;
+        let gpumon = |l: &Layout| {
+            [
+                l.gpumon_cmd,
+                l.gpumon_type_util,
+                l.pid_invalid,
+                l.sample_count,
+                l.params_size,
+                l.off_type,
+                l.off_buf_size,
+                l.off_count,
+                l.off_tracker,
+                l.off_samples,
+                l.sample_size,
+                l.off_timestamp,
+                l.off_fb,
+                l.off_gr,
+                l.off_nvenc,
+                l.off_nvdec,
+                l.off_nvjpg,
+                l.off_nvofa,
+                l.engine_size,
+                l.eng_off_util,
+                l.eng_off_vgpu_scale,
+                l.eng_off_proc_id,
+                l.eng_off_sub_proc_id,
+            ]
+        };
+        for (versions, l) in ROWS {
+            assert_eq!(gpumon(l), gpumon(&first), "{versions:?}");
+        }
+    }
+
+    #[test]
+    fn the_host_row_is_exact_inside_the_interval_borrowed_for_an_unprobed_patch_and_refused_outside()
+     {
+        assert!(host_layout(v(580, 159, 4)).is_some(), "its own row");
+        assert!(
+            host_layout(v(580, 142, 3)).is_some(),
+            "no row of its own, inside [580.65.06, 581)"
+        );
+        assert!(
+            host_layout(v(580, 65, 5)).is_none(),
+            "580.65.05 is below the interval and has no row"
+        );
+        assert!(host_layout(v(581, 0, 0)).is_none());
+        assert!(host_layout(v(535, 309, 1)).is_none(), "no row, outside");
+        assert!(
+            host_layout(v(595, 91, 7)).is_some(),
+            "outside the interval but probed"
+        );
+        assert!(host_layout(v(595, 91, 8)).is_none(), "outside and unprobed");
+    }
+
+    #[test]
     fn the_host_tags_listed_beyond_580_have_rows_that_print_the_host_size() {
         for t in HOST_TAGS_BEYOND_580 {
             let l = layout(*t).unwrap_or_else(|| panic!("{t} has no probed row"));
@@ -573,7 +660,14 @@ mod tests {
     /// A host reply with `n` samples, `ts(i)` stamps and the same `util` in the six engines.
     fn host_reply(l: &Layout, stamps: &[u64], util: [u32; 6]) -> Vec<u8> {
         let mut p = host_request(l);
-        let engines = [l.off_gr, l.off_fb, l.off_nvenc, l.off_nvdec, l.off_nvjpg, l.off_nvofa];
+        let engines = [
+            l.off_gr,
+            l.off_fb,
+            l.off_nvenc,
+            l.off_nvdec,
+            l.off_nvjpg,
+            l.off_nvofa,
+        ];
         for (i, ts) in stamps.iter().enumerate() {
             let at = off(l.off_samples) + i * off(l.sample_size);
             put_u64(&mut p, at + off(l.off_timestamp), *ts).unwrap();
@@ -591,7 +685,11 @@ mod tests {
         assert_eq!(r.len(), 55_888);
         assert_eq!(r[0], 2, "NV2080_CTRL_GPUMON_SAMPLE_TYPE_PERFMON_UTIL");
         assert_eq!(get_u32(&r, 4), Some(55_872));
-        assert_eq!(r.iter().filter(|b| **b != 0).count(), 3, "type 2 and bufSize 55872 (0xda40) only");
+        assert_eq!(
+            r.iter().filter(|b| **b != 0).count(),
+            3,
+            "type 2 and bufSize 55872 (0xda40) only"
+        );
         assert_eq!(host_request(l), r, "no input, so no variation");
     }
 
@@ -616,17 +714,29 @@ mod tests {
     #[test]
     fn a_value_above_100_percent_is_clamped_and_counted() {
         let l = l580();
-        let r = decode_host_newest(l, &host_reply(l, &[1], [10_049, 10_050, u32::MAX, 20_000, 10_000, 0]))
-            .unwrap();
+        let r = decode_host_newest(
+            l,
+            &host_reply(l, &[1], [10_049, 10_050, u32::MAX, 20_000, 10_000, 0]),
+        )
+        .unwrap();
         assert_eq!(r.percents.array(), [100, 100, 100, 100, 100, 0]);
-        assert_eq!(r.clamped, 3, "10049 and 10000 round to 100 and are NOT clamped; 10050 (101), MAX and 20000 are");
+        assert_eq!(
+            r.clamped, 3,
+            "10049 and 10000 round to 100 and are NOT clamped; 10050 (101), MAX and 20000 are"
+        );
     }
 
     #[test]
     fn a_reply_with_no_sample_or_the_wrong_shape_is_not_available_not_zero() {
         let l = l580();
-        assert!(decode_host_newest(l, &host_reply(l, &[], [5; 6])).is_none(), "empty ring");
-        assert!(decode_host_newest(l, &host_reply(l, &[0, 0], [5; 6])).is_none(), "all timestamps zero");
+        assert!(
+            decode_host_newest(l, &host_reply(l, &[], [5; 6])).is_none(),
+            "empty ring"
+        );
+        assert!(
+            decode_host_newest(l, &host_reply(l, &[0, 0], [5; 6])).is_none(),
+            "all timestamps zero"
+        );
         assert!(decode_host_newest(l, &host_request(l)).is_none());
         let mut bad_type = host_reply(l, &[1], [5; 6]);
         bad_type[0] = 1;
@@ -634,7 +744,10 @@ mod tests {
         let mut bad_size = host_reply(l, &[1], [5; 6]);
         put_u32(&mut bad_size, 4, 12).unwrap();
         assert!(decode_host_newest(l, &bad_size).is_none());
-        assert!(decode_host_newest(l, &host_reply(l, &[1], [5; 6])[1..]).is_none(), "truncated");
+        assert!(
+            decode_host_newest(l, &host_reply(l, &[1], [5; 6])[1..]).is_none(),
+            "truncated"
+        );
     }
 
     #[test]
@@ -660,8 +773,16 @@ mod tests {
         let at = off(l.off_samples);
         assert_eq!(get_u64(&p, at), Some(10));
         assert_eq!(get_u32(&p, at + off(l.off_gr)), Some(4_000), "pct x 100");
-        assert_eq!(get_u32(&p, at + off(l.off_gr) + 8), Some(u32::MAX), "procId = NV2080_GPUMON_PID_INVALID");
-        assert_eq!(get_u32(&p, at + off(l.off_gr) + 12), Some(u32::MAX), "subProcessID");
+        assert_eq!(
+            get_u32(&p, at + off(l.off_gr) + 8),
+            Some(u32::MAX),
+            "procId = NV2080_GPUMON_PID_INVALID"
+        );
+        assert_eq!(
+            get_u32(&p, at + off(l.off_gr) + 12),
+            Some(u32::MAX),
+            "subProcessID"
+        );
         assert_eq!(get_u32(&p, at + off(l.off_nvofa)), Some(10_000));
         // sample 2 is where sample 2 goes; everything after it is zero
         assert_eq!(get_u64(&p, at + off(l.sample_size)), Some(20));
@@ -682,7 +803,11 @@ mod tests {
             .collect();
         let p = encode_gpumon_reply(l, &many).unwrap();
         assert_eq!(get_u32(&p, 8), Some(72));
-        assert_eq!(get_u32(&p, 12), Some(0), "tracker 0 = the oldest entry is index 0");
+        assert_eq!(
+            get_u32(&p, 12),
+            Some(0),
+            "tracker 0 = the oldest entry is index 0"
+        );
         assert_eq!(get_u64(&p, off(l.off_samples)), Some(29), "100 - 72 + 1");
     }
 
@@ -703,11 +828,20 @@ mod tests {
         assert!(gpumon_request_is_served(l, &r));
         let reply_a = encode_gpumon_reply(
             l,
-            &[GuestSample { timestamp_ns: 1, percents: Percents::default() }],
+            &[GuestSample {
+                timestamp_ns: 1,
+                percents: Percents::default(),
+            }],
         );
         assert_eq!(
             reply_a,
-            encode_gpumon_reply(l, &[GuestSample { timestamp_ns: 1, percents: Percents::default() }]),
+            encode_gpumon_reply(
+                l,
+                &[GuestSample {
+                    timestamp_ns: 1,
+                    percents: Percents::default()
+                }]
+            ),
             "the reply is a function of the snapshot only"
         );
         let mut bad = host_request(l);
@@ -729,9 +863,16 @@ mod tests {
     #[test]
     fn init_links_only_a_valid_page_and_unlinks_on_zero() {
         let l = l580();
-        assert_eq!(parse_init(l, &init(1, 0x1_2345_6000)), Some(RusdInit::Link(0x1_2345_6000)));
+        assert_eq!(
+            parse_init(l, &init(1, 0x1_2345_6000)),
+            Some(RusdInit::Link(0x1_2345_6000))
+        );
         assert_eq!(parse_init(l, &init(0, 0)), Some(RusdInit::Unlink));
-        assert_eq!(parse_init(l, &init(0, 0xdead)), Some(RusdInit::Unlink), "address ignored on unlink");
+        assert_eq!(
+            parse_init(l, &init(0, 0xdead)),
+            Some(RusdInit::Unlink),
+            "address ignored on unlink"
+        );
         for bad in [
             init(1, 0),
             init(1, 0x1001),
@@ -782,8 +923,16 @@ mod tests {
         assert_eq!(get_u32(i, 0), Some(91), "gpuPercentBusy");
         assert_eq!(get_u32(i, 4), Some(12), "memoryPercentBusy");
         for (k, want) in [1u32, 2, 3, 4].iter().enumerate() {
-            assert_eq!(get_u32(i, 8 + 8 * k), Some(*want), "engUtil[{k}].clkPercentBusy");
-            assert_eq!(get_u32(i, 12 + 8 * k), Some(250_000), "engUtil[{k}].samplingPeriodUs");
+            assert_eq!(
+                get_u32(i, 8 + 8 * k),
+                Some(*want),
+                "engUtil[{k}].clkPercentBusy"
+            );
+            assert_eq!(
+                get_u32(i, 12 + 8 * k),
+                Some(250_000),
+                "engUtil[{k}].samplingPeriodUs"
+            );
         }
         // 595.84 puts it elsewhere
         let w = encode_rusd_record(layout(v(595, 84, 0)).unwrap(), &p, 77, 1).unwrap();
@@ -794,7 +943,10 @@ mod tests {
     fn a_timestamp_the_seqlock_would_misread_is_refused() {
         let l = l580();
         for ts in [0, u64::MAX, 0xFF00_0000_0000_0000, 0xFF00_0000_0000_0001] {
-            assert!(encode_rusd_record(l, &Percents::default(), ts, 1).is_none(), "{ts:#x}");
+            assert!(
+                encode_rusd_record(l, &Percents::default(), ts, 1).is_none(),
+                "{ts:#x}"
+            );
         }
         assert!(encode_rusd_record(l, &Percents::default(), 0xFEFF_FFFF_FFFF_FFFF, 1).is_some());
     }

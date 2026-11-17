@@ -76,7 +76,10 @@
  * branches (claude/guestmem-*-20261031, integration/beta-candidate-1, codex/perf-parity). */
 /* 33 (2026-11-15, claude/flags-stage1-20261115, docs/design/V3_WINDOWS_SUPPORT_PROFILE.md): kf3_realize gains
  * windows_support (the windows-support property: 1 = on, the default; 0 = a Linux-only VM) after user_view_keep. */
-#define KF3_ABI 33
+/* 34 (2026-11-17, claude/util-flag-20261117, docs/design/V3_UTILIZATION_FLAG.md): kf3_realize gains report_utilization
+ * (the report-utilization property: 1 = on, the default; 0 = no GPU utilisation shown to the guest, no host call) after
+ * windows_support. */
+#define KF3_ABI 34
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -182,7 +185,7 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
                     uint32_t display_max_fps, const char *gop_efi,
-                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, uint32_t windows_support, void **out,
+                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, uint32_t windows_support, uint32_t report_utilization, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
