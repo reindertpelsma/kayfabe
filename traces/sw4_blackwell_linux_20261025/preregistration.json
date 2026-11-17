@@ -1,0 +1,76 @@
+{
+  "lane": "SW4",
+  "utc": "2026-10-24T23:46:13.520657+00:00",
+  "offer": {
+    "id": 50694293,
+    "machine_id": 45428,
+    "host_id": 70221,
+    "geolocation": "Quebec, CA",
+    "verification": "verified",
+    "vms_enabled": true,
+    "is_vm_deverified": false,
+    "num_gpus": 1,
+    "gpu_name": "RTX 5060 Ti",
+    "gpu_ram": 16311,
+    "dph_total": 0.32066666666666666,
+    "storage_cost": 0.09333333333333332,
+    "storage_total_cost": 0.023333333333333327,
+    "inet_down_cost": 0.01953125,
+    "inet_up_cost": 0.01953125,
+    "disk_space": 1468.0,
+    "cpu_cores_effective": 20.0,
+    "cpu_ram": 96549
+  },
+  "plan": {
+    "credit_before": 23.09472549055988,
+    "transfer_usd": 0.25390625,
+    "nonruntime_margin_usd": 0.5,
+    "armed_utc": "2026-10-24T23:46:12.381318+00:00",
+    "deadline_utc": "2026-10-25T01:31:36.381318+00:00",
+    "seconds": 6324,
+    "quoted_rate": 0.32066666666666666,
+    "rate_bound": 0.42066666666666663,
+    "reservation_usd": 1.492877361111111,
+    "credit_after_reservation": 21.60184812944877,
+    "stop_usd": 1.5,
+    "cap_usd": 2.0,
+    "reserve_usd": 8.0,
+    "leases_authorized": 1
+  },
+  "production_source": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "production_hashes": {
+    "crates/kayfabe-rm-ladder/src/main.rs": "f6d4c7c9099320cb901caf0606656a47a4337a38f26c075c08f2e1e6d6f8f3c8",
+    "scripts/fastguest/fast_suite.sh": "c34de7371f0ac514a5aa3871135ef801ff56c94dc3f45de91602215189410616",
+    "scripts/fastguest/run_fast_guest.sh": "4f5ba247be7be1b917dfe0d7dc9def29e9d8341fc8c8fd3a1878e452362cc74d",
+    "scripts/fastguest/build_fast_guest.sh": "f22be95092beaf10cc8cf42235456041f43b715f017e1afafd19c06914078d97",
+    "scripts/bench/build_kf3.sh": "4b31b855460729a1d426fa25ceabf1141a6b9e040b9aa00daaf6cf16dadd1597",
+    "scripts/bench/v3_gates.sh": "2e5f525c219c042d0b76192da134d6db15f4327c4aed44839ffd09490a7c0bcb"
+  },
+  "derived_die_source": "0c326f0a93334b54d92f12c9eba82877f44aa41a",
+  "allowed_actual_dies": [
+    "GB206",
+    "GB207"
+  ],
+  "marketing_is_not_die": true,
+  "native_driver": "595.91.07 open",
+  "guest_driver": "595.91.07 open, host-mode Linux",
+  "native_hypothesis": "Actual bound GB206/GB207 passes gates9/9+gate10/USER and bare30/30.",
+  "native_falsifier": "Binding/refusal, any gate/bare failure, or unmatched Xid excludes guest.",
+  "guest_hypothesis": "After native pass, exact production source passes fast30/30.",
+  "guest_falsifier": "Any failure/crash/unrun, unmatched Xid, or missed fixed180s oracle.",
+  "xid_policy": "Exact source-derived native/guest type/channel/VA/client records only.",
+  "flags": {
+    "KF_DEVICE": "kf3",
+    "KF_FROM_HOST": "1",
+    "KF3_FB_MB": "8192"
+  },
+  "framebuffer": "16GB marketed VRAM; 8192MiB store preserves >=2GiB host headroom.",
+  "bar1": "Observe256MiB host limit; run+mark; no resize; inherited guest128MiB.",
+  "transfer_bound": {
+    "download_bytes": 12000000000,
+    "upload_bytes": 1000000000
+  },
+  "native_failure": "EXCLUDED/UNRUN guest; no kayfabe attribution",
+  "max_leases": 1,
+  "retry_after_real_refusal": false
+}

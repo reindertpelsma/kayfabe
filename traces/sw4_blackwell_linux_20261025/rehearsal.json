@@ -1,0 +1,59 @@
+{
+  "expected_red": [
+    {
+      "commit": "1f46f82d6",
+      "log": "expected_red.log",
+      "tests": 30,
+      "failures": 13,
+      "errors": 15,
+      "private_original_sha256": "daec0fefe599f5ef0edcffa363895eaa2225017d0b42a560ad2f57ef85716e33"
+    },
+    {
+      "commit": "98e13d391",
+      "log": "wiring_expected_red.log",
+      "tests": 8,
+      "failures": 0,
+      "errors": 8,
+      "private_original_sha256": "76972e99bbfccec8bc5fe887f7ef00d71e95219b998cba1e098a76481362f744"
+    },
+    {
+      "commit": "0cb67fcdf",
+      "log": "cost_expected_red.log",
+      "tests": 9,
+      "failures": 2,
+      "errors": 7,
+      "private_original_sha256": "faea969f92b1ca0eeae0164fd45a82f249550e365f55e132972af3b31396522a"
+    },
+    {
+      "commit": "5ca0a7934",
+      "log": "resource_expected_red.log",
+      "tests": 11,
+      "failures": 0,
+      "errors": 2,
+      "private_original_sha256": "2cb76020d9497d2889a929b32254d36a0461d28e9acb2d7da67925a71f493042"
+    },
+    {
+      "commit": "0e691dc22",
+      "log": "network_failclosed_expected_red.log",
+      "tests": 11,
+      "failures": 0,
+      "errors": 2,
+      "private_original_sha256": "6bfb2d5ffbecb1e336a88afb691647341ba8e1d73de0b79c794cedec71319b14"
+    }
+  ],
+  "final_operator_tests": 134,
+  "final_payload_tests": 140,
+  "failed": 0,
+  "skipped": 0,
+  "fix_commit": "e0c03c908",
+  "format_commit": "2c77897d5",
+  "black_version": "25.1.0",
+  "payload_fixture_initial_incomplete": {
+    "tests": 122,
+    "failures": 3,
+    "errors": 29,
+    "reason": "Private copy lacked fixture and source dependencies; no guard was changed."
+  },
+  "full_adapter_fake_transports": true,
+  "actual_hardware_qualification_runs": 0
+}

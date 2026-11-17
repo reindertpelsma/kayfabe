@@ -1,0 +1,14 @@
+{
+  "lease_id": 57581047,
+  "elapsed_seconds_create_to_absence": 538.461175,
+  "observed_hourly_usd": 0.32066666666666666,
+  "runtime_estimate_usd": 0.04796293058796296,
+  "retained_transfer_liability_usd": 0.25390625,
+  "retained_additional_nonruntime_margin_usd": 0.5,
+  "conservative_charge_usd": 0.801869180587963,
+  "night_sw3_retained_usd": 0.6758229960666666,
+  "night_total_retained_usd": 1.4776921766546296,
+  "stop_usd": 1.5,
+  "hard_cap_usd": 2.0,
+  "settled_invoice": false
+}
