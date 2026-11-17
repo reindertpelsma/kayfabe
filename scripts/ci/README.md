@@ -126,6 +126,8 @@ CODE READ: if cloud-init omits standard HOME or leaves it empty, repo-side onsta
 current OS account's home directory. An explicit process HOME is preserved; no Worker var is added.
 
 
+The `matlab` stage (2026-11-17; GPU-free tests only, NOT run on a box, it needs KVM and a GPU): `matlab_stage.py` runs the MATLAB GPU rows of the Linux proprietary image (`scripts/bench/linux/matlab_rows.py`, rows in `scripts/bench/linux/matlab/`, design in `docs/design/V3_PROPIMAGE_LINUX.md` section 14). Large tier, off by default (`MATLAB_IN_LARGE = False`, `MANUAL_ONLY_STAGES`): `vast_payload.py --only matlab --matlab-image PATH|URL --matlab-driver VERSION|PATH|URL` (standalone: your own image, no sha256 pin enforced, the computed one recorded, a row that cannot run is a skip) or an instruction carrying `matlab` (the Worker's strict shape: image by pin from `matlab_pins.json` through the presigned-URL file, driver pinned in `release-matrix.json`, zero skips). One line `KF_MATLAB_RESULT {json}` (validated by `vast_report.validate_matlab`). Tests `test_matlab_rows.py`, `test_matlab_stage.py`; mutants `matlab_rows_mutants.py`, `matlab_stage_mutants.py`.
+
 The `propimage_apps` stage (2026-11-15, owner ruling that the proprietary Windows image's seven apps must PASS per GPU family; GPU-free tests only, NOT run on a box,
 and it cannot PASS yet): `propimage_apps.py` fetches the private image through `box_downloader.py` (manifest made from `propimage_apps_pins.json`), builds swtpm 0.10.1 when
 the box's is older, unpacks, and runs `scripts/bench/windows/propimage_check.py` in three offline boots (Wukong last, alone, guest framebuffer 8192 MiB), then

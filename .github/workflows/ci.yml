@@ -74,6 +74,10 @@ jobs:
           # Proprietary Linux image tooling (2026-11-16): identity, argv, clock rule, grep, driver stub, auth-capture; >=2 named killers.
           python3 -B -I scripts/ci/test_propimage_linux.py
           python3 -B -I scripts/ci/propimage_linux_mutants.py
+          # MATLAB rows of the Linux proprietary image (2026-11-17): fixture results, a fake guest transport, the optional `matlab` payload stage; >=2 named killers per mutant.
+          python3 -B -I scripts/ci/test_matlab_rows.py
+          python3 -B -I scripts/ci/matlab_rows_mutants.py
+          python3 -B -I scripts/ci/matlab_stage_mutants.py
           # Uniform guest clock rule (2026-11-16): network only decides; the floor counts loaded software only; >=2 killers each.
           python3 -B -I scripts/ci/clockrule_mutants.py
           # Proposed release matrix and payload contract: two named killers per mutant.

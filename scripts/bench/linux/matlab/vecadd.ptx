@@ -1,0 +1,46 @@
+//
+// vecadd: c[i] = a[i] + b[i] for i < n. Hand-written PTX text (no nvcc needed): the NVIDIA driver JIT-compiles it for the
+// device at load time. SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+//
+// C prototype used by cuda_kernel.m:  void vecadd(const float *a, const float *b, float *c, int n)
+//
+.version 7.0
+.target sm_75
+.address_size 64
+
+.visible .entry vecadd(
+	.param .u64 vecadd_param_0,
+	.param .u64 vecadd_param_1,
+	.param .u64 vecadd_param_2,
+	.param .u32 vecadd_param_3
+)
+{
+	.reg .pred 	%p<2>;
+	.reg .f32 	%f<4>;
+	.reg .b32 	%r<6>;
+	.reg .b64 	%rd<11>;
+
+	ld.param.u64 	%rd1, [vecadd_param_0];
+	ld.param.u64 	%rd2, [vecadd_param_1];
+	ld.param.u64 	%rd3, [vecadd_param_2];
+	ld.param.u32 	%r2, [vecadd_param_3];
+	mov.u32 	%r3, %ntid.x;
+	mov.u32 	%r4, %ctaid.x;
+	mov.u32 	%r5, %tid.x;
+	mad.lo.s32 	%r1, %r3, %r4, %r5;
+	setp.ge.s32 	%p1, %r1, %r2;
+	@%p1 bra 	DONE;
+	cvta.to.global.u64 	%rd4, %rd1;
+	cvta.to.global.u64 	%rd5, %rd2;
+	cvta.to.global.u64 	%rd6, %rd3;
+	mul.wide.s32 	%rd7, %r1, 4;
+	add.s64 	%rd8, %rd4, %rd7;
+	add.s64 	%rd9, %rd5, %rd7;
+	add.s64 	%rd10, %rd6, %rd7;
+	ld.global.f32 	%f1, [%rd8];
+	ld.global.f32 	%f2, [%rd9];
+	add.f32 	%f3, %f1, %f2;
+	st.global.f32 	[%rd10], %f3;
+DONE:
+	ret;
+}

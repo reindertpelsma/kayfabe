@@ -253,7 +253,7 @@ class Calibrate(unittest.TestCase):
         import io
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            self.assertEqual(cal.main(["--instruction", str(instruction), "--today", "2026-11-16", runs]), 0)
+            self.assertEqual(cal.main(["--instruction", str(instruction), "--today", "2026-11-17", runs]), 0)
         self.assertIn("bandwidth.json (proposed)", out.getvalue())
         self.assertEqual(chk.DATA.read_bytes(), before)
 

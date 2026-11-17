@@ -101,7 +101,7 @@ test('every pinned object equals the pin the box reads (size, sha256, ref)', () 
   // values below are the owner's: the zip is 62,506,351,001 bytes and its sha256 is the one measured by a full readback.
   const bPath = REPO + 'scripts/ci/propimage_apps_b_pins.json';
   const b = existsSync(bPath) ? JSON.parse(read(bPath)).items : [];
-  const known = [...pins, ...b];
+  const known = [...pins, ...b, ...JSON.parse(read(REPO + 'scripts/ci/matlab_pins.json')).items];
   for (const o of PROPIMAGES.objects) {
     const pin = known.find((p) => p.ref === o.ref);
     if (pin === undefined) {
@@ -112,7 +112,7 @@ test('every pinned object equals the pin the box reads (size, sha256, ref)', () 
     }
     assert.equal(pin.sha256, o.sha256, o.id + ' sha256');
     assert.equal(pin.size, o.size, o.id + ' size');
-    assert.equal(pin.role, o.role, o.id + ' role');
+    assert.equal(pin.role, o.role === 'linux_image' ? 'image' : o.role, o.id + ' role');
   }
 });
 test('image A pin, image B pin and the signed GOP are the values the owner gave', () => {
@@ -379,7 +379,7 @@ test('an application the harness cannot grade stays refused when someone lists i
 });
 test('exactly one signed GOP object is required', () => {
   refuses(
-    edit((c) => c.objects.pop()),
+    edit((c) => (c.objects = c.objects.filter((o) => o.role !== 'gop'))),
     'GOP',
   );
 });
