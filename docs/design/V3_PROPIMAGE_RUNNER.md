@@ -1,8 +1,12 @@
 # The generic image runner: any number of Windows images, their applications, and the clock/network rule
 
-STATUS: DESIGN-ONLY, 2026-11-16 (phase 1 built and GPU-free tested; run on no box. Phase 2, the `built` kind and the SPEC-lane unification, is NOT built). Owner ruling: `docs/OWNER_RULINGS.md` section AT. Code: `scripts/bench/windows/clocknet_assert.py`, `propimage_registry.py` with `app_defs/`, `propimage_runspec.py`, `propimage_plain.py`; `scripts/ci/propimage_images.py` (entered through `propimage_apps.py run --image ...`). Tests: `scripts/ci/test_clocknet_assert.py`, `test_propimage_runspec.py`, `test_propimage_images.py`; mutants: `clocknet_assert_mutants.py`, `propimage_runner_mutants.py` (two named killers each, in `ci.yml`).
+STATUS: DESIGN-ONLY, 2026-11-16 (identity pins strict-only: corrected 2026-11-17, see below; phase 1 built and GPU-free tested; run on no box. Phase 2, the `built` kind and the SPEC-lane unification, is NOT built). Owner ruling: `docs/OWNER_RULINGS.md` section AT. Code: `scripts/bench/windows/clocknet_assert.py`, `propimage_registry.py` with `app_defs/`, `propimage_runspec.py`, `propimage_plain.py`; `scripts/ci/propimage_images.py` (entered through `propimage_apps.py run --image ...`). Tests: `scripts/ci/test_clocknet_assert.py`, `test_propimage_runspec.py`, `test_propimage_images.py`; mutants: `clocknet_assert_mutants.py`, `propimage_runner_mutants.py` (two named killers each, in `ci.yml`).
 
 Labels: MEASURED (a record shows it), CODE READ (read in the tree), INFERRED, NOT RUN (nothing here ran on a box).
+
+## Correction, 2026-11-17: a `sha256` in a source is an identity pin, enforced only when strict
+
+Owner rule 2026-11-17 (`docs/OWNER_RULINGS.md` §AV, `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`). Where the text below says a hash is "checked" or a run is refused for "a hash" (the `#sha256=` suffix, `--propimage PATH[:sha256]`, `sha256` in a source, the `SOURCE_SHA256_MISMATCH`, `PIN_SHA256_MISMATCH` and `SHA256_ON_DIRECTORY` refusals, exit code 2 "a hash"), read: only a strict run enforces it. A standalone run always records the computed sha256 and size of what it read (`source.sha256`, `source.size`) with the pin it was given (`source.pin_sha256`) and `source.identity` (`none`, `match`, `differs`, `unverifiable`); a pin that differs is a `KF_PROPIMAGE_RUN_PIN_NOTE` line, not a refusal. The user's own opt-in is `--expect-sha256 NAME=HASH` (spec key `expect_sha256`), enforced in every mode. The record has `pins_enforced` (equal to `strict`). `run --pins FILE` names the deployment's own pins file for `pin:` sources and the legacy stage. The `url` source without a sha256 is no longer "fetched unverified": its hash is computed and recorded like every other.
 
 ## What changed and why
 
@@ -49,7 +53,7 @@ Named refusals (`propimage_runspec.SpecError.reason`): `SPEC_NOT_OBJECT`, `SPEC_
 
 Command line (`propimage_apps.py run|plan ...`; per-image flags belong to the nearest `--image` before them):
 
-- `--image prebuilt:SOURCE` or `--propimage PATH[:sha256]`; `--image built:SOURCE` (validated, refused by the runner: phase 2). `SOURCE` is a path, an `https://` URL, `pin:NAME` or `official`, each with an optional `#sha256=HEX`.
+- `--image prebuilt:SOURCE` or `--propimage PATH[:sha256]` (a hash here is a pin: see the correction above); `--expect-sha256 NAME=HASH` (repeatable, any mode); `--pins FILE`; `--image built:SOURCE` (validated, refused by the runner: phase 2). `SOURCE` is a path, an `https://` URL, `pin:NAME` or `official`, each with an optional `#sha256=HEX`.
 - `--label NAME`, `--state auto|none|PATH`, `--net off|on`, `--apps a,b` (restrict), `--app ID=present|skip|install:official|install:file:PATH|install:url:URL` (repeatable), `--ssh-user U --ssh-key FILE --ssh-port N`.
 - `--images-file FILE` (the JSON above) instead of image flags; the two together are refused (`IMAGES_FILE_AND_FLAGS`).
 - global: `--sha`, `--checkout`, `--prefix`, `--out`, `--urls`, `--bench`, `--deadline-epoch`, `--evidence-dir`, `--qemu`, `--gop-efi`.
@@ -103,4 +107,4 @@ Phase 2 (NOT built; the runner refuses a `built` image by name, `BUILT_NOT_IMPLE
 - Plain-mode drivers: only the core table (`propimage_check.run_check`) and `module:function` drivers; a definition needing harness switches other than `--superposition-run` and `--fb-mb` is refused in plain mode (`PLAIN_HARNESS_ARGS`).
 - A state.json image with its apps read from a probe: not supported (see above).
 - The experiment launchers under `host_tools/` and `glcrash/` have no assert.
-- A `url` source without a sha256 is fetched unverified; the record carries the sha256 of the bytes that were read. A `pin` always carries its pinned sha256, a `file` is hashed only when the source names one (a directory cannot carry one).
+- Every `file` and `url` source is hashed and the record carries its sha256 and size (since 2026-11-17); a `pin` carries its pinned sha256 (verified by the downloader). A directory has no single hash: size only.

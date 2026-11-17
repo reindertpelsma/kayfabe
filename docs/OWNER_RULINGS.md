@@ -1,10 +1,27 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-16 (§AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-17 (§AV: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §AV. Pins are deployment data: identity pins are strict-only; a standalone run records and never refuses on them, 2026-11-17
+
+**STATUS: LIVE, 2026-11-17; owner rule (stated in conversation, recorded by the coordinator).** Design, audit and the run-your-own-deployment
+recipe: `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`. Built GPU-free; no box ran it.
+
+1. sha256 and size **identity pins** (a fixed sha256 of "the" image, fixed object names) are deployment data for our Worker and for strict
+   or CI runs only. A **standalone** run (a user running `vast_payload.py`, `propimage_apps.py` or the generic runner themselves, permissive)
+   must not require pins for images, artifacts or apps: someone may have built their own Windows images, compiled their own software
+   (for example Unreal), or spread applications over different images. The proprietary images are not strict for standalone.
+2. **Integrity checks stay** (a pack manifest's member hashes, the seed binding, cache-key consistency). Pins on what the repository
+   itself downloads (swtpm, libtpms, noVNC, wheels, install media) are supply-chain integrity and hold in every mode.
+3. A standalone run **records** the computed sha256 and size of each user-supplied object in its evidence instead of refusing on a mismatch;
+   `--expect-sha256 NAME=HASH` lets a user opt in. One mechanism: `propimage_runspec.pins_enforced(spec)`, true only for a strict spec.
+4. Anyone can **run their own deployment**: build artifacts with the repository's scripts, publish to their own object store, write their own
+   config and pins. Storage is plain S3 semantics (R2 is S3-compatible; no R2-only features; presign with any S3-compatible API).
+5. The Worker's own behaviour (`ci/vast-broker/propimages.json`, strict always) does not change.
 
 ## §AU. The guest clock depends only on the network; a recorded clock is never earlier than the software loaded into the image, 2026-11-16
 
