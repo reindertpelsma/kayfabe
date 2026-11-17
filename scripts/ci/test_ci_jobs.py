@@ -156,6 +156,15 @@ class Layout(unittest.TestCase):
             first_run = next(s["run"] for s in steps if "run" in s)
             self.assertIn("npm ci --prefix ci/vast-broker --omit=dev", logical_lines(first_run)[0], name)
 
+    def test_stable_and_stripped_have_a_time_limit_too(self):
+        for name in ("stable", "stripped"):
+            self.assertIsInstance(jobs()[name].get("timeout-minutes"), int, name)
+
+    def test_the_rust_jobs_share_the_cache_entry_stable_has(self):
+        for name in ("rust-mutants-a", "rust-mutants-b"):
+            uses = {s["uses"].split("@")[0]: s.get("with", {}) for s in jobs()[name]["steps"] if "uses" in s}
+            self.assertEqual(uses["Swatinem/rust-cache"].get("shared-key"), "stable", name)
+
     def test_the_rust_jobs_use_the_pinned_toolchain_and_both_build_targets(self):
         for name in ("rust-mutants-a", "rust-mutants-b"):
             uses = {s["uses"].split("@")[0]: s.get("with", {}) for s in jobs()[name]["steps"] if "uses" in s}

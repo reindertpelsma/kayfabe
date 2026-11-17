@@ -72,6 +72,7 @@ jobs:
   stable:
     name: stable — build, test, clippy, fmt, boundary
     runs-on: ubuntu-latest
+    timeout-minutes: 45   # the gates below take about 8 minutes since the harnesses moved out (docs/CI_V3.md); a hang must not hold a runner for the default six hours
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The Worker's runtime dependency (jose), as the steps that ran before this one in this job had left it (the Worker
@@ -2181,7 +2182,10 @@ jobs:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
           components: rustfmt, clippy
           targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi   # the embedded isolate image and GOP driver; see the `stable` history
+      # The same cache entry as `stable` (shared-key), so a job split out of it starts from the dependencies it already had.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: stable
       # The Windows support profile (2026-11-15: kf-rm winprofile and the chain/channel links, kf-qemu channel birth, mirror-space
       # start and display colour path; "a Linux guest, an undeclared guest and windows-support=off reach none of it"): each mutant needs two named killers.
       - name: Windows support profile mutations require two named killers each
@@ -2198,7 +2202,10 @@ jobs:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
           components: rustfmt, clippy
           targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi   # the embedded isolate image and GOP driver; see the `stable` history
+      # The same cache entry as `stable` (shared-key), so a job split out of it starts from the dependencies it already had.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: stable
       # The oracle gate of crates/kf-chip/tests/hwref_is_current.rs has its own tests; each mutant of it needs two
       # named killers. The harness rewrites that one file and always restores it (this checkout is throwaway).
       - name: Oracle-gate mutations require two named killers each
@@ -2232,6 +2239,7 @@ jobs:
   stripped:
     name: stripped tree — build, test, clippy on what .workerignore leaves
     runs-on: ubuntu-latest
+    timeout-minutes: 120   # its test step took 22.7 to 44.5 minutes over 45 recent runs; a hang must not hold a runner for the default six hours
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The key the Worker would store for this commit and the key of the tree we are about to strip
