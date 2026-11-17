@@ -47,7 +47,7 @@ Nothing is hosted, mirrored, cached or pinned by us. **Nothing NVIDIA ships is s
 
 **TensorRT: the install route and the licence (checked 2026-11-17, [read]).** The PyPI projects `tensorrt`, `tensorrt-cu12`, `tensorrt-cu13` and `tensorrt-cuXX-libs` are source stubs: the `-libs` sdist (15 KB) builds with `wheel_stub` and fetches the real wheel from `https://pypi.nvidia.com/`, an open index whose listing carries a `sha256` per file; `-bindings` wheels (1 MB) are on PyPI and on that index. No account, login or developer programme is involved: pip installed both wheels on three boxes with no credential at all [run: traces/open_ml_rows_20261117, 2026-11-17] (the `developer login` that the earlier proposal recorded is [inferred] to be about the SDK tarball, which this route does not use). The meta package `tensorrt-cuXX` is a pure-Python sdist built with setuptools in an isolated environment whose build requirements pip fetches WITHOUT hashes; the row therefore does not install it: it installs the libs and bindings wheels (both hashed) and imports `tensorrt_bindings`, which the meta package's `tensorrt/__init__.py` only re-exports. **`trtexec` is in no pip wheel** (the libs wheel holds `libnvinfer`, the builder resources per architecture, the plugin library and the ONNX parser, no executable and no headers). The row drives the same builder (parser, builder, FP16 flag, optimization profile, timing) through the Python API and reports `trtexec` as `NOT_RUN reason=trtexec_is_not_in_the_pypi_wheels`. A `trtexec` from source is possible: the OSS repository carries the headers and `samples/trtexec` (Apache-2.0), CMake builds it against the wheel's libraries with `-DBUILD_PARSERS=OFF -DBUILD_PLUGINS=OFF -DBUILD_SAMPLES=ON -DCUDA_VERSION=13.0`, but it needs CMake 3.31 or newer (Ubuntu 24.04 has 3.28) and the repository's submodules [not measured, not done]. **Licence:** the TensorRT wheels declare `License: Proprietary`; their `LICENSE.txt` is NVIDIA's Software License Agreement, which says installing or using the software is acceptance. **Owner question:** clause 2.1(iii)(b) of that agreement forbids making the software available to third parties "by operating hosted/virtual system environments"; running it in our own test guest on a box we rent is internal use, but a kayfabe user who runs this row inside a virtual-GPU guest they offer to others is outside it. The row prints the licence name at setup; nothing in this change redistributes any NVIDIA file.
 
-**Size and time of a setup** [run: traces/open_ml_rows_20261117]: JAX cu13 4.4 GB venv, 177 s; TensorRT cu13 7.3 GB, 335 s; vLLM cu13 9.6 GB + 272 MB model, 465 s; JAX cu12 5.8 GB, 233 s; TensorRT cu12 7.0 GB, 294 s (a 500 Mbit link, up to two setups at once). A standalone run of all three downloads about 21 GB. `ci/vast-broker/bandwidth.json` is unchanged: the Worker's payload never runs these rows.
+**Size and time of a setup** [run: traces/open_ml_rows_20261117]: JAX cu13 4.4 GB venv, 177 s; TensorRT cu13 7.3 GB, 335 s; vLLM cu13 9.6 GB + 272 MB model, 465 s; JAX cu12 5.8 GB, 233 s; TensorRT cu12 7.0 GB, 294 s (B1: an offer of 870 Mbit with two setups at once, so these are upper bounds; on B2 at 1.2 Gbit: 254 s, 71 s, 70 s). A standalone run of all three downloads about 21 GB. `ci/vast-broker/bandwidth.json` is unchanged: the Worker's payload never runs these rows.
 
 ## 4. Flavour by driver
 
@@ -93,7 +93,43 @@ Expected guest durations [inferred, a VM exit costs 10 to 40 times bare metal]: 
 
 Evidence: `traces/open_ml_rows_20261117/` (text only). Revision under test: the PR's head, named in that directory's README. Machines (Vast CONTAINER boxes, Ubuntu 24.04 image `nvidia/cuda:13.0.1-devel-ubuntu24.04`, no kayfabe, no KVM):
 
-RESULTS_TABLE
+| | die | driver (CUDA) | link the offer listed |
+|---|---|---|---|
+| B1 | RTX 3060, 12 GB, GA106, `sm_86` | 580.159.03 (13.0, the lowest the cu13 flavour takes) | 870 Mbit |
+| B2 | RTX 4060 Ti, 16 GB, AD106, `sm_89` | 580.178.04 (13.0) | 1.2 Gbit |
+| B3 | RTX 2080 Ti, 11 GB, TU102, `sm_75` (the Turing floor) | 615.71.09 (13.4) | 920 Mbit |
+
+**All three rows PASS on all three dies, and all three CPU forms FAIL on all three** [run: traces/open_ml_rows_20261117, revision `f4df2f99f`, 2026-11-17].
+
+| | B1 RTX 3060 | B2 RTX 4060 Ti | B3 RTX 2080 Ti |
+|---|---|---|---|
+| **vllm** row seconds (engine start) | 82 (68) | 62 (51) | 74 (61) |
+| greedy `token_sha256` | `98fb8ab0f592...` | the same | the same |
+| CUDA graph sizes, mode | 51, `FULL_AND_PIECEWISE` | 51, the same | 51, the same |
+| KV cache tokens (engine log) | 445,056 | 608,896 | 393,216 |
+| device memory grew (MiB of total) | 10,754 of 12,288 | 14,372 of 16,380 | 9,667 of 11,264 |
+| prompts one at a time give the batched ids | yes | yes | yes |
+| **tensorrt** row seconds (builder) | 109 (53) | 76 (38) | 81 (40) |
+| tactic log lines, timing cache | 2282, 51 KB | 2267, 51 KB | 2421, 61 KB |
+| engine vs ONNX Runtime CPU, fraction of the reference's largest value | 7.3e-4 | 1.2e-3 | 1.0e-3 |
+| ONNX Runtime TensorRT provider vs CPU (absolute, reference 3.209) | 6.2e-3, 2 nodes on TensorRT | 5.8e-3, 2 | 2.3e-3, 2 |
+| **jax** row seconds | 9.6 | 9.2 | 3.1 |
+| `bytes_limit` (MiB), fraction of `nvidia-smi`'s total | 8934, 0.727 | 11962, 0.730 | 8128, 0.722 |
+| default-precision matmul vs CPU (fraction of largest value) | 2.9e-4 (TF32) | 2.9e-4 (TF32) | 1.2e-6 (no TF32) |
+| autotuner dump: entries by backend (besides `NATIVE_EMITTER`) | cuBLASLt, cuDNN, Triton, block-level emitter | the same | cuBLASLt, cuDNN |
+
+Also measured on 2026-11-17: the CUDA 12 flavours of JAX and TensorRT PASS on B1, an RTX 3060 (forced on the CUDA 13 driver: 10 s and 52 s; the ONNX Runtime provider part is `NOT_RUN` by name because that wheel has no TensorRT provider); the rows through `run_apps.sh host` and `gpu_use_rows.py annotate-res` on B1 (`run_apps_host.txt`); and `run_standalone.sh` from a plain clone on B2 and B3 (setup 4 min 14 s for vLLM, 71 s TensorRT, 70 s JAX on a gigabit link; then the three rows).
+
+**Hypothesis H5 held: the greedy token ids are identical on three dies of three architectures** (Ampere, Ada, Turing; vLLM chose `FLASH_ATTN` (FlashAttention 2) on the first two and `TRITON_ATTN` on Turing, so two attention code paths agree, [run: the engine log line `Using ... attention backend` of each `vllm.log`]). That is why `pins.json` commits `expected_token_sha256` and the row fails a run that differs (`tokens_equal_committed_hash`). The commitment is bound to its context (vllm 0.34.0, torch 2.14.0, float16, the model revision; a test compares the context with the lock). Three dies is not "every die": a die where it differs is a finding to read, not a reason to loosen the pin. Not measured: Hopper, Blackwell, a driver older than 580, other GPUs of the same architecture.
+
+**What the native runs found** (each started as a falsifier of section 10 and was fixed before the final runs; the final runs are above):
+
+1. The JAX negative control (`JAX_PLATFORMS=cpu`) still found an autotuner dump: a file the previous run had left in the working directory. The control caught a stale-file defect that no GPU run could show; the working directory is now removed before every run (two tests, two mutants).
+2. FlashInfer's nvcc JIT does not work from the pip toolchain (section 6): with `nvcc` on the `PATH` the vLLM engine fails to start with `CUDA compiler and CUDA toolkit headers are incompatible`; without it vLLM disables FlashInfer. The first design put `nvcc` on the `PATH`; reverted.
+3. Thresholds the first draft had too loose or too tight, now set from measurements and recorded beside the constant: TensorRT tolerance 5 percent (measured 0.1 percent; now 1 percent), JAX default-precision tolerance 2 percent (TF32 gives 0.03 percent; now 0.3 percent), the preallocation window 70 to 78 percent (measured 72.2 to 73.0 because `nvidia-smi`'s total includes the driver's reserve; now 68 to 78).
+4. `row_tensorrt.py` had a `--trtexec PATH` option that only recorded the path: removed (a hook that does not run the program it names is a fiction).
+
+Time and size of a setup are in section 3. Cost of the whole native campaign: COST_LINE.
 
 ## 9. Tests and mutants (GPU-free)
 

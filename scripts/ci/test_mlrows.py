@@ -1042,6 +1042,18 @@ class CmdRun(unittest.TestCase):
         self.assertFalse(any(l.startswith("GPU_USE_PROOF") for l in lines))
         self.assertTrue(any(l.startswith("VLLM_SUMMARY status=FAIL ") for l in lines))
 
+    def test_one_clean_note_line_for_the_matrix_whatever_the_reason_says(self):
+        res = trt_result(engine={"ran": True, "max_abs_err": 0.2, "ref_max_abs": 3.0, "repeat_identical": True})
+        st, why, checks = lib.judge_tensorrt(res)
+        rc, lines = self.run_main("tensorrt", (st, why, "cu13", checks, res, []))
+        notes = [l for l in lines if l.startswith("APPNOTE ")]
+        self.assertEqual(len(notes), 1)
+        self.assertTrue(notes[0].startswith("APPNOTE FAIL on cu13: engine_equals_onnxruntime_cpu"), notes[0])
+        self.assertNotRegex(notes[0], r"[=|]")
+        self.assertLessEqual(len(notes[0]), 160)
+        rc, lines = self.run_main("vllm", self.passed("vllm"))
+        self.assertIn("APPNOTE PASS on cu13: ok", lines)
+
     def test_the_exit_code_is_one_only_for_a_fail(self):
         res = vllm_result()
         for status, want in ((lib.PASS, 0), (lib.NOT_RUN, 0), (lib.FAIL, 1)):
@@ -1445,6 +1457,10 @@ class MatrixWiring(unittest.TestCase):
     def test_a_pass_summary_is_a_pass(self):
         m = self.row_verdict("print('VLLM_SUMMARY status=PASS flavour=cu13')\n")
         self.assertEqual(m.group(1), "PASS")
+
+    def test_the_rows_own_note_line_is_the_note_of_a_pass(self):
+        m = self.row_verdict("print('VLLM_SUMMARY status=PASS')\nprint('APPNOTE PASS on cu13: ok')\nprint('(MainProcess) INFO shutdown timeout=default')\n")
+        self.assertEqual((m.group(1), m.group(3)), ("PASS", "APPNOTE PASS on cu13: ok".replace("APPNOTE ", "")))
 
     def test_a_not_run_is_notrun_with_its_reason_and_never_a_pass_or_a_fail(self):
         m = self.row_verdict("print('VLLM_SUMMARY status=NOT_RUN reason=x')\nprint('APPNOTRUN driver_cuda_below_every_wheel: cu13: driver supports CUDA 12.9 < 13.0')\n")

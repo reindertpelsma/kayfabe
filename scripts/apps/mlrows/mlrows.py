@@ -428,6 +428,7 @@ def cmd_run(a):
     say("%s %s" % (SUMMARY[a.row], kv(status=status, flavour=flavour, reason=reason[:120], secs=(result or {}).get("secs"), mem_growth_mib=(result or {}).get("mem_growth_mib"),
                                        token_sha256=(result or {}).get("token_sha256") if a.row == "vllm" else None)))
     say(lib.judged_line(a.row, status, reason, flavour, checks, result))
+    say("APPNOTE %s on %s: %s" % (status, flavour or "-", re.sub(r"[=|\s]+", " ", reason)[:110]))     # run_apps.sh puts this in the APPRES note (the engine log's own words would match its generic grep)
     if status == lib.NOT_RUN:
         say("APPNOTRUN " + reason[:150])
     return 1 if status == lib.FAIL else 0

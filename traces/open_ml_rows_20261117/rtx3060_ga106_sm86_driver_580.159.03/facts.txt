@@ -1,0 +1,4 @@
+NVIDIA GeForce RTX 3060, 580.159.03, 8.6, 12288 MiB
+| NVIDIA-SMI 580.159.03             Driver Version: 580.159.03     CUDA Version: 13.0     |
+Python 3.12.3
+Model name:                              Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40G
