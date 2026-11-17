@@ -1,4 +1,4 @@
-STATUS: DESIGN-ONLY, 2026-11-16, except section 12 (slice 1: the local build tooling and its measured proof on one coordinator box, LIVE as tooling). Sections 1 to 11 are unchanged design and proposals; every "NEW" item outside section 12 is a proposal.
+STATUS: DESIGN-ONLY, 2026-11-16, except section 12 (slice 1: the local build tooling and its measured proof on one coordinator box, LIVE as tooling) and section 13 (2026-11-17: package manifest, offline enforcement and run-time injection, LIVE as tooling, unit-tested only, never run on a guest). Sections 1 to 11 are unchanged design and proposals; every "NEW" item outside section 12 is a proposal.
 
 # A Linux proprietary image (image C): design and first slice
 
@@ -237,3 +237,107 @@ A cached sign-in is a credential: a token, not only an e-mail address. A run box
 2. The sign-in flow and the offline behaviour of the application (12.3, 12.4).
 3. Whether `-cpu` with the fixed AMD profile changes what the application checks (falsifier 4 of section 8).
 4. UEFI without Secure Boot was used and booted; the GOP option ROM for kf3 was not tried.
+
+## 13. Package manifest, offline enforcement and run-time injection (2026-11-17)
+
+STATUS: LIVE as tooling, 2026-11-17. Labels as in section 12. **TESTED** = GPU-free unit tests and mutants with scripted guests (`scripts/ci/test_propimage_linux.py`, `scripts/ci/propimage_linux_mutants.py`); **MEASURED** = ran on the coordinator box on 2026-11-17 and is named; **UNVERIFIED** = needs a guest nobody has booted. Run on the coordinator box on 2026-11-17: 236 tests OK (121 new), 67 of 67 mutants killed by at least two named tests (35 new, in both modules), and the gates `doc_freshness`, the claim ledger, `ignore_ladder`, `workflow_lint`, `no_gpu_uuids`, `no_private_refs` and `bandwidth_check` clean. **No VM was booted for this section**: the harden, seal and inject steps were never run against a real guest, only against scripted ones. The code is `scripts/bench/linux/propimage_linux_pkgs.py` (pure functions; the guest transport is passed in) wired into `propimage_linux.py`.
+
+Owner rules, 2026-11-17 (given in the working session; they are the design inputs here):
+
+1. The image is fully offline: no apt and no other network inside a clone. apt may be used only in the SETUP VM, before the seal. There is no allow-list of mirrors and none will be added: `harden-offline` has no `--allow-apt-mirrors` option, on purpose.
+2. Every package installed into the sealed image is documented, so the image can be reproduced like any other proprietary image: the seal writes a complete, reviewable package manifest.
+3. Python dependencies stay out of the image. Python environments are built at run time from the repository's own scripts (`scripts/kfml`: `setup --venv`, `build-wheels`, hashed locks) and copied into the running offline clone; they are never stored in the sealed image or in the private store.
+
+The wording of this section is deliberately about a private store, isolation and reproducibility. It makes no claim about any vendor's licence, activation or offline behaviour.
+
+### 13.1 Commands
+
+| Command | What it does |
+|---|---|
+| `seal --dir D [--vendor-entry 'k=v ...']... [--compare PREV] [--require-hardened]` | As section 12, plus: `packages.manifest.json` next to the sealed image (13.2), its sha256 in `state.json` (`packages.manifest_sha256`), WARN lines (13.2), and with `--compare` the diff against a previous manifest. A bad `--vendor-entry` stops the seal before any long step. `--require-hardened` turns the NOT_HARDENED warning into a refusal (the setup VM is still running when it refuses). |
+| `pack STATE IMAGE --out ZIP` | Adds `packages.manifest.json` from the image's directory as a member (covered by the sha256 manifest of the zip) and prints a WARN when there is none. Refuses (`PACKAGES_MANIFEST_MISSING_OR_CHANGED`) when the state records a manifest hash and the file is missing or different. `unpack` checks the member's schema and its hash against the state. |
+| `diff-packages A B` | A and B are manifests or packed zips; prints what changed (13.2), exit 1 when anything did. |
+| `harden-offline --dir D` | Run on the SETUP VM as the last step before the seal (13.3). |
+| `unharden --dir D [--clone N]` | A throwaway clone only (13.3). |
+| `inject --dir D [--name N] --src PATH --dest GUESTPATH [--max-gb 20] [--replace]` | A file or directory into a running offline clone (13.4). |
+| `inject --dir D [--name N] --wheelhouse DIR --lock FILE [--dest GUESTPATH]` | A wheelhouse, installed offline with hashes inside the clone (13.4). |
+
+Order for a real image: `init`, `fetch-base`, `setup`, install and prepare (apt allowed, network on, real clock), `inventory`, then `harden-offline`, then `seal ... --vendor-entry ... --require-hardened`, `scan-image`, `pack`. Anything that needs the network must be done before `harden-offline`; the hardened setup VM cannot go online again (a clone can, with `unharden`, 13.3).
+
+`STAGE_A` now also installs `python3-venv` (so a copied wheelhouse can be installed with a venv inside a clone) and `nftables` (so `harden-offline` needs no apt of its own). The proof image of section 12 predates both: on such an image `harden-offline` runs `apt-get install nftables` itself while the setup VM still has its network, and `python3-venv` must be installed by hand before the seal (`GUEST_NO_VENV` names it otherwise). Both then appear in the manifest like every other package.
+
+### 13.2 The manifest: `packages.manifest.json`
+
+Schema `kayfabe-propimage-linux-packages/v1`, written by the seal from the running guest (after the seal's own cleanup, before the stop), mode as the other members, `json.dumps(sort_keys=True)`. The collector runs one `sudo python3` over ssh that executes a fixed list of read-only commands and returns their raw output; all parsing happens on the host (tested without a guest).
+
+| Field | Content |
+|---|---|
+| `schema`, `generated_utc` | The schema id and the host time of the seal (ignored by `diff-packages`). |
+| `base` | Name, release and sha256 of the pinned Ubuntu cloud image. |
+| `os`, `python3` | `/etc/os-release` id, version and codename; `python3 --version`. |
+| `kernel` | `release` (`uname -r`), `headers_present`, `proc_version`, and the kernel, headers and meta packages with versions. |
+| `dpkg` | Every installed package (`dpkg-query -W -f`, status `ii` and `hi`; removed packages with leftover config are not listed): `name`, `version`, `arch`, `manual` (from `apt-mark showmanual`), `held`. |
+| `apt` | `sources_origin` (`guest-live`, `recorded-by-harden-offline`, or `none`), `sources` (path, sha256 of the redacted text, the text; the user-info part of any URL is replaced by `REDACTED`; `auth.conf` is never read), `preferences`, `holds`. After `harden-offline` the guest has no sources, so the record `harden-offline` wrote on the host (`D/setup/apt_sources.recorded.json`, taken before the removal) is used. |
+| `snaps`, `pip`, `npm`, `gem` | System-wide packages with versions. `pip` is every distribution Python can see that is not owned by dpkg (`/usr/lib/python3/`); `npm` is `npm ls -g`; `gem` is `gem list --local`; each is empty when the tool is absent. |
+| `python_envs` | Paths of every `pyvenv.cfg` under `/opt`, `/usr/local` and `/home` (rule 3: there should be none). |
+| `vendor` | One object per `--vendor-entry`, free-form (13.2.1). |
+| `large_dirs` | Entries over 1 GB (`du -x -s`) directly under `/opt/*`, `/usr/local/*` and each user's home (a `.cache` is not one). |
+| `inventory` | Counts only (no paths) of the files created or changed after provisioning: entries, files, dirs, links, bytes, by reason and by top-level directory; `{"unavailable": ...}` when the provisioning marker is missing. |
+| `hardening` | `hardened` (true only when all of 13.3's end state holds in the live guest), `problems`, the live ruleset's counts and drop hooks, the sha256 of `/etc/nftables.conf`, the state of `nftables.service` and of each masked unit. |
+| `counts` | dpkg, manual, snaps, pip, npm, gem, vendor. |
+
+The seal prints WARN lines, never silently: `LARGE_DIRS_WITHOUT_VENDOR_ENTRY` (a directory over 1 GB under `/opt`, `/usr/local` or a home, named with its size, and no `--vendor-entry`), `PYTHON_ENV_IN_IMAGE`, `NOT_HARDENED` (with the reasons), `NO_APT_SOURCES_RECORDED`.
+
+#### 13.2.1 Vendor entries
+
+`--vendor-entry 'name=MATLAB release=R2026b products=MATLAB,Parallel_Computing_Toolbox,Deep_Learning_Toolbox installer_sha256=<64 hex> installed_via=<installer|mpm>'`, repeatable. `name` is required; the other keys are free-form lowercase `key=value` words (a value with spaces is quoted, shell style); `products` becomes a list; `installer_sha256` must be 64 hex. A key that names a secret (`password`, `token`, `secret`, `credential`, `licen[sc]e`, `activation`, `api_key`, `key`, `*_key`) and a value that is a URL with credentials are refused (`VENDOR_ENTRY_SECRET_KEY`, `VENDOR_ENTRY_CREDENTIAL`): the manifest records what was installed and how, never anything that signs in.
+
+`diff-packages` (and `seal --compare`) reports, per section, `+` added, `-` removed and `~` changed (`name: old -> new`) for dpkg, apt sources, snaps, pip, npm, gem, vendor entries and large directories, plus a changed kernel release or hardened flag. Identical content, whatever the timestamp, prints `no package-level difference` and exits 0.
+
+### 13.3 Offline enforcement in the guest
+
+`harden-offline --dir D` (ssh into the running setup VM, as root through sudo) does, in this order:
+
+1. Reads the apt sources and preferences and writes them, redacted, to `D/setup/apt_sources.recorded.json` on the host. A second run, when the guest no longer has sources, keeps the first record.
+2. Probes the network from inside the guest (TCP to `1.1.1.1:443` and `9.9.9.9:53`, one UDP DNS query, one ping, plus loopback to port 22) to know what was reachable before.
+3. Runs the guest script: installs `nftables` only if `nft` is missing (the last use of apt); writes `/etc/nftables.conf` (below); checks it with `nft -c`; enables `nftables.service` so the rules load at every boot; applies it; masks `apt-daily.timer`, `apt-daily-upgrade.timer`, `apt-daily.service`, `apt-daily-upgrade.service` and `unattended-upgrades.service`; sets the periodic apt options to 0; removes `/etc/apt/sources.list`, `/etc/apt/sources.list.d/*`, `/etc/apt/auth.conf*` and `/var/lib/apt/lists/*`.
+4. Reads the live ruleset back (`nft -j list ruleset`) and refuses on any rule in the drop chains that is not loopback or established/related (`HARDEN_EXCEPTION`) or when output and forward do not both have policy drop (`HARDEN_NO_DEFAULT_DROP`); checks that every masked unit reports `masked` and no apt source file is left; prints the counts (tables, chains, rules, by kind); probes again from inside the guest and refuses unless nothing outbound answers (`HARDEN_OUTBOUND_OPEN`) and loopback to port 22 still works (`HARDEN_LOOPBACK_BROKEN`). When nothing was reachable before the rules either (the guest was already offline), it says so: the check then cannot show that the rules did it. It writes `D/setup/hardening.json`.
+
+The ruleset is exactly this (inbound is left open: the only listener is sshd, and the clone's NIC is `restrict=on`; replies to the harness's ssh are `established`):
+
+```
+flush ruleset
+table inet kf_offline {
+    chain input   { type filter hook input priority 0; policy accept; }
+    chain forward { type filter hook forward priority 0; policy drop; }
+    chain output  { type filter hook output priority 0; policy drop;
+        oifname "lo" accept
+        ct state established,related accept
+    }
+}
+```
+
+There is no exception, no mirror list and no option to add one. **There is no apt in a clone, ever.** A package that is needed must be installed in the setup VM before `harden-offline`, and it will be in the manifest.
+
+`unharden --dir D [--clone N]` is for the online logout step on a THROWAWAY clone (start one with `run --keep --net online`): it flushes the runtime ruleset with `nft flush ruleset` and checks that no drop chain is left. It refuses unless `D/run/N` is a running clone: the name may not leave `D/run`, may not resolve into `D/sealed`, `clone.qcow2` may not be the sealed image and must be a qcow2 overlay whose backing file is the sealed image (`qemu-img info -U`), and the qemu process must be alive. The persistent `/etc/nftables.conf` is left alone (it lives in the clone's overlay), so the sealed image is never touched. To go back online on the setup VM before a seal, do not run `harden-offline` yet.
+
+- **MEASURED** (2026-11-17, coordinator box, nft 1.1.6, `unshare -rn`, no VM): the ruleset above passes `nft -c -f`, loads, and `nft -j list ruleset` has the shape the analyser reads (committed as a test fixture). The guest's nft is Ubuntu 24.04's (1.0.9, CODE READ: same JSON schema version); nothing was run in a guest.
+- **UNVERIFIED, falsifier given:** (a) DHCP. The clone gets its address by DHCP from slirp. systemd-networkd's first exchange uses a packet socket, which an `output` hook does not see (not verified here); a lease renewal after half the lease time (slirp's lease is 24 h, not verified) uses a normal UDP socket and would be dropped, so a clone that runs longer than about 12 h might lose its address. Falsifier: boot a hardened clone, check `networkctl status` after the first reboot, and let one run exceed 13 h. A static address in the netplan file would remove the question; it is not done. (b) That `harden-offline` leaves ssh usable on the real guest (inbound ssh and its replies are `established`; not run). (c) That `python3 -c` with `socket.connect` to `1.1.1.1` blocks (timeout) rather than errors on an output drop; either counts as unreachable here.
+
+### 13.4 `inject`: run-time environments into a running clone
+
+`inject` talks to a clone that is already running (`run --keep`, then `--name`, default `clone1`). Before it sends a byte it checks the clone exactly like `run` does: the clone resolution of 13.3 (an overlay of the sealed image, alive), then the identity rows, the network row (no internet, no ping: this is what refuses the setup VM, which has a network) and the recorded-clock window (elapsed time is taken from the clone's pid file); a mismatch refuses with `CLONE_CHECK_FAILED` naming the rows. The kernel-header, compiler and cloud-init rows do not block it.
+
+- **Transport.** tar over the existing ssh transport (`ssh ... bash -c 'tar -x -p --no-same-owner -C DEST'`, the stream written by Python's `tarfile`); no scp. Modes are kept; owners become the guest user; setuid and setgid bits are dropped from the stream; uid, gid and names are zeroed in it. The printed `sha256` is that of the tar stream as the host sent it (with its byte count); it is reproducible for the same source and is NOT a check of what arrived (tar's own exit status is).
+- **Destinations.** A relative `--dest` is under `/home/kfimage`; an absolute one must be strictly under `/home/kfimage` or `/opt/kf` (the root itself, `..`, a sibling with the same prefix and everything else are `INJECT_DEST_REFUSED`). `/opt/kf` is created and handed to the guest user through sudo. An existing destination is `INJECT_DEST_EXISTS` unless `--replace` (which removes it first). A directory source lands as the destination directory; a file takes the destination's name.
+- **Source rules.** Symlinks are kept only when they are relative and resolve inside the source (`INJECT_SYMLINK_ESCAPES`; an absolute link is refused even when it points into the source, because it would not survive the move); sockets, fifos and devices are `INJECT_SPECIAL_FILE`; a symlink as the source itself is refused. The total of file sizes is capped at `--max-gb` (default 20) and refused before anything is sent (`INJECT_TOO_LARGE`); the stream itself is capped as well.
+- **Python, honestly.** Copying a venv works only when the host's Python minor version, libc and CPU ABI match the guest's (Ubuntu 24.04, Python 3.12, glibc 2.39, x86-64), and a venv holds absolute paths and interpreter symlinks (`bin/python3 -> /usr/bin/python3.12`, `pyvenv.cfg`), which `inject --src` refuses by design. The robust variant is a wheelhouse: build it where the repository's scripts run (`scripts/kfml` `build-wheels` and `pip download -r <hashed lock> -d DIR`, see `scripts/kfml/README.md`), then `inject --wheelhouse DIR --lock FILE`.
+- **`--wheelhouse DIR --lock FILE`** (host side, before anything is copied): parses the lock; every requirement must be `name==version` with at least one `--hash=sha256:` (`LOCK_NOT_HASHED`, `LOCK_NOT_PINNED`); a requirement that cannot come from a local directory (a URL, a VCS reference, a path, an editable, a nested `-r`) is `LOCK_NEEDS_INDEX`: the clone has no network and no index, and this is the refusal the owner asked for. Index and find-links option lines in the lock (the kfml lock names an extra index for its CUDA wheels) are NOT copied: the staged lock keeps every requirement and hash and loses those lines, and the clone installs with `--no-index` (the original lock's sha256 is printed, so the lock a result cites is still the original). Then, per requirement: a wheel with the pinned name and version must be in the directory (`WHEEL_MISSING`), one of the wheels' sha256 must be in the lock's hash list (`WHEEL_HASH_MISMATCH`), and one of those must fit the guest read from the guest itself (Python minor, machine, glibc; `WHEEL_TAG_MISMATCH`). A requirement with an environment marker and no wheel is a WARN (pip decides in the guest). Only the matching wheels and the staged lock are sent, to `DEST/wheelhouse` and `DEST/requirements.lock.txt` (default `DEST=/opt/kf/pyenv`). In the guest: `python3 -m venv DEST/venv` and `DEST/venv/bin/python -m pip install --no-index --no-input --only-binary=:all: --find-links DEST/wheelhouse --require-hashes -r DEST/requirements.lock.txt`; a failure is `PIP_INSTALL_FAILED` with pip's last lines; a guest without `venv`/`ensurepip` is `GUEST_NO_VENV` (install `python3-venv` in the setup VM). Nothing Python-related is stored in the sealed image or in the private store: the target is the clone's throwaway overlay, and the seal warns when it finds a `pyvenv.cfg`.
+- **TESTED** (scripted guest; the stream is extracted by a local `tar -x -p`): destinations, symlink and special-file refusals, the size cap, modes and symlinks surviving the tar round trip, the hash, the wheelhouse checks for all named errors, the staged lock, the install command's flags, the clone guards. **NOT run** against a real clone or a real pip.
+
+### 13.5 Open and not done
+
+1. Nothing here ran on a guest: the first real run of `harden-offline`, a seal with a manifest and an `inject --wheelhouse` is the test of 13.3 and 13.4, and the numbers (counts of packages, rules, wheels, seconds) are not known yet.
+2. A static netplan address (13.3, DHCP renewal) is not implemented.
+3. `inject` does not verify content on arrival beyond tar's exit status and, for wheels, pip's `--require-hashes` in the guest.
+4. The manifest lists what is installed, not how to rebuild it: reproduction means the pinned base image, the apt sources recorded here (a mirror snapshot is not pinned by this tool; package versions are), the vendor entries and the installer hashes they carry.
