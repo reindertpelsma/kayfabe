@@ -1,0 +1,32 @@
+2026-11-16T04:13:37,968141+00:00 NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ 
+2026-11-16T04:13:38,036440+00:00 NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (Nv
+2026-11-16T04:13:38,037457+00:00 NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (Nv
+2026-11-16T04:13:38,038505+00:00 NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_D
+2026-11-16T04:13:38,038942+00:00 NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+2026-11-16T04:13:38,038950+00:00 NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ 
+2026-11-16T04:28:58,554888+00:00 x86/PAT: kf3-vamgr:82181 freeing invalid memtype [mem 0x380000520000-0x38000071ffff]
+2026-11-16T04:28:58,556153+00:00 x86/PAT: kf3-vamgr:82181 freeing invalid memtype [mem 0x380000720000-0x38000091ffff]
+2026-11-16T04:28:58,557444+00:00 x86/PAT: kf3-vamgr:82181 freeing invalid memtype [mem 0x380000920000-0x380000b1ffff]
+2026-11-16T04:29:27,718254+00:00 x86/PAT: kf3-vamgr:82181 freeing invalid memtype [mem 0x380002880000-0x3800028effff]
+2026-11-16T04:50:16,732393+00:00 x86/PAT: kf3-vamgr:90616 freeing invalid memtype [mem 0x380000520000-0x38000071ffff]
+2026-11-16T04:50:16,733489+00:00 x86/PAT: kf3-vamgr:90616 freeing invalid memtype [mem 0x380000720000-0x38000091ffff]
+2026-11-16T04:50:59,454115+00:00 x86/PAT: kf3-vamgr:90616 freeing invalid memtype [mem 0x380002920000-0x38000298ffff]
+2026-11-16T04:53:18,683237+00:00 x86/PAT: kf3-vamgr:90616 freeing invalid memtype [mem 0x380003720000-0x38000379ffff]
+2026-11-16T05:03:19,910350+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x380000520000-0x38000071ffff]
+2026-11-16T05:03:42,813405+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x380002580000-0x3800025effff]
+2026-11-16T05:03:49,692962+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x380003380000-0x3800033fffff]
+2026-11-16T05:07:01,071911+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x380004b80000-0x380004beffff]
+2026-11-16T05:10:47,880410+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x3800009b0000-0x3800009fffff]
+2026-11-16T05:10:48,684473+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x380000ea0000-0x38000109ffff]
+2026-11-16T05:10:48,684661+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x3800010a0000-0x38000129ffff]
+2026-11-16T05:10:48,684751+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x3800012a0000-0x38000149ffff]
+2026-11-16T05:10:58,512147+00:00 NVRM: virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+2026-11-16T05:13:03,495005+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x3800034e0000-0x38000354ffff]
+2026-11-16T05:21:19,979425+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x380000cb0000-0x380000cfffff]
+2026-11-16T05:21:21,185357+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x3800009b0000-0x380000baffff]
+2026-11-16T05:21:21,185552+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x380000bb0000-0x380000daffff]
+2026-11-16T05:21:21,185679+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x380000db0000-0x380000faffff]
+2026-11-16T05:21:32,094566+00:00 NVRM: virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+2026-11-16T05:23:36,617959+00:00 x86/PAT: kf3-vamgr:95189 freeing invalid memtype [mem 0x380003610000-0x38000368ffff]
+
+4

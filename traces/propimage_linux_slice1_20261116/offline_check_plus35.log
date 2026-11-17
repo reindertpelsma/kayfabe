@@ -1,0 +1,27 @@
+KF_CLOCK image=propimage-linux net=offline using=recorded base=2026-12-21T20:10:10Z recorded=2026-12-21T20:10:10Z floor_input=- inputs=0
+{
+ "image_sha256": "f4474d309c5e0ff81bfb97fdcdd7f94d9a6cb13f2c398a40d234ef7a103b6c52",
+ "advance_days": 35.0,
+ "rounds": [
+  {
+   "round": 0,
+   "guest_utc": "2026-12-21T20:10:43Z",
+   "net": false,
+   "checks": [
+    {
+     "cmd": "echo 1",
+     "rc": 0,
+     "pass": true,
+     "kept_lines": 2,
+     "dropped_lines": 0,
+     "output_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    }
+   ]
+  }
+ ],
+ "result": "PASS"
+}
+
+real	1m5.203s
+user	0m0.217s
+sys	0m0.061s

@@ -1,0 +1,54 @@
+{
+  "schema": "kayfabe.test-assets/1",
+  "comment": "Open (redistributable) media for the Resolve GPU lane: scripts/bench/windows/resolve_gpu.py. Same schema and sources as scripts/bench/assets/test_assets.json; licences read from the pages in license_url on 2026-11-16.",
+  "assets": [
+    {
+      "name": "video/sintel_trailer_1080p.mp4",
+      "url": "https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4",
+      "license": "CC-BY-3.0",
+      "license_url": "https://durian.blender.org/sharing/",
+      "share_alike": false,
+      "attribution": "(c) copyright Blender Foundation | www.sintel.org (Sintel trailer, CC BY 3.0)",
+      "source_page": "https://durian.blender.org/",
+      "sha256": "34bbd52a4b89fdf63c8ace50b268da26653a59508288100cd3c23de276db7931",
+      "size": 14621544,
+      "purpose": "1080p H.264 video, about 52 s (colour, noise reduction, retime, render source)"
+    },
+    {
+      "name": "video/bbb_trailer_720p.mov",
+      "url": "https://download.blender.org/peach/trailer/trailer_720p.mov",
+      "license": "CC-BY-3.0",
+      "license_url": "https://peach.blender.org/about/",
+      "share_alike": false,
+      "attribution": "(c) copyright 2008, Blender Foundation / www.bigbuckbunny.org (Big Buck Bunny trailer, CC BY 3.0)",
+      "source_page": "https://peach.blender.org/",
+      "sha256": "cb7be60feb4fd4ff5b006e35e824201a48361b7ebc2f2bbcaf3351912035561a",
+      "size": 17810888,
+      "purpose": "720p QuickTime video (second codec/container, upscale to UHD)"
+    },
+    {
+      "name": "photo/lady_fern_4845x2980.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Lady_fern_at_Myrstigen_trail_1.jpg",
+      "license": "CC0-1.0",
+      "license_url": "https://commons.wikimedia.org/wiki/File:Lady_fern_at_Myrstigen_trail_1.jpg",
+      "share_alike": false,
+      "attribution": "W.carter, via Wikimedia Commons (CC0 1.0); no attribution required",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Lady_fern_at_Myrstigen_trail_1.jpg",
+      "sha256": "0bc00fcb56fa001c2d2fcdbaceb72cf6d4177576d7aa772b250a0cd3c33771cc",
+      "size": 1075063,
+      "purpose": "4845x2980 still (zoom, sharpen, noise; still-frame source)"
+    },
+    {
+      "name": "texture/rocky_terrain_02_diff_4k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/rocky_terrain_02/rocky_terrain_02_diff_4k.jpg",
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license",
+      "share_alike": false,
+      "attribution": "Amal Kumar, Poly Haven (CC0 1.0); no attribution required",
+      "source_page": "https://polyhaven.com/a/rocky_terrain_02",
+      "sha256": "ec7fe2042bb87958739b7f78a7678b29a44d33bfb5496cb22c5b1c68a089e6e8",
+      "size": 11328906,
+      "purpose": "4096x4096 texture still (heavy-detail frame)"
+    }
+  ]
+}

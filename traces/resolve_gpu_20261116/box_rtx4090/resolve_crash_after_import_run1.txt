@@ -1,0 +1,23 @@
+CORRECTION (same day, after two more sessions; supersedes the "page switch" reading below): Resolve died the same way in THREE sessions on two boots of this box
+(18:02:47 in boot rg7; 18:02:49 and 18:17:27 in boot rg9), each about 3 to 4 minutes after Resolve was started and the imported timeline was loaded, with no Color or Deliver
+page switch in the 18:17 session (the script had already ended after the import). Sessions that ended before about 3 minutes (two runs on rg7) did not crash. So the crash is
+not tied to a page switch; it is tied to time after project load (INFERRED: background work on the loaded timeline). Events: guest_events_three_resolve_crashes.txt.
+
+Resolve 21.2.0.6 (free) on image A under kf3, RTX 4090 (AD102, pci 0x2684), host driver 580.159.04, kf3 rev a564ba3c5 (+ harness fixes), 2026-11-16.
+Source: guest Application and System event logs read by `Get-WinEvent` after the first driver run (manual run of the Resolve row on a held guest). Guest clock (frozen at
+the image's date): 11/12/2026. Text copied by hand from the output; nothing else was kept.
+
+Sequence of that run (guest clock): 17:59 Resolve started, project created, FCPXML timeline imported (4 clips, UHD, MEASURED by screenshot "LOADING EDIT PAGE" then the
+timeline on the Cut page); the driver then invoked the Color page button.
+
+18:02:40, 18:02:43, 18:02:44  System  nvlddmkm  Id 153   (three events; the message text was empty in the query)
+18:02:47  Application  NVIDIA OpenGL Driver  Id 1   "Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2)"
+18:02:52  Application  Application Error  Id 1000  Faulting application Resolve.exe 21.2.0.6; faulting module nvoglv64.dll 32.0.15.8088;
+                                                  exception code 0xc0000409; fault offset 0x00000000010816ad
+
+Result: Resolve.exe exited; the row's step "color page" never completed (INCONCLUSIVE).
+
+What is NOT known: whether the Color page switch, the timeline import's background work, or something else triggered it; whether it repeats (the second and third driver runs on the same
+boot did NOT crash: they skipped the Color page and stopped at the Deliver page because UI Automation had no main window for 10 to 20 s after the import); whether bare-metal / VFIO
+shows it (the PC is powered off from 06:00Z; control row queued). The same three Id 153 events also appear in the image's own older log (11/12/2026 4:17 PM, image build).
+The earlier PC session (RTX 4070, rev fb274c4b) switched to the Color page without a crash.

@@ -1,0 +1,86 @@
+{
+ "goto_debug": [
+  "page=Deliver elements=220 main=True button=True",
+  "invoked",
+  "marker=Render Queue found=False elements=0 like="
+ ],
+ "ended": 1794506904.73,
+ "grade_nodes": [],
+ "renders": [],
+ "steps": [
+  {
+   "ok": true,
+   "t": 1794506244.832,
+   "note": "",
+   "n": "samplers"
+  },
+  {
+   "ok": true,
+   "t": 1794506393.489,
+   "note": "",
+   "n": "project manager"
+  },
+  {
+   "ok": true,
+   "t": 1794506411.969,
+   "note": "DaVinci Resolve - kf780592a0",
+   "n": "main window"
+  },
+  {
+   "ok": true,
+   "t": 1794506442.885,
+   "note": "kf_gpu",
+   "n": "import timeline"
+  },
+  {
+   "ok": false,
+   "t": 1794506899.75,
+   "note": "",
+   "n": "deliver page"
+  }
+ ],
+ "log_lines": [
+  "[0x00001164] | GPUDetect            | ERROR | 2026-11-12 17:58:00,725 | NVML Error Unknown Error (999): Querying device current PCI link width",
+  "[0x00001164] | GPUDetect            | INFO  | 2026-11-12 17:58:00,752 | Detected 1 GPUs:",
+  "[0x00001164] | GPUDetect            | INFO  | 2026-11-12 17:58:00,754 |     Discrete, 529 MiB used of 3.6 GiB VRAM, PCI:0:4 (x0)",
+  "[0x00001164] | GPUDetect            | INFO  | 2026-11-12 17:58:00,754 |     Matches: CUDA, DirectX, NVAPI, NVML, OpenCL, Win32",
+  "[0x00001164] | Main.GPUConfig       | INFO  | 2026-11-12 17:58:00,765 | Compute API set to automatic, defaulting to CUDA.",
+  "[0x00001164] | Main.GPUConfig       | INFO  | 2026-11-12 17:58:00,765 | Selected compute API: CUDA",
+  "[0x00001164] | Main.GPUConfig       | INFO  | 2026-11-12 17:58:00,765 | Automatic GPU Selection:",
+  "[0x000005a0] | IO                   | INFO  | 2026-11-12 17:58:07,287 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 8, upto 8192 x 8192",
+  "[0x000005a0] | IO                   | INFO  | 2026-11-12 17:58:07,311 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 10, upto 8192 x 8192",
+  "[0x000005a0] | IO                   | INFO  | 2026-11-12 17:58:07,342 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 8, upto 8192 x 8192",
+  "[0x000005a0] | IO                   | INFO  | 2026-11-12 17:58:07,399 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 10, upto 8192 x 8192",
+  "[0x000005a0] | IO                   | INFO  | 2026-11-12 17:58:07,498 | NVENC encodes H264, with chroma 4:2:0/4:4:4, bit depth up to 8",
+  "[0x000005a0] | IO                   | INFO  | 2026-11-12 17:58:07,498 | NVENC encodes HEVC, with chroma 4:2:0/4:4:4, bit depth up to 10",
+  "[0x000005a0] | IO                   | INFO  | 2026-11-12 17:58:07,498 | NVENC encodes AV1, with chroma 4:2:0, bit depth up to 10",
+  "[0x000005a0] | IO                   | INFO  | 2026-11-12 17:58:07,522 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+  "[0x00001164] | UI.GLContext         | INFO  | 2026-11-12 17:58:20,834 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4090/PCIe/SSE2'",
+  "[0x0000186c] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 17:58:21,576 | Let There Be CUDA Light!",
+  "[0x0000186c] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 17:58:21,590 | Initializing CUDA board manager for Main Display GPU gpu:f432211b.76ce3c9a.",
+  "[0x00000f50] | GPU.SingleBoardMgr   | INFO  | 2026-11-12 17:58:22,716 | Board manager thread for \"NVIDIA \" (gpu:f432211b.76ce3c9a) is ready.",
+  "[0x000029c4] | UI.GLIO              | INFO  | 2026-11-12 17:58:35,147 | Initialized MainPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4090'",
+  "[0x00000be8] | UI.GLIO              | INFO  | 2026-11-12 17:58:38,421 | Initialized AuxPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4090'"
+ ],
+ "run_id": "780592a0902d43b59db7b59e11851549",
+ "app": "resolve",
+ "kind": "RESOLVE_GPU",
+ "tz_offset_s": 0,
+ "window_name": "DaVinci Resolve - kf780592a0",
+ "t0": 1794506244.725,
+ "stage": "init",
+ "started": 1794506243.596,
+ "app_events": [
+  "Application Error id=1000 Faulting application name: Resolve.exe, version: 21.2.0.6, time stamp: 0x00000000\r | Faulting module name: nvoglv64.dll, version: 32.0.15.8088, time stamp: 0x6885c454\r | Exception code: 0xc0000409\r | Fault offset: 0x00000000010816ad\r",
+  "Application Error id=1000 Faulting application name: nvidia-smi.exe, version: 8.17.15.8088, time stamp: 0x6885c44f\r | Faulting module name: nvml.dll, version: 8.17.15.8088, time stamp: 0x6885c42f\r | Exception code: 0xc0000005\r | Fault offset: 0x00000000000eb680\r",
+  "NVIDIA OpenGL Driver id=1 Unable to recover from a kernel exception. The application must close. |  |  | Error code: 3 (subcode 2)"
+ ],
+ "error": "Deliver page did not open",
+ "nvlddmkm_events": [
+  "id=153 2026-11-12T18:02:45.2826006+00:00",
+  "id=153 2026-11-12T18:02:44.9966045+00:00",
+  "id=153 2026-11-12T18:02:42.0016784+00:00"
+ ],
+ "resolve_running": false,
+ "log_start_bytes": 28870
+}
