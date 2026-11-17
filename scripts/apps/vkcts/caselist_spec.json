@@ -1,0 +1,26 @@
+{
+  "schema": "kf-vkcts-caselist-spec/1",
+  "status": "LIVE, 2026-11-17. Recipe of caselist.tsv: breadth over the driver surfaces no other row touches (docs/design/V3_VULKAN_CTS_ROW.md). Chosen from the main mustpass of the pinned CTS; no case is picked by how it behaves on any machine.",
+  "mustpass_list": "external/vulkancts/mustpass/main/vk-default.txt",
+  "rule": "Per bucket: the sorted names that match `include` (prefixes) and `filter` and not `exclude` / `exclude_filter` (regexes on the whole name) are grouped by the matched prefix plus `depth` further name components (strata). With at least `count` strata, `count` evenly spaced strata give one case each; otherwise the quota is split over the strata (the largest strata take the remainder) and each stratum gives cases at evenly spaced positions of its sorted list. Deterministic, no randomness.",
+  "buckets": [
+    {"area": "rt_pipeline", "include": ["dEQP-VK.ray_tracing_pipeline."], "exclude": ["dEQP-VK.ray_tracing_pipeline.acceleration_structures.", "dEQP-VK.ray_tracing_pipeline.opacity_micromap."], "depth": 1, "count": 28},
+    {"area": "accel_structure", "include": ["dEQP-VK.ray_tracing_pipeline.acceleration_structures.operations.traditional_structures."], "depth": 1, "count": 12},
+    {"area": "accel_structure", "include": ["dEQP-VK.ray_tracing_pipeline.acceleration_structures."], "exclude": ["dEQP-VK.ray_tracing_pipeline.acceleration_structures.flags.", "dEQP-VK.ray_tracing_pipeline.acceleration_structures.operations."], "depth": 1, "count": 14},
+    {"area": "accel_structure", "include": ["dEQP-VK.ray_query.acceleration_structures."], "exclude": ["dEQP-VK.ray_query.acceleration_structures.flags.", "dEQP-VK.ray_query.acceleration_structures.operations."], "depth": 1, "count": 12},
+    {"area": "accel_structure", "include": ["dEQP-VK.ray_tracing_pipeline.acceleration_structures.flags."], "depth": 1, "count": 6},
+    {"area": "ray_query", "include": ["dEQP-VK.ray_query."], "exclude": ["dEQP-VK.ray_query.acceleration_structures.", "dEQP-VK.ray_query.opacity_micromap."], "depth": 1, "count": 22},
+    {"area": "mesh_task", "include": ["dEQP-VK.mesh_shader.ext."], "exclude": ["dEQP-VK.mesh_shader.ext.query."], "exclude_filter": "task", "depth": 1, "count": 20},
+    {"area": "mesh_task", "include": ["dEQP-VK.mesh_shader.ext."], "exclude": ["dEQP-VK.mesh_shader.ext.query."], "filter": "task", "depth": 1, "count": 10},
+    {"area": "sparse", "include": ["dEQP-VK.sparse_resources."], "depth": 1, "count": 30},
+    {"area": "video_decode", "include": ["dEQP-VK.video.decode."], "depth": 1, "count": 16},
+    {"area": "video_encode", "include": ["dEQP-VK.video.encode."], "depth": 1, "count": 15},
+    {"area": "video_other", "include": ["dEQP-VK.video.profiles.", "dEQP-VK.video.capabilities.", "dEQP-VK.video.synchronization.", "dEQP-VK.video.synchronization2."], "depth": 1, "count": 12},
+    {"area": "timeline", "include": ["dEQP-VK.synchronization.timeline_semaphore."], "depth": 1, "count": 16},
+    {"area": "sync2", "include": ["dEQP-VK.synchronization2."], "depth": 1, "count": 18},
+    {"area": "descriptor_buffer", "include": ["dEQP-VK.binding_model.descriptor_buffer."], "depth": 1, "count": 18},
+    {"area": "dgc", "include": ["dEQP-VK.dgc."], "depth": 2, "count": 20},
+    {"area": "coop_matrix", "include": ["dEQP-VK.compute.pipeline.cooperative_matrix."], "depth": 1, "count": 22}
+  ],
+  "required_areas": ["rt_pipeline", "accel_structure", "ray_query", "mesh_task", "sparse", "video_decode", "video_encode", "timeline", "sync2", "descriptor_buffer", "dgc", "coop_matrix"]
+}
