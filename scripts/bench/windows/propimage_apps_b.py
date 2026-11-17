@@ -45,6 +45,8 @@ EXPECT = {
 }
 
 # lane: gate = must pass on kf3 (strict); discovery = exotic or heavy, allowed to fail and crash (the failures are the product; each runs in a fresh clone).
+# 2026-11-17: a lane is also stated in the Worker's list (ci/vast-broker/propimages.json, image imgb); test_propimage_apps_b_stage.WorkerLanes pins every shared row equal.
+# `illustratorsample` is discovery there (FAIL on a Vast box, AD102) and so here.
 # name -> timeout (s), script, GPU engines that must be busy during the operation (() = informational sampling only)
 CHECKS = {
     "gpudiag": {"timeout": 240, "script": "sniffers.ps1", "gpu": (), "lane": "gate", "path": "NVIDIA driver/CUDA enumeration by the applications own sniffers"},
@@ -52,7 +54,7 @@ CHECKS = {
     "illustrator": {"timeout": 480, "script": "illustrator.ps1", "gpu": (), "lane": "gate", "path": "D3D11 canvas, large path counts, raster export"},
     "aftereffects": {"timeout": 1500, "script": "aftereffects.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "CUDA/OptiX effects, 3D layers, 16-bit float, 4K render, particle effects"},
     "indesign": {"timeout": 480, "script": "indesign.ps1", "gpu": (), "lane": "discovery", "path": "D3D11/Direct2D page rendering, PDF/JPEG export"},
-    "illustratorsample": {"timeout": 480, "script": "illustrator_sample.ps1", "gpu": (), "lane": "gate", "path": "D3D11 canvas on shipped art"},
+    "illustratorsample": {"timeout": 480, "script": "illustrator_sample.ps1", "gpu": (), "lane": "discovery", "path": "D3D11 canvas on shipped art"},
     "indesignsample": {"timeout": 480, "script": "indesign_sample.ps1", "gpu": (), "lane": "discovery", "path": "D3D11/Direct2D on shipped documents"},
     "animatesample": {"timeout": 420, "script": "animate_sample.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/D3D11 stage on a shipped document", "disabled": 'same as animate (JSFL entry)'},
     "photoshopsample": {"timeout": 900, "script": "photoshop_sample.ps1", "gpu": ("gpu",), "lane": "discovery", "path": "GPU filters on shipped 4K+ photo, 3840x2160 template"},
