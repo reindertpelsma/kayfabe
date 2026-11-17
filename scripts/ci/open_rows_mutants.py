@@ -169,6 +169,8 @@ MUTANTS = [
       K("DcgmRowEndToEnd.a_refused_field_does_not_hide_the_fields_beside_it", "DcgmRowEndToEnd.a_refused_field_gets_its_own_not_supported_row")),
     M("text-fields-recorded-as-na", "nvml", '            rows.append(row_line("dcgm", tag, "-", "OK", real[-1]))', '            rows.append(row_line("dcgm", tag, "-", "NA", "N/A"))',
       K("DcgmParsers.a_text_field_is_kept_as_text", "DcgmParsers.dmon_values_and_na")),
+    M("diag-warning-kept-as-json", "nvml", '                            info = " | ".join(x.get("warning", json.dumps(x)) if isinstance(x, dict) else str(x) for x in info)', '                            info = json.dumps(info)',
+      K("DcgmParsers.a_diag_warning_is_read_as_its_message", "DcgmParsers.diag_json_both_layouts")),
     M("skip-reason-not-read-from-nvvs", "nvml", "            out[m[1]] = m[2][:160]", "            pass",
       K("DcgmParsers.the_skip_reason_comes_from_nvvs_log", "DcgmParsers.diag_rows_carry_the_skip_reason")),
     M("skipped-diagnostics-count-as-gpu-work", "nvml", 'status.strip().upper() in ("PASS", "FAIL", "WARN") for cat', 'status.strip().upper() in ("PASS", "FAIL", "WARN", "SKIP") for cat',

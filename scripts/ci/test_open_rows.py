@@ -840,9 +840,17 @@ class DcgmParsers(unittest.TestCase):
     def test_dmon_ignores_other_gpus(self):
         self.assertEqual(N.parse_dcgm_dmon("GPU 1 99\nGPU 0 5\n", ["A"]), {"A": ["5"]})
 
+    def test_a_diag_warning_is_read_as_its_message(self):
+        doc = {"DCGM Diagnostic": {"test_categories": [{"category": "Deployment", "tests": [{"name": "software", "results": [{"entity_id": 0, "status": "Fail", "warnings": [
+            {"error_category": 8, "error_id": 29, "error_severity": 5, "warning": "Persistence Mode: Persistence mode for GPU 0 is disabled."}]}]}]}]}}
+        # the software diagnostic of a native run on a VM whose persistence mode was off (traces/open_rows_ffdcgm_20261117)
+        tests = N.parse_diag_json(json.dumps(doc))
+        self.assertEqual(tests[0][3:], ("Fail", "Persistence Mode: Persistence mode for GPU 0 is disabled."))
+
     def test_diag_json_both_layouts(self):
         t4 = N.parse_diag_json(DIAG_V4)
         self.assertEqual([(c, n, s) for c, n, g, s, i in t4], [("Deployment", "software", "Pass"), ("Hardware", "memory", "Skip"), ("Hardware", "pcie", "Fail")])
+        self.assertEqual((t4[1][4], t4[2][4]), ("not supported on this GPU", "x"))  # a result's `info`, and a `warnings` list read as its messages
         t3 = N.parse_diag_json("log line before\n" + DIAG_V3)
         self.assertEqual(t3[0][3], "Pass")
         self.assertEqual(t3[0][2], "0")

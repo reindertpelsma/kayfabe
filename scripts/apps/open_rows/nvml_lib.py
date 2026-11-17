@@ -362,8 +362,10 @@ def parse_diag_json(text):
                     if isinstance(r, dict) and "status" in r:
                         gpu = r.get("gpu_id", r.get("entity_id", "-"))
                         info = r.get("info", r.get("warnings", ""))
-                        if isinstance(info, (list, dict)):
-                            info = json.dumps(info)[:160]
+                        if isinstance(info, list):  # DCGM warnings: [{"error_id": 29, "warning": "Persistence Mode: ..."}]
+                            info = " | ".join(x.get("warning", json.dumps(x)) if isinstance(x, dict) else str(x) for x in info)
+                        elif isinstance(info, dict):
+                            info = json.dumps(info)
                         out.append((category, str(node["name"]), str(gpu), str(r["status"]), str(info)[:160]))
                 return
             cat = node.get("category", category)
