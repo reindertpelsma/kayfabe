@@ -1,0 +1,115 @@
+# TEMPLATE for the PRIVATE companion repository. It is not a workflow of this public repository
+# (it lives outside .github/workflows) and nothing here runs it. Copy it to the private repo's
+# .github/workflows/ and set, in the private repo:
+#   environment "gpu-vast" (optionally with required reviewers) holding the secrets
+#     VAST_API_KEY    key of a DEDICATED, low-balance Vast account (the only spend risk)
+#     VAST_SSH_KEY    private half of the SSH key registered on that Vast account
+#     PUBLIC_STATUS_TOKEN  optional fine-grained token, statuses:write on the public repo only
+#   variables PUBLIC_REPO (owner/name), RUNNER_PIN (a reviewed 40-hex commit of the public repo
+#   that holds scripts/ci/vast_simple), REQUIRED_CHECK (name of the GPU-free job that must have
+#   passed on the tested SHA).
+# The tested SHA is a STRING here. It is never checked out in this repository, because run.py
+# runs with the Vast key: only the pinned, reviewed RUNNER_PIN commit may supply code.
+name: Vast GPU (simple)
+on:
+  workflow_dispatch:
+    inputs:
+      sha: {description: "tested commit (40 hex)", required: true}
+      profile: {description: "check or sweep", default: check}
+  repository_dispatch:
+    types: [kayfabe-gpu]
+  schedule:
+    - cron: "17 3 * * 1"   # weekly sweep of master
+    - cron: "*/30 * * * *" # reaper
+permissions: {}
+concurrency: {group: vast-simple, cancel-in-progress: false}
+defaults:
+  run:
+    shell: bash --noprofile --norc -eo pipefail {0}
+jobs:
+  gpu:
+    if: github.event_name != 'schedule' || github.event.schedule == '17 3 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+    environment: gpu-vast
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLIC_REPO: ${{ vars.PUBLIC_REPO }}
+      REQUIRED_CHECK: ${{ vars.REQUIRED_CHECK }}
+    steps:
+      - name: Validate the tested SHA (already green on public GPU-free CI, on master)
+        id: target
+        env:
+          IN_SHA: ${{ inputs.sha || github.event.client_payload.sha }}
+          IN_PROFILE: ${{ inputs.profile || github.event.client_payload.profile || (github.event_name == 'schedule' && 'sweep') || 'check' }}
+        run: |
+          sha=${IN_SHA:-$(gh api "repos/$PUBLIC_REPO/commits/master" --jq .sha)}
+          [[ "$sha" =~ ^[0-9a-f]{40}$ && "$IN_PROFILE" =~ ^(check|sweep)$ ]]
+          status=$(gh api "repos/$PUBLIC_REPO/compare/master...$sha" --jq .status)
+          [[ "$status" = identical || "$status" = behind ]]
+          gh api "repos/$PUBLIC_REPO/commits/$sha/check-runs" \
+            --jq "[.check_runs[]|select(.name==env.REQUIRED_CHECK)|.conclusion]|index(\"success\")" \
+            | grep -qx '[0-9]*'
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+          echo "profile=$IN_PROFILE" >>"$GITHUB_OUTPUT"
+      - name: Fetch the pinned runner code (not the tested commit)
+        uses: actions/checkout@v4 # pin to a full commit SHA in the private repo
+        with:
+          repository: ${{ vars.PUBLIC_REPO }}
+          ref: ${{ vars.RUNNER_PIN }}
+          path: runner
+          sparse-checkout: |
+            scripts/ci/vast_simple
+            ci/vast-broker/defaults.json
+          persist-credentials: false
+      - name: Run
+        id: run
+        env:
+          VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+          VAST_SSH_KEY: ${{ secrets.VAST_SSH_KEY }}
+          SHA: ${{ steps.target.outputs.sha }}
+          PROFILE: ${{ steps.target.outputs.profile }}
+        run: |
+          install -m 600 /dev/null "$RUNNER_TEMP/vast_key"
+          printf '%s\n' "$VAST_SSH_KEY" >"$RUNNER_TEMP/vast_key"
+          code=0
+          python3 -I runner/scripts/ci/vast_simple/run.py --sha "$SHA" --profile "$PROFILE" \
+            --repo "$PUBLIC_REPO" --ssh-key "$RUNNER_TEMP/vast_key" \
+            --defaults runner/ci/vast-broker/defaults.json --out "$RUNNER_TEMP/out" || code=$?
+          rm -f "$RUNNER_TEMP/vast_key"
+          echo "code=$code" >>"$GITHUB_OUTPUT"
+          exit "$code"
+      - uses: actions/upload-artifact@v4 # pin in the private repo
+        if: always()
+        with: {name: vast-simple-out, path: "${{ runner.temp }}/out", if-no-files-found: ignore}
+      - name: Report a commit status on the public repository (optional)
+        if: always() && steps.run.outputs.code != ''
+        env:
+          TOKEN: ${{ secrets.PUBLIC_STATUS_TOKEN }}
+          CODE: ${{ steps.run.outputs.code }}
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          [ -n "$TOKEN" ] || exit 0
+          state=failure; [ "$CODE" = 0 ] && state=success; [ "$CODE" = 2 ] && state=error
+          curl --silent --show-error --fail --max-time 20 -X POST \
+            -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github+json' \
+            -d "{\"state\":\"$state\",\"context\":\"gpu-vast-simple\"}" \
+            "https://api.github.com/repos/$PUBLIC_REPO/statuses/$SHA" >/dev/null
+  reaper:
+    if: github.event_name == 'schedule' && github.event.schedule == '*/30 * * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: gpu-vast
+    steps:
+      - uses: actions/checkout@v4 # pin to a full commit SHA in the private repo
+        with:
+          repository: ${{ vars.PUBLIC_REPO }}
+          ref: ${{ vars.RUNNER_PIN }}
+          path: runner
+          sparse-checkout: |
+            scripts/ci/vast_simple
+            ci/vast-broker/defaults.json
+          persist-credentials: false
+      - env:
+          VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+        run: python3 -I runner/scripts/ci/vast_simple/reaper.py --defaults runner/ci/vast-broker/defaults.json
