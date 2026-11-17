@@ -20,6 +20,8 @@ COPY = [
     "scripts/apps/run_apps.sh", "scripts/apps/apps_matrix.sh", "scripts/apps/apps_hook.sh", "scripts/apps/matrix_table.py",
     "scripts/apps/known_unsupported.json", "scripts/apps/gate_list.txt", "scripts/apps/gate_list_middle.txt", "scripts/apps/expected_rows.txt",
     "scripts/bench/windows/gpu_assert.py",
+    # read at import time by test_vkcts.RealOutputTests: without them the unmutated baseline dies with FileNotFoundError
+    "scripts/ci/fixtures/vkcts_real_qpa.txt", "scripts/ci/fixtures/vkcts_real_console.txt",
 ]
 LIB, TOOL = "scripts/apps/vkcts/vkcts_lib.py", "scripts/apps/vkcts/vkcts.py"
 RUNAPPS, TABLE = "scripts/apps/run_apps.sh", "scripts/apps/matrix_table.py"
