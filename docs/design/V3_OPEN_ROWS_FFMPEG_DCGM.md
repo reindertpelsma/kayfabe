@@ -1,6 +1,6 @@
 # V3 open rows: the FFmpeg NVENC/NVDEC capability matrix and the DCGM + NVML sweep
 
-**STATUS: LIVE, 2026-11-17 (code and GPU-free tests; native results from two Vast container boxes are in section 10; NOT run in a kayfabe guest. Every sentence tagged [inferred] or [not measured] is a hypothesis with a falsifier in section 11).** Owner ruling 2026-11-17 (binding): go OPEN FIRST; an open row works for a standalone third party who trusts git only, from the repository alone, fully automated: no private R2 object, no account, no secret, no licence. A Worker may keep a cache, but nothing in this change reads one.
+**STATUS: LIVE, 2026-11-17 (code and GPU-free tests; native results from two Vast container boxes are in section 10; the FIRST kayfabe guest run (RTX 3090, kf3 `04613288`, same day) is in section 13. Every sentence tagged [inferred] or [not measured] is a hypothesis with a falsifier in section 11).** Owner ruling 2026-11-17 (binding): go OPEN FIRST; an open row works for a standalone third party who trusts git only, from the repository alone, fully automated: no private R2 object, no account, no secret, no licence. A Worker may keep a cache, but nothing in this change reads one.
 
 Labels: **[read]** a file or page read, **[run: <directory>]** a logged run (its directory is named), **[inferred]** my reading, not tested.
 
@@ -164,8 +164,25 @@ For the guest run (not done); a result that contradicts one of these says kayfab
 
 ## 12. Not done
 
-- No kayfabe guest has run either row; the tolerances of `nvml_field_classes.tsv` and every guest expectation are [inferred].
+- (Folded 2026-11-17, section 13: both rows have now run once in a kayfabe guest, on one die, one driver.) The tolerances of `nvml_field_classes.tsv` were never exercised on a live value that moved; every guest expectation not named in section 13 is still [inferred].
 - DCGM under the Worker is NOT_RUN by decision (section 3); its bandwidth is therefore not counted for the Worker.
 - `dcgm_root.tar` is 2.0 GB uncompressed for the cuda12 flavour [run: traces/open_rows_ffdcgm_20261117/vm_rtx3060_ga104_driver_575.51.03/bundle_tar_facts.txt]; what it adds to `bundle.tgz` is not measured.
 - No R2 cache of any fetched artifact exists in this change; if one is added it must be optional, and a value the user passes is trusted as given (owner addendum 2026-11-17).
 - Hopper and Blackwell codec tables are not asserted: the matrix derives them; the video-engine document says they were not measured on hardware.
+
+## 13. First guest data (2026-11-17, RTX 3090 GA102, Vast KVM box, host and guest driver 580.159.04, kf3 `04613288`, Ubuntu 22.04 host with ffmpeg 4.4.2, guest ffmpeg a different build)
+
+Evidence: `traces/open_rows_guest_20261117/` (runs R1, R1c, R1p). Commands: the ones of section 8 (`apps_matrix.sh host|guest RUN nvcodec_matrix nvml_dcgm`, `APPS_APP_TMO=3600`, one app per boot), plus `KF_GUEST_IMG` = the apps image, plus a second host run (R1c, the control) and a persistence-mode run (R1p: host `nvidia-smi -pm 1`, guest `APPS_GUEST_PM=1`).
+
+| | host (R1, control R1c identical) | guest (R1) |
+|---|---|---|
+| `nvcodec_matrix` | pass 35, not_supported 7, fail 0, mismatch 0, not_run 5 (AV1 encode: `unknown_encoder`), 143 s, `gpu_use=PROVEN` | pass 31, not_supported 16, fail 0, mismatch 0, not_run 0, 245 s, `host_gpu_use=PROVEN` (encoder 100 percent in 28 samples) |
+| compare | host against host: 47 of 47 agree, 0 capdiffs (noise floor zero) | 38 agree, 9 disagree, 4 candidates, 1 capdiff |
+| `nvml_dcgm` | nvml_fields_ok 57, queries 63/74, smi 647/734, dcgm_fields 159/768 | NVML compare: 132 `FINDING_NA_IN_GUEST`, DCGM 74; host against host: 0 |
+
+- **The 4 candidates (`sess_h264_n04`, `n05`, `n06`, `n08`) and the capdiff `sessions.opened host=8 guest=3`: bucket 1**, documented: `kf-qemu encquota::ENC_SESSIONS_PER_VM = 3` (security review S1-42, a design choice in the source comment). Every other probe line (all cap ids of three codecs, every decoder row) is equal. `nvcodec_known_limits.tsv` now says so (it was pinned empty); up to the cap (n01 to n03) guest and host agree.
+- **The 5 `enc_av1_*` DISAGREE (host NOT_RUN, guest NOT_SUPPORTED): bucket 3**, our configuration: the host's ffmpeg (Ubuntu 22.04, 4.4.2) has no `av1_nvenc`, the guest's ffmpeg (a different build, sha in the summary header) has one and the attempt fails; both probes say the die has no AV1 encode. The AV1-encode die hole of section 10 is NOT closed (no Ada die in this run).
+- **NVML and DCGM findings, 132 and 74: bucket 1 once read against `V3_UTILIZATION_FLAG.md` section 10**, and now MEASURED: clocks (graphics, memory, SM, video, max), power (usage, limits, constraints, energy), temperature and thresholds, fan, perf state, throttle reasons and clock-event counters, PCIe throughput, replay counter and link width, and the `utilization.*` columns are `NOT_SUPPORTED` or `[N/A]` in the guest although the host serves them. The question of section 5, "whether the guest's NVML gets them another way", is answered: it does not. The table `nvml_expected_not_supported.tsv` deliberately does not list them yet; that is the owner's decision (listing them turns the row quiet, and they are the cheapest next telemetry to serve).
+- **DCGM diag (H4 held): bucket 3.** With persistence mode off, `Deployment/software` FAILS on the host as well as in the guest (`dcgmi diag` rc 226 after 1 to 2 s); with it on (R1p), it PASSES on both. The other seven level-3 tests are `SKIP` on both sides on this GeForce (no profiling), so the diagnostic does not work the GPU here and its guest-versus-host comparison is a statement about the harness only.
+- **kf3 census (H7 not held).** In the row window the guest saw 4193 (nvcodec) and 1083 / 793 (nvml_dcgm) unserviced GSP RPCs, all `fn76` (GSP_RM_CONTROL, answered `0x56` not-supported by kf3); the top commands in the cumulative `gsp_refusals[...]` of the last status line of the nvcodec row (4282 in all, 49 of them before the row) are `0x20802087` (1830), `0x20802a12` (1616), `0x20808165` (303, the NVENC session accounting control of `V3_FEATURE_GAPS.md` L13) and `0x20810108` (86). The applications survived all of them (no row failed). 0 refused, guest Xid 0 and host Xid 0 in these rows. The kf3 log slices of two simple rows run the same day (`nvidia_smi`, `vectorAdd`, apps-stage smoke test) hold 33 and 36 `UNSERVICED` lines in all, so the open rows are one to two orders of magnitude noisier: the census belongs in the row line, as `apps_hook.sh` prints it.
+
