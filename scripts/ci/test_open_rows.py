@@ -1643,6 +1643,19 @@ class StaticContracts(unittest.TestCase):
         self.assertEqual(keys, {"OPENROWS_NVCH_URL", "OPENROWS_NVCH_TAG", "OPENROWS_NVCH_COMMIT", "OPENROWS_NVIDIA_REPO_BASE", "OPENROWS_NVIDIA_KEY_FILE",
                                 "OPENROWS_DCGM_VERSION", "OPENROWS_DCGM_PACKAGE_STEMS"})
 
+    def test_provision_waits_for_a_busy_package_manager_before_every_apt_call(self):
+        text = (OR / "provision.sh").read_text()
+        self.assertIn("unattended-upgr", text)  # a fresh Ubuntu machine holds the dpkg lock for a while (it cost a native run its DCGM step)
+        self.assertEqual(len(re.findall(r"wait_apt; apt-get ", text)), 2)  # the DCGM update and the DCGM install
+        self.assertEqual(len(re.findall(r"\bwait_apt\b", text)), 4)  # its definition, the helper's install and those two
+
+    def test_the_dcgm_install_itself_waits_for_the_lock(self):
+        self.assertRegex((OR / "provision.sh").read_text(), r"wait_apt; apt-get [^\n]* install -y")
+
+    def test_the_helper_install_waits_for_the_lock_too(self):
+        text = (OR / "provision.sh").read_text()
+        self.assertRegex(text, r"apt_install\(\) \{\n  wait_apt\n")
+
     def test_provision_never_trusts_an_unsigned_repository(self):
         text = (OR / "provision.sh").read_text()
         for bad in ("trusted=yes", "allow-insecure", "--allow-unauthenticated", "AllowUnauthenticated"):
