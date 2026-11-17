@@ -6,7 +6,7 @@ STATUS: LIVE as a one-off harness, 2026-11-17 (its first run is traces/matlab_gp
 
   matlab_gpu_box.py fetch  --url-file F [--work W]      download the image (presigned GET from F: {"url","size","sha256"}, mode 0600; the
                                                         URL is never printed), verify size and sha256, unpack, lay out the run dir W/img
-  matlab_gpu_box.py driver --version V [--work W]       NVIDIA public CDN .run + sha256sum.txt of the same directory; verify; record Last-Modified
+  matlab_gpu_box.py driver --version V [--work W]       NVIDIA public CDN .run + per-file .sha256sum; verify; record Last-Modified
   matlab_gpu_box.py boot   --qemu Q --version V [--work W]   propimage_linux.py run --keep --gpu kf3 (offline clone, recorded clock)
   matlab_gpu_box.py install --version V [--work W]      propimage_linux.py install-driver (the .run is staged into the offline guest)
   matlab_gpu_box.py guest  [--timeout S] -- CMD...       one command in the guest over ssh; stdout and stderr to this stdout
@@ -129,9 +129,9 @@ def cmd_driver(a):
     for base in CDN:
         base = base.format(v=v)
         try:
-            sums = urllib.request.urlopen(base + "/sha256sum.txt", timeout=60).read().decode()
+            sums = urllib.request.urlopen("%s/%s.sha256sum" % (base, name), timeout=60).read().decode()  # NVIDIA's own per-file checksum
         except Exception as e:  # noqa: BLE001
-            say("sha256sum.txt at %s: %s" % (base, type(e).__name__))
+            say("%s.sha256sum at %s: %s" % (name, base, type(e).__name__))
             continue
         want = [l.split()[0] for l in sums.splitlines() if l.strip().endswith(name)]
         if len(want) != 1:
@@ -144,7 +144,7 @@ def cmd_driver(a):
         else:
             lm = urllib.request.urlopen(urllib.request.Request(base + "/" + name, method="HEAD"), timeout=60).headers.get("Last-Modified")
         got = sha256_file(run)
-        say("DRIVER %s sha256=%s want=%s %s last_modified=%s source=%s" % (name, got, want[0], "OK" if got == want[0] else "MISMATCH", lm, base))
+        say("DRIVER %s sha256=%s nvidia_checksum=%s %s last_modified=%s source=%s" % (name, got, want[0], "OK" if got == want[0] else "MISMATCH", lm, base))
         if got != want[0]:
             return 1
         import email.utils
