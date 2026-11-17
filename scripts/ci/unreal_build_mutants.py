@@ -39,7 +39,7 @@ CASES = [
          "test_recipe_rev_follows_the_recipe_contents", "test_key_changes_with_a_recipe_field_that_is_not_a_flag"),
     case("key-ignores-target", "ue_lib", '"target": dict(r["target"]),', '"target": {},',
          "test_key_names_the_target_platform", "test_key_inputs_name_the_commit_the_engine_version_and_the_recipe"),
-    case("key-ignores-engine-version", "ue_lib", '"engine": {k: version[k] for k in ("major", "minor", "patch", "branch", "compatible_changelist", "is_promoted")},', '"engine": {},',
+    case("key-ignores-engine-version", "ue_lib", '"engine": {k: version[k] for k in ("major", "minor", "branch", "compatible_changelist", "is_promoted", "patch")},', '"engine": {},',
          "test_key_changes_with_the_engine_version", "test_key_inputs_name_the_commit_the_engine_version_and_the_recipe"),
     case("key-ignores-deps-digest", "ue_lib", '"deps_manifest_sha256": deps_digest,', '"deps_manifest_sha256": None,',
          "test_key_changes_with_the_dependency_manifest", "test_key_inputs_name_the_commit_the_engine_version_and_the_recipe"),

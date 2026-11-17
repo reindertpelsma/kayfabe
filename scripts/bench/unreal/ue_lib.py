@@ -281,7 +281,7 @@ def key_inputs(identity, version, toolchain, deps_digest, recipe=None):
         "schema": KEY_SCHEMA,
         "source": {"kind": identity["kind"], "id": identity["id"], "dirty_digest": identity["dirty_digest"]},
         "deps_manifest_sha256": deps_digest,
-        "engine": {k: version[k] for k in ("major", "minor", "patch", "branch", "compatible_changelist", "is_promoted")},
+        "engine": {k: version[k] for k in ("major", "minor", "branch", "compatible_changelist", "is_promoted", "patch")},
         "recipe_rev": recipe_rev(r),
         "toolchain": dict(toolchain),
         "target": dict(r["target"]),
