@@ -2272,7 +2272,7 @@
    "rx": "tg64",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
-    "out:CUDA|NVIDIA",
+    "out:\\| CUDA +\\| +[1-9][0-9]* \\|",
     "pdh:Cuda|Compute|3D|Copy"
    ],
    "difficulty": "high",
@@ -2310,7 +2310,7 @@
    "rx": "^OUTSHA llama_cpp ",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
-    "out:Device 0: NVIDIA|offloaded [0-9]+/[0-9]+ layers to GPU|CUDA0: NVIDIA",
+    "out:offloaded ([1-9][0-9]*)/\\1 layers to GPU",
     "pdh:Cuda|Compute|3D|Copy"
    ],
    "difficulty": "high",
@@ -2387,7 +2387,7 @@
    "rx": "tg64",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
-    "out:Vulkan|NVIDIA",
+    "out:ggml_vulkan: [0-9]+ = NVIDIA",
     "pdh:Cuda|Compute|3D|Copy"
    ],
    "difficulty": "high",

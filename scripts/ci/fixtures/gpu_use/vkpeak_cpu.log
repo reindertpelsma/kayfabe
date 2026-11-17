@@ -1,0 +1,5 @@
+=== vkpeak side=guest start=2026-11-17T00:00:00+00:00 host=fixture cmd: <the row's command line>
+device       = llvmpipe (LLVM 15.0.7, 256 bits)
+
+fp32-scalar  = 31.20 GFLOPS
+=== end rc=0 secs=3 2026-11-17T00:00:03+00:00

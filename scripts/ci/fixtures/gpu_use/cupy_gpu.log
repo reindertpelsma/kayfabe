@@ -1,0 +1,3 @@
+CHECK cupy_matmul ok
+GPU_USE_PROOF cupy device=cuda:0 name=NVIDIA GeForce RTX 4090 peak_mib=96
+CUPY_DONE

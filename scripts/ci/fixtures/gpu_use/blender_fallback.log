@@ -1,0 +1,5 @@
+=== blender_cycles side=guest start=2026-11-17T00:00:00+00:00 host=fixture cmd: <the row's command line>
+BLENDER_DEVICES dev=CUDA scene=GPU active=False cpu_enabled=True enabled=1 names=AMD EPYC 7B13 64-Core Processor
+Warning: CUDA error: no CUDA-capable device is detected, falling back to CPU
+BLENDER_OK CUDA gpu=AMD EPYC 7B13 64-Core Processor mean=0.6405
+=== end rc=0 secs=3 2026-11-17T00:00:03+00:00
