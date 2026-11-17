@@ -1,6 +1,6 @@
 // The Worker's knowledge of the proprietary Windows images (docs/design/V3_WORKER_PROPIMAGES.md).
-// STATUS: DESIGN-ONLY, 2026-11-16. Nothing in src/index.js imports this file: it is pure, tested, and not wired into any
-// rental. The deployed Worker is unchanged. Owner decision 2026-11-16: the Worker knows image A and image B from
+// STATUS: DESIGN-ONLY, 2026-11-17. Pure and tested. src/index.js does not import this file; src/legs.js does, and runs only behind
+// PROPIMAGES_ENABLED (default off), so no rental changes until the owner switches it on. The deployed Worker is unchanged. Owner decision 2026-11-16: the Worker knows image A and image B from
 // configuration (propimages.json), with the applications on them, and builds the instruction from it; the Worker/CI run is
 // STRICT (everything in the configuration must run, zero skips); an application is in the gate lane (must pass) or the
 // discovery lane (may fail; the failure is a listed finding), and standalone runs take the same instruction shape.

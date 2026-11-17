@@ -49,6 +49,7 @@ export const BOOLEAN_VARS = Object.freeze([
   'ALLOW_UNKNOWN_COUNTRY',
   'TREE_KEY_CARRY_OVER',
   'MIDDLE_APPS_ENABLED',
+  'PROPIMAGES_ENABLED',
 ]);
 // The deployment's identity: without these no request can be authorized. A configuration error in
 // any other (policy) var must not stop the cron's teardown, which then runs on these vars and the
@@ -178,6 +179,8 @@ export function configuration(env) {
     deniedCountries,
     // Edits3 C: unknown or unparseable geolocation is rejected unless the owner opts in.
     middleAppsEnabled: env.MIDDLE_APPS_ENABLED !== 'false',
+    // default OFF: a release leg builds and stores a payload instruction (src/legs.js) only when the owner sets this to 'true'
+    propimagesEnabled: env.PROPIMAGES_ENABLED === 'true',
     allowUnknownCountry: env.ALLOW_UNKNOWN_COUNTRY === 'true',
     maxInet: number('MAX_INET_USD_PER_GB', DEFAULTS.payloadProfiles.small.maxInetUsdPerGb, 1),
     repositoryId: env.REPOSITORY_GITHUB_ID,
@@ -606,10 +609,48 @@ export function resourceCaps(cfg, profile = cfg.profile ?? 'check', tierName = c
     )
       refuse('CONFIG_RESOURCE_PROFILE', 503);
   if (profile === 'release') validateStagePolicy(cfg.releaseStages ?? []);
+  // The instruction-derived estimate (src/bandwidth.js, `cfg.bandwidthEstimate = {downGb, upGb}`) REPLACES the profile number when
+  // it is present and valid (a finite number above zero), so it can lower a leg's allowance as well as raise it; it is capped at
+  // the profile's hard maximum (defaults.json payloadBandwidthMax, which may not be below the profile row). An invalid estimate
+  // is ignored: the profile number stays. The owner's BANDWIDTH_*_GB override still only raises (max) what the estimate gave.
+  let down = base.bandwidthDownGb,
+    up = base.bandwidthUpGb,
+    estimate;
+  const given = cfg.bandwidthEstimate;
+  if (given !== undefined) {
+    const top = DEFAULTS.payloadBandwidthMax?.[name];
+    if (
+      !top ||
+      !finite(top.downGb, 10000) ||
+      !finite(top.upGb, 10000) ||
+      top.downGb < base.bandwidthDownGb ||
+      top.upGb < base.bandwidthUpGb
+    )
+      refuse('CONFIG_RESOURCE_PROFILE', 503);
+    const usable = (n) => typeof n === 'number' && Number.isFinite(n) && n > 0;
+    const pick = (n, max) => (usable(n) ? Math.min(Math.ceil(n), max) : undefined);
+    const d = pick(given?.downGb, top.downGb),
+      u = pick(given?.upGb, top.upGb);
+    if (d !== undefined) down = d;
+    if (u !== undefined) up = u;
+    estimate = {
+      downGb: down,
+      upGb: up,
+      source: [
+        d !== undefined ? 'down:estimate' : 'down:profile',
+        u !== undefined ? 'up:estimate' : 'up:profile',
+      ],
+      capped: [
+        usable(given?.downGb) && Math.ceil(given.downGb) > top.downGb,
+        usable(given?.upGb) && Math.ceil(given.upGb) > top.upGb,
+      ],
+    };
+  }
   return {
     ...base,
-    bandwidthDownGb: Math.max(base.bandwidthDownGb, cfg.bandwidthDownOverride ?? 0),
-    bandwidthUpGb: Math.max(base.bandwidthUpGb, cfg.bandwidthUpOverride ?? 0),
+    bandwidthDownGb: Math.max(down, cfg.bandwidthDownOverride ?? 0),
+    bandwidthUpGb: Math.max(up, cfg.bandwidthUpOverride ?? 0),
+    ...(estimate === undefined ? {} : { estimate }),
     maxInetUsdPerGb: Math.min(base.maxInetUsdPerGb, cfg.maxInetOverride ?? base.maxInetUsdPerGb),
   };
 }
