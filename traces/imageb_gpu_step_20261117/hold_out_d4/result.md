@@ -1,3 +1,4 @@
+Run 2026-11-17, image B gpu-step diagnostic boot hold_out_d4 (Vast box, kf3), harness result table:
 | step | verdict | evidence | class | detail |
 |---|---|---|---|---|
 | prerequisite | PASS | NONE | harness | swtpm >= 0.10 (libtpms state compatibility still required) |
