@@ -1015,6 +1015,19 @@ pub static HOST_CONTROLS: &[HostControl] = &[
             size: crate::gssreplay::ENC_SESSION_PARAMS_SIZE,
         },
     },
+    // ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`, device property `report-utilization`): the ONE
+    // unprivileged host read behind the guest's utilisation numbers, `NV2080_CTRL_CMD_PERF_GET_GPUMON_PERFMON_UTIL_
+    // SAMPLES_V2` (flags 0x50008, NON_PRIVILEGED). Id and size come from the generated utilisation table, never
+    // from here; valid in the encoded interval and at the listed tags whose probed row prints the same size.
+    HostControl {
+        name: "",
+        cmd: crate::utilization::GPUMON_CMD,
+        params: HostParams::MeasuredOpaque {
+            source: "derived: ogkm ctrl2080perf.h compiled by tools/util-probe/generate.py; traces/util_layout_20261117",
+            versions: crate::utilization::HOST_TAGS_BEYOND_580,
+            size: crate::utilization::HOST_PARAMS_SIZE,
+        },
+    },
 ];
 
 /// The row for `cmd`, if kayfabe issues it to a host.

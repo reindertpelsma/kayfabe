@@ -88,6 +88,7 @@ fn chain(log: &kf_rm::unserviced::UnservicedLog) -> Box<dyn CommandPolicy> {
         display: Some((&kf_chip::display::AMPERE).into()),
         console: None,
         windows: Default::default(),
+        utilization: None,
     };
     kf_rm::served_policy(
         ga106::board(),

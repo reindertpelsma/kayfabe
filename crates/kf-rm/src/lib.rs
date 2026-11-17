@@ -50,6 +50,7 @@ pub mod sw_runlist_probe;
 pub mod sweep;
 pub mod sysmembar;
 pub mod unserviced;
+pub mod utilization;
 pub mod vfguest;
 pub mod winprofile;
 pub mod zbc;
@@ -168,6 +169,11 @@ pub struct ObjectLinks {
     /// measured Windows build at fn 1, and by no other. Shared by `Clone`, so the device's display and
     /// memory planes read the same declaration the chain records.
     pub windows: winprofile::WindowsProfile,
+    /// ★ 2026-11-17 (`docs/design/V3_UTILIZATION_FLAG.md`, OWNER_RULINGS §AV): the `report-utilization` device
+    /// property. `Some` seats [`utilization::UtilizationPolicy`], which answers the GPU-utilisation controls from
+    /// a cache of one fixed host read; `None` (the property off, and the `Default`) seats nothing, so those
+    /// controls reach the ledger and are refused, exactly as before the feature existed.
+    pub utilization: Option<utilization::UtilizationSeat>,
 }
 
 /// ★ The display seat: the chip's display row, and — when a display PLANE consumes the model (the
@@ -228,6 +234,7 @@ impl core::fmt::Debug for ObjectLinks {
                 &self.console.as_ref().map(|c| (c.bar1_bytes, c.boot_fb)),
             )
             .field("windows_support", &self.windows.support())
+            .field("utilization", &self.utilization.is_some())
             .finish()
     }
 }
@@ -500,6 +507,7 @@ pub fn served_chain(
         display,
         console,
         windows,
+        utilization,
     } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
         .with_engine_caps(authored::engine_caps(&host.engines))
@@ -551,6 +559,14 @@ pub fn served_chain(
         chain.push(Box::new(hoststub::HostStubPolicy::new(driver)));
     }
     chain.push(Box::new(fecstrace::FecsTracePolicy::new(driver)));
+    // ★ 2026-11-17: GPU utilisation (`report-utilization`, default on): claims the GPUMON samples control and the
+    // two RUSD controls, for a guest driver version that has a generated layout row; nothing is seated with the
+    // property off. Ahead of `InitTablePolicy`/the ledger, which would refuse the three ids.
+    if let Some(seat) = &utilization
+        && let Some(link) = utilization::UtilizationPolicy::new(driver, seat)
+    {
+        chain.push(Box::new(link));
+    }
     // ★ 2026-11-15 (OWNER_RULINGS §W, reversed 2026-11-15: "set the measured Windows profile as the
     // default"; was `KF3_SW_RUNLIST_HOST_OWNED`): the software-runlist submit as host-owned
     // scheduling, option (b) — `sw_runlist_host.rs`. kf-qemu opens every kernel channel of a declared
