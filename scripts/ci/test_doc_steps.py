@@ -11,6 +11,7 @@ does not carry the doc hashes and the root steps.
 import hashlib
 import importlib.util
 import json
+import re
 import os
 from pathlib import Path
 import subprocess
@@ -1032,7 +1033,11 @@ class Budget(unittest.TestCase):
         self.assertIn("manual-only stage is in a default plan: install_flow", errors)
 
     def test_a_stage_that_is_neither_budgeted_nor_manual_only_is_refused(self):
-        errors = self.pr.validate(self.data, self.source.replace('MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "matlab": "MATLAB_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}', 'MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "matlab": "MATLAB_IN_LARGE"}'))
+        # the literal table is read from the source (not spelled here), so a stage added to it by another change does not break this test
+        table = re.search(r"^MANUAL_ONLY_STAGES = \{.*\}$", self.source, re.M)[0]
+        without = re.sub(r', "install_flow": "INSTALL_FLOW_IN_LARGE"', "", table)
+        self.assertNotEqual(table, without)
+        errors = self.pr.validate(self.data, self.source.replace(table, without))
         self.assertEqual(errors, ["unbudgeted payload stage: install_flow"])
 
     def test_a_manual_only_stage_that_also_has_a_row_is_refused(self):
@@ -1058,7 +1063,7 @@ class Budget(unittest.TestCase):
 
     def test_a_non_literal_table_is_refused(self):
         with self.assertRaises(ValueError):
-            self.pr.manual_only(self.source.replace('MANUAL_ONLY_STAGES = {"propimage_apps": "PROPIMAGE_APPS_IN_LARGE", "propimage_apps_b": "PROPIMAGE_APPS_B_IN_LARGE", "matlab": "MATLAB_IN_LARGE", "install_flow": "INSTALL_FLOW_IN_LARGE"}', "MANUAL_ONLY_STAGES = dict(a=1)"))
+            self.pr.manual_only(self.source.replace(re.search(r"^MANUAL_ONLY_STAGES = \{.*\}$", self.source, re.M)[0], "MANUAL_ONLY_STAGES = dict(a=1)"))
 
 
 def shutil_which(tool):
