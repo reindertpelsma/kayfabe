@@ -31,7 +31,11 @@ export function plannedStages(instruction, { only = [], skip = [] } = {}) {
   const names = ['provision', 'cuda_host', 'merge_bar', 'cuda_guest'];
   if (i.linux_apps !== null && i.linux_apps !== undefined) names.push('apps');
   // kfml (2026-11-17): in the default plan of the middle and the large tier; the payload's --skip kfml leaves it out; small and adhoc never plan it
-  if ((i.tier === 'middle' || i.tier === 'large') && (!skip.includes('kfml') || only.includes('kfml'))) names.push('kfml');
+  if (
+    (i.tier === 'middle' || i.tier === 'large') &&
+    (!skip.includes('kfml') || only.includes('kfml'))
+  )
+    names.push('kfml');
   if (i.tier === 'large' && only.includes('install_flow')) names.push('install_flow');
   if (i.windows) {
     names.push('windows_gate');
