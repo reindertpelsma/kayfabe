@@ -37,6 +37,11 @@ runtime are recorded in every row, PASS or not) plus the
 resolved pins: `cudnn, triton, lock_sha256` (of the lock the venv was set up from), `upstream_commits`,
 `patch_sha256`, `dataset_sha256`, and `tier, launch_bound, guest_estimate_s`.
 
+**2026-11-17 note on the bullet below (payload stage, not the runner):** the runner's exit code is unchanged (NOT_RUN does not fail `kfml run`), and the payload's default grading still counts a record with a NOT_RUN row as a pass and a
+whole-stage NOT_RUN as a skipped row. Under a STRICT payload instruction a row that did not run fails the stage by name `kfml_not_run`: MEASURED in the 2026-11-17 acceptance run, `managed_oversub` was NOT_RUN (`host RAM too small to
+oversubscribe VRAM by 25%`) and the stage still graded PASS. "Strict" means `propimages_strict`, the payload instruction's only strict switch; whether kfml deserves its own field is an OWNER decision (open). Grading: `scripts/ci/VAST_PAYLOAD.md`,
+"The kfml stage".
+
 * **PASS / FAIL / NOT_RUN.** NOT_RUN is reported only when the hardware cannot run the test (compute
   capability below/above the declared range, VRAM below the declared total, driver too old for the
   installed CUDA wheel, the documented known-unsupported probe). Software that is missing (no torch, no

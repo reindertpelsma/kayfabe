@@ -1675,10 +1675,13 @@ def start_kfml_prefetch(root, evidence, popen=subprocess.Popen):
         return None
 
 
-def kfml_rows(text, rc, sha, result):
+def kfml_rows(text, rc, sha, result, strict=False):
     """One KF_KFML_RESULT line, kept in the result file (die, driver, per-row status) even when it is red (vast_report.py validates it).
     PASS needs rc 0, verdict PASS and the right sha. verdict NOT_RUN (no pinned wheel flavour fits this box, or every test NOT_RUN for a
-    named hardware reason) with rc 0 is a skipped row, never a pass; a FAIL row, a failed step or anything else is the stage failing."""
+    named hardware reason) with rc 0 is a skipped row, never a pass; a FAIL row, a failed step or anything else is the stage failing.
+    strict (2026-11-17; the instruction's `propimages_strict`, its only strict switch): a row that did not run fails by name `kfml_not_run`,
+    whether the whole stage was NOT_RUN or one row of a PASS record was (MEASURED: managed_oversub NOT_RUN on a box with too little RAM
+    graded PASS); the record is kept first, so the evidence stays. Without strict nothing changes."""
     found = re.findall(r"^KF_KFML_RESULT (\{.*\})$", text, re.M)
     if len(found) != 1:
         raise EvidenceError("kfml")
@@ -1690,9 +1693,14 @@ def kfml_rows(text, rc, sha, result):
     if type(doc) is not dict or doc.get("sha") != sha:
         raise EvidenceError("kfml")
     if rc == 0 and doc.get("verdict") == "NOT_RUN":
+        if strict:
+            raise EvidenceError("kfml_not_run")
         return [row("kfml", skipped=1)]
     if rc or doc.get("verdict") != "PASS":
         raise EvidenceError("kfml")
+    rows = doc.get("rows")
+    if strict and type(rows) is list and any(type(r) is dict and r.get("status") == "NOT_RUN" for r in rows):
+        raise EvidenceError("kfml_not_run")
     return [row("kfml", 1)]
 
 
@@ -2046,7 +2054,8 @@ def main():
             stages.append(stage)
         if "kfml" in plan:
             # Host-native, on the GPU the earlier Linux stages have released; scripts/ci/kfml_stage.py owns setup (flavour auto), the
-            # pinned downloads, the run and the record. Its tier follows the payload tier.
+            # pinned downloads, the run and the record. Its tier follows the payload tier. A strict instruction (propimages_strict, the only strict
+            # switch the instruction has) fails a row that did not run as `kfml_not_run` (2026-11-17; whether kfml needs its own field is the owner's).
             output_kf = evidence / "kfml.run"
             stage = make_stage(
                 "kfml",
@@ -2057,7 +2066,7 @@ def main():
                 ],
                 output_kf,
                 [],
-                lambda rc, output=output_kf: kfml_rows(bounded_text(output), rc, sha, result),
+                lambda rc, output=output_kf: kfml_rows(bounded_text(output), rc, sha, result, strict=instruction.propimages_strict),
             )
             stage.update(min_remaining_ms=KFML_MIN_REMAINING_MS[tier], short_row="kfml_retry_time")
             stages.append(stage)
