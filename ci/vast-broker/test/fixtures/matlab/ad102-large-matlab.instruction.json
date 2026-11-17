@@ -2,7 +2,7 @@
   "linux_apps": "middle",
   "matlab": {
     "driver": {
-      "version": "580.173.02"
+      "version": "590.48.01"
     },
     "image": {
       "from": "pin",

@@ -203,8 +203,8 @@ class RunTests(unittest.TestCase):
         self.assertEqual([i["sources"][0]["kind"] for i in seen["manifest"]["items"]], ["signed", "mirror"])
         self.assertEqual(seen["kw"]["image_sha256"], item["sha256"])
         self.assertEqual(rec["image"], {"sha256": item["sha256"], "size": item["size"], "source": "pin", "pin_enforced": True, "ref": item["ref"]})
-        self.assertEqual(rec["driver"]["version"], "580.173.02")
-        self.assertEqual(seen["driver_sha256"], ms.driver_pin("580.173.02", ms.load_matrix())["sha256"])
+        self.assertEqual(rec["driver"]["version"], "590.48.01")
+        self.assertEqual(seen["driver_sha256"], ms.driver_pin("590.48.01", ms.load_matrix())["sha256"])
         self.assertEqual(seen["kw"]["driver_created_utc"], "2026-11-07T00:00:00Z")
         self.assertEqual(seen["rows"], [r for r in MR.ROW_ORDER if r != "gpu_info"])
         self.assertTrue(all(v == "discovery" for v in seen["lanes"].values()))
@@ -547,7 +547,7 @@ class PayloadWiringTests(unittest.TestCase):
     def test_dry_run_of_the_golden_and_of_the_flags(self):
         code, out = self.run_dry(doc=golden())
         self.assertEqual(code, 0, out)
-        self.assertIn("KF_PAYLOAD_MATLAB strict=1 rows=8 driver=580.173.02", out)
+        self.assertIn("KF_PAYLOAD_MATLAB strict=1 rows=8 driver=590.48.01", out)
         self.assertRegex(out, r"KF_PAYLOAD_PLAN stages=.*matlab planned=")
         base = golden()
         del base["matlab"]
@@ -596,7 +596,7 @@ class InstructionSchemaTests(unittest.TestCase):
 
     def test_the_golden_is_accepted_and_round_trips(self):
         i = pi.parse(self.doc())
-        self.assertEqual(i.matlab["driver"], {"version": "580.173.02"})
+        self.assertEqual(i.matlab["driver"], {"version": "590.48.01"})
         self.assertEqual(json.loads(i.canonical_bytes()), golden())
 
     def test_emit_instruction_writes_the_object_back_byte_for_byte(self):
