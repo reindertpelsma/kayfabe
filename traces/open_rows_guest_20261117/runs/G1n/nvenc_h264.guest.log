@@ -1,0 +1,19 @@
+=== nvenc_h264 side=guest start=2026-11-17T22:58:16+00:00 host=<box> cmd: ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v ${KF_ENC:-h264_nvenc} -preset p4 /opt/apps/out/guest/nvenc_h264.mp4 2>&1 | grep -v "^  " | tail -25; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 /opt/apps/out/guest/nvenc_h264.mp4 | sed 's/^/frame= /;s/$/ /'; echo "ENCODER_TAG $(ffprobe -v error -select_streams v:0 -show_entries stream_tags=encoder -of default=nw=1:nk=1 /opt/apps/out/guest/nvenc_h264.mp4)"
+Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':
+Stream mapping:
+Press [q] to stop, [?] for help
+x264 [error]: invalid preset 'p4'
+[libx264 @ 0x5c250ce759c0] Error setting preset/tune p4/(null).
+[libx264 @ 0x5c250ce759c0] Possible presets: ultrafast superfast veryfast faster fast medium slow slower veryslow placebo
+[libx264 @ 0x5c250ce759c0] Possible tunes: film animation grain stillimage psnr ssim fastdecode zerolatency
+[vost#0:0/libx264 @ 0x5c250ce755c0] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.
+Error while filtering: Invalid argument
+[out#0/mp4 @ 0x5c250ce742c0] Nothing was written into output file, because at least one of its streams received no packets.
+frame=    0 fps=0.0 q=0.0 Lsize=       0kB time=N/A bitrate=N/A speed=N/A    
+Conversion failed!
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x63ef9e13c940] moov atom not found
+/opt/apps/out/guest/nvenc_h264.mp4: Invalid data found when processing input
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x611c90b7e840] moov atom not found
+/opt/apps/out/guest/nvenc_h264.mp4: Invalid data found when processing input
+ENCODER_TAG 
+=== end rc=0 secs=0 2026-11-17T22:58:16+00:00

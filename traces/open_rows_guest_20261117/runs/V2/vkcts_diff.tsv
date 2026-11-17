@@ -1,0 +1,8 @@
+#case	area	host	guest	category
+dEQP-VK.dgc.ext.graphics.multiview.view_mask_2.no_ies_gpl.indexed_draw_buffer_tokens	dgc	Pass	DeviceLost	GUEST_ONLY_FAIL
+VKCTS_DIFF cases=3 candidates=1 same_ok=2 same_not_supported=0 both_fail=0 both_fail_different=0 guest_only_fail=1 guest_loses_support=0 guest_fail_host_ns=0 guest_gains_support=0 host_only_fail=0 host_fail_guest_not_supported=0 incomplete=0 host_digest=ad56e6a07c19bd5e guest_digest=4068656fadc1e0ee
+VKCTS_EXT_DIFF host_only=- guest_only=-
+VKCTS_GPU side=host source=host verdict=FAIL samples=11 busy_samples=0 peak_gpu_pct=0.0 mem_rise_mb=82 reasons=gpu_engine_idle:_0_sample(s)_at_or_above_3?_(need_2);_peak_0.0
+VKCTS_GPU side=guest source=host verdict=FAIL samples=39 busy_samples=11 peak_gpu_pct=12.0 mem_rise_mb=53 reasons=video_memory_did_not_rise_by_64_MiB_(baseline_8761.0,_peak_8814.0)
+VKCTS_AREA info SAME_OK=2
+VKCTS_AREA dgc GUEST_ONLY_FAIL=1

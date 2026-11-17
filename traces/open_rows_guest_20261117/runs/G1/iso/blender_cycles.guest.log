@@ -1,0 +1,8 @@
+=== blender_cycles side=guest start=2026-11-17T22:50:18+00:00 host=<box> cmd: for dev in ${KF_BLENDER_DEVS:-CUDA OPTIX}; do /opt/apps/data/blender/blender -b --factory-startup --python /opt/apps/bundle/share/blender_render.py -- $dev /opt/apps/out/guest/blender_$dev.png 2>&1 | grep -E "BLENDER_|Error|error|Fra:1 .*Finished|[Ff]alling back" | tail -6; done
+BLENDER_DEVICES dev=CUDA scene=GPU active=True cpu_enabled=False enabled=1 names=NVIDIA GeForce RTX 3090
+Fra:1 Mem:46.70M (Peak 62.53M) | Time:00:03.08 | Mem:672.59M, Peak:672.59M | Scene, ViewLayer | Finished
+BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 3090 mean=0.6405
+BLENDER_DEVICES dev=OPTIX scene=GPU active=True cpu_enabled=False enabled=1 names=NVIDIA GeForce RTX 3090
+Fra:1 Mem:45.50M (Peak 61.32M) | Time:00:03.28 | Mem:672.46M, Peak:672.46M | Scene, ViewLayer | Finished
+BLENDER_OK OPTIX gpu=NVIDIA GeForce RTX 3090 mean=0.6405
+=== end rc=0 secs=18 2026-11-17T22:50:36+00:00

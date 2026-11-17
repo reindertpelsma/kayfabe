@@ -1,0 +1,49 @@
+=== hashcat side=host start=2026-11-17T22:54:02+00:00 host=<box> cmd: hashcat --potfile-disable -O -m 0 -a 3 ${KF_HASHCAT_ARGS:-} e4726719b68b205913167f0975d977ee '?l?l?l?l?l?l' 2>&1 | tee /opt/apps/out/host/hashcat_full.txt | tail -30; grep -a -E '^(\* Device #|CUDA API|OpenCL API|HIP API)' /opt/apps/out/host/hashcat_full.txt || true
+Minimum password length supported by kernel: 0
+Maximum password length supported by kernel: 55
+
+Sorting hashes. Please be patient...[2K
+Sorted hashes[2K
+Removing duplicate hashes. Please be patient...[2K
+Removed duplicate hashes[2K
+Sorting salts. Please be patient...[2K
+Sorted salts[2K
+Generating bitmap tables...[2K
+Generated bitmap tables[2K
+Hashes: 1 digests; 1 unique digests, 1 unique salts
+Bitmaps: 16 bits, 65536 entries, 0x0000ffff mask, 262144 bytes, 5/13 rotates
+
+Optimizers applied:
+* Optimized-Kernel
+* Zero-Byte
+* Precompute-Init
+* Meet-In-The-Middle
+* Early-Skip
+* Not-Salted
+* Not-Iterated
+* Single-Hash
+* Single-Salt
+* Brute-Force
+* Raw-Hash
+
+Watchdog: Temperature abort trigger set to 90c
+
+Initializing device kernels and memory. Please be patient...[2K
+Initializing backend runtime for device #3. Please be patient...[2K
+[31mclBuildProgram(): CL_BUILD_PROGRAM_FAILURE[0m
+
+[31m* Device #3: Kernel /usr/share/hashcat/OpenCL/shared.cl build failed.[0m
+
+error: unknown target CPU 'generic'
+Device pthread-AMD EPYC 7B13 64-Core Processor failed to build the program, log: error: unknown target CPU 'generic'
+
+Started: Tue Nov 17 22:54:02 2026
+[2K
+Stopped: Tue Nov 17 22:54:03 2026
+CUDA API (CUDA 13.0)
+* Device #1: NVIDIA GeForce RTX 3090, skipped
+OpenCL API (OpenCL 3.0 CUDA 13.0.98) - Platform #1 [NVIDIA Corporation]
+* Device #2: NVIDIA GeForce RTX 3090, skipped
+OpenCL API (OpenCL 2.0 pocl 1.8  Linux, None+Asserts, RELOC, LLVM 11.1.0, SLEEF, DISTRO, POCL_DEBUG) - Platform #2 [The pocl project]
+* Device #3: pthread-AMD EPYC 7B13 64-Core Processor, 49586/99236 MB (16384 MB allocatable), 30MCU
+=== end rc=0 secs=1 2026-11-17T22:54:03+00:00

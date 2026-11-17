@@ -1,0 +1,63 @@
+{
+ "app": {
+  "device": "",
+  "facts": {},
+  "ok": false,
+  "reasons": [
+   "the stream was not encoded by h264_nvenc"
+  ]
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 0,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 0,
+  "gr_methods": 0,
+  "retired": 0,
+  "serves": 0,
+  "status_lines": 4,
+  "submissions": 0,
+  "wakes": {},
+  "xid": 0
+ },
+ "class": "a+proof",
+ "reasons": [
+  "[host-census] FAIL: host census: no GPU work in the window (submissions +0, channel births +0, doorbells +0, retired channels 0): the guest never submitted work to the GPU through kf3",
+  "[host-smi] FAIL: host engines: encoder idle: dmon enc peak 0.0, sessions 0.0 -> 0.0",
+  "[app] FAIL: the stream was not encoded by h264_nvenc"
+ ],
+ "row": "nvenc_h264",
+ "smi": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 8761.0
+  },
+  "peak": {
+   "busy_samples": 0,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "gpu_dmon_sm": 0.0,
+   "mem_mb": 8761.0
+  },
+  "reasons": [
+   "encoder idle: dmon enc peak 0.0, sessions 0.0 -> 0.0"
+  ],
+  "required": [
+   "enc"
+  ],
+  "samples": 11,
+  "source": "host",
+  "unreadable": false,
+  "verdict": "FAIL"
+ },
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "FAIL"
+}

@@ -1,0 +1,48 @@
+[    4.036591] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+[  382.245131] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  395.274971] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  397.573364] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  399.523898] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  401.505501] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  403.520284] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  420.902690] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  498.272342] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  575.624182] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  652.974022] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  730.389616] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  734.063427] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  736.061094] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  739.113990] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  741.303770] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  743.577608] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  746.221075] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  769.633229] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  780.186908] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  807.904633] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  885.209106] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[  962.523082] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1040.005005] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1117.363750] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1194.875000] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1272.232637] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1349.689546] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1427.176309] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1438.527923] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1504.633763] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1581.974622] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1659.466770] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1736.806805] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1814.265651] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1891.748242] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 1969.215864] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2046.579895] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2123.933042] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2165.014994] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2166.963113] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 2244.254487] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2257.808098] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2278.842312] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2356.175591] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2433.587626] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2647.426386] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2674.396006] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0

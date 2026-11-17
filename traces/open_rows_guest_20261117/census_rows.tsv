@@ -1,0 +1,84 @@
+run	file	side	app	verdict	secs	gpu_use	gpu_auth	gpu_subs	gpu_births	boot	guest_xid	host_gpu_use	unserviced_in_row	unserviced_ids_in_row	gsp_refusals_total	gsp_refusals_distinct	gsp_refusals_top	REFUSED_lines	gsp_refusals_delta_in_boot
+F1	host.res	host	nvenc_h264	PASS	3	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+F1	host.res	host	nvenc_hevc	PASS	3	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+F1	host.res	host	nvdec_h264	PASS	4	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+F1	host.res	host	hashcat	PASS	4	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+F1	host.res	host	blender_cycles	PASS	3	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+F1	guest.res	guest	nvenc_h264	PASS	11	PASS	host	1501	6	ap_F1_b1	0	-	-	-	101	36	fn76/0x20802a12=0x56x16;fn76/0x20800afe=0x56x6;fn76/0x20800a80=0x56x6;fn76/0x20800aff=0x56x5	11	101
+F1	guest.res	guest	nvenc_hevc	PASS	7	PASS	host	1498	6	ap_F1_b1	0	-	-	-	144	36	fn76/0x20802a12=0x56x32;fn76/0x20800afe=0x56x8;fn76/0x20800a80=0x56x8;fn76/0x20800aff=0x56x6	3	43
+F1	guest.res	guest	nvdec_h264	PASS	8	PASS	host	1192	6	ap_F1_b1	0	-	-	-	191	36	fn76/0x20802a12=0x56x52;fn76/0x20800afe=0x56x10;fn76/0x20800a80=0x56x10;fn76/0x20800aff=0x56x7	3	47
+F1	guest.res	guest	hashcat	PASS	28	PASS	host	23253	6	ap_F1_b1	0	-	-	-	256	37	fn76/0x20802a12=0x56x64;fn76/0x20808546=0x56x18;fn76/0x20800afe=0x56x12;fn76/0x20800a80=0x56x12	2	65
+F1	guest.res	guest	blender_cycles	PASS	8	PASS	host	9522	12	ap_F1_b1	0	-	-	-	330	37	fn76/0x20802a12=0x56x88;fn76/0x20808546=0x56x18;fn76/0x20800afe=0x56x16;fn76/0x20800a80=0x56x16	0	74
+G1	host.res	host	blender_cycles	PASS	5	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	llama_cpp_gen	PASS	1	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	llama_bench	PASS	1	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	torch_correct	PASS	5	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	hf_generate	PASS	5	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	cupy	PASS	2	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	nvenc_h264	FAIL	2	FAIL	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	nvenc_hevc	FAIL	3	FAIL	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	nvdec_h264	FAIL	4	FAIL	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	hashcat	PASS	15	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	clpeak	PASS	51	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	vkpeak	PASS	348	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	host.res	host	egl_offscreen	PASS	13	PASS	guest	-	-	-	-	-	-	-	-	-	-	-	-
+G1	guest.res	guest	blender_cycles	FAIL	21	FAIL	host	9512	14	ap_G1_b1	0	-	-	-	132	35	fn76/0x20802a12=0x56x24;fn76/0x20800afe=0x56x8;fn76/0x20800a80=0x56x8;fn76/0x20800aff=0x56x6	13	132
+G1	guest.res	guest	llama_cpp_gen	PASS	15	PASS	host	3176	6	ap_G1_b1	0	-	-	-	206	35	fn76/0x20802a12=0x56x48;fn76/0x20800afe=0x56x12;fn76/0x20800a80=0x56x12;fn76/0x20800aff=0x56x8	1	74
+G1	guest.res	guest	llama_bench	PASS	2	PASS	host	4118	6	ap_G1_b1	0	-	-	-	243	35	fn76/0x20802a12=0x56x60;fn76/0x20800afe=0x56x14;fn76/0x20800a80=0x56x14;fn76/0x2080012f=0x56x10	0	37
+G1	guest.res	guest	torch_correct	PASS	50	PASS	host	4004	6	ap_G1_b1	0	-	-	-	280	35	fn76/0x20802a12=0x56x72;fn76/0x20800afe=0x56x16;fn76/0x20800a80=0x56x16;fn76/0x2080012f=0x56x12	0	37
+G1	guest.res	guest	hf_generate	PASS	12	PASS	host	3717	6	ap_G1_b1	0	-	-	-	317	35	fn76/0x20802a12=0x56x84;fn76/0x20800afe=0x56x18;fn76/0x20800a80=0x56x18;fn76/0x2080012f=0x56x14	0	37
+G1	guest.res	guest	cupy	PASS	3	PASS	host	1070	6	ap_G1_b1	0	-	-	-	354	35	fn76/0x20802a12=0x56x96;fn76/0x20800afe=0x56x20;fn76/0x20800a80=0x56x20;fn76/0x2080012f=0x56x16	0	37
+G1	guest.res	guest	nvenc_h264	PASS	6	PASS	host	1501	6	ap_G1_b1	0	-	-	-	397	36	fn76/0x20802a12=0x56x112;fn76/0x20800afe=0x56x22;fn76/0x20800a80=0x56x22;fn76/0x2080012f=0x56x18	1	43
+G1	guest.res	guest	nvenc_hevc	PASS	5	PASS	host	1493	6	ap_G1_b1	0	-	-	-	440	36	fn76/0x20802a12=0x56x128;fn76/0x20800afe=0x56x24;fn76/0x20800a80=0x56x24;fn76/0x2080012f=0x56x20	0	43
+G1	guest.res	guest	nvdec_h264	FAIL	6	FAIL	host	1192	6	ap_G1_b1	0	-	-	-	487	36	fn76/0x20802a12=0x56x148;fn76/0x20800afe=0x56x26;fn76/0x20800a80=0x56x26;fn76/0x2080012f=0x56x22	0	47
+G1	guest.res	guest	hashcat	FAIL	13	FAIL	host	23263	12	ap_G1_b1	0	-	-	-	589	37	fn76/0x20802a12=0x56x172;fn76/0x20800afe=0x56x30;fn76/0x20800a80=0x56x30;fn76/0x2080012f=0x56x26	1	102
+G1	guest.res	guest	clpeak	PASS	83	PASS	host	10528	12	ap_G1_b1	0	-	-	-	663	37	fn76/0x20802a12=0x56x196;fn76/0x20800afe=0x56x34;fn76/0x20800a80=0x56x34;fn76/0x2080012f=0x56x30	0	74
+G1	guest.res	guest	vkpeak	PASS	353	PASS	host	1620	2	ap_G1_b1	0	-	-	-	1192	39	fn76/0x20802a12=0x56x352;fn76/0x2080a0d1=0x56x323;fn76/0x20800a9a=0x56x45;fn76/0x20800afe=0x56x36	0	529
+G1	guest.res	guest	egl_offscreen	PASS	13	PASS	host	56	2	ap_G1_b1	0	-	-	-	1226	39	fn76/0x20802a12=0x56x364;fn76/0x2080a0d1=0x56x323;fn76/0x20800a9a=0x56x46;fn76/0x20800afe=0x56x38	0	34
+G1	guest_isolated.res	guest	blender_cycles	FAIL	18	FAIL	host	9522	14	ap_G1_i_blender_cycles	0	-	-	-	132	35	fn76/0x20802a12=0x56x24;fn76/0x20800afe=0x56x8;fn76/0x20800a80=0x56x8;fn76/0x20800aff=0x56x6	13	132
+G1	guest_isolated.res	guest	hashcat	FAIL	37	FAIL	host	23240	8	ap_G1_i_hashcat	0	-	-	-	589	37	fn76/0x20802a12=0x56x172;fn76/0x20800afe=0x56x30;fn76/0x20800a80=0x56x30;fn76/0x2080012f=0x56x26	1	589
+G1	guest_isolated.res	guest	nvdec_h264	FAIL	9	FAIL	host	1187	8	ap_G1_i_nvdec_h264	0	-	-	-	487	36	fn76/0x20802a12=0x56x148;fn76/0x20800afe=0x56x26;fn76/0x20800a80=0x56x26;fn76/0x2080012f=0x56x22	0	487
+G1n	guest.res	guest	blender_cycles	FAIL	25	-	-	-	-	ap_G1n_b1	0	-	-	-	94	34	fn76/0x20802a12=0x56x12;fn76/0x20800afe=0x56x6;fn76/0x20800a80=0x56x6;fn76/0x20800aff=0x56x5	9	94
+G1n	guest.res	guest	llama_cpp_gen	PASS	19	-	-	-	-	ap_G1n_b1	0	-	-	-	168	35	fn76/0x20802a12=0x56x36;fn76/0x20800afe=0x56x10;fn76/0x20800a80=0x56x10;fn76/0x20800aff=0x56x7	0	74
+G1n	guest.res	guest	llama_bench	PASS	8	-	-	-	-	ap_G1n_b1	0	-	-	-	205	35	fn76/0x20802a12=0x56x48;fn76/0x20800afe=0x56x12;fn76/0x20800a80=0x56x12;fn76/0x20800aff=0x56x8	0	37
+G1n	guest.res	guest	hashcat	PASS	42	-	-	-	-	ap_G1n_b1	0	-	-	-	241	35	fn76/0x20802a12=0x56x60;fn76/0x20800afe=0x56x14;fn76/0x20800a80=0x56x14;fn76/0x2080012f=0x56x10	0	36
+G1n	guest.res	guest	clpeak	PASS	43	-	-	-	-	ap_G1n_b1	0	-	-	-	277	35	fn76/0x20802a12=0x56x72;fn76/0x20800afe=0x56x16;fn76/0x20800a80=0x56x16;fn76/0x2080012f=0x56x12	0	36
+G1n	guest.res	guest	egl_offscreen	FAIL	0	-	-	-	-	ap_G1n_b1	0	-	-	-	277	35	fn76/0x20802a12=0x56x72;fn76/0x20800afe=0x56x16;fn76/0x20800a80=0x56x16;fn76/0x2080012f=0x56x12	0	0
+G1n	guest.res	guest	nvdec_h264	PASS	3	-	-	-	-	ap_G1n_b1	0	-	-	-	314	35	fn76/0x20802a12=0x56x84;fn76/0x20800afe=0x56x18;fn76/0x20800a80=0x56x18;fn76/0x2080012f=0x56x14	0	37
+G1n	guest.res	guest	nvenc_h264	FAIL	0	-	-	-	-	ap_G1n_b1	0	-	-	-	314	35	fn76/0x20802a12=0x56x84;fn76/0x20800afe=0x56x18;fn76/0x20800a80=0x56x18;fn76/0x2080012f=0x56x14	0	0
+G1n	guest.res	guest	nvenc_hevc	FAIL	0	-	-	-	-	ap_G1n_b1	0	-	-	-	351	35	fn76/0x20802a12=0x56x96;fn76/0x20800afe=0x56x20;fn76/0x20800a80=0x56x20;fn76/0x2080012f=0x56x16	0	37
+G1n	host_negctl.res	NEGCTL	app=blender_cycles control=CONTROL_OK judged=FAIL why=[app] FAIL: CUDA: BLENDER_OK missing (the row dropped its device proof); OPTIX: BLENDER_OK missing 	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	host_negctl.res	NEGCTL	app=llama_cpp_gen control=CONTROL_OK judged=FAIL why=[app] FAIL: offloaded 0/29 layers: the model ran on the CPU	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	host_negctl.res	NEGCTL	app=llama_bench control=CONTROL_OK judged=FAIL why=[app] FAIL: llama-bench ran on backend 'CUDA' with ngl 0	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	host_negctl.res	NEGCTL	app=hashcat control=CONTROL_OK judged=FAIL why=[app] FAIL: hashcat used a non-NVIDIA device: #3 pthread-AMD EPYC 7B13 64-Core Processor	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	host_negctl.res	NEGCTL	app=clpeak control=CONTROL_OK judged=FAIL why=[app] FAIL: no NVIDIA device block holds a bandwidth result (devices: pthread-AMD EPYC 7B13 64-Core )	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	host_negctl.res	NEGCTL	app=egl_offscreen control=CONTROL_OK judged=FAIL why=[app] FAIL: no `[egl] renderer:` line	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	host_negctl.res	NEGCTL	app=nvdec_h264 control=CONTROL_OK judged=FAIL why=[app] FAIL: the decoder outputs a software pixel format (pix_fmt: yuv420p): decoded on the CPU	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	host_negctl.res	NEGCTL	app=nvenc_h264 control=CONTROL_OK judged=FAIL why=[app] FAIL: the stream was not encoded by h264_nvenc	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	host_negctl.res	NEGCTL	app=nvenc_hevc control=CONTROL_OK judged=FAIL why=[app] FAIL: the stream was not encoded by hevc_nvenc	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	negctl.res	NEGCTL	app=blender_cycles control=CONTROL_OK judged=FAIL why=[host-census] FAIL: host census: no GPU work in the window (submissions +26, channel births +8, doo	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	negctl.res	NEGCTL	app=llama_cpp_gen control=CONTROL_OK judged=FAIL why=[host-smi] FAIL: host engines: gpu engine idle: 0 sample(s) at or above 3% (need 1); peak 2.0	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	negctl.res	NEGCTL	app=llama_bench control=CONTROL_OK judged=FAIL why=[app] FAIL: llama-bench ran on backend 'CUDA' with ngl 0	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	negctl.res	NEGCTL	app=hashcat control=CONTROL_OK judged=FAIL why=[host-census] FAIL: host census: no GPU work in the window (submissions +26, channel births +6, doorbells 	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	negctl.res	NEGCTL	app=clpeak control=CONTROL_OK judged=FAIL why=[host-census] FAIL: host census: no GPU work in the window (submissions +26, channel births +6, doorbells +	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	negctl.res	NEGCTL	app=egl_offscreen control=CONTROL_OK judged=FAIL why=[host-census] FAIL: host census: no GPU work in the window (submissions +0, channel births +0, doorb	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	negctl.res	NEGCTL	app=nvdec_h264 control=CONTROL_OK judged=FAIL why=[host-census] FAIL: host census: no GPU work in the window (submissions +0, channel births +0, doorbell	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	negctl.res	NEGCTL	app=nvenc_h264 control=CONTROL_OK judged=FAIL why=[host-census] FAIL: host census: no GPU work in the window (submissions +0, channel births +0, doorbell	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+G1n	negctl.res	NEGCTL	app=nvenc_hevc control=CONTROL_OK judged=FAIL why=[host-census] FAIL: host census: no GPU work in the window (submissions +0, channel births +0, doorbell	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+R1	host.res	host	nvcodec_matrix	PASS	143	PROVEN	-	-	-	-	-	-	-	-	-	-	-	-	-
+R1	host.res	host	nvml_dcgm	PASS	27	NA	none	-	-	-	-	-	-	-	-	-	-	-	-
+R1	guest.res	guest	nvcodec_matrix	PASS	245	NA	none	62981	176	ap_R1_b1	0	PROVEN	4193	code:76	4282	39	fn76/0x20802087=0x56x1830;fn76/0x20802a12=0x56x1616;fn76/0x20808165=0x56x303;fn76/0x2080012f=0x56x127	0	4282
+R1	guest.res	guest	nvml_dcgm	PASS	76	NA	none	26	8	ap_R1_b2	0	INFO	1083	code:76,code:50	1162	70	fn76/0x20802087=0x56x614;fn76/0x20808546=0x56x82;fn76/0x20801344=0x56x39;fn76/0x20803401=0x56x34	45	1162
+R1c	host.res	host	nvcodec_matrix	PASS	143	PROVEN	-	-	-	-	-	-	-	-	-	-	-	-	-
+R1p	host.res	host	nvml_dcgm	PASS	24	NA	none	-	-	-	-	-	-	-	-	-	-	-	-
+R1p	guest.res	guest	nvml_dcgm	PASS	41	NA	none	26	6	ap_R1p_b1	0	INFO	793	code:76,code:50	887	70	fn76/0x20802087=0x56x340;fn76/0x20808546=0x56x82;fn76/0x20801344=0x56x39;fn76/0x20803401=0x56x34	42	887
+V1	host.res	host	vkcts	PASS	104	NA	none	-	-	-	-	-	-	-	-	-	-	-	-
+V1	guest.res	guest	vkcts	PASS	877	NA	none	339	74	ap_V1_b1	0	-	-	-	5329	38	fn76/0x20802a12=0x56x2968;fn76/0x2080a0d1=0x56x1496;fn76/0x20800a9a=0x56x371;fn76/0x2080012f=0x56x54	0	5329
+V1b	guest.res	guest	vkcts	PASS	868	NA	none	339	74	ap_V1b_b1	0	-	-	-	5247	38	fn76/0x20802a12=0x56x2968;fn76/0x2080a0d1=0x56x1414;fn76/0x20800a9a=0x56x371;fn76/0x2080012f=0x56x54	0	5247
+V1c	host.res	host	vkcts	PASS	91	NA	none	-	-	-	-	-	-	-	-	-	-	-	-
+V2	host.res	host	vkcts	FAIL	6	NA	none	-	-	-	-	-	-	-	-	-	-	-	-
+V2	guest.res	guest	vkcts	PASS	16	NA	none	618	18	ap_V2_b1	0	-	-	-	393	37	fn76/0x20802a12=0x56x216;fn76/0x20800a9a=0x56x16;fn76/0x20800afe=0x56x12;fn76/0x20800a80=0x56x12	8	393
+V3	host.res	host	vkcts	FAIL	6	NA	none	-	-	-	-	-	-	-	-	-	-	-	-
+V3	guest.res	guest	vkcts	PASS	316	NA	none	399	10	ap_V3_b1	0	-	-	-	825	37	fn76/0x2080a0d1=0x56x580;fn76/0x20802a12=0x56x128;fn76/0x20800a9a=0x56x11;fn76/0x20800afe=0x56x8	3	825
+openguest_prov	guest.res	guest	nvidia_smi	PASS	0	NA	none	2	2	ap_openguest_prov_b1	0	-	-	-	96	28	fn76/0x2080014b=0x56x10;fn76/0x20800aff=0x56x7;fn76/0x20800afe=0x56x6;fn76/0x20800a80=0x56x6	3	96
+openguest_prov	guest.res	guest	vectorAdd	PASS	4	NA	none	927	6	ap_openguest_prov_b1	0	-	-	-	134	35	fn76/0x20802a12=0x56x12;fn76/0x2080014b=0x56x10;fn76/0x20800afe=0x56x8;fn76/0x20800aff=0x56x8	10	38

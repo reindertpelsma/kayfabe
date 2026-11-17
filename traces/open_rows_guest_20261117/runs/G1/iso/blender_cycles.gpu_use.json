@@ -1,0 +1,71 @@
+{
+ "app": {
+  "device": "NVIDIA GeForce RTX 3090",
+  "facts": {
+   "devices": [
+    "CUDA",
+    "OPTIX"
+   ],
+   "oks": 2
+  },
+  "ok": true,
+  "reasons": []
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 14,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 1170,
+  "gr_methods": 0,
+  "retired": 12,
+  "serves": 13380,
+  "status_lines": 13,
+  "submissions": 9522,
+  "wakes": {
+   "CE2": 8034
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] PASS: host census: +9522 submission(s), +14 channel birth(s) in the window",
+  "[host-smi] FAIL: host engines: video memory did not rise by 64 MiB (baseline 8761.0, peak 8792.0)",
+  "[app] PASS: the application reports NVIDIA GeForce RTX 3090",
+  "[note] the guest's own output claims a GPU (NVIDIA GeForce RTX 3090) but the host observables say otherwise: the host census is the authority"
+ ],
+ "row": "blender_cycles",
+ "smi": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 8761.0
+  },
+  "peak": {
+   "busy_samples": 8,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 7.0,
+   "gpu_dmon_sm": 7.0,
+   "mem_mb": 8792.0
+  },
+  "reasons": [
+   "video memory did not rise by 64 MiB (baseline 8761.0, peak 8792.0)"
+  ],
+  "required": [
+   "gpu",
+   "mem"
+  ],
+  "samples": 81,
+  "source": "host",
+  "unreadable": false,
+  "verdict": "FAIL"
+ },
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "FAIL"
+}

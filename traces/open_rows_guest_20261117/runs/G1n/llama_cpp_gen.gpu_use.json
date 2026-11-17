@@ -1,0 +1,68 @@
+{
+ "app": {
+  "device": "NVIDIA GeForce RTX 3090",
+  "facts": {
+   "layers": 29,
+   "offloaded": 0
+  },
+  "ok": false,
+  "reasons": [
+   "offloaded 0/29 layers: the model ran on the CPU"
+  ]
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 12,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 262,
+  "gr_methods": 0,
+  "retired": 6,
+  "serves": 1133,
+  "status_lines": 11,
+  "submissions": 942,
+  "wakes": {
+   "CE2": 1611
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] PASS: host census: +942 submission(s), +12 channel birth(s) in the window",
+  "[host-smi] FAIL: host engines: gpu engine idle: 0 sample(s) at or above 3% (need 1); peak 2.0",
+  "[app] FAIL: offloaded 0/29 layers: the model ran on the CPU"
+ ],
+ "row": "llama_cpp_gen",
+ "smi": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 8761.0
+  },
+  "peak": {
+   "busy_samples": 0,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 2.0,
+   "gpu_dmon_sm": 2.0,
+   "mem_mb": 8789.0
+  },
+  "reasons": [
+   "gpu engine idle: 0 sample(s) at or above 3% (need 1); peak 2.0"
+  ],
+  "required": [
+   "gpu"
+  ],
+  "samples": 84,
+  "source": "host",
+  "unreadable": false,
+  "verdict": "FAIL"
+ },
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "FAIL"
+}

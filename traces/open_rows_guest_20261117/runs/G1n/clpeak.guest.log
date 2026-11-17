@@ -1,0 +1,58 @@
+=== clpeak side=guest start=2026-11-17T22:57:04+00:00 host=<box> cmd: /opt/apps/bundle/bin/clpeak ${KF_CLPEAK_ARGS:-}
+
+Platform: Portable Computing Language
+  Device: cpu-haswell-AMD EPYC 7B13 64-Core Processor
+    Driver version  : 5.0+debian (Linux x64)
+    Compute units   : 6
+    Clock frequency : 2249 MHz
+
+    Global memory bandwidth (GBPS)
+      float   : 39.44
+      float2  : 44.67
+      float4  : 73.62
+      float8  : 81.88
+      float16 : 62.36
+
+    Single-precision compute (GFLOPS)
+      float   : 6.71
+      float2  : 13.64
+      float4  : 27.90
+      float8  : 57.74
+      float16 : 114.84
+
+    No half precision support! Skipped
+
+    Double-precision compute (GFLOPS)
+      double   : 6.71
+      double2  : 13.60
+      double4  : 27.67
+      double8  : 54.72
+      double16 : 105.24
+
+    Integer compute (GIOPS)
+      int   : 10.10
+      int2  : 23.96
+      int4  : 49.82
+      int8  : 107.42
+      int16 : 195.07
+
+    Integer compute Fast 24bit (GIOPS)
+      int   : 10.12
+      int2  : 23.94
+      int4  : 50.28
+      int8  : 107.64
+      int16 : 194.19
+
+    Transfer bandwidth (GBPS)
+      enqueueWriteBuffer              : 4.03
+      enqueueReadBuffer               : 16.83
+      enqueueWriteBuffer non-blocking : 4.12
+      enqueueReadBuffer non-blocking  : 17.81
+      enqueueMapBuffer(for read)      : 1869.98
+        memcpy from mapped ptr        : 15.81
+      enqueueUnmap(after write)       : 3755.66
+        memcpy to mapped ptr          : 4.01
+
+    Kernel launch latency : 87.49 us
+
+=== end rc=0 secs=43 2026-11-17T22:57:47+00:00

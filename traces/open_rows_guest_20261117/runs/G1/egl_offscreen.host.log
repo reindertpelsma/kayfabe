@@ -1,0 +1,5 @@
+=== egl_offscreen side=host start=2026-11-17T22:19:31+00:00 host=<box> cmd: ${KF_EGL_ENV:+env $KF_EGL_ENV }/opt/apps/bundle/bin/egl_offscreen
+[egl] renderer: NVIDIA GeForce RTX 3090/PCIe/SSE2
+METRIC egl_gl_Mtri_s 3.0
+CHECK egl_gl_Mtri_s ok
+=== end rc=0 secs=13 2026-11-17T22:19:44+00:00

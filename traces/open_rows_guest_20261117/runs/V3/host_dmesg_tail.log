@@ -1,0 +1,50 @@
+[ 2244.254487] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2257.808098] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2278.842312] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2356.175591] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2433.587626] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2647.426386] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2674.396006] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2692.653323] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2694.588647] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 2888.910461] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:1187
+[ 2888.910489] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _mmuWalkLevelInstAcquire(pWalk, pLevel->subLevels + subLevelIdx, vaLo, vaLimit, bTarget, pOpParams->bRelease, pOpParams->bCommit, &bChanged, &pSubLevelInsts[subLevelIdx], bInitNv4k) @ mmu_walk.c:1371
+[ 2888.910496] NVRM: nvAssertFailedNoLog: Assertion failed: NV_OK == status @ mmu_walk.c:429
+[ 2888.910504] NVRM: dmaMapBuffer_GM107: vaspaceAlloc failed
+[ 2888.910507] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgraphicsMapCtxBuffer(pGpu, pKernelGraphics, pMemDesc, pKernelChannel->pVAS, &pEngCtx->vaList, NV_FALSE, NV_FALSE) @ kernel_graphics_context.c:1634
+[ 2888.910514] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxMapCtxBuffers(pGpu, pKernelGraphicsObject->pKernelGraphicsContext, pKernelGraphics, pKernelGraphicsObject) @ kernel_graphics_object.c:218
+[ 3007.908386] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3012.068006] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3014.024761] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 3156.032148] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3197.701772] NVRM: Persistence mode is deprecated and will be removed in a future release. Please use nvidia-persistenced instead.
+[ 3269.399495] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 3653.789423] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 4121.392937] NVRM: GPU at PCI:0000:00:07: GPU-00000000-0000-0000-0000-000000000000
+[ 4121.392950] NVRM: Xid (PCI:0000:00:07): 109, pid=119929, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[ 4450.779876] NVRM: Xid (PCI:0000:00:07): 109, pid=119929, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[ 4572.574409] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception on GPC 1: 3D-Z SYSMEM KIND Violation. Coordinates: (0x0, 0x0)
+[ 4572.574424] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception: ESR 0x508420=0x80004000 0x508434=0x0 0x508438=0xd0000 0x50843c=0x210006
+[ 4572.574430] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception on GPC 2: 3D-Z SYSMEM KIND Violation. Coordinates: (0x8, 0x0)
+[ 4572.574436] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception: ESR 0x510420=0x80004000 0x510434=0x8 0x510438=0xd0000 0x51043c=0x210006
+[ 4572.575582] NVRM: Xid (PCI:0000:00:07): 13, pid=119929, name=qemu-system-x86, Graphics Exception: channel 0x00000025, Class 0000c797, Offset 00000000, Data 00000000
+[ 5157.651671] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 5618.393056] NVRM: Xid (PCI:0000:00:07): 109, pid=130578, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[ 5948.319727] NVRM: Xid (PCI:0000:00:07): 109, pid=130578, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[ 6068.017986] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception on GPC 1: 3D-Z SYSMEM KIND Violation. Coordinates: (0x0, 0x0)
+[ 6068.017997] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception: ESR 0x508420=0x80004000 0x508434=0x0 0x508438=0xd0000 0x50843c=0x210006
+[ 6068.018002] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception on GPC 2: 3D-Z SYSMEM KIND Violation. Coordinates: (0x8, 0x0)
+[ 6068.018006] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception: ESR 0x510420=0x80004000 0x510434=0x8 0x510438=0xd0000 0x51043c=0x210006
+[ 6068.019024] NVRM: Xid (PCI:0000:00:07): 13, pid=130578, name=qemu-system-x86, Graphics Exception: channel 0x00000025, Class 0000c797, Offset 00000000, Data 00000000
+[ 6097.035669] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6846.991577] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6933.184591] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 7037.663864] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 7128.175377] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 7416.757160] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 7482.722805] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception on GPC 1: 3D-Z SYSMEM KIND Violation. Coordinates: (0x0, 0x0)
+[ 7482.722824] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception: ESR 0x508420=0x80004000 0x508434=0x0 0x508438=0xd0000 0x50843c=0x210006
+[ 7482.722834] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception on GPC 2: 3D-Z SYSMEM KIND Violation. Coordinates: (0x8, 0x0)
+[ 7482.722842] NVRM: Xid (PCI:0000:00:07): 13, Graphics Exception: ESR 0x510420=0x80004000 0x510434=0x8 0x510438=0xd0000 0x51043c=0x210006
+[ 7482.723830] NVRM: Xid (PCI:0000:00:07): 13, pid=144626, name=qemu-system-x86, Graphics Exception: channel 0x00000025, Class 0000c797, Offset 00000000, Data 00000000
+[ 7524.394515] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0

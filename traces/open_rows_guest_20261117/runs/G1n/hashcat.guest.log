@@ -1,0 +1,42 @@
+=== hashcat side=guest start=2026-11-17T22:56:14+00:00 host=<box> cmd: hashcat --potfile-disable -O -m 0 -a 3 ${KF_HASHCAT_ARGS:-} e4726719b68b205913167f0975d977ee '?l?l?l?l?l?l' 2>&1 | tee /opt/apps/out/guest/hashcat_full.txt | tail -30; grep -a -E '^(\* Device #|CUDA API|OpenCL API|HIP API)' /opt/apps/out/guest/hashcat_full.txt || true
+* Brute-Force
+* Raw-Hash
+
+Watchdog: Temperature abort trigger set to 90c
+
+Initializing device kernels and memory. Please be patient...Initializing backend runtime for device #2. Please be patient...Initialized backend runtime for device #2Host memory required for this attack: 1 MB
+
+Initialized device kernels and memoryStarting self-test. Please be patient...Finished self-testStarting autotune. Please be patient...Finished autotune
+                                                          
+[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit => 
+                                                          
+e4726719b68b205913167f0975d977ee:kayfab
+
+                                                          
+Session..........: hashcat
+Status...........: Cracked
+Hash.Mode........: 0 (MD5)
+Hash.Target......: e4726719b68b205913167f0975d977ee
+Time.Started.....: Tue Nov 17 22:56:54 2026 (1 sec)
+Time.Estimated...: Tue Nov 17 22:56:55 2026 (0 secs)
+Kernel.Feature...: Optimized Kernel
+Guess.Mask.......: ?l?l?l?l?l?l [6]
+Guess.Queue......: 1/1 (100.00%)
+Speed.#2.........:   117.2 MH/s (0.61ms) @ Accel:1024 Loops:42 Thr:1 Vec:8
+Recovered........: 1/1 (100.00%) Digests (total), 1/1 (100.00%) Digests (new)
+Progress.........: 95784960/308915776 (31.01%)
+Rejected.........: 0/95784960 (0.00%)
+Restore.Point....: 141312/456976 (30.92%)
+Restore.Sub.#2...: Salt:0 Amplifier:0-42 Iteration:0-42
+Candidate.Engine.: Device Generator
+Candidates.#2....: saarir -> nimmcc
+Hardware.Mon.#2..: N/A
+
+Started: Tue Nov 17 22:56:14 2026
+Stopped: Tue Nov 17 22:56:55 2026
+* Device #1: CUDA SDK Toolkit not installed or incorrectly installed.
+OpenCL API (OpenCL 3.0 CUDA 13.0.98) - Platform #1 [NVIDIA Corporation]
+* Device #1: NVIDIA GeForce RTX 3090, skipped
+OpenCL API (OpenCL 3.0 PoCL 5.0+debian  Linux, None+Asserts, RELOC, SPIR, LLVM 16.0.6, SLEEF, DISTRO, POCL_DEBUG) - Platform #2 [The pocl project]
+* Device #2: cpu-haswell-AMD EPYC 7B13 64-Core Processor, 6940/13944 MB (2048 MB allocatable), 6MCU
+=== end rc=0 secs=42 2026-11-17T22:56:56+00:00

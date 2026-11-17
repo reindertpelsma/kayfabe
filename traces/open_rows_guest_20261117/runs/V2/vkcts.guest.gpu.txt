@@ -1,0 +1,1 @@
+VKCTS_GPU side=guest source=host verdict=FAIL samples=39 busy_samples=11 peak_gpu_pct=12.0 mem_rise_mb=53 reasons=video_memory_did_not_rise_by_64_MiB_(baseline_8761.0,_peak_8814.0)

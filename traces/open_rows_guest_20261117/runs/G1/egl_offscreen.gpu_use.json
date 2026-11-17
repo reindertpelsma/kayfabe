@@ -1,0 +1,37 @@
+{
+ "app": {
+  "device": "NVIDIA GeForce RTX 3090/PCIe/SSE2",
+  "facts": {},
+  "ok": true,
+  "reasons": []
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 2,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 28,
+  "gr_methods": 0,
+  "retired": 2,
+  "serves": 79,
+  "status_lines": 11,
+  "submissions": 56,
+  "wakes": {
+   "CE2": 41
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] PASS: host census: +56 submission(s), +2 channel birth(s) in the window",
+  "[app] PASS: the application reports NVIDIA GeForce RTX 3090/PCIe/SSE2"
+ ],
+ "row": "egl_offscreen",
+ "smi": null,
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "PASS"
+}

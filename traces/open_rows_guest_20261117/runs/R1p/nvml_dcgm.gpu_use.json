@@ -1,0 +1,25 @@
+{
+ "app": null,
+ "authority": "none",
+ "census": {
+  "base_missing": false,
+  "births": 6,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 23,
+  "gr_methods": 0,
+  "retired": 4,
+  "serves": 46,
+  "status_lines": 24,
+  "submissions": 26,
+  "wakes": {
+   "CE2": 24
+  },
+  "xid": 0
+ },
+ "class": "own",
+ "reasons": [],
+ "row": "nvml_dcgm",
+ "smi": null,
+ "verdict": "NA"
+}
