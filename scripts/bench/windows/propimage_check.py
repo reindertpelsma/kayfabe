@@ -173,15 +173,17 @@ ConvertTo-Json -Compress @{changed=$changed; restarted=$restarted; guest_utc=(Ge
 # (classify_gpu_query); the guest only reports.
 RENDER_GPU_QUERY = r"""
 $ErrorActionPreference='Continue'
+$sw=[Diagnostics.Stopwatch]::StartNew()
 $smi=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader 2>&1 | ForEach-Object {[string]$_})
 $rc=$LASTEXITCODE
+$smis=[int]$sw.Elapsed.TotalSeconds
 $dev=@(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {$_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
  $id=$_.InstanceId
  $pc=(Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_ProblemCode -ErrorAction SilentlyContinue).Data
  $sv=(Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_Service -ErrorAction SilentlyContinue).Data
  @{class=[string]$_.Class;present=[bool]$_.Present;status=[string]$_.Status;problem=$pc;service=[string]$sv}
 })
-ConvertTo-Json -Compress -Depth 4 @{smi_rc=$rc; smi_out=@($smi); devices=@($dev); guest_utc=(Get-Date).ToUniversalTime().ToString('o')}
+ConvertTo-Json -Compress -Depth 4 @{smi_rc=$rc; smi_s=$smis; smi_out=@($smi); devices=@($dev); guest_utc=(Get-Date).ToUniversalTime().ToString('o')}
 """
 
 # A device left in Code 43 by the plain restart: Disable/Enable (MEASURED 2026-11-16 on an RTX 4090 box: clears it at once). Applied once, after the
@@ -225,6 +227,7 @@ BARE_UUID = re.compile(r"(?<![{0-9A-Za-z])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa
 GPU_WAIT_SETTLED_S = 120  # bound of the wait for the NVIDIA device to finish its first-boot install before the restart
 GPU_POLL_S = 240  # bound of the poll after the restart (the Disable/Enable retry comes at half of it)
 GPU_POLL_EVERY_S = 10
+GPU_QUERY_TIMEOUT_S = 150  # one query call. MEASURED 2026-11-17 (RTX 4090 box, 4 boots): the FIRST nvidia-smi after the restart blocks for about 60 s (call 74-80 s, a normal one 13 s); 90 s was too close
 
 
 def redact(text, limit=2000):
@@ -262,7 +265,7 @@ def classify_gpu_query(q, expected, host_uuids=None):
     rc = q.get("smi_rc")
     gpu = [x for x in out if re.fullmatch(r"GPU-[0-9A-Za-z-]+", x)]
     other = [x for x in out if x not in gpu]
-    res = {"smi_rc": rc if type(rc) is int else None, "gpu_lines": len(gpu), "other_lines": len(other), "observed_is_expected": None, "observed_is_host": None}
+    res = {"smi_rc": rc if type(rc) is int else None, "smi_s": q.get("smi_s") if type(q.get("smi_s")) is int else None, "gpu_lines": len(gpu), "other_lines": len(other), "observed_is_expected": None, "observed_is_host": None}
     if len(gpu) > 1:
         res["kind"] = "multi"
     elif len(gpu) == 1 and rc == 0 and not other:
@@ -299,10 +302,17 @@ def problem_codes(devices):
 
 
 def gpu_query(g, expected, host_fn, started_at, clock):
-    """One bounded query as a record. A transport error or a timeout is its own case, never 'mismatch'."""
-    rec = {"t": int(clock() - started_at)}
+    """One bounded query as a record, with how long the whole call took (`dur_s`) and, from the guest, how long nvidia-smi itself blocked (`smi_s`)."""
+    t = clock()
+    rec = _gpu_query_record(g, expected, host_fn, {"t": int(t - started_at)})
+    rec["dur_s"] = int(clock() - t)
+    return rec
+
+
+def _gpu_query_record(g, expected, host_fn, rec):
+    """A transport error or a timeout is its own case, never 'mismatch'."""
     try:
-        p = g.ps(RENDER_GPU_QUERY, timeout=90)
+        p = g.ps(RENDER_GPU_QUERY, timeout=GPU_QUERY_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         return dict(rec, kind="timeout", devices=[])
     except OSError as exc:
@@ -344,7 +354,7 @@ def gpu_fix(g, expected, sleep=time.sleep, clock=time.monotonic, wait_s=None, po
     diag = {"schema": "kayfabe.gpu-step/1", "waited": [], "polls": []}
     while True:
         q = gpu_query(g, expected, host_fn, t0, clock)
-        diag["waited"].append({k: q.get(k) for k in ("t", "kind", "devices", "text") if k in q})
+        diag["waited"].append({k: q.get(k) for k in ("t", "dur_s", "smi_s", "kind", "devices", "text") if k in q})
         settled = gpu_device_settled(q["devices"])
         if settled or clock() - t0 >= wait_s:
             break

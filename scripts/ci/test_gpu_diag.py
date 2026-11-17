@@ -34,8 +34,11 @@ INSTALLING = {"class": "Display", "present": True, "status": "Error", "problem":
 PHANTOM = {"class": "Display", "present": False, "status": "Unknown", "problem": 45, "service": "nvlddmkm"}
 
 
-def query(smi=(), rc=0, devices=(STARTED,)):
-    return json.dumps({"smi_rc": rc, "smi_out": list(smi), "devices": list(devices)})
+def query(smi=(), rc=0, devices=(STARTED,), smi_s=None):
+    doc = {"smi_rc": rc, "smi_out": list(smi), "devices": list(devices)}
+    if smi_s is not None:
+        doc["smi_s"] = smi_s
+    return json.dumps(doc)
 
 
 class Fake:
@@ -43,7 +46,7 @@ class Fake:
 
     def __init__(self, answers, repair_rc=0, events="== nvlddmkm events\n12:00:01 id=43 level=2 driver stopped\n"):
         self.answers, self.repair_rc, self.events = answers, repair_rc, events
-        self.calls, self.now, self.queries = [], 0.0, 0
+        self.calls, self.now, self.queries, self.timeouts = [], 0.0, 0, []
 
     def sleep(self, s):
         self.now += s
@@ -53,6 +56,7 @@ class Fake:
 
     def ps(self, script, timeout=120):
         self.now += 2
+        self.timeouts.append((script == m.RENDER_GPU_QUERY, timeout))
         if script == m.RENDER_GPU_QUERY:
             n, self.queries = self.queries, self.queries + 1
             self.calls.append("query")
@@ -170,6 +174,7 @@ class Loop(unittest.TestCase):
         self.assertEqual(d["kind"], "no_uuid")
         self.assertEqual(d["gpu_lines"], 0)
         self.assertGreaterEqual(d["poll_s"], m.GPU_POLL_S)
+        self.assertTrue(all("dur_s" in p for p in d["polls"]))
         self.assertLess(d["poll_s"], m.GPU_POLL_S + 40)
         self.assertLess(len(fake.calls), 80)
         self.assertLessEqual(len(d["polls"]), 14)  # the record stays small
@@ -219,6 +224,28 @@ class Loop(unittest.TestCase):
         self.assertEqual((ok, d["kind"]), (False, "timeout"))
         self.assertEqual({p["kind"] for p in d["polls"]}, {"timeout"})
         self.assertIn("observed UUID timeout", m.gpu_step_detail(ok, text))
+
+    def test_a_query_may_block_as_long_as_the_first_nvidia_smi_after_a_restart_does(self):
+        fake = Fake([query(devices=[STARTED]), query([EXPECTED], smi_s=63)])
+        ok, text = fake.fix()
+        self.assertTrue(ok, text)
+        self.assertEqual({t for is_query, t in fake.timeouts if is_query}, {m.GPU_QUERY_TIMEOUT_S})
+        self.assertGreaterEqual(m.GPU_QUERY_TIMEOUT_S, 120)
+
+    def test_the_query_call_limit_covers_the_measured_first_call_after_a_restart(self):
+        fake = Fake([query(devices=[STARTED]), query([EXPECTED])])
+        fake.fix()
+        self.assertGreaterEqual(min(t for is_query, t in fake.timeouts if is_query), 120)  # measured: 74-80 s for that call
+        self.assertGreaterEqual(m.GPU_QUERY_TIMEOUT_S, 120)
+
+    def test_every_query_records_how_long_it_took_and_how_long_nvidia_smi_blocked(self):
+        fake = Fake([query(devices=[STARTED]), query([], devices=[CODE43], smi_s=61)])
+        ok, text = fake.fix()
+        d = json.loads(text)
+        self.assertEqual(d["polls"][0]["smi_s"], 61)
+        self.assertGreaterEqual(d["polls"][0]["dur_s"], 2)
+        self.assertIn("dur_s", d["waited"][0])
+        self.assertIn("dur_s", d["polls"][-1])
 
     def test_the_whole_step_is_bounded_when_nothing_ever_works(self):
         fake = Fake([query(devices=[INSTALLING])])
