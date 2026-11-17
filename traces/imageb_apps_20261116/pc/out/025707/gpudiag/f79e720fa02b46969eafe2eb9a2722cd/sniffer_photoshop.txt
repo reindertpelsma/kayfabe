@@ -1,0 +1,25 @@
+﻿Start sniffer 2026-11-15 22:55:18
+C:\Program Files\Adobe\Adobe Photoshop 2027\sniffer.exe
+
+{73314 ms}
+Start platform native
+  Auto HDR:                     FALSE
+  Stream HDR video:             FALSE
+  HDR off on battery:           FALSE
+  # displays:                   0
+  
+  # devices:                    0
+End platform native
+{73348 ms}
+
+{73348 ms}
+Start platform OpenCL
+  # displays:                   0
+  
+  # devices:                    0
+End platform OpenCL
+{73350 ms}
+
+Exit code kExitNormal
+End sniffer 2026-11-15 22:55:18
+

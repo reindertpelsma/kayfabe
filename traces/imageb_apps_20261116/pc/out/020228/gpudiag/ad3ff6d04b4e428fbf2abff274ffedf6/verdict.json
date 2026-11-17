@@ -1,0 +1,17 @@
+{
+  "app": "gpudiag",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "InitMS: 85.7887, SniffMS: 18.3792",
+  "class": "app",
+  "limited": false,
+  "secs": 0,
+  "gpu": {
+    "required": [],
+    "verdict": "FAIL",
+    "peak": {},
+    "baseline": {},
+    "samples": 0
+  }
+}

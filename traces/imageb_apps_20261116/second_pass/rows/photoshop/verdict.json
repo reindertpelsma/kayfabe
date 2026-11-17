@@ -1,0 +1,35 @@
+{
+  "app": "photoshop",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "8K-class canvas, 101 layers with 10 blend modes, features 16bit,adjustment_layers,brush_strokes,canvas8k,layers100,smart_object,smart_sharpen, saved 2048x1338 PNG (std 50.6) and PSD; 362252 ms",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "OpenGL/D3D12 canvas, GPU filters (smart sharpen), 16-bit/wide-gamut, large VRAM allocation (8K, 100 layers)",
+  "platform": "kf3",
+  "secs": 511,
+  "gpu": {
+    "required": [
+      "gpu"
+    ],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 53.0,
+      "mem_mb": 9539.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 53.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 148
+    },
+    "baseline": {
+      "mem_mb": 9416.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 1199
+  },
+  "outputs_recorded": 6
+}

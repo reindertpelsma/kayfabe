@@ -1,0 +1,57 @@
+aerender version 27.0x78
+PROGRESS: Launching After Effects...
+PROGRESS:  11/16/2026 12:47:48 AM: Starting composition "kfcomp".
+
+PROGRESS:  Render Settings: Best Settings
+PROGRESS:  Quality: Best
+PROGRESS:  Resolution: Full
+PROGRESS:  Size: 3840 x 2160
+PROGRESS:  Proxy Use: Use No Proxies
+PROGRESS:  Effects: Current Settings
+PROGRESS:  Disk Cache: Read Only
+PROGRESS:  Color Depth: Current Settings
+PROGRESS:  Frame Blending: On for Checked Layers
+PROGRESS:  Field Render: Off
+PROGRESS:  Pulldown: Off
+PROGRESS:  Motion Blur: On for Checked Layers
+PROGRESS:   
+PROGRESS:  Solos: Current Settings
+PROGRESS:   
+PROGRESS:  Time Span: Custom
+PROGRESS:  Start: 0:00:00:00
+PROGRESS:  End: 0:00:00:09
+PROGRESS:  Duration: 0:00:00:10
+PROGRESS:  Frame Rate: 30.00 (comp)
+PROGRESS:  Guide Layers: All Off
+PROGRESS:  Skip Existing Files: Off
+PROGRESS:  
+PROGRESS:  Output Module: TIFF Sequence with Alpha
+PROGRESS:  Output To: C:\kfapps\28abaae73f3d4f568eb3868577bac313\aeadv3d\frames\f_[#####].tif
+PROGRESS:  Format: Photoshop Sequence
+PROGRESS:  Output Info: -
+PROGRESS:  Start Frame: 0
+PROGRESS:  Output Audio: -
+PROGRESS:  Channels: RGB + Alpha
+PROGRESS:  Depth: Millions of Colors+
+PROGRESS:  Color: Premultiplied
+PROGRESS:  Resize: -
+PROGRESS:  Crop: -
+PROGRESS:  Final Size: 3840 x 2160
+PROGRESS:  Profile: -
+PROGRESS:  Embed Profile: 
+PROGRESS:   
+PROGRESS:  Post-Render Action: None
+PROGRESS:   
+PROGRESS:   
+PROGRESS:   
+PROGRESS:  
+PROGRESS:  0:00:00:00 (1): 9 Seconds
+PROGRESS:  0:00:00:01 (2): 1 Seconds
+PROGRESS:  0:00:00:02 (3): 1 Seconds
+PROGRESS:  0:00:00:03 (4): 0 Seconds
+PROGRESS:  0:00:00:04 (5): 1 Seconds
+PROGRESS:  0:00:00:05 (6): 0 Seconds
+PROGRESS:  0:00:00:06 (7): 0 Seconds
+PROGRESS:  0:00:00:07 (8): 1 Seconds
+PROGRESS:  0:00:00:08 (9): 0 Seconds
+PROGRESS:  0:00:00:09 (10): 0 Seconds

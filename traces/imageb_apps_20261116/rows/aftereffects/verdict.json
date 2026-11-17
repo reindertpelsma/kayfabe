@@ -1,0 +1,34 @@
+{
+  "app": "aftereffects",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "After Effects did not finish the script (no marker)",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "CUDA/OptiX effects, 3D layers, 16-bit float, 4K render, particle effects",
+  "platform": "kf3",
+  "secs": 1097,
+  "gpu": {
+    "required": [
+      "gpu"
+    ],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 50.0,
+      "mem_mb": 9609.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 50.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 112
+    },
+    "baseline": {
+      "mem_mb": 9408.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 2351
+  }
+}

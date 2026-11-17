@@ -1,0 +1,51 @@
+﻿{
+    "app":  "aftereffects",
+    "started":  1794790537.647,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "f_00000.tif",
+                        "bytes":  33203548,
+                        "modified":  1794791073.091
+                    },
+                    {
+                        "file":  "f_00059.tif",
+                        "bytes":  33203644,
+                        "modified":  1794791122.75
+                    },
+                    {
+                        "file":  "aerender.log",
+                        "bytes":  3847,
+                        "modified":  1794791123.94
+                    },
+                    {
+                        "file":  "kf.aep",
+                        "bytes":  432596,
+                        "modified":  1794791000.514
+                    },
+                    {
+                        "file":  "ae_make.txt",
+                        "bytes":  602,
+                        "modified":  1794791000.523
+                    }
+                ],
+    "footage":  "sintel_trailer_1080p.mp4",
+    "ae_file_scripts":  "already on",
+    "startup_attempts":  [
+                             "1:none:369s",
+                             "2:marker:92s"
+                         ],
+    "make_log":  "16bpc,fractalnoise,turbulent,glow,blur,precomp,lumetri,3d_layer,expression,footage,camera,particles,text,cuda,om:TIFF Sequence with Alpha,templates:AIFF 48kHz|Alpha Only|H.264 - Match Render Settings -  5 Mbps|H.264 - Match Render Settings - 15 Mbps|H.264 - Match Render Settings - 40 Mbps|High Quality|High Quality with Alpha|Lossless|Lossless with Alpha|Multi-Machine Sequence|Photoshop|TIFF Sequence with Alpha|_HIDDEN X-Factor 16|_HIDDEN X-Factor 16 Premul|_HIDDEN X-Factor 32|_HIDDEN X-Factor 32 Premul|_HIDDEN X-Factor 8|_HIDDEN X-Factor 8 Premul\r\navail=1813|1816\r\nrenderer=1813\r\nsize=3840x2160\r\n",
+    "t_render_start":  1794791003.241,
+    "aerender_attempts":  [
+                              "1:ran:124s"
+                          ],
+    "aerender_exit":  0,
+    "t_render_end":  1794791127.97,
+    "frame_count":  60,
+    "quit":  "process",
+    "ended":  1794791129.184,
+    "dismissed":  [
+
+                  ]
+}
