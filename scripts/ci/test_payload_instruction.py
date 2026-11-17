@@ -607,6 +607,15 @@ class Propimages(unittest.TestCase):
     def test_dry_run_refuses_the_list_on_a_small_tier(self):
         self.assertEqual(self.dry(tier="small", propimages=[IMG]), 1)
 
+    def test_the_list_is_accepted_on_the_second_dies_middle_tier_leg(self):
+        # owner ruling 2026-11-16: the release's second die (tier middle) runs the other image
+        inst = pi.parse(raw(good(tier="middle", propimages=[IMG])))
+        self.assertEqual(inst.propimages[0]["label"], "imga")
+
+    def test_the_list_is_refused_on_the_adhoc_and_unknown_tiers(self):
+        self.refuses(good(tier="adhoc", propimages=[IMG]))
+        self.refuses(good(tier="unknown", propimages=[IMG]))
+
     def test_the_enums_are_closed(self):
         self.refuses(good(tier="large", propimages=[dict(IMG, kind="rebuilt")]))
         self.refuses(good(tier="large", propimages=[dict(IMG, net="maybe")]))

@@ -184,6 +184,69 @@ impl Capacity {
         })
     }
 
+    /// ★ 2026-11-16 (**replay seam**, `docs/design/V3_REPLAY_TESTS.md`): a walker whose slot pool
+    /// already holds `held` — `(slot, region)` pairs — and is free everywhere else. For regression
+    /// fixtures that rebuild a LOGGED pool geometry (`slot_geometry`) and replay one decision on it;
+    /// production only ever reaches a layout through [`Capacity::plan`], [`Capacity::slot_needed`]
+    /// and [`Capacity::release`]. Slots not named hold nothing (a later `plan` gives them the default).
+    ///
+    /// # Errors
+    /// A layout no pool could hold, by name: a slot out of range or named twice, an empty region,
+    /// a region past the pool, or two regions that overlap. Plus everything [`Capacity::new`] refuses.
+    pub fn from_slot_regions(
+        max_slots: u32,
+        walk_pool: u32,
+        slot_pool: u32,
+        max_cap: u32,
+        slot_default: u32,
+        held: &[(u32, Region)],
+    ) -> Result<Capacity, String> {
+        let mut c = Capacity::new(max_slots, walk_pool, slot_pool, max_cap, slot_default)?;
+        let mut by_off: Vec<(u32, Region)> = held.to_vec();
+        by_off.sort_by_key(|&(_, r)| r.off);
+        let mut free = Vec::new();
+        let mut end = 0u64;
+        for &(s, r) in &by_off {
+            if s >= max_slots {
+                return Err(format!("slot {s} out of range ({max_slots})"));
+            }
+            if c.region[s as usize].is_some() {
+                return Err(format!("slot {s} named twice"));
+            }
+            if r.cap == 0 {
+                return Err(format!("slot {s}: an empty region"));
+            }
+            if u64::from(r.off) + u64::from(r.cap) > u64::from(slot_pool) {
+                return Err(format!(
+                    "slot {s}: region {}+{} is past the pool ({slot_pool})",
+                    r.off, r.cap
+                ));
+            }
+            if u64::from(r.off) < end {
+                return Err(format!(
+                    "slot {s}: region {}+{} overlaps the one before it (ends at {end})",
+                    r.off, r.cap
+                ));
+            }
+            if u64::from(r.off) > end {
+                free.push(Region {
+                    off: end as u32,
+                    cap: r.off - end as u32,
+                });
+            }
+            end = u64::from(r.off) + u64::from(r.cap);
+            c.region[s as usize] = Some(r);
+        }
+        if end < u64::from(slot_pool) {
+            free.push(Region {
+                off: end as u32,
+                cap: slot_pool - end as u32,
+            });
+        }
+        c.slots.free = free;
+        Ok(c)
+    }
+
     /// The region slot `s` holds, if any.
     #[must_use]
     pub fn slot_region(&self, s: u32) -> Option<Region> {

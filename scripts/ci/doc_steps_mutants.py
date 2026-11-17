@@ -127,10 +127,10 @@ MUTANTS = [
     M("budget-manual-row-allowed", "budget", '"manual-only stage has a budget row: " + name for name in sorted(manual) if name in stages', '"manual-only stage has a budget row: " + name for name in sorted(manual) if False'),
     M("budget-flag-truthy-ok", "budget", "            if flags[flag] is not False\n", "            if not flags[flag] is False and flags[flag]\n"),
     # reporter
-    M("report-install-flow-key-refused", "report", '            "install_flow",\n        }', "        }"),
+    M("report-install-flow-key-refused", "report", '            "install_flow",\n            "kfml",\n            "net_bytes",\n        }', '            "kfml",\n            "net_bytes",\n        }'),
     M("report-install-flow-unvalidated", "report", '            validate_install_flow(doc["install_flow"])', "            pass"),
     M("report-doc-hash-unchecked", "report", 're.fullmatch("[0-9a-f]{64}", v) for k, v in value["docs"].items())', "True for k, v in value['docs'].items())"),
-    M("report-size-unbounded", "report", "    ok = ok and len(json.dumps(value, separators=(\",\", \":\")).encode()) <= 8192", "    pass"),
+    M("report-size-unbounded", "report", "    ok = ok and len(json.dumps(value, separators=(\",\", \":\")).encode()) <= 8192\n    if not ok:\n        raise ValueError(\"install_flow\")", "    pass\n    if not ok:\n        raise ValueError(\"install_flow\")"),
 ]
 
 

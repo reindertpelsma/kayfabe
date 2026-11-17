@@ -71,6 +71,8 @@ jobs:
           # Proprietary Windows image tooling (2026-11-12, design-only): seed ids, argv per mode, verify, zip; >=2 killers.
           python3 -B -I scripts/ci/test_propimage.py
           python3 -B -I scripts/ci/propimage_mutants.py
+          # Uniform guest clock rule (2026-11-16): network only decides; the floor counts loaded software only; >=2 killers each.
+          python3 -B -I scripts/ci/clockrule_mutants.py
           # Proposed release matrix and payload contract: two named killers per mutant.
           node ci/vast-broker/release-matrix-mutants.mjs
           # RV1 admission/receipt grading and both SPEC lanes: two named killers each.
@@ -93,6 +95,11 @@ jobs:
           # Provider-status tolerance and close-line mutants (2026-11-06): each must fail at least two tests.
           node ci/vast-broker/provider-tolerance-mutants.mjs
           node ci/vast-broker/denied-countries-mutants.mjs
+          # Worker proprietary-image configuration and instruction part, the /bench-data allow-list stays closed (2026-11-16): two named killers per mutant.
+          node ci/vast-broker/propimages-mutants.mjs
+          # Bandwidth table guard (fails on a stale ESTIMATE: edit ci/vast-broker/bandwidth.json) and the mutants of the guard, the calibration and the transferred-bytes record (2026-11-16): two named killers per mutant; their tests run in the scripts/ci suite.
+          python3 -B -I scripts/ci/bandwidth_check.py
+          python3 -B -I scripts/ci/bandwidth_mutants.py
           npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
           node --test ci/vast-admin/test/*.test.mjs
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)

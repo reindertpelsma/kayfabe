@@ -209,7 +209,7 @@ MUTANTS = [
     # the payload wiring
     M("payload-stage-in-the-default-plan", "payload", "PROPIMAGE_APPS_IN_LARGE = False", "PROPIMAGE_APPS_IN_LARGE = True",
       W + "test_not_in_the_default_plan_and_only_with_only_in_large", W + "test_manual_only_table_and_the_budget_guard"),
-    M("payload-stage-in-every-tier", "payload", 'if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only or i.propimages):', 'if (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only or i.propimages):',
+    M("payload-stage-in-every-tier", "payload", 'if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):', 'if i.propimages or (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only):',
       W + "test_not_in_the_default_plan_and_only_with_only_in_large", W + "test_dry_run_refuses_the_stage_outside_the_large_tier"),
     M("payload-record-sha-unbound", "payload", 'if type(doc) is not dict or doc.get("sha") != sha:', "if type(doc) is not dict:",
       W + "test_rows_bind_the_record_to_the_sha", W + "test_rows_pass_fail_and_not_run"),
@@ -220,8 +220,8 @@ MUTANTS = [
       W + "test_a_nonzero_exit_with_a_pass_record_is_a_failure", W + "test_rows_pass_fail_and_not_run"),
     M("payload-record-not-kept", "payload", '    result["propimage_apps"] = doc\n', "    pass\n",
       W + "test_rows_need_exactly_one_parseable_line_and_keep_a_red_record", W + "test_rows_pass_fail_and_not_run"),
-    M("payload-stage-after-the-spec-lane", "payload", '    if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only or i.propimages):\n        names.append("propimage_apps")\n    if "specviewperf" in i.stages:\n        names.append("specviewperf")',
-      '    if "specviewperf" in i.stages:\n        names.append("specviewperf")\n    if i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only or i.propimages):\n        names.append("propimage_apps")',
+    M("payload-stage-after-the-spec-lane", "payload", '    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")\n    if "specviewperf" in i.stages:\n        names.append("specviewperf")',
+      '    if "specviewperf" in i.stages:\n        names.append("specviewperf")\n    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")',
       W + "test_runs_after_every_windows_stage_and_before_the_spec_lane", W + "test_runs_before_the_spec_lane_without_windows_stages"),
 ]
 
