@@ -98,6 +98,17 @@ class Pins(unittest.TestCase):
         self.assertRegex(t["oss_commit"], r"^[0-9a-f]{40}$")
         self.assertFalse(t["in_pypi_wheels"])
 
+    def test_the_committed_token_hash_is_bound_to_the_versions_it_was_measured_with(self):
+        spec = PINS["rows"]["vllm"]
+        ctx = spec["expected_token_context"]
+        self.assertRegex(spec["expected_token_sha256"], r"^[0-9a-f]{64}$")
+        have = lib.lock_versions((ML / spec["flavours"]["cu13"]["lock"]).read_text())
+        self.assertEqual((ctx["vllm"], ctx["torch"]), (have["vllm"], have["torch"]))
+        self.assertEqual(ctx["model_revision"], PINS["model"]["revision"])
+        self.assertGreaterEqual(len(ctx["dies"]), 2)
+        self.assertEqual(ctx["dtype"], "float16")
+        self.assertIn('dtype="float16"', (ML / "row_vllm.py").read_text())
+
     def test_pins_json_is_stable_json(self):
         text = (ML / "pins.json").read_text()
         self.assertEqual(json.loads(text), json.loads(json.dumps(json.loads(text))))
@@ -634,6 +645,13 @@ class Proof(unittest.TestCase):
         self.assertIn("device=cpu:0 name=cpu", line)
         self.assertIs(gu.PROOFS["framework"](line, framework="jax", min_mib=1)["ok"], False)
 
+    def test_a_cpu_platform_prints_a_cpu_device_whatever_the_memory_did(self):
+        for row in lib.ROWS:
+            line = lib.proof_for(row, dict(vllm_result(), platform="cpu", mem_growth_mib=9000), self.f)
+            self.assertIn("device=cpu:0 name=cpu", line, row)
+        line = lib.proof_for("jax", dict(jax_result(), device="cpu"), self.f)
+        self.assertIn("device=cpu:0", line)
+
     def test_no_measurement_or_no_gpu_name_prints_no_proof(self):
         self.assertIsNone(lib.proof_for("vllm", vllm_result(mem_growth_mib=None), self.f))
         self.assertIsNone(lib.proof_for("vllm", None, self.f))
@@ -738,7 +756,7 @@ class FakeProc:
 
 
 class FakeSampler:
-    used, total = [300, 300, 300, 6000, 9300, 9300, 400], 12288
+    used, total = [500, 300, 400, 6000, 9300, 9300, 400], 12288
 
     def start(self):
         pass
@@ -849,12 +867,47 @@ class RunRow(unittest.TestCase):
             st, why, *_ = self.run_row("jax", ["working"], pins=pins, hold=5)
         self.assertIn("did not finish in 0.2 s", why)
 
+    def test_the_row_s_library_path_leads_with_the_venv(self):
+        libdir = self.root / "tensorrt" / "venv" / "lib" / "python3.12" / "site-packages" / "tensorrt_libs"
+        libdir.mkdir(parents=True)
+        with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": "/usr/local/nvidia/lib64"}):
+            mr.run_row("tensorrt", self.root, self.out, facts(), PINS, popen=self.popen(self.good_lines("tensorrt")))
+        parts = self.captured["env"]["LD_LIBRARY_PATH"].split(":")
+        self.assertEqual(parts[0], str(libdir))
+        self.assertEqual(parts[-1], "/usr/local/nvidia/lib64")
+
+    def test_log_facts_are_read_from_the_whole_log_not_the_tail(self):
+        lines = ["INFO GPU KV cache size: 445,056 tokens"] + ["noise"] * (mr.MAX_LOG_LINES + 20) + self.good_lines()
+        _, _, _, _, result, _ = self.run_row("vllm", lines)
+        self.assertEqual(result["log_facts"]["kv_cache_tokens"], 445056)
+
+    def test_a_run_whose_reference_is_all_zero_is_a_fail_with_the_check_named(self):
+        res = trt_result(engine={"ran": True, "max_abs_err": 0.0, "ref_max_abs": 0.0, "repeat_identical": True})
+        for k in ("mem_growth_mib", "total_mib"):
+            res.pop(k, None)
+        st, why, *_ = self.run_row("tensorrt", [lib.JSON_PREFIX + json.dumps(res)])
+        self.assertEqual(st, lib.FAIL)
+        self.assertTrue(why.startswith("engine_equals_onnxruntime_cpu"), why)
+
     def test_a_committed_expected_token_hash_reaches_the_judge(self):
         pins = json.loads(json.dumps(PINS))
         pins["rows"]["vllm"]["expected_token_sha256"] = "f" * 64
         st, why, *_ = self.run_row("vllm", self.good_lines(), pins=pins)
         self.assertEqual(st, lib.FAIL)
         self.assertTrue(why.startswith("tokens_equal_committed_hash"), why)
+
+    def test_a_machine_without_a_c_compiler_is_not_run_for_vllm_before_the_row_starts(self):
+        self.captured.clear()
+        for f in (facts(gcc=False), facts(python_h=False)):
+            st, why, *_ = self.run_row("vllm", self.good_lines(), facts=f)
+            self.assertEqual(st, lib.NOT_RUN)
+            self.assertIn("no_c_compiler_or_python_headers", why)
+        self.assertNotIn("argv", self.captured)
+
+    def test_the_other_rows_do_not_need_a_c_compiler(self):
+        for row in ("jax", "tensorrt"):
+            st, why, *_ = self.run_row(row, self.good_lines(row), facts=facts(gcc=False, python_h=False))
+            self.assertEqual(st, lib.PASS, (row, why))
 
     def test_a_forced_flavour_the_driver_cannot_take_is_not_run(self):
         st, why, *_ = self.run_row("jax", [], facts=facts(driver_cuda=(12, 9)), forced="cu13")
@@ -978,6 +1031,14 @@ class CmdRun(unittest.TestCase):
         self.assertTrue(any(l.startswith("APPNOTRUN driver_cuda_below_every_wheel") for l in lines))
         self.assertFalse(any("status=PASS" in l for l in lines))
         self.assertFalse(any(l.startswith("GPU_USE_PROOF") for l in lines))
+
+    def test_a_run_without_a_memory_measurement_prints_no_proof_and_does_not_crash(self):
+        res = vllm_result(mem_growth_mib=None)
+        st, why, checks = lib.judge_vllm(res)
+        rc, lines = self.run_main("vllm", (st, why, "cu13", checks, res, []))
+        self.assertEqual(rc, 1)
+        self.assertFalse(any(l.startswith("GPU_USE_PROOF") for l in lines))
+        self.assertTrue(any(l.startswith("VLLM_SUMMARY status=FAIL ") for l in lines))
 
     def test_the_exit_code_is_one_only_for_a_fail(self):
         res = vllm_result()
@@ -1128,6 +1189,15 @@ class Setup(unittest.TestCase):
             return t + m.group(1)
         self.refused(dup, "twice")
 
+    def test_a_tensorrt_lock_without_nvidia_s_index_is_refused_before_pip_runs(self):
+        text = (ML / "locks/tensorrt_cu13.lock.txt").read_text().replace("--extra-index-url https://pypi.nvidia.com/\n", "")
+        (self.t / "bad.lock").write_text(text)
+        with mock.patch.object(mr, "lock_path", lambda *a: self.t / "bad.lock"):
+            st, why = self.setup("tensorrt")
+        self.assertEqual(st, lib.FAIL)
+        self.assertIn("pypi.nvidia.com", why)
+        self.assertEqual(self.calls, [])
+
     def test_a_lock_that_disagrees_with_the_pins_is_refused_before_pip_runs(self):
         self.refused(lambda t: t.replace("jax==0.12.0.1", "jax==0.11.0", 1), "pins.json says 0.12.0.1")
 
@@ -1227,6 +1297,16 @@ class Compare(unittest.TestCase):
         self.assertEqual(self.kinds("tensorrt", judged("tensorrt"), judged("tensorrt", builder=b)), ["CANDIDATE"])
         self.assertEqual(self.kinds("tensorrt", judged("tensorrt"), judged("tensorrt", ort_trt={"status": "NOT_RUN"})), ["CANDIDATE"])
         self.assertEqual(self.kinds("tensorrt", judged("tensorrt"), judged("tensorrt", onnx_sha256="c" * 64)), ["NOTE"])
+
+    def test_a_not_run_guest_alone_does_not_fail_the_comparison(self):
+        t = Path(tempfile.mkdtemp())
+        for name, j in (("h.log", judged("jax")), ("g.log", judged("jax", lib.NOT_RUN))):
+            (t / name).write_text(lib.judged_line("jax", j["status"], j["reason"], "cu13", [], j["result"]) + "\n")
+        buf = io.StringIO()
+        with mock.patch("sys.stdout", buf):
+            rc = mr.main(["compare", "jax", str(t / "h.log"), str(t / "g.log")])
+        self.assertEqual(rc, 0)
+        self.assertIn("ML_COMPARE_NOTE jax: host PASS, guest NOT_RUN", buf.getvalue())
 
     def test_the_autotuner_loss_alone_is_a_candidate(self):
         self.assertEqual(self.kinds("jax", judged("jax"), judged("jax", autotune_bytes=0)), ["CANDIDATE"])
@@ -1446,6 +1526,7 @@ class MatrixWiring(unittest.TestCase):
         hook = (ROOT / "scripts/apps/apps_hook.sh").read_text()
         self.assertIn('mlrows/mlrows.py" push --root', hook)
         self.assertIn('--transport "$G"', hook)
+        self.assertIn("case $a in vllm|tensorrt|jax)", hook)
         matrix = (ROOT / "scripts/apps/apps_matrix.sh").read_text()
         self.assertIn('mlrows/mlrows.py" setup --root', matrix)
         self.assertIn('mlrows/mlrows.py" compare "$row"', matrix)
@@ -1454,6 +1535,46 @@ class MatrixWiring(unittest.TestCase):
     def test_the_hook_and_matrix_glue_stay_short_shell(self):
         for f in ("apps_hook.sh", "apps_matrix.sh"):
             self.assertLessEqual(len((ROOT / "scripts/apps" / f).read_text().splitlines()), 140, f)
+
+
+class HookPush(unittest.TestCase):
+    """The two shell lines of apps_hook.sh that copy the rows into the guest, run for real with a fake transport (they are the only part of the hook these rows add)."""
+    hook = (ROOT / "scripts/apps/apps_hook.sh").read_text()
+
+    def lines(self):
+        a = self.hook.index("MLR=$(for a in $APPS")
+        b = self.hook.index("$G 'sudo rm -rf /opt/apps/out/guest'")
+        return self.hook[a:b]
+
+    def run_lines(self, apps, staged):
+        t = Path(tempfile.mkdtemp())
+        for row in staged:
+            (t / "root" / "mlrows" / row / "venv" / "bin").mkdir(parents=True)
+            (t / "root" / "mlrows" / row / "venv" / "bin" / "python").write_text("py")
+        sink = t / "sink"
+        sink.mkdir()
+        (t / "g").write_text("#!/bin/sh\ncat > \"$(mktemp %s/XXXXXX)\"\n" % sink)
+        (t / "g").chmod(0o755)
+        script = 'HERE="%s"; APPS="%s"; G="%s"; set -u\n%s' % (ROOT / "scripts/apps", apps, t / "g", self.lines())
+        done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=dict(os.environ, KF_APPS_ROOT=str(t / "root")), timeout=60)
+        return done, sorted(sink.iterdir())
+
+    def test_the_rows_asked_for_and_staged_are_pushed_with_the_tool_dir(self):
+        done, sent = self.run_lines("nvidia_smi jax vllm", ["jax", "vllm"])
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.count("MLROWS_PUSH what="), 3)
+        for what in ("mlrows_tool", "jax", "vllm"):
+            self.assertIn("what=%s rc=0" % what, done.stdout)
+        self.assertEqual(len(sent), 3)
+
+    def test_a_run_without_ml_rows_pushes_nothing(self):
+        done, sent = self.run_lines("nvidia_smi vectorAdd", ["jax"])
+        self.assertEqual((done.stdout, sent), ("", []))                     # the hook has no `set -e`: the false `[ -n ]` test is harmless there
+
+    def test_a_row_that_was_not_staged_is_left_out_and_the_tool_dir_still_goes(self):
+        done, sent = self.run_lines("tensorrt", [])
+        self.assertIn("what=mlrows_tool rc=0", done.stdout)
+        self.assertNotIn("what=tensorrt", done.stdout)
 
 
 class GpuUseJudge(unittest.TestCase):
@@ -1499,6 +1620,10 @@ class GpuUseJudge(unittest.TestCase):
         for row in lib.ROWS:
             rec = gur.evaluate(row, "guest", self.log(row, self.good(row)), self.window, self.base, tg.smi_for(row, False))
             self.assertEqual(rec["verdict"], gu.FAIL, (row, rec["reasons"]))
+
+    def test_a_cpu_run_with_plenty_of_memory_growth_is_still_judged_fail_by_the_app_proof(self):
+        rec = gur.evaluate("jax", "host", "\n".join(["log", lib.proof_for("jax", dict(jax_result(), platform="cpu", mem_growth_mib=9000), facts())]), None, None, None)
+        self.assertEqual(rec["verdict"], gu.FAIL, rec["reasons"])
 
     def test_a_row_that_dropped_its_proof_is_a_fail_not_a_pass(self):
         for row in lib.ROWS:
@@ -1580,6 +1705,96 @@ class Standalone(unittest.TestCase):
         self.assertLessEqual(len(text.splitlines()), 30)
         for bad in ("curl", "wget", "pip install", "git clone", "sudo"):
             self.assertNotIn(bad, text)
+
+
+# ------------------------------------------------------------------------------------------------ the real runs (fixtures captured on a Vast container, RTX 4060 Ti, 2026-11-17)
+REAL = {row: fx("%s_run_rtx4060ti_580.log" % row) for row in lib.ROWS}
+REAL_NEG = {row: fx("%s_negctl_rtx4060ti_580.log" % row) for row in lib.ROWS}
+REAL_FACTS = facts(name="NVIDIA GeForce RTX 4060 Ti", driver="580.178.04", cc=(8, 9), total_mib=16380)
+
+
+class RealRuns(unittest.TestCase):
+    """The lines a native run printed, through today's judges: format drift between the runner and its logs shows here, and the judges are tested on real numbers."""
+
+    def test_every_real_run_is_a_pass_and_re_judging_its_measurements_gives_the_same_verdict(self):
+        for row in lib.ROWS:
+            judged_line = lib.extract_judged(REAL[row], row)
+            self.assertEqual(judged_line["status"], lib.PASS, row)
+            res = lib.extract_result(REAL[row])
+            st, why, checks = lib.JUDGES[row](res)
+            self.assertEqual((st, why), (lib.PASS, "ok"), (row, why))
+            self.assertEqual([c["name"] for c in checks], [c["name"] for c in judged_line["checks"]], row)
+
+    def test_the_proof_line_the_run_printed_is_the_one_the_runner_would_print_now(self):
+        for row in lib.ROWS:
+            res = lib.extract_judged(REAL[row], row)["result"]
+            printed = [l for l in REAL[row].splitlines() if l.startswith("GPU_USE_PROOF")]
+            self.assertEqual(printed, [lib.proof_for(row, res, REAL_FACTS)], row)
+
+    def test_the_real_proof_lines_pass_the_judge_with_the_floors_of_the_class_table(self):
+        for row in lib.ROWS:
+            p = gur.policy(row)
+            proof = gu.PROOFS[p["proof"]](REAL[row], **p["params"])
+            self.assertIs(proof["ok"], True, (row, proof))
+
+    def test_the_summary_line_carries_the_status_and_for_vllm_the_token_hash(self):
+        vl = [l for l in REAL["vllm"].splitlines() if l.startswith("VLLM_SUMMARY ")][0]
+        res = lib.extract_result(REAL["vllm"])
+        self.assertIn("status=PASS", vl)
+        self.assertIn("token_sha256=%s" % res["token_sha256"], vl)
+        self.assertEqual(res["token_sha256"], lib.canon_sha256(res["token_ids"]))
+
+    def test_the_committed_token_hash_if_any_is_what_the_real_run_produced(self):
+        want = PINS["rows"]["vllm"].get("expected_token_sha256")
+        if want:
+            self.assertEqual(lib.extract_result(REAL["vllm"])["token_sha256"], want)
+
+    def test_the_engine_log_facts_come_out_of_a_real_log(self):
+        facts_ = lib.extract_result(REAL["vllm"])["log_facts"]
+        self.assertEqual(facts_["graphs_captured"], facts_["graphs_planned"])
+        self.assertGreater(facts_["kv_cache_tokens"], 100000)
+        self.assertGreater(facts_["graph_capture_gib"], 0)
+        again = lib.vllm_log_facts(REAL["vllm"])
+        self.assertEqual({k: again[k] for k in ("kv_cache_tokens", "graphs_captured", "model_load_gib")}, {k: facts_[k] for k in ("kv_cache_tokens", "graphs_captured", "model_load_gib")})
+
+    def test_a_real_run_compared_with_itself_has_no_finding(self):
+        for row in lib.ROWS:
+            j = lib.extract_judged(REAL[row], row)
+            self.assertEqual(lib.compare_rows(row, j, j), [], row)
+
+    def test_the_real_negative_controls_are_fails_and_the_gpu_use_judge_agrees(self):
+        for row in lib.ROWS:
+            j = lib.extract_judged(REAL_NEG[row], row)
+            self.assertEqual(j["status"], lib.FAIL, row)
+            p = gur.policy(row)
+            rec = gur.evaluate(row, "host", REAL_NEG[row], None, None, None)
+            self.assertEqual(rec["verdict"], gu.FAIL, (row, rec["reasons"]))
+
+    def test_the_vllm_control_has_no_proof_line_because_nothing_ran(self):
+        self.assertFalse([l for l in REAL_NEG["vllm"].splitlines() if l.startswith("GPU_USE_PROOF")])
+        self.assertIn("RuntimeError", REAL_NEG["vllm"])
+
+    def test_the_jax_and_tensorrt_controls_print_a_cpu_device(self):
+        for row in ("jax", "tensorrt"):
+            self.assertIn("GPU_USE_PROOF %s device=cpu:0 name=cpu peak_mib=0" % row, REAL_NEG[row])
+
+    def test_the_real_results_hold_the_numbers_the_design_doc_quotes(self):
+        t = lib.extract_result(REAL["tensorrt"])
+        self.assertEqual((t["trt"], t["builder"]["fp16"], t["ort_trt"]["first_provider"]), ("10.16.1.11", True, "TensorrtExecutionProvider"))
+        self.assertGreater(t["builder"]["tactic_lines"], 1000)
+        j = lib.extract_result(REAL["jax"])
+        self.assertAlmostEqual(j["bytes_limit_mib"] / j["total_mib"], 0.73, places=2)
+        self.assertEqual(j["jax"], "0.12.0.1")
+
+    def test_a_real_run_with_one_property_broken_fails_by_that_check(self):
+        res = lib.extract_result(REAL["vllm"])
+        res["repeat_identical"] = False
+        st, why, _ = lib.judge_vllm(res)
+        self.assertEqual(st, lib.FAIL)
+        self.assertTrue(why.startswith("greedy_repeat_identical"))
+        res = lib.extract_result(REAL["jax"])
+        res["bytes_limit_mib"] = res["total_mib"] * 0.5
+        self.assertTrue(lib.judge_jax(res)[1].startswith("preallocation_is_75_percent"))
 
 
 # ------------------------------------------------------------------------------------------------ the trust rules, as text pins

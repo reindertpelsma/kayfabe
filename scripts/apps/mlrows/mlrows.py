@@ -241,6 +241,13 @@ def fetch_model(dest, pins, get=None):
     return True, "%d files, %d bytes" % (len(plan), sum(p["size"] for p in plan))
 
 
+def toolchain_problem(spec, facts):
+    """vLLM's Triton and torch.compile build a launcher with the C compiler and the Python headers at the first start: without them the engine fails late and obscurely."""
+    if spec.get("needs_c_compiler") and not (facts.get("gcc") and facts.get("python_h")):
+        return "no_c_compiler_or_python_headers: install gcc and python3-dev (Triton and torch.compile build a launcher at first use)"
+    return None
+
+
 def setup_row(row, root, facts, pins, forced=None, get=None):
     """-> (status ok|NOT_RUN|FAIL, reason). Preconditions are named, the install is `pip --require-hashes`, nothing outside `root/row` is written."""
     spec = pins["rows"][row]
@@ -250,8 +257,9 @@ def setup_row(row, root, facts, pins, forced=None, get=None):
     if choice["status"] != "ok":
         return lib.FAIL, choice["reason"]
     flavour = choice["flavour"]
-    if spec.get("needs_c_compiler") and not (facts.get("gcc") and facts.get("python_h")):
-        return lib.NOT_RUN, "no_c_compiler_or_python_headers: install gcc and python3-dev (Triton and torch.compile build a launcher at first use)"
+    problem = toolchain_problem(spec, facts)
+    if problem:
+        return lib.NOT_RUN, problem
     free = facts.get("disk_free_gb")
     if free is not None and free < spec["need_disk_gb"]:
         return lib.NOT_RUN, "disk_free_below_need: %.0f GB free, %d GB needed" % (free, spec["need_disk_gb"])
@@ -327,6 +335,9 @@ def run_row(row, root, out, facts, pins, forced=None, negctl=False, base_env=Non
     if choice["status"] != "ok":
         return lib.FAIL, choice["reason"], None, [], None, []
     flavour = choice["flavour"]
+    problem = toolchain_problem(spec, facts)
+    if problem:
+        return lib.NOT_RUN, problem, flavour, [], None, []
     state = read_setup(root, row)
     py = venv_python(root, row)
     if not (state and state.get("status") == "ok" and py.exists()):

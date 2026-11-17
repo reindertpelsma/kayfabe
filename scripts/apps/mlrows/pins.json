@@ -28,7 +28,15 @@
       "setup_download_gb": 11,
       "timeout_s": 1500,
       "needs_c_compiler": true,
-      "expected_token_sha256": null
+      "expected_token_sha256": "98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a",
+      "expected_token_context": {
+        "what": "sha256 of the canonical JSON of the 8 greedy token-id lists (the row's own OUTPUT, not a binary); MEASURED identical on three dies of three architectures on 2026-11-17 (traces/open_ml_rows_20261117); valid only for exactly this context, a change to any item below needs a new measurement on at least two dies",
+        "vllm": "0.34.0",
+        "torch": "2.14.0",
+        "dtype": "float16",
+        "model_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+        "dies": ["RTX 3060 sm_86 (driver 580.159.03)", "RTX 4060 Ti sm_89 (driver 580.178.04)", "RTX 2080 Ti sm_75 (driver 615.71.09)"]
+      }
     },
     "tensorrt": {
       "title": "TensorRT builder + engine (FP16), ONNX Runtime CPU as the reference, ONNX Runtime TensorRT EP",

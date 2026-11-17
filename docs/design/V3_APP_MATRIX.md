@@ -23,6 +23,10 @@ on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failur
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
 
+## Discovery rows (2026-11-17)
+
+`run_apps.sh` has a second list for rows that report and never gate. The open ML rows are `vllm` (offline `LLM(...)` on a 135M model at temperature 0, engine process, CUDA graph capture), `tensorrt` (builder with FP16 and an empty timing cache, engine, ONNX Runtime TensorRT provider) and `jax` (XLA preallocation, autotuner, jit against the CPU): [design](V3_OPEN_ML_ROWS.md), [manual](../howto/open-ml-rows.md). They are in `list`, not in `listall` or `all`, and in no gate list; each environment is built from a hashed lock at setup time and each row asserts GPU use ([V3_GPU_USE_ASSERTION.md](V3_GPU_USE_ASSERTION.md)).
+
 ## Reproducing the image (DESIGN-ONLY, 2026-11-07)
 
 **RESEARCH, 2026-11-08:** [chroot construction without KVM](V3_APPS_IMAGE_CHROOT_EVALUATION.md) is evaluated as an additional backend for independent release-box builds. It is not implemented or qualified; the working QEMU path and old bash paths remain available.

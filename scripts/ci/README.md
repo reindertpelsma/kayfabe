@@ -201,3 +201,5 @@ root payload, which can read `/run/kf-ci/env` today. The payload's only hook is 
 MANIFEST` (prints `KF_PAYLOAD_PREFETCH ...` for the planned stages); without `--dry-run` it is refused. Not done: starting the
 downloader from the payload, a stage calling `wait`, apt (design source c), seeders (deferred), the real manifest for the
 SPEC and Windows media, disk reservation of unpack space beyond `--reserve-gb`.
+
+Open ML rows (2026-11-17, [design](../../docs/design/V3_OPEN_ML_ROWS.md), [manual](../../docs/howto/open-ml-rows.md)): `test_mlrows.py` (GPU-free tests of `scripts/apps/mlrows/`: hashed locks, flavour choice, model check, judges, environment, wiring, GPU-use judge) and `mlrows_mutants.py` (two named killers per mutant, run by `ci.yml`).
