@@ -1,0 +1,189 @@
+{
+ "cts_commit": "0d18b347943e5e843529a05c95220e27fe30c538",
+ "lists": {
+  "gl46_core": {
+   "count": 494,
+   "groups": [
+    {
+     "prefix": "KHR-GL46.compute_shader.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": "all"
+    },
+    {
+     "prefix": "KHR-GL46.tessellation_shader.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": "all"
+    },
+    {
+     "prefix": "KHR-GL46.gl_spirv.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": "all"
+    },
+    {
+     "prefix": "KHR-GL46.internalformat.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": "all"
+    },
+    {
+     "prefix": "KHR-GL46.shader_image_load_store.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": "all"
+    },
+    {
+     "prefix": "KHR-GL46.shader_storage_buffer_object.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": 20
+    },
+    {
+     "prefix": "KHR-GL46.copy_image.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": 20
+    },
+    {
+     "prefix": "KHR-GL46.clear_tex_image.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": 12
+    },
+    {
+     "prefix": "KHR-GL46.packed_depth_stencil.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": "all"
+    },
+    {
+     "prefix": "KHR-GL46.buffer_storage.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": "all"
+    },
+    {
+     "prefix": "KHR-GL46.multi_bind.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": "all"
+    },
+    {
+     "prefix": "KHR-GL46.sparse_buffer_tests.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": 20
+    },
+    {
+     "prefix": "KHR-GL46.sparse_texture_tests.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": 20
+    },
+    {
+     "prefix": "KHR-GL46.draw_indirect.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": 12
+    },
+    {
+     "prefix": "KHR-GL46.geometry_shader.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": 12
+    },
+    {
+     "prefix": "KHR-GL46.direct_state_access.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": 12
+    },
+    {
+     "prefix": "KHR-GL46.transform_feedback.",
+     "source": "external/openglcts/data/gl_cts/data/mustpass/gl/khronos_mustpass/main/gl46-main.txt",
+     "take": "all"
+    }
+   ],
+   "out": "caselists/gl46_core.txt",
+   "row": "vkglcts_gl46",
+   "sha256": "9a4f4528cdf310d6cefab447eb048e6723c220db16be1d4f1471016a756c5c2b"
+  },
+  "vk_breadth": {
+   "count": 375,
+   "groups": [
+    {
+     "prefix": "dEQP-VK.ray_query.",
+     "source": "external/vulkancts/mustpass/main/vk-default/ray-query.txt",
+     "take": 30
+    },
+    {
+     "prefix": "dEQP-VK.ray_tracing_pipeline.",
+     "source": "external/vulkancts/mustpass/main/vk-default/ray-tracing-pipeline.txt",
+     "take": 30
+    },
+    {
+     "prefix": "dEQP-VK.mesh_shader.",
+     "source": "external/vulkancts/mustpass/main/vk-default/mesh-shader.txt",
+     "take": 30
+    },
+    {
+     "prefix": "dEQP-VK.sparse_resources.",
+     "source": "external/vulkancts/mustpass/main/vk-default/sparse-resources.txt",
+     "take": 30
+    },
+    {
+     "prefix": "dEQP-VK.synchronization.",
+     "source": "external/vulkancts/mustpass/main/vk-default/synchronization.txt",
+     "take": 25
+    },
+    {
+     "prefix": "dEQP-VK.synchronization2.",
+     "source": "external/vulkancts/mustpass/main/vk-default/synchronization2.txt",
+     "take": 25
+    },
+    {
+     "prefix": "dEQP-VK.compute.",
+     "source": "external/vulkancts/mustpass/main/vk-default/compute.txt",
+     "take": 30
+    },
+    {
+     "prefix": "dEQP-VK.api.",
+     "source": "external/vulkancts/mustpass/main/vk-default/api.txt",
+     "take": 40
+    },
+    {
+     "prefix": "dEQP-VK.tessellation.",
+     "source": "external/vulkancts/mustpass/main/vk-default/tessellation.txt",
+     "take": 20
+    },
+    {
+     "prefix": "dEQP-VK.descriptor_indexing.",
+     "source": "external/vulkancts/mustpass/main/vk-default/descriptor-indexing.txt",
+     "take": 15
+    },
+    {
+     "prefix": "dEQP-VK.fragment_shading_rate.",
+     "source": "external/vulkancts/mustpass/main/vk-default/fragment-shading-rate.txt",
+     "take": 15
+    },
+    {
+     "prefix": "dEQP-VK.shader_object.",
+     "source": "external/vulkancts/mustpass/main/vk-default/shader-object/link.txt",
+     "take": 15
+    },
+    {
+     "prefix": "dEQP-VK.dgc.",
+     "source": "external/vulkancts/mustpass/main/vk-default/dgc.txt",
+     "take": 20
+    },
+    {
+     "prefix": "dEQP-VK.subgroups.",
+     "source": "external/vulkancts/mustpass/main/vk-default/subgroups.txt",
+     "take": 20
+    },
+    {
+     "prefix": "dEQP-VK.memory_model.",
+     "source": "external/vulkancts/mustpass/main/vk-default/memory-model.txt",
+     "take": 15
+    },
+    {
+     "prefix": "dEQP-VK.memory.",
+     "source": "external/vulkancts/mustpass/main/vk-default/memory.txt",
+     "take": 15
+    }
+   ],
+   "out": "caselists/vk_breadth.txt",
+   "row": "vkglcts_vk",
+   "sha256": "daa3a38d7fb2643b5cd0e56cf59d4958bec030995c2e1e4f36dd8ce796828f47"
+  }
+ },
+ "schema": 1,
+ "selection_rule": "per group: all cases, or N cases at evenly spaced positions of the must-pass file (index i*len//N), order kept",
+ "status": "STATUS: DESIGN-ONLY, 2026-11-17. Selection spec of the committed caselists; regenerate with cts_caselist.py generate --write."
+}
