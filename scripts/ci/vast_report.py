@@ -549,7 +549,11 @@ def validate_propimage_run(value):
     verdicts = ("PASS", "FAIL", "RETRY", "REFUSED", "SKIPPED")
     classes = ("MISSING_INPUT", "NO_DRIVER", "NOT_INSTALLED", "NOT_PROVIDED", "CONSTRAINT")
     top = {"schema", "verdict", "sha", "reason", "family", "cpu_vendor", "preflight", "images", "strict", "pins_enforced", "summary", "strict_failures", "breakages", "platform", "rows"}
-    ok = type(value) is dict and top <= set(value) <= top | {"error"} and value["schema"] == "kayfabe.propimage-run/1"
+    ok = type(value) is dict and top <= set(value) <= top | {"error", "swtpm"} and value["schema"] == "kayfabe.propimage-run/1"
+    # 2026-11-17: the swtpm of the run, as in the legacy stage's record: {version, built} (built = this run built 0.10.1 under /opt/tpm)
+    swtpm = value.get("swtpm", {"version": None, "built": False}) if ok else None
+    ok = ok and type(swtpm) is dict and set(swtpm) == {"version", "built"} and type(swtpm["built"]) is bool
+    ok = ok and (swtpm["version"] is None or (type(swtpm["version"]) is str and re.fullmatch(r"[0-9.]{1,16}", swtpm["version"]) is not None))
     ok = ok and value["verdict"] in verdicts and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
     ok = ok and type(value["reason"]) is str and word.fullmatch(value["reason"]) is not None and ("error" not in value or text.fullmatch(str(value["error"])))
     ok = ok and value["family"] in (None, "turing", "ampere", "ada", "blackwell") and value["cpu_vendor"] in (None, "amd", "intel", "other")

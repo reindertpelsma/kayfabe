@@ -63,6 +63,9 @@ RR = "test_propimage_images.ResultRows."
 # the identity-pin rule (docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md), scripts/ci/test_propimage_pins.py
 MX, PS, EX, RI, PF2, NT = ("test_propimage_pins." + n for n in ("Matrix.", "Sources.", "ExpectSha256.", "ReportInvariants.", "PinsFlag.", "Notes."))
 
+# 2026-11-17: an old swtpm is built before the first boot, not refused (docs/design/V3_PROPIMAGE_RUNNER.md), test_propimage_images.SwtpmTools
+SW = "test_propimage_images.SwtpmTools."
+
 
 def M(name, key, old, new, *tests):
     return (name, key, old, new, list(tests))
@@ -252,6 +255,58 @@ MUTANTS = [
       RI + "test_a_claimed_match_needs_equal_hashes", RI + "test_a_match_with_no_computed_hash_is_a_contradiction"),
     M("report-identity-none-with-a-pin", "report", '(src["identity"] == "none") == (src["pin_sha256"] is None)', "True",
       RI + "test_a_pin_less_source_says_none", RI + "test_a_source_with_identity_none_cannot_carry_a_pin"),
+    # swtpm older than 0.10: built under /opt/tpm before the first boot (route signed: the private tarballs; route git: the pinned upstream commits)
+    M("swtpm-old-refused-again", "images", 'pa.row("swtpm", "MATCH" if have_swtpm else "WARN",', 'pa.row("swtpm", "MATCH" if have_swtpm else "MISMATCH",',
+      SW + "test_an_old_swtpm_with_the_refs_builds_from_the_private_tarballs_and_continues", SW + "test_an_old_swtpm_without_refs_builds_from_the_pinned_upstream_commits"),
+    M("swtpm-old-not-built", "images", "        if have_swtpm:\n", "        if True:\n",
+      SW + "test_an_old_swtpm_with_the_refs_builds_from_the_private_tarballs_and_continues", SW + "test_an_old_swtpm_without_refs_builds_from_the_pinned_upstream_commits"),
+    M("swtpm-new-built-anyway", "images", "        if have_swtpm:\n", "        if False:\n",
+      SW + "test_a_new_enough_swtpm_fetches_and_builds_nothing", SW + "test_an_already_built_prefix_is_used_and_not_built_again"),
+    M("swtpm-failed-build-ignored", "images", '                swrow.update(status="MISMATCH", detail=pa.clean("build failed: " + r.reason, 160))\n                raise\n',
+      '                route = "git"\n',
+      SW + "test_a_failed_tarball_fetch_is_download", SW + "test_a_failed_git_fetch_is_swtpm_source", SW + "test_a_checkout_that_is_not_the_pinned_commit_is_never_built"),
+    M("swtpm-failed-build-row-not-updated", "images", 'swrow.update(status="MISMATCH", detail=pa.clean("build failed: " + r.reason, 160))', "pass",
+      SW + "test_a_failed_build_on_the_signed_route_says_so_in_the_swtpm_row", SW + "test_a_failed_build_on_the_git_route_says_so_in_the_swtpm_row"),
+    M("swtpm-environment-not-updated", "images", '    ctx.environ.update(SWTPM=pa.SWTPM_PREFIX + "/bin/swtpm", LD_LIBRARY_PATH=env["LD_LIBRARY_PATH"])\n    ctx.environ.update(pa.swtpm_env(ctx.environ))\n', "    pass\n",
+      SW + "test_an_old_swtpm_with_the_refs_builds_from_the_private_tarballs_and_continues", SW + "test_an_old_swtpm_without_refs_builds_from_the_pinned_upstream_commits"),
+    M("swtpm-built-flag-false", "images", '"built": True}\n            swrow.update', '"built": False}\n            swrow.update',
+      SW + "test_an_old_swtpm_with_the_refs_builds_from_the_private_tarballs_and_continues", SW + "test_an_old_swtpm_without_refs_builds_from_the_pinned_upstream_commits"),
+    M("swtpm-probe-without-library-path", "images", "ctx.runner, pa.swtpm_env(ctx.environ))\n        have_swtpm", "ctx.runner, ctx.environ)\n        have_swtpm",
+      SW + "test_an_already_built_prefix_is_used_and_not_built_again", SW + "test_an_already_built_prefix_starts_with_its_library_path"),
+    M("swtpm-preflight-refusal-ignored", "images", "        if hard:\n            rec[\"verdict\"], rec[\"reason\"] = hard\n            return rec\n",
+      "        if False:\n            return rec\n",
+      SW + "test_a_wrong_gpu_family_comes_before_the_build", SW + "test_a_missing_kf3_qemu_comes_before_the_build", SW + "test_too_little_disk_comes_before_the_build"),
+    M("swtpm-signed-route-keeps-the-github-mirror", "images", '                it["sources"] = [x for x in it["sources"] if x["kind"] == "signed"]           # the GitHub archive mirror is never tried here\n',
+      "                pass\n",
+      SW + "test_an_old_swtpm_with_the_refs_builds_from_the_private_tarballs_and_continues", SW + "test_the_tools_come_first_and_the_image_is_downloaded_once_after_them"),
+    M("swtpm-signed-route-ignores-the-url-file", "images", '    return items if url_file_names(ctx.urls, [i["ref"] for i in items.values()]) else None\n', "    return items\n",
+      SW + "test_a_url_file_with_the_libtpms_ref_alone_takes_the_git_route", SW + "test_a_url_file_with_the_swtpm_ref_alone_takes_the_git_route",
+      SW + "test_an_old_swtpm_without_refs_builds_from_the_pinned_upstream_commits"),
+    M("swtpm-git-route-always", "images", '    return items if url_file_names(ctx.urls, [i["ref"] for i in items.values()]) else None\n', "    return None\n",
+      SW + "test_an_old_swtpm_with_the_refs_builds_from_the_private_tarballs_and_continues", SW + "test_a_failed_tarball_fetch_is_download",
+      SW + "test_the_tools_come_first_and_the_image_is_downloaded_once_after_them"),
+    M("swtpm-one-ref-is-enough", "images", "all(type(urls.get(r)) is str for r in refs)", "any(type(urls.get(r)) is str for r in refs)",
+      SW + "test_a_url_file_with_the_libtpms_ref_alone_takes_the_git_route", SW + "test_a_url_file_with_the_swtpm_ref_alone_takes_the_git_route"),
+    M("swtpm-url-without-a-string-is-named", "images", "all(type(urls.get(r)) is str for r in refs)", "all(r in urls for r in refs)",
+      SW + "test_a_swtpm_ref_without_a_string_url_is_not_named", SW + "test_a_libtpms_ref_without_a_string_url_is_not_named"),
+    M("swtpm-git-commit-unchecked", "images", '    if done.returncode != 0 or (done.stdout or "").strip() != commit:', "    if done.returncode != 0:",
+      SW + "test_a_checkout_that_is_not_the_pinned_commit_is_never_built", SW + "test_a_checkout_of_the_other_project_is_never_built"),
+    M("swtpm-git-commit-error-renamed", "images", 'raise pa.Refused("SWTPM_SOURCE_COMMIT")', 'raise pa.Refused("SWTPM_SOURCE")',
+      SW + "test_a_checkout_that_is_not_the_pinned_commit_is_never_built", SW + "test_a_checkout_of_the_other_project_is_never_built"),
+    M("swtpm-git-fetches-all-history", "images", '"fetch", "-q", "--depth", "1", url, commit]', '"fetch", "-q", url, commit]',
+      SW + "test_an_old_swtpm_without_refs_builds_from_the_pinned_upstream_commits", SW + "test_a_swtpm_ref_without_a_string_url_is_not_named"),
+    M("swtpm-git-fetches-a-tag-not-the-commit", "images", '"fetch", "-q", "--depth", "1", url, commit]', '"fetch", "-q", "--depth", "1", url, "v0.10.1"]',
+      SW + "test_an_old_swtpm_without_refs_builds_from_the_pinned_upstream_commits", SW + "test_a_url_file_with_the_libtpms_ref_alone_takes_the_git_route"),
+    M("swtpm-git-tree-not-used-by-the-recipe", "pa", "        if trees is None:\n", "        if True:\n",
+      SW + "test_an_old_swtpm_without_refs_builds_from_the_pinned_upstream_commits", SW + "test_a_url_file_with_the_swtpm_ref_alone_takes_the_git_route"),
+    M("swtpm-tools-pins-not-checked", "pa", "    roles = roles or needed_roles(build_swtpm)\n    unset = unset_roles(pins, roles)\n", "    roles = roles or needed_roles(build_swtpm)\n    unset = []\n",
+      SW + "test_an_unpinned_libtpms_tarball_refuses_before_anything_is_fetched", SW + "test_an_unpinned_swtpm_tarball_refuses_before_anything_is_fetched"),
+    M("report-swtpm-built-not-bool", "report", 'and type(swtpm["built"]) is bool', "",
+      SW + "test_the_swtpm_part_of_a_built_record_is_validated", SW + "test_the_swtpm_part_of_a_refusal_record_is_validated"),
+    M("report-swtpm-version-any-text", "report", '(swtpm["version"] is None or (type(swtpm["version"]) is str and re.fullmatch(r"[0-9.]{1,16}", swtpm["version"]) is not None))', "True",
+      SW + "test_the_swtpm_part_of_a_built_record_is_validated", SW + "test_the_swtpm_part_of_a_refusal_record_is_validated"),
+    M("report-swtpm-keys-open", "report", 'type(swtpm) is dict and set(swtpm) == {"version", "built"} and', "type(swtpm) is dict and",
+      SW + "test_the_swtpm_part_of_a_built_record_is_validated", SW + "test_the_swtpm_part_of_a_refusal_record_is_validated"),
     M("report-differs-with-equal-hashes", "report", '(src["identity"] != "differs" or src["sha256"] not in (None, src["pin_sha256"]))', "True",
       RI + "test_a_differing_pin_whose_hashes_are_equal_is_a_contradiction", RI + "test_a_differing_pin_whose_hashes_are_equal_is_a_contradiction"),
 ]
