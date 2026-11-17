@@ -2108,6 +2108,9 @@ jobs:
           # Standalone trust helper and lint (2026-11-17): anchors, the default mode, the explicit lift, user input, evidence; the lint's rules: two named killers per mutant.
           python3 -B -I scripts/ci/kf_trust_mutants.py
           python3 -B -I scripts/ci/trust_lint_mutants.py
+          # Unreal installed-build tooling (2026-11-17, design-only, fake runner): cache key, budgets, resume, build-or-fetch, pins; >=2 named killers.
+          python3 -B -I scripts/ci/test_unreal_build.py
+          python3 -B -I scripts/ci/unreal_build_mutants.py
           # Uniform guest clock rule (2026-11-16): network only decides; the floor counts loaded software only; >=2 killers each.
           python3 -B -I scripts/ci/clockrule_mutants.py
           # Bandwidth table guard (fails on a stale ESTIMATE: edit ci/vast-broker/bandwidth.json) and the mutants of the guard, the calibration and the transferred-bytes record (2026-11-16): two named killers per mutant; their tests run in the scripts/ci suite.
