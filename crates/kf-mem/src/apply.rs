@@ -1748,6 +1748,41 @@ mod tests {
         );
     }
 
+    /// ★★ **A depth/stencil kind in guest RAM keeps its layout on the host** (vkcts 2026-11-17,
+    /// RTX 3090, host 580.159.04: `dEQP-VK.dgc.ext.graphics.multiview.view_mask_2.no_ies_gpl.
+    /// indexed_draw_buffer_tokens` raised host Xid 13 "3D-Z SYSMEM KIND Violation" in the guest
+    /// only). The host RM maps a Z kind onto sysmem: `ogkm-580:
+    /// src/nvidia/src/kernel/mem_mgr/virtual_mem.c:1348-1394` takes any supported
+    /// `kindOverride` and, for an `ADDR_SYSMEM` target, strips only compression; Z surfaces in
+    /// sysmem are a configuration RM names (`ogkm-580:
+    /// src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:4923-4928`). Rewriting the
+    /// guest's Z kind to PITCH on a RAM row is the wrong kind the v3-gfx carry exists to end.
+    #[test]
+    fn a_depth_kind_in_guest_ram_keeps_its_layout_on_the_host() {
+        for (guest, want) in [
+            (0x01, 0x01), // Z16
+            (0x02, 0x02), // S8
+            (0x03, 0x03), // S8Z24
+            (0x04, 0x04), // ZF32_X24S8
+            (0x05, 0x05), // Z24S8
+            (0x0B, 0x01), // Z16 compressible -> Z16
+            (0x0E, 0x05), // Z24S8 compressible -> Z24S8
+        ] {
+            for per_map_kind in [true, false] {
+                assert_eq!(
+                    host_pte_kind(guest, true, per_map_kind),
+                    host_pte_kind(guest, false, per_map_kind),
+                    "kind {guest:#x} per_map_kind={per_map_kind}: RAM and vidmem must agree"
+                );
+                assert_eq!(
+                    host_pte_kind(guest, true, per_map_kind),
+                    want,
+                    "kind {guest:#x} in guest RAM, per_map_kind={per_map_kind}"
+                );
+            }
+        }
+    }
+
     /// ★★ The host-driver axis: on a host with no per-map PTE kind (≤575.64.05) PITCH / GENERIC /
     /// compressible generic map with NO override (the pre-v3-gfx mapping), vidmem or RAM alike,
     /// while a depth/stencil kind is KEPT — so the host carry refuses it by name rather than
