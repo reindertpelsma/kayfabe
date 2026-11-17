@@ -519,6 +519,15 @@ class DriverTests(Base):
         self.assertTrue(any("--no-questions" in c and "CC=x86_64-linux-gnu-gcc-13" in c for c in log))
         self.assertTrue(any("rm -f /var/tmp/nv-580.159.04.run" in c for c in log))
 
+    def test_without_an_expected_sha_the_users_driver_runs_and_the_hash_and_size_are_recorded(self):
+        f, sha = self.run_file()
+        runner, _ = self.stub()
+        r = self.p.install_driver(self.st, "/k", f, runner=runner, log=lambda *a: None)
+        self.assertEqual((r["sha256"], r["bytes"]), (sha, len(b"fake installer")))
+        runner2, _ = self.stub()
+        r2 = self.p.install_driver(self.st, "/k", f, sha, runner=runner2, log=lambda *a: None)
+        self.assertEqual(r2["sha256"], sha)
+
     def test_wrong_sha_refused_before_any_ssh(self):
         f, _ = self.run_file()
         runner, log = self.stub()

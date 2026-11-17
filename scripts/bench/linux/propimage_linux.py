@@ -1064,12 +1064,14 @@ def driver_clock(state, run_file, created_utc=None, offset_s=0):
     return clock_for_mode(state, "run", "offline", loaded_software=[spec], offset_s=offset_s)
 
 
-def install_driver(state, key, run_file, sha256, created_utc=None, load_module=True, runner=subprocess.run, jobs=8, log=print):
+def install_driver(state, key, run_file, sha256=None, created_utc=None, load_module=True, runner=subprocess.run, jobs=8, log=print):
     """Stage the .run on the running offline clone, build it with the kernel's compiler, verify content. Named failures:
-    DRIVER_SHA_MISMATCH, KERNEL_CC_MISSING, GUEST_DRIVER_MISMATCH. Needs the clock rule to have passed at boot (driver_clock)."""
+    DRIVER_SHA_MISMATCH, KERNEL_CC_MISSING, GUEST_DRIVER_MISMATCH. Needs the clock rule to have passed at boot (driver_clock).
+    The .run is the USER's file: `sha256` is an opt-in expectation (docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md); without it nothing is refused and
+    the result carries the computed sha256 and size either way."""
     ver = driver_version_from_name(run_file)
     got = W.sha256_file(run_file)
-    require(got == sha256, "DRIVER_SHA_MISMATCH: %s is %s, the pin says %s" % (Path(run_file).name, got, sha256))
+    require(sha256 is None or got == sha256, "DRIVER_SHA_MISMATCH: %s is %s, the pin says %s" % (Path(run_file).name, got, sha256))
     q = run_ssh(state, key, KERNEL_CC_CMD, runner=runner)
     cc = q.stdout.strip() or None
     chk = run_ssh(state, key, "command -v %s" % shlex.quote(cc or "gcc"), runner=runner)
@@ -1084,7 +1086,7 @@ def install_driver(state, key, run_file, sha256, created_utc=None, load_module=T
                    runner=runner).stdout.strip()
     run_ssh(state, key, "sudo rm -f /var/tmp/nv-%s.run" % ver, runner=runner)
     require(mod == ver and cuda == ver, "GUEST_DRIVER_MISMATCH: modinfo=%r libcuda=%r want %s" % (mod, cuda, ver))
-    return {"version": ver, "modinfo": mod, "libcuda": cuda, "cc": cc}
+    return {"version": ver, "modinfo": mod, "libcuda": cuda, "cc": cc, "sha256": got, "bytes": Path(run_file).stat().st_size}
 
 
 # ---------------------------------------------------------------- package (one disk, three members)
@@ -1740,7 +1742,7 @@ def main(argv=None):
     s = sub.add_parser("auth-paste"); s.add_argument("--dir", required=True); s.add_argument("--session", default=TMUX_SESSION)
     s = sub.add_parser("auth-selftest"); s.add_argument("--dir", required=True); s.add_argument("--name", default="auth1")
     s = sub.add_parser("install-driver"); s.add_argument("--dir", required=True); s.add_argument("--run", required=True)
-    s.add_argument("--sha256", required=True); s.add_argument("--created-utc"); s.add_argument("--skip-module-load", action="store_true")
+    s.add_argument("--sha256", help="optional: refuse unless the .run has this sha256"); s.add_argument("--created-utc"); s.add_argument("--skip-module-load", action="store_true")
     s = sub.add_parser("pack"); s.add_argument("state"); s.add_argument("image"); s.add_argument("--out", required=True)
     s.add_argument("--extra", action="append", default=[], help="more members, e.g. packages.tsv and seal_report.txt")
     s = sub.add_parser("unpack"); s.add_argument("zip"); s.add_argument("--dir", required=True); s.add_argument("--workdir")
