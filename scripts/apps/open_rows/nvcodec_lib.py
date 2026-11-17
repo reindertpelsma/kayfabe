@@ -362,7 +362,9 @@ def decode_compare_argv(ffmpeg, case, stream):
     key = (case["chroma"], case["bitdepth"])
     argv = [ffmpeg, "-hide_banner", "-nostdin", "-i", stream]
     if case["mode"] == "hwaccel_cuda":
-        argv += ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-i", stream]
+        # AV1: ffmpeg prefers libdav1d, which has no NVDEC hwaccel, so the frames would be software frames and hwdownload fails; the native
+        # `av1` decoder is the one that takes the hwaccel (measured on ffmpeg 4.4.2, traces/open_rows_ffdcgm_20261117)
+        argv += (["-c:v", "av1"] if case["codec"] == "av1" else []) + ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-i", stream]
         lower = "hwdownload,format=%s,format=%s" % (HW_SW_FMT[key], f)
     else:
         argv += ["-c:v", CUVID[case["codec"]], "-i", stream]
@@ -414,13 +416,14 @@ def parse_stream_json(text):
 REASONS = (
     ("driver_api_too_old", re.compile(r"Driver does not support the required nvenc API version|minimum required Nvidia driver", re.I)),
     ("session_limit", re.compile(r"OpenEncodeSessionEx failed: (out of memory|incompatible client key)|OpenEncodeSessionEx failed: .*\(10\)", re.I)),
+    ("caps_not_supported", re.compile(r"\bbit encode not supported|\bnot supported\b|\bexceeds\b|Codec not supported", re.I)),
     ("no_encode_device", re.compile(r"No (NVENC )?capable devices found|Cannot load libnvidia-encode|OpenEncodeSessionEx failed: (no encode device|unsupported device)", re.I)),
     ("no_decode_device", re.compile(r"CUDA_ERROR_NO_DEVICE|no CUDA-capable device", re.I)),
     ("unknown_encoder", re.compile(r"Unknown encoder|Encoder .* not found|Unrecognized option", re.I)),
     ("unknown_decoder", re.compile(r"Unknown decoder|Decoder .* not found", re.I)),
     ("no_cuvid", re.compile(r"Cannot load libnvcuvid|cuvid.*not (found|available)|Cannot load cuvid", re.I)),
     ("hw_decode_unsupported", re.compile(r"Hardware is lacking required capabilities|Failed setup for format cuda|doesn't support|"
-                                         r"cuvidCreateDecoder|Codec not supported|No decoder surfaces left|not supported", re.I)),
+                                         r"cuvidCreateDecoder|No decoder surfaces left|decoding for stream \d+ failed|Impossible to convert between the formats", re.I)),
     ("encoder_params_rejected", re.compile(r"InitializeEncoder failed|invalid param|Provided device doesn't support required NVENC", re.I)),
     ("cuda_error", re.compile(r"CUDA_ERROR_|cuCtxCreate|Failed to create .*CUDA|cuInit", re.I)),
     ("out_of_memory", re.compile(r"out of memory|Cannot allocate memory|OUT_OF_MEMORY", re.I)),

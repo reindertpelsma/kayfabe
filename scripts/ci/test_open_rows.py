@@ -341,6 +341,15 @@ class Commands(unittest.TestCase):
         self.assertIn("hevc_cuvid", b)
         self.assertNotIn("-hwaccel", b)
 
+    def test_av1_hwaccel_forces_the_native_decoder_and_only_there(self):
+        av1 = next(c for c in L.load_cases(CASES_TEXT) if c["id"] == "dec_av1_420_8_hw")
+        a = L.decode_compare_argv("ffmpeg", av1, "s.mkv")
+        i = a.index("-hwaccel")
+        self.assertEqual(a[i - 2:i], ["-c:v", "av1"])  # applies to the hardware input, not the software one
+        self.assertNotIn("-c:v", a[:a.index("s.mkv", a.index("s.mkv") + 1)][:2])
+        hevc = next(c for c in L.load_cases(CASES_TEXT) if c["id"] == "dec_hevc_420_8_hw")
+        self.assertNotIn("-c:v", L.decode_compare_argv("ffmpeg", hevc, "s.mkv"))
+
     def test_the_444_10bit_surface_is_named_correctly(self):
         c = next(c for c in L.load_cases(CASES_TEXT) if c["id"] == "dec_hevc_444_10_hw")
         self.assertIn("yuv444p16le", " ".join(L.decode_compare_argv("ffmpeg", c, "s")))
@@ -370,11 +379,23 @@ class ReasonsAndCompare(unittest.TestCase):
         text = "[h264_nvenc @ 0x1] OpenEncodeSessionEx failed: incompatible client key (21): (no details)\n[h264_nvenc @ 0x1] No capable devices found\n"
         self.assertEqual(L.classify_reason(text), "session_limit")
 
+    def test_reason_caps_as_ffmpeg_words_it(self):
+        # ffmpeg's own capability checks (measured on a native RTX 3060, traces/open_rows_ffdcgm_20261117), each followed by the generic line
+        for first in ("[h264_nvenc @ 0x1] 10 bit encode not supported", "[h264_nvenc @ 0x1] Width 4224 exceeds 4096"):
+            self.assertEqual(L.classify_reason(first + "\n[h264_nvenc @ 0x1] No capable devices found\n"), "caps_not_supported", first)
+
+    def test_reason_a_bare_no_capable_devices_stays_a_device_error(self):
+        self.assertEqual(L.classify_reason("[h264_nvenc @ 0x1] No capable devices found\n"), "no_encode_device")
+
     def test_reason_params(self):
         self.assertEqual(L.classify_reason("[av1_nvenc @ 0x5] InitializeEncoder failed: invalid param (8)"), "encoder_params_rejected")
 
     def test_reason_missing_encoder(self):
         self.assertEqual(L.classify_reason("Unknown encoder 'av1_nvenc'"), "unknown_encoder")
+
+    def test_reason_hw_decode_as_ffmpeg_words_it_for_a_stream_nvdec_cannot_take(self):
+        text = "decoding for stream 0 failed\nImpossible to convert between the formats supported by the filter 'graph 0 input from stream 1:0'\n"
+        self.assertEqual(L.classify_reason(text), "hw_decode_unsupported")
 
     def test_reason_hw_decode(self):
         self.assertEqual(L.classify_reason("[hevc @ 0x1] Hardware is lacking required capabilities"), "hw_decode_unsupported")
@@ -1112,7 +1133,7 @@ if "-filter_complex" in a and any("psnr" in x for x in a):
     if mode == "psnr_missing":
         sys.exit(0)
     decode = "-hwaccel" in a or any(x.endswith("_cuvid") for x in a)
-    v = {"psnr_low": "20.0", "psnr_edge": "28.00", "psnr_just_under": "27.99", "psnr_inf": "inf"}.get(mode, "inf" if decode else "41.0")
+    v = {"psnr_low": "20.0", "psnr_edge": "24.00", "psnr_just_under": "23.99", "psnr_inf": "inf"}.get(mode, "inf" if decode else "41.0")
     if mode == "psnr_two":
         say("[Parsed_psnr_2 @ 0x1] PSNR y:1 u:1 v:1 average:20.0 min:1 max:1")
     say("[Parsed_psnr_2 @ 0x1] PSNR y:%s u:1 v:1 average:%s min:1 max:1" % (v, v))
@@ -1413,6 +1434,7 @@ class DcgmRowEndToEnd(unittest.TestCase):
         self.run_row(out, self.bundle, mode="refused")
         rows = N.parse_rows((out / "dcgm.tsv").read_text())
         self.assertEqual(rows[("dcgm", "prof_sm_active")]["status"], "NOT_SUPPORTED")
+        self.assertEqual([k[1] for k, r in rows.items() if k[0] == "dcgm" and r["status"] == "NOT_SUPPORTED"], ["prof_sm_active"])  # and only that one
 
     def test_a_refused_field_does_not_hide_the_fields_beside_it(self):
         out = Path(self.tmp.name) / "o10"
