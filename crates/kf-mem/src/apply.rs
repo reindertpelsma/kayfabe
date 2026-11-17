@@ -274,10 +274,17 @@ fn whole_pages(d: &Desired, grain: u64) -> bool {
 
 /// ★ v3-gfx — **the PTE kind a host row carries**: the guest's kind with compression stripped
 /// (`kf_chip::uncompressed_pte_kind`; this device never backs comptags, so a compressible kind would
-/// point the engine at compression state that does not exist). Guest RAM takes only PITCH or
-/// GENERIC (sysmem holds no depth/stencil surface kinds); anything unknown stays PITCH, the
-/// pre-v3-gfx mapping. `[measured vgfx 2026-09-26, gfx9]` a GL depth buffer mapped PITCH raised
-/// host Xid 13 "3D-Z KIND Violation" on every draw.
+/// point the engine at compression state that does not exist). Guest RAM and the store take the
+/// SAME kind; anything unknown stays PITCH, the pre-v3-gfx mapping. `[measured vgfx 2026-09-26,
+/// gfx9]` a GL depth buffer mapped PITCH raised host Xid 13 "3D-Z KIND Violation" on every draw.
+///
+/// ⊘ **CORRECTED 2026-11-17 (vkcts, RTX 3090, host 580.159.04).** This function used to rewrite a
+/// depth/stencil kind on a guest-RAM row to PITCH, on the unmeasured premise that sysmem holds no
+/// Z surface. The host RM maps one (`ogkm-580: src/nvidia/src/kernel/mem_mgr/virtual_mem.c:
+/// 1348-1394` keeps an uncompressed Z `kindOverride` on an `ADDR_SYSMEM` target), and a Vulkan
+/// depth image in a host-heap memory type is such a surface. The vkcts DGC multiview case that
+/// raised host Xid 13 "3D-Z SYSMEM KIND Violation" in the guest only is the candidate symptom
+/// (`[inferred]` until the one-case rerun). `ram` no longer changes the kind.
 ///
 /// ★★ **The host-driver axis (`per_map_kind`, `V3_DRIVER_MATRIX.md` §2.2 H3).** A host below
 /// 580.65.06 has no per-map kind at all: its PTE takes the memory object's own kind. There
@@ -287,14 +294,13 @@ fn whole_pages(d: &Desired, grain: u64) -> bool {
 /// equivalent — mapping it as the memory's kind is the Xid 13 above — so it is KEPT, and the host
 /// carry refuses it by name (`HOST_ABI_REFUSED`, `kindOverride`): a loud gap, never a wrong kind.
 #[must_use]
-pub fn host_pte_kind(guest: u8, ram: bool, per_map_kind: bool) -> u8 {
+pub fn host_pte_kind(guest: u8, _ram: bool, per_map_kind: bool) -> u8 {
     match kf_chip::uncompressed_pte_kind(guest) {
         Some(kf_chip::PTE_KIND_PITCH | kf_chip::PTE_KIND_GENERIC) if !per_map_kind => {
             kf_chip::PTE_KIND_PITCH
         }
-        Some(k) if !ram => k,
-        Some(k @ (kf_chip::PTE_KIND_PITCH | kf_chip::PTE_KIND_GENERIC)) => k,
-        _ => kf_chip::PTE_KIND_PITCH,
+        Some(k) => k,
+        None => kf_chip::PTE_KIND_PITCH,
     }
 }
 
@@ -1822,8 +1828,8 @@ mod tests {
         assert_eq!(host_pte_kind(0x01, false, true), 0x01);
         assert_eq!(
             host_pte_kind(0x01, true, true),
-            kf_chip::PTE_KIND_PITCH,
-            "RAM holds no Z surface"
+            0x01,
+            "a Z surface in guest RAM keeps Z16 (see a_depth_kind_in_guest_ram_keeps_its_layout_on_the_host)"
         );
         // Through apply: a GENERIC vidmem leaf on an old host is placed kind 0.
         let t = Rec::default();
