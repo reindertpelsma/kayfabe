@@ -23,6 +23,7 @@ while busy; do say "waiting: a QEMU/cargo is running (serial bench)"; sleep 20; 
 if [ "$SIDE" = host ]; then
   mkdir -p /opt/apps
   cp -f "$HERE"/src/*.py /opt/apps/bundle/share/
+  cp -rf "$HERE/open_rows" /opt/apps/bundle/share/
   exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9   # the host GPU is the bench GPU
   bash "$HERE/run_apps.sh" host "$@" | tee -a "$R/host.res"
   flock -u 9
@@ -76,4 +77,10 @@ if [ "$PER" -gt 1 ] && [ "${APPS_NO_ISOLATE:-0}" != 1 ]; then
   done
   [ -f "$R/iso/guest.res" ] && cp "$R/iso/guest.res" "$R/guest_isolated.res"
 fi
+# the open rows: host control against guest, per case / per field (open_rows/compare_logs.py; a finding is a candidate, not a failure of the run)
+for row in nvcodec_matrix nvml_dcgm; do
+  if [ -f "$R/$row.host.log" ] && [ -f "$R/$row.guest.log" ]; then
+    python3 "$HERE/open_rows/compare_logs.py" "$row" "$R/$row.host.log" "$R/$row.guest.log" > "$R/$row.compare.txt" 2>&1; say "COMPARE $row: $(tail -n 1 "$R/$row.compare.txt")"
+  fi
+done
 say "GUEST_DONE batched: $(grep -c 'verdict=PASS' "$R/guest.res") pass / $(wc -l < "$R/guest.res");  isolated re-runs: $(grep -c 'verdict=PASS' "$R/guest_isolated.res" 2>/dev/null || echo 0) pass / $(wc -l < "$R/guest_isolated.res" 2>/dev/null || echo 0)"

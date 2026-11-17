@@ -1,0 +1,52 @@
+# STATUS: LIVE, 2026-11-17. Case table of the FFmpeg NVENC/NVDEC capability matrix row (docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md).
+# One case per line, tab separated. `needs` is the condition under which the case is EXPECTED to work, written over what the driver
+# itself reports (nvcodec_probe.c); it is never a per-die table. Grammar: scripts/apps/open_rows/nvcodec_lib.py parse_needs.
+# A case whose needs fail is still run: it must fail (NOT_SUPPORTED); an unexpected success is a MISMATCH.
+id	group	op	codec	profile	pix_fmt	chroma	bitdepth	width	height	frames	sessions	mode	flags	needs	psnr_min
+enc_h264_420_8_1080p	encode	enc	h264	high	yuv420p	420	8	1920	1080	30	1	nvenc	-	enc:h264 & enc:h264:dim	28
+enc_hevc_420_8_1080p	encode	enc	hevc	main	yuv420p	420	8	1920	1080	30	1	nvenc	-	enc:hevc & enc:hevc:dim	28
+enc_av1_420_8_1080p	encode	enc	av1	main	yuv420p	420	8	1920	1080	30	1	nvenc	-	enc:av1 & enc:av1:dim	28
+enc_hevc_main10_1080p	bitdepth	enc	hevc	main10	p010le	420	10	1920	1080	30	1	nvenc	-	enc:hevc & enc:hevc:SUPPORT_10BIT_ENCODE>=1 & enc:hevc:dim	28
+enc_av1_10bit_1080p	bitdepth	enc	av1	main	p010le	420	10	1920	1080	30	1	nvenc	-	enc:av1 & enc:av1:SUPPORT_10BIT_ENCODE>=1 & enc:av1:dim	28
+enc_h264_10bit_1080p	bitdepth	enc	h264	-	p010le	420	10	1920	1080	30	1	nvenc	-	enc:h264 & enc:h264:SUPPORT_10BIT_ENCODE>=1 & enc:h264:dim	28
+enc_hevc_444_8_1080p	chroma	enc	hevc	rext	yuv444p	444	8	1920	1080	30	1	nvenc	-	enc:hevc & enc:hevc:SUPPORT_YUV444_ENCODE>=1 & enc:hevc:dim	28
+enc_hevc_444_10_1080p	chroma	enc	hevc	rext	yuv444p16le	444	10	1920	1080	30	1	nvenc	-	enc:hevc & enc:hevc:SUPPORT_YUV444_ENCODE>=1 & enc:hevc:SUPPORT_10BIT_ENCODE>=1 & enc:hevc:dim	28
+enc_h264_444_8_1080p	chroma	enc	h264	high444p	yuv444p	444	8	1920	1080	30	1	nvenc	-	enc:h264 & enc:h264:SUPPORT_YUV444_ENCODE>=1 & enc:h264:dim	28
+enc_av1_444_8_1080p	chroma	enc	av1	main	yuv444p	444	8	1920	1080	30	1	nvenc	-	enc:av1 & enc:av1:SUPPORT_YUV444_ENCODE>=1 & enc:av1:dim	28
+enc_h264_above4096	size	enc	h264	high	yuv420p	420	8	4224	2176	20	1	nvenc	-	enc:h264 & enc:h264:dim	25
+enc_hevc_5k	size	enc	hevc	main	yuv420p	420	8	5120	2880	15	1	nvenc	-	enc:hevc & enc:hevc:dim	25
+enc_hevc_8k	size	enc	hevc	main	yuv420p	420	8	7680	4320	6	1	nvenc	-	enc:hevc & enc:hevc:dim	25
+enc_av1_8k	size	enc	av1	main	yuv420p	420	8	7680	4320	6	1	nvenc	-	enc:av1 & enc:av1:dim	25
+enc_h264_8k	size	enc	h264	high	yuv420p	420	8	7680	4320	6	1	nvenc	-	enc:h264 & enc:h264:dim	25
+enc_h264_bframes_lookahead	lookahead	enc	h264	high	yuv420p	420	8	1920	1080	40	1	nvenc	-rc vbr -b:v 0 -cq 24 -bf 3 -rc-lookahead 20	enc:h264 & enc:h264:SUPPORT_LOOKAHEAD>=1 & enc:h264:NUM_MAX_BFRAMES>=3 & enc:h264:dim	28
+enc_hevc_bframes_lookahead	lookahead	enc	hevc	main	yuv420p	420	8	1920	1080	40	1	nvenc	-rc vbr -b:v 0 -cq 24 -bf 3 -rc-lookahead 20	enc:hevc & enc:hevc:SUPPORT_LOOKAHEAD>=1 & enc:hevc:NUM_MAX_BFRAMES>=3 & enc:hevc:dim	28
+enc_av1_bframes_lookahead	lookahead	enc	av1	main	yuv420p	420	8	1920	1080	40	1	nvenc	-rc vbr -b:v 0 -cq 24 -bf 3 -rc-lookahead 20	enc:av1 & enc:av1:SUPPORT_LOOKAHEAD>=1 & enc:av1:NUM_MAX_BFRAMES>=3 & enc:av1:dim	28
+enc_hevc_bref_middle	lookahead	enc	hevc	main	yuv420p	420	8	1920	1080	40	1	nvenc	-rc vbr -b:v 0 -cq 24 -bf 3 -b_ref_mode middle	enc:hevc & enc:hevc:SUPPORT_BFRAME_REF_MODE>=1 & enc:hevc:NUM_MAX_BFRAMES>=3 & enc:hevc:dim	28
+enc_h264_temporal_aq	lookahead	enc	h264	high	yuv420p	420	8	1920	1080	40	1	nvenc	-rc vbr -b:v 0 -cq 24 -temporal-aq 1	enc:h264 & enc:h264:SUPPORT_TEMPORAL_AQ>=1 & enc:h264:dim	28
+sess_h264_n01	sessions	sessions	h264	-	yuv420p	420	8	1280	720	1	1	nvenc	-	enc:h264 & enc:sessions>=1	0
+sess_h264_n02	sessions	sessions	h264	-	yuv420p	420	8	1280	720	1	2	nvenc	-	enc:h264 & enc:sessions>=2	0
+sess_h264_n03	sessions	sessions	h264	-	yuv420p	420	8	1280	720	1	3	nvenc	-	enc:h264 & enc:sessions>=3	0
+sess_h264_n04	sessions	sessions	h264	-	yuv420p	420	8	1280	720	1	4	nvenc	-	enc:h264 & enc:sessions>=4	0
+sess_h264_n05	sessions	sessions	h264	-	yuv420p	420	8	1280	720	1	5	nvenc	-	enc:h264 & enc:sessions>=5	0
+sess_h264_n06	sessions	sessions	h264	-	yuv420p	420	8	1280	720	1	6	nvenc	-	enc:h264 & enc:sessions>=6	0
+sess_h264_n08	sessions	sessions	h264	-	yuv420p	420	8	1280	720	1	8	nvenc	-	enc:h264 & enc:sessions>=8	0
+sess_h264_n09	sessions	sessions	h264	-	yuv420p	420	8	1280	720	1	9	nvenc	-	enc:h264 & enc:sessions>=9	0
+sess_h264_n12	sessions	sessions	h264	-	yuv420p	420	8	1280	720	1	12	nvenc	-	enc:h264 & enc:sessions>=12	0
+dec_h264_420_8_hw	decode	dec	h264	-	yuv420p	420	8	1280	720	30	1	hwaccel_cuda	-	dec:h264:420:8:dim	45
+dec_hevc_420_8_hw	decode	dec	hevc	-	yuv420p	420	8	1280	720	30	1	hwaccel_cuda	-	dec:hevc:420:8:dim	45
+dec_hevc_420_10_hw	decode	dec	hevc	-	yuv420p10le	420	10	1280	720	30	1	hwaccel_cuda	-	dec:hevc:420:10:dim	45
+dec_hevc_444_8_hw	decode	dec	hevc	-	yuv444p	444	8	1280	720	30	1	hwaccel_cuda	-	dec:hevc:444:8:dim	45
+dec_vp9_420_8_hw	decode	dec	vp9	-	yuv420p	420	8	1280	720	30	1	hwaccel_cuda	-	dec:vp9:420:8:dim	45
+dec_av1_420_8_hw	decode	dec	av1	-	yuv420p	420	8	1280	720	30	1	hwaccel_cuda	-	dec:av1:420:8:dim	45
+dec_h264_420_8_cuvid	decode	dec	h264	-	yuv420p	420	8	1280	720	30	1	cuvid	-	dec:h264:420:8:dim	45
+dec_hevc_420_8_cuvid	decode	dec	hevc	-	yuv420p	420	8	1280	720	30	1	cuvid	-	dec:hevc:420:8:dim	45
+dec_hevc_420_10_cuvid	decode	dec	hevc	-	yuv420p10le	420	10	1280	720	30	1	cuvid	-	dec:hevc:420:10:dim	45
+dec_hevc_444_8_cuvid	decode	dec	hevc	-	yuv444p	444	8	1280	720	30	1	cuvid	-	dec:hevc:444:8:dim	45
+dec_vp9_420_8_cuvid	decode	dec	vp9	-	yuv420p	420	8	1280	720	30	1	cuvid	-	dec:vp9:420:8:dim	45
+dec_av1_420_8_cuvid	decode	dec	av1	-	yuv420p	420	8	1280	720	30	1	cuvid	-	dec:av1:420:8:dim	45
+dec_h264_420_10_hw	decode	dec	h264	-	yuv420p10le	420	10	1280	720	30	1	hwaccel_cuda	-	dec:h264:420:10:dim	45
+dec_hevc_444_10_hw	decode	dec	hevc	-	yuv444p10le	444	10	1280	720	30	1	hwaccel_cuda	-	dec:hevc:444:10:dim	45
+dec_vp9_420_10_hw	decode	dec	vp9	-	yuv420p10le	420	10	1280	720	30	1	hwaccel_cuda	-	dec:vp9:420:10:dim	45
+dec_av1_420_10_hw	decode	dec	av1	-	yuv420p10le	420	10	1280	720	30	1	hwaccel_cuda	-	dec:av1:420:10:dim	45
+dec_hevc_8k_hw	decode	dec	hevc	-	yuv420p	420	8	7680	4320	4	1	hwaccel_cuda	-	dec:hevc:420:8:dim	45
+dec_h264_above4096_hw	decode	dec	h264	-	yuv420p	420	8	4224	2176	4	1	hwaccel_cuda	-	dec:h264:420:8:dim	45

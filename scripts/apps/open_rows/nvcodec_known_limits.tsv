@@ -1,0 +1,5 @@
+# STATUS: LIVE, 2026-11-17. Documented kayfabe limitations that explain a guest result which differs from the host control, per case
+# (scripts/apps/open_rows/nvcodec_lib.py classify_pair). Empty on purpose: nothing about NVENC/NVDEC capability is documented as a
+# limitation of the Linux guest (docs/design/V3_VIDEO_ENGINES.md measured the first matrix byte-identical to bare metal on one GA106). A
+# line is added only with the document that decides it. Columns: case_glob, the guest result it explains, the reason.
+case_glob	result	reason

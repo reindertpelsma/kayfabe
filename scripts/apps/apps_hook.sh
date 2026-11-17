@@ -19,6 +19,8 @@ $G 'sudo tee /opt/apps/bundle/run_apps.sh >/dev/null' < "$HERE/run_apps.sh"
 tar -C /workspace/apps/bundle -cf - bin | $G 'sudo tar -C /opt/apps/bundle -xf -'
 $G 'test -d /opt/apps/bundle/cuda/include' || tar -C /workspace/apps/bundle -czf - cuda | $G 'sudo tar -C /opt/apps/bundle -xzf -'
 for f in "$HERE"/src/*.py; do $G "sudo tee /opt/apps/bundle/share/$(basename "$f") >/dev/null" < "$f"; done
+# the open rows' drivers (scripts/apps/open_rows): small, pushed every boot like src/*.py; their DCGM files ride in the bundle
+tar -C "$HERE" -cf - open_rows | $G 'sudo mkdir -p /opt/apps/bundle/share && sudo tar -C /opt/apps/bundle/share -xf -'
 $G 'sudo rm -rf /opt/apps/out/guest'
 echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,driver_version,persistence_mode --format=csv,noheader' 2>&1 | head -1)"
 # ⊘ boot_capture.sh reloads ONLY `nvidia`; the host has nvidia_modeset + nvidia_drm loaded, and the
@@ -26,8 +28,13 @@ echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,dr
 # Load them so both sides run the same experiment; APPS_GUEST_DRM=0 reproduces the bare state.
 [ "${APPS_GUEST_DRM:-1}" = 1 ] && echo "APPS_GUEST_DRM $($G 'sudo modprobe nvidia_drm; echo rc=$?; lsmod | grep -c ^nvidia' 2>&1 | tr '\n' ' ')"
 [ "${APPS_GUEST_PM:-0}" = 1 ] && echo "APPS_GUEST_PM=$($G 'sudo nvidia-smi -pm 1 2>&1 | tail -1')"
+# ⊘ the open rows read the HOST census: GPU use from the host's nvidia-smi (a guest cannot prove it until the utilisation flag serves the
+#   counters) and the unserviced-RPC count of the kf3 log before and after the row (open_rows/census.py; the same census the other rows read)
+census_need(){ case "$1" in nvcodec_matrix) echo enc;; nvml_dcgm) echo gpu;; esac; }
 for app in $APPS; do
   q0=$(wc -l < "$QLOG" 2>/dev/null || echo 0)
+  need=$(census_need "$app"); cpid=""
+  if [ -n "$need" ]; then python3 "$HERE/open_rows/census.py" sample --out "$OUT/$app.hostsmi.csv" > "$OUT/$app.hostsmi.json" 2>/dev/null & cpid=$!; fi
   d0=$($G 'sudo dmesg | wc -l' 2>/dev/null | tr -d '\r'); d0=${d0:-0}
   res=$(timeout "${APPS_APP_TMO:-2400}" "$G" "sudo bash /opt/apps/bundle/run_apps.sh guest $app" 2>&1 | tr -d '\r')
   src=$?
@@ -41,11 +48,16 @@ for app in $APPS; do
     $G "sudo cat /opt/apps/out/guest/$app.log" > "$OUT/$app.guest.log" 2>&1
     $G "sudo dmesg | tail -n +$((d0+1))" > "$OUT/$app.guest_dmesg.log" 2>&1
   fi
+  cextra=""
+  if [ -n "$cpid" ]; then
+    kill -TERM "$cpid" 2>/dev/null; wait "$cpid" 2>/dev/null
+    cextra=" $(python3 "$HERE/open_rows/census.py" verdict --csv "$OUT/$app.hostsmi.csv" --need "$need" 2>&1 | tail -1) $(python3 "$HERE/open_rows/census.py" kf3 --log "$QLOG" --before "$q0" 2>&1 | tail -1)"
+  fi
   tail -n +"$((q0+1))" "$QLOG" 2>/dev/null | tail -3000 > "$OUT/$app.kf3.log"
   nx=$(grep -c 'Xid' "$OUT/$app.guest_dmesg.log" 2>/dev/null); nx=${nx:-0}
   nr=$(grep -v 'kf3: family=' "$OUT/$app.kf3.log" 2>/dev/null | grep -ciE 'refus'); nr=${nr:-0}
   nk=$(wc -l < "$OUT/$app.kf3.log")
-  echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr" | tee -a "$OUT/guest.res"
+  echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr$cextra" | tee -a "$OUT/guest.res"
   grep -a '^APPDIG ' <<<"$res" | tee -a "$OUT/guest.dig"
   [ $alive = 0 ] && { echo "APPS_HOOK guest dead after $app — stopping this boot"; break; }
   # ⊘ measured nb1 (670bd310, vh): after UnifiedMemoryStreams' fault the boot was WEDGED — every
