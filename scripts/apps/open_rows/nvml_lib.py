@@ -27,7 +27,7 @@ CLASSES = ("static", "live", "numeric", "ignore")
 NA_TEXT = {"n/a", "[n/a]", "not supported", "[not supported]", "[not found]", "not found", "unknown error", "[unknown error]", "-", ""}
 # identity: never recorded as a value, never compared (UUIDs, serials, bus ids differ by construction between host and guest)
 IDENTITY = re.compile(r"(^|/)(uuid|serial|serial_number|board_id|minor_number|pci_bus_id|pci_bus|pci_device|pci_domain|pci_device_id|"
-                      r"pci_sub_system_id|multigpu_board|gpu_uuid|pci_device_id|domain|bus|device|function|id)$|pci_bus_id|uuid", re.I)
+                      r"pci_sub_system_id|multigpu_board|gpu_uuid|pci_device_id|domain|bus|device|function|id|pdi|gpu_part_number)$|pci_bus_id|uuid|fabric_guid|chassis_serial", re.I)
 
 
 PCI_ADDRESS = re.compile(r"\b[0-9a-fA-F]{4,8}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]\b")

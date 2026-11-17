@@ -624,6 +624,26 @@ class NvmlDiff(unittest.TestCase):
         h, g = rows_of(R("smiq", "compute_cap", "OK", "8.6"))[k], rows_of(R("smiq", "compute_cap", "OK", "8.9"))[k]
         self.assertEqual(self.cmp(h, g)[0], "FINDING_DIFF_STATIC")
 
+    def test_clocks_follow_the_pstate_so_only_the_number_is_owed(self):
+        # 210 MHz idle on one native box, 1777 MHz boosted on another (traces/open_rows_ffdcgm_20261117)
+        h = rows_of(R("query", "clock.current.sm", "OK", "210"))[("query", "clock.current.sm")]
+        g = rows_of(R("query", "clock.current.sm", "OK", "1777"))[("query", "clock.current.sm")]
+        self.assertEqual(self.cmp(h, g)[0], "OK")
+        self.assertEqual(self.cmp(h, rows_of(R("query", "clock.current.sm", "NOT_SUPPORTED", "-"))[("query", "clock.current.sm")])[0], "FINDING_NA_IN_GUEST")
+
+    def test_the_max_clock_of_one_die_is_static(self):
+        h = rows_of(R("query", "clock.max.sm", "OK", "2130"))[("query", "clock.max.sm")]
+        g = rows_of(R("query", "clock.max.sm", "OK", "2100"))[("query", "clock.max.sm")]
+        self.assertEqual(self.cmp(h, g)[0], "FINDING_DIFF_STATIC")
+
+    def test_the_supported_clock_lists_are_not_compared(self):
+        k = ("smi", "nvidia_smi_log/gpu/supported_clocks/supported_mem_clock[0]/supported_graphics_clock[3]")
+        self.assertEqual(self.cmp(rows_of(R("smi", k[1], "OK", "427 MHz"))[k], None)[0], "IGNORED")
+
+    def test_the_device_identifier_and_part_number_never_reach_a_row(self):
+        flat = N.flatten_smi_xml("<a><gpu><pdi>0x1f10be42c354148e</pdi><gpu_part_number>2503-300-A1</gpu_part_number><product_name>X</product_name></gpu></a>")
+        self.assertEqual((flat["a/gpu/pdi"], flat["a/gpu/gpu_part_number"], flat["a/gpu/product_name"]), ("<scrubbed>", "<scrubbed>", "X"))
+
     def test_a_leaf_no_table_line_names_is_only_asked_to_be_a_number(self):
         k = ("smi", "nvidia_smi_log/gpu/unlisted_leaf")
         h, g = rows_of(R("smi", k[1], "OK", "5"))[k], rows_of(R("smi", k[1], "OK", "6"))[k]

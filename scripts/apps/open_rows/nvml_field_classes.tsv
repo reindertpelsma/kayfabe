@@ -1,7 +1,7 @@
 # STATUS: LIVE, 2026-11-17. How the host/guest diff treats each NVML field, query and nvidia-smi value (scripts/apps/open_rows/nvml_lib.py).
 # glob over `kind:key`, first match wins; class: static (host and guest must be equal), live (equal within param: abs:N or rel:F),
 # numeric (only that the guest answers a NUMBER is asserted: the default), ignore (never compared). These tolerances are INFERRED and
-# will move with the first guest run; a loosened line needs its reason on the line above it.
+# will move with the first guest run; a loosened line needs its reason on the line above it. Lines with a reason were set from native logs.
 glob	class	param
 # identity and per-process data differ by construction
 smi:*/processes*	ignore	-
@@ -15,12 +15,14 @@ smiq:count	ignore	-
 query:utilization.*	live	abs:35
 smi:*/utilization/*	live	abs:35
 smiq:utilization.*	live	abs:35
-query:clock.current.*	live	rel:0.6
+# clocks follow the P-state: 210 MHz idle and 1777 MHz boosted were both logged on one die class (traces/open_rows_ffdcgm_20261117), so only the number is owed
+query:clock.current.*	numeric	-
 query:clock.max.*	static	-
 query:clock.app*	live	rel:0.6
-smi:*/clocks/*	live	rel:0.6
+smi:*/clocks/*	numeric	-
+smi:*/supported_clocks/*	ignore	-
 smi:*/max_clocks/*	static	-
-smiq:clocks.current.*	live	rel:0.6
+smiq:clocks.current.*	numeric	-
 smiq:clocks.max.*	static	-
 query:power.usage_mw	live	rel:0.8
 query:power.energy_mj	numeric	-
@@ -42,6 +44,9 @@ smi:*/bar1_memory_usage/*	numeric	-
 smiq:memory.*	numeric	-
 # identity-like statics: the same die must report the same values in the guest
 query:name	static	-
+# persistence and virtualization modes are configuration of the machine, not of the die
+query:static.persistence_mode	numeric	-
+query:static.virtualization_mode	numeric	-
 query:static.*	static	-
 query:system.*	numeric	-
 query:vbios_version	static	-
