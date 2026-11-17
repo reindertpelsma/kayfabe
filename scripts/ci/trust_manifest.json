@@ -1582,6 +1582,24 @@
    "row": 17,
    "reason": "downloads official installers whose url and sha256 are pinned in recipe.json; not yet read through kf_trust"
   },
+  "scripts/apps/mlrows/gen_locks.py": {
+   "count": 1,
+   "class": "planned",
+   "row": null,
+   "reason": "maintainer tool that resolves the hashed locks of the open ML rows with uv against PyPI and NVIDIA's open index; a user installs from the committed locks with `pip --require-hashes`, never through this file. Arrived with the open ML rows (docs/design/V3_OPEN_ML_ROWS.md); route through kf_trust or drop the file from the scan when the owners decide the scope of route 3"
+  },
+  "scripts/apps/mlrows/mlrows.py": {
+   "count": 3,
+   "class": "planned",
+   "row": null,
+   "reason": "fetches the 135M model from its origin and installs the three venvs with `pip --require-hashes --only-binary` from the committed locks; every wheel is checked against the lock's hash, the model against the sha256 in pins.json. Not yet read through kf_trust (open ML rows, docs/design/V3_OPEN_ML_ROWS.md)"
+  },
+  "scripts/apps/open_rows/provision.sh": {
+   "count": 1,
+   "class": "planned",
+   "row": null,
+   "reason": "fetches NVIDIA's apt repository key from NVIDIA's own URL and installs DCGM through apt (signed index); the Worker's cache-only apt shim refuses it by design. Not yet read through kf_trust (open FFmpeg/DCGM rows, docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md)"
+  },
   "scripts/apps/pin_lib.sh": {
    "count": 4,
    "class": "native-route3",
@@ -1641,6 +1659,18 @@
    "class": "operator",
    "row": null,
    "reason": "network and apt mirror speed probes: nothing they fetch is used"
+  },
+  "scripts/bench/linux/matlab_gpu_box.py": {
+   "count": 4,
+   "class": "planned",
+   "row": null,
+   "reason": "first-GPU-test provisioning of the Linux image C rows on a rented box: downloads the guest driver .run and NVIDIA's per-file checksum from NVIDIA and checks them against each other; a test tool, not a product path. Arrived with PR #465"
+  },
+  "scripts/bench/linux/matlab_gpu_prov.sh": {
+   "count": 1,
+   "class": "planned",
+   "row": null,
+   "reason": "first-GPU-test provisioning script: rustup `curl | sh` for the build of kf3 on the test box, the same pattern the pre-v3 provisioning scripts keep (scripts/bench/provision_bare_metal.sh). Arrived with PR #465; a test tool, not a product path"
   },
   "scripts/bench/linux/propimage_linux.py": {
    "count": 7,
@@ -1713,6 +1743,12 @@
    "class": "experiment-only",
    "row": 35,
    "reason": "experiment-only host tools: `git fetch origin <branch>` of this repository's own experiment branches, one raw header read from raw.githubusercontent.com and the nvkvm-pv experiment repository"
+  },
+  "scripts/bench/windows/open_rows/kfopen_build.py": {
+   "count": 4,
+   "class": "planned",
+   "row": null,
+   "reason": "downloads inside the online Windows guest: the toolchain (Build Tools bootstrapper, MinGit, Python, NuGet) and pinned sources, each checked by an official checksum or a vendor signature, or refused unless `--accept-unanchored-downloads` records the lift (docs/design/V3_WINDOWS_OPEN_ROWS.md section 4); its own anchors, not yet read through kf_trust"
   },
   "scripts/bench/windows/resolve_media.py": {
    "count": 3,
@@ -1847,16 +1883,22 @@
    "reason": "prints and performs the clone of this repository at a commit and refuses unless HEAD equals it"
   },
   "scripts/kfml/kfml/datasets.py": {
-   "count": 2,
+   "count": 7,
    "class": "native-route3",
    "row": 19,
-   "reason": "kfml datasets by the url and sha256 pinned in pins.json (route 3); not yet read through kf_trust"
+   "reason": "kfml datasets by the url and sha256 pinned in pins.json (route 3), the fetch with ranged connections added by the kfml run (#455) raised the primitive lines from 2 to 7; not yet read through kf_trust. A RAISE of an existing entry, recorded by the standalone union only so that the other gates run: anchor it or take this commit out"
   },
   "scripts/kfml/kfml/setup_venv.py": {
    "count": 2,
    "class": "native-route3",
    "row": 17,
    "reason": "kfml CUDA redist by sha256 pinned in pins.json; its pip wheels are NOT hashed yet (requirements*.lock.txt say HASHES TODO), so the wheel closure has no anchor today (row 18)"
+  },
+  "scripts/kfml/kfml/wheelhouse.py": {
+   "count": 1,
+   "class": "planned",
+   "row": null,
+   "reason": "`pip download --require-hashes` of the hashed lock into a transient wheelhouse on the host (official indexes only); every wheel is checked against the lock. Not yet read through kf_trust (kfml guest mode)"
   },
   "scripts/kfseed/cli.py": {
    "count": 3,
