@@ -242,10 +242,9 @@ else
   echo "apt SKIPPED - every dependency already present"
 fi
 
-if ! command -v cargo >/dev/null 2>&1; then
-  curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
-fi
-. "$HOME/.cargo/env"
+# [2026-11-17] rustup is installed below, AFTER the clone: its installer is anchored by scripts/ci/kf_trust.py (a pinned rustup-init
+# checked against the official .sha256 and the vendor-published pin in scripts/ci/trust_manifest.json, audit row 3), and that file
+# comes with the tree. `curl https://sh.rustup.rs | sh` anchored nothing.
 # ⚠ The targets (musl, see the header; x86_64-unknown-uefi since 2026-10-03, OWNER_RULINGS §K: kf3's
 # boot-display GOP driver is built from firmware/kf-gop by crates/kf-gop-image/build.rs during every kf3
 # build) are added to the PINNED toolchain below, after the clone, where rust-toolchain.toml is.
@@ -282,6 +281,15 @@ cd ~/kayfabe
 # silently rewound the named branch to master — a box provisioned with KAYFABE_BRANCH=v3 built
 # `e24bc063` (master). Only this HEAD line exposed it. The branch is set ONCE, above.
 echo "HEAD=$(git rev-parse --short HEAD) branch=$(git branch --show-current)"
+if ! command -v cargo >/dev/null 2>&1; then
+  [ -f scripts/ci/kf_trust.py ] || die "branch $KF_BRANCH has no scripts/ci/kf_trust.py, so rustup cannot be anchored: use a branch that has it, or install rustup yourself"
+  rustup_dir=$(mktemp -d)
+  python3 -I scripts/ci/kf_trust.py fetch rustup-init-1.29.3 --out "$rustup_dir/rustup-init" || die "rustup-init did not pass its trust anchors"
+  chmod 0700 "$rustup_dir/rustup-init"
+  "$rustup_dir/rustup-init" -y --default-toolchain stable --profile minimal
+  rm -rf "$rustup_dir"
+fi
+. "$HOME/.cargo/env"
 # ★ The pinned toolchain (rust-toolchain.toml) and its targets — the ones every build in this tree
 # uses. Idempotent, so unconditional is fine, but report it: a silent success here and a silent no-op
 # look identical in the log.

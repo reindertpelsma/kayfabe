@@ -1,6 +1,6 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-16 (the VA-apply profiling mutants and the profile-table self-test were added; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-17 (the standalone trust gate and its mutants were added; the VA-apply profiling mutants and the profile-table self-test were added; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
 ## Shipped GPU programs: the `ptx` job (2026-11-13)
@@ -247,6 +247,18 @@ steps too. The runner extracts the actual workflow (the `stable` job and the
 non-destructive steps of `stripped`, where build and test live; it never runs the
 strip, which deletes files, so `--all` builds and tests the full tree) and enforces
 minimum step counts, so a shortened or malformed job cannot report a vacuous green.
+
+## Standalone trust gate (2026-11-17)
+
+CODE READ: [`trust_lint.py`](../scripts/ci/trust_lint.py) runs in the `stable` job beside `ignore_ladder.py check`. It reads
+[`trust_manifest.json`](../scripts/ci/trust_manifest.json), the repository's list of what its scripts download and the anchor of each
+(an upstream checksum fetched from upstream, or a pin in git of something upstream authored: a commit, a vendor checksum, a registry digest, a
+source hash), and fails on an anchor that is "a sha256 in git of an artifact we build or host", an artifact without an anchor, a consumer that
+does not go through [`kf_trust.py`](../scripts/ci/kf_trust.py), a pin that drifted away from the code that holds it, an unpinned Dockerfile
+`FROM`, and any download primitive in `scripts/` or `tools/` that is neither routed nor on the manifest's `unrouted` ratchet (a count per file
+and a reason; it can only go down; a finding is fixed, the list is never re-recorded to pass). `kf_trust_mutants.py` and
+`trust_lint_mutants.py` weaken each rule once and need two named killers each. The gate and its mutants are ignored by the ladder like the other
+CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use them). Design: `docs/design/V3_STANDALONE_TRUST.md`.
 
 ## Documentation freshness policy (2026-10-22)
 

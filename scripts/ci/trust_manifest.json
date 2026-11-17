@@ -1,0 +1,1904 @@
+{
+ "schema": "kayfabe.trust-manifest/1",
+ "artifacts": {
+  "blender-4.5.0-linux-x64": {
+   "row": 25,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://download.blender.org/release/Blender4.5/blender-4.5.0-linux-x64.tar.xz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/gfxset/provision.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://download.blender.org/release/Blender4.5/blender-4.5.0.sha256",
+     "format": "sha256sum",
+     "member": "blender-4.5.0-linux-x64.tar.xz"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "1188b95cc12321c770b631939f7c25a096910b6f884a990bf9c0f62d52b38aec",
+     "size": 376170648,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://download.blender.org/release/Blender4.5/blender-4.5.0.sha256",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/apps/pins.sh",
+     "contains": [
+      "1188b95cc12321c770b631939f7c25a096910b6f884a990bf9c0f62d52b38aec",
+      "376170648"
+     ]
+    }
+   ]
+  },
+  "blender-open-data-launcher-3.3.0": {
+   "row": 25,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://download.blender.org/release/BlenderBenchmark2.0/launcher/benchmark-launcher-cli-3.3.0-linux.tar.gz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/gfxset/provision.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "a15e062179e7bf5cd20d58081f3c84cf87d56df3f596ffb0a11383638139324a",
+     "size": 7803498,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://download.blender.org/release/BlenderBenchmark2.0/launcher/benchmark-launcher-cli-3.3.0-linux.tar.gz",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "cuda-keyring-1.1-1-ubuntu2204": {
+   "row": 27,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb",
+   "runs": "host",
+   "consumers": [
+    "scripts/apps/pin_lib.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "d93190d50b98ad4699ff40f4f7af50f16a76dac3bb8da1eaaf366d47898ff8df",
+     "size": 4332,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/apps/pins.sh",
+     "contains": [
+      "d93190d50b98ad4699ff40f4f7af50f16a76dac3bb8da1eaaf366d47898ff8df"
+     ]
+    }
+   ]
+  },
+  "cuda-keyring-1.1-1-ubuntu2404": {
+   "row": 27,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb",
+   "runs": "host",
+   "consumers": [
+    "scripts/apps/pin_lib.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "d2a6b11c096396d868758b86dab1823b25e14d70333f1dfa74da5ddaf6a06dba",
+     "size": 4328,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/apps/pins.sh",
+     "contains": [
+      "d2a6b11c096396d868758b86dab1823b25e14d70333f1dfa74da5ddaf6a06dba"
+     ]
+    }
+   ]
+  },
+  "geekbench-6.4.0-linux": {
+   "row": 25,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://cdn.geekbench.com/Geekbench-6.4.0-Linux.tar.gz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/gfxset/provision.sh",
+    "scripts/apps/setup_side.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "43833053774816178a292331cc205923c5e8168ada378d41b9119532125a50ac",
+     "size": 228079249,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://cdn.geekbench.com/Geekbench-6.4.0-Linux.tar.gz",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/apps/pins.sh",
+     "contains": [
+      "43833053774816178a292331cc205923c5e8168ada378d41b9119532125a50ac"
+     ]
+    }
+   ]
+  },
+  "geekbench-6.5.0-linux": {
+   "row": 25,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://cdn.geekbench.com/Geekbench-6.5.0-Linux.tar.gz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/gfxset/provision.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "c7156003f3fe7aedc986af7b02fbf654de8ab5e9ff530cab17c088ad3c2b0538",
+     "size": 228080235,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://cdn.geekbench.com/Geekbench-6.5.0-Linux.tar.gz",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "geekbench-7.0.0-linux": {
+   "row": 25,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://cdn.geekbench.com/Geekbench-7.0.0-Linux.tar.gz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/gfxset/provision.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "961a00ac0ac432ffa6874764e86c59d2e098fff65b5b398bb9381bf7fc46c81b",
+     "size": 393434626,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://cdn.geekbench.com/Geekbench-7.0.0-Linux.tar.gz",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "kfml-base-image": {
+   "row": 20,
+   "kind": "oci-image",
+   "routing": "native",
+   "origin": "docker.io/nvidia/cuda:12.8.1-devel-ubuntu24.04",
+   "runs": "build",
+   "consumers": [
+    "scripts/kfml/Dockerfile"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "digest": "sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66",
+     "pin_origin": "registry-digest",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://hub.docker.com/r/nvidia/cuda/tags?name=12.8.1-devel-ubuntu24.04",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/Dockerfile",
+     "contains": [
+      "sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66"
+     ]
+    }
+   ]
+  },
+  "kfml-cu126-cuda-cccl-12.6.77": {
+   "row": 17,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-12.6.77-archive.tar.xz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/setup_venv.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "9c3145ef01f73e50c0f5fcf923f0899c847f487c529817daa8f8b1a3ecf20925",
+     "size": 934952,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_12.6.3.json",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "9c3145ef01f73e50c0f5fcf923f0899c847f487c529817daa8f8b1a3ecf20925"
+     ]
+    }
+   ]
+  },
+  "kfml-cu126-cuda-cudart-12.6.77": {
+   "row": 17,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.6.77-archive.tar.xz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/setup_venv.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "f74689258a60fd9c5bdfa7679458527a55e22442691ba678dcfaeffbf4391ef9",
+     "size": 1126072,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_12.6.3.json",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "f74689258a60fd9c5bdfa7679458527a55e22442691ba678dcfaeffbf4391ef9"
+     ]
+    }
+   ]
+  },
+  "kfml-cu126-cuda-nvcc-12.6.85": {
+   "row": 17,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-12.6.85-archive.tar.xz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/setup_venv.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "840deff234d9bef20d6856439c49881cb4f29423b214f9ecd2fa59b7ac323817",
+     "size": 49996208,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_12.6.3.json",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "840deff234d9bef20d6856439c49881cb4f29423b214f9ecd2fa59b7ac323817"
+     ]
+    }
+   ]
+  },
+  "kfml-cu128-cuda-cccl-12.8.90": {
+   "row": 17,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-12.8.90-archive.tar.xz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/setup_venv.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "0740e9e01e4f15e17c5ab8d68bba4f8ec0eb6b84edccba4ac45112d2d2174e4b",
+     "size": 928524,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_12.8.1.json",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "0740e9e01e4f15e17c5ab8d68bba4f8ec0eb6b84edccba4ac45112d2d2174e4b"
+     ]
+    }
+   ]
+  },
+  "kfml-cu128-cuda-cudart-12.8.90": {
+   "row": 17,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.8.90-archive.tar.xz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/setup_venv.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "8d566b5fe745c46842dc16945cf36686227536decd2302c372be86da37faca68",
+     "size": 1354240,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_12.8.1.json",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "8d566b5fe745c46842dc16945cf36686227536decd2302c372be86da37faca68"
+     ]
+    }
+   ]
+  },
+  "kfml-cu128-cuda-nvcc-12.8.93": {
+   "row": 17,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-12.8.93-archive.tar.xz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/setup_venv.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "9961b3484b6b71314063709a4f9529654f96782ad39e72bf1e00f070db8210d3",
+     "size": 79015464,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_12.8.1.json",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "9961b3484b6b71314063709a4f9529654f96782ad39e72bf1e00f070db8210d3"
+     ]
+    }
+   ]
+  },
+  "libtpms-0.10.1-source": {
+   "row": 9,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://github.com/stefanberger/libtpms/archive/refs/tags/v0.10.1.tar.gz",
+   "runs": "host",
+   "consumers": [
+    "scripts/ci/propimage_apps.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "ebc24f3191d90f6cf0b4d4200cd876db4bd224b3c565708bbea0a82ee275e0fb",
+     "size": 1399253,
+     "pin_origin": "measured-from-upstream",
+     "scope": "source",
+     "pin_source_url": "https://github.com/stefanberger/libtpms/archive/refs/tags/v0.10.1.tar.gz",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/ci/propimage_apps_pins.json",
+     "contains": [
+      "ebc24f3191d90f6cf0b4d4200cd876db4bd224b3c565708bbea0a82ee275e0fb",
+      "1399253"
+     ]
+    }
+   ]
+  },
+  "novnc-1.6.0-source": {
+   "row": 10,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz",
+   "runs": "host",
+   "consumers": [
+    "scripts/bench/linux/propimage_linux.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "5066103959ef4e9b10f37e5a148627360dd8414e4cf8a7db92bdbd022e728aaa",
+     "size": 724137,
+     "pin_origin": "measured-from-upstream",
+     "scope": "source",
+     "pin_source_url": "https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/bench/linux/propimage_linux.py",
+     "contains": [
+      "5066103959ef4e9b10f37e5a148627360dd8414e4cf8a7db92bdbd022e728aaa"
+     ]
+    }
+   ]
+  },
+  "nvidia-linux-run-535.309.01": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/535.309.01/NVIDIA-Linux-x86_64-535.309.01.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/535.309.01/NVIDIA-Linux-x86_64-535.309.01.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-535.309.01.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "288b4902ea79b017b49a9226a84f7eaa3e6b49ca0146ae50277c2fe19dd39803",
+     "size": 341945818,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/535.309.01/NVIDIA-Linux-x86_64-535.309.01.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-550.54.14": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/550.54.14/NVIDIA-Linux-x86_64-550.54.14.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/550.54.14/NVIDIA-Linux-x86_64-550.54.14.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-550.54.14.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "8c497ff1cfc7c310fb875149bc30faa4fd26d2237b2cba6cd2e8b0780157cfe3",
+     "size": 306861083,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/550.54.14/NVIDIA-Linux-x86_64-550.54.14.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-565.57.01": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/565.57.01/NVIDIA-Linux-x86_64-565.57.01.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/565.57.01/NVIDIA-Linux-x86_64-565.57.01.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-565.57.01.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "6eebe94e585e385e8804f5a74152df414887bf819cc21bd95b72acd0fb182c7a",
+     "size": 339273984,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/565.57.01/NVIDIA-Linux-x86_64-565.57.01.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-570.148.08": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/tesla/570.148.08/NVIDIA-Linux-x86_64-570.148.08.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "6499c4e609c682be9af3690056024c451273f5adff42a757ce6f1c4521b84fdf",
+     "size": 375680910,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/tesla/570.148.08/NVIDIA-Linux-x86_64-570.148.08.run",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-575.57.08": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/575.57.08/NVIDIA-Linux-x86_64-575.57.08.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/575.57.08/NVIDIA-Linux-x86_64-575.57.08.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-575.57.08.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "2aa701dac180a7b20a6e578cccd901ded8d44e57d60580f08f9d28dd1fffc6f2",
+     "size": 389558524,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/575.57.08/NVIDIA-Linux-x86_64-575.57.08.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-580.105.08": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.105.08/NVIDIA-Linux-x86_64-580.105.08.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.105.08/NVIDIA-Linux-x86_64-580.105.08.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-580.105.08.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "d9c6e8188672f3eb74dd04cfa69dd58479fa1d0162c8c28c8d17625763293475",
+     "size": 396635119,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.105.08/NVIDIA-Linux-x86_64-580.105.08.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-580.126.09": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.126.09/NVIDIA-Linux-x86_64-580.126.09.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.126.09/NVIDIA-Linux-x86_64-580.126.09.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-580.126.09.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "4cac53e48f8adff661d47c8788ed24059a248c9fd8098ceafd088a498986ec26",
+     "size": 396807358,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.126.09/NVIDIA-Linux-x86_64-580.126.09.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-580.159.04": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/box/windows_lane.sh",
+    "scripts/bench/provision_bench_tree.sh",
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-580.159.04.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+     "size": 397162548,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-580.173.02": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.173.02/NVIDIA-Linux-x86_64-580.173.02.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.173.02/NVIDIA-Linux-x86_64-580.173.02.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-580.173.02.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "8d8eb9001e05a9a8a663d3d5d304feb64ef2844ee185ccdfd952786820f46e1b",
+     "size": 398312209,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.173.02/NVIDIA-Linux-x86_64-580.173.02.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-580.178.04": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.178.04/NVIDIA-Linux-x86_64-580.178.04.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.178.04/NVIDIA-Linux-x86_64-580.178.04.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-580.178.04.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "5975a86ee45bffcb626f51ae33d1169b108186a2ea47ad651e72f13fa4b6d6f9",
+     "size": 397214534,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.178.04/NVIDIA-Linux-x86_64-580.178.04.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-580.65.06": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.65.06/NVIDIA-Linux-x86_64-580.65.06.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.65.06/NVIDIA-Linux-x86_64-580.65.06.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-580.65.06.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "04b10867af585e765cfbfdcf39ed5f4bd112375bebab0172eaa187c6aa5024ff",
+     "size": 393832804,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.65.06/NVIDIA-Linux-x86_64-580.65.06.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-580.95.05": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.95.05/NVIDIA-Linux-x86_64-580.95.05.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.95.05/NVIDIA-Linux-x86_64-580.95.05.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-580.95.05.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "849ef0ef8e842b9806b2cde9f11c1303d54f1a9a769467e4e5d961b2fe1182a7",
+     "size": 396658958,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.95.05/NVIDIA-Linux-x86_64-580.95.05.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-590.48.01": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/590.48.01/NVIDIA-Linux-x86_64-590.48.01.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/590.48.01/NVIDIA-Linux-x86_64-590.48.01.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-590.48.01.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "b9e2f80693781431cc87f4cd29109e133dcecb50a50d6b68d4b3bf2d696bd689",
+     "size": 416273526,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/590.48.01/NVIDIA-Linux-x86_64-590.48.01.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-595.84": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/595.84/NVIDIA-Linux-x86_64-595.84.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/595.84/NVIDIA-Linux-x86_64-595.84.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-595.84.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "99c404e52131bf27bca6da0268dcce3ebedc7a73ab174071a995cf1a6c5eba06",
+     "size": 423524924,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/595.84/NVIDIA-Linux-x86_64-595.84.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-linux-run-610.57.04": {
+   "row": 16,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://us.download.nvidia.com/XFree86/Linux-x86_64/610.57.04/NVIDIA-Linux-x86_64-610.57.04.run",
+   "runs": "host-root",
+   "consumers": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/610.57.04/NVIDIA-Linux-x86_64-610.57.04.run.sha256sum",
+     "format": "sha256sum",
+     "member": "NVIDIA-Linux-x86_64-610.57.04.run"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "b2e935c66b83bb00c0c857bc8e0ee0fd52de9286b40c9cc1eec29a7ce7eb116d",
+     "size": 463025450,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/610.57.04/NVIDIA-Linux-x86_64-610.57.04.run.sha256sum",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "nvidia-windows-580.88-exe": {
+   "row": 15,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/windows/win_vm.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+     "size": 890807536,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+     "status": "CARRIED",
+     "carried_from": "ci/vast-broker/planner/fixtures/official-driver-pins.json"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/bench/windows/win_vm.sh",
+     "contains": [
+      "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+      "890807536"
+     ]
+    }
+   ]
+  },
+  "ogkm-535.309.01": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "9756a4df56f42c1df568d2cf9e8b84e42ae03ffd",
+     "ref": "535.309.01",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/535.309.01",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-550.54.14": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "476bd34534a9389eedff73464d3f2fa5912f09ae",
+     "ref": "550.54.14",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/550.54.14",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-565.57.01": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "d5a0858f901d15bda4c3d6db19a271507722a860",
+     "ref": "565.57.01",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/565.57.01",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-570.148.08": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "af31543aaa3352478414fc2392559af2c9ad871a",
+     "ref": "570.148.08",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/570.148.08",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-575.57.08": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "30e15d79de62e8955eb8b77a6e292ab9b87f52b0",
+     "ref": "575.57.08",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/575.57.08",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-580.105.08": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "2af9f1f0f7de4988432d4ae875b5858ffdb09cc2",
+     "ref": "580.105.08",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/580.105.08",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-580.126.09": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "455d4b8b75f56d7483489c255705d064fdedf3c6",
+     "ref": "580.126.09",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/580.126.09",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-580.159.04": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+     "ref": "580.159.04",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/580.159.04",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-580.173.02": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "20e4e6e19cc26ba47b5cbe23130a396be100c427",
+     "ref": "580.173.02",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/580.173.02",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-580.178.04": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "c8e699821c23e4335bf23330a54a23d15cfb95e9",
+     "ref": "580.178.04",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/580.178.04",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-580.65.06": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+     "ref": "580.65.06",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/580.65.06",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-580.95.05": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "2b436058a616676ec888ef3814d1db6b2220f2eb",
+     "ref": "580.95.05",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/580.95.05",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-590.48.01": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "2ccbad25e1af6a6ee6f38cf569f89f8b65d658ab",
+     "ref": "590.48.01",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/590.48.01",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-595.84": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "722ae84526a09ed672fbe75448e2909834ba4cce",
+     "ref": "595.84",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/595.84",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "ogkm-610.57.04": {
+   "row": 29,
+   "kind": "git",
+   "routing": "helper",
+   "origin": "https://github.com/NVIDIA/open-gpu-kernel-modules.git",
+   "runs": "build",
+   "consumers": [
+    "scripts/drivermatrix/stage_guest_driver.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "commit": "e4a5faa2567f28c8eabe0ebb6422b6d0abcf37eb",
+     "ref": "610.57.04",
+     "pin_origin": "git-commit",
+     "scope": "source",
+     "pin_source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/releases/tag/610.57.04",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "openssh-win64-10.0.0.0p2-msi": {
+   "row": 14,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.0.0.0p2-Preview/OpenSSH-Win64-v10.0.0.0.msi",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/windows/win_vm.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9",
+     "size": 6586368,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://api.github.com/repos/PowerShell/Win32-OpenSSH/releases/tags/10.0.0.0p2-Preview",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/bench/windows/win_vm.sh",
+     "contains": [
+      "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9",
+      "6586368"
+     ]
+    }
+   ]
+  },
+  "qemu-source": {
+   "row": 4,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://download.qemu.org/qemu-10.2.4.tar.xz",
+   "runs": "build",
+   "consumers": [
+    "scripts/bench/provision_bench_tree.sh",
+    "scripts/ci/qemu_source.py",
+    "scripts/ci/vast_box_main.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "821b545b92f165e57dddccac5077d76d4d436a226595b8813ad59306bbfd0746",
+     "size": 141137724,
+     "pin_origin": "measured-from-upstream",
+     "scope": "source",
+     "pin_source_url": "https://download.qemu.org/qemu-10.2.4.tar.xz.sig",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/bench/qemu.pin",
+     "contains": [
+      "821b545b92f165e57dddccac5077d76d4d436a226595b8813ad59306bbfd0746",
+      "141137724"
+     ]
+    }
+   ]
+  },
+  "rustup-init-1.29.3": {
+   "row": 3,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-unknown-linux-gnu/rustup-init",
+   "runs": "host",
+   "consumers": [
+    "scripts/bench/provision_box.sh",
+    "scripts/ci/vast_box_main.sh"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-unknown-linux-gnu/rustup-init.sha256",
+     "format": "sha256sum",
+     "member": "rustup-init"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55",
+     "size": 21347088,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-unknown-linux-gnu/rustup-init.sha256",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "swtpm-0.10.1-source": {
+   "row": 9,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.1.tar.gz",
+   "runs": "host",
+   "consumers": [
+    "scripts/ci/propimage_apps.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "f8da11cadfed27e26d26c5f58a7b8f2d14d684e691927348906b5891f525c684",
+     "size": 415992,
+     "pin_origin": "measured-from-upstream",
+     "scope": "source",
+     "pin_source_url": "https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.1.tar.gz",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/ci/propimage_apps_pins.json",
+     "contains": [
+      "f8da11cadfed27e26d26c5f58a7b8f2d14d684e691927348906b5891f525c684",
+      "415992"
+     ]
+    }
+   ]
+  },
+  "ubuntu-24.04-cloudimg-release-20261017": {
+   "row": 5,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img",
+   "runs": "host",
+   "consumers": [
+    "scripts/bench/linux/propimage_linux.py"
+   ],
+   "anchors": [
+    {
+     "class": "official-checksum-url",
+     "url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/SHA256SUMS",
+     "format": "sha256sum",
+     "member": "ubuntu-24.04-server-cloudimg-amd64.img"
+    },
+    {
+     "class": "upstream-pin",
+     "sha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
+     "size": 621284352,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/SHA256SUMS",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/bench/linux/propimage_linux.py",
+     "contains": [
+      "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94"
+     ]
+    }
+   ]
+  },
+  "virtio-win-0.1.302-iso": {
+   "row": 13,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.302-1/virtio-win-0.1.302.iso",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/windows/win_vm.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d",
+     "size": 877373440,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.302-1/virtio-win-0.1.302.iso",
+     "status": "CARRIED",
+     "carried_from": "scripts/bench/windows/win_vm.sh"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/bench/windows/win_vm.sh",
+     "contains": [
+      "303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d",
+      "877373440"
+     ]
+    }
+   ]
+  },
+  "virtualgl-3.1.3-amd64-deb": {
+   "row": 24,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://github.com/VirtualGL/virtualgl/releases/download/3.1.3/virtualgl_3.1.3_amd64.deb",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/provision_guest_gfx.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "ca0f9ad6263f93ca9393dd55620835c2b042d6a825f21bf0ea9a39e61e67b16e",
+     "size": 1618538,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://github.com/VirtualGL/virtualgl/releases/tag/3.1.3",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ]
+  },
+  "vkpeak-20250531-ubuntu": {
+   "row": 25,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://github.com/nihui/vkpeak/releases/download/20250531/vkpeak-20250531-ubuntu.zip",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/gfxset/provision.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "5d233c230d4dc14c43e76da3feb4a7374f9e79d0a0bbea00b1b8f33f6ac07eaf",
+     "size": 1239961,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://api.github.com/repos/nihui/vkpeak/releases/tags/20250531",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/apps/pins.sh",
+     "contains": [
+      "5d233c230d4dc14c43e76da3feb4a7374f9e79d0a0bbea00b1b8f33f6ac07eaf",
+      "1239961"
+     ]
+    }
+   ]
+  },
+  "websockify-0.13.0-wheel": {
+   "row": 11,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://files.pythonhosted.org/packages/19/e8/6476cd85a71f7cfb04ca1e199809b75bc8580d075d4338ffcde4c761d620/websockify-0.13.0-py3-none-any.whl",
+   "runs": "host",
+   "consumers": [
+    "scripts/bench/linux/propimage_linux.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "ac497a8dafc7f51d28ca989f01cdf5f8add663a497d425a56b159dcb8d6a314c",
+     "size": 41537,
+     "pin_origin": "vendor-published",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://pypi.org/pypi/websockify/0.13.0/json",
+     "status": "MEASURED",
+     "measured": "2026-11-17"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/bench/linux/propimage_linux.py",
+     "contains": [
+      "ac497a8dafc7f51d28ca989f01cdf5f8add663a497d425a56b159dcb8d6a314c"
+     ]
+    }
+   ]
+  },
+  "windows-11-ltsc-2024-eval-iso": {
+   "row": 12,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://go.microsoft.com/fwlink/?linkid=2289029&clcid=0x409&culture=en-us&country=us",
+   "runs": "guest",
+   "consumers": [
+    "scripts/bench/windows/win_vm.sh"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68",
+     "size": 5112850432,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://www.microsoft.com/en-us/evalcenter/download-windows-11-enterprise",
+     "status": "CARRIED",
+     "carried_from": "scripts/bench/windows/win_vm.sh"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/bench/windows/win_vm.sh",
+     "contains": [
+      "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68",
+      "5112850432"
+     ]
+    }
+   ]
+  }
+ },
+ "unrouted": {
+  "scripts/apps/image/common.py": {
+   "count": 3,
+   "class": "native-route3",
+   "row": 17,
+   "reason": "the open apps image recipe fetches each input by the url and sha256 pinned in recipe.json, fail closed (route 3, checked by test_apps_image); not yet read through kf_trust"
+  },
+  "scripts/apps/image/guest.py": {
+   "count": 2,
+   "class": "native-route3",
+   "row": 17,
+   "reason": "downloads a recipe input to a .part file and checks the recipe's sha256 before use; not yet read through kf_trust"
+  },
+  "scripts/apps/image/official.py": {
+   "count": 3,
+   "class": "native-route3",
+   "row": 17,
+   "reason": "downloads official installers whose url and sha256 are pinned in recipe.json; not yet read through kf_trust"
+  },
+  "scripts/apps/pin_lib.sh": {
+   "count": 4,
+   "class": "native-route3",
+   "row": 27,
+   "reason": "the apps path's own fail-closed route-3 helpers (pin_fetch_file, pin_git_checkout): values in pins.sh, held to trust_manifest.json by pin_files"
+  },
+  "scripts/bench/assets/build_test_assets.py": {
+   "count": 5,
+   "class": "native-route3",
+   "row": 23,
+   "reason": "builds the test-assets bundle from upstream files pinned by sha256 in resolve_assets.json (route 3: bytes upstream still serves); not yet read through kf_trust"
+  },
+  "scripts/bench/box/fetch_bench_data.sh": {
+   "count": 4,
+   "class": "operator",
+   "row": 30,
+   "reason": "fetches one object from the Worker's /bench-data route with the run token and a sha256 the operator pins: the operator path, self-trust"
+  },
+  "scripts/bench/box/merge_check.sh": {
+   "count": 1,
+   "class": "operator",
+   "row": 1,
+   "reason": "git fetch of this repository itself at the revision under test: the repository is the root of trust"
+  },
+  "scripts/bench/display/broker_lane.sh": {
+   "count": 2,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only lane: clones the nvkvm-pv experiment repository (audit row 35)"
+  },
+  "scripts/bench/display/interactive.sh": {
+   "count": 1,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only: fetches the nvkvm-pv experiment repository (audit row 35)"
+  },
+  "scripts/bench/display/planes_hw_reference.sh": {
+   "count": 1,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only: wget of an NVIDIA .run for a hardware reference (audit row 35)"
+  },
+  "scripts/bench/gfxset/provision.sh": {
+   "count": 1,
+   "class": "planned",
+   "row": 25,
+   "reason": "the BtbN static ffmpeg `latest` build: a floating url that cannot be pinned without choosing a dated autobuild tag; the rest of this file is anchored"
+  },
+  "scripts/bench/gfxset/src/build_extra.sh": {
+   "count": 1,
+   "class": "planned",
+   "row": 25,
+   "reason": "git clone of glmark2 at tag 2023.01 with no commit check: pin the commit like open-gpu-kernel-modules (next step)"
+  },
+  "scripts/bench/host_preflight.sh": {
+   "count": 2,
+   "class": "operator",
+   "row": null,
+   "reason": "network and apt mirror speed probes: nothing they fetch is used"
+  },
+  "scripts/bench/linux/propimage_linux.py": {
+   "count": 6,
+   "class": "native-route3",
+   "row": 5,
+   "reason": "the Linux image builder: Ubuntu cloud image and noVNC/websockify with sha256 pins that trust_manifest.json holds (pin_files); not yet read through kf_trust"
+  },
+  "scripts/bench/provision_bare_metal.sh": {
+   "count": 3,
+   "class": "planned",
+   "row": 3,
+   "reason": "legacy pre-v3 script that pins the old branch w749-fable-legb, which carries no kf_trust.py: its rustup curl-to-sh stays until the script is retired or its branch moves"
+  },
+  "scripts/bench/provision_bench_tree.sh": {
+   "count": 3,
+   "class": "planned",
+   "row": 5,
+   "reason": "the floating noble/current cloud image and the CUDA cudart redist url are still raw downloads: pinning them changes the bench guest image (next step); the QEMU tarball and the NVIDIA installer are anchored"
+  },
+  "scripts/bench/provision_box.sh": {
+   "count": 3,
+   "class": "operator",
+   "row": null,
+   "reason": "an apt mirror speed probe and the clone of this repository itself (the root of trust); rustup is anchored"
+  },
+  "scripts/bench/specviewperf/stream_url.py": {
+   "count": 3,
+   "class": "user-input",
+   "row": 30,
+   "reason": "streams the archive of the user's own presigned-URL file: user input, trusted, recorded (OWNER_RULINGS section AX)"
+  },
+  "scripts/bench/unigine/probe_superposition.sh": {
+   "count": 1,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only probe of the Unigine Superposition installer (audit row 35)"
+  },
+  "scripts/bench/windows/appmatrix/appdisk.py": {
+   "count": 2,
+   "class": "planned",
+   "row": 31,
+   "reason": "downloads the app matrix installers named in appmatrix/manifest.json (pinned there); port onto kf_trust with the app matrix"
+  },
+  "scripts/bench/windows/appmatrix/fetch_public_bundle.py": {
+   "count": 4,
+   "class": "planned",
+   "row": 21,
+   "reason": "fetches the public Windows apps bundle (bundles.kayfabe.dev) by an opaque pin of OUR build: FAIL for a third party until route 2 (attestation) exists"
+  },
+  "scripts/bench/windows/appmatrix/package_bundle.py": {
+   "count": 7,
+   "class": "operator",
+   "row": 21,
+   "reason": "operator-side bundle packaging and upload to the operator's object store"
+  },
+  "scripts/bench/windows/appmatrix/publish_bundle.py": {
+   "count": 4,
+   "class": "operator",
+   "row": 21,
+   "reason": "operator-side publication of the public bundle to the operator's object store"
+  },
+  "scripts/bench/windows/resolve_media.py": {
+   "count": 3,
+   "class": "native-route3",
+   "row": 23,
+   "reason": "the Resolve open media: upstream url first, sha256 pinned per file in resolve_assets.json (route 3); not yet read through kf_trust"
+  },
+  "scripts/bench/windows/win_vm.sh": {
+   "count": 1,
+   "class": "native-route3",
+   "row": 12,
+   "reason": "the Windows install media (MEDIA table): url, sha256 and size pinned in the file (route 3), held to trust_manifest.json by pin_files; not yet read through kf_trust"
+  },
+  "scripts/ci/box_downloader_worker.py": {
+   "count": 3,
+   "class": "operator",
+   "row": 30,
+   "reason": "the box downloader's Worker source: fetches from the operator's /bench-data route with the run token"
+  },
+  "scripts/ci/cloud_init_replay.py": {
+   "count": 2,
+   "class": "tooling",
+   "row": null,
+   "reason": "a test-support replay of cloud-init commands against fakes: it fetches nothing"
+  },
+  "scripts/ci/fetch_evidence.py": {
+   "count": 3,
+   "class": "operator",
+   "row": null,
+   "reason": "coordinator tool that reads the operator's own run evidence"
+  },
+  "scripts/ci/fetch_oracles.sh": {
+   "count": 1,
+   "class": "native-route3",
+   "row": 29,
+   "reason": "fetches the ogkm oracle checkouts by the commit pinned in the third_party submodule list: git fetch of a commit id (route 3)"
+  },
+  "scripts/ci/kf-box-blob-url": {
+   "count": 1,
+   "class": "operator",
+   "row": 8,
+   "reason": "asks the operator's Worker for the setup-cache locator: the operator path"
+  },
+  "scripts/ci/kf-box-kill": {
+   "count": 1,
+   "class": "operator",
+   "row": null,
+   "reason": "asks the operator's Worker to destroy this box"
+  },
+  "scripts/ci/kf_fetch.py": {
+   "count": 7,
+   "class": "transport",
+   "row": null,
+   "reason": "the transfer layer kf_trust.py runs for pinned downloads: the pin comes from its caller, never from the server"
+  },
+  "scripts/ci/propimage_images.py": {
+   "count": 2,
+   "class": "user-input",
+   "row": 31,
+   "reason": "materializes the images a user names by URL or path: user input, trusted, recorded (OWNER_RULINGS section AW)"
+  },
+  "scripts/ci/release_driver_media.py": {
+   "count": 4,
+   "class": "operator",
+   "row": 16,
+   "reason": "fetches an official installer by an immutable pin the Worker sends for a release matrix: the operator path, strict"
+  },
+  "scripts/ci/setup_cache_build.py": {
+   "count": 4,
+   "class": "operator",
+   "row": 8,
+   "reason": "the maintainer-side builder of the setup cache: a third party uses plain apt and crates.io instead"
+  },
+  "scripts/ci/vast_diagnostic_logs.py": {
+   "count": 4,
+   "class": "operator",
+   "row": null,
+   "reason": "uploads diagnostics to the operator's Worker"
+  },
+  "scripts/ci/vast_evidence.py": {
+   "count": 6,
+   "class": "operator",
+   "row": null,
+   "reason": "uploads the failed-run evidence bundle to the operator's Worker"
+  },
+  "scripts/ci/vast_report.py": {
+   "count": 6,
+   "class": "operator",
+   "row": null,
+   "reason": "reports to the operator's Worker"
+  },
+  "scripts/ci/vast_run_report.py": {
+   "count": 6,
+   "class": "operator",
+   "row": null,
+   "reason": "posts the run report to the operator's Worker"
+  },
+  "scripts/ci/vast_setup.py": {
+   "count": 4,
+   "class": "operator",
+   "row": 8,
+   "reason": "installs the setup cache the operator's Worker names (strict pins); a third party uses plain apt and crates.io"
+  },
+  "scripts/drivermatrix/stage_guest_driver.sh": {
+   "count": 2,
+   "class": "planned",
+   "row": 28,
+   "reason": "the CUDA-repo deb firmware fallback (index scrape, TLS only) for versions with no anchored .run; the .run and the ogkm tree are anchored"
+  },
+  "scripts/drivermatrix/sweep.sh": {
+   "count": 1,
+   "class": "operator",
+   "row": null,
+   "reason": "git fetch of this repository itself: the root of trust"
+  },
+  "scripts/evidence/fetch_evidence_archive.py": {
+   "count": 3,
+   "class": "evidence",
+   "row": 32,
+   "reason": "documentation-only evidence archives (sha256 pinned in EVIDENCE_ARCHIVE.md, never run, tar extraction filtered)"
+  },
+  "scripts/fastguest/axis_cell.sh": {
+   "count": 1,
+   "class": "operator",
+   "row": null,
+   "reason": "git fetch and reset to this repository's own branch: the root of trust"
+  },
+  "scripts/kfhost/bootstrap.py": {
+   "count": 1,
+   "class": "operator",
+   "row": 8,
+   "reason": "prints and performs the clone of this repository at a commit and refuses unless HEAD equals it"
+  },
+  "scripts/kfml/kfml/datasets.py": {
+   "count": 2,
+   "class": "native-route3",
+   "row": 19,
+   "reason": "kfml datasets by the url and sha256 pinned in pins.json (route 3); not yet read through kf_trust"
+  },
+  "scripts/kfml/kfml/setup_venv.py": {
+   "count": 2,
+   "class": "native-route3",
+   "row": 17,
+   "reason": "kfml CUDA redist by sha256 pinned in pins.json; its pip wheels are NOT hashed yet (requirements*.lock.txt say HASHES TODO), so the wheel closure has no anchor today (row 18)"
+  },
+  "scripts/kfseed/cli.py": {
+   "count": 3,
+   "class": "tooling",
+   "row": null,
+   "reason": "talks to 127.0.0.1 only"
+  },
+  "scripts/kfseed/selfcheck.py": {
+   "count": 4,
+   "class": "tooling",
+   "row": null,
+   "reason": "talks to a local test server only"
+  },
+  "tools/api_boundaries/sweep_setup.sh": {
+   "count": 2,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only tool that clones the NVIDIA open kernel modules for a header sweep (audit row 35)"
+  },
+  "tools/drivermatrix/drmnv.py": {
+   "count": 2,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only reader of raw.githubusercontent.com headers by tag (audit row 35)"
+  },
+  "tools/drivermatrix/regen.sh": {
+   "count": 1,
+   "class": "tooling",
+   "row": null,
+   "reason": "the match is the text of an install hint, not a download"
+  },
+  "tools/drivermatrix/windows_twins.py": {
+   "count": 2,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only reader of raw.githubusercontent.com headers by tag (audit row 35)"
+  },
+  "tools/uvm_efs/box/provision.sh": {
+   "count": 4,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only box provisioning that clones this repository and an experiment branch (audit row 35)"
+  },
+  "tools/windows-capture/build/build-linux.sh": {
+   "count": 1,
+   "class": "experiment-only",
+   "row": null,
+   "reason": "downloads a build toolchain for the Windows capture tool, which is not a product path"
+  },
+  "scripts/bench/windows/host_tools/": {
+   "count": 26,
+   "class": "experiment-only",
+   "row": 35,
+   "reason": "experiment-only host tools: `git fetch origin <branch>` of this repository's own experiment branches, one raw header read from raw.githubusercontent.com and the nvkvm-pv experiment repository"
+  }
+ }
+}

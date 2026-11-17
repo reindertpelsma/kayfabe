@@ -46,7 +46,7 @@ class PcKnobs(unittest.TestCase):
             if k not in ("lanes", "min_free_gb"):
                 self.assertEqual(pc[k], base[k], k)
 
-    def run_stream(self, pin, shape="flat", key="k", ref="k", extra=None):
+    def run_stream(self, pin, shape="flat", key="k", ref="k", extra=None, pin_args=None):
         srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         try:
@@ -63,7 +63,7 @@ class PcKnobs(unittest.TestCase):
                 uf.write_text(json.dumps(doc))
                 st = Path(d) / "st"
                 p = subprocess.run([sys.executable, "-I", str(SPEC / "stream_url.py"), "--url-file", str(uf), "--key", key,
-                                    "--sha256", pin, "--status", str(st)], capture_output=True, timeout=60)
+                                    *(["--sha256", pin] if pin_args is None else pin_args), "--status", str(st)], capture_output=True, timeout=60)
                 return p.returncode, p.stdout, st.read_text() if st.exists() else ""
         finally:
             srv.shutdown()
@@ -110,6 +110,41 @@ class PcKnobs(unittest.TestCase):
         rc, out, st = self.run_stream(hashlib.sha256(BODY).hexdigest())
         self.assertEqual((rc, out), (0, BODY))
         self.assertTrue(st.startswith("STREAM_OK"))
+
+    # 2026-11-17 (OWNER_RULINGS section AX): the user's URL file is trusted; our git pin is only compared unless it is enforced
+    def test_a_noted_pin_that_differs_is_recorded_and_never_a_refusal(self):
+        rc, out, st = self.run_stream(None, pin_args=["--note-pin", "0" * 64])
+        self.assertEqual((rc, out), (0, BODY))
+        self.assertTrue(st.startswith("STREAM_OK"), st)
+        self.assertIn("pin=differs", st)
+        self.assertIn("sha256=" + hashlib.sha256(BODY).hexdigest(), st)
+
+    def test_a_noted_pin_that_differs_still_delivers_every_byte_and_the_hash_of_what_was_delivered(self):
+        rc, out, st = self.run_stream(None, pin_args=["--note-pin", "f" * 64])
+        self.assertEqual(rc, 0)
+        self.assertEqual(hashlib.sha256(out).hexdigest(), hashlib.sha256(BODY).hexdigest())
+        self.assertIn("bytes=%d " % len(BODY), st)
+
+    def test_a_noted_pin_that_matches_is_recorded_as_a_match(self):
+        rc, out, st = self.run_stream(None, pin_args=["--note-pin", hashlib.sha256(BODY).hexdigest()])
+        self.assertEqual((rc, out), (0, BODY))
+        self.assertIn("pin=match", st)
+
+    def test_no_pin_at_all_records_the_computed_hash_and_exits_zero(self):
+        rc, out, st = self.run_stream(None, pin_args=[])
+        self.assertEqual((rc, out), (0, BODY))
+        self.assertIn("pin=none", st)
+        self.assertIn("sha256=" + hashlib.sha256(BODY).hexdigest(), st)
+
+    def test_an_enforced_pin_still_refuses_beside_a_noted_one(self):
+        rc, _, st = self.run_stream(None, pin_args=["--sha256", "0" * 64, "--note-pin", hashlib.sha256(BODY).hexdigest()])
+        self.assertEqual(rc, 3)
+        self.assertTrue(st.startswith("STREAM_MISMATCH"), st)
+
+    def test_an_enforced_pin_that_matches_passes_beside_a_wrong_noted_one(self):
+        rc, out, st = self.run_stream(None, pin_args=["--sha256", hashlib.sha256(BODY).hexdigest(), "--note-pin", "0" * 64])
+        self.assertEqual((rc, out), (0, BODY))
+        self.assertIn("pin=differs", st)
 
     def test_stream_mismatch(self):
         rc, _, st = self.run_stream("0" * 64)

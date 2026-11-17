@@ -165,6 +165,10 @@ jobs:
           # The ignore ladder (.gitignore <= .workerignore <= .dockerignore), the matcher against git and
           # docker semantics on this tree, and what the strip step would refuse (the stripped-tree job runs it).
           python3 scripts/ci/ignore_ladder.py check
+          # Standalone trust (2026-11-17, docs/design/V3_STANDALONE_TRUST.md): every download the repository defines has an anchor that does
+          # not depend on us (scripts/ci/trust_manifest.json), no script downloads outside kf_trust.py or the ratcheted `unrouted` list, and
+          # no anchor is "a sha256 in git of an artifact we build or host". Its tests run in the discover step below.
+          python3 -B -I scripts/ci/trust_lint.py
           # Python < 3.14 uses the zstd CLI for bounded evidence inspection.
           if ! command -v zstd >/dev/null 2>&1; then
             sudo bash scripts/ci/kf_dns_fallback.sh || true
@@ -187,6 +191,9 @@ jobs:
           python3 scripts/ci/clocknet_assert_mutants.py
           # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
           python3 scripts/ci/stream_url_mutants.py
+          # Standalone trust helper and lint (2026-11-17): anchors, the default mode, the explicit lift, user input, evidence; the lint's rules: two named killers per mutant.
+          python3 -B -I scripts/ci/kf_trust_mutants.py
+          python3 -B -I scripts/ci/trust_lint_mutants.py
           # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.
           python3 scripts/ci/doc_steps_mutants.py
           # Native fault-name derivation (2026-11-16): the fixture and committed-JSON layers run here with no oracle (the oracle

@@ -16,13 +16,24 @@
 # string "Open Kernel Module" in /proc/driver/nvidia/version -- an installer that exits 0 and
 # leaves the closed module loaded is the exact false green this tree keeps paying for.
 set -uo pipefail
-# ★ [2026-09-28] `HOST_DRIVER=<version>` names the version instead of a URL (the driver-matrix
-# sweep, `scripts/drivermatrix/sweep.sh`); `RUN_URL` still wins when given. The default stays the
-# bench's 580.159.04 on the XFree86/ path.
-[ -n "${HOST_DRIVER:-}" ] && [ -z "${RUN_URL:-}" ] && \
-  RUN_URL=https://us.download.nvidia.com/XFree86/Linux-x86_64/$HOST_DRIVER/NVIDIA-Linux-x86_64-$HOST_DRIVER.run
-RUN_URL=${RUN_URL:-https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run}
-RUN=/root/$(basename "$RUN_URL")
+# ★ [2026-11-17] THE INSTALLER IS ANCHORED, NOT TRUSTED ON TLS ALONE (docs/design/V3_STANDALONE_TRUST.md, audit row 16: this file
+# runs as root and loads a kernel module). The default installer of a version is fetched and checked by scripts/ci/kf_trust.py
+# against NVIDIA's own `.run.sha256sum` AND the vendor-published sha256 pinned in scripts/ci/trust_manifest.json; a version that
+# manifest does not list is refused by name (TRUST_UNKNOWN_ARTIFACT). A `RUN_URL` the caller passes is a USER INPUT (OWNER_RULINGS
+# section AX): trusted, its sha256 and size recorded, never refused on our pin. `KF_TRUST_LIFT=<reason>` lifts the check
+# explicitly (recorded, non-gating). The old XFree86/ -> tesla/ fallback is gone: a version served only from tesla/ has its URL
+# in the manifest (570.148.08).
+USER_RUN_URL=${RUN_URL:-}
+DRIVER_VERSION=${HOST_DRIVER:-580.159.04}
+KF_TRUST_PY=$(dirname "$0")/../ci/kf_trust.py
+# ★ [2026-09-28] `HOST_DRIVER=<version>` names the version (the driver-matrix sweep, `scripts/drivermatrix/sweep.sh`); the default is the
+# bench's 580.159.04. `RUN_URL` still wins when given: it is a user input (above). The installer's file name is derived, never the URL's
+# query: a presigned URL's signature must not end up in a path.
+if [ -n "$USER_RUN_URL" ]; then
+  RUN=/root/$(basename "${USER_RUN_URL%%\?*}")
+else
+  RUN=/root/NVIDIA-Linux-x86_64-$DRIVER_VERSION.run
+fi
 # KF_DRIVER_PIN_BEGIN
 # A matrix selection carries immutable official media pins. Verify cache/download
 # before any hardware change, and never fall through to the legacy URL fallback.
@@ -34,25 +45,27 @@ fi
 echo "DRIVER_SWAP_START $(date -Is)"
 echo "before: $(cat /proc/driver/nvidia/version 2>/dev/null | head -1)"
 
-# ⊘ [2026-09-28] XFree86/ IS NOT EVERY VERSION'S PATH. `[measured 2026-09-26, box 52788835]`
-# 570.148.08's .run is 404 under XFree86/Linux-x86_64/ and present only on the datacenter path
-# `tesla/<v>/` (hostwalk2: `SWAP host=570.148.08 rc=3`); hostwalk3 swapped it from there. An
-# XFree86/ URL is therefore tried as given, then as its tesla/ twin — the same two paths
-# `stage_guest_driver.sh` tries for the guest's .run. Downloaded to `.part` and renamed, so a cut
-# download is never mistaken for a .run on the next swap.
-if [ ! -s "$RUN" ]; then
-  URLS=("$RUN_URL")
-  case "$RUN_URL" in
-    */XFree86/Linux-x86_64/*)
-      _v=$(basename "$RUN" .run | sed 's/^NVIDIA-Linux-x86_64-//')
-      URLS+=("https://us.download.nvidia.com/tesla/$_v/$(basename "$RUN")") ;;
-  esac
-  for u in "${URLS[@]}"; do
-    echo "downloading $u"
-    curl -fsSL -o "$RUN.part" "$u" && { mv "$RUN.part" "$RUN"; break; }
-  done
-  rm -f "$RUN.part"
-  [ -s "$RUN" ] || { echo "DOWNLOAD_FAILED (tried: ${URLS[*]})"; exit 3; }
+# ⊘ [2026-09-28] XFree86/ IS NOT EVERY VERSION'S PATH. `[measured 2026-09-26, box 52788835]` 570.148.08's .run is 404 under
+# XFree86/Linux-x86_64/ and present only on the datacenter path `tesla/<v>/`. [2026-11-17] The path is data now: the manifest
+# entry of each version carries the URL that serves it (measured from us.download.nvidia.com), so no guessing and no fallback.
+# Downloaded to `.unverified` and renamed by kf_trust.py only after every anchor passed, so a cut or wrong download is never
+# mistaken for a .run on the next swap.
+if [ -n "${KF_RELEASE_DRIVER_PINS:-}" ]; then
+  : # the matrix's official pin was verified above by release_driver_media.py, before any hardware change
+elif [ -s "$RUN" ] && [ -z "$USER_RUN_URL" ]; then
+  # a cached installer is held to the same anchors as a download
+  python3 -I "$KF_TRUST_PY" verify "nvidia-linux-run-$DRIVER_VERSION" "$RUN" \
+    || { echo "DOWNLOAD_FAILED (the cached $RUN is not the anchored installer of $DRIVER_VERSION)"; exit 3; }
+elif [ -s "$RUN" ]; then
+  python3 -I "$KF_TRUST_PY" fetch "nvidia-linux-run-$DRIVER_VERSION" --out "$RUN" --user-source "$RUN" \
+    || { echo "DOWNLOAD_FAILED (could not record the installer you passed)"; exit 3; }
+else
+  echo "obtaining the installer of $DRIVER_VERSION"
+  if [ -n "$USER_RUN_URL" ]; then
+    python3 -I "$KF_TRUST_PY" fetch "nvidia-linux-run-$DRIVER_VERSION" --out "$RUN" --user-source "$USER_RUN_URL"
+  else
+    python3 -I "$KF_TRUST_PY" fetch "nvidia-linux-run-$DRIVER_VERSION" --out "$RUN"
+  fi || { echo "DOWNLOAD_FAILED (version $DRIVER_VERSION; see the TRUST_ line above)"; exit 3; }
 fi
 ls -la "$RUN"
 

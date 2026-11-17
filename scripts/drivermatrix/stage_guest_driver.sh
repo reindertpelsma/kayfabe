@@ -41,6 +41,7 @@ OUT=$ROOT/$V
 SRC=$ROOT/src/ogkm-$V
 RUN=$OUT/NVIDIA-Linux-x86_64-$V.run
 JOBS=${JOBS:-$(nproc)}
+KF_TRUST=$(cd "$(dirname "${BASH_SOURCE[0]}")/../ci" && pwd)/kf_trust.py
 say() { echo "[$(date -Is)] stage $V: $*"; }
 die() { say "⊘ $*"; echo "STAGE_FAILED $V: $*" >&2; exit 1; }
 
@@ -50,10 +51,16 @@ rm -f "$OUT/STAGED"
 
 # ── 1. the modules, from the tag ──────────────────────────────────────────────────────────
 if [ ! -f "$OUT/modules/nvidia.ko" ] || [ "$(modinfo -F version "$OUT/modules/nvidia.ko" 2>/dev/null)" != "$V" ]; then
+    # [2026-11-17] a tag can move: HEAD must be the commit trust_manifest.json pins for this tag (scripts/ci/kf_trust.py, audit row 29);
+    # a cached tree at another commit is removed and fetched again. A tag the manifest does not list is refused by name.
+    if [ -d "$SRC/.git" ] && ! python3 -I "$KF_TRUST" git-verify "ogkm-$V" "$SRC"; then
+        say "the cached ogkm tree is not the pinned commit: fetching it again"
+        rm -rf "$SRC"
+    fi
     if [ ! -d "$SRC/.git" ]; then
-        say "clone ogkm $V"
-        git clone -q --depth 1 --branch "$V" https://github.com/NVIDIA/open-gpu-kernel-modules.git "$SRC" \
-            || die "clone of tag $V failed"
+        say "clone ogkm $V (HEAD must be the pinned commit)"
+        python3 -I "$KF_TRUST" git-checkout "ogkm-$V" --dest "$SRC" \
+            || die "ogkm $V did not pass its trust anchor (see the TRUST_ line above; pin the tag in scripts/ci/trust_manifest.json)"
     fi
     # ⊘ THE KERNEL'S OWN COMPILER, not the default `cc`. `[measured 2026-09-26]` Ubuntu 22.04's
     # HWE 6.8 kernel is built with gcc-12 while `cc` is gcc-11, and the kernel's flags include
@@ -113,14 +120,23 @@ fetch_deb_firmware() {
     return 1
 }
 if ! ls "$OUT/firmware/nvidia/$V/"gsp_ga10x.bin >/dev/null 2>&1; then
-    if [ ! -s "$RUN" ]; then
-        for url in https://us.download.nvidia.com/XFree86/Linux-x86_64/$V/NVIDIA-Linux-x86_64-$V.run \
-                   https://us.download.nvidia.com/tesla/$V/NVIDIA-Linux-x86_64-$V.run; do
-            say "download $url"
-            curl -fsSL -o "$RUN.part" "$url" && { mv "$RUN.part" "$RUN"; break; }
-        done
-        rm -f "$RUN.part"
+    # [2026-11-17] the .run is anchored (NVIDIA's .sha256sum and the vendor-published pin, scripts/ci/kf_trust.py, audit row 16); the manifest
+    # entry carries the URL that serves this version, so the XFree86/ -> tesla/ guessing is gone. Exit 3 (refused) stops the stage;
+    # 1 (transfer failed) or 4 (no entry for this version) falls to the CUDA-repo deb below, as a 404 always did (that fallback is audit row 28).
+    trc=0
+    if [ -s "$RUN" ]; then
+        python3 -I "$KF_TRUST" verify "nvidia-linux-run-$V" "$RUN"; trc=$?
+        case "$trc" in
+            3) say "the cached .run is not the anchored installer: fetching it again"; rm -f "$RUN" ;;
+            4) # no manifest entry for this version: a file somebody put here is their own input, trusted and recorded
+               python3 -I "$KF_TRUST" fetch "nvidia-linux-run-$V" --out "$RUN" --user-source "$RUN"; trc=$? ;;
+        esac
     fi
+    if [ ! -s "$RUN" ]; then
+        python3 -I "$KF_TRUST" fetch "nvidia-linux-run-$V" --out "$RUN"; trc=$?
+    fi
+    [ "$trc" -ne 3 ] || die "the .run of $V did not pass its trust anchors (see the TRUST_ line above)"
+    [ "$trc" -eq 0 ] || rm -f "$RUN" "$RUN.unverified"
     if [ -s "$RUN" ]; then
         x=$(mktemp -d "$ROOT/src/x-$V.XXXX")
         sh "$RUN" -x --target "$x/pkg" > /dev/null 2>&1 || { rm -rf "$x"; die "could not extract $RUN"; }
