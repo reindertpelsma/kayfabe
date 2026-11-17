@@ -143,7 +143,7 @@ def fetch_all(src, pins, run=run_cmd, sleep=time.sleep):
     L.check_fetch_sources((Path(src) / "external/fetch_sources.py").read_text(), pins)
     for script in pins["fetch_scripts"]:
         say("running the pinned %s" % script)
-        if not retry(lambda: run([sys.executable, "-I", script], cwd=src, timeout=3600) == 0, sleep=sleep):
+        if not retry(lambda: run([sys.executable, script], cwd=src, timeout=3600) == 0, sleep=sleep):
             raise L.PinRefused("%s failed" % script)
     verify_externals(src, pins)
 
