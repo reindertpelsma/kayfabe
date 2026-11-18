@@ -196,6 +196,12 @@ The reasons for the arrangement are isolation (the guest is hostile and rented h
 
 Use throwaway accounts where the vendor allows it, and treat every image as private (step 10).
 
+#### Checking that no stored sign-in is still valid (the online token check)
+
+`scripts/bench/windows/propimage_token_check.py` emulates an untrusted party who holds a copy of the sealed image: it boots a fresh throwaway overlay of it online, with the real clock, and prints a report of booleans, counts, file names and modification times (never values, e-mail addresses or token contents). You give it the sealed image directory and a checklist file of your own (start from `scripts/bench/windows/token_check/checklist_template.md`); nothing is tied to a particular image or machine. Run `prepare`, `start`, try the checklist, then `end`, which deletes the whole run directory. The sealed image is only a read-only backing file.
+
+MEASURED on 2026-11-18: "shows signed in" is not proof, because apps start in an offline mode or show a cached identity. Only a server round-trip action counts (for example Steam *Go Online*, creating a share link in a vendor's cloud app, or opening a portal), and the checklist must say what PASS and FAIL look like. The tool records whether the sealed image has a guest firewall block before it lifts anything, and lifting is optional (`--lift-firewall`). This is a procedure, not a guarantee: the guest paths of the tool (ssh, the PowerShell report, the firewall lift) are not covered by the GPU-free tests.
+
 ## Using the image afterwards
 
 - **The image is immutable.** The scripts come from the repository over SSH on every boot. Nothing is written back to the image. CODE READ (`propimage_check.py`: the PowerShell travels on SSH standard input).
