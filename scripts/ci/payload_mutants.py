@@ -831,6 +831,32 @@ CASES += [
     ), "native_xid_guard.py"),
 ]
 
+# 2026-11-18 host-driver preflight (test_vast_payload_hostdriver.py): a Blackwell box whose host driver is on a branch with no measured PRECOMP row is refused
+# by name before any stage; every other die and a box without a GPU see nothing. Each mutant breaks one clause of that rule.
+HD_SELECT = 'version = environ.get("HOST_DRIVER") or environ.get("KF_HOST_DRIVER") or HOST_DRIVER_DEFAULT'
+CASES += [
+    ("hostdriver-never-refuses", function("host_driver_refusal", "    return None")),
+    ("hostdriver-refuses-every-die", function("is_blackwell", "    return True")),
+    ("hostdriver-refuses-every-supported-die", scoped("is_blackwell", "1200 <= cc < 1300", "cc >= 750")),
+    ("hostdriver-selector-ignored", scoped("host_driver_refusal", HD_SELECT, "version = HOST_DRIVER_DEFAULT")),
+    ("hostdriver-readiness-selector-ignored", scoped("host_driver_refusal", HD_SELECT, 'version = environ.get("HOST_DRIVER") or HOST_DRIVER_DEFAULT')),
+    ("hostdriver-installer-selector-ignored", scoped("host_driver_refusal", HD_SELECT, 'version = environ.get("KF_HOST_DRIVER") or HOST_DRIVER_DEFAULT')),
+    ("hostdriver-default-is-the-measured-driver", replace('HOST_DRIVER_DEFAULT = "580.159.04"', 'HOST_DRIVER_DEFAULT = "595.91.07"')),
+    ("hostdriver-measured-branch-refused", scoped("host_driver_refusal", "if int(found[1]) in measured:", "if int(found[1]) not in measured:")),
+    ("hostdriver-loaded-driver-ignored", scoped("host_driver_refusal", 'if "provision" in stages:', "if True:")),
+    ("hostdriver-bare-metal-stage-refused", scoped("host_driver_refusal", "if not is_blackwell(hw) or all(s in BARE_METAL_STAGES for s in stages):", "if not is_blackwell(hw):")),
+    ("hostdriver-unreadable-table-passes", replace(
+        '        return "PRECOMP_TABLE_UNREADABLE", "the table of measured host branches (" + PRECOMP_TABLE + ") cannot be read from this checkout"',
+        "        return None")),
+    ("hostdriver-empty-table-is-measured", scoped("precomp_measured", 'raise ValueError("no rows")', "pass")),
+    ("hostdriver-any-die-row-is-a-blackwell-branch", scoped("precomp_measured", " and BLACKWELL_DIE.fullmatch(cols[1])", "")),
+    ("hostdriver-main-unchecked", replace("refusal = host_driver_refusal(os.environ, result[\"hardware\"], selected, root)", "refusal = None")),
+    ("hostdriver-hint-carries-a-url", scoped("host_driver_hint", 'branches = "/".join(str(b) for b in sorted(measured))', 'branches = "595 (https://us.download.nvidia.com/x)"')),
+    ("hostdriver-hint-drops-the-run-url-route", replace(
+        '               "RUN_URL, a user input (trusted, its sha256 and size recorded)" if versions else ""))',
+        '               "" if versions else ""))')),
+]
+
 COLLECT = """import io,json,unittest,importlib.util
 from pathlib import Path
 s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_payload*.py')
@@ -887,6 +913,7 @@ def main():
             "test_vast_payload_winapps.py",
 
             "test_vast_payload_spec.py",
+            "test_vast_payload_hostdriver.py",
             "host_claims_vectors.json",
             "test_vast_box.py",
             "vast_report.py",
@@ -902,6 +929,16 @@ def main():
         ):
             (bench / relative).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(HERE.parent / "bench" / relative, bench / relative)
+        # The host-driver preflight tests read the PRECOMP table, the Rust files that include it and the scripts that default the host driver.
+        for relative in (
+            "crates/kf-rm/data/precomp_measured.tsv",
+            "crates/kf-rm/src/consttab.rs",
+            "crates/kf-rm/src/precomp.rs",
+            "scripts/bench/provision_host_driver.sh",
+            "scripts/bench/box/provision_full.sh",
+        ):
+            (root / relative).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parents[1] / relative, root / relative)
         # The apps stage tests run the lane script and ask run_apps.sh for the app names.
         (bench / "box").mkdir(exist_ok=True)
         shutil.copyfile(HERE.parent / "bench/box/apps_gate.sh", bench / "box/apps_gate.sh")

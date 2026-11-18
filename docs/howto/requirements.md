@@ -16,6 +16,7 @@ This page lists only what the repository's evidence states. Where the repository
 
 ### NVIDIA driver on the host
 
+- **Blackwell cards (RTX 50 series, compute capability 12.x) need a host driver of branch 595 [measured 2026-11-18, one box, RTX 5070 Ti; added above the text it corrects].** The display constants for Blackwell were measured on host 595.91.07 only, and a 580 host (the bench default) makes the device refuse to start. The other dies are unchanged. See [Running the QEMU device](installing.md). <!-- src: crates/kf-rm/data/precomp_measured.tsv, scripts/ci/vast_payload.py host_driver_refusal -->
 - **The open NVIDIA kernel module** (`-m=kernel-open`) is what every recorded run used, and the provisioning script refuses a host whose `/proc/driver/nvidia/version` does not say "Open Kernel Module". <!-- src: scripts/bench/provision_host_driver.sh, scripts/bench/provision_bench_tree.sh -->
 - Closed (proprietary) host modules: supported in principle, untested. <!-- src: docs/design/V3_SECURITY_MODEL.md section 10 -->
 - **Host driver versions that passed** the GPU gates (9/9), the 30-arm thin-guest suite and the CUDA ladder with a 580.159.04 guest: 570.148.08 (kayfabe `1f3e4fc4`), 575.57.08, 580.65.06 and 580.95.05 (`ee35ca4a`) and 580.159.04 (`1837166d`) [measured, GA102 boxes, September 2026; nested rented hosts]. <!-- src: docs/design/V3_DRIVER_MATRIX.md section 6.0 (host x guest grid) -->
