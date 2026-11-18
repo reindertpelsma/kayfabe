@@ -117,7 +117,8 @@ struct Walked {
 
 /* One serial walk of `root` over `mem`, exactly as kf_walk_kernel sets it up (no samples). */
 static Walked walk(const KfFormat &F, const std::vector<uint8_t> &mem, uint64_t root,
-                   uint64_t span = KF_GPGA_SPAN_UNBOUNDED, uint64_t budget = 4000000ull)
+                   uint64_t span = KF_GPGA_SPAN_UNBOUNDED, uint64_t budget = 4000000ull,
+                   uint32_t sparse_on = 0u)
 {
     Walked w;
     w.runs.assign(1u << 16, KfMapRun());
@@ -132,6 +133,7 @@ static Walked walk(const KfFormat &F, const std::vector<uint8_t> &mem, uint64_t 
     c.cap = (uint32_t)w.runs.size();
     c.pdb_index = 0;
     c.sdev = NULL;
+    c.sparse_on = sparse_on;
     kf_walk_one(c, root);
     w.runs.resize(c.n);
     w.refuse = c.refuse; w.refusals = c.refusals; w.sparse = c.sparse; w.stop = c.stop;
@@ -359,6 +361,126 @@ static void ver2_cases(void)
         g.u64(t.ptb(VA) + 8u) = 0x20ull;
         EXPECT(v2_leaves(g, t.root) == 16u, "ver2 sparse+unmapped slots: want slot 0's 16 leaves only");
     }
+}
+
+/* ══ ABI 7 (2026-11-18, V3_SPARSE_RESIDENCY_RCA.md §8.7): SPARSE runs, only when the host opts in ══ */
+static void sparse_counts(const Walked &w, size_t *maps, size_t *sparse, bool *shape_ok)
+{
+    *maps = 0; *sparse = 0; *shape_ok = true;
+    for (const KfMapRun &r : w.runs) {
+        if (r.flags & KFWR_RF_SPARSE) {
+            (*sparse)++;
+            /* maps nothing: gpga == va, aperture VIDMEM, no kind, no permission */
+            if (r.gpga != r.va || (r.flags & ~(KFWR_RF_SPARSE | (KFWR_RF_PS_MASK << KFWR_RF_PS_SHIFT))) != 0u)
+                *shape_ok = false;
+        } else {
+            (*maps)++;
+        }
+    }
+}
+
+static void sparse_cases(void)
+{
+    const KfFormat F = kf_format_ver2();
+    const uint64_t VA = (1ull << 47) | (3ull << 38) | (7ull << 29) | (5ull << 21);
+    size_t m = 0, sp = 0;
+    bool ok = false;
+    {   /* the residency pattern: even 64 KiB slots bound, odd slots SPARSE big PTEs, no small table */
+        Gpga g(8u << 20);
+        Tree t(g);
+        for (uint32_t i = 0; i < 32u; i += 2u) t.map64k(VA + 0x10000ull * i, 0x400000ull + 0x10000ull * i);
+        for (uint32_t i = 1; i < 32u; i += 2u) g.u64(t.ptb(VA) + 8ull * i) = PTE_VOL;
+        const Walked off = walk(F, g.mem, t.root), on = walk(F, g.mem, t.root, KF_GPGA_SPAN_UNBOUNDED, 4000000ull, 1u);
+        sparse_counts(off, &m, &sp, &ok);
+        EXPECT(m == 16u && sp == 0u && off.sparse == 16u, "gate off: 16 maps, no SPARSE run (got %zu, %zu)", m, sp);
+        sparse_counts(on, &m, &sp, &ok);
+        EXPECT(m == 16u && sp == 16u && ok, "gate on: 16 maps + 16 SPARSE 64 KiB runs (got %zu, %zu, shape %d)", m, sp, ok);
+        EXPECT(on.sparse == off.sparse, "the census does not depend on the gate");
+        bool lens = true;
+        for (const KfMapRun &r : on.runs) if ((r.flags & KFWR_RF_SPARSE) && r.len != 0x10000ull) lens = false;
+        EXPECT(lens, "each SPARSE slot is one 64 KiB run");
+    }
+    {   /* eight adjacent SPARSE big PTEs coalesce into one 512 KiB run */
+        Gpga g(8u << 20);
+        Tree t(g);
+        t.map64k(VA, 0x400000ull);
+        for (uint32_t i = 1; i < 9u; i++) g.u64(t.ptb(VA) + 8ull * i) = PTE_VOL;
+        const Walked on = walk(F, g.mem, t.root, KF_GPGA_SPAN_UNBOUNDED, 4000000ull, 1u);
+        sparse_counts(on, &m, &sp, &ok);
+        EXPECT(sp == 1u && ok, "one SPARSE run, got %zu", sp);
+        for (const KfMapRun &r : on.runs)
+            if (r.flags & KFWR_RF_SPARSE)
+                EXPECT(r.va == VA + 0x10000ull && r.len == 0x80000ull, "run %llx+%llx", (unsigned long long)r.va,
+                       (unsigned long long)r.len);
+    }
+    {   /* a SPARSE big HALF: the whole 2 MiB is one SPARSE run */
+        Gpga g(8u << 20);
+        Tree t(g);
+        for (uint32_t i = 0; i < 4u; i++) t.map4k(VA + 4096ull * i, 0x300000ull + 4096ull * i);
+        g.u64(t.pd0(VA) + (uint64_t)vi0(VA) * 16u) = PTE_VOL;
+        const Walked on = walk(F, g.mem, t.root, KF_GPGA_SPAN_UNBOUNDED, 4000000ull, 1u);
+        sparse_counts(on, &m, &sp, &ok);
+        EXPECT(m == 0u && sp == 1u && ok && on.runs[0].va == VA && on.runs[0].len == (2ull << 20),
+               "sparse big half: one 2 MiB SPARSE run (got %zu maps, %zu sparse)", m, sp);
+        uint64_t bytes = 0;
+        for (const KfMapRun &r : on.runs) if (r.flags & KFWR_RF_SPARSE) bytes += r.len;
+        EXPECT(bytes == (2ull << 20), "sparse big half: 2 MiB of SPARSE, got %llx", (unsigned long long)bytes);
+    }
+    {   /* a SPARSE directory entry (PD1): its whole 512 MiB */
+        Gpga g(8u << 20);
+        Tree t(g);
+        t.map4k(VA, 0x300000ull);
+        const uint64_t other = VA + (1ull << 29);
+        g.u64(t.pd1(VA) + (uint64_t)vi1(other) * 8u) = PTE_VOL;
+        const Walked on = walk(F, g.mem, t.root, KF_GPGA_SPAN_UNBOUNDED, 4000000ull, 1u);
+        sparse_counts(on, &m, &sp, &ok);
+        bool found = false;
+        for (const KfMapRun &r : on.runs)
+            if ((r.flags & KFWR_RF_SPARSE) && r.va == (other & ~((1ull << 29) - 1ull)) && r.len == (1ull << 29)) found = true;
+        EXPECT(m == 1u && sp == 1u && found, "sparse PD1 entry: one 512 MiB SPARSE run (got %zu, %zu)", m, sp);
+        EXPECT(ok, "sparse PD1 entry: the run maps nothing (gpga == va, no aperture/kind/permission)");
+        for (const KfMapRun &r : on.runs)
+            if (r.flags & KFWR_RF_SPARSE) EXPECT(r.gpga == r.va, "SPARSE gpga %llx != va", (unsigned long long)r.gpga);
+    }
+    {   /* a SPARSE big PTE over a small table: the 4 KiB PTEs answer; SPARSE 4 KiB PTEs are 4 KiB runs */
+        Gpga g(8u << 20);
+        Tree t(g);
+        for (uint32_t i = 0; i < 8u; i++) t.map4k(VA + 4096ull * i, 0x300000ull + 4096ull * i);
+        for (uint32_t i = 8; i < 16u; i++) g.u64(t.pts(VA) + 8ull * i) = PTE_VOL;
+        g.u64(t.ptb(VA)) = PTE_VOL;
+        const Walked on = walk(F, g.mem, t.root, KF_GPGA_SPAN_UNBOUNDED, 4000000ull, 1u);
+        sparse_counts(on, &m, &sp, &ok);
+        EXPECT(m == 1u && sp == 1u && ok, "8 maps coalesce, 8 SPARSE 4 KiB PTEs coalesce, no 64 KiB SPARSE (got %zu, %zu)",
+               m, sp);
+        sparse_counts(walk(F, g.mem, t.root), &m, &sp, &ok);
+        EXPECT(m == 1u && sp == 0u, "gate off: the SPARSE 4 KiB PTEs publish nothing (got %zu, %zu)", m, sp);
+        for (const KfMapRun &r : on.runs)
+            if (r.flags & KFWR_RF_SPARSE)
+                EXPECT(r.va == VA + 0x8000ull && r.len == 0x8000ull && ((r.flags >> KFWR_RF_PS_SHIFT) & 3u) == KFWR_PS_4K,
+                       "the 4 KiB SPARSE run");
+    }
+    {   /* a SPARSE run is not bounded by the GPGA span (it maps nothing): VA far above an 8 MiB span */
+        Gpga g(8u << 20);
+        Tree t(g);
+        t.map64k(VA, 0x400000ull);
+        for (uint32_t i = 1; i < 4u; i++) g.u64(t.ptb(VA) + 8ull * i) = PTE_VOL;
+        const Walked on = walk(F, g.mem, t.root, 8ull << 20, 4000000ull, 1u);
+        sparse_counts(on, &m, &sp, &ok);
+        EXPECT((on.refuse & KFWR_R_LEAF_OOB) == 0u, "a SPARSE run is not a leaf out of bounds (refuse %#x)", on.refuse);
+        EXPECT(sp == 1u && m == 1u, "bounded span: the SPARSE run is published (got %zu, %zu)", m, sp);
+    }
+    {   /* the gate never changes a walk without SPARSE entries: every corpus-like shape is identical */
+        Gpga g(8u << 20);
+        Tree t(g);
+        for (uint32_t i = 0; i < 40u; i++) t.map4k(VA + 4096ull * i * 3u, 0x300000ull + 4096ull * i);
+        t.map64k(VA + (1ull << 20), 0x600000ull);
+        const Walked off = walk(F, g.mem, t.root), on = walk(F, g.mem, t.root, KF_GPGA_SPAN_UNBOUNDED, 4000000ull, 1u);
+        bool same = off.runs.size() == on.runs.size() && off.refuse == on.refuse && off.sparse == on.sparse;
+        for (size_t i = 0; same && i < off.runs.size(); i++)
+            same = memcmp(&off.runs[i], &on.runs[i], sizeof(KfMapRun)) == 0;
+        EXPECT(same, "a walk without SPARSE entries is the same with the gate on");
+    }
+    printf("  [sparse] ABI 7 SPARSE runs: residency, coalesce, big half, directory, small, gate-invariance\n");
 }
 
 /* ══ THE HOSTILE-DESCRIPTOR CORPUS (review 3 F-10): every break of kf_format_break is refused by the
@@ -769,6 +891,7 @@ int main(int argc, char **argv)
     if (do_dump) return g_fail ? 1 : 0;
     ver3_cases();
     ver2_cases();
+    sparse_cases();
     format_cases();
     emit_cut_cases();
     emit_cut_hostile();

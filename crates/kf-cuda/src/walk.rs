@@ -694,8 +694,11 @@ impl Report {
                 r.aperture(),
                 crate::abi::KFWR_AP_SYS_COHERENT | crate::abi::KFWR_AP_SYS_NONCOHERENT
             );
+            // ★ ABI 7: a SPARSE run maps nothing (`gpga == va`).
+            let sparse = r.flags & crate::abi::KFWR_RF_SPARSE != 0;
             if r.op != KFWR_OP_UNMAP
                 && !sysmem
+                && !sparse
                 && (r.gpga > self.gpga_span || r.len > self.gpga_span - r.gpga)
             {
                 return Err(ReportError::RunOutsideGpga {
@@ -1014,13 +1017,14 @@ impl WalkKernel {
             });
         }
         // ★ v3-roperm: the key is the host's POLICY and may name only the bits the kernel keys on.
-        if cfg.key_perm & !crate::abi::KFWR_RF_KEY_PERM_ALL != 0 {
+        // ★ ABI 7: plus KFWR_RF_SPARSE, the opt-in to SPARSE runs.
+        if cfg.key_perm & !(crate::abi::KFWR_RF_KEY_PERM_ALL | crate::abi::KFWR_RF_SPARSE) != 0 {
             return Err(refused(
                 "the walk kernel's diff key (WalkCfg::key_perm)",
                 format!(
-                    "key_perm {:#x} names bits outside KFWR_RF_KEY_PERM_ALL {:#x}; REFUSED at launch, by name",
+                    "key_perm {:#x} names bits outside KFWR_RF_KEY_PERM_ALL | KFWR_RF_SPARSE {:#x}; REFUSED at launch, by name",
                     cfg.key_perm,
-                    crate::abi::KFWR_RF_KEY_PERM_ALL
+                    crate::abi::KFWR_RF_KEY_PERM_ALL | crate::abi::KFWR_RF_SPARSE
                 ),
             ));
         }

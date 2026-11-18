@@ -1,6 +1,6 @@
 # V3 — sparse residency: why residency cases hang in the guest (root cause, GPU-free reproduction)
 
-**STATUS: LIVE, 2026-11-18. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as an opt-in property (#494). Option C (the exact fix): C1 is MEASURED infeasible. C2's host costs are MEASURED (§8.1, one RTX 3090 box, bare host). Its design is in §8, and stage 1 (the GPU-free engine and its proof) is built: S1 and S2 are both green in the model. C2 is not wired into apply and not run with a guest. The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
+**STATUS: LIVE, 2026-11-18. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as an opt-in property (#494). Option C (the exact fix): C1 is MEASURED infeasible. C2's host costs are MEASURED (§8.1, one RTX 3090 box, bare host). Its design is in §8, and stage 1 (the GPU-free engine and its proof) is built: S1 and S2 are both green in the model. C2 is not wired into apply and not run with a guest. Stage 2 (the walker's SPARSE runs, ABI 7, behind a gate that is off by default) is built and shown equivalent with the gate off (§8.8). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
 Parent evidence: `traces/open_rows_guest_20261117/confirm/` (PR #479) and `docs/design/V3_VULKAN_CTS_ROW.md` §12
 (tree branch). Pattern: `V3_REPLAY_TESTS.md`.
 
@@ -428,3 +428,53 @@ the ratchet are unchanged: production still uses the static fence until stage 2.
 **Open (INFERRED, not measured):**
 - whether Unreal's virtual textures and DXVK's sparse binding stay within the 4096-block cap per range;
 - whether a 64 KiB tile is fine-grained enough for every title.
+
+### 8.8 Stage 2: the walker publishes SPARSE runs (built 2026-11-18; equivalence MEASURED GPU-free)
+
+**The ABI.**
+- **`KFWR_RF_SPARSE` (bit 7)** marks a SPARSE run. It maps nothing: `gpga == va`, aperture VIDMEM, no
+  kind and no permission, and the §39(c) span bound does not apply. It is defined in `kf_walk.h` and
+  `kf_cuda::abi`.
+- **The gate.** The walk emits SPARSE runs only when `KfArgs::key_perm` holds the same bit. No struct
+  moved; `KF_ABI_VERSION` goes 6 → 7.
+- **The diff.** SPARSE joins the diff key (`kf_hkey` bit 14, mirrored by `diffmodel::host_key_with`). A
+  MAP leaf therefore never keeps a SPARSE placement. **The UNSPARSE transition is the diff's own UNMAP**
+  of the SPARSE placement, so the walker needs no new op.
+- **Validation.** `kf_create` and `WalkCfg` accept the bit, and `kf_validate_report` and
+  `Report::validate` exempt SPARSE runs from the span check. Production never sets the bit: the stage-3
+  property sets it.
+
+**What is emitted.** With the gate on, the serial and the parallel walk emit, for:
+- a SPARSE directory entry: one run over its whole range (page-size class 2 MiB);
+- a SPARSE big half of a dual PDE: one 2 MiB run;
+- a SPARSE small half with no big table: one 2 MiB run;
+- a SPARSE big PTE with no small table under it: one 64 KiB run;
+- a SPARSE small PTE: one 4 KiB run.
+
+Adjacent SPARSE entries coalesce, because `gpga == va` keeps the coalescer's rule. Two shapes stay
+INVALID on purpose (S2-safe, and counted only in `sparse_slots` as before): a SPARSE big PTE over a
+small table (its small PTEs answer, as `kf_big_pte_owns_slot` already rules), and a SPARSE small half
+under a present big table (the answer there is per 64 KiB slot).
+
+**The before/after equivalence campaign** (the PF-2 method, `V3_PTE_MODEL_FUZZ.md` §4 and §5.5):
+- **Setup.** Harness `pte_fuzz_campaign` at `d46bb1c6c` (#503). Its walker is byte-identical to this
+  branch's base, `2236a1ca7`. `KF_FUZZ_SEED=e9017a1e KF_FUZZ_CASES=60000`, all five families (Turing
+  11,926, Ampere 11,980, Ada 12,048, Hopper 12,105, Blackwell 11,941), 3,179,449 leaf-steps per run.
+  The scratch harness appends the case's SPARSE census to each digest line.
+- **Runs.** A is the base walker. B is this walker with the gate off. C is this walker with the gate on.
+
+| compared | result |
+|---|---|
+| A against B (gate off) | **byte-identical per-case digest tables**: sha256 `ba820acdcacbc54aab4050832cdb8d04a687c2c58884f19d2c46f0e824cc75a2` for both. The findings report is identical too. |
+| A against C, the 22,666 cases with no SPARSE entry | **identical**: the subset's sha256 is `59fcd2468b8cbe7afb65ecd70446f43c02ecda523b4b37e26b12ef100671f58b` in both. |
+| A against C, the 37,334 cases with SPARSE entries | 36,694 differ. 640 are the same (`[inferred]`: their only SPARSE entries are the two shapes left INVALID above). Full C table sha256 `3892a06005ec75e8a584779127331122e4849c356b5d46b5637ddfc8f47b54b0`. |
+
+**Further evidence:**
+- `kf_cpu_walk --dump` over the committed corpus is byte-identical before and after.
+- `kf_cpu_walk` gains six SPARSE cases: the residency pattern, coalescing, the big half, a directory
+  entry, small PTEs under a sparse big PTE, the span exemption and gate invariance.
+- `scripts/ci/walk_kernel_mutants.py` gains five ABI-7 mutants, each with at least 2 distinct killers
+  (34/34).
+- The PTX was regenerated with NVRTC 12.2.140. `walk_ptx_repro.py walk` reports ok, and the committed
+  base PTX also rebuilt byte-identically before the change.
+- ⚠ The parallel walk's SPARSE emission is graded by `kf_tests` on a GPU only. Not run on a GPU yet.
