@@ -126,7 +126,7 @@ def compare(a):
     print("\n".join(diffrun.diff_lines(diffs)))
     hv, gv = rowio.load(a.host, "vk_leaves.tsv"), rowio.load(a.guest, "vk_leaves.tsv")
     if hv and gv:
-        vd = L.vulkan_diff(hv.split(), gv.split())
+        vd = L.vulkan_diff(hv.splitlines(), gv.splitlines())
         for side in ("only_host", "only_guest"):
             for leaf in vd[side][:20]:
                 print("VKDIFF %s %s" % (side, leaf))
@@ -142,7 +142,7 @@ def hoststate(a):
         leaked, distinct = L.host_state_changed(samples)
         print("HOST_STATE_LEAK=%d samples=%d distinct=%d" % (leaked, len(samples), len(distinct)))
         return 1 if leaked else 0
-    argv = ["nvidia-smi", "--query-gpu=" + S.SMI_FIELDS, "--format=csv,noheader,nounits", "-i", "0", "-lms", "500"]
+    argv = ["nvidia-smi", "--query-gpu=" + S.STATE_FIELDS, "--format=csv,noheader,nounits", "-i", "0", "-lms", "500"]
     rows, stop = [], threading.Event()
     p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     signal.signal(signal.SIGTERM, lambda *_: stop.set())

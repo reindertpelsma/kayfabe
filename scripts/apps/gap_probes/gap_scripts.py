@@ -60,13 +60,13 @@ def vk_dump(ctx):
             leaves = L.flatten_vulkan(json.loads(text))
         except ValueError:
             return result("FAIL", "no_json_from_vulkaninfo_rc_%s" % rc)
-    (ctx["out"] / "vk_leaves.tsv").write_text("\n".join(leaves) + "\n")
-    groups = L.vulkan_groups(leaves)
+    tokens = L.vulkan_tokens(leaves)
+    (ctx["out"] / "vk_leaves.tsv").write_text("\n".join(tokens) + "\n")   # the tokens, not the raw leaves: two vulkaninfo versions lay the JSON out differently
     rc, ver, to = run([exe, "--version"], 20)
-    kv = {"leaves": len(leaves), "groups": len(groups), "info.vulkaninfo_version": " ".join(ver.split())[:120]}
-    for g, ls in groups.items():   # one digest per group: a difference is named by group in the comparison, the leaf-level diff is in vk_leaves.tsv
-        kv["group." + g] = "%d:%08x" % (len(ls), _crc("\n".join(ls)))
-    return result("PASS" if len(leaves) > 100 else "FAIL", "-" if len(leaves) > 100 else "too_few_leaves", **kv)
+    kv = {"tokens": "%d:%08x" % (len(tokens), _crc("\n".join(tokens))), "extensions": sum(1 for t in tokens if t.startswith("ext:")),
+          "info.leaves": len(leaves), "info.vulkaninfo_version": " ".join(ver.split())[:120]}
+    ok = len(tokens) > 100
+    return result("PASS" if ok else "FAIL", "-" if ok else "too_few_tokens", **kv)
 
 
 def _crc(s):
@@ -76,6 +76,7 @@ def _crc(s):
 
 # ------------------------------------------------------------------------------------------------------------------ nvidia-smi setters
 SMI_FIELDS = "compute_mode,persistence_mode,power.limit,clocks.applications.graphics,clocks.current.graphics"
+STATE_FIELDS = "compute_mode,persistence_mode,power.limit,clocks.applications.graphics"   # control state only: a live clock changes with load and is not state the guest may change
 
 
 def smi_query():

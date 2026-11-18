@@ -249,6 +249,12 @@ class Setters(unittest.TestCase):
         self.assertEqual(L.host_state_changed(same)[0], False)
         self.assertEqual(L.host_state_changed(same + [("Exclusive_Process", "Disabled", "350.00", "-", "210")])[0], True)
 
+    def test_the_host_state_watcher_reads_control_state_only_not_a_live_clock(self):
+        import gap_scripts
+        self.assertNotIn("current", gap_scripts.STATE_FIELDS)
+        self.assertEqual(gap_scripts.STATE_FIELDS.split(","), ["compute_mode", "persistence_mode", "power.limit", "clocks.applications.graphics"])
+        self.assertIn("clocks.current.graphics", gap_scripts.SMI_FIELDS)   # the setters probe still records it, as information
+
     def test_the_hoststate_verdict_command_reads_the_csv(self):
         with tempfile.TemporaryDirectory() as d:
             f = Path(d) / "h.csv"
@@ -258,6 +264,40 @@ class Setters(unittest.TestCase):
             f.write_text("1.0;Default;Disabled;350\n1.5;Exclusive_Process;Disabled;350\n")
             p = subprocess.run([sys.executable, str(GP / "gap_probes.py"), "hoststate", "verdict", "--csv", str(f)], capture_output=True, text=True)
             self.assertEqual((p.returncode, p.stdout.strip()), (1, "HOST_STATE_LEAK=1 samples=2 distinct=2"))
+
+
+class VulkanTokens(unittest.TestCase):
+    def test_an_extension_is_the_same_token_in_both_json_layouts(self):
+        a = L.vulkan_tokens(["ArrayOfVkExtensionProperties[3].extensionName=VK_KHR_swapchain", "ArrayOfVkExtensionProperties[3].specVersion=70"])
+        b = L.vulkan_tokens(["capabilities.device.extensions.VK_KHR_swapchain=70"])
+        self.assertIn("ext:VK_KHR_swapchain", a)
+        self.assertEqual([t for t in a if t.startswith("ext:")], b)
+
+    def test_limits_and_features_become_name_equals_value_with_their_indexes(self):
+        t = L.vulkan_tokens(["capabilities.device.properties.VkPhysicalDeviceProperties.limits.maxComputeWorkGroupCount[1]=65535",
+                             "VkPhysicalDeviceFeatures.sparseBinding=True", "$schema=https://x"])
+        self.assertEqual(t, ["maxComputeWorkGroupCount[1]=65535", "sparseBinding=True"])
+
+    def test_a_lost_feature_shows_in_the_token_diff_whatever_the_layout(self):
+        host = L.vulkan_tokens(["a.b.sparseBinding=True", "ArrayOfVkExtensionProperties[0].extensionName=VK_EXT_x"])
+        guest = L.vulkan_tokens(["capabilities.features.sparseBinding=False", "capabilities.device.extensions.VK_EXT_x=1"])
+        d = L.vulkan_diff(host, guest)
+        self.assertEqual((d["only_host"], d["only_guest"]), (["sparseBinding=True"], ["sparseBinding=False"]))
+
+    def test_a_value_with_a_space_survives_the_leaves_file(self):
+        t = L.vulkan_tokens(["x.deviceName=NVIDIA GeForce RTX 3090"])
+        self.assertEqual(t, ["deviceName=NVIDIA GeForce RTX 3090"])
+        d = Path(tempfile.mkdtemp(prefix="gaptok"))
+        self.addCleanup(shutil.rmtree, d, True)
+        (d / "h").mkdir()
+        (d / "g").mkdir()
+        res = "id\tgroup\tstatus\trc\tsecs\tt0\tt1\treason\tcanary\nvk_dump\tg\tPASS\t0\t1\t1\t2\t-\t-\n"
+        for side, name in (("h", "NVIDIA GeForce RTX 3090"), ("g", "NVIDIA GeForce RTX 4090")):
+            (d / side / "results.tsv").write_text(res)
+            (d / side / "vk_leaves.tsv").write_text("deviceName=%s\n" % name)
+        p = subprocess.run([sys.executable, str(GP / "gap_probes.py"), "compare", str(d / "h"), str(d / "g")], capture_output=True, text=True)
+        self.assertIn("VKDIFF only_host deviceName=NVIDIA GeForce RTX 3090", p.stdout)
+        self.assertIn("VKDIFF_SUMMARY only_host=1 only_guest=1", p.stdout)
 
 
 class Vulkan(unittest.TestCase):
@@ -722,8 +762,8 @@ class ScriptCases(unittest.TestCase):
         leaves = (self.d / "vk_leaves.tsv").read_text()
         self.assertNotIn("UUID", leaves)
         self.assertNotIn("LUID", leaves)
-        self.assertIn("capabilities.device.features.VkPhysicalDeviceFeatures.f7=True", leaves)
-        self.assertTrue([k for k in r["kv"] if k.startswith("group.")])
+        self.assertIn("f7=True", leaves.splitlines())
+        self.assertRegex(r["kv"]["tokens"], r"^\d+:[0-9a-f]{8}$")
 
 
 class RunnerKv(unittest.TestCase):

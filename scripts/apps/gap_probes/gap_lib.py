@@ -204,3 +204,22 @@ def tools_verdict(classes):
     if all(c == "OK" for c in classes.values()):
         return "PASS", "-"
     return "NOT_SUPPORTED", "tool_answer_" + "_".join(sorted(n for n, c in classes.items() if c != "OK"))
+
+
+def vulkan_tokens(leaves):
+    """Format-independent tokens of a vulkaninfo dump, so two vulkaninfo versions with different JSON layouts can still be compared: an extension is `ext:<name>` whether it is a
+    list entry (`extensionName=...`) or a key (`...extensions.<name>`); anything else is `<last identifier with its indexes>=<value>` (a limit, a feature, a property)."""
+    out = set()
+    for leaf in leaves:
+        path, _, val = leaf.partition("=")
+        if path.endswith("extensionName"):
+            out.add("ext:" + val)
+            continue
+        m = re.search(r"\.extensions\.(VK_\w+)$", path)
+        if m:
+            out.add("ext:" + m[1])
+            continue
+        m = re.search(r"([A-Za-z_]\w*)((?:\[\d+\])*)$", path)
+        if m and not path.startswith("$schema"):
+            out.add("%s%s=%s" % (m[1], m[2], val))
+    return sorted(out)
