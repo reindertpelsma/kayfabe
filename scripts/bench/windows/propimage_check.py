@@ -1803,7 +1803,7 @@ def main(argv=None):
     ap.add_argument("--broker", default=str(HERE.parents[2] / "broker/nvkvm-display-broker"))
     ap.add_argument("--gop-efi", help="signed boot GOP driver to stage into the work directory")
     ap.add_argument("--display", choices=("broker", "off"), default="broker")
-    ap.add_argument("--apps", default=",".join(CHECKS))
+    ap.add_argument("--apps", default=",".join(CHECKS), help="comma-separated names, `all`, or `none` (blank image: power, GPU and identity rows only)")
     ap.add_argument("--app-set", choices=("a", "b"), default="a", help="a: the first image's applications (default); b: the second image's creative applications")
     ap.add_argument("--data-iso", help="read-only data volume (label KFDATA) attached on the AHCI cd port; required by --app-set b")
     ap.add_argument(
@@ -1885,7 +1885,8 @@ def main(argv=None):
                 raise ValueError("--app-set b needs --data-iso FILE (the open test-asset volume)")
             if a.apps == ",".join(CHECKS):
                 a.apps = ",".join(getattr(app_b, "ENABLED", checks))
-        names = list(checks) if a.apps == "all" else a.apps.split(",")
+        # `none`: a blank image has no application to check; the power, GPU and identity rows are the whole run (2026-11-17)
+        names = list(checks) if a.apps == "all" else [] if a.apps == "none" else a.apps.split(",")
         # Preserve the measured predecessor's app spelling as an input alias only.
         names = ["wukong" if n == "blackmyth" else n for n in names]
         if any(n not in checks for n in names) or len(set(names)) != len(names):
