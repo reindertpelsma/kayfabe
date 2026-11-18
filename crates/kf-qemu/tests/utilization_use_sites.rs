@@ -72,7 +72,7 @@ fn the_use_sites_read_the_property() {
         (
             "the C device passes the property",
             &c,
-            "s->report_utilization ? 1 : 0, &s->h, err, sizeof(err));",
+            "s->report_utilization ? 1 : 0, s->unmapped_reads_zero",
         ),
         (
             "the C property is declared and defaults to ON",
@@ -82,7 +82,7 @@ fn the_use_sites_read_the_property() {
         (
             "the C header declares the parameter after windows_support",
             &h,
-            "uint32_t windows_support, uint32_t report_utilization, void **out,",
+            "uint32_t windows_support, uint32_t report_utilization, uint32_t unmapped_reads_zero,",
         ),
     ] {
         assert!(text.contains(needle), "{what}: `{needle}` is missing");
