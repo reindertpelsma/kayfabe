@@ -83,6 +83,18 @@ pub struct SimMap {
 /// What one model page translates to: `(ram, backing offset)`.
 pub type Backing = (bool, u64);
 
+/// ★ 2026-11-18: the host PTE state of one VA ([`SimRm::host_pte`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostPte {
+    /// A mirror mapping translates it.
+    Mapped(Backing),
+    /// SPARSE: a GPU read returns zero, a write is dropped, a sparse-residency query says
+    /// non-resident; no fault (`nvos.h:1415-1419`).
+    Sparse,
+    /// INVALID: a GPU access faults (host Xid 31, or a stall where the fault is not serviced).
+    Invalid,
+}
+
 /// Host calls and the stitch's mm syscalls, as production would issue them (the syscall budget).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Counters {
@@ -597,6 +609,36 @@ impl SimRm {
             STORE_OBJ | FOREIGN_OBJ => (false, o),
             h => *self.objs.get(&h)?.get(usize::try_from(o / P).ok()?)?,
         })
+    }
+
+    /// ★ 2026-11-18 (sparse residency RCA): what the host MMU finds at `va` in this space — a mirror
+    /// translation, or for an unmapped VA the state host RM leaves there. ogkm-580
+    /// `gpu_vaspace.c:1577-1600` ("VA reserved as sparse is sparsified immediately, changing its
+    /// unmapped state from invalid to zero") and `2279-2289` (an unmap inside a sparse block
+    /// "return[s] back to Sparse", else "plain old unmap"): an unmapped VA is [`HostPte::Sparse`]
+    /// exactly when a reservation allocated with `NVOS32_ALLOC_FLAGS_SPARSE` contains it. Every
+    /// reservation of the mirror (the static guest ranges and the micro reservations) is made by
+    /// `HostRm::reserve_va` with [`kf_host::channel::NVOS32_RESERVE_FLAGS`], so the model reads
+    /// production's flags rather than a copy of them.
+    #[must_use]
+    pub fn host_pte(&self, va: u64) -> HostPte {
+        if let Some(b) = self.translate(va, Owner::Mirror) {
+            return HostPte::Mapped(b);
+        }
+        let reserved = self
+            .space
+            .guest
+            .iter()
+            .any(|g| g.handle != 0 && g.lo <= va && va < g.hi)
+            || self.resv.values().any(|&(lo, hi)| lo <= va && va < hi);
+        let sparse_flag = kf_host::channel::NVOS32_RESERVE_FLAGS
+            & kf_host::channel::NVOS32_ALLOC_FLAGS_SPARSE
+            != 0;
+        if reserved && sparse_flag {
+            HostPte::Sparse
+        } else {
+            HostPte::Invalid
+        }
     }
 
     /// Mirror mappings whose PTEs are gone while RM still lists them.
@@ -1307,5 +1349,7 @@ pub fn check(
 mod adversarial;
 #[cfg(test)]
 mod fuzz;
+#[cfg(test)]
+mod sparse;
 #[cfg(test)]
 mod tests;
