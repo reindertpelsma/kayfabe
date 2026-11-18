@@ -1,6 +1,6 @@
 # V3 — boundary fuzzing: GPU-free property tests at the guest-to-host boundary
 
-**STATUS: LIVE, 2026-11-18 (first pass: four entry points fuzzed, two findings; BF-1 fixed (span cap, PR stacked on this note's PR), BF-2 fixed in #495).**
+**STATUS: LIVE, 2026-11-18 (first pass: four entry points fuzzed, two findings; BF-1 fixed in #497, BF-2 fixed in #495; plain-log ratchet #498 and the kf-qemu log triage of §6 in their own PRs).**
 Owner, 2026-11-18: finding a bug is worth more than shipping with bugs nobody knows about. This document lists the entry
 points that take guest-controlled bytes, the properties each campaign checks, how to run the campaigns, and the results.
 **Measured** means a test or campaign run on 2026-11-18 at `origin/next` `55194e22e` plus this branch. **Inferred** means read
@@ -89,7 +89,35 @@ prologue (channel birth through `ChanSink`, the Windows software-runlist paths) 
   number kf-qemu 364, kf-mem 59, kf-disp 28, kf-chan 8, kf-host 7, kf-cuda 5, kf-gsp 2. Many kf-qemu sites have their own
   per-site counters (e.g. `refusals_logged < 64`). The S1-86 row of `V3_SECURITY_MODEL.md` §7 stays open for them.
 
-## 6. Sources
+## 6. Guest-repeatable log sites in kf-qemu: triage (2026-11-18, INFERRED from reading the code)
+
+The rule: a plain `eprintln!` matters only if a guest can make it fire **repeatedly**: per register write,
+per RPC, per channel life, per fault, per display update. Sites that fire once per process, sites behind an
+operator environment flag, and sites already bounded by their own counter are left plain, and the bound is
+named. The kf-qemu cluster list was given by the coordinator (2026-11-18); the other kf-qemu sites are not triaged yet.
+`scripts/ci/debt.py logs` pins every remaining plain site (#498), so a new one fails CI.
+Converted sites use `kf_arch::rate_eprintln!`.
+
+| cluster | converted (guest can repeat it) | left plain, and why |
+|---|---|---|
+| `device.rs` `apply_register` | GSP phase change; WPR2 up at FWSEC-FRTS (once per boot, and guest root can reboot the device at will) | `w#n` trace (`LIFE_WRITES_LOGGED` per life); GSP write / command REFUSED (`reset::loud(n)`); `KF3_INJECT_FWSEC_FAIL` (test injection) |
+| `drainer_loop` | device reset COMPLETE (one per guest-initiated reset) | heartbeat (time: one per 2 s); PROF (`prof::on`); `KF3_DBFAST_SPIN_US` (one-shot) |
+| `deliver_rc` | all 3 (one per channel fault; unprivileged userspace can fault its own channels) | — |
+| `deliver_preempt_complete` | all 5 (one per guest runlist preempt) | — |
+| `deliver_hotplug` | — | host-initiated (broker hotplug), not guest-steered |
+| `worker_loop` | — | epoll set-up failures (one-shot); PT-NSI wake (first 8, then powers of two) |
+| `va_loop` | T-space prewarm lines (one per new VA space); trigger armed/idle (guest toggles it) | REFUSED (`refusals` capped at 16 per manager); walk reconciled / deferred clears (`logged < 256`); reset lines (`reset::loud`); `maplog` (env); BAR1 views (`bar1phys::bounded`); stop-time dump |
+| `display.rs` `display_loop` | model statements (one per display object alloc/free); head arm lines (one per modeset); channel STOPPED (one per exception) | set-up and `EXPERIMENT` lines (one-shot or env); TRACE/WTRACE (env or `method_trace_remaining`); STALL (16 per VM); console shows (`SHOWN_LINES`); forced frame edge (20); updates (64); tick handoffs (32); life ENDED (`reset::loud`); fps line (time) |
+| `userpump.rs` | the per-channel-life summaries in `release` (LIFECYCLE, LAZY_OBSERVE, SYNC_CARRIED, STORE_VIEWS); SWITCH_CURSOR_MISMATCH; USER_RING_REFUSED | `trace_*` and `USER_RING_TRACE` (`KF3_USER_RING_TRACE`); SHADOW (experiment flag); config lines (one-shot); lifecycle notices, SYNC/SCAN retries, MIGRATED, BACKSTOP (per-channel `loud` or `< 4` counters: bounded per channel, **not** across channels; next slice) |
+| `userrelay.rs` | route declined, native birth quarantined, notifier owner lost, the free and never-born error lines, quota/storage retained | summaries (first 16, then powers of two); `KF3_WIN_USER_RING_SHADOW` (env) |
+| `kf-host` `birth_member_profile` | — | **kept on purpose**: the merge-bar census reads every channel-birth line (`LOG_KEEP` in `debt.py`, the reason in the baseline value) |
+
+**Remaining plain sites for the next slice** (count from `debt.py logs` after #495 and the kf-qemu triage, 2026-11-18):
+kf-qemu 231, kf-mem 44, kf-chan 8, kf-linux-raw 8, kf-host 7, kf-cuda 5, kf-rm 25 (after #495: `hostquery` realize-time host queries and the already-budgeted `census`/`rowserve`/`defapi`/`gssnative`/`chanlink` sites), kf-util 3, kf-broker 1, kf-gsp 1.
+The next step is to triage these, starting with kf-mem `vasmgr` (per walk) and kf-chan `dbfast`/`refused_segment`
+(per doorbell registration and per refused segment).
+
+## 7. Sources
 
 `docs/audits/2026-10-03-v3-stage1.md` (S1-83, S1-86); `docs/design/V3_SECURITY_MODEL.md` §7–§8; `docs/design/V3_REPLAY_TESTS.md`
 (the red-then-pin pattern BF-1 follows); `crates/kf-arch/src/ratelog.rs` (the rate limit BF-2 applies).
