@@ -1,6 +1,6 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-16 (the VA-apply profiling mutants and the profile-table self-test were added; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-18 (the plain-log ratchet was added; 2026-11-16: the VA-apply profiling mutants and the profile-table self-test were added; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
 ## Shipped GPU programs: the `ptx` job (2026-11-13)
@@ -112,6 +112,13 @@ drift accumulated behind it. What changed, step by step:
 - **Claim ledger (`claims-debt.json`).** 616 sites were recorded (607 `unattributed`, 7 `bare-hardware`,
   2 `conflated`): docs 327, traces 154, kf-qemu 51, kf-chan 40, kf-disp 11, kf-broker 8, kf-rm 7, kf-mem 5, kf-abi 4,
   and 9 elsewhere. They are prose written since the last record; none was rewritten.
+- **Plain-log ratchet (`logs-debt.json`, 2026-11-18).** `python3 scripts/ci/debt.py logs` pins every plain
+  `eprintln!` in the non-test code of the product crates (`LOG_CRATES` in `debt.py`) by file, enclosing fn and the
+  macro up to its format string; a second identical site in one fn is numbered, so it is new too. A new plain site
+  fails; guest-repeatable sites use `kf_arch::rate_eprintln!` (S1-86, `docs/design/V3_BOUNDARY_FUZZING.md`). 436 sites
+  were recorded as the first baseline: kf-qemu 261, kf-rm 98, kf-mem 44, kf-chan 8, kf-linux-raw 8, kf-host 7,
+  kf-cuda 5, kf-util 3, kf-broker 1, kf-gsp 1. Sites kept on purpose carry their reason in the baseline value
+  (`LOG_KEEP`: the kf-host channel-birth line, which the merge-bar census reads in full).
 - **Dependency isolation.** `kf-trap -> loom` and `kf-disp -> kf-broker, kf-linux-raw` are dev-dependencies of pure
   crates that the rule forbids. They are named, exactly and as dev-dependencies only, in `DEV_ONLY_EXCEPTIONS` of
   `scripts/ci/dependencies.py`. **Owner decision pending:** keep the exceptions, or move those tests to `kf-harness`.
