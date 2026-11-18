@@ -93,7 +93,7 @@ MUTANTS = [
     M("a-broken-tool-is-not-supported", "lib", 'if classes[name] in ("TIMEOUT", "CRASH", "ERROR"):', 'if classes[name] in ("TIMEOUT", "CRASH"):',
       K("Tools.a_tool_that_breaks_fails_the_case_and_one_that_declines_is_not_supported", "Tools.a_sanitizer_that_errors_fails_the_case_with_the_tool_named")),
     M("tools-root-not-searched", "scripts", 'TOOL_ROOTS = ("", str(Path(__file__).resolve().parent / "tools"))', 'TOOL_ROOTS = ("",)',
-      K("Tools.tools_pushed_under_the_tools_directory_are_found_and_so_is_cupti", "Tools.the_default_tool_roots_are_the_machine_and_the_directory_beside_the_script")),
+      K("Tools.a_tool_pushed_beside_the_script_is_found_with_the_default_roots", "Tools.the_default_tool_roots_are_the_machine_and_the_directory_beside_the_script")),
     M("falsifier-not-required", "lib", 'if len(r["falsifier"].strip()) < 20:', 'if False:',
       K("CaseTable.a_case_without_a_falsifier_is_refused", "TableMore.a_falsifier_of_a_few_words_is_refused")),
     M("duplicate-ids-allowed", "lib", 'if r["id"] in seen:', 'if False:', K("CaseTable.ids_are_unique_and_a_duplicate_is_refused", "TableMore.an_id_repeated_across_kinds_is_refused")),
