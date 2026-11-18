@@ -498,9 +498,38 @@ def derive_password(seed):
     return "Kf-" + _h(seed, "guest-password").hex()[:16]
 
 
-def render_unattend(template, state, computer="KFPROP"):
+# `unattended` (2026-11-17, from the second proprietary image's build, MEASURED there): nobody sits at the console of an offline build
+# guest, so two answer-file additions replace the owner's hands. (1) OOBE needs no network (BypassNRO in the specialize pass). (2) The first
+# logon runs the SAME setup_ssh.ps1 from the KFTOOLS disc (found by its volume label, never by drive letter), so SSH still has one way in.
+# The default render is unchanged (the template's own text says the owner runs the script).
+_UNATTEND_NRO_ANCHOR = '<Order>10</Order><Path>reg add HKLM\\SYSTEM\\CurrentControlSet\\Control\\CI\\Policy'
+_UNATTEND_NRO = (
+    '\n    <!-- UNATTENDED: the guest is offline (restrict=on) for the whole build; BypassNRO lets OOBE finish without a network. -->'
+    '\n    <RunSynchronousCommand wcm:action="add"><Order>11</Order><Path>reg add '
+    'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path></RunSynchronousCommand>')
+_UNATTEND_FLC_ANCHOR = "one way only. -->\n   <TimeZone>UTC</TimeZone>"
+_UNATTEND_FLC = (
+    "one way only. -->\n   <TimeZone>UTC</TimeZone>\n"
+    "   <!-- UNATTENDED: no human at the console, so the first logon runs the SAME setup_ssh.ps1 from the KFTOOLS CD "
+    "(still the one and only way SSH gets in). -->\n"
+    '   <FirstLogonCommands><SynchronousCommand wcm:action="add"><Order>1</Order><Description>kfprop setup_ssh</Description>'
+    '<CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "foreach ($v in Get-Volume) { if ($v.FileSystemLabel -eq '
+    "'KFTOOLS' -and $v.DriveLetter) { &amp; ($v.DriveLetter + ':\\setup_ssh.ps1') *&gt; C:\\Windows\\Temp\\kf_setup_ssh.log } }"
+    '"</CommandLine></SynchronousCommand></FirstLogonCommands>')
+
+
+def _unattended(xml):
+    i = xml.find(_UNATTEND_NRO_ANCHOR)
+    require(i >= 0, "template lacks the specialize anchor for the unattended variant")
+    j = xml.index("</RunSynchronousCommand>", i) + len("</RunSynchronousCommand>")
+    xml = xml[:j] + _UNATTEND_NRO + xml[j:]
+    require(xml.count(_UNATTEND_FLC_ANCHOR) == 1, "template lacks the oobeSystem anchor for the unattended variant")
+    return xml.replace(_UNATTEND_FLC_ANCHOR, _UNATTEND_FLC)
+
+
+def render_unattend(template, state, computer="KFPROP", unattended=False):
     """autounattend.xml for Windows 11 Pro: offline local account, virtio drivers from the virtio-win ISO,
-    OpenSSH from the pinned MSI. Deterministic: the same state gives the same bytes."""
+    OpenSSH from the pinned MSI. Deterministic: the same state gives the same bytes. `unattended` adds the two console-free steps above."""
     user = state["guest"]["user"]
     require(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,19}", user), "bad guest user name")
     require(re.fullmatch(r"[A-Z][A-Z0-9-]{0,14}", computer), "bad computer name")
@@ -518,7 +547,7 @@ def render_unattend(template, state, computer="KFPROP"):
         require(key in out, "template lacks " + key)
         out = out.replace(key, val)
     require("@@" not in out, "unfilled placeholder in the template")
-    return out
+    return _unattended(out) if unattended else out
 
 
 
@@ -570,7 +599,7 @@ Write-Output ('MACHINE_GUID ' + (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\C
 """
 
 
-def write_tools_dir(state, outdir, msi, nvidia, template_path=UNATTEND_TEMPLATE):
+def write_tools_dir(state, outdir, msi, nvidia, template_path=UNATTEND_TEMPLATE, unattended=False):
     """The ONE install CD (label KFTOOLS): autounattend.xml, the pinned OpenSSH MSI, setup_ssh.ps1, the pinned NVIDIA
     installer. Nothing else; the virtio-win CD is attached separately."""
     out = Path(outdir)
@@ -587,7 +616,7 @@ def write_tools_dir(state, outdir, msi, nvidia, template_path=UNATTEND_TEMPLATE)
         except OSError:
             shutil.copyfile(src, dst)
     (out / "setup_ssh.ps1").write_text(render_setup_ssh(state), encoding="utf-8", newline="\r\n")
-    (out / "autounattend.xml").write_text(render_unattend(Path(template_path).read_text(encoding="utf-8"), state), encoding="utf-8")
+    (out / "autounattend.xml").write_text(render_unattend(Path(template_path).read_text(encoding="utf-8"), state, unattended=unattended), encoding="utf-8")
     return sorted(p.name for p in out.iterdir())
 
 
@@ -645,6 +674,7 @@ def main(argv=None):
     p.add_argument("--ssh-key-dir", help="directory with id_ed25519 and id_ed25519.pub for the guest")
     p = sub.add_parser("tools"); p.add_argument("state"); p.add_argument("--msi", required=True)
     p.add_argument("--nvidia", required=True); p.add_argument("--out", required=True)
+    p.add_argument("--unattended", action="store_true", help="answer file for an offline build with no human at the console: BypassNRO and a first-logon setup_ssh.ps1")
     p = sub.add_parser("argv"); p.add_argument("state"); p.add_argument("mode", choices=MODES)
     p.add_argument("--disk", required=True); p.add_argument("--workdir", required=True)
     p.add_argument("--broker-sock"); p.add_argument("--gop-efi"); p.add_argument("--uid", type=int, default=1000)
@@ -674,7 +704,7 @@ def main(argv=None):
                 st["guest"]["ssh_public_key"] = (kd / "id_ed25519.pub").read_text().strip()
             Path(a.out).write_text(json.dumps(st, indent=2) + "\n")
         elif a.verb == "tools":
-            print(" ".join(write_tools_dir(_load(a.state), a.out, a.msi, a.nvidia)))
+            print(" ".join(write_tools_dir(_load(a.state), a.out, a.msi, a.nvidia, unattended=a.unattended)))
         elif a.verb == "argv":
             state = _load(a.state)
             if not a.no_cpu_preflight:

@@ -20,6 +20,12 @@ def case(name, old, new, *tests, count=1):
 
 
 CASES = [
+    case("unattended-drops-bypassnro", "xml = xml[:j] + _UNATTEND_NRO + xml[j:]", "xml = xml[:j] + xml[j:]",
+         "test_unattended_variant_skips_the_console_steps_and_keeps_one_ssh_way", "test_tools_cd_unattended_option_reaches_the_answer_file_and_the_cli"),
+    case("unattended-drops-firstlogon", "return xml.replace(_UNATTEND_FLC_ANCHOR, _UNATTEND_FLC)", "return xml",
+         "test_unattended_variant_skips_the_console_steps_and_keeps_one_ssh_way", "test_tools_cd_unattended_option_reaches_the_answer_file_and_the_cli"),
+    case("unattended-on-by-default", 'def render_unattend(template, state, computer="KFPROP", unattended=False):', 'def render_unattend(template, state, computer="KFPROP", unattended=True):',
+         "test_unattend_is_deterministic_and_filled", "test_unattended_variant_skips_the_console_steps_and_keeps_one_ssh_way"),
     case("seed-in-hash", 'f"{DOMAIN}\\0{seed}\\0{field}"', 'f"{DOMAIN}\\0{field}"',
          "test_different_seed_different_ids", "test_cli_ids_and_verify_exit_codes"),
     case("field-in-hash", '\\0{field}"', '"',

@@ -87,6 +87,8 @@ How known: starting setup mode, reaching the Windows Setup screen and the answer
 python3 -B -I scripts/bench/windows/propimage.py tools state.json --msi OpenSSH-Win64-v10.0.0.0.msi --nvidia 580.88-desktop-win10-win11-64bit-international-dch-whql.exe --out tools-dir/
 ```
 
+For a build with nobody at the console (offline guest, headless), add `--unattended` to `tools`: the answer file then also sets OOBE's `BypassNRO` (no network needed) and runs the **same** `setup_ssh.ps1` from the disc at the first logon, found by the disc's label `KFTOOLS`. SSH still has one way in. The Windows Setup "Product key" page is not skipped by the answer file; answer it on the console or from a script that watches the screen (no key is entered: "I don't have a product key"). Since 2026-11-17; the second proprietary image was built this way.
+
 In the guest, open an administrator PowerShell and run the script from the disc (the drive letter varies):
 
 ```text

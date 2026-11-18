@@ -971,6 +971,43 @@ class PropTests(unittest.TestCase):
         self.assertIn("E:\\viostor\\w11\\amd64", a)
         self.assertNotIn("FirstLogonCommands", a)
 
+    def test_unattended_variant_skips_the_console_steps_and_keeps_one_ssh_way(self):
+        """2026-11-17: nobody sits at the console of an offline build guest. --unattended adds BypassNRO (OOBE without a network) and a
+        first-logon command that runs the SAME setup_ssh.ps1 from the KFTOOLS disc; the default render is byte-identical to before."""
+        import xml.dom.minidom
+        plain = self.p.render_unattend(self.template(), self.state)
+        a = self.p.render_unattend(self.template(), self.state, unattended=True)
+        xml.dom.minidom.parseString(a.encode())
+        self.assertEqual(plain, self.p.render_unattend(self.template(), self.state, unattended=False))
+        self.assertNotIn("FirstLogonCommands", plain)
+        self.assertNotIn("BypassNRO", plain)
+        self.assertIn(r"OOBE /v BypassNRO /t REG_DWORD /d 1 /f", a)
+        self.assertEqual(a.count("<FirstLogonCommands>"), 1)
+        self.assertIn("KFTOOLS", a)
+        self.assertEqual(a.count("<CommandLine>"), 1)
+        self.assertEqual(re.search(r"<CommandLine>(.*?)</CommandLine>", a, re.S).group(1).count("setup_ssh.ps1"), 1)
+        self.assertEqual(a, self.p.render_unattend(self.template(), self.state, unattended=True))
+
+    def test_unattended_variant_adds_no_secret_and_no_new_check_bypass(self):
+        a = self.p.render_unattend(self.template(), self.state, unattended=True)
+        plain = self.p.render_unattend(self.template(), self.state)
+        pw = self.p.derive_password(SEED)
+        self.assertEqual(a.count(pw), plain.count(pw))
+        for forbidden in ("BypassTPMCheck", "BypassSecureBootCheck", "BypassRAMCheck", "ProductKey"):
+            self.assertNotIn(forbidden, a)
+        # the first-logon command only reads the disc by its label; it never names a drive letter or a path outside it
+        cmd = re.search(r"<CommandLine>(.*?)</CommandLine>", a, re.S).group(1)
+        self.assertNotRegex(cmd, r"[D-K]:\\")
+        self.assertIn("-ExecutionPolicy Bypass", cmd)
+
+    def test_unattended_variant_refuses_a_template_without_its_anchors(self):
+        for anchor in ('<Order>10</Order><Path>reg add HKLM\\SYSTEM\\CurrentControlSet\\Control\\CI\\Policy',
+                       "one way only. -->\n   <TimeZone>UTC</TimeZone>"):
+            t = self.template()
+            self.assertIn(anchor, t)
+            with self.assertRaises(self.p.PropError):
+                self.p.render_unattend(t.replace(anchor, anchor.replace("Order", "Ordre").replace("TimeZone", "TimeZon")), self.state, unattended=True)
+
     def test_unattend_is_wellformed_xml_and_keeps_secure_boot_and_tpm_checks(self):
         import xml.dom.minidom
         a = self.p.render_unattend(self.template(), self.state)
@@ -1123,6 +1160,23 @@ class PropTests(unittest.TestCase):
         msi, nv = self.make_tools()
         names = self.p.write_tools_dir(self.state, self.tmp / "cd", msi, nv)
         self.assertEqual(names, sorted(["autounattend.xml", self.p.OPENSSH_MSI, self.p.NVIDIA_EXE, "setup_ssh.ps1"]))
+
+    def test_tools_cd_unattended_option_reaches_the_answer_file_and_the_cli(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        msi, nv = self.make_tools()
+        self.p.write_tools_dir(self.state, self.tmp / "cdu", msi, nv, unattended=True)
+        unat = (self.tmp / "cdu/autounattend.xml").read_text(encoding="utf-8")
+        self.assertIn("<FirstLogonCommands>", unat)
+        self.assertIn("BypassNRO", unat)
+        self.p.write_tools_dir(self.state, self.tmp / "cdp", msi, nv)
+        self.assertNotIn("FirstLogonCommands", (self.tmp / "cdp/autounattend.xml").read_text(encoding="utf-8"))
+        st = self.tmp / "state.json"
+        st.write_text(json.dumps(self.state))
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = self.p.main(["tools", str(st), "--msi", str(msi), "--nvidia", str(nv), "--out", str(self.tmp / "cdc"), "--unattended"])
+        self.assertEqual(rc, 0)
+        self.assertIn("<FirstLogonCommands>", (self.tmp / "cdc/autounattend.xml").read_text(encoding="utf-8"))
 
     def test_tools_cd_refuses_unpinned_hash(self):
         self.state["guest"]["ssh_public_key"] = self.PUB
