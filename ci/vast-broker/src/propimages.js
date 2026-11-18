@@ -55,6 +55,7 @@ export const MATLAB_ROWS = Object.freeze([
   'dl_predict_sweep',
   'mex_cuda',
   'gfx_render',
+  'matlab_examples',
 ]);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 // A driver version as the release matrix writes it: two to four numeric fields (590.48.01).

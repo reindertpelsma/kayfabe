@@ -72,6 +72,10 @@ RANGES = {}
 for _g in ("philox", "threefry", "combrecursive"):
     RANGES.update({"unif_mean_" + _g: (0.499, 0.501), "unif_var_" + _g: (0.0813, 0.0853), "unif_hist_dev_" + _g: (0.0, 0.003), "unif_lag1_" + _g: (-0.002, 0.002),
                    "norm_mean_" + _g: (-0.002, 0.002), "norm_var_" + _g: (0.99, 1.01), "rand_diffseed_equal_" + _g: (0.0, 0.001)})
+RANGES.update({"enum_gpuarray_pass_fraction": (0.90, 1.0), "messy_vram_fraction": (0.70, 0.95)})       # DESIGN values: recalibrate after the first measured run
+ERRID_GPU_PREFIX = {"errpath_oom": "parallel:gpu", "errpath_wrongclass": "parallel:gpu", "errpath_badptx": "parallel:gpu"}      # UNVERIFIED identifier families (no native reference yet)
+ERRID_WITH_CPU = ("errpath_innerdim", "errpath_badindex")                                                                       # the GPU call must raise the CPU call's identifier class
+ID_RE = re.compile(r"[A-Za-z0-9:_.]{1,64}")
 RANGES.update({"randi_min": (1.0, 1.0), "randi_max": (10.0, 10.0), "avail_ratio_after_reset": (0.85, 1.10), "gfx_circle_area_fraction": (0.77, 0.80),
                "gfx_isosurface_area_ratio": (0.98, 1.02), "gfx_nonwhite_fraction": (0.15, 0.97)})
 MEM_RETURNED = 0.80                                  # mem_oversub: free memory after the release, over the start value
@@ -170,6 +174,14 @@ DL_LAYER_OPS = (("conv1d", "double"), ("conv2d", "double"), ("conv2d_s", "single
                 ("avgpool2d", "double"), ("batchnorm", "double"), ("groupnorm", "double"), ("layernorm", "double"), ("attention", "double"), ("lstm", "double"),
                 ("gru", "double"), ("gelu", "double"), ("softmax_ce", "double"), ("fullyconnect", "double"))
 GEN3 = ("philox", "threefry", "combrecursive")
+EXAMPLES_NAMES = ("examples_discovered", "examples_run", "examples_failed", "examples_status", "examples_failed_cpu_ok", "examples_control_status",
+                  "enum_gpuarray_tested", "enum_gpuarray_diff", "enum_gpuarray_gpu_only_error", "enum_gpuarray_pass_fraction", "enum_gpuarray_status",
+                  "enum_layers_tested", "enum_layers_diff", "enum_layers_gpu_only_error", "enum_layers_status",
+                  "enum_train_cells", "enum_train_diff", "enum_train_unexpected_error", "enum_train_status",
+                  "errpath_innerdim", "errpath_badindex", "errpath_oom", "errpath_wrongclass", "errpath_badptx", "errpath_status",
+                  "messy_under_pressure_single", "messy_vram_fraction", "messy_oom_recovery_single", "messy_no_oom_raised", "messy_odd_shapes_mismatches",
+                  "messy_rerun_after_reset_mismatches", "messy_worker_not_running_when_killed", "messy_kill_recover_double", "messy_new_pool_after_kill_double",
+                  "messy_soak_single_after_6000", "messy_status")
 # id -> (script, time-box seconds for the matlab process, host engines that must show use, the check names the script must report)
 # The time-boxes are DESIGN values (an estimate for a nested box, never measured); no pass criterion is a time.
 ROWS = {
@@ -222,11 +234,13 @@ ROWS = {
                                                "mex_hist_total_count", "exact_mex_sum", "exact_mex_hist_after_2000_launches")),
     "gfx_render": ("gfx_render.m", 1200, ("gpu",), ("gfx_compute_status", "surface_double_512", "gfx_figure_status", "gfx_circle_area_fraction", "gfx_nonwhite_fraction",
                                                     "gfx_distinct_colors", "gfx_iso_status", "isosurface_vertices", "gfx_isosurface_area_ratio", "gfx_gpu_proof")),
+    "matlab_examples": ("matlab_examples.m", 7200, ("gpu", "mem"), EXAMPLES_NAMES),
 }
 PREAMBLE = "gpu_info"
 ROW_ORDER = tuple(ROWS)
 SUPPORT_FILES = ("kf_atleast.m", "kf_cmp.m", "kf_count.m", "kf_fail.m", "kf_fp.m", "kf_gpu.m", "kf_outdir.m", "kf_resid.m", "kf_tol.m", "kf_worker_task.m",
-                 "kf_write.m", "vecadd.ptx", "kf_err.m", "kf_range.m", "kf_af_iter.m", "kf_dl_loss.m", "kf_dl_flat.m", "kf_dl_probe.m", "kf_dl_predict.m", "kf_mex.cu")
+                 "kf_write.m", "vecadd.ptx", "kf_err.m", "kf_range.m", "kf_af_iter.m", "kf_dl_loss.m", "kf_dl_flat.m", "kf_dl_probe.m", "kf_dl_predict.m", "kf_mex.cu", "kf_examples.json", "kf_run_example.m", "kf_enum_gpuarray.m", "kf_enum_layers.m", "kf_enum_train.m", "kf_errpath.m",
+                 "kf_long_kernel.m")
 
 
 def row_timeout(row):
@@ -367,7 +381,8 @@ def check_atleast(item):
     return value >= minimum, "value=%g min=%g" % (value, minimum)
 
 
-MIN_ATLEAST = {"num_workers": 2.0, "distinct_pids": 2.0, "workers_with_a_device": 2.0, "gfx_distinct_colors": 64.0, "isosurface_vertices": 1000.0}
+MIN_ATLEAST = {"num_workers": 2.0, "distinct_pids": 2.0, "workers_with_a_device": 2.0, "gfx_distinct_colors": 64.0, "isosurface_vertices": 1000.0, "examples_discovered": 20.0, "examples_run": 10.0,
+               "enum_gpuarray_tested": 100.0, "enum_layers_tested": 20.0, "enum_train_cells": 24.0}
 
 
 def host_atleast(item):
@@ -412,8 +427,28 @@ def check_range(item):
     return bounds[0] <= value <= bounds[1], "value=%.6g host_range=[%g,%g]" % (value, bounds[0], bounds[1])
 
 
+def _id_class(ident):
+    return ":".join(ident.split(":")[:2])
+
+
+def check_errid(item):
+    """An error path (kf_errpath.m): the GPU call must have raised, with an identifier of the host's family; where a CPU analogue exists the GPU identifier must have the CPU's class."""
+    name, gid, cid = item.get("name"), item.get("gpu_id"), item.get("cpu_id")
+    if item.get("raised") is not True:
+        return False, "no error raised"
+    if not (isinstance(gid, str) and ID_RE.fullmatch(gid)):
+        return False, "malformed errid"
+    if name in ERRID_GPU_PREFIX:
+        return gid.startswith(ERRID_GPU_PREFIX[name]), "gpu_id=%s host_family=%s" % (clean(gid, 48), ERRID_GPU_PREFIX[name])
+    if name in ERRID_WITH_CPU:
+        if not (isinstance(cid, str) and ID_RE.fullmatch(cid)):
+            return False, "no cpu identifier"
+        return _id_class(gid) == _id_class(cid), "gpu_id=%s cpu_id=%s" % (clean(gid, 40), clean(cid, 40))
+    return False, "malformed errid"
+
+
 KINDS = {"cmp": check_cmp, "resid": check_resid, "count": check_count, "atleast": host_atleast, "series": check_series, "pair": check_pair,
-         "gpuarray": check_gpuarray, "range": check_range}
+         "gpuarray": check_gpuarray, "range": check_range, "errid": check_errid}
 
 
 def verify_checks(row, doc):
@@ -708,9 +743,11 @@ def run_row(sess, row, ctx):
 KEEP_INFO = ("name", "compute_capability", "driver_version", "toolkit_version", "total_memory", "available_memory", "multiprocessors", "device_count", "matlab_release",
              "can_use_gpu")
 KEEP_RENDERER = ("graphics_renderer", "vendor", "renderer_device", "hardware_support_level", "display_present", "hardware_assertion_possible", "software_renderer")
+KEEP_ENUM = ("examples_failed", "examples_failed_cpu_ok", "gpuarray_diff", "gpuarray_gpu_only_error", "gpuarray_counts", "layers_diff", "layers_gpu_only_error", "layers_both_error",
+             "layers_counts", "train_diff", "train_unexpected_error", "train_refused", "train_counts")
 KEEP_MEMORY = ("total", "avail_start", "avail_after_alloc", "avail_end", "chunk_bytes", "chunks", "allocated_bytes")
 KEEP_ITEM = ("name", "kind", "dtype", "numel", "tol", "gpu", "cpu", "diff", "ref", "value", "expected", "min", "guest_pass", "on_gpu", "exists_on_gpu", "underlying",
-             "device_index", "device_name", "env_requested", "err_id")
+             "device_index", "device_name", "env_requested", "err_id", "cpu_id", "gpu_id", "raised")
 
 
 def _plain(v):
@@ -732,9 +769,9 @@ def sanitize_result(doc):
            "checks": [{k: _plain(c.get(k)) for k in KEEP_ITEM if k in c} for c in doc.get("checks", [])[:MAX_CHECKS]]}
     if isinstance(doc.get("gpu_device"), dict):
         out["gpu_device"] = {k: _plain(v) for k, v in doc["gpu_device"].items() if k in ("name", "index", "can_use_gpu") and not isinstance(v, (dict, list))}
-    for key, keep in (("info", KEEP_INFO), ("memory", KEEP_MEMORY), ("renderer", KEEP_RENDERER)):
+    for key, keep in (("info", KEEP_INFO), ("memory", KEEP_MEMORY), ("renderer", KEEP_RENDERER), ("enum", KEEP_ENUM)):
         if isinstance(doc.get(key), dict):
-            out[key] = {k: _plain(v) for k, v in doc[key].items() if k in keep and not isinstance(v, (dict, list))}
+            out[key] = {k: _plain(v) for k, v in doc[key].items() if k in keep and (key == "enum" or not isinstance(v, (dict, list)))}
     if num(doc.get("epochs")) is not None:
         out["epochs"] = doc["epochs"]
     return out

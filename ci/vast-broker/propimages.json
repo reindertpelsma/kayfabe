@@ -255,6 +255,10 @@
         "gfx_render": {
           "lane": "discovery",
           "basis": "MATLAB graphics export; renderer recorded: discovery"
+        },
+        "matlab_examples": {
+          "lane": "discovery",
+          "basis": "shipped examples, feature sweeps, error paths and messy variants of the installed products: discovery"
         }
       }
     }

@@ -63,6 +63,9 @@
       "gpu_stencil": {
         "lane": "discovery"
       },
+      "matlab_examples": {
+        "lane": "discovery"
+      },
       "mem_oversub": {
         "lane": "discovery"
       },
