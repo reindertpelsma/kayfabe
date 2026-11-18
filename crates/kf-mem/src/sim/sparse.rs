@@ -163,7 +163,11 @@ fn s1_guest_sparse_slots_are_sparse_on_the_host() {
 #[ignore = "KNOWN-RED S1 (sparse residency): with the default fill an unbind back to SPARSE leaves the host INVALID; run with --ignored"]
 fn s1_an_unbound_slot_returns_to_sparse_on_the_host() {
     for (batching, low, got) in unbound_slot_0(GuestVaFill::Fault) {
-        assert_eq!(got, HostPte::Sparse, "S1: batching={batching} low={low}: slot 0");
+        assert_eq!(
+            got,
+            HostPte::Sparse,
+            "S1: batching={batching} low={low}: slot 0"
+        );
     }
 }
 
@@ -216,7 +220,12 @@ fn s2_guest_invalid_vas_stay_invalid_on_the_host() {
 #[test]
 fn on_s1_guest_sparse_slots_read_zero() {
     let bad = s1_violations(GuestVaFill::Zero);
-    assert!(bad.is_empty(), "S1 with the fill ON: {} pages, first: {}", bad.len(), bad[0]);
+    assert!(
+        bad.is_empty(),
+        "S1 with the fill ON: {} pages, first: {}",
+        bad.len(),
+        bad[0]
+    );
 }
 
 /// ★ ON: an unbind back to SPARSE reads zero again (host RM returns an unmap inside a `_SPARSE`
@@ -224,7 +233,11 @@ fn on_s1_guest_sparse_slots_read_zero() {
 #[test]
 fn on_s1_an_unbound_slot_returns_to_zero() {
     for (batching, low, got) in unbound_slot_0(GuestVaFill::Zero) {
-        assert_eq!(got, HostPte::Sparse, "ON: batching={batching} low={low}: slot 0");
+        assert_eq!(
+            got,
+            HostPte::Sparse,
+            "ON: batching={batching} low={low}: slot 0"
+        );
     }
 }
 
@@ -250,10 +263,22 @@ fn on_is_scoped_to_the_static_guest_ranges() {
     for (batching, low) in PATHS {
         let sim = fresh(GuestVaFill::Zero);
         let rm = sim.0.borrow();
-        assert_eq!(rm.host_pte(R - P), HostPte::Invalid, "batching={batching} low={low}");
-        assert_eq!(rm.host_pte(R_END), HostPte::Invalid, "batching={batching} low={low}");
+        assert_eq!(
+            rm.host_pte(R - P),
+            HostPte::Invalid,
+            "batching={batching} low={low}"
+        );
+        assert_eq!(
+            rm.host_pte(R_END),
+            HostPte::Invalid,
+            "batching={batching} low={low}"
+        );
     }
     let sim = fresh(GuestVaFill::Zero);
     sim.0.borrow_mut().resv.insert(0x77, (0x10_0000, 0x20_0000));
-    assert_eq!(sim.0.borrow().host_pte(0x10_0000), HostPte::Invalid, "a micro reservation keeps the plain flags");
+    assert_eq!(
+        sim.0.borrow().host_pte(0x10_0000),
+        HostPte::Invalid,
+        "a micro reservation keeps the plain flags"
+    );
 }
