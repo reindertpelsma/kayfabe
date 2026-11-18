@@ -1,5 +1,5 @@
-//! `NV2080_CTRL_CMD_FIFO_RUNLIST_SET_SCHED_POLICY` (`0x20801115`) and the two `SET_INTERLEAVE_LEVEL`
-//! controls — the queue-priority path of `VK_KHR_global_priority` (STATUS: LIVE, 2026-11-18; a replay
+//! `NV2080_CTRL_CMD_FIFO_RUNLIST_SET_SCHED_POLICY` (`0x20801115`), the two `SET_INTERLEAVE_LEVEL`
+//! controls, `MAKE_REALTIME` and `RESTART_RUNLIST` — the queue-priority path of `VK_KHR_global_priority` (STATUS: LIVE, 2026-11-18; a replay
 //! test in the sense of `docs/design/V3_REPLAY_TESTS.md`, design note `docs/design/V3_QUEUE_PRIORITY.md`).
 //!
 //! ## The logged failure
@@ -36,9 +36,11 @@ const SET_SCHED_POLICY: u32 = 0x2080_1115;
 const TSG_SET_INTERLEAVE: u32 = 0xa06c_0107;
 /// `NVA06F_CTRL_CMD_SET_INTERLEAVE_LEVEL` (`ctrla06fgpfifo.h:144`).
 const CHAN_SET_INTERLEAVE: u32 = 0xa06f_0109;
-/// Neighbours that are NOT served: they change GPU preemption or the runlist itself.
+/// Neighbour that is NOT served: the guest answers the GET itself.
 const TSG_GET_INTERLEAVE: u32 = 0xa06c_0108;
+/// `NVA06C_CTRL_CMD_MAKE_REALTIME` (`ctrla06c.h:395`).
 const MAKE_REALTIME: u32 = 0xa06c_0110;
+/// `NVA06F_CTRL_CMD_RESTART_RUNLIST` (`ctrla06fgpfifo.h:207`).
 const RESTART_RUNLIST: u32 = 0xa06f_0111;
 const UPDATE_CHANNEL_INFO: u32 = 0x2080_1116;
 
@@ -178,6 +180,22 @@ fn fixture_values(kind: &str) -> Vec<(String, u32, u32)> {
         .collect()
 }
 
+/// The one-byte-per-field params rows of the fixture (`name key=0x.. key=0x..`), as byte vectors.
+fn fixture_bytes(prefix: &str) -> Vec<(String, Vec<u8>)> {
+    FIXTURE
+        .lines()
+        .filter_map(|l| l.strip_prefix(prefix))
+        .map(|l| {
+            let mut it = l.split_whitespace();
+            let name = it.next().unwrap().to_string();
+            let bytes = it
+                .map(|kv| u8::from_str_radix(kv.split_once("=0x").unwrap().1, 16).unwrap())
+                .collect();
+            (name, bytes)
+        })
+        .collect()
+}
+
 /// The replay starts from the logged state: the fixture names this control and this status, and four
 /// boots; a drifted fixture fails here, before it can make the acceptance test pass for the wrong reason.
 #[test]
@@ -186,10 +204,22 @@ fn the_fixture_is_the_logged_refusal() {
         .lines()
         .filter(|l| l.starts_with("logged-line: "))
         .collect();
-    assert_eq!(logged.len(), 4);
-    for l in &logged {
+    assert_eq!(logged.len(), 6);
+    for l in &logged[..4] {
         assert!(l.ends_with("GSP REFUSED fn76/0x20801115=0x56"), "{l}");
     }
+    assert!(
+        logged[4].contains("GSP REFUSED fn76/0xa06f0111=0x56"),
+        "{}",
+        logged[4]
+    );
+    assert!(
+        logged[5].contains("GSP REFUSED fn76/0xa06c0110=0x56"),
+        "{}",
+        logged[5]
+    );
+    assert_eq!(fixture_bytes("synthetic-realtime: ").len(), 2);
+    assert_eq!(fixture_bytes("synthetic-restart: ").len(), 3);
     assert!(FIXTURE.contains("measured: control=0x20801115 status=0x56"));
     assert_eq!(fixture_values("").len(), 4);
 }
@@ -388,12 +418,127 @@ fn interleave_level_sets_are_served_and_validated() {
     assert_no_host_action(&seen);
 }
 
-/// ⊘ Everything next to these controls stays refused by name exactly as before: they change GPU
-/// preemption or the runlist itself (`MAKE_REALTIME`, `RESTART_RUNLIST`), or the guest never sends them
-/// (the interleave GET is answered by the guest's own RM).
+/// ★ THE SECOND REPLAY (RTX 4090, kf3 with #508): the two controls the REALTIME queue path reaches next. Each
+/// params shape is answered `NV_OK` (envelope and control header), echoed, no ledger entry, no host action.
+/// RED before this change: `fn76/0xa06f0111=0x56` and `fn76/0xa06c0110=0x56`.
+#[test]
+fn the_realtime_controls_are_served_ok_and_nothing_reaches_the_host() {
+    for (cmd, object, prefix) in [
+        (MAKE_REALTIME, TSG, "synthetic-realtime: "),
+        (RESTART_RUNLIST, CHANNEL, "synthetic-restart: "),
+    ] {
+        for (name, params) in fixture_bytes(prefix) {
+            let log = kf_rm::unserviced::UnservicedLog::new();
+            let (mut c, seen) = chain(&log);
+            let r = c.respond(&control(object, cmd, &params)).expect("answered");
+            assert_eq!(
+                statuses(&r),
+                (NV_OK, NV_OK),
+                "{cmd:#x} {name}: served, not refused 0x56"
+            );
+            assert_eq!(
+                &r.body[PARAMS_AT..],
+                params.as_slice(),
+                "{cmd:#x} {name}: params as sent"
+            );
+            assert_eq!(log.total(), 0, "{cmd:#x} {name}: no ledger entry");
+            assert_no_host_action(&seen);
+        }
+    }
+}
+
+/// A REALTIME queue's lifetime as the log orders it: policy, level, restart, promote ... demote; repeated.
+#[test]
+fn a_realtime_queue_lifetime_repeated() {
+    let log = kf_rm::unserviced::UnservicedLog::new();
+    let (mut c, seen) = chain(&log);
+    for _ in 0..200 {
+        for (object, cmd, params) in [
+            (SUBDEVICE, SET_SCHED_POLICY, words(&[0, 1])),
+            (TSG, TSG_SET_INTERLEAVE, words(&[2])),
+            (CHANNEL, RESTART_RUNLIST, vec![1, 0]),
+            (TSG, MAKE_REALTIME, vec![1]),
+            (CHANNEL, RESTART_RUNLIST, vec![1, 1]),
+            (TSG, MAKE_REALTIME, vec![0]),
+            (SUBDEVICE, SET_SCHED_POLICY, words(&[1, 0])),
+        ] {
+            let r = c.respond(&control(object, cmd, &params)).expect("answered");
+            assert_eq!(statuses(&r), (NV_OK, NV_OK), "{cmd:#x}");
+        }
+    }
+    assert_eq!(log.total(), 0);
+    assert_no_host_action(&seen);
+}
+
+/// `NvBool` is a byte and RM tests it for non-zero: every value is a boolean; only the SIZE is checked.
+#[test]
+fn booleans_are_bytes_and_any_value_is_accepted() {
+    let log = kf_rm::unserviced::UnservicedLog::new();
+    let (mut c, seen) = chain(&log);
+    for b in [0u8, 1, 2, 0x7f, 0x80, 0xff] {
+        let r = c
+            .respond(&control(TSG, MAKE_REALTIME, &[b]))
+            .expect("answered");
+        assert_eq!(statuses(&r), (NV_OK, NV_OK), "bRealtime {b:#x}");
+        let r = c
+            .respond(&control(CHANNEL, RESTART_RUNLIST, &[b, !b]))
+            .expect("answered");
+        assert_eq!(statuses(&r), (NV_OK, NV_OK), "restart {b:#x}");
+    }
+    assert_no_host_action(&seen);
+}
+
+/// ⊘ Hostile realtime params: a wrong or lying size, a serialized envelope. Refused by name, never host.
+#[test]
+fn hostile_realtime_controls_are_refused_by_name_and_reach_no_host() {
+    let log = kf_rm::unserviced::UnservicedLog::new();
+    let (mut c, seen) = chain(&log);
+    let serialized = (0..32)
+        .map(|b| 1u32 << b)
+        .find(|f| kf_abi::rpc_params_are_serialized(*f))
+        .expect("a serialized flag bit");
+    for (cmd, size) in [(MAKE_REALTIME, 1usize), (RESTART_RUNLIST, 2)] {
+        for (len, declared) in [
+            (0usize, 0u32),
+            (size - 1, (size - 1) as u32),
+            (size + 1, (size + 1) as u32),
+            (4096, 4096),
+            (size, 0),
+            (size, (size + 1) as u32),
+            (size, u32::MAX),
+        ] {
+            let r = c
+                .respond(&control_declared(TSG, cmd, &vec![1u8; len], declared, 0))
+                .expect("answered");
+            assert_eq!(
+                r.rpc_result, NV_ERR_INVALID_PARAM_STRUCT,
+                "{cmd:#x} len {len} declared {declared}"
+            );
+        }
+        let r = c
+            .respond(&control_declared(
+                TSG,
+                cmd,
+                &vec![1u8; size],
+                size as u32,
+                serialized,
+            ))
+            .expect("answered");
+        assert_eq!(r.rpc_result, NV_ERR_NOT_SUPPORTED, "{cmd:#x} serialized");
+    }
+    assert_no_host_action(&seen);
+}
+
+/// ⊘ Everything next to these controls stays refused by name exactly as before: the GETs the guest never
+/// sends (it answers them itself) and `UPDATE_CHANNEL_INFO`.
 #[test]
 fn the_neighbours_stay_refused() {
-    for cmd in [TSG_GET_INTERLEAVE, MAKE_REALTIME, RESTART_RUNLIST] {
+    for cmd in [
+        TSG_GET_INTERLEAVE,
+        UPDATE_CHANNEL_INFO,
+        0xa06f_0110,
+        0xa06c_0111,
+    ] {
         let log = kf_rm::unserviced::UnservicedLog::new();
         let (mut c, seen) = chain(&log);
         // The ledger answers nothing (`None`), which the FSM turns into the refusal the guest reads.
@@ -402,11 +547,6 @@ fn the_neighbours_stay_refused() {
         assert_eq!(log.total(), 1, "{cmd:#x} reaches the ledger as before");
         assert_no_host_action(&seen);
     }
-    let log = kf_rm::unserviced::UnservicedLog::new();
-    let (mut c, _) = chain(&log);
-    let r = c.respond(&control(SUBDEVICE, UPDATE_CHANNEL_INFO, &words(&[0; 8])));
-    assert!(r.is_none_or(|r| r.rpc_result != NV_OK));
-    assert_eq!(log.total(), 1);
 }
 
 /// Another RPC function carrying the same bytes is not a control: the link claims `GSP_RM_CONTROL` only.
