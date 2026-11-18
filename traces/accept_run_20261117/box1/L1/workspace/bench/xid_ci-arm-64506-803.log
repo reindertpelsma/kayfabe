@@ -1,0 +1,45 @@
+[xid-watch] tag=ci-arm-64506-803  host=ubuntu  utc=2026-11-17T13:18:56Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --alias-unmap-observe
+[xid-watch] host_dmesg_lines=828  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=4
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=65199 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--alias-unmap-observe]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0027f
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=sem-release — the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine emulator                      decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red
+RUNG_map_propagation=NOTRUN
+RUNG_alias_two_vas=NOTRUN
+RUNG_missing_page=NOTRUN
+RUNG_map_stress=NOTRUN
+RUNG_rpc_mixed=NOTRUN
+RUNG_cross_client=NOTRUN
+info  R1" unmap observe   = GPU 0, euid 0 — alias one object at two VAs, UNMAP the first, and ask whether the second survived
+info  R1" the bar         = both VAs live (control), then VA_A unmapped, then a release through VA_B must STILL land. ⊘ `pde_info` after an unmap is NOT graded — RM may leave the page table standing
+ALIAS_MARK=both_mapped va_a=0x0000000731000000 va_b=0x0000000831000000
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  R1" control A/B     = Landed / Landed
+ok    R1" control         = both aliases landed before the unmap
+ALIAS_MARK=unmap_a_begin va=0x0000000731000000
+ALIAS_MARK=unmap_a_end ok=true
+info  R1" host after unmap = A PDE_ABSENT / B PDE_COVERS ⊘ UNGRADED — PDE granularity cannot see a leaf go away
+info  R1" allocator says A = Ok(Free) (want Free — the VA is reusable again)
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  R1" release via B#2 = Landed
+★     R1" SIBLING SURVIVED = unmapping VA_A left VA_B live. ⇒ RM tracks the two aliases INDEPENDENTLY, and any fix that keys host backing by frame alone is weaker than the driver it stands in for
+RUNGCTL_alias_unmap=PASS
+RUNG_alias_unmap=PASS
+done — w379/w381 mapping-plane rungs only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=4
+[xid-watch] ★ HOST Xid CLEAN across the command — 4 before, 4 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (828 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-64506-803.log

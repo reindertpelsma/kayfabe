@@ -1,0 +1,31 @@
+[xid-watch] tag=ci-arm-21602-21338  host=ubuntu  utc=2026-11-17T14:48:35Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --gpga-reserve-probe
+[xid-watch] host_dmesg_lines=809  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=5
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=23191 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--gpga-reserve-probe]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00392
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+--- GPGA read sweep: 256 MiB object, splitmix64-filled, memcpy per row ---
+kayfabe-isolate: STORE-RESERVE ★ CONTIGUOUS and 1 GiB-ALIGNED, 64 MiB —                  every slice's physical address is `base + offset` with `base ≡ 0`, so a                  FIXED map is congruent at EVERY page size and store slices need no                  small-page pin.
+GPGA_SWEEP copy=       64 B   64 MiB in   1.988 s =>     32.2 MiB/s
+GPGA_SWEEP copy=      512 B   64 MiB in   2.097 s =>     30.5 MiB/s
+GPGA_SWEEP copy=     4096 B   64 MiB in   2.945 s =>     21.7 MiB/s
+GPGA_SWEEP copy=    65536 B   64 MiB in   2.935 s =>     21.8 MiB/s
+GPGA_SWEEP copy=  1048576 B   64 MiB in   4.032 s =>     15.9 MiB/s
+GPGA_SWEEP copy= 16777216 B   64 MiB in   4.803 s =>     13.3 MiB/s
+GPGA_LARGEST_RESERVABLE_MB=12288  (advertised today: 12288)
+kayfabe-isolate: STORE-RESERVE ★ CONTIGUOUS and 1 GiB-ALIGNED, 24 MiB —                  every slice's physical address is `base + offset` with `base ≡ 0`, so a                  FIXED map is congruent at EVERY page size and store slices need no                  small-page pin.
+GPGA_VIDMEM_READ=7.3 MiB/s over 24 MiB in 3295.3 ms  ⇒ a full page-table re-read costs ~3295 ms, and 1178 refreshes would cost ~3881.9 s if NOT promoted
+GPGA_HOSTMEM_READ=3137 MiB/s (the SAME loop over ordinary RAM) ⇒ ratio 431x — if this is fast, the cost is the BUS, not the wrapper
+GPGA_PROBE=(P) ★ reserved 12288 MiB and measured the read cost
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=5
+[xid-watch] ★ HOST Xid CLEAN across the command — 5 before, 5 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (809 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-21602-21338.log

@@ -1,0 +1,90 @@
+﻿{
+    "goto_debug":  [
+                       "page=Deliver elements=18 main=False button=False"
+                   ],
+    "ended":  1794506449.504,
+    "grade_nodes":  [
+
+                    ],
+    "renders":  [
+
+                ],
+    "steps":  [
+                  {
+                      "ok":  true,
+                      "t":  1794506191.553,
+                      "note":  "",
+                      "n":  "samplers"
+                  },
+                  {
+                      "ok":  true,
+                      "t":  1794506307.009,
+                      "note":  "",
+                      "n":  "project manager"
+                  },
+                  {
+                      "ok":  true,
+                      "t":  1794506322.48,
+                      "note":  "DaVinci Resolve - kf943c9868",
+                      "n":  "main window"
+                  },
+                  {
+                      "ok":  true,
+                      "t":  1794506353.377,
+                      "note":  "kf_gpu",
+                      "n":  "import timeline"
+                  },
+                  {
+                      "ok":  false,
+                      "t":  1794506438.707,
+                      "note":  "",
+                      "n":  "deliver page"
+                  }
+              ],
+    "log_lines":  [
+                      "[0x00000908] | GPUDetect            | ERROR | 2026-11-12 17:56:54,821 | NVML Error Unknown Error (999): Querying device current PCI link width",
+                      "[0x00000908] | GPUDetect            | INFO  | 2026-11-12 17:56:54,834 | Detected 1 GPUs:",
+                      "[0x00000908] | GPUDetect            | INFO  | 2026-11-12 17:56:54,836 |     Discrete, 458 MiB used of 3.6 GiB VRAM, PCI:0:4 (x0)",
+                      "[0x00000908] | GPUDetect            | INFO  | 2026-11-12 17:56:54,836 |     Matches: CUDA, DirectX, NVAPI, NVML, OpenCL, Win32",
+                      "[0x00000908] | Main.GPUConfig       | INFO  | 2026-11-12 17:56:54,842 | Compute API set to automatic, defaulting to CUDA.",
+                      "[0x00000908] | Main.GPUConfig       | INFO  | 2026-11-12 17:56:54,842 | Selected compute API: CUDA",
+                      "[0x00000908] | Main.GPUConfig       | INFO  | 2026-11-12 17:56:54,842 | Automatic GPU Selection:",
+                      "[0x00000a48] | IO                   | INFO  | 2026-11-12 17:56:59,760 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 8, upto 8192 x 8192",
+                      "[0x00000a48] | IO                   | INFO  | 2026-11-12 17:56:59,798 | NVDEC decodes VP9, chroma 4:2:0, bitdepth 10, upto 8192 x 8192",
+                      "[0x00000a48] | IO                   | INFO  | 2026-11-12 17:56:59,829 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 8, upto 8192 x 8192",
+                      "[0x00000a48] | IO                   | INFO  | 2026-11-12 17:56:59,849 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 10, upto 8192 x 8192",
+                      "[0x00000a48] | IO                   | INFO  | 2026-11-12 17:56:59,911 | NVENC encodes H264, with chroma 4:2:0/4:4:4, bit depth up to 8",
+                      "[0x00000a48] | IO                   | INFO  | 2026-11-12 17:56:59,911 | NVENC encodes HEVC, with chroma 4:2:0/4:4:4, bit depth up to 10",
+                      "[0x00000a48] | IO                   | INFO  | 2026-11-12 17:56:59,911 | NVENC encodes AV1, with chroma 4:2:0, bit depth up to 10",
+                      "[0x00000a48] | IO                   | INFO  | 2026-11-12 17:56:59,924 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+                      "[0x00000908] | UI.GLContext         | INFO  | 2026-11-12 17:57:13,248 | Initialized OpenGL 4.5 (requested 4.5) on device \u0027NVIDIA Corporation NVIDIA GeForce RTX 4090/PCIe/SSE2\u0027",
+                      "[0x00001d10] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 17:57:13,786 | Let There Be CUDA Light!",
+                      "[0x00001d10] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 17:57:13,788 | Initializing CUDA board manager for Main Display GPU gpu:589d4fc1.76ce3c9a.",
+                      "[0x00001608] | GPU.SingleBoardMgr   | INFO  | 2026-11-12 17:57:14,391 | Board manager thread for \"NVIDIA \" (gpu:589d4fc1.76ce3c9a) is ready.",
+                      "[0x00002b0c] | UI.GLIO              | INFO  | 2026-11-12 17:57:31,543 | Initialized MainPlayer OpenGL I/O on CUDA device \u0027NVIDIA GeForce RTX 4090\u0027",
+                      "[0x00002b14] | UI.GLIO              | INFO  | 2026-11-12 17:57:32,885 | Initialized AuxPlayer OpenGL I/O on CUDA device \u0027NVIDIA GeForce RTX 4090\u0027"
+                  ],
+    "run_id":  "943c98686efe43cabe27a31f13de31b6",
+    "app":  "resolve",
+    "kind":  "RESOLVE_GPU",
+    "tz_offset_s":  0,
+    "window_name":  "DaVinci Resolve - kf943c9868",
+    "t0":  1794506191.501,
+    "stage":  "init",
+    "started":  1794506190.845,
+    "app_events":  [
+                       "Application Error id=1000 Faulting application name: nvidia-smi.exe, version: 8.17.15.8088, time stamp: 0x6885c44f\r | Faulting module name: nvml.dll, version: 8.17.15.8088, time stamp: 0x6885c42f\r | Exception code: 0xc0000005\r | Fault offset: 0x00000000000eb680\r",
+                       "Application Error id=1000 Faulting application name: Resolve.exe, version: <ip>, time stamp: 0x00000000\r | Faulting module name: nvoglv64.dll, version: 32.0.15.8088, time stamp: 0x6885c454\r | Exception code: 0xc0000409\r | Fault offset: 0x00000000010816ad\r",
+                       "NVIDIA OpenGL Driver id=1 Unable to recover from a kernel exception. The application must close. |  |  | Error code: 3 (subcode 2)",
+                       "Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for \\MINWINPC$ via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.microsoftaik.azure.net/templates/Aik/scep failed:\r | \r | GetCACaps | \r",
+                       "Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for Local system via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.microsoftaik.azure.net/templates/Aik/scep failed:\r | \r | GetCACaps | \r"
+                   ],
+    "error":  "Deliver page did not open",
+    "nvlddmkm_events":  [
+                            "id=153 2026-11-12T18:00:17.2050664+00:00",
+                            "id=153 2026-11-12T18:00:17.0291082+00:00",
+                            "id=153 2026-11-12T18:00:14.1440817+00:00"
+                        ],
+    "resolve_running":  true,
+    "log_start_bytes":  28870
+}

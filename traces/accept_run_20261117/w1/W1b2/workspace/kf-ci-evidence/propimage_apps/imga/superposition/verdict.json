@@ -1,0 +1,7 @@
+{
+  "app": "superposition",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "Completed benchmark interval 178 s on NVIDIA GeForce RTX 4090 (driver 32.0.15.8088) from the saved log; score and FPS are not in the log file",
+  "secs": 763
+}

@@ -1,0 +1,1 @@
+SPECRUN_END workload=energy-04 rc=0 start=2026-11-18T02:17:19Z end=2026-11-18T02:22:35Z secs=316

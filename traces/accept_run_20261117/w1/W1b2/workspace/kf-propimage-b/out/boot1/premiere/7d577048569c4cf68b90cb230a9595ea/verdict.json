@@ -1,0 +1,34 @@
+{
+  "app": "premiere",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "LIMITED: launched, main window reached (1 windows), process responding=True, 4541 MB; no document work",
+  "error": "",
+  "class": "app",
+  "limited": true,
+  "lane": "gate",
+  "path": "Mercury engine start, CUDA/D3D12 init (launch only)",
+  "platform": "kf3",
+  "secs": 95,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 20.0,
+      "mem_mb": 9589.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 20.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 44
+    },
+    "baseline": {
+      "mem_mb": 9432.0,
+      "gpu": 2.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 320
+  },
+  "outputs_recorded": 4
+}

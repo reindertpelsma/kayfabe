@@ -1,0 +1,49 @@
+{
+ "census": {
+  "counts": {
+   "refused": 16,
+   "unserviced": 40
+  },
+  "lines": 849,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 10,
+   "submissions": 1224,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [],
+  "flag_disagrees": 0,
+  "n": 1
+ },
+ "facts": {
+  "compute_capability": "8.9",
+  "device_count": 1,
+  "driver_version": 13.1,
+  "matlab_release": "2026b",
+  "name": "NVIDIA GeForce RTX 4090",
+  "toolkit_version": 13.1,
+  "total_memory": 3968073728
+ },
+ "failure_class": "OUTPUT_MISMATCH",
+ "findings": [
+  "TOTAL_MEMORY_OUT_OF_RANGE guest=3968073728 host_mib=24564"
+ ],
+ "gpu": {},
+ "host_xid": 0,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "TOTAL_MEMORY_OUT_OF_RANGE guest=3968073728 host_mib=24564",
+ "result": {
+  "bytes": 634,
+  "sha256": "a6b2844f4245189821091a105410f1bf4fba25d48319efcb30d187148e9bbbfc"
+ },
+ "row": "gpu_info",
+ "secs": 18,
+ "verdict": "FAIL"
+}

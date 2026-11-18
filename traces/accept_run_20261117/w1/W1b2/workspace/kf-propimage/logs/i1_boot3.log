@@ -1,0 +1,18 @@
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+platform PASS NONE kf3
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-12T17:49:48Z (fresh overlay)
+harness HARNESS NONE kf-gop.signed.efi not found (pass --gop-efi): /workspace/kf-propimage/gop/kf-gop.signed.efi
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+platform PASS NONE kf3
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-12T17:49:48Z (fresh overlay)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+ssh PASS NONE loopback guest transport ready
+power OK FILE OK values={"sleep":{"ac":0,"dc":0},"hibernate_after":{"ac":0,"dc":0},"unattended_sleep":{"ac":0,"dc":0},"hybrid_sleep":{"ac":0,"dc":0},"monitor":{"ac":0,"dc":0},"disk":{"ac":0,"dc":0},"wake_signin":{"
+gpu PASS NONE post-fix seed UUID exact match after 43s (expected=1 observed=1 host=n/a), problem code 0, settled before restart=True
+verify PASS NONE identity, clock, TPM and seed GPU checked
+app:3dmark PASS FILE 3DMark score 6576 (graphics 6949), graphics tests 42.43, 42.36 FPS, finished 2026-11-12T18:09:16Z on NVIDIA GeForce RTX 4090 driver 32.0.15.8088, all 10 workload status codes 0; CLI refused (Professio
+stop PASS NONE own QEMU stopped; other own helpers cleaned by ExitStack

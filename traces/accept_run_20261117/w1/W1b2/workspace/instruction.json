@@ -1,0 +1,86 @@
+{
+ "linux_apps": "middle",
+ "matlab": {
+  "bin": "/home/kfimage/MATLAB/R2026b/bin/matlab",
+  "driver": {
+   "version": "590.48.01"
+  },
+  "image": {
+   "from": "pin",
+   "ref": "propimage-kfimg-matlab-20261117.zip",
+   "sha256": "30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a"
+  },
+  "isolation": "shared",
+  "label": "matlab",
+  "rows": {
+   "cuda_kernel": {
+    "lane": "discovery"
+   },
+   "dl_train": {
+    "lane": "discovery"
+   },
+   "gpu_fft": {
+    "lane": "discovery"
+   },
+   "gpu_info": {
+    "lane": "discovery"
+   },
+   "gpu_matmul": {
+    "lane": "discovery"
+   },
+   "gpu_solve": {
+    "lane": "discovery"
+   },
+   "mem_oversub": {
+    "lane": "discovery"
+   },
+   "parpool_gpu": {
+    "lane": "discovery"
+   }
+  }
+ },
+ "propimages": [
+  {
+   "apps": {
+    "3dmark": {
+     "lane": "discovery",
+     "mode": "present"
+    },
+    "edrawings": {
+     "lane": "gate",
+     "mode": "present"
+    },
+    "resolve": {
+     "lane": "discovery",
+     "mode": "present"
+    },
+    "solidworks": {
+     "lane": "gate",
+     "mode": "present"
+    },
+    "superposition": {
+     "lane": "discovery",
+     "mode": "present"
+    }
+   },
+   "disk": {
+    "from": "pin",
+    "ref": "propimage-kfimg-20261112.zip",
+    "sha256": "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3"
+   },
+   "kind": "prebuilt",
+   "label": "imga"
+  }
+ ],
+ "propimages_strict": true,
+ "rehearsal": true,
+ "schema": "kayfabe.payload-instruction/1",
+ "spec": "both",
+ "stages": [
+  "specviewperf"
+ ],
+ "tier": "large",
+ "winapps": "mid",
+ "windows": true,
+ "windows_runs": 2
+}

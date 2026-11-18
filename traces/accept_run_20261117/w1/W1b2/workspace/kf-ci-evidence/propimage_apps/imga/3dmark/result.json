@@ -1,0 +1,15 @@
+﻿{
+    "result_file":  "3DMark-TimeSpy-6576-20261112180916.3dmark-result",
+    "invoked":  1794506317.771,
+    "progress_seen":  true,
+    "cli_output":  "AMD64\r\ndone\r\n17:56:24   _____ ____  __  __            _\r\n17:56:24  |___ /|  _ \\|  \\/  | __ _ _ __| | __\r\n17:56:24    |_ \\| | | | |\\/| |/ _` | \u0027__| |/ /\r\n17:56:24   ___) | |_| | |  | | (_| | |  |   \u003c\r\n17:56:24  |____/|____/|_|  |_|\\__,_|_|  |_|\\_\\\r\n17:56:24 3DMark Command Line Client version: 2.32.8919 64\r\n17:56:24 Futuremark Systeminfo version: 5.92.1497.0\r\n17:56:29 Professional or Developer license key required for command line access\r\n17:56:30\r\n",
+    "ui_ready":  true,
+    "modified":  1794506962.207,
+    "bytes":  199205,
+    "run_id":  "2c39d22a330b4a7bba8bee507151494a",
+    "app":  "3dmark",
+    "kind":  "TDM",
+    "ui_texts":  "3DMark ; Chrome Legacy Window ; System Menu Bar ; System ; Minimize ; Maximize ; Close",
+    "started":  1794506178.667,
+    "ended":  1794506973.402
+}

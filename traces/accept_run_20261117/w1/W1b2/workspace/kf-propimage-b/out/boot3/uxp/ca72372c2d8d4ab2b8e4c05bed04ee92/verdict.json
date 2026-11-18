@@ -1,0 +1,34 @@
+{
+  "app": "uxp",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "LIMITED: launched, main window reached (1 windows), process responding=True, 116 MB; no document work",
+  "error": "",
+  "class": "app",
+  "limited": true,
+  "lane": "gate",
+  "path": "UXP tooling start (launch only)",
+  "platform": "kf3",
+  "secs": 39,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 19.0,
+      "mem_mb": 9444.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 19.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 45
+    },
+    "baseline": {
+      "mem_mb": 9418.0,
+      "gpu": 2.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 198
+  },
+  "outputs_recorded": 3
+}

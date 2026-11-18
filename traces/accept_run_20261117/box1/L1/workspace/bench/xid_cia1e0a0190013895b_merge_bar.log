@@ -1,0 +1,22 @@
+[xid-watch] tag=cia1e0a0190013895b_merge_bar  host=ubuntu  utc=2026-11-17T13:15:28Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/merge_check.sh d33d20c0b5f60f9c6aeddac4c624fe9d4e78e7b5 cia1e0a0190013895b
+[xid-watch] host_dmesg_lines=719  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=10
+[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — the run is VOID whatever it printed:
+    [ 1340.224223] NVRM: Xid (PCI:0000:00:07): 31, pid=64980, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1343.248061] NVRM: Xid (PCI:0000:00:07): 31, pid=64980, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1346.248934] NVRM: Xid (PCI:0000:00:07): 31, pid=64980, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1349.285219] NVRM: Xid (PCI:0000:00:07): 31, pid=64980, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1386.159580] NVRM: Xid (PCI:0000:00:07): 31, pid=65408, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+    [ 1821.654130] NVRM: Xid (PCI:0000:00:07): 31, pid=69046, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1824.862489] NVRM: Xid (PCI:0000:00:07): 31, pid=69046, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1827.811518] NVRM: Xid (PCI:0000:00:07): 31, pid=69046, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1830.959737] NVRM: Xid (PCI:0000:00:07): 31, pid=69046, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 2049.383524] NVRM: Xid (PCI:0000:00:07): 31, pid=70922, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[xid-watch]   ⊘ An "Xid 31 … FAULT_PDE" means the host MMU walked for an address that resolved
+[xid-watch]   to nothing — i.e. OUR placement, not the guest's methods. A rung that reports
+[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.

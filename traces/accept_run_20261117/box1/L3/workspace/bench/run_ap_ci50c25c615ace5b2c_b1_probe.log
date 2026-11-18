@@ -1,0 +1,131 @@
+=== boot_capture tag=ap_ci50c25c615ace5b2c_b1 at 2026-11-17T15:59:38+00:00 ===
+=== source revision: 021cad3cc ===
+=== qemu binary: -rwxr-xr-x 1 root root 96816576 Nov 17 14:45 /workspace/bench/kf3-bins/021cad3c/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kf-ci-src/scripts/bench/boot_nvkvm.sh  sha256=0c01dc8eb42df9a4
+    used: /workspace/kf-ci-src/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Tue Nov 17 15:59:50 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4090        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Nov 17 15:59 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Nov 17 15:59 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Nov 17 15:59 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Nov 17 15:59 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Nov 17 15:59 .
+drwxr-xr-x 18 root root   4000 Nov 17 15:59 ..
+cr--------  1 root root 240, 1 Nov 17 15:59 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Nov 17 15:59 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/kf-ci-src/scripts/apps/apps_hook.sh at 2026-11-17T15:59:53+00:00 ===
+APPS_HOOK tag=ap_ci50c25c615ace5b2c_b1 apps=[nvidia_smi deviceQuery vectorAdd vectorAddDrv matrixMul matrixMulDrv bandwidthTest simpleStreams asyncAPI simpleAtomicIntrinsics simpleCallback simpleOccupancy simpleZeroCopy simpleCooperativeGroups concurrentKernels simpleIPC cudaTensorCoreGemm bf16TensorCoreGemm globalToShmemAsyncCopy cdpSimpleQuicksort graphMemoryNodes simpleCudaGraphs simpleCUBLAS simpleCUFFT conjugateGradient MersenneTwisterGP11213 reduction sortingNetworks scan histogram BlackScholes fastWalshTransform transpose stream_triad reduce nbody blackscholes mandelbrot conv2d sgemm_cublas fft_cufft sha256 memcpy2d stream_default stream_created stream_nonblocking stream_perthread stream_two stream_created2nd gpu_burn torch_correct torch_ai_bench hf_generate cupy llama_cpp_gen llama_bench vulkaninfo vkpeak egl_offscreen clinfo clpeak nvenc_h264 nvenc_hevc nvdec_h264 hashcat blender_cycles] guest=NVIDIA GeForce RTX 4090, 580.159.04, Disabled
+APPS_GUEST_DRM rc=0 4 
+APPRES side=guest app=nvidia_smi verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=295 kf3_refusals=18
+APPRES side=guest app=deviceQuery verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=895 kf3_refusals=29
+APPRES side=guest app=vectorAdd verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=828 kf3_refusals=22
+APPRES side=guest app=vectorAddDrv verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=816 kf3_refusals=20
+APPRES side=guest app=matrixMul verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=825 kf3_refusals=19
+APPRES side=guest app=matrixMulDrv verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=804 kf3_refusals=19
+APPRES side=guest app=bandwidthTest verdict=PASS rc=0 secs=6 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=835 kf3_refusals=19
+APPRES side=guest app=simpleStreams verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=843 kf3_refusals=17
+APPRES side=guest app=asyncAPI verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=840 kf3_refusals=17
+APPRES side=guest app=simpleAtomicIntrinsics verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=808 kf3_refusals=15
+APPRES side=guest app=simpleCallback verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=822 kf3_refusals=15
+APPRES side=guest app=simpleOccupancy verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=843 kf3_refusals=15
+APPRES side=guest app=simpleZeroCopy verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=818 kf3_refusals=15
+APPRES side=guest app=simpleCooperativeGroups verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=803 kf3_refusals=15
+APPRES side=guest app=concurrentKernels verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=836 kf3_refusals=16
+APPRES side=guest app=simpleIPC verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1309 kf3_refusals=15
+APPRES side=guest app=cudaTensorCoreGemm verdict=PASS rc=0 secs=7 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=835 kf3_refusals=15
+APPRES side=guest app=bf16TensorCoreGemm verdict=PASS rc=0 secs=18 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=843 kf3_refusals=15
+APPRES side=guest app=globalToShmemAsyncCopy verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=808 kf3_refusals=15
+APPRES side=guest app=cdpSimpleQuicksort verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=852 kf3_refusals=13
+APPRES side=guest app=graphMemoryNodes verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=804 kf3_refusals=12
+APPRES side=guest app=simpleCudaGraphs verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=806 kf3_refusals=12
+APPRES side=guest app=simpleCUBLAS verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=876 kf3_refusals=12
+APPRES side=guest app=simpleCUFFT verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=808 kf3_refusals=12
+APPRES side=guest app=conjugateGradient verdict=PASS rc=0 secs=3 quiet=1 note=warn:Test Summary: Error amount = 0.000000 boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=877 kf3_refusals=12
+APPRES side=guest app=MersenneTwisterGP11213 verdict=PASS rc=0 secs=3 quiet=1 note=warn:Max absolute error: 0.000000E+00 boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=806 kf3_refusals=12
+APPRES side=guest app=reduction verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=3000 kf3_refusals=12
+APPRES side=guest app=sortingNetworks verdict=PASS rc=0 secs=10 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=810 kf3_refusals=12
+APPRES side=guest app=scan verdict=PASS rc=0 secs=4 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=805 kf3_refusals=12
+APPRES side=guest app=histogram verdict=PASS rc=0 secs=5 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=834 kf3_refusals=12
+APPRES side=guest app=BlackScholes verdict=PASS rc=0 secs=3 quiet=0 note=warn:Max absolute error: 1.192093E-05 boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=805 kf3_refusals=13
+APPRES side=guest app=fastWalshTransform verdict=PASS rc=0 secs=6 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=808 kf3_refusals=12
+APPRES side=guest app=transpose verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=826 kf3_refusals=12
+APPRES side=guest app=stream_triad verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=794 kf3_refusals=12
+APPRES side=guest app=reduce verdict=PASS rc=0 secs=7 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=792 kf3_refusals=12
+APPRES side=guest app=nbody verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=792 kf3_refusals=12
+APPRES side=guest app=blackscholes verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=790 kf3_refusals=12
+APPRES side=guest app=mandelbrot verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=794 kf3_refusals=12
+APPRES side=guest app=conv2d verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APPRES side=guest app=sgemm_cublas verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=866 kf3_refusals=12
+APPRES side=guest app=fft_cufft verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=792 kf3_refusals=12
+APPRES side=guest app=sha256 verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=795 kf3_refusals=12
+APPRES side=guest app=memcpy2d verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=790 kf3_refusals=12
+APPRES side=guest app=stream_default verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APPRES side=guest app=stream_created verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=792 kf3_refusals=12
+APPRES side=guest app=stream_nonblocking verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=794 kf3_refusals=12
+APPRES side=guest app=stream_perthread verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=790 kf3_refusals=12
+APPRES side=guest app=stream_two verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=791 kf3_refusals=12
+APPRES side=guest app=stream_created2nd verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=790 kf3_refusals=12
+APPRES side=guest app=gpu_burn verdict=PASS rc=0 secs=97 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1353 kf3_refusals=19
+APPRES side=guest app=torch_correct verdict=PASS rc=0 secs=92 quiet=2 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1082 kf3_refusals=12
+APPDIG side=guest app=torch_correct DIGEST cnn_train_step 763c693a5a53f948
+APPRES side=guest app=torch_ai_bench verdict=PASS rc=0 secs=27 quiet=2 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1055 kf3_refusals=12
+APPRES side=guest app=hf_generate verdict=PASS rc=0 secs=18 quiet=3 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=879 kf3_refusals=12
+APPDIG side=guest app=hf_generate OUTSHA hf_generate 0d973108a6251e14
+APPRES side=guest app=cupy verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=912 kf3_refusals=12
+APPRES side=guest app=llama_cpp_gen verdict=PASS rc=0 secs=5 quiet=0 note=warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CUDA_Host, using CPU instead boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1420 kf3_refusals=12
+APPDIG side=guest app=llama_cpp_gen OUTSHA llama_cpp 30451301af8e011d
+APPRES side=guest app=llama_bench verdict=PASS rc=0 secs=4 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1608 kf3_refusals=12
+APPRES side=guest app=vulkaninfo verdict=PASS rc=0 secs=3 quiet=0 note=warn:error: XDG_RUNTIME_DIR is invalid or not set in the environment. boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1111 kf3_refusals=6
+APPRES side=guest app=vkpeak verdict=PASS rc=0 secs=480 quiet=4 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=3000 kf3_refusals=4
+APPRES side=guest app=egl_offscreen verdict=PASS rc=0 secs=7 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=460 kf3_refusals=4
+APPRES side=guest app=clinfo verdict=PASS rc=0 secs=4 quiet=2 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1143 kf3_refusals=24
+APPRES side=guest app=clpeak verdict=PASS rc=0 secs=178 quiet=1 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=895 kf3_refusals=13
+APPRES side=guest app=nvenc_h264 verdict=PASS rc=0 secs=12 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=901 kf3_refusals=13
+APPRES side=guest app=nvenc_hevc verdict=PASS rc=0 secs=10 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=876 kf3_refusals=12
+APPRES side=guest app=nvdec_h264 verdict=PASS rc=0 secs=9 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=879 kf3_refusals=12
+APPRES side=guest app=hashcat verdict=PASS rc=0 secs=38 quiet=0 note=warn:This means that hashcat cannot use the full parallel power of your device(s). boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1283 kf3_refusals=15
+APPRES side=guest app=blender_cycles verdict=PASS rc=0 secs=13 quiet=0 note=- boot=ap_ci50c25c615ace5b2c_b1 guest_xid=0 kf3_lines=1583 kf3_refusals=24
+APPS_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 25 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=1552
+GUEST_DMESG_AFTER_NVRM=1544
+GUEST_DMESG_WORKLOAD_DELTA=1527
+=== HOST dmesg delta for this boot (watermark 1207 → 1209) ===
+HOST_DMESG_LINES=2
+HOST_DMESG_NVRM=1
+HOST_DMESG_XID=0
+0

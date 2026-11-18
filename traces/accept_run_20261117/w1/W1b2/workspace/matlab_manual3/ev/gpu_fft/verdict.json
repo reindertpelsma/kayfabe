@@ -1,0 +1,65 @@
+{
+ "census": {
+  "counts": {
+   "refused": 9,
+   "unserviced": 21
+  },
+  "lines": 656,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 9,
+   "submissions": 1728,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [],
+  "flag_disagrees": 0,
+  "n": 21
+ },
+ "facts": {},
+ "failure_class": "GPU_NOT_USED",
+ "findings": [],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4794.0
+  },
+  "peak": {
+   "busy_samples": 0,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 1.0,
+   "gpu_dmon_sm": 1.0,
+   "mem_mb": 4805.0
+  },
+  "reasons": [
+   "gpu engine idle: 0 sample(s) at or above 3% (need 2); peak 1.0",
+   "video memory did not rise by 64 MiB (baseline 4794.0, peak 4805.0)"
+  ],
+  "required": [
+   "gpu",
+   "mem"
+  ],
+  "samples": 37,
+  "source": "host",
+  "verdict": "FAIL"
+ },
+ "host_xid": 0,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "gpu engine idle: 0 sample(s) at or above 3% (need 2); peak 1.0",
+ "result": {
+  "bytes": 7800,
+  "sha256": "7c456d15dff39a5b4a931e3ca8ac273d1932203ef7877cd18e8defcaab0a95c0"
+ },
+ "row": "gpu_fft",
+ "secs": 14,
+ "verdict": "FAIL"
+}
