@@ -473,17 +473,24 @@ static int spin_for(unsigned long long ns) {
 }
 static int c_spin_5s(void) { return spin_for(5000000000ULL); }
 static int c_spin_30s(void) { return spin_for(30000000000ULL); }
-static int recover_after(CUfunction f, void **params, const char *what) {
-  CUresult r = launch1(f, 1, 1, NULL, params); if (!r) r = cuCtxSynchronize();
-  kv("fault_rc", "%d", r); if (r == 0) return fail(what, 0);   // a faulting kernel that reports success is a defect of its own
-  cuCtxDestroy_v2(ctx); ctx = NULL; CUresult s = cuCtxCreate_v2(&ctx, 0, dev); kv("new_ctx_rc", "%d", s); if (s) return fail("no_new_context_after_fault", s);
-  if (cuModuleLoadData(&mod, PTX)) return fail("module_after_fault", 0);
-  if (cuModuleGetFunction(&f_addone, mod, "addone")) return fail("symbol_after_fault", 0);
-  int c = c_canary(); kv("canary_after", "%s", STATUS[c]); if (c != PASS) return fail("device_unusable_after_fault", RC);
-  RC = r; return PASS;
+// A kernel fault is sticky for the process that made it (the CUDA context, and the process's later contexts, stay poisoned: a HOST run of the first version of this case
+// failed the same way, 2026-11-18, so the recovery is judged ACROSS processes, which is what a user meets): a child process makes the fault, the parent's context must still
+// work, and a fresh process must work.
+static int c_fault_child(const char *which) {
+  unsigned long long p = 0; void *a[] = {&p};
+  CUresult r = launch1(!strcmp(which, "trap") ? f_trap : f_fault, 1, 1, NULL, !strcmp(which, "trap") ? NULL : a); if (!r) r = cuCtxSynchronize();
+  fprintf(stderr, "fault_child %s rc=%d\n", which, r); return r != 0 ? PASS : FAIL;   // PASS = the fault was reported
 }
-static int c_fault_recovery(void) { unsigned long long p = 0; void *a[] = {&p}; return recover_after(f_fault, a, "illegal_store_was_not_reported"); }
-static int c_trap_recovery(void) { return recover_after(f_trap, NULL, "trap_was_not_reported"); }
+static int recover_after(const char *which, const char *what) {
+  pid_t c; if (spawn_self("fault_child", which, "-", &c)) return fail("fork", 0);
+  int crc = child_status(c); kv("fault_child_exit", "%d", crc); if (crc != 0) return fail(what, crc);
+  int p = c_canary(); kv("parent_canary_after", "%s", STATUS[p]); if (p != PASS) return fail("parent_context_unusable_after_another_process_faulted", RC);
+  pid_t d; if (spawn_self("fanout_child", "0", "-", &d)) return fail("fork", 0);
+  int drc = child_status(d); kv("fresh_process_exit", "%d", drc); if (drc != 0) return fail("fresh_process_unusable_after_a_fault", drc);
+  return PASS;
+}
+static int c_fault_recovery(void) { return recover_after("fault", "illegal_store_was_not_reported"); }
+static int c_trap_recovery(void) { return recover_after("trap", "trap_was_not_reported"); }
 static int c_launch_flood_100k(void) {
   CUdeviceptr d; unsigned zero = 0, v = 0; CK(cuMemAlloc_v2(&d, 4)); CK(cuMemcpyHtoD_v2(d, &zero, 4)); double t = now();
   for (int i = 0; i < 100000; i++) CK(run_addone(d, 1, NULL));
@@ -560,14 +567,14 @@ int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
   const char *name = argv[1]; CASE = name; const Case *c = NULL; int child = 0, st;
   for (unsigned i = 0; i < sizeof CASES / sizeof *CASES; i++) if (!strcmp(CASES[i].name, name)) c = &CASES[i];
-  if (!strcmp(name, "ipc_child") || !strcmp(name, "ipc_event_child") || !strcmp(name, "ipc_vmm_child") || !strcmp(name, "fanout_child")) child = 1;
+  if (!strcmp(name, "ipc_child") || !strcmp(name, "ipc_event_child") || !strcmp(name, "ipc_vmm_child") || !strcmp(name, "fanout_child") || !strcmp(name, "fault_child")) child = 1;
   if (!c && !child) { fprintf(stderr, "unknown case %s\n", name); return 2; }
   double t0 = now();
   st = setup(child || c->module);
   if (st == PASS) {
     if (child) {
       st = !strcmp(name, "ipc_child") ? c_ipc_child(argv[2]) : !strcmp(name, "ipc_event_child") ? c_ipc_event_child(argv[2])
-         : !strcmp(name, "ipc_vmm_child") ? c_ipc_vmm_child(argv[2], argv[3]) : c_fanout_child(argv[2]);
+         : !strcmp(name, "ipc_vmm_child") ? c_ipc_vmm_child(argv[2], argv[3]) : !strcmp(name, "fault_child") ? c_fault_child(argv[2]) : c_fanout_child(argv[2]);
       if (st != PASS) fprintf(stderr, "child %s: %s rc=%d\n", name, REASON, RC);
       return st == PASS ? 0 : 1;
     }

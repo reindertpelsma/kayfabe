@@ -314,7 +314,7 @@ def tools_sanitizer(ctx):
     runs = {t: base + ["--tool", t, ctx["probe"], "canary"] for t in ("memcheck", "racecheck", "synccheck", "initcheck")}
     r = tool_case(ctx, runs)
     # positive control: the same tool must REPORT an illegal store. A silent memcheck is blind, whatever it says about the clean run
-    rc, out, to = run(base + ["--tool", "memcheck", ctx["probe"], "fault_recovery"], 240)
+    rc, out, to = run(base + ["--tool", "memcheck", ctx["probe"], "fault_child", "fault"], 240)
     seen = "invalid __global__ write" in out.lower() or "invalid __global__" in out.lower()
     r["kv"]["memcheck_reports_the_illegal_store"] = str(int(seen))
     if r["status"] == "PASS" and not seen:
