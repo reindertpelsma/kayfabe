@@ -1801,6 +1801,13 @@ class BreadthRowTests(unittest.TestCase):
         self.assertGreater(body.index("CUDA_VISIBLE_DEVICES"), control)
         self.assertNotIn("kf_err", body.split("CUDA_VISIBLE_DEVICES")[1].split("catch ME")[0])
 
+    def test_the_examples_row_writes_a_partial_document_before_each_later_part(self):
+        body = self.text("matlab_examples.m")
+        self.assertEqual(body.count("doc.status = 'partial';"), 4)
+        for marker in ("% ---- 2.", "% ---- 3.", "% ---- 4.", "% ---- 5."):
+            before = body.split(marker)[0]
+            self.assertTrue(before.rstrip().endswith("kf_write(row, doc);       % a time-boxed kill must not lose the parts that finished (the host reads only a 'done' document; the partial file is for the evidence pull)"), marker)
+
     def test_the_examples_data_file_is_sane(self):
         cfg = json.loads(self.text("kf_examples.json"))
         self.assertTrue(set(cfg["example_roots"]) <= {"parallel", "nnet"})

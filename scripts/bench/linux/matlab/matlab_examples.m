@@ -76,6 +76,10 @@ try
         catch
         end
     end
+    doc.status = 'partial';
+    doc.checks = checks;
+    doc.enum = enum;
+    kf_write(row, doc);       % a time-boxed kill must not lose the parts that finished (the host reads only a 'done' document; the partial file is for the evidence pull)
     % ---- 2. feature enumeration
     try
         s = kf_enum_gpuarray(cfg);
@@ -116,6 +120,10 @@ try
     catch ME
         checks{end+1} = kf_err('enum_train_status', ME);
     end
+    doc.status = 'partial';
+    doc.checks = checks;
+    doc.enum = enum;
+    kf_write(row, doc);       % a time-boxed kill must not lose the parts that finished (the host reads only a 'done' document; the partial file is for the evidence pull)
     % ---- 3. error paths
     try
         free0 = d.AvailableMemory;
@@ -128,6 +136,10 @@ try
     catch ME
         checks{end+1} = kf_err('errpath_status', ME);
     end
+    doc.status = 'partial';
+    doc.checks = checks;
+    doc.enum = enum;
+    kf_write(row, doc);       % a time-boxed kill must not lose the parts that finished (the host reads only a 'done' document; the partial file is for the evidence pull)
     % ---- 4. messy variants
     try
         free0 = d.AvailableMemory;
@@ -198,6 +210,10 @@ try
         catch
         end
     end
+    doc.status = 'partial';
+    doc.checks = checks;
+    doc.enum = enum;
+    kf_write(row, doc);       % a time-boxed kill must not lose the parts that finished (the host reads only a 'done' document; the partial file is for the evidence pull)
     % ---- 5. the CPU-only control of the examples that threw, LAST: the workers it starts have no visible GPU (the variable is left set; nothing after this needs a GPU worker)
     try
         cpu_ok = 0;
