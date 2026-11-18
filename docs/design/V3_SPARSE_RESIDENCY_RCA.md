@@ -1,6 +1,6 @@
 # V3 — sparse residency: why residency cases hang in the guest (root cause, GPU-free reproduction)
 
-**STATUS: LIVE, 2026-11-18. Root cause found in the code, red GPU-free test committed, fix NOT in this change: it forks on an owner decision (§5). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
+**STATUS: LIVE, 2026-11-18. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as an opt-in property (#494). Option C (the exact fix): C1 is MEASURED infeasible; C2 is designed, not built (§7). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
 Parent evidence: `traces/open_rows_guest_20261117/confirm/` (PR #479) and `docs/design/V3_VULKAN_CTS_ROW.md` §12
 (tree branch). Pattern: `V3_REPLAY_TESTS.md`.
 
@@ -120,9 +120,121 @@ Hostile-guest bounds for the stages: SPARSE runs come out of the same per-walk r
 there is no new unbounded emit. Each run costs one micro reservation, bounded by the slot pool. A SPARSE
 host PTE maps no memory.
 
-## 6. Hardware confirmation still needed
+## 6. Hardware confirmation
+
+**Update 2026-11-18 (MEASURED, box `kf-openguest-180343`, RTX 4090 (Ada), host and guest driver 580.159.04,
+kf3 `5ee2aa5a` = `claude/sparse-box-tree-20261118`).** The tree is the accept tree plus #494, with one binary
+for both boots. Each case ran alone in its own `deqp-vk` process. The host ran the same list as the oracle.
+Text evidence: `/workspace/bench/sparse_box_20261118/box2/raw` (coordinator side).
+
+The prediction and the falsifier were stated before the run:
+- off: the two residency cases time out with Xid 109;
+- on: everything passes;
+- Xid 109 with the property on falsifies the mechanism.
+
+| case (`dEQP-VK.sparse_resources.`) | host | guest, property off | guest, `unmapped-reads-zero=on` |
+|---|---|---|---|
+| `multisampled_image_sparse_binding.rgba16ui.samples_4` | Pass | Pass | Pass |
+| `multisampled_image_sparse_residency.rgba16ui.samples_4` | Pass | **Timeout (300 s), 1 host Xid 109** | **Pass (13 s), 0 Xid** |
+| `buffer.texel_buffers.sparse_residency..._size_2_16_r32ui` | Pass | Pass | Pass |
+| `buffer.texel_buffers.sparse_residency..._size_2_24_r32ui` | Pass | **Timeout (300 s), 1 host Xid 109** | **Pass (14 s), 0 Xid** |
+| `mipmap_sparse_residency.2d.rgba16ui.1024_128_1` | Pass | Pass | Pass |
+| `mipmap_sparse_residency.cube.r8_snorm.128_128_1` | Pass | Pass | Pass |
+| `image_sparse_residency.mutable.2d.r16g16_unorm_r16g16_snorm_r16g16_uint` | Pass | Pass | Pass |
+| `device_group_image_sparse_residency.2d.rgba16ui.1024_128_1` | NotSupported | NotSupported | NotSupported |
+| `shader_intrinsics.2d_sparse_sample_implicit_lod.g16_b16r16_2plane_444_unorm.128_128_1` | NotSupported | NotSupported | NotSupported |
+| `image_rebind.2d_array.r8.128_128_8` | NotSupported | NotSupported | NotSupported |
+| `image_sparse_binding.multiple_bind_sparse_info.3d.rgba32ui.512_256_6` | Pass | Pass | Pass |
+| `image_sparse_memory_aliasing.2d.rgba32ui.11_37_1` | Pass | Pass | Pass |
+
+- Both Xid 109 were `CTX SWITCH TIMEOUT` on channel 0x31 with `Info 0x6c022`, as on the RTX 3090. They were
+  the only two Xid lines of the whole box.
+- **Verdict: the mechanism holds, and the falsifier was not observed.** An INVALID host PTE under the guest's
+  SPARSE pages hangs the channel. A SPARSE host PTE there makes the cases pass. Option C (exact S1 with S2
+  kept) is therefore worth building for this symptom.
+- The first box rented for this run (an RTX 4090) wedged on bare metal before any kayfabe code ran: RC
+  watchdog `GPPut < WATCHDOG_GPFIFO_ENTRIES` asserts, then a host CUDA ladder binary stuck in the kernel.
+  It was destroyed and replaced.
+
+**Still open, non-blocking:** why an INVALID read stalls the context (Xid 109) instead of faulting (Xid 31).
+A candidate (INFERRED): the twin's TEX faults are replayable in the instance block that host GSP builds, and
+nobody services them. The fix does not depend on the answer.
+
+(Superseded 2026-11-18 by the update above:)
 
 One run of `msresid` with a kf3 that holds SPARSE at the guest-SPARSE slots. Prediction: Pass and no Xid.
 Falsifier: Xid 109 again, which would refute the mechanism. Under option B this is one flag (a control build of `next` against B, the image pair and the texel pair).
 The run should come after the §5 decision; before that it would only repeat §1. A B build that still
 hangs refutes the mechanism and moves the question to Xid 109 vs Xid 31.
+
+## 7. Option C research (2026-11-18, time-boxed): SPARSE for exactly the guest's sparse runs
+
+**Invariants.** S1: every guest-SPARSE VA is SPARSE on the host. S2: every guest-INVALID VA is INVALID on
+the host. Every guest-mapped VA stays mapped as today, including the guard ("an unchanged VA stays
+mapped at all times").
+
+**What blocks it** (§5): host RM can make a VA SPARSE only by allocating a `_SPARSE` `NV50` block there. kf's
+static fence blocks already own the guest VA, and an `NV50` block can be neither split nor nested.
+
+### C1: drop the fence (`VA_INTERNAL_LIMIT`)
+
+If host RM's own per-channel context buffers could be kept out of the guest ranges some other way, there
+would be no fence. A guest-SPARSE run would then be one exact `_SPARSE` `NV50` block, and a guest row would
+be placed as today (micro reservations, `batch.rs`).
+
+The one unprivileged lever is `NV_VASPACE_ALLOCATION_FLAGS_VA_INTERNAL_LIMIT`. It routes RM-internal
+allocations into `[4 GiB, 4.5 GiB)` (`vaspace_api.c:370-374`), a window that every GSP-client guest RM also
+withholds from its own clients, so no guest row ever lands there. On a GSP host, however, client RM
+reserves exactly that window for server RM (`gpu_vaspace.c:340-344`, `_gvaspaceReserveVaForClientRm`).
+
+- Code-reading prediction (INFERRED): GR context creation fails with the flag.
+- Probe: `crates/kf-harness/src/bin/kf-va-fence-probe.rs`, on the sparse box after the guest runs. It runs
+  two arms: `default` (the positive control: host RM's buffers should occupy guest-range chunks) and
+  `internal_limit`.
+- Falsifier of the prediction: `internal_limit` builds the compute object and the whole first guest range
+  reserves cleanly, while the `default` arm shows occupied chunks.
+
+### C2: exact block tiling
+
+Keep a fence, but tile the guest ranges so that every byte belongs to exactly one host block:
+- a **fence** block: empty, INVALID;
+- a **row** block: a guest mapping placed through it;
+- a **sparse** block: `_SPARSE`.
+
+A fence block never holds a mapping, so it can be freed and re-reserved around a new row or sparse run
+without unmapping anything. That gives S1 and S2 exactly, at the guest's own granularity, with
+unprivileged verbs only.
+
+The costs and unknowns, none of them measured:
+- **RM calls.** A map or unmap in a fenced gap costs about 5 RM calls instead of 1: free the fence, two
+  fence remnants, the block, the map. The micro-reservation path already pays a similar cost per batch,
+  not per row.
+- **Allocator cost.** RM's VA heap is an `eheap` whose block lookup is a list search
+  (`eheap_old.c:1005-1027`). Thousands of blocks per space make every host map slower, so this needs a
+  host-side measurement before any design commitment.
+- **A race.** Between freeing a fence and re-reserving it, a host-RM placement in the same space (a
+  twin's GR context, created on an act thread) could land in the gap. The carve and every host object
+  allocation in that space need one kf-owned lock. That is allowed: no vCPU takes it (CLAUDE.md rule).
+- **Hostile-guest bounds.** Blocks per space are at most 2 × (rows + sparse runs) + 1, bounded by the
+  space's slot capacity (the walk pool). SPARSE runs come out of the same budget. RM call rate is bounded
+  by the invalidate rate, as today. All arithmetic is in checked `u64`.
+- **Walker.** The walker must emit SPARSE runs (stage 2 of §5: an ABI field and the PTX, which is
+  regenerable locally). VER3 PDE sparse must be included (`kf_pde_sparse`).
+
+### C1 probe result (MEASURED 2026-11-18, same box, bare host after the guest runs, 0 new Xid)
+
+- Arm `default` (positive control): space, GR channel, compute object `0xc9c0` and schedule all OK. A FIXED
+  reservation of the whole first guest range is refused (`NoMemory`). Host RM's own buffers occupy
+  `0x120000000` (exactly 4.5 GiB), `0x120200000` and `0x124000000`-`0x124a00000`. This is the gfx7
+  collision, seen directly by the probe (`kf-va-fence-probe` on box `kf-openguest-180343`).
+- Arm `internal_limit` (flags `0x80`): space and channel OK, **compute object refused (`NoMemory`)**, as
+  predicted.
+
+**C1 is infeasible:** with the flag, host RM cannot build a GR context at all.
+
+### Verdict
+
+C1 is infeasible (box `kf-openguest-180343`, kf3 `5ee2aa5a`, probe output above). C2 is feasible with unprivileged verbs only (no NVIDIA-side change), but it is a
+redesign of how `kf-mem` places guest rows, whose per-map cost is unknown until a host-side test exists.
+DX12 reserved/tiled resources and UE virtual textures on Windows need the same S1+S2 property, so C (not
+B) is the real fix.
