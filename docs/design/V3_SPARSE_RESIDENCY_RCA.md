@@ -71,6 +71,19 @@ Mutant (blanket fix: add `_SPARSE` to `NVOS32_RESERVE_FLAGS`): S1 turns green bu
 
 ## 5. Fix design (DESIGN-ONLY; the fix forks on an owner decision)
 
+**Update 2026-11-18 (coordinator decision): option B is implemented as an OPT-IN, default OFF.** The
+`unmapped-reads-zero` device property (`kf_host::channel::GuestVaFill`, `guest_range_plan`; ABI 35;
+`docs/howto/installing.md`) applies to the static guest ranges only. Its tests are in
+`crates/kf-mem/src/sim/sparse.rs`:
+- `on_s1_*` are green with the property on;
+- `on_s2_consequence_*` pins the documented price (with it on, a guest-INVALID VA reads zero);
+- with the property off, S2 and the ratchet are unchanged.
+
+Mutants are in `scripts/ci/sparse_fill_mutants.py` (7, each killed by at least 2 named tests). Two wiring
+lines have no GPU-free killer: the plan's flags reaching `reserve_va_flags`, and realize calling
+`set_guest_va_fill`. The box run covers them (the `unmapped-reads-zero=on` log line and the verdict).
+Option C is still open. Not run on hardware.
+
 **Requirement.** The host must hold SPARSE exactly where the guest's PTE is SPARSE (S1), and INVALID
 wherever the guest's PTE is INVALID (S2).
 
