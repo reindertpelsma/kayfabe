@@ -537,14 +537,14 @@ class RunTests(unittest.TestCase):
         st["qemu"].update(over)
         return st
 
-    def real_execute(self, hooks, seen, state, results=None):
+    def real_execute(self, hooks, seen, state, results=None, probe_text=None):
         """The rows module's own execute() behind the stage's hook: a scripted guest and `state` as the image's state; the stage's context and the judge are the real ones."""
         results = results or tm.all_good()
         seen["boots"] = []
 
         def execute(image, directory, workdir, qemu, driver_run, driver_sha256, rows, lanes, ctx, sha, **kw):
             seen["declared_before"] = ctx.declared_fb_mb
-            ctx.census, ctx.sleep, ctx.probe_factory = tm.FakeCensus(), (lambda secs: None), (lambda d: tm.FakeProbe())
+            ctx.census, ctx.sleep, ctx.probe_factory = tm.FakeCensus(), (lambda secs: None), (lambda d: tm.FakeProbe(probe_text))
             seen["mctx"] = ctx
             with patch.object(MR, "preflight_refusal", lambda *a, **k: None), patch.object(MR, "prepare_dir", lambda *a, **k: (state, {})):
                 return MR.execute(image, directory, workdir, qemu, driver_run, driver_sha256, rows, lanes, ctx, sha, make_session=lambda i: (
@@ -567,6 +567,20 @@ class RunTests(unittest.TestCase):
         self.assertEqual(rec["gpu"]["memory_mib"], 24564)                    # the host card is recorded as a fact, and was never the limit
         self.assertIsNone(seen["declared_before"])                         # the stage does not know the value: it comes from the state, inside execute()
         self.assertEqual(seen["mctx"].declared_fb_mb, 4096)
+        vast_report.validate_matlab(rec)
+
+    # ---- 2026-11-18 (MEASURED, Vast RTX 4090 under kf3: five rows failed GPU_NOT_USED on host nvidia-smi readings while the kf3 census counted GPU work): the census is
+    # the primary proof, the readings are facts of the row record; the strict report validator must accept the record with them
+    def test_a_record_whose_rows_were_proved_by_the_census_passes_the_stage_and_the_report_validator(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        self.real_execute(hooks, seen, self.declared_state(4096), probe_text=tm.smi_4090())
+        rec, code = ms.run(a, hooks)
+        self.assertEqual((rec["verdict"], code), ("PASS", 0), [(r["row"], r["verdict"], r["reason"]) for r in rec["rows"]])
+        proofs = {r["row"]: r["gpu"].get("proved_by") for r in rec["rows"]}
+        self.assertEqual(set(proofs.values()), {"census"}, proofs)
+        row = next(r for r in rec["rows"] if r["row"] == "gpu_matmul")
+        self.assertEqual((row["gpu"]["readings"]["engine"]["peak_pct"], row["gpu"]["readings"]["memory"]["rise_mib"]), (2.0, 11.0))
+        self.assertLessEqual(len(json.dumps(row["gpu"])), 2048)
         vast_report.validate_matlab(rec)
 
     def test_the_declared_value_is_the_one_of_the_state_not_a_constant(self):

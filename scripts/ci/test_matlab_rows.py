@@ -126,6 +126,15 @@ def smi_csv(busy=True, mem_rise=True, n=12, na=False):
     return "\n".join(lines) + "\n"
 
 
+def smi_4090():
+    """MEASURED 2026-11-18 (Vast RTX 4090, kf3, MATLAB R2026b; figures reported by the coordinator, that run's evidence directory is not in this tree): the host
+    nvidia-smi rows of the five rows that failed GPU_NOT_USED. Utilisation never reached 3 percent in a 1 s sample (peak 2.0: the kernels last milliseconds) and the
+    host memory stayed flat (4794 -> 4805 MiB: the declared 4096 MiB carve-out is reserved at launch; that this is the reason is INFERRED), while the kf3 census
+    counted GPU work for every row."""
+    lines = ["2026/11/18 10:00:%02d.000, %s, 5, %s, 0, 0" % (i, 2 if i >= 2 else 0, 4794 if i < 4 else 4805) for i in range(12)]
+    return "\n".join(lines) + "\n"
+
+
 class FakeProbe:
     def __init__(self, text=None, starts=True):
         self.text, self.starts = smi_csv() if text is None else text, starts
@@ -681,6 +690,21 @@ class GpuUseTests(unittest.TestCase):
     def test_rows_without_a_requirement_need_no_counters(self):
         self.assertFalse(M.assess_gpu_use("gpu_info", "", "")["unreadable"])
 
+    def test_the_two_readings_of_the_4090_run_are_recorded_beside_the_verdict(self):
+        rec = M.assess_gpu_use("gpu_matmul", smi_4090(), "")
+        self.assertEqual(rec["verdict"], "FAIL")          # nvidia-smi alone still says so: the reading's own verdict is kept as a fact
+        r = rec["readings"]
+        self.assertEqual((r["engine"]["met"], r["engine"]["busy_samples"], r["engine"]["peak_pct"]), (False, 0, 2.0))
+        self.assertEqual((r["memory"]["met"], r["memory"]["baseline_mib"], r["memory"]["peak_mib"], r["memory"]["rise_mib"]), (False, 4794.0, 4805.0, 11.0))
+        self.assertTrue(r["engine"]["required"] and r["memory"]["required"])
+
+    def test_readings_of_a_row_that_requires_one_observable_still_cover_both(self):
+        r = M.assess_gpu_use("cuda_kernel", smi_csv(), "")["readings"]
+        self.assertEqual((r["engine"]["required"], r["memory"]["required"], r["engine"]["met"], r["memory"]["met"]), (True, False, True, True))
+
+    def test_no_sample_is_unreadable_readings(self):
+        self.assertEqual(M.assess_gpu_use("gpu_matmul", "", "")["readings"], {"unreadable": True})
+
     def test_required_engines_per_row(self):
         self.assertEqual(M.row_require("cuda_kernel"), ("gpu",))
         self.assertEqual(M.row_require("mem_oversub"), ("mem",))
@@ -743,7 +767,60 @@ class JudgeTests(unittest.TestCase):
         self.assertEqual(self.j(gpu={"verdict": "FAIL", "unreadable": True, "reasons": []})[0], "HARNESS")
 
     def test_idle_gpu_is_a_failure_class(self):
-        self.assertEqual(self.j(gpu={"verdict": "FAIL", "unreadable": False, "reasons": ["gpu engine idle"]})[:2], ("FAIL", "GPU_NOT_USED"))
+        # 2026-11-18: only when no readable census proves the use (a census that does is the primary proof: CensusPrimaryTests); it stays a failure otherwise
+        self.assertEqual(self.j(work={"verdict": "NOT_RUN", "why": "no status line"}, gpu={"verdict": "FAIL", "unreadable": False, "reasons": ["gpu engine idle"]})[:2],
+                         ("FAIL", "GPU_NOT_USED"))
+        self.assertEqual(self.j(work=None, gpu={"verdict": "FAIL", "unreadable": False, "reasons": ["gpu engine idle"]})[:2], ("FAIL", "GPU_NOT_USED"))
+
+
+class CensusPrimaryJudgeTests(unittest.TestCase):
+    """2026-11-18, owner rule of 2026-11-17 (census first, the application's proof second, a negative control): under kf3 the host census is the PRIMARY proof of
+    GPU use. The host engine-utilisation and host-memory readings are facts of the record; they do not by themselves fail a row the census proves used. A census that
+    does not prove it fails the row whatever nvidia-smi shows; a census that cannot be read proves nothing (and then the readings still decide)."""
+
+    OK, WORK = JudgeTests.OK, JudgeTests.WORK
+    NO_WORK = {"verdict": "FAIL", "why": "host census: no GPU work in the window (submissions +0, channel births +0, doorbells +None, retired channels 0)"}
+    UNREAD = {"verdict": "NOT_RUN", "why": "host census: no status line"}
+    USED = JudgeTests.USED
+    IDLE = {"verdict": "FAIL", "unreadable": False, "reasons": ["gpu engine idle: 0 sample(s) at or above 3% (need 2); peak 2.0",
+                                                                "video memory did not rise by 64 MiB (baseline 4794.0, peak 4805.0)"]}
+
+    def j(self, row="gpu_matmul", gpu=None, work=None, verified=None):
+        return M.judge(row, {"rc": 0, "timed_out": False, "lost": False}, {"x": 1}, verified or self.OK, gpu, {}, None, work)
+
+    def test_a_census_that_proves_the_use_is_not_failed_by_an_idle_engine_and_a_flat_memory_reading(self):
+        for row in (r for r in M.ROW_ORDER if M.row_require(r)):
+            self.assertEqual(self.j(row=row, gpu=self.IDLE, work=self.WORK), ("PASS", None, ""), row)
+
+    def test_the_census_is_asked_of_every_row_and_a_census_with_no_work_fails_even_when_nvidia_smi_shows_load(self):
+        for row in M.ROW_ORDER:
+            for gpu in (self.USED, None):
+                v = self.j(row=row, gpu=gpu, work=self.NO_WORK)
+                self.assertEqual(v[:2], ("FAIL", "GPU_NOT_USED"), (row, gpu))
+                self.assertIn("no GPU work in the window", v[2])
+
+    def test_a_census_that_cannot_be_read_proves_nothing_and_the_engine_reading_still_fails_the_row(self):
+        for work in (None, self.UNREAD):
+            self.assertEqual(self.j(gpu=self.IDLE, work=work)[:2], ("FAIL", "GPU_NOT_USED"), work)
+            self.assertEqual(self.j(gpu=self.USED, work=work), ("HARNESS", None, "HOST_CENSUS_MISSING"), work)
+
+    def test_unreadable_counters_are_still_a_harness_matter_with_a_census_proof(self):
+        self.assertEqual(self.j(gpu=None, work=self.WORK), ("HARNESS", None, "HOST_COUNTERS_MISSING"))
+        self.assertEqual(self.j(gpu={"verdict": "FAIL", "unreadable": True, "reasons": []}, work=self.WORK)[0], "HARNESS")
+
+    def test_the_guests_own_proof_can_still_only_add_a_failure(self):
+        for klass in ("GPU_NOT_USED", "OUTPUT_MISMATCH"):
+            bad = dict(self.OK, ok=False, klass=klass, findings=["NO_GPU_ARRAY_PROOF"])
+            self.assertEqual(self.j(verified=bad, gpu=self.IDLE, work=self.WORK)[:2], ("FAIL", klass))
+            self.assertEqual(self.j(verified=bad, gpu=self.USED, work=self.WORK)[:2], ("FAIL", klass))
+
+    def test_host_xid_still_fails_a_row_the_census_proved(self):
+        self.assertEqual(M.judge("gpu_matmul", {"rc": 0, "timed_out": False, "lost": False}, {"x": 1}, self.OK, self.IDLE, {}, 1, self.WORK)[:2], ("FAIL", "XID"))
+
+    def test_the_proof_is_named(self):
+        gu = M.gpu_use()
+        self.assertEqual(gu.proved_by("PASS", self.IDLE, ("gpu", "mem")), "census")
+        self.assertEqual(gu.proved_by("NOT_RUN", self.IDLE, ("gpu", "mem")), None)
 
 
 # ---------------------------------------------------------------- the run, with a fake guest
@@ -818,9 +895,10 @@ class RunTests(unittest.TestCase):
         self.assertEqual((rec["verdict"], rec["exit_code"]), ("RETRY", 3))
 
     def test_an_idle_gpu_fails_the_row_as_gpu_not_used(self):
+        # 2026-11-18: with a census that proves the use the idle reading is a fact (CensusPrimaryTests); with a census that cannot be read it still fails the row
         ctx = make_ctx(probes={"cuda_kernel": FakeProbe(smi_csv(busy=False))})
-        out, ctx, _ = run(all_good(), ctx=ctx)
-        r = by_row(out)["cuda_kernel"]
+        ctx.census = FakeCensus(work=False, base=False)
+        r, _ = M.run_row(FakeSession(all_good()), "cuda_kernel", ctx)
         self.assertEqual((r["verdict"], r["failure_class"]), ("FAIL", "GPU_NOT_USED"))
         self.assertEqual(r["gpu"]["source"], "host")
 
@@ -1499,6 +1577,86 @@ class GpuUseProofTests(unittest.TestCase):
             ctx.census = FakeCensus(work=False)
             rec, _ = M.run_row(FakeSession(all_good()), row, ctx)
             self.assertEqual((rec["verdict"], rec["failure_class"]), ("FAIL", "GPU_NOT_USED"), row)
+
+    # ---- 2026-11-18: the census is the primary proof; nvidia-smi is recorded as facts
+    def one_row(self, row, smi=None, work=True, base=True, evidence=None):
+        ctx = make_ctx(probes={row: FakeProbe(smi)} if smi is not None else {}, evidence_dir=evidence)
+        ctx.census = FakeCensus(work=work, base=base)
+        return M.run_row(FakeSession(all_good()), row, ctx)[0]
+
+    def test_the_rows_that_failed_on_the_4090_box_pass_by_census_with_both_readings_recorded(self):
+        for row in ("gpu_matmul", "gpu_fft", "gpu_solve", "dl_train", "parpool_gpu", "mem_oversub", "cuda_kernel"):
+            r = self.one_row(row, smi_4090())
+            self.assertEqual((r["verdict"], r["failure_class"], r["reason"]), ("PASS", None, ""), (row, r["reason"]))
+            self.assertEqual(r["gpu"]["proved_by"], "census", row)
+            eng, mem = r["gpu"]["readings"]["engine"], r["gpu"]["readings"]["memory"]
+            self.assertEqual((eng["met"], eng["busy_samples"], eng["peak_pct"]), (False, 0, 2.0), row)
+            self.assertEqual((mem["met"], mem["baseline_mib"], mem["peak_mib"]), (False, 4794.0, 4805.0), row)
+            self.assertEqual(r["gpu"]["verdict"], "FAIL", row)         # what nvidia-smi alone says is kept, as a fact
+            self.assertEqual(r["census"]["work"]["verdict"], "PASS")
+            self.assertGreaterEqual(r["census"]["work"]["submissions"], 32)
+
+    def test_a_cpu_only_run_still_fails_whatever_nvidia_smi_shows(self):
+        for row in M.ROW_ORDER:
+            r = self.one_row(row, smi_csv() if M.row_require(row) else None, work=False)
+            self.assertEqual((r["verdict"], r["failure_class"]), ("FAIL", "GPU_NOT_USED"), row)
+            self.assertIn("no GPU work in the window", r["reason"])
+            self.assertIsNone(r["gpu"]["proved_by"], row)
+            self.assertEqual(r["census"]["work"]["verdict"], "FAIL")
+            if M.row_require(row):
+                self.assertTrue(r["gpu"]["readings"]["engine"]["met"], row)     # nvidia-smi shows load: the divergence is on the record, the census decides
+
+    def test_a_census_that_cannot_be_read_does_not_let_nvidia_smi_prove_the_use(self):
+        r = self.one_row("gpu_matmul", smi_csv(), work=False, base=False)             # busy GPU, rising memory, no baseline line
+        self.assertEqual((r["verdict"], r["reason"]), ("HARNESS", "HOST_CENSUS_MISSING"))
+        self.assertIsNone(r["gpu"]["proved_by"])
+
+    def test_with_no_readable_census_the_engine_and_the_memory_readings_still_fail_their_rows(self):
+        for row, smi in (("gpu_matmul", smi_4090()), ("mem_oversub", smi_csv(mem_rise=False)), ("cuda_kernel", smi_csv(busy=False))):
+            r = self.one_row(row, smi, work=False, base=False)
+            self.assertEqual((r["verdict"], r["failure_class"]), ("FAIL", "GPU_NOT_USED"), row)
+            self.assertIsNone(r["gpu"]["proved_by"], row)
+
+    def test_the_memory_row_passes_on_a_flat_memory_reading_only_with_a_census(self):
+        self.assertEqual(self.one_row("mem_oversub", smi_csv(mem_rise=False))["verdict"], "PASS")
+        self.assertEqual(self.one_row("mem_oversub", smi_csv(mem_rise=False), work=False, base=False)["verdict"], "FAIL")
+
+    def test_a_row_that_failed_on_its_numbers_names_nobody(self):
+        results = all_good()
+        results["gpu_fft"] = (0, raw(set_check(good("gpu_fft"), "fft_single_65536", diff=9.0)))
+        ctx = make_ctx(probes={"gpu_fft": FakeProbe(smi_4090())})
+        r, _ = M.run_row(FakeSession(results), "gpu_fft", ctx)
+        self.assertEqual((r["verdict"], r["failure_class"]), ("FAIL", "OUTPUT_MISMATCH"))
+        self.assertEqual(r["census"]["work"]["verdict"], "PASS")          # the census did prove GPU work, and the row still failed: it names nobody
+        self.assertIsNone(r["gpu"]["proved_by"])
+
+    def test_a_harness_row_names_nobody(self):
+        ctx = make_ctx(probes={"gpu_matmul": FakeProbe(starts=False)})
+        r, _ = M.run_row(FakeSession(all_good()), "gpu_matmul", ctx)
+        self.assertEqual((r["verdict"], r["reason"]), ("HARNESS", "HOST_COUNTERS_MISSING"))
+        self.assertIsNone(r["gpu"]["proved_by"])
+
+    def test_the_preamble_names_the_census_and_a_failed_row_names_nobody(self):
+        self.assertEqual(self.one_row("gpu_info")["gpu"]["proved_by"], "census")
+        self.assertIsNone(self.one_row("gpu_fft", smi_csv(), work=False)["gpu"]["proved_by"])
+
+    def test_the_record_keeps_the_proof_name_when_it_shrinks_to_fit(self):
+        out, ctx, _ = run(all_good(), ctx=make_ctx(probes={r: FakeProbe(smi_4090()) for r in M.ROW_ORDER}))
+        rec = M.build_record(out, ctx, "a" * 40, {}, {})
+        for r in rec["rows"]:
+            r["gpu"]["pad"] = "x" * 7000                       # 8 rows of padding: the serialiser must shrink the gpu detail of some rows to fit
+        data = json.loads(M.serialise(rec))
+        self.assertTrue(any("readings" not in r["gpu"] for r in data["rows"]), "nothing was shrunk: the test pads too little")
+        self.assertTrue(all(r["gpu"].get("proved_by") == "census" for r in data["rows"]), [r["gpu"] for r in data["rows"]])
+        self.assertLessEqual(len(M.serialise(rec).encode()), M.MAX_RECORD_BYTES)
+
+    def test_the_evidence_holds_the_proof_name_and_the_readings(self):
+        with tempfile.TemporaryDirectory(prefix="matlab-rows-readings-") as t:
+            self.one_row("gpu_matmul", smi_4090(), evidence=t)
+            doc = json.loads((Path(t) / "gpu_matmul" / "verdict.json").read_text())
+            self.assertEqual((doc["verdict"], doc["gpu"]["proved_by"], doc["gpu"]["readings"]["memory"]["peak_mib"]), ("PASS", "census", 4805.0))
+            self.assertEqual(doc["census"]["work"]["verdict"], "PASS")
+            self.assertTrue((Path(t) / "gpu_matmul" / "host_query.csv").is_file())
 
     def test_evidence_keeps_the_gpu_proof_fields_and_nothing_else_of_the_device_block(self):
         doc = good("cuda_kernel")
