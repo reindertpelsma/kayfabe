@@ -194,6 +194,9 @@ pub struct SimRm {
     /// ★ 2026-11-18: the fill of the STATIC guest ranges (`HostRm::set_guest_va_fill`; the
     /// `unmapped-reads-zero` property). Micro reservations always take `NVOS32_RESERVE_FLAGS`.
     pub fill: kf_host::channel::GuestVaFill,
+    /// ★ 2026-11-18 (option C2, `crate::tiling`): micro reservations allocated with
+    /// `NVOS32_ALLOC_FLAGS_SPARSE` ([`SimRm::reserve_tile`]).
+    pub sparse_resv: std::collections::BTreeSet<u32>,
 }
 
 /// The size a reservation of `len` bytes is aligned to by host RM (see [`SimRm::reserve_rounds`]).
@@ -316,6 +319,7 @@ impl Sim {
             reserve_rounds: true,
             self_held: Vec::new(),
             fill: kf_host::channel::GuestVaFill::Fault,
+            sparse_resv: std::collections::BTreeSet::new(),
         }))
     }
 }
@@ -547,6 +551,7 @@ impl SimRm {
                 let _ = self.unmap_whole_in(m.hdma, m.va, true);
             }
         } else if let Some((lo, _)) = self.resv.remove(&h) {
+            self.sparse_resv.remove(&h);
             self.maps.retain(|m| m.hdma != h);
             self.blocks.remove(&lo);
         } else {
@@ -559,6 +564,27 @@ impl SimRm {
     /// A FIXED `NV50_MEMORY_VIRTUAL` over `[va, va+len)`: one heap block, refused over any block
     /// or static reservation.
     fn reserve(&mut self, va: u64, len: u64) -> Result<u32, String> {
+        self.reserve_with(va, len, false)
+    }
+
+    /// ★ 2026-11-18 (option C2): a tiling block — [`SimRm::reserve`] with the block's attr
+    /// (`big_forced`: `_ATTR_PAGE_SIZE_BIG` + `_ALIGNMENT_FORCE`, rounded to 64 KiB only,
+    /// `[measured kf-va-tiling-probe M5]`) and base (`sparse`: `NVOS32_ALLOC_FLAGS_SPARSE`).
+    pub(crate) fn reserve_tile(
+        &mut self,
+        va: u64,
+        len: u64,
+        sparse: bool,
+        big_forced: bool,
+    ) -> Result<u32, String> {
+        let h = self.reserve_with(va, len, big_forced)?;
+        if sparse {
+            self.sparse_resv.insert(h);
+        }
+        Ok(h)
+    }
+
+    fn reserve_with(&mut self, va: u64, len: u64, big_forced: bool) -> Result<u32, String> {
         self.n.rm_reserve += 1;
         let statics = self
             .space
@@ -574,7 +600,11 @@ impl SimRm {
             return Err(format!("reserve {va:#x}+{len:#x}: NV_ERR_NO_MEMORY"));
         }
         let (lo, hi) = if self.reserve_rounds {
-            let a = reserve_align(len);
+            let a = if big_forced {
+                0x1_0000
+            } else {
+                reserve_align(len)
+            };
             let lo = va / a * a;
             (lo, lo + len.div_ceil(a) * a)
         } else {
@@ -638,8 +668,13 @@ impl SimRm {
             .any(|g| g.handle != 0 && g.lo <= va && va < g.hi)
         {
             Some(self.fill.reserve_flags())
-        } else if self.resv.values().any(|&(lo, hi)| lo <= va && va < hi) {
-            Some(kf_host::channel::NVOS32_RESERVE_FLAGS)
+        } else if let Some((h, _)) = self.resv.iter().find(|&(_, &(lo, hi))| lo <= va && va < hi) {
+            // ★ 2026-11-18 (option C2): a tiling block keeps the base it was reserved with.
+            Some(if self.sparse_resv.contains(h) {
+                kf_host::channel::NVOS32_RESERVE_FLAGS | kf_host::channel::NVOS32_ALLOC_FLAGS_SPARSE
+            } else {
+                kf_host::channel::NVOS32_RESERVE_FLAGS
+            })
         } else {
             None
         };
@@ -1362,3 +1397,5 @@ mod fuzz;
 mod sparse;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tiling;

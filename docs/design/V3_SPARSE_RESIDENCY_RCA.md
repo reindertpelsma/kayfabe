@@ -1,6 +1,6 @@
 # V3 — sparse residency: why residency cases hang in the guest (root cause, GPU-free reproduction)
 
-**STATUS: LIVE, 2026-11-18. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as an opt-in property (#494). Option C (the exact fix): C1 is MEASURED infeasible; C2 is designed, not built (§7). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
+**STATUS: LIVE, 2026-11-18. Root cause found in the code and CONFIRMED on hardware (§6, one RTX 4090 box: off, the residency cases hang with Xid 109; with option B on, they pass). Option B ships as an opt-in property (#494). Option C (the exact fix): C1 is MEASURED infeasible. C2's host costs are MEASURED (§8.1, one RTX 3090 box, bare host). Its design is in §8, and stage 1 (the GPU-free engine and its proof) is built: S1 and S2 are both green in the model. C2 is not wired into apply and not run with a guest. The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
 Parent evidence: `traces/open_rows_guest_20261117/confirm/` (PR #479) and `docs/design/V3_VULKAN_CTS_ROW.md` §12
 (tree branch). Pattern: `V3_REPLAY_TESTS.md`.
 
@@ -124,6 +124,10 @@ answer is worse than a hang, and it would hit managed-memory workloads that have
 sparse. If the owner wants the sparse row to pass, B could come as a documented power-user switch scoped to
 one VM. The cost to state for it: S2 fails for that VM. C stays open research.
 
+**Update 2026-11-18 (later): this staging is superseded by §8.7.** Stage 1 there is the tiling engine
+(`crates/kf-mem/src/tiling.rs`), not the ABI flag. The walker ABI moved to stage 2, and the wiring to stage 3.
+What follows is the original text.
+
 **Staging, if C is ever found.** Stage 1 (GPU-free, Rust):
 - a `KFWR_RF_SPARSE` run flag in the walk ABI (`kf_cuda::abi`, `KF_ABI_VERSION` bump), mirrored in
   `kf_walk.h`;
@@ -225,7 +229,12 @@ A fence block never holds a mapping, so it can be freed and re-reserved around a
 without unmapping anything. That gives S1 and S2 exactly, at the guest's own granularity, with
 unprivileged verbs only.
 
-The costs and unknowns, none of them measured:
+**Update 2026-11-18 (later): the costs below are now MEASURED (§8.1), and the design that answers them is in §8.**
+Summary of what changed: a carve costs exactly 5 RM calls. Per-row tiling costs 3.9x to 5.5x the map cost of
+the static fence (up to 16000 blocks). The eheap is linear, but no ceiling appeared below 64000 blocks. The
+race is real (§8.1, M3). A `_SPARSE` block cannot be smaller than 64 KiB.
+
+The costs and unknowns (as first written, before the measurements):
 - **RM calls.** A map or unmap in a fenced gap costs about 5 RM calls instead of 1: free the fence, two
   fence remnants, the block, the map. The micro-reservation path already pays a similar cost per batch,
   not per row.
@@ -258,3 +267,164 @@ C1 is infeasible (box `kf-openguest-180343`, kf3 `5ee2aa5a`, probe output above)
 redesign of how `kf-mem` places guest rows, whose per-map cost is unknown until a host-side test exists.
 DX12 reserved/tiled resources and UE virtual textures on Windows need the same S1+S2 property, so C (not
 B) is the real fix.
+
+## 8. Option C2: measurements and design (2026-11-18)
+
+### 8.1 Host measurements (MEASURED, `kf-va-tiling-probe`, box `kf-openguest-180543`, RTX 3090, 580.159.04, bare host)
+
+Evidence: `traces/sparse_c2_tiling_probe_20261118/` (probe revision `62b063433`, then `c07bd23dc` for the row
+sweep). The box showed 0 Xid lines, before and after every arm. Range `L` = 4.5 GiB, span 64 GiB. Maps are
+64 KiB device-local, FIXED, with deferred TLB invalidation.
+
+**Falsifier, stated before the run:** if M2 grows linearly to more than about 1 ms per call at 16k blocks, or
+M1 costs more than about 10x M0, then C2 needs coarser tiling (one row block per walk batch, not one per
+row). **Result: the falsifier was not triggered.**
+
+| arm | result |
+|---|---|
+| M0: one static block, N maps and N unmaps through it | 25.8 us per map, 21.2 us per unmap (p50 24.4 / 20.6). Flat from N = 1000 to 8000. |
+| M1: exact tiling, eager merge | **5.00 RM calls per map and per unmap.** Map mean: 102 us at 2000 blocks (3.9x M0), 111 us at 4096 (4.3x), 143 us at 16000 (5.5x). Unmap mean: 106 us, 124 us (5.7x), 219 us (10.3x). |
+| M1d: the same, default attr everywhere | **The first carve is refused (`NoMemory`).** See M5. |
+| M2: K disjoint 64 KiB blocks | Reserve and free are **O(K)** in the blocks below the address, about 13 ns per block. Worst reserve: 66 us at K = 4k, 215 us at 16k, 420 us at 32k, 850 us at 64k. Worst free: 54 us at 4k, 165 us at 16k, 790 us at 64k. Map and unmap through an existing block stay flat at 35-39 us up to 32k. **No refusal up to 64000 blocks** (no per-client ceiling was reached). |
+| M3: a second thread places non-FIXED maps during M1 | **The race is real.** On the second carve, a placement landed at `0x120010000`, inside the fence just freed, and the re-reserve of the remnant was refused. The window (fence freed until the last remnant is reserved) is 55-65 us at p50, 84-197 us at p99, and 539 us at most (16k blocks). |
+| M4: `_SPARSE` micro blocks | 64 KiB and 2 MiB `_SPARSE` blocks work next to a fence, next to each other and next to a mapped row block. A map through a sparse block works, and so does its unmap. **A 4 KiB `_SPARSE` block is refused (`NoMemory`), even with `_ATTR_PAGE_SIZE_4KB` + `_ALIGNMENT_FORCE`.** |
+| M5: alignment | A default-attr block of 4 MiB at a 64 KiB edge is **rounded outward to 2 MiB** (the 64 KiB below it is then taken). The same block with `_ATTR_PAGE_SIZE_BIG` + `_ALIGNMENT_FORCE` (alignment 64 KiB) is **exact**, `_SPARSE` or not. A 192 KiB default block is exact. A 4 KiB map inside a BIG-attr block works. |
+
+What follows from these results:
+- M5 matches `gpu_vaspace.c:1835-1930`: `_memmgrPickDefaultGpuPageSize` picks 2 MiB for a request of
+  2 MiB or more.
+- The tile is 64 KiB. This is also the sparse block size the guest's Vulkan driver uses for these cases:
+  `SLOT` in §4. That match is INFERRED for other titles.
+
+### 8.2 Placement (built in stage 1: `crates/kf-mem/src/tiling.rs`)
+
+- **One engine per guest range.** `Tiling` owns `[lo, hi)`, which replaces that range's static reservation.
+  Its blocks partition the range exactly.
+- **Each block has a base**: INVALID (a plain reservation) or SPARSE (`_SPARSE`).
+- **The guest's wish** is one interval map, `set_base`:
+  - SPARSE runs are rounded inward to tiles, INVALID runs outward;
+  - so a mixed tile is INVALID: S2 wins, and a real fault never turns into a silent zero.
+- **Lifecycle.**
+  - **Fence**: an empty INVALID block.
+  - **Sparse block**: an empty SPARSE block. A guest bind or unbind inside it is one map or unmap: no
+    re-tile, because host RM restores sparse on unmap (M4).
+  - **Row block**: a block that holds a mapping. It is never freed while it holds one (the guard).
+    `prepare_row` carves the row's tiles out of the empty block that holds them, with the same base. A
+    partial edge tile, which a neighbouring row may share, gets a block of its own, so a row pins only
+    tiles it touches. `release_row` brings the emptied tiles to the wish and merges them.
+- **Re-tiling.**
+  - Every change is one `replace(old empty blocks → new layout)`.
+  - The parts of the end blocks outside the changed span keep their base, and an empty neighbour with
+    the same base is merged in.
+  - Blocks that already match at either end are left alone.
+  - A carve is free 1 + reserve up to 3 (M1: 5 calls with the map).
+- **Exact layouts** (`layout`). A block under 2 MiB, or one 2 MiB-aligned at both ends, takes the
+  default attr. An EMPTY block otherwise takes `_ATTR_PAGE_SIZE_BIG` + `_ALIGNMENT_FORCE` (M5). A row
+  block is never BIG-only: it is cut into an aligned 2 MiB core plus edges under 2 MiB, so 4 KiB, 64 KiB
+  and 2 MiB guest pages all fit it.
+
+### 8.3 The per-space tiling lock (DESIGN, not built)
+
+M3 shows that a host-RM placement in the same space can land in a freed fence. Nothing else can place
+there: the space belongs to kf's client, and only kf's own calls place in it. The design:
+- **One kf-owned lock per host VA space** (a `kf_util` lock rank below the VA manager's).
+- **It is held across every re-tile**, from the free to the last reserve or the rollback.
+- **It is also held across every host call that can place in the space without FIXED**:
+  - `birth_channel`, `alloc_compute_object` and the rest of host RM's context-buffer placements;
+  - `map_window*`, and `raw_map_dma_slice(.., None, ..)`.
+- **Hold time** is the M3 window: p99 at most 197 us at 16k blocks, and below 100 us at the 4096-block cap.
+- **No vCPU takes it.** Re-tiles run on the VA-manager (apply) thread, and object allocation runs on act
+  threads (CLAUDE.md: nothing blocks on a vCPU or under a lock a vCPU takes).
+- **A gap left by a refused restore is healed first** by whoever takes the lock next: a placement
+  heals before it places.
+
+### 8.4 Hostile-guest bounds (built in stage 1, except the log line)
+
+- Every guest value is clipped to the range with checked arithmetic. A wrapping, empty or outside
+  request is refused by name before any host call (`c2_hostile_requests_are_refused_before_any_host_call`).
+- **Blocks per range are capped at 4096** (`TilingCfg::max_blocks`; M2: the worst reserve is 66 us
+  there). Optional growth stops at the cap.
+  - Mandatory S2 work may exceed the cap by the pieces of one layout, at most 3 per step.
+  - At the cap, a row is mapped through the empty block that holds it without a carve (`pinned`): this
+    is correct for S1 and S2 now, but that block cannot be re-tiled until the row goes.
+- **The wish map is capped** (`max_wish_runs`, 32768). Beyond it a SPARSE wish is refused and counted,
+  and the tile stays INVALID (loud).
+- **Host-call budget per batch** (`batch_calls`, 4096; at the M1 rate that is about 800 carves, or about
+  0.1 s of host time per walk batch). It cuts optional work: SPARSE carves, row carves (which then pin),
+  and merges. **S2 restores are never cut**, and `begin_batch` retries them first, ignoring the budget.
+  Cut work stays visible in `Tiling::pending()`.
+- **Log** (stage 2): one `rate_eprintln!` line per batch with the stats (cut, pinned, rollbacks, gaps).
+  Nothing per tile, so no unbounded emit.
+
+### 8.5 Failure modes (built in stage 1)
+
+- **A refused reserve or free in the middle of a re-tile** rolls the step back to the old layout: the
+  new blocks are freed and the old ones restored (`c2_a_refused_reserve_mid_retile_rolls_back`).
+- **A refused restore** leaves an unreserved gap. The gap reads INVALID, so S2 still holds. It is
+  counted (`gaps_left`) and healed by the next call over it, or by `begin_batch`
+  (`c2_a_refused_restore_leaves_a_gap_that_heals`).
+- **A refused S2 restore** (the host keeps the SPARSE block) stays pending and is retried first, whatever
+  the budget (`c2_a_refused_s2_restore_is_retried_first`).
+- **The one S2 hazard C2 cannot fix in place** is a mixed tile under a live row: a guest maps one 4 KiB
+  page inside a sparse tile, then returns another page of that tile to INVALID. The row's block is
+  pinned, so the tile reads zero until the row goes. The case is reported as pending and fixed on
+  release (`c2_a_mixed_tile_is_pending_and_fixed_when_the_row_goes`).
+  - Guest RM always unbinds back to sparse inside a sparse resource (`gpu_vaspace.c:2279-2284`), so only
+    a guest that bypasses its RM gets here. It only affects that guest's own VA.
+
+### 8.6 Stage 1 proof (GPU-free, `crates/kf-mem/src/sim/tiling.rs`, 20 tests; mutants `scripts/ci/tiling_mutants.py`)
+
+**The host model.** `sim`'s host model takes the engine's base (`_SPARSE`) and attr (the M5 rounding).
+`SimRm::host_pte` answers per page. A guard is armed over every other live row, and it is checked after
+every host call.
+
+**The invariants**, checked against a brute-force per-page oracle:
+- exact tiling: the engine's blocks are the host's reservations, unrounded, with no leak;
+- mapped pages translate exactly;
+- **S1** and **S2** hold per tile;
+- every miss is reported pending.
+
+**The tests:**
+- `c2_s1_residency_slots_are_sparse_and_s2_holds_around_them`: the §4 pattern under C2; S1 and S2 are
+  both green.
+- The edge cases: the unbind without a re-tile, edges, merging, the remap/unmap/re-sparse sequence,
+  partial tiles, 2 MiB rounding, budget cuts, the cap, refusals, the shared edge tile, and hostile input.
+- The model-based random test: 24 seeds × 2 attr modes × 250 ops, strict (no miss at all), with the host
+  calls of one op bounded by a constant.
+- The same test with injected refusals and a small budget, which then heals to strict.
+
+**Mutants:** 11. Each is killed by at least 2 named tests (run 2026-11-18: weak = 0). §4's KNOWN-RED tests and
+the ratchet are unchanged: production still uses the static fence until stage 2.
+
+### 8.7 Staging
+
+1. **Stage 1 (this change).** The engine, the host model and the proof. No production caller.
+2. **Stage 2: the walker.**
+   - **The run.** `kf_walk.cu` emits a run with a new `KFWR_RF_SPARSE` flag (bit 7) where it now only
+     counts `sparse_slots`.
+   - **Its granularity.** A SPARSE run is tile-granular, rounded inward. It also comes from a VER3 sparse
+     PDE (`kf_pde_sparse`), which covers its whole 2 MiB or 512 MiB.
+   - **The diff.** The diff emits SPARSE when a PTE becomes sparse and UNSPARSE when it goes from sparse
+     to INVALID.
+   - **The ABI.** The bump goes to `KF_ABI_VERSION` and `KFWR_VERSION`. `kf_walk.h` mirrors the
+     constants, and the `.cu`, `.h` and regenerated `.ptx` are committed together (NVRTC 12.2.140, §5; the
+     CI ptx job must stay green).
+   - **The budget.** SPARSE runs come out of the walk's existing run budget.
+3. **Stage 3: wiring, behind a property that is off by default** (`exact-sparse=on`, next to
+   `unmapped-reads-zero`).
+   - `apply` routes rows of a tiled range through `prepare_row`, `commit_row` and `release_row`, and SPARSE
+     and UNSPARSE runs through `set_base`.
+   - `HostRm` gains `reserve_va_attr`: production's form of the probe-only verb, with the attr and alignment.
+   - The per-space lock is added (§8.3).
+   - Off by default, nothing changes.
+4. **Stage 4: the default.** `exact-sparse=on` becomes the default and replaces `unmapped-reads-zero=auto`.
+   The evidence needed first:
+   - the §6 table on one box with exact on and zero off: the residency cases pass with 0 Xid;
+   - the fast suite at 30/30 and v3_gates at 9/9 with exact on;
+   - a UVM/HMM negative control that still fails loudly (S2 on hardware);
+   - one Windows sparse title or DX12 tiled-resource case;
+   - the per-map cost on a CUDA app row with many allocations, against today's.
+
+**Open (INFERRED, not measured):**
+- whether Unreal's virtual textures and DXVK's sparse binding stay within the 4096-block cap per range;
+- whether a 64 KiB tile is fine-grained enough for every title.
