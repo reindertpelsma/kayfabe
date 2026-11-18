@@ -1,0 +1,63 @@
+{
+ "census": {
+  "counts": {
+   "refused": 20,
+   "unserviced": 21
+  },
+  "lines": 709,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 20,
+   "submissions": 1519,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [],
+  "flag_disagrees": 0,
+  "n": 15
+ },
+ "facts": {},
+ "failure_class": "GPU_NOT_USED",
+ "findings": [
+  "sparse_nnz_exact: the GPU side of the comparison was not a gpuArray on the device"
+ ],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4664.0
+  },
+  "peak": {
+   "busy_samples": 6,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 6.0,
+   "gpu_dmon_sm": 6.0,
+   "mem_mb": 4675.0
+  },
+  "reasons": [],
+  "required": [
+   "gpu"
+  ],
+  "samples": 82,
+  "source": "host",
+  "verdict": "PASS"
+ },
+ "host_xid": null,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "sparse_nnz_exact: the GPU side of the comparison was not a gpuArray on the device",
+ "result": {
+  "bytes": 3741,
+  "sha256": "74a7bf263ea3f0ffee4f35d17adb8bc18b547de6d965a5cae8e0899b8a6e06c6"
+ },
+ "row": "gpu_sparse",
+ "secs": 36,
+ "verdict": "FAIL"
+}

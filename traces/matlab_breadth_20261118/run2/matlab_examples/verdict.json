@@ -1,0 +1,63 @@
+{
+ "census": {
+  "counts": {
+   "refused": 451,
+   "unserviced": 29
+  },
+  "lines": 4577,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 451,
+   "submissions": 9624,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [],
+  "flag_disagrees": 0,
+  "n": 0
+ },
+ "facts": {},
+ "failure_class": "HANG",
+ "findings": [
+  "STATUS"
+ ],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4664.0
+  },
+  "peak": {
+   "busy_samples": 14,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 10.0,
+   "gpu_dmon_sm": 10.0,
+   "mem_mb": 4680.0
+  },
+  "reasons": [],
+  "required": [
+   "gpu"
+  ],
+  "samples": 1811,
+  "source": "host",
+  "verdict": "PASS"
+ },
+ "host_xid": null,
+ "lane": "discovery",
+ "rc": 124,
+ "reason": "ROW_TIMEBOX",
+ "result": {
+  "bytes": 3118,
+  "sha256": "322f8cc0b82b0be19c8aabe2687cb4c2d2fd97865f629eea5619ffbd66537e6b"
+ },
+ "row": "matlab_examples",
+ "secs": 902,
+ "verdict": "FAIL"
+}

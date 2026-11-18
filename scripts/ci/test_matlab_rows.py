@@ -34,6 +34,27 @@ M = load()
 
 # ---------------------------------------------------------------- fixture documents
 def kind_of(name):
+    if name.endswith("_status") or name.startswith(("repro_mismatch_", "exists_after_reset", "device_unavailable", "gputimeit_nonpositive", "gpu_selected_after_reset",
+                                                    "roundtrip_mismatches", "randperm_not_permutation", "pcg_flag_nonzero", "mex_hist_total_count", "resume_loss_regress",
+                                                    "examples_failed", "enum_gpuarray_diff", "enum_gpuarray_gpu_only_error", "enum_layers_diff", "enum_layers_gpu_only_error",
+                                                    "enum_train_diff", "enum_train_unexpected_error", "messy_no_oom_raised", "messy_odd_shapes_mismatches",
+                                                    "messy_rerun_after_reset_mismatches", "messy_worker_not_running_when_killed")):
+        return "count"
+    if name.startswith("errpath_") and name != "errpath_status":
+        return "errid"
+    if name in M.RANGES:
+        return "range"
+    if name in ("device_count", "device_table_rows", "checkpoint_files", "accel_cache_hits", "gfx_distinct_colors", "isosurface_vertices", "examples_discovered", "examples_run", "enum_gpuarray_tested",
+                "enum_layers_tested", "enum_train_cells"):
+        return "atleast"
+    if name in ("rand_is_gpuarray", "sparse_is_gpu_sparse", "custom_env_gpu", "predict_env_gpu", "layers_env_gpu", "mex_output_gpuarray", "gfx_gpu_proof"):
+        return "gpuarray"
+    if name in ("custom_loss_curve", "train_loss_curve"):
+        return "series"
+    if name == "custom_final_mse":
+        return "pair"
+    if "_resid_" in name:
+        return "resid"
     if name.startswith(("mldivide_resid", "lu_resid", "qr_resid", "qr_orth", "chol_resid")):
         return "resid"
     if name in ("content_mismatches", "no_write_past_n"):
@@ -70,10 +91,16 @@ def item(name, **over):
     elif kind == "count":
         it = {"name": name, "kind": "count", "value": 0, "expected": 0, "guest_pass": True}
     elif kind == "atleast":
-        it = {"name": name, "kind": "atleast", "value": 2, "min": 2, "guest_pass": True}
+        it = {"name": name, "kind": "atleast", "value": 2000, "min": 2, "guest_pass": True}
     elif kind == "gpuarray":
         it = {"name": name, "kind": "gpuarray", "on_gpu": True, "exists_on_gpu": True, "underlying": "single", "device_index": 1, "device_name": "NVIDIA GeForce RTX 4090",
               "guest_pass": True}
+    elif kind == "errid":
+        it = {"name": name, "kind": "errid", "raised": True, "gpu_id": (M.ERRID_GPU_PREFIX[name] + ":X") if name in M.ERRID_GPU_PREFIX else "MATLAB:innerdim", "cpu_id": "MATLAB:innerdim",
+              "guest_pass": True}
+    elif kind == "range":
+        lo, hi = M.RANGES[name]
+        it = {"name": name, "kind": "range", "value": (lo + hi) / 2, "min": lo, "expected": hi, "guest_pass": True}
     elif kind == "series":
         it = {"name": name, "kind": "series", "gpu": [1.0, 0.5, 0.2, 0.1], "cpu": [1.0, 0.5, 0.2, 0.1]}
     else:
@@ -519,7 +546,7 @@ class JudgeTests(unittest.TestCase):
 class RunTests(unittest.TestCase):
     def test_every_row_passes_in_the_discovery_lane(self):
         out, ctx, calls = run(all_good())
-        self.assertEqual(len(out["rows"]), 8)
+        self.assertEqual(len(out["rows"]), len(M.ROW_ORDER))
         self.assertTrue(all(r["verdict"] == "PASS" for r in out["rows"]), [(r["row"], r["verdict"], r["reason"]) for r in out["rows"]])
         rec = M.build_record(out, ctx, "a" * 40, {}, {})
         self.assertEqual((rec["verdict"], rec["exit_code"], rec["breakages"]), ("PASS", 0, []))
@@ -527,7 +554,7 @@ class RunTests(unittest.TestCase):
     def test_each_row_boots_alone_installs_the_driver_then_injects_then_runs(self):
         out, ctx, calls = run(all_good())
         boots = [c for c in calls if c[0] == "boot"]
-        self.assertEqual(len(boots), 8)
+        self.assertEqual(len(boots), len(M.ROW_ORDER))
         first = [c[0] for c in calls[:6]]
         self.assertEqual(first, ["boot", "install_driver", "inject", "exec", "fetch", "shutdown"])
         self.assertEqual(calls[3][1], "gpu_info")
@@ -540,7 +567,7 @@ class RunTests(unittest.TestCase):
     def test_shared_isolation_uses_one_boot(self):
         out, ctx, calls = run(all_good(), ctx=make_ctx(isolation="shared"))
         self.assertEqual(len([c for c in calls if c[0] == "boot"]), 1)
-        self.assertEqual(len(out["rows"]), 8)
+        self.assertEqual(len(out["rows"]), len(M.ROW_ORDER))
 
     def test_a_crash_in_a_shared_boot_sends_the_rest_to_a_fresh_boot(self):
         results = all_good()
@@ -596,7 +623,7 @@ class RunTests(unittest.TestCase):
     def test_gpu_use_is_assessed_only_inside_the_rows_own_window(self):
         out, ctx, _ = run(all_good())
         self.assertTrue(all(p.started and p.stopped for p in ctx.made))
-        self.assertEqual(len(ctx.made), 7)        # gpu_info needs no counters
+        self.assertEqual(len(ctx.made), len(M.ROW_ORDER) - 1)        # gpu_info needs no counters
 
     def test_driver_missing_is_not_run_for_every_row(self):
         out, ctx, calls = run(all_good(), refuse=("driver", M.BootRefusal("GUEST_NO_DRIVER", "NOT_RUN")))
@@ -1132,7 +1159,7 @@ class EvidenceTests(unittest.TestCase):
             rec = json.loads(line.split(" ", 1)[1])
             self.assertEqual((code, rec["verdict"]), (0, "SKIPPED"))
             self.assertEqual({r["reason"] for r in rec["rows"]}, {"IMAGE_MISSING"})
-            self.assertEqual(len(rec["rows"]), 8)
+            self.assertEqual(len(rec["rows"]), len(M.ROW_ORDER))
             code, out = self.run_cli("run", "--image", str(Path(t) / "nope.zip"), "--workdir", t, "--qemu", "/nonexistent", "--driver-run", "x",
                                      "--driver-sha256", "0" * 64, "--strict")
             self.assertEqual(code, 4)
@@ -1296,6 +1323,8 @@ class ScriptTests(unittest.TestCase):
         for p in sorted(MATLAB_DIR.iterdir()):
             body = "\n".join(l.split("%")[0] for l in p.read_text().splitlines()) if p.suffix == ".m" else ""
             for pattern in self.FORBIDDEN:
+                if p.name == "matlab_examples.m" and pattern == r"\bmatlabroot\b":
+                    continue                        # the one directory lookup of the shipped examples (test_the_examples_row_uses_matlabroot_only_as_a_directory)
                 self.assertIsNone(re.search(pattern, body), "%s matches %s" % (p.name, pattern))
 
     def test_scripts_never_write_a_path_or_a_user_name_into_the_json(self):
@@ -1352,7 +1381,15 @@ class ScriptTests(unittest.TestCase):
                 parts = name.split("_")
                 k = next((i for i, w in enumerate(parts) if w in ("single", "double") or w[:1].isdigit()), len(parts))
                 stem = "_".join(parts[:k]) if k else name
-                self.assertIn(stem, body, "%s: %s" % (row, name))
+                if row == "dl_layers" and name != "layers_env_gpu":
+                    op = next(o for o, _ in M.DL_LAYER_OPS if name.startswith(o + "_") and name[len(o) + 1:] in ("status", "y_" + dict(M.DL_LAYER_OPS)[o], "g_" + dict(M.DL_LAYER_OPS)[o]))
+                    self.assertIn("'%s'" % op, body, name)
+                    for pat in ("'%s_status'", "'%s_y_%s'", "'%s_g_%s'"):
+                        self.assertIn(pat, body, name)
+                    continue
+                generic = "_".join(parts[:-1]) + "_%s"       # a name built with sprintf from a loop variable (the generator tag, the batch size, the cycle number)
+                lead = "%s_" + "_".join(parts[1:])                          # ... or from a loop over the leading token (the optimiser's name)
+                self.assertTrue(stem in body or name in body or generic in body or lead in body, "%s: %s" % (row, name))
 
     def test_scripts_use_the_documented_tolerance_numbers(self):
         body = self.text("kf_tol.m")
@@ -1408,6 +1445,473 @@ class ScriptTests(unittest.TestCase):
 
     def test_scripts_are_listed_for_injection(self):
         self.assertTrue(set(M.SUPPORT_FILES) <= {p.name for p in MATLAB_DIR.iterdir()})
+
+
+# ---------------------------------------------------------------- the breadth rows (docs/design/V3_PROPIMAGE_LINUX.md section 15)
+BREADTH = ("gpu_arrayfun", "gpu_pagefun", "gpu_classes", "gpu_sparse", "gpu_rand", "gpu_devctl", "gpu_stencil", "dl_custom_loop", "dl_layers", "dl_predict_sweep", "mex_cuda",
+           "gfx_render", "matlab_examples")
+
+
+def code_of(text):
+    """MATLAB text with comments and string literals removed (a quote after a name, a bracket or a dot is a transpose)."""
+    out, i, n, stack = [], 0, len(text), []
+    while i < n:
+        ch = text[i]
+        if ch == "%":
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if ch == "'":
+            joined = "".join(out)
+            prev = joined.rstrip(" \t")[-1:]
+            spaced = len(joined) > len(joined.rstrip(" \t"))
+            if prev and (prev.isalnum() or prev in ")]}'._") and not (spaced and stack and stack[-1] in "[{"):
+                out.append(ch)
+                i += 1
+                continue
+            i += 1
+            while i < n and text[i] != "\n":
+                if text[i] == "'":
+                    if i + 1 < n and text[i + 1] == "'":
+                        i += 2
+                        continue
+                    break
+                i += 1
+            out.append("''")
+            i += 1
+            continue
+        if ch in "([{":
+            stack.append(ch)
+        elif ch in ")]}" and stack:
+            stack.pop()
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def lint_matlab(text):
+    """-> problems: unbalanced brackets, an unterminated string, or control blocks that do not close. Words inside brackets (end of an index) are not block words."""
+    problems = []
+    code = code_of(text)
+    depth, flat = 0, []
+    pairs = {")": "(", "]": "[", "}": "{"}
+    stack = []
+    for ch in code:
+        if ch in "([{":
+            stack.append(ch)
+        elif ch in ")]}":
+            if not stack or stack.pop() != pairs[ch]:
+                problems.append("unbalanced " + ch)
+                stack = []
+        elif not stack:
+            flat.append(ch)
+        elif ch == "\n":
+            flat.append(" ")           # a continuation inside brackets keeps the statement together
+    if stack:
+        problems.append("unclosed bracket")
+    words = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", "".join(flat))
+    for w in words:
+        if w in ("if", "for", "parfor", "spmd", "switch", "try", "function", "while"):
+            depth += 1
+        elif w == "end":
+            depth -= 1
+            if depth < 0:
+                problems.append("end without a block")
+                depth = 0
+    if depth:
+        problems.append("%d block(s) not closed" % depth)
+    return problems
+
+
+class BreadthRowTests(unittest.TestCase):
+    def text(self, name):
+        return (MATLAB_DIR / name).read_text()
+
+    def test_the_rows_are_in_the_table_in_order_after_the_first_eight(self):
+        self.assertEqual(tuple(M.ROW_ORDER[8:]), BREADTH)
+        for row in BREADTH:
+            script, box, require, names = M.ROWS[row]
+            self.assertTrue(script == row + ".m" and 0 < box <= (7200 if row == "matlab_examples" else 1800) and set(require) <= {"gpu", "mem"} and require, row)
+            self.assertTrue(len(names) == len(set(names)) <= M.MAX_CHECKS - 1, row)
+            self.assertTrue(all(M.NAME_RE.fullmatch(n) for n in names), row)
+
+    def test_every_script_lints_clean(self):
+        self.assertEqual(lint_matlab("function f()\nif a(end)\nx = [1 2];\nend\nend\n"), [])
+        for bad in ("if x\n", "x = (1;\n", "end\n", "x = {1, 2\n"):
+            self.assertTrue(lint_matlab(bad), bad)
+        for p in sorted(MATLAB_DIR.glob("*.m")):
+            self.assertEqual(lint_matlab(p.read_text()), [], p.name)
+
+    def test_every_row_opens_with_its_falsifier_and_every_step_reports_a_status_or_is_the_whole_row(self):
+        for row in BREADTH:
+            body = self.text(row + ".m")
+            self.assertIn("Falsifier:", body.split("row = ")[0], row)
+            for name in M.ROWS[row][3]:
+                if name.endswith("_status") and row == "dl_layers":
+                    self.assertIn("kf_err(sprintf('%s_status', op), ME)", body)
+                elif name.endswith("_status"):
+                    self.assertIn("kf_err('%s', ME)" % name, body, "%s: %s" % (row, name))
+                    self.assertIn("kf_count('%s', 0, 0)" % name, body, "%s: %s" % (row, name))
+
+    def test_the_helper_functions_the_scripts_call_exist_and_are_listed_for_injection(self):
+        for row in BREADTH:
+            for helper in set(re.findall(r"\b(kf_[a-z_]+)\(", self.text(row + ".m"))) - {"kf_mex"}:       # kf_mex is built from kf_mex.cu by mexcuda
+                self.assertIn(helper + ".m", M.SUPPORT_FILES, "%s calls %s" % (row, helper))
+                self.assertTrue((MATLAB_DIR / (helper + ".m")).is_file(), helper)
+
+    def test_the_host_range_table_matches_the_bounds_the_scripts_state(self):
+        found = {}
+        tags = {"philox": 0, "threefry": 0, "combrecursive": 0}
+        for row in BREADTH:
+            for m in re.finditer(r"kf_range\((?:sprintf\('([^']+)'[^)]*\)|'([^']+)')[^;]*?,\s*(-?[\d.]+),\s*(-?[\d.]+)\);", self.text(row + ".m")):
+                pat, lit, lo, hi = m.group(1), m.group(2), float(m.group(3)), float(m.group(4))
+                for name in ([pat % t for t in tags] if pat else [lit]):
+                    found[name] = (lo, hi)
+        self.assertEqual(found, M.RANGES)
+
+    def test_exact_checks_use_a_zero_tolerance_in_the_script_and_the_host(self):
+        n = 0
+        for row in BREADTH:
+            for m in re.finditer(r"kf_cmp\('(exact_[A-Za-z0-9_]+)',.*,\s*([^,()]+)\);", self.text(row + ".m")):
+                n += 1
+                self.assertEqual(m.group(2).strip(), "0", m.group(1))
+                self.assertEqual(M.tolerance_for(m.group(1), "int32"), 0.0)
+        self.assertGreaterEqual(n, 15)
+        self.assertIsNone(M.tolerance_for("pagemtimes_single_32", "int32"))
+
+    def test_gpu_rand_reseeds_with_the_same_seed_and_a_different_one_per_generator(self):
+        body = self.text("gpu_rand.m")
+        self.assertEqual(body.count("gpurng(7, gens{g})"), 2)
+        self.assertIn("gpurng(8, gens{g})", body)
+        self.assertEqual(re.findall(r"gens = \{([^}]*)\}", body)[0].count("'") // 2, 3)
+        for gen in ("Philox4x32-10", "Threefry4x64-20", "CombRecursive"):
+            self.assertIn(gen, body)
+        self.assertGreaterEqual(int(re.search(r"N = 2 \^ (\d+)", body).group(1)), 24)       # the host intervals assume at least 2^24 draws
+
+    def test_gpu_devctl_resets_then_checks_for_stale_arrays_then_reselects(self):
+        body = self.text("gpu_devctl.m")
+        a, b, c = body.index("reset(d)"), body.index("existsOnGPU(kept)"), body.index("d = gpuDevice(1);", body.index("reset(d)"))
+        self.assertTrue(a < b < c)
+        self.assertIn("for cyc = 1:4", body)
+
+    def test_dl_scripts_start_both_devices_from_the_same_weights_and_data(self):
+        body = self.text("dl_custom_loop.m")
+        self.assertEqual(body.count("rng(11, 'twister')"), 1)
+        self.assertGreaterEqual(body.count("dnet = dnet0;"), 2)
+        self.assertIn("dlupdate(@gpuArray, dnet)", body)
+        self.assertIn("dlaccelerate(@kf_dl_loss)", body)
+        layers = self.text("dl_layers.m")
+        self.assertIn("xc = dlarray(x, fmts{i})", layers)
+        self.assertIn("xg = dlarray(gpuArray(x), fmts{i})", layers)
+        self.assertIn("rng(100 + i, 'twister')", layers)
+
+    def test_dl_layers_tables_and_the_probe_agree_with_the_host_table(self):
+        body = self.text("dl_layers.m")
+        ops = re.findall(r"ops = \{(.*?)\};", body, re.S)[0]
+        ops = re.findall(r"'([a-z0-9_]+)'", ops)
+        self.assertEqual(ops, [o for o, _ in M.DL_LAYER_OPS])
+        for key in ("fmts", "xsz", "dts"):
+            self.assertEqual(len(re.findall(r"%s = \{(.*?)\};" % key, body, re.S)[0].split(",")) if key != "xsz" else len(re.findall(r"\[[^\]]*\]", re.findall(r"xsz = \{(.*?)\};", body, re.S)[0])), len(ops), key)
+        dts = re.findall(r"'(single|double)'", re.findall(r"dts = \{(.*?)\};", body, re.S)[0])
+        self.assertEqual(dts, [d for _, d in M.DL_LAYER_OPS])
+        probe = self.text("kf_dl_probe.m")
+        for op in ops:
+            self.assertIn("'%s'" % op, probe, op)
+
+    def test_the_predict_sweep_covers_a_batch_larger_than_the_data(self):
+        body = self.text("dl_predict_sweep.m")
+        self.assertIn("for mb = [1 7 64 1000 2048]", body)
+        self.assertIn("N = 2048;", body)
+        for mb in (1, 7, 64, 1000, 2048):
+            self.assertIn("predict_mb_single_%d" % mb, "".join(M.ROWS["dl_predict_sweep"][3]))
+
+    def test_mex_cuda_compiles_the_committed_source_and_the_source_has_shared_memory_and_atomics(self):
+        body = self.text("mex_cuda.m")
+        self.assertIn("mexcuda('-outdir', wd, fullfile(wd, 'kf_mex.cu'))", body)
+        self.assertNotIn("nvcc", code_of(body))
+        cu = self.text("kf_mex.cu")
+        for needle in ("__shared__", "atomicAdd(&sh[in[i]], 1u)", "atomicAdd(out, sh[0])", "__syncthreads()", "mxInitGPU()", "mxGPUCreateFromMxArray", "mxGPUDestroyGPUArray(out)"):
+            self.assertIn(needle, cu)
+        self.assertEqual(cu.count("{"), cu.count("}"))
+        self.assertEqual(cu.count("("), cu.count(")"))
+        self.assertIn("i < n", cu)
+        self.assertNotIn("system(", cu)
+
+    def test_the_graphics_row_records_the_renderer_and_judges_software_only_with_a_display(self):
+        body = self.text("gfx_render.m")
+        self.assertIn("rendererinfo(ax)", body)
+        self.assertIn("if rinfo.hardware_assertion_possible\n        checks{end+1} = kf_count('gfx_renderer_software'", body)
+        self.assertIn("'hardware_assertion_possible', ~isempty(getenv('DISPLAY'))", body)
+        self.assertIn("doc.renderer = rinfo;", body)
+        self.assertNotIn("gfx_renderer_software", "".join(M.ROWS["gfx_render"][3]))     # conditional: never a required name
+        self.assertTrue(set(re.findall(r"'(\w+)'", re.findall(r"rinfo = struct\((.*?)\);", body, re.S)[0])[::2]) <= set(M.KEEP_RENDERER))
+
+    def test_the_examples_row_uses_matlabroot_only_as_a_directory_and_never_in_the_json(self):
+        body = code_of(self.text("matlab_examples.m"))
+        self.assertEqual(re.findall(r"\bmatlabroot\b", body), ["matlabroot"])
+        self.assertIn("fullfile(matlabroot, 'toolbox'", self.text("matlab_examples.m"))
+        for other in sorted(MATLAB_DIR.glob("*.m")):
+            if other.name != "matlab_examples.m":
+                self.assertNotRegex(code_of(other.read_text()), r"\bmatlabroot\b", other.name)
+        self.assertNotRegex(body, r"doc\.\w+ = .*fullfile")
+
+    def test_the_breadth_rows_do_not_require_the_host_memory_counter(self):
+        # MEASURED 2026-11-18 (traces/matlab_breadth_20261118): under kf3 the host's memory.used stayed within 11 MiB of its baseline (4664 to 4675 MiB) in rows that allocate tens of
+        # MiB, because the guest's 4 GiB frame buffer is carved out when the VM starts; the host census (submissions) was the evidence of use. The `mem` engine would fail them all.
+        for row in BREADTH:
+            self.assertEqual(M.ROWS[row][2], ("gpu",) if row in ("gpu_arrayfun", "gpu_pagefun", "gpu_classes", "gpu_sparse", "gpu_rand", "gpu_stencil", "dl_custom_loop", "dl_layers",
+                                                                  "dl_predict_sweep", "matlab_examples") else M.ROWS[row][2], row)
+            if row not in ("gpu_devctl", "mex_cuda", "gfx_render"):
+                self.assertNotIn("mem", M.ROWS[row][2], row)
+
+    def test_the_sparse_row_uses_a_sparse_gpuarray_and_proves_it(self):
+        body = self.text("gpu_sparse.m")
+        self.assertIn("delsq(numgrid('S', 258))", body)
+        self.assertIn("kf_gpu('sparse_is_gpu_sparse', Ag)", body)
+        self.assertIn("issparse(Ag)", body)
+        self.assertIn("for k = 1:500", body)
+
+    def test_sustained_phases_of_the_breadth_rows_have_fixed_counts(self):
+        for row, needle in (("gpu_arrayfun", "for k = 1:200"), ("gpu_pagefun", "for k = 1:300"), ("gpu_stencil", "for k = 1:1500"), ("gpu_stencil", "steps = 10000;"),
+                            ("mex_cuda", "for r = 1:2000"), ("gpu_rand", "for k = 1:100")):
+            self.assertIn(needle, self.text(row + ".m"), row)
+
+    # ---- the host side of the new kinds
+    def doc_with(self, row, name, **over):
+        return M.parse_row_json(raw(set_check(good(row), name, **over)), row)
+
+    def test_a_range_statistic_outside_the_hosts_interval_fails_and_inside_passes(self):
+        lo, hi = M.RANGES["unif_mean_philox"]
+        self.assertTrue(M.verify_doc("gpu_rand", self.doc_with("gpu_rand", "unif_mean_philox", value=0.5), HW)["ok"])
+        for value in (lo - 0.01, hi + 0.01, 0.0, 1.0):
+            v = M.verify_doc("gpu_rand", self.doc_with("gpu_rand", "unif_mean_philox", value=value), HW)
+            self.assertEqual((v["ok"], v["klass"]), (False, "OUTPUT_MISMATCH"), value)
+
+    def test_the_guest_cannot_widen_its_own_range(self):
+        d = self.doc_with("gpu_rand", "unif_mean_philox", value=0.9, min=0.0, expected=1.0, guest_pass=True)
+        v = M.verify_doc("gpu_rand", d, HW)
+        self.assertFalse(v["ok"])
+        self.assertIn("host_range", " ".join(v["findings"]))
+
+    def test_a_range_without_a_host_entry_is_malformed(self):
+        ok, why = M.check_range({"name": "not_in_the_table", "value": 0.5})
+        self.assertEqual((ok, why), (False, "malformed range"))
+        self.assertEqual(M.check_range({"name": "randi_min", "value": float("nan")})[0], False)
+
+    def test_a_random_stream_that_differs_after_reseeding_fails_the_row(self):
+        results = all_good()
+        results["gpu_rand"] = (0, raw(set_check(good("gpu_rand"), "repro_mismatch_threefry", value=3, expected=3)))
+        out, _, _ = run(results)
+        r = by_row(out)["gpu_rand"]
+        self.assertEqual((r["verdict"], r["failure_class"]), ("FAIL", "OUTPUT_MISMATCH"))
+
+    def test_an_exact_check_with_one_wrong_element_fails_whatever_the_precision_table_says(self):
+        for row, name in (("gpu_classes", "exact_sort_values"), ("gpu_pagefun", "exact_pagetranspose_double"), ("mex_cuda", "exact_mex_hist_large")):
+            d = set_check(good(row), name, diff=1e-9, ref=1e6)
+            v = M.verify_doc(row, M.parse_row_json(raw(d), row), HW)
+            self.assertFalse(v["ok"], name)
+            self.assertIn(name, v["failed"])
+
+    def test_a_step_that_threw_names_its_identifier_and_keeps_the_other_steps(self):
+        d = good("dl_layers")
+        d["checks"] = [c for c in d["checks"] if not c["name"].startswith("attention_")] + [
+            {"name": "attention_status", "kind": "count", "value": 1, "expected": 0, "guest_pass": False, "err_id": "MATLAB:UndefinedFunction"}]
+        v = M.verify_doc("dl_layers", M.parse_row_json(raw(d), "dl_layers"), HW)
+        self.assertFalse(v["ok"])
+        self.assertIn("err_id=MATLAB:UndefinedFunction", v["findings"][0])
+        self.assertEqual(v["failed"], ["attention_status"])
+        self.assertEqual(v["n_checks"], len(M.ROWS["dl_layers"][3]) - 2)
+
+    def test_a_hostile_error_identifier_is_not_echoed(self):
+        ok, why = M.check_count({"name": "x_status", "value": 1, "expected": 0, "err_id": "/home/u/secret\n" + "x" * 80})
+        self.assertFalse(ok)
+        self.assertNotIn("secret", why)
+
+    def test_evidence_keeps_the_error_identifier_and_the_renderer_record_and_nothing_else_of_them(self):
+        d = good("gfx_render")
+        d["renderer"] = {"graphics_renderer": "WebGL", "vendor": "x", "renderer_device": "NVIDIA", "hardware_support_level": "Full", "display_present": True,
+                         "hardware_assertion_possible": True, "software_renderer": False, "path": "/home/u"}
+        d["checks"][0]["err_id"] = "kf:probe:op"
+        d["checks"][0]["message"] = "secret text"
+        out = M.sanitize_result(M.parse_row_json(raw(d), "gfx_render"))
+        self.assertEqual(set(out["renderer"]), set(M.KEEP_RENDERER))
+        self.assertEqual(out["renderer"]["graphics_renderer"], "WebGL")
+        self.assertEqual(out["checks"][0]["err_id"], "kf:probe:op")
+        self.assertNotIn("message", out["checks"][0])
+        self.assertNotIn("secret", json.dumps(out))
+
+    def test_the_host_minimums_of_the_new_atleast_checks_come_from_its_own_table(self):
+        for row, name, bad in (("gfx_render", "gfx_distinct_colors", 3), ("gfx_render", "isosurface_vertices", 10), ("dl_predict_sweep", "checkpoint_files", 0)):
+            v = M.verify_doc(row, self.doc_with(row, name, value=bad, min=0), HW)
+            self.assertFalse(v["ok"], name)
+
+    def test_a_widened_range_at_run_level_still_fails_the_row(self):
+        results = all_good()
+        results["gpu_rand"] = (0, raw(set_check(good("gpu_rand"), "norm_var_philox", value=3.0, min=0.0, expected=10.0, guest_pass=True)))
+        out, _, _ = run(results)
+        r = by_row(out)["gpu_rand"]
+        self.assertEqual((r["verdict"], r["failure_class"]), ("FAIL", "OUTPUT_MISMATCH"))
+
+    def test_a_range_check_the_host_has_no_interval_for_fails_the_row_at_run_level(self):
+        d = good("gpu_rand")
+        d["checks"].append({"name": "invented_range", "kind": "range", "value": 0.5, "min": 0, "expected": 1, "guest_pass": True})
+        results = all_good()
+        results["gpu_rand"] = (0, raw(d))
+        out, _, _ = run(results)
+        self.assertEqual(by_row(out)["gpu_rand"]["verdict"], "FAIL")
+
+    def test_a_failed_step_names_its_identifier_in_the_rows_reason(self):
+        d = good("gpu_sparse")
+        d["checks"] = [c for c in d["checks"] if c["name"] != "solve_status"] + [
+            {"name": "solve_status", "kind": "count", "value": 1, "expected": 0, "guest_pass": False, "err_id": "parallel:gpu:SparseSolve"}]
+        results = all_good()
+        results["gpu_sparse"] = (0, raw(d))
+        out, _, _ = run(results)
+        self.assertIn("err_id=parallel:gpu:SparseSolve", " ".join([by_row(out)["gpu_sparse"]["reason"]] + by_row(out)["gpu_sparse"].get("findings", [])))
+
+    def test_the_evidence_file_of_a_failed_step_and_of_the_graphics_row_name_the_identifier_and_the_renderer(self):
+        results = all_good()
+        d = good("gfx_render")
+        d["renderer"] = {"graphics_renderer": "WebGL", "renderer_device": "NVIDIA", "display_present": False, "hardware_assertion_possible": False}
+        d["checks"] = [c for c in d["checks"] if c["name"] != "gfx_iso_status"] + [
+            {"name": "gfx_iso_status", "kind": "count", "value": 1, "expected": 0, "guest_pass": False, "err_id": "MATLAB:isosurface:bad"}]
+        results["gfx_render"] = (0, raw(d))
+        with tempfile.TemporaryDirectory(prefix="matlab-rows-ev-") as t:
+            run(results, ctx=make_ctx(evidence_dir=t))
+            got = json.loads((Path(t) / "gfx_render" / "result.json").read_text())
+            self.assertEqual(got["renderer"]["graphics_renderer"], "WebGL")
+            self.assertIn("MATLAB:isosurface:bad", json.dumps(got["checks"]))
+
+    def test_the_cuda_source_the_mex_row_compiles_is_listed_for_injection_and_copied_by_the_script(self):
+        self.assertIn("kf_mex.cu", M.SUPPORT_FILES)
+        self.assertIn("copyfile(fullfile(here, 'kf_mex.cu'), wd)", self.text("mex_cuda.m"))
+        self.assertTrue((MATLAB_DIR / "kf_mex.cu").is_file())
+
+    # ---- matlab_examples (docs/design/V3_PROPIMAGE_LINUX.md section 16)
+    def test_the_examples_row_runs_each_example_under_a_budget_kills_on_timeout_and_runs_the_cpu_control_last(self):
+        body = self.text("matlab_examples.m")
+        self.assertIn("wait(f, 'finished', cfg.example_budget_s)", body)
+        timeout_branch = body.split("if ~wait(f, 'finished', cfg.example_budget_s)")[1].split("continue")[0]
+        self.assertIn("cancel(f);", timeout_branch)
+        self.assertIn("delete(pool);", timeout_branch)
+        self.assertEqual(body.count("CUDA_VISIBLE_DEVICES"), 1)
+        control = body.index("5. the CPU-only control")
+        self.assertGreater(control, body.index("kf_enum_train(cfg)"))
+        self.assertGreater(control, body.index("messy_soak_single_after_6000"))
+        self.assertGreater(body.index("CUDA_VISIBLE_DEVICES"), control)
+        self.assertNotIn("kf_err", body.split("CUDA_VISIBLE_DEVICES")[1].split("catch ME")[0])
+
+    def test_the_examples_row_writes_a_partial_document_before_each_later_part(self):
+        body = self.text("matlab_examples.m")
+        self.assertEqual(body.count("doc.status = 'partial';"), 4)
+        for marker in ("% ---- 2.", "% ---- 3.", "% ---- 4.", "% ---- 5."):
+            before = body.split(marker)[0]
+            self.assertTrue(before.rstrip().endswith("kf_write(row, doc);       % a time-boxed kill must not lose the parts that finished (the host reads only a 'done' document; the partial file is for the evidence pull)"), marker)
+
+    def test_the_examples_data_file_is_sane(self):
+        cfg = json.loads(self.text("kf_examples.json"))
+        self.assertTrue(set(cfg["example_dirs"]) <= {"matlab/demos", "parallel/examples", "nnet/nndemos"})
+        self.assertTrue(0 < cfg["example_max"] <= 40 and 0 < cfg["example_budget_s"] <= 120)
+        self.assertTrue({"Download", "Pretrained", "Internet", "Cluster"} <= set(cfg["example_deny"]))
+        self.assertEqual(cfg["solvers"], ["sgdm", "adam", "rmsprop", "lbfgs"])
+        self.assertTrue({"cpu", "gpu", "auto", "multi-gpu", "parallel-gpu"} <= set(cfg["environments"]))
+        self.assertGreaterEqual(len(cfg["layers"]), 30)
+        for item in cfg["layers"]:
+            self.assertTrue(set(item) == {"c", "in"} and item["in"] in ("features", "image", "image12", "sequence"), item)
+            self.assertNotIn(";", item["c"])
+        self.assertGreaterEqual(len(cfg["solvers"]) * len(cfg["environments"]), M.MIN_ATLEAST["enum_train_cells"])
+        self.assertIn("rand", cfg["gpuarray_skip_exact"])         # a random function cannot be compared with the CPU's stream
+
+    def test_the_sweeps_call_the_products_own_lists(self):
+        self.assertIn("methods('gpuArray')", self.text("kf_enum_gpuarray.m"))
+        self.assertIn("str2func(['@() ' item.c])", self.text("kf_enum_layers.m"))
+        self.assertNotRegex(code_of(self.text("kf_enum_layers.m")), r"\beval\b")
+        train = self.text("kf_enum_train.m")
+        self.assertIn("trainingOptions(sol, 'ExecutionEnvironment', envn", train)
+        self.assertIn("if strcmp(envn, 'cpu')", train)
+
+    def test_an_error_path_must_raise_with_the_hosts_family_or_the_cpus_class(self):
+        def doc(name, **over):
+            it = {"name": name, "kind": "errid", "raised": True, "gpu_id": "parallel:gpu:array:OOM", "cpu_id": "", "guest_pass": True}
+            it.update(over)
+            return it
+        self.assertTrue(M.check_errid(doc("errpath_oom"))[0])
+        self.assertFalse(M.check_errid(doc("errpath_oom", gpu_id="MATLAB:nomem"))[0])
+        self.assertFalse(M.check_errid(doc("errpath_oom", raised=False))[0])
+        self.assertFalse(M.check_errid(doc("errpath_oom", gpu_id="a b"))[0])
+        self.assertTrue(M.check_errid(doc("errpath_innerdim", gpu_id="MATLAB:innerdim", cpu_id="MATLAB:innerdim"))[0])
+        self.assertFalse(M.check_errid(doc("errpath_innerdim", gpu_id="parallel:gpu:array:Other", cpu_id="MATLAB:innerdim"))[0])
+        self.assertFalse(M.check_errid(doc("errpath_innerdim", gpu_id="MATLAB:innerdim", cpu_id=""))[0])
+        self.assertFalse(M.check_errid(doc("errpath_unlisted"))[0])
+
+    def test_a_gpu_error_path_with_a_foreign_identifier_fails_the_examples_row_at_run_level(self):
+        for name, over in (("errpath_wrongclass", {"gpu_id": "MATLAB:foreign"}), ("errpath_badindex", {"gpu_id": "parallel:gpu:array:Other"}), ("errpath_innerdim", {"gpu_id": "parallel:gpu:array:Other"})):
+            results = all_good()
+            results["matlab_examples"] = (0, raw(set_check(good("matlab_examples"), name, **over)))
+            out, _, _ = run(results)
+            r = by_row(out)["matlab_examples"]
+            self.assertEqual((r["verdict"], r["failure_class"]), ("FAIL", "OUTPUT_MISMATCH"), name)
+
+    def test_a_gpu_error_path_that_raised_nothing_fails_the_row_at_run_level(self):
+        results = all_good()
+        results["matlab_examples"] = (0, raw(set_check(good("matlab_examples"), "errpath_oom", raised=False)))
+        out, _, _ = run(results)
+        self.assertEqual(by_row(out)["matlab_examples"]["failure_class"], "OUTPUT_MISMATCH")
+
+    def test_a_sweep_that_tested_too_few_functions_fails_the_row_at_run_level(self):
+        results = all_good()
+        results["matlab_examples"] = (0, raw(set_check(good("matlab_examples"), "enum_gpuarray_tested", value=50, min=0)))
+        out, _, _ = run(results)
+        self.assertEqual(by_row(out)["matlab_examples"]["failure_class"], "OUTPUT_MISMATCH")
+
+    def test_the_examples_evidence_file_lists_the_failing_names(self):
+        d = good("matlab_examples")
+        d["enum"] = {"examples_failed": ["Some_Example:parallel:gpu:Foo"], "layers_diff": ["lstmLayer"]}
+        results = all_good()
+        results["matlab_examples"] = (0, raw(d))
+        with tempfile.TemporaryDirectory(prefix="matlab-rows-ev-") as t:
+            run(results, ctx=make_ctx(evidence_dir=t))
+            got = json.loads((Path(t) / "matlab_examples" / "result.json").read_text())
+            self.assertEqual(got["enum"]["layers_diff"], ["lstmLayer"])
+            self.assertEqual(got["enum"]["examples_failed"], ["Some_Example:parallel:gpu:Foo"])
+
+    def test_the_sweeps_failure_counts_and_minimums_are_the_hosts(self):
+        for name, over in (("enum_layers_diff", {"value": 2, "expected": 2}), ("enum_gpuarray_gpu_only_error", {"value": 1, "expected": 1}), ("enum_train_unexpected_error", {"value": 3, "expected": 3}),
+                           ("examples_failed", {"value": 1, "expected": 1}), ("enum_gpuarray_pass_fraction", {"value": 0.5}), ("enum_gpuarray_tested", {"value": 50, "min": 0}),
+                           ("examples_run", {"value": 5, "min": 0}), ("enum_train_cells", {"value": 12, "min": 0})):
+            v = M.verify_doc("matlab_examples", self.doc_with("matlab_examples", name, **over), HW)
+            self.assertFalse(v["ok"], name)
+            self.assertIn(name, v["failed"])
+
+    def test_evidence_keeps_the_failing_names_of_the_sweeps_and_nothing_else(self):
+        d = good("matlab_examples")
+        d["enum"] = {"examples_failed": ["Example_One:MATLAB:UndefinedFunction", "x" * 80], "gpuarray_diff": ["eig", "svd"], "gpuarray_counts": [300, 290, 2, 1, 5, 2, 20],
+                     "secret_list": ["/home/u/x"], "layers_diff": ["lstmLayer"]}
+        out = M.sanitize_result(M.parse_row_json(raw(d), "matlab_examples"))
+        self.assertEqual(set(out["enum"]), {"examples_failed", "gpuarray_diff", "gpuarray_counts", "layers_diff"})
+        self.assertEqual(out["enum"]["gpuarray_diff"], ["eig", "svd"])
+        self.assertEqual(out["enum"]["gpuarray_counts"][0], 300)
+        self.assertNotIn("secret", json.dumps(out))
+        self.assertNotIn("/home", json.dumps(out))
+
+    def test_gfx_colour_minimum_is_sixty_four(self):
+        self.assertEqual(M.MIN_ATLEAST["gfx_distinct_colors"], 64.0)
+        self.assertFalse(M.host_atleast({"name": "gfx_distinct_colors", "value": 63, "min": 0})[0])
+        self.assertTrue(M.host_atleast({"name": "gfx_distinct_colors", "value": 64, "min": 0})[0])
+
+    def test_all_new_rows_pass_through_the_runner_and_a_wrong_gpu_array_fails_each(self):
+        out, _, _ = run(all_good())
+        for row in BREADTH:
+            self.assertEqual(by_row(out)[row]["verdict"], "PASS", row)
+        for row in BREADTH:
+            d = good(row)
+            for c in d["checks"]:
+                if c["kind"] in ("cmp", "gpuarray"):
+                    c["on_gpu"] = False
+            results = all_good()
+            results[row] = (0, raw(d))
+            out, _, _ = run(results)
+            self.assertEqual(by_row(out)[row]["failure_class"], "GPU_NOT_USED", row)
 
 
 if __name__ == "__main__":

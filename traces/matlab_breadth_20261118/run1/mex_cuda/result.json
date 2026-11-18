@@ -1,0 +1,139 @@
+{
+ "checks": [
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "mexcuda_compile_status",
+   "value": 0
+  },
+  {
+   "device_index": 1,
+   "device_name": "NVIDIA GeForce RTX 3090",
+   "exists_on_gpu": true,
+   "guest_pass": true,
+   "kind": "gpuarray",
+   "name": "mex_output_gpuarray",
+   "on_gpu": true,
+   "underlying": "uint32"
+  },
+  {
+   "cpu": [
+    62507.49906211253,
+    1000003.0,
+    4022,
+    3847
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    62507.49906211253,
+    1000003.0,
+    4022,
+    3847
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_mex_hist_small",
+   "numel": 256,
+   "on_gpu": true,
+   "ref": 62507.49906211253,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    2097160.7796551986,
+    33554432.0,
+    131076,
+    131119
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    2097160.7796551986,
+    33554432.0,
+    131076,
+    131119
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_mex_hist_large",
+   "numel": 256,
+   "on_gpu": true,
+   "ref": 2097160.7796551986,
+   "tol": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "mex_hist_total_count",
+   "value": 0
+  },
+  {
+   "cpu": [
+    99953476.0,
+    99953476.0,
+    99953476.0,
+    99953476.0
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    99953476.0,
+    99953476.0,
+    99953476.0,
+    99953476.0
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_mex_sum",
+   "numel": 1,
+   "on_gpu": true,
+   "ref": 99953476.0,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    62507.49906211253,
+    1000003.0,
+    4022,
+    3847
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    62507.49906211253,
+    1000003.0,
+    4022,
+    3847
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_mex_hist_after_2000_launches",
+   "numel": 256,
+   "on_gpu": true,
+   "ref": 62507.49906211253,
+   "tol": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "mex_run_status",
+   "value": 0
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 3090"
+ },
+ "row": "mex_cuda",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

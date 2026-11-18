@@ -1,0 +1,129 @@
+{
+ "checks": [
+  {
+   "cpu": [
+    255.91700591029527,
+    131025.9196438822,
+    0.4990384493599416,
+    0.499107018030661
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    255.91700591029527,
+    131025.9196438822,
+    0.4990384493599416,
+    0.499107018030661
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "heat_circshift_double_512",
+   "numel": 262144,
+   "on_gpu": true,
+   "ref": 255.91700591029527,
+   "tol": 1e-10
+  },
+  {
+   "cpu": [
+    255.54448418035736,
+    130835.96980166435,
+    0.5024595856666565,
+    0.5024641752243042
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    255.54448418035736,
+    130835.96980166435,
+    0.5024595856666565,
+    0.5024641752243042
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "heat_circshift_single_512",
+   "numel": 262144,
+   "on_gpu": true,
+   "ref": 255.54448418035736,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    242.95651225192492,
+    121873.38860975375,
+    0.0021143576552497,
+    0.0020392729121419036
+   ],
+   "diff": 4.04315214087531e-14,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    242.9565122519249,
+    121873.38860975375,
+    0.0021143576552496994,
+    0.0020392729121419036
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "conv2_same_double_512",
+   "numel": 262144,
+   "on_gpu": true,
+   "ref": 242.95651225192492,
+   "tol": 1e-10
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "stencil_status",
+   "value": 0
+  },
+  {
+   "cpu": [
+    30.49442073297694,
+    952.5154027768533,
+    -0.8390715290765043,
+    0.39182827027057676
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    30.49442073297694,
+    952.5154027768533,
+    -0.8390715290765043,
+    0.39182827027057676
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "rk4_double_4096",
+   "numel": 4096,
+   "on_gpu": true,
+   "ref": 30.49442073297694,
+   "tol": 1e-10
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "rk4_analytic_resid_double_4096",
+   "tol": 1e-10,
+   "value": 2.3397950243975174e-12
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "rk4_status",
+   "value": 0
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 3090"
+ },
+ "row": "gpu_stencil",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

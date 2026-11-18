@@ -16,7 +16,28 @@
       "cuda_kernel": {
         "lane": "discovery"
       },
+      "dl_custom_loop": {
+        "lane": "discovery"
+      },
+      "dl_layers": {
+        "lane": "discovery"
+      },
+      "dl_predict_sweep": {
+        "lane": "discovery"
+      },
       "dl_train": {
+        "lane": "discovery"
+      },
+      "gfx_render": {
+        "lane": "discovery"
+      },
+      "gpu_arrayfun": {
+        "lane": "discovery"
+      },
+      "gpu_classes": {
+        "lane": "discovery"
+      },
+      "gpu_devctl": {
         "lane": "discovery"
       },
       "gpu_fft": {
@@ -28,10 +49,28 @@
       "gpu_matmul": {
         "lane": "discovery"
       },
+      "gpu_pagefun": {
+        "lane": "discovery"
+      },
+      "gpu_rand": {
+        "lane": "discovery"
+      },
       "gpu_solve": {
         "lane": "discovery"
       },
+      "gpu_sparse": {
+        "lane": "discovery"
+      },
+      "gpu_stencil": {
+        "lane": "discovery"
+      },
+      "matlab_examples": {
+        "lane": "discovery"
+      },
       "mem_oversub": {
+        "lane": "discovery"
+      },
+      "mex_cuda": {
         "lane": "discovery"
       },
       "parpool_gpu": {

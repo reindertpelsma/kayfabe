@@ -1,0 +1,70 @@
+{
+ "census": {
+  "counts": {
+   "refused": 19,
+   "unserviced": 21
+  },
+  "lines": 704,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 19,
+   "submissions": 1516,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [
+   "sparse_status"
+  ],
+  "flag_disagrees": 0,
+  "n": 13
+ },
+ "facts": {},
+ "failure_class": "BAD_RESULT",
+ "findings": [
+  "sparse_status: value=1 (guest expected 0, host expects 0) err_id=parallel:gpu:array:SparseNotSu",
+  "MISSING_CHECK:sparse_nnz_exact",
+  "MISSING_CHECK:spmv_power500_double"
+ ],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4664.0
+  },
+  "peak": {
+   "busy_samples": 6,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 9.0,
+   "gpu_dmon_sm": 9.0,
+   "mem_mb": 4675.0
+  },
+  "reasons": [
+   "video memory did not rise by 64 MiB (baseline 4664.0, peak 4675.0)"
+  ],
+  "required": [
+   "gpu",
+   "mem"
+  ],
+  "samples": 78,
+  "source": "host",
+  "verdict": "FAIL"
+ },
+ "host_xid": null,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "sparse_status: value=1 (guest expected 0, host expects 0) err_id=parallel:gpu:array:SparseNotSu",
+ "result": {
+  "bytes": 3174,
+  "sha256": "d3b9cd3238c193112de551067586ea5dd40b0108fd3e44bf9f7da22ef75b6dd5"
+ },
+ "row": "gpu_sparse",
+ "secs": 34,
+ "verdict": "FAIL"
+}

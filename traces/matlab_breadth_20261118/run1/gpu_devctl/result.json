@@ -1,0 +1,165 @@
+{
+ "checks": [
+  {
+   "guest_pass": true,
+   "kind": "atleast",
+   "min": 1,
+   "name": "device_count",
+   "value": 1
+  },
+  {
+   "guest_pass": true,
+   "kind": "atleast",
+   "min": 1,
+   "name": "device_table_rows",
+   "value": 1
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "device_unavailable",
+   "value": 0
+  },
+  {
+   "cpu": [
+    1048554.7567537192,
+    2147029015.7066345,
+    501.92779541015625,
+    499.96636962890625
+   ],
+   "diff": 0.16723357984940185,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    1048554.7567387292,
+    2147029015.6818848,
+    501.92779541015625,
+    499.9664611816406
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "cycle_matmul_single_1",
+   "numel": 4194304.0,
+   "on_gpu": true,
+   "ref": 1048554.7567537192,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    1049361.2200993947,
+    2148701322.613556,
+    499.8815612792969,
+    503.34588623046875
+   ],
+   "diff": 0.16744260665819807,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    1049361.2200210397,
+    2148701322.4530334,
+    499.8815612792969,
+    503.34588623046875
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "cycle_matmul_single_2",
+   "numel": 4194304.0,
+   "on_gpu": true,
+   "ref": 1049361.2200993947,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    1049485.4531202721,
+    2148949600.807678,
+    514.0589599609375,
+    506.5825500488281
+   ],
+   "diff": 0.16740817686841925,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    1049485.4530436082,
+    2148949600.652069,
+    514.05908203125,
+    506.5825500488281
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "cycle_matmul_single_3",
+   "numel": 4194304.0,
+   "on_gpu": true,
+   "ref": 1049485.4531202721,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    1048846.0366577907,
+    2147633733.932678,
+    504.49493408203125,
+    504.286865234375
+   ],
+   "diff": 0.16737466923686908,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    1048846.0366299415,
+    2147633733.8741455,
+    504.4949035644531,
+    504.2867431640625
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "cycle_matmul_single_4",
+   "numel": 4194304.0,
+   "on_gpu": true,
+   "ref": 1048846.0366577907,
+   "tol": 0.0001
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "exists_after_reset",
+   "value": 0
+  },
+  {
+   "expected": 1.1,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.85,
+   "name": "avail_ratio_after_reset",
+   "value": 1
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "gpu_selected_after_reset",
+   "value": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "gputimeit_nonpositive",
+   "value": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "devctl_status",
+   "value": 0
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 3090"
+ },
+ "row": "gpu_devctl",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

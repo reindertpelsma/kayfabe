@@ -1,0 +1,47 @@
+{
+ "census": {
+  "counts": {
+   "refused": 31,
+   "unserviced": 49
+  },
+  "lines": 1005,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 25,
+   "submissions": 961,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [],
+  "flag_disagrees": 0,
+  "n": 1
+ },
+ "facts": {
+  "compute_capability": "8.6",
+  "device_count": 1,
+  "driver_version": 13.1,
+  "matlab_release": "2026b",
+  "name": "NVIDIA GeForce RTX 3090",
+  "toolkit_version": 13.1,
+  "total_memory": 3968073728
+ },
+ "failure_class": null,
+ "findings": [],
+ "gpu": {},
+ "host_xid": null,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "",
+ "result": {
+  "bytes": 633,
+  "sha256": "067ff2c318bbb88b90d080ce9fadb07791b004856f073fb37b0df388cf11ef98"
+ },
+ "row": "gpu_info",
+ "secs": 50,
+ "verdict": "PASS"
+}

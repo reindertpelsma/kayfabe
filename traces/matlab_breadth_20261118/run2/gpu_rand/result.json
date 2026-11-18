@@ -1,0 +1,241 @@
+{
+ "checks": [
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "repro_mismatch_philox",
+   "value": 0
+  },
+  {
+   "expected": 0.001,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0,
+   "name": "rand_diffseed_equal_philox",
+   "value": 0
+  },
+  {
+   "device_index": 1,
+   "device_name": "NVIDIA GeForce RTX 3090",
+   "exists_on_gpu": true,
+   "guest_pass": true,
+   "kind": "gpuarray",
+   "name": "rand_is_gpuarray",
+   "on_gpu": true,
+   "underlying": "single"
+  },
+  {
+   "expected": 0.501,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.499,
+   "name": "unif_mean_philox",
+   "value": 0.5000386847141806
+  },
+  {
+   "expected": 0.0853,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.0813,
+   "name": "unif_var_philox",
+   "value": 0.0833231828871551
+  },
+  {
+   "expected": 0.003,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0,
+   "name": "unif_hist_dev_philox",
+   "value": 6.785392761229914e-05
+  },
+  {
+   "expected": 0.002,
+   "guest_pass": true,
+   "kind": "range",
+   "min": -0.002,
+   "name": "unif_lag1_philox",
+   "value": -0.00023141143875733217
+  },
+  {
+   "expected": 0.002,
+   "guest_pass": true,
+   "kind": "range",
+   "min": -0.002,
+   "name": "norm_mean_philox",
+   "value": 2.5009818764187353e-05
+  },
+  {
+   "expected": 1.01,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.99,
+   "name": "norm_var_philox",
+   "value": 0.9999108128436468
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "repro_mismatch_threefry",
+   "value": 0
+  },
+  {
+   "expected": 0.001,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0,
+   "name": "rand_diffseed_equal_threefry",
+   "value": 5.960464477539063e-08
+  },
+  {
+   "expected": 0.501,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.499,
+   "name": "unif_mean_threefry",
+   "value": 0.49988763106625667
+  },
+  {
+   "expected": 0.0853,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.0813,
+   "name": "unif_var_threefry",
+   "value": 0.08335040375144122
+  },
+  {
+   "expected": 0.003,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0,
+   "name": "unif_hist_dev_threefry",
+   "value": 0.00014617443084716242
+  },
+  {
+   "expected": 0.002,
+   "guest_pass": true,
+   "kind": "range",
+   "min": -0.002,
+   "name": "unif_lag1_threefry",
+   "value": -1.3809367208098819e-06
+  },
+  {
+   "expected": 0.002,
+   "guest_pass": true,
+   "kind": "range",
+   "min": -0.002,
+   "name": "norm_mean_threefry",
+   "value": -0.00014254341629005226
+  },
+  {
+   "expected": 1.01,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.99,
+   "name": "norm_var_threefry",
+   "value": 0.9998416972260837
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "repro_mismatch_combrecursive",
+   "value": 0
+  },
+  {
+   "expected": 0.001,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0,
+   "name": "rand_diffseed_equal_combrecursive",
+   "value": 0
+  },
+  {
+   "expected": 0.501,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.499,
+   "name": "unif_mean_combrecursive",
+   "value": 0.5000383595860506
+  },
+  {
+   "expected": 0.0853,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.0813,
+   "name": "unif_var_combrecursive",
+   "value": 0.08331730003057249
+  },
+  {
+   "expected": 0.003,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0,
+   "name": "unif_hist_dev_combrecursive",
+   "value": 0.00016679763793944757
+  },
+  {
+   "expected": 0.002,
+   "guest_pass": true,
+   "kind": "range",
+   "min": -0.002,
+   "name": "unif_lag1_combrecursive",
+   "value": -0.0001730562569841004
+  },
+  {
+   "expected": 0.002,
+   "guest_pass": true,
+   "kind": "range",
+   "min": -0.002,
+   "name": "norm_mean_combrecursive",
+   "value": -4.18160741992552e-05
+  },
+  {
+   "expected": 1.01,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 0.99,
+   "name": "norm_var_combrecursive",
+   "value": 1.0002290767965056
+  },
+  {
+   "expected": 1,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 1,
+   "name": "randi_min",
+   "value": 1
+  },
+  {
+   "expected": 10,
+   "guest_pass": true,
+   "kind": "range",
+   "min": 10,
+   "name": "randi_max",
+   "value": 10
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "rand_status",
+   "value": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "randperm_not_permutation",
+   "value": 0
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 3090"
+ },
+ "row": "gpu_rand",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

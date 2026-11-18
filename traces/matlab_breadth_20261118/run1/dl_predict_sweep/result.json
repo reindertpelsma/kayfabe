@@ -1,0 +1,261 @@
+{
+ "checks": [
+  {
+   "cpu": [
+    17.4104293783518,
+    2047.9999974737875,
+    0.05642542243003845,
+    0.213980033993721
+   ],
+   "diff": 1.641684255371708e-05,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    17.41042899723118,
+    2047.9999979357235,
+    0.05642525479197502,
+    0.21397989988327026
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "predict_mb_single_1",
+   "numel": 20480,
+   "on_gpu": true,
+   "ref": 17.4104293783518,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    17.4104293783518,
+    2047.9999974737875,
+    0.05642542243003845,
+    0.213980033993721
+   ],
+   "diff": 1.6461424105330367e-05,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    17.410428979848184,
+    2048.000000654254,
+    0.05642525479197502,
+    0.21397992968559265
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "predict_mb_single_7",
+   "numel": 20480,
+   "on_gpu": true,
+   "ref": 17.4104293783518,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    17.4104293783518,
+    2047.9999974737875,
+    0.05642542243003845,
+    0.213980033993721
+   ],
+   "diff": 1.6444797605051213e-05,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    17.41042888935143,
+    2047.999997308012,
+    0.05642525479197502,
+    0.21397991478443146
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "predict_mb_single_64",
+   "numel": 20480,
+   "on_gpu": true,
+   "ref": 17.4104293783518,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    17.4104293783518,
+    2047.9999974737875,
+    0.05642542243003845,
+    0.213980033993721
+   ],
+   "diff": 1.649147140315774e-05,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    17.410428703258443,
+    2048.0000028298236,
+    0.05642525479197502,
+    0.21397992968559265
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "predict_mb_single_1000",
+   "numel": 20480,
+   "on_gpu": true,
+   "ref": 17.4104293783518,
+   "tol": 0.0001
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "predict_api_resid_single_1000",
+   "tol": 0.0001,
+   "value": 9.472179602682912e-07
+  },
+  {
+   "cpu": [
+    17.4104293783518,
+    2047.9999974737875,
+    0.05642542243003845,
+    0.213980033993721
+   ],
+   "diff": 0.002998392672268419,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    17.410823114910766,
+    2047.9999996726401,
+    0.0564175546169281,
+    0.21401862800121307
+   ],
+   "guest_pass": false,
+   "kind": "cmp",
+   "name": "predict_mb_single_2048",
+   "numel": 20480,
+   "on_gpu": true,
+   "ref": 17.4104293783518,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    17.410428703258443,
+    2048.0000028298236,
+    0.05642525479197502,
+    0.21397992968559265
+   ],
+   "diff": 2.5348006878440907e-06,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    17.410428979848184,
+    2048.000000654254,
+    0.05642525479197502,
+    0.21397992968559265
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "predict_invariance_single",
+   "numel": 20480,
+   "on_gpu": true,
+   "ref": 17.410428703258443,
+   "tol": 0.0001
+  },
+  {
+   "device_index": 1,
+   "device_name": "NVIDIA GeForce RTX 3090",
+   "exists_on_gpu": true,
+   "guest_pass": true,
+   "kind": "gpuarray",
+   "name": "predict_env_gpu",
+   "on_gpu": true,
+   "underlying": "single"
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "sweep_status",
+   "value": 0
+  },
+  {
+   "cpu": [
+    3.8634364157915115,
+    2.378714084625244,
+    2.008096031844616,
+    1.8395256623625755,
+    1.7075168117880821,
+    1.577368289232254,
+    1.4543459936976433,
+    1.3585068807005882,
+    1.273485705256462,
+    1.1986758336424828
+   ],
+   "gpu": [
+    3.863435596227646,
+    2.3787175565958023,
+    2.0081348717212677,
+    1.8396770432591438,
+    1.7078332901000977,
+    1.5778395384550095,
+    1.4549617022275925,
+    1.3592288941144943,
+    1.2739218845963478,
+    1.1984560638666153
+   ],
+   "kind": "series",
+   "name": "train_loss_curve"
+  },
+  {
+   "guest_pass": true,
+   "kind": "atleast",
+   "min": 1,
+   "name": "checkpoint_files",
+   "value": 10
+  },
+  {
+   "cpu": [
+    13.46123406929345,
+    512.0000004698227,
+    0.42049023509025574,
+    0.08597967773675919
+   ],
+   "diff": 3.237429267858204e-05,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    13.46123354700578,
+    511.9999975400774,
+    0.4204906225204468,
+    0.08597897738218307
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "checkpoint_vs_final_single",
+   "numel": 5120,
+   "on_gpu": true,
+   "ref": 13.46123406929345,
+   "tol": 0.0001
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "ckpt_status",
+   "value": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "resume_loss_regress",
+   "value": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "resume_status",
+   "value": 0
+  }
+ ],
+ "epochs": 10,
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 3090"
+ },
+ "row": "dl_predict_sweep",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}
