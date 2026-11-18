@@ -316,6 +316,16 @@ class VkPrio(unittest.TestCase):
         self.assertEqual(kv["fam1.reported"], "LOW,MEDIUM,HIGH,REALTIME")
         self.assertEqual((kv["create.0.LOW"], kv["create.0.HIGH"], kv["create.0.REALTIME"]), ("0", "0", "-3"))
 
+    def test_the_allocation_timing_is_evidence_and_the_count_is_a_result(self):
+        kv = L.parse_vkprio(self.OUT + "VKALLOC requested=4000 ok=3990 last_failure=-2 secs=12.5 us_per_allocation=3125.0 memory_types=11\n")
+        self.assertEqual((kv["alloc_requested"], kv["alloc_ok"], kv["alloc_last_failure"]), ("4000", "3990", "-2"))
+        self.assertEqual((kv["perf.alloc_secs"], kv["perf.alloc_us_each"]), ("12.5", "3125.0"))
+
+    def test_two_runs_that_differ_only_in_allocation_time_do_not_differ(self):
+        a = L.parse_vkprio(self.OUT + "VKALLOC requested=4000 ok=4000 last_failure=0 secs=0.5 us_per_allocation=125.0 memory_types=11\n")
+        b = L.parse_vkprio(self.OUT + "VKALLOC requested=4000 ok=4000 last_failure=0 secs=30.0 us_per_allocation=7500.0 memory_types=11\n")
+        self.assertEqual(D.compare({"x": R("x", "pass", kv=a)}, {"x": R("x", "pass", kv=b)}), [])
+
     def test_only_the_first_device_counts_a_software_device_must_not_mix_in(self):
         kv = L.parse_vkprio(self.OUT)
         self.assertEqual(kv["info.device"], "NVIDIA GeForce RTX 3090")

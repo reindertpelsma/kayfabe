@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+static double now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec + t.tv_nsec / 1e9; }
 
 typedef int32_t VkResult;
 typedef void *VkInstance, *VkPhysicalDevice, *VkDevice;
@@ -22,6 +24,10 @@ typedef struct { int32_t sType; const void *pNext; int32_t globalPriority; } VkD
 typedef struct { int32_t sType; const void *pNext; uint32_t flags, queueFamilyIndex, queueCount; const float *pQueuePriorities; } VkDeviceQueueCreateInfo;
 typedef struct { int32_t sType; const void *pNext; uint32_t flags, queueCreateInfoCount; const VkDeviceQueueCreateInfo *pQueueCreateInfos; uint32_t enabledLayerCount; const char *const *ppEnabledLayerNames;
                  uint32_t enabledExtensionCount; const char *const *ppEnabledExtensionNames; const void *pEnabledFeatures; } VkDeviceCreateInfo;
+typedef struct { uint32_t propertyFlags, heapIndex; } VkMemoryType;
+typedef struct { uint64_t size; uint32_t flags; } VkMemoryHeap;
+typedef struct { uint32_t memoryTypeCount; VkMemoryType memoryTypes[32]; uint32_t memoryHeapCount; VkMemoryHeap memoryHeaps[16]; } VkPhysicalDeviceMemoryProperties;
+typedef struct { int32_t sType; const void *pNext; uint64_t allocationSize; uint32_t memoryTypeIndex; } VkMemoryAllocateInfo;
 typedef struct { uint32_t apiVersion, driverVersion, vendorID, deviceID, deviceType; char deviceName[256]; uint8_t rest[1024]; } VkPhysicalDevicePropertiesHead;
 static const int32_t PRIO[] = {128, 256, 512, 1024};
 static const char *PN[] = {"LOW", "MEDIUM", "HIGH", "REALTIME"};
@@ -63,6 +69,21 @@ int main(void) {
       printf("VKPRIO create family=%u priority=%s result=%d\n", i, PN[p], cr);
       if (!cr && dev) destroyDevice(dev, NULL);
     }
+  }
+  if (n) {   // the CTS case memory.allocation.basic.size_4KiB.mixed.count_4000: 4000 live 4 KiB allocations over the memory types in turn; time per vkAllocateMemory
+    VkResult (*allocMem)(VkDevice, const VkMemoryAllocateInfo *, const void *, void **) = getProc(inst, "vkAllocateMemory");
+    void (*freeMem)(VkDevice, void *, const void *) = getProc(inst, "vkFreeMemory");
+    void (*getMem)(VkPhysicalDevice, VkPhysicalDeviceMemoryProperties *) = getProc(inst, "vkGetPhysicalDeviceMemoryProperties");
+    VkPhysicalDeviceMemoryProperties mp; memset(&mp, 0, sizeof mp); getMem(pd[0], &mp);
+    float one = 1.0f; VkDeviceQueueCreateInfo qi = {2, NULL, 0, 0, 1, &one}; VkDeviceCreateInfo di = {3, NULL, 0, 1, &qi, 0, NULL, 0, NULL, NULL};
+    VkDevice dev = NULL; VkResult cr = createDevice(pd[0], &di, NULL, &dev);
+    if (cr || !dev) { printf("VKALLOC error=vkCreateDevice result=%d\n", cr); return 0; }
+    enum { N = 4000 }; void **mem = calloc(N, sizeof *mem); int ok = 0; VkResult last = 0; double t = now();
+    for (int i = 0; i < N; i++) { VkMemoryAllocateInfo ai = {5, NULL, 4096, (uint32_t)(i % mp.memoryTypeCount)}; VkResult ar = allocMem(dev, &ai, NULL, &mem[i]); if (ar) { last = ar; mem[i] = NULL; } else ok++; }
+    double s = now() - t;
+    printf("VKALLOC requested=%d ok=%d last_failure=%d secs=%.3f us_per_allocation=%.1f memory_types=%u\n", N, ok, last, s, s * 1e6 / N, mp.memoryTypeCount);
+    for (int i = 0; i < N; i++) if (mem[i]) freeMem(dev, mem[i], NULL);
+    destroyDevice(dev, NULL);
   }
   return 0;
 }

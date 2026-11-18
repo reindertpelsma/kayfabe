@@ -240,6 +240,12 @@ def parse_vkprio(text):
         m = re.match(r"VKPRIO create family=(\d+) priority=(\w+) result=(-?\d+)$", line)
         if m and ("fam%s.reported" % m[1]) in kv and ("create.%s.%s" % (m[1], m[2])) not in kv:
             kv["create.%s.%s" % (m[1], m[2])] = m[3]
+    for line in text.splitlines():
+        m = re.match(r"VKALLOC requested=(\d+) ok=(\d+) last_failure=(-?\d+) secs=([\d.]+) us_per_allocation=([\d.]+) memory_types=(\d+)$", line)
+        if m:
+            kv["alloc_requested"], kv["alloc_ok"], kv["alloc_last_failure"] = m[1], m[2], m[3]
+            kv["perf.alloc_secs"], kv["perf.alloc_us_each"] = m[4], m[5]   # timings are evidence, never a difference
+            break
     if dev:
         kv["info.device"] = dev
     return kv
