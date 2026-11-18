@@ -10164,13 +10164,20 @@ mod replay_creo04_gb203_xid32 {
         let logged = field("logged-route line=2799:");
         assert_eq!(route_declined_line(family, class).as_deref(), Some(logged));
         assert!(field("logged-alloc line=16956:").contains(&format!("class={class:#x}")));
-        assert_eq!(ring_relay_serves(family, class), Err(field("measured decline:")));
+        assert_eq!(
+            ring_relay_serves(family, class),
+            Err(field("measured decline:"))
+        );
         // The logged twin is the one the route sends to the USERD relay, with a 5080 holding nothing.
-        assert!(field("logged-birth line=16959:").contains("(USERD relay: doorbells go to a worker)"));
+        assert!(
+            field("logged-birth line=16959:").contains("(USERD relay: doorbells go to a worker)")
+        );
         assert!(field("logged-twin5080 line=16962:").contains("NOTHING registered"));
         assert!(field("logged-registration line=17354:").contains("object=0xff1fe010"));
         assert!(field("logged-twin5080 line=16962:").contains("0xc1d0009e:0xff1fe010"));
-        assert!(field("logged-xid dmesg=8468.111405:").ends_with("channel 0x00000016 intr 00800000"));
+        assert!(
+            field("logged-xid dmesg=8468.111405:").ends_with("channel 0x00000016 intr 00800000")
+        );
         // Control: the same viewset passed on an RTX 4090 (Ada, 2026-11-16); Ada's Windows user-work class is
         // routed to the private ring, and no decline line is printed for it.
         let ada = kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A;
@@ -10185,7 +10192,10 @@ mod replay_creo04_gb203_xid32 {
     fn known_defect_gb20x_windows_user_work_trigger_finds_nothing_registered() {
         let (family, class) = (logged_family(), logged_class());
         assert!(!ring_relay_route(true, true, family, class));
-        assert_eq!(twin_defapi_plan(true, true), TwinDefapiPlan::AuthorHostObject);
+        assert_eq!(
+            twin_defapi_plan(true, true),
+            TwinDefapiPlan::AuthorHostObject
+        );
     }
 
     /// The invariant, red today. A permitted Windows user-work channel of the logged family and class (the

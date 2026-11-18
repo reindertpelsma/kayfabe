@@ -1322,7 +1322,10 @@ mod tests {
     #[test]
     fn the_route_declined_line_is_printed_only_for_a_declined_channel() {
         assert_eq!(
-            route_declined_line(kf_chip::Family::Ada, kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A),
+            route_declined_line(
+                kf_chip::Family::Ada,
+                kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
+            ),
             None
         );
         let line = route_declined_line(kf_chip::Family::Blackwell, 0xca6f).expect("declined");
