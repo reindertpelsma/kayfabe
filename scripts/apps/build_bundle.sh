@@ -105,7 +105,7 @@ pin_git_checkout "$S/gpu-burn" "$PIN_GPU_BURN_URL" "" "$PIN_GPU_BURN_COMMIT"; ok
 # pinned to the revision of the first matrix (V3_APP_MATRIX.md §1) so reruns are comparable; no environment override
 pin_git_checkout "$S/llama.cpp" "$PIN_LLAMA_URL" "" "$PIN_LLAMA_COMMIT"; ok src_llama_cpp $?
 ( cd "$S/llama.cpp" && cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86 -DLLAMA_CURL=OFF \
-    -DCMAKE_BUILD_TYPE=Release >/tmp/build_llama.log 2>&1 && cmake --build build -j"$(nproc)" --target llama-cli llama-bench llama-simple >>/tmp/build_llama.log 2>&1 )
+    -DLLAMA_USE_PREBUILT_UI=OFF -DCMAKE_BUILD_TYPE=Release >/tmp/build_llama.log 2>&1 && cmake --build build -j"$(nproc)" --target llama-cli llama-bench llama-simple >>/tmp/build_llama.log 2>&1 )
 rm -f "$B"/llama/lib*.so*
 cp -u "$S/llama.cpp/build/bin/"llama-* "$B/llama/" 2>/dev/null
 find "$S/llama.cpp/build" -name '*.so*' -exec cp -P -u {} "$B/llama/" \; 2>/dev/null
