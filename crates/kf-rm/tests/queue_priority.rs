@@ -24,8 +24,8 @@ mod ga106;
 
 use kf_abi::versions::{BENCH_DRIVER, table_for};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
-use kf_rm::chanlink::{ChanAnswer, ChanStatement};
 use kf_rm::barpde::MemStatement;
+use kf_rm::chanlink::{ChanAnswer, ChanStatement};
 use std::sync::{Arc, Mutex};
 
 const FIXTURE: &str = include_str!("fixtures/queue_priority_refusal.txt");
@@ -54,13 +54,21 @@ fn driver() -> kf_abi::versions::DriverAbiTable {
 }
 
 /// A `GSP_RM_CONTROL` with `declared` as the params size the guest wrote (a lie can be built).
-fn control_declared(object: u32, cmd: u32, params: &[u8], declared: u32, rpc_flags: u32) -> RpcCommand {
+fn control_declared(
+    object: u32,
+    cmd: u32,
+    params: &[u8],
+    declared: u32,
+    rpc_flags: u32,
+) -> RpcCommand {
     let abi = driver();
     let w = abi.rm_control_wire();
     let mut payload = vec![0u8; PARAMS_AT + params.len()];
     payload[0..4].copy_from_slice(&0xc1d0_0002u32.to_le_bytes());
     payload[4..8].copy_from_slice(&object.to_le_bytes());
     payload[8..12].copy_from_slice(&cmd.to_le_bytes());
+    // a stale status the reply must overwrite
+    payload[STATUS_AT..STATUS_AT + 4].copy_from_slice(&0x1111_1111u32.to_le_bytes());
     payload[w.params_size_off..w.params_size_off + 4].copy_from_slice(&declared.to_le_bytes());
     payload[w.rpc_flags_off..w.rpc_flags_off + 4].copy_from_slice(&rpc_flags.to_le_bytes());
     payload[PARAMS_AT..].copy_from_slice(params);
@@ -126,8 +134,16 @@ fn chain(log: &kf_rm::unserviced::UnservicedLog) -> (Box<dyn CommandPolicy>, Arc
 }
 
 fn assert_no_host_action(seen: &Seen) {
-    assert_eq!(seen.chan.lock().unwrap().as_slice(), &[] as &[String], "no channel statement");
-    assert_eq!(seen.mem.lock().unwrap().as_slice(), &[] as &[String], "no memory statement");
+    assert_eq!(
+        seen.chan.lock().unwrap().as_slice(),
+        &[] as &[String],
+        "no channel statement"
+    );
+    assert_eq!(
+        seen.mem.lock().unwrap().as_slice(),
+        &[] as &[String],
+        "no memory statement"
+    );
 }
 
 /// The envelope AND the control header's own status word.
@@ -152,7 +168,11 @@ fn fixture_values(kind: &str) -> Vec<(String, u32, u32)> {
                 let s = s.unwrap().strip_prefix(p).unwrap();
                 u32::from_str_radix(s.trim_start_matches("0x"), 16).unwrap()
             };
-            (name, num("flags=", it.next()), num("schedPolicy=", it.next()))
+            (
+                name,
+                num("flags=", it.next()),
+                num("schedPolicy=", it.next()),
+            )
         })
         .collect()
 }
@@ -161,7 +181,10 @@ fn fixture_values(kind: &str) -> Vec<(String, u32, u32)> {
 /// boots; a drifted fixture fails here, before it can make the acceptance test pass for the wrong reason.
 #[test]
 fn the_fixture_is_the_logged_refusal() {
-    let logged: Vec<&str> = FIXTURE.lines().filter(|l| l.starts_with("logged-line: ")).collect();
+    let logged: Vec<&str> = FIXTURE
+        .lines()
+        .filter(|l| l.starts_with("logged-line: "))
+        .collect();
     assert_eq!(logged.len(), 4);
     for l in &logged {
         assert!(l.ends_with("GSP REFUSED fn76/0x20801115=0x56"), "{l}");
@@ -182,9 +205,21 @@ fn the_logged_refused_control_is_served_ok_and_nothing_reaches_the_host() {
         let r = c
             .respond(&control(SUBDEVICE, SET_SCHED_POLICY, &params))
             .expect("answered");
-        assert_eq!(statuses(&r), (NV_OK, NV_OK), "{name}: served, not refused 0x56");
-        assert_eq!(&r.body[PARAMS_AT..], params.as_slice(), "{name}: params as sent");
-        assert_eq!(log.total(), 0, "{name}: the control no longer reaches the ledger");
+        assert_eq!(
+            statuses(&r),
+            (NV_OK, NV_OK),
+            "{name}: served, not refused 0x56"
+        );
+        assert_eq!(
+            &r.body[PARAMS_AT..],
+            params.as_slice(),
+            "{name}: params as sent"
+        );
+        assert_eq!(
+            log.total(),
+            0,
+            "{name}: the control no longer reaches the ledger"
+        );
         assert_no_host_action(&seen);
     }
 }
@@ -196,8 +231,16 @@ fn a_device_lifetime_set_set_restore_repeated() {
     let log = kf_rm::unserviced::UnservicedLog::new();
     let (mut c, seen) = chain(&log);
     for _ in 0..200 {
-        for p in [words(&[0, 1]), words(&[0, 1]), words(&[1, 0]), words(&[0, 2]), words(&[1, 0xffff_ffff])] {
-            let r = c.respond(&control(SUBDEVICE, SET_SCHED_POLICY, &p)).expect("answered");
+        for p in [
+            words(&[0, 1]),
+            words(&[0, 1]),
+            words(&[1, 0]),
+            words(&[0, 2]),
+            words(&[1, 0xffff_ffff]),
+        ] {
+            let r = c
+                .respond(&control(SUBDEVICE, SET_SCHED_POLICY, &p))
+                .expect("answered");
             assert_eq!(statuses(&r), (NV_OK, NV_OK), "{p:?}");
         }
     }
@@ -224,9 +267,20 @@ fn hostile_set_sched_policy_is_refused_by_name_and_reaches_no_host() {
         (vec![0u8; 8], 0),
     ] {
         let r = c
-            .respond(&control_declared(SUBDEVICE, SET_SCHED_POLICY, &params, declared, 0))
+            .respond(&control_declared(
+                SUBDEVICE,
+                SET_SCHED_POLICY,
+                &params,
+                declared,
+                0,
+            ))
             .expect("answered");
-        assert_eq!(r.rpc_result, NV_ERR_INVALID_PARAM_STRUCT, "len {} declared {declared}", params.len());
+        assert_eq!(
+            r.rpc_result,
+            NV_ERR_INVALID_PARAM_STRUCT,
+            "len {} declared {declared}",
+            params.len()
+        );
         refusals += 1;
     }
     // restore not set and a policy that does not exist
@@ -243,7 +297,13 @@ fn hostile_set_sched_policy_is_refused_by_name_and_reaches_no_host() {
         .find(|f| kf_abi::rpc_params_are_serialized(*f))
         .expect("a serialized flag bit");
     let r = c
-        .respond(&control_declared(SUBDEVICE, SET_SCHED_POLICY, &words(&[0, 1]), 8, serialized))
+        .respond(&control_declared(
+            SUBDEVICE,
+            SET_SCHED_POLICY,
+            &words(&[0, 1]),
+            8,
+            serialized,
+        ))
         .expect("answered");
     assert_eq!(r.rpc_result, NV_ERR_NOT_SUPPORTED);
     refusals += 1;
@@ -269,9 +329,17 @@ fn only_the_restore_bit_of_flags_is_read() {
     }
     for flags in [1u32, 0xffff_ffff] {
         let r = c
-            .respond(&control(SUBDEVICE, SET_SCHED_POLICY, &words(&[flags, 0xdead_beef])))
+            .respond(&control(
+                SUBDEVICE,
+                SET_SCHED_POLICY,
+                &words(&[flags, 0xdead_beef]),
+            ))
             .expect("answered");
-        assert_eq!(statuses(&r), (NV_OK, NV_OK), "restore with flags {flags:#x}");
+        assert_eq!(
+            statuses(&r),
+            (NV_OK, NV_OK),
+            "restore with flags {flags:#x}"
+        );
     }
     assert_no_host_action(&seen);
 }
@@ -285,19 +353,34 @@ fn interleave_level_sets_are_served_and_validated() {
     let (mut c, seen) = chain(&log);
     for (object, cmd) in [(TSG, TSG_SET_INTERLEAVE), (CHANNEL, CHAN_SET_INTERLEAVE)] {
         for level in [0u32, 1, 2] {
-            let r = c.respond(&control(object, cmd, &words(&[level]))).expect("answered");
+            let r = c
+                .respond(&control(object, cmd, &words(&[level])))
+                .expect("answered");
             assert_eq!(statuses(&r), (NV_OK, NV_OK), "{cmd:#x} level {level}");
             assert_eq!(&r.body[PARAMS_AT..], words(&[level]).as_slice());
         }
         for level in [3u32, 0x8000_0000, u32::MAX] {
-            let r = c.respond(&control(object, cmd, &words(&[level]))).expect("answered");
-            assert_eq!(r.rpc_result, NV_ERR_INVALID_ARGUMENT, "{cmd:#x} level {level:#x}");
+            let r = c
+                .respond(&control(object, cmd, &words(&[level])))
+                .expect("answered");
+            assert_eq!(
+                r.rpc_result, NV_ERR_INVALID_ARGUMENT,
+                "{cmd:#x} level {level:#x}"
+            );
         }
-        for (params, declared) in [(vec![], 0u32), (vec![0u8; 8], 8), (vec![0u8; 4], 8), (vec![0u8; 4], u32::MAX)] {
+        for (params, declared) in [
+            (vec![], 0u32),
+            (vec![0u8; 8], 8),
+            (vec![0u8; 4], 8),
+            (vec![0u8; 4], u32::MAX),
+        ] {
             let r = c
                 .respond(&control_declared(object, cmd, &params, declared, 0))
                 .expect("answered");
-            assert_eq!(r.rpc_result, NV_ERR_INVALID_PARAM_STRUCT, "{cmd:#x} declared {declared}");
+            assert_eq!(
+                r.rpc_result, NV_ERR_INVALID_PARAM_STRUCT,
+                "{cmd:#x} declared {declared}"
+            );
         }
     }
     assert_eq!(log.total(), 0);
