@@ -1,0 +1,287 @@
+{
+ "checks": [
+  {
+   "cpu": [
+    16582.475692108183,
+    33554235.7311213,
+    8.804037094116211,
+    9.341951370239258
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    16582.475692108183,
+    33554235.7311213,
+    8.804037094116211,
+    9.341951370239258
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "pagemtimes_single_32",
+   "numel": 4194304.0,
+   "on_gpu": true,
+   "ref": 16582.475692108183,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    16581.93872336287,
+    33556278.34818209,
+    8.933479739356619,
+    6.574716966135076
+   ],
+   "diff": 8.169964604997303e-13,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    16581.93872336287,
+    33556278.34818209,
+    8.933479739356619,
+    6.574716966135076
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "pagemtimes_double_32",
+   "numel": 4194304.0,
+   "on_gpu": true,
+   "ref": 16581.93872336287,
+   "tol": 1e-10
+  },
+  {
+   "cpu": [
+    16587.832767124448,
+    33565588.98988104,
+    8.970303535461426,
+    7.3506059646606445
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    16587.832767124448,
+    33565588.98988104,
+    8.970303535461426,
+    7.3506059646606445
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "pagemtimes_tn_single",
+   "numel": 4194304.0,
+   "on_gpu": true,
+   "ref": 16587.832767124448,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    5954.830916992609,
+    4258767.434098674,
+    7.863170906923561,
+    8.541839450920989
+   ],
+   "diff": 2.9428777020956703e-13,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    5954.830916992608,
+    4258767.434098674,
+    7.863170906923561,
+    8.541839450920989
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "pagemtimes_expand_double",
+   "numel": 524288,
+   "on_gpu": true,
+   "ref": 5954.830916992609,
+   "tol": 1e-10
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "pagemtimes_status",
+   "value": 0
+  },
+  {
+   "cpu": [
+    6624.503315225154,
+    7081726.619775772,
+    5.9503560066223145,
+    5.291289806365967
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    6624.503315225154,
+    7081726.619775772,
+    5.9503560066223145,
+    5.291289806365967
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "pagefun_mtimes_single",
+   "numel": 1179648.0,
+   "on_gpu": true,
+   "ref": 6624.503315225154,
+   "tol": 0.0001
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "pagefun_mtimes_status",
+   "value": 0
+  },
+  {
+   "cpu": [
+    681.6886727257264,
+    696699.5600491448,
+    0.6189144288930899,
+    0.7555507783877486
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    681.6886727257264,
+    696699.5600491448,
+    0.6189144288930899,
+    0.7555507783877486
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_pagetranspose_double",
+   "numel": 1392640.0,
+   "on_gpu": true,
+   "ref": 681.6886727257264,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    681.5879573954471,
+    348585.7275370696,
+    0.766969476417767,
+    0.8350080928223678
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    681.5879573954471,
+    348585.7275370696,
+    0.766969476417767,
+    0.8350080928223678
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_pagectranspose_complex",
+   "numel": 696320,
+   "on_gpu": true,
+   "ref": 681.5879573954471,
+   "tol": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "pagetranspose_status",
+   "value": 0
+  },
+  {
+   "cpu": [
+    418.0891912966365,
+    45742.23370419307,
+    7.943943977355957,
+    0.04686542972922325
+   ],
+   "diff": 0.0005239533811884884,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    418.08936238195975,
+    45742.250453376924,
+    7.94395112991333,
+    0.0468655526638031
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "pagesvd_single",
+   "numel": 32768,
+   "on_gpu": true,
+   "ref": 418.0891912966365,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    418.29363058418426,
+    45744.91264348577,
+    8.070280074870158,
+    0.08590535001850004
+   ],
+   "diff": 1.1507793626888507e-12,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    418.29363058418454,
+    45744.9126434858,
+    8.070280074870176,
+    0.08590535001850018
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "pagesvd_double",
+   "numel": 32768,
+   "on_gpu": true,
+   "ref": 418.29363058418426,
+   "tol": 1e-10
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "pagesvd_status",
+   "value": 0
+  },
+  {
+   "cpu": [
+    32959.27972693072,
+    67093185.24861717,
+    17.80238914489746,
+    16.064680099487305
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    32959.27972693072,
+    67093185.24861717,
+    17.80238914489746,
+    16.064680099487305
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "pagemtimes_single_after_300",
+   "numel": 4194304.0,
+   "on_gpu": true,
+   "ref": 32959.27972693072,
+   "tol": 0.0001
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "pagemtimes_sustained_status",
+   "value": 0
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 3090"
+ },
+ "row": "gpu_pagefun",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

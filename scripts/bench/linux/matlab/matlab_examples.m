@@ -1,4 +1,4 @@
-% matlab_examples: production workloads, not synthetic ones: MATLAB's own SHIPPED examples (discovered in the installed products' example folders and run non-interactively in a
+% matlab_examples: production workloads, not synthetic ones: MATLAB's own SHIPPED examples (discovered as live scripts in the installed products' toolbox folders: the offline install ships almost none, MEASURED: two in matlab/demos, none in parallel or nnet and run non-interactively in a
 % single-worker pool with a time budget each, a timeout kills the worker mid-kernel and the next example gets a fresh pool), the product's own FEATURE LISTS swept function by function
 % (the methods of gpuArray, the deep-learning layer constructors, every solver by every execution environment of trainingOptions) with the CPU result as oracle, error paths compared
 % by identifier class, and messy variants (memory near the limit with an out-of-memory error and recovery, odd shapes, a rerun after reset(gpuDevice), a worker killed mid-kernel, a soak).
@@ -20,8 +20,8 @@ try
     names = {};
     try
         found = {};
-        for r = 1:numel(cfg.example_roots)
-            hits = dir(fullfile(matlabroot, 'examples', cfg.example_roots{r}, '**', '*.mlx'));
+        for r = 1:numel(cfg.example_dirs)
+            hits = dir(fullfile(matlabroot, 'toolbox', cfg.example_dirs{r}, '**', '*.mlx'));
             for k = 1:numel(hits)
                 found{end+1} = fullfile(hits(k).folder, hits(k).name); %#ok<SAGROW>
             end

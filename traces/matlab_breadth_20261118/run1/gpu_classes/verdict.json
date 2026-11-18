@@ -1,0 +1,70 @@
+{
+ "census": {
+  "counts": {
+   "refused": 12,
+   "unserviced": 21
+  },
+  "lines": 662,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 12,
+   "submissions": 2264,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [
+   "int_status"
+  ],
+  "flag_disagrees": 0,
+  "n": 20
+ },
+ "facts": {},
+ "failure_class": "BAD_RESULT",
+ "findings": [
+  "int_status: value=1 (guest expected 0, host expects 0) err_id=parallel:gpu:compiler:Unsuppor",
+  "MISSING_CHECK:exact_uint64_large"
+ ],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4664.0
+  },
+  "peak": {
+   "busy_samples": 0,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 2.0,
+   "gpu_dmon_sm": 2.0,
+   "mem_mb": 4675.0
+  },
+  "reasons": [
+   "gpu engine idle: 0 sample(s) at or above 3% (need 2); peak 2.0",
+   "video memory did not rise by 64 MiB (baseline 4664.0, peak 4675.0)"
+  ],
+  "required": [
+   "gpu",
+   "mem"
+  ],
+  "samples": 53,
+  "source": "host",
+  "verdict": "FAIL"
+ },
+ "host_xid": null,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "int_status: value=1 (guest expected 0, host expects 0) err_id=parallel:gpu:compiler:Unsuppor",
+ "result": {
+  "bytes": 5105,
+  "sha256": "140b51461c652bf71a1b7dc6ecfcdb4fbf5c91e4820749ff9807d5071030ccb3"
+ },
+ "row": "gpu_classes",
+ "secs": 22,
+ "verdict": "FAIL"
+}

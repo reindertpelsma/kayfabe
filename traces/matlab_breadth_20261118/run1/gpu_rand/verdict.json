@@ -1,0 +1,68 @@
+{
+ "census": {
+  "counts": {
+   "refused": 11,
+   "unserviced": 21
+  },
+  "lines": 676,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 11,
+   "submissions": 2821,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [
+   "randperm_not_permutation"
+  ],
+  "flag_disagrees": 0,
+  "n": 29
+ },
+ "facts": {},
+ "failure_class": "OUTPUT_MISMATCH",
+ "findings": [
+  "randperm_not_permutation: value=1 (guest expected 0, host expects 0) err_id=MATLAB:randperm:inputTyp"
+ ],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4664.0
+  },
+  "peak": {
+   "busy_samples": 6,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 5.0,
+   "gpu_dmon_sm": 5.0,
+   "mem_mb": 4676.0
+  },
+  "reasons": [
+   "video memory did not rise by 64 MiB (baseline 4664.0, peak 4676.0)"
+  ],
+  "required": [
+   "gpu",
+   "mem"
+  ],
+  "samples": 45,
+  "source": "host",
+  "verdict": "FAIL"
+ },
+ "host_xid": null,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "randperm_not_permutation: value=1 (guest expected 0, host expects 0) err_id=MATLAB:randperm:inputTyp",
+ "result": {
+  "bytes": 3540,
+  "sha256": "1962fb760a3ac4cc5a02e1a97108c2b79d5a272e48d99b8656e8dc2e35aff7ce"
+ },
+ "row": "gpu_rand",
+ "secs": 18,
+ "verdict": "FAIL"
+}

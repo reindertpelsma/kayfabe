@@ -1,0 +1,61 @@
+{
+ "census": {
+  "counts": {
+   "refused": 22,
+   "unserviced": 21
+  },
+  "lines": 683,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 22,
+   "submissions": 1048,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [],
+  "flag_disagrees": 0,
+  "n": 8
+ },
+ "facts": {},
+ "failure_class": null,
+ "findings": [],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4664.0
+  },
+  "peak": {
+   "busy_samples": 4,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 7.0,
+   "gpu_dmon_sm": 7.0,
+   "mem_mb": 4674.0
+  },
+  "reasons": [],
+  "required": [
+   "gpu"
+  ],
+  "samples": 91,
+  "source": "host",
+  "verdict": "PASS"
+ },
+ "host_xid": null,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "",
+ "result": {
+  "bytes": 1703,
+  "sha256": "da8f57a44c08d8fb1b068353cf3dcc22f3872f8b2aa55b576417b4669b1db040"
+ },
+ "row": "mex_cuda",
+ "secs": 41,
+ "verdict": "PASS"
+}

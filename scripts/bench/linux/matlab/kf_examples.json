@@ -1,11 +1,11 @@
 {
   "comment": "Data of the matlab_examples row (docs/design/V3_PROPIMAGE_LINUX.md section 16). Examples are DISCOVERED in the installed products' shipped example folders; this file only steers the choice. Layer constructors and solver and environment names are the vendor's, from the documentation lists.",
-  "example_roots": ["parallel", "nnet"],
+  "example_dirs": ["matlab/demos", "parallel/examples", "nnet/nndemos"],
   "example_prefer": ["GPU", "gpu", "Mandelbrot", "Backprop", "Digit", "Sequence", "Classif", "Regress", "Gradient", "Custom", "Train", "Benchmark", "Wave", "Stencil"],
   "example_deny": ["Download", "Pretrained", "Internet", "Simulink", "Cluster", "Cloud", "Interactive", "App", "Deploy", "Codegen", "Generate", "Import", "Export", "ONNX", "Python", "Video", "Webcam", "Camera", "Speech", "Audio", "Reinforcement", "Hyperparameter", "Bayesian", "Experiment"],
   "example_max": 24,
   "example_budget_s": 60,
-  "gpuarray_skip_exact": ["gpuArray", "delete", "disp", "display", "gather", "existsOnGPU", "classUnderlying", "clear", "save", "load", "saveobj", "loadobj", "wait", "reset", "subsasgn", "subsref", "arrayfun", "bsxfun", "pagefun", "cellfun", "structfun", "feval", "eval", "evalc", "input", "keyboard", "pause", "plot", "plot3", "mesh", "surf", "image", "imagesc", "figure", "close", "rand", "randn", "randi", "randperm", "inputname", "mustBeNonempty", "validateattributes", "parfor", "spmd", "cat", "horzcat", "vertcat", "end", "numArgumentsFromSubscript", "isa", "class", "ctranspose", "transpose"],
+  "gpuarray_skip_exact": ["gpuArray", "isgpuarray", "sprand", "sprandn", "sprandsym", "delete", "disp", "display", "gather", "existsOnGPU", "classUnderlying", "clear", "save", "load", "saveobj", "loadobj", "wait", "reset", "subsasgn", "subsref", "arrayfun", "bsxfun", "pagefun", "cellfun", "structfun", "feval", "eval", "evalc", "input", "keyboard", "pause", "plot", "plot3", "mesh", "surf", "image", "imagesc", "figure", "close", "rand", "randn", "randi", "randperm", "inputname", "mustBeNonempty", "validateattributes", "parfor", "spmd", "cat", "horzcat", "vertcat", "end", "numArgumentsFromSubscript", "isa", "class", "ctranspose", "transpose"],
   "gpuarray_skip_prefix": ["set", "plot", "mesh", "surf", "contour", "fill", "patch", "animated", "text", "ezplot", "fplot", "write", "read", "fopen", "fclose", "fprintf", "fwrite", "mex", "run", "open", "edit", "web", "doc", "help", "rng", "gpu", "parallel"],
   "layers": [
     {"c": "fullyConnectedLayer(5)", "in": "features"}, {"c": "reluLayer", "in": "features"}, {"c": "leakyReluLayer", "in": "features"}, {"c": "clippedReluLayer(2)", "in": "features"},

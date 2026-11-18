@@ -1,0 +1,408 @@
+{
+ "checks": [
+  {
+   "cpu": [
+    176625.91541164054,
+    -22920169.0,
+    63,
+    99
+   ],
+   "diff": 0,
+   "dtype": "int8",
+   "exists_on_gpu": true,
+   "gpu": [
+    176625.91541164054,
+    -22920169.0,
+    63,
+    99
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_int8_saturate",
+   "numel": 4000000.0,
+   "on_gpu": true,
+   "ref": 176625.91541164054,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    200163082.0064429,
+    285541745820.0,
+    82,
+    126578
+   ],
+   "diff": 0,
+   "dtype": "int32",
+   "exists_on_gpu": true,
+   "gpu": [
+    200163082.0064429,
+    285541745820.0,
+    82,
+    126578
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_int32_cumsum",
+   "numel": 4000000.0,
+   "on_gpu": true,
+   "ref": 200163082.0064429,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    156155.812309158,
+    191143530.0,
+    82,
+    44
+   ],
+   "diff": 0,
+   "dtype": "int32",
+   "exists_on_gpu": true,
+   "gpu": [
+    156155.812309158,
+    191143530.0,
+    82,
+    44
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_int32_mod",
+   "numel": 8000000.0,
+   "on_gpu": true,
+   "ref": 156155.812309158,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    4986045831804.875,
+    8655059700529375.0,
+    635428651.0,
+    594464675.0
+   ],
+   "diff": 0,
+   "dtype": "uint32",
+   "exists_on_gpu": true,
+   "gpu": [
+    4986045831804.875,
+    8655059700529375.0,
+    635428651.0,
+    594464675.0
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_uint32_bitops",
+   "numel": 4000000.0,
+   "on_gpu": true,
+   "ref": 4986045831804.875,
+   "tol": 0
+  },
+  {
+   "err_id": "parallel:gpu:compiler:UnsupportedType",
+   "expected": 0,
+   "guest_pass": false,
+   "kind": "count",
+   "name": "int_status",
+   "value": 1
+  },
+  {
+   "cpu": [
+    1574.5237375155702,
+    2479125.0,
+    0,
+    1
+   ],
+   "diff": 0,
+   "dtype": "logical",
+   "exists_on_gpu": true,
+   "gpu": [
+    1574.5237375155702,
+    2479125.0,
+    0,
+    1
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_logical_ops",
+   "numel": 4000000.0,
+   "on_gpu": true,
+   "ref": 1574.5237375155702,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    3456628394.694058,
+    4479717970623.0,
+    3,
+    4000000.0
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    3456628394.694058,
+    4479717970623.0,
+    3,
+    4000000.0
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_find_indices",
+   "numel": 2239577.0,
+   "on_gpu": true,
+   "ref": 3456628394.694058,
+   "tol": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "logical_status",
+   "value": 0
+  },
+  {
+   "cpu": [
+    1154.884220218009,
+    2000501.274009894,
+    2.2573465296993334e-07,
+    0.9999999738516986
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    1154.884220218009,
+    2000501.274009894,
+    2.2573465296993334e-07,
+    0.9999999738516986
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_sort_values",
+   "numel": 4000000.0,
+   "on_gpu": true,
+   "ref": 1154.884220218009,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    4618803019.542423,
+    8000002000000.0,
+    1643602.0,
+    2194525.0
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    4618803019.542423,
+    8000002000000.0,
+    1643602.0,
+    2194525.0
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_sort_perm_indices",
+   "numel": 4000000.0,
+   "on_gpu": true,
+   "ref": 4618803019.542423,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    2310071532.97545,
+    4001268338018.2354,
+    0.6931335694646737,
+    2000501.2740098322
+   ],
+   "diff": 0.00013858136474030678,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    2310071532.9755397,
+    4001268338018.461,
+    0.6931335694646737,
+    2000501.2740098953
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "cumsum_double",
+   "numel": 4000000.0,
+   "on_gpu": true,
+   "ref": 2310071532.97545,
+   "tol": 1e-10
+  },
+  {
+   "cpu": [
+    400004.39518585295,
+    4000000.0,
+    39977,
+    39721
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    400004.39518585295,
+    4000000.0,
+    39977,
+    39721
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_histcounts",
+   "numel": 100,
+   "on_gpu": true,
+   "ref": 400004.39518585295,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    695498.4877222955,
+    21990204.0,
+    22031,
+    22389
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    695498.4877222955,
+    21990204.0,
+    22031,
+    22389
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_accumarray",
+   "numel": 1000,
+   "on_gpu": true,
+   "ref": 695498.4877222955,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    204154.76359859912,
+    12502500.0,
+    1,
+    5000
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    204154.76359859912,
+    12502500.0,
+    1,
+    5000
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_unique",
+   "numel": 5000,
+   "on_gpu": true,
+   "ref": 204154.76359859912,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    1413.9048765740924,
+    1999127.0,
+    1,
+    1
+   ],
+   "diff": 0,
+   "dtype": "logical",
+   "exists_on_gpu": true,
+   "gpu": [
+    1413.9048765740924,
+    1999127.0,
+    1,
+    1
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "exact_ismember",
+   "numel": 4000000.0,
+   "on_gpu": true,
+   "ref": 1413.9048765740924,
+   "tol": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "scan_status",
+   "value": 0
+  },
+  {
+   "cpu": [
+    2147.079312656433,
+    -742901.1732165052,
+    1.6495704650878906,
+    0.3348325490951538
+   ],
+   "diff": 7.323774618330464e-05,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    2147.0793265001944,
+    -742901.1801428061,
+    1.6495704650878906,
+    0.3348325490951538
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "complex_arith_single",
+   "numel": 1000000.0,
+   "on_gpu": true,
+   "ref": 2147.079312656433,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    2149.311678898483,
+    -743474.8744871826,
+    -1.8332553862798837,
+    -1.777035568913411
+   ],
+   "diff": 1.2018999389386805e-13,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    2149.3116788984826,
+    -743474.8744871826,
+    -1.8332553862798837,
+    -1.777035568913411
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "complex_arith_double",
+   "numel": 1000000.0,
+   "on_gpu": true,
+   "ref": 2149.311678898483,
+   "tol": 1e-10
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "complex_status",
+   "value": 0
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "roundtrip_mismatches",
+   "value": 0
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 3090"
+ },
+ "row": "gpu_classes",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

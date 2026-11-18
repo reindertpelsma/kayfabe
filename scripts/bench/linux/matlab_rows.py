@@ -73,8 +73,8 @@ for _g in ("philox", "threefry", "combrecursive"):
     RANGES.update({"unif_mean_" + _g: (0.499, 0.501), "unif_var_" + _g: (0.0813, 0.0853), "unif_hist_dev_" + _g: (0.0, 0.003), "unif_lag1_" + _g: (-0.002, 0.002),
                    "norm_mean_" + _g: (-0.002, 0.002), "norm_var_" + _g: (0.99, 1.01), "rand_diffseed_equal_" + _g: (0.0, 0.001)})
 RANGES.update({"enum_gpuarray_pass_fraction": (0.90, 1.0), "messy_vram_fraction": (0.70, 0.95)})       # DESIGN values: recalibrate after the first measured run
-ERRID_GPU_PREFIX = {"errpath_oom": "parallel:gpu", "errpath_wrongclass": "parallel:gpu", "errpath_badptx": "parallel:gpu"}      # UNVERIFIED identifier families (no native reference yet)
-ERRID_WITH_CPU = ("errpath_innerdim", "errpath_badindex")                                                                       # the GPU call must raise the CPU call's identifier class
+ERRID_GPU_PREFIX = {"errpath_oom": "parallel:gpu", "errpath_wrongclass": "parallel:gpu", "errpath_badptx": "parallel:gpu", "errpath_badindex": "parallel:array"}   # MEASURED on kf3 (2026-11-18), not yet on native Linux
+ERRID_WITH_CPU = ("errpath_innerdim",)                                                                                                    # the GPU call must raise the CPU call's identifier class
 ID_RE = re.compile(r"[A-Za-z0-9:_.]{1,64}")
 RANGES.update({"randi_min": (1.0, 1.0), "randi_max": (10.0, 10.0), "avail_ratio_after_reset": (0.85, 1.10), "gfx_circle_area_fraction": (0.77, 0.80),
                "gfx_isosurface_area_ratio": (0.98, 1.02), "gfx_nonwhite_fraction": (0.15, 0.97)})

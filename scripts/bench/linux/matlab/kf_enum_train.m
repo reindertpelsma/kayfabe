@@ -16,7 +16,11 @@ for a = 1:numel(cfg.solvers)
         s.cells = s.cells + 1;
         try
             rng(41, 'twister');
-            opts = trainingOptions(sol, 'ExecutionEnvironment', envn, 'MaxEpochs', 3, 'MiniBatchSize', 64, 'Shuffle', 'never', 'Plots', 'none', 'Verbose', false);
+            if strcmp(sol, 'lbfgs')
+                opts = trainingOptions(sol, 'ExecutionEnvironment', envn, 'MaxIterations', 30, 'Plots', 'none', 'Verbose', false);        % full-batch solver: no MiniBatchSize, MaxEpochs or Shuffle
+            else
+                opts = trainingOptions(sol, 'ExecutionEnvironment', envn, 'MaxEpochs', 3, 'MiniBatchSize', 64, 'Shuffle', 'never', 'Plots', 'none', 'Verbose', false);
+            end
             net = trainnet(X, Y, layers, 'mse', opts);
             P = minibatchpredict(net, X, 'ExecutionEnvironment', 'cpu');
             loss = mean((double(P(:)) - double(Y(:))) .^ 2);

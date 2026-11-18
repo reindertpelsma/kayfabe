@@ -96,7 +96,7 @@ def item(name, **over):
         it = {"name": name, "kind": "gpuarray", "on_gpu": True, "exists_on_gpu": True, "underlying": "single", "device_index": 1, "device_name": "NVIDIA GeForce RTX 4090",
               "guest_pass": True}
     elif kind == "errid":
-        it = {"name": name, "kind": "errid", "raised": True, "gpu_id": "parallel:gpu:array:OOM" if name in M.ERRID_GPU_PREFIX else "MATLAB:innerdim", "cpu_id": "MATLAB:innerdim",
+        it = {"name": name, "kind": "errid", "raised": True, "gpu_id": (M.ERRID_GPU_PREFIX[name] + ":X") if name in M.ERRID_GPU_PREFIX else "MATLAB:innerdim", "cpu_id": "MATLAB:innerdim",
               "guest_pass": True}
     elif kind == "range":
         lo, hi = M.RANGES[name]
@@ -1649,7 +1649,7 @@ class BreadthRowTests(unittest.TestCase):
     def test_the_examples_row_uses_matlabroot_only_as_a_directory_and_never_in_the_json(self):
         body = code_of(self.text("matlab_examples.m"))
         self.assertEqual(re.findall(r"\bmatlabroot\b", body), ["matlabroot"])
-        self.assertIn("fullfile(matlabroot, 'examples'", self.text("matlab_examples.m"))
+        self.assertIn("fullfile(matlabroot, 'toolbox'", self.text("matlab_examples.m"))
         for other in sorted(MATLAB_DIR.glob("*.m")):
             if other.name != "matlab_examples.m":
                 self.assertNotRegex(code_of(other.read_text()), r"\bmatlabroot\b", other.name)
@@ -1810,7 +1810,7 @@ class BreadthRowTests(unittest.TestCase):
 
     def test_the_examples_data_file_is_sane(self):
         cfg = json.loads(self.text("kf_examples.json"))
-        self.assertTrue(set(cfg["example_roots"]) <= {"parallel", "nnet"})
+        self.assertTrue(set(cfg["example_dirs"]) <= {"matlab/demos", "parallel/examples", "nnet/nndemos"})
         self.assertTrue(0 < cfg["example_max"] <= 40 and 0 < cfg["example_budget_s"] <= 120)
         self.assertTrue({"Download", "Pretrained", "Internet", "Cluster"} <= set(cfg["example_deny"]))
         self.assertEqual(cfg["solvers"], ["sgdm", "adam", "rmsprop", "lbfgs"])
@@ -1845,7 +1845,7 @@ class BreadthRowTests(unittest.TestCase):
         self.assertFalse(M.check_errid(doc("errpath_unlisted"))[0])
 
     def test_a_gpu_error_path_with_a_foreign_identifier_fails_the_examples_row_at_run_level(self):
-        for name, over in (("errpath_wrongclass", {"gpu_id": "MATLAB:foreign"}), ("errpath_badindex", {"gpu_id": "parallel:gpu:array:Other"})):
+        for name, over in (("errpath_wrongclass", {"gpu_id": "MATLAB:foreign"}), ("errpath_badindex", {"gpu_id": "parallel:gpu:array:Other"}), ("errpath_innerdim", {"gpu_id": "parallel:gpu:array:Other"})):
             results = all_good()
             results["matlab_examples"] = (0, raw(set_check(good("matlab_examples"), name, **over)))
             out, _, _ = run(results)

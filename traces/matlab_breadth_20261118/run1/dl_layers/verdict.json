@@ -1,0 +1,68 @@
+{
+ "census": {
+  "counts": {
+   "refused": 16,
+   "unserviced": 21
+  },
+  "lines": 725,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 16,
+   "submissions": 1486,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [
+   "conv2d_s_g_single"
+  ],
+  "flag_disagrees": 0,
+  "n": 49
+ },
+ "facts": {},
+ "failure_class": "OUTPUT_MISMATCH",
+ "findings": [
+  "conv2d_s_g_single: rel=0.000254 fp=0.000119 tol=0.0001"
+ ],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4664.0
+  },
+  "peak": {
+   "busy_samples": 4,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 6.0,
+   "gpu_dmon_sm": 6.0,
+   "mem_mb": 4674.0
+  },
+  "reasons": [
+   "video memory did not rise by 64 MiB (baseline 4664.0, peak 4674.0)"
+  ],
+  "required": [
+   "gpu",
+   "mem"
+  ],
+  "samples": 67,
+  "source": "host",
+  "verdict": "FAIL"
+ },
+ "host_xid": null,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "conv2d_s_g_single: rel=0.000254 fp=0.000119 tol=0.0001",
+ "result": {
+  "bytes": 13183,
+  "sha256": "643aa3b6a00defedf6372a376c7e66af3626b264bc9e3b1f277bf9792531685a"
+ },
+ "row": "dl_layers",
+ "secs": 29,
+ "verdict": "FAIL"
+}
