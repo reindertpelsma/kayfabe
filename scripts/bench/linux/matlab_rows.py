@@ -61,11 +61,19 @@ MIN_CC_X100 = 750              # MATLAB's GPU support starts at compute capabili
 BOOT_SLACK_S = 240             # DESIGN: boot, ssh, identity probe and the pull of the JSON around a row's own time-box
 LANES = ("gate", "discovery")
 FAIL_CLASSES = ("CRASH", "HANG", "XID", "TDR", "ASSERT", "OUTPUT_MISMATCH", "GPU_NOT_USED", "BAD_RESULT")
-EXACT_PREFIXES = ("vecadd_", "sample_chunk_", "sum_ones", "no_write_past_n", "content_mismatches")
+EXACT_PREFIXES = ("vecadd_", "sample_chunk_", "sum_ones", "no_write_past_n", "content_mismatches", "exact_")
 TOLERANCE = {"single": 1e-4, "double": 1e-10}        # relative; the host's own copy (kf_tol.m states the same numbers, never trusted)
 PAIR_REL, PAIR_ABS = 0.10, 2e-3                      # dl_train: GPU and CPU final loss
 LOSS_FALL = 0.5                                      # dl_train: the last epoch's mean loss must be below this fraction of the first
 MEM_FRACTION = (0.70, 0.90)                          # mem_oversub: allocated bytes over the free memory reported at the start
+# `range` checks (the breadth rows, section 15 of docs/design/V3_PROPIMAGE_LINUX.md): the host's own closed interval per check name, never the guest's. A statistic of a
+# fixed-seed sample of at least 2^24 draws: the bounds are 10 or more standard deviations wide (so no seed can miss), far inside any broken generator.
+RANGES = {}
+for _g in ("philox", "threefry", "combrecursive"):
+    RANGES.update({"unif_mean_" + _g: (0.499, 0.501), "unif_var_" + _g: (0.0813, 0.0853), "unif_hist_dev_" + _g: (0.0, 0.003), "unif_lag1_" + _g: (-0.002, 0.002),
+                   "norm_mean_" + _g: (-0.002, 0.002), "norm_var_" + _g: (0.99, 1.01), "rand_diffseed_equal_" + _g: (0.0, 0.001)})
+RANGES.update({"randi_min": (1.0, 1.0), "randi_max": (10.0, 10.0), "avail_ratio_after_reset": (0.85, 1.10), "gfx_circle_area_fraction": (0.77, 0.80),
+               "gfx_isosurface_area_ratio": (0.98, 1.02), "gfx_nonwhite_fraction": (0.15, 0.97)})
 MEM_RETURNED = 0.80                                  # mem_oversub: free memory after the release, over the start value
 NAME_RE = re.compile(r"[A-Za-z0-9_]{1,64}")
 BIN_RE = re.compile(r"[A-Za-z0-9_./-]{1,120}")
@@ -151,6 +159,17 @@ def _names_solve():
     return out + ["mldivide_double_2048_after_100"]
 
 
+def _names_dl_layers():
+    out = []
+    for op, dt in DL_LAYER_OPS:
+        out += ["%s_status" % op, "%s_y_%s" % (op, dt), "%s_g_%s" % (op, dt)]
+    return out + ["layers_env_gpu"]
+
+
+DL_LAYER_OPS = (("conv1d", "double"), ("conv2d", "double"), ("conv2d_s", "single"), ("conv3d", "double"), ("transpconv2d", "double"), ("maxpool2d", "double"),
+                ("avgpool2d", "double"), ("batchnorm", "double"), ("groupnorm", "double"), ("layernorm", "double"), ("attention", "double"), ("lstm", "double"),
+                ("gru", "double"), ("gelu", "double"), ("softmax_ce", "double"), ("fullyconnect", "double"))
+GEN3 = ("philox", "threefry", "combrecursive")
 # id -> (script, time-box seconds for the matlab process, host engines that must show use, the check names the script must report)
 # The time-boxes are DESIGN values (an estimate for a nested box, never measured); no pass criterion is a time.
 ROWS = {
@@ -164,11 +183,50 @@ ROWS = {
     "cuda_kernel": ("cuda_kernel.m", 900, ("gpu",), ("vecadd_1000", "vecadd_1048573", "vecadd_10000000", "vecadd_after_40000_launches", "no_write_past_n",
                                                     "vecadd_first_n_of_guarded", "kernel_output_gpuarray")),
     "mem_oversub": ("mem_oversub.m", 900, ("mem",), ("chunks_gpuarray", "content_mismatches", "sample_chunk_1")),
+    # the breadth rows (docs/design/V3_PROPIMAGE_LINUX.md section 15): what people run in MATLAB beyond the numerics above; every row reports a `<step>_status` count per step
+    # (0, or 1 with the error identifier) so one failing API does not hide the others
+    "gpu_arrayfun": ("gpu_arrayfun.m", 900, ("gpu", "mem"), ("af_expr_status", "af_expr_single_4M", "af_expr_double_4M", "af_loop_status", "af_loop_double_1M",
+                                                              "af_multiout_status", "af_multiout_y_double", "af_multiout_z_double", "af_branch_single",
+                                                              "implicit_expand_double", "af_int_status", "exact_af_int32", "exact_af_logical", "af_sustained_status",
+                                                              "af_sustained_single_after_200")),
+    "gpu_pagefun": ("gpu_pagefun.m", 900, ("gpu", "mem"), ("pagemtimes_status", "pagemtimes_single_32", "pagemtimes_double_32", "pagemtimes_tn_single",
+                                                           "pagemtimes_expand_double", "pagefun_mtimes_status", "pagefun_mtimes_single", "pagetranspose_status",
+                                                           "exact_pagetranspose_double", "exact_pagectranspose_complex", "pagesvd_status", "pagesvd_single",
+                                                           "pagesvd_double", "pagemtimes_sustained_status", "pagemtimes_single_after_300")),
+    "gpu_classes": ("gpu_classes.m", 900, ("gpu", "mem"), ("int_status", "exact_int8_saturate", "exact_int32_cumsum", "exact_uint32_bitops", "exact_uint64_large",
+                                                           "exact_int32_mod", "logical_status", "exact_logical_ops", "exact_find_indices", "scan_status",
+                                                           "exact_sort_values", "exact_sort_perm_indices", "cumsum_double", "exact_histcounts", "exact_accumarray",
+                                                           "exact_unique", "exact_ismember", "complex_status", "complex_arith_single", "complex_arith_double",
+                                                           "roundtrip_mismatches")),
+    "gpu_sparse": ("gpu_sparse.m", 1200, ("gpu", "mem"), ("sparse_status", "sparse_is_gpu_sparse", "spmv_double_65536", "spmv_complex_double_65536", "spmm_double_8cols",
+                                                          "spgemm_apply_double", "sparse_build_apply_double", "sparse_rowsum_double", "sparse_diag_double",
+                                                          "sparse_nnz_exact", "spmv_power500_double", "solve_status", "sparse_mldivide_resid_double_4096",
+                                                          "pcg_resid_double_16384", "pcg_flag_nonzero")),
+    "gpu_rand": ("gpu_rand.m", 900, ("gpu", "mem"), tuple(["rand_status", "rand_is_gpuarray", "randi_min", "randi_max", "randperm_not_permutation"]
+                                                          + ["%s_%s" % (k, g) for g in GEN3 for k in ("repro_mismatch", "rand_diffseed_equal", "unif_mean", "unif_var",
+                                                                                                       "unif_hist_dev", "unif_lag1", "norm_mean", "norm_var")])),
+    "gpu_devctl": ("gpu_devctl.m", 900, ("gpu",), ("devctl_status", "device_count", "device_table_rows", "device_unavailable", "gputimeit_nonpositive",
+                                                   "cycle_matmul_single_1", "cycle_matmul_single_2", "cycle_matmul_single_3", "cycle_matmul_single_4",
+                                                   "exists_after_reset", "avail_ratio_after_reset", "gpu_selected_after_reset")),
+    "gpu_stencil": ("gpu_stencil.m", 1200, ("gpu", "mem"), ("stencil_status", "heat_circshift_double_512", "heat_circshift_single_512", "conv2_same_double_512",
+                                                            "rk4_status", "rk4_double_4096", "rk4_analytic_resid_double_4096")),
+    "dl_custom_loop": ("dl_custom_loop.m", 1800, ("gpu", "mem"), ("loop_status", "custom_env_gpu", "gradcheck_double", "custom_loss_curve", "custom_final_mse",
+                                                                  "optim_status", "adamupdate_params_single", "sgdmupdate_params_single", "rmspropupdate_params_single",
+                                                                  "accel_status", "accel_vs_plain_single", "accel_cache_hits")),
+    "dl_layers": ("dl_layers.m", 1800, ("gpu", "mem"), tuple(_names_dl_layers())),
+    "dl_predict_sweep": ("dl_predict_sweep.m", 1800, ("gpu", "mem"), ("sweep_status", "predict_env_gpu", "predict_mb_single_1", "predict_mb_single_7", "predict_mb_single_64",
+                                                                     "predict_mb_single_1000", "predict_mb_single_2048", "predict_invariance_single", "predict_api_resid_single_1000", "ckpt_status",
+                                                                     "train_loss_curve", "checkpoint_files", "checkpoint_vs_final_single", "resume_status",
+                                                                     "resume_loss_regress")),
+    "mex_cuda": ("mex_cuda.m", 1200, ("gpu",), ("mexcuda_compile_status", "mex_run_status", "mex_output_gpuarray", "exact_mex_hist_small", "exact_mex_hist_large",
+                                               "mex_hist_total_count", "exact_mex_sum", "exact_mex_hist_after_2000_launches")),
+    "gfx_render": ("gfx_render.m", 1200, ("gpu",), ("gfx_compute_status", "surface_double_512", "gfx_figure_status", "gfx_circle_area_fraction", "gfx_nonwhite_fraction",
+                                                    "gfx_distinct_colors", "gfx_iso_status", "isosurface_vertices", "gfx_isosurface_area_ratio", "gfx_gpu_proof")),
 }
 PREAMBLE = "gpu_info"
 ROW_ORDER = tuple(ROWS)
 SUPPORT_FILES = ("kf_atleast.m", "kf_cmp.m", "kf_count.m", "kf_fail.m", "kf_fp.m", "kf_gpu.m", "kf_outdir.m", "kf_resid.m", "kf_tol.m", "kf_worker_task.m",
-                 "kf_write.m", "vecadd.ptx")
+                 "kf_write.m", "vecadd.ptx", "kf_err.m", "kf_range.m", "kf_af_iter.m", "kf_dl_loss.m", "kf_dl_flat.m", "kf_dl_probe.m", "kf_dl_predict.m", "kf_mex.cu")
 
 
 def row_timeout(row):
@@ -297,7 +355,9 @@ def check_count(item):
     value, expected = num(item.get("value")), num(item.get("expected"))
     if value is None or expected is None:
         return False, "malformed count"
-    return value == 0.0, "value=%g (guest expected %g, host expects 0)" % (value, expected)
+    eid = item.get("err_id")
+    tail = " err_id=" + clean(eid, 48) if isinstance(eid, str) and re.fullmatch(r"[A-Za-z0-9:_.]{0,48}", eid) else ""
+    return value == 0.0, "value=%g (guest expected %g, host expects 0)%s" % (value, expected, tail)
 
 
 def check_atleast(item):
@@ -307,7 +367,7 @@ def check_atleast(item):
     return value >= minimum, "value=%g min=%g" % (value, minimum)
 
 
-MIN_ATLEAST = {"num_workers": 2.0, "distinct_pids": 2.0, "workers_with_a_device": 2.0}
+MIN_ATLEAST = {"num_workers": 2.0, "distinct_pids": 2.0, "workers_with_a_device": 2.0, "gfx_distinct_colors": 64.0, "isosurface_vertices": 1000.0}
 
 
 def host_atleast(item):
@@ -344,8 +404,16 @@ def check_gpuarray(item):
     return on and exists, "on_gpu=%s exists_on_gpu=%s" % (on, exists)
 
 
+def check_range(item):
+    """A statistic inside the HOST's interval for its name (RANGES); a name without an entry is malformed, the guest's own bounds are never read."""
+    value, bounds = num(item.get("value")), RANGES.get(item.get("name"))
+    if value is None or bounds is None:
+        return False, "malformed range"
+    return bounds[0] <= value <= bounds[1], "value=%.6g host_range=[%g,%g]" % (value, bounds[0], bounds[1])
+
+
 KINDS = {"cmp": check_cmp, "resid": check_resid, "count": check_count, "atleast": host_atleast, "series": check_series, "pair": check_pair,
-         "gpuarray": check_gpuarray}
+         "gpuarray": check_gpuarray, "range": check_range}
 
 
 def verify_checks(row, doc):
@@ -639,9 +707,10 @@ def run_row(sess, row, ctx):
 
 KEEP_INFO = ("name", "compute_capability", "driver_version", "toolkit_version", "total_memory", "available_memory", "multiprocessors", "device_count", "matlab_release",
              "can_use_gpu")
+KEEP_RENDERER = ("graphics_renderer", "vendor", "renderer_device", "hardware_support_level", "display_present", "hardware_assertion_possible", "software_renderer")
 KEEP_MEMORY = ("total", "avail_start", "avail_after_alloc", "avail_end", "chunk_bytes", "chunks", "allocated_bytes")
 KEEP_ITEM = ("name", "kind", "dtype", "numel", "tol", "gpu", "cpu", "diff", "ref", "value", "expected", "min", "guest_pass", "on_gpu", "exists_on_gpu", "underlying",
-             "device_index", "device_name", "env_requested")
+             "device_index", "device_name", "env_requested", "err_id")
 
 
 def _plain(v):
@@ -663,7 +732,7 @@ def sanitize_result(doc):
            "checks": [{k: _plain(c.get(k)) for k in KEEP_ITEM if k in c} for c in doc.get("checks", [])[:MAX_CHECKS]]}
     if isinstance(doc.get("gpu_device"), dict):
         out["gpu_device"] = {k: _plain(v) for k, v in doc["gpu_device"].items() if k in ("name", "index", "can_use_gpu") and not isinstance(v, (dict, list))}
-    for key, keep in (("info", KEEP_INFO), ("memory", KEEP_MEMORY)):
+    for key, keep in (("info", KEEP_INFO), ("memory", KEEP_MEMORY), ("renderer", KEEP_RENDERER)):
         if isinstance(doc.get(key), dict):
             out[key] = {k: _plain(v) for k, v in doc[key].items() if k in keep and not isinstance(v, (dict, list))}
     if num(doc.get("epochs")) is not None:

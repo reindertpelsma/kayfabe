@@ -506,7 +506,10 @@ test('the box reads the golden and writes the same bytes back; its dry run plans
   });
   const run = python('scripts/ci/vast_payload.py', ['--instruction', GOLDEN, '--dry-run']);
   assert.equal(run.status, 0, run.stdout + run.stderr);
-  assert.match(run.stdout, /^KF_PAYLOAD_MATLAB strict=1 rows=8 driver=590\.48\.01$/m);
+  assert.match(
+    run.stdout,
+    new RegExp('^KF_PAYLOAD_MATLAB strict=1 rows=' + MATLAB_ROWS.length + ' driver=590\\.48\\.01$', 'm'),
+  );
   assert.match(run.stdout, /^KF_PAYLOAD_PLAN stages=.*:matlab planned=.*:matlab$/m);
 });
 test('the box refuses the part by name: a changed sha256, an unpinned driver, an unknown row, the middle tier, a flag beside it', () => {

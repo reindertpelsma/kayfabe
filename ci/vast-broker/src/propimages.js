@@ -43,6 +43,18 @@ export const MATLAB_ROWS = Object.freeze([
   'parpool_gpu',
   'cuda_kernel',
   'mem_oversub',
+  'gpu_arrayfun',
+  'gpu_pagefun',
+  'gpu_classes',
+  'gpu_sparse',
+  'gpu_rand',
+  'gpu_devctl',
+  'gpu_stencil',
+  'dl_custom_loop',
+  'dl_layers',
+  'dl_predict_sweep',
+  'mex_cuda',
+  'gfx_render',
 ]);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 // A driver version as the release matrix writes it: two to four numeric fields (590.48.01).

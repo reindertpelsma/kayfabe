@@ -568,7 +568,7 @@ class PayloadWiringTests(unittest.TestCase):
     def test_dry_run_of_the_golden_and_of_the_flags(self):
         code, out = self.run_dry(doc=golden())
         self.assertEqual(code, 0, out)
-        self.assertIn("KF_PAYLOAD_MATLAB strict=1 rows=8 driver=590.48.01", out)
+        self.assertIn("KF_PAYLOAD_MATLAB strict=1 rows=%d driver=590.48.01" % len(MR.ROW_ORDER), out)
         self.assertRegex(out, r"KF_PAYLOAD_PLAN stages=.*matlab planned=")
         base = golden()
         del base["matlab"]

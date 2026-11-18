@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REL = "scripts/bench/linux/matlab_rows.py"
 SRC = (ROOT / REL).read_text()
-COPIES = ("scripts/bench/linux/propimage_linux.py", "scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py",
+COPIES = ("scripts/bench/linux/propimage_linux.py", "scripts/bench/linux/propimage_linux_pkgs.py", "scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py",
           "scripts/bench/windows/gpu_assert.py", "scripts/bench/windows/kf3_census.py", "scripts/bench/linux/auth_stub_app.py", "scripts/bench/gpu_use.py")
 
 
@@ -125,6 +125,30 @@ CASES = [
          "test_gpudevice_must_be_present_usable_and_the_hosts_gpu", "test_gpu_not_used_outranks_a_numeric_miss_for_a_foreign_device"),
     case("numeric-miss-outranks-gpu-not-used", 'else "GPU_NOT_USED" if any(k == "GPU_NOT_USED" for k, _ in found)\n             else ("OUTPUT_MISMATCH" if found else None))', 'else ("OUTPUT_MISMATCH" if found else None))',
          "test_gpu_not_used_outranks_a_numeric_miss", "test_a_cpu_result_compared_with_the_cpu_result_agrees_numerically_and_still_fails"),
+    # the breadth rows (docs/design/V3_PROPIMAGE_LINUX.md section 15)
+    case("range-trusts-the-guests-bounds", 'value, bounds = num(item.get("value")), RANGES.get(item.get("name"))',
+         'value, bounds = num(item.get("value")), ((num(item.get("min")), num(item.get("expected"))) if num(item.get("min")) is not None else RANGES.get(item.get("name")))',
+         "test_the_guest_cannot_widen_its_own_range", "test_a_widened_range_at_run_level_still_fails_the_row"),
+    case("range-table-widened", '"unif_mean_" + _g: (0.499, 0.501)', '"unif_mean_" + _g: (0.0, 1.0)',
+         "test_a_range_statistic_outside_the_hosts_interval_fails_and_inside_passes", "test_the_host_range_table_matches_the_bounds_the_scripts_state"),
+    case("range-without-entry-passes", '    if value is None or bounds is None:\n        return False, "malformed range"', '    if value is None or bounds is None:\n        return True, "malformed range"',
+         "test_a_range_without_a_host_entry_is_malformed", "test_a_range_check_the_host_has_no_interval_for_fails_the_row_at_run_level"),
+    case("range-kind-unregistered", '"gpuarray": check_gpuarray, "range": check_range}', '"gpuarray": check_gpuarray}',
+         "test_a_range_statistic_outside_the_hosts_interval_fails_and_inside_passes", "test_all_new_rows_pass_through_the_runner_and_a_wrong_gpu_array_fails_each"),
+    case("exact-prefix-dropped", '"content_mismatches", "exact_")', '"content_mismatches")',
+         "test_an_exact_check_with_one_wrong_element_fails_whatever_the_precision_table_says", "test_exact_checks_use_a_zero_tolerance_in_the_script_and_the_host"),
+    case("error-identifier-not-in-the-reason", '"value=%g (guest expected %g, host expects 0)%s" % (value, expected, tail)', '"value=%g (guest expected %g, host expects 0)" % (value, expected)',
+         "test_a_step_that_threw_names_its_identifier_and_keeps_the_other_steps", "test_a_failed_step_names_its_identifier_in_the_rows_reason"),
+    case("error-identifier-not-in-evidence", '"device_index", "device_name", "env_requested", "err_id")', '"device_index", "device_name", "env_requested")',
+         "test_evidence_keeps_the_error_identifier_and_the_renderer_record_and_nothing_else_of_them", "test_the_evidence_file_of_a_failed_step_and_of_the_graphics_row_name_the_identifier_and_the_renderer"),
+    case("renderer-block-not-in-evidence", '("memory", KEEP_MEMORY), ("renderer", KEEP_RENDERER)):', '("memory", KEEP_MEMORY)):',
+         "test_evidence_keeps_the_error_identifier_and_the_renderer_record_and_nothing_else_of_them", "test_the_evidence_file_of_a_failed_step_and_of_the_graphics_row_name_the_identifier_and_the_renderer"),
+    case("colour-minimum-lowered", '"gfx_distinct_colors": 64.0', '"gfx_distinct_colors": 1.0',
+         "test_the_host_minimums_of_the_new_atleast_checks_come_from_its_own_table", "test_gfx_colour_minimum_is_sixty_four"),
+    case("rows-lost-from-the-table", '    "gfx_render": ("gfx_render.m", 1200,', '    "gfx_render_gone": ("gfx_render.m", 1200,',
+         "test_the_rows_are_in_the_table_in_order_after_the_first_eight", "test_every_row_opens_with_its_falsifier_and_every_step_reports_a_status_or_is_the_whole_row"),
+    case("mex-source-not-injected", '"kf_dl_predict.m", "kf_mex.cu")', '"kf_dl_predict.m")',
+         "test_every_row_has_its_script_and_no_stray_files", "test_the_cuda_source_the_mex_row_compiles_is_listed_for_injection_and_copied_by_the_script"),
 ]
 
 

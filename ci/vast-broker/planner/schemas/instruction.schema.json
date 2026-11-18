@@ -295,7 +295,7 @@
         },
         "rows": {
           "type": "object",
-          "maxProperties": 16,
+          "maxProperties": 32,
           "additionalProperties": {
             "$ref": "#/$defs/matlab_row"
           }

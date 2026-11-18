@@ -542,7 +542,8 @@ def validate_propimage_apps_b(value):
 
 # matlab_stage.py's rows (scripts/bench/linux/matlab_rows.ROWS keys, in table order). A test pins this equal to the table; lanes come from the record (the Worker's
 # list decides them), the validator only bounds them.
-MATLAB_ROWS = ("gpu_info", "gpu_matmul", "gpu_fft", "gpu_solve", "dl_train", "parpool_gpu", "cuda_kernel", "mem_oversub")
+MATLAB_ROWS = ("gpu_info", "gpu_matmul", "gpu_fft", "gpu_solve", "dl_train", "parpool_gpu", "cuda_kernel", "mem_oversub",
+               "gpu_arrayfun", "gpu_pagefun", "gpu_classes", "gpu_sparse", "gpu_rand", "gpu_devctl", "gpu_stencil", "dl_custom_loop", "dl_layers", "dl_predict_sweep", "mex_cuda", "gfx_render")
 MATLAB_VERDICTS = ("PASS", "FAIL", "HARNESS", "NOT_RUN")
 MATLAB_CLASSES = ("CRASH", "HANG", "XID", "TDR", "ASSERT", "OUTPUT_MISMATCH", "GPU_NOT_USED", "BAD_RESULT")
 

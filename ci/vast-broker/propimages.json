@@ -207,6 +207,54 @@
         "mem_oversub": {
           "lane": "discovery",
           "basis": "allocates to 85 percent of the free memory: discovery"
+        },
+        "gpu_arrayfun": {
+          "lane": "discovery",
+          "basis": "arrayfun kernel fusion JIT, first run on any die: discovery"
+        },
+        "gpu_pagefun": {
+          "lane": "discovery",
+          "basis": "batched cuBLAS/cuSOLVER calls, first run on any die: discovery"
+        },
+        "gpu_classes": {
+          "lane": "discovery",
+          "basis": "integer, logical, complex and sort/scan primitives, first run on any die: discovery"
+        },
+        "gpu_sparse": {
+          "lane": "discovery",
+          "basis": "cuSPARSE and sparse solvers, first run on any die: discovery"
+        },
+        "gpu_rand": {
+          "lane": "discovery",
+          "basis": "GPU random generators and their reproducibility, first run on any die: discovery"
+        },
+        "gpu_devctl": {
+          "lane": "discovery",
+          "basis": "CUDA context teardown and re-creation four times: discovery"
+        },
+        "gpu_stencil": {
+          "lane": "discovery",
+          "basis": "several hundred thousand tiny kernel launches: discovery"
+        },
+        "dl_custom_loop": {
+          "lane": "discovery",
+          "basis": "dlarray/dlgradient/dlfeval/dlaccelerate, first run on any die: discovery"
+        },
+        "dl_layers": {
+          "lane": "discovery",
+          "basis": "conv1d/2d/3d, transposed conv, norms, attention, LSTM, GRU forward and backward: discovery"
+        },
+        "dl_predict_sweep": {
+          "lane": "discovery",
+          "basis": "predict MiniBatchSize sweep, checkpoint and resume: discovery"
+        },
+        "mex_cuda": {
+          "lane": "discovery",
+          "basis": "mexcuda compile with the bundled nvcc, shared memory and atomics: discovery"
+        },
+        "gfx_render": {
+          "lane": "discovery",
+          "basis": "MATLAB graphics export; renderer recorded: discovery"
         }
       }
     }
