@@ -192,13 +192,10 @@ pub fn geo_of(f: kf_chip::Family) -> Geo {
     }
 }
 
-/// The descriptor production hands the walker for `f` (`kf_qemu::device` realize, by table format).
+/// The descriptor production hands the walker for `f` (`kf_qemu::device` realize).
 #[must_use]
 pub fn production_format(f: kf_chip::Family) -> kf_cuda::abi::KfFormat {
-    match f.mmu_format() {
-        kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
-        kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
-    }
+    crate::apply::walk_format(f)
 }
 
 /// All five families.
@@ -1049,7 +1046,7 @@ fn report(cases: u64, ptes: u64, t: &Map<&'static str, (usize, String)>) -> Stri
 
 /// ★ The quick run of `cargo test`: a fixed seed set, a few seconds.
 #[test]
-#[ignore = "KNOWN-RED PF-1 and PF-2 (V3_PTE_MODEL_FUZZ.md): un-ignored by the stacked fix; run with --ignored"]
+#[ignore = "KNOWN-RED PF-2 (V3_PTE_MODEL_FUZZ.md): un-ignored by the stacked fix; run with --ignored"]
 fn pte_fuzz_quick() {
     let (cases, ptes, t) = campaign(0, 2000, 0x5EED_0001);
     let bad: Vec<_> = t.keys().filter(|c| !KNOWN.contains(c)).collect();
@@ -1120,7 +1117,6 @@ mod findings {
     /// gave every VER2 family a 512 MiB leaf at PD1: on Turing such an entry became a 512 MiB host
     /// mapping of the store where the guest's MMU sees an INVALID PDE (a fault).
     #[test]
-    #[ignore = "KNOWN-RED PF-1 (V3_PTE_MODEL_FUZZ.md): fixed by the stacked PF-1 change; run with --ignored"]
     fn pf1_turing_pd1_bit0_is_not_a_512m_page() {
         let word = enc_pte(Geo::Gp10x, 0, 0, 0x00, false, false, false, false);
         let (f, _) = one_refresh(kf_chip::Family::Turing, |g| g.put(Slot::Dir(2), R0, word));

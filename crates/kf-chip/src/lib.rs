@@ -188,6 +188,18 @@ impl Family {
         }
     }
 
+    /// ★ 2026-11-18 (`V3_PTE_MODEL_FUZZ.md` PF-1) — **can a GMMU PD1 entry (VA `37:29`) be a 512 MiB
+    /// PTE?** Family row, from ogkm-580: `kgmmuFmtInitLevels_GP10X` gives PD1 no page
+    /// (`kern_gmmu_fmt_gp10x.c:74-80`) and is bound to TU10x/TU11x; `_GA10X` adds it (`bPageTable`,
+    /// `kern_gmmu_fmt_ga10x.c:55`) for GA10x/AD10x; `_GH10X` has it (`kern_gmmu_fmt_gh10x.c:93`) and
+    /// `_GB10X` inherits it (`kern_gmmu_fmt_gb10x.c:57`) — the bindings are
+    /// `g_kern_gmmu_nvoc.c:670-690`. On a level without a page, bit 0 is not a VALID bit
+    /// (`gmmu_fmt.c:64-86`): the entry is always a PDE.
+    #[must_use]
+    pub const fn pd1_holds_page(self) -> bool {
+        !matches!(self, Family::Turing)
+    }
+
     /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3) — **does the host engine write `GP_GET` back
     /// into a channel's USERD?** Turing … Hopper: yes — every channel class's control struct names
     /// `GPGet` at `0x88` (`ogkm-580: clc46f.h`…`clc86f.h:29-45`). Blackwell: **no** — `Nvc96fControl`
