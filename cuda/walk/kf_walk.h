@@ -87,6 +87,10 @@ extern "C" {
 #define KFWR_R_LEAF_OOB        (1u << 13)
 /* An entry named a slot outside the committed-placement table. */
 #define KFWR_R_BAD_SLOT        (1u << 14)
+/* ★ 2026-11-18 (docs/design/V3_PTE_MODEL_FUZZ.md PF-2): a VALID entry at a level whose page the
+ * walk's page-size code cannot name (KF_PS_UNCODED in the descriptor: GB10X's 256 GiB page at PD2).
+ * Refused, sampled, absent; never read as a PDE. */
+#define KFWR_R_UNCODED_PAGE    (1u << 15)
 
 /* ── PdbEntry::vas_flags ─────────────────────────────────────────────────────── */
 #define KFWR_V_NEW    (1u << 0)

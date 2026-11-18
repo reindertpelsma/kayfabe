@@ -178,7 +178,10 @@ pub fn check_format(f: &KfFormat) -> Result<(), String> {
         if l.va_lo >= 64 {
             return Err(format!("dir[{k}] va_lo {} >= 64", l.va_lo));
         }
-        if l.leaf_ps != KF_PS_NONE && l.leaf_ps > 3 {
+        if l.leaf_ps != KF_PS_NONE
+            && l.leaf_ps > 3
+            && !(l.leaf_ps == crate::abi::KF_PS_UNCODED && wpe == 1)
+        {
             return Err(format!(
                 "dir[{k}] leaf_ps {} is no page-size code",
                 l.leaf_ps

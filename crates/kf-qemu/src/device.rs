@@ -502,10 +502,8 @@ impl Device {
         // ★ P4 realize order (`V3_P4_PORT_MAP.md` §2.0): the GPU walker's CUDA context comes up
         // BEFORE the reservation, then the store is exported into it. ⊘ No walker, no device:
         // BAR2 and every invalidate are walked by it, and there is no CPU fallback to fall to.
-        let fmt = match family.mmu_format() {
-            kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
-            kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
-        };
+        // ★ 2026-11-18 (PF-1): per family, not per format — Turing's PD1 holds no page.
+        let fmt = kf_mem::apply::walk_format(family);
         // ★★★ v3-roperm: the permission policy — ONE value for the walker's diff key and the host
         // map. ATOMIC_DISABLE is carried only under `KF3_CARRY_ATOMIC_DISABLE=1`: enable it once
         // replayable-fault delivery exists (`kf_mem::apply::PermPolicy`).

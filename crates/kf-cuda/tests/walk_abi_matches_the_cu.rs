@@ -1092,6 +1092,16 @@ fn the_report_constants_match_the_header() {
         u64::from(kf_cuda::abi::KF_SAMPLE_LVL_SMALL),
         kf_cuda::abi::KF_DIRS as u64 + 1
     );
+    // ★ 2026-11-18 (PF-2): the descriptor's "uncoded page" leaf code, defined in the .cu.
+    assert_eq!(
+        u64::from_str_radix(
+            extract_define(&cu, "KF_PS_UNCODED").trim_start_matches("0x").trim_end_matches('u'),
+            16
+        )
+        .expect("hex"),
+        u64::from(kf_cuda::abi::KF_PS_UNCODED),
+        "KF_PS_UNCODED differs"
+    );
     for (n, r) in [
         ("KFWR_R_OOB", kf_cuda::abi::KFWR_R_OOB),
         ("KFWR_R_UNALIGNED", kf_cuda::abi::KFWR_R_UNALIGNED),
@@ -1101,6 +1111,7 @@ fn the_report_constants_match_the_header() {
             kf_cuda::abi::KFWR_R_MISALIGNED_LEAF,
         ),
         ("KFWR_R_LEAF_OOB", kf_cuda::abi::KFWR_R_LEAF_OOB),
+        ("KFWR_R_UNCODED_PAGE", kf_cuda::abi::KFWR_R_UNCODED_PAGE),
     ] {
         assert_eq!(parse(n), u64::from(r), "{n} differs");
     }

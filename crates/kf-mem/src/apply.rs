@@ -371,6 +371,19 @@ impl PermPolicy {
     }
 }
 
+/// ★ 2026-11-18 (`V3_PTE_MODEL_FUZZ.md` PF-1) — **the walk descriptor of a family**: its table
+/// format, and whether its PD1 holds a 512 MiB page ([`kf_chip::Family::pd1_holds_page`]). ONE
+/// function, used by the device's realize and by the GPU-free PTE fuzz, so the two cannot drift.
+#[must_use]
+pub fn walk_format(family: kf_chip::Family) -> kf_cuda::abi::KfFormat {
+    match family.mmu_format() {
+        kf_chip::MmuFormat::Ver2 if family.pd1_holds_page() => kf_cuda::abi::kf_format_ver2(),
+        kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2_no_pd1_page(),
+        kf_chip::MmuFormat::Ver3 if family.pd2_holds_page() => kf_cuda::abi::kf_format_ver3_pd2_page(),
+        kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
+    }
+}
+
 /// ★ 2026-10-09: a walk run's page-size code (`kf_cuda::abi::PS_*`) as bytes; 0 for an unknown
 /// code (the caller then treats the run as made of family-grain leaves).
 #[must_use]
