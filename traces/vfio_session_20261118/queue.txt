@@ -8,3 +8,4 @@ r2v   Wukong image A VFIO x3                                          PLANNED
 r2k   Wukong image A kf3 x3                                           PLANNED
 r3    image B discovery rows VFIO then kf3 (only if time remains, no new boot after 10:00Z) PLANNED
 # 04:06Z coordinator order after the hang: kf3 arms FIRST (Resolve x3 then Wukong kf3 x3), restore settle fix in pcsession (udevadm settle + uvm stable 60 s + going>120 s = wedge); Wukong VFIO arm needs a NEW owner go (report first).
+# 08:24Z r2k Wukong kf3 x3 (s3k): DONE (1 result at 3-5 FPS, 1 TDR, 1 early exit). Wukong VFIO arm: NOT RUN (needs new owner go). Image B rows: NOT RUN. Session over; pc idle.

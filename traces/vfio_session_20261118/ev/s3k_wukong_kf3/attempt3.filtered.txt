@@ -1,0 +1,3 @@
+09:21:44 ATTEMPT 3 qemu.log line 38358
+09:23:04 game process gone; status={'now': '2026-11-12T18:08:52.8300868+00:00', 'alive': False, 'smi': '398, [N/A]', 'lke': ['2026-11-12T17:56:24.6656255+00:00 141', '2026-11-12T17:56:24.4661600+00:00 141'], 'launcher': 
+09:23:10 END game_exited vram_peak=431 secs_since_launch=77 confirm_to_end=None qlog 38682->None->40645
