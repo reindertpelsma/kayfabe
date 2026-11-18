@@ -254,22 +254,31 @@ def life_busy_poweroff(ctx):
 
 # ------------------------------------------------------------------------------------------------------------------ the NVIDIA tools
 # They come from the official CUDA apt repository at run time (provision_tools.sh): never stored in the repo, an image or R2.
+# the tools are searched on the machine itself and under tools/ beside this file: a guest has no network at run time, so a run may push the tools the host installed
+# (from the official repository, by provision_tools.sh) into that directory; nothing there is ever committed
+TOOL_ROOTS = ("", str(Path(__file__).resolve().parent / "tools"))
+
+
 def find_tool(name):
     import glob
     found = shutil.which(name)
     if found:
         return found
-    for pat in ("/usr/local/cuda*/bin/" + name, "/opt/nvidia/nsight-systems/*/bin/" + name, "/opt/nvidia/nsight-compute/*/" + name):
-        hits = sorted(glob.glob(pat))
-        if hits:
-            return hits[-1]
+    for root in TOOL_ROOTS:
+        for pat in ("/usr/local/cuda*/bin/" + name, "/opt/nvidia/nsight-systems/*/bin/" + name, "/opt/nvidia/nsight-compute/*/" + name):
+            hits = sorted(glob.glob(root + pat))
+            if hits:
+                return hits[-1]
     return None
 
 
 def cupti_lib():
     import glob
-    hits = sorted(glob.glob("/usr/local/cuda*/extras/CUPTI/lib64/libcupti.so.*"))
-    return hits[-1] if hits else ""
+    for root in TOOL_ROOTS:
+        hits = sorted(glob.glob(root + "/usr/local/cuda*/extras/CUPTI/lib64/libcupti.so.*"))
+        if hits:
+            return hits[-1]
+    return ""
 
 
 def tool_case(ctx, runs, extra_kv=None):

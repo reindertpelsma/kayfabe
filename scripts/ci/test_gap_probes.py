@@ -710,6 +710,26 @@ class Tools(unittest.TestCase):
         r = gap_scripts.tools_sanitizer({"probe": "/bin/true", "out": d})
         self.assertEqual(r["status"], "PASS")
 
+    def test_tools_pushed_under_the_tools_directory_are_found_and_so_is_cupti(self):
+        import gap_scripts
+        d = Path(tempfile.mkdtemp(prefix="gaproot"))
+        self.addCleanup(shutil.rmtree, d, True)
+        (d / "usr/local/cuda-12.9/bin").mkdir(parents=True)
+        (d / "usr/local/cuda-12.9/bin/compute-sanitizer").write_text("#!/bin/sh\n")
+        (d / "usr/local/cuda-12.9/extras/CUPTI/lib64").mkdir(parents=True)
+        (d / "usr/local/cuda-12.9/extras/CUPTI/lib64/libcupti.so.12").write_text("")
+        saved = gap_scripts.TOOL_ROOTS
+        gap_scripts.TOOL_ROOTS = (str(d),)
+        self.addCleanup(setattr, gap_scripts, "TOOL_ROOTS", saved)
+        self.assertTrue(gap_scripts.find_tool("compute-sanitizer").endswith("cuda-12.9/bin/compute-sanitizer"))
+        self.assertIsNone(gap_scripts.find_tool("ncu"))
+        self.assertTrue(gap_scripts.cupti_lib().endswith("libcupti.so.12"))
+
+    def test_the_default_tool_roots_are_the_machine_and_the_directory_beside_the_script(self):
+        import gap_scripts
+        self.assertEqual(gap_scripts.TOOL_ROOTS[0], "")
+        self.assertTrue(gap_scripts.TOOL_ROOTS[1].endswith("gap_probes/tools"))
+
     def test_a_counter_permission_answer_from_ncu_is_a_declined_case_not_a_failure(self):
         cls = L.classify_tool(1, "==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters")
         self.assertEqual(L.tools_verdict({"metric": cls}), ("NOT_SUPPORTED", "tool_answer_metric"))

@@ -18,7 +18,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 FILES = {"diff": "scripts/apps/gap_probes/diffrun.py", "lib": "scripts/apps/gap_probes/gap_lib.py", "run": "scripts/apps/gap_probes/gap_probes.py",
-         "c": "scripts/apps/gap_probes/gap_probe.c", "table": "scripts/apps/gap_probes/gap_cases.tsv", "runapps": "scripts/apps/run_apps.sh", "hook": "scripts/apps/apps_hook.sh"}
+         "c": "scripts/apps/gap_probes/gap_probe.c", "scripts": "scripts/apps/gap_probes/gap_scripts.py", "table": "scripts/apps/gap_probes/gap_cases.tsv", "runapps": "scripts/apps/run_apps.sh", "hook": "scripts/apps/apps_hook.sh"}
 SUITE = "test_gap_probes."
 COPY_DIRS = ["scripts/apps/gap_probes", "scripts/apps/open_rows"]
 COPY_FILES = ["scripts/ci/test_gap_probes.py", "scripts/apps/run_apps.sh", "scripts/apps/apps_hook.sh", "scripts/apps/apps_matrix.sh", "scripts/apps/build_bundle.sh",
@@ -92,6 +92,8 @@ MUTANTS = [
       K("Tools.classes_of_the_answers_the_nvidia_tools_give", "Tools.a_counter_permission_answer_from_ncu_is_a_declined_case_not_a_failure")),
     M("a-broken-tool-is-not-supported", "lib", 'if classes[name] in ("TIMEOUT", "CRASH", "ERROR"):', 'if classes[name] in ("TIMEOUT", "CRASH"):',
       K("Tools.a_tool_that_breaks_fails_the_case_and_one_that_declines_is_not_supported", "Tools.a_sanitizer_that_errors_fails_the_case_with_the_tool_named")),
+    M("tools-root-not-searched", "scripts", 'TOOL_ROOTS = ("", str(Path(__file__).resolve().parent / "tools"))', 'TOOL_ROOTS = ("",)',
+      K("Tools.tools_pushed_under_the_tools_directory_are_found_and_so_is_cupti", "Tools.the_default_tool_roots_are_the_machine_and_the_directory_beside_the_script")),
     M("falsifier-not-required", "lib", 'if len(r["falsifier"].strip()) < 20:', 'if False:',
       K("CaseTable.a_case_without_a_falsifier_is_refused", "TableMore.a_falsifier_of_a_few_words_is_refused")),
     M("duplicate-ids-allowed", "lib", 'if r["id"] in seen:', 'if False:', K("CaseTable.ids_are_unique_and_a_duplicate_is_refused", "TableMore.an_id_repeated_across_kinds_is_refused")),
