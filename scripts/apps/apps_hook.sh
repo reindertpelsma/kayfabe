@@ -24,7 +24,7 @@ tar -C /workspace/apps/bundle -cf - bin | $G 'sudo tar -C /opt/apps/bundle -xf -
 $G 'test -d /opt/apps/bundle/cuda/include' || tar -C /workspace/apps/bundle -czf - cuda | $G 'sudo tar -C /opt/apps/bundle -xzf -'
 for f in "$HERE"/src/*.py; do $G "sudo tee /opt/apps/bundle/share/$(basename "$f") >/dev/null" < "$f"; done
 # the open rows' drivers (scripts/apps/open_rows): small, pushed every boot like src/*.py; their DCGM files ride in the bundle
-tar -C "$HERE" -cf - open_rows | $G 'sudo mkdir -p /opt/apps/bundle/share && sudo tar -C /opt/apps/bundle/share -xf -'
+tar -C "$HERE" -cf - open_rows gap_probes | $G 'sudo mkdir -p /opt/apps/bundle/share && sudo tar -C /opt/apps/bundle/share -xf -'
 # discovery row vkcts: the tool dir and the artifact `vkcts.py build` made (docs/design/V3_VULKAN_CTS_ROW.md); the host samples the GPU around the row
 case " $APPS " in *" vkcts "*)
   tar -C "$HERE/vkcts" -cf - vkcts.py vkcts_lib.py pins.json caselist.tsv | $G 'sudo mkdir -p /opt/apps/bundle/vkcts_tool && sudo tar -C /opt/apps/bundle/vkcts_tool -xf -'
@@ -42,7 +42,7 @@ echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,dr
 [ "${APPS_GUEST_PM:-0}" = 1 ] && echo "APPS_GUEST_PM=$($G 'sudo nvidia-smi -pm 1 2>&1 | tail -1')"
 # ⊘ the open rows read the HOST census: GPU use from the host's nvidia-smi (a guest cannot prove it until the utilisation flag serves the
 #   counters) and the unserviced-RPC count of the kf3 log before and after the row (open_rows/census.py; the same census the other rows read)
-census_need(){ case "$1" in nvcodec_matrix) echo enc;; nvml_dcgm) echo info;; esac; }
+census_need(){ case "$1" in nvcodec_matrix) echo enc;; nvml_dcgm) echo info;; gap_probes) echo info;; esac; }
 GU="$HERE/gpu_use_rows.py"
 for app in $APPS; do
   q0=$(wc -l < "$QLOG" 2>/dev/null || echo 0)

@@ -1,0 +1,6 @@
+# STATUS: RESEARCH, 2026-11-18. Differences between the host run and the guest run that are explained, not hidden. TSV: case_glob key_glob host_class guest_class bucket reason (every limit carries a reason).
+# A limit explains one difference; an unlisted difference stays a candidate. Pinned by scripts/ci/test_gap_probes.py.
+attr_dump	mem_total_mib	pass	pass	kayfabe_limitation	the guest reports the frame-buffer size the host reserves for it (fb-mb policy, docs/design/V3_UTILIZATION_FLAG.md and the image-B backlog 3), not the die total
+attr_dump	attr.33	pass	pass	kayfabe_limitation	PCI bus id differs: the guest has its own virtual PCI topology
+attr_dump	attr.34	pass	pass	kayfabe_limitation	PCI device id of the slot differs: the guest has its own virtual PCI topology
+attr_dump	attr.50	pass	pass	kayfabe_limitation	PCI domain id differs: the guest has its own virtual PCI topology

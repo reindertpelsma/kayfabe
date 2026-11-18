@@ -1,0 +1,687 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+"""GPU-free tests of the GPU-PV gap probes and the differential runner core (scripts/apps/gap_probes). Stdlib only.
+
+STATUS: RESEARCH, 2026-11-18 (docs/design/V3_GPUPV_GAP_MATRIX.md). Mutation checks: scripts/ci/gap_probes_mutants.py (two named killers per mutant).
+"""
+import atexit
+import io
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+GP = ROOT / "scripts/apps/gap_probes"
+sys.path.insert(0, str(GP))
+sys.path.insert(0, str(ROOT / "scripts/apps/open_rows"))
+import diffrun as D  # noqa: E402
+import gap_lib as L  # noqa: E402
+import gap_probes as GPR  # noqa: E402
+import rowio  # noqa: E402
+
+TABLE = (GP / "gap_cases.tsv").read_text()
+HDR = "id|group|kind|prog|timeout_s|gpu|tags|env|falsifier\n"
+FALS = "the guest differs from the host in a measurable way"
+
+
+def case_line(id="a", kind="c", prog="a", timeout="30", gpu="yes", tags="-", env="-", fal=FALS):
+    return "|".join((id, "g", kind, prog, timeout, gpu, tags, env, fal)) + "\n"
+
+
+class CaseTable(unittest.TestCase):
+    def test_the_real_table_loads_and_every_case_has_a_falsifier(self):
+        cases = L.load_cases(TABLE)
+        self.assertGreaterEqual(len(cases), 30)
+        for c in cases:
+            self.assertGreaterEqual(len(c["falsifier"]), 20, c["id"])
+
+    def test_ids_are_unique_and_a_duplicate_is_refused(self):
+        with self.assertRaises(ValueError):
+            L.load_cases(HDR + case_line("a") + case_line("a"))
+
+    def test_a_case_without_a_falsifier_is_refused(self):
+        with self.assertRaises(ValueError):
+            L.load_cases(HDR + case_line(fal="short"))
+
+    def test_unknown_kind_tag_or_a_tiny_timeout_is_refused(self):
+        for bad in (case_line(kind="sh"), case_line(tags="root_only"), case_line(timeout="3"), case_line(gpu="maybe")):
+            with self.assertRaises(ValueError):
+                L.load_cases(HDR + bad)
+
+    def test_env_is_parsed_as_data(self):
+        c = L.load_cases(HDR + case_line(env="A=1,B=x=y"))[0]
+        self.assertEqual(c["env"], {"A": "1", "B": "x=y"})
+
+    def test_the_table_names_no_image_and_no_vendor_app(self):
+        """The standalone rule: images are configuration, not code. A probe row never names one."""
+        for f in GP.iterdir():
+            if f.suffix in (".tsv", ".py", ".c"):
+                text = f.read_text().lower()
+                for word in ("propimage", "image a", "image b", "photoshop", "premiere", "davinci", "adobe", "matlab"):
+                    self.assertNotIn(word, text, "%s names %s" % (f.name, word))
+
+    def test_every_c_case_exists_in_the_binary_and_the_binary_has_no_unlisted_case(self):
+        exe = build_c(self)
+        names = set(subprocess.run([exe, "list"], capture_output=True, text=True).stdout.split())
+        wanted = {c["prog"] for c in L.load_cases(TABLE) if c["kind"] == "c"}
+        self.assertEqual(wanted - names, set())
+        self.assertEqual(names - wanted, {"kill_target"})   # the one case that is a fixture of the lifecycle cases, not a probe
+
+    def test_every_py_case_exists_in_gap_scripts(self):
+        import gap_scripts
+        for c in L.load_cases(TABLE):
+            if c["kind"] == "py":
+                self.assertIn(c["prog"], gap_scripts.CASES)
+
+    def test_the_disruptive_cases_are_guest_only_and_opt_in(self):
+        by = {c["id"]: c for c in L.load_cases(TABLE)}
+        for name in ("life_module_cycle", "life_reset", "life_busy_poweroff"):
+            self.assertIn("guest_only", by[name]["tags"])
+        self.assertIn("destructive", by["life_reset"]["tags"])
+        self.assertIn("terminal", by["life_busy_poweroff"]["tags"])
+
+
+_C = {}
+
+
+def build_c(tc, flags=()):
+    key = tuple(flags)
+    if key not in _C:
+        d = tempfile.mkdtemp(prefix="gapc")
+        atexit.register(shutil.rmtree, d, True)
+        exe = str(Path(d) / "gap_probe")
+        p = subprocess.run(["gcc", "-O2", "-Wall", "-Werror=implicit", "-Wno-unused-function", "-Wno-unused-const-variable", *flags, "-o", exe, str(GP / "gap_probe.c"), "-ldl"],
+                           capture_output=True, text=True)
+        if p.returncode:
+            tc.fail(p.stderr[-800:])
+        _C[key] = exe
+    return _C[key]
+
+
+class Selection(unittest.TestCase):
+    cases = L.load_cases(TABLE)
+
+    def ids(self, side, **kw):
+        return [c["id"] for c in L.select(self.cases, side, **kw)[0]]
+
+    def test_a_guest_only_case_never_runs_on_the_host_side(self):
+        self.assertNotIn("life_module_cycle", self.ids("host", destructive=True, terminal=True))
+        self.assertIn("life_module_cycle", self.ids("guest"))
+
+    def test_destructive_and_terminal_cases_need_their_flag(self):
+        self.assertNotIn("life_reset", self.ids("guest"))
+        self.assertIn("life_reset", self.ids("guest", destructive=True))
+        self.assertNotIn("life_busy_poweroff", self.ids("guest", destructive=True))
+        self.assertIn("life_busy_poweroff", self.ids("guest", terminal=True))
+
+    def test_the_terminal_case_is_last_and_destructive_ones_come_after_the_safe_ones(self):
+        ids = self.ids("guest", destructive=True, terminal=True)
+        self.assertEqual(ids[-1], "life_busy_poweroff")
+        self.assertGreater(ids.index("life_reset"), ids.index("spin_30s"))
+
+    def test_only_selects_by_glob_and_skipped_carry_a_reason(self):
+        run, skipped = L.select(self.cases, "host", only="pool_*,canary")
+        self.assertEqual(sorted(c["id"] for c in run), ["canary", "pool_alloc_free", "pool_ipc_export", "pool_threshold_trim"])
+        run, skipped = L.select(self.cases, "host")
+        self.assertIn(("life_reset", "guest_only"), [(c["id"], r) for c, r in skipped])
+
+
+class SelectionOrder(unittest.TestCase):
+    TABLE = HDR + case_line("t", prog="t", tags="terminal") + case_line("d", prog="d", tags="destructive") + case_line("s", prog="s")
+
+    def test_a_terminal_case_listed_first_still_runs_last(self):
+        run, _ = L.select(L.load_cases(self.TABLE), "guest", destructive=True, terminal=True)
+        self.assertEqual([c["id"] for c in run], ["s", "d", "t"])
+
+    def test_a_destructive_case_listed_before_a_safe_one_runs_after_it(self):
+        run, _ = L.select(L.load_cases(self.TABLE), "guest", destructive=True, terminal=True)
+        self.assertLess([c["id"] for c in run].index("s"), [c["id"] for c in run].index("d"))
+
+    def test_the_default_selection_has_neither_destructive_nor_terminal_cases(self):
+        run, skipped = L.select(L.load_cases(self.TABLE), "guest")
+        self.assertEqual([c["id"] for c in run], ["s"])
+        self.assertEqual(sorted(r for _, r in skipped), ["destructive_not_requested", "terminal_not_requested"])
+
+
+class ProbeOutput(unittest.TestCase):
+    OUT = "GAPKV x attr=41:1\nGAPKV x attr=83:0\nGAPKV x mem_total_mib=4096\nGAPKV other k=v\nGAPPROBE case=x status=PASS rc=0 secs=1.5 reason=-\n"
+
+    def test_attribute_lines_become_per_attribute_keys(self):
+        p = L.parse_probe_output(self.OUT, "x")
+        self.assertEqual(p["kv"]["attr.41"], "1")
+        self.assertEqual(p["kv"]["attr.83"], "0")
+        self.assertEqual(p["kv"]["mem_total_mib"], "4096")
+
+    def test_lines_of_another_case_are_ignored(self):
+        self.assertNotIn("k", L.parse_probe_output(self.OUT, "x")["kv"])
+        self.assertIsNone(L.parse_probe_output(self.OUT, "other"))
+
+    def test_an_unknown_status_or_no_result_line_is_none(self):
+        self.assertIsNone(L.parse_probe_output("GAPPROBE case=x status=GREAT rc=0 secs=1 reason=-\n", "x"))
+        self.assertIsNone(L.parse_probe_output("GAPKV x a=1\n", "x"))
+
+    def test_values_cannot_inject_a_tab_or_a_second_line(self):
+        self.assertEqual(L.clean("a\tb|c\nd"), "a b c d")
+
+    def test_a_timeout_a_crash_and_a_missing_line_are_failures_with_a_named_reason(self):
+        self.assertEqual(L.classify_process(124, True, None), ("FAIL", "timeout"))
+        self.assertEqual(L.classify_process(-11, False, None), ("FAIL", "crash_signal_11"))
+        self.assertEqual(L.classify_process(3, False, None), ("FAIL", "no_result_line_exit_3"))
+        self.assertEqual(L.classify_process(127, False, None), ("NOT_RUN", "cannot_execute"))
+
+    def test_a_parsed_result_wins_over_the_exit_code_but_not_over_a_timeout(self):
+        parsed = {"status": "NOT_SUPPORTED", "reason": "attr_0"}
+        self.assertEqual(L.classify_process(0, False, parsed), ("NOT_SUPPORTED", "attr_0"))
+        self.assertEqual(L.classify_process(124, True, parsed), ("FAIL", "timeout"))
+
+    def test_a_failure_asks_for_a_canary_and_three_dead_canaries_stop_the_run(self):
+        self.assertEqual(L.canary_policy("FAIL", "timeout", 0), (True, False))
+        self.assertEqual(L.canary_policy("PASS", "-", 0), (False, False))
+        self.assertEqual(L.canary_policy("NOT_SUPPORTED", "attr_0", 0), (False, False))
+        self.assertEqual(L.canary_policy("FAIL", "timeout", 2), (True, True))
+
+
+class CJudge(unittest.TestCase):
+    """The C judge table, compiled with -DGAP_SELFTEST (no libcuda): the rule every case relies on."""
+
+    def table(self):
+        exe = build_c(self, ("-DGAP_SELFTEST",))
+        out = subprocess.run([exe], capture_output=True, text=True).stdout
+        return {tuple(map(int, re.findall(r"=(\d+)", l.split("->")[0]))): l.split("-> ")[1] for l in out.splitlines()}
+
+    def test_worked_and_the_attribute_says_yes_is_pass_and_worked_against_it_is_a_mismatch(self):
+        t = self.table()
+        self.assertEqual(t[(1, 0, 1)], "PASS")
+        self.assertEqual(t[(0, 0, 1)], "MISMATCH")
+
+    def test_refused_and_the_attribute_says_no_is_not_supported_and_refused_against_it_is_fail(self):
+        t = self.table()
+        self.assertEqual(t[(0, 801, 0)], "NOT_SUPPORTED")
+        self.assertEqual(t[(1, 801, 0)], "FAIL")
+
+    def test_wrong_data_is_a_fail_whatever_the_attribute_says(self):
+        t = self.table()
+        self.assertEqual(t[(1, 0, 0)], "FAIL")
+        self.assertEqual(t[(0, 0, 0)], "FAIL")
+
+    def test_without_libcuda_every_case_is_not_run_with_its_reason_never_a_pass(self):
+        if any(Path(p).exists() for p in ("/usr/lib/x86_64-linux-gnu/libcuda.so.1", "/usr/lib64/libcuda.so.1", "/lib/x86_64-linux-gnu/libcuda.so.1")):
+            self.skipTest("libcuda present")
+        exe = build_c(self)
+        for case in ("canary", "vmm_basic", "ipc_legacy"):
+            out = subprocess.run([exe, case], capture_output=True, text=True).stdout
+            p = L.parse_probe_output(out, case)
+            self.assertEqual((p["status"], p["reason"]), ("NOT_RUN", "no_libcuda"))
+
+
+class Setters(unittest.TestCase):
+    def test_classes_of_the_answers_a_geforce_gives(self):
+        c = L.classify_setter
+        self.assertEqual(c(0, "Compute mode is set to DEFAULT for GPU 0"), "OK")
+        self.assertEqual(c(1, "Setting ECC mode is not supported for GPU"), "NOT_SUPPORTED")
+        self.assertEqual(c(1, "Insufficient Permissions"), "NO_PERMISSION")
+        self.assertEqual(c(1, "Unable to set power limit: Not Supported"), "NOT_SUPPORTED")
+        self.assertEqual(c(4, "NVML: Unknown Error"), "ERROR")
+        self.assertEqual(c(-11, ""), "CRASH")
+        self.assertEqual(c(124, "", True), "TIMEOUT")
+
+    def test_a_timeout_or_a_crash_or_an_unknown_error_fails_the_probe(self):
+        for bad in ("TIMEOUT", "CRASH", "ERROR"):
+            st, why = L.setters_verdict({"pm_on": "OK", "ecc_off": bad}, True)
+            self.assertEqual(st, "FAIL")
+            self.assertIn("ecc_off", why)
+
+    def test_a_dead_device_after_the_setters_fails_the_probe(self):
+        self.assertEqual(L.setters_verdict({"a": "OK"}, False), ("FAIL", "device_unusable_after_setters"))
+        self.assertEqual(L.setters_verdict({"a": "OK", "b": "NOT_SUPPORTED", "c": "NO_PERMISSION"}, True), ("PASS", "-"))
+
+    def test_a_host_state_that_changes_while_the_guest_runs_setters_is_a_leak(self):
+        same = [("Default", "Disabled", "350.00", "-", "210")] * 5
+        self.assertEqual(L.host_state_changed(same)[0], False)
+        self.assertEqual(L.host_state_changed(same + [("Exclusive_Process", "Disabled", "350.00", "-", "210")])[0], True)
+
+    def test_the_hoststate_verdict_command_reads_the_csv(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "h.csv"
+            f.write_text("1.0;Default;Disabled;350\n1.5;Default;Disabled;350\n")
+            p = subprocess.run([sys.executable, str(GP / "gap_probes.py"), "hoststate", "verdict", "--csv", str(f)], capture_output=True, text=True)
+            self.assertEqual((p.returncode, p.stdout.strip()), (0, "HOST_STATE_LEAK=0 samples=2 distinct=1"))
+            f.write_text("1.0;Default;Disabled;350\n1.5;Exclusive_Process;Disabled;350\n")
+            p = subprocess.run([sys.executable, str(GP / "gap_probes.py"), "hoststate", "verdict", "--csv", str(f)], capture_output=True, text=True)
+            self.assertEqual((p.returncode, p.stdout.strip()), (1, "HOST_STATE_LEAK=1 samples=2 distinct=2"))
+
+
+class Vulkan(unittest.TestCase):
+    DOC = {"capabilities": {"device": {"properties": {"VkPhysicalDeviceProperties": {"deviceName": "X", "deviceUUID": [1, 2], "limits": {"maxImageDimension2D": 32768}},
+                                                      "VkPhysicalDeviceIDProperties": {"deviceLUID": [1]}},
+                                       "features": {"VkPhysicalDeviceFeatures": {"sparseBinding": True}}}},
+           "extensions": [{"extensionName": "VK_KHR_swapchain"}]}
+
+    def test_uuids_and_luids_are_dropped_and_the_rest_is_kept_sorted(self):
+        leaves = L.flatten_vulkan(self.DOC)
+        self.assertEqual(leaves, sorted(leaves))
+        self.assertFalse([l for l in leaves if "UUID" in l or "LUID" in l])
+        self.assertIn("capabilities.device.features.VkPhysicalDeviceFeatures.sparseBinding=True", leaves)
+        self.assertIn("extensions[0].extensionName=VK_KHR_swapchain", leaves)
+
+    def test_groups_name_a_difference_by_its_first_two_path_components(self):
+        g = L.vulkan_groups(L.flatten_vulkan(self.DOC))
+        self.assertIn("capabilities.device", g)
+        self.assertIn("extensions.0", g)
+
+    def test_a_feature_the_guest_loses_is_found_in_only_host(self):
+        h = L.flatten_vulkan(self.DOC)
+        doc = json.loads(json.dumps(self.DOC))
+        doc["capabilities"]["device"]["features"]["VkPhysicalDeviceFeatures"]["sparseBinding"] = False
+        d = L.vulkan_diff(h, L.flatten_vulkan(doc))
+        self.assertEqual(d["n_only_host"], 1)
+        self.assertTrue(d["only_host"][0].endswith("sparseBinding=True"))
+        self.assertTrue(d["only_guest"][0].endswith("sparseBinding=False"))
+
+
+def R(case, status, area="a", reason="-", kv=None, t0=None, t1=None):
+    return D.row(case, status, area, reason, "1", t0, t1, kv)
+
+
+class Categories(unittest.TestCase):
+    def test_the_comparison_table(self):
+        c = D.categorize
+        self.assertEqual(c("pass", "pass"), "SAME_OK")
+        self.assertEqual(c("not_supported", "not_supported"), "SAME_NOT_SUPPORTED")
+        self.assertEqual(c("pass", "fail"), "GUEST_ONLY_FAIL")
+        self.assertEqual(c("pass", "timeout"), "GUEST_ONLY_FAIL")
+        self.assertEqual(c("pass", "not_supported"), "GUEST_LOSES_SUPPORT")
+        self.assertEqual(c("not_supported", "pass"), "GUEST_GAINS_SUPPORT")
+        self.assertEqual(c("not_supported", "crash"), "GUEST_FAIL_HOST_NS")
+        self.assertEqual(c("fail", "fail"), "BOTH_FAIL")
+        self.assertEqual(c("fail", "timeout"), "BOTH_FAIL_DIFFERENT")
+        self.assertEqual(c("fail", "pass"), "HOST_ONLY_FAIL")
+        self.assertEqual(c("pass", "not_run"), "INCOMPLETE")
+
+    def test_an_unknown_raw_status_is_a_failure_never_a_pass(self):
+        self.assertEqual(D.normalise("Excellent"), "fail")
+        rows = D.parse_gap_results("id\tgroup\tstatus\trc\tsecs\tt0\tt1\treason\tcanary\nx\tg\tSUPERB\t0\t1\t1\t2\t-\t-\n")
+        self.assertEqual(rows["x"]["status"], "fail")
+
+    def test_statuses_are_normalised_and_timeouts_and_crashes_stay_apart_from_fail(self):
+        self.assertEqual(D.normalise("Pass"), "pass")
+        self.assertEqual(D.normalise("QualityWarning"), "pass")
+        self.assertEqual(D.normalise("NotSupported"), "not_supported")
+        self.assertEqual(D.normalise("FAIL", "timeout"), "timeout")
+        self.assertEqual(D.normalise("FAIL", "crash_signal_11"), "crash")
+        self.assertEqual(D.normalise("FAIL", "wrong_value"), "fail")
+        self.assertEqual(D.normalise("MISMATCH"), "fail")
+        self.assertEqual(D.normalise("never_heard_of_it"), "fail")   # an unknown status is never a pass
+
+
+class Compare(unittest.TestCase):
+    def test_only_differences_are_reported(self):
+        diffs = D.compare({"a": R("a", "pass"), "b": R("b", "pass")}, {"a": R("a", "pass"), "b": R("b", "fail")})
+        self.assertEqual([d["case"] for d in diffs], ["b"])
+        self.assertEqual(diffs[0]["category"], "GUEST_ONLY_FAIL")
+
+    def test_an_unclassified_difference_is_a_kayfabe_gap_candidate(self):
+        d = D.compare({"b": R("b", "pass")}, {"b": R("b", "timeout", reason="timeout")})[0]
+        self.assertEqual(d["bucket"], "kayfabe_gap_candidate")
+
+    def test_a_case_that_fails_on_the_host_control_too_is_not_kayfabes(self):
+        d = D.compare({"b": R("b", "fail")}, {"b": R("b", "fail")})[0]
+        self.assertEqual((d["category"], d["bucket"]), ("BOTH_FAIL", "app_or_harness_bug"))
+
+    def test_a_value_difference_between_two_passes_is_reported(self):
+        d = D.compare({"a": R("a", "pass", kv={"gran": "2097152"})}, {"a": R("a", "pass", kv={"gran": "65536"})})[0]
+        self.assertEqual(d["category"], "VALUE_DIFF")
+        self.assertIn("gran:2097152->65536", d["kvdiff"])
+
+    def test_a_listed_limit_explains_exactly_the_difference_it_names(self):
+        limits = D.parse_limits("attr_dump\tmem_total_mib\tpass\tpass\tkayfabe_limitation\tthe guest reports its own frame buffer\n")
+        h = {"attr_dump": R("attr_dump", "pass", kv={"mem_total_mib": "24000", "attr.75": "8"})}
+        g = {"attr_dump": R("attr_dump", "pass", kv={"mem_total_mib": "4096", "attr.75": "8"})}
+        d = D.compare(h, g, limits)[0]
+        self.assertEqual((d["bucket"], d["why"]), ("kayfabe_limitation", "the guest reports its own frame buffer"))
+        g["attr_dump"]["kv"]["attr.75"] = "7"   # an unrelated key now differs too: the limit must not hide it
+        d = D.compare(h, g, limits)[0]
+        self.assertEqual(d["bucket"], "kayfabe_gap_candidate")
+
+    def test_a_limit_for_one_key_does_not_hide_a_difference_in_another(self):
+        limits = D.parse_limits("attr_dump\tmem_total_mib\t*\t*\tkayfabe_limitation\tthe guest reports its own frame buffer size\n")
+        d = D.compare({"attr_dump": R("attr_dump", "pass", kv={"attr.1": "1"})}, {"attr_dump": R("attr_dump", "pass", kv={"attr.1": "2"})}, limits)[0]
+        self.assertEqual(d["bucket"], "kayfabe_gap_candidate")
+
+    def test_a_limit_with_a_dash_or_a_blank_reason_is_refused(self):
+        for reason in ("-", "   "):
+            with self.assertRaises(ValueError):
+                D.parse_limits("a\t*\t*\t*\tkayfabe_limitation\t%s\n" % reason)
+
+    def test_the_cli_refuses_a_limits_file_with_an_unknown_bucket(self):
+        d = Path(tempfile.mkdtemp(prefix="gaplim"))
+        self.addCleanup(shutil.rmtree, d, True)
+        res = "id\tgroup\tstatus\trc\tsecs\tt0\tt1\treason\tcanary\nx\tg\tPASS\t0\t1\t1\t2\t-\t-\n"
+        (d / "h.tsv").write_text(res)
+        (d / "g.tsv").write_text(res)
+        (d / "lim.tsv").write_text("x\t*\t*\t*\twhatever\tbecause it is documented somewhere\n")
+        p = subprocess.run([sys.executable, str(GP / "diffrun.py"), "diff", str(d / "h.tsv"), str(d / "g.tsv"), "--limits", str(d / "lim.tsv")], capture_output=True, text=True)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("bucket", p.stderr)
+
+    def test_a_limit_needs_a_known_bucket_and_a_reason(self):
+        with self.assertRaises(ValueError):
+            D.parse_limits("a\t*\t*\t*\tfine\tbecause\n")
+        with self.assertRaises(ValueError):
+            D.parse_limits("a\t*\t*\t*\tkayfabe_limitation\t-\n")
+        with self.assertRaises(ValueError):
+            D.parse_limits("a\t*\t*\tkayfabe_limitation\tbecause\n")
+
+    def test_the_shipped_limits_parse_and_every_one_has_a_reason(self):
+        limits = D.parse_limits((GP / "gap_known_limits.tsv").read_text())
+        self.assertGreaterEqual(len(limits), 1)
+        for l in limits:
+            self.assertGreater(len(l["reason"]), 20)
+
+    def test_a_host_xid_inside_a_case_window_is_attached_and_one_outside_is_not(self):
+        xids = D.parse_xids("1731900010.5 host kernel: NVRM: Xid (PCI:0000:01:00): 109, pid=1, name=x\n1731901000.0 host kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=2\nnoise line\n")
+        self.assertEqual([x for _, x, _ in xids], [109, 13])
+        g = {"a": R("a", "timeout", reason="timeout", t0=1731900000.0, t1=1731900013.0), "b": R("b", "fail", t0=1731900500.0, t1=1731900510.0)}
+        h = {"a": R("a", "pass"), "b": R("b", "pass")}
+        d = {x["case"]: x for x in D.compare(h, g, (), xids)}
+        self.assertEqual(d["a"]["xid"], "109")
+        self.assertEqual(d["b"]["xid"], "-")
+
+    def test_an_xid_before_the_window_is_not_attached_and_one_just_after_it_is(self):
+        xids = D.parse_xids("1731899000.0 k: NVRM: Xid (PCI:0000:01:00): 31, pid=1\n1731900016.0 k: NVRM: Xid (PCI:0000:01:00): 109, pid=2\n")
+        g = {"a": R("a", "timeout", reason="timeout", t0=1731900000.0, t1=1731900013.0)}
+        d = D.compare({"a": R("a", "pass")}, g, (), xids)[0]
+        self.assertEqual(d["xid"], "109")   # 16 s is inside t1 + 5 s slack only for the second; the first is 1000 s earlier
+
+    def test_the_summary_counts_candidates_and_buckets(self):
+        h = {"a": R("a", "pass"), "b": R("b", "fail"), "c": R("c", "pass")}
+        g = {"a": R("a", "timeout"), "b": R("b", "fail"), "c": R("c", "pass")}
+        diffs = D.compare(h, g)
+        line = D.summary_line(h, g, diffs)
+        self.assertIn("cases=3 differing=2 candidates=1", line)
+        self.assertIn("harness=1", line)
+
+
+class Adapters(unittest.TestCase):
+    pass
+
+
+class AdaptersMore(unittest.TestCase):
+    def test_vkcts_rows_and_nvcodec_rows_read_into_the_same_shape(self):
+        vk = "VKCTS_RESULTS_BEGIN v1 side=host\n#case\tstatus\tclass\tarea\tdetail\ndEQP-VK.a\tPass\tpass\tinfo\tPass\ndEQP-VK.b\tNotSupported\tnot_supported\tsparse\tno\ndEQP-VK.c\tTimeout\ttimeout\tsparse\tTimeout\n"
+        rows = D.parse_vkcts_results(vk)
+        self.assertEqual({k: v["status"] for k, v in rows.items()}, {"dEQP-VK.a": "pass", "dEQP-VK.b": "not_supported", "dEQP-VK.c": "timeout"})
+        nv = "case_id\tgroup\texpect\tresult\treason\trc\tsecs\tpsnr\tframes\tn_ok\tsess_peak\tdetail\nenc_h264\tencode\tPASS\tPASS\tok\t0\t3.1\t30\t30\t-\t-\t-\n"
+        self.assertEqual(D.parse_nvcodec_results(nv)["enc_h264"]["status"], "pass")
+
+    def test_the_gap_results_and_kv_files_round_trip(self):
+        res = "id\tgroup\tstatus\trc\tsecs\tt0\tt1\treason\tcanary\nx\tg\tFAIL\t0\t3.0\t10\t13\ttimeout\tFAIL\n"
+        rows = D.parse_gap_results(res)
+        D.parse_gap_kv("x\tk\tv\ny\tz\tw\n", rows)
+        self.assertEqual((rows["x"]["status"], rows["x"]["kv"]["k"], rows["x"]["t1"]), ("timeout", "v", 13.0))
+
+
+FAKE = """#!/usr/bin/env python3
+import sys, time, os, signal
+case = sys.argv[1]
+if case == "list":
+    sys.exit(0)
+if case == "canary":
+    if os.path.exists(os.environ.get("FAKE_DEAD", "/nonexistent")):
+        print("GAPPROBE case=canary status=FAIL rc=700 secs=0.1 reason=cuCtxSynchronize")
+    else:
+        print("GAPPROBE case=canary status=PASS rc=0 secs=0.1 reason=-")
+elif case == "good":
+    print("GAPKV good attr=41:1"); print("GAPPROBE case=good status=PASS rc=0 secs=0.2 reason=-")
+elif case == "refused":
+    print("GAPPROBE case=refused status=NOT_SUPPORTED rc=801 secs=0.2 reason=attr_0")
+elif case == "bad":
+    print("GAPPROBE case=bad status=FAIL rc=700 secs=0.2 reason=cuMemMap")
+elif case == "crash":
+    os.kill(os.getpid(), signal.SIGSEGV)
+elif case == "hang":
+    time.sleep(600)
+else:
+    sys.exit(3)
+"""
+
+
+class RunnerEndToEnd(unittest.TestCase):
+    def run_table(self, rows, env=None, side="host", extra=()):
+        d = tempfile.mkdtemp(prefix="gaprun")
+        self.addCleanup(shutil.rmtree, d, True)
+        d = Path(d)
+        fake = d / "fake_probe"
+        fake.write_text(FAKE)
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        table = d / "cases.tsv"
+        table.write_text(HDR + "".join(rows))
+        saved = GPR.CASES
+        GPR.CASES = table
+        self.addCleanup(setattr, GPR, "CASES", saved)
+        old = dict(os.environ)
+        os.environ.update(env or {})
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(old)))
+        out = d / "out"
+        buf = io.StringIO()
+        real, sys.stdout = sys.stdout, buf
+        try:
+            rc = GPR.main(["run", "--side", side, "--out", str(out), "--probe", str(fake), *extra])
+        finally:
+            sys.stdout = real
+        rows = {l.split("\t")[0]: l.split("\t") for l in (out / "results.tsv").read_text().splitlines()[1:]}
+        return rc, rows, out, buf.getvalue()
+
+    def test_pass_refused_fail_and_crash_are_each_told_apart(self):
+        rc, rows, out, text = self.run_table([case_line("canary", prog="canary"), case_line("good", prog="good"), case_line("refused", prog="refused"),
+                                              case_line("bad", prog="bad"), case_line("crash", prog="crash")])
+        self.assertEqual({k: v[2] for k, v in rows.items()}, {"canary": "PASS", "good": "PASS", "refused": "NOT_SUPPORTED", "bad": "FAIL", "crash": "FAIL"})
+        self.assertEqual(rows["crash"][7], "crash_signal_11")
+        self.assertEqual(rows["bad"][7], "cuMemMap")
+        self.assertEqual(rc, 1)
+        self.assertIn("GAP_PROBES_SUMMARY side=host pass=2 not_supported=1 fail=2", text)
+        self.assertIn("good\tattr.41\t1", (out / "kv.tsv").read_text())
+
+    def test_a_failure_runs_a_canary_and_records_it(self):
+        rc, rows, out, _ = self.run_table([case_line("bad", prog="bad"), case_line("good", prog="good")])
+        self.assertEqual(rows["bad"][8], "PASS")
+        self.assertEqual(rows["good"][8], "-")
+
+    def test_a_dead_device_stops_the_run_and_the_rest_are_not_run_with_the_reason(self):
+        dead = tempfile.NamedTemporaryFile(delete=False)
+        self.addCleanup(os.unlink, dead.name)
+        rows = [case_line("bad%d" % i, prog="bad") for i in range(4)] + [case_line("good", prog="good")]
+        rc, res, out, _ = self.run_table(rows, env={"FAKE_DEAD": dead.name})
+        self.assertEqual(res["bad2"][8], "FAIL")
+        self.assertEqual((res["bad3"][2], res["bad3"][7]), ("NOT_RUN", "device_dead_after_bad2"))
+        self.assertEqual((res["good"][2], res["good"][7]), ("NOT_RUN", "device_dead_after_bad2"))
+
+    def test_a_hang_is_a_timeout_failure_not_a_pass_and_the_run_goes_on(self):
+        rc, rows, out, _ = self.run_table([case_line("hang", prog="hang", timeout="10"), case_line("good", prog="good")])
+        self.assertEqual((rows["hang"][2], rows["hang"][7]), ("FAIL", "timeout"))
+        self.assertEqual(rows["good"][2], "PASS")
+        self.assertEqual(rc, 1)
+
+    def test_a_guest_only_case_is_not_run_on_the_host_and_says_why(self):
+        rc, rows, out, _ = self.run_table([case_line("good", prog="good"), case_line("g", prog="good", tags="guest_only")])
+        self.assertEqual((rows["g"][2], rows["g"][7]), ("NOT_RUN", "guest_only"))
+        self.assertEqual(rc, 0)
+
+    def test_without_a_probe_binary_and_without_gcc_everything_is_not_run_never_a_pass(self):
+        d = Path(tempfile.mkdtemp(prefix="gapnogcc"))
+        self.addCleanup(shutil.rmtree, d, True)
+        saved = GPR.build_probe
+        GPR.build_probe = lambda out: None
+        self.addCleanup(setattr, GPR, "build_probe", saved)
+        table = d / "c.tsv"
+        table.write_text(HDR + case_line("good", prog="good"))
+        savedc = GPR.CASES
+        GPR.CASES = table
+        self.addCleanup(setattr, GPR, "CASES", savedc)
+        real, sys.stdout = sys.stdout, io.StringIO()
+        try:
+            rc = GPR.main(["run", "--side", "host", "--out", str(d / "o")])
+        finally:
+            sys.stdout = real
+        row = (d / "o/results.tsv").read_text().splitlines()[1].split("\t")
+        self.assertEqual((row[2], row[7], rc), ("NOT_RUN", "no_gap_probe_binary_and_no_gcc", 0))
+
+    def test_emit_blocks_carry_the_files_and_compare_reads_a_log(self):
+        rc, rows, out, text = self.run_table([case_line("good", prog="good"), case_line("bad", prog="bad")], extra=("--emit",))
+        blocks = rowio.extract(text)
+        self.assertEqual(set(blocks), {"results.tsv", "kv.tsv", "summary.txt"})
+        rc, rows2, out2, text2 = self.run_table([case_line("good", prog="good"), case_line("bad", prog="refused")], extra=("--emit",))
+        d = Path(tempfile.mkdtemp(prefix="gapcmp"))
+        self.addCleanup(shutil.rmtree, d, True)
+        (d / "host.log").write_text(text)
+        (d / "guest.log").write_text(text2)
+        p = subprocess.run([sys.executable, str(GP / "gap_probes.py"), "compare", str(d / "host.log"), str(d / "guest.log")], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stdout)   # host FAIL vs guest NOT_SUPPORTED is HOST_FAIL_GUEST_NOT_SUPPORTED: not a guest candidate
+        self.assertIn("bad", p.stdout)
+
+
+FAKE_SMI = """#!/usr/bin/env python3
+import sys
+a = sys.argv[1:]
+if any(x.startswith("--query-gpu") for x in a):
+    print("Default, Disabled, 350.00, 1500, 210"); sys.exit(0)
+if "-e" in a:
+    print("Setting ECC mode is not supported for GPU 0"); sys.exit(1)
+if "-c" in a and "PROHIBITED" in a:
+    print("Insufficient Permissions"); sys.exit(1)
+print("ok"); sys.exit(0)
+"""
+FAKE_VK = """#!/usr/bin/env python3
+import sys, json
+out = sys.argv[sys.argv.index("-o") + 1] if "-o" in sys.argv else "vulkaninfo.json"
+doc = {"capabilities": {"device": {"properties": {"VkPhysicalDeviceProperties": {"deviceName": "X", "deviceUUID": [1, 2, 3]}, "VkPhysicalDeviceIDProperties": {"deviceLUID": [9]}},
+       "features": {"VkPhysicalDeviceFeatures": {"f%d" % i: True for i in range(150)}}}}}
+open(out, "w").write(json.dumps(doc))
+"""
+
+
+class ScriptCases(unittest.TestCase):
+    """The py cases run against fake nvidia-smi / vulkaninfo / probe programs on PATH: the decisions of gap_lib are tested above, this checks they are wired."""
+
+    def setUp(self):
+        import gap_scripts
+        self.S = gap_scripts
+        self.d = Path(tempfile.mkdtemp(prefix="gapscr"))
+        self.addCleanup(shutil.rmtree, self.d, True)
+        for name, body in (("nvidia-smi", FAKE_SMI), ("vulkaninfo", FAKE_VK)):
+            f = self.d / name
+            f.write_text(body)
+            f.chmod(0o755)
+        old = os.environ["PATH"]
+        os.environ["PATH"] = str(self.d) + os.pathsep + old
+        self.addCleanup(os.environ.__setitem__, "PATH", old)
+
+    def probe(self, canary_ok):
+        f = self.d / "probe"
+        f.write_text("#!/bin/sh\necho 'GAPPROBE case=canary status=%s rc=0 secs=0.1 reason=-'\n" % ("PASS" if canary_ok else "FAIL"))
+        f.chmod(0o755)
+        return str(f)
+
+    def test_smi_setters_records_one_class_per_setter_and_passes_on_native_answers(self):
+        r = self.S.smi_setters({"probe": self.probe(True), "out": self.d})
+        self.assertEqual(r["status"], "PASS", r)
+        self.assertEqual(r["kv"]["setter.ecc_off"], "NOT_SUPPORTED")
+        self.assertEqual(r["kv"]["setter.compute_prohibited"], "NO_PERMISSION")
+        self.assertEqual(r["kv"]["setter.pm_on"], "OK")
+
+    def test_smi_setters_fails_when_the_device_is_dead_afterwards(self):
+        r = self.S.smi_setters({"probe": self.probe(False), "out": self.d})
+        self.assertEqual((r["status"], r["reason"]), ("FAIL", "device_unusable_after_setters"))
+
+    def test_an_insufficient_permissions_answer_is_not_an_error(self):
+        st, why = L.setters_verdict({"x": L.classify_setter(1, "Insufficient Permissions")}, True)
+        self.assertEqual((st, why), ("PASS", "-"))
+
+    def test_vk_dump_writes_leaves_without_uuids_and_digests_per_group(self):
+        r = self.S.vk_dump({"probe": "-", "out": self.d})
+        self.assertEqual(r["status"], "PASS", r)
+        leaves = (self.d / "vk_leaves.tsv").read_text()
+        self.assertNotIn("UUID", leaves)
+        self.assertNotIn("LUID", leaves)
+        self.assertIn("capabilities.device.features.VkPhysicalDeviceFeatures.f7=True", leaves)
+        self.assertTrue([k for k in r["kv"] if k.startswith("group.")])
+
+
+class RunnerKv(unittest.TestCase):
+    def test_a_case_keeps_only_its_own_kv_lines(self):
+        t = GPR.L.parse_probe_output("GAPKV other k=v\nGAPKV mine a=1\nGAPPROBE case=mine status=PASS rc=0 secs=1 reason=-\n", "mine")
+        self.assertEqual(t["kv"], {"a": "1"})
+
+    def test_the_cli_run_of_a_destructive_case_without_the_flag_says_why(self):
+        d = Path(tempfile.mkdtemp(prefix="gapdes"))
+        self.addCleanup(shutil.rmtree, d, True)
+        p = subprocess.run([sys.executable, str(GP / "gap_probes.py"), "run", "--side", "guest", "--out", str(d), "--only", "life_reset,life_busy_poweroff"], capture_output=True, text=True)
+        rows = {l.split("\t")[0]: l.split("\t") for l in (d / "results.tsv").read_text().splitlines()[1:]}
+        self.assertEqual(rows["life_reset"][7], "destructive_not_requested")
+        self.assertEqual(rows["life_busy_poweroff"][7], "terminal_not_requested")
+
+
+class CJudgeTable(unittest.TestCase):
+    def test_the_whole_judge_table_is_exactly_this(self):
+        out = subprocess.run([build_c(self, ("-DGAP_SELFTEST",))], capture_output=True, text=True).stdout.splitlines()
+        self.assertEqual([l.split("-> ")[1] for l in out], ["PASS", "MISMATCH", "NOT_SUPPORTED", "FAIL", "FAIL", "FAIL"])
+
+
+class TableMore(unittest.TestCase):
+    def test_a_falsifier_of_a_few_words_is_refused(self):
+        with self.assertRaises(ValueError):
+            L.load_cases(HDR + case_line(fal="it breaks"))
+
+    def test_an_id_repeated_across_kinds_is_refused(self):
+        with self.assertRaises(ValueError):
+            L.load_cases(HDR + case_line("x", kind="c") + case_line("x", kind="py"))
+
+
+class WiringMore(unittest.TestCase):
+    def test_run_apps_lists_the_row_but_all_does_not_expand_to_it(self):
+        env = dict(os.environ, APPS_ROOT=tempfile.mkdtemp(prefix="gapapps"))
+        self.addCleanup(shutil.rmtree, env["APPS_ROOT"], True)
+        full = subprocess.run(["bash", str(ROOT / "scripts/apps/run_apps.sh"), "host", "list"], capture_output=True, text=True, env=env).stdout.split()
+        gate = subprocess.run(["bash", str(ROOT / "scripts/apps/run_apps.sh"), "host", "listall"], capture_output=True, text=True, env=env).stdout.split()
+        self.assertIn("gap_probes", full)
+        self.assertNotIn("gap_probes", gate)
+
+    def test_the_census_function_of_the_hook_answers_info_for_the_row(self):
+        line = next(l for l in (ROOT / "scripts/apps/apps_hook.sh").read_text().splitlines() if l.startswith("census_need(){"))
+        out = subprocess.run(["bash", "-c", line + '; census_need gap_probes; census_need nvcodec_matrix'], capture_output=True, text=True).stdout.split()
+        self.assertEqual(out, ["info", "enc"])
+
+
+class Wiring(unittest.TestCase):
+    def test_the_row_is_a_discovery_row_with_its_own_summary_line(self):
+        text = (ROOT / "scripts/apps/run_apps.sh").read_text()
+        disc = text.split("DISCOVERY=$(cat <<'EOF'")[1].split("\nEOF")[0]
+        self.assertIn("gap_probes|3600|GAP_PROBES_SUMMARY side=|", disc)
+        self.assertIn("--side $SIDE", disc)
+        apps = text.split("APPS=$(cat <<'EOF'")[1].split("\nEOF")[0]
+        self.assertNotIn("gap_probes", apps)   # not in `all`: a gate list never carries it
+
+    def test_the_directory_reaches_the_bundle_the_host_and_the_guest(self):
+        for f, needle in (("build_bundle.sh", "gap_probes"), ("apps_matrix.sh", '"$HERE/gap_probes"'), ("apps_hook.sh", "open_rows gap_probes")):
+            self.assertIn(needle, (ROOT / "scripts/apps" / f).read_text(), f)
+
+    def test_the_host_census_asks_for_the_row_and_the_compare_step_runs_it(self):
+        self.assertIn("gap_probes) echo info", (ROOT / "scripts/apps/apps_hook.sh").read_text())
+        self.assertIn("gap_probes.py\" compare", (ROOT / "scripts/apps/apps_matrix.sh").read_text())
+
+    def test_the_recipe_pins_the_current_runner(self):
+        rec = json.loads((ROOT / "scripts/apps/image/recipe.json").read_text())
+        import hashlib
+        want = hashlib.sha256((ROOT / "scripts/apps/run_apps.sh").read_bytes()).hexdigest()
+        self.assertIn(want, json.dumps(rec))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=1)

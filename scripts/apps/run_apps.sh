@@ -108,9 +108,11 @@ geekbench_gpu|1200|Uploading results|cd $D/geekbench && ./geekbench6 --gpu OpenC
 EOF
 )
 # DISCOVERY rows report and never gate: they are in `list` (so the names are known) but not in `listall` / `all`, and in no gate list.
+# gap_probes: the GPU-PV gap probes (docs/design/V3_GPUPV_GAP_MATRIX.md; scripts/apps/gap_probes): host control against guest per case.
 # vkcts: the open Vulkan CTS subset (docs/design/V3_VULKAN_CTS_ROW.md). Needs `vkcts.py build` once ($B/vkcts) and the tool dir $B/vkcts_tool.
 # vllm, tensorrt, jax: the open ML rows (docs/design/V3_OPEN_ML_ROWS.md). Each needs `mlrows.py setup` once ($B/mlrows: one venv per row from a hashed lock) and the tool dir $B/mlrows_tool.
 DISCOVERY=$(cat <<'EOF'
+gap_probes|3600|GAP_PROBES_SUMMARY side=|python3 $B/share/gap_probes/gap_probes.py run --side $SIDE --out $O/gap_probes --egl $B/bin/egl_offscreen --emit
 vkcts|2700|VKCTS_SUMMARY|python3 $B/vkcts_tool/vkcts.py run --side $SIDE --artifact $B/vkcts --out $O/vkcts
 vllm|1800|VLLM_SUMMARY status=PASS|python3 -B -I $B/mlrows_tool/mlrows.py run vllm --root $B/mlrows --out $O/vllm
 tensorrt|1500|TENSORRT_SUMMARY status=PASS|python3 -B -I $B/mlrows_tool/mlrows.py run tensorrt --root $B/mlrows --out $O/tensorrt
