@@ -175,3 +175,32 @@ def vulkan_diff(host_leaves, guest_leaves, limit=40):
     h, g = set(host_leaves), set(guest_leaves)
     only_h, only_g = sorted(h - g), sorted(g - h)
     return {"only_host": only_h[:limit], "only_guest": only_g[:limit], "n_only_host": len(only_h), "n_only_guest": len(only_g)}
+
+
+# ------------------------------------------------------------------------------------------------------------------ the NVIDIA tools (compute-sanitizer, ncu, nsys)
+def classify_tool(rc, output, timed_out=False):
+    """OK | NOT_SUPPORTED | NO_PERMISSION | TIMEOUT | CRASH | ERROR for one run of an NVIDIA tool. The first three are answers a GPU stack may give without being broken:
+    a stack that does not serve the profiler or the debugger interface says so (docs/OWNER_RULINGS.md H: capability absent); anything else is a finding."""
+    low = output.lower()
+    if timed_out:
+        return "TIMEOUT"
+    if rc is not None and rc < 0:
+        return "CRASH"
+    if "err_nvgpuctrperm" in low or "permission" in low and "counter" in low:
+        return "NO_PERMISSION"
+    if "not supported" in low or "unsupported" in low or "does not support" in low or "not available" in low or "cannot be profiled" in low:
+        return "NOT_SUPPORTED"
+    if rc == 0:
+        return "OK"
+    return "ERROR"
+
+
+def tools_verdict(classes):
+    """classes: {name: class}. -> (status, reason). Any TIMEOUT, CRASH or ERROR is FAIL (named). All OK is PASS. Otherwise (some tool says not supported / not permitted, none broke)
+    the case is NOT_SUPPORTED, so that the host-vs-guest comparison shows a lost capability as GUEST_LOSES_SUPPORT and the known-limits file can explain it."""
+    for name in sorted(classes):
+        if classes[name] in ("TIMEOUT", "CRASH", "ERROR"):
+            return "FAIL", "%s_%s" % (name, classes[name].lower())
+    if all(c == "OK" for c in classes.values()):
+        return "PASS", "-"
+    return "NOT_SUPPORTED", "tool_answer_" + "_".join(sorted(n for n, c in classes.items() if c != "OK"))

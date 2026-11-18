@@ -1235,7 +1235,7 @@ class MatrixRowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             full = self.bash(["x", "list"], t).stdout.split()
             allnames = self.bash(["x", "listall"], t).stdout.split()
-            self.assertEqual([n for n in full if n not in ("vkcts", "vllm", "tensorrt", "jax")], allnames)   # the four discovery rows (vkcts, and the three open ML rows)
+            self.assertEqual([n for n in full if n not in ("vkcts", "vllm", "tensorrt", "jax", "gap_probes")], allnames)   # the four discovery rows (vkcts, and the three open ML rows)
 
     def test_the_row_is_not_in_the_expected_provisioning_rows(self):
         self.assertNotIn("vkcts", (ROOT / "scripts/apps/expected_rows.txt").read_text())

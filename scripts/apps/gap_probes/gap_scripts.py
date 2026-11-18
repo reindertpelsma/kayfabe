@@ -252,5 +252,91 @@ def life_busy_poweroff(ctx):
     return result("FAIL", "machine_did_not_power_off_in_60s")
 
 
-CASES = {"vk_dump": vk_dump, "smi_setters": smi_setters, "life_persistenced": life_persistenced, "life_kill_kernel": life_kill_kernel, "life_kill_gl": life_kill_gl,
+# ------------------------------------------------------------------------------------------------------------------ the NVIDIA tools
+# They come from the official CUDA apt repository at run time (provision_tools.sh): never stored in the repo, an image or R2.
+def find_tool(name):
+    import glob
+    found = shutil.which(name)
+    if found:
+        return found
+    for pat in ("/usr/local/cuda*/bin/" + name, "/opt/nvidia/nsight-systems/*/bin/" + name, "/opt/nvidia/nsight-compute/*/" + name):
+        hits = sorted(glob.glob(pat))
+        if hits:
+            return hits[-1]
+    return None
+
+
+def cupti_lib():
+    import glob
+    hits = sorted(glob.glob("/usr/local/cuda*/extras/CUPTI/lib64/libcupti.so.*"))
+    return hits[-1] if hits else ""
+
+
+def tool_case(ctx, runs, extra_kv=None):
+    """runs: {name: argv or None}. None -> the tool is not installed -> NOT_RUN (never a pass). -> result dict; kv holds one class per run."""
+    classes, kv, outs = {}, dict(extra_kv or {}), {}
+    for name, argv in runs.items():
+        if argv is None:
+            return result("NOT_RUN", "no_tool_for_" + name)
+        rc, out, to = run(argv, 240)
+        classes[name] = L.classify_tool(rc, out, to)
+        kv["tool." + name] = classes[name]
+        outs[name] = out
+    st, why = L.tools_verdict(classes)
+    return dict(result(st, why, **kv), outs=outs)
+
+
+def tools_sanitizer(ctx):
+    exe = find_tool("compute-sanitizer")
+    if not exe:
+        return result("NOT_RUN", "no_compute_sanitizer")
+    base = [exe, "--error-exitcode", "99"]
+    runs = {t: base + ["--tool", t, ctx["probe"], "canary"] for t in ("memcheck", "racecheck", "synccheck", "initcheck")}
+    r = tool_case(ctx, runs)
+    # positive control: the same tool must REPORT an illegal store. A silent memcheck is blind, whatever it says about the clean run
+    rc, out, to = run(base + ["--tool", "memcheck", ctx["probe"], "fault_recovery"], 240)
+    seen = "invalid __global__ write" in out.lower() or "invalid __global__" in out.lower()
+    r["kv"]["memcheck_reports_the_illegal_store"] = str(int(seen))
+    if r["status"] == "PASS" and not seen:
+        return dict(r, status="FAIL", reason="memcheck_silent_about_an_illegal_store")
+    return r
+
+
+def tools_ncu(ctx):
+    exe = find_tool("ncu")
+    if not exe:
+        return result("NOT_RUN", "no_ncu")
+    return tool_case(ctx, {"metric": [exe, "--metrics", "sm__cycles_elapsed.avg", "-k", "regex:addone", "--launch-count", "1", ctx["probe"], "canary"]})
+
+
+def tools_nsys(ctx):
+    exe = find_tool("nsys")
+    if not exe:
+        return result("NOT_RUN", "no_nsys")
+    d = Path(tempfile.mkdtemp(prefix="gapnsys"))
+    try:
+        rep = str(d / "r")
+        r = tool_case(ctx, {"profile": [exe, "profile", "--trace=cuda,nvtx,osrt", "--stats=false", "-f", "true", "-o", rep, ctx["probe"], "canary"]})
+        if r["status"] != "PASS":
+            return r
+        rc, out, to = run([exe, "stats", "--report", "cuda_gpu_kern_sum", "--format", "csv", rep + ".nsys-rep"], 120)
+        seen = "addone" in out
+        r["kv"]["kernel_in_report"] = str(int(seen))
+        return r if seen else dict(r, status="FAIL", reason="nsys_report_has_no_kernel")
+    finally:
+        shutil.rmtree(d, True)
+
+
+def tools_nsys_gpumetrics(ctx):
+    exe = find_tool("nsys")
+    if not exe:
+        return result("NOT_RUN", "no_nsys")
+    d = Path(tempfile.mkdtemp(prefix="gapnsysm"))
+    try:
+        return tool_case(ctx, {"gpu_metrics": [exe, "profile", "--gpu-metrics-device=0", "--stats=false", "-f", "true", "-o", str(d / "r"), ctx["probe"], "canary"]})
+    finally:
+        shutil.rmtree(d, True)
+
+
+CASES = {"tools_sanitizer": tools_sanitizer, "tools_ncu": tools_ncu, "tools_nsys": tools_nsys, "tools_nsys_gpumetrics": tools_nsys_gpumetrics, "vk_dump": vk_dump, "smi_setters": smi_setters, "life_persistenced": life_persistenced, "life_kill_kernel": life_kill_kernel, "life_kill_gl": life_kill_gl,
          "life_module_cycle": life_module_cycle, "life_reset": life_reset, "life_busy_poweroff": life_busy_poweroff}

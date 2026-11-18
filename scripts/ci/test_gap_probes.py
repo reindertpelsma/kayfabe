@@ -659,6 +659,86 @@ class WiringMore(unittest.TestCase):
         self.assertEqual(out, ["info", "enc"])
 
 
+class Tools(unittest.TestCase):
+    def test_classes_of_the_answers_the_nvidia_tools_give(self):
+        c = L.classify_tool
+        self.assertEqual(c(0, "==PROF== Disconnected from process\nsm__cycles_elapsed.avg 1234"), "OK")
+        self.assertEqual(c(1, "==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters"), "NO_PERMISSION")
+        self.assertEqual(c(1, "==ERROR== Profiling is not supported on this device"), "NOT_SUPPORTED")
+        self.assertEqual(c(1, "Unable to start GPU metrics: unsupported GPU"), "NOT_SUPPORTED")
+        self.assertEqual(c(2, "segmentation fault in the tool"), "ERROR")
+        self.assertEqual(c(-6, ""), "CRASH")
+        self.assertEqual(c(124, "", True), "TIMEOUT")
+
+    def test_a_tool_that_breaks_fails_the_case_and_one_that_declines_is_not_supported(self):
+        self.assertEqual(L.tools_verdict({"memcheck": "OK", "racecheck": "OK"}), ("PASS", "-"))
+        self.assertEqual(L.tools_verdict({"metric": "NO_PERMISSION"}), ("NOT_SUPPORTED", "tool_answer_metric"))
+        self.assertEqual(L.tools_verdict({"a": "OK", "b": "ERROR", "c": "NOT_SUPPORTED"}), ("FAIL", "b_error"))
+        self.assertEqual(L.tools_verdict({"a": "TIMEOUT"}), ("FAIL", "a_timeout"))
+
+    def test_the_ncu_limit_explains_a_lost_capability_and_nothing_else(self):
+        limits = D.parse_limits((GP / "gap_known_limits.tsv").read_text())
+        lost = D.compare({"tools_ncu": R("tools_ncu", "pass")}, {"tools_ncu": R("tools_ncu", "not_supported")}, limits)[0]
+        self.assertEqual(lost["bucket"], "kayfabe_limitation")
+        broke = D.compare({"tools_ncu": R("tools_ncu", "pass")}, {"tools_ncu": R("tools_ncu", "fail")}, limits)[0]
+        self.assertEqual(broke["bucket"], "kayfabe_gap_candidate")
+        other = D.compare({"tools_nsys": R("tools_nsys", "pass")}, {"tools_nsys": R("tools_nsys", "not_supported")}, limits)[0]
+        self.assertEqual(other["bucket"], "kayfabe_gap_candidate")   # only the profiler row is a documented limitation
+
+    def test_the_tool_cases_are_not_run_when_the_tool_is_absent_never_a_pass(self):
+        import gap_scripts
+        saved = gap_scripts.find_tool
+        gap_scripts.find_tool = lambda name: None
+        self.addCleanup(setattr, gap_scripts, "find_tool", saved)
+        for fn in (gap_scripts.tools_sanitizer, gap_scripts.tools_ncu, gap_scripts.tools_nsys, gap_scripts.tools_nsys_gpumetrics):
+            r = fn({"probe": "-", "out": Path(".")})
+            self.assertEqual(r["status"], "NOT_RUN", fn.__name__)
+
+    def test_a_silent_memcheck_fails_the_sanitizer_case_even_when_the_clean_runs_pass(self):
+        import gap_scripts
+        d = Path(tempfile.mkdtemp(prefix="gapsan"))
+        self.addCleanup(shutil.rmtree, d, True)
+        fake = d / "compute-sanitizer"
+        fake.write_text("#!/bin/sh\necho '========= ERROR SUMMARY: 0 errors'\nexit 0\n")
+        fake.chmod(0o755)
+        saved = gap_scripts.find_tool
+        gap_scripts.find_tool = lambda name: str(fake)
+        self.addCleanup(setattr, gap_scripts, "find_tool", saved)
+        r = gap_scripts.tools_sanitizer({"probe": "/bin/true", "out": d})
+        self.assertEqual((r["status"], r["reason"]), ("FAIL", "memcheck_silent_about_an_illegal_store"))
+        fake.write_text("#!/bin/sh\necho '========= Invalid __global__ write of size 4 bytes'\nexit 0\n")
+        r = gap_scripts.tools_sanitizer({"probe": "/bin/true", "out": d})
+        self.assertEqual(r["status"], "PASS")
+
+    def test_a_counter_permission_answer_from_ncu_is_a_declined_case_not_a_failure(self):
+        cls = L.classify_tool(1, "==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters")
+        self.assertEqual(L.tools_verdict({"metric": cls}), ("NOT_SUPPORTED", "tool_answer_metric"))
+
+    def test_a_sanitizer_that_errors_fails_the_case_with_the_tool_named(self):
+        import gap_scripts
+        d = Path(tempfile.mkdtemp(prefix="gapsan2"))
+        self.addCleanup(shutil.rmtree, d, True)
+        fake = d / "compute-sanitizer"
+        fake.write_text("#!/bin/sh\necho 'boom: internal tool failure'\nexit 3\n")
+        fake.chmod(0o755)
+        saved = gap_scripts.find_tool
+        gap_scripts.find_tool = lambda name: str(fake)
+        self.addCleanup(setattr, gap_scripts, "find_tool", saved)
+        r = gap_scripts.tools_sanitizer({"probe": "/bin/true", "out": d})
+        self.assertEqual(r["status"], "FAIL")
+        self.assertTrue(r["reason"].endswith("_error"), r["reason"])
+
+    def test_the_provisioning_script_pins_versions_and_uses_only_the_official_repository(self):
+        text = (GP / "provision_tools.sh").read_text()
+        self.assertIn("set -euo pipefail", text)
+        self.assertIn("OPENROWS_NVIDIA_REPO_BASE", text)
+        self.assertNotRegex(text, r"https?://(?!developer\.download\.nvidia\.com)")
+        for pin in ("SAN=", "CUPTI=", "NCU=", "NSYS="):
+            self.assertRegex(text, pin + r"\d+\.\d+\.\d+-\d")
+        self.assertLess(len(text.splitlines()), 50)
+
+
+
 class Wiring(unittest.TestCase):
     def test_the_row_is_a_discovery_row_with_its_own_summary_line(self):
         text = (ROOT / "scripts/apps/run_apps.sh").read_text()

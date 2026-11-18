@@ -4,3 +4,4 @@ attr_dump	mem_total_mib	pass	pass	kayfabe_limitation	the guest reports the frame
 attr_dump	attr.33	pass	pass	kayfabe_limitation	PCI bus id differs: the guest has its own virtual PCI topology
 attr_dump	attr.34	pass	pass	kayfabe_limitation	PCI device id of the slot differs: the guest has its own virtual PCI topology
 attr_dump	attr.50	pass	pass	kayfabe_limitation	PCI domain id differs: the guest has its own virtual PCI topology
+tools_ncu	*	pass	not_supported	kayfabe_limitation	the profiler interface is stubbed as capability absent (docs/OWNER_RULINGS.md section H: debugger, profiler, NVLink, ECC): performance counters are not served to a guest

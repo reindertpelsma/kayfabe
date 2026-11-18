@@ -47,6 +47,8 @@ def build_probe(out):
 
 def run_c_case(probe, case, log_dir):
     env = dict(os.environ, **case["env"])
+    if case["prog"].startswith("cupti_"):
+        env.setdefault("GAP_CUPTI_LIB", S.cupti_lib())
     t0 = time.time()
     rc, out, to = S.run([probe, case["prog"]], case["timeout_s"], env=env)
     (log_dir / (case["id"] + ".log")).write_text(out[-8000:])

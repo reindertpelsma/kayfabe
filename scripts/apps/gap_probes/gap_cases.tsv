@@ -33,6 +33,12 @@ spin_30s|cuda_kernel_time|c|spin_30s|180|yes|-|-|a 30 s kernel is killed in the 
 launch_flood_100k|cuda_kernel_time|c|launch_flood_100k|600|yes|-|-|100000 back-to-back launches lose a launch or hang
 fault_recovery|cuda_kernel_time|c|fault_recovery|180|yes|-|-|an illegal store is not reported, or the device is unusable for a new context afterwards
 trap_recovery|cuda_kernel_time|c|trap_recovery|180|yes|-|-|a trap is not reported, or the device is unusable for a new context afterwards
+cupti_callback|profiling|c|cupti_callback|120|yes|-|-|the CUPTI callback API does not see the driver API calls of a process in the guest while it does on the host (or cuptiSubscribe is refused)
+cupti_activity|profiling|c|cupti_activity|120|yes|-|-|the CUPTI activity API returns fewer kernel records than kernels launched in the guest, or refuses to enable, where the host does not
+tools_sanitizer|profiling|py|tools_sanitizer|600|yes|-|-|compute-sanitizer memcheck, racecheck, synccheck or initcheck hangs or errors in the guest, or memcheck is silent about an illegal store that the host run reports
+tools_ncu|profiling|py|tools_ncu|300|yes|-|-|Nsight Compute kernel replay with performance counters hangs or fails with an unlisted error in the guest (ERR_NVGPUCTRPERM or a clean not-supported answer is a pass)
+tools_nsys|profiling|py|tools_nsys|300|yes|-|-|Nsight Systems cannot trace the CUDA calls and kernels of a process in the guest where the host run can
+tools_nsys_gpumetrics|profiling|py|tools_nsys_gpumetrics|300|yes|-|-|Nsight Systems GPU metrics sampling hangs or fails with an unlisted error in the guest (a clean not-supported answer is a pass)
 vk_dump|vulkan_caps|py|vk_dump|180|no|-|-|any Vulkan feature, limit, queue family, format or extension value differs from the host outside the known limits
 smi_setters|smi_control|py|smi_setters|300|no|-|-|a setter answers differently from the host, hangs, or changes a value the host can see (guest root changing host GPU state)
 life_persistenced|lifecycle|py|life_persistenced|180|no|-|-|nvidia-persistenced does not start, hold and stop cleanly in the guest, or CUDA fails while it runs

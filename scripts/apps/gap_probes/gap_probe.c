@@ -496,6 +496,44 @@ static int c_kill_target(void) {   // life_kill_* : runs kernels until killed; t
   for (;;) { CK(launch1(f_spin, 1, 1, NULL, a)); CK(cuCtxSynchronize()); }
 }
 
+// ---------------------------------------------------------------------------------------------------------------- cases: CUPTI (callback API and activity API; libcupti comes from the toolkit at run time, GAP_CUPTI_LIB names it)
+typedef void *CUptiSub; typedef void (*CuptiCb)(void *, int, unsigned, const void *);
+static int (*cuptiSubscribe)(CUptiSub *, CuptiCb, void *); static int (*cuptiUnsubscribe)(CUptiSub); static int (*cuptiEnableDomain)(unsigned, CUptiSub, int);
+static int (*cuptiActivityRegisterCallbacks)(void (*)(uint8_t **, size_t *, size_t *), void (*)(CUcontext, uint32_t, uint8_t *, size_t, size_t));
+static int (*cuptiActivityEnable)(int); static int (*cuptiActivityFlushAll)(unsigned); static int (*cuptiActivityGetNextRecord)(uint8_t *, size_t, void **);
+static long cb_enter, act_kernels;
+static void cupti_cb(void *u, int dom, unsigned id, const void *d) { if (dom == 1 && d && *(const int *)d == 0) cb_enter++; }
+static void act_req(uint8_t **b, size_t *sz, size_t *mx) { *b = aligned_alloc(8, 1 << 20); *sz = 1 << 20; *mx = 0; }
+static void act_done(CUcontext c, uint32_t sid, uint8_t *b, size_t sz, size_t valid) {
+  void *rec = NULL; while (cuptiActivityGetNextRecord(b, valid, &rec) == 0) { int kind = *(int *)rec; if (kind == 3 || kind == 10) act_kernels++; } free(b);
+}
+static int cupti_open(void) {
+  const char *p = getenv("GAP_CUPTI_LIB"); void *h = p && *p ? dlopen(p, RTLD_NOW) : dlopen("libcupti.so.12", RTLD_NOW);
+  if (!h) h = dlopen("libcupti.so.13", RTLD_NOW);
+  if (!h) { REASON = "no_libcupti"; return NOT_RUN; }
+  cuptiSubscribe = dlsym(h, "cuptiSubscribe"); cuptiUnsubscribe = dlsym(h, "cuptiUnsubscribe"); cuptiEnableDomain = dlsym(h, "cuptiEnableDomain");
+  cuptiActivityRegisterCallbacks = dlsym(h, "cuptiActivityRegisterCallbacks"); cuptiActivityEnable = dlsym(h, "cuptiActivityEnable");
+  cuptiActivityFlushAll = dlsym(h, "cuptiActivityFlushAll"); cuptiActivityGetNextRecord = dlsym(h, "cuptiActivityGetNextRecord");
+  if (!cuptiSubscribe || !cuptiEnableDomain || !cuptiActivityEnable || !cuptiActivityGetNextRecord) { REASON = "libcupti_symbols"; return NOT_RUN; }
+  return PASS;
+}
+static int c_cupti_callback(void) {
+  int o = cupti_open(); if (o != PASS) return o;
+  CUptiSub sub; int r = cuptiSubscribe(&sub, cupti_cb, NULL); kv("subscribe_rc", "%d", r); if (r) return fail("cuptiSubscribe", r);
+  r = cuptiEnableDomain(1, sub, 1); kv("enable_domain_rc", "%d", r); if (r) return fail("cuptiEnableDomain", r);
+  CUdeviceptr d; CK(cuMemAlloc_v2(&d, 4096)); for (int i = 0; i < 10; i++) CK(run_addone(d, 1024, NULL)); CK(cuCtxSynchronize());
+  kv("driver_api_enter_callbacks_ge_10", "%d", cb_enter >= 10); cuptiUnsubscribe(sub);
+  return cb_enter >= 10 ? PASS : fail("cupti_saw_fewer_than_10_driver_calls", 0);
+}
+static int c_cupti_activity(void) {
+  int o = cupti_open(); if (o != PASS) return o;
+  int r = cuptiActivityRegisterCallbacks(act_req, act_done); kv("register_rc", "%d", r); if (r) return fail("cuptiActivityRegisterCallbacks", r);
+  r = cuptiActivityEnable(10); kv("enable_kernel_rc", "%d", r); if (r) return judge(0, r, 0, "cuptiActivityEnable");   // a refusal is an answer: the harness compares it with the host's
+  CUdeviceptr d; CK(cuMemAlloc_v2(&d, 4096)); for (int i = 0; i < 10; i++) CK(run_addone(d, 1024, NULL)); CK(cuCtxSynchronize());
+  r = cuptiActivityFlushAll(1); kv("flush_rc", "%d", r); kv("kernel_records_ge_10", "%d", act_kernels >= 10);
+  return act_kernels >= 10 ? PASS : fail("cupti_activity_returned_fewer_than_10_kernel_records", r);
+}
+
 typedef struct { const char *name; int (*fn)(void); int module; } Case;
 static const Case CASES[] = {
   {"attr_dump", c_attr_dump, 0}, {"pinned_1g", c_pinned_1g, 0}, {"pinned_4g", c_pinned_4g, 0}, {"host_register_512m", c_host_register_512m, 0},
@@ -506,7 +544,7 @@ static const Case CASES[] = {
   {"pool_alloc_free", c_pool_alloc_free, 1}, {"pool_threshold_trim", c_pool_threshold_trim, 0}, {"pool_ipc_export", c_pool_ipc_export, 0},
   {"churn_ctx_200", c_churn_ctx_200, 0}, {"churn_module_200", c_churn_module_200, 0}, {"churn_streams_events", c_churn_streams_events, 0},
   {"fanout_procs_24", c_fanout_procs_24, 0}, {"spin_5s", c_spin_5s, 1}, {"spin_30s", c_spin_30s, 1}, {"fault_recovery", c_fault_recovery, 1},
-  {"trap_recovery", c_trap_recovery, 1}, {"launch_flood_100k", c_launch_flood_100k, 1}, {"canary", c_canary, 1}, {"kill_target", c_kill_target, 1},
+  {"trap_recovery", c_trap_recovery, 1}, {"launch_flood_100k", c_launch_flood_100k, 1}, {"canary", c_canary, 1}, {"kill_target", c_kill_target, 1}, {"cupti_callback", c_cupti_callback, 1}, {"cupti_activity", c_cupti_activity, 1},
 };
 
 #ifdef GAP_SELFTEST   // gcc -DGAP_SELFTEST: prints the judge() table, no libcuda needed (scripts/ci/test_gap_probes.py)
