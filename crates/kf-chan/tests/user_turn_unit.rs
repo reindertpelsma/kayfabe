@@ -932,6 +932,48 @@ fn without_engine_written_userd_words_the_first_gate_never_opens() {
     assert!(io.calls.contains(&Call::ReadPb(gated.raw())));
     assert_eq!(r.cursor, 2);
 }
+/// ★ 2026-11-18 (stage 1 of `V3_BLACKWELL_USER_RING_ROUTE.md` §2, O1) — the twin of the characterization above:
+/// on the same family, with the SEMAPHORE progress source the same gate opens. The simulated engine releases the
+/// value the Blackwell marker cell carries (its `SEM_PAYLOAD_LO` word) into the private semaphore word, and the
+/// relay reads the words `SemaphoreProgress` derives from it: the tagged reference, and the private `GP_GET` just
+/// after the marker (entry 0 + the gate's barrier + its marker = 3, the value the Ada engine writes back).
+#[test]
+fn with_the_semaphore_source_the_first_gate_opens_on_blackwell() {
+    use kf_chan::user_semaphore::{ProgressSource, SemaphoreProgress, marker_cell};
+    let source = ProgressSource::for_family(kf_chip::Family::Blackwell);
+    assert_eq!(source, ProgressSource::SemaphoreMarker);
+    let gated = ge(1, Kind::Plain).sync();
+    let mut io = Mock::new(16);
+    let mut r = relay();
+    io.put_entry(0, &ge(0, Kind::Plain));
+    io.put_entry(1, &gated);
+    io.put = 2;
+    for _ in 0..8 {
+        if io.gates() > 0 {
+            break;
+        }
+        turn(&mut r, &mut io).unwrap();
+    }
+    assert_eq!(r.need, Need::Marker { target: 1 });
+    // The ledger records what the relay published: entry 0 and the barrier, then the marker.
+    let mut progress = SemaphoreProgress::new(512).unwrap();
+    progress.publish_entries(2).unwrap();
+    let (count, value) = progress.publish_marker().unwrap();
+    assert_eq!((count, value), (1, Marks::value(1)));
+    let cell = marker_cell(source, value, 0x0000_7fff_0000_0100).unwrap();
+    let released = cell[3];
+    let words = progress.observe(released).unwrap();
+    io.hw_reference = words.reference;
+    io.hw_get = words.get;
+    assert_eq!((io.hw_get, io.hw_reference), (3, Marks::value(1)));
+    turn(&mut r, &mut io).unwrap();
+    assert!(
+        io.calls.contains(&Call::ReadPb(gated.raw())),
+        "the gate opened"
+    );
+    assert_eq!(r.cursor, 2);
+}
+
 // Decision Phase 1: hardware format bounds Pointer; copies alone use the scan budget.
 #[test]
 fn pointer_forwards_each_run3440_descriptor_unchanged_without_reading_its_pushbuffer() {
