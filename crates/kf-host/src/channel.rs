@@ -776,10 +776,29 @@ impl HostRm {
         self.alloc_vaspace_with(false, MirrorVaStart::HostDefault)
     }
 
+    /// ★ 2026-11-18 PROBE ONLY (`kf-va-fence-probe`, `V3_SPARSE_RESIDENCY_RCA.md` §7): a bare space
+    /// (no guest-range reservations) allocated with the caller's `NV_VASPACE_ALLOCATION_FLAGS_*`.
+    /// Production never calls it.
+    ///
+    /// # Errors
+    /// The host's refusal; a half-built space is freed.
+    pub fn alloc_vaspace_probe_flags(&self, flags: u32) -> Result<VaSpace, RmError> {
+        self.alloc_vaspace_flags(false, MirrorVaStart::HostDefault, flags)
+    }
+
     fn alloc_vaspace_with(
         &self,
         reserve_guest: bool,
         start: MirrorVaStart,
+    ) -> Result<VaSpace, RmError> {
+        self.alloc_vaspace_flags(reserve_guest, start, 0)
+    }
+
+    fn alloc_vaspace_flags(
+        &self,
+        reserve_guest: bool,
+        start: MirrorVaStart,
+        flags: u32,
     ) -> Result<VaSpace, RmError> {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
         // ★ 2026-10-08 (task A): a guest-mirror space starts where the guest's page tables can map
@@ -790,6 +809,7 @@ impl HostRm {
         let start = effective_start(reserve_guest, start);
         NvVaspaceAllocationParameters {
             va_base: start.va_base(),
+            flags,
             ..NvVaspaceAllocationParameters::default()
         }
         .encode_into(&mut params)
