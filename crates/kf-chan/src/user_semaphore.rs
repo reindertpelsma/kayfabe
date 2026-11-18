@@ -16,7 +16,8 @@
 //! - the wake, Turing's `.interrupt`, `uvm_turing_host.c:79-81`: `NON_STALL_INTERRUPT 0`.
 //!
 //! `SET_REFERENCE` (`0x50`) is NOT used there: no public Hopper/Blackwell channel header defines it, and
-//! UVM never emits it. Whether it is the Xid 32 METHOD of GB205 round B1n is INFERRED (design §2.1).
+//! UVM never emits it. On GB203 / 595.91.07 it raises Xid 32 `intr 00200000` (METHOD), measured 2026-11-18 by
+//! `kf-semmarker-probe` (design §2.7); that GB205 round B1n's METHOD Xid is this marker is INFERRED (another die).
 //!
 //! **Hostile guest.** The semaphore word is GPU-writable and lives in the twin's own restricted address
 //! space, which the guest's forwarded pushbuffers also execute in. A guest that learns its VA can write it.

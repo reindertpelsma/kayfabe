@@ -151,12 +151,17 @@ pub struct Attempt {
     pub xids: Vec<Xid>,
 }
 
+/// PBDMA `INTR_0` METHOD (bit 21; GA100 `dev_pbdma.ref` meaning, INFERRED for GB20x) as RM prints it after `intr`.
+pub const INTR_METHOD: u32 = 0x0020_0000;
+
 /// The verdict of one attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     /// The stream ran to its end with no Xid.
     Clean,
-    /// Variant A only: Xid 32 and the witness never landed (0x50 is not a method here).
+    /// Variant A only: exactly one Xid 32 with PBDMA `INTR_0` METHOD (bit 21, [`INTR_METHOD`]): 0x50 is not a
+    /// method here. Whether the witness after it lands does not matter: measured 2026-11-18 on GB203 / 595.91.07
+    /// (probe `d360cd651`), the Xid was raised AND the later witness release landed.
     MethodRefused,
     /// Anything else: stop the run (fail closed) and keep the evidence.
     Unexpected,
@@ -171,7 +176,16 @@ pub fn verdict(v: Variant, a: &Attempt) -> Verdict {
     let landed = a.word == Some(v.expected_word());
     match (v, a.xids.as_slice(), landed) {
         (_, [], true) => Verdict::Clean,
-        (Variant::A, [Xid { code: 32, .. }], false) => Verdict::MethodRefused,
+        (
+            Variant::A,
+            [
+                Xid {
+                    code: 32,
+                    intr: Some(INTR_METHOD),
+                },
+            ],
+            _,
+        ) => Verdict::MethodRefused,
         _ => Verdict::Unexpected,
     }
 }
@@ -284,10 +298,18 @@ mod tests {
                 verdict(v, &att(false, Some(v.expected_word()), &[])),
                 Verdict::Unexpected
             );
-            assert_eq!(
-                verdict(v, &att(true, Some(v.expected_word()), &[x32])),
-                Verdict::Unexpected
-            );
+            if v == Variant::A {
+                assert_eq!(
+                    verdict(v, &att(true, Some(v.expected_word()), &[x32])),
+                    Verdict::MethodRefused,
+                    "the witness may land after the METHOD Xid"
+                );
+            } else {
+                assert_eq!(
+                    verdict(v, &att(true, Some(v.expected_word()), &[x32])),
+                    Verdict::Unexpected
+                );
+            }
             assert_eq!(verdict(v, &att(true, None, &[x31])), Verdict::Unexpected);
             assert_eq!(verdict(v, &att(true, Some(0), &[])), Verdict::Unexpected);
         }
@@ -328,19 +350,53 @@ mod tests {
             );
             assert_eq!(verdict(v, &att(true, None, &[])), Verdict::Unexpected);
         }
-        // Only an A attempt whose witness is missing with exactly one Xid 32 is MethodRefused.
+        // Only an A attempt with exactly one Xid 32 whose intr is METHOD is MethodRefused.
         assert_eq!(
             verdict(Variant::A, &att(true, None, &[x(31)])),
             Verdict::Unexpected
         );
         assert_eq!(
             verdict(Variant::A, &att(true, None, &[x(32)])),
-            Verdict::MethodRefused
+            Verdict::Unexpected,
+            "no intr printed"
         );
         assert_eq!(
             verdict(Variant::B, &att(true, None, &[x(32)])),
             Verdict::Unexpected
         );
+    }
+
+    /// The 2026-11-18 GB203 attempt as measured: one Xid 32 `intr 00200000`, AND the witness landed.
+    #[test]
+    fn the_measured_gb203_a_attempt_is_method_refused() {
+        let line = "[18942.341911] NVRM: Xid (PCI:0000:00:07): 32, pid=118554, name=kf-semmarker-pr, channel 0x00000002 intr 00200000";
+        let x = parse_xid(line).unwrap();
+        assert_eq!(
+            x,
+            Xid {
+                code: 32,
+                intr: Some(INTR_METHOD)
+            }
+        );
+        let landed = att(true, Some(witness_value(Variant::A)), &[x]);
+        assert_eq!(verdict(Variant::A, &landed), Verdict::MethodRefused);
+        assert_eq!(
+            verdict(Variant::A, &att(true, Some(0), &[x])),
+            Verdict::MethodRefused
+        );
+        // A DEVICE Xid 32 (the creo-04 signature) is not the METHOD answer.
+        let device = Xid {
+            code: 32,
+            intr: Some(0x0080_0000),
+        };
+        assert_eq!(
+            verdict(Variant::A, &landed_with(device)),
+            Verdict::Unexpected
+        );
+    }
+
+    fn landed_with(x: Xid) -> Attempt {
+        att(true, Some(witness_value(Variant::A)), &[x])
     }
 
     #[test]
