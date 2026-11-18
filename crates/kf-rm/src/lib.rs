@@ -39,6 +39,7 @@ pub mod osevent;
 pub mod pmsr;
 pub mod precomp;
 pub mod preempt_bind_probe;
+pub mod queuepriority;
 pub mod rmgraph;
 pub mod rmrpc;
 pub mod rowserve;
@@ -701,7 +702,7 @@ pub fn served_chain(
         )));
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
-    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 9]>([
+    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 10]>([
         // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the FBSR save's registration of GSP-RM's
         // suspend buffer, its FREE, `FBSR_INIT` and the PM-transition scheduling toggle — answered,
         // nothing on the host (`pmsr.rs`). Ahead of the object seat, which would refuse fn 4.
@@ -712,6 +713,10 @@ pub fn served_chain(
         // ★ 2026-10-07: RC-recovery GET/SET (a stub under owner ruling §S) and the power source,
         // answered per VM; never forwarded (`vfguest.rs`).
         Box::new(vfguest::VfGuestPolicy::new(driver)),
+        // ★ 2026-11-18: queue priority (`VK_KHR_global_priority`): the runlist scheduling policy and the
+        // two interleave-level SETs, accepted as the VM's own virtual state, never forwarded and never
+        // applied on the host (`queuepriority.rs`, `docs/design/V3_QUEUE_PRIORITY.md`).
+        Box::new(queuepriority::QueuePriorityPolicy::new(driver)),
         Box::new(kf_gsp::Observing(Box::new(
             faultbuffer::FaultBufferRecorder::new(driver, fault_buffer),
         ))),
