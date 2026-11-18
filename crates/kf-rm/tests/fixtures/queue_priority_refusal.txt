@@ -1,0 +1,19 @@
+# STATUS: LIVE, 2026-11-18 (replay fixture, docs/design/V3_REPLAY_TESTS.md pattern; consumed by
+# crates/kf-rm/tests/queue_priority.rs via include_str!). One state, one request, never a per-die table.
+#
+# logged-*: copied verbatim from the committed evidence. measured: what the evidence names. synthetic:
+# what the kf3 log does NOT carry (it prints the control id and status, never the params), derived from the
+# ogkm struct and labelled.
+source: traces/gap_probes_run_20261118/confirm/kf3_refused_delta.txt (PR #488, branch claude/gap-matrix-20261118), lines 3-6
+logged-line: F2: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+logged-line: F4: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+logged-line: F5: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+logged-line: F6: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+measured: control=0x20801115 status=0x56 guest=580.159.04 box=RTX3090 failing_boots=4 neighbour_boots_with_it=0
+measured: guest-visible-symptom=vkCreateDevice -3 (VK_ERROR_INITIALIZATION_FAILED) for LOW, HIGH, REALTIME; MEDIUM 0; host all 0
+# synthetic: NV2080_CTRL_FIFO_RUNLIST_SET_SCHED_POLICY_PARAMS { NvU32 flags; NvU32 schedPolicy } (ogkm-580
+# ctrl2080fifo.h:790-793). The Vulkan driver is closed source: which of these three it sends is INFERRED.
+synthetic: set-interleaved flags=0x0 schedPolicy=0x1
+synthetic: set-interleaved-wddm flags=0x0 schedPolicy=0x2
+synthetic: set-default flags=0x0 schedPolicy=0x0
+synthetic: restore flags=0x1 schedPolicy=0x0
