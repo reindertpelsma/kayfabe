@@ -10,6 +10,9 @@ Rules (each finding is printed as `file:line: rule: message`; exit 1 if there is
   allowlist   the jobs of gpu-vast.yml and gpu-vast-sweep.yml are exactly the ones in ALLOWLIST,
               each with exactly the permissions listed there. The Worker-facing `gpu` job may hold
               `id-token: write` and nothing else; a later edit cannot widen any of them silently.
+  gate-needs  every job of ci.yml except `gate` and `slow` (the nightly soak) is in the `needs` of the `gate`
+              job, and the gate job is named `CI`. A job the gate does not wait for is a gate that cannot fail
+              the pull request, which is how a split-out shard would silently stop counting.
   secrets     a job that touches the Worker secrets (`VAST_BROKER_*`, `secrets: inherit`, or the
               `gpu-vast` environment) has no `uses:` step at all: no checkout, cache, artifact or
               third-party action runs in the same job as the Worker credentials.
@@ -49,6 +52,9 @@ ALLOWLIST: dict[str, dict[str, dict[str, str]]] = {
     },
     "gpu-vast-sweep.yml": {"gpu": {"id-token": "write"}},
 }
+
+# ci.yml: the jobs the gate does not wait for, with the reason (a new entry has to be argued in review).
+GATE_EXEMPT = {"gate": "is the gate", "slow": "nightly and on demand only, never on the push path"}
 
 SHA = re.compile(r"[0-9a-f]{40}")
 ACTION = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_./-]+)?@[0-9a-f]{40}")
@@ -215,6 +221,39 @@ def touches_secrets(text_lines: list[tuple[int, str]]) -> bool:
     return False
 
 
+def gate_needs(job: Job) -> tuple[list[str] | None, str | None]:
+    """The names in the gate job's `needs: [a, b]` (None and a message for a shape this parser does not read)."""
+    for n, line in job.lines:
+        m = re.match(r"^\s{4}needs:\s*(.*?)\s*$", line)
+        if not m:
+            continue
+        value = strip_comment(m.group(1))
+        if value.startswith("[") and value.endswith("]"):
+            return [x.strip() for x in value[1:-1].split(",") if x.strip()], None
+        return None, f"cannot read the gate's needs {value!r} (use the inline form `needs: [a, b]`)"
+    return None, "the gate job has no `needs:` line"
+
+
+def lint_gate(wf: Workflow, rel: str) -> list[str]:
+    out = []
+    gate = next((j for j in wf.jobs if j.name == "gate"), None)
+    if gate is None:
+        return [f"{rel}: gate-needs: there is no `gate` job"]
+    name = next((strip_comment(m.group(1)).strip("'\"") for _, l in gate.lines
+                 if (m := re.match(r"^\s{4}name:\s*(.*?)\s*$", l))), None)
+    if name != "CI":
+        out.append(f"{rel}:{gate.start}: gate-needs: the gate job must be named `CI` (the required check), not {name!r}")
+    needs, err = gate_needs(gate)
+    if err:
+        return out + [f"{rel}:{gate.start}: gate-needs: {err}"]
+    names = {j.name for j in wf.jobs}
+    for missing in sorted(names - set(needs) - set(GATE_EXEMPT)):
+        out.append(f"{rel}: gate-needs: job `{missing}` is not in the gate's `needs`, so its result cannot fail the gate")
+    for unknown in sorted(set(needs) - names):
+        out.append(f"{rel}: gate-needs: the gate needs `{unknown}`, which is not a job of this workflow")
+    return out
+
+
 def lint_workflow(path: Path, rel: str) -> list[str]:
     wf = parse(path, path.read_text())
     out = []
@@ -226,6 +265,8 @@ def lint_workflow(path: Path, rel: str) -> list[str]:
         out.append(f"{rel}:1: permissions: no top-level `permissions:` key")
     elif wf.top_keys["permissions"] == "write-all":
         out.append(f"{rel}:1: permissions: top-level `permissions: write-all`")
+    if path.name == "ci.yml":
+        out += lint_gate(wf, rel)
     # allowlist
     allowed = ALLOWLIST.get(path.name)
     if allowed is not None:

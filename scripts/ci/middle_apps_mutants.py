@@ -930,31 +930,96 @@ def mutate(text, old, new):
     return text
 
 
+def prepare(root):
+    """One owned temporary copy of the trees the mutants and their tests read (a worker owns one)."""
+    ignore = shutil.ignore_patterns("node_modules", ".wrangler", "__pycache__")
+    for name in [
+        "scripts",
+        "ci/vast-broker",
+        "ci/vast-reaper",
+        "ci/platform-api/migrations",
+    ]:
+        shutil.copytree(ROOT / name, root / name, ignore=ignore)
+    shutil.copyfile(ROOT / "ci/requirements.toml", root / "ci/requirements.toml")
+    for relative in (
+        "traces/apps_linux_20261107/g1/gate_full.out",
+        "traces/apps_linux_20261107/g2/gate_mid.out",
+    ):
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, target)
+    (root / BROKER / "node_modules").symlink_to(
+        ROOT / BROKER / "node_modules", target_is_directory=True
+    )
+
+
+def run_case(root, case):
+    """Apply one mutant in `root`, collect, restore; returns the row. Raises on a malformed mutant."""
+    name, filename, old, new, mode = case
+    path = root / filename
+    original = path.read_text()
+    changed = mutate(original, old, new)
+    if changed == original:
+        raise RuntimeError("empty mutant " + name)
+    if filename.endswith(".py"):
+        ast.parse(changed)
+    elif filename.endswith(".json"):
+        json.loads(changed)
+    path.write_text(changed)
+    try:
+        if filename.endswith((".js", ".mjs")):
+            checked = subprocess.run(
+                ["node", "--check", str(path)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if checked.returncode:
+                raise RuntimeError("syntax error " + name + ": " + checked.stderr)
+        result = collect(root, mode)
+    finally:
+        path.write_text(original)
+    killers = result["killers"]
+    if any("_FailedTest" in name for name in killers):
+        raise RuntimeError("import failed " + repr(result))
+    print(
+        name + ": " + str(len(killers)) + " killers",
+        file=sys.stderr,
+        flush=True,
+    )
+    return dict(mutant=name, count=len(killers), killers=killers)
+
+
+def parse_shard(text):
+    """`I/N` -> (I, N) with 1 <= I <= N."""
+    try:
+        index, count = (int(part) for part in text.split("/"))
+    except ValueError:
+        raise SystemExit("--shard wants I/N, got %r" % text)
+    if not 1 <= index <= count:
+        raise SystemExit("--shard I/N wants 1 <= I <= N, got %r" % text)
+    return index, count
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("only", nargs="?", default="")
+    parser.add_argument(
+        "--shard",
+        default="1/1",
+        help="I/N: run every N-th mutant starting at the I-th (strided, so the three test modes stay mixed). The N slices "
+        "together are every mutant exactly once; each is meant to run on a machine of its own, because the tests "
+        "share fixed /tmp paths (setup_side.sh writes /tmp/setup_hf.out), so two copies on one machine can disturb each other.",
+    )
     args = parser.parse_args()
+    index, count = parse_shard(args.shard)
+    cases = [case for case in CASES if args.only in case[0]][index - 1 :: count]
+    if count > 1 and not cases:
+        print("this shard holds no mutant: the shard count is larger than the number of mutants", file=sys.stderr)
+        return 1
     with tempfile.TemporaryDirectory(prefix="PM1-middle-mutants-") as directory:
         root = Path(directory)
-        ignore = shutil.ignore_patterns("node_modules", ".wrangler", "__pycache__")
-        for name in [
-            "scripts",
-            "ci/vast-broker",
-            "ci/vast-reaper",
-            "ci/platform-api/migrations",
-        ]:
-            shutil.copytree(ROOT / name, root / name, ignore=ignore)
-        shutil.copyfile(ROOT / "ci/requirements.toml", root / "ci/requirements.toml")
-        for relative in (
-            "traces/apps_linux_20261107/g1/gate_full.out",
-            "traces/apps_linux_20261107/g2/gate_mid.out",
-        ):
-            target = root / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / relative, target)
-        (root / BROKER / "node_modules").symlink_to(
-            ROOT / BROKER / "node_modules", target_is_directory=True
-        )
+        prepare(root)
         baselines = {}
         for mode in ("py", "node", "config"):
             result = collect(root, mode)
@@ -962,44 +1027,7 @@ def main():
                 raise RuntimeError("baseline red " + mode + ": " + repr(result))
             baselines[mode] = result["tests"]
         print("baseline green " + json.dumps(baselines), file=sys.stderr, flush=True)
-        rows = []
-        for name, filename, old, new, mode in CASES:
-            if args.only not in name:
-                continue
-            path = root / filename
-            original = path.read_text()
-            changed = mutate(original, old, new)
-            if changed == original:
-                raise RuntimeError("empty mutant " + name)
-            if filename.endswith(".py"):
-                ast.parse(changed)
-            elif filename.endswith(".json"):
-                json.loads(changed)
-            path.write_text(changed)
-            try:
-                if filename.endswith((".js", ".mjs")):
-                    checked = subprocess.run(
-                        ["node", "--check", str(path)],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                    )
-                    if checked.returncode:
-                        raise RuntimeError(
-                            "syntax error " + name + ": " + checked.stderr
-                        )
-                result = collect(root, mode)
-            finally:
-                path.write_text(original)
-            killers = result["killers"]
-            if any("_FailedTest" in name for name in killers):
-                raise RuntimeError("import failed " + repr(result))
-            rows.append(dict(mutant=name, count=len(killers), killers=killers))
-            print(
-                name + ": " + str(len(killers)) + " killers",
-                file=sys.stderr,
-                flush=True,
-            )
+        rows = [run_case(root, case) for case in cases]
         print(json.dumps(dict(baselines=baselines, cases=rows), indent=2))
         return int(any(row["count"] < 2 for row in rows))
 
