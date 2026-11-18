@@ -1158,6 +1158,19 @@ pub fn kf_format_ver3() -> KfFormat {
     f
 }
 
+/// ★ 2026-11-18 (`V3_PTE_MODEL_FUZZ.md` PF-1) — the VER2 descriptor of a chip whose PD1 holds NO
+/// page (Turing's `kgmmuFmtInitLevels_GP10X`, `kern_gmmu_fmt_gp10x.c:74-80`): [`kf_format_ver2`] with
+/// `dir[3].leaf_ps = KF_PS_NONE`, so bit 0 of a PD1 entry is never read as VALID. ⊘ Every VER2
+/// family had the GA10X geometry: a Turing PD1 entry with bit 0 set became a 512 MiB host mapping
+/// where the guest's MMU sees a page-directory entry. The kernel reads `leaf_ps` from the
+/// descriptor on every path (`kf_dir_step`, `kf_par_decode_slot`), so no PTX change.
+#[must_use]
+pub fn kf_format_ver2_no_pd1_page() -> KfFormat {
+    let mut f = kf_format_ver2();
+    f.dir[3].leaf_ps = KF_PS_NONE;
+    f
+}
+
 /// Aperture code: video memory.
 pub const AP_VID: u8 = 0;
 /// Aperture code: peer.
