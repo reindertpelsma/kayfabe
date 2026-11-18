@@ -333,14 +333,14 @@ class WindowsOpenRowsTests(unittest.TestCase):
 
     def test_only_the_three_by_design_rows_not_running_passes_and_is_named(self):
         rows, rec = self.grade(dict(self.BY_DESIGN))
-        self.assertEqual(rows[0]["name"], "windows_open_rows")
+        self.assertEqual((rows[0]["name"], rows[0]["pass"], rows[0]["skip"], rows[0]["fail"]), ("windows_open_rows", 6, 3, 0))
         self.assertEqual(rec["not_run_by_design"], ["dxsamples_multiadapter", "vkglcts_gl46", "vkglcts_vk"])
         self.assertEqual((rec["not_run"], rec["breakages"], rec["ran"], rec["passed"]), ([], [], 6, 6))
 
     def test_a_row_that_ran_and_failed_is_a_listed_breakage_not_a_failure(self):
         rows, rec = self.grade({**self.BY_DESIGN, "dxsamples_hdr": "guest_fail"}, rc=1, kind="FAIL")
         self.assertEqual(rec["breakages"], ["dxsamples_hdr"])
-        self.assertEqual(rows[0]["pass"], 6)
+        self.assertEqual((rows[0]["pass"], rows[0]["fail"]), (5, 0))
 
     def test_any_other_row_that_did_not_run_fails_by_name(self):
         for cls in ("harness", "not_run"):
@@ -357,7 +357,7 @@ class WindowsOpenRowsTests(unittest.TestCase):
     def test_every_row_that_ran_and_failed_is_still_only_a_list_of_breakages(self):
         failing = {a: "guest_fail" for a in self.ROWS if a not in self.BY_DESIGN}
         rows, rec = self.grade({**self.BY_DESIGN, **failing}, rc=1, kind="FAIL")
-        self.assertEqual((len(rec["breakages"]), rec["passed"], rows[0]["pass"]), (6, 0, 6))
+        self.assertEqual((len(rec["breakages"]), rec["passed"], rows[0]["pass"], rows[0]["fail"]), (6, 0, 0, 0))
 
     def test_the_record_accounts_for_every_expected_row(self):
         for classes in (dict(self.BY_DESIGN), {**self.BY_DESIGN, "dxsamples_hdr": "guest_fail"}):

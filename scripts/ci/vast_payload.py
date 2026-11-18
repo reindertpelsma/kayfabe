@@ -1602,7 +1602,8 @@ def apps_discovery_rows(text, rc, sha, result):
         raise EvidenceError("apps_discovery_not_run")
     if rc or doc.get("verdict") != "PASS":
         raise EvidenceError("apps_discovery")
-    return [row("apps_discovery", len(doc.get("rows", [])))]
+    # pass = the rows that passed; a row that ran and failed is a listed breakage (the record), not a pass and not a failed stage
+    return [row("apps_discovery", sum(1 for r in doc.get("rows", []) if type(r) is dict and r.get("status") == "PASS"))]
 
 
 def windows_open_rows_rows(text, rc, sha, result):
@@ -1631,7 +1632,8 @@ def windows_open_rows_rows(text, rc, sha, result):
         raise EvidenceError("windows_open_rows")
     if unexpected:
         raise EvidenceError("windows_open_rows_not_run")
-    return [row("windows_open_rows", record["ran"])]
+    # pass = the rows that passed, skip = the by-design rows that cannot run on one machine (named in the record); breakages are listed, not failures
+    return [row("windows_open_rows", record["passed"], 0, len(record["not_run_by_design"]))]
 
 
 
