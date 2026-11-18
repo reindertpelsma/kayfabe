@@ -268,6 +268,32 @@ const PASSED_THROUGH: &[&kf_abi::matrix::StructRuns] = &[
 ];
 
 /// Print a host-ABI refusal once, by name, and turn it into the status class callers see.
+/// ★ The host-ABI decision for one control, before any ioctl: how `cmd` crosses to this host
+/// ([`kf_abi::hostabi::HostAbi::control_carry`]), and — for an opaque row with a fixed size
+/// (`MeasuredOpaque`, `BranchSized`) — a refusal of any body that is not exactly that size. The
+/// HOST row decides the size; a request only selects the control. `Ok(None)` = pass through.
+///
+/// # Errors
+/// The [`kf_abi::hostabi::HostAbiError`] to refuse by name.
+pub fn control_plan(
+    abi: &kf_abi::hostabi::HostAbi,
+    cmd: u32,
+    payload_len: usize,
+) -> Result<Option<kf_abi::hostabi::Carry>, kf_abi::hostabi::HostAbiError> {
+    let carry = abi.control_carry(cmd)?;
+    if let Some(kf_abi::hostabi::Carry::Same { size }) = carry {
+        let row = kf_abi::hostabi::host_control(cmd);
+        if payload_len != size && row.is_some_and(|r| r.params.is_opaque_sized()) {
+            return Err(kf_abi::hostabi::HostAbiError::Size {
+                strukt: row.map_or("host control", |r| r.name),
+                want: size,
+                got: payload_len,
+            });
+        }
+    }
+    Ok(carry)
+}
+
 fn abi_refused(what: &str, e: &kf_abi::hostabi::HostAbiError) -> RmError {
     kf_arch::rate_eprintln!("kf-host: HOST-ABI REFUSED {what}: {e}");
     RmError::Other(HOST_ABI_REFUSED)
@@ -923,7 +949,11 @@ impl HostRm {
             Some(HostParams::Renamed { before, after }) => {
                 (before.name, self.abi.carry_renamed(before, after))
             }
-            Some(HostParams::NoHeader { .. } | HostParams::MeasuredOpaque { .. }) => {
+            Some(
+                HostParams::NoHeader { .. }
+                | HostParams::MeasuredOpaque { .. }
+                | HostParams::BranchSized { .. },
+            ) => {
                 kf_arch::rate_eprintln!(
                     "kf-host: HOST-ABI REFUSED {what}: allocation params with no header"
                 );
@@ -1136,9 +1166,7 @@ impl HostRm {
     pub fn raw_control(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
         // ★ The host-driver axis: the payload is the bench layout; carry it to the host's own
         // measured layout and back (`kf_abi::hostabi::HOST_CONTROLS`). Same layout ⇒ untouched.
-        let carry = self
-            .abi
-            .control_carry(cmd)
+        let carry = control_plan(&self.abi, cmd, payload.len())
             .map_err(|e| abi_refused(&format!("control {cmd:#010x}"), &e))?;
         match carry {
             Some(c @ kf_abi::hostabi::Carry::Carried { .. }) => {
@@ -1154,22 +1182,6 @@ impl HostRm {
                     .map_err(|e| abi_refused(&format!("control {cmd:#010x} ({name}) reply"), &e))?;
                 payload.copy_from_slice(&back);
                 Ok(())
-            }
-            Some(kf_abi::hostabi::Carry::Same { size })
-                if payload.len() != size
-                    && kf_abi::hostabi::host_control(cmd).is_some_and(|row| {
-                        matches!(
-                            row.params,
-                            kf_abi::hostabi::HostParams::MeasuredOpaque { .. }
-                        )
-                    }) =>
-            {
-                let err = kf_abi::hostabi::HostAbiError::Size {
-                    strukt: kf_abi::hostabi::host_control(cmd).map_or("host control", |r| r.name),
-                    want: size,
-                    got: payload.len(),
-                };
-                Err(abi_refused(&format!("control {cmd:#010x}"), &err))
             }
             _ => self.raw_control_exact(object, cmd, payload),
         }
@@ -2432,5 +2444,147 @@ mod display_slot_tests {
             !super::display_slot_exportable(Some(1 << 30), 1 << 30),
             "the store's size"
         );
+    }
+}
+
+#[cfg(test)]
+mod control_plan_tests {
+    //! ★★ 2026-11-18 (Rocky 9.7 guest at host 595.91.07: cuInit 999; kf-host refused 852e/853a/a618/853b
+    //! by name at realize, so the guest's GSP-bound F-4 questions were never answered). The decision
+    //! `raw_control` takes before its ioctl, through the real `kf_abi::hostabi` table.
+    use super::control_plan;
+    use kf_abi::gssreplay::{Answer, ROWS, answer};
+    use kf_abi::host_driver::HostDriverVersion;
+    use kf_abi::hostabi::{Carry, HostAbi, HostAbiError};
+
+    fn abi(v: &str) -> HostAbi {
+        HostAbi::for_host(HostDriverVersion::parse(v).expect("parse")).expect("measured")
+    }
+
+    /// The five rows and their 595-branch sizes (`kf_abi::hostabi`, traces/constants_measure_20261014b/tier2/).
+    const ROWS_595: [(u32, usize); 5] = [
+        (0x2080_852e, 596),
+        (0x2080_853a, 15352),
+        (0x2080_a618, 8632),
+        (0x2080_853b, 14320),
+        (0x2080_852a, 1784),
+    ];
+
+    #[test]
+    fn a_595_host_is_asked_exactly_the_measured_size() {
+        for v in ["595.84", "595.91.07"] {
+            let h = abi(v);
+            for (cmd, size) in ROWS_595 {
+                assert!(
+                    matches!(control_plan(&h, cmd, size), Ok(Some(Carry::Same { size: s })) if s == size),
+                    "{cmd:#x} at {v}"
+                );
+                for other in [
+                    0,
+                    4,
+                    528,
+                    1432,
+                    1456,
+                    1716,
+                    1832,
+                    8620,
+                    size - 4,
+                    size + 4,
+                    16384,
+                ] {
+                    if other == size {
+                        continue;
+                    }
+                    assert!(
+                        matches!(
+                            control_plan(&h, cmd, other),
+                            Err(HostAbiError::Size { want, got, .. }) if want == size && got == other
+                        ),
+                        "{cmd:#x} at {v}: a {other} B body must be refused before the ioctl"
+                    );
+                }
+            }
+        }
+    }
+
+    /// ⊘ No regression: a 580 host keeps getting the 580 sizes, untouched.
+    #[test]
+    fn a_580_host_still_passes_the_580_sizes() {
+        for v in [
+            "580.105.08",
+            "580.126.09",
+            "580.159.04",
+            "580.173.02",
+            "580.178.04",
+        ] {
+            let h = abi(v);
+            for (cmd, size) in [(0x2080_852e, 528), (0x2080_853a, 1456), (0x2080_a618, 8620)] {
+                assert!(
+                    matches!(control_plan(&h, cmd, size), Ok(None)),
+                    "{cmd:#x} at {v}"
+                );
+            }
+            assert!(matches!(
+                control_plan(&h, 0x2080_852a, 1784),
+                Ok(Some(Carry::Same { size: 1784 }))
+            ));
+        }
+    }
+
+    /// An unmeasured host outside the encoded interval is still refused by name.
+    #[test]
+    fn an_unmeasured_branch_stays_refused() {
+        for v in ["575.57.08", "590.48.01", "610.43.02"] {
+            for (cmd, size) in ROWS_595 {
+                assert!(
+                    matches!(
+                        control_plan(&abi(v), cmd, size),
+                        Err(HostAbiError::NoHeader { .. })
+                    ),
+                    "{cmd:#x} at {v}"
+                );
+            }
+        }
+    }
+
+    /// ★ The guest cannot pick the size. Realize asks every `gssreplay::ROWS` row through the plan;
+    /// only rows the HOST row admits get an answer (the device itself is faked as echoing NV_OK,
+    /// which is generous: the plan, not the device, must be what refuses). A guest request is then
+    /// answered only at the host's size; the 580-branch body of the same control is not.
+    #[test]
+    fn the_guest_request_selects_the_control_never_the_size() {
+        for v in ["595.84", "595.91.07"] {
+            let h = abi(v);
+            let answers: Vec<Answer> = ROWS
+                .iter()
+                .filter(|r| control_plan(&h, r.cmd, r.size).is_ok())
+                .map(|r| Answer::from_host(*r, &r.request()))
+                .collect();
+            for (cmd, size) in ROWS_595 {
+                let admitted: Vec<usize> = answers
+                    .iter()
+                    .filter(|a| a.row.cmd == cmd)
+                    .map(|a| a.row.size)
+                    .collect();
+                assert_eq!(admitted, vec![size], "{cmd:#x} at {v}");
+                let row = ROWS
+                    .iter()
+                    .find(|r| r.cmd == cmd && r.size == size)
+                    .expect("guest-facing row");
+                assert!(answer(&answers, cmd, &mut row.request()), "{cmd:#x} at {v}");
+            }
+            for (cmd, size) in [
+                (0x2080_852e, 528),
+                (0x2080_853a, 1456),
+                (0x2080_a618, 8620),
+                (0x2080_852a, 1716),
+                (0x2080_852e, 1432),
+            ] {
+                assert!(
+                    !answer(&answers, cmd, &mut vec![0u8; size]),
+                    "{cmd:#x} {size} B at {v}: another branch's size must not be answered"
+                );
+            }
+        }
     }
 }
