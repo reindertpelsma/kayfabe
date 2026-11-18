@@ -730,6 +730,18 @@ class Tools(unittest.TestCase):
         self.assertEqual(gap_scripts.TOOL_ROOTS[0], "")
         self.assertTrue(gap_scripts.TOOL_ROOTS[1].endswith("gap_probes/tools"))
 
+    def test_a_tool_pushed_beside_the_script_is_found_with_the_default_roots(self):
+        import gap_scripts
+        tools = Path(gap_scripts.__file__).resolve().parent / "tools"
+        existed = tools.exists()
+        bindir = tools / "usr/local/cuda-12.9/bin"
+        bindir.mkdir(parents=True, exist_ok=True)
+        (bindir / "gap-fake-tool").write_text("#!/bin/sh\n")
+        try:
+            self.assertTrue(gap_scripts.find_tool("gap-fake-tool").endswith("cuda-12.9/bin/gap-fake-tool"))
+        finally:
+            shutil.rmtree(tools if not existed else bindir, True)
+
     def test_a_counter_permission_answer_from_ncu_is_a_declined_case_not_a_failure(self):
         cls = L.classify_tool(1, "==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters")
         self.assertEqual(L.tools_verdict({"metric": cls}), ("NOT_SUPPORTED", "tool_answer_metric"))
