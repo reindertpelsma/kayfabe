@@ -1,0 +1,53 @@
+[2026-11-06|22:25:15] Gathering System Details: Started
+[2026-11-06|22:26:20] Gathering System Details: Finished
+[2026-11-06|22:26:20] Workload initialization: Started
+[2026-11-06|22:26:33] Workload initialization: Finished
+
+Valid Workloads: 
+  3) creo-04 [v1.0.1] 
+    ✓ <id=14> 01_ScorpionShadedReflections 
+    ✓ <id=15> 02_SubmarineShadedReflections 
+    ✓ <id=16> 03_WorldCarShadedReflections 
+    ✓ <id=17> 04_WorldCarShaded 
+    ✓ <id=18> 05_ScorpionShaded 
+    ✓ <id=19> 06_SubmarineShaded 
+    ✓ <id=20> 07_WorldCarShadedEdges 
+    ✓ <id=21> 08_ScorpionShadedEdges 
+    ✓ <id=22> 09_SubmarineShadedHQEdges 
+    ✓ <id=23> 10_WorldCarHiddenLines 
+    ✓ <id=24> 11_ScorpionHiddenLines 
+    ✓ <id=25> 12_SubmarineNoHidden 
+    ✓ <id=26> 13_ScorpionNoHidden 
+    
+[2026-11-06|22:26:33] Starting Workload 1 of 1, Iteration 1 of 1
+[2026-11-06|22:26:33] [Workload:creo-04] Starting
+[2026-11-06|22:35:10] [workload: creo-04 / subtest: 01_ScorpionShadedReflections] Started
+[2026-11-06|22:36:14] [workload: creo-04 / subtest: 01_ScorpionShadedReflections] Completed
+[2026-11-06|22:36:14] [workload: creo-04 / subtest: 02_SubmarineShadedReflections] Started
+[2026-11-06|22:37:10] [workload: creo-04 / subtest: 02_SubmarineShadedReflections] Completed
+[2026-11-06|22:37:10] [workload: creo-04 / subtest: 03_WorldCarShadedReflections] Started
+[2026-11-06|22:37:44] [workload: creo-04 / subtest: 03_WorldCarShadedReflections] Completed
+[2026-11-06|22:37:44] [workload: creo-04 / subtest: 04_WorldCarShaded] Started
+[2026-11-06|22:38:16] [workload: creo-04 / subtest: 04_WorldCarShaded] Completed
+[2026-11-06|22:38:16] [workload: creo-04 / subtest: 05_ScorpionShaded] Started
+[2026-11-06|22:39:10] [workload: creo-04 / subtest: 05_ScorpionShaded] Completed
+[2026-11-06|22:39:10] [workload: creo-04 / subtest: 06_SubmarineShaded] Started
+[2026-11-06|22:40:02] [workload: creo-04 / subtest: 06_SubmarineShaded] Completed
+[2026-11-06|22:40:02] [workload: creo-04 / subtest: 07_WorldCarShadedEdges] Started
+[2026-11-06|22:40:56] [workload: creo-04 / subtest: 07_WorldCarShadedEdges] Completed
+[2026-11-06|22:40:56] [workload: creo-04 / subtest: 08_ScorpionShadedEdges] Started
+[2026-11-06|22:41:54] [workload: creo-04 / subtest: 08_ScorpionShadedEdges] Completed
+[2026-11-06|22:41:54] [workload: creo-04 / subtest: 09_SubmarineShadedHQEdges] Started
+[2026-11-06|22:42:51] [workload: creo-04 / subtest: 09_SubmarineShadedHQEdges] Completed
+[2026-11-06|22:42:51] [workload: creo-04 / subtest: 10_WorldCarHiddenLines] Started
+[2026-11-06|22:43:23] [workload: creo-04 / subtest: 10_WorldCarHiddenLines] Completed
+[2026-11-06|22:43:23] [workload: creo-04 / subtest: 11_ScorpionHiddenLines] Started
+[2026-11-06|22:44:13] [workload: creo-04 / subtest: 11_ScorpionHiddenLines] Completed
+[2026-11-06|22:44:13] [workload: creo-04 / subtest: 12_SubmarineNoHidden] Started
+[2026-11-06|22:45:07] [workload: creo-04 / subtest: 12_SubmarineNoHidden] Completed
+[2026-11-06|22:45:07] [workload: creo-04 / subtest: 13_ScorpionNoHidden] Started
+[2026-11-06|22:45:57] [workload: creo-04 / subtest: 13_ScorpionNoHidden] Completed
+[2026-11-06|22:45:57] [Workload: creo-04] Completed
+
+Run complete -- results and logs available in: 
+[Iteration 1] C:\spec\results\creo-04\result_2026-11-06-22-26-33

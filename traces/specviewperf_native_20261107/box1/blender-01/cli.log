@@ -1,0 +1,35 @@
+[2026-11-06|20:17:23] Gathering System Details: Started
+[2026-11-06|20:18:01] Gathering System Details: Finished
+[2026-11-06|20:18:01] Workload initialization: Started
+[2026-11-06|20:18:02] Workload initialization: Finished
+
+Valid Workloads: 
+  1) blender-01 [v1.0.1] 
+    ✓ <id=1> 01_MetroverseWireframeQuad 
+    ✓ <id=2> 02_MetroverseShadedSolidShadows 
+    ✓ <id=3> 03_MetroverseShadedWireframe 
+    ✓ <id=4> 04_MetroverseColorXray 
+    ✓ <id=5> 05_MetroverseQuadViewports 
+    ✓ <id=6> 06_MetroverseEevee 
+    ✓ <id=7> 07_ClassroomEevee 
+    
+[2026-11-06|20:18:02] Starting Workload 1 of 1, Iteration 1 of 1
+[2026-11-06|20:18:02] [Workload:blender-01] Starting
+[2026-11-06|20:18:03] [workload: blender-01 / subtest: 01_MetroverseWireframeQuad] Started
+[2026-11-06|20:22:40] [workload: blender-01 / subtest: 01_MetroverseWireframeQuad] Completed
+[2026-11-06|20:22:40] [workload: blender-01 / subtest: 02_MetroverseShadedSolidShadows] Started
+[2026-11-06|20:25:54] [workload: blender-01 / subtest: 02_MetroverseShadedSolidShadows] Completed
+[2026-11-06|20:25:54] [workload: blender-01 / subtest: 03_MetroverseShadedWireframe] Started
+[2026-11-06|20:31:02] [workload: blender-01 / subtest: 03_MetroverseShadedWireframe] Completed
+[2026-11-06|20:31:02] [workload: blender-01 / subtest: 04_MetroverseColorXray] Started
+[2026-11-06|20:35:14] [workload: blender-01 / subtest: 04_MetroverseColorXray] Completed
+[2026-11-06|20:35:14] [workload: blender-01 / subtest: 05_MetroverseQuadViewports] Started
+[2026-11-06|20:42:02] [workload: blender-01 / subtest: 05_MetroverseQuadViewports] Completed
+[2026-11-06|20:42:02] [workload: blender-01 / subtest: 06_MetroverseEevee] Started
+[2026-11-06|20:45:18] [workload: blender-01 / subtest: 06_MetroverseEevee] Completed
+[2026-11-06|20:45:18] [workload: blender-01 / subtest: 07_ClassroomEevee] Started
+[2026-11-06|20:48:38] [workload: blender-01 / subtest: 07_ClassroomEevee] Completed
+[2026-11-06|20:48:38] [Workload: blender-01] Completed
+
+Run complete -- results and logs available in: 
+[Iteration 1] C:\spec\results\blender-01\result_2026-11-06-20-18-02
