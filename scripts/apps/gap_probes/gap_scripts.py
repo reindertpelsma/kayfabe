@@ -162,24 +162,49 @@ def life_kill_gl(ctx, rounds=5):
     return result("PASS", rounds_ok=rounds)
 
 
+def pids_of(name):
+    """Process ids by name from /proc (the kernel keeps 15 characters of the name, so `nvidia-persistenced` is `nvidia-persiste`; pgrep -x cannot match it)."""
+    out = []
+    for p in Path("/proc").iterdir():
+        if p.name.isdigit():
+            try:
+                if (p / "comm").read_text().strip() == name[:15]:
+                    out.append(int(p.name))
+            except OSError:
+                pass
+    return out
+
+
 def life_persistenced(ctx):
+    """nvidia-persistenced daemonises: the process we start returns at once, so the daemon is found by name, held for a few seconds with CUDA alive, and stopped with SIGTERM."""
     exe = shutil.which("nvidia-persistenced")
     if not exe:
         return result("NOT_RUN", "no_nvidia_persistenced")
-    p = subprocess.Popen([exe, "--no-persistence-mode", "--verbose"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    pre = pids_of("nvidia-persistenced")
+    if pre:   # one is running already (the machine's own): do not disturb it, show that CUDA works while it runs
+        c = canary(ctx)
+        return result("PASS" if c else "FAIL", "-" if c else "cuda_fails_while_persistenced_runs", preexisting=1, canary=int(c))
+    rc, out, to = run([exe, "--no-persistence-mode", "--verbose"], 60)
     time.sleep(3)
-    alive = p.poll() is None
-    c = canary(ctx) if alive else False
-    if alive:
-        p.terminate()
-        try:
-            p.wait(20)
-        except subprocess.TimeoutExpired:
-            p.kill()
-            return result("FAIL", "persistenced_ignored_sigterm", alive=1, canary=int(c))
-    if not alive:
-        return result("FAIL", "persistenced_exited_early_rc_%s" % p.returncode, alive=0)
-    return result("PASS" if c else "FAIL", "-" if c else "cuda_fails_while_persistenced_runs", alive=1, canary=int(c))
+    pids = pids_of("nvidia-persistenced")
+    kv = {"start_rc": rc, "daemon_found": int(bool(pids))}
+    if to or rc != 0 or not pids:
+        return result("FAIL", "persistenced_did_not_start", **kv)
+    c = canary(ctx)
+    for pid in pids:
+        os.kill(pid, signal.SIGTERM)
+    gone = False
+    for _ in range(20):
+        time.sleep(1)
+        if not pids_of("nvidia-persistenced"):
+            gone = True
+            break
+    kv.update(canary=int(c), stopped_on_sigterm=int(gone))
+    if not gone:
+        for pid in pids_of("nvidia-persistenced"):
+            os.kill(pid, signal.SIGKILL)
+        return result("FAIL", "persistenced_ignored_sigterm", **kv)
+    return result("PASS" if c else "FAIL", "-" if c else "cuda_fails_while_persistenced_runs", **kv)
 
 
 MODULES = ["nvidia_drm", "nvidia_modeset", "nvidia_uvm", "nvidia"]

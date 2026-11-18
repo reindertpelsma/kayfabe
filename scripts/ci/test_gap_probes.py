@@ -601,6 +601,28 @@ class ScriptCases(unittest.TestCase):
         r = self.S.smi_setters({"probe": self.probe(False), "out": self.d})
         self.assertEqual((r["status"], r["reason"]), ("FAIL", "device_unusable_after_setters"))
 
+    def test_persistenced_is_found_by_name_after_it_daemonises_and_stopped_with_sigterm(self):
+        """A fake nvidia-persistenced that forks a sleeper named like the daemon and returns 0 at once, as the real one does."""
+        d = self.d
+        daemon = d / "nvidia-persistenced"
+        sleeper = d / "sleeper"
+        sleeper.mkdir()
+        shutil.copy(shutil.which("bash"), sleeper / "nvidia-persistenced")   # a process whose kernel name is the daemon's
+        daemon.write_text("#!/bin/sh\n%s/nvidia-persistenced -c 'sleep 300; true' >/dev/null 2>&1 &\nexit 0\n" % sleeper)
+        daemon.chmod(0o755)
+        r = self.S.life_persistenced({"probe": self.probe(True), "out": d})
+        self.assertEqual(r["status"], "PASS", r)
+        self.assertEqual(r["kv"]["stopped_on_sigterm"], "1")
+        self.assertEqual(r["kv"]["daemon_found"], "1")
+
+    def test_a_persistenced_that_never_starts_a_daemon_fails_the_case(self):
+        d = self.d
+        daemon = d / "nvidia-persistenced"
+        daemon.write_text("#!/bin/sh\nexit 0\n")
+        daemon.chmod(0o755)
+        r = self.S.life_persistenced({"probe": self.probe(True), "out": d})
+        self.assertEqual((r["status"], r["reason"]), ("FAIL", "persistenced_did_not_start"))
+
     def test_an_insufficient_permissions_answer_is_not_an_error(self):
         st, why = L.setters_verdict({"x": L.classify_setter(1, "Insufficient Permissions")}, True)
         self.assertEqual((st, why), ("PASS", "-"))
