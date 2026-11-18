@@ -932,18 +932,49 @@ impl HostRm {
         self.reserve_va_flags(space, at, len, NVOS32_RESERVE_FLAGS)
     }
 
+    /// ★ 2026-11-18 PROBE ONLY (`kf-va-tiling-probe`, `V3_SPARSE_RESIDENCY_RCA.md` §8): a reservation
+    /// with the caller's `NVOS32` flags, `attr` and alignment (e.g. [`NVOS32_RESERVE_FLAGS`] `|`
+    /// [`NVOS32_ALLOC_FLAGS_SPARSE`] for a `_SPARSE` micro block, or `_ATTR_PAGE_SIZE_BIG` with
+    /// `_ALLOC_FLAGS_ALIGNMENT_FORCE` for a 64 KiB-granular fence). Production never calls it.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn reserve_va_probe_flags(
+        &self,
+        space: u32,
+        at: u64,
+        len: u64,
+        flags: u32,
+        attr: u32,
+        alignment: u64,
+    ) -> Result<u32, RmError> {
+        self.reserve_va_attr(space, at, len, flags, attr, alignment)
+    }
+
     /// [`HostRm::reserve_va`] with explicit `NVOS32` flags: [`NVOS32_RESERVE_FLAGS`], or
     /// [`GuestVaFill::reserve_flags`] for a static guest range.
     fn reserve_va_flags(&self, space: u32, at: u64, len: u64, flags: u32) -> Result<u32, RmError> {
+        self.reserve_va_attr(space, at, len, flags, 0, 0)
+    }
+
+    fn reserve_va_attr(
+        &self,
+        space: u32,
+        at: u64,
+        len: u64,
+        flags: u32,
+        attr: u32,
+        alignment: u64,
+    ) -> Result<u32, RmError> {
         let mut p = [0u8; NvMemoryAllocationParams::SIZE];
         NvMemoryAllocationParams {
             owner: self.client.raw(),
             kind: 0,
             flags: 0,
             attr2: 0,
-            attr: 0,
+            attr,
             size: len,
-            alignment: 0,
+            alignment,
         }
         .encode_into(&mut p)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;

@@ -1,0 +1,9 @@
+c07bd23dc kf-va-tiling-probe: row count as the second argument (M1 at the block cap)
+BUILD_RC=0
+TILING arm=M0 calls_per_map=1 calls_per_unmap=1 map[n=2048 p50=24.4us p99=37.1us max=45.1us mean=26.1us] unmap[n=2048 p50=20.6us p99=32.1us max=304.9us mean=21.8us] invalidate_ok=true invalidate_us=16
+TILING arm=M1d big_fences=false mapped=0 calls_per_map=0.00 calls_per_unmap=0.00 peak_blocks=1 map[n=0] unmap[n=0] window[n=0] map_err_at=0:resv_Row[0x120000000,0x120010000)(NoMemory)
+TILING arm=M1 big_fences=true mapped=2048 calls_per_map=5.00 calls_per_unmap=5.00 peak_blocks=4096 map[n=2048 p50=112.7us p99=137.2us max=149.7us mean=111.0us] unmap[n=2048 p50=126.7us p99=160.1us max=935.3us mean=123.9us] window[n=4096 p50=56.6us p99=100.0us max=110.1us mean=63.4us]
+TILING arm=M0 calls_per_map=1 calls_per_unmap=1 map[n=8000 p50=24.4us p99=36.1us max=47.0us mean=25.8us] unmap[n=8000 p50=20.7us p99=30.7us max=259.5us mean=21.2us] invalidate_ok=true invalidate_us=17
+TILING arm=M1d big_fences=false mapped=0 calls_per_map=0.00 calls_per_unmap=0.00 peak_blocks=1 map[n=0] unmap[n=0] window[n=0] map_err_at=0:resv_Row[0x120000000,0x120010000)(NoMemory)
+TILING arm=M1 big_fences=true mapped=8000 calls_per_map=5.00 calls_per_unmap=5.00 peak_blocks=16000 map[n=8000 p50=145.1us p99=185.8us max=247.5us mean=142.6us] unmap[n=8000 p50=226.8us p99=302.0us max=618.9us mean=219.0us] window[n=16000 p50=64.8us p99=197.4us max=539.1us mean=96.3us]
+xid_before=0 xid_after=0

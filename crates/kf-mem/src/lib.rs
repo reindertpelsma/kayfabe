@@ -39,5 +39,6 @@ pub mod maplog;
 pub mod refusal_dump;
 #[cfg(test)]
 pub(crate) mod sim;
+pub mod tiling;
 pub mod vaprof;
 pub mod vasmgr;
