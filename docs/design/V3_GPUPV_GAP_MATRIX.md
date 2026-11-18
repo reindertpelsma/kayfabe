@@ -2,7 +2,7 @@
 
 **STATUS: RESEARCH, 2026-11-18** (first version; every row says whether it is MEASURED, cited or INFERRED; one hardware run of 2026-11-18 on one RTX 3090 box is recorded in sections 3.4 and 3.5 and in `traces/gap_probes_run_20261118/`; nothing else here was run on a GPU).
 
-**Summary (public, counts per kayfabe status): 133 rows: WORKS 48, BROKEN 15, UNKNOWN 62, N-A-BY-DESIGN 8.** **Target: BROKEN = 0. Patch-tier rows are BROKEN until the optional patch tier ships.** **Closure path of the BROKEN and UNKNOWN rows: IN-TREE FIX 59, PATCH TIER 3, OWNER DECISION 15 (and 8 N-A-BY-DESIGN rows, which close by their stated reason).** (IN-TREE FIX = kayfabe code; PATCH TIER = needs a host and/or guest kernel or driver patch, optional and later, section 6; OWNER DECISION = a policy; for an UNKNOWN row the path is the one that applies if a run fails.) UNKNOWN is the largest class on purpose: most rows name a probe that is authored and not yet run, and a row only leaves UNKNOWN when a run with a revision exists. The aim of the matrix is to find failures: a pass is hygiene, a failure is a result.
+**Summary (public, counts per kayfabe status): 148 rows: WORKS 60, BROKEN 22, UNKNOWN 58, N-A-BY-DESIGN 8.** **Target: BROKEN = 0. Patch-tier rows are BROKEN until the optional patch tier ships.** **Closure path of the BROKEN and UNKNOWN rows: IN-TREE FIX 59, PATCH TIER 3, OWNER DECISION 18 (and 8 N-A-BY-DESIGN rows, which close by their stated reason).** (IN-TREE FIX = kayfabe code; PATCH TIER = needs a host and/or guest kernel or driver patch, optional and later, section 6; OWNER DECISION = a policy; for an UNKNOWN row the path is the one that applies if a run fails.) UNKNOWN is the largest class on purpose: most rows name a probe that is authored and not yet run, and a row only leaves UNKNOWN when a run with a revision exists. The aim of the matrix is to find failures: a pass is hygiene, a failure is a result.
 
 Owner goal (2026-11-17/18): kayfabe emulates full NVIDIA; its first target is the set of gaps that GPU paravirtualisation (GPU-PV) leaves behind. Every failing probe ends in exactly one of four buckets, and a difference is never called a kayfabe bug without a host control (`docs/OWNER_RULINGS.md` working rules):
 
@@ -95,11 +95,11 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
 | GX-01 | Vulkan extension set equal to the host | I | WORKS | MEASURED: extension sets equal in the Vulkan CTS subset guest run (open-rows guest run 2026-11-17 (kf3 04613288, RTX 3090; evidence PR pending)) | none | - |
-| GX-02 | Vulkan features, limits, queue families and format properties equal to the host | I | UNKNOWN | none; probe vk_dump authored | run vk_dump | IN-TREE FIX |
-| GX-03 | Vulkan ray tracing pipeline and ray query | P7 | UNKNOWN | gfxset item pv_vk_rt_ext exists but is in no stage | run the gfxset item on a box; read feature bits in vk_dump | IN-TREE FIX |
-| GX-04 | Mesh and task shaders | I | UNKNOWN | none | add the CTS mesh groups to the full-suite list (section 4) | IN-TREE FIX |
+| GX-02 | Vulkan features, limits, queue families and format properties equal to the host | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): vk_dump: 250 of 250 device extensions equal and 172 shared feature, limit and property names equal but for 4 format-related ones; the host's vulkaninfo is an older version than the guest's and dumps fewer properties (679 against 1266 tokens), so full parity needs one pinned tool | pin one vulkaninfo build for both sides | - |
+| GX-03 | Vulkan ray tracing pipeline and ray query | P7 | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): CTS sample: ray_tracing_pipeline 234 and ray_query 232 cases, guest equals host but for one case that is only slow (CT-02, CT-03) | none | - |
+| GX-04 | Mesh and task shaders | I | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): CTS mesh_shader sample: 3 guest Timeouts without PR 480 (all depth_only or partial-usage smoke cases), none with it (CT-04) | merge PR 480 | IN-TREE FIX (merge PR 480) |
 | GX-05 | Device-generated commands (multiview indexed draw) | I | WORKS | MEASURED: DeviceLost with host Xid 13 before the fix, Pass after it (PR 480, host_pte_kind), confirmed on a second box 2026-11-18 | none | - |
-| GX-06 | Sparse binding and residency (buffer and multisampled image residency) | S14 | BROKEN | MEASURED: Timeout and host Xid 109 on texel_buffers.sparse_residency size_2_24 and on the 4-sample residency image case; binding-only cases pass; mechanism NOT shown (docs/design/V3_VULKAN_CTS_ROW.md section 12) | root cause first, then a GPU-free regression test | IN-TREE FIX (root cause first; H6 or H7 only if the cause is the mapping granularity, INFERRED) |
+| GX-06 | Sparse binding and residency (buffer and multisampled image residency) | S14 | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): CTS sparse_resources sample: 11 of 70 differ, with and without PR 480, host Xid 109 and 31 (CT-01) | root cause first, then a GPU-free regression test | IN-TREE FIX (root cause first; H6 or H7 only if the cause is the mapping granularity, INFERRED) |
 | GX-07 | Vulkan video decode and encode queues | I | WORKS | MEASURED: the 43 video cases of the CTS subset agree host versus guest (open-rows guest run 2026-11-17 (kf3 04613288, RTX 3090; evidence PR pending)) | none | - |
 | GX-08 | Present modes, vsync, tearing, swapchain recreation | I | UNKNOWN | none | display lane: needs a window system in the guest | IN-TREE FIX |
 | GX-09 | Variable refresh rate (VRR, G-SYNC) | I | UNKNOWN | none; the virtual monitor is set by kayfabe | decide whether the virtual EDID should advertise a VRR range | OWNER DECISION (virtual monitor VRR range) |
@@ -112,13 +112,28 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 | GX-16 | OpenGL context sharing across threads and processes | I | UNKNOWN | none | DESIGN-ONLY: two shared contexts, fence sync, compute shader | IN-TREE FIX |
 | GX-17 | EGL, GBM and Wayland compositors (weston headless, sway) | S9 | WORKS | MEASURED: gfxset pv_gbm_egl_import, weston_headless, weston_client_diff, sway_screencap in the 38/38 guest run | none | - |
 | GX-18 | PRIME render offload | S9 | UNKNOWN | none | DESIGN-ONLY: needs a second (software or virtual) GPU in the guest | OWNER DECISION (whether a second virtual GPU is offered to the guest) |
-| GX-20 | Vulkan queue global priority (VK_KHR_global_priority): HIGH and REALTIME queues | P7 | UNKNOWN | none | DESIGN-ONLY | IN-TREE FIX |
+| GX-20 | Vulkan queue global priority (VK_KHR_global_priority): LOW, HIGH and REALTIME queues | P7 | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): vk_global_priority: the guest reports the host's priorities (family 0: LOW, MEDIUM, HIGH, REALTIME) but vkCreateDevice with LOW, HIGH or REALTIME on any family fails with VK_ERROR_INITIALIZATION_FAILED (-3) and only the default MEDIUM succeeds; the host accepts all reported ones; same uid 0 and same capability sets on both sides. The kf3 log of every failing boot has one refusal that the neighbour boot lacks: GSP REFUSED fn76/0x20801115=0x56, NV2080_CTRL_CMD_FIFO_RUNLIST_SET_SCHED_POLICY (the link is INFERRED). CTS: api.device_init.create_device_global_priority_khr.basic and _query_khr.basic, synchronization.global_priority_transition high and realtime | owner decision on the host-wide runlist scheduling policy, then an in-tree change | OWNER DECISION (the host-wide runlist scheduling policy, section 3.5) |
 | GX-19 | Display-less and headless operation | S9 | WORKS | MEASURED: the whole gfxset and the Linux app matrix run headless | none | - |
 
 ### 2.5 Vulkan CTS groups, sampled (section 3.5)
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
+| CT-01 | Vulkan CTS sparse_resources (70 sampled of 19,402) | S14 | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 53 pass, 17 NS; guest 42 pass, 17 NS, 10 Timeout, 1 Fail, with and without PR 480 (11 cases: image_sparse_residency 2d_array/cube/cube_array, multisampled_image_sparse_residency r32ui/rgba16f/rgba32f samples_2 and rgba32i/rgba32ui/rgba8i samples_4, buffer texel_buffers.sparse_residency size_2_24 r64ui, shader_intrinsics.cube_sparse_read r32i); host Xid 109 (channel 0x31) and one Xid 31 per timeout; mechanism not shown (CU/GX-06) | root cause first, then a GPU-free regression test | IN-TREE FIX |
+| CT-02 | Vulkan CTS ray_tracing_pipeline (234 sampled of 22,241) | P7 | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 205 pass, 29 NS; guest 204 pass, 29 NS, 1 Timeout at 60 s (misc.recursiveTraces_AABB_15), which passes alone in the guest at 240 s: slowness, not a hang | none | - |
+| CT-03 | Vulkan CTS ray_query (232 sampled of 48,771) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 217 pass, 15 NS; guest identical | none | - |
+| CT-04 | Vulkan CTS mesh_shader (254 sampled of 28,061) | I | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): without PR 480 the guest times out on 3 ext.smoke cases (optimized_lib depth_only_points_position_components, optimized_lib partial_usage_without_compaction, shader_objects depth_only_triangles) and the host Xid 13 3D-Z SYSMEM KIND Violation appears; with PR 480 the guest equals the host (238 pass, 16 NS). PR 480 is open, so the tree under test is BROKEN | merge PR 480 | IN-TREE FIX (merge PR 480) |
+| CT-05 | Vulkan CTS synchronization2 (235 sampled of 81,510) | I | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): without PR 480 14 none_stage depth/stencil cases fail (12 Fail, 2 Timeout) with host Xid 13 3D-Z SYSMEM KIND Violation; with PR 480 the guest equals the host (112 pass, 123 NS). PR 480 is open, so the tree under test is BROKEN | merge PR 480 | IN-TREE FIX (merge PR 480) |
+| CT-06 | Vulkan CTS synchronization (249 sampled of 64,872) | I | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): 2 global_priority_transition cases (realtime and high) pass on the host and are NotSupported in the guest (vkCreateDevice -> VK_ERROR_INITIALIZATION_FAILED), reproduced alone in fresh boots; the rest equal (see GX-20) | see GX-20 | OWNER DECISION (see GX-20) |
+| CT-07 | Vulkan CTS transform_feedback (269 sampled of 133,719) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 170 pass, 99 NS; guest identical | none | - |
+| CT-08 | Vulkan CTS device_group (21 of 21) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 12 pass, 9 NS; guest identical | none | - |
+| CT-09 | Vulkan CTS memory (240 sampled of 6,364) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 162 pass, 78 NS; guest 162 pass, 77 NS, 1 Timeout at 60 s (allocation.basic.size_4KiB.mixed.count_4000) which answers NotSupported alone, as the host does; vkAllocateMemory costs 4,931 us in the guest against 154.6 us on the host (performance) | none (performance row) | - |
+| CT-10 | Vulkan CTS memory_model (229 sampled of 18,530) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 214 pass, 15 NS; guest identical | none | - |
+| CT-11 | Vulkan CTS api (263 sampled of 267,509) | I | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): guest Fail on api.device_init.create_device_global_priority_khr.basic and ..._query_khr.basic (Pass on the host, reproduced alone, see GX-20); api.maintenance3_check.support_count_inline_uniform_block_extra_bindings_create_layout fails on the host too (bucket 3); the rest equal | see GX-20 | OWNER DECISION (see GX-20) |
+| CT-12 | Vulkan CTS pipeline (265 sampled of 1,172,232) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 224 pass, 41 NS; guest identical | none | - |
+| CT-13 | Vulkan CTS compute (243 sampled of 67,553) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 195 pass, 48 NS; guest identical | none | - |
+| CT-14 | Vulkan CTS subgroups (254 sampled of 48,621) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 228 pass, 26 NS; guest identical | none | - |
+| CT-15 | Vulkan CTS video (263 sampled of 9,471) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host 3 pass, 260 NS (the die lacks most of the video features); guest identical | none | - |
 
 ### 2.6 Video engines
 
@@ -270,7 +285,7 @@ MEASURED, one run on one box on 2026-11-18, text evidence in `traces/gap_probes_
 
 - **Box.** One Vast KVM VM (nested KVM), RTX 3090 (GA102, 24 GB), Xeon W-2133 VM with 11 vCPU and 98 GB RAM, Ubuntu 22.04, host and guest driver 580.159.04, guest image from the apps stage (fast guest, `KF_DEVICE=kf3`, 16 GB RAM, 6 vCPU). Rented about 02:16 UTC, destroyed after the run (the record of the teardown is in the trace README).
 - **Revisions.** kf3 `4065c82a` for every run unless the row says otherwise: the crates are byte-identical to `claude/accept-final-tree-20261118` (`2fab69396`, no PR 480). The probe code (the box checkout of this branch, short revisions) was `a41eaaa2` for H1, `a8545da3` for H1c and G1 to G4, `6345785b` for H2 and G5, and `8aa94098` for H3, G6 and the CTS runs; the box tree moved forward as probes were corrected, and the table below takes the latest run of each case. Runs with the PR 480 control binary use kf3 `8aa94098-dirty` = the same crates plus the diff of PR 480's two commits `e0e6b15d1` and `fa87599a6` (`kf-mem/src/apply.rs` only), built on the box in 40 s.
-- **Runs.** H1 host (first probe version: 39 pass, 3 FAIL, 3 not run), H1c host control (fixed probes: 42 pass, 3 guest-only not run; host against host differs only in one performance number), G1 guest (37 pass, 1 NOT_SUPPORTED, 2 FAIL, 5 not run), G2 guest `life_reset`, G3 guest busy power-off, G4 guest kill probes, H2 and G5 host and guest reruns of the cases whose probes had been corrected or whose output was missing, H3 and G6 the Vulkan dump with format-independent tokens.
+- **Runs.** H1 host (first probe version: 39 pass, 3 FAIL, 3 not run), H1c host control (fixed probes: 42 pass, 3 guest-only not run; host against host differs only in one performance number), G1 guest (37 pass, 1 NOT_SUPPORTED, 2 FAIL, 5 not run), G2 guest `life_reset`, G3 guest busy power-off, G4 guest kill probes, H2 and G5 host and guest reruns of the cases whose probes had been corrected or whose output was missing, H3 and G6 the Vulkan dump with format-independent tokens, H4 and G7 the global-priority probe.
 
 The per-case table (the latest run of each case on each side; `NOT_RUN` on the host means a guest-only case):
 
@@ -313,7 +328,7 @@ The per-case table (the latest run of each case on each side; `NOT_RUN` on the h
 | tools_ncu | profiling | PASS | NOT_RUN | guest: tool not pushed (1.2 GB) |
 | tools_nsys | profiling | PASS | NOT_RUN | guest: tool not pushed (1 GB) |
 | tools_nsys_gpumetrics | profiling | PASS | NOT_RUN | guest: tool not pushed |
-| vk_global_priority | vulkan_caps | NOT_RUN | NOT_RUN | see section 3.5 (global priority) |
+| vk_global_priority | vulkan_caps | PASS | PASS | see section 3.5 (global priority) |
 | vk_dump | vulkan_caps | PASS | PASS | two vulkaninfo versions: 250 of 250 extensions equal, 172 shared names equal except 4 format-related (token counts 679 against 1266) |
 | smi_setters | smi_control | PASS | PASS | guest answers NOT_SUPPORTED for compute-mode and accounting setters, power and clock fields N/A (listed limitation); no host-visible change (207 samples) |
 | life_persistenced | lifecycle | PASS | PASS | first host version failed (harness defect, fixed) |
@@ -336,12 +351,67 @@ The per-case table (the latest run of each case on each side; `NOT_RUN` on the h
 | graph_capture_launch, launch_flood_100k | PASS / PASS, a captured graph replays at 174k/s on the host and 20.7k/s in the guest; 100000 launches take under 1 s and about 4 s | none (performance) | kept as `perf.*` evidence, never a difference |
 | fault_recovery, trap_recovery, life_persistenced (first host version) | FAIL on the host control | 3, harness defect | the host control failed the same case: a sticky fault poisons its own process (recovery is now judged across processes) and the daemon forks (now found by its kernel name). Caught by the host control before any guest claim |
 | smi_setters watcher (first version) | HOST_STATE_LEAK=1 | 3, harness defect | the watcher read a live clock; with the four control fields only, 207 samples show one distinct state |
+| vk_global_priority | PASS / PASS, create results differ: in the guest vkCreateDevice with LOW, HIGH or REALTIME fails (-3) on every family, only MEDIUM works | none yet, candidate | section 3.5 |
 | life_reset | guest only: NOT_SUPPORTED rc 3, device usable after | N-A-BY-DESIGN (TL-12) | a guest-triggered GPU reset is a privileged host action |
 | life_busy_poweroff | guest only: guest dead by design | none | kf3 retired all 6 channel tokens (released=true, stale binds 0, unresolved 0), no process left, host idle, no new Xid, the next guest boot on the same die passed |
 
 **kf3 census per guest run** (from the harness's per-row line, `traces/gap_probes_run_20261118/gap/census_rows.tsv`): guest Xid 0 in every run; kf3 refusals 29 to 82 per run (the counter counts every kf3 line containing `refus`, floor about 15 to 50); `unserviced_in_row`: G1 2975, G2 61, G3 33, G4 353, G5 520, all of one id (`code:76`, the unserviced GSP RM control already known from the open-rows run). Host Xid during the gap probes: Xid 43 (host control faults, expected), and Xid 31 and 13 with the qemu pid while the guest ran the two managed cases.
 
-### 3.5 Vulkan CTS groups, host versus guest (PENDING)
+### 3.5 Vulkan CTS groups and the global-priority lead (MEASURED, same box and day)
+
+**What ran.** The Vulkan CTS (`deqp-vk`, pinned `vulkan-cts-1.4.7.1`, commit `0d18b347943e5e843529a05c95220e27fe30c538`, built on the box) over a fixed-seed, breadth-first sample of the main mustpass (`scripts/apps/gap_probes/cts_groups.py`; each group is split by the next two name components and one case is taken from each split in turn). Sample 1: seed 20261118, 70 cases per group of sparse_resources, ray_tracing_pipeline, ray_query, mesh_shader, synchronization2, synchronization, transform_feedback, device_group (all 21), memory, memory_model, api, pipeline, compute, subgroups, video = 1,001 cases. Sample 2: seed 20261119, up to 200 more per group (sparse_resources left out, because its open failures are known) = 2,621 cases; because of a defect of mine in the deduplication 301 of them repeat sample 1 and ran twice with equal results, so **3,323 distinct cases** (3,321 and the 2 info cases) were compared. Each side runs the same list with `vkcts.py run`: host first (0 Fail except one case that fails on the host too), then the guest, 60 s per case in the guest (90 s on the host), in chunks of at most 380 cases (the row refuses a list over 400). The sample is a few tenths of a percent of each group (mustpass sizes in `cts_groups.py`: for example api 267,509 cases, pipeline 1,172,232, transform_feedback 133,719): it is a sample, never a full run, and the unreached part of every group is the rest.
+
+**Without and with PR 480.** Chunk 1 (382 cases: sparse_resources 70, ray_tracing_pipeline 70, ray_query 70, mesh_shader 70, synchronization2 70, 30 synchronization) ran in the guest twice: on kf3 `4065c82a` (no PR 480) and on `8aa94098-dirty` (PR 480's two commits applied, see section 3.4). Every later guest run used the PR 480 binary. Host Xid lines in the two windows: without PR 480 Xid 13 (3D-Z SYSMEM KIND Violation) 141, Xid 109 12, Xid 31 1; with it Xid 13 0, Xid 109 10, Xid 31 1.
+
+| chunk 1, guest | pass | NS | Fail | Timeout |
+|---|---|---|---|---|
+| host (control) | 291 | 91 | 0 | 0 |
+| without PR 480 | 262 | 92 | 16 | 12 |
+| with PR 480 | 279 | 92 | 1 | 10 |
+
+**Flip list (17 cases go from Fail or Timeout to Pass with PR 480; all depth or stencil):** mesh_shader.ext.smoke.optimized_lib.depth_only_points_position_components, mesh_shader.ext.smoke.optimized_lib.partial_usage_without_compaction, mesh_shader.ext.smoke.shader_objects.depth_only_triangles (Timeouts), and 14 synchronization2.none_stage cases: depth_stencil_attachment_to_depth_attachment_stencil_read, depth_stencil_attachment_to_generic_depth_stencil_read, generic_depth_stencil_attachment_to_depth_attachment_stencil_read, generic_stencil_attachment_to_transfer_src, legacy_depth_stencil_attachment_to_depth_attachment_stencil_read, legacy_general_to_stencil_read, legacy_generic_depth_stencil_attachment_to_generic_color_read, legacy_stencil_attachment_to_shader_read, legacy_stencil_attachment_to_stencil_read, old_access_general_to_depth_attachment_stencil_read (Timeout), old_access_generic_depth_stencil_attachment_to_generic_color_read, old_access_generic_depth_stencil_attachment_to_transfer_src, old_access_stencil_attachment_to_generic_color_read, old_access_transfer_dst_to_depth_attachment_stencil_read (Timeout). The list is in `traces/gap_probes_run_20261118/cts/flips_pr480.txt`. PR 480 is open, so these rows stay BROKEN for the tree under test.
+
+**Per group, all samples, guest on the PR 480 binary** (`cts/report_all_with_pr480.txt`; host pass/NS/Fail against guest pass/NS/Fail/Timeout):
+
+| group | host | guest |
+|---|---|---|
+| sparse_resources | pass=53 not_supported=17 | pass=42 not_supported=17 fail=1 timeout=10 |
+| ray_tracing_pipeline | pass=205 not_supported=29 | pass=204 not_supported=29 timeout=1 |
+| ray_query | pass=217 not_supported=15 | pass=217 not_supported=15 |
+| mesh_shader | pass=238 not_supported=16 | pass=238 not_supported=16 |
+| synchronization2 | pass=112 not_supported=123 | pass=112 not_supported=123 |
+| synchronization | pass=19 not_supported=230 | pass=17 not_supported=232 |
+| transform_feedback | pass=170 not_supported=99 | pass=170 not_supported=99 |
+| device_group | pass=12 not_supported=9 | pass=12 not_supported=9 |
+| memory | pass=162 not_supported=78 | pass=162 not_supported=77 timeout=1 |
+| memory_model | pass=214 not_supported=15 | pass=214 not_supported=15 |
+| api | pass=94 not_supported=168 fail=1 | pass=92 not_supported=168 fail=3 |
+| pipeline | pass=224 not_supported=41 | pass=224 not_supported=41 |
+| compute | pass=195 not_supported=48 | pass=195 not_supported=48 |
+| subgroups | pass=228 not_supported=26 | pass=228 not_supported=26 |
+| video | pass=3 not_supported=260 | pass=3 not_supported=260 |
+
+**Still different with PR 480 (18 cases, `cts/report_all_with_pr480.txt`)**, with the confirmation of each non-sparse one alone in a fresh guest boot (240 s per case; the host passes them twice):
+
+| case | host / guest | alone in a fresh guest boot | reading |
+|---|---|---|---|
+| 11 sparse_resources cases (10 Timeout, 1 Fail: cube_sparse_read.r32i) | Pass / Timeout or Fail | not repeated (known open row, reproducible before) | CT-01 / GX-06; host Xid 109 channel 0x31 and Xid 31 |
+| api.device_init.create_device_global_priority_khr.basic | Pass / Fail | Fail | global priority, GX-20 |
+| api.device_init.create_device_global_priority_query_khr.basic | Pass / Fail | Fail | GX-20 |
+| synchronization.global_priority_transition.high.no_sync.sparse.from_graphics_to_compute | Pass / NotSupported | NotSupported | GX-20 |
+| synchronization.global_priority_transition.realtime.semaphore.no_modifiers.from_compute_to_transfer | Pass / NotSupported | NotSupported | GX-20 |
+| ray_tracing_pipeline.misc.recursiveTraces_AABB_15 | Pass / Timeout (60 s) | Pass | slowness, not a hang |
+| memory.allocation.basic.size_4KiB.mixed.count_4000 | NotSupported / Timeout (60 s) | NotSupported (as the host) | slowness: 4000 live allocations cost 19.7 s in the guest against 0.6 s on the host |
+| api.maintenance3_check.support_count_inline_uniform_block_extra_bindings_create_layout | Fail / Fail | not repeated | fails on the host too: bucket 3 |
+
+**The global-priority lead (GX-20), what was measured.**
+
+1. `gap_vkprio` (a small C program, `vk_global_priority` case) on host and guest: the guest reports the host's priorities (family 0: LOW, MEDIUM, HIGH, REALTIME; families 1, 3 and 4: LOW, MEDIUM, HIGH; the host also reports REALTIME on families 2 and 5) but `vkCreateDevice` with a non-default global priority fails with VK_ERROR_INITIALIZATION_FAILED (-3) for LOW, HIGH and REALTIME on every family, and succeeds only for MEDIUM (the default). The host accepts every priority it reports and answers VK_ERROR_NOT_PERMITTED_KHR (-1000174001) for REALTIME only where it does not report it.
+2. The process is the same on both sides: uid 0 and the capability sets CapEff = CapBnd = `000001ffffffffff`; a missing CAP_SYS_NICE is not the difference.
+3. kf3 log delta: in each of the four failing confirm boots exactly one refused RM control is absent from the neighbour boot (the two info cases only): `GSP REFUSED fn76/0x20801115=0x56`, which is `NV2080_CTRL_CMD_FIFO_RUNLIST_SET_SCHED_POLICY` (the runlist scheduling policy, a host-wide setting; `docs/reference/IMPLEMENTATION_SURFACE.md` names it); the other refused kinds are identical (`confirm/kf3_refused_delta.txt`). INFERRED: that the driver's non-default queue priority path issues this control and fails when it is refused; the falsifier is that answering it (a policy choice for the owner: a host-wide setting must not come from guest bytes, and accepting it silently as a default-policy state is the ruling-S option) makes the four cases pass.
+4. The exact failing call is `vkCreateDevice` (the CTS reports `createUncheckedDevice ... VK_ERROR_INITIALIZATION_FAILED`).
+
+**Performance observations (evidence, not defects):** vkAllocateMemory 154.6 us on the host against 4,931 us in the guest (4000 live 4 KiB allocations: 0.6 s against 19.7 s); a captured CUDA graph replays 174k times per second on the host and 20.7k in the guest; 100000 launches take under 1 s on the host and about 4 s in the guest.
 
 ### 3.6 Probes not authored (DESIGN-ONLY rows in the matrix)
 

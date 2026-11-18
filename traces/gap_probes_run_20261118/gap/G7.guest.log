@@ -1,0 +1,58 @@
+=== gap_probes side=guest start=2026-11-18T05:46:01+00:00 host=ubuntu cmd: python3 /opt/apps/bundle/share/gap_probes/gap_probes.py run --side guest --out /opt/apps/out/guest/gap_probes --egl /opt/apps/bundle/bin/egl_offscreen --only vk_global_priority --emit
+GAPCASE vk_global_priority PASS -
+@@FILE results.tsv sha256=06c1514419c5a1d1 bytes=121
+id	group	status	rc	secs	t0	t1	reason	canary
+vk_global_priority	vulkan_caps	PASS	0	49.0	1794980762.533	1794980811.570	-	-
+@@END results.tsv
+@@FILE kv.tsv sha256=8c729ece4424da1d bytes=1863
+vk_global_priority	alloc_last_failure	0
+vk_global_priority	alloc_ok	4000
+vk_global_priority	alloc_requested	4000
+vk_global_priority	create.0.HIGH	-3
+vk_global_priority	create.0.LOW	-3
+vk_global_priority	create.0.MEDIUM	0
+vk_global_priority	create.0.REALTIME	-3
+vk_global_priority	create.1.HIGH	-3
+vk_global_priority	create.1.LOW	-3
+vk_global_priority	create.1.MEDIUM	0
+vk_global_priority	create.1.REALTIME	-1000174001
+vk_global_priority	create.2.HIGH	-3
+vk_global_priority	create.2.LOW	-3
+vk_global_priority	create.2.MEDIUM	0
+vk_global_priority	create.2.REALTIME	-3
+vk_global_priority	create.3.HIGH	-3
+vk_global_priority	create.3.LOW	-3
+vk_global_priority	create.3.MEDIUM	0
+vk_global_priority	create.3.REALTIME	-1000174001
+vk_global_priority	create.4.HIGH	-3
+vk_global_priority	create.4.LOW	-3
+vk_global_priority	create.4.MEDIUM	0
+vk_global_priority	create.4.REALTIME	-1000174001
+vk_global_priority	create.5.HIGH	-3
+vk_global_priority	create.5.LOW	-3
+vk_global_priority	create.5.MEDIUM	0
+vk_global_priority	create.5.REALTIME	-3
+vk_global_priority	fam0.queue_flags	0xf
+vk_global_priority	fam0.reported	LOW,MEDIUM,HIGH,REALTIME
+vk_global_priority	fam1.queue_flags	0xc
+vk_global_priority	fam1.reported	LOW,MEDIUM,HIGH
+vk_global_priority	fam2.queue_flags	0xe
+vk_global_priority	fam2.reported	LOW,MEDIUM,HIGH,REALTIME
+vk_global_priority	fam3.queue_flags	0x2c
+vk_global_priority	fam3.reported	LOW,MEDIUM,HIGH
+vk_global_priority	fam4.queue_flags	0x4c
+vk_global_priority	fam4.reported	LOW,MEDIUM,HIGH
+vk_global_priority	fam5.queue_flags	0x10c
+vk_global_priority	fam5.reported	LOW,MEDIUM,HIGH,REALTIME
+vk_global_priority	info.cap_bnd	000001ffffffffff
+vk_global_priority	info.cap_eff	000001ffffffffff
+vk_global_priority	info.device	NVIDIA GeForce RTX 3090
+vk_global_priority	info.uid	0
+vk_global_priority	perf.alloc_secs	19.726
+vk_global_priority	perf.alloc_us_each	4931.4
+@@END kv.tsv
+@@FILE summary.txt sha256=2d6d205f741164eb bytes=81
+GAP_PROBES_SUMMARY side=guest pass=1 not_supported=0 fail=0 mismatch=0 not_run=0
+@@END summary.txt
+GAP_PROBES_SUMMARY side=guest pass=1 not_supported=0 fail=0 mismatch=0 not_run=0
+=== end rc=0 secs=50 2026-11-18T05:46:51+00:00

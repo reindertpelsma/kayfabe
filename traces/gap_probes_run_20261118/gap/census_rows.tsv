@@ -5,7 +5,9 @@ G3.guest.res	GUEST_DEAD	-	0	29	33	927
 G4.guest.res	PASS	35	0	62	353	3695
 G5.guest.res	PASS	1.7	0	82	520	1863
 G6.guest.res	PASS	5	0	19	69	163
+G7.guest.res	PASS	50	0	4	278	2821
 H1.host.res	FAIL	366	-	-	-	-
 H1c.host.res	PASS	359	-	-	-	-
 H2.host.res	PASS	1.9	-	-	-	-
 H3.host.res	PASS	1	-	-	-	-
+H4.host.res	PASS	5	-	-	-	-

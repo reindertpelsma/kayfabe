@@ -1,0 +1,3 @@
+#case	area	host	guest	category	bucket	guest_xid	host_xid	kvdiff	why
+vk_global_priority	vulkan_caps	pass	pass	VALUE_DIFF	kayfabe_gap_candidate	-	-	create.0.HIGH:0->-3;create.0.LOW:0->-3;create.0.REALTIME:0->-3;create.1.HIGH:0->-3;create.1.LOW:0->-3;create.2.HIGH:0->-3	unclassified
+GAP_COMPARE cases=1 differing=1 candidates=1 limitation=0 harness=0 config=0 value_diff=1
