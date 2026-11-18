@@ -1,0 +1,42 @@
+== attempt 1: polls=13 baseline_lke=0
+   first LKE guest=1794506127.4 -> host epoch 1794711414.1 (offset spread 0.8 s) -> qemu.log lines 12954..17132 (5 s window, 4178 lines)
+   heartbeats around: first trapped=2087342 applied=7685 refused=0 -> last trapped=2277599 applied=11357 refused=1
+   event counts in window: {'late': 184, 'refus': 87, 'unserviced': 189, 'disable_channels': 6, 'walk capacity': 11, 'mem large apply': 1}
+   large apply ms in window: [21]
+   sample non-heartbeat lines:
+      kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc RmAlloc seq=0
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc RmAlloc seq=0
+      kf3: GSP rpc RmAlloc seq=0
+      kf3: USER_RING_PREPARE elapsed_us=84 ok=true
+== attempt 2: polls=13 baseline_lke=2
+   first LKE guest=1794506343.9 -> host epoch 1794711630.8 (offset spread 1.8 s) -> qemu.log lines 23182..26366 (5 s window, 3184 lines)
+   heartbeats around: first trapped=3881348 applied=14941 refused=1 -> last trapped=3920206 applied=16344 refused=1
+   event counts in window: {'unserviced': 109, 'late': 160, 'refus': 138, 'walk capacity': 2, 'mem large apply': 1, 'error': 1}
+   large apply ms in window: [643]
+   sample non-heartbeat lines:
+      kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+      W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc RmControl seq=0
+== attempt 3: polls=25 baseline_lke=9
+   first LKE guest=1794506754.7 -> host epoch 1794712041.5 (offset spread 3.1 s) -> qemu.log lines 40995..44553 (5 s window, 3558 lines)
+   heartbeats around: first trapped=6312950 applied=26617 refused=1 -> last trapped=6407318 applied=30290 refused=1
+   event counts in window: {'unserviced': 125, 'late': 173, 'refus': 87, 'walk capacity': 14, 'mem large apply': 1, 'disable_channels': 2}
+   large apply ms in window: [90]
+   sample non-heartbeat lines:
+      kf3: GSP rpc RmControl seq=0
+      kf3: act timeslice: 0xc1d002a4:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (173 us, off the GSP lock)
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc RmControl seq=0
+      kf3: act schedule: 0xc1d002a4:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (270 us, off the GSP lock)
+      kf3: GSP rpc RmControl seq=0
+      kf3: GSP rpc RmControl seq=0
+      kf3: act deferred API context: EvictCtx { engine_type: 1, h_client: 3251634640, chid: 15, chan_client: 3251634841, object: 4279107584 } on 0xc1d00299:0xff0e0000 -> Window

@@ -1,0 +1,28 @@
+15:39:47 ATTEMPT 1 qemu.log line 0
+15:40:07 t=12 ocr=': r 4 < Le r if res ee Sal eae og ee ae te aed 4 tf (REDS eae Ss Ss 4 0 Fe ep ee page Vw p> ay 2 a ) ese 1026 ilggs — ay ae ag 1 a | es SOLIDWORKS ae 4 ‘A 2733 '
+15:40:20 t=24 ocr=': r 4 < Le r if res ee Sal eae og ee ae te aed 4 tf (REDS eae Ss Ss 4 0 Fe ep ee page Vw p> ay 2 a 1 ese 1026 =" — my ae ag 1 a es SOLIDWORKS ae 4 ‘A 2733 \ er '
+15:40:32 t=36 ocr=''
+15:40:45 t=49 ocr='Initial Setup Text < English = > Change the language of the interface text. This setting can only be changed on the title screen. ® Confirm '
+15:41:03 t=68 ocr='Adjust the brightness until the pattern is faintly visible. Decrease Brightness 50 Increase Brightness ® Confirm G Return '
+15:41:22 t=87 ocr='Data Storage and Processing Agreement Preface 1 In order to continuously optimize user experience and improve service quality, with the consent of the user (her'
+15:41:47 t=111 ocr='Data Storage and Processing Agreement the "Settings" menu interface. However, this does not affect the lawful collection and processing of data by Game Science '
+15:42:05 t=129 ocr=''
+15:42:19 t=143 ocr='Se « wR ps a ys | Ms ak, # See iJ Se ro ~ am rr ay aq > Lie a a. os BLACK MYTH: iy ee ——_ a , Lg = eg, OO) | ‘ 2a 15, 2 eo ee 7 aR AS Po , - Se Se TL a Ee g 22S'
+15:42:37 t=162 ocr=': SA 1X “fiz . r Fan a \p er ree ee L i eo 4 5a Benchmark \ . (Si ae i" a Settings me MeaGc 2. o ag A; Purchase Now Pg ie be i ih Se, ee \ ae Pee x é he Ro VW T'
+15:42:56 t=180 ocr='| Benchmark = : Are you sure you want to run benchmark? Confirm ‘ Cancel '
+15:43:00 CONFIRM clicked, qemu.log line 0
+15:43:13 t=198 ocr='BO. '
+15:43:27 t=211 ocr='“eo = — '
+15:43:41 t=226 ocr='Seee et IN ao oe 4 in a Current FPS > Rcd pee: tN cs iS 3 ap BP ES oi a Re ee, eS, EE as PE el aa es hp thay 54 FPS we aod eaea Ris gg ea Ea BZ lee oe “ Si de. '
+15:43:56 t=240 ocr='ce a eee a a ee = Current FPS ee ee ae, * Lane pee Se bes Ny ig By fae MEL. = 59 FPS ee ae eo x \ EES Ns 2 eas @ oF Zz vx : 4 “ies ae Se Be 5 * 2 ay ie ‘vsti es'
+15:44:10 t=255 ocr='8 OY: » ap Se © fa gs ¢ 2 ~ Current FPS 7. eee if ie Cen§ te - Be xs EERES > =e gt We ie J ge ae in ig * Marwy PRES am ses 7S tg oo amy ae Neg Kees ; wos $e \ a'
+15:44:26 t=270 ocr='/ col GRAINS os es RN Eg aah cae Kok eee ee ie a ee s, eu Se y tt Fi MEE SOF ici RR NA NS, POORER ore be Coren ee as a ~ A 4h ue Bea °9 Se AON Vee Oe OS 50 FPS '
+15:44:40 t=284 ocr='* Bi ee : Ry Ve bi WO Be Sg = Current FPS ee & ee Be * ese ; eee x 2 aie, i = 52 FPS ‘32 so Sa Sale S see eK ye aes ae. Bee si a me a a | RS ee Se Ee ae a Bay %'
+15:44:55 t=300 ocr='45 ; ed 2 9 ff §E : Current FPS ‘ \ e : ‘* — 3 SS Be ESS ay al Z 4 : o) is “2 —— swe ae ees = ee : < aa v age So ‘ 3 ek . a = = == — Ss : : a Sere See ee =e PS '
+15:45:10 t=315 ocr='oe SAV aeons © ee p - SE os : Current FPS Hitaa se Se ae ad et _——. ‘e if i j ri, ip > Hy igs =. * oo Sees NA NG x meas We . ears irae, reine tears hie. Ah Tae '
+15:45:26 t=330 ocr='Current FPS bis 59 FPS h Pec i ar + lh gal Ae aalaaalll Mba * a ge LE “ Stet ni Ning hh ane CA. ee ie bes p 4 OOo) aa aS j > . s = Se as 5 EAA ne ed A “a te 3 .'
+15:45:41 t=345 ocr='ah ye Re is 15s ln Og Sig yee : ‘ Psa Wissen w Pry ae! WY ELp Current FPS \ aNd bie a) Wi, fe te Madu 44, a Seek gas 3 ta, he: 7 7 iad fave? 55 FPS x Ae i Ae? s'
+15:45:55 t=359 ocr='oN. aad = py 2” Current FPS Ae DY” CY) Be Zig Be i WHS tan LS Dims - A een NO aes oS NA 2 S cee th UU? oa le ate tg PRS eS Z (ait xe a eee ek AW, S Bar... NN a '
+15:46:09 t=373 ocr='; Vin “7 i. ; . K MYTH E] 7~ al 3 at J rd Benchmark Results Operating System _ Graphic Setting - » Nov 12, 2026 r az t Game Version Disp Texture Quality : 1.0.3'
+15:46:09 result screen text: ; Vin “7 i. ; . K MYTH E] 7~ al 3 at J rd Benchmark Results Operating System _ Graphic Setting - » Nov 12, 2026 r az t Game Version Disp Texture Quality : 1.0.3.14649 Border Very Higl Average “Ge anes we po a tae Operating System Version __ DisplayR Hair Quality ee es ee ee 10.0.26200.1.256.64bit . 
+15:46:16 END result_screen vram_peak=5083 secs_since_launch=381 confirm_to_end=200 qlog 0->0->0

@@ -1,0 +1,150 @@
+[
+ {
+  "attempt": 1,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [
+   [
+    116,
+    5
+   ],
+   [
+    158,
+    7
+   ],
+   [
+    185,
+    4
+   ]
+  ],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "lang",
+   "bright",
+   "scroll",
+   "agree",
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 5640,
+  "confirm_to_end": 210,
+  "qlog": [
+   7627,
+   12765,
+   14546
+  ],
+  "status": {
+   "now": "2026-11-12T17:59:07.4258952+00:00",
+   "alive": true,
+   "smi": "5466, [N/A]",
+   "lke": [],
+   "launcher": true,
+   "cpu": 581.96875
+  },
+  "events": []
+ },
+ {
+  "attempt": 2,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [],
+  "ran": false,
+  "end": "tdr",
+  "seen": [],
+  "vram_peak": 2064,
+  "confirm_to_end": null,
+  "qlog": [
+   14783,
+   null,
+   20733
+  ],
+  "status": {
+   "now": "2026-11-12T18:00:09.9402191+00:00",
+   "alive": true,
+   "smi": "2051, [N/A]",
+   "lke": [
+    "2026-11-12T17:59:38.1257387+00:00 117",
+    "2026-11-12T17:59:38.0734019+00:00 141",
+    "2026-11-12T17:59:38.0184014+00:00 117",
+    "2026-11-12T17:59:28.7353783+00:00 141",
+    "2026-11-12T17:59:28.6777577+00:00 141"
+   ],
+   "launcher": true,
+   "cpu": 25.734375
+  },
+  "events": [
+   "5:59:26 PM nvlddmkm id=153",
+   "5:59:33 PM nvlddmkm id=153",
+   "5:59:33 PM nvlddmkm id=153"
+  ]
+ },
+ {
+  "attempt": 3,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [
+   [
+    137,
+    4
+   ]
+  ],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 5601,
+  "confirm_to_end": 232,
+  "qlog": [
+   20955,
+   24395,
+   26588
+  ],
+  "status": {
+   "now": "2026-11-12T18:05:29.2858540+00:00",
+   "alive": true,
+   "smi": "5444, [N/A]",
+   "lke": [
+    "2026-11-12T17:59:38.1257387+00:00 117",
+    "2026-11-12T17:59:38.0734019+00:00 141",
+    "2026-11-12T17:59:38.0184014+00:00 117",
+    "2026-11-12T17:59:28.7353783+00:00 141",
+    "2026-11-12T17:59:28.6777577+00:00 141"
+   ],
+   "launcher": true,
+   "cpu": 426.46875
+  },
+  "events": [
+   "5:59:26 PM nvlddmkm id=153",
+   "5:59:33 PM nvlddmkm id=153",
+   "5:59:33 PM nvlddmkm id=153"
+  ]
+ }
+]

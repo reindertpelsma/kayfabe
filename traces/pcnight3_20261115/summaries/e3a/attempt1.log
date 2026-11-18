@@ -1,0 +1,27 @@
+08:16:17 ATTEMPT 1 qemu.log line 7299
+08:16:37 t=12 ocr='a nny =. a ‘ : 7VET ” a ia 4 i Reteyelle Sin Sluipictygiessiit.. 5 F ied : . < < atl - > ;. - Se A Bay 12026) all Cate Bdge AUR. Slice = sity a rie | oe ee nT ;'
+08:16:50 t=24 ocr='a nny =. a ‘ : 7VET ” a ia 4 i Reteyelle Sin Sluipictygiessiit.. 5 F ied : . < < atl - > ;. - Se A Bay 12026) all Cate Bdge AUR. Slice = sity a rie | oe ee nT ;'
+08:17:02 t=37 ocr=''
+08:17:16 t=51 ocr='Initial Setup Text < English = > Change the language of the interface text. This setting can only be changed on the title screen. '
+08:17:33 t=67 ocr='Adjust the brightness until the pattern is faintly visible. Decrease Brightness 50 Increase Brightness ® Confirm G Return '
+08:17:51 t=85 ocr='Data Storage and Processing Agreement Preface 1 In order to continuously optimize user experience and improve service quality, with the consent of the user (her'
+08:18:16 t=110 ocr='Data Storage and Processing Agreement the "Settings" menu interface. However, this does not affect the lawful collection and processing of data by Game Science '
+08:18:33 t=128 ocr='>S5¢c~ '
+08:18:46 t=141 ocr='a. aS ~ y| yor ee a oe. Aes ‘ew NN Wf Zahn a ain q : ——- XI 5 ign “ : +e ./ am a — > : nee © . i. ‘pre : an [a = : ‘ SS Bint “ets BLACK MYTH* : | i a : WiKOnG .'
+08:18:59 t=154 ocr='= KS ~ Ay yr et UW 7 7X) ae: Ne oa vse, ey’ ae ea YG, SE . A 2 a a ae Pe. _ BLACK MYTH* : Se a i pe yp ea es, Oe! | no. a aa ~— a € °S= 0 iz ys LA ad + ¢ 2 a 7 '
+08:19:13 t=167 ocr='ot a 1 yes a 1s e wR ps a aes Ea A = See FEEL. * iia aay as a ay D — “* wh S — Tay ae BLACK MYTH* Q ce | aa ae 78) tA elie se Be ee gt i S Wy, oe sae ae oe 4 D8'
+08:19:30 t=185 ocr=': SA 1X “fiz . r Fan a \p er ree ee L i eo 4 5a Benchmark \ . (Si ae i" a Settings me MeaGc 2. o ag A; Purchase Now Pg ie be i ih Se, ee \ ae Pee x é he Ro VW T'
+08:19:50 t=204 ocr='| Benchmark : Are you sure you want to run benchmark? Confirm ‘ Cancel '
+08:19:56 CONFIRM clicked, qemu.log line 12670
+08:20:11 t=225 ocr=''
+08:20:28 t=243 ocr=''
+08:20:44 t=258 ocr=''
+08:21:00 t=275 ocr=''
+08:21:25 t=300 ocr=''
+08:21:47 t=321 ocr=''
+08:22:06 t=340 ocr=''
+08:22:18 t=353 ocr=''
+08:22:33 t=368 ocr='ees | «ee '
+08:22:42 LKE count 0->2: first GPU watchdog event, qemu.log line 23425
+08:22:42 game process gone; status={'now': '2026-11-12T17:58:32.0072532+00:00', 'alive': False, 'smi': '403, [N/A]', 'lke': ['2026-11-12T17:58:28.4907682+00:00 141', '2026-11-12T17:58:28.4447085+00:00 141'], 'launcher': False, 'cpu': 0}
+08:22:48 END game_exited vram_peak=3621 secs_since_launch=382 confirm_to_end=178 qlog 7784->12670->23425

@@ -1,0 +1,24 @@
+15:46:21 ATTEMPT 2 qemu.log line 0
+15:46:43 t=12 ocr=': r 4 : Le r if res Asal Lf Tn ins | — re | i 7 8 | ii j mrp Al em | ey F saps tai " re ul . amis # r 4 i Se 5a Bee : ee ee % Rar gerd 4 > hd i =. ye Ss ee ee p'
+15:46:55 t=24 ocr='Q se L ‘io J '
+15:47:08 t=37 ocr='Q se L ‘io J '
+15:47:22 t=51 ocr='OM Bee eg, 6. oe, 6 Ea ere 2 be A 24 S<W (Pe >a / 7 AW NG OP e ie 7 oa ha eon) es e Ese 3 i. BE bai BLACK MYTH: — : é _ I a 5 ae e > Ay '
+15:47:35 t=64 ocr=': aN ’ NAS es ‘igs = e. a y a. gd a 77 | 7 See & 08's St e 7 7 iar Sao nye yh 7 =" gee peek ae a = ae aes ss) ar : x a © FA. i : WUKONG —— : Press Any Button = '
+15:47:54 t=83 ocr=': SA 1X “fiz . r Fan a \p er ree ee L i eo 4 5a Benchmark \ . (Si ae i" a Settings me MeaGc 2. o ag A; Purchase Now Pg ie be i ih Se, ee \ ae Pee x é he Ro VW T'
+15:48:12 t=101 ocr='| Benchmark = : Are you sure you want to run benchmark? Confirm ‘ Cancel '
+15:48:17 CONFIRM clicked, qemu.log line 0
+15:48:29 t=118 ocr='oe | ¢ ee '
+15:48:42 t=130 ocr=''
+15:48:54 t=143 ocr=''
+15:49:10 t=159 ocr='U icc y hig Oy" ges | ON aa Beg Me a Lh 4 > a ne | ee ne ge ee wy Current FPS ee ee > Ray ge p/m Beh. aes Ee ae id y TZ aoe i ee ee ye SS BOW +s i = Ragyise ee '
+15:49:26 t=175 ocr='es SS eee 2 oa SS Current FPS ¥ ae = a Se Cee see = 74 ay . ———" ya ae 53 FPS =e ios bes. : ae aS e - / = 14% a ii oC —_ wl i” a - as ~ gcc = oem = gen 5 = - ee'
+15:49:41 t=190 ocr='a Oe es 48 FPS 1) 3 ee eee aie. | , % PM Bie ee ep GAZ ae, ee ee Gia At Me Ae A eee” Gbre 4”? site SG a Fa ae Naeg Po ile ie Za 5 NL ame Aan Wee eee bad 3 ee od'
+15:49:58 t=207 ocr='2 Sse FS eee gee" = Fa Dee bby 5 te eee CN ase ee ae ee eae NS a eet, A ee — a ——— OE = = {a agape 9 : a se a = — = Se a —~ hd . ae ' a ‘ ” ; ¥ e \ 3 Vo. v ~_ e'
+15:50:15 t=224 ocr='Current FPS = aS <p > SA a a gaa a 58 FPS PB a , = SS % \ \ EN = i QS" See = Neer eas a: os : a a ~~ F 2 — a ae ra Ce aS se ee ‘= : Be st ee | Ps a i \y eo ae Y'
+15:50:33 t=242 ocr='md ‘ ime SS OS nag € yer a Ry Re Current FPS 4 SSE A ce SERS RRS RR > wean Ss hay ¥ ‘ 56 FPS SPS Pipa. aS ae: ce, SOE “e Berta Cece aa If SN oy = & Tae co So ey'
+15:50:50 t=259 ocr='Current FPS ’ TA i NSE a a eT Mk rs Wa ae ae Te & wa oe ae ee aoe ivan ae Bis Gf pen WF a ee ef ‘ Dae. ey a ee ay TR ap ee afe %, : oe ieee. sn Si? ag iy: - 2 :'
+15:51:07 t=276 ocr='eee y Ya te os. & = t A $e, ‘: iy bees Ch te og Rs ‘ nn ee ~~ St. é hs a) Ale Current FPS we why Meet li Jat’ its : ers at Bie’ FO Gy c . »® \ dan ye o Ba . 4 V'
+15:51:21 t=290 ocr='Current FPS 62 FPS @ Exit '
+15:51:35 t=304 ocr='“9 hy «in a s ree € nf SN: > AS q 2 , y a <3 can f a aoe 7 Benchmark Results _ me ee oe. - Nov 12, 2026 a / as E: ae Maximum Minimum ra ey . n~ . Ras <* ce 65 F'
+15:51:35 result screen text: “9 hy «in a s ree € nf SN: > AS q 2 , y a <3 can f a aoe 7 Benchmark Results _ me ee oe. - Nov 12, 2026 a / as E: ae Maximum Minimum ra ey . n~ . Ras <* ce 65 Frs 3 Fes = -_ Ed ” Low 5th - : ay > 7 ™ *. 47 res ‘< <a Mee : = s : a Z Total VRAM Used oy Meas aN ae = 2 x 0 as ‘ 5p . . ies A y ‘ at eee e
+15:51:44 END result_screen vram_peak=5235 secs_since_launch=313 confirm_to_end=211 qlog 0->0->0

@@ -1,0 +1,6 @@
+== attempt 1: polls=25 baseline_lke=0
+   no LiveKernelEvent seen
+== attempt 2: polls=21 baseline_lke=0
+   no LiveKernelEvent seen
+== attempt 3: polls=22 baseline_lke=0
+   no LiveKernelEvent seen

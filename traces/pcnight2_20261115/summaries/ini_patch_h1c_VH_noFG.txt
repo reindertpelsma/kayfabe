@@ -1,0 +1,12 @@
+
+UISettingData=(("MainDisplay", "0"),("PrivacyAgreement", "0"),("Min", 
+"0"),("FrameRateQualityFirst", "0"),("ScreenBrightness", "50"),("ScreenMode", 
+"1"),("ScreenRatio", "2"),("ScreenResolution", "0"),("WindowFullImageQuality", 
+"0"),("LockFrameRate", "0"),("Vsync", "0"),("MotionBlur", "2"),("Dlss", "1"),("Dx12", 
+"0"),("SoundVolume", "100"),("RecommendQualityLevel", "0"),("ImageQuality", 
+"1080"),("SuperResolutionSampling", "2"),("InsertFrame", "0"),("Rtx", "0"),("QualityLevel", 
+"6"),("ViewDistance", "4"),("AntiAliasing", "4"),("PostProcessing", "4"),("ShadowQuality", 
+"4"),("TextureQuality", "4"),("FxQuality", "4"),("MaterialQuality", "4"),("VegetationQuality", 
+"4"),("GlobalIllumination", "4"),("ReflectionQuality", "4"),("RtxLevel", "2"))
+
+

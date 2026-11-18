@@ -1,0 +1,98 @@
+[
+ {
+  "attempt": 1,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [
+   [
+    74,
+    7
+   ]
+  ],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "lang",
+   "bright",
+   "scroll",
+   "agree",
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 5083,
+  "confirm_to_end": 204,
+  "qlog": [
+   0,
+   0,
+   0
+  ],
+  "status": {
+   "now": "2026-11-12T17:58:58.2950982+00:00",
+   "alive": true,
+   "smi": "4760, 98",
+   "lke": [],
+   "launcher": true,
+   "cpu": 795.90625
+  },
+  "events": []
+ },
+ {
+  "attempt": 2,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [
+   [
+    140,
+    4
+   ],
+   [
+    188,
+    62
+   ]
+  ],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 5235,
+  "confirm_to_end": 216,
+  "qlog": [
+   0,
+   0,
+   0
+  ],
+  "status": {
+   "now": "2026-11-12T18:04:25.7099189+00:00",
+   "alive": true,
+   "smi": "4916, 96",
+   "lke": [],
+   "launcher": true,
+   "cpu": 675.59375
+  },
+  "events": []
+ }
+]

@@ -1,0 +1,70 @@
+[
+ {
+  "attempt": 1,
+  "end": "game_exited",
+  "seen": [
+   "lang",
+   "bright",
+   "scroll",
+   "agree",
+   "anykey",
+   "menu",
+   "confirm"
+  ],
+  "vram_peak": 3506,
+  "confirm_to_end": 38,
+  "qlog": [
+   7315,
+   12787,
+   18140
+  ],
+  "status": {
+   "now": "2026-11-12T17:56:00.5631099+00:00",
+   "alive": false,
+   "smi": "519, [N/A]",
+   "lke": [
+    "2026-11-12T17:55:48.0415442+00:00 141",
+    "2026-11-12T17:55:47.9476247+00:00 141"
+   ],
+   "launcher": false,
+   "cpu": 0
+  },
+  "events": [
+   "5:55:44 PM nvlddmkm id=153",
+   "5:55:45 PM nvlddmkm id=153",
+   "5:55:45 PM nvlddmkm id=153"
+  ]
+ },
+ {
+  "attempt": 2,
+  "end": "result_screen",
+  "seen": [
+   "anykey",
+   "menu",
+   "confirm"
+  ],
+  "vram_peak": 3700,
+  "confirm_to_end": 391,
+  "qlog": [
+   18289,
+   21213,
+   39673
+  ],
+  "status": {
+   "now": "2026-11-12T18:05:04.0931032+00:00",
+   "alive": true,
+   "smi": "3622, [N/A]",
+   "lke": [
+    "2026-11-12T17:55:48.0415442+00:00 141",
+    "2026-11-12T17:55:47.9476247+00:00 141"
+   ],
+   "launcher": true,
+   "cpu": 283.46875
+  },
+  "events": [
+   "5:55:44 PM nvlddmkm id=153",
+   "5:55:45 PM nvlddmkm id=153",
+   "5:55:45 PM nvlddmkm id=153"
+  ]
+ }
+]

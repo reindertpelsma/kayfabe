@@ -1,0 +1,43 @@
+relaunch qemu.log lines [14550, None, 17656] tdr False first_lke_s None
+count DEAD ring Rewrite: 0 ForeignClass: 0 slot pool exhausted: 0
+--- every non-heartbeat line naming token 0x2809:
+1693 kf3: act birth translated: chan 0xc1d0001c:0xff040007 BORN Translated: token 0x2809 -> host 0x50033 in VasKey(13965662457344034928) gpfifo=0x120530000x2048 userd=Some(Sysmem { base: 10610712064, size: 512 }) engine=0x33 tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00800000 userd_at_birth(GP_PUT,G
+1703 kf3: chan 0xc1d0001c:0xff040007 GPFIFO_SCHEDULE enable=true (token 0x2809, host 0x50033)
+--- heartbeat 0x2809 mentions (count): 383
+--- 40 lines starting at relaunch (qemu.log line 14550):
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d00051:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (381 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d0004d:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (261 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d000a8:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (201 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d00044:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (200 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d000a7:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (284 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d000a6:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (322 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d000c6:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (294 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d00043:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (247 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d000c4:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (240 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d000d1:0xff0e0000 SET_TIMESLICE 400 us on 3 twin group(s) (728 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d000ce:0xff0e0000 SET_TIMESLICE 400 us on 3 twin group(s) (688 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: act timeslice: 0xc1d000b0:0xff0e0000 SET_TIMESLICE 400 us on 3 twin group(s) (600 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0

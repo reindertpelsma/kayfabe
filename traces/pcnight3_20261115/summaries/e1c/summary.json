@@ -1,0 +1,57 @@
+[
+ {
+  "attempt": 1,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "lang",
+   "bright",
+   "scroll",
+   "agree",
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 5092,
+  "confirm_to_end": 212,
+  "qlog": [
+   7766,
+   12566,
+   14373
+  ],
+  "status": {
+   "now": "2026-11-12T17:58:50.9556358+00:00",
+   "alive": true,
+   "smi": "4972, [N/A]",
+   "lke": [],
+   "launcher": true,
+   "cpu": 378.359375
+  },
+  "events": []
+ },
+ {
+  "relaunch": true,
+  "wait": 120,
+  "tdr": false,
+  "first_lke_s": null,
+  "alive_end": true,
+  "qlog": [
+   14495,
+   null,
+   17596
+  ]
+ }
+]
