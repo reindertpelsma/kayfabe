@@ -1,0 +1,15 @@
+START 2026-11-15T14:17:32Z name=r7 cpu_arg=<profile> args=--apps 3dmark,superposition --superposition-run --hold-until-file /root/prop/release_r7
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-12T17:49:48Z (fresh overlay)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+ssh PASS NONE loopback guest transport ready
+power OK FILE OK values={"sleep":{"ac":0,"dc":0},"hibernate_after":{"ac":0,"dc":0},"unattended_sleep":{"ac":0,"dc":0},"hybrid_sleep":{"ac":0,"dc":0},"monitor":{"ac":0,"dc":0},"disk":{"ac":0,"dc":0},"wake_signin":{"
+gpu PASS NONE post-fix seed UUID exact match
+verify PASS NONE identity, clock, TPM and seed GPU checked
+hold released NONE guest held for manual iteration; ssh port 33037
+app:3dmark FAIL NONE No RUN link under the Time Spy card
+app:superposition HARNESS NONE Task timeout; no verdict
+stop PASS NONE own QEMU stopped; other own helpers cleaned by ExitStack
+EXIT rc=1 2026-11-15T14:49:27Z

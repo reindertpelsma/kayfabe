@@ -1,0 +1,10 @@
+START 2026-11-15T13:16:35Z name=pd cpu_arg=host,vendor=AuthenticAMD,-avx512f,-rtm,-hle,-mpx,-sgx,-vmx,-svm,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash args=--apps edge --hold-until-file /root/prop/release_pd
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-12T17:49:48Z (fresh overlay)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+clock-save WARN NONE Guest clock not saved: Guest UTC unavailable before shutdown
+stop PASS NONE own QEMU stopped; other own helpers cleaned by ExitStack
+harness HARNESS NONE Guest SSH unavailable
+EXIT rc=1 2026-11-15T13:24:35Z

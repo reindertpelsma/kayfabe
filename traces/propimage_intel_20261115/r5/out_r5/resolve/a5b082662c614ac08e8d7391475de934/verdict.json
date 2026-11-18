@@ -1,0 +1,7 @@
+{
+  "app": "resolve",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "Resolve created project kfa5b08266 (UIA main window 'DaVinci Resolve - kfa5b08266'); its log after the start shows CUDA compute, NVDEC/NVENC initialised and OpenGL on NVIDIA Corporation NVIDIA GeForce RTX 3090/PCIe/SSE2; no render or benchmark was run",
+  "secs": 189
+}

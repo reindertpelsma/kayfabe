@@ -1,0 +1,61 @@
+--- /workspace/wt-propintel-1794743003/scripts/bench/windows/propimage.py	2026-11-15 11:43:24.254046044 +0000
++++ scratch/windows/propimage.py	2026-11-15 11:51:06.166334759 +0000
+@@ -18,6 +18,7 @@
+ The same machine ids, disk serial, MAC, subnet and swtpm state apply in every mode.
+ """
+ import argparse
++import os
+ import base64
+ import copy
+ import datetime as dt
+@@ -115,6 +116,9 @@
+ 
+ 
+ def cpu_arg(state):
++    # SCRATCH DEVIATION (intel experiment): KF_INTEL_CPU_ARG replaces the whole -cpu value
++    if os.environ.get("KF_INTEL_CPU_ARG"):
++        return os.environ["KF_INTEL_CPU_ARG"]
+     c = state["cpu"]
+     return ",".join([c["base_model"], "model-id=" + c["model_id"], "family=%d" % c["family"], "model=%d" % c["model"],
+                      "stepping=%d" % c["stepping"]] + ["-" + f for f in c["remove"]] + c["hv_flags"])
+@@ -144,6 +148,8 @@
+     missing = sorted(set(c["required_host_flags"]) - flags)
+     rows.append(("cpu_features", "MATCH" if not missing and flags else "MISMATCH",
+                  "missing host flags: %s" % (", ".join(missing) if missing else ("none" if flags else "no flags line"))))
++    if os.environ.get("KF_INTEL_EXPERIMENT") == "1":   # SCRATCH DEVIATION: host check relaxed, rows kept visible as WARN
++        rows = [(n, "WARN" if s == "MISMATCH" else s, d) for (n, s, d) in rows]
+     return rows
+ 
+ 
+--- /workspace/wt-propintel-1794743003/scripts/bench/windows/propimage_check.py	2026-11-15 11:43:24.254046044 +0000
++++ scratch/windows/propimage_check.py	2026-11-15 12:46:26.551112688 +0000
+@@ -361,6 +361,11 @@
+ 
+ def gpu_fix(g, expected):
+     result = g.ps(render_gpu_fix(expected))
++    for _ in range(2 if os.environ.get("KF_INTEL_EXPERIMENT") == "1" else 0):   # SCRATCH DEVIATION: retry (first pnputil restart failed once, device was fine afterwards)
++        if result.returncode == 0 and gpu_uuid_matches(result.stdout, expected):
++            break
++        time.sleep(20)
++        result = g.ps(render_gpu_fix(expected))
+     return (
+         result.returncode == 0 and gpu_uuid_matches(result.stdout, expected),
+         result.stdout + result.stderr,
+@@ -1806,7 +1811,7 @@
+                 raise ValueError("Refused KF3 flag line")
+             env[key] = value
+         if any(
+-            row[1] != "MATCH" for row in PI.cpu_preflight(state, Path("/proc/cpuinfo").read_text())
++            row[1] not in ("MATCH", "WARN") for row in PI.cpu_preflight(state, Path("/proc/cpuinfo").read_text())
+         ):
+             raise ValueError("CPU_PROFILE_UNSUPPORTED")
+         with ExitStack() as stack:
+@@ -1925,6 +1930,8 @@
+                     "post-fix seed UUID exact match" if fixed else "repair or UUID check failed",
+                 )
+                 if not fixed:
++                    if a.hold_until_file and os.environ.get("KF_INTEL_HOLD_ON_GPU_FAIL") == "1":   # SCRATCH DEVIATION: hold for inspection
++                        record("hold", hold_for_release(a.hold_until_file, 3 * 3600), "SCRATCH: guest held after GPU fix FAIL; ssh port %s" % g.port)
+                     raise ValueError("GPU prerequisite failed; app checks not run")
+                 facts = PI.run_guest_probe(state, str(key))
+                 matches = PI.compare(state, facts)

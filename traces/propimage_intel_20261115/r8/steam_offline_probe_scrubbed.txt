@@ -1,0 +1,75 @@
+
+Name                              Length LastWriteTime        
+----                              ------ -------------        
+appinfo_log.txt                     8628 11/12/2026 4:57:54 PM
+bootstrap_log.txt                  45449 11/12/2026 5:07:26 PM
+cef_log.txt                        10335 11/12/2026 5:52:40 PM
+cloud_log.txt                       9378 11/12/2026 4:54:30 PM
+configstore_log.txt                 8675 11/12/2026 5:07:23 PM
+connection_log.txt                 54510 11/12/2026 5:07:23 PM
+console_log.txt                     8321 11/12/2026 5:07:22 PM
+content_log.txt                    18916 11/12/2026 4:54:50 PM
+controller.txt                       375 11/12/2026 5:07:25 PM
+gameoverlay_renderer.previous.txt  28655 11/12/2026 4:54:33 PM
+gameoverlay_renderer.txt               0 11/12/2026 5:59:28 PM
+gameprocess_log.txt                 1914 11/12/2026 4:54:50 PM
+parental_log.txt                     229 11/12/2026 3:27:07 PM
+remote_connections.txt               357 11/12/2026 3:27:07 PM
+runprocess_log.txt                   729 11/12/2026 4:15:46 PM
+shader_log.txt                      5542 11/12/2026 4:54:51 PM
+sitelicense_log.txt                  638 11/12/2026 4:08:25 PM
+stats_log.txt                       1968 11/12/2026 4:54:50 PM
+steamsysinfo.txt                     893 11/12/2026 5:52:39 PM
+steamui_audio.txt                    675 11/12/2026 3:17:21 PM
+steamui_html.txt                    4173 11/12/2026 5:07:23 PM
+steamui_librarycache.txt          118847 11/12/2026 4:57:49 PM
+steamui_login.txt                   3278 11/12/2026 5:06:48 PM
+steamui_system.txt                  1016 11/12/2026 3:27:10 PM
+steamui_update.txt                   114 11/12/2026 3:17:18 PM
+streaming_log.txt                   1775 11/12/2026 4:54:50 PM
+systemaudiomanager.txt               119 11/12/2026 3:17:18 PM
+systemdisplaymanager.txt             120 11/12/2026 3:17:18 PM
+systemdockmanager.txt                118 11/12/2026 3:17:18 PM
+systemmanager.txt                   1238 11/12/2026 3:19:19 PM
+systemperfmanager.txt                297 11/12/2026 3:17:18 PM
+systemperfreporting.txt              119 11/12/2026 3:17:18 PM
+text_filter_log.txt                 1066 11/12/2026 3:27:11 PM
+timedtrial_log.txt                    93 11/12/2026 5:06:18 PM
+transport_client.txt                 219 11/12/2026 3:17:21 PM
+transport_steamui.txt                343 11/12/2026 5:07:23 PM
+webhelper.txt                      88182 11/12/2026 5:54:40 PM
+webhelper_gpu.txt                  39872 11/12/2026 4:18:07 PM
+webhelper_js.txt                   19542 11/12/2026 4:50:43 PM
+workshop_log.txt                     882 11/12/2026 4:50:44 PM
+
+
+
+--- connection_log tail
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (cmp1-lhr1.steamserver.net:443) failed talking to cm (timeout/neterror - Invalid)
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (ext2-scl1.steamserver.net:27030) starting...
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (cmp2-hkg1.steamserver.net:27024) failed talking to cm (timeout/neterror - Invalid)
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (ext1-scl1.steamserver.net:443) starting...
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (ext1-scl1.steamserver.net:27030) failed talking to cm (timeout/neterror - Invalid)
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (cmp1-atl3.steamserver.net:27018) starting...
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (ext2-lim1.steamserver.net:27034) failed talking to cm (timeout/neterror - Invalid)
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (ext2-scl1.steamserver.net:27030) failed talking to cm (timeout/neterror - Invalid)
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (cmp1-ord1.steamserver.net:27018) starting...
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (ext1-scl1.steamserver.net:443) failed talking to cm (timeout/neterror - Invalid)
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (cmp1-atl3.steamserver.net:27018) failed talking to cm (timeout/neterror - Invalid)
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] PingWebSocketCM() (cmp1-ord1.steamserver.net:27018) failed talking to cm (timeout/neterror - Invalid)
+[2026-11-12 18:01:24] [Connecting, 4, 31] [U:1:<id>] Connect() starting connection (eNetQOSLevelHigh, ext2-dxb1.steamserver.net:27020, WebSocket)
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] ConnectFailed('Connection Failed':0) (0.0.0.0:0, WebSocket)
+[2026-11-12 18:01:24] [Connecting, 4, 0] [U:1:<id>] Client thinks it can connect via: UDP - yes, TCP - yes, WebSocket:443 - yes, WebSocket:Non443 - yes
+[2026-11-12 18:01:24] [Logged Off, 4, 0] [U:1:<id>] StartAutoReconnect() will start in 331.0 seconds (attempt 7)
+[2026-11-12 18:01:57] Connectivity test: Starting test, fetching 'http://steamconnecttest.com/204'
+[2026-11-12 18:01:57] Connectivity test (0.0.0.0:80 (0.0.0.0:80)): HTTP fetch failed
+[2026-11-12 18:01:57] Connectivity test: result=Failed (since 558.5s ago), prev=Unknown, in progress=0
+[2026-11-12 18:03:05] Connectivity test: Starting test, fetching 'http://steamconnecttest.com/204'
+[2026-11-12 18:03:05] Connectivity test (0.0.0.0:80 (0.0.0.0:80)): HTTP fetch failed
+[2026-11-12 18:03:05] Connectivity test: result=Failed (since 626.7s ago), prev=Unknown, in progress=0
+[2026-11-12 18:04:14] Connectivity test: Starting test, fetching 'http://steamconnecttest.com/204'
+[2026-11-12 18:04:14] Connectivity test (0.0.0.0:80 (0.0.0.0:80)): HTTP fetch failed
+[2026-11-12 18:04:14] Connectivity test: result=Failed (since 696.0s ago), prev=Unknown, in progress=0
+--- driver srv.log tail
+2026-11-12T17:56:30.2979620+00:00 server up appid=3132990
+2026-11-12T17:57:00.4862437+00:00 LAUNCH
