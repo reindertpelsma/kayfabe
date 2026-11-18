@@ -10,7 +10,10 @@ fn impls(src: &str) -> Vec<(String, String)> {
     let mut rest = src;
     while let Some(i) = rest.find("MapTarget for ") {
         let after = &rest[i + "MapTarget for ".len()..];
-        let name: String = after.chars().take_while(|c| !c.is_whitespace() && *c != '{').collect();
+        let name: String = after
+            .chars()
+            .take_while(|c| !c.is_whitespace() && *c != '{')
+            .collect();
         // The impl body: from its opening brace to the matching close.
         let Some(open) = after.find('{') else { break };
         let mut depth = 0usize;
@@ -38,7 +41,10 @@ fn impls(src: &str) -> Vec<(String, String)> {
 fn every_delegating_map_target_forwards_set_guest_bases() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut seen = 0;
-    for file in ["crates/kf-qemu/src/mem.rs", "crates/kf-harness/src/publish.rs"] {
+    for file in [
+        "crates/kf-qemu/src/mem.rs",
+        "crates/kf-harness/src/publish.rs",
+    ] {
         let src = std::fs::read_to_string(root.join(file)).expect(file);
         for (name, body) in impls(&src) {
             if body.contains("fn begin_refresh") {
@@ -50,5 +56,8 @@ fn every_delegating_map_target_forwards_set_guest_bases() {
             }
         }
     }
-    assert!(seen >= 3, "found {seen} delegating targets (GpuMirror, Target, Recorded expected)");
+    assert!(
+        seen >= 3,
+        "found {seen} delegating targets (GpuMirror, Target, Recorded expected)"
+    );
 }
