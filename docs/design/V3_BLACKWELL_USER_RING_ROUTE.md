@@ -18,6 +18,24 @@ dmesg 8468.11). The guest's RM unloaded 7 s later (kf3 log `GSP fn 47 UNLOADING_
 `t=1580.0s`, phase `Running -> Halted`). That is the Windows TDR recovery after the Xid, not a cause of it. The
 driver re-initialised, and the row failed with `reason=GUEST`.
 
+**Update, 2026-11-18 (second occurrence; reported by the acceptance lane, not yet re-checked here).** Same box, SPEC S2,
+boot 3 (enscape-01, boot started 03:29Z): a host `NVRM: Xid 32 ... channel 0x1f intr 00800000` at 03:49:23Z, about 20
+min in, with kf3-vamgr freeing mappings 10 s later. This time the guest SURVIVED: the licence probe answered at boot
+age 47 min, QEMU was alive at 71 min, and the viewset continued. Xid 32 with this `intr` therefore recurs on this die
+(2 in 3 boots so far) and is not always fatal.
+
+Caveat: the kf3 log of boot 3 stopped being written at 03:38:55, ten minutes before that Xid, so it cannot cover the
+Xid window.
+
+Open checks, against the evidence copy the lane refreshes after it ends:
+- whether 0x1f is again a `0xca6f` Windows user-work twin on the USERD relay (its birth line and the boot's
+  `USER_RING_ROUTE_DECLINED` line);
+- whether a `0x50800104` and an unmap/remap burst precede the Xid. The log stops early, so a registration after
+  03:38:55 cannot be seen in it;
+- the guest-side recovery: TDR, display-driver reset, or a per-process device-lost only. Hypothesis, unmeasured:
+  survival means Windows recovered the one process's device without unloading the RM, whereas creo-04's boot logged
+  `UNLOADING_GUEST_DRIVER`. Falsifier: a guest RM unload (fn 47) near 03:49 in boot 3.
+
 The chain, link by link:
 
 1. **Channel 0x16 is a Windows user-work Passthrough GR twin of class `0xca6f`.** MEASURED. Host token
@@ -144,4 +162,6 @@ Stages:
    (30/30), then the user-ring lane. Then SPEC creo-04 twice and GravityMark 1.89 Vulkan once, each with
    `KF3_RPC_TRACE=1`.
    - Falsifier: any host Xid on a user-work twin, or a `USER_RING_ROUTE_DECLINED` line for `0xca6f`.
+   - Baseline for that falsifier on the SPEC 5070 Ti: 2 host Xid 32 (`intr 00800000`) in 3 SPEC viewset boots
+     (2026-11-18, S2). "No host Xid 32 over full SPEC viewset boots" is measurable against it.
    - Control: the same tree on an Ada box (creo-04 PASS).
