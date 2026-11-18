@@ -109,7 +109,60 @@ pub const HOST_HOLE_LO: u64 = (1 << 40) - (64 << 30);
 /// `NV50_MEMORY_VIRTUAL` (`ogkm-580: resource_list.h:516-523`, parent `Device`).
 const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
 /// `NVOS32_ALLOC_FLAGS_FIXED_ADDRESS_ALLOCATE | _LAZY | _VIRTUAL` (`nvos.h:1448-1464`).
-const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
+///
+/// ⚠ 2026-11-18 (sparse residency RCA, `V3_SPARSE_RESIDENCY_RCA.md`): NOT `_SPARSE`
+/// ([`NVOS32_ALLOC_FLAGS_SPARSE`]), so an unmapped VA inside a reservation is INVALID on the host (a
+/// fault), never the guest's SPARSE "reads zero" (`ogkm-580 gpu_vaspace.c:1577-1600`, `2279-2289`),
+/// unless the VM opted into [`GuestVaFill::Zero`] for its static guest ranges. Public so the host model (`kf-mem` `sim`) derives the reservation's unmapped state from it.
+pub const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
+/// `NVOS32_ALLOC_FLAGS_SPARSE` (`ogkm-580 nvos.h:1472`; semantics `nvos.h:1415-1419`: "an unmapped
+/// virtual address range should not fault but simply return 0's").
+pub const NVOS32_ALLOC_FLAGS_SPARSE: u32 = 0x0400_0000;
+
+/// ★ 2026-11-18 — what an UNMAPPED VA of the static guest ranges ([`GUEST_VA_RANGES`] and the low
+/// range) reads as on the host twin. The `unmapped-reads-zero` device property, default off
+/// (`V3_SPARSE_RESIDENCY_RCA.md` §5, option B).
+///
+/// Only the static guest ranges take it: micro reservations ([`HostRm::reserve_va`]) and bare spaces
+/// keep [`NVOS32_RESERVE_FLAGS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GuestVaFill {
+    /// INVALID: a GPU access to an unmapped guest VA faults (an RC, which reaches the guest). The
+    /// default. A guest's SPARSE pages (Vulkan sparse residency) fault too: those cases hang.
+    #[default]
+    Fault,
+    /// SPARSE: a GPU read of any unmapped guest VA returns zero and a write is dropped, with no
+    /// fault. The guest's sparse pages then behave as on bare metal, but so does every other
+    /// unmapped VA: a read the guest expects to fault (unserviced managed-memory demand paging, an
+    /// application bug) silently reads zero.
+    Zero,
+}
+
+impl GuestVaFill {
+    /// The `NVOS32` flags of a static guest-range reservation with this fill.
+    #[must_use]
+    pub const fn reserve_flags(self) -> u32 {
+        match self {
+            Self::Fault => NVOS32_RESERVE_FLAGS,
+            Self::Zero => NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE,
+        }
+    }
+}
+
+/// ★ 2026-11-18: the static guest-range reservations of a mirror space that starts at `start`, in
+/// the order [`VaSpace::guest`] holds them: `(lo, hi, NVOS32 flags)`. Every range takes `fill`
+/// ([`GuestVaFill::reserve_flags`]). [`HostRm::alloc_vaspace_at`] reserves exactly these.
+pub fn guest_range_plan(
+    start: MirrorVaStart,
+    fill: GuestVaFill,
+) -> impl Iterator<Item = (u64, u64, u32)> {
+    let flags = fill.reserve_flags();
+    GUEST_VA_RANGES
+        .iter()
+        .copied()
+        .chain(start.low_range())
+        .map(move |(lo, hi)| (lo, hi, flags))
+}
 
 impl VaSpace {
     /// ★ **STATUS (2026-10-09): this is the ONE-handle form; a straddling row is no longer refused
@@ -683,6 +736,24 @@ impl HostRm {
         self.alloc_vaspace_at(MirrorVaStart::HostDefault)
     }
 
+    /// ★ 2026-11-18: set what an unmapped VA of the static guest ranges reads as in every space
+    /// allocated AFTER this call ([`GuestVaFill`]). Called once at device realize from the
+    /// `unmapped-reads-zero` property; never from the environment.
+    pub fn set_guest_va_fill(&self, fill: GuestVaFill) {
+        self.guest_va_zero
+            .store(fill == GuestVaFill::Zero, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// The fill [`HostRm::set_guest_va_fill`] set ([`GuestVaFill::Fault`] if never set).
+    #[must_use]
+    pub fn guest_va_fill(&self) -> GuestVaFill {
+        if self.guest_va_zero.load(std::sync::atomic::Ordering::Relaxed) {
+            GuestVaFill::Zero
+        } else {
+            GuestVaFill::Fault
+        }
+    }
+
     /// ★ 2026-11-15: [`HostRm::alloc_vaspace`] with the start the caller derived from the guest's
     /// DECLARED identity ([`MirrorVaStart::select`]). A Linux guest's spaces are always
     /// [`MirrorVaStart::HostDefault`]; the floor is a Windows-profile behaviour (see [`TWIN_VA_FLOOR`]).
@@ -763,9 +834,9 @@ impl HostRm {
                 // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
                 // ★ 2026-10-08: plus the low guest range of a floor-started space (slot 2).
                 if reserve_guest {
-                    let ranges = GUEST_VA_RANGES.iter().copied().chain(start.low_range());
-                    for (slot, (lo, hi)) in vas.guest.iter_mut().zip(ranges) {
-                        match self.reserve_va(space, lo, hi - lo) {
+                    let plan = guest_range_plan(start, self.guest_va_fill());
+                    for (slot, (lo, hi, flags)) in vas.guest.iter_mut().zip(plan) {
+                        match self.reserve_va_flags(space, lo, hi - lo, flags) {
                             Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
                             Err(e) => kf_arch::rate_eprintln!(
                                 "kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT reserved: {e:?} — host RM may place its own objects there"
@@ -787,6 +858,12 @@ impl HostRm {
     /// # Errors
     /// The host's refusal.
     pub fn reserve_va(&self, space: u32, at: u64, len: u64) -> Result<u32, RmError> {
+        self.reserve_va_flags(space, at, len, NVOS32_RESERVE_FLAGS)
+    }
+
+    /// [`HostRm::reserve_va`] with explicit `NVOS32` flags: [`NVOS32_RESERVE_FLAGS`], or
+    /// [`GuestVaFill::reserve_flags`] for a static guest range.
+    fn reserve_va_flags(&self, space: u32, at: u64, len: u64, flags: u32) -> Result<u32, RmError> {
         let mut p = [0u8; NvMemoryAllocationParams::SIZE];
         NvMemoryAllocationParams {
             owner: self.client.raw(),
@@ -799,7 +876,7 @@ impl HostRm {
         }
         .encode_into(&mut p)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        p[8..12].copy_from_slice(&NVOS32_RESERVE_FLAGS.to_le_bytes());
+        p[8..12].copy_from_slice(&flags.to_le_bytes());
         p[80..88].copy_from_slice(&at.to_le_bytes()); // offset
         p[108..112].copy_from_slice(&space.to_le_bytes()); // hVASpace
         let want = self.mint();
@@ -2331,6 +2408,68 @@ fn encode_deferred_channel_update(
         &ring.userd_offset.to_le_bytes(),
     )?;
     Some((abi.cmd_v2, bytes))
+}
+
+#[cfg(test)]
+mod guest_va_fill_tests {
+    use super::*;
+
+    /// The default is FAULT: the reservation flags are exactly the pre-2026-11-18 ones, without
+    /// `_SPARSE` (S2 of `V3_SPARSE_RESIDENCY_RCA.md`).
+    #[test]
+    fn the_default_fill_faults_and_keeps_the_reserve_flags() {
+        assert_eq!(GuestVaFill::default(), GuestVaFill::Fault);
+        assert_eq!(GuestVaFill::Fault.reserve_flags(), NVOS32_RESERVE_FLAGS);
+        assert_eq!(GuestVaFill::Fault.reserve_flags() & NVOS32_ALLOC_FLAGS_SPARSE, 0);
+    }
+
+    /// ZERO adds exactly `_SPARSE` (`nvos.h:1472`) to the same three flags (`nvos.h:1448-1464`).
+    #[test]
+    fn zero_adds_exactly_the_sparse_flag() {
+        assert_eq!(NVOS32_ALLOC_FLAGS_SPARSE, 0x0400_0000);
+        assert_eq!(
+            GuestVaFill::Zero.reserve_flags(),
+            0x0000_0010 | 0x0000_0400 | 0x0008_0000 | 0x0400_0000
+        );
+    }
+
+    /// The plan reserves the same ranges under either fill, and every range carries the fill.
+    #[test]
+    fn the_plan_carries_the_fill_on_every_static_range() {
+        for start in [MirrorVaStart::HostDefault, MirrorVaStart::GuestFloor] {
+            let fault: Vec<_> = guest_range_plan(start, GuestVaFill::Fault).collect();
+            let zero: Vec<_> = guest_range_plan(start, GuestVaFill::Zero).collect();
+            let ranges: Vec<_> = GUEST_VA_RANGES.iter().copied().chain(start.low_range()).collect();
+            assert_eq!(fault.iter().map(|&(l, h, _)| (l, h)).collect::<Vec<_>>(), ranges);
+            assert_eq!(zero.iter().map(|&(l, h, _)| (l, h)).collect::<Vec<_>>(), ranges);
+            assert!(fault.iter().all(|&(.., f)| f == NVOS32_RESERVE_FLAGS), "{start:?}");
+            assert!(
+                zero.iter().all(|&(.., f)| f == NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE),
+                "{start:?}"
+            );
+        }
+    }
+
+    /// The ZERO plan differs from the FAULT plan in exactly one bit per range: `_SPARSE`.
+    #[test]
+    fn the_zero_plan_differs_from_fault_by_exactly_sparse() {
+        let fault = guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::Fault);
+        let zero = guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::Zero);
+        for ((fl, fh, ff), (zl, zh, zf)) in fault.zip(zero) {
+            assert_eq!((fl, fh), (zl, zh));
+            assert_eq!(ff ^ zf, NVOS32_ALLOC_FLAGS_SPARSE, "{fl:#x}");
+        }
+    }
+
+    /// A HostRm-free stand-in for `set_guest_va_fill` / `guest_va_fill`: the default plan of a
+    /// floor-started space has no `_SPARSE` range (S2 holds by default).
+    #[test]
+    fn the_default_plan_has_no_sparse_range() {
+        let plan: Vec<_> =
+            guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::default()).collect();
+        assert_eq!(plan.len(), 3);
+        assert!(plan.iter().all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE == 0));
+    }
 }
 
 #[cfg(test)]

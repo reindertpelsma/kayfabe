@@ -82,7 +82,11 @@ use std::os::unix::ffi::OsStrExt as _;
 /// 34 (2026-11-17, `claude/util-flag-20261117`, `docs/design/V3_UTILIZATION_FLAG.md`): `kf3_realize` gains
 /// `report_utilization` (the `report-utilization` property; 1 = on, the default; 0 = off: no utilisation is shown to the
 /// guest and no host call is made) after `windows_support`.
-pub const KF3_ABI: u32 = 34;
+/// 35 (2026-11-18, `claude/sparse-zero-fill-20261118`, `docs/design/V3_SPARSE_RESIDENCY_RCA.md`): `kf3_realize`
+/// gains `unmapped_reads_zero` (the `unmapped-reads-zero` property; 0 = off, the default; 1 = unmapped
+/// guest VAs read zero on the host) after `windows_support`. 34 is taken by an unmerged branch
+/// (`claude/util-flag-20261117`, `report_utilization`); a merge with it puts this argument after that one.
+pub const KF3_ABI: u32 = 35;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -264,6 +268,7 @@ pub unsafe extern "C" fn kf3_realize(
     user_view_keep: u32,
     windows_support: u32,
     report_utilization: u32,
+    unmapped_reads_zero: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -309,6 +314,7 @@ pub unsafe extern "C" fn kf3_realize(
         channel_budget,
         windows_support: windows_support != 0,
         report_utilization: report_utilization != 0,
+        unmapped_reads_zero: unmapped_reads_zero != 0,
     };
     crate::userstore::configure(user_view_keep);
     // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).
