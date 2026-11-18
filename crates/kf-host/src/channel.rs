@@ -740,14 +740,19 @@ impl HostRm {
     /// allocated AFTER this call ([`GuestVaFill`]). Called once at device realize from the
     /// `unmapped-reads-zero` property; never from the environment.
     pub fn set_guest_va_fill(&self, fill: GuestVaFill) {
-        self.guest_va_zero
-            .store(fill == GuestVaFill::Zero, std::sync::atomic::Ordering::Relaxed);
+        self.guest_va_zero.store(
+            fill == GuestVaFill::Zero,
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
 
     /// The fill [`HostRm::set_guest_va_fill`] set ([`GuestVaFill::Fault`] if never set).
     #[must_use]
     pub fn guest_va_fill(&self) -> GuestVaFill {
-        if self.guest_va_zero.load(std::sync::atomic::Ordering::Relaxed) {
+        if self
+            .guest_va_zero
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
             GuestVaFill::Zero
         } else {
             GuestVaFill::Fault
@@ -2440,7 +2445,10 @@ mod guest_va_fill_tests {
     fn the_default_fill_faults_and_keeps_the_reserve_flags() {
         assert_eq!(GuestVaFill::default(), GuestVaFill::Fault);
         assert_eq!(GuestVaFill::Fault.reserve_flags(), NVOS32_RESERVE_FLAGS);
-        assert_eq!(GuestVaFill::Fault.reserve_flags() & NVOS32_ALLOC_FLAGS_SPARSE, 0);
+        assert_eq!(
+            GuestVaFill::Fault.reserve_flags() & NVOS32_ALLOC_FLAGS_SPARSE,
+            0
+        );
     }
 
     /// ZERO adds exactly `_SPARSE` (`nvos.h:1472`) to the same three flags (`nvos.h:1448-1464`).
@@ -2459,12 +2467,26 @@ mod guest_va_fill_tests {
         for start in [MirrorVaStart::HostDefault, MirrorVaStart::GuestFloor] {
             let fault: Vec<_> = guest_range_plan(start, GuestVaFill::Fault).collect();
             let zero: Vec<_> = guest_range_plan(start, GuestVaFill::Zero).collect();
-            let ranges: Vec<_> = GUEST_VA_RANGES.iter().copied().chain(start.low_range()).collect();
-            assert_eq!(fault.iter().map(|&(l, h, _)| (l, h)).collect::<Vec<_>>(), ranges);
-            assert_eq!(zero.iter().map(|&(l, h, _)| (l, h)).collect::<Vec<_>>(), ranges);
-            assert!(fault.iter().all(|&(.., f)| f == NVOS32_RESERVE_FLAGS), "{start:?}");
+            let ranges: Vec<_> = GUEST_VA_RANGES
+                .iter()
+                .copied()
+                .chain(start.low_range())
+                .collect();
+            assert_eq!(
+                fault.iter().map(|&(l, h, _)| (l, h)).collect::<Vec<_>>(),
+                ranges
+            );
+            assert_eq!(
+                zero.iter().map(|&(l, h, _)| (l, h)).collect::<Vec<_>>(),
+                ranges
+            );
             assert!(
-                zero.iter().all(|&(.., f)| f == NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE),
+                fault.iter().all(|&(.., f)| f == NVOS32_RESERVE_FLAGS),
+                "{start:?}"
+            );
+            assert!(
+                zero.iter()
+                    .all(|&(.., f)| f == NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE),
                 "{start:?}"
             );
         }
@@ -2488,7 +2510,10 @@ mod guest_va_fill_tests {
         let plan: Vec<_> =
             guest_range_plan(MirrorVaStart::GuestFloor, GuestVaFill::default()).collect();
         assert_eq!(plan.len(), 3);
-        assert!(plan.iter().all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE == 0));
+        assert!(
+            plan.iter()
+                .all(|&(.., f)| f & NVOS32_ALLOC_FLAGS_SPARSE == 0)
+        );
     }
 }
 
