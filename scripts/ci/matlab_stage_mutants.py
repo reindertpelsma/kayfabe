@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Mutation checks of the `matlab` payload stage (2026-11-17): every mutant needs two named killers (stdlib, GPU-free).
 
-Each mutant is one exact-once text replacement in a private copy of matlab_stage.py, vast_report.py, vast_payload.py or payload_instruction.py (the whole of scripts/ci,
+Each mutant is one exact-once text replacement in a private copy of matlab_stage.py, vast_report.py, vast_payload.py, payload_instruction.py or matlab_rows.py (the whole of scripts/ci,
 scripts/kfci and scripts/bench/linux is copied, plus the harness files the stage imports); the named tests of test_matlab_stage.py run against the copy and the failing
 ones are the killers. The unmutated copy must be green first.
 
@@ -20,7 +20,8 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-FILES = {"ms": "scripts/ci/matlab_stage.py", "report": "scripts/ci/vast_report.py", "payload": "scripts/ci/vast_payload.py", "pinst": "scripts/ci/payload_instruction.py"}
+FILES = {"ms": "scripts/ci/matlab_stage.py", "report": "scripts/ci/vast_report.py", "payload": "scripts/ci/vast_payload.py", "pinst": "scripts/ci/payload_instruction.py",
+         "rows": "scripts/bench/linux/matlab_rows.py"}
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_matlab_stage."
 COPY_DIRS = ["scripts/ci", "scripts/kfci", "scripts/bench/linux"]
@@ -115,6 +116,24 @@ MUTANTS = [
       SF + "test_the_stage_gets_the_object_with_its_bin", SF + "test_the_stage_gets_another_bin_as_it_is"),
     M("matlab-on-the-middle-tier", "pinst", '    if i.matlab is not None and i.tier != "large":\n        raise InstructionError("matlab needs the large tier")', "    pass",
       IS + "test_refusals", PW + "test_an_instruction_with_matlab_on_a_middle_tier_is_not_planned"),
+    # 2026-11-18: the preamble judges the guest's total memory against the fb-mb the launch declares (the image state's), never against the host card's memory
+    M("gpu-info-tolerance-removed", "rows", "GPU_INFO_TOTAL_FRACTION = (0.80, 1.00)", "GPU_INFO_TOTAL_FRACTION = (0.0, 1.00)",
+      R + "test_a_report_under_the_tolerance_of_a_6144_launch_is_out_of_range_by_name", R + "test_the_strict_stage_fails_on_a_report_under_the_tolerance_and_runs_no_other_row"),
+    M("gpu-info-upper-bound-removed", "rows", "GPU_INFO_TOTAL_FRACTION = (0.80, 1.00)", "GPU_INFO_TOTAL_FRACTION = (0.80, 1000.0)",
+      R + "test_a_guest_reporting_more_than_the_launch_declared_fails_by_name", R + "test_the_strict_stage_fails_on_a_guest_above_the_declared_size_and_runs_no_other_row"),
+    M("gpu-info-host-comparison-restored", "rows", '    if declared_bytes(declared_fb_mb) is None:\n        findings.append(("HARNESS", "DECLARED_FB_MB_MISSING"))',
+      '    mib = (hw or {}).get("memory_mib")\n    if isinstance(mib, int) and mib > 0 and not (0.5 * mib * 2 ** 20 <= total <= 1.01 * mib * 2 ** 20):\n'
+      '        findings.append(("OUTPUT_MISMATCH", "TOTAL_MEMORY_OUT_OF_RANGE guest=%d host_mib=%d" % (total, mib)))\n'
+      '    if declared_bytes(declared_fb_mb) is None:\n        findings.append(("HARNESS", "DECLARED_FB_MB_MISSING"))',
+      R + "test_the_measured_report_passes_the_stage_against_the_declared_value_of_the_state", R + "test_the_standalone_shape_judges_the_same_way",
+      R + "test_strict_run_fetches_the_pinned_objects_and_runs_the_listed_rows"),
+    M("declared-value-ignored-by-the-judge", "rows", "            verified = verify_doc(row, parsed, ctx.hw, ctx.declared_fb_mb)\n", "            verified = verify_doc(row, parsed, ctx.hw, 4096)\n",
+      R + "test_the_declared_value_is_the_one_of_the_state_not_a_constant", R + "test_a_report_under_the_tolerance_of_a_6144_launch_is_out_of_range_by_name"),
+    M("declared-value-fixed-in-execute", "rows", "        ctx.declared_fb_mb = prop().declared_fb_mb(st)\n", "        ctx.declared_fb_mb = 4096\n",
+      R + "test_the_declared_value_is_the_one_of_the_state_not_a_constant", R + "test_an_image_state_that_declares_nothing_pays_for_no_boot",
+      R + "test_a_report_under_the_tolerance_of_a_6144_launch_is_out_of_range_by_name"),
+    M("state-without-a-declared-value-still-boots", "rows", "        if ctx.declared_fb_mb is None:\n            no_value", "        if False:\n            no_value",
+      R + "test_an_image_state_that_declares_nothing_pays_for_no_boot", R + "test_an_image_state_that_declares_nothing_refuses_every_row_by_name"),
     M("matlab-not-emitted", "pinst", '        if self.matlab is not None:\n            out["matlab"] = json.loads(json.dumps(self.matlab))\n', "",
       IS + "test_the_golden_is_accepted_and_round_trips", IS + "test_emit_instruction_writes_the_object_back_byte_for_byte"),
 ]

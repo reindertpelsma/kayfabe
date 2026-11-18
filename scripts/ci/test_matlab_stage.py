@@ -529,6 +529,112 @@ class RunTests(unittest.TestCase):
         self.assertNotIn("secret-token-path", json.dumps(rec))
         self.assertNotIn("example.invalid", json.dumps(rec))
 
+    # ---- 2026-11-18 (MEASURED, Vast RTX 4090 under kf3: `TOTAL_MEMORY_OUT_OF_RANGE guest=3968073728 host_mib=24564`, rc 4, seven rows not run): the preamble
+    # judges the guest's total memory against the fb-mb the LAUNCH declares, read from the image state the boots start from; the host card's memory is only recorded.
+    def declared_state(self, fb_mb=4096, **over):
+        st = MR.prop().init_state(tm.SEED, ram_mb=4096, smp=2, disk_gb=30, keypair=("PRIVATE", tm.PUB))
+        st["qemu"]["fb_mb"] = fb_mb
+        st["qemu"].update(over)
+        return st
+
+    def real_execute(self, hooks, seen, state, results=None):
+        """The rows module's own execute() behind the stage's hook: a scripted guest and `state` as the image's state; the stage's context and the judge are the real ones."""
+        results = results or tm.all_good()
+        seen["boots"] = []
+
+        def execute(image, directory, workdir, qemu, driver_run, driver_sha256, rows, lanes, ctx, sha, **kw):
+            seen["declared_before"] = ctx.declared_fb_mb
+            ctx.census, ctx.sleep, ctx.probe_factory = tm.FakeCensus(), (lambda secs: None), (lambda d: tm.FakeProbe())
+            seen["mctx"] = ctx
+            with patch.object(MR, "preflight_refusal", lambda *a, **k: None), patch.object(MR, "prepare_dir", lambda *a, **k: (state, {})):
+                return MR.execute(image, directory, workdir, qemu, driver_run, driver_sha256, rows, lanes, ctx, sha, make_session=lambda i: (
+                    seen["boots"].append(i), tm.FakeSession(results, index=i))[1], **kw)
+
+        hooks["execute"] = execute
+
+    def gpu_info_total(self, total):
+        results = tm.all_good()
+        results["gpu_info"] = (0, tm.raw(dict(tm.good("gpu_info"), info=dict(tm.INFO, total_memory=total, available_memory=min(tm.INFO["available_memory"], total)))))
+        return results
+
+    def test_the_measured_report_passes_the_stage_against_the_declared_value_of_the_state(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        self.real_execute(hooks, seen, self.declared_state(4096), self.gpu_info_total(tm.MEASURED_TOTAL))
+        rec, code = ms.run(a, hooks)
+        self.assertEqual((rec["verdict"], code), ("PASS", 0))
+        self.assertEqual(rec["rows"][0]["row"], "gpu_info")
+        self.assertEqual((rec["rows"][0]["verdict"], rec["rows"][0]["facts"]["declared_fb_mb"], rec["rows"][0]["facts"]["total_memory"]), ("PASS", 4096, tm.MEASURED_TOTAL))
+        self.assertEqual(rec["gpu"]["memory_mib"], 24564)                    # the host card is recorded as a fact, and was never the limit
+        self.assertIsNone(seen["declared_before"])                         # the stage does not know the value: it comes from the state, inside execute()
+        self.assertEqual(seen["mctx"].declared_fb_mb, 4096)
+        vast_report.validate_matlab(rec)
+
+    def test_the_declared_value_is_the_one_of_the_state_not_a_constant(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        self.real_execute(hooks, seen, self.declared_state(8192), self.gpu_info_total(7_700_000_000))
+        rec, code = ms.run(a, hooks)
+        self.assertEqual((rec["verdict"], code, seen["mctx"].declared_fb_mb), ("PASS", 0, 8192))
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        self.real_execute(hooks, seen, self.declared_state(4096), self.gpu_info_total(7_700_000_000))        # the same guest report against a launch of 4096
+        rec, code = ms.run(a, hooks)
+        self.assertEqual(rec["rows"][0]["reason"].split()[0], "TOTAL_MEMORY_OVER_DECLARED")
+
+    def test_a_report_under_the_tolerance_of_a_6144_launch_is_out_of_range_by_name(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        self.real_execute(hooks, seen, self.declared_state(6144), self.gpu_info_total(tm.MEASURED_TOTAL))   # 61.6 percent: above the hard floor, under 80 percent
+        rec, code = ms.run(a, hooks)
+        pre = rec["rows"][0]
+        self.assertEqual((pre["verdict"], pre["failure_class"], pre["reason"].split()[0]), ("FAIL", "OUTPUT_MISMATCH", "TOTAL_MEMORY_OUT_OF_RANGE"))
+        self.assertIn("declared_fb_mb=6144", pre["reason"])
+        vast_report.validate_matlab(rec)
+
+    def test_the_strict_stage_fails_on_a_report_under_the_tolerance_and_runs_no_other_row(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        self.real_execute(hooks, seen, self.declared_state(6144), self.gpu_info_total(tm.MEASURED_TOTAL))
+        rec, code = ms.run(a, hooks)
+        self.assertEqual((rec["verdict"], code), ("FAIL", 4))
+        self.assertEqual({r["reason"] for r in rec["rows"][1:]}, {"GPU_INFO_FAILED"})
+        self.assertEqual(seen["boots"], [1])                                  # the preamble's boot only
+
+    def test_a_guest_reporting_more_than_the_launch_declared_fails_by_name(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        self.real_execute(hooks, seen, self.declared_state(4096), self.gpu_info_total(5 * 2 ** 30))
+        rec, code = ms.run(a, hooks)
+        pre = rec["rows"][0]
+        self.assertEqual((pre["verdict"], pre["failure_class"], pre["reason"].split()[0]), ("FAIL", "OUTPUT_MISMATCH", "TOTAL_MEMORY_OVER_DECLARED"))
+        vast_report.validate_matlab(rec)
+
+    def test_the_strict_stage_fails_on_a_guest_above_the_declared_size_and_runs_no_other_row(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        self.real_execute(hooks, seen, self.declared_state(4096), self.gpu_info_total(5 * 2 ** 30))
+        rec, code = ms.run(a, hooks)
+        self.assertEqual((rec["verdict"], code), ("FAIL", 4))
+        self.assertEqual({r["reason"] for r in rec["rows"][1:]}, {"GPU_INFO_FAILED"})
+        self.assertEqual(seen["boots"], [1])
+
+    def test_an_image_state_that_declares_nothing_refuses_every_row_by_name(self):
+        for broken in ({}, {"qemu": {}}, {"qemu": {"fb_mb": 0}}, {"qemu": {"fb_mb": "4096"}}):
+            a, hooks, seen, klog, d, prefix = self.strict_args()
+            self.real_execute(hooks, seen, broken)
+            rec, code = ms.run(a, hooks)
+            self.assertEqual({(r["verdict"], r["reason"]) for r in rec["rows"]}, {("HARNESS", "DECLARED_FB_MB_MISSING")}, broken)
+            self.assertEqual((rec["verdict"], code), ("RETRY", 3))
+            self.assertEqual(rec["reason"], "HARNESS:gpu_info")
+            vast_report.validate_matlab(rec)
+
+    def test_an_image_state_that_declares_nothing_pays_for_no_boot(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        self.real_execute(hooks, seen, {"qemu": {}})
+        ms.run(a, hooks)
+        self.assertEqual(seen["boots"], [])
+        self.assertIsNone(seen["mctx"].declared_fb_mb)
+
+    def test_the_standalone_shape_judges_the_same_way(self):
+        a, hooks, seen, klog, d, prefix, image = self.standalone()
+        self.real_execute(hooks, seen, self.declared_state(4096), self.gpu_info_total(tm.MEASURED_TOTAL))
+        rec, code = ms.run(a, hooks)
+        self.assertEqual((rec["verdict"], code, rec["rows"][0]["facts"]["declared_fb_mb"]), ("PASS", 0, 4096))
+
 
 class GuestBinTests(unittest.TestCase):
     """The one rule for the guest's matlab binary (2026-11-18): the flag alone, the instruction's `bin` alone, neither -> the rows' name; both and different -> BIN_CONFLICT."""

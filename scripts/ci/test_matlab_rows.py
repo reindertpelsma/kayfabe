@@ -82,8 +82,10 @@ def item(name, **over):
     return it
 
 
-INFO = {"name": "NVIDIA GeForce RTX 4090", "compute_capability": "8.9", "driver_version": 13.0, "toolkit_version": 12.9, "total_memory": 25757220864,
-        "available_memory": 24000000000, "multiprocessors": 128, "device_count": 1, "matlab_release": "2026b", "can_use_gpu": True}
+DECLARED_FB_MB = 4096          # what the launch declares: propimage_linux.init_state's `fb_mb`, written by build_argv as the kf3 device's `fb-mb=`
+MEASURED_TOTAL = 3968073728    # MEASURED 2026-11-18 (Vast RTX 4090, kf3): gpuDevice TotalMemory of a guest booted with fb-mb=4096 (3784 MiB: 92.4 percent of it)
+INFO = {"name": "NVIDIA GeForce RTX 4090", "compute_capability": "8.9", "driver_version": 13.0, "toolkit_version": 12.9, "total_memory": MEASURED_TOTAL,
+        "available_memory": 3_700_000_000, "multiprocessors": 128, "device_count": 1, "matlab_release": "2026b", "can_use_gpu": True}
 MEM = {"total": 25757220864, "avail_start": 24000000000, "avail_after_alloc": 3000000000, "avail_end": 23900000000, "chunk_bytes": 134217728, "chunks": 152,
        "allocated_bytes": 152 * 134217728}
 HW = {"gpu_name": "NVIDIA GeForce RTX 4090", "compute_cap": 890, "memory_mib": 24564}
@@ -218,6 +220,7 @@ def make_ctx(lanes=None, probes=None, census_lines=(), xid=None, **kw):
         made.append(p)
         return p
 
+    kw.setdefault("declared_fb_mb", DECLARED_FB_MB)
     ctx = M.Context(lanes=lanes, hw=dict(HW), probe_factory=factory, sleep=lambda s: None, census=FakeCensus(census_lines),
                     xid_mark=lambda: 0, xid_since=(lambda mark: xid) if xid is not None else (lambda mark: None), **kw)
     ctx.made = made
@@ -244,7 +247,7 @@ def by_row(out):
 class ParseTests(unittest.TestCase):
     def test_good_documents_pass_for_every_row(self):
         for row in M.ROW_ORDER:
-            v = M.verify_doc(row, M.parse_row_json(raw(good(row)), row), HW)
+            v = M.verify_doc(row, M.parse_row_json(raw(good(row)), row), HW, DECLARED_FB_MB)
             self.assertTrue(v["ok"], (row, v))
             self.assertEqual(v["n_checks"], len(M.ROWS[row][3]))
 
@@ -305,7 +308,7 @@ class ParseTests(unittest.TestCase):
 
 class NumbersTests(unittest.TestCase):
     def verify(self, row, doc):
-        return M.verify_doc(row, M.parse_row_json(raw(doc), row), HW)
+        return M.verify_doc(row, M.parse_row_json(raw(doc), row), HW, DECLARED_FB_MB)
 
     def test_tolerance_miss_is_output_mismatch(self):
         d = set_check(good("gpu_matmul"), "matmul_single_512", diff=0.01, ref=10.0)   # relative 1e-3 against 1e-4
@@ -400,7 +403,7 @@ class NumbersTests(unittest.TestCase):
         v = self.verify("gpu_info", d)
         self.assertEqual(v["klass"], "OUTPUT_MISMATCH")
         d = good("gpu_info")
-        d["info"]["total_memory"] = 2 * HW["memory_mib"] * 2 ** 20
+        d["info"]["total_memory"] = 2 * DECLARED_FB_MB * 2 ** 20           # twice what the launch declared
         self.assertEqual(self.verify("gpu_info", d)["klass"], "OUTPUT_MISMATCH")
         d = good("gpu_info")
         d["info"]["can_use_gpu"] = False
@@ -411,7 +414,8 @@ class NumbersTests(unittest.TestCase):
 
     def test_gpu_info_facts_carry_no_account_data(self):
         facts = self.verify("gpu_info", good("gpu_info"))["facts"]
-        self.assertEqual(sorted(facts), ["compute_capability", "device_count", "driver_version", "matlab_release", "name", "toolkit_version", "total_memory"])
+        self.assertEqual(sorted(facts), ["compute_capability", "declared_fb_mb", "device_count", "driver_version", "matlab_release", "name", "toolkit_version", "total_memory"])
+        self.assertEqual(facts["declared_fb_mb"], DECLARED_FB_MB)
 
     def test_compute_capability_gate(self):
         self.assertEqual(M.cc_x100({"compute_capability": "8.9"}), 890)
@@ -425,6 +429,233 @@ class NumbersTests(unittest.TestCase):
             d = good("mem_oversub")
             d["memory"].update(edit)
             self.assertEqual(self.verify("mem_oversub", d)["klass"], klass, edit)
+
+
+# ---------------------------------------------------------------- the preamble's total memory is judged against the DECLARED fb-mb
+class DeclaredMemoryTests(unittest.TestCase):
+    """2026-11-18, MEASURED on a Vast RTX 4090 under kf3: the preamble failed `TOTAL_MEMORY_OUT_OF_RANGE guest=3968073728 host_mib=24564` and no other row ran.
+    The guest reports the VRAM carve-out the LAUNCH declares (the kf3 property `fb-mb`, 4096 MiB), never the host's 24 GB, so the host's memory is no limit."""
+
+    def info(self, total, declared=DECLARED_FB_MB, hw=HW):
+        d = good("gpu_info")
+        d["info"]["total_memory"] = total
+        d["info"]["available_memory"] = min(d["info"]["available_memory"], total)           # the document stays consistent (free is never above total)
+        return M.verify_doc("gpu_info", M.parse_row_json(raw(d), "gpu_info"), hw, declared)
+
+    @staticmethod
+    def bytes_of(mib):
+        return mib * 2 ** 20
+
+    def test_the_measured_report_of_the_4090_run_passes_against_the_declared_4096(self):
+        v = self.info(MEASURED_TOTAL)
+        self.assertEqual((v["ok"], v["klass"], v["findings"]), (True, None, []))
+        self.assertEqual(v["facts"]["declared_fb_mb"], 4096)
+        self.assertEqual(v["facts"]["total_memory"], MEASURED_TOTAL)
+
+    def test_the_hosts_memory_is_never_a_limit(self):
+        for hw_mib in (24564, 8192, 4096, 100, None):
+            hw = dict(HW, memory_mib=hw_mib)
+            self.assertTrue(self.info(MEASURED_TOTAL, hw=hw)["ok"], hw_mib)
+        self.assertTrue(self.info(MEASURED_TOTAL, hw={})["ok"])                      # no host facts at all: the declared bound still applies
+        v = self.info(self.bytes_of(HW["memory_mib"]))                              # a guest that reports the HOST's total sees more than the launch declared
+        self.assertEqual((v["ok"], v["klass"]), (False, "OUTPUT_MISMATCH"))
+        self.assertTrue(v["findings"][0].startswith("TOTAL_MEMORY_OVER_DECLARED"), v["findings"])
+        self.assertFalse(self.info(self.bytes_of(1024), hw={})["ok"])               # and the bound holds without host facts
+
+    def test_zero_and_tiny_reports_fail(self):
+        for total in (0, 1, 4096, self.bytes_of(1), self.bytes_of(255)):
+            v = self.info(total)
+            self.assertFalse(v["ok"], total)
+            self.assertIn(v["klass"], ("BAD_RESULT", "OUTPUT_MISMATCH"))
+        v = self.info(self.bytes_of(255))
+        self.assertTrue(v["findings"][0].startswith("TOTAL_MEMORY_BELOW_FLOOR"), v["findings"])
+
+    def test_a_gib_of_a_declared_4096_fails_below_the_floor(self):
+        v = self.info(self.bytes_of(1024))
+        self.assertEqual((v["ok"], v["klass"]), (False, "OUTPUT_MISMATCH"))
+        self.assertTrue(v["findings"][0].startswith("TOTAL_MEMORY_BELOW_FLOOR"), v["findings"])
+        self.assertIn("declared_fb_mb=4096", v["findings"][0])
+
+    def test_more_than_declared_fails_by_its_own_name(self):
+        v = self.info(5 * 2 ** 30)
+        self.assertEqual((v["ok"], v["klass"]), (False, "OUTPUT_MISMATCH"))
+        self.assertTrue(v["findings"][0].startswith("TOTAL_MEMORY_OVER_DECLARED"), v["findings"])
+        self.assertTrue(self.info(self.bytes_of(DECLARED_FB_MB))["ok"])             # exactly the declared size is the upper edge and passes
+        v = self.info(self.bytes_of(DECLARED_FB_MB) + 1)
+        self.assertEqual((v["ok"], v["findings"][0].split()[0]), (False, "TOTAL_MEMORY_OVER_DECLARED"))
+
+    def test_between_the_floor_and_the_tolerance_is_out_of_range(self):
+        declared = self.bytes_of(DECLARED_FB_MB)
+        low = -(-int(M.GPU_INFO_TOTAL_FRACTION[0] * declared * 1000) // 1000)        # the smallest passing integer, rounded up
+        self.assertTrue(self.info(low)["ok"], low)
+        for total in (low - 1, int(0.60 * declared), int(0.51 * declared)):
+            v = self.info(total)
+            self.assertEqual((v["ok"], v["klass"], v["findings"][0].split()[0]), (False, "OUTPUT_MISMATCH", "TOTAL_MEMORY_OUT_OF_RANGE"), total)
+        v = self.info(int(0.49 * declared))
+        self.assertEqual(v["findings"][0].split()[0], "TOTAL_MEMORY_BELOW_FLOOR")   # under half of it: the hard floor, a different defect than a carve-out
+
+    def test_the_tolerance_is_the_documented_one_and_holds_the_measured_value(self):
+        lo, hi = M.GPU_INFO_TOTAL_FRACTION
+        self.assertEqual((lo, hi), (0.80, 1.00))
+        self.assertLess(M.GPU_INFO_FLOOR_FRACTION, lo)
+        self.assertEqual(M.GPU_INFO_FLOOR_BYTES, 256 * 2 ** 20)
+        self.assertTrue(lo <= MEASURED_TOTAL / self.bytes_of(DECLARED_FB_MB) <= hi)
+        self.assertAlmostEqual(MEASURED_TOTAL / self.bytes_of(DECLARED_FB_MB), 0.924, places=3)      # 3784 of 4096 MiB
+
+    def test_a_declared_8192_judges_the_same_way(self):
+        self.assertTrue(self.info(7_700_000_000, declared=8192)["ok"])
+        v = self.info(MEASURED_TOTAL, declared=8192)                                # the 4096 report is under half of 8192: the launch declared more than the guest saw
+        self.assertEqual((v["ok"], v["findings"][0].split()[0]), (False, "TOTAL_MEMORY_BELOW_FLOOR"))
+        v = self.info(7_700_000_000, declared=4096)
+        self.assertEqual((v["ok"], v["findings"][0].split()[0]), (False, "TOTAL_MEMORY_OVER_DECLARED"))
+
+    def test_a_declared_value_that_is_missing_is_a_harness_matter_never_a_pass(self):
+        for declared in (None, 0, -4096, "4096", 4096.0, True, [4096]):
+            v = self.info(MEASURED_TOTAL, declared=declared)
+            self.assertEqual((v["ok"], v["klass"]), (False, "HARNESS"), declared)
+            self.assertEqual(v["findings"], ["DECLARED_FB_MB_MISSING"])
+            self.assertIsNone(v["facts"]["declared_fb_mb"])
+
+    def test_a_bad_info_block_still_outranks_a_missing_declared_value(self):
+        d = good("gpu_info")
+        d["info"]["can_use_gpu"] = False
+        v = M.verify_doc("gpu_info", M.parse_row_json(raw(d), "gpu_info"), HW, None)
+        self.assertEqual(v["klass"], "BAD_RESULT")
+        d = good("gpu_info")
+        d["info"]["name"] = "NVIDIA GeForce RTX 3060"
+        v = M.verify_doc("gpu_info", M.parse_row_json(raw(d), "gpu_info"), HW, None)
+        self.assertEqual(v["klass"], "OUTPUT_MISMATCH")                              # a real failure is reported as one even when the memory could not be judged
+
+    def test_the_other_rows_do_not_need_the_declared_value(self):
+        for row in M.ROW_ORDER:
+            if row != "gpu_info":
+                self.assertTrue(M.verify_doc(row, M.parse_row_json(raw(good(row)), row), HW, None)["ok"], row)
+
+    def test_the_preamble_still_checks_everything_else(self):
+        d = good("gpu_info")
+        d["info"]["name"] = "NVIDIA GeForce RTX 3060"
+        v = M.verify_doc("gpu_info", M.parse_row_json(raw(d), "gpu_info"), HW, DECLARED_FB_MB)
+        self.assertEqual((v["klass"], v["findings"][0].split()[0]), ("OUTPUT_MISMATCH", "GPU_NAME_DIFFERS"))
+        d = good("gpu_info")
+        d["info"]["available_memory"] = d["info"]["total_memory"] + 1
+        self.assertEqual(M.verify_doc("gpu_info", M.parse_row_json(raw(d), "gpu_info"), HW, DECLARED_FB_MB)["klass"], "BAD_RESULT")
+
+    def test_the_judge_maps_a_harness_klass_to_harness_not_a_failure(self):
+        verified = self.info(MEASURED_TOTAL, declared=None)
+        verdict = M.judge("gpu_info", {"rc": 0, "timed_out": False, "lost": False, "secs": 1}, {"status": "done"}, verified, None, {}, None)
+        self.assertEqual(verdict, ("HARNESS", None, "DECLARED_FB_MB_MISSING"))
+        failing = M.judge("gpu_info", {"rc": 0, "timed_out": False, "lost": False, "secs": 1}, {"status": "done"}, self.info(5 * 2 ** 30), None, {}, None)
+        self.assertEqual(failing[:2], ("FAIL", "OUTPUT_MISMATCH"))
+
+    # ---- at run level: the context carries the declared value to the judge
+    def test_a_good_preamble_passes_the_run_with_the_declared_value_in_its_facts(self):
+        out, ctx, _ = run(all_good())
+        rec = by_row(out)["gpu_info"]
+        self.assertEqual((rec["verdict"], rec["facts"]["declared_fb_mb"]), ("PASS", 4096))
+        self.assertEqual(M.grade(out["rows"], True)[2], 0)
+
+    def test_the_run_judges_the_preamble_against_the_context_value_not_a_constant(self):
+        results = all_good()
+        results["gpu_info"] = (0, raw(dict(good("gpu_info"), info=dict(INFO, total_memory=7_700_000_000))))
+        out, _, _ = run(results, ctx=make_ctx(declared_fb_mb=8192))
+        self.assertEqual(by_row(out)["gpu_info"]["verdict"], "PASS")
+        out, _, _ = run(results, ctx=make_ctx(declared_fb_mb=4096))
+        rec = by_row(out)["gpu_info"]
+        self.assertEqual((rec["verdict"], rec["failure_class"]), ("FAIL", "OUTPUT_MISMATCH"))
+        self.assertTrue(rec["reason"].startswith("TOTAL_MEMORY_OVER_DECLARED"), rec["reason"])
+
+    def test_a_guest_above_the_declared_size_fails_the_preamble_and_nothing_else_runs(self):
+        results = all_good()
+        results["gpu_info"] = (0, raw(dict(good("gpu_info"), info=dict(INFO, total_memory=5 * 2 ** 30))))
+        out, _, calls = run(results)
+        rows = by_row(out)
+        self.assertEqual((rows["gpu_info"]["verdict"], rows["gpu_info"]["failure_class"]), ("FAIL", "OUTPUT_MISMATCH"))
+        self.assertEqual({r["reason"] for k, r in rows.items() if k != "gpu_info"}, {"GPU_INFO_FAILED"})
+        self.assertEqual([c[1] for c in calls if c[0] == "exec"], ["gpu_info"])
+
+    def test_no_declared_value_in_the_context_is_a_harness_retry_never_a_pass(self):
+        out, _, calls = run(all_good(), ctx=make_ctx(declared_fb_mb=None))
+        rows = by_row(out)
+        self.assertEqual((rows["gpu_info"]["verdict"], rows["gpu_info"]["failure_class"], rows["gpu_info"]["reason"]), ("HARNESS", None, "DECLARED_FB_MB_MISSING"))
+        self.assertEqual({r["reason"] for k, r in rows.items() if k != "gpu_info"}, {"GPU_INFO_FAILED"})
+        self.assertEqual(M.grade(out["rows"], True)[:3], ("RETRY", "HARNESS:gpu_info", 3))
+
+    def test_the_context_defaults_to_no_declared_value(self):
+        self.assertIsNone(M.Context().declared_fb_mb)
+        self.assertEqual(M.Context(declared_fb_mb=4096).declared_fb_mb, 4096)
+
+    # ---- the one source of truth: the state the boot is launched from
+    def execute(self, state, results, rows=("gpu_matmul",)):
+        from unittest import mock
+        with tempfile.TemporaryDirectory(prefix="matlab-rows-exec-") as t:
+            img, drv = Path(t) / "i.zip", Path(t) / "NVIDIA-Linux-x86_64-580.126.09.run"
+            img.write_bytes(b"x")
+            drv.write_bytes(b"x")
+            ctx = make_ctx(declared_fb_mb=1)                      # a stale or foreign value: execute() must replace it with the state's
+            sessions = []
+
+            def make(i):
+                sessions.append(FakeSession(results, index=i))
+                return sessions[-1]
+
+            with mock.patch.object(M, "preflight_refusal", lambda *a, **k: None), mock.patch.object(M, "prepare_dir", lambda *a, **k: (state, {})):
+                rec = M.execute(str(img), None, t, "/q", str(drv), "0" * 64, list(rows), ctx.lanes, ctx, "0" * 40, make_session=make)
+        return rec, ctx, sessions
+
+    def state(self, fb_mb=None):
+        st = M.prop().init_state(SEED, ram_mb=4096, smp=2, disk_gb=30, keypair=("PRIVATE", PUB))
+        if fb_mb is not None:
+            st["qemu"]["fb_mb"] = fb_mb
+        return st
+
+    def test_execute_takes_the_declared_value_from_the_image_state_the_boot_uses(self):
+        rec, ctx, sessions = self.execute(self.state(), all_good())
+        self.assertEqual(ctx.declared_fb_mb, 4096)
+        self.assertEqual(ctx.declared_fb_mb, M.prop().declared_fb_mb(self.state()))
+        self.assertEqual(rec["rows"][0]["facts"]["declared_fb_mb"], 4096)
+        self.assertEqual(rec["rows"][0]["verdict"], "PASS")
+        rec, ctx, sessions = self.execute(self.state(8192), all_good())
+        self.assertEqual((ctx.declared_fb_mb, rec["rows"][0]["verdict"], rec["rows"][0]["failure_class"]), (8192, "FAIL", "OUTPUT_MISMATCH"))   # 3.97e9 is under half of 8192 MiB
+
+    def test_execute_refuses_a_state_that_declares_nothing_before_any_boot(self):
+        for broken in ({}, {"qemu": {}}, {"qemu": {"fb_mb": 0}}, {"qemu": {"fb_mb": "4096"}}, {"qemu": {"fb_mb": None}}):
+            rec, ctx, sessions = self.execute(broken, all_good())
+            self.assertEqual(sessions, [], broken)
+            self.assertEqual({(r["verdict"], r["reason"]) for r in rec["rows"]}, {("HARNESS", "DECLARED_FB_MB_MISSING")}, broken)
+            self.assertEqual((rec["verdict"], rec["exit_code"]), ("RETRY", 3))
+            self.assertIsNone(ctx.declared_fb_mb)
+            self.assertEqual([r["row"] for r in rec["rows"]], ["gpu_info", "gpu_matmul"])
+
+    def test_the_boot_argv_carries_the_value_the_judge_uses(self):
+        for fb_mb in (None, 8192, 6144):
+            s, calls, popens, p = make_session(self)
+            if fb_mb is not None:
+                s.st["qemu"]["fb_mb"] = fb_mb
+            s.boot()
+            device = next(a for a in popens[0] if a.startswith("kf3-gpu,"))
+            self.assertIn(",fb-mb=%d," % M.prop().declared_fb_mb(s.st), device + ",")
+            self.assertEqual(int(re.search(r"fb-mb=(\d+)", device).group(1)), fb_mb or 4096)
+
+    def test_verify_cli_takes_the_declared_value_and_no_host_memory(self):
+        with tempfile.TemporaryDirectory(prefix="matlab-rows-cli-") as t:
+            f = Path(t) / "r.json"
+            f.write_bytes(raw(good("gpu_info")))
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = M.main(["verify", str(f), "--row", "gpu_info", "--host-gpu-name", "NVIDIA GeForce RTX 4090", "--declared-fb-mb", "4096"])
+            self.assertEqual((code, buf.getvalue().split()[0]), (0, "OK"))
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = M.main(["verify", str(f), "--row", "gpu_info", "--declared-fb-mb", "8192"])
+            self.assertEqual(code, 1)
+            self.assertIn("TOTAL_MEMORY_BELOW_FLOOR", buf.getvalue())
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = M.main(["verify", str(f), "--row", "gpu_info"])
+            self.assertEqual(code, 1)
+            self.assertIn("DECLARED_FB_MB_MISSING", buf.getvalue())
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                M.main(["verify", str(f), "--row", "gpu_info", "--host-mem-mib", "24564"])         # the host's memory is not an input any more
 
 
 # ---------------------------------------------------------------- GPU use from the host counters, the verdict order
@@ -870,7 +1101,7 @@ class FinalRuleTests(unittest.TestCase):
                 buf = io.StringIO()
                 with mock.patch.object(M, "host_gpu_facts", lambda: dict(HW)), mock.patch.object(M, "preflight_refusal", lambda *a, **k: None), \
                         mock.patch.object(M, "prepare_dir", lambda *a, **k: ({}, {})), mock.patch.object(M, "run_rows", fake_run_rows), \
-                        mock.patch.object(M, "prop", lambda: types.SimpleNamespace(driver_version_from_name=lambda p: "580.126.09")), contextlib.redirect_stdout(buf):
+                        mock.patch.object(M, "prop", lambda: types.SimpleNamespace(driver_version_from_name=lambda p: "580.126.09", declared_fb_mb=lambda st: 4096)), contextlib.redirect_stdout(buf):
                     M.main(common + (["--strict"] if strict else []))
                 outcomes[strict] = json.loads([l for l in buf.getvalue().splitlines() if l.startswith(M.RESULT_LINE)][0].split(" ", 1)[1])
             self.assertEqual(len(seen), 1)                                              # the permissive run went on to run the rows
@@ -1164,7 +1395,7 @@ class GpuUseProofTests(unittest.TestCase):
     before the gather), and the host's kf3 census window showing GPU work: each is a separate check with its own failure."""
 
     def verify(self, row, doc, hw=HW):
-        return M.verify_doc(row, doc, hw)
+        return M.verify_doc(row, doc, hw, DECLARED_FB_MB)
 
     def test_a_cpu_result_compared_with_the_cpu_result_agrees_numerically_and_still_fails(self):
         doc = good("gpu_matmul")

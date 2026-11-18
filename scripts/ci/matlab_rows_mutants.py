@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REL = "scripts/bench/linux/matlab_rows.py"
 SRC = (ROOT / REL).read_text()
-COPIES = ("scripts/bench/linux/propimage_linux.py", "scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py",
+COPIES = ("scripts/bench/linux/propimage_linux.py", "scripts/bench/linux/propimage_linux_pkgs.py", "scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py",
           "scripts/bench/windows/gpu_assert.py", "scripts/bench/windows/kf3_census.py", "scripts/bench/linux/auth_stub_app.py", "scripts/bench/gpu_use.py")
 
 
@@ -123,7 +123,30 @@ CASES = [
          "test_gpudevice_must_be_present_usable_and_the_hosts_gpu", "test_the_scripts_write_a_device_block_and_the_host_requires_it"),
     case("device-name-not-compared", '    if hw and hw.get("gpu_name") and _norm_gpu_name(hw["gpu_name"]) != _norm_gpu_name(name):\n        return [("GPU_NOT_USED"', '    if False:\n        return [("GPU_NOT_USED"',
          "test_gpudevice_must_be_present_usable_and_the_hosts_gpu", "test_gpu_not_used_outranks_a_numeric_miss_for_a_foreign_device"),
-    case("numeric-miss-outranks-gpu-not-used", 'else "GPU_NOT_USED" if any(k == "GPU_NOT_USED" for k, _ in found)\n             else ("OUTPUT_MISMATCH" if found else None))', 'else ("OUTPUT_MISMATCH" if found else None))',
+    # 2026-11-18: the preamble judges the guest's total memory against the fb-mb the LAUNCH declares, never against the host card's memory
+    case("total-memory-tolerance-removed", "GPU_INFO_TOTAL_FRACTION = (0.80, 1.00)", "GPU_INFO_TOTAL_FRACTION = (0.0, 1.00)",
+         "test_between_the_floor_and_the_tolerance_is_out_of_range", "test_the_tolerance_is_the_documented_one_and_holds_the_measured_value"),
+    case("total-memory-upper-bound-removed", "GPU_INFO_TOTAL_FRACTION = (0.80, 1.00)", "GPU_INFO_TOTAL_FRACTION = (0.80, 1000.0)",
+         "test_more_than_declared_fails_by_its_own_name", "test_the_hosts_memory_is_never_a_limit"),
+    case("total-memory-floor-removed", "GPU_INFO_FLOOR_FRACTION, GPU_INFO_FLOOR_BYTES = 0.50, 256 * 2 ** 20", "GPU_INFO_FLOOR_FRACTION, GPU_INFO_FLOOR_BYTES = 0.0, 0",
+         "test_zero_and_tiny_reports_fail", "test_a_gib_of_a_declared_4096_fails_below_the_floor"),
+    case("total-memory-over-declared-loses-its-name", 'return "TOTAL_MEMORY_OVER_DECLARED " + where', 'return "TOTAL_MEMORY_OUT_OF_RANGE " + where',
+         "test_more_than_declared_fails_by_its_own_name", "test_a_guest_above_the_declared_size_fails_the_preamble_and_nothing_else_runs"),
+    case("host-memory-comparison-restored", '    if declared_bytes(declared_fb_mb) is None:\n        findings.append(("HARNESS", "DECLARED_FB_MB_MISSING"))',
+         '    mib = (hw or {}).get("memory_mib")\n    if isinstance(mib, int) and mib > 0 and not (0.5 * mib * 2 ** 20 <= total <= 1.01 * mib * 2 ** 20):\n'
+         '        findings.append(("OUTPUT_MISMATCH", "TOTAL_MEMORY_OUT_OF_RANGE guest=%d host_mib=%d" % (total, mib)))\n'
+         '    if declared_bytes(declared_fb_mb) is None:\n        findings.append(("HARNESS", "DECLARED_FB_MB_MISSING"))',
+         "test_the_hosts_memory_is_never_a_limit", "test_the_measured_report_of_the_4090_run_passes_against_the_declared_4096"),
+    case("declared-value-ignored-by-the-judge", "            verified = verify_doc(row, parsed, ctx.hw, ctx.declared_fb_mb)\n", "            verified = verify_doc(row, parsed, ctx.hw, 4096)\n",
+         "test_the_run_judges_the_preamble_against_the_context_value_not_a_constant", "test_no_declared_value_in_the_context_is_a_harness_retry_never_a_pass"),
+    case("declared-value-fixed-in-execute", "        ctx.declared_fb_mb = prop().declared_fb_mb(st)\n", "        ctx.declared_fb_mb = 4096\n",
+         "test_execute_takes_the_declared_value_from_the_image_state_the_boot_uses", "test_execute_refuses_a_state_that_declares_nothing_before_any_boot"),
+    case("missing-declared-value-is-not-flagged", '        findings.append(("HARNESS", "DECLARED_FB_MB_MISSING"))\n    else:', "        pass\n    else:",
+         "test_a_declared_value_that_is_missing_is_a_harness_matter_never_a_pass", "test_no_declared_value_in_the_context_is_a_harness_retry_never_a_pass"),
+    case("harness-class-is-a-failure", '        if verified["klass"] == "HARNESS":\n', "        if False:\n",
+         "test_the_judge_maps_a_harness_klass_to_harness_not_a_failure", "test_no_declared_value_in_the_context_is_a_harness_retry_never_a_pass"),
+    case("numeric-miss-outranks-gpu-not-used", 'else "GPU_NOT_USED" if any(k == "GPU_NOT_USED" for k, _ in found)\n             else ("OUTPUT_MISMATCH" if any(k == "OUTPUT_MISMATCH" for k, _ in found) else "HARNESS" if found else None))',
+         'else ("OUTPUT_MISMATCH" if any(k == "OUTPUT_MISMATCH" for k, _ in found) or any(k == "GPU_NOT_USED" for k, _ in found) else "HARNESS" if found else None))',
          "test_gpu_not_used_outranks_a_numeric_miss", "test_a_cpu_result_compared_with_the_cpu_result_agrees_numerically_and_still_fails"),
 ]
 
