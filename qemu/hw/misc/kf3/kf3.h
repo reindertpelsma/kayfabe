@@ -79,7 +79,9 @@
 /* 35 (2026-11-18, claude/sparse-zero-fill-20261118, docs/design/V3_SPARSE_RESIDENCY_RCA.md): kf3_realize gains
  * unmapped_reads_zero (the unmapped-reads-zero property: 0 = off, the default; 1 = unmapped guest VAs read
  * zero on the host) after windows_support. 34 is taken by an unmerged branch (claude/util-flag-20261117). */
-#define KF3_ABI 35
+/* 36 (2026-11-18, claude/sparse-zero-default-20261118): unmapped_reads_zero becomes three-valued: 0 = off,
+ * 1 = on, 2 = auto (the default: zero for a Windows-profile guest's spaces only); anything else refuses realize. */
+#define KF3_ABI 36
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u

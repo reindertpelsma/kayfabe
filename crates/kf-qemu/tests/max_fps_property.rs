@@ -24,7 +24,7 @@ fn config(display: bool, display_max_fps: u32) -> Config {
         vm_id: None,
         pci_devfn: 0,
         windows_support: true,
-        unmapped_reads_zero: false,
+        unmapped_reads_zero: kf_host::channel::GuestVaFillPolicy::ByProfile,
         channel_budget: 0,
     }
 }

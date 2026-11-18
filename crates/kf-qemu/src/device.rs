@@ -110,23 +110,20 @@ pub struct Config {
     /// variable and never inferred from the guest.
     pub windows_support: bool,
     /// ★ 2026-11-18 (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §5, option B): the
-    /// `unmapped-reads-zero` property, default OFF. On, an unmapped VA of the static guest ranges
-    /// reads ZERO on the host twin instead of faulting ([`kf_host::channel::GuestVaFill::Zero`]):
-    /// the guest's sparse pages (Vulkan sparse residency) work, and every other unmapped VA the
-    /// guest's GPU touches silently reads zero. Never an environment variable; never inferred from
-    /// the guest.
-    pub unmapped_reads_zero: bool,
+    /// `unmapped-reads-zero` property, `off` / `on` / `auto` (the default). With ZERO, an unmapped VA of
+    /// the static guest ranges reads zero on the host twin instead of faulting
+    /// ([`kf_host::channel::GuestVaFill::Zero`]): the guest's sparse pages (Vulkan sparse residency,
+    /// DX12 reserved/tiled resources) work, and every other unmapped VA the guest's GPU touches silently
+    /// reads zero. `auto` gives ZERO to the spaces of a Windows-profile guest only
+    /// ([`kf_host::channel::GuestVaFillPolicy::ByProfile`]). Never an environment variable.
+    pub unmapped_reads_zero: kf_host::channel::GuestVaFillPolicy,
 }
 
 impl Config {
-    /// The host fill of the static guest ranges this configuration asks for.
+    /// The fill policy of the static guest ranges this configuration asks for.
     #[must_use]
-    pub const fn guest_va_fill(&self) -> kf_host::channel::GuestVaFill {
-        if self.unmapped_reads_zero {
-            kf_host::channel::GuestVaFill::Zero
-        } else {
-            kf_host::channel::GuestVaFill::Fault
-        }
+    pub const fn guest_va_fill_policy(&self) -> kf_host::channel::GuestVaFillPolicy {
+        self.unmapped_reads_zero
     }
 
     /// ★ The properties that refuse each other or a value, by name — before anything is opened,
@@ -423,12 +420,18 @@ impl Device {
             .map_err(|e| e.to_string())?,
         ));
         // ★ 2026-11-18: before any mirror space exists, so every space's static guest ranges take it.
-        rm.set_guest_va_fill(cfg.guest_va_fill());
-        if cfg.unmapped_reads_zero {
-            eprintln!(
-                "kf3: unmapped-reads-zero=on: unmapped guest VAs read ZERO on the host (no fault); sparse residency works, faults are silent (V3_SPARSE_RESIDENCY_RCA.md)"
-            );
-        }
+        rm.set_guest_va_fill_policy(cfg.guest_va_fill_policy());
+        eprintln!(
+            "kf3: unmapped-reads-zero={}",
+            match cfg.unmapped_reads_zero {
+                kf_host::channel::GuestVaFillPolicy::Fault =>
+                    "off: unmapped guest VAs fault on the host (sparse residency hangs)",
+                kf_host::channel::GuestVaFillPolicy::Zero =>
+                    "on: unmapped guest VAs read ZERO on the host (no fault); sparse residency works, faults are silent (V3_SPARSE_RESIDENCY_RCA.md)",
+                kf_host::channel::GuestVaFillPolicy::ByProfile =>
+                    "auto: ZERO for a Windows-profile guest's spaces, FAULT for every other guest (V3_SPARSE_RESIDENCY_RCA.md)",
+            }
+        );
         let (architecture, implementation, revision) = rm.arch_info();
         let family = Family::from_arch(architecture, implementation)
             .map_err(|e| format!("family: {e:?}"))?;
@@ -4448,36 +4451,75 @@ mod config_tests {
             vm_id: None,
             pci_devfn: 0,
             windows_support: true,
-            unmapped_reads_zero: false,
+            unmapped_reads_zero: kf_host::channel::GuestVaFillPolicy::ByProfile,
         }
     }
 
-    /// ★ 2026-11-18 `unmapped-reads-zero`: off by default (the host faults on an unmapped guest VA,
-    /// S2 of `V3_SPARSE_RESIDENCY_RCA.md`); on asks for the ZERO fill, and nothing else changes.
+    /// ★ 2026-11-18 `unmapped-reads-zero`: `auto` by default, which is FAULT for a Linux guest's spaces
+    /// (S2 of `V3_SPARSE_RESIDENCY_RCA.md`) and ZERO for a Windows-profile guest's; `off` overrides it.
     #[test]
-    fn unmapped_reads_zero_is_off_by_default_and_maps_to_the_fill() {
-        use kf_host::channel::GuestVaFill;
-        let off = cfg(false, false);
-        assert!(!off.unmapped_reads_zero, "default off");
-        assert_eq!(off.guest_va_fill(), GuestVaFill::Fault);
-        let on = Config {
-            unmapped_reads_zero: true,
+    fn unmapped_reads_zero_defaults_to_auto_linux_fault_windows_zero() {
+        use kf_host::channel::{GuestVaFill, GuestVaFillPolicy, MirrorVaStart};
+        let d = cfg(false, false);
+        assert_eq!(
+            d.guest_va_fill_policy(),
+            GuestVaFillPolicy::ByProfile,
+            "default auto"
+        );
+        let linux = MirrorVaStart::select(false);
+        let windows = MirrorVaStart::select(true);
+        assert_eq!(d.guest_va_fill_policy().fill_for(linux), GuestVaFill::Fault);
+        assert_eq!(
+            d.guest_va_fill_policy().fill_for(windows),
+            GuestVaFill::Zero
+        );
+        let off = Config {
+            unmapped_reads_zero: GuestVaFillPolicy::Fault,
             ..cfg(false, false)
         };
-        assert_eq!(on.guest_va_fill(), GuestVaFill::Zero);
-        assert!(on.check().is_ok(), "the property needs no other property");
+        assert_eq!(
+            off.guest_va_fill_policy().fill_for(windows),
+            GuestVaFill::Fault,
+            "off overrides Windows"
+        );
+        assert!(off.check().is_ok());
     }
 
-    /// ★ 2026-11-18: the property and the fill agree for both values (the ZERO fill exactly when on).
+    /// ★ 2026-11-18: a device line that names no `unmapped-reads-zero` gives a Windows-profile guest's
+    /// spaces the ZERO fill (the DX12 reserved-resource case) and a Linux guest's the FAULT fill.
     #[test]
-    fn the_property_and_the_fill_round_trip() {
-        use kf_host::channel::GuestVaFill;
-        for on in [false, true] {
+    fn the_default_device_zeroes_only_windows_profile_spaces() {
+        use kf_host::channel::{GuestVaFill, MirrorVaStart};
+        for display in [false, true] {
+            let c = cfg(display, false);
+            let fill = |w: bool| c.guest_va_fill_policy().fill_for(MirrorVaStart::select(w));
+            assert_eq!(
+                (fill(false), fill(true)),
+                (GuestVaFill::Fault, GuestVaFill::Zero),
+                "display={display}"
+            );
+        }
+    }
+
+    /// ★ 2026-11-18: both explicit values ignore the profile (`on` overrides the Linux default).
+    #[test]
+    fn an_explicit_value_overrides_either_profile() {
+        use kf_host::channel::{GuestVaFill, GuestVaFillPolicy, MirrorVaStart};
+        for (p, want) in [
+            (GuestVaFillPolicy::Zero, GuestVaFill::Zero),
+            (GuestVaFillPolicy::Fault, GuestVaFill::Fault),
+        ] {
             let c = Config {
-                unmapped_reads_zero: on,
+                unmapped_reads_zero: p,
                 ..cfg(true, false)
             };
-            assert_eq!(c.guest_va_fill() == GuestVaFill::Zero, on, "on={on}");
+            for start in [MirrorVaStart::select(false), MirrorVaStart::select(true)] {
+                assert_eq!(
+                    c.guest_va_fill_policy().fill_for(start),
+                    want,
+                    "{p:?} {start:?}"
+                );
+            }
         }
     }
 

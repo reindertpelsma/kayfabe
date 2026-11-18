@@ -83,7 +83,10 @@ use std::os::unix::ffi::OsStrExt as _;
 /// gains `unmapped_reads_zero` (the `unmapped-reads-zero` property; 0 = off, the default; 1 = unmapped
 /// guest VAs read zero on the host) after `windows_support`. 34 is taken by an unmerged branch
 /// (`claude/util-flag-20261117`, `report_utilization`); a merge with it puts this argument after that one.
-pub const KF3_ABI: u32 = 35;
+/// 36 (2026-11-18, `claude/sparse-zero-default-20261118`): `unmapped_reads_zero` becomes three-valued
+/// (0 = off, 1 = on, 2 = auto, the new default: ZERO for a Windows-profile guest's spaces only); any
+/// other value refuses realize by name.
+pub const KF3_ABI: u32 = 36;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -309,7 +312,17 @@ pub unsafe extern "C" fn kf3_realize(
         pci_devfn,
         channel_budget,
         windows_support: windows_support != 0,
-        unmapped_reads_zero: unmapped_reads_zero != 0,
+        unmapped_reads_zero: match unmapped_reads_zero {
+            0 => kf_host::channel::GuestVaFillPolicy::Fault,
+            1 => kf_host::channel::GuestVaFillPolicy::Zero,
+            2 => kf_host::channel::GuestVaFillPolicy::ByProfile,
+            other => {
+                err.write(&format!(
+                    "unmapped-reads-zero: ABI value {other} is none of 0 (off), 1 (on), 2 (auto)"
+                ));
+                return -1;
+            }
+        },
     };
     crate::userstore::configure(user_view_keep);
     // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).

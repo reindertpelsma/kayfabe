@@ -71,6 +71,13 @@ Mutant (blanket fix: add `_SPARSE` to `NVOS32_RESERVE_FLAGS`): S1 turns green bu
 
 ## 5. Fix design (DESIGN-ONLY; the fix forks on an owner decision)
 
+**Update 2026-11-18, later (coordinator decision; stacked PR `claude/sparse-zero-default-20261118`): the
+default is now `auto`.** `GuestVaFillPolicy::ByProfile` gives ZERO to the spaces of a Windows-profile guest
+(the floor-started spaces) and FAULT to every other guest; `on` and `off` override it for every space. ABI 36.
+- Linux keeps S2 by default: MEASURED (the Linux guests above).
+- Windows gets S1 by default. That sparse reads work there, and that the silent-zero hazard is smaller
+  there (no demand-paged UVM/HMM on WDDM), is INFERRED: no Windows sparse run exists yet.
+
 **Update 2026-11-18 (coordinator decision): option B is implemented as an OPT-IN, default OFF.** The
 `unmapped-reads-zero` device property (`kf_host::channel::GuestVaFill`, `guest_range_plan`; ABI 35;
 `docs/howto/installing.md`) applies to the static guest ranges only. Its tests are in
