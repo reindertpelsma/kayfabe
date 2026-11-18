@@ -392,7 +392,7 @@ static int c_pool_alloc_free(void) {
   CK(cuMemFreeAsync(p, s));
   unsigned *h = malloc(n * 4);
   for (int i = 1; i <= 100; i++) {
-    CK(cuMemAllocAsync(&p, (size_t)i * 64 * 1024, s)); CK(run_fill(p, i * 16 * 1024, (unsigned)i, s)); CK(cuMemcpyDtoH_v2(h, p, 4096)); CK(cuMemFreeAsync(p, s));
+    CK(cuMemAllocAsync(&p, (size_t)i * 64 * 1024, s)); CK(run_fill(p, i * 16 * 1024, (unsigned)i, s)); CK(cuStreamSynchronize(s)); CK(cuMemcpyDtoH_v2(h, p, 4096)); CK(cuMemFreeAsync(p, s));
     if (!check_fill(h, 1024, (unsigned)i)) return fail("pool_value", 0);
   }
   CK(cuStreamSynchronize(s)); return judge(ok, 0, 1, "-");
