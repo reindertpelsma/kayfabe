@@ -115,6 +115,7 @@ fn hrun(rng: &mut Rng) -> DiffRun {
         },
         privileged: rng.below(100) < 10,
         leaf: hleaf(rng),
+        sparse: false,
     };
     // Half the rows start SANE (so the placement code is reached, not only the refusals) and have
     // ONE field made hostile, or none.

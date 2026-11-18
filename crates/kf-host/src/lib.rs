@@ -13,8 +13,10 @@ pub mod birth;
 pub mod channel;
 pub mod event;
 pub mod phase;
+pub mod placement;
 pub mod precomp;
 pub mod tier;
+pub mod tiling;
 pub mod timer;
 pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};
 pub use event::EventFd;
@@ -488,6 +490,14 @@ pub struct HostRm {
     /// every mirror space allocated after it is set ([`channel::GuestVaFillPolicy`] as its byte; the
     /// `unmapped-reads-zero` property). 0 = [`channel::GuestVaFillPolicy::Fault`], the unset default.
     guest_va_fill_policy: std::sync::atomic::AtomicU8,
+    /// ★ 2026-11-18 (C2): the placement lock ([`placement`]): held by every re-tile of a guest range
+    /// and by every call that can place without FIXED (an alloc, a map with no address).
+    placement: placement::PlacementLock,
+    /// ★ 2026-11-18 (C2): the exact-tiling engines of the guest ranges, by host space handle
+    /// ([`tiling`]); empty unless `exact-sparse` is on.
+    tilings: std::sync::Mutex<std::collections::BTreeMap<u32, Vec<tiling::Tiling>>>,
+    /// ★ 2026-11-18 (C2): whether spaces allocated from now on tile their guest ranges.
+    exact_sparse: std::sync::atomic::AtomicBool,
 }
 
 impl HostRm {
@@ -584,6 +594,9 @@ impl HostRm {
             }),
             cpu_maps: std::sync::atomic::AtomicU64::new(0),
             guest_va_fill_policy: std::sync::atomic::AtomicU8::new(0),
+            placement: placement::PlacementLock::default(),
+            tilings: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            exact_sparse: std::sync::atomic::AtomicBool::new(false),
             views: Default::default(),
             // Filled in below, once there is a subdevice to parent it to.
             usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
@@ -914,6 +927,9 @@ impl HostRm {
         params: &mut [u8],
         issue: impl FnOnce(&mut [u8]) -> Result<u32, RmError>,
     ) -> Result<u32, RmError> {
+        // ★ 2026-11-18 (C2, `placement`): an object's context buffers are placed by RM where it
+        // chooses; no re-tile may have a fence freed meanwhile.
+        let _placing = self.placement.hold("alloc");
         use kf_abi::hostabi::{Carry, HostParams};
         let what = format!("alloc class {class:#06x}");
         let (name, carry) = match strukt {
@@ -1078,6 +1094,7 @@ impl HostRm {
         inner: &mut [u8],
     ) -> Result<u32, RmError> {
         birth::admit_alloc_class(class, None)?;
+        let _placing = self.placement.hold("nested alloc"); // ★ 2026-11-18 (C2, `placement`)
         // ⊘ The nested pointer is patched in place, so this block cannot be carried: it is sent
         // at the bench layout, which is only known correct on the interval the encoders were
         // written for. (No caller today — `NV_MEMORY_LIST_ALLOCATION_PARAMS`.)
@@ -1132,6 +1149,12 @@ impl HostRm {
             .expect("objects")
             .parents
             .insert(child, parent);
+    }
+
+    /// ★ 2026-11-18 (C2): this client's placement lock ([`placement`]).
+    #[must_use]
+    pub const fn placement(&self) -> &placement::PlacementLock {
+        &self.placement
     }
 
     /// `NV_ESC_RM_CONTROL` on one of our objects.
@@ -1310,6 +1333,11 @@ impl HostRm {
         is_shared_slice: bool,
         kind: u32,
     ) -> Result<u64, RmError> {
+        // ★ 2026-11-18 (C2, `placement`): a map at an address RM chooses must not land in a fence a
+        // re-tile has freed.
+        let _placing = at
+            .is_none()
+            .then(|| self.placement.hold("map without an address"));
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         // ★★★★★ **CONSTRAINT 28, HALF ONE — THE PAGE-SIZE FLAG MATCHES THE REQUEST.**
         // `[measured w744]` `DMA_OFFSET_FIXED_TRUE` alone is **not** address identity: RM

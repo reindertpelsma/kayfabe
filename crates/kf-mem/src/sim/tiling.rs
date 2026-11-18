@@ -1,5 +1,5 @@
 //! ★ 2026-11-18 — **Option C2, stage 1, GPU-free: exact block tiling keeps S1 AND S2**
-//! (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §8; engine: `crate::tiling`).
+//! (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §8; engine: `kf_host::tiling`).
 //!
 //! The host is `sim`'s model of one VA space with NO static guest reservation over the tiled range
 //! (C2 replaces the static fence by the engine's blocks). The model's reservations take the engine's
@@ -20,7 +20,7 @@
 //!   tile pinned by a row), and an S2 mismatch only for a mixed tile under a live row.
 
 use super::*;
-use crate::tiling::{Attr, Base, TILE, TileError, TileVerbs, Tiling, TilingCfg};
+use kf_host::tiling::{Attr, Base, TILE, TileError, TileVerbs, Tiling, TilingCfg};
 
 /// The tiled range: 4 MiB at 4.5 GiB (two 2 MiB pages, so 2 MiB rounding is exercised).
 const R: u64 = (1 << 32) + (1 << 29);

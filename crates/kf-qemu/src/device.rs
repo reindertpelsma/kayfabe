@@ -117,6 +117,13 @@ pub struct Config {
     /// reads zero. `auto` gives ZERO to the spaces of a Windows-profile guest only
     /// ([`kf_host::channel::GuestVaFillPolicy::ByProfile`]). Never an environment variable.
     pub unmapped_reads_zero: kf_host::channel::GuestVaFillPolicy,
+    /// ★ 2026-11-18 (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §8.9, option C2): the `exact-sparse`
+    /// property, default OFF until hardware evidence exists. On: every mirror space's guest ranges are
+    /// tiled exactly (`kf_host::tiling`), the walker publishes the guest's SPARSE runs
+    /// (`KFWR_RF_SPARSE`), and only those ranges read zero on the host — every other unmapped guest VA
+    /// still faults, so `unmapped-reads-zero` is not used for the tiled ranges. Never an environment
+    /// variable.
+    pub exact_sparse: bool,
 }
 
 impl Config {
@@ -421,6 +428,13 @@ impl Device {
         ));
         // ★ 2026-11-18: before any mirror space exists, so every space's static guest ranges take it.
         rm.set_guest_va_fill_policy(cfg.guest_va_fill_policy());
+        // ★ 2026-11-18 (C2): likewise before any mirror space exists.
+        rm.set_exact_sparse(cfg.exact_sparse);
+        if cfg.exact_sparse {
+            eprintln!(
+                "kf3: exact-sparse=on: guest ranges are tiled exactly; a guest SPARSE range reads zero, every other unmapped guest VA faults (unmapped-reads-zero does not apply to them) (V3_SPARSE_RESIDENCY_RCA.md §8.9)"
+            );
+        }
         eprintln!(
             "kf3: unmapped-reads-zero={}",
             match cfg.unmapped_reads_zero {
@@ -556,7 +570,13 @@ impl Device {
         let mut kernel = on_cuda_thread("kf3-cuda-walk", || {
             kf_cuda::walk::WalkKernel::bring_up_on(
                 kf_cuda::walk::WalkCfg {
-                    key_perm: perm.key_perm(),
+                    // ★ 2026-11-18 (C2, ABI 7): the walker publishes SPARSE runs only for exact-sparse.
+                    key_perm: perm.key_perm()
+                        | if cfg.exact_sparse {
+                            kf_cuda::abi::KFWR_RF_SPARSE
+                        } else {
+                            0
+                        },
                     ..kf_cuda::walk::WalkCfg::default()
                 },
                 fmt,
@@ -4452,6 +4472,7 @@ mod config_tests {
             pci_devfn: 0,
             windows_support: true,
             unmapped_reads_zero: kf_host::channel::GuestVaFillPolicy::ByProfile,
+            exact_sparse: false,
         }
     }
 

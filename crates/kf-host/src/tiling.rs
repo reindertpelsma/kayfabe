@@ -82,6 +82,18 @@ pub trait TileVerbs {
     /// # Errors
     /// The host's refusal (the block is then still there).
     fn free(&self, handle: u32) -> Result<(), String>;
+    /// ★ §8.3/§8.9: a re-tile is about to free a block — take the PLACEMENT LOCK
+    /// ([`crate::placement`]) so no non-FIXED placement can land in the freed VA until
+    /// [`TileVerbs::retile_end`]. Production refuses on a vCPU or guest-trap thread (re-tiles run
+    /// on the VA-manager thread); the refusal stops the re-tile before any host call.
+    ///
+    /// # Errors
+    /// Why the re-tile may not run here.
+    fn retile_begin(&self) -> Result<(), String> {
+        Ok(())
+    }
+    /// The re-tile is done (its last reserve, or its rollback): release the placement lock.
+    fn retile_end(&self) {}
 }
 
 /// Limits.
@@ -351,11 +363,25 @@ impl Tiling {
         if same {
             return Ok(());
         }
+        // ★ §8.9: the whole step, from the first free to the last reserve or rollback, holds the
+        // placement lock; a refusal to take it stops the step before any host call.
+        v.retile_begin().map_err(TileError::Refused)?;
+        let r = self.replace_locked(v, &olds, new);
+        v.retile_end();
+        r
+    }
+
+    fn replace_locked(
+        &mut self,
+        v: &dyn TileVerbs,
+        olds: &[(u64, Block)],
+        new: &[Spec],
+    ) -> Result<(), TileError> {
         let cost = u64::try_from(olds.len().saturating_add(new.len())).unwrap_or(u64::MAX);
         self.batch_used = self.batch_used.saturating_add(cost);
         let mut freed: Vec<(u64, Block)> = Vec::new();
         let mut fail = None;
-        for &(k, b) in &olds {
+        for &(k, b) in olds {
             bump(&mut self.stats.calls);
             match v.free(b.handle) {
                 Ok(()) => {
@@ -611,20 +637,72 @@ impl Tiling {
         len: u64,
         base: Base,
     ) -> Result<(), TileError> {
+        match self.wish_only(va, len, base)? {
+            Some((a, b)) => self.reconcile(v, a, b).map_or(Ok(()), Err),
+            None => Ok(()),
+        }
+    }
+
+    /// ★ §8.9: a whole batch of guest wishes (one walk's SPARSE and UNSPARSE runs), assigned first
+    /// and re-tiled ONCE over their spans — a bind inside a sparse range (UNSPARSE the old run,
+    /// SPARSE its pieces) costs one re-tile, not two. A refused wish (outside, the wish cap) is
+    /// skipped and counted; the others still apply.
+    ///
+    /// # Errors
+    /// The first refusal (of a wish, or of the re-tile; the layout stays consistent).
+    pub fn set_bases(
+        &mut self,
+        v: &dyn TileVerbs,
+        wishes: &[(u64, u64, Base)],
+    ) -> Result<(), TileError> {
+        let mut first = None;
+        let mut spans: Vec<(u64, u64)> = Vec::new();
+        for &(va, len, base) in wishes {
+            match self.wish_only(va, len, base) {
+                Ok(Some(s)) => spans.push(s),
+                Ok(None) => {}
+                Err(e) => {
+                    first.get_or_insert(e);
+                }
+            }
+        }
+        spans.sort_unstable();
+        let mut merged: Vec<(u64, u64)> = Vec::new();
+        for (a, b) in spans {
+            match merged.last_mut() {
+                Some(m) if a <= m.1 => m.1 = m.1.max(b),
+                _ => merged.push((a, b)),
+            }
+        }
+        for (a, b) in merged {
+            if let Some(e) = self.reconcile(v, a, b) {
+                first.get_or_insert(e);
+            }
+        }
+        first.map_or(Ok(()), Err)
+    }
+
+    /// Assign one wish (rounded: SPARSE inward, INVALID outward); the tile-aligned span to re-tile.
+    fn wish_only(
+        &mut self,
+        va: u64,
+        len: u64,
+        base: Base,
+    ) -> Result<Option<(u64, u64)>, TileError> {
         let (a, b) = self.clip(va, len)?;
         let (a, b) = match base {
             Base::Sparse => (up(a, TILE).ok_or(TileError::Outside)?, down(b, TILE)),
             Base::Invalid => (down(a, TILE), up(b, TILE).ok_or(TileError::Outside)?),
         };
         if a >= b {
-            return Ok(());
+            return Ok(None);
         }
         if base == Base::Sparse && self.wish.len().saturating_add(2) > self.cfg.max_wish_runs {
             bump(&mut self.stats.wish_refused);
-            return Ok(());
+            return Ok(None);
         }
         self.assign_wish(a, b, base);
-        self.reconcile(v, a, b).map_or(Ok(()), Err)
+        Ok(Some((a, b)))
     }
 
     fn assign_wish(&mut self, a: u64, b: u64, base: Base) {
@@ -762,6 +840,12 @@ impl Tiling {
         Ok(())
     }
 
+    /// The end of the live row (coverage) that starts exactly at `va`.
+    #[must_use]
+    pub fn row_end(&self, va: u64) -> Option<u64> {
+        self.rows.get(&va).copied()
+    }
+
     /// The pieces a live row is mapped through (to unmap it).
     #[must_use]
     pub fn row_pieces(&self, va: u64) -> Vec<(u32, u64, u64)> {
@@ -785,6 +869,46 @@ impl Tiling {
     pub fn release_row(&mut self, v: &dyn TileVerbs, va: u64) -> Result<(), TileError> {
         let b = self.rows.remove(&va).ok_or(TileError::NotARow)?;
         let (t0, t1) = (down(va, TILE), up(b, TILE).unwrap_or(self.hi).min(self.hi));
+        self.reconcile(v, t0, t1).map_or(Ok(()), Err)
+    }
+
+    /// ★ §8.9: every block intersecting `[va, va+len)`, clipped: `(handle, va, len)` — the pieces a
+    /// mapping placed through [`Tiling::prepare_row`] lies in (to unmap it, by range or by start).
+    #[must_use]
+    pub fn pieces_in(&self, va: u64, len: u64) -> Vec<(u32, u64, u64)> {
+        let b = va.saturating_add(len);
+        self.blocks_in(va, b)
+            .into_iter()
+            .map(|(k, blk)| {
+                let s = k.max(va);
+                (blk.handle, s, span(s, blk.hi.min(b)))
+            })
+            .collect()
+    }
+
+    /// ★ §8.9: `[va, va+len)` was unmapped (by range: any part of any rows): forget that coverage —
+    /// a row cut in the middle keeps its outside parts — then bring the tiles to the wish.
+    ///
+    /// # Errors
+    /// [`TileError::Outside`]; the first host refusal of the re-tile (the layout stays consistent).
+    pub fn release_range(&mut self, v: &dyn TileVerbs, va: u64, len: u64) -> Result<(), TileError> {
+        let (a, b) = self.clip(va, len)?;
+        let hit: Vec<(u64, u64)> = self
+            .rows
+            .range(..b)
+            .filter(|&(_, &e)| e > a)
+            .map(|(&s, &e)| (s, e))
+            .collect();
+        for (s, e) in hit {
+            self.rows.remove(&s);
+            if s < a {
+                self.rows.insert(s, a);
+            }
+            if e > b {
+                self.rows.insert(b, e);
+            }
+        }
+        let (t0, t1) = (down(a, TILE), up(b, TILE).unwrap_or(self.hi).min(self.hi));
         self.reconcile(v, t0, t1).map_or(Ok(()), Err)
     }
 
@@ -859,4 +983,67 @@ impl Tiling {
         }
         self.rows.clear();
     }
+}
+
+/// ★ §8.9: why a tiled map failed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TiledMapError<E> {
+    /// The engine refused (outside, overlap, a gap, a refused carve).
+    Tile(TileError),
+    /// A piece's map was refused; the pieces before it were unmapped again.
+    Map(E),
+}
+
+/// ★ §8.9 — **map one FIXED row through the tiling, all or nothing**: carve its tiles
+/// ([`Tiling::prepare_row`]), call `place(handle, va, len)` once per block piece, and commit it. On a
+/// refused piece the pieces already placed are taken down again (`unplace(handle, va)`, newest
+/// first). The SAME glue serves `HostRm`'s piece routing and the GPU-free model.
+///
+/// # Errors
+/// [`TiledMapError`].
+pub fn map_tiled<E>(
+    t: &mut Tiling,
+    v: &dyn TileVerbs,
+    va: u64,
+    len: u64,
+    place: &mut dyn FnMut(u32, u64, u64) -> Result<(), E>,
+    unplace: &mut dyn FnMut(u32, u64),
+) -> Result<(), TiledMapError<E>> {
+    let pieces = t.prepare_row(v, va, len).map_err(TiledMapError::Tile)?;
+    for (i, &(h, pva, plen)) in pieces.iter().enumerate() {
+        if let Err(e) = place(h, pva, plen) {
+            for &(h0, va0, _) in pieces.iter().take(i).rev() {
+                unplace(h0, va0);
+            }
+            return Err(TiledMapError::Map(e));
+        }
+    }
+    t.commit_row(va, len).map_err(TiledMapError::Tile)
+}
+
+/// ★ §8.9 — **unmap through the tiling**: one `unplace(handle, va, size)` per block piece of
+/// `[va, va+len)` (`size` 0 = the whole mapping keyed by the piece's start, else the piece's length),
+/// then [`Tiling::release_range`]. Every piece is attempted; the first refusal is returned (the
+/// coverage is released only when every piece went).
+///
+/// # Errors
+/// The first refused piece, or the re-tile's refusal (as [`TiledMapError::Tile`]).
+pub fn unmap_tiled<E>(
+    t: &mut Tiling,
+    v: &dyn TileVerbs,
+    va: u64,
+    len: u64,
+    by_range: bool,
+    unplace: &mut dyn FnMut(u32, u64, u64) -> Result<(), E>,
+) -> Result<(), TiledMapError<E>> {
+    let mut first = None;
+    for (h, pva, plen) in t.pieces_in(va, len) {
+        if let Err(e) = unplace(h, pva, if by_range { plen } else { 0 }) {
+            first.get_or_insert(e);
+        }
+    }
+    if let Some(e) = first {
+        return Err(TiledMapError::Map(e));
+    }
+    t.release_range(v, va, len).map_err(TiledMapError::Tile)
 }

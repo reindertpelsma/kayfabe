@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Mutation harness for option C2's exact block tiling (STATUS: LIVE, 2026-11-18;
-docs/design/V3_SPARSE_RESIDENCY_RCA.md section 8): crates/kf-mem/src/tiling.rs against the GPU-free tests in
-crates/kf-mem/src/sim/tiling.rs.
+docs/design/V3_SPARSE_RESIDENCY_RCA.md section 8): crates/kf-host/src/tiling.rs against the GPU-free tests in
+crates/kf-mem/src/sim/tiling.rs and sim/exact.rs.
 
 Each mutant is a one-site edit of the engine; each must be killed by at least two independently named failing
 tests. A compile error is not a kill. The file is overwritten in place and ALWAYS restored (also on an
@@ -17,11 +17,12 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-ENG = "crates/kf-mem/src/tiling.rs"
+ENG = "crates/kf-host/src/tiling.rs"
 with open(os.path.join(ROOT, ENG), encoding="utf-8") as f:
     TEXT = f.read()
 
-TESTS = [["cargo", "test", "-p", "kf-mem", "--lib", "sim::tiling"]]
+TESTS = [["cargo", "test", "-p", "kf-mem", "--lib", "sim::tiling"],
+         ["cargo", "test", "-p", "kf-mem", "--lib", "sim::exact"]]
 
 
 def ed(old, new):
@@ -57,6 +58,10 @@ CASES = [
         "                if edge && false && c0 < cut && cut < c1 && !cuts.contains(&cut) {")),
     ("sparse-reserved-as-invalid",
      ed("                match v.reserve(lo, hi, base, attr) {", "                match v.reserve(lo, hi, Base::Invalid, attr) {")),
+    ("retile-without-the-placement-lock",
+     ed("        v.retile_begin().map_err(TileError::Refused)?;\n", "")),
+    ("release-forgets-only-whole-rows",
+     ed("            if s < a {\n                self.rows.insert(s, a);\n            }", "")),
     ("s2-retry-cut-by-budget",
      ed("        for (a, b, _) in pending.iter().filter(|p| p.2 == Base::Invalid) {\n",
         "        for (a, b, _) in pending.iter().filter(|p| p.2 == Base::Invalid).take(0) {\n")),
