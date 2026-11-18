@@ -82,7 +82,9 @@ fn s1_guest_sparse_slots_are_sparse_on_the_host() {
             for p in [slot(i), slot(i) + SLOT - P] {
                 let got = rm.host_pte(p);
                 if got != HostPte::Sparse {
-                    bad.push(format!("batching={batching} low={low} slot {i} va {p:#x}: {got:?}"));
+                    bad.push(format!(
+                        "batching={batching} low={low} slot {i} va {p:#x}: {got:?}"
+                    ));
                 }
             }
         }
