@@ -1,0 +1,19 @@
+{
+ "name": "s1v_a2",
+ "tag": "s1v",
+ "platform": "vfio",
+ "image": "a",
+ "rows": "resolve",
+ "attempt": 2,
+ "rev": "6bfa2dbc",
+ "rc": 1,
+ "duration_s": 1148,
+ "row_lines": [
+  "app:resolve FAIL FILE h264: format step failed; add to queue step failed; render step failed"
+ ],
+ "app_crash_events": 0,
+ "start": "2026-11-18T03:24:15Z",
+ "end": "2026-11-18T03:43:23Z",
+ "crash_detect": null,
+ "census": {}
+}

@@ -1,0 +1,2 @@
+udevadm settle: (0, '')
+nvidia_uvm live refcnt 0 stable 60s, no nvidia modprobe/rmmod running: settled

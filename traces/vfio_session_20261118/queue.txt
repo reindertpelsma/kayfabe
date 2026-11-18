@@ -1,0 +1,10 @@
+# VFIO control session 2026-11-18 (owner-approved, ONE session). State: PLANNED / RUNNING / DONE / NOT RUN. A boot cut by power loss = NOT RUN.
+# kf3 rev for the kf3 arms and the shared QEMU binary: 6bfa2dbc (newest installed on the pc, built 2026-11-16 18:59; sha in README)
+dry1  services dry run: DONE 03:02Z (nvidia_drm refcnt 0 after gdm stop)
+dry2  audio-only cycle: DONE 03:04Z (card back, nvidia-smi OK)
+r1v   Resolve image A VFIO x3: DONE (s1v, 03:05-04:02Z): 3/3 no crash, alive 915-940 s soak; restore clean; THEN uvm 'going' hang 04:03Z -> SysRq s,u,b 04:05Z
+r1k   Resolve image A kf3 x3                                          PLANNED
+r2v   Wukong image A VFIO x3                                          PLANNED
+r2k   Wukong image A kf3 x3                                           PLANNED
+r3    image B discovery rows VFIO then kf3 (only if time remains, no new boot after 10:00Z) PLANNED
+# 04:06Z coordinator order after the hang: kf3 arms FIRST (Resolve x3 then Wukong kf3 x3), restore settle fix in pcsession (udevadm settle + uvm stable 60 s + going>120 s = wedge); Wukong VFIO arm needs a NEW owner go (report first).

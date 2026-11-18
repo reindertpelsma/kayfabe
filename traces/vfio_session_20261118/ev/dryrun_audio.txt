@@ -1,0 +1,23 @@
+holders with gdm up: [2147, 71018]
+                     USER        PID ACCESS COMMAND
+/dev/nvidia-modeset: <user>    71018 F.... gnome-shell
+/dev/nvidia0:        <user>    71018 F...m gnome-shell
+/dev/nvidiactl:      <user>    71018 F...m gnome-shell
+/dev/dri/card1:      root          1 F.... systemd
+                     root       2147 F.... systemd-logind
+                     <user>    71018 F...m gnome-shell
+/dev/dri/renderD128: <user>    71018 F.... gnome-shell
+
+gdm stop: (0, '')
+holders after gdm stop: []
+
+fuser snd: (0, '')
+audio function 0000:01:00.1 released from snd_hda_intel rc=0 
+audio driver now: None
+probe back: (0, '')
+audio driver after re-probe: snd_hda_intel
+aplay -l: (0, '9\n 0 [NVidia         ]: HDA-Intel - HDA NVidia\n                      HDA NVidia at 0xfc080000 irq 85\n')
+persistenced start: (0, '')
+gdm start: (0, '')
+nvidia-smi: (0, 'NVIDIA GeForce RTX 4070, 595.91.07, 445 MiB\n')
+gdm active: (0, 'active\n')
