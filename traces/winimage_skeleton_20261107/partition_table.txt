@@ -1,0 +1,13 @@
+Disk /dev/vda: 314572800 sectors, 150.0 GiB
+Sector size (logical/physical): 512/512 bytes
+Disk identifier (GUID): CA29FCE4-D107-48EC-ADF4-DE1838AC201B
+Partition table holds up to 128 entries
+Main partition table begins at sector 2 and ends at sector 33
+First usable sector is 34, last usable sector is 314572766
+Partitions will be aligned on 2048-sector boundaries
+Total free space is 2014 sectors (1007.0 KiB)
+
+Number  Start (sector)    End (sector)  Size       Code  Name
+   1            2048          206847   100.0 MiB   EF00  EFI system partition
+   2          206848          239615   16.0 MiB    0C01  Microsoft reserved ...
+   3          239616       314572766   149.9 GiB   0700  Basic data partition

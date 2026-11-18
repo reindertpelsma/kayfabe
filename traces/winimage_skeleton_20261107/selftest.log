@@ -1,0 +1,8 @@
+Warning: block count mismatch: found 306176 but assuming 204800.
+6.18.60-0-virt
+sr0 ;vda ;vda1 vfat;
+restored EFI/Microsoft/Boot/bootmgfw.efi
+restored EFI/BOOT/BOOTX64.EFI
+RESTORE_RC=0
+Warning: block count mismatch: found 306176 but assuming 204800.
+UKI_SELFTEST_PASS uki_bytes=25699840 dir=/data/winimage_skeleton_20261107/selftest

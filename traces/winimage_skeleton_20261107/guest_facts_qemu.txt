@@ -1,0 +1,23 @@
+HOST DESKTOP-AJVH7H9 BOOT 2026-11-07T16:28:52.5000000-08:00 NOW 2026-11-07T16:35:32.6181822-08:00
+SECUREBOOT True
+Get-CimInstance : Invalid query 
+At line:4 char:16
++ ... CENSE " + ((Get-CimInstance SoftwareLicensingProduct -Filter "Name li ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (:) [Get-CimInstance], CimException
+    + FullyQualifiedErrorId : HRESULT 0x80041017,Microsoft.Management.Infrastructure.CimCmdlets.G 
+   etCimInstanceCommand
+ 
+LICENSE 
+TPM error TPM 2.0: Structure is wrong size. (Exception from HRESULT: 0x80280095)
+DISK n=0 size=161061273600 bus=SCSI model=Red Hat VirtIO boot=True
+IPCONF if=Ethernet ipv4=10.0.2.15 gw=10.0.2.2
+NIC Red Hat VirtIO Ethernet Adapter #2 mac=52-54-00-4B-46-58 status=Up
+PROBLEM_DEVICES: 
+GPU_DEVICES: Microsoft Basic Display Adapter[OK]
+VIRTIO_PRESENT: Red Hat VirtIO SCSI controller[OK]; VirtIO RNG Device[OK]; Red Hat VirtIO Ethernet Adapter #2[OK]
+BCD device                  partition=C: | path                    \WINDOWS\system32\winload.efi | osdevice                partition=C:
+STATE complete=True error=
+LOCALUSERS Administrator[enabled=False],DefaultAccount[enabled=False],Guest[enabled=False],vast[enabled=True],WDAGUtilityAccount[enabled=False]
+SSHD Running
+ESP_KFBACKUP_ON_IMAGE False

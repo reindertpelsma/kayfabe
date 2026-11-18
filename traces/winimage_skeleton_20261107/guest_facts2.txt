@@ -1,0 +1,3 @@
+LICENSE status=1 channel=Retail:TB:Eval name=Windows(R), EnterpriseSEval edition
+TPM_DEVICES Trusted Platform Module 2.0[OK]
+NVIDIA NVIDIA GeForce RTX 3060[Unknown];NVIDIA High Definition Audio[Unknown]
