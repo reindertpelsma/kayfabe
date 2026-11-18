@@ -1655,6 +1655,15 @@ class BreadthRowTests(unittest.TestCase):
                 self.assertNotRegex(code_of(other.read_text()), r"\bmatlabroot\b", other.name)
         self.assertNotRegex(body, r"doc\.\w+ = .*fullfile")
 
+    def test_the_breadth_rows_do_not_require_the_host_memory_counter(self):
+        # MEASURED 2026-11-18 (traces/matlab_breadth_20261118): under kf3 the host's memory.used stayed within 11 MiB of its baseline (4664 to 4675 MiB) in rows that allocate tens of
+        # MiB, because the guest's 4 GiB frame buffer is carved out when the VM starts; the host census (submissions) was the evidence of use. The `mem` engine would fail them all.
+        for row in BREADTH:
+            self.assertEqual(M.ROWS[row][2], ("gpu",) if row in ("gpu_arrayfun", "gpu_pagefun", "gpu_classes", "gpu_sparse", "gpu_rand", "gpu_stencil", "dl_custom_loop", "dl_layers",
+                                                                  "dl_predict_sweep", "matlab_examples") else M.ROWS[row][2], row)
+            if row not in ("gpu_devctl", "mex_cuda", "gfx_render"):
+                self.assertNotIn("mem", M.ROWS[row][2], row)
+
     def test_the_sparse_row_uses_a_sparse_gpuarray_and_proves_it(self):
         body = self.text("gpu_sparse.m")
         self.assertIn("delsq(numgrid('S', 258))", body)

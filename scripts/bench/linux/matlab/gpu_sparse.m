@@ -26,7 +26,7 @@ try
         checks{end+1} = kf_cmp('sparse_build_apply_double', S * gpuArray(x), A * x, kf_tol('double'));
         checks{end+1} = kf_cmp('sparse_rowsum_double', full(sum(Ag, 2)), full(sum(A, 2)), kf_tol('double'));
         checks{end+1} = kf_cmp('sparse_diag_double', full(diag(Ag)), full(diag(A)), kf_tol('double'));
-        checks{end+1} = kf_cmp('sparse_nnz_exact', full(sum(sum(Ag ~= 0))), nnz(A), kf_tol('double'));
+        checks{end+1} = kf_cmp('sparse_nnz_exact', nnz(Ag), nnz(A), kf_tol('double'));
         xg = gpuArray(x);
         xc = x;
         for k = 1:500

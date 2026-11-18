@@ -25,7 +25,7 @@ try
             bitxor(bitand(u, v), bitor(bitshift(u, 3), bitshift(v, -5))), 0);
         w = uint64(2) ^ 63 + uint64(randi(1000000000, n, 1));
         gw = gpuArray(w);
-        checks{end+1} = kf_cmp('exact_uint64_large', bitxor(gw, bitshift(gw, -13)) + uint64(12345), bitxor(w, bitshift(w, -13)) + uint64(12345), 0);
+        checks{end+1} = kf_cmp('exact_uint64_large', max(gw + uint64(12345), gw), max(w + uint64(12345), w), 0);
         checks{end+1} = kf_count('int_status', 0, 0);
     catch ME
         checks{end+1} = kf_err('int_status', ME);

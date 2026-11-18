@@ -49,8 +49,8 @@ try
         checks{end+1} = kf_err('rand_status', ME);
     end
     try
-        p = gather(randperm(1000000, 'gpuArray'));
-        checks{end+1} = kf_count('randperm_not_permutation', double(~isequal(sort(p(:)), (1:1000000)')), 0);
+        p = gather(sort(randperm(gpuArray(1000000))));
+        checks{end+1} = kf_count('randperm_not_permutation', double(~isequal(p(:), (1:1000000)')), 0);
     catch ME
         checks{end+1} = kf_err('randperm_not_permutation', ME);
     end
