@@ -63,7 +63,15 @@ fn run_arm(rm: &HostRm, arm: &str, flags: u32) -> String {
         Err(e) => return format!("{out} ring_obj=ERR({e:?})"),
     };
     let at = HOST_HOLE_LO + (1 << 30);
-    let ring_va = match rm.map(space, ring, MapBacking::Dedicated, 0, RING_BYTES, Some(at), false) {
+    let ring_va = match rm.map(
+        space,
+        ring,
+        MapBacking::Dedicated,
+        0,
+        RING_BYTES,
+        Some(at),
+        false,
+    ) {
         Ok(v) => v,
         Err(e) => return format!("{out} ring_map=ERR({e:?})"),
     };
@@ -111,7 +119,11 @@ fn run_arm(rm: &HostRm, arm: &str, flags: u32) -> String {
     }
     out.push_str(&format!(
         " occupied_chunks_first16g=[{}]",
-        occupied.iter().map(|v| format!("{v:#x}")).collect::<Vec<_>>().join(",")
+        occupied
+            .iter()
+            .map(|v| format!("{v:#x}"))
+            .collect::<Vec<_>>()
+            .join(",")
     ));
     rm.free_vaspace(space);
     out

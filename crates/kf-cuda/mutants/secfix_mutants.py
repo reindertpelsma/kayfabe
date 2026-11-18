@@ -427,6 +427,74 @@ MUTANTS = [
         "        let i = self.free.iter().position(|r| r.cap >= cap)?;",
         "        let i = self.free.iter().rposition(|r| r.cap >= cap)?;",
     ),
+    # ── 2026-11-18 slot-ceiling fix (growth in place into the free run after the slot; replay_slot_ceiling.rs,
+    #    model_capacity.rs, docs/design/V3_REPLAY_TESTS.md) ──
+    (
+        "slotfix-in-place-disabled",
+        "capacity.rs",
+        "        let end = r.off.checked_add(r.cap)?;\n",
+        "        let end = r.off.checked_add(r.cap)?;\n        if end > 0 {\n            return None;\n        }\n",
+    ),
+    (
+        "slotfix-in-place-run-need-not-touch-the-end",
+        "capacity.rs",
+        ".position(|f| f.off == end)?;",
+        ".position(|f| f.off >= end)?;",
+    ),
+    (
+        "slotfix-in-place-exact-tail-refused",
+        "capacity.rs",
+        "        if f.cap < extra {\n            return None;",
+        "        if f.cap <= extra {\n            return None;",
+    ),
+    (
+        "slotfix-in-place-one-grain-past-the-tail-granted",
+        "capacity.rs",
+        "        if f.cap < extra {\n            return None;",
+        "        if f.cap + 256 < extra {\n            return None;",
+    ),
+    (
+        "slotfix-in-place-also-releases-the-old-region",
+        "capacity.rs",
+        "            .or_else(|| self.slots.grow_in_place(old, required))\n        {\n            to\n",
+        "            .or_else(|| self.slots.grow_in_place(old, required))\n        {\n            self.slots.release(old);\n            to\n",
+    ),
+    (
+        "slotfix-in-place-required-tried-before-preferred",
+        "capacity.rs",
+        "            .grow_in_place(old, preferred)\n            .or_else(|| self.slots.grow_in_place(old, required))",
+        "            .grow_in_place(old, required)\n            .or_else(|| self.slots.grow_in_place(old, preferred))",
+    ),
+    (
+        "slotfix-in-place-tried-before-relocation",
+        "capacity.rs",
+        "        let to = if let Some(to) = self\n            .slots\n            .alloc(preferred)",
+        "        let to = if let Some(to) = self\n            .slots\n            .grow_in_place(old, preferred)\n            .or_else(|| self.slots.alloc(preferred))",
+    ),
+    (
+        "slotfix-move-copies-in-place-too",
+        "capacity.rs",
+        "(self.to.off != self.from.off).then_some(",
+        "(self.to.off == self.to.off).then_some(",
+    ),
+    (
+        "slotfix-move-copy-length-is-the-new-region",
+        "capacity.rs",
+        "self.from.off, self.from.cap))",
+        "self.from.off, self.to.cap))",
+    ),
+    (
+        "slotfix-max-cap-check-dropped",
+        "capacity.rs",
+        "        if need > self.max_cap {\n            self.stats.ceilings += 1;\n            return Err(format!(\n                \"slot {s}: {need} committed",
+        "        if false {\n            self.stats.ceilings += 1;\n            return Err(format!(\n                \"slot {s}: {need} committed",
+    ),
+    (
+        "slotfix-release-does-not-coalesce-right",
+        "capacity.rs",
+        "        if i + 1 < self.free.len() && self.free[i].off + self.free[i].cap == self.free[i + 1].off {",
+        "        if false {",
+    ),
 ]
 
 FAILED = re.compile(r"^test (\S+) \.\.\. FAILED$", re.M)
