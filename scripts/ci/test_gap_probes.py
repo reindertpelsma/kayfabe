@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "scripts/apps/open_rows"))
 import diffrun as D  # noqa: E402
 import gap_lib as L  # noqa: E402
 import cts_groups as CG  # noqa: E402
+import cts_report as CR  # noqa: E402
 import gap_probes as GPR  # noqa: E402
 import rowio  # noqa: E402
 
@@ -1128,6 +1129,67 @@ class CtsGroups(unittest.TestCase):
     def test_a_group_picks_up_its_files_under_a_directory(self):
         self.assertEqual(CG.group_files("vk-default/pipeline/monolithic/depth.txt vk-default/pipelines.txt vk-default/api.txt", "pipeline"),
                          ["vk-default/pipeline/monolithic/depth.txt"])
+
+
+VK_BLOCK = "VKCTS_RESULTS_BEGIN v1 side=%s\n#case\tstatus\tclass\tarea\tdetail\n%sVKCTS_RESULTS_END n=%d digest=x\n"
+
+
+def vk_rows(rows):
+    return "".join("%s\t%s\t%s\t%s\t-\n" % r for r in rows)
+
+
+class CtsReport(unittest.TestCase):
+    def logs(self, host_rows, guest_rows):
+        d = Path(tempfile.mkdtemp(prefix="gapcts"))
+        self.addCleanup(shutil.rmtree, d, True)
+        out = []
+        for side, rows in (("host", host_rows), ("guest", guest_rows)):
+            paths = []
+            for i, chunk in enumerate(rows):
+                f = d / ("%s%d.log" % (side, i))
+                f.write_text("noise\n" + VK_BLOCK % (side, vk_rows(chunk), len(chunk)))
+                paths.append(str(f))
+            out.append(paths)
+        return d, out
+
+    def run_report(self, host_rows, guest_rows):
+        d, (h, g) = self.logs(host_rows, guest_rows)
+        return subprocess.run([sys.executable, str(GP / "cts_report.py"), "--host", *h, "--guest", *g], capture_output=True, text=True)
+
+    def test_chunks_of_one_side_are_joined_and_counted_per_area(self):
+        p = self.run_report([[("dEQP-VK.a.x", "Pass", "pass", "sparse")], [("dEQP-VK.a.y", "NotSupported", "not_supported", "sparse"), ("dEQP-VK.b.z", "Pass", "pass", "api")]],
+                            [[("dEQP-VK.a.x", "Pass", "pass", "sparse"), ("dEQP-VK.a.y", "NotSupported", "not_supported", "sparse")], [("dEQP-VK.b.z", "Pass", "pass", "api")]])
+        self.assertEqual(p.returncode, 0, p.stdout)
+        self.assertIn("AREA sparse host: pass=1 not_supported=1 | guest: pass=1 not_supported=1", p.stdout)
+        self.assertIn("AREA api host: pass=1 | guest: pass=1", p.stdout)
+        self.assertIn("CTS_REPORT cases=3 differing=0 candidates=0", p.stdout)
+
+    def test_three_chunks_of_one_case_each_count_three_cases(self):
+        rows = [("dEQP-VK.a.%s" % n, "Pass", "pass", "api") for n in "xyz"]
+        p = self.run_report([[r] for r in rows], [[r] for r in rows])
+        self.assertIn("CTS_REPORT cases=3 differing=0 candidates=0", p.stdout)
+
+    def test_a_guest_that_ran_less_shows_not_run_in_the_area_line(self):
+        rows = [("dEQP-VK.a.x", "Pass", "pass", "api"), ("dEQP-VK.a.y", "Pass", "pass", "api")]
+        p = self.run_report([rows], [rows[:1]])
+        self.assertIn("AREA api host: pass=2 | guest: pass=1 not_run=1", p.stdout)
+
+    def test_a_guest_only_timeout_is_a_candidate_and_the_exit_status_says_so(self):
+        p = self.run_report([[("dEQP-VK.a.x", "Pass", "pass", "sparse"), ("dEQP-VK.a.y", "Pass", "pass", "sparse")]],
+                            [[("dEQP-VK.a.x", "Pass", "pass", "sparse"), ("dEQP-VK.a.y", "Timeout", "timeout", "sparse")]])
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("dEQP-VK.a.y\tsparse\tpass\ttimeout\tGUEST_ONLY_FAIL\tkayfabe_gap_candidate", p.stdout)
+        self.assertIn("candidates=1", p.stdout)
+
+    def test_a_case_missing_from_the_guest_logs_is_not_run_there_not_a_pass(self):
+        p = self.run_report([[("dEQP-VK.a.x", "Pass", "pass", "sparse")]], [[]])
+        self.assertIn("guest: not_run=1", p.stdout)
+        self.assertIn("INCOMPLETE", p.stdout)
+
+    def test_a_case_that_fails_on_both_sides_is_the_harness_or_the_application(self):
+        p = self.run_report([[("dEQP-VK.a.x", "Fail", "fail", "api")]], [[("dEQP-VK.a.x", "Fail", "fail", "api")]])
+        self.assertEqual(p.returncode, 0)
+        self.assertIn("BOTH_FAIL\tapp_or_harness_bug", p.stdout)
 
 
 class Wiring(unittest.TestCase):

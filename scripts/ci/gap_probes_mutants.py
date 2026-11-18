@@ -18,7 +18,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 FILES = {"diff": "scripts/apps/gap_probes/diffrun.py", "lib": "scripts/apps/gap_probes/gap_lib.py", "run": "scripts/apps/gap_probes/gap_probes.py",
-         "c": "scripts/apps/gap_probes/gap_probe.c", "scripts": "scripts/apps/gap_probes/gap_scripts.py", "cts": "scripts/apps/gap_probes/cts_groups.py", "table": "scripts/apps/gap_probes/gap_cases.tsv", "runapps": "scripts/apps/run_apps.sh", "hook": "scripts/apps/apps_hook.sh"}
+         "c": "scripts/apps/gap_probes/gap_probe.c", "scripts": "scripts/apps/gap_probes/gap_scripts.py", "cts": "scripts/apps/gap_probes/cts_groups.py", "report": "scripts/apps/gap_probes/cts_report.py", "table": "scripts/apps/gap_probes/gap_cases.tsv", "runapps": "scripts/apps/run_apps.sh", "hook": "scripts/apps/apps_hook.sh"}
 SUITE = "test_gap_probes."
 COPY_DIRS = ["scripts/apps/gap_probes", "scripts/apps/open_rows", "scripts/apps/vkcts"]
 COPY_FILES = ["scripts/ci/test_gap_probes.py", "scripts/apps/run_apps.sh", "scripts/apps/apps_hook.sh", "scripts/apps/apps_matrix.sh", "scripts/apps/build_bundle.sh",
@@ -106,6 +106,10 @@ MUTANTS = [
       K("Compare.perf_keys_are_measurements_and_never_a_difference", "Compare.the_cli_ignores_perf_keys_in_the_kv_files_of_two_runs")),
     M("long-names-kept", "cts", 'if line.startswith("dEQP-VK.") and CASE_OK.match(line):', 'if line.startswith("dEQP-VK."):',
       K("CtsGroups.a_name_the_vkcts_row_would_refuse_is_left_out_of_the_group", "CtsGroups.every_sampled_line_is_a_name_the_vkcts_row_accepts")),
+    M("report-keeps-only-the-last-chunk", "report", '        rows.update(D.parse_vkcts_results(Path(p).read_text(errors="replace")))', '        rows = D.parse_vkcts_results(Path(p).read_text(errors="replace"))',
+      K("CtsReport.chunks_of_one_side_are_joined_and_counted_per_area", "CtsReport.three_chunks_of_one_case_each_count_three_cases")),
+    M("report-missing-case-is-a-pass", "report", 't["guest"][g["status"] if g else "not_run"] += 1', 't["guest"][g["status"] if g else "pass"] += 1',
+      K("CtsReport.a_case_missing_from_the_guest_logs_is_not_run_there_not_a_pass", "CtsReport.a_guest_that_ran_less_shows_not_run_in_the_area_line")),
     M("falsifier-not-required", "lib", 'if len(r["falsifier"].strip()) < 20:', 'if False:',
       K("CaseTable.a_case_without_a_falsifier_is_refused", "TableMore.a_falsifier_of_a_few_words_is_refused")),
     M("duplicate-ids-allowed", "lib", 'if r["id"] in seen:', 'if False:', K("CaseTable.ids_are_unique_and_a_duplicate_is_refused", "TableMore.an_id_repeated_across_kinds_is_refused")),
