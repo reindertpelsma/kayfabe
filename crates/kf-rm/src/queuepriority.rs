@@ -689,4 +689,28 @@ mod tests {
         assert_eq!(p.policy(), SchedPolicy::ChannelInterleaved);
         assert_eq!((p.last_realtime(), p.last_level()), (None, None));
     }
+
+    /// The realtime boolean survives every other accepted control (one word, written only by `MAKE_REALTIME`).
+    #[test]
+    fn realtime_state_survives_other_controls() {
+        let mut p = QueuePriorityPolicy::new(abi());
+        assert!(ok(&mut p, MAKE_REALTIME, &[0x80]));
+        assert!(ok(&mut p, SET_SCHED_POLICY, &words(&[0, 1])));
+        assert!(ok(&mut p, TSG_SET_INTERLEAVE_LEVEL, &words(&[2])));
+        assert!(ok(&mut p, RESTART_RUNLIST, &[1, 1]));
+        assert_eq!(p.last_realtime(), Some(true));
+        assert!(ok(&mut p, MAKE_REALTIME, &[0]));
+        assert_eq!(p.last_realtime(), Some(false));
+    }
+
+    /// Every accepted `RESTART_RUNLIST` is counted, one by one.
+    #[test]
+    fn restart_counts_every_accept() {
+        let mut p = QueuePriorityPolicy::new(abi());
+        for n in 1..=10u64 {
+            assert!(ok(&mut p, RESTART_RUNLIST, &[0, 1]));
+            assert_eq!(p.runlist_restarts, n);
+        }
+        assert_eq!((p.realtime_sets, p.refused), (0, 0));
+    }
 }

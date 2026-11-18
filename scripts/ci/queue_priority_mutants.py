@@ -37,11 +37,35 @@ def ed(rel, *pairs):
     return rel, text
 
 
-CLAIMS = "SET_SCHED_POLICY | TSG_SET_INTERLEAVE_LEVEL | CHANNEL_SET_INTERLEAVE_LEVEL"
+CLAIM_HEAD = "        matches!(\n            cmd,\n            SET_SCHED_POLICY\n                | TSG_SET_INTERLEAVE_LEVEL\n"
 CASES = [
-    ("sched-policy-unclaimed", ed(QP, (CLAIMS, "TSG_SET_INTERLEAVE_LEVEL | CHANNEL_SET_INTERLEAVE_LEVEL")), ALL),
-    ("claims-everything", ed(QP, ("        matches!(\n            cmd,\n            " + CLAIMS, "        cmd != 0 || matches!(\n            cmd,\n            " + CLAIMS)), ALL),
-    ("claims-make-realtime", ed(QP, (CLAIMS, CLAIMS + " | 0xa06c_0110")), ALL),
+    ("sched-policy-unclaimed", ed(QP, (CLAIM_HEAD, "        matches!(\n            cmd,\n            TSG_SET_INTERLEAVE_LEVEL\n")), ALL),
+    # `claims` and `params_size_of` are two gates on the same ids, so a widening mutant has to open both.
+    (
+        "claims-everything",
+        ed(
+            QP,
+            (CLAIM_HEAD, "        cmd != 0 || matches!(\n            cmd,\n            SET_SCHED_POLICY\n                | TSG_SET_INTERLEAVE_LEVEL\n"),
+            ("            RESTART_RUNLIST => Some(RESTART_RUNLIST_PARAMS_SIZE),\n            _ => None,", "            RESTART_RUNLIST => Some(RESTART_RUNLIST_PARAMS_SIZE),\n            _ => Some(INTERLEAVE_PARAMS_SIZE),"),
+        ),
+        ALL,
+    ),
+    (
+        "claims-channel-get-interleave",
+        ed(
+            QP,
+            ("                | RESTART_RUNLIST\n        )", "                | RESTART_RUNLIST\n                | 0xa06f_0110\n        )"),
+            ("            RESTART_RUNLIST => Some(RESTART_RUNLIST_PARAMS_SIZE),\n            _ => None,", "            RESTART_RUNLIST => Some(RESTART_RUNLIST_PARAMS_SIZE),\n            0xa06f_0110 => Some(INTERLEAVE_PARAMS_SIZE),\n            _ => None,"),
+        ),
+        ALL,
+    ),
+    ("make-realtime-unclaimed", ed(QP, ("                | MAKE_REALTIME\n                | RESTART_RUNLIST\n        )", "                | RESTART_RUNLIST\n        )")), ALL),
+    ("restart-runlist-unclaimed", ed(QP, ("                | MAKE_REALTIME\n                | RESTART_RUNLIST\n        )", "                | MAKE_REALTIME\n        )")), ALL),
+    ("make-realtime-size-wrong", ed(QP, ("MAKE_REALTIME => Some(MAKE_REALTIME_PARAMS_SIZE),", "MAKE_REALTIME => Some(2),")), ALL),
+    ("restart-runlist-size-wrong", ed(QP, ("RESTART_RUNLIST => Some(RESTART_RUNLIST_PARAMS_SIZE),", "RESTART_RUNLIST => Some(1),")), ALL),
+    ("realtime-not-recorded", ed(QP, ("            self.last_realtime = Some(*b != 0);", "            let _ = b;")), ALL),
+    ("realtime-only-one-is-true", ed(QP, ("self.last_realtime = Some(*b != 0);", "self.last_realtime = Some(*b == 1);")), ALL),
+    ("restart-uncounted", ed(QP, ("            bump(&mut self.runlist_restarts);\n", "")), ALL),
     ("restore-flag-not-read", ed(QP, ("if flags & FLAGS_RESTORE != 0 {", "if false {")), ALL),
     ("restore-is-flag-equality", ed(QP, ("if flags & FLAGS_RESTORE != 0 {", "if flags == FLAGS_RESTORE {")), ALL),
     ("restore-keeps-policy", ed(QP, ("                self.policy = SchedPolicy::Default;\n                bump(&mut self.policy_restores);", "                bump(&mut self.policy_restores);")), ALL),
