@@ -1,0 +1,2 @@
+[ 7069.154120] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 7187.808538] hrtimer: interrupt took 3417351 ns

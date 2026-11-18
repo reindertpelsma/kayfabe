@@ -1,0 +1,7 @@
+{
+  "app": "solidworks",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "API exported STEP with entity data (not a GPU/render benchmark)",
+  "secs": 122
+}

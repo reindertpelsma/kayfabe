@@ -1,0 +1,21 @@
+2026-11-16T03:48:02Z FIRST comm=build-script-bu pid=4700 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/kf-ci-src/target/debug/build/kayfabe-isolate-host-22acd90bcb317be7/build-script-build 
+2026-11-16T03:54:06Z FIRST comm=qemu-system-com pid=49142 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/bin/sh /var/lib/dpkg/info/qemu-system-common.postinst configure  
+2026-11-16T03:54:44Z FIRST comm=qemu-system-x86 pid=49559 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp 8 -display none -drive if=virtio,file=/workspace/bench/guest.qcow2,format=qcow2 -drive if=virtio,file=/works
+2026-11-16T03:55:20Z FIRST comm=python3 pid=50582 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/bench/qemu-build-kf3/pyvenv/bin/python3 -B /workspace/bench/qemu-10.2.4/python/scripts/mkvenv.py ensuregroup --dir /workspace/bench/qemu-10.2.4/pytho
+2026-11-16T03:55:24Z FIRST comm=meson pid=50811 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/bench/qemu-build-kf3/pyvenv/bin/python3 /workspace/bench/qemu-build-kf3/pyvenv/bin/meson setup -Dtools=disabled -Dguest_agent=disabled -Dwerror=false
+2026-11-16T04:00:48Z FIRST comm=cup2 pid=60350 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/bench/cudaladder-host-bins/cup2 
+2026-11-16T04:00:50Z FIRST comm=cup3 pid=60376 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/bench/cudaladder-host-bins/cup3 
+2026-11-16T04:00:52Z FIRST comm=cup8 pid=60405 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/bench/cudaladder-host-bins/cup8 
+2026-11-16T04:00:55Z FIRST comm=cup8bench pid=60442 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/bench/cudaladder-host-bins/cup8bench 
+2026-11-16T04:01:26Z FIRST comm=kf-gate1 pid=61678 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/kf-ci-src/target/release/kf-gate1 
+2026-11-16T04:01:28Z FIRST comm=kf-gate2 pid=61700 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/kf-ci-src/target/release/kf-gate2 
+2026-11-16T04:01:30Z FIRST comm=kf-gate2 pid=61700 uid=0 CapEff=000001ffffdfffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=
+2026-11-16T04:01:32Z FIRST comm=kf-gate3 pid=61729 uid=0 CapEff=000001ffffdfffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=
+2026-11-16T04:01:35Z FIRST comm=kf-gate4 pid=61758 uid=0 CapEff=000001ffffdfffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=
+2026-11-16T04:01:37Z FIRST comm=kf-gate5 pid=61794 uid=0 CapEff=000001ffffdfffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=
+2026-11-16T04:01:41Z FIRST comm=kf-gate8 pid=61945 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/kf-ci-src/target/release/kf-gate8 
+2026-11-16T04:01:45Z FIRST comm=kf-gate9 pid=61987 uid=0 CapEff=000001ffffdfffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/kf-ci-src/target/release/kf-gate9 
+2026-11-16T04:02:06Z FIRST comm=kf-micro-reserv pid=62040 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/kf-ci-src/target/release/kf-micro-reserve-probe reserve 
+2026-11-16T04:03:30Z FIRST comm=kayfabe-rm-ladd pid=63524 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/kf-ci-src/target/release/kayfabe-rm-ladder --engines 
+2026-11-16T04:28:01Z FIRST comm=cup8_host pid=67447 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/root/prov/ci5eed5eed5eed5eed_windows/cup8_host 
+2026-11-16T06:28:16Z FIRST comm=kf-timer-probe pid=84789 uid=0 CapEff=000001ffffffffff CapPrm=000001ffffffffff NoNewPrivs=0 seccomp=0 cmd=/workspace/kf-ci-src/target/release/kf-timer-probe 

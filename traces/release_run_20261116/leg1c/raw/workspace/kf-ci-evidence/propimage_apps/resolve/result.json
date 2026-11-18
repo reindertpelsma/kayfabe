@@ -1,0 +1,18 @@
+﻿{
+    "window_name":  "DaVinci Resolve - kf6b6d0b6b",
+    "kind":  "RESOLVE",
+    "focus":  false,
+    "started":  1794506484.144,
+    "log_lines":  [
+                      "[0x000029c4] | GPUDetect            | INFO  | 2026-11-12 18:01:46,418 | Detected 1 GPUs:",
+                      "[0x000029c4] | Main.GPUConfig       | INFO  | 2026-11-12 18:01:46,452 | Selected compute API: CUDA",
+                      "[0x000024ac] | IO                   | INFO  | 2026-11-12 18:01:53,201 | Nvidia GPU (0) is initialised as decoding and encoding device.",
+                      "[0x000029c4] | UI.GLContext         | INFO  | 2026-11-12 18:02:07,676 | Initialized OpenGL 4.5 (requested 4.5) on device \u0027NVIDIA Corporation NVIDIA GeForce RTX 4090/PCIe/SSE2\u0027",
+                      "[0x00001878] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 18:02:09,032 | Let There Be CUDA Light!"
+                  ],
+    "app":  "resolve",
+    "ended":  1794506637.017,
+    "run_id":  "6b6d0b6b853c4452a60a3546d70d104f",
+    "stage":  "main window",
+    "project_name":  "kf6b6d0b6b"
+}

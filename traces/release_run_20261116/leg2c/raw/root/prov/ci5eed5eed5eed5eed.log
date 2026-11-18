@@ -1,0 +1,12 @@
+START 2026-11-16T04:01:01+00:00
+Preparing worktree (detached HEAD f723d3261)
+HEAD=f723d32614b15796cf12b9d0bf50706de7b6c0be CHECKOUT=/workspace/bench/verify-worktrees/ci5eed5eed5eed5eed.KvD9zh NOFETCH=0 TREE=none SECTIONS= 
+IGNORE_STRIP kept=3577 removed=21852 rev=HEAD
+IGNORE_STRIP_KEY 575753d595a85e91274758ce5d3aa42868931d6c20f0783e011e529d9bbe9c39
+IGNORE_STRIP_VERIFIED removed=21852 rev=HEAD
+KF_REQUIRE_ORACLES=1
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/f723d326/qemu-system-x86_64 rev=f723d326 mtime=2026-11-16 04:02:47.398089324 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+EXIT rc=0 2026-11-16T04:04:56+00:00

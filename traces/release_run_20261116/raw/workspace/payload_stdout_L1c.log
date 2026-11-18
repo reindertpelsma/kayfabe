@@ -1,0 +1,26 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=lanea winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       543G  180G  363G  34% /
+KF_PREFLIGHT_FREE_BYTES=389430743040
+KF_PAYLOAD_STAGE_START name=windows_apps
+[xid-watch] tag=ci5eed5eed5eed5eed_windows_apps  host=ubuntu  utc=2026-11-16T04:16:17Z
+[xid-watch] command: env KF_WINAPPS_PROFILE=mid bash /workspace/kf-ci-src/scripts/bench/box/windows_apps.sh ci5eed5eed5eed5eed /root/prov
+[xid-watch] host_dmesg_lines=1202  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+WINAPPS_REFUSED why=would-overwrite-/root/prov/ci5eed5eed5eed5eed_winapps.log
+[xid-watch] --- command output ends (rc=2) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1202 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_windows_apps.log
+KF_PAYLOAD_STAGE_END name=windows_apps rc=2 duration_ms=3790
+KF_PAYLOAD_FAIL suite=windows_apps_retry_refused
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=2
+stage name=windows_apps rc=2 duration_ms=3790 result=FAIL reason=windows_apps_retry_refused
+stage name=windows_gate_2 result=NOT_RUN
+suite name=windows_apps_retry_refused pass=0 fail=1 skip=0
+first_fail stage=windows_apps line=no red line found; last line: [xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_windows~_apps.log
+KF_FINAL_SUMMARY_END

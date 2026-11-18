@@ -1,0 +1,8 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=lanea winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       514G  189G  326G  37% /
+KF_PREFLIGHT_FREE_BYTES=348997173248
+KF_PAYLOAD_FAIL suite=infrastructure
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=0
+suite name=infrastructure pass=0 fail=1 skip=0
+KF_FINAL_SUMMARY_END

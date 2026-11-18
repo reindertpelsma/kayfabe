@@ -1,0 +1,12 @@
+WINAPPS_START tag=ci5eed5eed5eed5eed rev=c53dd6b8 source=/workspace/kf-ci-src 2026-11-16T04:18:49+00:00 profile=mid gate_tag=gate_ci5eed5eed5eed5eed per_guest=8
+WINAPPS_REQUESTED=1
+APPS_STAGE preflight 2026-11-16T04:18:49+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 137585(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 137585(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 137585(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 137585(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 137585(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 137632(bash) uid_root 0/0/0/0
+WINAPPS_REFUSED why=no-kf3-qemu-/workspace/bench/kf3-bins/c53dd6b8/qemu-system-x86_64
+WINAPPS_EXIT rc=2 2026-11-16T04:18:49+00:00

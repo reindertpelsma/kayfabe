@@ -1,0 +1,8 @@
+07:18:21 waiting for /root/stage/.lock
+07:18:21 lock held
+Warning: Permanently added '[<ip>]:59804' (ED25519) to the list of known hosts.
+PUSH_OK key=windows-proprietary/kfimg-20261112/image-v2.zip dest=/workspace/pinned/propimage-kfimg-20261112.zip size=50496618964 sha256=cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3 r2_secs=164 hash_secs=128 rsync_secs=1102 07:45:23
+07:45:23 waiting for /root/stage/.lock
+07:45:23 lock held
+Warning: Permanently added '[<ip>]:59804' (ED25519) to the list of known hosts.
+PUSH_OK key=windows-proprietary/kfimg-20261112/kf-gop.signed.efi dest=/workspace/pinned/kf-gop.signed.efi size=11224 sha256=423a9abc5789b8b4e9834ba016261efb9d64515d53f259a90446917ce91b848e r2_secs=1 hash_secs=0 rsync_secs=2 07:45:26

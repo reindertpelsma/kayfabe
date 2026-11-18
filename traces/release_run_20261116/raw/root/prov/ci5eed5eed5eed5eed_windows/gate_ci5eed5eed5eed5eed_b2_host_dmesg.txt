@@ -1,0 +1,6 @@
+[ 7867.284904] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 8090.277587] x86/PAT: kf3-vamgr:132295 freeing invalid memtype [mem 0x2000520000-0x200071ffff]
+[ 8090.280914] x86/PAT: kf3-vamgr:132295 freeing invalid memtype [mem 0x2000720000-0x200091ffff]
+[ 8090.287244] x86/PAT: kf3-vamgr:132295 freeing invalid memtype [mem 0x2000920000-0x2000b1ffff]
+[ 8145.540832] x86/PAT: kf3-vamgr:132295 freeing invalid memtype [mem 0x2001d10000-0x2001d7ffff]
+[ 8231.372889] x86/PAT: kf3-vamgr:132295 freeing invalid memtype [mem 0x2002f40000-0x2002fbffff]

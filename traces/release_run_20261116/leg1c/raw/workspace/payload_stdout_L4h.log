@@ -1,0 +1,40 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=lanea winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       514G  189G  325G  37% /
+KF_PREFLIGHT_FREE_BYTES=348716732416
+KF_PAYLOAD_STAGE_START name=specviewperf
+[xid-watch] tag=ci5eed5eed5eed5eed_specviewperf  host=ubuntu  utc=2026-11-16T08:59:29Z
+[xid-watch] command: env -u KF_SPEC_TABLE KF_SPEC_LANE=lanea KF_SPEC_DEADLINE_EPOCH=1794839247 bash /workspace/kf-ci-src/scripts/ci/vast_stage_specviewperf.sh ci5eed5eed5eed5eed /root/prov
+[xid-watch] host_dmesg_lines=1220  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+SPEC_STAGE_START lane=lanea
+SPEC_STAGE_LIST lane=lanea n=4
+SPEC_COPY_DELETED removed=archive
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
+SPEC_ROW name=creo-04 result=PASS subtests=13/13 reason=- failed=-
+SPEC_ROW name=blender-01 result=FAIL subtests=0/0 reason=GUEST failed=-
+blender_01 --- FAILED
+SPEC_ROW name=enscape-01 result=FAIL subtests=0/0 reason=GUEST failed=-
+enscape_01 --- FAILED
+SPEC_COPY_DELETED removed=nothing
+SPEC_STAGE_COUNTS pass=2 fail=2 not_run=0 of=4
+SPECVIEWPERF_STAGE_FAIL
+SPECVIEWPERF_STAGE_EXIT rc=1
+[xid-watch] --- command output ends (rc=1) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1220 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_specviewperf.log
+KF_PAYLOAD_STAGE_END name=specviewperf rc=1 duration_ms=10305101
+KF_PAYLOAD_FAIL suite=specviewperf
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=1
+stage name=specviewperf rc=1 duration_ms=10305101 result=FAIL reason=specviewperf
+suite name=specviewperf_passed pass=2 fail=0 skip=0
+suite name=specviewperf pass=0 fail=1 skip=0
+first_fail stage=specviewperf line=blender_01 --- FAILED
+failed_test stage=specviewperf name=blender_01
+failed_test stage=specviewperf name=enscape_01
+KF_FINAL_SUMMARY_END

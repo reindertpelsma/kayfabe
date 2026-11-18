@@ -1,0 +1,7 @@
+2026-11-16T04:20:55Z START run_dir=/root/prov/ci5eed5eed5eed5eed_winapps/run vm=winvm kf3_rev=- apps=10
+2026-11-16T04:20:55Z MATRIX_START apps=10 (resume skips 0) per_guest=8 max_tdr=3 tier<=3
+2026-11-16T04:20:55Z win_vm.sh run --detach tag=apps_g1_042055 rc=0
+2026-11-16T04:21:01Z [g1] launched; waiting for the guest agent (<= 1500s)
+2026-11-16T04:23:33Z [g1] agent answered after 157s
+2026-11-16T04:23:33Z [g1] no KF_GUEST_PW: assuming autologon
+2026-11-16T04:23:48Z [g1] interactive session: KFWIN\kf

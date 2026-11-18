@@ -1,0 +1,3 @@
+CUDA_LADDER_STARTED=2026-11-16T04:16:45+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=c53dd6b8
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]

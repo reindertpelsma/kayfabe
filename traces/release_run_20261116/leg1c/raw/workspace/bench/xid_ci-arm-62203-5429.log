@@ -1,0 +1,27 @@
+[xid-watch] tag=ci-arm-62203-5429  host=ubuntu  utc=2026-11-16T04:03:26Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --pce-mask-probe
+[xid-watch] host_dmesg_lines=858  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=5
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63727 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--pce-mask-probe]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0035a
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R24 pce-mask probe  = 0x20802a02, 8-byte params, one bare Subdevice, no channel
+info  R24 ceEngineType is [IN] — seeding ONLY the pceMask word, NOT the R18 blanket
+info  R24 cecaps measured present=0x0f (LCE0..3); asking 0..=4 to MEASURE the edge
+★     R24 LCE0 (type 0x09) = NV_OK  echo=0x00000009 pceMask=0x00000020 popcount=1 [WRITTEN]
+★     R24 LCE1 (type 0x0a) = NV_OK  echo=0x0000000a pceMask=0x00000010 popcount=1 [WRITTEN]
+★     R24 LCE2 (type 0x0b) = NV_OK  echo=0x0000000b pceMask=0x00000010 popcount=1 [WRITTEN]
+★     R24 LCE3 (type 0x0c) = NV_OK  echo=0x0000000c pceMask=0x00000020 popcount=1 [WRITTEN]
+info  R24 LCE4 (type 0x0d) = refused Other(86) (no value measured)
+done — pce-mask probe only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=5
+[xid-watch] ★ HOST Xid CLEAN across the command — 5 before, 5 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (858 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-5429.log

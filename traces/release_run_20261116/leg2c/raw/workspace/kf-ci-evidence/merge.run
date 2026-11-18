@@ -1,0 +1,6 @@
+[xid-watch] tag=ci5eed5eed5eed5eed_merge_bar  host=ubuntu  utc=2026-11-16T04:00:59Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/merge_check.sh f723d32614b15796cf12b9d0bf50706de7b6c0be ci5eed5eed5eed5eed
+[xid-watch] host_dmesg_lines=832  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---

@@ -1,0 +1,44 @@
+SPEC_NOTE stage=preflight 2026-11-16T08:59:31+00:00 left_s=19676
+SPEC_STAGE_LIST lane=lanea n=4
+SPEC_NOTE rev=06086008 tag=ci5eed5eed5eed5eed lane=lanea release=15.0.0 deadline_left_s=19676
+SPEC_NOTE host: gpu="NVIDIA GeForce RTX 4090" cpus=30 ram_gb=98 disk_free_gb=325 need_gb=130
+SPEC_NOTE stage=fetch 2026-11-16T08:59:36+00:00 left_s=19671
+SPEC_NOTE stage=hostref_before 2026-11-16T08:59:36+00:00 left_s=19671
+SPEC_NOTE hostref before green cup8=PASS xid_count=10 xid_delta=0
+SPEC_NOTE stage=overlay 2026-11-16T08:59:41+00:00 left_s=19666
+SPEC_NOTE stage=boot_copy 2026-11-16T08:59:41+00:00 left_s=19666
+SPEC_NOTE ssh up after 10s
+SPEC_NOTE guest prep: SPEC_PREP exclusion=ok free_gb=183.7
+SPEC_NOTE stage=copy 2026-11-16T09:02:01+00:00 left_s=19526
+SPEC_NOTE copy: src=0 zstd=0 tarfilter=0 ssh_tar=0 
+SPEC_NOTE copy verified: 4 viewset directories match the manifest
+SPEC_NOTE guest post: SPEC_POST cli=present SPEC_POST icacls_rc=0 SPEC_POST vcredist_rc=0 
+SPEC_COPY_DELETED removed=archive
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE stage=boot_run 2026-11-16T09:43:53+00:00 left_s=17014
+SPEC_NOTE ssh up after 20s
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 276s)
+SPEC_NOTE settle_wait_s=276
+SPEC_NOTE stage=viewset_energy-04 2026-11-16T09:52:03+00:00 left_s=16524
+SPEC_NOTE run energy-04 (budget 1200s, mode full, left 16518s)
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
+SPEC_NOTE stage=viewset_creo-04 2026-11-16T09:59:32+00:00 left_s=16075
+SPEC_NOTE run creo-04 (budget 3900s, mode full, left 16072s)
+SPEC_ROW name=creo-04 result=PASS subtests=13/13 reason=- failed=-
+SPEC_NOTE stage=viewset_blender-01 2026-11-16T10:26:36+00:00 left_s=14451
+SPEC_NOTE run blender-01 (budget 5700s, mode full, left 14447s)
+SPEC_ROW name=blender-01 result=FAIL subtests=0/0 reason=GUEST failed=-
+blender_01 --- FAILED
+SPEC_NOTE stage=viewset_enscape-01 2026-11-16T10:47:16+00:00 left_s=13211
+SPEC_NOTE ssh up after 20s
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 275s)
+SPEC_NOTE settle_wait_s=275
+SPEC_NOTE run enscape-01 (budget 6300s, mode full, left 12688s)
+SPEC_ROW name=enscape-01 result=FAIL subtests=0/0 reason=GUEST failed=-
+enscape_01 --- FAILED
+SPEC_NOTE stage=conclude 2026-11-16T11:51:02+00:00 left_s=9385
+SPEC_NOTE hostref after green cup8=PASS xid_count=10 xid_delta=0
+SPEC_NOTE guest overlay kept as spec_ci5eed5eed5eed5eed.kept.qcow2 (KF_SPEC_KEEP_ON_FAIL=1)
+SPEC_COPY_DELETED removed=nothing
+SPEC_STAGE_COUNTS pass=2 fail=2 not_run=0 of=4
+SPECVIEWPERF_STAGE_FAIL
