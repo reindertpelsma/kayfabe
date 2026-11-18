@@ -125,7 +125,7 @@ sparse. If the owner wants the sparse row to pass, B could come as a documented 
 one VM. The cost to state for it: S2 fails for that VM. C stays open research.
 
 **Update 2026-11-18 (later): this staging is superseded by §8.7.** Stage 1 there is the tiling engine
-(`crates/kf-mem/src/tiling.rs`), not the ABI flag. The walker ABI moved to stage 2, and the wiring to stage 3.
+(`crates/kf-host/src/tiling.rs`), not the ABI flag. The walker ABI moved to stage 2, and the wiring to stage 3.
 What follows is the original text.
 
 **Staging, if C is ever found.** Stage 1 (GPU-free, Rust):
@@ -296,7 +296,7 @@ What follows from these results:
 - The tile is 64 KiB. This is also the sparse block size the guest's Vulkan driver uses for these cases:
   `SLOT` in §4. That match is INFERRED for other titles.
 
-### 8.2 Placement (built in stage 1: `crates/kf-mem/src/tiling.rs`)
+### 8.2 Placement (built in stage 1: `crates/kf-host/src/tiling.rs`)
 
 - **One engine per guest range.** `Tiling` owns `[lo, hi)`, which replaces that range's static reservation.
   Its blocks partition the range exactly.
@@ -478,3 +478,150 @@ under a present big table (the answer there is per 64 KiB slot).
 - The PTX was regenerated with NVRTC 12.2.140. `walk_ptx_repro.py walk` reports ok, and the committed
   base PTX also rebuilt byte-identically before the change.
 - ⚠ The parallel walk's SPARSE emission is graded by `kf_tests` on a GPU only. Not run on a GPU yet.
+
+### 8.9 Stage 3: `exact-sparse` wired behind a property that is off by default (built 2026-11-18, GPU-free)
+
+**Where the code lives.** The engine moved to `crates/kf-host/src/tiling.rs`, because tiling host
+reservations is a host-placement concern. `kf-mem`'s tests reach it as `kf_host::tiling`.
+
+**Routing.** With `HostRm::set_exact_sparse(true)`, `alloc_vaspace` makes each guest range ONE INVALID fence
+of an exact tiling (`HostRm::tilings`, by space). `VaSpace::guest` keeps that first fence's handle, so
+`guest_reserved` and the range-edge split behave as before. Every FIXED map and unmap that lands in a tiled
+range is routed through the tiling at the chokepoints that already split rows per `hDma`:
+- `map_pieces`, `unmap_pieces` and `HostRm::unmap` (the `DmaVerbs::tiled_map` and `tiled_unmap` hooks);
+- one glue for production and the model: `tiling::map_tiled` and `unmap_tiled`, which carve, place each
+  block piece, roll back, commit or release.
+
+**Coverage.** A range unmap that cuts a row keeps the row's outside parts as live coverage
+(`Tiling::release_range`).
+
+**Free.** `free_vaspace` releases the tiling's blocks, and does not free the stale first-fence handle twice.
+
+**SPARSE runs in apply.** A `DiffRun` carries `sparse` (from `KFWR_RF_SPARSE`). `apply_entry` applies one
+entry's SPARSE runs FIRST, as ONE batch of wishes:
+- the path is `MapTarget` → `BatchedVas` → `SpaceVerbs` → `HostRm::tiling_set_bases`, and then
+  `Tiling::set_bases`, which assigns every wish and then re-tiles once;
+- every SPARSE run gets the batch's verdict, and the other runs are applied as before.
+
+Wishes go first so that a bind finds its tile already cut out of the sparse block, and an unbind finds its
+tile already wished SPARSE. The default target refuses SPARSE runs by name (`NO_EXACT_TILING`). The walker
+then keeps offering them, and the range stays INVALID, which is exactly the pre-C2 behaviour.
+
+**The property.** `exact-sparse` is a kf3 device property: `DEFINE_PROP_BOOL`, default `false`, KF3 ABI 37,
+with a row in `docs/howto/installing.md` and in `troubleshooting.md`. When on:
+- realize calls `HostRm::set_exact_sparse(true)` before any mirror space exists;
+- the walker's `key_perm` gains `KFWR_RF_SPARSE`.
+
+`unmapped-reads-zero` does not apply to tiled ranges: they start INVALID whatever its value, so a Linux guest
+keeps its fault default and gets S1 and S2 together. No environment variable is added. A dedicated
+env/property allowlist lint does not exist on `next` (searched 2026-11-18). Off, nothing changes: no tiling,
+no SPARSE runs (ABI-7 gate clear), the static reservations as before.
+
+**The placement lock (BUILT, `crates/kf-host/src/placement.rs`).**
+- **Scope.** There is one lock per `HostRm`, because only this client's calls place in its spaces.
+- **Who takes it.** Every re-tile holds it from its first free to its last reserve or rollback
+  (`TileVerbs::retile_begin` and `retile_end`, called by `Tiling::replace`). Every call that can place
+  without FIXED takes it too: `carried_alloc` (every RM alloc), `raw_alloc_nested`, and
+  `raw_map_dma_slice(.., None, ..)`.
+- **Re-entrancy.** It is re-entrant per thread and per instance: a re-tile's reserve takes it again.
+- **Lock order.** The tiling table comes first, then the placement lock. Nothing that holds the
+  placement lock takes the tiling table.
+- **Tested.**
+  - `the_placement_lock_closes_the_measured_race` models M3. An adversary tries a non-FIXED placement
+    after EVERY free of 200 random re-tiles. Under the lock it is always blocked inside the window: 0
+    placements land in the guest range and 0 re-tiles roll back. The control without the lock reproduces
+    M3, with placements in freed fences and rollbacks.
+  - The mutant `retile-without-the-placement-lock` is killed by 2 tests.
+
+**The blocking rule (CLAUDE.md), stated and checked.**
+- **Which threads.** Re-tiles run on the VA-manager thread: the apply of a walk (`kf_mem::vasmgr` →
+  `apply_entry` → `BatchedVas`), plus the act thread where `BatchedVas::hand_to_host` already runs. They
+  never run in a trap. RM allocations run on act and worker threads. A vCPU only classifies and enqueues.
+  So no vCPU takes the placement lock or the tiling table.
+- **The check.** `PlacementLock::hold_for_retile` on a thread marked as a vCPU (`kf_util` witness) or
+  inside a guest trap refuses the re-tile BEFORE any host call. Any other acquisition there is counted
+  (`vcpu_holds`) with a rate-limited line.
+- **Tests.**
+  - `placement::tests::a_vcpu_thread_never_runs_a_retile`.
+  - `sim::exact::a_retile_on_a_vcpu_thread_is_refused_before_any_host_call`: no host call, layout intact,
+    the wish left pending.
+
+**Hostile-guest bounds (as designed in §8.4, built):**
+- 4096 blocks per range;
+- a cap on the wish map (32768);
+- a host-call budget per batch (4096), renewed by `BatchedVas::begin_refresh` → `tiling_begin_batch`, which
+  retries S2 first;
+- `rate_eprintln!` for every guest-repeatable line: one stats line per batch with cut, pinned, rollbacks,
+  gaps, wish refusals and pending, plus the refusal lines;
+- checked arithmetic (`kf-mem` and `kf-host` deny `arithmetic_side_effects`; clippy new=0).
+
+**Rollback at every step (tested).** `a_refused_call_at_every_step_of_a_retile_rolls_back_consistently`
+refuses the n-th host call, for EVERY n, of four kinds of re-tile: a SPARSE carve, an INVALID restore with
+a three-block merge, a row carve, and a release with a merge. Each time:
+- the layout is exact, with no gap unless a restore was refused;
+- every miss is reported pending;
+- the next batch heals everything.
+
+**The model through the real apply path** (`crates/kf-mem/src/sim/exact.rs`, 9 tests), on all three apply
+paths:
+- the §4 residency pattern: S1 and S2 green, with the guard held through every host call;
+- unbind, then free: back to one fence;
+- S2 without SPARSE runs;
+- `exact-sparse` off: SPARSE runs refused by name, nothing else changed;
+- the race, the vCPU refusal and rollback at every step (above);
+- two tests of a range unmap cutting a row.
+
+**Mutants:** `scripts/ci/tiling_mutants.py`, 13 in total, each killed by at least 2 named tests (weak 0).
+
+**Not done here:**
+- `kf_tests` has no GPU case for the parallel walk's SPARSE runs. The hardware run below exercises it end
+  to end.
+- A batch object freed while its rows are still mapped would leave stale coverage. That is S1-only, and
+  teardown frees the whole tiling.
+
+### 8.10 The hardware confirmation recipe (DESIGN; the coordinator books the box)
+
+**Setup.** One Linux box (KVM offer, any Ampere or Ada card, host driver 580.159.04) and ONE kf3 binary built
+from `claude/sparse-c2-wire-20261118`. Two guest boots of the same image: property OFF (the defaults), then
+`exact-sparse=on`. `unmapped-reads-zero` stays at its default `auto`, which is FAULT for Linux.
+
+**Predictions (stated now):**
+- With OFF, msresid and t24 time out with Xid 109.
+- With C2 ON, all 12 cases match the host oracle (msresid and t24 pass, 0 Xid 109).
+- The managed-memory rows fail LOUDLY in BOTH boots, as `V3_BUILD.md` C documents (host Xid 31 FAULT_PDE,
+  guest CUDA error such as 719). They never pass with wrong data, and they never fail a result check with
+  no Xid.
+
+**Falsifiers:**
+- Xid 109 or a timeout on msresid or t24 with C2 ON: the C2 path is not effective. Look for the
+  `kf3: exact-sparse=on` line and the tiling stats lines.
+- A managed-memory row that reports a result mismatch with no Xid, or passes, with C2 ON: S2 is broken on
+  hardware.
+
+**Commands.** On the box, after the kit's provisioning (`rent.sh`, `provision_full.sh` with
+`KAYFABE_BRANCH=claude/sparse-c2-wire-20261118`, then `apps_prov.sh`, `vk_when_ready.sh` and `prep_sp.sh` from
+the sparse kit's `onbox3/`):
+
+```bash
+QB=$(ls -td /workspace/bench/kf3-bins/*/qemu-system-x86_64 | head -1); SPEC=$(cat /workspace/ogr/spec.txt)
+# host oracle: the 12 sparse cases and the managed-memory rows
+( cd /workspace/kf-ci-src && python3 scripts/apps/vkcts/vkcts.py run --side host --artifact "$(readlink -f /workspace/apps/vkcts/current)" --caselist /workspace/ogr/list_all.tsv --out /workspace/ogr_out/host )
+bash scripts/apps/apps_matrix.sh host c2um_host UnifiedMemoryStreams UnifiedMemoryPerf conjugateGradientUM
+# guest, property OFF (defaults), then C2 ON (unmapped-reads-zero left at auto = FAULT for Linux)
+KF3_BIN=$QB bash /workspace/ogr/ogr_boot.sh SOFF "$SPEC"
+KF3_BIN=$QB KF3_DEV_EXTRA=exact-sparse=on bash /workspace/ogr/ogr_boot.sh SC2 "$SPEC"
+# the S2 control on hardware: managed memory must still fail LOUDLY with C2 ON
+KF3_BIN=$QB bash scripts/apps/apps_matrix.sh guest c2um_off UnifiedMemoryStreams UnifiedMemoryPerf conjugateGradientUM
+KF3_BIN=$QB KF3_DEV_EXTRA=exact-sparse=on bash scripts/apps/apps_matrix.sh guest c2um_on UnifiedMemoryStreams UnifiedMemoryPerf conjugateGradientUM
+# regression set (strictly serial, one box): gates, then the fast suite with and without the property
+bash scripts/bench/v3_gates.sh                                    # 9/9
+KF_DEVICE=kf3 scripts/fastguest/fast_suite.sh c2off 180           # 30/30
+KF_DEVICE=kf3 KF3_DEV_EXTRA=exact-sparse=on scripts/fastguest/fast_suite.sh c2on 180   # 30/30
+# evidence (text only): Xid lines and the C2 lines
+dmesg | grep -a Xid | tail -20; grep -ah 'exact-sparse\|exact tiling\|placement lock' /workspace/apps/results/SC2/*.log | head -50
+```
+
+⚠ `fast_suite.sh` receiving `KF3_DEV_EXTRA` through `boot_nvkvm.sh` is INFERRED from `boot_nvkvm.sh:45`:
+check for the `kf3: exact-sparse=on` line in its log before reading the verdict. The default changes
+(stage 4, §8.7) only after this run passes and after a Windows sparse title or DX12 tiled-resource case
+passes.

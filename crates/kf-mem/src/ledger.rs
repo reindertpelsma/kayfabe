@@ -339,7 +339,25 @@ pub trait MapTarget {
     /// the per-refresh host-call budget it keeps for placing rows ([`crate::batch::BatchedVas::
     /// begin_refresh`]). Default: nothing to renew. A wrapping target must FORWARD this.
     fn begin_refresh(&self) {}
+
+    /// ★ 2026-11-18 (C2, `V3_SPARSE_RESIDENCY_RCA.md` §8.9): one walk entry's SPARSE wishes,
+    /// `(va, len, sparse)`: `true` the guest's SPARSE range (reads zero), `false` its return to
+    /// INVALID. Applied by the target's exact tiling (`kf_host::tiling`), never as a host map.
+    /// Default: refused by name (no exact tiling: the SPARSE range stays INVALID, as before C2). A
+    /// wrapping target must FORWARD this.
+    ///
+    /// # Errors
+    /// The refusal, by name.
+    fn set_guest_bases(&self, wishes: &[(u64, u64, bool)]) -> Result<(), String> {
+        let _ = wishes;
+        Err(NO_EXACT_TILING.into())
+    }
 }
+
+/// ★ 2026-11-18 (C2): why a SPARSE run was refused: the target has no exact tiling (the
+/// `exact-sparse` property is off, or the space is not a guest mirror).
+pub const NO_EXACT_TILING: &str =
+    "SPARSE run refused: this target has no exact tiling (exact-sparse is off)";
 
 /// ★ Review fix 2026-10-10 — [`MapTarget::own_view`]'s answer.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

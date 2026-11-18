@@ -137,7 +137,7 @@ pub const KFWR_RF_PRIVILEGE: u32 = 1 << 6;
 /// ★ ABI 7: a SPARSE run — the guest's entries over `[va, va+len)` are SPARSE (an access reads zero).
 /// It maps nothing: `gpga == va`, aperture VIDMEM, no kind, no permission; the §39(c) span bound does
 /// not apply. Emitted only when [`KfArgs::key_perm`] holds this bit (the C2 tiling engine,
-/// `kf_mem::tiling`); it joins the diff key, so a SPARSE range going back to INVALID is the UNMAP of its
+/// `kf_host::tiling`); it joins the diff key, so a SPARSE range going back to INVALID is the UNMAP of its
 /// placement. Mirrors `KFWR_RF_SPARSE`.
 pub const KFWR_RF_SPARSE: u32 = 1 << 7;
 /// ★★★ v3-roperm: the permission bits that MAY join the diff key (`kf_hkey` /

@@ -56,6 +56,10 @@ pub struct DiffRun {
     /// change independently — so every later change is a whole-mapping unmap
     /// (`crate::batch::BatchedVas` rule 2).
     pub leaf: u64,
+    /// ★ 2026-11-18 (C2, ABI 7): a SPARSE run (`KFWR_RF_SPARSE`): no mapping. A MAP is the guest's
+    /// SPARSE range (reads zero), an UNMAP its return to INVALID. Applied as a wish of the target's
+    /// exact tiling ([`MapTarget::set_guest_bases`]), never as a host map.
+    pub sparse: bool,
 }
 
 /// How one entry's runs are turned into host rows.
@@ -361,6 +365,7 @@ impl PermPolicy {
             perm: self.host_perm(m.flags),
             privileged: m.flags & kf_cuda::abi::KFWR_RF_PRIVILEGE != 0,
             leaf: leaf_bytes(m.page_size()),
+            sparse: m.flags & kf_cuda::abi::KFWR_RF_SPARSE != 0,
         }
     }
 }
@@ -746,8 +751,53 @@ impl Applied {
 /// placement whose unmap failed (the two would overlap on the host). A walked piece wholly above a
 /// CPU window's extent has no CPU address: it is satisfied as HELD (nothing of ours placed); one
 /// crossing the extent is placed up to it.
-#[allow(clippy::too_many_lines)]
+///
+/// ★ 2026-11-18 (C2, `V3_SPARSE_RESIDENCY_RCA.md` §8.9): SPARSE runs ([`DiffRun::sparse`]) map
+/// nothing. They are the guest's wishes for the target's exact tiling, applied FIRST and as ONE
+/// batch ([`MapTarget::set_guest_bases`]): a bind inside a sparse range then finds its tile already
+/// cut out, and an unbind finds its tile already wished SPARSE. Every SPARSE run gets the batch's
+/// verdict (APPLIED, or FAILED by name — a target without exact tiling refuses, so the walker
+/// keeps re-offering it and the range stays INVALID, as before C2). The other runs are applied as
+/// always.
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
+    if !runs.iter().any(|r| r.sparse) {
+        return apply_plain(target, runs, cfg);
+    }
+    let wishes: Vec<(u64, u64, bool)> = runs
+        .iter()
+        .filter(|r| r.sparse)
+        .map(|r| (r.va, r.len, !r.unmap))
+        .collect();
+    target.begin_refresh();
+    let verdict = target.set_guest_bases(&wishes);
+    let (idx, plain): (Vec<usize>, Vec<DiffRun>) = runs
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| !r.sparse)
+        .map(|(i, r)| (i, *r))
+        .unzip();
+    let sub = apply_plain(target, &plain, cfg);
+    let mut out = Applied {
+        codes: vec![KFWR_ACK_APPLIED; runs.len()],
+        ..sub.clone()
+    };
+    for (j, &i) in idx.iter().enumerate() {
+        if let (Some(c), Some(&code)) = (out.codes.get_mut(i), sub.codes.get(j)) {
+            *c = code;
+        }
+    }
+    if let Err(why) = verdict {
+        for (i, r) in runs.iter().enumerate() {
+            if r.sparse {
+                out.refuse(i, why.clone());
+            }
+        }
+    }
+    out
+}
+
+#[allow(clippy::too_many_lines)]
+fn apply_plain(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
     // ★ 2026-11-16 (observation only, `kf_host::phase`): the apply's partition — Prep, UnmapPhase,
     // MapPhase, Takedown, Invalidate — five clock reads and nothing decided by them.
     use kf_host::phase::{Phase, ns_since, record};
@@ -1682,6 +1732,7 @@ mod tests {
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
             leaf: 0,
+            sparse: false,
         }
     }
     fn u(va: u64, len: u64) -> DiffRun {
@@ -1696,6 +1747,7 @@ mod tests {
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
             leaf: 0,
+            sparse: false,
         }
     }
 
@@ -1980,6 +2032,7 @@ mod tests {
             perm: MapPerm::READ_WRITE,
             privileged: false,
             leaf: 0x1000,
+            sparse: false,
         };
         let atomic_on = PermPolicy {
             carry_atomic_disable: true,
@@ -2054,6 +2107,11 @@ mod tests {
                 },
                 6 => DiffRun {
                     privileged: true,
+                    ..plain
+                },
+                // ★ 2026-11-18 (ABI 7): KFWR_RF_SPARSE.
+                7 => DiffRun {
+                    sparse: true,
                     ..plain
                 },
                 16..=23 => DiffRun {
@@ -2366,6 +2424,7 @@ mod tests {
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
             leaf: 0,
+            sparse: false,
         }
     }
     fn hopper() -> ApplyCfg<'static> {

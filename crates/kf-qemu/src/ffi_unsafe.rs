@@ -86,7 +86,10 @@ use std::os::unix::ffi::OsStrExt as _;
 /// 36 (2026-11-18, `claude/sparse-zero-default-20261118`): `unmapped_reads_zero` becomes three-valued
 /// (0 = off, 1 = on, 2 = auto, the new default: ZERO for a Windows-profile guest's spaces only); any
 /// other value refuses realize by name.
-pub const KF3_ABI: u32 = 36;
+/// 37 (2026-11-18, `claude/sparse-c2-wire-20261118`, `V3_SPARSE_RESIDENCY_RCA.md` §8.9): `kf3_realize` gains
+/// `exact_sparse` (the `exact-sparse` property; 0 = off, the default; 1 = exact tiling of the guest ranges)
+/// after `unmapped_reads_zero`; any other value refuses realize by name.
+pub const KF3_ABI: u32 = 37;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -268,6 +271,7 @@ pub unsafe extern "C" fn kf3_realize(
     user_view_keep: u32,
     windows_support: u32,
     unmapped_reads_zero: u32,
+    exact_sparse: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -319,6 +323,16 @@ pub unsafe extern "C" fn kf3_realize(
             other => {
                 err.write(&format!(
                     "unmapped-reads-zero: ABI value {other} is none of 0 (off), 1 (on), 2 (auto)"
+                ));
+                return -1;
+            }
+        },
+        exact_sparse: match exact_sparse {
+            0 => false,
+            1 => true,
+            other => {
+                err.write(&format!(
+                    "exact-sparse: ABI value {other} is neither 0 (off) nor 1 (on)"
                 ));
                 return -1;
             }

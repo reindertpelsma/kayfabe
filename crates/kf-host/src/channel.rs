@@ -322,6 +322,77 @@ pub const VA_PIECES_MAX: usize = 2 * 3 + 1;
 pub const VA_BELOW_TWIN_FLOOR: u32 = 0x4B77;
 /// A guest row whose end does not fit in 64 bits (`va + len` wraps) — refused before any host call.
 pub const VA_ROW_WRAPS: u32 = 0x4B78;
+/// ★ 2026-11-18 (C2): the exact tiling of a guest range refused a row or a wish
+/// ([`crate::tiling::TileError`], named in a rate-limited line); the step was rolled back.
+pub const VA_TILING_REFUSED: u32 = 0x4B7A;
+
+/// `NVOS32_ALLOC_FLAGS_ALIGNMENT_FORCE` (`ogkm-580 nvos.h:1452`).
+const NVOS32_ALLOC_FLAGS_ALIGNMENT_FORCE: u32 = 0x100;
+/// `NVOS32_ATTR_PAGE_SIZE_BIG` (`nvos.h:1061-1065`, bits 24:23 = 2).
+const NVOS32_ATTR_PAGE_SIZE_BIG: u32 = 2 << 23;
+
+/// ★ 2026-11-18 (C2, `V3_SPARSE_RESIDENCY_RCA.md` §8.9): the `NVOS32` flags, attr and alignment of a
+/// tiling block. `[measured 2026-11-18, kf-va-tiling-probe M4 and M5, traces/sparse_c2_tiling_probe_20261118]`
+/// a `_SPARSE` block works at 64 KiB and 2 MiB, and BIG + ALIGNMENT_FORCE keeps any 64 KiB edges.
+#[must_use]
+pub const fn tile_block_params(
+    base: crate::tiling::Base,
+    attr: crate::tiling::Attr,
+) -> (u32, u32, u64) {
+    let sparse = match base {
+        crate::tiling::Base::Sparse => NVOS32_ALLOC_FLAGS_SPARSE,
+        crate::tiling::Base::Invalid => 0,
+    };
+    match attr {
+        crate::tiling::Attr::Default => (NVOS32_RESERVE_FLAGS | sparse, 0, 0),
+        crate::tiling::Attr::BigForced => (
+            NVOS32_RESERVE_FLAGS | sparse | NVOS32_ALLOC_FLAGS_ALIGNMENT_FORCE,
+            NVOS32_ATTR_PAGE_SIZE_BIG,
+            0x1_0000,
+        ),
+    }
+}
+
+/// ★ 2026-11-18 (C2): the host verbs of one space's tiling — reservations and frees through
+/// [`HostRm`], each re-tile under the placement lock ([`crate::placement`]).
+struct RmTiles<'a> {
+    rm: &'a HostRm,
+    space: u32,
+    guard: std::cell::RefCell<Option<crate::placement::PlacementGuard<'a>>>,
+}
+
+impl crate::tiling::TileVerbs for RmTiles<'_> {
+    fn reserve(
+        &self,
+        lo: u64,
+        hi: u64,
+        base: crate::tiling::Base,
+        attr: crate::tiling::Attr,
+    ) -> Result<u32, String> {
+        let (flags, a, align) = tile_block_params(base, attr);
+        self.rm
+            .reserve_va_attr(self.space, lo, hi.saturating_sub(lo), flags, a, align)
+            .map_err(|e| format!("reserve {lo:#x}..{hi:#x} {base:?}: {e:?}"))
+    }
+    fn free(&self, handle: u32) -> Result<(), String> {
+        self.rm
+            .free(handle)
+            .map_err(|e| format!("free {handle:#x}: {e:?}"))
+    }
+    fn retile_begin(&self) -> Result<(), String> {
+        let g = self.rm.placement().hold_for_retile()?;
+        *self.guard.borrow_mut() = Some(g);
+        Ok(())
+    }
+    fn retile_end(&self) {
+        self.guard.borrow_mut().take();
+    }
+}
+
+fn tiling_refused(what: &str, e: &crate::tiling::TileError) -> RmError {
+    kf_arch::rate_eprintln!("kf-host: exact tiling refused {what}: {e:?}");
+    RmError::Other(VA_TILING_REFUSED)
+}
 
 /// ★ 2026-10-08 (Windows walls, task A) — **where a guest-mirror twin's host VA space starts.**
 ///
@@ -456,9 +527,92 @@ pub(crate) trait DmaVerbs {
     /// One `NV_ESC_RM_UNMAP_MEMORY_DMA` in `h_dma`: `size == 0` the whole mapping keyed by its exact
     /// start `va`, else every mapping intersecting `[va, va+size)`.
     fn unmap_one(&self, h_dma: u32, va: u64, size: u64, flags: u32) -> Result<(), RmError>;
+    /// ★ 2026-11-18 (C2): map one piece that lies in an EXACTLY TILED guest range through its
+    /// tiling; `None` if `p.at` is in no tiled range of `space`.
+    fn tiled_map(
+        &self,
+        _space: u32,
+        _p: MapPiece,
+        _rollback_flags: u32,
+    ) -> Option<Result<u64, RmError>> {
+        None
+    }
+    /// ★ 2026-11-18 (C2): unmap one piece in a tiled range (by start or by range); `None` if `va`
+    /// is in no tiled range of `space`.
+    fn tiled_unmap(
+        &self,
+        _space: u32,
+        _va: u64,
+        _len: u64,
+        _by_range: bool,
+        _flags: u32,
+    ) -> Option<Result<(), RmError>> {
+        None
+    }
 }
 
 impl DmaVerbs for HostRm {
+    fn tiled_map(
+        &self,
+        space: u32,
+        p: MapPiece,
+        rollback_flags: u32,
+    ) -> Option<Result<u64, RmError>> {
+        self.with_tiling(space, p.at, |t, v| {
+            let r = crate::tiling::map_tiled(
+                t,
+                v,
+                p.at,
+                p.len,
+                &mut |h, pva, plen| {
+                    self.raw_map_dma_slice(
+                        h,
+                        p.memory,
+                        p.offset.wrapping_add(pva.wrapping_sub(p.at)),
+                        plen,
+                        Some(pva),
+                        p.extra,
+                        p.shared,
+                        p.kind,
+                    )
+                    .map(|_| ())
+                },
+                &mut |h, pva| {
+                    let _ = self.raw_unmap_dma_range(h, pva, 0, rollback_flags);
+                },
+            );
+            match r {
+                Ok(()) => Ok(p.at),
+                Err(crate::tiling::TiledMapError::Map(e)) => Err(e),
+                Err(crate::tiling::TiledMapError::Tile(e)) => Err(tiling_refused(
+                    &format!("the row {:#x}+{:#x}", p.at, p.len),
+                    &e,
+                )),
+            }
+        })
+    }
+    fn tiled_unmap(
+        &self,
+        space: u32,
+        va: u64,
+        len: u64,
+        by_range: bool,
+        flags: u32,
+    ) -> Option<Result<(), RmError>> {
+        self.with_tiling(space, va, |t, v| {
+            let r =
+                crate::tiling::unmap_tiled(t, v, va, len.max(1), by_range, &mut |h, pva, size| {
+                    self.raw_unmap_dma_range(h, pva, size, flags)
+                });
+            match r {
+                Ok(()) => Ok(()),
+                Err(crate::tiling::TiledMapError::Map(e)) => Err(e),
+                Err(crate::tiling::TiledMapError::Tile(e)) => {
+                    Err(tiling_refused(&format!("the unmap {va:#x}+{len:#x}"), &e))
+                }
+            }
+        })
+    }
     fn map_one(&self, h_dma: u32, p: MapPiece) -> Result<u64, RmError> {
         self.raw_map_dma_slice(
             h_dma,
@@ -489,7 +643,11 @@ pub(crate) fn map_pieces<V: DmaVerbs + ?Sized>(
 ) -> Result<u64, RmError> {
     let pieces = space.dma_pieces(row.at, row.len)?;
     if let [(h, _, len)] = pieces.as_slice() {
-        return v.map_one(*h, MapPiece { len: *len, ..row });
+        let one = MapPiece { len: *len, ..row };
+        // ★ 2026-11-18 (C2): a piece in an exactly tiled guest range goes through its tiling.
+        return v
+            .tiled_map(space.space, one, rollback_flags)
+            .unwrap_or_else(|| v.map_one(*h, one));
     }
     // Checked once, so no piece offset below can overflow (`piece.va - at < len`).
     row.offset
@@ -502,9 +660,15 @@ pub(crate) fn map_pieces<V: DmaVerbs + ?Sized>(
             at: va,
             ..row
         };
-        if let Err(e) = v.map_one(h, piece) {
-            for &(h0, va0, _) in pieces[..i].iter().rev() {
-                if let Err(r) = v.unmap_one(h0, va0, 0, rollback_flags) {
+        let placed = v
+            .tiled_map(space.space, piece, rollback_flags)
+            .unwrap_or_else(|| v.map_one(h, piece));
+        if let Err(e) = placed {
+            for &(h0, va0, len0) in pieces[..i].iter().rev() {
+                let undo = v
+                    .tiled_unmap(space.space, va0, len0, false, rollback_flags)
+                    .unwrap_or_else(|| v.unmap_one(h0, va0, 0, rollback_flags));
+                if let Err(r) = undo {
                     kf_arch::rate_eprintln!(
                         "kf-host: split map {:#x}+{:#x}: piece {va:#x} refused ({e:?}); rolling back piece {va0:#x} was refused too ({r:?})",
                         row.at,
@@ -532,7 +696,11 @@ pub(crate) fn unmap_pieces<V: DmaVerbs + ?Sized>(
     let mut first = Ok(());
     for (h, pva, plen) in space.dma_pieces(va, len)? {
         let size = if by_range { plen } else { 0 };
-        if let Err(e) = v.unmap_one(h, pva, size, flags)
+        // ★ 2026-11-18 (C2): a piece in an exactly tiled guest range goes through its tiling.
+        let r = v
+            .tiled_unmap(space.space, pva, plen, by_range, flags)
+            .unwrap_or_else(|| v.unmap_one(h, pva, size, flags));
+        if let Err(e) = r
             && first.is_ok()
         {
             first = Err(e);
@@ -796,6 +964,136 @@ impl HostRm {
             .store(policy.to_u8(), std::sync::atomic::Ordering::Relaxed);
     }
 
+    /// ★ 2026-11-18 (C2, the `exact-sparse` property): spaces allocated from now on tile their guest
+    /// ranges exactly ([`crate::tiling`]) instead of one static reservation each, so a guest SPARSE
+    /// range reads zero (S1) and a guest INVALID range still faults (S2). Called once at device
+    /// realize; never from the environment. Default off.
+    pub fn set_exact_sparse(&self, on: bool) {
+        self.exact_sparse
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether [`HostRm::set_exact_sparse`] is on.
+    #[must_use]
+    pub fn exact_sparse(&self) -> bool {
+        self.exact_sparse.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Run `f` on the tiling of `space` that holds `va`, under the tiling table's lock; `None` if no
+    /// tiled range of `space` holds `va`. Lock order: tilings → placement (a re-tile takes the
+    /// placement lock inside); nothing that holds the placement lock takes this one.
+    pub(crate) fn with_tiling<R>(
+        &self,
+        space: u32,
+        va: u64,
+        f: impl FnOnce(&mut crate::tiling::Tiling, &dyn crate::tiling::TileVerbs) -> R,
+    ) -> Option<R> {
+        let mut map = self
+            .tilings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let t = map.get_mut(&space)?.iter_mut().find(|t| {
+            let (lo, hi) = t.range();
+            lo <= va && va < hi
+        })?;
+        let v = RmTiles {
+            rm: self,
+            space,
+            guard: std::cell::RefCell::new(None),
+        };
+        Some(f(t, &v))
+    }
+
+    /// ★ 2026-11-18 (C2): one walk's SPARSE (`true`) and UNSPARSE (`false`) runs for `space`,
+    /// `(va, len, sparse)`, applied as ONE batch per tiled range ([`crate::tiling::Tiling::set_bases`]).
+    /// A run outside every tiled range is refused by name.
+    ///
+    /// # Errors
+    /// [`VA_TILING_REFUSED`] (the first refusal; the others still applied).
+    pub fn tiling_set_bases(&self, space: u32, wishes: &[(u64, u64, bool)]) -> Result<(), RmError> {
+        let mut first = Ok(());
+        let mut groups: std::collections::BTreeMap<u64, Vec<(u64, u64, crate::tiling::Base)>> =
+            std::collections::BTreeMap::new();
+        {
+            let map = self
+                .tilings
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let ranges: Vec<(u64, u64)> = map.get(&space).map_or_else(Vec::new, |v| {
+                v.iter().map(crate::tiling::Tiling::range).collect()
+            });
+            for &(va, len, sparse) in wishes {
+                let base = if sparse {
+                    crate::tiling::Base::Sparse
+                } else {
+                    crate::tiling::Base::Invalid
+                };
+                let end = va.saturating_add(len);
+                // Clip to each tiled range (a walker run may span more than one, or reach outside).
+                let mut any = false;
+                for &(lo, hi) in &ranges {
+                    let (a, b) = (va.max(lo), end.min(hi));
+                    if a < b {
+                        groups.entry(lo).or_default().push((a, b - a, base));
+                        any = true;
+                    }
+                }
+                if !any && first.is_ok() {
+                    first = Err(tiling_refused(
+                        &format!("a SPARSE run {va:#x}+{len:#x} outside every tiled range"),
+                        &crate::tiling::TileError::Outside,
+                    ));
+                }
+            }
+        }
+        for (lo, w) in groups {
+            let r = self.with_tiling(space, lo, |t, v| t.set_bases(v, &w));
+            if let Some(Err(e)) = r
+                && first.is_ok()
+            {
+                first = Err(tiling_refused("a batch of SPARSE runs", &e));
+            }
+        }
+        first
+    }
+
+    /// ★ 2026-11-18 (C2): a new walk batch for `space`: every tiling's host-call budget is renewed and
+    /// work cut earlier is retried (S2 first). One rate-limited line when a tiling has cut, pinned,
+    /// rolled back, left a gap or refused a wish so far (never one per tile).
+    pub fn tiling_begin_batch(&self, space: u32) {
+        let mut map = self
+            .tilings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(ts) = map.get_mut(&space) else {
+            return;
+        };
+        for t in ts.iter_mut() {
+            let v = RmTiles {
+                rm: self,
+                space,
+                guard: std::cell::RefCell::new(None),
+            };
+            t.begin_batch(&v);
+            let st = t.stats;
+            if st.cut | st.pinned | st.rollbacks | st.gaps_left | st.wish_refused != 0 {
+                kf_arch::rate_eprintln!(
+                    "kf-host: space {space:#x} exact tiling {:#x}..{:#x}: blocks={} calls={} cut={} pinned={} rollbacks={} gaps={} wish_refused={} pending={}",
+                    t.range().0,
+                    t.range().1,
+                    t.blocks().len(),
+                    st.calls,
+                    st.cut,
+                    st.pinned,
+                    st.rollbacks,
+                    st.gaps_left,
+                    st.wish_refused,
+                    t.pending().len()
+                );
+            }
+        }
+    }
+
     /// The policy [`HostRm::set_guest_va_fill_policy`] set ([`GuestVaFillPolicy::Fault`] if never set).
     #[must_use]
     pub fn guest_va_fill_policy(&self) -> GuestVaFillPolicy {
@@ -904,7 +1202,42 @@ impl HostRm {
                 // ★ v3-gfx: reserve the guest's ranges BEFORE anything is placed in the space. A
                 // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
                 // ★ 2026-10-08: plus the low guest range of a floor-started space (slot 2).
-                if reserve_guest {
+                if reserve_guest && self.exact_sparse() {
+                    // ★ 2026-11-18 (C2): each guest range starts as ONE INVALID fence of an exact
+                    // tiling. `unmapped-reads-zero` does not apply here: S1 and S2 come from the
+                    // tiling (V3_SPARSE_RESIDENCY_RCA.md §8.9).
+                    let mut tiles = Vec::new();
+                    for (slot, (lo, hi, _)) in vas
+                        .guest
+                        .iter_mut()
+                        .zip(guest_range_plan(start, GuestVaFill::Fault))
+                    {
+                        let v = RmTiles {
+                            rm: self,
+                            space,
+                            guard: std::cell::RefCell::new(None),
+                        };
+                        match crate::tiling::Tiling::new(
+                            &v,
+                            lo,
+                            hi,
+                            crate::tiling::TilingCfg::default(),
+                        ) {
+                            Ok(t) => {
+                                let handle = t.blocks().values().next().map_or(0, |b| b.handle);
+                                *slot = GuestVaRange { handle, lo, hi };
+                                tiles.push(t);
+                            }
+                            Err(e) => kf_arch::rate_eprintln!(
+                                "kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT tiled: {e:?} — host RM may place its own objects there"
+                            ),
+                        }
+                    }
+                    self.tilings
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .insert(space, tiles);
+                } else if reserve_guest {
                     let plan = guest_range_plan(start, self.guest_va_fill_policy().fill_for(start));
                     for (slot, (lo, hi, flags)) in vas.guest.iter_mut().zip(plan) {
                         match self.reserve_va_flags(space, lo, hi - lo, flags) {
@@ -957,7 +1290,7 @@ impl HostRm {
         self.reserve_va_attr(space, at, len, flags, 0, 0)
     }
 
-    fn reserve_va_attr(
+    pub(crate) fn reserve_va_attr(
         &self,
         space: u32,
         at: u64,
@@ -998,7 +1331,29 @@ impl HostRm {
     /// ★ v3-gfx: free a space and everything kf allocated over it (reservations first — they
     /// reference the space).
     pub fn free_vaspace(&self, space: VaSpace) {
-        for g in space.guest.iter().filter(|g| g.handle != 0) {
+        // ★ 2026-11-18 (C2): a tiled range's blocks are the tiling's; its `guest` handle is only
+        // the first fence it started with.
+        let tiles = self
+            .tilings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&space.space);
+        let tiled: Vec<(u64, u64)> = tiles.as_ref().map_or_else(Vec::new, |ts| {
+            ts.iter().map(crate::tiling::Tiling::range).collect()
+        });
+        for mut t in tiles.into_iter().flatten() {
+            let v = RmTiles {
+                rm: self,
+                space: space.space,
+                guard: std::cell::RefCell::new(None),
+            };
+            t.release_all(&v);
+        }
+        for g in space
+            .guest
+            .iter()
+            .filter(|g| g.handle != 0 && !tiled.contains(&(g.lo, g.hi)))
+        {
             let _ = self.free(g.handle);
         }
         let _ = self.free(space.range);
@@ -1179,6 +1534,17 @@ impl HostRm {
     /// # Errors
     /// The host's status.
     pub fn unmap(&self, space: VaSpace, va: u64, defer: bool) -> Result<(), RmError> {
+        // ★ 2026-11-18 (C2): the mapping at `va` in a tiled range is the row the tiling placed there.
+        let len = self
+            .with_tiling(space.space, va, |t, _| {
+                t.row_end(va).map(|e| e.saturating_sub(va))
+            })
+            .flatten();
+        if let Some(len) = len
+            && let Some(r) = self.tiled_unmap(space.space, va, len, false, unmap_flags(defer))
+        {
+            return r;
+        }
         self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, unmap_flags(defer))
     }
 
