@@ -115,6 +115,10 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
     fn begin_refresh(&self) {
         self.inner.begin_refresh();
     }
+    // ★ 2026-11-18 (C2): forwarded EXPLICITLY (the default refuses every SPARSE run).
+    fn set_guest_bases(&self, wishes: &[(u64, u64, bool)]) -> Result<(), String> {
+        self.inner.set_guest_bases(wishes)
+    }
 }
 
 /// ★ `V3_BATCHED_MAP.md`: a host space that places VA-contiguous guest-RAM runs as batches

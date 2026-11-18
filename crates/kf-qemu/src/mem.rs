@@ -2098,6 +2098,12 @@ impl MapTarget for GpuMirror {
     fn begin_refresh(&self) {
         self.bv.begin_refresh();
     }
+    // ★ 2026-11-18 (C2, `V3_SPARSE_RESIDENCY_RCA.md` §8.11): forwarded EXPLICITLY. `[measured box
+    // kf-openguest-180716, tree f5dbe55e]` without it the trait default refused every SPARSE run
+    // ("this target has no exact tiling") although the space was tiled, and msresid still hung.
+    fn set_guest_bases(&self, wishes: &[(u64, u64, bool)]) -> Result<(), String> {
+        self.bv.set_guest_bases(wishes)
+    }
 }
 
 /// ★ The batch / ownership ledger of one mirrored space (`kf_mem::batch::BatchedVas`), with the
@@ -2374,6 +2380,14 @@ impl MapTarget for Target {
             Target::Window(w) => w.begin_refresh(),
             Target::Bar1(b) => b.win.begin_refresh(),
             Target::Gpu(g) => g.begin_refresh(),
+        }
+    }
+    // ★ 2026-11-18 (C2): forwarded EXPLICITLY (the default refuses every SPARSE run).
+    fn set_guest_bases(&self, wishes: &[(u64, u64, bool)]) -> Result<(), String> {
+        match self {
+            Target::Window(w) => w.set_guest_bases(wishes),
+            Target::Bar1(b) => b.win.set_guest_bases(wishes),
+            Target::Gpu(g) => g.set_guest_bases(wishes),
         }
     }
 }
