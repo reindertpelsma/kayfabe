@@ -656,7 +656,16 @@ pub fn refresh(
     com: &mut diffmodel::Committed,
 ) -> Refresh {
     let f = production_format(k.fam);
-    let leaf_ps = [f.dir[0].leaf_ps, f.dir[1].leaf_ps, f.dir[2].leaf_ps, f.dir[3].leaf_ps, f.dir[4].leaf_ps];
+    let mut leaf_ps = [f.dir[0].leaf_ps, f.dir[1].leaf_ps, f.dir[2].leaf_ps, f.dir[3].leaf_ps, f.dir[4].leaf_ps];
+    // `KF_PTE_FUZZ_NO_UNCODED=1`: the descriptor without PF-2's level (what a walker that predates
+    // `KF_PS_UNCODED` can be handed) — for the before/after equivalence only.
+    if std::env::var_os("KF_PTE_FUZZ_NO_UNCODED").is_some() {
+        for l in &mut leaf_ps {
+            if *l == kf_cuda::abi::KF_PS_UNCODED {
+                *l = kf_cuda::abi::KF_PS_NONE;
+            }
+        }
+    }
     let walk = w.walk(f.table_version == kf_cuda::abi::KF_TBL_VER3, leaf_ps, &gu.mem, gu.root);
     let pol = PermPolicy {
         carry_atomic_disable: k.carry_atomic,
@@ -1046,7 +1055,6 @@ fn report(cases: u64, ptes: u64, t: &Map<&'static str, (usize, String)>) -> Stri
 
 /// ★ The quick run of `cargo test`: a fixed seed set, a few seconds.
 #[test]
-#[ignore = "KNOWN-RED PF-2 (V3_PTE_MODEL_FUZZ.md): un-ignored by the stacked fix; run with --ignored"]
 fn pte_fuzz_quick() {
     let (cases, ptes, t) = campaign(0, 2000, 0x5EED_0001);
     let bad: Vec<_> = t.keys().filter(|c| !KNOWN.contains(c)).collect();
@@ -1158,9 +1166,8 @@ mod findings {
     /// (VER3 PDEs have no valid bit, `kf_dir_present`): a VIDEO-aperture 256 GiB page vanished with
     /// no refusal, and a PEER-aperture one (PTE aperture 1 = PDE VIDEO) sent the walk into the
     /// page's DATA as if it were a PD1 table, publishing leaves the guest's MMU never translates.
-    /// Fail closed: such an entry must be refused by name.
+    /// Fail closed: such an entry is refused by name (`KFWR_R_UNCODED_PAGE`).
     #[test]
-    #[ignore = "KNOWN-RED PF-2 (V3_PTE_MODEL_FUZZ.md): fixed by the stacked PF-2 change; run with --ignored"]
     fn pf2_blackwell_256g_page_is_refused_by_name_never_misread() {
         let geo = Geo::Gb10x;
         // (a) VIDEO: must be a named refusal, not silence.
@@ -1168,7 +1175,7 @@ mod findings {
             g.put(Slot::Dir(2), 0, enc_pte(geo, 0, 0, 0x06, false, false, false, false));
         });
         assert!(f.is_empty(), "VIDEO 256 GiB page: {f:?}");
-        assert_ne!(r.walk.refuse, 0, "refused by name");
+        assert_eq!(r.walk.refuse, kf_cuda::abi::KFWR_R_UNCODED_PAGE, "refused by name");
         // (b) PEER over a page whose first bytes look like a PD1 table holding a 512 MiB leaf.
         let (f, r) = one_refresh(kf_chip::Family::Blackwell, |g| {
             let t = 0x0300_0000;

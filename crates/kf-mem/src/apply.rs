@@ -373,6 +373,7 @@ pub fn walk_format(family: kf_chip::Family) -> kf_cuda::abi::KfFormat {
     match family.mmu_format() {
         kf_chip::MmuFormat::Ver2 if family.pd1_holds_page() => kf_cuda::abi::kf_format_ver2(),
         kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2_no_pd1_page(),
+        kf_chip::MmuFormat::Ver3 if family.pd2_holds_page() => kf_cuda::abi::kf_format_ver3_pd2_page(),
         kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
     }
 }

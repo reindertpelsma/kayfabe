@@ -39,6 +39,11 @@ pub const KF_MAX_ENT: u32 = 512;
 /// `KF_PS_NONE` — "a valid entry at this level is not a leaf".
 pub const KF_PS_NONE: u8 = 0xFF;
 
+/// ★ 2026-11-18 (`V3_PTE_MODEL_FUZZ.md` PF-2) `KF_PS_UNCODED` — "a valid entry at this level is a
+/// page the walk cannot name": refused by name ([`KFWR_R_UNCODED_PAGE`], sampled), never read as a PDE.
+/// Non-dual levels only (checked by `kf_dev_format_ok` and [`crate::walk::check_format`]).
+pub const KF_PS_UNCODED: u8 = 0xFE;
+
 /// Address spaces the kernel's own table can hold. Mirrors `KF_MAX_PDB`.
 pub const KF_MAX_PDB: usize = 64;
 
@@ -72,6 +77,9 @@ pub const KF_SAMPLE_LVL_SMALL: u16 = 6;
 pub const KFWR_R_MISALIGNED_LEAF: u32 = 1 << 10;
 /// `KFWR_R_LEAF_OOB`: a leaf whose `[gpga, gpga+len)` leaves the GPGA window (or is PEER).
 pub const KFWR_R_LEAF_OOB: u32 = 1 << 13;
+/// ★ 2026-11-18 (`V3_PTE_MODEL_FUZZ.md` PF-2) `KFWR_R_UNCODED_PAGE`: a VALID entry at a level the
+/// descriptor marks [`KF_PS_UNCODED`] (a page the walk cannot name: GB10X's 256 GiB page).
+pub const KFWR_R_UNCODED_PAGE: u32 = 1 << 15;
 /// `KFWR_R_OOB`: a table would leave the GPGA buffer.
 pub const KFWR_R_OOB: u32 = 1 << 0;
 /// `KFWR_R_UNALIGNED`: a table pointer is not naturally aligned.
@@ -1168,6 +1176,18 @@ pub fn kf_format_ver3() -> KfFormat {
 pub fn kf_format_ver2_no_pd1_page() -> KfFormat {
     let mut f = kf_format_ver2();
     f.dir[3].leaf_ps = KF_PS_NONE;
+    f
+}
+
+/// ★ 2026-11-18 (`V3_PTE_MODEL_FUZZ.md` PF-2) — the VER3 descriptor of a chip whose PD2 holds a
+/// 256 GiB page (Blackwell's `kgmmuFmtInitLevels_GB10X`, `kern_gmmu_fmt_gb10x.c:38,60`): [`kf_format_ver3`]
+/// with `dir[2].leaf_ps = KF_PS_UNCODED`. ⊘ With GH10X's geometry a VALID PD2 entry was read as a
+/// PDE (VER3 PDEs have no valid bit): a VIDEO 256 GiB page vanished silently and a PEER one sent
+/// the walk into the page's data as if it were a PD1 table.
+#[must_use]
+pub fn kf_format_ver3_pd2_page() -> KfFormat {
+    let mut f = kf_format_ver3();
+    f.dir[2].leaf_ps = KF_PS_UNCODED;
     f
 }
 

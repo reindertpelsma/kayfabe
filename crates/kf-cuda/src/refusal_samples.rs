@@ -18,6 +18,7 @@
 
 use crate::abi::{
     KF_REFUSAL_SAMPLES, KFWR_R_FOREIGN_AP, KFWR_R_LEAF_OOB, KFWR_R_MISALIGNED_LEAF, KFWR_R_OOB,
+    KFWR_R_UNCODED_PAGE,
     KFWR_R_UNALIGNED, KfRefusalSample,
 };
 use crate::walk::Report;
@@ -38,6 +39,7 @@ pub fn bit_name(bit: u32) -> &'static str {
         KFWR_R_FOREIGN_AP => "FOREIGN_AP",
         KFWR_R_MISALIGNED_LEAF => "MISALIGNED_LEAF",
         KFWR_R_LEAF_OOB => "LEAF_OOB",
+        KFWR_R_UNCODED_PAGE => "UNCODED_PAGE",
         _ => "?",
     }
 }

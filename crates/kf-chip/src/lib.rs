@@ -200,6 +200,14 @@ impl Family {
         !matches!(self, Family::Turing)
     }
 
+    /// ★ 2026-11-18 (`V3_PTE_MODEL_FUZZ.md` PF-2) — **can a GMMU PD2 entry (VA `46:38`) be a 256 GiB
+    /// PTE?** Only `kgmmuFmtInitLevels_GB10X` says so (`kern_gmmu_fmt_gb10x.c:38,60`), bound to every
+    /// chip the earlier arms do not name — the Blackwell parts (`g_kern_gmmu_nvoc.c:687-690`).
+    #[must_use]
+    pub const fn pd2_holds_page(self) -> bool {
+        matches!(self, Family::Blackwell)
+    }
+
     /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3) — **does the host engine write `GP_GET` back
     /// into a channel's USERD?** Turing … Hopper: yes — every channel class's control struct names
     /// `GPGet` at `0x88` (`ogkm-580: clc46f.h`…`clc86f.h:29-45`). Blackwell: **no** — `Nvc96fControl`

@@ -105,6 +105,11 @@
 #define KF_ENTRY_RUN_SHARE       (KF_MAX_SCRATCH / KF_WALK_SPACES_AT_BUDGET)
 #define KF_ENTRY_CUT             (KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP)
 #define KF_PS_NONE 0xFFu
+/* ★ 2026-11-18 (docs/design/V3_PTE_MODEL_FUZZ.md PF-2) — a directory level whose VALID entry is a page
+ * the walk's two-bit page-size code cannot name (GB10X's 256 GiB page at PD2, ogkm-580
+ * kern_gmmu_fmt_gb10x.c:38,60). Such an entry is REFUSED by name (KFWR_R_UNCODED_PAGE, sampled), never read as a PDE: VER3 PDEs have no valid bit, so the old descriptor sent the walk
+ * into the page's data (a PEER page) or dropped it silently (a VIDEO page). Non-dual levels only. */
+#define KF_PS_UNCODED 0xFEu
 /* ABI 6: a refusal sample's `level` names a leaf TABLE as one past the directory slots. */
 static_assert(KF_SAMPLE_LVL_BIG == KF_DIRS && KF_SAMPLE_LVL_SMALL == KF_DIRS + 1u,
               "KF_SAMPLE_LVL_* in kf_walk.h must follow KF_DIRS");
@@ -531,7 +536,8 @@ __device__ __forceinline__ bool kf_dev_format_ok(const KfFormat &F)
         if (L.entries > KF_MAX_ENT || !kf_dev_pow2(L.entries)) return false;
         if ((uint32_t)L.entries * wpe > KF_SHWORDS) return false;        /* the expand's snapshot */
         if (L.va_lo >= 64u) return false;
-        if (L.leaf_ps != KF_PS_NONE && L.leaf_ps > 3u) return false;
+        if (L.leaf_ps != KF_PS_NONE && L.leaf_ps > 3u &&
+            !(L.leaf_ps == KF_PS_UNCODED && wpe == 1u)) return false;
     }
     if (F.small_entries > KF_MAX_ENT || !kf_dev_pow2(F.small_entries)) return false;   /* ssmall */
     if (F.big_entries > KF_SHWORDS - KF_MAX_ENT || !kf_dev_pow2(F.big_entries)) return false; /* sbig */
@@ -709,6 +715,11 @@ __device__ __forceinline__ uint32_t kf_dir_step(KfCtx &c, uint32_t k, uint64_t t
     uint64_t raw;
     if (!kf_charge(c, 1)) return KF_STEP_STOP;
     if (!kf_load64(c, tbl + (uint64_t)idx * L.entry_bytes, &raw)) return KF_STEP_SKIP;
+    if (L.leaf_ps == KF_PS_UNCODED && kf_valid(F, raw)) {   /* PF-2: a page we cannot name */
+        c.refuse |= KFWR_R_UNCODED_PAGE; c.refusals++;
+        kf_sample(c.sdev, c.pdb_index, KFWR_R_UNCODED_PAGE, k, va, raw, kf_addr(F, raw, kf_ap_raw(F, raw)), 0ull);
+        return KF_STEP_SKIP;
+    }
     if (L.leaf_ps != KF_PS_NONE && kf_valid(F, raw)) {
         kf_emit(c, va, kf_addr(F, raw, kf_ap_raw(F, raw)),
                 1ull << F.ps_log2[L.leaf_ps], kf_leaf_flags(F, raw, L.leaf_ps), raw, k);
@@ -1881,7 +1892,8 @@ static const char *kf_format_check(const KfFormat &F)
         if (F.dir[k].entry_bytes != 8 && F.dir[k].entry_bytes != 16) return "entry_bytes";
         if (F.dir[k].va_lo >= 64) return "va_lo";
         if (!kf_pow2((uint64_t)F.dir[k].entries * F.dir[k].entry_bytes)) return "table bytes not a power of two";
-        if (F.dir[k].leaf_ps != KF_PS_NONE && F.dir[k].leaf_ps > 3) return "leaf_ps";
+        if (F.dir[k].leaf_ps != KF_PS_NONE && F.dir[k].leaf_ps > 3 &&
+            !(F.dir[k].leaf_ps == KF_PS_UNCODED && F.dir[k].entry_bytes == 8)) return "leaf_ps";
     }
     if (F.dir[KF_DIRS - 1].entry_bytes != 16) return "the deepest directory must carry a dual entry";
     if (F.small_entries == 0 || F.small_entries > KF_MAX_ENT) return "small_entries";
@@ -2268,6 +2280,11 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
     ch.len_log2 = 0u; ch.pdb = e.pdb; ch.kind = 0u; ch.has = 0u;
 
     const uint64_t lo16 = dual ? sh[2u * i] : sh[i];
+    if (L.leaf_ps == KF_PS_UNCODED && kf_valid(F, lo16)) {   /* PF-2: a page we cannot name */
+        if (census) kf_par_refuse_samp(d, KFWR_R_UNCODED_PAGE, e.pdb, level, e.va | ((uint64_t)i << L.va_lo),
+                                       lo16, kf_addr(F, lo16, kf_ap_raw(F, lo16)), 0ull);
+        return false;
+    }
     if (L.leaf_ps != KF_PS_NONE && kf_valid(F, lo16)) {
         ch.va = e.va | ((uint64_t)i << L.va_lo);
         ch.addr = kf_addr(F, lo16, kf_ap_raw(F, lo16));
