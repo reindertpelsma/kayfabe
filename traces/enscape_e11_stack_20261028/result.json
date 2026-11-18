@@ -1,0 +1,134 @@
+{
+  "status": "DEBUG_DIAGNOSTIC_NOT_A_PERFORMANCE_RESULT",
+  "date": "2026-10-28",
+  "run_alias": "e11-enscape06-default-1",
+  "source_revision": "fa0829d75c3f630266afd375fc0a7fd3cfae9d06",
+  "production_parent_revision": "bab3c0882b49c76f8a71d47fc672ba6330bc1313",
+  "binary_sha256": "801a87530e10347dcd680cfed743a751fc58c59df672c776ecba3fecd6d82c83",
+  "qemu_version": "10.2.4",
+  "patched_main_loop_sha256": "fecb4b1137deec4cacce9888a8a8a5414c21f29c6d91a9b70bc18bb202126fef",
+  "flags": {
+    "baseline": "unchanged original A7418 production23 flags",
+    "added_debug_environment": {
+      "KF3_DIAG_REFRESH_STACK": "1"
+    }
+  },
+  "guest_driver": "580.88",
+  "tdr_registry": {
+    "TdrDelay": null,
+    "TdrDdiDelay": null,
+    "meaning": "both absent"
+  },
+  "invocation": {
+    "vendor_batch_sha256": "dde76812307c0e28e86d74b379c4ecd728a2335881759b58edc4b0a720953cdb",
+    "workload_json_sha256": "a46c9ee038b3364b3cfb069773c82695e50436e343b712f7e77dca225bd926e4",
+    "arguments": [
+      "enscape",
+      "6"
+    ],
+    "selector_name": "06_SanMiguelFullUltraHQ",
+    "resolution": "FullHD1920x1080",
+    "requests": 1,
+    "full_suite": false
+  },
+  "observed_outcome": {
+    "actual_engine_exited": true,
+    "result_xml_present": true,
+    "vendor_error": "waitForEnscapeProcEnd: ERROR: Enscape process was unresponsive!",
+    "wrapper_exit": null,
+    "clean_pass": false,
+    "system_event153_records_since_launch": 0,
+    "post_first_sample_behavior": "PERTURBED"
+  },
+  "stack_headers_observed": 3,
+  "sample_locations": [
+    {
+      "sample": 1,
+      "function": "Mapping::anywhere",
+      "file": "crates/kf-linux-raw/src/mapping_unsafe.rs",
+      "raw_pc_line": 303,
+      "return_pc_minus_one_line": 294,
+      "caller": "MappedRegion::stitch",
+      "caller_file": "crates/kf-linux-raw/src/mapping_unsafe.rs",
+      "caller_line": 551
+    },
+    {
+      "sample": 2,
+      "function": "Live::mark / Vec::with_capacity allocation",
+      "file": "crates/kf-host/src/sparse/state.rs",
+      "line": 30,
+      "caller": "Reservations::mark",
+      "caller_file": "crates/kf-host/src/sparse.rs",
+      "caller_line": 950
+    },
+    {
+      "sample": 3,
+      "same_location_as_sample": 2
+    }
+  ],
+  "common_call_path": [
+    {
+      "function": "apply_entry",
+      "file": "crates/kf-mem/src/apply.rs",
+      "line": 1060
+    },
+    {
+      "function": "VaManager::on_walk_ready",
+      "file": "crates/kf-mem/src/vasmgr.rs",
+      "raw_pc_line": 1744,
+      "return_pc_minus_one_line": 1743
+    }
+  ],
+  "clock_bracket_semantics": "neighboring logged clock records only; buffered/interleaved output precludes exact sample timestamps",
+  "sample_clock_brackets_utc": [
+    {
+      "samples": [
+        1
+      ],
+      "preceding": "2026-10-28T21:10:52.035857Z",
+      "following": "2026-10-28T21:10:52.769074Z"
+    },
+    {
+      "samples": [
+        2,
+        3
+      ],
+      "preceding": "2026-10-28T21:10:52.769074Z",
+      "following": "2026-10-28T21:10:53.035876Z"
+    }
+  ],
+  "not_identified": [
+    "time spent per host call",
+    "unique split ticket for each sample",
+    "whether signal was delayed until syscall return",
+    "kernel stack",
+    "complete event or request census",
+    "cause of historical ENS12 TDR",
+    "TdrDelay intervention effect"
+  ],
+  "capture": {
+    "archive_sha256": "9beba4cf1c6ac6d7cf8ab0ad8882ea5dd9a09a77e7de89225e8d4a1cce9b41e1",
+    "archive_bytes": 114939128,
+    "dxg_etl_bytes": 536870912,
+    "nt_etl_bytes": 248864768,
+    "both_stop_commands_succeeded": true,
+    "host_copy_verified": true,
+    "circular_retention_and_event_loss": "UNKNOWN; no ETL decode yet",
+    "zip_entries_crc_checked": 15
+  },
+  "restoration": {
+    "status": "CLEAN_SHUTDOWN_AND_RESTORED",
+    "unclean": false,
+    "qmp_quit_or_forced_signal": false,
+    "owned_qemu_gone": true,
+    "foreign_qemu_observed": 0,
+    "gdm_active": true,
+    "cuInit": 0,
+    "devnull_character": true,
+    "parent_unchanged": true,
+    "lock_released": true,
+    "unit_inactive_main_pid_zero": true,
+    "ended_utc": "2026-10-28T21:26:08.751475Z"
+  },
+  "image_identity_limit": "top parent content and backchain stat metadata sealed; underlying base content hash not captured; not full image byte identity"
+}

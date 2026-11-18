@@ -1,0 +1,95 @@
+{
+  "raw_sources_are_private": true,
+  "files": [
+    {
+      "private_source_alias": "runtime-log",
+      "bytes": 155590579,
+      "sha256": "851041d479d55386df69c37a71d2f67b05bd4963a0254fb74015c8c38092d3a4"
+    },
+    {
+      "private_source_alias": "runtime-command",
+      "bytes": 3948,
+      "sha256": "363a53c2dba54775a15e7cd0718755d86d5c821529f3da1ba1122bd84d87e276"
+    },
+    {
+      "private_source_alias": "thread-mask-snapshot",
+      "bytes": 7494,
+      "sha256": "f0b81beaaada138552d2fd730c0ccc6914ccfc7ad15ab228d6f67353d8c87203"
+    },
+    {
+      "private_source_alias": "counter-analysis",
+      "bytes": 2137,
+      "sha256": "0d661cbd541d8c54bdc1bd349ec3525a7942953802644fab3e8a2b94013e95e0"
+    },
+    {
+      "private_source_alias": "full-counter-summary-lines",
+      "bytes": 882,
+      "sha256": "551f2277ccc2730694e24218b504f691cba3723de6189860ba65085cef39a88b"
+    },
+    {
+      "private_source_alias": "resolved-stacks",
+      "bytes": 208760,
+      "sha256": "ccb6a23fb760d33d917cdab47981e8c0f8b7f4a8676817f260df25cde37eba7d"
+    },
+    {
+      "private_source_alias": "scatter-phase-candidates",
+      "bytes": 5894,
+      "sha256": "4a8cdf3630292eaf48973786edddb5855759c7563bc91513e43865099a3b3081"
+    },
+    {
+      "private_source_alias": "prelaunch-log-frontier",
+      "bytes": 487,
+      "sha256": "bf30c7db8bd73823a668c342c06fe7be3f8f17f49785e190353cc6189f0e28db"
+    },
+    {
+      "private_source_alias": "workload-cutoff-log-frontier",
+      "bytes": 285,
+      "sha256": "2417fb63bb19b10dad5911e63afacd79c542035b09b32cd677ebdf930301dfc3"
+    },
+    {
+      "private_source_alias": "execution-amendment",
+      "bytes": 1175,
+      "sha256": "d6e8927176eaf2c7999ea3afecc2c963ab2f15d8b01670fd358a8f6421ebb13b"
+    },
+    {
+      "private_source_alias": "failure-trace-archive",
+      "bytes": 77480579,
+      "sha256": "962f43df67288e08e6543f6ab279d36659b6ccdeb10ac90b47bef1fc7b00f8ee"
+    },
+    {
+      "private_source_alias": "final-metadata-archive",
+      "bytes": 4591921,
+      "sha256": "0ee0ed3ff5502363be94244767263e98ff23c9648701834b63c14bf065377b6a"
+    },
+    {
+      "private_source_alias": "final-outcome",
+      "bytes": 1227,
+      "sha256": "a9457cd927f9aa38d5d6bb7260d785ebcb469269017ca094ab74fbd94e4502d1"
+    },
+    {
+      "private_source_alias": "first-final-read-error-response",
+      "bytes": 553,
+      "sha256": "dc47cb817659727a08d77541c0bcc9916855a859ccadeca17093e48c1a112f35"
+    },
+    {
+      "private_source_alias": "successful-final-response",
+      "bytes": 1111,
+      "sha256": "2385c902da3c804d6e944bfc337fc22d8c636906ff71d15d6899d482164cd876"
+    },
+    {
+      "private_source_alias": "session-exit",
+      "bytes": 692,
+      "sha256": "e9405e43c65a7fe0eaa4352a44fde690393f74e235bbbcfd77724c6bce2ac4d6"
+    },
+    {
+      "private_source_alias": "post-cleanup",
+      "bytes": 323,
+      "sha256": "31a17f36bdc00495f61a01cb03a09a98a99b77171921faa1050ed3b2fb4680a0"
+    },
+    {
+      "private_source_alias": "rust-line-proof",
+      "bytes": 864,
+      "sha256": "053335644e53570c7c436b04052effbdf5fe61c728cebfb1d9c67e04dc5f4336"
+    }
+  ]
+}
