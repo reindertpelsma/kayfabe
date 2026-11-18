@@ -233,6 +233,57 @@ first, the lift is not needed. OWNER_RULINGS.md is not edited by this change.
 
 ### 2.7 Probe: is `SET_REFERENCE` the METHOD Xid on GB20x? (INFERRED today)
 
+**Result, MEASURED 2026-11-18 05:30-05:32Z** (SPEC box, RTX 5070 Ti GB203, host 595.91.07, bare metal, no VM; probe
+`d360cd651`, binary sha256 `f0bdeb65...`; USER channel class `0xca6f`; scrubbed outputs kept on the box under
+`/workspace/semprobe_out`):
+
+| variant | attempts | host Xid | word |
+|---|---|---|---|
+| A `SET_REFERENCE` then witness | 1 (the run stopped after it, fail-closed) | `Xid 32 ... channel 0x00000002 intr 00200000` | witness `0x57170041` LANDED |
+| B stage-1 semaphore cell | 5 (2 as canary, then 3 children) | none | `0x4b460001` every time |
+| C `NON_STALL_INTERRUPT` then witness | 3 children | none | witness `0x57170043` every time |
+
+**Two intr bits, two causes:**
+- **`intr 00200000` (bit 21, METHOD in the GA100 meaning)** is what `SET_REFERENCE` (`0x50`) raises on GB203. So on GB203
+  the private ring's own `SET_REFERENCE` marker is refused, not only its progress words. INFERRED (B1n ran on a GB205,
+  not measured here): GB205 round B1n's "Xid 32 METHOD at the relay's first publication" is the same marker.
+  - The PBDMA raised the Xid AND executed the later witness release.
+  - The probe's first verdict expected the witness to be missing, so it stopped the run. The verdict is now
+    "exactly one Xid 32 with intr bit 21, whatever the witness".
+- **`intr 00800000` (bit 23, DEVICE)** is the creo-04 / enscape-01 event (§1): a software-subchannel method kicked
+  back to RM, the unserved ring-growth trigger. SET_REFERENCE is NOT that event.
+- **The stage-1 marker** (`SEM_*` release plus `NON_STALL_INTERRUPT`) processes cleanly on a USER ca6f channel, 5 of 5.
+  `NON_STALL_INTERRUPT` alone is clean too, 3 of 3.
+- The host stayed healthy after the deliberate A Xid: the later B/C runs raised no Xid, and `nvidia-smi -q` changed
+  only in throughput and temperature.
+
+**Built (2026-11-18):** `kf-harness` binary `kf-semmarker-probe`, pure part `kf_harness::semprobe` (unit-tested).
+It is a v3 tool. Nothing in the frozen `kayfabe-rm-ladder` is touched, and there is no unsafe code.
+
+How it differs from the sketch below:
+- The channel is a USER **copy-engine** channel. Host methods (`SET_REFERENCE`, `SEM_*`,
+  `NON_STALL_INTERRUPT`) are PBDMA methods whatever the engine, and B1n's METHOD Xids hit both its GR and CE
+  rings.
+- Instead of a non-stall event count, A and C end with a WITNESS release into the owned word. It lands only if
+  the PBDMA processed everything before it.
+
+Each attempt is one child process with:
+- a fresh VA space and USER channel;
+- a read-only command mapping;
+- one owned GPU-writable 64 KiB buffer;
+- USERD with no GPU mapping.
+
+Safety:
+- The parent kills a child after 20 s (10 s to reap) and reads the dmesg delta per attempt.
+- It records the exact words and methods.
+- It STOPS at the first outcome that is neither `Clean` nor (A only) `MethodRefused`: exactly one Xid 32 with
+  the witness missing.
+
+Verdicts:
+- A: `MethodRefused` supports the inference; `Clean` falsifies it.
+- B: must be `Clean` with the word reading `0x4B460001`.
+- C: must be `Clean`.
+
 On a Blackwell box, bare metal first (the raw client, `kayfabe-rm-ladder` / `kf-rawclient`). A USER `0xca6f`
 channel on GR, three variants, each its own process with a fresh channel, N=3 each:
 

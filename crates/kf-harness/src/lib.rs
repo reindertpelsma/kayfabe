@@ -4,6 +4,7 @@
 //! tree's *"the last line is not the verdict"*). Every check prints `CHECK <name> PASS|FAIL <why>`.
 
 pub mod publish;
+pub mod semprobe;
 pub mod tables;
 
 use kf_abi::submit::{SET_OBJECT, ce, method_header_inc};
