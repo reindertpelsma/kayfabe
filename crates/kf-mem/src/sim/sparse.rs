@@ -93,7 +93,9 @@ fn s1_violations(fill: GuestVaFill) -> Vec<String> {
             for p in [slot(i), slot(i) + SLOT - P] {
                 let got = rm.host_pte(p);
                 if got != HostPte::Sparse {
-                    bad.push(format!("batching={batching} low={low} slot {i} va {p:#x}: {got:?}"));
+                    bad.push(format!(
+                        "batching={batching} low={low} slot {i} va {p:#x}: {got:?}"
+                    ));
                 }
             }
         }

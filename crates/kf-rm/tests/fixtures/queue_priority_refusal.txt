@@ -1,0 +1,35 @@
+# STATUS: LIVE, 2026-11-18 (replay fixture, docs/design/V3_REPLAY_TESTS.md pattern; consumed by
+# crates/kf-rm/tests/queue_priority.rs via include_str!). One state, one request, never a per-die table.
+#
+# logged-*: copied verbatim from the committed evidence. measured: what the evidence names. synthetic:
+# what the kf3 log does NOT carry (it prints the control id and status, never the params), derived from the
+# ogkm struct and labelled.
+source: traces/gap_probes_run_20261118/confirm/kf3_refused_delta.txt (PR #488, branch claude/gap-matrix-20261118), lines 3-6
+logged-line: F2: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+logged-line: F4: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+logged-line: F5: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+logged-line: F6: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+logged-line: pcreate.kf3.full.log:3058: kf3: GSP REFUSED fn76/0xa06f0111=0x56 (GSP_RM_CONTROL) first_seq=1942 — the guest read a non-OK status
+logged-line: pcreate.kf3.full.log:3129: kf3: GSP REFUSED fn76/0xa06c0110=0x56 (GSP_RM_CONTROL) first_seq=2009 — the guest read a non-OK status
+source-2: RTX 4090 box, kf3 on the merged tree that includes PR #508 (the policy control served): scrubbed text under
+  /workspace/bench/sparse_c2_hw_20261118/priority_evidence/scrubbed/ (pcreate.kf3.full.log, results.tsv, vkprio.guest.txt); not committed.
+  The REFUSED line prints once per control per boot, so only the first window shows it; the REFUSED set over all five windows is exactly these two.
+measured: control=0xa06f0111 status=0x56 seq=1942 (right after SET_CTXSW_PREEMPTION_MODE on the channel's group)
+measured: control=0xa06c0110 status=0x56 seq=2009 (right after the channel's ENGINE_TIMESLICE property)
+measured: guest results with #508: phigh Pass; pcreate, pquery Fail -3; prt NotSupported (-3 in the test's createDevice); host Pass
+measured: control=0x20801115 status=0x56 guest=580.159.04 box=RTX3090 failing_boots=4 neighbour_boots_with_it=0
+measured: guest-visible-symptom=vkCreateDevice -3 (VK_ERROR_INITIALIZATION_FAILED) for LOW, HIGH, REALTIME; MEDIUM 0; host all 0
+# synthetic: NV2080_CTRL_FIFO_RUNLIST_SET_SCHED_POLICY_PARAMS { NvU32 flags; NvU32 schedPolicy } (ogkm-580
+# ctrl2080fifo.h:790-793). The Vulkan driver is closed source: which of these three it sends is INFERRED.
+synthetic: set-interleaved flags=0x0 schedPolicy=0x1
+synthetic: set-interleaved-wddm flags=0x0 schedPolicy=0x2
+synthetic: set-default flags=0x0 schedPolicy=0x0
+synthetic: restore flags=0x1 schedPolicy=0x0
+# synthetic: NVA06C_CTRL_MAKE_REALTIME_PARAMS { NvBool bRealtime } (1 byte) and NVA06F_CTRL_RESTART_RUNLIST_PARAMS
+# { NvBool bForceRestart; NvBool bBypassWait } (2 bytes), ogkm-580 ctrla06c.h:399-401, ctrla06fgpfifo.h:211-214.
+# The log does not carry params; which the closed-source driver sends is INFERRED.
+synthetic-realtime: promote bRealtime=0x1
+synthetic-realtime: demote bRealtime=0x0
+synthetic-restart: plain bForceRestart=0x0 bBypassWait=0x0
+synthetic-restart: forced bForceRestart=0x1 bBypassWait=0x0
+synthetic-restart: forced-bypass bForceRestart=0x1 bBypassWait=0x1
