@@ -787,6 +787,7 @@ impl HostRm {
         self.alloc_vaspace_at(MirrorVaStart::HostDefault)
     }
 
+<<<<<<< HEAD
     /// ★ 2026-11-18: set the policy that chooses what an unmapped VA of the static guest ranges reads
     /// as in every space allocated AFTER this call ([`GuestVaFillPolicy`]). Called once at device
     /// realize from the `unmapped-reads-zero` property; never from the environment. Never called: every
@@ -794,15 +795,37 @@ impl HostRm {
     pub fn set_guest_va_fill_policy(&self, policy: GuestVaFillPolicy) {
         self.guest_va_fill_policy
             .store(policy.to_u8(), std::sync::atomic::Ordering::Relaxed);
+=======
+    /// ★ 2026-11-18: set what an unmapped VA of the static guest ranges reads as in every space
+    /// allocated AFTER this call ([`GuestVaFill`]). Called once at device realize from the
+    /// `unmapped-reads-zero` property; never from the environment.
+    pub fn set_guest_va_fill(&self, fill: GuestVaFill) {
+        self.guest_va_zero.store(
+            fill == GuestVaFill::Zero,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+>>>>>>> origin/claude/sparse-zero-fill-20261118
     }
 
     /// The policy [`HostRm::set_guest_va_fill_policy`] set ([`GuestVaFillPolicy::Fault`] if never set).
     #[must_use]
+<<<<<<< HEAD
     pub fn guest_va_fill_policy(&self) -> GuestVaFillPolicy {
         GuestVaFillPolicy::from_u8(
             self.guest_va_fill_policy
                 .load(std::sync::atomic::Ordering::Relaxed),
         )
+=======
+    pub fn guest_va_fill(&self) -> GuestVaFill {
+        if self
+            .guest_va_zero
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            GuestVaFill::Zero
+        } else {
+            GuestVaFill::Fault
+        }
+>>>>>>> origin/claude/sparse-zero-fill-20261118
     }
 
     /// ★ 2026-11-15: [`HostRm::alloc_vaspace`] with the start the caller derived from the guest's
