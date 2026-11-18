@@ -2587,4 +2587,240 @@ mod control_plan_tests {
             }
         }
     }
+
+    /// What `control_plan` must decide for one (host, control): the golden outcome.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Want {
+        /// The old 580 contract: the body passes through untouched (any size).
+        Pass,
+        /// Asked at exactly this size.
+        Size(usize),
+        /// Refused by name (`NoHeader`): the host's layout for it is not known.
+        Refused,
+    }
+
+    /// The host tags inside the encoded interval `[580.65.06, 581)` (`kf_abi::host_driver`).
+    const HOSTS_580: [&str; 9] = [
+        "580.65.06",
+        "580.82.07",
+        "580.94.02",
+        "580.95.05",
+        "580.105.08",
+        "580.126.09",
+        "580.159.04",
+        "580.173.02",
+        "580.178.04",
+    ];
+    /// The 595 GSP branch profile (`kf_abi::hostabi::GSP_BRANCH_595`).
+    const HOSTS_595: [&str; 2] = ["595.84", "595.91.07"];
+    /// Every other matrix tag: no row for these five, so each is refused by name.
+    const HOSTS_REFUSED: [&str; 19] = [
+        "535.309.01",
+        "545.23.08",
+        "550.40.07",
+        "550.54.14",
+        "550.90.07",
+        "555.42.02",
+        "560.28.03",
+        "565.57.01",
+        "570.86.15",
+        "570.124.06",
+        "570.148.08",
+        "575.51.02",
+        "575.51.03",
+        "575.57.08",
+        "575.64.05",
+        "590.48.01",
+        "610.43.02",
+        "610.57.04",
+        "615.71.09",
+    ];
+
+    /// The golden table: per host class, per control. 580 rows equal the pre-2026-11-18 behaviour
+    /// (NoHeader/unlisted ⇒ pass-through inside the interval; 852a size-checked at 1784).
+    fn want(host: &str, cmd: u32) -> Want {
+        let size_595 = ROWS_595
+            .iter()
+            .find(|r| r.0 == cmd)
+            .expect("one of the five")
+            .1;
+        if HOSTS_595.contains(&host) {
+            Want::Size(size_595)
+        } else if HOSTS_580.contains(&host) {
+            if cmd == 0x2080_852a {
+                Want::Size(1784)
+            } else {
+                Want::Pass
+            }
+        } else {
+            assert!(HOSTS_REFUSED.contains(&host), "{host} is not classified");
+            Want::Refused
+        }
+    }
+
+    /// ★★ 2026-11-18 (owner: "across ALL supported versions"): every host tag of the driver matrix
+    /// (`kf_abi::generated::matrix::MEASURED`, 29 tags) x the five controls, through `control_plan`.
+    /// The three lists must cover MEASURED exactly, so a new matrix tag fails here until classified.
+    #[test]
+    fn every_matrix_host_gets_its_golden_outcome_for_the_five_controls() {
+        let listed: std::collections::BTreeSet<String> = HOSTS_580
+            .iter()
+            .chain(&HOSTS_595)
+            .chain(&HOSTS_REFUSED)
+            .map(|s| s.to_string())
+            .collect();
+        let measured: std::collections::BTreeSet<String> = kf_abi::generated::matrix::MEASURED
+            .iter()
+            .map(|v| abi(&v.to_string()).version().to_string())
+            .collect();
+        let listed_norm: std::collections::BTreeSet<String> = listed
+            .iter()
+            .map(|s| abi(s).version().to_string())
+            .collect();
+        assert_eq!(
+            listed_norm, measured,
+            "the golden table must cover every matrix tag"
+        );
+        for host in HOSTS_580.iter().chain(&HOSTS_595).chain(&HOSTS_REFUSED) {
+            let h = abi(host);
+            for (cmd, size_595) in ROWS_595 {
+                let w = want(host, cmd);
+                // Probe with the 595 size, the 580 size and the size the outcome names.
+                for len in [size_595, 528, 1456, 8620, 1716, 1832] {
+                    let got = control_plan(&h, cmd, len);
+                    let ok = match w {
+                        Want::Pass => matches!(got, Ok(None)),
+                        Want::Size(s) if len == s => {
+                            matches!(got, Ok(Some(Carry::Same { size })) if size == s)
+                        }
+                        Want::Size(s) => matches!(
+                            got,
+                            Err(HostAbiError::Size { want, .. }) if want == s
+                        ),
+                        Want::Refused => matches!(
+                            got,
+                            Err(HostAbiError::NoHeader { cmd: c, .. }) if c == cmd
+                        ),
+                    };
+                    assert!(ok, "host {host} {cmd:#x} {len} B: want {w:?}, got {got:?}");
+                }
+            }
+        }
+    }
+
+    /// ⊘ Adjacent UNMEASURED hosts are refused by name before any control is planned.
+    #[test]
+    fn adjacent_unmeasured_hosts_are_refused_by_name() {
+        for v in [
+            "581.0.0",
+            "580.159.05",
+            "594.0.0",
+            "595.0.0",
+            "595.84.1",
+            "595.91.06",
+            "595.91.08",
+            "595.99.0",
+            "596.0.0",
+            "610.0.0",
+        ] {
+            let parsed = HostDriverVersion::parse(v).expect("parse");
+            assert!(
+                matches!(
+                    HostAbi::for_host(parsed),
+                    Err(HostAbiError::Unmeasured { .. })
+                ),
+                "{v}"
+            );
+        }
+    }
+
+    /// ★ The guest-driver axis: what a guest of each branch sends for these controls (its GSP
+    /// branch's size: `kf_abi::gssreplay` comments, Windows captures in
+    /// traces/constants_measure_20261014b/ga106_*, ga104_596.51; for Linux guests that the size
+    /// equals the Windows one at the same branch is an inference from F-4) meets a 580.159.04
+    /// host. The selection must be what it was before 2026-11-18: four pass-through, 852a only at
+    /// 1784 — the matrix passed these pairs.
+    #[test]
+    fn guest_branches_against_the_bench_host_select_the_same_rows_as_before() {
+        let h = abi("580.159.04");
+        // (guest, [(cmd, size the guest sends)])
+        let guests: [(&str, [(u32, usize); 5]); 6] = [
+            (
+                "575.57.08",
+                [
+                    (0x2080_852e, 528),
+                    (0x2080_853a, 1456),
+                    (0x2080_a618, 8620),
+                    (0x2080_853b, 1832),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "580.105.08",
+                [
+                    (0x2080_852e, 528),
+                    (0x2080_853a, 1456),
+                    (0x2080_a618, 8620),
+                    (0x2080_853b, 1832),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "580.159.04",
+                [
+                    (0x2080_852e, 528),
+                    (0x2080_853a, 1456),
+                    (0x2080_a618, 8620),
+                    (0x2080_853b, 1832),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "590.48.01",
+                [
+                    (0x2080_852e, 596),
+                    (0x2080_853a, 1456),
+                    (0x2080_a618, 8620),
+                    (0x2080_853b, 1832),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "595.84",
+                [
+                    (0x2080_852e, 596),
+                    (0x2080_853a, 15352),
+                    (0x2080_a618, 8632),
+                    (0x2080_853b, 14320),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+            (
+                "610.57.04",
+                [
+                    (0x2080_852e, 1432),
+                    (0x2080_853a, 15352),
+                    (0x2080_a618, 20000),
+                    (0x2080_853b, 14320),
+                    (0x2080_852a, 1784),
+                ],
+            ),
+        ];
+        for (guest, sends) in guests {
+            for (cmd, len) in sends {
+                let got = control_plan(&h, cmd, len);
+                if cmd == 0x2080_852a {
+                    assert!(
+                        matches!(got, Ok(Some(Carry::Same { size: 1784 }))),
+                        "guest {guest} {cmd:#x}: {got:?}"
+                    );
+                } else {
+                    assert!(
+                        matches!(got, Ok(None)),
+                        "guest {guest} {cmd:#x} {len} B: {got:?}"
+                    );
+                }
+            }
+        }
+    }
 }

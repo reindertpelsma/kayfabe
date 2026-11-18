@@ -487,6 +487,11 @@ pub enum HostParams {
     /// contract holds unchanged (the bytes pass through: the 580 sizes); outside it, ONLY a host
     /// that is one of the exact tags of a measured [`BranchSize`] profile is asked, at that
     /// branch's size; every other host is refused by name with `source`.
+    ///
+    /// ⊘ Tier 2, not tier 1 (OWNER_RULINGS §AH; the reason is in `V3_DRIVER_MATRIX.md` §2.2, 2026-11-18):
+    /// the size check for these ids is done by the GSP firmware, and ogkm only forwards its status (ogkm-595
+    /// `rmapi_gss_legacy_control.c:33-37`, `src/kernel/vgpu/rpc.c:11227-11234`). No ogkm tag names the ids,
+    /// so their sizes cannot be derived from ogkm.
     BranchSized {
         /// Where the in-interval contract came from (also the refusal text elsewhere).
         source: &'static str,
