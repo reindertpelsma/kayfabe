@@ -19,6 +19,8 @@ import random
 import re
 import sys
 
+# the names `vkcts.py run --caselist` accepts (vkcts_lib.CASE_RE): a mustpass name with a component over 120 characters cannot be run by that row and is left out of the sample
+CASE_OK = re.compile(r"^dEQP-VK(?:\.[A-Za-z0-9_-]{1,120}){1,24}$")
 INFO = ("dEQP-VK.info.device_properties", "dEQP-VK.info.device_extensions")
 # group name -> mustpass file stem(s) under vk-default/ (a stem names vk-default/<stem>.txt and everything under vk-default/<stem>/)
 FILES = {"sparse_resources": "sparse-resources", "ray_tracing_pipeline": "ray-tracing-pipeline", "ray_query": "ray-query", "mesh_shader": "mesh-shader",
@@ -37,7 +39,7 @@ def read_group(mustpass, group):
     for rel in group_files(listing, FILES[group]):
         for line in (Path(mustpass) / rel).read_text().splitlines():
             line = line.strip()
-            if line.startswith("dEQP-VK."):
+            if line.startswith("dEQP-VK.") and CASE_OK.match(line):
                 names.add(line)
     return sorted(names)
 

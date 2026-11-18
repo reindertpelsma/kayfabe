@@ -1063,6 +1063,28 @@ class CtsGroups(unittest.TestCase):
         self.assertEqual([l for l in lines if "pipelines" in l], [])
         self.assertIn("group pipeline: 2 of 2 cases sampled", notes)
 
+    def with_bad_names(self):
+        d = self.mustpass()
+        long_name = "dEQP-VK.sparse_resources.buffer.a." + "x" * 130
+        with open(d / "vk-default/sparse-resources.txt", "a") as f:
+            f.write(long_name + "\ndEQP-VK.sparse_resources.buffer.a.bad name\n")
+        return d, long_name
+
+    def test_a_name_the_vkcts_row_would_refuse_is_left_out_of_the_group(self):
+        d, long_name = self.with_bad_names()
+        names = CG.read_group(d, "sparse_resources")
+        self.assertNotIn(long_name, names)
+        self.assertEqual(len(names), 120)
+
+    def test_every_sampled_line_is_a_name_the_vkcts_row_accepts(self):
+        d, _ = self.with_bad_names()
+        sys.path.insert(0, str(ROOT / "scripts/apps/vkcts"))
+        import vkcts_lib
+        lines = CG.build(d, ["sparse_resources"], 500, "9")[0]
+        self.assertEqual(len(lines), 2 + 120)
+        for line in lines:
+            self.assertRegex(line.split("\t")[1], vkcts_lib.CASE_RE)
+
     def test_a_group_picks_up_its_files_under_a_directory(self):
         self.assertEqual(CG.group_files("vk-default/pipeline/monolithic/depth.txt vk-default/pipelines.txt vk-default/api.txt", "pipeline"),
                          ["vk-default/pipeline/monolithic/depth.txt"])
