@@ -112,6 +112,8 @@ MUTANTS = [
       K("CtsReport.a_case_missing_from_the_guest_logs_is_not_run_there_not_a_pass", "CtsReport.a_guest_that_ran_less_shows_not_run_in_the_area_line")),
     M("booleans-not-normalised", "lib", '{"True": "1", "true": "1", "False": "0", "false": "0"}.get(val, val)', 'val',
       K("VulkanTokens.booleans_are_one_and_zero_whatever_the_tool_wrote", "VulkanTokens.limits_and_features_become_name_equals_value_with_their_indexes")),
+    M("vkprio-mixes-devices", "lib", 'if m[1] == dev:\n                kv["fam%s.reported" % m[2]] = m[5]', 'if True:\n                kv["fam%s.reported" % m[2]] = m[5]',
+      K("VkPrio.only_the_first_device_counts_a_software_device_must_not_mix_in", "VkPrio.the_reported_priorities_and_each_create_result_are_recorded_per_family")),
     M("falsifier-not-required", "lib", 'if len(r["falsifier"].strip()) < 20:', 'if False:',
       K("CaseTable.a_case_without_a_falsifier_is_refused", "TableMore.a_falsifier_of_a_few_words_is_refused")),
     M("duplicate-ids-allowed", "lib", 'if r["id"] in seen:', 'if False:', K("CaseTable.ids_are_unique_and_a_duplicate_is_refused", "TableMore.an_id_repeated_across_kinds_is_refused")),

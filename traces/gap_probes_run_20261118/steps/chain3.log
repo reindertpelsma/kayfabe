@@ -11,3 +11,4 @@ CHAIN3 guest 1 03:50:20
 [apps_matrix 2026-11-18T04:17:56+00:00] boot ap_C1_b1 rc=0 apps=[vkcts] :: /workspace/bench/run_ap_C1_b1_probe.log:APPS_HOOK tag=ap_C1_b1 apps=[vkcts] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_C1_b1_probe.log:APPS_HOOK_DONE 
 scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/C1/guest_isolated.res: No such file or directory
 [apps_matrix 2026-11-18T04:17:56+00:00] GUEST_DONE batched: 1 pass / 2;  isolated re-runs: 0 pass / 0
+CHAIN3 done 04:44:18

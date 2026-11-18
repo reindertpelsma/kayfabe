@@ -1,0 +1,22 @@
+AREA info host: pass=2 | guest: pass=2
+AREA ray_tracing_pipeline host: pass=177 not_supported=23 | guest: pass=176 not_supported=23 timeout=1
+AREA ray_query host: pass=189 not_supported=11 | guest: pass=189 not_supported=11
+AREA mesh_shader host: pass=188 not_supported=12 | guest: pass=188 not_supported=12
+AREA synchronization2 host: pass=90 not_supported=110 | guest: pass=90 not_supported=110
+AREA synchronization host: pass=14 not_supported=186 | guest: pass=13 not_supported=187
+AREA transform_feedback host: pass=124 not_supported=76 | guest: pass=124 not_supported=76
+AREA device_group host: pass=12 not_supported=9 | guest: pass=12 not_supported=9
+AREA memory host: pass=132 not_supported=68 | guest: pass=132 not_supported=67 timeout=1
+AREA memory_model host: pass=190 not_supported=10 | guest: pass=190 not_supported=10
+AREA api host: pass=70 not_supported=130 | guest: pass=68 not_supported=130 fail=2
+AREA pipeline host: pass=169 not_supported=31 | guest: pass=169 not_supported=31
+AREA compute host: pass=159 not_supported=41 | guest: pass=159 not_supported=41
+AREA subgroups host: pass=180 not_supported=20 | guest: pass=180 not_supported=20
+AREA video host: pass=3 not_supported=197 | guest: pass=3 not_supported=197
+#case	area	host	guest	category	bucket	guest_xid	host_xid	kvdiff	why
+dEQP-VK.ray_tracing_pipeline.misc.recursiveTraces_AABB_15	ray_tracing_pipeline	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.synchronization.global_priority_transition.high.no_sync.sparse.from_graphics_to_compute	synchronization	pass	not_supported	GUEST_LOSES_SUPPORT	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.memory.allocation.basic.size_4KiB.mixed.count_4000	memory	not_supported	timeout	GUEST_FAIL_HOST_NS	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.api.device_init.create_device_global_priority_khr.basic	api	pass	fail	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.api.device_init.create_device_global_priority_query_khr.basic	api	pass	fail	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+CTS_REPORT cases=2623 differing=5 candidates=5

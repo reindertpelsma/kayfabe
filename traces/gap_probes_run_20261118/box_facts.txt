@@ -2,4 +2,4 @@ NVIDIA GeForce RTX 3090, 580.159.04, 24576 MiB
 6.8.0-59-generic
 Model name:                           Intel(R) Xeon(R) W-2133 CPU @ 3.60GHz
 11
-Mem:              98           1           1          16          95          79
+Mem:              98           1          17           0          79          96

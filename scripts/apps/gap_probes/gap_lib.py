@@ -223,3 +223,23 @@ def vulkan_tokens(leaves):
         if m and not path.startswith("$schema"):
             out.add("%s%s=%s" % (m[1], m[2], {"True": "1", "true": "1", "False": "0", "false": "0"}.get(val, val)))   # an older vulkaninfo writes booleans as 1 and 0
     return sorted(out)
+
+
+def parse_vkprio(text):
+    """Output of gap_vkprio -> dict of kv for the probe: `fam<i>.reported` (the priorities a queue family reports) and `create.<i>.<PRIORITY>` (the VkResult of vkCreateDevice with that priority),
+    for the first physical device only (a second device, e.g. a software one, would mix with the first)."""
+    kv, dev = {}, None
+    for line in text.splitlines():
+        m = re.match(r"VKPRIO device=(.*) queue_family=(\d+) flags=(0x[0-9a-f]+) count=(\d+) reported=(\S+)$", line)
+        if m:
+            dev = dev or m[1]
+            if m[1] == dev:
+                kv["fam%s.reported" % m[2]] = m[5]
+                kv["fam%s.queue_flags" % m[2]] = m[3]
+            continue
+        m = re.match(r"VKPRIO create family=(\d+) priority=(\w+) result=(-?\d+)$", line)
+        if m and ("fam%s.reported" % m[1]) in kv and ("create.%s.%s" % (m[1], m[2])) not in kv:
+            kv["create.%s.%s" % (m[1], m[2])] = m[3]
+    if dev:
+        kv["info.device"] = dev
+    return kv

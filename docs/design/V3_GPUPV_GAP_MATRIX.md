@@ -1,8 +1,8 @@
 # V3 GPU-PV gap matrix: what a GPU paravirtualisation stack leaves behind, and where kayfabe stands
 
-**STATUS: RESEARCH, 2026-11-18** (first version; every row says whether it is MEASURED, cited or INFERRED; no probe of this document has run on a GPU yet, section 3.4 says so again where hardware results would go).
+**STATUS: RESEARCH, 2026-11-18** (first version; every row says whether it is MEASURED, cited or INFERRED; one hardware run of 2026-11-18 on one RTX 3090 box is recorded in sections 3.4 and 3.5 and in `traces/gap_probes_run_20261118/`; nothing else here was run on a GPU).
 
-**Summary (public, counts per kayfabe status): 132 rows: WORKS 20, BROKEN 11, UNKNOWN 94, N-A-BY-DESIGN 7.** **Target: BROKEN = 0. Patch-tier rows are BROKEN until the optional patch tier ships.** **Closure path of the BROKEN and UNKNOWN rows: IN-TREE FIX 88, PATCH TIER 4, OWNER DECISION 13 (and 7 N-A-BY-DESIGN rows, which close by their stated reason).** (IN-TREE FIX = kayfabe code; PATCH TIER = needs a host and/or guest kernel or driver patch, optional and later, section 6; OWNER DECISION = a policy; for an UNKNOWN row the path is the one that applies if a run fails.) UNKNOWN is the largest class on purpose: most rows name a probe that is authored and not yet run, and a row only leaves UNKNOWN when a run with a revision exists. The aim of the matrix is to find failures: a pass is hygiene, a failure is a result.
+**Summary (public, counts per kayfabe status): 133 rows: WORKS 48, BROKEN 15, UNKNOWN 62, N-A-BY-DESIGN 8.** **Target: BROKEN = 0. Patch-tier rows are BROKEN until the optional patch tier ships.** **Closure path of the BROKEN and UNKNOWN rows: IN-TREE FIX 59, PATCH TIER 3, OWNER DECISION 15 (and 8 N-A-BY-DESIGN rows, which close by their stated reason).** (IN-TREE FIX = kayfabe code; PATCH TIER = needs a host and/or guest kernel or driver patch, optional and later, section 6; OWNER DECISION = a policy; for an UNKNOWN row the path is the one that applies if a run fails.) UNKNOWN is the largest class on purpose: most rows name a probe that is authored and not yet run, and a row only leaves UNKNOWN when a run with a revision exists. The aim of the matrix is to find failures: a pass is hygiene, a failure is a result.
 
 Owner goal (2026-11-17/18): kayfabe emulates full NVIDIA; its first target is the set of gaps that GPU paravirtualisation (GPU-PV) leaves behind. Every failing probe ends in exactly one of four buckets, and a difference is never called a kayfabe bug without a host control (`docs/OWNER_RULINGS.md` working rules):
 
@@ -29,54 +29,54 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
-| CU-01 | CUDA IPC, legacy memory handles (cuIpcGetMemHandle/OpenMemHandle) between two guest processes | I | UNKNOWN | none; probe ipc_legacy authored | run ipc_legacy on host and guest | IN-TREE FIX |
-| CU-02 | CUDA IPC events | I | UNKNOWN | none; probe ipc_event authored | run ipc_event | IN-TREE FIX |
-| CU-03 | VMM export of a physical allocation as a POSIX fd and import in a second process | S4 | UNKNOWN | none; probe ipc_vmm_fd authored | run ipc_vmm_fd | IN-TREE FIX |
-| CU-04 | Virtual memory management: cuMemCreate, cuMemMap, cuMemSetAccess, granularity | S4 | UNKNOWN | none; probes vmm_basic and vmm_granularity authored | run both | IN-TREE FIX |
-| CU-05 | VMM remap: physical handles swapped under one VA range | S4 | UNKNOWN | none; probe vmm_remap authored | run vmm_remap | IN-TREE FIX |
+| CU-01 | CUDA IPC, legacy memory handles (cuIpcGetMemHandle/OpenMemHandle) between two guest processes | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): ipc_legacy PASS on host and guest (a second process wrote through the imported handle) | none | - |
+| CU-02 | CUDA IPC events | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): ipc_event PASS on host and guest | none | - |
+| CU-03 | VMM export of a physical allocation as a POSIX fd and import in a second process | S4 | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): ipc_vmm_fd PASS on host and guest (fd sent over a unix socket, imported, mapped and written by a second process) | none | - |
+| CU-04 | Virtual memory management: cuMemCreate, cuMemMap, cuMemSetAccess, granularity | S4 | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): vmm_basic and vmm_granularity PASS on host and guest; granularity values equal | none | - |
+| CU-05 | VMM remap: physical handles swapped under one VA range | S4 | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): vmm_remap PASS on host and guest | none | - |
 | CU-06 | VMM compressible allocations (CU_MEM_ALLOCATION_COMP_GENERIC) | S4 | UNKNOWN | none | add a case to gap_probe.c (vmm_compress) | IN-TREE FIX |
 | CU-07 | VMM fabric handles, IMEX channels, multicast objects | S4 | N-A(needs an NVLink/NVSwitch fabric; the target is one GeForce die per guest and NVLink is stubbed as absent by owner ruling H) | docs/OWNER_RULINGS.md section H | assert the attribute dump reports fabric handles unsupported (attr_dump) | N-A-BY-DESIGN |
-| CU-08 | CUDA graphs: stream capture, instantiate, 1000 replays | I | UNKNOWN | none in the Linux app matrix; probes graph_capture_launch, graph_mem_nodes authored | run both | IN-TREE FIX |
-| CU-09 | CUDA graph update (cuGraphExecUpdate) | I | UNKNOWN | none; probe graph_update authored | run graph_update | IN-TREE FIX |
+| CU-08 | CUDA graphs: stream capture, instantiate, 1000 replays | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): graph_capture_launch and graph_mem_nodes PASS on host and guest; a captured graph replays at 20.7k launches/s in the guest against 174k/s on the host (performance, not correctness) | performance row, owner priority 'decent' | - |
+| CU-09 | CUDA graph update (cuGraphExecUpdate) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): graph_update PASS on host and guest | none | - |
 | CU-10 | Conditional graph nodes, graph memory nodes, device-side graph launch | I | UNKNOWN | none | extend gap_probe.c after the first graph run | IN-TREE FIX |
-| CU-11 | Stream-ordered allocator: cuMemAllocAsync/FreeAsync, release threshold, trim | I | UNKNOWN | none; probes pool_alloc_free, pool_threshold_trim authored | run both | IN-TREE FIX |
-| CU-12 | Memory pool export as a shareable handle | I | UNKNOWN | none; probe pool_ipc_export authored | run pool_ipc_export | IN-TREE FIX |
+| CU-11 | Stream-ordered allocator: cuMemAllocAsync/FreeAsync, release threshold, trim | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): pool_alloc_free and pool_threshold_trim PASS on host and guest | none | - |
+| CU-12 | Memory pool export as a shareable handle | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): pool_ipc_export PASS on host and guest | none | - |
 | CU-13 | Managed memory with demand paging (a kernel touching a managed allocation) | S1 | BROKEN | MEASURED: the four UVM demand-paging apps (UnifiedMemoryStreams, UnifiedMemoryPerf, conjugateGradientUM, attach_verify) fail in the guest with one host Xid 31 each and pass on bare metal (kf3 144557e4, 2026-11-07, docs/design/V3_APP_MATRIX.md); documented limitation, not a release target (README.md, docs/OWNER_RULINGS.md section E) | owner decision; probes managed_* record the same failure per case | PATCH TIER (H3 host nvidia-uvm fault service plus the guest side; H4 pool; section 6) |
-| CU-14 | Managed memory: prefetch, advise, read-mostly, accessed-by | S1 | UNKNOWN | none; probe managed_prefetch_advise authored; expected to hit the CU-13 limitation (INFERRED) | run it; a host pass and a guest failure is the listed limitation | PATCH TIER if the failure is a demand fault (INFERRED, H3 and H4), else IN-TREE FIX |
-| CU-15 | Managed memory: concurrent CPU access during a kernel (concurrentManagedAccess) | S1 | UNKNOWN | none; probe managed_concurrent authored; expected to hit the CU-13 limitation (INFERRED) | run it | PATCH TIER (H3 and H4: concurrent access is demand faulting) |
-| CU-16 | Managed memory oversubscription (more than the device holds) | S1 | UNKNOWN | none; probe managed_oversub authored (oversubscribes only where the guest frame buffer is below 8 GiB) | run it with fb-mb 4096 | PATCH TIER (H3 and H4: oversubscription is demand faulting) |
-| CU-17 | Pinned host memory, 1 GiB and 4 GiB | S1 | UNKNOWN | none; probes pinned_1g, pinned_4g authored | run both | IN-TREE FIX |
-| CU-18 | Host registration (cuMemHostRegister) and mapped zero-copy kernels | I | UNKNOWN | none; probes host_register_512m, mapped_zerocopy authored | run both | IN-TREE FIX |
-| CU-19 | A guest request for an absurd pinned allocation is refused promptly (hostile guest rule: no unbounded guest-reachable resource) | I | UNKNOWN | none; probe pinned_huge_refused authored | run it | IN-TREE FIX |
+| CU-14 | Managed memory: prefetch, advise, read-mostly, accessed-by | S1 | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): managed_prefetch_advise FAIL in the guest (cuCtxSynchronize) with host Xid 31 and 13 on the qemu pid, PASS on the host: the CU-13 limitation, bucket 1 | same closure as CU-13 | PATCH TIER (H3 and H4, same as CU-13) |
+| CU-15 | Managed memory: concurrent CPU access during a kernel (concurrentManagedAccess) | S1 | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): managed_concurrent PASS on host and guest (CPU writes while a kernel runs; that kernel does not touch managed pages, so this does not cover demand paging, which is CU-13) | none | - |
+| CU-16 | Managed memory oversubscription (more than the device holds) | S1 | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): managed_oversub FAIL in the guest (cuCtxSynchronize) with host Xid 31, PASS on the host (the host did not oversubscribe: its 24 GB exceeds the 8 GiB base, the guest sees 7.9 GB): the CU-13 limitation, bucket 1 | same closure as CU-13 | PATCH TIER (H3 and H4, same as CU-13) |
+| CU-17 | Pinned host memory, 1 GiB and 4 GiB | S1 | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): pinned_1g and pinned_4g PASS on host and guest | none | - |
+| CU-18 | Host registration (cuMemHostRegister) and mapped zero-copy kernels | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): host_register_512m and mapped_zerocopy PASS on host and guest | none | - |
+| CU-19 | A guest request for an absurd pinned allocation is refused promptly (hostile guest rule: no unbounded guest-reachable resource) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): pinned_huge_refused PASS on host and guest: a 1 TiB pinned request is refused promptly | none | - |
 | CU-20 | Cooperative kernel launch (grid-wide synchronisation) | I | UNKNOWN | none | DESIGN-ONLY: author a coop case (occupancy-sized grid, atomic barrier) | IN-TREE FIX |
 | CU-21 | Thread block clusters (sm_90 and newer) | I | UNKNOWN | none; needs a Hopper or Blackwell die | DESIGN-ONLY: gate on the cluster-launch attribute (attr_dump) | IN-TREE FIX if a run on a Hopper or Blackwell die fails |
 | CU-22 | Peer access and peer-to-peer copies | I | N-A(one die per guest: peer PTEs are refused by name and the P2P capabilities answer NOT_SUPPORTED; the guest must answer cudaDeviceCanAccessPeer with 0, which attr_dump records) | docs/design/V3_FEATURE_GAPS.md row L10 | check the clean answer in attr_dump | N-A-BY-DESIGN |
 | CU-23 | NVRTC and nvJitLink compilation in the guest | I | UNKNOWN | none; driver PTX JIT of fresh modules is probe churn_module_200 | author an NVRTC case once the toolkit is on the box | IN-TREE FIX |
-| CU-24 | PTX JIT of 200 fresh modules with the cache disabled | I | UNKNOWN | none; probe churn_module_200 authored | run it | IN-TREE FIX |
+| CU-24 | PTX JIT of 200 fresh modules with the cache disabled | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): churn_module_200 PASS on host and guest (200 fresh PTX JIT modules, cache disabled) | none | - |
 | CU-25 | Per-boot CUDA process budget | I | WORKS | MEASURED: 100 CUDA processes in one boot, 100 of 100 (docs/design/V3_APP_MATRIX.md row m20seq); the earlier host NoMemory at the 40th (no persistence mode) or 60th process, cause J, is gone | re-measure with fanout_procs_24 and churn_ctx_200 (concurrent, not sequential) | - |
-| CU-26 | 24 simultaneous CUDA processes each running a kernel | I | UNKNOWN | none; probe fanout_procs_24 authored | run it | IN-TREE FIX |
-| CU-27 | 2048 streams and 4096 events in one process | I | UNKNOWN | none; probe churn_streams_events authored | run it | IN-TREE FIX |
-| CU-28 | Kernel running 5 s and 30 s (no watchdog the host does not apply) | I | UNKNOWN | none; probes spin_5s, spin_30s authored | run both | IN-TREE FIX |
-| CU-29 | Illegal-address and trap faults are reported, and a fresh context works afterwards | I | UNKNOWN | none; probes fault_recovery, trap_recovery authored | run both; a host Xid 13 or 31 on the host control is expected and is not a finding | IN-TREE FIX |
-| CU-30 | 100000 back-to-back launches | I | UNKNOWN | none; probe launch_flood_100k authored | run it | IN-TREE FIX |
-| CU-31 | CUDA attribute parity (all attributes, memory total) | I | UNKNOWN | none; probe attr_dump authored; memory total and PCI ids are listed known differences | run it | IN-TREE FIX |
+| CU-26 | 24 simultaneous CUDA processes each running a kernel | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): fanout_procs_24 PASS on host and guest (24 concurrent processes, each with a context and a kernel); churn_ctx_200 PASS on both | none | - |
+| CU-27 | 2048 streams and 4096 events in one process | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): churn_streams_events PASS on host and guest | none | - |
+| CU-28 | Kernel running 5 s and 30 s (no watchdog the host does not apply) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): spin_5s and spin_30s PASS on host and guest: no watchdog kills a long kernel | none | - |
+| CU-29 | Illegal-address and trap faults are reported, and a fresh context works afterwards | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): fault_recovery and trap_recovery PASS on host and guest, judged across processes (a fault in a second process is reported, the first process and a fresh process still work). The first version judged it inside one process and FAILED on the host too: a harness defect found by the host control | none | - |
+| CU-30 | 100000 back-to-back launches | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): launch_flood_100k PASS on host and guest (about 4 s in the guest against under 1 s on the host) | none | - |
+| CU-31 | CUDA attribute parity (all attributes, memory total) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): attr_dump PASS on host and guest: of every CUDA device attribute only the memory total (24124 against 7871 MiB) and the PCI device id differ, both listed known differences | none | - |
 
 ### 2.2 Tools, profiling, NVML and nvidia-smi
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
 | TL-01 | MPS (nvidia-cuda-mps-control daemon, two clients) | S5 | UNKNOWN | none | DESIGN-ONLY: start the daemon with a private pipe directory and run two canary clients | IN-TREE FIX |
-| TL-02 | compute-sanitizer: memcheck, racecheck, synccheck, initcheck | S1 | UNKNOWN | none; probe tools_sanitizer authored | run it with the tools from provision_tools.sh | IN-TREE FIX |
-| TL-03 | CUPTI callback API | I | UNKNOWN | none; probe cupti_callback authored | run it | IN-TREE FIX |
-| TL-04 | CUPTI activity API (kernel records) | I | UNKNOWN | none; probe cupti_activity authored | run it | IN-TREE FIX |
+| TL-02 | compute-sanitizer: memcheck, racecheck, synccheck, initcheck | S1 | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): tools_sanitizer: PASS on the host (memcheck, racecheck, synccheck, initcheck all report 0 errors); in the guest the first CUDA call of the target returns 999 under each tool (the tool's own output: target application returned an error), and the host answers the positive control. Bucket 1 by INFERENCE from ruling H (debugger stubbed); mechanism not shown | read the injection failure: which RM control the tool needs | OWNER DECISION (serve the debugger interface that ruling H stubs) |
+| TL-03 | CUPTI callback API | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): cupti_callback PASS on host and guest | none | - |
+| TL-04 | CUPTI activity API (kernel records) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): cupti_activity PASS on host and guest (kernel activity records returned) | none | - |
 | TL-05 | Nsight Compute kernel replay with performance counters | S6, S2 | N-A(profiler interface stubbed as capability absent by owner ruling H; hardware performance counters are a privileged RM profiler interface and the hostile-guest rule forbids serving it; the probe still records the exact answer) | docs/OWNER_RULINGS.md section H; probe tools_ncu authored | run tools_ncu: a clean not-supported answer is the expected pass | N-A-BY-DESIGN |
-| TL-06 | Nsight Systems CUDA trace | I | UNKNOWN | none; probe tools_nsys authored | run it | IN-TREE FIX |
-| TL-07 | Nsight Systems GPU metrics sampling | S6 | UNKNOWN | none; probe tools_nsys_gpumetrics authored | run it | IN-TREE FIX |
+| TL-06 | Nsight Systems CUDA trace | I | UNKNOWN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): tools_nsys PASS on the host; NOT_RUN in the guest (the 1 GB tool was not pushed into the guest) | push the tool into the guest or install it in the image | IN-TREE FIX |
+| TL-07 | Nsight Systems GPU metrics sampling | S6 | UNKNOWN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): tools_nsys_gpumetrics PASS on the host; NOT_RUN in the guest (tool not pushed) | as TL-06 | IN-TREE FIX |
 | TL-08 | cuda-gdb and the debugger interface | I | N-A(debugger stubbed as capability absent by owner ruling H) | docs/OWNER_RULINGS.md section H | none | N-A-BY-DESIGN |
 | TL-09 | NVML field coverage in the guest | S1 | BROKEN | MEASURED open-rows guest run 2026-11-17 (kf3 04613288, RTX 3090; evidence PR pending): 132 NVML and 74 DCGM telemetry values (clocks, power, temperature, fan, PCIe throughput, utilisation, throttle reasons) answer N/A in the guest; documented limitation (docs/design/V3_UTILIZATION_FLAG.md section 10) | none until the owner wants the counters served | OWNER DECISION (serve the counters, docs/design/V3_UTILIZATION_FLAG.md) |
 | TL-10 | nvidia-smi queries and persistence mode | S11 | WORKS | MEASURED open-rows guest run 2026-11-17 (kf3 04613288, RTX 3090; evidence PR pending): persistence mode on, DCGM software diagnostic passes on host and guest; memory.used and encoder session counters served | none | - |
-| TL-11 | nvidia-smi setters from guest root: compute mode, power limit, clock lock, ECC, accounting | S11 | UNKNOWN | none; probe smi_setters authored, with a host-state watcher that fails when the host sees a change | run smi_setters with hoststate watch on the host | IN-TREE FIX |
-| TL-12 | Driver reset (nvidia-smi -r) | S11 | UNKNOWN | none; probe life_reset authored (destructive, guest only) | run life_reset with --destructive in the guest | IN-TREE FIX |
+| TL-11 | nvidia-smi setters from guest root: compute mode, power limit, clock lock, ECC, accounting | S11 | BROKEN | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): smi_setters: in the guest the compute-mode and accounting setters answer NOT_SUPPORTED where the host answers OK, and power limit and clock fields are N/A so those setters were not attempted; every answer is a clean answer and the device works afterwards. Capability absent (ruling H pattern), bucket 1 | owner decision whether a guest may hold a compute mode | OWNER DECISION (whether a guest may hold a compute mode) |
+| TL-12 | Driver reset (nvidia-smi -r) | S11 | N-A(a guest-triggered GPU reset is a privileged host action that kayfabe never authors from guest bytes: the hostile-guest rule; measured: nvidia-smi -r in the guest answers NOT_SUPPORTED with rc 3 and the device works afterwards) | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): life_reset (guest only, destructive flag) PASS: clean refusal, canary after it passes | none | N-A-BY-DESIGN |
 | TL-13 | ECC mode and counters | S11 | N-A(owner ruling H stubs ECC as capability absent; consumer dies have none to report) | docs/OWNER_RULINGS.md section H | none | N-A-BY-DESIGN |
 | TL-14 | MIG | S11 | N-A(MIG partitions a data-centre die; one guest owns one whole GeForce die) | none | none | N-A-BY-DESIGN |
 | TL-15 | NVAPI queries (Windows) | P12 | UNKNOWN | none | DESIGN-ONLY: NvAPI_Initialize, EnumPhysicalGPUs, GPU_GetFullName, GPU_GetMemoryInfo compared with a native run | IN-TREE FIX |
@@ -112,9 +112,15 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 | GX-16 | OpenGL context sharing across threads and processes | I | UNKNOWN | none | DESIGN-ONLY: two shared contexts, fence sync, compute shader | IN-TREE FIX |
 | GX-17 | EGL, GBM and Wayland compositors (weston headless, sway) | S9 | WORKS | MEASURED: gfxset pv_gbm_egl_import, weston_headless, weston_client_diff, sway_screencap in the 38/38 guest run | none | - |
 | GX-18 | PRIME render offload | S9 | UNKNOWN | none | DESIGN-ONLY: needs a second (software or virtual) GPU in the guest | OWNER DECISION (whether a second virtual GPU is offered to the guest) |
+| GX-20 | Vulkan queue global priority (VK_KHR_global_priority): HIGH and REALTIME queues | P7 | UNKNOWN | none | DESIGN-ONLY | IN-TREE FIX |
 | GX-19 | Display-less and headless operation | S9 | WORKS | MEASURED: the whole gfxset and the Linux app matrix run headless | none | - |
 
-### 2.5 Video engines
+### 2.5 Vulkan CTS groups, sampled (section 3.5)
+
+| id | feature | source | kayfabe status | evidence | next step | closure path |
+|---|---|---|---|---|---|---|
+
+### 2.6 Video engines
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
@@ -128,26 +134,26 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 | VD-08 | NVJPG and SEC2 engines | I | N-A(not advertised by design: docs/design/V3_VIDEO_ENGINES.md; no app needs the engine) | docs/design/V3_FEATURE_GAPS.md row L12 | none | N-A-BY-DESIGN |
 | VD-09 | Screen capture plus NVENC record (OBS, Sunshine class) | I | UNKNOWN | none | DESIGN-ONLY: OBS CLI display capture with the encoder session counter as the GPU-use proof | IN-TREE FIX |
 
-### 2.6 Linux stack, containers, libraries and frameworks
+### 2.7 Linux stack, containers, libraries and frameworks
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
 | LX-01 | Container toolkit and CDI specs (nvidia-ctk cdi generate) in the guest | S10 | UNKNOWN | none | DESIGN-ONLY: generate the spec in a guest with the toolkit installed from the official repository, run a container with --device nvidia.com/gpu=all | IN-TREE FIX |
 | LX-02 | nvidia-modprobe and /dev/nvidia* node creation for an unprivileged user | S9 | UNKNOWN | none | DESIGN-ONLY | IN-TREE FIX |
-| LX-03 | nvidia-persistenced start, hold and stop with CUDA alive | S9 | UNKNOWN | none; probe life_persistenced authored | run it | IN-TREE FIX |
+| LX-03 | nvidia-persistenced start, hold and stop with CUDA alive | S9 | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): life_persistenced PASS on host and guest: start, hold with CUDA alive, stop on SIGTERM | none | - |
 | LX-04 | OpenCL (clinfo, clpeak) and hashcat | I | WORKS | MEASURED: rows clinfo, clpeak, hashcat in the Linux app matrix (docs/design/V3_APP_MATRIX.md) | none | - |
 | LX-05 | CUDA libraries and frameworks: cuBLAS, cuFFT, PyTorch, CuPy, llama.cpp | I | WORKS | MEASURED: rows sgemm_cublas, fft_cufft, torch_correct, torch_ai_bench, cupy, llama_cpp_gen in the Linux app matrix | none | - |
 | LX-06 | vLLM, TensorRT and JAX rows | I | UNKNOWN | rows built (scripts/apps/mlrows), first guest run pending | run apps_discovery | IN-TREE FIX |
 | LX-07 | Two dies per family (slot pool) | I | UNKNOWN | none in this batch | DESIGN-ONLY: two guests on two dies, then reboot one with a busy GPU and read the census | IN-TREE FIX |
 
-### 2.7 Lifecycle and fault events
+### 2.8 Lifecycle and fault events
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
-| LF-01 | Unload and reload the nvidia modules in the guest (3 cycles), with and without a CUDA client alive | I | UNKNOWN | none; probe life_module_cycle authored (guest only) | run it; the expected result is a quick refusal under a live client and a clean reload | IN-TREE FIX |
-| LF-02 | Kill a process in the middle of a kernel (5 rounds), next process must work | I | UNKNOWN | none; probe life_kill_kernel authored | run it on host and guest | IN-TREE FIX |
-| LF-03 | Kill an EGL client in the middle of rendering (5 rounds) | I | UNKNOWN | none; probe life_kill_gl authored | run it on host and guest | IN-TREE FIX |
-| LF-04 | Guest power-off with a busy GPU: the host frees the slot, VA pool and channels | I | UNKNOWN | none; probe life_busy_poweroff authored (terminal); the host census check is DESIGN-ONLY | run, then read the host census and boot the same device again | IN-TREE FIX |
+| LF-01 | Unload and reload the nvidia modules in the guest (3 cycles), with and without a CUDA client alive | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): life_module_cycle PASS in the guest: three cycles, the unload is refused quickly under a live client, the client survives, unload and reload without one work, CUDA passes after each reload | none | - |
+| LF-02 | Kill a process in the middle of a kernel (5 rounds), next process must work | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): life_kill_kernel PASS on host and guest (5 rounds) | none | - |
+| LF-03 | Kill an EGL client in the middle of rendering (5 rounds) | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): life_kill_gl PASS on host and guest (5 rounds, EGL client killed mid-render) | none | - |
+| LF-04 | Guest power-off with a busy GPU: the host frees the slot, VA pool and channels | I | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): life_busy_poweroff in the guest (a busy kernel running, then power-off): kf3 retired all 6 channel tokens (released=true, stale binds 0, unresolved 0), no process left, host idle and no new Xid, and the next guest boot on the same die passed its canary and kill probes. VA-pool occupancy was not read | read the VA pool counter after the power-off | - |
 | LF-05 | Guest reboot with a busy GPU | I | UNKNOWN | a plain reboot scrubs the store (docs/design/V3_DEVICE_RESET.md); a busy-GPU reboot is not measured | DESIGN-ONLY: spin client then systemctl reboot, canary after boot | IN-TREE FIX |
 | LF-06 | VT switch and screen lock/unlock under a display manager with a GL client alive | I | UNKNOWN | none | DESIGN-ONLY: commands in section 5 | IN-TREE FIX |
 | LF-07 | S3 suspend and resume, Linux guest | I | WORKS | MEASURED: three suspend/resume cycles in one boot at kf3 559db30c, RTX 4070, 2026-10-14 (traces/linux_s3_resume_20261014, docs/design/V3_S3_RESUME.md); the release image VMs set disable_s3=1 by default, so this is opt-in; not re-run since | re-run at the current revision before any claim | - |
@@ -160,7 +166,7 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 | LF-14 | Device removal and re-add (hot unplug of the kf3 device) | I | UNKNOWN | none | DESIGN-ONLY: QMP device_del then device_add, host census | OWNER DECISION (whether hot unplug of the device is supported) |
 | LF-15 | Display mode and HDR toggles at run time (Windows) | I | UNKNOWN | none | DESIGN-ONLY: section 5 | IN-TREE FIX |
 
-### 2.8 Windows guest
+### 2.9 Windows guest
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
@@ -180,7 +186,7 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 | WX-14 | WSL2 CUDA inside a Windows guest (nested virtualisation) | S1, S2 | UNKNOWN | none | DESIGN-ONLY: needs nested KVM on the host and a pre-bundled rootfs | IN-TREE FIX |
 | WX-15 | TCC versus WDDM driver model answers | P12 | UNKNOWN | none | DESIGN-ONLY: nvidia-smi driver_model fields, -dm refusal text equals a native GeForce | IN-TREE FIX |
 
-### 2.9 Applications
+### 2.10 Applications
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
@@ -194,7 +200,7 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 | AP-08 | Isaac Sim headless (pip package from NVIDIA's index: Vulkan ray tracing, GPU PhysX, OmniGraph, NVENC streaming) | I | UNKNOWN | none | DESIGN-ONLY: install from the official index at run time, run a headless scene with the encoder session counter as proof | IN-TREE FIX |
 | AP-09 | RTX Remix (DX8/DX9 games to Vulkan path tracing, Windows) | I | UNKNOWN | none | DESIGN-ONLY: needs an owned game | OWNER DECISION (an owned game) |
 
-### 2.10 Full suites
+### 2.11 Full suites
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
@@ -204,24 +210,24 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 | FS-04 | DirectX 12 samples and conformance | I | UNKNOWN | a DirectX sample row set exists in the open Windows profile | section 4 | IN-TREE FIX |
 | FS-05 | FFmpeg NVENC/NVDEC matrix | I | WORKS | MEASURED open-rows guest run 2026-11-17 (kf3 04613288, RTX 3090; evidence PR pending): 47 cases, 38 agree, the 9 differences are explained (session cap, a different ffmpeg build) | none | - |
 
-### 2.11 Interface coverage and fuzzing
+### 2.12 Interface coverage and fuzzing
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
 | CV-01 | Interface coverage per suite: which RM classes and controls each suite exercises (trace and ogkm method) | I | UNKNOWN | the method exists; no per-suite coverage table | section 4.5 | IN-TREE FIX |
 | CV-02 | Boundary fuzzing of the RM verbs and ioctls a guest can reach | I | UNKNOWN | none | DESIGN-ONLY (section 4.5) | IN-TREE FIX |
 
-### 2.12 Security
+### 2.13 Security
 
 | id | feature | source | kayfabe status | evidence | next step | closure path |
 |---|---|---|---|---|---|---|
-| SE-01 | Guest root cannot change host GPU state (compute mode, clocks, persistence, power limit) | S11 | UNKNOWN | none; probe smi_setters plus the host-state watcher authored | run it | IN-TREE FIX |
+| SE-01 | Guest root cannot change host GPU state (compute mode, clocks, persistence, power limit) | S11 | WORKS | MEASURED gap-probe run 2026-11-18 (kf3 4065c82a, RTX 3090, driver 580.159.04 on both sides; traces/gap_probes_run_20261118): smi_setters with a host watcher: 207 samples at 0.5 s of compute mode, persistence mode, power limit and application clocks show no change on the host while the guest ran every setter (the first watcher included a live clock and cried leak: a harness defect, fixed) | none | - |
 
 ## 3. The first batch of probes
 
 ### 3.1 What exists
 
-`scripts/apps/gap_probes` holds 45 cases in 13 groups as DATA (`gap_cases.tsv`, one row per case with its falsifier, timeout and tags). Nothing is hard-coded per image: the standalone images are configuration, and no row names one (a test scans the directory). It is a DISCOVERY row of `scripts/apps/run_apps.sh` (name `gap_probes`, in no gate list), so it rides the existing open-guest lane: `apps_hook.sh` samples the host GPU census around the row, `apps_matrix.sh` compares the host log with the guest log.
+`scripts/apps/gap_probes` holds 46 cases in 13 groups as DATA (`gap_cases.tsv`, one row per case with its falsifier, timeout and tags). Nothing is hard-coded per image: the standalone images are configuration, and no row names one (a test scans the directory). It is a DISCOVERY row of `scripts/apps/run_apps.sh` (name `gap_probes`, in no gate list), so it rides the existing open-guest lane: `apps_hook.sh` samples the host GPU census around the row, `apps_matrix.sh` compares the host log with the guest log.
 
 | group | cases | falsifier of the first case (the full table has one per case) | GPU work |
 |---|---|---|---|
@@ -237,7 +243,7 @@ Rows are grouped by area. Columns: id, feature, source, kayfabe status, evidence
 | cuda_churn | churn_ctx_200, churn_module_200, churn_streams_events, fanout_procs_24 | 200 create/use/destroy cycles of a context fail (the per-boot CUDA process budget is about 60 on the same device) | yes |
 | cuda_kernel_time | spin_5s, spin_30s, launch_flood_100k, fault_recovery, trap_recovery | a 5 s kernel is killed in the guest (a watchdog the host does not apply) | yes |
 | profiling | cupti_callback, cupti_activity, tools_sanitizer, tools_ncu, tools_nsys, tools_nsys_gpumetrics | the CUPTI callback API does not see the driver API calls of a process in the guest while it does on the host (or cuptiSubscribe is refused) | yes |
-| vulkan_caps | vk_dump | any Vulkan feature, limit, queue family, format or extension value differs from the host outside the known limits | no |
+| vulkan_caps | vk_global_priority, vk_dump | a global queue priority (low, medium, high, realtime) that the host reports or accepts in vkCreateDevice is not reported or is refused in the guest | no |
 | smi_control | smi_setters | a setter answers differently from the host, hangs, or changes a value the host can see (guest root changing host GPU state) | no |
 | lifecycle | life_persistenced, life_kill_kernel, life_kill_gl, life_module_cycle, life_reset, life_busy_poweroff | nvidia-persistenced does not start, hold and stop cleanly in the guest, or CUDA fails while it runs | yes |
 
@@ -256,13 +262,88 @@ Listed limits at the time of writing: the frame-buffer total and the PCI ids of 
 
 ### 3.3 Tests
 
-GPU-free: `scripts/ci/test_gap_probes.py` (the case table, selection, probe output parsing, process classification, the C judge table compiled with `-DGAP_SELFTEST`, setters, Vulkan flattening, the comparison, runner end to end against fake probe programs, wiring). Mutants: `scripts/ci/gap_probes_mutants.py`, every mutant killed by two named tests. MEASURED: those tests and mutants pass; the C file compiles with `gcc -Wall`. NOT measured: any behaviour against libcuda.
+GPU-free: `scripts/ci/test_gap_probes.py` (the case table, selection, probe output parsing, process classification, the C judge table compiled with `-DGAP_SELFTEST`, setters, Vulkan flattening, the comparison, runner end to end against fake probe programs, wiring). Mutants: `scripts/ci/gap_probes_mutants.py`, every mutant killed by two named tests. MEASURED: those tests and mutants pass; the C file compiles with `gcc -Wall`; the probes then ran against a real libcuda on the host and in the guest (section 3.4).
 
 ### 3.4 Hardware results
 
-PENDING: the hardware run (one Vast box through the open-guest lane) has not been done when this version was written. This section receives, per probe, the host result, the guest result, the kf3 census (Xid, refused, unserviced) and the bucket of every difference. Until then every probe row is UNKNOWN.
+MEASURED, one run on one box on 2026-11-18, text evidence in `traces/gap_probes_run_20261118/` (README there). Nothing here is a claim about another die, driver or day.
 
-### 3.5 Probes not authored (DESIGN-ONLY rows in the matrix)
+- **Box.** One Vast KVM VM (nested KVM), RTX 3090 (GA102, 24 GB), Xeon W-2133 VM with 11 vCPU and 98 GB RAM, Ubuntu 22.04, host and guest driver 580.159.04, guest image from the apps stage (fast guest, `KF_DEVICE=kf3`, 16 GB RAM, 6 vCPU). Rented about 02:16 UTC, destroyed after the run (the record of the teardown is in the trace README).
+- **Revisions.** kf3 `4065c82a` for every run unless the row says otherwise: the crates are byte-identical to `claude/accept-final-tree-20261118` (`2fab69396`, no PR 480). The probe code (the box checkout of this branch, short revisions) was `a41eaaa2` for H1, `a8545da3` for H1c and G1 to G4, `6345785b` for H2 and G5, and `8aa94098` for H3, G6 and the CTS runs; the box tree moved forward as probes were corrected, and the table below takes the latest run of each case. Runs with the PR 480 control binary use kf3 `8aa94098-dirty` = the same crates plus the diff of PR 480's two commits `e0e6b15d1` and `fa87599a6` (`kf-mem/src/apply.rs` only), built on the box in 40 s.
+- **Runs.** H1 host (first probe version: 39 pass, 3 FAIL, 3 not run), H1c host control (fixed probes: 42 pass, 3 guest-only not run; host against host differs only in one performance number), G1 guest (37 pass, 1 NOT_SUPPORTED, 2 FAIL, 5 not run), G2 guest `life_reset`, G3 guest busy power-off, G4 guest kill probes, H2 and G5 host and guest reruns of the cases whose probes had been corrected or whose output was missing, H3 and G6 the Vulkan dump with format-independent tokens.
+
+The per-case table (the latest run of each case on each side; `NOT_RUN` on the host means a guest-only case):
+
+| case | group | host | guest | note |
+|---|---|---|---|---|
+| attr_dump | cuda_attr | PASS | PASS | memory total and PCI device id differ (listed) |
+| canary | cuda_attr | PASS | PASS |  |
+| pinned_1g | cuda_pinned | PASS | PASS |  |
+| pinned_4g | cuda_pinned | PASS | PASS |  |
+| host_register_512m | cuda_pinned | PASS | PASS |  |
+| mapped_zerocopy | cuda_pinned | PASS | PASS |  |
+| pinned_huge_refused | cuda_pinned | PASS | PASS |  |
+| managed_prefetch_advise | cuda_managed | PASS | FAIL | UVM demand paging, documented limitation (CU-13) |
+| managed_concurrent | cuda_managed | PASS | PASS |  |
+| managed_oversub | cuda_managed | PASS | FAIL | UVM demand paging, documented limitation (CU-13) |
+| ipc_legacy | cuda_ipc | PASS | PASS |  |
+| ipc_event | cuda_ipc | PASS | PASS |  |
+| ipc_vmm_fd | cuda_ipc | PASS | PASS |  |
+| vmm_granularity | cuda_vmm | PASS | PASS |  |
+| vmm_basic | cuda_vmm | PASS | PASS |  |
+| vmm_remap | cuda_vmm | PASS | PASS |  |
+| graph_capture_launch | cuda_graph | PASS | PASS | replay 174k/s host, 20.7k/s guest (performance) |
+| graph_update | cuda_graph | PASS | PASS |  |
+| graph_mem_nodes | cuda_graph | PASS | PASS |  |
+| pool_alloc_free | cuda_pool | PASS | PASS |  |
+| pool_threshold_trim | cuda_pool | PASS | PASS |  |
+| pool_ipc_export | cuda_pool | PASS | PASS |  |
+| churn_ctx_200 | cuda_churn | PASS | PASS |  |
+| churn_module_200 | cuda_churn | PASS | PASS |  |
+| churn_streams_events | cuda_churn | PASS | PASS |  |
+| fanout_procs_24 | cuda_churn | PASS | PASS |  |
+| spin_5s | cuda_kernel_time | PASS | PASS |  |
+| spin_30s | cuda_kernel_time | PASS | PASS |  |
+| launch_flood_100k | cuda_kernel_time | PASS | PASS | under 1 s host, about 4 s guest (performance) |
+| fault_recovery | cuda_kernel_time | PASS | PASS | first host version failed (harness defect, fixed) |
+| trap_recovery | cuda_kernel_time | PASS | PASS | first host version failed (harness defect, fixed) |
+| cupti_callback | profiling | PASS | PASS |  |
+| cupti_activity | profiling | PASS | PASS |  |
+| tools_sanitizer | profiling | PASS | NOT_SUPPORTED | first CUDA call under the tool returns 999 in the guest (INFERRED: debugger stub, ruling H) |
+| tools_ncu | profiling | PASS | NOT_RUN | guest: tool not pushed (1.2 GB) |
+| tools_nsys | profiling | PASS | NOT_RUN | guest: tool not pushed (1 GB) |
+| tools_nsys_gpumetrics | profiling | PASS | NOT_RUN | guest: tool not pushed |
+| vk_global_priority | vulkan_caps | NOT_RUN | NOT_RUN | see section 3.5 (global priority) |
+| vk_dump | vulkan_caps | PASS | PASS | two vulkaninfo versions: 250 of 250 extensions equal, 172 shared names equal except 4 format-related (token counts 679 against 1266) |
+| smi_setters | smi_control | PASS | PASS | guest answers NOT_SUPPORTED for compute-mode and accounting setters, power and clock fields N/A (listed limitation); no host-visible change (207 samples) |
+| life_persistenced | lifecycle | PASS | PASS | first host version failed (harness defect, fixed) |
+| life_kill_kernel | lifecycle | PASS | PASS |  |
+| life_kill_gl | lifecycle | PASS | PASS |  |
+| life_module_cycle | lifecycle | NOT_RUN | PASS | guest only, 3 cycles |
+| life_reset | lifecycle | NOT_RUN | PASS | guest only: nvidia-smi -r answers NOT_SUPPORTED rc 3, device usable after |
+| life_busy_poweroff | lifecycle | NOT_RUN | NOT_RUN | guest only, terminal: guest dead by design; host retired all channel tokens, next boot passed |
+
+**Differences and their buckets** (the host run is the control for each):
+
+| case | host / guest | bucket | basis |
+|---|---|---|---|
+| managed_prefetch_advise, managed_oversub | PASS / FAIL (cuCtxSynchronize), host Xid 31 and 13 on the qemu pid in the guest window | 1, documented | UVM demand paging is a documented limitation (README, ruling E); CU-13 |
+| attr_dump | PASS / PASS, memory total 24124 against 7871 MiB and PCI device id differ; every other CUDA attribute equal | 1, documented (listed in `gap_known_limits.tsv`) | the guest reports the frame buffer reserved for it and its own virtual PCI topology |
+| smi_setters | PASS / PASS, setters differ: compute mode and accounting OK on the host, NOT_SUPPORTED in the guest; power and clock fields N/A in the guest | 1, documented (listed) | ruling H: a stub answers as a GPU without the feature; telemetry N/A, `V3_UTILIZATION_FLAG.md` section 10. No change was visible on the host: 207 samples at 0.5 s of compute mode, persistence mode, power limit and application clocks |
+| tools_sanitizer | PASS / NOT_SUPPORTED: under the tool the first CUDA call of the target returns 999 in the guest (the tool says the target application returned an error) | 1, INFERRED (listed as such) | ruling H stubs the debugger; the mechanism is not shown |
+| tools_ncu, tools_nsys, tools_nsys_gpumetrics | PASS / NOT_RUN | 4, our configuration | the tools (1.2 GB and 1 GB) were not pushed into the guest; the host runs pass. The compute-sanitizer tools (38 MB) and libcupti were pushed |
+| vk_dump | PASS / PASS, token digests differ | 4, our configuration | the host's vulkaninfo is an older version than the guest's and dumps fewer properties; 250 of 250 extensions are equal and 172 shared names are equal but for 4 format-related ones. A pinned single tool is the next step |
+| graph_capture_launch, launch_flood_100k | PASS / PASS, a captured graph replays at 174k/s on the host and 20.7k/s in the guest; 100000 launches take under 1 s and about 4 s | none (performance) | kept as `perf.*` evidence, never a difference |
+| fault_recovery, trap_recovery, life_persistenced (first host version) | FAIL on the host control | 3, harness defect | the host control failed the same case: a sticky fault poisons its own process (recovery is now judged across processes) and the daemon forks (now found by its kernel name). Caught by the host control before any guest claim |
+| smi_setters watcher (first version) | HOST_STATE_LEAK=1 | 3, harness defect | the watcher read a live clock; with the four control fields only, 207 samples show one distinct state |
+| life_reset | guest only: NOT_SUPPORTED rc 3, device usable after | N-A-BY-DESIGN (TL-12) | a guest-triggered GPU reset is a privileged host action |
+| life_busy_poweroff | guest only: guest dead by design | none | kf3 retired all 6 channel tokens (released=true, stale binds 0, unresolved 0), no process left, host idle, no new Xid, the next guest boot on the same die passed |
+
+**kf3 census per guest run** (from the harness's per-row line, `traces/gap_probes_run_20261118/gap/census_rows.tsv`): guest Xid 0 in every run; kf3 refusals 29 to 82 per run (the counter counts every kf3 line containing `refus`, floor about 15 to 50); `unserviced_in_row`: G1 2975, G2 61, G3 33, G4 353, G5 520, all of one id (`code:76`, the unserviced GSP RM control already known from the open-rows run). Host Xid during the gap probes: Xid 43 (host control faults, expected), and Xid 31 and 13 with the qemu pid while the guest ran the two managed cases.
+
+### 3.5 Vulkan CTS groups, host versus guest (PENDING)
+
+### 3.6 Probes not authored (DESIGN-ONLY rows in the matrix)
 
 MPS (two clients on a private pipe directory), cooperative launch and cluster launch, an NVRTC case, CUDA-GL and CUDA-Vulkan interop, OpenGL extension and context-sharing parity through EGL, work graphs and the other Windows rows, the lifecycle cases that need a display (VT switch, lock and unlock, display mode change), the host census check after a busy power-off, Isaac Sim and RTX Remix. Each is a row with its next step; none is claimed.
 

@@ -304,6 +304,36 @@ class VulkanTokens(unittest.TestCase):
         self.assertIn("VKDIFF_SUMMARY only_host=1 only_guest=1", p.stdout)
 
 
+class VkPrio(unittest.TestCase):
+    OUT = ("VKPRIO device=NVIDIA GeForce RTX 3090 queue_family=0 flags=0xf count=16 reported=LOW,MEDIUM,HIGH\n"
+           "VKPRIO device=NVIDIA GeForce RTX 3090 queue_family=1 flags=0xc count=2 reported=LOW,MEDIUM,HIGH,REALTIME\n"
+           "VKPRIO create family=0 priority=LOW result=0\nVKPRIO create family=0 priority=HIGH result=0\nVKPRIO create family=0 priority=REALTIME result=-3\n"
+           "VKPRIO device=llvmpipe queue_family=0 flags=0xf count=1 reported=LOW\nVKPRIO create family=0 priority=LOW result=-1\n")
+
+    def test_the_reported_priorities_and_each_create_result_are_recorded_per_family(self):
+        kv = L.parse_vkprio(self.OUT)
+        self.assertEqual(kv["fam0.reported"], "LOW,MEDIUM,HIGH")
+        self.assertEqual(kv["fam1.reported"], "LOW,MEDIUM,HIGH,REALTIME")
+        self.assertEqual((kv["create.0.LOW"], kv["create.0.HIGH"], kv["create.0.REALTIME"]), ("0", "0", "-3"))
+
+    def test_only_the_first_device_counts_a_software_device_must_not_mix_in(self):
+        kv = L.parse_vkprio(self.OUT)
+        self.assertEqual(kv["info.device"], "NVIDIA GeForce RTX 3090")
+        self.assertEqual(kv["create.0.LOW"], "0")   # not the llvmpipe -1
+
+    def test_the_probe_is_a_case_and_its_c_source_compiles(self):
+        self.assertIn("vk_global_priority", [c["id"] for c in L.load_cases(TABLE)])
+        with tempfile.TemporaryDirectory() as d:
+            p = subprocess.run(["gcc", "-O2", "-Wall", "-Werror", "-o", str(Path(d) / "x"), str(GP / "gap_vkprio.c"), "-ldl"], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+
+    def test_the_process_identity_carries_the_capability_sets(self):
+        import gap_scripts
+        ident = gap_scripts.process_identity()
+        self.assertRegex(ident["info.cap_eff"], r"^[0-9a-f]{16}$")
+        self.assertTrue(ident["info.uid"].isdigit())
+
+
 class Vulkan(unittest.TestCase):
     DOC = {"capabilities": {"device": {"properties": {"VkPhysicalDeviceProperties": {"deviceName": "X", "deviceUUID": [1, 2], "limits": {"maxImageDimension2D": 32768}},
                                                       "VkPhysicalDeviceIDProperties": {"deviceLUID": [1]}},

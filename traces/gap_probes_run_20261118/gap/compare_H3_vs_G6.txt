@@ -1,0 +1,44 @@
+#case	area	host	guest	category	bucket	guest_xid	host_xid	kvdiff	why
+vk_dump	vulkan_caps	pass	pass	VALUE_DIFF	kayfabe_gap_candidate	-	-	tokens:679:459d3f30->1266:67425112	unclassified
+VKDIFF only_host alphaToOne=1
+VKDIFF only_host bufferFeatures=0
+VKDIFF only_host bufferFeatures=112
+VKDIFF only_host bufferFeatures=120
+VKDIFF only_host bufferFeatures=536870976
+VKDIFF only_host bufferFeatures=536870984
+VKDIFF only_host bufferFeatures=536871000
+VKDIFF only_host bufferFeatures=536871032
+VKDIFF only_host bufferFeatures=64
+VKDIFF only_host bufferFeatures=72
+VKDIFF only_host bufferFeatures=8
+VKDIFF only_host bufferFeatures=88
+VKDIFF only_host depthBiasClamp=1
+VKDIFF only_host depthBounds=1
+VKDIFF only_host depthClamp=1
+VKDIFF only_host desc=JSON configuration file describing GPU 0 (NVIDIA GeForce RTX 3090). Generated using the vulkaninfo program.
+VKDIFF only_host description=NVIDIA GR2608 layer
+VKDIFF only_host description=NVIDIA Optimus layer
+VKDIFF only_host deviceType=2
+VKDIFF only_host drawIndirectFirstInstance=1
+VKDIFF only_guest accelerationStructure=True
+VKDIFF only_guest accelerationStructureCaptureReplay=True
+VKDIFF only_guest accelerationStructureCaptureReplayDescriptorDataSize=1
+VKDIFF only_guest accelerationStructureDescriptorSize=8
+VKDIFF only_guest accelerationStructureHostCommands=False
+VKDIFF only_guest accelerationStructureIndirectBuild=False
+VKDIFF only_guest advancedBlendAllOperations=True
+VKDIFF only_guest advancedBlendCoherentOperations=True
+VKDIFF only_guest advancedBlendCorrelatedOverlap=True
+VKDIFF only_guest advancedBlendIndependentBlend=False
+VKDIFF only_guest advancedBlendMaxColorAttachments=8
+VKDIFF only_guest advancedBlendNonPremultipliedDstColor=True
+VKDIFF only_guest advancedBlendNonPremultipliedSrcColor=True
+VKDIFF only_guest allowSamplerImageViewPostSubmitCreation=False
+VKDIFF only_guest alphaToOne=True
+VKDIFF only_guest attachmentFeedbackLoopDynamicState=True
+VKDIFF only_guest attachmentFeedbackLoopLayout=True
+VKDIFF only_guest attachmentFragmentShadingRate=True
+VKDIFF only_guest author=Automated export from vulkaninfo
+VKDIFF only_guest borderColorSwizzle=True
+VKDIFF_SUMMARY only_host=318 only_guest=905
+GAP_COMPARE cases=1 differing=1 candidates=1 limitation=0 harness=0 config=0 value_diff=1

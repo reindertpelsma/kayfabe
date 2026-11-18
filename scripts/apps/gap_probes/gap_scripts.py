@@ -74,6 +74,32 @@ def _crc(s):
     return zlib.crc32(s.encode()) & 0xFFFFFFFF
 
 
+def process_identity():
+    """Who the process is, as the driver sees it: uid and the capability sets (realtime queue priority needs CAP_SYS_NICE or the equivalent check in the driver)."""
+    try:
+        st = dict(l.split(":\t", 1) for l in Path("/proc/self/status").read_text().splitlines() if ":\t" in l)
+        return {"info.uid": st.get("Uid", "?").split()[0], "info.cap_eff": st.get("CapEff", "?"), "info.cap_bnd": st.get("CapBnd", "?")}
+    except OSError:
+        return {}
+
+
+def vk_global_priority(ctx):
+    """Which global queue priorities are reported, and which vkCreateDevice accepts (the CTS global-priority cases failed in the guest and passed on the host)."""
+    if shutil.which("gcc") is None:
+        return result("NOT_RUN", "no_gcc")
+    exe = str(ctx["out"] / "gap_vkprio")
+    rc, out, to = run(["gcc", "-O2", "-o", exe, str(Path(__file__).resolve().parent / "gap_vkprio.c"), "-ldl"], 60)
+    if rc != 0:
+        return result("NOT_RUN", "gap_vkprio_did_not_build")
+    rc, out, to = run([exe], 120)
+    kv = L.parse_vkprio(out)
+    (ctx["out"] / "vkprio.txt").write_text(out)
+    kv.update(process_identity())
+    if to or not any(k.startswith("fam") for k in kv):
+        return result("FAIL" if to else "NOT_RUN", "timeout" if to else "no_queue_family_reported", **kv)
+    return result("PASS", "-", **kv)
+
+
 # ------------------------------------------------------------------------------------------------------------------ nvidia-smi setters
 SMI_FIELDS = "compute_mode,persistence_mode,power.limit,clocks.applications.graphics,clocks.current.graphics"
 STATE_FIELDS = "compute_mode,persistence_mode,power.limit,clocks.applications.graphics"   # control state only: a live clock changes with load and is not state the guest may change
@@ -403,5 +429,5 @@ def tools_nsys_gpumetrics(ctx):
         shutil.rmtree(d, True)
 
 
-CASES = {"tools_sanitizer": tools_sanitizer, "tools_ncu": tools_ncu, "tools_nsys": tools_nsys, "tools_nsys_gpumetrics": tools_nsys_gpumetrics, "vk_dump": vk_dump, "smi_setters": smi_setters, "life_persistenced": life_persistenced, "life_kill_kernel": life_kill_kernel, "life_kill_gl": life_kill_gl,
+CASES = {"vk_global_priority": vk_global_priority, "tools_sanitizer": tools_sanitizer, "tools_ncu": tools_ncu, "tools_nsys": tools_nsys, "tools_nsys_gpumetrics": tools_nsys_gpumetrics, "vk_dump": vk_dump, "smi_setters": smi_setters, "life_persistenced": life_persistenced, "life_kill_kernel": life_kill_kernel, "life_kill_gl": life_kill_gl,
          "life_module_cycle": life_module_cycle, "life_reset": life_reset, "life_busy_poweroff": life_busy_poweroff}

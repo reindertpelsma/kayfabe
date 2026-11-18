@@ -1,0 +1,19 @@
+# CTS chunk 1, guest without PR 480 -> with PR 480 (same list, same host run). 17 cases change class.
+#case	without	with
+dEQP-VK.mesh_shader.ext.smoke.optimized_lib.depth_only_points_position_components	timeout	pass
+dEQP-VK.mesh_shader.ext.smoke.optimized_lib.partial_usage_without_compaction	timeout	pass
+dEQP-VK.mesh_shader.ext.smoke.shader_objects.depth_only_triangles	timeout	pass
+dEQP-VK.synchronization2.none_stage.depth_stencil_attachment_to_depth_attachment_stencil_read	fail	pass
+dEQP-VK.synchronization2.none_stage.depth_stencil_attachment_to_generic_depth_stencil_read	fail	pass
+dEQP-VK.synchronization2.none_stage.generic_depth_stencil_attachment_to_depth_attachment_stencil_read	fail	pass
+dEQP-VK.synchronization2.none_stage.generic_stencil_attachment_to_transfer_src	fail	pass
+dEQP-VK.synchronization2.none_stage.legacy_depth_stencil_attachment_to_depth_attachment_stencil_read	fail	pass
+dEQP-VK.synchronization2.none_stage.legacy_general_to_stencil_read	fail	pass
+dEQP-VK.synchronization2.none_stage.legacy_generic_depth_stencil_attachment_to_generic_color_read	fail	pass
+dEQP-VK.synchronization2.none_stage.legacy_stencil_attachment_to_shader_read	fail	pass
+dEQP-VK.synchronization2.none_stage.legacy_stencil_attachment_to_stencil_read	fail	pass
+dEQP-VK.synchronization2.none_stage.old_access_general_to_depth_attachment_stencil_read	timeout	pass
+dEQP-VK.synchronization2.none_stage.old_access_generic_depth_stencil_attachment_to_generic_color_read	fail	pass
+dEQP-VK.synchronization2.none_stage.old_access_generic_depth_stencil_attachment_to_transfer_src	fail	pass
+dEQP-VK.synchronization2.none_stage.old_access_stencil_attachment_to_generic_color_read	fail	pass
+dEQP-VK.synchronization2.none_stage.old_access_transfer_dst_to_depth_attachment_stencil_read	timeout	pass

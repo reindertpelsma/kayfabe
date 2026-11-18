@@ -39,6 +39,7 @@ tools_sanitizer|profiling|py|tools_sanitizer|600|yes|-|-|compute-sanitizer memch
 tools_ncu|profiling|py|tools_ncu|300|yes|-|-|Nsight Compute kernel replay with performance counters hangs or fails with an unlisted error in the guest (ERR_NVGPUCTRPERM or a clean not-supported answer is a pass)
 tools_nsys|profiling|py|tools_nsys|300|yes|-|-|Nsight Systems cannot trace the CUDA calls and kernels of a process in the guest where the host run can
 tools_nsys_gpumetrics|profiling|py|tools_nsys_gpumetrics|300|yes|-|-|Nsight Systems GPU metrics sampling hangs or fails with an unlisted error in the guest (a clean not-supported answer is a pass)
+vk_global_priority|vulkan_caps|py|vk_global_priority|120|no|-|-|a global queue priority (low, medium, high, realtime) that the host reports or accepts in vkCreateDevice is not reported or is refused in the guest
 vk_dump|vulkan_caps|py|vk_dump|180|no|-|-|any Vulkan feature, limit, queue family, format or extension value differs from the host outside the known limits
 smi_setters|smi_control|py|smi_setters|300|no|-|-|a setter answers differently from the host, hangs, or changes a value the host can see (guest root changing host GPU state)
 life_persistenced|lifecycle|py|life_persistenced|180|no|-|-|nvidia-persistenced does not start, hold and stop cleanly in the guest, or CUDA fails while it runs
