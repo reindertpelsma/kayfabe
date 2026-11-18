@@ -36,6 +36,11 @@ use kf_host::{HostRm, MapBacking, MapPerm, VaSpace};
 use kf_linux_raw::DevDir;
 
 const PAGE: u64 = 0x1_0000;
+/// `NVOS32_ALLOC_FLAGS_ALIGNMENT_FORCE` (`nvos.h:1452`).
+const ALIGNMENT_FORCE: u32 = 0x100;
+/// `NVOS32_ATTR_PAGE_SIZE` (`nvos.h:1061-1065`, bits 24:23): `_4KB` = 1, `_BIG` = 2.
+const ATTR_PAGE_SIZE_4KB: u32 = 1 << 23;
+const ATTR_PAGE_SIZE_BIG: u32 = 2 << 23;
 const SPAN: u64 = 64 << 30;
 const SLOTS: u64 = SPAN / PAGE;
 const STRIDE: u64 = 1009; // odd, so `i * STRIDE mod SLOTS` is a permutation of the slots
@@ -77,7 +82,10 @@ fn main() {
         m0_map = m0(&rm, mem, lo);
     }
     if want("m1") {
-        m1(&rm, mem, lo, m0_map);
+        // M1d: every block with the default attr (prediction: the first carve is refused or
+        // misplaced, because a remnant of 2 MiB or more is rounded to 2 MiB).
+        m1(&rm, mem, lo, m0_map, "M1d", false);
+        m1(&rm, mem, lo, m0_map, "M1", true);
     }
     if want("m2") {
         m2(&rm, mem, lo);
@@ -87,6 +95,9 @@ fn main() {
     }
     if want("m4") {
         m4(&rm, mem, lo);
+    }
+    if want("m5") {
+        m5(&rm, lo);
     }
     let _ = rm.free(mem);
     println!("TILING done");
@@ -215,6 +226,9 @@ struct Blk {
 struct Tiling<'a> {
     rm: &'a HostRm,
     space: u32,
+    /// Fences take `_ATTR_PAGE_SIZE_BIG` + `_ALIGNMENT_FORCE` (64 KiB granular) instead of the
+    /// default attr (2 MiB rounding for a block of 2 MiB or more, `gpu_vaspace.c:1835-1930`).
+    big_fences: bool,
     blocks: BTreeMap<u64, Blk>,
     calls: u64,
     peak: usize,
@@ -222,7 +236,7 @@ struct Tiling<'a> {
 }
 
 impl<'a> Tiling<'a> {
-    fn new(rm: &'a HostRm, space: u32, lo: u64, hi: u64) -> Result<Self, String> {
+    fn new(rm: &'a HostRm, space: u32, lo: u64, hi: u64, big_fences: bool) -> Result<Self, String> {
         let h = rm
             .reserve_va(space, lo, hi - lo)
             .map_err(|e| format!("fence_resv({e:?})"))?;
@@ -238,6 +252,7 @@ impl<'a> Tiling<'a> {
         Ok(Self {
             rm,
             space,
+            big_fences,
             blocks,
             calls: 1,
             peak: 1,
@@ -246,15 +261,24 @@ impl<'a> Tiling<'a> {
     }
 
     fn reserve(&mut self, lo: u64, hi: u64, kind: Kind) -> Result<(), String> {
-        let flags = if kind == Kind::Sparse {
-            NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE
-        } else {
-            NVOS32_RESERVE_FLAGS
+        let (flags, attr, align) = match kind {
+            Kind::Fence if self.big_fences => (
+                NVOS32_RESERVE_FLAGS | ALIGNMENT_FORCE,
+                ATTR_PAGE_SIZE_BIG,
+                PAGE,
+            ),
+            Kind::Sparse if hi - lo < PAGE => (
+                NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE | ALIGNMENT_FORCE,
+                ATTR_PAGE_SIZE_4KB,
+                0x1000,
+            ),
+            Kind::Sparse => (NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE, 0, 0),
+            _ => (NVOS32_RESERVE_FLAGS, 0, 0),
         };
         self.calls += 1;
         let h = self
             .rm
-            .reserve_va_probe_flags(self.space, lo, hi - lo, flags)
+            .reserve_va_probe_flags(self.space, lo, hi - lo, flags, attr, align)
             .map_err(|e| format!("resv_{kind:?}[{lo:#x},{hi:#x})({e:?})"))?;
         self.blocks.insert(lo, Blk { hi, kind, h });
         self.peak = self.peak.max(self.blocks.len());
@@ -393,12 +417,12 @@ fn tiled_run(t: &mut Tiling<'_>, mem: u32, lo: u64, stop_on: &AtomicBool) -> Str
     )
 }
 
-fn m1(rm: &HostRm, mem: u32, lo: u64, m0_map: Option<f64>) {
-    let Some(s) = space(rm, "M1") else { return };
-    let mut t = match Tiling::new(rm, s.space, lo, lo + SPAN) {
+fn m1(rm: &HostRm, mem: u32, lo: u64, m0_map: Option<f64>, arm: &str, big: bool) {
+    let Some(s) = space(rm, arm) else { return };
+    let mut t = match Tiling::new(rm, s.space, lo, lo + SPAN, big) {
         Ok(t) => t,
         Err(e) => {
-            println!("TILING arm=M1 {e}");
+            println!("TILING arm={arm} {e}");
             rm.free_vaspace(s);
             return;
         }
@@ -411,7 +435,7 @@ fn m1(rm: &HostRm, mem: u32, lo: u64, m0_map: Option<f64>) {
         let m1 = mean_before.elapsed().as_secs_f64() * 1e6 / (2 * N) as f64;
         format!(" mean_us_per_op_incl_unmap={m1:.1} m0_map_mean_us={m0:.1}")
     });
-    println!("TILING arm=M1 {body}{ratio}");
+    println!("TILING arm={arm} big_fences={big} {body}{ratio}");
     t.free_all();
     rm.free_vaspace(s);
 }
@@ -503,7 +527,7 @@ fn m3(rm: &HostRm, mem: u32, lo: u64) {
             return;
         }
     };
-    let mut t = match Tiling::new(rm, s.space, lo, lo + SPAN) {
+    let mut t = match Tiling::new(rm, s.space, lo, lo + SPAN, true) {
         Ok(t) => t,
         Err(e) => {
             println!("TILING arm=M3 {e}");
@@ -558,7 +582,7 @@ fn m3(rm: &HostRm, mem: u32, lo: u64) {
 
 fn m4(rm: &HostRm, mem: u32, lo: u64) {
     let Some(s) = space(rm, "M4") else { return };
-    let mut t = match Tiling::new(rm, s.space, lo, lo + SPAN) {
+    let mut t = match Tiling::new(rm, s.space, lo, lo + SPAN, true) {
         Ok(t) => t,
         Err(e) => {
             println!("TILING arm=M4 {e}");
@@ -618,5 +642,88 @@ fn m4(rm: &HostRm, mem: u32, lo: u64) {
     let _ = rm.invalidate_tlb(s);
     println!("{out} steps[{}] blocks={}", st.show(), t.blocks.len());
     t.free_all();
+    rm.free_vaspace(s);
+}
+
+/// M5: the alignment facts C2's placement depends on. Each case reserves a block whose start is 64 KiB
+/// aligned but not 2 MiB aligned, then probes the 64 KiB just below its start and just above its end:
+/// `below=ERR` / `above=ERR` means RM rounded the block outward (it covers VA it was not asked for).
+fn m5(rm: &HostRm, lo: u64) {
+    let Some(s) = space(rm, "M5") else { return };
+    let mut out = String::from("TILING arm=M5");
+    let at = lo + (1 << 30) + 3 * PAGE;
+    let cases: [(&str, u64, u32, u32, u64); 5] = [
+        ("default_4m", 4 << 20, NVOS32_RESERVE_FLAGS, 0, 0),
+        ("default_192k", 3 * PAGE, NVOS32_RESERVE_FLAGS, 0, 0),
+        (
+            "big_force_4m",
+            4 << 20,
+            NVOS32_RESERVE_FLAGS | ALIGNMENT_FORCE,
+            ATTR_PAGE_SIZE_BIG,
+            PAGE,
+        ),
+        (
+            "sparse_big_force_4m",
+            4 << 20,
+            NVOS32_RESERVE_FLAGS | ALIGNMENT_FORCE | NVOS32_ALLOC_FLAGS_SPARSE,
+            ATTR_PAGE_SIZE_BIG,
+            PAGE,
+        ),
+        (
+            "default_4m_plus_64k_len",
+            (4 << 20) + PAGE,
+            NVOS32_RESERVE_FLAGS,
+            0,
+            0,
+        ),
+    ];
+    for (i, (name, len, flags, attr, align)) in cases.into_iter().enumerate() {
+        let base = at + (i as u64) * (64 << 20);
+        let probe = |va: u64| match rm.reserve_va(s.space, va, PAGE) {
+            Ok(h) => {
+                let _ = rm.free(h);
+                "OK".to_string()
+            }
+            Err(e) => format!("ERR({e:?})"),
+        };
+        match rm.reserve_va_probe_flags(s.space, base, len, flags, attr, align) {
+            Ok(h) => {
+                let below = probe(base - PAGE);
+                let above = probe(base + len);
+                out.push_str(&format!(" {name}=OK(below={below},above={above})"));
+                let _ = rm.free(h);
+            }
+            Err(e) => out.push_str(&format!(" {name}=ERR({e:?})")),
+        }
+    }
+    // A 4 KiB-paged map inside a default 64 KiB row block, and inside a BIG-attr block.
+    if let Ok(mem4) = rm.alloc_device_local(0x1000) {
+        for (name, attr, flags, align) in [
+            ("map4k_in_default_row", 0, NVOS32_RESERVE_FLAGS, 0),
+            (
+                "map4k_in_big_block",
+                ATTR_PAGE_SIZE_BIG,
+                NVOS32_RESERVE_FLAGS | ALIGNMENT_FORCE,
+                PAGE,
+            ),
+        ] {
+            let va = at + (512 << 20);
+            match rm.reserve_va_probe_flags(s.space, va, PAGE, flags, attr, align) {
+                Ok(h) => {
+                    match rm.map_in_ro_4k(h, mem4, 0x1000, va) {
+                        Ok(_) => {
+                            out.push_str(&format!(" {name}=OK"));
+                            let _ = rm.unmap_in(h, va, 0, false);
+                        }
+                        Err(e) => out.push_str(&format!(" {name}=ERR({e:?})")),
+                    }
+                    let _ = rm.free(h);
+                }
+                Err(e) => out.push_str(&format!(" {name}=resv_ERR({e:?})")),
+            }
+        }
+        let _ = rm.free(mem4);
+    }
+    println!("{out}");
     rm.free_vaspace(s);
 }
