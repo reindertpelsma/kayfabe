@@ -44,7 +44,14 @@ const ATTR_PAGE_SIZE_BIG: u32 = 2 << 23;
 const SPAN: u64 = 64 << 30;
 const SLOTS: u64 = SPAN / PAGE;
 const STRIDE: u64 = 1009; // odd, so `i * STRIDE mod SLOTS` is a permutation of the slots
-const N: u64 = 1000;
+/// Rows per M0/M1/M3 run: 1000, or the second argument (`kf-va-tiling-probe m1 4000`).
+fn n() -> u64 {
+    std::env::args()
+        .nth(2)
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1000)
+        .min(SLOTS)
+}
 const M2_STEPS: [u64; 6] = [100, 1000, 4000, 16_000, 32_000, 64_000];
 const M2_REPS: usize = 21;
 
@@ -65,8 +72,9 @@ fn main() {
     };
     let lo = GUEST_VA_RANGES[0].0;
     println!(
-        "TILING driver={} base={lo:#x} span={SPAN:#x} n={N} page={PAGE:#x}",
-        rm.driver_version()
+        "TILING driver={} base={lo:#x} span={SPAN:#x} n={} page={PAGE:#x}",
+        rm.driver_version(),
+        n()
     );
     let mem = match rm.alloc_device_local(PAGE) {
         Ok(m) => m,
@@ -176,7 +184,7 @@ fn m0(rm: &HostRm, mem: u32, lo: u64) -> Option<f64> {
     };
     let (mut mp, mut um) = (Stat::default(), Stat::default());
     let mut err = String::new();
-    for i in 0..N {
+    for i in 0..n() {
         let t = Instant::now();
         if let Err(e) = map_at(rm, h, mem, slot_va(lo, i)) {
             err = format!(" map_err_at={i}({e:?})");
@@ -358,7 +366,7 @@ fn tiled_run(t: &mut Tiling<'_>, mem: u32, lo: u64, stop_on: &AtomicBool) -> Str
     let mut err = String::new();
     let mut mapped = 0;
     let c0 = t.calls;
-    for i in 0..N {
+    for i in 0..n() {
         if stop_on.load(Ordering::Relaxed) {
             break;
         }
@@ -432,7 +440,7 @@ fn m1(rm: &HostRm, mem: u32, lo: u64, m0_map: Option<f64>, arm: &str, big: bool)
     let body = tiled_run(&mut t, mem, lo, &never);
     let _ = rm.invalidate_tlb(s);
     let ratio = m0_map.map_or(String::new(), |m0| {
-        let m1 = mean_before.elapsed().as_secs_f64() * 1e6 / (2 * N) as f64;
+        let m1 = mean_before.elapsed().as_secs_f64() * 1e6 / (2 * n()) as f64;
         format!(" mean_us_per_op_incl_unmap={m1:.1} m0_map_mean_us={m0:.1}")
     });
     println!("TILING arm={arm} big_fences={big} {body}{ratio}");
