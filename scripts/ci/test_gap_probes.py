@@ -23,6 +23,7 @@ sys.path.insert(0, str(GP))
 sys.path.insert(0, str(ROOT / "scripts/apps/open_rows"))
 import diffrun as D  # noqa: E402
 import gap_lib as L  # noqa: E402
+import cts_groups as CG  # noqa: E402
 import gap_probes as GPR  # noqa: E402
 import rowio  # noqa: E402
 
@@ -854,6 +855,70 @@ class MatrixDoc(unittest.TestCase):
         text = DOC.read_text()
         for bad in ("/root/", "/workspace/", "@gmail", "licence key", "instance id"):
             self.assertNotIn(bad, text)
+
+
+class CtsGroups(unittest.TestCase):
+    def mustpass(self):
+        d = Path(tempfile.mkdtemp(prefix="gapmp"))
+        self.addCleanup(shutil.rmtree, d, True)
+        (d / "vk-default/pipeline/monolithic").mkdir(parents=True)
+        names = ["dEQP-VK.sparse_resources.%s.case_%d" % (sub, i) for sub in ("buffer.a", "buffer.b", "image.c", "image.d") for i in range(30)]
+        (d / "vk-default/sparse-resources.txt").write_text("\n".join(names) + "\n")
+        (d / "vk-default/pipeline/monolithic/depth.txt").write_text("dEQP-VK.pipeline.monolithic.depth.x1\ndEQP-VK.pipeline.monolithic.depth.x2\n")
+        (d / "vk-default/api.txt").write_text("")
+        (d / "vk-default/pipelines").mkdir()
+        (d / "vk-default/pipelines/other.txt").write_text("dEQP-VK.pipelines.other.y1\n")
+        (d / "vk-default.txt").write_text("vk-default/sparse-resources.txt vk-default/pipeline/monolithic/depth.txt vk-default/pipelines/other.txt vk-default/api.txt\n")
+        return d
+
+    def test_the_same_seed_gives_the_same_list_and_another_seed_another_one(self):
+        d = self.mustpass()
+        a = CG.build(d, ["sparse_resources"], 12, "1")[0]
+        self.assertEqual(a, CG.build(d, ["sparse_resources"], 12, "1")[0])
+        self.assertNotEqual(a, CG.build(d, ["sparse_resources"], 12, "2")[0])
+
+    def test_the_sample_is_breadth_first_one_case_per_split_in_turn(self):
+        d = self.mustpass()
+        lines = CG.build(d, ["sparse_resources"], 8, "7")[0]
+        splits = {CG.split_key(l.split("\t")[1]) for l in lines[2:]}
+        self.assertEqual(len(lines) - 2, 8)
+        self.assertEqual(len(splits), 4)   # 8 cases over 4 splits of 30 each: every split is reached before any is used twice
+
+    def test_the_info_cases_come_first_and_a_group_is_capped_and_labelled(self):
+        d = self.mustpass()
+        lines, notes = CG.build(d, ["sparse_resources", "pipeline"], 5, "7")
+        self.assertEqual([l.split("\t")[1] for l in lines[:2]], list(CG.INFO))
+        self.assertEqual(sum(1 for l in lines if l.startswith("sparse_resources\t")), 5)
+        self.assertEqual(sum(1 for l in lines if l.startswith("pipeline\t")), 2)   # a group smaller than the budget is taken whole
+        self.assertIn("group sparse_resources: 5 of 120 cases sampled", notes)
+
+    def test_a_missing_or_unknown_group_is_reported_not_invented(self):
+        d = self.mustpass()
+        lines, notes = CG.build(d, ["api", "no_such_group"], 5, "7")
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(any("api has no case" in n for n in notes))
+        self.assertTrue(any("unknown group no_such_group" in n for n in notes))
+
+    def test_a_sample_as_small_as_the_number_of_splits_touches_each_split_once(self):
+        d = self.mustpass()
+        lines = CG.build(d, ["sparse_resources"], 4, "3")[0]
+        self.assertEqual(sorted(CG.split_key(l.split("\t")[1]) for l in lines[2:]), sorted(["dEQP-VK.sparse_resources.buffer.a", "dEQP-VK.sparse_resources.buffer.b",
+                                                                                           "dEQP-VK.sparse_resources.image.c", "dEQP-VK.sparse_resources.image.d"]))
+
+    def test_the_pick_inside_one_split_depends_on_the_seed(self):
+        d = self.mustpass()
+        picks = {tuple(l for l in CG.build(d, ["sparse_resources"], 4, str(seed))[0] if ".buffer.a." in l) for seed in range(6)}
+        self.assertGreater(len(picks), 1)
+
+    def test_a_directory_whose_name_only_starts_like_the_group_is_not_part_of_it(self):
+        d = self.mustpass()
+        lines, notes = CG.build(d, ["pipeline"], 10, "7")
+        self.assertEqual([l for l in lines if "pipelines" in l], [])
+        self.assertIn("group pipeline: 2 of 2 cases sampled", notes)
+
+    def test_a_group_picks_up_its_files_under_a_directory(self):
+        self.assertEqual(CG.group_files("vk-default/pipeline/monolithic/depth.txt vk-default/pipelines.txt vk-default/api.txt", "pipeline"),
+                         ["vk-default/pipeline/monolithic/depth.txt"])
 
 
 class Wiring(unittest.TestCase):

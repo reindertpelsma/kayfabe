@@ -18,7 +18,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 FILES = {"diff": "scripts/apps/gap_probes/diffrun.py", "lib": "scripts/apps/gap_probes/gap_lib.py", "run": "scripts/apps/gap_probes/gap_probes.py",
-         "c": "scripts/apps/gap_probes/gap_probe.c", "scripts": "scripts/apps/gap_probes/gap_scripts.py", "table": "scripts/apps/gap_probes/gap_cases.tsv", "runapps": "scripts/apps/run_apps.sh", "hook": "scripts/apps/apps_hook.sh"}
+         "c": "scripts/apps/gap_probes/gap_probe.c", "scripts": "scripts/apps/gap_probes/gap_scripts.py", "cts": "scripts/apps/gap_probes/cts_groups.py", "table": "scripts/apps/gap_probes/gap_cases.tsv", "runapps": "scripts/apps/run_apps.sh", "hook": "scripts/apps/apps_hook.sh"}
 SUITE = "test_gap_probes."
 COPY_DIRS = ["scripts/apps/gap_probes", "scripts/apps/open_rows"]
 COPY_FILES = ["scripts/ci/test_gap_probes.py", "scripts/apps/run_apps.sh", "scripts/apps/apps_hook.sh", "scripts/apps/apps_matrix.sh", "scripts/apps/build_bundle.sh",
@@ -94,6 +94,12 @@ MUTANTS = [
       K("Tools.a_tool_that_breaks_fails_the_case_and_one_that_declines_is_not_supported", "Tools.a_sanitizer_that_errors_fails_the_case_with_the_tool_named")),
     M("tools-root-not-searched", "scripts", 'TOOL_ROOTS = ("", str(Path(__file__).resolve().parent / "tools"))', 'TOOL_ROOTS = ("",)',
       K("Tools.a_tool_pushed_beside_the_script_is_found_with_the_default_roots", "Tools.the_default_tool_roots_are_the_machine_and_the_directory_beside_the_script")),
+    M("sample-not-seeded", "cts", 'random.Random("%s:%s:%s" % (seed, group, key)).shuffle(lst)', 'random.Random("fixed").shuffle(lst)',
+      K("CtsGroups.the_same_seed_gives_the_same_list_and_another_seed_another_one", "CtsGroups.the_pick_inside_one_split_depends_on_the_seed")),
+    M("sample-depth-first", "cts", 'k = order[i % len(order)]', 'k = order[0] if splits[order[0]] else order[i % len(order)]',
+      K("CtsGroups.the_sample_is_breadth_first_one_case_per_split_in_turn", "CtsGroups.a_sample_as_small_as_the_number_of_splits_touches_each_split_once")),
+    M("directory-prefix-too-loose", "cts", 'p.startswith("vk-default/%s/" % stem)', 'p.startswith("vk-default/%s" % stem)',
+      K("CtsGroups.a_group_picks_up_its_files_under_a_directory", "CtsGroups.a_directory_whose_name_only_starts_like_the_group_is_not_part_of_it")),
     M("falsifier-not-required", "lib", 'if len(r["falsifier"].strip()) < 20:', 'if False:',
       K("CaseTable.a_case_without_a_falsifier_is_refused", "TableMore.a_falsifier_of_a_few_words_is_refused")),
     M("duplicate-ids-allowed", "lib", 'if r["id"] in seen:', 'if False:', K("CaseTable.ids_are_unique_and_a_duplicate_is_refused", "TableMore.an_id_repeated_across_kinds_is_refused")),
