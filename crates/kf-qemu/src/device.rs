@@ -2068,7 +2068,7 @@ impl Device {
             if let Some(line) =
                 crate::tspace::prewarm(&self.tspace, &self.mem, self.rm, self.store.handle, carve)
             {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: mem t={:.3}s {line}",
                     self.born.elapsed().as_secs_f64()
                 );
@@ -2082,7 +2082,7 @@ impl Device {
                 && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle)
             {
                 prewarmed += 1;
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: mem t={:.3}s [{prewarmed}/{}] {line}",
                     self.born.elapsed().as_secs_f64(),
                     crate::mem::PREWARM_SPARES
@@ -2472,7 +2472,7 @@ impl Device {
             let armed = self.mem.port.armed_request().map(|r| r.seq);
             if armed != armed_seen {
                 if m.stats.unreconciled > 0 {
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf3: mem t={:.3}s trigger {} (seq {:?}; unreconciled so far {})",
                         self.born.elapsed().as_secs_f64(),
                         if armed.is_some() { "armed" } else { "idle" },
@@ -2685,7 +2685,7 @@ impl Device {
                 if let crate::reset::Progress::Completed(e) = self.reset.poll(self)
                     && crate::reset::loud(e)
                 {
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf3: device reset #{e} COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: {})",
                         self.reset.gate.dropped()
                     );
@@ -3422,7 +3422,7 @@ impl Device {
         let mut posted = 0usize;
         for e in evs {
             let Some(engine) = kf_abi::rc::EngineRoute::declared(e.engine) else {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: RC chid {:#x}: engine type 0 — no route; NOT posted",
                     e.chid
                 );
@@ -3464,13 +3464,16 @@ impl Device {
                 Ok(()) => {
                     posted += 1;
                     self.counters.rc_posted.fetch_add(1, Ordering::Relaxed);
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf3: RC_TRIGGERED posted: guest chid {:#x} engine {:#x} except_type {:#x} (host {:#x})",
-                        e.chid, e.engine, e.except_type, e.host_token
+                        e.chid,
+                        e.engine,
+                        e.except_type,
+                        e.host_token
                     );
                 }
                 Err(kf_gsp::GspFault::QueueFull { .. }) => back.push(e),
-                Err(f) => eprintln!(
+                Err(f) => kf_arch::rate_eprintln!(
                     "kf3: RC_TRIGGERED for chid {:#x} REFUSED by the queue: {f:?}",
                     e.chid
                 ),
@@ -3575,7 +3578,7 @@ impl Device {
             return;
         }
         let Some(dp) = self.display else {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf3: preempt-complete for {} async preempt(s) NOT posted: no display model holds the registrations",
                 done.len()
             );
@@ -3586,7 +3589,7 @@ impl Device {
         for (i, &(client, ev)) in done.iter().enumerate() {
             let target = dp.model.lock().ok().and_then(|g| g.preempt_target(client));
             let Some(t) = target else {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: RUNLIST_PREEMPT_COMPLETE for client {client:#x} NOT posted: no live registration"
                 );
                 continue;
@@ -3600,7 +3603,7 @@ impl Device {
             let payload = match n.encode() {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("kf3: RUNLIST_PREEMPT_COMPLETE NOT posted: {e}");
+                    kf_arch::rate_eprintln!("kf3: RUNLIST_PREEMPT_COMPLETE NOT posted: {e}");
                     continue;
                 }
             };
@@ -3609,16 +3612,19 @@ impl Device {
             match g.fsm.post_subdevice_event(&mut ram, payload) {
                 Ok(()) => {
                     posted_any = true;
-                    eprintln!(
+                    kf_arch::rate_eprintln!(
                         "kf3: RUNLIST_PREEMPT_COMPLETE posted to {:#x}:{:#x} (eventData {ev:#x}) after the host's disable+preempt returned",
-                        t.client, t.event
+                        t.client,
+                        t.event
                     );
                 }
                 Err(kf_gsp::GspFault::QueueFull { .. }) => {
                     back.extend_from_slice(&done[i..]);
                     break;
                 }
-                Err(f) => eprintln!("kf3: RUNLIST_PREEMPT_COMPLETE REFUSED by the queue: {f:?}"),
+                Err(f) => kf_arch::rate_eprintln!(
+                    "kf3: RUNLIST_PREEMPT_COMPLETE REFUSED by the queue: {f:?}"
+                ),
             }
         }
         if posted_any {
@@ -4255,13 +4261,13 @@ impl HostOps for Device {
         let after = g.fsm.phase();
         if after != before {
             // ★ The P2 gate's observable: the boot phase, logged by the drainer (never a vCPU).
-            eprintln!("kf3: GSP phase {before:?} -> {after:?}");
+            kf_arch::rate_eprintln!("kf3: GSP phase {before:?} -> {after:?}");
         }
         // ★★★ v3-initrace: the FWSEC that just raised WPR2 was commanded where to put FRTS — read it
         // before anything is published (the guest reads WPR2_ADDR_LO only after HALTED, published
         // last). One guest-RAM read of ≤ 8 words at offsets of the ROM we generated.
         if let Some(read) = g.fsm.resolve_frts_command(&mut ram) {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset={} → served WPR2_ADDR_LO={:?}",
                 read.map_or("unreadable/not FRTS — derived".to_string(), |o| format!(
                     "{o:#x}"
