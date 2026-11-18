@@ -17,8 +17,8 @@ try
         gx = gpuArray(x);
         checks{end+1} = kf_cmp('exact_int32_cumsum', cumsum(gx), cumsum(x), 0);
         checks{end+1} = kf_cmp('exact_int32_mod', [mod(gx, int32(97)); rem(gx, int32(97))], [mod(x, int32(97)); rem(x, int32(97))], 0);
-        u = randi([0 intmax('uint32')], n, 1, 'uint32');
-        v = randi([0 intmax('uint32')], n, 1, 'uint32');
+        u = randi([0 double(intmax('uint32'))], n, 1, 'uint32');
+        v = randi([0 double(intmax('uint32'))], n, 1, 'uint32');
         gu = gpuArray(u);
         gv = gpuArray(v);
         checks{end+1} = kf_cmp('exact_uint32_bitops', bitxor(bitand(gu, gv), bitor(bitshift(gu, 3), bitshift(gv, -5))), ...
