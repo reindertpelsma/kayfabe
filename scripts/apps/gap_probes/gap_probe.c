@@ -353,7 +353,7 @@ static int c_graph_capture_launch(void) {
   CK(cuMemAlloc_v2(&d, n * 4)); CK(cuMemsetD32Async(d, 0, n, NULL)); CK(cuCtxSynchronize()); CK(cuStreamCreate(&s, 1));
   CK(cuStreamBeginCapture_v2(s, 0)); for (int i = 0; i < 4; i++) CK(run_addone(d, n, s)); CK(cuStreamEndCapture(s, &g));
   CK(cuGraphInstantiateWithFlags(&e, g, 0));
-  double t = now(); for (int i = 0; i < 1000; i++) CK(cuGraphLaunch(e, s)); CK(cuStreamSynchronize(s)); kv("launches_per_s", "%d", (int)(1000 / (now() - t)) / 100 * 100);
+  double t = now(); for (int i = 0; i < 1000; i++) CK(cuGraphLaunch(e, s)); CK(cuStreamSynchronize(s)); kv("perf.launches_per_s", "%d", (int)(1000 / (now() - t)));
   unsigned *h = malloc(n * 4); CK(cuMemcpyDtoH_v2(h, d, n * 4));
   for (unsigned i = 0; i < n; i++) if (h[i] != 4000) return fail("graph_replay_value", 0);
   return PASS;
@@ -467,7 +467,7 @@ static int c_fanout_procs_24(void) {
 static int spin_for(unsigned long long ns) {
   CUdeviceptr flag; CK(cuMemAlloc_v2(&flag, 4)); CK(cuMemsetD32Async(flag, 0, 1, NULL)); void *a[] = {&ns, &flag};
   double t = now(); CK(launch1(f_spin, 1, 1, NULL, a)); CUresult r = cuCtxSynchronize(); double s = now() - t;
-  kv("secs", "%d", (int)s); unsigned v = 0; if (r == 0) CK(cuMemcpyDtoH_v2(&v, flag, 4));
+  kv("perf.secs", "%d", (int)s); unsigned v = 0; if (r == 0) CK(cuMemcpyDtoH_v2(&v, flag, 4));
   if (r) return fail("a_kernel_that_only_runs_long_was_killed", r);
   return v == 1 && s >= ns / 1e9 * 0.9 ? PASS : fail("spin_flag_or_time", 0);
 }
@@ -494,7 +494,7 @@ static int c_trap_recovery(void) { return recover_after("trap", "trap_was_not_re
 static int c_launch_flood_100k(void) {
   CUdeviceptr d; unsigned zero = 0, v = 0; CK(cuMemAlloc_v2(&d, 4)); CK(cuMemcpyHtoD_v2(d, &zero, 4)); double t = now();
   for (int i = 0; i < 100000; i++) CK(run_addone(d, 1, NULL));
-  CK(cuCtxSynchronize()); kv("secs", "%d", (int)(now() - t)); CK(cuMemcpyDtoH_v2(&v, d, 4));
+  CK(cuCtxSynchronize()); kv("perf.secs", "%d", (int)(now() - t)); CK(cuMemcpyDtoH_v2(&v, d, 4));
   return v == 100000 ? PASS : fail("flood_count", 0);
 }
 static int c_kill_target(void) {   // life_kill_* : runs kernels until killed; the harness kills it mid-kernel and then runs the canary

@@ -372,6 +372,30 @@ class Compare(unittest.TestCase):
         self.assertNotEqual(p.returncode, 0)
         self.assertIn("bucket", p.stderr)
 
+    def test_perf_keys_are_measurements_and_never_a_difference(self):
+        h = {"a": R("a", "pass", kv={"perf.secs": "5", "gran": "1"})}
+        g = {"a": R("a", "pass", kv={"perf.secs": "9", "gran": "1"})}
+        self.assertEqual(D.compare(h, g), [])
+        g["a"]["kv"]["gran"] = "2"
+        self.assertEqual(D.compare(h, g)[0]["kvdiff"], "gran:1->2")
+
+    def test_the_cli_ignores_perf_keys_in_the_kv_files_of_two_runs(self):
+        d = Path(tempfile.mkdtemp(prefix="gapperf"))
+        self.addCleanup(shutil.rmtree, d, True)
+        res = "id\tgroup\tstatus\trc\tsecs\tt0\tt1\treason\tcanary\nx\tg\tPASS\t0\t1\t1\t2\t-\t-\n"
+        for side, val in (("h", "100"), ("g", "7")):
+            (d / side).mkdir()
+            (d / side / "results.tsv").write_text(res)
+            (d / side / "kv.tsv").write_text("x\tperf.launches_per_s\t%s\nx\tattr.1\t1\n" % val)
+        p = subprocess.run([sys.executable, str(GP / "gap_probes.py"), "compare", str(d / "h"), str(d / "g")], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stdout)
+        self.assertIn("differing=0", p.stdout)
+
+    def test_the_c_probe_names_every_timing_value_perf(self):
+        src = (GP / "gap_probe.c").read_text()
+        for m in re.finditer(r'kv\("([a-z_.]*(?:secs|per_s)[a-z_.]*)"', src):
+            self.assertTrue(m.group(1).startswith("perf."), m.group(1))
+
     def test_a_limit_needs_a_known_bucket_and_a_reason(self):
         with self.assertRaises(ValueError):
             D.parse_limits("a\t*\t*\t*\tfine\tbecause\n")

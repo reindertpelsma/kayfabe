@@ -102,6 +102,8 @@ MUTANTS = [
       K("CtsGroups.a_group_picks_up_its_files_under_a_directory", "CtsGroups.a_directory_whose_name_only_starts_like_the_group_is_not_part_of_it")),
     M("oldest-release-wins", "scripts", 'return max(paths, key=lambda p: (key(p), p)) if paths else None', 'return min(paths, key=lambda p: (key(p), p)) if paths else None',
       K("Tools.the_newest_release_wins_over_a_symlink_that_sorts_later", "Tools.the_newest_release_supplies_libcupti")),
+    M("perf-keys-compared", "diff", 'and not k.startswith("perf.") and hk.get(k)', 'and hk.get(k)',
+      K("Compare.perf_keys_are_measurements_and_never_a_difference", "Compare.the_cli_ignores_perf_keys_in_the_kv_files_of_two_runs")),
     M("falsifier-not-required", "lib", 'if len(r["falsifier"].strip()) < 20:', 'if False:',
       K("CaseTable.a_case_without_a_falsifier_is_refused", "TableMore.a_falsifier_of_a_few_words_is_refused")),
     M("duplicate-ids-allowed", "lib", 'if r["id"] in seen:', 'if False:', K("CaseTable.ids_are_unique_and_a_duplicate_is_refused", "TableMore.an_id_repeated_across_kinds_is_refused")),
