@@ -78,7 +78,14 @@ pub struct SimMap {
     pub owner: Owner,
     /// Its PTEs were released while RM still lists it (the `NV01` split hazard).
     pub broken: bool,
+    /// ★ 2026-11-18 (`V3_PTE_MODEL_FUZZ.md`): the host PTE attributes the map verb carried —
+    /// `(kind, permissions)` of the row (`Desired::kind`, `Desired::perm`); a SKED row carries
+    /// [`SKED_ATTR_KIND`]. Read by [`SimRm::host_attr`].
+    pub attr: (u8, MapPerm),
 }
+
+/// ★ 2026-11-18: the kind the model records for a SKED-reflected placement (`NV_MMU_PTE_KIND_SMSKED_MESSAGE`).
+pub const SKED_ATTR_KIND: u8 = 0x0F;
 
 /// What one model page translates to: `(ram, backing offset)`.
 pub type Backing = (bool, u64);
@@ -123,6 +130,9 @@ pub struct SimRm {
     pub space: VaSpace,
     /// Every mapping RM lists, any `hDma`.
     pub maps: Vec<SimMap>,
+    /// ★ 2026-11-18: the attributes of the map verb in flight (set by every `SpaceVerbs` map
+    /// entry point before it calls [`SimRm::map`] / `map_through`), recorded on each [`SimMap`].
+    pub cur_attr: (u8, MapPerm),
     /// VA heap blocks, `start → end` (`NV01` per-map blocks and reservation blocks).
     pub blocks: BTreeMap<u64, u64>,
     /// Micro reservations, `handle → (lo, hi)`.
@@ -300,6 +310,7 @@ impl Sim {
             remade_transients: 0,
             reserve_rounds: true,
             self_held: Vec::new(),
+            cur_attr: (0, MapPerm::READ_WRITE),
         }))
     }
 }
@@ -403,6 +414,7 @@ impl SimRm {
                 off: off + (pv - va),
                 owner,
                 broken: false,
+                attr: self.cur_attr,
             });
             self.check_guard("map");
         }
@@ -599,6 +611,17 @@ impl SimRm {
         })
     }
 
+    /// ★ 2026-11-18 (`V3_PTE_MODEL_FUZZ.md`): what a live mirror mapping translates `va` to, WITH
+    /// the host PTE attributes its map verb carried: `(backing, kind, permissions)`.
+    #[must_use]
+    pub fn host_attr(&self, va: u64) -> Option<(Backing, u8, MapPerm)> {
+        let m = self
+            .maps
+            .iter()
+            .find(|m| !m.broken && m.owner == Owner::Mirror && m.va <= va && va < m.va + m.len)?;
+        Some((self.translate(va, Owner::Mirror)?, m.attr.0, m.attr.1))
+    }
+
     /// Mirror mappings whose PTEs are gone while RM still lists them.
     #[must_use]
     pub fn broken_mirror(&self) -> Vec<(u64, u64)> {
@@ -612,6 +635,7 @@ impl SimRm {
     /// Place a FOREIGN mapping (other kayfabe code, same client + `hDma`).
     pub fn place_foreign(&mut self, id: u32, va: u64, len: u64) -> bool {
         let n = self.n;
+        self.cur_attr = (0, MapPerm::READ_WRITE);
         let ok = self
             .map(va, len, FOREIGN_OBJ, va, Owner::Foreign(id))
             .is_ok();
@@ -685,6 +709,7 @@ impl SpaceVerbs for &Sim {
             return Err(format!("map {:#x}+{:#x}: refused (injected)", d.va, d.len));
         }
         let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
+        self.0.borrow_mut().cur_attr = (d.kind, d.perm);
         match self
             .0
             .borrow_mut()
@@ -699,6 +724,7 @@ impl SpaceVerbs for &Sim {
         if self.0.borrow_mut().ext_hit(2) {
             return Err(format!("map SKED {:#x}: refused (injected)", s.va));
         }
+        self.0.borrow_mut().cur_attr = (SKED_ATTR_KIND, MapPerm::READ_WRITE);
         match self
             .0
             .borrow_mut()
@@ -717,6 +743,7 @@ impl SpaceVerbs for &Sim {
     ) -> Result<u32, String> {
         let mut rm = self.0.borrow_mut();
         let (h, va, len) = rm.stitch(rows)?;
+        rm.cur_attr = rows.first().map_or((0, MapPerm::READ_WRITE), |d| (d.kind, d.perm));
         match rm.map(va, len, h, 0, Owner::Mirror) {
             Ok(()) => Ok(h),
             Err(_) => {
@@ -786,6 +813,7 @@ impl SpaceVerbs for &Sim {
             return Err(format!("map {:#x} in {h:#x}: refused (injected)", d.va));
         }
         let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
+        self.0.borrow_mut().cur_attr = (d.kind, d.perm);
         match self.0.borrow_mut().map_through(h, d.va, d.len, obj, d.off) {
             Ok(()) => Ok(Mapped::Placed),
             Err(true) => Ok(Mapped::HeldByHost),
@@ -802,6 +830,7 @@ impl SpaceVerbs for &Sim {
                 s.va
             ));
         }
+        self.0.borrow_mut().cur_attr = (SKED_ATTR_KIND, MapPerm::READ_WRITE);
         match self
             .0
             .borrow_mut()
@@ -821,6 +850,7 @@ impl SpaceVerbs for &Sim {
     ) -> Result<u32, String> {
         let mut rm = self.0.borrow_mut();
         let (obj, va, len) = rm.stitch(rows)?;
+        rm.cur_attr = rows.first().map_or((0, MapPerm::READ_WRITE), |d| (d.kind, d.perm));
         let fail = core::mem::take(&mut rm.fail_next_batch_map);
         match (fail, rm.map_through(h, va, len, obj, 0)) {
             (false, Ok(())) => Ok(obj),
@@ -1307,5 +1337,9 @@ pub fn check(
 mod adversarial;
 #[cfg(test)]
 mod fuzz;
+#[cfg(test)]
+pub mod pte_fuzz;
+#[cfg(test)]
+pub mod pte_oracle;
 #[cfg(test)]
 mod tests;
