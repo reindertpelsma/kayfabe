@@ -112,7 +112,7 @@ impl CommandPolicy for PreemptBindProbe {
             .copy_from_slice(&NV_OK.to_le_bytes());
         self.answered += 1;
         if self.answered <= LOG_CAP {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: WINDOWS PROFILE GR_CTXSW_PREEMPTION_BIND {:#010x} client={:#x} object={:#x} flags={:#x} hClient={:#x} hChannel={:#x} gfxp={} cilp={}: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #{}",
                 req.cmd,
                 req.client,
@@ -196,7 +196,7 @@ impl CommandPolicy for ZcullBindProbe {
             .copy_from_slice(&NV_OK.to_le_bytes());
         self.answered += 1;
         if self.answered <= LOG_CAP {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: WINDOWS PROFILE GR_CTXSW_ZCULL_BIND {:#010x} from client={:#x} names hClient={:#x} hChannel={:#x} va={:#x} mode={}: NV_OK, request echoed, NOTHING bound on the host — FABRICATED answer (Windows profile) #{}",
                 req.cmd,
                 req.client,

@@ -74,9 +74,12 @@ impl CommandPolicy for DisplayCtrlProbe {
             .copy_from_slice(&NV_OK.to_le_bytes());
         self.answered += 1;
         if self.answered <= LOG_CAP {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: WINDOWS PROFILE NV0073 {:#010x} client={:#x} object={:#x}: NV_OK, request echoed — FABRICATED answer (Windows profile) #{}",
-                req.cmd, req.client, req.object, self.answered
+                req.cmd,
+                req.client,
+                req.object,
+                self.answered
             );
         }
         Some(Reply {
@@ -181,9 +184,12 @@ impl CommandPolicy for DisplayPrivateProbe {
             .copy_from_slice(&NV_OK.to_le_bytes());
         self.answered += 1;
         if self.answered <= LOG_CAP {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: PROBE {PRIVATE_FLAG} {:#010x} client={:#x} object={:#x}: NV_OK with the real GPU's measured reply — a probe, not a shipped behaviour #{}",
-                req.cmd, req.client, req.object, self.answered
+                req.cmd,
+                req.client,
+                req.object,
+                self.answered
             );
         }
         Some(Reply {
@@ -405,7 +411,7 @@ impl CommandPolicy for DisplayTopologyProbe {
             .copy_from_slice(&status.to_le_bytes());
         self.answered += 1;
         if self.answered <= LOG_CAP {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: PROBE {} {:#010x} client={:#x} object={:#x}: status {status:#x} with the real GPU's measured reply shape — a probe, not a shipped behaviour #{}",
                 if self.hdmi && self.xbar {
                     "KF3_DISPLAY_HDMI_PROBE+KF3_DISPLAY_XBAR_PROBE"

@@ -106,7 +106,7 @@ fn defaults(t: TableType, die: kf_chip::DieId) -> Vec<ZbcValue> {
             .collect(),
         Err(e) => {
             ZBC_DEFAULTS_REFUSED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "W349REFUSE zbc defaults ({key}) die={die}: {e}; the ZBC table starts EMPTY (valid=0, nothing claimed)"
             );
             Vec::new()

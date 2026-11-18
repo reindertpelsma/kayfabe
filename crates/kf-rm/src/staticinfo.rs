@@ -267,7 +267,7 @@ impl StaticInfoPolicy {
         let console = match console_mem_size(version, &fn72) {
             Ok(c) => c,
             Err(e) if seat.boot_fb.is_none() => {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf-rm: GET_GSP_STATIC_INFO (gop=off): consoleMemSize not read ({e}); the board's \
                      region table is served"
                 );
@@ -279,7 +279,7 @@ impl StaticInfoPolicy {
             return Ok(today());
         }
         let Some(g) = seat.boot_fb else {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: GET_GSP_STATIC_INFO (gop=off): the guest preserves a firmware console of \
                  {console:#x} bytes (fn 72 seq {}), but kf3 serves no boot display; the board's region \
                  table is served, as before",
@@ -306,7 +306,7 @@ impl StaticInfoPolicy {
         if !ours {
             return Err(ConsoleRefusal::NotOurLayout);
         }
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-rm: GET_GSP_STATIC_INFO: the guest preserves a firmware console of {console:#x} bytes \
              (fn 72 seq {}; boot framebuffer G = {g:#x}{}): region 0 = [0, {console:#x}) reserved, \
              the heap starts at {console:#x}, {} regions",
@@ -515,7 +515,7 @@ impl CommandPolicy for StaticInfoPolicy {
         if cmd.payload.len() != want {
             // ★ Named: the guest's own struct and the measured one for its declared version
             // disagree, i.e. the declared `guest-driver=` is not what the guest is.
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: GET_GSP_STATIC_INFO refused: the guest's GspStaticConfigInfo is {} bytes, \
                  the measured layout for driver {} is {}",
                 cmd.payload.len(),
@@ -532,7 +532,7 @@ impl CommandPolicy for StaticInfoPolicy {
         let regions = match self.fb_regions_now() {
             Ok(r) => r,
             Err(e) => {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf-rm: GET_GSP_STATIC_INFO refused: the guest's firmware console cannot be \
                      served: {e} (guest driver {})",
                     self.driver.driver_version()
@@ -551,7 +551,7 @@ impl CommandPolicy for StaticInfoPolicy {
                 body,
             }),
             Err(e) => {
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf-rm: GET_GSP_STATIC_INFO refused: {e:?} (guest driver {})",
                     self.driver.driver_version()
                 );

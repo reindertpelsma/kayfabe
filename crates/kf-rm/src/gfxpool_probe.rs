@@ -55,7 +55,7 @@ impl CommandPolicy for GfxPoolProbe {
         let result = gfxpool::experimental_query(params);
         self.served += 1;
         if should_log(self.served) {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: EXPERIMENT virtual GFX_POOL_QUERY_SIZE bytes={} maxSlots={:?} result={:?} #{}",
                 params.len(),
                 params
