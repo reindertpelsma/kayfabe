@@ -129,6 +129,67 @@ const MUTANTS = [
     'matlab: the minimum lowered to the 580 default of the die',
     [C, { change: (d) => (d.linux_images[0].min_guest_driver = '580.173.02') }],
   ],
+  // the image's guest binary (`bin`, 2026-11-18: it is not on the guest's PATH, so the Worker names it from the image config)
+  [
+    'matlab: the configured binary is not copied into the part',
+    [[S, '      ...(li.bin !== undefined ? { bin: li.bin } : {}),\n', '']],
+  ],
+  [
+    'matlab: the binary key is emitted even when none is configured',
+    [[S, '...(li.bin !== undefined ? { bin: li.bin } : {}),', 'bin: li.bin,']],
+  ],
+  [
+    'matlab: the binary is not checked against the pattern',
+    [[S, "typeof li.bin === 'string' && GUEST_BIN.test(li.bin)", 'true']],
+  ],
+  [
+    'matlab: the binary pattern lets a newline through (multiline flag)',
+    [
+      [
+        S,
+        'const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/;',
+        'const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/m;',
+      ],
+    ],
+  ],
+  [
+    'matlab: the binary length is unbounded',
+    [
+      [
+        S,
+        'const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/;',
+        'const GUEST_BIN = /^[A-Za-z0-9_./-]+$/;',
+      ],
+    ],
+  ],
+  [
+    'matlab: the binary pattern allows a space and shell characters',
+    [[S, 'const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/;', 'const GUEST_BIN = /^[^\\n]{1,120}$/;']],
+  ],
+  [
+    'matlab: the basis of the binary is not required',
+    [[S, 'if (li.bin !== undefined || li.bin_basis !== undefined)', 'if (false)']],
+  ],
+  [
+    'matlab: the binary keys are not in the Linux image schema',
+    [[S, "          'bin',\n          'bin_basis',\n", '']],
+  ],
+  [
+    'matlab: the binary removed from the config',
+    [
+      C,
+      {
+        change: (d) => {
+          delete d.linux_images[0].bin;
+          delete d.linux_images[0].bin_basis;
+        },
+      },
+    ],
+  ],
+  [
+    'matlab: the binary in the config is the bare name again',
+    [C, { change: (d) => (d.linux_images[0].bin = 'matlab') }],
+  ],
   [
     'matlab: the stage is not planned from the instruction (bandwidth)',
     [[BW, "(i.matlab ?? null) !== null || only.includes('matlab')", "only.includes('matlab')"]],

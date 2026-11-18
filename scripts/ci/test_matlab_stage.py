@@ -13,6 +13,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -23,6 +24,7 @@ import payload_instruction as pi  # noqa: E402
 import profile_resources  # noqa: E402
 import propimage_apps as pa  # noqa: E402
 import test_matlab_rows as tm  # noqa: E402
+import test_vast_payload_v7 as v7  # noqa: E402
 import vast_payload  # noqa: E402
 import vast_report  # noqa: E402
 
@@ -96,6 +98,26 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(self.refusal(lambda d: d.update(rows={})), "NO_ROWS")
         self.assertEqual(self.refusal(lambda d: d["rows"].update(nonsense={"lane": "gate"})), "ROW_UNKNOWN:nonsense")
 
+    GOOD_BINS = ("matlab", "/home/kfimage/MATLAB/R2026b/bin/matlab", "bin/matlab-2026b_x.1", "a" * 120)
+    BAD_BINS = ("", "a" * 121, "matlab -batch", "matlab;id", "$(id)", "`id`", "a|b", "a&b", "a>b", "a'b", 'a"b', "a\nb", "matlab\n", " matlab", "matlab ", "mat\u0142ab", 5, None, True, ["matlab"], {"p": 1})
+
+    def test_the_golden_object_carries_the_image_binary(self):
+        self.assertEqual(golden()["matlab"]["bin"], "/home/kfimage/MATLAB/R2026b/bin/matlab")
+
+    def test_a_valid_bin_is_accepted_and_an_absent_one_is_too(self):
+        for b in self.GOOD_BINS:
+            self.assertIsNone(self.refusal(lambda d, b=b: d.update(bin=b)), b)
+        self.assertIsNone(self.refusal(lambda d: d.pop("bin", None)))
+
+    def test_a_bad_bin_is_refused_by_name(self):
+        for b in self.BAD_BINS:
+            self.assertEqual(self.refusal(lambda d, b=b: d.update(bin=b)), "BIN_INVALID", repr(b))
+
+    def test_the_bin_rule_is_the_rows_own_pattern_not_a_copy(self):
+        for b in self.GOOD_BINS + self.BAD_BINS:
+            ok = type(b) is str and MR.BIN_RE.fullmatch(b) is not None
+            self.assertEqual(self.refusal(lambda d, b=b: d.update(bin=b)) is None, ok, repr(b))
+
     def test_an_unset_pin_is_refused_before_anything_is_fetched(self):
         d = tmpdir(self)
         doc = json.loads(ms.PINS_PATH.read_text())
@@ -138,7 +160,7 @@ class ManifestTests(unittest.TestCase):
 
 def namespace(**over):
     base = dict(sha=SHA, checkout=str(ROOT), prefix="/workspace/kf-matlab-test", out="/dev/null", urls="/nonexistent", bench="/nonexistent", deadline_epoch=0.0,
-                evidence_dir=None, instruction_matlab=None, matlab_image="", matlab_driver="", rows=None, isolation="row", lane=[], matlab="matlab")
+                evidence_dir=None, instruction_matlab=None, matlab_image="", matlab_driver="", rows=None, isolation="row", lane=[], matlab=None)      # None = `--matlab` not given (the parser default)
     base.update(over)
     return types.SimpleNamespace(**base)
 
@@ -225,6 +247,61 @@ class RunTests(unittest.TestCase):
         ms.run(a, hooks)
         self.assertEqual(seen["lanes"]["gpu_fft"], "gate")
         self.assertEqual(seen["isolation"], "shared")
+
+    def test_the_instruction_bin_is_the_binary_the_rows_run(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args()
+        rec, code = ms.run(a, hooks)
+        self.assertEqual((rec["verdict"], code), ("PASS", 0))
+        self.assertEqual(seen["mctx"].matlab, "/home/kfimage/MATLAB/R2026b/bin/matlab")
+        self.assertIn(" /home/kfimage/MATLAB/R2026b/bin/matlab -batch ", MR.remote_command("gpu_fft", 60, seen["mctx"].matlab))
+
+    def test_another_bin_in_the_instruction_is_another_binary(self):
+        doc = golden()["matlab"]
+        doc["bin"] = "/opt/other/bin/matlab"
+        a, hooks, seen, klog, d, prefix = self.strict_args(doc)
+        ms.run(a, hooks)
+        self.assertEqual(seen["mctx"].matlab, "/opt/other/bin/matlab")
+
+    def test_an_instruction_without_bin_runs_the_name_matlab_as_before(self):
+        doc = golden()["matlab"]
+        del doc["bin"]
+        a, hooks, seen, klog, d, prefix = self.strict_args(doc)
+        ms.run(a, hooks)
+        self.assertEqual(seen["mctx"].matlab, "matlab")
+        self.assertEqual(seen["mctx"].matlab, MR.MATLAB_BIN)
+
+    def test_the_flag_alone_still_names_the_binary_of_an_instruction_without_bin(self):
+        doc = golden()["matlab"]
+        del doc["bin"]
+        a, hooks, seen, klog, d, prefix = self.strict_args(doc, matlab="/opt/flag/bin/matlab")
+        ms.run(a, hooks)
+        self.assertEqual(seen["mctx"].matlab, "/opt/flag/bin/matlab")
+
+    def test_a_flag_equal_to_the_instruction_bin_is_not_a_conflict(self):
+        a, hooks, seen, klog, d, prefix = self.strict_args(matlab="/home/kfimage/MATLAB/R2026b/bin/matlab")
+        rec, code = ms.run(a, hooks)
+        self.assertEqual((rec["verdict"], code), ("PASS", 0))
+        self.assertEqual(seen["mctx"].matlab, "/home/kfimage/MATLAB/R2026b/bin/matlab")
+
+    def test_a_flag_that_differs_from_the_instruction_bin_is_a_usage_error_before_anything_runs(self):
+        for flag in ("matlab", "/opt/flag/bin/matlab"):                 # an explicit `matlab` is explicit too
+            a, hooks, seen, klog, d, prefix = self.strict_args(matlab=flag)
+            with self.assertRaises(ValueError) as c:
+                ms.run(a, hooks)
+            self.assertIn("BIN_CONFLICT", str(c.exception))
+            self.assertNotIn("manifest", seen)                          # nothing was fetched
+            self.assertFalse(klog.started)
+
+    def test_an_invalid_bin_refuses_the_whole_stage_by_name_before_anything_is_fetched(self):
+        for bad in ("matlab;id", "", "a" * 121, 5):
+            doc = golden()["matlab"]
+            doc["bin"] = bad
+            a, hooks, seen, klog, d, prefix = self.strict_args(doc)
+            rec, code = ms.run(a, hooks)
+            self.assertEqual({r["reason"] for r in rec["rows"]}, {"BIN_INVALID"}, repr(bad))
+            self.assertEqual((rec["verdict"], code), ("FAIL", 4), repr(bad))
+            self.assertNotIn("manifest", seen)
+            vast_report.validate_matlab(rec)
 
     def test_the_listed_gate_lane_decides_the_stage(self):
         doc = golden()["matlab"]
@@ -359,6 +436,14 @@ class RunTests(unittest.TestCase):
         self.assertEqual(rec["verdict"], "FAIL")
         self.assertEqual(code, 4)                                    # strict: the refusal of every row is a STRICT_SKIP, not exit 0
 
+    def test_standalone_runs_the_flag_binary_and_without_a_flag_the_name_matlab(self):
+        a, hooks, seen, klog, d, prefix, image = self.standalone(matlab="/opt/mine/bin/matlab")
+        ms.run(a, hooks)
+        self.assertEqual(seen["mctx"].matlab, "/opt/mine/bin/matlab")
+        a, hooks, seen, klog, d, prefix, image = self.standalone()
+        ms.run(a, hooks)
+        self.assertEqual(seen["mctx"].matlab, "matlab")
+
     def test_standalone_without_strict_rows_is_still_permissive(self):
         a, hooks, seen, klog, d, prefix, image = self.standalone(driver="580.94.02")
         rec, code = ms.run(a, hooks)
@@ -445,6 +530,34 @@ class RunTests(unittest.TestCase):
         self.assertNotIn("example.invalid", json.dumps(rec))
 
 
+class GuestBinTests(unittest.TestCase):
+    """The one rule for the guest's matlab binary (2026-11-18): the flag alone, the instruction's `bin` alone, neither -> the rows' name; both and different -> BIN_CONFLICT."""
+    B = "/home/kfimage/MATLAB/R2026b/bin/matlab"
+
+    def test_the_rule_table(self):
+        obj_bin, obj_none = {"bin": self.B}, {}
+        table = [
+            (obj_bin, None, self.B),          # the instruction alone
+            (obj_bin, self.B, self.B),        # both, equal
+            (obj_none, None, "matlab"),       # neither: the name the rows always used
+            (obj_none, "/opt/m/bin/matlab", "/opt/m/bin/matlab"),   # the flag alone with an instruction that has no bin
+            (None, None, "matlab"),           # standalone shape, no flag
+            (None, "/opt/m/bin/matlab", "/opt/m/bin/matlab"),       # standalone shape: the flag
+        ]
+        for obj, flag, want in table:
+            self.assertEqual(ms.guest_bin(MR, obj, flag), want, (obj, flag))
+
+    def test_both_and_different_is_a_value_error_naming_the_conflict(self):
+        for flag in ("matlab", "/opt/m/bin/matlab", ""):
+            with self.assertRaises(ValueError) as c:
+                ms.guest_bin(MR, {"bin": self.B}, flag)
+            self.assertTrue(str(c.exception).startswith("BIN_CONFLICT"), str(c.exception))
+
+    def test_the_rule_does_not_validate_the_value_the_refusal_does(self):
+        self.assertEqual(ms.guest_bin(MR, {"bin": "a;b"}, None), "a;b")
+        self.assertEqual(ms.instruction_refusal(dict(golden()["matlab"], bin="a;b")), "BIN_INVALID")
+
+
 class MainTests(unittest.TestCase):
     def call(self, *argv):
         buf = io.StringIO()
@@ -459,6 +572,47 @@ class MainTests(unittest.TestCase):
         self.assertEqual(self.call(*common, "--matlab-image", "/x.zip")[0], 2)                      # image without a driver
         self.assertEqual(self.call(*common, "--instruction-matlab", "/y.json", "--rows", "gpu_fft")[0], 2)
         self.assertEqual(self.call("run", "--sha", "nothex", "--out", "/dev/null", "--matlab-image", "/x", "--matlab-driver", "580.1.2")[0], 2)
+
+    def test_a_flag_that_differs_from_the_instruction_bin_is_a_named_usage_error(self):
+        d = tmpdir(self)
+        f = d / "m.json"
+        f.write_text(json.dumps(golden()["matlab"]))
+        common = ["run", "--sha", SHA, "--out", str(d / "o.json"), "--prefix", str(d / "kf-matlab"), "--instruction-matlab", str(f)]
+        code, out = self.call(*common, "--matlab", "/opt/flag/bin/matlab")
+        self.assertEqual(code, 2)
+        self.assertRegex(out, r"^KF_MATLAB_USAGE BIN_CONFLICT\b")
+        self.assertNotIn("KF_MATLAB_RESULT", out)
+        self.assertFalse((d / "o.json").exists())
+
+    def test_the_flag_is_not_given_by_default_and_is_passed_as_given(self):
+        seen = []
+        real = ms.run
+
+        def spy(a, hooks=None):
+            seen.append(a.matlab)
+            raise ValueError("stop here")
+        ms.run = spy
+        try:
+            base = ["run", "--sha", SHA, "--out", "/dev/null", "--matlab-image", "/x.zip", "--matlab-driver", "580.173.02"]
+            self.call(*base)
+            self.call(*base, "--matlab", "/opt/mine/bin/matlab")
+        finally:
+            ms.run = real
+        self.assertEqual(seen, [None, "/opt/mine/bin/matlab"])
+
+    def test_a_strict_command_line_without_the_flag_has_no_conflict(self):
+        seen = []
+        real = ms.run
+
+        def spy(a, hooks=None):
+            seen.append(a)
+            raise ValueError("stop here")
+        ms.run = spy
+        try:
+            self.call("run", "--sha", SHA, "--out", "/dev/null", "--instruction-matlab", "/y.json")
+        finally:
+            ms.run = real
+        self.assertEqual(ms.guest_bin(MR, golden()["matlab"], seen[0].matlab), "/home/kfimage/MATLAB/R2026b/bin/matlab")
 
     def test_plan_lists_the_rows(self):
         code, out = self.call("plan")
@@ -628,6 +782,33 @@ class InstructionSchemaTests(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stdout)
         self.assertEqual((d / "o.json").read_bytes(), GOLDEN.read_bytes())
 
+    def test_the_image_binary_is_part_of_the_object_and_of_its_canonical_bytes(self):
+        i = pi.parse(self.doc())
+        self.assertEqual(i.matlab["bin"], "/home/kfimage/MATLAB/R2026b/bin/matlab")
+        self.assertIn(b'"bin": "/home/kfimage/MATLAB/R2026b/bin/matlab"', i.canonical_bytes())
+
+    def test_an_object_without_bin_is_accepted_and_has_no_bin_in_its_bytes(self):
+        d = golden()
+        del d["matlab"]["bin"]
+        i = pi.parse(json.dumps(d).encode())
+        self.assertNotIn("bin", i.matlab)
+        self.assertNotIn(b'"bin"', i.canonical_bytes())
+        self.assertEqual(json.loads(i.canonical_bytes()), d)
+
+    def test_a_valid_bin_is_accepted_by_the_schema(self):
+        for b in InstructionTests.GOOD_BINS:
+            d = golden()
+            d["matlab"]["bin"] = b
+            self.assertEqual(pi.parse(json.dumps(d).encode()).matlab["bin"], b)
+
+    def test_a_bad_bin_is_refused_by_the_schema_with_the_path_named(self):
+        for b in InstructionTests.BAD_BINS:
+            d = golden()
+            d["matlab"]["bin"] = b
+            with self.assertRaises(pi.InstructionError) as c:
+                pi.parse(json.dumps(d).encode())
+            self.assertIn("bin", str(c.exception), repr(b))
+
     def test_absent_means_none_and_is_not_emitted(self):
         d = golden()
         del d["matlab"]
@@ -658,6 +839,64 @@ class InstructionSchemaTests(unittest.TestCase):
 
     def test_the_two_schema_copies_are_identical(self):
         self.assertEqual((ROOT / "ci/vast-broker/planner/schemas/instruction.schema.json").read_bytes(), (ROOT / "scripts/kfci/schemas/instruction.schema.json").read_bytes())
+
+
+# ---------------------------------------------------------------- the stage's instruction file (the box payload, through main)
+class StageFileTests(unittest.TestCase):
+    """The payload hands the stage the instruction's `matlab` object as the file `matlab_instruction.json`: every key of the object, `bin` included, must arrive."""
+    setUp = v7.V7Tests.setUp
+    _main_fixture = v7.V7Tests._main_fixture
+
+    @staticmethod
+    def leg(matlab):
+        """The golden's `matlab` object on the smallest large-tier instruction (no Windows, no apps): the plan holds the checks and the `matlab` stage."""
+        doc = golden()
+        doc.update(matlab=matlab, windows=False, windows_runs=1, winapps=None, linux_apps=None)
+        return doc
+
+    def stage_file(self, matlab):
+        """-> (the stage's command line, the decoded file the payload wrote for it), read while the box's evidence directory still exists."""
+        doc = self.leg(matlab)
+        seen = {}
+        real = self.m.execute_stages
+
+        def recording(stages, soft, result, destination, runner=real.__defaults__[0]):
+            for stage in stages:
+                if stage["name"] == "matlab":
+                    cmd = stage["command"]
+                    seen["cmd"] = list(cmd)
+                    seen["file"] = json.loads(Path(cmd[cmd.index("--instruction-matlab") + 1]).read_text())
+            return real([x for x in stages if x["name"] != "matlab"], soft, result, destination, runner)
+
+        orig = self.m.parse_args
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "i.json"
+            path.write_text(json.dumps(doc))
+            with patch.object(self.m, "parse_args", side_effect=lambda argv: orig([*argv, "--instruction", str(path), "--only", "matlab"])), \
+                    patch.object(self.m, "execute_stages", recording), contextlib.redirect_stdout(io.StringIO()):
+                self._main_fixture(windows=None, soft_ms=900 * 60000)
+        return seen["cmd"], seen["file"]
+
+    def test_the_stage_gets_the_object_with_its_bin(self):
+        cmd, doc = self.stage_file(golden()["matlab"])
+        self.assertEqual(doc, golden()["matlab"])
+        self.assertEqual(doc["bin"], "/home/kfimage/MATLAB/R2026b/bin/matlab")
+        self.assertIn("matlab_stage.py", " ".join(cmd))
+        self.assertNotIn("--matlab", cmd)                       # the binary travels in the object, never as a second spelling on the command line
+
+    def test_the_stage_gets_another_bin_as_it_is(self):
+        m = golden()["matlab"]
+        m["bin"] = "/opt/other/bin/matlab"
+        cmd, doc = self.stage_file(m)
+        self.assertEqual(doc["bin"], "/opt/other/bin/matlab")
+        self.assertNotIn("--matlab", cmd)
+
+    def test_the_stage_of_an_object_without_bin_gets_no_bin(self):
+        m = golden()["matlab"]
+        del m["bin"]
+        doc = self.stage_file(m)[1]
+        self.assertEqual(doc, m)
+        self.assertNotIn("bin", doc)
 
 
 # ---------------------------------------------------------------- the report validator

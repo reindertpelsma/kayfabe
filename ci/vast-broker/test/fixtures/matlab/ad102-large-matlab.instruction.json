@@ -1,6 +1,7 @@
 {
   "linux_apps": "middle",
   "matlab": {
+    "bin": "/home/kfimage/MATLAB/R2026b/bin/matlab",
     "driver": {
       "version": "590.48.01"
     },

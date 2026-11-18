@@ -90,6 +90,15 @@ test('the committed image carries the minimum guest driver MATLAB needs, a pinne
   assert.match(m.min_guest_driver_basis, /MEASURED/);
   assert.match(m.min_guest_driver_basis, /580\.159\.04/);
 });
+test('the committed image carries the binary the image keeps matlab at, with the measured basis (2026-11-18: it is not on the guest PATH)', () => {
+  const m = linux(PROPIMAGES);
+  assert.equal(m.bin, '/home/kfimage/MATLAB/R2026b/bin/matlab');
+  assert.match(m.bin_basis, /^MEASURED 2026-11-18/);
+  assert.match(m.bin_basis, /inspection boot/);
+  assert.match(m.bin_basis, /not on the guest's ssh PATH/);
+  assert.match(m.bin_basis, /find/);
+  assert.deepEqual(propimagesConfigProblems(), []);
+});
 test('the row ids are the box own table (scripts/bench/linux/matlab_rows.py plan)', () => {
   const run = python('scripts/bench/linux/matlab_rows.py', ['plan']);
   assert.equal(run.status, 0, run.stderr);
@@ -242,6 +251,133 @@ test('a basis with no minimum is a stray key, not a free note, and is refused', 
     edit((c) => delete linux(c).min_guest_driver),
     'MIN_GUEST_DRIVER_BASIS:matlab',
   );
+});
+// ---- `bin` (2026-11-18): where the image keeps the matlab binary in the guest; an image property, so config, never code
+test('the binary is optional: without it (and its basis) the configuration is valid and the part carries no `bin`', () => {
+  const c = edit((x) => {
+    delete linux(x).bin;
+    delete linux(x).bin_basis;
+  });
+  assert.deepEqual(propimagesConfigProblems(c), []);
+  const part = matlabPlan(LARGE('AD102'), { config: c }).part;
+  assert.equal('bin' in part.matlab, false);
+  assert.equal(JSON.stringify(part).includes('"bin"'), false);
+});
+test('a binary that is not the box pattern (letters, digits and _ . / -, 1 to 120 characters, a string) is refused', () => {
+  const long = 'a'.repeat(121);
+  for (const bad of [
+    '',
+    long,
+    'matlab -batch',
+    'matlab;id',
+    '$(id)',
+    '`id`',
+    'a|b',
+    'a&b',
+    "a'b",
+    'a\nb',
+    'matlab\n',
+    ' matlab',
+    'mat\u0142ab',
+    5,
+    null,
+    true,
+    ['matlab'],
+    {},
+  ])
+    refuses(
+      edit((c) => (linux(c).bin = bad)),
+      'BIN:matlab',
+    );
+});
+test('a binary that is the box pattern is accepted: a bare name, a path, the longest allowed', () => {
+  for (const good of [
+    'matlab',
+    '/home/kfimage/MATLAB/R2026b/bin/matlab',
+    'bin/matlab-2026b_x.1',
+    'a'.repeat(120),
+  ])
+    assert.deepEqual(propimagesConfigProblems(edit((c) => (linux(c).bin = good))), [], good);
+});
+test('the binary needs its basis: a missing, an empty or a non-string one is refused', () => {
+  refuses(
+    edit((c) => delete linux(c).bin_basis),
+    'BIN_BASIS:matlab',
+  );
+  refuses(
+    edit((c) => (linux(c).bin_basis = '')),
+    'BIN_BASIS:matlab',
+  );
+  refuses(
+    edit((c) => (linux(c).bin_basis = 5)),
+    'BIN_BASIS:matlab',
+  );
+});
+test('a basis with no binary is a stray key, not a free note, and is refused', () => {
+  refuses(
+    edit((c) => delete linux(c).bin),
+    'BIN_BASIS:matlab',
+  );
+});
+test('the binary and its basis are keys of the Linux image schema, not stray keys', () => {
+  const problems = propimagesConfigProblems();
+  assert.equal(problems.includes('LINUX_IMAGE_SCHEMA'), false);
+  const c = edit((x) => (linux(x).binary = '/x/matlab'));
+  refuses(c, 'LINUX_IMAGE_SCHEMA');
+});
+test('the plan copies the configured binary into the part, as it is', () => {
+  const part = matlabPlan(LARGE('AD102')).part;
+  assert.equal(part.matlab.bin, '/home/kfimage/MATLAB/R2026b/bin/matlab');
+  const c = edit((x) => (linux(x).bin = '/opt/other/bin/matlab'));
+  assert.equal(matlabPlan(LARGE('AD102'), { config: c }).part.matlab.bin, '/opt/other/bin/matlab');
+});
+test('the plan refuses a configuration with a bad binary with the configuration error, before it builds anything', () => {
+  const c = edit((x) => (linux(x).bin = 'matlab;id'));
+  assert.throws(() => matlabPlan(LARGE('AD102'), { config: c }), /propimages config: BIN:matlab/);
+});
+test('the keys of the matlab part are pinned: the binary is one of them, every other key is as before', () => {
+  const { part } = matlabPlan(LARGE('AD102'));
+  assert.deepEqual(Object.keys(part.matlab).sort(), [
+    'bin',
+    'driver',
+    'image',
+    'isolation',
+    'label',
+    'rows',
+  ]);
+  const c = edit((x) => {
+    delete linux(x).bin;
+    delete linux(x).bin_basis;
+  });
+  assert.deepEqual(Object.keys(matlabPlan(LARGE('AD102'), { config: c }).part.matlab).sort(), [
+    'driver',
+    'image',
+    'isolation',
+    'label',
+    'rows',
+  ]);
+});
+test('the box refuses a binary the Worker pattern would also refuse, by the schema (the two patterns agree)', () => {
+  const doc = JSON.parse(readFileSync(GOLDEN, 'utf8'));
+  assert.equal(doc.matlab.bin, matlabPlan(LARGE('AD102')).part.matlab.bin);
+  for (const bad of ['matlab;id', '', 'a'.repeat(121), 'a b', 'matlab\n']) {
+    const d = structuredClone(doc);
+    d.matlab.bin = bad;
+    const run = dry(d);
+    assert.equal(run.status, 1, JSON.stringify(bad));
+    assert.match(run.stdout, /KF_PAYLOAD_INSTRUCTION_REFUSED/);
+    assert.equal(
+      propimagesConfigProblems(edit((c) => (linux(c).bin = bad))).includes('BIN:matlab'),
+      true,
+      JSON.stringify(bad),
+    );
+  }
+  for (const good of ['matlab', 'a'.repeat(120), '/opt/x/bin/matlab']) {
+    const d = structuredClone(doc);
+    d.matlab.bin = good;
+    const run = dry(d);
+    assert.equal(run.status, 0, good + run.stdout);
+  }
 });
 test('dotted versions compare field by field as numbers, a missing field is zero', () => {
   assert.ok(compareDottedVersions('580.173.02', '590.48.01') < 0);

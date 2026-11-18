@@ -47,6 +47,9 @@ export const MATLAB_ROWS = Object.freeze([
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 // A driver version as the release matrix writes it: two to four numeric fields (590.48.01).
 const DOTTED_VERSION = /^[0-9]+(\.[0-9]+){1,3}$/;
+// The guest binary of a Linux image: the box rows' own rule (scripts/bench/linux/matlab_rows.py BIN_RE, and the instruction schema's `matlab.bin`). The `$` is
+// the end of the string here (no multiline flag), so a trailing newline does not match.
+const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/;
 const pinnedLinuxInstaller = (matrix, version) =>
   (matrix.driver_installers ?? []).find(
     (p) => p.os === 'linux' && p.version === version && p.status === 'PINNED',
@@ -210,6 +213,8 @@ function linuxImageProblems(value, objects, labels, families, bad, releaseMatrix
           'scheduling',
           'min_guest_driver',
           'min_guest_driver_basis',
+          'bin',
+          'bin_basis',
           'measured_families',
           'rows',
         ]),
@@ -240,6 +245,16 @@ function linuxImageProblems(value, objects, labels, families, bad, releaseMatrix
         li.min_guest_driver !== undefined &&
           typeof li.min_guest_driver_basis === 'string' &&
           li.min_guest_driver_basis.length > 0,
+      );
+    // `bin` (optional, 2026-11-18): where the image keeps the guest's matlab binary. It is a property of the IMAGE (measured: `matlab` is not on the guest's ssh
+    // PATH in the MATLAB Linux image), so it is configuration, never a name in code; the Worker copies it into the instruction's `matlab.bin`. The basis (how
+    // it was found) is allowed only beside it, like the minimum driver's.
+    if (li.bin !== undefined)
+      bad('BIN:' + label, typeof li.bin === 'string' && GUEST_BIN.test(li.bin));
+    if (li.bin !== undefined || li.bin_basis !== undefined)
+      bad(
+        'BIN_BASIS:' + label,
+        li.bin !== undefined && typeof li.bin_basis === 'string' && li.bin_basis.length > 0,
       );
     if (li.measured_families !== undefined)
       bad(
@@ -446,6 +461,8 @@ export function matlabPlan(
         ]),
       ),
       isolation: li.isolation,
+      // the image's own binary (propimages.json `bin`), only when it is configured: absent = the box runs the name `matlab`
+      ...(li.bin !== undefined ? { bin: li.bin } : {}),
     },
   };
   const lines = [
