@@ -1,0 +1,36 @@
+CHAIN_C2 provision EXIT rc=0 2026-11-18T07:27:42Z 07:27:48
+CHAIN_C2 apps_prov rc=0 07:53:05
+CHAIN_C2 vk_build rc=0 07:53:05
+CHAIN_C2 prep rc=0 VKPRIO_BUILD_OK 07:53:06
+CHAIN_C2 kf3=/workspace/bench/kf3-bins/f5dbe55e/qemu-system-x86_64 07:53:06
+CHAIN_C2 host_setup rc=0 07:57:19
+CHAIN_C2 host_vkcts rc=0 VKCTS_SUMMARY side=host cases=18 pass=15 warn=0 not_supported=3 fail=0 crash=0 timeout=0 not_run=0 device=NVIDIA_GeForce_RTX_4090 type=DISCRETE_GPU gpu_use=PASS 07:57:28
+CHAIN_C2 host_vkprio rc=0 21 accepted 07:57:33
+CHAIN_C2 um_host rc=0 07:57:44
+CHAIN_C2 HOST_ORACLE_DONE 07:57:44
+CHAIN_C2 SOFF done 07:58:21
+CHAIN_C2 SC2 done 07:59:06
+CHAIN_C2 um_off finished (orphaned from chain 1) [apps_matrix 2026-11-18T08:01:41+00:00] GUEST_DONE batched: 0 pass / 6;  isolated re-runs: 0 pass / 0 08:01:47
+CHAIN_C2 SOFF2 done 08:14:53
+CHAIN_C2 SC2B done 08:27:05
+CHAIN_C2 um_on rc=0 08:29:17
+CHAIN_C2 gates rc=0 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS 08:29:53
+CHAIN_C2 stopped old-binary legs (fs c2off in progress, fs c2on, UMOFF, UMON): coordinator wrap-up 08:31:20
+warning: filtering not recognized by server, ignoring
+warning: lazy fetching disabled; some objects may not be available
+fatal: git upload-pack: not our ref dbb009aea405c5a2bf1b4cedbe99449100138b21
+fatal: remote error: upload-pack: not our ref dbb009aea405c5a2bf1b4cedbe99449100138b21
+fatal: unresolved deltas left after unpacking
+fatal: unpack-objects failed
+CHAIN_C2 tree f5dbe55e 08:31:31
+CHAIN_C2 build_kf3 rc=0 KF3_BUILT /workspace/bench/kf3-bins/f5dbe55e/qemu-system-x86_64 rev=f5dbe55e mtime=2026-11-18 08:31:37.609856876 +0000 (shared build dir /workspace/bench/qemu-b 08:31:37
+CHAIN_C2 no kf3 binary for bb5b2c41 08:31:37
+CHAIN_C2 tree bb5b2c41 (checked out by hand: origin repointed to GitHub) 08:32:18
+CHAIN_C2 build_kf3 rc=0 KF3_BUILT /workspace/bench/kf3-bins/bb5b2c41/qemu-system-x86_64 rev=bb5b2c41 mtime=2026-11-18 08:32:32.680015834 +0000 (shared build dir /workspace/bench/qemu-b 08:32:32
+CHAIN_C2 host_vkprio_user rc=0 accepted=12 08:32:36
+CHAIN_C2 PRIO done 08:35:14
+CHAIN_C2 SC2C done 08:37:23
+CHAIN_C2 UMON2 done UM_END UnifiedMemoryPerf rc=1 host_xid=      1 [ 4729.786772] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCL|UM_END UnifiedMemoryStreams rc=255 host_xid=      1 [ 4735.512054] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x00000020, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC0 |UM_END conjugateGradientUM rc=1 host_xid=      1 [ 4741.680278] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC4 GPC| 08:38:31
+CHAIN_C2 fs_on2 rc=0 FAST_SUITE_RC=0 08:46:31
+CHAIN_C2 DONE_P 08:46:31
+CHAIN_C2 gates_fixed V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS 08:48:25

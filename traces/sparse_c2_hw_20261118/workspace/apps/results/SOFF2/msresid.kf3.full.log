@@ -1,0 +1,1534 @@
+kf3: GSP command service REFUSED: QueueNotBound [#7, rate-limited]
+kf3: GSP command service REFUSED: QueueNotBound [#8, rate-limited]
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset=0x1ffe00000 → served WPR2_ADDR_LO=Some(Ok("0x1ffe000"))
+kayfabe: GSP-PUBLISH gpa=0x11f200000 gpa_same=false seq_last=Some(1) cmd_seq=1460 ⇒ same_instance=false [#5, rate-limited]
+kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq=0 936 bytes: bGspNocatEnabled=0 at +929 (driver 580.159.04's layout; 1 = a Windows-built RM, THE_WINDOWS_AXIS §7) [#5, rate-limited]
+kf3: GSP rpc GspSetSystemInfo seq=0
+kf3: GSP rpc SetRegistry seq=0
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says guestDriverVersion="580.159.04" guestVersion="rel/gpu_drv/r580/r582_49-530" guestTitle="Private r582_49 rel/gpu_drv/r580/r582_49-530 unknown" guestClNum=0 vgx=0x2b.0x13; this device answers as driver 580.159.04
+kf3: GSP rpc SetGuestSystemInfo seq=0
+kf3: GSP phase Booted -> Running
+kf3: GSP rpc GetGspStaticInfo seq=1
+kf3: GSP rpc InitGspTraceCrashBuffer seq=2
+kf3: GSP rpc RmControl seq=3
+kf3: GSP rpc RmControl seq=4
+kf3: GSP rpc RmControl seq=5
+kf3: GSP rpc RmControl seq=6
+kf3: GSP rpc RmControl seq=7
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 7 }
+kf3: GSP rpc RmControl seq=8
+kf3: GSP rpc RmControl seq=9
+kf3: GSP rpc RmControl seq=10
+kf3: GSP rpc RmControl seq=11
+kf3: GSP rpc RmControl seq=12
+kf3: GSP rpc RmControl seq=13
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 13 }
+kf3: GSP rpc RmControl seq=14
+kf3: GSP rpc RmControl seq=15
+kf3: GSP rpc RmControl seq=16
+kf3: GSP rpc RmControl seq=17
+kf3: GSP rpc RmControl seq=18
+kf3: GSP rpc RmControl seq=19
+kf3: GSP rpc RmControl seq=20
+kf3: GSP rpc RmControl seq=21
+kf3: GSP rpc RmAlloc seq=22
+kf3: GSP rpc RmAlloc seq=23
+kf3: GSP rpc RmAlloc seq=24
+kf3: GSP rpc RmAlloc seq=25
+kf3: GSP rpc RmControl seq=26
+kf3: GSP rpc RmControl seq=27
+kf3: GSP rpc UpdateBarPde seq=28
+kf3: GSP rpc RmControl seq=29
+kf3: GSP rpc RmControl seq=30
+kf3: GSP rpc RmControl seq=31
+kf3: GSP rpc RmControl seq=32
+kf3: GSP rpc RmControl seq=33
+kf3: GSP rpc RmControl seq=34
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 34 }
+kf3: GSP rpc RmControl seq=35
+kf3: GSP rpc RmAlloc seq=36
+kf3: GSP rpc RmAlloc seq=37
+kf3: GSP rpc RmAlloc seq=38
+kf3: GSP rpc RmControl seq=39
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 39 }
+kf3: GSP rpc RmControl seq=40
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 40 }
+kf3: GSP rpc RmControl seq=41
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 41 }
+kf3: GSP rpc RmControl seq=42
+kf3: GSP rpc RmControl seq=43
+kf3: GSP rpc RmAlloc seq=44
+kf3: GSP rpc RmAlloc seq=45
+kf3: GSP rpc RmAlloc seq=46
+kf3: GSP rpc RmControl seq=47
+kf3: GSP rpc RmControl seq=48
+kf3: GSP rpc RmControl seq=49
+kf3: GSP rpc RmControl seq=50
+kf3: GSP rpc RmControl seq=51
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 51 }
+kf3: GSP rpc RmControl seq=52
+kf3: GSP rpc RmControl seq=53
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 53 }
+kf3: GSP rpc RmControl seq=54
+kf3: GSP rpc RmControl seq=55
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 55 }
+kf3: GSP rpc RmControl seq=56
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 56 }
+kf3: GSP rpc RmControl seq=57
+kf3: GSP rpc RmControl seq=58
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 58 }
+kf3: GSP rpc RmControl seq=59
+kf3: GSP rpc RmControl seq=60
+kf3: GSP rpc Free seq=61
+kf3: GSP rpc Free seq=62
+kf3: GSP rpc Free seq=63
+kf3: GSP rpc RmAlloc seq=64
+kf3: GSP rpc RmAlloc seq=65
+kf3: GSP rpc RmAlloc seq=66
+kf3: GSP rpc RmAlloc seq=67
+kf3: GSP rpc RmControl seq=68
+kf3: VasKey(13970166297506349068) mirror space=0xcafe001e: windows=none rings=none (recycled)
+kf3: GSP rpc Free seq=69
+kf3: GSP rpc RmControl seq=70
+kf3: GSP rpc RmAlloc seq=71
+kf-host: channel birth h=0xcafe0248 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1e0003b:0x2 BORN Translated: token 0x801 -> host 0x10018 in VasKey(13970166297506349068) gpfifo=0x120064000x4096 userd=Some(Framebuffer { base: 8254128128, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(264), Some(264)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=false fast=off (2706 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=72
+kf3: chan 0xc1e0003b:0x2 GPFIFO_SCHEDULE enable=true (token 0x801, host 0x10018)
+kf3: GSP rpc RmControl seq=73
+kf3: GSP rpc RmAlloc seq=74
+kf3: GSP rpc RmControl seq=75
+kf3: GSP rpc RmAlloc seq=76
+kf3: GSP rpc RmAlloc seq=77
+kf3: GSP rpc RmAlloc seq=78
+kf3: GSP rpc RmAlloc seq=79
+kf3: chan token 0x801: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmControl seq=80
+kf3: VasKey(13970166301801316362) mirror space=0xcafe001a: windows=none rings=none (recycled)
+kf-mem: leaf 0x120000000+0x1efc00000 (store 0x0) CLIPPED at the firmware carve-out 0x1efbe0000: 0x120000000+0x1efbe0000 placed, 0x30fbe0000+0x20000 left absent (§Q)
+kf3: mem invalidate seq 1853 CLEARED OVER ABSENCE (Some(VasKey(13970166301801316362))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=43.079s REFUSED VasKey(13970166301801316362) root 0x1efa7c000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem invalidate seq 1857 CLEARED OVER ABSENCE (Some(VasKey(13970166301801316362))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=43.081s REFUSED VasKey(13970166301801316362) root 0x1efa7c000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem invalidate seq 1858 CLEARED OVER ABSENCE (Some(VasKey(13970166301801316362))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=43.082s REFUSED VasKey(13970166301801316362) root 0x1efa7c000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: GSP rpc RmControl seq=81
+kf3: GSP rpc RmAlloc seq=82
+kf-host: channel birth h=0xcafe024f engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1e0003c:0x2 BORN Translated: token 0x802 -> host 0x10019 in VasKey(13970166301801316362) gpfifo=0x320064000x4096 userd=Some(Framebuffer { base: 8254193664, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00100000 userd_at_birth(GP_PUT,GP_GET)=(Some(2), Some(2)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=false fast=off (2480 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=83
+kf3: chan 0xc1e0003c:0x2 BIND engine=0xb (host 0x10019)
+kf3: GSP rpc RmControl seq=84
+kf3: chan 0xc1e0003c:0x2 GPFIFO_SCHEDULE enable=true (token 0x802, host 0x10019)
+kf3: GSP rpc RmControl seq=85
+kf3: GSP rpc RmAlloc seq=86
+kf3: GSP rpc RmControl seq=87
+kf3: chan token 0x802: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmAlloc seq=88
+kf3: GSP rpc RmAlloc seq=89
+kf3: GSP rpc RmAlloc seq=90
+kf3: GSP rpc RmAlloc seq=91
+kf3: GSP rpc RmControl seq=92
+kf3: VasKey(13970166309229035586) mirror space=0xcafe0177: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=93
+kf3: chan 0xc1e0003d:0xbaba0045 class=0xc56f engine=0x1 kernel=true vaspace=Some(baba0042) chid=Some(3) — a KERNEL non-CE channel: not born (kernel GR is P7)
+kf3: GSP rpc RmAlloc seq=94
+kf3: VasKey(13970166309229035586) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166309229035586) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166309229035586) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166309229035586) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166309229035586) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166309229035586) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: chan 0xc1e0003d:0xbaba0045 GPU_PROMOTE_CTX: no passthrough twin — not ours (entries=9)
+kf3: GSP rpc RmControl seq=95
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 95 }
+kf3: GSP rpc Free seq=96
+kf3: GSP rpc Free seq=97
+kf3: GSP rpc Free seq=98
+kf3: GSP rpc Free seq=99
+kf3: GSP rpc Free seq=100
+kf3: GSP rpc RmControl seq=101
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 101 }
+kf3: GSP rpc RmAlloc seq=102
+kf3: GSP rpc RmAlloc seq=103
+kf3: GSP rpc RmAlloc seq=104
+kf3: GSP rpc RmAlloc seq=105
+kf3: GSP rpc RmAlloc seq=106
+kf3: GSP rpc RmControl seq=107
+kf3: VasKey(13965662714168606720) mirror space=0xcafe0177: windows=none rings=none (recycled)
+kf3: GSP rpc Free seq=108
+kf3: GSP rpc RmControl seq=109
+kf-rm: RPC-REFUSED #10 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf3: GSP rpc RmAlloc seq=110
+kf3: GSP rpc Free seq=111
+kf3: GSP rpc Free seq=112
+kf3: GSP rpc Free seq=113
+kf3: GSP rpc Free seq=114
+kf3: GSP rpc RmAlloc seq=115
+kf3: GSP rpc RmAlloc seq=116
+kf3: GSP rpc RmAlloc seq=117
+kf-rm: RPC-REFUSED #11 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf3: GSP rpc RmAlloc seq=118
+kf3: GSP rpc RmAlloc seq=119
+kf3: GSP rpc RmAlloc seq=120
+kf3: GSP rpc RmAlloc seq=121
+kf3: GSP rpc RmAlloc seq=122
+kf3: GSP rpc RmControl seq=123
+kf3: VasKey(13965662680612995075) mirror space=0xcafe0177: windows=none rings=none (recycled)
+kf3: GSP rpc RmAlloc seq=124
+kf3: GSP rpc RmAlloc seq=125
+kf3: GSP rpc RmAlloc seq=126
+kf3: GSP rpc RmAlloc seq=127
+kf3: GSP rpc RmAlloc seq=128
+kf3: GSP rpc RmAlloc seq=129
+kf3: GSP rpc RmAlloc seq=130
+kf3: GSP rpc DupObject seq=131
+kf3: GSP rpc RmAlloc seq=132
+kf3: GSP rpc RmControl seq=133
+kf3: GSP rpc RmControl seq=134
+kf3: GSP rpc RmControl seq=135
+kf3: GSP rpc RmControl seq=136
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 136 }
+kf3: GSP rpc RmAlloc seq=137
+kf3: GSP rpc RmAlloc seq=138
+kf3: GSP rpc RmAlloc seq=139
+kf3: GSP rpc RmAlloc seq=140
+kf3: GSP rpc RmAlloc seq=141
+kf3: GSP rpc RmAlloc seq=142
+kf3: GSP rpc RmControl seq=143
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 143 }
+kf3: GSP rpc RmControl seq=144
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 144 }
+kf3: GSP rpc RmControl seq=145
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 145 }
+kf3: GSP rpc RmControl seq=146
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 146 }
+kf3: GSP rpc RmAlloc seq=147
+kf3: GSP rpc RmControl seq=148
+kf3: GSP rpc RmAlloc seq=149
+kf3: GSP rpc Free seq=150
+kf3: GSP rpc RmControl seq=151
+kf3: GSP rpc Free seq=152
+kf3: GSP rpc Free seq=153
+kf3: GSP rpc Free seq=154
+kf3: GSP rpc Free seq=155
+kf3: GSP rpc RmControl seq=156
+kf3: GSP rpc RmControl seq=157
+kf3: GSP rpc RmControl seq=158
+kf3: GSP rpc RmControl seq=159
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 159 }
+kf3: GSP rpc RmControl seq=160
+kf3: GSP rpc RmControl seq=161
+kf3: GSP rpc RmAlloc seq=162
+kf3: GSP rpc DupObject seq=163
+kf3: GSP rpc RmAlloc seq=164
+kf3: GSP rpc RmAlloc seq=165
+kf3: GSP rpc RmControl seq=166
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 166 }
+kf3: GSP rpc Free seq=167
+kf3: GSP rpc RmControl seq=168
+kf3: GSP rpc RmAlloc seq=169
+kf3: GSP rpc RmControl seq=170
+kf3: GSP rpc RmControl seq=171
+kf3: GSP rpc RmAlloc seq=172
+kf3: GSP rpc RmControl seq=173
+kf3: GSP rpc RmControl seq=174
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 174 }
+kf3: GSP rpc RmControl seq=175
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 175 }
+kf3: GSP rpc RmControl seq=176
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 176 }
+kf3: GSP rpc RmControl seq=177
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 177 }
+kf3: GSP rpc RmControl seq=178
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 178 }
+kf3: GSP rpc RmControl seq=179
+kf3: GSP rpc RmControl seq=180
+kf3: GSP rpc RmControl seq=181
+kf3: GSP rpc RmControl seq=182
+kf3: GSP rpc RmControl seq=183
+kf3: GSP rpc RmControl seq=184
+kf3: GSP rpc RmControl seq=185
+kf3: GSP rpc RmAlloc seq=186
+kf3: GSP rpc RmAlloc seq=187
+kf-host: channel birth h=0xcafe0262 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00042:0xbeef0100 BORN Passthrough: token 0x3 -> host 0x1a in VasKey(13965662680612995075) gpfifo=0x4020000x32768 userd=Store { store: 3405643781, off: 9698816 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (1731 us, off the GSP lock)
+kf3: chan 0xc1d00042:0xbeef0100 BIND engine=0x1 (passthrough host 0x1a)
+kf3: GSP rpc RmControl seq=188
+kf3: GSP rpc RmControl seq=189
+kf3: act schedule: 0xc1d00042:0xbeef0100 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (277 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=190
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 190 }
+kf3: GSP rpc RmControl seq=191
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 191 }
+kf3: GSP rpc RmControl seq=192
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 192 }
+kf3: GSP rpc RmControl seq=193
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 193 }
+kf3: GSP rpc RmControl seq=194
+kf3: GSP rpc RmAlloc seq=195
+kf-host: channel birth h=0xcafe0266 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00042:0xbeef0101 BORN Passthrough: token 0x804 -> host 0x1001b in VasKey(13965662680612995075) gpfifo=0x4100000x32768 userd=Store { store: 3405643781, off: 9698304 } engine=0xb declared_kernel_pid=false privilege=1 rc=armed late_joiner_schedule=Some(NoTsg) fast=off (1773 us, off the GSP lock)
+kf3: chan 0xc1d00042:0xbeef0101 BIND engine=0xb (passthrough host 0x1001b)
+kf3: GSP rpc RmControl seq=196
+kf3: GSP rpc RmControl seq=197
+kf3: act schedule: 0xc1d00042:0xbeef0101 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (283 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=198
+kf3: GSP rpc RmAlloc seq=199
+kf-host: channel birth h=0xcafe026a engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00042:0xbeef0102 BORN Passthrough: token 0x1005 -> host 0x2001c in VasKey(13965662680612995075) gpfifo=0x4160000x32768 userd=Store { store: 3405643781, off: 9697792 } engine=0xc declared_kernel_pid=false privilege=1 rc=armed late_joiner_schedule=Some(NoTsg) fast=off (1795 us, off the GSP lock)
+kf3: chan 0xc1d00042:0xbeef0102 BIND engine=0xc (passthrough host 0x2001c)
+kf3: GSP rpc RmControl seq=200
+kf3: GSP rpc RmControl seq=201
+kf3: act schedule: 0xc1d00042:0xbeef0102 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (283 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=202
+kf3: act promote ctx: chan 0xc1d00042:0xbeef0100 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x1a (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=9 init_ids=0xe05 va_ids=0xa7d bound=true — not forwarded, no guest byte touched (3 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=203
+kf3: act engine object: 0xc1d00042:0xbeef502d class 0x902d (TwoD) on twin host 0x1a -> host object 0xcafe026f (1462 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=204
+kf3: act engine object: 0xc1d00042:0xbeefa0b5 class 0xc7b5 (DmaCopy) on twin host 0x1a -> host object 0xcafe0270 (217 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=205
+kf3: act engine object: 0xc1d00042:0xbeef8500 class 0xc7b5 (DmaCopy) on twin host 0x1001b -> host object 0xcafe0271 (215 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=206
+kf3: act engine object: 0xc1d00042:0xbeef8501 class 0xc7b5 (DmaCopy) on twin host 0x2001c -> host object 0xcafe0272 (217 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=207
+kf3: act engine object: 0xc1d00042:0xbeef3901 class 0xa140 (InlineToMemory) on twin host 0x1a -> host object 0xcafe0273 (1019 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=208
+kf3: GSP rpc RmAlloc seq=209
+kf3: act engine object: 0xc1d00042:0xbeef9097 class 0xc997 (ThreeD) on twin host 0x1a -> host object 0xcafe0274 (491 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=210
+kf3: GSP rpc RmControl seq=211
+kf3: act zcull bind: 0xc1d00042:0xbeef0100 ZCULL_BIND va=0x4280000 mode=2 on 1 GR twin(s) (338 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=212
+kf3: act ctxsw preemption: 0xc1d00042:0xcef80000 SET_CTXSW_PREEMPTION_MODE flags=0x1 gfxp=0 cilp=1 on 1 host group(s) (311 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=213
+kf3: GSP rpc RmControl seq=214
+kf3: GSP rpc RmControl seq=215
+kf3: GSP rpc RmControl seq=216
+kf3: GSP rpc RmControl seq=217
+kf3: GSP rpc RmControl seq=218
+kf3: GSP rpc RmControl seq=219
+kf3: GSP rpc RmControl seq=220
+kf3: GSP rpc RmControl seq=221
+kf3: GSP rpc RmControl seq=222
+kf3: GSP rpc RmControl seq=223
+kf3: GSP rpc RmControl seq=224
+kf3: GSP rpc RmControl seq=225
+kf3: GSP rpc RmControl seq=226
+kf3: GSP rpc RmControl seq=227
+kf3: GSP rpc RmControl seq=228
+kf3: GSP rpc RmControl seq=229
+kf3: GSP rpc RmControl seq=230
+kf3: GSP rpc RmControl seq=231
+kf3: GSP rpc RmControl seq=232
+kf3: GSP rpc RmControl seq=233
+kf3: GSP rpc RmControl seq=234
+kf3: GSP rpc RmControl seq=235
+kf3: GSP rpc RmControl seq=236
+kf3: GSP rpc RmControl seq=237
+kf3: GSP rpc RmControl seq=238
+kf3: GSP rpc RmControl seq=239
+kf3: GSP rpc RmControl seq=240
+kf3: GSP rpc RmControl seq=241
+kf3: GSP rpc RmControl seq=242
+kf3: GSP rpc RmControl seq=243
+kf3: GSP rpc RmControl seq=244
+kf3: GSP rpc RmControl seq=245
+kf3: GSP rpc RmControl seq=246
+kf3: GSP rpc RmControl seq=247
+kf3: GSP rpc RmControl seq=248
+kf3: GSP rpc RmControl seq=249
+kf3: GSP rpc RmControl seq=250
+kf3: GSP rpc RmControl seq=251
+kf3: GSP rpc RmControl seq=252
+kf3: GSP rpc RmControl seq=253
+kf3: GSP rpc RmControl seq=254
+kf3: GSP rpc RmControl seq=255
+kf3: GSP rpc RmControl seq=256
+kf3: GSP rpc RmControl seq=257
+kf3: GSP rpc RmControl seq=258
+kf3: GSP rpc RmControl seq=259
+kf3: GSP rpc RmControl seq=260
+kf3: GSP rpc RmControl seq=261
+kf3: GSP rpc RmControl seq=262
+kf3: GSP rpc RmControl seq=263
+kf3: GSP rpc RmControl seq=264
+kf3: GSP rpc RmControl seq=265
+kf3: GSP rpc RmControl seq=266
+kf3: GSP rpc RmControl seq=267
+kf3: GSP rpc RmControl seq=268
+kf3: GSP rpc RmControl seq=269
+kf3: GSP rpc RmControl seq=270
+kf3: GSP rpc RmControl seq=271
+kf3: GSP rpc RmControl seq=272
+kf3: GSP rpc RmControl seq=273
+kf3: GSP rpc RmControl seq=274
+kf3: GSP rpc RmControl seq=275
+kf3: GSP rpc RmAlloc seq=276
+kf3: GSP rpc RmAlloc seq=277
+kf3: GSP rpc RmAlloc seq=278
+kf3: GSP rpc RmControl seq=279
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 279 }
+kf3: GSP rpc RmControl seq=280
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 280 }
+kf3: GSP rpc RmControl seq=281
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 281 }
+kf3: GSP rpc RmControl seq=282
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 282 }
+kf3: GSP rpc RmControl seq=283
+kf3: GSP rpc RmControl seq=284
+kf3: GSP rpc RmControl seq=285
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 285 }
+kf3: GSP rpc RmControl seq=286
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 286 }
+kf3: GSP rpc RmControl seq=287
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 287 }
+kf3: GSP rpc RmControl seq=288
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 288 }
+kf3: GSP rpc RmControl seq=289
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 289 }
+kf3: GSP rpc RmControl seq=290
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 290 }
+kf3: GSP rpc RmControl seq=291
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 291 }
+kf3: GSP rpc RmControl seq=292
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 292 }
+kf3: GSP rpc RmControl seq=293
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 293 }
+kf3: GSP rpc RmControl seq=294
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 294 }
+kf3: GSP rpc RmControl seq=295
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 295 }
+kf3: GSP rpc RmControl seq=296
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 296 }
+kf3: GSP rpc RmControl seq=297
+kf3: GSP rpc RmControl seq=298
+kf3: GSP rpc Free seq=299
+kf3: GSP rpc Free seq=300
+kf3: GSP rpc Free seq=301
+kf3: GSP rpc Free seq=302
+kf3: GSP rpc Free seq=303
+kf3: act free: 0xc1d00042:0xbeef8500: engine object host 0xcafe0271 freed (305 us, off the GSP lock)
+kf3: GSP rpc Free seq=304
+kf3: DOORBELL-LEDGER tok=0x00000804 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1001b trap=0 fast=0
+kf3: act free: 0xc1d00042:0xbeef0101: passthrough 0xc1d00042:0xbeef0101 token 0x804 host 0x1001b objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (920 us, off the GSP lock)
+kf3: GSP rpc Free seq=305
+kf3: act free: 0xc1d00042:0xbeef8501: engine object host 0xcafe0272 freed (298 us, off the GSP lock)
+kf3: GSP rpc Free seq=306
+kf3: DOORBELL-LEDGER tok=0x00001005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2001c trap=0 fast=0
+kf3: act free: 0xc1d00042:0xbeef0102: passthrough 0xc1d00042:0xbeef0102 token 0x1005 host 0x2001c objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (901 us, off the GSP lock)
+kf3: GSP rpc Free seq=307
+kf3: act free: 0xc1d00042:0xbeefa0b5: engine object host 0xcafe0270 freed (306 us, off the GSP lock)
+kf3: GSP rpc Free seq=308
+kf3: act free: 0xc1d00042:0xbeef9097: engine object host 0xcafe0274 freed (347 us, off the GSP lock)
+kf3: GSP rpc Free seq=309
+kf3: act free: 0xc1d00042:0xbeef502d: engine object host 0xcafe026f freed (344 us, off the GSP lock)
+kf3: GSP rpc Free seq=310
+kf3: act free: 0xc1d00042:0xbeef3901: engine object host 0xcafe0273 freed (333 us, off the GSP lock)
+kf3: GSP rpc Free seq=311
+kf3: DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=4 emulated=0 forwarded=4 host=0x1a trap=4 fast=0
+kf3: act free: 0xc1d00042:0xbeef0100: passthrough 0xc1d00042:0xbeef0100 token 0x3 host 0x1a objects=0 ctx=CtxBind { initialized: 3589, va_bound: 2685, bound: true, promotes: 1, evicts: 0 } freed (1042 us, off the GSP lock)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #512: Raise(0) (guest armed=true, vector Some(0))
+kf3: GSP rpc Free seq=312
+kf3: GSP rpc Free seq=313
+kf3: GSP rpc Free seq=314
+kf3: GSP rpc RmControl seq=315
+kf3: GSP rpc RmControl seq=316
+kf3: GSP rpc RmControl seq=317
+kf3: GSP rpc RmControl seq=318
+kf3: GSP rpc Free seq=319
+kf3: GSP rpc Free seq=320
+kf3: GSP rpc Free seq=321
+kf3: GSP rpc Free seq=322
+kf3: GSP rpc Free seq=323
+kf3: GSP rpc Free seq=324
+kf3: GSP rpc Free seq=325
+kf3: GSP rpc Free seq=326
+kf3: GSP rpc Free seq=327
+kf3: GSP rpc Free seq=328
+kf3: GSP rpc Free seq=329
+kf3: GSP rpc Free seq=330
+kf3: GSP rpc Free seq=331
+kf3: GSP rpc Free seq=332
+kf3: GSP rpc Free seq=333
+kf3: GSP rpc Free seq=334
+kf3: GSP rpc Free seq=335
+kf3: GSP rpc Free seq=336
+kf3: GSP rpc Free seq=337
+kf3: GSP rpc Free seq=338
+kf3: GSP rpc Free seq=339
+kf3: TSPACE-RETIRE tok=0x802 host=0x10019 key=VasKey(13970166301801316362) ring_va=0xff00100000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+kf3: chan token 0x802 (host 0x10019) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=5 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1e0003c:0x2: translated host 0x10019 (1338 us, off the GSP lock)
+kf3: GSP rpc Free seq=340
+kf3: GSP rpc Free seq=341
+kf3: GSP rpc Free seq=342
+kf3: GSP rpc Free seq=343
+kf3: GSP rpc Free seq=344
+kf3: GSP rpc Free seq=345
+kf3: GSP rpc Free seq=346
+kf3: TSPACE-RETIRE tok=0x801 host=0x10018 key=VasKey(13970166297506349068) ring_va=0xff00000000 released=true stale_binds=0/46 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=23 host=0x10018 fast=0
+kf3: chan token 0x801 (host 0x10018) RETIRED, forwarded=23 submissions=47 splits=0/0 serves=67 last_put=Some(23) gp_get=Some(23) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1e0003b:0x2: translated host 0x10018 (1408 us, off the GSP lock)
+kf3: GSP rpc Free seq=347
+kf3: GSP rpc Free seq=348
+kf3: GSP rpc Free seq=349
+kf3: GSP rpc Free seq=350
+kf3: GSP rpc RmControl seq=351
+kf3: GSP rpc RmControl seq=352
+kf3: mem t=43.336s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP rpc Free seq=353
+kf3: GSP rpc Free seq=354
+kf3: GSP rpc Free seq=355
+kf3: GSP rpc Free seq=356
+kf3: GSP rpc Free seq=357
+kf3: GSP rpc Free seq=358
+kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE 0x20800a38: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #5
+kf3: GSP rpc RmControl seq=359
+kf3: GSP rpc UpdateBarPde seq=360
+kf3: GSP rpc Free seq=361
+kf3: GSP rpc Free seq=362
+kf3: GSP rpc Free seq=363
+kf3: GSP rpc Free seq=364
+kf3: GSP rpc RmControl seq=365
+kf3: GSP rpc UnloadingGuestDriver seq=366
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=366: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: GSP command service REFUSED: QueueNotBound [#9, rate-limited]
+kf3: GSP command service REFUSED: QueueNotBound [#10, rate-limited]
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset=0x1ffe00000 → served WPR2_ADDR_LO=Some(Ok("0x1ffe000"))
+kayfabe: GSP-PUBLISH gpa=0x143400000 gpa_same=false seq_last=Some(1) cmd_seq=369 ⇒ same_instance=false [#6, rate-limited]
+kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq=0 936 bytes: bGspNocatEnabled=0 at +929 (driver 580.159.04's layout; 1 = a Windows-built RM, THE_WINDOWS_AXIS §7) [#6, rate-limited]
+kf3: GSP rpc GspSetSystemInfo seq=0
+kf3: GSP rpc SetRegistry seq=0
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says guestDriverVersion="580.159.04" guestVersion="rel/gpu_drv/r580/r582_49-530" guestTitle="Private r582_49 rel/gpu_drv/r580/r582_49-530 unknown" guestClNum=0 vgx=0x2b.0x13; this device answers as driver 580.159.04
+kf3: GSP rpc SetGuestSystemInfo seq=0
+kf3: GSP phase Booted -> Running
+kf3: GSP rpc GetGspStaticInfo seq=1
+kf3: GSP rpc InitGspTraceCrashBuffer seq=2
+kf3: GSP rpc RmControl seq=3
+kf3: GSP rpc RmControl seq=4
+kf3: GSP rpc RmControl seq=5
+kf3: GSP rpc RmControl seq=6
+kf3: GSP rpc RmControl seq=7
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 7 }
+kf3: GSP rpc RmControl seq=8
+kf3: GSP rpc RmControl seq=9
+kf3: GSP rpc RmControl seq=10
+kf3: GSP rpc RmControl seq=11
+kf3: GSP rpc RmControl seq=12
+kf3: GSP rpc RmControl seq=13
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 13 }
+kf3: GSP rpc RmControl seq=14
+kf3: GSP rpc RmControl seq=15
+kf3: GSP rpc RmControl seq=16
+kf3: GSP rpc RmControl seq=17
+kf3: GSP rpc RmControl seq=18
+kf3: GSP rpc RmControl seq=19
+kf3: GSP rpc RmControl seq=20
+kf3: GSP rpc RmControl seq=21
+kf3: GSP rpc RmAlloc seq=22
+kf3: GSP rpc RmAlloc seq=23
+kf3: GSP rpc RmAlloc seq=24
+kf3: GSP rpc RmAlloc seq=25
+kf3: GSP rpc RmControl seq=26
+kf3: GSP rpc RmControl seq=27
+kf3: GSP rpc UpdateBarPde seq=28
+kf3: GSP rpc RmControl seq=29
+kf3: GSP rpc RmControl seq=30
+kf3: GSP rpc RmControl seq=31
+kf3: GSP rpc RmControl seq=32
+kf3: GSP rpc RmControl seq=33
+kf3: GSP rpc RmControl seq=34
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 34 }
+kf3: GSP rpc RmControl seq=35
+kf3: GSP rpc RmAlloc seq=36
+kf3: GSP rpc RmAlloc seq=37
+kf3: GSP rpc RmAlloc seq=38
+kf3: GSP rpc RmControl seq=39
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 39 }
+kf3: GSP rpc RmControl seq=40
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 40 }
+kf3: GSP rpc RmControl seq=41
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 41 }
+kf3: GSP rpc RmControl seq=42
+kf3: GSP rpc RmControl seq=43
+kf-rm: chanlink: client 0xc1e00048 root: kernel=true internal=true [#64, rate-limited]
+kf3: GSP rpc RmAlloc seq=44
+kf3: GSP rpc RmAlloc seq=45
+kf3: GSP rpc RmAlloc seq=46
+kf3: GSP rpc RmControl seq=47
+kf3: GSP rpc RmControl seq=48
+kf3: GSP rpc RmControl seq=49
+kf3: GSP rpc RmControl seq=50
+kf3: GSP rpc RmControl seq=51
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 51 }
+kf3: GSP rpc RmControl seq=52
+kf3: GSP rpc RmControl seq=53
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 53 }
+kf3: GSP rpc RmControl seq=54
+kf3: GSP rpc RmControl seq=55
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 55 }
+kf3: GSP rpc RmControl seq=56
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 56 }
+kf3: GSP rpc RmControl seq=57
+kf3: GSP rpc RmControl seq=58
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 58 }
+kf3: GSP rpc RmControl seq=59
+kf3: GSP rpc RmControl seq=60
+kf3: GSP rpc Free seq=61
+kf3: GSP rpc Free seq=62
+kf3: GSP rpc Free seq=63
+kf3: GSP rpc RmAlloc seq=64
+kf3: GSP rpc RmAlloc seq=65
+kf3: GSP rpc RmAlloc seq=66
+kf3: GSP rpc RmAlloc seq=67
+kf3: GSP rpc RmControl seq=68
+kf3: VasKey(13970166357635891212) mirror space=0xcafe001e: windows=none rings=none (recycled)
+kf3: GSP rpc Free seq=69
+kf3: GSP rpc RmControl seq=70
+kf3: GSP rpc RmAlloc seq=71
+kf-host: channel birth h=0xcafe027d engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1e00049:0x2 BORN Translated: token 0x801 -> host 0x10018 in VasKey(13970166357635891212) gpfifo=0x120064000x4096 userd=Some(Framebuffer { base: 8254128128, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(23), Some(23)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=false fast=off (2604 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=72
+kf3: chan 0xc1e00049:0x2 GPFIFO_SCHEDULE enable=true (token 0x801, host 0x10018)
+kf3: GSP rpc RmControl seq=73
+kf3: GSP rpc RmAlloc seq=74
+kf3: GSP rpc RmControl seq=75
+kf3: GSP rpc RmAlloc seq=76
+kf3: GSP rpc RmAlloc seq=77
+kf3: GSP rpc RmAlloc seq=78
+kf3: GSP rpc RmAlloc seq=79
+kf3: chan token 0x801: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmControl seq=80
+kf3: VasKey(13970166361930858506) mirror space=0xcafe001a: windows=none rings=none (recycled)
+kf-mem: leaf 0x120000000+0x1efc00000 (store 0x0) CLIPPED at the firmware carve-out 0x1efbe0000: 0x120000000+0x1efbe0000 placed, 0x30fbe0000+0x20000 left absent (§Q)
+kf3: mem invalidate seq 2100 CLEARED OVER ABSENCE (Some(VasKey(13970166361930858506))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem t=43.624s REFUSED VasKey(13970166361930858506) root 0x1efa7c000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem invalidate seq 2104 CLEARED OVER ABSENCE (Some(VasKey(13970166361930858506))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 2105 CLEARED OVER ABSENCE (Some(VasKey(13970166361930858506))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: GSP rpc RmControl seq=81
+kf3: GSP rpc RmAlloc seq=82
+kf-host: channel birth h=0xcafe0284 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1e0004a:0x2 BORN Translated: token 0x802 -> host 0x10019 in VasKey(13970166361930858506) gpfifo=0x320064000x4096 userd=Some(Framebuffer { base: 8254193664, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00100000 userd_at_birth(GP_PUT,GP_GET)=(Some(2), Some(2)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=false fast=off (2370 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=83
+kf3: chan 0xc1e0004a:0x2 BIND engine=0xb (host 0x10019)
+kf3: GSP rpc RmControl seq=84
+kf3: chan 0xc1e0004a:0x2 GPFIFO_SCHEDULE enable=true (token 0x802, host 0x10019)
+kf3: GSP rpc RmControl seq=85
+kf3: GSP rpc RmAlloc seq=86
+kf3: GSP rpc RmControl seq=87
+kf3: chan token 0x802: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmAlloc seq=88
+kf3: GSP rpc RmAlloc seq=89
+kf3: GSP rpc RmAlloc seq=90
+kf3: GSP rpc RmAlloc seq=91
+kf3: GSP rpc RmControl seq=92
+kf3: VasKey(13970166369358577730) mirror space=0xcafe0177: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=93
+kf3: chan 0xc1e0004b:0xbaba0045 class=0xc56f engine=0x1 kernel=true vaspace=Some(baba0042) chid=Some(3) — a KERNEL non-CE channel: not born (kernel GR is P7)
+kf3: GSP rpc RmAlloc seq=94
+kf3: VasKey(13970166369358577730) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166369358577730) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166369358577730) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166369358577730) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166369358577730) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166369358577730) root 0x1efa64000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: chan 0xc1e0004b:0xbaba0045 GPU_PROMOTE_CTX: no passthrough twin — not ours (entries=9)
+kf3: GSP rpc RmControl seq=95
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 95 }
+kf3: GSP rpc Free seq=96
+kf3: GSP rpc Free seq=97
+kf3: GSP rpc Free seq=98
+kf3: GSP rpc Free seq=99
+kf3: GSP rpc Free seq=100
+kf3: GSP rpc RmControl seq=101
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 101 }
+kf3: GSP rpc RmAlloc seq=102
+kf3: GSP rpc RmAlloc seq=103
+kf3: GSP rpc RmAlloc seq=104
+kf3: GSP rpc RmAlloc seq=105
+kf3: GSP rpc RmAlloc seq=106
+kf3: GSP rpc RmControl seq=107
+kf3: VasKey(13965662774298148864) mirror space=0xcafe0177: windows=none rings=none (recycled)
+kf3: GSP rpc Free seq=108
+kf3: GSP rpc RmControl seq=109
+kf-rm: RPC-REFUSED #12 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf3: GSP rpc RmAlloc seq=110
+kf3: GSP rpc Free seq=111
+kf3: GSP rpc Free seq=112
+kf3: GSP rpc Free seq=113
+kf3: GSP rpc Free seq=114
+kf3: GSP rpc RmAlloc seq=115
+kf3: GSP rpc RmAlloc seq=116
+kf3: GSP rpc RmAlloc seq=117
+kf-rm: RPC-REFUSED #13 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf3: GSP rpc RmAlloc seq=118
+kf3: GSP rpc RmAlloc seq=119
+kf3: GSP rpc RmAlloc seq=120
+kf3: GSP rpc RmAlloc seq=121
+kf3: GSP rpc RmAlloc seq=122
+kf3: GSP rpc RmControl seq=123
+kf3: VasKey(13965662740742537219) mirror space=0xcafe0177: windows=none rings=none (recycled)
+kf3: GSP rpc RmAlloc seq=124
+kf3: GSP rpc RmAlloc seq=125
+kf3: GSP rpc RmAlloc seq=126
+kf3: GSP rpc RmAlloc seq=127
+kf3: GSP rpc RmAlloc seq=128
+kf3: GSP rpc RmAlloc seq=129
+kf3: GSP rpc RmAlloc seq=130
+kf3: GSP rpc DupObject seq=131
+kf3: GSP rpc RmAlloc seq=132
+kf3: GSP rpc RmControl seq=133
+kf3: GSP rpc RmControl seq=134
+kf3: GSP rpc RmControl seq=135
+kf3: GSP rpc RmControl seq=136
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 136 }
+kf3: GSP rpc RmAlloc seq=137
+kf3: GSP rpc RmAlloc seq=138
+kf3: GSP rpc RmAlloc seq=139
+kf3: GSP rpc RmAlloc seq=140
+kf3: GSP rpc RmAlloc seq=141
+kf3: GSP rpc RmAlloc seq=142
+kf3: GSP rpc RmControl seq=143
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 143 }
+kf3: GSP rpc RmControl seq=144
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 144 }
+kf3: GSP rpc RmControl seq=145
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 145 }
+kf3: GSP rpc RmControl seq=146
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 146 }
+kf3: GSP rpc RmAlloc seq=147
+kf3: GSP rpc RmControl seq=148
+kf3: GSP rpc RmAlloc seq=149
+kf3: GSP rpc Free seq=150
+kf3: GSP rpc RmControl seq=151
+kf3: GSP rpc Free seq=152
+kf3: GSP rpc Free seq=153
+kf3: GSP rpc Free seq=154
+kf3: GSP rpc Free seq=155
+kf3: GSP rpc RmControl seq=156
+kf3: GSP rpc RmControl seq=157
+kf3: GSP rpc RmControl seq=158
+kf3: GSP rpc RmControl seq=159
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 159 }
+kf3: GSP rpc RmControl seq=160
+kf3: GSP rpc RmControl seq=161
+kf3: GSP rpc RmAlloc seq=162
+kf3: GSP rpc DupObject seq=163
+kf3: GSP rpc RmAlloc seq=164
+kf3: GSP rpc RmAlloc seq=165
+kf3: GSP rpc RmControl seq=166
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 166 }
+kf3: GSP rpc Free seq=167
+kf3: GSP rpc RmControl seq=168
+kf3: GSP rpc RmAlloc seq=169
+kf3: GSP rpc RmControl seq=170
+kf3: GSP rpc RmControl seq=171
+kf3: GSP rpc RmAlloc seq=172
+kf3: GSP rpc RmControl seq=173
+kf3: GSP rpc RmControl seq=174
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 174 }
+kf3: GSP rpc RmControl seq=175
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 175 }
+kf3: GSP rpc RmControl seq=176
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 176 }
+kf3: GSP rpc RmControl seq=177
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 177 }
+kf3: GSP rpc RmControl seq=178
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 178 }
+kf3: GSP rpc RmControl seq=179
+kf3: GSP rpc RmControl seq=180
+kf3: GSP rpc RmControl seq=181
+kf3: GSP rpc RmControl seq=182
+kf3: GSP rpc RmControl seq=183
+kf3: GSP rpc RmControl seq=184
+kf3: GSP rpc RmControl seq=185
+kf3: GSP rpc RmAlloc seq=186
+kf3: GSP rpc RmAlloc seq=187
+kf-host: channel birth h=0xcafe0297 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00050:0xbeef0100 BORN Passthrough: token 0x3 -> host 0x1a in VasKey(13965662740742537219) gpfifo=0x4020000x32768 userd=Store { store: 3405643781, off: 9698816 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (1750 us, off the GSP lock)
+kf3: chan 0xc1d00050:0xbeef0100 BIND engine=0x1 (passthrough host 0x1a)
+kf3: GSP rpc RmControl seq=188
+kf3: GSP rpc RmControl seq=189
+kf3: act schedule: 0xc1d00050:0xbeef0100 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (271 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=190
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 190 }
+kf3: GSP rpc RmControl seq=191
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 191 }
+kf3: GSP rpc RmControl seq=192
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 192 }
+kf3: GSP rpc RmControl seq=193
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 193 }
+kf3: GSP rpc RmControl seq=194
+kf3: GSP rpc RmAlloc seq=195
+kf-host: channel birth h=0xcafe029b engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00050:0xbeef0101 BORN Passthrough: token 0x804 -> host 0x1001b in VasKey(13965662740742537219) gpfifo=0x4100000x32768 userd=Store { store: 3405643781, off: 9698304 } engine=0xb declared_kernel_pid=false privilege=1 rc=armed late_joiner_schedule=Some(NoTsg) fast=off (1755 us, off the GSP lock)
+kf3: chan 0xc1d00050:0xbeef0101 BIND engine=0xb (passthrough host 0x1001b)
+kf3: GSP rpc RmControl seq=196
+kf3: GSP rpc RmControl seq=197
+kf3: act schedule: 0xc1d00050:0xbeef0101 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (278 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=198
+kf3: GSP rpc RmAlloc seq=199
+kf-host: channel birth h=0xcafe029f engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00050:0xbeef0102 BORN Passthrough: token 0x1005 -> host 0x2001c in VasKey(13965662740742537219) gpfifo=0x4160000x32768 userd=Store { store: 3405643781, off: 9697792 } engine=0xc declared_kernel_pid=false privilege=1 rc=armed late_joiner_schedule=Some(NoTsg) fast=off (1751 us, off the GSP lock)
+kf3: chan 0xc1d00050:0xbeef0102 BIND engine=0xc (passthrough host 0x2001c)
+kf3: GSP rpc RmControl seq=200
+kf3: GSP rpc RmControl seq=201
+kf3: act schedule: 0xc1d00050:0xbeef0102 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (273 us, off the GSP lock)
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00050:0xbeef0004 params=560 rpc_flags=0x0 [#16, rate-limited]
+kf3: GSP rpc RmControl seq=202
+kf3: act promote ctx: chan 0xc1d00050:0xbeef0100 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x1a (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=9 init_ids=0xe05 va_ids=0xa7d bound=true — not forwarded, no guest byte touched (1 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=203
+kf3: act engine object: 0xc1d00050:0xbeef502d class 0x902d (TwoD) on twin host 0x1a -> host object 0xcafe02a4 (1406 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=204
+kf3: act engine object: 0xc1d00050:0xbeefa0b5 class 0xc7b5 (DmaCopy) on twin host 0x1a -> host object 0xcafe02a5 (219 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=205
+kf3: act engine object: 0xc1d00050:0xbeef8500 class 0xc7b5 (DmaCopy) on twin host 0x1001b -> host object 0xcafe02a6 (218 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=206
+kf3: act engine object: 0xc1d00050:0xbeef8501 class 0xc7b5 (DmaCopy) on twin host 0x2001c -> host object 0xcafe02a7 (217 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=207
+kf3: act engine object: 0xc1d00050:0xbeef3901 class 0xa140 (InlineToMemory) on twin host 0x1a -> host object 0xcafe02a8 (1022 us, off the GSP lock)
+kf3: GSP rpc RmAlloc seq=208
+kf3: GSP rpc RmAlloc seq=209
+kf3: act engine object: 0xc1d00050:0xbeef9097 class 0xc997 (ThreeD) on twin host 0x1a -> host object 0xcafe02a9 (490 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=210
+kf3: GSP rpc RmControl seq=211
+kf3: act zcull bind: 0xc1d00050:0xbeef0100 ZCULL_BIND va=0x4280000 mode=2 on 1 GR twin(s) (338 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=212
+kf3: act ctxsw preemption: 0xc1d00050:0xcef80000 SET_CTXSW_PREEMPTION_MODE flags=0x1 gfxp=0 cilp=1 on 1 host group(s) (312 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=213
+kf3: GSP rpc RmControl seq=214
+kf3: GSP rpc RmControl seq=215
+kf3: GSP rpc RmControl seq=216
+kf3: GSP rpc RmControl seq=217
+kf3: GSP rpc RmControl seq=218
+kf3: GSP rpc RmControl seq=219
+kf3: GSP rpc RmControl seq=220
+kf3: GSP rpc RmControl seq=221
+kf3: GSP rpc RmControl seq=222
+kf3: GSP rpc RmControl seq=223
+kf3: GSP rpc RmControl seq=224
+kf3: GSP rpc RmControl seq=225
+kf3: GSP rpc RmControl seq=226
+kf3: GSP rpc RmControl seq=227
+kf3: GSP rpc RmControl seq=228
+kf3: GSP rpc RmControl seq=229
+kf3: GSP rpc RmControl seq=230
+kf3: GSP rpc RmControl seq=231
+kf3: GSP rpc RmControl seq=232
+kf3: GSP rpc RmControl seq=233
+kf3: GSP rpc RmControl seq=234
+kf3: GSP rpc RmControl seq=235
+kf3: GSP rpc RmControl seq=236
+kf3: GSP rpc RmControl seq=237
+kf3: GSP rpc RmControl seq=238
+kf3: GSP rpc RmControl seq=239
+kf3: GSP rpc RmControl seq=240
+kf3: GSP rpc RmControl seq=241
+kf3: GSP rpc RmControl seq=242
+kf3: GSP rpc RmControl seq=243
+kf3: GSP rpc RmControl seq=244
+kf3: GSP rpc RmControl seq=245
+kf3: GSP rpc RmControl seq=246
+kf3: GSP rpc RmControl seq=247
+kf3: GSP rpc RmControl seq=248
+kf3: GSP rpc RmControl seq=249
+kf3: GSP rpc RmControl seq=250
+kf3: GSP rpc RmControl seq=251
+kf3: GSP rpc RmControl seq=252
+kf3: GSP rpc RmControl seq=253
+kf3: GSP rpc RmControl seq=254
+kf3: GSP rpc RmControl seq=255
+kf3: GSP rpc RmControl seq=256
+kf3: GSP rpc RmControl seq=257
+kf3: GSP rpc RmControl seq=258
+kf3: GSP rpc RmControl seq=259
+kf3: GSP rpc RmControl seq=260
+kf3: GSP rpc RmControl seq=261
+kf3: GSP rpc RmControl seq=262
+kf3: GSP rpc RmControl seq=263
+kf3: GSP rpc RmControl seq=264
+kf3: GSP rpc RmControl seq=265
+kf3: GSP rpc RmControl seq=266
+kf3: GSP rpc RmControl seq=267
+kf3: GSP rpc RmControl seq=268
+kf3: GSP rpc RmControl seq=269
+kf3: GSP rpc RmControl seq=270
+kf3: GSP rpc RmControl seq=271
+kf3: GSP rpc RmControl seq=272
+kf3: GSP rpc RmControl seq=273
+kf3: GSP rpc RmControl seq=274
+kf3: GSP rpc RmControl seq=275
+kf3: GSP rpc RmAlloc seq=276
+kf3: GSP rpc RmAlloc seq=277
+kf3: GSP rpc RmAlloc seq=278
+kf3: GSP rpc RmControl seq=279
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 279 }
+kf3: GSP rpc RmControl seq=280
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 280 }
+kf3: GSP rpc RmControl seq=281
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 281 }
+kf3: GSP rpc RmControl seq=282
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 282 }
+kf3: GSP rpc RmControl seq=283
+kf3: GSP rpc RmControl seq=284
+kf3: GSP rpc RmControl seq=285
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 285 }
+kf3: GSP rpc RmControl seq=286
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 286 }
+kf3: GSP rpc RmControl seq=287
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 287 }
+kf3: GSP rpc RmControl seq=288
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 288 }
+kf3: GSP rpc RmControl seq=289
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 289 }
+kf3: GSP rpc RmControl seq=290
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 290 }
+kf3: GSP rpc RmControl seq=291
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 291 }
+kf3: GSP rpc RmControl seq=292
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 292 }
+kf3: GSP rpc RmControl seq=293
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 293 }
+kf3: GSP rpc RmControl seq=294
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 294 }
+kf3: GSP rpc RmControl seq=295
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 295 }
+kf3: GSP rpc RmControl seq=296
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 296 }
+kf3: GSP rpc RmAlloc seq=297
+kf3: GSP rpc RmAlloc seq=298
+kf3: GSP rpc RmAlloc seq=299
+kf3: GSP rpc RmAlloc seq=300
+kf3: GSP rpc RmControl seq=301
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 301 }
+kf3: GSP rpc RmControl seq=302
+kf3: GSP rpc RmControl seq=303
+kf3: GSP rpc RmControl seq=304
+kf3: GSP rpc RmControl seq=305
+kf3: GSP rpc RmControl seq=306
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 306 }
+kf3: GSP rpc RmControl seq=307
+kf3: GSP rpc RmControl seq=308
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 308 }
+kf3: GSP rpc RmControl seq=309
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 309 }
+kf3: GSP rpc RmControl seq=310
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 310 }
+kf3: GSP rpc RmControl seq=311
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 311 }
+kf3: GSP rpc RmControl seq=312
+kf3: GSP rpc RmControl seq=313
+kf3: GSP rpc RmControl seq=314
+kf3: GSP rpc RmControl seq=315
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00053:0x5c000007 under 0x5c000002 (device default for it: 0x5c000007) VAS-FACTS index=Some(0) flags=Some(48) bigPageSize=Some(0) vaBase(lo32)=Some(1000) vaSize(lo32)=Some(0) [#32, rate-limited]
+kf-rm: chanlink: VAS-DECL 0xc1d00053:0x5c000007 vaBase=0x1000 vaSize=0x0 end=None shared_management=false [#32, rate-limited]
+kf3: GSP rpc RmAlloc seq=316
+kf3: GSP rpc RmAlloc seq=317
+kf3: GSP rpc RmControl seq=318
+kf3: VasKey(13965662802501697544) mirror space=0xcafe00ab: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=319
+kf3: GSS 0x20808162 answered from the host's realize-time reply
+kf3: GSP rpc RmControl seq=320
+kf3: GSP rpc RmControl seq=321
+kf3: GSP rpc RmAlloc seq=322
+kf3: GSP rpc RmAlloc seq=323
+kf3: GSP rpc RmAlloc seq=324
+kf3: GSP rpc Free seq=325
+kf3: GSP rpc Free seq=326
+kf3: GSP rpc Free seq=327
+kf3: GSP rpc RmAlloc seq=328
+kf3: GSP rpc RmAlloc seq=329
+kf3: GSP rpc RmAlloc seq=330
+kf3: GSP rpc RmControl seq=331
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 331 }
+kf3: GSP rpc RmControl seq=332
+kf3: GSP rpc RmControl seq=333
+kf3: GSP rpc RmControl seq=334
+kf3: GSP rpc RmAlloc seq=335
+kf3: GSP rpc RmControl seq=336
+kf3: VasKey(13965662490830307388) mirror space=0xcafe00af: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=337
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 337 }
+kf3: GSP rpc RmControl seq=338
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 338 }
+kf3: GSP rpc RmControl seq=339
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 339 }
+kf3: GSP rpc RmControl seq=340
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 340 }
+kf3: GSP rpc RmControl seq=341
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 341 }
+kf3: GSP rpc RmControl seq=342
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 342 }
+kf3: GSP rpc RmControl seq=343
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 343 }
+kf3: GSP rpc RmControl seq=344
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 344 }
+kf3: GSP rpc RmControl seq=345
+kf3: GSP rpc RmControl seq=346
+kf3: GSP rpc RmAlloc seq=347
+kf3: GSP rpc RmControl seq=348
+kf3: VasKey(13965662490830307388) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf00049): privileged leaves are mirrored here
+kf3: GSP rpc RmAlloc seq=349
+kf-host: channel birth h=0xcafe02b5 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1d0000a:0xcaf00049 BORN Translated: token 0x806 -> host 0x1001d in VasKey(13965662490830307388) gpfifo=0x121010000x1024 userd=Some(Framebuffer { base: 16842752, size: 512 }) engine=0xb tsg=Some(caf0003f) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00200000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=false fast=off (2357 us, off the GSP lock)
+kf3: chan 0xc1d0000a:0xcaf00049 (host 0x1001d): class 0xc076 handle None took software classID Some(1)
+kf3: GSP rpc RmAlloc seq=350
+kf3: GSP rpc RmAlloc seq=351
+kf3: chan 0xc1d0000a:0xcaf00049 GPFIFO_SCHEDULE enable=true (token 0x806, host 0x1001d)
+kf3: GSP rpc RmControl seq=352
+kf3: chan token 0x806: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmAlloc seq=353
+kf-host: channel birth h=0xcafe02bb engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1d0000a:0xcaf00054 BORN Translated: token 0x807 -> host 0x1001e in VasKey(13965662490830307388) gpfifo=0x121040000x1024 userd=Some(Framebuffer { base: 17039360, size: 512 }) engine=0xb tsg=Some(caf0003f) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00300000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=false fast=off (2392 us, off the GSP lock)
+kf3: chan 0xc1d0000a:0xcaf00054 (host 0x1001e): class 0xc076 handle None took software classID Some(1)
+kf3: GSP rpc RmAlloc seq=354
+kf3: GSP rpc RmAlloc seq=355
+kf3: chan 0xc1d0000a:0xcaf00054 GPFIFO_SCHEDULE enable=true (token 0x807, host 0x1001e)
+kf3: GSP rpc RmControl seq=356
+kf3: chan token 0x807: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmControl seq=357
+kf3: GSP rpc RmAlloc seq=358
+kf3: GSP rpc RmControl seq=359
+kf3: GSP rpc RmAlloc seq=360
+kf-host: channel birth h=0xcafe02c1 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1d0000a:0xcaf0005f BORN Translated: token 0x1008 -> host 0x1001f in VasKey(13965662490830307388) gpfifo=0x121070000x1024 userd=Some(Framebuffer { base: 17235968, size: 512 }) engine=0xc tsg=Some(caf00057) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00400000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=false fast=off (2402 us, off the GSP lock)
+kf3: chan 0xc1d0000a:0xcaf0005f (host 0x1001f): class 0xc076 handle None took software classID Some(1)
+kf3: GSP rpc RmAlloc seq=361
+kf3: GSP rpc RmAlloc seq=362
+kf3: chan 0xc1d0000a:0xcaf0005f GPFIFO_SCHEDULE enable=true (token 0x1008, host 0x1001f)
+kf3: GSP rpc RmControl seq=363
+kf3: chan token 0x1008: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmAlloc seq=364
+kf-host: channel birth h=0xcafe02c7 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1d0000a:0xcaf0006a BORN Translated: token 0x1009 -> host 0x10020 in VasKey(13965662490830307388) gpfifo=0x1210a0000x1024 userd=Some(Framebuffer { base: 17432576, size: 512 }) engine=0xc tsg=Some(caf00057) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=false fast=off (2401 us, off the GSP lock)
+kf3: chan 0xc1d0000a:0xcaf0006a (host 0x10020): class 0xc076 handle None took software classID Some(1)
+kf3: GSP rpc RmAlloc seq=365
+kf3: GSP rpc RmAlloc seq=366
+kf3: chan 0xc1d0000a:0xcaf0006a GPFIFO_SCHEDULE enable=true (token 0x1009, host 0x10020)
+kf3: GSP rpc RmControl seq=367
+kf3: chan token 0x1009: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmControl seq=368
+kf3: GSP rpc RmControl seq=369
+kf3: GSP rpc RmControl seq=370
+kf3: GSP rpc RmControl seq=371
+kf3: GSP rpc RmControl seq=372
+kf3: GSP rpc RmControl seq=373
+kf3: GSP rpc RmControl seq=374
+kf3: GSP rpc RmControl seq=375
+kf3: GSP rpc RmControl seq=376
+kf3: GSP rpc RmControl seq=377
+kf3: GSP rpc RmControl seq=378
+kf3: GSP rpc RmControl seq=379
+kf3: GSP rpc RmControl seq=380
+kf3: GSP rpc RmControl seq=381
+kf3: GSP rpc RmControl seq=382
+kf3: GSP rpc RmControl seq=383
+kf3: GSP rpc RmControl seq=384
+kf3: GSP rpc RmControl seq=385
+kf3: GSP rpc RmControl seq=386
+kf3: GSP rpc RmControl seq=387
+kf3: GSP rpc RmControl seq=388
+kf3: GSP rpc RmControl seq=389
+kf3: GSP rpc RmControl seq=390
+kf3: GSP rpc RmControl seq=391
+kf3: GSP rpc RmControl seq=392
+kf3: GSP rpc RmControl seq=393
+kf3: GSP rpc RmControl seq=394
+kf3: GSP rpc RmControl seq=395
+kf3: GSP rpc RmControl seq=396
+kf3: GSP rpc RmControl seq=397
+kf3: GSP rpc RmControl seq=398
+kf3: GSP rpc RmControl seq=399
+kf3: GSP rpc RmControl seq=400
+kf3: GSP rpc RmControl seq=401
+kf3: GSP rpc RmControl seq=402
+kf3: GSP rpc RmControl seq=403
+kf3: GSP rpc RmControl seq=404
+kf3: GSP rpc RmControl seq=405
+kf3: GSP rpc RmControl seq=406
+kf3: GSP rpc RmControl seq=407
+kf3: GSP rpc RmControl seq=408
+kf3: GSP rpc RmControl seq=409
+kf3: GSP rpc RmControl seq=410
+kf3: GSP rpc RmControl seq=411
+kf3: GSP rpc RmControl seq=412
+kf3: GSP rpc RmControl seq=413
+kf3: GSP rpc RmControl seq=414
+kf3: GSP rpc RmControl seq=415
+kf3: GSP rpc RmControl seq=416
+kf3: GSP rpc RmControl seq=417
+kf3: GSP rpc RmControl seq=418
+kf3: GSP rpc RmControl seq=419
+kf3: GSP rpc RmControl seq=420
+kf3: GSP rpc RmControl seq=421
+kf3: GSP rpc RmControl seq=422
+kf3: GSP rpc RmControl seq=423
+kf3: GSP rpc RmControl seq=424
+kf3: GSP rpc RmControl seq=425
+kf3: GSP rpc RmControl seq=426
+kf3: GSP rpc RmControl seq=427
+kf3: GSP rpc RmControl seq=428
+kf3: GSP rpc RmControl seq=429
+kf3: GSP rpc RmControl seq=430
+kf3: GSP rpc RmControl seq=431
+kf3: GSP rpc RmControl seq=432
+kf3: GSP rpc RmAlloc seq=433
+kf3: GSP rpc RmControl seq=434
+kf3: GSP rpc RmControl seq=435
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 435 }
+kf3: GSP rpc RmControl seq=436
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 436 }
+kf3: GSP rpc RmControl seq=437
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 437 }
+kf3: GSP rpc RmControl seq=438
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 438 }
+kf3: GSP rpc RmControl seq=439
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 439 }
+kf3: GSP rpc RmAlloc seq=440
+kf3: GSP rpc RmAlloc seq=441
+kf-host: channel birth h=0xcafe02d9 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00050:0xbeee0100 BORN Passthrough: token 0xa -> host 0x21 in VasKey(13965662740742537219) gpfifo=0x4a50000x32768 userd=Store { store: 3405643781, off: 9697280 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (1775 us, off the GSP lock)
+kf3: chan 0xc1d00050:0xbeee0100 BIND engine=0x1 (passthrough host 0x21)
+kf3: GSP rpc RmControl seq=442
+kf3: GSP rpc RmControl seq=443
+kf3: act schedule: 0xc1d00050:0xbeee0100 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (274 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=444
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 444 }
+kf3: GSP rpc RmControl seq=445
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 445 }
+kf3: GSP rpc RmControl seq=446
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 446 }
+kf3: GSP rpc RmControl seq=447
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 447 }
+kf3: GSP rpc RmControl seq=448
+kf3: GSP rpc RmAlloc seq=449
+kf-host: channel birth h=0xcafe02dd engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00050:0xbeee0101 BORN Passthrough: token 0x80b -> host 0x10022 in VasKey(13965662740742537219) gpfifo=0x4ab0000x32768 userd=Store { store: 3405643781, off: 9696768 } engine=0xb declared_kernel_pid=false privilege=1 rc=armed late_joiner_schedule=Some(NoTsg) fast=off (1815 us, off the GSP lock)
+kf3: chan 0xc1d00050:0xbeee0101 BIND engine=0xb (passthrough host 0x10022)
+kf3: GSP rpc RmControl seq=450
+kf3: GSP rpc RmControl seq=451
+kf3: act schedule: 0xc1d00050:0xbeee0101 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (293 us, off the GSP lock)
+kf3: GSP rpc RmControl seq=452
+kf3: GSP rpc RmAlloc seq=453
+kf-host: channel birth h=0xcafe02e1 engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00050:0xbeee0102 BORN Passthrough: token 0x100c -> host 0x20023 in VasKey(13965662740742537219) gpfifo=0x4b10000x32768 userd=Store { store: 3405643781, off: 9696256 } engine=0xc declared_
+... [middle cut by make_trace.py: 933780 bytes] ...
+a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852f,0x20808513,0x20802068,0x2080a612,0x2080012f,0x20802a12,0x20810107,0x20800a9a,0x20800ab8,0x2080a0d1,0x20800a9e,0x20800a9c,0x20800a1e] gsp_refusals[total=888 distinct=35 [fn76/0x20800a87=0x56x6 fn76/0x20800a4b=0x56x6 fn76/0x20800a80=0x56x12 fn76/0x20802a0f=0x56x6 fn76/0x2080017e=0x56x6 fn76/0x20800a30=0x56x6 fn76/0x20800a2e=0x56x6 fn76/0x20800b03=0x56x6 fn76/0x20800b05=0x56x6 fn76/0x20800a3f=0x56x6 fn76/0x2080012b=0x56x6 fn76/0x2080013f=0x56x6 fn103/0x0000c36f=0x56x6 fn103/0x0000402c=0x56x6 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x3 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852f=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x20809064=0x56x3 fn103/0x0000208f=0x56x1 fn76/0x2080012f=0x56x12 fn76/0x20802a12=0x56x256 fn76/0x20810107=0x56x4 fn76/0x20800a9a=0x56x22 fn76/0x20800ab8=0x56x1 fn76/0x2080a0d1=0x56x479 fn76/0x20800a9e=0x56x1 fn76/0x20800a9c=0x56x1 fn76/0x20800a1e=0x56x1]] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]
+W343GSSCENSUS cmd=0x2080a0d1 params_size=2024 params_at=40 payload_len=2064
+kf3: GSP rpc RmControl seq=1613
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1613 }
+W343GSSCENSUS cmd=0x2080a0d1 params_size=2024 params_at=40 payload_len=2064
+kf3: GSP rpc RmControl seq=1614
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1614 }
+W343GSSCENSUS cmd=0x2080a0d1 params_size=2024 params_at=40 payload_len=2064
+kf3: GSP rpc RmControl seq=1615
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1615 }
+W343GSSCENSUS cmd=0x2080a0d1 params_size=2024 params_at=40 payload_len=2064
+kf3: GSP rpc RmControl seq=1616
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1616 }
+kf3: family=Ada phase=Running trapped=91356 applied=10041 refused=0 serviced=4226 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2968 walks=3002/3002 cleared=2968 superseded=0 named_missed=11 unreconciled=0 absent_cleared=18 mapped=28346 unmapped=15612 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=34934 priv_withheld_bytes=0x4562bd7000 priv_mirrored=36 sked=12/0held carve_gpu=0 carve_kernel=24 carve_cpu=7 carve_clipped=0xc0000 fn70=11 roots=36 root_moves=2 stmts=227/227 refused=16 pramin_repoints=118 pramin_miss=0 last_miss=0x0 pramin_worst_us=381 (map 345 mmap 61) pramin_maps=118 pramin_mmaps=118 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 pramin_pool_empty=0 pramin_retire_full=0 reaped=117 cache_ops=266 sysmembars=150 root_unsets=2] mirrors=3 reused=31 prewarmed=3 mirror_avg_us=1221 mirror_max_us=1242 vat[invals=0 arrive->clear_avg_us=0 max_us=92518 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=547 host_calls=0 apply_max_ms=92 split_max_ms=0 slow_applies=0 slow_splits=0 q_inbox_n=0 q_inbox_avg_us=0 q_inbox_max_us=18 submit_n=0 submit_avg_us=0 submit_max_us=77 collect_n=0 collect_avg_us=0 collect_max_us=25 cap_retries=0 req_n=0 req_avg_us=0 req_p50_us=0 req_p95_us=0 req_p99_us=0 req_max_ms=0 aps_n=0 aps_avg_us=0 aps_p50_us=0 aps_p95_us=0 aps_p99_us=0 aps_max_ms=92 prep_n=0 prep_us=0 prep_max_us=135 unmapph_n=0 unmapph_us=0 unmapph_max_us=33911 mapph_n=0 mapph_us=0 mapph_max_us=92323 takedown_n=0 takedown_us=0 takedown_max_us=2 inval_n=0 inval_us=0 inval_max_us=60 rm_map_n=0 rm_map_us=0 rm_map_max_us=91492 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=33906 rm_free_n=0 rm_free_us=0 rm_free_max_us=60 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=76 ledger_n=0 ledger_us=0 ledger_max_us=13 stitch_n=0 stitch_us=0 stitch_max_us=2349 desc_n=0 desc_us=0 desc_max_us=2373 reap_n=0 reap_us=0 reap_max_us=16 slow_reqs=0 slow_aps=0 windows_max=0 slow_printed=0 slow_suppressed=0 ring_overwritten=0 pub_n=0 pub_avg_us=0 pub_max_us=20 resume_n=0 resume_avg_us=0 resume_max_us=17 e2e_n=0 e2e_avg_us=0 e2e_p50_us=0 e2e_p95_us=0 e2e_p99_us=0 e2e_max_ms=0] chan[births=20 pt_births=48 acts=395/0refused birth_refused_cap=0 worst_act_us=2734 nsi=[GR0:17/17raised(nolive=0,novec=0) CE2:483/332raised(nolive=0,novec=0) CE3:3/3raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=623 fifo_raised=623 fifo_armed=24 sticky=0x0 kernel_nonstall_registered=28 arm_clears=6 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=1126 not_armed=151 unvectored=0 relay_off=0 relay=on pacing=off refused=0 v0[raised=215 coalesced_later_raised=0 late=0 owed=false] v1[raised=332 coalesced_later_raised=0 late=0 owed=false] v2[raised=3 coalesced_later_raised=0 late=0 owed=false] v4[raised=425 coalesced_later_raised=0 late=0 owed=false] GR0[vec=Some(0) armed=2 wakes=17 not_armed=0 raised=17 live_twins=10] CE2[vec=Some(1) armed=1 wakes=483 not_armed=151 raised=332 live_twins=4] CE3[vec=Some(2) armed=1 wakes=3 not_armed=0 raised=3 live_twins=7]] served=1838 parks=14845 host_rings=543 contended=998 poisoned=0 tokens=[0x801:fwd=64,subs=64,serves=68,put=Some(64),gp_get=Some(64) 0x802:fwd=2,subs=2,serves=6,put=Some(2),gp_get=Some(2) 0x806:fwd=3,subs=3,serves=7,put=Some(3),gp_get=Some(3) 0x807:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x1008:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x1009:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1)]] views[armed=1650 released=1099 refused=0 held=551] rc[armed=68 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=71874 raised=963 held=24 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] util[on host_reads=369 refused=0 stalled=0 empty=0 gpumon=0/0/0 rusd=6/5/9 published=1/0] unserviced=[0x20800a87,0x20800a4b,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852f,0x20808513,0x20802068,0x2080a612,0x2080012f,0x20802a12,0x20810107,0x20800a9a,0x20800ab8,0x2080a0d1,0x20800a9e,0x20800a9c,0x20800a1e] gsp_refusals[total=892 distinct=35 [fn76/0x20800a87=0x56x6 fn76/0x20800a4b=0x56x6 fn76/0x20800a80=0x56x12 fn76/0x20802a0f=0x56x6 fn76/0x2080017e=0x56x6 fn76/0x20800a30=0x56x6 fn76/0x20800a2e=0x56x6 fn76/0x20800b03=0x56x6 fn76/0x20800b05=0x56x6 fn76/0x20800a3f=0x56x6 fn76/0x2080012b=0x56x6 fn76/0x2080013f=0x56x6 fn103/0x0000c36f=0x56x6 fn103/0x0000402c=0x56x6 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x3 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852f=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x20809064=0x56x3 fn103/0x0000208f=0x56x1 fn76/0x2080012f=0x56x12 fn76/0x20802a12=0x56x256 fn76/0x20810107=0x56x4 fn76/0x20800a9a=0x56x22 fn76/0x20800ab8=0x56x1 fn76/0x2080a0d1=0x56x483 fn76/0x20800a9e=0x56x1 fn76/0x20800a9c=0x56x1 fn76/0x20800a1e=0x56x1]] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]
+W343GSSCENSUS cmd=0x2080a0d1 params_size=2024 params_at=40 payload_len=2064
+kf3: GSP rpc RmControl seq=1617
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1617 }
+W343GSSCENSUS cmd=0x2080a0d1 params_size=2024 params_at=40 payload_len=2064
+kf3: GSP rpc RmControl seq=1618
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1618 }
+kf3: GSP rpc RmControl seq=1619
+kf3: family=Ada phase=Running trapped=91396 applied=10046 refused=0 serviced=4229 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2968 walks=3002/3003 cleared=2968 superseded=0 named_missed=11 unreconciled=0 absent_cleared=18 mapped=28346 unmapped=15612 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=34934 priv_withheld_bytes=0x4562bd7000 priv_mirrored=36 sked=12/0held carve_gpu=0 carve_kernel=24 carve_cpu=7 carve_clipped=0xc0000 fn70=11 roots=36 root_moves=2 stmts=228/227 refused=16 pramin_repoints=118 pramin_miss=0 last_miss=0x0 pramin_worst_us=381 (map 345 mmap 61) pramin_maps=118 pramin_mmaps=118 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 pramin_pool_empty=0 pramin_retire_full=0 reaped=117 cache_ops=266 sysmembars=150 root_unsets=3] mirrors=3 reused=31 prewarmed=3 mirror_avg_us=1221 mirror_max_us=1242 vat[invals=0 arrive->clear_avg_us=0 max_us=92518 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=547 host_calls=0 apply_max_ms=92 split_max_ms=0 slow_applies=0 slow_splits=0 q_inbox_n=1 q_inbox_avg_us=13 q_inbox_max_us=18 submit_n=1 submit_avg_us=10648 submit_max_us=10648 collect_n=0 collect_avg_us=0 collect_max_us=25 cap_retries=0 req_n=0 req_avg_us=0 req_p50_us=0 req_p95_us=0 req_p99_us=0 req_max_ms=0 aps_n=0 aps_avg_us=0 aps_p50_us=0 aps_p95_us=0 aps_p99_us=0 aps_max_ms=92 prep_n=0 prep_us=0 prep_max_us=135 unmapph_n=0 unmapph_us=0 unmapph_max_us=33911 mapph_n=0 mapph_us=0 mapph_max_us=92323 takedown_n=0 takedown_us=0 takedown_max_us=2 inval_n=0 inval_us=0 inval_max_us=60 rm_map_n=0 rm_map_us=0 rm_map_max_us=91492 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=33906 rm_free_n=0 rm_free_us=0 rm_free_max_us=60 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=76 ledger_n=0 ledger_us=0 ledger_max_us=13 stitch_n=0 stitch_us=0 stitch_max_us=2349 desc_n=0 desc_us=0 desc_max_us=2373 reap_n=0 reap_us=0 reap_max_us=16 slow_reqs=0 slow_aps=0 windows_max=0 slow_printed=0 slow_suppressed=0 ring_overwritten=0 pub_n=0 pub_avg_us=0 pub_max_us=20 resume_n=0 resume_avg_us=0 resume_max_us=17 e2e_n=0 e2e_avg_us=0 e2e_p50_us=0 e2e_p95_us=0 e2e_p99_us=0 e2e_max_ms=0] chan[births=20 pt_births=48 acts=395/0refused birth_refused_cap=0 worst_act_us=2734 nsi=[GR0:17/17raised(nolive=0,novec=0) CE2:484/333raised(nolive=0,novec=0) CE3:3/3raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=625 fifo_raised=625 fifo_armed=24 sticky=0x0 kernel_nonstall_registered=28 arm_clears=6 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=1129 not_armed=151 unvectored=0 relay_off=0 relay=on pacing=off refused=0 v0[raised=215 coalesced_later_raised=0 late=0 owed=false] v1[raised=333 coalesced_later_raised=0 late=0 owed=false] v2[raised=3 coalesced_later_raised=0 late=0 owed=false] v4[raised=427 coalesced_later_raised=0 late=0 owed=false] GR0[vec=Some(0) armed=2 wakes=17 not_armed=0 raised=17 live_twins=10] CE2[vec=Some(1) armed=1 wakes=484 not_armed=151 raised=333 live_twins=4] CE3[vec=Some(2) armed=1 wakes=3 not_armed=0 raised=3 live_twins=7]] served=1841 parks=14929 host_rings=545 contended=998 poisoned=0 tokens=[0x801:fwd=64,subs=64,serves=68,put=Some(64),gp_get=Some(64) 0x802:fwd=2,subs=2,serves=6,put=Some(2),gp_get=Some(2) 0x806:fwd=4,subs=3,serves=10,put=Some(4),gp_get=Some(3) 0x807:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x1008:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x1009:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1)]] views[armed=1650 released=1099 refused=0 held=551] rc[armed=68 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=71908 raised=966 held=24 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] util[on host_reads=371 refused=0 stalled=0 empty=0 gpumon=0/0/0 rusd=6/5/9 published=1/0] unserviced=[0x20800a87,0x20800a4b,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852f,0x20808513,0x20802068,0x2080a612,0x2080012f,0x20802a12,0x20810107,0x20800a9a,0x20800ab8,0x2080a0d1,0x20800a9e,0x20800a9c,0x20800a1e] gsp_refusals[total=894 distinct=35 [fn76/0x20800a87=0x56x6 fn76/0x20800a4b=0x56x6 fn76/0x20800a80=0x56x12 fn76/0x20802a0f=0x56x6 fn76/0x2080017e=0x56x6 fn76/0x20800a30=0x56x6 fn76/0x20800a2e=0x56x6 fn76/0x20800b03=0x56x6 fn76/0x20800b05=0x56x6 fn76/0x20800a3f=0x56x6 fn76/0x2080012b=0x56x6 fn76/0x2080013f=0x56x6 fn103/0x0000c36f=0x56x6 fn103/0x0000402c=0x56x6 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x3 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852f=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x20809064=0x56x3 fn103/0x0000208f=0x56x1 fn76/0x2080012f=0x56x12 fn76/0x20802a12=0x56x256 fn76/0x20810107=0x56x4 fn76/0x20800a9a=0x56x22 fn76/0x20800ab8=0x56x1 fn76/0x2080a0d1=0x56x485 fn76/0x20800a9e=0x56x1 fn76/0x20800a9c=0x56x1 fn76/0x20800a1e=0x56x1]] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]
+kf3: family=Ada phase=Running trapped=91396 applied=10046 refused=0 serviced=4229 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2968 walks=3002/3003 cleared=2968 superseded=0 named_missed=11 unreconciled=0 absent_cleared=18 mapped=28346 unmapped=15612 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=34934 priv_withheld_bytes=0x4562bd7000 priv_mirrored=36 sked=12/0held carve_gpu=0 carve_kernel=24 carve_cpu=7 carve_clipped=0xc0000 fn70=11 roots=36 root_moves=2 stmts=228/227 refused=16 pramin_repoints=118 pramin_miss=0 last_miss=0x0 pramin_worst_us=381 (map 345 mmap 61) pramin_maps=118 pramin_mmaps=118 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 pramin_pool_empty=0 pramin_retire_full=0 reaped=117 cache_ops=266 sysmembars=150 root_unsets=3] mirrors=3 reused=31 prewarmed=3 mirror_avg_us=1221 mirror_max_us=1242 vat[invals=0 arrive->clear_avg_us=0 max_us=92518 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=547 host_calls=0 apply_max_ms=92 split_max_ms=0 slow_applies=0 slow_splits=0 q_inbox_n=0 q_inbox_avg_us=0 q_inbox_max_us=18 submit_n=0 submit_avg_us=0 submit_max_us=10648 collect_n=0 collect_avg_us=0 collect_max_us=25 cap_retries=0 req_n=0 req_avg_us=0 req_p50_us=0 req_p95_us=0 req_p99_us=0 req_max_ms=0 aps_n=0 aps_avg_us=0 aps_p50_us=0 aps_p95_us=0 aps_p99_us=0 aps_max_ms=92 prep_n=0 prep_us=0 prep_max_us=135 unmapph_n=0 unmapph_us=0 unmapph_max_us=33911 mapph_n=0 mapph_us=0 mapph_max_us=92323 takedown_n=0 takedown_us=0 takedown_max_us=2 inval_n=0 inval_us=0 inval_max_us=60 rm_map_n=0 rm_map_us=0 rm_map_max_us=91492 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=33906 rm_free_n=0 rm_free_us=0 rm_free_max_us=60 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=76 ledger_n=0 ledger_us=0 ledger_max_us=13 stitch_n=0 stitch_us=0 stitch_max_us=2349 desc_n=0 desc_us=0 desc_max_us=2373 reap_n=0 reap_us=0 reap_max_us=16 slow_reqs=0 slow_aps=0 windows_max=0 slow_printed=0 slow_suppressed=0 ring_overwritten=0 pub_n=0 pub_avg_us=0 pub_max_us=20 resume_n=0 resume_avg_us=0 resume_max_us=17 e2e_n=0 e2e_avg_us=0 e2e_p50_us=0 e2e_p95_us=0 e2e_p99_us=0 e2e_max_ms=0] chan[births=20 pt_births=48 acts=395/0refused birth_refused_cap=0 worst_act_us=2734 nsi=[GR0:17/17raised(nolive=0,novec=0) CE2:484/333raised(nolive=0,novec=0) CE3:3/3raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=625 fifo_raised=625 fifo_armed=24 sticky=0x0 kernel_nonstall_registered=28 arm_clears=6 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=1129 not_armed=151 unvectored=0 relay_off=0 relay=on pacing=off refused=0 v0[raised=215 coalesced_later_raised=0 late=0 owed=false] v1[raised=333 coalesced_later_raised=0 late=0 owed=false] v2[raised=3 coalesced_later_raised=0 late=0 owed=false] v4[raised=427 coalesced_later_raised=0 late=0 owed=false] GR0[vec=Some(0) armed=2 wakes=17 not_armed=0 raised=17 live_twins=10] CE2[vec=Some(1) armed=1 wakes=484 not_armed=151 raised=333 live_twins=4] CE3[vec=Some(2) armed=1 wakes=3 not_armed=0 raised=3 live_twins=7]] served=1841 parks=15009 host_rings=545 contended=998 poisoned=0 tokens=[0x801:fwd=64,subs=64,serves=68,put=Some(64),gp_get=Some(64) 0x802:fwd=2,subs=2,serves=6,put=Some(2),gp_get=Some(2) 0x806:fwd=4,subs=3,serves=10,put=Some(4),gp_get=Some(3) 0x807:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x1008:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x1009:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1)]] views[armed=1650 released=1099 refused=0 held=551] rc[armed=68 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=71908 raised=966 held=24 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] util[on host_reads=373 refused=0 stalled=0 empty=0 gpumon=0/0/0 rusd=6/5/9 published=1/0] unserviced=[0x20800a87,0x20800a4b,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852f,0x20808513,0x20802068,0x2080a612,0x2080012f,0x20802a12,0x20810107,0x20800a9a,0x20800ab8,0x2080a0d1,0x20800a9e,0x20800a9c,0x20800a1e] gsp_refusals[total=894 distinct=35 [fn76/0x20800a87=0x56x6 fn76/0x20800a4b=0x56x6 fn76/0x20800a80=0x56x12 fn76/0x20802a0f=0x56x6 fn76/0x2080017e=0x56x6 fn76/0x20800a30=0x56x6 fn76/0x20800a2e=0x56x6 fn76/0x20800b03=0x56x6 fn76/0x20800b05=0x56x6 fn76/0x20800a3f=0x56x6 fn76/0x2080012b=0x56x6 fn76/0x2080013f=0x56x6 fn103/0x0000c36f=0x56x6 fn103/0x0000402c=0x56x6 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x3 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852f=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x20809064=0x56x3 fn103/0x0000208f=0x56x1 fn76/0x2080012f=0x56x12 fn76/0x20802a12=0x56x256 fn76/0x20810107=0x56x4 fn76/0x20800a9a=0x56x22 fn76/0x20800ab8=0x56x1 fn76/0x2080a0d1=0x56x485 fn76/0x20800a9e=0x56x1 fn76/0x20800a9c=0x56x1 fn76/0x20800a1e=0x56x1]] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]
+kf3: family=Ada phase=Running trapped=91396 applied=10046 refused=0 serviced=4229 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=2968 walks=3002/3003 cleared=2968 superseded=0 named_missed=11 unreconciled=0 absent_cleared=18 mapped=28346 unmapped=15612 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=34934 priv_withheld_bytes=0x4562bd7000 priv_mirrored=36 sked=12/0held carve_gpu=0 carve_kernel=24 carve_cpu=7 carve_clipped=0xc0000 fn70=11 roots=36 root_moves=2 stmts=228/227 refused=16 pramin_repoints=118 pramin_miss=0 last_miss=0x0 pramin_worst_us=381 (map 345 mmap 61) pramin_maps=118 pramin_mmaps=118 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 pramin_pool_empty=0 pramin_retire_full=0 reaped=117 cache_ops=266 sysmembars=150 root_unsets=3] mirrors=3 reused=31 prewarmed=3 mirror_avg_us=1221 mirror_max_us=1242 vat[invals=0 arrive->clear_avg_us=0 max_us=92518 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=547 host_calls=0 apply_max_ms=92 split_max_ms=0 slow_applies=0 slow_splits=0 q_inbox_n=0 q_inbox_avg_us=0 q_inbox_max_us=18 submit_n=0 submit_avg_us=0 submit_max_us=10648 collect_n=0 collect_avg_us=0 collect_max_us=25 cap_retries=0 req_n=0 req_avg_us=0 req_p50_us=0 req_p95_us=0 req_p99_us=0 req_max_ms=0 aps_n=0 aps_avg_us=0 aps_p50_us=0 aps_p95_us=0 aps_p99_us=0 aps_max_ms=92 prep_n=0 prep_us=0 prep_max_us=135 unmapph_n=0 unmapph_us=0 unmapph_max_us=33911 mapph_n=0 mapph_us=0 mapph_max_us=92323 takedown_n=0 takedown_us=0 takedown_max_us=2 inval_n=0 inval_us=0 inval_max_us=60 rm_map_n=0 rm_map_us=0 rm_map_max_us=91492 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=33906 rm_free_n=0 rm_free_us=0 rm_free_max_us=60 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=76 ledger_n=0 ledger_us=0 ledger_max_us=13 stitch_n=0 stitch_us=0 stitch_max_us=2349 desc_n=0 desc_us=0 desc_max_us=2373 reap_n=0 reap_us=0 reap_max_us=16 slow_reqs=0 slow_aps=0 windows_max=0 slow_printed=0 slow_suppressed=0 ring_overwritten=0 pub_n=0 pub_avg_us=0 pub_max_us=20 resume_n=0 resume_avg_us=0 resume_max_us=17 e2e_n=0 e2e_avg_us=0 e2e_p50_us=0 e2e_p95_us=0 e2e_p99_us=0 e2e_max_ms=0] chan[births=20 pt_births=48 acts=395/0refused birth_refused_cap=0 worst_act_us=2734 nsi=[GR0:17/17raised(nolive=0,novec=0) CE2:484/333raised(nolive=0,novec=0) CE3:3/3raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=625 fifo_raised=625 fifo_armed=24 sticky=0x0 kernel_nonstall_registered=28 arm_clears=6 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=1129 not_armed=151 unvectored=0 relay_off=0 relay=on pacing=off refused=0 v0[raised=215 coalesced_later_raised=0 late=0 owed=false] v1[raised=333 coalesced_later_raised=0 late=0 owed=false] v2[raised=3 coalesced_later_raised=0 late=0 owed=false] v4[raised=427 coalesced_later_raised=0 late=0 owed=false] GR0[vec=Some(0) armed=2 wakes=17 not_armed=0 raised=17 live_twins=10] CE2[vec=Some(1) armed=1 wakes=484 not_armed=151 raised=333 live_twins=4] CE3[vec=Some(2) armed=1 wakes=3 not_armed=0 raised=3 live_twins=7]] served=1841 parks=15089 host_rings=545 contended=998 poisoned=0 tokens=[0x801:fwd=64,subs=64,serves=68,put=Some(64),gp_get=Some(64) 0x802:fwd=2,subs=2,serves=6,put=Some(2),gp_get=Some(2) 0x806:fwd=4,subs=3,serves=10,put=Some(4),gp_get=Some(3) 0x807:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x1008:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x1009:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1)]] views[armed=1650 released=1099 refused=0 held=551] rc[armed=68 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=71908 raised=966 held=24 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] util[on host_reads=375 refused=0 stalled=0 empty=0 gpumon=0/0/0 rusd=6/5/9 published=1/0] unserviced=[0x20800a87,0x20800a4b,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852f,0x20808513,0x20802068,0x2080a612,0x2080012f,0x20802a12,0x20810107,0x20800a9a,0x20800ab8,0x2080a0d1,0x20800a9e,0x20800a9c,0x20800a1e] gsp_refusals[total=894 distinct=35 [fn76/0x20800a87=0x56x6 fn76/0x20800a4b=0x56x6 fn76/0x20800a80=0x56x12 fn76/0x20802a0f=0x56x6 fn76/0x2080017e=0x56x6 fn76/0x20800a30=0x56x6 fn76/0x20800a2e=0x56x6 fn76/0x20800b03=0x56x6 fn76/0x20800b05=0x56x6 fn76/0x20800a3f=0x56x6 fn76/0x2080012b=0x56x6 fn76/0x2080013f=0x56x6 fn103/0x0000c36f=0x56x6 fn103/0x0000402c=0x56x6 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x3 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852f=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x20809064=0x56x3 fn103/0x0000208f=0x56x1 fn76/0x2080012f=0x56x12 fn76/0x20802a12=0x56x256 fn76/0x20810107=0x56x4 fn76/0x20800a9a=0x56x22 fn76/0x20800ab8=0x56x1 fn76/0x2080a0d1=0x56x485 fn76/0x20800a9e=0x56x1 fn76/0x20800a9c=0x56x1 fn76/0x20800a1e=0x56x1]] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]
+kf3: RC host twin 0x31 (guest chid 0x1a, engine 0x1) wrote its notifier: except_type=0x6d (Xid 109) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x32 (guest chid 0x1b, engine 0x1) wrote its notifier: except_type=0x6d (Xid 109) — forwarding RC_TRIGGERED
+kf3: RC_TRIGGERED posted: guest chid 0x1a engine 0x1 except_type 0x6d (host 0x31)
+kf3: RC_TRIGGERED posted: guest chid 0x1b engine 0x1 except_type 0x6d (host 0x32)
+kf3: mem SPLIT-LATE ticket=2 target=pdb:0x0 ms=4359 (n=1, 0 still queued)
+kf3: VA_SLOW n=1 kind=ticket t_ms=349246 ticket=2 walk=3003 key=0x0 pdb=0x0 windows=1 req_us=4359373 q_inbox_us=13 mgr_us=4359359 submit_us=10648 walk_us=4348669 collect_us=10 apply_own_us=16 apply_all_us=16 cap_retries=0
+kf3: GSP rpc Free seq=1620
+kf3: GSP rpc Free seq=1621
+kf3: GSP rpc Free seq=1622
+kf3: GSP rpc Free seq=1623
+kf3: GSP rpc Free seq=1624
+kf3: GSP rpc Free seq=1625
+kf3: GSP rpc Free seq=1626
+kf3: GSP rpc Free seq=1627
+kf3: GSP rpc Free seq=1628
+kf3: GSP rpc Free seq=1629
+kf3: GSP rpc Free seq=1630
+kf3: GSP rpc Free seq=1631
+kf3: GSP rpc Free seq=1632
+kf3: GSP rpc Free seq=1633
+kf3: act free: 0xc1d00050:0xbeef8500: engine object host 0xcafe02a6 freed (340 us, off the GSP lock)
+kf3: GSP rpc Free seq=1634
+kf3: DOORBELL-LEDGER tok=0x00000804 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1001b trap=0 fast=0
+kf3: act free: 0xc1d00050:0xbeef0101: passthrough 0xc1d00050:0xbeef0101 token 0x804 host 0x1001b objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1260 us, off the GSP lock)
+kf3: GSP rpc Free seq=1635
+kf3: act free: 0xc1d00050:0xbeef8501: engine object host 0xcafe02a7 freed (293 us, off the GSP lock)
+kf3: GSP rpc Free seq=1636
+kf3: DOORBELL-LEDGER tok=0x00001005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2001c trap=0 fast=0
+kf3: act free: 0xc1d00050:0xbeef0102: passthrough 0xc1d00050:0xbeef0102 token 0x1005 host 0x2001c objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (946 us, off the GSP lock)
+kf3: GSP rpc Free seq=1637
+kf3: act free: 0xc1d00050:0xbeee8500: engine object host 0xcafe02e6 freed (296 us, off the GSP lock)
+kf3: GSP rpc Free seq=1638
+kf3: DOORBELL-LEDGER tok=0x0000080b route=passthrough rung=8 emulated=0 forwarded=8 host=0x10022 trap=8 fast=0
+kf3: act free: 0xc1d00050:0xbeee0101: passthrough 0xc1d00050:0xbeee0101 token 0x80b host 0x10022 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (959 us, off the GSP lock)
+kf3: GSP rpc Free seq=1639
+kf3: act free: 0xc1d00050:0xbeee8501: engine object host 0xcafe02e7 freed (285 us, off the GSP lock)
+kf3: GSP rpc Free seq=1640
+kf3: DOORBELL-LEDGER tok=0x0000100c route=passthrough rung=0 emulated=0 forwarded=0 host=0x20023 trap=0 fast=0
+kf3: act free: 0xc1d00050:0xbeee0102: passthrough 0xc1d00050:0xbeee0102 token 0x100c host 0x20023 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (932 us, off the GSP lock)
+kf3: GSP rpc Free seq=1641
+kf3: act free: 0xc1d00050:0xbeed8500: engine object host 0xcafe02fd freed (292 us, off the GSP lock)
+kf3: GSP rpc Free seq=1642
+kf3: DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=1 emulated=0 forwarded=1 host=0x20024 trap=1 fast=0
+kf3: act free: 0xc1d00050:0xbeed0101: passthrough 0xc1d00050:0xbeed0101 token 0x100d host 0x20024 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (923 us, off the GSP lock)
+kf3: GSP rpc Free seq=1643
+kf3: act free: 0xc1d00050:0xbeea8500: engine object host 0xcafe032e freed (290 us, off the GSP lock)
+kf3: GSP rpc Free seq=1644
+kf3: DOORBELL-LEDGER tok=0x00001010 route=passthrough rung=2 emulated=0 forwarded=2 host=0x20027 trap=2 fast=0
+kf3: act free: 0xc1d00050:0xbeea0101: passthrough 0xc1d00050:0xbeea0101 token 0x1010 host 0x20027 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (917 us, off the GSP lock)
+kf3: GSP rpc Free seq=1645
+kf3: act free: 0xc1d00050:0xbee88500: engine object host 0xcafe036c freed (289 us, off the GSP lock)
+kf3: GSP rpc Free seq=1646
+kf3: DOORBELL-LEDGER tok=0x00000814 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002b trap=0 fast=0
+kf3: act free: 0xc1d00050:0xbee80101: passthrough 0xc1d00050:0xbee80101 token 0x814 host 0x1002b objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (944 us, off the GSP lock)
+kf3: GSP rpc Free seq=1647
+kf3: act free: 0xc1d00050:0xbee88501: engine object host 0xcafe036d freed (286 us, off the GSP lock)
+kf3: GSP rpc Free seq=1648
+kf3: DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002c trap=0 fast=0
+kf3: act free: 0xc1d00050:0xbee80102: passthrough 0xc1d00050:0xbee80102 token 0x1015 host 0x2002c objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (930 us, off the GSP lock)
+kf3: GSP rpc Free seq=1649
+kf3: act free: 0xc1d00050:0xbee78500: engine object host 0xcafe03ba freed (293 us, off the GSP lock)
+kf3: GSP rpc Free seq=1650
+kf3: DOORBELL-LEDGER tok=0x00000817 route=passthrough rung=4 emulated=0 forwarded=4 host=0x1002e trap=4 fast=0
+kf3: act free: 0xc1d00050:0xbee70101: passthrough 0xc1d00050:0xbee70101 token 0x817 host 0x1002e objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (904 us, off the GSP lock)
+kf3: GSP rpc Free seq=1651
+kf3: act free: 0xc1d00050:0xbee78501: engine object host 0xcafe03bb freed (277 us, off the GSP lock)
+kf3: GSP rpc Free seq=1652
+kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002f trap=0 fast=0
+kf3: act free: 0xc1d00050:0xbee70102: passthrough 0xc1d00050:0xbee70102 token 0x1018 host 0x2002f objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (855 us, off the GSP lock)
+kf3: GSP rpc Free seq=1653
+kf3: act free: 0xc1d00050:0xbee68500: engine object host 0xcafe03d0 freed (284 us, off the GSP lock)
+kf3: GSP rpc Free seq=1654
+kf3: DOORBELL-LEDGER tok=0x00001019 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20030 trap=1 fast=0
+kf3: act free: 0xc1d00050:0xbee60101: passthrough 0xc1d00050:0xbee60101 token 0x1019 host 0x20030 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (885 us, off the GSP lock)
+kf3: GSP rpc Free seq=1655
+kf3: act free: 0xc1d00050:0xbeefa0b5: engine object host 0xcafe02a5 freed (307 us, off the GSP lock)
+kf3: GSP rpc Free seq=1656
+kf3: act free: 0xc1d00050:0xbeef9097: engine object host 0xcafe02a9 freed (344 us, off the GSP lock)
+kf3: GSP rpc Free seq=1657
+kf3: act free: 0xc1d00050:0xbeef502d: engine object host 0xcafe02a4 freed (319 us, off the GSP lock)
+kf3: GSP rpc Free seq=1658
+kf3: act free: 0xc1d00050:0xbeef3901: engine object host 0xcafe02a8 freed (324 us, off the GSP lock)
+kf3: GSP rpc Free seq=1659
+kf3: DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=4 emulated=0 forwarded=4 host=0x1a trap=4 fast=0
+kf3: act free: 0xc1d00050:0xbeef0100: passthrough 0xc1d00050:0xbeef0100 token 0x3 host 0x1a objects=0 ctx=CtxBind { initialized: 3589, va_bound: 2685, bound: true, promotes: 1, evicts: 0 } freed (1129 us, off the GSP lock)
+kf3: PT-NSI host CE2 notifier wake #512: Raise(1) (vector Some(1), live twins 0)
+kf3: GSP rpc Free seq=1660
+kf3: GSP rpc Free seq=1661
+kf3: GSP rpc Free seq=1662
+kf3: GSP rpc Free seq=1663
+kf3: act free: 0xc1d00050:0xbeeea0b5: engine object host 0xcafe02e5 freed (418 us, off the GSP lock)
+kf3: GSP rpc Free seq=1664
+kf3: act free: 0xc1d00050:0xbeee90c0: engine object host 0xcafe02ee freed (374 us, off the GSP lock)
+kf3: GSP rpc Free seq=1665
+kf3: act free: 0xc1d00050:0xbeee9097: engine object host 0xcafe02e9 freed (330 us, off the GSP lock)
+kf3: GSP rpc Free seq=1666
+kf3: act free: 0xc1d00050:0xbeee502d: engine object host 0xcafe02e4 freed (324 us, off the GSP lock)
+kf3: GSP rpc Free seq=1667
+kf3: act free: 0xc1d00050:0xbeee3901: engine object host 0xcafe02e8 freed (314 us, off the GSP lock)
+kf3: GSP rpc Free seq=1668
+kf3: DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=3 emulated=0 forwarded=3 host=0x21 trap=3 fast=0
+kf3: act free: 0xc1d00050:0xbeee0100: passthrough 0xc1d00050:0xbeee0100 token 0xa host 0x21 objects=0 ctx=CtxBind { initialized: 5, va_bound: 2685, bound: true, promotes: 1, evicts: 0 } freed (1177 us, off the GSP lock)
+kf3: GSP rpc Free seq=1669
+kf3: GSP rpc Free seq=1670
+kf3: GSP rpc Free seq=1671
+kf3: act free: 0xc1d00050:0xbeeca2b5: engine object host 0xcafe031c freed (399 us, off the GSP lock)
+kf3: GSP rpc Free seq=1672
+kf3: act free: 0xc1d00050:0xbeec90c1: engine object host 0xcafe031b freed (342 us, off the GSP lock)
+kf3: GSP rpc Free seq=1673
+kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=3 emulated=0 forwarded=3 host=0x26 trap=3 fast=0
+kf3: act free: 0xc1d00050:0xbeec0104: passthrough 0xc1d00050:0xbeec0104 token 0xf host 0x26 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1216 us, off the GSP lock)
+kf3: GSP rpc Free seq=1674
+kf3: act free: 0xc1d00050:0xbeeca0b5: engine object host 0xcafe0318 freed (334 us, off the GSP lock)
+kf3: GSP rpc Free seq=1675
+kf3: act free: 0xc1d00050:0xbeec90c0: engine object host 0xcafe0321 freed (340 us, off the GSP lock)
+kf3: GSP rpc Free seq=1676
+kf3: GSP rpc Free seq=1677
+kf3: GSP rpc Free seq=1678
+kf3: GSP rpc Free seq=1679
+kf3: act free: 0xc1d00050:0xbeec9097: debugger session host 0xcafe0323 freed; engine object host 0xcafe031a freed (1237 us, off the GSP lock)
+kf3: GSP rpc Free seq=1680
+kf3: act free: 0xc1d00050:0xbeec502d: engine object host 0xcafe0317 freed (332 us, off the GSP lock)
+kf3: GSP rpc Free seq=1681
+kf3: act free: 0xc1d00050:0xbeec3901: engine object host 0xcafe0319 freed (316 us, off the GSP lock)
+kf3: GSP rpc Free seq=1682
+kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=5 emulated=0 forwarded=5 host=0x25 trap=5 fast=0
+kf3: act free: 0xc1d00050:0xbeec0100: passthrough 0xc1d00050:0xbeec0100 token 0xe host 0x25 objects=0 ctx=CtxBind { initialized: 5, va_bound: 2685, bound: true, promotes: 1, evicts: 0 } freed (1140 us, off the GSP lock)
+kf3: GSP rpc Free seq=1683
+kf3: act free: 0xc1d00050:0xbee9a1b5: engine object host 0xcafe034f freed (342 us, off the GSP lock)
+kf3: GSP rpc Free seq=1684
+kf3: act free: 0xc1d00050:0xbee990c1: engine object host 0xcafe034e freed (333 us, off the GSP lock)
+kf3: GSP rpc Free seq=1685
+kf3: DOORBELL-LEDGER tok=0x00000012 route=passthrough rung=4 emulated=0 forwarded=4 host=0x29 trap=4 fast=0
+kf3: act free: 0xc1d00050:0xbee90103: passthrough 0xc1d00050:0xbee90103 token 0x12 host 0x29 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1111 us, off the GSP lock)
+kf3: GSP rpc Free seq=1686
+kf3: GSP rpc Free seq=1687
+kf3: GSP rpc Free seq=1688
+kf3: GSP rpc Free seq=1689
+kf3: GSP rpc Free seq=1690
+kf3: act free: 0xc1d00050:0xbee9a0b5: engine object host 0xcafe033d freed (409 us, off the GSP lock)
+kf3: GSP rpc Free seq=1691
+kf3: act free: 0xc1d00050:0xbee990c0: engine object host 0xcafe0344 freed (369 us, off the GSP lock)
+kf3: GSP rpc Free seq=1692
+kf3: act free: 0xc1d00050:0xbee99097: engine object host 0xcafe033f freed (332 us, off the GSP lock)
+kf3: GSP rpc Free seq=1693
+kf3: act free: 0xc1d00050:0xbee9502d: engine object host 0xcafe033c freed (319 us, off the GSP lock)
+kf3: GSP rpc Free seq=1694
+kf3: act free: 0xc1d00050:0xbee93901: engine object host 0xcafe033e freed (311 us, off the GSP lock)
+kf3: GSP rpc Free seq=1695
+kf3: DOORBELL-LEDGER tok=0x00000011 route=passthrough rung=3 emulated=0 forwarded=3 host=0x28 trap=3 fast=0
+kf3: act free: 0xc1d00050:0xbee90100: passthrough 0xc1d00050:0xbee90100 token 0x11 host 0x28 objects=0 ctx=CtxBind { initialized: 5, va_bound: 2685, bound: true, promotes: 1, evicts: 0 } freed (1178 us, off the GSP lock)
+kf3: GSP rpc Free seq=1696
+kf3: GSP rpc Free seq=1697
+kf3: GSP rpc Free seq=1698
+kf3: act free: 0xc1d00050:0xbee8a0b5: engine object host 0xcafe036b freed (407 us, off the GSP lock)
+kf3: GSP rpc Free seq=1699
+kf3: act free: 0xc1d00050:0xbee890c0: engine object host 0xcafe0374 freed (376 us, off the GSP lock)
+kf3: GSP rpc Free seq=1700
+kf3: act free: 0xc1d00050:0xbee89097: engine object host 0xcafe036f freed (336 us, off the GSP lock)
+kf3: GSP rpc Free seq=1701
+kf3: act free: 0xc1d00050:0xbee8502d: engine object host 0xcafe036a freed (325 us, off the GSP lock)
+kf3: GSP rpc Free seq=1702
+kf3: act free: 0xc1d00050:0xbee83901: engine object host 0xcafe036e freed (325 us, off the GSP lock)
+kf3: GSP rpc Free seq=1703
+kf3: DOORBELL-LEDGER tok=0x00000013 route=passthrough rung=3 emulated=0 forwarded=3 host=0x2a trap=3 fast=0
+kf3: act free: 0xc1d00050:0xbee80100: passthrough 0xc1d00050:0xbee80100 token 0x13 host 0x2a objects=0 ctx=CtxBind { initialized: 5, va_bound: 2685, bound: true, promotes: 1, evicts: 0 } freed (1191 us, off the GSP lock)
+kf3: GSP rpc Free seq=1704
+kf3: GSP rpc Free seq=1705
+kf3: GSP rpc Free seq=1706
+kf3: act free: 0xc1d00050:0xbee7a0b5: engine object host 0xcafe03b9 freed (395 us, off the GSP lock)
+kf3: GSP rpc Free seq=1707
+kf3: act free: 0xc1d00050:0xbee790c0: engine object host 0xcafe03c2 freed (358 us, off the GSP lock)
+kf3: GSP rpc Free seq=1708
+kf3: act free: 0xc1d00050:0xbee79097: engine object host 0xcafe03bd freed (334 us, off the GSP lock)
+kf3: GSP rpc Free seq=1709
+kf3: act free: 0xc1d00050:0xbee7502d: engine object host 0xcafe03b8 freed (315 us, off the GSP lock)
+kf3: GSP rpc Free seq=1710
+kf3: act free: 0xc1d00050:0xbee73901: engine object host 0xcafe03bc freed (316 us, off the GSP lock)
+kf3: GSP rpc Free seq=1711
+kf3: DOORBELL-LEDGER tok=0x00000016 route=passthrough rung=3 emulated=0 forwarded=3 host=0x2d trap=3 fast=0
+kf3: act free: 0xc1d00050:0xbee70100: passthrough 0xc1d00050:0xbee70100 token 0x16 host 0x2d objects=0 ctx=CtxBind { initialized: 5, va_bound: 2685, bound: true, promotes: 1, evicts: 0 } freed (1170 us, off the GSP lock)
+kf3: GSP rpc Free seq=1712
+kf3: GSP rpc Free seq=1713
+kf3: GSP rpc Free seq=1714
+kf3: act free: 0xc1d00050:0xbee5a2b5: engine object host 0xcafe03ee freed (380 us, off the GSP lock)
+kf3: GSP rpc Free seq=1715
+kf3: act free: 0xc1d00050:0xbee590c1: engine object host 0xcafe03ed freed (337 us, off the GSP lock)
+kf3: GSP rpc Free seq=1716
+kf3: DOORBELL-LEDGER tok=0x0000001b route=passthrough rung=5 emulated=0 forwarded=5 host=0x32 trap=5 fast=0
+kf3: act free: 0xc1d00050:0xbee50104: passthrough 0xc1d00050:0xbee50104 token 0x1b host 0x32 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1125 us, off the GSP lock)
+kf3: GSP rpc Free seq=1717
+kf3: act free: 0xc1d00050:0xbee5a0b5: engine object host 0xcafe03ea freed (275 us, off the GSP lock)
+kf3: GSP rpc Free seq=1718
+kf3: act free: 0xc1d00050:0xbee590c0: engine object host 0xcafe03f3 freed (299 us, off the GSP lock)
+kf3: GSP rpc Free seq=1719
+kf3: act free: 0xc1d00050:0xbee59097: engine object host 0xcafe03ec freed (289 us, off the GSP lock)
+kf3: GSP rpc Free seq=1720
+kf3: act free: 0xc1d00050:0xbee5502d: engine object host 0xcafe03e9 freed (278 us, off the GSP lock)
+kf3: GSP rpc Free seq=1721
+kf3: act free: 0xc1d00050:0xbee53901: engine object host 0xcafe03eb freed (285 us, off the GSP lock)
+kf3: GSP rpc Free seq=1722
+kf3: DOORBELL-LEDGER tok=0x0000001a route=passthrough rung=9 emulated=0 forwarded=9 host=0x31 trap=9 fast=0
+kf3: act free: 0xc1d00050:0xbee50100: passthrough 0xc1d00050:0xbee50100 token 0x1a host 0x31 objects=0 ctx=CtxBind { initialized: 5, va_bound: 2685, bound: true, promotes: 1, evicts: 0 } freed (959 us, off the GSP lock)
+kf3: GSP rpc Free seq=1723
+kf3: GSP rpc Free seq=1724
+kf3: GSP rpc Free seq=1725
+kf3: GSP rpc RmControl seq=1726
+kf3: GSP rpc Free seq=1727
+kf3: GSP rpc RmControl seq=1728
+kf3: GSP rpc RmControl seq=1729
+kf3: GSP rpc RmControl seq=1730
+kf3: GSP rpc RmControl seq=1731
+kf3: GSP rpc RmControl seq=1732
+kf3: GSP rpc RmControl seq=1733
+kf3: GSP rpc RmControl seq=1734
+kf3: GSP rpc RmControl seq=1735
+kf3: mem large apply VasKey(13965662740742537219): 0 maps + 1024 unmaps in 4 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 1 unmap verb(s) (1 range(s) carrying 1024 runs), 0 fallback(s)
+kf3: GSP rpc RmControl seq=1736
+kf3: mem large apply VasKey(13965662740742537219): 0 maps + 1022 unmaps in 4 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 1 unmap verb(s) (1 range(s) carrying 1022 runs), 0 fallback(s)
+kf3: GSP rpc RmControl seq=1737
+kf3: GSP rpc RmControl seq=1738
+kf3: GSP rpc RmControl seq=1739
+kf3: GSP rpc RmControl seq=1740
+kf3: GSP rpc RmControl seq=1741
+kf3: GSP rpc RmControl seq=1742
+kf3: GSP rpc RmControl seq=1743
+kf3: GSP rpc RmControl seq=1744
+kf3: GSP rpc RmControl seq=1745
+kf3: GSP rpc RmControl seq=1746
+kf3: GSP rpc RmControl seq=1747
+kf3: GSP rpc RmControl seq=1748
+kf3: GSP rpc RmControl seq=1749
+kf3: GSP rpc RmControl seq=1750
+kf3: GSP rpc RmControl seq=1751
+kf3: GSP rpc RmControl seq=1752
+kf3: GSP rpc Free seq=1753
+kf3: GSP rpc Free seq=1754
+kf3: GSP rpc Free seq=1755
+kf3: GSP rpc Free seq=1756
+kf3: GSP rpc Free seq=1757
+kf3: GSP rpc Free seq=1758
+kf3: GSP rpc Free seq=1759
+kf3: GSP rpc Free seq=1760
+kf3: GSP rpc Free seq=1761
+kf3: GSP rpc Free seq=1762
+kf3: GSP rpc Free seq=1763
+kf3: GSP rpc Free seq=1764
+kf3: GSP rpc Free seq=1765
+kf3: GSP rpc Free seq=1766
+kf3: GSP rpc Free seq=1767
+kf3: GSP rpc Free seq=1768
+kf3: GSP rpc Free seq=1769
+kf3: GSP rpc Free seq=1770
+kf3: GSP rpc Free seq=1771
+kf3: GSP rpc Free seq=1772
+kf3: GSP rpc Free seq=1773
+kf3: GSP rpc Free seq=1774
+kf3: GSP rpc Free seq=1775
+kf3: GSP rpc Free seq=1776
+kf3: GSP rpc Free seq=1777
+kf3: GSP rpc Free seq=1778
+kf3: GSP rpc Free seq=1779
+kf3: GSP rpc Free seq=1780
+kf3: GSP rpc Free seq=1781
+kf3: GSP rpc Free seq=1782
+kf3: GSP rpc RmControl seq=1783
+kf3: GSP rpc RmControl seq=1784
+kf3: GSP rpc RmControl seq=1785
+kf3: GSP rpc RmControl seq=1786
+kf3: GSP rpc RmControl seq=1787
+kf3: GSP rpc RmControl seq=1788
+kf3: GSP rpc RmControl seq=1789
+kf3: GSP rpc RmControl seq=1790
+kf3: GSP rpc RmControl seq=1791
+kf3: GSP rpc RmControl seq=1792
+kf3: GSP rpc RmControl seq=1793
+kf3: GSP rpc RmControl seq=1794
+kf3: GSP rpc RmControl seq=1795
+kf3: GSP rpc RmControl seq=1796
+kf3: GSP rpc RmControl seq=1797
+kf3: GSP rpc RmControl seq=1798
+kf3: GSP rpc RmControl seq=1799
+kf3: GSP rpc RmControl seq=1800
+kf3: GSP rpc RmControl seq=1801
+kf3: GSP rpc RmControl seq=1802
+kf3: GSP rpc RmControl seq=1803
+kf3: GSP rpc RmControl seq=1804
+kf3: GSP rpc RmControl seq=1805
+kf3: GSP rpc RmControl seq=1806
+kf3: GSP rpc RmControl seq=1807
+kf3: GSP rpc Free seq=1808
+kf3: GSP rpc Free seq=1809
+kf3: GSP rpc Free seq=1810
+kf3: GSP rpc Free seq=1811
+kf3: GSP rpc Free seq=1812
+kf3: GSP rpc Free seq=1813
+kf3: TSPACE-RETIRE tok=0x1009 host=0x10020 key=VasKey(13965662490830307388) ring_va=0xff00500000 released=true stale_binds=0/1 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00001009 route=translated emulated=0 forwarded=1 host=0x10020 fast=0
+kf3: chan token 0x1009 (host 0x10020) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=3 last_put=Some(1) gp_get=Some(1) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: true }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1d0000a:0xcaf0006a: translated host 0x10020 (1480 us, off the GSP lock)
+kf3: GSP rpc Free seq=1814
+kf3: GSP rpc Free seq=1815
+kf3: GSP rpc Free seq=1816
+kf3: TSPACE-RETIRE tok=0x1008 host=0x1001f key=VasKey(13965662490830307388) ring_va=0xff00400000 released=true stale_binds=0/1 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00001008 route=translated emulated=0 forwarded=1 host=0x1001f fast=0
+kf3: chan token 0x1008 (host 0x1001f) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=3 last_put=Some(1) gp_get=Some(1) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: true }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1d0000a:0xcaf0005f: translated host 0x1001f (1358 us, off the GSP lock)
+kf3: GSP rpc Free seq=1817
+kf3: GSP rpc Free seq=1818
+kf3: GSP rpc Free seq=1819
+kf3: GSP rpc Free seq=1820
+kf3: TSPACE-RETIRE tok=0x807 host=0x1001e key=VasKey(13965662490830307388) ring_va=0xff00300000 released=true stale_binds=0/1 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000807 route=translated emulated=0 forwarded=1 host=0x1001e fast=0
+kf3: chan token 0x807 (host 0x1001e) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=3 last_put=Some(1) gp_get=Some(1) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: true }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1d0000a:0xcaf00054: translated host 0x1001e (1306 us, off the GSP lock)
+kf3: GSP rpc Free seq=1821
+kf3: GSP rpc Free seq=1822
+kf3: GSP rpc Free seq=1823
+kf3: TSPACE-RETIRE tok=0x806 host=0x1001d key=VasKey(13965662490830307388) ring_va=0xff00200000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=4 host=0x1001d fast=0
+kf3: chan token 0x806 (host 0x1001d) RETIRED, forwarded=4 submissions=4 splits=1/1 serves=12 last_put=Some(4) gp_get=Some(4) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: true }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1d0000a:0xcaf00049: translated host 0x1001d (1357 us, off the GSP lock)
+kf3: GSP rpc Free seq=1824
+kf3: GSP rpc RmControl seq=1825
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #1024: Raise(0) (guest armed=true, vector Some(0))
+kf3: GSP rpc Free seq=1826
+kf3: GSP rpc RmControl seq=1827
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1827 }
+kf3: GSP rpc RmControl seq=1828
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1828 }
+kf3: GSP rpc RmControl seq=1829
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 1829 }
+kf3: GSP rpc Free seq=1830
+kf3: GSP rpc Free seq=1831
+kf3: GSP rpc Free seq=1832
+kf3: GSP rpc Free seq=1833
+kf3: GSP rpc Free seq=1834
+kf3: GSP rpc Free seq=1835
+kf3: GSP rpc Free seq=1836
+kf3: GSP rpc Free seq=1837
+kf3: GSP rpc Free seq=1838
+kf3: GSP rpc Free seq=1839
+kf3: GSP rpc Free seq=1840
+kf3: TSPACE-RETIRE tok=0x802 host=0x10019 key=VasKey(13970166361930858506) ring_va=0xff00100000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+kf3: chan token 0x802 (host 0x10019) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=6 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1e0004a:0x2: translated host 0x10019 (1277 us, off the GSP lock)
+kf3: GSP rpc Free seq=1841
+kf3: GSP rpc Free seq=1842
+kf3: GSP rpc Free seq=1843
+kf3: GSP rpc Free seq=1844
+kf3: GSP rpc Free seq=1845
+kf3: GSP rpc Free seq=1846
+kf3: GSP rpc Free seq=1847
+kf3: TSPACE-RETIRE tok=0x801 host=0x10018 key=VasKey(13970166357635891212) ring_va=0xff00000000 released=true stale_binds=0/650 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=325 host=0x10018 fast=0
+kf3: chan token 0x801 (host 0x10018) RETIRED, forwarded=325 submissions=477 splits=0/0 serves=661 last_put=Some(325) gp_get=Some(325) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1e00049:0x2: translated host 0x10018 (1364 us, off the GSP lock)
+kf3: GSP rpc Free seq=1848
+kf3: GSP rpc Free seq=1849
+kf3: GSP rpc Free seq=1850
+kf3: GSP rpc Free seq=1851
+kf3: GSP rpc RmControl seq=1852
+kf3: GSP rpc RmControl seq=1853
+kf3: mem t=349.851s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP rpc Free seq=1854
+kf3: GSP rpc Free seq=1855
+kf3: GSP rpc Free seq=1856
+kf3: GSP rpc Free seq=1857
+kf3: GSP rpc Free seq=1858
+kf3: GSP rpc Free seq=1859
+kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE 0x20800a38: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #6
+kf3: GSP rpc RmControl seq=1860
+kf3: GSP rpc UpdateBarPde seq=1861
+kf3: GSP rpc Free seq=1862
+kf3: GSP rpc Free seq=1863
+kf3: GSP rpc Free seq=1864
+kf3: GSP rpc Free seq=1865
+kf3: GSP rpc RmControl seq=1866
+kf3: GSP rpc UnloadingGuestDriver seq=1867
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=1867: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: VA_WORST apply_max_ms=92 split_max_ms=4359 slow_applies=0 slow_splits=1 hostmaps(whole boot so far)=batch[calls=232 rows=22591 -> pieces(mmaps)=22591 call_avg_us=481 piece_avg_us=4 call_max_us=2843 piece_max_us=667] ram_run_maps[n=4645 avg_us=13 max_us=383] store_run_maps[n=499 avg_us=1116 max_us=91492]
+kf3: family=Ada phase=Halted trapped=103268 applied=10515 refused=0 serviced=4477 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110100 mem[inval=3869 walks=3902/3902 cleared=3869 superseded=0 named_missed=14 unreconciled=0 absent_cleared=18 mapped=28359 unmapped=28363 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=36019 priv_withheld_bytes=0x4770386000 priv_mirrored=36 sked=12/0held carve_gpu=0 carve_kernel=24 carve_cpu=8 carve_clipped=0xc0000 fn70=12 roots=36 root_moves=2 stmts=287/287 refused=16 pramin_repoints=122 pramin_miss=0 last_miss=0x0 pramin_worst_us=381 (map 345 mmap 61) pramin_maps=122 pramin_mmaps=122 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 pramin_pool_empty=0 pramin_retire_full=0 reaped=121 cache_ops=366 sysmembars=201 root_unsets=4] mirrors=3 reused=31 prewarmed=3 mirror_avg_us=1221 mirror_max_us=1242 vat[invals=898 arrive->clear_avg_us=362 max_us=92518 walks=900 walk_avg_us=5095 gpu_avg_us=217 plan_avg_us=0 apply_avg_us=99 leaves=201 host_calls=1461 apply_max_ms=92 split_max_ms=4359 slow_applies=0 slow_splits=1 q_inbox_n=0 q_inbox_avg_us=0 q_inbox_max_us=18 submit_n=899 submit_avg_us=8 submit_max_us=10648 collect_n=900 collect_avg_us=1 collect_max_us=25 cap_retries=0 req_n=1 req_avg_us=4359373 req_p50_us=8388608 req_p95_us=8388608 req_p99_us=8388608 req_max_ms=4359 aps_n=900 aps_avg_us=99 aps_p50_us=32 aps_p95_us=128 aps_p99_us=512 aps_max_ms=92 prep_n=900 prep_us=669 prep_max_us=135 unmapph_n=900 unmapph_us=83180 unmapph_max_us=33911 mapph_n=900 mapph_us=621 mapph_max_us=92323 takedown_n=900 takedown_us=27 takedown_max_us=2 inval_n=463 inval_us=5177 inval_max_us=1199 rm_map_n=0 rm_map_us=0 rm_map_max_us=91492 rm_unmap_n=433 rm_unmap_us=56011 rm_unmap_max_us=33906 rm_free_n=267 rm_free_us=5455 rm_free_max_us=262 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=76 ledger_n=433 ledger_us=408 ledger_max_us=13 stitch_n=0 stitch_us=0 stitch_max_us=2349 desc_n=0 desc_us=0 desc_max_us=2373 reap_n=0 reap_us=0 reap_max_us=16 slow_reqs=1 slow_aps=0 windows_max=1 slow_printed=1 slow_suppressed=0 ring_overwritten=0 pub_n=1 pub_avg_us=4359381 pub_max_us=4359381 resume_n=1 resume_avg_us=44 resume_max_us=44 e2e_n=1 e2e_avg_us=4359425 e2e_p50_us=8388608 e2e_p95_us=8388608 e2e_p99_us=8388608 e2e_max_ms=4359] chan[births=20 pt_births=48 acts=474/0refused birth_refused_cap=0 worst_act_us=2734 nsi=[GR0:17/17raised(nolive=0,novec=0) CE2:847/680raised(nolive=0,novec=0) CE3:3/3raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=1030 fifo_raised=1030 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=28 arm_clears=6 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=1897 not_armed=167 unvectored=0 relay_off=0 relay=on pacing=off refused=0 v0[raised=233 coalesced_later_raised=0 late=0 owed=false] v1[raised=680 coalesced_later_raised=0 late=0 owed=false] v2[raised=3 coalesced_later_raised=0 late=0 owed=false] v4[raised=814 coalesced_later_raised=0 late=0 owed=false] GR0[vec=Some(0) armed=0 wakes=17 not_armed=0 raised=17 live_twins=0] CE2[vec=Some(1) armed=0 wakes=847 not_armed=167 raised=680 live_twins=0] CE3[vec=Some(2) armed=0 wakes=3 not_armed=0 raised=3 live_twins=0]] served=2437 parks=16116 host_rings=933 contended=999 poisoned=0 tokens=[]] views[armed=1667 released=1664 refused=0 held=3] rc[armed=68 unarmed=0 wakes=1 seen=2 posted=2] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=80347 raised=1716 held=28 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] util[on host_reads=377 refused=0 stalled=0 empty=0 gpumon=0/0/0 rusd=6/6/9 published=1/0] unserviced=[0x20800a87,0x20800a4b,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852f,0x20808513,0x20802068,0x2080a612,0x2080012f,0x20802a12,0x20810107,0x20800a9a,0x20800ab8,0x2080a0d1,0x20800a9e,0x20800a9c,0x20800a1e] gsp_refusals[total=897 distinct=35 [fn76/0x20800a87=0x56x6 fn76/0x20800a4b=0x56x6 fn76/0x20800a80=0x56x12 fn76/0x20802a0f=0x56x6 fn76/0x2080017e=0x56x6 fn76/0x20800a30=0x56x6 fn76/0x20800a2e=0x56x6 fn76/0x20800b03=0x56x6 fn76/0x20800b05=0x56x6 fn76/0x20800a3f=0x56x6 fn76/0x2080012b=0x56x6 fn76/0x2080013f=0x56x6 fn103/0x0000c36f=0x56x6 fn103/0x0000402c=0x56x6 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x3 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852f=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x20809064=0x56x3 fn103/0x0000208f=0x56x1 fn76/0x2080012f=0x56x12 fn76/0x20802a12=0x56x256 fn76/0x20810107=0x56x4 fn76/0x20800a9a=0x56x22 fn76/0x20800ab8=0x56x1 fn76/0x2080a0d1=0x56x485 fn76/0x20800a9e=0x56x2 fn76/0x20800a9c=0x56x2 fn76/0x20800a1e=0x56x2]] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]
+kf3: family=Ada phase=Halted trapped=103268 applied=10515 refused=0 serviced=4477 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110100 mem[inval=3869 walks=3902/3902 cleared=3869 superseded=0 named_missed=14 unreconciled=0 absent_cleared=18 mapped=28359 unmapped=28363 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=36019 priv_withheld_bytes=0x4770386000 priv_mirrored=36 sked=12/0held carve_gpu=0 carve_kernel=24 carve_cpu=8 carve_clipped=0xc0000 fn70=12 roots=36 root_moves=2 stmts=287/287 refused=16 pramin_repoints=122 pramin_miss=0 last_miss=0x0 pramin_worst_us=381 (map 345 mmap 61) pramin_maps=122 pramin_mmaps=122 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 pramin_pool_empty=0 pramin_retire_full=0 reaped=121 cache_ops=366 sysmembars=201 root_unsets=4] mirrors=3 reused=31 prewarmed=3 mirror_avg_us=1221 mirror_max_us=1242 vat[invals=0 arrive->clear_avg_us=0 max_us=92518 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=201 host_calls=0 apply_max_ms=92 split_max_ms=4359 slow_applies=0 slow_splits=1 q_inbox_n=0 q_inbox_avg_us=0 q_inbox_max_us=18 submit_n=0 submit_avg_us=0 submit_max_us=10648 collect_n=0 collect_avg_us=0 collect_max_us=25 cap_retries=0 req_n=0 req_avg_us=0 req_p50_us=0 req_p95_us=0 req_p99_us=0 req_max_ms=4359 aps_n=0 aps_avg_us=0 aps_p50_us=0 aps_p95_us=0 aps_p99_us=0 aps_max_ms=92 prep_n=0 prep_us=0 prep_max_us=135 unmapph_n=0 unmapph_us=0 unmapph_max_us=33911 mapph_n=0 mapph_us=0 mapph_max_us=92323 takedown_n=0 takedown_us=0 takedown_max_us=2 inval_n=0 inval_us=0 inval_max_us=1199 rm_map_n=0 rm_map_us=0 rm_map_max_us=91492 rm_unmap_n=0 rm_unmap_us=0 rm_unmap_max_us=33906 rm_free_n=0 rm_free_us=0 rm_free_max_us=262 rm_resv_n=0 rm_resv_us=0 rm_resv_max_us=76 ledger_n=0 ledger_us=0 ledger_max_us=13 stitch_n=0 stitch_us=0 stitch_max_us=2349 desc_n=0 desc_us=0 desc_max_us=2373 reap_n=0 reap_us=0 reap_max_us=16 slow_reqs=1 slow_aps=0 windows_max=1 slow_printed=1 slow_suppressed=0 ring_overwritten=0 pub_n=0 pub_avg_us=0 pub_max_us=4359381 resume_n=0 resume_avg_us=0 resume_max_us=44 e2e_n=0 e2e_avg_us=0 e2e_p50_us=0 e2e_p95_us=0 e2e_p99_us=0 e2e_max_ms=4359] chan[births=20 pt_births=48 acts=474/0refused birth_refused_cap=0 worst_act_us=2734 nsi=[GR0:17/17raised(nolive=0,novec=0) CE2:847/680raised(nolive=0,novec=0) CE3:3/3raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=1030 fifo_raised=1030 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=28 arm_clears=6 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=1897 not_armed=167 unvectored=0 relay_off=0 relay=on pacing=off refused=0 v0[raised=233 coalesced_later_raised=0 late=0 owed=false] v1[raised=680 coalesced_later_raised=0 late=0 owed=false] v2[raised=3 coalesced_later_raised=0 late=0 owed=false] v4[raised=814 coalesced_later_raised=0 late=0 owed=false] GR0[vec=Some(0) armed=0 wakes=17 not_armed=0 raised=17 live_twins=0] CE2[vec=Some(1) armed=0 wakes=847 not_armed=167 raised=680 live_twins=0] CE3[vec=Some(2) armed=0 wakes=3 not_armed=0 raised=3 live_twins=0]] served=2437 parks=16196 host_rings=933 contended=999 poisoned=0 tokens=[]] views[armed=1667 released=1664 refused=0 held=3] rc[armed=68 unarmed=0 wakes=1 seen=2 posted=2] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=80347 raised=1716 held=28 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] util[on host_reads=379 refused=0 stalled=0 empty=0 gpumon=0/0/0 rusd=6/6/9 published=1/0] unserviced=[0x20800a87,0x20800a4b,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852f,0x20808513,0x20802068,0x2080a612,0x2080012f,0x20802a12,0x20810107,0x20800a9a,0x20800ab8,0x2080a0d1,0x20800a9e,0x20800a9c,0x20800a1e] gsp_refusals[total=897 distinct=35 [fn76/0x20800a87=0x56x6 fn76/0x20800a4b=0x56x6 fn76/0x20800a80=0x56x12 fn76/0x20802a0f=0x56x6 fn76/0x2080017e=0x56x6 fn76/0x20800a30=0x56x6 fn76/0x20800a2e=0x56x6 fn76/0x20800b03=0x56x6 fn76/0x20800b05=0x56x6 fn76/0x20800a3f=0x56x6 fn76/0x2080012b=0x56x6 fn76/0x2080013f=0x56x6 fn103/0x0000c36f=0x56x6 fn103/0x0000402c=0x56x6 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x3 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852f=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x20809064=0x56x3 fn103/0x0000208f=0x56x1 fn76/0x2080012f=0x56x12 fn76/0x20802a12=0x56x256 fn76/0x20810107=0x56x4 fn76/0x20800a9a=0x56x22 fn76/0x20800ab8=0x56x1 fn76/0x2080a0d1=0x56x485 fn76/0x20800a9e=0x56x2 fn76/0x20800a9c=0x56x2 fn76/0x20800a1e=0x56x2]] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]

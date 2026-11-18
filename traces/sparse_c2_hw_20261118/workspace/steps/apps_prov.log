@@ -1,0 +1,16 @@
+APP_POLICY name=UnifiedMemoryStreams os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=UnifiedMemoryPerf os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=conjugateGradientUM os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=attach_verify os=linux result=NOT_RUN note=unsupported (UVM)
+APPS_STAGE_LIST n=2 budget_s=3000 per_boot=100
+APPS_PROVISION_START 2026-11-18T07:27:48+00:00
+APPS_PROVISION_END rc=0 2026-11-18T07:52:04+00:00
+APPS_STAGE_START 2026-11-18T07:52:04+00:00 tag=openguest_prov
+APP_TRY app=nvidia_smi verdict=PASS rc=0 secs=0 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=2 gpu_births=4 boot=ap_openguest_prov_b1 guest_xid=0 kf3_lines=297 kf3_refusals=18
+APP_TRY app=vectorAdd verdict=PASS rc=0 secs=1 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=1193 gpu_births=6 boot=ap_openguest_prov_b1 guest_xid=0 kf3_lines=868 kf3_refusals=29
+APPS_STAGE_MATRIX_END rc=0 secs=61
+APP_ROW name=nvidia_smi os=linux result=PASS secs=0 guest_xid=0 note=- gpu_use=NA gpu_auth=none gpu_subs=2 gpu_births=4
+APP_ROW name=vectorAdd os=linux result=PASS secs=1 guest_xid=0 note=- gpu_use=NA gpu_auth=none gpu_subs=1193 gpu_births=6
+APPS_STAGE_COUNTS pass=2 fail=0 not_run=0 of=2 secs=61
+APPS_STAGE_PASS
+APPS_STAGE_EXIT rc=0

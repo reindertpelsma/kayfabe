@@ -1,0 +1,5 @@
+[apps_matrix 2026-11-18T07:57:33+00:00] START side=host run=c2um_host rev=f5dbe55e apps=3
+APPRES side=host app=UnifiedMemoryStreams verdict=PASS rc=0 secs=2 quiet=1 note=-
+APPRES side=host app=UnifiedMemoryPerf verdict=PASS rc=0 secs=8 quiet=1 note=-
+APPRES side=host app=conjugateGradientUM verdict=PASS rc=0 secs=1 quiet=0 note=warn:Test Summary: Error amount = 0.000000, result = SUCCESS
+[apps_matrix 2026-11-18T07:57:44+00:00] HOST_DONE 3 pass / 3 rows

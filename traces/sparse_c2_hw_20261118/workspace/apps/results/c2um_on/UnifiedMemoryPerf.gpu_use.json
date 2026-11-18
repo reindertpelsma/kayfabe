@@ -1,0 +1,25 @@
+{
+ "app": null,
+ "authority": "none",
+ "census": {
+  "base_missing": false,
+  "births": 2,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 0,
+  "gr_methods": 0,
+  "retired": 0,
+  "serves": 0,
+  "status_lines": 4,
+  "submissions": 0,
+  "wakes": {
+   "CE2": 2
+  },
+  "xid": 0
+ },
+ "class": "a",
+ "reasons": [],
+ "row": "UnifiedMemoryPerf",
+ "smi": null,
+ "verdict": "NA"
+}

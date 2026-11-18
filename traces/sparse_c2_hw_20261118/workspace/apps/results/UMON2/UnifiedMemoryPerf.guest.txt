@@ -1,0 +1,3 @@
+GPU Device 0: "Ada" with compute capability 8.9
+
+Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn)" 

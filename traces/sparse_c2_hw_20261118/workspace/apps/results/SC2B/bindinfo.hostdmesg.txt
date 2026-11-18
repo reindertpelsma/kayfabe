@@ -1,0 +1,5 @@
+[ 4052.144349] x86/PAT: kf3-vamgr:97340 freeing invalid memtype [mem 0x10017a0000-0x100199ffff]
+[ 4052.144493] x86/PAT: kf3-vamgr:97340 freeing invalid memtype [mem 0x10019a0000-0x1001b9ffff]
+[ 4052.144614] x86/PAT: kf3-vamgr:97340 freeing invalid memtype [mem 0x1001ba0000-0x1001d9ffff]
+[ 4052.144749] x86/PAT: kf3-vamgr:97340 freeing invalid memtype [mem 0x1001da0000-0x1001f9ffff]
+[ 4052.144857] x86/PAT: kf3-vamgr:97340 freeing invalid memtype [mem 0x1001fa0000-0x100219ffff]

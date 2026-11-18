@@ -1,0 +1,78 @@
+=== boot_capture tag=UMON2 at 2026-11-18T08:37:47+00:00 ===
+=== source revision: bb5b2c41a ===
+=== qemu binary: -rwxr-xr-x 1 root root 97118896 Nov 18 08:32 /workspace/bench/kf3-bins/bb5b2c41/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kf-ci-src/scripts/bench/boot_nvkvm.sh  sha256=0c01dc8eb42df9a4
+    used: /workspace/kf-ci-src/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Nov 18 08:37:51 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4090        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Nov 18 08:37 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Nov 18 08:37 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Nov 18 08:37 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Nov 18 08:37 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Nov 18 08:37 .
+drwxr-xr-x 18 root root   4000 Nov 18 08:37 ..
+cr--------  1 root root 240, 1 Nov 18 08:37 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Nov 18 08:37 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/onbox/um_hook.sh at 2026-11-18T08:37:52+00:00 ===
+/tmp/um:
+total 3112
+drwxrwxr-x  3 ubuntu ubuntu    4096 Nov 18 08:37 .
+drwxrwxrwt 14 root   root      4096 Nov 18 08:37 ..
+-rwxrwxr-x  1 ubuntu ubuntu 1055656 Nov 18 08:37 UnifiedMemoryPerf
+-rwxrwxr-x  1 ubuntu ubuntu 1030272 Nov 18 08:37 UnifiedMemoryStreams
+-rwxrwxr-x  1 ubuntu ubuntu 1085288 Nov 18 08:37 conjugateGradientUM
+drwxrwxr-x  2 ubuntu ubuntu    4096 Nov 18 08:38 lib
+
+/tmp/um/lib:
+total 921172
+drwxrwxr-x 2 ubuntu ubuntu      4096 Nov 18 08:38 .
+UM_HOOK tag=UMON2 dev_extra=[exact-sparse=on]
+UM_START UnifiedMemoryPerf 08:38:04
+UM_END UnifiedMemoryPerf rc=1 host_xid=      1 [ 4729.786772] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_0 faulted @ 0x7b68_5c000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ  guest_xid=0 cuda_err=[CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLau;] last=[ Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn)"  ]
+UM_START UnifiedMemoryStreams 08:38:11
+UM_END UnifiedMemoryStreams rc=255 host_xid=      1 [ 4735.512054] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x00000020, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC0 GPCCLIENT_T1_2 faulted @ 0x71e9_46109000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ  guest_xid=0 cuda_err=[CUDA error at U;code=13(CUBLAS_STATUS_EXECUTIO;] last=[Task [7], thread [3] executing on device (597) timeout: the monitored command dumped core ]
+UM_START conjugateGradientUM 08:38:18
+UM_END conjugateGradientUM rc=1 host_xid=      1 [ 4741.680278] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC4 GPCCLIENT_T1_0 faulted @ 0x77fa_c0200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ  guest_xid=0 cuda_err=[Error amou;] last=[&&&& conjugateGradientUM FAILED Test Summary:  Error amount = 1.000000, result = FAILURE ]
+UM_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 24 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=112
+GUEST_DMESG_AFTER_NVRM=106
+GUEST_DMESG_WORKLOAD_DELTA=88
+=== HOST dmesg delta for this boot (watermark 843 → 848) ===
+HOST_DMESG_LINES=5
+HOST_DMESG_NVRM=5
+HOST_DMESG_XID=3

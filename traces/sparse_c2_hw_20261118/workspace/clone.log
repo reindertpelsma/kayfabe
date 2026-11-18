@@ -1,0 +1,5 @@
+Cloning into '/workspace/kf-ci-src'...
+From https://github.com/reindertpelsma/kayfabe
+ * branch                f5dbe55e80ae4843d1ca2117c3bcd789723ff27f -> FETCH_HEAD
+HEAD is now at f5dbe55e8 hw-confirm tree: merge fixes (queue_priority test gains utilization: None; utilization use-site anchors follow the ABI-37 argument order) and the gap_vkprio probe from claude/gap-matrix-20261118
+CLONE_OK

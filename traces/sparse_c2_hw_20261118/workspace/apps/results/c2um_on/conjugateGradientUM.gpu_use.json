@@ -1,0 +1,23 @@
+{
+ "app": null,
+ "authority": "none",
+ "census": {
+  "base_missing": false,
+  "births": 0,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 0,
+  "gr_methods": 0,
+  "retired": 0,
+  "serves": 0,
+  "status_lines": 3,
+  "submissions": 0,
+  "wakes": {},
+  "xid": 0
+ },
+ "class": "a",
+ "reasons": [],
+ "row": "conjugateGradientUM",
+ "smi": null,
+ "verdict": "NA"
+}

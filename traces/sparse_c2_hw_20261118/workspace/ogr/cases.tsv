@@ -1,0 +1,12 @@
+msbind	dEQP-VK.sparse_resources.multisampled_image_sparse_binding.rgba16ui.samples_4
+msresid	dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba16ui.samples_4
+t16	dEQP-VK.sparse_resources.buffer.texel_buffers.sparse_residency.storage_texel_buffer_read_size_2_16_r32ui
+t24	dEQP-VK.sparse_resources.buffer.texel_buffers.sparse_residency.storage_texel_buffer_read_size_2_24_r32ui
+mip2d	dEQP-VK.sparse_resources.mipmap_sparse_residency.2d.rgba16ui.1024_128_1
+mipcube	dEQP-VK.sparse_resources.mipmap_sparse_residency.cube.r8_snorm.128_128_1
+imgmut	dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16_unorm_r16g16_snorm_r16g16_uint
+dgimg	dEQP-VK.sparse_resources.device_group_image_sparse_residency.2d.rgba16ui.1024_128_1
+intr	dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_sample_implicit_lod.g16_b16r16_2plane_444_unorm.128_128_1
+rebind	dEQP-VK.sparse_resources.image_rebind.2d_array.r8.128_128_8
+bindinfo	dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.3d.rgba32ui.512_256_6
+alias	dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d.rgba32ui.11_37_1

@@ -1,0 +1,3 @@
+=== conjugateGradientUM side=guest start=2026-11-18T08:29:07+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/conjugateGradientUM
+bash: line 1: /opt/apps/bundle/samples/conjugateGradientUM: No such file or directory
+=== end rc=127 secs=0 2026-11-18T08:29:07+00:00
