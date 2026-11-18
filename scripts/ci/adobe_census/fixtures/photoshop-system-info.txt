@@ -1,0 +1,3 @@
+Adobe Photoshop Version: 27.0.0
+  useOpenCL: 0
+  IsOpenCLGPUCapable: 1
