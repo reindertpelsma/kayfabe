@@ -100,6 +100,8 @@ MUTANTS = [
       K("CtsGroups.the_sample_is_breadth_first_one_case_per_split_in_turn", "CtsGroups.a_sample_as_small_as_the_number_of_splits_touches_each_split_once")),
     M("directory-prefix-too-loose", "cts", 'p.startswith("vk-default/%s/" % stem)', 'p.startswith("vk-default/%s" % stem)',
       K("CtsGroups.a_group_picks_up_its_files_under_a_directory", "CtsGroups.a_directory_whose_name_only_starts_like_the_group_is_not_part_of_it")),
+    M("oldest-release-wins", "scripts", 'return max(paths, key=lambda p: (key(p), p)) if paths else None', 'return min(paths, key=lambda p: (key(p), p)) if paths else None',
+      K("Tools.the_newest_release_wins_over_a_symlink_that_sorts_later", "Tools.the_newest_release_supplies_libcupti")),
     M("falsifier-not-required", "lib", 'if len(r["falsifier"].strip()) < 20:', 'if False:',
       K("CaseTable.a_case_without_a_falsifier_is_refused", "TableMore.a_falsifier_of_a_few_words_is_refused")),
     M("duplicate-ids-allowed", "lib", 'if r["id"] in seen:', 'if False:', K("CaseTable.ids_are_unique_and_a_duplicate_is_refused", "TableMore.an_id_repeated_across_kinds_is_refused")),

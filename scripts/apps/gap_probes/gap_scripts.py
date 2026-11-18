@@ -8,6 +8,7 @@ first exercised on a box. Each returns dict(status, reason, kv). A case never to
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -259,25 +260,35 @@ def life_busy_poweroff(ctx):
 TOOL_ROOTS = ("", str(Path(__file__).resolve().parent / "tools"))
 
 
+def newest(paths):
+    """The path under the highest CUDA release, judged by the real path (cuda and cuda-12 are symlinks to a release, and sorting the names would prefer them)."""
+    def key(p):
+        m = re.findall(r"cuda-(\d+)\.(\d+)", os.path.realpath(p))
+        return tuple(int(x) for x in m[-1]) if m else (0, 0)
+    return max(paths, key=lambda p: (key(p), p)) if paths else None
+
+
 def find_tool(name):
     import glob
     found = shutil.which(name)
     if found:
         return found
     for root in TOOL_ROOTS:
+        hits = []
         for pat in ("/usr/local/cuda*/bin/" + name, "/opt/nvidia/nsight-systems/*/bin/" + name, "/opt/nvidia/nsight-compute/*/" + name):
-            hits = sorted(glob.glob(root + pat))
-            if hits:
-                return hits[-1]
+            hits += glob.glob(root + pat)
+        best = newest(hits)
+        if best:
+            return best
     return None
 
 
 def cupti_lib():
     import glob
     for root in TOOL_ROOTS:
-        hits = sorted(glob.glob(root + "/usr/local/cuda*/extras/CUPTI/lib64/libcupti.so.*"))
-        if hits:
-            return hits[-1]
+        best = newest(glob.glob(root + "/usr/local/cuda*/extras/CUPTI/lib64/libcupti.so.*"))
+        if best:
+            return best
     return ""
 
 

@@ -726,6 +726,30 @@ class Tools(unittest.TestCase):
         self.assertIsNone(gap_scripts.find_tool("ncu"))
         self.assertTrue(gap_scripts.cupti_lib().endswith("libcupti.so.12"))
 
+    def newest_fixture(self):
+        import gap_scripts
+        d = Path(tempfile.mkdtemp(prefix="gapver"))
+        self.addCleanup(shutil.rmtree, d, True)
+        for rel in ("cuda-12.6", "cuda-12.9"):
+            (d / "usr/local" / rel / "bin").mkdir(parents=True)
+            (d / "usr/local" / rel / "bin/compute-sanitizer").write_text("")
+            (d / "usr/local" / rel / "extras/CUPTI/lib64").mkdir(parents=True)
+            (d / "usr/local" / rel / "extras/CUPTI/lib64/libcupti.so.12").write_text("")
+        (d / "usr/local/cuda-12").symlink_to(d / "usr/local/cuda-12.6")   # sorts after cuda-12.9 as a name and points at the older release
+        saved = gap_scripts.TOOL_ROOTS
+        gap_scripts.TOOL_ROOTS = (str(d),)
+        self.addCleanup(setattr, gap_scripts, "TOOL_ROOTS", saved)
+        saved_which = gap_scripts.shutil.which
+        gap_scripts.shutil.which = lambda n: None
+        self.addCleanup(setattr, gap_scripts.shutil, "which", saved_which)
+        return gap_scripts
+
+    def test_the_newest_release_wins_over_a_symlink_that_sorts_later(self):
+        self.assertIn("cuda-12.9/bin/compute-sanitizer", self.newest_fixture().find_tool("compute-sanitizer"))
+
+    def test_the_newest_release_supplies_libcupti(self):
+        self.assertIn("cuda-12.9/extras", self.newest_fixture().cupti_lib())
+
     def test_the_default_tool_roots_are_the_machine_and_the_directory_beside_the_script(self):
         import gap_scripts
         self.assertEqual(gap_scripts.TOOL_ROOTS[0], "")
