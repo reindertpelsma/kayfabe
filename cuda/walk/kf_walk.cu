@@ -420,6 +420,15 @@ __device__ __forceinline__ bool kf_pde_sparse(const KfFormat &F, uint64_t raw)
     }
 }
 
+/* ★ ABI 7 (2026-11-18, V3_SPARSE_RESIDENCY_RCA.md §8.7): the flags of a SPARSE run of page-size class
+ * `ps`. No aperture bits (VIDMEM), no kind, no permission: the run maps nothing (kf_walk.h
+ * KFWR_RF_SPARSE). Emitted only when the host opted in (KfArgs::key_perm & KFWR_RF_SPARSE); every
+ * call site below is behind that test, so with it clear the walk is the ABI-6 walk. */
+__device__ __forceinline__ uint32_t kf_sparse_flags(uint32_t ps)
+{
+    return KFWR_RF_SPARSE | ((ps & KFWR_RF_PS_MASK) << KFWR_RF_PS_SHIFT);
+}
+
 /* ★★★★★ THE BIG HALF CAN VETO THE SMALL ONE (w760h, from ogkm's own checks).
  * Two encodings of a dual PDE's LOW word, both meaning "there is nothing below
  * me -- do not look at the 4 KiB table", and we honoured NEITHER:
@@ -568,6 +577,7 @@ struct KfCtx {
     KfMapRun run;
     uint16_t pdb_index;
     KfDev *sdev;          /* ★ ABI 6: where refusal samples go (NULL = none) */
+    uint32_t sparse_on;   /* ★ ABI 7: emit SPARSE runs (KfArgs::key_perm & KFWR_RF_SPARSE); 0 = ABI 6 */
 };
 
 /* I2: the bounds check, and the single dereference it guards. */
@@ -664,9 +674,10 @@ __device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, ui
      * bounding it by the vidmem span refused every sysmem leaf above ~span. PEER has no
      * meaning for a single-GPU guest and is refused here. */
     {
+        /* ★ ABI 7: a SPARSE run maps nothing (gpga == va), so it has nothing to contain. */
         uint32_t ap = (flags >> KFWR_RF_AP_SHIFT) & KFWR_RF_AP_MASK;
-        if (ap == KFWR_AP_PEER ||
-            (ap == KFWR_AP_VIDMEM && (gpga > c.w.span || len > c.w.span - gpga))) {
+        if (!(flags & KFWR_RF_SPARSE) && (ap == KFWR_AP_PEER ||
+            (ap == KFWR_AP_VIDMEM && (gpga > c.w.span || len > c.w.span - gpga)))) {
             c.refuse |= KFWR_R_LEAF_OOB; c.refusals++;
             kf_sample(c.sdev, c.pdb_index, KFWR_R_LEAF_OOB, level, va, raw, gpga, len);
             return;
@@ -716,7 +727,11 @@ __device__ __forceinline__ uint32_t kf_dir_step(KfCtx &c, uint32_t k, uint64_t t
     }
     uint32_t apc = kf_ap_raw(F, raw);
     if (!kf_dir_present(F, raw, apc, L.leaf_ps != KF_PS_NONE)) {
-        if (kf_pde_sparse(F, raw)) c.sparse++;
+        if (kf_pde_sparse(F, raw)) {
+            c.sparse++;
+            /* ★ ABI 7: a SPARSE directory entry: its whole VA range reads zero. */
+            if (c.sparse_on) kf_emit(c, va, va, 1ull << L.va_lo, kf_sparse_flags(KFWR_PS_2M), raw, k);
+        }
         return KF_STEP_SKIP;
     }
     if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; return KF_STEP_SKIP; }
@@ -817,6 +832,17 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                              * present big table is a cache attribute, not a veto. */
                             c.sparse++;
                             has_s = false;
+                            /* ★ ABI 7: the whole 2 MiB reads zero. */
+                            if (c.sparse_on)
+                                kf_emit(c, va4, va4, 1ull << D.va_lo, kf_sparse_flags(KFWR_PS_2M), lo16,
+                                        KF_DIRS - 1u);
+                        } else if (c.sparse_on && !has_s && kf_pde_sparse(F, hi16) &&
+                                   !kf_dir_present(F, hi16, aps, false)) {
+                            /* ★ ABI 7: no big table and a SPARSE small half: every lookup in the
+                             * 2 MiB ends at the sparse small PDE. (With a big table present the
+                             * answer is per 64 KiB slot; it is not emitted: INVALID, loud.) */
+                            kf_emit(c, va4, va4, 1ull << D.va_lo, kf_sparse_flags(KFWR_PS_2M), hi16,
+                                    KF_DIRS - 1u);
                         }
 
                         /* Both sub-tables cover the SAME VA range at different page
@@ -854,7 +880,16 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
                                                 1ull << F.ps_log2[F.big_ps],
                                                 kf_leaf_flags(F, e, F.big_ps), e, KF_SAMPLE_LVL_BIG);
-                                    else if (kf_pte_sparse(F, e)) c.sparse++;
+                                    else if (kf_pte_sparse(F, e)) {
+                                        c.sparse++;
+                                        /* ★ ABI 7: a SPARSE big PTE with no small table under it.
+                                         * (With one, the small PTEs answer: see kf_big_pte_owns_slot.) */
+                                        if (c.sparse_on && !has_s) {
+                                            const uint64_t sva = va4 | ((uint64_t)bb << F.big_va_lo);
+                                            kf_emit(c, sva, sva, 1ull << F.ps_log2[F.big_ps],
+                                                    kf_sparse_flags(F.big_ps), e, KF_SAMPLE_LVL_BIG);
+                                        }
+                                    }
                                 }
                             }
                             if (has_s && !slot_owned) {
@@ -869,7 +904,14 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
                                                 1ull << F.ps_log2[F.small_ps],
                                                 kf_leaf_flags(F, e, F.small_ps), e, KF_SAMPLE_LVL_SMALL);
-                                    else if (kf_pte_sparse(F, e)) c.sparse++;
+                                    else if (kf_pte_sparse(F, e)) {
+                                        c.sparse++;
+                                        if (c.sparse_on) {   /* ★ ABI 7 */
+                                            const uint64_t sva = va4 | ((uint64_t)s << F.small_va_lo);
+                                            kf_emit(c, sva, sva, 1ull << F.ps_log2[F.small_ps],
+                                                    kf_sparse_flags(F.small_ps), e, KF_SAMPLE_LVL_SMALL);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -941,6 +983,7 @@ __global__ void kf_walk_kernel(KfArgs a)
     c.n = 0u; c.have = 0u;
     c.pdb_index = (uint16_t)t;
     c.sdev = d;
+    c.sparse_on = (a.key_perm & KFWR_RF_SPARSE) ? 1u : 0u;   /* ★ ABI 7 */
     memset(&c.run, 0, sizeof(c.run));
 
     kf_walk_one(c, pdb);
@@ -1005,8 +1048,10 @@ __device__ __forceinline__ uint32_t kf_hkey(uint32_t flags, uint32_t kp)
 {
     const uint32_t ap = flags & KFWR_RF_AP_MASK;
     const uint32_t k = ap == KFWR_AP_VIDMEM ? 0u : (ap == KFWR_AP_SYSCOH || ap == KFWR_AP_SYSNONCOH) ? 1u : 2u;
+    /* ★ ABI 7: SPARSE joins the key (bit 14), so a MAP leaf never keeps a SPARSE placement. */
     return k | (((flags >> KFWR_RF_KIND_SHIFT) & KFWR_RF_KIND_MASK) << 2)
-             | (((flags & kp & KFWR_RF_KEY_PERM_ALL) >> 3) << 10);
+             | (((flags & kp & KFWR_RF_KEY_PERM_ALL) >> 3) << 10)
+             | ((flags & KFWR_RF_SPARSE) ? (1u << 14) : 0u);
 }
 __device__ __forceinline__ uint64_t kf_end(const KfMapRun &r) { return r.va + r.len; }
 
@@ -2074,9 +2119,10 @@ __device__ __forceinline__ void kf_acc_emit(KfRunAcc &c, uint64_t va, uint64_t g
 #ifndef KF_BREAK_BOUNDS
     /* §39(c), the parallel half of the same chokepoint. */
     {   /* w825 — per aperture; see kf_emit. */
+        /* ★ ABI 7: a SPARSE run maps nothing (gpga == va); see kf_emit. */
         uint32_t ap = (flags >> KFWR_RF_AP_SHIFT) & KFWR_RF_AP_MASK;
-        if (ap == KFWR_AP_PEER ||
-            (ap == KFWR_AP_VIDMEM && (gpga > c.span || len > c.span - gpga))) {
+        if (!(flags & KFWR_RF_SPARSE) && (ap == KFWR_AP_PEER ||
+            (ap == KFWR_AP_VIDMEM && (gpga > c.span || len > c.span - gpga)))) {
             c.refuse |= KFWR_R_LEAF_OOB; c.refusals++;
             kf_sample(c.sdev, c.pdb_index, KFWR_R_LEAF_OOB, level, va, raw, gpga, len);
             return;
@@ -2282,6 +2328,17 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
         const uint32_t apc = kf_ap_raw(F, lo16);
         if (!kf_dir_present(F, lo16, apc, L.leaf_ps != KF_PS_NONE)) {
             if (census && kf_pde_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
+            /* ★ ABI 7: a SPARSE directory entry is a leaf task of its whole range (kf_dir_step). */
+            if ((a.key_perm & KFWR_RF_SPARSE) && kf_pde_sparse(F, lo16)) {
+                ch.va = e.va | ((uint64_t)i << L.va_lo);
+                ch.addr = ch.va;
+                ch.flags = kf_sparse_flags(KFWR_PS_2M);
+                ch.len_log2 = L.va_lo;
+                ch.kind = KF_ENT_LEAF;
+                ch.addr2 = lo16;
+                ch.has = (uint8_t)level;
+                return true;
+            }
             return false;
         }
         const uint64_t cb = (uint64_t)F.dir[level + 1u].entries * F.dir[level + 1u].entry_bytes;
@@ -2308,6 +2365,7 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
     const uint32_t aps = kf_ap_raw(F, hi16), apb = kf_ap_raw(F, lo16);
     uint8_t has = 0u;
     uint64_t pts = 0ull, ptb = 0ull;
+    uint64_t sparse2m = 0ull;   /* ★ ABI 7: the SPARSE half that makes the whole 2 MiB sparse */
     const uint64_t dva = e.va | ((uint64_t)i << L.va_lo);
     if (kf_dir_present(F, hi16, aps, false)) {
         if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) {
@@ -2336,6 +2394,20 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
         /* An INVALID, sparse big half vetoes the small table (see the serial walk). */
         if (census) atomicAdd(&d->sparse_slots, 1u);
         has &= ~1u;
+        sparse2m = lo16;
+    } else if (!(has & 1u) && kf_pde_sparse(F, hi16) && !kf_dir_present(F, hi16, aps, false)) {
+        sparse2m = hi16;   /* no big table, a SPARSE small half (see the serial walk) */
+    }
+    /* ★ ABI 7: the whole 2 MiB reads zero: a leaf task (as a 2 MiB leaf at this level would be). */
+    if (!has && sparse2m != 0ull && (a.key_perm & KFWR_RF_SPARSE)) {
+        ch.va = dva;
+        ch.addr = dva;
+        ch.flags = kf_sparse_flags(KFWR_PS_2M);
+        ch.len_log2 = L.va_lo;
+        ch.kind = KF_ENT_LEAF;
+        ch.addr2 = sparse2m;
+        ch.has = (uint8_t)level;
+        return true;
     }
     if (!has) return false;
     ch.va = e.va | ((uint64_t)i << L.va_lo);
@@ -2529,7 +2601,14 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
                 kf_acc_emit(c, t.va | ((uint64_t)bb << F.big_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                             1ull << F.ps_log2[F.big_ps], kf_leaf_flags(F, e, F.big_ps),
                             e, KF_SAMPLE_LVL_BIG);
-            else if (census && kf_pte_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
+            else if (kf_pte_sparse(F, e)) {
+                if (census) atomicAdd(&a.dev->sparse_slots, 1u);
+                if ((a.key_perm & KFWR_RF_SPARSE) && !(t.has & 1u)) {   /* ★ ABI 7: see the serial walk */
+                    const uint64_t sva = t.va | ((uint64_t)bb << F.big_va_lo);
+                    kf_acc_emit(c, sva, sva, 1ull << F.ps_log2[F.big_ps], kf_sparse_flags(F.big_ps), e,
+                                KF_SAMPLE_LVL_BIG);
+                }
+            }
         }
         if ((t.has & 1u) && !slot_owned) {
             for (uint32_t j = 0u; j < 16u && j < ratio; j++) {
@@ -2540,7 +2619,14 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
                     kf_acc_emit(c, t.va | ((uint64_t)si << F.small_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                                 1ull << F.ps_log2[F.small_ps], kf_leaf_flags(F, e, F.small_ps),
                                 e, KF_SAMPLE_LVL_SMALL);
-                else if (census && kf_pte_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
+                else if (kf_pte_sparse(F, e)) {
+                    if (census) atomicAdd(&a.dev->sparse_slots, 1u);
+                    if (a.key_perm & KFWR_RF_SPARSE) {   /* ★ ABI 7 */
+                        const uint64_t sva = t.va | ((uint64_t)si << F.small_va_lo);
+                        kf_acc_emit(c, sva, sva, 1ull << F.ps_log2[F.small_ps], kf_sparse_flags(F.small_ps),
+                                    e, KF_SAMPLE_LVL_SMALL);
+                    }
+                }
             }
         }
     }
@@ -2886,8 +2972,9 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
     }
     if (w->cfg.max_pdbs == 0u || w->cfg.max_pdbs > KF_MAX_PDB) w->cfg.max_pdbs = KF_MAX_PDB;
     if (w->cfg.max_slots == 0u) w->cfg.max_slots = KF_MAX_PDB;
-    if (w->cfg.key_perm & ~(uint32_t)KFWR_RF_KEY_PERM_ALL) {
-        fprintf(stderr, "kf_create: key_perm %#x names bits outside KFWR_RF_KEY_PERM_ALL\n", w->cfg.key_perm);
+    if (w->cfg.key_perm & ~(uint32_t)(KFWR_RF_KEY_PERM_ALL | KFWR_RF_SPARSE)) {
+        fprintf(stderr, "kf_create: key_perm %#x names bits outside KFWR_RF_KEY_PERM_ALL | KFWR_RF_SPARSE\n",
+                w->cfg.key_perm);
         free(w);
         return NULL;
     }
@@ -3213,7 +3300,7 @@ extern "C" int kf_validate_report(const KfReportHeader *h, const KfPdbEntry *p,
          * outside the store hands the guest memory that is not its own. ⊘ This is
          * a SECOND implementation of the kernel's own emit-time check on purpose:
          * if the two ever disagree, the report is the thing that was wrong. */
-        if (r[i].op != KFWR_OP_UNMAP &&
+        if (r[i].op != KFWR_OP_UNMAP && !(r[i].flags & KFWR_RF_SPARSE) &&   /* ★ ABI 7: maps nothing */
             ((r[i].flags & KFWR_RF_AP_MASK) == KFWR_AP_VIDMEM) &&
             (r[i].gpga > gpga_span || r[i].len > gpga_span - r[i].gpga))
                                                   { msg = "run leaves the GPGA window"; rc = -16; goto out; }

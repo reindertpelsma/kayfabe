@@ -74,8 +74,15 @@ pub fn host_key_with(flags: u32, key_perm: u32) -> u32 {
         AP_SYS | AP_SYS_NC => 1,
         _ => 2,
     };
+    // ★ ABI 7: SPARSE joins the key (bit 14), as in `kf_hkey`.
+    let sparse = if flags & crate::abi::KFWR_RF_SPARSE != 0 {
+        1 << 14
+    } else {
+        0
+    };
     ap | (RF_KIND.get(flags) << HKEY_KIND_LO)
         | (((flags & key_perm & KFWR_RF_KEY_PERM_ALL) >> RF_PERM_LO) << HKEY_PERM_LO)
+        | sparse
 }
 
 /// [`host_key_with`] under the default policy ([`KFWR_RF_KEY_PERM_DEFAULT`]).
@@ -469,7 +476,8 @@ mod tests {
                 2 | 3 => 1,
                 _ => 2,
             };
-            ap | (((f >> 16) & 0xff) << 2) | (((f & kp & 0x78) >> 3) << 10)
+            // ★ ABI 7: `| ((flags & KFWR_RF_SPARSE) ? (1u << 14) : 0u)` (`kf_hkey`).
+            ap | (((f >> 16) & 0xff) << 2) | (((f & kp & 0x78) >> 3) << 10) | (((f >> 7) & 1) << 14)
         };
         assert_eq!(SYS, 2);
         assert_eq!(BIG, 1 << 8);

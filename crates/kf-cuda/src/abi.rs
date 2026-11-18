@@ -58,7 +58,11 @@ pub const KF_MAX_SCOPE: usize = 256;
 /// so only this number (and the PTX's `.param`-independent semantics) tells a PTX built before it
 /// — which writes a 64-byte header — from one that writes 392: the host would otherwise read
 /// 328 bytes of the next region as samples.
-pub const KF_ABI_VERSION: u32 = 6;
+///
+/// ★ 7 (2026-11-18, `V3_SPARSE_RESIDENCY_RCA.md` §8.7): [`KFWR_RF_SPARSE`] runs, emitted only when
+/// [`KfArgs::key_perm`] holds that bit. No struct moved; a PTX built before it would ignore the bit
+/// and publish no SPARSE run while the host waits for them.
+pub const KF_ABI_VERSION: u32 = 7;
 
 /// Refusal samples one walk's report carries. Mirrors `KF_REFUSAL_SAMPLES` in `kf_walk.h`.
 pub const KF_REFUSAL_SAMPLES: usize = 8;
@@ -130,6 +134,12 @@ pub const KFWR_RF_VOLATILE: u32 = 1 << 5;
 /// `ogkm-580 virt_mem_allocator_gm107.c:2849-2850`): a privileged leaf is WITHHELD from a user twin
 /// instead (`kf_mem::apply`). Mirrors `KFWR_RF_PRIVILEGE`.
 pub const KFWR_RF_PRIVILEGE: u32 = 1 << 6;
+/// ★ ABI 7: a SPARSE run — the guest's entries over `[va, va+len)` are SPARSE (an access reads zero).
+/// It maps nothing: `gpga == va`, aperture VIDMEM, no kind, no permission; the §39(c) span bound does
+/// not apply. Emitted only when [`KfArgs::key_perm`] holds this bit (the C2 tiling engine,
+/// `kf_mem::tiling`); it joins the diff key, so a SPARSE range going back to INVALID is the UNMAP of its
+/// placement. Mirrors `KFWR_RF_SPARSE`.
+pub const KFWR_RF_SPARSE: u32 = 1 << 7;
 /// ★★★ v3-roperm: the permission bits that MAY join the diff key (`kf_hkey` /
 /// [`crate::diffmodel::host_key_with`]); which of them do is the host's policy, passed per launch
 /// in [`KfArgs::key_perm`]. Mirrors `KFWR_RF_KEY_PERM_ALL`.

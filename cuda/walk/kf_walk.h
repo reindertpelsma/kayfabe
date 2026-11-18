@@ -124,6 +124,15 @@ extern "C" {
 #define KFWR_RF_ATOMIC_DISABLE (1u << 4)
 #define KFWR_RF_VOLATILE       (1u << 5)
 #define KFWR_RF_PRIVILEGE      (1u << 6)
+/* ★ 2026-11-18 (ABI 7, docs/design/V3_SPARSE_RESIDENCY_RCA.md §8.7 stage 2): a SPARSE run. The guest's
+ * entries over [va, va+len) are SPARSE (VALID=0 + VOL on VER2, PCF SPARSE on VER3): an access reads
+ * zero, it does not fault. The run maps NOTHING: gpga == va (so the coalescer and the diff's linear
+ * coverage work unchanged), aperture VIDMEM, kind 0, and the §39(c) span bound does not apply to it.
+ * Emitted ONLY when KfArgs::key_perm holds this bit (the host opted in: the C2 tiling engine); with
+ * it clear the walk is the ABI-6 walk, byte for byte. It joins the diff key (kf_hkey), so a SPARSE
+ * placement is never "kept" by a MAP leaf over the same VA, and a SPARSE range that goes back to
+ * INVALID is the UNMAP of its placement (the UNSPARSE transition). */
+#define KFWR_RF_SPARSE         (1u << 7)
 /* ★★★ v3-roperm: THE PERMISSION BITS THAT MAY JOIN THE DIFF KEY (kf_hkey), i.e. be part of what a
  * committed placement IS, so that changing one on a kept placement is UNMAP + MAP. Which of them
  * do join is the host's POLICY, passed per launch in KfArgs::key_perm (never baked into the PTX):
@@ -319,11 +328,13 @@ typedef struct KfScope {
 /* Bumped whenever the format descriptor's layout changes (or the report/device ABI does). A host/PTX skew must
  * fail LOUDLY at launch rather than decode garbage field offsets and look like a
  * page-table bug (THE_CONSTRAINTS.md §21). */
-#define KF_ABI_VERSION 6u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need);
+#define KF_ABI_VERSION 7u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need);
                               * 5: permission bits join the diff key (kf_hkey), selected per launch by
                               *    KfArgs::key_perm (a subset of KFWR_RF_KEY_PERM_ALL)
                               * 6: refusal samples (KfRefusalSample): KfReportHeader grows 64 -> 392 bytes and
-                              *    KfDev gains the sample accumulator; KfFormat and KfArgs are unchanged */
+                              *    KfDev gains the sample accumulator; KfFormat and KfArgs are unchanged
+                              * 7: KFWR_RF_SPARSE runs, emitted only when KfArgs::key_perm holds that bit;
+                              *    no struct layout changes */
 
 #define KF_TBL_VER2 2u   /* Pascal…Ada  — GA10x is the tested one               */
 #define KF_TBL_VER3 3u   /* Hopper/Blackwell — SKETCHED, NEVER RUN, and refused
@@ -363,8 +374,8 @@ typedef struct KfWalkCfg {
      * someone forgot. Use KF_GPGA_SPAN_UNBOUNDED to opt out on purpose. */
     uint64_t gpga_span;
     /* ★ v3-roperm: which permission bits join the diff key (KfArgs::key_perm). A subset of
-     * KFWR_RF_KEY_PERM_ALL, else kf_create refuses; KFWR_RF_KEY_PERM_DEFAULT is the host's
-     * default policy. */
+     * KFWR_RF_KEY_PERM_ALL | KFWR_RF_SPARSE, else kf_create refuses; KFWR_RF_KEY_PERM_DEFAULT is the
+     * host's default policy. ★ ABI 7: KFWR_RF_SPARSE here makes the walk publish SPARSE runs. */
     uint32_t key_perm;
 } KfWalkCfg;
 

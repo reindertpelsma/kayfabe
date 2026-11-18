@@ -961,6 +961,10 @@ fn the_report_constants_match_the_header() {
         parse("KFWR_RF_PRIVILEGE"),
         u64::from(kf_cuda::abi::KFWR_RF_PRIVILEGE)
     );
+    assert_eq!(
+        parse("KFWR_RF_SPARSE"),
+        u64::from(kf_cuda::abi::KFWR_RF_SPARSE)
+    );
     // ★ The flags word's named RANGES (`KFWR_RF_*_{SHIFT,MASK}`), which every Rust reader goes
     // through (`kf_cuda::abi::RF_*`) instead of restating a shift.
     for (n, r) in [
