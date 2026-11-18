@@ -1,6 +1,6 @@
 # V3 — sparse residency: why residency cases hang in the guest (root cause, GPU-free reproduction)
 
-**STATUS: LIVE, 2026-11-18. Root cause found in the code, red GPU-free test committed, fix NOT in this change (DESIGN-ONLY below). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
+**STATUS: LIVE, 2026-11-18. Root cause found in the code, red GPU-free test committed, fix NOT in this change: it forks on an owner decision (§5). The hardware link from an INVALID host PTE to Xid 109 is INFERRED.**
 Parent evidence: `traces/open_rows_guest_20261117/confirm/` (PR #479) and `docs/design/V3_VULKAN_CTS_ROW.md` §12
 (tree branch). Pattern: `V3_REPLAY_TESTS.md`.
 
@@ -69,21 +69,60 @@ walker run) is replayed through the real `apply_entry` path and `BatchedVas`, on
 Mutant (blanket fix: add `_SPARSE` to `NVOS32_RESERVE_FLAGS`): S1 turns green but the mutant is **killed** by
 `s2_...` and `ratchet_...`. A blanket sparse reservation therefore cannot pass for the fix.
 
-## 5. Fix (DESIGN-ONLY, not in this change)
+## 5. Fix design (DESIGN-ONLY; the fix forks on an owner decision)
 
-The host must hold SPARSE exactly where the guest's PTE is SPARSE. Host RM offers userspace one way to make
-a VA sparse: allocate it as a `_SPARSE` `NV50_MEMORY_VIRTUAL` block (`gpu_vaspace.c:1577-1600`;
-`NV0080_CTRL_DMA_UPDATE_PDE_2 _SPARSE` is for externally managed PDEs only). The static guest reservation
-already owns the VA, so the design needs three changes:
-(a) the walker publishes a SPARSE run (an ABI field in `KfMapRun`, with the PTX regenerated);
-(b) `kf-mem` places guest-SPARSE runs in `_SPARSE` micro reservations, which means the static guest ranges
-must stop pre-owning that VA (or be split around it);
-(c) S1 turns green and S2 stays green.
-The hostile-guest analysis: a SPARSE host PTE maps no memory, so the guest gains nothing it could not already
-reach by writing a PTE. Each run is bounded by the walk budget.
+**Requirement.** The host must hold SPARSE exactly where the guest's PTE is SPARSE (S1), and INVALID
+wherever the guest's PTE is INVALID (S2).
+
+**The host verbs that exist (ogkm-580, read 2026-11-18).** An unprivileged host client can make a VA
+SPARSE in exactly one way: by allocating it as a `_SPARSE` `NV50_MEMORY_VIRTUAL` block. That block reads
+zero from the moment it is allocated, and an unmap inside it returns to sparse
+(`gpu_vaspace.c:1577-1600`, `2279-2289`). The two other routes are closed to kf:
+- `NV0080_CTRL_CMD_DMA_UPDATE_PDE_2 _SPARSE` is registered NON_PRIVILEGED, but its handler refuses any
+  caller below `RS_PRIV_LEVEL_KERNEL` (`dma.c:301-323`).
+- `VA_INTERNAL_LIMIT` routes host RM's own placements into the server-RM split window
+  (`vaspace_api.c:370-384`), which is reserved, so it cannot replace the static reservations.
+
+**The blocker.** kf's static guest reservations (`GUEST_VA_RANGES`, one `NV50` block each) already own
+every guest VA. They must exist before host RM places anything (`channel.rs` §v3-gfx records the gfx7 and gfx8 runs that showed why).
+A FIXED `NV50` allocation over an existing block is refused (`gpu_vaspace.c:1374-1386`; `sim.rs` models
+this), and freeing or splitting the reservation unmaps every guest mapping inside it, which breaks the
+guard that "an unchanged VA stays mapped at all times". **No unprivileged sequence produces SPARSE at
+a sub-range of a live static reservation while leaving the rest of it INVALID.** S1 and S2 cannot both
+hold with today's fence.
+
+**The options**, each with its cost:
+
+| option | S1 | S2 | cost / risk |
+|---|---|---|---|
+| **B: `_SPARSE` static reservations** (one flag in `NVOS32_RESERVE_FLAGS`) | green | **red** | Every guest-INVALID access reads zero instead of faulting. UVM demand paging and HMM (`V3_BUILD.md` C), which fail loudly today (a forwarded RC, CUDA 719), would become **silent wrong answers**, as would application bugs. No walker or ABI change. |
+| **C: a different fence** (no static reservation over guest VA, so per-run `_SPARSE` micro reservations become possible) | green | green | Needs a new way to keep host RM's own per-channel context buffers out of guest VA. None was found in ogkm-580, and the two recorded failures (gfx7 collision, gfx8 >2^47 placement, `channel.rs`) are exactly what the fence prevents. Research, not a patch. |
+| **K: known limitation** (today) | red | green | Sparse residency hangs the channel (Xid 109); the guest sees an RC. |
+
+**Recommendation:** keep K as the default (loud failure) and do not ship B by default. A silent wrong
+answer is worse than a hang, and it would hit managed-memory workloads that have nothing to do with
+sparse. If the owner wants the sparse row to pass, B could come as a documented power-user switch scoped to
+one VM. The cost to state for it: S2 fails for that VM. C stays open research.
+
+**Staging, if C is ever found.** Stage 1 (GPU-free, Rust):
+- a `KFWR_RF_SPARSE` run flag in the walk ABI (`kf_cuda::abi`, `KF_ABI_VERSION` bump), mirrored in
+  `kf_walk.h`;
+- `apply` places a SPARSE run as a `_SPARSE` micro reservation through a new `SpaceVerbs` verb;
+- the sim models it, S1 turns green, and S2 stays green.
+
+Stage 2 (kernel): `kf_walk.cu` emits the SPARSE run where it now only increments `sparse_slots`, then the
+PTX is regenerated locally with `NVRTC_SO=<nvidia-cuda-nvrtc-cu12==12.2.140>/libnvrtc.so.12 python3
+cuda/walk/make_ptx.py cuda/walk/kf_walk.cu cuda/walk/kf_walk.ptx compute_75`. `[measured 2026-11-18]`
+Regenerating from the current source with that NVRTC is byte-identical to the committed PTX. No nvcc or GPU
+is needed.
+
+Hostile-guest bounds for the stages: SPARSE runs come out of the same per-walk run budget as MAP runs, so
+there is no new unbounded emit. Each run costs one micro reservation, bounded by the slot pool. A SPARSE
+host PTE maps no memory.
 
 ## 6. Hardware confirmation still needed
 
 One run of `msresid` with a kf3 that holds SPARSE at the guest-SPARSE slots. Prediction: Pass and no Xid.
-Falsifier: Xid 109 again, which would refute the mechanism. The discriminating run is cheap once (a)-(b)
-exist. Before that, any box run would only repeat §1.
+Falsifier: Xid 109 again, which would refute the mechanism. Under option B this is one flag (a control build of `next` against B, the image pair and the texel pair).
+The run should come after the §5 decision; before that it would only repeat §1. A B build that still
+hangs refutes the mechanism and moves the question to Xid 109 vs Xid 31.
