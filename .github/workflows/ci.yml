@@ -2252,6 +2252,10 @@ jobs:
       # kf-qemu host read and the property's use sites): each mutant needs two named killers.
       - name: GPU-utilisation reporting mutations require two named killers each
         run: python3 scripts/ci/util_flag_mutants.py
+      # The queue-priority link (2026-11-18: kf-rm queuepriority, SET_SCHED_POLICY / SET_INTERLEAVE_LEVEL accepted as per-VM
+      # virtual state, never forwarded): each mutant needs two named killers.
+      - name: Queue-priority link mutations require two named killers each
+        run: python3 scripts/ci/queue_priority_mutants.py
 
   # The open-row harnesses of the standalone release run (2026-11-17): the FFmpeg and DCGM rows, the GPU-use assertion, the open ML rows and
   # the Vulkan CTS row. They are GPU-free (fixtures, fakes, a Python stand-in for each tool) and independent of the other mutant jobs.
