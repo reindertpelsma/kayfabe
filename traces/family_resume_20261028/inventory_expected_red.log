@@ -1,0 +1,43 @@
+FFFF
+======================================================================
+FAIL: test_another_native_adapter_refusal_cannot_be_swallowed (test_driver_inventory.InventoryTests.test_another_native_adapter_refusal_cannot_be_swallowed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "[OPERATOR_WORKTREE]/scripts/bench/family_resume/test_driver_inventory.py", line 48, in test_another_native_adapter_refusal_cannot_be_swallowed
+    self.assertEqual(recorded, "9")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: None != '9'
+
+======================================================================
+FAIL: test_closed_image_inventory_is_recorded_without_blocking_planned_provision (test_driver_inventory.InventoryTests.test_closed_image_inventory_is_recorded_without_blocking_planned_provision)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "[OPERATOR_WORKTREE]/scripts/bench/family_resume/test_driver_inventory.py", line 31, in test_closed_image_inventory_is_recorded_without_blocking_planned_provision
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : inventory-test: line 2: [OPERATOR_WORKTREE]/scripts/bench/family_resume/driver_inventory.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_native_adapter_failure_still_stops_before_guest (test_driver_inventory.InventoryTests.test_native_adapter_failure_still_stops_before_guest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "[OPERATOR_WORKTREE]/scripts/bench/family_resume/test_driver_inventory.py", line 42, in test_native_adapter_failure_still_stops_before_guest
+    self.assertEqual(recorded, "6")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: None != '6'
+
+======================================================================
+FAIL: test_other_initial_inventory_failure_is_recorded (test_driver_inventory.InventoryTests.test_other_initial_inventory_failure_is_recorded)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "[OPERATOR_WORKTREE]/scripts/bench/family_resume/test_driver_inventory.py", line 37, in test_other_initial_inventory_failure_is_recorded
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : inventory-test: line 2: [OPERATOR_WORKTREE]/scripts/bench/family_resume/driver_inventory.sh: No such file or directory
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.010s
+
+FAILED (failures=4)

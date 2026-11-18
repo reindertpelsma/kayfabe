@@ -1,0 +1,21 @@
+{
+  "public_alias": "stage-c-box-1",
+  "raw_console_published": false,
+  "pin_values_or_keys_published": false,
+  "uuid_label_published": false,
+  "IP_or_account_credit_published": false,
+  "private_paths_published": false,
+  "mapping_retained_privately": true,
+  "public_receipts_are_safe_projections_not_raw_copies": true,
+  "raw_capture_sha256": "dcc4a18c1b87dc656aba219106182dc550ec99a628511c1cc1b9540bb2766f0d",
+  "private_metadata_digests_do_not_imply_public_raw_payload": true,
+  "public_runtime_byte_equivalent_to_private_execution": true,
+  "public_fixtures_use_authorized_synthetic_credit": true,
+  "original_private_execution_branch_preserved": true,
+  "public_composition_base": "11917c053bdb2f0b49b7591dffc81de08e77cb99",
+  "private_value_commits_merged_or_cherry_picked": false,
+  "private_value_commits_are_public_ancestors": false,
+  "inherited_baseline_audit_path_redacted_at_public_tip": true,
+  "historical_already_published_baseline_not_rewritten": true,
+  "new_public_commits_introduce_no_private_paths": true
+}

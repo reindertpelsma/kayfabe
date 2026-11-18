@@ -1,0 +1,36 @@
+[
+  {
+    "mutant": "transfer omitted",
+    "killed": true
+  },
+  {
+    "mutant": "runtime omitted",
+    "killed": true
+  },
+  {
+    "mutant": "capture id unchecked",
+    "killed": true
+  },
+  {
+    "mutant": "absence id unchecked",
+    "killed": true
+  },
+  {
+    "mutant": "controller reused",
+    "killed": true
+  },
+  {
+    "mutant": "unrelated process owned",
+    "killed": true
+  },
+  {
+    "mutant": "initial inventory fatal",
+    "killed": true,
+    "killer_tests": 2
+  },
+  {
+    "mutant": "native errexit disabled",
+    "killed": true,
+    "killer_tests": 2
+  }
+]

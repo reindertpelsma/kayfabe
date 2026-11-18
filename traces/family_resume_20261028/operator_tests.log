@@ -1,0 +1,29 @@
+.........................................................SW5_PHASE native-binding
+SW5_PHASE gates9+10-user
+SW5_PHASE bare30
+SW5_PHASE kf3-build
+SW5_PHASE host-fastguest-build
+SW5_PHASE guest30-180s
+SW5_PHASE xid-user-census
+..SW5_PHASE native-binding
+SW5_PHASE gates9+10-user
+SW5_PHASE bare30
+SW5_PHASE kf3-build
+SW5_PHASE host-fastguest-build
+SW5_PHASE guest30-180s
+SW5_PHASE xid-user-census
+........SW5_PHASE native-binding
+SW5_PHASE gates9+10-user
+SW5_PHASE bare30
+SW5_PHASE kf3-build
+SW5_PHASE host-fastguest-build
+SW5_PHASE guest30-180s
+SW5_PHASE xid-user-census
+..SW5_PHASE native-binding
+SW5_PHASE gates9+10-user
+SW5_PHASE bare30
+.
+----------------------------------------------------------------------
+Ran 70 tests in 8.838s
+
+OK

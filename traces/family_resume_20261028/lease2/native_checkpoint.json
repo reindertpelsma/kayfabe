@@ -1,0 +1,10 @@
+{
+  "sha256": "a682a8da10bada3f1c8aa5a826966b65befc1c1e04bef23058c007e9f56be259",
+  "bytes": 147766,
+  "files": 81,
+  "local_sha256": "a682a8da10bada3f1c8aa5a826966b65befc1c1e04bef23058c007e9f56be259",
+  "verified_utc": "2026-10-28T16:31:38.502397+00:00",
+  "kind": "native checkpoint; not final capture",
+  "id": 58117397,
+  "final": false
+}

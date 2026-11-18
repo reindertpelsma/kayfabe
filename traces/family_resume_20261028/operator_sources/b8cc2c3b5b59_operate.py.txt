@@ -1,0 +1,190 @@
+"""SW5 attended execution using the retained, tested SW3/SW4 lifecycle guards."""
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import math
+from pathlib import Path
+import subprocess
+import shutil
+import sys
+
+import lifecycle
+import operator_backend as O
+import round_budget as B
+from store_plan import framebuffer_mib
+
+sys.path.insert(0, "[OPERATOR_WORKTREE]/scripts/bench/sw3")
+from offer_selector import require_offer
+
+ROOT = Path("[PRIVATE_CAPTURE_ROOT]")
+PRODUCTION = "7dcedefea093de078188efd5f712561bde746362"
+DENIED = {"CU", "IR", "KP", "SY", "CN", "HK", "MO"}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--machine", type=int, required=True)
+    parser.add_argument("--die", required=True)
+    parser.add_argument("--lease", type=int, required=True)
+    parser.add_argument("--execute", action="store_true")
+    args = parser.parse_args()
+    assert args.die in {"GB205", "GA106", "TU102", "TU104", "TU106", "TU116"}
+    assert 1 <= args.lease <= 3
+    evidence = ROOT / ("lease" + str(args.lease))
+    assert not evidence.exists(), "never overwrite an earlier attempt"
+    previous = list(ROOT.glob("lease*/owned.json"))
+    assert len(previous) == args.lease - 1
+    current = O.api(["show", "instances"])
+    retained = 0.0
+    for path in previous:
+        row = json.loads(path.read_text())[0]
+        assert row["destroyed"] and row["api_absent"]
+        assert not any(item["id"] == row["id"] for item in current)
+        assert not (path.parent / "identity_refusal.json").exists()
+        retained += json.loads((path.parent / "cost.json").read_text())["retained_usd"]
+    assert not any(row.get("label", "").startswith("codex-sw5-") for row in current)
+    offers = O.api(
+        [
+            "search",
+            "offers",
+            "verified=true vms_enabled=true num_gpus=1 inet_down>=200 "
+            "disk_space>=180 reliability>=0.95 "
+            "geolocation notin [CU,IR,KP,SY,CN,HK,MO]",
+            "--storage",
+            "180",
+            "--limit",
+            "2000",
+            "-o",
+            "dph_total",
+        ]
+    )
+    O.save(ROOT / ("market_lease" + str(args.lease) + ".json"), offers)
+    offer = next(row for row in offers if row["machine_id"] == args.machine)
+    bad = json.loads((O.HERE / "known_bad_machines.json").read_text())
+    bad_ids = {row[key] for row in bad for key in ("machine_id", "host_id") if key in row}
+    require_offer(offer, bad_ids)
+    assert offer["host_id"] not in bad_ids
+    country = offer["geolocation"].rsplit(",", 1)[-1].strip()
+    assert len(country) == 2 and country not in DENIED
+    assert offer["cpu_cores_effective"] >= 8 and offer["cpu_ram"] >= 16 * 1024
+    assert offer["disk_space"] >= 180
+    store_mib = framebuffer_mib(offer["gpu_ram"])
+    O.save(O.HERE / "framebuffer.json", store_mib)
+    rates = [offer[key] for key in ("inet_down_cost", "inet_up_cost")]
+    assert all(type(rate) in (int, float) and math.isfinite(rate) and rate >= 0 for rate in rates)
+    transfer = 12 * rates[0] + rates[1]
+    credit = float(O.api(["show", "user"])["credit"])
+    plan = B.plan(
+        offer["dph_total"], credit, dt.datetime.now(dt.timezone.utc), transfer_usd=transfer
+    )
+    assert retained + plan["reservation_usd"] < 4.0
+    assert credit - plan["reservation_usd"] >= 8
+    # Owner reserves4USD here and remaining8USD of shared12 with coordinator.
+    plan.update(capture_lead_seconds=420, work_lead_seconds=480,
+                authority="SW5_RESUME_20261028", stage_cap_usd=4, shared_cap_usd=12)
+    locks = {
+        str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in O.HERE.iterdir()
+        if path.suffix in (".py", ".sh", ".tar")
+        or path.name in ("completed.json", "framebuffer.json")
+    }
+    selected = {
+        key: offer.get(key)
+        for key in (
+            "id",
+            "machine_id",
+            "host_id",
+            "gpu_name",
+            "gpu_ram",
+            "geolocation",
+            "verification",
+            "is_vm_deverified",
+            "vms_enabled",
+            "dph_total",
+            "cpu_cores_effective",
+            "cpu_ram",
+            "inet_down_cost",
+            "inet_up_cost",
+        )
+    }
+    registration = {
+        "lane": "SW5",
+        "utc": O.utc(),
+        "offer": selected,
+        "candidate_die": args.die,
+        "plan": plan,
+        "production_source": PRODUCTION,
+        "feature_inventory": {"TSG_mirror": "ABSENT; full-feature UNRUN",
+                              "Windows": "UNRUN", "Linux_stock_master": "RUN"},
+        "round_authority": "SW5_RESUME_20261028",
+        "source_hashes": locks,
+        "derived_die_source": "7dcedefea093de078188efd5f712561bde746362",
+        "one_die_per_lease": True,
+        "native_hypothesis": "Actual bound die passes native gates9/9+gate10 and bare30/30.",
+        "native_falsifier": "Any native gate/bare failure excludes the cell before guest work.",
+        "guest_hypothesis": "After native passes on this box, production passes fast30/30.",
+        "guest_falsifier": "Any failed/crashed/unrun arm or unmatched Xid; original180s oracle.",
+        "flags": {"KF_DEVICE": "kf3", "KF_FROM_HOST": "1", "KF3_FB_MB": str(store_mib), "KF3_LIFECYCLE_MODE": "default",
+                  "KF3_PUT_CACHE": "1", "KF3_LAZY_OBSERVE": "1"},
+        "bar1_policy": "Observe and mark256MiB Vast exception; no resizing.",
+        "die_policy": "Native RM tuple decides; marketing is advisory. No second die on a lease.",
+        "xid_policy": "Exact source-approved negative controls only; unmatched faults stop.",
+        "lane_stop_usd": 4,
+        "lane_cap_usd": 4,
+        "max_leases": 3,
+        "retained_prior_usd": retained,
+        "provider_retry": "At most one, different machine AND host, only pre-SSH provider failure.",
+        "identity_refusal": "No retry; record and park.",
+    }
+    O.save(ROOT / ("operator_plan_lease" + str(args.lease) + ".json"), registration)
+    print(json.dumps({"state": "PREREGISTERED", "offer": selected, "plan": plan}), flush=True)
+    if not args.execute:
+        return
+    lifecycle.source_lock(locks)
+    archive = ROOT / ("sources_lease" + str(args.lease))
+    archive.mkdir(exist_ok=False)
+    for filename in locks:
+        shutil.copyfile(filename, archive / Path(filename).name)
+    backend = O.Backend(offer, plan, credit, evidence=evidence)
+    error = None
+    try:
+        lifecycle.execute(backend, plan)
+    except Exception as caught:
+        error = caught
+        O.save(
+            evidence / "STOP.json",
+            {
+                "utc": O.utc(),
+                "kind": type(caught).__name__,
+                "reason": str(caught),
+            },
+        )
+    rows = json.loads((evidence / "owned.json").read_text())
+    if rows and rows[0].get("api_absent"):
+        row = rows[0]
+        elapsed = (
+            dt.datetime.fromisoformat(row["absence_verified_utc"])
+            - dt.datetime.fromisoformat(row["created_utc"])
+        ).total_seconds()
+        runtime = elapsed * row.get("observed_dph_total", offer["dph_total"]) / 3600
+        O.save(
+            evidence / "cost.json",
+            {
+                "id": row["id"],
+                "elapsed_seconds": elapsed,
+                "runtime_estimate_usd": runtime,
+                "transfer_liability_usd": transfer,
+                "nonruntime_margin_usd": 0.5,
+                "retained_usd": runtime + transfer + 0.5,
+                "settled_invoice": False,
+            },
+        )
+    if error:
+        print("SW5_STOP " + str(error), flush=True)
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

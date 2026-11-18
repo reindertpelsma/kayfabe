@@ -1,0 +1,45 @@
+"""Actual Backend.absent must never cancel a watcher on incomplete/foreign inventory."""
+import datetime as dt
+import hashlib
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+import create_receipt_guard as G
+import operator_backend as O
+import lifecycle
+
+
+class ParentCleanup(unittest.TestCase):
+    def fixture(self, snapshot):
+        events=[]
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);now=G.utc()
+            plan=dict(armed_utc=now.isoformat(),deadline_utc=(now+dt.timedelta(hours=2)).isoformat(),
+                      seconds=7200,quoted_rate=.17,rate_bound=.27,reservation_usd=1.21,
+                      reserve_usd=8,capture_lead_seconds=600)
+            ref=G.prepare(root,dict(id=900,machine_id=32570,host_id=166946),plan,71,
+                          dict(owner_id=71,complete=True,rows=[]),
+                          '7dcedefea093de078188efd5f712561bde746362')
+            b=O.Backend.__new__(O.Backend);b.intent_ref=ref;b.evidence=root
+            b.arm=lambda _:dict(state='ARMED',deadline_utc=plan['deadline_utc'])
+            b.report=lambda _:None;b.create=lambda:42;b.ready=lambda _:None;b.run=lambda _:None
+            b.capture=lambda _:(b'fixture',hashlib.sha256(b'fixture').hexdigest())
+            b.destroy=lambda iid:events.append(('destroy',iid))
+            b.cancel=lambda _:events.append(('cancel',None))
+            with patch.object(O,'api',return_value=[]),patch.object(O.P,'snapshot',return_value=snapshot):
+                try:lifecycle.execute(b,plan)
+                except (RuntimeError,G.Unresolved,O.P.InventoryUnresolved):pass
+        self.assertIn(('destroy',42),events)
+        self.assertNotIn(('cancel',None),events,'incomplete absence cancelled independent watcher')
+
+    def test_truncated_inventory_cannot_cancel_independent_watcher(self):
+        self.fixture(dict(owner_id=71,complete=False,rows=[]))
+
+    def test_foreign_account_inventory_cannot_cancel_independent_watcher(self):
+        self.fixture(dict(owner_id=72,complete=True,rows=[]))
+
+
+if __name__=='__main__':unittest.main()
