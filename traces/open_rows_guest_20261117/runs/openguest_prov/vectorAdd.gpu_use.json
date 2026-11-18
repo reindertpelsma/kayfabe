@@ -1,0 +1,25 @@
+{
+ "app": null,
+ "authority": "none",
+ "census": {
+  "base_missing": false,
+  "births": 6,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 252,
+  "gr_methods": 0,
+  "retired": 6,
+  "serves": 1128,
+  "status_lines": 5,
+  "submissions": 927,
+  "wakes": {
+   "CE2": 797
+  },
+  "xid": 0
+ },
+ "class": "a",
+ "reasons": [],
+ "row": "vectorAdd",
+ "smi": null,
+ "verdict": "NA"
+}

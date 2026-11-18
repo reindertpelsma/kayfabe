@@ -1,0 +1,220 @@
+NVML_ROW FINDING_NA_IN_GUEST field fi169 host=5937 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi173 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi174 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi175 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi176 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi177 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi178 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi179 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi180 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi181 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi182 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi183 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi185 host=121733 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi186 host=121733 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi191 host=18943 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi197 host=3209729064 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi198 host=228068600 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi226 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi227 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi228 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi229 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi269 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi270 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi271 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi74 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi75 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi76 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi77 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi78 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi79 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi80 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi81 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi83 host=18943 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi91 host=4 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi94 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST field fi95 host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query clock.current.graphics host=1800 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query clock.current.mem host=9751 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query clock.current.sm host=1800 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query clock.current.video host=1590 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query clock.max.graphics host=2100 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query clock.max.mem host=9751 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query clock.max.sm host=2100 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query clock.max.video host=1950 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query fan.speed_pct host=42 guest=NOT_SUPPORTED/-
+NVML_ROW EXPECTED_NS query nvlink.state.0 owner_ruling_H: NVLink is stubbed as capability absent (OWNER_RULINGS section H)
+NVML_ROW FINDING_NA_IN_GUEST query pcie.link_width_current host=16 guest=UNKNOWN/-
+NVML_ROW FINDING_NA_IN_GUEST query pcie.replay_counter host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query pcie.throughput_kbs.rx host=341 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query pcie.throughput_kbs.tx host=439 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query perf.state host=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query power.energy_mj host=29090 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query power.limit_constraints_mw host=v0=100000;v1=500000 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query power.limit_default_mw host=420000 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query power.limit_enforced_mw host=420000 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query power.limit_mw host=420000 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query power.management_mode host=1 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query power.usage_mw host=121733 guest=NOT_SUPPORTED/-
+NVML_ROW OK_SERVED_THOUGH_LISTED query processes.compute per-process figures are not served: no pids, by design (V3_UTILIZATION_FLAG section 10)
+NVML_ROW OK_SERVED_THOUGH_LISTED query processes.graphics per-process figures are not served: no pids, by design (V3_UTILIZATION_FLAG section 10)
+NVML_ROW OK_SERVED_THOUGH_LISTED query processes.mps per-process figures are not served: no pids, by design (V3_UTILIZATION_FLAG section 10)
+NVML_ROW FINDING_NA_IN_GUEST query temperature.gpu host=44 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query temperature.threshold.0 host=98 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query temperature.threshold.1 host=95 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query throttle.current host=1 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query utilization.decoder host=v0=0;v1=100000 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query utilization.encoder host=v0=0;v1=100000 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query utilization.jpg host=v0=0;v1=100000 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query utilization.ofa host=v0=0;v1=100000 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST query utilization.rates host=gpu=0;memory=0 guest=NOT_SUPPORTED/-
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/clocks/graphics_clock host=1800 MHz guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/clocks/mem_clock host=9751 MHz guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/clocks/sm_clock host=1800 MHz guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/clocks/video_clock host=1590 MHz guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/clocks_event_reasons_counters/clocks_event_reasons_counters_hw_power_brake host=0 us guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/clocks_event_reasons_counters/clocks_event_reasons_counters_hw_therm_slowdown host=0 us guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/clocks_event_reasons_counters/clocks_event_reasons_counters_sw_power_cap host=0 us guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/clocks_event_reasons_counters/clocks_event_reasons_counters_sw_therm_slowdown host=0 us guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/clocks_event_reasons_counters/clocks_event_reasons_counters_sync_boost host=0 us guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/fan_speed host=42 % guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/gpu_power_readings/average_power_draw host=123.97 W guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/gpu_power_readings/current_power_limit host=420.00 W guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/gpu_power_readings/default_power_limit host=420.00 W guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/gpu_power_readings/instant_power_draw host=124.83 W guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/gpu_power_readings/max_power_limit host=500.00 W guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/gpu_power_readings/min_power_limit host=100.00 W guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/gpu_power_readings/requested_power_limit host=420.00 W guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/inforom_version/oem_object host=2.0 guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/max_clocks/graphics_clock host=2100 MHz guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/max_clocks/mem_clock host=9751 MHz guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/max_clocks/sm_clock host=2100 MHz guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/max_clocks/video_clock host=1950 MHz guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/pci/pci_gpu_link_info/link_widths/current_link_width host=16x guest=NA/Unknown Error
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/pci/replay_counter host=0 guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/pci/replay_rollover_counter host=0 guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/pci/rx_util host=292 KB/s guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/pci/tx_util host=390 KB/s guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/platformInfo/module_id host=1 guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/temperature/gpu_temp host=45 C guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/temperature/gpu_temp_max_threshold host=98 C guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/temperature/gpu_temp_slow_threshold host=95 C guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/utilization/decoder_util host=0 % guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/utilization/encoder_util host=0 % guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/utilization/gpu_util host=0 % guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/utilization/jpeg_util host=0 % guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/utilization/memory_util host=0 % guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smi nvidia_smi_log/gpu/utilization/ofa_util host=0 % guest=NA/N/A
+NVML_ROW FINDING_NA_IN_GUEST smiq clocks_event_reasons_counters.hw_power_brake_slowdown host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq clocks_event_reasons_counters.hw_thermal_slowdown host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq clocks_event_reasons_counters.sw_power_cap host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq clocks_event_reasons_counters.sw_thermal_slowdown host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq clocks_event_reasons_counters.sync_boost host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq ecc.errors.uncorrected.aggregate.sram.l2 host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq ecc.errors.uncorrected.aggregate.sram.mcu host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq ecc.errors.uncorrected.aggregate.sram.other host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq ecc.errors.uncorrected.aggregate.sram.parity host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq ecc.errors.uncorrected.aggregate.sram.pcie host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq ecc.errors.uncorrected.aggregate.sram.secded host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq ecc.errors.uncorrected.aggregate.sram.sm host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq ecc.errors.uncorrected.volatile.sram.parity host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq ecc.errors.uncorrected.volatile.sram.secded host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq fan.speed host=42 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq inforom.oem host=2.0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq pcie.link.width.current host=16 guest=NA/[Unknown Error]
+NVML_ROW FINDING_NA_IN_GUEST smiq platform.host_id host=1 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq platform.module_id host=1 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq platform.slot_number host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq platform.tray_index host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq power.draw host=124.30 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq temperature.gpu host=45 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq utilization.decoder host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq utilization.encoder host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq utilization.gpu host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq utilization.jpeg host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq utilization.memory host=0 guest=NA/[N/A]
+NVML_ROW FINDING_NA_IN_GUEST smiq utilization.ofa host=0 guest=NA/[N/A]
+DCGM_ROW FINDING_NA_IN_GUEST app_clock_violation host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST base_clock_violation host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST board_limit_violation host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST chassis_slot_number host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST clocks_event_boost_ns host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST clocks_event_hw_thermal_slowdown_ns host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST clocks_event_power_brake_slowdown_ns host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST clocks_event_power_cap_ns host=2498761984 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST clocks_event_sw_thermal_slowdown_ns host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST current_clocks_event_reasons host=1 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST dec_util_ratio host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST dec_utilization host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST ecc_threshold_sram host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST enc_util_ratio host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST enc_utilization host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST enforced_power_limit host=420.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST fan_speed host=36 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST fan_speed_ratio host=0.350 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_app_throttle_seconds_total host=7.806 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_base_throttle_seconds_total host=7.806 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_energy_joules_total host=1496 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_hw_power_brake_throttle_seconds_total host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_hw_thermal_throttle_seconds_total host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_limit_throttle_seconds_total host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_low_util_throttle_seconds_total host=16.681 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_power_throttle_seconds_total host=4.499 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_reliability_throttle_seconds_total host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_sw_thermal_throttle_seconds_total host=2.424 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_sync_boost_throttle_seconds_total host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_temp host=45 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_thermal_throttle_seconds_total host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_util_ratio host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST gpu_utilization host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST host_id host=1 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST infiniband_guid host=0x0000000000000000 guest=OK/<<<NOT_SUPPORTED>>>
+DCGM_ROW FINDING_NA_IN_GUEST inforom_config_checksum host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST inforom_config_valid host=1 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST low_util_violation host=2285183712 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST mem_copy_utilization host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST memory_clock host=9751 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST memory_clock_hertz host=405000000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST memory_max_clock host=9751 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST memory_max_clock_hertz host=9751000000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST memory_util_ratio host=0.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST module_id host=1 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST oem_inforom_version host=2.0 guest=OK/<<<NOT_SUP...
+DCGM_ROW FINDING_NA_IN_GUEST pcie_count_correctable_errors host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST pcie_link_width host=16 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST pcie_replay_counter host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST peer_type host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST power_management_limit host=420.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST power_management_limit_default host=420.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST power_management_limit_max host=500.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST power_management_limit_min host=100.000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST power_usage host=123.669 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST power_usage_instant host=123.698 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST power_violation host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST pstate host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST reliability_violation host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST shutdown_temp host=98 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST slowdown_temp host=95 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST sm_clock host=1800 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST sm_clock_hertz host=210000000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST sm_max_clock host=2100 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST sm_max_clock_hertz host=2100000000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST sync_boost_violation host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST thermal_violation host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST total_energy_consumption host=460322 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST tray_index host=0 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST vgpu_instance_license_status host=0 guest=OK/60076131...
+DCGM_ROW FINDING_NA_IN_GUEST video_clock host=1590 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST video_clock_hertz host=555000000 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST video_max_clock host=1950 guest=NA/N/A
+DCGM_ROW FINDING_NA_IN_GUEST video_max_clock_hertz host=1950000000 guest=NA/N/A
+DIAG_ROW Deployment/software/gpu0 host=FAIL guest=FAIL AGREE
+DIAG_ROW Hardware/diagnostic/gpu0 host=SKIP guest=SKIP AGREE
+DIAG_ROW Hardware/memory/gpu0 host=SKIP guest=SKIP AGREE
+DIAG_ROW Hardware/nvbandwidth/gpu0 host=SKIP guest=SKIP AGREE
+DIAG_ROW Integration/pcie/gpu0 host=SKIP guest=SKIP AGREE
+DIAG_ROW Stress/memory_bandwidth/gpu0 host=SKIP guest=SKIP AGREE
+DIAG_ROW Stress/targeted_power/gpu0 host=SKIP guest=SKIP AGREE
+DIAG_ROW Stress/targeted_stress/gpu0 host=SKIP guest=SKIP AGREE
+DIAG_ROW [r1] Deployment/software/gpu0 host=FAIL guest=FAIL AGREE
+NVML_COMPARE findings=132 dcgm_findings=74 BOTH_NOT_NUMBER=495 EXPECTED_NS=1 FINDING_NA_IN_GUEST=132 GUEST_EXTRA=2 IGNORED=534 OK=90 OK_SERVED_THOUGH_LISTED=3

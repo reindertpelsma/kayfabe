@@ -1,0 +1,42 @@
+{
+ "app": {
+  "device": "CUDA SDK Toolkit not installed or incorrectly installed.",
+  "facts": {
+   "devices": 3,
+   "used": 2
+  },
+  "ok": false,
+  "reasons": [
+   "hashcat used a non-NVIDIA device: #1 CUDA SDK Toolkit not installed or incorrectly installed."
+  ]
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 8,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 914,
+  "gr_methods": 0,
+  "retired": 6,
+  "serves": 26988,
+  "status_lines": 22,
+  "submissions": 23240,
+  "wakes": {
+   "CE2": 20612
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] PASS: host census: +23240 submission(s), +8 channel birth(s) in the window",
+  "[app] FAIL: hashcat used a non-NVIDIA device: #1 CUDA SDK Toolkit not installed or incorrectly installed."
+ ],
+ "row": "hashcat",
+ "smi": null,
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "FAIL"
+}

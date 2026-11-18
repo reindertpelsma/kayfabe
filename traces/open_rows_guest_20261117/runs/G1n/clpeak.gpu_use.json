@@ -1,0 +1,69 @@
+{
+ "app": {
+  "device": "",
+  "facts": {
+   "devices": [
+    "cpu-haswell-AMD EPYC 7B13 64-Core Proces"
+   ]
+  },
+  "ok": false,
+  "reasons": [
+   "no NVIDIA device block holds a bandwidth result (devices: cpu-haswell-AMD EPYC 7B13 64-C)"
+  ]
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 6,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 23,
+  "gr_methods": 0,
+  "retired": 6,
+  "serves": 50,
+  "status_lines": 25,
+  "submissions": 26,
+  "wakes": {
+   "CE2": 24
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] FAIL: host census: no GPU work in the window (submissions +26, channel births +6, doorbells +0, retired channels 6): the guest never submitted work to the GPU through kf3",
+  "[host-smi] FAIL: host engines: gpu engine idle: 0 sample(s) at or above 3% (need 2); peak 0.0",
+  "[app] FAIL: no NVIDIA device block holds a bandwidth result (devices: cpu-haswell-AMD EPYC 7B13 64-C)"
+ ],
+ "row": "clpeak",
+ "smi": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 8761.0
+  },
+  "peak": {
+   "busy_samples": 0,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "gpu_dmon_sm": 0.0,
+   "mem_mb": 8783.0
+  },
+  "reasons": [
+   "gpu engine idle: 0 sample(s) at or above 3% (need 2); peak 0.0"
+  ],
+  "required": [
+   "gpu"
+  ],
+  "samples": 179,
+  "source": "host",
+  "unreadable": false,
+  "verdict": "FAIL"
+ },
+ "thresholds": {
+  "interval_ms": 250,
+  "min_samples": 2
+ },
+ "verdict": "FAIL"
+}

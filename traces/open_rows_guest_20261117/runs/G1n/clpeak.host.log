@@ -1,0 +1,12 @@
+=== clpeak side=host start=2026-11-17T22:54:03+00:00 host=<box> cmd: /opt/apps/bundle/bin/clpeak ${KF_CLPEAK_ARGS:-}
+
+Platform: Portable Computing Language
+  Device: pthread-AMD EPYC 7B13 64-Core Processor
+    Driver version  : 1.8 (Linux x64)
+    Compute units   : 30
+    Clock frequency : 2249 MHz
+    Build Log: error: unknown target CPU 'generic'
+Device pthread-AMD EPYC 7B13 64-Core Processor failed to build the program, log: error: unknown target CPU 'generic'
+
+
+=== end rc=0 secs=0 2026-11-17T22:54:03+00:00

@@ -1,0 +1,1 @@
+APPRES side=guest app=nvml_dcgm verdict=PASS rc=0 secs=41 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=26 gpu_births=6 boot=ap_R1p_b1 guest_xid=0 kf3_lines=2261 kf3_refusals=70 host_gpu_use=INFO need=info why=gpu=1_enc=0_dec=0_sess=0_mem_rise=4 unserviced_before=64 unserviced_after=857 unserviced_in_row=793 unserviced_ids_in_row=code:76,code:50

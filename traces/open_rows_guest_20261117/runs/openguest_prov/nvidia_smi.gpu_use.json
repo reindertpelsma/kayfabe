@@ -1,0 +1,25 @@
+{
+ "app": null,
+ "authority": "none",
+ "census": {
+  "base_missing": false,
+  "births": 2,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 2,
+  "gr_methods": 0,
+  "retired": 2,
+  "serves": 4,
+  "status_lines": 5,
+  "submissions": 2,
+  "wakes": {
+   "CE2": 4
+  },
+  "xid": 0
+ },
+ "class": "a-info",
+ "reasons": [],
+ "row": "nvidia_smi",
+ "smi": null,
+ "verdict": "NA"
+}

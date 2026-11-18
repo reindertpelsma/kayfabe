@@ -1,0 +1,91 @@
+[boot_capture:ap_G1_i_blender_cycles] BINARY kf3-bin-rev:04613288  (/workspace/bench/kf3-bins/04613288/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:ap_G1_i_blender_cycles] host dmesg watermark: 863 lines
+[boot_capture:ap_G1_i_blender_cycles] booting (extra args: none)
+KF_GUEST_PROFILE image=/workspace/bench/guest_apps.qcow2 source=receipt version=580.159.04
+== kf3 binary: /workspace/bench/kf3-bins/04613288/qemu-system-x86_64 (rev 04613288)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04
+[boot_capture:ap_G1_i_blender_cycles] guest is up after 33s
+[boot_capture:ap_G1_i_blender_cycles] module unloaded and ring buffer cleared; loading cold
+[boot_capture:ap_G1_i_blender_cycles] opening the device (this is what runs RmInitAdapter)
+[boot_capture:ap_G1_i_blender_cycles] captured 29 dmesg lines, 26 NVRM, 0 adapter → /workspace/bench/run_ap_G1_i_blender_cycles_dmesg.log
+[boot_capture:ap_G1_i_blender_cycles] --- the verdict lines ---
+[boot_capture:ap_G1_i_blender_cycles] running POST_CAPTURE_HOOK: /workspace/kf-ci-src/scripts/apps/apps_hook.sh
+[boot_capture:ap_G1_i_blender_cycles] hook finished: rc=0
+[boot_capture:ap_G1_i_blender_cycles] guest dmesg after workload: 130 lines (123 NVRM), delta 101 → /workspace/bench/run_ap_G1_i_blender_cycles_dmesg_after.log
+[boot_capture:ap_G1_i_blender_cycles] host dmesg delta: 1 lines, 1 NVRM, 0
+0 Xid → /workspace/bench/run_ap_G1_i_blender_cycles_hostdmesg.log
+[boot_capture:ap_G1_i_blender_cycles] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:ap_G1_i_blender_cycles] census present (kf3):
+    kf3: family=Ampere phase=Halted trapped=63680 applied=6898 refused=0 serviced=1884 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110100 mem[inval=865 walks=1779/1779 cleared=865 superseded=0 named_missed=17 unreconciled=0 absent_cleared=15 mapped=19311 unmapped=2909 clipped=0x0 held=0 vm
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=386 emulated=0 forwarded=386 host=0x1e trap=386 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=2 emulated=0 forwarded=2 host=0x1f trap=2 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=2963 emulated=0 forwarded=2963 host=0x20 trap=2963 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=139 emulated=0 forwarded=139 host=0x10026 trap=139 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=2 emulated=0 forwarded=2 host=0x2002a trap=2 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1092 emulated=0 forwarded=1092 host=0x2002b trap=1092 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=409 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=143 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=1266 emulated=0 forwarded=1266 host=0x1e trap=1266 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=2 emulated=0 forwarded=2 host=0x1f trap=2 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=3748 emulated=0 forwarded=3748 host=0x20 trap=3748 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=161 emulated=0 forwarded=161 host=0x10026 trap=161 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=10 emulated=0 forwarded=10 host=0x2002a trap=10 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1092 emulated=0 forwarded=1092 host=0x2002b trap=1092 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=461 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=147 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=195 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=115 emulated=0 forwarded=115 host=0x1e trap=115 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=98 emulated=0 forwarded=98 host=0x10026 trap=98 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=2 emulated=0 forwarded=2 host=0x2002a trap=2 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=49 host=0x10018 fast=0
+[boot_capture:ap_G1_i_blender_cycles] ★ no /workspace/kf-ci-src/traces/guest_boots in this checkout — evidence stays on the box only, and a BOOTED claim
+[boot_capture:ap_G1_i_blender_cycles]   made from this run cannot be re-verified by anyone reading the repository.
+[boot_capture:ap_G1_i_blender_cycles] done. serial=/workspace/bench/run_ap_G1_i_blender_cycles_serial.log qemu=/workspace/bench/run_ap_G1_i_blender_cycles_qemu.log dmesg=/workspace/bench/run_ap_G1_i_blender_cycles_dmesg.log dmesg_after=/workspace/bench/run_ap_G1_i_blender_cycles_dmesg_after.log probe=/workspace/bench/run_ap_G1_i_blender_cycles_probe.log hostdmesg=/workspace/bench/run_ap_G1_i_blender_cycles_hostdmesg.log

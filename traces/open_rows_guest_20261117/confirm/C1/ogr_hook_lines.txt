@@ -1,0 +1,12 @@
+OGR_HOOK tag=C1 kf3=ad1a0c4c cases=[msbind_a=/workspace/ogr/list_msbind.tsv msresid=/workspace/ogr/list_msresid.tsv msbind_b=/workspace/ogr/list_msbind.tsv]
+OGR_CASE_START msbind_a 00:48:00 q0=1431 h0=805
+OGR_APPRES msbind_a APPRES side=guest app=vkcts verdict=PASS rc=0 secs=8 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END msbind_a rc=0 00:48:13 host_xid_lines=0 kf3_lines=2769
+OGR_CASE_START msresid 00:48:15 q0=4200 h0=805
+OGR_APPRES msresid APPRES side=guest app=vkcts verdict=PASS rc=0 secs=309 quiet=0 note=ok cases=3 pass=2 warn=0 ns=0 fail=0 crash=0 timeout=1 notrun=0 gpu=EXTERNAL
+OGR_CASE_END msresid rc=0 00:53:30 host_xid_lines=1 kf3_lines=4355
+OGR_CASE_START msbind_b 00:53:31 q0=8555 h0=808
+OGR_APPRES msbind_b APPRES side=guest app=vkcts verdict=PASS rc=0 secs=5 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END msbind_b rc=0 00:53:42 host_xid_lines=0 kf3_lines=2470
+OGR_HOOK_DONE
+HOOK_RC=0

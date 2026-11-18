@@ -1,0 +1,40 @@
+{
+ "app": {
+  "device": "NVIDIA GeForce RTX 3090",
+  "facts": {
+   "framework_device": "cuda:0",
+   "peak_mib": 22
+  },
+  "ok": true,
+  "reasons": []
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 6,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 297,
+  "gr_methods": 0,
+  "retired": 6,
+  "serves": 1384,
+  "status_lines": 6,
+  "submissions": 1070,
+  "wakes": {
+   "CE2": 937
+  },
+  "xid": 0
+ },
+ "class": "a+proof",
+ "reasons": [
+  "[host-census] PASS: host census: +1070 submission(s), +6 channel birth(s) in the window",
+  "[app] PASS: the application reports NVIDIA GeForce RTX 3090"
+ ],
+ "row": "cupy",
+ "smi": null,
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "PASS"
+}

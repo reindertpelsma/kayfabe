@@ -1,0 +1,62 @@
+{
+ "app": {
+  "device": "hevc_nvenc",
+  "facts": {},
+  "ok": true,
+  "reasons": []
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 6,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 476,
+  "gr_methods": 0,
+  "retired": 6,
+  "serves": 2432,
+  "status_lines": 7,
+  "submissions": 1498,
+  "wakes": {
+   "CE2": 1178,
+   "NVENC0": 600
+  },
+  "xid": 0
+ },
+ "class": "a+proof",
+ "reasons": [
+  "[host-census] PASS: host census: +1498 submission(s), +6 channel birth(s) in the window",
+  "[host-smi] PASS: host engines: enc busy (peak {'gpu': 19.0, 'mem_mb': 8790.0, 'gpu_dmon_sm': 19.0, 'enc': 73.0, 'busy_samples': 11})",
+  "[app] PASS: the application reports hevc_nvenc"
+ ],
+ "row": "nvenc_hevc",
+ "smi": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 8761.0
+  },
+  "peak": {
+   "busy_samples": 11,
+   "dec": 0.0,
+   "enc": 73.0,
+   "enc_sessions": 0.0,
+   "gpu": 19.0,
+   "gpu_dmon_sm": 19.0,
+   "mem_mb": 8790.0
+  },
+  "reasons": [],
+  "required": [
+   "enc"
+  ],
+  "samples": 34,
+  "source": "host",
+  "unreadable": false,
+  "verdict": "PASS"
+ },
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "PASS"
+}

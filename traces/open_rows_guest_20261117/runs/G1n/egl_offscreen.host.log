@@ -1,0 +1,6 @@
+=== egl_offscreen side=host start=2026-11-17T22:54:03+00:00 host=<box> cmd: ${KF_EGL_ENV:+env $KF_EGL_ENV }/opt/apps/bundle/bin/egl_offscreen
+libEGL warning: egl: failed to create dri2 screen
+libEGL warning: egl: failed to create dri2 screen
+CHECK egl_gl_Mtri_s FAIL
+[egl] eglInitialize failed
+=== end rc=0 secs=0 2026-11-17T22:54:03+00:00
