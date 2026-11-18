@@ -746,7 +746,7 @@ def doc_rows():
     rows = []
     for line in DOC.read_text().splitlines():
         c = [x.strip() for x in line.strip().strip("|").split(" | ")]
-        if len(c) == 6 and re.fullmatch(r"[A-Z]{2}-\d\d", c[0]):
+        if len(c) == 7 and re.fullmatch(r"[A-Z]{2}-\d\d", c[0]):
             rows.append(c)
     return rows
 
@@ -764,6 +764,29 @@ class MatrixDoc(unittest.TestCase):
         for r in rows:
             self.assertRegex(r[3], r"^(WORKS|BROKEN|UNKNOWN|N-A\(.{20,}\))$", r[0])
 
+    def test_every_broken_and_unknown_row_has_a_closure_path_and_the_counts_match(self):
+        rows = doc_rows()
+        for r in rows:
+            if r[3] in ("BROKEN", "UNKNOWN"):
+                self.assertRegex(r[6], r"^(IN-TREE FIX|PATCH TIER|OWNER DECISION)", r[0])
+            elif r[3].startswith("N-A"):
+                self.assertEqual(r[6], "N-A-BY-DESIGN", r[0])
+            else:
+                self.assertEqual(r[6], "-", r[0])
+        bu = [r for r in rows if r[3] in ("BROKEN", "UNKNOWN")]
+        want = tuple(sum(1 for r in bu if r[6].startswith(k)) for k in ("IN-TREE FIX", "PATCH TIER", "OWNER DECISION"))
+        m = re.search(r"Closure path of the BROKEN and UNKNOWN rows: IN-TREE FIX (\d+), PATCH TIER (\d+), OWNER DECISION (\d+) \(and (\d+) N-A-BY-DESIGN", DOC.read_text())
+        self.assertEqual(tuple(map(int, m.groups()[:3])), want)
+        self.assertIn("Target: BROKEN = 0. Patch-tier rows are BROKEN until the optional patch tier ships.", DOC.read_text())
+
+    def test_the_patch_tier_section_lists_every_patch_tier_row(self):
+        text = DOC.read_text()
+        sec = text.split("## 6. Patch tier")[1].split("## 7.")[0]
+        for r in doc_rows():
+            if r[6].startswith("PATCH TIER"):
+                self.assertIn(r[0], sec, r[0])
+        self.assertIn("H3", sec)
+
     def test_the_public_summary_counts_match_the_rows(self):
         rows = doc_rows()
         want = {k: sum(1 for r in rows if r[3].startswith(k)) for k in ("WORKS", "BROKEN", "UNKNOWN", "N-A")}
@@ -772,7 +795,7 @@ class MatrixDoc(unittest.TestCase):
 
     def test_every_source_key_of_a_row_is_defined_with_a_url_or_marked_inferred(self):
         text = DOC.read_text()
-        defs = {m[0]: m[2] for m in re.findall(r"^\| (\w+) \| ([^|]+) \| (\S+) \|", text.split("## 7. Sources")[1], re.M)}
+        defs = {m[0]: m[2] for m in re.findall(r"^\| (\w+) \| ([^|]+) \| (\S+) \|", text.split("## 8. Sources")[1], re.M)}
         for r in doc_rows():
             for k in r[2].split(", "):
                 self.assertIn(k, defs, r[0])
