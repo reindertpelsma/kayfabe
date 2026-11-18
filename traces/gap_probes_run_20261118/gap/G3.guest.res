@@ -1,0 +1,1 @@
+APPRES side=guest app=gap_probes verdict=GUEST_DEAD rc=ssh255 secs=- quiet=- note=no-result-line(guest_alive=0) gpu_use=NA gpu_auth=none gpu_subs=927 gpu_births=8 boot=ap_G3_b1 guest_xid=0 kf3_lines=860 kf3_refusals=29 host_gpu_use=INFO need=info why=gpu=100_enc=0_dec=0_sess=0_mem_rise=28 unserviced_before=41 unserviced_after=74 unserviced_in_row=33 unserviced_ids_in_row=code:76

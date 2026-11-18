@@ -1,0 +1,23 @@
+CTS_CHAIN build rc=0 03:42:15
+1003 /workspace/cts/caselist.tsv
+1
+CTS_CHAIN host 03:42:22
+CTS_CHAIN host rc=1 03:42:22
+CHAIN2 H2 03:42:22
+[apps_matrix 2026-11-18T03:42:22+00:00] START side=host run=H2 rev=6345785b apps=1
+APPRES side=host app=gap_probes verdict=PASS rc=0 secs=68 quiet=0 note=warn:tools_sanitizer info.initcheck_msg ========= COMPUTE-SANITIZER / GAPPROBE case=canary status=PASS rc=0 secs=1.9 reason=- / ========= ERROR SUMMARY: 0 errors
+[apps_matrix 2026-11-18T03:43:31+00:00] HOST_DONE 1 pass / 1 rows
+CHAIN2 G5 03:43:31
+[apps_matrix 2026-11-18T03:43:31+00:00] START side=guest run=G5 rev=6345785b apps=1
+[apps_matrix 2026-11-18T03:43:32+00:00] kf3 binary: /workspace/bench/kf3-bins/4065c82a/qemu-system-x86_64
+[apps_matrix 2026-11-18T03:45:18+00:00] boot ap_G5_b1 rc=0 apps=[gap_probes] :: /workspace/bench/run_ap_G5_b1_probe.log:APPS_HOOK tag=ap_G5_b1 apps=[gap_probes] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_G5_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/G5/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T03:45:18+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+HOST_STATE_LEAK=1 samples=207 distinct=4
+CHAIN2 C1 03:45:25
+[apps_matrix 2026-11-18T03:45:25+00:00] START side=guest run=C1 rev=6345785b apps=1
+[apps_matrix 2026-11-18T03:45:25+00:00] kf3 binary: /workspace/bench/kf3-bins/4065c82a/qemu-system-x86_64
+[apps_matrix 2026-11-18T03:46:44+00:00] boot ap_C1_b1 rc=0 apps=[vkcts] :: /workspace/bench/run_ap_C1_b1_probe.log:APPS_HOOK tag=ap_C1_b1 apps=[vkcts] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_C1_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/C1/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T03:46:44+00:00] GUEST_DONE batched: 0 pass / 1;  isolated re-runs: 0 pass / 0
+CHAIN2 done 03:46:44

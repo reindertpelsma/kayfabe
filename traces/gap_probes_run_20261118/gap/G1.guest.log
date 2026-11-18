@@ -1,0 +1,342 @@
+=== gap_probes side=guest start=2026-11-18T03:24:36+00:00 host=ubuntu cmd: python3 /opt/apps/bundle/share/gap_probes/gap_probes.py run --side guest --out /opt/apps/out/guest/gap_probes --egl /opt/apps/bundle/bin/egl_offscreen --emit
+GAPCASE attr_dump PASS -
+GAPCASE canary PASS -
+GAPCASE pinned_1g PASS -
+GAPCASE pinned_4g PASS -
+GAPCASE host_register_512m PASS -
+GAPCASE mapped_zerocopy PASS -
+GAPCASE pinned_huge_refused PASS -
+GAPCASE managed_prefetch_advise FAIL cuCtxSynchronize()
+GAPCASE managed_concurrent PASS -
+GAPCASE managed_oversub FAIL cuCtxSynchronize()
+GAPCASE ipc_legacy PASS -
+GAPCASE ipc_event PASS -
+GAPCASE ipc_vmm_fd PASS -
+GAPCASE vmm_granularity PASS -
+GAPCASE vmm_basic PASS -
+GAPCASE vmm_remap PASS -
+GAPCASE graph_capture_launch PASS -
+GAPCASE graph_update PASS -
+GAPCASE graph_mem_nodes PASS -
+GAPCASE pool_alloc_free PASS -
+GAPCASE pool_threshold_trim PASS -
+GAPCASE pool_ipc_export PASS -
+GAPCASE churn_ctx_200 PASS -
+GAPCASE churn_module_200 PASS -
+GAPCASE churn_streams_events PASS -
+GAPCASE fanout_procs_24 PASS -
+GAPCASE spin_5s PASS -
+GAPCASE spin_30s PASS -
+GAPCASE launch_flood_100k PASS -
+GAPCASE fault_recovery PASS -
+GAPCASE trap_recovery PASS -
+GAPCASE cupti_callback PASS -
+GAPCASE cupti_activity PASS -
+GAPCASE tools_sanitizer NOT_SUPPORTED tool_answer_initcheck_memcheck_racecheck_synccheck
+GAPCASE tools_ncu NOT_RUN no_ncu
+GAPCASE tools_nsys NOT_RUN no_nsys
+GAPCASE tools_nsys_gpumetrics NOT_RUN no_nsys
+GAPCASE vk_dump PASS -
+GAPCASE smi_setters PASS -
+GAPCASE life_persistenced PASS -
+GAPCASE life_kill_kernel PASS -
+GAPCASE life_kill_gl PASS -
+GAPCASE life_module_cycle PASS -
+@@FILE results.tsv sha256=05fed02191dd6f5f bytes=3372
+id	group	status	rc	secs	t0	t1	reason	canary
+attr_dump	cuda_attr	PASS	0	2.6	1794972277.779	1794972280.384	-	-
+canary	cuda_attr	PASS	0	2.2	1794972280.384	1794972282.630	-	-
+pinned_1g	cuda_pinned	PASS	0	9.8	1794972282.630	1794972292.460	-	-
+pinned_4g	cuda_pinned	PASS	0	26.7	1794972292.460	1794972319.116	-	-
+host_register_512m	cuda_pinned	PASS	0	4.7	1794972319.116	1794972323.856	-	-
+mapped_zerocopy	cuda_pinned	PASS	0	1.5	1794972323.856	1794972325.378	-	-
+pinned_huge_refused	cuda_pinned	PASS	2	1.5	1794972325.378	1794972326.863	-	-
+managed_prefetch_advise	cuda_managed	FAIL	719	1.5	1794972326.863	1794972328.373	cuCtxSynchronize()	PASS
+managed_concurrent	cuda_managed	PASS	0	3.4	1794972330.366	1794972333.811	-	-
+managed_oversub	cuda_managed	FAIL	719	1.8	1794972333.811	1794972335.652	cuCtxSynchronize()	PASS
+ipc_legacy	cuda_ipc	PASS	0	2.0	1794972337.559	1794972339.555	-	-
+ipc_event	cuda_ipc	PASS	0	2.5	1794972339.555	1794972342.039	-	-
+ipc_vmm_fd	cuda_ipc	PASS	0	2.7	1794972342.039	1794972344.715	-	-
+vmm_granularity	cuda_vmm	PASS	0	1.9	1794972344.715	1794972346.615	-	-
+vmm_basic	cuda_vmm	PASS	0	1.5	1794972346.615	1794972348.149	-	-
+vmm_remap	cuda_vmm	PASS	0	1.9	1794972348.149	1794972350.024	-	-
+graph_capture_launch	cuda_graph	PASS	0	2.0	1794972350.024	1794972352.063	-	-
+graph_update	cuda_graph	PASS	0	1.9	1794972352.064	1794972353.990	-	-
+graph_mem_nodes	cuda_graph	PASS	0	1.9	1794972353.990	1794972355.938	-	-
+pool_alloc_free	cuda_pool	PASS	0	1.8	1794972355.938	1794972357.711	-	-
+pool_threshold_trim	cuda_pool	PASS	0	1.6	1794972357.711	1794972359.329	-	-
+pool_ipc_export	cuda_pool	PASS	0	2.0	1794972359.329	1794972361.332	-	-
+churn_ctx_200	cuda_churn	PASS	0	170.9	1794972361.332	1794972532.199	-	-
+churn_module_200	cuda_churn	PASS	0	3.9	1794972532.199	1794972536.106	-	-
+churn_streams_events	cuda_churn	PASS	0	2.6	1794972536.106	1794972538.731	-	-
+fanout_procs_24	cuda_churn	PASS	0	18.5	1794972538.731	1794972557.183	-	-
+spin_5s	cuda_kernel_time	PASS	0	7.0	1794972557.183	1794972564.158	-	-
+spin_30s	cuda_kernel_time	PASS	0	31.9	1794972564.158	1794972596.091	-	-
+launch_flood_100k	cuda_kernel_time	PASS	0	6.2	1794972596.091	1794972602.298	-	-
+fault_recovery	cuda_kernel_time	PASS	0	3.3	1794972602.298	1794972605.601	-	-
+trap_recovery	cuda_kernel_time	PASS	0	2.7	1794972605.601	1794972608.327	-	-
+cupti_callback	profiling	PASS	0	1.9	1794972608.327	1794972610.242	-	-
+cupti_activity	profiling	PASS	0	2.0	1794972610.242	1794972612.215	-	-
+tools_sanitizer	profiling	NOT_SUPPORTED	0	9.7	1794972612.216	1794972621.896	tool_answer_initcheck_memcheck_racecheck_synccheck	-
+tools_ncu	profiling	NOT_RUN	0	0.0	1794972621.896	1794972621.896	no_ncu	-
+tools_nsys	profiling	NOT_RUN	0	0.0	1794972621.896	1794972621.897	no_nsys	-
+tools_nsys_gpumetrics	profiling	NOT_RUN	0	0.0	1794972621.897	1794972621.897	no_nsys	-
+vk_dump	vulkan_caps	PASS	0	2.0	1794972621.897	1794972623.932	-	-
+smi_setters	smi_control	PASS	0	9.2	1794972623.932	1794972633.144	-	-
+life_persistenced	lifecycle	PASS	0	6.1	1794972633.144	1794972639.206	-	-
+life_kill_kernel	lifecycle	PASS	0	29.0	1794972639.206	1794972668.168	-	-
+life_kill_gl	lifecycle	PASS	0	120.7	1794972668.168	1794972788.843	-	-
+life_module_cycle	lifecycle	PASS	0	14.8	1794972788.843	1794972803.658	-	-
+life_reset	lifecycle	NOT_RUN	0	0.0	0	0	destructive_not_requested	-
+life_busy_poweroff	lifecycle	NOT_RUN	0	0.0	0	0	terminal_not_requested	-
+@@END results.tsv
+@@FILE kv.tsv sha256=6249db43b6f6ef46 bytes=6403
+attr_dump	attr.1	1024
+attr_dump	attr.10	32
+attr_dump	attr.100	0
+attr_dump	attr.101	0
+attr_dump	attr.102	1
+attr_dump	attr.103	1
+attr_dump	attr.104	0
+attr_dump	attr.105	0
+attr_dump	attr.106	16
+attr_dump	attr.107	1
+attr_dump	attr.108	4325376
+attr_dump	attr.109	134213632
+attr_dump	attr.11	2147483647
+attr_dump	attr.110	0
+attr_dump	attr.111	1024
+attr_dump	attr.112	1
+attr_dump	attr.113	0
+attr_dump	attr.114	1
+attr_dump	attr.115	1
+attr_dump	attr.116	0
+attr_dump	attr.117	1
+attr_dump	attr.118	0
+attr_dump	attr.119	9
+attr_dump	attr.12	65536
+attr_dump	attr.120	0
+attr_dump	attr.121	1
+attr_dump	attr.122	1
+attr_dump	attr.123	1
+attr_dump	attr.124	0
+attr_dump	attr.125	1
+attr_dump	attr.126	1
+attr_dump	attr.127	0
+attr_dump	attr.128	1
+attr_dump	attr.129	0
+attr_dump	attr.13	1755000
+attr_dump	attr.130	0
+attr_dump	attr.131	-1
+attr_dump	attr.132	0
+attr_dump	attr.133	0
+attr_dump	attr.134	0
+attr_dump	attr.135	0
+attr_dump	attr.136	0
+attr_dump	attr.137	0
+attr_dump	attr.138	0
+attr_dump	attr.139	570691806
+attr_dump	attr.14	512
+attr_dump	attr.140	1078137944
+attr_dump	attr.141	1
+attr_dump	attr.142	1
+attr_dump	attr.143	0
+attr_dump	attr.144	1
+attr_dump	attr.145	1
+attr_dump	attr.146	0
+attr_dump	attr.147	0
+attr_dump	attr.148	E1
+attr_dump	attr.149	E1
+attr_dump	attr.15	1
+attr_dump	attr.150	E1
+attr_dump	attr.151	E1
+attr_dump	attr.152	E1
+attr_dump	attr.153	E1
+attr_dump	attr.154	E1
+attr_dump	attr.155	E1
+attr_dump	attr.156	E1
+attr_dump	attr.157	E1
+attr_dump	attr.158	E1
+attr_dump	attr.159	E1
+attr_dump	attr.16	82
+attr_dump	attr.17	0
+attr_dump	attr.18	0
+attr_dump	attr.19	1
+attr_dump	attr.2	1024
+attr_dump	attr.20	0
+attr_dump	attr.21	131072
+attr_dump	attr.22	131072
+attr_dump	attr.23	65536
+attr_dump	attr.24	16384
+attr_dump	attr.25	16384
+attr_dump	attr.26	16384
+attr_dump	attr.27	32768
+attr_dump	attr.28	32768
+attr_dump	attr.29	2048
+attr_dump	attr.3	1024
+attr_dump	attr.30	512
+attr_dump	attr.31	1
+attr_dump	attr.32	0
+attr_dump	attr.33	0
+attr_dump	attr.34	3
+attr_dump	attr.35	0
+attr_dump	attr.36	9751000
+attr_dump	attr.37	384
+attr_dump	attr.38	6291456
+attr_dump	attr.39	1536
+attr_dump	attr.4	64
+attr_dump	attr.40	2
+attr_dump	attr.41	1
+attr_dump	attr.42	32768
+attr_dump	attr.43	2048
+attr_dump	attr.44	1
+attr_dump	attr.45	32768
+attr_dump	attr.46	32768
+attr_dump	attr.47	8192
+attr_dump	attr.48	8192
+attr_dump	attr.49	32768
+attr_dump	attr.5	2147483647
+attr_dump	attr.50	0
+attr_dump	attr.51	32
+attr_dump	attr.52	32768
+attr_dump	attr.53	32768
+attr_dump	attr.54	2046
+attr_dump	attr.55	32768
+attr_dump	attr.56	131072
+attr_dump	attr.57	65536
+attr_dump	attr.58	16384
+attr_dump	attr.59	16384
+attr_dump	attr.6	65535
+attr_dump	attr.60	16384
+attr_dump	attr.61	32768
+attr_dump	attr.62	2048
+attr_dump	attr.63	32768
+attr_dump	attr.64	32768
+attr_dump	attr.65	2048
+attr_dump	attr.66	32768
+attr_dump	attr.67	32768
+attr_dump	attr.68	2046
+attr_dump	attr.69	268435456
+attr_dump	attr.7	65535
+attr_dump	attr.70	131072
+attr_dump	attr.71	65000
+attr_dump	attr.72	2097120
+attr_dump	attr.73	32768
+attr_dump	attr.74	32768
+attr_dump	attr.75	8
+attr_dump	attr.76	6
+attr_dump	attr.77	32768
+attr_dump	attr.78	1
+attr_dump	attr.79	1
+attr_dump	attr.8	49152
+attr_dump	attr.80	1
+attr_dump	attr.81	102400
+attr_dump	attr.82	65536
+attr_dump	attr.83	1
+attr_dump	attr.84	0
+attr_dump	attr.85	0
+attr_dump	attr.86	0
+attr_dump	attr.87	64
+attr_dump	attr.88	1
+attr_dump	attr.89	1
+attr_dump	attr.9	65536
+attr_dump	attr.90	1
+attr_dump	attr.91	1
+attr_dump	attr.92	0
+attr_dump	attr.93	0
+attr_dump	attr.94	0
+attr_dump	attr.95	1
+attr_dump	attr.96	1
+attr_dump	attr.97	101376
+attr_dump	attr.98	0
+attr_dump	attr.99	1
+attr_dump	attrs_ok	147
+attr_dump	driver_api_version	13000
+attr_dump	mem_total_mib	7871
+pinned_1g	alloc_rc	0
+pinned_4g	alloc_rc	0
+host_register_512m	register_rc	0
+pinned_huge_refused	rc	2
+pinned_huge_refused	refused_in_under_30s	1
+managed_prefetch_advise	advise_rc	0,0,0
+managed_prefetch_advise	attr_concurrent	1
+managed_prefetch_advise	attr_managed	1
+managed_prefetch_advise	attr_pageable	1
+managed_prefetch_advise	prefetch_dev_rc	0
+managed_concurrent	attr_concurrent	1
+managed_concurrent	cpu_writes_during_kernel	1
+managed_oversub	bytes_mib	9839
+managed_oversub	device_total_mib	7871
+managed_oversub	oversubscribes_device	1
+ipc_legacy	child_exit	0
+ipc_legacy	get_rc	0
+ipc_event	attr_ipc_event	1
+ipc_event	child_exit	0
+ipc_event	get_rc	0
+ipc_vmm_fd	attr_posix_fd	1
+ipc_vmm_fd	attr_vmm	1
+ipc_vmm_fd	child_exit	0
+ipc_vmm_fd	export_rc	0
+vmm_granularity	attr_vmm	1
+vmm_granularity	gran_min	2097152
+vmm_granularity	gran_recommended	2097152
+graph_capture_launch	launches_per_s	20700
+graph_update	update_rc	0
+graph_update	update_result	0
+pool_alloc_free	attr_pools	1
+pool_threshold_trim	reserved_after_free_ge_256mib	1
+pool_threshold_trim	reserved_after_trim_is_0	1
+pool_ipc_export	attr_pool_handle_types	9
+pool_ipc_export	export_rc	0
+churn_ctx_200	cycles	200
+churn_module_200	modules	200
+churn_streams_events	events	4096
+churn_streams_events	streams	2048
+fanout_procs_24	failed	0
+fanout_procs_24	spawned	24
+spin_5s	secs	5
+spin_30s	secs	30
+launch_flood_100k	secs	4
+fault_recovery	fault_child_exit	0
+fault_recovery	fresh_process_exit	0
+fault_recovery	parent_canary_after	PASS
+trap_recovery	fault_child_exit	0
+trap_recovery	fresh_process_exit	0
+trap_recovery	parent_canary_after	PASS
+cupti_callback	driver_api_enter_callbacks_ge_10	1
+cupti_callback	enable_domain_rc	0
+cupti_callback	subscribe_rc	0
+cupti_activity	enable_kernel_rc	0
+cupti_activity	flush_rc	0
+cupti_activity	kernel_records_ge_10	1
+cupti_activity	register_rc	0
+tools_sanitizer	memcheck_reports_the_illegal_store	0
+tools_sanitizer	tool.initcheck	NOT_SUPPORTED
+tools_sanitizer	tool.memcheck	NOT_SUPPORTED
+tools_sanitizer	tool.racecheck	NOT_SUPPORTED
+tools_sanitizer	tool.synccheck	NOT_SUPPORTED
+vk_dump	group.$schema	1:268afb3a
+vk_dump	group.capabilities.device	3335:419fe6b8
+vk_dump	group.profiles.VP_VULKANINFO_NVIDIA_GeForce_RTX_3090_580_159_4_0	9:3aca96ab
+vk_dump	groups	3
+vk_dump	leaves	3345
+smi_setters	baseline	Default,Disabled,[N/A],[N/A],[N/A]
+smi_setters	setter.accounting	NOT_SUPPORTED
+smi_setters	setter.compute_exclusive	NOT_SUPPORTED
+smi_setters	setter.compute_prohibited	NOT_SUPPORTED
+smi_setters	setter.ecc_off	NOT_SUPPORTED
+smi_setters	setter.pm_on	OK
+smi_setters	unchanged_after_undo	1
+life_persistenced	canary	1
+life_persistenced	daemon_found	1
+life_persistenced	start_rc	0
+life_persistenced	stopped_on_sigterm	1
+life_kill_kernel	rounds_ok	5
+life_kill_gl	rounds_ok	5
+life_module_cycle	cycles_ok	3
+@@END kv.tsv
+@@FILE summary.txt sha256=1d905146e694b13c bytes=82
+GAP_PROBES_SUMMARY side=guest pass=37 not_supported=1 fail=2 mismatch=0 not_run=5
+@@END summary.txt
+GAP_PROBES_SUMMARY side=guest pass=37 not_supported=1 fail=2 mismatch=0 not_run=5
+=== end rc=1 secs=527 2026-11-18T03:33:23+00:00

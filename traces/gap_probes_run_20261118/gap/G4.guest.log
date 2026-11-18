@@ -1,0 +1,16 @@
+=== gap_probes side=guest start=2026-11-18T03:38:18+00:00 host=ubuntu cmd: python3 /opt/apps/bundle/share/gap_probes/gap_probes.py run --side guest --out /opt/apps/out/guest/gap_probes --egl /opt/apps/bundle/bin/egl_offscreen --only canary,life_kill_kernel --emit
+GAPCASE canary PASS -
+GAPCASE life_kill_kernel PASS -
+@@FILE results.tsv sha256=8f2de277920d6277 bytes=179
+id	group	status	rc	secs	t0	t1	reason	canary
+canary	cuda_attr	PASS	0	2.4	1794973099.610	1794973101.970	-	-
+life_kill_kernel	lifecycle	PASS	0	31.2	1794973101.970	1794973133.157	-	-
+@@END results.tsv
+@@FILE kv.tsv sha256=7b9f4427222b1fe8 bytes=29
+life_kill_kernel	rounds_ok	5
+@@END kv.tsv
+@@FILE summary.txt sha256=7d9b3599b4833497 bytes=81
+GAP_PROBES_SUMMARY side=guest pass=2 not_supported=0 fail=0 mismatch=0 not_run=0
+@@END summary.txt
+GAP_PROBES_SUMMARY side=guest pass=2 not_supported=0 fail=0 mismatch=0 not_run=0
+=== end rc=0 secs=35 2026-11-18T03:38:53+00:00

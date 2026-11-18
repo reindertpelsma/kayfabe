@@ -1,0 +1,9 @@
+run	verdict	secs	guest_xid	kf3_refusals	unserviced_in_row	gpu_subs
+G1.guest.res	FAIL	527	0	48	2975	3703
+G2.guest.res	PASS	8	0	57	61	926
+G3.guest.res	GUEST_DEAD	-	0	29	33	927
+G4.guest.res	PASS	35	0	62	353	3695
+G5.guest.res	PASS	1.7	0	82	520	1863
+H1.host.res	FAIL	366	-	-	-	-
+H1c.host.res	PASS	359	-	-	-	-
+H2.host.res	PASS	1.9	-	-	-	-

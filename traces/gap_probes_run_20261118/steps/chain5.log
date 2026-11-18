@@ -1,0 +1,6 @@
+CHAIN5 baseline chunk 1 ended 04:18:00
+ls: cannot access '/workspace/bench/kf3-bins/*dirty*/qemu-system-x86_64': No such file or directory
+CHAIN5 fixed binary 
+CHAIN5 guest 1b 04:18:00
+[apps_matrix 2026-11-18T04:18:00+00:00] START side=guest run=C1b rev=8aa94098 apps=1
+[apps_matrix 2026-11-18T04:18:00+00:00] kf3 binary: /workspace/bench/kf3-bins/4065c82a/qemu-system-x86_64

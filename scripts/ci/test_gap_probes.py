@@ -277,13 +277,16 @@ class VulkanTokens(unittest.TestCase):
     def test_limits_and_features_become_name_equals_value_with_their_indexes(self):
         t = L.vulkan_tokens(["capabilities.device.properties.VkPhysicalDeviceProperties.limits.maxComputeWorkGroupCount[1]=65535",
                              "VkPhysicalDeviceFeatures.sparseBinding=True", "$schema=https://x"])
-        self.assertEqual(t, ["maxComputeWorkGroupCount[1]=65535", "sparseBinding=True"])
+        self.assertEqual(t, ["maxComputeWorkGroupCount[1]=65535", "sparseBinding=1"])
 
     def test_a_lost_feature_shows_in_the_token_diff_whatever_the_layout(self):
         host = L.vulkan_tokens(["a.b.sparseBinding=True", "ArrayOfVkExtensionProperties[0].extensionName=VK_EXT_x"])
         guest = L.vulkan_tokens(["capabilities.features.sparseBinding=False", "capabilities.device.extensions.VK_EXT_x=1"])
         d = L.vulkan_diff(host, guest)
-        self.assertEqual((d["only_host"], d["only_guest"]), (["sparseBinding=True"], ["sparseBinding=False"]))
+        self.assertEqual((d["only_host"], d["only_guest"]), (["sparseBinding=1"], ["sparseBinding=0"]))
+
+    def test_booleans_are_one_and_zero_whatever_the_tool_wrote(self):
+        self.assertEqual(L.vulkan_tokens(["a.alphaToOne=True", "a.depthClamp=false", "b.alphaToOne=1"]), ["alphaToOne=1", "depthClamp=0"])
 
     def test_a_value_with_a_space_survives_the_leaves_file(self):
         t = L.vulkan_tokens(["x.deviceName=NVIDIA GeForce RTX 3090"])
@@ -763,7 +766,7 @@ class ScriptCases(unittest.TestCase):
         leaves = (self.d / "vk_leaves.tsv").read_text()
         self.assertNotIn("UUID", leaves)
         self.assertNotIn("LUID", leaves)
-        self.assertIn("f7=True", leaves.splitlines())
+        self.assertIn("f7=1", leaves.splitlines())
         self.assertRegex(r["kv"]["tokens"], r"^\d+:[0-9a-f]{8}$")
 
 

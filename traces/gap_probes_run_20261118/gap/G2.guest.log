@@ -1,0 +1,16 @@
+=== gap_probes side=guest start=2026-11-18T03:35:27+00:00 host=ubuntu cmd: python3 /opt/apps/bundle/share/gap_probes/gap_probes.py run --side guest --out /opt/apps/out/guest/gap_probes --egl /opt/apps/bundle/bin/egl_offscreen --only life_reset --destructive --emit
+GAPCASE life_reset PASS -
+@@FILE results.tsv sha256=72a10c1f88b88175 bytes=110
+id	group	status	rc	secs	t0	t1	reason	canary
+life_reset	lifecycle	PASS	0	7.3	1794972928.599	1794972935.860	-	-
+@@END results.tsv
+@@FILE kv.tsv sha256=c3d92c5e7bc3fb8b bytes=85
+life_reset	canary_after	1
+life_reset	reset_class	NOT_SUPPORTED
+life_reset	reset_rc	3
+@@END kv.tsv
+@@FILE summary.txt sha256=2d6d205f741164eb bytes=81
+GAP_PROBES_SUMMARY side=guest pass=1 not_supported=0 fail=0 mismatch=0 not_run=0
+@@END summary.txt
+GAP_PROBES_SUMMARY side=guest pass=1 not_supported=0 fail=0 mismatch=0 not_run=0
+=== end rc=0 secs=8 2026-11-18T03:35:35+00:00

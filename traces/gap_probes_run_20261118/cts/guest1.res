@@ -1,0 +1,2 @@
+APPRES side=guest app=vkcts verdict=FAIL rc=1 secs=1 quiet=0 note= raise CaselistError("%d cases, more than the %d allowed (a few hundred at most)" % (len(entries), max_cases)) gpu_use=NA gpu_auth=none gpu_subs=0 gpu_births=0 boot=ap_C1_b1 guest_xid=0 kf3_lines=5 kf3_refusals=0
+APPRES side=guest app=vkcts verdict=PASS rc=0 secs=1583 quiet=0 note=ok cases=382 pass=262 warn=0 ns=92 fail=16 crash=0 timeout=12 notrun=0 gpu=EXTERNAL gpu_use=NA gpu_auth=none gpu_subs=1083 gpu_births=248 boot=ap_C1_b1 guest_xid=0 kf3_lines=3000 kf3_refusals=12

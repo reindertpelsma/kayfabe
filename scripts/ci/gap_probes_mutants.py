@@ -110,6 +110,8 @@ MUTANTS = [
       K("CtsReport.chunks_of_one_side_are_joined_and_counted_per_area", "CtsReport.three_chunks_of_one_case_each_count_three_cases")),
     M("report-missing-case-is-a-pass", "report", 't["guest"][g["status"] if g else "not_run"] += 1', 't["guest"][g["status"] if g else "pass"] += 1',
       K("CtsReport.a_case_missing_from_the_guest_logs_is_not_run_there_not_a_pass", "CtsReport.a_guest_that_ran_less_shows_not_run_in_the_area_line")),
+    M("booleans-not-normalised", "lib", '{"True": "1", "true": "1", "False": "0", "false": "0"}.get(val, val)', 'val',
+      K("VulkanTokens.booleans_are_one_and_zero_whatever_the_tool_wrote", "VulkanTokens.limits_and_features_become_name_equals_value_with_their_indexes")),
     M("falsifier-not-required", "lib", 'if len(r["falsifier"].strip()) < 20:', 'if False:',
       K("CaseTable.a_case_without_a_falsifier_is_refused", "TableMore.a_falsifier_of_a_few_words_is_refused")),
     M("duplicate-ids-allowed", "lib", 'if r["id"] in seen:', 'if False:', K("CaseTable.ids_are_unique_and_a_duplicate_is_refused", "TableMore.an_id_repeated_across_kinds_is_refused")),

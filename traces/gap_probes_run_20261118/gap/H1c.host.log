@@ -1,0 +1,836 @@
+=== gap_probes side=host start=2026-11-18T03:17:43+00:00 host=ubuntu cmd: python3 /opt/apps/bundle/share/gap_probes/gap_probes.py run --side host --out /opt/apps/out/host/gap_probes --egl /opt/apps/bundle/bin/egl_offscreen --emit
+GAPCASE attr_dump PASS -
+GAPCASE canary PASS -
+GAPCASE pinned_1g PASS -
+GAPCASE pinned_4g PASS -
+GAPCASE host_register_512m PASS -
+GAPCASE mapped_zerocopy PASS -
+GAPCASE pinned_huge_refused PASS -
+GAPCASE managed_prefetch_advise PASS -
+GAPCASE managed_concurrent PASS -
+GAPCASE managed_oversub PASS -
+GAPCASE ipc_legacy PASS -
+GAPCASE ipc_event PASS -
+GAPCASE ipc_vmm_fd PASS -
+GAPCASE vmm_granularity PASS -
+GAPCASE vmm_basic PASS -
+GAPCASE vmm_remap PASS -
+GAPCASE graph_capture_launch PASS -
+GAPCASE graph_update PASS -
+GAPCASE graph_mem_nodes PASS -
+GAPCASE pool_alloc_free PASS -
+GAPCASE pool_threshold_trim PASS -
+GAPCASE pool_ipc_export PASS -
+GAPCASE churn_ctx_200 PASS -
+GAPCASE churn_module_200 PASS -
+GAPCASE churn_streams_events PASS -
+GAPCASE fanout_procs_24 PASS -
+GAPCASE spin_5s PASS -
+GAPCASE spin_30s PASS -
+GAPCASE launch_flood_100k PASS -
+GAPCASE fault_recovery PASS -
+GAPCASE trap_recovery PASS -
+GAPCASE cupti_callback PASS -
+GAPCASE cupti_activity PASS -
+GAPCASE tools_sanitizer PASS -
+GAPCASE tools_ncu PASS -
+GAPCASE tools_nsys PASS -
+GAPCASE tools_nsys_gpumetrics PASS -
+GAPCASE vk_dump PASS -
+GAPCASE smi_setters PASS -
+GAPCASE life_persistenced PASS -
+GAPCASE life_kill_kernel PASS -
+GAPCASE life_kill_gl PASS -
+@@FILE results.tsv sha256=43342a26d40b852e bytes=3202
+id	group	status	rc	secs	t0	t1	reason	canary
+attr_dump	cuda_attr	PASS	0	1.5	1794971864.581	1794971866.116	-	-
+canary	cuda_attr	PASS	0	2.1	1794971866.117	1794971868.258	-	-
+pinned_1g	cuda_pinned	PASS	0	2.8	1794971868.258	1794971871.050	-	-
+pinned_4g	cuda_pinned	PASS	0	4.6	1794971871.050	1794971875.638	-	-
+host_register_512m	cuda_pinned	PASS	0	2.5	1794971875.638	1794971878.159	-	-
+mapped_zerocopy	cuda_pinned	PASS	0	2.1	1794971878.159	1794971880.250	-	-
+pinned_huge_refused	cuda_pinned	PASS	2	2.1	1794971880.250	1794971882.337	-	-
+managed_prefetch_advise	cuda_managed	PASS	0	2.4	1794971882.337	1794971884.739	-	-
+managed_concurrent	cuda_managed	PASS	0	3.6	1794971884.739	1794971888.360	-	-
+managed_oversub	cuda_managed	PASS	0	3.8	1794971888.360	1794971892.147	-	-
+ipc_legacy	cuda_ipc	PASS	0	2.3	1794971892.147	1794971894.433	-	-
+ipc_event	cuda_ipc	PASS	0	2.3	1794971894.433	1794971896.715	-	-
+ipc_vmm_fd	cuda_ipc	PASS	0	2.4	1794971896.715	1794971899.074	-	-
+vmm_granularity	cuda_vmm	PASS	0	2.1	1794971899.075	1794971901.202	-	-
+vmm_basic	cuda_vmm	PASS	0	2.1	1794971901.203	1794971903.335	-	-
+vmm_remap	cuda_vmm	PASS	0	2.1	1794971903.335	1794971905.472	-	-
+graph_capture_launch	cuda_graph	PASS	0	2.1	1794971905.472	1794971907.620	-	-
+graph_update	cuda_graph	PASS	0	2.1	1794971907.620	1794971909.743	-	-
+graph_mem_nodes	cuda_graph	PASS	0	2.1	1794971909.743	1794971911.884	-	-
+pool_alloc_free	cuda_pool	PASS	0	2.1	1794971911.884	1794971914.013	-	-
+pool_threshold_trim	cuda_pool	PASS	0	2.1	1794971914.013	1794971916.133	-	-
+pool_ipc_export	cuda_pool	PASS	0	2.1	1794971916.133	1794971918.274	-	-
+churn_ctx_200	cuda_churn	PASS	0	29.4	1794971918.274	1794971947.643	-	-
+churn_module_200	cuda_churn	PASS	0	3.1	1794971947.643	1794971950.763	-	-
+churn_streams_events	cuda_churn	PASS	0	2.2	1794971950.763	1794971952.954	-	-
+fanout_procs_24	cuda_churn	PASS	0	10.0	1794971952.954	1794971962.914	-	-
+spin_5s	cuda_kernel_time	PASS	0	7.1	1794971962.915	1794971970.005	-	-
+spin_30s	cuda_kernel_time	PASS	0	32.1	1794971970.005	1794972002.107	-	-
+launch_flood_100k	cuda_kernel_time	PASS	0	2.3	1794972002.107	1794972004.388	-	-
+fault_recovery	cuda_kernel_time	PASS	0	2.5	1794972004.388	1794972006.863	-	-
+trap_recovery	cuda_kernel_time	PASS	0	2.7	1794972006.863	1794972009.555	-	-
+cupti_callback	profiling	PASS	0	2.1	1794972009.555	1794972011.676	-	-
+cupti_activity	profiling	PASS	0	2.1	1794972011.676	1794972013.794	-	-
+tools_sanitizer	profiling	PASS	0	11.9	1794972013.794	1794972025.727	-	-
+tools_ncu	profiling	PASS	0	3.5	1794972025.728	1794972029.204	-	-
+tools_nsys	profiling	PASS	0	6.5	1794972029.204	1794972035.663	-	-
+tools_nsys_gpumetrics	profiling	PASS	0	4.9	1794972035.663	1794972040.588	-	-
+vk_dump	vulkan_caps	PASS	0	0.6	1794972040.588	1794972041.188	-	-
+smi_setters	smi_control	PASS	0	27.0	1794972041.189	1794972068.196	-	-
+life_persistenced	lifecycle	PASS	0	2.1	1794972068.196	1794972070.333	-	-
+life_kill_kernel	lifecycle	PASS	0	33.6	1794972070.333	1794972103.935	-	-
+life_kill_gl	lifecycle	PASS	0	118.5	1794972103.935	1794972222.397	-	-
+life_module_cycle	lifecycle	NOT_RUN	0	0.0	0	0	guest_only	-
+life_reset	lifecycle	NOT_RUN	0	0.0	0	0	guest_only	-
+life_busy_poweroff	lifecycle	NOT_RUN	0	0.0	0	0	guest_only	-
+@@END results.tsv
+@@FILE kv.tsv sha256=cce66893ab0e8c7f bytes=35001
+attr_dump	attr.1	1024
+attr_dump	attr.10	32
+attr_dump	attr.100	0
+attr_dump	attr.101	0
+attr_dump	attr.102	1
+attr_dump	attr.103	1
+attr_dump	attr.104	0
+attr_dump	attr.105	0
+attr_dump	attr.106	16
+attr_dump	attr.107	1
+attr_dump	attr.108	4325376
+attr_dump	attr.109	134213632
+attr_dump	attr.11	2147483647
+attr_dump	attr.110	0
+attr_dump	attr.111	1024
+attr_dump	attr.112	1
+attr_dump	attr.113	0
+attr_dump	attr.114	1
+attr_dump	attr.115	1
+attr_dump	attr.116	0
+attr_dump	attr.117	1
+attr_dump	attr.118	0
+attr_dump	attr.119	9
+attr_dump	attr.12	65536
+attr_dump	attr.120	0
+attr_dump	attr.121	1
+attr_dump	attr.122	1
+attr_dump	attr.123	1
+attr_dump	attr.124	0
+attr_dump	attr.125	1
+attr_dump	attr.126	1
+attr_dump	attr.127	0
+attr_dump	attr.128	1
+attr_dump	attr.129	0
+attr_dump	attr.13	1755000
+attr_dump	attr.130	0
+attr_dump	attr.131	-1
+attr_dump	attr.132	0
+attr_dump	attr.133	0
+attr_dump	attr.134	0
+attr_dump	attr.135	0
+attr_dump	attr.136	0
+attr_dump	attr.137	0
+attr_dump	attr.138	0
+attr_dump	attr.139	570691806
+attr_dump	attr.14	512
+attr_dump	attr.140	1078137944
+attr_dump	attr.141	1
+attr_dump	attr.142	1
+attr_dump	attr.143	0
+attr_dump	attr.144	1
+attr_dump	attr.145	1
+attr_dump	attr.146	0
+attr_dump	attr.147	0
+attr_dump	attr.148	E1
+attr_dump	attr.149	E1
+attr_dump	attr.15	1
+attr_dump	attr.150	E1
+attr_dump	attr.151	E1
+attr_dump	attr.152	E1
+attr_dump	attr.153	E1
+attr_dump	attr.154	E1
+attr_dump	attr.155	E1
+attr_dump	attr.156	E1
+attr_dump	attr.157	E1
+attr_dump	attr.158	E1
+attr_dump	attr.159	E1
+attr_dump	attr.16	82
+attr_dump	attr.17	0
+attr_dump	attr.18	0
+attr_dump	attr.19	1
+attr_dump	attr.2	1024
+attr_dump	attr.20	0
+attr_dump	attr.21	131072
+attr_dump	attr.22	131072
+attr_dump	attr.23	65536
+attr_dump	attr.24	16384
+attr_dump	attr.25	16384
+attr_dump	attr.26	16384
+attr_dump	attr.27	32768
+attr_dump	attr.28	32768
+attr_dump	attr.29	2048
+attr_dump	attr.3	1024
+attr_dump	attr.30	512
+attr_dump	attr.31	1
+attr_dump	attr.32	0
+attr_dump	attr.33	0
+attr_dump	attr.34	7
+attr_dump	attr.35	0
+attr_dump	attr.36	9751000
+attr_dump	attr.37	384
+attr_dump	attr.38	6291456
+attr_dump	attr.39	1536
+attr_dump	attr.4	64
+attr_dump	attr.40	2
+attr_dump	attr.41	1
+attr_dump	attr.42	32768
+attr_dump	attr.43	2048
+attr_dump	attr.44	1
+attr_dump	attr.45	32768
+attr_dump	attr.46	32768
+attr_dump	attr.47	8192
+attr_dump	attr.48	8192
+attr_dump	attr.49	32768
+attr_dump	attr.5	2147483647
+attr_dump	attr.50	0
+attr_dump	attr.51	32
+attr_dump	attr.52	32768
+attr_dump	attr.53	32768
+attr_dump	attr.54	2046
+attr_dump	attr.55	32768
+attr_dump	attr.56	131072
+attr_dump	attr.57	65536
+attr_dump	attr.58	16384
+attr_dump	attr.59	16384
+attr_dump	attr.6	65535
+attr_dump	attr.60	16384
+attr_dump	attr.61	32768
+attr_dump	attr.62	2048
+attr_dump	attr.63	32768
+attr_dump	attr.64	32768
+attr_dump	attr.65	2048
+attr_dump	attr.66	32768
+attr_dump	attr.67	32768
+attr_dump	attr.68	2046
+attr_dump	attr.69	268435456
+attr_dump	attr.7	65535
+attr_dump	attr.70	131072
+attr_dump	attr.71	65000
+attr_dump	attr.72	2097120
+attr_dump	attr.73	32768
+attr_dump	attr.74	32768
+attr_dump	attr.75	8
+attr_dump	attr.76	6
+attr_dump	attr.77	32768
+attr_dump	attr.78	1
+attr_dump	attr.79	1
+attr_dump	attr.8	49152
+attr_dump	attr.80	1
+attr_dump	attr.81	102400
+attr_dump	attr.82	65536
+attr_dump	attr.83	1
+attr_dump	attr.84	0
+attr_dump	attr.85	0
+attr_dump	attr.86	0
+attr_dump	attr.87	64
+attr_dump	attr.88	1
+attr_dump	attr.89	1
+attr_dump	attr.9	65536
+attr_dump	attr.90	1
+attr_dump	attr.91	1
+attr_dump	attr.92	0
+attr_dump	attr.93	0
+attr_dump	attr.94	0
+attr_dump	attr.95	1
+attr_dump	attr.96	1
+attr_dump	attr.97	101376
+attr_dump	attr.98	0
+attr_dump	attr.99	1
+attr_dump	attrs_ok	147
+attr_dump	driver_api_version	13000
+attr_dump	mem_total_mib	24124
+pinned_1g	alloc_rc	0
+pinned_4g	alloc_rc	0
+host_register_512m	register_rc	0
+pinned_huge_refused	rc	2
+pinned_huge_refused	refused_in_under_30s	1
+managed_prefetch_advise	advise_rc	0,0,0
+managed_prefetch_advise	attr_concurrent	1
+managed_prefetch_advise	attr_managed	1
+managed_prefetch_advise	attr_pageable	1
+managed_prefetch_advise	prefetch_cpu_rc	0
+managed_prefetch_advise	prefetch_dev_rc	0
+managed_concurrent	attr_concurrent	1
+managed_concurrent	cpu_writes_during_kernel	1
+managed_oversub	bytes_mib	10240
+managed_oversub	device_total_mib	24124
+managed_oversub	oversubscribes_device	0
+ipc_legacy	child_exit	0
+ipc_legacy	get_rc	0
+ipc_event	attr_ipc_event	1
+ipc_event	child_exit	0
+ipc_event	get_rc	0
+ipc_vmm_fd	attr_posix_fd	1
+ipc_vmm_fd	attr_vmm	1
+ipc_vmm_fd	child_exit	0
+ipc_vmm_fd	export_rc	0
+vmm_granularity	attr_vmm	1
+vmm_granularity	gran_min	2097152
+vmm_granularity	gran_recommended	2097152
+graph_capture_launch	launches_per_s	174000
+graph_update	update_rc	0
+graph_update	update_result	0
+pool_alloc_free	attr_pools	1
+pool_threshold_trim	reserved_after_free_ge_256mib	1
+pool_threshold_trim	reserved_after_trim_is_0	1
+pool_ipc_export	attr_pool_handle_types	9
+pool_ipc_export	export_rc	0
+churn_ctx_200	cycles	200
+churn_module_200	modules	200
+churn_streams_events	events	4096
+churn_streams_events	streams	2048
+fanout_procs_24	failed	0
+fanout_procs_24	spawned	24
+spin_5s	secs	5
+spin_30s	secs	30
+launch_flood_100k	secs	0
+fault_recovery	fault_child_exit	0
+fault_recovery	fresh_process_exit	0
+fault_recovery	parent_canary_after	PASS
+trap_recovery	fault_child_exit	0
+trap_recovery	fresh_process_exit	0
+trap_recovery	parent_canary_after	PASS
+cupti_callback	driver_api_enter_callbacks_ge_10	1
+cupti_callback	enable_domain_rc	0
+cupti_callback	subscribe_rc	0
+cupti_activity	enable_kernel_rc	0
+cupti_activity	flush_rc	0
+cupti_activity	kernel_records_ge_10	1
+cupti_activity	register_rc	0
+tools_sanitizer	memcheck_reports_the_illegal_store	1
+tools_sanitizer	tool.initcheck	OK
+tools_sanitizer	tool.memcheck	OK
+tools_sanitizer	tool.racecheck	OK
+tools_sanitizer	tool.synccheck	OK
+tools_ncu	tool.metric	OK
+tools_nsys	kernel_in_report	1
+tools_nsys	tool.profile	OK
+tools_nsys_gpumetrics	tool.gpu_metrics	OK
+vk_dump	group.$schema	1:f6037658
+vk_dump	group.ArrayOfVkExtensionProperties.0	2:d8acc96e
+vk_dump	group.ArrayOfVkExtensionProperties.1	2:24c1da1b
+vk_dump	group.ArrayOfVkExtensionProperties.10	2:207e1cac
+vk_dump	group.ArrayOfVkExtensionProperties.100	2:96fcd8cb
+vk_dump	group.ArrayOfVkExtensionProperties.101	2:e754967c
+vk_dump	group.ArrayOfVkExtensionProperties.102	2:1e2e74cc
+vk_dump	group.ArrayOfVkExtensionProperties.103	2:ca9e6266
+vk_dump	group.ArrayOfVkExtensionProperties.104	2:4379d320
+vk_dump	group.ArrayOfVkExtensionProperties.105	2:dbd5eb62
+vk_dump	group.ArrayOfVkExtensionProperties.106	2:05867fea
+vk_dump	group.ArrayOfVkExtensionProperties.107	2:038bfa1a
+vk_dump	group.ArrayOfVkExtensionProperties.108	2:61f5a3f4
+vk_dump	group.ArrayOfVkExtensionProperties.109	2:bd6b06e4
+vk_dump	group.ArrayOfVkExtensionProperties.11	2:3d7bdecc
+vk_dump	group.ArrayOfVkExtensionProperties.110	2:e70b2bff
+vk_dump	group.ArrayOfVkExtensionProperties.111	2:8d245a4b
+vk_dump	group.ArrayOfVkExtensionProperties.112	2:31d14bb7
+vk_dump	group.ArrayOfVkExtensionProperties.113	2:8aad4bb2
+vk_dump	group.ArrayOfVkExtensionProperties.114	2:ab4f4cd9
+vk_dump	group.ArrayOfVkExtensionProperties.115	2:9f1742bc
+vk_dump	group.ArrayOfVkExtensionProperties.116	2:05da0ced
+vk_dump	group.ArrayOfVkExtensionProperties.117	2:b3753de7
+vk_dump	group.ArrayOfVkExtensionProperties.118	2:e6004256
+vk_dump	group.ArrayOfVkExtensionProperties.119	2:6f4c431b
+vk_dump	group.ArrayOfVkExtensionProperties.12	2:3e900b1c
+vk_dump	group.ArrayOfVkExtensionProperties.120	2:e24c0a6d
+vk_dump	group.ArrayOfVkExtensionProperties.121	2:24b978dd
+vk_dump	group.ArrayOfVkExtensionProperties.122	2:b3cd834c
+vk_dump	group.ArrayOfVkExtensionProperties.123	2:712f8565
+vk_dump	group.ArrayOfVkExtensionProperties.124	2:f8d3534d
+vk_dump	group.ArrayOfVkExtensionProperties.125	2:a74f19da
+vk_dump	group.ArrayOfVkExtensionProperties.126	2:30678534
+vk_dump	group.ArrayOfVkExtensionProperties.127	2:4eff5400
+vk_dump	group.ArrayOfVkExtensionProperties.128	2:bb5dfb17
+vk_dump	group.ArrayOfVkExtensionProperties.129	2:fe3c6d45
+vk_dump	group.ArrayOfVkExtensionProperties.13	2:989707a4
+vk_dump	group.ArrayOfVkExtensionProperties.130	2:8e265bfd
+vk_dump	group.ArrayOfVkExtensionProperties.131	2:576fdb08
+vk_dump	group.ArrayOfVkExtensionProperties.132	2:54063c48
+vk_dump	group.ArrayOfVkExtensionProperties.133	2:3c5bd580
+vk_dump	group.ArrayOfVkExtensionProperties.134	2:a0870ee1
+vk_dump	group.ArrayOfVkExtensionProperties.135	2:51b0be5b
+vk_dump	group.ArrayOfVkExtensionProperties.136	2:2c885794
+vk_dump	group.ArrayOfVkExtensionProperties.137	2:4657d559
+vk_dump	group.ArrayOfVkExtensionProperties.138	2:c80ace4f
+vk_dump	group.ArrayOfVkExtensionProperties.139	2:7dafa2ca
+vk_dump	group.ArrayOfVkExtensionProperties.14	2:4c2426cd
+vk_dump	group.ArrayOfVkExtensionProperties.140	2:e730f8ac
+vk_dump	group.ArrayOfVkExtensionProperties.141	2:3d5c3fd8
+vk_dump	group.ArrayOfVkExtensionProperties.142	2:cdaa283b
+vk_dump	group.ArrayOfVkExtensionProperties.143	2:abdf3aaf
+vk_dump	group.ArrayOfVkExtensionProperties.144	2:cef75710
+vk_dump	group.ArrayOfVkExtensionProperties.145	2:ab390ac7
+vk_dump	group.ArrayOfVkExtensionProperties.146	2:c7bb16b3
+vk_dump	group.ArrayOfVkExtensionProperties.147	2:1b851e5e
+vk_dump	group.ArrayOfVkExtensionProperties.148	2:1281ac31
+vk_dump	group.ArrayOfVkExtensionProperties.149	2:fe3b887b
+vk_dump	group.ArrayOfVkExtensionProperties.15	2:78383e3c
+vk_dump	group.ArrayOfVkExtensionProperties.150	2:7a5ad6ba
+vk_dump	group.ArrayOfVkExtensionProperties.151	2:13be2f1a
+vk_dump	group.ArrayOfVkExtensionProperties.152	2:2e23753e
+vk_dump	group.ArrayOfVkExtensionProperties.153	2:28e2bd24
+vk_dump	group.ArrayOfVkExtensionProperties.154	2:07972cbc
+vk_dump	group.ArrayOfVkExtensionProperties.155	2:c98fa9b8
+vk_dump	group.ArrayOfVkExtensionProperties.156	2:5344ef59
+vk_dump	group.ArrayOfVkExtensionProperties.157	2:d3121e73
+vk_dump	group.ArrayOfVkExtensionProperties.158	2:5d6d549a
+vk_dump	group.ArrayOfVkExtensionProperties.159	2:2c6d84e9
+vk_dump	group.ArrayOfVkExtensionProperties.16	2:11193d52
+vk_dump	group.ArrayOfVkExtensionProperties.160	2:95567f31
+vk_dump	group.ArrayOfVkExtensionProperties.161	2:4c8d52ce
+vk_dump	group.ArrayOfVkExtensionProperties.162	2:edb9856d
+vk_dump	group.ArrayOfVkExtensionProperties.163	2:d0d07057
+vk_dump	group.ArrayOfVkExtensionProperties.164	2:88b55c11
+vk_dump	group.ArrayOfVkExtensionProperties.165	2:621fc395
+vk_dump	group.ArrayOfVkExtensionProperties.166	2:01b5ac0b
+vk_dump	group.ArrayOfVkExtensionProperties.167	2:787a0562
+vk_dump	group.ArrayOfVkExtensionProperties.168	2:7db22705
+vk_dump	group.ArrayOfVkExtensionProperties.169	2:45497a4c
+vk_dump	group.ArrayOfVkExtensionProperties.17	2:096bc7cd
+vk_dump	group.ArrayOfVkExtensionProperties.170	2:076756d4
+vk_dump	group.ArrayOfVkExtensionProperties.171	2:f68c8828
+vk_dump	group.ArrayOfVkExtensionProperties.172	2:deb4c1a6
+vk_dump	group.ArrayOfVkExtensionProperties.173	2:0694382a
+vk_dump	group.ArrayOfVkExtensionProperties.174	2:b708dee5
+vk_dump	group.ArrayOfVkExtensionProperties.175	2:5997e7fd
+vk_dump	group.ArrayOfVkExtensionProperties.176	2:29a29020
+vk_dump	group.ArrayOfVkExtensionProperties.177	2:33db4281
+vk_dump	group.ArrayOfVkExtensionProperties.178	2:6218c9b3
+vk_dump	group.ArrayOfVkExtensionProperties.179	2:965792e2
+vk_dump	group.ArrayOfVkExtensionProperties.18	2:cac5e94e
+vk_dump	group.ArrayOfVkExtensionProperties.180	2:4880b516
+vk_dump	group.ArrayOfVkExtensionProperties.181	2:5f8a1161
+vk_dump	group.ArrayOfVkExtensionProperties.182	2:2b46ce0a
+vk_dump	group.ArrayOfVkExtensionProperties.183	2:af6872ac
+vk_dump	group.ArrayOfVkExtensionProperties.184	2:a1d7c0e7
+vk_dump	group.ArrayOfVkExtensionProperties.185	2:0c56609f
+vk_dump	group.ArrayOfVkExtensionProperties.186	2:20e9d0ba
+vk_dump	group.ArrayOfVkExtensionProperties.187	2:e629beb8
+vk_dump	group.ArrayOfVkExtensionProperties.188	2:385e3e41
+vk_dump	group.ArrayOfVkExtensionProperties.189	2:61835aba
+vk_dump	group.ArrayOfVkExtensionProperties.19	2:6d7a9963
+vk_dump	group.ArrayOfVkExtensionProperties.190	2:90af6be9
+vk_dump	group.ArrayOfVkExtensionProperties.191	2:42a7481b
+vk_dump	group.ArrayOfVkExtensionProperties.192	2:17294c05
+vk_dump	group.ArrayOfVkExtensionProperties.193	2:60b51e5e
+vk_dump	group.ArrayOfVkExtensionProperties.194	2:039fe9c0
+vk_dump	group.ArrayOfVkExtensionProperties.195	2:92b5a7bb
+vk_dump	group.ArrayOfVkExtensionProperties.196	2:6373e2c1
+vk_dump	group.ArrayOfVkExtensionProperties.197	2:e32f6bb3
+vk_dump	group.ArrayOfVkExtensionProperties.198	2:e9d98627
+vk_dump	group.ArrayOfVkExtensionProperties.199	2:158f8833
+vk_dump	group.ArrayOfVkExtensionProperties.2	2:788b4170
+vk_dump	group.ArrayOfVkExtensionProperties.20	2:35968c3a
+vk_dump	group.ArrayOfVkExtensionProperties.200	2:3961733a
+vk_dump	group.ArrayOfVkExtensionProperties.201	2:b1290e2a
+vk_dump	group.ArrayOfVkExtensionProperties.202	2:b17f3140
+vk_dump	group.ArrayOfVkExtensionProperties.203	2:fa75f86a
+vk_dump	group.ArrayOfVkExtensionProperties.204	2:ffdbfd5f
+vk_dump	group.ArrayOfVkExtensionProperties.205	2:cb6bc628
+vk_dump	group.ArrayOfVkExtensionProperties.206	2:13b77e35
+vk_dump	group.ArrayOfVkExtensionProperties.207	2:0a5ada87
+vk_dump	group.ArrayOfVkExtensionProperties.208	2:067dced2
+vk_dump	group.ArrayOfVkExtensionProperties.209	2:7a81d732
+vk_dump	group.ArrayOfVkExtensionProperties.21	2:862ab2a0
+vk_dump	group.ArrayOfVkExtensionProperties.210	2:461bb4af
+vk_dump	group.ArrayOfVkExtensionProperties.211	2:46d3f827
+vk_dump	group.ArrayOfVkExtensionProperties.212	2:a6fa1483
+vk_dump	group.ArrayOfVkExtensionProperties.213	2:b9ce41fc
+vk_dump	group.ArrayOfVkExtensionProperties.214	2:9cd41423
+vk_dump	group.ArrayOfVkExtensionProperties.215	2:80f7fbe8
+vk_dump	group.ArrayOfVkExtensionProperties.216	2:295bf664
+vk_dump	group.ArrayOfVkExtensionProperties.217	2:ea3d9dc9
+vk_dump	group.ArrayOfVkExtensionProperties.218	2:dcda4e99
+vk_dump	group.ArrayOfVkExtensionProperties.219	2:1d2a6766
+vk_dump	group.ArrayOfVkExtensionProperties.22	2:9f1744af
+vk_dump	group.ArrayOfVkExtensionProperties.220	2:e6d0e407
+vk_dump	group.ArrayOfVkExtensionProperties.221	2:caae3af2
+vk_dump	group.ArrayOfVkExtensionProperties.222	2:eab2285c
+vk_dump	group.ArrayOfVkExtensionProperties.223	2:0c48e2a0
+vk_dump	group.ArrayOfVkExtensionProperties.224	2:b28a2d17
+vk_dump	group.ArrayOfVkExtensionProperties.225	2:e92cd639
+vk_dump	group.ArrayOfVkExtensionProperties.226	2:07fc97ac
+vk_dump	group.ArrayOfVkExtensionProperties.227	2:f03e8acd
+vk_dump	group.ArrayOfVkExtensionProperties.228	2:39929f9a
+vk_dump	group.ArrayOfVkExtensionProperties.229	2:0de618c3
+vk_dump	group.ArrayOfVkExtensionProperties.23	2:248320e2
+vk_dump	group.ArrayOfVkExtensionProperties.230	2:b3a619b9
+vk_dump	group.ArrayOfVkExtensionProperties.231	2:4ce5aa27
+vk_dump	group.ArrayOfVkExtensionProperties.232	2:d7770390
+vk_dump	group.ArrayOfVkExtensionProperties.233	2:cc63cfd7
+vk_dump	group.ArrayOfVkExtensionProperties.234	2:5bf931ae
+vk_dump	group.ArrayOfVkExtensionProperties.235	2:46f78231
+vk_dump	group.ArrayOfVkExtensionProperties.236	2:c708377c
+vk_dump	group.ArrayOfVkExtensionProperties.237	2:f5d72e51
+vk_dump	group.ArrayOfVkExtensionProperties.238	2:11b5ba22
+vk_dump	group.ArrayOfVkExtensionProperties.239	2:625687be
+vk_dump	group.ArrayOfVkExtensionProperties.24	2:8b1660e3
+vk_dump	group.ArrayOfVkExtensionProperties.240	2:b9ab0a95
+vk_dump	group.ArrayOfVkExtensionProperties.241	2:18eb1233
+vk_dump	group.ArrayOfVkExtensionProperties.242	2:8d69f90a
+vk_dump	group.ArrayOfVkExtensionProperties.243	2:9f5c960b
+vk_dump	group.ArrayOfVkExtensionProperties.244	2:0156ab10
+vk_dump	group.ArrayOfVkExtensionProperties.245	2:abd9fa53
+vk_dump	group.ArrayOfVkExtensionProperties.246	2:987ebca9
+vk_dump	group.ArrayOfVkExtensionProperties.247	2:96d95050
+vk_dump	group.ArrayOfVkExtensionProperties.248	2:6dfdb33d
+vk_dump	group.ArrayOfVkExtensionProperties.249	2:0b15bf02
+vk_dump	group.ArrayOfVkExtensionProperties.25	2:6187a92c
+vk_dump	group.ArrayOfVkExtensionProperties.26	2:6ff1cf96
+vk_dump	group.ArrayOfVkExtensionProperties.27	2:f6051e20
+vk_dump	group.ArrayOfVkExtensionProperties.28	2:5a498b9c
+vk_dump	group.ArrayOfVkExtensionProperties.29	2:a40fe327
+vk_dump	group.ArrayOfVkExtensionProperties.3	2:9cd91e91
+vk_dump	group.ArrayOfVkExtensionProperties.30	2:9b0432ad
+vk_dump	group.ArrayOfVkExtensionProperties.31	2:296b3d5f
+vk_dump	group.ArrayOfVkExtensionProperties.32	2:2e561a97
+vk_dump	group.ArrayOfVkExtensionProperties.33	2:5e1d99cc
+vk_dump	group.ArrayOfVkExtensionProperties.34	2:a8bb3bca
+vk_dump	group.ArrayOfVkExtensionProperties.35	2:6efe9fab
+vk_dump	group.ArrayOfVkExtensionProperties.36	2:deb0098f
+vk_dump	group.ArrayOfVkExtensionProperties.37	2:9b7256e8
+vk_dump	group.ArrayOfVkExtensionProperties.38	2:eac2dc06
+vk_dump	group.ArrayOfVkExtensionProperties.39	2:7f6475b5
+vk_dump	group.ArrayOfVkExtensionProperties.4	2:3e129902
+vk_dump	group.ArrayOfVkExtensionProperties.40	2:c36bc7ac
+vk_dump	group.ArrayOfVkExtensionProperties.41	2:cfc43fa5
+vk_dump	group.ArrayOfVkExtensionProperties.42	2:aa5ec331
+vk_dump	group.ArrayOfVkExtensionProperties.43	2:3ff86a82
+vk_dump	group.ArrayOfVkExtensionProperties.44	2:57955ab8
+vk_dump	group.ArrayOfVkExtensionProperties.45	2:bf4c595f
+vk_dump	group.ArrayOfVkExtensionProperties.46	2:f3608de5
+vk_dump	group.ArrayOfVkExtensionProperties.47	2:ecb2ffb8
+vk_dump	group.ArrayOfVkExtensionProperties.48	2:3be46999
+vk_dump	group.ArrayOfVkExtensionProperties.49	2:59e31a20
+vk_dump	group.ArrayOfVkExtensionProperties.5	2:179c8c42
+vk_dump	group.ArrayOfVkExtensionProperties.50	2:74e1b4a1
+vk_dump	group.ArrayOfVkExtensionProperties.51	2:6eecc23e
+vk_dump	group.ArrayOfVkExtensionProperties.52	2:67661da4
+vk_dump	group.ArrayOfVkExtensionProperties.53	2:9851feee
+vk_dump	group.ArrayOfVkExtensionProperties.54	2:3a71066b
+vk_dump	group.ArrayOfVkExtensionProperties.55	2:4950d6c9
+vk_dump	group.ArrayOfVkExtensionProperties.56	2:1a74a1a3
+vk_dump	group.ArrayOfVkExtensionProperties.57	2:c5601e2e
+vk_dump	group.ArrayOfVkExtensionProperties.58	2:936f3973
+vk_dump	group.ArrayOfVkExtensionProperties.59	2:a04d639b
+vk_dump	group.ArrayOfVkExtensionProperties.6	2:2f08e354
+vk_dump	group.ArrayOfVkExtensionProperties.60	2:69c17c85
+vk_dump	group.ArrayOfVkExtensionProperties.61	2:0fb4b755
+vk_dump	group.ArrayOfVkExtensionProperties.62	2:36e7e4ac
+vk_dump	group.ArrayOfVkExtensionProperties.63	2:55bd1ed6
+vk_dump	group.ArrayOfVkExtensionProperties.64	2:99bbdbb9
+vk_dump	group.ArrayOfVkExtensionProperties.65	2:f095344b
+vk_dump	group.ArrayOfVkExtensionProperties.66	2:37288575
+vk_dump	group.ArrayOfVkExtensionProperties.67	2:e25ce98f
+vk_dump	group.ArrayOfVkExtensionProperties.68	2:c922430c
+vk_dump	group.ArrayOfVkExtensionProperties.69	2:b4e8689c
+vk_dump	group.ArrayOfVkExtensionProperties.7	2:0b8174fc
+vk_dump	group.ArrayOfVkExtensionProperties.70	2:6f530ea2
+vk_dump	group.ArrayOfVkExtensionProperties.71	2:96e7ae4e
+vk_dump	group.ArrayOfVkExtensionProperties.72	2:8a88095d
+vk_dump	group.ArrayOfVkExtensionProperties.73	2:6f0d0618
+vk_dump	group.ArrayOfVkExtensionProperties.74	2:4f7c1d9d
+vk_dump	group.ArrayOfVkExtensionProperties.75	2:f806bca6
+vk_dump	group.ArrayOfVkExtensionProperties.76	2:7f616934
+vk_dump	group.ArrayOfVkExtensionProperties.77	2:8f5190d7
+vk_dump	group.ArrayOfVkExtensionProperties.78	2:e4c6ef73
+vk_dump	group.ArrayOfVkExtensionProperties.79	2:bc79949f
+vk_dump	group.ArrayOfVkExtensionProperties.8	2:2008151d
+vk_dump	group.ArrayOfVkExtensionProperties.80	2:77dd5f72
+vk_dump	group.ArrayOfVkExtensionProperties.81	2:77329e5d
+vk_dump	group.ArrayOfVkExtensionProperties.82	2:9afa8404
+vk_dump	group.ArrayOfVkExtensionProperties.83	2:8ffbee5b
+vk_dump	group.ArrayOfVkExtensionProperties.84	2:66d7c58f
+vk_dump	group.ArrayOfVkExtensionProperties.85	2:8452c654
+vk_dump	group.ArrayOfVkExtensionProperties.86	2:6a492926
+vk_dump	group.ArrayOfVkExtensionProperties.87	2:970076d4
+vk_dump	group.ArrayOfVkExtensionProperties.88	2:537f9393
+vk_dump	group.ArrayOfVkExtensionProperties.89	2:3bb7a507
+vk_dump	group.ArrayOfVkExtensionProperties.9	2:eac18617
+vk_dump	group.ArrayOfVkExtensionProperties.90	2:cb9cd34a
+vk_dump	group.ArrayOfVkExtensionProperties.91	2:5bcf20f3
+vk_dump	group.ArrayOfVkExtensionProperties.92	2:3f0f596a
+vk_dump	group.ArrayOfVkExtensionProperties.93	2:499e353c
+vk_dump	group.ArrayOfVkExtensionProperties.94	2:0190609d
+vk_dump	group.ArrayOfVkExtensionProperties.95	2:703672ca
+vk_dump	group.ArrayOfVkExtensionProperties.96	2:866938a1
+vk_dump	group.ArrayOfVkExtensionProperties.97	2:8a23b011
+vk_dump	group.ArrayOfVkExtensionProperties.98	2:32de8474
+vk_dump	group.ArrayOfVkExtensionProperties.99	2:f8f4a249
+vk_dump	group.ArrayOfVkFormatProperties.0	4:1b4d26ae
+vk_dump	group.ArrayOfVkFormatProperties.1	4:1d8c4eff
+vk_dump	group.ArrayOfVkFormatProperties.10	4:5ad29da2
+vk_dump	group.ArrayOfVkFormatProperties.100	4:1444e725
+vk_dump	group.ArrayOfVkFormatProperties.101	4:c058271f
+vk_dump	group.ArrayOfVkFormatProperties.102	4:95785ab2
+vk_dump	group.ArrayOfVkFormatProperties.103	4:553d4773
+vk_dump	group.ArrayOfVkFormatProperties.104	4:dd114e76
+vk_dump	group.ArrayOfVkFormatProperties.105	4:7ad1cd39
+vk_dump	group.ArrayOfVkFormatProperties.106	4:836e524a
+vk_dump	group.ArrayOfVkFormatProperties.107	4:e13c579f
+vk_dump	group.ArrayOfVkFormatProperties.108	4:0f893e80
+vk_dump	group.ArrayOfVkFormatProperties.109	4:e85daf4a
+vk_dump	group.ArrayOfVkFormatProperties.11	4:2eb19d6d
+vk_dump	group.ArrayOfVkFormatProperties.110	4:0f655aec
+vk_dump	group.ArrayOfVkFormatProperties.111	4:e8b1cb26
+vk_dump	group.ArrayOfVkFormatProperties.112	4:1bbd7f39
+vk_dump	group.ArrayOfVkFormatProperties.113	4:fc69eef3
+vk_dump	group.ArrayOfVkFormatProperties.114	4:9d4300d1
+vk_dump	group.ArrayOfVkFormatProperties.115	4:7a97911b
+vk_dump	group.ArrayOfVkFormatProperties.116	4:e73e05f5
+vk_dump	group.ArrayOfVkFormatProperties.117	4:00ea943f
+vk_dump	group.ArrayOfVkFormatProperties.118	4:439ff2da
+vk_dump	group.ArrayOfVkFormatProperties.119	4:68b64a59
+vk_dump	group.ArrayOfVkFormatProperties.12	4:ca9dc4f8
+vk_dump	group.ArrayOfVkFormatProperties.120	4:ffa1a194
+vk_dump	group.ArrayOfVkFormatProperties.121	4:2879b65b
+vk_dump	group.ArrayOfVkFormatProperties.122	4:a4e1faad
+vk_dump	group.ArrayOfVkFormatProperties.123	4:c5885105
+vk_dump	group.ArrayOfVkFormatProperties.124	4:9cbe23da
+vk_dump	group.ArrayOfVkFormatProperties.125	4:e3051220
+vk_dump	group.ArrayOfVkFormatProperties.126	4:4b9f89d0
+vk_dump	group.ArrayOfVkFormatProperties.127	4:72ebfcaf
+vk_dump	group.ArrayOfVkFormatProperties.128	4:6ad6dc77
+vk_dump	group.ArrayOfVkFormatProperties.129	4:7a0a18cf
+vk_dump	group.ArrayOfVkFormatProperties.13	4:2fa171a6
+vk_dump	group.ArrayOfVkFormatProperties.130	4:71d6a499
+vk_dump	group.ArrayOfVkFormatProperties.131	4:48a2d1e6
+vk_dump	group.ArrayOfVkFormatProperties.132	4:2a96ffa0
+vk_dump	group.ArrayOfVkFormatProperties.133	4:691b5896
+vk_dump	group.ArrayOfVkFormatProperties.134	4:94077165
+vk_dump	group.ArrayOfVkFormatProperties.135	4:ec0140ec
+vk_dump	group.ArrayOfVkFormatProperties.136	4:8e356eaa
+vk_dump	group.ArrayOfVkFormatProperties.137	4:b7411bd5
+vk_dump	group.ArrayOfVkFormatProperties.138	4:af7c3b0d
+vk_dump	group.ArrayOfVkFormatProperties.139	4:bfa0ffb5
+vk_dump	group.ArrayOfVkFormatProperties.14	4:9753a059
+vk_dump	group.ArrayOfVkFormatProperties.140	4:52221b65
+vk_dump	group.ArrayOfVkFormatProperties.141	4:6b566e1a
+vk_dump	group.ArrayOfVkFormatProperties.142	4:ba4c0d2b
+vk_dump	group.ArrayOfVkFormatProperties.143	4:ce567577
+vk_dump	group.ArrayOfVkFormatProperties.144	4:8e8bf4b4
+vk_dump	group.ArrayOfVkFormatProperties.145	4:6aeddc2e
+vk_dump	group.ArrayOfVkFormatProperties.146	4:d7a0f0a3
+vk_dump	group.ArrayOfVkFormatProperties.147	4:042c47a9
+vk_dump	group.ArrayOfVkFormatProperties.148	4:aca85338
+vk_dump	group.ArrayOfVkFormatProperties.149	4:69b7ca91
+vk_dump	group.ArrayOfVkFormatProperties.15	4:1722afc3
+vk_dump	group.ArrayOfVkFormatProperties.150	4:51c2b306
+vk_dump	group.ArrayOfVkFormatProperties.151	4:8b62a7bc
+vk_dump	group.ArrayOfVkFormatProperties.152	4:49150866
+vk_dump	group.ArrayOfVkFormatProperties.153	4:ad7320fc
+vk_dump	group.ArrayOfVkFormatProperties.154	4:d8f7b7d8
+vk_dump	group.ArrayOfVkFormatProperties.155	4:0b7b00d2
+vk_dump	group.ArrayOfVkFormatProperties.156	4:d64c9125
+vk_dump	group.ArrayOfVkFormatProperties.157	4:1353088c
+vk_dump	group.ArrayOfVkFormatProperties.158	4:52a093ea
+vk_dump	group.ArrayOfVkFormatProperties.159	4:9b92929b
+vk_dump	group.ArrayOfVkFormatProperties.16	4:016a83ca
+vk_dump	group.ArrayOfVkFormatProperties.160	4:82e78eaf
+vk_dump	group.ArrayOfVkFormatProperties.161	4:6681a635
+vk_dump	group.ArrayOfVkFormatProperties.162	4:c90e7e55
+vk_dump	group.ArrayOfVkFormatProperties.163	4:808e3055
+vk_dump	group.ArrayOfVkFormatProperties.164	4:9c6c1c78
+vk_dump	group.ArrayOfVkFormatProperties.165	4:c1ea69ee
+vk_dump	group.ArrayOfVkFormatProperties.166	4:36311601
+vk_dump	group.ArrayOfVkFormatProperties.167	4:19a58259
+vk_dump	group.ArrayOfVkFormatProperties.17	4:cc8a998e
+vk_dump	group.ArrayOfVkFormatProperties.18	4:9d9fa413
+vk_dump	group.ArrayOfVkFormatProperties.19	4:4bd5769e
+vk_dump	group.ArrayOfVkFormatProperties.2	4:10ae6dac
+vk_dump	group.ArrayOfVkFormatProperties.20	4:64edf443
+vk_dump	group.ArrayOfVkFormatProperties.21	4:07ecc1f8
+vk_dump	group.ArrayOfVkFormatProperties.22	4:179d2fe6
+vk_dump	group.ArrayOfVkFormatProperties.23	4:ee57b5ef
+vk_dump	group.ArrayOfVkFormatProperties.24	4:ab082c77
+vk_dump	group.ArrayOfVkFormatProperties.25	4:888fab89
+vk_dump	group.ArrayOfVkFormatProperties.26	4:c72d376c
+vk_dump	group.ArrayOfVkFormatProperties.27	4:637f1bd1
+vk_dump	group.ArrayOfVkFormatProperties.28	4:326a264c
+vk_dump	group.ArrayOfVkFormatProperties.29	4:46092683
+vk_dump	group.ArrayOfVkFormatProperties.3	4:a1f68513
+vk_dump	group.ArrayOfVkFormatProperties.30	4:b97aabab
+vk_dump	group.ArrayOfVkFormatProperties.31	4:62d0a506
+vk_dump	group.ArrayOfVkFormatProperties.32	4:51bcaa35
+vk_dump	group.ArrayOfVkFormatProperties.33	4:137259c5
+vk_dump	group.ArrayOfVkFormatProperties.34	4:264fd97c
+vk_dump	group.ArrayOfVkFormatProperties.35	4:ae6760c3
+vk_dump	group.ArrayOfVkFormatProperties.36	4:2e0e29cc
+vk_dump	group.ArrayOfVkFormatProperties.37	4:7d7befdd
+vk_dump	group.ArrayOfVkFormatProperties.38	4:30dc2097
+vk_dump	group.ArrayOfVkFormatProperties.39	4:437613d5
+vk_dump	group.ArrayOfVkFormatProperties.4	4:0c8bb0aa
+vk_dump	group.ArrayOfVkFormatProperties.40	4:53d52b39
+vk_dump	group.ArrayOfVkFormatProperties.41	4:30a07740
+vk_dump	group.ArrayOfVkFormatProperties.42	4:9d906029
+vk_dump	group.ArrayOfVkFormatProperties.43	4:be17e7d7
+vk_dump	group.ArrayOfVkFormatProperties.44	4:94378a0b
+vk_dump	group.ArrayOfVkFormatProperties.45	4:a4bac821
+vk_dump	group.ArrayOfVkFormatProperties.46	4:42e395ff
+vk_dump	group.ArrayOfVkFormatProperties.47	4:ce18cb83
+vk_dump	group.ArrayOfVkFormatProperties.48	4:83bf04c9
+vk_dump	group.ArrayOfVkFormatProperties.49	4:87e73332
+vk_dump	group.ArrayOfVkFormatProperties.5	4:0a4ad8fb
+vk_dump	group.ArrayOfVkFormatProperties.50	4:80b93749
+vk_dump	group.ArrayOfVkFormatProperties.51	4:c0ef2f13
+vk_dump	group.ArrayOfVkFormatProperties.52	4:9178e96d
+vk_dump	group.ArrayOfVkFormatProperties.53	4:f358681a
+vk_dump	group.ArrayOfVkFormatProperties.54	4:662abf2d
+vk_dump	group.ArrayOfVkFormatProperties.55	4:a9c3b5ca
+vk_dump	group.ArrayOfVkFormatProperties.56	4:8ab935bf
+vk_dump	group.ArrayOfVkFormatProperties.57	4:a93eb241
+vk_dump	group.ArrayOfVkFormatProperties.58	4:c023a392
+vk_dump	group.ArrayOfVkFormatProperties.59	4:8c488f13
+vk_dump	group.ArrayOfVkFormatProperties.6	4:0768fba8
+vk_dump	group.ArrayOfVkFormatProperties.60	4:4ff4ef93
+vk_dump	group.ArrayOfVkFormatProperties.61	4:4d545913
+vk_dump	group.ArrayOfVkFormatProperties.62	4:29dcd111
+vk_dump	group.ArrayOfVkFormatProperties.63	4:0a5b56ef
+vk_dump	group.ArrayOfVkFormatProperties.64	4:cd7f48a5
+vk_dump	group.ArrayOfVkFormatProperties.65	4:47a95c6e
+vk_dump	group.ArrayOfVkFormatProperties.66	4:92f206c0
+vk_dump	group.ArrayOfVkFormatProperties.67	4:a27f44ea
+vk_dump	group.ArrayOfVkFormatProperties.68	4:102c05f4
+vk_dump	group.ArrayOfVkFormatProperties.69	4:33ab820a
+vk_dump	group.ArrayOfVkFormatProperties.7	4:baf32457
+vk_dump	group.ArrayOfVkFormatProperties.70	4:9c05e250
+vk_dump	group.ArrayOfVkFormatProperties.71	4:ac88a07a
+vk_dump	group.ArrayOfVkFormatProperties.72	4:85236490
+vk_dump	group.ArrayOfVkFormatProperties.73	4:efc48d8b
+vk_dump	group.ArrayOfVkFormatProperties.74	4:daf90d32
+vk_dump	group.ArrayOfVkFormatProperties.75	4:1d8f04f2
+vk_dump	group.ArrayOfVkFormatProperties.76	4:00b0d948
+vk_dump	group.ArrayOfVkFormatProperties.77	4:47444ffd
+vk_dump	group.ArrayOfVkFormatProperties.78	4:0ae380b7
+vk_dump	group.ArrayOfVkFormatProperties.79	4:dac0c8f9
+vk_dump	group.ArrayOfVkFormatProperties.8	4:e91462d8
+vk_dump	group.ArrayOfVkFormatProperties.80	4:2edc0f33
+vk_dump	group.ArrayOfVkFormatProperties.81	4:f29b52d8
+vk_dump	group.ArrayOfVkFormatProperties.82	4:92d9ca3b
+vk_dump	group.ArrayOfVkFormatProperties.83	4:b15e4dc5
+vk_dump	group.ArrayOfVkFormatProperties.84	4:df2bc0ba
+vk_dump	group.ArrayOfVkFormatProperties.85	4:fcac4744
+vk_dump	group.ArrayOfVkFormatProperties.86	4:18443fc5
+vk_dump	group.ArrayOfVkFormatProperties.87	4:9c93b73b
+vk_dump	group.ArrayOfVkFormatProperties.88	4:7ecca370
+vk_dump	group.ArrayOfVkFormatProperties.89	4:88ae9920
+vk_dump	group.ArrayOfVkFormatProperties.9	4:db668d36
+vk_dump	group.ArrayOfVkFormatProperties.90	4:8ff09d5b
+vk_dump	group.ArrayOfVkFormatProperties.91	4:72cf0a24
+vk_dump	group.ArrayOfVkFormatProperties.92	4:2358cc5a
+vk_dump	group.ArrayOfVkFormatProperties.93	4:47625300
+vk_dump	group.ArrayOfVkFormatProperties.94	4:3eda1a9d
+vk_dump	group.ArrayOfVkFormatProperties.95	4:da22d845
+vk_dump	group.ArrayOfVkFormatProperties.96	4:5964f199
+vk_dump	group.ArrayOfVkFormatProperties.97	4:48464925
+vk_dump	group.ArrayOfVkFormatProperties.98	4:f2a8c882
+vk_dump	group.ArrayOfVkFormatProperties.99	4:3a07746a
+vk_dump	group.ArrayOfVkLayerProperties.0	4:71588cd7
+vk_dump	group.ArrayOfVkLayerProperties.1	4:833f1b90
+vk_dump	group.ArrayOfVkQueueFamilyProperties.0	5:7178bc62
+vk_dump	group.ArrayOfVkQueueFamilyProperties.1	5:cc1ddc29
+vk_dump	group.ArrayOfVkQueueFamilyProperties.2	5:5e2881fb
+vk_dump	group.ArrayOfVkQueueFamilyProperties.3	5:07307339
+vk_dump	group.ArrayOfVkQueueFamilyProperties.4	5:f6229e60
+vk_dump	group.ArrayOfVkQueueFamilyProperties.5	5:bce86c44
+vk_dump	group.VkPhysicalDeviceFeatures.alphaToOne	1:c6e663cb
+vk_dump	group.VkPhysicalDeviceFeatures.depthBiasClamp	1:1c720b75
+vk_dump	group.VkPhysicalDeviceFeatures.depthBounds	1:ef23d897
+vk_dump	group.VkPhysicalDeviceFeatures.depthClamp	1:22f70fee
+vk_dump	group.VkPhysicalDeviceFeatures.drawIndirectFirstInstance	1:c2eb87ff
+vk_dump	group.VkPhysicalDeviceFeatures.dualSrcBlend	1:439d820b
+vk_dump	group.VkPhysicalDeviceFeatures.fillModeNonSolid	1:34658433
+vk_dump	group.VkPhysicalDeviceFeatures.fragmentStoresAndAtomics	1:1075cf26
+vk_dump	group.VkPhysicalDeviceFeatures.fullDrawIndexUint32	1:c3344d64
+vk_dump	group.VkPhysicalDeviceFeatures.geometryShader	1:26aaeef7
+vk_dump	group.VkPhysicalDeviceFeatures.imageCubeArray	1:052f3223
+vk_dump	group.VkPhysicalDeviceFeatures.independentBlend	1:7064cfc3
+vk_dump	group.VkPhysicalDeviceFeatures.inheritedQueries	1:618d64af
+vk_dump	group.VkPhysicalDeviceFeatures.largePoints	1:c90ff7d1
+vk_dump	group.VkPhysicalDeviceFeatures.logicOp	1:c80e203e
+vk_dump	group.VkPhysicalDeviceFeatures.multiDrawIndirect	1:e919883a
+vk_dump	group.VkPhysicalDeviceFeatures.multiViewport	1:68c795e1
+vk_dump	group.VkPhysicalDeviceFeatures.occlusionQueryPrecise	1:0a5d36af
+vk_dump	group.VkPhysicalDeviceFeatures.pipelineStatisticsQuery	1:3619d733
+vk_dump	group.VkPhysicalDeviceFeatures.robustBufferAccess	1:74419573
+vk_dump	group.VkPhysicalDeviceFeatures.sampleRateShading	1:43e0f52d
+vk_dump	group.VkPhysicalDeviceFeatures.samplerAnisotropy	1:ffa99bc2
+vk_dump	group.VkPhysicalDeviceFeatures.shaderClipDistance	1:b55eaf52
+vk_dump	group.VkPhysicalDeviceFeatures.shaderCullDistance	1:ba83227c
+vk_dump	group.VkPhysicalDeviceFeatures.shaderFloat64	1:ba6653f4
+vk_dump	group.VkPhysicalDeviceFeatures.shaderImageGatherExtended	1:a04aa58c
+vk_dump	group.VkPhysicalDeviceFeatures.shaderInt16	1:e1029654
+vk_dump	group.VkPhysicalDeviceFeatures.shaderInt64	1:7f517a83
+vk_dump	group.VkPhysicalDeviceFeatures.shaderResourceMinLod	1:23c89182
+vk_dump	group.VkPhysicalDeviceFeatures.shaderResourceResidency	1:9cc410a7
+vk_dump	group.VkPhysicalDeviceFeatures.shaderSampledImageArrayDynamicIndexing	1:2fac112a
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageBufferArrayDynamicIndexing	1:a9d9ec54
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageArrayDynamicIndexing	1:0c7a236c
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageExtendedFormats	1:4bea6f99
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageMultisample	1:07674359
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageReadWithoutFormat	1:1b518689
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageWriteWithoutFormat	1:797129d0
+vk_dump	group.VkPhysicalDeviceFeatures.shaderTessellationAndGeometryPointSize	1:681c0be0
+vk_dump	group.VkPhysicalDeviceFeatures.shaderUniformBufferArrayDynamicIndexing	1:6e9f1616
+vk_dump	group.VkPhysicalDeviceFeatures.sparseBinding	1:941c8c53
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidency16Samples	1:e3e11a82
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidency2Samples	1:6847742d
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidency4Samples	1:6559046a
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidency8Samples	1:7f65e4e4
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidencyAliased	1:1865e4d5
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidencyBuffer	1:eca2757b
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidencyImage2D	1:0b96f8f0
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidencyImage3D	1:b32a9f95
+vk_dump	group.VkPhysicalDeviceFeatures.tessellationShader	1:b12285ef
+vk_dump	group.VkPhysicalDeviceFeatures.textureCompressionASTC_LDR	1:1faa216b
+vk_dump	group.VkPhysicalDeviceFeatures.textureCompressionBC	1:84b9ba06
+vk_dump	group.VkPhysicalDeviceFeatures.textureCompressionETC2	1:3665019c
+vk_dump	group.VkPhysicalDeviceFeatures.variableMultisampleRate	1:0871f269
+vk_dump	group.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics	1:7b41de1a
+vk_dump	group.VkPhysicalDeviceFeatures.wideLines	1:a4d84bdc
+vk_dump	group.VkPhysicalDeviceMemoryProperties.memoryHeaps	6:833410e5
+vk_dump	group.VkPhysicalDeviceMemoryProperties.memoryTypes	12:8099282b
+vk_dump	group.VkPhysicalDeviceProperties.apiVersion	1:b4972544
+vk_dump	group.VkPhysicalDeviceProperties.deviceID	1:2bd9284e
+vk_dump	group.VkPhysicalDeviceProperties.deviceName	1:2e25a6e2
+vk_dump	group.VkPhysicalDeviceProperties.deviceType	1:9d1a7573
+vk_dump	group.VkPhysicalDeviceProperties.driverVersion	1:d9d39fb1
+vk_dump	group.VkPhysicalDeviceProperties.limits	110:8b92117b
+vk_dump	group.VkPhysicalDeviceProperties.sparseProperties	5:178cc967
+vk_dump	group.VkPhysicalDeviceProperties.vendorID	1:dac778e2
+vk_dump	group.comments.desc	1:739f4cbd
+vk_dump	group.comments.vulkanApiVersion	1:588e31f0
+vk_dump	groups	494
+vk_dump	leaves	1407
+smi_setters	baseline	Default,Disabled,370.00,[N/A],1755
+smi_setters	setter.accounting	OK
+smi_setters	setter.compute_exclusive	OK
+smi_setters	setter.compute_prohibited	OK
+smi_setters	setter.ecc_off	NOT_SUPPORTED
+smi_setters	setter.lock_gr_clock	OK
+smi_setters	setter.pm_on	OK
+smi_setters	setter.power_same	OK
+smi_setters	unchanged_after_undo	1
+life_persistenced	canary	1
+life_persistenced	preexisting	1
+life_kill_kernel	rounds_ok	5
+life_kill_gl	rounds_ok	5
+@@END kv.tsv
+@@FILE summary.txt sha256=a155b19d3d79b57e bytes=81
+GAP_PROBES_SUMMARY side=host pass=42 not_supported=0 fail=0 mismatch=0 not_run=3
+@@END summary.txt
+GAP_PROBES_SUMMARY side=host pass=42 not_supported=0 fail=0 mismatch=0 not_run=3
+=== end rc=0 secs=359 2026-11-18T03:23:42+00:00

@@ -221,5 +221,5 @@ def vulkan_tokens(leaves):
             continue
         m = re.search(r"([A-Za-z_]\w*)((?:\[\d+\])*)$", path)
         if m and not path.startswith("$schema"):
-            out.add("%s%s=%s" % (m[1], m[2], val))
+            out.add("%s%s=%s" % (m[1], m[2], {"True": "1", "true": "1", "False": "0", "false": "0"}.get(val, val)))   # an older vulkaninfo writes booleans as 1 and 0
     return sorted(out)
