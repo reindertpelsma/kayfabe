@@ -932,6 +932,22 @@ impl HostRm {
         self.reserve_va_flags(space, at, len, NVOS32_RESERVE_FLAGS)
     }
 
+    /// ★ 2026-11-18 PROBE ONLY (`kf-va-tiling-probe`, `V3_SPARSE_RESIDENCY_RCA.md` §8): a reservation
+    /// with the caller's `NVOS32` flags (e.g. [`NVOS32_RESERVE_FLAGS`] `|` [`NVOS32_ALLOC_FLAGS_SPARSE`]
+    /// for a `_SPARSE` micro block). Production never calls it.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn reserve_va_probe_flags(
+        &self,
+        space: u32,
+        at: u64,
+        len: u64,
+        flags: u32,
+    ) -> Result<u32, RmError> {
+        self.reserve_va_flags(space, at, len, flags)
+    }
+
     /// [`HostRm::reserve_va`] with explicit `NVOS32` flags: [`NVOS32_RESERVE_FLAGS`], or
     /// [`GuestVaFill::reserve_flags`] for a static guest range.
     fn reserve_va_flags(&self, space: u32, at: u64, len: u64, flags: u32) -> Result<u32, RmError> {
