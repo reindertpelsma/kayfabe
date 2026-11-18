@@ -5,12 +5,19 @@
  * This exercises the real GL driver (libEGL/libGLESv2 -> nvidia) over nvkvm's
  * forwarded /dev/nvidia* + /dev/dri/renderD128, the same path graphics apps use.
  *
- * Renders many gouraud triangles into a 1024x1024 FBO for N frames; correctness
- * = the whole clear+draw+readback pipeline ran on the GPU with no GL error.
- * Emits: METRIC egl_gl_Mtri_s <v> ; CHECK egl_gl_Mtri_s <ok|FAIL>
+ * Renders many gouraud triangles into a 1024x1024 FBO for N frames. Correctness (2026-11-12; the old
+ * check was "no GL error", which a software rasterizer also passes):
+ *   1. the renderer string names NVIDIA and no software rasterizer (llvmpipe, swrast, lavapipe, softpipe);
+ *   2. an exact-pixel scene, drawn before the benchmark: clear to (0,0,1,1), one flat (1,0,0) triangle over
+ *      the lower-left half. Colour components 0 and 1 are exact in every GL pixel format, so the pixels are
+ *      derived, not captured: inside (W/4,W/4) = 255,0,0,255; outside (3W/4,3W/4) = 0,0,255,255;
+ *   3. no GL error after the benchmark.
+ * Emits: METRIC egl_gl_Mtri_s <v> ; RENDERER <string> ; CHECK egl_renderer ; CHECK egl_pixels ;
+ *        CHECK egl_gl_Mtri_s <ok|FAIL>
  *
  * Build: gcc egl_offscreen.c -o egl_offscreen -lEGL -lGLESv2
  */
+#define _GNU_SOURCE /* strcasestr */
 #define EGL_EGLEXT_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES
 #include <EGL/egl.h>
@@ -19,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 static double now(){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t.tv_sec+t.tv_nsec/1e9;}
 #define W 1024
@@ -50,7 +58,16 @@ int main(int argc,char**argv){
     if(ctx==EGL_NO_CONTEXT){printf("CHECK egl_gl_Mtri_s FAIL\n[egl] no context\n");return 0;}
     /* surfaceless: render straight to an FBO */
     if(!eglMakeCurrent(dpy,EGL_NO_SURFACE,EGL_NO_SURFACE,ctx)){printf("CHECK egl_gl_Mtri_s FAIL\n[egl] makeCurrent (no surfaceless ext?)\n");return 0;}
-    fprintf(stderr,"[egl] renderer: %s\n",(const char*)glGetString(GL_RENDERER));
+    const char*rend=(const char*)glGetString(GL_RENDERER); if(!rend) rend="";
+    fprintf(stderr,"[egl] renderer: %s\n",rend);
+    printf("RENDERER %s\n",rend);
+    {
+        static const char*soft[]={"llvmpipe","swrast","lavapipe","softpipe","software","swiftshader",0};
+        int bad=!strcasestr(rend,"NVIDIA");
+        for(int i=0;soft[i];i++) if(strcasestr(rend,soft[i])) bad=1;
+        printf("CHECK egl_renderer %s\n",bad?"FAIL":"ok");
+        if(bad){printf("[egl] renderer is not the NVIDIA GPU: '%s'\n",rend);return 0;}
+    }
 
     GLuint tex; glGenTextures(1,&tex); glBindTexture(GL_TEXTURE_2D,tex);
     glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,W,W,0,GL_RGBA,GL_UNSIGNED_BYTE,0);
@@ -70,15 +87,34 @@ int main(int argc,char**argv){
     glEnableVertexAttribArray(0); glVertexAttribPointer(0,2,GL_FLOAT,0,5*sizeof(float),0);
     glEnableVertexAttribArray(1); glVertexAttribPointer(1,3,GL_FLOAT,0,5*sizeof(float),(void*)(2*sizeof(float)));
 
-    glClearColor(0.05f,0.10f,0.20f,1.0f); /* alpha=1 so readback proves render+readback path */
+    /* exact-pixel scene (see the header): flat red triangle over the lower-left half on a blue clear */
+    {
+        static const float tri[3][5]={{-1,-1,1,0,0},{1,-1,1,0,0},{-1,1,1,0,0}};
+        GLuint tb; glGenBuffers(1,&tb); glBindBuffer(GL_ARRAY_BUFFER,tb);
+        glBufferData(GL_ARRAY_BUFFER,sizeof tri,tri,GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0); glVertexAttribPointer(0,2,GL_FLOAT,0,5*sizeof(float),0);
+        glEnableVertexAttribArray(1); glVertexAttribPointer(1,3,GL_FLOAT,0,5*sizeof(float),(void*)(2*sizeof(float)));
+        glClearColor(0.0f,0.0f,1.0f,1.0f); glClear(GL_COLOR_BUFFER_BIT);
+        glDrawArrays(GL_TRIANGLES,0,3); glFinish();
+        unsigned char in[4]={9,9,9,9}, out[4]={9,9,9,9};
+        glReadPixels(W/4,W/4,1,1,GL_RGBA,GL_UNSIGNED_BYTE,in);
+        glReadPixels(3*W/4,3*W/4,1,1,GL_RGBA,GL_UNSIGNED_BYTE,out);
+        static const unsigned char ein[4]={255,0,0,255}, eout[4]={0,0,255,255};
+        int okp=!memcmp(in,ein,4)&&!memcmp(out,eout,4)&&glGetError()==GL_NO_ERROR;
+        printf("PIXELS inside=%u,%u,%u,%u outside=%u,%u,%u,%u expected inside=255,0,0,255 outside=0,0,255,255\n",
+               in[0],in[1],in[2],in[3],out[0],out[1],out[2],out[3]);
+        printf("CHECK egl_pixels %s\n",okp?"ok":"FAIL");
+        if(!okp) return 0;
+        glBindBuffer(GL_ARRAY_BUFFER,vbo);
+        glVertexAttribPointer(0,2,GL_FLOAT,0,5*sizeof(float),0);
+        glVertexAttribPointer(1,3,GL_FLOAT,0,5*sizeof(float),(void*)(2*sizeof(float)));
+    }
+    glClearColor(0.05f,0.10f,0.20f,1.0f);
     glClear(GL_COLOR_BUFFER_BIT); glDrawArrays(GL_TRIANGLES,0,nv); glFinish(); /* warm */
     double t=now();
     for(int f=0;f<frames;f++){ glClear(GL_COLOR_BUFFER_BIT); glDrawArrays(GL_TRIANGLES,0,nv); }
     glFinish(); t=now()-t;
-    unsigned char px[4]={0}; glReadPixels(W/2,W/2,1,1,GL_RGBA,GL_UNSIGNED_BYTE,px);
-    /* Correctness = the whole GL pipeline (clear+draw+readback) executed on the
-     * GPU with no error.  (Pixel-value asserts are too driver-format-finicky to
-     * gate on; the renderer string logged above already confirms it's NVIDIA.) */
+    /* The renderer and exact-pixel checks ran above; this one is the benchmark's own GL error state. */
     GLenum gerr = glGetError();
     printf("METRIC egl_gl_Mtri_s %.1f\n",(double)tris*frames/t/1e6);
     printf("CHECK egl_gl_Mtri_s %s\n",(gerr==GL_NO_ERROR)?"ok":"FAIL");

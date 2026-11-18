@@ -492,6 +492,7 @@ for api in ("webgl", "webgpu"):
 
 NO_EQUIVALENT = {
     "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
+    "cuda_drv_probe": "Linux-only dlopen(libcuda.so.1) byte-exact driver-API probe; the Windows driver-API rungs are the cup2..cup8 ladder",
     "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time",
 }
 

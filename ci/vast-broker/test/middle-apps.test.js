@@ -158,7 +158,7 @@ for (const missing of ['apps', 'windows_apps']) {
     assert.equal((await h.call('/rent', { body: requested() })).status, 200);
     const result = { nonce, verdict: 'PASS', ...sampleResult() };
     result.suites.push(
-      ...Object.entries({ apps: 66, windows_apps: 10 })
+      ...Object.entries({ apps: 67, windows_apps: 10 })
         .filter(([name]) => name !== missing)
         .map(([name, pass]) => ({ name, pass, fail: 0, skip: 0 })),
     );
@@ -216,7 +216,7 @@ test('middle Linux profile includes the entire supported catalogue', () => {
       .filter((line) => line && !line.startsWith('#'));
   assert.deepEqual(ids('gate_list_middle.txt'), ids('gate_list.txt'));
   assert.equal(MIDDLE_APP_COUNTS.apps, ids('gate_list.txt').length);
-  assert.equal(MIDDLE_APP_COUNTS.apps, 66);
+  assert.equal(MIDDLE_APP_COUNTS.apps, 67);
 });
 
 test('middle PASS with only the old 63 Linux probes is rejected', async () => {

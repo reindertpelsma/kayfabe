@@ -275,6 +275,16 @@ def grade_row(app, row):
     )
 
 
+def verdict_line(app, row):
+    """A TIMEOUT is its own verdict in run_apps.sh (rc 124/137, with quiet= = seconds the log was silent before the
+    kill); grade_row folds it into result=FAIL, which the gate needs. This extra line keeps the distinction in the
+    stage output and in the report: `APP_VERDICT name=<app> verdict=TIMEOUT quiet=<s>`. Empty for every other row."""
+    if field(r".* verdict=([A-Z_]*) .*", row) != "TIMEOUT":
+        return ""
+    quiet = field(r".* quiet=([0-9]{1,9}) .*", row) or "-"
+    return "APP_VERDICT name=%s verdict=TIMEOUT quiet=%s" % (app, quiet)
+
+
 def decide(passed, failed, unrun, count, matrix_rc):
     if failed > 0:
         return StepResult(Verdict.FAIL)
@@ -490,6 +500,8 @@ class AppsGate(Step):
             row = last_row([results / "guest_isolated.res", results / "guest.res"], app)
             result, line = grade_row(app, row)
             ctx.emit(line)
+            if verdict_line(app, row):
+                ctx.emit(verdict_line(app, row))
             if result == "PASS":
                 passed += 1
             elif result == "NOT_RUN":

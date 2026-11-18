@@ -96,7 +96,7 @@ CASES = [
         "false && profile === 'check' && options.tierName === 'middle' && cfg.pinnedMiddleDies.length",
         "node",
     ),
-    ("linux-count-weakened", BROKER + "runner.py", '"apps": 66', '"apps": 63', "py"),
+    ("linux-count-weakened", BROKER + "runner.py", '"apps": 67', '"apps": 64', "py"),
     (
         "middle-linux-restores-old-63-probe-subset",
         "scripts/apps/gate_list_middle.txt",

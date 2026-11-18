@@ -81,7 +81,7 @@ class TrustedRunner(unittest.TestCase):
         if rows is None and enabled:
             status["suites"] += [
                 dict(name=n, **{"pass": c, "fail": 0, "skip": 0})
-                for n, c in [("apps", 66), ("windows_apps", 10)]
+                for n, c in [("apps", 67), ("windows_apps", 10)]
             ]
         calls = []
 
@@ -145,7 +145,7 @@ class TrustedRunner(unittest.TestCase):
 
     def test_requested_windows_stage_cannot_disappear_from_a_pass(self):
         result, controller, _ = self.execute(
-            rows=[dict(name="apps", **{"pass": 66, "fail": 0, "skip": 0})]
+            rows=[dict(name="apps", **{"pass": 67, "fail": 0, "skip": 0})]
         )
         self.assertEqual(result["verdict"], "FAIL")
         self.assertEqual(controller.retry, 1)
@@ -160,7 +160,7 @@ class TrustedRunner(unittest.TestCase):
     def test_windows_mid_count_cannot_shrink(self):
         rows = [
             dict(name=n, **{"pass": c, "fail": 0, "skip": 0})
-            for n, c in [("apps", 66), ("windows_apps", 9)]
+            for n, c in [("apps", 67), ("windows_apps", 9)]
         ]
         self.assertEqual(self.execute(rows=rows)[0]["verdict"], "FAIL")
 
@@ -240,7 +240,7 @@ class TrustedRunner(unittest.TestCase):
     def test_middle_count_covers_every_supported_linux_probe(self):
         names = apps.payload().apps_gate_list(ROOT, "large")
         self.assertEqual(r.MIDDLE_APP_COUNTS["apps"], len(names))
-        self.assertEqual(len(names), 66)
+        self.assertEqual(len(names), 67)
 
     def test_middle_cannot_accept_the_old_63_app_pass(self):
         rows = [
@@ -371,6 +371,7 @@ class PayloadMiddle(unittest.TestCase):
 
     def test_full_66_probe_record_passes_the_middle_grader(self):
         names = self.m.apps_gate_list(ROOT, "middle")
+        names = [n for n in names if n != "cuda_drv_probe"]  # added 2026-11-12, after the 2026-11-07 record
         text = (ROOT / "traces/apps_linux_20261107/g1/gate_full.out").read_text()
         self.assertEqual(self.m.apps_rows(text, 0, names), [self.m.row("apps", 66)])
 
@@ -424,7 +425,7 @@ class PayloadMiddle(unittest.TestCase):
         self.assertEqual(rc, 0, result)
         self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
         counts = {row["name"]: row["pass"] for row in result["suites"]}
-        self.assertEqual((counts["apps"], counts["windows_apps"]), (66, 10))
+        self.assertEqual((counts["apps"], counts["windows_apps"]), (67, 10))
 
     def test_all_66_apps_do_not_start_with_less_than_the_full_suffix(self):
         names = self.m.apps_gate_list(ROOT, "middle")

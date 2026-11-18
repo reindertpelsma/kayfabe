@@ -56,6 +56,7 @@ APP_ROW = re.compile(
     r"^APP_ROW name=([A-Za-z0-9_]{1,48}) os=linux result=(PASS|FAIL|NOT_RUN)"
     r"(?: secs=(\S+))?(?: guest_xid=\S+)?(?: note=(.*))?$"
 )
+APP_VERDICT = re.compile(r"^APP_VERDICT name=([A-Za-z0-9_]{1,48}) verdict=TIMEOUT quiet=([0-9]{1,9}|-)$")
 WINAPP_ROW = re.compile(
     r"^WINAPPS_APP app=([A-Za-z0-9_]{1,48}) class=(pass|guest_fail|boot_fail|harness|not_run)"
     r" verdict=(PASS\*?|FAIL|TIMEOUT|BOOT_FAIL|NOTRUN|-) batched=\S+ alone=\S+"
@@ -201,6 +202,12 @@ class Collector:
             if m:
                 self.apps[m[1]] = (m[2], m[3], (m[4] or "").strip())
                 self.test("linux", "apps_linux", m[1], "SKIP" if m[2] == "NOT_RUN" else m[2], seconds_ms(m[3]))
+        elif head == "APP_VERDICT":
+            # A TIMEOUT is a FAIL for the gate, but the report keeps the cause apart from a plain failure.
+            m = APP_VERDICT.match(line)
+            if m and m[1] in self.apps:
+                res, secs, note = self.apps[m[1]]
+                self.apps[m[1]] = (res, secs, ("[TIMEOUT quiet=%ss] " % m[2] + note).strip())
         elif head == "WINAPPS_APP":
             m = WINAPP_ROW.fullmatch(line)
             if m:

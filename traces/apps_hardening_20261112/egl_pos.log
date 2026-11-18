@@ -1,0 +1,8 @@
+[egl] renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+RENDERER NVIDIA GeForce RTX 4070/PCIe/SSE2
+CHECK egl_renderer ok
+PIXELS inside=255,0,0,255 outside=0,0,255,255 expected inside=255,0,0,255 outside=0,0,255,255
+CHECK egl_pixels ok
+METRIC egl_gl_Mtri_s 2.6
+CHECK egl_gl_Mtri_s ok
+rc=0 t=.517018321

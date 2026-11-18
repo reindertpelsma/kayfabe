@@ -1,4 +1,5 @@
-# Linux app gate list, MIDDLE tier: all 66 supported probes (owner clarification 2026-11-09, RV2 F2)
+# Linux app gate list, MIDDLE tier: all 67 supported probes (owner clarification 2026-11-09, RV2 F2)
+# 2026-11-12: cuda_drv_probe added (byte-exact driver-API probe, scripts/apps/src/cuda_drv_probe.c). It is not in the 2026-11-07 trace; regenerating from that trace drops it.
 # Generated from the per-app table of traces/apps_linux_20261107/ (RTX 4090, kf3 144557e4, 2026-11-07): the apps
 # that passed on bare metal AND in the Linux guest. One app per line, in run order. A change to this list is a
 # change to the gate: say why in the commit. Regenerate with scripts/apps/matrix_table.py --gate-list.
@@ -11,6 +12,7 @@ nvidia_smi
 deviceQuery
 vectorAdd
 vectorAddDrv
+cuda_drv_probe
 matrixMul
 matrixMulDrv
 bandwidthTest
