@@ -52,6 +52,25 @@ fn u32_fields(h: &str, name: &str) -> Vec<String> {
         .collect()
 }
 
+/// The field names of a struct whose fields are all `NvBool` (one byte each).
+fn bool_fields(h: &str, name: &str) -> Vec<String> {
+    let start = h
+        .find(&format!("typedef struct {name} {{"))
+        .unwrap_or_else(|| panic!("no struct {name}"));
+    let body = &h[start..];
+    let body = &body[body.find('{').unwrap() + 1..body.find('}').unwrap()];
+    body.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            let l = l
+                .strip_prefix("NvBool ")
+                .unwrap_or_else(|| panic!("{name}: {l} is not NvBool"));
+            l.trim_end_matches(';').to_string()
+        })
+        .collect()
+}
+
 fn check(tree: &Path, label: &str) {
     let fifo = header(tree, "ctrl2080/ctrl2080fifo.h").expect("ctrl2080fifo.h");
     let tsg = header(tree, "ctrla06c.h").expect("ctrla06c.h");
@@ -69,6 +88,37 @@ fn check(tree: &Path, label: &str) {
     assert_eq!(
         define(&chan, "NVA06F_CTRL_CMD_SET_INTERLEAVE_LEVEL"),
         q::CHANNEL_SET_INTERLEAVE_LEVEL,
+        "{label}"
+    );
+    assert_eq!(
+        define(&tsg, "NVA06C_CTRL_CMD_MAKE_REALTIME"),
+        q::MAKE_REALTIME,
+        "{label}"
+    );
+    assert_eq!(
+        define(&chan, "NVA06F_CTRL_CMD_RESTART_RUNLIST"),
+        q::RESTART_RUNLIST,
+        "{label}"
+    );
+    // `NvBool` is `NvU8` (nvtypes.h), so one byte per field
+    assert_eq!(
+        bool_fields(&tsg, "NVA06C_CTRL_MAKE_REALTIME_PARAMS"),
+        ["bRealtime"],
+        "{label}"
+    );
+    assert_eq!(
+        bool_fields(&tsg, "NVA06C_CTRL_MAKE_REALTIME_PARAMS").len(),
+        q::MAKE_REALTIME_PARAMS_SIZE,
+        "{label}"
+    );
+    assert_eq!(
+        bool_fields(&chan, "NVA06F_CTRL_RESTART_RUNLIST_PARAMS"),
+        ["bForceRestart", "bBypassWait"],
+        "{label}"
+    );
+    assert_eq!(
+        bool_fields(&chan, "NVA06F_CTRL_RESTART_RUNLIST_PARAMS").len(),
+        q::RESTART_RUNLIST_PARAMS_SIZE,
         "{label}"
     );
     // params layouts: field count x 4 bytes
