@@ -739,6 +739,68 @@ class Tools(unittest.TestCase):
 
 
 
+DOC = ROOT / "docs/design/V3_GPUPV_GAP_MATRIX.md"
+
+
+def doc_rows():
+    rows = []
+    for line in DOC.read_text().splitlines():
+        c = [x.strip() for x in line.strip().strip("|").split(" | ")]
+        if len(c) == 6 and re.fullmatch(r"[A-Z]{2}-\d\d", c[0]):
+            rows.append(c)
+    return rows
+
+
+class MatrixDoc(unittest.TestCase):
+    def test_the_document_opens_with_a_dated_status_and_leaves_no_placeholder(self):
+        text = DOC.read_text()
+        self.assertRegex(text.split("\n", 3)[2], r"^\*\*STATUS: (RESEARCH|LIVE), 2026-\d\d-\d\d")
+        self.assertNotIn("@@", text)
+
+    def test_at_least_sixty_rows_with_unique_ids_and_a_known_status(self):
+        rows = doc_rows()
+        self.assertGreaterEqual(len(rows), 60)
+        self.assertEqual(len({r[0] for r in rows}), len(rows))
+        for r in rows:
+            self.assertRegex(r[3], r"^(WORKS|BROKEN|UNKNOWN|N-A\(.{20,}\))$", r[0])
+
+    def test_the_public_summary_counts_match_the_rows(self):
+        rows = doc_rows()
+        want = {k: sum(1 for r in rows if r[3].startswith(k)) for k in ("WORKS", "BROKEN", "UNKNOWN", "N-A")}
+        m = re.search(r"\*\*Summary \(public, counts per kayfabe status\): (\d+) rows: WORKS (\d+), BROKEN (\d+), UNKNOWN (\d+), N-A-BY-DESIGN (\d+)\.", DOC.read_text())
+        self.assertEqual(tuple(map(int, m.groups())), (len(rows), want["WORKS"], want["BROKEN"], want["UNKNOWN"], want["N-A"]))
+
+    def test_every_source_key_of_a_row_is_defined_with_a_url_or_marked_inferred(self):
+        text = DOC.read_text()
+        defs = {m[0]: m[2] for m in re.findall(r"^\| (\w+) \| ([^|]+) \| (\S+) \|", text.split("## 7. Sources")[1], re.M)}
+        for r in doc_rows():
+            for k in r[2].split(", "):
+                self.assertIn(k, defs, r[0])
+                self.assertTrue(k == "I" or defs[k].startswith("https://"), k)
+
+    def test_a_row_that_says_a_probe_is_authored_names_a_real_case(self):
+        ids = {c["id"] for c in L.load_cases(TABLE)}
+        for r in doc_rows():
+            if "authored" in r[4]:
+                self.assertTrue(any(re.search(r"\b%s\b" % re.escape(i), r[4]) for i in ids), r[0])
+
+    def test_a_works_or_broken_row_names_a_measurement_or_a_document(self):
+        for r in doc_rows():
+            if r[3] in ("WORKS", "BROKEN"):
+                self.assertRegex(r[4], r"MEASURED|documented|reported|docs/|traces/|README", r[0])
+
+    def test_no_case_of_the_table_is_missing_from_the_matrix(self):
+        text = DOC.read_text()
+        for c in L.load_cases(TABLE):
+            if c["id"] not in ("canary",):
+                self.assertIn(c["id"], text, c["id"])
+
+    def test_the_document_names_no_private_path_and_no_identifier(self):
+        text = DOC.read_text()
+        for bad in ("/root/", "/workspace/", "@gmail", "licence key", "instance id"):
+            self.assertNotIn(bad, text)
+
+
 class Wiring(unittest.TestCase):
     def test_the_row_is_a_discovery_row_with_its_own_summary_line(self):
         text = (ROOT / "scripts/apps/run_apps.sh").read_text()

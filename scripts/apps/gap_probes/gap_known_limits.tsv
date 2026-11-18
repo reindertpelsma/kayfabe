@@ -5,3 +5,6 @@ attr_dump	attr.33	pass	pass	kayfabe_limitation	PCI bus id differs: the guest has
 attr_dump	attr.34	pass	pass	kayfabe_limitation	PCI device id of the slot differs: the guest has its own virtual PCI topology
 attr_dump	attr.50	pass	pass	kayfabe_limitation	PCI domain id differs: the guest has its own virtual PCI topology
 tools_ncu	*	pass	not_supported	kayfabe_limitation	the profiler interface is stubbed as capability absent (docs/OWNER_RULINGS.md section H: debugger, profiler, NVLink, ECC): performance counters are not served to a guest
+managed_prefetch_advise	*	pass	*	kayfabe_limitation	UVM demand paging is not supported in the guest and is not a release target (README.md, docs/OWNER_RULINGS.md section E); the four UVM apps fail the same way with one host Xid 31 each
+managed_concurrent	*	pass	*	kayfabe_limitation	UVM demand paging is not supported in the guest and is not a release target (README.md, docs/OWNER_RULINGS.md section E)
+managed_oversub	*	pass	*	kayfabe_limitation	UVM demand paging is not supported in the guest and is not a release target (README.md, docs/OWNER_RULINGS.md section E)
