@@ -769,6 +769,18 @@ class Tools(unittest.TestCase):
     def test_the_newest_release_wins_over_a_symlink_that_sorts_later(self):
         self.assertIn("cuda-12.9/bin/compute-sanitizer", self.newest_fixture().find_tool("compute-sanitizer"))
 
+    def test_libcupti_is_also_found_in_lib64_where_cuda_12_9_installs_it(self):
+        import gap_scripts
+        d = Path(tempfile.mkdtemp(prefix="gaplib"))
+        self.addCleanup(shutil.rmtree, d, True)
+        (d / "usr/local/cuda-12.9/targets/x86_64-linux/lib").mkdir(parents=True)
+        (d / "usr/local/cuda-12.9/targets/x86_64-linux/lib/libcupti.so.12").write_text("")
+        (d / "usr/local/cuda-12.9/lib64").symlink_to("targets/x86_64-linux/lib")
+        saved = gap_scripts.TOOL_ROOTS
+        gap_scripts.TOOL_ROOTS = (str(d),)
+        self.addCleanup(setattr, gap_scripts, "TOOL_ROOTS", saved)
+        self.assertTrue(gap_scripts.cupti_lib().endswith("libcupti.so.12"))
+
     def test_the_newest_release_supplies_libcupti(self):
         self.assertIn("cuda-12.9/extras", self.newest_fixture().cupti_lib())
 

@@ -311,7 +311,7 @@ def find_tool(name):
 def cupti_lib():
     import glob
     for root in TOOL_ROOTS:
-        best = newest(glob.glob(root + "/usr/local/cuda*/extras/CUPTI/lib64/libcupti.so.*"))
+        best = newest(glob.glob(root + "/usr/local/cuda*/extras/CUPTI/lib64/libcupti.so.*") + glob.glob(root + "/usr/local/cuda*/lib64/libcupti.so.*"))   # 12.9 ships it in lib64
         if best:
             return best
     return ""
