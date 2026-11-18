@@ -233,6 +233,33 @@ first, the lift is not needed. OWNER_RULINGS.md is not edited by this change.
 
 ### 2.7 Probe: is `SET_REFERENCE` the METHOD Xid on GB20x? (INFERRED today)
 
+**Built (2026-11-18):** `kf-harness` binary `kf-semmarker-probe`, pure part `kf_harness::semprobe` (unit-tested).
+It is a v3 tool. Nothing in the frozen `kayfabe-rm-ladder` is touched, and there is no unsafe code.
+
+How it differs from the sketch below:
+- The channel is a USER **copy-engine** channel. Host methods (`SET_REFERENCE`, `SEM_*`,
+  `NON_STALL_INTERRUPT`) are PBDMA methods whatever the engine, and B1n's METHOD Xids hit both its GR and CE
+  rings.
+- Instead of a non-stall event count, A and C end with a WITNESS release into the owned word. It lands only if
+  the PBDMA processed everything before it.
+
+Each attempt is one child process with:
+- a fresh VA space and USER channel;
+- a read-only command mapping;
+- one owned GPU-writable 64 KiB buffer;
+- USERD with no GPU mapping.
+
+Safety:
+- The parent kills a child after 20 s (10 s to reap) and reads the dmesg delta per attempt.
+- It records the exact words and methods.
+- It STOPS at the first outcome that is neither `Clean` nor (A only) `MethodRefused`: exactly one Xid 32 with
+  the witness missing.
+
+Verdicts:
+- A: `MethodRefused` supports the inference; `Clean` falsifies it.
+- B: must be `Clean` with the word reading `0x4B460001`.
+- C: must be `Clean`.
+
 On a Blackwell box, bare metal first (the raw client, `kayfabe-rm-ladder` / `kf-rawclient`). A USER `0xca6f`
 channel on GR, three variants, each its own process with a fresh channel, N=3 each:
 
