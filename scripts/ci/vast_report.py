@@ -902,11 +902,11 @@ def read_result_file(path):
             "propimage_apps_b",
             "propimage_run",
             "matlab",
-            "install_flow",
-            "kfml",
             "apps_discovery",
             "windows_open_rows",
             "full",
+            "install_flow",
+            "kfml",
             "net_bytes",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
