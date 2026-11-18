@@ -101,7 +101,10 @@ def run_all(a):
     count = {s: sum(1 for r in rows if r["status"] == s) for s in L.STATUSES}
     summary = "GAP_PROBES_SUMMARY side=%s pass=%d not_supported=%d fail=%d mismatch=%d not_run=%d" % (
         a.side, count["PASS"], count["NOT_SUPPORTED"], count["FAIL"], count["MISMATCH"], count["NOT_RUN"])
-    for name, text in (("results.tsv", results), ("kv.tsv", kvtxt), ("summary.txt", summary + "\n")):
+    files = [("results.tsv", results), ("kv.tsv", kvtxt), ("summary.txt", summary + "\n")]
+    if (out / "vk_leaves.tsv").is_file():
+        files.append(("vk_leaves.tsv", (out / "vk_leaves.tsv").read_text()))   # the leaf-level Vulkan diff needs both sides' leaves
+    for name, text in files:
         (out / name).write_text(text)
         if a.emit:
             sys.stdout.write(rowio.emit(name, text))

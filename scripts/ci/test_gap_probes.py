@@ -15,6 +15,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -379,6 +380,11 @@ class Compare(unittest.TestCase):
         g["a"]["kv"]["gran"] = "2"
         self.assertEqual(D.compare(h, g)[0]["kvdiff"], "gran:1->2")
 
+    def test_info_keys_are_text_for_the_evidence_and_never_a_difference(self):
+        h = {"a": R("a", "pass", kv={"info.msg": "one version"})}
+        g = {"a": R("a", "pass", kv={"info.msg": "another version"})}
+        self.assertEqual(D.compare(h, g), [])
+
     def test_the_cli_ignores_perf_keys_in_the_kv_files_of_two_runs(self):
         d = Path(tempfile.mkdtemp(prefix="gapperf"))
         self.addCleanup(shutil.rmtree, d, True)
@@ -558,6 +564,27 @@ class RunnerEndToEnd(unittest.TestCase):
         row = (d / "o/results.tsv").read_text().splitlines()[1].split("\t")
         self.assertEqual((row[2], row[7], rc), ("NOT_RUN", "no_gap_probe_binary_and_no_gcc", 0))
 
+    def test_the_vulkan_leaves_travel_in_the_emit_blocks_when_a_case_wrote_them(self):
+        d = Path(tempfile.mkdtemp(prefix="gapleaf"))
+        self.addCleanup(shutil.rmtree, d, True)
+        (d / "out").mkdir()
+        (d / "out/vk_leaves.tsv").write_text("a=1\nb=2\n")
+        fake = d / "fake_probe"
+        fake.write_text(FAKE)
+        fake.chmod(0o755)
+        table = d / "cases.tsv"
+        table.write_text(HDR + case_line("good", prog="good"))
+        saved = GPR.CASES
+        GPR.CASES = table
+        self.addCleanup(setattr, GPR, "CASES", saved)
+        buf = io.StringIO()
+        real, sys.stdout = sys.stdout, buf
+        try:
+            GPR.main(["run", "--side", "host", "--out", str(d / "out"), "--probe", str(fake), "--emit"])
+        finally:
+            sys.stdout = real
+        self.assertEqual(rowio.extract(buf.getvalue()).get("vk_leaves.tsv"), "a=1\nb=2\n")
+
     def test_emit_blocks_carry_the_files_and_compare_reads_a_log(self):
         rc, rows, out, text = self.run_table([case_line("good", prog="good"), case_line("bad", prog="bad")], extra=("--emit",))
         blocks = rowio.extract(text)
@@ -638,6 +665,44 @@ class ScriptCases(unittest.TestCase):
         self.assertEqual(r["status"], "PASS", r)
         self.assertEqual(r["kv"]["stopped_on_sigterm"], "1")
         self.assertEqual(r["kv"]["daemon_found"], "1")
+
+    def test_a_daemon_the_machine_already_runs_is_stopped_first_and_started_again_afterwards(self):
+        d = self.d
+        sleeper = d / "sleeper"
+        sleeper.mkdir()
+        shutil.copy(shutil.which("bash"), sleeper / "nvidia-persistenced")
+        daemon = d / "nvidia-persistenced"
+        daemon.write_text("#!/bin/sh\n%s/nvidia-persistenced -c 'sleep 300; true' >/dev/null 2>&1 &\nexit 0\n" % sleeper)
+        daemon.chmod(0o755)
+        pre = subprocess.Popen([str(sleeper / "nvidia-persistenced"), "-c", "sleep 300; true"], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        def reap():
+            for p in self.S.pids_of("nvidia-persistenced"):
+                try:
+                    os.killpg(os.getpgid(p), 9)
+                except OSError:
+                    pass
+        self.addCleanup(reap)
+        time.sleep(0.5)
+        self.assertEqual(self.S.pids_of("nvidia-persistenced"), [pre.pid])
+        r = self.S.life_persistenced({"probe": self.probe(True), "out": d})
+        pre.wait(timeout=5)
+        self.assertEqual(r["status"], "PASS", r)
+        self.assertEqual(r["kv"]["info.preexisting"], "1")
+        time.sleep(1)
+        self.assertEqual(len(self.S.pids_of("nvidia-persistenced")), 1)   # the machine's own daemon is back, started from its own command line
+
+    def test_the_tool_cases_keep_the_tools_last_words_as_an_info_key(self):
+        d = self.d
+        fake = d / "ncu"
+        fake.write_text("#!/bin/sh\necho '==ERROR== Profiling is not supported on this device'\nexit 1\n")
+        fake.chmod(0o755)
+        saved = self.S.find_tool
+        self.S.find_tool = lambda name: str(fake)
+        self.addCleanup(setattr, self.S, "find_tool", saved)
+        r = self.S.tools_ncu({"probe": "/bin/true", "out": d})
+        self.assertEqual(r["status"], "NOT_SUPPORTED")
+        self.assertIn("not supported on this device", r["kv"]["info.metric_msg"])
 
     def test_a_persistenced_that_never_starts_a_daemon_fails_the_case(self):
         d = self.d

@@ -62,7 +62,8 @@ def vk_dump(ctx):
             return result("FAIL", "no_json_from_vulkaninfo_rc_%s" % rc)
     (ctx["out"] / "vk_leaves.tsv").write_text("\n".join(leaves) + "\n")
     groups = L.vulkan_groups(leaves)
-    kv = {"leaves": len(leaves), "groups": len(groups)}
+    rc, ver, to = run([exe, "--version"], 20)
+    kv = {"leaves": len(leaves), "groups": len(groups), "info.vulkaninfo_version": " ".join(ver.split())[:120]}
     for g, ls in groups.items():   # one digest per group: a difference is named by group in the comparison, the leaf-level diff is in vk_leaves.tsv
         kv["group." + g] = "%d:%08x" % (len(ls), _crc("\n".join(ls)))
     return result("PASS" if len(leaves) > 100 else "FAIL", "-" if len(leaves) > 100 else "too_few_leaves", **kv)
@@ -88,7 +89,7 @@ def smi_setters(ctx):
     base = smi_query()
     if base is None:
         return result("FAIL", "nvidia_smi_query_failed")
-    classes, kv = {}, {"baseline": ",".join(base)}
+    classes, kv = {}, {"info.baseline": ",".join(base)}
     pl = base[2] if base[2].replace(".", "", 1).isdigit() else None
     gr = base[4] if base[4].isdigit() else None
     steps = [("pm_on", ["-pm", "1"], ["-pm", "0" if base[1].lower() == "disabled" else "1"]), ("compute_exclusive", ["-c", "EXCLUSIVE_PROCESS"], ["-c", "DEFAULT"]),
@@ -168,7 +169,7 @@ def pids_of(name):
     for p in Path("/proc").iterdir():
         if p.name.isdigit():
             try:
-                if (p / "comm").read_text().strip() == name[:15]:
+                if (p / "comm").read_text().strip() == name[:15] and (p / "stat").read_text().rsplit(")", 1)[1].split()[0] != "Z":   # a zombie is already gone
                     out.append(int(p.name))
             except OSError:
                 pass
@@ -176,18 +177,35 @@ def pids_of(name):
 
 
 def life_persistenced(ctx):
-    """nvidia-persistenced daemonises: the process we start returns at once, so the daemon is found by name, held for a few seconds with CUDA alive, and stopped with SIGTERM."""
+    """nvidia-persistenced daemonises: the process we start returns at once, so the daemon is found by name, held for a few seconds with CUDA alive, and stopped with SIGTERM.
+    A daemon the machine already runs (a host usually does) is stopped first and started again afterwards with its own command line, so both sides take the same path."""
     exe = shutil.which("nvidia-persistenced")
     if not exe:
         return result("NOT_RUN", "no_nvidia_persistenced")
-    pre = pids_of("nvidia-persistenced")
-    if pre:   # one is running already (the machine's own): do not disturb it, show that CUDA works while it runs
-        c = canary(ctx)
-        return result("PASS" if c else "FAIL", "-" if c else "cuda_fails_while_persistenced_runs", preexisting=1, canary=int(c))
+    saved = []
+    for pid in pids_of("nvidia-persistenced"):
+        try:
+            saved.append(Path("/proc/%d/cmdline" % pid).read_bytes().rstrip(b"\0").split(b"\0"))
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    for _ in range(20):
+        if not pids_of("nvidia-persistenced"):
+            break
+        time.sleep(0.5)
+    try:
+        return _persistenced_round(ctx, exe, len(saved))
+    finally:
+        for argv in saved[:1]:
+            if not pids_of("nvidia-persistenced"):
+                subprocess.Popen([a.decode() for a in argv], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
+
+
+def _persistenced_round(ctx, exe, preexisting):
     rc, out, to = run([exe, "--no-persistence-mode", "--verbose"], 60)
     time.sleep(3)
     pids = pids_of("nvidia-persistenced")
-    kv = {"start_rc": rc, "daemon_found": int(bool(pids))}
+    kv = {"start_rc": rc, "daemon_found": int(bool(pids)), "info.preexisting": preexisting}
     if to or rc != 0 or not pids:
         return result("FAIL", "persistenced_did_not_start", **kv)
     c = canary(ctx)
@@ -326,6 +344,7 @@ def tool_case(ctx, runs, extra_kv=None):
         rc, out, to = run(argv, 240)
         classes[name] = L.classify_tool(rc, out, to)
         kv["tool." + name] = classes[name]
+        kv["info.%s_msg" % name] = " / ".join(l.strip() for l in out.splitlines() if l.strip())[-170:]   # the tool's own last words, kept in the evidence, never compared
         outs[name] = out
     st, why = L.tools_verdict(classes)
     return dict(result(st, why, **kv), outs=outs)

@@ -139,8 +139,8 @@ def categorize(h, g):
 
 
 def kv_diffs(hk, gk):
-    """Keys whose values differ, or exist on one side only (the canary key is the harness's, and `perf.*` keys are measurements that vary between two runs of the same machine: neither is a result)."""
-    return [(k, hk.get(k, "-"), gk.get(k, "-")) for k in sorted(set(hk) | set(gk)) if k != "canary" and not k.startswith("perf.") and hk.get(k) != gk.get(k)]
+    """Keys whose values differ, or exist on one side only (the canary key is the harness's, `perf.*` keys are measurements that vary between two runs of the same machine, and `info.*` keys are text kept in the evidence: none of them is a result)."""
+    return [(k, hk.get(k, "-"), gk.get(k, "-")) for k in sorted(set(hk) | set(gk)) if k != "canary" and not k.startswith(("perf.", "info.")) and hk.get(k) != gk.get(k)]
 
 
 def parse_xids(text):
