@@ -1,0 +1,10 @@
+START 2026-11-18T05:47:07+00:00
+BOX_RC=0
+dba960052 kf-harness: kf-va-tiling-probe (option C2 measurements: M0 baseline, M1 exact tiling, M2 eheap scaling, M3 race, M4 sparse micro blocks)
+DRIVER_RC=0
+NVIDIA GeForce RTX 3090, 580.159.04
+WATCHDOG_ASSERTS=0
+PROBE_BUILD_RC=0
+EXIT 2026-11-18T05:53:22+00:00
+NVIDIA GeForce RTX 3090, 580.159.04
+6.8.0-59-generic

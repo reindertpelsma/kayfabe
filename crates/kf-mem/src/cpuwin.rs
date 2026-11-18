@@ -1536,6 +1536,7 @@ mod tests {
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
             leaf: 0,
+            sparse: false,
         }
     }
 

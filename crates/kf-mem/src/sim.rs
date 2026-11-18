@@ -83,6 +83,18 @@ pub struct SimMap {
 /// What one model page translates to: `(ram, backing offset)`.
 pub type Backing = (bool, u64);
 
+/// ★ 2026-11-18: the host PTE state of one VA ([`SimRm::host_pte`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostPte {
+    /// A mirror mapping translates it.
+    Mapped(Backing),
+    /// SPARSE: a GPU read returns zero, a write is dropped, a sparse-residency query says
+    /// non-resident; no fault (`nvos.h:1415-1419`).
+    Sparse,
+    /// INVALID: a GPU access faults (host Xid 31, or a stall where the fault is not serviced).
+    Invalid,
+}
+
 /// Host calls and the stitch's mm syscalls, as production would issue them (the syscall budget).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Counters {
@@ -179,6 +191,15 @@ pub struct SimRm {
     /// (the mirror's own reservation pad, a stray, a remnant): such an answer reaches the apply as
     /// `HeldByHost` and the guest's leaf is silently absent. Must stay empty (`sim::check`).
     pub self_held: Vec<String>,
+    /// ★ 2026-11-18: the fill of the STATIC guest ranges (`HostRm::set_guest_va_fill`; the
+    /// `unmapped-reads-zero` property). Micro reservations always take `NVOS32_RESERVE_FLAGS`.
+    pub fill: kf_host::channel::GuestVaFill,
+    /// ★ 2026-11-18 (option C2, `kf_host::tiling`): micro reservations allocated with
+    /// `NVOS32_ALLOC_FLAGS_SPARSE` ([`SimRm::reserve_tile`]).
+    pub sparse_resv: std::collections::BTreeSet<u32>,
+    /// ★ 2026-11-18 (C2): the static guest ranges an exact tiling owns (their `guest` handle is
+    /// only the first fence; the blocks are micro reservations in [`SimRm::resv`]).
+    pub tiled: Vec<(u64, u64)>,
 }
 
 /// The size a reservation of `len` bytes is aligned to by host RM (see [`SimRm::reserve_rounds`]).
@@ -250,7 +271,112 @@ pub struct UnmapFault {
 
 /// The model behind a `&Sim` [`SpaceVerbs`].
 #[derive(Debug)]
-pub struct Sim(pub RefCell<SimRm>);
+pub struct Sim(
+    pub RefCell<SimRm>,
+    /// ★ 2026-11-18 (C2): the exact tiling of the space's guest range, when the model runs with
+    /// `exact-sparse` ([`Sim::tile`]); routed exactly as `kf_host`'s piece functions route it.
+    pub RefCell<Option<kf_host::tiling::Tiling>>,
+);
+
+/// ★ 2026-11-18 (C2): the model's tiling verbs (reservations with the engine's base and attr).
+pub struct SimTiles<'a>(pub &'a Sim);
+
+impl kf_host::tiling::TileVerbs for SimTiles<'_> {
+    fn reserve(
+        &self,
+        lo: u64,
+        hi: u64,
+        base: kf_host::tiling::Base,
+        attr: kf_host::tiling::Attr,
+    ) -> Result<u32, String> {
+        self.0.0.borrow_mut().reserve_tile(
+            lo,
+            hi - lo,
+            base == kf_host::tiling::Base::Sparse,
+            attr == kf_host::tiling::Attr::BigForced,
+        )
+    }
+    fn free(&self, handle: u32) -> Result<(), String> {
+        self.0.0.borrow_mut().free(handle)
+    }
+}
+
+impl Sim {
+    /// ★ 2026-11-18 (C2): run the space's FIRST guest range as an exact tiling (`exact-sparse`):
+    /// one INVALID fence, as `HostRm::alloc_vaspace` makes it.
+    ///
+    /// # Panics
+    /// If the tiling cannot be made (a test bug).
+    pub fn tile(&self) {
+        let g = self.0.borrow().space.guest[0];
+        self.0.borrow_mut().tiled.push((g.lo, g.hi));
+        let t = kf_host::tiling::Tiling::new(
+            &SimTiles(self),
+            g.lo,
+            g.hi,
+            kf_host::tiling::TilingCfg::default(),
+        )
+        .expect("tile the guest range");
+        *self.1.borrow_mut() = Some(t);
+    }
+
+    fn in_tiling(&self, va: u64, len: u64) -> bool {
+        self.1.borrow().as_ref().is_some_and(|t| {
+            let (lo, hi) = t.range();
+            lo <= va && va.saturating_add(len.max(1)) <= hi
+        })
+    }
+
+    fn tiled_map(&self, va: u64, len: u64, obj: u32, off: u64) -> Result<Mapped, String> {
+        let mut tg = self.1.borrow_mut();
+        let t = tg.as_mut().ok_or("no tiling")?;
+        kf_host::tiling::map_tiled(
+            t,
+            &SimTiles(self),
+            va,
+            len,
+            &mut |h, pva, plen| {
+                self.0
+                    .borrow_mut()
+                    .map_through(h, pva, plen, obj, off + (pva - va))
+            },
+            &mut |h, pva| {
+                let _ = self.0.borrow_mut().unmap_whole_in(h, pva, true);
+            },
+        )
+        .map(|()| Mapped::Placed)
+        .map_err(|e| format!("tiled map {va:#x}+{len:#x}: {e:?}"))
+    }
+
+    fn tiled_unmap(&self, va: u64, len: Option<u64>, by_range: bool) -> Result<(), String> {
+        let mut tg = self.1.borrow_mut();
+        let t = tg.as_mut().ok_or("no tiling")?;
+        let len = match len {
+            Some(l) => l,
+            None => t
+                .row_end(va)
+                .map(|e| e - va)
+                .ok_or_else(|| format!("unmap {va:#x}: OBJECT_NOT_FOUND"))?,
+        };
+        kf_host::tiling::unmap_tiled(
+            t,
+            &SimTiles(self),
+            va,
+            len,
+            by_range,
+            &mut |h, pva, size| {
+                let mut rm = self.0.borrow_mut();
+                if size == 0 {
+                    rm.unmap_whole_in(h, pva, true)
+                } else {
+                    rm.unmap_range_in(h, pva, pva + size, true);
+                    Ok(())
+                }
+            },
+        )
+        .map_err(|e| format!("tiled unmap {va:#x}+{len:#x}: {e:?}"))
+    }
+}
 
 /// A test space with ONE static guest reservation `[resv_lo, resv_hi)`.
 #[must_use]
@@ -274,33 +400,39 @@ impl Sim {
     /// A fresh model of `space`.
     #[must_use]
     pub fn new(space: VaSpace) -> Self {
-        Sim(RefCell::new(SimRm {
-            space,
-            maps: Vec::new(),
-            blocks: BTreeMap::new(),
-            resv: BTreeMap::new(),
-            objs: BTreeMap::new(),
-            next_obj: 0x1000,
-            violations: Vec::new(),
-            transient: Vec::new(),
-            transient_va: Vec::new(),
-            fail_unmaps: None,
-            injected: 0,
-            guard: Vec::new(),
-            asserts: 0,
-            ranges: Vec::new(),
-            gap_bytes: 0,
-            refuse_reserve: false,
-            refuse_reserve_over: None,
-            ext: None,
-            ext_hits: ExtHits::default(),
-            no_guard: false,
-            fail_next_batch_map: false,
-            n: Counters::default(),
-            remade_transients: 0,
-            reserve_rounds: true,
-            self_held: Vec::new(),
-        }))
+        Sim(
+            RefCell::new(SimRm {
+                space,
+                maps: Vec::new(),
+                blocks: BTreeMap::new(),
+                resv: BTreeMap::new(),
+                objs: BTreeMap::new(),
+                next_obj: 0x1000,
+                violations: Vec::new(),
+                transient: Vec::new(),
+                transient_va: Vec::new(),
+                fail_unmaps: None,
+                injected: 0,
+                guard: Vec::new(),
+                asserts: 0,
+                ranges: Vec::new(),
+                gap_bytes: 0,
+                refuse_reserve: false,
+                refuse_reserve_over: None,
+                ext: None,
+                ext_hits: ExtHits::default(),
+                no_guard: false,
+                fail_next_batch_map: false,
+                n: Counters::default(),
+                remade_transients: 0,
+                reserve_rounds: true,
+                self_held: Vec::new(),
+                fill: kf_host::channel::GuestVaFill::Fault,
+                sparse_resv: std::collections::BTreeSet::new(),
+                tiled: Vec::new(),
+            }),
+            RefCell::new(None),
+        )
     }
 }
 
@@ -531,6 +663,7 @@ impl SimRm {
                 let _ = self.unmap_whole_in(m.hdma, m.va, true);
             }
         } else if let Some((lo, _)) = self.resv.remove(&h) {
+            self.sparse_resv.remove(&h);
             self.maps.retain(|m| m.hdma != h);
             self.blocks.remove(&lo);
         } else {
@@ -543,12 +676,33 @@ impl SimRm {
     /// A FIXED `NV50_MEMORY_VIRTUAL` over `[va, va+len)`: one heap block, refused over any block
     /// or static reservation.
     fn reserve(&mut self, va: u64, len: u64) -> Result<u32, String> {
+        self.reserve_with(va, len, false)
+    }
+
+    /// ★ 2026-11-18 (option C2): a tiling block — [`SimRm::reserve`] with the block's attr
+    /// (`big_forced`: `_ATTR_PAGE_SIZE_BIG` + `_ALIGNMENT_FORCE`, rounded to 64 KiB only,
+    /// `[measured kf-va-tiling-probe M5]`) and base (`sparse`: `NVOS32_ALLOC_FLAGS_SPARSE`).
+    pub(crate) fn reserve_tile(
+        &mut self,
+        va: u64,
+        len: u64,
+        sparse: bool,
+        big_forced: bool,
+    ) -> Result<u32, String> {
+        let h = self.reserve_with(va, len, big_forced)?;
+        if sparse {
+            self.sparse_resv.insert(h);
+        }
+        Ok(h)
+    }
+
+    fn reserve_with(&mut self, va: u64, len: u64, big_forced: bool) -> Result<u32, String> {
         self.n.rm_reserve += 1;
-        let statics = self
-            .space
-            .guest
-            .iter()
-            .any(|g| g.handle != 0 && overlaps(g.lo, g.hi - g.lo, va, len));
+        let statics = self.space.guest.iter().any(|g| {
+            g.handle != 0
+                && !self.tiled.contains(&(g.lo, g.hi))
+                && overlaps(g.lo, g.hi - g.lo, va, len)
+        });
         if self.refuse_reserve
             || self.refuse_reserve_over.is_some_and(|m| len > m)
             || self.ext_hit(0)
@@ -558,7 +712,11 @@ impl SimRm {
             return Err(format!("reserve {va:#x}+{len:#x}: NV_ERR_NO_MEMORY"));
         }
         let (lo, hi) = if self.reserve_rounds {
-            let a = reserve_align(len);
+            let a = if big_forced {
+                0x1_0000
+            } else {
+                reserve_align(len)
+            };
             let lo = va / a * a;
             (lo, lo + len.div_ceil(a) * a)
         } else {
@@ -567,11 +725,11 @@ impl SimRm {
         // The ROUNDED block must be free too (RM refuses on any overlap).
         if (lo, hi) != (va, va + len)
             && (self.block_overlaps(lo, hi - lo)
-                || self
-                    .space
-                    .guest
-                    .iter()
-                    .any(|g| g.handle != 0 && overlaps(g.lo, g.hi - g.lo, lo, hi - lo)))
+                || self.space.guest.iter().any(|g| {
+                    g.handle != 0
+                        && !self.tiled.contains(&(g.lo, g.hi))
+                        && overlaps(g.lo, g.hi - g.lo, lo, hi - lo)
+                }))
         {
             return Err(format!(
                 "reserve {va:#x}+{len:#x}: NV_ERR_NO_MEMORY (rounded block {lo:#x}..{hi:#x} is occupied)"
@@ -597,6 +755,43 @@ impl SimRm {
             STORE_OBJ | FOREIGN_OBJ => (false, o),
             h => *self.objs.get(&h)?.get(usize::try_from(o / P).ok()?)?,
         })
+    }
+
+    /// ★ 2026-11-18 (sparse residency RCA): what the host MMU finds at `va` in this space — a mirror
+    /// translation, or for an unmapped VA the state host RM leaves there. ogkm-580
+    /// `gpu_vaspace.c:1577-1600` ("VA reserved as sparse is sparsified immediately, changing its
+    /// unmapped state from invalid to zero") and `2279-2289` (an unmap inside a sparse block
+    /// "return[s] back to Sparse", else "plain old unmap"): an unmapped VA is [`HostPte::Sparse`]
+    /// exactly when a reservation allocated with `NVOS32_ALLOC_FLAGS_SPARSE` contains it. Every
+    /// static guest range is reserved with [`SimRm::fill`]'s `reserve_flags()` and every micro
+    /// reservation with [`kf_host::channel::NVOS32_RESERVE_FLAGS`], as in production, so the model
+    /// reads production's flags rather than a copy of them.
+    #[must_use]
+    pub fn host_pte(&self, va: u64) -> HostPte {
+        if let Some(b) = self.translate(va, Owner::Mirror) {
+            return HostPte::Mapped(b);
+        }
+        // A static guest range takes the VM's fill; a micro reservation the plain flags (production:
+        // `alloc_vaspace_with` vs `HostRm::reserve_va`).
+        let flags = if self.space.guest.iter().any(|g| {
+            g.handle != 0 && !self.tiled.contains(&(g.lo, g.hi)) && g.lo <= va && va < g.hi
+        }) {
+            Some(self.fill.reserve_flags())
+        } else if let Some((h, _)) = self.resv.iter().find(|&(_, &(lo, hi))| lo <= va && va < hi) {
+            // ★ 2026-11-18 (option C2): a tiling block keeps the base it was reserved with.
+            Some(if self.sparse_resv.contains(h) {
+                kf_host::channel::NVOS32_RESERVE_FLAGS | kf_host::channel::NVOS32_ALLOC_FLAGS_SPARSE
+            } else {
+                kf_host::channel::NVOS32_RESERVE_FLAGS
+            })
+        } else {
+            None
+        };
+        if flags.is_some_and(|f| f & kf_host::channel::NVOS32_ALLOC_FLAGS_SPARSE != 0) {
+            HostPte::Sparse
+        } else {
+            HostPte::Invalid
+        }
     }
 
     /// Mirror mappings whose PTEs are gone while RM still lists them.
@@ -685,6 +880,9 @@ impl SpaceVerbs for &Sim {
             return Err(format!("map {:#x}+{:#x}: refused (injected)", d.va, d.len));
         }
         let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
+        if self.in_tiling(d.va, d.len) {
+            return self.tiled_map(d.va, d.len, obj, d.off);
+        }
         match self
             .0
             .borrow_mut()
@@ -698,6 +896,9 @@ impl SpaceVerbs for &Sim {
     fn map_sked_row(&self, s: &SkedRow, _defer: bool) -> Result<Mapped, String> {
         if self.0.borrow_mut().ext_hit(2) {
             return Err(format!("map SKED {:#x}: refused (injected)", s.va));
+        }
+        if self.in_tiling(s.va, s.len) {
+            return self.tiled_map(s.va, s.len, STORE_OBJ, s.off);
         }
         match self
             .0
@@ -715,8 +916,17 @@ impl SpaceVerbs for &Sim {
         rows: &[Desired],
         _defer: bool,
     ) -> Result<u32, String> {
+        let (h, va, len) = self.0.borrow_mut().stitch(rows)?;
+        if self.in_tiling(va, len) {
+            return match self.tiled_map(va, len, h, 0) {
+                Ok(_) => Ok(h),
+                Err(e) => {
+                    let _ = self.0.borrow_mut().free(h);
+                    Err(e)
+                }
+            };
+        }
         let mut rm = self.0.borrow_mut();
-        let (h, va, len) = rm.stitch(rows)?;
         match rm.map(va, len, h, 0, Owner::Mirror) {
             Ok(()) => Ok(h),
             Err(_) => {
@@ -726,18 +936,24 @@ impl SpaceVerbs for &Sim {
         }
     }
     fn unmap_whole(&self, va: u64, _defer: bool) -> Result<(), String> {
-        let mut rm = self.0.borrow_mut();
-        if rm.inject_unmap().is_some() {
+        if self.0.borrow_mut().inject_unmap().is_some() {
             return Err(format!("unmap {va:#x}: refused (injected)"));
         }
+        if self.in_tiling(va, 1) {
+            return self.tiled_unmap(va, None, false);
+        }
+        let mut rm = self.0.borrow_mut();
         let h = rm.space.dma_for(va, 1).map_err(|e| format!("{e:?}"))?;
         rm.unmap_whole_in(h, va, true)
     }
     fn unmap_row(&self, va: u64, len: u64, _defer: bool) -> Result<(), String> {
-        let mut rm = self.0.borrow_mut();
-        if rm.inject_unmap().is_some() {
+        if self.0.borrow_mut().inject_unmap().is_some() {
             return Err(format!("unmap row {va:#x}: refused (injected)"));
         }
+        if self.in_tiling(va, len) {
+            return self.tiled_unmap(va, Some(len), false);
+        }
+        let mut rm = self.0.borrow_mut();
         let mut first = Ok(());
         for (h, pv, _) in rm.pieces(va, len)? {
             if let Err(e) = rm.unmap_whole_in(h, pv, true) {
@@ -762,8 +978,13 @@ impl SpaceVerbs for &Sim {
             })
             .count() as u64;
         rm.gap_bytes += gap * P;
-        for (h, pv, pl) in rm.pieces(va, len)? {
-            rm.unmap_range_in(h, pv, pv + pl, true);
+        if self.in_tiling(va, len) {
+            drop(rm);
+            self.tiled_unmap(va, Some(len), true)?;
+        } else {
+            for (h, pv, pl) in rm.pieces(va, len)? {
+                rm.unmap_range_in(h, pv, pv + pl, true);
+            }
         }
         if injected == Some(true) {
             return Err(format!(
@@ -771,6 +992,28 @@ impl SpaceVerbs for &Sim {
             ));
         }
         Ok(())
+    }
+    fn set_guest_bases(&self, wishes: &[(u64, u64, bool)]) -> Result<(), String> {
+        let mut tg = self.1.borrow_mut();
+        let t = tg.as_mut().ok_or(crate::ledger::NO_EXACT_TILING)?;
+        let w: Vec<(u64, u64, kf_host::tiling::Base)> = wishes
+            .iter()
+            .map(|&(va, len, sp)| {
+                let base = if sp {
+                    kf_host::tiling::Base::Sparse
+                } else {
+                    kf_host::tiling::Base::Invalid
+                };
+                (va, len, base)
+            })
+            .collect();
+        t.set_bases(&SimTiles(self), &w)
+            .map_err(|e| format!("SPARSE runs: {e:?}"))
+    }
+    fn begin_tiling_batch(&self) {
+        if let Some(t) = self.1.borrow_mut().as_mut() {
+            t.begin_batch(&SimTiles(self));
+        }
     }
     fn free(&self, handle: u32) -> Result<(), String> {
         self.0.borrow_mut().free(handle)
@@ -985,6 +1228,9 @@ impl MapTarget for SimMirror<'_> {
     fn begin_refresh(&self) {
         self.bv.begin_refresh();
     }
+    fn set_guest_bases(&self, wishes: &[(u64, u64, bool)]) -> Result<(), String> {
+        self.bv.set_guest_bases(wishes)
+    }
 }
 
 /// `GpuMirror`'s `cut_rows` over the model's `va → len` rows: rows wholly inside `[va, end)` go,
@@ -1091,6 +1337,7 @@ pub fn map_run(va: u64, len: u64, ram: bool, off: u64, read_only: bool) -> DiffR
         },
         privileged: false,
         leaf: 0,
+        sparse: false,
     }
 }
 
@@ -1116,7 +1363,7 @@ pub fn unmap_run(va: u64, c: &Committed) -> DiffRun {
 fn backing_of(c: &BTreeMap<u64, Committed>, p: u64) -> Option<(bool, u64, bool, u8)> {
     c.range(..=p)
         .next_back()
-        .filter(|&(&v, x)| p < v + x.len && !x.held)
+        .filter(|&(&v, x)| p < v + x.len && !x.held && !x.run.sparse)
         .map(|(&v, x)| (x.ram, x.off + (p - v), x.run.perm.read_only, x.run.kind))
 }
 
@@ -1161,7 +1408,7 @@ pub fn apply_and_commit(
         let rm = m.sim().0.borrow();
         let guard: Vec<(u64, Backing)> = committed
             .iter()
-            .filter(|(_, c)| !c.held)
+            .filter(|(_, c)| !c.held && !c.run.sparse)
             .flat_map(|(&v, c)| (0..c.len / P).map(move |i| v + i * P))
             .filter(|&p| backing_of(committed, p) == backing_of(&after, p))
             .filter_map(|p| backing_of(committed, p).map(|(r, o, ..)| (p, (r, o))))
@@ -1290,7 +1537,7 @@ pub fn check(
         let want = committed
             .range(..=p)
             .next_back()
-            .filter(|&(&v, c)| p < v + c.len && !c.held)
+            .filter(|&(&v, c)| p < v + c.len && !c.held && !c.run.sparse)
             .map(|(&v, c)| (c.ram, c.off + (p - v)));
         let got = rm.translate(p, Owner::Mirror);
         if want != got {
@@ -1306,6 +1553,12 @@ pub fn check(
 #[cfg(test)]
 mod adversarial;
 #[cfg(test)]
+mod exact;
+#[cfg(test)]
 mod fuzz;
 #[cfg(test)]
+mod sparse;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tiling;

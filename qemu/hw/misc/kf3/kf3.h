@@ -79,7 +79,17 @@
 /* 34 (2026-11-17, claude/util-flag-20261117, docs/design/V3_UTILIZATION_FLAG.md): kf3_realize gains report_utilization
  * (the report-utilization property: 1 = on, the default; 0 = no GPU utilisation shown to the guest, no host call) after
  * windows_support. */
-#define KF3_ABI 34
+/* 35 (2026-11-18, claude/sparse-zero-fill-20261118, docs/design/V3_SPARSE_RESIDENCY_RCA.md): kf3_realize gains
+ * unmapped_reads_zero (the unmapped-reads-zero property: 0 = off, the default; 1 = unmapped guest VAs read
+ * zero on the host) after windows_support. 34 is taken by an unmerged branch (claude/util-flag-20261117). */
+/* 36 (2026-11-18, claude/sparse-zero-default-20261118): unmapped_reads_zero becomes three-valued: 0 = off,
+ * 1 = on, 2 = auto (the default: zero for a Windows-profile guest's spaces only); anything else refuses realize. */
+/* 37 (2026-11-18, claude/sparse-c2-wire-20261118, docs/design/V3_SPARSE_RESIDENCY_RCA.md 8.9): kf3_realize gains
+ * exact_sparse (the exact-sparse property: 0 = off, the default; 1 = the guest ranges are tiled exactly, so a
+ * guest SPARSE range reads zero and every other unmapped guest VA still faults) after unmapped_reads_zero. */
+/* (merge 2026-11-18, claude/hw-confirm-tree-20261118: 34 report_utilization comes first; unmapped_reads_zero and
+ * exact_sparse follow it.) */
+#define KF3_ABI 37
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -185,7 +195,7 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
                     uint32_t display_max_fps, const char *gop_efi,
-                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, uint32_t windows_support, uint32_t report_utilization, void **out,
+                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, uint32_t windows_support, uint32_t report_utilization, uint32_t unmapped_reads_zero, uint32_t exact_sparse, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

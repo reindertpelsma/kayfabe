@@ -82,7 +82,17 @@ use std::os::unix::ffi::OsStrExt as _;
 /// 34 (2026-11-17, `claude/util-flag-20261117`, `docs/design/V3_UTILIZATION_FLAG.md`): `kf3_realize` gains
 /// `report_utilization` (the `report-utilization` property; 1 = on, the default; 0 = off: no utilisation is shown to the
 /// guest and no host call is made) after `windows_support`.
-pub const KF3_ABI: u32 = 34;
+/// 35 (2026-11-18, `claude/sparse-zero-fill-20261118`, `docs/design/V3_SPARSE_RESIDENCY_RCA.md`): `kf3_realize`
+/// gains `unmapped_reads_zero` (the `unmapped-reads-zero` property; 0 = off, the default; 1 = unmapped
+/// guest VAs read zero on the host) after `windows_support`. 34 is taken by an unmerged branch
+/// (`claude/util-flag-20261117`, `report_utilization`); a merge with it puts this argument after that one.
+/// 36 (2026-11-18, `claude/sparse-zero-default-20261118`): `unmapped_reads_zero` becomes three-valued
+/// (0 = off, 1 = on, 2 = auto, the new default: ZERO for a Windows-profile guest's spaces only); any
+/// other value refuses realize by name.
+/// 37 (2026-11-18, `claude/sparse-c2-wire-20261118`, `V3_SPARSE_RESIDENCY_RCA.md` §8.9): `kf3_realize` gains
+/// `exact_sparse` (the `exact-sparse` property; 0 = off, the default; 1 = exact tiling of the guest ranges)
+/// after `unmapped_reads_zero`; any other value refuses realize by name.
+pub const KF3_ABI: u32 = 37;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -264,6 +274,8 @@ pub unsafe extern "C" fn kf3_realize(
     user_view_keep: u32,
     windows_support: u32,
     report_utilization: u32,
+    unmapped_reads_zero: u32,
+    exact_sparse: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -309,6 +321,27 @@ pub unsafe extern "C" fn kf3_realize(
         channel_budget,
         windows_support: windows_support != 0,
         report_utilization: report_utilization != 0,
+        unmapped_reads_zero: match unmapped_reads_zero {
+            0 => kf_host::channel::GuestVaFillPolicy::Fault,
+            1 => kf_host::channel::GuestVaFillPolicy::Zero,
+            2 => kf_host::channel::GuestVaFillPolicy::ByProfile,
+            other => {
+                err.write(&format!(
+                    "unmapped-reads-zero: ABI value {other} is none of 0 (off), 1 (on), 2 (auto)"
+                ));
+                return -1;
+            }
+        },
+        exact_sparse: match exact_sparse {
+            0 => false,
+            1 => true,
+            other => {
+                err.write(&format!(
+                    "exact-sparse: ABI value {other} is neither 0 (off) nor 1 (on)"
+                ));
+                return -1;
+            }
+        },
     };
     crate::userstore::configure(user_view_keep);
     // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).

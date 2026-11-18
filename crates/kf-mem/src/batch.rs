@@ -99,6 +99,17 @@ pub trait SpaceVerbs {
     /// # Errors
     /// The host's refusal, by name.
     fn unmap_in(&self, h: u32, va: u64, size: u64, defer: bool) -> Result<(), String>;
+    /// ★ 2026-11-18 (C2): SPARSE wishes for this space's exact tiling (`MapTarget::set_guest_bases`).
+    ///
+    /// # Errors
+    /// The refusal, by name ([`crate::ledger::NO_EXACT_TILING`] by default).
+    fn set_guest_bases(&self, wishes: &[(u64, u64, bool)]) -> Result<(), String> {
+        let _ = wishes;
+        Err(crate::ledger::NO_EXACT_TILING.into())
+    }
+    /// ★ 2026-11-18 (C2): a new walk batch: renew the exact tiling's host-call budget and retry
+    /// what was cut (S2 first). Default: no tiling.
+    fn begin_tiling_batch(&self) {}
 }
 
 impl SpaceVerbs for HostVas<'_> {
@@ -184,6 +195,14 @@ impl SpaceVerbs for HostVas<'_> {
         defer: bool,
     ) -> Result<u32, String> {
         HostVas::map_scattered_through(self, Some(h), ram_fd, rows, defer)
+    }
+    fn set_guest_bases(&self, wishes: &[(u64, u64, bool)]) -> Result<(), String> {
+        self.rm
+            .tiling_set_bases(self.space.space, wishes)
+            .map_err(|e| format!("SPARSE runs: {e:?}"))
+    }
+    fn begin_tiling_batch(&self) {
+        self.rm.tiling_begin_batch(self.space.space);
     }
     fn unmap_in(&self, h: u32, va: u64, size: u64, defer: bool) -> Result<(), String> {
         self.rm
@@ -1508,6 +1527,16 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         self.refresh_armed.store(true, Relaxed);
         self.placed_spent.store(0, Relaxed);
         self.amp_spent.store(0, Relaxed);
+        // ★ 2026-11-18 (C2): the exact tiling's per-batch budget (VA-manager thread).
+        self.vas.begin_tiling_batch();
+    }
+
+    /// ★ 2026-11-18 (C2): SPARSE wishes for the space's exact tiling ([`SpaceVerbs::set_guest_bases`]).
+    ///
+    /// # Errors
+    /// The refusal, by name.
+    pub fn set_guest_bases(&self, wishes: &[(u64, u64, bool)]) -> Result<(), String> {
+        self.vas.set_guest_bases(wishes)
     }
 
     /// ★ Review item 4: spend `placed` placement calls, `amplified` of them beyond one per guest
