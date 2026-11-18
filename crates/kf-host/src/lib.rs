@@ -484,10 +484,10 @@ pub struct HostRm {
     /// ★ H0: what the host `nvidia.ko` reports about the kayfabe patch tier (`tier.rs`). Logged at
     /// bring-up; read by no behaviour yet.
     tier: tier::HostTier,
-    /// ★ 2026-11-18: what an unmapped VA of the static guest ranges reads as in every mirror space
-    /// allocated after it is set ([`channel::GuestVaFill`]; the `unmapped-reads-zero` property).
-    /// `false` = [`channel::GuestVaFill::Fault`], the default.
-    guest_va_zero: std::sync::atomic::AtomicBool,
+    /// ★ 2026-11-18: the policy that picks what an unmapped VA of the static guest ranges reads as in
+    /// every mirror space allocated after it is set ([`channel::GuestVaFillPolicy`] as its byte; the
+    /// `unmapped-reads-zero` property). 0 = [`channel::GuestVaFillPolicy::Fault`], the unset default.
+    guest_va_fill_policy: std::sync::atomic::AtomicU8,
 }
 
 impl HostRm {
@@ -583,7 +583,7 @@ impl HostRm {
                 display_slots: BTreeMap::new(),
             }),
             cpu_maps: std::sync::atomic::AtomicU64::new(0),
-            guest_va_zero: std::sync::atomic::AtomicBool::new(false),
+            guest_va_fill_policy: std::sync::atomic::AtomicU8::new(0),
             views: Default::default(),
             // Filled in below, once there is a subdevice to parent it to.
             usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-"""Mutation harness for the `unmapped-reads-zero` property (STATUS: LIVE, 2026-11-18;
-docs/design/V3_SPARSE_RESIDENCY_RCA.md): kf_host::channel::GuestVaFill and guest_range_plan,
-kf_qemu::device::Config::guest_va_fill, and the kf-mem host model's S1/S2 tests.
+"""Mutation harness for the `unmapped-reads-zero` property (STATUS: LIVE, 2026-11-18, updated for the `auto` default;
+docs/design/V3_SPARSE_RESIDENCY_RCA.md): kf_host::channel::GuestVaFill, GuestVaFillPolicy and guest_range_plan,
+kf_qemu::device::Config::guest_va_fill_policy, and the kf-mem host model's S1/S2 tests.
 
 Each mutant is a one-site edit of production code; each must be killed by at least two independently named
 failing tests. A compile error is not a kill. Every file touched is overwritten in place and ALWAYS restored
 (also on an interrupt). NOT covered GPU-free (needs host RM): alloc_vaspace_with passing the plan's flags to
-reserve_va_flags, and Device::realize calling set_guest_va_fill; the box run's log line and verdict cover them.
+reserve_va_flags, and Device::realize calling set_guest_va_fill_policy; the box run's log line and verdict cover them.
 Run: python3 scripts/ci/sparse_fill_mutants.py [CASE ...]   (exit 0 only if no mutant is weak)
 """
 
@@ -41,8 +41,12 @@ CASES = [
     ("default-fill-is-zero", ed(CH, "    #[default]\n    Fault,\n    /// SPARSE", "    Fault,\n    #[default]\n    /// SPARSE"), HOST + MEM),
     ("plan-ignores-the-fill", ed(CH, "    let flags = fill.reserve_flags();\n    GUEST_VA_RANGES", "    let flags = { let _ = fill; NVOS32_RESERVE_FLAGS };\n    GUEST_VA_RANGES"), HOST),
     ("plan-drops-the-low-range", ed(CH, "        .chain(start.low_range())\n        .map(move |(lo, hi)| (lo, hi, flags))", "        .map(move |(lo, hi)| (lo, hi, flags))"), HOST),
-    ("config-ignores-the-property", ed(DEV, "        if self.unmapped_reads_zero {\n            kf_host::channel::GuestVaFill::Zero", "        if false && self.unmapped_reads_zero {\n            kf_host::channel::GuestVaFill::Zero"), QEMU),
-    ("config-always-zero", ed(DEV, "        if self.unmapped_reads_zero {\n            kf_host::channel::GuestVaFill::Zero", "        if true || self.unmapped_reads_zero {\n            kf_host::channel::GuestVaFill::Zero"), QEMU),
+    ("auto-zeroes-linux", ed(CH, "(Self::Zero, _) | (Self::ByProfile, MirrorVaStart::GuestFloor) => GuestVaFill::Zero,\n            (Self::Fault, _) | (Self::ByProfile, MirrorVaStart::HostDefault) => GuestVaFill::Fault,", "(Self::Zero, _) | (Self::ByProfile, _) => GuestVaFill::Zero,\n            (Self::Fault, _) => GuestVaFill::Fault,"), HOST + QEMU),
+    ("auto-faults-windows", ed(CH, "(Self::Zero, _) | (Self::ByProfile, MirrorVaStart::GuestFloor) => GuestVaFill::Zero,\n            (Self::Fault, _) | (Self::ByProfile, MirrorVaStart::HostDefault) => GuestVaFill::Fault,", "(Self::Zero, _) => GuestVaFill::Zero,\n            (Self::Fault, _) | (Self::ByProfile, _) => GuestVaFill::Fault,"), HOST + QEMU),
+    ("unset-policy-is-auto", ed(CH, "    #[default]\n    Fault,\n    /// ZERO everywhere (`unmapped-reads-zero=on`).\n    Zero,\n    /// ZERO for Windows-profile spaces, FAULT otherwise (`unmapped-reads-zero=auto`, kf3's default).\n    ByProfile,", "    Fault,\n    /// ZERO everywhere (`unmapped-reads-zero=on`).\n    Zero,\n    /// ZERO for Windows-profile spaces, FAULT otherwise (`unmapped-reads-zero=auto`, kf3's default).\n    #[default]\n    ByProfile,"), HOST),
+    ("policy-byte-loses-zero", ed(CH, "            1 => Self::Zero,\n", "            1 => Self::Fault,\n"), HOST),
+    ("config-default-off", ed(DEV, "            unmapped_reads_zero: kf_host::channel::GuestVaFillPolicy::ByProfile,\n        }", "            unmapped_reads_zero: kf_host::channel::GuestVaFillPolicy::Fault,\n        }"), QEMU),
+    ("config-ignores-the-property", ed(DEV, "    pub const fn guest_va_fill_policy(&self) -> kf_host::channel::GuestVaFillPolicy {\n        self.unmapped_reads_zero\n", "    pub const fn guest_va_fill_policy(&self) -> kf_host::channel::GuestVaFillPolicy {\n        let _ = self.unmapped_reads_zero;\n        kf_host::channel::GuestVaFillPolicy::ByProfile\n"), QEMU),
 ]
 
 

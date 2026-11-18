@@ -26,7 +26,7 @@ fn config(gpu_uuid: Option<&str>, vm_id: Option<&str>, devfn: u32) -> Config {
         vm_id: vm_id.map(str::to_owned),
         pci_devfn: devfn,
         windows_support: true,
-        unmapped_reads_zero: false,
+        unmapped_reads_zero: kf_host::channel::GuestVaFillPolicy::ByProfile,
         channel_budget: 0,
     }
 }
