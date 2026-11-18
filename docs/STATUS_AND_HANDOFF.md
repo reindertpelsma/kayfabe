@@ -12,6 +12,14 @@
 6. The documents map: [`README.md`](README.md) (current documents versus history).
 
 
+## UPDATE 2026-11-18 — a new blank Windows 11 + NVIDIA base image is sealed on the pc (the layer under later proprietary applications)
+
+Branch `claude/win11-base-image-20261117`, PRs against `next` (#481 `propimage_check --apps none`, #482 `propimage tools --unattended`, plus this document and its traces). Design, hypotheses, results and open items: [`design/V3_WINDOWS_BASE_IMAGE.md`](design/V3_WINDOWS_BASE_IMAGE.md); text evidence: `traces/win11_base_20261117/README.md`.
+- MEASURED (pc, RTX 4070, kf3 `6bfa2dbc2` = `next` with #438): Windows 11 Pro 25H2 installed unattended and offline (9.5 min to SSH), NVIDIA 580.88 Code 0 with the seed GPU UUID and NO env file, Code 0 again after an in-guest restart, sealed at 11.1 GB, two offline throwaway clones pass the harness (power, GPU, identity, clock window, no route out), census Xid 0. The whole build took 34 minutes.
+- The PR #431 question, MEASURED: no `KF3_*` environment is needed any more; `guest-driver=580.65.06` is STILL required (a plain `win_vm.sh run` ends in Code 43; an unset `guest-driver=` defaults to the host's driver version); `gpu-uuid=` is needed only for a stable identity. #431 is DIRTY and red; its env-file part is obsolete after #438.
+- Guest `nvidia-smi` prints `[N/A]` or 0 for temperature, fan, power, clocks, P-state and utilisation where the host has numbers (utilisation is #459).
+- Owed: back up the sealed image from the pc (the pc is the only copy), the owner's answer on the NVIDIA-in-images ruling scope (document, section 9), a hardware run of `win_vm.sh run` after the `guest-driver` default.
+
 ## UPDATE 2026-11-15 — engines with no derived method table are not offered to a Windows guest (flag, default off; not run on hardware)
 
 Branch `claude/hide-untabled-classes-20261115`, draft PR against `next`. Design, rule and falsifier:

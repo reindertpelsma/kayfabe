@@ -1,0 +1,2 @@
+PNP name='NVIDIA GeForce RTX 4070' status=OK problem=CM_PROB_NONE code=0
+NVIDIA GeForce RTX 4070, <gpu_uuid>, 580.88

@@ -1,0 +1,2 @@
+name, driver_version, memory.total [MiB], memory.used [MiB], temperature.gpu, fan.speed [%], power.draw [W], power.limit [W], clocks.current.sm [MHz], clocks.current.memory [MHz], utilization.gpu [%], utilization.memory [%], pstate, pcie.link.gen.current
+NVIDIA GeForce RTX 4070, 595.91.07, 12282 MiB, 5180 MiB, 44, 0 %, 36.44 W, 200.00 W, 2490 MHz, 10251 MHz, 0 %, 0 %, P2, 4

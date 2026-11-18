@@ -1,0 +1,27 @@
+2026-11-18T00:24:13+0100 media: sha256 of the Windows ISO
+2026-11-18T00:24:27+0100 media: copy virtio-win.iso from image B's media (read) and verify
+2026-11-18T00:24:30+0100 media: download the NVIDIA 580.88 installer from NVIDIA's official host and verify the pin
+2026-11-18T00:24:55+0100 media: NVIDIA installer sha256 90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 == the repo pin (size 890807536)
+2026-11-18T00:24:55+0100 seed generated (not logged); derived ids share nothing with images A and B; ssh port <ssh_port> free
+2026-11-18T00:24:55+0100 state.json written; computer name <computer_name>
+2026-11-18T00:24:57+0100 tools.iso built: 580.88-desktop-win10-win11-64bit-international-dch-whql.exe, OpenSSH-Win64-v10.0.0.0.msi, autounattend.xml, setup_ssh.ps1
+2026-11-18T00:24:58+0100 swtpm manufactured: ['.lock', 'tpm2-00.permall']
+2026-11-18T00:24:58+0100 PREPARE DONE
+2026-11-18T00:25:28+0100 START setup (headless, restrict=on) qemu pid 33234
+2026-11-18T00:27:57+0100 ATTACH to qemu pid 33234
+2026-11-18T00:27:57+0100 product key page detected (attempt 1): Tab x1, Enter
+2026-11-18T00:34:59+0100 SSH UP after 420 s
+2026-11-18T00:35:15+0100 post: first probe (propimage.py GUEST_PS)
+2026-11-18T00:35:23+0100 post: ids as the guest sees them: smbios_uuid=MATCH; smbios_serial=MATCH; baseboard_serial=MATCH; chassis_serial=MATCH; mac=MATCH; disk_serial=MATCH
+2026-11-18T00:35:41+0100 post: facts: computer=<computer_name> edition=Professional build=26200.8037 license_status=5 secure_boot=True tpm_present=True problem_devices=0 internet=False dns=FAILED
+2026-11-18T00:35:43+0100 post: DWM OverlayTestMode=5 rc=0 The operation completed successfully.
+2026-11-18T00:35:49+0100 post: desktop_prep (autologon): DESKTOP_PREP_DONE fail=0
+2026-11-18T00:35:49+0100 post: restart test (the image must boot from its own disk, ssh back, autologon to a desktop)
+2026-11-18T00:36:33+0100 post: ssh back after 1 s
+2026-11-18T00:36:35+0100 post: signed-in desktop after restart (autologon): <computer_name>\kfimage
+2026-11-18T00:36:39+0100 post: quiesce: 
+2026-11-18T00:36:57+0100 post: after restart: dwm_overlay=5 uptime ok; used_c_gb=23.9 free_c_gb=135
+2026-11-18T00:37:04+0100 post: recorded machine_guid, ek_pub_hash (set), last_time_at_stop_utc=2026-11-17T23:36:58Z, cpu_fingerprint
+2026-11-18T00:37:19+0100 post: guest stopped cleanly; qemu exited
+2026-11-18T00:40:29+0100 fw: sbverify kf-gop.signed.efi against db.crt: rc=0 Signature verification OK
+2026-11-18T00:40:29+0100 fw: OVMF vars written (540672 bytes); db entries mention guid: False

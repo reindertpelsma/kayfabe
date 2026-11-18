@@ -1,0 +1,27 @@
+{
+ "started": "2026-11-17T23:40:40Z",
+ "kf3_env": {
+  "KF3_RPC_TRACE": "1"
+ },
+ "ssh_up_s": 24,
+ "driver_install_s": 66,
+ "first_enable_ok": true,
+ "first_enable_poll_s": 3,
+ "power1_ok": true,
+ "gpu_fix1_ok": true,
+ "restart_ssh_back_s": 1,
+ "restart_gpu_ok": true,
+ "restart_poll_s": 3,
+ "restart_desktop": true,
+ "power2_ok": true,
+ "quiesce": "QUIET after 3 rounds",
+ "census_counts": {
+  "unserviced": 945,
+  "refused": 497
+ },
+ "xid": 0,
+ "dmesg_new_lines": 2,
+ "windows_profile_line_count": 212,
+ "ok": true,
+ "ended": "2026-11-17T23:47:18Z"
+}

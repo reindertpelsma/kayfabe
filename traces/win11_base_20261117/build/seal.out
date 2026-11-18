@@ -1,0 +1,43 @@
+free GB 287.882493952
+resuming from the stopped guest; recorded stop time 2026-11-17T23:46:57Z
++ qemu-img create -q -f qcow2 -b /workspace/pc1/winvm/win11_base/image.qcow2 -F qcow2 /workspace/pc1/winvm/win11_base/runs/trim_20261117T234916Z/trim.qcow2
++ modprobe nbd max_part=16
++ qemu-nbd -c /dev/nbd0 --discard=unmap --detect-zeroes=unmap -f qcow2 /workspace/pc1/winvm/win11_base/runs/trim_20261117T234916Z/trim.qcow2
++ partprobe /dev/nbd0
+nbd0   171798691840 
+nbd0p1    314572800 vfat
+nbd0p2     16777216 
+nbd0p3 170643161088 ntfs
+nbd0p4    821035008 ntfs
+
+C: partition /dev/nbd0p3 170643161088
+ntfswipe is about to wipe:
+	unused disk space
+	file tails
+	unused mft areas
+	unused directory index space
+	the pagefile (swap space)
+	undelete data
+
+ntfswipe will overwrite these areas with: 0x00 
+(however undelete data will be overwritten by random values)
+
+
+ntfswipe will begin in 5 seconds, press CTRL-C to abort.
+
+wipe_directory 0x00, 47850152 bytes
+wipe_tails 0x00, 247565583 bytes
+wipe_mft 0x00, 162791424 bytes
+wipe_pagefile 0x00, 8589934592 bytes
+wipe_unused 0x00, 148777988096 bytes
+wipe_undelete
+157826129847 bytes were wiped (excluding undelete data)
+ 
+trim overlay allocated: 2.5G	/workspace/pc1/winvm/win11_base/runs/trim_20261117T234916Z/trim.qcow2
++ nice -n 10 ionice -c2 -n7 qemu-img convert -c -m 4 -O qcow2 /workspace/pc1/winvm/win11_base/runs/trim_20261117T234916Z/trim.qcow2 /workspace/pc1/winvm/win11_base/sealed/20261117T234916Z/image.qcow2
+convert seconds 191
+2026-11-18T00:57:33+0100 lifecycle row: 4-sealed {"id": "20261117T234916Z", "stop_utc": "2026-11-17T23:46:57Z", "file": "/workspace/pc1/winvm/win11_base/sealed/20261117T234916Z/image.qcow2", "bytes": 11101075456, "sha256": "<sha256-redacted>", "state_sha256": "<truncated>
++ qemu-nbd -r -c /dev/nbd1 -f qcow2 /workspace/pc1/winvm/win11_base/sealed/20261117T234916Z/image.qcow2
+2026-11-18T00:58:42+0100 lifecycle row: 4b-zero-check {"id": "20261117T234916Z", "cluster_size": 4096, "free_clusters": 36322751, "free_bytes": 148777988096, "runs_with_nonzero": 0, "nonzero_bytes": 0}
+ZERO CHECK {"cluster_size": 4096, "free_clusters": 36322751, "free_bytes": 148777988096, "runs_with_nonzero": 0, "nonzero_bytes": 0}
+SEALED 20261117T234916Z trimmed=True bytes=11101075456 stop=2026-11-17T23:46:57Z

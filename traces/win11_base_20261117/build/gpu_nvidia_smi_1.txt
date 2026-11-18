@@ -1,0 +1,143 @@
+Tue Nov 17 23:44:44 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:04.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |     253MiB /   4096MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1424    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            5000    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            5376    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            6056    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
++-----------------------------------------------------------------------------------------+
+
+==============NVSMI LOG==============
+
+Timestamp                                 : Tue Nov 17 23:44:45 2026
+Driver Version                            : 580.88
+CUDA Version                              : 13.0
+
+Attached GPUs                             : 1
+GPU 00000000:00:04.0
+    Product Name                          : NVIDIA GeForce RTX 4070
+    Product Brand                         : GeForce
+    Product Architecture                  : Ada Lovelace
+    Display Mode                          : Requested functionality has been deprecated
+    Display Attached                      : Yes
+    Display Active                        : Enabled
+    Persistence Mode                      : N/A
+    Addressing Mode                       : N/A
+    MIG Mode
+        Current                           : N/A
+        Pending                           : N/A
+    Accounting Mode                       : Disabled
+    Accounting Mode Buffer Size           : 4000
+    Driver Model
+        Current                           : WDDM
+        Pending                           : WDDM
+    Serial Number                         : N/A
+    GPU UUID                              : GPU-<uuid>
+    GPU PDI                               : N/A
+    Minor Number                          : N/A
+    VBIOS Version                         : 95.04.3e.08.be
+    MultiGPU Board                        : No
+    Board ID                              : 0x4
+    Board Part Number                     : N/A
+    GPU Part Number                       : N/A
+    FRU Part Number                       : N/A
+    Platform Info
+        Chassis Serial Number             : N/A
+        Slot Number                       : N/A
+        Tray Index                        : N/A
+        Host ID                           : N/A
+        Peer Type                         : N/A
+        Module Id                         : N/A
+        GPU Fabric GUID                   : N/A
+    Inforom Version
+        Image Version                     : N/A
+        OEM Object                        : N/A
+        ECC Object                        : N/A
+        Power Management Object           : N/A
+    Inforom BBX Object Flush
+        Latest Timestamp                  : Unknown Error
+        Latest Duration                   : Unknown Error
+    GPU Operation Mode
+        Current                           : N/A
+        Pending                           : N/A
+    GPU C2C Mode                          : N/A
+    GPU Virtualization Mode
+        Virtualization Mode               : Pass-Through
+        Host VGPU Mode                    : N/A
+        vGPU Heterogeneous Mode           : N/A
+    GPU Recovery Action                   : None
+    GSP Firmware Version                  : 580.88
+    IBMNPU
+        Relaxed Ordering Mode             : N/A
+    PCI
+        Bus                               : 0x00
+        Device                            : 0x04
+        Domain                            : 0x0000
+        Device Id                         : 0x278610DE
+        Bus Id                            : 00000000:00:04.0
+        Sub System Id                     : 0x40EE1458
+        GPU Link Info
+            PCIe Generation
+                Max                       : 4
+                Current                   : 4
+                Device Current            : 4
+                Device Max                : 4
+                Host Max                  : N/A
+            Link Width
+                Max                       : 16x
+                Current                   : Unknown Error
+        Bridge Chip
+            Type                          : N/A
+            Firmware                      : N/A
+        Replays Since Reset               : N/A
+        Replay Number Rollovers           : N/A
+        Tx Throughput                     : N/A
+        Rx Throughput                     : N/A
+        Atomic Caps Outbound              : N/A
+        Atomic Caps Inbound               : N/A
+    Fan Speed                             : N/A
+    Performance State                     : N/A
+    Clocks Event Reasons                  : N/A
+    Clocks Event Reasons Counters
+        SW Power Capping                  : N/A
+        Sync Boost                        : N/A
+        SW Thermal Slowdown               : N/A
+        HW Thermal Slowdown               : N/A
+        HW Power Braking                  : N/A
+    Sparse Operation Mode                 : N/A
+    FB Memory Usage
+        Total                             : 4096 MiB
+        Reserved                          : 349 MiB
+        Used                              : 253 MiB
+        Free                              : 3495 MiB
+    BAR1 Memory Usage
+        Total                             : 128 MiB
+        Used                              : 100 MiB
+        Free                              : 28 MiB
+    Conf Compute Protected Memory Usage
+        Total                             : N/A
+        Used                              : N/A
+        Free                              : N/A
+    Compute Mode                          : Default
+    Utilization
+        GPU                               : N/A
+        Memory                            : N/A
+        Encoder                           : N/A
+        Decoder                           : N/A
+        JPEG                              : N/A
+        OFA                               : N/A
