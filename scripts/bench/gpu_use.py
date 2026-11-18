@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Shared GPU-use judge for application rows that CAN run on the CPU (stdlib only).
 
-STATUS: LIVE, 2026-11-17 (owner requirement of 2026-11-17: a row that passes because the application silently fell back to the CPU is a
-false pass). GPU-free: parsing, judging and the negative controls are tested against committed fixture logs in scripts/ci/test_gpu_use.py and
-mutated by scripts/ci/gpu_use_mutants.py. NOT run on hardware when this line was written: the validation request is section 6 of
-docs/design/V3_GPU_USE_ASSERTION.md, and every threshold below marked UNCALIBRATED is an inference until that run.
+STATUS: LIVE, 2026-11-18 (owner requirement of 2026-11-17: a row that passes because the application silently fell back to the CPU is a
+false pass; 2026-11-18: under kf3 the host census is the PRIMARY proof, the host engine and memory readings are recorded as facts when the census proved the use
+(`judge(..., census_primary=True)`, `proved_by`, `host_readings`; docs/design/V3_GPU_USE_ASSERTION.md section 10.1)). GPU-free: parsing, judging and the negative
+controls are tested against committed fixture logs in scripts/ci/test_gpu_use.py and mutated by scripts/ci/gpu_use_mutants.py. The 2026-11-17 first hardware run
+(section 10.2) and the 2026-11-18 one (section 10.1) calibrated what they name; every threshold below marked UNCALIBRATED is an inference until a run says otherwise.
 
     verdict = judge(name, census=window_census(lines, base_line), smi=smi_record(query_csv, dmon_txt, ("gpu",)), app=PROOFS["blender"](log, devs=(...)),
                     need_census=True, need_engines=("gpu",), side="guest")
@@ -30,6 +31,14 @@ Rules (never weakened to pass; a row that cannot be judged says why and is NOT_R
   PASS    every required observable holds. With no host observable available (the bare-metal baseline) the record says authority=guest.
 A negative control (the same row with the GPU hidden or the application's own CPU switch) must be judged FAIL: control_verdict() says CONTROL_OK
 when it was and CONTROL_BROKEN when the judge passed a CPU run.
+
+Census primary (2026-11-18, opt-in per caller; the owner rule of 2026-11-17 puts the host census first). MEASURED on a 4090 box: five MATLAB rows failed on two host
+nvidia-smi readings (utilisation peak 2.0 because ms-long kernels fall between 1 s samples; host memory flat because the declared fb-mb carve-out is reserved at launch,
+INFERRED) while the census counted GPU work for every row. With `census_primary=True` and `side="guest"` a census that PROVES the use (PASS) decides: an engine or
+memory reading that says idle or flat is kept as a FACT (`readings`, a `[host-smi] FACT` reason) and does not fail the row. The census wins in BOTH directions: a census
+that shows no work fails the row whatever nvidia-smi shows. Everything else is unchanged: an unreadable census is NOT_RUN and then the readings still decide, an
+unreadable sampler is NOT_RUN, the application proof can only add a failure, and a caller without a census (the bare-metal baseline, `need_census=False`) keeps the engine
+and memory checks. `proved_by` names the observable that proved a PASS: "census", else "engine", else "memory", else None.
 """
 import importlib.util
 import re
@@ -53,6 +62,11 @@ def _text(value):
 
 
 # ------------------------------------------------------------------------------------------------ the kf3 host log (host-authored)
+PROVED_BY = ("census", "engine", "memory")          # the observables that can prove a use, in the order of authority (owner rule 2026-11-17: census first)
+ENGINE_OBSERVABLE = {"gpu": "engine", "enc": "engine", "dec": "engine", "mem": "memory"}      # the proved_by name each host reading carries
+CENSUS_PRIMARY_REASON = ("the census proved the use; the reading is recorded as a fact and does not decide "
+                         "(docs/design/V3_GPU_USE_ASSERTION.md section 10.1)")
+
 STATUS_RX = re.compile(r"kf3: family=\S+ phase=(\S+)")
 BIRTHS_RX = re.compile(r"\bchan\[births=(\d+)")
 TOKENS_RX = re.compile(r"\btokens=\[([^\]]*)\]")
@@ -190,10 +204,35 @@ def smi_record(query_text, dmon_text, require, **thresholds):
     """The host's nvidia-smi samples of the row's window -> the gpu_assert.evaluate record (source host) plus `unreadable`: no sample at all is a
     sampler problem (NOT_RUN here), never a pass and never a statement about the guest."""
     ga = gpu_assert()
-    rec = ga.evaluate(ga.parse_query_csv(_text(query_text)), ga.parse_dmon(_text(dmon_text)), tuple(require), **thresholds)
+    q, d = ga.parse_query_csv(_text(query_text)), ga.parse_dmon(_text(dmon_text))
+    rec = ga.evaluate(q, d, tuple(require), **thresholds)
     rec["source"] = "host"
     rec["unreadable"] = bool(require) and rec.get("samples", 0) == 0 and rec.get("dmon_samples", 0) == 0
+    rec["readings"] = host_readings(q, d, tuple(require), **thresholds)
     return rec
+
+
+def host_readings(query_rows, dmon_rows, require=(), **thresholds):
+    """The host nvidia-smi samples as FACTS, whether or not a reading was required: the engine (utilisation) and the memory reading each say whether the shared
+    threshold was met and with which numbers (the same gpu_assert.evaluate that judges them, one observable at a time, so a fact and a verdict never disagree about a
+    threshold). `required` says whether the caller asked it to decide. -> {unreadable, engine, memory[, encoder, decoder]}; no sample at all is {"unreadable": True}
+    (an unreadable GPU is not an idle one)."""
+    ga = gpu_assert()
+    if not any(r["gpu"] is not None or r["mem_mb"] is not None for r in query_rows) and not dmon_rows:
+        return {"unreadable": True}
+    eng, mem = ga.evaluate(query_rows, dmon_rows, ("gpu",), **thresholds), ga.evaluate(query_rows, dmon_rows, ("mem",), **thresholds)
+    peak, base = eng["peak"], eng["baseline"]
+    rise = None if peak["mem_mb"] is None or base["mem_mb"] is None else round(peak["mem_mb"] - base["mem_mb"], 1)
+    out = {"unreadable": False,
+           "engine": {"met": eng["verdict"] == PASS, "required": "gpu" in require, "busy_samples": peak["busy_samples"],
+                      "need_samples": thresholds.get("min_samples", ga.MIN_SAMPLES), "min_pct": thresholds.get("min_gpu", ga.MIN_GPU_PCT),
+                      "peak_pct": peak["gpu"] if peak["gpu"] is not None else peak["gpu_dmon_sm"]},
+           "memory": {"met": mem["verdict"] == PASS, "required": "mem" in require, "baseline_mib": base["mem_mb"], "peak_mib": peak["mem_mb"], "rise_mib": rise,
+                      "need_mib": thresholds.get("min_mem", ga.MIN_MEM_MB)}}
+    for key, name in (("enc", "encoder"), ("dec", "decoder")):
+        if key in require:
+            out[name] = {"met": ga.evaluate(query_rows, dmon_rows, (key,), **thresholds)["verdict"] == PASS, "required": True, "peak": peak[key]}
+    return out
 
 
 def judge_smi(rec, require):
@@ -206,6 +245,17 @@ def judge_smi(rec, require):
     if rec.get("verdict") != PASS:
         return FAIL, "host engines: " + "; ".join(rec.get("reasons") or ["not busy"])
     return PASS, "host engines: %s busy (peak %s)" % ("+".join(require), {k: v for k, v in (rec.get("peak") or {}).items() if v})
+
+
+def proved_by(census_verdict, smi, require):
+    """Which host observable proved the use of a PASSING row, in the order of authority: "census" (the kf3 census passed), else, only when NO census was asked of
+    the caller (`census_verdict` None: the bare-metal baseline), "engine" (the sampler was readable and passed with an engine required) or "memory" (only host memory
+    was required); else None. A census that failed or could not be read proved nothing and nothing else may take its place (the caller only asks about a PASS)."""
+    if census_verdict == PASS:
+        return "census"
+    if census_verdict is None and smi and not smi.get("unreadable") and smi.get("verdict") == PASS and require:
+        return "engine" if any(ENGINE_OBSERVABLE[e] == "engine" for e in require) else "memory"
+    return None
 
 
 # ------------------------------------------------------------------------------------------------ app proofs (guest self-report)
@@ -426,26 +476,32 @@ PROOFS = {"blender": proof_blender, "llama": proof_llama, "framework": proof_fra
 
 # ------------------------------------------------------------------------------------------------ the verdict
 def judge(name, census=None, smi=None, app=None, need_census=True, need_engines=(), side="guest", app_missing="FAIL", app_required=True,
-          min_submissions=MIN_SUBMISSIONS):
-    """One row -> {row, verdict, reasons [named, source-tagged], authority, census, smi, app}.
+          min_submissions=MIN_SUBMISSIONS, census_primary=False):
+    """One row -> {row, verdict, reasons [named, source-tagged], authority, census, smi, app, proved_by, readings}.
 
     side "guest": the host census is the authority (need_census True means it MUST show work). side "host": a bare-metal baseline: there is no kf3 log,
     the census is not asked for and the record says authority=guest unless the host engines were sampled.
+    census_primary (opt-in, only meaningful for side "guest" with a census asked for, which is how the kf3 platform is known here; 2026-11-18): a census that PASSES
+    decides, and an engine or memory reading that FAILS is kept as a fact (`[host-smi] FACT`, `readings`) instead of failing the row. A census that fails still fails
+    the row, whatever nvidia-smi shows; a census that is not run decides nothing, so the readings decide as they always did.
     app_missing: what a row whose proof line is absent becomes ("FAIL": the row dropped it; "NOT_RUN": the marker is unmeasured)."""
-    reasons, verdicts = [], []
+    reasons, verdicts, facts = [], [], []
 
     def add(v, why, src):
         verdicts.append(v)
         reasons.append("[%s] %s: %s" % (src, v, why))
 
-    host_seen = False
+    host_seen, census_v = False, None
     if need_census and side == "guest":
-        v, why = judge_census(census, min_submissions)
-        add(v, why, "host-census")
-        host_seen = host_seen or v != NOT_RUN
+        census_v, why = judge_census(census, min_submissions)
+        add(census_v, why, "host-census")
+        host_seen = host_seen or census_v != NOT_RUN
     if need_engines:
         v, why = judge_smi(smi, need_engines)
-        add(v, why, "host-smi")
+        if census_primary and census_v == PASS and v == FAIL:
+            facts.append("[host-smi] FACT: %s (%s)" % (why, CENSUS_PRIMARY_REASON))
+        else:
+            add(v, why, "host-smi")
         host_seen = host_seen or v != NOT_RUN
     if app_required:
         if app is None:
@@ -460,13 +516,14 @@ def judge(name, census=None, smi=None, app=None, need_census=True, need_engines=
     verdict = FAIL if failed else (NOT_RUN if not_run else PASS)
     if failed and any(v == FAIL and r.startswith("[host-") for v, r in zip(verdicts, reasons)) and app and app["ok"] is True:
         reasons.append("[note] the guest's own output claims a GPU (%s) but the host observables say otherwise: the host census is the authority" % (app["device"] or "?"))
-    return {"row": name, "verdict": verdict, "reasons": reasons, "authority": "host" if host_seen else "guest", "census": census, "smi": _slim_smi(smi), "app": app}
+    return {"row": name, "verdict": verdict, "reasons": reasons + facts, "authority": "host" if host_seen else "guest", "census": census, "smi": _slim_smi(smi), "app": app,
+            "proved_by": proved_by(census_v, smi, need_engines) if verdict == PASS else None, "readings": (smi or {}).get("readings")}
 
 
 def _slim_smi(rec):
     if not rec:
         return None
-    return {k: rec.get(k) for k in ("required", "verdict", "reasons", "peak", "baseline", "samples", "source", "unreadable")}
+    return {k: rec.get(k) for k in ("required", "verdict", "reasons", "peak", "baseline", "samples", "source", "unreadable", "readings")}
 
 
 def control_verdict(judged):

@@ -1,7 +1,7 @@
 # GPU use is asserted, never assumed: the audit of every row that can run on the CPU, and the shared judge
 
-**STATUS: LIVE, 2026-11-17 (owner requirement of 2026-11-17, binding; implemented and tested GPU-free; FIRST HARDWARE RUN the same day, RTX 3090, section 10: three thresholds and proofs were wrong and are fixed; NOT run on any hardware when this line was first written: every
-statement marked INFERRED or UNCALIBRATED below is a hypothesis with a falsifier in section 7).** The requirement, verbatim in substance: for MATLAB, Blender and
+**STATUS: LIVE, 2026-11-18 (owner requirement of 2026-11-17, binding; implemented and tested GPU-free; FIRST HARDWARE RUN 2026-11-17, RTX 3090, section 10.2: three thresholds and proofs were wrong and are fixed; SECOND HARDWARE DATA 2026-11-18, RTX 4090, MATLAB rows, section 10.1: five or six rows failed on two host nvidia-smi readings while the kf3 census counted GPU work, so under kf3 the census is now the PRIMARY proof for the callers that opt in and those two readings are facts of the record (implemented and tested GPU-free, NOT yet re-run on a box: V8 of section 10.1); NOT run on any hardware when this line was first written: every
+statement marked INFERRED or UNCALIBRATED below is a hypothesis with a falsifier in section 7 or 10.1).** The requirement, verbatim in substance: for MATLAB, Blender and
 every other application that CAN run on the CPU, a row must ASSERT that the GPU was used; a row that passes because the application silently fell back to the
 CPU is a false pass and hides exactly the bugs kayfabe exists to find.
 
@@ -11,7 +11,7 @@ chosen from the few numbers the old logs hold, to be set from the first hardware
 ## 1. Rules this work keeps
 
 - The guest is hostile. The kf3 device's own log (host-authored) is the authority; the host's `nvidia-smi` on the box is the second host-authored signal; what the
-  application prints about its own device is a guest self-report that can only ADD a failure or support a pass. It never overrides a host "no work".
+  application prints about its own device is a guest self-report that can only ADD a failure or support a pass. It never overrides a host "no work". ⊘ 2026-11-18, amended by section 10.1: the order is census first, and for a caller that opts in (`census_primary`: the MATLAB rows) the second signal no longer FAILS a row that the census proved used; it is recorded as a fact. A census that shows no work still fails the row whatever the second signal says.
 - An unreadable observable is NOT_RUN with a named reason, never a pass; an idle GPU and an unreadable GPU are different findings and the reason says which.
 - A threshold is never relaxed to make a row pass: a real GPU row that fails means a named constant is wrong, to be changed with the run beside it.
 - A passing GPU run keeps its verdict: the new fields are appended, the commands of the rows are the old commands (the CPU forms exist only under `KF_NEGCTL=1`).
@@ -84,7 +84,7 @@ Before: seven rows required host `nvidia-smi` engines (`gpu_assert.evaluate`, ho
 gathered whatever it was given (`gather` of a regular array returns it, so a GPU row that computed on the CPU compared the CPU with the CPU and agreed). After: every
 row needs (1) a `gpu_device` block (gpuDevice index at least 1, `canUseGPU`, the host's GPU name), (2) a recorded `isa(x,'gpuArray')` and `existsOnGPU(x)` BEFORE the gather
 on every GPU-versus-CPU comparison plus a `kf_gpu.m` proof item in `cuda_kernel`, `mem_oversub`, `dl_train`, and (3) the host census window with at least 32 submissions
-(HARNESS when the census cannot be read). `dl_train` trains with an explicit `ExecutionEnvironment 'gpu'` (an error without a GPU, never a fallback). The `trainnet` info table has no device field (INFERRED), so the guest gives no evidence of the training device at all: the host census and engines are the authority for `dl_train`, and the guest's `train_env_gpu` item only proves a gpuArray can be made from the training data.
+(HARNESS when the census cannot be read). `dl_train` trains with an explicit `ExecutionEnvironment 'gpu'` (an error without a GPU, never a fallback). The `trainnet` info table has no device field (INFERRED), so the guest gives no evidence of the training device at all: the host census and engines are the authority for `dl_train`, and the guest's `train_env_gpu` item only proves a gpuArray can be made from the training data. ⊘ 2026-11-18 (section 10.1): for every MATLAB row the census is the primary proof and the engine and memory readings are facts when it passed; `mem_oversub` and `gpu_matmul` through `parpool_gpu` failed on the readings alone.
 
 ### 2.4 Rows on open PRs (listed, not edited)
 
@@ -125,7 +125,7 @@ busy number. This work does not depend on #459.
 ## 4. The judge (`scripts/bench/gpu_use.py`) and the Linux wiring
 
 `judge(row, census, smi, app, need_census, need_engines, side)` returns PASS, FAIL or NOT_RUN with source-tagged reasons (`[host-census]`, `[host-smi]`, `[app]`). FAIL: the app
-reports a CPU or non-NVIDIA device, the proof line a row must print is missing (the row dropped it), a window with a baseline shows no work, a required engine stayed idle.
+reports a CPU or non-NVIDIA device, the proof line a row must print is missing (the row dropped it), a window with a baseline shows no work, a required engine stayed idle (⊘ 2026-11-18: not when the caller passes `census_primary=True` and the census PASSED, section 10.1; `judge()` takes it as opt-in and the Linux matrix does not opt in).
 NOT_RUN: no kf3 status line in the window, no baseline, an unreadable sampler, an unmeasured marker. The record says `authority=host` when a host observable was read and
 `authority=guest` for the bare-metal baseline (no kf3 log there). `control_verdict` says CONTROL_OK when a negative control was judged FAIL and CONTROL_BROKEN when the judge
 passed a CPU run.
@@ -145,7 +145,7 @@ the CPU fixture of every row (`scripts/ci/fixtures/gpu_use/`, README there label
 
 ## 6. Tests and mutants
 
-`scripts/ci/test_gpu_use.py` (115 tests, in the `scripts/ci` discovery) and `scripts/ci/gpu_use_mutants.py` (40 mutants, two named killers each: empty census window passes, no-work
+`scripts/ci/test_gpu_use.py` (160 tests on 2026-11-18, in the `scripts/ci` discovery; the classes `CensusPrimary`, `ProvedBy` and `HostReadings` are section 10.1's) and `scripts/ci/gpu_use_mutants.py` (56 mutants on 2026-11-18, two named killers each; the 16 of section 10.1 are census demoted again, the engine or memory proof dropped, a failed census rescued by nvidia-smi, `proved_by` lying and the readings lying; the first 40: empty census window passes, no-work
 passes, floor zero, retired channel counted twice, baseline ignored, guest overrides the host, CPU device name accepted, a dropped proof passes, a negative control that does not switch,
 the hook not annotating or slicing early, the Windows llama proofs and the CPU switch, and more). MATLAB: `GpuUseProofTests` and ten more cases in `matlab_rows_mutants.py` on PR #464.
 
@@ -190,7 +190,66 @@ after this merges is the calibration (section 7).
 Windows host sampler (needs the supervisor, section 2.2); kfml scrub and #470/#471 gating (open PRs, not edited); multi-GPU boxes (all GPUs are sampled together); the percent of
 PR #459 in the kf3 log; `geekbench_gpu` (policy skip); the thresholds of section 3 are UNCALIBRATED; the census is lower-bounded and cannot separate a CUDA context from compute.
 
-## 10. First hardware data (2026-11-17)
+## 10. Hardware data
+
+### 10.1 2026-11-18, RTX 4090, MATLAB rows: the census is the primary proof under kf3; the host engine and memory readings are facts
+
+**STATUS: LIVE, 2026-11-18; owner rule of 2026-11-17 (the host census first, the application's proof second, a negative control must exist), applied by the coordinator's instruction of 2026-11-18. Implemented and
+tested GPU-free; the hardware re-run (V8 below) has not happened.** This subsection CORRECTS 10.2 item 1 ("the census and the other engines stay required of a guest") for the callers that opt in, and the statements marked
+⊘ in sections 1, 2.3 and 4. The owner's wording is quoted in section 1 and in the requirement at the top of this document; `docs/OWNER_RULINGS.md` has no entry for it in this tree (a gap, reported with this change).
+
+**What was measured (2026-11-18, one Vast box, RTX 4090, MATLAB R2026b in a Linux guest under kf3 with the declared `fb-mb=4096`; rows of `scripts/bench/linux/matlab_rows.py`, judged by `gpu_use.py`'s census and
+`gpu_assert`'s readings).** The figures are those reported by the coordinator after the run; that run's evidence directory is not in this tree, so every number here is a citation and the row count is UNVERIFIED here (the report calls
+it five rows and names six for the memory reading).
+
+| observable (2026-11-18, RTX 4090) | rows | MEASURED (reported by the coordinator) |
+|---|---|---|
+| guest checks against the CPU reference, every GPU-side value a `gpuArray` on the device | all | passed |
+| kf3 census of the window (host-authored) | all | births 4, retired 4, submissions 1200 to 12776, Xid 0: GPU work, far above the floor of 32 |
+| host engine reading (`gpu_assert`: 3 percent in at least 2 samples) | `gpu_matmul`, `gpu_fft` | `gpu engine idle: 0 sample(s) at or above 3% (need 2); peak 2.0`; `cuda_kernel` peaked at 99 percent and passed |
+| host memory reading (rise of at least 64 MiB) | `gpu_matmul`, `gpu_fft`, `gpu_solve`, `dl_train`, `parpool_gpu`, `mem_oversub` | `video memory did not rise by 64 MiB (baseline 4794.0, peak 4805.0)` |
+
+Five rows therefore ended `FAIL GPU_NOT_USED` on the two readings alone. **INFERRED (hypotheses, not measured here):** (a) the utilisation reading missed the work because the kernels last milliseconds and the sampler takes one sample per
+second; falsifier: the same rows sampled every 100 ms (the interval of the Linux matrix) still peak under 3 percent. (b) the memory reading stayed flat because the declared 4096 MiB carve-out is reserved when the guest is launched and
+the guest sub-allocates inside it; falsifier: the box's `memory.used` does not rise by about 4096 MiB between before the launch and after the boot. The 2026-11-17 RTX 3090 data of 10.2 item 1 has the same shape for the Linux matrix (host memory 8761 to 8792 MiB under a guest that allocated), where the answer was to drop `mem` for a guest.
+
+**The rule (what changed, and why it is not a relaxed threshold: no threshold moved, the question is WHICH observable is authoritative).**
+
+| case | verdict | `proved_by` |
+|---|---|---|
+| census PASS (at least `MIN_SUBMISSIONS` = 32 host submissions in the window), engine idle, memory flat | PASS | `census`; both readings recorded in `gpu.readings` with the numbers |
+| census FAIL (no work), engine busy, memory rising | FAIL `GPU_NOT_USED` | none |
+| census FAIL (no work), the CPU-only negative control | FAIL `GPU_NOT_USED` | none |
+| census not run or unreadable (no status line, no baseline) | NOT_RUN (judge) or HARNESS `HOST_CENSUS_MISSING` (MATLAB rows); nvidia-smi cannot prove it | none |
+| census not run, engine idle or memory flat | FAIL `GPU_NOT_USED` as before: the readings still decide when no census proved the use | none |
+| sampler unreadable, census PASS | NOT_RUN or HARNESS `HOST_COUNTERS_MISSING` as before: an unreadable GPU counter is not an idle one (a decision, unchanged on purpose: the readings are evidence the record owes) | none |
+| the guest's own proof (gpuDevice, gpuArray, the application's device) fails | FAIL: it can only ADD a failure | none |
+| a caller with no census (the bare-metal baseline, `need_census=False`) | unchanged: engine and memory decide | `engine` or `memory` |
+
+- **The census wins in both directions.** A census with no work fails the row even when nvidia-smi shows load and memory rising: the owner's rule makes the census the authority, and the reason is that the nvidia-smi reading is system-wide (every
+  process on the box, the kf3 device's own host work) and cannot be attributed to this guest's channels, while the census counts only the channels of this guest. A busy GPU beside a census of no work is a divergence worth a human look, so it is kept in `readings`
+  (`met` true) and does not rescue the row.
+- **How the platform is known.** `gpu_use.judge(..., side="guest", need_census=True)` is the kf3 platform (a census exists only because the kf3 device printed it), and a census that passed implies kf3 status lines; `census_primary` is opt-in and default False, so
+  the bare-metal baseline (`side="host"`), VFIO and the Windows rows (`gpu_assert` alone, no census) are unchanged. `matlab_rows.py` only ever boots a kf3 guest (`LinuxSession.boot` uses `gpu="kf3"`), so its judge always has the census. No image or application name is involved.
+- **Why only the MATLAB rows opt in.** The census cannot tell a CUDA context from compute done on it (section 3: llama.cpp at `-ngl 0` creates the backend and shows work), which is why the Linux matrix keeps the engine counter and the application proof as deciding observables
+  (`scripts/apps/gpu_use_rows.py` does not pass `census_primary`; a test pins that). A `gpuArray` operation has no silent CPU path (a GPU operation without a GPU is an error) and the guest proof requires every GPU-side value to be a `gpuArray` on the device (section 2.3), so the census plus
+  that proof is adequate for MATLAB (INFERRED from how `gpuArray` works, an operation on one runs on the device and has no CPU path inside it; not measured here; the CPU-only control for MATLAB is the census no-work case, tested GPU-free in `CensusPrimaryJudgeTests` and `GpuUseProofTests`).
+- **What the census proves.** At least `MIN_SUBMISSIONS` host submissions in the window (UNCALIBRATED, section 3). Births, retired channels and doorbells are facts of the record, not part of the rule: a channel that did the work and has not retired still counts through the live `tokens=[...]` of the status line. "Only emulated-channel work" adds no
+  submission by reading `crates/kf-chan/src/host.rs` (`counts()` is the number of host submissions of a channel; INFERRED, no log in this tree shows an emulated-only window), so such a window fails as no work.
+- **Constants.** `gpu_use.PROVED_BY` = (`census`, `engine`, `memory`), the order of authority; `gpu_use.ENGINE_OBSERVABLE` maps `gpu`, `enc` and `dec` to `engine` and `mem` to `memory`; `gpu_use.CENSUS_PRIMARY_REASON` is the text of the fact line; the thresholds of the readings are
+  `gpu_assert`'s (3 percent, 2 samples, 64 MiB) and are recorded beside each reading as `min_pct`, `need_samples`, `need_mib`.
+- **The record.** `gpu_use.judge` returns `proved_by` and `readings`; the MATLAB row record carries `gpu.proved_by` (None unless the row passed) and `gpu.readings` inside the existing `gpu` object, because `vast_report.validate_matlab` pins the row's key set and bounds `gpu` at 2048 bytes
+  (a test runs a real record through it). `gpu.verdict` stays what nvidia-smi alone says: a fact when `proved_by` is `census`.
+
+**Tests and mutants (GPU-free).** `CensusPrimary`, `ProvedBy` and `HostReadings` in `scripts/ci/test_gpu_use.py` (the failing numbers of the table are the fixture: `census_4090`, `smi_flat_4090`), `CensusPrimaryJudgeTests` (7 cases), ten run-level cases and three reading cases in `scripts/ci/test_matlab_rows.py`, one record case in
+`scripts/ci/test_matlab_stage.py` (a real record through `vast_report.validate_matlab`). Two old tests changed meaning on purpose and say so in a comment: an idle engine fails a MATLAB row when the census could not be read (it used to fail with a readable census too). Mutants: 16 in `gpu_use_mutants.py` and 10 in `matlab_rows_mutants.py`, each with
+at least two named killers (census demoted again, a failed census rescued by nvidia-smi, the engine or memory proof dropped for a caller without a census, an unreadable census or sampler counted as proof, the negative control that always passes, `proved_by` lying, the readings lying).
+
+**Validation request V8 (hardware, NOT RUN).** Re-run the MATLAB rows of section 7 on a 4090 box with the tree of this change. Expected: every row that passed the census is `PASS`, its record has `gpu.proved_by` `census` and `gpu.readings` with the numbers above; a CPU-only run of the same rows (the guest without the GPU) is `FAIL GPU_NOT_USED`. Falsified by:
+any `FAIL` or `HARNESS` on a row whose `census.work.verdict` is `PASS`; a PASS without `proved_by` `census`. Run one row a second time with the sampler at 100 ms to test hypothesis (a). Findings not fixed here: the Linux matrix and the Windows rows keep their own order (above); `scripts/apps/open_rows/census.py` `--need mem` and
+`scripts/apps/vkcts/vkcts.py` are the same shape as the Linux matrix (the vkcts guest path already drops `mem`); no Windows row has a census.
+
+### 10.2 2026-11-17, RTX 3090: first hardware data
 
 Run on one Vast KVM box (RTX 3090 GA102, host and guest driver 580.159.04, Ubuntu 22.04 host with ffmpeg 4.4.2, kf3 `04613288`), strictly serial, host first then guest; evidence in `traces/open_rows_guest_20261117/` (runs G1, G1n, F1). The rows of section 7 except `torch_ai_bench`, MATLAB and the vkpeak negative control; the guest positives in ONE boot (`APPS_PER_BOOT=100`, the matrix re-runs every non-PASS row alone in a fresh boot: all three reproduced alone). Section 7 asked for one app per boot; the batch is the matrix default of the gate and was chosen for time.
 
@@ -204,9 +263,9 @@ Run on one Vast KVM box (RTX 3090 GA102, host and guest driver 580.159.04, Ubunt
 | V6 | held: every guest window had a status line before and inside it (no `NOTRUN` from an empty base) | `runs/G1`, `runs/F1` |
 | V7 | not run (MATLAB) | |
 
-The three defects (each a harness or threshold error, shown by the host control or by the numbers recorded in section 10; each fixed test-first on this branch):
+The three defects (each a harness or threshold error, shown by the host control or by the numbers recorded in section 10.2; each fixed test-first on this branch):
 1. **`mem` cannot be required of a guest.** `blender_cycles` in the guest: census +9512 submissions, GPU 53 percent busy, host video memory 8761 to 8792 MiB (floor 64 MiB): a guest's device memory is the 8 GiB store the host reserves at boot, so a guest allocation never moves host VRAM. `host_engines(app, side)` drops `mem` for `side=guest`; the bare-metal run still needs the rise, the census and the other engines stay required of a guest.
 2. **ffmpeg 4.4.2 rows.** On the bare-metal host `nvenc_h264`, `nvenc_hevc` and `nvdec_h264` were judged FAIL: the nvenc rows filtered the indented stream-mapping line (the only place 4.4 names the encoder; its mp4 has no `encoder` stream tag) and `MAPPING_RX` stopped at the first `)` of `(rawvideo (native) -> h264 (h264_nvenc))`; the nvdec row kept only the first `Reinit context` line (software format), the second says `pix_fmt: cuda`. The nvdec row failed in the guest for the same reason.
 3. **hashcat notice.** `* Device #1: CUDA SDK Toolkit not installed ...` has the shape of a device line and was read as a non-NVIDIA device; a device line ends in `, skipped` or `, <used>/<total> MB`.
-No threshold was relaxed to make a row pass: the proofs now read the line that is really printed, and the `mem` observable is dropped where it cannot exist, with the numbers of section 10 (2026-11-17) as the test fixture.
+No threshold was relaxed to make a row pass: the proofs now read the line that is really printed, and the `mem` observable is dropped where it cannot exist, with the numbers of section 10.2 (2026-11-17) as the test fixture.
 

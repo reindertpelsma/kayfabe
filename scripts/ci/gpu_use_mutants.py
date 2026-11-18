@@ -43,6 +43,7 @@ print('KF_MUTATION_RESULT=' + json.dumps({'tests': r.testsRun, 'killers': [t.id(
 CE, JC, AP, JU, NC, RW, CL, RR, SP, WI, SM, MT = (SUITE + n for n in (
     "Census.", "JudgeCensus.", "AppProofs.", "Judge.", "NegativeControls.", "Rows.", "Cli.", "RunAppsRows.", "ScriptProofs.", "Wiring.", "SmiJudge.", "MatrixTable."))
 HK, WR = SUITE + "HookWithAFakeGuest.", SUITE + "WindowsRows."
+CP, PB, HR, GM = (SUITE + n for n in ("CensusPrimary.", "ProvedBy.", "HostReadings.", "GuestMemoryRise."))
 
 
 def M(name, key, old, new, *tests):
@@ -86,6 +87,49 @@ MUTANTS = [
       SM + "test_no_sample_at_all_is_unreadable_and_not_run", JU + "test_an_unreadable_sampler_is_not_run_not_idle"),
     M("smi-idle-passes", "gu", 'if rec.get("verdict") != PASS:\n        return FAIL,', 'if rec.get("verdict") != PASS:\n        return PASS,',
       JU + "test_an_idle_host_engine_fails_whatever_the_guest_printed", NC + "test_rows_with_engines_fail_on_an_idle_host_gpu_alone"),
+    # 2026-11-18: the census is the primary proof under kf3 (opt-in); the readings are facts; the proof is named
+    M("census-primary-demoted-again", "gu", "if census_primary and census_v == PASS and v == FAIL:", "if False and census_primary and census_v == PASS and v == FAIL:",
+      CP + "test_a_census_that_proves_the_use_passes_an_idle_engine_and_a_flat_memory_reading", CP + "test_each_reading_alone_is_a_fact_too",
+      CP + "test_the_fact_line_carries_the_reason_and_the_numbers"),
+    M("census-primary-without-a-census-drops-the-engine-and-memory-checks", "gu", "if census_primary and census_v == PASS and v == FAIL:",
+      "if census_primary and census_v != FAIL and v == FAIL:",
+      CP + "test_a_caller_without_a_census_keeps_the_engine_check", CP + "test_a_caller_without_a_census_keeps_the_memory_check",
+      CP + "test_without_a_readable_census_an_idle_engine_still_fails"),
+    M("census-primary-counts-an-unreadable-sampler-as-a-fact", "gu", "if census_primary and census_v == PASS and v == FAIL:", "if census_primary and census_v == PASS and v != PASS:",
+      CP + "test_an_unreadable_sampler_is_not_run_even_when_the_census_proved_it", CP + "test_no_sampler_record_under_census_primary_is_not_run"),
+    M("census-no-work-rescued-by-the-engine", "gu", '        add(census_v, why, "host-census")\n',
+      '        add(PASS if (census_primary and census_v == FAIL and smi is not None and smi.get("verdict") == PASS) else census_v, why, "host-census")\n',
+      CP + "test_a_census_with_no_work_fails_even_when_the_engine_is_busy_and_the_memory_rises", CP + "test_the_negative_control_is_still_judged_fail",
+      CP + "test_a_window_of_only_non_gpu_counters_has_no_work"),
+    M("census-primary-is-the-default", "gu", "min_submissions=MIN_SUBMISSIONS, census_primary=False):", "min_submissions=MIN_SUBMISSIONS, census_primary=True):",
+      CP + "test_the_old_order_is_the_default_and_still_fails_the_same_window", CP + "test_the_linux_matrix_rows_keep_the_engine_check_because_they_do_not_opt_in",
+      JU + "test_an_idle_host_engine_fails_whatever_the_guest_printed"),
+    M("engine-proof-dropped-for-every-caller", "gu", "    rec = ga.evaluate(q, d, tuple(require), **thresholds)\n",
+      '    rec = ga.evaluate(q, d, tuple(e for e in require if e != "gpu"), **thresholds)\n',
+      CP + "test_a_caller_without_a_census_keeps_the_engine_check", SM + "test_the_sampler_reads_a_na_utilisation_as_unknown_not_busy"),
+    M("memory-proof-dropped-for-every-caller", "gu", "    rec = ga.evaluate(q, d, tuple(require), **thresholds)\n",
+      '    rec = ga.evaluate(q, d, tuple(e for e in require if e != "mem"), **thresholds)\n',
+      CP + "test_a_caller_without_a_census_keeps_the_memory_check", GM + "test_the_bare_metal_row_still_needs_the_memory_to_rise"),
+    M("negative-control-always-ok", "gu", '    return "CONTROL_OK" if judged["verdict"] == FAIL else "CONTROL_BROKEN"', '    return "CONTROL_OK"',
+      JU + "test_control_verdict", CP + "test_a_control_that_passes_is_broken_even_under_census_primary"),
+    M("proved-by-always-census", "gu", "    if census_verdict == PASS:\n        return \"census\"", "    if True:\n        return \"census\"",
+      PB + "test_the_engine_is_named_when_only_the_engines_proved_it", PB + "test_memory_is_named_when_only_memory_was_required_and_rose", PB + "test_the_helper_itself"),
+    M("proved-by-names-memory-as-an-engine", "gu", '"mem": "memory"}', '"mem": "engine"}',
+      PB + "test_the_names_and_the_engine_mapping", PB + "test_memory_is_named_when_only_memory_was_required_and_rose"),
+    M("proved-by-set-on-a-failed-row", "gu", 'proved_by(census_v, smi, need_engines) if verdict == PASS else None', 'proved_by(census_v, smi, need_engines)',
+      PB + "test_a_row_that_did_not_pass_names_nobody", CP + "test_the_old_order_is_the_default_and_still_fails_the_same_window",
+      CP + "test_the_guests_own_proof_can_still_only_add_a_failure"),
+    M("proved-by-prefers-the-engine-over-the-census", "gu", "    if census_verdict == PASS:\n        return \"census\"",
+      "    if census_verdict == PASS and not (smi and smi.get(\"verdict\") == PASS):\n        return \"census\"",
+      PB + "test_the_census_is_named_when_it_proved_it_in_either_order", PB + "test_the_helper_itself", CP + "test_each_reading_alone_is_a_fact_too"),
+    M("readings-not-recorded", "gu", '    rec["readings"] = host_readings(q, d, tuple(require), **thresholds)', '    rec["readings"] = None',
+      HR + "test_a_busy_gpu_and_a_rising_memory_are_met", CP + "test_the_two_readings_are_recorded_as_facts_when_the_census_proved_it", HR + "test_no_sample_is_unreadable_not_idle"),
+    M("readings-engine-always-met", "gu", '"engine": {"met": eng["verdict"] == PASS,', '"engine": {"met": True,',
+      HR + "test_an_idle_engine_and_a_flat_memory_are_not_met", CP + "test_the_two_readings_are_recorded_as_facts_when_the_census_proved_it"),
+    M("readings-memory-rise-reversed", "gu", 'round(peak["mem_mb"] - base["mem_mb"], 1)', 'round(base["mem_mb"] - peak["mem_mb"], 1)',
+      HR + "test_a_busy_gpu_and_a_rising_memory_are_met", CP + "test_the_two_readings_are_recorded_as_facts_when_the_census_proved_it"),
+    M("fact-line-dropped", "gu", '            facts.append("[host-smi] FACT: %s (%s)" % (why, CENSUS_PRIMARY_REASON))', "            pass",
+      CP + "test_a_census_that_proves_the_use_passes_an_idle_engine_and_a_flat_memory_reading", CP + "test_the_fact_line_carries_the_reason_and_the_numbers"),
     # the judge
     M("guest-overrides-the-host", "gu", "failed, not_run = FAIL in verdicts, NOT_RUN in verdicts",
       'failed, not_run = FAIL in verdicts and not (app and app["ok"] is True), NOT_RUN in verdicts',

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """MATLAB GPU rows on the Linux proprietary image: boot, install the driver, inject the scripts, run each row, judge on the HOST (stdlib only).
 
-STATUS: DESIGN-ONLY, 2026-11-17. GPU-free: every judging function is tested against fixture results and a fake guest transport
+STATUS: DESIGN-ONLY, 2026-11-17 (2026-11-18: the host kf3 census is the PRIMARY proof of GPU use, the host nvidia-smi engine and memory readings are facts of the row
+record when the census proved the use; docs/design/V3_GPU_USE_ASSERTION.md section 10.1). GPU-free: every judging function is tested against fixture results and a fake guest transport
 (scripts/ci/test_matlab_rows.py, mutants scripts/ci/matlab_rows_mutants.py). The real transport (`LinuxSession`) and the CLI have run on NO box;
 what needs a KVM box with a GPU is listed in docs/design/V3_PROPIMAGE_LINUX.md section 14. Rows and their scripts: scripts/bench/linux/matlab/.
 
@@ -21,8 +22,13 @@ or licence data (a test scans them), and this module never reads or prints any.
 Verdict classes (per row): PASS; FAIL with a class (CRASH, HANG, XID, TDR, ASSERT, OUTPUT_MISMATCH, GPU_NOT_USED, BAD_RESULT); HARNESS (the run could not be
 judged: transport, driver build, host counters missing, identity mismatch, no declared fb-mb to judge the guest's total memory against: never an application failure); NOT_RUN with a named reason (IMAGE_MISSING,
 NO_GPU, GUEST_NO_DRIVER, GPU_UNSUPPORTED, DRIVER_MISSING, INJECT_UNAVAILABLE, GPU_INFO_FAILED, TIME, HOST_MEMORY_LOW...). GPU use is asserted from
-the HOST: the kf3 device's own log window of the row (scripts/bench/gpu_use.py: channels born and GPFIFO entries submitted while the row ran) is the authority, the
-HOST-side `nvidia-smi` counters (scripts/bench/windows/gpu_assert.py: HostProbe and evaluate, the record format of the Windows rows) the second observable.
+the HOST: the kf3 device's own log window of the row (scripts/bench/gpu_use.py: channels born and GPFIFO entries submitted while the row ran) is the PRIMARY proof (owner
+rule 2026-11-17), the HOST-side `nvidia-smi` counters (scripts/bench/windows/gpu_assert.py: HostProbe and evaluate, the record format of the Windows rows) are READINGS.
+2026-11-18, MEASURED on a 4090 box: five rows failed on two readings (utilisation peak 2.0: the kernels last milliseconds and the sampler takes one sample per second;
+host memory flat: INFERRED to be the declared fb-mb carve-out, reserved at launch) while the census counted GPU work for every row. So a census that proves the use (PASS)
+decides and the two readings are recorded under `gpu.readings` of the row record with `gpu.proved_by` naming the observable that proved it; a census that shows no work
+fails the row (GPU_NOT_USED) whatever nvidia-smi shows; a census that cannot be read proves nothing, so the readings then keep failing an idle row as before. This module
+only ever runs a kf3 guest (LinuxSession boots `gpu="kf3"`), which is how the platform is known: a bare-metal or VFIO caller never reaches this judge.
 The guest's own proof (gpuDevice present, every GPU-side value a gpuArray before it is gathered) can only ADD a failure (GPU_NOT_USED): it never overrides a host
 "no work". A row whose host observables cannot be read is HARNESS, never PASS.
 Every row is in the discovery lane unless told otherwise (`--lane ROW=gate`): a discovery failure is a listed breakage and never fails the run by itself;
@@ -521,6 +527,7 @@ def assess_gpu_use(row, query_text, dmon_text, **thresholds):
     rec["source"] = "host"
     rec["name"] = row
     rec["unreadable"] = bool(required) and rec.get("samples", 0) == 0 and rec.get("dmon_samples", 0) == 0
+    rec["readings"] = gpu_use().host_readings(q, d, required, **thresholds)       # both observables as facts, required or not (the record keeps them whatever decides)
     return rec
 
 
@@ -536,7 +543,9 @@ def assess_work(window, base_line):
 def judge(row, execution, parsed, verified, gpu, census, host_xid, work=None):
     """-> (verdict, failure_class, reason). The order is the point: a guest that is gone or hung is judged before its numbers, host Xids before a
     PASS, the numbers before the GPU-use assertion, and a GPU counter that could not be read is HARNESS (the row could not be judged).
-    execution {rc, timed_out, lost}; parsed: the document or None; verified: verify_doc's dict or None; gpu: assess_gpu_use record or None."""
+    execution {rc, timed_out, lost}; parsed: the document or None; verified: verify_doc's dict or None; gpu: assess_gpu_use record or None.
+    GPU use (2026-11-18): the census first. No work in the window fails the row; work (PASS) proves it, and then the engine and memory readings of `gpu` no longer
+    decide (they are facts in the record); without a census that proves it, the readings fail an idle row exactly as before."""
     xid = (host_xid or 0) + int((census or {}).get("xid", 0) or 0)
     if execution.get("lost") and not parsed:
         return "FAIL", "CRASH", "GUEST_LOST"
@@ -553,14 +562,16 @@ def judge(row, execution, parsed, verified, gpu, census, host_xid, work=None):
         return "FAIL", verified["klass"], (verified["findings"] or ["?"])[0]
     if execution.get("rc") not in (0, None):
         return "FAIL", "ASSERT", "MATLAB_EXIT:%s" % execution["rc"]
-    # the host-authored GPU-use assertion: the kf3 census window first (the authority: the guest never submitted work to the GPU), then the host's engines
+    # the host-authored GPU-use assertion: the kf3 census window first (the primary proof: no work in the window means the guest never submitted work to the GPU, and
+    # nvidia-smi showing load does not rescue that: it is system-wide and cannot be attributed to this guest), then the host's engines, which decide only when no census proved it
     census_verdict = (work or {}).get("verdict", "NOT_RUN")
     if census_verdict == "FAIL":
         return "FAIL", "GPU_NOT_USED", clean((work or {}).get("why", "no GPU work in the window"), 120)
+    census_proves = census_verdict == "PASS"
     if row_require(row):
         if gpu is None or gpu.get("unreadable"):
             return "HARNESS", None, "HOST_COUNTERS_MISSING"
-        if gpu["verdict"] != "PASS":
+        if gpu["verdict"] != "PASS" and not census_proves:
             return "FAIL", "GPU_NOT_USED", clean((gpu.get("reasons") or ["?"])[0], 100)
     if census_verdict != "PASS":
         return "HARNESS", None, "HOST_CENSUS_MISSING"
@@ -664,7 +675,10 @@ def run_row(sess, row, ctx):
         rec["facts"] = verified["facts"]
     if gpu:
         rec["gpu"] = {"required": list(gpu.get("required", [])), "verdict": gpu.get("verdict"), "samples": gpu.get("samples"), "peak": {k: v for k, v in (gpu.get("peak") or {}).items() if num(v) is not None or v is None},
-                      "baseline": gpu.get("baseline"), "reasons": [clean(x, 100) for x in (gpu.get("reasons") or [])][:4], "source": "host"}
+                      "baseline": gpu.get("baseline"), "reasons": [clean(x, 100) for x in (gpu.get("reasons") or [])][:4], "source": "host",
+                      "readings": gpu.get("readings")}      # `verdict` is what nvidia-smi alone says: a fact when `proved_by` is "census", the decision otherwise
+    # which observable proved a PASS (None for any other verdict). The name lives inside `gpu` so the row's key set, which vast_report.validate_matlab pins, stays the same.
+    rec["gpu"]["proved_by"] = gpu_use().proved_by(work.get("verdict"), gpu, row_require(row)) if verdict == "PASS" else None
     rec["census"] = {"lines": census.get("lines", 0), "counts": census.get("counts", {}), "xid": census.get("xid", 0),
                      "work": {k: work.get(k) for k in ("verdict", "status_lines", "base_missing", "births", "submissions", "doorbells", "retired")}}
     if ctx.evidence_dir:
@@ -842,7 +856,7 @@ def serialise(rec):
     for r in rec["rows"]:
         if len(data.encode()) <= MAX_RECORD_BYTES:
             break
-        r["findings"], r["gpu"] = r["findings"][:2], {k: v for k, v in r["gpu"].items() if k in ("required", "verdict", "samples")}
+        r["findings"], r["gpu"] = r["findings"][:2], {k: v for k, v in r["gpu"].items() if k in ("required", "verdict", "samples", "proved_by")}
         data = json.dumps(rec, separators=(",", ":"), sort_keys=True)
     return data
 

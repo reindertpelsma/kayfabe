@@ -1097,6 +1097,253 @@ class SmiJudge(unittest.TestCase):
         self.assertEqual(gu.judge_smi(gu.smi_record(q, "", ("gpu",)), ("gpu",))[0], gu.FAIL)
 
 
+# ------------------------------------------------------------------------------------------------ 2026-11-18: the census is the primary proof under kf3
+# MEASURED 2026-11-18 (Vast RTX 4090, MATLAB R2026b in a kf3 guest, declared fb-mb 4096; the figures were reported by the coordinator, that run's evidence
+# directory is not in this tree): five MATLAB rows failed GPU_NOT_USED on two host nvidia-smi readings although the kf3 census counted GPU work for every row.
+# Engine proof: `gpu engine idle: 0 sample(s) at or above 3% (need 2); peak 2.0`. Memory proof: `video memory did not rise by 64 MiB (baseline 4794.0, peak 4805.0)`.
+# Census of those rows: births 4, retired 4, submissions 1200 to 12776, Xid 0.
+def census_4090(subs=1200):
+    """A window of the shape the 4090 run measured: +4 channel births, 4 retired channels, `subs` submissions in all."""
+    base = status(2, live="")
+    return gu.window_census([retired("0x80%d" % i, subs // 4) for i in range(4)] + [status(6, live="")], base)
+
+
+def smi_flat_4090():
+    """The host nvidia-smi rows of the failed rows: utilisation peaks at 2 percent (ms-long kernels between 1 s samples), memory 4794 -> 4805 MiB."""
+    q = "\n".join("2026/11/18 00:00:%02d.000, %s, 0, %s, 0, 0" % (i, 2 if i >= 2 else 0, 4794 if i < 4 else 4805) for i in range(10))
+    return gu.smi_record(q, "", ("gpu", "mem"))
+
+
+def census_no_work():
+    return gu.window_census([status(2, live="")], status(2, live=""))
+
+
+class CensusPrimary(unittest.TestCase):
+    """Under kf3 (`side="guest"`, a census asked for) the host-authored census is the primary proof when the caller opts in with `census_primary`: a window the census
+    proves used is not failed by the host engine or memory readings, which are recorded as FACTS. A census that does NOT prove the use still fails the row (the
+    census wins in both directions), an unreadable census is NOT_RUN, and every caller without a census keeps the engine and memory checks (they still decide)."""
+
+    def judge(self, census=None, smi=None, app=None, **kw):
+        kw.setdefault("need_engines", ("gpu", "mem"))
+        kw.setdefault("census_primary", True)
+        return gu.judge("matlab_row", census=census if census is not None else census_4090(), smi=smi if smi is not None else smi_flat_4090(),
+                        app=app if app is not None else gu.proof_blender(fx("blender_gpu.log")), **kw)
+
+    def test_the_measured_window_is_what_the_census_calls_work(self):
+        c = census_4090()
+        self.assertEqual((c["births"], c["retired"], c["submissions"]), (4, 4, 1200))
+        self.assertEqual(gu.judge_census(c)[0], gu.PASS)
+
+    def test_the_measured_readings_are_the_two_the_old_rule_failed_on(self):
+        v, why = gu.judge_smi(smi_flat_4090(), ("gpu", "mem"))
+        self.assertEqual(v, gu.FAIL)
+        self.assertIn("0 sample(s) at or above 3% (need 2); peak 2.0", why)
+        self.assertIn("video memory did not rise by 64 MiB (baseline 4794.0, peak 4805.0)", why)
+
+    def test_a_census_that_proves_the_use_passes_an_idle_engine_and_a_flat_memory_reading(self):
+        v = self.judge()
+        self.assertEqual((v["verdict"], v["authority"], v["proved_by"]), (gu.PASS, "host", "census"), v["reasons"])
+        self.assertTrue(any(r.startswith("[host-smi] FACT") for r in v["reasons"]), v["reasons"])
+        self.assertFalse(any(r.startswith("[host-smi] FAIL") for r in v["reasons"]), v["reasons"])
+
+    def test_the_two_readings_are_recorded_as_facts_when_the_census_proved_it(self):
+        r = self.judge()["readings"]
+        self.assertEqual((r["unreadable"], r["engine"]["met"], r["engine"]["busy_samples"], r["engine"]["peak_pct"]), (False, False, 0, 2.0))
+        self.assertEqual((r["memory"]["met"], r["memory"]["baseline_mib"], r["memory"]["peak_mib"], r["memory"]["rise_mib"]), (False, 4794.0, 4805.0, 11.0))
+        self.assertEqual((r["engine"]["required"], r["memory"]["required"]), (True, True))
+
+    def test_the_old_order_is_the_default_and_still_fails_the_same_window(self):
+        v = self.judge(census_primary=False)
+        self.assertEqual((v["verdict"], v["proved_by"]), (gu.FAIL, None))
+        self.assertTrue(any(r.startswith("[host-smi] FAIL") for r in v["reasons"]), v["reasons"])
+
+    def test_each_reading_alone_is_a_fact_too(self):
+        for need in (("gpu",), ("mem",), ("gpu", "mem")):
+            v = self.judge(need_engines=need)
+            self.assertEqual((v["verdict"], v["proved_by"]), (gu.PASS, "census"), (need, v["reasons"]))
+
+    def test_the_fact_line_carries_the_reason_and_the_numbers(self):
+        facts = [r for r in self.judge()["reasons"] if r.startswith("[host-smi] FACT")]
+        self.assertEqual(len(facts), 1)
+        self.assertIn("peak 2.0", facts[0])
+        self.assertIn("baseline 4794.0, peak 4805.0", facts[0])
+        self.assertIn(gu.CENSUS_PRIMARY_REASON, facts[0])
+
+    def test_a_control_that_passes_is_broken_even_under_census_primary(self):
+        v = self.judge(smi=smi_busy())                       # a "CPU run" the judge passed: work in the census, busy engines, a good proof
+        self.assertEqual((v["verdict"], gu.control_verdict(v)), (gu.PASS, "CONTROL_BROKEN"))
+
+    def test_no_sampler_record_under_census_primary_is_not_run(self):
+        v = gu.judge("x", census=census_4090(), smi=None, app=None, need_engines=("gpu", "mem"), app_required=False, census_primary=True)
+        self.assertEqual((v["verdict"], v["proved_by"]), (gu.NOT_RUN, None), v["reasons"])
+
+    def test_a_census_with_no_work_fails_even_when_the_engine_is_busy_and_the_memory_rises(self):
+        v = self.judge(census=census_no_work(), smi=smi_busy())
+        self.assertEqual((v["verdict"], v["proved_by"]), (gu.FAIL, None))
+        self.assertTrue(any(r.startswith("[host-census] FAIL") for r in v["reasons"]), v["reasons"])
+        self.assertTrue(v["readings"]["engine"]["met"] and v["readings"]["memory"]["met"])       # the divergence stays visible, as facts
+
+    def test_a_window_of_only_non_gpu_counters_has_no_work(self):
+        c = gu.window_census(fx("kf3_window_cpu_app.log").splitlines(), fx("kf3_base_end.txt").strip())
+        v = self.judge(census=c, smi=smi_busy())
+        self.assertEqual(v["verdict"], gu.FAIL)
+
+    def test_an_unreadable_census_is_not_run_and_nvidia_smi_cannot_prove_it(self):
+        for census in (gu.window_census([], None), gu.window_census(fx("kf3_window_no_status.log").splitlines(), fx("kf3_base.txt").strip())):
+            v = self.judge(census=census, smi=smi_busy())
+            self.assertEqual((v["verdict"], v["proved_by"]), (gu.NOT_RUN, None), v["reasons"])
+        v = gu.judge("x", census=None, smi=smi_busy(), app=gu.proof_blender(fx("blender_gpu.log")), need_engines=("gpu", "mem"), census_primary=True)
+        self.assertEqual((v["verdict"], v["proved_by"]), (gu.NOT_RUN, None))
+
+    def test_a_census_that_could_not_be_baselined_is_not_run_not_a_pass(self):
+        c = gu.window_census(fx("kf3_window_idle.log").splitlines(), None)
+        self.assertEqual(self.judge(census=c, smi=smi_busy())["verdict"], gu.NOT_RUN)
+
+    def test_without_a_readable_census_an_idle_engine_still_fails(self):
+        v = self.judge(census=gu.window_census([], None), smi=smi_flat_4090())
+        self.assertEqual(v["verdict"], gu.FAIL, v["reasons"])
+        self.assertTrue(any(r.startswith("[host-smi] FAIL") for r in v["reasons"]), v["reasons"])
+
+    def test_an_unreadable_sampler_is_not_run_even_when_the_census_proved_it(self):
+        v = self.judge(smi=gu.smi_record("", "", ("gpu", "mem")))
+        self.assertEqual((v["verdict"], v["proved_by"]), (gu.NOT_RUN, None), v["reasons"])
+        self.assertEqual(self.judge(smi=gu.smi_record("", "", ("gpu", "mem")))["readings"], {"unreadable": True})
+
+    def test_the_guests_own_proof_can_still_only_add_a_failure(self):
+        v = self.judge(app=gu.proof_blender(fx("blender_cpu.log")))
+        self.assertEqual((v["verdict"], v["proved_by"]), (gu.FAIL, None))
+        v = self.judge(app=gu.proof_framework("no proof line", framework="torch"))
+        self.assertEqual(v["verdict"], gu.FAIL)
+        v = self.judge(app=gu.proof_nvdec("frame=1"), app_missing=gu.NOT_RUN)
+        self.assertEqual(v["verdict"], gu.NOT_RUN)
+
+    def test_a_guest_that_says_gpu_cannot_rescue_a_census_with_no_work(self):
+        v = self.judge(census=census_no_work(), smi=smi_flat_4090())
+        self.assertEqual(v["verdict"], gu.FAIL)
+        self.assertTrue(any("host census is the authority" in r for r in v["reasons"]), v["reasons"])
+
+    def test_the_negative_control_is_still_judged_fail(self):
+        """The CPU-only form of a row: the census sees no work, whatever the guest prints and whatever the host counters say."""
+        for smi in (smi_busy(), smi_flat_4090(), smi_idle()):
+            for need in (("gpu", "mem"), ("gpu",), ("mem",), ()):
+                v = self.judge(census=census_no_work(), smi=smi if need else None, need_engines=need)
+                self.assertEqual((v["verdict"], gu.control_verdict(v)), (gu.FAIL, "CONTROL_OK"), (need, v["reasons"]))
+
+    def test_the_bare_metal_baseline_is_unchanged_whatever_the_flag(self):
+        for flag in (False, True):
+            v = gu.judge("blender_cycles", census=None, smi=smi_flat_4090(), app=gu.proof_blender(fx("blender_gpu.log")), need_census=False, need_engines=("gpu", "mem"),
+                         side="host", census_primary=flag)
+            self.assertEqual((v["verdict"], v["authority"]), (gu.FAIL, "host"), v["reasons"])
+            v = gu.judge("blender_cycles", census=census_4090(), smi=smi_flat_4090(), app=gu.proof_blender(fx("blender_gpu.log")), need_census=True, need_engines=("gpu", "mem"),
+                         side="host", census_primary=flag)
+            self.assertEqual(v["verdict"], gu.FAIL, v["reasons"])        # a census is not asked of a bare-metal run, so it cannot demote the engines either
+
+    def test_a_caller_without_a_census_keeps_the_memory_check(self):
+        flat = gu.smi_record("\n".join("2026/11/18 00:00:%02d.000, 60, 0, 4794, 0, 0" % i for i in range(8)), "", ("mem",))
+        for flag in (False, True):
+            v = gu.judge("x", census=None, smi=flat, app=None, need_census=False, need_engines=("mem",), side="host", app_required=False, census_primary=flag)
+            self.assertEqual(v["verdict"], gu.FAIL, v["reasons"])
+            self.assertIn("video memory did not rise", " ".join(v["reasons"]))
+
+    def test_a_caller_without_a_census_keeps_the_engine_check(self):
+        for flag in (False, True):
+            v = gu.judge("x", census=None, smi=smi_flat_4090(), app=None, need_census=False, need_engines=("gpu",), side="host", app_required=False, census_primary=flag)
+            self.assertEqual(v["verdict"], gu.FAIL, v["reasons"])
+            self.assertIn("gpu engine idle", " ".join(v["reasons"]))
+
+    def test_the_linux_matrix_rows_keep_the_engine_check_because_they_do_not_opt_in(self):
+        rec = rows.evaluate("blender_cycles", "guest", fx("blender_gpu.log"), fx("kf3_window_gpu.log").splitlines(), fx("kf3_base.txt").strip(),
+                            gu.smi_record(GuestMemoryRise.Q.replace(", 53,", ", 0,"), "# gpu sm mem enc dec\n0 0 0 0 0\n", ("gpu",), min_samples=1))
+        self.assertEqual(rec["verdict"], gu.FAIL, rec["reasons"])
+
+
+class ProvedBy(unittest.TestCase):
+    """`proved_by` names the observable that proved the use: the census first, then the engine counters, then host memory; None when the row did not pass or no
+    host observable proved it (the bare-metal baseline with nothing sampled)."""
+
+    def test_the_names_and_the_engine_mapping(self):
+        self.assertEqual(gu.PROVED_BY, ("census", "engine", "memory"))
+        self.assertEqual({e: gu.ENGINE_OBSERVABLE[e] for e in ("gpu", "enc", "dec", "mem")}, {"gpu": "engine", "enc": "engine", "dec": "engine", "mem": "memory"})
+
+    def test_the_census_is_named_when_it_proved_it_in_either_order(self):
+        for primary in (False, True):
+            v = gu.judge("x", census=Judge.census_ok(), smi=smi_busy(), app=gu.proof_blender(fx("blender_gpu.log")), need_engines=("gpu", "mem"), census_primary=primary)
+            self.assertEqual((v["verdict"], v["proved_by"]), (gu.PASS, "census"), v["reasons"])
+
+    def test_the_engine_is_named_when_only_the_engines_proved_it(self):
+        v = gu.judge("x", census=None, smi=smi_busy(), app=gu.proof_blender(fx("blender_gpu.log")), need_census=False, need_engines=("gpu", "mem"), side="host")
+        self.assertEqual((v["verdict"], v["proved_by"]), (gu.PASS, "engine"), v["reasons"])
+
+    def test_memory_is_named_when_only_memory_was_required_and_rose(self):
+        q = "\n".join("2026/11/18 00:00:%02d.000, 0, 0, %d, 0, 0" % (i, 300 if i < 2 else 3000) for i in range(8))
+        v = gu.judge("x", census=None, smi=gu.smi_record(q, "", ("mem",)), app=None, need_census=False, need_engines=("mem",), side="host", app_required=False)
+        self.assertEqual((v["verdict"], v["proved_by"]), (gu.PASS, "memory"), v["reasons"])
+
+    def test_a_row_that_did_not_pass_names_nobody(self):
+        for v in (gu.judge("x", census=census_no_work(), smi=smi_busy(), app=None, need_engines=("gpu",), app_required=False),
+                  gu.judge("x", census=Judge.census_ok(), smi=smi_idle(), app=None, need_engines=("gpu",), app_required=False),
+                  gu.judge("x", census=Judge.census_ok(), smi=None, app=gu.proof_blender(fx("blender_cpu.log")), need_engines=())):
+            self.assertNotEqual(v["verdict"], gu.PASS)
+            self.assertIsNone(v["proved_by"], v["reasons"])
+
+    def test_nothing_host_side_to_name_is_none(self):
+        v = gu.judge("blender_cycles", census=None, app=gu.proof_blender(fx("blender_gpu.log")), need_census=False, side="host")
+        self.assertEqual((v["verdict"], v["authority"], v["proved_by"]), (gu.PASS, "guest", None))
+
+    def test_the_helper_itself(self):
+        self.assertEqual(gu.proved_by(gu.PASS, None, ()), "census")
+        self.assertEqual(gu.proved_by(gu.PASS, smi_idle(), ("gpu",)), "census")
+        self.assertEqual(gu.proved_by(gu.PASS, smi_busy(), ("gpu", "mem")), "census")         # both proved it: the census is named first
+        self.assertEqual(gu.proved_by(None, smi_busy(), ("gpu", "mem")), "engine")
+        self.assertEqual(gu.proved_by(None, smi_busy(), ("mem",)), "memory")
+        # a census that failed or could not be read proved nothing, and nvidia-smi may not take its place; nor does an idle reading, no sampler, nothing required or an unreadable one
+        for census_v, smi, req in ((gu.FAIL, smi_busy(), ("gpu",)), (gu.NOT_RUN, smi_busy(), ("gpu", "mem")), (gu.NOT_RUN, smi_busy(), ("mem",)),
+                                   (None, smi_idle(), ("gpu",)), (None, None, ("gpu",)), (None, smi_busy(), ()), (None, gu.smi_record("", "", ("gpu",)), ("gpu",))):
+            self.assertIsNone(gu.proved_by(census_v, smi, req), (census_v, req))
+
+
+class HostReadings(unittest.TestCase):
+    """The host nvidia-smi readings as FACTS: both observables are read from the same rows the verdict reads, whether or not they were required."""
+
+    def test_a_busy_gpu_and_a_rising_memory_are_met(self):
+        r = smi_busy()["readings"]
+        self.assertEqual((r["unreadable"], r["engine"]["met"], r["memory"]["met"]), (False, True, True))
+        self.assertGreaterEqual(r["engine"]["busy_samples"], r["engine"]["need_samples"])
+        self.assertGreaterEqual(r["memory"]["rise_mib"], r["memory"]["need_mib"])
+
+    def test_the_thresholds_are_the_shared_ones_and_a_caller_override_is_recorded(self):
+        r = smi_flat_4090()["readings"]
+        self.assertEqual((r["engine"]["need_samples"], r["engine"]["min_pct"], r["memory"]["need_mib"]), (2, 3, 64))
+        q = "\n".join("2026/11/18 00:00:%02d.000, 2, 0, %d, 0, 0" % (i, 100 if i < 2 else 190) for i in range(8))
+        r2 = gu.smi_record(q, "", ("gpu", "mem"), min_gpu=1, min_samples=3, min_mem=50)["readings"]
+        self.assertEqual((r2["engine"]["met"], r2["engine"]["need_samples"], r2["engine"]["min_pct"], r2["memory"]["met"], r2["memory"]["need_mib"]), (True, 3, 1, True, 50))
+
+    def test_both_are_read_even_when_only_one_is_required(self):
+        r = gu.smi_record(GuestMemoryRise.Q, GuestMemoryRise.D, ("gpu",), min_samples=1)["readings"]
+        self.assertEqual((r["engine"]["required"], r["memory"]["required"], r["engine"]["met"], r["memory"]["met"]), (True, False, True, False))
+
+    def test_an_idle_engine_and_a_flat_memory_are_not_met(self):
+        r = smi_idle()["readings"]
+        self.assertEqual((r["engine"]["met"], r["memory"]["met"], r["engine"]["busy_samples"], r["memory"]["rise_mib"]), (False, False, 0, 0.0))
+
+    def test_no_sample_is_unreadable_not_idle(self):
+        self.assertEqual(gu.smi_record("", "", ("gpu", "mem"))["readings"], {"unreadable": True})
+        self.assertEqual(gu.smi_record("garbage\n", "", ("gpu",))["readings"], {"unreadable": True})
+
+    def test_the_encoder_and_decoder_are_read_when_required(self):
+        d = "# gpu sm mem enc dec\n" + "\n".join("0 10 0 %d 0" % (5 if i > 1 else 0) for i in range(6))
+        q = "\n".join("2026/11/18 00:00:%02d.000, 10, 0, 300, 0, 0" % i for i in range(6))
+        r = gu.smi_record(q, d, ("enc", "dec"))["readings"]
+        self.assertEqual((r["encoder"]["met"], r["decoder"]["met"], r["encoder"]["required"]), (True, False, True))
+        self.assertNotIn("encoder", gu.smi_record(q, d, ("gpu",))["readings"])
+
+    def test_the_judge_record_carries_the_readings_and_the_slim_record_keeps_them(self):
+        v = gu.judge("x", census=Judge.census_ok(), smi=smi_busy(), app=None, need_engines=("gpu", "mem"), app_required=False)
+        self.assertEqual(v["readings"], smi_busy()["readings"])
+        self.assertEqual(v["smi"]["readings"], v["readings"])
+        self.assertIsNone(gu.judge("x", census=Judge.census_ok(), app=None, need_engines=(), app_required=False)["readings"])
+
+
 class MatrixTable(unittest.TestCase):
     def test_a_guest_notrun_from_the_gpu_use_judge_is_unattributed_not_a_defect(self):
         mt = load("matrix_table_t", "scripts/apps/matrix_table.py")
