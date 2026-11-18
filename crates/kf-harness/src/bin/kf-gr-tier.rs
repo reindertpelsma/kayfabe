@@ -215,10 +215,11 @@ struct Guest<'a> {
 }
 
 impl Rows for Guest<'_> {
-    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, u64> {
-        let end = va.checked_add(len).ok_or(va)?;
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, kf_chan::tmode::Unresolved> {
+        use kf_chan::tmode::Unresolved::Uncovered;
+        let end = va.checked_add(len).ok_or(Uncovered(va))?;
         if va < self.va || end > self.va + CHAN_BYTES {
-            return Err(va.max(self.va + CHAN_BYTES).min(va));
+            return Err(Uncovered(va.max(self.va + CHAN_BYTES).min(va)));
         }
         Ok(vec![Span {
             ram: false,
@@ -238,7 +239,7 @@ impl GuestMemory for Mem<'_, '_> {
         let s = self
             .0
             .resolve(va, out.len() as u64)
-            .map_err(|at| format!("{at:#x} not placed"))?;
+            .map_err(|e| format!("{e:?}: not placed"))?;
         self.0
             .walk
             .read_store(s[0].off, out)

@@ -553,6 +553,14 @@ pub enum Refusal {
     /// ★ T-mode (§3.4): a BLOCK-LINEAR virtual operand — its footprint is a function of the block
     /// geometry, which `extents` does not model.
     BlockLinearVirtual,
+    /// ★ 2026-11-18 (BF-1): a virtual operand whose rows need more than
+    /// [`crate::tmode::MAX_SPANS`] spans; resolution stopped at `at`. Refused, never waited on.
+    TooManySpans {
+        /// The operand's VA.
+        va: u64,
+        /// The first byte not resolved.
+        at: u64,
+    },
     /// ★ T-mode (§3.4): a virtual operand or semaphore no placement row covers — at `at`.
     VirtualUnresolved {
         /// The operand's VA.
@@ -695,6 +703,7 @@ impl Refusal {
             Refusal::MultiLineDiscontiguous => "multi_line_discontiguous",
             Refusal::SplitInsideElement => "split_inside_element",
             Refusal::TooManyPieces { .. } => "too_many_pieces",
+            Refusal::TooManySpans { .. } => "too_many_spans",
             Refusal::Footprint { .. } => "footprint",
             Refusal::Perimeter { .. } => "perimeter",
             Refusal::GrMethod { .. } => "gr_method",

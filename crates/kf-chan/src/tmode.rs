@@ -38,6 +38,11 @@ use kf_host::MapPerm;
 
 /// At most this many pieces per launch (§3.4); a launch that would need more is refused by name.
 pub const MAX_PIECES: usize = 4096;
+/// ★ 2026-11-18 (BF-1, `docs/design/V3_BOUNDARY_FUZZING.md`): the most spans one resolution may
+/// produce. A side with more spans than this needs more than [`MAX_PIECES`] pieces, so nothing a
+/// bind could accept is cut off; [`resolve_spans`] stops here instead of walking the guest's whole
+/// footprint first.
+pub const MAX_SPANS: usize = MAX_PIECES + 1;
 /// The output cap per pushed piece (§3.5): far below the host ring's half-pushbuffer limit.
 pub const CHUNK_BYTES: usize = 64 << 10;
 /// Maximum operand bytes resolved for one submitted part of a single-line copy.
@@ -62,11 +67,13 @@ pub struct Span {
 /// map calls, never a copy of the guest's tables (§56 rule 2, `V3_P1P2_TSPACE.md` §11.4).
 pub trait Rows {
     /// Resolve `[va, va+len)` under ONE read guard: its spans in VA order, merged where contiguous
-    /// in both VA and backing with one permission. `Err(at)` names the first byte no row covers.
+    /// in both VA and backing with one permission.
     ///
     /// # Errors
-    /// The first uncovered byte.
-    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, u64>;
+    /// [`Unresolved::Uncovered`] names the first byte no row covers (a walk may still place it);
+    /// [`Unresolved::TooManySpans`] says the range needs more than [`MAX_SPANS`] spans (no walk
+    /// changes that verdict into an acceptable bind).
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, Unresolved>;
 
     /// ★ The vIOMMU seam (§2.6): the memfd offset of guest DMA range `[dma, dma+len)` when it is one
     /// contiguous run — today `RamMap::file_range`; under a vIOMMU, IOVA→GPA first.
@@ -78,7 +85,7 @@ pub trait Rows {
     ///
     /// # Errors
     /// As [`Rows::resolve`].
-    fn resolve_epoch(&self, va: u64, len: u64) -> (Result<Vec<Span>, u64>, u64) {
+    fn resolve_epoch(&self, va: u64, len: u64) -> (Result<Vec<Span>, Unresolved>, u64) {
         (self.resolve(va, len), 0)
     }
 
@@ -109,26 +116,46 @@ pub enum Changed {
     Unknown,
 }
 
+/// Why a range did not resolve. ★ BF-1: the two are kept apart on purpose. `Uncovered` is a gap
+/// a pending walk may fill (the runner WAITS on it, `Rows::walk_pending`); `TooManySpans` is a
+/// verdict on the guest's own layout, refused by name and never waited on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unresolved {
+    /// The first byte no row covers.
+    Uncovered(u64),
+    /// The range needs more than [`MAX_SPANS`] spans; resolution stopped at `at`.
+    TooManySpans {
+        /// The first byte not resolved.
+        at: u64,
+    },
+}
+
 /// ★ The pure core of [`Rows::resolve`]: walk `prefix(va) = (ram, off, bytes left in the row, perm)`
-/// piece by piece, merging adjacent pieces contiguous in backing with one permission.
+/// piece by piece, merging adjacent pieces contiguous in backing with one permission. ★ BF-1: at
+/// most [`MAX_SPANS`] spans are built and at most `MAX_SPANS` row lookups made before
+/// [`Unresolved::TooManySpans`], whatever `len` the guest declared.
 ///
 /// # Errors
-/// The first uncovered byte.
+/// [`Unresolved`].
 pub fn resolve_spans(
     va: u64,
     len: u64,
     prefix: impl Fn(u64) -> Option<(bool, u64, u64, MapPerm)>,
-) -> Result<Vec<Span>, u64> {
-    let end = va.checked_add(len).ok_or(va)?;
+) -> Result<Vec<Span>, Unresolved> {
+    let end = va.checked_add(len).ok_or(Unresolved::Uncovered(va))?;
     let mut out: Vec<Span> = Vec::new();
     let mut at = va;
     while at < end {
-        let (ram, off, avail, perm) = prefix(at).filter(|p| p.2 > 0).ok_or(at)?;
+        let (ram, off, avail, perm) = prefix(at)
+            .filter(|p| p.2 > 0)
+            .ok_or(Unresolved::Uncovered(at))?;
         let n = avail.min(end - at);
+        let full = out.len() >= MAX_SPANS;
         match out.last_mut() {
             Some(s) if s.ram == ram && s.perm == perm && s.off.checked_add(s.len) == Some(off) => {
                 s.len += n;
             }
+            _ if full => return Err(Unresolved::TooManySpans { at }),
             _ => out.push(Span {
                 ram,
                 off,
@@ -1188,6 +1215,15 @@ const fn target_of(mode: u32) -> Target {
 /// — a physical operand is one span with no permission (kernel physical access).
 type Side = Vec<(bool, u64, u64, Option<MapPerm>)>;
 
+/// The refusal an unresolved range earns: an uncovered byte is [`Refusal::VirtualUnresolved`] (the
+/// runner waits for the walk), too many spans is [`Refusal::TooManySpans`] (refused, never waited).
+fn unresolved(va: u64, e: Unresolved) -> Refusal {
+    match e {
+        Unresolved::Uncovered(at) => Refusal::VirtualUnresolved { va, at },
+        Unresolved::TooManySpans { at } => Refusal::TooManySpans { va, at },
+    }
+}
+
 /// Resolve one operand into backing spans, each checked to lie wholly inside its window.
 fn resolve_side(op: Operand, len: u64, rows: &dyn Rows, w: &TWindows) -> Result<Side, Refusal> {
     let untranslatable = |target, phys| Refusal::Untranslatable { target, phys, len };
@@ -1207,9 +1243,7 @@ fn resolve_side(op: Operand, len: u64, rows: &dyn Rows, w: &TWindows) -> Result<
             Ok(vec![(true, off, len, None)])
         }
         Operand::Virtual(va) => {
-            let spans = rows
-                .resolve(va, len)
-                .map_err(|at| Refusal::VirtualUnresolved { va, at })?;
+            let spans = rows.resolve(va, len).map_err(|e| unresolved(va, e))?;
             let mut out = Vec::with_capacity(spans.len());
             let mut cur = va;
             for s in spans {
@@ -1341,9 +1375,7 @@ fn sema_addr(
     rows: &dyn Rows,
     w: &TWindows,
 ) -> Result<WindowAddr, Refusal> {
-    let spans = rows
-        .resolve(va, bytes)
-        .map_err(|at| Refusal::VirtualUnresolved { va, at })?;
+    let spans = rows.resolve(va, bytes).map_err(|e| unresolved(va, e))?;
     let [s] = spans.as_slice() else {
         return Err(Refusal::SemaphoreSpansRows { va, bytes });
     };
@@ -1591,8 +1623,8 @@ const HOST_WFI: u32 = 0x78;
 /// No placement row at all — the positive control's resolver.
 struct NoRows;
 impl Rows for NoRows {
-    fn resolve(&self, va: u64, _: u64) -> Result<Vec<Span>, u64> {
-        Err(va)
+    fn resolve(&self, va: u64, _: u64) -> Result<Vec<Span>, Unresolved> {
+        Err(Unresolved::Uncovered(va))
     }
     fn dma_to_file_range(&self, _: u64, _: u64) -> Option<u64> {
         None
@@ -1766,7 +1798,7 @@ struct Recording<'a> {
 }
 
 impl Rows for Recording<'_> {
-    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, u64> {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, Unresolved> {
         let (r, epoch) = self.inner.resolve_epoch(va, len);
         let r = r?;
         self.rec.borrow_mut().push(Bound {
