@@ -61,6 +61,10 @@ The three defects (all wrong thresholds or proofs, found by the host control or 
 - `test_gpu_use.py` pins 71 rows of `run_apps.sh`; PRs 471 and 474 add three discovery rows (74): class `own` in `gpu_use_rows.py` for `nvcodec_matrix`, `nvml_dcgm`, `vkcts` (they assert GPU use inside their own driver); this belongs to whichever of the three PRs merges last, it is on the tree branch only.
 - Cosmetic: `apps_matrix.sh` prints `guest_isolated.res: No such file or directory` at the end of every one-app-per-boot run.
 
+## Follow-up, 2026-11-18: two hardware confirmations (`confirm/`)
+
+On a second box (same die, same driver, kf3 built from the tree plus PR 480): **the DGC multiview case passes alone on the fixed kf3 (`ad1a0c4c`, no host Xid) and fails alone, with the same host Xid 13 `3D-Z SYSMEM KIND Violation`, on a control kf3 that differs only in `kf-mem/src/apply.rs` (`ad1a0c4c-dirty`)**: updated verdict for that candidate: a kayfabe-core defect (`host_pte_kind` rewriting a Z kind on a guest-RAM row to PITCH), fixed by PR 480, hardware-confirmed once per binary. For the two sparse-residency Timeouts: each half-resident case hangs with host Xid 109 and each fully bound case passes before and after (texel buffer `size_2_16` against `size_2_24`, and the size-matched image pair `multisampled_image_sparse_binding` against `..._residency`); the named twin of the brief does not exist in vulkan-cts-1.4.7.1; the mechanism (sparse entries never written) is NOT shown by the kf3 logs. Updated bucket for those two: an undocumented kayfabe limitation, probably a core gap, reproducible, root cause open. Details and the exact commands: `confirm/README.md`.
+
 ## Caveats
 
 - One die (GA102), one driver (580.159.04), one host kernel; ffmpeg differs between host (4.4.2) and guest (6.x), which is a bucket-3 difference of its own.

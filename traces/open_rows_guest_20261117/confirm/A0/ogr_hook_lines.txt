@@ -1,0 +1,6 @@
+OGR_HOOK tag=A0 kf3=ad1a0c4c-dirty cases=[dgc=/workspace/ogr/list_dgc.tsv]
+OGR_CASE_START dgc 00:46:41 q0=1435 h0=796
+OGR_APPRES dgc APPRES side=guest app=vkcts verdict=PASS rc=0 secs=15 quiet=0 note=ok cases=3 pass=2 warn=0 ns=0 fail=1 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END dgc rc=0 00:47:01 host_xid_lines=5 kf3_lines=4293
+OGR_HOOK_DONE
+HOOK_RC=0

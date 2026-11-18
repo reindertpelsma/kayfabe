@@ -1,0 +1,6 @@
+OGR_HOOK tag=A1 kf3=ad1a0c4c cases=[dgc=/workspace/ogr/list_dgc.tsv]
+OGR_CASE_START dgc 00:38:47 q0=1432 h0=787
+OGR_APPRES dgc APPRES side=guest app=vkcts verdict=PASS rc=0 secs=9 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END dgc rc=0 00:39:01 host_xid_lines=0 kf3_lines=2293
+OGR_HOOK_DONE
+HOOK_RC=0
