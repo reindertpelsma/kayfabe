@@ -1,0 +1,12 @@
+2026-11-18T00:35:15+0100 post: first probe (propimage.py GUEST_PS)
+2026-11-18T00:35:23+0100 post: ids as the guest sees them: smbios_uuid=MATCH; smbios_serial=MATCH; baseboard_serial=MATCH; chassis_serial=MATCH; mac=MATCH; disk_serial=MATCH
+2026-11-18T00:35:41+0100 post: facts: computer=<computer_name> edition=Professional build=26200.8037 license_status=5 secure_boot=True tpm_present=True problem_devices=0 internet=False dns=FAILED
+2026-11-18T00:35:43+0100 post: DWM OverlayTestMode=5 rc=0 The operation completed successfully.
+2026-11-18T00:35:49+0100 post: desktop_prep (autologon): DESKTOP_PREP_DONE fail=0
+2026-11-18T00:35:49+0100 post: restart test (the image must boot from its own disk, ssh back, autologon to a desktop)
+2026-11-18T00:36:33+0100 post: ssh back after 1 s
+2026-11-18T00:36:35+0100 post: signed-in desktop after restart (autologon): <computer_name>\kfimage
+2026-11-18T00:36:39+0100 post: quiesce: 
+2026-11-18T00:36:57+0100 post: after restart: dwm_overlay=5 uptime ok; used_c_gb=23.9 free_c_gb=135
+2026-11-18T00:37:04+0100 post: recorded machine_guid, ek_pub_hash (set), last_time_at_stop_utc=2026-11-17T23:36:58Z, cpu_fingerprint
+2026-11-18T00:37:19+0100 post: guest stopped cleanly; qemu exited

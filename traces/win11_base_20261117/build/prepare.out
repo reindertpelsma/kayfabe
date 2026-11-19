@@ -1,0 +1,9 @@
+2026-11-18T00:24:13+0100 media: sha256 of the Windows ISO
+2026-11-18T00:24:27+0100 media: copy virtio-win.iso from image B's media (read) and verify
+2026-11-18T00:24:30+0100 media: download the NVIDIA 580.88 installer from NVIDIA's official host and verify the pin
+2026-11-18T00:24:55+0100 media: NVIDIA installer sha256 90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 == the repo pin (size 890807536)
+2026-11-18T00:24:55+0100 seed generated (not logged); derived ids share nothing with images A and B; ssh port <ssh_port> free
+2026-11-18T00:24:55+0100 state.json written; computer name <computer_name>
+2026-11-18T00:24:57+0100 tools.iso built: 580.88-desktop-win10-win11-64bit-international-dch-whql.exe, OpenSSH-Win64-v10.0.0.0.msi, autounattend.xml, setup_ssh.ps1
+2026-11-18T00:24:58+0100 swtpm manufactured: ['.lock', 'tpm2-00.permall']
+2026-11-18T00:24:58+0100 PREPARE DONE

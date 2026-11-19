@@ -1,0 +1,34 @@
+{
+ "guest_utc": "2026-11-18T00:48:58Z",
+ "uptime_s": 116,
+ "tcp_1_1_1_1_443": false,
+ "dns": "FAILED",
+ "http": "FAILED",
+ "default_route": [],
+ "pnp": {
+  "name": "NVIDIA GeForce RTX 4070",
+  "status": "Error",
+  "problem": "CM_PROB_FAILED_POST_START",
+  "code": 43,
+  "driver_version": "32.0.15.8088"
+ },
+ "problem_devices": [
+  "Display|NVIDIA GeForce RTX 4070|problem=CM_PROB_FAILED_POST_START"
+ ],
+ "smi_query": [
+  "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.",
+  ""
+ ],
+ "smi_names_uuid_count": 2,
+ "events_since_boot": [
+  "7023 Service Control Manager"
+ ],
+ "display_events": [],
+ "kernel_power_41": 0,
+ "crash_dump_files": 0,
+ "rtc_base_utc": "2026-11-18T00:46:56Z",
+ "clock_offset_s": 122,
+ "clock_in_window": true,
+ "stop_time_in_state": "2026-11-17T23:46:57Z",
+ "guest_after_stop_time": true
+}

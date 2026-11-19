@@ -1,0 +1,18 @@
+2026-11-18T00:40:51+0100 gpu: driver tree ready (Display.NvContainer, DisplayDriver.nvi, DisplayDriverExt.dll, NVCPL, NVWMI, NvCamera)
+2026-11-18T00:40:51+0100 gpu: qemu started pid 37570; waiting for ssh
+2026-11-18T00:41:19+0100 gpu: ssh up after 24 s
+2026-11-18T00:42:42+0100 gpu: gsp_on rc=0 (66 s): GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1 | GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+2026-11-18T00:42:45+0100 gpu: desktop_prep: DESKTOP_PREP_DONE fail=0
+2026-11-18T00:43:34+0100 gpu: ssh back after 1 s
+2026-11-18T00:43:36+0100 gpu: signed-in desktop: <computer_name>\kfimage
+2026-11-18T00:44:01+0100 gpu: GATE_ENABLE utc=2026-11-17T23:43:59Z id=PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&11583659&0&20 rc=0
+2026-11-18T00:44:05+0100 gpu: check after 3 s: PNP name='NVIDIA GeForce RTX 4070' status=OK problem=CM_PROB_NONE code=0 | NVIDIA GeForce RTX 4070, <gpu_uuid>, 580.88
+2026-11-18T00:44:05+0100 gpu: RESULT OK (Code 0 and seed GPU UUID)
+2026-11-18T00:44:31+0100 gpu: power_fix #1 OK 
+2026-11-18T00:44:37+0100 gpu: gpu_fix #1 True
+2026-11-18T00:44:48+0100 gpu: restart test (in-guest Restart-Computer inside the same kf3 QEMU)
+2026-11-18T00:45:43+0100 gpu: after restart: desktop=True gpu_ok=True (3 s): PNP name='NVIDIA GeForce RTX 4070' status=OK problem=CM_PROB_NONE code=0 | NVIDIA GeForce RTX 4070, <gpu_uuid>, 580.88
+2026-11-18T00:46:08+0100 gpu: power_fix #2 OK 
+2026-11-18T00:46:55+0100 gpu: quiesce: QUIET after 3 rounds
+2026-11-18T00:47:01+0100 gpu: recorded; machine_guid/ek unchanged check: see probe
+2026-11-18T00:47:18+0100 gpu: STAGE RESULT {"started": "2026-11-17T23:40:40Z", "kf3_env": {"KF3_RPC_TRACE": "1"}, "ssh_up_s": 24, "driver_install_s": 66, "first_enable_ok": true, "first_enable_poll_s": 3, "power1_ok": true, "gpu_fix1_ok": true, "restart_ssh_back_s": 1, "restart_gpu_ok": true, "restart_poll_s": 3, "restart_desktop": true, "power2_ok": true, "quiesce": "QUIET after 3 rounds", "census_counts": {"unserviced": 945, "refused": 497}, "xid": 0, "dmesg_new_lines": 2, "windows_profile_line_count": 212, "ok": true, "ended": "2026-11-17T23:47:18Z"}

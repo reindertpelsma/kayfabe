@@ -1,0 +1,32 @@
+{
+ "guest_utc": "2026-11-18T00:49:01Z",
+ "uptime_s": 120,
+ "tcp_1_1_1_1_443": false,
+ "dns": "FAILED",
+ "http": "FAILED",
+ "default_route": [],
+ "pnp": {
+  "name": "NVIDIA GeForce RTX 4070",
+  "status": "OK",
+  "problem": "CM_PROB_NONE",
+  "code": 0,
+  "driver_version": "32.0.15.8088"
+ },
+ "problem_devices": [],
+ "smi_query": [
+  "name, driver_version, memory.total [MiB], memory.used [MiB], temperature.gpu, fan.speed [%], power.draw [W], power.limit [W], clocks.current.sm [MHz], clocks.current.memory [MHz], utilization.gpu [%], utilization.memory [%], pstate, pcie.link.gen.current",
+  "NVIDIA GeForce RTX 4070, 580.88, 4096 MiB, 401 MiB, 0, [N/A], [N/A], [N/A], 0 MHz, 0 MHz, [N/A], [N/A], [N/A], 4"
+ ],
+ "smi_names_uuid_count": 1,
+ "events_since_boot": [
+  "7023 Service Control Manager"
+ ],
+ "display_events": [],
+ "kernel_power_41": 0,
+ "crash_dump_files": 0,
+ "rtc_base_utc": "2026-11-18T00:46:56Z",
+ "clock_offset_s": 125,
+ "clock_in_window": true,
+ "stop_time_in_state": "2026-11-17T23:46:57Z",
+ "guest_after_stop_time": true
+}

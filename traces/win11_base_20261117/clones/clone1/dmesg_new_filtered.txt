@@ -1,0 +1,2 @@
+[13349.667645] NVRM:unknown NVRM ioctl command: 0xf0
+[13349.905778] NVRM:unknown NVRM ioctl command: 0xf0
