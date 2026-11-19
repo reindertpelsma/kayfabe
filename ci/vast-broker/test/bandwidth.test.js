@@ -86,6 +86,7 @@ test('a leg with no image carries no propimage line and no stage the leg does no
     'merge_bar',
     'cuda_guest',
     'apps',
+    'kfml',
     'windows_gate',
     'windows_apps',
   ]);
@@ -277,21 +278,34 @@ test("the plan of stages is the payload's own plan (every leg of this file, with
   try {
     const legs = { CHECK_SMALL, CHECK_MIDDLE, A_ONLY, B_ONLY, BOTH };
     for (const [name, leg] of Object.entries(legs))
-      for (const only of [[], ['install_flow']]) {
+      for (const [only, skip] of [
+        [[], []],
+        [['install_flow'], []],
+        [[], ['kfml']],
+      ]) {
         const doc = make(leg);
         if (only.includes('install_flow') && doc.tier !== 'large') continue;
+        if (skip.includes('kfml') && !['middle', 'large'].includes(doc.tier)) continue; // the payload refuses a --skip of a stage that is not planned
         const file = join(dir, name + '.json');
         writeFileSync(file, JSON.stringify(doc));
         const args = ['scripts/ci/vast_payload.py', '--instruction', file, '--dry-run'];
         for (const o of only) args.push('--only', o);
+        for (const o of skip) args.push('--skip', o);
         const run = python(args);
-        const planned = /planned=(\S+)/.exec(run.stdout)?.[1];
+        // `planned=` is the whole plan; `stages=` is what --only/--skip chose out of it (a --skip leg is compared with the chosen list)
+        const planned = (skip.length ? /stages=(\S+) planned=/ : /planned=(\S+)/).exec(
+          run.stdout,
+        )?.[1];
         // image B's definitions are another change: a strict refusal there is not a plan to compare
         if (!planned) {
           assert.match(run.stdout, /STRICT_UNKNOWN_APP/, name);
           continue;
         }
-        assert.deepEqual(plannedStages(doc, { only }), planned.split(':'), name + only);
+        assert.deepEqual(
+          plannedStages(doc, { only, skip }),
+          planned.split(':'),
+          name + only + skip,
+        );
       }
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -344,7 +358,7 @@ test('the Python reading of the table selects the same lines and bytes as the Ja
   }
 });
 test('the table passes the guard: every stage of the payload, provenance on every number', () => {
-  const run = python(['scripts/ci/bandwidth_check.py', '--today', '2026-11-16']);
+  const run = python(['scripts/ci/bandwidth_check.py', '--today', '2026-11-17']);
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.match(run.stdout, /bandwidth table: PASS/);
 });

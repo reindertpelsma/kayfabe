@@ -34,7 +34,7 @@ class ProfileResources(unittest.TestCase):
                 DATA["payloadProfiles"][name]["bandwidthDownGb"]
                 for name in ["small", "middle", "large", "adhoc"]
             ],
-            [73, 87, 130, 38],
+            [73, 92, 135, 38],
         )
 
     def test_new_direct_download_stage_is_rejected(self):

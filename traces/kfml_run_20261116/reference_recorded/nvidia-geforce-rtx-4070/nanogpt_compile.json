@@ -1,0 +1,92 @@
+{
+ "compute_cap": "8.9",
+ "cuda": "12.6",
+ "data": {
+  "config": {
+   "batch": 32,
+   "bias": false,
+   "block_size": 128,
+   "dropout": 0.0,
+   "lr": [
+    0.002,
+    0.0002,
+    20
+   ],
+   "n_embd": 128,
+   "n_head": 4,
+   "n_layer": 4,
+   "seed": 1234,
+   "steps": 400
+  },
+  "windows": {
+   "100": 2.492709894180298,
+   "200": 2.364689588546753,
+   "300": 2.2324232482910156,
+   "400": 2.154313716888428
+  }
+ },
+ "driver": "560.35.03",
+ "gpu_name": "NVIDIA GeForce RTX 4070",
+ "measured_on": {
+  "compute_cap": "8.9",
+  "cuda": "12.6",
+  "driver": "560.35.03",
+  "driver_cuda": "12.6",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "run_id": "kfml_run_20261116",
+  "torch": "2.7.1+cu126"
+ },
+ "metrics": {
+  "amp_dtype": "torch.bfloat16",
+  "amp_vs_fp32_max_window_diff": 0.0026373958587644353,
+  "compiled_vs_eager_max_window_diff": 0.0014392566680907493,
+  "forward_rel_err": 0.0034965034965031053,
+  "grad_scaler": false,
+  "modes": {
+   "amp_compiled": {
+    "final": 2.154313716888428,
+    "first_step_s": 17.20927095413208,
+    "initial": 3.7737258434295655,
+    "steps_per_s": 81.68615514737387,
+    "windows": {
+     "100": 2.492709894180298,
+     "200": 2.364689588546753,
+     "300": 2.2324232482910156,
+     "400": 2.154313716888428
+    }
+   },
+   "amp_eager": {
+    "final": 2.152874460220337,
+    "first_step_s": 0.2538454532623291,
+    "initial": 3.773525619506836,
+    "steps_per_s": 55.39184551994188,
+    "windows": {
+     "100": 2.4924556827545166,
+     "200": 2.3649413108825685,
+     "300": 2.231303110122681,
+     "400": 2.152874460220337
+    }
+   },
+   "fp32_eager": {
+    "final": 2.1555118560791016,
+    "first_step_s": 0.46057772636413574,
+    "initial": 3.774065613746643,
+    "steps_per_s": 70.10124180010015,
+    "windows": {
+     "100": 2.4912647724151613,
+     "200": 2.3644202041625975,
+     "300": 2.23309832572937,
+     "400": 2.1555118560791016
+    }
+   }
+  },
+  "params": 812288,
+  "reference_compared": false,
+  "reference_config_mismatch": false,
+  "reference_diff": null
+ },
+ "test": "nanogpt_compile",
+ "torch": "2.7.1+cu126",
+ "wall_s": 50.154
+}

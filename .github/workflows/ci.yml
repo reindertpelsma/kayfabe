@@ -2134,6 +2134,10 @@ jobs:
           python3 scripts/ci/box_downloader_mutants.py
           # propimage_apps payload stage (2026-11-15, OWNER_RULINGS 2026-11-15): >=2 named killers per mutant.
           python3 scripts/ci/propimage_apps_mutants.py
+          # kfml payload stage (2026-11-16): >=2 named killers per mutant; the kfml package's own GPU-free unit tests.
+          python3 scripts/ci/kfml_stage_mutants.py
+          python3 scripts/ci/kfml_guest_mutants.py
+          (cd scripts/kfml && python3 -m unittest discover -s tests -t .)
           # Generic proprietary-image runner, 2026-11-16 (docs/design/V3_PROPIMAGE_RUNNER.md): registry, run spec, images; clock/network assert in every launch path; >=2 named killers per mutant.
           python3 scripts/ci/propimage_runner_mutants.py
           python3 scripts/ci/clocknet_assert_mutants.py

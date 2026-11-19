@@ -1,0 +1,59 @@
+{
+ "compute_cap": "12.0",
+ "cuda": "12.8",
+ "data": {},
+ "driver": "580.178.04",
+ "gpu_name": "NVIDIA GeForce RTX 5070",
+ "measured_on": {
+  "compute_cap": "12.0",
+  "cuda": "12.8",
+  "driver": "580.178.04",
+  "driver_cuda": "13.0",
+  "flavor": "cu128",
+  "gpu_name": "NVIDIA GeForce RTX 5070",
+  "run_id": "kfml_run_20261117_5070_drv580",
+  "torch": "2.7.1+cu128"
+ },
+ "metrics": {
+  "add_sizes": [
+   1,
+   7,
+   1000,
+   98432,
+   1048579,
+   134217733
+  ],
+  "cases_checked": 28,
+  "fp16_dot_compile": "ok",
+  "layernorm_max_abs_err": 0.0039014816284179688,
+  "matmul": {
+   "1000x777x333": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 128, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 9.5058163651629e-07
+   },
+   "127x129x65": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 2.8711497179756407e-07
+   },
+   "17x33x19": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.5800623032191652e-07
+   },
+   "2049x513x1025": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 128, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.955575271495036e-06
+   },
+   "512x512x512": {
+    "best_config": "BLOCK_M: 32, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 2, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 9.466141364100622e-07
+   }
+  },
+  "matmul_input_dtype": "torch.float16",
+  "matmul_worst_rel_err": 1.955575271495036e-06,
+  "softmax_max_abs_err": 4.172325134277344e-07,
+  "triton": "3.3.1"
+ },
+ "test": "triton_kernels",
+ "torch": "2.7.1+cu128",
+ "wall_s": 8.982
+}

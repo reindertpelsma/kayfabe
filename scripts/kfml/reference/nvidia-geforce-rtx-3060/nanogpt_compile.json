@@ -1,0 +1,92 @@
+{
+ "compute_cap": "8.6",
+ "cuda": "12.6",
+ "data": {
+  "config": {
+   "batch": 32,
+   "bias": false,
+   "block_size": 128,
+   "dropout": 0.0,
+   "lr": [
+    0.002,
+    0.0002,
+    20
+   ],
+   "n_embd": 128,
+   "n_head": 4,
+   "n_layer": 4,
+   "seed": 1234,
+   "steps": 400
+  },
+  "windows": {
+   "100": 2.492458772659302,
+   "200": 2.36490777015686,
+   "300": 2.232280626296997,
+   "400": 2.1538837432861326
+  }
+ },
+ "driver": "535.154.05",
+ "gpu_name": "NVIDIA GeForce RTX 3060",
+ "measured_on": {
+  "compute_cap": "8.6",
+  "cuda": "12.6",
+  "driver": "535.154.05",
+  "driver_cuda": "12.2",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 3060",
+  "run_id": "kfml_run_20261117_3060_drv535_forced_cu126",
+  "torch": "2.7.1+cu126"
+ },
+ "metrics": {
+  "amp_dtype": "torch.bfloat16",
+  "amp_vs_fp32_max_window_diff": 0.001707639694213725,
+  "compiled_vs_eager_max_window_diff": 0.00033143043518091275,
+  "forward_rel_err": 0.0034965034965031053,
+  "grad_scaler": false,
+  "modes": {
+   "amp_compiled": {
+    "final": 2.1538837432861326,
+    "first_step_s": 6.566675424575806,
+    "initial": 3.7736615180969237,
+    "steps_per_s": 219.10236345209617,
+    "windows": {
+     "100": 2.492458772659302,
+     "200": 2.36490777015686,
+     "300": 2.232280626296997,
+     "400": 2.1538837432861326
+    }
+   },
+   "amp_eager": {
+    "final": 2.1538044738769533,
+    "first_step_s": 0.06383514404296875,
+    "initial": 3.773583984375,
+    "steps_per_s": 148.27652469594506,
+    "windows": {
+     "100": 2.492127342224121,
+     "200": 2.3646428966522217,
+     "300": 2.232495803833008,
+     "400": 2.1538044738769533
+    }
+   },
+   "fp32_eager": {
+    "final": 2.155512113571167,
+    "first_step_s": 0.3070518970489502,
+    "initial": 3.7740655660629274,
+    "steps_per_s": 130.49754709941084,
+    "windows": {
+     "100": 2.4912647914886477,
+     "200": 2.3644203090667726,
+     "300": 2.233098554611206,
+     "400": 2.155512113571167
+    }
+   }
+  },
+  "params": 812288,
+  "reference_compared": false,
+  "reference_config_mismatch": false,
+  "reference_diff": null
+ },
+ "test": "nanogpt_compile",
+ "torch": "2.7.1+cu126",
+ "wall_s": 20.683
+}

@@ -1,0 +1,59 @@
+{
+ "compute_cap": "8.6",
+ "cuda": "12.6",
+ "data": {},
+ "driver": "535.154.05",
+ "gpu_name": "NVIDIA GeForce RTX 3060",
+ "measured_on": {
+  "compute_cap": "8.6",
+  "cuda": "12.6",
+  "driver": "535.154.05",
+  "driver_cuda": "12.2",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 3060",
+  "run_id": "kfml_run_20261117_3060_drv535_forced_cu126",
+  "torch": "2.7.1+cu126"
+ },
+ "metrics": {
+  "add_sizes": [
+   1,
+   7,
+   1000,
+   98432,
+   1048579,
+   134217733
+  ],
+  "cases_checked": 28,
+  "fp16_dot_compile": "ok",
+  "layernorm_max_abs_err": 0.0039014816284179688,
+  "matmul": {
+   "1000x777x333": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 128, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.346657313661126e-06
+   },
+   "127x129x65": {
+    "best_config": "BLOCK_M: 32, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 2, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 3.445379661570769e-07
+   },
+   "17x33x19": {
+    "best_config": "BLOCK_M: 32, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 2, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.5800623032191652e-07
+   },
+   "2049x513x1025": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 128, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 3.42225735039392e-06
+   },
+   "512x512x512": {
+    "best_config": "BLOCK_M: 32, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 2, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.6227672858803999e-06
+   }
+  },
+  "matmul_input_dtype": "torch.float16",
+  "matmul_worst_rel_err": 3.42225735039392e-06,
+  "softmax_max_abs_err": 4.172325134277344e-07,
+  "triton": "3.3.1"
+ },
+ "test": "triton_kernels",
+ "torch": "2.7.1+cu126",
+ "wall_s": 8.91
+}

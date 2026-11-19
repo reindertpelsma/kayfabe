@@ -1,0 +1,46 @@
+[
+ {
+  "compute_cap": "8.9",
+  "cuda": "12.6",
+  "cudnn": "90501",
+  "dataset_sha256": {
+   "cifar10_binary": "c4a38c50a1bc5f3a1c5537f2155ab9d68f9f25eb1ed8d9ddda3db29a59bca1dd"
+  },
+  "driver": "560.35.03",
+  "driver_cuda": "12.6",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "guest_estimate_s": null,
+  "launch_bound": true,
+  "lock_sha256": "26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0",
+  "metrics": {
+   "acc_amp": 0.7425,
+   "acc_fp32": 0.744,
+   "amp_dtype": "torch.bfloat16",
+   "cuda_ipc": true,
+   "epoch_loss": [
+    1.693291492951222,
+    1.262905023036859,
+    1.0381093147473457,
+    0.8860218341533954,
+    0.7430441440680088
+   ],
+   "grad_scaler": false,
+   "log": "/root/run/logs4/amp_convnet_cifar.log",
+   "pred_agreement": 0.9945,
+   "reference_diff": null,
+   "reference_recorded": true,
+   "train_s": 24.40024995803833
+  },
+  "name": "amp_convnet_cifar",
+  "patch_sha256": {},
+  "reason": "",
+  "status": "PASS",
+  "tier": "mid",
+  "torch": "2.7.1+cu126",
+  "triton": "3.3.1",
+  "upstream_commits": {},
+  "vram_gb": 11.62,
+  "wall_s": 35.793
+ }
+]

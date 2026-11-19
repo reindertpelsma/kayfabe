@@ -1,0 +1,2 @@
+{"name": "cifar10_binary", "path": "/root/kfvenv/kfml-cache/data/cifar-10-binary.tar.gz", "sha256": "c4a38c50a1bc5f3a1c5537f2155ab9d68f9f25eb1ed8d9ddda3db29a59bca1dd", "pinned": true}
+{"name": "tinyshakespeare", "path": "/root/kfvenv/kfml-cache/data/tinyshakespeare-input.txt", "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed", "pinned": true}
