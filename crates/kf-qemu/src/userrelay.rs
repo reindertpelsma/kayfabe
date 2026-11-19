@@ -478,7 +478,7 @@ pub(super) fn note_route_declined(family: kf_chip::Family, class: u32) {
     static ONCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
     if let Err(why) = ring_relay_serves(family, class) {
         ONCE.get_or_init(|| {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf3: USER_RING_ROUTE_DECLINED family={family:?} class={class:#x}: {why} — Windows user-work takes the USERD-relay route (as KF3_WIN_USER_RING_RELAY=0), USER twin unchanged (logged once)"
             );
         });
@@ -714,9 +714,10 @@ impl Birth {
                 if let Ok(mut r) = record.lock() {
                     r.dead = Some(format!("NATIVE_BIRTH_UNCERTAIN {why:?}"));
                 }
-                eprintln!(
+                kf_arch::rate_eprintln!(
                     "kf3: USER_RING_NATIVE_BIRTH_QUARANTINED {:#x}:{:#x} {why:?}; storage and counts retained, no token handed out",
-                    a.client, a.handle
+                    a.client,
+                    a.handle
                 );
                 return Err(fail(format!("USER_RING_NATIVE_BIRTH_UNCERTAIN {why:?}")));
             }
@@ -945,7 +946,9 @@ impl ChanPlane {
                 .is_none_or(|p| match p.release(&self.relay_stats) {
                     Ok(()) => true,
                     Err(why) => {
-                        eprintln!("kf3: {why}; source views retained until session close");
+                        kf_arch::rate_eprintln!(
+                            "kf3: {why}; source views retained until session close"
+                        );
                         false
                     }
                 });
@@ -961,7 +964,9 @@ impl ChanPlane {
             self.release_notifier(n);
         }
         if let Err(why) = quota.release_confirmed() {
-            eprintln!("kf3: USER_RING_QUOTA_RETAINED after confirmed native free: {why}");
+            kf_arch::rate_eprintln!(
+                "kf3: USER_RING_QUOTA_RETAINED after confirmed native free: {why}"
+            );
         }
         // Queue metadata may contend; no publisher guard is held over it.
         let cleanup = self.inbox.user_va.release_after_channel_free(lease);
@@ -1003,7 +1008,9 @@ impl ChanPlane {
                 holds.retain(|(id, _)| !Arc::ptr_eq(id, &identity));
             }
         } else {
-            eprintln!("kf3: USER_RING_STORAGE_CLEANUP_RETAINED host {token:#x}: {cleanup:?}");
+            kf_arch::rate_eprintln!(
+                "kf3: USER_RING_STORAGE_CLEANUP_RETAINED host {token:#x}: {cleanup:?}"
+            );
         }
     }
 
@@ -1024,7 +1031,7 @@ impl ChanPlane {
         // Unexpected owner loss: keep CPU/RM resources until session close.
         // Do not attempt native context free without confirmed channel cleanup.
         std::mem::forget(n);
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf3: USER_RING_NOTIFIER_OWNER_LOST host {token:#x}; retained until session close"
         );
     }
@@ -1040,7 +1047,9 @@ impl ChanPlane {
                 .is_none_or(|p| match p.release(&self.relay_stats) {
                     Ok(()) => true,
                     Err(why) => {
-                        eprintln!("kf3: {why}; source views retained until session close");
+                        kf_arch::rate_eprintln!(
+                            "kf3: {why}; source views retained until session close"
+                        );
                         false
                     }
                 });
