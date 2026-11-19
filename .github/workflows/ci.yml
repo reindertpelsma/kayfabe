@@ -2095,6 +2095,10 @@ jobs:
           # Proprietary Linux image tooling (2026-11-16): identity, argv, clock rule, grep, driver stub, auth-capture; >=2 named killers.
           python3 -B -I scripts/ci/test_propimage_linux.py
           python3 -B -I scripts/ci/propimage_linux_mutants.py
+          # MATLAB rows of the Linux proprietary image (2026-11-17): fixture results, a fake guest transport, the optional `matlab` payload stage; >=2 named killers per mutant.
+          python3 -B -I scripts/ci/test_matlab_rows.py
+          python3 -B -I scripts/ci/matlab_rows_mutants.py
+          python3 -B -I scripts/ci/matlab_stage_mutants.py
           # Unreal installed-build tooling (2026-11-17, design-only, fake runner): cache key, budgets, resume, build-or-fetch, pins; >=2 named killers.
           python3 -B -I scripts/ci/test_unreal_build.py
           python3 -B -I scripts/ci/unreal_build_mutants.py

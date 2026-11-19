@@ -185,7 +185,7 @@ MUTANTS = [
       RV + "test_a_pass_image_with_an_unproven_boot_is_refused", TI + "test_the_record_validates_for_the_report_and_a_pass_needs_proven_boots"),
     M("report-extra-keys-allowed", "report", 'keys <= set(im) <= keys | {"error"} and im["verdict"] in verdicts', 'keys <= set(im) and im["verdict"] in verdicts',
       RV + "test_shape_extra_keys_and_a_pass_without_apps_are_refused", RV + "test_an_image_with_an_extra_key_is_refused"),
-    M("payload-accepts-not-run", "payload", 'or rc or doc.get("verdict") != "PASS":\n        raise EvidenceError("propimage_apps")\n    return [row("propimage_apps", 1)]\n\n\ndef propimages_refusal', 'or rc:\n        raise EvidenceError("propimage_apps")\n    return [row("propimage_apps", 1)]\n\n\ndef propimages_refusal',
+    M("payload-accepts-not-run", "payload", 'or rc or doc.get("verdict") != "PASS":\n        raise EvidenceError("propimage_apps")\n    return [row("propimage_apps", 1)]\n\n\ndef matlab_refusal', 'or rc:\n        raise EvidenceError("propimage_apps")\n    return [row("propimage_apps", 1)]\n\n\ndef matlab_refusal',
       PR + "test_only_a_pass_with_rc_zero_for_this_sha_is_a_pass", PR + "test_a_refused_run_is_the_stage_failing"),
     M("images-file-and-flags-allowed", "pa", '            if spec:\n                raise spec_mod.SpecError("IMAGES_FILE_AND_FLAGS")', "            if False:\n                pass",
       CL + "test_images_file_and_flags_together_are_refused_and_a_file_is_read", CL + "test_images_file_and_a_propimage_flag_together_are_refused_too"),

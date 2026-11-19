@@ -25,7 +25,7 @@ const count = (n) => Number.isSafeInteger(n) && n >= 0;
 
 // The stages the payload plans for an instruction, in run order: the same rule as plan_stage_names in scripts/ci/vast_payload.py
 // (test/bandwidth.test.js compares the two). `only` and `skip` are the payload's --only and --skip lists: `only` is what puts the manual-only stage
-// `install_flow` (and `propimage_apps` without an image list) into a large plan.
+// `install_flow` (and `propimage_apps` without an image list, and `matlab` without the instruction's object) into a large plan.
 export function plannedStages(instruction, { only = [], skip = [] } = {}) {
   const i = instruction;
   const names = ['provision', 'cuda_host', 'merge_bar', 'cuda_guest'];
@@ -44,6 +44,8 @@ export function plannedStages(instruction, { only = [], skip = [] } = {}) {
   }
   if ((i.propimages ?? []).length > 0 || (i.tier === 'large' && only.includes('propimage_apps')))
     names.push('propimage_apps');
+  if (i.tier === 'large' && ((i.matlab ?? null) !== null || only.includes('matlab')))
+    names.push('matlab');
   if ((i.stages ?? []).includes('specviewperf')) names.push('specviewperf');
   return names;
 }
