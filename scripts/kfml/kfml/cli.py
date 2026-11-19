@@ -6,7 +6,7 @@ import json
 import os
 import sys
 
-from . import buildwheels, bundle, datasets, gating, registry, runner, setup_venv, versions
+from . import buildwheels, bundle, datasets, flavor, gating, registry, runner, setup_venv, versions
 from . import env as envmod
 from .spec import MID_TOTAL_LIMIT_S, guest_estimate_s, tier_problems
 
@@ -42,6 +42,10 @@ def _list(args, out):
     return 0
 
 
+def flavor_cuda(name):
+    return datasets.load_pins()["flavors"][name]["cuda"]
+
+
 def _check(args, out, probe=envmod.probe_env):
     e = probe()
     root = envmod.venv_root()
@@ -56,13 +60,21 @@ def _check(args, out, probe=envmod.probe_env):
     item(e.gpu_visible or e.cuda_available, "NVIDIA GPU: %s, cc %s, %s GB, driver %s" % (
         e.gpu_name, versions.cc_str(e.cc), e.vram_total_gb and round(e.vram_total_gb, 1), e.driver),
         "no GPU visible: need an NVIDIA GPU and its driver (the driver is never installed by kfml)")
+    lines.append("flavor: %s%s" % (e.flavor or "NONE", "  (" + e.flavor_reason + ")" if e.flavor_reason else ""))
+    lines.append("       driver %s supports CUDA %s; GPU sm_%s" % (
+        e.driver, e.driver_cuda, ("%d%d" % tuple(e.cc)) if e.cc else "?"))
+    if e.flavor_blocked:
+        lines.append("NOT_RUN: no pinned flavour can run here; every test row will be NOT_RUN (not FAIL)")
+    elif e.flavor and e.torch and e.cuda and e.cuda != flavor_cuda(e.flavor):
+        lines.append("note: installed torch is CUDA %s, the derived flavour is %s (CUDA %s); re-run setup with "
+                     "--flavor auto into a fresh venv if it does not run" % (e.cuda, e.flavor, flavor_cuda(e.flavor)))
     item(bool(e.vram_total_gb and e.vram_total_gb >= 8), "VRAM >= 8 GB (documented floor)",
          "tests need >= 8 GB total VRAM; smaller cards get NOT_RUN")
     item(e.torch is not None, "torch %s (cuda %s, cudnn %s, triton %s)" % (e.torch, e.cuda, e.cudnn, e.triton),
-         "python3 -m kfml setup --venv DIR   (then run kfml from DIR/bin/python)")
+         "python3 -m kfml setup --venv DIR   (flavour is derived from the box; then run kfml from DIR/bin/python)")
     if e.torch and not e.cuda_available:
         item(False, "torch.cuda usable (%s)" % e.cuda_error,
-             "driver too old for this CUDA wheel -> NOT_RUN; try `setup --flavor cu126`, or update the driver")
+             "driver too old for this CUDA wheel -> NOT_RUN; `setup --flavor auto` picks the flavour the driver can run")
     item(bool(e.torch and versions.ge(e.torch, "2.7")), "torch >= 2.7", "install torch >= 2.7 (cu128 index)")
     nv_ok = bool(e.nvcc) and (not e.cuda or tuple(versions.parse(e.nvcc)[:2]) == tuple((versions.parse(e.cuda) or ())[:2]))
     item(nv_ok, "nvcc %s (must equal torch cuda %s major.minor) %s" % (e.nvcc, e.cuda, e.nvcc_path or ""),
@@ -88,7 +100,7 @@ def _check(args, out, probe=envmod.probe_env):
 def _run(args, out, probe=envmod.probe_env):
     specs = registry.all_specs()
     try:
-        sel = runner.select(specs, args.only.split(",") if args.only else None, args.all)
+        sel = runner.select(specs, args.only.split(",") if args.only else None, args.all, args.tier)
     except runner.RunnerError as e:
         sys.stderr.write("error: %s\n" % e)
         return 2
@@ -115,8 +127,29 @@ def _run(args, out, probe=envmod.probe_env):
 
 
 def _setup(args, out):
+    if args.plan:  # the flavour decision only: nothing is created, nothing is downloaded (the stage uses it to start downloads only when a flavour fits)
+        smi = envmod.nvidia_smi()
+        facts = {"gpu_name": smi.get("name"), "compute_cap": "%d.%d" % tuple(smi["cc"]) if smi.get("cc") else None,
+                 "driver": smi.get("driver"), "driver_cuda": smi.get("driver_cuda"),
+                 "vram_gb": round(smi["total"], 2) if smi.get("total") else None}
+        facts = {k: v for k, v in facts.items() if v is not None}
+        try:
+            f, why = setup_venv.resolve_flavor(args.flavor, smi=smi)
+        except setup_venv.NoFlavor as e:
+            out.write(json.dumps({"status": "NOT_RUN", "reason": str(e), "facts": facts}) + "\n")
+            return 3
+        except setup_venv.SetupError as e:
+            sys.stderr.write("error: %s\n" % e)
+            return 2
+        out.write(json.dumps({"flavor": f, "flavor_reason": why, "facts": facts}) + "\n")
+        return 0
     try:
-        r = setup_venv.setup(args.venv, args.flavor, args.python, args.with_nvcc, args.allow_unhashed, args.installer)
+        r = setup_venv.setup(args.venv, args.flavor, args.python, args.with_nvcc, args.allow_unhashed, args.installer,
+                             nvcc_if_needed=args.nvcc_if_needed, wheelhouse=args.wheelhouse)
+    except setup_venv.NoFlavor as e:
+        sys.stderr.write("NOT_RUN: %s\n" % e)
+        out.write(json.dumps({"status": "NOT_RUN", "reason": str(e)}) + "\n")
+        return 3
     except setup_venv.SetupError as e:
         sys.stderr.write("error: %s\n" % e)
         return 2
@@ -125,17 +158,20 @@ def _setup(args, out):
 
 
 def _fetch(args, out):
-    root = envmod.venv_root()
-    if root is None:
-        sys.stderr.write("error: run inside the venv (or set KF_ML_HOME)\n")
-        return 2
+    if args.into:
+        data = args.into  # datasets only, no venv needed (the payload prefetches while earlier stages run)
+    else:
+        root = envmod.venv_root()
+        if root is None:
+            sys.stderr.write("error: run inside the venv (or set KF_ML_HOME), or pass --into DIR\n")
+            return 2
+        data = envmod.cache_env(root)["KF_ML_DATA"]
     pins = datasets.load_pins()
-    data = envmod.cache_env(root)["KF_ML_DATA"]
     rc = 0
     for name in sorted(pins["datasets"]):
         try:
-            out.write(json.dumps(dict(name=name, **datasets.fetch(name, data, pins))) + "\n")
-        except (datasets.PinMe, datasets.HashMismatch) as e:
+            out.write(json.dumps(dict(name=name, **datasets.fetch(name, data, pins, source_dir=args.source_dir))) + "\n")
+        except (datasets.PinMe, datasets.HashMismatch, FileNotFoundError, OSError) as e:
             sys.stderr.write("%s\n" % e)
             rc = 1
     return rc
@@ -161,6 +197,52 @@ def _build_wheels(args, out):
     return 1 if any("error" in r or r.get("refused") for r in recs) else 0
 
 
+def _wheelhouse(args, out):
+    from . import wheelhouse as wh
+    pins = datasets.load_pins()
+    if args.verify:
+        try:
+            doc = wh.verify(args.out)
+        except wh.WheelhouseError as e:
+            sys.stderr.write("error: %s\n" % e)
+            return 1
+        out.write(json.dumps({"verified": len(doc["files"]), "total_bytes": doc["total_bytes"], "flavors": sorted(doc["flavors"])}) + "\n")
+        return 0
+    if args.flavor == "all":
+        flavors = [n for n, _ in flavor.table(pins)]
+    elif args.flavor == "auto":
+        if args.flavor_for:
+            dc, cc = args.flavor_for.split(":")
+            c = flavor.choose(pins, dc, tuple(int(x) for x in cc.split(".")))
+            if c.flavor is None:
+                sys.stderr.write("NOT_RUN: %s\n" % c.reason)
+                out.write(json.dumps({"status": "NOT_RUN", "reason": c.reason}) + "\n")
+                return 3
+            flavors = [c.flavor]
+        else:
+            try:
+                f, _ = setup_venv.resolve_flavor("auto", pins)
+            except setup_venv.NoFlavor as e:
+                sys.stderr.write("NOT_RUN: %s\n" % e)
+                out.write(json.dumps({"status": "NOT_RUN", "reason": str(e)}) + "\n")
+                return 3
+            flavors = [f]
+    else:
+        flavors = args.flavor.split(",")
+    try:
+        doc = wh.build(args.out, flavors, pins, guest_python=args.guest_python, guest_glibc=args.guest_glibc, with_redist=not args.no_redist, datasets=args.with_data)
+    except (wh.WheelhouseError, setup_venv.SetupError) as e:
+        sys.stderr.write("error: %s\n" % e)
+        return 1
+    out.write(json.dumps({"flavors": flavors, "files": len(doc["files"]), "total_bytes": doc["total_bytes"], "build_s": doc["build_s"]}) + "\n")
+    return 0
+
+
+def wheelhouse_default_glibc():
+    from . import wheelhouse as wh
+    return wh.DEFAULT_GLIBC
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="kfml")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -171,6 +253,8 @@ def build_parser():
     s = sub.add_parser("run")
     s.add_argument("--only")
     s.add_argument("--all", action="store_true", help="include tests that are not part of the gate")
+    s.add_argument("--tier", choices=("mid", "large"),
+                   help="mid: the gated mid tests; large: every test (mid plus the non-gate ones)")
     s.add_argument("--json")
     s.add_argument("--record-reference")
     s.add_argument("--reference")
@@ -178,12 +262,30 @@ def build_parser():
     s.add_argument("--budget-scale")
     s = sub.add_parser("setup")
     s.add_argument("--venv", required=True)
-    s.add_argument("--flavor", choices=tuple(setup_venv.FLAVORS), default="cu128")
+    s.add_argument("--flavor", choices=("auto",) + tuple(setup_venv.FLAVORS), default="auto",
+                   help="auto (default): derived from the driver's CUDA version and the GPU's compute capability")
     s.add_argument("--python")
     s.add_argument("--with-nvcc", action="store_true")
+    s.add_argument("--nvcc-if-needed", action="store_true",
+                   help="like --with-nvcc, but only when no nvcc with the flavour's CUDA major.minor is on the box")
     s.add_argument("--allow-unhashed", action="store_true")
+    s.add_argument("--plan", action="store_true", help="print the flavour decision and exit (3 = no flavour fits); installs and creates nothing")
+    s.add_argument("--wheelhouse", metavar="DIR", help="offline install from a wheelhouse (no index, hashes required)")
     s.add_argument("--installer", choices=("pip", "uv"), default="pip")
-    sub.add_parser("fetch-data")
+    s = sub.add_parser("fetch-data")
+    s.add_argument("--into", metavar="DIR", help="download into DIR instead of the venv's data directory (no venv needed)")
+    s.add_argument("--from", dest="source_dir", metavar="DIR",
+                   help="offline: take the datasets from DIR (a wheelhouse's data/); still verified against pins.json")
+    s = sub.add_parser("wheelhouse", help="build or verify the offline wheelhouse (host side; the guest installs from it)")
+    s.add_argument("--out", required=True)
+    s.add_argument("--flavor", default="auto", help="auto (this box), all, or cu126|cu128 (comma separated)")
+    s.add_argument("--guest-python", help="the CPython (3.12) of the machine that will install it; default: this interpreter")
+    s.add_argument("--guest-glibc", default=wheelhouse_default_glibc(), help="glibc of the guest (2.39): the newest manylinux tag accepted")
+    s.add_argument("--no-redist", action="store_true")
+    s.add_argument("--with-data", action="store_true", help="also fetch the pinned datasets into OUT/data")
+    s.add_argument("--verify", action="store_true", help="only re-hash OUT against its MANIFEST.json")
+    s.add_argument("--flavor-for", metavar="DRIVER_CUDA:CC",
+                   help="choose the flavour for these guest facts instead of this box (e.g. 12.6:8.9)")
     s = sub.add_parser("bundle")
     s.add_argument("--out", required=True)
     s.add_argument("--wheels")
@@ -196,4 +298,4 @@ def main(argv=None, out=None):
     out = out or sys.stdout
     args = build_parser().parse_args(argv)
     return {"list": _list, "check": _check, "run": _run, "setup": _setup, "fetch-data": _fetch,
-            "bundle": _bundle, "build-wheels": _build_wheels}[args.cmd](args, out)
+            "bundle": _bundle, "build-wheels": _build_wheels, "wheelhouse": _wheelhouse}[args.cmd](args, out)

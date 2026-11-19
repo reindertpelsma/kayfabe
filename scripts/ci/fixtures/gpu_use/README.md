@@ -30,3 +30,10 @@ real line, because no run has printed it yet.
 | `nvenc_h264` | `nvenc_gpu.log` | `nvenc_cpu.log` (`libx264` encoder tag) | the ffmpeg lines REAL; `ENCODER_TAG` is the new line of the row, SYNTHETIC value |
 | `nvdec_h264` | `nvdec_gpu.log` | `nvdec_cpu.log` (`pix_fmt: yuv420p`), `nvdec_failed_setup.log` | the `frame=` lines REAL; the `Reinit context ... pix_fmt:` marker INFERRED from the ffmpeg sources, never seen in a log of this tree |
 | `torch_*`, `hf_generate`, `cupy` | `torch_gpu.log`, `cupy_gpu.log` | `torch_cpu.log`, `torch_noproof.log` (the row dropped the proof) | SYNTHETIC: the `GPU_USE_PROOF` line the scripts now print |
+
+## ffmpeg 4.4.2 (Ubuntu 22.04) rows of the FIXED commands
+
+| file | what it is | label |
+|---|---|---|
+| `nvenc_gpu_ffmpeg44.log`, `nvdec_gpu_ffmpeg44.log` | the nvenc_h264 and nvdec_h264 rows after the fix (stream-mapping line kept, both `Reinit context` lines kept), bare metal, RTX 3090 | REAL (`traces/open_rows_guest_20261117/runs/F1/`, host name scrubbed) |
+

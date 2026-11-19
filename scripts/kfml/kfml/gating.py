@@ -18,6 +18,9 @@ def evaluate(spec, env, environ=None) -> Verdict:
     environ = os.environ if environ is None else environ
     if not env.gpu_visible and not env.cuda_available:
         return Verdict("env_missing", "no NVIDIA GPU visible (nvidia-smi found none)")
+    if env.torch is None and env.flavor_blocked:
+        # nothing to run and nothing installable: hardware/driver cannot take any pinned wheel flavour
+        return Verdict("not_run", env.flavor_reason)
     if env.torch is None:
         return Verdict("env_missing", "torch is not importable (%s); run `kfml setup --venv DIR`" % (env.cuda_error or ""))
     if not env.cuda_available:

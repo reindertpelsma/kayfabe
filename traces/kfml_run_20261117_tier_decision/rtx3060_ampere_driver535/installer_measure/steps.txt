@@ -1,0 +1,5 @@
+pip rc=0 s=98
+uv rc=2 s=2
+8170	/root/m_pip
+23	/root/m_uv
+done

@@ -1,0 +1,4 @@
+plan rc=3
+cold stage rc=0 wall=0s
+overlay         100G   55M  100G   1% /
+done

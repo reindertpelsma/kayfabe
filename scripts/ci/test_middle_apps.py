@@ -401,7 +401,7 @@ class PayloadMiddle(unittest.TestCase):
     def test_explicit_middle_request_runs_both_after_the_linux_bar(self):
         rc, result, calls = self.go()
         self.assertEqual(rc, 0, result)
-        self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
+        self.assertEqual([c for c in calls if c != "kfml"][-3:], ["apps", "windows_gate", "windows_apps"])  # kfml is a default stage since 2026-11-17
 
     def test_all_66_apps_and_windows_mid_fit_the_declared_suffix(self):
         names = self.m.apps_gate_list(ROOT, "middle")
@@ -422,7 +422,7 @@ class PayloadMiddle(unittest.TestCase):
             soft=246, names=names, logs={"windows_apps": (text, rc)}
         )
         self.assertEqual(rc, 0, result)
-        self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
+        self.assertEqual([c for c in calls if c != "kfml"][-3:], ["apps", "windows_gate", "windows_apps"])  # kfml is a default stage since 2026-11-17
         counts = {row["name"]: row["pass"] for row in result["suites"]}
         self.assertEqual((counts["apps"], counts["windows_apps"]), (66, 10))
 
@@ -515,13 +515,13 @@ class PayloadMiddle(unittest.TestCase):
         self.assertNotIn("windows_gate", calls)
 
     def test_mid_apps_need_their_cleanup_margin_too(self):
-        rc, result, calls = self.after_stage(6, 235)
+        rc, result, calls = self.after_stage(7, 235)  # stage 7 is windows_gate now that kfml (6) is a default stage
         self.assertEqual(rc, 1)
         self.assertNotIn("windows_apps", calls)
         self.assertIn("windows_apps_retry_time", [x["name"] for x in result["suites"]])
 
     def test_mid_apps_do_not_start_with_only_the_raw_matrix_budget(self):
-        rc, result, calls = self.after_stage(6, 240)
+        rc, result, calls = self.after_stage(7, 240)
         self.assertEqual(rc, 1)
         self.assertNotIn("windows_apps", calls)
 
@@ -646,7 +646,7 @@ class OnstartContract(unittest.TestCase):
                 self.assertEqual(box.get("KF_LINUX_APPS"), "1")
                 rc, result, calls, text = self.plan(box)
                 self.assertEqual(rc, 0, result)
-                self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
+                self.assertEqual([c for c in calls if c != "kfml"][-3:], ["apps", "windows_gate", "windows_apps"])  # kfml is a default stage since 2026-11-17
                 self.assertIn({"name": "apps", "pass": len(apps.NAMES), "fail": 0, "skip": 0}, result["suites"])
                 self.assertRegex(text, r"KF_PAYLOAD_TIER .* winapps=mid linuxapps=1\n")
 

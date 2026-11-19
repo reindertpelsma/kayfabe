@@ -210,6 +210,22 @@ class AppProofs(unittest.TestCase):
         self.assertIs(p["ok"], True)
         self.assertEqual((p["facts"]["devices"], p["facts"]["used"]), (3, 1))
 
+    def test_hashcat_cuda_notice_line_is_not_a_device(self):
+        # MEASURED 2026-11-17, kf3 guest, RTX 3090, hashcat 6.2.6: the CUDA backend is not usable in the guest (no toolkit) and hashcat says so in the SAME
+        # `* Device #1:` form as a device, then runs on the NVIDIA GPU through OpenCL. The notice is not a device; the GPU run is a pass.
+        text = ("* Device #1: CUDA SDK Toolkit not installed or incorrectly installed.\n"
+                "OpenCL API (OpenCL 3.0 CUDA 13.0.98) - Platform #1 [NVIDIA Corporation]\n"
+                "* Device #1: NVIDIA GeForce RTX 3090, 7552/7871 MB (1967 MB allocatable), 82MCU\n"
+                "OpenCL API (OpenCL 3.0 PoCL 5.0+debian  Linux) - Platform #2 [The pocl project]\n"
+                "* Device #2: cpu-haswell-AMD EPYC 7B13 64-Core Processor, skipped\n")
+        p = gu.proof_hashcat(text)
+        self.assertIs(p["ok"], True, p["reasons"])
+        self.assertEqual(p["facts"]["devices"], 2)
+        # a notice and nothing else proves nothing; a notice followed by a CPU device is still the CPU
+        self.assertIsNone(gu.proof_hashcat("* Device #1: CUDA SDK Toolkit not installed or incorrectly installed.\n")["ok"])
+        cpu = text.replace("NVIDIA GeForce RTX 3090, 7552/7871 MB (1967 MB allocatable), 82MCU", "cpu-haswell-AMD EPYC 7B13, 1024/2048 MB, 6MCU")
+        self.assertIs(gu.proof_hashcat(cpu)["ok"], False)
+
     def test_hashcat_without_device_lines_is_unproven_none(self):
         self.assertIsNone(gu.proof_hashcat("Session..........: hashcat\nSpeed.#1.........:  5296.5 MH/s")["ok"])
 
@@ -322,6 +338,42 @@ def smi_for(app, busy=True):
     # the encoder session counter is the last column of the query: 0 before, 1 while busy
     q2 = "\n".join(l.rsplit(",", 2)[0] + ", %d, 0" % (0 if (i < 2 or not busy) else 1) for i, l in enumerate(q.splitlines()))
     return gu.smi_record(q2, d, eng, min_samples=rows.policy(app)["min_samples"])
+
+
+class GuestMemoryRise(unittest.TestCase):
+    """MEASURED 2026-11-17 (first guest run, RTX 3090, kf3 04613288, blender_cycles CUDA+OPTIX): census +9512 submissions, GPU 53 percent busy, but host video memory
+    8761 -> 8792 MiB. A guest's device memory is the store the host reserves at boot (8 GiB), so a guest allocation never moves host VRAM: the `mem` observable can
+    only be required of a bare-metal run. The census and the other engines stay required of a guest."""
+
+    Q = "\n".join("2026/11/17 00:00:%02d.000, %d, 0, %d, 0, 0" % (i, 53, 8761 + (31 if i > 3 else 0)) for i in range(8))
+    D = "# gpu sm mem enc dec\n" + "\n".join("0 53 0 0 0" for _ in range(4))
+
+    def rec(self, side):
+        smi = gu.smi_record(self.Q, self.D, rows.host_engines("blender_cycles", side), min_samples=1)
+        return rows.evaluate("blender_cycles", side, fx("blender_gpu.log"), fx("kf3_window_gpu.log").splitlines(), fx("kf3_base.txt").strip(), smi)
+
+    def test_the_guest_row_does_not_need_host_video_memory_to_rise(self):
+        rec = self.rec("guest")
+        self.assertEqual(rec["verdict"], gu.PASS, rec["reasons"])
+        self.assertEqual(rows.host_engines("blender_cycles", "guest"), ("gpu",))
+
+    def test_the_bare_metal_row_still_needs_the_memory_to_rise(self):
+        self.assertEqual(rows.host_engines("blender_cycles", "host"), ("gpu", "mem"))
+        self.assertEqual(self.rec("host")["verdict"], gu.FAIL)
+
+    def test_an_idle_host_gpu_still_fails_a_guest_row(self):
+        q = "\n".join("2026/11/17 00:00:%02d.000, 0, 0, 8761, 0, 0" % i for i in range(8))
+        smi = gu.smi_record(q, "# gpu sm mem enc dec\n0 0 0 0 0\n0 0 0 0 0\n", rows.host_engines("blender_cycles", "guest"), min_samples=1)
+        rec = rows.evaluate("blender_cycles", "guest", fx("blender_gpu.log"), fx("kf3_window_gpu.log").splitlines(), fx("kf3_base.txt").strip(), smi)
+        self.assertEqual(rec["verdict"], gu.FAIL, rec["reasons"])
+
+    def test_the_sampler_files_of_a_guest_row_are_read_without_the_memory_requirement(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "host_query.csv").write_text(self.Q)
+            (Path(d) / "host_dmon.txt").write_text(self.D)
+            self.assertEqual(rows.smi_from_dir("blender_cycles", d, "guest")["required"], ["gpu"])
+            self.assertEqual(rows.smi_from_dir("blender_cycles", d, "host")["required"], ["gpu", "mem"])
 
 
 class NegativeControls(unittest.TestCase):
@@ -645,6 +697,46 @@ case "$*" in *"-f null"*) echo "[h264 @ 0x1] Reinit context to 1280x720, pix_fmt
 echo "$enc" > "$out"; echo "frame=  600 fps=186 q=17.0"''')
         self.tool("bin/ffprobe", r'''f="${@: -1}"
 case "$*" in *stream_tags=encoder*) echo "Lavc60.31.102 $(cat "$f")";; *) echo 600;; esac''')
+
+    def ffmpeg44(self):
+        """What the Ubuntu 22.04 package (ffmpeg 4.4.2, the box host) prints, MEASURED 2026-11-17 on a Vast RTX 3090 box (traces/open_rows_guest_20261117/): the mp4 has NO
+        `encoder` stream tag, the encoder is named only in the (indented) stream-mapping line, and the h264 decoder prints a `Reinit context` line with the SOFTWARE
+        format first and a second one with `pix_fmt: cuda` when the hwaccel took over."""
+        self.tool("bin/ffmpeg", r'''out="${@: -1}"; enc=$(echo "$@" | sed -n 's/.*-c:v \([a-z0-9_]*\).*/\1/p')
+case "$*" in *"-f null"*) echo "[h264 @ 0x1] Reinit context to 1280x720, pix_fmt: yuv420p"; echo "Stream mapping:"; echo "  Stream #0:0 -> #0:0 (h264 (native) -> wrapped_avframe (native))"
+  echo "$*" | grep -q 'hwaccel none' || { echo "[h264 @ 0x2] format supported: yes, max_mb_count: 65536"; echo "[h264 @ 0x2] Reinit context to 1280x720, pix_fmt: cuda"; }
+  echo "frame=  600 fps=0.0"; exit 0;; esac
+echo "$enc" > "$out"; echo "Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':"; echo "Stream mapping:"; echo "  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 ($enc))"
+echo "Press [q] to stop, [?] for help"; echo "frame=  600 fps=398 q=12.0 Lsize=     890kB time=00:00:19.86"''')
+        self.tool("bin/ffprobe", r'''case "$*" in *stream_tags=encoder*) echo "";; *) echo 600;; esac''')
+
+    def test_nvenc_on_ffmpeg_4_4_is_proved_by_the_stream_mapping_line(self):
+        self.ffmpeg44()
+        res, log, calls = self.run_row("nvenc_h264")
+        self.assertIn("verdict=PASS", res)
+        self.assertIn("Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (h264_nvenc))", log)     # the row's own `grep -v "^  "` used to drop it
+        self.assertEqual(rows.evaluate("nvenc_h264", "host", log)["app"]["ok"], True)
+        res, log, calls = self.run_row("nvenc_h264", True)
+        self.assertEqual(rows.evaluate("nvenc_h264", "host", log)["verdict"], gu.FAIL)
+
+    def test_nvdec_on_ffmpeg_4_4_keeps_the_second_reinit_line(self):
+        self.ffmpeg44()
+        res, log, calls = self.run_row("nvdec_h264")
+        self.assertIn("pix_fmt: cuda", log)                                   # `grep -m1` kept only the first (software) line and the proof called a GPU decode CPU
+        self.assertEqual(rows.evaluate("nvdec_h264", "host", log)["app"]["ok"], True)
+        res, log, calls = self.run_row("nvdec_h264", True)
+        self.assertEqual(rows.evaluate("nvdec_h264", "host", log)["verdict"], gu.FAIL)
+
+    def test_the_real_ffmpeg_4_4_2_rows_of_the_fixed_commands_are_proved(self):
+        # REAL: lines of the fixed nvenc and nvdec rows on bare metal (RTX 3090, Ubuntu 22.04 ffmpeg 4.4.2), traces/open_rows_guest_20261117/runs/F1/
+        self.assertIs(gu.proof_nvenc(fx("nvenc_gpu_ffmpeg44.log"), codec="h264")["ok"], True)
+        self.assertIs(gu.proof_nvdec(fx("nvdec_gpu_ffmpeg44.log"))["ok"], True)
+
+    def test_the_mapping_line_with_nested_parentheses_names_the_encoder(self):
+        line = "  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (h264_nvenc))\nENCODER_TAG \n"
+        self.assertIs(gu.proof_nvenc(line, codec="h264")["ok"], True)
+        self.assertIs(gu.proof_nvenc(line.replace("h264_nvenc", "libx264"), codec="h264")["ok"], False)
+        self.assertIs(gu.proof_nvenc(line.replace("h264_nvenc", "hevc_nvenc"), codec="h264")["ok"], False)
 
     def test_nvenc_encoder_tag(self):
         self.ffmpeg()

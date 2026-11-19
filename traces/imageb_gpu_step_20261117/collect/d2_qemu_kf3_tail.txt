@@ -1,0 +1,300 @@
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00142:0xff040015->host 0x2003e] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply);
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b08e03250) after the host's disable+preempt returned
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00142:0xff1fe034: engine object host 0xcafe028e freed (517 us, off the GSP lock)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: USER_RING_LIFECYCLE (c1d00142, ff040015) mode=Pointer Counts { entries_scan: 15, entries_pointer: 69, pointer_large_entries: 0, pointer_entry_max_bytes: 232, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_byt
+kf3: USER_RING_LAZY_OBSERVE (c1d00142, ff040015) turns=108 put_cache_hits=64 put_fresh_reads=34 obs_skipped=74 obs_unconditional=23 obs_forced_wait=6 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=5 inval_mode_change=0 inval_migration=0 inval_reset=0 inv
+kf3: DOORBELL-LEDGER tok=0x00001017 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003e trap=0 fast=0
+kf3: act free: 0xc1d00142:0xff040015: passthrough 0xc1d00142:0xff040015 token 0x1017 host 0x2003e objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (2381 us, off the GSP lock)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801208 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801211 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50800101 client=0xc1d00015 object=0xff1fe010 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act deferred API context: EvictCtx { engine_type: 1, h_client: 3251634456, chid: 24, chan_client: 3251634494, object: 4279107584 } on 0xc1d0013e:0xff0e0000 -> Windows user-work Passthrough twin(s) [3f]: host channel(s) off the runlist, context UNBOUND (owner ruling B / ?U / ?V) (400 us, off the
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0013e:0xff1fe032: engine object host 0xcafe025f freed (549 us, off the GSP lock)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0013e:0xff1fe026: engine object host 0xcafe025a freed (426 us, off the GSP lock)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0013e:0xff1fe034: engine object host 0xcafe0255 freed (349 us, off the GSP lock)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0013e:0xff1fe01a: engine object host 0xcafe0256 freed (403 us, off the GSP lock)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0013e:0xff1fe02c: engine object host 0xcafe0257 freed (387 us, off the GSP lock)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: USER_RING_LIFECYCLE (c1d0013e, ff04001c) mode=Pointer Counts { entries_scan: 17, entries_pointer: 1196, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max
+kf3: USER_RING_LAZY_OBSERVE (c1d0013e, ff04001c) turns=1302 put_cache_hits=1152 put_fresh_reads=136 obs_skipped=1163 obs_unconditional=24 obs_forced_wait=38 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=77 inval_mode_change=0 inval_migration=0 inval_res
+kf3: DOORBELL-LEDGER tok=0x00000018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3f trap=0 fast=0
+kf3: act free: 0xc1d0013e:0xff04001c: passthrough 0xc1d0013e:0xff04001c token 0x18 host 0x3f objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (2755 us, off the GSP lock)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: PT-NSI host CE3 notifier wake #8192: Raise(2) (vector Some(2), live twins 4)
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.49 clamped=0 late_max_us=4227 kms=55.5 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=56.5 skipped=0 checks=3.9 same=7526 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale
+kf3: family=Ada phase=Running trapped=354894 applied=9384 refused=0 serviced=8458 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x690000 mem[inval=4802 walks=12912/12912 cleared=4802 superseded=0 named_missed=0 unreconciled=0 absent_cleared=51 mapped=60087 unmapped=54337 clipped=0x0 held=0
+kf3: family=Ada phase=Running trapped=359638 applied=9384 refused=0 serviced=8458 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x690000 mem[inval=4802 walks=12912/12912 cleared=4802 superseded=0 named_missed=0 unreconciled=0 absent_cleared=51 mapped=60087 unmapped=54337 clipped=0x0 held=0
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.89 clamped=0 late_max_us=4227 kms=55.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=54.9 skipped=0 checks=4.9 same=7534 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale
+kf3: PT-NSI host GR0 notifier wake #4096: Raise(0) (vector Some(0), live twins 5)
+kf3: family=Ada phase=Running trapped=364372 applied=9384 refused=0 serviced=8458 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=4802 walks=12912/12912 cleared=4802 superseded=0 named_missed=0 unreconciled=0 absent_cleared=51 mapped=60087 unmapped=54337 clipped=0x0 held=0
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.51 clamped=0 late_max_us=4227 kms=59.5 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=60.5 skipped=0 checks=0.0 same=7548 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale
+kf3: family=Ada phase=Running trapped=369358 applied=9384 refused=0 serviced=8458 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x690000 mem[inval=4802 walks=12912/12912 cleared=4802 superseded=0 named_missed=0 unreconciled=0 absent_cleared=51 mapped=60087 unmapped=54337 clipped=0x0 held=0
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.88 clamped=0 late_max_us=4227 kms=58.8 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=57.8 skipped=0 checks=1.9 same=7550 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: family=Ada phase=Running trapped=372911 applied=9389 refused=0 serviced=8463 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=4802 walks=12912/12912 cleared=4802 superseded=0 named_missed=0 unreconciled=0 absent_cleared=51 mapped=60087 unmapped=54337 clipped=0x0 held=0
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.91 clamped=0 late_max_us=4227 kms=28.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=27.9 skipped=0 checks=31.9 same=7592 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stal
+kf3: family=Ada phase=Running trapped=375432 applied=9389 refused=0 serviced=8463 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=4802 walks=12914/12914 cleared=4802 superseded=0 named_missed=0 unreconciled=0 absent_cleared=51 mapped=60087 unmapped=54385 clipped=0x0 held=0
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.95 clamped=0 late_max_us=4227 kms=46.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=46.9 skipped=0 checks=12.9 same=7657 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stal
+kf3: family=Ada phase=Running trapped=379921 applied=9389 refused=0 serviced=8463 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81000 mem[inval=4802 walks=12914/12914 cleared=4802 superseded=0 named_missed=0 unreconciled=0 absent_cleared=51 mapped=60087 unmapped=54385 clipped=0x0 held=0
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.95 clamped=0 late_max_us=4227 kms=45.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=45.9 skipped=0 checks=13.9 same=7678 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stal
+kf3: family=Ada phase=Running trapped=384891 applied=9389 refused=0 serviced=8463 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x690000 mem[inval=4802 walks=12914/12914 cleared=4802 superseded=0 named_missed=0 unreconciled=0 absent_cleared=51 mapped=60087 unmapped=54385 clipped=0x0 held=0
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.58 clamped=0 late_max_us=4227 kms=58.5 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=58.5 skipped=0 checks=0.9 same=7679 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0013a:0xff040017->host 0x40] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); re
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b03ddba80) after the host's disable+preempt returned
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0013f:0xff040016->host 0x20045] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply);
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b0813c460) after the host's disable+preempt returned
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00117:0xff04000e->host 0x37] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); re
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b08105200) after the host's disable+preempt returned
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0011d:0xff040010->host 0x39] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); re
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b08135370) after the host's disable+preempt returned
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0012c:0xff040014->host 0x2003d] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply);
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b0810db50) after the host's disable+preempt returned
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00131:0xff040011->host 0x3a] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); re
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b0539dc30) after the host's disable+preempt returned
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00132:0xff040012->host 0x2003b] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply);
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b081345a0) after the host's disable+preempt returned
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00198:0xff04001b->host 0x44] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); re
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b0728cfa0) after the host's disable+preempt returned
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080110b client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00199:0xff04001e->host 0x20047] + 0 Translated ring(s) ? async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply);
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffa68b0728ab10) after the host's disable+preempt returned
+kf3: display: +969695 ms the console shows no new frame: a lit head has no window (held up to 250 ms) ? the last frame stays (core channel allocated)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3700104 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: TSPACE-RETIRE tok=0x801 host=0x10028 key=VasKey(13970166078463016970) ring_va=0xff00000000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=2 host=0x10028 fast=0
+kf3: chan token 0x801 (host 0x10028) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=5 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tie
+kf3: act free: 0xc1e00008:0x2: translated host 0x10028 (2095 us, off the GSP lock)
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=969.844s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=969.844s BAR1's physical view REFUSED: boot framebuffer [0x0, +0x7f0000): 56 placement(s) of the guest's still overlap it (first 0x0+0x10000 -> Some(1ead20000)) ? BAR1's physical view not restored; boot framebuffer scrub REFUSED: not scrubbed: a newer guest RM life began (fn 72) after thi
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=0xc1e00003 object=0xcaf00002 params=00000000000000000000000000000000000000000000000000000000000000000000000000000000 result=0x0
+kf3: display: SharedData(None)
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0
+kf3: GSP rpc UnloadingGuestDriver seq=0
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=64 ? the guest's RM gives BAR1 up
+kf3: GSP fn 47: the guest RM unloaded with 23 client(s) still holding host objects [c1d00013, c1d00015, c1d00016, c1d00018, c1d00019, c1d0001a, c1d0001b, c1d0001c, c1d0001d, c1d0001e, c1d0001f, c1d00022, c1d00028, c1d0002b, c1d00117, c1d0011d, c1d0012c, c1d00131, c1d00132, c1d0013a, c1d0013f, c1d001
+kf3: GSP phase Running -> Suspending
+kf3: display: +969824 ms the guest's display life ENDED (its RM unloaded): 21 model channel(s), 0 queued completion(s) dropped (never written) ? the boot layer is shown again
+kf3: TSPACE-RETIRE tok=0x802 host=0x10029 key=VasKey(13965662457344034928) ring_va=0xff00100000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=1 host=0x10029 fast=0
+kf3: chan token 0x802 (host 0x10029) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=3 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tie
+kf3: act free: 0xc1d00013:0xc1d00013: translated host 0x10029 (2153 us, off the GSP lock)
+kf3: GSP phase Suspending -> Halted
+kf3: TSPACE-RETIRE tok=0x3 host=0x2a key=VasKey(13965662457344034928) ring_va=0xff00200000 released=true stale_binds=0/378 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000003 route=translated emulated=0 forwarded=91 host=0x2a fast=0
+kf3: chan token 0x3 (host 0x2a) RETIRED, forwarded=91 submissions=189 splits=0/0 serves=1217 last_put=Some(91) gp_get=Some(91) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_
+kf3: act free: 0xc1d00015:0xc1d00015: translated host 0x2a (5047 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x804 host=0x1002b key=VasKey(13965662457344034928) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=0 host=0x1002b fast=0
+kf3: chan token 0x804 (host 0x1002b) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=f
+kf3: act free: 0xc1d00016:0xc1d00016: translated host 0x1002b (2516 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x1805 host=0x3002c key=VasKey(13965662457344034928) ring_va=0xff00400000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002c fast=0
+kf3: chan token 0x1805 (host 0x3002c) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=
+kf3: act free: 0xc1d00018:0xc1d00018: translated host 0x3002c (2214 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x806 host=0x1002d key=VasKey(13965662457344034928) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=0 host=0x1002d fast=0
+kf3: chan token 0x806 (host 0x1002d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=f
+kf3: act free: 0xc1d00019:0xc1d00019: translated host 0x1002d (1925 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x2007 host=0xc002e key=VasKey(13965662457344034928) ring_va=0xff00600000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00002007 route=translated emulated=0 forwarded=0 host=0xc002e fast=0
+kf3: chan token 0x2007 (host 0xc002e) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=
+kf3: act free: 0xc1d0001a:0xc1d0001a: translated host 0xc002e (2120 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x2808 host=0x7002f key=VasKey(13965662457344034928) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00002808 route=translated emulated=0 forwarded=0 host=0x7002f fast=0
+kf3: chan token 0x2808 (host 0x7002f) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=
+kf3: act free: 0xc1d0001b:0xc1d0001b: translated host 0x7002f (2459 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x2009 host=0xc0030 key=VasKey(13965662457344034928) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00002009 route=translated emulated=0 forwarded=0 host=0xc0030 fast=0
+kf3: chan token 0x2009 (host 0xc0030) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=
+kf3: act free: 0xc1d0001c:0xc1d0001c: translated host 0xc0030 (6343 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x280a host=0x70031 key=VasKey(13965662457344034928) ring_va=0xff00900000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000280a route=translated emulated=0 forwarded=0 host=0x70031 fast=0
+kf3: chan token 0x280a (host 0x70031) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=
+kf3: act free: 0xc1d0001d:0xc1d0001d: translated host 0x70031 (1771 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x300b host=0x50032 key=VasKey(13965662457344034928) ring_va=0xff00a00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000300b route=translated emulated=0 forwarded=0 host=0x50032 fast=0
+kf3: chan token 0x300b (host 0x50032) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=
+kf3: act free: 0xc1d0001e:0xc1d0001e: translated host 0x50032 (1773 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x200c host=0xc0033 key=VasKey(13965662457344034928) ring_va=0xff00b00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000200c route=translated emulated=0 forwarded=0 host=0xc0033 fast=0
+kf3: chan token 0x200c (host 0xc0033) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=
+kf3: act free: 0xc1d0001f:0xc1d0001f: translated host 0xc0033 (1814 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x80d host=0x10034 key=VasKey(13965662586193053776) ring_va=0xff00c00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000080d route=translated emulated=0 forwarded=0 host=0x10034 fast=0
+kf3: chan token 0x80d (host 0x10034) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=f
+kf3: act free: 0xc1d00022:0xc1d00022: translated host 0x10034 (1671 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x80e host=0x10035 key=VasKey(13965662607667890256) ring_va=0xff00d00000 released=true stale_binds=0/68639 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000080e route=translated emulated=0 forwarded=352570 host=0x10035 fast=0
+kf3: chan token 0x80e (host 0x10035) RETIRED, forwarded=352570 submissions=59966 splits=8088/8088 serves=47028 last_put=Some(8506) gp_get=Some(8506) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext
+kf3: act free: 0xc1d00028:0xc1d00028: translated host 0x10035 (1856 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0xf host=0x36 key=VasKey(13965662607667890256) ring_va=0xff00e00000 released=true stale_binds=0/2 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000000f route=translated emulated=0 forwarded=1 host=0x36 fast=0
+kf3: chan token 0xf (host 0x36) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=2 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=tru
+kf3: act free: 0xc1d0002b:0xc1d0002b: translated host 0x36 (3054 us, off the GSP lock)
+kf3: USER_RING_LIFECYCLE (c1d00117, ff04000e) mode=Scan Counts { entries_scan: 132, entries_pointer: 0, pointer_large_entries: 0, pointer_entry_max_bytes: 0, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_bytes: 0
+kf3: USER_RING_LAZY_OBSERVE (c1d00117, ff04000e) turns=290 put_cache_hits=0 put_fresh_reads=241 obs_skipped=0 obs_unconditional=290 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inv
+kf3: DOORBELL-LEDGER tok=0x00000010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x37 trap=0 fast=0
+kf3: act free: 0xc1d00117:0xc1d00117: passthrough 0xc1d00117:0xff04000e token 0x10 host 0x37 objects=5 ctx=CtxBind { initialized: 5, va_bound: 2685, bound: true, promotes: 2, evicts: 0 } freed (3306 us, off the GSP lock)
+kf3: USER_RING_LIFECYCLE (c1d0011d, ff040010) mode=Pointer Counts { entries_scan: 17, entries_pointer: 498, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_
+kf3: USER_RING_LAZY_OBSERVE (c1d0011d, ff040010) turns=535 put_cache_hits=491 put_fresh_reads=42 obs_skipped=473 obs_unconditional=23 obs_forced_wait=7 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=32 inval_mode_change=0 inval_migration=0 inval_reset=0 
+kf3: DOORBELL-LEDGER tok=0x00000012 route=passthrough rung=0 emulated=0 forwarded=0 host=0x39 trap=0 fast=0
+kf3: act free: 0xc1d0011d:0xc1d0011d: passthrough 0xc1d0011d:0xff040010 token 0x12 host 0x39 objects=5 ctx=CtxBind { initialized: 4, va_bound: 2684, bound: true, promotes: 4, evicts: 0 } freed (3716 us, off the GSP lock)
+kf3: USER_RING_LIFECYCLE (c1d0012c, ff040014) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1, pointer_large_entries: 0, pointer_entry_max_bytes: 48, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_bytes
+kf3: USER_RING_LAZY_OBSERVE (c1d0012c, ff040014) turns=23 put_cache_hits=0 put_fresh_reads=22 obs_skipped=1 obs_unconditional=21 obs_forced_wait=1 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_
+kf3: DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003d trap=0 fast=0
+kf3: act free: 0xc1d0012c:0xc1d0012c: passthrough 0xc1d0012c:0xff040014 token 0x1016 host 0x2003d objects=1 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (2032 us, off the GSP lock)
+kf3: USER_RING_LIFECYCLE (c1d00131, ff040011) mode=Pointer Counts { entries_scan: 17, entries_pointer: 67507, pointer_large_entries: 0, pointer_entry_max_bytes: 100776, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_m
+kf3: USER_RING_LAZY_OBSERVE (c1d00131, ff040011) turns=70635 put_cache_hits=66353 put_fresh_reads=4117 obs_skipped=64840 obs_unconditional=22 obs_forced_wait=1442 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=4331 inval_mode_change=0 inval_migration=0 i
+kf3: DOORBELL-LEDGER tok=0x00000013 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3a trap=0 fast=0
+kf3: act free: 0xc1d00131:0xc1d00131: passthrough 0xc1d00131:0xff040011 token 0x13 host 0x3a objects=5 ctx=CtxBind { initialized: 4, va_bound: 2684, bound: true, promotes: 4, evicts: 0 } freed (3333 us, off the GSP lock)
+kf3: display: +969875 ms the console shows BLACK 1920x1080 (the scanout shown is lost: no head is lit) (core channel FREE)
+kf3: USER_RING_LIFECYCLE (c1d00132, ff040012) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1, pointer_large_entries: 0, pointer_entry_max_bytes: 48, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_bytes
+kf3: USER_RING_LAZY_OBSERVE (c1d00132, ff040012) turns=24 put_cache_hits=0 put_fresh_reads=21 obs_skipped=2 obs_unconditional=21 obs_forced_wait=1 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_
+kf3: DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003b trap=0 fast=0
+kf3: act free: 0xc1d00132:0xc1d00132: passthrough 0xc1d00132:0xff040012 token 0x1014 host 0x2003b objects=1 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (2043 us, off the GSP lock)
+kf3: USER_RING_LIFECYCLE (c1d0013a, ff040017) mode=Pointer Counts { entries_scan: 17, entries_pointer: 45044, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_ma
+kf3: USER_RING_LAZY_OBSERVE (c1d0013a, ff040017) turns=50804 put_cache_hits=42580 put_fresh_reads=8088 obs_skipped=45003 obs_unconditional=24 obs_forced_wait=2776 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=3001 inval_mode_change=0 inval_migration=0 i
+kf3: DOORBELL-LEDGER tok=0x00000019 route=passthrough rung=0 emulated=0 forwarded=0 host=0x40 trap=0 fast=0
+kf3: act free: 0xc1d0013a:0xc1d0013a: passthrough 0xc1d0013a:0xff040017 token 0x19 host 0x40 objects=5 ctx=CtxBind { initialized: 4, va_bound: 2684, bound: true, promotes: 4, evicts: 0 } freed (3724 us, off the GSP lock)
+kf3: USER_RING_LIFECYCLE (c1d0013f, ff040016) mode=Pointer Counts { entries_scan: 15, entries_pointer: 2789, pointer_large_entries: 0, pointer_entry_max_bytes: 144, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_b
+kf3: USER_RING_LAZY_OBSERVE (c1d0013f, ff040016) turns=3156 put_cache_hits=2633 put_fresh_reads=515 obs_skipped=2780 obs_unconditional=22 obs_forced_wait=167 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=187 inval_mode_change=0 inval_migration=0 inval_r
+kf3: DOORBELL-LEDGER tok=0x0000101e route=passthrough rung=0 emulated=0 forwarded=0 host=0x20045 trap=0 fast=0
+kf3: act free: 0xc1d0013f:0xc1d0013f: passthrough 0xc1d0013f:0xff040016 token 0x101e host 0x20045 objects=1 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (2141 us, off the GSP lock)
+kf3: USER_RING_LIFECYCLE (c1d00198, ff04001b) mode=Pointer Counts { entries_scan: 17, entries_pointer: 220, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_
+kf3: USER_RING_LAZY_OBSERVE (c1d00198, ff04001b) turns=254 put_cache_hits=213 put_fresh_reads=40 obs_skipped=213 obs_unconditional=21 obs_forced_wait=7 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=13 inval_mode_change=0 inval_migration=0 inval_reset=0 
+kf3: DOORBELL-LEDGER tok=0x0000001d route=passthrough rung=0 emulated=0 forwarded=0 host=0x44 trap=0 fast=0
+kf3: act free: 0xc1d00198:0xc1d00198: passthrough 0xc1d00198:0xff04001b token 0x1d host 0x44 objects=5 ctx=CtxBind { initialized: 4, va_bound: 2684, bound: true, promotes: 4, evicts: 0 } freed (3345 us, off the GSP lock)
+kf3: USER_RING_LIFECYCLE (c1d00199, ff04001e) mode=Pointer Counts { entries_scan: 15, entries_pointer: 18, pointer_large_entries: 0, pointer_entry_max_bytes: 232, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_parts_max: 0, window_entry_max_byt
+kf3: USER_RING_LAZY_OBSERVE (c1d00199, ff04001e) turns=39 put_cache_hits=16 put_fresh_reads=23 obs_skipped=18 obs_unconditional=18 obs_forced_wait=2 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=1 inval_mode_change=0 inval_migration=0 inval_reset=0 inva
+kf3: USER_RING_LOOP SUMMARY (all relays gone, #1) wakes(doorbell=60410 event=42041 spin=5391 backstop=33278 busy_looks=65350 unannounced_spins=9741) backstop_found(work=1 carried=0 contended=0) event_without_progress=293 gates=24 carried_ungated=0 credit_waits=0 contended_turns=558 pop_writebacks=14
+kf3: USER_RING_LIFECYCLE SUMMARY (all relays gone, #1) entries_scan=2777 entries_pointer=127365 pointer_large_entries=0 refused_scan_budget=0 refused_staged_span_budget=0 segments_streamed=0 stream_restarts=0 stream_publish_retries=0 entries_window=0 to_pointer=66 to_window_exact=0 to_window_fresh=0
+kf3: USER_RING_LAZY_OBSERVE SUMMARY (all relays gone, #1) turns=143940 put_cache_hits=122972 put_fresh_reads=20257 obs_skipped=124578 obs_unconditional=5983 obs_forced_wait=5076 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=8303 inval_mode_change=0 inva
+kf3: USER_STORE_VIEWS keep=16 armed=0 evicted_at_quota=0 rm_refused_retry_ok=0 rm_refused_fallback_ok=0 rm_refused_read_refused=0
+kf3: DOORBELL-LEDGER tok=0x00001020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20047 trap=0 fast=0
+kf3: act free: 0xc1d00199:0xc1d00199: passthrough 0xc1d00199:0xff04001e token 0x1020 host 0x20047 objects=1 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (2010 us, off the GSP lock)
+kf3: mem t=969.962s BAR1's physical view REFUSED: boot framebuffer [0x0, +0x7f0000): 56 placement(s) of the guest's still overlap it (first 0x0+0x10000 -> Some(1ead20000)) ? BAR1's physical view not restored; boot framebuffer store [0x0, +0x7f0000) scrubbed first
+kf3: display: +969937 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: display fps[cap=75(unset) copies=22.7 skipped=0 checks=23.7 same=7704 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale=0 probation=0]]
+kf3: family=Ada phase=Halted trapped=388791 applied=9543 refused=0 serviced=8485 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x110100 mem[inval=4835 walks=12947/12947 cleared=4835 superseded=0 named_missed=0 unreconciled=0 absent_cleared=51 mapped=60117 unmapped=54417 clipped=0x0 held=0 
