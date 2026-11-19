@@ -3263,7 +3263,7 @@ impl Device {
                 .map(|mut g| g.take_statements())
                 .unwrap_or_default();
             for s in st {
-                eprintln!("kf3: display: {s:?}");
+                kf_arch::rate_eprintln!("kf3: display: {s:?}");
                 match s {
                     Statement::SharedData(page) => {
                         shared_data = page;
@@ -4019,7 +4019,7 @@ impl Device {
                                     kf_disp::class::put(0, fld, if active { awake } else { sleep }),
                                 );
                             }
-                            eprintln!("kf3: display: {}", a.line(cap));
+                            kf_arch::rate_eprintln!("kf3: display: {}", a.line(cap));
                         }
                     }
                     Effect::Latched { window } => {
@@ -4036,7 +4036,9 @@ impl Device {
                     Effect::Trace(line) => eprintln!("kf3: display: TRACE {line}"),
                     Effect::Exception { chn, at, what } => {
                         dp.counters.exceptions.fetch_add(1, Ordering::Relaxed);
-                        eprintln!("kf3: display: channel {chn} STOPPED at {at:#x}: {what}");
+                        kf_arch::rate_eprintln!(
+                            "kf3: display: channel {chn} STOPPED at {at:#x}: {what}"
+                        );
                     }
                 }
             }

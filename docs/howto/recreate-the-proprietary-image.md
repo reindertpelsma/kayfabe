@@ -217,7 +217,7 @@ STATUS: LIVE, 2026-11-18. MEASURED on one real build by the maintainers; what wa
    - Adobe: whether the application asks to sign in (MEASURED 2026-11-18 on the maintainers' real build: it did).
 4. Do not use the image on a rented machine and do not upload it anywhere until its check has passed. A failed check means the revocation was not effective: revoke again and repeat the check on a new overlay.
 
-The maintainers' checker is a script that creates the overlay, lifts the firewall and prints a checklist of the server round-trip actions to do by hand (NOT in this repository at the time of writing; the checklist above is the procedure).
+The check can be run with the generic tool `scripts/bench/windows/propimage_token_check.py` (`prepare`, `start`, your checklist, `end`; start from `scripts/bench/windows/token_check/checklist_template.md`; firewall lift optional with `--lift-firewall`). The checklist above is the procedure; the tool only automates the overlay, the report and the clean-up, and its guest paths are not covered by the GPU-free tests.
 
 **Named-user licences that need "authorize to work offline".** Some named-user licences must be authorized for offline use while the machine is connected. Do it in install mode with the real clock: allow only that one program through a program-scoped firewall rule, keep the sealed firewall for everything else, authorize, remove the rules, and reseal the image. Do not open the whole network for this. MEASURED 2026-11-18 on the maintainers' real build for ArcGIS Pro only; other products are NOT TESTED.
 
