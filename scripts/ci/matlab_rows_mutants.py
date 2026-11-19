@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REL = "scripts/bench/linux/matlab_rows.py"
 SRC = (ROOT / REL).read_text()
-COPIES = ("scripts/bench/linux/propimage_linux.py", "scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py",
+COPIES = ("scripts/bench/linux/propimage_linux.py", "scripts/bench/linux/propimage_linux_pkgs.py", "scripts/bench/windows/propimage.py", "scripts/bench/windows/clockrule.py", "scripts/bench/windows/clocknet_assert.py",
           "scripts/bench/windows/gpu_assert.py", "scripts/bench/windows/kf3_census.py", "scripts/bench/linux/auth_stub_app.py", "scripts/bench/gpu_use.py")
 
 
