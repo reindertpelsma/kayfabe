@@ -40,6 +40,13 @@ PIN_BLENDER_URL=https://download.blender.org/release/Blender4.5/blender-4.5.0-li
 PIN_BLENDER_SHA256=1188b95cc12321c770b631939f7c25a096910b6f884a990bf9c0f62d52b38aec
 PIN_BLENDER_SIZE=376170648
 
+# Geekbench 6.4.0, fetched only for the manual, owner-approved run (KF_APPS_GEEKBENCH=1, setup_side.sh): sha256 and size MEASURED
+# 2026-11-17 from cdn.geekbench.com (Geekbench publishes no checksum); the same pin is in scripts/ci/trust_manifest.json, which
+# scripts/ci/trust_lint.py holds to this file.
+PIN_GEEKBENCH_URL=https://cdn.geekbench.com/Geekbench-6.4.0-Linux.tar.gz
+PIN_GEEKBENCH_SHA256=43833053774816178a292331cc205923c5e8168ada378d41b9119532125a50ac
+PIN_GEEKBENCH_SIZE=228079249
+
 # --- NVIDIA CUDA toolkit: installed ON THE BOX, at run time, from NVIDIA's own repository -----------------------
 # Nothing from NVIDIA is stored in our images, R2 or release assets (owner ruling 2026-11-07). The repository's
 # signing key arrives inside cuda-keyring_1.1-1_all.deb; that deb is pinned by sha256 per Ubuntu release, and any

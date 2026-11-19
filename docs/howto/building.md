@@ -48,6 +48,8 @@ rustup target add --toolchain 1.99.0 x86_64-unknown-linux-musl x86_64-unknown-ue
 ```
 <!-- src: scripts/bench/provision_box.sh (rustup steps; the script reads the channel from rust-toolchain.toml and adds each target in a loop) -->
 
+The first line is rustup's own official installer, which you run yourself. The repository's provisioning scripts instead fetch a pinned `rustup-init` and check it against the `.sha256` that `static.rust-lang.org` publishes next to it and a pin in `scripts/ci/trust_manifest.json`. <!-- src: scripts/ci/vast_box_main.sh, scripts/ci/trust_manifest.json -->
+
 (`rustup` normally adds the listed targets itself when it installs the pinned toolchain; the commands above make it explicit, as the provisioning script does.) Without the musl standard library the whole workspace fails with `error[E0463]: can't find crate for std` on a crate that has nothing to do with musl. The UEFI target is needed because the build compiles kayfabe's boot-display driver (`firmware/kf-gop`) from source; a missing target is a named build error. No compiled binary is committed to the repository. <!-- src: scripts/bench/provision_box.sh header, crates/kf-gop-image/build.rs -->
 
 ## 4. Build and test the workspace

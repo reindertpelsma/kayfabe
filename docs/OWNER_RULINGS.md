@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-18 (§AV (2026-11-17): the guest may read the physical GPU's utilisation, `report-utilization`, default on; §BA: propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, one-way clock rule, token revocation; §AZ: proprietary images and SPEC leave the required release gate and run as an app lane; 2026-11-17: §AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-18 (§AV (2026-11-17): the guest may read the physical GPU's utilisation, `report-utilization`, default on; §AX (2026-11-17): standalone trust is git only by default, the lift is explicit, what the user passes is trusted, and a user-passed mirror refines §AW.2; §BA: propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, one-way clock rule, token revocation; §AZ: proprietary images and SPEC leave the required release gate and run as an app lane; 2026-11-17: §AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -102,6 +102,36 @@ citation: ask whether its reason still holds before relying on it.
 6. **Rotation.** Each release runs the images on rotating families so that every image meets every family within four releases; a rotation table records the last run per image and family. A change to an architecture-specific path (a per-family descriptor, a channel route, the walker) escalates to every image on the affected family.
 7. **The discovery lane is separate and non-gating.** Real applications and production workloads run between releases, chosen by the coverage gap (new RM control ids, new refusals, new Xid lines: a novelty signal), with automatic capture of the kf3 census window, the host log and the guest events; every novelty is triaged with a control (VFIO, native Windows or the host) and becomes a GPU-free replay test and a gate row.
 8. **What this does not change.** The standalone run still lets a third party add their own proprietary apps and images by configuration (the owner's rule of 2026-11-18). Nothing in this ruling edits how an image is built, and a PASS of the required gate is still a statement only about the gate.
+## §AX. Standalone trust is git only by default; the lift is explicit; what the user passes is trusted, 2026-11-17
+
+**STATUS: LIVE, 2026-11-17; owner rules (stated in conversation, recorded by the coordinator); step 1 of the plan is built GPU-free, no box ran it.**
+Design, the list of what was changed and what was not: `docs/design/V3_STANDALONE_TRUST.md`. Code: `scripts/ci/kf_trust.py`,
+`scripts/ci/trust_manifest.json`, `scripts/ci/trust_lint.py`. Refines §AW.2 (the supersession note stands in that sentence).
+
+1. **Two actors.** The OPERATOR runs their own Worker, boxes and object store: implicit trust in their own storage and pipeline, and a pin is
+   deployment data that guards against staleness, corruption and accidents (§AW), not a security anchor. The THIRD PARTY dislikes opaque
+   blobs: a standalone run trusts git (the reviewed repository) and nothing we build or host.
+2. **The default of a standalone run is "trust git only".** What the repository downloads by itself must be verified by an anchor that does
+   not depend on us. The anchors allowed for a repo-defined default: (1) the official upstream checksum or signature, fetched from the
+   upstream origin; (2) a GitHub attestation, verified (NOT BUILT: the helper refuses it by name, `TRUST_ATTEST_NOT_IMPLEMENTED`); (3) a pin in
+   git of an upstream-authored identifier that anyone can re-check against upstream: a git commit or tag id, a vendor-published checksum, a
+   registry digest, or the sha256 of a SOURCE input. **Not allowed:** a sha256 in git of an artifact WE build or host (class
+   `git-sha256-of-our-own-artifact`; the lint fails on it and the helper refuses it).
+3. **Lifting is explicit and recorded.** Only a named flag (`--trust-lift REASON`, `KF_TRUST_LIFT=REASON`) lifts the default; a failed
+   check then becomes anchor `unverified-lifted` with the computed sha256, marked non-gating. Nothing implies the lift: not reachability,
+   not a URL scheme, not the absence of a Worker.
+4. **What the user passes is ALWAYS trusted.** A path or URL the user passes explicitly (an image, a `.run`, a mirror, a URL file) is a user
+   input: its sha256 and size are recorded, `--expect-sha256` is the user's own opt-in and is enforced in every mode, no verification is
+   needed. The newest statement decides the conflict with §AW.2: **a user-passed mirror, URL or path for a repo-defined artifact is a user
+   input, trusted and recorded.** Strict mode (an operator who sets `KF_TRUST_MODE=strict`; having the Worker's instruction set it is DESIGN INTENT, not wired in this
+   change) additionally holds a user object to the pin the operator keeps (for example the SPECviewperf archive's pin). The Worker's
+   `/bench-data` route, which has no URL file, already keeps that pin.
+5. **PENDING OWNER CONFIRMATION.** The owner agreed to anchor (3) for SOURCE inputs. This change also accepts, and implements, the sha256 of
+   an upstream BINARY that upstream still serves byte-identically (measured from the upstream host, no vendor checksum behind it). Each such
+   entry is marked `pending-owner-confirmation` by the helper and listed by `python3 scripts/ci/trust_lint.py --pending` (11 names on
+   2026-11-17). If the owner rules against it, those entries lose their anchor and their runs need the lift or a user-supplied file.
+6. **Not decided here:** whether `qemu_source.py --from-file` (today still held to the pin, as §AR said) should become a plain user input;
+   the attestation route (step 2) and the CI workflow that would build and attest what only we can build (steps 5 to 7 of the plan).
 
 ## §AW. Pins are deployment data: identity pins are strict-only; a standalone run records and never refuses on them, 2026-11-17
 
@@ -113,7 +143,11 @@ recipe: `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`. Built GPU-free; no box ran
    must not require pins for images, artifacts or apps: someone may have built their own Windows images, compiled their own software
    (for example Unreal), or spread applications over different images. The proprietary images are not strict for standalone.
 2. **Integrity checks stay** (a pack manifest's member hashes, the seed binding, cache-key consistency). Pins on what the repository
-   itself downloads (swtpm, libtpms, noVNC, wheels, install media) are supply-chain integrity and hold in every mode.
+   itself downloads (swtpm, libtpms, noVNC, wheels, install media) are supply-chain integrity and hold in every mode. **[Refined by §AX,
+   2026-11-17: they hold as integrity checks on what the repository downloads BY ITSELF; a mirror, URL or path the user passes for such an
+   artifact is a user input and is trusted and recorded, not refused, and the pin that decides what the repository's own download is must
+   be an anchor that does not depend on us (see §AX.2). The coordinator's audit cites this sentence as "AW.4": in the tree it is §AW.2,
+   and rule 4 of `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`.]**
 3. A standalone run **records** the computed sha256 and size of each user-supplied object in its evidence instead of refusing on a mismatch;
    `--expect-sha256 NAME=HASH` lets a user opt in. One mechanism: `propimage_runspec.pins_enforced(spec)`, true only for a strict spec.
 4. Anyone can **run their own deployment**: build artifacts with the repository's scripts, publish to their own object store, write their own
