@@ -14,7 +14,15 @@ class RunnerError(Exception):
     pass
 
 
-def select(specs, only=None, run_all=False):
+def select(specs, only=None, run_all=False, tier=None):
+    """--tier mid: the gated mid tests. --tier large: every test of every tier (the large tier includes mid, plus the
+    tests that are not in the gate). --only wins over both."""
+    if tier not in (None, "mid", "large"):
+        raise RunnerError("unknown tier %r (mid|large)" % tier)
+    if tier == "large":
+        run_all = True
+    elif tier == "mid" and not only:
+        return [s for s in specs if s.gate and s.tier == "mid"]
     by = {s.name: s for s in specs}
     if only:
         bad = [n for n in only if n not in by]
@@ -37,6 +45,12 @@ def run_all(specs, env, environ=None, root=None, reference_dir=None, record_dir=
     if root is not None:
         cenv.update(envmod.cache_env(root))
         envmod.ensure_dirs(envmod.cache_env(root))
+        # ninja (torch.utils.cpp_extension.load_inline) and nvcc-adjacent tools are console scripts of the venv: put its bin/ on PATH
+        # (the runner is started with an explicit interpreter path, so the venv is usually not activated). First run, 2026-11-16: without
+        # this cuda_ext_inline failed "Ninja is required to load C++ extensions" although the venv has ninja.
+        vbin = root / "bin"
+        if vbin.is_dir():
+            cenv["PATH"] = str(vbin) + os.pathsep + cenv.get("PATH", "")
         cuda_home = root / "cuda_home"
         if (cuda_home / "bin" / "nvcc").exists():
             cenv["CUDA_HOME"] = str(cuda_home)
@@ -85,18 +99,25 @@ def _run_one(spec, env, cenv, data_dir, log_dir, budget, reference_dir, record_d
             psha[up.name] = r.patch_sha256
         if r and r.path:
             paths[up.name] = r.path
+    ref_doc, ref_how = reference.find(reference_dir, spec.name, env)
     ctx = {"name": spec.name, "module": spec.module, "cc": list(env.cc) if env.cc else None,
            "vram_total_gb": env.vram_total_gb, "vram_free_gb": env.vram_free_gb, "data_dir": data_dir,
-           "reference": reference.load(reference_dir, spec.name), "budget_s": budget,
+           "reference": ref_doc.get("data") if ref_doc else None, "budget_s": budget,
            "upstream_paths": paths, "dev_cpu": dev_cpu, "guest": cenv.get("KF_ML_GUEST") == "1"}
     res = exec_fn(ctx, budget, cenv, os.path.join(log_dir, spec.name + ".log"), python=python)
     status, reason = res.get("status", "FAIL"), res.get("reason", "")
     metrics = res.get("metrics", {})
     if res.get("log"):
         metrics = dict(metrics, log=res["log"])
-    if status == "PASS" and record_dir and res.get("reference") is not None:
-        reference.write(record_dir, spec.name, env, res["reference"])
+    wall = time.time() - t0
+    if ref_doc is not None:
+        metrics = dict(metrics, reference_from=reference.describe(ref_doc, ref_how),
+                       wall_ratio=reference.wall_ratio(ref_doc, ref_how, wall))
+    if status == "PASS" and record_dir:  # every PASS row is recorded: `data` (what a workload compares) may be empty, wall_s/metrics never are
+        reference.write(record_dir, spec.name, env, res.get("reference") or {}, wall_s=round(wall, 3),
+                        metrics={k: v for k, v in res.get("metrics", {}).items() if k != "log"},
+                        run_id=cenv.get("KF_ML_RUN_ID"))
         metrics = dict(metrics, reference_recorded=True)
-    return rows.make_row(spec.name, status, reason, time.time() - t0, env, metrics,
+    return rows.make_row(spec.name, status, reason, wall, env, metrics,
                          upstream_commits=commits, patch_sha256=psha,
                          dataset_sha256=res.get("dataset_sha256", {}), **extra)

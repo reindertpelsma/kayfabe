@@ -1,0 +1,169 @@
+{
+  "schema": "kayfabe.gpu-step/1",
+  "waited": [
+    {
+      "t": 19,
+      "kind": "error_text",
+      "devices": [
+        {
+          "class": "Display",
+          "present": false,
+          "status": "Unknown",
+          "problem": null,
+          "service": "nvlddmkm"
+        },
+        {
+          "class": "Display",
+          "present": true,
+          "status": "Error",
+          "problem": 43,
+          "service": "nvlddmkm"
+        }
+      ]
+    },
+    {
+      "t": 37,
+      "kind": "error_text",
+      "devices": [
+        {
+          "class": "Display",
+          "present": false,
+          "status": "Unknown",
+          "problem": null,
+          "service": "nvlddmkm"
+        },
+        {
+          "class": "Display",
+          "present": true,
+          "status": "Error",
+          "problem": 43,
+          "service": "nvlddmkm"
+        }
+      ]
+    },
+    {
+      "t": 56,
+      "kind": "error_text",
+      "devices": [
+        {
+          "class": "Display",
+          "present": false,
+          "status": "Unknown",
+          "problem": null,
+          "service": "nvlddmkm"
+        },
+        {
+          "class": "Display",
+          "present": true,
+          "status": "Error",
+          "problem": 43,
+          "service": "nvlddmkm"
+        }
+      ]
+    },
+    {
+      "t": 75,
+      "kind": "error_text",
+      "devices": [
+        {
+          "class": "Display",
+          "present": false,
+          "status": "Unknown",
+          "problem": null,
+          "service": "nvlddmkm"
+        },
+        {
+          "class": "Display",
+          "present": true,
+          "status": "Error",
+          "problem": 43,
+          "service": "nvlddmkm"
+        }
+      ]
+    },
+    {
+      "t": 95,
+      "kind": "error_text",
+      "devices": [
+        {
+          "class": "Display",
+          "present": false,
+          "status": "Unknown",
+          "problem": null,
+          "service": "nvlddmkm"
+        },
+        {
+          "class": "Display",
+          "present": true,
+          "status": "Error",
+          "problem": 43,
+          "service": "nvlddmkm"
+        }
+      ]
+    },
+    {
+      "t": 119,
+      "kind": "error_text",
+      "devices": [
+        {
+          "class": "Display",
+          "present": false,
+          "status": "Unknown",
+          "problem": null,
+          "service": "nvlddmkm"
+        },
+        {
+          "class": "Display",
+          "present": true,
+          "status": "Error",
+          "problem": 43,
+          "service": "nvlddmkm"
+        }
+      ]
+    }
+  ],
+  "polls": [
+    {
+      "t": 0,
+      "smi_rc": 0,
+      "gpu_lines": 1,
+      "other_lines": 0,
+      "observed_is_expected": true,
+      "observed_is_host": null,
+      "kind": "expected",
+      "devices": [
+        {
+          "class": "Display",
+          "present": false,
+          "status": "Unknown",
+          "problem": null,
+          "service": "nvlddmkm"
+        },
+        {
+          "class": "Display",
+          "present": true,
+          "status": "OK",
+          "problem": 0,
+          "service": "nvlddmkm"
+        }
+      ]
+    }
+  ],
+  "started_before_restart": false,
+  "wait_s": 134,
+  "repair": {
+    "changed": true,
+    "restarted": 1
+  },
+  "restart_at_s": 164,
+  "kind": "expected",
+  "ok": true,
+  "total_s": 238,
+  "poll_s": 74,
+  "problem_codes": [
+    0
+  ],
+  "smi_rc": 0,
+  "gpu_lines": 1,
+  "observed_is_host": null
+}

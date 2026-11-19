@@ -1,0 +1,21 @@
+ok   python 3.10.12
+ok   NVIDIA GPU: NVIDIA GeForce RTX 3060, cc 8.6, 11.8 GB, driver 535.154.05
+flavor: NONE  (no pinned flavour can run on this box: cu128: driver supports CUDA 12.2 < 12.8; cu126: driver supports CUDA 12.2 < 12.6)
+       driver 535.154.05 supports CUDA 12.2; GPU sm_86
+NOT_RUN: no pinned flavour can run here; every test row will be NOT_RUN (not FAIL)
+ok   VRAM >= 8 GB (documented floor)
+ok   torch 2.7.1+cu126 (cuda 12.6, cudnn 90501, triton 3.3.1)
+ok   torch >= 2.7
+ok   nvcc 12.6 (must equal torch cuda 12.6 major.minor) /root/venv_f/cuda_home/bin/nvcc
+ok   C compiler
+ok   Python.h (python3-dev)
+ok   disk free 91.3 GB (>= 20 recommended: CUDA wheels are several GB)
+ok   venv/KF_ML_HOME: /root/venv_f
+ok   venv lock sha256: 26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0
+cache paths (delete the venv dir = full cleanup):
+test nanogpt_compile    OK
+test triton_kernels     OK
+test cuda_ext_inline    OK
+test amp_convnet_cifar  OK
+test stress_alloc       OK
+test managed_oversub    OK

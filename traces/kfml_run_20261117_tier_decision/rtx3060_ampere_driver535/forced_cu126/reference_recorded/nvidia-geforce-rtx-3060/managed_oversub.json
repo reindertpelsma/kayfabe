@@ -1,0 +1,25 @@
+{
+ "compute_cap": "8.6",
+ "cuda": "12.6",
+ "data": {},
+ "driver": "535.154.05",
+ "gpu_name": "NVIDIA GeForce RTX 3060",
+ "measured_on": {
+  "compute_cap": "8.6",
+  "cuda": "12.6",
+  "driver": "535.154.05",
+  "driver_cuda": "12.2",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 3060",
+  "run_id": "kfml_run_20261117_3060_drv535_forced_cu126",
+  "torch": "2.7.1+cu126"
+ },
+ "metrics": {
+  "chunks": 59,
+  "oversub_gb": 14.75,
+  "vram_gb": 11.76214599609375
+ },
+ "test": "managed_oversub",
+ "torch": "2.7.1+cu126",
+ "wall_s": 37.361
+}
