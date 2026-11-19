@@ -24,6 +24,7 @@ pub mod passthrough;
 pub mod ptnsi;
 pub mod rc;
 pub mod ring;
+pub mod splitdump;
 pub mod swmethod;
 pub mod tmode;
 pub mod translated;

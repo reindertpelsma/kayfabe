@@ -1416,6 +1416,12 @@ fn bind_launch(
         };
         return Err(Refusal::ReadOnlyRow { va });
     }
+    // ⚠ DIAGNOSTIC (`KF3_SPLIT_DUMP=1`, default off: a no-op): the copy's resolved destination.
+    if crate::splitdump::on()
+        && let Some((d, _)) = &dst
+    {
+        crate::splitdump::record_copy(d.iter().map(|&(ram, off, n, _)| (ram, off, n)));
+    }
     let sema = match l.sema {
         Some(s) => Some((s, sema_addr(s.va, s.bytes, true, s.reduction, rows, w)?)),
         None => None,

@@ -3974,6 +3974,61 @@ fn retire_association(mirrors: &Mirrors, key: VasKey) -> Result<Mirror, String> 
         .ok_or_else(|| "mirror association missing".to_string())
 }
 
+/// ⚠ DIAGNOSTIC (`KF3_SPLIT_DUMP=1`, default off: returns at once), 2026-11-19 reset hang. Called
+/// on the VA thread for a Translated channel's split of `pdb`, before it is walked. For the first
+/// [`kf_chan::splitdump::DUMPS_PER_PDB`] splits of each pdb in a device-reset epoch, prints what the
+/// store holds at the root page and at the page its first vidmem PDE names (one level, a decoding
+/// GUESS, `kf_chan::splitdump::pde_vidmem_target`), then the Translated copies recorded since the
+/// last dump with their destinations. The store is read through the walker's own `read_store`,
+/// which blocks this thread for two 4 KiB reads. Diagnostic only.
+pub fn split_dump(m: &Manager, pdb: u64) {
+    use kf_chan::splitdump as sd;
+    if !sd::on() || !sd::take_dump_slot(pdb) {
+        return;
+    }
+    let epoch = sd::epoch();
+    let slot = m
+        .table
+        .objects()
+        .into_iter()
+        .find(|(_, root, _)| *root == Some(pdb))
+        .and_then(|(_, _, slot)| slot);
+    let read = |at: u64| -> Result<sd::PageSummary, String> {
+        let mut page = vec![0u8; 4096];
+        m.walker()
+            .kernel
+            .read_store(at, &mut page)
+            .map_err(|e| e.to_string())?;
+        Ok(sd::summarize(&page))
+    };
+    let mut pages = vec![pdb];
+    match read(pdb) {
+        Ok(root) => {
+            eprintln!("{}", sd::page_line(epoch, "root", slot, pdb, pdb, &root));
+            if let Some(l1) = root.first.first().copied().and_then(sd::pde_vidmem_target) {
+                pages.push(l1);
+                match read(l1) {
+                    Ok(s) => eprintln!("{}", sd::page_line(epoch, "level1", slot, pdb, l1, &s)),
+                    Err(e) => eprintln!(
+                        "kf3: SPLITDUMP epoch={epoch} level1 slot={slot:?} pdb={pdb:#x} page={l1:#x} unreadable: {e}"
+                    ),
+                }
+            }
+        }
+        Err(e) => eprintln!(
+            "kf3: SPLITDUMP epoch={epoch} root slot={slot:?} pdb={pdb:#x} unreadable: {e}"
+        ),
+    }
+    let copies = sd::take_copies();
+    eprintln!(
+        "kf3: SPLITDUMP epoch={epoch} copies since last dump: {} (all Translated channels; the requesting token is in the maplog SPLIT-REQUEST line)",
+        copies.len()
+    );
+    for c in &copies {
+        eprintln!("{}", sd::copy_line(c, &pages));
+    }
+}
+
 /// ★★ **Device reset, stage Memory** (`docs/design/V3_DEVICE_RESET.md` §3), on the VA thread, once
 /// no walk is in flight (`VaManager::abandon_life` said so) and after the channel plane freed every
 /// guest client (so no mirror has a live channel). Three steps, driven by [`crate::memreset::Driver`]
@@ -3988,6 +4043,8 @@ fn retire_association(mirrors: &Mirrors, key: VasKey) -> Result<Mirror, String> 
 ///    BAR1/BAR2 objects re-registered with a FRESH walker slot each (§9 ResetWalkerState), their
 ///    windows back to the boot view (BAR1's seed placed again), their roots set as realize set them.
 pub fn reset_memory_prepare(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm) -> String {
+    // ⚠ DIAGNOSTIC (`KF3_SPLIT_DUMP=1`; a no-op when off): the next lines are a new epoch.
+    kf_chan::splitdump::bump_epoch();
     let abandoned = plane.port.reset();
     plane.reset_pramin();
     let mut retired = 0usize;

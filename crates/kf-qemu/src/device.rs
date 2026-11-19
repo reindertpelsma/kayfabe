@@ -2242,6 +2242,12 @@ impl Device {
                 }
                 match target {
                     crate::mem::SplitTarget::Pdb(pdb) => {
+                        // ⚠ DIAGNOSTIC (`KF3_SPLIT_DUMP=1`; returns at once when off).
+                        if let Some(p) = pdb
+                            && kf_chan::splitdump::on()
+                        {
+                            crate::mem::split_dump(&m, p);
+                        }
                         m.on_split_queued(pdb, ticket, Some(queued), trigger);
                     }
                     // ★ §U.2: a deferred TLB invalidate — the channel's own space; its gate is
