@@ -43,6 +43,28 @@ on:
 permissions:
   contents: read
 
+# 2026-11-17 (docs/CI_V3.md, "Job layout, concurrency and caches"): a newer push to the same branch, or a
+# newer commit of the same pull request, cancels the run it supersedes. A stale run stops costing runner
+# minutes and the newer run decides.
+# Never cancelled: pushes to `next` and `master` (every merge keeps its own run), tags, schedule,
+# workflow_dispatch and merge_group. Those get a group that holds only their own run id, so no other run
+# can queue behind or cancel them. `cancel-in-progress` is true only where the group is shared per branch
+# or per pull request. scripts/ci/test_ci_concurrency.py evaluates both expressions for each event kind.
+# The `CI` gate job below keeps `if: always()`: the gate of a cancelled run fails, which marks the
+# superseded commit red and nothing else, because a pull request is judged by the checks of its head commit.
+concurrency:
+  group: >-
+    ci-${{
+    (github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number))
+    || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+    && github.ref != 'refs/heads/next' && github.ref != 'refs/heads/master'
+    && format('push-{0}', github.ref))
+    || format('run-{0}', github.run_id) }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request'
+    || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+    && github.ref != 'refs/heads/next' && github.ref != 'refs/heads/master') }}
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -50,61 +72,13 @@ jobs:
   stable:
     name: stable — build, test, clippy, fmt, boundary
     runs-on: ubuntu-latest
+    timeout-minutes: 45   # the gates below take about 8 minutes since the harnesses moved out (docs/CI_V3.md); a hang must not hold a runner for the default six hours
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Vast broker mocks and workflow boundary
-        run: |
-          npx --yes prettier@3.6.2 --check 'ci/vast-broker/**/*.js' 'ci/vast-broker/**/*.mjs'
-          npx --yes prettier@3.6.2 --config ci/vast-broker/.prettierrc.json --check \
-            'ci/vast-admin/**/*.js' 'ci/vast-admin/**/*.mjs'
-          python3 -m pip install black==25.1.0
-          python3 -m black --check --config ci/vast-broker/pyproject.toml ci/vast-broker
-          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
-          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
-          node --test ci/vast-broker/test
-          # Tier, release and admin-start mutants (wtier, 2026-11-05): each must be killed.
-          node ci/vast-broker/scripts/mutate-tiers.mjs
-          # Trusted middle real-app policy, evidence completeness and suffix budgets: >=2 named killers.
-          python3 scripts/ci/middle_apps_mutants.py
-          # Runner OIDC token retry (2026-11-11): transient retried, refusal not, hard bound; >=2 killers.
-          python3 scripts/ci/oidc_retry_mutants.py
-          # Proprietary Windows image tooling (2026-11-12, design-only): seed ids, argv per mode, verify, zip; >=2 killers.
-          python3 -B -I scripts/ci/test_propimage.py
-          python3 -B -I scripts/ci/propimage_mutants.py
-          # Proprietary Linux image tooling (2026-11-16): identity, argv, clock rule, grep, driver stub, auth-capture; >=2 named killers.
-          python3 -B -I scripts/ci/test_propimage_linux.py
-          python3 -B -I scripts/ci/propimage_linux_mutants.py
-          # Uniform guest clock rule (2026-11-16): network only decides; the floor counts loaded software only; >=2 killers each.
-          python3 -B -I scripts/ci/clockrule_mutants.py
-          # Proposed release matrix and payload contract: two named killers per mutant.
-          node ci/vast-broker/release-matrix-mutants.mjs
-          # RV1 admission/receipt grading and both SPEC lanes: two named killers each.
-          node ci/vast-broker/release-safety-mutants.mjs
-          # Release resilience (2026-11-12): a failed rental is replaced alone, never a FAIL; killers per mutant are stated in the script.
-          node ci/vast-broker/release-resilience-mutants.mjs
-          node ci/vast-broker/release-vendor-mutants.mjs
-          # RV2 attribution, SPEC contract and finite-resource regressions: >=2 killers each.
-          node ci/vast-broker/rv2-mutants.mjs
-          # Official driver pins and media drift: two named killers per mutant.
-          node ci/vast-broker/driver-pins-mutants.mjs
-          # Seeded markets and worst-case renting use only the mocked Vast transport.
-          node ci/vast-broker/simulation-mutants.mjs
-          python3 scripts/ci/profile_resources.py
-          node ci/vast-broker/profile-resources-mutants.mjs
-          # Evidence upload route mutants (2026-11-06): each must fail at least two tests.
-          node ci/vast-broker/evidence-mutants.mjs
-          # Public log, run report and publisher mutants (2026-11-07): each must fail at least two tests.
-          node ci/vast-broker/report-mutants.mjs
-          # Provider-status tolerance and close-line mutants (2026-11-06): each must fail at least two tests.
-          node ci/vast-broker/provider-tolerance-mutants.mjs
-          node ci/vast-broker/denied-countries-mutants.mjs
-          # Worker proprietary-image configuration and instruction part, the /bench-data allow-list stays closed (2026-11-16): two named killers per mutant.
-          node ci/vast-broker/propimages-mutants.mjs
-          # Bandwidth table guard (fails on a stale ESTIMATE: edit ci/vast-broker/bandwidth.json) and the mutants of the guard, the calibration and the transferred-bytes record (2026-11-16): two named killers per mutant; their tests run in the scripts/ci suite.
-          python3 -B -I scripts/ci/bandwidth_check.py
-          python3 -B -I scripts/ci/bandwidth_mutants.py
-          npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
-          node --test ci/vast-admin/test/*.test.mjs
+      # The Worker's runtime dependency (jose), as the steps that ran before this one in this job had left it (the Worker
+      # tests and mutants now run in `worker-tests`, `worker-mutants-a`, `worker-mutants-b` and `middle-apps`).
+      - name: Worker runtime dependency (jose) from the committed lockfile
+        run: npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
@@ -124,7 +98,7 @@ jobs:
       # reached-count steps now live in the `stripped` job below, which runs them on the tree that is
       # left after everything `.workerignore` matches is deleted. This job keeps what judges the
       # repository as a whole: clippy with its debt ratchet, rustfmt, the structure, boundary, claim and
-      # documentation gates, and the Worker and CI-script self-tests. No check was dropped: a test that
+      # documentation gates (2026-11-17: the Worker and CI-script self-tests and mutants moved into jobs of their own). No check was dropped: a test that
       # needs an ignored path fails there until the data moves next to it or the path is kept.
       - name: Clippy (errors and new warning sites fail)
         run: bash scripts/ci/clippy.sh
@@ -135,28 +109,8 @@ jobs:
       # name. The list is scripts/ci/full_tree_tests.tsv; a listed test that is missing or fails fails here.
       - name: Full-tree Rust checks (the tests the stripped job skips)
         run: python3 scripts/ci/full_tree_tests.py run
-      # The oracle gate of crates/kf-chip/tests/hwref_is_current.rs has its own tests; each mutant of it needs two
-      # named killers. The harness rewrites that one file and always restores it (this checkout is throwaway).
-      - name: Oracle-gate mutations require two named killers each
-        run: python3 scripts/ci/oracle_gate_mutants.py
-      # The video-class coverage ratchet (crates/kf-chan/tests/video_class_coverage.rs, 2026-11-15): each mutant needs two named killers.
-      - name: Video-class coverage mutations require two named killers each
-        run: python3 scripts/ci/video_class_coverage_mutants.py
-      # The offer filter "an engine with no derived method table is not offered to the guest" (2026-11-15:
-      # kf-chip video_gaps, kf-rm hostquery::hide_untabled_video, kf-qemu rmfacts flag): each mutant needs two named killers.
-      - name: Video-engine offer-filter mutations require two named killers each
-        run: python3 scripts/ci/hide_untabled_video_mutants.py
-      # The host unmap-call cap (crates/kf-mem/src/batch.rs `UNMAP_CALL_MAX_ENTRIES`, 2026-11-15): each mutant needs two named killers.
-      - name: Host unmap-call cap mutations require two named killers each
-        run: python3 scripts/ci/va_apply_bounds_mutants.py
-      # The Windows support profile (2026-11-15: kf-rm winprofile and the chain/channel links, kf-qemu channel birth, mirror-space
-      # start and display colour path; "a Linux guest, an undeclared guest and windows-support=off reach none of it"): each mutant needs two named killers.
-      - name: Windows support profile mutations require two named killers each
-        run: python3 scripts/ci/windows_profile_mutants.py
-      # The bounded VA-apply phase profiling (docs/design/V3_VA_PROFILE.md, 2026-11-16: kf-mem vaprof/vasmgr/batch,
-      # kf-qemu split delivery, kf-cuda ceiling geometry; observation only): each mutant needs two named killers.
-      - name: VA-apply profiling mutations require two named killers each
-        run: python3 scripts/ci/va_profile_mutants.py
+      # The harnesses that used to follow here run in their own jobs (rust-mutants-a/-b, mutants-a/-b, selftests, worker-*,
+      # middle-apps), see "THE JOBS SPLIT OUT OF `stable`" below.
       - name: v3 dependency isolation and CI guard self-tests
         run: |
           python3 scripts/ci/dependencies.py
@@ -165,40 +119,6 @@ jobs:
           # The ignore ladder (.gitignore <= .workerignore <= .dockerignore), the matcher against git and
           # docker semantics on this tree, and what the strip step would refuse (the stripped-tree job runs it).
           python3 scripts/ci/ignore_ladder.py check
-          # Python < 3.14 uses the zstd CLI for bounded evidence inspection.
-          if ! command -v zstd >/dev/null 2>&1; then
-            sudo bash scripts/ci/kf_dns_fallback.sh || true
-            sudo apt-get update -q
-            sudo apt-get install -y -q zstd
-          fi
-          python3 -m unittest discover -s scripts/ci -p 'test_*.py'
-          python3 scripts/ci/image_size_mutants.py
-          python3 scripts/ci/kfci_mutants.py
-          # Payload instruction file, --only/--skip/--dry-run (2026-11-15, OWNER_RULINGS section AR S1/S3): >=2 named killers per mutant.
-          python3 scripts/ci/instruction_mutants.py
-          # kfroot (the explicit root step) and the rootless assertion of the Windows harness (2026-11-15, OWNER_RULINGS section AR item 6): >=2 named killers per mutant.
-          python3 scripts/ci/kfroot_mutants.py --jobs 4
-          # Box downloader (2026-11-15, design V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN step 3): >=2 named killers per mutant.
-          python3 scripts/ci/box_downloader_mutants.py
-          # propimage_apps payload stage (2026-11-15, OWNER_RULINGS 2026-11-15): >=2 named killers per mutant.
-          python3 scripts/ci/propimage_apps_mutants.py
-          # Generic proprietary-image runner, 2026-11-16 (docs/design/V3_PROPIMAGE_RUNNER.md): registry, run spec, images; clock/network assert in every launch path; >=2 named killers per mutant.
-          python3 scripts/ci/propimage_runner_mutants.py
-          python3 scripts/ci/clocknet_assert_mutants.py
-          # Open FFmpeg NVENC/NVDEC matrix and DCGM + NVML sweep rows (2026-11-17, docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md): caps comparison,
-          # verdicts, PSNR threshold, NVML field diff, census and the trust-rule pins; >=2 named killers per mutant. The tests run in the discover above.
-          python3 scripts/ci/open_rows_mutants.py --jobs 4
-          # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
-          python3 scripts/ci/stream_url_mutants.py
-          # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.
-          python3 scripts/ci/doc_steps_mutants.py
-          # Native fault-name derivation (2026-11-16): the fixture and committed-JSON layers run here with no oracle (the oracle
-          # layer skips; the vast-box-scripts job fetches the pin and requires it). >=2 named killers per mutant.
-          python3 scripts/ci/derive_fault_names_mutants.py
-          python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
-          bash scripts/bench/qemu_identity_selftest.sh
-          python3 -I scripts/bench/va_profile_table.py --self-test
-          bash scripts/bench/box/birth_census.sh --selftest
       # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
       # completion-source reactor's MODEL is core-owned and PURE: the core says
       # "notifiable source" and "completion source", full stop. The OS half — the
@@ -2059,6 +1979,262 @@ jobs:
             echo "growth stops being a count of the audit surface."
             exit 1
           fi
+  # ★ THE JOBS SPLIT OUT OF `stable` (2026-11-17, docs/CI_V3.md "Job layout, concurrency and caches"). `stable` took
+  # about 3 h 30 min because one runner executed every harness below one after another. The harnesses are
+  # independent, so each group is a job of its own and they run side by side. Nothing was dropped and no command
+  # changed: each harness is the same command with the same pass criteria in exactly one of these jobs (a harness that
+  # kept its own parallel switch, `--jobs`, keeps it). The `CI` gate job needs every one of them and refuses a skip.
+  # To add a harness: put the command in the job whose run time it fits, or in a new job that you add to the gate's
+  # `needs` (scripts/ci/workflow_lint.py refuses a job the gate does not need).
+
+  worker-tests:
+    name: worker — formatting, broker and admin tests, tier mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Formatting, the Worker and admin test suites and the tier mutants
+        run: |
+          npx --yes prettier@3.6.2 --check 'ci/vast-broker/**/*.js' 'ci/vast-broker/**/*.mjs'
+          npx --yes prettier@3.6.2 --config ci/vast-broker/.prettierrc.json --check \
+            'ci/vast-admin/**/*.js' 'ci/vast-admin/**/*.mjs'
+          python3 -m pip install black==25.1.0
+          python3 -m black --check --config ci/vast-broker/pyproject.toml ci/vast-broker
+          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          node --test ci/vast-broker/test
+          # Tier, release and admin-start mutants (wtier, 2026-11-05): each must be killed.
+          node ci/vast-broker/scripts/mutate-tiers.mjs
+          npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
+          node --test ci/vast-admin/test/*.test.mjs
+
+  worker-mutants-a:
+    name: worker mutants A — evidence upload, provider tolerance, denied countries
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Worker mutants (each must fail at least two tests)
+        run: |
+          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          # Evidence upload route mutants (2026-11-06): each must fail at least two tests.
+          node ci/vast-broker/evidence-mutants.mjs
+          # Provider-status tolerance and close-line mutants (2026-11-06): each must fail at least two tests.
+          node ci/vast-broker/provider-tolerance-mutants.mjs
+          node ci/vast-broker/denied-countries-mutants.mjs
+
+  worker-mutants-b:
+    name: worker mutants B — report, release, simulation, profile, proprietary images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Worker mutants (each must fail at least two tests)
+        run: |
+          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          # Public log, run report and publisher mutants (2026-11-07): each must fail at least two tests.
+          node ci/vast-broker/report-mutants.mjs
+          # Proposed release matrix and payload contract: two named killers per mutant.
+          node ci/vast-broker/release-matrix-mutants.mjs
+          # RV1 admission/receipt grading and both SPEC lanes: two named killers each.
+          node ci/vast-broker/release-safety-mutants.mjs
+          # Release resilience (2026-11-12): a failed rental is replaced alone, never a FAIL; killers per mutant are stated in the script.
+          node ci/vast-broker/release-resilience-mutants.mjs
+          node ci/vast-broker/release-vendor-mutants.mjs
+          # RV2 attribution, SPEC contract and finite-resource regressions: >=2 killers each.
+          node ci/vast-broker/rv2-mutants.mjs
+          # Official driver pins and media drift: two named killers per mutant.
+          node ci/vast-broker/driver-pins-mutants.mjs
+          # Seeded markets and worst-case renting use only the mocked Vast transport.
+          node ci/vast-broker/simulation-mutants.mjs
+          python3 scripts/ci/profile_resources.py
+          node ci/vast-broker/profile-resources-mutants.mjs
+          # Worker proprietary-image configuration and instruction part, the /bench-data allow-list stays closed (2026-11-16): two named killers per mutant.
+          node ci/vast-broker/propimages-mutants.mjs
+
+  middle-apps:
+    name: middle apps policy mutants — slice ${{ matrix.shard }} of 4
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # The number after the slash below is this list's length; scripts/ci/test_ci_jobs.py checks that they agree.
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Middle real-app policy mutants
+        run: |
+          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          # Trusted middle real-app policy, evidence completeness and suffix budgets: >=2 named killers.
+          # --shard I/4 (2026-11-17): 118 mutants, one after another, took 99 minutes (run 44088759756). Each slice is every fourth mutant
+          # from the I-th, on a runner of its own: the slices together are every mutant once, the tests, the mutants and the pass
+          # criterion (>= 2 killers each) are the same. Not several workers on one runner: the tests share fixed /tmp paths
+          # (setup_side.sh writes /tmp/setup_hf.out and reads it back), and a spurious failure counts as a killer.
+          # scripts/ci/test_middle_apps_mutants_shards.py and middle_apps_shards_mutants.py judge the slicing.
+          python3 scripts/ci/middle_apps_mutants.py --shard ${{ matrix.shard }}/4
+
+  mutants-a:
+    name: script mutants A — OIDC retry, proprietary images, clock rule, bandwidth, image size, kfci, instruction
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Script mutants (each must fail at least two tests)
+        run: |
+          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          # Runner OIDC token retry (2026-11-11): transient retried, refusal not, hard bound; >=2 killers.
+          python3 scripts/ci/oidc_retry_mutants.py
+          # Proprietary Windows image tooling (2026-11-12, design-only): seed ids, argv per mode, verify, zip; >=2 killers.
+          python3 -B -I scripts/ci/test_propimage.py
+          python3 -B -I scripts/ci/propimage_mutants.py
+          # Proprietary Linux image tooling (2026-11-16): identity, argv, clock rule, grep, driver stub, auth-capture; >=2 named killers.
+          python3 -B -I scripts/ci/test_propimage_linux.py
+          python3 -B -I scripts/ci/propimage_linux_mutants.py
+          # Unreal installed-build tooling (2026-11-17, design-only, fake runner): cache key, budgets, resume, build-or-fetch, pins; >=2 named killers.
+          python3 -B -I scripts/ci/test_unreal_build.py
+          python3 -B -I scripts/ci/unreal_build_mutants.py
+          # Uniform guest clock rule (2026-11-16): network only decides; the floor counts loaded software only; >=2 killers each.
+          python3 -B -I scripts/ci/clockrule_mutants.py
+          # Bandwidth table guard (fails on a stale ESTIMATE: edit ci/vast-broker/bandwidth.json) and the mutants of the guard, the calibration and the transferred-bytes record (2026-11-16): two named killers per mutant; their tests run in the scripts/ci suite.
+          python3 -B -I scripts/ci/bandwidth_check.py
+          python3 -B -I scripts/ci/bandwidth_mutants.py
+          python3 scripts/ci/image_size_mutants.py
+          python3 scripts/ci/kfci_mutants.py
+          # Payload instruction file, --only/--skip/--dry-run (2026-11-15, OWNER_RULINGS section AR S1/S3): >=2 named killers per mutant.
+          python3 scripts/ci/instruction_mutants.py
+          # The CI job layout of 2026-11-17: the sharded unittest runner (every module in one shard, the plain runner's exit
+          # status) and the slicing of middle_apps_mutants.py (every mutant in exactly one slice): >=2 named killers per mutant.
+          python3 scripts/ci/unittest_shard_mutants.py
+          python3 scripts/ci/middle_apps_shards_mutants.py
+
+  mutants-b:
+    name: script mutants B — kfroot, box downloader, runner stages, doc steps, fault names, self-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Script mutants and the evidence and bench self-tests
+        run: |
+          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          # Python < 3.14 uses the zstd CLI for bounded evidence inspection.
+          if ! command -v zstd >/dev/null 2>&1; then
+            sudo bash scripts/ci/kf_dns_fallback.sh || true
+            sudo apt-get update -q
+            sudo apt-get install -y -q zstd
+          fi
+          # kfroot (the explicit root step) and the rootless assertion of the Windows harness (2026-11-15, OWNER_RULINGS section AR item 6): >=2 named killers per mutant.
+          python3 scripts/ci/kfroot_mutants.py --jobs 4
+          # Box downloader (2026-11-15, design V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN step 3): >=2 named killers per mutant.
+          python3 scripts/ci/box_downloader_mutants.py
+          # propimage_apps payload stage (2026-11-15, OWNER_RULINGS 2026-11-15): >=2 named killers per mutant.
+          python3 scripts/ci/propimage_apps_mutants.py
+          # Generic proprietary-image runner, 2026-11-16 (docs/design/V3_PROPIMAGE_RUNNER.md): registry, run spec, images; clock/network assert in every launch path; >=2 named killers per mutant.
+          python3 scripts/ci/propimage_runner_mutants.py
+          python3 scripts/ci/clocknet_assert_mutants.py
+          # Open FFmpeg NVENC/NVDEC matrix and DCGM + NVML sweep rows (2026-11-17, docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md): caps comparison,
+          # verdicts, PSNR threshold, NVML field diff, census and the trust-rule pins; >=2 named killers per mutant. The tests run in the selftests job.
+          python3 scripts/ci/open_rows_mutants.py --jobs 4
+          # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
+          python3 scripts/ci/stream_url_mutants.py
+          # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.
+          python3 scripts/ci/doc_steps_mutants.py
+          # Native fault-name derivation (2026-11-16): the fixture and committed-JSON layers run here with no oracle (the oracle
+          # layer skips; the vast-box-scripts job fetches the pin and requires it). >=2 named killers per mutant.
+          python3 scripts/ci/derive_fault_names_mutants.py
+          python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
+          bash scripts/bench/qemu_identity_selftest.sh
+          python3 -I scripts/bench/va_profile_table.py --self-test
+          bash scripts/bench/box/birth_census.sh --selftest
+
+  selftests:
+    name: scripts/ci self-tests — shard ${{ matrix.shard }} of 3
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # The count after --count below is this list's length; scripts/ci/test_ci_jobs.py checks that they agree.
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Every test_*.py of scripts/ci, this shard (a partition of the modules; scripts/ci/unittest_shard.py)
+        run: |
+          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          # Python < 3.14 uses the zstd CLI for bounded evidence inspection.
+          if ! command -v zstd >/dev/null 2>&1; then
+            sudo bash scripts/ci/kf_dns_fallback.sh || true
+            sudo apt-get update -q
+            sudo apt-get install -y -q zstd
+          fi
+          python3 scripts/ci/unittest_shard.py -s scripts/ci -p 'test_*.py' --count 3 --index ${{ matrix.shard }}
+
+  # The Rust mutation harnesses rewrite one source file in the checkout, run `cargo test` and restore it, so each job
+  # runs them one after another on a checkout of its own. The Windows support profile is the longest (one rebuild per mutant).
+  rust-mutants-a:
+    name: rust mutants A — Windows support profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
+          components: rustfmt, clippy
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi   # the embedded isolate image and GOP driver; see the `stable` history
+      # The same cache entry as `stable` (shared-key), so a job split out of it starts from the dependencies it already had.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: stable
+      # The Windows support profile (2026-11-15: kf-rm winprofile and the chain/channel links, kf-qemu channel birth, mirror-space
+      # start and display colour path; "a Linux guest, an undeclared guest and windows-support=off reach none of it"): each mutant needs two named killers.
+      - name: Windows support profile mutations require two named killers each
+        run: python3 scripts/ci/windows_profile_mutants.py
+
+  rust-mutants-b:
+    name: rust mutants B — oracle gate, video classes, offer filter, unmap cap, VA profiling
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
+          components: rustfmt, clippy
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi   # the embedded isolate image and GOP driver; see the `stable` history
+      # The same cache entry as `stable` (shared-key), so a job split out of it starts from the dependencies it already had.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: stable
+      # The oracle gate of crates/kf-chip/tests/hwref_is_current.rs has its own tests; each mutant of it needs two
+      # named killers. The harness rewrites that one file and always restores it (this checkout is throwaway).
+      - name: Oracle-gate mutations require two named killers each
+        run: python3 scripts/ci/oracle_gate_mutants.py
+      # The video-class coverage ratchet (crates/kf-chan/tests/video_class_coverage.rs, 2026-11-15): each mutant needs two named killers.
+      - name: Video-class coverage mutations require two named killers each
+        run: python3 scripts/ci/video_class_coverage_mutants.py
+      # The offer filter "an engine with no derived method table is not offered to the guest" (2026-11-15:
+      # kf-chip video_gaps, kf-rm hostquery::hide_untabled_video, kf-qemu rmfacts flag): each mutant needs two named killers.
+      - name: Video-engine offer-filter mutations require two named killers each
+        run: python3 scripts/ci/hide_untabled_video_mutants.py
+      # The queue-priority link (2026-11-18: kf-rm queuepriority: SET_SCHED_POLICY, SET_INTERLEAVE_LEVEL, MAKE_REALTIME and RESTART_RUNLIST
+      # accepted as per-VM virtual state, never forwarded): each mutant needs two named killers.
+      - name: Queue-priority link mutations require two named killers each
+        run: python3 scripts/ci/queue_priority_mutants.py
+      # The host unmap-call cap (crates/kf-mem/src/batch.rs `UNMAP_CALL_MAX_ENTRIES`, 2026-11-15): each mutant needs two named killers.
+      - name: Host unmap-call cap mutations require two named killers each
+        run: python3 scripts/ci/va_apply_bounds_mutants.py
+      # The bounded VA-apply phase profiling (docs/design/V3_VA_PROFILE.md, 2026-11-16: kf-mem vaprof/vasmgr/batch,
+      # kf-qemu split delivery, kf-cuda ceiling geometry; observation only): each mutant needs two named killers.
+      - name: VA-apply profiling mutations require two named killers each
+        run: python3 scripts/ci/va_profile_mutants.py
+
   # ★ THE PRODUCTION HALF, ON THE STRIPPED TREE (2026-11-09; OWNER_RULINGS section AQ, design:
   # docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4). A vast box clones the repository and
   # deletes everything `.workerignore` matches before it tests (scripts/bench/box/merge_check.sh), so
@@ -2073,6 +2249,7 @@ jobs:
   stripped:
     name: stripped tree — build, test, clippy on what .workerignore leaves
     runs-on: ubuntu-latest
+    timeout-minutes: 120   # its test step took 22.7 to 44.5 minutes over 45 recent runs; a hang must not hold a runner for the default six hours
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The key the Worker would store for this commit and the key of the tree we are about to strip
@@ -2664,10 +2841,15 @@ jobs:
   # called CI the rule can never be satisfied. This gate job is that check: it is green only
   # when every required job finished without failing or being cancelled. `slow` is left out
   # on purpose (it runs nightly or on demand) and a job skipped by its own `if:` is accepted.
+  # 2026-11-17: `stable` and the jobs split out of it (worker-*, middle-apps, mutants-*, selftests, rust-mutants-*)
+  # carry gates that no `if:` may switch off, so for them a skipped result is a failure, as it is for `stripped`.
+  # `if: always()` stays: the gate of a run that was cancelled (superseded by a newer push, or cancelled by hand)
+  # still runs, sees a `cancelled` result, and fails. Skipping the gate instead would report a required check as
+  # passed for a commit whose run never finished.
   gate:
     name: CI
     if: always()
-    needs: [stable, stripped, aarch64, firmware, broker, platform, ptx]
+    needs: [stable, stripped, aarch64, firmware, broker, platform, ptx, worker-tests, worker-mutants-a, worker-mutants-b, middle-apps, mutants-a, mutants-b, selftests, rust-mutants-a, rust-mutants-b]
     runs-on: ubuntu-latest
     steps:
       - name: Require every needed job to have passed
@@ -2676,12 +2858,25 @@ jobs:
           # `stripped` is the production verdict: it must have RUN and passed. A skipped result (a pull request
           # that adds `if: false` to the job) is not accepted, unlike the other jobs' own-`if:` skips.
           STRIPPED: ${{ needs.stripped.result }}
+          # The same rule for `stable` and every job split out of it (scripts/ci/test_ci_gate.py keeps this list equal to
+          # the jobs that carry them).
+          MUST_RUN: >-
+            ${{ needs.stable.result }} ${{ needs.worker-tests.result }} ${{ needs.worker-mutants-a.result }}
+            ${{ needs.worker-mutants-b.result }} ${{ needs.middle-apps.result }} ${{ needs.mutants-a.result }}
+            ${{ needs.mutants-b.result }} ${{ needs.selftests.result }} ${{ needs.rust-mutants-a.result }}
+            ${{ needs.rust-mutants-b.result }}
         run: |
-          echo "needed job results: $RESULTS (stripped: $STRIPPED)"
+          echo "needed job results: $RESULTS (stripped: $STRIPPED; must have run: $MUST_RUN)"
           if [ "$STRIPPED" != success ]; then
             echo "the stripped-tree job did not succeed: $STRIPPED"
             exit 1
           fi
+          for r in $MUST_RUN; do
+            if [ "$r" != success ]; then
+              echo "a gate-carrying job did not succeed: $r (skipped is not a pass; cancelled means this run was superseded or stopped, and the newer run decides)"
+              exit 1
+            fi
+          done
           for r in $RESULTS; do
             case "$r" in
               success|skipped) ;;

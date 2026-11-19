@@ -81,8 +81,12 @@ aps_max_ms windows_max`. Lost if QEMU is killed; the live lines and the status l
 **5. `kf3: walk capacity ceiling geometry: slot S region OFF+CAP required R pool P free F in N region(s),
 largest [OFF+CAP ...]; adjacent free: head H tail T (in-place growth would fit|would not fit); neighbours left
 sI@OFF+CAP right ...; slots held K`** — after a `walk capacity ceiling: slot pool exhausted` line. "would fit"
-means the slot's own region plus the free run directly after it holds the required size: an adjacent-tail
-growth would avoid the copy (not implemented; `CODEX_VA_LATENCY_20261116.md`, "Fix slot fragmentation").
+means the slot's own region plus the free run directly after it holds the required size.
+**Correction 2026-11-18:** adjacent-tail growth IS implemented now (`Capacity::slot_needed` falls back to it when no
+free block holds a new region; `docs/design/V3_REPLAY_TESTS.md`, "The fix"), so a ceiling line followed by "would
+fit" should no longer occur; if one appears in a log the fix is wrong, or the pool changed between the two lines
+(a GPU-free replay says it cannot for a single walker). Not yet confirmed on hardware. Old text: "an adjacent-tail
+growth would avoid the copy (not implemented; `CODEX_VA_LATENCY_20261116.md`, "Fix slot fragmentation")".
 
 ## How to read it (`scripts/bench/va_profile_table.py`)
 
@@ -101,8 +105,9 @@ Questions it answers, each with its falsifier stated before the run is read:
   small against `apply_own_us` for the slow tickets.
 - "Result delivery and worker resume are negligible" is falsified if `resume_max_us` or `e2e_max_ms - req_max_ms` is
   a material share of `e2e_max_ms`.
-- The fragmentation reading (H3) is refined by the geometry line: "would fit" says an adjacent-tail growth would
-  have avoided that ceiling; "would not fit" says it would not.
+- The fragmentation reading (H3) is refined by the geometry line: "would fit" said an adjacent-tail growth would
+  have avoided that ceiling (since 2026-11-18 such a growth is taken instead of refused); "would not fit" says it
+  would not.
 
 ## Tests and mutants
 
