@@ -1,0 +1,80 @@
+=== POST_CAPTURE_HOOK /root/reboot_hook.sh at 2026-11-19T01:53:17+00:00 ===
+RB_START 2026-11-19T01:53:17+00:00 tag=rb_base_580_rf2f009a8 repo_rev=f2f009a8 qemu_pid=224892
+GCC_RC=0
+RB_DRIVER_LOADED 580.159.04
+RB_SMOKE phase=cold verdict=PASS ssh_rc=0 secs=5 out=[CUP3_RC=0 CTX OK|MODULE OK|LAUNCH OK|SYNC OK|KERNEL rv=43 want=43 -> PASS|DONE|]
+RB_REBOOT_ISSUED 2026-11-19T01:53:24+00:00
+RB_GUEST_BACK up=1 secs=23 qemu_alive=yes
+RB_AFTER_NVSMI GPU 0: NVIDIA GeForce RTX 3090  
+CUP3_BIN_PRESENT
+RB_SMOKE phase=after_reboot verdict=PASS ssh_rc=0 secs=4 out=[CUP3_RC=0 CTX OK|MODULE OK|LAUNCH OK|SYNC OK|KERNEL rv=43 want=43 -> PASS|DONE|]
+--- guest dmesg NVRM/Xid (filtered) ---
+[   28.141643] NVRM: tmrSetCurrentTime_GV100: ERROR: Write to PTIMER attempted even though Level 0 PLM is disabled.
+[   28.141653] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ timer_gv100.c:80
+[   28.170933] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_
+[   28.170980] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_
+[   28.186370] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   28.188197] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   28.188268] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_
+[   28.188350] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &nu
+[   28.474889] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:
+[   28.475472] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kerne
+[   28.477266] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   28.477480] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   28.477492] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   28.477499] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   28.480984] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   28.480996] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   28.491751] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00015; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   28.491765] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   28.491780] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, b
+[   28.494434] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   28.498390] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00016; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   31.263325] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[   31.263814] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[   31.264502] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[   31.435084] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTER
+--- qemu.log lines around device reset (filtered) ---
+7:kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784 [#1, rate-limited]
+24:kf3: channel plane: Translated rings on host COPY2 (engine 0xb); completions on FIFO_EVENT_MTHD + CE2
+35:kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+36:kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+175:kf3: GSP phase Cold -> ProtectedRegionUp
+575:kf3: GSP phase ProtectedRegionUp -> Booted
+578:kf3: GSP phase Booted -> Running
+1053:kf3: GSP phase Running -> Suspending
+1054:kf3: GSP phase Suspending -> Halted
+1058:kf3: GSP phase Halted -> ProtectedRegionUp
+1064:kf3: GSP phase ProtectedRegionUp -> Booted
+1067:kf3: GSP phase Booted -> Running
+1428:kf3: GSP phase Running -> Suspending
+1429:kf3: GSP phase Suspending -> Halted
+1432:kf3: GSP phase Halted -> ProtectedRegionUp
+1438:kf3: GSP phase ProtectedRegionUp -> Booted
+1441:kf3: GSP phase Booted -> Running
+2277:kf3: GSP phase Running -> Suspending
+2278:kf3: GSP phase Suspending -> Halted
+2281:kf3: device reset #2: vCPUs out (gate closed); 0 queued register write(s) dropped; 0 Translated pump(s) stopped; GSP Halted -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree clear
+2282:kf3: act device reset: barrier: device reset epoch 2: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=22 db_regs=0 (3044 us, off the GSP lock)
+2283:kf3: mem t=43.860s device reset #2: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 0 VA space(s) retired, 0 KEPT, mirrors left 0; views sunk [BAR1: 0 placement(s) sunk, 0 kept, 0 door
+2284:kf3: device reset #2: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+2285:kf3: device reset #2 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+2286:kf3: device reset #2 complete before the vCPUs resume (the main loop waited 28055 us)
+2287:kf3: device reset #3: vCPUs out (gate closed); 0 queued register write(s) dropped; 0 Translated pump(s) stopped; GSP Cold -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+2288:kf3: act device reset: barrier: device reset epoch 3: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=0 db_regs=0 (2141 us, off the GSP lock)
+2289:kf3: mem t=43.913s device reset #3: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 0 VA space(s) retired, 0 KEPT, mirrors left 0; views sunk [BAR1: 0 placement(s) sunk, 0 kept, 0 door
+2290:kf3: device reset #3: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+2291:kf3: device reset #3 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+2292:kf3: device reset #3 complete before the vCPUs resume (the main loop waited 30480 us)
+2427:kf3: GSP phase Cold -> ProtectedRegionUp
+2827:kf3: GSP phase ProtectedRegionUp -> Booted
+2830:kf3: GSP phase Booted -> Running
+3066:kf3: GSP phase Running -> Suspending
+3067:kf3: GSP phase Suspending -> Halted
+3070:kf3: GSP phase Halted -> ProtectedRegionUp
+3076:kf3: GSP phase ProtectedRegionUp -> Booted
+3079:kf3: GSP phase Booted -> Running
+3882:kf3: GSP phase Running -> Suspending
+3883:kf3: GSP phase Suspending -> Halted
+RB_END 2026-11-19T01:54:04+00:00
+HOOK_RC=0

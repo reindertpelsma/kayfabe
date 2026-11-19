@@ -1,0 +1,29 @@
+SWEEP_START 2026-11-19T00:09:07+00:00 rev=8a4bd4b0 tag=hostabi_pr_580 arch=GA102
+SWEEP_ARCH arch=GA102 src=pci.ids gpu="NVIDIA GeForce RTX 3090" pci=10de:2204 family="Ampere" gpus=1 bdf=0000:00:07.0 lspci="00:07.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [GeForce RTX 3090] [10de:2204] (rev a1)"
+SWEEP_PLAN hosts=580.159.04 ref_host=580.159.04 guests=580.159.04 mixed=none default_guest=580.159.04 thin_re=^580\. budget=180 ladder_reps=1 ladder_rungs=cup2,cup3,cup8,cup8bench bare=cup2
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/8a4bd4b0/qemu-system-x86_64 rev=8a4bd4b0 mtime=2026-11-19 00:10:03.117910657 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+SWEEP_HOST_START 2026-11-19T00:10:03+00:00 rev=8a4bd4b0 host=580.159.04 arch=GA102
+SWAP host=580.159.04 already installed arch=GA102
+SWEEP_ROW_START 2026-11-19T00:10:05+00:00 row=bare:580.159.04:cup2
+BARE host=580.159.04 cup2 rc=0 CE rv=0xabcd1234 want=0xabcd1234 -> PASS verdict=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:10:10+00:00 row=bare:580.159.04:cup2 rc=0 secs=5
+SWEEP_ROW_START 2026-11-19T00:10:10+00:00 row=gates:580.159.04
+GATES host=580.159.04 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:10:57+00:00 row=gates:580.159.04 rc=0 secs=47
+SWEEP_ROW_START 2026-11-19T00:10:57+00:00 row=canary:580.159.04
+SWEEP_ROW_START 2026-11-19T00:10:57+00:00 row=stage:580.159.04
+STAGE 580.159.04 rc=0 [2026-11-19T00:12:37+00:00] stage 580.159.04: STAGED ✔ /workspace/drivers/580.159.04 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:12:37+00:00 row=stage:580.159.04 rc=0 secs=100
+CANARY host=580.159.04 verdict=PASS thin=1/1 guest=580.159.04 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:13:36+00:00 row=canary:580.159.04 rc=0 secs=159
+SWEEP_ROW_START 2026-11-19T00:13:36+00:00 row=thin:580.159.04:580.159.04
+MATRIX_ROW host=580.159.04 guest=580.159.04 rev=8a4bd4b0 thin=30/30 ladder=- arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:27:42+00:00 row=thin:580.159.04:580.159.04 rc=0 secs=846
+SWEEP_ROW_START 2026-11-19T00:27:42+00:00 row=ladder:580.159.04:580.159.04
+LADDER host=580.159.04 guest=580.159.04 rev=8a4bd4b0 4/4 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:33:08+00:00 row=ladder:580.159.04:580.159.04 rc=0 secs=326
+SWEEP_HOST_EXIT 2026-11-19T00:33:08+00:00 host=580.159.04
+SWEEP_RESTORE host=580.159.04
+SWAP host=580.159.04 already installed arch=GA102
+SWEEP_EXIT 2026-11-19T00:33:10+00:00 rc=0 rows_run=6

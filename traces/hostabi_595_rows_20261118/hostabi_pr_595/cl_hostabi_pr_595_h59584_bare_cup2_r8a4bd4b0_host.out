@@ -1,0 +1,4 @@
+CUDA_LADDER_STARTED=2026-11-19T00:36:15+00:00 mode=host reps=1 rungs=cup2 rev=8a4bd4b0
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=439 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CUDA_LADDER_DONE=2026-11-19T00:36:17+00:00

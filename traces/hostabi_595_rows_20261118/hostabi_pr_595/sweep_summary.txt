@@ -1,0 +1,26 @@
+SWEEP_START 2026-11-19T00:33:27+00:00 rev=8a4bd4b0 tag=hostabi_pr_595 arch=GA102
+SWEEP_ARCH arch=GA102 src=pci.ids gpu="NVIDIA GeForce RTX 3090" pci=10de:2204 family="Ampere" gpus=1 bdf=0000:00:07.0 lspci="00:07.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [GeForce RTX 3090] [10de:2204] (rev a1)"
+SWEEP_PLAN hosts=595.84 ref_host=580.159.04 guests=580.159.04 mixed=none default_guest=580.159.04 thin_re=^580\. budget=180 ladder_reps=1 ladder_rungs=cup2,cup3,cup8,cup8bench bare=cup2
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/8a4bd4b0/qemu-system-x86_64 rev=8a4bd4b0 mtime=2026-11-19 00:34:22.964186251 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+SWEEP_HOST_START 2026-11-19T00:34:23+00:00 rev=8a4bd4b0 host=595.84 arch=GA102
+SWEEP_ROW_START 2026-11-19T00:34:24+00:00 row=swap:595.84
+SWAP host=595.84 rc=0 got=595.84 OPEN_MODULE=yes KERNEL_CC=x86_64-linux-gnu-gcc-12 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:36:15+00:00 row=swap:595.84 rc=0 secs=111
+SWEEP_ROW_START 2026-11-19T00:36:15+00:00 row=bare:595.84:cup2
+BARE host=595.84 cup2 rc=0 CE rv=0xabcd1234 want=0xabcd1234 -> PASS verdict=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:36:17+00:00 row=bare:595.84:cup2 rc=0 secs=2
+SWEEP_ROW_START 2026-11-19T00:36:17+00:00 row=gates:595.84
+GATES host=595.84 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:36:42+00:00 row=gates:595.84 rc=0 secs=25
+SWEEP_ROW_START 2026-11-19T00:36:42+00:00 row=canary:595.84
+CANARY host=595.84 verdict=PASS thin=1/1 guest=580.159.04 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:37:00+00:00 row=canary:595.84 rc=0 secs=18
+SWEEP_ROW_START 2026-11-19T00:37:00+00:00 row=thin:595.84:580.159.04
+MATRIX_ROW host=595.84 guest=580.159.04 rev=8a4bd4b0 thin=30/30 ladder=- arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:48:26+00:00 row=thin:595.84:580.159.04 rc=0 secs=686
+SWEEP_ROW_START 2026-11-19T00:48:26+00:00 row=ladder:595.84:580.159.04
+LADDER host=595.84 guest=580.159.04 rev=8a4bd4b0 4/4 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:52:57+00:00 row=ladder:595.84:580.159.04 rc=0 secs=271
+SWEEP_HOST_EXIT 2026-11-19T00:52:57+00:00 host=595.84
+SWEEP_EXIT 2026-11-19T00:52:57+00:00 rc=0 rows_run=6
