@@ -1,0 +1,59 @@
+{
+ "compute_cap": "7.5",
+ "cuda": "12.8",
+ "data": {},
+ "driver": "595.91.07",
+ "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+ "measured_on": {
+  "compute_cap": "7.5",
+  "cuda": "12.8",
+  "driver": "595.91.07",
+  "driver_cuda": "13.2",
+  "flavor": "cu128",
+  "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+  "run_id": "kfml_run_20261117_second_die",
+  "torch": "2.7.1+cu128"
+ },
+ "metrics": {
+  "add_sizes": [
+   1,
+   7,
+   1000,
+   98432,
+   1048579,
+   134217733
+  ],
+  "cases_checked": 28,
+  "fp16_dot_compile": "failed on sm_75: PassManager::run failed",
+  "layernorm_max_abs_err": 0.0039014816284179688,
+  "matmul": {
+   "1000x777x333": {
+    "best_config": "BLOCK_M: 128, BLOCK_N: 128, BLOCK_K: 32, GROUP_M: 8, num_warps: 8, num_ctas: 1, num_stages: 3, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 0.0
+   },
+   "127x129x65": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 3.142332332117803e-07
+   },
+   "17x33x19": {
+    "best_config": "BLOCK_M: 32, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 2, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 0.0
+   },
+   "2049x513x1025": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.2599198271345813e-06
+   },
+   "512x512x512": {
+    "best_config": "BLOCK_M: 64, BLOCK_N: 64, BLOCK_K: 32, GROUP_M: 8, num_warps: 4, num_ctas: 1, num_stages: 2, num_buffers_warp_spec: 0, num_consumer_groups: 0, reg_dec_producer: 0, reg_inc_consumer: 0, maxnreg: None",
+    "rel_err": 1.0397943697171286e-06
+   }
+  },
+  "matmul_input_dtype": "torch.float32",
+  "matmul_worst_rel_err": 1.2599198271345813e-06,
+  "softmax_max_abs_err": 4.172325134277344e-07,
+  "triton": "3.3.1"
+ },
+ "test": "triton_kernels",
+ "torch": "2.7.1+cu128",
+ "wall_s": 12.785
+}

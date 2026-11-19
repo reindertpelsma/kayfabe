@@ -23,7 +23,7 @@ def run_child(ctx: dict, budget_s: float, env: dict, log_path: str, python=None,
     os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
     with open(log_path, "wb") as log:
         proc = subprocess.Popen([python, "-m", "kfml._child", ctx_p, out_p], env=cenv, stdout=log,
-                                stderr=subprocess.STDOUT, start_new_session=True)
+                                stderr=subprocess.STDOUT, start_new_session=True, cwd=work)
         try:
             rc = proc.wait(timeout=budget_s)
         except subprocess.TimeoutExpired:

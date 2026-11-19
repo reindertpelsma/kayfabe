@@ -1,0 +1,1 @@
+{"flavor": "cu128", "flavor_reason": "chose cu128 (driver CUDA 13.0 >= 12.8 and sm_120 is inside sm_75..sm_120)"}
