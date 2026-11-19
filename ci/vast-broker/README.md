@@ -496,7 +496,7 @@ standalone runner's flag parser (`test/propimages_check.py`, golden files in `te
 one leg from its instruction (only the stages and images it runs, one image per box in a split release) and a text breakdown naming
 the table entry of every line. All numbers are in `bandwidth.json`; pinned image sizes come from `propimages.json` and driver sizes
 from `release-matrix.json`. The box records the bytes it actually moved per stage (`net_bytes` in its result file).
-`bandwidthOverrides()` is the pair for `cfg.bandwidthDownOverride` / `bandwidthUpOverride`; `policy.js` takes `max(profile, override)`.
+`bandwidthEstimateInput(estimate)` is `cfg.bandwidthEstimate`, which `policy.js` `resourceCaps` takes as the leg's number (see "Private objects" below, 2026-11-17); `bandwidthOverrides()` is the older pair for `cfg.bandwidthDownOverride` / `bandwidthUpOverride`, which only raises (`max(number, override)`).
 
 ### Changing the bandwidth numbers
 
@@ -507,3 +507,28 @@ from `release-matrix.json`. The box records the bytes it actually moved per stag
 3. Check and commit: `python3 scripts/ci/bandwidth_check.py` must print `bandwidth table: PASS` (it refuses an entry without a class,
    source or date, an ESTIMATE older than 60 days or without a note, an unknown field, a payload stage missing from the table).
    Example: the apps stage moved 5.2 GB, so the calibrate diff sets `apps.media` to `"down_bytes": 5200000000` and its basis no longer says ESTIMATE.
+
+## Private objects, the lease-time trust scope, releaseSeq and the estimate as the price (built 2026-11-17, NOT DEPLOYED)
+
+STATUS: DESIGN-ONLY, 2026-11-17. Design: `docs/design/V3_WORKER_PRIVATE_PRESIGN.md`. Private here means licence-restricted for redistribution,
+not sensitive.
+
+- **Route.** `GET /bench-data/<run>-<attempt>/private/<prefix>/<object path>` answers a live run token that carries the `private` scope with a
+  `302` to a presigned GET URL (TTL: `min(max_ttl_seconds, time to the run's hard deadline)`, at most 12 hours; `urls_per_run` URLs per run,
+  default 24). Any object under a prefix listed in `private-objects.json` is served (no object-name list); the public `/bench-data/<run>/<name>`
+  allow-list is unchanged. Refusals are named in the body's `reason`: `TOKEN_INVALID`, `TOKEN_EXPIRED`, `TRUST_SCOPE_MISSING`, `TIER_NOT_ALLOWED`,
+  `PREFIX_NOT_PRIVATE`, `OBJECT_MISSING`, and `RATE_LIMITED` (reason `PRIVATE_URL_LIMIT`). There is no listing and no response names another
+  object. A mint logs `private_data_url` (run, object, expiry), a refusal `private_data_refused` (run, prefix, reason); the URL is never logged or stored.
+  The Worker holds only the read-only key pair (no write, no credential to a box) and sends one presigned HEAD to prove the object exists.
+- **Trust.** The scope is decided when the token is issued (`src/trust.js`, rules in `trust.json`) from provenance the Worker checked: the owner's
+  repository with a head in that repository (a fork or an unknown head is untrusted), a listed event, the owner as actor, a trusted branch
+  (`next`, `master`, `claude/*`, `codex/*`) or a pull request head of this repository; an admin start of a commit reachable from master or next.
+  Untrusted runs get `scopes: ['public']` in the signed token and the record; the private route needs both to say `private`.
+- **Who may fetch.** `private-objects.json` `allow`: profile `release` or an admin-started run; a GitHub check run and the sweep are `TIER_NOT_ALLOWED`.
+- **releaseSeq** comes from the ledger (`release-seq:<sha>` memo and a counter, or the admin start's `release_seq`), so the same sha always gets the
+  same image assignment. With `PROPIMAGES_ENABLED=true` (default off) a release leg builds, stores and logs its instruction (`src/legs.js`), and the
+  box fetches it with its run token from `GET /instruction/<run>-<attempt>` (`404 NO_INSTRUCTION` when there is none).
+- **Estimate as the price.** `resourceCaps` takes `cfg.bandwidthEstimate` as the number when valid (it can lower or raise the profile row), capped at
+  `payloadBandwidthMax` in `defaults.json`; the Worker logs the breakdown (`bandwidth estimate ...` lines) and the priced number.
+- Tests: `test/private-presign.test.js`, `trust.test.js`, `bandwidth-pricing.test.js`, `release-seq.test.js`; mutants `private-presign-mutants.mjs`
+  (two named killers each, in `ci.yml`).

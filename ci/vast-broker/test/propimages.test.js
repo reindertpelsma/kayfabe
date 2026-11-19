@@ -133,7 +133,7 @@ test('the lane table is the measured one: what passes today is gate, the rest is
     return { gate: out.gate.sort(), discovery: out.discovery.sort() };
   };
   assert.deepEqual(lanes('imga'), {
-    gate: ['edge', 'edrawings', 'solidworks'],
+    gate: ['edrawings', 'solidworks'],
     discovery: ['3dmark', 'resolve', 'superposition'],
   });
   assert.deepEqual(lanes('imgb'), {
@@ -281,8 +281,8 @@ test('an image with no applications is refused', () => {
 });
 test('a lane that is neither gate nor discovery is refused by name', () => {
   refuses(
-    edit((c) => (image(c, 'imga').apps.edge.lane = 'optional')),
-    'LANE:imga:edge',
+    edit((c) => (image(c, 'imga').apps.solidworks.lane = 'optional')),
+    'LANE:imga:solidworks',
   );
 });
 test('an application with no lane is refused by name', () => {
@@ -367,7 +367,7 @@ test('more than eight images are refused', () => {
 });
 test('an application cannot be both listed and excluded', () => {
   refuses(
-    edit((c) => (image(c, 'imga').excluded.edge = 'x')),
+    edit((c) => (image(c, 'imga').excluded.solidworks = 'x')),
     'EXCLUDED:imga',
   );
 });
@@ -521,7 +521,12 @@ test('the assignment record names slot, swap, rotation and release number', () =
 // ---- lanes on a family the image has not run on
 test('on a family the image has run on, the lanes are the configured ones', () => {
   const apps = plan(SLOT1).part.propimages[0].apps;
-  assert.equal(apps.edge.lane, 'gate');
+  assert.equal(apps.solidworks.lane, 'gate');
+  assert.equal(
+    apps.edge,
+    undefined,
+    'Edge ships with Windows and is a row of the open matrix, not of image A',
+  );
   assert.equal(apps.resolve.lane, 'discovery');
 });
 test('on a family the image has not run on, EVERY application is in the discovery lane', () => {
@@ -716,8 +721,10 @@ test("tierEnvironment is unchanged: the rehearsal leg sends exactly today's vari
     false,
   );
 });
-test('the deployed Worker does not import the module yet', () => {
-  assert.equal(read(here('../src/index.js')).includes('propimages'), false);
+test('the Worker reaches the module only through src/legs.js (behind PROPIMAGES_ENABLED, default off), never directly', () => {
+  assert.equal(/from\s+'\.\/propimages\.js'/.test(read(here('../src/index.js'))), false);
+  assert.equal(/from\s+'\.\/bandwidth\.js'/.test(read(here('../src/index.js'))), false);
+  assert.ok(/from\s+'\.\/propimages\.js'/.test(read(here('../src/legs.js'))));
 });
 
 // ---------------------------------------------------------------- the allow-list decision

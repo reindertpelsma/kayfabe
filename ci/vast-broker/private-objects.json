@@ -1,0 +1,35 @@
+{
+  "schema": "kayfabe.worker-private-objects/1",
+  "status": "STATUS: DESIGN-ONLY, 2026-11-17. Read by src/privatedata.js (not deployed). Private here means licence-restricted for redistribution, NOT sensitive: the objects are not secret, they are kept private only because their licences forbid redistribution. A run token with the private scope may be given a presigned GET URL for ANY object under one of these prefixes (no object-name list). Design: docs/design/V3_WORKER_PRIVATE_PRESIGN.md.",
+  "prefixes": [
+    {
+      "prefix": "windows-proprietary",
+      "basis": "the proprietary Windows images and the signed GOP named by propimages.json (windows-proprietary/kfimg-*/...)"
+    },
+    {
+      "prefix": "linux-proprietary",
+      "basis": "reserved by the owner ruling of 2026-11-17 for the Linux proprietary image; no object is named in the tree yet"
+    },
+    {
+      "prefix": "media-cache",
+      "basis": "reserved by the owner ruling of 2026-11-17 for licence-restricted media; no object is named in the tree yet"
+    },
+    {
+      "prefix": "specworkstation-4.0.0",
+      "basis": "reserved by the owner ruling of 2026-11-17 for the SPECworkstation 4.0.0 copy; no object is named in the tree yet"
+    }
+  ],
+  "allow": [
+    {
+      "profile": "release",
+      "why": "the release tier (profile release, every leg tier): proprietary images are for the largest tier only"
+    },
+    {
+      "source": "admin",
+      "why": "an owner-started manual run (admin start of any tier on a commit of master or next)"
+    }
+  ],
+  "max_ttl_seconds": 43200,
+  "min_ttl_seconds": 60,
+  "urls_per_run": 24
+}

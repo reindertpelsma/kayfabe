@@ -181,7 +181,7 @@ const MUTANTS = [
   ],
   [
     'a gate row moved to discovery in the config',
-    [C, { change: (d) => (d.images[0].apps.edge.lane = 'discovery') }],
+    [C, { change: (d) => (d.images[0].apps.solidworks.lane = 'discovery') }],
   ],
   [
     'image B marked measured on blackwell in the config',

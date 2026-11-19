@@ -141,6 +141,21 @@ export class Github {
     for (const [field, valid] of checks)
       if (!valid) refuse('UNAUTHORIZED', 401, undefined, 'github:run:' + field);
     if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);
-    return { sha: r.head_sha, branch: r.head_branch, run: c.run_id, attempt: c.run_attempt };
+    // Verified provenance for the trust decision at lease time (src/trust.js): every field is a fact this function has just
+    // checked (the signed claims and the run read of the signed attempt), nothing a request body or a PR tree can set.
+    return {
+      sha: r.head_sha,
+      branch: r.head_branch,
+      run: c.run_id,
+      attempt: c.run_attempt,
+      provenance: {
+        source: 'github',
+        repository: r.repository.full_name,
+        headRepository: r.head_repository.full_name,
+        event: c.event_name,
+        headBranch: r.head_branch,
+        actorIsOwner: true,
+      },
+    };
   }
 }

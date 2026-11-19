@@ -29,7 +29,7 @@ const stamp = (date) =>
     .replace(/[-:]/g, '')
     .replace(/\.\d{3}Z$/, 'Z');
 export const MAX_PRESIGN_SECONDS = 604800;
-// Returns the full presigned URL for GET https://<host><path>. `path` is the unencoded object
+// Returns the full presigned URL for GET (or HEAD, for an existence probe) https://<host><path>. `path` is the unencoded object
 // path starting with "/" (bucket included for path-style endpoints).
 export async function presignGet({
   accessKeyId,
@@ -40,7 +40,9 @@ export async function presignGet({
   service = 's3',
   expires,
   date,
+  method = 'GET',
 }) {
+  if (method !== 'GET' && method !== 'HEAD') throw new RangeError('method');
   if (!Number.isInteger(expires) || expires < 1 || expires > MAX_PRESIGN_SECONDS)
     throw new RangeError('expires');
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) throw new RangeError('date');
@@ -60,7 +62,7 @@ export async function presignGet({
       .map(([k, v]) => k + '=' + v)
       .join('&'),
     uri = canonicalPath(path),
-    canonical = ['GET', uri, query, 'host:' + host + '\n', 'host', 'UNSIGNED-PAYLOAD'].join('\n'),
+    canonical = [method, uri, query, 'host:' + host + '\n', 'host', 'UNSIGNED-PAYLOAD'].join('\n'),
     toSign = [
       'AWS4-HMAC-SHA256',
       amzDate,

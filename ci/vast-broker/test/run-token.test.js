@@ -21,7 +21,7 @@ async function rented() {
   return { h, record, token };
 }
 const progress = (h, token) => h.report({ seq: 1, kind: 'progress', text: 'x' }, { token });
-test('run token: issued as an HS256 JWT over run, attempt, sha, nonce and exp', async () => {
+test('run token: issued as an HS256 JWT over run, attempt, sha, nonce, scopes and exp', async () => {
   const { record, token } = await rented();
   const { payload, protectedHeader } = await jwtVerify(
     token,
@@ -29,7 +29,16 @@ test('run token: issued as an HS256 JWT over run, attempt, sha, nonce and exp', 
     { algorithms: ['HS256'], currentDate: new Date(record.started) },
   );
   assert.deepEqual(protectedHeader, { alg: 'HS256' });
-  assert.deepEqual(Object.keys(payload).sort(), ['attempt', 'exp', 'nonce', 'run', 'sha']);
+  // `scopes` (src/trust.js) is decided at lease time: the harness rental is the owner's own pull request head, so it is trusted
+  assert.deepEqual(Object.keys(payload).sort(), [
+    'attempt',
+    'exp',
+    'nonce',
+    'run',
+    'scopes',
+    'sha',
+  ]);
+  assert.deepEqual(payload.scopes, ['public', 'private']);
   assert.deepEqual(
     [payload.run, payload.attempt, payload.sha, payload.nonce],
     ['123', '1', record.sha, record.nonce],

@@ -2053,6 +2053,8 @@ jobs:
           node ci/vast-broker/profile-resources-mutants.mjs
           # Worker proprietary-image configuration and instruction part, the /bench-data allow-list stays closed (2026-11-16): two named killers per mutant.
           node ci/vast-broker/propimages-mutants.mjs
+          # Private-object presign route, lease-time trust scope, estimate as the price and releaseSeq (2026-11-17): two named killers per mutant.
+          node ci/vast-broker/private-presign-mutants.mjs
 
   middle-apps:
     name: middle apps policy mutants — slice ${{ matrix.shard }} of 4

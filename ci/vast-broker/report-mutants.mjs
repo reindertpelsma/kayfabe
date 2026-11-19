@@ -395,15 +395,21 @@ const MUTANTS = [
   ],
   [
     'run report not a box route',
-    [[T, '/^\\/(?:report|run-report|kill|evidence)\\/', '/^\\/(?:report|kill|evidence)\\/']],
+    [
+      [
+        T,
+        '/^\\/(?:report|run-report|kill|evidence|instruction)\\/',
+        '/^\\/(?:report|kill|evidence|instruction)\\/',
+      ],
+    ],
   ],
   [
     'run report not authorised at the gateway',
     [
       [
         I,
-        '/^\\/(?:report|run-report|kill|blob-url|bench-data|evidence)\\//.test(path)) {',
-        '/^\\/(?:report|kill|blob-url|bench-data|evidence)\\//.test(path)) {',
+        '/^\\/(?:report|run-report|kill|blob-url|bench-data|instruction|evidence)\\//.test(path)) {',
+        '/^\\/(?:report|kill|blob-url|bench-data|instruction|evidence)\\//.test(path)) {',
       ],
     ],
   ],
