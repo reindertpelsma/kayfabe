@@ -1,0 +1,17 @@
+uname: 6.8.0-59-generic
+START 2026-11-18T23:54:30+00:00
+BOX_RC=0
+DRIVER_RC=0
+TREE_RC=0
+LADDER_RC=0
+FG_RC=0
+KF3_RC=0
+READY driver=580.159.04
+EXIT 2026-11-19T00:08:07+00:00
+c63b19fb3 kf-host: golden host-version table for the five GSS rows; ogkm tier-2 reason
+
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.84  Release Build  (dvs-builder@U22-I3-AM25-26-2)  Wed Jun 10 21:06:37 UTC 2026
+/dev/root       146G   35G  111G  24% /
+18
+Mem:              39           1           6           0          32          37
+(note: the box checkout HEAD above is the branch head at provisioning time; every sweep used KF_REV=<sha> from the tables, see sweep_summary.txt rev=)
