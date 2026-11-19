@@ -59,6 +59,12 @@ safety net, not a guarantee. `DRY_RUN=1 ONCE=1` tests it.
 
 ## Provision and check
 
+> **2026-11-18, MEASURED (one box, RTX 5070 Ti = GB203): `provision_full.sh` installs host driver 580.159.04 on EVERY die, and a Blackwell die cannot
+> boot kf3 on it** (the display PRECOMP rows are measured on branch 595 only; QEMU exits 10 s into boot 1). On a Blackwell box export
+> `HOST_DRIVER=595.91.07 KF_HOST_DRIVER=595.91.07` and `RUN_URL=<the installer>` (595.91.07 has no pin in `scripts/ci/trust_manifest.json`; a `RUN_URL` is
+> a user input, trusted and recorded) before `provision_full.sh`; `provision_full.sh` does not copy `KF_HOST_DRIVER` into `HOST_DRIVER` itself, so name both
+> (`windows_lane.sh` does). `scripts/ci/vast_payload.py` refuses the 580 case by name before any stage (`HOST_DRIVER_UNMEASURED:blackwell:580`).
+
 From a cloud session (no SSH): the same scripts, through `vx` — see the last section.
 
 ```bash

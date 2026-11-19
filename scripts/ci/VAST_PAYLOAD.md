@@ -30,6 +30,22 @@ read faults from `--defer-liveness` and one host-semaphore write fault from
 the missing-page marker names VA `0xa11000000`. This supersedes this paragraph's
 first-version description of a CE-client-only, VA-only missing-page admission.
 
+## Host-driver preflight (2026-11-18)
+
+[MEASURED 2026-11-18, one Vast box, RTX 5070 Ti = GB203, leg `windows_gate`] `provision_full.sh` installs host driver 580.159.04 on every die. On a
+Blackwell die the kf3 device then refuses to realize (`display.precomp.0xca73.0x0780: unmeasured on GB203 branch 580 (measured on: GB202/595, GB203/595,
+GB206/595)`), QEMU exits 10 s into boot 1 and the leg is spent, 25 minutes of Windows install first. [CODE READ: vast_payload.py
+`host_driver_refusal`] Before any stage of a real run (the `--dry-run` plan reads no box state by contract and is unchanged), a box whose GPU has compute capability 12.x and whose host driver would sit on a branch with
+no measured PRECOMP row is refused by name: `KF_PAYLOAD_HOST_DRIVER_REFUSED HOST_DRIVER_UNMEASURED:blackwell:580`, then a `KF_PAYLOAD_HOST_DRIVER_HINT`
+line, then `KF_PAYLOAD_FAIL suite=preflight`. The driver judged is the one `provision_host_driver.sh` installs (`HOST_DRIVER`, else `KF_HOST_DRIVER`,
+which the release-matrix mapping copies into `HOST_DRIVER`, else 580.159.04) when a `provision` stage is selected, and the one already loaded when it is not
+(`--only windows_gate` on a box provisioned by hand). The measured branches are read from `crates/kf-rm/data/precomp_measured.tsv`, the file the Rust loader
+includes, never kept as a second copy; an unreadable table is its own named refusal (`PRECOMP_TABLE_UNREADABLE`), never a pass. A box without a GPU, an
+unknown driver, a selection of the bare-metal CUDA ladder alone and every die that is not Blackwell see no change (the table is not even read). The way out
+is `HOST_DRIVER=595.91.07` and `KF_HOST_DRIVER=595.91.07` plus `RUN_URL=<installer>` (595.91.07 is not pinned in `scripts/ci/trust_manifest.json`; a
+`RUN_URL` is a user input, trusted and recorded). Tests: `test_vast_payload_hostdriver.py`; mutants `hostdriver-*` in `payload_mutants.py`. Not measured: a
+Worker leg with `KF_HOST_DRIVER` alone is still refused earlier as a proposed release matrix (`release_retry_matrix_*`).
+
 ## XD1: Blackwell host-semaphore spelling, 2026-11-09
 
 **MEASURED (retained GitHub log, not a new GPU run):** batch PR #318,

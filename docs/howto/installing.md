@@ -45,6 +45,8 @@ Neither the static check nor the documented command establishes a passing vendor
 
 ## 1. The host driver
 
+> **Blackwell (RTX 50 series) needs a 595 host driver [measured 2026-11-18, one rented box, RTX 5070 Ti; added above the text it corrects].** The default below, 580.159.04, is the bench default for every card, and on a Blackwell card it does not work: the device refuses to start about ten seconds into the first guest boot ("unmeasured on GB203 branch 580"), because the display constants it serves were measured on host branch 595 only. Install 595.91.07 instead (`HOST_DRIVER=595.91.07`, and `KF_HOST_DRIVER=595.91.07` when you use the bench scripts). That version has no checksum pinned in the script's trust table, so also pass the installer you downloaded yourself as `RUN_URL=<where it is>`; a `RUN_URL` is your own input, it is trusted and its sha256 is recorded. The bench payload now refuses a Blackwell box with an unmeasured host branch by name, before any stage. <!-- src: crates/kf-rm/data/precomp_measured.tsv, crates/kf-rm/src/consttab.rs, scripts/ci/vast_payload.py host_driver_refusal, scripts/bench/provision_host_driver.sh, traces/blackwell_win_20261103/README.md (the pass with 595.91.07) -->
+
 The recorded runs use the open kernel module. The script that installs it for the bench is `scripts/bench/provision_host_driver.sh` (run as root; default version 580.159.04):
 
 ```sh

@@ -1094,6 +1094,87 @@ def hardware():
         return {"gpu_name": "unknown", "compute_cap": 0, "driver_version": "unknown"}
 
 
+# 2026-11-18 HOST-DRIVER PREFLIGHT. [MEASURED 2026-11-18, Vast box, RTX 5070 Ti = GB203, leg windows_gate] provision_full.sh and
+# provision_host_driver.sh install 580.159.04 on every die. On a Blackwell die the kf3 device then refuses to realize ("the SDR caps page is NOT
+# derived (... display.precomp.0xca73.0x0780: unmeasured on GB203 branch 580 (measured on: GB202/595, GB203/595, GB206/595)"), QEMU exits 10 s
+# into boot 1 and the leg is burnt, 25 minutes of Windows install first. 595.91.07 passed (traces/blackwell_win_20261103/README.md). The rule
+# refuses by name before any stage when a Blackwell box (compute capability 12.x) would boot kf3 on a host branch that has no measured PRECOMP
+# row. The measured branches are READ from the table the Rust loader includes (crates/kf-rm/src/consttab.rs PRECOMP_TSV), never kept as a second
+# copy; a die that is not Blackwell never reads it.
+HOST_DRIVER_DEFAULT = "580.159.04"   # provision_host_driver.sh `${HOST_DRIVER:-...}` and provision_full.sh's READY check; a test pins both
+PRECOMP_TABLE = "crates/kf-rm/data/precomp_measured.tsv"
+PRECOMP_KEY_PREFIX = "display.precomp."   # crates/kf-rm/src/precomp.rs PREFIX
+BLACKWELL_DIE = re.compile(r"GB20[0-9]")
+HOST_DRIVER_VERSION = re.compile(r"([0-9]{3})\.[0-9]{1,3}(?:\.[0-9]{1,2})?")
+MEASURED_SOURCE = re.compile(r"measured:[A-Z0-9]+,([0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,2})?),")
+BARE_METAL_STAGES = ("cuda_host",)   # no kf3 device: nothing serves a PRECOMP row to it
+
+
+def is_blackwell(hw):
+    """Compute capability 12.x (hardware() stores it x100) of the one GPU; a box with no readable GPU (0) is not."""
+    cc = hw.get("compute_cap") if type(hw) is dict else None
+    return type(cc) is int and 1200 <= cc < 1300
+
+
+def precomp_measured(root):
+    """{host branch: sorted measured driver versions} of the committed display PRECOMP rows of the Blackwell dies. OSError or ValueError when the
+    table is unreadable, malformed or empty: the caller refuses by name, a rule that cannot read its table never passes a box."""
+    found = {}
+    for line in (root / PRECOMP_TABLE).read_text().splitlines():
+        if not line or line.startswith("#") or line.startswith("key\t"):
+            continue
+        cols = line.split("\t")
+        if len(cols) < 7:
+            raise ValueError("short row")
+        if cols[0].startswith(PRECOMP_KEY_PREFIX) and BLACKWELL_DIE.fullmatch(cols[1]):
+            versions = found.setdefault(int(cols[2]), set())
+            source = MEASURED_SOURCE.match(cols[6])
+            if source:
+                versions.add(source[1])
+    if not found:
+        raise ValueError("no rows")
+    return {branch: sorted(versions) for branch, versions in found.items()}
+
+
+def host_driver_hint(measured):
+    """The one line that says how to get out of the refusal: the selector, the measured branch and driver, and the RUN_URL route (a user input,
+    trusted and recorded; the trust manifest gets no unpinned artifact). No URL, no credential."""
+    branches = "/".join(str(b) for b in sorted(measured))
+    versions = sorted({v for vs in measured.values() for v in vs})
+    return ("the display PRECOMP rows are measured on host branch " + branches + " only (" + PRECOMP_TABLE + "); set KF_HOST_DRIVER and HOST_DRIVER "
+            "(provision_host_driver.sh reads HOST_DRIVER) to a driver of that branch"
+            + (", the measured one is " + ", ".join(versions) + ", which scripts/ci/trust_manifest.json does not pin: pass its installer as "
+               "RUN_URL, a user input (trusted, its sha256 and size recorded)" if versions else ""))
+
+
+def host_driver_refusal(environ, hw, stages, root):
+    """None, or (token, hint): the named refusal of a Blackwell box whose host driver is on a branch with no measured PRECOMP row. The driver is
+    the one provision_host_driver.sh installs (HOST_DRIVER, else the matrix's KF_HOST_DRIVER, which release_driver_environment copies into
+    HOST_DRIVER, else the default) when a provision stage runs, and the one already loaded (hw) when none does. A box without a GPU, an unknown
+    or malformed version and a selection that needs no kf3 device are other preflights' business."""
+    if not is_blackwell(hw) or all(s in BARE_METAL_STAGES for s in stages):
+        return None
+    if "provision" in stages:
+        version = environ.get("HOST_DRIVER") or environ.get("KF_HOST_DRIVER") or HOST_DRIVER_DEFAULT
+    else:
+        version = hw.get("driver_version")
+    found = HOST_DRIVER_VERSION.fullmatch(version) if isinstance(version, str) else None
+    if found is None:
+        return None
+    try:
+        measured = precomp_measured(root)
+    except (OSError, ValueError):
+        return "PRECOMP_TABLE_UNREADABLE", "the table of measured host branches (" + PRECOMP_TABLE + ") cannot be read from this checkout"
+    if int(found[1]) in measured:
+        return None
+    return "HOST_DRIVER_UNMEASURED:blackwell:" + found[1], host_driver_hint(measured)
+
+
+def print_host_driver_refusal(refusal):
+    print("KF_PAYLOAD_HOST_DRIVER_REFUSED " + refusal[0], flush=True)
+    print("KF_PAYLOAD_HOST_DRIVER_HINT " + refusal[1], flush=True)
+
+
 # Host claims for the public setup picker (2026-11-06). CLAIMS: read from this box's own /proc and
 # from receipts of its own provisioning; the Worker checks their shape (vast_report.clean_claims,
 # results.js cleanClaims) and no verdict reads them. The guest OS versions are the harness's own
@@ -2048,6 +2129,10 @@ def main():
         refusal = matlab_refusal(instruction, args)
         if refusal:
             print("KF_PAYLOAD_MATLAB_REFUSED " + refusal, flush=True)
+            raise EvidenceError("preflight")
+        refusal = host_driver_refusal(os.environ, result["hardware"], selected, root)
+        if refusal:
+            print_host_driver_refusal(refusal)
             raise EvidenceError("preflight")
         if args.only or args.skip:
             result["selection"] = {"only": args.only, "skip": args.skip}

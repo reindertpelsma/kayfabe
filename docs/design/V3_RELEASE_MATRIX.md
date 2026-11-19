@@ -87,6 +87,13 @@ by these throughput observations alone.
 
 ## Proposed drivers
 
+**2026-11-18 correction (CODE READ plus one MEASURED box, folded above the table it corrects).** The two Blackwell host rows below (GB202 590.48.01, GB205
+580.105.08) and the pinned host 580.159.04 cannot boot kf3 on a Blackwell die: the display PRECOMP rows are scoped to host branch and exist for branch 595
+only (`crates/kf-rm/data/precomp_measured.tsv`; the Rust loader refuses any other branch, `crates/kf-rm/src/consttab.rs`), and a rented RTX 5070 Ti (GB203) on
+580.159.04 lost a whole leg to it on 2026-11-18. A Blackwell host row needs a 595 driver (595.91.07 is the measured one) before this matrix can be approved; the
+payload now refuses a Blackwell box on any other branch by name before any stage (`HOST_DRIVER_UNMEASURED:blackwell:<branch>`, `scripts/ci/vast_payload.py`).
+The table is left as proposed; it is not edited here (owner review).
+
 PROPOSED (all rows; minimum supported host/Linux/Windows driver for every die is
 UNKNOWN). The combination means the ordered host + Linux guest + Windows guest
 triple. All eight triples are unique, and both the host/Linux and host/Windows pairs are unique. Each flagship has newer versions than its
