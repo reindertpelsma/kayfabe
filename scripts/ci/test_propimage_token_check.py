@@ -117,8 +117,8 @@ class ScrubTests(unittest.TestCase):
     def test_token_like_strings_are_hidden(self):
         tok = "A" * 45
         jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk"
-        out = T.scrub("t=%s j=%s g=123e4567-e89b-12d3-a456-426614174000 GPU-12345678-1234-1234-1234-123456789012" % (tok, jwt))
-        for secret in (tok, jwt, "123e4567-e89b-12d3-a456-426614174000", "12345678-1234-1234-1234-123456789012"):
+        out = T.scrub("t=%s j=%s g=123e4567-e89b-12d3-a456-426614174000 GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001" % (tok, jwt))
+        for secret in (tok, jwt, "123e4567-e89b-12d3-a456-426614174000", "fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001"):
             self.assertNotIn(secret, out)
 
     def test_powershell_scrubbers_match_the_python_ones(self):
