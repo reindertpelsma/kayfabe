@@ -54,6 +54,142 @@ const MUTANTS = [
     [[S, "objects.get(li.object)?.role === 'linux_image'", 'true']],
   ],
   ['matlab: row ids are not checked', [[S, 'MATLAB_ROWS.includes(id)', 'true']]],
+  // the image's minimum guest driver (min_guest_driver: the die default is raised to it when older, never above it)
+  [
+    'matlab: the image minimum is never applied (the die default always wins)',
+    [[S, 'if (compareDottedVersions(diePin.version, minPin.version) < 0) {', 'if (false) {']],
+  ],
+  [
+    'matlab: the image minimum always wins, even over a newer die default',
+    [[S, 'if (compareDottedVersions(diePin.version, minPin.version) < 0) {', 'if (true) {']],
+  ],
+  [
+    'matlab: the driver versions are compared as text',
+    [
+      [
+        S,
+        'if (compareDottedVersions(diePin.version, minPin.version) < 0) {',
+        'if (diePin.version < minPin.version) {',
+      ],
+    ],
+  ],
+  [
+    'matlab: the dotted comparison reads a missing field as a large number',
+    [[S, 'const d = (x[i] ?? 0) - (y[i] ?? 0);', 'const d = (x[i] ?? 9e9) - (y[i] ?? 9e9);']],
+  ],
+  [
+    'matlab: the newest pinned driver is taken instead of the minimum',
+    [
+      [
+        S,
+        '      pin = minPin;',
+        "      pin = releaseMatrix.driver_installers.filter((p) => p.os === 'linux' && p.status === 'PINNED').at(-1);",
+      ],
+    ],
+  ],
+  [
+    'matlab: an unpinned minimum is not refused by the plan',
+    [[S, 'if (minPin === undefined)', 'if (false)']],
+  ],
+  [
+    'matlab: the raise is not said in the log line',
+    [[S, "      pin.version +\n      why +\n      ', ' +", "      pin.version +\n      ', ' +"]],
+  ],
+  [
+    'matlab: the minimum is not checked against the pinned installers of the config',
+    [[S, 'pinnedLinuxInstaller(releaseMatrix, li.min_guest_driver) !== undefined,', 'true,']],
+  ],
+  [
+    'matlab: the basis of the minimum is not required',
+    [
+      [
+        S,
+        'if (li.min_guest_driver !== undefined || li.min_guest_driver_basis !== undefined)',
+        'if (false)',
+      ],
+    ],
+  ],
+  [
+    'matlab: the minimum keys are not in the Linux image schema',
+    [[S, "          'min_guest_driver',\n          'min_guest_driver_basis',\n", '']],
+  ],
+  [
+    'matlab: the minimum removed from the config',
+    [
+      C,
+      {
+        change: (d) => {
+          delete d.linux_images[0].min_guest_driver;
+          delete d.linux_images[0].min_guest_driver_basis;
+        },
+      },
+    ],
+  ],
+  [
+    'matlab: the minimum lowered to the 580 default of the die',
+    [C, { change: (d) => (d.linux_images[0].min_guest_driver = '580.173.02') }],
+  ],
+  // the image's guest binary (`bin`, 2026-11-18: it is not on the guest's PATH, so the Worker names it from the image config)
+  [
+    'matlab: the configured binary is not copied into the part',
+    [[S, '      ...(li.bin !== undefined ? { bin: li.bin } : {}),\n', '']],
+  ],
+  [
+    'matlab: the binary key is emitted even when none is configured',
+    [[S, '...(li.bin !== undefined ? { bin: li.bin } : {}),', 'bin: li.bin,']],
+  ],
+  [
+    'matlab: the binary is not checked against the pattern',
+    [[S, "typeof li.bin === 'string' && GUEST_BIN.test(li.bin)", 'true']],
+  ],
+  [
+    'matlab: the binary pattern lets a newline through (multiline flag)',
+    [
+      [
+        S,
+        'const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/;',
+        'const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/m;',
+      ],
+    ],
+  ],
+  [
+    'matlab: the binary length is unbounded',
+    [
+      [
+        S,
+        'const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/;',
+        'const GUEST_BIN = /^[A-Za-z0-9_./-]+$/;',
+      ],
+    ],
+  ],
+  [
+    'matlab: the binary pattern allows a space and shell characters',
+    [[S, 'const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/;', 'const GUEST_BIN = /^[^\\n]{1,120}$/;']],
+  ],
+  [
+    'matlab: the basis of the binary is not required',
+    [[S, 'if (li.bin !== undefined || li.bin_basis !== undefined)', 'if (false)']],
+  ],
+  [
+    'matlab: the binary keys are not in the Linux image schema',
+    [[S, "          'bin',\n          'bin_basis',\n", '']],
+  ],
+  [
+    'matlab: the binary removed from the config',
+    [
+      C,
+      {
+        change: (d) => {
+          delete d.linux_images[0].bin;
+          delete d.linux_images[0].bin_basis;
+        },
+      },
+    ],
+  ],
+  [
+    'matlab: the binary in the config is the bare name again',
+    [C, { change: (d) => (d.linux_images[0].bin = 'matlab') }],
+  ],
   [
     'matlab: the stage is not planned from the instruction (bandwidth)',
     [[BW, "(i.matlab ?? null) !== null || only.includes('matlab')", "only.includes('matlab')"]],

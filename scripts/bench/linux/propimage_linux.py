@@ -92,6 +92,7 @@ BASE = {
 OVMF_CODE = "/usr/share/OVMF/OVMF_CODE_4M.fd"
 OVMF_VARS_TEMPLATE = "/usr/share/OVMF/OVMF_VARS_4M.fd"
 STATE_FILES = ("firmware/OVMF_VARS.fd",)
+DEFAULT_FB_MB = 4096           # the kf3 `fb-mb` a new Linux image state declares: the VRAM carve-out of the guest (applications see about 3.8 GB of it, never the host card's size)
 MIN_AVAILABLE_MB_BOOT = 2048   # the owner's rule for this coordinator box: do not boot below it
 MIN_AVAILABLE_MB_RUNNING = 600  # a running guest is killed (never the host's other work) below it
 NOVNC = {  # both pinned by sha256 (read from PyPI's JSON API and from a download on 2026-11-16); pip runs with --require-hashes
@@ -123,12 +124,21 @@ def init_state(seed, ram_mb=8192, smp=4, disk_gb=60, nic_model="virtio-net-pci",
     return {
         "state_version": STATE_VERSION, "os": "linux", "seed": seed, "ids": ids, "linux_ids": derive_linux_ids(seed), "desktop": bool(desktop),
         "clock": {"last_time_at_stop_utc": None, "gap_s": ids["clock_gap_s"]},
-        "qemu": {"machine": "pc-q35-10.2", "smp": smp, "ram_mb": ram_mb, "disk_gb": disk_gb, "fb_mb": 4096,
+        "qemu": {"machine": "pc-q35-10.2", "smp": smp, "ram_mb": ram_mb, "disk_gb": disk_gb, "fb_mb": DEFAULT_FB_MB,
                  "nic_model": nic_model, "guest_driver": None},   # guest_driver null: the NVIDIA driver is a run parameter
         "cpu": cpu, "cpu_fingerprint": None, "files": {}, "base": copy.deepcopy(BASE),
         "guest": {"user": GUEST_USER, "password": W.derive_password(seed), "ssh_private_key": priv, "ssh_public_key": pub},
         "packages": None, "seal": None, "created_utc": None,
     }
+
+
+def declared_fb_mb(state):
+    """The `fb-mb` (MiB) of the kf3 device that a launch of this state declares: the ONE source for build_argv (which writes it as `fb-mb=`, always explicitly, the
+    device default is never relied on) and for every judge that compares a guest-reported memory size with it (matlab_rows.py). None when the state holds no
+    positive integer (a bool, a float or a string is not one)."""
+    q = state.get("qemu") if isinstance(state, dict) else None
+    v = q.get("fb_mb") if isinstance(q, dict) else None
+    return v if type(v) is int and v > 0 else None
 
 
 def validate_state(state):
@@ -258,7 +268,8 @@ def build_argv(state, mode, disk, workdir, net=None, clock=None, qemu="/usr/bin/
         a += ["-display", "none"]
     if gpu == "kf3":
         require(driver_version or q["guest_driver"], "GUEST_DRIVER_REQUIRED: the image pins no NVIDIA driver; pass the run's guest driver")
-        a += ["-vga", "none", "-device", ",".join(["kf3-gpu", "id=kf0", "fb-mb=%d" % q["fb_mb"], "bar1-size=134217728", "bar2-size=33554432",
+        require(declared_fb_mb(state) is not None, "bad fb_mb: the state declares no positive integer number of MiB")
+        a += ["-vga", "none", "-device", ",".join(["kf3-gpu", "id=kf0", "fb-mb=%d" % declared_fb_mb(state), "bar1-size=134217728", "bar2-size=33554432",
                                                    "gpu-uuid=" + ids["gpu_uuid"], "guest-driver=" + (driver_version or q["guest_driver"])])]
     else:
         require(gpu == "none", "gpu must be none or kf3")

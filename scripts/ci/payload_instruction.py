@@ -82,8 +82,9 @@ class Instruction:
     propimages: tuple = ()
     # strict (the Worker's shape): every listed image and app must run and any skip fails the stage; false = run what can run (docs/design/V3_PROPIMAGE_RUNNER.md)
     propimages_strict: bool = False
-    # 2026-11-17: the MATLAB GPU rows of the Linux proprietary image (scripts/ci/matlab_stage.py): {label?, image {from: pin, ref, sha256}, driver {version}, rows
+    # 2026-11-17: the MATLAB GPU rows of the Linux proprietary image (scripts/ci/matlab_stage.py): {label?, bin?, image {from: pin, ref, sha256}, driver {version}, rows
     # {row: {lane}}, isolation?}. Always strict (the Worker's shape); a standalone run uses the stage's own flags instead. None = no such stage.
+    # 2026-11-18: `bin` = where the image keeps the matlab binary in the guest (an image property; the schema validates it, absent = the name `matlab`).
     matlab: object = None
     # where it came from (worker / default / instruction); printed, never part of equality
     source: str = dataclasses.field(default="instruction", compare=False)

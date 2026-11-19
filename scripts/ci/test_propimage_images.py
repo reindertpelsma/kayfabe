@@ -1417,5 +1417,239 @@ class SwtpmTools(unittest.TestCase):
         vast_report.validate_propimage_run(rec)
 
 
+class GopRunner(Runner):
+    """The downloader as the boot GOP's tests need it: every manifest it is asked to fetch is kept and the order of fetches and boots is in `events`.
+    The GOP item (name kf-gop.signed.efi) is written as the bytes b"signed-gop" (the fake downloader of Runner would write a zip); `gop_rc` is the
+    downloader's exit code for the GOP manifest (a nonzero one writes nothing), `gop_writes` False makes it exit 0 and write nothing."""
+
+    def __init__(self, gop_rc=0, gop_writes=True):
+        super().__init__()
+        self.gop_rc, self.gop_writes, self.manifests, self.events = gop_rc, gop_writes, [], []
+
+    def __call__(self, argv, **kw):
+        if len(argv) > 4 and str(argv[3]).endswith("box_downloader.py") and argv[4] == "fetch":
+            manifest = json.loads(Path(argv[argv.index("fetch") + 1]).read_text())
+            self.manifests.append(manifest)
+            gop = [i for i in manifest["items"] if i["name"] == GOP_NAME]
+            self.events.append("fetch:gop" if gop else "fetch:image")
+            if gop:
+                self.calls.append(list(argv))
+                dest = Path(argv[argv.index("--dest") + 1]) / gop[0]["dest"]
+                if not self.gop_rc and self.gop_writes:
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(GOP_BYTES)
+                return subprocess.CompletedProcess(argv, self.gop_rc, "", "")
+        return super().__call__(argv, **kw)
+
+    def gop_fetches(self):
+        return [m for m in self.manifests if any(i["name"] == GOP_NAME for i in m["items"])]
+
+
+GOP_NAME, GOP_BYTES = "kf-gop.signed.efi", b"signed-gop"
+GOP_PIN = next(i for i in pa.load_pins()["items"] if i["role"] == "gop")
+
+
+class BootGop(unittest.TestCase):
+    """2026-11-18, MEASURED on a Vast box (the first hardware run of the strict image path): the generic runner downloaded the image archive alone and
+    handed the boots a GOP path that nothing ever filled, so every boot failed in 50 seconds with `kf-gop.signed.efi not found (pass --gop-efi)`. The
+    runner now fetches the pinned boot GOP (pins role `gop`, the signed ref of the URL file) through the download manifest, once per run, at the first
+    state-shaped image, and the boots get that file. A plain disk has no GOP (propimage_plain.py takes none) and fetches nothing; a caller's own
+    `gop` argument is used as it is and nothing is fetched."""
+
+    def box(self, **kw):
+        env = Env(self)
+        env.runner = env.ctx.runner = GopRunner(**kw)
+        return env
+
+    @staticmethod
+    def go(env, *imgs):
+        """Like Env.run but WITHOUT the explicit gop: the runner has to get one itself."""
+        return images.run_images(env.ctx, doc(*imgs), hooks=env.hooks)
+
+    def two_state(self, env, tag=""):
+        return self.go(env, {"label": "first", "kind": "prebuilt", "disk": src(env.state_dir("s1" + tag))},
+                       {"label": "second", "kind": "prebuilt", "disk": src(env.state_dir("s2" + tag))})
+
+    @staticmethod
+    def gop_args(env):
+        return [c[c.index("--gop-efi") + 1] for c in env.cmds]
+
+    def assertNothingBooted(self, env, rec=None):
+        self.assertEqual(env.cmds, [])
+        self.assertNotIn("boot", env.runner.events)
+        if rec is not None:
+            vast_report.validate_propimage_run(rec)
+
+    def unpinned(self, env, **fields):
+        pins = json.loads(Path(pa.PINS_PATH).read_text())
+        next(i for i in pins["items"] if i["role"] == "gop").update(fields)
+        (env.tmp / "pins.json").write_text(json.dumps(pins))
+        env.ctx.pins_path = env.tmp / "pins.json"
+
+    # ------------------------------------------------------------ the fetch
+    def test_two_state_images_fetch_the_boot_gop_once(self):
+        env = self.box()
+        rec = self.two_state(env)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertEqual((len(env.runner.gop_fetches()), env.runner.events.count("fetch:gop")), (1, 1), env.runner.events)
+        self.assertTrue(env.cmds and all(Path(a).is_file() for a in self.gop_args(env)), self.gop_args(env))
+
+    def test_every_boot_of_every_image_gets_the_downloaded_file(self):
+        env = self.box()
+        rec = self.two_state(env)
+        self.assertGreaterEqual(len(env.cmds), 2)
+        self.assertEqual(len(set(self.gop_args(env))), 1, self.gop_args(env))
+        got = Path(self.gop_args(env)[0])
+        self.assertTrue(got.is_file(), got)
+        self.assertEqual(got.read_bytes(), GOP_BYTES)                                   # the file the downloader wrote, not any other path
+        self.assertTrue(got.is_relative_to(env.ctx.prefix))
+        self.assertEqual([i["verdict"] for i in rec["images"]], ["PASS", "PASS"])
+
+    def test_the_manifest_is_the_pinned_item_from_its_signed_ref_and_nothing_else(self):
+        env = self.box()
+        self.two_state(env)
+        (manifest,) = env.runner.gop_fetches()
+        (item,) = manifest["items"]
+        self.assertEqual((item["name"], item["dest"], item["sha256"], item["size"], item["needed_by"]),
+                         (GOP_NAME, GOP_PIN["dest"], GOP_PIN["sha256"], GOP_PIN["size"], "image"))
+        self.assertEqual(item["sources"], [{"kind": "signed", "ref": GOP_PIN["ref"]}])
+        self.assertEqual(manifest["stages"], ["image"])
+        self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$")
+
+    def test_the_gop_is_fetched_before_the_first_boot(self):
+        env = self.box()
+        self.two_state(env)
+        ev = env.runner.events
+        self.assertEqual((ev.count("fetch:gop"), ev.index("fetch:gop") < ev.index("boot")), (1, True), ev)
+
+    def test_a_pinned_image_gets_its_gop_before_the_image_is_downloaded(self):
+        env = self.box()
+        rec = self.go(env, {"kind": "prebuilt", "disk": {"from": "pin", "ref": "propimage-kfimg-20261112.zip"}, "only": ["3dmark"]})
+        self.assertEqual(rec["images"][0]["verdict"], "PASS", rec)
+        ev = env.runner.events
+        self.assertEqual(ev[:2], ["fetch:gop", "fetch:image"], ev)                        # a wrong GOP pin must not cost a 50 GB download first
+        self.assertEqual(ev.count("fetch:gop"), 1)
+
+    def test_a_second_run_asks_the_downloader_again_and_trusts_no_left_over_file(self):
+        env = self.box()
+        self.two_state(env)
+        env.ctx.prefix.joinpath("gop", GOP_PIN["dest"]).write_bytes(b"left over from another revision")
+        env.cmds.clear()
+        self.two_state(env, "again")
+        self.assertEqual(Path(self.gop_args(env)[0]).read_bytes(), GOP_BYTES)
+
+    # ------------------------------------------------------------ the pin
+    def unset_field_refused(self, field):
+        env = self.box()
+        self.unpinned(env, **{field: None})
+        rec = self.two_state(env)
+        self.assertEqual([(i["verdict"], i["reason"]) for i in rec["images"]], [("REFUSED", "PIN_UNSET:gop")] * 2)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "first:PIN_UNSET:gop"))
+        self.assertEqual(images.exit_code(rec), 2)
+        self.assertEqual(env.runner.manifests, [])                                       # an unpinned object is never fetched
+        self.assertNothingBooted(env, rec)
+
+    def test_an_unset_gop_sha256_is_refused_by_name_before_any_boot(self):
+        self.unset_field_refused("sha256")
+
+    def test_an_unset_gop_size_is_refused_by_name_before_any_boot(self):
+        self.unset_field_refused("size")
+
+    def test_an_unset_gop_pin_is_refused_before_the_image_is_fetched(self):
+        env = self.box()
+        self.unpinned(env, sha256=None)
+        rec = self.go(env, {"kind": "prebuilt", "disk": {"from": "pin", "ref": "propimage-kfimg-20261112.zip"}, "only": ["3dmark"]})
+        self.assertEqual((rec["images"][0]["verdict"], rec["images"][0]["reason"]), ("REFUSED", "PIN_UNSET:gop"))
+        self.assertEqual(env.runner.manifests, [])
+        self.assertNothingBooted(env, rec)
+
+    def test_a_pins_file_without_a_gop_item_is_refused_by_name(self):
+        env = self.box()
+        pins = json.loads(Path(pa.PINS_PATH).read_text())
+        pins["items"] = [i for i in pins["items"] if i["role"] != "gop"]
+        with unittest.mock.patch.object(pa, "load_pins", lambda path=None: pins):
+            rec = self.two_state(env)
+        self.assertEqual([(i["verdict"], i["reason"]) for i in rec["images"]], [("REFUSED", "PIN_UNSET:gop")] * 2)
+        self.assertEqual(env.runner.manifests, [])
+        self.assertNothingBooted(env, rec)
+
+    def test_a_pins_file_without_a_gop_item_never_fetches_the_image_either(self):
+        env = self.box()
+        pins = json.loads(Path(pa.PINS_PATH).read_text())
+        pins["items"] = [i for i in pins["items"] if i["role"] != "gop"]
+        with unittest.mock.patch.object(pa, "load_pins", lambda path=None: pins):
+            rec = self.go(env, {"kind": "prebuilt", "disk": {"from": "pin", "ref": "propimage-kfimg-20261112.zip"}, "only": ["3dmark"]})
+        self.assertEqual((rec["images"][0]["verdict"], rec["images"][0]["reason"]), ("REFUSED", "PIN_UNSET:gop"))
+        self.assertEqual(env.runner.manifests, [])
+        self.assertNothingBooted(env, rec)
+
+    # ------------------------------------------------------------ the failures
+    def test_a_failed_gop_fetch_is_download_and_nothing_boots(self):
+        env = self.box(gop_rc=1)
+        rec = self.two_state(env)
+        self.assertEqual([(i["verdict"], i["reason"]) for i in rec["images"]], [("REFUSED", "DOWNLOAD")] * 2)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "first:DOWNLOAD"))
+        self.assertEqual(images.exit_code(rec), 2)                                       # not a guest failure
+        self.assertEqual(len(env.runner.gop_fetches()), 1)                               # one attempt for the run
+        self.assertNothingBooted(env, rec)
+
+    def test_a_failed_gop_fetch_is_tried_once_per_run_not_once_per_image(self):
+        env = self.box(gop_rc=1)
+        self.two_state(env)
+        self.assertEqual(len(env.runner.gop_fetches()), 1, env.runner.events)
+
+    def test_a_downloader_that_exits_zero_without_the_file_is_download(self):
+        env = self.box(gop_writes=False)
+        rec = self.two_state(env)
+        self.assertEqual([(i["verdict"], i["reason"]) for i in rec["images"]], [("REFUSED", "DOWNLOAD")] * 2)
+        self.assertNothingBooted(env, rec)
+
+    def test_a_pinned_image_is_not_downloaded_when_the_gop_file_is_missing(self):
+        env = self.box(gop_writes=False)
+        rec = self.go(env, {"kind": "prebuilt", "disk": {"from": "pin", "ref": "propimage-kfimg-20261112.zip"}, "only": ["3dmark"]})
+        self.assertEqual((rec["images"][0]["verdict"], rec["images"][0]["reason"]), ("REFUSED", "DOWNLOAD"))
+        self.assertEqual(env.runner.events, ["fetch:gop"])                               # the 50 GB image was never asked for
+        self.assertNothingBooted(env, rec)
+
+    def test_a_failed_gop_fetch_does_not_stop_a_plain_image_after_it(self):
+        env = self.box(gop_rc=1)
+        rec = self.go(env, {"label": "first", "kind": "prebuilt", "disk": src(env.state_dir())},
+                       {"label": "second", "kind": "prebuilt", "disk": src(env.plain_dir()), "ssh": SSH, "apps": {"3dmark": {"mode": "present"}}})
+        self.assertEqual([(i["label"], i["verdict"]) for i in rec["images"]], [("first", "REFUSED"), ("second", "PASS")])
+        self.assertEqual(len(env.cmds), 1)
+        self.assertNotIn("--gop-efi", env.cmds[0])
+
+    # ------------------------------------------------------------ what does not change
+    def test_an_explicit_gop_is_used_as_it_is_and_nothing_is_fetched(self):
+        env = self.box(gop_rc=1)                                                         # a fetch would fail: it must not happen
+        rec = env.run(doc({"label": "first", "kind": "prebuilt", "disk": src(env.state_dir("s1"))},
+                          {"label": "second", "kind": "prebuilt", "disk": src(env.state_dir("s2"))}))
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertEqual(env.runner.manifests, [])
+        self.assertEqual(set(self.gop_args(env)), {str(env.tmp / "gop.efi")})
+        self.assertFalse((env.ctx.prefix / "gop" / GOP_PIN["dest"]).exists())
+
+    def test_an_explicit_gop_is_used_even_when_the_pins_file_has_no_gop_pin(self):
+        env = self.box()
+        self.unpinned(env, sha256=None)
+        rec = env.run(doc({"kind": "prebuilt", "disk": src(env.state_dir())}))
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertEqual(env.runner.manifests, [])
+
+    def test_plain_images_need_no_gop_and_fetch_none(self):
+        env = self.box(gop_rc=1)
+        rec = self.go(env, {"kind": "prebuilt", "disk": src(env.plain_dir()), "ssh": SSH, "apps": {"3dmark": {"mode": "present"}}})
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertEqual(env.runner.manifests, [])
+        self.assertNotIn("--gop-efi", env.cmds[0])
+
+    def test_a_state_image_with_nothing_to_run_needs_no_gop(self):
+        env = self.box(gop_rc=1)
+        rec = self.go(env, {"kind": "prebuilt", "disk": src(env.state_dir()), "only": ["notanapp"]})
+        self.assertEqual(env.runner.manifests, [])
+        self.assertEqual(env.cmds, [])
+        self.assertNotEqual(rec["images"][0]["reason"], "DOWNLOAD")
+
+
 if __name__ == "__main__":
     unittest.main()

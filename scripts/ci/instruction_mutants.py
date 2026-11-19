@@ -83,6 +83,11 @@ MUTANTS = [
     M("inst-spec-needs-windows-dropped", "inst", "if wanted and not i.windows:", "if False:"),
     M("inst-linux-apps-middle-tier-dropped", "inst", 'if i.linux_apps == "middle" and i.tier not in ("middle", "large"):', "if False:"),
     M("inst-linux-apps-large-tier-dropped", "inst", 'if i.linux_apps == "large" and i.tier != "large":', "if False:"),
+    # 2026-11-18: the optional `bin` of the `matlab` object (the schema is its only validator on the box side)
+    M("schema-matlab-bin-pattern-open", "schema", '"pattern": "^[A-Za-z0-9_./-]+$"', '"pattern": "^.*$"'),
+    M("schema-matlab-bin-length-unbounded", "schema", '"maxLength": 120,\n          "pattern": "^[A-Za-z0-9_./-]+$"', '"maxLength": 12000,\n          "pattern": "^[A-Za-z0-9_./-]+$"'),
+    M("schema-matlab-bin-not-a-string", "schema", '"bin": {\n          "type": "string",', '"bin": {\n          "type": "number",'),
+    M("schema-matlab-bin-required", "schema", '"required": [\n        "image",\n        "driver",\n        "rows"\n      ]', '"required": [\n        "image",\n        "driver",\n        "rows",\n        "bin"\n      ]'),
     M("inst-hash-of-something-else", "inst", "return parse(raw), hashlib.sha256(raw).hexdigest()", 'return parse(raw), hashlib.sha256(b"").hexdigest()'),
     M("checker-defs-ignored", "checker", "return check(defs[reference[8:]], value, path, defs)", 'return check(SCHEMA["$defs"][reference[8:]], value, path, defs)'),
     M("payload-file-beside-env-allowed", "payload", "if any(name in environ for name in INSTRUCTION_ENV):", "if False:"),

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kayfabe.dev/schemas/kfci/v1/instruction.schema.json",
   "title": "kayfabe box payload instruction version 1",
-  "$comment": "STATUS 2026-11-15: LIVE (scripts/ci/payload_instruction.py reads it). Mirror: scripts/kfci/schemas/instruction.schema.json must be byte-identical (test_payload_instruction.py). Instruction = what a box runs; a requirement (what is wanted) is a different format that the Worker resolves into this. 2026-11-16: optional `propimages` = the images and apps of the generic proprietary-image runner (scripts/bench/windows/propimage_runspec.py validates the same objects; docs/design/V3_PROPIMAGE_RUNNER.md). 2026-11-17: optional `matlab` = the MATLAB GPU rows of the Linux proprietary image (scripts/bench/linux/matlab_rows.py, stage `matlab` of scripts/ci/vast_payload.py; docs/design/V3_PROPIMAGE_LINUX.md section 14). Always strict: the image is a pin, the rows list is the Worker's.",
+  "$comment": "STATUS 2026-11-15: LIVE (scripts/ci/payload_instruction.py reads it). Mirror: scripts/kfci/schemas/instruction.schema.json must be byte-identical (test_payload_instruction.py). Instruction = what a box runs; a requirement (what is wanted) is a different format that the Worker resolves into this. 2026-11-16: optional `propimages` = the images and apps of the generic proprietary-image runner (scripts/bench/windows/propimage_runspec.py validates the same objects; docs/design/V3_PROPIMAGE_RUNNER.md). 2026-11-17: optional `matlab` = the MATLAB GPU rows of the Linux proprietary image (scripts/bench/linux/matlab_rows.py, stage `matlab` of scripts/ci/vast_payload.py; docs/design/V3_PROPIMAGE_LINUX.md section 14). Always strict: the image is a pin, the rows list is the Worker's. 2026-11-18: optional `matlab.bin` = where the image keeps the matlab binary in the guest (an image property, from ci/vast-broker/propimages.json `linux_images[].bin`); the rows' own pattern, at most 120 characters of letters, digits and `_ . / -`; absent = the name `matlab`.",
   "type": "object",
   "properties": {
     "schema": {
@@ -246,6 +246,12 @@
     "matlab": {
       "type": "object",
       "properties": {
+        "bin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9_./-]+$"
+        },
         "label": {
           "type": "string",
           "minLength": 1,

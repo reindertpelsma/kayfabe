@@ -7,7 +7,7 @@ STATUS: DESIGN-ONLY, 2026-11-17. GPU-free: every judging function is tested agai
 what needs a KVM box with a GPU is listed in docs/design/V3_PROPIMAGE_LINUX.md section 14. Rows and their scripts: scripts/bench/linux/matlab/.
 
     matlab_rows.py plan                                           the rows, their time-boxes and what each must show
-    matlab_rows.py verify RESULT.json --row ROW [--host-gpu-name N --host-mem-mib M]   re-judge one pulled result file (no VM)
+    matlab_rows.py verify RESULT.json --row ROW [--host-gpu-name N] [--declared-fb-mb M]   re-judge one pulled result file (no VM)
     matlab_rows.py run --image ZIP|--dir D --workdir W --qemu BIN --driver-run F --driver-sha256 H [--rows a,b] [--isolation row|shared]
                        [--lane ROW=gate|discovery] [--strict] [--sha SHA] [--out FILE] [--evidence-dir DIR] [--deadline-epoch N]
 
@@ -19,7 +19,7 @@ tolerances. Nothing else of the guest's output is kept: a row's stdout is not re
 or licence data (a test scans them), and this module never reads or prints any.
 
 Verdict classes (per row): PASS; FAIL with a class (CRASH, HANG, XID, TDR, ASSERT, OUTPUT_MISMATCH, GPU_NOT_USED, BAD_RESULT); HARNESS (the run could not be
-judged: transport, driver build, host counters missing, identity mismatch: never an application failure); NOT_RUN with a named reason (IMAGE_MISSING,
+judged: transport, driver build, host counters missing, identity mismatch, no declared fb-mb to judge the guest's total memory against: never an application failure); NOT_RUN with a named reason (IMAGE_MISSING,
 NO_GPU, GUEST_NO_DRIVER, GPU_UNSUPPORTED, DRIVER_MISSING, INJECT_UNAVAILABLE, GPU_INFO_FAILED, TIME, HOST_MEMORY_LOW...). GPU use is asserted from
 the HOST: the kf3 device's own log window of the row (scripts/bench/gpu_use.py: channels born and GPFIFO entries submitted while the row ran) is the authority, the
 HOST-side `nvidia-smi` counters (scripts/bench/windows/gpu_assert.py: HostProbe and evaluate, the record format of the Windows rows) the second observable.
@@ -65,6 +65,12 @@ EXACT_PREFIXES = ("vecadd_", "sample_chunk_", "sum_ones", "no_write_past_n", "co
 TOLERANCE = {"single": 1e-4, "double": 1e-10}        # relative; the host's own copy (kf_tol.m states the same numbers, never trusted)
 PAIR_REL, PAIR_ABS = 0.10, 2e-3                      # dl_train: GPU and CPU final loss
 LOSS_FALL = 0.5                                      # dl_train: the last epoch's mean loss must be below this fraction of the first
+# gpu_info (the preamble): the guest's TotalMemory is judged against the VRAM carve-out the LAUNCH declares (the kf3 property `fb-mb`, `propimage_linux.declared_fb_mb`
+# of the state the boot uses), NEVER against the host card's memory. MEASURED 2026-11-18 (Vast RTX 4090, kf3, fb-mb=4096): the guest reported 3968073728 bytes
+# (3784 MiB: 92.4 percent of the declared 4096 MiB) while the host card has 24564 MiB; applications see the carve-out (traces/imageb_apps_20261116, backlog 3).
+GPU_INFO_TOTAL_FRACTION = (0.80, 1.00)               # the reported total over the declared size: the driver and the display take part of the framebuffer (7.6 percent measured), so
+#                                                      the lower edge leaves room for a larger share; above 1.00 the guest sees more than the launch declared (a bug, not a carve-out)
+GPU_INFO_FLOOR_FRACTION, GPU_INFO_FLOOR_BYTES = 0.50, 256 * 2 ** 20     # the hard floor: under half the declared size, or under 256 MiB, the guest sees (almost) none of it
 MEM_FRACTION = (0.70, 0.90)                          # mem_oversub: allocated bytes over the free memory reported at the start
 MEM_RETURNED = 0.80                                  # mem_oversub: free memory after the release, over the start value
 NAME_RE = re.compile(r"[A-Za-z0-9_]{1,64}")
@@ -385,8 +391,30 @@ def _norm_gpu_name(name):
     return re.sub(r"[^a-z0-9]", "", str(name).lower().replace("nvidia", "").replace("geforce", ""))
 
 
-def verify_gpu_info(doc, hw):
-    """The device facts MATLAB reported against the host's own: the name, the memory, the compute capability MATLAB supports."""
+def declared_bytes(declared_fb_mb):
+    """The declared `fb-mb` in bytes, or None when it is not a positive integer (a bool, float, string or None is not one)."""
+    return declared_fb_mb << 20 if type(declared_fb_mb) is int and declared_fb_mb > 0 else None
+
+
+def total_memory_finding(total, declared_fb_mb):
+    """The guest's TotalMemory against the declared carve-out -> None (in range) or a named finding. OVER_DECLARED: more than the launch declared.
+    BELOW_FLOOR: under the hard floor (half of it, or 256 MiB). OUT_OF_RANGE: above the floor but under GPU_INFO_TOTAL_FRACTION's lower edge."""
+    want = declared_bytes(declared_fb_mb)
+    lo, hi = GPU_INFO_TOTAL_FRACTION
+    where = "guest=%d declared_fb_mb=%d" % (total, declared_fb_mb)
+    if total > hi * want:
+        return "TOTAL_MEMORY_OVER_DECLARED " + where
+    if total < max(GPU_INFO_FLOOR_FRACTION * want, GPU_INFO_FLOOR_BYTES):
+        return "TOTAL_MEMORY_BELOW_FLOOR " + where
+    if total < lo * want:
+        return "TOTAL_MEMORY_OUT_OF_RANGE " + where
+    return None
+
+
+def verify_gpu_info(doc, hw, declared_fb_mb=None):
+    """The device facts MATLAB reported: the name against the host's own, the total memory against the VRAM carve-out the LAUNCH declared (`declared_fb_mb`; the host
+    card's memory is recorded by the caller and is no limit), the compute capability MATLAB supports. A declared value that is missing is a HARNESS finding: the memory
+    could not be judged, which is never a pass."""
     info = doc.get("info")
     findings, facts = [], {}
     if not isinstance(info, dict):
@@ -401,13 +429,16 @@ def verify_gpu_info(doc, hw):
             and devs and devs >= 1 and isinstance(rel, str) and re.fullmatch(r"\d{4}[ab]", rel) and info.get("can_use_gpu") is True):
         return [("BAD_RESULT", "BAD_INFO")], facts
     facts = {"name": clean(name, 64), "compute_capability": cc, "driver_version": drv, "toolkit_version": tk, "total_memory": int(total),
-             "device_count": int(devs), "matlab_release": rel}
+             "device_count": int(devs), "matlab_release": rel, "declared_fb_mb": declared_fb_mb if declared_bytes(declared_fb_mb) else None}
     if hw:
         if hw.get("gpu_name") and _norm_gpu_name(hw["gpu_name"]) != _norm_gpu_name(name):
             findings.append(("OUTPUT_MISMATCH", "GPU_NAME_DIFFERS host=%s guest=%s" % (clean(hw["gpu_name"], 40), clean(name, 40))))
-        mib = hw.get("memory_mib")
-        if isinstance(mib, int) and mib > 0 and not (0.5 * mib * 2 ** 20 <= total <= 1.01 * mib * 2 ** 20):
-            findings.append(("OUTPUT_MISMATCH", "TOTAL_MEMORY_OUT_OF_RANGE guest=%d host_mib=%d" % (total, mib)))
+    if declared_bytes(declared_fb_mb) is None:
+        findings.append(("HARNESS", "DECLARED_FB_MB_MISSING"))
+    else:
+        text = total_memory_finding(total, declared_fb_mb)
+        if text:
+            findings.append(("OUTPUT_MISMATCH", text))
     return findings, facts
 
 
@@ -450,9 +481,11 @@ def verify_gpu_device(doc, hw):
     return []
 
 
-def verify_doc(row, doc, hw=None):
+def verify_doc(row, doc, hw=None, declared_fb_mb=None):
     """One row's result document -> {ok, klass, findings (at most 8), n_checks, failed, flag_disagrees, facts}. klass: None, ASSERT (the script threw),
-    BAD_RESULT (unusable) or OUTPUT_MISMATCH (a recomputed number missed). An error document is an ASSERT with the error id only."""
+    BAD_RESULT (unusable), GPU_NOT_USED, OUTPUT_MISMATCH (a recomputed number missed) or HARNESS (it could not be judged: the preamble without a declared fb-mb;
+    a real failure outranks it). An error document is an ASSERT with the error id only. `hw`: the host's GPU facts (the name is compared); `declared_fb_mb`:
+    the launch's VRAM carve-out in MiB, the preamble's reference for the guest's total memory."""
     if doc["status"] == "error":
         eid = doc.get("error_id")
         return {"ok": False, "klass": "ASSERT", "findings": ["ERROR_ID:" + (clean(eid, 80) if isinstance(eid, str) and re.fullmatch(r"[A-Za-z0-9:_.]{0,80}", eid) else "?")],
@@ -463,7 +496,7 @@ def verify_doc(row, doc, hw=None):
         found.append(("GPU_NOT_USED", "NO_GPU_ARRAY_PROOF"))
     facts = {}
     if row == "gpu_info":
-        extra, facts = verify_gpu_info(doc, hw)
+        extra, facts = verify_gpu_info(doc, hw, declared_fb_mb)
         found += extra
     elif row == "mem_oversub":
         found += verify_mem(doc)
@@ -472,7 +505,7 @@ def verify_doc(row, doc, hw=None):
         if ep is None or ep < 3:
             found.append(("BAD_RESULT", "BAD_EPOCHS"))
     klass = ("BAD_RESULT" if any(k == "BAD_RESULT" for k, _ in found) else "GPU_NOT_USED" if any(k == "GPU_NOT_USED" for k, _ in found)
-             else ("OUTPUT_MISMATCH" if found else None))
+             else ("OUTPUT_MISMATCH" if any(k == "OUTPUT_MISMATCH" for k, _ in found) else "HARNESS" if found else None))
     return {"ok": not found, "klass": klass, "findings": [clean(t, 100) for _, t in found][:8], "n_checks": len(items),
             "failed": [i["name"] for i in items if not i["ok"]][:8], "flag_disagrees": sum(1 for i in items if i["flag_disagrees"]), "facts": facts}
 
@@ -515,6 +548,8 @@ def judge(row, execution, parsed, verified, gpu, census, host_xid, work=None):
         rc = execution.get("rc")
         return "FAIL", ("CRASH" if rc not in (0, None) or execution.get("lost") else "BAD_RESULT"), "NO_USABLE_RESULT rc=%s" % rc
     if not verified["ok"]:
+        if verified["klass"] == "HARNESS":
+            return "HARNESS", None, (verified["findings"] or ["?"])[0]       # nothing the guest did failed: the harness could not judge it
         return "FAIL", verified["klass"], (verified["findings"] or ["?"])[0]
     if execution.get("rc") not in (0, None):
         return "FAIL", "ASSERT", "MATLAB_EXIT:%s" % execution["rc"]
@@ -616,7 +651,7 @@ def run_row(sess, row, ctx):
         rec["result"] = {"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
         try:
             parsed = parse_row_json(raw, row)
-            verified = verify_doc(row, parsed, ctx.hw)
+            verified = verify_doc(row, parsed, ctx.hw, ctx.declared_fb_mb)
         except BadResult as exc:
             verified = {"ok": False, "klass": "BAD_RESULT", "findings": [exc.reason], "n_checks": 0, "failed": [], "flag_disagrees": 0, "facts": {}}
             parsed = None
@@ -685,10 +720,12 @@ def write_evidence(directory, rec, parsed, texts):
 # ---------------------------------------------------------------- the run
 class Context:
     """The run's collaborators, every one replaceable (the tests pass fakes). `probe_factory(dir)` -> an object with start() and stop();
-    `xid_mark()` and `xid_since(mark)` count host kernel Xid lines (None when unknown); `census` is kf3_census (count_lines, window, census)."""
+    `xid_mark()` and `xid_since(mark)` count host kernel Xid lines (None when unknown); `census` is kf3_census (count_lines, window, census);
+    `declared_fb_mb` is the VRAM carve-out the launch declares (the preamble's reference for the guest's total memory)."""
 
     def __init__(self, lanes=None, hw=None, probe_factory=None, evidence_dir=None, workdir=".", sleep=time.sleep, clock=time.monotonic, settle_s=2.0,
-                 census=None, xid_mark=None, xid_since=None, deadline_epoch=0.0, now=time.time, isolation="row", strict=False, matlab=MATLAB_BIN):
+                 census=None, xid_mark=None, xid_since=None, deadline_epoch=0.0, now=time.time, isolation="row", strict=False, matlab=MATLAB_BIN,
+                 declared_fb_mb=None):
         self.lanes, self.hw, self.evidence_dir, self.workdir = dict(lanes or {}), hw or {}, evidence_dir, workdir
         self.probe_factory = probe_factory or (lambda d: gpu_assert().HostProbe(d))
         self.sleep, self.clock, self.settle_s = sleep, clock, settle_s
@@ -696,6 +733,7 @@ class Context:
         self.xid_mark = xid_mark or (lambda: None)
         self.xid_since = xid_since or (lambda mark: None)
         self.deadline_epoch, self.now, self.isolation, self.strict, self.matlab = deadline_epoch, now, isolation, strict, matlab
+        self.declared_fb_mb = declared_fb_mb      # MiB, the kf3 `fb-mb` the boots declare; execute() sets it from the image state. None = unknown: the preamble is then HARNESS, never PASS
 
 
 def plan_boots(rows, isolation):
@@ -989,13 +1027,13 @@ def cmd_plan(_):
 
 def cmd_verify(a):
     raw = Path(a.result).read_bytes()[:MAX_JSON_BYTES + 1]
-    hw = {"gpu_name": a.host_gpu_name, "memory_mib": a.host_mem_mib} if a.host_gpu_name else {}
+    hw = {"gpu_name": a.host_gpu_name} if a.host_gpu_name else {}
     try:
         doc = parse_row_json(raw, a.row)
     except BadResult as exc:
         print("BAD_RESULT " + exc.reason)
         return 1
-    v = verify_doc(a.row, doc, hw)
+    v = verify_doc(a.row, doc, hw, a.declared_fb_mb)
     print("%s %s checks=%d failed=%s findings=%s" % ("OK" if v["ok"] else "FAIL:" + str(v["klass"]), a.row, v["n_checks"], ",".join(v["failed"]) or "-", "; ".join(v["findings"]) or "-"))
     return 0 if v["ok"] else 1
 
@@ -1023,8 +1061,14 @@ def execute(image, directory, workdir, qemu, driver_run, driver_sha256, rows, la
             p = pl.paths(directory)
             st = pl.load_state(p["state"])
         driver_rec["version"] = prop().driver_version_from_name(driver_run)
-        make = make_session or (lambda index: LinuxSession(st, p, "matlab%d" % index, qemu, driver_run, driver_sha256, driver_created_utc))
-        result = run_rows(rows, make, ctx)
+        # the VRAM carve-out the boots declare: read from the very state the sessions launch from (propimage_linux.build_argv writes the same value as `fb-mb=`)
+        ctx.declared_fb_mb = prop().declared_fb_mb(st)
+        if ctx.declared_fb_mb is None:
+            no_value = BootRefusal("DECLARED_FB_MB_MISSING", "HARNESS")       # nothing to judge the guest's memory against: no boot is paid for
+            result = {"rows": [refused_record(r, ctx.lanes.get(r, "discovery"), no_value) for r in [PREAMBLE] + list(rows)], "boots": []}
+        else:
+            make = make_session or (lambda index: LinuxSession(st, p, "matlab%d" % index, qemu, driver_run, driver_sha256, driver_created_utc))
+            result = run_rows(rows, make, ctx)
     return build_record(result, ctx, sha, image_rec, driver_rec, family)
 
 
@@ -1055,7 +1099,7 @@ def main(argv=None):
     v.add_argument("result")
     v.add_argument("--row", required=True, choices=ROW_ORDER)
     v.add_argument("--host-gpu-name")
-    v.add_argument("--host-mem-mib", type=int)
+    v.add_argument("--declared-fb-mb", type=int, help="the kf3 `fb-mb` the boot declared (MiB): the gpu_info row judges the guest's total memory against it")
     r = sub.add_parser("run")
     r.add_argument("--image")
     r.add_argument("--image-sha256", help="a pin for --image: enforced with --strict only (otherwise the computed sha256 is just recorded)")

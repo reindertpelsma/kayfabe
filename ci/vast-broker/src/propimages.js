@@ -45,12 +45,35 @@ export const MATLAB_ROWS = Object.freeze([
   'mem_oversub',
 ]);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+// A driver version as the release matrix writes it: two to four numeric fields (590.48.01).
+const DOTTED_VERSION = /^[0-9]+(\.[0-9]+){1,3}$/;
+// The guest binary of a Linux image: the box rows' own rule (scripts/bench/linux/matlab_rows.py BIN_RE, and the instruction schema's `matlab.bin`). The `$` is
+// the end of the string here (no multiline flag), so a trailing newline does not match.
+const GUEST_BIN = /^[A-Za-z0-9_./-]{1,120}$/;
+const pinnedLinuxInstaller = (matrix, version) =>
+  (matrix.driver_installers ?? []).find(
+    (p) => p.os === 'linux' && p.version === version && p.status === 'PINNED',
+  );
+// Numeric field-by-field comparison of two dotted versions (a missing field is 0): negative when a is older than b. Never a text compare
+// ('1000.2.3' is newer than '590.48.01').
+export function compareDottedVersions(a, b) {
+  const x = String(a).split('.').map(Number);
+  const y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
 const only = (v, allowed) => isObject(v) && Object.keys(v).every((k) => allowed.includes(k));
 
 // Every problem of a configuration, as upper-case tokens with an optional `:detail`; an empty list is a good configuration.
 // `registry` (optional) = { label: [known app ids] }: the apps the runner has a definition for. When given, an application
 // the runner does not know is UNKNOWN_APP (a strict run refuses it by name before any boot; this refuses it earlier).
-export function propimagesConfigProblems(value = PROPIMAGES, { registry } = {}) {
+export function propimagesConfigProblems(
+  value = PROPIMAGES,
+  { registry, releaseMatrix = RELEASE_MATRIX } = {},
+) {
   const problems = [];
   const bad = (reason, ok = false) => {
     if (!ok) problems.push(reason);
@@ -163,7 +186,8 @@ export function propimagesConfigProblems(value = PROPIMAGES, { registry } = {}) 
       );
     }
   }
-  if (value.linux_images !== undefined) linuxImageProblems(value, objects, labels, families, bad);
+  if (value.linux_images !== undefined)
+    linuxImageProblems(value, objects, labels, families, bad, releaseMatrix);
   return problems;
 }
 
@@ -171,7 +195,7 @@ export function propimagesConfigProblems(value = PROPIMAGES, { registry } = {}) 
 // object (role `linux_image`), says that no per-family list is kept (`families: 'generic'`), how its boots are isolated, how it is
 // scheduled, and its rows with their lanes. `measured_families` (optional) is the families a lane is trusted on; elsewhere every row
 // is emitted in the discovery lane, exactly as for the Windows images.
-function linuxImageProblems(value, objects, labels, families, bad) {
+function linuxImageProblems(value, objects, labels, families, bad, releaseMatrix) {
   const list = value.linux_images;
   if (
     !bad('LINUX_IMAGES', Array.isArray(list) && list.length > 0 && list.length <= MAX_LINUX_IMAGES)
@@ -187,6 +211,10 @@ function linuxImageProblems(value, objects, labels, families, bad) {
           'families',
           'isolation',
           'scheduling',
+          'min_guest_driver',
+          'min_guest_driver_basis',
+          'bin',
+          'bin_basis',
           'measured_families',
           'rows',
         ]),
@@ -201,6 +229,33 @@ function linuxImageProblems(value, objects, labels, families, bad) {
     bad('LINUX_FAMILIES:' + label, li.families === 'generic');
     bad('LINUX_ISOLATION:' + label, ['row', 'shared'].includes(li.isolation));
     bad('LINUX_SCHEDULING:' + label, typeof li.scheduling === 'string' && li.scheduling.length > 0);
+    // `min_guest_driver` (optional): the oldest guest driver the image's application accepts. It is a dotted version that is a PINNED Linux
+    // installer of the release matrix (the Worker never names a driver the box cannot fetch by pin), and it carries the basis of the claim.
+    // The basis is allowed only beside the minimum: a note about nothing is a stray key.
+    if (li.min_guest_driver !== undefined)
+      bad(
+        'MIN_GUEST_DRIVER:' + label,
+        typeof li.min_guest_driver === 'string' &&
+          DOTTED_VERSION.test(li.min_guest_driver) &&
+          pinnedLinuxInstaller(releaseMatrix, li.min_guest_driver) !== undefined,
+      );
+    if (li.min_guest_driver !== undefined || li.min_guest_driver_basis !== undefined)
+      bad(
+        'MIN_GUEST_DRIVER_BASIS:' + label,
+        li.min_guest_driver !== undefined &&
+          typeof li.min_guest_driver_basis === 'string' &&
+          li.min_guest_driver_basis.length > 0,
+      );
+    // `bin` (optional, 2026-11-18): where the image keeps the guest's matlab binary. It is a property of the IMAGE (measured: `matlab` is not on the guest's ssh
+    // PATH in the MATLAB Linux image), so it is configuration, never a name in code; the Worker copies it into the instruction's `matlab.bin`. The basis (how
+    // it was found) is allowed only beside it, like the minimum driver's.
+    if (li.bin !== undefined)
+      bad('BIN:' + label, typeof li.bin === 'string' && GUEST_BIN.test(li.bin));
+    if (li.bin !== undefined || li.bin_basis !== undefined)
+      bad(
+        'BIN_BASIS:' + label,
+        li.bin !== undefined && typeof li.bin_basis === 'string' && li.bin_basis.length > 0,
+      );
     if (li.measured_families !== undefined)
       bad(
         'MEASURED_FAMILIES:' + label,
@@ -356,7 +411,8 @@ export function propimagePlan(
 }
 // The `matlab` part of the instruction for ONE release leg (the stage `matlab` of scripts/ci/vast_payload.py, validated by the box's schema and
 // by scripts/ci/matlab_stage.py instruction_refusal). A Linux image needs a KVM box with a GPU; it is NOT part of the Windows A/B slot rotation:
-// the part depends on the leg's die only (its pinned guest driver from the release matrix) and is emitted for the large-tier leg of a release.
+// the part depends on the leg's die only (its pinned guest driver from the release matrix, raised to the image's `min_guest_driver` when older)
+// and is emitted for the large-tier leg of a release.
 // Always strict: the image is a pin, the rows are the configured ones, and a family the image has not run on gets every row in the discovery lane.
 export function matlabPlan(
   { profile, tierName, die, label = 'matlab' } = {},
@@ -370,10 +426,27 @@ export function matlabPlan(
   const li = (value.linux_images ?? []).find((i) => i.label === label);
   if (li === undefined) throw Error('matlab unknown image:' + String(label).slice(0, 32));
   const version = releaseMatrix.dies.find((d) => d.die === die)?.drivers?.linux_guest_driver;
-  const pin = (releaseMatrix.driver_installers ?? []).find(
-    (p) => p.os === 'linux' && p.version === version && p.status === 'PINNED',
-  );
-  if (pin === undefined) throw Error('matlab driver:' + String(die).slice(0, 16));
+  const diePin = pinnedLinuxInstaller(releaseMatrix, version);
+  if (diePin === undefined) throw Error('matlab driver:' + String(die).slice(0, 16));
+  // The image's application refuses a guest driver older than its CUDA runtime (propimages.json `min_guest_driver`, measured on one die): a die
+  // whose default is older gets exactly the pinned minimum (never a newer driver than needed), any other die keeps its own default. A
+  // minimum that is not a pinned Linux installer of THIS matrix refuses the plan by name, whether or not this die needs it.
+  let pin = diePin;
+  let why = '';
+  if (li.min_guest_driver !== undefined) {
+    const minPin = pinnedLinuxInstaller(releaseMatrix, li.min_guest_driver);
+    if (minPin === undefined)
+      throw Error('matlab min driver:' + String(li.min_guest_driver).slice(0, 16));
+    if (compareDottedVersions(diePin.version, minPin.version) < 0) {
+      pin = minPin;
+      why =
+        ' (the image needs at least ' +
+        minPin.version +
+        "; the die's default " +
+        diePin.version +
+        ' is older)';
+    }
+  }
   const object = value.objects.find((o) => o.id === li.object);
   const measured = (li.measured_families ?? []).includes(family);
   const part = {
@@ -388,6 +461,8 @@ export function matlabPlan(
         ]),
       ),
       isolation: li.isolation,
+      // the image's own binary (propimages.json `bin`), only when it is configured: absent = the box runs the name `matlab`
+      ...(li.bin !== undefined ? { bin: li.bin } : {}),
     },
   };
   const lines = [
@@ -398,6 +473,7 @@ export function matlabPlan(
       family +
       '): guest driver ' +
       pin.version +
+      why +
       ', ' +
       (measured
         ? 'lanes as configured'

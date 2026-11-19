@@ -26,6 +26,7 @@ FILES = {
     "payload": "scripts/ci/vast_payload.py",
     "pab": "scripts/ci/propimage_apps_b_stage.py",
     "check": "scripts/bench/windows/propimage_check.py",
+    "bench": "scripts/bench/windows/propimage_apps_b.py",
 }
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_propimage_apps."
@@ -50,6 +51,7 @@ COPY_FILES = [
     "ci/vast-broker/planner/schemas/instruction.schema.json",
     "ci/vast-broker/release-matrix.json",
     "ci/vast-broker/defaults.json",
+    "ci/vast-broker/propimages.json",
 ]
 COLLECT = """import io, json, sys, unittest
 suite = unittest.defaultTestLoader.loadTestsFromNames(sys.argv[1:])
@@ -58,6 +60,8 @@ print('KF_MUTATION_RESULT=' + json.dumps({'tests': r.testsRun, 'killers': [t.id(
 """
 
 PB, BG, CK = ("test_propimage_apps_b_stage.Plan.", "test_propimage_apps_b_stage.GuestRam.", "test_propimage_check.T.")   # image B's stage and the harness
+# 2026-11-17 lane selection (`run --lane gate`, `--propimage-b-lane`) and the harness/Worker lane pin
+LS, RPT, WL, PW = ("test_propimage_apps_b_stage." + n + "." for n in ("LaneSelection", "Report", "WorkerLanes", "PayloadWiring"))
 P, V, B, K, R, RP, W, G, RV = (SUITE + n for n in (
     "Pins.", "Preflight.", "Boots.", "Verdicts.", "Run.", "ReportValidation.", "PayloadWiring.", "KernelLogWindows.", "ReportValidation."))
 
@@ -272,6 +276,52 @@ MUTANTS = [
     M("payload-stage-after-the-spec-lane", "payload", '    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")\n    if i.tier == "large" and (PROPIMAGE_APPS_B_IN_LARGE or "propimage_apps_b" in only):\n        names.append("propimage_apps_b")\n    if i.tier == "large" and (i.matlab is not None or MATLAB_IN_LARGE or "matlab" in only):\n        names.append("matlab")\n    if "specviewperf" in i.stages:\n        names.append("specviewperf")',
       '    if "specviewperf" in i.stages:\n        names.append("specviewperf")\n    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")',
       W + "test_runs_after_every_windows_stage_and_before_the_spec_lane", W + "test_runs_before_the_spec_lane_without_windows_stages"),
+
+    # lane selection (2026-11-17): `run --lane gate` runs the enabled gate rows only, the record says which selection ran, the report refuses an inconsistent one
+    M("lane-stage-gate-selects-every-row", "pab", 'and (lane == "all" or c.get("lane") == lane))', "and True)",
+      LS + "test_the_gate_rows_are_the_enabled_rows_whose_table_lane_is_gate", LS + "test_gate_runs_only_the_enabled_gate_rows_in_table_order",
+      LS + "test_rows_that_were_not_selected_are_neither_failed_nor_skipped", RPT + "test_a_gate_selection_pass_holds_exactly_the_gate_rows_and_validates"),
+    M("lane-stage-selection-includes-disabled-rows", "pab", 'if not c.get("disabled") and (lane', "if (lane",
+      LS + "test_the_gate_rows_are_the_enabled_rows_whose_table_lane_is_gate", LS + "test_the_default_selection_is_all_and_the_record_says_so"),
+    M("lane-stage-apps-subset-ignored", "pab", "    if apps:\n        return tuple(a for a in checks if a in apps)", "    if False:\n        return ()",
+      LS + "test_the_gate_rows_are_the_enabled_rows_whose_table_lane_is_gate", LS + "test_an_apps_subset_says_apps"),
+    M("lane-stage-lane-and-apps-allowed", "pab", '    if apps and lane != "all":\n        raise ValueError("--lane and --apps are mutually exclusive")', "    if False:\n        raise ValueError()",
+      LS + "test_lane_and_apps_together_are_a_usage_error_and_an_unknown_lane_too", LS + "test_check_selection_names_the_two_usage_errors"),
+    M("lane-stage-unknown-lane-allowed", "pab", '    if lane not in LANE_SELECTIONS:\n        raise ValueError("--lane must be one of " + "|".join(LANE_SELECTIONS))', "    if False:\n        raise ValueError()",
+      LS + "test_lane_and_apps_together_are_a_usage_error_and_an_unknown_lane_too", LS + "test_check_selection_names_the_two_usage_errors"),
+    M("lane-stage-record-always-says-all", "pab", 'rec = new_record(ctx, "apps" if apps else lane)', 'rec = new_record(ctx, "all")',
+      LS + "test_gate_runs_only_the_enabled_gate_rows_in_table_order", LS + "test_an_apps_subset_says_apps", RPT + "test_the_record_names_its_selection_and_only_the_known_ones_validate"),
+    M("lane-stage-cli-lane-with-apps-allowed", "pab", '        if a.apps and a.lane:           # any explicit --lane, `all` too: the two ways to say which rows run are never mixed\n            raise ValueError("--lane and --apps are mutually exclusive")\n', "",
+      LS + "test_cli_refuses_lane_gate_with_apps_as_a_usage_error_before_running", LS + "test_cli_refuses_lane_all_with_apps_too"),
+    M("lane-stage-cli-lane-not-passed", "pab", 'AUDIO and not a.no_audio, a.lane or "all"), a.out)', "AUDIO and not a.no_audio), a.out)",
+      LS + "test_cli_passes_the_lane_and_defaults_to_all", LS + "test_the_lane_is_independent_of_the_ram_and_audio_switches"),
+    M("lane-report-selection-unchecked", "report", "    ok = ok and type(selection) is str and selection in PROPIMAGE_B_SELECTIONS\n", "",
+      RPT + "test_an_unknown_selection_label_is_refused", RPT + "test_unknown_keys_and_oversized_strings_are_refused"),
+    M("lane-report-gate-boots-unchecked", "report", '    ok = ok and (selection != "gate" or all(PROPIMAGE_B_ROWS[a] == ("gate", True) for b in boots for a in b["apps"]))\n', "",
+      RPT + "test_a_gate_selection_record_with_a_discovery_row_or_boot_is_refused", RPT + "test_a_gate_selection_boot_naming_a_disabled_row_is_refused"),
+    M("lane-report-gate-rows-unchecked", "report", '    ok = ok and (selection != "gate" or all(PROPIMAGE_B_ROWS[n] == ("gate", True) for n in names))\n', "",
+      RPT + "test_a_gate_selection_record_with_a_discovery_row_or_boot_is_refused", RPT + "test_a_red_gate_selection_record_also_holds_gate_rows_only"),
+    M("lane-report-illustratorsample-is-gate", "report", '"illustratorsample": ("discovery", True)', '"illustratorsample": ("gate", True)',
+      RPT + "test_the_row_table_equals_the_application_table", LS + "test_a_gate_only_record_validates_as_pass"),
+    M("lane-harness-illustratorsample-is-gate", "bench", '"script": "illustrator_sample.ps1", "gpu": (), "lane": "discovery",', '"script": "illustrator_sample.ps1", "gpu": (), "lane": "gate",',
+      WL + "test_every_row_in_both_lists_has_the_same_lane", WL + "test_the_gate_selection_is_exactly_the_workers_gate_rows", RPT + "test_the_row_table_equals_the_application_table"),
+    M("lane-payload-flag-accepted-without-the-stage", "payload", 'if args.propimage_b_lane is not None and "propimage_apps_b" not in chosen:', "if False:",
+      PW + "test_the_lane_flag_is_refused_by_name_when_the_stage_is_not_selected", PW + "test_dry_run_refuses_the_flag_without_the_stage_by_name"),
+    M("lane-payload-flag-all-not-refused", "payload", "if args.propimage_b_lane is not None and", 'if args.propimage_b_lane == "gate" and',
+      PW + "test_the_lane_flag_is_refused_by_name_when_the_stage_is_not_selected", PW + "test_dry_run_refuses_the_flag_without_the_stage_by_name"),
+    M("lane-payload-gate-adds-no-stage-argument", "payload", 'return ["--lane", "gate"] if lane == "gate" else []', "return []",
+      PW + "test_only_gate_adds_stage_arguments", PW + "test_the_stage_command_is_unchanged_without_the_flag_and_gets_lane_gate_with_it",
+      PW + "test_dry_run_with_the_flag_adds_one_line_and_changes_no_other"),
+    M("lane-payload-all-adds-a-stage-argument", "payload", 'return ["--lane", "gate"] if lane == "gate" else []', 'return ["--lane", "gate"] if lane else []',
+      PW + "test_only_gate_adds_stage_arguments", PW + "test_the_stage_command_is_unchanged_without_the_flag_and_gets_lane_gate_with_it",
+      PW + "test_dry_run_with_the_flag_adds_one_line_and_changes_no_other"),
+    M("lane-payload-gate-floor-equals-all", "payload", "PROPIMAGE_APPS_B_GATE_MIN_REMAINING_MS = 150 * 60000", "PROPIMAGE_APPS_B_GATE_MIN_REMAINING_MS = 240 * 60000",
+      PW + "test_the_gate_lane_has_its_own_lower_time_floor", PW + "test_dry_run_with_the_flag_adds_one_line_and_changes_no_other"),
+    M("lane-payload-floor-ignores-the-lane", "payload", "return PROPIMAGE_APPS_B_GATE_MIN_REMAINING_MS if lane == \"gate\" else PROPIMAGE_APPS_B_MIN_REMAINING_MS",
+      "return PROPIMAGE_APPS_B_MIN_REMAINING_MS",
+      PW + "test_the_gate_lane_has_its_own_lower_time_floor", PW + "test_dry_run_with_the_flag_adds_one_line_and_changes_no_other"),
+    M("lane-payload-dry-run-line-always-printed", "payload", '        if args.propimage_b_lane is not None:\n            print("KF_PAYLOAD_PROPIMAGE_B lane=', '        if True:\n            print("KF_PAYLOAD_PROPIMAGE_B lane=',
+      PW + "test_dry_run_without_the_flag_prints_exactly_the_old_lines", PW + "test_dry_run_with_the_flag_adds_one_line_and_changes_no_other"),
 ]
 
 

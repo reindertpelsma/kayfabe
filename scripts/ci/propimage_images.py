@@ -415,13 +415,57 @@ def copy_evidence_for(out, evidence_dir, apps, label):
                     shutil.copyfile(src, dst / name)
 
 
+GOP_ROLE = "gop"
+
+
+def fetch_boot_gop(ctx):
+    """The signed boot GOP driver (pins role `gop`) through the download manifest, the way the legacy stage fetches it next to its image. Its sha256 and
+    size come from the pins file (`--pins FILE` for your own), its private signed ref must be in the URL file, and the downloader verifies the bytes.
+    -> the file's path under <prefix>/gop. A named pa.Refused: PIN_UNSET:gop (no gop item, or its sha256 or size is null: nothing is fetched) or DOWNLOAD."""
+    pins = pa.load_pins(ctx.pins_path)
+    item = next((i for i in pins["items"] if i["role"] == GOP_ROLE), None)
+    if item is None:
+        raise pa.Refused("PIN_UNSET:" + GOP_ROLE)
+    manifest = pa.build_manifest({"items": [item]}, False, roles=(GOP_ROLE,))
+    work, dl = ctx.prefix / "work", ctx.prefix / "gop"
+    for d in (work, dl):
+        d.mkdir(parents=True, exist_ok=True)
+    (work / "gop_manifest.json").write_text(json.dumps(manifest))
+    pa.fetch(ctx, work / "gop_manifest.json", dl, ctx.prefix / "logs")
+    path = dl / item["dest"]
+    if not path.is_file():
+        raise pa.Refused("DOWNLOAD")
+    return path
+
+
+class GopFile:
+    """The boot GOP of one run, asked for by the first state-shaped image that is about to boot (a plain disk takes none). The caller's own file
+    (`--gop-efi`) is returned as it is and nothing is fetched; otherwise the pinned one is fetched ONCE and every image gets that file. A refusal is
+    remembered too: the second image does not try again."""
+
+    def __init__(self, ctx, explicit=None):
+        self.ctx, self.path, self.refusal = ctx, explicit, None
+
+    def __call__(self):
+        if self.path is None and self.refusal is None:
+            try:
+                self.path = fetch_boot_gop(self.ctx)
+            except pa.Refused as r:
+                self.refusal = r.reason
+        if self.refusal is not None:
+            raise pa.Refused(self.refusal)
+        return self.path
+
+
 def run_image(ctx, img, index, reg, pins, flags, broker, hooks, klog, evidence_dir, cpu_rows, gop, enforced=True, expect=None):
-    """One image's record. Never raises for a named refusal: the record says so."""
+    """One image's record. Never raises for a named refusal: the record says so. `gop` is a GopFile (run_images): called, it gives the boot GOP's path."""
     rec = new_image_record(img)
     base, logs, loc = ctx.prefix / ("img%d" % (index + 1)), ctx.prefix / "logs", None
     try:
         if img["kind"] == "built":
             raise pa.Refused("BUILT_NOT_IMPLEMENTED")        # phase 2: install an ISO, then the applications
+        if img["disk"]["from"] == "pin" and img["state"] != "none":
+            gop()                                            # a state image of the deployment's own pins: a wrong GOP pin must not cost the image download first
         loc = materialize(ctx, img, base, pins, logs, hooks, rec["source"], enforced, expect)
         rec["mode"] = "ci" if loc.kind == "state" else "plain"
         guest = (loc.state or {}).get("qemu", {}).get("guest_driver") if type(loc.state) is dict else None
@@ -451,6 +495,7 @@ def run_image(ctx, img, index, reg, pins, flags, broker, hooks, klog, evidence_d
         if not boots:
             skip(rec, rec["not_run"][0]["reason"] if rec["not_run"] else "NO_APPS")
             return rec
+        gop_path = gop() if loc.kind == "state" else None    # once per run; the first state image that has something to boot asks
         for d in (base / "work", base / "out", ctx.prefix / "kernel"):
             d.mkdir(parents=True, exist_ok=True)
         timed_out = False
@@ -464,7 +509,7 @@ def run_image(ctx, img, index, reg, pins, flags, broker, hooks, klog, evidence_d
             extra = merged_args(apps, reg)
             if loc.kind == "state":
                 cmd = state_command(ctx.check_py, {"dir": str(loc.dir), "work": str(wk), "out": str(out), "qemu": str(ctx.qemu), "flags": flags,
-                                                   "broker": broker, "gop": str(gop), "apps": apps}, extra)
+                                                   "broker": broker, "gop": str(gop_path), "apps": apps}, extra)
             else:
                 unknown = [w for w in extra if w.startswith("--") and w not in PLAIN_ARGS]
                 if unknown:
@@ -725,9 +770,10 @@ def run_images(ctx, spec, evidence_dir=None, hooks=None, gop=None):
             if pa.run_command(ctx, ["make", "-C", str(ctx.checkout / "broker")], ctx.prefix / "logs/broker_build.log", 900) != 0:
                 raise pa.Refused("NO_BROKER_BUILD")
         flags = str(ctx.checkout / "scripts/bench/windows/kf3_flags.sample.env")
+        gop_file = GopFile(ctx, gop)
         for n, img in enumerate(spec["images"]):
             rec["images"].append(run_image(ctx, img, n, reg, pins, flags, str(broker), hooks, klog, evidence_dir, rows,
-                                           gop or ctx.prefix / "gop/kf-gop.signed.efi", enforced, expect.get(img["label"])))
+                                           gop_file, enforced, expect.get(img["label"])))
             write_record(ctx.out, rec)
         rec["verdict"], rec["reason"] = grade_run(rec["images"], spec["strict"])
         if spec["strict"]:

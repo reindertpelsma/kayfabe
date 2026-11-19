@@ -65,6 +65,8 @@ MX, PS, EX, RI, PF2, NT = ("test_propimage_pins." + n for n in ("Matrix.", "Sour
 
 # 2026-11-17: an old swtpm is built before the first boot, not refused (docs/design/V3_PROPIMAGE_RUNNER.md), test_propimage_images.SwtpmTools
 SW = "test_propimage_images.SwtpmTools."
+# 2026-11-18: the boot GOP is fetched by the generic runner, test_propimage_images.BootGop
+GP = "test_propimage_images.BootGop."
 
 
 def M(name, key, old, new, *tests):
@@ -309,6 +311,36 @@ MUTANTS = [
       SW + "test_the_swtpm_part_of_a_built_record_is_validated", SW + "test_the_swtpm_part_of_a_refusal_record_is_validated"),
     M("report-differs-with-equal-hashes", "report", '(src["identity"] != "differs" or src["sha256"] not in (None, src["pin_sha256"]))', "True",
       RI + "test_a_differing_pin_whose_hashes_are_equal_is_a_contradiction", RI + "test_a_differing_pin_whose_hashes_are_equal_is_a_contradiction"),
+    # 2026-11-18: the generic runner fetches the boot GOP itself (docs/design/V3_PROPIMAGE_RUNNER.md), test_propimage_images.BootGop
+    M("gop-not-fetched", "images", "                self.path = fetch_boot_gop(self.ctx)\n", '                self.path = self.ctx.prefix / "gop/kf-gop.signed.efi"\n',
+      GP + "test_two_state_images_fetch_the_boot_gop_once", GP + "test_every_boot_of_every_image_gets_the_downloaded_file", GP + "test_the_gop_is_fetched_before_the_first_boot"),
+    M("gop-fetched-once-per-image", "images", "        if self.path is None and self.refusal is None:\n", "        if self.refusal is None and self.ctx is not None:\n",
+      GP + "test_two_state_images_fetch_the_boot_gop_once", GP + "test_an_explicit_gop_is_used_as_it_is_and_nothing_is_fetched"),
+    M("gop-refusal-not-remembered", "images", "            except pa.Refused as r:\n                self.refusal = r.reason\n", "            except pa.Refused:\n                raise\n",
+      GP + "test_a_failed_gop_fetch_is_tried_once_per_run_not_once_per_image", GP + "test_a_failed_gop_fetch_is_download_and_nothing_boots"),
+    M("gop-failed-fetch-ignored", "images",
+      '    pa.fetch(ctx, work / "gop_manifest.json", dl, ctx.prefix / "logs")\n    path = dl / item["dest"]\n    if not path.is_file():\n        raise pa.Refused("DOWNLOAD")\n    return path\n',
+      '    try:\n        pa.fetch(ctx, work / "gop_manifest.json", dl, ctx.prefix / "logs")\n    except pa.Refused:\n        pass\n    return dl / item["dest"]\n',
+      GP + "test_a_failed_gop_fetch_is_download_and_nothing_boots", GP + "test_a_failed_gop_fetch_is_tried_once_per_run_not_once_per_image",
+      GP + "test_a_downloader_that_exits_zero_without_the_file_is_download"),
+    M("gop-missing-file-accepted", "images", '    if not path.is_file():\n        raise pa.Refused("DOWNLOAD")\n    return path\n', "    return path\n",
+      GP + "test_a_downloader_that_exits_zero_without_the_file_is_download", GP + "test_a_pinned_image_is_not_downloaded_when_the_gop_file_is_missing"),
+    M("gop-path-is-the-name-not-the-dest", "images", '    path = dl / item["dest"]\n    if not path.is_file():', '    path = dl / item["name"]\n    if not path.is_file():',
+      GP + "test_two_state_images_fetch_the_boot_gop_once", GP + "test_every_boot_of_every_image_gets_the_downloaded_file"),
+    M("gop-boots-get-the-undownloaded-default-path", "images", '        raise pa.Refused("DOWNLOAD")\n    return path\n', '        raise pa.Refused("DOWNLOAD")\n    return ctx.prefix / "gop/kf-gop.signed.efi"\n',
+      GP + "test_two_state_images_fetch_the_boot_gop_once", GP + "test_every_boot_of_every_image_gets_the_downloaded_file"),
+    M("gop-wrong-role-fetched", "images", "roles=(GOP_ROLE,))", 'roles=("image",))',
+      GP + "test_the_manifest_is_the_pinned_item_from_its_signed_ref_and_nothing_else", GP + "test_two_state_images_fetch_the_boot_gop_once"),
+    M("gop-pin-read-from-the-repository-not-the-deployment", "images", "    pins = pa.load_pins(ctx.pins_path)\n    item = next(", "    pins = pa.load_pins()\n    item = next(",
+      GP + "test_an_unset_gop_sha256_is_refused_by_name_before_any_boot", GP + "test_an_unset_gop_size_is_refused_by_name_before_any_boot"),
+    M("gop-no-gop-item-not-refused", "images", '    if item is None:\n        raise pa.Refused("PIN_UNSET:" + GOP_ROLE)\n', "    if item is None:\n        raise pa.Refused(\"PIN_UNKNOWN\")\n",
+      GP + "test_a_pins_file_without_a_gop_item_is_refused_by_name", GP + "test_a_pins_file_without_a_gop_item_never_fetches_the_image_either"),
+    M("gop-explicit-ignored", "images", "        self.ctx, self.path, self.refusal = ctx, explicit, None\n", "        self.ctx, self.path, self.refusal = ctx, None, None\n",
+      GP + "test_an_explicit_gop_is_used_as_it_is_and_nothing_is_fetched", GP + "test_an_explicit_gop_is_used_even_when_the_pins_file_has_no_gop_pin"),
+    M("gop-asked-for-before-the-image-download-removed", "images", '        if img["disk"]["from"] == "pin" and img["state"] != "none":\n            gop()', '        if False:\n            gop()',
+      GP + "test_a_pinned_image_gets_its_gop_before_the_image_is_downloaded", GP + "test_an_unset_gop_pin_is_refused_before_the_image_is_fetched"),
+    M("gop-fetched-for-plain-images", "images", 'gop_path = gop() if loc.kind == "state" else None', "gop_path = gop()",
+      GP + "test_plain_images_need_no_gop_and_fetch_none", GP + "test_a_failed_gop_fetch_does_not_stop_a_plain_image_after_it"),
 ]
 
 

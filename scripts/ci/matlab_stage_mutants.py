@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Mutation checks of the `matlab` payload stage (2026-11-17): every mutant needs two named killers (stdlib, GPU-free).
 
-Each mutant is one exact-once text replacement in a private copy of matlab_stage.py, vast_report.py, vast_payload.py or payload_instruction.py (the whole of scripts/ci,
+Each mutant is one exact-once text replacement in a private copy of matlab_stage.py, vast_report.py, vast_payload.py, payload_instruction.py or matlab_rows.py (the whole of scripts/ci,
 scripts/kfci and scripts/bench/linux is copied, plus the harness files the stage imports); the named tests of test_matlab_stage.py run against the copy and the failing
 ones are the killers. The unmutated copy must be green first.
 
@@ -20,7 +20,8 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-FILES = {"ms": "scripts/ci/matlab_stage.py", "report": "scripts/ci/vast_report.py", "payload": "scripts/ci/vast_payload.py", "pinst": "scripts/ci/payload_instruction.py"}
+FILES = {"ms": "scripts/ci/matlab_stage.py", "report": "scripts/ci/vast_report.py", "payload": "scripts/ci/vast_payload.py", "pinst": "scripts/ci/payload_instruction.py",
+         "rows": "scripts/bench/linux/matlab_rows.py"}
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_matlab_stage."
 COPY_DIRS = ["scripts/ci", "scripts/kfci", "scripts/bench/linux"]
@@ -37,7 +38,8 @@ suite = unittest.defaultTestLoader.loadTestsFromNames(sys.argv[1:])
 r = unittest.TextTestRunner(stream=io.StringIO()).run(suite)
 print('KF_MUTATION_RESULT=' + json.dumps({'tests': r.testsRun, 'killers': [t.id() for t, _ in r.failures + r.errors]}))
 """
-P, I, R, MN, PW, IS, RP = (SUITE + n for n in ("PinsTests.", "InstructionTests.", "RunTests.", "ManifestTests.", "PayloadWiringTests.", "InstructionSchemaTests.", "ReportTests."))
+P, I, R, MN, PW, IS, RP, MA, SF, GB = (SUITE + n for n in ("PinsTests.", "InstructionTests.", "RunTests.", "ManifestTests.", "PayloadWiringTests.", "InstructionSchemaTests.",
+                                                           "ReportTests.", "MainTests.", "StageFileTests.", "GuestBinTests."))
 
 
 def M(name, key, old, new, *tests):
@@ -85,8 +87,53 @@ MUTANTS = [
       PW + "test_refusals_of_the_standalone_flags", PW + "test_dry_run_of_the_golden_and_of_the_flags"),
     M("pin_check_skipped_in_the_payload", "payload", "            return matlab_stage.instruction_refusal(instruction.matlab)", "            return None",
       PW + "test_the_instruction_object_is_checked_against_the_pins", PW + "test_dry_run_of_the_golden_and_of_the_flags"),
+    # 2026-11-18: the optional `bin` of the object (the image's own matlab binary: the name `matlab` is not on the guest's ssh PATH)
+    M("bin-not-refused-when-invalid", "ms", '    if "bin" in obj and not bin_valid(obj["bin"], mr):\n        return "BIN_INVALID"\n', "",
+      I + "test_a_bad_bin_is_refused_by_name", R + "test_an_invalid_bin_refuses_the_whole_stage_by_name_before_anything_is_fetched"),
+    M("bin-pattern-loses-its-characters", "ms", "return type(value) is str and mr.BIN_RE.fullmatch(value) is not None", "return type(value) is str",
+      I + "test_the_bin_rule_is_the_rows_own_pattern_not_a_copy", I + "test_a_bad_bin_is_refused_by_name"),
+    M("bin-accepts-a-non-string", "ms", "return type(value) is str and mr.BIN_RE.fullmatch(value) is not None", "return mr.BIN_RE.fullmatch(str(value)) is not None",
+      I + "test_a_bad_bin_is_refused_by_name", I + "test_the_bin_rule_is_the_rows_own_pattern_not_a_copy"),
+    M("instruction-bin-ignored", "ms", "    if wanted is not None:\n        return wanted\n", "",
+      R + "test_the_instruction_bin_is_the_binary_the_rows_run", R + "test_another_bin_in_the_instruction_is_another_binary"),
+    M("bin-conflict-allowed", "ms", "if wanted is not None and flag is not None and flag != wanted:", "if False:",
+      R + "test_a_flag_that_differs_from_the_instruction_bin_is_a_usage_error_before_anything_runs", MA + "test_a_flag_that_differs_from_the_instruction_bin_is_a_named_usage_error"),
+    M("bin-conflict-also-for-an-equal-flag", "ms", "if wanted is not None and flag is not None and flag != wanted:", "if wanted is not None and flag is not None:",
+      R + "test_a_flag_equal_to_the_instruction_bin_is_not_a_conflict", GB + "test_the_rule_table"),
+    M("flag-ignored", "ms", "    return flag if flag is not None else mr.MATLAB_BIN", "    return mr.MATLAB_BIN",
+      R + "test_the_flag_alone_still_names_the_binary_of_an_instruction_without_bin", R + "test_standalone_runs_the_flag_binary_and_without_a_flag_the_name_matlab"),
+    M("default-binary-is-not-the-rows-name", "ms", "    return flag if flag is not None else mr.MATLAB_BIN", '    return flag if flag is not None else "/usr/local/bin/matlab"',
+      R + "test_an_instruction_without_bin_runs_the_name_matlab_as_before", R + "test_standalone_runs_the_flag_binary_and_without_a_flag_the_name_matlab"),
+    M("flag-default-is-the-name-matlab", "ms", 'r.add_argument("--matlab", default=None,', 'r.add_argument("--matlab", default="matlab",',
+      MA + "test_the_flag_is_not_given_by_default_and_is_passed_as_given", MA + "test_a_strict_command_line_without_the_flag_has_no_conflict"),
+    M("bin-conflict-error-loses-its-name", "ms", 'raise ValueError("BIN_CONFLICT the instruction\'s bin and --matlab differ")', 'raise ValueError("the instruction\'s bin and --matlab differ")',
+      GB + "test_both_and_different_is_a_value_error_naming_the_conflict", MA + "test_a_flag_that_differs_from_the_instruction_bin_is_a_named_usage_error"),
+    M("bin-dropped-from-the-stage-file", "payload", "instruction_file.write_text(json.dumps(instruction.matlab))",
+      'instruction_file.write_text(json.dumps({k: v for k, v in instruction.matlab.items() if k != "bin"}))',
+      SF + "test_the_stage_gets_the_object_with_its_bin", SF + "test_the_stage_gets_another_bin_as_it_is"),
+    M("bin-as-a-second-spelling-on-the-command-line", "payload", '                matlab_argv += ["--instruction-matlab", str(instruction_file)]\n',
+      '                matlab_argv += ["--instruction-matlab", str(instruction_file), "--matlab", "matlab"]\n',
+      SF + "test_the_stage_gets_the_object_with_its_bin", SF + "test_the_stage_gets_another_bin_as_it_is"),
     M("matlab-on-the-middle-tier", "pinst", '    if i.matlab is not None and i.tier != "large":\n        raise InstructionError("matlab needs the large tier")', "    pass",
       IS + "test_refusals", PW + "test_an_instruction_with_matlab_on_a_middle_tier_is_not_planned"),
+    # 2026-11-18: the preamble judges the guest's total memory against the fb-mb the launch declares (the image state's), never against the host card's memory
+    M("gpu-info-tolerance-removed", "rows", "GPU_INFO_TOTAL_FRACTION = (0.80, 1.00)", "GPU_INFO_TOTAL_FRACTION = (0.0, 1.00)",
+      R + "test_a_report_under_the_tolerance_of_a_6144_launch_is_out_of_range_by_name", R + "test_the_strict_stage_fails_on_a_report_under_the_tolerance_and_runs_no_other_row"),
+    M("gpu-info-upper-bound-removed", "rows", "GPU_INFO_TOTAL_FRACTION = (0.80, 1.00)", "GPU_INFO_TOTAL_FRACTION = (0.80, 1000.0)",
+      R + "test_a_guest_reporting_more_than_the_launch_declared_fails_by_name", R + "test_the_strict_stage_fails_on_a_guest_above_the_declared_size_and_runs_no_other_row"),
+    M("gpu-info-host-comparison-restored", "rows", '    if declared_bytes(declared_fb_mb) is None:\n        findings.append(("HARNESS", "DECLARED_FB_MB_MISSING"))',
+      '    mib = (hw or {}).get("memory_mib")\n    if isinstance(mib, int) and mib > 0 and not (0.5 * mib * 2 ** 20 <= total <= 1.01 * mib * 2 ** 20):\n'
+      '        findings.append(("OUTPUT_MISMATCH", "TOTAL_MEMORY_OUT_OF_RANGE guest=%d host_mib=%d" % (total, mib)))\n'
+      '    if declared_bytes(declared_fb_mb) is None:\n        findings.append(("HARNESS", "DECLARED_FB_MB_MISSING"))',
+      R + "test_the_measured_report_passes_the_stage_against_the_declared_value_of_the_state", R + "test_the_standalone_shape_judges_the_same_way",
+      R + "test_strict_run_fetches_the_pinned_objects_and_runs_the_listed_rows"),
+    M("declared-value-ignored-by-the-judge", "rows", "            verified = verify_doc(row, parsed, ctx.hw, ctx.declared_fb_mb)\n", "            verified = verify_doc(row, parsed, ctx.hw, 4096)\n",
+      R + "test_the_declared_value_is_the_one_of_the_state_not_a_constant", R + "test_a_report_under_the_tolerance_of_a_6144_launch_is_out_of_range_by_name"),
+    M("declared-value-fixed-in-execute", "rows", "        ctx.declared_fb_mb = prop().declared_fb_mb(st)\n", "        ctx.declared_fb_mb = 4096\n",
+      R + "test_the_declared_value_is_the_one_of_the_state_not_a_constant", R + "test_an_image_state_that_declares_nothing_pays_for_no_boot",
+      R + "test_a_report_under_the_tolerance_of_a_6144_launch_is_out_of_range_by_name"),
+    M("state-without-a-declared-value-still-boots", "rows", "        if ctx.declared_fb_mb is None:\n            no_value", "        if False:\n            no_value",
+      R + "test_an_image_state_that_declares_nothing_pays_for_no_boot", R + "test_an_image_state_that_declares_nothing_refuses_every_row_by_name"),
     M("matlab-not-emitted", "pinst", '        if self.matlab is not None:\n            out["matlab"] = json.loads(json.dumps(self.matlab))\n', "",
       IS + "test_the_golden_is_accepted_and_round_trips", IS + "test_emit_instruction_writes_the_object_back_byte_for_byte"),
 ]

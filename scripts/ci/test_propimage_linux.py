@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import sys
@@ -255,6 +256,42 @@ class ArgvTests(Base):
         j = " ".join(self.argv("run", gpu="kf3", driver_version="580.159.04"))
         self.assertIn("gpu-uuid=" + self.st["ids"]["gpu_uuid"], j)
         self.assertIn("guest-driver=580.159.04", j)
+
+    # 2026-11-18: the kf3 device's `fb-mb` is always written explicitly, from ONE accessor that the MATLAB rows' judge also reads (matlab_rows.py, the preamble)
+    def test_a_new_state_declares_the_default_fb_mb(self):
+        self.assertEqual(self.p.DEFAULT_FB_MB, 4096)
+        self.assertEqual(self.p.declared_fb_mb(self.st), 4096)
+
+    def test_the_kf3_argv_declares_the_fb_mb_of_the_state(self):
+        for fb_mb in (4096, 8192, 6144):
+            self.st["qemu"]["fb_mb"] = fb_mb
+            device = next(w for w in self.argv("run", gpu="kf3", driver_version="580.159.04") if w.startswith("kf3-gpu,"))
+            self.assertIn(",fb-mb=%d," % fb_mb, device)
+            self.assertEqual(self.p.declared_fb_mb(self.st), fb_mb)
+        self.assertEqual(len([w for w in self.argv("run", gpu="kf3", driver_version="580.159.04") if "fb-mb=" in w]), 1)
+
+    def test_the_value_the_judge_reads_is_the_value_the_argv_carries(self):
+        self.st["qemu"]["fb_mb"] = 8192
+        device = next(w for w in self.argv("run", gpu="kf3", driver_version="580.159.04") if w.startswith("kf3-gpu,"))
+        self.assertEqual(int(re.search(r"fb-mb=(\d+)", device).group(1)), self.p.declared_fb_mb(self.st))
+
+    def test_the_declared_fb_mb_is_a_positive_integer_or_nothing(self):
+        for value in (0, -1, "4096", 4096.0, None, True, [4096]):
+            self.st["qemu"]["fb_mb"] = value
+            self.assertIsNone(self.p.declared_fb_mb(self.st), value)
+        for state in ({}, {"qemu": None}, {"qemu": {}}, None, []):
+            self.assertIsNone(self.p.declared_fb_mb(state))
+
+    def test_the_kf3_argv_refuses_a_state_that_declares_no_positive_fb_mb(self):
+        for value in (0, -1, "4096", 4096.0, None, True):
+            self.st["qemu"]["fb_mb"] = value
+            with self.assertRaises(self.p.PropError) as e:
+                self.argv("run", gpu="kf3", driver_version="580.159.04")
+            self.assertIn("fb_mb", str(e.exception))
+
+    def test_a_run_without_the_gpu_needs_no_declared_fb_mb(self):
+        self.st["qemu"]["fb_mb"] = None
+        self.assertNotIn("kf3-gpu", " ".join(self.argv("run")))
 
     def test_cli_argv_refuses_kf3_without_a_driver(self):
         st = self.tmp / "s.json"
