@@ -28,7 +28,7 @@ afterwards). This document says what the planner computes. It does not change th
   bandwidth price cap, and the cheapest by final total is taken: any die of the family, **not** pinned to a matrix die. The
   price is `appLegTotal`: compute and storage (the image's disk) over the role's hard limit plus the image's bandwidth at the
   offer's per-GB prices. The bandwidth is `bandwidth.json`'s own estimate of the image's stages with its margin, not the release
-  profile's flat 130 GB (`policy.js` `offerPrice` is the same formula; a test pins them equal for the release numbers). Two
+  profile's flat bandwidth figure (135 GB at 2026-11-17; `policy.js` `offerPrice` is the same formula; a test pins them equal for the release numbers). Two
   legs never share a machine; the scarcest leg chooses first. A manual-only image's leg carries `only` (the stages to pass to the
   payload's `--only`).
 - **First release** (`firstRelease: true`): every configured image on every family of the release matrix; the rotation table is

@@ -3,7 +3,7 @@
 // FALSIFIER (written before the code): a core-path change is reported as not required (or a docs, site, ci, test-only or
 // excluded-crate change as required); the committed core_paths differ from the section AZ item 5 list; a glob lets `*` cross a
 // directory or `**` stop at one; a leg is pinned to a die or an image is named in planner code; an image's leg is priced at
-// the release profile's 130 GB instead of its own measured bandwidth; an offer with too little VRAM or disk is chosen; a dearer
+// the release profile's flat bandwidth instead of its own measured bandwidth; an offer with too little VRAM or disk is chosen; a dearer
 // offer is chosen over a cheaper one that qualifies; the first release misses an image/family pair; a rotation leaves an
 // image/family pair unrun for more than four releases or an image out of a release; an estimate over the daily cap is admitted.
 import test from 'node:test';
@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { offlineAppPlan, releaseConfig } from '../release-plan.mjs';
 import { estimateBandwidth, plannedStages } from '../src/bandwidth.js';
-import { offerPrice } from '../src/policy.js';
+import { offerPrice, resourceCaps } from '../src/policy.js';
 import {
   APP_LANE,
   validateAppLaneConfig,
@@ -202,8 +202,9 @@ test('image profile: bandwidth is the measured GB of the image stages, not the r
       'a stage without downloads of its own still uploads its evidence',
     );
     assert.ok(
-      p.bandwidth_down_gb > 40 && p.bandwidth_down_gb < 130,
-      'measured, below the 130 GB profile',
+      p.bandwidth_down_gb > 40 &&
+        p.bandwidth_down_gb < resourceCaps(releaseConfig(VARS), 'release').bandwidthDownGb,
+      'measured, below the release profile',
     );
     assert.equal(p.disk_gb, img.disk_gb);
     assert.equal(p.vram_gb, img.vram_gb);
@@ -231,11 +232,19 @@ test('leg price is compute+storage over the hard limit plus bandwidth priced per
 });
 test('appLegTotal equals the release offerPrice total when given the release profile numbers', () => {
   const cfg = releaseConfig(VARS);
+  // The numbers come from the release (large) resource profile in defaults.json, not from literals: a change to the profile
+  // (130 -> 135 GB on 2026-11-17) must not break the pin, while a change to the formula in either function still does.
+  const r = resourceCaps(cfg, 'release');
+  assert.ok(r.diskGb > 0 && r.bandwidthDownGb > 0);
   for (const offer of market()) {
     const release = offerPrice(offer, cfg, 'release');
     const mine = appLegTotal(
       offer,
-      { disk_gb: 300, bandwidth_down_gb: 130, bandwidth_up_gb: 2 },
+      {
+        disk_gb: r.diskGb,
+        bandwidth_down_gb: r.bandwidthDownGb,
+        bandwidth_up_gb: r.bandwidthUpGb,
+      },
       { hard: cfg.hard, cronPeriod: cfg.cronPeriod },
     );
     assert.ok(Math.abs(release.total - mine) < 1e-9, String(offer.id));

@@ -122,7 +122,7 @@ const configProblems = validateAppLaneConfig(APP_LANE);
 if (configProblems.length) throw Error('app-lane.json: ' + configProblems.join('; '));
 
 // ---- the profile of one image role ---------------------------------------------------------------------------------------
-// Bandwidth is the measured GB of the image's own stages (bandwidth.json, with its margin), not the release profile's 130 GB.
+// Bandwidth is the measured GB of the image's own stages (bandwidth.json, with its margin), not the release profile's flat figure.
 // A stage that bandwidth.js does not plan on its own (a table stage with no entries of its own) adds its upload only.
 export function imageProfile(image, { table = BANDWIDTH } = {}) {
   const instruction = { tier: 'large', windows: false, propimages: [{ label: image.id }] };
