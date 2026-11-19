@@ -240,8 +240,11 @@ def build_argv(state, mode, disk, workdir, net=None, clock=None, qemu="/usr/bin/
          "-object", "rng-random,id=rng0,filename=/dev/urandom", "-device", "virtio-rng-pci,rng=rng0",
          "-serial", "file:%s/serial.log" % wd,
          "-qmp", "unix:%s/qmp.sock,server=on,wait=off" % wd, "-msg", "timestamp=on"]
-    if mode == "setup":
-        # the setup VM only: balloon free-page reporting hands the guest's freed pages back to this (shared) coordinator box
+    if mode == "setup" and gpu != "kf3":
+        # the GPU-less setup VM only: balloon free-page reporting hands the guest's freed pages back to this (shared)
+        # coordinator box. ⊘ NEVER beside kf3 (2026-11-19, the AD104 in-QEMU reboot hang): a balloon discards guest pages
+        # the GPU keeps using, and kf3 refuses to realize next to one (qemu/hw/misc/kf3/kf3.c kf3_balloon_refusal;
+        # docs/howto/attach-to-existing-vm.md: <memballoon model='none'/>).
         a += ["-device", "virtio-balloon-pci,free-page-reporting=on,deflate-on-oom=on"]
     media = ([seed_iso] if seed_iso else []) + list(extra_iso)
     for i, iso in enumerate(media):
