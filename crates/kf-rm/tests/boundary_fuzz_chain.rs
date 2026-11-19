@@ -306,6 +306,7 @@ fn chain(windows: bool, planes: &Arc<Planes>) -> Box<dyn CommandPolicy> {
         display: Some((&kf_chip::display::AMPERE).into()),
         console: None,
         windows: kf_rm::winprofile::WindowsProfile::on(),
+        utilization: None,
     };
     let mut c = kf_rm::served_policy(
         ga106::board(),
