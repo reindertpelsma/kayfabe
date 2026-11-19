@@ -22,6 +22,7 @@ PAYLOAD_RELEASE_MATRIX_EXECUTOR = 0
 PAYLOAD_RELEASE_REHEARSAL = 1
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
+import kernel_log
 import native_xid_guard as xid_guard
 
 STOP = False
@@ -665,6 +666,8 @@ SUMMARY_LIMIT = 4096
 LINE_LIMIT = 240
 # Records of the stages of the current run, in order; the FINAL SUMMARY is built from them.
 STAGE_RECORDS = []
+# kernel_log capture directory for the run (None: not capturing); stage edges are recorded as line offsets.
+KERNEL_LOG_DIR = None
 PROV_DIR = "/root/prov"
 # provision_full.sh writes one log per step; its RC line names the step whose log has the cause.
 PROVISION_STEP_LOGS = {
@@ -1180,6 +1183,11 @@ def persist_result(destination, result):
     temporary.replace(destination)
 
 
+def kernel_log_mark(name, edge):
+    if KERNEL_LOG_DIR is not None:
+        kernel_log.mark(KERNEL_LOG_DIR, name, edge)
+
+
 NET_DEV, NET_ROUTE = "/proc/net/dev", "/proc/net/route"
 
 
@@ -1225,6 +1233,7 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
             result["host_reference"] = "NOT_GREEN"
             persist_result(destination, result)
         print("KF_PAYLOAD_STAGE_START name=" + name, flush=True)
+        kernel_log_mark(name, "start")
         start = time.monotonic()
         need = stage.get("min_remaining_ms")
         # Too little time left to finish: not run (rc 125), and not a verdict on the guest.
@@ -1235,6 +1244,7 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
         if not short:
             record_net(result, name, net_before, net_counters())
         record.update(rc=rc, duration_ms=elapsed, result="PASS")
+        kernel_log_mark(name, "end")
         print(
             "KF_PAYLOAD_STAGE_END name=" + name + " rc=" + str(rc) + " duration_ms=" + str(elapsed),
             flush=True,
@@ -2206,7 +2216,17 @@ def main():
         stages = [s for s in stages if s["name"] in selected]
         if "kfml" in selected:
             start_kfml_prefetch(root, evidence)
-        return execute_stages(stages, soft, result, destination)
+        global KERNEL_LOG_DIR
+        try:
+            kernel_log.start(evidence / "kernel-log")
+            KERNEL_LOG_DIR = evidence / "kernel-log"
+        except (OSError, RuntimeError) as error:
+            print("KF_PAYLOAD_KERNEL_LOG_UNAVAILABLE " + str(error), flush=True)
+        try:
+            return execute_stages(stages, soft, result, destination)
+        finally:
+            if KERNEL_LOG_DIR is not None:
+                kernel_log.stop(KERNEL_LOG_DIR)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):
             result["verdict"] = "PROVIDER_FAULT"

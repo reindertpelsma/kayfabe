@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_lock.sh"
 # cdp_host.sh TAG "RUNS" — the BARE-METAL control on the bench box: the CDP probe (and, with
 # spec `qs`, cdpSimpleQuicksort) run directly on the host GPU, serialized on the bench lock.
 #   RUNS: space-separated `mode:sched[:t]` (t = record every /dev/nvidia* ioctl with the nvdiff
@@ -12,7 +13,7 @@ OUT=/workspace/apps/results/cdpp/$TAG; mkdir -p "$OUT"
 echo "CDPH_START $(date -Is) tag=$TAG runs=[$RUNS] scripts=$(git -C "$REPO" rev-parse --short=8 HEAD) host_driver=$(cat /sys/module/nvidia/version 2>/dev/null)"
 bash "$HERE/cdp_build.sh" "$OUT/bin" || { echo "CDPH_EXIT rc=3 $(date -Is)"; exit 3; }
 T0=$(date +%s)
-exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
 for spec in $RUNS; do
   if [ "${spec%%:*}" = qs ]; then
     n=${spec#qs}; n=${n#:}; arg=${n:+-num_items=$n}

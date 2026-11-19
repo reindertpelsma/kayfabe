@@ -162,6 +162,7 @@ const files = [
   P,
   R,
   'scripts/ci/payload_instruction.py',
+  'scripts/ci/kernel_log.py',
   'scripts/ci/box_downloader.py',
   'scripts/ci/propimage_apps.py',
   'scripts/ci/kf_fetch.py',

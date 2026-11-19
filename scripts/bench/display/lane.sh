@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/kf_lock.sh"
 # lane.sh <tag> — the display lane, one boot (docs/design/V3_DISPLAY.md §5).
 #   Boots the fat guest on the kf3 device built from THIS checkout with the display plane ON
 #   (`display=on`), no emulated VGA (the kf3 head is the only graphic console), a localhost-only
@@ -24,7 +25,7 @@ export POST_CAPTURE_HOOK="$HERE/${DISPLAY_HOOK:-hook}.sh"
 # (coordinator 2026-09-30: an unclean shutdown leaves the image's journal dirty and the next fast-guest
 # build cannot mount it): sync, then the kernel's emergency sync + remount read-only.
 export PRE_POWEROFF_GUEST_CMD=${PRE_POWEROFF_GUEST_CMD:-"sudo sync; echo s | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1; echo u | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1"}
-exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
 echo "DISPLAY_LANE_START tag=$TAG rev=$(git -C "$REPO" rev-parse --short=8 HEAD) $(date -Is)"
 bash "$REPO/scripts/bench/boot_capture.sh" "$TAG" -- -vga none -vnc "${DISPLAY_VNC:-127.0.0.1:0}"
 # ⊘ boot_capture's status, taken HERE: `[measured m1b, m1c]` it used to be read after the grep below,

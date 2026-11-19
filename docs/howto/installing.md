@@ -80,7 +80,7 @@ The tap network is the bench's choice. The Windows harness uses user-mode networ
 
 ## 3. One GPU job at a time
 
-The launch scripts take an exclusive lock, `/tmp/kayfabe-fastguest.lock` (override with `KF_LOCK`), and wait for it. GPU runs are strictly serial: two concurrent runs of the fast lane kill each other's QEMU. <!-- src: scripts/fastguest/run_fast_guest.sh -->
+The launch scripts take an exclusive lock, `/tmp/kayfabe-fastguest.lock` (override with `KF_LOCK`), and wait for it. GPU runs are strictly serial: two concurrent runs of the fast lane kill each other's QEMU. Different users share the one file: the first creates it mode 0666 and the scripts open it read-only (`scripts/lib/kf_lock.sh`), so a lock file created by root does not lock a non-root user out. A non-root user on a checkout owned by another uid needs no `safe.directory` setting: the suite's revision lookups pass `-c safe.directory=<that checkout>` for that one command. <!-- src: scripts/lib/kf_lock.sh, scripts/lib/kf_git.sh; code reading, not run on a second uid -->
 
 Between runs the launcher also waits (up to about 30 s) for the previous VM's GPU memory to drain (`KF_GPU_IDLE_MIB`, default 512). <!-- src: scripts/fastguest/run_fast_guest.sh -->
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_git.sh"
 # ★★★★★ THE FAST SUITE — every arm, one boot each, one budget each.
 #
 # > Owner, 2026-09-18: *"Why not make a raw client fast that passes 10s on bare metal, set 20s
@@ -31,7 +32,7 @@ if [ "${#ARMS[@]}" -eq 0 ]; then
 fi
 OUT=$BENCH/${TAG}_suite.out
 { echo "FAST_SUITE_STARTED=$(date -Is) arms=${#ARMS[@]} budget=${BUDGET}s"
-  echo "rev=$(git -C "$(dirname "$0")/../.." rev-parse --short HEAD 2>/dev/null || echo ?)"
+  echo "rev=$(kf_git "$(dirname "$0")/../.." rev-parse --short HEAD 2>/dev/null || echo ?)"
   printf '%-28s %-9s %-5s %s\n' ARM VERDICT secs why
 } > "$OUT"
 pass=0; fail=0; crash=0; notrun=0

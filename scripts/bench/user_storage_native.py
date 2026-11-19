@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Isolated native read-only storage phase probe; no guest or product fallback."""
+import sys
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "lib"))
+import kf_lock  # noqa: E402
 import argparse
 import datetime as dt
 import fcntl
@@ -22,7 +25,7 @@ def main():
     parser.add_argument("result", type=Path)
     parser.add_argument("--mode", choices=["storage-control-barrier-phased", "storage-assembled-phased"], default="storage-control-barrier-phased")
     args = parser.parse_args()
-    lock = open("/tmp/kayfabe-fastguest.lock", "a")
+    lock = kf_lock.open_lock_file()
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     if subprocess.run(["pgrep", "-x", "qemu-system-x86"], capture_output=True).returncode != 1:
         raise RuntimeError("QEMU active or process check failed")

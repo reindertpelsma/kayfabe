@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_lock.sh"
 # apps_matrix.sh — drive the V3 app matrix on a bench box (strictly serial: one GPU job at a time).
 #   apps_matrix.sh host  <run> <app|all>...   bare-metal baseline on this box (as root)
 #   apps_matrix.sh guest <run> <app|all>...   the same apps inside the kf3 fat guest; batched per
@@ -23,7 +24,7 @@ while busy; do say "waiting: a QEMU/cargo is running (serial bench)"; sleep 20; 
 if [ "$SIDE" = host ]; then
   mkdir -p /opt/apps
   cp -f "$HERE"/src/*.py /opt/apps/bundle/share/
-  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9   # the host GPU is the bench GPU
+  kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9   # the host GPU is the bench GPU
   bash "$HERE/run_apps.sh" host "$@" | tee -a "$R/host.res"
   flock -u 9
   for f in /opt/apps/out/host/*.log; do cp -f "$f" "$R/$(basename "$f" .log).host.log"; done
@@ -37,7 +38,7 @@ QB=${KF3_BIN:-$(ls -td /workspace/bench/kf3-bins/*/qemu-system-x86_64 | head -1)
 say "kf3 binary: $QB"
 boot(){  # $1 tag, $2 apps, $3 outdir
   # ★ serialize each boot on the shared bench lock (held per boot, released between boots)
-  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+  kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
   env KF_DEVICE=kf3 QEMU_BIN="$QB" NVKVM_RAM_MB=${NVKVM_RAM_MB:-16384} KF_SMP=${KF_SMP:-6} GQ_TIMEOUT=300 \
       APPS="$2" APPS_OUT="$3" POST_CAPTURE_HOOK="$HERE/apps_hook.sh" \
       bash "$REPO/scripts/bench/boot_capture.sh" "$1" > "$3/boot_$1.driver.log" 2>&1

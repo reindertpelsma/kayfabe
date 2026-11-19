@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_lock.sh"
 # cdp_guest.sh BIN TAG "RUNS" — ONE FRESH kf3 fat-guest boot (the app-matrix image) running the
 # CDP probe per RUNS entry (`cdp_hook.sh`). A poisoned CUDA context answers 999 to every later
 # process in the same boot, so put the run that may hang LAST.
@@ -19,7 +20,7 @@ bash "$HERE/cdp_build.sh" "$OUT/bin" || { echo "CDPG_EXIT rc=3 $(date -Is)"; exi
 busy(){ pgrep -x qemu-system-x86 >/dev/null || pgrep -x cargo >/dev/null || pgrep -x rustc >/dev/null; }
 while busy; do sleep 10; done
 T0=$(date +%s)
-exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+kf_lock_open "${KF_LOCK:-/tmp/kayfabe-fastguest.lock}" 9; flock 9
 env KF_DEVICE=kf3 QEMU_BIN="$BIN" KF_GUEST_IMG=${KF_GUEST_IMG:-/workspace/bench/guest_apps.qcow2} \
     NVKVM_RAM_MB=${NVKVM_RAM_MB:-16384} KF_SMP=${KF_SMP:-6} GQ_TIMEOUT=${GQ_TIMEOUT:-600} \
     CDP_OUT="$OUT" CDP_RUNS="$RUNS" CDP_BINDIR="$OUT/bin" POST_CAPTURE_HOOK="$HERE/cdp_hook.sh" \

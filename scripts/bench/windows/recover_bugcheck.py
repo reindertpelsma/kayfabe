@@ -16,6 +16,9 @@ It never starts Windows or a debugger and never writes to the image. Usage (root
 after the run's supervisor has stopped): recover_bugcheck.py --run N. Output: the JSON summary
 on stdout and in <run>/bugcheck-offline/bugcheck.json. The evtx copies stay private on the PC.
 """
+import sys
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2] / "lib"))
+import kf_lock  # noqa: E402
 import argparse
 import fcntl
 import json
@@ -65,7 +68,7 @@ def main():
     os.umask(0o077)
     name = f'boundary-kayfabe-{args.run}'
     work = BASE / name
-    with open('/tmp/kayfabe-fastguest.lock', 'a') as lock:
+    with kf_lock.open_lock_file() as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         state = subprocess.run(['systemctl', 'show', 'kf-' + name, '-p', 'ActiveState', '--value'],
                                capture_output=True, text=True, check=True, timeout=30).stdout.strip()

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/kf_lock.sh"
 # LLM parity on a SHARED bench box: provision (guest image + host venv), then the guest lane
 # without and with guest persistence mode, then the host lane — each GPU/qcow2 step under
 # /tmp/kayfabe-fastguest.lock, and only when no other agent's QEMU / suite is running.
@@ -14,7 +15,7 @@ say() { echo "[$(date -Is)] $*"; }
 # as long as it waited [measured vh, w828] — two waiters, each blocking the other's condition forever.
 idle() { ! pgrep -x qemu-system-x86 >/dev/null && ! pgrep -f '^(/usr/bin/)?bash [^-]\S*(fast_suite|run_fast_guest|boot_capture)\.sh' >/dev/null; }
 locked() {  # wait for idle, then run "$@" holding the lock
-    exec 9>/tmp/kayfabe-fastguest.lock
+    kf_lock_open /tmp/kayfabe-fastguest.lock 9
     while :; do
         flock 9
         idle && break
