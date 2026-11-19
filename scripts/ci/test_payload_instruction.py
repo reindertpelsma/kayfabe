@@ -707,6 +707,70 @@ class Propimages(unittest.TestCase):
         self.assertIn("propimage_apps", m.plan_stage_names(with_list))
 
 
+MATLAB = {
+    "label": "matlab",
+    "image": {"from": "pin", "ref": "propimage-kfimg-matlab-20261117.zip", "sha256": "0" * 64},
+    "driver": {"version": "590.48.01"},
+    "rows": {"gpu_fft": {"lane": "discovery"}},
+    "isolation": "row",
+}
+
+
+class MatlabBin(unittest.TestCase):
+    """2026-11-18: the optional `bin` of the `matlab` object, where the image keeps the matlab binary in the guest (an image property, the Worker's config).
+    The schema is the only validator here (the pin and row checks are matlab_stage.instruction_refusal, test_matlab_stage.py)."""
+
+    def doc(self, **bin_):
+        return good(tier="large", matlab=dict(MATLAB, **bin_))
+
+    def parsed(self, value):
+        return pi.parse(raw(self.doc(bin=value)))
+
+    def refused(self, value):
+        with self.assertRaises(pi.InstructionError) as c:
+            self.parsed(value)
+        return str(c.exception)
+
+    def test_a_bin_is_accepted_and_is_in_the_canonical_bytes(self):
+        for value in ("matlab", "/home/kfimage/MATLAB/R2026b/bin/matlab", "bin/matlab-2026b_x.1"):
+            with self.subTest(value=value):
+                i = self.parsed(value)
+                self.assertEqual(i.matlab["bin"], value)
+                self.assertEqual(json.loads(i.canonical_bytes())["matlab"]["bin"], value)
+
+    def test_an_object_without_a_bin_is_the_same_bytes_as_before_the_field_existed(self):
+        i = pi.parse(raw(good(tier="large", matlab=MATLAB)))
+        self.assertNotIn("bin", i.matlab)
+        self.assertNotIn(b'"bin"', i.canonical_bytes())
+        self.assertEqual(json.loads(i.canonical_bytes())["matlab"], MATLAB)
+
+    def test_a_bin_of_exactly_120_characters_is_accepted_and_121_is_refused(self):
+        self.assertEqual(len(self.parsed("a" * 120).matlab["bin"]), 120)
+        self.assertIn("bin", self.refused("a" * 121))
+
+    def test_a_bin_with_shell_metacharacters_or_spaces_is_refused_with_the_path_named(self):
+        for value in ("matlab;id", "$(id)", "`id`", "a|b", "a&b", "a>b", "a b", "a'b", 'a"b', "~/matlab", "a*b", "a\\b"):
+            with self.subTest(value=value):
+                self.assertIn("bin", self.refused(value))
+
+    def test_a_bin_with_a_newline_even_trailing_is_refused(self):
+        for value in ("matlab\n", "a\nb", "\nmatlab", "matlab\r"):
+            with self.subTest(value=value):
+                self.assertIn("bin", self.refused(value))
+
+    def test_an_empty_or_non_string_bin_is_refused(self):
+        for value in ("", 5, 1.5, None, True, ["matlab"], {"p": "matlab"}):
+            with self.subTest(value=value):
+                self.assertIn("bin", self.refused(value))
+
+    def test_a_non_ascii_bin_is_refused(self):
+        self.assertIn("bin", self.refused("mat\u0142ab"))
+
+    def test_the_bin_is_part_of_an_object_the_tier_rule_still_refuses_on_a_small_tier(self):
+        with self.assertRaises(pi.InstructionError):
+            pi.parse(raw(good(tier="small", matlab=dict(MATLAB, bin="matlab"))))
+
+
 class ReporterAcceptsProvenance(unittest.TestCase):
     def test_the_reporter_reads_the_new_keys_and_refuses_bad_ones(self):
         import vast_report

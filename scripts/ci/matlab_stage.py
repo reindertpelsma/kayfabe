@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """The MATLAB rows of the Linux proprietary image as an optional payload stage (stdlib only).
 
-STATUS: DESIGN-ONLY, 2026-11-17. GPU-free tests only (test_matlab_stage.py); the stage has never run on a box, it needs a KVM box with a GPU. Wired into vast_payload.py
+STATUS: DESIGN-ONLY, 2026-11-17. GPU-free tests only (test_matlab_stage.py); it needs a KVM box with a GPU. 2026-11-18: the first strict run on a Vast box ended every row `CRASH NO_USABLE_RESULT rc=127` (the binary name was not on the guest's PATH; see "The matlab binary in the guest" below). Wired into vast_payload.py
 as the stage `matlab` (large tier, off by default: `--only matlab`, or an instruction that carries `matlab`), and its record is validated in vast_report.py
 (`validate_matlab`). Design: docs/design/V3_PROPIMAGE_LINUX.md section 14. The rows, the guest transport and the verdicts are scripts/bench/linux/matlab_rows.py.
 
@@ -17,6 +17,11 @@ size and sha256), the NVIDIA driver version (pinned in ci/vast-broker/release-ma
 must run (zero skips). STANDALONE (`--matlab-image PATH|URL`): the image is the caller's own, NO sha256 pin is enforced (the computed sha256 is recorded), the driver is a
 pinned VERSION, a .run file or an https URL (a file or URL driver is sha256-hashed and recorded, not pinned), the policy is permissive (a row that cannot run is a skip
 with its reason, exit 0) and every row is in the discovery lane unless `--lane` says otherwise.
+
+The matlab binary in the guest (2026-11-18, MEASURED on the first box run: the name `matlab` is not on the guest's ssh PATH in the MATLAB Linux image, every row ended
+rc 127): the instruction's optional `bin` (an image property, ci/vast-broker/propimages.json `linux_images[].bin`; `guest_bin`), else the `--matlab` flag, else the name `matlab`.
+The flag alone is used in the standalone shape (and with an instruction that has no `bin`); the instruction's `bin` alone is used; both given and different is the usage error
+`BIN_CONFLICT` (exit 2, nothing runs), both given and equal is fine. An invalid `bin` (the rows' BIN_RE) is the refusal `BIN_INVALID`.
 
 One line is printed, `KF_MATLAB_RESULT {json}` (schema kayfabe.matlab-rows/1, at most 48 KiB), and written to --out. Exit: 0 PASS or SKIPPED, 1 a gate row failed, 3 RETRY
 (a harness problem or no time), 4 a strict skip, 2 usage. The image never stays on the box (the stage deletes what it downloaded and unpacked) and is never printed.
@@ -79,13 +84,31 @@ def driver_pin(version, matrix):
     return None
 
 
+def bin_valid(value, mr):
+    """The rows' own rule for the guest binary (matlab_rows.BIN_RE: letters, digits and `_ . / -`, 1 to 120 characters); a non-string is never valid."""
+    return type(value) is str and mr.BIN_RE.fullmatch(value) is not None
+
+
+def guest_bin(mr, instruction, flag):
+    """The matlab binary the rows run in the guest. `instruction` is the strict object (None in the standalone shape), `flag` the `--matlab` value (None = not given).
+    The flag alone wins (standalone, or an instruction without `bin`), the instruction's `bin` alone is used, neither gives the rows' default name; both given and
+    different raises ValueError('BIN_CONFLICT ...') (a usage error: nothing has run yet). The value is not validated here: instruction_refusal does that (BIN_INVALID)."""
+    wanted = (instruction or {}).get("bin")
+    if wanted is not None and flag is not None and flag != wanted:
+        raise ValueError("BIN_CONFLICT the instruction's bin and --matlab differ")
+    if wanted is not None:
+        return wanted
+    return flag if flag is not None else mr.MATLAB_BIN
+
+
 def instruction_refusal(obj, pins_path=PINS_PATH, matrix=None, root=ROOT):
     """The named refusal of the instruction's `matlab` object (the schema already checked the shape), or None: PIN_UNKNOWN, PIN_UNSET, PIN_SHA256_MISMATCH,
-    DRIVER_UNPINNED:<version>, ROW_UNKNOWN:<row>, NO_ROWS. A Worker object is strict: nothing here accepts a source that is not a pin."""
+    DRIVER_UNPINNED:<version>, ROW_UNKNOWN:<row>, NO_ROWS, BIN_INVALID. A Worker object is strict: nothing here accepts a source that is not a pin."""
     try:
         pins = load_pins(pins_path)
         matrix = matrix if matrix is not None else load_matrix()
-        rows = rows_module(root).ROWS
+        mr = rows_module(root)
+        rows = mr.ROWS
     except (OSError, ValueError):
         return "PINS_UNREADABLE"
     item = next((i for i in pins["items"] if i["ref"] == obj["image"]["ref"]), None)
@@ -102,6 +125,8 @@ def instruction_refusal(obj, pins_path=PINS_PATH, matrix=None, root=ROOT):
     for r in obj["rows"]:
         if r not in rows:
             return "ROW_UNKNOWN:" + pa.clean(r, 24)
+    if "bin" in obj and not bin_valid(obj["bin"], mr):
+        return "BIN_INVALID"
     return None
 
 
@@ -174,12 +199,13 @@ def run(a, hooks=None):
     lanes.update({r: v["lane"] for r, v in instruction["rows"].items()} if strict else {})
     lanes.update(mr.parse_lanes(a.lane, mr.ROW_ORDER) if not strict and a.lane else {})
     isolation = (instruction.get("isolation") if strict else None) or a.isolation
+    matlab_bin = guest_bin(mr, instruction, a.matlab)       # ValueError (BIN_CONFLICT) = a usage error, before anything is fetched or run
     hw = (hooks.get("hardware") or mr.host_gpu_facts)()
     family = pa.FAMILY_BY_CC.get(hw.get("compute_cap"))
     image_rec = {"sha256": None, "size": None, "source": "pin" if strict else "user", "pin_enforced": strict}
     driver_rec = {"version": None, "sha256": None, "source": "pin" if strict else "user"}
     ctx_args = dict(lanes=lanes, hw=hw, evidence_dir=a.evidence_dir, workdir=str(prefix / "work"), isolation=isolation, strict=strict or rows_strict, deadline_epoch=a.deadline_epoch,
-                    matlab=a.matlab)
+                    matlab=matlab_bin)
     mctx = mr.Context(**ctx_args)
     started, klog = False, None
     pctx = pa.Context(a.sha, root, prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=hw)
@@ -297,7 +323,8 @@ def main(argv=None):
     r.add_argument("--rows")
     r.add_argument("--isolation", choices=("row", "shared"), default="row")
     r.add_argument("--lane", action="append", default=[])
-    r.add_argument("--matlab", default="matlab", help="the matlab binary in the guest")
+    r.add_argument("--matlab", default=None, help="the matlab binary in the guest (default: the instruction's `bin`, else the name `matlab`; both given and different "
+                   "is a usage error)")
     sub.add_parser("plan")
     a = p.parse_args(argv)
     try:

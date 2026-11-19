@@ -37,7 +37,8 @@ suite = unittest.defaultTestLoader.loadTestsFromNames(sys.argv[1:])
 r = unittest.TextTestRunner(stream=io.StringIO()).run(suite)
 print('KF_MUTATION_RESULT=' + json.dumps({'tests': r.testsRun, 'killers': [t.id() for t, _ in r.failures + r.errors]}))
 """
-P, I, R, MN, PW, IS, RP = (SUITE + n for n in ("PinsTests.", "InstructionTests.", "RunTests.", "ManifestTests.", "PayloadWiringTests.", "InstructionSchemaTests.", "ReportTests."))
+P, I, R, MN, PW, IS, RP, MA, SF, GB = (SUITE + n for n in ("PinsTests.", "InstructionTests.", "RunTests.", "ManifestTests.", "PayloadWiringTests.", "InstructionSchemaTests.",
+                                                           "ReportTests.", "MainTests.", "StageFileTests.", "GuestBinTests."))
 
 
 def M(name, key, old, new, *tests):
@@ -85,6 +86,33 @@ MUTANTS = [
       PW + "test_refusals_of_the_standalone_flags", PW + "test_dry_run_of_the_golden_and_of_the_flags"),
     M("pin_check_skipped_in_the_payload", "payload", "            return matlab_stage.instruction_refusal(instruction.matlab)", "            return None",
       PW + "test_the_instruction_object_is_checked_against_the_pins", PW + "test_dry_run_of_the_golden_and_of_the_flags"),
+    # 2026-11-18: the optional `bin` of the object (the image's own matlab binary: the name `matlab` is not on the guest's ssh PATH)
+    M("bin-not-refused-when-invalid", "ms", '    if "bin" in obj and not bin_valid(obj["bin"], mr):\n        return "BIN_INVALID"\n', "",
+      I + "test_a_bad_bin_is_refused_by_name", R + "test_an_invalid_bin_refuses_the_whole_stage_by_name_before_anything_is_fetched"),
+    M("bin-pattern-loses-its-characters", "ms", "return type(value) is str and mr.BIN_RE.fullmatch(value) is not None", "return type(value) is str",
+      I + "test_the_bin_rule_is_the_rows_own_pattern_not_a_copy", I + "test_a_bad_bin_is_refused_by_name"),
+    M("bin-accepts-a-non-string", "ms", "return type(value) is str and mr.BIN_RE.fullmatch(value) is not None", "return mr.BIN_RE.fullmatch(str(value)) is not None",
+      I + "test_a_bad_bin_is_refused_by_name", I + "test_the_bin_rule_is_the_rows_own_pattern_not_a_copy"),
+    M("instruction-bin-ignored", "ms", "    if wanted is not None:\n        return wanted\n", "",
+      R + "test_the_instruction_bin_is_the_binary_the_rows_run", R + "test_another_bin_in_the_instruction_is_another_binary"),
+    M("bin-conflict-allowed", "ms", "if wanted is not None and flag is not None and flag != wanted:", "if False:",
+      R + "test_a_flag_that_differs_from_the_instruction_bin_is_a_usage_error_before_anything_runs", MA + "test_a_flag_that_differs_from_the_instruction_bin_is_a_named_usage_error"),
+    M("bin-conflict-also-for-an-equal-flag", "ms", "if wanted is not None and flag is not None and flag != wanted:", "if wanted is not None and flag is not None:",
+      R + "test_a_flag_equal_to_the_instruction_bin_is_not_a_conflict", GB + "test_the_rule_table"),
+    M("flag-ignored", "ms", "    return flag if flag is not None else mr.MATLAB_BIN", "    return mr.MATLAB_BIN",
+      R + "test_the_flag_alone_still_names_the_binary_of_an_instruction_without_bin", R + "test_standalone_runs_the_flag_binary_and_without_a_flag_the_name_matlab"),
+    M("default-binary-is-not-the-rows-name", "ms", "    return flag if flag is not None else mr.MATLAB_BIN", '    return flag if flag is not None else "/usr/local/bin/matlab"',
+      R + "test_an_instruction_without_bin_runs_the_name_matlab_as_before", R + "test_standalone_runs_the_flag_binary_and_without_a_flag_the_name_matlab"),
+    M("flag-default-is-the-name-matlab", "ms", 'r.add_argument("--matlab", default=None,', 'r.add_argument("--matlab", default="matlab",',
+      MA + "test_the_flag_is_not_given_by_default_and_is_passed_as_given", MA + "test_a_strict_command_line_without_the_flag_has_no_conflict"),
+    M("bin-conflict-error-loses-its-name", "ms", 'raise ValueError("BIN_CONFLICT the instruction\'s bin and --matlab differ")', 'raise ValueError("the instruction\'s bin and --matlab differ")',
+      GB + "test_both_and_different_is_a_value_error_naming_the_conflict", MA + "test_a_flag_that_differs_from_the_instruction_bin_is_a_named_usage_error"),
+    M("bin-dropped-from-the-stage-file", "payload", "instruction_file.write_text(json.dumps(instruction.matlab))",
+      'instruction_file.write_text(json.dumps({k: v for k, v in instruction.matlab.items() if k != "bin"}))',
+      SF + "test_the_stage_gets_the_object_with_its_bin", SF + "test_the_stage_gets_another_bin_as_it_is"),
+    M("bin-as-a-second-spelling-on-the-command-line", "payload", '                matlab_argv += ["--instruction-matlab", str(instruction_file)]\n',
+      '                matlab_argv += ["--instruction-matlab", str(instruction_file), "--matlab", "matlab"]\n',
+      SF + "test_the_stage_gets_the_object_with_its_bin", SF + "test_the_stage_gets_another_bin_as_it_is"),
     M("matlab-on-the-middle-tier", "pinst", '    if i.matlab is not None and i.tier != "large":\n        raise InstructionError("matlab needs the large tier")', "    pass",
       IS + "test_refusals", PW + "test_an_instruction_with_matlab_on_a_middle_tier_is_not_planned"),
     M("matlab-not-emitted", "pinst", '        if self.matlab is not None:\n            out["matlab"] = json.loads(json.dumps(self.matlab))\n', "",

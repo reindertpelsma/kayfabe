@@ -34,6 +34,8 @@ With a `state.json` inside the image, the applications come from its `software` 
 ... --image prebuilt:/data/image.zip --apps resolve,3dmark
 ```
 
+An image with a `state.json` boots with kayfabe's signed boot display driver. Give it with `--gop-efi FILE`. Without that option the runner fetches the pinned copy once per run through the download-URL file (`--urls`); a box with neither gets the refusal `DOWNLOAD` (or `PIN_UNSET:gop`, when your own `--pins` file leaves the driver's sha256 or size empty) before any boot. A plain disk needs no driver.
+
 Several images in one call (options after `--image` belong to that image):
 
 ```
