@@ -134,6 +134,11 @@ generated display files reproduce byte for byte):
   vetoes, review 3 F-1) and requires each mutant to fail at least two distinct `kf_cpu_walk` checks.
 - `scripts/ci/va_apply_bounds_mutants.py` (Rust job, 2026-11-15) mutates the host unmap-call cap in `crates/kf-mem/src/batch.rs`
   (`UNMAP_CALL_MAX_ENTRIES`) and requires each mutant to fail at least two named `kf-mem` tests.
+- `scripts/ci/util_flag_mutants.py` (Rust job, 2026-11-17) mutates GPU-utilisation reporting (`report-utilization`; `kf-abi` `utilization.rs`, the
+  `kf-rm` link, sampler and RUSD publisher, the `kf-qemu` host read and the property's use sites) and requires each mutant to fail at least two named
+  tests (`crates/kf-rm/tests/utilization_chain.rs`, `utilization_replay.rs`, the unit tests they sit beside, and `crates/kf-qemu/tests/utilization_use_sites.rs`,
+  which pins its sites as source text). `crates/kf-abi/tests/utilization_layout_is_current.rs` recompiles `tools/util-probe/probe.c` against the two pinned
+  oracles (`KF_REQUIRE_ORACLES=1` makes a missing tree a failure). Design and hostile-guest analysis: `docs/design/V3_UTILIZATION_FLAG.md`.
 - `scripts/ci/windows_profile_mutants.py` (Rust job, 2026-11-15) mutates the Windows support profile's identity gates (`kf-rm` `winprofile.rs`, the
   chain and channel links, `kf-qemu` channel birth, the mirror-space start and the display colour path) and requires each mutant to fail at least two
   named tests. The tests are the proof that a Linux guest, an undeclared guest and a `windows-support=off` VM reach none of the profile

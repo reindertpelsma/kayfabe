@@ -2248,6 +2248,10 @@ jobs:
       # kf-qemu split delivery, kf-cuda ceiling geometry; observation only): each mutant needs two named killers.
       - name: VA-apply profiling mutations require two named killers each
         run: python3 scripts/ci/va_profile_mutants.py
+      # GPU-utilisation reporting (docs/design/V3_UTILIZATION_FLAG.md, 2026-11-17: kf-abi encoders, kf-rm link/sampler/publisher,
+      # kf-qemu host read and the property's use sites): each mutant needs two named killers.
+      - name: GPU-utilisation reporting mutations require two named killers each
+        run: python3 scripts/ci/util_flag_mutants.py
 
   # ★ THE PRODUCTION HALF, ON THE STRIPPED TREE (2026-11-09; OWNER_RULINGS section AQ, design:
   # docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4). A vast box clones the repository and

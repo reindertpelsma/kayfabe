@@ -45,7 +45,7 @@
 # --- traces/: ignored EXCEPT the evidence that tests read (include_str! and runtime reads) ---
 # The syntax has no negation, so the kept directories are listed by being left out: each line below is the
 # shortest prefix glob that matches no kept name. Kept (a test of a workspace crate reads them; the box
-# sparse list in ci/vast-broker/src/onstart.js names the same data): driver_matrix, rawclient_ce_interrupt_20261008, blackwell_host_caps_review_20261022, blackwell_hw_20261103, blackwell_provider_validation_20261023, blackwell_windows_resume_20261023, real_ga106, c_oracle_census, user_ring_scan_20261014, constants_night_20261014, real_ad104, real_ga104, real_hw_20261013, real_tu116, die_driver_sweep_20261015, constants_measure_20261014b, cap1_coldboot_hermetic.rec, cap1b_coldboot_hermetic_d6.rec.
+# sparse list in ci/vast-broker/src/onstart.js names the same data): driver_matrix, rawclient_ce_interrupt_20261008, blackwell_host_caps_review_20261022, blackwell_hw_20261103, blackwell_provider_validation_20261023, blackwell_windows_resume_20261023, real_ga106, c_oracle_census, user_ring_scan_20261014, constants_night_20261014, real_ad104, real_ga104, real_hw_20261013, real_tu116, die_driver_sweep_20261015, constants_measure_20261014b, cap1_coldboot_hermetic.rec, cap1b_coldboot_hermetic_d6.rec, util_layout_20261117.
 # A new traces/ directory whose name starts like one of these globs is ignored without a line; one that
 # starts like a kept name stays in the stripped tree (harmless, it only enters the key).
 # ORDER MATTERS TO THE WORKER, NOT TO THE STRIP: treekey.js stops at the first line that matches, and it
