@@ -130,18 +130,18 @@ pub struct UtilRuntime {
 pub fn enable(mut host: Box<dyn HostUtilization>) -> Option<UtilRuntime> {
     match host.read() {
         Err(UtilRefusal::NoSource(why)) => {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf3: report-utilization=on, but this host has no unprivileged GPU-utilisation source ({why}): \
                  NOT serving utilisation; the guest sees N/A exactly as with report-utilization=off"
             );
             return None;
         }
-        Err(other) => eprintln!(
+        Err(other) => kf_arch::rate_eprintln!(
             "kf3: report-utilization=on: first host reading was {other:?}; serving, will retry"
         ),
         Ok(_) => {}
     }
-    eprintln!(
+    kf_arch::rate_eprintln!(
         "kf3: report-utilization=on: the guest is shown the PHYSICAL GPU's utilisation (whole device, 1 % resolution, \
          a cross-tenant load side channel on a shared GPU; set report-utilization=off to hide it)"
     );
