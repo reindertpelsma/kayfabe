@@ -109,7 +109,15 @@ pub const HOST_HOLE_LO: u64 = (1 << 40) - (64 << 30);
 /// `NV50_MEMORY_VIRTUAL` (`ogkm-580: resource_list.h:516-523`, parent `Device`).
 const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
 /// `NVOS32_ALLOC_FLAGS_FIXED_ADDRESS_ALLOCATE | _LAZY | _VIRTUAL` (`nvos.h:1448-1464`).
-const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
+///
+/// ⚠ 2026-11-18 (sparse residency RCA, `V3_SPARSE_RESIDENCY_RCA.md`): NOT `_SPARSE`
+/// ([`NVOS32_ALLOC_FLAGS_SPARSE`]), so an unmapped VA inside a reservation is INVALID on the host (a
+/// fault), never the guest's SPARSE "reads zero" (`ogkm-580 gpu_vaspace.c:1577-1600`, `2279-2289`).
+/// Public so the host model (`kf-mem` `sim`) derives the reservation's unmapped state from it.
+pub const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
+/// `NVOS32_ALLOC_FLAGS_SPARSE` (`ogkm-580 nvos.h:1472`; semantics `nvos.h:1415-1419`: "an unmapped
+/// virtual address range should not fault but simply return 0's").
+pub const NVOS32_ALLOC_FLAGS_SPARSE: u32 = 0x0400_0000;
 
 impl VaSpace {
     /// ★ **STATUS (2026-10-09): this is the ONE-handle form; a straddling row is no longer refused
