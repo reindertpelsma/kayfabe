@@ -46,7 +46,7 @@ test('profile resources: four data profiles include conservative stage allowance
     assert.deepEqual(r, DEFAULTS.payloadProfiles[tier]);
   }
   assert.equal(cfgFor('large').diskGb, 300);
-  assert.equal(cfgFor('large').bandwidthDown, 130);
+  assert.equal(cfgFor('large').bandwidthDown, 135);
   assert.equal(cfgFor('large').maxInet, 0.02);
   assert.equal(cfgFor('small').maxInet, 0.005);
   assert.equal(cfgFor('middle').maxInet, 0.005);
@@ -116,7 +116,7 @@ test('release estimate reserves the large allowance on every large leg and the m
         market.find((o) => o.id === l.offer_id),
         cfg,
       );
-      // The large allowance (130 GB, 300 GB disk) is reserved on every leg; a middle leg is priced at the middle hard limit.
+      // The large allowance (135 GB, 300 GB disk) is reserved on every leg; a middle leg is priced at the middle hard limit.
       return (
         sum +
         (l.leg_tier === 'middle'
@@ -125,7 +125,7 @@ test('release estimate reserves the large allowance on every large leg and the m
       );
     }, 0);
   assert.ok(Math.abs(plan.estimate_usd - expected) < 0.002);
-  assert.equal(plan.resource_profile.bandwidthDownGb, 130);
+  assert.equal(plan.resource_profile.bandwidthDownGb, 135);
   assert.equal(plan.resource_profile.diskGb, 300);
 });
 test('a shared offer cache is refreshed across resource query boundaries', async () => {
