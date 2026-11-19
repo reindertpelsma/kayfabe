@@ -1,0 +1,3964 @@
+{
+ "note": "Shared by scripts/ci/test_propimage_config.py (the reference) and ci/vast-broker/test/bundles.test.js (the port). Regenerate only with the Python module; both suites must agree.",
+ "validation": [
+  {
+   "name": "small valid document",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": null
+  },
+  {
+   "name": "valid full windows run",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "rows": [
+        "r1",
+        "r2"
+       ],
+       "solo_rows": [
+        "r2"
+       ],
+       "data_iso": true,
+       "guest_ram_mb": 16384,
+       "audio": true,
+       "harness_args": {
+        "before_apps": [
+         "--app-set",
+         "b"
+        ],
+        "after_apps": [
+         "--fb-mb",
+         "8192"
+        ],
+        "per_row": {
+         "r1": [
+          "--x"
+         ]
+        }
+       }
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": null
+  },
+  {
+   "name": "valid committed file",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "status": "STATUS: LIVE as data, 2026-11-19; READ by scripts/ci/propimage_config.py only (the generic stage and the Worker planner do not consume it yet: docs/design/V3_PROPIMAGE_CONFIG.md, steps 2-4). The project's own bundles, as operator deployment data: object keys and sizes are the project's store layout, not code. A third party passes its own file of the same schema. Sizes are read-backs of the store listing of 2026-11-19 unless a bundle's basis says otherwise. No licence key, account, e-mail, institution or credential belongs in this file (the validator refuses the shapes).",
+    "bundles": {
+     "imga": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261112/image-v2.zip",
+      "size_bytes": 50496618964,
+      "sha256": "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3",
+      "ref": "propimage-kfimg-20261112.zip",
+      "apps": [
+       "solidworks",
+       "edrawings",
+       "3dmark",
+       "superposition",
+       "resolve"
+      ],
+      "basis": "object and identity as in propimages.json (store listing 2026-11-19 reads the same size); apps are the Worker's gate and discovery apps; the stage also runs rows edge and wukong",
+      "run": {
+       "rows_file": "scripts/bench/windows/propimage_check.py",
+       "pins_file": "scripts/ci/propimage_apps_pins.json",
+       "rows": [
+        "superposition",
+        "3dmark",
+        "solidworks",
+        "resolve",
+        "edrawings",
+        "edge",
+        "wukong"
+       ],
+       "solo_rows": [
+        "wukong"
+       ],
+       "data_iso": false,
+       "harness_args": {
+        "per_row": {
+         "superposition": [
+          "--superposition-run"
+         ],
+         "wukong": [
+          "--fb-mb",
+          "8192"
+         ]
+        }
+       }
+      }
+     },
+     "imgb": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261116/image.zip",
+      "size_bytes": 62506351001,
+      "sha256": "fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a",
+      "ref": "propimage-kfimg-20261116.zip",
+      "apps": [
+       "gpudiag",
+       "illustrator",
+       "acrobat",
+       "premiere",
+       "lightroomlaunch",
+       "dimension",
+       "uxp",
+       "photoshop",
+       "photoshopsample",
+       "photoshopprojects",
+       "aftereffects",
+       "aeparallel",
+       "aeprojects",
+       "aetoggle",
+       "mediaencoder",
+       "indesign",
+       "indesignsample",
+       "illustratorsample"
+      ],
+      "basis": "the Adobe image, version 1 (built 2026-11-16); a rebuilt candidate is not verified and is not entered here",
+      "licence_note": "named-user licences; the image is private and is never redistributed",
+      "run": {
+       "rows_file": "scripts/bench/windows/propimage_apps_b.py",
+       "pins_file": "scripts/ci/propimage_apps_b_pins.json",
+       "data_iso": true,
+       "guest_ram_mb": 16384,
+       "audio": true,
+       "harness_args": {
+        "before_apps": [
+         "--app-set",
+         "b"
+        ],
+        "after_apps": [
+         "--fb-mb",
+         "8192"
+        ]
+       }
+      }
+     },
+     "imgc": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-matlab-20261117/image.zip",
+      "size_bytes": 8128391922,
+      "sha256": "30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a",
+      "ref": "propimage-kfimg-matlab-20261117.zip",
+      "apps": [
+       "matlab"
+      ],
+      "basis": "identity is the full read-back of the object (2026-11-17, PR 467); propimages.json and matlab_pins.json still carry the earlier build until that PR merges",
+      "run": {
+       "rows_file": "scripts/bench/linux/matlab_rows.py",
+       "pins_file": "scripts/ci/matlab_pins.json",
+       "isolation": "row"
+      }
+     },
+     "imgd": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261118/image.zip",
+      "size_bytes": 86744842653,
+      "apps": [
+       "autocad",
+       "arcgispro",
+       "steam"
+      ],
+      "basis": "UNVERIFIED: the app list is the three applications the 2026-11-18 token check found signed in, the owner confirms it; no sha256 is recorded; the size is the store listing of 2026-11-19; no row table exists for these applications yet, so no `run`",
+      "licence_note": "Autodesk token not yet revoked; the vendor-side revoke and a passing token check come before any use on a rented box"
+     },
+     "imge": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-maya-20261119/image.zip",
+      "size_bytes": 7720510275,
+      "apps": [
+       "maya"
+      ],
+      "basis": "UNVERIFIED: built 2026-11-19; no sha256 and no token check are recorded in the repository; the size is the store listing of 2026-11-19; no row table exists yet, so no `run`"
+     }
+    }
+   },
+   "reason": null
+  },
+  {
+   "name": "a_typo_in_the_file_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    },
+    "colour": 1
+   },
+   "reason": "TOP_KEY"
+  },
+  {
+   "name": "a_file_without_bundles_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1"
+   },
+   "reason": "TOP_KEY"
+  },
+  {
+   "name": "a_file_with_no_bundles_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {}
+   },
+   "reason": "BUNDLES"
+  },
+  {
+   "name": "seventeen_bundles_are_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "b0": {
+      "os": "linux",
+      "r2": "k/0.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a0"
+      ]
+     },
+     "b1": {
+      "os": "linux",
+      "r2": "k/1.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a1"
+      ]
+     },
+     "b2": {
+      "os": "linux",
+      "r2": "k/2.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a2"
+      ]
+     },
+     "b3": {
+      "os": "linux",
+      "r2": "k/3.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a3"
+      ]
+     },
+     "b4": {
+      "os": "linux",
+      "r2": "k/4.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a4"
+      ]
+     },
+     "b5": {
+      "os": "linux",
+      "r2": "k/5.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a5"
+      ]
+     },
+     "b6": {
+      "os": "linux",
+      "r2": "k/6.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a6"
+      ]
+     },
+     "b7": {
+      "os": "linux",
+      "r2": "k/7.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a7"
+      ]
+     },
+     "b8": {
+      "os": "linux",
+      "r2": "k/8.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a8"
+      ]
+     },
+     "b9": {
+      "os": "linux",
+      "r2": "k/9.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a9"
+      ]
+     },
+     "b10": {
+      "os": "linux",
+      "r2": "k/10.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a10"
+      ]
+     },
+     "b11": {
+      "os": "linux",
+      "r2": "k/11.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a11"
+      ]
+     },
+     "b12": {
+      "os": "linux",
+      "r2": "k/12.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a12"
+      ]
+     },
+     "b13": {
+      "os": "linux",
+      "r2": "k/13.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a13"
+      ]
+     },
+     "b14": {
+      "os": "linux",
+      "r2": "k/14.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a14"
+      ]
+     },
+     "b15": {
+      "os": "linux",
+      "r2": "k/15.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a15"
+      ]
+     },
+     "b16": {
+      "os": "linux",
+      "r2": "k/16.zip",
+      "size_bytes": 1,
+      "apps": [
+       "a16"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLES"
+  },
+  {
+   "name": "a_status_of_4001_characters_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    },
+    "status": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   "reason": "STATUS"
+  },
+  {
+   "name": "a_bundle_id_with_a_space_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     },
+     "w 1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_ID:w 1"
+  },
+  {
+   "name": "a_bundle_that_is_a_string_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": "x",
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_SHAPE:w1"
+  },
+  {
+   "name": "a_typo_in_a_bundle_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "slot": 1
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_KEY:w1"
+  },
+  {
+   "name": "a_bundle_without_apps_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_MISSING:w1"
+  },
+  {
+   "name": "an_object_key_with_a_space_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "a b.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_R2:w1"
+  },
+  {
+   "name": "a_zero_size_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 0,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_SIZE:w1"
+  },
+  {
+   "name": "a_size_of_the_limit_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 4398046511104,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_SIZE:w1"
+  },
+  {
+   "name": "a_true_size_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": true,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_SIZE:w1"
+  },
+  {
+   "name": "a_bundle_with_sixty_five_apps_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "a0",
+       "a1",
+       "a2",
+       "a3",
+       "a4",
+       "a5",
+       "a6",
+       "a7",
+       "a8",
+       "a9",
+       "a10",
+       "a11",
+       "a12",
+       "a13",
+       "a14",
+       "a15",
+       "a16",
+       "a17",
+       "a18",
+       "a19",
+       "a20",
+       "a21",
+       "a22",
+       "a23",
+       "a24",
+       "a25",
+       "a26",
+       "a27",
+       "a28",
+       "a29",
+       "a30",
+       "a31",
+       "a32",
+       "a33",
+       "a34",
+       "a35",
+       "a36",
+       "a37",
+       "a38",
+       "a39",
+       "a40",
+       "a41",
+       "a42",
+       "a43",
+       "a44",
+       "a45",
+       "a46",
+       "a47",
+       "a48",
+       "a49",
+       "a50",
+       "a51",
+       "a52",
+       "a53",
+       "a54",
+       "a55",
+       "a56",
+       "a57",
+       "a58",
+       "a59",
+       "a60",
+       "a61",
+       "a62",
+       "a63",
+       "a64"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_APPS:w1"
+  },
+  {
+   "name": "an_uppercase_sha256_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "sha256": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB"
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_SHA256:w1"
+  },
+  {
+   "name": "a_ref_with_a_slash_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "ref": "a/b"
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_REF:w1"
+  },
+  {
+   "name": "an_unknown_family_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "needs_gpu_families": [
+       "pascal"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_FAMILIES:w1"
+  },
+  {
+   "name": "a_repeated_family_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "needs_gpu_families": [
+       "ada",
+       "ada"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_FAMILIES:w1"
+  },
+  {
+   "name": "an_empty_family_list_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "needs_gpu_families": []
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_FAMILIES:w1"
+  },
+  {
+   "name": "a_note_with_a_control_character_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "basis": "a\tb"
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_BASIS:w1"
+  },
+  {
+   "name": "a_run_that_is_a_list_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": []
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_SHAPE:w1"
+  },
+  {
+   "name": "a_windows_run_without_a_pins_file_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/x.py"
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_MISSING:w1"
+  },
+  {
+   "name": "a_climbing_rows_file_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "a/../b.py",
+       "pins_file": "scripts/ci/pins.json"
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_ROWS_FILE:w1"
+  },
+  {
+   "name": "an_absolute_pins_file_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "/etc/pins.json"
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_PINS_FILE:w1"
+  },
+  {
+   "name": "a_run_with_an_uppercase_row_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "rows": [
+        "R"
+       ]
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_ROWS:w1"
+  },
+  {
+   "name": "a_run_with_a_repeated_solo_row_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "solo_rows": [
+        "r",
+        "r"
+       ]
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_SOLO_ROWS:w1"
+  },
+  {
+   "name": "a_solo_row_that_is_not_a_row_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "rows": [
+        "r1"
+       ],
+       "solo_rows": [
+        "r2"
+       ]
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_SOLO_ROWS_UNKNOWN:w1"
+  },
+  {
+   "name": "data_iso_one_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "data_iso": 1
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_DATA_ISO:w1"
+  },
+  {
+   "name": "audio_yes_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "audio": "yes"
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_AUDIO:w1"
+  },
+  {
+   "name": "guest_ram_of_1500_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "guest_ram_mb": 1500
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_GUEST_RAM:w1"
+  },
+  {
+   "name": "a_guest_ram_of_two_tib_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "guest_ram_mb": 2097152
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_GUEST_RAM:w1"
+  },
+  {
+   "name": "a_typo_in_harness_args_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "harness_args": {
+        "middle": []
+       }
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "ARGS_KEY:w1"
+  },
+  {
+   "name": "a_run_with_seventeen_words_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "harness_args": {
+        "after_apps": [
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w",
+         "w"
+        ]
+       }
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "ARGS:w1:after_apps"
+  },
+  {
+   "name": "a_word_with_a_semicolon_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "harness_args": {
+        "before_apps": [
+         "a;b"
+        ]
+       }
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "ARGS:w1:before_apps"
+  },
+  {
+   "name": "per_row_that_is_a_list_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "harness_args": {
+        "per_row": []
+       }
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "ARGS_PER_ROW:w1"
+  },
+  {
+   "name": "per_row_name_with_a_space_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "harness_args": {
+        "per_row": {
+         "a b": []
+        }
+       }
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "ARGS_PER_ROW_NAME:w1"
+  },
+  {
+   "name": "per_row_name_outside_rows_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "rows": [
+        "r1"
+       ],
+       "harness_args": {
+        "per_row": {
+         "r2": []
+        }
+       }
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "ARGS_PER_ROW_UNKNOWN:w1:r2"
+  },
+  {
+   "name": "the_data_volume_flag_after_the_apps_is_refused",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "harness_args": {
+        "after_apps": [
+         "--data-iso"
+        ]
+       }
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "ARGS_DATA_ISO_SET_BY_FIELD:w1"
+  },
+  {
+   "name": "the_data_volume_flag_in_a_per_row_list_is_refused",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "harness_args": {
+        "per_row": {
+         "r1": [
+          "--data-iso"
+         ]
+        }
+       }
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "ARGS_DATA_ISO_SET_BY_FIELD:w1"
+  },
+  {
+   "name": "linux_run_with_a_typo_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/linux/rows.py",
+       "pins_file": "scripts/ci/pins.json",
+       "isolation": "row",
+       "audio": true
+      }
+     }
+    }
+   },
+   "reason": "RUN_KEY:l1"
+  },
+  {
+   "name": "a_linux_run_without_isolation_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ],
+      "run": {
+       "rows_file": "scripts/x.py",
+       "pins_file": "scripts/p.json"
+      }
+     }
+    }
+   },
+   "reason": "RUN_MISSING:l1"
+  },
+  {
+   "name": "a_linux_run_with_a_climbing_path_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ],
+      "run": {
+       "rows_file": "../x.py",
+       "pins_file": "scripts/ci/pins.json",
+       "isolation": "row"
+      }
+     }
+    }
+   },
+   "reason": "RUN_ROWS_FILE:l1"
+  },
+  {
+   "name": "a_linux_run_with_isolation_vm_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/linux/rows.py",
+       "pins_file": "scripts/ci/pins.json",
+       "isolation": "vm"
+      }
+     }
+    }
+   },
+   "reason": "RUN_ISOLATION:l1"
+  },
+  {
+   "name": "a_duplicate_object_key_is_refused_by_the_cli",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "win/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "DUPLICATE_R2"
+  },
+  {
+   "name": "wrong schema",
+   "doc": {
+    "schema": "x",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "SCHEMA"
+  },
+  {
+   "name": "os unknown",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "bsd",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_OS:w1"
+  },
+  {
+   "name": "duplicate r2",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "DUPLICATE_R2"
+  },
+  {
+   "name": "note email",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "licence_note": "a b@c.d"
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_LICENCE_NOTE_SECRETISH:w1"
+  },
+  {
+   "name": "note token",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "basis": "ABCDEF0123456789ABCDEF01"
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_BASIS_SECRETISH:w1"
+  },
+  {
+   "name": "climbing key",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "a/../b.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_R2:w1"
+  },
+  {
+   "name": "bad guest ram bool",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "guest_ram_mb": true
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_GUEST_RAM:w1"
+  },
+  {
+   "name": "an empty apps list",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": []
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_APPS:w1"
+  },
+  {
+   "name": "an object key with a double slash",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "a//b.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_R2:w1"
+  },
+  {
+   "name": "an object key with a trailing slash",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "a/b/",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_R2:w1"
+  },
+  {
+   "name": "an absolute object key",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "/abs/x.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_R2:w1"
+  },
+  {
+   "name": "a fractional size",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 1.5,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_SIZE:w1"
+  },
+  {
+   "name": "a size that is a string",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": "10",
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_SIZE:w1"
+  },
+  {
+   "name": "a windows run with a key of its own making",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "app_set": "a"
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_KEY:w1"
+  },
+  {
+   "name": "a linux key on a windows run",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "run": {
+       "rows_file": "scripts/bench/windows/table.py",
+       "pins_file": "scripts/ci/pins.json",
+       "isolation": "row"
+      }
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "RUN_KEY:w1"
+  },
+  {
+   "name": "a bundle without an os",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_MISSING:w1"
+  },
+  {
+   "name": "a status that is a number",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    },
+    "status": 5
+   },
+   "reason": "STATUS"
+  },
+  {
+   "name": "a note of 301 characters",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ],
+      "basis": "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x"
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "reason": "BUNDLE_BASIS:w1"
+  }
+ ],
+ "resolver": [
+  {
+   "name": "one app",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha"
+   ],
+   "expect": {
+    "bundles": [
+     "w1"
+    ]
+   }
+  },
+  {
+   "name": "two bundles",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha",
+    "gamma"
+   ],
+   "expect": {
+    "bundles": [
+     "w1",
+     "w2"
+    ]
+   }
+  },
+  {
+   "name": "overlap goes to the smaller",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "beta"
+   ],
+   "expect": {
+    "bundles": [
+     "w1"
+    ]
+   }
+  },
+  {
+   "name": "unknown",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "nope"
+   ],
+   "expect": {
+    "error": "UNKNOWN_APP:nope"
+   }
+  },
+  {
+   "name": "unknown among known",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha",
+    "nope"
+   ],
+   "expect": {
+    "error": "UNKNOWN_APP:nope"
+   }
+  },
+  {
+   "name": "bad name",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "Alpha"
+   ],
+   "expect": {
+    "error": "BAD_APP:Alpha"
+   }
+  },
+  {
+   "name": "empty",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [],
+   "expect": {
+    "bundles": []
+   }
+  },
+  {
+   "name": "both platforms",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha",
+    "delta"
+   ],
+   "expect": {
+    "bundles": [
+     "l1",
+     "w1"
+    ]
+   }
+  },
+  {
+   "name": "os windows hides linux",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "delta"
+   ],
+   "expect": {
+    "error": "UNKNOWN_APP:delta"
+   },
+   "os": "windows"
+  },
+  {
+   "name": "os unknown",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha"
+   ],
+   "expect": {
+    "error": "BUNDLE_OS:macos"
+   },
+   "os": "macos"
+  },
+  {
+   "name": "repeats",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "gamma",
+    "alpha",
+    "gamma"
+   ],
+   "expect": {
+    "bundles": [
+     "w1",
+     "w2"
+    ]
+   }
+  },
+  {
+   "name": "ambiguous",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta",
+       "alpha"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha"
+   ],
+   "expect": {
+    "error": "AMBIGUOUS_APP:alpha"
+   }
+  },
+  {
+   "name": "ambiguous settled by os linux",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta",
+       "alpha"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha"
+   ],
+   "expect": {
+    "bundles": [
+     "l1"
+    ]
+   },
+   "os": "linux"
+  },
+  {
+   "name": "ambiguous settled by os windows",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta",
+       "alpha"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha"
+   ],
+   "expect": {
+    "bundles": [
+     "w1"
+    ]
+   },
+   "os": "windows"
+  },
+  {
+   "name": "fewest bytes beat fewest bundles",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     },
+     "huge": {
+      "os": "windows",
+      "r2": "win/huge.zip",
+      "size_bytes": 10000,
+      "apps": [
+       "alpha",
+       "gamma"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha",
+    "gamma"
+   ],
+   "expect": {
+    "bundles": [
+     "w1",
+     "w2"
+    ]
+   }
+  },
+  {
+   "name": "one bundle cheaper than two",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "w1": {
+      "os": "windows",
+      "r2": "win/one.zip",
+      "size_bytes": 100,
+      "apps": [
+       "alpha",
+       "beta"
+      ]
+     },
+     "w2": {
+      "os": "windows",
+      "r2": "win/two.zip",
+      "size_bytes": 200,
+      "apps": [
+       "beta",
+       "gamma"
+      ]
+     },
+     "l1": {
+      "os": "linux",
+      "r2": "lin/one.zip",
+      "size_bytes": 50,
+      "apps": [
+       "delta"
+      ]
+     },
+     "all": {
+      "os": "windows",
+      "r2": "win/all.zip",
+      "size_bytes": 250,
+      "apps": [
+       "alpha",
+       "gamma"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "alpha",
+    "gamma"
+   ],
+   "expect": {
+    "bundles": [
+     "all"
+    ]
+   }
+  },
+  {
+   "name": "equal bytes prefer fewer bundles",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "aa": {
+      "os": "windows",
+      "r2": "k/aa.zip",
+      "size_bytes": 30,
+      "apps": [
+       "one"
+      ]
+     },
+     "bb": {
+      "os": "windows",
+      "r2": "k/bb.zip",
+      "size_bytes": 30,
+      "apps": [
+       "two"
+      ]
+     },
+     "zz": {
+      "os": "windows",
+      "r2": "k/zz.zip",
+      "size_bytes": 60,
+      "apps": [
+       "one",
+       "two"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "one",
+    "two"
+   ],
+   "expect": {
+    "bundles": [
+     "zz"
+    ]
+   }
+  },
+  {
+   "name": "equal cost broken by smaller ids",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "dd": {
+      "os": "windows",
+      "r2": "k/dd.zip",
+      "size_bytes": 10,
+      "apps": [
+       "two"
+      ]
+     },
+     "cc": {
+      "os": "windows",
+      "r2": "k/cc.zip",
+      "size_bytes": 10,
+      "apps": [
+       "one"
+      ]
+     },
+     "bb": {
+      "os": "windows",
+      "r2": "k/bb.zip",
+      "size_bytes": 10,
+      "apps": [
+       "two"
+      ]
+     },
+     "aa": {
+      "os": "windows",
+      "r2": "k/aa.zip",
+      "size_bytes": 10,
+      "apps": [
+       "one"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "one",
+    "two"
+   ],
+   "expect": {
+    "bundles": [
+     "aa",
+     "bb"
+    ]
+   }
+  },
+  {
+   "name": "cheaper wins with a later id",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "bundles": {
+     "aa": {
+      "os": "windows",
+      "r2": "k/aa.zip",
+      "size_bytes": 500,
+      "apps": [
+       "one"
+      ]
+     },
+     "zz": {
+      "os": "windows",
+      "r2": "k/zz.zip",
+      "size_bytes": 10,
+      "apps": [
+       "one"
+      ]
+     }
+    }
+   },
+   "apps": [
+    "one"
+   ],
+   "expect": {
+    "bundles": [
+     "zz"
+    ]
+   }
+  },
+  {
+   "name": "committed: one bundle each",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "status": "STATUS: LIVE as data, 2026-11-19; READ by scripts/ci/propimage_config.py only (the generic stage and the Worker planner do not consume it yet: docs/design/V3_PROPIMAGE_CONFIG.md, steps 2-4). The project's own bundles, as operator deployment data: object keys and sizes are the project's store layout, not code. A third party passes its own file of the same schema. Sizes are read-backs of the store listing of 2026-11-19 unless a bundle's basis says otherwise. No licence key, account, e-mail, institution or credential belongs in this file (the validator refuses the shapes).",
+    "bundles": {
+     "imga": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261112/image-v2.zip",
+      "size_bytes": 50496618964,
+      "sha256": "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3",
+      "ref": "propimage-kfimg-20261112.zip",
+      "apps": [
+       "solidworks",
+       "edrawings",
+       "3dmark",
+       "superposition",
+       "resolve"
+      ],
+      "basis": "object and identity as in propimages.json (store listing 2026-11-19 reads the same size); apps are the Worker's gate and discovery apps; the stage also runs rows edge and wukong",
+      "run": {
+       "rows_file": "scripts/bench/windows/propimage_check.py",
+       "pins_file": "scripts/ci/propimage_apps_pins.json",
+       "rows": [
+        "superposition",
+        "3dmark",
+        "solidworks",
+        "resolve",
+        "edrawings",
+        "edge",
+        "wukong"
+       ],
+       "solo_rows": [
+        "wukong"
+       ],
+       "data_iso": false,
+       "harness_args": {
+        "per_row": {
+         "superposition": [
+          "--superposition-run"
+         ],
+         "wukong": [
+          "--fb-mb",
+          "8192"
+         ]
+        }
+       }
+      }
+     },
+     "imgb": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261116/image.zip",
+      "size_bytes": 62506351001,
+      "sha256": "fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a",
+      "ref": "propimage-kfimg-20261116.zip",
+      "apps": [
+       "gpudiag",
+       "illustrator",
+       "acrobat",
+       "premiere",
+       "lightroomlaunch",
+       "dimension",
+       "uxp",
+       "photoshop",
+       "photoshopsample",
+       "photoshopprojects",
+       "aftereffects",
+       "aeparallel",
+       "aeprojects",
+       "aetoggle",
+       "mediaencoder",
+       "indesign",
+       "indesignsample",
+       "illustratorsample"
+      ],
+      "basis": "the Adobe image, version 1 (built 2026-11-16); a rebuilt candidate is not verified and is not entered here",
+      "licence_note": "named-user licences; the image is private and is never redistributed",
+      "run": {
+       "rows_file": "scripts/bench/windows/propimage_apps_b.py",
+       "pins_file": "scripts/ci/propimage_apps_b_pins.json",
+       "data_iso": true,
+       "guest_ram_mb": 16384,
+       "audio": true,
+       "harness_args": {
+        "before_apps": [
+         "--app-set",
+         "b"
+        ],
+        "after_apps": [
+         "--fb-mb",
+         "8192"
+        ]
+       }
+      }
+     },
+     "imgc": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-matlab-20261117/image.zip",
+      "size_bytes": 8128391922,
+      "sha256": "30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a",
+      "ref": "propimage-kfimg-matlab-20261117.zip",
+      "apps": [
+       "matlab"
+      ],
+      "basis": "identity is the full read-back of the object (2026-11-17, PR 467); propimages.json and matlab_pins.json still carry the earlier build until that PR merges",
+      "run": {
+       "rows_file": "scripts/bench/linux/matlab_rows.py",
+       "pins_file": "scripts/ci/matlab_pins.json",
+       "isolation": "row"
+      }
+     },
+     "imgd": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261118/image.zip",
+      "size_bytes": 86744842653,
+      "apps": [
+       "autocad",
+       "arcgispro",
+       "steam"
+      ],
+      "basis": "UNVERIFIED: the app list is the three applications the 2026-11-18 token check found signed in, the owner confirms it; no sha256 is recorded; the size is the store listing of 2026-11-19; no row table exists for these applications yet, so no `run`",
+      "licence_note": "Autodesk token not yet revoked; the vendor-side revoke and a passing token check come before any use on a rented box"
+     },
+     "imge": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-maya-20261119/image.zip",
+      "size_bytes": 7720510275,
+      "apps": [
+       "maya"
+      ],
+      "basis": "UNVERIFIED: built 2026-11-19; no sha256 and no token check are recorded in the repository; the size is the store listing of 2026-11-19; no row table exists yet, so no `run`"
+     }
+    }
+   },
+   "apps": [
+    "solidworks",
+    "matlab"
+   ],
+   "expect": {
+    "bundles": [
+     "imga",
+     "imgc"
+    ]
+   }
+  },
+  {
+   "name": "committed: mixed",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "status": "STATUS: LIVE as data, 2026-11-19; READ by scripts/ci/propimage_config.py only (the generic stage and the Worker planner do not consume it yet: docs/design/V3_PROPIMAGE_CONFIG.md, steps 2-4). The project's own bundles, as operator deployment data: object keys and sizes are the project's store layout, not code. A third party passes its own file of the same schema. Sizes are read-backs of the store listing of 2026-11-19 unless a bundle's basis says otherwise. No licence key, account, e-mail, institution or credential belongs in this file (the validator refuses the shapes).",
+    "bundles": {
+     "imga": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261112/image-v2.zip",
+      "size_bytes": 50496618964,
+      "sha256": "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3",
+      "ref": "propimage-kfimg-20261112.zip",
+      "apps": [
+       "solidworks",
+       "edrawings",
+       "3dmark",
+       "superposition",
+       "resolve"
+      ],
+      "basis": "object and identity as in propimages.json (store listing 2026-11-19 reads the same size); apps are the Worker's gate and discovery apps; the stage also runs rows edge and wukong",
+      "run": {
+       "rows_file": "scripts/bench/windows/propimage_check.py",
+       "pins_file": "scripts/ci/propimage_apps_pins.json",
+       "rows": [
+        "superposition",
+        "3dmark",
+        "solidworks",
+        "resolve",
+        "edrawings",
+        "edge",
+        "wukong"
+       ],
+       "solo_rows": [
+        "wukong"
+       ],
+       "data_iso": false,
+       "harness_args": {
+        "per_row": {
+         "superposition": [
+          "--superposition-run"
+         ],
+         "wukong": [
+          "--fb-mb",
+          "8192"
+         ]
+        }
+       }
+      }
+     },
+     "imgb": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261116/image.zip",
+      "size_bytes": 62506351001,
+      "sha256": "fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a",
+      "ref": "propimage-kfimg-20261116.zip",
+      "apps": [
+       "gpudiag",
+       "illustrator",
+       "acrobat",
+       "premiere",
+       "lightroomlaunch",
+       "dimension",
+       "uxp",
+       "photoshop",
+       "photoshopsample",
+       "photoshopprojects",
+       "aftereffects",
+       "aeparallel",
+       "aeprojects",
+       "aetoggle",
+       "mediaencoder",
+       "indesign",
+       "indesignsample",
+       "illustratorsample"
+      ],
+      "basis": "the Adobe image, version 1 (built 2026-11-16); a rebuilt candidate is not verified and is not entered here",
+      "licence_note": "named-user licences; the image is private and is never redistributed",
+      "run": {
+       "rows_file": "scripts/bench/windows/propimage_apps_b.py",
+       "pins_file": "scripts/ci/propimage_apps_b_pins.json",
+       "data_iso": true,
+       "guest_ram_mb": 16384,
+       "audio": true,
+       "harness_args": {
+        "before_apps": [
+         "--app-set",
+         "b"
+        ],
+        "after_apps": [
+         "--fb-mb",
+         "8192"
+        ]
+       }
+      }
+     },
+     "imgc": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-matlab-20261117/image.zip",
+      "size_bytes": 8128391922,
+      "sha256": "30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a",
+      "ref": "propimage-kfimg-matlab-20261117.zip",
+      "apps": [
+       "matlab"
+      ],
+      "basis": "identity is the full read-back of the object (2026-11-17, PR 467); propimages.json and matlab_pins.json still carry the earlier build until that PR merges",
+      "run": {
+       "rows_file": "scripts/bench/linux/matlab_rows.py",
+       "pins_file": "scripts/ci/matlab_pins.json",
+       "isolation": "row"
+      }
+     },
+     "imgd": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261118/image.zip",
+      "size_bytes": 86744842653,
+      "apps": [
+       "autocad",
+       "arcgispro",
+       "steam"
+      ],
+      "basis": "UNVERIFIED: the app list is the three applications the 2026-11-18 token check found signed in, the owner confirms it; no sha256 is recorded; the size is the store listing of 2026-11-19; no row table exists for these applications yet, so no `run`",
+      "licence_note": "Autodesk token not yet revoked; the vendor-side revoke and a passing token check come before any use on a rented box"
+     },
+     "imge": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-maya-20261119/image.zip",
+      "size_bytes": 7720510275,
+      "apps": [
+       "maya"
+      ],
+      "basis": "UNVERIFIED: built 2026-11-19; no sha256 and no token check are recorded in the repository; the size is the store listing of 2026-11-19; no row table exists yet, so no `run`"
+     }
+    }
+   },
+   "apps": [
+    "solidworks",
+    "premiere",
+    "matlab",
+    "maya"
+   ],
+   "expect": {
+    "bundles": [
+     "imga",
+     "imgb",
+     "imgc",
+     "imge"
+    ]
+   }
+  },
+  {
+   "name": "committed: unknown",
+   "doc": {
+    "schema": "kayfabe.propimage-bundles/1",
+    "status": "STATUS: LIVE as data, 2026-11-19; READ by scripts/ci/propimage_config.py only (the generic stage and the Worker planner do not consume it yet: docs/design/V3_PROPIMAGE_CONFIG.md, steps 2-4). The project's own bundles, as operator deployment data: object keys and sizes are the project's store layout, not code. A third party passes its own file of the same schema. Sizes are read-backs of the store listing of 2026-11-19 unless a bundle's basis says otherwise. No licence key, account, e-mail, institution or credential belongs in this file (the validator refuses the shapes).",
+    "bundles": {
+     "imga": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261112/image-v2.zip",
+      "size_bytes": 50496618964,
+      "sha256": "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3",
+      "ref": "propimage-kfimg-20261112.zip",
+      "apps": [
+       "solidworks",
+       "edrawings",
+       "3dmark",
+       "superposition",
+       "resolve"
+      ],
+      "basis": "object and identity as in propimages.json (store listing 2026-11-19 reads the same size); apps are the Worker's gate and discovery apps; the stage also runs rows edge and wukong",
+      "run": {
+       "rows_file": "scripts/bench/windows/propimage_check.py",
+       "pins_file": "scripts/ci/propimage_apps_pins.json",
+       "rows": [
+        "superposition",
+        "3dmark",
+        "solidworks",
+        "resolve",
+        "edrawings",
+        "edge",
+        "wukong"
+       ],
+       "solo_rows": [
+        "wukong"
+       ],
+       "data_iso": false,
+       "harness_args": {
+        "per_row": {
+         "superposition": [
+          "--superposition-run"
+         ],
+         "wukong": [
+          "--fb-mb",
+          "8192"
+         ]
+        }
+       }
+      }
+     },
+     "imgb": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261116/image.zip",
+      "size_bytes": 62506351001,
+      "sha256": "fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a",
+      "ref": "propimage-kfimg-20261116.zip",
+      "apps": [
+       "gpudiag",
+       "illustrator",
+       "acrobat",
+       "premiere",
+       "lightroomlaunch",
+       "dimension",
+       "uxp",
+       "photoshop",
+       "photoshopsample",
+       "photoshopprojects",
+       "aftereffects",
+       "aeparallel",
+       "aeprojects",
+       "aetoggle",
+       "mediaencoder",
+       "indesign",
+       "indesignsample",
+       "illustratorsample"
+      ],
+      "basis": "the Adobe image, version 1 (built 2026-11-16); a rebuilt candidate is not verified and is not entered here",
+      "licence_note": "named-user licences; the image is private and is never redistributed",
+      "run": {
+       "rows_file": "scripts/bench/windows/propimage_apps_b.py",
+       "pins_file": "scripts/ci/propimage_apps_b_pins.json",
+       "data_iso": true,
+       "guest_ram_mb": 16384,
+       "audio": true,
+       "harness_args": {
+        "before_apps": [
+         "--app-set",
+         "b"
+        ],
+        "after_apps": [
+         "--fb-mb",
+         "8192"
+        ]
+       }
+      }
+     },
+     "imgc": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-matlab-20261117/image.zip",
+      "size_bytes": 8128391922,
+      "sha256": "30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a",
+      "ref": "propimage-kfimg-matlab-20261117.zip",
+      "apps": [
+       "matlab"
+      ],
+      "basis": "identity is the full read-back of the object (2026-11-17, PR 467); propimages.json and matlab_pins.json still carry the earlier build until that PR merges",
+      "run": {
+       "rows_file": "scripts/bench/linux/matlab_rows.py",
+       "pins_file": "scripts/ci/matlab_pins.json",
+       "isolation": "row"
+      }
+     },
+     "imgd": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261118/image.zip",
+      "size_bytes": 86744842653,
+      "apps": [
+       "autocad",
+       "arcgispro",
+       "steam"
+      ],
+      "basis": "UNVERIFIED: the app list is the three applications the 2026-11-18 token check found signed in, the owner confirms it; no sha256 is recorded; the size is the store listing of 2026-11-19; no row table exists for these applications yet, so no `run`",
+      "licence_note": "Autodesk token not yet revoked; the vendor-side revoke and a passing token check come before any use on a rented box"
+     },
+     "imge": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-maya-20261119/image.zip",
+      "size_bytes": 7720510275,
+      "apps": [
+       "maya"
+      ],
+      "basis": "UNVERIFIED: built 2026-11-19; no sha256 and no token check are recorded in the repository; the size is the store listing of 2026-11-19; no row table exists yet, so no `run`"
+     }
+    }
+   },
+   "apps": [
+    "wukong"
+   ],
+   "expect": {
+    "error": "UNKNOWN_APP:wukong"
+   }
+  }
+ ]
+}

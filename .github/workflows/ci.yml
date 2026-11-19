@@ -2061,6 +2061,8 @@ jobs:
           node ci/vast-broker/profile-resources-mutants.mjs
           # Worker proprietary-image configuration and instruction part, the /bench-data allow-list stays closed (2026-11-16): two named killers per mutant.
           node ci/vast-broker/propimages-mutants.mjs
+          # Bundle table port and the planner's use of it (2026-11-19): two named killers per mutant.
+          node ci/vast-broker/bundles-mutants.mjs
           # Private-object presign route, lease-time trust scope, estimate as the price and releaseSeq (2026-11-17): two named killers per mutant.
           node ci/vast-broker/private-presign-mutants.mjs
 

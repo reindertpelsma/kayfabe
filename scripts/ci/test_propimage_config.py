@@ -795,5 +795,40 @@ class Committed(unittest.TestCase):
         self.assertEqual(self.cfg, before)
 
 
+PARITY = ROOT / "ci/vast-broker/test/fixtures/bundles/parity-cases.json"
+
+
+class Parity(unittest.TestCase):
+    """The cases shared with the Worker's JavaScript port (ci/vast-broker/src/bundles.js, test/bundles.test.js): this module is the reference, so
+    every case's expected answer, refusal reason included, must be what it computes."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cases = json.loads(PARITY.read_text())
+
+    def test_every_validation_case_has_the_recorded_reason(self):
+        for c in self.cases["validation"]:
+            self.assertEqual(reason(pc.validate, copy.deepcopy(c["doc"])), c["reason"], c["name"])
+
+    def test_every_resolver_case_has_the_recorded_answer(self):
+        for c in self.cases["resolver"]:
+            try:
+                got = {"bundles": pc.bundles_for(copy.deepcopy(c["doc"]), list(c["apps"]), c.get("os"))}
+            except pc.ConfigError as exc:
+                got = {"error": exc.reason}
+            self.assertEqual(got, c["expect"], c["name"])
+
+    def test_the_cases_cover_both_outcomes_and_every_refusal_of_the_matrix(self):
+        reasons = {c["reason"] for c in self.cases["validation"]}
+        self.assertIn(None, reasons)
+        self.assertTrue({want for _, want in CLI_REFUSALS.values()} <= reasons)
+        self.assertTrue(any("error" in c["expect"] for c in self.cases["resolver"]))
+        self.assertTrue(any("bundles" in c["expect"] for c in self.cases["resolver"]))
+
+    def test_the_committed_table_in_the_cases_is_the_committed_table(self):
+        embedded = next(c["doc"] for c in self.cases["validation"] if c["name"] == "valid committed file")
+        self.assertEqual(embedded, pc.load())
+
+
 if __name__ == "__main__":
     unittest.main()
