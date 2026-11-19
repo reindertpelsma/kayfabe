@@ -13,6 +13,7 @@
 - [Attach to a VM you already have](attach-to-existing-vm.md)
 - [Linux guest](linux-guest.md)
 - [Rebuild the Linux apps image](linux-apps-image.md)
+- [Run the open ML rows (vLLM, TensorRT, JAX)](open-ml-rows.md)
 - [Windows guest](windows-guest.md)
 - [Proprietary test images](proprietary-test-images.md)
 - [Recreate the proprietary Windows image](recreate-the-proprietary-image.md)

@@ -1,0 +1,5 @@
+=== blender_cycles side=guest start=2026-11-17T00:00:00+00:00 host=fixture cmd: <the row's command line>
+BLENDER_DEVICES dev=CPU scene=CPU active=False cpu_enabled=True enabled=1 names=AMD EPYC 7B13 64-Core Processor
+Fra:1 Mem:49.81M (Peak 65.63M) | Time:00:41.19 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Finished
+BLENDER_OK CPU cpu=AMD EPYC 7B13 64-Core Processor mean=0.6405
+=== end rc=0 secs=3 2026-11-17T00:00:03+00:00

@@ -7,6 +7,11 @@ with one host Xid 31 and a bare-metal PASS. The per-app table, the gate lists, t
 [`traces/apps_linux_20261107/README.md`](../../traces/apps_linux_20261107/README.md).** The text below is the history of R1-R4.
 The result of record before R5 was §R3, below: 61/65 apps at kf3 `2830988f` (RTX 3060).
 
+**UPDATE 2026-11-17 (owner requirement): a row whose application can run on the CPU now asserts that the GPU was used.** Eight rows have a CPU path, six more carry a device
+proof, and `scripts/apps/gpu_use_rows.py` rewrites a PASS to FAIL (or NOTRUN when the proof cannot be judged) from the application's own proof, the kf3 log window of the app and the
+box's `nvidia-smi`; `KF_NEGCTL=1` runs the CPU form of each row as a control. The R1-R5 results below predate it. Audit, rules and the hardware validation request:
+[`V3_GPU_USE_ASSERTION.md`](V3_GPU_USE_ASSERTION.md).
+
 ★ *2026-09-30 (§R4, partial): the same matrix at kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix) on an RTX 3070 —
 guest OFF 60/65 + 6/6, identical to R3; PM, 100-process and fast-path-ON runs not run.*
 ⊘ *Superseded 2026-11-07 by the STATUS above (this was the STATUS of 2026-09-28):* **current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,
@@ -17,6 +22,10 @@ on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failur
 ⊘ *Superseded by §R3 (the headline below is R2's):* **Headline of 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
+
+## Discovery rows (2026-11-17)
+
+`run_apps.sh` has a second list for rows that report and never gate. The open ML rows are `vllm` (offline `LLM(...)` on a 135M model at temperature 0, engine process, CUDA graph capture), `tensorrt` (builder with FP16 and an empty timing cache, engine, ONNX Runtime TensorRT provider) and `jax` (XLA preallocation, autotuner, jit against the CPU): [design](V3_OPEN_ML_ROWS.md), [manual](../howto/open-ml-rows.md). They are in `list`, not in `listall` or `all`, and in no gate list; each environment is built from a hashed lock at setup time and each row asserts GPU use ([V3_GPU_USE_ASSERTION.md](V3_GPU_USE_ASSERTION.md)).
 
 ## Reproducing the image (DESIGN-ONLY, 2026-11-07)
 

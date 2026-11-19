@@ -1,0 +1,2 @@
+CHECK matmul_fp32 ok maxerr=2.0e-05
+TORCH_CORRECT_DONE

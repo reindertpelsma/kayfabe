@@ -1,0 +1,4 @@
+NVIDIA GeForce RTX 4060 Ti, 580.178.04, 8.9, 16380 MiB
+| NVIDIA-SMI 580.178.04             Driver Version: 580.178.04     CUDA Version: 13.0     |
+Python 3.12.3
+Model name:                              AMD Ryzen Threadripper PRO 3945WX 12-Co
