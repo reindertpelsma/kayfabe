@@ -106,14 +106,14 @@ class RehearsalMain(unittest.TestCase):
     def test_rehearsal_plans_the_middle_apps_pair_with_the_middle_profile(self):
         rc, result, calls, text, asked = self.go()
         self.assertEqual(rc, 0, result)
-        self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
+        self.assertEqual([c for c in calls if c != "kfml"][-3:], ["apps", "windows_gate", "windows_apps"])  # kfml is a default stage since 2026-11-17
         self.assertEqual(asked, ["middle"])
         self.assertRegex(text, r"KF_PAYLOAD_TIER .* tier=large rehearsal=1 .* winapps=mid linuxapps=1\n")
 
     def test_large_without_the_marker_also_plans_the_apps_pair(self):
         rc, result, calls, text, asked = self.go({"KF_RELEASE_REHEARSAL": None})
         self.assertEqual(rc, 0, result)
-        self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
+        self.assertEqual([c for c in calls if c != "kfml"][-3:], ["apps", "windows_gate", "windows_apps"])  # kfml is a default stage since 2026-11-17
         self.assertRegex(text, r"tier=large rehearsal=0 ")
         self.assertEqual(asked, ["middle"])
 

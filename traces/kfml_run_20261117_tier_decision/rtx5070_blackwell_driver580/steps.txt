@@ -1,0 +1,5 @@
+plan rc=0
+cold stage rc=0 wall=601s
+warm stage rc=0 wall=51s
+overlay         100G   11G   90G  11% /
+done

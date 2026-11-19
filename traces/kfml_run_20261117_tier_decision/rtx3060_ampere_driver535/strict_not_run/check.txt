@@ -1,0 +1,24 @@
+ok   python 3.10.12
+ok   NVIDIA GPU: NVIDIA GeForce RTX 3060, cc 8.6, 12.0 GB, driver 535.154.05
+flavor: NONE  (no pinned flavour can run on this box: cu128: driver supports CUDA 12.2 < 12.8; cu126: driver supports CUDA 12.2 < 12.6)
+       driver 535.154.05 supports CUDA 12.2; GPU sm_86
+NOT_RUN: no pinned flavour can run here; every test row will be NOT_RUN (not FAIL)
+ok   VRAM >= 8 GB (documented floor)
+MISSING torch None (cuda None, cudnn None, triton None)
+       -> python3 -m kfml setup --venv DIR   (flavour is derived from the box; then run kfml from DIR/bin/python)
+MISSING torch >= 2.7
+       -> install torch >= 2.7 (cu128 index)
+ok   nvcc 12.2 (must equal torch cuda None major.minor) /usr/local/cuda/bin/nvcc
+ok   C compiler
+ok   Python.h (python3-dev)
+ok   disk free 99.9 GB (>= 20 recommended: CUDA wheels are several GB)
+MISSING venv/KF_ML_HOME: None
+       -> run inside the venv from `kfml setup --venv DIR` or set KF_ML_HOME
+MISSING venv lock sha256: None
+       -> created by `kfml setup`
+test nanogpt_compile    NOT_RUN: no pinned flavour can run on this box: cu128: driver supports CUDA 12.2 < 12.8; cu126: driver supports CUDA 12.2 < 12.6
+test triton_kernels     NOT_RUN: no pinned flavour can run on this box: cu128: driver supports CUDA 12.2 < 12.8; cu126: driver supports CUDA 12.2 < 12.6
+test cuda_ext_inline    NOT_RUN: no pinned flavour can run on this box: cu128: driver supports CUDA 12.2 < 12.8; cu126: driver supports CUDA 12.2 < 12.6
+test amp_convnet_cifar  NOT_RUN: no pinned flavour can run on this box: cu128: driver supports CUDA 12.2 < 12.8; cu126: driver supports CUDA 12.2 < 12.6
+test stress_alloc       NOT_RUN: no pinned flavour can run on this box: cu128: driver supports CUDA 12.2 < 12.8; cu126: driver supports CUDA 12.2 < 12.6
+test managed_oversub    NOT_RUN: no pinned flavour can run on this box: cu128: driver supports CUDA 12.2 < 12.8; cu126: driver supports CUDA 12.2 < 12.6

@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 
@@ -56,6 +57,15 @@ class Runner(unittest.TestCase):
         self.assertTrue(rows[0]["reason"].startswith("env-missing"))
         self.assertEqual(ex.calls, [])
 
+    def test_venv_bin_is_first_on_path_so_ninja_is_found(self):
+        os.makedirs(os.path.join(self.root, "bin"))
+        _, ex = self.go([spec()], environ={"PATH": "/usr/bin"})
+        self.assertEqual(ex.calls[0][2]["PATH"], os.path.join(self.root, "bin") + os.pathsep + "/usr/bin")
+
+    def test_no_venv_bin_leaves_path_alone(self):
+        _, ex = self.go([spec()], environ={"PATH": "/usr/bin"})
+        self.assertEqual(ex.calls[0][2]["PATH"], "/usr/bin")
+
     def test_child_env_inside_root(self):
         _, ex = self.go([spec()])
         env = ex.calls[0][2]
@@ -98,8 +108,12 @@ class Runner(unittest.TestCase):
         rows, _ = self.go([spec()], ex=ex, record_dir=rec)
         self.assertEqual(rows[0]["dataset_sha256"], {"d": "f" * 64})
         self.assertTrue(rows[0]["metrics"]["reference_recorded"])
-        with open(os.path.join(rec, "t.json")) as f:
-            self.assertEqual(json.load(f)["data"], {"x": 1})
+        with open(os.path.join(rec, "fake-rtx", "t.json")) as f:  # per die class, not flat
+            doc = json.load(f)
+        self.assertEqual(doc["data"], {"x": 1})
+        self.assertEqual(doc["measured_on"]["gpu_name"], "Fake RTX")
+        self.assertEqual(doc["measured_on"]["driver"], "999.1")
+        self.assertIn("wall_s", doc)
         ex2 = Fake({"status": "PASS", "metrics": {}})
         self.go([spec()], ex=ex2, reference_dir=rec)
         self.assertEqual(ex2.calls[0][0]["reference"], {"x": 1})
@@ -172,3 +186,44 @@ class Executor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChildCwd(unittest.TestCase):
+    """2026-11-16: torch imported from a deleted working directory dies with an oneMKL error that reads as 'torch missing'."""
+
+    def test_child_runs_in_its_own_work_dir_not_the_callers_cwd(self):
+        import sys
+        import textwrap
+        with tempfile.TemporaryDirectory() as d:
+            mod = os.path.join(d, "kfml_fake_cwd.py")
+            with open(mod, "w") as f:
+                f.write(textwrap.dedent("""
+                    import os
+                    def run(ctx):
+                        return {"metrics": {"cwd": os.getcwd()}}
+                    """))
+            ctx = {"name": "t", "module": "kfml_fake_cwd", "data_dir": d, "budget_s": 60, "cc": None}
+            env = {"PATH": os.environ["PATH"], "TMPDIR": d}
+            res = executor.run_child(ctx, 60, env, os.path.join(d, "log"), python=sys.executable, extra_path=(d,))
+            self.assertEqual(res["status"], "PASS", res)
+            self.assertNotEqual(res["metrics"]["cwd"], os.getcwd())
+            self.assertTrue(res["metrics"]["cwd"].startswith(d))
+
+    def test_probe_runs_from_an_existing_directory_even_if_the_callers_cwd_was_deleted(self):
+        # a stand-in interpreter that succeeds only when its working directory still exists (as torch's import needs)
+        with tempfile.TemporaryDirectory() as d:
+            fake = os.path.join(d, "fakepython")
+            with open(fake, "w") as f:
+                f.write("#!%s -S\nimport os, sys\ntry:\n    os.getcwd()\nexcept OSError:\n"
+                        "    sys.stderr.write('Intel oneMKL FATAL ERROR: Cannot load libtorch_cpu.so')\n    sys.exit(2)\n"
+                        "print('{\"torch\": \"9.9\", \"modules\": {}}')\n" % sys.executable)
+            os.chmod(fake, 0o755)
+            old = os.getcwd()
+            gone = tempfile.mkdtemp()
+            os.chdir(gone)
+            os.rmdir(gone)
+            try:
+                out = envmod.probe_torch(python=fake)
+            finally:
+                os.chdir(old)
+        self.assertEqual(out.get("torch"), "9.9", out)

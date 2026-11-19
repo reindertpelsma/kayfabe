@@ -358,6 +358,16 @@ class V7Tests(unittest.TestCase):
                     native_path(mapped(output)).parent.mkdir(parents=True, exist_ok=True)
                     native_path(mapped(output)).write_text(windows_log or WINDOWS_PASS)
                     return 124 if name == failure else (0 if "GATE_PASS" in (windows_log or WINDOWS_PASS) else 1)
+                elif name == "kfml" and "kfml" not in (stage_logs or {}):
+                    # kfml is in the default plan of middle and large (2026-11-17): a passing stage log for the fixture's sha unless the test brings its own
+                    import kfml_stage
+
+                    row = {"name": "nanogpt_compile", "status": "PASS", "reason": "", "wall_s": 1.0, "gpu_name": "RTX 3060",
+                           "compute_cap": "8.6", "driver": "580.159.04", "metrics": {}}
+                    doc = kfml_stage.summarize([row], SHA, "mid", [{"step": "run", "rc": 0, "s": 1.0}])
+                    native_path(mapped(output)).parent.mkdir(parents=True, exist_ok=True)
+                    native_path(mapped(output)).write_text("KF_KFML_RESULT " + json.dumps(doc) + "\n")
+                    return 0
                 elif name in (stage_logs or {}):
                     # wtier 2026-11-05: windows_gate_2 and the specviewperf stage wrapper.
                     for key in ("KF_TIER", "KF_WINDOWS_RUNS", "KF_STAGES", "KF_SPEC"):

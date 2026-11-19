@@ -3,7 +3,7 @@ from __future__ import annotations
 
 STATUSES = ("PASS", "FAIL", "NOT_RUN")
 FIELDS = ("name", "status", "reason", "wall_s", "gpu_name", "compute_cap", "vram_gb", "driver",
-          "torch", "cuda", "metrics")
+          "driver_cuda", "flavor", "torch", "cuda", "metrics")
 EXTRA = ("cudnn", "triton", "lock_sha256", "upstream_commits", "patch_sha256", "dataset_sha256",
          "tier", "launch_bound", "guest_estimate_s")
 
@@ -20,6 +20,9 @@ def make_row(name, status, reason, wall_s, env, metrics=None, **extra):
         "compute_cap": ("%d.%d" % tuple(env.cc)) if getattr(env, "cc", None) else None,
         "vram_gb": getattr(env, "vram_total_gb", None),
         "driver": getattr(env, "driver", None),
+        "driver_cuda": getattr(env, "driver_cuda", None),  # highest CUDA the driver supports
+        # the wheel flavour that is INSTALLED (kfml-setup.json); the one derived for the box when none is recorded
+        "flavor": getattr(env, "flavor_installed", None) or getattr(env, "flavor", None),
         "torch": getattr(env, "torch", None),
         "cuda": getattr(env, "cuda", None),
         "metrics": dict(metrics or {}),

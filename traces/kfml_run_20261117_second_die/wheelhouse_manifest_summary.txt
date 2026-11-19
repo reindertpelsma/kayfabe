@@ -1,0 +1,7 @@
+MANIFEST.json of: kfml wheelhouse --flavor all --guest-python 3.12 (glibc 2.39 platform list) on the second-die box; wheels = lock closure, redist = 3 NVIDIA redist archives
+cu126/redist   files= 3 bytes=52057232
+cu126/wheels   files=29 bytes=3026998392
+cu128/redist   files= 3 bytes=81298228
+cu128/wheels   files=29 bytes=3881029847
+total_bytes=7041383699 build_s=112.2 python=3.12
+cp310 cu128 wheelhouse with data (the offline proof): files=34 total_bytes=4133802925
