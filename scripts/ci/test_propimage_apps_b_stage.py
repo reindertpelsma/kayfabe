@@ -60,6 +60,14 @@ class Pins(unittest.TestCase):
         self.assertEqual([s.kind for s in by["propimage-kfimg-20261116.zip"].sources], ["signed"])
         self.assertEqual([s.kind for s in by["test-assets-20261116c.iso"].sources], ["mirror"])
 
+    def test_the_tools_of_the_committed_pins_are_signed_then_mirror_next_to_the_data_volume(self):
+        # 2026-11-17: the b stage reuses pa.build_manifest for the tools; the private copy comes first, the public mirror stays the fallback
+        parsed = box_downloader.parse_manifest(json.dumps(sb.build_manifest(pa.load_pins(sb.PINS_PATH), True)).encode())
+        by = {i.name: i for i in parsed.items}
+        for name in ("libtpms-0.10.1.tar.gz", "swtpm-0.10.1.tar.gz"):
+            self.assertEqual([s.kind for s in by[name].sources], ["signed", "mirror"], name)
+        self.assertEqual([s.kind for s in by["test-assets-20261116c.iso"].sources], ["mirror"])
+
     def test_no_vendor_or_licence_wording_in_the_pins(self):
         text = sb.PINS_PATH.read_text().lower()
         for bad in ("adobe", "licen", "serial", "account"):
