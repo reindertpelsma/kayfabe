@@ -174,6 +174,8 @@ const files = [
   'ci/vast-broker/package.json',
   'ci/vast-broker/defaults.json',
   'ci/vast-broker/release-matrix.json',
+  'ci/vast-broker/trust.json',
+  'ci/vast-broker/private-objects.json',
   'ci/vast-broker/app-lane.json',
   'ci/vast-broker/bandwidth.json',
   'ci/vast-broker/propimages.json',
