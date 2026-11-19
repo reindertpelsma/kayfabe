@@ -1,6 +1,6 @@
 {
   "schema": "kayfabe.worker-propimages/1",
-  "status": "STATUS: DESIGN-ONLY, 2026-11-16. Not read by the deployed Worker (nothing imports src/propimages.js yet). Owner decisions 2026-11-16: the Worker knows image A and image B from this file, with the applications on them; the Worker and CI run is STRICT (everything listed for the leg must run, zero skips); gate lane and discovery lane; a release rents two dies per family and the images are split across the two boxes (slot 1 runs image A, slot 2 runs image B; `swap` exchanges them; a family with one die gets both); images are for the release run only. Design: docs/design/V3_WORKER_PROPIMAGES.md. 2026-11-17: `linux_images` carries the MATLAB Linux image (object `imgc`, role `linux_image`): every row in the discovery lane, no per-family list (it has run on no die), scheduled outside the slot rotation (docs/design/V3_PROPIMAGE_LINUX.md section 14).",
+  "status": "STATUS: DESIGN-ONLY, 2026-11-16. Not read by the deployed Worker (nothing imports src/propimages.js yet). Owner decisions 2026-11-16: the Worker knows image A and image B from this file, with the applications on them; the Worker and CI run is STRICT (everything listed for the leg must run, zero skips); gate lane and discovery lane; a release rents two dies per family and the images are split across the two boxes (slot 1 runs image A, slot 2 runs image B; `swap` exchanges them; a family with one die gets both); images are for the release run only. Design: docs/design/V3_WORKER_PROPIMAGES.md. 2026-11-17: `linux_images` carries the MATLAB Linux image (object `imgc`, role `linux_image`): every row in the discovery lane, no per-family list (it has run on no die), scheduled outside the slot rotation (docs/design/V3_PROPIMAGE_LINUX.md section 14). 2026-11-17 (later): the MATLAB entry carries `min_guest_driver` (590.48.01, measured on one RTX 3080: MATLAB R2026b refused guest driver 580.159.04), and `matlabPlan` raises a die's default guest driver to it when the default is older (traces/matlab_gpu_20261117/).",
   "strict": true,
   "swap": false,
   "unmeasured_note": "not yet measured on this family",
@@ -34,8 +34,8 @@
       "role": "linux_image",
       "ref": "propimage-kfimg-matlab-20261117.zip",
       "object": "linux-proprietary/kfimg-matlab-20261117/image.zip",
-      "size": 8147790579,
-      "sha256": "81f7408f19bcb332ab31fd36b5922ff70f11d342a71166c67b538e764b285dcc"
+      "size": 8128391922,
+      "sha256": "30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a"
     }
   ],
   "images": [
@@ -173,6 +173,8 @@
       "families": "generic",
       "isolation": "row",
       "scheduling": "one run per release box that has a KVM host and a GPU; not part of the A/B slot rotation",
+      "min_guest_driver": "590.48.01",
+      "min_guest_driver_basis": "MEASURED on one RTX 3080 (GA102), one run, 2026-11-17 (traces/matlab_gpu_20261117/README.md): the same sealed image with guest driver 590.48.01 (CUDA 13.1) passed gpuDevice, the matmul and FFT rows and the Deep Learning Toolbox rows; with guest driver 580.159.04 (CUDA 13.0) gpuDevice failed with 'GPU computing in MATLAB requires a newer graphics driver'. MATLAB R2026b bundles CUDA runtime 13.1.80 (MEASURED). INFERRED, not separately proven: MATLAB refuses a driver older than its CUDA runtime. 590.48.01 is the lowest version tried that passed; no version between 580.159.04 and 590.48.01 was tried, and no other die was tried.",
       "rows": {
         "gpu_info": {
           "lane": "discovery",

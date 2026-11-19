@@ -922,7 +922,7 @@ def _main(argv, spec):
     r.add_argument("--deadline-epoch", type=float, default=0.0)
     r.add_argument("--evidence-dir")
     r.add_argument("--qemu", help="generic runner: the kf3 QEMU binary (default: the bench dir's kf3-bins/<sha>/)")
-    r.add_argument("--gop-efi", help="generic runner: the signed boot GOP driver for state.json images")
+    r.add_argument("--gop-efi", help="generic runner: the signed boot GOP driver for state.json images (default: the pinned one, fetched once per run)")
     r.add_argument("--pins", help="YOUR deployment's pins file (kayfabe.propimage-pins/1): the objects `pin:NAME` and the legacy stage may fetch "
                                   "(default: the repository's own propimage_apps_pins.json)")
     q = sub.add_parser("plan")
