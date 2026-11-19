@@ -12,13 +12,19 @@ is research tooling outside the harness). Both end the stage with a NAMED reason
     propimage_apps.py plan [--sha SHA] [--cpuinfo FILE]        preflight rows and the boot plan; touches nothing
     propimage_apps.py manifest --out FILE [--swtpm-build]      the download manifest (kayfabe.download-manifest/1); refuses unpinned items
 
+PINS ARE DEPLOYMENT DATA (owner, 2026-11-17; docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md). `run` without an image flag is the DEPLOYMENT stage:
+it fetches the image and the GOP named in the pins file (the repository's own, or YOUR file through `--pins FILE`) and refuses anything that is
+not the pinned object. `run --image ...` / `--propimage ...` / `--images-file` is the generic runner: the sha256 in a source is an identity pin
+that only a strict run (`--strict`, the Worker) enforces; a standalone run records the computed sha256 and size and `--expect-sha256 NAME=HASH`
+opts in. The pins of the downloaded third-party tools (the swtpm and libtpms sources) are supply-chain integrity and hold in every mode.
+
 What `run` does, in order (every step is a refusal point with a name, in the record):
   1. CPU vendor (NOT_RUN CPU_VENDOR on anything but AMD: the image runs the fixed CPU profile `kayfabe-amd-v1`, AuthenticAMD,
      propimage.py CPU_PROFILE; docs/design/V3_RELEASE_MATRIX.md), CPU features (CPU_PROFILE_UNSUPPORTED), GPU family
      (GPU_FAMILY), pins (PIN_UNSET:<role>), the kf3 QEMU of this revision, the URL file, free disk, swtpm.
   2. Prefetch through scripts/ci/box_downloader.py (the manifest comes from the pins, the presigned-URL file from the bootstrap
      layer; this stage never sees the run token). Image and GOP are `signed` sources only (private object); the swtpm sources are
-     public mirrors, fetched only when the box's swtpm is older than 0.10.
+     a private `ref` (the coordinator's URL file) first and the public mirror as the fallback, fetched only when the box's swtpm is older than 0.10.
   3. swtpm >= 0.10 (built under /opt/tpm when the box's is older; libtpms must match: the image's TPM state is not readable by
      0.6.3, traces/hwrun_20261113/README.md), the display broker (`make -C broker`), the verified unpack (propimage_check.load_image:
      both members' sha256 and the seed), then the archive is deleted.
@@ -144,7 +150,8 @@ def load_pins(path=PINS_PATH):
         if (it["sha256"] is not None and not (type(it["sha256"]) is str and HEX64.fullmatch(it["sha256"]))) or (
                 it["size"] is not None and not (type(it["size"]) is int and 0 < it["size"] < 1 << 40)):
             raise ValueError("pins: sha256 or size")
-        if it["needed_by"] not in ("image", "tools") or ("ref" in it) == ("mirror" in it):
+        # at least one source; both are allowed (2026-11-17: the tool tarballs carry a private ref AND the public mirror)
+        if it["needed_by"] not in ("image", "tools") or not ("ref" in it or "mirror" in it):
             raise ValueError("pins: sources")
         if "ref" in it and not NAME_RE.fullmatch(str(it["ref"])):
             raise ValueError("pins: ref")
@@ -176,6 +183,12 @@ def needed_roles(build_swtpm):
     return ("image", "gop") + (("libtpms", "swtpm") if build_swtpm else ())
 
 
+def item_sources(it):
+    """The sources of one pin in fallback order: the signed ref first (the private copy, from the presigned-URL file), then the public
+    mirror. box_downloader requires private sources before mirrors; a run whose URL file lacks the ref falls through to the mirror."""
+    return ([{"kind": "signed", "ref": it["ref"]}] if "ref" in it else []) + ([{"kind": "mirror", "url": it["mirror"]}] if "mirror" in it else [])
+
+
 def build_manifest(pins, build_swtpm, roles=None):
     """kayfabe.download-manifest/1 for the needed roles. Refuses (PIN_UNSET:<first role>) when any needed item is unpinned."""
     roles = roles or needed_roles(build_swtpm)
@@ -186,9 +199,8 @@ def build_manifest(pins, build_swtpm, roles=None):
     for it in pins["items"]:
         if it["role"] not in roles:
             continue
-        source = {"kind": "signed", "ref": it["ref"]} if "ref" in it else {"kind": "mirror", "url": it["mirror"]}
         items.append({"name": it["name"], "dest": it["dest"], "sha256": it["sha256"], "size": it["size"],
-                      "needed_by": it["needed_by"], "sources": [source]})
+                      "needed_by": it["needed_by"], "sources": item_sources(it)})
     for it in items:
         if it["needed_by"] not in stages:
             stages.append(it["needed_by"])
@@ -906,6 +918,8 @@ def _main(argv, spec):
     r.add_argument("--evidence-dir")
     r.add_argument("--qemu", help="generic runner: the kf3 QEMU binary (default: the bench dir's kf3-bins/<sha>/)")
     r.add_argument("--gop-efi", help="generic runner: the signed boot GOP driver for state.json images")
+    r.add_argument("--pins", help="YOUR deployment's pins file (kayfabe.propimage-pins/1): the objects `pin:NAME` and the legacy stage may fetch "
+                                  "(default: the repository's own propimage_apps_pins.json)")
     q = sub.add_parser("plan")
     q.add_argument("--sha", default="0" * 40)
     q.add_argument("--cpuinfo", default="/proc/cpuinfo")
@@ -940,9 +954,10 @@ def _main(argv, spec):
             sys.path.insert(0, str(HERE))
             import propimage_images
             ctx = Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=hardware_now(),
-                          qemu=a.qemu)
+                          qemu=a.qemu, pins_path=Path(a.pins or PINS_PATH))
             return propimage_images.finish(propimage_images.run_images(ctx, spec, a.evidence_dir, gop=Path(a.gop_efi) if a.gop_efi else None), a.out)
-        ctx = Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=hardware_now())
+        ctx = Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=hardware_now(),
+                      pins_path=Path(a.pins or PINS_PATH))
         return finish(run(ctx, a.evidence_dir), a.out)
     except Refused as exc:
         print("KF_PROPIMAGE_APPS_REFUSED " + clean(exc.reason, 80), flush=True)

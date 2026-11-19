@@ -9,7 +9,7 @@ One shape serves the Worker (the instruction's `propimages` list holds the same 
 (`--images-file`) and the command line (`--image KIND:SOURCE ...`, parsed into the same object). Every refusal has a name
 (`SpecError.reason`); nothing is guessed.
 
-  {"schema": "kayfabe.propimage-images/1", "images": [IMAGE, ...], "strict": false}
+  {"schema": "kayfabe.propimage-images/1", "images": [IMAGE, ...], "strict": false, "expect_sha256": {"NAME": "64 hex"}}
   IMAGE = {"label": "name",                      optional; default image1, image2, ...
            "kind": "prebuilt" | "built",
            "disk": SOURCE,                       prebuilt: the disk (an unpacked image directory, a zip, or a bare disk file)
@@ -27,6 +27,12 @@ Two policies. STANDALONE (`strict` false, the default): run as much as the input
 instruction): every listed image and app must run, a skip is a failure by name. A strict spec must say exactly what runs: every image lists at
 least one `present` app, and `skip` and `only` entries are refused (STRICT_SKIP_ENTRY, STRICT_ONLY, STRICT_NEEDS_APPS); an app without a
 definition is STRICT_UNKNOWN_APP (`strict_unknown_app`).
+
+IDENTITY PINS (owner rule 2026-11-17; docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md). A `sha256` in a SOURCE is an identity pin: a statement
+about WHICH object a deployment means. It is enforced only when `pins_enforced(spec)` is true (a strict spec: the Worker, a strict CI run). A
+standalone run records the computed sha256 and size and says whether the pin matched, and never refuses on it: someone may have built their
+own images. `expect_sha256` (`--expect-sha256 NAME=HASH`, NAME = an image label or the file name of its source) is the user's own opt-in:
+enforced in every mode, refused by name (EXPECT_SHA256_MISMATCH).
 
 Two lanes per application row (`lane`, default `gate`): GATE rows must run and pass, a failure is fatal always; DISCOVERY rows may fail or
 crash (exotic rows that try to break kf3): a failure never fails the run by itself and is reported in the known-breakages table, checked against
@@ -55,6 +61,7 @@ MAX_IMAGES = 8
 IMAGE_KEYS = {"label", "kind", "disk", "iso", "state", "state_file", "net", "only", "apps", "ssh"}
 PER_IMAGE_FLAGS = ("--label", "--state", "--net", "--apps", "--app", "--ssh-user", "--ssh-key", "--ssh-port")
 IMAGE_FLAGS = ("--image", "--propimage")
+EXPECT_FLAG = "--expect-sha256"
 
 
 class SpecError(ValueError):
@@ -184,7 +191,7 @@ def validate(doc):
     """The normalized spec (every default filled in) or a SpecError by name."""
     if type(doc) is not dict:
         raise SpecError("SPEC_NOT_OBJECT")
-    if doc.get("schema") != SCHEMA or not {"schema", "images"} <= set(doc) <= {"schema", "images", "strict"}:
+    if doc.get("schema") != SCHEMA or not {"schema", "images"} <= set(doc) <= {"schema", "images", "strict", "expect_sha256"}:
         raise SpecError("SPEC_SCHEMA")
     strict = doc.get("strict", False)
     if type(strict) is not bool:
@@ -204,7 +211,40 @@ def validate(doc):
                 raise SpecError("STRICT_SKIP_ENTRY", img["label"])
             if not any(e["mode"] in ("present", "install") for e in img["apps"].values()):
                 raise SpecError("STRICT_NEEDS_APPS", img["label"])
-    return {"schema": SCHEMA, "images": norm, "strict": strict}
+    return {"schema": SCHEMA, "images": norm, "strict": strict, "expect_sha256": check_expect(doc.get("expect_sha256", {}), norm)}
+
+
+def source_name(src):
+    """The file name of a source: what `--expect-sha256 NAME=` may call it (a path's or URL's last part, or a pin's ref)."""
+    ref = (src or {}).get("ref") or ""
+    return ref.split("?")[0].rsplit("/", 1)[-1]
+
+
+def check_expect(expect, images):
+    """{name: sha256} the user expects; every name must call an image (its label or its source's file name), so a typo is never silent."""
+    if type(expect) is not dict or len(expect) > 32:
+        raise SpecError("EXPECT_SHA256_BAD", "shape")
+    names = {}
+    for img in images:
+        names.setdefault(img["label"], img["label"])
+        names.setdefault(source_name(img["disk"] or img["iso"]), img["label"])
+    out = {}
+    for name, sha in expect.items():
+        if type(sha) is not str or not HEX64.fullmatch(sha):
+            raise SpecError("EXPECT_SHA256_BAD", str(name)[:32])
+        if name not in names or not name:
+            raise SpecError("EXPECT_SHA256_UNKNOWN", str(name)[:32])
+        label = names[name]
+        if label in out and out[label] != sha:
+            raise SpecError("EXPECT_SHA256_DUP", label)
+        out[label] = sha                              # keyed by the image label from here on
+    return out
+
+
+def pins_enforced(spec):
+    """THE one switch: identity pins (a source's sha256, the object a pin names) are enforced only under a strict spec (the Worker, strict CI).
+    A standalone spec records what it computed and refuses nothing on a pin. `expect_sha256` is not a pin: it is the user's own request."""
+    return bool(spec.get("strict"))
 
 
 def validate_list(images, strict=False):
@@ -277,9 +317,25 @@ def split_flags(argv):  # noqa: C901
     """Takes the image flags out of a command line. -> (the remaining words, a spec dict or None). Per-image flags belong to the
     nearest `--image`/`--propimage` before them (like ffmpeg's per-input options); one before any image is refused. Both
     `--flag value` and `--flag=value` are read."""
-    rest, images, i, strict = [], [], 0, False
+    rest, images, i, strict, expect = [], [], 0, False, {}
     while i < len(argv):
         word = argv[i]
+        if word == EXPECT_FLAG or word.startswith(EXPECT_FLAG + "="):
+            if word == EXPECT_FLAG:
+                i += 1
+                if i >= len(argv):
+                    raise SpecError("FLAG_NEEDS_VALUE", EXPECT_FLAG)
+                value = argv[i]
+            else:
+                value = word[len(EXPECT_FLAG) + 1:]
+            name, sep, sha = value.rpartition("=")
+            if not sep or not name or not HEX64.fullmatch(sha):
+                raise SpecError("EXPECT_SHA256_BAD", value[:32])
+            if expect.get(name, sha) != sha:
+                raise SpecError("EXPECT_SHA256_DUP", name[:32])
+            expect[name] = sha
+            i += 1
+            continue
         if word == "--strict":
             strict = True
             i += 1
@@ -304,7 +360,16 @@ def split_flags(argv):  # noqa: C901
         i += 1
     if strict and not images:
         raise SpecError("STRICT_WITHOUT_IMAGES")
-    return rest, ({"schema": SCHEMA, "images": images, "strict": True} if images and strict else {"schema": SCHEMA, "images": images} if images else None)
+    if expect and not images:
+        raise SpecError("EXPECT_WITHOUT_IMAGES")
+    if not images:
+        return rest, None
+    doc = {"schema": SCHEMA, "images": images}
+    if strict:
+        doc["strict"] = True
+    if expect:
+        doc["expect_sha256"] = expect
+    return rest, doc
 
 
 def _image_from_flag(flag, value):
