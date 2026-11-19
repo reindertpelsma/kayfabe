@@ -66,6 +66,10 @@ version of the roughly 70-app matrix (the apps that worked before). **CODE READ 
 
 ## 2. What can be automated offline, and what cannot
 
+**UPDATE 2026-11-17:** a fifth class, `online_source`, exists (9 rows, `vkglcts_*` and `dxsamples_*`, built from pinned upstream
+sources inside an online guest; never in `small`, `mid` or `full`; profile `open_source`): see
+[`V3_WINDOWS_OPEN_ROWS.md`](V3_WINDOWS_OPEN_ROWS.md). The inventory is now 129 apps; the four-class table below is the state of 2026-11-08.
+
 `scripts/bench/windows/appmatrix/gate_profiles.json` is the one source; `gate_profiles.py check` and
 `tests/test_gate_profiles.py` keep it consistent with `apps.json` and `manifest.json`. **CODE READ / generated counts, DX1 2026-11-08 at `b370e4f12`:** 120
 apps, in four classes.

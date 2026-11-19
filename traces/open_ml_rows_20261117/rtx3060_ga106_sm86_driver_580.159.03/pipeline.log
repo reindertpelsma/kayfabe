@@ -1,0 +1,10 @@
+START 21:55:42 REV f4df2f99f
+RUN_EXIT jax rc=0 21:55:54
+RUN_EXIT tensorrt rc=0 21:57:44
+RUN_EXIT vllm rc=0 21:59:09
+NEGCTL_EXIT jax rc=1 21:59:13
+NEGCTL_EXIT tensorrt rc=1 21:59:15
+NEGCTL_EXIT vllm rc=1 21:59:44
+CU12_EXIT jax rc=0 21:59:56
+CU12_EXIT tensorrt rc=0 22:00:50
+EXIT 22:00:50

@@ -2061,6 +2061,8 @@ jobs:
           node ci/vast-broker/profile-resources-mutants.mjs
           # Worker proprietary-image configuration and instruction part, the /bench-data allow-list stays closed (2026-11-16): two named killers per mutant.
           node ci/vast-broker/propimages-mutants.mjs
+          # Private-object presign route, lease-time trust scope, estimate as the price and releaseSeq (2026-11-17): two named killers per mutant.
+          node ci/vast-broker/private-presign-mutants.mjs
 
   middle-apps:
     name: middle apps policy mutants — slice ${{ matrix.shard }} of 4
@@ -2103,6 +2105,10 @@ jobs:
           # Proprietary Linux image tooling (2026-11-16): identity, argv, clock rule, grep, driver stub, auth-capture; >=2 named killers.
           python3 -B -I scripts/ci/test_propimage_linux.py
           python3 -B -I scripts/ci/propimage_linux_mutants.py
+          # MATLAB rows of the Linux proprietary image (2026-11-17): fixture results, a fake guest transport, the optional `matlab` payload stage; >=2 named killers per mutant.
+          python3 -B -I scripts/ci/test_matlab_rows.py
+          python3 -B -I scripts/ci/matlab_rows_mutants.py
+          python3 -B -I scripts/ci/matlab_stage_mutants.py
           # Unreal installed-build tooling (2026-11-17, design-only, fake runner): cache key, budgets, resume, build-or-fetch, pins; >=2 named killers.
           python3 -B -I scripts/ci/test_unreal_build.py
           python3 -B -I scripts/ci/unreal_build_mutants.py
@@ -2151,6 +2157,8 @@ jobs:
           # Image B gpu step diagnostics, 2026-11-17 (docs/design/V3_PROPIMAGE_B_APPS.md): the case is named, bounded poll after a started-wait, log tail kept, honest detail; >=2 named killers per mutant.
           python3 scripts/ci/propimage_gpu_diag_mutants.py --jobs 4
           python3 scripts/ci/clocknet_assert_mutants.py
+          # The standalone full run (2026-11-17, docs/design/V3_STANDALONE_FULL_RUN.md): the manifest, the named refusals, the skip record, the two open-row stages, the report bound; >=2 named killers per mutant.
+          python3 scripts/ci/standalone_full_mutants.py --jobs 2
           # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
           python3 scripts/ci/stream_url_mutants.py
           # Standalone trust helper and lint (2026-11-17): anchors, the default mode, the explicit lift, user input, evidence; the lint's rules: two named killers per mutant.
@@ -2252,6 +2260,26 @@ jobs:
       # kf-qemu host read and the property's use sites): each mutant needs two named killers.
       - name: GPU-utilisation reporting mutations require two named killers each
         run: python3 scripts/ci/util_flag_mutants.py
+
+  # The open-row harnesses of the standalone release run (2026-11-17): the FFmpeg and DCGM rows, the GPU-use assertion, the open ML rows and
+  # the Vulkan CTS row. They are GPU-free (fixtures, fakes, a Python stand-in for each tool) and independent of the other mutant jobs.
+  open-rows-mutants:
+    name: open rows mutants — FFmpeg and DCGM, GPU-use assertion, ML rows, Vulkan CTS
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Open-row mutants (each must fail at least two tests)
+        run: |
+          # Open FFmpeg NVENC/NVDEC matrix and DCGM + NVML sweep rows (2026-11-17, docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md): caps comparison,
+          # verdicts, PSNR threshold, NVML field diff, census and the trust-rule pins; >=2 named killers per mutant.
+          python3 scripts/ci/open_rows_mutants.py --jobs 4
+          # GPU-use assertion (owner requirement 2026-11-17, docs/design/V3_GPU_USE_ASSERTION.md): the judge, the Linux wiring and the Windows llama proofs; >=2 named killers per mutant.
+          python3 scripts/ci/gpu_use_mutants.py --jobs 4
+          # Open ML rows (vllm, tensorrt, jax; 2026-11-17, docs/design/V3_OPEN_ML_ROWS.md): hashed locks, flavour choice, model check, judges, environment, wiring; >=2 named killers per mutant.
+          python3 -B -I scripts/ci/mlrows_mutants.py --jobs 4
+          # Open Vulkan CTS row (2026-11-17, docs/design/V3_VULKAN_CTS_ROW.md): pins, case list, QPA parser, crash attribution, host-vs-guest diff; >=2 named killers per mutant.
+          python3 -B -I scripts/ci/vkcts_mutants.py
 
   # ★ THE PRODUCTION HALF, ON THE STRIPPED TREE (2026-11-09; OWNER_RULINGS section AQ, design:
   # docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4). A vast box clones the repository and
@@ -2867,7 +2895,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [stable, stripped, aarch64, firmware, broker, platform, ptx, worker-tests, worker-mutants-a, worker-mutants-b, middle-apps, mutants-a, mutants-b, selftests, rust-mutants-a, rust-mutants-b]
+    needs: [stable, stripped, aarch64, firmware, broker, platform, ptx, worker-tests, worker-mutants-a, worker-mutants-b, middle-apps, mutants-a, mutants-b, selftests, rust-mutants-a, rust-mutants-b, open-rows-mutants]
     runs-on: ubuntu-latest
     steps:
       - name: Require every needed job to have passed
@@ -2882,7 +2910,7 @@ jobs:
             ${{ needs.stable.result }} ${{ needs.worker-tests.result }} ${{ needs.worker-mutants-a.result }}
             ${{ needs.worker-mutants-b.result }} ${{ needs.middle-apps.result }} ${{ needs.mutants-a.result }}
             ${{ needs.mutants-b.result }} ${{ needs.selftests.result }} ${{ needs.rust-mutants-a.result }}
-            ${{ needs.rust-mutants-b.result }}
+            ${{ needs.rust-mutants-b.result }} ${{ needs.open-rows-mutants.result }}
         run: |
           echo "needed job results: $RESULTS (stripped: $STRIPPED; must have run: $MUST_RUN)"
           if [ "$STRIPPED" != success ]; then

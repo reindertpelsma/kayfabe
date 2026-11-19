@@ -1,0 +1,165 @@
+MLROWS_FACTS {"cc": [8, 6], "disk_free_gb": 50.058223616, "driver": "580.159.03", "driver_cuda": [13, 0], "gcc": true, "gpus": 1, "name": "NVIDIA GeForce RTX 3060", "python": [3, 12, 3], "python_h": true, "total_mib": 12288}
+MLROWS_ROW row=vllm flavour=cu13 negctl=1 lock_sha256=b170c21f4d74462c
+| W1117 21:59:19.093000 14052 torch/_opaque_base.py:6] torch._opaque_base is deprecated, use torch._custom_class_base instead
+| W1117 21:59:19.141000 14052 torch/_library/opaque_object.py:288] register_opaque_type is deprecated, use register_custom_class instead
+| W1117 21:59:19.142000 14052 torch/_library/opaque_object.py:211] typ='value' is deprecated, use typ='constant' instead
+| W1117 21:59:24.237000 14052 torch/utils/cpp_extension.py:183] No CUDA runtime is found, using CUDA_HOME='/usr/local/cuda'
+| (MainProcess pid=14052) INFO 11-17 21:59:28 [startup.py:96] non-default args: {'tokenizer': '/root/ml/vllm/model', 'dtype': 'float16', 'max_model_len': 512, 'gpu_memory_utilization': 0.9, 'disable_log_stats': True, 'model': '/root/ml/vllm/model'}
+| (MainProcess pid=14052) WARNING 11-17 21:59:39 [flashinfer.py:107] FlashInfer kernels are disabled: flashinfer-cubin is not installed and nvcc (CUDA_HOME, CUDA_PATH, PATH or /usr/local/cuda) or ninja (PATH) is missing. Set CUDA_HOME to a CUDA toolkit and put ninja on PATH, or run `vllm download-kern
+| (MainProcess pid=14052) INFO 11-17 21:59:39 [model.py:761] Resolved architecture: LlamaForCausalLM
+| (MainProcess pid=14052) WARNING 11-17 21:59:39 [model.py:2560] Casting torch.bfloat16 to torch.float16.
+| (MainProcess pid=14052) INFO 11-17 21:59:39 [model.py:2214] Using max model len 512
+| (MainProcess pid=14052) INFO 11-17 21:59:39 [scheduler.py:354] Chunked prefill is enabled with max_num_batched_tokens=8192.
+| (MainProcess pid=14052) INFO 11-17 21:59:39 [kernel.py:517] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'], gelu_and_mul_sparse=['triton', 'native'])
+| (MainProcess pid=14052) INFO 11-17 21:59:40 [numa_utils.py:575] Automatic NUMA binding unavailable on this host; starting unbound. Enable debug logging for the skip reason.
+| (EngineCore pid=14302) INFO 11-17 21:59:40 [core.py:153] Initializing a V1 LLM engine (v0.34.0) with config: model='/root/ml/vllm/model', speculative_config=None, tokenizer='/root/ml/vllm/model', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_cod
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757] EngineCore failed to start.
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757] Traceback (most recent call last):
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1728, in run_engine_core
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     return func(*args, **kwargs)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]            ^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1399, in __init__
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     super().__init__(
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 164, in __init__
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     self.model_executor = executor_class(vllm_config)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     return func(*args, **kwargs)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]            ^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/executor/abstract.py", line 121, in __init__
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     self._init_executor()
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/executor/uniproc_executor.py", line 69, in _init_executor
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     self.driver_worker.init_device()
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/worker/worker_base.py", line 387, in init_device
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     self.worker.init_device()  # type: ignore
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     ^^^^^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     return func(*args, **kwargs)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]            ^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu_worker.py", line 489, in init_device
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     assert self.local_rank < torch.accelerator.device_count(), (
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757] AssertionError: DP adjusted local rank 0 is out of bounds for 0 devices.
+| Process EngineCore:
+| Traceback (most recent call last):
+|   File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+|     self.run()
+|   File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+|     self._target(*self._args, **self._kwargs)
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1761, in run_engine_core
+|     raise e
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1728, in run_engine_core
+|     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+|                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+|     return func(*args, **kwargs)
+|            ^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1399, in __init__
+|     super().__init__(
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 164, in __init__
+| ... (111 lines; the whole log is vllm.venv.log)
+| (MainProcess pid=14052) INFO 11-17 21:59:40 [numa_utils.py:575] Automatic NUMA binding unavailable on this host; starting unbound. Enable debug logging for the skip reason.
+| (EngineCore pid=14302) INFO 11-17 21:59:40 [core.py:153] Initializing a V1 LLM engine (v0.34.0) with config: model='/root/ml/vllm/model', speculative_config=None, tokenizer='/root/ml/vllm/model', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_cod
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757] EngineCore failed to start.
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757] Traceback (most recent call last):
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1728, in run_engine_core
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     return func(*args, **kwargs)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]            ^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1399, in __init__
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     super().__init__(
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 164, in __init__
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     self.model_executor = executor_class(vllm_config)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     return func(*args, **kwargs)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]            ^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/executor/abstract.py", line 121, in __init__
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     self._init_executor()
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/executor/uniproc_executor.py", line 69, in _init_executor
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     self.driver_worker.init_device()
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/worker/worker_base.py", line 387, in init_device
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     self.worker.init_device()  # type: ignore
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     ^^^^^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     return func(*args, **kwargs)
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]            ^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu_worker.py", line 489, in init_device
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]     assert self.local_rank < torch.accelerator.device_count(), (
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+| (EngineCore pid=14302) ERROR 11-17 21:59:42 [core.py:1757] AssertionError: DP adjusted local rank 0 is out of bounds for 0 devices.
+| Process EngineCore:
+| Traceback (most recent call last):
+|   File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+|     self.run()
+|   File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+|     self._target(*self._args, **self._kwargs)
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1761, in run_engine_core
+|     raise e
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1728, in run_engine_core
+|     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+|                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+|     return func(*args, **kwargs)
+|            ^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1399, in __init__
+|     super().__init__(
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 164, in __init__
+|     self.model_executor = executor_class(vllm_config)
+|                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+|     return func(*args, **kwargs)
+|            ^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/executor/abstract.py", line 121, in __init__
+|     self._init_executor()
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/executor/uniproc_executor.py", line 69, in _init_executor
+|     self.driver_worker.init_device()
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/worker/worker_base.py", line 387, in init_device
+|     self.worker.init_device()  # type: ignore
+|     ^^^^^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+|     return func(*args, **kwargs)
+|            ^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu_worker.py", line 489, in init_device
+|     assert self.local_rank < torch.accelerator.device_count(), (
+|            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+| AssertionError: DP adjusted local rank 0 is out of bounds for 0 devices.
+| Traceback (most recent call last):
+|   File "/root/kayfabe/scripts/apps/mlrows/row_vllm.py", line 108, in <module>
+|     main()
+|   File "/root/kayfabe/scripts/apps/mlrows/row_vllm.py", line 72, in main
+|     llm = LLM(model=a.model_dir, tokenizer=a.model_dir, dtype="float16", max_model_len=512, seed=0, gpu_memory_utilization=0.9)
+|           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/entrypoints/llm.py", line 352, in __init__
+|     self.llm_engine = LLMEngine.from_engine_args(
+|                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/llm_engine.py", line 191, in from_engine_args
+|     return cls(
+|            ^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/llm_engine.py", line 116, in __init__
+|     self.engine_core = EngineCoreClient.make_client(
+|                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 142, in make_client
+|     return SyncMPClient(
+|            ^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 175, in sync_wrapper
+|     return func(*args, **kwargs)
+|            ^^^^^^^^^^^^^^^^^^^^^
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 996, in __init__
+|     super().__init__(
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 729, in __init__
+|     with launch_core_engines(
+|   File "/usr/lib/python3.12/contextlib.py", line 144, in __exit__
+|     next(self.gen)
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 1393, in launch_core_engines
+|     wait_for_engine_startup(
+|   File "/root/ml/vllm/venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 1477, in wait_for_engine_startup
+|     raise RuntimeError(
+| RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {'EngineCore': 1}
+VLLM_SUMMARY status=FAIL flavour=cu13 reason=no_result:_rc=1,_last_line:_RuntimeError:_Engine_core_initialization_failed._See_root_cause_above._Failed_core_proc(s):_ secs=- mem_growth_mib=- token_sha256=-
+MLROWS_RESULT {"checks":[],"flavour":"cu13","reason":"no_result: rc=1, last line: RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {'EngineCore': 1}","result":null,"row":"vllm","status":"FAIL"}

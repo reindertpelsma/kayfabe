@@ -137,6 +137,8 @@ CODE READ: if cloud-init omits standard HOME or leaves it empty, repo-side onsta
 current OS account's home directory. An explicit process HOME is preserved; no Worker var is added.
 
 
+The `matlab` stage (2026-11-17; GPU-free tests only, NOT run on a box, it needs KVM and a GPU): `matlab_stage.py` runs the MATLAB GPU rows of the Linux proprietary image (`scripts/bench/linux/matlab_rows.py`, rows in `scripts/bench/linux/matlab/`, design in `docs/design/V3_PROPIMAGE_LINUX.md` section 14). Large tier, off by default (`MATLAB_IN_LARGE = False`, `MANUAL_ONLY_STAGES`): `vast_payload.py --only matlab --matlab-image PATH|URL --matlab-driver VERSION|PATH|URL` (standalone: your own image, no sha256 pin enforced, the computed one recorded, a row that cannot run is a skip) or an instruction carrying `matlab` (the Worker's strict shape: image by pin from `matlab_pins.json` through the presigned-URL file, driver pinned in `release-matrix.json`, zero skips). One line `KF_MATLAB_RESULT {json}` (validated by `vast_report.validate_matlab`). Tests `test_matlab_rows.py`, `test_matlab_stage.py`; mutants `matlab_rows_mutants.py`, `matlab_stage_mutants.py`.
+
 The `propimage_apps` stage (2026-11-15, owner ruling that the proprietary Windows image's seven apps must PASS per GPU family; GPU-free tests only, NOT run on a box,
 and it cannot PASS yet): `propimage_apps.py` fetches the private image through `box_downloader.py` (manifest made from `propimage_apps_pins.json`), builds swtpm 0.10.1 when
 the box's is older, unpacks, and runs `scripts/bench/windows/propimage_check.py` in three offline boots (Wukong last, alone, guest framebuffer 8192 MiB), then
@@ -212,3 +214,14 @@ root payload, which can read `/run/kf-ci/env` today. The payload's only hook is 
 MANIFEST` (prints `KF_PAYLOAD_PREFETCH ...` for the planned stages); without `--dry-run` it is refused. Not done: starting the
 downloader from the payload, a stage calling `wait`, apt (design source c), seeders (deferred), the real manifest for the
 SPEC and Windows media, disk reservation of unpack space beyond `--reserve-gb`.
+
+The open FFmpeg NVENC/NVDEC matrix and DCGM + NVML sweep rows (2026-11-17, `docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md`, `docs/howto/open-linux-rows.md`; the rows live in `scripts/apps/open_rows/`): `test_open_rows.py` (GPU-free: table validity, caps comparison, verdicts, PSNR thresholds, the NVML field diff, DCGM parsers, the host census, the sweep against a fake `libnvidia-ml`, both runners end to end against fake tools, outputs of the native runs under `fixtures/open_rows/`, and the trust-rule pins) and `open_rows_mutants.py` (two named killers per mutant, in `ci.yml`).
+
+The open Vulkan CTS row (2026-11-17; design `docs/design/V3_VULKAN_CTS_ROW.md`, usage `docs/howto/vulkan-cts.md`; MEASURED once on a native RTX 3060 container,
+`traces/vkcts_host_20261117/`, never in a guest): `test_vkcts.py` (pins and the CTS fetch script check, the committed case list and its digest, the QPA parser against a
+fixture of a real log, crash and hang attribution, the block format, the host-versus-guest diff table, the row inside `scripts/apps/run_apps.sh`, GPU-use assertion with a
+fake `nvidia-smi`; GPU-free, no network, a Python stand-in for `deqp-vk`); mutants `vkcts_mutants.py` (two named killers each, in `ci.yml`).
+
+Open ML rows (2026-11-17, [design](../../docs/design/V3_OPEN_ML_ROWS.md), [manual](../../docs/howto/open-ml-rows.md)): `test_mlrows.py` (GPU-free tests of `scripts/apps/mlrows/`: hashed locks, flavour choice, model check, judges, environment, wiring, GPU-use judge) and `mlrows_mutants.py` (two named killers per mutant, run by `ci.yml`).
+
+The standalone full run (2026-11-17, [design](../../docs/design/V3_STANDALONE_FULL_RUN.md), [manual](../../docs/howto/full-standalone-run.md)): `test_standalone_full.py` (GPU-free: the manifest and the plan order, each named refusal, the skip record, `--full` on the command line against the committed Worker golden, the `apps_discovery` stage with a fake runner, the `windows_open_rows` grader, the MATLAB zero-skip flag, the report validators and the row bound); mutants `standalone_full_mutants.py` (two named killers each, in `ci.yml`).

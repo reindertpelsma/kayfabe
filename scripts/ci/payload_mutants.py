@@ -412,6 +412,7 @@ CASES += [
     ("spec-min-remaining-ignores-the-native-walls", replace('table["factor"] * native', "native")),
     ("spec-windows-disk-not-sized", replace('            os.environ.setdefault("WINVM_DISK_GB", SPEC_DISK_GB)', "            pass")),
     ("spec-command-always-lane-both", replace('"KF_SPEC_LANE=" + spec,', '"KF_SPEC_LANE=both",')),
+    ("spec-command-lets-the-lane-guest-go-offline", replace('                    "KF_SPEC_NET=online",\n', "")),
     ("spec-command-keeps-the-narrowed-table", replace('                    "KF_SPEC_TABLE",\n', '                    "KF_SPEC_LANE_X",\n')),
     (
         "spec-narrowed-verdict-accepted",

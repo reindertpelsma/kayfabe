@@ -1,0 +1,15 @@
+{
+  "schema": "kayfabe.worker-trust/1",
+  "status": "STATUS: DESIGN-ONLY, 2026-11-17. Read by src/trust.js (not deployed). The scope of a run token is decided ONCE, when the token is issued (lease time), from provenance the Worker has verified itself (GitHub OIDC claims and the read of the signed run attempt, or the owner's authenticated admin start). A run of untrusted provenance gets scopes ['public'] and can never be given a private object; the private store does not trust it and it does not trust the private store. Design: docs/design/V3_WORKER_PRIVATE_PRESIGN.md.",
+  "private": {
+    "same_repository": true,
+    "events": {
+      "github": ["push", "pull_request", "pull_request_target", "workflow_dispatch"],
+      "admin": ["admin_start"]
+    },
+    "branches": ["next", "master", "claude/*", "codex/*"],
+    "collaborator_pr_heads": true,
+    "require_owner_actor": true,
+    "admin_requires_reachable": true
+  }
+}

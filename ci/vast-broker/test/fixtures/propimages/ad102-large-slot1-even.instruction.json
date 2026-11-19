@@ -7,10 +7,6 @@
           "lane": "discovery",
           "mode": "present"
         },
-        "edge": {
-          "lane": "gate",
-          "mode": "present"
-        },
         "edrawings": {
           "lane": "gate",
           "mode": "present"

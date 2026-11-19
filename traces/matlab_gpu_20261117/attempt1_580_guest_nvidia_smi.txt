@@ -1,0 +1,2 @@
+NVIDIA GeForce RTX 3080, 580.159.04
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     

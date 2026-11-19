@@ -2,6 +2,8 @@
 import {constantTimeEqual} from './tokens.js';
 // prettier-ignore
 import {refuse} from './policy.js';
+// prettier-ignore
+import {PRIVATE_PATH} from './privatedata.js';
 // This table is the gateway's route recognition.
 export function routeKind(path) {
   if (
@@ -10,12 +12,15 @@ export function routeKind(path) {
   )
     return 'runner';
   if (
-    /^\/(?:report|run-report|kill|evidence)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(path) ||
+    /^\/(?:report|run-report|kill|evidence|instruction)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(
+      path,
+    ) ||
     new RegExp(
       '^/blob-url/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}/' +
         '[A-Za-z0-9._-]{1,64}/[A-Za-z0-9._-]{1,100}$',
     ).test(path) ||
-    /^\/bench-data\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}\/[A-Za-z0-9._-]{1,100}$/.test(path)
+    /^\/bench-data\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}\/[A-Za-z0-9._-]{1,100}$/.test(path) ||
+    PRIVATE_PATH.test(path)
   )
     return 'box';
   return null;

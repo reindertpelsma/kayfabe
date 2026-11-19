@@ -45,6 +45,10 @@ LINE_MARK = b"...[line truncated, %d bytes dropped]"
 UNKNOWN_HW = {"gpu_name": "unknown", "compute_cap": 0, "driver_version": "unknown"}
 EPOCH_LO, EPOCH_HI = 1_000_000_000, 4_102_444_800
 SUITE_NAME = re.compile(r"[a-z][a-z0-9_]{0,47}")
+# 2026-11-17: the standalone full run plans 16 stages and each stage returns one to six rows (merge_bar six, specviewperf three, the others one), so one full run reports up to
+# 26 rows plus the failure row of a red stage. The bound was 19 (and the Worker's 20) when a run had fewer stages. ci/vast-broker/src/results.js has the same number
+# (test_vast_report_rows pins both).
+MAX_SUITE_ROWS = 32
 GPU_NAME = re.compile(r"[A-Za-z0-9_. -]{1,100}")
 DRIVER = re.compile(r"unknown|[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,2})?")
 REASONS = {"payload_missing"}
@@ -529,6 +533,74 @@ def validate_propimage_apps_b(value):
         raise ValueError("propimage_apps_b")
 
 
+# matlab_stage.py's rows (scripts/bench/linux/matlab_rows.ROWS keys, in table order). A test pins this equal to the table; lanes come from the record (the Worker's
+# list decides them), the validator only bounds them.
+MATLAB_ROWS = ("gpu_info", "gpu_matmul", "gpu_fft", "gpu_solve", "dl_train", "parpool_gpu", "cuda_kernel", "mem_oversub")
+MATLAB_VERDICTS = ("PASS", "FAIL", "HARNESS", "NOT_RUN")
+MATLAB_CLASSES = ("CRASH", "HANG", "XID", "TDR", "ASSERT", "OUTPUT_MISMATCH", "GPU_NOT_USED", "BAD_RESULT")
+
+
+def validate_matlab(value):
+    """The matlab stage's record (scripts/ci/matlab_stage.py, schema kayfabe.matlab-rows/1): bounded, strictly read, not forwarded. A PASS record has no gate-lane
+    FAIL, no HARNESS row, no row missing and, under strict, no NOT_RUN row; a discovery row of any verdict never fails it and every discovery FAIL is listed in
+    `breakages`."""
+    text = re.compile(r"[\x20-\x7e]{0,200}")
+    token = re.compile(r"[A-Z][A-Z0-9_]{0,40}(:[A-Za-z0-9_]{1,40}){0,2}")
+    num = lambda v, hi=1 << 40: type(v) is int and 0 <= v <= hi  # noqa: E731
+    top = {"schema", "verdict", "reason", "sha", "strict", "isolation", "gpu", "family", "image", "driver", "rows", "breakages", "boots", "summary", "exit_code"}
+    ok = type(value) is dict and set(value) == top
+    ok = ok and value["schema"] == "kayfabe.matlab-rows/1" and value["verdict"] in ("PASS", "FAIL", "RETRY", "SKIPPED")
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    ok = ok and type(value["reason"]) is str and (token.fullmatch(value["reason"]) is not None or value["reason"] == "")
+    ok = ok and type(value["strict"]) is bool and value["isolation"] in ("row", "shared") and num(value["exit_code"], 4)
+    ok = ok and value["family"] in (None, "turing", "ampere", "ada", "blackwell") and text.fullmatch(str(value["summary"])) is not None
+    g = value["gpu"] if ok else None
+    ok = ok and type(g) is dict and set(g) == {"gpu_name", "compute_cap", "memory_mib"} and (g["gpu_name"] is None or text.fullmatch(str(g["gpu_name"])) is not None)
+    ok = ok and all(g[k] is None or num(g[k], 1 << 24) for k in ("compute_cap", "memory_mib"))
+    image = value["image"] if ok else None
+    ok = ok and type(image) is dict and {"sha256", "size", "source", "pin_enforced"} <= set(image) <= {"sha256", "size", "source", "pin_enforced", "ref"}
+    ok = ok and (image["sha256"] is None or re.fullmatch("[0-9a-f]{64}", str(image["sha256"]))) and (image["size"] is None or num(image["size"]))
+    ok = ok and image["source"] in ("pin", "user") and type(image["pin_enforced"]) is bool and (image.get("ref") is None or NAME_OK.fullmatch(str(image.get("ref"))))
+    drv = value["driver"] if ok else None
+    ok = ok and type(drv) is dict and {"version", "sha256", "source"} <= set(drv) <= {"version", "sha256", "source", "ref"} and drv["source"] in ("pin", "user")
+    ok = ok and (drv["version"] is None or re.fullmatch(r"[0-9]+\.[0-9]+(\.[0-9]+)?", str(drv["version"]))) and (drv["sha256"] is None or re.fullmatch("[0-9a-f]{64}", str(drv["sha256"])))
+    rows = value["rows"] if ok else None
+    ok = ok and type(rows) is list and 1 <= len(rows) <= len(MATLAB_ROWS)
+    if ok:
+        names = [r.get("row") if type(r) is dict else None for r in rows]
+        ok = names == [n for n in MATLAB_ROWS if n in names] and len(set(names)) == len(names)
+    row_keys = {"row", "lane", "verdict", "failure_class", "reason", "rc", "secs", "checks", "gpu", "census", "host_xid", "findings", "facts", "result"}
+    ok = ok and all(
+        type(r) is dict and set(r) == row_keys and r["lane"] in ("gate", "discovery") and r["verdict"] in MATLAB_VERDICTS
+        and (r["failure_class"] is None or r["failure_class"] in MATLAB_CLASSES) and (r["failure_class"] is not None) == (r["verdict"] == "FAIL")
+        and text.fullmatch(str(r["reason"])) is not None and (r["rc"] is None or (type(r["rc"]) is int and -256 <= r["rc"] <= 256)) and num(r["secs"], 1 << 20)
+        and (r["host_xid"] is None or num(r["host_xid"], 1 << 30))
+        and type(r["checks"]) is dict and set(r["checks"]) == {"n", "failed", "flag_disagrees"} and num(r["checks"]["n"], 256) and num(r["checks"]["flag_disagrees"], 256)
+        and type(r["checks"]["failed"]) is list and len(r["checks"]["failed"]) <= 8 and all(NAME_OK.fullmatch(str(x)) for x in r["checks"]["failed"])
+        and type(r["findings"]) is list and len(r["findings"]) <= 8 and all(text.fullmatch(str(x)) for x in r["findings"])
+        and type(r["gpu"]) is dict and len(json.dumps(r["gpu"])) <= 2048 and type(r["census"]) is dict and len(json.dumps(r["census"])) <= 2048
+        and type(r["facts"]) is dict and len(json.dumps(r["facts"])) <= 1024
+        and type(r["result"]) is dict and set(r["result"]) == {"sha256", "bytes"} and (r["result"]["sha256"] is None or re.fullmatch("[0-9a-f]{64}", str(r["result"]["sha256"])))
+        for r in (rows or []))
+    bad = [r for r in (rows or []) if ok and r["verdict"] == "FAIL" and r["lane"] == "discovery"]
+    ok = ok and type(value["breakages"]) is list and [b.get("row") if type(b) is dict else None for b in value["breakages"]] == [r["row"] for r in bad]
+    ok = ok and all(set(b) == {"row", "class", "reason", "host_xid"} and b["class"] in MATLAB_CLASSES and text.fullmatch(str(b["reason"])) is not None and num(b["host_xid"], 1 << 30)
+                    for b in value["breakages"])
+    boots = value["boots"] if ok else None
+    ok = ok and type(boots) is list and len(boots) <= 24 and all(
+        type(b) is dict and set(b) == {"index", "rows", "secs", "refused"} and num(b["index"], 24) and num(b["secs"], 1 << 20) and type(b["rows"]) is list
+        and all(x in MATLAB_ROWS for x in b["rows"]) and (b["refused"] is None or token.fullmatch(str(b["refused"]))) for b in boots)
+    if ok and value["verdict"] == "PASS":
+        ok = (value["reason"] == "" and not any(r["verdict"] == "HARNESS" or (r["verdict"] == "FAIL" and r["lane"] == "gate") for r in rows)
+              and not (value["strict"] and any(r["verdict"] == "NOT_RUN" for r in rows)) and value["exit_code"] == 0
+              and any(r["verdict"] == "PASS" for r in rows))
+    elif ok:
+        ok = value["reason"] != "" or value["verdict"] == "SKIPPED"
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 49152
+    if not ok:
+        raise ValueError("matlab")
+
+
 def census_ok(c, num, text):
     """A row's census as the stage records it: {} (none taken) or {lines, counts, xid, ids} with the fixed keyword set, at most 8 ids per keyword."""
     if c == {}:
@@ -549,7 +621,11 @@ def validate_propimage_run(value):
     verdicts = ("PASS", "FAIL", "RETRY", "REFUSED", "SKIPPED")
     classes = ("MISSING_INPUT", "NO_DRIVER", "NOT_INSTALLED", "NOT_PROVIDED", "CONSTRAINT")
     top = {"schema", "verdict", "sha", "reason", "family", "cpu_vendor", "preflight", "images", "strict", "pins_enforced", "summary", "strict_failures", "breakages", "platform", "rows"}
-    ok = type(value) is dict and top <= set(value) <= top | {"error"} and value["schema"] == "kayfabe.propimage-run/1"
+    ok = type(value) is dict and top <= set(value) <= top | {"error", "swtpm"} and value["schema"] == "kayfabe.propimage-run/1"
+    # 2026-11-17: the swtpm of the run, as in the legacy stage's record: {version, built} (built = this run built 0.10.1 under /opt/tpm)
+    swtpm = value.get("swtpm", {"version": None, "built": False}) if ok else None
+    ok = ok and type(swtpm) is dict and set(swtpm) == {"version", "built"} and type(swtpm["built"]) is bool
+    ok = ok and (swtpm["version"] is None or (type(swtpm["version"]) is str and re.fullmatch(r"[0-9.]{1,16}", swtpm["version"]) is not None))
     ok = ok and value["verdict"] in verdicts and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
     ok = ok and type(value["reason"]) is str and word.fullmatch(value["reason"]) is not None and ("error" not in value or text.fullmatch(str(value["error"])))
     ok = ok and value["family"] in (None, "turing", "ampere", "ada", "blackwell") and value["cpu_vendor"] in (None, "amd", "intel", "other")
@@ -727,6 +803,66 @@ def validate_kfml(value):
         raise ValueError("kfml")
 
 
+def validate_apps_discovery(value):
+    """The apps_discovery stage's record (scripts/ci/apps_discovery_stage.py): bounded, strictly read, not forwarded. DISCOVERY lane: a row that RAN and failed is a
+    KNOWN_BREAKAGE, a row that did not run is NOT_RUN and is named in `not_run`; a PASS verdict has no NOT_RUN row."""
+    name = re.compile(r"[a-z][a-z0-9_]{0,39}")
+    text = re.compile(r"[\x20-\x7e]{0,120}")
+    keys = {"schema", "verdict", "sha", "run_id", "rows", "steps", "not_run", "breakages", "host_control", "reason", "guest_rc"}
+    ok = type(value) is dict and {"schema", "verdict", "sha", "run_id", "steps"} <= set(value) <= keys
+    ok = ok and value["schema"] == 1 and value["verdict"] in ("PASS", "FAIL", "RETRY", "PARTIAL")
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    ok = ok and type(value["run_id"]) is str and re.fullmatch("[A-Za-z0-9_.-]{1,48}", value["run_id"]) is not None
+    ok = ok and type(value.get("reason", "")) is str and text.fullmatch(value.get("reason", "")) is not None
+    ok = ok and value.get("host_control", "absent") in ("present", "absent")
+    steps = value["steps"]
+    ok = ok and type(steps) is list and len(steps) <= 8 and all(
+        type(x) is dict and set(x) == {"step", "rc", "s"} and name.fullmatch(x["step"]) and type(x["rc"]) is int and type(x["s"]) is int for x in steps)
+    rows = value.get("rows", [])
+    most = 8                                              # six rows today; the bound is a little above
+    ok = ok and type(rows) is list and len(rows) <= most
+    if ok:
+        for r in rows:
+            ok = ok and type(r) is dict and {"name", "status", "guest", "host", "reason"} <= set(r) <= {"name", "status", "guest", "host", "reason", "dcgm"}
+            ok = ok and name.fullmatch(str(r.get("name"))) is not None and r.get("status") in ("PASS", "KNOWN_BREAKAGE", "NOT_RUN")
+            ok = ok and all(type(r.get(k)) is str and text.fullmatch(r[k]) is not None for k in ("guest", "host", "reason"))
+            ok = ok and (r["status"] == "PASS" or r["reason"] != "")
+    for key in ("not_run", "breakages"):
+        ok = ok and type(value.get(key, [])) is list and len(value.get(key, [])) <= 8 and all(type(x) is str and name.fullmatch(x) for x in value.get(key, []))
+    ok = ok and (value["verdict"] != "PASS" or not value.get("not_run"))
+    ok = ok and (value["verdict"] != "PASS" or bool(rows))
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 8192
+    if not ok:
+        raise ValueError("apps_discovery")
+
+
+def validate_windows_open_rows(value):
+    """The windows_open_rows stage's record (vast_payload.windows_open_rows_rows): bounded, strictly read, not forwarded."""
+    name = re.compile(r"[a-z][a-z0-9_]{0,47}")
+    keys = {"profile", "expected", "ran", "passed", "breakages", "not_run_by_design", "not_run", "sha"}
+    ok = type(value) is dict and set(value) == keys and value["profile"] == "open_source"
+    ok = ok and all(type(value[k]) is int and 0 <= value[k] <= 64 for k in ("expected", "ran", "passed"))
+    ok = ok and value["passed"] <= value["ran"] <= value["expected"]
+    ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
+    for key in ("breakages", "not_run_by_design", "not_run"):
+        ok = ok and type(value[key]) is list and len(value[key]) <= 16 and all(type(x) is str and name.fullmatch(x) for x in value[key])
+    ok = ok and len(json.dumps(value, separators=(",", ":")).encode()) <= 4096
+    if not ok:
+        raise ValueError("windows_open_rows")
+
+
+def validate_full(value):
+    """The `full` record of a --full run (scripts/ci/standalone_full.record): the stages planned, the stages explicitly skipped, whether the run is complete."""
+    name = re.compile(r"[a-z][a-z0-9_]{0,31}")
+    ok = type(value) is dict and set(value) == {"manifest", "stages", "skipped", "complete", "by_design"} and type(value["manifest"]) is int and 1 <= value["manifest"] <= 99
+    ok = ok and type(value["complete"]) is bool
+    for key in ("stages", "skipped", "by_design"):
+        ok = ok and type(value[key]) is list and len(value[key]) <= 24 and all(type(x) is str and name.fullmatch(x) for x in value[key])
+    ok = ok and (not value["complete"] or not value["skipped"])
+    if not ok:
+        raise ValueError("full")
+
+
 def validate_net_bytes(value):
     """The bytes the box's default interface moved while each stage ran (vast_payload.record_net). Read, validated and not forwarded:
     it only calibrates ci/vast-broker/bandwidth.json (scripts/ci/bandwidth_calibrate.py)."""
@@ -765,6 +901,10 @@ def read_result_file(path):
             "propimage_apps",
             "propimage_apps_b",
             "propimage_run",
+            "matlab",
+            "apps_discovery",
+            "windows_open_rows",
+            "full",
             "install_flow",
             "kfml",
             "net_bytes",
@@ -794,12 +934,26 @@ def read_result_file(path):
             validate_propimage_run(doc["propimage_run"])
             if doc["verdict"] == "PASS" and doc["propimage_run"]["verdict"] != "PASS":
                 raise ValueError("propimage_run verdict")
+        if "matlab" in doc:
+            validate_matlab(doc["matlab"])
+            if doc["verdict"] == "PASS" and doc["matlab"]["verdict"] != "PASS":
+                raise ValueError("matlab verdict")
         if "install_flow" in doc:
             validate_install_flow(doc["install_flow"])
         if "kfml" in doc:
             validate_kfml(doc["kfml"])
             if doc["verdict"] == "PASS" and doc["kfml"]["verdict"] == "FAIL":
                 raise ValueError("kfml verdict")
+        if "apps_discovery" in doc:
+            validate_apps_discovery(doc["apps_discovery"])
+            if doc["verdict"] == "PASS" and doc["apps_discovery"]["verdict"] != "PASS":
+                raise ValueError("apps_discovery verdict")
+        if "windows_open_rows" in doc:
+            validate_windows_open_rows(doc["windows_open_rows"])
+            if doc["verdict"] == "PASS" and doc["windows_open_rows"]["not_run"]:
+                raise ValueError("windows_open_rows verdict")
+        if "full" in doc:
+            validate_full(doc["full"])
         if "net_bytes" in doc:
             validate_net_bytes(doc["net_bytes"])
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):
@@ -815,7 +969,7 @@ def read_result_file(path):
         ):
             raise ValueError("host reference")
         rows = doc["suites"]
-        if type(rows) is not list or not 1 <= len(rows) <= 19:
+        if type(rows) is not list or not 1 <= len(rows) <= MAX_SUITE_ROWS:
             raise ValueError("suites")
         for row in rows:
             if type(row) is not dict or set(row) != {"name", "pass", "fail", "skip"}:

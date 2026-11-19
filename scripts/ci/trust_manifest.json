@@ -1392,7 +1392,8 @@
    "runs": "host",
    "consumers": [
     "scripts/bench/provision_box.sh",
-    "scripts/ci/vast_box_main.sh"
+    "scripts/ci/vast_box_main.sh",
+    "scripts/bench/linux/matlab_gpu_prov.sh"
    ],
    "anchors": [
     {
@@ -1645,6 +1646,24 @@
    "row": 17,
    "reason": "downloads official installers whose url and sha256 are pinned in recipe.json; not yet read through kf_trust"
   },
+  "scripts/apps/mlrows/gen_locks.py": {
+   "count": 1,
+   "class": "tooling",
+   "row": null,
+   "reason": "maintainer tool, run by hand only (no stage or run invokes it): resolves the hashed locks of the open ML rows with uv against PyPI and NVIDIA's open index; users install from the committed locks with `pip --require-hashes`"
+  },
+  "scripts/apps/mlrows/mlrows.py": {
+   "count": 3,
+   "class": "native-route3",
+   "row": null,
+   "reason": "anchored in its own code: the 135M model by the upstream commit of its repository (pins.json `revision`) and each file against the sha256 (LFS) or git blob id that the origin's tree API reports for that commit; the three venvs with `pip --require-hashes --only-binary` from the committed locks (PyPI's and NVIDIA's own per-file digests). Not yet read through kf_trust"
+  },
+  "scripts/apps/open_rows/provision.sh": {
+   "count": 1,
+   "class": "native-route3",
+   "row": null,
+   "reason": "NVIDIA's apt repository key from NVIDIA's URL, refused unless its fingerprint equals pins.env OPENROWS_NVIDIA_KEY_FPR (low 64 bits = the key id NVIDIA publishes); DCGM then through apt with that signed index. The Worker's cache-only apt shim refuses it by design. Not yet read through kf_trust"
+  },
   "scripts/apps/pin_lib.sh": {
    "count": 4,
    "class": "native-route3",
@@ -1704,6 +1723,12 @@
    "class": "operator",
    "row": null,
    "reason": "network and apt mirror speed probes: nothing they fetch is used"
+  },
+  "scripts/bench/linux/matlab_gpu_box.py": {
+   "count": 4,
+   "class": "native-route3",
+   "row": null,
+   "reason": "first-GPU-test provisioning of the Linux image C rows: the guest driver .run checked against NVIDIA's own per-file .sha256sum fetched from NVIDIA (an official checksum, class official-checksum-url in substance); a test tool, not a product path. Not yet read through kf_trust"
   },
   "scripts/bench/linux/propimage_linux.py": {
    "count": 7,
@@ -1776,6 +1801,12 @@
    "class": "experiment-only",
    "row": 35,
    "reason": "experiment-only host tools: `git fetch origin <branch>` of this repository's own experiment branches, one raw header read from raw.githubusercontent.com and the nvkvm-pv experiment repository"
+  },
+  "scripts/bench/windows/open_rows/kfopen_build.py": {
+   "count": 4,
+   "class": "native-route3",
+   "row": null,
+   "reason": "downloads inside the online Windows guest: the toolchain (Build Tools bootstrapper, MinGit, Python, NuGet) and pinned sources, each checked by an official checksum or a vendor signature, or refused unless `--accept-unanchored-downloads` records the lift (docs/design/V3_WINDOWS_OPEN_ROWS.md). kf_trust cannot run in that guest"
   },
   "scripts/bench/windows/resolve_media.py": {
    "count": 3,

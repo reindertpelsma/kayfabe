@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import kfml_stage as ks
 import payload_instruction as pi
+import test_vast_payload_v7 as v7
 import vast_report
 
 HERE = Path(__file__).resolve().parent
@@ -399,6 +400,158 @@ class Payload(unittest.TestCase):
         self.assertEqual(result["kfml"]["reason"], "setup failed rc=1")
 
 
+    # 2026-11-17 (MEASURED on a Vast box): the stage graded PASS with one row of six NOT_RUN (managed_oversub: the VM's RAM was too small to
+    # oversubscribe VRAM by 25%). Under a strict instruction (propimages_strict, the instruction's only strict switch) a row that did not
+    # run fails by name `kfml_not_run`; the record is kept either way. Non-strict is unchanged (a skip is a skip).
+    def row_not_run_text(self, **over):
+        doc = ks.summarize([ml_row(), ml_row("managed_oversub", "NOT_RUN", "host RAM too small to oversubscribe VRAM by 25%")], SHA, "large",
+                           [{"step": "run", "rc": 0, "s": 3.0}], "ci1")
+        doc.update(over)
+        return "KF_KFML_RESULT " + json.dumps(doc) + "\n", doc
+
+    def test_the_record_with_a_not_run_row_is_a_pass_verdict_like_the_measured_run(self):
+        text, doc = self.row_not_run_text()
+        self.assertEqual(doc["verdict"], "PASS")
+        self.assertEqual([r["status"] for r in doc["rows"]], ["PASS", "NOT_RUN"])
+
+    def test_strict_a_not_run_row_fails_by_name_and_the_record_is_kept(self):
+        text, doc = self.row_not_run_text()
+        result = {}
+        with self.assertRaises(self.m.EvidenceError) as caught:
+            self.m.kfml_rows(text, 0, SHA, result, strict=True)
+        self.assertEqual(caught.exception.name, "kfml_not_run")
+        self.assertEqual(result["kfml"], doc)
+
+    def test_strict_a_whole_stage_not_run_fails_by_name_and_the_record_is_kept(self):
+        result = {}
+        with self.assertRaises(self.m.EvidenceError) as caught:
+            self.m.kfml_rows(self.not_run_text(), 0, SHA, result, strict=True)
+        self.assertEqual(caught.exception.name, "kfml_not_run")
+        self.assertEqual(result["kfml"]["verdict"], "NOT_RUN")
+
+    def test_strict_with_every_row_passing_is_a_pass(self):
+        m = self.m
+        result = {}
+        text, doc = self.line()
+        self.assertEqual(m.kfml_rows(text, 0, SHA, result, strict=True), [m.row("kfml", 1)])
+        self.assertEqual(result["kfml"], doc)
+
+    def test_non_strict_keeps_the_old_behaviour_a_not_run_row_passes_and_a_whole_stage_not_run_is_skipped(self):
+        m = self.m
+        text, doc = self.row_not_run_text()
+        for kw in ({}, {"strict": False}):
+            with self.subTest(kw=kw):
+                self.assertEqual(m.kfml_rows(text, 0, SHA, {}, **kw), [m.row("kfml", 1)])
+                self.assertEqual(m.kfml_rows(self.not_run_text(), 0, SHA, {}, **kw), [m.row("kfml", skipped=1)])
+
+    def test_strict_is_a_keyword_that_defaults_to_false(self):
+        import inspect
+        parameter = inspect.signature(self.m.kfml_rows).parameters["strict"]
+        self.assertIs(parameter.default, False)
+
+    def test_strict_a_not_run_row_with_a_bad_exit_code_is_the_stage_failing_not_a_not_run(self):
+        with self.assertRaises(self.m.EvidenceError) as caught:
+            self.m.kfml_rows(self.row_not_run_text()[0], 1, SHA, {}, strict=True)
+        self.assertEqual(caught.exception.name, "kfml")
+
+    def test_strict_a_not_run_row_from_a_killed_stage_is_the_stage_failing_not_a_not_run(self):
+        with self.assertRaises(self.m.EvidenceError) as caught:
+            self.m.kfml_rows(self.row_not_run_text()[0], 137, SHA, {}, strict=True)
+        self.assertEqual(caught.exception.name, "kfml")
+
+    def test_strict_does_not_rename_the_other_failures(self):
+        m = self.m
+        red = ks.failure(SHA, "mid", [], "setup failed rc=1")
+        fail_row = ks.summarize([ml_row(), ml_row("b", "FAIL", "boom"), ml_row("c", "NOT_RUN", "r")], SHA, "mid", [{"step": "run", "rc": 1, "s": 1.0}])
+        for text, rc, sha in (
+            (self.not_run_text(), 1, SHA), (self.row_not_run_text()[0], 1, SHA), (self.row_not_run_text()[0], 0, "b" * 40),
+            ("KF_KFML_RESULT " + json.dumps(red) + "\n", 1, SHA), ("KF_KFML_RESULT " + json.dumps(fail_row) + "\n", 0, SHA),
+            ("no result line\n", 0, SHA), (self.line()[0], 1, SHA),
+        ):
+            with self.subTest(rc=rc, t=text[:40]):
+                with self.assertRaises(m.EvidenceError) as caught:
+                    m.kfml_rows(text, rc, sha, {}, strict=True)
+                self.assertEqual(caught.exception.name, "kfml")
+
+
+class StrictInMain(unittest.TestCase):
+    """The strict flag reaches the kfml grader through main(): the instruction's `propimages_strict` (the plan builder's only strict switch)."""
+
+    setUp = v7.V7Tests.setUp
+    _main_fixture = v7.V7Tests._main_fixture
+
+    IMG = {"label": "imga", "kind": "prebuilt", "disk": {"from": "pin", "ref": "propimage-kfimg-20261112.zip"}, "apps": {"resolve": {"mode": "present"}}}
+
+    def doc(self, strict):
+        doc = {"schema": pi.SCHEMA_ID, "tier": "large", "windows": False, "windows_runs": 1, "stages": [], "spec": None, "winapps": None,
+               "linux_apps": None, "rehearsal": False, "propimages": [self.IMG]}
+        if strict is not None:
+            doc["propimages_strict"] = strict
+        return doc
+
+    def run_main(self, strict, text, code=0):
+        orig = self.m.parse_args
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "i.json"
+            path.write_text(json.dumps(self.doc(strict)))
+            # The image list only has to make the instruction strict (the runner of the listed images is not under test, and its registry is not
+            # in the fixture's repo): the refusal pass is stubbed, `--only kfml` plans no propimage stage.
+            with (
+                patch.object(self.m, "parse_args", side_effect=lambda argv: orig([*argv, "--instruction", str(path), "--only", "kfml"])),
+                patch.object(self.m, "propimages_refusal", return_value=None),
+            ):
+                return self._main_fixture(windows=None, soft_ms=900 * 60000, stage_logs={"kfml": (text, code)})
+
+    def record(self, rows):
+        doc = ks.summarize(rows, v7.SHA, "large", [{"step": "run", "rc": 0, "s": 3.0}], "ci1")
+        return doc, "KF_KFML_RESULT " + json.dumps(doc) + "\n"
+
+    def one_row_not_run(self):
+        return self.record([ml_row(), ml_row("managed_oversub", "NOT_RUN", "host RAM too small to oversubscribe VRAM by 25%")])
+
+    def whole_stage_not_run(self):
+        doc = ks.not_run(v7.SHA, "large", [], "no pinned flavour can run on this box: x", ["a"])
+        return doc, "KF_KFML_RESULT " + json.dumps(doc) + "\n"
+
+    def test_a_strict_instruction_fails_a_not_run_row_by_name_and_keeps_the_record(self):
+        doc, text = self.one_row_not_run()
+        rc, result, calls = self.run_main(True, text)
+        self.assertEqual((rc, calls, result["verdict"]), (1, ["kfml"], "FAIL"))
+        self.assertEqual([r["name"] for r in result["suites"] if r["fail"]], ["kfml_not_run"])
+        self.assertEqual(result["kfml"], doc)
+
+    def test_a_strict_instruction_fails_a_whole_stage_not_run_by_name_and_keeps_the_record(self):
+        doc, text = self.whole_stage_not_run()
+        rc, result, calls = self.run_main(True, text)
+        self.assertEqual((rc, result["verdict"]), (1, "FAIL"))
+        self.assertEqual([r["name"] for r in result["suites"] if r["fail"]], ["kfml_not_run"])
+        self.assertEqual(result["kfml"], doc)
+
+    def test_a_strict_instruction_passes_when_every_row_ran(self):
+        doc, text = self.record([ml_row(), ml_row("b")])
+        rc, result, calls = self.run_main(True, text)
+        self.assertEqual((rc, result["verdict"]), (0, "PASS"))
+        self.assertIn({"name": "kfml", "pass": 1, "fail": 0, "skip": 0}, result["suites"])
+
+    def test_a_non_strict_instruction_still_passes_a_not_run_row(self):
+        for strict in (False, None):
+            with self.subTest(strict=strict):
+                doc, text = self.one_row_not_run()
+                rc, result, calls = self.run_main(strict, text)
+                self.assertEqual((rc, result["verdict"]), (0, "PASS"))
+                self.assertIn({"name": "kfml", "pass": 1, "fail": 0, "skip": 0}, result["suites"])
+                self.assertEqual(result["kfml"], doc)
+
+    def test_a_non_strict_instruction_still_skips_a_whole_stage_not_run(self):
+        for strict in (False, None):
+            with self.subTest(strict=strict):
+                doc, text = self.whole_stage_not_run()
+                rc, result, calls = self.run_main(strict, text)
+                self.assertEqual((rc, result["verdict"]), (0, "PASS"))
+                self.assertIn({"name": "kfml", "pass": 0, "fail": 0, "skip": 1}, result["suites"])
+                self.assertEqual(result["kfml"], doc)
+
+
 class Report(unittest.TestCase):
     def good(self):
         return ks.summarize([ml_row(), ml_row("b", "NOT_RUN", "vram below the floor")], SHA, "large", [{"step": "run", "rc": 0, "s": 3.0}], "ci1")
@@ -467,6 +620,18 @@ class Report(unittest.TestCase):
             with self.assertRaises(Exception):
                 vast_report.read_result_file(self.write(d, doc, "PASS"))
             vast_report.read_result_file(self.write(d, doc, "FAIL"))
+
+    def test_a_strict_not_run_failure_validates_as_a_red_report_and_never_as_a_green_one(self):
+        # 2026-11-17: the payload's strict grading ends the run FAIL with the suite `kfml_not_run`; the record it keeps (a PASS verdict with a
+        # NOT_RUN row, or a whole-stage NOT_RUN) is a record the report already accepts, so vast_report.py needs no new name.
+        one = ks.summarize([ml_row(), ml_row("managed_oversub", "NOT_RUN", "host RAM too small to oversubscribe VRAM by 25%")], SHA, "large",
+                           [{"step": "run", "rc": 0, "s": 3.0}], "ci1")
+        whole = ks.not_run(SHA, "large", [], "no pinned flavour can run on this box: x", ["a"])
+        for doc in (one, whole):
+            with tempfile.TemporaryDirectory() as d:
+                p = Path(d) / "r.json"
+                p.write_text(json.dumps({"verdict": "FAIL", "suites": [{"name": "kfml_not_run", "pass": 0, "fail": 1, "skip": 0}], "kfml": doc}))
+                self.assertEqual(vast_report.read_result_file(p)["verdict"], "FAIL")
 
     def test_a_passing_report_cannot_carry_a_failed_kfml(self):
         fail = ks.failure(SHA, "mid", [], "setup failed rc=1")

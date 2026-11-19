@@ -2066,6 +2066,17 @@ def main(argv=None):
         help="DIAGNOSTIC ARM: override the guest-visible FB size (the image's own value is the default)",
     )
     ap.add_argument(
+        "--ram-mb",
+        type=int,
+        help="override the guest RAM of this run in MiB (the image's own value, 8192, is the default); refused above 75 percent of the host's MemAvailable. "
+        "The sealed state.json is not changed",
+    )
+    ap.add_argument(
+        "--audio",
+        action="store_true",
+        help="add a virtual HDA sound card (QEMU null audio backend: no host audio is opened); off by default",
+    )
+    ap.add_argument(
         "--hold-until-file",
         help="Manual iteration: after verify, keep the guest up until this file appears (max 3 h)",
     )
@@ -2173,6 +2184,8 @@ def main(argv=None):
             if not 1024 <= a.fb_mb <= 1048576:
                 raise ValueError("--fb-mb out of range")
             state["qemu"]["fb_mb"] = a.fb_mb
+        if a.ram_mb is not None:
+            PI.check_ram_override(a.ram_mb, PI.mem_available_mb())     # named ValueError (PropError) before anything is created or booted
         work = Path(a.work).resolve()
         work.mkdir(parents=True, exist_ok=a.resume)
         (work / "run").mkdir(exist_ok=a.resume)
@@ -2209,6 +2222,10 @@ def main(argv=None):
         record("clock", "PASS", f"RTC base {PI.fmt(rtc_base)} ({kind} overlay)")
         if a.fb_mb is not None:
             record("fb-mb", "PASS", f"DIAGNOSTIC ARM: guest-visible FB {a.fb_mb} MiB (image default differs)")
+        if a.ram_mb is not None:
+            record("ram-mb", "PASS", f"OVERRIDE: guest RAM {a.ram_mb} MiB for this run (the image's own value is the default; sealed state.json unchanged)")
+        if a.audio:
+            record("audio", "PASS", "virtual HDA sound card, QEMU null backend (no host audio opened)")
         env = dict(os.environ)
         for line in Path(a.flags).read_text().splitlines():
             line = line.strip()
@@ -2288,7 +2305,7 @@ def main(argv=None):
                 }
             command = PI.build_argv(
                 state, "ci", str(clone), str(work), qemu=a.qemu, display=a.display,
-                data_iso=a.data_iso if a.app_set == "b" else None, **kw
+                data_iso=a.data_iso if a.app_set == "b" else None, ram_mb=a.ram_mb, audio=a.audio, **kw
             )
             if "restrict=on" not in " ".join(command) or str(clone) not in " ".join(command):
                 raise ValueError("Offline overlay invariant violated")

@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-18 (§AV (2026-11-17): the guest may read the physical GPU's utilisation, `report-utilization`, default on; §AX (2026-11-17): standalone trust is git only by default, the lift is explicit, what the user passes is trusted, and a user-passed mirror refines §AW.2; §BA: propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, one-way clock rule, token revocation; §AZ: proprietary images and SPEC leave the required release gate and run as an app lane; 2026-11-17: §AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-18 (§AX (2026-11-17): standalone trust is git only by default, the lift is explicit, what the user passes is trusted, and a user-passed mirror refines §AW.2; §AY (2026-11-17): the SPEC lanes' open LTSC guest has the network and the real clock; §AV (2026-11-17): the guest may read the physical GPU's utilisation, `report-utilization`, default on; §BA: propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, one-way clock rule, token revocation; §AZ: proprietary images and SPEC leave the required release gate and run as an app lane; 2026-11-17: §AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -102,6 +102,7 @@ citation: ask whether its reason still holds before relying on it.
 6. **Rotation.** Each release runs the images on rotating families so that every image meets every family within four releases; a rotation table records the last run per image and family. A change to an architecture-specific path (a per-family descriptor, a channel route, the walker) escalates to every image on the affected family.
 7. **The discovery lane is separate and non-gating.** Real applications and production workloads run between releases, chosen by the coverage gap (new RM control ids, new refusals, new Xid lines: a novelty signal), with automatic capture of the kf3 census window, the host log and the guest events; every novelty is triaged with a control (VFIO, native Windows or the host) and becomes a GPU-free replay test and a gate row.
 8. **What this does not change.** The standalone run still lets a third party add their own proprietary apps and images by configuration (the owner's rule of 2026-11-18). Nothing in this ruling edits how an image is built, and a PASS of the required gate is still a statement only about the gate.
+
 ## §AX. Standalone trust is git only by default; the lift is explicit; what the user passes is trusted, 2026-11-17
 
 **STATUS: LIVE, 2026-11-17; owner rules (stated in conversation, recorded by the coordinator); step 1 of the plan is built GPU-free, no box ran it.**
@@ -143,11 +144,7 @@ recipe: `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`. Built GPU-free; no box ran
    must not require pins for images, artifacts or apps: someone may have built their own Windows images, compiled their own software
    (for example Unreal), or spread applications over different images. The proprietary images are not strict for standalone.
 2. **Integrity checks stay** (a pack manifest's member hashes, the seed binding, cache-key consistency). Pins on what the repository
-   itself downloads (swtpm, libtpms, noVNC, wheels, install media) are supply-chain integrity and hold in every mode. **[Refined by §AX,
-   2026-11-17: they hold as integrity checks on what the repository downloads BY ITSELF; a mirror, URL or path the user passes for such an
-   artifact is a user input and is trusted and recorded, not refused, and the pin that decides what the repository's own download is must
-   be an anchor that does not depend on us (see §AX.2). The coordinator's audit cites this sentence as "AW.4": in the tree it is §AW.2,
-   and rule 4 of `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`.]**
+   itself downloads (swtpm, libtpms, noVNC, wheels, install media) are supply-chain integrity and hold in every mode.
 3. A standalone run **records** the computed sha256 and size of each user-supplied object in its evidence instead of refusing on a mismatch;
    `--expect-sha256 NAME=HASH` lets a user opt in. One mechanism: `propimage_runspec.pins_enforced(spec)`, true only for a strict spec.
 4. Anyone can **run their own deployment**: build artifacts with the repository's scripts, publish to their own object store, write their own
@@ -174,6 +171,24 @@ the RUSD publisher, tests and mutants); **not run on hardware** (the plan and th
 5. **The RUSD answer needs a publisher, so it has one.** `sweep.rs` refused `0x20800afe`/`0x20800aff` because an `NV_OK` would promise a page
    that is never written; with the property on, kayfabe writes the utilisation record of that page itself (from its own sample), and
    nothing else of it.
+
+## §AY. The open LTSC guest of the SPECviewperf lanes has the network and the real clock, 2026-11-17
+
+**STATUS: LIVE, 2026-11-17; owner decision (stated in conversation, recorded by the coordinator).** Design and what needs hardware:
+`docs/design/V3_SPEC_GATE.md` section 5a. Implemented GPU-free in `scripts/bench/box/specviewperf_stage.sh`; nothing here has run on hardware yet.
+
+1. The open Windows LTSC guest that the SPECviewperf lanes run on has **internet and the real clock** (`KF_SPEC_NET=online`, the default of
+   the stage): the Windows evaluation guest needs the network and the real time to complete its own start-up validation. By §AU the real
+   clock follows from the network. SPEC does not mind having internet.
+2. It does **not** apply to the proprietary images (A, B, C): they stay offline with the clock of their `state.json` (§AR, §AU). The Windows
+   gate, the Windows apps stage and the second Windows run keep their network mode (they are shorter than 60 minutes).
+3. The guest stays untrusted and the box holds no secrets; the network of this stage is for the operating system's own validation and
+   incidental traffic.
+4. The licence probe is on by default for this stage and the stage reports a guest that went down with a licence event 1074 as
+   `GUEST_SHUTDOWN_LICENCE`. The "validate once, then seal" proposal of the acceptance plan is the fallback and is not needed if the online
+   boot validates.
+
+<!-- src: owner, 2026-11-17: "the open Windows LTSC guest that the SPECviewperf lanes run on must have INTERNET and the REAL CLOCK" -->
 
 ## §AU. The guest clock depends only on the network; a recorded clock is never earlier than the software loaded into the image, 2026-11-16
 

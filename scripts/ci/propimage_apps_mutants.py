@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Mutation checks of the propimage_apps stage (2026-11-15): every mutant needs two named killers (stdlib, GPU-free).
 
-Each mutant is one exact-once text replacement in a private copy of propimage_apps.py, vast_report.py or vast_payload.py (the whole of
+Each mutant is one exact-once text replacement in a private copy of propimage_apps.py, vast_report.py, vast_payload.py, propimage_apps_b_stage.py or
+propimage_check.py (2026-11-16: the image B guest RAM and sound card mutants; their killers are in test_propimage_apps_b_stage.py and test_propimage_check.py) (the whole of
 scripts/ci and scripts/kfci is copied, plus the harness files the stage imports); the named tests of test_propimage_apps.py run against
 the copy and the failing ones are the killers. The unmutated copy must be green first.
 
@@ -23,6 +24,8 @@ FILES = {
     "pa": "scripts/ci/propimage_apps.py",
     "report": "scripts/ci/vast_report.py",
     "payload": "scripts/ci/vast_payload.py",
+    "pab": "scripts/ci/propimage_apps_b_stage.py",
+    "check": "scripts/bench/windows/propimage_check.py",
 }
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_propimage_apps."
@@ -36,6 +39,10 @@ COPY_FILES = [
     "scripts/bench/windows/clocknet_assert.py",
     "scripts/bench/windows/propimage_plain.py",
     "scripts/bench/windows/propimage_registry.py",
+    "scripts/bench/windows/propimage_apps_b.py",
+    "scripts/bench/windows/gpu_assert.py",
+    "scripts/bench/windows/kf3_census.py",
+    "scripts/bench/windows/media_check.py",
     "scripts/bench/windows/propimage_runspec.py",
     "scripts/bench/windows/app_defs/core_apps.py",
     "scripts/bench/windows/propimage_autounattend.xml.in",
@@ -50,6 +57,7 @@ r = unittest.TextTestRunner(stream=io.StringIO()).run(suite)
 print('KF_MUTATION_RESULT=' + json.dumps({'tests': r.testsRun, 'killers': [t.id() for t, _ in r.failures + r.errors]}))
 """
 
+PB, BG, CK = ("test_propimage_apps_b_stage.Plan.", "test_propimage_apps_b_stage.GuestRam.", "test_propimage_check.T.")   # image B's stage and the harness
 P, V, B, K, R, RP, W, G, RV = (SUITE + n for n in (
     "Pins.", "Preflight.", "Boots.", "Verdicts.", "Run.", "ReportValidation.", "PayloadWiring.", "KernelLogWindows.", "ReportValidation."))
 
@@ -226,6 +234,27 @@ MUTANTS = [
       RV + "test_payload_pass_with_a_red_record_is_refused_but_a_red_payload_may_carry_it", RV + "test_payload_pass_with_a_refused_record_is_refused"),
     M("report-hash-unchecked", "report", 'and num(e["bytes"]) and re.fullmatch("[0-9a-f]{64}", str(e["sha256"])) for e in a["evidence"])', "for e in a['evidence'])",
       RV + "test_hashes_sizes_and_counts_are_checked", RV + "test_result_file_refuses_a_bad_evidence_hash"),
+    # image B's guest RAM override and sound card (2026-11-16): the stage's boot command, its refusal, and the harness that forwards them
+    M("b-stage-ram-flag-dropped", "pab", '        cmd += ["--ram-mb", str(ram)]', "        pass",
+      PB + "test_boot_command_carries_the_guest_ram_and_the_sound_card_by_default", BG + "test_every_boot_gets_the_ram_and_audio_flags_and_the_stage_passes"),
+    M("b-stage-audio-off-by-default", "pab", "AUDIO = True", "AUDIO = False",
+      PB + "test_boot_command_carries_the_guest_ram_and_the_sound_card_by_default", BG + "test_cli_defaults_and_switches"),
+    M("b-stage-ram-default-8192", "pab", "GUEST_RAM_MB = 16384", "GUEST_RAM_MB = 8192",
+      PB + "test_boot_command_carries_the_guest_ram_and_the_sound_card_by_default", BG + "test_cli_defaults_and_switches"),
+    M("b-stage-ram-override-field-ignored", "pab", 'ram = a.get("ram_mb", GUEST_RAM_MB)', "ram = GUEST_RAM_MB",
+      PB + "test_boot_command_override_fields_change_or_drop_them", BG + "test_run_arguments_switch_both_off"),
+    M("b-stage-ram-refusal-skipped", "pab", "        check_guest_ram(pi_check, guest_ram_mb)\n", "",
+      BG + "test_an_override_above_75_percent_of_memavailable_is_refused_before_anything_is_fetched", BG + "test_the_boundary_is_exactly_75_percent"),
+    M("b-stage-refusal-reason-lost", "pab", 'named.group(1) if named else "RAM_OVERRIDE_INVALID"', '"RAM_OVERRIDE_INVALID"',
+      BG + "test_an_override_above_75_percent_of_memavailable_is_refused_before_anything_is_fetched", BG + "test_the_boundary_is_exactly_75_percent"),
+    M("b-stage-zero-still-checked", "pab", "    if not guest_ram_mb:\n        return", "    if False:\n        return",
+      BG + "test_an_invalid_override_is_refused_by_name_and_zero_skips_the_check", BG + "test_run_arguments_switch_both_off"),
+    M("b-check-ram-refusal-dropped", "check", "            PI.check_ram_override(a.ram_mb, PI.mem_available_mb())", "            pass",
+      CK + "test_pipeline_refuses_a_ram_override_above_75_percent_of_memavailable_before_any_boot", CK + "test_pipeline_refuses_an_invalid_ram_override"),
+    M("b-check-ram-not-forwarded", "check", "ram_mb=a.ram_mb, audio=a.audio,", "ram_mb=None, audio=a.audio,",
+      CK + "test_pipeline_passes_the_ram_and_audio_overrides_to_the_argv", CK + "test_pipeline_ram_alone_sets_no_sound_card"),
+    M("b-check-audio-not-forwarded", "check", "ram_mb=a.ram_mb, audio=a.audio,", "ram_mb=a.ram_mb, audio=False,",
+      CK + "test_pipeline_passes_the_ram_and_audio_overrides_to_the_argv", CK + "test_pipeline_audio_alone_sets_no_ram_override"),
     # the payload wiring
     M("payload-stage-in-the-default-plan", "payload", "PROPIMAGE_APPS_IN_LARGE = False", "PROPIMAGE_APPS_IN_LARGE = True",
       W + "test_not_in_the_default_plan_and_only_with_only_in_large", W + "test_manual_only_table_and_the_budget_guard"),
@@ -240,7 +269,7 @@ MUTANTS = [
       W + "test_a_nonzero_exit_with_a_pass_record_is_a_failure", W + "test_rows_pass_fail_and_not_run"),
     M("payload-record-not-kept", "payload", '    result["propimage_apps"] = doc\n', "    pass\n",
       W + "test_rows_need_exactly_one_parseable_line_and_keep_a_red_record", W + "test_rows_pass_fail_and_not_run"),
-    M("payload-stage-after-the-spec-lane", "payload", '    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")\n    if i.tier == "large" and (PROPIMAGE_APPS_B_IN_LARGE or "propimage_apps_b" in only):\n        names.append("propimage_apps_b")\n    if "specviewperf" in i.stages:\n        names.append("specviewperf")',
+    M("payload-stage-after-the-spec-lane", "payload", '    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")\n    if i.tier == "large" and (PROPIMAGE_APPS_B_IN_LARGE or "propimage_apps_b" in only):\n        names.append("propimage_apps_b")\n    if i.tier == "large" and (i.matlab is not None or MATLAB_IN_LARGE or "matlab" in only):\n        names.append("matlab")\n    if "specviewperf" in i.stages:\n        names.append("specviewperf")',
       '    if "specviewperf" in i.stages:\n        names.append("specviewperf")\n    if i.propimages or (i.tier == "large" and (PROPIMAGE_APPS_IN_LARGE or "propimage_apps" in only)):\n        names.append("propimage_apps")',
       W + "test_runs_after_every_windows_stage_and_before_the_spec_lane", W + "test_runs_before_the_spec_lane_without_windows_stages"),
 ]
@@ -290,7 +319,7 @@ def main():
     args = parser.parse_args()
     chosen = [m for m in MUTANTS if args.only in m[0]]
     with tempfile.TemporaryDirectory(prefix="kf-propimage-apps-mutants-") as parent:
-        baseline = run_tests(tree(parent, "base", {}), [SUITE.rstrip(".")])
+        baseline = run_tests(tree(parent, "base", {}), [SUITE.rstrip("."), "test_propimage_apps_b_stage", "test_propimage_check"])
         if baseline["killers"]:
             print("BASELINE RED: %s" % baseline["killers"], file=sys.stderr)
             return 1

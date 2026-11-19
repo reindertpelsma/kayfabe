@@ -88,20 +88,28 @@ async function secretsOf(env, entry) {
   if (env.BROKER_PATH_PREFIX && env.WORKER_URL)
     values.push(String(env.WORKER_URL).replace(/\/+$/, '') + '/' + env.BROKER_PATH_PREFIX);
   // The token of every leg of this run (a replacement leg's log carries the earlier legs' text).
+  // With and without the scope claim (src/trust.js): a token issued before the claim existed has none, and an entry that does not say
+  // which scopes its token carried is redacted for every form a token can have.
+  const forms =
+    entry.scopes === undefined
+      ? [undefined, ['public'], ['public', 'private']]
+      : [entry.scopes, undefined];
   for (const nonce of [entry.nonce, ...(entry.priorNonces ?? [])])
-    try {
-      values.push(
-        await new RunTokens(env.RUN_TOKEN_SECRET).issue({
-          run: entry.run,
-          attempt: entry.attempt,
-          sha: entry.sha,
-          nonce,
-          key: entry.key,
-          label: 'kf-ci-' + entry.key,
-          reportExpiry: entry.reportExpiry,
-        }),
-      );
-    } catch {}
+    for (const scopes of forms)
+      try {
+        values.push(
+          await new RunTokens(env.RUN_TOKEN_SECRET).issue({
+            run: entry.run,
+            attempt: entry.attempt,
+            sha: entry.sha,
+            nonce,
+            key: entry.key,
+            label: 'kf-ci-' + entry.key,
+            reportExpiry: entry.reportExpiry,
+            ...(scopes === undefined ? {} : { scopes }),
+          }),
+        );
+      } catch {}
   return exactValues(values);
 }
 

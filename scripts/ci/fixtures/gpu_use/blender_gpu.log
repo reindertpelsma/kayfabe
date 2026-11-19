@@ -1,0 +1,8 @@
+=== blender_cycles side=guest start=2026-11-17T00:00:00+00:00 host=fixture cmd: <the row's command line>
+BLENDER_DEVICES dev=CUDA scene=GPU active=True cpu_enabled=False enabled=1 names=NVIDIA GeForce RTX 4090
+Fra:1 Mem:51.01M (Peak 66.84M) | Time:00:01.08 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Finished
+BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 4090 mean=0.6405
+BLENDER_DEVICES dev=OPTIX scene=GPU active=True cpu_enabled=False enabled=1 names=NVIDIA GeForce RTX 4090
+Fra:1 Mem:49.81M (Peak 65.63M) | Time:00:03.19 | Mem:1039.02M, Peak:1039.02M | Scene, ViewLayer | Finished
+BLENDER_OK OPTIX gpu=NVIDIA GeForce RTX 4090 mean=0.6405
+=== end rc=0 secs=3 2026-11-17T00:00:03+00:00

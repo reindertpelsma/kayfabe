@@ -47,6 +47,12 @@ import {allowedWorkflowRef} from './workflow-authority.js';
 import {mintBlob,checkBlobBudget} from './blobs.js';
 // prettier-ignore
 import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} from './benchdata.js';
+// prettier-ignore
+import {PRIVATE_PATH,PRIVATE_REFUSALS,privateAccess,privateCount,privateExists,privateExpiry,privateKey} from './privatedata.js';
+// prettier-ignore
+import {trustDecision} from './trust.js';
+// prettier-ignore
+import {releaseSeqFor,familyDiesOf,legInstruction} from './legs.js';
 import { offerPrice, providerId, applyResourceProfile } from './policy.js';
 import {
   BOOT_FAILURE_STATES,
@@ -1035,6 +1041,8 @@ export function createService({
       );
     const bench =
       /^\/bench-data\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/([A-Za-z0-9._-]{1,100})$/.exec(path);
+    const benchPrivate = PRIVATE_PATH.exec(path);
+    const instructionRoute = /^\/instruction\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
     const match =
       /^\/(report|kill|status|stop|logs|run-report)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
         path,
@@ -1042,6 +1050,8 @@ export function createService({
     if (
       !(blob && request.method === 'GET') &&
       !(bench && request.method === 'GET') &&
+      !(benchPrivate && request.method === 'GET') &&
+      !(instructionRoute && request.method === 'GET') &&
       !(path === '/availability' && request.method === 'GET') &&
       !(path === '/rent' && request.method === 'POST') &&
       !(path === '/stop-all' && request.method === 'POST') &&
@@ -1053,6 +1063,76 @@ export function createService({
     if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);
     const bearer = authorization.slice(7),
       vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
+    if (instructionRoute) {
+      // The leg's instruction (src/legs.js): the box fetches it with its run token and the hash is the provenance record. A run
+      // without one (every run today, PROPIMAGES_ENABLED is off) answers 404 NO_INSTRUCTION. Nothing here is a secret or a URL.
+      const r = await ledger.get('record:' + instructionRoute[1]);
+      if (
+        !r ||
+        r.key !== instructionRoute[1] ||
+        !(await tokens.verify(bearer, r)) ||
+        r.ended !== null ||
+        r.closed ||
+        now() >= r.reportExpiry * 1000
+      )
+        refuse('UNAUTHORIZED', 401);
+      clocks(r, cfg);
+      await readBounded(request, 0);
+      await rate(r, cfg);
+      if (typeof r.instruction !== 'string') refuse('NOT_FOUND', 404, 'NO_INSTRUCTION');
+      return new Response(r.instruction, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          'X-KF-Instruction-Sha256': r.instructionSha256,
+        },
+      });
+    }
+    if (benchPrivate) {
+      // Private (licence-restricted) objects: the scope was decided at lease time (src/trust.js) and is read here, with liveness, the
+      // profile or source, the per-run URL limit and the object's existence. Named refusals; no URL and no other object name leaves.
+      try {
+        const r = await ledger.get('record:' + benchPrivate[1]);
+        const verified = !!r && r.key === benchPrivate[1] && (await tokens.verify(bearer, r));
+        const fields = verified ? await tokens.verifyStateless(bearer) : null;
+        const used = privateAccess(verified ? r : null, fields, { nowMs: now() });
+        clocks(r, cfg);
+        await rejectExpiredCallback(r, cfg, vast);
+        await readBounded(request, 0);
+        const objectKey = privateKey(benchPrivate[2], benchPrivate[3]);
+        await rate(r, cfg);
+        const instance = await vast.inspect(r);
+        if (!instance || instance.actual_status !== 'running')
+          refuse('UNAUTHORIZED', 401, 'TOKEN_EXPIRED');
+        await privateExists(fetcher, env, objectKey, now());
+        const at = now(),
+          expires = privateExpiry(at, r.hardDeadline),
+          location = await benchUrl(env, objectKey, expires, at);
+        privateCount(r, used);
+        await ledger.save(r);
+        console.log(
+          JSON.stringify({
+            event: 'private_data_url',
+            run: benchPrivate[1],
+            object: objectKey,
+            expires: Math.floor(at / 1000) + expires,
+          }),
+        );
+        return benchRedirect(location);
+      } catch (e) {
+        if (e instanceof BrokerError && PRIVATE_REFUSALS.includes(e.reason))
+          console.log(
+            JSON.stringify({
+              event: 'private_data_refused',
+              run: benchPrivate[1],
+              prefix: benchPrivate[2],
+              reason: e.reason,
+            }),
+          );
+        throw e;
+      }
+    }
     if (bench) {
       const r = await ledger.get('record:' + bench[1]);
       if (
@@ -1481,6 +1561,25 @@ export function createService({
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
       await github.boxProtocol(target.sha, rehearsal ? { rehearsal: true } : { matrix: true });
     }
+    // The instruction of a release leg (src/legs.js, behind PROPIMAGES_ENABLED, default off): built from the leg, its estimate prices
+    // the leg (policy.js resourceCaps takes it as the number, capped at the profile's maximum), the record keeps it for GET /instruction.
+    let legDoc;
+    if (cfg.propimagesEnabled && profile === 'release' && leg) {
+      try {
+        legDoc = legInstruction({
+          profile,
+          tierName: middleLeg ? 'middle' : tierName,
+          leg,
+          cfg,
+          releaseSeq: leg.releaseSeq,
+          familyDies: leg.familyDies,
+        });
+      } catch {
+        refuse('NOT_ELIGIBLE', 409, 'INSTRUCTION_UNAVAILABLE');
+      }
+      cfg = { ...cfg, bandwidthEstimate: legDoc.pricing };
+      applyResourceProfile(cfg, profile, tierName);
+    }
     // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
     // while the spend row exists the key is refused. The row is pruned once its run ended more
     // than 30 days ago (ledger.budgets), so after that a token minted for the same run attempt
@@ -1606,9 +1705,15 @@ export function createService({
       : Array.from(crypto.getRandomValues(new Uint8Array(16)), (x) =>
           x.toString(16).padStart(2, '0'),
         ).join('');
+    // The scope of this run's token is decided HERE, once, from provenance the Worker verified itself (github.authorize, or the
+    // owner's admin start stored on the batch); the record keeps the decision, the token carries it (src/trust.js).
+    const { provenance, ...targetFields } = target,
+      trust = trustDecision(provenance, { repository: cfg.repo });
     const started = now(),
       r = {
-        ...target,
+        ...targetFields,
+        scopes: trust.scopes,
+        scopeWhy: trust.why,
         ...spendClass({ profile }),
         tier: tierName,
         middleAppsRequested:
@@ -1700,6 +1805,10 @@ export function createService({
         rateCount: 0,
         liveCheckedAt: null,
       };
+    if (legDoc) {
+      r.instruction = legDoc.text;
+      r.instructionSha256 = await sha256Hex(legDoc.text);
+    }
     r.runBudgetUsd =
       retrySource?.runBudgetUsd ??
       Math.min(
@@ -1832,6 +1941,21 @@ export function createService({
       r.id = await vast.create(offer, r, script, environment);
       r.idSource = 'create';
       await ledger.save(r);
+      if (legDoc) {
+        // what the leg's number is made of, one data-file entry per line (the id names the entry to edit), and the image plan
+        for (const line of [
+          ...legDoc.plan.lines.map((x) => 'instruction ' + x),
+          ...legDoc.estimate.lines.map((x) => x.trim()),
+          'bandwidth priced from the estimate: down ' +
+            cfg.bandwidthDown +
+            ' GB up ' +
+            cfg.bandwidthUp +
+            ' GB (profile row replaced, capped at the profile maximum)',
+          'instruction sha256 ' + r.instructionSha256,
+        ].slice(0, 80))
+          await workerLine(r, line.slice(0, 300), cfg);
+        await ledger.save(r);
+      }
       const createdInstance = await vast.inspect(r);
       r.contractVerified = true;
       await recordRental(r, createdInstance, cfg);
@@ -1878,7 +2002,7 @@ export function createService({
   // Its legs are ordinary rentals through admit(); the cron tick classifies ended legs, schedules
   // a fresh-box re-run for RETRY/UNATTRIBUTED within the release cost cap, starts pending legs as
   // slots and caps allow, and finishes with a verdict over (family, die, platform) cells.
-  const BATCH_KEYS = ['commit_sha', 'die', 'tier', 'rehearsal'];
+  const BATCH_KEYS = ['commit_sha', 'die', 'tier', 'rehearsal', 'release_seq'];
   function batchRequest(body) {
     if (
       !body ||
@@ -1894,7 +2018,13 @@ export function createService({
       (body.die !== undefined &&
         ((body.tier === 'large' && body.rehearsal !== true) ||
           typeof body.die !== 'string' ||
-          !/^[A-Z][A-Z0-9_]{1,23}$/.test(body.die)))
+          !/^[A-Z][A-Z0-9_]{1,23}$/.test(body.die))) ||
+      // the ordinal of the release (the number in its tag), large tier only; otherwise the Worker assigns it (src/legs.js)
+      (body.release_seq !== undefined &&
+        (body.tier !== 'large' ||
+          !Number.isSafeInteger(body.release_seq) ||
+          body.release_seq < 0 ||
+          body.release_seq > 1000000))
     )
       refuse('BAD_REQUEST', 400);
     return body;
@@ -2012,6 +2142,15 @@ export function createService({
       error.plan = plan;
       throw error;
     }
+    let releaseSeq;
+    if (request.tier === 'large') {
+      try {
+        releaseSeq = (await releaseSeqFor(ledger, request.commit_sha, request.release_seq)).seq;
+      } catch (e) {
+        if (e.conflict) refuse('BAD_REQUEST', 400, 'RELEASE_SEQ_CONFLICT');
+        throw e;
+      }
+    }
     const seq = ((await ledger.get('batch-seq')) ?? 0) + 1;
     await ledger.put('batch-seq', seq);
     const id = '8' + String(now()).padStart(15, '0') + String(seq % 1000).padStart(3, '0');
@@ -2061,6 +2200,15 @@ export function createService({
       state: 'RUNNING',
       created: now(),
       updated: now(),
+      // verified at the start: the owner's token, a commit reachable from master or next (github.reachable above)
+      provenance: {
+        source: 'admin',
+        repository: cfg.repo,
+        headRepository: cfg.repo,
+        event: 'admin_start',
+        reachable: true,
+        actorIsOwner: true,
+      },
       runnerNonce: await sha256Hex(
         'kf-batch:' + id + ':' + (random ? random() : crypto.randomUUID()),
       ),
@@ -2068,6 +2216,7 @@ export function createService({
       estimateUsd: plan.estimate_usd,
       ...(request.rehearsal === true ? { rehearsal: true, rehearsalDie: request.die } : {}),
       windowsRunsPerDie: request.tier === 'large' ? cfg.releaseWindowsRuns : 1,
+      ...(releaseSeq === undefined ? {} : { releaseSeq }),
       diesPerFamily: cfg.releaseDiesPerFamily,
       releaseDies: request.tier === 'large' ? cfg.releaseDies : {},
       stages: request.tier === 'large' ? cfg.releaseStages : [],
@@ -2242,6 +2391,8 @@ export function createService({
             branch: 'batch:' + batch.id,
             run: batch.id,
             attempt: String(l.seq),
+            // recorded by the owner's authenticated admin start; a batch stored before the field existed is untrusted
+            provenance: batch.provenance,
           },
           profile: batch.profile,
           tierName: batch.tier,
@@ -2260,6 +2411,9 @@ export function createService({
             ...(l.cpuVendor ? { cpuVendor: l.cpuVendor } : {}),
             ...(l.apps === false ? { apps: false } : {}),
             ...(batch.rehearsal === true ? { rehearsal: true } : {}),
+            ...(batch.releaseSeq === undefined
+              ? {}
+              : { releaseSeq: batch.releaseSeq, familyDies: familyDiesOf(batch, l.family) }),
             stages: l.legTier === 'middle' ? [] : batch.stages,
             avoidMachines: l.avoidMachines,
             avoidHosts: l.avoidHosts,
@@ -2465,14 +2619,23 @@ export function createService({
       /^\/(blob-url)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._-]{1,100}$/.exec(
         path,
       ) ??
-      /^\/(bench-data)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,100}$/.exec(path);
+      /^\/(instruction)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??
+      /^\/(bench-data)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,100}$/.exec(path) ??
+      (PRIVATE_PATH.exec(path) ? ['', 'bench-data', PRIVATE_PATH.exec(path)[1]] : null);
     if (box) {
+      // the private-object route names its refusals (src/privatedata.js)
+      const named = PRIVATE_PATH.test(path) ? (reason) => reason : () => undefined;
       const record = await ledger.get('record:' + box[2]);
-      if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);
+      if (!record || !(await tokens.verify(bearer, record)))
+        refuse(
+          'UNAUTHORIZED',
+          401,
+          named((await tokens.expired(bearer)) ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'),
+        );
       if (record.ended !== null || record.closed) {
         if (box[1] === 'kill' && record.boxKilled && record.ended !== null)
           return json({ state: 'NONE' });
-        refuse('UNAUTHORIZED', 401);
+        refuse('UNAUTHORIZED', 401, named('TOKEN_EXPIRED'));
       }
       if (box[1] === 'report' && record.resultAt !== undefined) refuse('UNAUTHORIZED', 401);
       return;
@@ -3167,14 +3330,23 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
     )
       return;
-    if (/^\/(?:report|run-report|kill|blob-url|bench-data|evidence)\//.test(path)) {
+    if (/^\/(?:report|run-report|kill|blob-url|bench-data|instruction|evidence)\//.test(path)) {
       if (boxSecret !== env.RUN_TOKEN_SECRET) {
         boxSecret = env.RUN_TOKEN_SECRET;
         boxVerifier = new RunTokens(boxSecret, now);
       }
       const fields = await boxVerifier.verifyStateless(bearer);
       const key = /^\/[^/]+\/([1-9][0-9]*-[1-9][0-9]*)/.exec(path)?.[1];
-      if (!fields || fields.key !== key) refuse('UNAUTHORIZED', 401);
+      if (!fields || fields.key !== key)
+        refuse(
+          'UNAUTHORIZED',
+          401,
+          PRIVATE_PATH.test(path)
+            ? (await boxVerifier.expired(bearer))
+              ? 'TOKEN_EXPIRED'
+              : 'TOKEN_INVALID'
+            : undefined,
+        );
       const window = Math.floor(now() / 60000);
       if (boxWindow !== window) {
         boxWindow = window;
@@ -3295,6 +3467,10 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
           verdict: 'UNAVAILABLE',
           log_tail_sanitised: '',
           bytes_dropped: 0,
+          // a named refusal of the private-object route (a bad token is TOKEN_INVALID); no other gateway answer carries a reason
+          ...(PRIVATE_PATH.test(path) && error instanceof BrokerError && error.reason
+            ? { reason: error.reason }
+            : {}),
         },
         {
           status: error instanceof BrokerError ? error.status : 503,

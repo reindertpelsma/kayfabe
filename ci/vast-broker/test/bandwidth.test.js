@@ -282,9 +282,12 @@ test("the plan of stages is the payload's own plan (every leg of this file, with
         [[], []],
         [['install_flow'], []],
         [[], ['kfml']],
+        // the manual-only stages of the standalone full run (scripts/ci/standalone_full.py)
+        [['apps_discovery', 'windows_open_rows', 'propimage_apps_b'], []],
       ]) {
         const doc = make(leg);
         if (only.includes('install_flow') && doc.tier !== 'large') continue;
+        if (only.includes('apps_discovery') && doc.tier !== 'large') continue;
         if (skip.includes('kfml') && !['middle', 'large'].includes(doc.tier)) continue; // the payload refuses a --skip of a stage that is not planned
         const file = join(dir, name + '.json');
         writeFileSync(file, JSON.stringify(doc));

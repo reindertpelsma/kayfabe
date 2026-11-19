@@ -1,0 +1,18 @@
+KF_CLOCK image=propimage-linux net=offline using=recorded base=2026-11-17T08:49:26Z recorded=2026-11-17T08:49:26Z floor_input=- inputs=0
+clone clone1 pid 62571; ssh up after 41.3s
+MATCH     machine_id
+MATCH     hostname
+MATCH     smbios_uuid
+MATCH     smbios_serial
+MATCH     baseboard_serial
+MATCH     chassis_serial
+MATCH     mac
+MATCH     disk_serial
+MATCH     kernel_headers           kernel=6.8.0-149-generic
+MATCH     driver_build_tools       kernel_cc=x86_64-linux-gnu-gcc-13
+MATCH     cloud_init_disabled      True
+MATCH     cpu_no_forbidden_flags   []
+MATCH     no_network               internet=False ping=False
+MATCH     clock                    base=2026-11-17T08:49:26Z guest=2026-11-17T08:50:07Z window_s=56
+RESULT MATCH
+EXIT rc=0 11:16:49

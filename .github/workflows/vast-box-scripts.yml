@@ -105,6 +105,12 @@ jobs:
         run: python3 scripts/bench/windows/appmatrix/repro_mutants.py
       - name: Reviewed artifact receiver mutation checks
         run: python3 scripts/bench/windows/appmatrix/receiver_mutants.py
+      - name: Open Windows rows (VK-GL-CTS, DirectX samples) - committed caselists, pins and unit tests
+        run: |
+          python3 scripts/bench/windows/open_rows/kfopen.py check
+          python3 -W ignore -m unittest discover -s scripts/bench/windows/open_rows/tests
+      - name: Open Windows rows mutations require two named killers each
+        run: python3 scripts/bench/windows/open_rows/open_rows_mutants.py --jobs 2
   gpu-free:
     name: Vast box scripts — tests and mutations
     runs-on: ubuntu-latest

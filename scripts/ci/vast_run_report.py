@@ -77,7 +77,7 @@ def windows_app_result(cls, verdict):
 # a viewset, its result and the names of its failed subtests. Nothing here is a number a benchmark measured.
 SPEC_ROW = re.compile(
     r"^SPEC_ROW name=([a-z][a-z_]*-[0-9]{2}) result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3}"
-    r" reason=(?:[A-Z_]{1,16}|-) failed=([A-Za-z0-9_,]{1,120}|-)$"
+    r" reason=(?:[A-Z_]{1,24}|-) failed=([A-Za-z0-9_,]{1,120}|-)$"
 )
 SPEC_SUITE = "spec_viewsets"  # the report's name for the stage's suite rows ("specviewperf" in the result file)
 SPEC_RESULT = {"PASS": "PASS", "FAIL": "FAIL", "NOT_RUN": "SKIP"}

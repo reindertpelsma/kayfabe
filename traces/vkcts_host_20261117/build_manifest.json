@@ -1,0 +1,67 @@
+{
+ "key": "97f8150df083a62a",
+ "cts_commit": "0d18b347943e5e843529a05c95220e27fe30c538",
+ "cts_tag": "vulkan-cts-1.4.7.1",
+ "externals": {
+  "spirv-tools": "1d0401cd2b68ae34cda9ff625bedd1be4ed6214a",
+  "glslang": "2ff6f609379ce43c4291c732cf6a19dd2461a680",
+  "spirv-headers": "cb42dec3830d3ac67fa449ecdc0c0f73d5e74498",
+  "vulkan-docs": "01aaacd99480487bf63830959513c5ca8ceb996d",
+  "amber": "c9f1e2871ccbb0b0564c4a33e359801144f6b7c1",
+  "jsoncpp": "89e2973c754a9c02a49974d839779b151e95afd6",
+  "vulkansc-pcutil": "f67d9e8e1c04f179ebeb837d21ab06192ad43fa0",
+  "vulkan-video-samples": "a193f6496760d69afcd39eab4ae63bf32ec8b5e1",
+  "video_generator": "9703a0c9d8dcb25f71860a4978fe73922d05004a"
+ },
+ "cmake_args": [
+  "-DDEQP_TARGET=vulkan_headless",
+  "-DSELECTED_BUILD_TARGETS=deqp-vk",
+  "-DCMAKE_BUILD_TYPE=Release",
+  "-DCMAKE_CXX_FLAGS_RELEASE=-O1 -g0 -DNDEBUG",
+  "-DCMAKE_C_FLAGS_RELEASE=-O1 -g0 -DNDEBUG",
+  "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
+ ],
+ "jobs": 13,
+ "cpus": 13,
+ "mem_gb": 60.4,
+ "fetch_s": 237,
+ "build_s": 341,
+ "binary_bytes": 77488128,
+ "binary_sha256_recorded_not_pinned": "402a3c7556d72c8baae2e7867a4ae584e07658dd218be4a71eefc11e4fb4cd07",
+ "compiler": [
+  "g++ (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0"
+ ]
+}{
+ "key": "97f8150df083a62a",
+ "cts_commit": "0d18b347943e5e843529a05c95220e27fe30c538",
+ "cts_tag": "vulkan-cts-1.4.7.1",
+ "externals": {
+  "spirv-tools": "1d0401cd2b68ae34cda9ff625bedd1be4ed6214a",
+  "glslang": "2ff6f609379ce43c4291c732cf6a19dd2461a680",
+  "spirv-headers": "cb42dec3830d3ac67fa449ecdc0c0f73d5e74498",
+  "vulkan-docs": "01aaacd99480487bf63830959513c5ca8ceb996d",
+  "amber": "c9f1e2871ccbb0b0564c4a33e359801144f6b7c1",
+  "jsoncpp": "89e2973c754a9c02a49974d839779b151e95afd6",
+  "vulkansc-pcutil": "f67d9e8e1c04f179ebeb837d21ab06192ad43fa0",
+  "vulkan-video-samples": "a193f6496760d69afcd39eab4ae63bf32ec8b5e1",
+  "video_generator": "9703a0c9d8dcb25f71860a4978fe73922d05004a"
+ },
+ "cmake_args": [
+  "-DDEQP_TARGET=vulkan_headless",
+  "-DSELECTED_BUILD_TARGETS=deqp-vk",
+  "-DCMAKE_BUILD_TYPE=Release",
+  "-DCMAKE_CXX_FLAGS_RELEASE=-O1 -g0 -DNDEBUG",
+  "-DCMAKE_C_FLAGS_RELEASE=-O1 -g0 -DNDEBUG",
+  "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
+ ],
+ "jobs": 13,
+ "cpus": 13,
+ "mem_gb": 60.4,
+ "fetch_s": 237,
+ "build_s": 341,
+ "binary_bytes": 77488128,
+ "binary_sha256_recorded_not_pinned": "402a3c7556d72c8baae2e7867a4ae584e07658dd218be4a71eefc11e4fb4cd07",
+ "compiler": [
+  "g++ (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0"
+ ]
+}
