@@ -9,13 +9,13 @@
     },
     "middle": {
       "diskGb": 120,
-      "bandwidthDownGb": 87,
+      "bandwidthDownGb": 92,
       "bandwidthUpGb": 2,
       "maxInetUsdPerGb": 0.005
     },
     "large": {
       "diskGb": 300,
-      "bandwidthDownGb": 130,
+      "bandwidthDownGb": 135,
       "bandwidthUpGb": 2,
       "maxInetUsdPerGb": 0.02
     },
@@ -173,6 +173,19 @@
       "status": "INFERRED",
       "source": "docs/DOWNLOADS.md",
       "note": "INFERRED ceiling above the documented 6-7 GB Windows app bundle estimate, not measured; split from the existing 17 GB media_and_margin reservation. Adhoc reserves this headroom without enabling Windows apps. Bundle pin is empty; remeasure before enabling."
+    },
+    "kfml": {
+      "profiles": [
+        "middle",
+        "large"
+      ],
+      "bandwidthDownGb": 4.2,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 15,
+      "status": "MEASURED",
+      "source": "traces/kfml_run_20261117_tier_decision/README.md",
+      "note": "Decimal GB ceiling: the cu128 wheels 3.96 GB + the redist nvcc 0.08 GB (only when the box has no matching nvcc) + the CIFAR-10 and tinyshakespeare datasets 0.17 GB = 4.13 GB, measured as file sizes on four boxes; the venv is 10.2 GB on disk after the run. The middle tier runs 5 rows, the large tier 6.",
+      "measuredDownloadBytes": 4133802925
     }
   },
   "daily": 6,

@@ -304,6 +304,7 @@ def run(ctx, evidence_dir=None, apps=None):
             boot["secs"] = int(time.monotonic() - t0)
             klog.mark(label, "end")
             boot["offline"] = pa.offline_proof(wk)
+            keep_qemu_log(pi_check, wk / "run/qemu.log", logs / (label + "_qemu_kf3.txt"))
             try:
                 rows_json = pa.read_json(out / "result.json")
                 rows_json = rows_json if type(rows_json) is list else []
@@ -311,6 +312,7 @@ def run(ctx, evidence_dir=None, apps=None):
                 rows_json = []
             boot["harness"] = [{"step": pa.clean(r.get("step"), 24), "verdict": pa.clean(r.get("verdict"), 12), "detail": pa.clean(r.get("detail"), 120)}
                                for r in rows_json if type(r) is dict and r.get("class") == "harness" and r.get("verdict") not in ("PASS", "OK")][:6]
+            report_gpu_step(rows_json, label, out, logs / (label + "_qemu_kf3.txt"), evidence_dir)
             per, unattributed = pa.xid_by_window(klog, boot["apps"], label)
             censuses = mark.census() if hasattr(mark, "census") else {}
             for app in boot["apps"]:
@@ -348,6 +350,42 @@ def run(ctx, evidence_dir=None, apps=None):
             pa.cleanup(ctx)
     return rec
 
+
+def keep_qemu_log(pi_check, src, dst):
+    """The kf3 QEMU log of the boot, tail only and redacted, BEFORE the cleanup deletes the work directory (2026-11-17: it was lost on every failed `gpu` step)."""
+    try:
+        Path(dst).write_text(pi_check.qemu_log_tail(src, limit=400))
+    except (OSError, AttributeError):
+        pass
+
+
+GPU_TAIL_LINES = 30
+
+
+def report_gpu_step(rows, label, out, kept_log, evidence_dir):
+    """A failed `gpu` step: say WHICH case on the stage's own output, with the case's text (counts, no UUID) and the kf3 log tail, and keep the diagnostic files."""
+    step = next((r for r in rows if type(r) is dict and r.get("step") == "gpu"), None)
+    if step is None or step.get("verdict") == "PASS":
+        return
+    print("KF_PROPIMAGE_APPS_B_GPU_FAIL boot=%s detail=%s" % (label, pa.clean(step.get("detail"), 400)), flush=True)
+    try:
+        tail = Path(kept_log).read_text().splitlines()[-GPU_TAIL_LINES:]
+    except OSError:
+        tail = []
+    for line in tail:
+        print("KF_PROPIMAGE_APPS_B_GPU_QEMU_TAIL boot=%s %s" % (label, pa.clean(line, 300)), flush=True)
+    if evidence_dir:
+        dst = Path(evidence_dir) / label
+        dst.mkdir(parents=True, exist_ok=True)
+        for name in GPU_EVIDENCE:
+            src = Path(out) / name
+            if src.is_file() and not src.is_symlink() and src.stat().st_size <= 1 << 20:
+                shutil.copyfile(src, dst / name)
+        if Path(kept_log).is_file():
+            shutil.copyfile(kept_log, dst / "qemu_kf3_tail.txt")
+
+
+GPU_EVIDENCE = ("gpu_fix.txt", "gpu_diag.json", "gpu_events.txt")
 
 # text evidence only: the verdicts, the sampled GPU numbers and the diagnostic output; never a PNG, PDF, PSD or video
 EVIDENCE_COPY = ("verdict.json", "result.json", "steps.log")

@@ -109,9 +109,26 @@ pub struct Config {
     /// then fails by name at its first Windows-only control). The only opt-out; never an environment
     /// variable and never inferred from the guest.
     pub windows_support: bool,
+    /// ★ 2026-11-18 (`docs/design/V3_SPARSE_RESIDENCY_RCA.md` §5, option B): the
+    /// `unmapped-reads-zero` property, default OFF. On, an unmapped VA of the static guest ranges
+    /// reads ZERO on the host twin instead of faulting ([`kf_host::channel::GuestVaFill::Zero`]):
+    /// the guest's sparse pages (Vulkan sparse residency) work, and every other unmapped VA the
+    /// guest's GPU touches silently reads zero. Never an environment variable; never inferred from
+    /// the guest.
+    pub unmapped_reads_zero: bool,
 }
 
 impl Config {
+    /// The host fill of the static guest ranges this configuration asks for.
+    #[must_use]
+    pub const fn guest_va_fill(&self) -> kf_host::channel::GuestVaFill {
+        if self.unmapped_reads_zero {
+            kf_host::channel::GuestVaFill::Zero
+        } else {
+            kf_host::channel::GuestVaFill::Fault
+        }
+    }
+
     /// ★ The properties that refuse each other or a value, by name — before anything is opened,
     /// so a refusal costs nothing: `display-broker` and `x11-dispsw` need `display`, and
     /// `display-max-fps` is
@@ -405,6 +422,13 @@ impl Device {
             )
             .map_err(|e| e.to_string())?,
         ));
+        // ★ 2026-11-18: before any mirror space exists, so every space's static guest ranges take it.
+        rm.set_guest_va_fill(cfg.guest_va_fill());
+        if cfg.unmapped_reads_zero {
+            eprintln!(
+                "kf3: unmapped-reads-zero=on: unmapped guest VAs read ZERO on the host (no fault); sparse residency works, faults are silent (V3_SPARSE_RESIDENCY_RCA.md)"
+            );
+        }
         let (architecture, implementation, revision) = rm.arch_info();
         let family = Family::from_arch(architecture, implementation)
             .map_err(|e| format!("family: {e:?}"))?;
@@ -4430,6 +4454,36 @@ mod config_tests {
             vm_id: None,
             pci_devfn: 0,
             windows_support: true,
+            unmapped_reads_zero: false,
+        }
+    }
+
+    /// ★ 2026-11-18 `unmapped-reads-zero`: off by default (the host faults on an unmapped guest VA,
+    /// S2 of `V3_SPARSE_RESIDENCY_RCA.md`); on asks for the ZERO fill, and nothing else changes.
+    #[test]
+    fn unmapped_reads_zero_is_off_by_default_and_maps_to_the_fill() {
+        use kf_host::channel::GuestVaFill;
+        let off = cfg(false, false);
+        assert!(!off.unmapped_reads_zero, "default off");
+        assert_eq!(off.guest_va_fill(), GuestVaFill::Fault);
+        let on = Config {
+            unmapped_reads_zero: true,
+            ..cfg(false, false)
+        };
+        assert_eq!(on.guest_va_fill(), GuestVaFill::Zero);
+        assert!(on.check().is_ok(), "the property needs no other property");
+    }
+
+    /// ★ 2026-11-18: the property and the fill agree for both values (the ZERO fill exactly when on).
+    #[test]
+    fn the_property_and_the_fill_round_trip() {
+        use kf_host::channel::GuestVaFill;
+        for on in [false, true] {
+            let c = Config {
+                unmapped_reads_zero: on,
+                ..cfg(true, false)
+            };
+            assert_eq!(c.guest_va_fill() == GuestVaFill::Zero, on, "on={on}");
         }
     }
 

@@ -23,6 +23,7 @@ import warnings
 from contextlib import ExitStack
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 
@@ -137,16 +138,14 @@ ConvertTo-Json -InputObject $events -Compress
     return events
 
 
-def render_gpu_fix(expected):
-    if not re.fullmatch(r"GPU-[A-Za-z0-9-]+", expected):
-        raise ValueError("Invalid expected GPU UUID")
-    return (
-        "$ErrorActionPreference='Stop'\n$expected='"
-        + expected
-        + "'\n"
-        + r"""
+def render_gpu_fix():
+    """Seed repair and Present-only restart. No polling and no UUID query here (2026-11-17): the poll is a Python loop (gpu_fix), because one
+    120 s ssh call hid whether the guest returned nothing, an error, two GPUs or a wrong value."""
+    return r"""
+$ErrorActionPreference='Stop'
 $base='HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
 $changed=$false
+$restarted=0
 # -Name lists key names only: a full Get-ChildItem opens every subkey, and the protected Properties subkey denies access.
 Get-ChildItem $base -Name | Where-Object {$_ -match '^\d{4}$'} | ForEach-Object {
  $kp=Join-Path $base $_
@@ -163,25 +162,288 @@ if($changed){
  Get-PnpDevice -Class Display | Where-Object {$_.Present -and $_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
   pnputil /restart-device $_.InstanceId | Out-Null
   if($LASTEXITCODE -ne 0){throw 'NVIDIA display device restart failed'}
+  $restarted++
  }
- Start-Sleep 15
 }
-function Read-Uuid(){ $x=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader 2>$null); if($LASTEXITCODE -eq 0 -and $x.Count -eq 1){ $x[0].Trim() } else { '' } }
-function Wait-Uuid($tries){ for($i=0;$i -lt $tries;$i++){ $u=Read-Uuid; if($u){ return $u }; Start-Sleep 5 }; return '' }
-$u=Wait-Uuid 18
-if($u -cne $expected){
- # MEASURED 2026-11-16 (RTX 4090 box): after a plain restart the device can stay in Code 43 where Disable/Enable clears it at once
- Get-PnpDevice -Class Display | Where-Object {$_.Present -and $_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
-  Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
-  Start-Sleep 5
-  Enable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
- }
- $u=Wait-Uuid 18
-}
-if($u -cne $expected){throw 'Post-fix seed GPU UUID mismatch'}
-$u
+ConvertTo-Json -Compress @{changed=$changed; restarted=$restarted; guest_utc=(Get-Date).ToUniversalTime().ToString('o')}
 """
-    )
+
+
+# One short query: nvidia-smi (return code and every output line) and the PnP state of every VEN_10DE device. The host classifies the answer
+# (classify_gpu_query); the guest only reports.
+RENDER_GPU_QUERY = r"""
+$ErrorActionPreference='Continue'
+$sw=[Diagnostics.Stopwatch]::StartNew()
+$smi=@(& nvidia-smi --query-gpu=uuid --format=csv,noheader 2>&1 | ForEach-Object {[string]$_})
+$rc=$LASTEXITCODE
+$smis=[int]$sw.Elapsed.TotalSeconds
+$dev=@(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {$_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
+ $id=$_.InstanceId
+ $pc=(Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_ProblemCode -ErrorAction SilentlyContinue).Data
+ $sv=(Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_Service -ErrorAction SilentlyContinue).Data
+ @{class=[string]$_.Class;present=[bool]$_.Present;status=[string]$_.Status;problem=$pc;service=[string]$sv}
+})
+ConvertTo-Json -Compress -Depth 4 @{smi_rc=$rc; smi_s=$smis; smi_out=@($smi); devices=@($dev); guest_utc=(Get-Date).ToUniversalTime().ToString('o')}
+"""
+
+# A device left in Code 43 by the plain restart: Disable/Enable (MEASURED 2026-11-16 on an RTX 4090 box: clears it at once). Applied once, after the
+# first half of the poll budget, and recorded with the PnP state that preceded it.
+RENDER_GPU_REENABLE = r"""
+$ErrorActionPreference='Stop'
+$n=0
+Get-PnpDevice -Class Display | Where-Object {$_.Present -and $_.InstanceId -match 'VEN_10DE'} | ForEach-Object {
+ Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
+ Start-Sleep 5
+ Enable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction Stop
+ $n++
+}
+ConvertTo-Json -Compress @{reenabled=$n}
+"""
+
+# Collected once, when the step fails: the guest's own account of the driver start (times are guest UTC).
+RENDER_GPU_EVIDENCE = r"""
+$ErrorActionPreference='Continue'
+function Short($t,$n){ $t=([string]$t) -replace '\s+',' '; if($t.Length -gt $n){ $t.Substring(0,$n) } else { $t } }
+$os=Get-CimInstance Win32_OperatingSystem
+'== now_utc ' + (Get-Date).ToUniversalTime().ToString('o')
+'== boot_utc ' + $os.LastBootUpTime.ToUniversalTime().ToString('o')
+'== nvlddmkm events since boot (System log)'
+Get-WinEvent -FilterHashtable @{LogName='System';ProviderName='nvlddmkm';StartTime=$os.LastBootUpTime} -ErrorAction SilentlyContinue | Select-Object -First 40 | ForEach-Object {
+ '{0} id={1} level={2} {3}' -f $_.TimeCreated.ToUniversalTime().ToString('HH:mm:ss'),$_.Id,$_.Level,(Short $_.Message 160)
+}
+'== Kernel-PnP events naming the NVIDIA device or driver since boot'
+Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Kernel-PnP/Configuration';StartTime=$os.LastBootUpTime} -ErrorAction SilentlyContinue | Where-Object {([string]$_.Message) -match 'VEN_10DE|nv_disp|nvlddmkm'} | Select-Object -First 40 | ForEach-Object {
+ '{0} id={1} {2}' -f $_.TimeCreated.ToUniversalTime().ToString('HH:mm:ss'),$_.Id,(Short $_.Message 200)
+}
+'== setupapi.dev.log, lines naming the NVIDIA device or driver (last 40)'
+Select-String -Path C:\Windows\INF\setupapi.dev.log -Pattern 'VEN_10DE|nv_disp|nvlddmkm' -ErrorAction SilentlyContinue | Select-Object -Last 40 | ForEach-Object { Short $_.Line 220 }
+'== setupapi.dev.log tail (last 60 lines)'
+Get-Content C:\Windows\INF\setupapi.dev.log -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Short $_ 220 }
+"""
+
+
+GPU_ID = re.compile(r"GPU-[0-9A-Za-z-]+")
+BARE_UUID = re.compile(r"(?<![{0-9A-Za-z])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}(?![}0-9A-Za-z])")
+GPU_WAIT_SETTLED_S = 120  # bound of the wait for the NVIDIA device to finish its first-boot install before the restart
+GPU_POLL_S = 240  # bound of the poll after the restart (the Disable/Enable retry comes at half of it)
+GPU_POLL_EVERY_S = 10
+GPU_QUERY_TIMEOUT_S = 150  # one query call. MEASURED 2026-11-17 (RTX 4090 box, 4 boots): the FIRST nvidia-smi after the restart blocks for about 60 s (call 74-80 s, a normal one 13 s); 90 s was too close
+
+
+def redact(text, limit=2000):
+    """Guest and host text for evidence: printable ASCII, GPU identity strings replaced, bounded. A UUID value never reaches a file."""
+    text = re.sub(r"[^\x20-\x7e\n\t]", "?", str(text))
+    return BARE_UUID.sub("<uuid>", GPU_ID.sub("GPU-<redacted>", text))[:limit]
+
+
+def qemu_log_tail(path, limit=200, max_bytes=262144):
+    """The tail of a QEMU/kf3 log, redacted, kept as evidence (the stage's cleanup deletes the log itself)."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - max_bytes))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError as exc:
+        return "qemu log unavailable: %s\n" % redact(exc, 120)
+    return "".join(redact(ln, 300) + "\n" for ln in lines[-limit:])
+
+
+def host_gpu_uuids():
+    """The host GPU's own UUIDs (None when they cannot be read): only used to say whether a wrong guest value is the host's."""
+    try:
+        done = run(["nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader"], timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return [ln.strip() for ln in done.stdout.splitlines() if ln.strip()] if done.returncode == 0 else None
+
+
+def classify_gpu_query(q, expected, host_uuids=None):
+    """One query answer -> the case. kinds: expected | no_uuid (nvidia-smi ran, printed nothing) | error_text (any other text, or a failing
+    return code) | multi (more than one GPU line) | wrong_value (one GPU line, not the seed's). Counts and flags only, never the value."""
+    out = [str(x).strip() for x in (q.get("smi_out") or []) if str(x).strip()]
+    rc = q.get("smi_rc")
+    gpu = [x for x in out if re.fullmatch(r"GPU-[0-9A-Za-z-]+", x)]
+    other = [x for x in out if x not in gpu]
+    res = {"smi_rc": rc if type(rc) is int else None, "smi_s": q.get("smi_s") if type(q.get("smi_s")) is int else None, "gpu_lines": len(gpu), "other_lines": len(other), "observed_is_expected": None, "observed_is_host": None}
+    if len(gpu) > 1:
+        res["kind"] = "multi"
+    elif len(gpu) == 1 and rc == 0 and not other:
+        same = gpu_uuid_matches(gpu[0], expected)
+        res["observed_is_expected"] = same
+        if not same:
+            res["observed_is_host"] = (gpu[0] in host_uuids) if host_uuids else None
+        res["kind"] = "expected" if same else "wrong_value"
+    elif not out and rc == 0:
+        res["kind"] = "no_uuid"
+    else:
+        res["kind"] = "error_text"
+        res["text"] = redact(" | ".join(other or ["return code %s" % rc]), 240)
+    devices = []
+    for d in (q.get("devices") or [])[:8]:
+        if type(d) is dict:
+            devices.append({"class": redact(d.get("class"), 20), "present": d.get("present") is True, "status": redact(d.get("status"), 12),
+                            "problem": d.get("problem") if type(d.get("problem")) is int else None, "service": redact(d.get("service"), 24)})
+    res["devices"] = devices
+    return res
+
+
+def gpu_device_settled(devices):
+    """Exactly one present NVIDIA display device, bound to the NVIDIA service (not the basic display driver), and out of the install states.
+    Problem code 43 counts as settled: on a die other than the image's own the new device instance sits in Code 43 (no EnableGpuFirmware yet)
+    until the repair and the restart, so waiting for Status OK first would only burn the whole wait (MEASURED 2026-11-17 on an RTX 4090 box:
+    Code 43 and the NVIDIA service from the first query on, 135 s wait for nothing, the restart then fixed it at once)."""
+    shown = [d for d in devices if d["present"] and d["class"] == "Display"]
+    return len(shown) == 1 and shown[0]["service"].lower() == "nvlddmkm" and shown[0]["problem"] in (0, 43)
+
+
+def problem_codes(devices):
+    return [d["problem"] for d in devices if d["present"]]
+
+
+def gpu_query(g, expected, host_fn, started_at, clock):
+    """One bounded query as a record, with how long the whole call took (`dur_s`) and, from the guest, how long nvidia-smi itself blocked (`smi_s`)."""
+    t = clock()
+    rec = _gpu_query_record(g, expected, host_fn, {"t": int(t - started_at)})
+    rec["dur_s"] = int(clock() - t)
+    return rec
+
+
+def _gpu_query_record(g, expected, host_fn, rec):
+    """A transport error or a timeout is its own case, never 'mismatch'."""
+    try:
+        p = g.ps(RENDER_GPU_QUERY, timeout=GPU_QUERY_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return dict(rec, kind="timeout", devices=[])
+    except OSError as exc:
+        return dict(rec, kind="transport", text=redact(exc, 120), devices=[])
+    if p.returncode:
+        return dict(rec, kind="transport", rc=p.returncode, text=redact(p.stdout + p.stderr, 240), devices=[])
+    try:
+        q = json.loads(p.stdout.lstrip("\ufeff"))
+        if type(q) is not dict:
+            raise ValueError("not an object")
+    except ValueError:
+        return dict(rec, kind="unparsed", text=redact(p.stdout + p.stderr, 240), devices=[])
+    res = classify_gpu_query(q, expected)
+    if res["kind"] == "wrong_value":
+        res = classify_gpu_query(q, expected, host_fn())
+    return dict(rec, **res)
+
+
+def gpu_events(g):
+    try:
+        p = g.ps(RENDER_GPU_EVIDENCE, timeout=90)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return "events unavailable: %s\n" % redact(type(exc).__name__, 40)
+    return redact(p.stdout + p.stderr, 24000) + "\n"
+
+
+GPU_TERMINAL = ("expected", "wrong_value", "multi")
+
+
+def gpu_fix(g, expected, sleep=time.sleep, clock=time.monotonic, wait_s=None, poll_s=None, host_fn=host_gpu_uuids):
+    """Wait (bounded) for the NVIDIA device to SETTLE (installed, driver bound), repair and restart it, then poll from here (bounded) until the guest answers with
+    one GPU line. Returns (ok, JSON text): the case (`kind`), counts, PnP problem codes, timings and, on failure, the guest's event text
+    under "events". The JSON holds no UUID value."""
+    if not re.fullmatch(r"GPU-[A-Za-z0-9-]+", expected):
+        raise ValueError("Invalid expected GPU UUID")
+    wait_s = GPU_WAIT_SETTLED_S if wait_s is None else wait_s
+    poll_s = GPU_POLL_S if poll_s is None else poll_s
+    t0 = clock()
+    diag = {"schema": "kayfabe.gpu-step/1", "waited": [], "polls": []}
+    while True:
+        q = gpu_query(g, expected, host_fn, t0, clock)
+        diag["waited"].append({k: q.get(k) for k in ("t", "dur_s", "smi_s", "kind", "devices", "text") if k in q})
+        settled = gpu_device_settled(q["devices"])
+        if settled or clock() - t0 >= wait_s:
+            break
+        sleep(5)
+    diag["settled_before_restart"] = settled
+    diag["pnp_before_restart"] = q["devices"]
+    diag["wait_s"] = int(clock() - t0)
+    diag["waited"] = diag["waited"][-6:]
+    try:
+        rep = g.ps(render_gpu_fix())
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        rep = SimpleNamespace(returncode=1, stdout="", stderr=type(exc).__name__)
+    if rep.returncode:
+        diag.update(kind="repair_failed", ok=False, repair_text=redact(rep.stdout + rep.stderr, 300))
+        diag["events"] = gpu_events(g)
+        return False, json.dumps(diag)
+    try:
+        diag["repair"] = {k: v for k, v in json.loads(rep.stdout.lstrip("\ufeff")).items() if k in ("changed", "restarted")}
+    except (ValueError, AttributeError):
+        diag["repair"] = {"unparsed": redact(rep.stdout, 120)}
+    restart_t = clock()
+    diag["restart_at_s"] = int(restart_t - t0)
+    reenabled = False
+    while True:
+        q = gpu_query(g, expected, host_fn, restart_t, clock)
+        diag["polls"].append(q)
+        elapsed = clock() - restart_t
+        if q["kind"] in GPU_TERMINAL or elapsed >= poll_s:
+            break
+        if not reenabled and elapsed >= poll_s / 2:
+            reenabled = True
+            diag["reenable_at_s"] = int(elapsed)
+            diag["pnp_before_reenable"] = q.get("devices", [])
+            try:
+                again = g.ps(RENDER_GPU_REENABLE, timeout=120)
+                diag["reenable_rc"] = again.returncode
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                diag["reenable_rc"] = type(exc).__name__
+        sleep(GPU_POLL_EVERY_S)
+    last = diag["polls"][-1]
+    diag.update(kind=last["kind"], ok=last["kind"] == "expected", total_s=int(clock() - t0), poll_s=int(clock() - restart_t),
+                problem_codes=problem_codes(last.get("devices", [])), smi_rc=last.get("smi_rc"), gpu_lines=last.get("gpu_lines"),
+                observed_is_host=last.get("observed_is_host"))
+    if len(diag["polls"]) > 14:
+        diag["polls"] = diag["polls"][:4] + diag["polls"][-10:]
+    if not diag["ok"]:
+        diag["events"] = gpu_events(g)
+    return diag["ok"], json.dumps(diag)
+
+
+def gpu_step_detail(ok, detail):
+    """The harness row's detail from gpu_fix's OWN result (never a fixed string): the case first, because the stage keeps only the first 120 characters."""
+    try:
+        d = json.loads(detail)
+    except (TypeError, ValueError):
+        d = None
+    if type(d) is not dict or d.get("schema") != "kayfabe.gpu-step/1":
+        return redact(detail, 300).strip() or ("PASS" if ok else "FAIL")  # a stub or the VFIO control says what it is
+    codes = ",".join(str(c) for c in d.get("problem_codes") or []) or "none"
+    if ok:
+        return "post-fix seed UUID exact match after %ss (expected=1 observed=1 host=n/a), problem code %s, settled before restart=%s" % (
+            d.get("total_s"), codes, d.get("settled_before_restart"))
+    host = {True: "same-as-host", False: "not-host", None: "unknown"}[d.get("observed_is_host")]
+    return "observed UUID %s: expected=1 observed=%s host=%s, problem code %s, after %ss, settled before restart=%s; see gpu_diag.json" % (
+        d.get("kind"), d.get("gpu_lines"), host, codes, d.get("total_s"), d.get("settled_before_restart"))
+
+
+def save_qemu_tail(out, qemu_log):
+    """A failed gpu step keeps the kf3 QEMU log tail in out/ and prints its last lines (the stage's cleanup deletes the log itself)."""
+    tail = qemu_log_tail(qemu_log)
+    (Path(out) / "qemu_kf3_tail.txt").write_text(tail)
+    print("kf3 QEMU log tail (redacted, last 30 of %d lines kept in qemu_kf3_tail.txt):" % tail.count("\n"), flush=True)
+    print("".join(tail.splitlines(True)[-30:]), end="", flush=True)
+    return tail
+
+
+def write_gpu_evidence(out, detail):
+    """gpu_fix.txt (the result as returned), gpu_diag.json and gpu_events.txt (the guest's own text) in the step's output directory."""
+    out = Path(out)
+    (out / "gpu_fix.txt").write_text(redact(detail, 60000))
+    try:
+        d = json.loads(detail)
+    except (TypeError, ValueError):
+        return
+    if type(d) is dict and d.get("schema") == "kayfabe.gpu-step/1":
+        events = d.pop("events", None)
+        (out / "gpu_diag.json").write_text(json.dumps(d, indent=2))
+        if events is not None:
+            (out / "gpu_events.txt").write_text(events)
 
 
 # Data used both to render the repair and to validate its independent readback.
@@ -415,14 +677,6 @@ def power_fix(g, sleep=time.sleep, clock=time.monotonic):
 
 def gpu_uuid_matches(actual, expected):
     return bool(actual.strip()) and actual.strip() == expected
-
-
-def gpu_fix(g, expected):
-    result = g.ps(render_gpu_fix(expected))
-    return (
-        result.returncode == 0 and gpu_uuid_matches(result.stdout, expected),
-        result.stdout + result.stderr,
-    )
 
 
 # Measured anchor: rectangle 1024x640, click at offset (927,602), sp_run.log.
@@ -2081,13 +2335,11 @@ def main(argv=None):
                         "Power prerequisites NOT OK; app checks not run (see power.json)"
                     )
                 fixed, detail = gpu_fix(g, state["ids"]["gpu_uuid"])
-                (out / "gpu_fix.txt").write_text(detail)
-                record(
-                    "gpu",
-                    "PASS" if fixed else "FAIL",
-                    "post-fix seed UUID exact match" if fixed else "repair or UUID check failed",
-                )
+                write_gpu_evidence(out, detail)
+                record("gpu", "PASS" if fixed else "FAIL", gpu_step_detail(fixed, detail))
                 if not fixed:
+                    # the kf3 QEMU log is the host's side of the driver restart; the stage deletes the log itself, this tail stays in out/
+                    save_qemu_tail(out, r / "qemu.log")
                     if a.hold_until_file:  # manual investigation: keep the guest up (max 1 h) so the PnP state can be inspected
                         record(
                             "hold",
