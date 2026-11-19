@@ -482,6 +482,87 @@ pub enum HostParams {
         /// Request and reply size, checked before the host ioctl.
         size: usize,
     },
+    /// ★ 2026-11-18: a GSS-legacy control whose `paramsSize` moved with the host's GSP firmware
+    /// branch (F-4, `V3_CONSTANT_MATRIX_20261014.md` §5.3.2). Inside the encoded interval the old
+    /// contract holds unchanged (the bytes pass through: the 580 sizes); outside it, ONLY a host
+    /// that is one of the exact tags of a measured [`BranchSize`] profile is asked, at that
+    /// branch's size; every other host is refused by name with `source`.
+    ///
+    /// ⊘ Tier 2, not tier 1 (OWNER_RULINGS §AH; the reason is in `V3_DRIVER_MATRIX.md` §2.2, 2026-11-18):
+    /// the size check for these ids is done by the GSP firmware, and ogkm only forwards its status (ogkm-595
+    /// `rmapi_gss_legacy_control.c:33-37`, `src/kernel/vgpu/rpc.c:11227-11234`). No ogkm tag names the ids,
+    /// so their sizes cannot be derived from ogkm.
+    BranchSized {
+        /// Where the in-interval contract came from (also the refusal text elsewhere).
+        source: &'static str,
+        /// The per-branch sizes, each with its trace path.
+        branches: &'static [BranchSize],
+    },
+}
+
+/// ★ A host GSP firmware branch, as a profile: the EXACT host driver tags measured on it. Never a
+/// range — a release of the branch that was not measured is not a member.
+#[derive(Debug, Clone, Copy)]
+pub struct HostBranch {
+    /// The branch, for messages.
+    pub name: &'static str,
+    /// The exact host driver tags probed on the branch (traces: each [`BranchSize::source`]).
+    pub hosts: &'static [DriverVersion],
+}
+
+impl HostBranch {
+    /// Is `v` one of this branch's listed host tags?
+    #[must_use]
+    pub fn contains(&self, v: DriverVersion) -> bool {
+        self.hosts.contains(&v)
+    }
+}
+
+/// One control's size on one host branch, with its provenance (trace path in `source`).
+#[derive(Debug, Clone, Copy)]
+pub struct BranchSize {
+    /// The branch.
+    pub branch: &'static HostBranch,
+    /// The size every host of the branch accepts (request and reply).
+    pub size: usize,
+    /// Trace path(s) and the measured/unverified marker.
+    pub source: &'static str,
+}
+
+/// ★ 2026-11-18: the 595 GSP branch — host tags 595.84 and 595.91.07 (Linux: the GSP firmware is
+/// the driver's own; Windows 596.51 carries GSP 595.76). Both are matrix tags (`generated::matrix`)
+/// and both were probed unprivileged on several dies (`traces/constants_measure_20261014b/tier2/`).
+pub static GSP_BRANCH_595: HostBranch = HostBranch {
+    name: "595",
+    hosts: &[
+        DriverVersion {
+            major: 595,
+            minor: 84,
+            patch: 0,
+        },
+        DriverVersion {
+            major: 595,
+            minor: 91,
+            patch: 7,
+        },
+    ],
+};
+
+/// The 595-branch hosts' tier-2 probes: zero request (853b: word 1 = 1), unprivileged.
+const TIER2_595: &str = "measured: tier-2 kit unprivileged at 595.84 (traces/constants_measure_20261014b/tier2/raw_36762817.txt AD102, \
+     raw_49498406.txt L4 AD104, raw_49886923.txt TU106) and 595.91.07 (raw_53783014.txt TU102, raw_55027878.txt AD103; \
+     traces/die_coverage_20261104/ada/ad104/gss595/tier2_probe_trimmed.txt AD104)";
+
+impl HostParams {
+    /// Does this row carry a fixed size for an opaque (no-header) body at a host where it
+    /// resolves to [`Carry::Same`]? The caller then refuses any other body size before the ioctl.
+    #[must_use]
+    pub fn is_opaque_sized(&self) -> bool {
+        matches!(
+            self,
+            HostParams::MeasuredOpaque { .. } | HostParams::BranchSized { .. }
+        )
+    }
 }
 
 /// One control issued to the host.
@@ -908,12 +989,21 @@ pub static HOST_CONTROLS: &[HostControl] = &[
     // traces/ctl_probe_20261013/probe_pass1.tsv); 852e/853a/a618 did NOT (INVALID_ARGUMENT there,
     // although AD103 at 575.51.03 and the Windows driver's GSP 580.65.05 answer the same zero
     // request): they are asked only inside the encoded interval and refused by name elsewhere.
+    // ⊘ CORRECTION 2026-11-18 (above the text it corrects): that INVALID_ARGUMENT was the 580-branch
+    // SIZE, not the control (F-4). 852e/853a/a618/853b are now [`HostParams::BranchSized`] rows,
+    // asked at a 595-branch host at the 595 sizes (below); 852a is asked at 595.84 too.
+    // `traces/ctl_probe_20261013/` is on branch `claude/ctl-probe-20261013` (commit aa8d029f2), not
+    // in this tree; the 595 claims below cite committed tier-2 files instead.
     HostControl {
         name: "",
         cmd: 0x2080_852a,
         params: HostParams::MeasuredOpaque {
-            source: CTL_PROBE_595_SOURCE,
-            versions: &[HOST_595_91_07],
+            // ★ 2026-11-18: 1784 NV_OK at both 595 tags; at AD104 595.91.07 every size from 1784 up
+            // and none below (so the 1716-byte row of a GSP 570 guest is refused here, correctly).
+            source: "measured:1784 NV_OK at 595.84 and 595.91.07, traces/constants_measure_20261014b/tier2/raw_36762817.txt:27, \
+                     raw_49498406.txt:27, raw_53783014.txt:27, raw_55027878.txt:27; AD104 595.91.07 scan: \
+                     traces/die_coverage_20261104/ada/ad104/gss595/scan_852abc_9064_trimmed.txt (1784..16384, none below)",
+            versions: GSP_BRANCH_595.hosts,
             size: 1784,
         },
     },
@@ -968,25 +1058,63 @@ pub static HOST_CONTROLS: &[HostControl] = &[
             size: 1,
         },
     },
+    // ★★ 2026-11-18: the F-4 rows. kf-host refused these four by name at realize on every 595 host
+    // (traces/die_coverage_20261104/ada/ad104/realize_gss_lines_timer_arm.txt). The consumers measured are
+    // Windows guest drivers (`crate::gssreplay`); a Linux or NVENC consumer is unverified. ⊘ Not a CUDA fix:
+    // on the coordinator's pc (2026-11-19), CUDA passed on a warmed 595.91.07 guest with and without these rows. Each is
+    // MEASURED NV_OK at both 595 tags at exactly this size (TIER2_595 files, lines 199-204 / AD104
+    // lines 34-37), and INVALID_ARGUMENT at the 580 sizes there; inside the encoded interval the 580
+    // sizes (528/1456/8620, NV_OK at 580.105.08..580.178.04, tier2_summary.tsv) keep passing through.
     HostControl {
         name: "",
         cmd: 0x2080_852e,
-        params: HostParams::NoHeader {
-            source: "zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07",
+        params: HostParams::BranchSized {
+            source: "zero request measured NV_OK at 528 B on AD103 575.51.03 and GSP 580.65.05; 596 B on the 595 branch",
+            branches: &[BranchSize {
+                branch: &GSP_BRANCH_595,
+                size: 596,
+                source: TIER2_595,
+            }],
         },
     },
     HostControl {
         name: "",
         cmd: 0x2080_853a,
-        params: HostParams::NoHeader {
-            source: "zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07",
+        params: HostParams::BranchSized {
+            source: "zero request measured NV_OK at 1456 B on AD103 575.51.03 and GSP 580.65.05; 15352 B on the 595 branch",
+            branches: &[BranchSize {
+                branch: &GSP_BRANCH_595,
+                size: 15352,
+                source: TIER2_595,
+            }],
         },
     },
     HostControl {
         name: "",
         cmd: 0x2080_a618,
-        params: HostParams::NoHeader {
-            source: "zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07",
+        params: HostParams::BranchSized {
+            source: "zero request measured NV_OK at 8620 B on AD103 575.51.03 and GSP 580.65.05; 8632 B on the 595 branch",
+            branches: &[BranchSize {
+                branch: &GSP_BRANCH_595,
+                size: 8632,
+                source: TIER2_595,
+            }],
+        },
+    },
+    // The request is `{0, 1, 0…}` (`crate::gssreplay`, word 1 = 1, Windows 596.51 / GSP 595.76 capture);
+    // every size 4..4096 is INVALID_ARGUMENT at the 595 tags (TIER2_595 files, lines 52-66). The 580-branch
+    // size (1832 in the AD103 580.88 capture) is NOT measured on a Linux 580 host: it keeps the old
+    // pass-through inside the interval and stays refused by name outside it and the 595 branch.
+    HostControl {
+        name: "",
+        cmd: 0x2080_853b,
+        params: HostParams::BranchSized {
+            source: "Windows 580.88 (GSP 580.65.05) issued it once at 1832 B, never measured on a host; 14320 B on the 595 branch",
+            branches: &[BranchSize {
+                branch: &GSP_BRANCH_595,
+                size: 14320,
+                source: TIER2_595,
+            }],
         },
     },
     HostControl {
@@ -1062,6 +1190,20 @@ impl HostAbi {
                         version: self.version,
                     })
                 }
+            }
+            Some(HostParams::BranchSized { source, branches }) => {
+                if self.in_encoded_interval() {
+                    return Ok(None);
+                }
+                branches
+                    .iter()
+                    .find(|b| b.branch.contains(self.version))
+                    .map(|b| Some(Carry::Same { size: b.size }))
+                    .ok_or(HostAbiError::NoHeader {
+                        cmd,
+                        source,
+                        version: self.version,
+                    })
             }
             Some(HostParams::NoHeader { source }) => {
                 if self.in_encoded_interval() {
@@ -1154,7 +1296,9 @@ mod tests {
             let (runs, after) = match c.params {
                 HostParams::Measured(r) => (r, None),
                 HostParams::Renamed { before, after } => (before, Some(after)),
-                HostParams::NoHeader { .. } | HostParams::MeasuredOpaque { .. } => continue,
+                HostParams::NoHeader { .. }
+                | HostParams::MeasuredOpaque { .. }
+                | HostParams::BranchSized { .. } => continue,
             };
             let row = hm::ALL_VALUES
                 .iter()
@@ -1318,17 +1462,96 @@ mod tests {
                 "{cmd:#x}"
             );
         }
-        // INVALID_ARGUMENT to a zero request at 595.91.07: refused there, by name.
-        for cmd in [0x2080_852e, 0x2080_853a, 0x2080_a618] {
-            assert!(matches!(
-                host("595.91.07").control_carry(cmd),
-                Err(HostAbiError::NoHeader { .. })
-            ));
-        }
+        // ⊘ 2026-11-18: the INVALID_ARGUMENT at 595.91.07 was the 580-branch size (F-4); these are
+        // now asked there at the 595 sizes (`gsp_595_branch_hosts_carry_the_measured_sizes`).
         assert!(matches!(
             HostAbi::for_host(HostDriverVersion::parse("595.91.08").expect("parse")),
             Err(HostAbiError::Unmeasured { .. })
         ));
+    }
+
+    /// ★★ 2026-11-18 (host-ABI coverage, not a CUDA fix): the GSS rows whose `paramsSize`
+    /// moved with the GSP firmware branch (F-4). The guest-facing rows (`crate::gssreplay`) had the
+    /// 595 sizes since 2026-10-14, but the HOST table refused them by name at every 595 host, so
+    /// realize never asked them and the guest's GSP-bound question was refused. MEASURED at both
+    /// 595 host tags (`traces/constants_measure_20261014b/tier2/raw_36762817.txt` 595.84 AD102,
+    /// `raw_49498406.txt` 595.84 L4, `raw_49886923.txt` 595.84 TU106, `raw_53783014.txt` 595.91.07
+    /// TU102, `raw_55027878.txt` 595.91.07 AD103; `traces/die_coverage_20261104/ada/ad104/gss595/
+    /// tier2_probe_trimmed.txt` 595.91.07 AD104).
+    const GSP_595_ROWS: [(u32, usize); 5] = [
+        (0x2080_852e, 596),
+        (0x2080_853a, 15352),
+        (0x2080_a618, 8632),
+        (0x2080_853b, 14320),
+        (0x2080_852a, 1784),
+    ];
+
+    #[test]
+    fn gsp_595_branch_hosts_carry_the_measured_sizes() {
+        for v in ["595.84", "595.91.07"] {
+            for (cmd, size) in GSP_595_ROWS {
+                let c = host(v).control_carry(cmd);
+                assert!(
+                    matches!(c, Ok(Some(Carry::Same { size: s })) if s == size),
+                    "{cmd:#x} at {v}: want the measured {size} B row, got {c:?}"
+                );
+            }
+        }
+    }
+
+    /// The 595 branch is exactly its two probed host tags (traces/constants_measure_20261014b/tier2/): a neighbour of either, or another
+    /// branch outside the encoded interval, stays refused BY NAME (exact membership, no nearest row).
+    #[test]
+    fn gsp_595_rows_do_not_leak_to_unmeasured_hosts() {
+        for v in ["575.57.08", "590.48.01", "610.43.02", "615.71.09"] {
+            for (cmd, _) in GSP_595_ROWS {
+                let c = host(v).control_carry(cmd);
+                assert!(
+                    matches!(
+                        c,
+                        Err(HostAbiError::NoHeader { .. } | HostAbiError::UnlistedControl { .. })
+                    ),
+                    "{cmd:#x} at {v}: an unmeasured host must be refused, got {c:?}"
+                );
+            }
+        }
+        for v in ["595.71.05", "595.91.08", "595.84.1"] {
+            assert!(
+                matches!(
+                    HostAbi::for_host(HostDriverVersion::parse(v).expect("parse")),
+                    Err(HostAbiError::Unmeasured { .. })
+                ),
+                "{v}"
+            );
+        }
+    }
+
+    /// ⊘ No regression at 580: inside the encoded interval these controls keep the old contract
+    /// (the 580-branch sizes 528/1456/8620 pass to the host untouched, as measured NV_OK on
+    /// 580.105.08/580.126.09/580.173.02/580.178.04, `traces/constants_measure_20261014b/tier2_summary.tsv`);
+    /// `0x2080852a` stays size-checked at 1784.
+    #[test]
+    fn a_580_host_keeps_the_580_contract_for_the_branch_sized_rows() {
+        for v in [
+            "580.65.06",
+            "580.105.08",
+            "580.126.09",
+            "580.159.04",
+            "580.173.02",
+            "580.178.04",
+        ] {
+            let h = host(v);
+            for cmd in [0x2080_852e, 0x2080_853a, 0x2080_a618, 0x2080_853b] {
+                assert!(
+                    matches!(h.control_carry(cmd), Ok(None)),
+                    "{cmd:#x} at {v}: the 580 sizes must pass through"
+                );
+            }
+            assert!(matches!(
+                h.control_carry(0x2080_852a),
+                Ok(Some(Carry::Same { size: 1784 }))
+            ));
+        }
     }
 
     /// ★ The MSENC caps query was malformed on hosts the old gate accepted: 8 bytes with
