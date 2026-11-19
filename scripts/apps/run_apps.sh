@@ -16,6 +16,13 @@ O=$A/out/$SIDE; mkdir -p "$O"
 export LD_LIBRARY_PATH=$B/lib:$B/llama${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 export HF_HOME=$D/hf HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 S=$B/samples
+# ⊘ NEGATIVE CONTROL of the GPU-use assertion (docs/design/V3_GPU_USE_ASSERTION.md): KF_NEGCTL=1 runs the CPU form of every row whose application CAN fall
+#   back to the CPU (Cycles CPU, llama.cpp -ngl 0, hashcat -D 1, clpeak on the pocl platform, vkpeak/EGL on a software device, ffmpeg software decode and
+#   encode, the GPU hidden from torch/CuPy). scripts/apps/gpu_use_rows.py judges it and must say FAIL. Unset: every command below is what it always was.
+if [ "${KF_NEGCTL:-0}" = 1 ]; then
+  export KF_BLENDER_DEVS=CPU KF_NGL=0 KF_HASHCAT_ARGS="-D 1" KF_CLPEAK_ARGS="-p 1" KF_VKPEAK_DEV=1 KF_DEC_ARGS="-hwaccel none" KF_ENC=libx264
+  export KF_EGL_ENV="__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json" KF_GPU_ENV="CUDA_VISIBLE_DEVICES="
+fi
 
 # ⊘ llama_cpp_gen's digest covers ONLY the generated text: this llama.cpp rev logs VRAM size and
 #   timings between the tokens (measured 670bd310: 3 digests for one token-identical output).
@@ -77,22 +84,22 @@ stream_perthread|60|STREAM_PROBE_DONE perthread rc=0|$B/bin/stream_probe perthre
 stream_two|60|STREAM_PROBE_DONE two rc=0|$B/bin/stream_probe two
 stream_created2nd|60|STREAM_PROBE_DONE created2nd rc=0|$B/bin/stream_probe created2nd
 gpu_burn|180|GPU 0: OK|cd $B/gpu-burn && ./gpu_burn 60
-torch_correct|300|TORCH_CORRECT_DONE|$PY $B/share/torch_correct.py
-torch_ai_bench|900|CHECK bert_infer_seqs ok|$PY $B/share/ai_bench.py
-hf_generate|600|OUTSHA|HF_MODEL=Qwen/Qwen2-0.5B-Instruct $PY $B/share/hf_generate.py
-cupy|300|CUPY_DONE|CUDA_PATH=$B/cuda $PY $B/share/cupy_check.py
-llama_cpp_gen|600|OUTSHA|$B/llama/llama-simple -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -n 64 -ngl 99 "Explain in three sentences why the sky is blue." > $O/llama_gen.txt 2>&1; rc=$?; cat $O/llama_gen.txt; echo "OUTSHA llama_cpp $(sed -n '/sky is blue\./,/main: decoded/p' $O/llama_gen.txt | grep -v 'main: decoded' | sed -E 's/CUDA Graph id [0-9]+ reused//g' | grep -v -E '^[a-z_]+: ' | tr -d '\n' | sha256sum | cut -c1-16)"; exit $rc
-llama_bench|900|tg64|$B/llama/llama-bench -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl 99 -p 512 -n 64 -r 2
+torch_correct|300|TORCH_CORRECT_DONE|${KF_GPU_ENV:+env $KF_GPU_ENV }$PY $B/share/torch_correct.py
+torch_ai_bench|900|CHECK bert_infer_seqs ok|${KF_GPU_ENV:+env $KF_GPU_ENV }$PY $B/share/ai_bench.py
+hf_generate|600|OUTSHA|HF_MODEL=Qwen/Qwen2-0.5B-Instruct ${KF_GPU_ENV:+env $KF_GPU_ENV }$PY $B/share/hf_generate.py
+cupy|300|CUPY_DONE|CUDA_PATH=$B/cuda ${KF_GPU_ENV:+env $KF_GPU_ENV }$PY $B/share/cupy_check.py
+llama_cpp_gen|600|OUTSHA|$B/llama/llama-simple -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -n 64 -ngl ${KF_NGL:-99} "Explain in three sentences why the sky is blue." > $O/llama_gen.txt 2>&1; rc=$?; cat $O/llama_gen.txt; echo "OUTSHA llama_cpp $(sed -n '/sky is blue\./,/main: decoded/p' $O/llama_gen.txt | grep -v 'main: decoded' | sed -E 's/CUDA Graph id [0-9]+ reused//g' | grep -v -E '^[a-z_]+: ' | tr -d '\n' | sha256sum | cut -c1-16)"; exit $rc
+llama_bench|900|tg64|$B/llama/llama-bench -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl ${KF_NGL:-99} -p 512 -n 64 -r 2
 vulkaninfo|60|NVIDIA|vulkaninfo --summary
-vkpeak|900|fp32-scalar|$B/bin/vkpeak 0
-egl_offscreen|90|CHECK|$B/bin/egl_offscreen
+vkpeak|900|fp32-scalar|$B/bin/vkpeak ${KF_VKPEAK_DEV:-0}
+egl_offscreen|90|CHECK|${KF_EGL_ENV:+env $KF_EGL_ENV }$B/bin/egl_offscreen
 clinfo|60|NVIDIA CUDA|clinfo -l; clinfo | grep -m3 -E 'Platform Name|Device Name'
-clpeak|600|Global memory bandwidth|$B/bin/clpeak
-nvenc_h264|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v h264_nvenc -preset p4 $O/nvenc_h264.mp4 2>&1 | grep -v "^  " | tail -25; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 $O/nvenc_h264.mp4 | sed 's/^/frame= /;s/$/ /'
-nvenc_hevc|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v hevc_nvenc -preset p4 $O/nvenc_hevc.mp4 2>&1 | grep -v "^  " | tail -25; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 $O/nvenc_hevc.mp4 | sed 's/^/frame= /;s/$/ /'
-nvdec_h264|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v libx264 -pix_fmt yuv420p $O/x264.mp4 >/dev/null 2>&1; ffmpeg -hide_banner -hwaccel cuda -hwaccel_output_format cuda -i $O/x264.mp4 -f null - > $O/nvdec.txt 2>&1; rc=$?; tr "\r" "\n" < $O/nvdec.txt | grep -E "frame=|rror|hwaccel|cuvid" | tail -4; grep -q "Failed setup for format cuda" $O/nvdec.txt && { echo "NVDEC_NOT_USED (software fallback)"; exit 3; }; exit $rc
-hashcat|300|e4726719b68b205913167f0975d977ee:kayfab|hashcat --potfile-disable -O -m 0 -a 3 e4726719b68b205913167f0975d977ee '?l?l?l?l?l?l' 2>&1 | tail -30
-blender_cycles|900|BLENDER_OK OPTIX|for dev in CUDA OPTIX; do $D/blender/blender -b --factory-startup --python $B/share/blender_render.py -- $dev $O/blender_$dev.png 2>&1 | grep -E "BLENDER_|Error|error|Fra:1 .*Finished" | tail -6; done
+clpeak|600|Global memory bandwidth|$B/bin/clpeak ${KF_CLPEAK_ARGS:-}
+nvenc_h264|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v ${KF_ENC:-h264_nvenc} -preset p4 $O/nvenc_h264.mp4 2>&1 | tee $O/nvenc_h264.ffmpeg.txt | grep -v "^  " | tail -25; grep -a -m1 "^  Stream #.* -> #" $O/nvenc_h264.ffmpeg.txt; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 $O/nvenc_h264.mp4 | sed 's/^/frame= /;s/$/ /'; echo "ENCODER_TAG $(ffprobe -v error -select_streams v:0 -show_entries stream_tags=encoder -of default=nw=1:nk=1 $O/nvenc_h264.mp4)"
+nvenc_hevc|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v ${KF_ENC:-hevc_nvenc} -preset p4 $O/nvenc_hevc.mp4 2>&1 | tee $O/nvenc_hevc.ffmpeg.txt | grep -v "^  " | tail -25; grep -a -m1 "^  Stream #.* -> #" $O/nvenc_hevc.ffmpeg.txt; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 $O/nvenc_hevc.mp4 | sed 's/^/frame= /;s/$/ /'; echo "ENCODER_TAG $(ffprobe -v error -select_streams v:0 -show_entries stream_tags=encoder -of default=nw=1:nk=1 $O/nvenc_hevc.mp4)"
+nvdec_h264|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v libx264 -pix_fmt yuv420p $O/x264.mp4 >/dev/null 2>&1; ffmpeg -hide_banner -v verbose ${KF_DEC_ARGS:--hwaccel cuda -hwaccel_output_format cuda} -i $O/x264.mp4 -f null - > $O/nvdec.txt 2>&1; rc=$?; tr "\r" "\n" < $O/nvdec.txt | grep -E "frame=|rror|hwaccel|cuvid" | tail -4; grep -a "Reinit context" $O/nvdec.txt | tail -3; grep -q "Failed setup for format cuda" $O/nvdec.txt && { echo "NVDEC_NOT_USED (software fallback)"; exit 3; }; exit $rc
+hashcat|300|e4726719b68b205913167f0975d977ee:kayfab|hashcat --potfile-disable -O -m 0 -a 3 ${KF_HASHCAT_ARGS:-} e4726719b68b205913167f0975d977ee '?l?l?l?l?l?l' 2>&1 | tee $O/hashcat_full.txt | tail -30; grep -a -E '^(\* Device #|CUDA API|OpenCL API|HIP API)' $O/hashcat_full.txt || true
+blender_cycles|900|BLENDER_OK OPTIX|for dev in ${KF_BLENDER_DEVS:-CUDA OPTIX}; do $D/blender/blender -b --factory-startup --python $B/share/blender_render.py -- $dev $O/blender_$dev.png 2>&1 | grep -E "BLENDER_|Error|error|Fra:1 .*Finished|[Ff]alling back" | tail -6; done
 geekbench_gpu|1200|Uploading results|cd $D/geekbench && ./geekbench6 --gpu OpenCL 2>&1 | tail -60
 EOF
 )

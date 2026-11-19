@@ -1,0 +1,5 @@
+=== vkpeak side=guest start=2026-11-07T02:47:25+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/vkpeak 0
+device       = NVIDIA GeForce RTX 4090
+
+fp32-scalar  = 62106.86 GFLOPS
+fp32-vec4    = 61694.98 GFLOPS

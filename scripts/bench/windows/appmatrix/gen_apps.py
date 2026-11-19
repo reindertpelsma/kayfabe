@@ -192,14 +192,14 @@ Get-Content "$OUT\gen.err" -ErrorAction SilentlyContinue | Select-Object -First 
 Get-Content "$OUT\gen.txt" -ErrorAction SilentlyContinue | ForEach-Object { "GEN $_" }
 $txt = (Get-Content "$OUT\gen.txt" -Raw -ErrorAction SilentlyContinue)
 if ($p.ExitCode -eq 0 -and $txt -and $txt.Trim().Length -gt 20) { "OUTSHA llama_cpp $(Get-KfDigest ($txt -replace '\s+', ' '))" ; exit 0 } else { 'LLAMA_FAIL no output'; exit 1 }""",
-    r"^OUTSHA llama_cpp ", 600, 60, [r"out:Device 0: NVIDIA|offloaded [0-9]+/[0-9]+ layers to GPU|CUDA0: NVIDIA", GPU_ENG], "high",
+    r"^OUTSHA llama_cpp ", 600, 60, [r"out:offloaded ([1-9][0-9]*)/\1 layers to GPU", GPU_ENG], "high",
     "greedy generation: ~1 GiB of weights, thousands of small kernel launches per second through the relay; Linux row passes with identical digests",
     linux=["llama_cpp_gen"], pkgs=("llama_cuda", "qwen_gguf", "vc_redist"), digest=True,
     note="digest is compared across Windows runs and informationally with Linux (different llama.cpp build)")
 app("llama_cuda_bench", "llm", MODEL + r"""Invoke-KfExe -Exe "$K\llama_cuda\llama-bench.exe" -ArgList @('-m', $m, '-ngl', '99', '-p', '512', '-n', '64', '-r', '2')
-exit $global:KfRc""", r"tg64", 900, 90, [r"out:CUDA|NVIDIA", GPU_ENG], *W_LONG, linux=["llama_bench"], pkgs=("llama_cuda", "qwen_gguf", "vc_redist"))
+exit $global:KfRc""", r"tg64", 900, 90, [r"out:\| CUDA +\| +[1-9][0-9]* \|", GPU_ENG], *W_LONG, linux=["llama_bench"], pkgs=("llama_cuda", "qwen_gguf", "vc_redist"))
 app("llama_vulkan_bench", "llm", MODEL + r"""Invoke-KfExe -Exe "$K\llama_vulkan\llama-bench.exe" -ArgList @('-m', $m, '-ngl', '99', '-p', '512', '-n', '64', '-r', '2')
-exit $global:KfRc""", r"tg64", 900, 90, [r"out:Vulkan|NVIDIA", GPU_ENG], "high",
+exit $global:KfRc""", r"tg64", 900, 90, [r"out:ggml_vulkan: [0-9]+ = NVIDIA", GPU_ENG], "high",
     "Vulkan compute (not CUDA) with 1.5 GiB device-local buffers and many dispatches: the Vulkan queue family/ICD path of the Windows driver",
     pkgs=("llama_vulkan", "qwen_gguf", "vc_redist"))
 

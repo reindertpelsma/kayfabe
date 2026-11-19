@@ -2143,6 +2143,8 @@ jobs:
           # Image B gpu step diagnostics, 2026-11-17 (docs/design/V3_PROPIMAGE_B_APPS.md): the case is named, bounded poll after a started-wait, log tail kept, honest detail; >=2 named killers per mutant.
           python3 scripts/ci/propimage_gpu_diag_mutants.py --jobs 4
           python3 scripts/ci/clocknet_assert_mutants.py
+          # GPU-use assertion (owner requirement 2026-11-17, docs/design/V3_GPU_USE_ASSERTION.md): the judge, the Linux wiring and the Windows llama proofs; >=2 named killers per mutant.
+          python3 scripts/ci/gpu_use_mutants.py --jobs 4
           # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
           python3 scripts/ci/stream_url_mutants.py
           # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.

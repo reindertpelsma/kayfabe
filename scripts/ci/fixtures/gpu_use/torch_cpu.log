@@ -1,0 +1,3 @@
+CHECK matmul_fp32 ok maxerr=0.0
+GPU_USE_PROOF torch device=cpu name=NVIDIA GeForce RTX 4090 peak_mib=0
+TORCH_CORRECT_DONE
