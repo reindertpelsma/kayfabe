@@ -230,7 +230,13 @@ const MUTANTS = [
   ],
   [
     'route not recognised as a box route',
-    [[R, '/^\\/(?:report|run-report|kill|evidence|instruction)\\/', '/^\\/(?:report|run-report|kill|instruction)\\/']],
+    [
+      [
+        R,
+        '/^\\/(?:report|run-report|kill|evidence|instruction)\\/',
+        '/^\\/(?:report|run-report|kill|instruction)\\/',
+      ],
+    ],
   ],
   [
     'profile ignored in the key',
