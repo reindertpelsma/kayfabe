@@ -400,9 +400,11 @@ buffer, gfx pool sizes: kernel-only), group I (GMMU static, user register access
   595-size rows were added to `kf_abi::gssreplay::ROWS`, but the host table `kf_abi::hostabi::HOST_CONTROLS` still
   refused 852e/853a/a618 by name at every host outside `[580.65.06, 581)` and had no 853b row. So at a 595 host
   kf-host refused all four at realize (`traces/die_coverage_20261104/ada/ad104/realize_gss_lines_timer_arm.txt`), and a
-  595 guest was never answered. MEASURED symptom, 2026-11-18, not committed here: a Linux guest with the stock driver on a 595.91.07
-  AD104 host got cuInit 999. Fixed by a 595-branch profile (`hostabi::GSP_BRANCH_595`, exact tags 595.84 and
-  595.91.07) and `BranchSized` rows. The fix is unverified on hardware. The 610 branch (852e 1432, a618 20000) still has no host
+  595 guest was never answered. Fixed by a 595-branch profile (`hostabi::GSP_BRANCH_595`, exact tags 595.84 and
+  595.91.07) and `BranchSized` rows (host-ABI coverage). ⊘ This does NOT fix CUDA. Coordinator's pc result, 2026-11-19,
+  not committed here: on a warmed 595.91.07 AD104 guest, CUDA passes with and without this fix. The earlier cuInit 999
+  happened only on the first boot after the driver install. The consumers of these controls are the Windows guest
+  driver's captures; a Linux or NVENC consumer is unverified. The 610 branch (852e 1432, a618 20000) still has no host
   row and stays refused.
 - **F-4 is RESOLVED** (section 5.3.2): not a changed control, a changed `paramsSize` per GSP branch; host and Windows driver agree in every (control, branch) cell. Wired as exact rows; a 595/610 host answers a 595/610 guest.
 - **F-1 (ZBC) has evidence**: Ampere/Ada/Blackwell defaults equal the served ones; **Turing differs** (formats 1/2/4, colorDS non-zero). Not wired (D16). Options for the owner: (a) a per-die table row for the three Turing dies measured; (b) serve Turing an empty table (no defaults) — safe because RM adds entries on demand; (c) leave (impact none today).

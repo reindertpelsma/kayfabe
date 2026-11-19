@@ -1058,9 +1058,10 @@ pub static HOST_CONTROLS: &[HostControl] = &[
             size: 1,
         },
     },
-    // ★★ 2026-11-18 (Rocky 9.7 guest at host 595.91.07: cuInit 999, guest NVRM NOT_SUPPORTED on the
-    // golden-image channel; kf-host refused these four by name at realize, as in
-    // traces/die_coverage_20261104/ada/ad104/realize_gss_lines_timer_arm.txt): the F-4 rows. Each is
+    // ★★ 2026-11-18: the F-4 rows. kf-host refused these four by name at realize on every 595 host
+    // (traces/die_coverage_20261104/ada/ad104/realize_gss_lines_timer_arm.txt). The consumers measured are
+    // Windows guest drivers (`crate::gssreplay`); a Linux or NVENC consumer is unverified. ⊘ Not a CUDA fix:
+    // on the coordinator's pc (2026-11-19), CUDA passed on a warmed 595.91.07 guest with and without these rows. Each is
     // MEASURED NV_OK at both 595 tags at exactly this size (TIER2_595 files, lines 199-204 / AD104
     // lines 34-37), and INVALID_ARGUMENT at the 580 sizes there; inside the encoded interval the 580
     // sizes (528/1456/8620, NV_OK at 580.105.08..580.178.04, tier2_summary.tsv) keep passing through.
@@ -1469,7 +1470,7 @@ mod tests {
         ));
     }
 
-    /// ★★ 2026-11-18 (Rocky 9.7 guest, host 595.91.07, cuInit 999): the GSS rows whose `paramsSize`
+    /// ★★ 2026-11-18 (host-ABI coverage, not a CUDA fix): the GSS rows whose `paramsSize`
     /// moved with the GSP firmware branch (F-4). The guest-facing rows (`crate::gssreplay`) had the
     /// 595 sizes since 2026-10-14, but the HOST table refused them by name at every 595 host, so
     /// realize never asked them and the guest's GSP-bound question was refused. MEASURED at both

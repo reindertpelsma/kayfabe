@@ -2449,8 +2449,9 @@ mod display_slot_tests {
 
 #[cfg(test)]
 mod control_plan_tests {
-    //! ★★ 2026-11-18 (Rocky 9.7 guest at host 595.91.07: cuInit 999; kf-host refused 852e/853a/a618/853b
-    //! by name at realize, so the guest's GSP-bound F-4 questions were never answered). The decision
+    //! ★★ 2026-11-18: kf-host refused 852e/853a/a618/853b by name at realize on every 595 host, so a
+    //! guest's 595-sized F-4 question was never answered (host-ABI coverage; not a CUDA fix, see
+    //! `kf_abi::hostabi` HOST_CONTROLS). The decision
     //! `raw_control` takes before its ioctl, through the real `kf_abi::hostabi` table.
     use super::control_plan;
     use kf_abi::gssreplay::{Answer, ROWS, answer};
