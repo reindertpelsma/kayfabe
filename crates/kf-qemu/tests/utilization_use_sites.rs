@@ -72,7 +72,7 @@ fn the_use_sites_read_the_property() {
         (
             "the C device passes the property",
             &c,
-            "s->report_utilization ? 1 : 0, &s->h, err, sizeof(err));",
+            "s->report_utilization ? 1 : 0, s->unmapped_reads_zero ? 1 : 0, &s->h, err, sizeof(err));",
         ),
         (
             "the C property is declared and defaults to ON",
@@ -80,9 +80,9 @@ fn the_use_sites_read_the_property() {
             "DEFINE_PROP_BOOL(\"report-utilization\", Kf3State, report_utilization, true),",
         ),
         (
-            "the C header declares the parameter after windows_support",
+            "the C header declares the parameter after windows_support and before unmapped_reads_zero (ABI 36)",
             &h,
-            "uint32_t windows_support, uint32_t report_utilization, void **out,",
+            "uint32_t windows_support, uint32_t report_utilization, uint32_t unmapped_reads_zero, void **out,",
         ),
     ] {
         assert!(text.contains(needle), "{what}: `{needle}` is missing");
