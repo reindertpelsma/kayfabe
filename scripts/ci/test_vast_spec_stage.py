@@ -167,6 +167,90 @@ class HappyPath(StageCase):
             self.assertEqual(walls, sorted(walls), lane)
 
 
+class UserUrlFile(StageCase):
+    """2026-11-17 (OWNER_RULINGS section AX): a standalone user's own URL file is trusted and recorded; our git pin is the Worker's and strict's."""
+
+    def serve(self, sb):
+        import http.server
+        import json
+        import threading
+
+        body = (sb.root / "archive.tar.zst").read_bytes()
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        self.addCleanup(srv.server_close)
+        uf = sb.root / "urls.json"
+        uf.write_text(json.dumps({"schema": "kayfabe.download-urls/1", "urls": {"specviewperf-15.0.0.tar.zst": "http://127.0.0.1:%d/o" % srv.server_port}}))
+        return uf
+
+    def run_user(self, pin=None, **extra):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"), pin=pin is not False)
+        if pin not in (None, False):
+            (sb.src / "scripts/bench/box/specviewperf.pin").write_text("specviewperf-15.0.0.tar.zst sha256=%s\n" % pin)
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        p = sb.run("lanea", KF_SPEC_URL_FILE=self.serve(sb), **extra)
+        return sb, p
+
+    def test_a_user_url_file_whose_archive_differs_from_our_pin_is_not_refused(self):
+        sb, p = self.run_user(pin="a" * 64)
+        self.assertNotIn("RETRY class=MEDIA", p.stdout)
+        self.assertIn("your archive: sha256=" + sb.sha, p.stdout)
+        self.assertIn("our git pin differs (enforced=0", p.stdout)
+
+    def test_the_same_archive_is_refused_when_the_mode_is_strict(self):
+        sb, p = self.run_user(pin="a" * 64, KF_TRUST_MODE="strict")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=MEDIA")
+        self.assertEqual(p.returncode, 3)
+
+    def test_a_user_url_file_needs_no_pin_file_at_all(self):
+        sb, p = self.run_user(pin=False)
+        self.assertNotIn("RETRY class=MEDIA", p.stdout)
+        self.assertIn("our git pin none", p.stdout)
+
+    def test_without_a_url_file_a_missing_pin_is_still_refused(self):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"), pin=False)
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        self.assertEqual(fk.verdict_of(sb.run("lanea").stdout), "SPECVIEWPERF_STAGE_RETRY class=MEDIA")
+
+    def test_the_users_own_expect_sha256_is_enforced_in_every_mode(self):
+        sb, p = self.run_user(pin="a" * 64, KF_SPEC_EXPECT_SHA256="b" * 64)
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=MEDIA")
+        sb, p = self.run_user(pin="a" * 64, KF_SPEC_EXPECT_SHA256=None)
+        sb2, p2 = self.run_user(pin="a" * 64)
+        self.assertNotIn("RETRY class=MEDIA", p2.stdout)
+
+    def test_the_matching_expect_sha256_passes_and_a_malformed_one_is_refused_by_name(self):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"))
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        p = sb.run("lanea", KF_SPEC_URL_FILE=self.serve(sb), KF_SPEC_EXPECT_SHA256=sb.sha)
+        self.assertNotIn("RETRY class=MEDIA", p.stdout)
+        sb, p = self.run_user(KF_SPEC_EXPECT_SHA256="XYZ")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=OPERATOR")
+
+    def test_the_users_archive_is_recorded_in_the_trust_evidence(self):
+        import json
+
+        sb, p = self.run_user(pin="a" * 64)
+        lines = [json.loads(l) for f in sb.prov.rglob("trust.jsonl") for l in f.read_text().splitlines()]
+        self.assertEqual([(r["anchor"], r["sha256"], r["name"]) for r in lines], [("user", sb.sha, "specviewperf-15.0.0.tar.zst")])
+
+    def test_a_trust_mode_outside_the_two_is_refused_by_name(self):
+        sb, p = self.run_user(KF_TRUST_MODE="whatever")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_RETRY class=OPERATOR")
+
+
 class Inputs(StageCase):
     """Missing or wrong media is RETRY class MEDIA; the pin is the repo's, never the Worker's."""
 

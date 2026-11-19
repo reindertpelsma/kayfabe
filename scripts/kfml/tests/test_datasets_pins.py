@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -26,26 +27,101 @@ class Datasets(unittest.TestCase):
     def pins(self, sha):
         return {"datasets": {"d": {"url": self.src.as_uri(), "filename": "d.bin", "sha256": sha}}}
 
+    def op(self, url):
+        return open(Path(url.replace("file://", "")), "rb")
+
     def test_pinned_ok(self):
-        r = datasets.fetch("d", self.t / "data", self.pins(self.sha), environ={})
+        r = datasets.fetch("d", self.t / "data", self.pins(self.sha), environ={}, opener=self.op)
         self.assertTrue(r["pinned"])
         self.assertEqual(r["sha256"], self.sha)
-        self.assertTrue(datasets.fetch("d", self.t / "data", self.pins(self.sha), environ={})["pinned"])  # cached
+        self.assertTrue(datasets.fetch("d", self.t / "data", self.pins(self.sha), environ={}, opener=self.op)["pinned"])  # cached
 
     def test_wrong_hash_refused_and_deleted(self):
         with self.assertRaises(datasets.HashMismatch):
-            datasets.fetch("d", self.t / "data", self.pins("0" * 64), environ={})
+            datasets.fetch("d", self.t / "data", self.pins("0" * 64), environ={}, opener=self.op)
         self.assertFalse((self.t / "data" / "d.bin").exists())
 
     def test_pin_me(self):
         with self.assertRaises(datasets.PinMe) as cm:
-            datasets.fetch("d", self.t / "data", self.pins(None), environ={})
+            datasets.fetch("d", self.t / "data", self.pins(None), environ={}, opener=self.op)
         self.assertIn("PIN ME", str(cm.exception))
         self.assertIn(self.sha, str(cm.exception))
         with self.assertRaises(datasets.PinMe):  # second call does not redownload and still refuses
-            datasets.fetch("d", self.t / "data", self.pins(None), environ={})
-        r = datasets.fetch("d", self.t / "data", self.pins(None), environ={"KF_ML_ALLOW_UNPINNED": "1"})
+            datasets.fetch("d", self.t / "data", self.pins(None), environ={}, opener=self.op)
+        r = datasets.fetch("d", self.t / "data", self.pins(None), environ={"KF_ML_ALLOW_UNPINNED": "1"}, opener=self.op)
         self.assertFalse(r["pinned"])
+
+    def test_vendor_md5_is_checked_beside_the_sha256(self):
+        """2026-11-19 (standalone trust): a dataset whose vendor publishes only an md5 (CIFAR-10) carries it in pins.json and the fetch
+        checks it too, so the anchor is the vendor's own checksum and not only a sha256 we measured."""
+        md5 = hashlib.md5(b"hello kfml").hexdigest()
+        ok = self.pins(self.sha)
+        ok["datasets"]["d"]["md5"] = md5
+        self.assertTrue(datasets.fetch("d", self.t / "data", ok, environ={}, opener=self.op)["pinned"])
+        bad = self.pins(self.sha)
+        bad["datasets"]["d"]["md5"] = "0" * 32
+        with self.assertRaises(datasets.HashMismatch):
+            datasets.fetch("d", self.t / "data2", bad, environ={}, opener=self.op)
+        self.assertFalse((self.t / "data2" / "d.bin").exists())
+
+    def test_every_repo_dataset_has_an_upstream_anchor(self):
+        """Each dataset names an immutable upstream source: a git-commit URL (anyone re-checks the blob at that commit) or a
+        vendor-published checksum fetched from the vendor's page (md5 + md5_source)."""
+        for name, d in datasets.load_pins()["datasets"].items():
+            commit_url = re.search(r"/[0-9a-f]{40}/", d["url"]) is not None
+            vendor = bool(re.fullmatch(r"[0-9a-f]{32}", d.get("md5", ""))) and d.get("md5_source", "").startswith("https://")
+            self.assertTrue(commit_url or vendor, name)
+
+    def test_a_network_fetch_goes_through_the_trust_helper(self):
+        """2026-11-19 (standalone trust, coordinator decision on #473): no download primitive in datasets.py. A network fetch asks
+        scripts/ci/kf_trust.py for the dataset's manifest artifact (anchors checked there), with the pin's stream count; the sha256 and the
+        vendor md5 are checked again here."""
+        calls = []
+        payload = b"hello kfml"
+
+        class FakeTrust:
+            class HttpTransport:
+                def __init__(self, streams=None):
+                    self.streams = streams
+
+            @staticmethod
+            def resolve(name, out, transport=None):
+                calls.append((name, Path(out).name, transport.streams))
+                Path(out).write_bytes(payload)
+                return {"name": name}
+
+        ent = {"url": "https://example.invalid/d.bin", "filename": "d.bin", "sha256": self.sha,
+               "md5": hashlib.md5(payload).hexdigest(), "trust_artifact": "kfml-dataset-d", "parallel": 6}
+        r = datasets.fetch("d", self.t / "data", {"datasets": {"d": ent}}, environ={}, trust=FakeTrust)
+        self.assertTrue(r["pinned"])
+        self.assertEqual(calls, [("kfml-dataset-d", "d.bin.part", 6)])
+        bad = dict(ent, md5="0" * 32)
+        with self.assertRaises(datasets.HashMismatch):
+            datasets.fetch("d", self.t / "data2", {"datasets": {"d": bad}}, environ={}, trust=FakeTrust)
+
+    def test_a_network_fetch_without_a_manifest_artifact_is_refused(self):
+        ent = {"url": "https://example.invalid/d.bin", "filename": "d.bin", "sha256": self.sha}
+        with self.assertRaises(datasets.PinMe):
+            datasets.fetch("d", self.t / "data", {"datasets": {"d": ent}}, environ={}, trust=object())
+
+    def test_the_repo_trust_helper_is_found_in_this_checkout(self):
+        kt = datasets.trust_helper()
+        self.assertIsNotNone(kt)
+        self.assertTrue(hasattr(kt, "resolve") and hasattr(kt, "HttpTransport"))
+
+    def test_every_repo_dataset_is_its_manifest_artifact(self):
+        import json
+        man = json.loads((ROOT.parent / "ci" / "trust_manifest.json").read_text())["artifacts"]
+        for name, d in datasets.load_pins()["datasets"].items():
+            a = man[d["trust_artifact"]]
+            self.assertEqual(a["origin"], d["url"], name)
+            self.assertEqual(a["routing"], "helper", name)
+            self.assertIn("scripts/kfml/kfml/datasets.py", a["consumers"], name)
+            self.assertEqual({x["sha256"] for x in a["anchors"]}, {d["sha256"]}, name)
+
+    def test_datasets_py_holds_no_download_primitive(self):
+        src = (ROOT / "kfml" / "datasets.py").read_text()
+        self.assertIsNone(re.search(r"\burlopen\b|\burlretrieve\b|\burllib\.request\b|\bhttp\.client\b|\brequests\.(?:get|post|put)\b", src))
 
     def test_repo_pins_file(self):
         p = datasets.load_pins()

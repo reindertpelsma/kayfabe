@@ -11,10 +11,21 @@ BENCH=/workspace/bench; HERE="$(cd "$(dirname "$0")" && pwd)"
 IMG=${KF_GUEST_IMG:-$BENCH/guest.qcow2}
 say(){ echo "[gset-prov $(date -Is)] $*"; }
 FF=${GSET_FF:-/workspace/video/ff/bin/ffmpeg}
-BLENDER_URL=${BLENDER_URL:-https://download.blender.org/release/Blender4.5/blender-4.5.0-linux-x64.tar.xz}
-VKPEAK_URL=${VKPEAK_URL:-https://github.com/nihui/vkpeak/releases/download/20250531/vkpeak-20250531-ubuntu.zip}
-BOD_URL=${BOD_URL:-https://download.blender.org/release/BlenderBenchmark2.0/launcher/benchmark-launcher-cli-3.3.0-linux.tar.gz}
-GB_URLS=${GB_URLS:-"https://cdn.geekbench.com/Geekbench-7.0.0-Linux.tar.gz https://cdn.geekbench.com/Geekbench-7.0.1-Linux.tar.gz https://cdn.geekbench.com/Geekbench-6.5.0-Linux.tar.gz https://cdn.geekbench.com/Geekbench-6.4.0-Linux.tar.gz"}
+# [2026-11-17] THE UPSTREAM ARTEFACTS ARE ANCHORED (audit row 25, docs/design/V3_STANDALONE_TRUST.md): each is fetched on THIS side by
+# scripts/ci/kf_trust.py, checked against its entry in scripts/ci/trust_manifest.json (Blender: its official .sha256 and the vendor-
+# published pin; vkpeak: the GitHub asset digest; the others: the sha256 measured from the upstream host), and only then piped into the
+# image. A `BLENDER_URL` / `VKPEAK_URL` / `BOD_URL` / `GB_URLS` the caller passes is a USER INPUT: trusted, its sha256 and size recorded,
+# never refused on our pin. Geekbench: the newest of the listed releases that downloads (7.0.1 no longer exists upstream: dropped).
+BLENDER_URL=${BLENDER_URL:-}
+VKPEAK_URL=${VKPEAK_URL:-}
+BOD_URL=${BOD_URL:-}
+GB_URLS=${GB_URLS:-}
+KF_TRUST_PY="$HERE/../../ci/kf_trust.py"
+STAGE=$(mktemp -d); trap 'rm -rf "$STAGE"' EXIT
+trust_fetch() {  # trust_fetch NAME USER_URL OUT: the anchored default, or the user's own URL
+  if [ -n "$2" ]; then python3 -I "$KF_TRUST_PY" fetch "$1" --out "$3" --user-source "$2"
+  else python3 -I "$KF_TRUST_PY" fetch "$1" --out "$3"; fi
+}
 # Ubuntu 24.04: compositors + clients + capture, the build deps of the probes and of glmark2 2023.01
 PKGS="weston sway swaybg grim xwayland mesa-utils mesa-utils-bin wayland-utils vulkan-tools \
 libwayland-dev wayland-protocols libwayland-egl-backend-dev libgbm-dev libdrm-dev libegl-dev libgles-dev \
@@ -52,19 +63,29 @@ $GS "sudo usermod -aG video,render ubuntu; sudo mkdir -p /opt/gfxset && sudo cho
 $GS "[ -f /etc/OpenCL/vendors/nvidia.icd ] || { sudo mkdir -p /etc/OpenCL/vendors && echo libnvidia-opencl.so.1 | sudo tee /etc/OpenCL/vendors/nvidia.icd >/dev/null; echo OPENCL_ICD_WRITTEN; }"
 # the same static ffmpeg the video lane and the host use
 $GS 'mkdir -p /opt/gfxset/ff/bin && cat > /opt/gfxset/ff/bin/ffmpeg && chmod +x /opt/gfxset/ff/bin/ffmpeg' < "$FF"
-# upstream artefacts, fetched INSIDE the image (both sides run these exact files)
-$GS "cd /opt/gfxset && { [ -x blender/blender ] || { mkdir -p blender && curl -fsSL --retry 3 '$BLENDER_URL' | tar xJ -C blender --strip-components=1; }; }; \
-     { [ -x vkpeak/vkpeak ] || { curl -fsSL -o /tmp/vkpeak.zip '$VKPEAK_URL' && mkdir -p vkpeak && unzip -o -q /tmp/vkpeak.zip -d /tmp/vkp \
-          && cp \$(find /tmp/vkp -name vkpeak -type f | head -1) vkpeak/vkpeak && chmod +x vkpeak/vkpeak; }; }; \
-     ls -la blender/blender vkpeak/vkpeak 2>&1 | tail -2"
+# upstream artefacts, checked on this side and piped INTO the image (both sides run these exact files)
+$GS '[ -x /opt/gfxset/blender/blender ]' || { trust_fetch blender-4.5.0-linux-x64 "$BLENDER_URL" "$STAGE/blender.tar.xz" \
+  && $GS 'cd /opt/gfxset && mkdir -p blender && tar xJ -C blender --strip-components=1' < "$STAGE/blender.tar.xz"; }
+$GS '[ -x /opt/gfxset/vkpeak/vkpeak ]' || { trust_fetch vkpeak-20250531-ubuntu "$VKPEAK_URL" "$STAGE/vkpeak.zip" \
+  && $GS 'cat > /tmp/vkpeak.zip && cd /opt/gfxset && mkdir -p vkpeak && unzip -o -q /tmp/vkpeak.zip -d /tmp/vkp \
+          && cp $(find /tmp/vkp -name vkpeak -type f | head -1) vkpeak/vkpeak && chmod +x vkpeak/vkpeak' < "$STAGE/vkpeak.zip"; }
+$GS "ls -la /opt/gfxset/blender/blender /opt/gfxset/vkpeak/vkpeak 2>&1 | tail -2"
 # Blender Open Data (nvkvm-pv docs/reference/blender-opendata.md): launcher 3.3.0, Blender 4.5.0, 3 scenes
-$GS "mkdir -p /opt/gfxset/bod && cd /opt/gfxset/bod && { [ -x benchmark-launcher-cli ] || curl -fsSL --retry 3 '$BOD_URL' | tar xz; } \
-     && export HOME=/opt/gfxset/bod && ./benchmark-launcher-cli blender download 4.5.0 >/tmp/bod_dl.log 2>&1; \
+$GS 'mkdir -p /opt/gfxset/bod && [ -x /opt/gfxset/bod/benchmark-launcher-cli ]' || { trust_fetch blender-open-data-launcher-3.3.0 "$BOD_URL" "$STAGE/bod.tar.gz" \
+  && $GS 'mkdir -p /opt/gfxset/bod && cd /opt/gfxset/bod && tar xz' < "$STAGE/bod.tar.gz"; }
+$GS "cd /opt/gfxset/bod && export HOME=/opt/gfxset/bod && ./benchmark-launcher-cli blender download 4.5.0 >/tmp/bod_dl.log 2>&1; \
      for s in monster junkshop classroom; do ./benchmark-launcher-cli scenes download --blender-version 4.5.0 \$s >>/tmp/bod_dl.log 2>&1; done; \
      ./benchmark-launcher-cli scenes list --blender-version 4.5.0 2>&1 | tail -6; sha256sum benchmark-launcher-cli | cut -c1-16; tail -2 /tmp/bod_dl.log"
 # Geekbench (nvkvm-pv ran GB 7's GPU Vulkan backend): the newest of the listed releases that downloads
-$GS "mkdir -p /opt/gfxset/geekbench && cd /opt/gfxset/geekbench && if ! ls geekbench[0-9]* >/dev/null 2>&1; then for u in $GB_URLS; do \
-       curl -fsSL \"\$u\" | tar xz --strip-components=1 && { echo GEEKBENCH_FROM=\$u; break; }; done; fi; ls | tr '\n' ' '"
+if ! $GS 'mkdir -p /opt/gfxset/geekbench && ls /opt/gfxset/geekbench/geekbench[0-9]* >/dev/null 2>&1'; then
+  if [ -n "$GB_URLS" ]; then gb_try="$GB_URLS"; else gb_try="geekbench-7.0.0-linux geekbench-6.5.0-linux geekbench-6.4.0-linux"; fi
+  for gb in $gb_try; do
+    if [ -n "$GB_URLS" ]; then gb_user=$gb; gb_name=geekbench-user; else gb_user=; gb_name=$gb; fi
+    trust_fetch "$gb_name" "$gb_user" "$STAGE/geekbench.tar.gz" \
+      && $GS 'cd /opt/gfxset/geekbench && tar xz --strip-components=1' < "$STAGE/geekbench.tar.gz" && { echo "GEEKBENCH_FROM=${gb_user:-$gb_name}" | sed 's/?.*//'; break; }
+  done
+fi
+$GS "ls /opt/gfxset/geekbench | tr '\n' ' '"
 # the workloads, built in the image from the tree's sources (gfx/ = the v3-gfx lane, gfxset/src = this set)
 tar -C "$HERE/.." -cf - gfx gfxset | $GS 'rm -rf /opt/gfxset/src && mkdir -p /opt/gfxset/src && tar -xf - -C /opt/gfxset/src'
 CTRL=$($GS 'S=/opt/gfxset/src; B=/opt/gfxset/gfxbin; export GSET_HOME=/opt/gfxset; bash $S/gfx/build_gfx.sh $B | tail -1;
