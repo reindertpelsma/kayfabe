@@ -1,0 +1,133 @@
+{
+ "state_version": 1,
+ "os": "linux",
+ "seed": "kayfabe-linux-proof-20261116",
+ "ids": {
+  "smbios": {
+   "uuid": "3efe1836-fd4e-5b92-abc0-b4627169347f",
+   "manufacturer": "kayfabe",
+   "product": "propimage",
+   "serial": "KF6307E7AD86",
+   "baseboard_serial": "KFB310735833B",
+   "chassis_serial": "KFC60A45FA1B0"
+  },
+  "nics": [
+   {
+    "mac": "52:54:00:e5:d4:2c"
+   }
+  ],
+  "disks": [
+   {
+    "serial": "KFD634954E7BE37",
+    "model": "virtio-blk-pci"
+   }
+  ],
+  "gpu_uuid": "<omitted>",
+  "net": {
+   "subnet": "10.18.158.0/24",
+   "ssh_port": 32766
+  },
+  "clock_gap_s": 2701
+ },
+ "linux_ids": {
+  "machine_id": "cae00bf870cbe5245c279a1c9c78befd",
+  "hostname": "kf-ec33b0ad"
+ },
+ "clock": {
+  "last_time_at_stop_utc": "2026-11-16T19:25:09Z",
+  "gap_s": 2701
+ },
+ "qemu": {
+  "machine": "pc-q35-10.2",
+  "smp": 2,
+  "ram_mb": 4096,
+  "disk_gb": 30,
+  "fb_mb": 4096,
+  "nic_model": "virtio-net-pci",
+  "guest_driver": null
+ },
+ "cpu": {
+  "name": "kayfabe-amd-v1",
+  "base_model": "EPYC-v1",
+  "vendor": "AuthenticAMD",
+  "model_id": "AMD Virtual CPU",
+  "family": 23,
+  "model": 1,
+  "stepping": 2,
+  "remove": [
+   "avx512f",
+   "rtm",
+   "hle",
+   "mpx",
+   "sgx",
+   "vmx",
+   "svm"
+  ],
+  "hv_flags": [],
+  "required_host_flags": [
+   "3dnowprefetch",
+   "abm",
+   "adx",
+   "aes",
+   "avx",
+   "avx2",
+   "bmi1",
+   "bmi2",
+   "clflushopt",
+   "clzero",
+   "cx16",
+   "f16c",
+   "fma",
+   "fsgsbase",
+   "lahf_lm",
+   "misalignsse",
+   "movbe",
+   "pclmulqdq",
+   "popcnt",
+   "rdrand",
+   "rdseed",
+   "rdtscp",
+   "sha_ni",
+   "smap",
+   "smep",
+   "sse4_1",
+   "sse4_2",
+   "sse4a",
+   "ssse3",
+   "xsave",
+   "xsavec",
+   "xsaveopt"
+  ]
+ },
+ "cpu_fingerprint": null,
+ "files": {
+  "firmware/OVMF_VARS.fd": {
+   "bytes": 540672,
+   "sha256": "f603f49a28a3318da03a5751568773545a53996f9930118d117a2ae97221f562"
+  }
+ },
+ "base": {
+  "name": "ubuntu-24.04-server-cloudimg-amd64.img",
+  "release": "release-20261017",
+  "url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img",
+  "sha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
+  "sha256_source": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/SHA256SUMS"
+ },
+ "guest": {
+  "user": "kfimage",
+  "password": "<omitted>",
+  "ssh_private_key": "<omitted>",
+  "ssh_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII4/HzXUEYAGN2sZo75redW7TDzLeJzH3RsXX0RHNxMJ kfimage-propimage"
+ },
+ "packages": {
+  "kernel": "6.8.0-149-generic",
+  "count": 1645,
+  "sha256": "e146534bc2499362c0fe570fec9571bbf4782169fe3fce5db6196ff3b62afa9b"
+ },
+ "seal": {
+  "image_sha256": "f4474d309c5e0ff81bfb97fdcdd7f94d9a6cb13f2c398a40d234ef7a103b6c52",
+  "image_bytes": 2462646272,
+  "virtual_bytes": 32212254720
+ },
+ "created_utc": "2026-11-16T19:10:01Z"
+}

@@ -1,0 +1,11 @@
+CREDENTIAL GREP REPORT (counts only; matches are never printed)
+patterns: literal1-97f91051, regex2-8d0cb4e5, token3-0b8ee590
+whole image (raw, incl. free space and deleted data): scanned 6710906880 of 32212254720 bytes
+  image  literal1-97f91051      0
+  image  regex2-8d0cb4e5        0
+  image  token3-0b8ee590        33
+TOTAL 33
+
+real	1m46.532s
+user	1m53.804s
+sys	0m9.006s

@@ -21,10 +21,11 @@ Two rules hold for every start of these images and are checked from the QEMU com
 
 ## Run one image
 
-An image is an unpacked image directory, the image zip, or a bare disk file (qcow2 and similar). Add `#sha256=<64 hex>` to a path or URL to have the file checked.
+An image is an unpacked image directory, the image zip, or a bare disk file (qcow2 and similar). The runner computes the sha256 and size of what it read and writes both into the result. To make a run refuse any file other than the one you expect, add `--expect-sha256 NAME=<64 hex>` (NAME is the image's label or its file name).
 
 ```
-python3 -B -I scripts/ci/propimage_apps.py run --sha <40 hex> --out result.json --image prebuilt:/data/image.zip#sha256=<64 hex>
+python3 -B -I scripts/ci/propimage_apps.py run --sha <40 hex> --out result.json --image prebuilt:/data/image.zip
+python3 -B -I scripts/ci/propimage_apps.py run --sha <40 hex> --out result.json --image prebuilt:/data/image.zip --expect-sha256 image.zip=<64 hex>
 ```
 
 With a `state.json` inside the image, the applications come from its `software` list. Say which ones to run with `--apps`:
@@ -61,6 +62,17 @@ Every application can be marked `gate` (the default) or `discovery`: `--app NAME
 
 The result file also has one row per application with fixed keys (die, family, host and guest driver, revision, image, application, lane, result, failure class, reason, duration, start and end time in UTC). A value the runner does not know is null.
 
+## Bring your own images
+
+Your images are yours: you can build a Windows image yourself, install software on it that you compiled or obtained yourself, or spread your applications over several images. A normal run does not need any list of approved images or fixed hashes, and a run never refuses an image because its hash is not one it knows.
+
+- **A normal run records, it does not judge.** For every image the result file has the sha256 and size that were read, so you can tell later exactly which file a result belongs to. A `#sha256=<64 hex>` after a path or URL (or `sha256` in a spec file) is kept as a pin. In a normal run a pin that does not match is recorded (`identity: differs`, and one `KF_PROPIMAGE_RUN_PIN_NOTE` line) and the run goes on.
+- **Make a check yourself with `--expect-sha256 NAME=<64 hex>`.** NAME is the image's `--label`, or the file name of its source. A file with another hash is refused before anything starts (`EXPECT_SHA256_MISMATCH`, exit code 2). It also works with `--strict`. A directory has no single hash, so an expectation on a directory is refused (`EXPECT_SHA256_ON_DIRECTORY`). A name that matches no image is an error, so a typo is never silently ignored.
+- **`--strict` enforces pins.** A strict run is a deployment's check, for example a CI service that lists exactly the images it means. There, a pin that does not match refuses the image (`SOURCE_SHA256_MISMATCH`). Pins that are not about your own images, such as those of tools the repository downloads itself, always hold.
+- The integrity of an image you give is still checked: the three-member image zip must match its own `manifest.json` (hashes of the disk and the state), and its seed must match.
+
+To fetch images from your own object store, run your own deployment as described in `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`: build the images with the scripts in this repository, upload them to your own bucket (any S3-compatible store), write a pins file that names them, and pass it with `--pins FILE`. Then `--image prebuilt:pin:NAME` fetches the object `NAME` through presigned URLs that you supply with `--urls FILE`.
+
 ## What happens to things that cannot run
 
 By default the run does as much as it can. Anything that cannot run is skipped with a reason, and a skip is not a failure: the exit code is 0 when everything that ran passed, and the last line says plainly `ran 3, passed 3, skipped 2 (NO_DRIVER 1, NOT_INSTALLED 1)`. The reasons are `MISSING_INPUT` (something you did not give: a file, a login), `NO_DRIVER` (no driver for that application), `NOT_INSTALLED` (not on the image), `NOT_PROVIDED` (you declared nothing and there is nothing to read) and `CONSTRAINT` (you asked to skip it, or this machine cannot run the image).
@@ -71,7 +83,7 @@ For checks that must be complete, add `--strict`: then every image and applicati
 |---|---|
 | 0 | everything that ran passed (skips allowed unless `--strict`); also when nothing could run |
 | 1 | an application failed |
-| 2 | refused: a bad option, a wrong file hash, an image that cannot be read, the wrong hardware |
+| 2 | refused: a bad option, a file that does not have the hash you gave with `--expect-sha256`, an image that cannot be read, the wrong hardware |
 | 3 | retry may help (a harness problem, no time left) |
 | 4 | `--strict` and something was skipped |
 
