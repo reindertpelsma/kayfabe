@@ -1,0 +1,30 @@
+{
+ "compute_cap": "12.0",
+ "cuda": "12.8",
+ "data": {},
+ "driver": "580.178.04",
+ "gpu_name": "NVIDIA GeForce RTX 5070",
+ "measured_on": {
+  "compute_cap": "12.0",
+  "cuda": "12.8",
+  "driver": "580.178.04",
+  "driver_cuda": "13.0",
+  "flavor": "cu128",
+  "gpu_name": "NVIDIA GeForce RTX 5070",
+  "run_id": "kfml_run_20261117_5070_drv580",
+  "torch": "2.7.1+cu128"
+ },
+ "metrics": {
+  "allocated_gb": 7.904095459729433,
+  "async_copy_mb": 64.0,
+  "buffers": 167,
+  "free_end_gb": 11.26617431640625,
+  "free_start_gb": 11.29156494140625,
+  "graph_replays": 40,
+  "streams": 16,
+  "target_gb": 7.9040954587981105
+ },
+ "test": "stress_alloc",
+ "torch": "2.7.1+cu128",
+ "wall_s": 2.769
+}

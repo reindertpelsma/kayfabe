@@ -370,6 +370,41 @@
     "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
    }
   },
+  "kfml": {
+   "note": "ML research workloads in the DEFAULT plan of the middle and large tiers (since 2026-11-17; `--skip kfml` leaves it out): the hashed wheel lock of the chosen CUDA flavour, the redist nvcc when the box has no matching nvcc, and the CIFAR-10 archive are downloaded into a venv on the box; the datasets are prefetched in the background at the start of the payload. The kfml guest mode (not in a plan) copies the same files host to guest instead; it adds no internet download in the guest",
+   "entries": [
+    {
+     "id": "kfml.wheels",
+     "what": "torch, triton, CUDA runtime wheels of the LARGEST pinned flavour (cu128, CPython 3.12 wheels) plus its three redist nvcc archives (the nvcc archives only when the box has no matching nvcc)",
+     "class": "package",
+     "down_bytes": 3962328075,
+     "url": null,
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "runs kfml_run_20261117_second_die and kfml_run_20261117_tier_decision (traces/kfml_run_20261117_second_die/wheelhouse/wheelhouse_manifest_summary.txt, traces/kfml_run_20261117_tier_decision/README.md): `kfml wheelhouse --flavor all --guest-python 3.12`, MANIFEST.json file sizes: cu126 wheels 3026998392 + redist 52057232, cu128 wheels 3881029847 + redist 81298228 (both flavours together 7041383699 bytes, 64 files, 112 s); the venv is 10.2 GB on disk (cu128) and 8.8 GB (cu126) after the run",
+     "note": "the host stage downloads one flavour; the largest is charged. CPython 3.10 wheels (the box's own interpreter) differ by a few MB (triton, numpy, pillow), not measured byte for byte",
+     "calibrate": true
+    },
+    {
+     "id": "kfml.datasets",
+     "what": "the pinned CIFAR-10 binary archive and tinyshakespeare",
+     "class": "official-url",
+     "down_bytes": 171167565,
+     "url": "https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz",
+     "basis": "measured",
+     "date": "2026-11-17",
+     "source": "scripts/kfml/pins.json filenames; runs kfml_run_20261116, kfml_run_20261117_second_die and kfml_run_20261117_tier_decision fetch-data: cifar-10-binary.tar.gz 170052171 bytes + tinyshakespeare-input.txt 1115394 bytes",
+     "note": "the dataset server gives about 45 KB/s per connection and resets 8 or more at once: fetch-data uses 6 ranged connections (about 8 minutes for CIFAR-10, MEASURED on three boxes) and the payload starts it in the background before the first stage; the bytes are small"
+    }
+   ],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "traces/kfml_run_20261116, traces/kfml_run_20261117_second_die, traces/kfml_run_20261117_tier_decision",
+    "note": "text rows and logs of six workloads, a few MB"
+   }
+  },
   "propimage_apps_b": {
    "note": "image B's own rows (propimage_apps_b): the image zip and the test assets are charged to propimage_apps for the same instruction; this stage fetches nothing more than that first stage's downloader does (UNVERIFIED until a box runs both stages: net_bytes of that run settles it)",
    "entries": [],

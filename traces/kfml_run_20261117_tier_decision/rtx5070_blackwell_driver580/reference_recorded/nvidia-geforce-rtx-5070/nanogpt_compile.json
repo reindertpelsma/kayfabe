@@ -1,0 +1,92 @@
+{
+ "compute_cap": "12.0",
+ "cuda": "12.8",
+ "data": {
+  "config": {
+   "batch": 32,
+   "bias": false,
+   "block_size": 128,
+   "dropout": 0.0,
+   "lr": [
+    0.002,
+    0.0002,
+    20
+   ],
+   "n_embd": 128,
+   "n_head": 4,
+   "n_layer": 4,
+   "seed": 1234,
+   "steps": 400
+  },
+  "windows": {
+   "100": 2.492234888076782,
+   "200": 2.36519700050354,
+   "300": 2.232884006500244,
+   "400": 2.1539613151550294
+  }
+ },
+ "driver": "580.178.04",
+ "gpu_name": "NVIDIA GeForce RTX 5070",
+ "measured_on": {
+  "compute_cap": "12.0",
+  "cuda": "12.8",
+  "driver": "580.178.04",
+  "driver_cuda": "13.0",
+  "flavor": "cu128",
+  "gpu_name": "NVIDIA GeForce RTX 5070",
+  "run_id": "kfml_run_20261117_5070_drv580",
+  "torch": "2.7.1+cu128"
+ },
+ "metrics": {
+  "amp_dtype": "torch.bfloat16",
+  "amp_vs_fp32_max_window_diff": 0.0017364120483400747,
+  "compiled_vs_eager_max_window_diff": 0.0008319187164307351,
+  "forward_rel_err": 0.0035211267605629835,
+  "grad_scaler": false,
+  "modes": {
+   "amp_compiled": {
+    "final": 2.1539613151550294,
+    "first_step_s": 6.995964527130127,
+    "initial": 3.7736735105514527,
+    "steps_per_s": 259.9203052456762,
+    "windows": {
+     "100": 2.492234888076782,
+     "200": 2.36519700050354,
+     "300": 2.232884006500244,
+     "400": 2.1539613151550294
+    }
+   },
+   "amp_eager": {
+    "final": 2.153775815963745,
+    "first_step_s": 0.1269817352294922,
+    "initial": 3.773684501647949,
+    "steps_per_s": 226.51856271409613,
+    "windows": {
+     "100": 2.4926319789886473,
+     "200": 2.3648847770690917,
+     "300": 2.2320520877838135,
+     "400": 2.153775815963745
+    }
+   },
+   "fp32_eager": {
+    "final": 2.155512228012085,
+    "first_step_s": 0.30393218994140625,
+    "initial": 3.7740655660629274,
+    "steps_per_s": 251.40743745262245,
+    "windows": {
+     "100": 2.4912647914886477,
+     "200": 2.3644202518463135,
+     "300": 2.2330986404418947,
+     "400": 2.155512228012085
+    }
+   }
+  },
+  "params": 812288,
+  "reference_compared": false,
+  "reference_config_mismatch": false,
+  "reference_diff": null
+ },
+ "test": "nanogpt_compile",
+ "torch": "2.7.1+cu128",
+ "wall_s": 19.048
+}

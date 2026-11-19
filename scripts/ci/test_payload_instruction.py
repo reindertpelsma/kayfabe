@@ -375,7 +375,7 @@ class Plan(unittest.TestCase):
         self.assertEqual(self.plan(), ["provision", "cuda_host", "merge_bar", "cuda_guest"])
         full = self.plan(tier="large", windows=True, windows_runs=2, winapps="mid", linux_apps="middle",
                          stages=["specviewperf"], spec="both")
-        self.assertEqual(full, ["provision", "cuda_host", "merge_bar", "cuda_guest", "apps", "windows_gate",
+        self.assertEqual(full, ["provision", "cuda_host", "merge_bar", "cuda_guest", "apps", "kfml", "windows_gate",
                                 "windows_apps", "windows_gate_2", "specviewperf"])
 
     def test_select_only_and_skip(self):
@@ -431,7 +431,7 @@ class DryRun(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("KF_PAYLOAD_TIER windows=1 source=instruction tier=large", out)
         self.assertIn("KF_PAYLOAD_INSTRUCTION sha256=" + digest, out)
-        self.assertIn("KF_PAYLOAD_PLAN stages=provision:cuda_host:merge_bar:cuda_guest:windows_gate:windows_apps", out)
+        self.assertIn("KF_PAYLOAD_PLAN stages=provision:cuda_host:merge_bar:cuda_guest:kfml:windows_gate:windows_apps", out)
 
     def test_dry_run_from_the_environment_needs_no_sha_nor_deadline(self):
         rc, out = self.run_main(["--dry-run"], {"KF_TIER": "small", "KF_MERGE_WINDOWS": "0"})

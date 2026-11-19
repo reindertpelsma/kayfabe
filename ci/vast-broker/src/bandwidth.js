@@ -24,12 +24,18 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const count = (n) => Number.isSafeInteger(n) && n >= 0;
 
 // The stages the payload plans for an instruction, in run order: the same rule as plan_stage_names in scripts/ci/vast_payload.py
-// (test/bandwidth.test.js compares the two). `only` is the payload's --only list: it is what puts the manual-only stage
+// (test/bandwidth.test.js compares the two). `only` and `skip` are the payload's --only and --skip lists: `only` is what puts the manual-only stage
 // `install_flow` (and `propimage_apps` without an image list) into a large plan.
-export function plannedStages(instruction, { only = [] } = {}) {
+export function plannedStages(instruction, { only = [], skip = [] } = {}) {
   const i = instruction;
   const names = ['provision', 'cuda_host', 'merge_bar', 'cuda_guest'];
   if (i.linux_apps !== null && i.linux_apps !== undefined) names.push('apps');
+  // kfml (2026-11-17): in the default plan of the middle and the large tier; the payload's --skip kfml leaves it out; small and adhoc never plan it
+  if (
+    (i.tier === 'middle' || i.tier === 'large') &&
+    (!skip.includes('kfml') || only.includes('kfml'))
+  )
+    names.push('kfml');
   if (i.tier === 'large' && only.includes('install_flow')) names.push('install_flow');
   if (i.windows) {
     names.push('windows_gate');

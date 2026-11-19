@@ -1,0 +1,25 @@
+{
+ "compute_cap": "8.9",
+ "cuda": "12.6",
+ "data": {},
+ "driver": "560.35.03",
+ "gpu_name": "NVIDIA GeForce RTX 4070",
+ "measured_on": {
+  "compute_cap": "8.9",
+  "cuda": "12.6",
+  "driver": "560.35.03",
+  "driver_cuda": "12.6",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "run_id": "kfml_run_20261116",
+  "torch": "2.7.1+cu126"
+ },
+ "metrics": {
+  "chunks": 59,
+  "oversub_gb": 14.75,
+  "vram_gb": 11.62451171875
+ },
+ "test": "managed_oversub",
+ "torch": "2.7.1+cu126",
+ "wall_s": 51.711
+}

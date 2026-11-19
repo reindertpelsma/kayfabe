@@ -174,7 +174,7 @@ For the guest run (not done); a result that contradicts one of these says kayfab
 
 Evidence: `traces/open_rows_guest_20261117/` (runs R1, R1c, R1p). Commands: the ones of section 8 (`apps_matrix.sh host|guest RUN nvcodec_matrix nvml_dcgm`, `APPS_APP_TMO=3600`, one app per boot), plus `KF_GUEST_IMG` = the apps image, plus a second host run (R1c, the control) and a persistence-mode run (R1p: host `nvidia-smi -pm 1`, guest `APPS_GUEST_PM=1`).
 
-| | host (R1, control R1c identical) | guest (R1) |
+| run 2026-11-17, RTX 3090, driver 580.159.04 (`traces/open_rows_guest_20261117/`) | host (R1, control R1c identical) | guest (R1) |
 |---|---|---|
 | `nvcodec_matrix` | pass 35, not_supported 7, fail 0, mismatch 0, not_run 5 (AV1 encode: `unknown_encoder`), 143 s, `gpu_use=PROVEN` | pass 31, not_supported 16, fail 0, mismatch 0, not_run 0, 245 s, `host_gpu_use=PROVEN` (encoder 100 percent in 28 samples) |
 | compare | host against host: 47 of 47 agree, 0 capdiffs (noise floor zero) | 38 agree, 9 disagree, 4 candidates, 1 capdiff |

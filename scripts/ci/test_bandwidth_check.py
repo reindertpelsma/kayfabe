@@ -10,7 +10,7 @@ import unittest
 import bandwidth_calibrate as cal
 import bandwidth_check as chk
 
-TODAY = datetime.date(2026, 11, 17)  # moved from 11-16 with the apps.open_rows entry (measured 2026-11-17)
+TODAY = datetime.date(2026, 11, 17)
 DATA = chk.load()
 PROPS = json.loads(chk.PROPS.read_text())
 MATRIX = json.loads(chk.MATRIX.read_text())
@@ -253,7 +253,7 @@ class Calibrate(unittest.TestCase):
         import io
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            self.assertEqual(cal.main(["--instruction", str(instruction), "--today", "2026-11-16", runs]), 0)
+            self.assertEqual(cal.main(["--instruction", str(instruction), "--today", "2026-11-17", runs]), 0)
         self.assertIn("bandwidth.json (proposed)", out.getvalue())
         self.assertEqual(chk.DATA.read_bytes(), before)
 
