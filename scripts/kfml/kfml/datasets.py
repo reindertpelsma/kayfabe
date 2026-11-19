@@ -35,6 +35,14 @@ def _sha256(path) -> str:
     return h.hexdigest()
 
 
+def _md5(path) -> str:
+    h = hashlib.md5(usedforsecurity=False)
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
 def download_parallel(url, dest, connections=6, urlopen=urllib.request.urlopen, retries=5, sleep=time.sleep, chunk=1 << 20):
     """Download URL into DEST with several ranged requests at once. Returns the byte count, or None when the server does not offer ranges
     (the caller then downloads sequentially). Why: the CIFAR-10 server gives about 45 KB/s per connection (MEASURED 2026-11-17, two boxes and
@@ -122,6 +130,11 @@ def fetch(name: str, data_dir, pins=None, environ=None, opener=None, source_dir=
             if got != want:
                 src.unlink()
                 raise HashMismatch("%s: sha256 %s != pinned %s (file deleted)" % (name, got, want))
+            # 2026-11-19 (standalone trust): the vendor's own checksum, where the vendor publishes only an md5 (pins.json md5_source).
+            vmd5 = ent.get("md5")
+            if vmd5 and _md5(src) != vmd5:
+                src.unlink()
+                raise HashMismatch("%s: md5 != the vendor's %s (%s; file deleted)" % (name, vmd5, ent.get("md5_source", "?")))
             os.replace(src, dest)
         else:
             if src is not unver:

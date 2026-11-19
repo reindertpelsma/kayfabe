@@ -404,6 +404,69 @@
     }
    ]
   },
+  "kfml-dataset-cifar10-binary": {
+   "row": 19,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/datasets.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "c4a38c50a1bc5f3a1c5537f2155ab9d68f9f25eb1ed8d9ddda3db29a59bca1dd",
+     "size": 170052171,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://www.cs.toronto.edu/~kriz/cifar.html",
+     "status": "MEASURED",
+     "measured": "2026-11-17",
+     "note": "the vendor publishes only an md5 (c32a1d4ab5d03f1284b67883e8d87530 on cifar.html, read 2026-11-19); scripts/kfml/kfml/datasets.py checks that md5 beside this sha256 on every fetch"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "c4a38c50a1bc5f3a1c5537f2155ab9d68f9f25eb1ed8d9ddda3db29a59bca1dd",
+      "c32a1d4ab5d03f1284b67883e8d87530"
+     ]
+    }
+   ]
+  },
+  "kfml-dataset-tinyshakespeare": {
+   "row": 19,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://raw.githubusercontent.com/karpathy/char-rnn/6f9487a6fe5b420b7ca9afb0d7c078e37c1d1b4e/data/tinyshakespeare/input.txt",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/datasets.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+     "size": 1115394,
+     "pin_origin": "git-commit",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://github.com/karpathy/char-rnn/blob/6f9487a6fe5b420b7ca9afb0d7c078e37c1d1b4e/data/tinyshakespeare/input.txt",
+     "status": "MEASURED",
+     "measured": "2026-11-19"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+      "6f9487a6fe5b420b7ca9afb0d7c078e37c1d1b4e"
+     ]
+    }
+   ]
+  },
   "libtpms-0.10.1-source": {
    "row": 9,
    "kind": "file",
@@ -1329,7 +1392,8 @@
    "runs": "host",
    "consumers": [
     "scripts/bench/provision_box.sh",
-    "scripts/ci/vast_box_main.sh"
+    "scripts/ci/vast_box_main.sh",
+    "scripts/bench/linux/matlab_gpu_prov.sh"
    ],
    "anchors": [
     {
@@ -1584,21 +1648,21 @@
   },
   "scripts/apps/mlrows/gen_locks.py": {
    "count": 1,
-   "class": "planned",
+   "class": "tooling",
    "row": null,
-   "reason": "maintainer tool that resolves the hashed locks of the open ML rows with uv against PyPI and NVIDIA's open index; a user installs from the committed locks with `pip --require-hashes`, never through this file. Arrived with the open ML rows (docs/design/V3_OPEN_ML_ROWS.md); route through kf_trust or drop the file from the scan when the owners decide the scope of route 3"
+   "reason": "maintainer tool, run by hand only (no stage or run invokes it): resolves the hashed locks of the open ML rows with uv against PyPI and NVIDIA's open index; users install from the committed locks with `pip --require-hashes`"
   },
   "scripts/apps/mlrows/mlrows.py": {
    "count": 3,
-   "class": "planned",
+   "class": "native-route3",
    "row": null,
-   "reason": "fetches the 135M model from its origin and installs the three venvs with `pip --require-hashes --only-binary` from the committed locks; every wheel is checked against the lock's hash, the model against the sha256 in pins.json. Not yet read through kf_trust (open ML rows, docs/design/V3_OPEN_ML_ROWS.md)"
+   "reason": "anchored in its own code: the 135M model by the upstream commit of its repository (pins.json `revision`) and each file against the sha256 (LFS) or git blob id that the origin's tree API reports for that commit; the three venvs with `pip --require-hashes --only-binary` from the committed locks (PyPI's and NVIDIA's own per-file digests). Not yet read through kf_trust"
   },
   "scripts/apps/open_rows/provision.sh": {
    "count": 1,
-   "class": "planned",
+   "class": "native-route3",
    "row": null,
-   "reason": "fetches NVIDIA's apt repository key from NVIDIA's own URL and installs DCGM through apt (signed index); the Worker's cache-only apt shim refuses it by design. Not yet read through kf_trust (open FFmpeg/DCGM rows, docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md)"
+   "reason": "NVIDIA's apt repository key from NVIDIA's URL, refused unless its fingerprint equals pins.env OPENROWS_NVIDIA_KEY_FPR (low 64 bits = the key id NVIDIA publishes); DCGM then through apt with that signed index. The Worker's cache-only apt shim refuses it by design. Not yet read through kf_trust"
   },
   "scripts/apps/pin_lib.sh": {
    "count": 4,
@@ -1662,15 +1726,9 @@
   },
   "scripts/bench/linux/matlab_gpu_box.py": {
    "count": 4,
-   "class": "planned",
+   "class": "native-route3",
    "row": null,
-   "reason": "first-GPU-test provisioning of the Linux image C rows on a rented box: downloads the guest driver .run and NVIDIA's per-file checksum from NVIDIA and checks them against each other; a test tool, not a product path. Arrived with PR #465"
-  },
-  "scripts/bench/linux/matlab_gpu_prov.sh": {
-   "count": 1,
-   "class": "planned",
-   "row": null,
-   "reason": "first-GPU-test provisioning script: rustup `curl | sh` for the build of kf3 on the test box, the same pattern the pre-v3 provisioning scripts keep (scripts/bench/provision_bare_metal.sh). Arrived with PR #465; a test tool, not a product path"
+   "reason": "first-GPU-test provisioning of the Linux image C rows: the guest driver .run checked against NVIDIA's own per-file .sha256sum fetched from NVIDIA (an official checksum, class official-checksum-url in substance); a test tool, not a product path. Not yet read through kf_trust"
   },
   "scripts/bench/linux/propimage_linux.py": {
    "count": 7,
@@ -1746,9 +1804,9 @@
   },
   "scripts/bench/windows/open_rows/kfopen_build.py": {
    "count": 4,
-   "class": "planned",
+   "class": "native-route3",
    "row": null,
-   "reason": "downloads inside the online Windows guest: the toolchain (Build Tools bootstrapper, MinGit, Python, NuGet) and pinned sources, each checked by an official checksum or a vendor signature, or refused unless `--accept-unanchored-downloads` records the lift (docs/design/V3_WINDOWS_OPEN_ROWS.md section 4); its own anchors, not yet read through kf_trust"
+   "reason": "downloads inside the online Windows guest: the toolchain (Build Tools bootstrapper, MinGit, Python, NuGet) and pinned sources, each checked by an official checksum or a vendor signature, or refused unless `--accept-unanchored-downloads` records the lift (docs/design/V3_WINDOWS_OPEN_ROWS.md). kf_trust cannot run in that guest"
   },
   "scripts/bench/windows/resolve_media.py": {
    "count": 3,
@@ -1886,7 +1944,7 @@
    "count": 7,
    "class": "native-route3",
    "row": 19,
-   "reason": "kfml datasets by the url and sha256 pinned in pins.json (route 3), the fetch with ranged connections added by the kfml run (#455) raised the primitive lines from 2 to 7; not yet read through kf_trust. A RAISE of an existing entry, recorded by the standalone union only so that the other gates run: anchor it or take this commit out"
+   "reason": "kfml datasets: the two anchored artifacts kfml-dataset-tinyshakespeare (git-commit URL) and kfml-dataset-cifar10-binary (sha256 + the vendor's md5, both checked per fetch). The ranged downloader merged from next with the kfml run (#455) spells the same two downloads in 7 primitive lines (was 2); no other URL. Not yet read through kf_trust"
   },
   "scripts/kfml/kfml/setup_venv.py": {
    "count": 2,
@@ -1896,9 +1954,9 @@
   },
   "scripts/kfml/kfml/wheelhouse.py": {
    "count": 1,
-   "class": "planned",
-   "row": null,
-   "reason": "`pip download --require-hashes` of the hashed lock into a transient wheelhouse on the host (official indexes only); every wheel is checked against the lock. Not yet read through kf_trust (kfml guest mode)"
+   "class": "native-route3",
+   "row": 18,
+   "reason": "`pip download --require-hashes` of the committed hashed lock into a transient wheelhouse on the host, official indexes only (merged from next with kfml guest mode); every wheel is checked against the lock's sha256, which PyPI publishes per file. Not yet read through kf_trust"
   },
   "scripts/kfseed/cli.py": {
    "count": 3,

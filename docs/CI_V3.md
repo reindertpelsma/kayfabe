@@ -369,7 +369,7 @@ minimum step counts, so a shortened or malformed job cannot report a vacuous gre
 
 ## Standalone trust gate (2026-11-17)
 
-CODE READ: [`trust_lint.py`](../scripts/ci/trust_lint.py) runs in the `stable` job beside `ignore_ladder.py check`. It reads
+CODE READ: [`trust_lint.py`](../scripts/ci/trust_lint.py) runs in the `stable` job beside `ignore_ladder.py check`; its mutants run in `mutants-b`. It reads
 [`trust_manifest.json`](../scripts/ci/trust_manifest.json), the repository's list of what its scripts download and the anchor of each
 (an upstream checksum fetched from upstream, or a pin in git of something upstream authored: a commit, a vendor checksum, a registry digest, a
 source hash), and fails on an anchor that is "a sha256 in git of an artifact we build or host", an artifact without an anchor, a consumer that

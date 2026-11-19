@@ -11,7 +11,13 @@ while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done
 apt-get update -qq
 apt-get install -y -qq $(for p in full bench; do bash scripts/bench/provision_box.sh --packages $p; done | sort -u | tr '\n' ' ') >/dev/null
 echo "APT_RC=$?"
-command -v cargo >/dev/null || curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal >/dev/null 2>&1
+# 2026-11-19 (standalone trust): rustup-init through kf_trust.py with the official .sha256 (as provision_box.sh), never `curl | sh`.
+if ! command -v cargo >/dev/null; then
+  RUSTUP_DIR=$(mktemp -d)
+  python3 -I scripts/ci/kf_trust.py fetch rustup-init-1.29.3 --out "$RUSTUP_DIR/rustup-init"
+  chmod 0700 "$RUSTUP_DIR/rustup-init"
+  "$RUSTUP_DIR/rustup-init" -y --default-toolchain stable --profile minimal >/dev/null 2>&1
+fi
 . "$HOME/.cargo/env"
 PIN=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
 rustup toolchain install "$PIN" --profile minimal >/dev/null 2>&1

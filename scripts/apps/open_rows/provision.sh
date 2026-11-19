@@ -30,6 +30,11 @@ probe() {
   gcc -O2 -Wall -I"$ROOT/src/nv-codec-headers/include" "$HERE/nvcodec_probe.c" -o "$ROOT/bin/nvcodec_probe" -ldl
 }
 ffmpeg_pkg() { command -v ffmpeg >/dev/null || apt_install ffmpeg || return 1; ffmpeg -version | head -n 1; }
+# 2026-11-19 (standalone trust): the fetched apt key must be the pinned one (pins.env OPENROWS_NVIDIA_KEY_FPR; its low 64 bits are the key id
+# NVIDIA publishes), never a key trusted on first use.
+key_fpr_ok() {
+  gpg --show-keys --with-colons "$1" 2>/dev/null | awk -F: '$1 == "fpr" { print $10; exit }' | grep -qx "$2"
+}
 dcgm() {
   local rel base keyring list cuda
   cuda=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: *\([0-9][0-9]*\)\..*/\1/p' | head -n 1); cuda=${cuda:-12}   # the flavour the driver wants
@@ -38,6 +43,7 @@ dcgm() {
   if ! grep -rqs "developer.download.nvidia.com/compute/cuda/repos/$rel" /etc/apt/sources.list /etc/apt/sources.list.d; then
     command -v gpg >/dev/null || apt_install gnupg ca-certificates curl || return 1
     curl -fsSL --connect-timeout 20 -o "$ROOT/nvidia.key" "$base/$OPENROWS_NVIDIA_KEY_FILE" || return 1
+    key_fpr_ok "$ROOT/nvidia.key" "$OPENROWS_NVIDIA_KEY_FPR" || { echo "dcgm: NVIDIA_KEY_FINGERPRINT the fetched key is not $OPENROWS_NVIDIA_KEY_FPR"; return 1; }
     gpg --dearmor --yes -o "$keyring" "$ROOT/nvidia.key" || return 1
     echo "deb [signed-by=$keyring] $base/ /" > "$list" || return 1
   fi

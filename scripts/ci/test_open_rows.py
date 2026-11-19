@@ -1667,7 +1667,7 @@ class StaticContracts(unittest.TestCase):
     def test_pins_env_names_a_commit_and_a_version_never_a_hash(self):
         keys = {l.split("=", 1)[0] for l in (OR / "pins.env").read_text().splitlines() if "=" in l and not l.startswith("#")}
         self.assertEqual(keys, {"OPENROWS_NVCH_URL", "OPENROWS_NVCH_TAG", "OPENROWS_NVCH_COMMIT", "OPENROWS_NVIDIA_REPO_BASE", "OPENROWS_NVIDIA_KEY_FILE",
-                                "OPENROWS_DCGM_VERSION", "OPENROWS_DCGM_PACKAGE_STEMS"})
+                                "OPENROWS_NVIDIA_KEY_FPR", "OPENROWS_DCGM_VERSION", "OPENROWS_DCGM_PACKAGE_STEMS"})
 
     def test_provision_waits_for_a_busy_package_manager_before_every_apt_call(self):
         text = (OR / "provision.sh").read_text()
@@ -1681,6 +1681,39 @@ class StaticContracts(unittest.TestCase):
     def test_the_helper_install_waits_for_the_lock_too(self):
         text = (OR / "provision.sh").read_text()
         self.assertRegex(text, r"apt_install\(\) \{\n  wait_apt\n")
+
+    def test_the_nvidia_repository_key_is_checked_against_its_pinned_fingerprint(self):
+        """2026-11-19 (standalone trust, #483): the apt key was trusted on first use. Its full fingerprint is pinned, its low 64 bits are the
+        key id NVIDIA itself publishes (A4B469963BF863CC, developer.nvidia.com/blog/updating-the-cuda-linux-gpg-repository-key), and the key is
+        refused before gpg --dearmor when the fetched file is another key."""
+        pins = dict(l.split("=", 1) for l in (OR / "pins.env").read_text().splitlines() if "=" in l and not l.startswith("#"))
+        self.assertRegex(pins["OPENROWS_NVIDIA_KEY_FPR"], r"^[0-9A-F]{40}$")
+        self.assertTrue(pins["OPENROWS_NVIDIA_KEY_FPR"].endswith("A4B469963BF863CC"))
+        text = (OR / "provision.sh").read_text()
+        check = text.index('key_fpr_ok "$ROOT/nvidia.key" "$OPENROWS_NVIDIA_KEY_FPR"')
+        self.assertLess(text.index('-o "$ROOT/nvidia.key"'), check)
+        self.assertLess(check, text.index("gpg --dearmor"))
+
+    @unittest.skipUnless(shutil.which("gpg"), "gpg is needed to make a test key")
+    def test_key_fpr_ok_accepts_only_the_pinned_key(self):
+        text = (OR / "provision.sh").read_text()
+        fn = re.search(r"^key_fpr_ok\(\) \{.*?\n\}\n", text, flags=re.S | re.M)
+        self.assertIsNotNone(fn)
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, GNUPGHOME=d)
+            subprocess.run(["gpg", "--batch", "--passphrase", "", "--quick-gen-key", "kayfabe test <t@example.invalid>", "ed25519", "sign", "1d"],
+                           env=env, check=True, capture_output=True)
+            out = subprocess.run(["gpg", "--batch", "--with-colons", "--list-keys"], env=env, check=True, capture_output=True, text=True).stdout
+            fpr = next(l.split(":")[9] for l in out.splitlines() if l.startswith("fpr:"))
+            key = Path(d) / "k.pub"
+            key.write_bytes(subprocess.run(["gpg", "--batch", "--export", "--armor"], env=env, check=True, capture_output=True).stdout)
+            junk = Path(d) / "junk.pub"
+            junk.write_text("not a key\n")
+            def ok(path, want):
+                return subprocess.run(["bash", "-c", fn.group(0) + 'key_fpr_ok "$1" "$2"', "x", str(path), want], env=env).returncode == 0
+            self.assertTrue(ok(key, fpr))
+            self.assertFalse(ok(key, "0" * 40))
+            self.assertFalse(ok(junk, fpr))
 
     def test_provision_never_trusts_an_unsigned_repository(self):
         text = (OR / "provision.sh").read_text()
