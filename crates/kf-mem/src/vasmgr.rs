@@ -3447,4 +3447,69 @@ mod tests {
         assert_eq!(r.m.stats.no_slot, 1);
         assert!(busy(&r.port), "never cleared: nothing was applied");
     }
+
+    /// FALSIFIER: either scope is completed before the moved object's new root lands.
+    fn audit_move_in_flight(all: bool, move_twice: bool) {
+        const NEW: u64 = 0x0020_0000;
+        const NEWER: u64 = 0x0030_0000;
+        const VA: u64 = 0x5000_0000;
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(VA, 0x0200_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        r.ops.borrow_mut().clear();
+        let req = guest_invalidate(&r.port, PDB_A, all);
+        r.m.on_invalidate(req, r.port.trigger());
+        r.m.table.set_root(K_A, NEW, PdbAperture::Vidmem).unwrap();
+        r.tables
+            .borrow_mut()
+            .insert(NEW, vec![(VA, 0x0300_0000, 0x1000, 0)]);
+        let first = r.m.on_walk_ready(r.port.trigger());
+        assert!(first.completed.is_empty());
+        assert!(
+            first.unreconciled.is_empty(),
+            "a moved root is retryable, not failed"
+        );
+        assert!(
+            busy(&r.port),
+            "the original PDB missing now must not cause a vacuous clear"
+        );
+        assert!(r.m.in_flight());
+        assert!(ops(&r).is_empty(), "the stale report must not be applied");
+        let expected_off = if move_twice {
+            r.m.table.set_root(K_A, NEWER, PdbAperture::Vidmem).unwrap();
+            r.tables
+                .borrow_mut()
+                .insert(NEWER, vec![(VA, 0x0400_0000, 0x1000, 0)]);
+            let second = r.m.on_walk_ready(r.port.trigger());
+            assert!(second.completed.is_empty() && second.unreconciled.is_empty());
+            assert!(busy(&r.port));
+            assert!(ops(&r).is_empty());
+            0x0400_0000
+        } else {
+            0x0300_0000
+        };
+        let done = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(done.completed, vec![(req.seq, ClearOutcome::Cleared)]);
+        assert!(!busy(&r.port));
+        assert!(ops(&r).contains(&Op::Map(VA, expected_off, 0x1000)));
+        assert!(r.ops.borrow().iter().all(|(_, was_busy)| *was_busy));
+        assert_eq!(r.m.stats.unreconciled, 0);
+    }
+
+    #[test]
+    fn audit_named_invalidate_retries_the_moved_object() {
+        audit_move_in_flight(false, false);
+    }
+
+    #[test]
+    fn audit_all_pdb_invalidate_retries_the_moved_object() {
+        audit_move_in_flight(true, false);
+    }
+
+    #[test]
+    fn audit_named_invalidate_survives_two_root_moves() {
+        audit_move_in_flight(false, true);
+    }
 }
