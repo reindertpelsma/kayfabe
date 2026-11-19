@@ -1,0 +1,25 @@
+{
+ "compute_cap": "7.5",
+ "cuda": "12.8",
+ "data": {},
+ "driver": "595.91.07",
+ "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+ "measured_on": {
+  "compute_cap": "7.5",
+  "cuda": "12.8",
+  "driver": "595.91.07",
+  "driver_cuda": "13.2",
+  "flavor": "cu128",
+  "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+  "run_id": "kfml_run_20261117_second_die",
+  "torch": "2.7.1+cu128"
+ },
+ "metrics": {
+  "chunks": 53,
+  "oversub_gb": 13.25,
+  "vram_gb": 10.56427001953125
+ },
+ "test": "managed_oversub",
+ "torch": "2.7.1+cu128",
+ "wall_s": 33.108
+}

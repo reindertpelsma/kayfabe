@@ -1,0 +1,7 @@
+nanogpt_compile    tier=mid   gate=True  budget= 1500s vram>=8GB cc>=7.5 est=unmeasured  launch_bound
+triton_kernels     tier=mid   gate=True  budget=  900s vram>=8GB cc>=7.5 est=unmeasured
+cuda_ext_inline    tier=mid   gate=True  budget=  900s vram>=8GB cc>=7.5 est=unmeasured
+amp_convnet_cifar  tier=mid   gate=True  budget= 1200s vram>=8GB cc>=7.5 est=unmeasured  launch_bound
+stress_alloc       tier=mid   gate=True  budget=  900s vram>=8GB cc>=7.5 est=unmeasured
+managed_oversub    tier=large gate=False budget=  900s vram>=8GB cc>=7.5 est=unmeasured
+total guest estimate: 0 s over 0 measured of 6 (6 unmeasured)

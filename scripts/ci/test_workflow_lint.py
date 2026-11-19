@@ -223,6 +223,57 @@ class Secrets(unittest.TestCase):
             self.assertEqual(wl.uses_in(gpu.lines), [])
 
 
+class GateNeeds(unittest.TestCase):
+    """ci.yml only: every job is in the gate's `needs` (2026-11-17, when `stable` was split into jobs)."""
+
+    def ci(self):
+        return real("ci.yml")
+
+    def lint_ci(self, text):
+        return [x for x in lint_one(text, "ci.yml") if "gate-needs:" in x]
+
+    def test_the_real_ci_workflow_is_clean(self):
+        self.assertEqual(self.lint_ci(self.ci()), [])
+
+    def test_a_job_the_gate_does_not_wait_for_is_a_finding(self):
+        text = mutate(self.ci(), ", rust-mutants-b]", "]")
+        out = self.lint_ci(text)
+        self.assertEqual(len(out), 1, out)
+        self.assertIn("rust-mutants-b", out[0])
+
+    def test_a_new_job_that_nobody_added_to_the_gate_is_a_finding(self):
+        text = mutate(self.ci(), "\n  gate:\n", "\n  shard-x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n\n  gate:\n")
+        out = self.lint_ci(text)
+        self.assertEqual(len(out), 1, out)
+        self.assertIn("shard-x", out[0])
+
+    def test_slow_is_exempt_and_the_gate_itself_needs_nothing(self):
+        self.assertNotIn("slow", self.ci().split("  gate:", 1)[1].split("needs:", 1)[1].split("\n", 1)[0])
+        self.assertEqual(self.lint_ci(self.ci()), [])
+
+    def test_the_gate_must_be_named_ci(self):
+        out = self.lint_ci(mutate(self.ci(), "    name: CI\n", "    name: Gate\n"))
+        self.assertEqual(len(out), 1, out)
+        self.assertIn("`CI`", out[0])
+
+    def test_a_needs_naming_a_job_that_does_not_exist_is_a_finding(self):
+        out = self.lint_ci(mutate(self.ci(), "needs: [stable, ", "needs: [ghost-job, stable, "))
+        self.assertEqual(len(out), 1, out)
+        self.assertIn("ghost-job", out[0])
+
+    def test_a_shape_the_parser_does_not_read_is_refused_not_guessed(self):
+        text = self.ci()
+        start = text.index("    needs: [stable, stripped")
+        end = text.index("\n", start)
+        block = "    needs:\n" + "".join("      - %s\n" % n for n in ("stable", "stripped"))
+        out = self.lint_ci(text[:start] + block.rstrip("\n") + text[end:])
+        self.assertEqual(len(out), 1, out)
+        self.assertIn("cannot read", out[0])
+
+    def test_other_workflows_are_not_held_to_it(self):
+        self.assertEqual([x for x in lint_one(GOOD) if "gate-needs" in x], [])
+
+
 class Cli(unittest.TestCase):
     def test_exit_codes(self):
         d, root = tree(x__yml=GOOD)

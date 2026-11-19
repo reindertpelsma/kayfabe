@@ -1649,11 +1649,60 @@ def install_flow_rows(text, rc, sha, result):
     return [row("install_flow", 1)]
 
 
+# 2026-11-17 kfml (scripts/kfml, ML research workloads; scripts/ci/kfml_stage.py): the ML workloads run natively on the box's own single NVIDIA
+# GPU, with the wheel flavour derived from the box (no die and no driver is named anywhere). IN THE DEFAULT PLAN of the MIDDLE and the LARGE tier
+# (owner, 2026-11-17: it joins the middle tier if it is not too big; measured: traces/kfml_run_20261117_tier_decision/README.md); `--skip kfml` leaves it out.
+# The kfml tier is `mid` for `middle` (the five gated rows, about 2 minutes warm) and `large` for `large` (all six rows). SMALL and ADHOC never plan it.
+# Its budget row is payloadStageResources.kfml in ci/vast-broker/defaults.json (a Worker bundle change) and its download numbers are bandwidth.json `kfml`.
+KFML_IN_MIDDLE_LARGE = True
+KFML_MIN_REMAINING_MS = {"middle": 20 * 60000, "large": 30 * 60000}   # MEASURED stage wall: about 4 and 5 minutes with the datasets prefetched, about 10 without (kfml_run_20261117_tier_decision), with margin
+KFML_PREFIX = "/workspace/kf-kfml"
+KFML_TIER = {"middle": "mid", "large": "large"}
+
+
+def start_kfml_prefetch(root, evidence, popen=subprocess.Popen):
+    """Start the kfml dataset prefetch in the background before the first stage (2026-11-17): the CIFAR-10 server is slow (about 8 minutes with six ranged
+    connections), provision and the other stages leave the network idle, and the kfml stage waits for the prefetch only if it is still running. Failure to
+    start is not an error (the stage then downloads for itself); nothing here touches the stage verdicts. Returns the process or None."""
+    script = Path(root) / "scripts/ci/kfml_stage.py"
+    if not script.is_file():
+        return None
+    try:
+        with open(evidence / "kfml_prefetch.run", "wb") as log:
+            return popen(["python3", str(script), "prefetch", "--checkout", str(root), "--prefix", KFML_PREFIX], stdout=log,
+                         stderr=subprocess.STDOUT, start_new_session=True)
+    except OSError:
+        return None
+
+
+def kfml_rows(text, rc, sha, result):
+    """One KF_KFML_RESULT line, kept in the result file (die, driver, per-row status) even when it is red (vast_report.py validates it).
+    PASS needs rc 0, verdict PASS and the right sha. verdict NOT_RUN (no pinned wheel flavour fits this box, or every test NOT_RUN for a
+    named hardware reason) with rc 0 is a skipped row, never a pass; a FAIL row, a failed step or anything else is the stage failing."""
+    found = re.findall(r"^KF_KFML_RESULT (\{.*\})$", text, re.M)
+    if len(found) != 1:
+        raise EvidenceError("kfml")
+    try:
+        doc = json.loads(found[0])
+    except ValueError:
+        raise EvidenceError("kfml") from None
+    result["kfml"] = doc
+    if type(doc) is not dict or doc.get("sha") != sha:
+        raise EvidenceError("kfml")
+    if rc == 0 and doc.get("verdict") == "NOT_RUN":
+        return [row("kfml", skipped=1)]
+    if rc or doc.get("verdict") != "PASS":
+        raise EvidenceError("kfml")
+    return [row("kfml", 1)]
+
+
 def plan_stage_names(i, only=()):
     """The stages main() builds for this instruction, in run order (main checks its own list against this)."""
     names = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
     if i.linux_apps is not None:
         names.append("apps")
+    if i.tier in KFML_TIER and (KFML_IN_MIDDLE_LARGE or "kfml" in only):
+        names.append("kfml")
     if i.tier == "large" and (INSTALL_FLOW_IN_LARGE or "install_flow" in only):
         names.append("install_flow")
     if i.windows:
@@ -1995,6 +2044,23 @@ def main():
                 WINDOWS_MIN_REMAINING_MS + (WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0) if windows else 0
             ), short_row="apps_retry_time")
             stages.append(stage)
+        if "kfml" in plan:
+            # Host-native, on the GPU the earlier Linux stages have released; scripts/ci/kfml_stage.py owns setup (flavour auto), the
+            # pinned downloads, the run and the record. Its tier follows the payload tier.
+            output_kf = evidence / "kfml.run"
+            stage = make_stage(
+                "kfml",
+                [
+                    "python3", str(root / "scripts/ci/kfml_stage.py"), "run", "--sha", sha, "--checkout", str(root),
+                    "--prefix", KFML_PREFIX, "--out", str(evidence / "kfml.json"), "--tier", KFML_TIER[tier],
+                    "--run-id", tag,
+                ],
+                output_kf,
+                [],
+                lambda rc, output=output_kf: kfml_rows(bounded_text(output), rc, sha, result),
+            )
+            stage.update(min_remaining_ms=KFML_MIN_REMAINING_MS[tier], short_row="kfml_retry_time")
+            stages.append(stage)
         if "install_flow" in plan:
             output_if = evidence / "install_flow.run"
             stage = make_stage(
@@ -2141,6 +2207,8 @@ def main():
         if [s["name"] for s in stages] != plan:
             raise EvidenceError("infrastructure")
         stages = [s for s in stages if s["name"] in selected]
+        if "kfml" in selected:
+            start_kfml_prefetch(root, evidence)
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):
