@@ -180,6 +180,7 @@ struct Kf3State {
     uint32_t channel_budget; /* ABI 26: channel-budget property (0 = derive from the host) */
     uint32_t user_view_keep; /* ABI 30: user-view-keep property (0 = the default, 16 views per channel) */
     bool windows_support;    /* ABI 33: windows-support property (default on); off = a Linux-only VM */
+    bool unmapped_reads_zero; /* ABI 35: unmapped-reads-zero property (default off) */
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -1640,7 +1641,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     const char *vm_id = (s->vm_id && s->vm_id[0]) ? s->vm_id : qemu_vm_id;
     int32_t realize_rc = kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
                     s->gop ? 1 : 0, s->x11_dispsw ? 1 : 0, broker_word, s->display_max_fps, s->gop_efi,
-                    s->gpu_uuid, vm_id, (uint32_t)pci->devfn, s->channel_budget, s->user_view_keep, s->windows_support ? 1 : 0, &s->h, err, sizeof(err));
+                    s->gpu_uuid, vm_id, (uint32_t)pci->devfn, s->channel_budget, s->user_view_keep, s->windows_support ? 1 : 0, s->unmapped_reads_zero ? 1 : 0, &s->h, err, sizeof(err));
     g_free(qemu_vm_id); /* Rust copied what it keeps during the call */
     if (realize_rc != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
@@ -2001,6 +2002,9 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_UINT32("user-view-keep", Kf3State, user_view_keep, 0),
     /* ABI 33: the one coarse opt-out of the Windows support profile (V3_WINDOWS_SUPPORT_PROFILE.md). */
     DEFINE_PROP_BOOL("windows-support", Kf3State, windows_support, true),
+    /* ABI 35: unmapped guest VAs read zero on the host (Vulkan sparse residency); default off.
+     * docs/howto/installing.md states the cost: faults the guest expects become silent zeros. */
+    DEFINE_PROP_BOOL("unmapped-reads-zero", Kf3State, unmapped_reads_zero, false),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),

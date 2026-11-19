@@ -1,0 +1,31 @@
+[
+ {
+  "compute_cap": "8.9",
+  "cuda": "12.6",
+  "cudnn": "90501",
+  "dataset_sha256": {},
+  "driver": "560.35.03",
+  "driver_cuda": "12.6",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "guest_estimate_s": null,
+  "launch_bound": false,
+  "lock_sha256": "26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0",
+  "metrics": {
+   "arch_list": "8.9+PTX",
+   "build_s": 37.850658893585205,
+   "log": "/root/run/logs_redist/cuda_ext_inline.log",
+   "spin_clock_cycles": 49885
+  },
+  "name": "cuda_ext_inline",
+  "patch_sha256": {},
+  "reason": "",
+  "status": "PASS",
+  "tier": "mid",
+  "torch": "2.7.1+cu126",
+  "triton": "3.3.1",
+  "upstream_commits": {},
+  "vram_gb": 11.62,
+  "wall_s": 41.45
+ }
+]

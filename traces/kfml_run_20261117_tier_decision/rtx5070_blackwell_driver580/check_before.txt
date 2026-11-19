@@ -1,0 +1,23 @@
+ok   python 3.10.12
+ok   NVIDIA GPU: NVIDIA GeForce RTX 5070, cc 12.0, 11.9 GB, driver 580.178.04
+flavor: cu128  (chose cu128 (driver CUDA 13.0 >= 12.8 and sm_120 is inside sm_75..sm_120))
+       driver 580.178.04 supports CUDA 13.0; GPU sm_120
+ok   VRAM >= 8 GB (documented floor)
+MISSING torch None (cuda None, cudnn None, triton None)
+       -> python3 -m kfml setup --venv DIR   (flavour is derived from the box; then run kfml from DIR/bin/python)
+MISSING torch >= 2.7
+       -> install torch >= 2.7 (cu128 index)
+ok   nvcc 12.8 (must equal torch cuda None major.minor) /usr/local/cuda/bin/nvcc
+ok   C compiler
+ok   Python.h (python3-dev)
+ok   disk free 99.9 GB (>= 20 recommended: CUDA wheels are several GB)
+MISSING venv/KF_ML_HOME: None
+       -> run inside the venv from `kfml setup --venv DIR` or set KF_ML_HOME
+MISSING venv lock sha256: None
+       -> created by `kfml setup`
+test nanogpt_compile    ENV_MISSING: torch is not importable (import torch failed: No module named 'torch'); run `kfml setup --venv DIR`
+test triton_kernels     ENV_MISSING: torch is not importable (import torch failed: No module named 'torch'); run `kfml setup --venv DIR`
+test cuda_ext_inline    ENV_MISSING: torch is not importable (import torch failed: No module named 'torch'); run `kfml setup --venv DIR`
+test amp_convnet_cifar  ENV_MISSING: torch is not importable (import torch failed: No module named 'torch'); run `kfml setup --venv DIR`
+test stress_alloc       ENV_MISSING: torch is not importable (import torch failed: No module named 'torch'); run `kfml setup --venv DIR`
+test managed_oversub    ENV_MISSING: torch is not importable (import torch failed: No module named 'torch'); run `kfml setup --venv DIR`

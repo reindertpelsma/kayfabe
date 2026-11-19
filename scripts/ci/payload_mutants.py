@@ -868,6 +868,7 @@ def main():
             "payload_instruction.py",
             "box_downloader.py",
             "propimage_apps.py",
+            "kfml_stage.py",  # test_vast_payload_apps and the v7 fixture build the kfml stage log with it (default stage since 2026-11-17)
             "kf_fetch.py",
             "vast_payload.sh",
             "kernel_log.py",
