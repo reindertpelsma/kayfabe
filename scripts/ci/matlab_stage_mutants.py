@@ -25,7 +25,7 @@ SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_matlab_stage."
 COPY_DIRS = ["scripts/ci", "scripts/kfci", "scripts/bench/linux"]
 COPY_FILES = [
-    "scripts/bench/native_xid_guard.py", "scripts/bench/native_fault_names.json", "scripts/bench/specviewperf/lanes.json",
+    "scripts/bench/native_xid_guard.py", "scripts/bench/gpu_use.py", "scripts/bench/native_fault_names.json", "scripts/bench/specviewperf/lanes.json",
     "scripts/bench/windows/propimage.py", "scripts/bench/windows/propimage_check.py", "scripts/bench/windows/clocknet_assert.py", "scripts/bench/windows/clockrule.py",
     "scripts/bench/windows/gpu_assert.py", "scripts/bench/windows/kf3_census.py", "scripts/bench/windows/propimage_plain.py", "scripts/bench/windows/propimage_registry.py",
     "scripts/bench/windows/propimage_runspec.py", "scripts/bench/windows/app_defs/core_apps.py", "scripts/bench/windows/propimage_autounattend.xml.in",
