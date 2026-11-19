@@ -1,0 +1,49 @@
+{
+  "schema": "kayfabe.app-lane/1",
+  "status": "STATUS: DESIGN-ONLY for the Worker, 2026-11-18. The planner that reads this file (src/app-lane.js, release-plan.mjs --app-lane) is implemented and tested GPU-free; the Worker admin start kind 'app' is NOT built and nothing here is deployed or read by the deployed Worker. Ruling: docs/OWNER_RULINGS.md section AZ. Design: docs/design/V3_APP_LANE_PLANNER.md.",
+  "core_paths": [
+    "crates/kf-*/src/**",
+    "!crates/kf-harness/**",
+    "!crates/kf-rawclient/**",
+    "!crates/kf-trace/**",
+    "crates/kf-chip/**",
+    "cuda/walk/**",
+    "qemu/hw/misc/kf3/**",
+    "broker/**",
+    "firmware/**",
+    "scripts/bench/windows/propimage.py",
+    "scripts/bench/windows/clocknet_assert.py",
+    "!crates/*/tests/**"
+  ],
+  "core_paths_note": "Section AZ item 5, verbatim as data. A file is core when it matches a pattern without '!' and no pattern with '!'. '*' stays inside one path segment, '**' crosses segments. The three excluded crates and test-only paths (crates/*/tests/**) are the section's exceptions; docs, site, ci, scripts other than the two listed, and traces match nothing and so are not core.",
+  "rotation": {
+    "window_releases": 4,
+    "basis": "owner ruling 2026-11-18, section AZ item 6: every image meets every family within four releases"
+  },
+  "roles": {
+    "image": {
+      "hard_minutes": 300,
+      "max_inet_usd_per_gb": 0.02,
+      "basis": "ESTIMATE, 2026-11-18: the large profile's hard limit (5 h) and bandwidth price cap, reused until an app-lane run measures the image stages alone"
+    }
+  },
+  "images": [
+    {
+      "id": "imga",
+      "disk_gb": 300,
+      "vram_gb": 8,
+      "stages": ["propimage_apps"],
+      "manual_only": true,
+      "basis": "disk_gb: ESTIMATE, the large profile disk; vram_gb: UNMEASURED placeholder (no VRAM floor of the image is recorded in the repository), set it from a measured run"
+    },
+    {
+      "id": "imgb",
+      "disk_gb": 300,
+      "vram_gb": 8,
+      "stages": ["propimage_apps", "propimage_apps_b"],
+      "manual_only": true,
+      "basis": "disk_gb: ESTIMATE, the large profile disk; vram_gb: UNMEASURED placeholder (no VRAM floor of the image is recorded in the repository), set it from a measured run"
+    }
+  ],
+  "images_note": "The planner knows images only from this list (configuration, owner rule 2026-11-18). An image also needs an entry in propimages.json so that bandwidth.json can read its pinned size; images C and D are added here and there when they exist."
+}

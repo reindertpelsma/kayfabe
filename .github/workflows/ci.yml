@@ -841,6 +841,10 @@ jobs:
       # (383, a census of pre-existing prose across a tree several agents write at once).
       - name: "Claim-ledger gate (a measurement word names its run, not a source read)"
         run: python3 scripts/ci/debt.py claims
+      # ★ 2026-11-18 (S1-86 / BF-2): every plain `eprintln!` of the product crates is pinned by file,
+      # enclosing fn and text; a new one fails (guest-repeatable sites use `kf_arch::rate_eprintln!`).
+      - name: "Plain-log ratchet (no new unthrottled eprintln! in the product crates)"
+        run: python3 scripts/ci/debt.py logs
       # Scan every tracked regular file and symlink text, including bounded archive members.
       # The empty UUID baseline remains shrink-only; additions and stale entries fail.
       - name: "GPU-UUID ratchet (including bounded archive members)"
@@ -2147,15 +2151,15 @@ jobs:
           python3 scripts/ci/box_downloader_mutants.py
           # propimage_apps payload stage (2026-11-15, OWNER_RULINGS 2026-11-15): >=2 named killers per mutant.
           python3 scripts/ci/propimage_apps_mutants.py
-          # Generic proprietary-image runner, 2026-11-16 (docs/design/V3_PROPIMAGE_RUNNER.md): registry, run spec, images; clock/network assert in every launch path; >=2 named killers per mutant.
-          python3 scripts/ci/propimage_runner_mutants.py
-          python3 scripts/ci/clocknet_assert_mutants.py
           # kfml payload stage (2026-11-16): >=2 named killers per mutant; the kfml package's own GPU-free unit tests.
           python3 scripts/ci/kfml_stage_mutants.py
           python3 scripts/ci/kfml_guest_mutants.py
           (cd scripts/kfml && python3 -m unittest discover -s tests -t .)
+          # Generic proprietary-image runner, 2026-11-16 (docs/design/V3_PROPIMAGE_RUNNER.md): registry, run spec, images; clock/network assert in every launch path; >=2 named killers per mutant.
+          python3 scripts/ci/propimage_runner_mutants.py
           # Image B gpu step diagnostics, 2026-11-17 (docs/design/V3_PROPIMAGE_B_APPS.md): the case is named, bounded poll after a started-wait, log tail kept, honest detail; >=2 named killers per mutant.
           python3 scripts/ci/propimage_gpu_diag_mutants.py --jobs 4
+          python3 scripts/ci/clocknet_assert_mutants.py
           # The standalone full run (2026-11-17, docs/design/V3_STANDALONE_FULL_RUN.md): the manifest, the named refusals, the skip record, the two open-row stages, the report bound; >=2 named killers per mutant.
           python3 scripts/ci/standalone_full_mutants.py --jobs 2
           # SPECviewperf URL-file reader: the standalone release run's one-file shape (2026-11-16): >=2 named killers per mutant.
@@ -2241,6 +2245,10 @@ jobs:
       # kf-chip video_gaps, kf-rm hostquery::hide_untabled_video, kf-qemu rmfacts flag): each mutant needs two named killers.
       - name: Video-engine offer-filter mutations require two named killers each
         run: python3 scripts/ci/hide_untabled_video_mutants.py
+      # The queue-priority link (2026-11-18: kf-rm queuepriority: SET_SCHED_POLICY, SET_INTERLEAVE_LEVEL, MAKE_REALTIME and RESTART_RUNLIST
+      # accepted as per-VM virtual state, never forwarded): each mutant needs two named killers.
+      - name: Queue-priority link mutations require two named killers each
+        run: python3 scripts/ci/queue_priority_mutants.py
       # The host unmap-call cap (crates/kf-mem/src/batch.rs `UNMAP_CALL_MAX_ENTRIES`, 2026-11-15): each mutant needs two named killers.
       - name: Host unmap-call cap mutations require two named killers each
         run: python3 scripts/ci/va_apply_bounds_mutants.py

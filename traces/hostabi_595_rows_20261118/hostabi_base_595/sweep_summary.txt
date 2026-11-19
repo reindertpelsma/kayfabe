@@ -1,0 +1,24 @@
+SWEEP_START 2026-11-19T00:53:25+00:00 rev=f2f009a8 tag=hostabi_base_595 arch=GA102
+SWEEP_ARCH arch=GA102 src=pci.ids gpu="NVIDIA GeForce RTX 3090" pci=10de:2204 family="Ampere" gpus=1 bdf=0000:00:07.0 lspci="00:07.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [GeForce RTX 3090] [10de:2204] (rev a1)"
+SWEEP_PLAN hosts=595.84 ref_host=580.159.04 guests=580.159.04 mixed=none default_guest=580.159.04 thin_re=^580\. budget=180 ladder_reps=1 ladder_rungs=cup2,cup3,cup8,cup8bench bare=cup2
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/f2f009a8/qemu-system-x86_64 rev=f2f009a8 mtime=2026-11-19 00:54:21.218166524 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+SWEEP_HOST_START 2026-11-19T00:54:21+00:00 rev=f2f009a8 host=595.84 arch=GA102
+SWAP host=595.84 already installed arch=GA102
+SWEEP_ROW_START 2026-11-19T00:54:21+00:00 row=bare:595.84:cup2
+BARE host=595.84 cup2 rc=0 CE rv=0xabcd1234 want=0xabcd1234 -> PASS verdict=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:54:22+00:00 row=bare:595.84:cup2 rc=0 secs=1
+SWEEP_ROW_START 2026-11-19T00:54:22+00:00 row=gates:595.84
+GATES host=595.84 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:54:47+00:00 row=gates:595.84 rc=0 secs=25
+SWEEP_ROW_START 2026-11-19T00:54:47+00:00 row=canary:595.84
+CANARY host=595.84 verdict=PASS thin=1/1 guest=580.159.04 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T00:55:37+00:00 row=canary:595.84 rc=0 secs=50
+SWEEP_ROW_START 2026-11-19T00:55:37+00:00 row=thin:595.84:580.159.04
+MATRIX_ROW host=595.84 guest=580.159.04 rev=f2f009a8 thin=30/30 ladder=- arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:06:54+00:00 row=thin:595.84:580.159.04 rc=0 secs=677
+SWEEP_ROW_START 2026-11-19T01:06:54+00:00 row=ladder:595.84:580.159.04
+LADDER host=595.84 guest=580.159.04 rev=f2f009a8 4/4 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:11:25+00:00 row=ladder:595.84:580.159.04 rc=0 secs=271
+SWEEP_HOST_EXIT 2026-11-19T01:11:25+00:00 host=595.84
+SWEEP_EXIT 2026-11-19T01:11:25+00:00 rc=0 rows_run=5

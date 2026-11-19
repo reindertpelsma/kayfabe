@@ -1,10 +1,107 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-11-17 (§AX: standalone trust is git only by default, the lift is explicit, what the user passes is trusted, and a user-passed mirror refines §AW.2; §AW: pins are deployment data, identity pins strict-only; §AY: the SPEC lanes' open LTSC guest has the network and the real clock; §AV: the guest may read the physical GPU's utilisation, `report-utilization`, default on; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-18 (§AX (2026-11-17): standalone trust is git only by default, the lift is explicit, what the user passes is trusted, and a user-passed mirror refines §AW.2; §AY (2026-11-17): the SPEC lanes' open LTSC guest has the network and the real clock; §AV (2026-11-17): the guest may read the physical GPU's utilisation, `report-utilization`, default on; §BA: propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, one-way clock rule, token revocation; §AZ: proprietary images and SPEC leave the required release gate and run as an app lane; 2026-11-17: §AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §BA. Propimages are configuration, standalone needs only git and official URLs, one stored image per propimage, no licence time checker, and other 2026-11-18 rulings
+
+**STATUS: LIVE as rulings, 2026-11-18; owner decisions (stated in conversation, recorded by the coordinator from its notes). Each item says what is a rule and what is only a plan. DESIGN-ONLY for the config schema and the generic stage: nothing in items 1 and 2 is implemented yet; the refactor is queued.** Where an item restates a rule already in `AGENTS.md`, it is repeated here only to give it a date and a reason.
+
+<!-- src: owner, 2026-11-18, conversation with the coordinator (propimage config, from-scratch standalone, one image per propimage, no licence time checker, clock rule, gap matrix, test-first, pc recovery, Vast offers, public screenshots) -->
+
+1. **Propimages are configuration, not names in code.** The images called A, B, C and D are configuration material. The code has no
+   concept of "image A": a propimage is a configuration entry (id, kind Windows or Linux, image source and trust anchor, identity or
+   seed rule, launch arguments, its apps with their rows, its gate rows) and **one generic stage** iterates the entries. One image
+   holding all the apps, or a subset spread over several images, must both be expressible. No new per-image stage name, environment
+   variable, script or test that names A, B, C or D: add a configuration entry instead. *Reason:* MEASURED on the 2026-11-18
+   acceptance tree: per-image stage names and environment names, and more than 20 files naming one image; third parties must be able
+   to bring their own images. The repository holds the schema, the validator and the generic stage. The concrete entries of the
+   project's own release gate (with their object-store keys) are operator deployment configuration, not repository code, because they depend on the
+   storage layout. *Plan, not done:* the refactor, with an equivalence test that the generated stage plan is identical before and
+   after.
+2. **Standalone is reproducible from git and official URLs only.** A third party must be able to run the whole standalone run from
+   the repository plus official URLs (each with an official anchor: upstream checksum, signature, attestation or pin), their own
+   inputs given by configuration, or software built from source by the repository's own recipe. No input may have our object store as
+   its only source, and the standalone plan may name no host of ours. Everything open is built from scratch. Proprietary software is
+   obtained by the user under their own licences and accepted agreements, and each proprietary app must be addable, testable and
+   includable by pointing the configuration at an installer (with the repository's silent-install recipe) or at a pre-installed image;
+   the licence input is a user-supplied file or environment value that the tooling never records or prints. An app that is configured must pass
+   under the strict zero-skip rule; an app that is not configured is listed as "not in this config", never skipped silently and never
+   counted as a pass. The project's own release gate is the project's own configuration with all of them. *Reason:* the from-scratch
+   requirement of the standalone run (see `AGENTS.md`, *Read first*, and the pins ruling §AW). *Known gap, measured in the 2026-11-18
+   audit of the run manifest:* a few inputs (the public Windows apps bundle, the SPECviewperf repack, the proprietary images, the signed
+   display firmware and the MATLAB and Unreal artifacts) have only our store as a source; for a third party these are their own inputs
+   by configuration, and a lint that the generated plan names no host of ours is queued.
+3. **One stored image per propimage.** In long-term storage there is exactly one image for each propimage, containing all its apps.
+   Layer checkpoints (a base plus one app at a time) stay on the maintainers' PC only. For safety the PC is never the only copy
+   (an earlier owner rule: the PC is unreliable), so one rolling copy per propimage may be kept at a fixed path, replaced and
+   read back before the old one is deleted; at the end that one object is the final image. No per-layer copies side by side. The blank
+   Windows base is a separate image. *Reason:* storage and clarity; the earlier images are single images too.
+4. **`state.json` has no licence time checker; the clock policy is one-way.** No `valid_until`, no licence-expiry check and no
+   clock-versus-licence validation in `state.json`, the propimage tooling, the Worker or any gate; a product's end date is never
+   written into code, a state file or a public document. The recorded-clock mechanism stays as it is. *Reason:* licence handling
+   does not belong in public code, and the pinned clock was already an accepted, private decision. The clock rule is **one-way:
+   internet on means the real clock, and that is enforced in every launch path. Internet off does not force a fake clock.** Whether
+   an offline guest runs a recorded clock or the real one is the user's or the Worker's policy, and a third party's policy may differ.
+   *Measured:* `clocknet_assert.py` already enforces the one-way direction and states that a real clock with the network off is
+   fine. *Design intent, not built:* an optional policy block in `state.json` that keeps clock and network independent (defaults equal
+   to today's behaviour; the gate pins them), documented in the howto with a schema reference. This refines §AU items 1 and 2.
+5. **Gap matrix: BROKEN target is 0; the managed-memory patch tier is optional and later.** Every BROKEN row of the GPU-gap matrix
+   needs a closure path: an in-tree fix, an optional patch tier (host and guest kernel or driver patch), an owner decision, or
+   not-applicable-by-design. The target count of BROKEN rows is 0. UVM managed memory (demand paging) is an *optional later patch
+   tier*, not a core requirement. *Reason:* adding passing apps for weeks without fixing kayfabe is inefficient; the metric from now is
+   confirmed kayfabe bugs found and kayfabe-code fixes merged, not rows or passes.
+6. **Reproduce a suspected bug with a cheap GPU-free Rust unit test first.** Before a hardware run or a theory, write the failing
+   unit test (a replay or a model test, with a mutant that proves it can fail) and only then fix or measure on a GPU. *Reason:* a
+   wrong hypothesis costs far more than a test; it keeps hardware time for what only hardware can answer.
+7. **A bare-metal or VFIO control decides whether a failure is kayfabe's.** Run the same case on the host or through VFIO first. If
+   it passes there and fails in the guest, the defect is kayfabe's; if it fails there too, it is not (`AGENTS.md`, *Verification*).
+   A harness defect caught by a host control is recorded as a harness defect.
+8. **The maintainers' PC is the VFIO and performance reference machine, and a wedged PC is never normally rebooted.** When the GPU
+   or driver is wedged (a driver unload or reset hangs, processes stuck in uninterruptible sleep), do not pile on reload attempts and
+   do not use `reboot`, `shutdown -r` or `reboot -f`: use the SysRq sequence `s` (sync), `u` (remount read-only), `b` (restart), one
+   step at a time. *Reason:* MEASURED 2026-11-16 and 2026-11-18: a normal reboot hung in the kernel's device shutdown waiting on the
+   stuck GPU device and needed a power cycle; SysRq `b` skips that path. Reload or reset is only for a GPU that is in error but still
+   responds. Never on a healthy PC. Sealed images are read-only, so only resumable work is at risk.
+9. **Rented offers are chosen by the final total price, with no regional preference.** The offer ranking prices rental, bandwidth
+   and storage into one total and ranks by what the run costs; the split by component does not matter. Data comes from the object
+   store behind a global edge network, so downloads are not region-bound, and a region preference only shrinks the pool. The one
+   region rule is the Worker's denied-countries list (trust policy), which stays. *Checked 2026-11-18:* no region preference exists in the offer
+   picker or the Worker's offer code.
+10. **Screenshots of proprietary apps may appear in public posts, never in the repository.** A screenshot is acceptable for a public
+    post if the account or user name, e-mail address, licence or serial strings and machine names are blurred and the owner reviews
+    each one before use. Screenshots stay out of the repository and out of `traces/`. *Reason:* the earlier "no screenshot leaves the
+    box" was a privacy rule, not a legal one; it is relaxed to "scrubbed, owner-reviewed, post only".
+11. **Cached logins stay in a sealed propimage; safety is vendor-side revocation, verified online.** Offline operation needs the
+    cached login, so removing it locally defeats the image. Protection against a leaked image is to make the login dead on the
+    vendor's server after the seal, and to verify that with an online check on a throwaway overlay. *Reason and measurement:*
+    `docs/howto/recreate-the-proprietary-image.md`, *Token revocation and the online token check* (MEASURED 2026-11-18). An image is
+    not used on a rented box or uploaded until its check has passed.
+
+## §AZ. Proprietary images and SPEC leave the required release gate; they run as an invoked app lane, required only when a release touches core paths, 2026-11-18
+
+**STATUS: LIVE as a ruling, 2026-11-18; owner decision (stated in conversation: "maybe the plan is to remove images and SPEC from release requirement, so we can launch them manually, or invoked through worker"; recorded by the coordinator). DESIGN-ONLY for the Worker: the Start kind `app` is not built and nothing is deployed. 2026-11-18 (implemented GPU-free, `docs/design/V3_APP_LANE_PLANNER.md`): the planner's `core_paths` data, `appLaneRequired`, the app leg, the first-release and rotation modes and the daily-cap refusal exist as offline code; the release criteria do not read them yet.** The cost model and the release plan behind it are in the coordinator's notes and are not yet a repository document (a design note follows this ruling); the discovery-versus-gate split below follows the owner's remark that apps find bugs in the unknown while conformance suites prove that a bug is solved.
+
+1. **The required release gate is the reproducible set.** It consists of the GPU-free layer (unit, replay, model and fuzz tests, the page-table oracle fuzz, the coverage meter), the per-family smoke tier, and the full-suite differential (Vulkan CTS and the other open suites run host against guest, only differences reported, a known-limits file for documented limitations). Every input of the gate is open or fetched from an official URL, so a third party can run it (the owner's standalone requirement of 2026-11-18, recorded by the coordinator).
+2. **The proprietary images and SPEC are not part of the required gate.** That covers every propimage (today A, B, C and D; the owner's rule of 2026-11-18, recorded by the coordinator and not yet folded into this file, is that they are configuration and not names in code) and the SPECviewperf stage. Reasons (measured or stated): their verdicts are often inconclusive or harness-level, a flaky host can fail a leg, they cost about 30 percent of the release, and a third party cannot reproduce them without the owner's proprietary inputs. `scripts/ci/vast_payload.py` already lists the image stages (`MANUAL_ONLY_STAGES`) as manual-only.
+3. **The app lane.** They run as an invoked lane: from the Worker admin page (a start kind `app`, to be built) or by hand, on boxes chosen by a profile that prices bandwidth by the real gigabytes of each role and is free to pick any die with enough VRAM (not pinned to a family). It may also run on a schedule between releases, and it runs on the owner's pc when that is free (the pc is the discovery machine: VFIO controls and perf ratios). A run records the commit, the die, the host driver, the rows and the verdicts.
+4. **The release record shows the app lane.** Each release states, per image, the last app-lane run: commit, date, die, family, result. It is information, not a criterion, except under item 5.
+5. **Conditional requirement.** If the change since the previous release (the batch PR's diff against master) touches any CORE PATH below, the app lane must have a green run, or a run whose only reds are listed known breakages, on a tree that contains the change, covering each image on at least one family, before the batch PR merges. If no core path is touched, the app lane is not required.
+   **Core paths (exact list; globs relative to the repository root):**
+   - `crates/kf-*/src/**` except `crates/kf-harness/**`, `crates/kf-rawclient/**` and `crates/kf-trace/**` (the kayfabe product crates, including their generated tables under `src/generated/`);
+   - `crates/kf-chip/**` (family and die tables and the per-family descriptors);
+   - `cuda/walk/**` (the walk kernel, its header and the committed PTX);
+   - `qemu/hw/misc/kf3/**` (the device, its properties and their defaults);
+   - `broker/**` (the display broker) and `firmware/**` (the boot-display driver);
+   - `scripts/bench/windows/propimage.py` and `scripts/bench/windows/clocknet_assert.py` (the launch arguments, the clock and network rule of a Windows guest).
+   Not core paths: `docs/**`, `site/**`, `ci/**`, `scripts/ci/**`, other `scripts/**`, `traces/**`, tests only (`crates/*/tests/**` alone), and CI-only changes. The list is data (a `core_paths` array in the release configuration read by the planner), so it is edited in one place; the planner never names an image.
+   **First release (owner, 2026-11-18: "my plan is still first release to run all of A to D").** The first release runs the app lane in full: every image (A, B, C and D as configured) on every architecture family of the release matrix, not only the rotation of item 6 and not only the minimum of this item. It is the baseline against which later rotations are read. Cost and die choice come from the planner (any die with enough VRAM per image, offers by final total price); the cost of this pass is estimated before it is started and is a decision for the owner if it exceeds the daily cap. DESIGN-ONLY until the app lane exists; until then it is run by hand with the same coverage.
+6. **Rotation.** Each release runs the images on rotating families so that every image meets every family within four releases; a rotation table records the last run per image and family. A change to an architecture-specific path (a per-family descriptor, a channel route, the walker) escalates to every image on the affected family.
+7. **The discovery lane is separate and non-gating.** Real applications and production workloads run between releases, chosen by the coverage gap (new RM control ids, new refusals, new Xid lines: a novelty signal), with automatic capture of the kf3 census window, the host log and the guest events; every novelty is triaged with a control (VFIO, native Windows or the host) and becomes a GPU-free replay test and a gate row.
+8. **What this does not change.** The standalone run still lets a third party add their own proprietary apps and images by configuration (the owner's rule of 2026-11-18). Nothing in this ruling edits how an image is built, and a PASS of the required gate is still a statement only about the gate.
 
 ## §AX. Standalone trust is git only by default; the lift is explicit; what the user passes is trusted, 2026-11-17
 
@@ -47,11 +144,7 @@ recipe: `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`. Built GPU-free; no box ran
    must not require pins for images, artifacts or apps: someone may have built their own Windows images, compiled their own software
    (for example Unreal), or spread applications over different images. The proprietary images are not strict for standalone.
 2. **Integrity checks stay** (a pack manifest's member hashes, the seed binding, cache-key consistency). Pins on what the repository
-   itself downloads (swtpm, libtpms, noVNC, wheels, install media) are supply-chain integrity and hold in every mode. **[Refined by §AX,
-   2026-11-17: they hold as integrity checks on what the repository downloads BY ITSELF; a mirror, URL or path the user passes for such an
-   artifact is a user input and is trusted and recorded, not refused, and the pin that decides what the repository's own download is must
-   be an anchor that does not depend on us (see §AX.2). The coordinator's audit cites this sentence as "AW.4": in the tree it is §AW.2,
-   and rule 4 of `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`.]**
+   itself downloads (swtpm, libtpms, noVNC, wheels, install media) are supply-chain integrity and hold in every mode.
 3. A standalone run **records** the computed sha256 and size of each user-supplied object in its evidence instead of refusing on a mismatch;
    `--expect-sha256 NAME=HASH` lets a user opt in. One mechanism: `propimage_runspec.pins_enforced(spec)`, true only for a strict spec.
 4. Anyone can **run their own deployment**: build artifacts with the repository's scripts, publish to their own object store, write their own
@@ -98,6 +191,8 @@ the RUSD publisher, tests and mutants); **not run on hardware** (the plan and th
 <!-- src: owner, 2026-11-17: "the open Windows LTSC guest that the SPECviewperf lanes run on must have INTERNET and the REAL CLOCK" -->
 
 ## §AU. The guest clock depends only on the network; a recorded clock is never earlier than the software loaded into the image, 2026-11-16
+
+**Refined 2026-11-18 by §BA item 4 (read this first):** the clock rule is one-way. Network on means the real clock. Network off does not force a recorded clock; that is the user's or the Worker's policy. Items 1 and 2 below say "network off runs a recorded clock" and "WARN" for an offline real clock; read them as the project's default policy, not as a rule a third party must follow.
 
 **STATUS: LIVE, 2026-11-16; owner rulings (stated in conversation, recorded by the coordinator).** Design and measured/code-read
 split: `docs/design/V3_CLOCK_RULE.md`. Implemented GPU-free in `scripts/bench/windows/clockrule.py` and `win_vm.sh`; nothing here has

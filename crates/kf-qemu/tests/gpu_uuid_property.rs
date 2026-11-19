@@ -27,6 +27,7 @@ fn config(gpu_uuid: Option<&str>, vm_id: Option<&str>, devfn: u32) -> Config {
         pci_devfn: devfn,
         windows_support: true,
         report_utilization: true,
+        unmapped_reads_zero: false,
         channel_budget: 0,
     }
 }

@@ -368,6 +368,22 @@ test/results-store.test.js test/store-ingest.test.js`, `node --test workerd/stor
 run against the real migrations on `node:sqlite` with a D1-shaped fake (`test/d1.js`); real
 Cloudflare D1, the GitHub trees API and the deployed Worker are not exercised.
 
+## The app lane planner (DESIGN-ONLY for the Worker, 2026-11-18)
+
+STATUS: the planner and its offline command are implemented and tested GPU-free (`src/app-lane.js`, `app-lane.json`,
+`test/app-lane.test.js`, synthetic offers). The Worker admin Start kind `app` is **not built**: nothing in `src/` imports the
+planner, nothing is deployed, nothing is rented, and no box has run a plan. Ruling: `docs/OWNER_RULINGS.md` section AZ;
+what it computes and what it lacks: [V3_APP_LANE_PLANNER.md](../../docs/design/V3_APP_LANE_PLANNER.md).
+
+- `node ci/vast-broker/release-plan.mjs --changed-files list.txt` says whether a change touches a core path (the list is the
+  `core_paths` array of `app-lane.json`, edited in one place) and names the matching files.
+- `node ci/vast-broker/release-plan.mjs --app-lane --market offers.json --daily-cap USD (--first-release | --rotation table.json)`
+  prints an app-lane plan: one leg per image and family (every pair on the first release, the oldest pairs on a rotation),
+  the cheapest qualifying offer of any die of the family, bandwidth priced per measured GB (`bandwidth.json`), an estimate in
+  USD, and a hard refusal (exit 2) when the estimate plus `--spent-today` exceeds the daily cap or a leg has no offer.
+- Images are configuration (`app-lane.json` `images`, with `disk_gb`, `vram_gb`, `stages`, `manual_only`); the planner never
+  names one. `vram_gb` is an UNMEASURED placeholder; `disk_gb` and the hard limit are ESTIMATES.
+
 ## Tiers, the admin start and the release run (how to)
 
 CODE READ (`src/tier.js`, `src/release.js`, `src/index.js`, branch `claude/worker-tier-20261105`,
