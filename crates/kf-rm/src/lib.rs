@@ -354,14 +354,18 @@ impl ReselectAtFn1 {
             return Reselection::Kept;
         };
         if let Some(t) = r.twin {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: the guest is Windows {} ({}), the Windows build of Linux {} (one changelist, \
                  {}): keyed as {}",
-                r.said, t.win_branch, t.linux_tag, t.linux_cl, t.linux_tag
+                r.said,
+                t.win_branch,
+                t.linux_tag,
+                t.linux_cl,
+                t.linux_tag
             );
         }
         if let Some(why) = &r.twin_refusal {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: the guest says it is {:?}, not a Windows twin: {why}",
                 r.said
             );
@@ -433,19 +437,19 @@ impl kf_gsp::CommandPolicy for ReselectAtFn1 {
         if cmd.function == kf_gsp::RpcFunction::SetGuestSystemInfo {
             match self.on_fn1(&cmd.payload) {
                 Reselection::Kept => {}
-                Reselection::Reselected { from, to } => eprintln!(
+                Reselection::Reselected { from, to } => kf_arch::rate_eprintln!(
                     "kf-rm: guest driver RE-SELECTED at fn 1: {from} (defaulted) -> {to} (the guest's \
                      own; pre-fn-1 surface identical)"
                 ),
-                Reselection::RefusedDeclared { reported } => eprintln!(
+                Reselection::RefusedDeclared { reported } => kf_arch::rate_eprintln!(
                     "kf-rm: the guest says it is driver {reported}, the device was DECLARED {}; \
                      not re-selecting a declared version",
                     self.current
                 ),
-                Reselection::RefusedUnserved { reported, why } => eprintln!(
+                Reselection::RefusedUnserved { reported, why } => kf_arch::rate_eprintln!(
                     "kf-rm: the guest says it is driver {reported}; no table to re-select: {why}"
                 ),
-                Reselection::RefusedSurface { reported, what } => eprintln!(
+                Reselection::RefusedSurface { reported, what } => kf_arch::rate_eprintln!(
                     "kf-rm: the guest says it is driver {reported}; cannot re-select from {}: \
                      {what} differs and the guest already consumed it",
                     self.current
@@ -581,7 +585,7 @@ pub fn served_chain(
     // Diagnostic-only B1 rank2, default off. No firmware logger or host DMA is created.
     if cmc_log_probe::enabled() {
         chain.push(Box::new(cmc_log_probe::CmcLogProbe::new(driver)));
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-rm: PROBE {}=1: CMC log-buffer registration echo only; no log writer or host action",
             cmc_log_probe::FLAG
         );
@@ -612,7 +616,7 @@ pub fn served_chain(
         chain.push(Box::new(display_ctrl_probe::DisplayPrivateProbe::new(
             driver,
         )));
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-rm: PROBE {}=1: NV0073 0x00730122 / 0x00730128 answered with the real GPU's measured reply (H-commit probe, not a shipped behaviour)",
             display_ctrl_probe::PRIVATE_FLAG
         );
@@ -628,7 +632,7 @@ pub fn served_chain(
         chain.push(Box::new(display_ctrl_probe::DisplayTopologyProbe::new(
             driver, hdmi, xbar,
         )));
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-rm: PROBE {}={} {}={}: connector identity / HDMI path and crossbar caps / DFP_ASSIGN_SOR answered with the real GPU's measured replies (H-hdmi / H-xbar probe, not a shipped behaviour)",
             display_ctrl_probe::HDMI_FLAG,
             u8::from(hdmi),

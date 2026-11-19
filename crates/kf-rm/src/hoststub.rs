@@ -86,9 +86,14 @@ impl CommandPolicy for HostStubPolicy {
         body[req.params_at..end].fill(0);
         self.answered += 1;
         if self.answered <= LOG_CAP {
-            eprintln!(
+            kf_arch::rate_eprintln!(
                 "kf-rm: HOST-STUB {:#010x} ({} msg {:#x}) client={:#x}: NV_OK, {} params byte(s) zeroed — host-owned stub, §S assumed #{}",
-                req.cmd, stub.interface, stub.message, req.client, stub.param_size, self.answered
+                req.cmd,
+                stub.interface,
+                stub.message,
+                req.client,
+                stub.param_size,
+                self.answered
             );
         }
         Some(Reply {

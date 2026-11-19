@@ -107,9 +107,11 @@ impl PmSuspendResumePolicy {
         }
         self.registered.insert(key);
         self.accepted += 1;
-        eprintln!(
+        kf_arch::rate_eprintln!(
             "kf-rm: pmsr: ALLOC_MEMORY SYSTEM list client={:#x} handle={:#x} pages={} — registered, not read (GSP-RM's suspend buffer; this device keeps its state in the VMM)",
-            r.client, r.handle, r.page_count
+            r.client,
+            r.handle,
+            r.page_count
         );
         // ⊘ An empty body: the guest reads only the status (one reply, `kf_gsp::large`).
         Self::ok(Vec::new())
