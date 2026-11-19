@@ -1,6 +1,6 @@
 {
  "schema": "kayfabe.propimage-pins/1",
- "status": "2026-11-16. The image archive and the open-asset data volume are pinned from the objects themselves (archive: sha256 and size read back after the private upload; data volume: built by scripts/bench/assets/build_test_assets.py, sha256 read back through the public URL). The signed boot GOP and the swtpm sources are the same objects as the first image's pins and carry the same values.",
+ "status": "2026-11-16. The image archive and the open-asset data volume are pinned from the objects themselves (archive: sha256 and size read back after the private upload; data volume: built by scripts/bench/assets/build_test_assets.py, sha256 read back through the public URL). The signed boot GOP and the swtpm sources are the same objects as the first image's pins and carry the same values. 2026-11-17: the libtpms and swtpm items also carry the private `ref` of the first image's pins (a private copy of the same public tarball, same sha256 and size, MEASURED by the coordinator by sha256sum against the pin) in front of the public `mirror`, which stays the fallback.",
  "items": [
   {
    "role": "image",
@@ -39,8 +39,9 @@
    "sha256": "ebc24f3191d90f6cf0b4d4200cd876db4bd224b3c565708bbea0a82ee275e0fb",
    "size": 1399253,
    "needed_by": "tools",
+   "ref": "propimage-tools-libtpms-0.10.1.tar.gz",
    "mirror": "https://github.com/stefanberger/libtpms/archive/refs/tags/v0.10.1.tar.gz",
-   "recorded_in": "same object as the first image pin of this role (propimage_apps_pins.json)"
+   "recorded_in": "same object as the first image pin of this role (propimage_apps_pins.json); 2026-11-17: the private copy named by `ref` is the same public BSD tarball, same sha256 and size, MEASURED by the coordinator by sha256sum against the pin; the public mirror stays the fallback"
   },
   {
    "role": "swtpm",
@@ -49,8 +50,9 @@
    "sha256": "f8da11cadfed27e26d26c5f58a7b8f2d14d684e691927348906b5891f525c684",
    "size": 415992,
    "needed_by": "tools",
+   "ref": "propimage-tools-swtpm-0.10.1.tar.gz",
    "mirror": "https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.1.tar.gz",
-   "recorded_in": "same object as the first image pin of this role (propimage_apps_pins.json)"
+   "recorded_in": "same object as the first image pin of this role (propimage_apps_pins.json); 2026-11-17: the private copy named by `ref` is the same public BSD tarball, same sha256 and size, MEASURED by the coordinator by sha256sum against the pin; the public mirror stays the fallback"
   }
  ]
 }

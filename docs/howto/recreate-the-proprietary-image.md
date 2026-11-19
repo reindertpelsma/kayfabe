@@ -1,6 +1,6 @@
 # Recreate the proprietary Windows image
 
-STATUS: LIVE, 2026-11-15 (a procedure and a policy). Nobody has followed this guide from scratch yet: a from-scratch run by a second person is still to do, and until it happens every step below is only as good as its label. This page is not legal advice and makes no statement about the licence terms of any application.
+STATUS: LIVE, 2026-11-18 (a procedure and a policy; 2026-11-18: sign-out in the app does not revoke a login at the vendor, see *Token revocation and the online token check*). Nobody has followed this guide from scratch yet: a from-scratch run by a second person is still to do, and until it happens every step below is only as good as its label. This page is not legal advice and makes no statement about the licence terms of any application.
 
 Kayfabe's Windows tests include commercial design, video and 3D applications and benchmarks. A *proprietary test image* is a private Windows disk image that the maintainers build to run those applications under kayfabe. This page tells you how to build your own, with your own accounts and licences. The policy in one page is [Proprietary test images](proprietary-test-images.md).
 
@@ -182,6 +182,8 @@ How known: the maintainers' upload to their own private bucket and a download wi
 
 ### 11. Sign out and unregister, on the original online disk only, after the backup exists
 
+**Correction, MEASURED 2026-11-18 (read this first):** for some vendors an in-app sign-out is local only and does not revoke the login at the vendor. Signing out here is therefore not enough, and the revocation that protects the image is done at the vendor after the seal and then verified. See *Token revocation and the online token check* below, which takes precedence over the wording of this step.
+
 Only now revoke the accounts: start the original (online) disk, or a separate copy of it, and sign out of every account, unlink the device, deregister keys on the vendors' own pages (for example the 3DMark key), change the password and end all sessions at each vendor, confirm on each vendor's website, then discard that disk. Never do this on the sealed image. Do it only after the backup exists: signing out or deregistering first would change the state the backup is meant to capture.
 
 How known: the maintainers did this after their upload, on an overlay of the packed disk, on 2026-11-12 (MEASURED that it was started; completion was by hand and is not shown by a file).
@@ -195,6 +197,37 @@ The backup is taken first (step 8). Then, on a separate copy of the disk, the ow
 The reasons for the arrangement are isolation (the guest is hostile and rented hosts are untrusted), reproducibility (no network dependence and a deterministic start), and a private store so that nothing proprietary is redistributed.
 
 Use throwaway accounts where the vendor allows it, and treat every image as private (step 10).
+
+## Token revocation and the online token check
+
+STATUS: LIVE, 2026-11-18. MEASURED on one real build by the maintainers; what was not measured is listed at the end of this section.
+
+**Why this matters.** A sealed image that must run offline has to keep its cached logins: remove them and the applications ask for a sign-in that cannot happen offline, and the image has lost its purpose. So the logins stay in the sealed image, and the protection against a leaked image is not to delete the login locally but to make it dead on the vendor's server after the seal (owner decision, 2026-11-18; DESIGN INTENT).
+
+**What was measured (2026-11-18, on a real build).** An in-app sign-out is local only for some vendors. After signing out in a copy, two online checks on fresh overlays of the sealed image still showed Steam, Autodesk (AutoCAD) and Esri (ArcGIS Pro) signed in. The cached login stays valid on the vendor's server, so a sealed image would let anyone who has it, and is online, use the owner's account. Adobe's applications, on the other image, asked to sign in after the sign-out, so that image passed the check. One more image showed a Steam sign-in prompt, and the cause (token removed locally or expired) is not settled.
+
+**What to do.**
+
+1. Seal the image first, as in steps 8 to 10.
+2. At each vendor, revoke after the seal: change the password, end all sessions, use the vendor's own device or session list, delete the account where it is a throwaway one. For Steam, use "Deauthorize all other devices" in the account settings (the account page, not the client). The vendor-side means differ per vendor; the list here is what was used, not a complete list.
+3. Verify with an **online token check**: boot a throwaway thin overlay of the sealed image, online, with the real clock and with the sealed firewall lifted for the test only, and run an action that needs a round trip to the vendor's server. "Shows signed in" is not proof: the application may be in an offline-mode setting or hold a cached lease. Examples that were used or planned:
+   - Steam: the client starts in offline mode in this image (a setting the image applies), so choose Steam > Go Online and read Steam's connection log for an "Access Denied" line. A denied connection means the login is dead; a connection that succeeds means it is still valid.
+   - Autodesk: a cloud action such as AutoCAD Share creating a link. If it creates a link, the session is still valid.
+   - Esri: an ArcGIS portal action (for example opening an item from the portal).
+   - Adobe: whether the application asks to sign in (MEASURED 2026-11-18 on the maintainers' real build: it did).
+4. Do not use the image on a rented machine and do not upload it anywhere until its check has passed. A failed check means the revocation was not effective: revoke again and repeat the check on a new overlay.
+
+The check can be run with the generic tool `scripts/bench/windows/propimage_token_check.py` (`prepare`, `start`, your checklist, `end`; start from `scripts/bench/windows/token_check/checklist_template.md`; firewall lift optional with `--lift-firewall`). The checklist above is the procedure; the tool only automates the overlay, the report and the clean-up, and its guest paths are not covered by the GPU-free tests.
+
+**Named-user licences that need "authorize to work offline".** Some named-user licences must be authorized for offline use while the machine is connected. Do it in install mode with the real clock: allow only that one program through a program-scoped firewall rule, keep the sealed firewall for everything else, authorize, remove the rules, and reseal the image. Do not open the whole network for this. MEASURED 2026-11-18 on the maintainers' real build for ArcGIS Pro only; other products are NOT TESTED.
+
+**What is NOT verified.**
+
+- That the revocation steps listed cover every stored login of every application in any image; the repository cannot see vendor-side state.
+- Whether a vendor's server accepts a cached login after a password change for some period (a lease); the checks above only show the state at the time of the check.
+- A second check later in time, and the behaviour of vendors that were not in this build.
+- The cause of the Steam sign-in prompt on the one image mentioned above.
+- That the Adobe result holds for an image sealed at a different time or on a different account.
 
 ## Using the image afterwards
 
@@ -239,5 +272,5 @@ The answer file may still carry choices that a future, more minimal image drops.
 ## What has and has not been shown
 
 - The maintainers built the image once, by hand with the repository's helper scripts, between 2026-11-12 and 2026-11-13, and ran parts of the offline check on it.
-- NOT TESTED: that someone else can follow this page from an empty disk to a working image, the ISO-making and the empty-disk and firmware-variable preparation (hand work), `setup_ssh.ps1` in a guest, `--resume` on hardware, an end-to-end pass of `propimage_check.py`, that the vendor-side revocation of step 11 covers every sign-in state stored in the backup (the tool cannot see vendor-side state), and the behaviour of any storage other than the maintainers' own.
+- NOT TESTED: that someone else can follow this page from an empty disk to a working image, the ISO-making and the empty-disk and firmware-variable preparation (hand work), `setup_ssh.ps1` in a guest, `--resume` on hardware, an end-to-end pass of `propimage_check.py`, that the vendor-side revocation of step 11 covers every sign-in state stored in the backup (the tool cannot see vendor-side state; see *Token revocation and the online token check* for what was measured and what was not), and the behaviour of any storage other than the maintainers' own.
 - Nothing here depends on, or is stored in, a public release build.

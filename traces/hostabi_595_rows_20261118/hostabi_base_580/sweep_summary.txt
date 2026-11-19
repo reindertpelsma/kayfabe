@@ -1,0 +1,28 @@
+SWEEP_START 2026-11-19T01:27:36+00:00 rev=f2f009a8 tag=hostabi_base_580 arch=GA102
+SWEEP_ARCH arch=GA102 src=pci.ids gpu="NVIDIA GeForce RTX 3090" pci=10de:2204 family="Ampere" gpus=1 bdf=0000:00:07.0 lspci="00:07.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [GeForce RTX 3090] [10de:2204] (rev a1)"
+SWEEP_PLAN hosts=580.159.04 ref_host=580.159.04 guests=580.159.04 mixed=none default_guest=580.159.04 thin_re=^580\. budget=180 ladder_reps=1 ladder_rungs=cup2,cup3,cup8,cup8bench bare=cup2
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/f2f009a8/qemu-system-x86_64 rev=f2f009a8 mtime=2026-11-19 01:28:31.406382710 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+SWEEP_HOST_START 2026-11-19T01:28:31+00:00 rev=f2f009a8 host=580.159.04 arch=GA102
+SWEEP_ROW_START 2026-11-19T01:28:31+00:00 row=swap:580.159.04
+SWAP host=580.159.04 rc=0 got=580.159.04 OPEN_MODULE=yes KERNEL_CC=x86_64-linux-gnu-gcc-12 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:30:13+00:00 row=swap:580.159.04 rc=0 secs=102
+SWEEP_ROW_START 2026-11-19T01:30:13+00:00 row=bare:580.159.04:cup2
+BARE host=580.159.04 cup2 rc=0 CE rv=0xabcd1234 want=0xabcd1234 -> PASS verdict=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:30:18+00:00 row=bare:580.159.04:cup2 rc=0 secs=5
+SWEEP_ROW_START 2026-11-19T01:30:18+00:00 row=gates:580.159.04
+GATES host=580.159.04 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:31:05+00:00 row=gates:580.159.04 rc=0 secs=47
+SWEEP_ROW_START 2026-11-19T01:31:05+00:00 row=canary:580.159.04
+CANARY host=580.159.04 verdict=PASS thin=1/1 guest=580.159.04 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:31:33+00:00 row=canary:580.159.04 rc=0 secs=28
+SWEEP_ROW_START 2026-11-19T01:31:33+00:00 row=thin:580.159.04:580.159.04
+MATRIX_ROW host=580.159.04 guest=580.159.04 rev=f2f009a8 thin=30/30 ladder=- arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:45:53+00:00 row=thin:580.159.04:580.159.04 rc=0 secs=860
+SWEEP_ROW_START 2026-11-19T01:45:53+00:00 row=ladder:580.159.04:580.159.04
+LADDER host=580.159.04 guest=580.159.04 rev=f2f009a8 4/4 arch=GA102
+SWEEP_ROW_EXIT 2026-11-19T01:50:53+00:00 row=ladder:580.159.04:580.159.04 rc=0 secs=300
+SWEEP_HOST_EXIT 2026-11-19T01:50:53+00:00 host=580.159.04
+SWEEP_RESTORE host=580.159.04
+SWAP host=580.159.04 already installed arch=GA102
+SWEEP_EXIT 2026-11-19T01:50:55+00:00 rc=0 rows_run=6

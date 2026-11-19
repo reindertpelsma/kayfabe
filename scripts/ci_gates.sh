@@ -139,7 +139,33 @@ jobs = yaml.safe_load(open(".github/workflows/ci.yml"))["jobs"]
 # be stripped. Locally `--all` therefore builds and tests the FULL tree; it sets KF_REQUIRE_ORACLES=1 like the job,
 # so run `scripts/ci/fetch_oracles.sh` first or the oracle tests fail by design.
 NEVER_LOCALLY = ("ignore_ladder.py strip", "fetch_oracles.sh")
+# 2026-11-17: the harnesses of `stable` moved into jobs of their own (docs/CI_V3.md, "Job layout, concurrency and caches").
+# They are read here too, in the order of the old `stable` job, so this runner still runs every one of them; a job
+# with a one-key matrix (`selftests`) is expanded, each shard run in turn. scripts/ci/test_ci_jobs.py keeps this list
+# equal to the jobs split out of `stable`.
+SPLIT_JOBS = ("worker-tests", "worker-mutants-a", "worker-mutants-b", "middle-apps", "mutants-a", "mutants-b",
+              "selftests", "rust-mutants-a", "rust-mutants-b")
+
+def job_steps(name):
+    job = jobs[name]
+    matrix = (job.get("strategy") or {}).get("matrix") or {}
+    keys = [k for k, v in matrix.items() if isinstance(v, list)]
+    if not keys:
+        return list(job.get("steps", []))
+    assert len(keys) == 1, "ci_gates.sh expands a one-key matrix only: " + name
+    key, out = keys[0], []
+    for value in matrix[key]:
+        for st in job.get("steps", []):
+            st = dict(st)
+            if "run" in st:
+                st["run"] = str(st["run"]).replace("${{ matrix.%s }}" % key, str(value))
+                st["name"] = "%s [%s=%s]" % (st.get("name", "(unnamed)"), key, value)
+            out.append(st)
+    return out
+
 job = {"steps": list(jobs["stable"].get("steps", [])) + [
+    st for name in SPLIT_JOBS for st in job_steps(name)
+] + [
     st for st in jobs["stripped"].get("steps", [])
     if not any(n in str(st.get("run", "")) for n in NEVER_LOCALLY)
 ]}
