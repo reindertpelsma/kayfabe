@@ -1,0 +1,6 @@
+verify rc=0 s=7
+setup rc=0 s=67
+fetch-data rc=0 s=1
+check rc=0 s=3
+run rc=0 s=82
+done

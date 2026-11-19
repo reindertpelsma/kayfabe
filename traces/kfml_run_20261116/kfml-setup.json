@@ -1,0 +1,1 @@
+{"flavor": "cu126", "flavor_reason": "chose cu126 (driver CUDA 12.6 >= 12.6 and sm_89 is inside sm_75..sm_90); rejected cu128: driver supports CUDA 12.6 < 12.8", "lock": "requirements.cu126.lock.txt", "lock_sha256": "26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0", "hashed": true, "installer": "pip"}

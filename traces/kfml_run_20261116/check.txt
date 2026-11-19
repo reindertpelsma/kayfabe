@@ -1,0 +1,20 @@
+ok   python 3.10.12
+ok   NVIDIA GPU: NVIDIA GeForce RTX 4070, cc 8.9, 11.6 GB, driver 560.35.03
+flavor: cu126  (chose cu126 (driver CUDA 12.6 >= 12.6 and sm_89 is inside sm_75..sm_90); rejected cu128: driver supports CUDA 12.6 < 12.8)
+       driver 560.35.03 supports CUDA 12.6; GPU sm_89
+ok   VRAM >= 8 GB (documented floor)
+ok   torch 2.7.1+cu126 (cuda 12.6, cudnn 90501, triton 3.3.1)
+ok   torch >= 2.7
+ok   nvcc 12.6 (must equal torch cuda 12.6 major.minor) /usr/local/cuda/bin/nvcc
+ok   C compiler
+ok   Python.h (python3-dev)
+ok   disk free 79.0 GB (>= 20 recommended: CUDA wheels are several GB)
+ok   venv/KF_ML_HOME: /root/kfvenv
+ok   venv lock sha256: 26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0
+cache paths (delete the venv dir = full cleanup):
+test nanogpt_compile    OK
+test triton_kernels     OK
+test cuda_ext_inline    OK
+test amp_convnet_cifar  OK
+test stress_alloc       OK
+test managed_oversub    OK
