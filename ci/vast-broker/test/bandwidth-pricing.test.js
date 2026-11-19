@@ -101,6 +101,23 @@ test('estimate: a missing or too-low hard maximum in the data is a configuration
   }
   assert.equal(caps('large', { bandwidthEstimate: { downGb: 30, upGb: 1 } }).bandwidthDownGb, 30);
 });
+test('estimate: a download maximum one below the profile row is refused, even for a small estimate under it', () => {
+  // The hard maximum may never be below the profile's own row (defaults.json payloadBandwidthMax); a row the estimate would
+  // not reach is still a configuration error, so the refusal does not depend on the estimate's size.
+  const table = DEFAULTS.payloadBandwidthMax;
+  const saved = table.large;
+  try {
+    table.large = { downGb: row('large').bandwidthDownGb - 1, upGb: row('large').bandwidthUpGb };
+    assert.throws(
+      () => caps('large', { bandwidthEstimate: { downGb: 1, upGb: 1 } }),
+      (e) => e.state === 'CONFIG_RESOURCE_PROFILE',
+    );
+    table.large = { downGb: row('large').bandwidthDownGb, upGb: row('large').bandwidthUpGb };
+    assert.equal(caps('large', { bandwidthEstimate: { downGb: 1, upGb: 1 } }).bandwidthDownGb, 1);
+  } finally {
+    table.large = saved;
+  }
+});
 test('estimate: an estimate from an instruction prices the leg (the real input, not a hand-made one)', () => {
   const instruction = buildInstruction('release', {
     tierName: 'large',
