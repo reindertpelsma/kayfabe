@@ -40,7 +40,7 @@ What the stages do **not** read from configuration and which therefore has no fi
 | `imga` | windows | `windows-proprietary/kfimg-20261112/image-v2.zip` | same size, sha256 and ref as `propimages.json` |
 | `imgb` | windows | `windows-proprietary/kfimg-20261116/image.zip` | version 1; a rebuilt candidate exists in the store and is **not** entered (not verified) |
 | `imgc` | linux | `linux-proprietary/kfimg-matlab-20261117/image.zip` | identity is the full read-back (8128391922 bytes); `propimages.json` and `matlab_pins.json` still carry an earlier build until PR 467 merges |
-| `imgd` | windows | `windows-proprietary/kfimg-20261118/image.zip` | **UNVERIFIED**: app list from the token check, no sha256, no row table; a vendor token is not yet revoked |
+| `imgd` | windows | `windows-proprietary/kfimg-20261118/image.zip` | **UNVERIFIED**: eleven applications listed (Ansys Student, VRED, Maya as `maya_win`, 3ds Max, AutoCAD, ArcGIS Pro, Solid Edge, KeyShot, Steam, Quake II RTX, Bright Memory), each listed and not yet row-tested; no sha256, no row table; a vendor token is not yet revoked |
 | `imge` | linux | `linux-proprietary/kfimg-maya-20261119/image.zip` | **UNVERIFIED**: no sha256, no token check recorded, no row table |
 
 The tests compare `imga` and `imgb` field by field with `propimages.json`, the rows and harness words of `imga` and `imgb` with the stage constants (`APPS`, `WUKONG_FB_MB`, `FB_MB`, `GUEST_RAM_MB`, `AUDIO`), and every `pins_file` with the object that the bundle names. If a stage constant changes, the entry must change with it, in the same change.
