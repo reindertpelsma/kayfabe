@@ -40,6 +40,7 @@ Every row carries a `lane` (`gate`: expected to pass on kf3, strict; `discovery`
 | `indesign_s1` .. `indesign_s6` | discovery | InDesign crash isolation: start+COM, new document, text frames, placed photo, PDF export, JPEG export; one fresh clone per row | `id_progress.txt` names the step that was running; WER minidump and Application log entries are kept | sampled |
 | `acrobat` | gate | open a 16-page PDF through the automation interface, extract 5 pages | page counts | sampled |
 | `premiere`, `dimension`, `uxp`, `lightroomlaunch` | gate | launch, reach the main window through UI Automation, hold, close | process alive and responding | none: PASS_LIMITED, no document work |
+| `bridge`, `characteranimator`, `audition` | discovery | the same launch-only check for Bridge 2027, Character Animator 2026 and Audition 2027 (new, unmeasured) | process alive and responding | none: PASS_LIMITED, no document work |
 | `animate`, `animatesample`, `animateprojects`, `lightroom` | disabled | JSFL entry and Lightroom plugin entry | | the reasons are in the table in code and in the traces README |
 
 Per-row measured status (PASS, PASS_LIMITED, FAIL, NOT RUN with the reason) is in `traces/imageb_apps_20261116/README.md`, never in this table.

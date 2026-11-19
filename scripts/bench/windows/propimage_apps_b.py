@@ -81,10 +81,13 @@ CHECKS = {
     "lightroomlaunch": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "Lightroom Classic start: catalog open, GPU capability scan (launch only)"},
     "dimension": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "OpenGL/OptiX init (launch only)"},
     "uxp": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "gate", "path": "UXP tooling start (launch only)"},
+    "bridge": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Bridge start (launch only; new, unmeasured)"},
+    "characteranimator": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Character Animator start (launch only; new, unmeasured)"},
+    "audition": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Audition start (launch only; new, unmeasured)"},
 }
 EMBED = {"premieretl": {"PP_TL": "pp_timeline.jsx"}, "amematrix": {"PP_TL": "pp_timeline.jsx"}, "aeadv3d": {"AE_ADV3D": "ae_adv3d.jsx"}, "aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aeparallel4": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
 ENABLED = tuple(n for n, c in CHECKS.items() if not c.get("disabled"))
-LAUNCH_ONLY = ("premiere", "dimension", "uxp", "lightroomlaunch")
+LAUNCH_ONLY = ("premiere", "dimension", "uxp", "lightroomlaunch", "bridge", "characteranimator", "audition")
 
 
 def render_check(name, run_id):

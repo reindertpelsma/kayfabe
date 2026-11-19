@@ -181,5 +181,22 @@ class T(unittest.TestCase):
         self.assertIn("no compute device", B.verdict("gpudiag", "x", self.d, None)["error"])
 
 
+NEW_LAUNCH = {
+    "bridge": r"C:\Program Files\Adobe\Adobe Bridge 2027\Adobe Bridge.exe",
+    "characteranimator": r"C:\Program Files\Adobe\Adobe Character Animator 2026\Support Files\Character Animator.exe",
+    "audition": r"C:\Program Files\Adobe\Adobe Audition 2027\Adobe Audition.exe",
+}
+
+
+class NewLaunchRows(unittest.TestCase):
+    def test_rows(self):
+        ps1 = (HERE.parent / "bench/windows/apps_b/launch.ps1").read_text()
+        for name, exe in NEW_LAUNCH.items():
+            c = B.CHECKS[name]
+            self.assertIn(name, B.LAUNCH_ONLY)
+            self.assertEqual((c["lane"], c["script"], c["gpu"], c["timeout"]), ("discovery", "launch.ps1", (), 1200), name)
+            self.assertIn(f"exe = '{exe}'", ps1, name)
+            self.assertRegex(ps1, rf"(?m)^\s*{name}\s*=\s*@\{{")
+
 if __name__ == "__main__":
     unittest.main()

@@ -198,8 +198,8 @@ def trim_census(c):
 
 
 def write_record(path, rec):
-    """pa.write_record with this stage's bound (the record has up to 21 rows): shrink evidence, xid lines and census ids until it fits."""
-    for evidence, lines, ids in ((24, 8, CENSUS_IDS), (8, 2, 4), (4, 1, 0)):
+    """pa.write_record with this stage's bound (the record has up to 24 rows): shrink evidence, xid lines and census ids until it fits."""
+    for evidence, lines, ids in ((24, 8, CENSUS_IDS), (8, 2, 4), (4, 1, 0), (2, 1, 0)):
         for a in rec["apps"]:
             a["evidence"], a["host_xid"]["lines"] = a["evidence"][:evidence], a["host_xid"]["lines"][:lines]
             if a.get("census", {}).get("ids") is not None:

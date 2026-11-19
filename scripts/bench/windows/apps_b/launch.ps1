@@ -8,6 +8,9 @@ $T = @{
   lightroomlaunch = @{ exe = 'C:\Program Files\Adobe\Adobe Lightroom Classic\Lightroom.exe'; proc = 'Lightroom'; title = 'Lightroom'; sniffer = $null }
   dimension    = @{ exe = 'C:\Program Files\Adobe\Adobe Dimension\Adobe Dimension.exe'; proc = 'Adobe Dimension'; title = 'Dimension'; sniffer = 'C:\Program Files\Adobe\Adobe Dimension\gpu-sniffer-core.exe' }
   uxp          = @{ exe = 'C:\Program Files\Adobe\Adobe UXP Developer Tools\Adobe UXP Developer Tools.exe'; proc = 'Adobe UXP Developer Tools'; title = 'UXP'; sniffer = $null }
+  bridge       = @{ exe = 'C:\Program Files\Adobe\Adobe Bridge 2027\Adobe Bridge.exe'; proc = 'Adobe Bridge'; title = 'Bridge'; sniffer = $null }
+  characteranimator = @{ exe = 'C:\Program Files\Adobe\Adobe Character Animator 2026\Support Files\Character Animator.exe'; proc = 'Character Animator'; title = 'Character Animator'; sniffer = $null }
+  audition     = @{ exe = 'C:\Program Files\Adobe\Adobe Audition 2027\Adobe Audition.exe'; proc = 'Adobe Audition'; title = 'Audition'; sniffer = $null }
 }
 $R = Init-Run $APPNAME
 $c = $T[$APPNAME]
