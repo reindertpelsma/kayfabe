@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -46,6 +47,27 @@ class Datasets(unittest.TestCase):
             datasets.fetch("d", self.t / "data", self.pins(None), environ={})
         r = datasets.fetch("d", self.t / "data", self.pins(None), environ={"KF_ML_ALLOW_UNPINNED": "1"})
         self.assertFalse(r["pinned"])
+
+    def test_vendor_md5_is_checked_beside_the_sha256(self):
+        """2026-11-19 (standalone trust): a dataset whose vendor publishes only an md5 (CIFAR-10) carries it in pins.json and the fetch
+        checks it too, so the anchor is the vendor's own checksum and not only a sha256 we measured."""
+        md5 = hashlib.md5(b"hello kfml").hexdigest()
+        ok = self.pins(self.sha)
+        ok["datasets"]["d"]["md5"] = md5
+        self.assertTrue(datasets.fetch("d", self.t / "data", ok, environ={})["pinned"])
+        bad = self.pins(self.sha)
+        bad["datasets"]["d"]["md5"] = "0" * 32
+        with self.assertRaises(datasets.HashMismatch):
+            datasets.fetch("d", self.t / "data2", bad, environ={})
+        self.assertFalse((self.t / "data2" / "d.bin").exists())
+
+    def test_every_repo_dataset_has_an_upstream_anchor(self):
+        """Each dataset names an immutable upstream source: a git-commit URL (anyone re-checks the blob at that commit) or a
+        vendor-published checksum fetched from the vendor's page (md5 + md5_source)."""
+        for name, d in datasets.load_pins()["datasets"].items():
+            commit_url = re.search(r"/[0-9a-f]{40}/", d["url"]) is not None
+            vendor = bool(re.fullmatch(r"[0-9a-f]{32}", d.get("md5", ""))) and d.get("md5_source", "").startswith("https://")
+            self.assertTrue(commit_url or vendor, name)
 
     def test_repo_pins_file(self):
         p = datasets.load_pins()

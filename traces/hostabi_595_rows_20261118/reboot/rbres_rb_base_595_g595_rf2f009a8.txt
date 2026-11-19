@@ -1,0 +1,5 @@
+=== POST_CAPTURE_HOOK /root/reboot_hook.sh at 2026-11-19T01:59:54+00:00 ===
+RB_START 2026-11-19T01:59:54+00:00 tag=rb_base_595_g595_rf2f009a8 repo_rev=f2f009a8 qemu_pid=242565
+bash: line 1: /home/ubuntu/cup3.c: Is a directory
+RB_FATAL push failed
+HOOK_RC=2

@@ -1,0 +1,30 @@
+{
+ "compute_cap": "8.6",
+ "cuda": "12.6",
+ "data": {},
+ "driver": "535.154.05",
+ "gpu_name": "NVIDIA GeForce RTX 3060",
+ "measured_on": {
+  "compute_cap": "8.6",
+  "cuda": "12.6",
+  "driver": "535.154.05",
+  "driver_cuda": "12.2",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 3060",
+  "run_id": "kfml_run_20261117_3060_drv535_forced_cu126",
+  "torch": "2.7.1+cu126"
+ },
+ "metrics": {
+  "allocated_gb": 8.159631349146366,
+  "async_copy_mb": 64.0,
+  "buffers": 184,
+  "free_end_gb": 11.6390380859375,
+  "free_start_gb": 11.6566162109375,
+  "graph_replays": 40,
+  "streams": 16,
+  "target_gb": 8.159631347283721
+ },
+ "test": "stress_alloc",
+ "torch": "2.7.1+cu126",
+ "wall_s": 2.631
+}

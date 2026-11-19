@@ -1,0 +1,5 @@
+setup rc=0 s=94
+fetch rc=0 s=503
+run cold rc=0 s=105
+run warm rc=0 s=56
+done

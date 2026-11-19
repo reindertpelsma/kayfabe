@@ -1,0 +1,39 @@
+{
+ "compute_cap": "12.0",
+ "cuda": "12.8",
+ "data": {
+  "acc": 0.725
+ },
+ "driver": "580.178.04",
+ "gpu_name": "NVIDIA GeForce RTX 5070",
+ "measured_on": {
+  "compute_cap": "12.0",
+  "cuda": "12.8",
+  "driver": "580.178.04",
+  "driver_cuda": "13.0",
+  "flavor": "cu128",
+  "gpu_name": "NVIDIA GeForce RTX 5070",
+  "run_id": "kfml_run_20261117_5070_drv580",
+  "torch": "2.7.1+cu128"
+ },
+ "metrics": {
+  "acc_amp": 0.725,
+  "acc_fp32": 0.727,
+  "amp_dtype": "torch.bfloat16",
+  "cuda_ipc": true,
+  "epoch_loss": [
+   1.6936289469401042,
+   1.26677733201247,
+   1.0505071786733775,
+   0.8926162719726562,
+   0.7554915012457432
+  ],
+  "grad_scaler": false,
+  "pred_agreement": 0.997,
+  "reference_diff": null,
+  "train_s": 10.474311828613281
+ },
+ "test": "amp_convnet_cifar",
+ "torch": "2.7.1+cu128",
+ "wall_s": 15.791
+}

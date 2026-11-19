@@ -404,6 +404,69 @@
     }
    ]
   },
+  "kfml-dataset-cifar10-binary": {
+   "row": 19,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/datasets.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "c4a38c50a1bc5f3a1c5537f2155ab9d68f9f25eb1ed8d9ddda3db29a59bca1dd",
+     "size": 170052171,
+     "pin_origin": "measured-from-upstream",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://www.cs.toronto.edu/~kriz/cifar.html",
+     "status": "MEASURED",
+     "measured": "2026-11-17",
+     "note": "the vendor publishes only an md5 (c32a1d4ab5d03f1284b67883e8d87530 on cifar.html, read 2026-11-19); scripts/kfml/kfml/datasets.py checks that md5 beside this sha256 on every fetch"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "c4a38c50a1bc5f3a1c5537f2155ab9d68f9f25eb1ed8d9ddda3db29a59bca1dd",
+      "c32a1d4ab5d03f1284b67883e8d87530"
+     ]
+    }
+   ]
+  },
+  "kfml-dataset-tinyshakespeare": {
+   "row": 19,
+   "kind": "file",
+   "routing": "native",
+   "origin": "https://raw.githubusercontent.com/karpathy/char-rnn/6f9487a6fe5b420b7ca9afb0d7c078e37c1d1b4e/data/tinyshakespeare/input.txt",
+   "runs": "guest",
+   "consumers": [
+    "scripts/kfml/kfml/datasets.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+     "size": 1115394,
+     "pin_origin": "git-commit",
+     "scope": "upstream-artifact",
+     "pin_source_url": "https://github.com/karpathy/char-rnn/blob/6f9487a6fe5b420b7ca9afb0d7c078e37c1d1b4e/data/tinyshakespeare/input.txt",
+     "status": "MEASURED",
+     "measured": "2026-11-19"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/kfml/pins.json",
+     "contains": [
+      "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+      "6f9487a6fe5b420b7ca9afb0d7c078e37c1d1b4e"
+     ]
+    }
+   ]
+  },
   "libtpms-0.10.1-source": {
    "row": 9,
    "kind": "file",
@@ -1847,16 +1910,22 @@
    "reason": "prints and performs the clone of this repository at a commit and refuses unless HEAD equals it"
   },
   "scripts/kfml/kfml/datasets.py": {
-   "count": 2,
+   "count": 7,
    "class": "native-route3",
    "row": 19,
-   "reason": "kfml datasets by the url and sha256 pinned in pins.json (route 3); not yet read through kf_trust"
+   "reason": "kfml datasets: the two anchored artifacts kfml-dataset-tinyshakespeare (git-commit URL) and kfml-dataset-cifar10-binary (sha256 + the vendor's md5, both checked per fetch). The ranged downloader merged from next with the kfml run (#455) spells the same two downloads in 7 primitive lines (was 2); no other URL. Not yet read through kf_trust"
   },
   "scripts/kfml/kfml/setup_venv.py": {
    "count": 2,
    "class": "native-route3",
    "row": 17,
    "reason": "kfml CUDA redist by sha256 pinned in pins.json; its pip wheels are NOT hashed yet (requirements*.lock.txt say HASHES TODO), so the wheel closure has no anchor today (row 18)"
+  },
+  "scripts/kfml/kfml/wheelhouse.py": {
+   "count": 1,
+   "class": "native-route3",
+   "row": 18,
+   "reason": "`pip download --require-hashes` of the committed hashed lock into a transient wheelhouse on the host, official indexes only (merged from next with kfml guest mode); every wheel is checked against the lock's sha256, which PyPI publishes per file. Not yet read through kf_trust"
   },
   "scripts/kfseed/cli.py": {
    "count": 3,

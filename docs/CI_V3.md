@@ -1,7 +1,114 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-17 (the standalone trust gate and its mutants were added; the VA-apply profiling mutants and the profile-table self-test were added; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-18 (the standalone trust gate and its mutants 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
+
+## Job layout, concurrency and caches (2026-11-17)
+
+**STATUS of this section: LIVE, 2026-11-17.** The layout and the rules are CODE READ (`.github/workflows/ci.yml`, tests named
+below). Every number marked MEASURED names the run it comes from (GitHub job and step records, fetched with
+`scripts/ci/ci_run_timings.py`). The expected times are INFERENCES from those records until the first runs on this
+layout are compared (*Test plan*, last subsection of this section). Nothing here changes what a gate checks.
+
+### Why: where the time and the queue went (MEASURED 2026-11-17)
+
+- The `stable` job took 210.5 min (run 44088759756), 252.2 min (44084630157) and 216.0 min (44079124968); the median of its
+  step "Vast broker mocks and workflow boundary" over the 17 recent successful runs was 148.6 min (min 136.2, max 162.7). In
+  run 44088759756 that step was 141.0 of the 210.5 min: 99 min were `middle_apps_mutants.py` (118 mutants, one after another, about 54 s
+  each), 13 min `evidence-mutants.mjs`, 7 min `report-mutants.mjs`, the rest the other Worker harnesses. The next three steps were
+  "v3 dependency isolation and CI guard self-tests" 32.9 min (17.4 min of it `unittest discover -s scripts/ci`, 5660 tests; the rest
+  the script mutants), "Windows support profile mutations" 19.1 min and "Host unmap-call cap mutations" 8.2 min. Everything else in `stable`
+  (clippy, fmt, the boundary and claim gates: 5.2 min; the three smaller Rust mutant steps: 4.1 min) added up to 9.3 min. One runner ran all of it in sequence.
+- The jobs wait for a runner far longer than they run. In 44088759756 `stable` queued 33.3 min, `stripped` 95.0 min, `platform` 157.8 min,
+  `ptx` 173.0 min; the `CI` gate job, which needs every other job and runs for under a second, was created when `stable` finished and then queued
+  139.6 min for a runner, so the run took 383.5 min from first job created to gate completed. At 20:25 UTC on 2026-11-17 there were 38 queued and 13 running
+  `CI` runs, and 32 of those 51 belonged to a branch that had a newer run (one branch, `claude/open-ffmpeg-dcgm-20261117`, had 17).
+  The runner pool is the bottleneck, so the first fix is no work for commits nobody will merge, and the second is a run that is as long as its longest job.
+- In 8 sampled runs that ended `cancelled`, the `CI` job (`if: always()`) still ran and ended `failure`, for example runs 43807153613 and 43805699116.
+
+### Concurrency
+
+`ci.yml` has a `concurrency:` block (tested by `scripts/ci/test_ci_concurrency.py`, which evaluates both expressions for every kind of
+trigger): a push to a branch other than `next` and `master`, and a `pull_request` run, share a group per branch or per pull request and
+`cancel-in-progress` is true there, so the newer run cancels the one it supersedes, queued or running. Pushes to `next` and `master`, tags,
+`schedule`, `workflow_dispatch` and `merge_group` get a group that is only their own run id and are never cancelled. The `CI` gate keeps
+`if: always()`: a cancelled run's gate fails, which reds the superseded commit and nothing else, because a pull request is judged by the
+checks of its head commit and the newer run decides. A gate that skipped itself after a cancel would report a required check as passed for a
+run that never finished, so the gate is not allowed to. Other workflows keep their own settings (`vast-box-scripts.yml` and `gpu-vast.yml`
+already cancel in progress; `gpu-vast.yml` is deliberately not touched).
+
+### Jobs
+
+`stable` keeps its name and the repository-wide gates: clippy and its debt ratchet, rustfmt, the full-tree Rust checks, the boundary, ABI,
+unsafe, claim-ledger, GPU-UUID, private-reference, caller-contract and section gates, the dependency and ignore-ladder checks and `workflow_lint.py`.
+Everything that was a long harness moved into a job of its own; each command is the same and in exactly one job
+(`scripts/ci/test_ci_jobs.py` pins the list of 65). Expected run time = the MEASURED step times of run 44088759756 (2026-11-17) summed per job plus
+about a minute of set-up; the two values that are not sums of measured steps are marked.
+
+| job | what it runs | measured before (min) | expected (min) |
+| --- | --- | --- | --- |
+| `stable` | the gates above | 210.5 for the whole old job | about 8 |
+| `worker-tests` | prettier, black, `node --test` of the Worker and the admin, tier mutants | about 6.5 | about 7 |
+| `worker-mutants-a` | evidence-upload, provider-tolerance, denied-countries mutants | about 14.7 | about 15 |
+| `worker-mutants-b` | report, release-*, rv2, driver-pins, simulation, profile, proprietary-image mutants | about 13.5 | about 14 |
+| `middle-apps` (4 slices) | `middle_apps_mutants.py --shard I/4`: every fourth of the 118 mutants from the I-th | 99.0 (one worker) | about 27 each (INFERRED: a quarter of 99 plus a baseline run and set-up) |
+| `mutants-a` | OIDC retry, propimage, clock rule, bandwidth, image size, kfci, instruction, and the mutants of the sharder and of the slicing | about 9 | about 10 |
+| `mutants-b` | kfroot, box downloader, runner stages, doc steps, fault names, evidence and bench self-tests | about 14 | about 15 |
+| `selftests` (3 shards) | every `test_*.py` of `scripts/ci`, a partition by module | 17.4 (one process) | about 6 each |
+| `rust-mutants-a` | Windows support profile mutants | 19.1 | about 20 |
+| `rust-mutants-b` | oracle gate, video classes, offer filter, unmap cap, VA profiling mutants | about 12.3 | about 13 |
+| `stripped` | unchanged: `cargo build` and `cargo test` on the stripped tree | 24.7 (44088759756), 44.5 (44084630157) | unchanged, now the longest job |
+
+The run's wall time without queueing is therefore the `stripped` job (INFERRED: 25 to 45 min) plus the gate, instead of 210 min plus the gate. Runner
+minutes of a whole run stay about where they were: 255.4 (MEASURED, run 44088759756 of 2026-11-17) and an INFERRED 270 to 280 afterwards, because every new job adds a set-up of
+about a minute and `middle-apps` runs its baseline four times. The split buys wall time; what buys queue is the cancellation above (63 % of the live runs in the snapshot) and `stripped`
+staying the longest job.
+
+`middle-apps` is four slices on four runners, not several workers on one. MEASURED on a developer box on 2026-11-17: the harness with six workers on one machine, against the
+sequential harness on nine of the mutants, gave one extra killer in each of two runs (`test_apps_pins.SetupSideRows.test_every_expected_setup_row_is_printed_ok_on_a_good_run`, then
+`...test_a_silent_model_load_is_not_a_success`). The cause is shared state, not load: `scripts/apps/setup_side.sh` writes `/tmp/setup_hf.out` and reads it back, so two copies on
+one machine disturb each other. A spurious failure counts as a killer and the rule is a minimum of two, so a pool of workers was not used. Fixing the script's fixed `/tmp` paths (or giving each
+worker a private `/tmp`) would make a pool possible and would save about 75 runner minutes per run; it changes a script the boxes run, so it was not done here.
+
+The `selftests` shards come from `scripts/ci/unittest_shard.py`: every test module is in exactly one shard (a partition by file size, deterministic, no
+state shared between jobs), the exit status is the plain runner's, and an empty shard fails. `scripts/ci/test_unittest_shard.py` proves the partition
+and the status, and `unittest_shard_mutants.py` needs two named killers for each way of getting either wrong. `middle_apps_mutants.py --shard I/N` runs
+every N-th mutant from the I-th (default `1/1`, the whole list as before); the slices are tested the same way (`test_middle_apps_mutants_shards.py`, `middle_apps_shards_mutants.py`).
+A harness that changes the checkout (the Rust mutants rewrite one file, run `cargo test` and restore it) runs in a job of its own, one after another.
+
+### The gate
+
+`gate` (`name: CI`, the required check) needs every job of the workflow except itself and the nightly `slow`; `scripts/ci/workflow_lint.py`
+(rule `gate-needs`) fails the lint for a job it does not need, so a new shard cannot be left out. `stripped`, `stable` and every job split out of `stable`
+must have succeeded: a skipped result is a failure for them (`if: false` on a shard would otherwise read as a pass). The other jobs keep the old rule (a
+skip by their own `if:` is accepted). `scripts/ci/test_ci_gate.py` runs the gate script for every result of every job. A cancelled or failed need fails
+the gate. `scripts/ci_gates.sh` reads the split jobs too (it expands the `selftests` matrix), so a local run still runs every harness.
+
+### Adding a harness
+
+Put its command in a `run:` step of the job whose time it fits (the table), or add a job (copy `mutants-a`, give it `timeout-minutes`) and put its id in the
+`gate` job's `needs` and `MUST_RUN`, and in `scripts/ci_gates.sh` `SPLIT_JOBS` and `SPLIT` of `test_ci_jobs.py`; the lint and the tests fail until you do.
+A new `scripts/ci/test_*.py` needs no edit: it falls into the lightest `selftests` shard. A harness can be sliced over machines like `middle_apps_mutants.py --shard I/N`; do not run several copies of tests on one machine
+without checking them for fixed `/tmp` paths (see above), and never run a harness that edits the checkout beside another reader of it. To balance, read the per-step times of a run (`python3 scripts/ci/ci_run_timings.py --steps 25 RUN`) and
+move the longest command of the slowest job to the fastest. Keep every job under the longest one (`stripped`) so the run is not made slower by its own shards.
+
+### Caches and downloads
+
+Measured in the same run: the Rust build is not the cost (`stripped` "Build" 0.5 min, "Clippy" 0.5 min with a 73 MB cache), and the three cache entries are keyed by the
+lockfile, so they already hit; the new Rust jobs use `shared-key: stable` to start from the entry `stable` had. The downloads are small: `npm ci` for the Worker
+(`jose` only) 0.3 s, `pip install black` about 3 s, `npx prettier` about 5 s, the toolchain about 11 s. Caching them would cost about what it saves and add an action to pin, so none
+was added. Not changed, on purpose: path filters (the required check `CI` must always be reported, and a docs-only change still needs `stripped` to prove the stripped tree is
+the same, which needs a result store, not a filter), the `pull_request` trigger (only the batch pull request to `master` uses it), the `stripped` test step (one `cargo test`, 23 to 45 min:
+the next cut is splitting its heavy test binaries into legs, which needs the reached-count steps to read all of their logs) and the `Vast box scripts` workflow (a `gpu-free` job of 50 to
+62 min on every push that touches `scripts/**`, not a required check). A gate on a lighter runner class is a further option, not done: whether the label exists for this account is not known from the repository.
+
+### Test plan and rollback
+
+Compare after the merge, with `python3 scripts/ci/ci_run_timings.py --steps 25 RUN...`: (1) three push runs on `next` after the merge against runs 44088759756 and 44084630157:
+expected `stable` under 12 min, every other new job under 25 min, `stripped` unchanged, no job above the `stripped` time, the four `middle-apps` slices each under 35 min, the gate beginning within
+its own queue wait of the last job; (2) a branch pushed twice in a minute: the first run must end `cancelled` and its `CI` job `failure`, the second run decides; (3) the killer lists of
+`middle-apps` against a sequential run of the same tree (`python3 scripts/ci/middle_apps_mutants.py` with one worker, on the same tree): equal. Roll back with one
+revert of the merge commit of the pull request (the old single `stable` job, no concurrency block); to keep the layout and drop only the cancel, revert the commit that added the `concurrency:` block.
 
 ## Shipped GPU programs: the `ptx` job (2026-11-13)
 
@@ -36,7 +143,7 @@ generated display files reproduce byte for byte):
 - `scripts/ci/va_profile_mutants.py` (Rust job, 2026-11-16) mutates the observation-only VA-apply profiling
   (`docs/design/V3_VA_PROFILE.md`: `kf-mem` vaprof/vasmgr/batch, `kf-qemu` split delivery, `kf-cuda` ceiling geometry)
   and requires each mutant to fail at least two named tests; `scripts/bench/va_profile_table.py --self-test` runs in the
-  Python self-test step.
+  `mutants-b` job.
 - `static` also ties the VER3 PCF enumerants the kernel names (`KF_VER3_*`) to
   `crates/kf-chip/data/hwref-580.159.04.tsv`.
 
@@ -112,6 +219,13 @@ drift accumulated behind it. What changed, step by step:
 - **Claim ledger (`claims-debt.json`).** 616 sites were recorded (607 `unattributed`, 7 `bare-hardware`,
   2 `conflated`): docs 327, traces 154, kf-qemu 51, kf-chan 40, kf-disp 11, kf-broker 8, kf-rm 7, kf-mem 5, kf-abi 4,
   and 9 elsewhere. They are prose written since the last record; none was rewritten.
+- **Plain-log ratchet (`logs-debt.json`, 2026-11-18).** `python3 scripts/ci/debt.py logs` pins every plain
+  `eprintln!` in the non-test code of the product crates (`LOG_CRATES` in `debt.py`) by file, enclosing fn and the
+  macro up to its format string; a second identical site in one fn is numbered, so it is new too. A new plain site
+  fails; guest-repeatable sites use `kf_arch::rate_eprintln!` (S1-86, `docs/design/V3_BOUNDARY_FUZZING.md`). 436 sites
+  were recorded as the first baseline: kf-qemu 261, kf-rm 98, kf-mem 44, kf-chan 8, kf-linux-raw 8, kf-host 7,
+  kf-cuda 5, kf-util 3, kf-broker 1, kf-gsp 1. Sites kept on purpose carry their reason in the baseline value
+  (`LOG_KEEP`: the kf-host channel-birth line, which the merge-bar census reads in full).
 - **Dependency isolation.** `kf-trap -> loom` and `kf-disp -> kf-broker, kf-linux-raw` are dev-dependencies of pure
   crates that the rule forbids. They are named, exactly and as dev-dependencies only, in `DEV_ONLY_EXCEPTIONS` of
   `scripts/ci/dependencies.py`. **Owner decision pending:** keep the exceptions, or move those tests to `kf-harness`.
@@ -243,14 +357,14 @@ truncated/failed Clippy output cannot pass, and dependency aliases cannot bypass
 the v3 boundary. The QEMU process-identity shell regression test also runs in CI.
 
 Run `bash scripts/ci_gates.sh` for fast guards, or `--all` for the build/test/lint
-steps too. The runner extracts the actual workflow (the `stable` job and the
+steps too. The runner extracts the actual workflow (the `stable` job, the jobs split out of it on 2026-11-17 and the
 non-destructive steps of `stripped`, where build and test live; it never runs the
 strip, which deletes files, so `--all` builds and tests the full tree) and enforces
 minimum step counts, so a shortened or malformed job cannot report a vacuous green.
 
 ## Standalone trust gate (2026-11-17)
 
-CODE READ: [`trust_lint.py`](../scripts/ci/trust_lint.py) runs in the `stable` job beside `ignore_ladder.py check`. It reads
+CODE READ: [`trust_lint.py`](../scripts/ci/trust_lint.py) runs in the `stable` job beside `ignore_ladder.py check`; its mutants run in `mutants-b`. It reads
 [`trust_manifest.json`](../scripts/ci/trust_manifest.json), the repository's list of what its scripts download and the anchor of each
 (an upstream checksum fetched from upstream, or a pin in git of something upstream authored: a commit, a vendor checksum, a registry digest, a
 source hash), and fails on an anchor that is "a sha256 in git of an artifact we build or host", an artifact without an anchor, a consumer that

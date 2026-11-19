@@ -56,6 +56,68 @@ def claims() -> dict[str, str]:
     return found
 
 
+# ★ 2026-11-18 (boundary fuzzing, S1-86 / BF-2, `docs/design/V3_BOUNDARY_FUZZING.md`): a plain
+# `eprintln!` on a path a guest can repeat is an unbounded host emit. Guest-repeatable sites use
+# `kf_arch::rate_eprintln!`; every remaining plain site of the product crates is pinned here by file,
+# enclosing fn and text, so a NEW plain site fails CI and the count can only go down. Tools and
+# oracles that never run inside the VMM are out of scope.
+LOG_CRATES = ("kf-broker", "kf-chan", "kf-core", "kf-cuda", "kf-disp", "kf-gsp", "kf-host",
+              "kf-linux-raw", "kf-mem", "kf-qemu", "kf-rm", "kf-trap", "kf-chip", "kf-abi",
+              "kf-arch", "kf-util")
+# Plain sites kept ON PURPOSE although a guest can repeat them, with the reason (written into the
+# baseline value): (path, fn) -> why.
+LOG_KEEP = {
+    ("crates/kf-host/src/channel.rs", "birth_member_profile"):
+        "KEEP: the merge-bar census reads every channel-birth line (S1-86 notes it); one per birth",
+}
+_FN = __import__("re").compile(r"^\s*(?:pub(?:\([a-z:]+\))?\s+)?(?:const\s+)?(?:unsafe\s+)?(?:async\s+)?fn\s+(\w+)")
+_TEST_MOD = __import__("re").compile(r"#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*mod\s+(\w+)\s*;")
+_PLAIN = __import__("re").compile(r"(?<![\w:])eprintln!\(")
+
+
+def logs(root: Path = ROOT, crates: tuple[str, ...] = LOG_CRATES) -> dict[str, str]:
+    found = {}
+    for crate in crates:
+        src = root / "crates" / crate / "src"
+        files = sorted(src.rglob("*.rs"))
+        # files that are test modules (`#[cfg(test)] mod x;` in a sibling or parent file)
+        test_files: set[Path] = set()
+        for f in files:
+            for name in _TEST_MOD.findall(f.read_text()):
+                base = f.parent if f.name in ("lib.rs", "mod.rs", "main.rs") else f.parent / f.stem
+                test_files |= {base / f"{name}.rs", base / name / "mod.rs"}
+                test_files |= set((base / name).rglob("*.rs"))
+        for f in files:
+            if f in test_files or f.name.endswith("_tests.rs") or f.name == "tests.rs" or "bin" in f.parts:
+                continue
+            fn = "?"
+            lines = f.read_text().splitlines()
+            seen: dict[str, int] = {}
+            for i, line in enumerate(lines):
+                if line.startswith("#[cfg(test)]"):
+                    break
+                m = _FN.match(line)
+                if m:
+                    fn = m.group(1)
+                if _PLAIN.search(line):
+                    path = str(f.relative_to(root))
+                    # the macro up to its format string (rustfmt may break after the `(`)
+                    span = [line.strip()]
+                    for nxt in lines[i + 1:i + 4]:
+                        if '"' in span[-1]:
+                            break
+                        span.append(nxt.strip())
+                    text = f"{fn} :: {' '.join(span)}"
+                    # an identical site in the same fn is a NEW site: number them
+                    seen[text] = seen.get(text, 0) + 1
+                    if seen[text] > 1:
+                        text = f"{text} #{seen[text]}"
+                    key = identity(path, "eprintln", text)
+                    why = LOG_KEEP.get((path, fn))
+                    found[key] = f"{text} :: {why}" if why else text
+    return found
+
+
 def clippy(log: Path) -> dict[str, str]:
     found = {}
     finished = False
@@ -91,13 +153,13 @@ def clippy(log: Path) -> dict[str, str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("kind", choices=("claims", "clippy", "frozen"))
+    parser.add_argument("kind", choices=("claims", "clippy", "frozen", "logs"))
     parser.add_argument("--log", type=Path)
     parser.add_argument("--record", action="store_true", help="explicitly record reviewed migration debt")
     args = parser.parse_args()
     if args.kind == "clippy" and args.log is None:
         parser.error("clippy requires --log")
-    actual = {"claims": claims, "clippy": lambda: clippy(args.log), "frozen": frozen}[args.kind]()
+    actual = {"claims": claims, "clippy": lambda: clippy(args.log), "frozen": frozen, "logs": logs}[args.kind]()
     path = ROOT / "scripts/ci" / f"{args.kind}-debt.json"
     if args.record:
         path.write_text(json.dumps(actual, sort_keys=True, indent=2) + "\n")
