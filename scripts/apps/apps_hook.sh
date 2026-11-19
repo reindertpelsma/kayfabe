@@ -19,6 +19,11 @@ $G 'sudo tee /opt/apps/bundle/run_apps.sh >/dev/null' < "$HERE/run_apps.sh"
 tar -C /workspace/apps/bundle -cf - bin | $G 'sudo tar -C /opt/apps/bundle -xf -'
 $G 'test -d /opt/apps/bundle/cuda/include' || tar -C /workspace/apps/bundle -czf - cuda | $G 'sudo tar -C /opt/apps/bundle -xzf -'
 for f in "$HERE"/src/*.py; do $G "sudo tee /opt/apps/bundle/share/$(basename "$f") >/dev/null" < "$f"; done
+# discovery row vkcts: the tool dir and the artifact `vkcts.py build` made (docs/design/V3_VULKAN_CTS_ROW.md); the host samples the GPU around the row
+case " $APPS " in *" vkcts "*)
+  tar -C "$HERE/vkcts" -cf - vkcts.py vkcts_lib.py pins.json caselist.tsv | $G 'sudo mkdir -p /opt/apps/bundle/vkcts_tool && sudo tar -C /opt/apps/bundle/vkcts_tool -xf -'
+  tar -C "$(readlink -f "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current")" -cf - . | $G 'sudo mkdir -p /opt/apps/bundle/vkcts && sudo tar -C /opt/apps/bundle/vkcts -xf -';;
+esac
 $G 'sudo rm -rf /opt/apps/out/guest'
 echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,driver_version,persistence_mode --format=csv,noheader' 2>&1 | head -1)"
 # ⊘ boot_capture.sh reloads ONLY `nvidia`; the host has nvidia_modeset + nvidia_drm loaded, and the
@@ -29,8 +34,10 @@ echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,dr
 for app in $APPS; do
   q0=$(wc -l < "$QLOG" 2>/dev/null || echo 0)
   d0=$($G 'sudo dmesg | wc -l' 2>/dev/null | tr -d '\r'); d0=${d0:-0}
+  [ "$app" = vkcts ] && python3 "$HERE/vkcts/vkcts.py" census start --dir "$OUT/vkcts.guest.census" >/dev/null 2>&1
   res=$(timeout "${APPS_APP_TMO:-2400}" "$G" "sudo bash /opt/apps/bundle/run_apps.sh guest $app" 2>&1 | tr -d '\r')
   src=$?
+  [ "$app" = vkcts ] && python3 "$HERE/vkcts/vkcts.py" census stop --dir "$OUT/vkcts.guest.census" --side guest > "$OUT/vkcts.guest.gpu.txt" 2>&1
   alive=1; $G true >/dev/null 2>&1 || { sleep 20; $G true >/dev/null 2>&1 || alive=0; }
   line=$(grep -a '^APPRES ' <<<"$res" | tail -1)
   if [ -z "$line" ]; then

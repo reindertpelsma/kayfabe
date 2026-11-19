@@ -96,14 +96,21 @@ blender_cycles|900|BLENDER_OK OPTIX|for dev in CUDA OPTIX; do $D/blender/blender
 geekbench_gpu|1200|Uploading results|cd $D/geekbench && ./geekbench6 --gpu OpenCL 2>&1 | tail -60
 EOF
 )
-[ "${1:-}" = list ] && { echo "$APPS" | cut -d'|' -f1 | tr '\n' ' '; echo; exit 0; }
+# DISCOVERY rows report and never gate: they are in `list` (so the names are known) but not in `listall` / `all`, and in no gate list.
+# vkcts: the open Vulkan CTS subset (docs/design/V3_VULKAN_CTS_ROW.md). Needs `vkcts.py build` once ($B/vkcts) and the tool dir $B/vkcts_tool.
+DISCOVERY=$(cat <<'EOF'
+vkcts|2700|VKCTS_SUMMARY|python3 $B/vkcts_tool/vkcts.py run --side $SIDE --artifact $B/vkcts --out $O/vkcts
+EOF
+)
+[ "${1:-}" = list ] && { { echo "$APPS"; echo "$DISCOVERY"; } | cut -d'|' -f1 | tr '\n' ' '; echo; exit 0; }
+[ "${1:-}" = listall ] && { echo "$APPS" | cut -d'|' -f1 | tr '\n' ' '; echo; exit 0; }
 [ "${1:-}" = all ] && set -- $(echo "$APPS" | cut -d'|' -f1)
 
 for app in "$@"; do
-  row=$(echo "$APPS" | awk -F'|' -v a="$app" '$1==a' | head -1)
+  row=$({ echo "$APPS"; echo "$DISCOVERY"; } | awk -F'|' -v a="$app" '$1==a' | head -1)
   [ -n "$row" ] || { echo "APPRES side=$SIDE app=$app verdict=NOTRUN rc=- secs=0 quiet=- note=unknown-app"; continue; }
   IFS='|' read -r name tmo rx cmd <<<"$row"
-  cmd=${cmd//\$S/$S}; cmd=${cmd//\$B/$B}; cmd=${cmd//\$D/$D}; cmd=${cmd//\$O/$O}; cmd=${cmd//\$PY/$PY}
+  cmd=${cmd//\$SIDE/$SIDE}; cmd=${cmd//\$S/$S}; cmd=${cmd//\$B/$B}; cmd=${cmd//\$D/$D}; cmd=${cmd//\$O/$O}; cmd=${cmd//\$PY/$PY}
   log=$O/$name.log
   { echo "=== $name side=$SIDE start=$(date -Is) host=$(hostname) cmd: $cmd"; } > "$log"
   t0=$(date +%s)
@@ -122,6 +129,8 @@ for app in "$@"; do
   # integer / transfer / launch-latency tests aborted with `clFinish (-36)` after a host Xid 31 —
   # a false PASS. clpeak reports a failed test as "Tests skipped"; the host baseline has none.
   [ "$name" = clpeak ] && [ $v = PASS ] && grep -qaE 'clFinish \(-|Tests skipped' "$log" && { v=FAIL; note="clpeak: $(grep -aE -c 'Tests skipped' "$log") test groups skipped ($(grep -aoE -m1 'cl[A-Za-z]+ \(-[0-9]+\)' "$log"))"; }
+  # an app may state its own note in one line, `APPNOTE <text>` (case names in its log would match the generic grep above)
+  appnote=$(grep -a -m1 '^APPNOTE ' "$log" | cut -c9-160 | tr '|' '/'); [ -n "$appnote" ] && note=$appnote
   echo "APPRES side=$SIDE app=$name verdict=$v rc=$rc secs=$((t1-t0)) quiet=$quiet note=${note:--}"
   grep -a -E '^(OUTSHA|DIGEST) ' "$log" | sed "s/^/APPDIG side=$SIDE app=$name /"
 done

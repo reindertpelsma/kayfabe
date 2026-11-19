@@ -206,3 +206,8 @@ root payload, which can read `/run/kf-ci/env` today. The payload's only hook is 
 MANIFEST` (prints `KF_PAYLOAD_PREFETCH ...` for the planned stages); without `--dry-run` it is refused. Not done: starting the
 downloader from the payload, a stage calling `wait`, apt (design source c), seeders (deferred), the real manifest for the
 SPEC and Windows media, disk reservation of unpack space beyond `--reserve-gb`.
+
+The open Vulkan CTS row (2026-11-17; design `docs/design/V3_VULKAN_CTS_ROW.md`, usage `docs/howto/vulkan-cts.md`; MEASURED once on a native RTX 3060 container,
+`traces/vkcts_host_20261117/`, never in a guest): `test_vkcts.py` (pins and the CTS fetch script check, the committed case list and its digest, the QPA parser against a
+fixture of a real log, crash and hang attribution, the block format, the host-versus-guest diff table, the row inside `scripts/apps/run_apps.sh`, GPU-use assertion with a
+fake `nvidia-smi`; GPU-free, no network, a Python stand-in for `deqp-vk`); mutants `vkcts_mutants.py` (two named killers each, in `ci.yml`).
