@@ -1,0 +1,30 @@
+
+Local build info:
+Version : 4.8.0
+Build ID : 27224
+Build Date : 2026-11-07
+Build Type : RelWithDebInfo
+Commit ID : b6c33f9895bbbc67e531371cb1550fa6abb3ca82
+Branch Name : v4.8.0
+CPU Arch : x86_64
+Build Platform : Linux 7.0.0-31-generic #31~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 10 09:38:02 UTC 2 x86_64
+CRC : 55bcb772b43c527cd928ac8fd5933b92
+
+Hostengine build info:
+Version : 4.8.0
+Build ID : 27224
+Build Date : 2026-11-07
+Build Type : RelWithDebInfo
+Commit ID : b6c33f9895bbbc67e531371cb1550fa6abb3ca82
+Branch Name : v4.8.0
+CPU Arch : x86_64
+Build Platform : Linux 7.0.0-31-generic #31~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 10 09:38:02 UTC 2 x86_64
+CRC : 55bcb772b43c527cd928ac8fd5933b92
+1 GPU found (Active).
++--------+----------------------------------------------------------------------+
+| GPU ID | Device Information                                                   |
++--------+----------------------------------------------------------------------+
+| 0      | Name: NVIDIA GeForce RTX 3060                                        |
+|        | PCI Bus ID: <pci>                                         |
+|        | Device UUID: <uuid>                |
++--------+----------------------------------------------------------------------+
