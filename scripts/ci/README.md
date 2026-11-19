@@ -1,5 +1,5 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: LIVE, 2026-11-15 (payload `--instruction FILE`, `--only/--skip/--dry-run`: GPU-free tests only, no box has run them; the rest of this page is as of 2026-11-06) (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
+STATUS: LIVE, 2026-11-15 (propimage_apps payload stage, `--only propimage_apps`, GPU-free tests only, no box has run it; box downloader `box_downloader.py`, built and tested GPU-free, run on no box and wired into no stage; payload `--instruction FILE`, `--only/--skip/--dry-run`: GPU-free tests only, no box has run them; the rest of this page is as of 2026-11-06) (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
 claude/vast-payload-p7-20261024). MEASURED 2026-10-25: a real Vast box booted with the
 protocol-7 setup but had not yet reported to the Worker, so protocol 7 has no end-to-end run on a
 real box yet. The evidence below is for the pre-port payload. MEASURED: run `v9-xid-kvm-20261023`, source
@@ -36,6 +36,16 @@ value in the file makes it invalid. PASS is withheld (FAIL + failing row) on non
 zero passes, unknown hardware or compute_cap < 750. Soft deadline: TERM, KILL after 30 s; result is
 FAIL with the suites already written plus `timeout`. Absent payload: FAIL `payload_missing`; absent
 or invalid result file: FAIL `result_missing`/`result_invalid`. Exit text never makes a PASS.
+
+kfroot and rootless Windows (2026-11-15, OWNER_RULINGS section AR item 6; GPU-free tests and one hand run of the real sudo in a sandbox, NOT run on a box):
+`kfroot.py` installs the explicit root step (`/usr/local/bin/kfroot` = `exec sudo -n -E` on a root-owned wrapper that is the only sudoers entry; the
+sudoers file is `visudo -c` checked before it is installed), bootstraps the box for an unprivileged `ci` user in group `kvm` (device nodes, memlock,
+`/workspace`, GPU lock, sudo log), starts a command dropped (`run`: every capability set empty, `NoNewPrivs=1`), and asserts the result from `/proc`
+and the sudo log (`assert-tree`, `audit-check`). `windows_gate.sh` and `windows_apps.sh` no longer refuse non-root: they check `/dev/kvm`, `/dev/nvidiactl`,
+writable directories, cargo and a readable kernel log by name, and the root operations (apt, the swtpm AppArmor rule, `dmesg` under
+`kernel.dmesg_restrict=1`) are `kfroot <cmd>` lines (`scripts/lib/kfroot.sh`). `KF_ROOTLESS=require|record|off` (default record). Design, the
+inventory of what really needs root, the measured sudo behaviour and the first-box checklist: [V3_KFROOT_ROOTLESS](../../docs/design/V3_KFROOT_ROOTLESS.md).
+Tests `test_kfroot.py`; mutants `kfroot_mutants.py` (two named killers each, in `ci.yml`). `vast_payload.py` does not yet use it.
 
 Instruction file and stage selection (2026-11-15, OWNER_RULINGS section AR, stages S1 and S3; MEASURED by
 GPU-free tests only, not on a box): the payload also takes `--instruction FILE` (JSON, at most 64 KiB, schema
@@ -114,3 +124,80 @@ The test runtime is Ubuntu 22.04 with GNU coreutils (`setup-test.Dockerfile`), m
 
 CODE READ: if cloud-init omits standard HOME or leaves it empty, repo-side onstart restores the
 current OS account's home directory. An explicit process HOME is preserved; no Worker var is added.
+
+
+The `propimage_apps` stage (2026-11-15, owner ruling that the proprietary Windows image's seven apps must PASS per GPU family; GPU-free tests only, NOT run on a box,
+and it cannot PASS yet): `propimage_apps.py` fetches the private image through `box_downloader.py` (manifest made from `propimage_apps_pins.json`), builds swtpm 0.10.1 when
+the box's is older, unpacks, and runs `scripts/bench/windows/propimage_check.py` in three offline boots (Wukong last, alone, guest framebuffer 8192 MiB), then
+records per app the verdict kind, evidence names and sha256, scores, guest TDR/LiveKernelEvent counts and the host Xid lines inside the app's kernel-log window.
+Every pin in `propimage_apps_pins.json` is unset (nothing in the repository records the image sha256), so it refuses `PIN_UNSET:image`; and the harness grades
+Wukong INCONCLUSIVE (its benchmark menu driver is research tooling in draft PR #417), so it ends `APP_FAIL:wukong` until that is in the harness. Non-AMD hosts are
+`NOT_RUN` (`CPU_VENDOR`). Selection: `vast_payload.py --instruction FILE --only propimage_apps` with a `large` instruction; not in the default large plan
+(`PROPIMAGE_APPS_IN_LARGE = False`, `MANUAL_ONLY_STAGES`). `propimage_apps.py plan` prints the preflight rows and the boot plan without touching anything;
+`propimage_apps.py manifest --out FILE` writes the download manifest (and refuses while pins are unset). The record is `propimage_apps` in `kf-result.json`, validated in
+`vast_report.py`. Design, refusal table and first-run checklist: `docs/design/V3_PROPIMAGE_APPS_STAGE.md`. Tests `test_propimage_apps.py`; mutants `propimage_apps_mutants.py`
+(two named killers each, in `ci.yml`).
+## Standalone run: one presigned-URL file for every private object (2026-11-16)
+
+A box that runs the payload by hand (no Worker, no run token, OWNER_RULINGS section AR item 3) needs the private objects through ONE file,
+`/run/kf-ci/download-urls.json` (mode 0600, schema `kayfabe.download-urls/1`: `{"urls": {ref: presigned https URL}}`, extra top-level keys such as the
+sizes and sha256 pins of the objects are ignored by the readers). The coordinator, which alone holds the R2 credential, writes it with
+`rclone link r2:... --expire <= 12h` per object; the box gets the file and nothing else (no key, token or rclone config).
+The readers: `box_downloader.py --urls` (the `propimage_apps` stage: refs `propimage-kfimg-<date>.zip`, `propimage-kf-gop.signed.efi`) and
+`scripts/bench/specviewperf/stream_url.py` (SPEC lane, `KF_SPEC_URL_FILE=<file>`; since 2026-11-16 it reads this shape too, object ref
+`specviewperf-15.0.0.tar.zst`, and still the PC-run flat map). Mutants: `stream_url_mutants.py`. Every other object of the rehearsal stages is public.
+
+The generic proprietary-image runner (2026-11-16, phase 1; `docs/design/V3_PROPIMAGE_RUNNER.md`, `docs/howto/run-windows-images.md`; GPU-free tests only, run on no box): `propimage_apps.py run --image prebuilt:SOURCE ... [--strict]` (or `--propimage PATH[:sha256]`, or `--images-file FILE`) takes any number of Windows images, each with its applications, through `propimage_images.py`; without an image flag `run` is the stage above. `scripts/bench/windows/propimage_registry.py` and `app_defs/` hold the application definitions (one file per definition set), `propimage_runspec.py` the spec and its named refusals, `propimage_plain.py` the harness for a disk without a state.json, `clocknet_assert.py` the rule that a faked clock needs the network off and a networked guest the real clock (checked in `propimage.py build_argv`, `propimage_run.sh`, `win_vm.sh` and the runner's boot proof). Standalone runs skip what cannot run (exit 0); `--strict` (the instruction's `propimages_strict`) fails on any skip (exit 4). Identity pins (a source's sha256, a `pin:` object's hash in the spec) are enforced only under `--strict`; a standalone run records the computed sha256 and size and `--expect-sha256 NAME=HASH` opts in (`docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`, `test_propimage_pins.py`; `--pins FILE` names your own deployment's pins). The record `kayfabe.propimage-run/1` is `propimage_run` in `kf-result.json` (`vast_report.py`). Tests `test_clocknet_assert.py`, `test_propimage_runspec.py`, `test_propimage_images.py`; mutants `clocknet_assert_mutants.py` and `propimage_runner_mutants.py` (two named killers each, in `ci.yml`).
+
+## Box downloader (`box_downloader.py`, 2026-11-15; step 3 of [V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN](../../docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md))
+
+MEASURED by GPU-free tests only (loopback HTTP server, `test_box_downloader.py`; mutants `box_downloader_mutants.py`, two named
+killers each, in `ci.yml`). Not run on a box, not wired into any stage, no real private R2 object ever fetched. Stdlib only,
+Python 3.9+, on top of `kf_fetch.py` (`.unverified` staging, per-chunk Range resume, size + sha256 pinned by the caller,
+atomic rename, partial deleted on a size or hash violation). It needs no Worker, no run token and no network credentials: a
+normal user needs Python 3 and a manifest.
+
+Standalone example (a local directory pin and an https mirror, nothing else):
+
+```sh
+cat > manifest.json <<'JSON'
+{"schema": "kayfabe.download-manifest/1", "stages": ["setup"],
+ "items": [
+  {"name": "tool.tar", "dest": "dl/tool.tar", "sha256": "<64 hex>", "size": 1234567, "needed_by": "setup",
+   "sources": [{"kind": "mirror", "url": "https://mirror.example.org/tool.tar"}]}]}
+JSON
+python3 scripts/ci/box_downloader.py check manifest.json                       # validate, print item count and bytes
+python3 scripts/ci/box_downloader.py fetch manifest.json --dest ./out --pin-dir ~/Downloads --limit-bandwidth 50 &
+python3 scripts/ci/box_downloader.py wait --dest ./out --deadline 600 tool.tar     # 0 verified, 1 failed, 3 deadline, 4 downloader gone
+python3 scripts/ci/box_downloader.py status --dest ./out
+python3 scripts/ci/box_downloader.py verify manifest.json --dest ./out             # re-hash every dest
+```
+
+`--pin-dir DIR` (repeatable) and `--pin NAME=PATH` use an existing local file when its size and sha256 match (otherwise it is
+ignored). Manifest format `kayfabe.download-manifest/1` (at most 1 MiB, strict, validated once in `box_downloader.py`):
+`stages` (first-use order) and `items`, each `{name, dest, sha256, size, needed_by, sources[], priority?, local?}`; `dest` is
+relative to `--dest`, with no `..` and no symlink on the way; ordering is stage, then priority, then manifest order; sources
+are the fallback order and `signed`/`s3` (private) must come before `mirror`. Source kinds: `mirror` (plain https URL,
+optional `follow_redirect`), `signed` (a presigned URL looked up by `ref` in `--urls FILE`, JSON `kayfabe.download-urls/1`,
+mode 0600, re-read on every attempt) and `s3` (any S3-compatible endpoint, path style; bucket and key in the manifest, the
+endpoint and credentials from `KF_S3_ENDPOINT`/`KF_S3_REGION`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN`
+or `--s3-config FILE`, mode 0600; the URL is signed locally with SigV4, 20 minutes). No account or bucket name is in the
+code; the repo's own defaults belong in the shipped manifest. `http://` sources need `--allow-http` (tests, trusted LANs).
+
+Defaults (DESIGN values, not measured on any box): 3 items in parallel, 4 streams per item, global cap 125 MB/s
+(`--limit-bandwidth MBPS`, 0 = off), per-connection cap off (`--stream-limit`), niced 19 and ionice idle (`--no-nice` off).
+Each completed item prints `KF_STEP name=download.<item> secs= bytes= source=<local|present|r2|s3|mirrorN> MBps=`; a failed
+one `KF_DOWNLOAD_FAIL name= class=RETRY reason=` (a harness failure, never a guest FAIL). URLs and credentials are never
+printed (every line is scrubbed). The bounded status file is `<dest>/.kf-downloader/status.json`. SIGTERM/SIGINT cancels:
+exit 5, partial files kept, the next run resumes after re-verifying every saved chunk.
+
+Payload and the token: `box_downloader.py` never reads the run token, the broker URL or the Access pair (a test greps its
+source for them). The Worker-aware part is `box_downloader_worker.py resolve MANIFEST --urls-out FILE`, run by the bootstrap
+layer that already holds the token (OWNER_RULINGS section AR): it asks `GET <broker>/bench-data/<run>/<name>` for each `signed`
+ref, keeps the 302 target, writes the 0600 URL file, and prints no URL. The payload gets only `--urls FILE` (a file, not a
+descriptor, because presigned URLs expire after 20 minutes and a refresher must be able to replace the file, and a restarted
+downloader must be able to read it again). That keeps the payload from being handed the token; it does not hide it from a
+root payload, which can read `/run/kf-ci/env` today. The payload's only hook is `vast_payload.py --dry-run --prefetch
+MANIFEST` (prints `KF_PAYLOAD_PREFETCH ...` for the planned stages); without `--dry-run` it is refused. Not done: starting the
+downloader from the payload, a stage calling `wait`, apt (design source c), seeders (deferred), the real manifest for the
+SPEC and Windows media, disk reservation of unpack space beyond `--reserve-gb`.

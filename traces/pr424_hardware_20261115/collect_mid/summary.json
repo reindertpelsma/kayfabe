@@ -1,0 +1,13 @@
+{
+ "cut_lines": 0,
+ "truncated_lines": 0,
+ "slow_unmap_lines": 0,
+ "slow_unmap_max_ms": null,
+ "split_late_lines": 0,
+ "split_late_max_ms": null,
+ "cap_ceiling_lines": 0,
+ "dead_lines": 0,
+ "no_run_applied": 0,
+ "budget_failures": 0,
+ "cut_report_runs_max": null
+}

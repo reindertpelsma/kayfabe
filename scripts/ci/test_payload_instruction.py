@@ -557,6 +557,156 @@ class ThroughMain(unittest.TestCase):
                 self.assertEqual(seen, [self.m.plan_stage_names(pi.from_dict(doc))])
 
 
+IMG = {"label": "imga", "kind": "prebuilt", "disk": {"from": "pin", "ref": "propimage-kfimg-20261112.zip"},
+       "apps": {"resolve": {"mode": "present"}, "3dmark": {"mode": "skip"}}}
+
+
+class Propimages(unittest.TestCase):
+    """2026-11-16: the optional `propimages` list (the generic proprietary-image runner's images and apps)."""
+
+    def refuses(self, doc):
+        with self.assertRaises(pi.InstructionError):
+            pi.parse(raw(doc))
+
+    def test_a_valid_list_round_trips_and_is_part_of_the_canonical_bytes(self):
+        inst = pi.parse(raw(good(tier="large", propimages=[IMG])))
+        self.assertEqual(inst.propimages[0]["label"], "imga")
+        self.assertEqual(pi.parse(inst.canonical_bytes()), inst)
+        self.assertIn(b"propimages", inst.canonical_bytes())
+
+    def test_an_instruction_without_the_list_is_byte_identical_to_before(self):
+        self.assertNotIn(b"propimages", pi.parse(raw(good(tier="large"))).canonical_bytes())
+
+    def test_an_unknown_image_field_is_refused(self):
+        self.refuses(good(tier="large", propimages=[dict(IMG, bogus=1)]))
+
+    def test_an_unknown_app_field_is_refused(self):
+        self.refuses(good(tier="large", propimages=[dict(IMG, apps={"resolve": {"mode": "present", "bogus": 1}})]))
+
+    def test_an_unknown_source_field_is_refused(self):
+        self.refuses(good(tier="large", propimages=[dict(IMG, disk={"from": "pin", "ref": "x", "bogus": 1})]))
+
+    def dry(self, **over):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "i.json"
+            path.write_bytes(raw(good(**over)))
+            return DryRun().run_main(["--dry-run", "--instruction", str(path)])[0]
+
+    def test_dry_run_refuses_an_unknown_image_field(self):
+        self.assertEqual(self.dry(tier="large", propimages=[dict(IMG, bogus=1)]), 1)
+
+    def test_dry_run_refuses_an_unknown_app_field(self):
+        self.assertEqual(self.dry(tier="large", propimages=[dict(IMG, apps={"resolve": {"mode": "present", "bogus": 1}})]), 1)
+
+    def test_one_repeated_label_among_three_images_is_refused(self):
+        self.refuses(good(tier="large", propimages=[dict(IMG, label="a"), dict(IMG, label="b"), dict(IMG, label="a")]))
+
+    def test_dry_run_refuses_duplicate_labels(self):
+        self.assertEqual(self.dry(tier="large", propimages=[IMG, dict(IMG)]), 1)
+
+    def test_dry_run_refuses_the_list_on_a_small_tier(self):
+        self.assertEqual(self.dry(tier="small", propimages=[IMG]), 1)
+
+    def test_the_list_is_accepted_on_the_second_dies_middle_tier_leg(self):
+        # owner ruling 2026-11-16: the release's second die (tier middle) runs the other image
+        inst = pi.parse(raw(good(tier="middle", propimages=[IMG])))
+        self.assertEqual(inst.propimages[0]["label"], "imga")
+
+    def test_the_list_is_refused_on_the_adhoc_and_unknown_tiers(self):
+        self.refuses(good(tier="adhoc", propimages=[IMG]))
+        self.refuses(good(tier="unknown", propimages=[IMG]))
+
+    def test_the_enums_are_closed(self):
+        self.refuses(good(tier="large", propimages=[dict(IMG, kind="rebuilt")]))
+        self.refuses(good(tier="large", propimages=[dict(IMG, net="maybe")]))
+        self.refuses(good(tier="large", propimages=[dict(IMG, apps={"resolve": {"mode": "launch"}})]))
+        self.refuses(good(tier="large", propimages=[dict(IMG, disk={"from": "ftp", "ref": "x"})]))
+
+    def test_the_lane_of_a_row_is_gate_or_discovery(self):
+        ok = dict(IMG, apps={"resolve": {"mode": "present", "lane": "discovery"}, "edge": {"mode": "present", "lane": "gate"}})
+        self.assertEqual(pi.parse(raw(good(tier="large", propimages=[ok]))).propimages[0]["apps"]["resolve"]["lane"], "discovery")
+        self.refuses(good(tier="large", propimages=[dict(IMG, apps={"resolve": {"mode": "present", "lane": "chaos"}})]))
+
+    def test_dry_run_refuses_an_unknown_lane(self):
+        self.assertEqual(Propimages().dry(tier="large", propimages=[dict(IMG, apps={"resolve": {"mode": "present", "lane": "chaos"}})]), 1)
+
+    def test_the_list_needs_the_large_tier_and_unique_labels(self):
+        self.refuses(good(tier="small", propimages=[IMG]))
+        self.refuses(good(tier="large", propimages=[IMG, dict(IMG)]))
+
+    def test_the_list_is_bounded(self):
+        self.refuses(good(tier="large", propimages=[dict(IMG, label="i%d" % n) for n in range(9)]))
+        self.refuses(good(tier="large", propimages=[dict(IMG, only=["a%d" % n for n in range(31)])]))
+
+    def test_dry_run_plans_the_stage_and_names_a_refused_spec(self):
+        m = DryRun()
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "i.json"
+            path.write_bytes(raw(good(tier="large", propimages=[IMG])))
+            rc, out = DryRun.run_main(m, ["--dry-run", "--instruction", str(path)])
+            self.assertEqual(rc, 0)
+            self.assertIn("propimage_apps", out.split("KF_PAYLOAD_PLAN stages=")[1].split(" ")[0])
+            bad = dict(IMG, apps={"resolve": {"mode": "present", "source": {"from": "file", "ref": "/x"}}})
+            path.write_bytes(raw(good(tier="large", propimages=[bad])))
+            rc, out = DryRun.run_main(m, ["--dry-run", "--instruction", str(path)])
+            self.assertEqual(rc, 1)
+            self.assertIn("KF_PAYLOAD_PROPIMAGES_REFUSED APP_SOURCE_FORBIDDEN:imga:resolve", out)
+
+    def test_strictness_is_written_with_the_list_and_round_trips(self):
+        for strict in (False, True):
+            inst = pi.parse(raw(good(tier="large", propimages=[IMG], propimages_strict=strict)))
+            self.assertEqual(inst.propimages_strict, strict)
+            self.assertEqual(json.loads(inst.canonical_bytes())["propimages_strict"], strict)
+            self.assertEqual(pi.parse(inst.canonical_bytes()), inst)
+        self.assertFalse(pi.parse(raw(good(tier="large", propimages=[IMG]))).propimages_strict)
+        self.assertNotIn(b"propimages_strict", pi.parse(raw(good(tier="large"))).canonical_bytes())
+
+    def test_strict_without_a_list_or_with_the_wrong_type_is_refused(self):
+        self.refuses(good(tier="large", propimages_strict=True))
+        self.refuses(good(tier="large", propimages=[IMG], propimages_strict="yes"))
+
+    def test_strict_without_a_list_is_refused_in_a_dry_run_too(self):
+        self.assertEqual(Propimages().dry(tier="large", propimages_strict=True), 1)
+
+    STRICT_IMG = dict(IMG, apps={"resolve": {"mode": "present"}})
+
+    def test_dry_run_shows_the_policy_and_the_emitted_instruction_carries_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "i.json"
+            path.write_bytes(raw(good(tier="large", propimages=[self.STRICT_IMG], propimages_strict=True)))
+            rc, out = DryRun().run_main(["--dry-run", "--instruction", str(path)])
+            self.assertEqual(rc, 0)
+            self.assertIn("KF_PAYLOAD_PROPIMAGES strict=1 images=imga", out)
+            emitted = Path(d) / "emitted.json"
+            DryRun().run_main(["--emit-instruction", str(emitted), "--instruction", str(path)])
+            self.assertTrue(json.loads(emitted.read_text())["propimages_strict"])
+            path.write_bytes(raw(good(tier="large", propimages=[self.STRICT_IMG])))
+            self.assertIn("KF_PAYLOAD_PROPIMAGES strict=0", DryRun().run_main(["--dry-run", "--instruction", str(path)])[1])
+
+    def test_a_strict_instruction_names_an_unknown_app_or_a_skip_entry_before_anything_runs(self):
+        unknown = dict(IMG, apps={"resolve": {"mode": "present"}, "photoshop": {"mode": "present"}})
+        for img, reason in ((unknown, "STRICT_UNKNOWN_APP:imga:photoshop"), (IMG, "STRICT_SKIP_ENTRY:imga")):
+            with tempfile.TemporaryDirectory() as d:
+                path = Path(d) / "i.json"
+                path.write_bytes(raw(good(tier="large", propimages=[img], propimages_strict=True)))
+                rc, out = DryRun().run_main(["--dry-run", "--instruction", str(path)])
+                self.assertEqual(rc, 1)
+                self.assertIn("KF_PAYLOAD_PROPIMAGES_REFUSED " + reason, out)
+
+    def test_the_images_file_the_stage_writes_carries_the_policy(self):
+        m = payload()
+        self.assertIn("strict", (HERE / "vast_payload.py").read_text())
+        self.assertTrue(m.propimages_refusal(pi.parse(raw(good(tier="large", propimages=[IMG], propimages_strict=True)))).startswith("STRICT_SKIP_ENTRY"))
+        self.assertIsNone(m.propimages_refusal(pi.parse(raw(good(tier="large", propimages=[self.STRICT_IMG], propimages_strict=True)))))
+
+    def test_the_stage_is_not_planned_without_the_list_or_a_selection(self):
+        m = payload()
+        plain = pi.parse(raw(good(tier="large", windows=True)))
+        self.assertNotIn("propimage_apps", m.plan_stage_names(plain))
+        with_list = pi.parse(raw(good(tier="large", windows=True, propimages=[IMG])))
+        self.assertIn("propimage_apps", m.plan_stage_names(with_list))
+
+
 class ReporterAcceptsProvenance(unittest.TestCase):
     def test_the_reporter_reads_the_new_keys_and_refuses_bad_ones(self):
         import vast_report

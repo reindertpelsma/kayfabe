@@ -316,6 +316,13 @@ class T(unittest.TestCase):
     def test_gpu_fix_restarts_changed_devices(self):
         script = m.render_gpu_fix("GPU-test")
         self.assertIn("pnputil /restart-device", script)
+        # a phantom device of another die (CM_PROB_PHANTOM) must never be restarted: only present devices with the NVIDIA vendor id
+        self.assertIn("$_.Present -and $_.InstanceId -match 'VEN_10DE'", script)
+        self.assertNotIn("FriendlyName -match 'NVIDIA'", script)
+        # a device left in Code 43 by a plain restart is retried with Disable/Enable (MEASURED); the exact seed UUID is still required
+        self.assertIn("Disable-PnpDevice", script)
+        self.assertIn("Enable-PnpDevice", script)
+        self.assertIn("-cne $expected", script)
         self.assertIn("$LASTEXITCODE", script)
         self.assertIn("$expected", script)
 

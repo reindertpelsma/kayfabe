@@ -1,0 +1,374 @@
+{
+ "schema": "kayfabe.bandwidth/1",
+ "status": "STATUS: DESIGN-ONLY, 2026-11-16. The numbers the Worker's bandwidth estimate (src/bandwidth.js) is made of; edit them here, nowhere else (README section 'Changing the bandwidth numbers'). Checked by scripts/ci/bandwidth_check.py; calibrated from real runs by scripts/ci/bandwidth_calibrate.py.",
+ "margin": {
+  "percent": 15,
+  "basis": "ESTIMATE",
+  "date": "2026-11-16",
+  "source": "owner request 2026-11-16",
+  "note": "applied last, on the sum of downloads and the sum of uploads"
+ },
+ "default_images": [
+  "imga"
+ ],
+ "fixed": [
+  {
+   "id": "fixed.repo_clone",
+   "what": "git clone of the repo at the run's sha (sparse, on the box)",
+   "class": "repo",
+   "down_bytes": 700000000,
+   "url": "https://github.com/reindertpelsma/kayfabe",
+   "basis": "ESTIMATE",
+   "date": "2026-11-16",
+   "source": "coordinator checkout 2026-11-16: .git is 668 MB for a full clone",
+   "note": "upper bound: a full clone; the box clones a sparse tree, so the real value is lower; a size from the GitHub repo API can be passed to the estimator instead",
+   "calibrate": true
+  },
+  {
+   "id": "fixed.setup_cache",
+   "what": "setup assets restored by the box wrapper",
+   "class": "package",
+   "down_bytes": 1000000000,
+   "url": null,
+   "basis": "ESTIMATE",
+   "date": "2026-11-16",
+   "source": "ci/vast-broker/defaults.json payloadStageResources.setup_cache (INFERRED 2026-10-23)",
+   "note": "rounded allowance, not a measured total"
+  }
+ ],
+ "stages": {
+  "provision": {
+   "note": "OS packages, toolchain, CUDA, kf3 build, the host and the Linux guest NVIDIA driver",
+   "entries": [
+    {
+     "id": "provision.host_driver",
+     "what": "NVIDIA host driver .run (the version the box is provisioned with)",
+     "class": "official-url",
+     "size_from": "driver:linux/580.159.04",
+     "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+     "basis": "measured",
+     "date": "2026-11-12",
+     "source": "ci/vast-broker/release-matrix.json driver_installers",
+     "note": "size is the pinned size of the installer; edit the version here when the pin moves"
+    },
+    {
+     "id": "provision.linux_guest_driver",
+     "what": "NVIDIA Linux guest driver .run",
+     "class": "official-url",
+     "size_from": "driver:linux/580.126.09",
+     "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.126.09/NVIDIA-Linux-x86_64-580.126.09.run",
+     "basis": "measured",
+     "date": "2026-11-12",
+     "source": "ci/vast-broker/release-matrix.json driver_installers",
+     "note": "pinned size; edit the version when the pin moves"
+    },
+    {
+     "id": "provision.packages",
+     "what": "apt packages, rustup and crates, CUDA toolkit, qemu build dependencies",
+     "class": "package",
+     "down_bytes": 12000000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "ci/vast-broker/defaults.json payloadStageResources.provision (INFERRED allowance 20 GB) minus the two drivers",
+     "note": "no measured total; replace with the calibrated value from a run",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 1000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "cuda_host": {
+   "note": "reuses what provision installed; downloads are charged to provision (defaults.json payloadStageResources)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 500000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "merge_bar": {
+   "note": "reuses what provision installed; downloads are charged to provision (defaults.json payloadStageResources)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "cuda_guest": {
+   "note": "reuses what provision installed; downloads are charged to provision (defaults.json payloadStageResources)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 500000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "apps": {
+   "note": "Linux app matrix (middle): the stage builds its own media on the box",
+   "entries": [
+    {
+     "id": "apps.media",
+     "what": "Linux apps media: bundle build and downloads, pinned source fetches, models",
+     "class": "package",
+     "down_bytes": 3000000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "RELEASE_SHAKEOUT_20261115.md (coordinator, /root/night): 2.1 GB download measured in the apps provisioning step",
+     "note": "the 2.1 GB measured plus build-time fetches that were not measured separately",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 1000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "install_flow": {
+   "note": "manual-only stage (--only): the documented user flow, built and run on the box",
+   "entries": [
+    {
+     "id": "install_flow.packages",
+     "what": "apt packages, toolchain and sources of the install flow",
+     "class": "package",
+     "down_bytes": 2000000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "scripts/ci/install_flow.py (not measured)",
+     "note": "no measured value; the stage is manual-only",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 500000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "windows_gate": {
+   "note": "Windows 11 install on the box and the Windows gate",
+   "entries": [
+    {
+     "id": "windows_gate.windows_iso",
+     "what": "Windows 11 LTSC 2024 evaluation ISO",
+     "class": "official-url",
+     "down_bytes": 5100000000,
+     "url": "https://www.microsoft.com/evalcenter",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "docs/DOWNLOADS.md Table A (5.1 GB, RESEARCH 2026-10-31)",
+     "note": "size as documented, not read back from a box"
+    },
+    {
+     "id": "windows_gate.virtio_win",
+     "what": "VirtIO-Win 0.1.302",
+     "class": "official-url",
+     "down_bytes": 877000000,
+     "url": "https://fedorapeople.org/groups/virt/virtio-win/",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "docs/DOWNLOADS.md Table A (877 MB)",
+     "note": "size as documented"
+    },
+    {
+     "id": "windows_gate.windows_guest_driver",
+     "what": "NVIDIA Windows guest driver",
+     "class": "official-url",
+     "size_from": "driver:windows/580.88",
+     "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+     "basis": "measured",
+     "date": "2026-11-12",
+     "source": "ci/vast-broker/release-matrix.json driver_installers",
+     "note": "pinned size; edit the version when the pin moves"
+    },
+    {
+     "id": "windows_gate.other",
+     "what": "OpenSSH for Windows, tools and anything else the gate fetches",
+     "class": "package",
+     "down_bytes": 1000000000,
+     "url": null,
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "docs/DOWNLOADS.md Table A (Win32-OpenSSH 7 MB) plus headroom",
+     "note": "replaces the old 35 GB planning ceiling of defaults.json (owner range 15 to 35 GB, never measured); calibrate from a run",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 2000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "windows_apps": {
+   "note": "Windows app bundle (open apps) on the same Windows guest",
+   "entries": [
+    {
+     "id": "windows_apps.bundle",
+     "what": "winapps-open app disk",
+     "class": "r2-listed",
+     "down_bytes": 7000000000,
+     "size_from": "r2:winapps-open.iso",
+     "url": "winapps-open.iso",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "docs/DOWNLOADS.md (6 to 7 GB bundle estimate); defaults.json payloadStageResources.windows_apps (8 GB ceiling)",
+     "note": "the Worker passes the real size from an R2 list; this is the fallback"
+    }
+   ],
+   "upload": {
+    "up_bytes": 1000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "windows_gate_2": {
+   "note": "second Windows run on the same box; reuses the first install and media (defaults.json payloadStageResources)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 1000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "propimage_apps": {
+   "note": "proprietary Windows images on the box: one image per box in a two-die release, both on a one-die box",
+   "entries": [
+    {
+     "id": "propimage_apps.image",
+     "what": "the image zip of each selected image",
+     "class": "r2-pinned",
+     "size_from": "propimage:image",
+     "per_image": true,
+     "url": "private object named in propimages.json",
+     "basis": "measured",
+     "date": "2026-11-16",
+     "source": "ci/vast-broker/propimages.json objects",
+     "note": "one line per image in the instruction; the size is the pinned size, edit it in propimages.json"
+    },
+    {
+     "id": "propimage_apps.gop",
+     "what": "signed boot display driver",
+     "class": "r2-pinned",
+     "size_from": "propimage:gop",
+     "url": "private object named in propimages.json",
+     "basis": "measured",
+     "date": "2026-11-16",
+     "source": "ci/vast-broker/propimages.json objects",
+     "note": "fetched once with the first image"
+    },
+    {
+     "id": "propimage_apps.imgb_test_assets",
+     "what": "open-licence test asset ISO used by image B's rows",
+     "class": "r2-listed",
+     "down_bytes": 171390976,
+     "size_from": "r2:test-assets-20261116b.iso",
+     "url": "https://bundles.kayfabe.dev/test-assets/20261116/test-assets-20261116b.iso",
+     "basis": "measured",
+     "date": "2026-11-16",
+     "source": "IMAGEB_APPS_20261116.md (coordinator, /root/night): test-assets ISO 171,390,976 B",
+     "note": "public bucket object; the Worker may pass the listed size",
+     "when": {
+      "images": [
+       "imgb"
+      ]
+     }
+    },
+    {
+     "id": "propimage_apps.imga_media",
+     "what": "open media of image A's Resolve row (public mirror)",
+     "class": "official-url",
+     "down_bytes": 300000000,
+     "url": "https://bundles.kayfabe.dev/test-assets/20261116/",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "RESOLVE_GPU_20261116.md (coordinator, /root/night): four pinned files, sizes in resolve_assets.json on #445",
+     "note": "not measured in total",
+     "when": {
+      "images": [
+       "imga"
+      ]
+     }
+    },
+    {
+     "id": "propimage_apps.other",
+     "what": "swtpm and libtpms sources, the runner's own fetches",
+     "class": "official-url",
+     "down_bytes": 50000000,
+     "url": "https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.1.tar.gz",
+     "basis": "ESTIMATE",
+     "date": "2026-11-16",
+     "source": "scripts/ci/propimage_apps_pins.json (libtpms 1.4 MB, swtpm 0.4 MB)",
+     "note": "two small tarballs plus headroom",
+     "calibrate": true
+    }
+   ],
+   "upload": {
+    "up_bytes": 5000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess; text evidence of one image run is a few MB"
+   }
+  },
+  "specviewperf": {
+   "note": "SPECviewperf lane: the private archive streamed onto the box",
+   "entries": [
+    {
+     "id": "specviewperf.archive",
+     "what": "SPECviewperf archive (zstd tar)",
+     "class": "r2-pinned",
+     "down_bytes": 42002015727,
+     "url": "specviewperf-15.0.0.tar.zst",
+     "basis": "measured",
+     "date": "2026-11-16",
+     "source": "traces/specviewperf_vast_20261105/README.md (42,002,015,727 B read back)",
+     "note": "same value as defaults.json payloadStageResources.specviewperf.measuredDownloadBytes"
+    }
+   ],
+   "upload": {
+    "up_bytes": 3000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/release_run_20261116",
+    "note": "evidence pull-back: whole-run collect archives of the 2026-11-16 release run were 4.8 to 9.9 MB (/workspace/bench/release_run_20261116/collect_L1*.tgz); the split per stage is a guess"
+   }
+  },
+  "propimage_apps_b": {
+   "note": "image B's own rows (propimage_apps_b): the image zip and the test assets are charged to propimage_apps for the same instruction; this stage fetches nothing more than that first stage's downloader does (UNVERIFIED until a box runs both stages: net_bytes of that run settles it)",
+   "entries": [],
+   "upload": {
+    "up_bytes": 5000000,
+    "basis": "ESTIMATE",
+    "date": "2026-11-16",
+    "source": "/workspace/bench/imageb_apps_20261116",
+    "note": "evidence pull-back of the image B rows: text evidence, a few MB (second Adobe pass collect archives 6 to 9 MB)"
+   }
+  }
+ }
+}

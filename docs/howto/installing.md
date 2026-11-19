@@ -117,6 +117,7 @@ Every property below is declared in `qemu/hw/misc/kf3/kf3.c`. Defaults are as de
 | `vm-id` | QEMU's `-uuid` | The VM's identity text for the above. |
 | `channel-budget` | `0` (derived from the host) | GPU channels per runlist told to the guest. Refused below 256 or above what the host can give (or 2048). |
 | `user-view-keep` | `0` (= 16) | Windows user-ring tuning: CPU views of the store that each channel keeps armed, up to 256. |
+| `windows-support` | `on` | **The Windows set is selected by what the guest declares about itself, which the guest controls, and the default is on: it is not a security boundary.** An honest Linux guest never reaches it; a guest that declares the Windows driver, truthfully or not, does. `off` is the hardening for Linux-only or multi-tenant hosts: a Linux-only VM that no declaration can switch on (a Windows guest on such a VM fails by name [not measured]). What the set is: the behaviours Windows needs and Linux does not use (the kernel graphics tier, per-process channel passthrough, the deferred-API objects, host-owned scheduling, the preemption and display-control answers, the colour path). On, Windows starts with no environment variables. The operator-only environment variable `KF3_DISPLAY_SDR_COLOR=1` (a lab override) forces the colour path even with `off`. See [Windows guest](windows-guest.md). [Added 2026-11-15; not run on hardware.] |
 | `doorbell-ioeventfd` | off | Doorbell fast path; off until measured. |
 | `doorbell-ioeventfd-max` | `256` | Cap for the fast path. |
 | `display-broker` | unset | Absolute path of the display broker's socket. See [Display and the broker](display.md). |
@@ -128,7 +129,7 @@ Every property below is declared in `qemu/hw/misc/kf3/kf3.c`. Defaults are as de
 
 Properties are given as `-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0`, or for one property on an existing device `-global kf3-gpu.<property>=<value>`. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/windows/win_vm.sh -->
 
-Environment variables beginning with `KF3_` also exist (for example `KF3_RPC_TRACE=1` logs every command the emulated GPU answers). They are for development and benchmarking. A complete, supported list is **not documented yet**; the harness sets what it needs. <!-- src: scripts/bench/windows/win_vm.sh -->
+Environment variables beginning with `KF3_` also exist (for example `KF3_RPC_TRACE=1` logs every command the emulated GPU answers). They are for development and benchmarking. A complete, supported list is **not documented yet**. (Windows needs none of them: since 2026-11-15 the Windows support set is on by default and is selected by the guest's own declaration; see `windows-support` above.) <!-- src: scripts/bench/windows/win_vm.sh -->
 
 ### Example: the Linux desktop guest's device line
 

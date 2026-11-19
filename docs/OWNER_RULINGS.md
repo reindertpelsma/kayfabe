@@ -1,10 +1,105 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-28 (§AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-11-18 (§AZ: proprietary images and SPEC leave the required release gate and run as an app lane; 2026-11-17: §AW: pins are deployment data, identity pins strict-only; 2026-11-16: §AU: the uniform clock rule; 2026-11-15: §AT: the measured Windows profile is the default, reversing §W's software-runlist "undecided"; §AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §AZ. Proprietary images and SPEC leave the required release gate; they run as an invoked app lane, required only when a release touches core paths, 2026-11-18
+
+**STATUS: LIVE as a ruling, 2026-11-18; owner decision (stated in conversation: "maybe the plan is to remove images and SPEC from release requirement, so we can launch them manually, or invoked through worker"; recorded by the coordinator). DESIGN-ONLY for the Worker: nothing here is implemented; the planner and the release criteria read it only after a change that is not yet written.** The cost model and the release plan behind it are in the coordinator's notes and are not yet a repository document (a design note follows this ruling); the discovery-versus-gate split below follows the owner's remark that apps find bugs in the unknown while conformance suites prove that a bug is solved.
+
+1. **The required release gate is the reproducible set.** It consists of the GPU-free layer (unit, replay, model and fuzz tests, the page-table oracle fuzz, the coverage meter), the per-family smoke tier, and the full-suite differential (Vulkan CTS and the other open suites run host against guest, only differences reported, a known-limits file for documented limitations). Every input of the gate is open or fetched from an official URL, so a third party can run it (the owner's standalone requirement of 2026-11-18, recorded by the coordinator).
+2. **The proprietary images and SPEC are not part of the required gate.** That covers every propimage (today A, B, C and D; the owner's rule of 2026-11-18, recorded by the coordinator and not yet folded into this file, is that they are configuration and not names in code) and the SPECviewperf stage. Reasons (measured or stated): their verdicts are often inconclusive or harness-level, a flaky host can fail a leg, they cost about 30 percent of the release, and a third party cannot reproduce them without the owner's proprietary inputs. `scripts/ci/vast_payload.py` already lists the image stages (`MANUAL_ONLY_STAGES`) as manual-only.
+3. **The app lane.** They run as an invoked lane: from the Worker admin page (a start kind `app`, to be built) or by hand, on boxes chosen by a profile that prices bandwidth by the real gigabytes of each role and is free to pick any die with enough VRAM (not pinned to a family). It may also run on a schedule between releases, and it runs on the owner's pc when that is free (the pc is the discovery machine: VFIO controls and perf ratios). A run records the commit, the die, the host driver, the rows and the verdicts.
+4. **The release record shows the app lane.** Each release states, per image, the last app-lane run: commit, date, die, family, result. It is information, not a criterion, except under item 5.
+5. **Conditional requirement.** If the change since the previous release (the batch PR's diff against master) touches any CORE PATH below, the app lane must have a green run, or a run whose only reds are listed known breakages, on a tree that contains the change, covering each image on at least one family, before the batch PR merges. If no core path is touched, the app lane is not required.
+   **Core paths (exact list; globs relative to the repository root):**
+   - `crates/kf-*/src/**` except `crates/kf-harness/**`, `crates/kf-rawclient/**` and `crates/kf-trace/**` (the kayfabe product crates, including their generated tables under `src/generated/`);
+   - `crates/kf-chip/**` (family and die tables and the per-family descriptors);
+   - `cuda/walk/**` (the walk kernel, its header and the committed PTX);
+   - `qemu/hw/misc/kf3/**` (the device, its properties and their defaults);
+   - `broker/**` (the display broker) and `firmware/**` (the boot-display driver);
+   - `scripts/bench/windows/propimage.py` and `scripts/bench/windows/clocknet_assert.py` (the launch arguments, the clock and network rule of a Windows guest).
+   Not core paths: `docs/**`, `site/**`, `ci/**`, `scripts/ci/**`, other `scripts/**`, `traces/**`, tests only (`crates/*/tests/**` alone), and CI-only changes. The list is data (a `core_paths` array in the release configuration read by the planner), so it is edited in one place; the planner never names an image.
+   **First release (owner, 2026-11-18: "my plan is still first release to run all of A to D").** The first release runs the app lane in full: every image (A, B, C and D as configured) on every architecture family of the release matrix, not only the rotation of item 6 and not only the minimum of this item. It is the baseline against which later rotations are read. Cost and die choice come from the planner (any die with enough VRAM per image, offers by final total price); the cost of this pass is estimated before it is started and is a decision for the owner if it exceeds the daily cap. DESIGN-ONLY until the app lane exists; until then it is run by hand with the same coverage.
+6. **Rotation.** Each release runs the images on rotating families so that every image meets every family within four releases; a rotation table records the last run per image and family. A change to an architecture-specific path (a per-family descriptor, a channel route, the walker) escalates to every image on the affected family.
+7. **The discovery lane is separate and non-gating.** Real applications and production workloads run between releases, chosen by the coverage gap (new RM control ids, new refusals, new Xid lines: a novelty signal), with automatic capture of the kf3 census window, the host log and the guest events; every novelty is triaged with a control (VFIO, native Windows or the host) and becomes a GPU-free replay test and a gate row.
+8. **What this does not change.** The standalone run still lets a third party add their own proprietary apps and images by configuration (the owner's rule of 2026-11-18). Nothing in this ruling edits how an image is built, and a PASS of the required gate is still a statement only about the gate.
+
+## §AW. Pins are deployment data: identity pins are strict-only; a standalone run records and never refuses on them, 2026-11-17
+
+**STATUS: LIVE, 2026-11-17; owner rule (stated in conversation, recorded by the coordinator).** Design, audit and the run-your-own-deployment
+recipe: `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`. Built GPU-free; no box ran it.
+
+1. sha256 and size **identity pins** (a fixed sha256 of "the" image, fixed object names) are deployment data for our Worker and for strict
+   or CI runs only. A **standalone** run (a user running `vast_payload.py`, `propimage_apps.py` or the generic runner themselves, permissive)
+   must not require pins for images, artifacts or apps: someone may have built their own Windows images, compiled their own software
+   (for example Unreal), or spread applications over different images. The proprietary images are not strict for standalone.
+2. **Integrity checks stay** (a pack manifest's member hashes, the seed binding, cache-key consistency). Pins on what the repository
+   itself downloads (swtpm, libtpms, noVNC, wheels, install media) are supply-chain integrity and hold in every mode.
+3. A standalone run **records** the computed sha256 and size of each user-supplied object in its evidence instead of refusing on a mismatch;
+   `--expect-sha256 NAME=HASH` lets a user opt in. One mechanism: `propimage_runspec.pins_enforced(spec)`, true only for a strict spec.
+4. Anyone can **run their own deployment**: build artifacts with the repository's scripts, publish to their own object store, write their own
+   config and pins. Storage is plain S3 semantics (R2 is S3-compatible; no R2-only features; presign with any S3-compatible API).
+5. The Worker's own behaviour (`ci/vast-broker/propimages.json`, strict always) does not change.
+
+## §AU. The guest clock depends only on the network; a recorded clock is never earlier than the software loaded into the image, 2026-11-16
+
+**STATUS: LIVE, 2026-11-16; owner rulings (stated in conversation, recorded by the coordinator).** Design and measured/code-read
+split: `docs/design/V3_CLOCK_RULE.md`. Implemented GPU-free in `scripts/bench/windows/clockrule.py` and `win_vm.sh`; nothing here has
+run on hardware yet.
+
+1. **Network off** (slirp `restrict=on`, only the ssh forward) runs a **recorded** clock; **network on** (`restrict=off`) runs the
+   **real** clock. Whether an image is open or proprietary does not matter. An offline image needs no current time; a moving clock
+   only adds ways for it to break. A guest with network needs the real time.
+2. A recorded clock with network is always refused. An offline guest on the real clock (no record yet) is a WARN, with one
+   switch (`WINVM_CLOCK_STRICT=1`) that the owner can flip later to refuse it.
+3. **A recorded clock is never earlier than the creation time of software loaded into the image** (SPECviewperf bundle on the open
+   LTSC image, a guest driver installer): clock floor = max(recorded, newest created_utc + 1 h). Our scripts and test/input assets do
+   not count. A proprietary image uses exactly the clock of its `state.json` and no floor.
+
+## §AT. The measured Windows profile is the default; `windows-support=on|off` is the one opt-out, 2026-11-15
+
+**STATUS: LIVE, 2026-11-15; owner rulings (stated in conversation, recorded by the coordinator).** Implements Stage 1 of
+`docs/design/V3_FLAG_INVENTORY.md`'s flag cleanup (draft PR `claude/flags-stage1-20261115`). Nothing here has run on hardware yet:
+the first proof is the Windows gate on a rented box with NO env file (`docs/design/V3_WINDOWS_SUPPORT_PROFILE.md`, *Status*).
+
+<!-- src: owner, 2026-11-15, flag-cleanup conversation: "Can you set these flags as default. To start windows you dont need an env file. Then the defaults are wrong." and "by default kayfabe should run both linux & windows out of the box, unless it's explicitly told to be linux only in the command line" -->
+
+1. **2026-11-15, owner: set the measured Windows profile as the default.** The 18 flags of the recorded Windows Code 0 holds
+   (`KF3_WIN_USER_CHANNELS_PASSTHROUGH`, `_WIN_TWIN_DEFAPI_OBJECT`, `_KERNEL_GR_CE`, `_KERNEL_GR_WORK`, `_TRANSLATED_CE_RELAY`,
+   `_DEFERRED_API`, `_PREEMPT_BIND_PROBE`, `_ZCULL_BIND_PROBE`, `_ASYNC_PREEMPT`, `_DISPLAY_CTRL_PROBE`, `_DISPLAY_IMP_ENABLE`,
+   `_SW_RUNLIST_PROBE`, `_SW_RUNLIST_HOST_OWNED`, `_GFX_POOL_PROBE`, `_MEMORY_LIST_PROBE`, `_DISPLAY_SDR_COLOR`,
+   `_DISPLAY_LUT_MIRROR`, `_DISPLAY_ILUT_OFFSET_256`) are hardwired **together**. What was measured: the Windows gates PASSed with all 18
+   on (RTX 4090 `a76d1397`, RTX 3090 `006d845a`, RTX 5070 Ti `54410b7d`, and an Ada die-coverage run: three GPU families; `windows_apps` 10/10 on the 4090). Individually ablated
+   (2026-10-10/11, idle desktop only): `TIMER_MAP` (not in this set) and a subset of the 18 (see `V3_FLAG_INVENTORY.md`); **not** ablated:
+   `ZCULL_BIND_PROBE`; needed only INFERRED: `KERNEL_GR_WORK`, `SW_RUNLIST_PROBE`, `MEMORY_LIST_PROBE`; idle-only: `TRANSLATED_CE_RELAY`,
+   `ASYNC_PREEMPT`; `DISPLAY_SDR_COLOR` was "not needed to boot" (colour fidelity). Those passes ran with the OLD, process-wide flags; the
+   per-declaration form shipped here (identity-gated per alloc, per space and per page) has **not** run on hardware. "To start Windows you
+   don't need an env file; then the defaults are wrong."
+2. **Both OSes out of the box.** "By default kayfabe should run both Linux and Windows out of the box, unless it is explicitly told to be
+   Linux-only on the command line." The compromise: each behaviour is gated on the guest DECLARING the Windows driver identity (owner
+   rule D4: keyed on declared state, never a flag), so Linux is unchanged by construction; one coarse device property
+   `windows-support=on|off`, **default on**, is the only opt-out (`docs/design/V3_WINDOWS_SUPPORT_PROFILE.md`). "Windows-only" is not worth
+   a switch. The rest of the `KF3_*` flags stay, documented for power users; the env-read allowlist lint comes later (Stage 3).
+   **The declaration is the guest's own bytes (rule D4): it selects a compatibility profile and is not a security boundary.** An honest Linux
+   guest never reaches the profile; a guest that declares Windows 580.88 reaches about fifteen paths that used to need an operator env flag
+   (user-work twins and the user ring, the 64 KiB-floor spaces, the host deferred-API object, the kernel-GR tier, the copy-engine relay,
+   memory-list descriptors, async preempt with cross-client re-enable, host-owned scheduling, the colour decoder). No path into another VM or
+   the host was found (read, not tested); a dedicated hostile-guest review is a follow-up. `windows-support=off` is the hardening for
+   Linux-only or multi-tenant hosts.
+3. **`KF3_SW_RUNLIST_HOST_OWNED` is turned on with the rest.** §W's "stays off and undecided" is reversed (see §W): "undecided" was never a
+   decision to keep it off.
+4. **Fabricated answers become product behaviour, named as such.** The profile includes answers no host query produced (class (c) in the
+   flag inventory): the `GFX_POOL_QUERY_SIZE` sizes (`kf_abi::gfxpool::experimental_query`), `NV_OK` with nothing bound on the host for
+   `GR_CTXSW_PREEMPTION_BIND` and the cross-client `GR_CTXSW_ZCULL_BIND`, the six echoed NV0073 controls, the software-runlist submit
+   `NV_OK` (contents ignored) and `IMP_ENABLE` TRUE. They are served only to a declared Windows guest; code and docs say "FABRICATED". They
+   claim no GPU work (§S: no forged completion).
+5. **Not decided here:** the colour path (`DISPLAY_SDR_COLOR` with its two decoder switches) is keyed on the declaration and shown to a Windows
+   guest only; whether a Linux guest should also get it is **not decided** (the Linux colour audit keeps `KF3_DISPLAY_SDR_COLOR=1` as an explicit
+   lab override). Stage 2 (delete dead and old-experiment branches), the lint and display-mode properties are later stages.
 
 ## §AS. User flow: compile QEMU, use your own tools; no new CLI; module and hypervisor independence are priorities, 2026-11-15
 
@@ -1121,7 +1216,12 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   served read-only (`nvidia-smi` is unprivileged on bare metal); power is not important. Direction: the
   values the guest sees are this VM's own, never host-wide quantities (§S exposure rule); the design
   and its measurements are open work (`docs/STATUS_AND_HANDOFF.md`).
-- **Software-runlist flag (`KF3_SW_RUNLIST_HOST_OWNED`):** stays off and undecided.
+- ⊘ **REVERSED 2026-11-15 (owner, §AT: "set the measured Windows profile as the default"): the
+  software-runlist host-owned scheduling (`KF3_SW_RUNLIST_HOST_OWNED`, now no flag) is ON for a guest that
+  declares the measured Windows driver, and off for every other guest.** "Undecided" was never a decision to
+  keep it off, and the owner did not keep it off: every passing Windows gate ran with it on.
+- **Software-runlist flag (`KF3_SW_RUNLIST_HOST_OWNED`):** ~~stays off and undecided~~ *(superseded
+  2026-11-15, see the bullet above and §AT).*
   - ⊘ *Later idea, not for now (owner, 2026-10-08):* "for B ... kayfabe can quota VMs
     scheduling/fairness, is related." If kayfabe owns the scheduling of the host twins (B), a per-VM
     share, timeslice or fairness quota has a natural place; a guest-built runlist, which B ignores,
@@ -1564,3 +1664,7 @@ sentence was removed. Thin multi-GPU tests and aarch64 builds already exist (ite
    `STATUS_DETAIL.md` section 3 records it: a Linux thin guest with two distinct GPUs. CUDA in a two-GPU guest, UVM
    across GPUs, peer access (refused by name) and Windows or display with several GPUs are not measured. Existing
    two-GPU thin tests and the aarch64 cross-builds do not establish full support.
+
+## §AT. Proprietary-image runner: a list of images, prebuilt now and built later, state.json optional, clock and network asserted, 2026-11-16
+
+Owner, 2026-11-16: the runner takes any number of images (a list); the kinds are `prebuilt` (phase 1) and `built` (phase 2, after the release run); `state.json` is optional (required for CI); a faked clock requires the network off and a networked guest requires the real clock (asserted in every launch path); the Worker builds instructions from its image and app configuration. Design, schema and the phase split: `docs/design/V3_PROPIMAGE_RUNNER.md`.

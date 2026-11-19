@@ -1,0 +1,18 @@
+[0x00002f34] | GPUDetect            | ERROR | 2026-11-12 17:52:23,889 | NVML Error Unknown Error (999): Querying device current PCI link width
+[0x00002f34] | GPUDetect            | INFO  | 2026-11-12 17:52:23,893 | Detected 1 GPUs:
+[0x00002f34] | Main.GPUConfig       | INFO  | 2026-11-12 17:52:23,897 | Compute API set to automatic, defaulting to CUDA.
+[0x00002f34] | Main.GPUConfig       | INFO  | 2026-11-12 17:52:23,897 | Selected compute API: CUDA
+[0x00002f34] | Main.GPUConfig       | INFO  | 2026-11-12 17:52:23,897 | Automatic GPU Selection:
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,119 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 8, upto 8192 x 8192
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,121 | NVDEC decodes AV1, chroma 4:2:0, bitdepth 10, upto 8192 x 8192
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,209 | NVENC encodes H264, with chroma 4:2:0/4:4:4, bit depth up to 8
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,209 | NVENC encodes HEVC, with chroma 4:2:0/4:4:4, bit depth up to 10
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,209 | NVENC encodes AV1, with chroma 4:2:0, bit depth up to 10
+[0x0000143c] | IO                   | INFO  | 2026-11-12 17:52:25,214 | Nvidia GPU (0) is initialised as decoding and encoding device.
+[0x00002f34] | UI.GLContext         | INFO  | 2026-11-12 17:52:27,502 | Initialized OpenGL 4.5 (requested 4.5) on device 'NVIDIA Corporation NVIDIA GeForce RTX 4070/PCIe/SSE2'
+[0x00001408] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 17:52:27,674 | Let There Be CUDA Light!
+[0x00001408] | GPU.MultiBoardMgr    | INFO  | 2026-11-12 17:52:27,674 | Initializing CUDA board manager for Main Display GPU gpu:2d090886.76ce3c9a.
+[0x00000b30] | GPU.SingleBoardMgr   | INFO  | 2026-11-12 17:52:27,905 | Board manager thread for "NVIDIA " (gpu:2d090886.76ce3c9a) is ready.
+[0x00002888] | UI.GLIO              | INFO  | 2026-11-12 17:52:31,302 | Initialized MainPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x00002908] | UI.GLIO              | INFO  | 2026-11-12 17:52:31,544 | Initialized AuxPlayer OpenGL I/O on CUDA device 'NVIDIA GeForce RTX 4070'
+[0x000024b4] | UI.Scopes            | INFO  | 2026-11-12 17:52:31,770 | Initialized GPU Scopes Manager on CUDA device 'NVIDIA GeForce RTX 4070'

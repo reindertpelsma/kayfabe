@@ -1,0 +1,17 @@
+{
+  "app": "indesign",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "built a 2-page document with a placed photo, exported a 2-page PDF (17201 bytes) and a 1240x1754 page JPEG",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "secs": 91,
+  "gpu": {
+    "required": [],
+    "verdict": "FAIL",
+    "peak": {},
+    "baseline": {},
+    "samples": 0
+  }
+}

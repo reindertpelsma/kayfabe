@@ -1,6 +1,9 @@
-STATUS: DESIGN-ONLY, 2026-11-13. Unified code is GPU-free tested, not hardware-qualified.
+STATUS: DESIGN-ONLY, 2026-11-13; terminology corrections of 2026-11-15 are folded in below (Resolve row updated 2026-11-16, see V3_RESOLVE_GPU_LANE.md). Unified code is GPU-free tested, not hardware-qualified.
 
 # One proprietary-image check pipeline
+
+2026-11-15 update: the release-run stage that runs this pipeline on Vast boxes (three offline boots, Wukong last, per-app record, pins unset, Wukong not yet drivable by the harness) is `docs/design/V3_PROPIMAGE_APPS_STAGE.md`. Nothing below changed.
+**Correction (2026-11-15, owner decisions; it takes precedence over the text below it).** The clock described under *Clock* is the **deterministic clock** (also called the fixed clock; older notes said "faked clock"). It starts at the guest time recorded at the last clean shutdown plus a small seed-derived gap and never starts earlier, so that boot behaviour, timestamps in results and application and certificate timers are the same on every run. It exists for reproducibility. The pipeline runs offline only (user-mode network with `restrict=on`), and the image's hardware identity is fixed per image so that runs are repeatable. The host CPU vendor must match the image's CPU profile (AMD); an Intel host is not supported by this image (`V3_WINDOWS_PROPRIETARY_IMAGE.md`, *Corrections*). The repository holds no proprietary software, installer, key or image; this document makes no statement about the licence terms of any application. Where a row below mentions a licence edition or an activation, it records what an application's own interface or documentation shows, not a finding about the clock.
 
 CODE READ: `scripts/bench/windows/propimage_check.py` is the single check module and
 `scripts/ci/test_propimage_check.py` its single test file. The former app module is
@@ -48,7 +51,7 @@ never PASS. Aggregate success requires every requested row to pass.
 | App | Path / evidence | Qualification boundary |
 |---|---|---|
 | SolidWorks | CODE READ: default LAUNCH_ONLY; optional `--solidworks-export` uses public COM OpenDoc6, ActivateDoc3 and SaveAs, then checks `model.step` entity data and API success (FILE). | MEASURED predecessor title: SOLIDWORKS Design Standard 2026 SP5.2 - Academic Use Only. INFERRED: installed samples/COM export are unverified; STEP export is application work, not proof of GPU rendering. |
-| Resolve 21 free | CODE READ: default LAUNCH_ONLY; optional collected UIA Run/status plan requires a new progress-to-finished transition (UIA). | MEASURED predecessor reached Project Manager. DOC READ: external scripting is Studio-only. INFERRED: free-build console exposure, a local project, rendering controls and decodable media output remain unverified. |
+| Resolve 21 free | CODE READ (2026-11-16, supersedes the launch-only row below): default is the GPU rendering row of `docs/design/V3_RESOLVE_GPU_LANE.md` (project from open media, five renders, host-verified outputs, GPU-use assertion); `--resolve-launch-only` keeps the old launch check; the collected UIA Run/status plan still exists. | MEASURED (2026-11-16, PC, Resolve 21.2.0.6): UI Automation sees the Deliver page controls, menus and file dialogs need coordinates, the free edition offers no NVIDIA encoder, scripting is gone, the physical GPU is busy during a render. DOC READ: external scripting is Studio-only. INFERRED: the full five-render row has not passed on a real guest until the trace README says so. |
 | 3DMark | CODE READ: default LAUNCH_ONLY; optional `--experiment-3dmark-accessibility` adds the Chromium accessibility switch only to its launch. | MEASURED predecessor UIA exposed two panes. INFERRED: the switch is unproven and may do nothing; it is not an automation fix. DOC READ: documented CLI/XML export requires Professional; activation alone does not establish that edition. |
 | Superposition Basic | CODE READ: default LAUNCH_ONLY; explicit `--superposition-run` derives the RUN click from the UIA window rectangle using the measured relative anchor. It removes the old log before launch and captures before/result screens. | MEASURED predecessor Qt launcher had no UIA children. `traces/hwrun_20261113/propimage/results/log.html` records running then stopped; `propimage/shots/sp_after.png` is its result screen. SAVE was missed after launcher closure; no saved score report is claimed. |
 | eDrawings | CODE READ: default LAUNCH_ONLY and UIA dump; optional collected UIA plan. | DOC READ: public OLE/ActiveX OpenDoc/Save exist. INFERRED: installed control registration, successful-load event, sample and native saved-format parser remain unverified. |
@@ -102,7 +105,7 @@ DOC READ sources (official; consulted in the app lane on 2026-11-13):
 
 ## Clock
 
-CODE READ (2026-11-13): a fresh overlay uses the frozen reference from the verified
+This is the deterministic clock (see the correction at the top). CODE READ (2026-11-13): a fresh overlay uses the frozen reference from the verified
 image state: last_time_at_stop_utc + gap_s. CI behavior stays fresh by default.
 Manual `--resume` reuses that work directory's existing overlay and TPM/firmware;
 it refuses --zip and validates the backing image before startup. Fully stop the

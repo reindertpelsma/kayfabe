@@ -74,7 +74,9 @@
  * gains `len` (bytes readable at `data`) after `serial`; kf3_display_frame refuses a frame whose
  * geometry does not fit it, and kf3.c checks it again (kf3_frame_fits). 31 is taken by unmerged
  * branches (claude/guestmem-*-20261031, integration/beta-candidate-1, codex/perf-parity). */
-#define KF3_ABI 32
+/* 33 (2026-11-15, claude/flags-stage1-20261115, docs/design/V3_WINDOWS_SUPPORT_PROFILE.md): kf3_realize gains
+ * windows_support (the windows-support property: 1 = on, the default; 0 = a Linux-only VM) after user_view_keep. */
+#define KF3_ABI 33
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -180,7 +182,7 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
                     uint32_t display_max_fps, const char *gop_efi,
-                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, void **out,
+                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, uint32_t windows_support, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

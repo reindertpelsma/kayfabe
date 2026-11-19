@@ -30,6 +30,8 @@
 #   win_vm.sh status              what runs, by process AND socket
 #   win_vm.sh sign                export + sign this checkout's kf-gop for gop-efi=
 #   win_vm.sh fetch               download + verify the pinned media into the cache
+#   win_vm.sh prepare             the one root step of the lane (the swtpm AppArmor rule, through `kfroot`); run it BEFORE
+#                                 the unprivileged drop (windows_gate.sh --prepare calls it); nothing else here needs root
 #
 # Environment: WINVM_ROOT (/workspace/winvm), WINVM_NAME (kfwin), BENCH (/workspace/bench: kf3
 # binaries per revision), WINVM_QEMU (override the binary), WINVM_SSH_PORT (2224),
@@ -48,6 +50,19 @@
 # the spec load). The proprietary image ALWAYS stays offline: online is refused (REFUSED, exit 2) when
 # WINVM_OFFICIAL_APPS_ISO is set, WINVM_PROPRIETARY=1, or the VM directory holds the proprietary image's marks
 # ($VM/proprietary, or a propimage.py $VM/state.json). Anything but online|offline is refused.
+# THE CLOCK RULE (2026-11-16, docs/design/V3_CLOCK_RULE.md; the logic is scripts/bench/windows/clockrule.py, shared with every launcher):
+# the clock depends ONLY on the network. offline (restrict=on) => the RECORDED clock (`-rtc base=<recorded>,clock=vm`, from
+# $VM/disk/clock.json, written by `install`'s check boot); online (restrict=off) => the REAL clock (`base=utc`). Online with a
+# recorded clock is always refused. An offline image with no clock.json yet runs the real clock and says so once:
+# `KF_CLOCK_NO_RECORD image=<name> using=real` (a WARN; $VM/logs/clock_verdict.json).
+#   WINVM_CLOCK_STRICT=1 (0)       refuse (KF_CLOCK_REFUSED reason=offline_real_clock_strict) instead of that fallback
+#   WINVM_LOADED_SOFTWARE=LIST     space-separated PATH or PATH=CREATED_UTC of SOFTWARE the stage loads into the image (the
+#                                  SPECviewperf bundle, a driver installer); the recorded clock is never earlier than its
+#                                  creation time + 1 h. Scripts and assets never go here. Unset: the floor is the recorded clock.
+#   WINVM_CLOCK_PINS=LIST          space-separated pin files; items with `loads_software: true` and `created_utc` give it
+#   WINVM_RTC_BASE=UTC-STAMP       an explicit recorded clock (offline only; before a loaded software's creation it is refused,
+#                                  KF_CLOCK_BEFORE_INPUT); unset or `utc`: no override
+#   The install and check boots (they make the record) run the real clock.
 # WINVM_KF3_DISPLAY=off: a headless device (no display plane, no boot GOP) for a box without a
 # monitor; `run` only, default on (2026-10-27).
 # WINVM_INSTALL_CACHE=unsafe: the install-time boots only (install and its check boot) run the base
@@ -108,6 +123,10 @@ DRY_RUN=${WINVM_DRY_RUN:-0}
 NET=${WINVM_NET:-offline}
 VM_UUID="" VM_SERIAL="" VM_MAC=""   # the per-VM identity (load_identity); empty = the fixed MAC, QEMU's SMBIOS
 export PATH="$HOME/.cargo/bin:$PATH"
+# `kfroot` (the explicit root step) and `kf_dmesg`; see scripts/lib/kfroot.sh. This script runs as an unprivileged uid in
+# group kvm: its only root operation is apparmor_swtpm below.
+# shellcheck source=../../lib/kfroot.sh
+. "$REPO/scripts/lib/kfroot.sh"
 
 # ★ The media, each pinned by sha256 at its first fetch (2026-10-04, box vwin). Only official
 # sources: Microsoft's evaluation fwlink, the virtio-win project's own versioned archive (the
@@ -258,13 +277,17 @@ make_layout() {
 apparmor_swtpm() {
   # jammy's swtpm runs under an enforced AppArmor profile scoped to libvirt paths; allow this
   # harness's tree (state, sockets, logs) through the profile's local include, once.
-  local prof=/etc/apparmor.d/usr.bin.swtpm local=/etc/apparmor.d/local/usr.bin.swtpm rule
+  # (WINVM_APPARMOR_DIR: a test knob, a fake /etc/apparmor.d)
+  local aa=${WINVM_APPARMOR_DIR:-/etc/apparmor.d}
+  local prof=$aa/usr.bin.swtpm local=$aa/local/usr.bin.swtpm rule
   [ -e "$prof" ] || { log "no swtpm AppArmor profile"; return 0; }
   grep -q 'include.*local/usr.bin.swtpm' "$prof" || die "$prof does not include $local"
   rule="$WINVM_ROOT/** rwk,"
   if ! grep -qxF "$rule" "$local" 2>/dev/null; then
-    printf '# kayfabe scripts/bench/windows/win_vm.sh: per-VM swtpm state, sockets, logs\n%s\n' "$rule" >> "$local"
-    apparmor_parser -r "$prof"
+    # root: /etc/apparmor.d is root-owned, and loading a profile into the kernel needs CAP_MAC_ADMIN. Both are kfroot steps
+    # (a box that already has the rule, the usual case after `windows_gate.sh --prepare`, needs neither).
+    printf '# kayfabe scripts/bench/windows/win_vm.sh: per-VM swtpm state, sockets, logs\n%s\n' "$rule" | kfroot tee -a "$local" > /dev/null
+    kfroot apparmor_parser -r "$prof"
     log "AppArmor: swtpm may use $WINVM_ROOT"
   fi
 }
@@ -431,7 +454,9 @@ log_identity() {
 # ------------------------------------------------------------------------------------------------
 # Only blank lines, '#' comments and KF3_NAME=digits lines are accepted; any other line refuses the
 # whole file (by line number, never by content). The list is NOT hard-coded here: it is the caller's
-# file (a sample is scripts/bench/windows/kf3_flags.sample.env, which must be confirmed against `next`).
+# file. ★ 2026-11-15 (flag cleanup, Stage 1): Windows needs NO env file: the measured Windows profile is the
+# device's default for a declared Windows guest, so a plain `run` boots with it. An env file is for MEASUREMENT
+# flags only (scripts/bench/windows/kf3_flags.sample.env is the commented example).
 ENVFILE_SRC="" ENVFILE_SHA="" ENVFILE_N=0
 load_env_file() {
   local f=$1 line n=0 lineno=0 pairs=()
@@ -484,6 +509,32 @@ is_proprietary_image() {
     || { [ -f "$VM/state.json" ] && grep -q '"state_version"' "$VM/state.json"; }
 }
 # net_restrict: prints the slirp restrict value for WINVM_NET, or refuses
+# clock_rule: sets RTC (the -rtc value) by the one rule, or refuses. Its named lines go to the log; CLOCK_PHASE=build for the
+# install and check boots (they are the ones that make the record).
+CLOCK_PHASE=run
+RTC=""
+clock_rule() {
+  local err rc=0 line args=() soft=() pins=()
+  err=$(mktemp)
+  read -r -a soft <<< "${WINVM_LOADED_SOFTWARE:-}"
+  read -r -a pins <<< "${WINVM_CLOCK_PINS:-}"
+  args=(rtc --net "$NET" --image "$NAME" --sidecar "$VM/disk/clock.json" --strict "${WINVM_CLOCK_STRICT:-0}" --phase "$CLOCK_PHASE")
+  [ "${WINVM_RTC_BASE:-utc}" = utc ] || args+=(--base "$WINVM_RTC_BASE")
+  [ "${#soft[@]}" -eq 0 ] || args+=(--loaded-software "${soft[@]}")
+  [ "${#pins[@]}" -eq 0 ] || args+=(--pins "${pins[@]}")
+  if [ -d "$VM/logs" ] && ! dry_run; then args+=(--json "$VM/logs/clock_verdict.json"); fi
+  RTC=$(python3 "$HERE/clockrule.py" "${args[@]}" 2> "$err") || rc=$?
+  while IFS= read -r line; do log "$line"; done < "$err"
+  rm -f "$err"
+  [ "$rc" -eq 0 ] || die "the clock rule refused (the KF_CLOCK_REFUSED line above says why)"
+}
+# record_clock: the guest's UTC time at the last probe before the build's shutdown, written next to the image
+record_clock() {
+  local t
+  t=$(gssh '(Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")' 2>/dev/null | tr -d '\r' | tail -1) || t=""
+  python3 "$HERE/clockrule.py" record --sidecar "$VM/disk/clock.json" --utc "$t" --source win_vm.sh:check_boot \
+    --tool-rev "$(kf3_rev)" || log "KF_CLOCK_RECORD_FAILED image=$NAME (offline boots will run the real clock with KF_CLOCK_NO_RECORD)"
+}
 net_restrict() {
   case "$NET" in
     offline) echo on ;;
@@ -496,6 +547,7 @@ qemu_common() {
   load_identity
   local restrict
   restrict=$(net_restrict)
+  clock_rule
   QA=(
     -name "$NAME,debug-threads=on"
     -object "memory-backend-memfd,id=ram0,size=${RAM_MB}M,share=on"
@@ -505,7 +557,7 @@ qemu_common() {
     -drive "if=pflash,format=raw,unit=0,readonly=on,file=$OVMF_CODE"
     -drive "if=pflash,format=raw,unit=1,file=$VM/firmware/OVMF_VARS.fd"
     -global ICH9-LPC.disable_s3=1 -global ICH9-LPC.disable_s4=1
-    -rtc "base=${WINVM_RTC_BASE:-utc},driftfix=slew" -global kvm-pit.lost_tick_policy=discard
+    -rtc "$RTC" -global kvm-pit.lost_tick_policy=discard
     -chardev "socket,id=chrtpm,path=$VM/run/swtpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm
     -device tpm-crb,tpmdev=tpm0
     -netdev "user,id=n0,restrict=$restrict,hostfwd=tcp:$SSH_BIND:$SSH_PORT-:22"
@@ -556,6 +608,8 @@ vm_start() {
   BOOT_EV=$VM/logs/${tag}_b${n}_qmp_events.jsonl
   local qlog=$VM/logs/${tag}_b${n}_qemu.log
   printf '%q ' "$q" "${QA[@]}" "$@" > "$VM/logs/${tag}_b${n}_cmdline.txt"
+  # 2026-11-16: a faked clock needs the network off, and a networked guest needs the real clock (clocknet_assert.py; one rule for every start)
+  python3 -B -I "$HERE/clocknet_assert.py" argv --who win_vm.sh -- "$q" "${QA[@]}" "$@" > /dev/null || die "clock/network rule refused this start (clocknet_assert.py)"
   "$q" "${QA[@]}" "$@" > "$qlog" 2>&1 &
   QPID=$!
   echo "$QPID" > "$VM/run/qemu.pid"
@@ -687,6 +741,7 @@ guest_shutdown_and_wait() {  # TIMEOUT_S
 # install
 # ------------------------------------------------------------------------------------------------
 install_boot_qa() {
+  CLOCK_PHASE=build
   qemu_common
   QA+=(-cpu "$(cpu_flags B)" -vga std -action panic=none
        -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap${WINVM_INSTALL_CACHE:+,cache=$WINVM_INSTALL_CACHE}"
@@ -710,6 +765,7 @@ install_boot() {
 }
 
 check_boot() {
+  CLOCK_PHASE=build
   qemu_common
   QA+=(-cpu "$(cpu_flags B)" -vga std -action panic=none
        -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap${WINVM_INSTALL_CACHE:+,cache=$WINVM_INSTALL_CACHE}"
@@ -721,6 +777,7 @@ check_boot() {
   if wait_ssh 1800; then
     log "first logon said: $(gssh 'Get-Content C:\kf\install-done.txt' 2>/dev/null | tr -d '\r')"
     run_check installcheck || rc=$?
+    record_clock
     gscp_from "C:/kf/firstlogon.log" "$VM/logs/firstlogon.log" || true
   else
     rc=1
@@ -943,7 +1000,7 @@ cmd_run() {
   local n=0 reason="" dm0
   while :; do
     n=$((n + 1))
-    dm0=$(dmesg 2>/dev/null | wc -l || echo 0)
+    dm0=$(kf_dmesg 2>/dev/null | wc -l || echo 0)
     nvidia-smi -q > "$VM/logs/${tag}_b${n}_host_smi_before.txt" 2>&1 || true
     # ★ 2026-10-09, DIAGNOSTIC (default off; docs/design/V3_BAR0_TRACE_MODE.md, OWNER_RULINGS §X):
     # WINVM_TRACE=1 records this boot with the VFIO reference's tracer — QEMU's trace events from
@@ -961,7 +1018,7 @@ cmd_run() {
     vm_start "$tag" "$n" -serial "file:$VM/logs/${tag}_b${n}_serial.log" "${tracea[@]}"
     vm_wait 0
     reason=$BOOT_REASON
-    dmesg 2>/dev/null | tail -n "+$((dm0 + 1))" > "$VM/logs/${tag}_b${n}_host_dmesg.txt" || true
+    kf_dmesg 2>/dev/null | tail -n "+$((dm0 + 1))" > "$VM/logs/${tag}_b${n}_host_dmesg.txt" || true
     nvidia-smi -q > "$VM/logs/${tag}_b${n}_host_smi_after.txt" 2>&1 || true
     log "WINVM_BOOT_END boot=$n rc=$BOOT_RC reason=$reason kf3_lines=$(grep -c 'kf3\|kf-rm\|kf-gsp' "$VM/logs/${tag}_b${n}_qemu.log" || true) host_xid=$(grep -c 'NVRM: Xid' "$VM/logs/${tag}_b${n}_host_dmesg.txt" || true)"
     grep -q GUEST_PANICKED "$BOOT_EV" && log "  GUEST_PANICKED in boot $n: $(grep GUEST_PANICKED "$BOOT_EV" | tail -1)"
@@ -1103,6 +1160,7 @@ main() {
     status) cmd_status ;;
     sign) cmd_sign ;;
     fetch) cmd_fetch ;;
+    prepare) install -d -m 0700 "$WINVM_ROOT"; apparmor_swtpm ;;
     ""|-h|--help|help) sed -n '3,64p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "unknown subcommand '$sub' (win_vm.sh help)" ;;
   esac

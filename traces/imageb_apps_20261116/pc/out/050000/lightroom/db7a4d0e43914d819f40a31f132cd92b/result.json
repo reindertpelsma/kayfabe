@@ -1,0 +1,18 @@
+﻿{
+    "app":  "lightroom",
+    "started":  1794783307.483,
+    "error":  "plugin did not report (not loaded or no catalog)",
+    "outputs":  [
+
+                ],
+    "source":  "dji_fc7303_0765.dng+sony_dsc_rx1_0812.arw",
+    "plugin_result":  null,
+    "titles":  [
+                   "Lightroom Catalog - Adobe Photoshop Lightroom Classic - Library - "
+               ],
+    "quit":  "forced",
+    "ended":  1794783773.457,
+    "dismissed":  [
+
+                  ]
+}

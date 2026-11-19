@@ -35,8 +35,13 @@
 #   WINAPPS_RETRY action=rerun-on-a-fresh-box class=<c> ...                  exit 3  PROVIDER, MEDIA (no or wrong app disk),
 #                                                                                   OPERATOR (our script: NOTRUN rows, budget ended,
 #                                                                                   driver died), HOSTREF, BAR1_EXCEPTION
-#   WINAPPS_REFUSED why=<w>                                                  exit 2  a precondition (not root, no gate pass, ...)
+#   WINAPPS_REFUSED why=<w>                                                  exit 2  a precondition (no /dev/kvm access, no gate pass, ...)
 #   WINAPPS_EXIT rc=<n> <utc>                                                always last
+# ROOTLESS (OWNER_RULINGS section AR item 6, 2026-11-15, NOT RUN ON A BOX): like windows_gate.sh this stage has no blanket root
+# refusal. It needs /dev/kvm and a kernel log it can read, directories it can write, and the packages and AppArmor rule the
+# gate's `--prepare` put in place; it has no root step of its own. KF_ROOTLESS=require|record|off as in windows_gate.sh
+# (scripts/lib/kfroot.sh): uid, capability sets and NoNewPrivs of its tree and the sudo log of the run window are recorded
+# (rootless_*.json, KFROOT_ASSERT lines, rootless=<state> in the verdict) and enforced in require mode.
 # Knobs: KF_WINAPPS_PROFILE (small | mid | full | public | ids:a,b,c; default small), KF_WINAPPS_BUDGET_S (per profile default),
 # KF_WINAPPS_PER_GUEST (8), KF_WINAPPS_MAX_TDR (3), KF_WINAPPS_GATE_TAG (the gate's overlay tag), WINVM_ROOT, BENCH.
 set -uo pipefail
@@ -57,6 +62,9 @@ mkdir -p "$PROV"
 say() { echo "$*" | tee -a "$LOG"; }
 
 export PATH="$PATH:$HOME/.cargo/bin"
+# shellcheck source=../../lib/kfroot.sh
+. "$SOURCE/scripts/lib/kfroot.sh"
+export KF_ROOTLESS=${KF_ROOTLESS:-record}
 export BENCH=${BENCH:-/workspace/bench}
 export WINVM_ROOT=${WINVM_ROOT:-/workspace/winvm}
 export WINVM_VM_IDENTITY=${WINVM_VM_IDENTITY:-1}
@@ -68,7 +76,10 @@ PROFILE=${KF_WINAPPS_PROFILE:-small}
 PER_GUEST=${KF_WINAPPS_PER_GUEST:-8}
 MAX_TDR=${KF_WINAPPS_MAX_TDR:-3}
 GATE_TAG=${KF_WINAPPS_GATE_TAG:-gate_$(printf %s "$T" | tr -c 'A-Za-z0-9_' '_' | cut -c1-24)}
-FLAGS=${KF_WINGATE_FLAGS:-$WIN/kf3_flags.sample.env}
+# ★ 2026-11-15 (flag cleanup, Stage 1): no env file by default (see windows_gate.sh); KF_WINGATE_FLAGS is measurement-only.
+FLAGS=${KF_WINGATE_FLAGS:-}
+FLAGS_ARGS=()
+[ -z "$FLAGS" ] || FLAGS_ARGS=(--flags-file "$FLAGS")
 GDRV=${KF_WINGATE_GUEST_DRIVER:-580.65.06}
 ARM=${KF_WINGATE_ARM:-B}
 DEFAULT_OFFICIAL_DRIVER=580.88          # the Windows driver windows_gate.sh installs (and checks); official_fetch.json pins it
@@ -233,12 +244,21 @@ say "WINAPPS_REQUESTED=1"
 python3 -I "$SOURCE/scripts/ci/app_policy.py" windows || refuse policy-unreadable
 
 stage preflight
-[ "$(id -u)" = 0 ] || refuse not-root
-[ -c /dev/kvm ] || refuse no-/dev/kvm
+# no blanket root refusal (it was `[ "$(id -u)" = 0 ] || refuse not-root`): access is checked, by name
+rootless_check preflight --pid $$ || refuse rootless-violated
+[ -c /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ] || refuse no-/dev/kvm-access
+if [ -e /dev/nvidiactl ]; then [ -r /dev/nvidiactl ] && [ -w /dev/nvidiactl ] || refuse no-/dev/nvidiactl-access; fi
+for d in "$PROV" "$EV" "$WINVM_ROOT" "$BENCH"; do
+    t=$d
+    while [ ! -e "$t" ] && [ "$t" != / ]; do t=$(dirname "$t"); done
+    [ -d "$t" ] && [ -w "$t" ] || refuse "not-writable-$d"
+done
+# the host Xid checks read the kernel log; an unreadable one was a silent zero (a vacuous check), now a refusal
+kf_dmesg > /dev/null 2>&1 || refuse dmesg-unreadable
 [ -e "$VM/installed" ] || refuse "windows-not-installed-($VM)"
 grep -q '^WINDOWS_GATE_PASS ' "$PROV/${T}_windows.log" 2> /dev/null || refuse "no-WINDOWS_GATE_PASS-in-$PROV/${T}_windows.log"
 [ -f "$VM/disk/$GATE_TAG.qcow2" ] || refuse "no-gate-overlay-disk/$GATE_TAG.qcow2"
-[ -r "$FLAGS" ] || refuse "no-flags-file-$FLAGS"
+[ -z "$FLAGS" ] || [ -r "$FLAGS" ] || refuse "no-flags-file-$FLAGS"
 [ -x "$WINVM_QEMU" ] || refuse "no-kf3-qemu-$WINVM_QEMU"
 [ -s "$VM/identity.env" ] || refuse "no-vm-identity"
 if pgrep -x qemu-system-x86 > /dev/null || run_loop_alive_any; then refuse "a-qemu-or-run-loop-is-already-running"; fi
@@ -267,7 +287,8 @@ if [ -z "$ISO" ]; then
         exit 3
     fi
     ISO=/workspace/winapps/kfapps.iso
-    mkdir -p "$(dirname "$ISO")"
+    mkdir -p "$(dirname "$ISO")" 2> /dev/null || refuse "not-writable-$(dirname "$ISO")"
+    [ -w "$(dirname "$ISO")" ] || refuse "not-writable-$(dirname "$ISO")"
     if ! fetch_app_disk "$ISO" "$EV/fetch_bundle.txt"; then
         verdict RETRY MEDIA "fetch of winapps-open.iso failed (fetch_bundle.txt): $(tail -1 "$EV/fetch_bundle.txt" | head -c 160)"
         exit 3
@@ -295,7 +316,7 @@ hostref() { # before|after
         echo "HOSTREF $when $(date -u -Is)"
         nvidia-smi --query-gpu=name,driver_version,memory.total,pstate --format=csv,noheader 2>&1 || ok=0
     } > "$f" 2>&1
-    xid=$(dmesg 2> /dev/null | grep -c 'NVRM: Xid' || true)
+    xid=$(kf_dmesg 2> /dev/null | grep -c 'NVRM: Xid' || true)
     echo "HOSTREF_XID_COUNT $xid" >> "$f"
     if [ -x "$EV/cup8_host" ]; then
         if timeout 180 "$EV/cup8_host" > "$EV/hostref_${when}_cup8.txt" 2>&1 && grep -q 'CUP8 VERDICT: PASS' "$EV/hostref_${when}_cup8.txt"; then cu=PASS; else cu=FAIL; fi
@@ -325,12 +346,13 @@ GUEST_STARTED=1
 RUN=$EV/run
 DEADLINE=$(($(date +%s) + BUDGET_S))
 python3 -I "$APPM/winapps.py" --vm winvm --run-dir "$RUN" --apps "$IDS" --tier 3 --iso "$ISO" "${OFFICIAL_ARGS[@]}" --image-manifest "$IMGMAN" \
-    --winvm-script "$WV" --winvm-root "$WINVM_ROOT" --winvm-name "${WINVM_NAME:-kfwin}" --parent-overlay "$GATE_TAG" --flags-file "$FLAGS" \
+    --winvm-script "$WV" --winvm-root "$WINVM_ROOT" --winvm-name "${WINVM_NAME:-kfwin}" --parent-overlay "$GATE_TAG" "${FLAGS_ARGS[@]}" \
     --guest-driver "$GDRV" --arm "$ARM" --per-guest "$PER_GUEST" --max-tdr "$MAX_TDR" --deadline-epoch "$DEADLINE" > "$EV/driver.out" 2>&1
 DRC=$?
 say "APPS_NOTE winapps.py rc=$DRC (0 done, 3 repeated guest boot failures, 4 guest limit, 6 time budget ended)"
 teardown_all
 GUEST_STARTED=0
+rootless_final
 if [ "$DRC" = 8 ]; then
     verdict RETRY MEDIA_DRIFT "official pinned download/catalogue failed; no app pass claimed (driver.out)"
     exit 3
@@ -365,6 +387,9 @@ for k in GUEST_FAIL BOOT_FAIL HARNESS NOT_RUN; do
     [ -z "$l" ] || why+="; ${k,,}=$l"
 done
 [ "$DRC" = 0 ] || why+="; driver rc=$DRC"
+why+="; rootless=$ROOTLESS_STATE"
+# KF_ROOTLESS=require: a run that was not rootless is never a pass (a root or capable process, a sudo entry other than the wrapper)
+if [ "$KIND" = PASS ] && [ "${ROOTLESS_FINAL_RC:-0}" != 0 ]; then KIND=RETRY CLASS=OPERATOR; why+="; KF_ROOTLESS=require violated (rootless_*.json)"; fi
 [ "${xid_delta:-0}" = 0 ] || why+="; host Xid delta=${xid_delta}"
 
 stage collect

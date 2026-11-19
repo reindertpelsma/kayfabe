@@ -241,6 +241,11 @@ pub struct DisplayPolicy {
     /// ★ EXPERIMENT `x11-dispsw`: each display-SW constructor's query paired with its alloc
     /// ([`DispSwPairing`]); `None` with the switch off (nothing is looked at).
     dispsw_pairing: Option<DispSwPairing>,
+    /// ★ 2026-11-15 (flag cleanup, Stage 1; was `KF3_DISPLAY_IMP_ENABLE`): the Windows support profile.
+    /// At every fn 1 the model is told whether the guest declared the measured Windows build, and
+    /// answers `IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` TRUE only then ([`Self::with_windows_profile`]).
+    /// `None` (a link built without a profile) answers FALSE, as before.
+    windows: Option<crate::winprofile::WindowsProfile>,
 }
 
 /// ⚠ EXPERIMENT flag (default off, 2026-10-08, H-edidseen): see
@@ -381,7 +386,22 @@ impl DisplayPolicy {
             seen: Vec::new(),
             claimed,
             dispsw_pairing: None,
+            windows: None,
         }
+    }
+
+    /// ★ 2026-11-15 (was `KF3_DISPLAY_IMP_ENABLE`): serve the Windows profile's display answer — the
+    /// real GPU's TRUE for `IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` (vfio-10 RPC 2645, run56; ⊘
+    /// `IS_MODE_POSSIBLE` already answers "possible") — to a guest that declares the measured Windows
+    /// build at fn 1, and FALSE to every other guest, including every Linux guest. Evaluated at each
+    /// fn 1, so a later declaration replaces it.
+    #[must_use]
+    pub fn with_windows_profile(
+        mut self,
+        profile: crate::winprofile::WindowsProfile,
+    ) -> DisplayPolicy {
+        self.windows = Some(profile);
+        self
     }
 
     /// ★ EXPERIMENT `x11-dispsw` (default off): offer the `GF100_DISP_SW` object — the model answers
@@ -393,15 +413,6 @@ impl DisplayPolicy {
     /// With no derived layouts (the M0 link) the query is not claimed and stays refused.
     #[must_use]
     pub fn offering_display_sw(mut self, on: bool) -> DisplayPolicy {
-        // ⚠ PROBE (default off, 2026-10-08, Windows run56): report IMP enabled, as the real GPU does.
-        if std::env::var("KF3_DISPLAY_IMP_ENABLE").as_deref() == Ok("1")
-            && let Some(m) = &self.model
-        {
-            lock(m).report_imp_enabled(true);
-            eprintln!(
-                "kf-rm: display: PROBE KF3_DISPLAY_IMP_ENABLE=1 — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS_MODE_POSSIBLE already says possible)"
-            );
-        }
         // ⚠ EXPERIMENT (default off, 2026-10-08, H-hdcp): see [`Self::answering_hdcp_state`].
         if std::env::var("KF3_DISPLAY_HDCP_STATE").as_deref() == Ok("1") && self.model.is_some() {
             self = self.answering_hdcp_state();
@@ -961,6 +972,9 @@ impl CommandPolicy for DisplayPolicy {
                 if let Some(m) = &self.model {
                     let (n, e) = {
                         let mut g = lock(m);
+                        // ★ 2026-11-15: the IMP answer follows THIS declaration (the profile's
+                        // identity observer sits ahead of this link, so it has already read this fn 1).
+                        g.report_imp_enabled(self.windows.as_ref().is_some_and(|w| w.active()));
                         (g.retire_all_hotplug(), g.retire_all_display_events())
                     };
                     if e > 0 {

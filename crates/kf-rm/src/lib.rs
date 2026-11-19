@@ -39,6 +39,7 @@ pub mod osevent;
 pub mod pmsr;
 pub mod precomp;
 pub mod preempt_bind_probe;
+pub mod queuepriority;
 pub mod rmgraph;
 pub mod rmrpc;
 pub mod rowserve;
@@ -51,6 +52,7 @@ pub mod sweep;
 pub mod sysmembar;
 pub mod unserviced;
 pub mod vfguest;
+pub mod winprofile;
 pub mod zbc;
 
 pub use hostfacts::HostFacts;
@@ -161,6 +163,12 @@ pub struct ObjectLinks {
     /// `docs/design/V3_DISPLAY.md` §4.11.4): fn 72's kept body, the BAR1 aperture and — with
     /// `gop=on` — the boot framebuffer's size. `None` serves the board's region table, as before.
     pub console: Option<staticinfo::ConsoleSeat>,
+    /// ★ 2026-11-15 (flag cleanup, Stage 1): the Windows support profile — the `windows-support`
+    /// property and the guest's declared identity ([`winprofile`]). `Default` is the property ON with
+    /// nothing declared: the Windows behaviours below are then reachable by a guest that declares the
+    /// measured Windows build at fn 1, and by no other. Shared by `Clone`, so the device's display and
+    /// memory planes read the same declaration the chain records.
+    pub windows: winprofile::WindowsProfile,
 }
 
 /// ★ The display seat: the chip's display row, and — when a display PLANE consumes the model (the
@@ -220,6 +228,7 @@ impl core::fmt::Debug for ObjectLinks {
                 "console",
                 &self.console.as_ref().map(|c| (c.bar1_bytes, c.boot_fb)),
             )
+            .field("windows_support", &self.windows.support())
             .finish()
     }
 }
@@ -491,6 +500,7 @@ pub fn served_chain(
         channels,
         display,
         console,
+        windows,
     } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
         .with_engine_caps(authored::engine_caps(&host.engines))
@@ -502,34 +512,55 @@ pub fn served_chain(
         static_info = static_info.with_name(n, sn);
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
-    if std::env::var("KF3_SW_RUNLIST_PROBE").as_deref() == Ok("1")
+    // ★ 2026-11-15 (review of PR #438, F1): a NEW chain is a NEW guest life — a device reset rebuilds it
+    // (`reset_life`), and so does the fn-1 re-selection — and every per-life link (the channel link's
+    // identity above all) starts undeclared. The profile is shared with planes that live outside the chain
+    // (the display and memory planes), so its declaration is cleared HERE, with the chain it belongs to:
+    // otherwise those planes would keep a dead life's Windows identity until the next fn 1 (never, for a
+    // guest that boots Linux or only the basic display adapter). The guest's fn 1, which follows, declares
+    // its own identity through the observer seated below.
+    windows.declare(false);
+    // ★ 2026-11-15 (flag cleanup, Stage 1): the Windows support profile. The identity observer is
+    // seated FIRST, so every Windows-gated link below sees the declaration of the SAME fn 1 that
+    // reaches it (a `CommandObserver` cannot answer: seating it first changes no reply). With the
+    // `windows-support` property off it never records anything, and every gated link below is
+    // either not built or answers nothing.
+    chain.push(Box::new(kf_gsp::Observing(Box::new(
+        winprofile::IdentityObserver::new(driver.driver_version(), windows.clone()),
+    ))));
+    // ★ 2026-11-15: software-runlist allocation metadata (was `KF3_SW_RUNLIST_PROBE`): the probe's own
+    // identity observer refuses every allocation until the guest declares the measured Windows build.
+    if windows.support()
         && let Some(policy) = objects.take()
     {
-        let (probe, observer) =
-            sw_runlist_probe::Probe::new(driver, authored::engine_caps(&host.engines), host.die);
+        let (probe, observer) = sw_runlist_probe::Probe::new(
+            driver,
+            authored::engine_caps(&host.engines),
+            host.die,
+            windows.clone(),
+        );
         objects = Some(policy.with_sw_runlist_probe(probe));
         chain.push(Box::new(observer));
-        eprintln!(
-            "kf-rm: EXPERIMENT software-runlist allocation metadata only; native backing and scheduling are NOT implemented"
-        );
     }
     // ★ 2026-10-07 (Windows Code43): two links that claim only their own generated ids, so their
     // place only has to be ahead of every link that might shadow them. The host-owned stub watches
     // fn1 for its Windows-build identity (`hoststub.rs`, §S ASSUMED, owner to confirm); the
-    // FECS-trace query is answered "disabled" (`fecstrace.rs`).
-    chain.push(Box::new(hoststub::HostStubPolicy::new(driver)));
+    // FECS-trace query is answered "disabled" (`fecstrace.rs`). ★ 2026-11-15: the stub is part of
+    // the Windows profile, so `windows-support=off` does not build it (a Windows guest's
+    // `0x2081010d` then reaches the ledger and is refused by name).
+    if windows.support() {
+        chain.push(Box::new(hoststub::HostStubPolicy::new(driver)));
+    }
     chain.push(Box::new(fecstrace::FecsTracePolicy::new(driver)));
-    // ⚠ AWAITING OWNER CONFIRMATION (default off): the software-runlist submit as host-owned
-    // scheduling, option (b) — `sw_runlist_host.rs`. kf-qemu opens every kernel channel at birth
-    // under the same flag.
-    if sw_runlist_host::enabled() {
-        chain.push(Box::new(sw_runlist_host::SwRunlistHostOwnedPolicy::new(
-            driver,
+    // ★ 2026-11-15 (OWNER_RULINGS §W, reversed 2026-11-15: "set the measured Windows profile as the
+    // default"; was `KF3_SW_RUNLIST_HOST_OWNED`): the software-runlist submit as host-owned
+    // scheduling, option (b) — `sw_runlist_host.rs`. kf-qemu opens every kernel channel of a declared
+    // Windows guest at birth under the same identity.
+    if windows.support() {
+        chain.push(Box::new(winprofile::WindowsOnly::new(
+            sw_runlist_host::SwRunlistHostOwnedPolicy::new(driver),
+            windows.clone(),
         )));
-        eprintln!(
-            "kf-rm: {}=1: software-runlist submits answered NV_OK and ignored; kernel channels scheduled at birth — AWAITING OWNER CONFIRMATION",
-            sw_runlist_host::FLAG
-        );
     }
     // Diagnostic-only B1 rank2, default off. No firmware logger or host DMA is created.
     if cmc_log_probe::enabled() {
@@ -539,29 +570,25 @@ pub fn served_chain(
             cmc_log_probe::FLAG
         );
     }
-    // ⚠ PROBE (default off): H-preempt-bind, 2026-10-08 — `preempt_bind_probe.rs`. Answers
-    // `GR_CTXSW_PREEMPTION_BIND` NV_OK with nothing sent to the host; never a shipped behaviour.
-    if preempt_bind_probe::enabled() {
-        chain.push(Box::new(preempt_bind_probe::PreemptBindProbe::new(driver)));
-        eprintln!(
-            "kf-rm: PROBE {}=1: GR_CTXSW_PREEMPTION_BIND answered NV_OK, NOTHING bound on the host (H-preempt-bind probe, not a shipped behaviour)",
-            preempt_bind_probe::FLAG
-        );
-    }
-    if preempt_bind_probe::zcull_enabled() {
-        chain.push(Box::new(preempt_bind_probe::ZcullBindProbe::new(driver)));
-        eprintln!(
-            "kf-rm: PROBE {}=1: a cross-client GR_CTXSW_ZCULL_BIND answered NV_OK, NOTHING bound on the host (probe, not a shipped behaviour)",
-            preempt_bind_probe::ZCULL_FLAG
-        );
-    }
-    // ⚠ PROBE (default off): H-modeset, 2026-10-08 — `display_ctrl_probe.rs`.
-    if display_ctrl_probe::enabled() {
-        chain.push(Box::new(display_ctrl_probe::DisplayCtrlProbe::new(driver)));
-        eprintln!(
-            "kf-rm: PROBE {}=1: six NV0073 controls answered NV_OK with the request echoed (H-modeset probe, not a shipped behaviour)",
-            display_ctrl_probe::FLAG
-        );
+    // ★ 2026-11-15 (was `KF3_PREEMPT_BIND_PROBE`, `KF3_ZCULL_BIND_PROBE`, `KF3_DISPLAY_CTRL_PROBE`):
+    // answers a declared Windows guest's `GR_CTXSW_PREEMPTION_BIND`, cross-client `GR_CTXSW_ZCULL_BIND`
+    // and six NV0073 controls `NV_OK` with the request echoed and NOTHING sent to the host (H-preempt-bind
+    // and H-modeset, 2026-10-08; `preempt_bind_probe.rs`, `display_ctrl_probe.rs`). ⚠ FABRICATED (class (c)):
+    // the guest is told its preemption buffers are bound when they are not. PRODUCT behaviour for a
+    // declared Windows guest only: the links answer nothing until the identity is declared.
+    if windows.support() {
+        chain.push(Box::new(winprofile::WindowsOnly::new(
+            preempt_bind_probe::PreemptBindProbe::new(driver),
+            windows.clone(),
+        )));
+        chain.push(Box::new(winprofile::WindowsOnly::new(
+            preempt_bind_probe::ZcullBindProbe::new(driver),
+            windows.clone(),
+        )));
+        chain.push(Box::new(winprofile::WindowsOnly::new(
+            display_ctrl_probe::DisplayCtrlProbe::new(driver),
+            windows.clone(),
+        )));
     }
     // ⚠ PROBE (default off): H-commit, 2026-10-08 — the two unnamed commit-time controls
     // (`display_ctrl_probe::DisplayPrivateProbe`, `traces/display_reply_diff_20261008/`).
@@ -593,24 +620,27 @@ pub fn served_chain(
             u8::from(xbar)
         );
     }
-    if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")
+    // ★ 2026-11-15 (was `KF3_MEMORY_LIST_PROBE`): contiguous SYSRAM descriptors backed by checked guest
+    // RAM, for a declared Windows guest only (the policy checks the profile per command).
+    if windows.support()
         && let Some(policy) = objects.take()
     {
-        objects = Some(policy.with_memory_list_probe());
-        eprintln!(
-            "kf-rm: EXPERIMENT contiguous SYSRAM descriptors backed by checked guest RAM; no scheduling"
-        );
+        objects = Some(policy.with_memory_list_probe(windows.clone()));
     }
     // ★ EXPERIMENT x11-dispsw: one switch, read off the display seat, sets BOTH halves — the query
     // answered and the alloc twinned (or refused) — so neither can be on without the other.
     // ⊘ Without a channel plane there is nothing to twin with, so the object is not offered at all
     // (an offered object with no host twin is run m3c: 186 host Xid 32).
     let x11_dispsw = channels.is_some() && display.as_ref().is_some_and(|s| s.x11_dispsw);
-    if std::env::var("KF3_GFX_POOL_PROBE").as_deref() == Ok("1") {
-        eprintln!(
-            "kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented"
-        );
-        chain.push(Box::new(gfxpool_probe::GfxPoolProbe { driver, served: 0 }));
+    // ★ 2026-11-15 (was `KF3_GFX_POOL_PROBE`): the virtual `GFX_POOL_QUERY_SIZE` answer. ⚠ FABRICATED
+    // (class (c)): the sizes are not a host query (`kf_abi::gfxpool::experimental_query`); a declared
+    // Windows guest that is refused this control ends in Code 43 (`traces/tur1_20261027/`). Pool
+    // lifecycle is not implemented; only the sizing query is served.
+    if windows.support() {
+        chain.push(Box::new(winprofile::WindowsOnly::new(
+            gfxpool_probe::GfxPoolProbe { driver, served: 0 },
+            windows.clone(),
+        )));
     }
     // ★ v3-display: the display link claims only its own controls, so its place is a matter of
     // which link answers first; it goes first so no other link's refusal can shadow it.
@@ -622,7 +652,8 @@ pub fn served_chain(
             Some(shared) => display::DisplayPolicy::over_shared(driver, seat.row, shared),
             None => display::DisplayPolicy::new(driver, seat.row),
         }
-        .offering_display_sw(x11_dispsw);
+        .offering_display_sw(x11_dispsw)
+        .with_windows_profile(windows.clone());
         if let Some(mut registry) = policy.registry() {
             objects = objects.map(|p| p.with_accepted_observer(move |cmd| registry.observe(cmd)));
         }
@@ -635,7 +666,9 @@ pub fn served_chain(
             .as_ref()
             .map_or(kf_abi::GuestOs::Linux, |m| m.guest_os);
         chain.push(Box::new(
-            chanlink::ChannelPolicy::new(driver, guest_os, sink).with_display_sw_twins(x11_dispsw),
+            chanlink::ChannelPolicy::new(driver, guest_os, sink)
+                .with_display_sw_twins(x11_dispsw)
+                .with_windows_support(windows.support()),
         ));
     }
     // ★ P4: the page-directory carrier is FIRST — ahead of `InitTablePolicy`, which terminates
@@ -653,7 +686,7 @@ pub fn served_chain(
         )));
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
-    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 9]>([
+    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 10]>([
         // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the FBSR save's registration of GSP-RM's
         // suspend buffer, its FREE, `FBSR_INIT` and the PM-transition scheduling toggle — answered,
         // nothing on the host (`pmsr.rs`). Ahead of the object seat, which would refuse fn 4.
@@ -664,6 +697,10 @@ pub fn served_chain(
         // ★ 2026-10-07: RC-recovery GET/SET (a stub under owner ruling §S) and the power source,
         // answered per VM; never forwarded (`vfguest.rs`).
         Box::new(vfguest::VfGuestPolicy::new(driver)),
+        // ★ 2026-11-18: queue priority (`VK_KHR_global_priority`): the runlist scheduling policy and the
+        // two interleave-level SETs, accepted as the VM's own virtual state, never forwarded and never
+        // applied on the host (`queuepriority.rs`, `docs/design/V3_QUEUE_PRIORITY.md`).
+        Box::new(queuepriority::QueuePriorityPolicy::new(driver)),
         Box::new(kf_gsp::Observing(Box::new(
             faultbuffer::FaultBufferRecorder::new(driver, fault_buffer),
         ))),

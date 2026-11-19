@@ -1,0 +1,305 @@
+{
+ "schema": "kayfabe.unreal-rows/1",
+ "status": "STATUS: DESIGN-ONLY, 2026-11-17. Row definitions for the Unreal rows; every row starts in the discovery lane. Names marked VERIFIED_IN_SOURCE were found in the source tree the user supplied, nothing was run. The commands are templates: {editor_cmd}, {project}, {map}, {out}, {packaged_binary} are filled by the stage.",
+ "lane_rule": "discovery until three consecutive clean runs on at least two dies (proposal)",
+ "rows": [
+  {
+   "id": "ue_vk_caps",
+   "title": "Vulkan capability parity: the guest reports the host die's ray-tracing, mesh-shader and shading-rate extensions",
+   "lane": "discovery",
+   "phase": 1,
+   "needs": [
+    "vulkan"
+   ],
+   "cmd": [
+    "vulkaninfo",
+    "--json"
+   ],
+   "time_box_s": 120,
+   "verify": [
+    "vk_caps_parity"
+   ],
+   "gpu_assert": "none",
+   "names": {
+    "vulkaninfo": "TOOL"
+   },
+   "notes": "A capability query, no GPU work: the verdict is set equality of the extension list the engine's renderer looks at, against the host's, plus the device name equal to the host's. A software ICD (llvmpipe) fails the name check."
+  },
+  {
+   "id": "ue_rhi_automation",
+   "title": "Built-in RHI unit tests (buffers, textures, clears, draws, UAV, bindless, readback, root constants)",
+   "lane": "discovery",
+   "phase": 1,
+   "needs": [
+    "vulkan",
+    "rhitests_plugin"
+   ],
+   "cmd": [
+    "{editor_cmd}",
+    "{project}",
+    "-unattended",
+    "-nosplash",
+    "-nosound",
+    "-vulkan",
+    "-RenderOffScreen",
+    "-ExecCmds=Automation RunTests Rendering.RHI; Quit",
+    "-ReportExportPath={out}/report",
+    "-log"
+   ],
+   "time_box_s": 1800,
+   "verify": [
+    "automation_report",
+    "log_regex"
+   ],
+   "gpu_assert": "mem",
+   "names": {
+    "Rendering.RHI": "VERIFIED_IN_SOURCE",
+    "RHITests plugin binaries in the installed build": "UNVERIFIED",
+    "-ReportExportPath": "UNVERIFIED"
+   },
+   "notes": "The filter is a spec in a plugin that is off by default; the project enables it. The host reads the exported report: number of tests run is at least the count the host (bare metal) run produced, none failed, none skipped by capability that the host did not skip."
+  },
+  {
+   "id": "ue_rt_automation",
+   "title": "Built-in ray-tracing test: acceleration structure build, occlusion and intersection rays",
+   "lane": "discovery",
+   "phase": 1,
+   "needs": [
+    "vulkan",
+    "rt"
+   ],
+   "cmd": [
+    "{editor_cmd}",
+    "{project}",
+    "-unattended",
+    "-nosplash",
+    "-nosound",
+    "-vulkan",
+    "-RenderOffScreen",
+    "-ExecCmds=Automation RunTests System.Renderer.RayTracing.BasicRayTracing; Quit",
+    "-ReportExportPath={out}/report",
+    "-log"
+   ],
+   "time_box_s": 900,
+   "verify": [
+    "automation_report",
+    "log_regex"
+   ],
+   "gpu_assert": "mem",
+   "names": {
+    "System.Renderer.RayTracing.BasicRayTracing": "VERIFIED_IN_SOURCE"
+   },
+   "notes": "The test reports itself skipped when the RHI lacks ray tracing. The host decides: if the host die supports the Vulkan ray-tracing extensions and the guest run skips, the row FAILS (parity); if the host does not support them the row is skipped with class CONSTRAINT."
+  },
+  {
+   "id": "ue_vt_automation",
+   "title": "Built-in virtual-texture test",
+   "lane": "discovery",
+   "phase": 1,
+   "needs": [
+    "vulkan"
+   ],
+   "cmd": [
+    "{editor_cmd}",
+    "{project}",
+    "-unattended",
+    "-nosplash",
+    "-nosound",
+    "-vulkan",
+    "-RenderOffScreen",
+    "-ExecCmds=Automation RunTests System.Renderer.VirtualTexture; Quit",
+    "-ReportExportPath={out}/report",
+    "-log"
+   ],
+   "time_box_s": 900,
+   "verify": [
+    "automation_report",
+    "log_regex"
+   ],
+   "gpu_assert": "mem",
+   "names": {
+    "System.Renderer.VirtualTexture": "VERIFIED_IN_SOURCE",
+    "-ReportExportPath": "UNVERIFIED"
+   },
+   "notes": ""
+  },
+  {
+   "id": "ue_shader_storm",
+   "title": "Shader compile storm: an empty local derived-data cache, every shader of a template recompiled by the worker processes",
+   "lane": "discovery",
+   "phase": 1,
+   "needs": [
+    "vulkan"
+   ],
+   "cmd": [
+    "{editor_cmd}",
+    "{project}",
+    "-unattended",
+    "-nosplash",
+    "-nosound",
+    "-vulkan",
+    "-RenderOffScreen",
+    "-ExecCmds=RecompileShaders all; Quit",
+    "-log"
+   ],
+   "time_box_s": 5400,
+   "verify": [
+    "log_regex"
+   ],
+   "gpu_assert": "none",
+   "names": {
+    "RecompileShaders": "VERIFIED_IN_SOURCE",
+    "the argument all": "UNVERIFIED",
+    "UE-LocalDataCachePath": "VERIFIED_IN_SOURCE",
+    "log lines counting compiled shaders": "UNVERIFIED"
+   },
+   "notes": "A CPU and scheduler row (the compile workers run on the guest's vCPUs); it asserts no hang, no worker crash, and that the number of shaders compiled is the same as on the host. The GPU is touched afterwards by pipeline creation, which the scene rows assert."
+  },
+  {
+   "id": "ue_scene_nanite_vsm",
+   "title": "A template scene with Nanite geometry and virtual shadow maps, rendered headless to an image",
+   "lane": "discovery",
+   "phase": 1,
+   "needs": [
+    "vulkan",
+    "sm6"
+   ],
+   "cmd": [
+    "{editor_cmd}",
+    "{project}",
+    "-unattended",
+    "-nosplash",
+    "-nosound",
+    "-vulkan",
+    "-RenderOffScreen",
+    "{map}",
+    "-ResX=1280",
+    "-ResY=720",
+    "-ExecCmds=r.Nanite 1; r.Shadow.Virtual.Enable 1; HighResShot 1280x720; Quit",
+    "-log"
+   ],
+   "time_box_s": 2400,
+   "verify": [
+    "image_nonflat",
+    "image_parity",
+    "log_regex"
+   ],
+   "gpu_assert": "util",
+   "names": {
+    "r.Nanite": "UNVERIFIED",
+    "r.Shadow.Virtual.Enable": "UNVERIFIED",
+    "HighResShot": "UNVERIFIED",
+    "Nanite and virtual shadow maps need the SM6 shader format on Linux Vulkan": "UNVERIFIED"
+   },
+   "notes": "The image is checked on the host: not flat (standard deviation and distinct-colour thresholds), and close to the image the bare-metal run of the same map produced (mean absolute difference under a threshold fixed from two host runs). A bit-identical hash is NOT expected (temporal passes) and is recorded only."
+  },
+  {
+   "id": "ue_scene_lumen_sw",
+   "title": "The same scene with software Lumen global illumination",
+   "lane": "discovery",
+   "phase": 1,
+   "needs": [
+    "vulkan",
+    "sm6"
+   ],
+   "cmd": [
+    "{editor_cmd}",
+    "{project}",
+    "-unattended",
+    "-nosplash",
+    "-nosound",
+    "-vulkan",
+    "-RenderOffScreen",
+    "{map}",
+    "-ResX=1280",
+    "-ResY=720",
+    "-ExecCmds=r.DynamicGlobalIlluminationMethod 1; r.Lumen.HardwareRayTracing 0; HighResShot 1280x720; Quit",
+    "-log"
+   ],
+   "time_box_s": 2400,
+   "verify": [
+    "image_nonflat",
+    "image_parity",
+    "log_regex"
+   ],
+   "gpu_assert": "util",
+   "names": {
+    "r.DynamicGlobalIlluminationMethod": "UNVERIFIED",
+    "r.Lumen.HardwareRayTracing": "UNVERIFIED",
+    "HighResShot": "UNVERIFIED"
+   },
+   "notes": ""
+  },
+  {
+   "id": "ue_scene_lumen_hwrt",
+   "title": "The same scene with Lumen hardware ray tracing on Vulkan ray tracing",
+   "lane": "discovery",
+   "phase": 1,
+   "needs": [
+    "vulkan",
+    "sm6",
+    "rt"
+   ],
+   "cmd": [
+    "{editor_cmd}",
+    "{project}",
+    "-unattended",
+    "-nosplash",
+    "-nosound",
+    "-vulkan",
+    "-RenderOffScreen",
+    "{map}",
+    "-ResX=1280",
+    "-ResY=720",
+    "-ExecCmds=r.RayTracing 1; r.DynamicGlobalIlluminationMethod 1; r.Lumen.HardwareRayTracing 1; HighResShot 1280x720; Quit",
+    "-log"
+   ],
+   "time_box_s": 3000,
+   "verify": [
+    "image_nonflat",
+    "image_parity",
+    "log_regex"
+   ],
+   "gpu_assert": "util",
+   "names": {
+    "r.RayTracing": "UNVERIFIED",
+    "r.Vulkan.RayTracing.AllowCompaction (the Vulkan ray-tracing cvars exist)": "VERIFIED_IN_SOURCE",
+    "r.Lumen.HardwareRayTracing": "UNVERIFIED"
+   },
+   "notes": "Skipped with class CONSTRAINT when the host die lacks the Vulkan ray-tracing extensions (ue_vk_caps says so)."
+  },
+  {
+   "id": "ue_packaged_benchmark",
+   "title": "A packaged template game run with the engine's benchmark switches for a fixed time, frame count and image checked",
+   "lane": "discovery",
+   "phase": 2,
+   "needs": [
+    "vulkan",
+    "packaged_sample"
+   ],
+   "cmd": [
+    "{packaged_binary}",
+    "-benchmark",
+    "-benchmarkseconds=60",
+    "-fps=60",
+    "-vulkan",
+    "-RenderOffScreen",
+    "-ExecCmds=HighResShot 1280x720",
+    "-log"
+   ],
+   "time_box_s": 900,
+   "verify": [
+    "log_regex",
+    "image_nonflat"
+   ],
+   "gpu_assert": "util",
+   "names": {
+    "-benchmark": "VERIFIED_IN_SOURCE",
+    "-benchmarkseconds=": "VERIFIED_IN_SOURCE",
+    "-fps=": "VERIFIED_IN_SOURCE",
+    "-dumpstats": "UNVERIFIED"
+   },
+   "notes": "Phase 2: needs a packaged sample, which is a SECOND artifact built on the trusted machine (cook and package of an engine template). With -benchmark the engine runs a fixed time step, so the frame count for the stated seconds is a number the host can check. -dumpstats was not found in the sources read; the stat output comes from the log."
+  }
+ ]
+}

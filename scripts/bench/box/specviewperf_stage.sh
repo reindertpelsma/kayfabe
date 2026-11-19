@@ -79,7 +79,8 @@ export WINVM_LOCK_WAIT_S=${WINVM_LOCK_WAIT_S:-120}
 export KF_GUEST_USER=${KF_GUEST_USER:-kf}
 unset KF_GUEST_PW
 GUEST_RAM_MB=${KF_SPEC_GUEST_RAM_MB:-16384}   # SPEC's own check wants about 15 GB (MEASURED 2026-11-05: 8 GB fails every workload with a memory requirement)
-FLAGS=${KF_WINGATE_FLAGS:-$WIN/kf3_flags.sample.env}
+# ★ 2026-11-15 (flag cleanup, Stage 1): no env file by default (see windows_gate.sh); KF_WINGATE_FLAGS is measurement-only.
+FLAGS=${KF_WINGATE_FLAGS:-}
 GDRV=${KF_WINGATE_GUEST_DRIVER:-580.65.06}
 ARM=${KF_WINGATE_ARM:-B}
 VM=$WINVM_ROOT/${WINVM_NAME:-kfwin}
@@ -223,7 +224,8 @@ boot_guest() { # copy|run  -> 0 ssh up, 1 no qemu, 2 no ssh
     if [ "$kind" = copy ]; then
         args+=(--no-kf3)
     else
-        args+=(--guest-driver "$GDRV" --kf3-extra "gpu-uuid=GPU-$VMUUID" --env-file "$FLAGS")
+        args+=(--guest-driver "$GDRV" --kf3-extra "gpu-uuid=GPU-$VMUUID")
+        [ -z "$FLAGS" ] || args+=(--env-file "$FLAGS")
     fi
     GUEST_STARTED=1
     WAIT_KF3=0
@@ -411,7 +413,7 @@ note "rev=$REV tag=$T lane=$LANE release=$RELEASE deadline_left_s=$(left)"
 [ -e "$VM/installed" ] || abort OPERATOR "windows is not installed ($VM)"
 grep -q '^WINDOWS_GATE_PASS ' "$PROV/${T}_windows.log" 2> /dev/null || abort OPERATOR "no WINDOWS_GATE_PASS in $PROV/${T}_windows.log"
 [ -f "$VM/disk/$GATE_TAG.qcow2" ] || abort OPERATOR "no gate overlay disk/$GATE_TAG.qcow2"
-[ -r "$FLAGS" ] || abort OPERATOR "no flags file $FLAGS"
+[ -z "$FLAGS" ] || [ -r "$FLAGS" ] || abort OPERATOR "no flags file $FLAGS"
 [ -x "$WINVM_QEMU" ] || abort OPERATOR "no kf3 qemu $WINVM_QEMU"
 [ -s "$VM/identity.env" ] || abort OPERATOR "no VM identity"
 VMUUID=$(sed -n 's/^VM_UUID=//p' "$VM/identity.env" 2> /dev/null | head -1)

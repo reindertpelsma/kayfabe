@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kayfabe.dev/schemas/kfci/v1/instruction.schema.json",
   "title": "kayfabe box payload instruction version 1",
-  "$comment": "STATUS 2026-11-15: LIVE (scripts/ci/payload_instruction.py reads it). Mirror: scripts/kfci/schemas/instruction.schema.json must be byte-identical (test_payload_instruction.py). Instruction = what a box runs; a requirement (what is wanted) is a different format that the Worker resolves into this.",
+  "$comment": "STATUS 2026-11-15: LIVE (scripts/ci/payload_instruction.py reads it). Mirror: scripts/kfci/schemas/instruction.schema.json must be byte-identical (test_payload_instruction.py). Instruction = what a box runs; a requirement (what is wanted) is a different format that the Worker resolves into this. 2026-11-16: optional `propimages` = the images and apps of the generic proprietary-image runner (scripts/bench/windows/propimage_runspec.py validates the same objects; docs/design/V3_PROPIMAGE_RUNNER.md).",
   "type": "object",
   "properties": {
     "schema": {
@@ -77,6 +77,16 @@
       "items": {
         "$ref": "#/$defs/artifact"
       }
+    },
+    "propimages": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/propimage"
+      }
+    },
+    "propimages_strict": {
+      "type": "boolean"
     }
   },
   "required": [
@@ -92,6 +102,144 @@
   ],
   "additionalProperties": false,
   "$defs": {
+    "source": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "enum": [
+            "official",
+            "file",
+            "url",
+            "pin"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[ -~]+$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "from"
+      ],
+      "additionalProperties": false
+    },
+    "propimage_app": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "present",
+            "skip",
+            "install"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "lane": {
+          "enum": [
+            "gate",
+            "discovery"
+          ]
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "propimage": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+        },
+        "kind": {
+          "enum": [
+            "prebuilt",
+            "built"
+          ]
+        },
+        "disk": {
+          "$ref": "#/$defs/source"
+        },
+        "iso": {
+          "$ref": "#/$defs/source"
+        },
+        "state": {
+          "enum": [
+            "auto",
+            "none"
+          ]
+        },
+        "state_file": {
+          "$ref": "#/$defs/source"
+        },
+        "net": {
+          "enum": [
+            "off",
+            "on"
+          ]
+        },
+        "only": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z0-9][a-z0-9_]*$"
+          }
+        },
+        "apps": {
+          "type": "object",
+          "maxProperties": 32,
+          "additionalProperties": {
+            "$ref": "#/$defs/propimage_app"
+          }
+        },
+        "ssh": {
+          "type": "object",
+          "properties": {
+            "user": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+            },
+            "key_file": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^[ -~]+$"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          },
+          "required": [
+            "user",
+            "key_file"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
     "artifact": {
       "type": "object",
       "properties": {

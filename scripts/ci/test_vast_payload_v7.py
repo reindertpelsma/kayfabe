@@ -420,8 +420,9 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(len(result["suites"]), 8)
         # host_claims (2026-11-06): the optional setup-picker facts, always at least the harness
         # guest OS; no Windows claim without the Windows stage.
+        # net_bytes (2026-11-16): the per-stage transfer, present when the box's counters can be read
         self.assertEqual(
-            set(result), {"verdict", "suites", "hardware", "host_reference", "host_claims"}
+            set(result) - {"net_bytes"}, {"verdict", "suites", "hardware", "host_reference", "host_claims"}
         )
         self.assertEqual(result["host_claims"]["linux_os_version"], "ubuntu-24.04")
         self.assertNotIn("windows_os_version", result["host_claims"])

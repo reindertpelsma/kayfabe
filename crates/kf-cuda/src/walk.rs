@@ -1764,6 +1764,14 @@ impl WalkKernel {
                     }
                     Err(e) => {
                         self.events.push(format!("capacity ceiling: {e}"));
+                        // ★ 2026-11-16 (observation only): the pool's geometry at the ceiling,
+                        // bounded to the first 16 ceilings of the walker.
+                        if self.cap.stats.ceilings <= 16 {
+                            self.events.push(format!(
+                                "capacity ceiling geometry: {}",
+                                self.cap.slot_geometry(s, need)
+                            ));
+                        }
                         return Ok(false);
                     }
                 }
@@ -1786,13 +1794,17 @@ impl WalkKernel {
         let run = core::mem::size_of::<KfMapRun>() as u64;
         for m in &moves {
             // Copy the whole old region: the counts (in `KfSlot`) say how much of it is live.
-            let n = (u64::from(m.from.cap) * run) as usize;
-            self.cu.memcpy_d2d_async(
-                &self.stream,
-                self.com.span(u64::from(m.to.off) * run, n),
-                self.com.span(u64::from(m.from.off) * run, n),
-                "cuMemcpyDtoDAsync(slot growth)",
-            )?;
+            // ★ 2026-11-18: growth in place (the free run after the slot) has no copy to issue:
+            // `Move::copy` is `None` and the placements stay where they are.
+            if let Some((dst, src, runs)) = m.copy() {
+                let n = (u64::from(runs) * run) as usize;
+                self.cu.memcpy_d2d_async(
+                    &self.stream,
+                    self.com.span(u64::from(dst) * run, n),
+                    self.com.span(u64::from(src) * run, n),
+                    "cuMemcpyDtoDAsync(slot growth)",
+                )?;
+            }
             self.events.push(format!(
                 "capacity: slot {} grown {} → {} runs",
                 m.slot, m.from.cap, m.to.cap

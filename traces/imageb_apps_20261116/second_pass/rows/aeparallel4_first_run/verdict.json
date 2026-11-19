@@ -1,0 +1,8 @@
+{
+  "class": "harness",
+  "app": "aeparallel",
+  "ok": false,
+  "evidence": "NONE",
+  "error": "Guest transport lost; not an app failure",
+  "outputs_recorded": 0
+}

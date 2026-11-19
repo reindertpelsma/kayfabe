@@ -12,9 +12,14 @@
 //! over FREE VA is expected to be accepted (inferred, which is what this measures).
 //!
 //! ```text
-//! KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 kf-micro-reserve-probe reserve        # the decision
-//! KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 kf-micro-reserve-probe nv01-control   # the root cause, on hardware
+//! kf-micro-reserve-probe reserve        # the decision
+//! kf-micro-reserve-probe nv01-control   # the root cause, on hardware
 //! ```
+//!
+//! ★ 2026-11-15 (flag cleanup, Stage 1): the probe's space is ALWAYS the one a declared Windows guest
+//! gets ([`kf_host::channel::MirrorVaStart::GuestFloor`], `HostRm::alloc_vaspace_at`): it used to need
+//! `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1` in the environment to be so (gate 10 set it). The floor is no
+//! longer an environment switch (a Linux guest never gets it), so the probe states it itself.
 //!
 //! - `reserve` (safe): a census of small reservations at Windows-like VAs (and the old LARGE one),
 //!   then: reserve 8 pages at `0x4030000`, map 8 pages of a VRAM object of ours THROUGH it as ONE
@@ -164,11 +169,11 @@ fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
         .map_err(|e| e.to_string())?;
     l.measure("session", format!("driver {}", rm.driver_version()));
-    l.measure(
-        "space_start",
-        format!("{:?}", kf_host::channel::MirrorVaStart::from_env()),
-    );
-    let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
+    let start = kf_host::channel::MirrorVaStart::select(true);
+    l.measure("space_start", format!("{start:?}"));
+    let space = rm
+        .alloc_vaspace_at(start)
+        .map_err(|e| format!("vaspace: {e:?}"))?;
 
     // ── the census: small FIXED reservations at Windows-like VAs, and the old LARGE one ──────
     let census: [(u64, u64, &str); 6] = [

@@ -47,6 +47,10 @@ apt-get install -y ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorri
 ```
 <!-- src: scripts/bench/windows/README.md -->
 
+### Windows needs no flags
+
+*(Since 2026-11-15.)* `win_vm.sh run` boots Windows with **no `KF3_*` environment file**. kayfabe's Windows support set (the kernel graphics tier, per-process channel passthrough, the deferred-API and software-runlist objects, host-owned scheduling, async preempt, the colour path, and the answers to the preemption, zcull, display-control and GFX pool queries that the Windows driver needs) is on by default and is selected by what the guest declares about itself when its driver starts (its first message to the emulated GPU, which names the driver build). **That declaration comes from the guest, so it is not a security boundary:** an honest Linux guest never declares the Windows driver and never reaches the Windows set, but any guest that declares Windows driver 580.88 does, and about fifteen paths that used to need an operator environment flag are now reachable by such a guest on a default VM (per-process channel passthrough, the deferred-API object, the kernel graphics tier, the copy-engine relay, memory-list descriptors, asynchronous preempt, host-owned scheduling, the colour decoder, and the made-up answers below). No path into another VM or the host was found when this was written [inferred from reading the code, not tested; a dedicated hostile-guest review is a follow-up]. On a host that runs only Linux guests, or several tenants, set `windows-support=off`: it is the hardening, and no declaration then reaches any of it. Some of those answers are made up by kayfabe, not taken from the GPU (the GFX pool sizes; `NV_OK` for the preemption and zcull binds with nothing bound on the host); they were measured as required by the Windows driver and are product behaviour for a declared Windows guest only. To make a VM Linux-only, set the device property `windows-support=off` ([Running the QEMU device](installing.md)); a Windows guest on such a VM is refused by name at its first Windows-only control [expected to end in Code 43; not measured]. **[Not yet run on hardware without an env file: the change was made 2026-11-15 from the measured env-file profile (RTX 4090, `windows_apps` 10/10); the first proof is the Windows gate on a rented box with no env file.]** <!-- src: docs/design/V3_WINDOWS_SUPPORT_PROFILE.md, docs/OWNER_RULINGS.md section AT -->
+
 ### What it sets up
 
 | Piece | How |
@@ -93,7 +97,7 @@ Other sub-commands in the script's header: `scp-to`, `scp-from`, `sign` (export 
 | `--detach` | Run in the background. |
 | `--no-rpc-trace` | Do not set `KF3_RPC_TRACE=1` (on by default for kayfabe runs). |
 | `--tag`, `--max-boots` | Name the run; limit restarts (default 12). |
-| `--env-file FILE` | Export the `KF3_*` flags listed in FILE (only `KF3_NAME=digits` lines and `#` comments are accepted). Added 2026-10-31; the sample `kf3_flags.sample.env` is not confirmed as the current production list. |
+| `--env-file FILE` | Export the `KF3_*` flags listed in FILE (only `KF3_NAME=digits` lines and `#` comments are accepted). Not needed to start Windows (since 2026-11-15 the Windows profile is the device's default); for measurement flags only, and `kf3_flags.sample.env` is a one-line example. |
 | `--dry-run` | Print the QEMU command line and exit; start nothing. |
 
 <!-- src: scripts/bench/windows/README.md; scripts/bench/windows/win_vm.sh (cmd_run) -->

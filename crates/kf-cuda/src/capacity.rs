@@ -69,6 +69,32 @@ impl Pool {
         Some(Region { off: r.off, cap })
     }
 
+    /// ★ 2026-11-18: grow `r` in place to `new_cap` runs by taking the free run that starts exactly at its
+    /// end. Returns the grown region (same `off`), or `None` — with the pool untouched — when no free
+    /// run starts there or it is too short. Never moves, never overlaps another region, never leaves
+    /// the pool: the extension is carved out of a free run, which lies inside `[0, size)`.
+    fn grow_in_place(&mut self, r: Region, new_cap: u32) -> Option<Region> {
+        let extra = new_cap.checked_sub(r.cap).filter(|&e| e > 0)?;
+        let end = r.off.checked_add(r.cap)?;
+        let i = self.free.iter().position(|f| f.off == end)?;
+        let f = self.free[i];
+        if f.cap < extra {
+            return None;
+        }
+        if f.cap == extra {
+            self.free.remove(i);
+        } else {
+            self.free[i] = Region {
+                off: f.off + extra,
+                cap: f.cap - extra,
+            };
+        }
+        Some(Region {
+            off: r.off,
+            cap: new_cap,
+        })
+    }
+
     fn release(&mut self, r: Region) {
         if r.cap == 0 {
             return;
@@ -110,6 +136,18 @@ pub struct Move {
     pub from: Region,
     /// Its new region.
     pub to: Region,
+}
+
+impl Move {
+    /// ★ 2026-11-18: the device-to-device copy this move needs, as `(dst_off, src_off, runs)`, or `None`.
+    /// A relocation copies the WHOLE old region (the counts in `KfSlot` say how much is live) to the new
+    /// one. Growth in place (`to.off == from.off`, into the free run after the slot) moves nothing and
+    /// needs no copy: the old and new regions would overlap, and a copy onto itself is never issued.
+    /// The walker issues exactly this copy and no other.
+    #[must_use]
+    pub fn copy(&self) -> Option<(u32, u32, u32)> {
+        (self.to.off != self.from.off).then_some((self.to.off, self.from.off, self.from.cap))
+    }
 }
 
 /// Counters, for the census line.
@@ -182,6 +220,69 @@ impl Capacity {
             prev_cap: [0; KF_MAX_PDB],
             stats: CapacityStats::default(),
         })
+    }
+
+    /// ★ 2026-11-16 (**replay seam**, `docs/design/V3_REPLAY_TESTS.md`): a walker whose slot pool
+    /// already holds `held` — `(slot, region)` pairs — and is free everywhere else. For regression
+    /// fixtures that rebuild a LOGGED pool geometry (`slot_geometry`) and replay one decision on it;
+    /// production only ever reaches a layout through [`Capacity::plan`], [`Capacity::slot_needed`]
+    /// and [`Capacity::release`]. Slots not named hold nothing (a later `plan` gives them the default).
+    ///
+    /// # Errors
+    /// A layout no pool could hold, by name: a slot out of range or named twice, an empty region,
+    /// a region past the pool, or two regions that overlap. Plus everything [`Capacity::new`] refuses.
+    pub fn from_slot_regions(
+        max_slots: u32,
+        walk_pool: u32,
+        slot_pool: u32,
+        max_cap: u32,
+        slot_default: u32,
+        held: &[(u32, Region)],
+    ) -> Result<Capacity, String> {
+        let mut c = Capacity::new(max_slots, walk_pool, slot_pool, max_cap, slot_default)?;
+        let mut by_off: Vec<(u32, Region)> = held.to_vec();
+        by_off.sort_by_key(|&(_, r)| r.off);
+        let mut free = Vec::new();
+        let mut end = 0u64;
+        for &(s, r) in &by_off {
+            if s >= max_slots {
+                return Err(format!("slot {s} out of range ({max_slots})"));
+            }
+            if c.region[s as usize].is_some() {
+                return Err(format!("slot {s} named twice"));
+            }
+            if r.cap == 0 {
+                return Err(format!("slot {s}: an empty region"));
+            }
+            if u64::from(r.off) + u64::from(r.cap) > u64::from(slot_pool) {
+                return Err(format!(
+                    "slot {s}: region {}+{} is past the pool ({slot_pool})",
+                    r.off, r.cap
+                ));
+            }
+            if u64::from(r.off) < end {
+                return Err(format!(
+                    "slot {s}: region {}+{} overlaps the one before it (ends at {end})",
+                    r.off, r.cap
+                ));
+            }
+            if u64::from(r.off) > end {
+                free.push(Region {
+                    off: end as u32,
+                    cap: r.off - end as u32,
+                });
+            }
+            end = u64::from(r.off) + u64::from(r.cap);
+            c.region[s as usize] = Some(r);
+        }
+        if end < u64::from(slot_pool) {
+            free.push(Region {
+                off: end as u32,
+                cap: slot_pool - end as u32,
+            });
+        }
+        c.slots.free = free;
+        Ok(c)
     }
 
     /// The region slot `s` holds, if any.
@@ -331,11 +432,29 @@ impl Capacity {
         // so the two must not overlap. Growth headroom is an optimization, not a capacity
         // requirement: a free region holding the actual demand is sufficient. Failed alloc
         // leaves the pool untouched, so both attempts retain the source until a move exists.
-        let Some(to) = self
+        //
+        // ★ 2026-11-18 (the slot-pool ceiling death, `docs/design/V3_REPLAY_TESTS.md`): when NO free
+        // block holds a new region, the slot grows IN PLACE into the free run that starts at its
+        // end (preferred size if that run holds it, else the required size). That is a fallback, so
+        // every growth that relocated before relocates the same way; it needs no copy (the device
+        // keeps the placements where they are; `to.off == from.off`) and stays inside the same
+        // bounds (`max_cap` per space, the pool). ⊘ Was: only a new disjoint region was tried, so
+        // a pool with over a million free runs refused a 6 000-run growth that fitted in the slot's
+        // own tail, the diff overflowed, the split did not apply and the guest's channel died.
+        let to = if let Some(to) = self
             .slots
             .alloc(preferred)
             .or_else(|| self.slots.alloc(required))
-        else {
+        {
+            self.slots.release(old);
+            to
+        } else if let Some(to) = self
+            .slots
+            .grow_in_place(old, preferred)
+            .or_else(|| self.slots.grow_in_place(old, required))
+        {
+            to
+        } else {
             self.stats.ceilings += 1;
             return Err(format!(
                 "slot pool exhausted: slot {s} grows {} → {required} required runs ({preferred} preferred), {} free (largest {}) of {}",
@@ -345,7 +464,6 @@ impl Capacity {
                 self.slots.size
             ));
         };
-        self.slots.release(old);
         self.region[i] = Some(to);
         let h = &mut self.hint[i];
         *h = (*h).max(to.cap);
@@ -356,6 +474,78 @@ impl Capacity {
             from: old,
             to,
         }))
+    }
+
+    /// ★ 2026-11-16 (observation only, `docs/design/V3_VA_PROFILE.md`): the slot pool's geometry
+    /// around slot `s` when its growth to `need` placements hit the ceiling (2026-11-18: since the
+    /// in-place fallback, "would fit" is printed at a ceiling only if the pool changed in between) — what a fragmentation
+    /// fix must know (whether the tail after the slot is free, the largest free blocks, who sits
+    /// next to it). Bounded: the 8 largest free regions and the slot's two neighbours.
+    #[must_use]
+    pub fn slot_geometry(&self, s: u32, need: u32) -> String {
+        let required = grain(u64::from(need), self.slot_default).min(u64::from(self.max_cap));
+        let old = self.region.get(s as usize).copied().flatten();
+        let mut free = self.slots.free.clone();
+        free.sort_by(|a, b| b.cap.cmp(&a.cap).then(a.off.cmp(&b.off)));
+        let largest: Vec<String> = free
+            .iter()
+            .take(8)
+            .map(|r| format!("{}+{}", r.off, r.cap))
+            .collect();
+        let (tail_free, head_free, left, right) = match old {
+            Some(o) => {
+                let end = o.off.saturating_add(o.cap);
+                let tail = self
+                    .slots
+                    .free
+                    .iter()
+                    .find(|r| r.off == end)
+                    .map_or(0, |r| r.cap);
+                let head = self
+                    .slots
+                    .free
+                    .iter()
+                    .find(|r| r.off.saturating_add(r.cap) == o.off)
+                    .map_or(0, |r| r.cap);
+                let mut left: Option<(usize, Region)> = None;
+                let mut right: Option<(usize, Region)> = None;
+                for (i, r) in self.region.iter().enumerate() {
+                    let Some(r) = *r else { continue };
+                    if i == s as usize {
+                        continue;
+                    }
+                    if r.off < o.off && left.is_none_or(|(_, l)| r.off > l.off) {
+                        left = Some((i, r));
+                    }
+                    if r.off > o.off && right.is_none_or(|(_, x)| r.off < x.off) {
+                        right = Some((i, r));
+                    }
+                }
+                (tail, head, left, right)
+            }
+            None => (0, 0, None, None),
+        };
+        let fmt = |x: Option<(usize, Region)>| {
+            x.map_or("none".to_string(), |(i, r)| {
+                format!("s{i}@{}+{}", r.off, r.cap)
+            })
+        };
+        format!(
+            "slot {s} region {} required {required} pool {} free {} in {} region(s), largest [{}]; adjacent free: head {head_free} tail {tail_free} (in-place growth {}); neighbours left {} right {}; slots held {}",
+            old.map_or("none".to_string(), |o| format!("{}+{}", o.off, o.cap)),
+            self.slots.size,
+            self.slots.free_runs(),
+            self.slots.free.len(),
+            largest.join(" "),
+            if old.is_some_and(|o| u64::from(o.cap) + u64::from(tail_free) >= required) {
+                "would fit"
+            } else {
+                "would not fit"
+            },
+            fmt(left),
+            fmt(right),
+            self.region.iter().filter(|r| r.is_some()).count(),
+        )
     }
 
     /// Free runs in the slot pool.
@@ -389,6 +579,198 @@ mod tests {
 
     fn cap() -> Capacity {
         Capacity::new(8, 1 << 16, 1 << 16, 1 << 15, 1024).expect("config")
+    }
+
+    /// ★ 2026-11-16: a ceiling with enough free runs in total but no block large enough names the
+    /// slot's region, the largest free blocks, its neighbours and that in-place growth would not fit.
+    #[test]
+    fn ceiling_geometry_names_the_blocks_and_the_neighbours() {
+        let mut c = Capacity::new(8, 4096, 4096, 4096, 1024).expect("config");
+        let _ = c.plan(&[0, 1, 2]).expect("plan");
+        let e = c
+            .slot_needed(1, 1500)
+            .expect_err("the pool has 1024 free, 1536 required");
+        assert!(e.contains("slot pool exhausted"), "{e}");
+        let g = c.slot_geometry(1, 1500);
+        for want in [
+            "slot 1 region 1024+1024",
+            "required 1536",
+            "free 1024 in 1 region(s)",
+            "largest [3072+1024]",
+            "head 0 tail 0",
+            "would not fit",
+            "left s0@0+1024",
+            "right s2@2048+1024",
+            "slots held 3",
+        ] {
+            assert!(g.contains(want), "{want} in {g}");
+        }
+        // slot 2 is in the same pool, but the free run right after it holds the growth: 2026-11-18, it
+        // grows there instead of being refused (it was a ceiling before)
+        let g2 = c.slot_geometry(2, 1500);
+        let m = c.slot_needed(2, 1500).expect("in place").expect("grew");
+        assert_eq!(
+            m.to,
+            Region {
+                off: 2048,
+                cap: 1536
+            }
+        );
+        for want in [
+            "slot 2 region 2048+1024",
+            "tail 1024",
+            "would fit",
+            "right none",
+        ] {
+            assert!(g2.contains(want), "{want} in {g2}");
+        }
+        assert!(!g2.contains("would not fit"), "{g2}");
+    }
+
+    /// ★ 2026-11-16: a free tail too small for the required size is named, and in-place growth
+    /// is said NOT to fit.
+    #[test]
+    fn ceiling_geometry_names_a_free_tail_too_small() {
+        let mut c = Capacity::new(8, 4096, 4096, 4096, 512).expect("config");
+        let _ = c.plan(&[0, 1, 2, 3]).expect("plan");
+        assert!(c.slot_needed(3, 4000).is_err());
+        let g = c.slot_geometry(3, 4000);
+        for want in [
+            "slot 3 region 1536+512",
+            "required 4096",
+            "largest [2048+2048]",
+            "head 0 tail 2048",
+            "would not fit",
+            "left s2@1024+512",
+        ] {
+            assert!(g.contains(want), "{want} in {g}");
+        }
+    }
+
+    /// ★ 2026-11-16: a free tail directly after the slot is named, with whether growth in place fits.
+    /// 2026-11-18: that growth now SUCCEEDS in place (it was refused at a ceiling), so the geometry is read
+    /// before the growth, as an observation of the state the decision starts from.
+    #[test]
+    fn ceiling_geometry_names_a_free_tail_that_would_fit() {
+        let mut c = Capacity::new(8, 4096, 4096, 4096, 1024).expect("config");
+        let _ = c.plan(&[0, 1]).expect("plan");
+        // 2048 free after slot 1; growth needs 3072: in place it fits exactly
+        let g = c.slot_geometry(1, 3000);
+        for want in [
+            "slot 1 region 1024+1024",
+            "required 3072",
+            "tail 2048",
+            "would fit",
+            "right none",
+            "left s0@0+1024",
+        ] {
+            assert!(g.contains(want), "{want} in {g}");
+        }
+        assert!(!g.contains("would not fit"), "{g}");
+        let m = c
+            .slot_needed(1, 3000)
+            .expect("fits in place")
+            .expect("grew");
+        assert_eq!(
+            m.from,
+            Region {
+                off: 1024,
+                cap: 1024
+            }
+        );
+        assert_eq!(
+            m.to,
+            Region {
+                off: 1024,
+                cap: 3072
+            }
+        );
+        assert_eq!(c.stats.ceilings, 0);
+        assert_eq!(c.slot_pool_free(), 0);
+        assert_eq!(m.copy(), None, "growth in place issues no copy");
+    }
+
+    /// ★ 2026-11-18: `Move::copy` is the device copy the walker issues: none in place, the whole OLD region
+    /// for a relocation (the destination may be larger, the source length is what is live).
+    #[test]
+    fn a_move_copies_the_whole_old_region_unless_it_grew_in_place() {
+        let from = Region {
+            off: 2048,
+            cap: 1024,
+        };
+        let reloc = Move {
+            slot: 3,
+            from,
+            to: Region { off: 0, cap: 1536 },
+        };
+        assert_eq!(reloc.copy(), Some((0, 2048, 1024)));
+        let inplace = Move {
+            slot: 3,
+            from,
+            to: Region {
+                off: 2048,
+                cap: 1536,
+            },
+        };
+        assert_eq!(inplace.copy(), None);
+    }
+
+    /// ★ 2026-11-18: `Pool::grow_in_place` takes only the free run that starts at the region's end, exactly,
+    /// keeps the free list sorted and non-adjacent, and leaves the pool untouched when it refuses.
+    #[test]
+    fn grow_in_place_takes_only_the_run_at_the_end() {
+        let mut p = Pool::new(4096);
+        let a = p.alloc(1024).expect("a");
+        let b = p.alloc(1024).expect("b");
+        let _c = p.alloc(1024).expect("c");
+        p.release(b);
+        // free: [1024, 2048) and [3072, 4096); `a` ends at 1024
+        assert_eq!(p.grow_in_place(a, 1024), None, "no growth, no extra");
+        assert_eq!(p.grow_in_place(a, 512), None, "shrinking is not growth");
+        let before = p.free.clone();
+        assert_eq!(p.grow_in_place(a, 2049), None, "one past the run");
+        assert_eq!(p.free, before, "a refusal changes nothing");
+        assert_eq!(p.grow_in_place(a, 1536), Some(Region { off: 0, cap: 1536 }));
+        assert_eq!(
+            p.free,
+            vec![
+                Region {
+                    off: 1536,
+                    cap: 512
+                },
+                Region {
+                    off: 3072,
+                    cap: 1024
+                }
+            ]
+        );
+        let g = p.grow_in_place(Region { off: 0, cap: 1536 }, 2048);
+        assert_eq!(g, Some(Region { off: 0, cap: 2048 }));
+        assert_eq!(
+            p.free,
+            vec![Region {
+                off: 3072,
+                cap: 1024
+            }],
+            "exact fit removes the run"
+        );
+        // a region at the pool end has no run after it
+        let last = Region {
+            off: 3072,
+            cap: 1024,
+        };
+        assert_eq!(p.grow_in_place(last, 2048), None);
+        // a region whose end is not the start of a free run (inside a free run) is not extended
+        assert_eq!(
+            p.grow_in_place(
+                Region {
+                    off: 2048,
+                    cap: 512
+                },
+                1024
+            ),
+            None
+        );
     }
 
     #[test]
