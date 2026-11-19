@@ -196,7 +196,9 @@ impl CommandPolicy for BarPdePolicy {
             Err(e) => {
                 self.refused += 1;
                 self.held_last = false;
-                eprintln!("kf-rm: UPDATE_BAR_PDE refused: {e:?} — the aperture stays as it was");
+                kf_gsp::guest_log!(
+                    "kf-rm: UPDATE_BAR_PDE refused: {e:?} — the aperture stays as it was"
+                );
                 Some(Reply {
                     rpc_result_private: None,
                     rpc_result: NV_ERR_INVALID_ARGUMENT,

@@ -2449,7 +2449,7 @@ impl Inbox {
         payload: u32,
     ) -> u64 {
         let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
-        eprintln!(
+        kf_gsp::guest_log!(
             "kf3: GATE ticket={t} by channel token {token:#x}: walk {key:?}, then release payload {payload}"
         );
         if let Ok(mut g) = self.gates.lock() {
@@ -2490,7 +2490,7 @@ impl Inbox {
             (Ok(()), Some((g, payload))) => g
                 .release(payload)
                 .map(|()| {
-                    eprintln!(
+                    kf_gsp::guest_log!(
                         "kf3: GATE ticket={ticket} RELEASED payload {payload} after the commit"
                     );
                 })
