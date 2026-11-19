@@ -1,14 +1,17 @@
 """Dataset fetch with sha256 verification. Pins live in pins.json; an unpinned download is kept
 as <name>.unverified, its hash printed, and the call fails with 'PIN ME' unless
-KF_ML_ALLOW_UNPINNED=1 (dev only)."""
+KF_ML_ALLOW_UNPINNED=1 (dev only).
+
+2026-11-19 (standalone trust, #473): a network fetch goes through the repository's trust helper,
+scripts/ci/kf_trust.py, for the dataset's artifact in scripts/ci/trust_manifest.json (`trust_artifact`
+in pins.json): the helper checks the anchors and does the transfer (parallel and resumable for a pinned
+file, the pin's `parallel` streams). This file holds no download primitive."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-import threading
-import time
-import urllib.request
+import importlib.util
 from pathlib import Path
 
 PINS_FILE = Path(__file__).resolve().parent.parent / "pins.json"
@@ -43,56 +46,22 @@ def _md5(path) -> str:
     return h.hexdigest()
 
 
-def download_parallel(url, dest, connections=6, urlopen=urllib.request.urlopen, retries=5, sleep=time.sleep, chunk=1 << 20):
-    """Download URL into DEST with several ranged requests at once. Returns the byte count, or None when the server does not offer ranges
-    (the caller then downloads sequentially). Why: the CIFAR-10 server gives about 45 KB/s per connection (MEASURED 2026-11-17, two boxes and
-    the coordinator: a single download takes 15 to 60 minutes), and answers a burst of 8 or more connections with resets, so the default is 6.
-    Nothing here is trusted: the caller verifies the sha256 pin of the finished file. A range that fails is retried from the byte it reached."""
-    req = urllib.request.Request(url, method="HEAD")
-    with urlopen(req) as r:
-        length = int(r.headers.get("Content-Length") or 0)
-        ranges_ok = "bytes" in (r.headers.get("Accept-Ranges") or "").lower()
-    if not ranges_ok or length <= 0 or connections < 2:
+class TrustHelperMissing(Exception):
+    pass
+
+
+def trust_helper():
+    """scripts/ci/kf_trust.py of this checkout, loaded as a module; None outside a repository checkout."""
+    path = Path(__file__).resolve().parents[3] / "scripts" / "ci" / "kf_trust.py"
+    if not path.is_file():
         return None
-    step = -(-length // connections)
-    spans = [(i * step, min(length, (i + 1) * step) - 1) for i in range(connections) if i * step < length]
-    fd = os.open(str(dest), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
-    errors = []
-
-    def one(span):
-        pos, end = span
-        for attempt in range(retries):
-            try:
-                rq = urllib.request.Request(url, headers={"Range": "bytes=%d-%d" % (pos, end)})
-                with urlopen(rq) as r:
-                    if getattr(r, "status", 206) != 206:
-                        raise OSError("server ignored the Range header (HTTP %s)" % getattr(r, "status", "?"))
-                    while pos <= end:
-                        b = r.read(min(chunk, end - pos + 1))
-                        if not b:
-                            raise OSError("short read")
-                        os.pwrite(fd, b, pos)
-                        pos += len(b)
-                return
-            except Exception as e:  # noqa: BLE001  a reset, a timeout, a short read: retry this span from where it stopped
-                last = e
-                sleep(min(2 ** attempt, 10))
-        errors.append("bytes %d-%d: %s" % (span[0], span[1], last))
-
-    try:
-        threads = [threading.Thread(target=one, args=(sp,)) for sp in spans]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-    finally:
-        os.close(fd)
-    if errors:
-        raise OSError("parallel download failed: " + "; ".join(errors[:3]))
-    return length
+    spec = importlib.util.spec_from_file_location("kf_trust", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def fetch(name: str, data_dir, pins=None, environ=None, opener=None, source_dir=None) -> dict:
+def fetch(name: str, data_dir, pins=None, environ=None, opener=None, source_dir=None, trust=None) -> dict:
     """Return {'path', 'sha256', 'pinned'}; downloads on first use. source_dir: an offline copy (a wheelhouse's data/): the file is
     taken from there instead of the network and is verified against the pin exactly like a download."""
     environ = os.environ if environ is None else environ
@@ -107,17 +76,24 @@ def fetch(name: str, data_dir, pins=None, environ=None, opener=None, source_dir=
         src = unver if unver.exists() else None
         if src is None:
             tmp = Path(str(dest) + ".part")
-            op = opener or urllib.request.urlopen
-            target = ent["url"]
+            op, target = opener, ent["url"]
             if source_dir is not None:
                 local = Path(source_dir) / ent["filename"]
                 if not local.is_file():
                     raise FileNotFoundError("offline: %s is not in %s" % (ent["filename"], source_dir))
                 op, target = (lambda path: open(path, "rb")), str(local)
-            done = None
-            if source_dir is None and opener is None and ent.get("parallel", 1) > 1:
-                done = download_parallel(target, tmp, ent["parallel"])
-            if done is None:
+            if op is None:
+                # the network: only through the trust helper, for the dataset's manifest artifact
+                art = ent.get("trust_artifact")
+                if not art:
+                    raise PinMe("PIN ME: dataset %s has no trust_artifact in pins.json; add the artifact with its anchors to "
+                                "scripts/ci/trust_manifest.json (no download outside the trust helper)" % name)
+                kt = trust if trust is not None else trust_helper()
+                if kt is None:
+                    raise TrustHelperMissing("TRUST_HELPER_MISSING: %s needs scripts/ci/kf_trust.py (run kfml from a repository checkout) "
+                                             "or an offline copy (--source-dir)" % name)
+                kt.resolve(art, tmp, transport=kt.HttpTransport(streams=int(ent.get("parallel", 4))))
+            else:
                 with op(target) as r, open(tmp, "wb") as f:
                     while True:
                         b = r.read(1 << 20)
