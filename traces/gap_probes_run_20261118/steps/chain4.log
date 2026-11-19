@@ -1,0 +1,11 @@
+CHAIN4 H3 04:44:19
+[apps_matrix 2026-11-18T04:44:19+00:00] START side=host run=H3 rev=8aa94098 apps=1
+APPRES side=host app=gap_probes verdict=PASS rc=0 secs=1 quiet=0 note=warn:GAP_PROBES_SUMMARY side=host pass=1 not_supported=0 fail=0 mismatch=0 not_run=0
+[apps_matrix 2026-11-18T04:44:20+00:00] HOST_DONE 1 pass / 1 rows
+CHAIN4 G6 04:44:20
+[apps_matrix 2026-11-18T04:44:20+00:00] START side=guest run=G6 rev=8aa94098 apps=1
+[apps_matrix 2026-11-18T04:44:20+00:00] kf3 binary: /workspace/bench/kf3-bins/8aa94098-dirty/qemu-system-x86_64
+[apps_matrix 2026-11-18T04:45:33+00:00] boot ap_G6_b1 rc=0 apps=[gap_probes] :: /workspace/bench/run_ap_G6_b1_probe.log:APPS_HOOK tag=ap_G6_b1 apps=[gap_probes] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_G6_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/G6/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T04:45:33+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+CHAIN4 done 04:45:34

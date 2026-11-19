@@ -1,0 +1,12 @@
+# STATUS: RESEARCH, 2026-11-18. Differences between the host run and the guest run that are explained, not hidden. TSV: case_glob key_glob host_class guest_class bucket reason (every limit carries a reason).
+# A limit explains one difference; an unlisted difference stays a candidate. Pinned by scripts/ci/test_gap_probes.py.
+attr_dump	mem_total_mib	pass	pass	kayfabe_limitation	the guest reports the frame-buffer size the host reserves for it (fb-mb policy, docs/design/V3_UTILIZATION_FLAG.md and the image-B backlog 3), not the die total
+attr_dump	attr.33	pass	pass	kayfabe_limitation	PCI bus id differs: the guest has its own virtual PCI topology
+attr_dump	attr.34	pass	pass	kayfabe_limitation	PCI device id of the slot differs: the guest has its own virtual PCI topology
+attr_dump	attr.50	pass	pass	kayfabe_limitation	PCI domain id differs: the guest has its own virtual PCI topology
+tools_ncu	*	pass	not_supported	kayfabe_limitation	the profiler interface is stubbed as capability absent (docs/OWNER_RULINGS.md section H: debugger, profiler, NVLink, ECC): performance counters are not served to a guest
+managed_prefetch_advise	*	pass	*	kayfabe_limitation	UVM demand paging is not supported in the guest and is not a release target (README.md, docs/OWNER_RULINGS.md section E); the four UVM apps fail the same way with one host Xid 31 each
+managed_concurrent	*	pass	*	kayfabe_limitation	UVM demand paging is not supported in the guest and is not a release target (README.md, docs/OWNER_RULINGS.md section E)
+managed_oversub	*	pass	*	kayfabe_limitation	UVM demand paging is not supported in the guest and is not a release target (README.md, docs/OWNER_RULINGS.md section E)
+smi_setters	*	pass	*	kayfabe_limitation	the guest nvidia-smi serves no power or clock values and refuses the compute-mode and accounting setters: capability absent, the answer of a GPU without the feature (docs/OWNER_RULINGS.md section H; telemetry N/A: docs/design/V3_UTILIZATION_FLAG.md section 10, measured 2026-11-17)
+tools_sanitizer	*	pass	*	kayfabe_limitation	INFERRED, mechanism not shown: compute-sanitizer needs the CUDA debugger/injection interface, which owner ruling H stubs as capability absent (docs/OWNER_RULINGS.md section H: debugger, profiler, NVLink, ECC); measured 2026-11-18: under the tool the first CUDA call of the target returns 999 in the guest and 0 on the host

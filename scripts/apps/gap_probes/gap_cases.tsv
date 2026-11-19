@@ -1,0 +1,50 @@
+# STATUS: RESEARCH, 2026-11-18. Case table of the GPU-PV gap probes (docs/design/V3_GPUPV_GAP_MATRIX.md section 3). One case per line, `|` separated.
+# kind c = a case of gap_probe.c, py = a function of gap_scripts.py. tags: guest_only (never run on the host oracle: it would disturb the machine kayfabe runs on), destructive and
+# terminal (opt-in: --destructive / --terminal). gpu = the case claims GPU work (the host census must show it). env = KEY=VALUE for the case. falsifier = the result that proves the hypothesis `the guest equals the host` wrong.
+id|group|kind|prog|timeout_s|gpu|tags|env|falsifier
+attr_dump|cuda_attr|c|attr_dump|60|no|-|-|any device attribute, or the memory total, differs between the host and the guest run outside gap_known_limits.tsv
+canary|cuda_attr|c|canary|60|yes|-|-|the smallest context + kernel + copy fails in the guest while it passes on the host
+pinned_1g|cuda_pinned|c|pinned_1g|180|no|-|-|cuMemHostAlloc of 1 GiB fails or corrupts in the guest and passes on the host
+pinned_4g|cuda_pinned|c|pinned_4g|300|no|-|-|cuMemHostAlloc of 4 GiB fails or corrupts in the guest and passes on the host
+host_register_512m|cuda_pinned|c|host_register_512m|120|no|-|-|cuMemHostRegister of an mmap region fails in the guest and passes on the host
+mapped_zerocopy|cuda_pinned|c|mapped_zerocopy|120|yes|-|-|a kernel cannot read and write mapped pinned host memory in the guest
+pinned_huge_refused|cuda_pinned|c|pinned_huge_refused|120|no|-|-|a 1 TiB pinned request is granted, or its refusal takes more than 30 s (unbounded guest-reachable resource)
+managed_prefetch_advise|cuda_managed|c|managed_prefetch_advise|180|yes|-|-|managed allocation, advise, prefetch and a kernel give a wrong value or an error that the host does not
+managed_concurrent|cuda_managed|c|managed_concurrent|180|yes|-|-|concurrentManagedAccess differs from the host, or CPU access during a kernel fails when the attribute says it works
+managed_oversub|cuda_managed|c|managed_oversub|900|yes|-|-|touching more managed memory than the device holds times out or loses data (host Xid 109 would be the signature)
+ipc_legacy|cuda_ipc|c|ipc_legacy|180|yes|-|-|cuIpcGetMemHandle/OpenMemHandle between two processes fails in the guest and works on the host
+ipc_event|cuda_ipc|c|ipc_event|180|no|-|-|an interprocess event cannot be waited on from a second process in the guest
+ipc_vmm_fd|cuda_ipc|c|ipc_vmm_fd|180|yes|-|-|a cuMemCreate allocation exported as a POSIX fd cannot be imported, mapped and written by a second process in the guest
+vmm_granularity|cuda_vmm|c|vmm_granularity|60|no|-|-|allocation granularity differs from the host or is not a power of two
+vmm_basic|cuda_vmm|c|vmm_basic|180|yes|-|-|cuMemCreate/Map/SetAccess/Unmap/Release round trip fails or corrupts in the guest
+vmm_remap|cuda_vmm|c|vmm_remap|180|yes|-|-|remapping physical handles under one VA range does not move the data with the handles
+graph_capture_launch|cuda_graph|c|graph_capture_launch|180|yes|-|-|a captured graph replayed 1000 times gives a wrong value or an error in the guest
+graph_update|cuda_graph|c|graph_update|180|yes|-|-|cuGraphExecUpdate cannot retarget an instantiated graph in the guest
+graph_mem_nodes|cuda_graph|c|graph_mem_nodes|180|yes|-|-|memset + device copy + kernel inside a graph gives a wrong value in the guest
+pool_alloc_free|cuda_pool|c|pool_alloc_free|180|yes|-|-|stream-ordered allocation (cuMemAllocAsync/FreeAsync) fails or corrupts in the guest
+pool_threshold_trim|cuda_pool|c|pool_threshold_trim|180|yes|-|-|the pool release threshold or cuMemPoolTrimTo is not honoured in the guest
+pool_ipc_export|cuda_pool|c|pool_ipc_export|120|no|-|-|an exportable pool cannot be created or exported in the guest while the attribute says it can
+churn_ctx_200|cuda_churn|c|churn_ctx_200|900|yes|-|-|200 create/use/destroy cycles of a context fail (the per-boot CUDA process budget is about 60 on the same device)
+churn_module_200|cuda_churn|c|churn_module_200|900|yes|-|CUDA_CACHE_DISABLE=1|200 freshly JIT-compiled modules cannot all be loaded, run and unloaded
+churn_streams_events|cuda_churn|c|churn_streams_events|300|no|-|-|2048 streams and 4096 events cannot be created, used and destroyed
+fanout_procs_24|cuda_churn|c|fanout_procs_24|600|yes|-|-|24 processes cannot hold a CUDA context at once and each run a kernel
+spin_5s|cuda_kernel_time|c|spin_5s|120|yes|-|-|a 5 s kernel is killed in the guest (a watchdog the host does not apply)
+spin_30s|cuda_kernel_time|c|spin_30s|180|yes|-|-|a 30 s kernel is killed in the guest (a watchdog the host does not apply)
+launch_flood_100k|cuda_kernel_time|c|launch_flood_100k|600|yes|-|-|100000 back-to-back launches lose a launch or hang
+fault_recovery|cuda_kernel_time|c|fault_recovery|180|yes|-|-|an illegal store in a second process is not reported, or it leaves the first process or a fresh process unable to use the GPU
+trap_recovery|cuda_kernel_time|c|trap_recovery|180|yes|-|-|a trap in a second process is not reported, or it leaves the first process or a fresh process unable to use the GPU
+cupti_callback|profiling|c|cupti_callback|120|yes|-|-|the CUPTI callback API does not see the driver API calls of a process in the guest while it does on the host (or cuptiSubscribe is refused)
+cupti_activity|profiling|c|cupti_activity|120|yes|-|-|the CUPTI activity API returns fewer kernel records than kernels launched in the guest, or refuses to enable, where the host does not
+tools_sanitizer|profiling|py|tools_sanitizer|600|yes|-|-|compute-sanitizer memcheck, racecheck, synccheck or initcheck hangs or errors in the guest, or memcheck is silent about an illegal store that the host run reports
+tools_ncu|profiling|py|tools_ncu|300|yes|-|-|Nsight Compute kernel replay with performance counters hangs or fails with an unlisted error in the guest (ERR_NVGPUCTRPERM or a clean not-supported answer is a pass)
+tools_nsys|profiling|py|tools_nsys|300|yes|-|-|Nsight Systems cannot trace the CUDA calls and kernels of a process in the guest where the host run can
+tools_nsys_gpumetrics|profiling|py|tools_nsys_gpumetrics|300|yes|-|-|Nsight Systems GPU metrics sampling hangs or fails with an unlisted error in the guest (a clean not-supported answer is a pass)
+vk_global_priority|vulkan_caps|py|vk_global_priority|120|no|-|-|a global queue priority (low, medium, high, realtime) that the host reports or accepts in vkCreateDevice is not reported or is refused in the guest
+vk_dump|vulkan_caps|py|vk_dump|180|no|-|-|any Vulkan feature, limit, queue family, format or extension value differs from the host outside the known limits
+smi_setters|smi_control|py|smi_setters|300|no|-|-|a setter answers differently from the host, hangs, or changes a value the host can see (guest root changing host GPU state)
+life_persistenced|lifecycle|py|life_persistenced|180|no|-|-|nvidia-persistenced does not start, hold and stop cleanly in the guest, or CUDA fails while it runs
+life_kill_kernel|lifecycle|py|life_kill_kernel|600|yes|-|-|SIGKILL of a process in the middle of a kernel leaves the device unusable for the next process (5 rounds)
+life_kill_gl|lifecycle|py|life_kill_gl|600|yes|-|-|SIGKILL of an EGL client mid-render leaves the next EGL client or CUDA process unable to run (5 rounds)
+life_module_cycle|lifecycle|py|life_module_cycle|900|no|guest_only|-|unloading and reloading the nvidia modules (with and without a CUDA client alive) hangs, unloads under a live client, or leaves CUDA unusable
+life_reset|lifecycle|py|life_reset|300|no|guest_only,destructive|-|nvidia-smi -r hangs or leaves the guest GPU unusable (a clean refusal is a pass)
+life_busy_poweroff|lifecycle|py|life_busy_poweroff|120|yes|guest_only,terminal|-|a guest power-off with a busy GPU leaves the host with a leaked slot, VA pool or channel (read on the host afterwards)

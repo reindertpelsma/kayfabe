@@ -1,0 +1,15 @@
+group sparse_resources: 70 of 19402 cases sampled
+group ray_tracing_pipeline: 70 of 22241 cases sampled
+group ray_query: 70 of 48771 cases sampled
+group mesh_shader: 70 of 28061 cases sampled
+group synchronization2: 70 of 81510 cases sampled
+group synchronization: 70 of 64872 cases sampled
+group transform_feedback: 70 of 133719 cases sampled
+group device_group: 21 of 21 cases sampled
+group memory: 70 of 6364 cases sampled
+group memory_model: 70 of 18530 cases sampled
+group api: 70 of 267509 cases sampled
+group pipeline: 70 of 1123492 cases sampled
+group compute: 70 of 67553 cases sampled
+group subgroups: 70 of 48621 cases sampled
+group video: 70 of 9471 cases sampled

@@ -1,0 +1,17 @@
+#case	area	host	guest	category	bucket	guest_xid	host_xid	kvdiff	why
+attr_dump	cuda_attr	pass	pass	VALUE_DIFF	kayfabe_limitation	-	-	attr.34:7->3;mem_total_mib:24124->7871	PCI device id of the slot differs: the guest has its own virtual PCI topology
+managed_prefetch_advise	cuda_managed	pass	fail	GUEST_ONLY_FAIL	kayfabe_limitation	-	-	-	UVM demand paging is not supported in the guest and is not a release target (README.md, docs/OWNER_RULINGS.md section E); the four UVM apps fail the same way with one host Xid 31 each
+managed_oversub	cuda_managed	pass	fail	GUEST_ONLY_FAIL	kayfabe_limitation	-	-	-	UVM demand paging is not supported in the guest and is not a release target (README.md, docs/OWNER_RULINGS.md section E)
+graph_capture_launch	cuda_graph	pass	pass	VALUE_DIFF	kayfabe_gap_candidate	-	-	launches_per_s:174000->20700	unclassified
+launch_flood_100k	cuda_kernel_time	pass	pass	VALUE_DIFF	kayfabe_gap_candidate	-	-	secs:0->4	unclassified
+tools_sanitizer	profiling	pass	not_supported	GUEST_LOSES_SUPPORT	kayfabe_limitation	-	-	-	INFERRED, mechanism not shown: compute-sanitizer needs the CUDA debugger/injection interface, which owner ruling H stubs as capability absent (docs/OWNER_RULINGS.md section H: debugger, profiler, NVLink, ECC); measured 2026-11-18: under the tool the first CUDA call of the target returns 999 in the guest and 0 on the host
+tools_ncu	profiling	pass	not_run	INCOMPLETE	-	-	-	-	-
+tools_nsys	profiling	pass	not_run	INCOMPLETE	-	-	-	-	-
+tools_nsys_gpumetrics	profiling	pass	not_run	INCOMPLETE	-	-	-	-	-
+vk_dump	vulkan_caps	pass	pass	VALUE_DIFF	kayfabe_gap_candidate	-	-	group.$schema:1:f6037658->1:268afb3a;group.ArrayOfVkExtensionProperties.0:2:d8acc96e->-;group.ArrayOfVkExtensionProperties.1:2:24c1da1b->-;group.ArrayOfVkExtensionProperties.10:2:207e1cac->-;group.ArrayOfVkExtensionProperties.100:2:96fcd8cb->-;group.ArrayOfVkExtensionProperties.101:2:e754967c->-	unclassified
+smi_setters	smi_control	pass	pass	VALUE_DIFF	kayfabe_limitation	-	-	baseline:Default,Disabled,370.00,[N/A],1755->Default,Disabled,[N/A],[N/A],[N/A];setter.accounting:OK->NOT_SUPPORTED;setter.compute_exclusive:OK->NOT_SUPPORTED;setter.compute_prohibited:OK->NOT_SUPPORTED;setter.lock_gr_clock:OK->-;setter.power_same:OK->-	the guest nvidia-smi serves no power or clock values and refuses the compute-mode and accounting setters: capability absent, the answer of a GPU without the feature (docs/OWNER_RULINGS.md section H; telemetry N/A: docs/design/V3_UTILIZATION_FLAG.md section 10, measured 2026-11-17)
+life_persistenced	lifecycle	pass	pass	VALUE_DIFF	kayfabe_gap_candidate	-	-	daemon_found:-->1;preexisting:1->-;start_rc:-->0;stopped_on_sigterm:-->1	unclassified
+life_module_cycle	lifecycle	not_run	pass	INCOMPLETE	-	-	-	-	-
+life_reset	lifecycle	not_run	not_run	INCOMPLETE	-	-	-	-	-
+life_busy_poweroff	lifecycle	not_run	not_run	INCOMPLETE	-	-	-	-	-
+GAP_COMPARE cases=45 differing=15 candidates=4 limitation=5 harness=0 config=0 guest_loses_support=1 guest_only_fail=2 incomplete=6 value_diff=6

@@ -1,0 +1,1967 @@
+=== gap_probes side=host start=2026-11-18T03:42:23+00:00 host=ubuntu cmd: python3 /opt/apps/bundle/share/gap_probes/gap_probes.py run --side host --out /opt/apps/out/host/gap_probes --egl /opt/apps/bundle/bin/egl_offscreen --only vk_dump,smi_setters,life_persistenced,tools_sanitizer,tools_ncu,tools_nsys,tools_nsys_gpumetrics,graph_capture_launch,launch_flood_100k --emit
+GAPCASE graph_capture_launch PASS -
+GAPCASE launch_flood_100k PASS -
+GAPCASE tools_sanitizer PASS -
+GAPCASE tools_ncu PASS -
+GAPCASE tools_nsys PASS -
+GAPCASE tools_nsys_gpumetrics PASS -
+GAPCASE vk_dump PASS -
+GAPCASE smi_setters PASS -
+GAPCASE life_persistenced PASS -
+@@FILE results.tsv sha256=9fa88743cecf1f3d bytes=689
+id	group	status	rc	secs	t0	t1	reason	canary
+graph_capture_launch	cuda_graph	PASS	0	2.1	1794973343.702	1794973345.809	-	-
+launch_flood_100k	cuda_kernel_time	PASS	0	2.3	1794973345.809	1794973348.118	-	-
+tools_sanitizer	profiling	PASS	0	11.9	1794973348.118	1794973359.971	-	-
+tools_ncu	profiling	PASS	0	3.6	1794973359.971	1794973363.557	-	-
+tools_nsys	profiling	PASS	0	6.6	1794973363.557	1794973370.125	-	-
+tools_nsys_gpumetrics	profiling	PASS	0	5.4	1794973370.125	1794973375.561	-	-
+vk_dump	vulkan_caps	PASS	0	2.3	1794973375.561	1794973377.812	-	-
+smi_setters	smi_control	PASS	0	27.1	1794973377.812	1794973404.934	-	-
+life_persistenced	lifecycle	PASS	0	6.8	1794973404.934	1794973411.704	-	-
+@@END results.tsv
+@@FILE kv.tsv sha256=8c032b23ed26a02f bytes=31058
+graph_capture_launch	perf.launches_per_s	174082
+launch_flood_100k	perf.secs	0
+tools_sanitizer	info.initcheck_msg	========= COMPUTE-SANITIZER / GAPPROBE case=canary status=PASS rc=0 secs=1.9 reason=- / ========= ERROR SUMMARY: 0 errors
+tools_sanitizer	info.memcheck_msg	========= COMPUTE-SANITIZER / GAPPROBE case=canary status=PASS rc=0 secs=1.9 reason=- / ========= ERROR SUMMARY: 0 errors
+tools_sanitizer	info.racecheck_msg	========= COMPUTE-SANITIZER / GAPPROBE case=canary status=PASS rc=0 secs=2.0 reason=- / ========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+tools_sanitizer	info.synccheck_msg	========= COMPUTE-SANITIZER / GAPPROBE case=canary status=PASS rc=0 secs=1.9 reason=- / ========= ERROR SUMMARY: 0 errors
+tools_sanitizer	memcheck_reports_the_illegal_store	1
+tools_sanitizer	tool.initcheck	OK
+tools_sanitizer	tool.memcheck	OK
+tools_sanitizer	tool.racecheck	OK
+tools_sanitizer	tool.synccheck	OK
+tools_ncu	info.metric_msg	ic Unit Metric Value / ---------------------- ----------- ------------ / sm__cycles_elapsed.avg       cycle      3894.10 / ---------------------- ----------- ------------
+tools_ncu	tool.metric	OK
+tools_nsys	info.profile_msg	=78%       ] r.nsys-rep / [1/1] [========================100%] r.nsys-rep / [1/1] [========================100%] r.nsys-rep / Generated: / /tmp/gapnsysyzmrc2d1/r.nsys-rep
+tools_nsys	kernel_in_report	1
+tools_nsys	tool.profile	OK
+tools_nsys_gpumetrics	info.gpu_metrics_msg	] r.nsys-rep / [1/1] [========================100%] r.nsys-rep / [1/1] [========================100%] r.nsys-rep / Generated: / /tmp/gapnsysmmq1ov4kf/r.nsys-rep
+tools_nsys_gpumetrics	tool.gpu_metrics	OK
+vk_dump	group.$schema	1:f6037658
+vk_dump	group.ArrayOfVkExtensionProperties.0	2:d8acc96e
+vk_dump	group.ArrayOfVkExtensionProperties.1	2:24c1da1b
+vk_dump	group.ArrayOfVkExtensionProperties.10	2:207e1cac
+vk_dump	group.ArrayOfVkExtensionProperties.100	2:96fcd8cb
+vk_dump	group.ArrayOfVkExtensionProperties.101	2:e754967c
+vk_dump	group.ArrayOfVkExtensionProperties.102	2:1e2e74cc
+vk_dump	group.ArrayOfVkExtensionProperties.103	2:ca9e6266
+vk_dump	group.ArrayOfVkExtensionProperties.104	2:4379d320
+vk_dump	group.ArrayOfVkExtensionProperties.105	2:dbd5eb62
+vk_dump	group.ArrayOfVkExtensionProperties.106	2:05867fea
+vk_dump	group.ArrayOfVkExtensionProperties.107	2:038bfa1a
+vk_dump	group.ArrayOfVkExtensionProperties.108	2:61f5a3f4
+vk_dump	group.ArrayOfVkExtensionProperties.109	2:bd6b06e4
+vk_dump	group.ArrayOfVkExtensionProperties.11	2:3d7bdecc
+vk_dump	group.ArrayOfVkExtensionProperties.110	2:e70b2bff
+vk_dump	group.ArrayOfVkExtensionProperties.111	2:8d245a4b
+vk_dump	group.ArrayOfVkExtensionProperties.112	2:31d14bb7
+vk_dump	group.ArrayOfVkExtensionProperties.113	2:8aad4bb2
+vk_dump	group.ArrayOfVkExtensionProperties.114	2:ab4f4cd9
+vk_dump	group.ArrayOfVkExtensionProperties.115	2:9f1742bc
+vk_dump	group.ArrayOfVkExtensionProperties.116	2:05da0ced
+vk_dump	group.ArrayOfVkExtensionProperties.117	2:b3753de7
+vk_dump	group.ArrayOfVkExtensionProperties.118	2:e6004256
+vk_dump	group.ArrayOfVkExtensionProperties.119	2:6f4c431b
+vk_dump	group.ArrayOfVkExtensionProperties.12	2:3e900b1c
+vk_dump	group.ArrayOfVkExtensionProperties.120	2:e24c0a6d
+vk_dump	group.ArrayOfVkExtensionProperties.121	2:24b978dd
+vk_dump	group.ArrayOfVkExtensionProperties.122	2:b3cd834c
+vk_dump	group.ArrayOfVkExtensionProperties.123	2:712f8565
+vk_dump	group.ArrayOfVkExtensionProperties.124	2:f8d3534d
+vk_dump	group.ArrayOfVkExtensionProperties.125	2:a74f19da
+vk_dump	group.ArrayOfVkExtensionProperties.126	2:30678534
+vk_dump	group.ArrayOfVkExtensionProperties.127	2:4eff5400
+vk_dump	group.ArrayOfVkExtensionProperties.128	2:bb5dfb17
+vk_dump	group.ArrayOfVkExtensionProperties.129	2:fe3c6d45
+vk_dump	group.ArrayOfVkExtensionProperties.13	2:989707a4
+vk_dump	group.ArrayOfVkExtensionProperties.130	2:8e265bfd
+vk_dump	group.ArrayOfVkExtensionProperties.131	2:576fdb08
+vk_dump	group.ArrayOfVkExtensionProperties.132	2:54063c48
+vk_dump	group.ArrayOfVkExtensionProperties.133	2:3c5bd580
+vk_dump	group.ArrayOfVkExtensionProperties.134	2:a0870ee1
+vk_dump	group.ArrayOfVkExtensionProperties.135	2:51b0be5b
+vk_dump	group.ArrayOfVkExtensionProperties.136	2:2c885794
+vk_dump	group.ArrayOfVkExtensionProperties.137	2:4657d559
+vk_dump	group.ArrayOfVkExtensionProperties.138	2:c80ace4f
+vk_dump	group.ArrayOfVkExtensionProperties.139	2:7dafa2ca
+vk_dump	group.ArrayOfVkExtensionProperties.14	2:4c2426cd
+vk_dump	group.ArrayOfVkExtensionProperties.140	2:e730f8ac
+vk_dump	group.ArrayOfVkExtensionProperties.141	2:3d5c3fd8
+vk_dump	group.ArrayOfVkExtensionProperties.142	2:cdaa283b
+vk_dump	group.ArrayOfVkExtensionProperties.143	2:abdf3aaf
+vk_dump	group.ArrayOfVkExtensionProperties.144	2:cef75710
+vk_dump	group.ArrayOfVkExtensionProperties.145	2:ab390ac7
+vk_dump	group.ArrayOfVkExtensionProperties.146	2:c7bb16b3
+vk_dump	group.ArrayOfVkExtensionProperties.147	2:1b851e5e
+vk_dump	group.ArrayOfVkExtensionProperties.148	2:1281ac31
+vk_dump	group.ArrayOfVkExtensionProperties.149	2:fe3b887b
+vk_dump	group.ArrayOfVkExtensionProperties.15	2:78383e3c
+vk_dump	group.ArrayOfVkExtensionProperties.150	2:7a5ad6ba
+vk_dump	group.ArrayOfVkExtensionProperties.151	2:13be2f1a
+vk_dump	group.ArrayOfVkExtensionProperties.152	2:2e23753e
+vk_dump	group.ArrayOfVkExtensionProperties.153	2:28e2bd24
+vk_dump	group.ArrayOfVkExtensionProperties.154	2:07972cbc
+vk_dump	group.ArrayOfVkExtensionProperties.155	2:c98fa9b8
+vk_dump	group.ArrayOfVkExtensionProperties.156	2:5344ef59
+vk_dump	group.ArrayOfVkExtensionProperties.157	2:d3121e73
+vk_dump	group.ArrayOfVkExtensionProperties.158	2:5d6d549a
+vk_dump	group.ArrayOfVkExtensionProperties.159	2:2c6d84e9
+vk_dump	group.ArrayOfVkExtensionProperties.16	2:11193d52
+vk_dump	group.ArrayOfVkExtensionProperties.160	2:95567f31
+vk_dump	group.ArrayOfVkExtensionProperties.161	2:4c8d52ce
+vk_dump	group.ArrayOfVkExtensionProperties.162	2:edb9856d
+vk_dump	group.ArrayOfVkExtensionProperties.163	2:d0d07057
+vk_dump	group.ArrayOfVkExtensionProperties.164	2:88b55c11
+vk_dump	group.ArrayOfVkExtensionProperties.165	2:621fc395
+vk_dump	group.ArrayOfVkExtensionProperties.166	2:01b5ac0b
+vk_dump	group.ArrayOfVkExtensionProperties.167	2:787a0562
+vk_dump	group.ArrayOfVkExtensionProperties.168	2:7db22705
+vk_dump	group.ArrayOfVkExtensionProperties.169	2:45497a4c
+vk_dump	group.ArrayOfVkExtensionProperties.17	2:096bc7cd
+vk_dump	group.ArrayOfVkExtensionProperties.170	2:076756d4
+vk_dump	group.ArrayOfVkExtensionProperties.171	2:f68c8828
+vk_dump	group.ArrayOfVkExtensionProperties.172	2:deb4c1a6
+vk_dump	group.ArrayOfVkExtensionProperties.173	2:0694382a
+vk_dump	group.ArrayOfVkExtensionProperties.174	2:b708dee5
+vk_dump	group.ArrayOfVkExtensionProperties.175	2:5997e7fd
+vk_dump	group.ArrayOfVkExtensionProperties.176	2:29a29020
+vk_dump	group.ArrayOfVkExtensionProperties.177	2:33db4281
+vk_dump	group.ArrayOfVkExtensionProperties.178	2:6218c9b3
+vk_dump	group.ArrayOfVkExtensionProperties.179	2:965792e2
+vk_dump	group.ArrayOfVkExtensionProperties.18	2:cac5e94e
+vk_dump	group.ArrayOfVkExtensionProperties.180	2:4880b516
+vk_dump	group.ArrayOfVkExtensionProperties.181	2:5f8a1161
+vk_dump	group.ArrayOfVkExtensionProperties.182	2:2b46ce0a
+vk_dump	group.ArrayOfVkExtensionProperties.183	2:af6872ac
+vk_dump	group.ArrayOfVkExtensionProperties.184	2:a1d7c0e7
+vk_dump	group.ArrayOfVkExtensionProperties.185	2:0c56609f
+vk_dump	group.ArrayOfVkExtensionProperties.186	2:20e9d0ba
+vk_dump	group.ArrayOfVkExtensionProperties.187	2:e629beb8
+vk_dump	group.ArrayOfVkExtensionProperties.188	2:385e3e41
+vk_dump	group.ArrayOfVkExtensionProperties.189	2:61835aba
+vk_dump	group.ArrayOfVkExtensionProperties.19	2:6d7a9963
+vk_dump	group.ArrayOfVkExtensionProperties.190	2:90af6be9
+vk_dump	group.ArrayOfVkExtensionProperties.191	2:42a7481b
+vk_dump	group.ArrayOfVkExtensionProperties.192	2:17294c05
+vk_dump	group.ArrayOfVkExtensionProperties.193	2:60b51e5e
+vk_dump	group.ArrayOfVkExtensionProperties.194	2:039fe9c0
+vk_dump	group.ArrayOfVkExtensionProperties.195	2:92b5a7bb
+vk_dump	group.ArrayOfVkExtensionProperties.196	2:6373e2c1
+vk_dump	group.ArrayOfVkExtensionProperties.197	2:e32f6bb3
+vk_dump	group.ArrayOfVkExtensionProperties.198	2:e9d98627
+vk_dump	group.ArrayOfVkExtensionProperties.199	2:158f8833
+vk_dump	group.ArrayOfVkExtensionProperties.2	2:788b4170
+vk_dump	group.ArrayOfVkExtensionProperties.20	2:35968c3a
+vk_dump	group.ArrayOfVkExtensionProperties.200	2:3961733a
+vk_dump	group.ArrayOfVkExtensionProperties.201	2:b1290e2a
+vk_dump	group.ArrayOfVkExtensionProperties.202	2:b17f3140
+vk_dump	group.ArrayOfVkExtensionProperties.203	2:fa75f86a
+vk_dump	group.ArrayOfVkExtensionProperties.204	2:ffdbfd5f
+vk_dump	group.ArrayOfVkExtensionProperties.205	2:cb6bc628
+vk_dump	group.ArrayOfVkExtensionProperties.206	2:13b77e35
+vk_dump	group.ArrayOfVkExtensionProperties.207	2:0a5ada87
+vk_dump	group.ArrayOfVkExtensionProperties.208	2:067dced2
+vk_dump	group.ArrayOfVkExtensionProperties.209	2:7a81d732
+vk_dump	group.ArrayOfVkExtensionProperties.21	2:862ab2a0
+vk_dump	group.ArrayOfVkExtensionProperties.210	2:461bb4af
+vk_dump	group.ArrayOfVkExtensionProperties.211	2:46d3f827
+vk_dump	group.ArrayOfVkExtensionProperties.212	2:a6fa1483
+vk_dump	group.ArrayOfVkExtensionProperties.213	2:b9ce41fc
+vk_dump	group.ArrayOfVkExtensionProperties.214	2:9cd41423
+vk_dump	group.ArrayOfVkExtensionProperties.215	2:80f7fbe8
+vk_dump	group.ArrayOfVkExtensionProperties.216	2:295bf664
+vk_dump	group.ArrayOfVkExtensionProperties.217	2:ea3d9dc9
+vk_dump	group.ArrayOfVkExtensionProperties.218	2:dcda4e99
+vk_dump	group.ArrayOfVkExtensionProperties.219	2:1d2a6766
+vk_dump	group.ArrayOfVkExtensionProperties.22	2:9f1744af
+vk_dump	group.ArrayOfVkExtensionProperties.220	2:e6d0e407
+vk_dump	group.ArrayOfVkExtensionProperties.221	2:caae3af2
+vk_dump	group.ArrayOfVkExtensionProperties.222	2:eab2285c
+vk_dump	group.ArrayOfVkExtensionProperties.223	2:0c48e2a0
+vk_dump	group.ArrayOfVkExtensionProperties.224	2:b28a2d17
+vk_dump	group.ArrayOfVkExtensionProperties.225	2:e92cd639
+vk_dump	group.ArrayOfVkExtensionProperties.226	2:07fc97ac
+vk_dump	group.ArrayOfVkExtensionProperties.227	2:f03e8acd
+vk_dump	group.ArrayOfVkExtensionProperties.228	2:39929f9a
+vk_dump	group.ArrayOfVkExtensionProperties.229	2:0de618c3
+vk_dump	group.ArrayOfVkExtensionProperties.23	2:248320e2
+vk_dump	group.ArrayOfVkExtensionProperties.230	2:b3a619b9
+vk_dump	group.ArrayOfVkExtensionProperties.231	2:4ce5aa27
+vk_dump	group.ArrayOfVkExtensionProperties.232	2:d7770390
+vk_dump	group.ArrayOfVkExtensionProperties.233	2:cc63cfd7
+vk_dump	group.ArrayOfVkExtensionProperties.234	2:5bf931ae
+vk_dump	group.ArrayOfVkExtensionProperties.235	2:46f78231
+vk_dump	group.ArrayOfVkExtensionProperties.236	2:c708377c
+vk_dump	group.ArrayOfVkExtensionProperties.237	2:f5d72e51
+vk_dump	group.ArrayOfVkExtensionProperties.238	2:11b5ba22
+vk_dump	group.ArrayOfVkExtensionProperties.239	2:625687be
+vk_dump	group.ArrayOfVkExtensionProperties.24	2:8b1660e3
+vk_dump	group.ArrayOfVkExtensionProperties.240	2:b9ab0a95
+vk_dump	group.ArrayOfVkExtensionProperties.241	2:18eb1233
+vk_dump	group.ArrayOfVkExtensionProperties.242	2:8d69f90a
+vk_dump	group.ArrayOfVkExtensionProperties.243	2:9f5c960b
+vk_dump	group.ArrayOfVkExtensionProperties.244	2:0156ab10
+vk_dump	group.ArrayOfVkExtensionProperties.245	2:abd9fa53
+vk_dump	group.ArrayOfVkExtensionProperties.246	2:987ebca9
+vk_dump	group.ArrayOfVkExtensionProperties.247	2:96d95050
+vk_dump	group.ArrayOfVkExtensionProperties.248	2:6dfdb33d
+vk_dump	group.ArrayOfVkExtensionProperties.249	2:0b15bf02
+vk_dump	group.ArrayOfVkExtensionProperties.25	2:6187a92c
+vk_dump	group.ArrayOfVkExtensionProperties.26	2:6ff1cf96
+vk_dump	group.ArrayOfVkExtensionProperties.27	2:f6051e20
+vk_dump	group.ArrayOfVkExtensionProperties.28	2:5a498b9c
+vk_dump	group.ArrayOfVkExtensionProperties.29	2:a40fe327
+vk_dump	group.ArrayOfVkExtensionProperties.3	2:9cd91e91
+vk_dump	group.ArrayOfVkExtensionProperties.30	2:9b0432ad
+vk_dump	group.ArrayOfVkExtensionProperties.31	2:296b3d5f
+vk_dump	group.ArrayOfVkExtensionProperties.32	2:2e561a97
+vk_dump	group.ArrayOfVkExtensionProperties.33	2:5e1d99cc
+vk_dump	group.ArrayOfVkExtensionProperties.34	2:a8bb3bca
+vk_dump	group.ArrayOfVkExtensionProperties.35	2:6efe9fab
+vk_dump	group.ArrayOfVkExtensionProperties.36	2:deb0098f
+vk_dump	group.ArrayOfVkExtensionProperties.37	2:9b7256e8
+vk_dump	group.ArrayOfVkExtensionProperties.38	2:eac2dc06
+vk_dump	group.ArrayOfVkExtensionProperties.39	2:7f6475b5
+vk_dump	group.ArrayOfVkExtensionProperties.4	2:3e129902
+vk_dump	group.ArrayOfVkExtensionProperties.40	2:c36bc7ac
+vk_dump	group.ArrayOfVkExtensionProperties.41	2:cfc43fa5
+vk_dump	group.ArrayOfVkExtensionProperties.42	2:aa5ec331
+vk_dump	group.ArrayOfVkExtensionProperties.43	2:3ff86a82
+vk_dump	group.ArrayOfVkExtensionProperties.44	2:57955ab8
+vk_dump	group.ArrayOfVkExtensionProperties.45	2:bf4c595f
+vk_dump	group.ArrayOfVkExtensionProperties.46	2:f3608de5
+vk_dump	group.ArrayOfVkExtensionProperties.47	2:ecb2ffb8
+vk_dump	group.ArrayOfVkExtensionProperties.48	2:3be46999
+vk_dump	group.ArrayOfVkExtensionProperties.49	2:59e31a20
+vk_dump	group.ArrayOfVkExtensionProperties.5	2:179c8c42
+vk_dump	group.ArrayOfVkExtensionProperties.50	2:74e1b4a1
+vk_dump	group.ArrayOfVkExtensionProperties.51	2:6eecc23e
+vk_dump	group.ArrayOfVkExtensionProperties.52	2:67661da4
+vk_dump	group.ArrayOfVkExtensionProperties.53	2:9851feee
+vk_dump	group.ArrayOfVkExtensionProperties.54	2:3a71066b
+vk_dump	group.ArrayOfVkExtensionProperties.55	2:4950d6c9
+vk_dump	group.ArrayOfVkExtensionProperties.56	2:1a74a1a3
+vk_dump	group.ArrayOfVkExtensionProperties.57	2:c5601e2e
+vk_dump	group.ArrayOfVkExtensionProperties.58	2:936f3973
+vk_dump	group.ArrayOfVkExtensionProperties.59	2:a04d639b
+vk_dump	group.ArrayOfVkExtensionProperties.6	2:2f08e354
+vk_dump	group.ArrayOfVkExtensionProperties.60	2:69c17c85
+vk_dump	group.ArrayOfVkExtensionProperties.61	2:0fb4b755
+vk_dump	group.ArrayOfVkExtensionProperties.62	2:36e7e4ac
+vk_dump	group.ArrayOfVkExtensionProperties.63	2:55bd1ed6
+vk_dump	group.ArrayOfVkExtensionProperties.64	2:99bbdbb9
+vk_dump	group.ArrayOfVkExtensionProperties.65	2:f095344b
+vk_dump	group.ArrayOfVkExtensionProperties.66	2:37288575
+vk_dump	group.ArrayOfVkExtensionProperties.67	2:e25ce98f
+vk_dump	group.ArrayOfVkExtensionProperties.68	2:c922430c
+vk_dump	group.ArrayOfVkExtensionProperties.69	2:b4e8689c
+vk_dump	group.ArrayOfVkExtensionProperties.7	2:0b8174fc
+vk_dump	group.ArrayOfVkExtensionProperties.70	2:6f530ea2
+vk_dump	group.ArrayOfVkExtensionProperties.71	2:96e7ae4e
+vk_dump	group.ArrayOfVkExtensionProperties.72	2:8a88095d
+vk_dump	group.ArrayOfVkExtensionProperties.73	2:6f0d0618
+vk_dump	group.ArrayOfVkExtensionProperties.74	2:4f7c1d9d
+vk_dump	group.ArrayOfVkExtensionProperties.75	2:f806bca6
+vk_dump	group.ArrayOfVkExtensionProperties.76	2:7f616934
+vk_dump	group.ArrayOfVkExtensionProperties.77	2:8f5190d7
+vk_dump	group.ArrayOfVkExtensionProperties.78	2:e4c6ef73
+vk_dump	group.ArrayOfVkExtensionProperties.79	2:bc79949f
+vk_dump	group.ArrayOfVkExtensionProperties.8	2:2008151d
+vk_dump	group.ArrayOfVkExtensionProperties.80	2:77dd5f72
+vk_dump	group.ArrayOfVkExtensionProperties.81	2:77329e5d
+vk_dump	group.ArrayOfVkExtensionProperties.82	2:9afa8404
+vk_dump	group.ArrayOfVkExtensionProperties.83	2:8ffbee5b
+vk_dump	group.ArrayOfVkExtensionProperties.84	2:66d7c58f
+vk_dump	group.ArrayOfVkExtensionProperties.85	2:8452c654
+vk_dump	group.ArrayOfVkExtensionProperties.86	2:6a492926
+vk_dump	group.ArrayOfVkExtensionProperties.87	2:970076d4
+vk_dump	group.ArrayOfVkExtensionProperties.88	2:537f9393
+vk_dump	group.ArrayOfVkExtensionProperties.89	2:3bb7a507
+vk_dump	group.ArrayOfVkExtensionProperties.9	2:eac18617
+vk_dump	group.ArrayOfVkExtensionProperties.90	2:cb9cd34a
+vk_dump	group.ArrayOfVkExtensionProperties.91	2:5bcf20f3
+vk_dump	group.ArrayOfVkExtensionProperties.92	2:3f0f596a
+vk_dump	group.ArrayOfVkExtensionProperties.93	2:499e353c
+vk_dump	group.ArrayOfVkExtensionProperties.94	2:0190609d
+vk_dump	group.ArrayOfVkExtensionProperties.95	2:703672ca
+vk_dump	group.ArrayOfVkExtensionProperties.96	2:866938a1
+vk_dump	group.ArrayOfVkExtensionProperties.97	2:8a23b011
+vk_dump	group.ArrayOfVkExtensionProperties.98	2:32de8474
+vk_dump	group.ArrayOfVkExtensionProperties.99	2:f8f4a249
+vk_dump	group.ArrayOfVkFormatProperties.0	4:1b4d26ae
+vk_dump	group.ArrayOfVkFormatProperties.1	4:1d8c4eff
+vk_dump	group.ArrayOfVkFormatProperties.10	4:5ad29da2
+vk_dump	group.ArrayOfVkFormatProperties.100	4:1444e725
+vk_dump	group.ArrayOfVkFormatProperties.101	4:c058271f
+vk_dump	group.ArrayOfVkFormatProperties.102	4:95785ab2
+vk_dump	group.ArrayOfVkFormatProperties.103	4:553d4773
+vk_dump	group.ArrayOfVkFormatProperties.104	4:dd114e76
+vk_dump	group.ArrayOfVkFormatProperties.105	4:7ad1cd39
+vk_dump	group.ArrayOfVkFormatProperties.106	4:836e524a
+vk_dump	group.ArrayOfVkFormatProperties.107	4:e13c579f
+vk_dump	group.ArrayOfVkFormatProperties.108	4:0f893e80
+vk_dump	group.ArrayOfVkFormatProperties.109	4:e85daf4a
+vk_dump	group.ArrayOfVkFormatProperties.11	4:2eb19d6d
+vk_dump	group.ArrayOfVkFormatProperties.110	4:0f655aec
+vk_dump	group.ArrayOfVkFormatProperties.111	4:e8b1cb26
+vk_dump	group.ArrayOfVkFormatProperties.112	4:1bbd7f39
+vk_dump	group.ArrayOfVkFormatProperties.113	4:fc69eef3
+vk_dump	group.ArrayOfVkFormatProperties.114	4:9d4300d1
+vk_dump	group.ArrayOfVkFormatProperties.115	4:7a97911b
+vk_dump	group.ArrayOfVkFormatProperties.116	4:e73e05f5
+vk_dump	group.ArrayOfVkFormatProperties.117	4:00ea943f
+vk_dump	group.ArrayOfVkFormatProperties.118	4:439ff2da
+vk_dump	group.ArrayOfVkFormatProperties.119	4:68b64a59
+vk_dump	group.ArrayOfVkFormatProperties.12	4:ca9dc4f8
+vk_dump	group.ArrayOfVkFormatProperties.120	4:ffa1a194
+vk_dump	group.ArrayOfVkFormatProperties.121	4:2879b65b
+vk_dump	group.ArrayOfVkFormatProperties.122	4:a4e1faad
+vk_dump	group.ArrayOfVkFormatProperties.123	4:c5885105
+vk_dump	group.ArrayOfVkFormatProperties.124	4:9cbe23da
+vk_dump	group.ArrayOfVkFormatProperties.125	4:e3051220
+vk_dump	group.ArrayOfVkFormatProperties.126	4:4b9f89d0
+vk_dump	group.ArrayOfVkFormatProperties.127	4:72ebfcaf
+vk_dump	group.ArrayOfVkFormatProperties.128	4:6ad6dc77
+vk_dump	group.ArrayOfVkFormatProperties.129	4:7a0a18cf
+vk_dump	group.ArrayOfVkFormatProperties.13	4:2fa171a6
+vk_dump	group.ArrayOfVkFormatProperties.130	4:71d6a499
+vk_dump	group.ArrayOfVkFormatProperties.131	4:48a2d1e6
+vk_dump	group.ArrayOfVkFormatProperties.132	4:2a96ffa0
+vk_dump	group.ArrayOfVkFormatProperties.133	4:691b5896
+vk_dump	group.ArrayOfVkFormatProperties.134	4:94077165
+vk_dump	group.ArrayOfVkFormatProperties.135	4:ec0140ec
+vk_dump	group.ArrayOfVkFormatProperties.136	4:8e356eaa
+vk_dump	group.ArrayOfVkFormatProperties.137	4:b7411bd5
+vk_dump	group.ArrayOfVkFormatProperties.138	4:af7c3b0d
+vk_dump	group.ArrayOfVkFormatProperties.139	4:bfa0ffb5
+vk_dump	group.ArrayOfVkFormatProperties.14	4:9753a059
+vk_dump	group.ArrayOfVkFormatProperties.140	4:52221b65
+vk_dump	group.ArrayOfVkFormatProperties.141	4:6b566e1a
+vk_dump	group.ArrayOfVkFormatProperties.142	4:ba4c0d2b
+vk_dump	group.ArrayOfVkFormatProperties.143	4:ce567577
+vk_dump	group.ArrayOfVkFormatProperties.144	4:8e8bf4b4
+vk_dump	group.ArrayOfVkFormatProperties.145	4:6aeddc2e
+vk_dump	group.ArrayOfVkFormatProperties.146	4:d7a0f0a3
+vk_dump	group.ArrayOfVkFormatProperties.147	4:042c47a9
+vk_dump	group.ArrayOfVkFormatProperties.148	4:aca85338
+vk_dump	group.ArrayOfVkFormatProperties.149	4:69b7ca91
+vk_dump	group.ArrayOfVkFormatProperties.15	4:1722afc3
+vk_dump	group.ArrayOfVkFormatProperties.150	4:51c2b306
+vk_dump	group.ArrayOfVkFormatProperties.151	4:8b62a7bc
+vk_dump	group.ArrayOfVkFormatProperties.152	4:49150866
+vk_dump	group.ArrayOfVkFormatProperties.153	4:ad7320fc
+vk_dump	group.ArrayOfVkFormatProperties.154	4:d8f7b7d8
+vk_dump	group.ArrayOfVkFormatProperties.155	4:0b7b00d2
+vk_dump	group.ArrayOfVkFormatProperties.156	4:d64c9125
+vk_dump	group.ArrayOfVkFormatProperties.157	4:1353088c
+vk_dump	group.ArrayOfVkFormatProperties.158	4:52a093ea
+vk_dump	group.ArrayOfVkFormatProperties.159	4:9b92929b
+vk_dump	group.ArrayOfVkFormatProperties.16	4:016a83ca
+vk_dump	group.ArrayOfVkFormatProperties.160	4:82e78eaf
+vk_dump	group.ArrayOfVkFormatProperties.161	4:6681a635
+vk_dump	group.ArrayOfVkFormatProperties.162	4:c90e7e55
+vk_dump	group.ArrayOfVkFormatProperties.163	4:808e3055
+vk_dump	group.ArrayOfVkFormatProperties.164	4:9c6c1c78
+vk_dump	group.ArrayOfVkFormatProperties.165	4:c1ea69ee
+vk_dump	group.ArrayOfVkFormatProperties.166	4:36311601
+vk_dump	group.ArrayOfVkFormatProperties.167	4:19a58259
+vk_dump	group.ArrayOfVkFormatProperties.17	4:cc8a998e
+vk_dump	group.ArrayOfVkFormatProperties.18	4:9d9fa413
+vk_dump	group.ArrayOfVkFormatProperties.19	4:4bd5769e
+vk_dump	group.ArrayOfVkFormatProperties.2	4:10ae6dac
+vk_dump	group.ArrayOfVkFormatProperties.20	4:64edf443
+vk_dump	group.ArrayOfVkFormatProperties.21	4:07ecc1f8
+vk_dump	group.ArrayOfVkFormatProperties.22	4:179d2fe6
+vk_dump	group.ArrayOfVkFormatProperties.23	4:ee57b5ef
+vk_dump	group.ArrayOfVkFormatProperties.24	4:ab082c77
+vk_dump	group.ArrayOfVkFormatProperties.25	4:888fab89
+vk_dump	group.ArrayOfVkFormatProperties.26	4:c72d376c
+vk_dump	group.ArrayOfVkFormatProperties.27	4:637f1bd1
+vk_dump	group.ArrayOfVkFormatProperties.28	4:326a264c
+vk_dump	group.ArrayOfVkFormatProperties.29	4:46092683
+vk_dump	group.ArrayOfVkFormatProperties.3	4:a1f68513
+vk_dump	group.ArrayOfVkFormatProperties.30	4:b97aabab
+vk_dump	group.ArrayOfVkFormatProperties.31	4:62d0a506
+vk_dump	group.ArrayOfVkFormatProperties.32	4:51bcaa35
+vk_dump	group.ArrayOfVkFormatProperties.33	4:137259c5
+vk_dump	group.ArrayOfVkFormatProperties.34	4:264fd97c
+vk_dump	group.ArrayOfVkFormatProperties.35	4:ae6760c3
+vk_dump	group.ArrayOfVkFormatProperties.36	4:2e0e29cc
+vk_dump	group.ArrayOfVkFormatProperties.37	4:7d7befdd
+vk_dump	group.ArrayOfVkFormatProperties.38	4:30dc2097
+vk_dump	group.ArrayOfVkFormatProperties.39	4:437613d5
+vk_dump	group.ArrayOfVkFormatProperties.4	4:0c8bb0aa
+vk_dump	group.ArrayOfVkFormatProperties.40	4:53d52b39
+vk_dump	group.ArrayOfVkFormatProperties.41	4:30a07740
+vk_dump	group.ArrayOfVkFormatProperties.42	4:9d906029
+vk_dump	group.ArrayOfVkFormatProperties.43	4:be17e7d7
+vk_dump	group.ArrayOfVkFormatProperties.44	4:94378a0b
+vk_dump	group.ArrayOfVkFormatProperties.45	4:a4bac821
+vk_dump	group.ArrayOfVkFormatProperties.46	4:42e395ff
+vk_dump	group.ArrayOfVkFormatProperties.47	4:ce18cb83
+vk_dump	group.ArrayOfVkFormatProperties.48	4:83bf04c9
+vk_dump	group.ArrayOfVkFormatProperties.49	4:87e73332
+vk_dump	group.ArrayOfVkFormatProperties.5	4:0a4ad8fb
+vk_dump	group.ArrayOfVkFormatProperties.50	4:80b93749
+vk_dump	group.ArrayOfVkFormatProperties.51	4:c0ef2f13
+vk_dump	group.ArrayOfVkFormatProperties.52	4:9178e96d
+vk_dump	group.ArrayOfVkFormatProperties.53	4:f358681a
+vk_dump	group.ArrayOfVkFormatProperties.54	4:662abf2d
+vk_dump	group.ArrayOfVkFormatProperties.55	4:a9c3b5ca
+vk_dump	group.ArrayOfVkFormatProperties.56	4:8ab935bf
+vk_dump	group.ArrayOfVkFormatProperties.57	4:a93eb241
+vk_dump	group.ArrayOfVkFormatProperties.58	4:c023a392
+vk_dump	group.ArrayOfVkFormatProperties.59	4:8c488f13
+vk_dump	group.ArrayOfVkFormatProperties.6	4:0768fba8
+vk_dump	group.ArrayOfVkFormatProperties.60	4:4ff4ef93
+vk_dump	group.ArrayOfVkFormatProperties.61	4:4d545913
+vk_dump	group.ArrayOfVkFormatProperties.62	4:29dcd111
+vk_dump	group.ArrayOfVkFormatProperties.63	4:0a5b56ef
+vk_dump	group.ArrayOfVkFormatProperties.64	4:cd7f48a5
+vk_dump	group.ArrayOfVkFormatProperties.65	4:47a95c6e
+vk_dump	group.ArrayOfVkFormatProperties.66	4:92f206c0
+vk_dump	group.ArrayOfVkFormatProperties.67	4:a27f44ea
+vk_dump	group.ArrayOfVkFormatProperties.68	4:102c05f4
+vk_dump	group.ArrayOfVkFormatProperties.69	4:33ab820a
+vk_dump	group.ArrayOfVkFormatProperties.7	4:baf32457
+vk_dump	group.ArrayOfVkFormatProperties.70	4:9c05e250
+vk_dump	group.ArrayOfVkFormatProperties.71	4:ac88a07a
+vk_dump	group.ArrayOfVkFormatProperties.72	4:85236490
+vk_dump	group.ArrayOfVkFormatProperties.73	4:efc48d8b
+vk_dump	group.ArrayOfVkFormatProperties.74	4:daf90d32
+vk_dump	group.ArrayOfVkFormatProperties.75	4:1d8f04f2
+vk_dump	group.ArrayOfVkFormatProperties.76	4:00b0d948
+vk_dump	group.ArrayOfVkFormatProperties.77	4:47444ffd
+vk_dump	group.ArrayOfVkFormatProperties.78	4:0ae380b7
+vk_dump	group.ArrayOfVkFormatProperties.79	4:dac0c8f9
+vk_dump	group.ArrayOfVkFormatProperties.8	4:e91462d8
+vk_dump	group.ArrayOfVkFormatProperties.80	4:2edc0f33
+vk_dump	group.ArrayOfVkFormatProperties.81	4:f29b52d8
+vk_dump	group.ArrayOfVkFormatProperties.82	4:92d9ca3b
+vk_dump	group.ArrayOfVkFormatProperties.83	4:b15e4dc5
+vk_dump	group.ArrayOfVkFormatProperties.84	4:df2bc0ba
+vk_dump	group.ArrayOfVkFormatProperties.85	4:fcac4744
+vk_dump	group.ArrayOfVkFormatProperties.86	4:18443fc5
+vk_dump	group.ArrayOfVkFormatProperties.87	4:9c93b73b
+vk_dump	group.ArrayOfVkFormatProperties.88	4:7ecca370
+vk_dump	group.ArrayOfVkFormatProperties.89	4:88ae9920
+vk_dump	group.ArrayOfVkFormatProperties.9	4:db668d36
+vk_dump	group.ArrayOfVkFormatProperties.90	4:8ff09d5b
+vk_dump	group.ArrayOfVkFormatProperties.91	4:72cf0a24
+vk_dump	group.ArrayOfVkFormatProperties.92	4:2358cc5a
+vk_dump	group.ArrayOfVkFormatProperties.93	4:47625300
+vk_dump	group.ArrayOfVkFormatProperties.94	4:3eda1a9d
+vk_dump	group.ArrayOfVkFormatProperties.95	4:da22d845
+vk_dump	group.ArrayOfVkFormatProperties.96	4:5964f199
+vk_dump	group.ArrayOfVkFormatProperties.97	4:48464925
+vk_dump	group.ArrayOfVkFormatProperties.98	4:f2a8c882
+vk_dump	group.ArrayOfVkFormatProperties.99	4:3a07746a
+vk_dump	group.ArrayOfVkLayerProperties.0	4:71588cd7
+vk_dump	group.ArrayOfVkLayerProperties.1	4:833f1b90
+vk_dump	group.ArrayOfVkQueueFamilyProperties.0	5:7178bc62
+vk_dump	group.ArrayOfVkQueueFamilyProperties.1	5:cc1ddc29
+vk_dump	group.ArrayOfVkQueueFamilyProperties.2	5:5e2881fb
+vk_dump	group.ArrayOfVkQueueFamilyProperties.3	5:07307339
+vk_dump	group.ArrayOfVkQueueFamilyProperties.4	5:f6229e60
+vk_dump	group.ArrayOfVkQueueFamilyProperties.5	5:bce86c44
+vk_dump	group.VkPhysicalDeviceFeatures.alphaToOne	1:c6e663cb
+vk_dump	group.VkPhysicalDeviceFeatures.depthBiasClamp	1:1c720b75
+vk_dump	group.VkPhysicalDeviceFeatures.depthBounds	1:ef23d897
+vk_dump	group.VkPhysicalDeviceFeatures.depthClamp	1:22f70fee
+vk_dump	group.VkPhysicalDeviceFeatures.drawIndirectFirstInstance	1:c2eb87ff
+vk_dump	group.VkPhysicalDeviceFeatures.dualSrcBlend	1:439d820b
+vk_dump	group.VkPhysicalDeviceFeatures.fillModeNonSolid	1:34658433
+vk_dump	group.VkPhysicalDeviceFeatures.fragmentStoresAndAtomics	1:1075cf26
+vk_dump	group.VkPhysicalDeviceFeatures.fullDrawIndexUint32	1:c3344d64
+vk_dump	group.VkPhysicalDeviceFeatures.geometryShader	1:26aaeef7
+vk_dump	group.VkPhysicalDeviceFeatures.imageCubeArray	1:052f3223
+vk_dump	group.VkPhysicalDeviceFeatures.independentBlend	1:7064cfc3
+vk_dump	group.VkPhysicalDeviceFeatures.inheritedQueries	1:618d64af
+vk_dump	group.VkPhysicalDeviceFeatures.largePoints	1:c90ff7d1
+vk_dump	group.VkPhysicalDeviceFeatures.logicOp	1:c80e203e
+vk_dump	group.VkPhysicalDeviceFeatures.multiDrawIndirect	1:e919883a
+vk_dump	group.VkPhysicalDeviceFeatures.multiViewport	1:68c795e1
+vk_dump	group.VkPhysicalDeviceFeatures.occlusionQueryPrecise	1:0a5d36af
+vk_dump	group.VkPhysicalDeviceFeatures.pipelineStatisticsQuery	1:3619d733
+vk_dump	group.VkPhysicalDeviceFeatures.robustBufferAccess	1:74419573
+vk_dump	group.VkPhysicalDeviceFeatures.sampleRateShading	1:43e0f52d
+vk_dump	group.VkPhysicalDeviceFeatures.samplerAnisotropy	1:ffa99bc2
+vk_dump	group.VkPhysicalDeviceFeatures.shaderClipDistance	1:b55eaf52
+vk_dump	group.VkPhysicalDeviceFeatures.shaderCullDistance	1:ba83227c
+vk_dump	group.VkPhysicalDeviceFeatures.shaderFloat64	1:ba6653f4
+vk_dump	group.VkPhysicalDeviceFeatures.shaderImageGatherExtended	1:a04aa58c
+vk_dump	group.VkPhysicalDeviceFeatures.shaderInt16	1:e1029654
+vk_dump	group.VkPhysicalDeviceFeatures.shaderInt64	1:7f517a83
+vk_dump	group.VkPhysicalDeviceFeatures.shaderResourceMinLod	1:23c89182
+vk_dump	group.VkPhysicalDeviceFeatures.shaderResourceResidency	1:9cc410a7
+vk_dump	group.VkPhysicalDeviceFeatures.shaderSampledImageArrayDynamicIndexing	1:2fac112a
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageBufferArrayDynamicIndexing	1:a9d9ec54
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageArrayDynamicIndexing	1:0c7a236c
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageExtendedFormats	1:4bea6f99
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageMultisample	1:07674359
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageReadWithoutFormat	1:1b518689
+vk_dump	group.VkPhysicalDeviceFeatures.shaderStorageImageWriteWithoutFormat	1:797129d0
+vk_dump	group.VkPhysicalDeviceFeatures.shaderTessellationAndGeometryPointSize	1:681c0be0
+vk_dump	group.VkPhysicalDeviceFeatures.shaderUniformBufferArrayDynamicIndexing	1:6e9f1616
+vk_dump	group.VkPhysicalDeviceFeatures.sparseBinding	1:941c8c53
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidency16Samples	1:e3e11a82
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidency2Samples	1:6847742d
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidency4Samples	1:6559046a
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidency8Samples	1:7f65e4e4
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidencyAliased	1:1865e4d5
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidencyBuffer	1:eca2757b
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidencyImage2D	1:0b96f8f0
+vk_dump	group.VkPhysicalDeviceFeatures.sparseResidencyImage3D	1:b32a9f95
+vk_dump	group.VkPhysicalDeviceFeatures.tessellationShader	1:b12285ef
+vk_dump	group.VkPhysicalDeviceFeatures.textureCompressionASTC_LDR	1:1faa216b
+vk_dump	group.VkPhysicalDeviceFeatures.textureCompressionBC	1:84b9ba06
+vk_dump	group.VkPhysicalDeviceFeatures.textureCompressionETC2	1:3665019c
+vk_dump	group.VkPhysicalDeviceFeatures.variableMultisampleRate	1:0871f269
+vk_dump	group.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics	1:7b41de1a
+vk_dump	group.VkPhysicalDeviceFeatures.wideLines	1:a4d84bdc
+vk_dump	group.VkPhysicalDeviceMemoryProperties.memoryHeaps	6:833410e5
+vk_dump	group.VkPhysicalDeviceMemoryProperties.memoryTypes	12:8099282b
+vk_dump	group.VkPhysicalDeviceProperties.apiVersion	1:b4972544
+vk_dump	group.VkPhysicalDeviceProperties.deviceID	1:2bd9284e
+vk_dump	group.VkPhysicalDeviceProperties.deviceName	1:2e25a6e2
+vk_dump	group.VkPhysicalDeviceProperties.deviceType	1:9d1a7573
+vk_dump	group.VkPhysicalDeviceProperties.driverVersion	1:d9d39fb1
+vk_dump	group.VkPhysicalDeviceProperties.limits	110:8b92117b
+vk_dump	group.VkPhysicalDeviceProperties.sparseProperties	5:178cc967
+vk_dump	group.VkPhysicalDeviceProperties.vendorID	1:dac778e2
+vk_dump	group.comments.desc	1:739f4cbd
+vk_dump	group.comments.vulkanApiVersion	1:588e31f0
+vk_dump	groups	494
+vk_dump	info.vulkaninfo_version	vulkaninfo - Summarize Vulkan information in relation to the current environment. USAGE: /usr/bin/vulkaninfo [options] O
+vk_dump	leaves	1407
+smi_setters	info.baseline	Default,Disabled,370.00,[N/A],1755
+smi_setters	setter.accounting	OK
+smi_setters	setter.compute_exclusive	OK
+smi_setters	setter.compute_prohibited	OK
+smi_setters	setter.ecc_off	NOT_SUPPORTED
+smi_setters	setter.lock_gr_clock	OK
+smi_setters	setter.pm_on	OK
+smi_setters	setter.power_same	OK
+smi_setters	unchanged_after_undo	1
+life_persistenced	canary	1
+life_persistenced	daemon_found	1
+life_persistenced	info.preexisting	1
+life_persistenced	start_rc	0
+life_persistenced	stopped_on_sigterm	1
+@@END kv.tsv
+@@FILE summary.txt sha256=2617245fd7a7f617 bytes=80
+GAP_PROBES_SUMMARY side=host pass=9 not_supported=0 fail=0 mismatch=0 not_run=0
+@@END summary.txt
+@@FILE vk_leaves.tsv sha256=8360dedfcb5478c0 bytes=79878
+$schema=https://schema.khronos.org/vulkan/devsim_1_0_0.json#
+ArrayOfVkExtensionProperties[0].extensionName=VK_KHR_16bit_storage
+ArrayOfVkExtensionProperties[0].specVersion=1
+ArrayOfVkExtensionProperties[100].extensionName=VK_KHR_vulkan_memory_model
+ArrayOfVkExtensionProperties[100].specVersion=3
+ArrayOfVkExtensionProperties[101].extensionName=VK_KHR_workgroup_memory_explicit_layout
+ArrayOfVkExtensionProperties[101].specVersion=1
+ArrayOfVkExtensionProperties[102].extensionName=VK_KHR_zero_initialize_workgroup_memory
+ArrayOfVkExtensionProperties[102].specVersion=1
+ArrayOfVkExtensionProperties[103].extensionName=VK_EXT_4444_formats
+ArrayOfVkExtensionProperties[103].specVersion=1
+ArrayOfVkExtensionProperties[104].extensionName=VK_EXT_attachment_feedback_loop_dynamic_state
+ArrayOfVkExtensionProperties[104].specVersion=1
+ArrayOfVkExtensionProperties[105].extensionName=VK_EXT_attachment_feedback_loop_layout
+ArrayOfVkExtensionProperties[105].specVersion=2
+ArrayOfVkExtensionProperties[106].extensionName=VK_EXT_blend_operation_advanced
+ArrayOfVkExtensionProperties[106].specVersion=2
+ArrayOfVkExtensionProperties[107].extensionName=VK_EXT_border_color_swizzle
+ArrayOfVkExtensionProperties[107].specVersion=1
+ArrayOfVkExtensionProperties[108].extensionName=VK_EXT_buffer_device_address
+ArrayOfVkExtensionProperties[108].specVersion=2
+ArrayOfVkExtensionProperties[109].extensionName=VK_EXT_calibrated_timestamps
+ArrayOfVkExtensionProperties[109].specVersion=2
+ArrayOfVkExtensionProperties[10].extensionName=VK_KHR_dedicated_allocation
+ArrayOfVkExtensionProperties[10].specVersion=3
+ArrayOfVkExtensionProperties[110].extensionName=VK_EXT_color_write_enable
+ArrayOfVkExtensionProperties[110].specVersion=1
+ArrayOfVkExtensionProperties[111].extensionName=VK_EXT_conditional_rendering
+ArrayOfVkExtensionProperties[111].specVersion=2
+ArrayOfVkExtensionProperties[112].extensionName=VK_EXT_conservative_rasterization
+ArrayOfVkExtensionProperties[112].specVersion=1
+ArrayOfVkExtensionProperties[113].extensionName=VK_EXT_custom_border_color
+ArrayOfVkExtensionProperties[113].specVersion=12
+ArrayOfVkExtensionProperties[114].extensionName=VK_EXT_depth_bias_control
+ArrayOfVkExtensionProperties[114].specVersion=1
+ArrayOfVkExtensionProperties[115].extensionName=VK_EXT_depth_clamp_control
+ArrayOfVkExtensionProperties[115].specVersion=1
+ArrayOfVkExtensionProperties[116].extensionName=VK_EXT_depth_clamp_zero_one
+ArrayOfVkExtensionProperties[116].specVersion=1
+ArrayOfVkExtensionProperties[117].extensionName=VK_EXT_depth_clip_control
+ArrayOfVkExtensionProperties[117].specVersion=1
+ArrayOfVkExtensionProperties[118].extensionName=VK_EXT_depth_clip_enable
+ArrayOfVkExtensionProperties[118].specVersion=1
+ArrayOfVkExtensionProperties[119].extensionName=VK_EXT_depth_range_unrestricted
+ArrayOfVkExtensionProperties[119].specVersion=1
+ArrayOfVkExtensionProperties[11].extensionName=VK_KHR_deferred_host_operations
+ArrayOfVkExtensionProperties[11].specVersion=4
+ArrayOfVkExtensionProperties[120].extensionName=VK_EXT_descriptor_buffer
+ArrayOfVkExtensionProperties[120].specVersion=1
+ArrayOfVkExtensionProperties[121].extensionName=VK_EXT_descriptor_indexing
+ArrayOfVkExtensionProperties[121].specVersion=2
+ArrayOfVkExtensionProperties[122].extensionName=VK_EXT_device_address_binding_report
+ArrayOfVkExtensionProperties[122].specVersion=1
+ArrayOfVkExtensionProperties[123].extensionName=VK_EXT_device_fault
+ArrayOfVkExtensionProperties[123].specVersion=2
+ArrayOfVkExtensionProperties[124].extensionName=VK_EXT_device_generated_commands
+ArrayOfVkExtensionProperties[124].specVersion=1
+ArrayOfVkExtensionProperties[125].extensionName=VK_EXT_discard_rectangles
+ArrayOfVkExtensionProperties[125].specVersion=2
+ArrayOfVkExtensionProperties[126].extensionName=VK_EXT_display_control
+ArrayOfVkExtensionProperties[126].specVersion=1
+ArrayOfVkExtensionProperties[127].extensionName=VK_EXT_dynamic_rendering_unused_attachments
+ArrayOfVkExtensionProperties[127].specVersion=1
+ArrayOfVkExtensionProperties[128].extensionName=VK_EXT_extended_dynamic_state
+ArrayOfVkExtensionProperties[128].specVersion=1
+ArrayOfVkExtensionProperties[129].extensionName=VK_EXT_extended_dynamic_state2
+ArrayOfVkExtensionProperties[129].specVersion=1
+ArrayOfVkExtensionProperties[12].extensionName=VK_KHR_depth_clamp_zero_one
+ArrayOfVkExtensionProperties[12].specVersion=1
+ArrayOfVkExtensionProperties[130].extensionName=VK_EXT_extended_dynamic_state3
+ArrayOfVkExtensionProperties[130].specVersion=2
+ArrayOfVkExtensionProperties[131].extensionName=VK_EXT_external_memory_host
+ArrayOfVkExtensionProperties[131].specVersion=1
+ArrayOfVkExtensionProperties[132].extensionName=VK_EXT_fragment_shader_interlock
+ArrayOfVkExtensionProperties[132].specVersion=1
+ArrayOfVkExtensionProperties[133].extensionName=VK_EXT_global_priority
+ArrayOfVkExtensionProperties[133].specVersion=2
+ArrayOfVkExtensionProperties[134].extensionName=VK_EXT_global_priority_query
+ArrayOfVkExtensionProperties[134].specVersion=1
+ArrayOfVkExtensionProperties[135].extensionName=VK_EXT_graphics_pipeline_library
+ArrayOfVkExtensionProperties[135].specVersion=1
+ArrayOfVkExtensionProperties[136].extensionName=VK_EXT_host_image_copy
+ArrayOfVkExtensionProperties[136].specVersion=1
+ArrayOfVkExtensionProperties[137].extensionName=VK_EXT_host_query_reset
+ArrayOfVkExtensionProperties[137].specVersion=1
+ArrayOfVkExtensionProperties[138].extensionName=VK_EXT_image_2d_view_of_3d
+ArrayOfVkExtensionProperties[138].specVersion=1
+ArrayOfVkExtensionProperties[139].extensionName=VK_EXT_image_drm_format_modifier
+ArrayOfVkExtensionProperties[139].specVersion=2
+ArrayOfVkExtensionProperties[13].extensionName=VK_KHR_depth_stencil_resolve
+ArrayOfVkExtensionProperties[13].specVersion=1
+ArrayOfVkExtensionProperties[140].extensionName=VK_EXT_image_robustness
+ArrayOfVkExtensionProperties[140].specVersion=1
+ArrayOfVkExtensionProperties[141].extensionName=VK_EXT_image_sliced_view_of_3d
+ArrayOfVkExtensionProperties[141].specVersion=1
+ArrayOfVkExtensionProperties[142].extensionName=VK_EXT_image_view_min_lod
+ArrayOfVkExtensionProperties[142].specVersion=1
+ArrayOfVkExtensionProperties[143].extensionName=VK_EXT_index_type_uint8
+ArrayOfVkExtensionProperties[143].specVersion=1
+ArrayOfVkExtensionProperties[144].extensionName=VK_EXT_inline_uniform_block
+ArrayOfVkExtensionProperties[144].specVersion=1
+ArrayOfVkExtensionProperties[145].extensionName=VK_EXT_legacy_vertex_attributes
+ArrayOfVkExtensionProperties[145].specVersion=1
+ArrayOfVkExtensionProperties[146].extensionName=VK_EXT_line_rasterization
+ArrayOfVkExtensionProperties[146].specVersion=1
+ArrayOfVkExtensionProperties[147].extensionName=VK_EXT_load_store_op_none
+ArrayOfVkExtensionProperties[147].specVersion=1
+ArrayOfVkExtensionProperties[148].extensionName=VK_EXT_map_memory_placed
+ArrayOfVkExtensionProperties[148].specVersion=1
+ArrayOfVkExtensionProperties[149].extensionName=VK_EXT_memory_budget
+ArrayOfVkExtensionProperties[149].specVersion=1
+ArrayOfVkExtensionProperties[14].extensionName=VK_KHR_descriptor_update_template
+ArrayOfVkExtensionProperties[14].specVersion=1
+ArrayOfVkExtensionProperties[150].extensionName=VK_EXT_memory_priority
+ArrayOfVkExtensionProperties[150].specVersion=1
+ArrayOfVkExtensionProperties[151].extensionName=VK_EXT_mesh_shader
+ArrayOfVkExtensionProperties[151].specVersion=1
+ArrayOfVkExtensionProperties[152].extensionName=VK_EXT_multi_draw
+ArrayOfVkExtensionProperties[152].specVersion=1
+ArrayOfVkExtensionProperties[153].extensionName=VK_EXT_mutable_descriptor_type
+ArrayOfVkExtensionProperties[153].specVersion=1
+ArrayOfVkExtensionProperties[154].extensionName=VK_EXT_nested_command_buffer
+ArrayOfVkExtensionProperties[154].specVersion=1
+ArrayOfVkExtensionProperties[155].extensionName=VK_EXT_non_seamless_cube_map
+ArrayOfVkExtensionProperties[155].specVersion=1
+ArrayOfVkExtensionProperties[156].extensionName=VK_EXT_opacity_micromap
+ArrayOfVkExtensionProperties[156].specVersion=2
+ArrayOfVkExtensionProperties[157].extensionName=VK_EXT_pageable_device_local_memory
+ArrayOfVkExtensionProperties[157].specVersion=1
+ArrayOfVkExtensionProperties[158].extensionName=VK_EXT_pci_bus_info
+ArrayOfVkExtensionProperties[158].specVersion=2
+ArrayOfVkExtensionProperties[159].extensionName=VK_EXT_physical_device_drm
+ArrayOfVkExtensionProperties[159].specVersion=1
+ArrayOfVkExtensionProperties[15].extensionName=VK_KHR_device_group
+ArrayOfVkExtensionProperties[15].specVersion=4
+ArrayOfVkExtensionProperties[160].extensionName=VK_EXT_pipeline_creation_cache_control
+ArrayOfVkExtensionProperties[160].specVersion=3
+ArrayOfVkExtensionProperties[161].extensionName=VK_EXT_pipeline_creation_feedback
+ArrayOfVkExtensionProperties[161].specVersion=1
+ArrayOfVkExtensionProperties[162].extensionName=VK_EXT_pipeline_library_group_handles
+ArrayOfVkExtensionProperties[162].specVersion=1
+ArrayOfVkExtensionProperties[163].extensionName=VK_EXT_pipeline_robustness
+ArrayOfVkExtensionProperties[163].specVersion=1
+ArrayOfVkExtensionProperties[164].extensionName=VK_EXT_post_depth_coverage
+ArrayOfVkExtensionProperties[164].specVersion=1
+ArrayOfVkExtensionProperties[165].extensionName=VK_EXT_present_mode_fifo_latest_ready
+ArrayOfVkExtensionProperties[165].specVersion=1
+ArrayOfVkExtensionProperties[166].extensionName=VK_EXT_primitive_topology_list_restart
+ArrayOfVkExtensionProperties[166].specVersion=1
+ArrayOfVkExtensionProperties[167].extensionName=VK_EXT_primitives_generated_query
+ArrayOfVkExtensionProperties[167].specVersion=1
+ArrayOfVkExtensionProperties[168].extensionName=VK_EXT_private_data
+ArrayOfVkExtensionProperties[168].specVersion=1
+ArrayOfVkExtensionProperties[169].extensionName=VK_EXT_provoking_vertex
+ArrayOfVkExtensionProperties[169].specVersion=1
+ArrayOfVkExtensionProperties[16].extensionName=VK_KHR_draw_indirect_count
+ArrayOfVkExtensionProperties[16].specVersion=1
+ArrayOfVkExtensionProperties[170].extensionName=VK_EXT_queue_family_foreign
+ArrayOfVkExtensionProperties[170].specVersion=1
+ArrayOfVkExtensionProperties[171].extensionName=VK_EXT_robustness2
+ArrayOfVkExtensionProperties[171].specVersion=1
+ArrayOfVkExtensionProperties[172].extensionName=VK_EXT_sample_locations
+ArrayOfVkExtensionProperties[172].specVersion=1
+ArrayOfVkExtensionProperties[173].extensionName=VK_EXT_sampler_filter_minmax
+ArrayOfVkExtensionProperties[173].specVersion=2
+ArrayOfVkExtensionProperties[174].extensionName=VK_EXT_scalar_block_layout
+ArrayOfVkExtensionProperties[174].specVersion=1
+ArrayOfVkExtensionProperties[175].extensionName=VK_EXT_separate_stencil_usage
+ArrayOfVkExtensionProperties[175].specVersion=1
+ArrayOfVkExtensionProperties[176].extensionName=VK_EXT_shader_atomic_float
+ArrayOfVkExtensionProperties[176].specVersion=1
+ArrayOfVkExtensionProperties[177].extensionName=VK_EXT_shader_demote_to_helper_invocation
+ArrayOfVkExtensionProperties[177].specVersion=1
+ArrayOfVkExtensionProperties[178].extensionName=VK_EXT_shader_image_atomic_int64
+ArrayOfVkExtensionProperties[178].specVersion=1
+ArrayOfVkExtensionProperties[179].extensionName=VK_EXT_shader_module_identifier
+ArrayOfVkExtensionProperties[179].specVersion=1
+ArrayOfVkExtensionProperties[17].extensionName=VK_KHR_driver_properties
+ArrayOfVkExtensionProperties[17].specVersion=1
+ArrayOfVkExtensionProperties[180].extensionName=VK_EXT_shader_object
+ArrayOfVkExtensionProperties[180].specVersion=1
+ArrayOfVkExtensionProperties[181].extensionName=VK_EXT_shader_replicated_composites
+ArrayOfVkExtensionProperties[181].specVersion=1
+ArrayOfVkExtensionProperties[182].extensionName=VK_EXT_shader_subgroup_ballot
+ArrayOfVkExtensionProperties[182].specVersion=1
+ArrayOfVkExtensionProperties[183].extensionName=VK_EXT_shader_subgroup_vote
+ArrayOfVkExtensionProperties[183].specVersion=1
+ArrayOfVkExtensionProperties[184].extensionName=VK_EXT_shader_viewport_index_layer
+ArrayOfVkExtensionProperties[184].specVersion=1
+ArrayOfVkExtensionProperties[185].extensionName=VK_EXT_subgroup_size_control
+ArrayOfVkExtensionProperties[185].specVersion=2
+ArrayOfVkExtensionProperties[186].extensionName=VK_EXT_swapchain_maintenance1
+ArrayOfVkExtensionProperties[186].specVersion=1
+ArrayOfVkExtensionProperties[187].extensionName=VK_EXT_texel_buffer_alignment
+ArrayOfVkExtensionProperties[187].specVersion=1
+ArrayOfVkExtensionProperties[188].extensionName=VK_EXT_tooling_info
+ArrayOfVkExtensionProperties[188].specVersion=1
+ArrayOfVkExtensionProperties[189].extensionName=VK_EXT_transform_feedback
+ArrayOfVkExtensionProperties[189].specVersion=1
+ArrayOfVkExtensionProperties[18].extensionName=VK_KHR_dynamic_rendering
+ArrayOfVkExtensionProperties[18].specVersion=1
+ArrayOfVkExtensionProperties[190].extensionName=VK_EXT_vertex_attribute_divisor
+ArrayOfVkExtensionProperties[190].specVersion=3
+ArrayOfVkExtensionProperties[191].extensionName=VK_EXT_vertex_attribute_robustness
+ArrayOfVkExtensionProperties[191].specVersion=1
+ArrayOfVkExtensionProperties[192].extensionName=VK_EXT_vertex_input_dynamic_state
+ArrayOfVkExtensionProperties[192].specVersion=2
+ArrayOfVkExtensionProperties[193].extensionName=VK_EXT_ycbcr_2plane_444_formats
+ArrayOfVkExtensionProperties[193].specVersion=1
+ArrayOfVkExtensionProperties[194].extensionName=VK_EXT_ycbcr_image_arrays
+ArrayOfVkExtensionProperties[194].specVersion=1
+ArrayOfVkExtensionProperties[195].extensionName=VK_NV_clip_space_w_scaling
+ArrayOfVkExtensionProperties[195].specVersion=1
+ArrayOfVkExtensionProperties[196].extensionName=VK_NV_cluster_acceleration_structure
+ArrayOfVkExtensionProperties[196].specVersion=2
+ArrayOfVkExtensionProperties[197].extensionName=VK_NV_compute_shader_derivatives
+ArrayOfVkExtensionProperties[197].specVersion=1
+ArrayOfVkExtensionProperties[198].extensionName=VK_NV_cooperative_matrix
+ArrayOfVkExtensionProperties[198].specVersion=1
+ArrayOfVkExtensionProperties[199].extensionName=VK_NV_cooperative_matrix2
+ArrayOfVkExtensionProperties[199].specVersion=1
+ArrayOfVkExtensionProperties[19].extensionName=VK_KHR_dynamic_rendering_local_read
+ArrayOfVkExtensionProperties[19].specVersion=1
+ArrayOfVkExtensionProperties[1].extensionName=VK_KHR_8bit_storage
+ArrayOfVkExtensionProperties[1].specVersion=1
+ArrayOfVkExtensionProperties[200].extensionName=VK_NV_cooperative_vector
+ArrayOfVkExtensionProperties[200].specVersion=4
+ArrayOfVkExtensionProperties[201].extensionName=VK_NV_copy_memory_indirect
+ArrayOfVkExtensionProperties[201].specVersion=1
+ArrayOfVkExtensionProperties[202].extensionName=VK_NV_corner_sampled_image
+ArrayOfVkExtensionProperties[202].specVersion=2
+ArrayOfVkExtensionProperties[203].extensionName=VK_NV_coverage_reduction_mode
+ArrayOfVkExtensionProperties[203].specVersion=1
+ArrayOfVkExtensionProperties[204].extensionName=VK_NV_cuda_kernel_launch
+ArrayOfVkExtensionProperties[204].specVersion=2
+ArrayOfVkExtensionProperties[205].extensionName=VK_NV_dedicated_allocation
+ArrayOfVkExtensionProperties[205].specVersion=1
+ArrayOfVkExtensionProperties[206].extensionName=VK_NV_dedicated_allocation_image_aliasing
+ArrayOfVkExtensionProperties[206].specVersion=1
+ArrayOfVkExtensionProperties[207].extensionName=VK_NV_descriptor_pool_overallocation
+ArrayOfVkExtensionProperties[207].specVersion=1
+ArrayOfVkExtensionProperties[208].extensionName=VK_NV_device_diagnostic_checkpoints
+ArrayOfVkExtensionProperties[208].specVersion=2
+ArrayOfVkExtensionProperties[209].extensionName=VK_NV_device_diagnostics_config
+ArrayOfVkExtensionProperties[209].specVersion=2
+ArrayOfVkExtensionProperties[20].extensionName=VK_KHR_external_fence
+ArrayOfVkExtensionProperties[20].specVersion=1
+ArrayOfVkExtensionProperties[210].extensionName=VK_NV_device_generated_commands
+ArrayOfVkExtensionProperties[210].specVersion=3
+ArrayOfVkExtensionProperties[211].extensionName=VK_NV_device_generated_commands_compute
+ArrayOfVkExtensionProperties[211].specVersion=2
+ArrayOfVkExtensionProperties[212].extensionName=VK_NV_disk_cache_utils
+ArrayOfVkExtensionProperties[212].specVersion=1
+ArrayOfVkExtensionProperties[213].extensionName=VK_NV_extended_sparse_address_space
+ArrayOfVkExtensionProperties[213].specVersion=1
+ArrayOfVkExtensionProperties[214].extensionName=VK_NV_fill_rectangle
+ArrayOfVkExtensionProperties[214].specVersion=1
+ArrayOfVkExtensionProperties[215].extensionName=VK_NV_fragment_coverage_to_color
+ArrayOfVkExtensionProperties[215].specVersion=1
+ArrayOfVkExtensionProperties[216].extensionName=VK_NV_fragment_shader_barycentric
+ArrayOfVkExtensionProperties[216].specVersion=1
+ArrayOfVkExtensionProperties[217].extensionName=VK_NV_fragment_shading_rate_enums
+ArrayOfVkExtensionProperties[217].specVersion=1
+ArrayOfVkExtensionProperties[218].extensionName=VK_NV_framebuffer_mixed_samples
+ArrayOfVkExtensionProperties[218].specVersion=1
+ArrayOfVkExtensionProperties[219].extensionName=VK_NV_geometry_shader_passthrough
+ArrayOfVkExtensionProperties[219].specVersion=1
+ArrayOfVkExtensionProperties[21].extensionName=VK_KHR_external_fence_fd
+ArrayOfVkExtensionProperties[21].specVersion=1
+ArrayOfVkExtensionProperties[220].extensionName=VK_NV_inherited_viewport_scissor
+ArrayOfVkExtensionProperties[220].specVersion=1
+ArrayOfVkExtensionProperties[221].extensionName=VK_NV_internal_nvpresent
+ArrayOfVkExtensionProperties[221].specVersion=1
+ArrayOfVkExtensionProperties[222].extensionName=VK_NV_linear_color_attachment
+ArrayOfVkExtensionProperties[222].specVersion=1
+ArrayOfVkExtensionProperties[223].extensionName=VK_NV_low_latency
+ArrayOfVkExtensionProperties[223].specVersion=1
+ArrayOfVkExtensionProperties[224].extensionName=VK_NV_low_latency2
+ArrayOfVkExtensionProperties[224].specVersion=2
+ArrayOfVkExtensionProperties[225].extensionName=VK_NV_memory_decompression
+ArrayOfVkExtensionProperties[225].specVersion=1
+ArrayOfVkExtensionProperties[226].extensionName=VK_NV_mesh_shader
+ArrayOfVkExtensionProperties[226].specVersion=1
+ArrayOfVkExtensionProperties[227].extensionName=VK_NV_optical_flow
+ArrayOfVkExtensionProperties[227].specVersion=1
+ArrayOfVkExtensionProperties[228].extensionName=VK_NV_partitioned_acceleration_structure
+ArrayOfVkExtensionProperties[228].specVersion=1
+ArrayOfVkExtensionProperties[229].extensionName=VK_NV_present_metering
+ArrayOfVkExtensionProperties[229].specVersion=1
+ArrayOfVkExtensionProperties[22].extensionName=VK_KHR_external_memory
+ArrayOfVkExtensionProperties[22].specVersion=1
+ArrayOfVkExtensionProperties[230].extensionName=VK_NV_raw_access_chains
+ArrayOfVkExtensionProperties[230].specVersion=1
+ArrayOfVkExtensionProperties[231].extensionName=VK_NV_ray_tracing
+ArrayOfVkExtensionProperties[231].specVersion=3
+ArrayOfVkExtensionProperties[232].extensionName=VK_NV_ray_tracing_invocation_reorder
+ArrayOfVkExtensionProperties[232].specVersion=1
+ArrayOfVkExtensionProperties[233].extensionName=VK_NV_ray_tracing_motion_blur
+ArrayOfVkExtensionProperties[233].specVersion=1
+ArrayOfVkExtensionProperties[234].extensionName=VK_NV_representative_fragment_test
+ArrayOfVkExtensionProperties[234].specVersion=2
+ArrayOfVkExtensionProperties[235].extensionName=VK_NV_sample_mask_override_coverage
+ArrayOfVkExtensionProperties[235].specVersion=1
+ArrayOfVkExtensionProperties[236].extensionName=VK_NV_scissor_exclusive
+ArrayOfVkExtensionProperties[236].specVersion=2
+ArrayOfVkExtensionProperties[237].extensionName=VK_NV_shader_atomic_float16_vector
+ArrayOfVkExtensionProperties[237].specVersion=1
+ArrayOfVkExtensionProperties[238].extensionName=VK_NV_shader_image_footprint
+ArrayOfVkExtensionProperties[238].specVersion=2
+ArrayOfVkExtensionProperties[239].extensionName=VK_NV_shader_sm_builtins
+ArrayOfVkExtensionProperties[239].specVersion=1
+ArrayOfVkExtensionProperties[23].extensionName=VK_KHR_external_memory_fd
+ArrayOfVkExtensionProperties[23].specVersion=1
+ArrayOfVkExtensionProperties[240].extensionName=VK_NV_shader_subgroup_partitioned
+ArrayOfVkExtensionProperties[240].specVersion=1
+ArrayOfVkExtensionProperties[241].extensionName=VK_NV_shading_rate_image
+ArrayOfVkExtensionProperties[241].specVersion=3
+ArrayOfVkExtensionProperties[242].extensionName=VK_NV_viewport_array2
+ArrayOfVkExtensionProperties[242].specVersion=1
+ArrayOfVkExtensionProperties[243].extensionName=VK_NV_viewport_swizzle
+ArrayOfVkExtensionProperties[243].specVersion=1
+ArrayOfVkExtensionProperties[244].extensionName=VK_NVX_binary_import
+ArrayOfVkExtensionProperties[244].specVersion=2
+ArrayOfVkExtensionProperties[245].extensionName=VK_NVX_image_view_handle
+ArrayOfVkExtensionProperties[245].specVersion=3
+ArrayOfVkExtensionProperties[246].extensionName=VK_NVX_multiview_per_view_attributes
+ArrayOfVkExtensionProperties[246].specVersion=1
+ArrayOfVkExtensionProperties[247].extensionName=VK_AMD_buffer_marker
+ArrayOfVkExtensionProperties[247].specVersion=1
+ArrayOfVkExtensionProperties[248].extensionName=VK_GOOGLE_hlsl_functionality1
+ArrayOfVkExtensionProperties[248].specVersion=1
+ArrayOfVkExtensionProperties[249].extensionName=VK_GOOGLE_user_type
+ArrayOfVkExtensionProperties[249].specVersion=1
+ArrayOfVkExtensionProperties[24].extensionName=VK_KHR_external_semaphore
+ArrayOfVkExtensionProperties[24].specVersion=1
+ArrayOfVkExtensionProperties[25].extensionName=VK_KHR_external_semaphore_fd
+ArrayOfVkExtensionProperties[25].specVersion=1
+ArrayOfVkExtensionProperties[26].extensionName=VK_KHR_format_feature_flags2
+ArrayOfVkExtensionProperties[26].specVersion=2
+ArrayOfVkExtensionProperties[27].extensionName=VK_KHR_fragment_shader_barycentric
+ArrayOfVkExtensionProperties[27].specVersion=1
+ArrayOfVkExtensionProperties[28].extensionName=VK_KHR_fragment_shading_rate
+ArrayOfVkExtensionProperties[28].specVersion=2
+ArrayOfVkExtensionProperties[29].extensionName=VK_KHR_get_memory_requirements2
+ArrayOfVkExtensionProperties[29].specVersion=1
+ArrayOfVkExtensionProperties[2].extensionName=VK_KHR_acceleration_structure
+ArrayOfVkExtensionProperties[2].specVersion=13
+ArrayOfVkExtensionProperties[30].extensionName=VK_KHR_global_priority
+ArrayOfVkExtensionProperties[30].specVersion=1
+ArrayOfVkExtensionProperties[31].extensionName=VK_KHR_image_format_list
+ArrayOfVkExtensionProperties[31].specVersion=1
+ArrayOfVkExtensionProperties[32].extensionName=VK_KHR_imageless_framebuffer
+ArrayOfVkExtensionProperties[32].specVersion=1
+ArrayOfVkExtensionProperties[33].extensionName=VK_KHR_incremental_present
+ArrayOfVkExtensionProperties[33].specVersion=2
+ArrayOfVkExtensionProperties[34].extensionName=VK_KHR_index_type_uint8
+ArrayOfVkExtensionProperties[34].specVersion=1
+ArrayOfVkExtensionProperties[35].extensionName=VK_KHR_line_rasterization
+ArrayOfVkExtensionProperties[35].specVersion=1
+ArrayOfVkExtensionProperties[36].extensionName=VK_KHR_load_store_op_none
+ArrayOfVkExtensionProperties[36].specVersion=1
+ArrayOfVkExtensionProperties[37].extensionName=VK_KHR_maintenance1
+ArrayOfVkExtensionProperties[37].specVersion=2
+ArrayOfVkExtensionProperties[38].extensionName=VK_KHR_maintenance2
+ArrayOfVkExtensionProperties[38].specVersion=1
+ArrayOfVkExtensionProperties[39].extensionName=VK_KHR_maintenance3
+ArrayOfVkExtensionProperties[39].specVersion=1
+ArrayOfVkExtensionProperties[3].extensionName=VK_KHR_bind_memory2
+ArrayOfVkExtensionProperties[3].specVersion=1
+ArrayOfVkExtensionProperties[40].extensionName=VK_KHR_maintenance4
+ArrayOfVkExtensionProperties[40].specVersion=2
+ArrayOfVkExtensionProperties[41].extensionName=VK_KHR_maintenance5
+ArrayOfVkExtensionProperties[41].specVersion=1
+ArrayOfVkExtensionProperties[42].extensionName=VK_KHR_maintenance6
+ArrayOfVkExtensionProperties[42].specVersion=1
+ArrayOfVkExtensionProperties[43].extensionName=VK_KHR_maintenance7
+ArrayOfVkExtensionProperties[43].specVersion=1
+ArrayOfVkExtensionProperties[44].extensionName=VK_KHR_maintenance8
+ArrayOfVkExtensionProperties[44].specVersion=1
+ArrayOfVkExtensionProperties[45].extensionName=VK_KHR_map_memory2
+ArrayOfVkExtensionProperties[45].specVersion=1
+ArrayOfVkExtensionProperties[46].extensionName=VK_KHR_multiview
+ArrayOfVkExtensionProperties[46].specVersion=1
+ArrayOfVkExtensionProperties[47].extensionName=VK_KHR_pipeline_binary
+ArrayOfVkExtensionProperties[47].specVersion=1
+ArrayOfVkExtensionProperties[48].extensionName=VK_KHR_pipeline_executable_properties
+ArrayOfVkExtensionProperties[48].specVersion=1
+ArrayOfVkExtensionProperties[49].extensionName=VK_KHR_pipeline_library
+ArrayOfVkExtensionProperties[49].specVersion=1
+ArrayOfVkExtensionProperties[4].extensionName=VK_KHR_buffer_device_address
+ArrayOfVkExtensionProperties[4].specVersion=1
+ArrayOfVkExtensionProperties[50].extensionName=VK_KHR_present_id
+ArrayOfVkExtensionProperties[50].specVersion=1
+ArrayOfVkExtensionProperties[51].extensionName=VK_KHR_present_wait
+ArrayOfVkExtensionProperties[51].specVersion=1
+ArrayOfVkExtensionProperties[52].extensionName=VK_KHR_push_descriptor
+ArrayOfVkExtensionProperties[52].specVersion=2
+ArrayOfVkExtensionProperties[53].extensionName=VK_KHR_ray_query
+ArrayOfVkExtensionProperties[53].specVersion=1
+ArrayOfVkExtensionProperties[54].extensionName=VK_KHR_ray_tracing_maintenance1
+ArrayOfVkExtensionProperties[54].specVersion=1
+ArrayOfVkExtensionProperties[55].extensionName=VK_KHR_ray_tracing_pipeline
+ArrayOfVkExtensionProperties[55].specVersion=1
+ArrayOfVkExtensionProperties[56].extensionName=VK_KHR_ray_tracing_position_fetch
+ArrayOfVkExtensionProperties[56].specVersion=1
+ArrayOfVkExtensionProperties[57].extensionName=VK_KHR_relaxed_block_layout
+ArrayOfVkExtensionProperties[57].specVersion=1
+ArrayOfVkExtensionProperties[58].extensionName=VK_KHR_sampler_mirror_clamp_to_edge
+ArrayOfVkExtensionProperties[58].specVersion=3
+ArrayOfVkExtensionProperties[59].extensionName=VK_KHR_sampler_ycbcr_conversion
+ArrayOfVkExtensionProperties[59].specVersion=14
+ArrayOfVkExtensionProperties[5].extensionName=VK_KHR_calibrated_timestamps
+ArrayOfVkExtensionProperties[5].specVersion=1
+ArrayOfVkExtensionProperties[60].extensionName=VK_KHR_separate_depth_stencil_layouts
+ArrayOfVkExtensionProperties[60].specVersion=1
+ArrayOfVkExtensionProperties[61].extensionName=VK_KHR_shader_atomic_int64
+ArrayOfVkExtensionProperties[61].specVersion=1
+ArrayOfVkExtensionProperties[62].extensionName=VK_KHR_shader_bfloat16
+ArrayOfVkExtensionProperties[62].specVersion=1
+ArrayOfVkExtensionProperties[63].extensionName=VK_KHR_shader_clock
+ArrayOfVkExtensionProperties[63].specVersion=1
+ArrayOfVkExtensionProperties[64].extensionName=VK_KHR_shader_draw_parameters
+ArrayOfVkExtensionProperties[64].specVersion=1
+ArrayOfVkExtensionProperties[65].extensionName=VK_KHR_shader_expect_assume
+ArrayOfVkExtensionProperties[65].specVersion=1
+ArrayOfVkExtensionProperties[66].extensionName=VK_KHR_shader_float16_int8
+ArrayOfVkExtensionProperties[66].specVersion=1
+ArrayOfVkExtensionProperties[67].extensionName=VK_KHR_shader_float_controls
+ArrayOfVkExtensionProperties[67].specVersion=4
+ArrayOfVkExtensionProperties[68].extensionName=VK_KHR_shader_float_controls2
+ArrayOfVkExtensionProperties[68].specVersion=1
+ArrayOfVkExtensionProperties[69].extensionName=VK_KHR_shader_integer_dot_product
+ArrayOfVkExtensionProperties[69].specVersion=1
+ArrayOfVkExtensionProperties[6].extensionName=VK_KHR_compute_shader_derivatives
+ArrayOfVkExtensionProperties[6].specVersion=1
+ArrayOfVkExtensionProperties[70].extensionName=VK_KHR_shader_maximal_reconvergence
+ArrayOfVkExtensionProperties[70].specVersion=1
+ArrayOfVkExtensionProperties[71].extensionName=VK_KHR_shader_non_semantic_info
+ArrayOfVkExtensionProperties[71].specVersion=1
+ArrayOfVkExtensionProperties[72].extensionName=VK_KHR_shader_quad_control
+ArrayOfVkExtensionProperties[72].specVersion=1
+ArrayOfVkExtensionProperties[73].extensionName=VK_KHR_shader_relaxed_extended_instruction
+ArrayOfVkExtensionProperties[73].specVersion=1
+ArrayOfVkExtensionProperties[74].extensionName=VK_KHR_shader_subgroup_extended_types
+ArrayOfVkExtensionProperties[74].specVersion=1
+ArrayOfVkExtensionProperties[75].extensionName=VK_KHR_shader_subgroup_rotate
+ArrayOfVkExtensionProperties[75].specVersion=2
+ArrayOfVkExtensionProperties[76].extensionName=VK_KHR_shader_subgroup_uniform_control_flow
+ArrayOfVkExtensionProperties[76].specVersion=1
+ArrayOfVkExtensionProperties[77].extensionName=VK_KHR_shader_terminate_invocation
+ArrayOfVkExtensionProperties[77].specVersion=1
+ArrayOfVkExtensionProperties[78].extensionName=VK_KHR_shared_presentable_image
+ArrayOfVkExtensionProperties[78].specVersion=1
+ArrayOfVkExtensionProperties[79].extensionName=VK_KHR_spirv_1_4
+ArrayOfVkExtensionProperties[79].specVersion=1
+ArrayOfVkExtensionProperties[7].extensionName=VK_KHR_cooperative_matrix
+ArrayOfVkExtensionProperties[7].specVersion=2
+ArrayOfVkExtensionProperties[80].extensionName=VK_KHR_storage_buffer_storage_class
+ArrayOfVkExtensionProperties[80].specVersion=1
+ArrayOfVkExtensionProperties[81].extensionName=VK_KHR_swapchain
+ArrayOfVkExtensionProperties[81].specVersion=70
+ArrayOfVkExtensionProperties[82].extensionName=VK_KHR_swapchain_mutable_format
+ArrayOfVkExtensionProperties[82].specVersion=1
+ArrayOfVkExtensionProperties[83].extensionName=VK_KHR_synchronization2
+ArrayOfVkExtensionProperties[83].specVersion=1
+ArrayOfVkExtensionProperties[84].extensionName=VK_KHR_timeline_semaphore
+ArrayOfVkExtensionProperties[84].specVersion=2
+ArrayOfVkExtensionProperties[85].extensionName=VK_KHR_uniform_buffer_standard_layout
+ArrayOfVkExtensionProperties[85].specVersion=1
+ArrayOfVkExtensionProperties[86].extensionName=VK_KHR_variable_pointers
+ArrayOfVkExtensionProperties[86].specVersion=1
+ArrayOfVkExtensionProperties[87].extensionName=VK_KHR_vertex_attribute_divisor
+ArrayOfVkExtensionProperties[87].specVersion=1
+ArrayOfVkExtensionProperties[88].extensionName=VK_KHR_video_decode_av1
+ArrayOfVkExtensionProperties[88].specVersion=1
+ArrayOfVkExtensionProperties[89].extensionName=VK_KHR_video_decode_h264
+ArrayOfVkExtensionProperties[89].specVersion=9
+ArrayOfVkExtensionProperties[8].extensionName=VK_KHR_copy_commands2
+ArrayOfVkExtensionProperties[8].specVersion=1
+ArrayOfVkExtensionProperties[90].extensionName=VK_KHR_video_decode_h265
+ArrayOfVkExtensionProperties[90].specVersion=8
+ArrayOfVkExtensionProperties[91].extensionName=VK_KHR_video_decode_queue
+ArrayOfVkExtensionProperties[91].specVersion=8
+ArrayOfVkExtensionProperties[92].extensionName=VK_KHR_video_decode_vp9
+ArrayOfVkExtensionProperties[92].specVersion=1
+ArrayOfVkExtensionProperties[93].extensionName=VK_KHR_video_encode_h264
+ArrayOfVkExtensionProperties[93].specVersion=14
+ArrayOfVkExtensionProperties[94].extensionName=VK_KHR_video_encode_h265
+ArrayOfVkExtensionProperties[94].specVersion=14
+ArrayOfVkExtensionProperties[95].extensionName=VK_KHR_video_encode_quantization_map
+ArrayOfVkExtensionProperties[95].specVersion=2
+ArrayOfVkExtensionProperties[96].extensionName=VK_KHR_video_encode_queue
+ArrayOfVkExtensionProperties[96].specVersion=12
+ArrayOfVkExtensionProperties[97].extensionName=VK_KHR_video_maintenance1
+ArrayOfVkExtensionProperties[97].specVersion=1
+ArrayOfVkExtensionProperties[98].extensionName=VK_KHR_video_maintenance2
+ArrayOfVkExtensionProperties[98].specVersion=1
+ArrayOfVkExtensionProperties[99].extensionName=VK_KHR_video_queue
+ArrayOfVkExtensionProperties[99].specVersion=8
+ArrayOfVkExtensionProperties[9].extensionName=VK_KHR_create_renderpass2
+ArrayOfVkExtensionProperties[9].specVersion=1
+ArrayOfVkFormatProperties[0].bufferFeatures=8
+ArrayOfVkFormatProperties[0].formatID=1
+ArrayOfVkFormatProperties[0].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[0].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[100].bufferFeatures=72
+ArrayOfVkFormatProperties[100].formatID=104
+ArrayOfVkFormatProperties[100].linearTilingFeatures=115713
+ArrayOfVkFormatProperties[100].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[101].bufferFeatures=72
+ArrayOfVkFormatProperties[101].formatID=105
+ArrayOfVkFormatProperties[101].linearTilingFeatures=115713
+ArrayOfVkFormatProperties[101].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[102].bufferFeatures=536870984
+ArrayOfVkFormatProperties[102].formatID=106
+ArrayOfVkFormatProperties[102].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[102].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[103].bufferFeatures=88
+ArrayOfVkFormatProperties[103].formatID=107
+ArrayOfVkFormatProperties[103].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[103].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[104].bufferFeatures=88
+ArrayOfVkFormatProperties[104].formatID=108
+ArrayOfVkFormatProperties[104].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[104].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[105].bufferFeatures=88
+ArrayOfVkFormatProperties[105].formatID=109
+ArrayOfVkFormatProperties[105].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[105].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[106].bufferFeatures=112
+ArrayOfVkFormatProperties[106].formatID=110
+ArrayOfVkFormatProperties[106].linearTilingFeatures=49158
+ArrayOfVkFormatProperties[106].optimalTilingFeatures=49158
+ArrayOfVkFormatProperties[107].bufferFeatures=112
+ArrayOfVkFormatProperties[107].formatID=111
+ArrayOfVkFormatProperties[107].linearTilingFeatures=49158
+ArrayOfVkFormatProperties[107].optimalTilingFeatures=49158
+ArrayOfVkFormatProperties[108].bufferFeatures=64
+ArrayOfVkFormatProperties[108].formatID=112
+ArrayOfVkFormatProperties[108].linearTilingFeatures=0
+ArrayOfVkFormatProperties[108].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[109].bufferFeatures=64
+ArrayOfVkFormatProperties[109].formatID=113
+ArrayOfVkFormatProperties[109].linearTilingFeatures=0
+ArrayOfVkFormatProperties[109].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[10].bufferFeatures=64
+ArrayOfVkFormatProperties[10].formatID=11
+ArrayOfVkFormatProperties[10].linearTilingFeatures=0
+ArrayOfVkFormatProperties[10].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[110].bufferFeatures=64
+ArrayOfVkFormatProperties[110].formatID=114
+ArrayOfVkFormatProperties[110].linearTilingFeatures=0
+ArrayOfVkFormatProperties[110].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[111].bufferFeatures=64
+ArrayOfVkFormatProperties[111].formatID=115
+ArrayOfVkFormatProperties[111].linearTilingFeatures=0
+ArrayOfVkFormatProperties[111].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[112].bufferFeatures=64
+ArrayOfVkFormatProperties[112].formatID=116
+ArrayOfVkFormatProperties[112].linearTilingFeatures=0
+ArrayOfVkFormatProperties[112].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[113].bufferFeatures=64
+ArrayOfVkFormatProperties[113].formatID=117
+ArrayOfVkFormatProperties[113].linearTilingFeatures=0
+ArrayOfVkFormatProperties[113].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[114].bufferFeatures=64
+ArrayOfVkFormatProperties[114].formatID=118
+ArrayOfVkFormatProperties[114].linearTilingFeatures=0
+ArrayOfVkFormatProperties[114].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[115].bufferFeatures=64
+ArrayOfVkFormatProperties[115].formatID=119
+ArrayOfVkFormatProperties[115].linearTilingFeatures=0
+ArrayOfVkFormatProperties[115].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[116].bufferFeatures=64
+ArrayOfVkFormatProperties[116].formatID=120
+ArrayOfVkFormatProperties[116].linearTilingFeatures=0
+ArrayOfVkFormatProperties[116].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[117].bufferFeatures=64
+ArrayOfVkFormatProperties[117].formatID=121
+ArrayOfVkFormatProperties[117].linearTilingFeatures=0
+ArrayOfVkFormatProperties[117].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[118].bufferFeatures=88
+ArrayOfVkFormatProperties[118].formatID=122
+ArrayOfVkFormatProperties[118].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[118].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[119].bufferFeatures=8
+ArrayOfVkFormatProperties[119].formatID=123
+ArrayOfVkFormatProperties[119].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[119].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[11].bufferFeatures=64
+ArrayOfVkFormatProperties[11].formatID=12
+ArrayOfVkFormatProperties[11].linearTilingFeatures=0
+ArrayOfVkFormatProperties[11].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[120].bufferFeatures=0
+ArrayOfVkFormatProperties[120].formatID=124
+ArrayOfVkFormatProperties[120].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[120].optimalTilingFeatures=122371
+ArrayOfVkFormatProperties[121].bufferFeatures=0
+ArrayOfVkFormatProperties[121].formatID=125
+ArrayOfVkFormatProperties[121].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[121].optimalTilingFeatures=122369
+ArrayOfVkFormatProperties[122].bufferFeatures=0
+ArrayOfVkFormatProperties[122].formatID=126
+ArrayOfVkFormatProperties[122].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[122].optimalTilingFeatures=122371
+ArrayOfVkFormatProperties[123].bufferFeatures=0
+ArrayOfVkFormatProperties[123].formatID=127
+ArrayOfVkFormatProperties[123].linearTilingFeatures=115713
+ArrayOfVkFormatProperties[123].optimalTilingFeatures=118273
+ArrayOfVkFormatProperties[124].bufferFeatures=0
+ArrayOfVkFormatProperties[124].formatID=129
+ArrayOfVkFormatProperties[124].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[124].optimalTilingFeatures=122369
+ArrayOfVkFormatProperties[125].bufferFeatures=0
+ArrayOfVkFormatProperties[125].formatID=130
+ArrayOfVkFormatProperties[125].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[125].optimalTilingFeatures=122369
+ArrayOfVkFormatProperties[126].bufferFeatures=0
+ArrayOfVkFormatProperties[126].formatID=131
+ArrayOfVkFormatProperties[126].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[126].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[127].bufferFeatures=0
+ArrayOfVkFormatProperties[127].formatID=132
+ArrayOfVkFormatProperties[127].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[127].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[128].bufferFeatures=0
+ArrayOfVkFormatProperties[128].formatID=133
+ArrayOfVkFormatProperties[128].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[128].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[129].bufferFeatures=0
+ArrayOfVkFormatProperties[129].formatID=134
+ArrayOfVkFormatProperties[129].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[129].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[12].bufferFeatures=88
+ArrayOfVkFormatProperties[12].formatID=13
+ArrayOfVkFormatProperties[12].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[12].optimalTilingFeatures=1073859715
+ArrayOfVkFormatProperties[130].bufferFeatures=0
+ArrayOfVkFormatProperties[130].formatID=135
+ArrayOfVkFormatProperties[130].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[130].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[131].bufferFeatures=0
+ArrayOfVkFormatProperties[131].formatID=136
+ArrayOfVkFormatProperties[131].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[131].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[132].bufferFeatures=0
+ArrayOfVkFormatProperties[132].formatID=137
+ArrayOfVkFormatProperties[132].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[132].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[133].bufferFeatures=0
+ArrayOfVkFormatProperties[133].formatID=138
+ArrayOfVkFormatProperties[133].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[133].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[134].bufferFeatures=0
+ArrayOfVkFormatProperties[134].formatID=139
+ArrayOfVkFormatProperties[134].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[134].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[135].bufferFeatures=0
+ArrayOfVkFormatProperties[135].formatID=140
+ArrayOfVkFormatProperties[135].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[135].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[136].bufferFeatures=0
+ArrayOfVkFormatProperties[136].formatID=141
+ArrayOfVkFormatProperties[136].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[136].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[137].bufferFeatures=0
+ArrayOfVkFormatProperties[137].formatID=142
+ArrayOfVkFormatProperties[137].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[137].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[138].bufferFeatures=0
+ArrayOfVkFormatProperties[138].formatID=143
+ArrayOfVkFormatProperties[138].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[138].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[139].bufferFeatures=0
+ArrayOfVkFormatProperties[139].formatID=144
+ArrayOfVkFormatProperties[139].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[139].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[13].bufferFeatures=88
+ArrayOfVkFormatProperties[13].formatID=14
+ArrayOfVkFormatProperties[13].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[13].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[140].bufferFeatures=0
+ArrayOfVkFormatProperties[140].formatID=145
+ArrayOfVkFormatProperties[140].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[140].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[141].bufferFeatures=0
+ArrayOfVkFormatProperties[141].formatID=146
+ArrayOfVkFormatProperties[141].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[141].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[142].bufferFeatures=0
+ArrayOfVkFormatProperties[142].formatID=1000156002
+ArrayOfVkFormatProperties[142].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[142].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[143].bufferFeatures=0
+ArrayOfVkFormatProperties[143].formatID=1000156003
+ArrayOfVkFormatProperties[143].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[143].optimalTilingFeatures=516935681
+ArrayOfVkFormatProperties[144].bufferFeatures=0
+ArrayOfVkFormatProperties[144].formatID=1000156004
+ArrayOfVkFormatProperties[144].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[144].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[145].bufferFeatures=0
+ArrayOfVkFormatProperties[145].formatID=1000156005
+ArrayOfVkFormatProperties[145].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[145].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[146].bufferFeatures=0
+ArrayOfVkFormatProperties[146].formatID=1000156006
+ArrayOfVkFormatProperties[146].linearTilingFeatures=5230593
+ArrayOfVkFormatProperties[146].optimalTilingFeatures=5230593
+ArrayOfVkFormatProperties[147].bufferFeatures=0
+ArrayOfVkFormatProperties[147].formatID=1000156007
+ArrayOfVkFormatProperties[147].linearTilingFeatures=1036289
+ArrayOfVkFormatProperties[147].optimalTilingFeatures=1036289
+ArrayOfVkFormatProperties[148].bufferFeatures=0
+ArrayOfVkFormatProperties[148].formatID=1000156008
+ArrayOfVkFormatProperties[148].linearTilingFeatures=1036289
+ArrayOfVkFormatProperties[148].optimalTilingFeatures=1036289
+ArrayOfVkFormatProperties[149].bufferFeatures=0
+ArrayOfVkFormatProperties[149].formatID=1000156009
+ArrayOfVkFormatProperties[149].linearTilingFeatures=1036289
+ArrayOfVkFormatProperties[149].optimalTilingFeatures=1036289
+ArrayOfVkFormatProperties[14].bufferFeatures=8
+ArrayOfVkFormatProperties[14].formatID=15
+ArrayOfVkFormatProperties[14].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[14].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[150].bufferFeatures=0
+ArrayOfVkFormatProperties[150].formatID=1000156012
+ArrayOfVkFormatProperties[150].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[150].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[151].bufferFeatures=0
+ArrayOfVkFormatProperties[151].formatID=1000156013
+ArrayOfVkFormatProperties[151].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[151].optimalTilingFeatures=516935681
+ArrayOfVkFormatProperties[152].bufferFeatures=0
+ArrayOfVkFormatProperties[152].formatID=1000156014
+ArrayOfVkFormatProperties[152].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[152].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[153].bufferFeatures=0
+ArrayOfVkFormatProperties[153].formatID=1000156015
+ArrayOfVkFormatProperties[153].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[153].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[154].bufferFeatures=0
+ArrayOfVkFormatProperties[154].formatID=1000156016
+ArrayOfVkFormatProperties[154].linearTilingFeatures=5230593
+ArrayOfVkFormatProperties[154].optimalTilingFeatures=5230593
+ArrayOfVkFormatProperties[155].bufferFeatures=0
+ArrayOfVkFormatProperties[155].formatID=1000156017
+ArrayOfVkFormatProperties[155].linearTilingFeatures=1036289
+ArrayOfVkFormatProperties[155].optimalTilingFeatures=1036289
+ArrayOfVkFormatProperties[156].bufferFeatures=0
+ArrayOfVkFormatProperties[156].formatID=1000156018
+ArrayOfVkFormatProperties[156].linearTilingFeatures=1036289
+ArrayOfVkFormatProperties[156].optimalTilingFeatures=1036289
+ArrayOfVkFormatProperties[157].bufferFeatures=0
+ArrayOfVkFormatProperties[157].formatID=1000156019
+ArrayOfVkFormatProperties[157].linearTilingFeatures=1036289
+ArrayOfVkFormatProperties[157].optimalTilingFeatures=1036289
+ArrayOfVkFormatProperties[158].bufferFeatures=0
+ArrayOfVkFormatProperties[158].formatID=1000156022
+ArrayOfVkFormatProperties[158].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[158].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[159].bufferFeatures=0
+ArrayOfVkFormatProperties[159].formatID=1000156023
+ArrayOfVkFormatProperties[159].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[159].optimalTilingFeatures=114282497
+ArrayOfVkFormatProperties[15].bufferFeatures=536871000
+ArrayOfVkFormatProperties[15].formatID=16
+ArrayOfVkFormatProperties[15].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[15].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[160].bufferFeatures=0
+ArrayOfVkFormatProperties[160].formatID=1000156024
+ArrayOfVkFormatProperties[160].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[160].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[161].bufferFeatures=0
+ArrayOfVkFormatProperties[161].formatID=1000156025
+ArrayOfVkFormatProperties[161].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[161].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[162].bufferFeatures=0
+ArrayOfVkFormatProperties[162].formatID=1000156026
+ArrayOfVkFormatProperties[162].linearTilingFeatures=5230593
+ArrayOfVkFormatProperties[162].optimalTilingFeatures=5230593
+ArrayOfVkFormatProperties[163].bufferFeatures=0
+ArrayOfVkFormatProperties[163].formatID=1000156029
+ArrayOfVkFormatProperties[163].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[163].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[164].bufferFeatures=0
+ArrayOfVkFormatProperties[164].formatID=1000156030
+ArrayOfVkFormatProperties[164].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[164].optimalTilingFeatures=114282497
+ArrayOfVkFormatProperties[165].bufferFeatures=0
+ArrayOfVkFormatProperties[165].formatID=1000156031
+ArrayOfVkFormatProperties[165].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[165].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[166].bufferFeatures=0
+ArrayOfVkFormatProperties[166].formatID=1000156032
+ArrayOfVkFormatProperties[166].linearTilingFeatures=13619201
+ArrayOfVkFormatProperties[166].optimalTilingFeatures=13619201
+ArrayOfVkFormatProperties[167].bufferFeatures=0
+ArrayOfVkFormatProperties[167].formatID=1000156033
+ArrayOfVkFormatProperties[167].linearTilingFeatures=5230593
+ArrayOfVkFormatProperties[167].optimalTilingFeatures=5230593
+ArrayOfVkFormatProperties[16].bufferFeatures=536871000
+ArrayOfVkFormatProperties[16].formatID=17
+ArrayOfVkFormatProperties[16].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[16].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[17].bufferFeatures=64
+ArrayOfVkFormatProperties[17].formatID=18
+ArrayOfVkFormatProperties[17].linearTilingFeatures=0
+ArrayOfVkFormatProperties[17].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[18].bufferFeatures=64
+ArrayOfVkFormatProperties[18].formatID=19
+ArrayOfVkFormatProperties[18].linearTilingFeatures=0
+ArrayOfVkFormatProperties[18].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[19].bufferFeatures=88
+ArrayOfVkFormatProperties[19].formatID=20
+ArrayOfVkFormatProperties[19].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[19].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[1].bufferFeatures=8
+ArrayOfVkFormatProperties[1].formatID=2
+ArrayOfVkFormatProperties[1].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[1].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[20].bufferFeatures=88
+ArrayOfVkFormatProperties[20].formatID=21
+ArrayOfVkFormatProperties[20].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[20].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[21].bufferFeatures=536870976
+ArrayOfVkFormatProperties[21].formatID=23
+ArrayOfVkFormatProperties[21].linearTilingFeatures=0
+ArrayOfVkFormatProperties[21].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[22].bufferFeatures=536870976
+ArrayOfVkFormatProperties[22].formatID=24
+ArrayOfVkFormatProperties[22].linearTilingFeatures=0
+ArrayOfVkFormatProperties[22].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[23].bufferFeatures=64
+ArrayOfVkFormatProperties[23].formatID=25
+ArrayOfVkFormatProperties[23].linearTilingFeatures=0
+ArrayOfVkFormatProperties[23].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[24].bufferFeatures=64
+ArrayOfVkFormatProperties[24].formatID=26
+ArrayOfVkFormatProperties[24].linearTilingFeatures=0
+ArrayOfVkFormatProperties[24].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[25].bufferFeatures=64
+ArrayOfVkFormatProperties[25].formatID=27
+ArrayOfVkFormatProperties[25].linearTilingFeatures=0
+ArrayOfVkFormatProperties[25].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[26].bufferFeatures=64
+ArrayOfVkFormatProperties[26].formatID=28
+ArrayOfVkFormatProperties[26].linearTilingFeatures=0
+ArrayOfVkFormatProperties[26].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[27].bufferFeatures=64
+ArrayOfVkFormatProperties[27].formatID=30
+ArrayOfVkFormatProperties[27].linearTilingFeatures=0
+ArrayOfVkFormatProperties[27].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[28].bufferFeatures=64
+ArrayOfVkFormatProperties[28].formatID=31
+ArrayOfVkFormatProperties[28].linearTilingFeatures=0
+ArrayOfVkFormatProperties[28].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[29].bufferFeatures=64
+ArrayOfVkFormatProperties[29].formatID=32
+ArrayOfVkFormatProperties[29].linearTilingFeatures=0
+ArrayOfVkFormatProperties[29].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[2].bufferFeatures=8
+ArrayOfVkFormatProperties[2].formatID=3
+ArrayOfVkFormatProperties[2].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[2].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[30].bufferFeatures=64
+ArrayOfVkFormatProperties[30].formatID=33
+ArrayOfVkFormatProperties[30].linearTilingFeatures=0
+ArrayOfVkFormatProperties[30].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[31].bufferFeatures=64
+ArrayOfVkFormatProperties[31].formatID=34
+ArrayOfVkFormatProperties[31].linearTilingFeatures=0
+ArrayOfVkFormatProperties[31].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[32].bufferFeatures=64
+ArrayOfVkFormatProperties[32].formatID=35
+ArrayOfVkFormatProperties[32].linearTilingFeatures=0
+ArrayOfVkFormatProperties[32].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[33].bufferFeatures=536871000
+ArrayOfVkFormatProperties[33].formatID=37
+ArrayOfVkFormatProperties[33].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[33].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[34].bufferFeatures=536871000
+ArrayOfVkFormatProperties[34].formatID=38
+ArrayOfVkFormatProperties[34].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[34].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[35].bufferFeatures=64
+ArrayOfVkFormatProperties[35].formatID=39
+ArrayOfVkFormatProperties[35].linearTilingFeatures=0
+ArrayOfVkFormatProperties[35].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[36].bufferFeatures=64
+ArrayOfVkFormatProperties[36].formatID=40
+ArrayOfVkFormatProperties[36].linearTilingFeatures=0
+ArrayOfVkFormatProperties[36].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[37].bufferFeatures=88
+ArrayOfVkFormatProperties[37].formatID=41
+ArrayOfVkFormatProperties[37].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[37].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[38].bufferFeatures=88
+ArrayOfVkFormatProperties[38].formatID=42
+ArrayOfVkFormatProperties[38].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[38].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[39].bufferFeatures=8
+ArrayOfVkFormatProperties[39].formatID=43
+ArrayOfVkFormatProperties[39].linearTilingFeatures=121857
+ArrayOfVkFormatProperties[39].optimalTilingFeatures=122241
+ArrayOfVkFormatProperties[3].bufferFeatures=8
+ArrayOfVkFormatProperties[3].formatID=4
+ArrayOfVkFormatProperties[3].linearTilingFeatures=121857
+ArrayOfVkFormatProperties[3].optimalTilingFeatures=122241
+ArrayOfVkFormatProperties[40].bufferFeatures=88
+ArrayOfVkFormatProperties[40].formatID=44
+ArrayOfVkFormatProperties[40].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[40].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[41].bufferFeatures=72
+ArrayOfVkFormatProperties[41].formatID=45
+ArrayOfVkFormatProperties[41].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[41].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[42].bufferFeatures=64
+ArrayOfVkFormatProperties[42].formatID=46
+ArrayOfVkFormatProperties[42].linearTilingFeatures=0
+ArrayOfVkFormatProperties[42].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[43].bufferFeatures=64
+ArrayOfVkFormatProperties[43].formatID=47
+ArrayOfVkFormatProperties[43].linearTilingFeatures=0
+ArrayOfVkFormatProperties[43].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[44].bufferFeatures=72
+ArrayOfVkFormatProperties[44].formatID=48
+ArrayOfVkFormatProperties[44].linearTilingFeatures=115713
+ArrayOfVkFormatProperties[44].optimalTilingFeatures=115713
+ArrayOfVkFormatProperties[45].bufferFeatures=72
+ArrayOfVkFormatProperties[45].formatID=49
+ArrayOfVkFormatProperties[45].linearTilingFeatures=115713
+ArrayOfVkFormatProperties[45].optimalTilingFeatures=115713
+ArrayOfVkFormatProperties[46].bufferFeatures=8
+ArrayOfVkFormatProperties[46].formatID=50
+ArrayOfVkFormatProperties[46].linearTilingFeatures=121857
+ArrayOfVkFormatProperties[46].optimalTilingFeatures=122241
+ArrayOfVkFormatProperties[47].bufferFeatures=88
+ArrayOfVkFormatProperties[47].formatID=51
+ArrayOfVkFormatProperties[47].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[47].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[48].bufferFeatures=88
+ArrayOfVkFormatProperties[48].formatID=52
+ArrayOfVkFormatProperties[48].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[48].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[49].bufferFeatures=64
+ArrayOfVkFormatProperties[49].formatID=53
+ArrayOfVkFormatProperties[49].linearTilingFeatures=0
+ArrayOfVkFormatProperties[49].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[4].bufferFeatures=8
+ArrayOfVkFormatProperties[4].formatID=5
+ArrayOfVkFormatProperties[4].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[4].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[50].bufferFeatures=64
+ArrayOfVkFormatProperties[50].formatID=54
+ArrayOfVkFormatProperties[50].linearTilingFeatures=0
+ArrayOfVkFormatProperties[50].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[51].bufferFeatures=88
+ArrayOfVkFormatProperties[51].formatID=55
+ArrayOfVkFormatProperties[51].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[51].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[52].bufferFeatures=88
+ArrayOfVkFormatProperties[52].formatID=56
+ArrayOfVkFormatProperties[52].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[52].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[53].bufferFeatures=8
+ArrayOfVkFormatProperties[53].formatID=57
+ArrayOfVkFormatProperties[53].linearTilingFeatures=121857
+ArrayOfVkFormatProperties[53].optimalTilingFeatures=122241
+ArrayOfVkFormatProperties[54].bufferFeatures=72
+ArrayOfVkFormatProperties[54].formatID=58
+ArrayOfVkFormatProperties[54].linearTilingFeatures=121857
+ArrayOfVkFormatProperties[54].optimalTilingFeatures=122241
+ArrayOfVkFormatProperties[55].bufferFeatures=64
+ArrayOfVkFormatProperties[55].formatID=59
+ArrayOfVkFormatProperties[55].linearTilingFeatures=0
+ArrayOfVkFormatProperties[55].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[56].bufferFeatures=64
+ArrayOfVkFormatProperties[56].formatID=60
+ArrayOfVkFormatProperties[56].linearTilingFeatures=0
+ArrayOfVkFormatProperties[56].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[57].bufferFeatures=64
+ArrayOfVkFormatProperties[57].formatID=61
+ArrayOfVkFormatProperties[57].linearTilingFeatures=0
+ArrayOfVkFormatProperties[57].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[58].bufferFeatures=72
+ArrayOfVkFormatProperties[58].formatID=62
+ArrayOfVkFormatProperties[58].linearTilingFeatures=115713
+ArrayOfVkFormatProperties[58].optimalTilingFeatures=115713
+ArrayOfVkFormatProperties[59].bufferFeatures=64
+ArrayOfVkFormatProperties[59].formatID=63
+ArrayOfVkFormatProperties[59].linearTilingFeatures=0
+ArrayOfVkFormatProperties[59].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[5].bufferFeatures=8
+ArrayOfVkFormatProperties[5].formatID=6
+ArrayOfVkFormatProperties[5].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[5].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[60].bufferFeatures=536871000
+ArrayOfVkFormatProperties[60].formatID=64
+ArrayOfVkFormatProperties[60].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[60].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[61].bufferFeatures=64
+ArrayOfVkFormatProperties[61].formatID=65
+ArrayOfVkFormatProperties[61].linearTilingFeatures=0
+ArrayOfVkFormatProperties[61].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[62].bufferFeatures=64
+ArrayOfVkFormatProperties[62].formatID=66
+ArrayOfVkFormatProperties[62].linearTilingFeatures=0
+ArrayOfVkFormatProperties[62].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[63].bufferFeatures=64
+ArrayOfVkFormatProperties[63].formatID=67
+ArrayOfVkFormatProperties[63].linearTilingFeatures=0
+ArrayOfVkFormatProperties[63].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[64].bufferFeatures=88
+ArrayOfVkFormatProperties[64].formatID=68
+ArrayOfVkFormatProperties[64].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[64].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[65].bufferFeatures=64
+ArrayOfVkFormatProperties[65].formatID=69
+ArrayOfVkFormatProperties[65].linearTilingFeatures=0
+ArrayOfVkFormatProperties[65].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[66].bufferFeatures=88
+ArrayOfVkFormatProperties[66].formatID=70
+ArrayOfVkFormatProperties[66].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[66].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[67].bufferFeatures=88
+ArrayOfVkFormatProperties[67].formatID=71
+ArrayOfVkFormatProperties[67].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[67].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[68].bufferFeatures=64
+ArrayOfVkFormatProperties[68].formatID=72
+ArrayOfVkFormatProperties[68].linearTilingFeatures=0
+ArrayOfVkFormatProperties[68].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[69].bufferFeatures=64
+ArrayOfVkFormatProperties[69].formatID=73
+ArrayOfVkFormatProperties[69].linearTilingFeatures=0
+ArrayOfVkFormatProperties[69].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[6].bufferFeatures=8
+ArrayOfVkFormatProperties[6].formatID=7
+ArrayOfVkFormatProperties[6].linearTilingFeatures=119809
+ArrayOfVkFormatProperties[6].optimalTilingFeatures=119809
+ArrayOfVkFormatProperties[70].bufferFeatures=88
+ArrayOfVkFormatProperties[70].formatID=74
+ArrayOfVkFormatProperties[70].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[70].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[71].bufferFeatures=88
+ArrayOfVkFormatProperties[71].formatID=75
+ArrayOfVkFormatProperties[71].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[71].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[72].bufferFeatures=88
+ArrayOfVkFormatProperties[72].formatID=76
+ArrayOfVkFormatProperties[72].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[72].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[73].bufferFeatures=536871000
+ArrayOfVkFormatProperties[73].formatID=77
+ArrayOfVkFormatProperties[73].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[73].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[74].bufferFeatures=536871000
+ArrayOfVkFormatProperties[74].formatID=78
+ArrayOfVkFormatProperties[74].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[74].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[75].bufferFeatures=64
+ArrayOfVkFormatProperties[75].formatID=79
+ArrayOfVkFormatProperties[75].linearTilingFeatures=0
+ArrayOfVkFormatProperties[75].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[76].bufferFeatures=64
+ArrayOfVkFormatProperties[76].formatID=80
+ArrayOfVkFormatProperties[76].linearTilingFeatures=0
+ArrayOfVkFormatProperties[76].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[77].bufferFeatures=88
+ArrayOfVkFormatProperties[77].formatID=81
+ArrayOfVkFormatProperties[77].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[77].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[78].bufferFeatures=88
+ArrayOfVkFormatProperties[78].formatID=82
+ArrayOfVkFormatProperties[78].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[78].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[79].bufferFeatures=536871032
+ArrayOfVkFormatProperties[79].formatID=83
+ArrayOfVkFormatProperties[79].linearTilingFeatures=121863
+ArrayOfVkFormatProperties[79].optimalTilingFeatures=122247
+ArrayOfVkFormatProperties[7].bufferFeatures=8
+ArrayOfVkFormatProperties[7].formatID=8
+ArrayOfVkFormatProperties[7].linearTilingFeatures=121857
+ArrayOfVkFormatProperties[7].optimalTilingFeatures=122241
+ArrayOfVkFormatProperties[80].bufferFeatures=536870976
+ArrayOfVkFormatProperties[80].formatID=84
+ArrayOfVkFormatProperties[80].linearTilingFeatures=0
+ArrayOfVkFormatProperties[80].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[81].bufferFeatures=536870976
+ArrayOfVkFormatProperties[81].formatID=85
+ArrayOfVkFormatProperties[81].linearTilingFeatures=0
+ArrayOfVkFormatProperties[81].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[82].bufferFeatures=64
+ArrayOfVkFormatProperties[82].formatID=86
+ArrayOfVkFormatProperties[82].linearTilingFeatures=0
+ArrayOfVkFormatProperties[82].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[83].bufferFeatures=64
+ArrayOfVkFormatProperties[83].formatID=87
+ArrayOfVkFormatProperties[83].linearTilingFeatures=0
+ArrayOfVkFormatProperties[83].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[84].bufferFeatures=64
+ArrayOfVkFormatProperties[84].formatID=88
+ArrayOfVkFormatProperties[84].linearTilingFeatures=0
+ArrayOfVkFormatProperties[84].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[85].bufferFeatures=64
+ArrayOfVkFormatProperties[85].formatID=89
+ArrayOfVkFormatProperties[85].linearTilingFeatures=0
+ArrayOfVkFormatProperties[85].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[86].bufferFeatures=536870976
+ArrayOfVkFormatProperties[86].formatID=90
+ArrayOfVkFormatProperties[86].linearTilingFeatures=0
+ArrayOfVkFormatProperties[86].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[87].bufferFeatures=536871000
+ArrayOfVkFormatProperties[87].formatID=91
+ArrayOfVkFormatProperties[87].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[87].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[88].bufferFeatures=536871000
+ArrayOfVkFormatProperties[88].formatID=92
+ArrayOfVkFormatProperties[88].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[88].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[89].bufferFeatures=64
+ArrayOfVkFormatProperties[89].formatID=93
+ArrayOfVkFormatProperties[89].linearTilingFeatures=0
+ArrayOfVkFormatProperties[89].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[8].bufferFeatures=88
+ArrayOfVkFormatProperties[8].formatID=9
+ArrayOfVkFormatProperties[8].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[8].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[90].bufferFeatures=64
+ArrayOfVkFormatProperties[90].formatID=94
+ArrayOfVkFormatProperties[90].linearTilingFeatures=0
+ArrayOfVkFormatProperties[90].optimalTilingFeatures=0
+ArrayOfVkFormatProperties[91].bufferFeatures=88
+ArrayOfVkFormatProperties[91].formatID=95
+ArrayOfVkFormatProperties[91].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[91].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[92].bufferFeatures=88
+ArrayOfVkFormatProperties[92].formatID=96
+ArrayOfVkFormatProperties[92].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[92].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[93].bufferFeatures=536871032
+ArrayOfVkFormatProperties[93].formatID=97
+ArrayOfVkFormatProperties[93].linearTilingFeatures=121863
+ArrayOfVkFormatProperties[93].optimalTilingFeatures=122247
+ArrayOfVkFormatProperties[94].bufferFeatures=120
+ArrayOfVkFormatProperties[94].formatID=98
+ArrayOfVkFormatProperties[94].linearTilingFeatures=117767
+ArrayOfVkFormatProperties[94].optimalTilingFeatures=117895
+ArrayOfVkFormatProperties[95].bufferFeatures=120
+ArrayOfVkFormatProperties[95].formatID=99
+ArrayOfVkFormatProperties[95].linearTilingFeatures=117767
+ArrayOfVkFormatProperties[95].optimalTilingFeatures=117895
+ArrayOfVkFormatProperties[96].bufferFeatures=120
+ArrayOfVkFormatProperties[96].formatID=100
+ArrayOfVkFormatProperties[96].linearTilingFeatures=121863
+ArrayOfVkFormatProperties[96].optimalTilingFeatures=122247
+ArrayOfVkFormatProperties[97].bufferFeatures=88
+ArrayOfVkFormatProperties[97].formatID=101
+ArrayOfVkFormatProperties[97].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[97].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[98].bufferFeatures=88
+ArrayOfVkFormatProperties[98].formatID=102
+ArrayOfVkFormatProperties[98].linearTilingFeatures=117763
+ArrayOfVkFormatProperties[98].optimalTilingFeatures=117891
+ArrayOfVkFormatProperties[99].bufferFeatures=536871000
+ArrayOfVkFormatProperties[99].formatID=103
+ArrayOfVkFormatProperties[99].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[99].optimalTilingFeatures=122243
+ArrayOfVkFormatProperties[9].bufferFeatures=88
+ArrayOfVkFormatProperties[9].formatID=10
+ArrayOfVkFormatProperties[9].linearTilingFeatures=121859
+ArrayOfVkFormatProperties[9].optimalTilingFeatures=122243
+ArrayOfVkLayerProperties[0].description=NVIDIA Optimus layer
+ArrayOfVkLayerProperties[0].implementationVersion=1
+ArrayOfVkLayerProperties[0].layerName=VK_LAYER_NV_optimus
+ArrayOfVkLayerProperties[0].specVersion=4211000
+ArrayOfVkLayerProperties[1].description=NVIDIA GR2608 layer
+ArrayOfVkLayerProperties[1].implementationVersion=1
+ArrayOfVkLayerProperties[1].layerName=VK_LAYER_NV_present
+ArrayOfVkLayerProperties[1].specVersion=4211000
+ArrayOfVkQueueFamilyProperties[0].minImageTransferGranularity.depth=1
+ArrayOfVkQueueFamilyProperties[0].minImageTransferGranularity.height=1
+ArrayOfVkQueueFamilyProperties[0].minImageTransferGranularity.width=1
+ArrayOfVkQueueFamilyProperties[0].queueCount=16
+ArrayOfVkQueueFamilyProperties[0].queueFlags=15
+ArrayOfVkQueueFamilyProperties[1].minImageTransferGranularity.depth=1
+ArrayOfVkQueueFamilyProperties[1].minImageTransferGranularity.height=1
+ArrayOfVkQueueFamilyProperties[1].minImageTransferGranularity.width=1
+ArrayOfVkQueueFamilyProperties[1].queueCount=2
+ArrayOfVkQueueFamilyProperties[1].queueFlags=12
+ArrayOfVkQueueFamilyProperties[2].minImageTransferGranularity.depth=1
+ArrayOfVkQueueFamilyProperties[2].minImageTransferGranularity.height=1
+ArrayOfVkQueueFamilyProperties[2].minImageTransferGranularity.width=1
+ArrayOfVkQueueFamilyProperties[2].queueCount=8
+ArrayOfVkQueueFamilyProperties[2].queueFlags=14
+ArrayOfVkQueueFamilyProperties[3].minImageTransferGranularity.depth=1
+ArrayOfVkQueueFamilyProperties[3].minImageTransferGranularity.height=1
+ArrayOfVkQueueFamilyProperties[3].minImageTransferGranularity.width=1
+ArrayOfVkQueueFamilyProperties[3].queueCount=1
+ArrayOfVkQueueFamilyProperties[3].queueFlags=44
+ArrayOfVkQueueFamilyProperties[4].minImageTransferGranularity.depth=1
+ArrayOfVkQueueFamilyProperties[4].minImageTransferGranularity.height=1
+ArrayOfVkQueueFamilyProperties[4].minImageTransferGranularity.width=1
+ArrayOfVkQueueFamilyProperties[4].queueCount=1
+ArrayOfVkQueueFamilyProperties[4].queueFlags=76
+ArrayOfVkQueueFamilyProperties[5].minImageTransferGranularity.depth=1
+ArrayOfVkQueueFamilyProperties[5].minImageTransferGranularity.height=1
+ArrayOfVkQueueFamilyProperties[5].minImageTransferGranularity.width=1
+ArrayOfVkQueueFamilyProperties[5].queueCount=1
+ArrayOfVkQueueFamilyProperties[5].queueFlags=268
+VkPhysicalDeviceFeatures.alphaToOne=1
+VkPhysicalDeviceFeatures.depthBiasClamp=1
+VkPhysicalDeviceFeatures.depthBounds=1
+VkPhysicalDeviceFeatures.depthClamp=1
+VkPhysicalDeviceFeatures.drawIndirectFirstInstance=1
+VkPhysicalDeviceFeatures.dualSrcBlend=1
+VkPhysicalDeviceFeatures.fillModeNonSolid=1
+VkPhysicalDeviceFeatures.fragmentStoresAndAtomics=1
+VkPhysicalDeviceFeatures.fullDrawIndexUint32=1
+VkPhysicalDeviceFeatures.geometryShader=1
+VkPhysicalDeviceFeatures.imageCubeArray=1
+VkPhysicalDeviceFeatures.independentBlend=1
+VkPhysicalDeviceFeatures.inheritedQueries=1
+VkPhysicalDeviceFeatures.largePoints=1
+VkPhysicalDeviceFeatures.logicOp=1
+VkPhysicalDeviceFeatures.multiDrawIndirect=1
+VkPhysicalDeviceFeatures.multiViewport=1
+VkPhysicalDeviceFeatures.occlusionQueryPrecise=1
+VkPhysicalDeviceFeatures.pipelineStatisticsQuery=1
+VkPhysicalDeviceFeatures.robustBufferAccess=1
+VkPhysicalDeviceFeatures.sampleRateShading=1
+VkPhysicalDeviceFeatures.samplerAnisotropy=1
+VkPhysicalDeviceFeatures.shaderClipDistance=1
+VkPhysicalDeviceFeatures.shaderCullDistance=1
+VkPhysicalDeviceFeatures.shaderFloat64=1
+VkPhysicalDeviceFeatures.shaderImageGatherExtended=1
+VkPhysicalDeviceFeatures.shaderInt16=1
+VkPhysicalDeviceFeatures.shaderInt64=1
+VkPhysicalDeviceFeatures.shaderResourceMinLod=1
+VkPhysicalDeviceFeatures.shaderResourceResidency=1
+VkPhysicalDeviceFeatures.shaderSampledImageArrayDynamicIndexing=1
+VkPhysicalDeviceFeatures.shaderStorageBufferArrayDynamicIndexing=1
+VkPhysicalDeviceFeatures.shaderStorageImageArrayDynamicIndexing=1
+VkPhysicalDeviceFeatures.shaderStorageImageExtendedFormats=1
+VkPhysicalDeviceFeatures.shaderStorageImageMultisample=1
+VkPhysicalDeviceFeatures.shaderStorageImageReadWithoutFormat=1
+VkPhysicalDeviceFeatures.shaderStorageImageWriteWithoutFormat=1
+VkPhysicalDeviceFeatures.shaderTessellationAndGeometryPointSize=1
+VkPhysicalDeviceFeatures.shaderUniformBufferArrayDynamicIndexing=1
+VkPhysicalDeviceFeatures.sparseBinding=1
+VkPhysicalDeviceFeatures.sparseResidency16Samples=1
+VkPhysicalDeviceFeatures.sparseResidency2Samples=1
+VkPhysicalDeviceFeatures.sparseResidency4Samples=1
+VkPhysicalDeviceFeatures.sparseResidency8Samples=1
+VkPhysicalDeviceFeatures.sparseResidencyAliased=1
+VkPhysicalDeviceFeatures.sparseResidencyBuffer=1
+VkPhysicalDeviceFeatures.sparseResidencyImage2D=1
+VkPhysicalDeviceFeatures.sparseResidencyImage3D=1
+VkPhysicalDeviceFeatures.tessellationShader=1
+VkPhysicalDeviceFeatures.textureCompressionASTC_LDR=0
+VkPhysicalDeviceFeatures.textureCompressionBC=1
+VkPhysicalDeviceFeatures.textureCompressionETC2=0
+VkPhysicalDeviceFeatures.variableMultisampleRate=1
+VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics=1
+VkPhysicalDeviceFeatures.wideLines=1
+VkPhysicalDeviceMemoryProperties.memoryHeaps[0].flags=1
+VkPhysicalDeviceMemoryProperties.memoryHeaps[0].size=25769803776
+VkPhysicalDeviceMemoryProperties.memoryHeaps[1].flags=0
+VkPhysicalDeviceMemoryProperties.memoryHeaps[1].size=79404036096
+VkPhysicalDeviceMemoryProperties.memoryHeaps[2].flags=1
+VkPhysicalDeviceMemoryProperties.memoryHeaps[2].size=257949696
+VkPhysicalDeviceMemoryProperties.memoryTypes[0].heapIndex=1
+VkPhysicalDeviceMemoryProperties.memoryTypes[0].propertyFlags=0
+VkPhysicalDeviceMemoryProperties.memoryTypes[1].heapIndex=0
+VkPhysicalDeviceMemoryProperties.memoryTypes[1].propertyFlags=1
+VkPhysicalDeviceMemoryProperties.memoryTypes[2].heapIndex=0
+VkPhysicalDeviceMemoryProperties.memoryTypes[2].propertyFlags=1
+VkPhysicalDeviceMemoryProperties.memoryTypes[3].heapIndex=1
+VkPhysicalDeviceMemoryProperties.memoryTypes[3].propertyFlags=6
+VkPhysicalDeviceMemoryProperties.memoryTypes[4].heapIndex=1
+VkPhysicalDeviceMemoryProperties.memoryTypes[4].propertyFlags=14
+VkPhysicalDeviceMemoryProperties.memoryTypes[5].heapIndex=2
+VkPhysicalDeviceMemoryProperties.memoryTypes[5].propertyFlags=7
+VkPhysicalDeviceProperties.apiVersion=4211000
+VkPhysicalDeviceProperties.deviceID=8708
+VkPhysicalDeviceProperties.deviceName=NVIDIA GeForce RTX 3090
+VkPhysicalDeviceProperties.deviceType=2
+VkPhysicalDeviceProperties.driverVersion=2435301632
+VkPhysicalDeviceProperties.limits.bufferImageGranularity=1024
+VkPhysicalDeviceProperties.limits.discreteQueuePriorities=2
+VkPhysicalDeviceProperties.limits.framebufferColorSampleCounts=15
+VkPhysicalDeviceProperties.limits.framebufferDepthSampleCounts=15
+VkPhysicalDeviceProperties.limits.framebufferNoAttachmentsSampleCounts=31
+VkPhysicalDeviceProperties.limits.framebufferStencilSampleCounts=31
+VkPhysicalDeviceProperties.limits.lineWidthGranularity=0.0625
+VkPhysicalDeviceProperties.limits.lineWidthRange[0]=1
+VkPhysicalDeviceProperties.limits.lineWidthRange[1]=64
+VkPhysicalDeviceProperties.limits.maxBoundDescriptorSets=32
+VkPhysicalDeviceProperties.limits.maxClipDistances=8
+VkPhysicalDeviceProperties.limits.maxColorAttachments=8
+VkPhysicalDeviceProperties.limits.maxCombinedClipAndCullDistances=8
+VkPhysicalDeviceProperties.limits.maxComputeSharedMemorySize=49152
+VkPhysicalDeviceProperties.limits.maxComputeWorkGroupCount[0]=2147483647
+VkPhysicalDeviceProperties.limits.maxComputeWorkGroupCount[1]=65535
+VkPhysicalDeviceProperties.limits.maxComputeWorkGroupCount[2]=65535
+VkPhysicalDeviceProperties.limits.maxComputeWorkGroupInvocations=1024
+VkPhysicalDeviceProperties.limits.maxComputeWorkGroupSize[0]=1024
+VkPhysicalDeviceProperties.limits.maxComputeWorkGroupSize[1]=1024
+VkPhysicalDeviceProperties.limits.maxComputeWorkGroupSize[2]=64
+VkPhysicalDeviceProperties.limits.maxCullDistances=8
+VkPhysicalDeviceProperties.limits.maxDescriptorSetInputAttachments=1048576
+VkPhysicalDeviceProperties.limits.maxDescriptorSetSampledImages=1048576
+VkPhysicalDeviceProperties.limits.maxDescriptorSetSamplers=1048576
+VkPhysicalDeviceProperties.limits.maxDescriptorSetStorageBuffers=1048576
+VkPhysicalDeviceProperties.limits.maxDescriptorSetStorageBuffersDynamic=16
+VkPhysicalDeviceProperties.limits.maxDescriptorSetStorageImages=1048576
+VkPhysicalDeviceProperties.limits.maxDescriptorSetUniformBuffers=1048576
+VkPhysicalDeviceProperties.limits.maxDescriptorSetUniformBuffersDynamic=15
+VkPhysicalDeviceProperties.limits.maxDrawIndexedIndexValue=4294967295
+VkPhysicalDeviceProperties.limits.maxDrawIndirectCount=4294967295
+VkPhysicalDeviceProperties.limits.maxFragmentCombinedOutputResources=4294967295
+VkPhysicalDeviceProperties.limits.maxFragmentDualSrcAttachments=1
+VkPhysicalDeviceProperties.limits.maxFragmentInputComponents=128
+VkPhysicalDeviceProperties.limits.maxFragmentOutputAttachments=8
+VkPhysicalDeviceProperties.limits.maxFramebufferHeight=32768
+VkPhysicalDeviceProperties.limits.maxFramebufferWidth=32768
+VkPhysicalDeviceProperties.limits.maxGeometryInputComponents=128
+VkPhysicalDeviceProperties.limits.maxGeometryOutputComponents=128
+VkPhysicalDeviceProperties.limits.maxGeometryOutputVertices=1024
+VkPhysicalDeviceProperties.limits.maxGeometryShaderInvocations=32
+VkPhysicalDeviceProperties.limits.maxGeometryTotalOutputComponents=1024
+VkPhysicalDeviceProperties.limits.maxImageDimension1D=32768
+VkPhysicalDeviceProperties.limits.maxImageDimension2D=32768
+VkPhysicalDeviceProperties.limits.maxImageDimension3D=16384
+VkPhysicalDeviceProperties.limits.maxImageDimensionCube=32768
+VkPhysicalDeviceProperties.limits.maxInterpolationOffset=0.4375
+VkPhysicalDeviceProperties.limits.maxMemoryAllocationCount=4294967295
+VkPhysicalDeviceProperties.limits.maxPerStageDescriptorInputAttachments=1048576
+VkPhysicalDeviceProperties.limits.maxPerStageDescriptorSampledImages=1048576
+VkPhysicalDeviceProperties.limits.maxPerStageDescriptorSamplers=1048576
+VkPhysicalDeviceProperties.limits.maxPerStageDescriptorStorageBuffers=1048576
+VkPhysicalDeviceProperties.limits.maxPerStageDescriptorStorageImages=1048576
+VkPhysicalDeviceProperties.limits.maxPerStageDescriptorUniformBuffers=1048576
+VkPhysicalDeviceProperties.limits.maxPerStageResources=4294967295
+VkPhysicalDeviceProperties.limits.maxPushConstantsSize=256
+VkPhysicalDeviceProperties.limits.maxSampleMaskWords=1
+VkPhysicalDeviceProperties.limits.maxSamplerAllocationCount=4000
+VkPhysicalDeviceProperties.limits.maxSamplerAnisotropy=16
+VkPhysicalDeviceProperties.limits.maxSamplerLodBias=15
+VkPhysicalDeviceProperties.limits.maxStorageBufferRange=4294967295
+VkPhysicalDeviceProperties.limits.maxTessellationControlPerPatchOutputComponents=120
+VkPhysicalDeviceProperties.limits.maxTessellationControlPerVertexInputComponents=128
+VkPhysicalDeviceProperties.limits.maxTessellationControlPerVertexOutputComponents=128
+VkPhysicalDeviceProperties.limits.maxTessellationControlTotalOutputComponents=4216
+VkPhysicalDeviceProperties.limits.maxTessellationEvaluationInputComponents=128
+VkPhysicalDeviceProperties.limits.maxTessellationEvaluationOutputComponents=128
+VkPhysicalDeviceProperties.limits.maxTessellationGenerationLevel=64
+VkPhysicalDeviceProperties.limits.maxTessellationPatchSize=32
+VkPhysicalDeviceProperties.limits.maxTexelBufferElements=134217728
+VkPhysicalDeviceProperties.limits.maxTexelGatherOffset=31
+VkPhysicalDeviceProperties.limits.maxTexelOffset=7
+VkPhysicalDeviceProperties.limits.maxUniformBufferRange=65536
+VkPhysicalDeviceProperties.limits.maxVertexInputAttributeOffset=2047
+VkPhysicalDeviceProperties.limits.maxVertexInputAttributes=32
+VkPhysicalDeviceProperties.limits.maxVertexInputBindingStride=2048
+VkPhysicalDeviceProperties.limits.maxVertexInputBindings=32
+VkPhysicalDeviceProperties.limits.maxVertexOutputComponents=128
+VkPhysicalDeviceProperties.limits.maxViewportDimensions[0]=32768
+VkPhysicalDeviceProperties.limits.maxViewportDimensions[1]=32768
+VkPhysicalDeviceProperties.limits.maxViewports=16
+VkPhysicalDeviceProperties.limits.minInterpolationOffset=-0.5
+VkPhysicalDeviceProperties.limits.minMemoryMapAlignment=64
+VkPhysicalDeviceProperties.limits.minStorageBufferOffsetAlignment=16
+VkPhysicalDeviceProperties.limits.minTexelBufferOffsetAlignment=16
+VkPhysicalDeviceProperties.limits.minTexelGatherOffset=-32
+VkPhysicalDeviceProperties.limits.minTexelOffset=-8
+VkPhysicalDeviceProperties.limits.minUniformBufferOffsetAlignment=64
+VkPhysicalDeviceProperties.limits.mipmapPrecisionBits=8
+VkPhysicalDeviceProperties.limits.nonCoherentAtomSize=64
+VkPhysicalDeviceProperties.limits.optimalBufferCopyOffsetAlignment=1
+VkPhysicalDeviceProperties.limits.optimalBufferCopyRowPitchAlignment=1
+VkPhysicalDeviceProperties.limits.pointSizeGranularity=0.0625
+VkPhysicalDeviceProperties.limits.pointSizeRange[0]=1
+VkPhysicalDeviceProperties.limits.pointSizeRange[1]=2047.94
+VkPhysicalDeviceProperties.limits.sampledImageColorSampleCounts=15
+VkPhysicalDeviceProperties.limits.sampledImageDepthSampleCounts=15
+VkPhysicalDeviceProperties.limits.sampledImageIntegerSampleCounts=15
+VkPhysicalDeviceProperties.limits.sampledImageStencilSampleCounts=31
+VkPhysicalDeviceProperties.limits.sparseAddressSpaceSize=1099511627776
+VkPhysicalDeviceProperties.limits.standardSampleLocations=1
+VkPhysicalDeviceProperties.limits.storageImageSampleCounts=15
+VkPhysicalDeviceProperties.limits.strictLines=1
+VkPhysicalDeviceProperties.limits.subPixelInterpolationOffsetBits=4
+VkPhysicalDeviceProperties.limits.subPixelPrecisionBits=8
+VkPhysicalDeviceProperties.limits.subTexelPrecisionBits=8
+VkPhysicalDeviceProperties.limits.viewportBoundsRange[0]=-65536
+VkPhysicalDeviceProperties.limits.viewportBoundsRange[1]=65536
+VkPhysicalDeviceProperties.limits.viewportSubPixelBits=8
+VkPhysicalDeviceProperties.sparseProperties.residencyAlignedMipSize=0
+VkPhysicalDeviceProperties.sparseProperties.residencyNonResidentStrict=1
+VkPhysicalDeviceProperties.sparseProperties.residencyStandard2DBlockShape=1
+VkPhysicalDeviceProperties.sparseProperties.residencyStandard2DMultisampleBlockShape=1
+VkPhysicalDeviceProperties.sparseProperties.residencyStandard3DBlockShape=1
+VkPhysicalDeviceProperties.vendorID=4318
+comments.desc=JSON configuration file describing GPU 0 (NVIDIA GeForce RTX 3090). Generated using the vulkaninfo program.
+comments.vulkanApiVersion=1.3.204
+@@END vk_leaves.tsv
+GAP_PROBES_SUMMARY side=host pass=9 not_supported=0 fail=0 mismatch=0 not_run=0
+=== end rc=0 secs=68 2026-11-18T03:43:31+00:00

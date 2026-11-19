@@ -133,7 +133,7 @@ fi
 # report NOT_RUN with its reason, and can never turn a gate bundle into a failed one. It fills $B/bin/nvcodec_probe and $B/dcgm_root.tar.
 bash "$HERE/open_rows/provision.sh" "$B" || say "open rows: at least one OPENROWS_ step failed (the rows report NOT_RUN; the gate list is unaffected)"
 rm -rf "$B/src" "$B/nvcodec_probe.log" "$B/ffmpeg.log" "$B/dcgm.log" "$B/nvidia.key" "$B/dcgm_files.txt" 2>/dev/null
-mkdir -p "$B/share" && cp -r "$HERE/open_rows" "$B/share/"
+mkdir -p "$B/share" && cp -r "$HERE/open_rows" "$HERE/gap_probes" "$B/share/"
 cp -u "$HERE/src/ai_bench.py" "$HERE"/src/*.py "$B/share/" 2>/dev/null
 cp -u "$HERE/run_apps.sh" "$B/"
 # A bundle with any failed step is never written: the stage must see "not built", not 66 apps of which some fail.

@@ -1,0 +1,15 @@
+group ray_tracing_pipeline: 260 of 22241 cases sampled
+group ray_query: 260 of 48771 cases sampled
+group mesh_shader: 260 of 28061 cases sampled
+group synchronization2: 260 of 81510 cases sampled
+group synchronization: 260 of 64872 cases sampled
+group transform_feedback: 260 of 133719 cases sampled
+group device_group: 21 of 21 cases sampled
+group memory: 260 of 6364 cases sampled
+group memory_model: 260 of 18530 cases sampled
+group api: 260 of 267509 cases sampled
+group pipeline: 260 of 1123492 cases sampled
+group compute: 260 of 67553 cases sampled
+group subgroups: 260 of 48621 cases sampled
+group video: 260 of 9471 cases sampled
+per group after removing the first sample: {'ray_tracing_pipeline': 200, 'ray_query': 200, 'mesh_shader': 200, 'synchronization2': 200, 'synchronization': 200, 'transform_feedback': 200, 'device_group': 21, 'memory': 200, 'memory_model': 200, 'api': 200, 'pipeline': 200, 'compute': 200, 'subgroups': 200, 'video': 200}

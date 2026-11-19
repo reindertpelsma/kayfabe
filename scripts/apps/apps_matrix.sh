@@ -24,7 +24,7 @@ while busy; do say "waiting: a QEMU/cargo is running (serial bench)"; sleep 20; 
 if [ "$SIDE" = host ]; then
   mkdir -p /opt/apps
   cp -f "$HERE"/src/*.py /opt/apps/bundle/share/
-  cp -rf "$HERE/open_rows" /opt/apps/bundle/share/
+  cp -rf "$HERE/open_rows" "$HERE/gap_probes" /opt/apps/bundle/share/
   # discovery row vkcts (docs/design/V3_VULKAN_CTS_ROW.md): the tool dir, and the artifact `vkcts.py build` made
   mkdir -p /opt/apps/bundle/vkcts_tool && cp -f "$HERE"/vkcts/{vkcts.py,vkcts_lib.py,pins.json,caselist.tsv} "$REPO/scripts/bench/windows/gpu_assert.py" /opt/apps/bundle/vkcts_tool/
   [ -d "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current" ] && ln -sfn "$(readlink -f "${KF_APPS_ROOT:-/workspace/apps}/vkcts/current")" /opt/apps/bundle/vkcts
@@ -97,6 +97,7 @@ for row in nvcodec_matrix nvml_dcgm; do
     python3 "$HERE/open_rows/compare_logs.py" "$row" "$R/$row.host.log" "$R/$row.guest.log" > "$R/$row.compare.txt" 2>&1; say "COMPARE $row: $(tail -n 1 "$R/$row.compare.txt")"
   fi
 done
+[ -f "$R/gap_probes.host.log" ] && [ -f "$R/gap_probes.guest.log" ] && { python3 "$HERE/gap_probes/gap_probes.py" compare "$R/gap_probes.host.log" "$R/gap_probes.guest.log" > "$R/gap_probes.compare.txt" 2>&1; say "COMPARE gap_probes: $(tail -n 1 "$R/gap_probes.compare.txt")"; }
 [ -f "$R/vkcts.host.log" ] && [ -f "$R/vkcts.guest.log" ] && python3 "$HERE/vkcts/vkcts.py" diff "$R" | grep -a '^VKCTS_DIFF'
 # the open ML rows: host control against guest (mlrows.py compare reads the MLROWS_RESULT lines; a CANDIDATE is a finding, not a failure of the run)
 for row in vllm tensorrt jax; do

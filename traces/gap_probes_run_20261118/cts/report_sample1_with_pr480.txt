@@ -1,0 +1,31 @@
+AREA info host: pass=2 | guest: pass=2
+AREA sparse_resources host: pass=53 not_supported=17 | guest: pass=42 not_supported=17 fail=1 timeout=10
+AREA ray_tracing_pipeline host: pass=63 not_supported=7 | guest: pass=63 not_supported=7
+AREA ray_query host: pass=66 not_supported=4 | guest: pass=66 not_supported=4
+AREA mesh_shader host: pass=65 not_supported=5 | guest: pass=65 not_supported=5
+AREA synchronization2 host: pass=36 not_supported=34 | guest: pass=36 not_supported=34
+AREA synchronization host: pass=6 not_supported=64 | guest: pass=5 not_supported=65
+AREA transform_feedback host: pass=47 not_supported=23 | guest: pass=47 not_supported=23
+AREA device_group host: pass=12 not_supported=9 | guest: pass=12 not_supported=9
+AREA memory host: pass=45 not_supported=25 | guest: pass=45 not_supported=25
+AREA memory_model host: pass=65 not_supported=5 | guest: pass=65 not_supported=5
+AREA api host: pass=26 not_supported=43 fail=1 | guest: pass=26 not_supported=43 fail=1
+AREA pipeline host: pass=60 not_supported=10 | guest: pass=60 not_supported=10
+AREA compute host: pass=54 not_supported=16 | guest: pass=54 not_supported=16
+AREA subgroups host: pass=64 not_supported=6 | guest: pass=64 not_supported=6
+AREA video host: not_supported=70 | guest: not_supported=70
+#case	area	host	guest	category	bucket	guest_xid	host_xid	kvdiff	why
+dEQP-VK.sparse_resources.buffer.texel_buffers.sparse_residency.storage_texel_buffer_read_size_2_24_r64ui	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.image_sparse_residency.2d_array.rg16ui.1024_128_8	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.image_sparse_residency.cube.rgba16i.256_256_1	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.image_sparse_residency.cube_array.rgba8ui.256_256_6	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.r32ui.samples_2	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba16f.samples_2	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba32f.samples_2	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba32i.samples_4	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba32ui.samples_4	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba8i.samples_4	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.shader_intrinsics.cube_sparse_read.r32i.256_256_1	sparse_resources	pass	fail	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.synchronization.global_priority_transition.realtime.semaphore.no_modifiers.from_compute_to_transfer	synchronization	pass	not_supported	GUEST_LOSES_SUPPORT	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.api.maintenance3_check.support_count_inline_uniform_block_extra_bindings_create_layout	api	fail	fail	BOTH_FAIL	app_or_harness_bug	-	-	-	the host control fails the same case
+CTS_REPORT cases=1003 differing=13 candidates=12

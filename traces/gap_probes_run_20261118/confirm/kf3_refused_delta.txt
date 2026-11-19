@@ -1,0 +1,6 @@
+# kf3 log, GSP REFUSED controls: each failing global-priority confirm boot against the neighbour boot with the two info cases only (N1).
+# ids in the boot and not in N1 are listed; N1 lists 9 kinds
+F2: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+F4: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+F5: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56
+F6: 10 kinds; not in N1: GSP REFUSED fn76/0x20801115=0x56

@@ -1,0 +1,1 @@
+APPRES side=guest app=vkcts verdict=PASS rc=0 secs=71 quiet=0 note=ok cases=382 pass=240 warn=0 ns=140 fail=2 crash=0 timeout=0 notrun=0 gpu=EXTERNAL gpu_use=NA gpu_auth=none gpu_subs=997 gpu_births=82 boot=ap_D5_b1 guest_xid=0 kf3_lines=3000 kf3_refusals=32

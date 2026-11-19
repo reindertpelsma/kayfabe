@@ -1,0 +1,49 @@
+#case	area	host	guest	category	bucket	guest_xid	host_xid	kvdiff	why
+tools_sanitizer	profiling	pass	not_supported	GUEST_LOSES_SUPPORT	kayfabe_limitation	-	-	-	INFERRED, mechanism not shown: compute-sanitizer needs the CUDA debugger/injection interface, which owner ruling H stubs as capability absent (docs/OWNER_RULINGS.md section H: debugger, profiler, NVLink, ECC); measured 2026-11-18: under the tool the first CUDA call of the target returns 999 in the guest and 0 on the host
+tools_ncu	profiling	pass	not_run	INCOMPLETE	-	-	-	-	-
+tools_nsys	profiling	pass	not_run	INCOMPLETE	-	-	-	-	-
+tools_nsys_gpumetrics	profiling	pass	not_run	INCOMPLETE	-	-	-	-	-
+vk_dump	vulkan_caps	pass	pass	VALUE_DIFF	kayfabe_gap_candidate	-	-	group.$schema:1:f6037658->1:268afb3a;group.ArrayOfVkExtensionProperties.0:2:d8acc96e->-;group.ArrayOfVkExtensionProperties.1:2:24c1da1b->-;group.ArrayOfVkExtensionProperties.10:2:207e1cac->-;group.ArrayOfVkExtensionProperties.100:2:96fcd8cb->-;group.ArrayOfVkExtensionProperties.101:2:e754967c->-	unclassified
+smi_setters	smi_control	pass	pass	VALUE_DIFF	kayfabe_limitation	-	-	setter.accounting:OK->NOT_SUPPORTED;setter.compute_exclusive:OK->NOT_SUPPORTED;setter.compute_prohibited:OK->NOT_SUPPORTED;setter.lock_gr_clock:OK->-;setter.power_same:OK->-	the guest nvidia-smi serves no power or clock values and refuses the compute-mode and accounting setters: capability absent, the answer of a GPU without the feature (docs/OWNER_RULINGS.md section H; telemetry N/A: docs/design/V3_UTILIZATION_FLAG.md section 10, measured 2026-11-17)
+VKDIFF only_host $schema=https://schema.khronos.org/vulkan/devsim_1_0_0.json#
+VKDIFF only_host ArrayOfVkExtensionProperties[0].extensionName=VK_KHR_16bit_storage
+VKDIFF only_host ArrayOfVkExtensionProperties[0].specVersion=1
+VKDIFF only_host ArrayOfVkExtensionProperties[100].extensionName=VK_KHR_vulkan_memory_model
+VKDIFF only_host ArrayOfVkExtensionProperties[100].specVersion=3
+VKDIFF only_host ArrayOfVkExtensionProperties[101].extensionName=VK_KHR_workgroup_memory_explicit_layout
+VKDIFF only_host ArrayOfVkExtensionProperties[101].specVersion=1
+VKDIFF only_host ArrayOfVkExtensionProperties[102].extensionName=VK_KHR_zero_initialize_workgroup_memory
+VKDIFF only_host ArrayOfVkExtensionProperties[102].specVersion=1
+VKDIFF only_host ArrayOfVkExtensionProperties[103].extensionName=VK_EXT_4444_formats
+VKDIFF only_host ArrayOfVkExtensionProperties[103].specVersion=1
+VKDIFF only_host ArrayOfVkExtensionProperties[104].extensionName=VK_EXT_attachment_feedback_loop_dynamic_state
+VKDIFF only_host ArrayOfVkExtensionProperties[104].specVersion=1
+VKDIFF only_host ArrayOfVkExtensionProperties[105].extensionName=VK_EXT_attachment_feedback_loop_layout
+VKDIFF only_host ArrayOfVkExtensionProperties[105].specVersion=2
+VKDIFF only_host ArrayOfVkExtensionProperties[106].extensionName=VK_EXT_blend_operation_advanced
+VKDIFF only_host ArrayOfVkExtensionProperties[106].specVersion=2
+VKDIFF only_host ArrayOfVkExtensionProperties[107].extensionName=VK_EXT_border_color_swizzle
+VKDIFF only_host ArrayOfVkExtensionProperties[107].specVersion=1
+VKDIFF only_host ArrayOfVkExtensionProperties[108].extensionName=VK_EXT_buffer_device_address
+VKDIFF only_guest $schema=https://schema.khronos.org/vulkan/profiles-0.8-latest.json
+VKDIFF only_guest capabilities.device.extensions.VK_AMD_buffer_marker=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_4444_formats=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_attachment_feedback_loop_dynamic_state=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_attachment_feedback_loop_layout=2
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_blend_operation_advanced=2
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_border_color_swizzle=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_buffer_device_address=2
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_calibrated_timestamps=2
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_color_write_enable=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_conditional_rendering=2
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_conservative_rasterization=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_custom_border_color=12
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_depth_bias_control=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_depth_clamp_control=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_depth_clamp_zero_one=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_depth_clip_control=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_depth_clip_enable=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_depth_range_unrestricted=1
+VKDIFF only_guest capabilities.device.extensions.VK_EXT_descriptor_buffer=1
+VKDIFF_SUMMARY only_host=1407 only_guest=3345
+GAP_COMPARE cases=9 differing=6 candidates=1 limitation=2 harness=0 config=0 guest_loses_support=1 incomplete=3 value_diff=2

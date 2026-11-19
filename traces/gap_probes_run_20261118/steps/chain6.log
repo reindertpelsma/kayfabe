@@ -1,0 +1,51 @@
+b chunks 7 cases 2621
+CHAIN6 host b1 04:45:43
+CHAIN6 host b2 04:48:46
+CHAIN6 host b3 04:49:16
+CHAIN6 host b4 04:49:37
+CHAIN6 host b5 04:50:56
+CHAIN6 host b6 04:51:20
+CHAIN6 host b7 04:51:57
+CHAIN6 guest b1 04:53:29
+[apps_matrix 2026-11-18T04:53:29+00:00] START side=guest run=D1 rev=8aa94098 apps=1
+[apps_matrix 2026-11-18T04:53:29+00:00] kf3 binary: /workspace/bench/kf3-bins/8aa94098-dirty/qemu-system-x86_64
+[apps_matrix 2026-11-18T05:05:55+00:00] boot ap_D1_b1 rc=0 apps=[vkcts] :: /workspace/bench/run_ap_D1_b1_probe.log:APPS_HOOK tag=ap_D1_b1 apps=[vkcts] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_D1_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/D1/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T05:05:55+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+CHAIN6 guest b2 05:05:55
+[apps_matrix 2026-11-18T05:05:55+00:00] START side=guest run=D2 rev=8aa94098 apps=1
+[apps_matrix 2026-11-18T05:05:55+00:00] kf3 binary: /workspace/bench/kf3-bins/8aa94098-dirty/qemu-system-x86_64
+[apps_matrix 2026-11-18T05:08:25+00:00] boot ap_D2_b1 rc=0 apps=[vkcts] :: /workspace/bench/run_ap_D2_b1_probe.log:APPS_HOOK tag=ap_D2_b1 apps=[vkcts] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_D2_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/D2/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T05:08:25+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+CHAIN6 guest b3 05:08:25
+[apps_matrix 2026-11-18T05:08:25+00:00] START side=guest run=D3 rev=8aa94098 apps=1
+[apps_matrix 2026-11-18T05:08:25+00:00] kf3 binary: /workspace/bench/kf3-bins/8aa94098-dirty/qemu-system-x86_64
+[apps_matrix 2026-11-18T05:10:55+00:00] boot ap_D3_b1 rc=0 apps=[vkcts] :: /workspace/bench/run_ap_D3_b1_probe.log:APPS_HOOK tag=ap_D3_b1 apps=[vkcts] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_D3_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/D3/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T05:10:55+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+CHAIN6 guest b4 05:10:55
+[apps_matrix 2026-11-18T05:10:55+00:00] START side=guest run=D4 rev=8aa94098 apps=1
+[apps_matrix 2026-11-18T05:10:55+00:00] kf3 binary: /workspace/bench/kf3-bins/8aa94098-dirty/qemu-system-x86_64
+[apps_matrix 2026-11-18T05:22:27+00:00] boot ap_D4_b1 rc=0 apps=[vkcts] :: /workspace/bench/run_ap_D4_b1_probe.log:APPS_HOOK tag=ap_D4_b1 apps=[vkcts] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_D4_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/D4/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T05:22:27+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+CHAIN6 guest b5 05:22:27
+[apps_matrix 2026-11-18T05:22:27+00:00] START side=guest run=D5 rev=8aa94098 apps=1
+[apps_matrix 2026-11-18T05:22:27+00:00] kf3 binary: /workspace/bench/kf3-bins/8aa94098-dirty/qemu-system-x86_64
+[apps_matrix 2026-11-18T05:24:47+00:00] boot ap_D5_b1 rc=0 apps=[vkcts] :: /workspace/bench/run_ap_D5_b1_probe.log:APPS_HOOK tag=ap_D5_b1 apps=[vkcts] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_D5_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/D5/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T05:24:47+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+CHAIN6 guest b6 05:24:47
+[apps_matrix 2026-11-18T05:24:47+00:00] START side=guest run=D6 rev=8aa94098 apps=1
+[apps_matrix 2026-11-18T05:24:47+00:00] kf3 binary: /workspace/bench/kf3-bins/8aa94098-dirty/qemu-system-x86_64
+[apps_matrix 2026-11-18T05:27:50+00:00] boot ap_D6_b1 rc=0 apps=[vkcts] :: /workspace/bench/run_ap_D6_b1_probe.log:APPS_HOOK tag=ap_D6_b1 apps=[vkcts] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_D6_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/D6/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T05:27:50+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+CHAIN6 guest b7 05:27:50
+[apps_matrix 2026-11-18T05:27:50+00:00] START side=guest run=D7 rev=8aa94098 apps=1
+[apps_matrix 2026-11-18T05:27:50+00:00] kf3 binary: /workspace/bench/kf3-bins/8aa94098-dirty/qemu-system-x86_64
+[apps_matrix 2026-11-18T05:31:24+00:00] boot ap_D7_b1 rc=0 apps=[vkcts] :: /workspace/bench/run_ap_D7_b1_probe.log:APPS_HOOK tag=ap_D7_b1 apps=[vkcts] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_D7_b1_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 106: /workspace/apps/results/D7/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T05:31:24+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+CHAIN6 done 05:31:24

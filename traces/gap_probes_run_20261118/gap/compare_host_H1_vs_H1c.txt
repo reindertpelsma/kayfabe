@@ -1,0 +1,9 @@
+#case	area	host	guest	category	bucket	guest_xid	host_xid	kvdiff	why
+graph_capture_launch	cuda_graph	pass	pass	VALUE_DIFF	kayfabe_gap_candidate	-	-	launches_per_s:173900->174000	unclassified
+fault_recovery	cuda_kernel_time	fail	pass	HOST_ONLY_FAIL	-	-	-	-	-
+trap_recovery	cuda_kernel_time	fail	pass	HOST_ONLY_FAIL	-	-	-	-	-
+life_persistenced	lifecycle	fail	pass	HOST_ONLY_FAIL	-	-	-	-	-
+life_module_cycle	lifecycle	not_run	not_run	INCOMPLETE	-	-	-	-	-
+life_reset	lifecycle	not_run	not_run	INCOMPLETE	-	-	-	-	-
+life_busy_poweroff	lifecycle	not_run	not_run	INCOMPLETE	-	-	-	-	-
+GAP_COMPARE cases=45 differing=7 candidates=1 limitation=0 harness=0 config=0 host_only_fail=3 incomplete=3 value_diff=1

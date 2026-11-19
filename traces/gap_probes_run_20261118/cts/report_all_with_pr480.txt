@@ -1,0 +1,36 @@
+AREA info host: pass=2 | guest: pass=2
+AREA sparse_resources host: pass=53 not_supported=17 | guest: pass=42 not_supported=17 fail=1 timeout=10
+AREA ray_tracing_pipeline host: pass=205 not_supported=29 | guest: pass=204 not_supported=29 timeout=1
+AREA ray_query host: pass=217 not_supported=15 | guest: pass=217 not_supported=15
+AREA mesh_shader host: pass=238 not_supported=16 | guest: pass=238 not_supported=16
+AREA synchronization2 host: pass=112 not_supported=123 | guest: pass=112 not_supported=123
+AREA synchronization host: pass=19 not_supported=230 | guest: pass=17 not_supported=232
+AREA transform_feedback host: pass=170 not_supported=99 | guest: pass=170 not_supported=99
+AREA device_group host: pass=12 not_supported=9 | guest: pass=12 not_supported=9
+AREA memory host: pass=162 not_supported=78 | guest: pass=162 not_supported=77 timeout=1
+AREA memory_model host: pass=214 not_supported=15 | guest: pass=214 not_supported=15
+AREA api host: pass=94 not_supported=168 fail=1 | guest: pass=92 not_supported=168 fail=3
+AREA pipeline host: pass=224 not_supported=41 | guest: pass=224 not_supported=41
+AREA compute host: pass=195 not_supported=48 | guest: pass=195 not_supported=48
+AREA subgroups host: pass=228 not_supported=26 | guest: pass=228 not_supported=26
+AREA video host: pass=3 not_supported=260 | guest: pass=3 not_supported=260
+#case	area	host	guest	category	bucket	guest_xid	host_xid	kvdiff	why
+dEQP-VK.sparse_resources.buffer.texel_buffers.sparse_residency.storage_texel_buffer_read_size_2_24_r64ui	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.image_sparse_residency.2d_array.rg16ui.1024_128_8	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.image_sparse_residency.cube.rgba16i.256_256_1	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.image_sparse_residency.cube_array.rgba8ui.256_256_6	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.r32ui.samples_2	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba16f.samples_2	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba32f.samples_2	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba32i.samples_4	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba32ui.samples_4	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba8i.samples_4	sparse_resources	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.sparse_resources.shader_intrinsics.cube_sparse_read.r32i.256_256_1	sparse_resources	pass	fail	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.synchronization.global_priority_transition.realtime.semaphore.no_modifiers.from_compute_to_transfer	synchronization	pass	not_supported	GUEST_LOSES_SUPPORT	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.api.maintenance3_check.support_count_inline_uniform_block_extra_bindings_create_layout	api	fail	fail	BOTH_FAIL	app_or_harness_bug	-	-	-	the host control fails the same case
+dEQP-VK.ray_tracing_pipeline.misc.recursiveTraces_AABB_15	ray_tracing_pipeline	pass	timeout	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.synchronization.global_priority_transition.high.no_sync.sparse.from_graphics_to_compute	synchronization	pass	not_supported	GUEST_LOSES_SUPPORT	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.memory.allocation.basic.size_4KiB.mixed.count_4000	memory	not_supported	timeout	GUEST_FAIL_HOST_NS	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.api.device_init.create_device_global_priority_khr.basic	api	pass	fail	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+dEQP-VK.api.device_init.create_device_global_priority_query_khr.basic	api	pass	fail	GUEST_ONLY_FAIL	kayfabe_gap_candidate	-	-	-	unclassified
+CTS_REPORT cases=3323 differing=18 candidates=17
