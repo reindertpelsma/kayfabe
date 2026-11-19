@@ -112,11 +112,19 @@
       "r2": "windows-proprietary/kfimg-20261118/image.zip",
       "size_bytes": 86744842653,
       "apps": [
+        "ansys",
+        "vred",
+        "maya_win",
+        "3dsmax",
         "autocad",
         "arcgispro",
-        "steam"
+        "solidedge",
+        "keyshot",
+        "steam",
+        "quake2rtx",
+        "brightmemory"
       ],
-      "basis": "UNVERIFIED: the app list is the three applications the 2026-11-18 token check found signed in, the owner confirms it; no sha256 is recorded; the size is the store listing of 2026-11-19; no row table exists for these applications yet, so no `run`",
+      "basis": "UNVERIFIED. Every application is listed, not yet row-tested; the list comes from the build notes and probes and the owner confirms it. maya_win is the Windows Maya (the id maya is the Linux image's). No sha256; size from the store listing of 2026-11-19; no row table, so no run",
       "licence_note": "Autodesk token not yet revoked; the vendor-side revoke and a passing token check come before any use on a rented box"
     },
     "imge": {
