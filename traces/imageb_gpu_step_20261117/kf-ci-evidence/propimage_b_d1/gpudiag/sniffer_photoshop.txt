@@ -1,0 +1,94 @@
+﻿Start sniffer 2026-11-15 23:06:32
+C:\Program Files\Adobe\Adobe Photoshop 2027\sniffer.exe
+
+{734780 ms}
+Start platform native
+  Auto HDR:                     FALSE
+  Stream HDR video:             FALSE
+  HDR off on battery:           FALSE
+  # displays:                   1
+  Display 0
+    Display:                      \\.\DISPLAY3
+    Main:                         TRUE
+    Built in:                     FALSE
+    Stereo:                       FALSE
+    Bounds:                       (0, 0) -> (1,920, 1,080)
+    Dimensions:                   (1,920 1,080)
+    Display scale:                1.25
+    Physical size:                (0 0)
+    Pixel size:                   (0 0)
+    Dynamic range:                (0 1)
+    HDR capable:                  FALSE
+    HDR enabled:                  FALSE
+    HDR limited by policy:        FALSE
+    Wide color capable:           FALSE
+    Wide color enabled:           FALSE
+    Color mode:                   SDR
+    Color encoding:               RGB
+    Bits per channel:             8
+    SDR white level (nits):       80
+    Max full-frame luminance (nits): 270
+    Primaries R/G/B (xy):         (0.639648 0.330078) (0.299805 0.599609) (0.150391 0.0595703)
+    White point (xy):             (0.3125 0.329102)
+    Color profile:                sRGB Color Space Profile.icm
+    Color profile size (bytes):   3,144
+    Attached Device:              (DeviceID name=NVIDIA GeForce RTX 4090 index=0)
+  
+  # devices:                    1
+  Device 0
+    Name:                         NVIDIA GeForce RTX 4090
+    Preferred:                    TRUE
+    Power Envelope:               DISCRETE
+    Attachment:                   UNKNOWN
+    # attached displays:          1
+      \\.\DISPLAY3
+    GPU accessible RAM:                7,853 MB
+    VRAM:                              7,853 MB
+    Dedicated System RAM:                  0 MB
+    Shared System RAM:                 4,259 MB
+    API version:                  12.2 (12.2)
+    Device version:               12.0 (12.0)
+    Vendor name:                  NVIDIA
+    Driver date:                  2025-07-27  000000.000000-000
+    Driver age:                   16 months
+    Driver version:               32.0.15.8088
+    Supports UMA:                 UNSUPPORTED
+    D3D-ID:                       9860
+    LUID:                         0x2407fe
+End platform native
+{739202 ms}
+
+{739203 ms}
+Start platform OpenCL
+Failed to read file: C:\Users\kfimage\AppData\Local\Temp\dep-8fca59.d
+  # displays:                   0
+  
+  # devices:                    1
+  Device 0
+    Name:                         NVIDIA GeForce RTX 4090
+    Preferred:                    TRUE
+    Power Envelope:               DISCRETE
+    Attachment:                   UNKNOWN
+    # attached displays:          0
+    GPU accessible RAM:                8,316 MB
+    VRAM:                              8,316 MB
+    Dedicated System RAM:                  0 MB
+    Shared System RAM:                     0 MB
+    API version:                  3.0 (OpenCL 3.0 CUDA)
+    Device version:               3.0 (OpenCL 3.0 CUDA)
+    Vendor name:                  NVIDIA
+    Driver date:                  UNKNOWN
+    Driver age:                   UNKNOWN
+    Driver version:               UNKNOWN
+    Bandwidth:                    12 GB / s
+    Compute score:                24,187.3
+    Device name string:           NVIDIA GeForce RTX 4090
+    Device vendor string:         NVIDIA Corporation
+    Platform name string:         NVIDIA CUDA 
+    Platform vendor string:       NVIDIA Corporation
+End platform OpenCL
+{743284 ms}
+
+Exit code kExitNormal
+End sniffer 2026-11-15 23:06:41
+

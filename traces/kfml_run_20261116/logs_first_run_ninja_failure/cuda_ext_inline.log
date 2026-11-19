@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/root/src/kfml/kfml/_child.py", line 27, in main
+    out = mod.run(Ctx(d)) or {}
+  File "/root/src/kfml/kfml/workloads/cuda_ext_inline.py", line 175, in run
+    ext = cpp_extension.load_inline(name="kfml_inline_%s" % cc.replace(".", "_"), cpp_sources=CPP, cuda_sources=CUDA,
+  File "/root/kfvenv/lib/python3.10/site-packages/torch/utils/cpp_extension.py", line 1994, in load_inline
+    return _jit_compile(
+  File "/root/kfvenv/lib/python3.10/site-packages/torch/utils/cpp_extension.py", line 2076, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "/root/kfvenv/lib/python3.10/site-packages/torch/utils/cpp_extension.py", line 2180, in _write_ninja_file_and_build_library
+    verify_ninja_availability()
+  File "/root/kfvenv/lib/python3.10/site-packages/torch/utils/cpp_extension.py", line 2241, in verify_ninja_availability
+    raise RuntimeError("Ninja is required to load C++ extensions")
+RuntimeError: Ninja is required to load C++ extensions

@@ -1,0 +1,183 @@
+[
+ {
+  "compute_cap": "8.9",
+  "cuda": "12.6",
+  "cudnn": "90501",
+  "dataset_sha256": {
+   "tinyshakespeare": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed"
+  },
+  "driver": "560.35.03",
+  "driver_cuda": "12.6",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "guest_estimate_s": null,
+  "launch_bound": true,
+  "lock_sha256": "26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0",
+  "metrics": {
+   "amp_dtype": "torch.bfloat16",
+   "amp_vs_fp32_max_window_diff": 0.0026373958587644353,
+   "compiled_vs_eager_max_window_diff": 0.0010384750366210227,
+   "forward_rel_err": 0.0034965034965031053,
+   "grad_scaler": false,
+   "log": "/root/run/logs_ref_other/nanogpt_compile.log",
+   "modes": {
+    "amp_compiled": {
+     "final": 2.1533652114868165,
+     "first_step_s": 2.1382062435150146,
+     "initial": 3.7736470460891725,
+     "steps_per_s": 96.57679905907398,
+     "windows": {
+      "100": 2.492062530517578,
+      "200": 2.3648228359222414,
+      "300": 2.232341585159302,
+      "400": 2.1533652114868165
+     }
+    },
+    "amp_eager": {
+     "final": 2.152874460220337,
+     "first_step_s": 0.22374582290649414,
+     "initial": 3.773525619506836,
+     "steps_per_s": 57.46052570905424,
+     "windows": {
+      "100": 2.4924556827545166,
+      "200": 2.3649413108825685,
+      "300": 2.231303110122681,
+      "400": 2.152874460220337
+     }
+    },
+    "fp32_eager": {
+     "final": 2.1555118560791016,
+     "first_step_s": 0.4483675956726074,
+     "initial": 3.7740655899047852,
+     "steps_per_s": 81.83077398131883,
+     "windows": {
+      "100": 2.4912647342681886,
+      "200": 2.364420223236084,
+      "300": 2.233098182678223,
+      "400": 2.1555118560791016
+     }
+    }
+   },
+   "params": 812288,
+   "reference_compared": true,
+   "reference_config_mismatch": false,
+   "reference_diff": 0.0009485054016113992,
+   "reference_from": {
+    "compute_cap": "8.6",
+    "cuda": "12.6",
+    "driver": "560.35.03",
+    "gpu_name": "Some Other Card",
+    "how": "other_die",
+    "run_id": "kfml_run_20261116"
+   },
+   "wall_ratio": null
+  },
+  "name": "nanogpt_compile",
+  "patch_sha256": {},
+  "reason": "",
+  "status": "PASS",
+  "tier": "mid",
+  "torch": "2.7.1+cu126",
+  "triton": "3.3.1",
+  "upstream_commits": {
+   "nanoGPT": "3adf61e154c3fe3fca428ad6bc3818b27a3b8291"
+  },
+  "vram_gb": 11.62,
+  "wall_s": 26.96
+ },
+ {
+  "compute_cap": "8.9",
+  "cuda": "12.6",
+  "cudnn": "90501",
+  "dataset_sha256": {
+   "cifar10_binary": "c4a38c50a1bc5f3a1c5537f2155ab9d68f9f25eb1ed8d9ddda3db29a59bca1dd"
+  },
+  "driver": "560.35.03",
+  "driver_cuda": "12.6",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "guest_estimate_s": null,
+  "launch_bound": true,
+  "lock_sha256": "26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0",
+  "metrics": {
+   "acc_amp": 0.7425,
+   "acc_fp32": 0.744,
+   "amp_dtype": "torch.bfloat16",
+   "cuda_ipc": true,
+   "epoch_loss": [
+    1.693291492951222,
+    1.262905023036859,
+    1.0381093147473457,
+    0.8860218341533954,
+    0.7430441440680088
+   ],
+   "grad_scaler": false,
+   "log": "/root/run/logs_ref_other/amp_convnet_cifar.log",
+   "pred_agreement": 0.9945,
+   "reference_diff": 0.0050000000000000044,
+   "reference_from": {
+    "compute_cap": "8.6",
+    "cuda": "12.6",
+    "driver": "560.35.03",
+    "gpu_name": "Some Other Card",
+    "how": "other_die",
+    "run_id": "kfml_run_20261116"
+   },
+   "train_s": 29.872303009033203,
+   "wall_ratio": null
+  },
+  "name": "amp_convnet_cifar",
+  "patch_sha256": {},
+  "reason": "",
+  "status": "PASS",
+  "tier": "mid",
+  "torch": "2.7.1+cu126",
+  "triton": "3.3.1",
+  "upstream_commits": {},
+  "vram_gb": 11.62,
+  "wall_s": 41.987
+ },
+ {
+  "compute_cap": "8.9",
+  "cuda": "12.6",
+  "cudnn": "90501",
+  "dataset_sha256": {},
+  "driver": "560.35.03",
+  "driver_cuda": "12.6",
+  "flavor": "cu126",
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "guest_estimate_s": null,
+  "launch_bound": false,
+  "lock_sha256": "26fa1094b1d347d258805d068032d9b56e5dfa35e7e1f4d1444d6e1928ab59d0",
+  "metrics": {
+   "allocated_gb": 8.026928711682558,
+   "async_copy_mb": 64.0,
+   "buffers": 177,
+   "free_end_gb": 11.349853515625,
+   "free_start_gb": 11.467041015625,
+   "graph_replays": 40,
+   "log": "/root/run/logs_ref_other/stress_alloc.log",
+   "reference_from": {
+    "compute_cap": "8.6",
+    "cuda": "12.6",
+    "driver": "560.35.03",
+    "gpu_name": "Some Other Card",
+    "how": "other_die",
+    "run_id": "kfml_run_20261116"
+   },
+   "streams": 16,
+   "target_gb": 8.026928710751235,
+   "wall_ratio": null
+  },
+  "name": "stress_alloc",
+  "patch_sha256": {},
+  "reason": "",
+  "status": "PASS",
+  "tier": "mid",
+  "torch": "2.7.1+cu126",
+  "triton": "3.3.1",
+  "upstream_commits": {},
+  "vram_gb": 11.62,
+  "wall_s": 6.157
+ }
+]

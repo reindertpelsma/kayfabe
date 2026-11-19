@@ -1,0 +1,30 @@
+{
+ "compute_cap": "7.5",
+ "cuda": "12.8",
+ "data": {},
+ "driver": "595.91.07",
+ "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+ "measured_on": {
+  "compute_cap": "7.5",
+  "cuda": "12.8",
+  "driver": "595.91.07",
+  "driver_cuda": "13.2",
+  "flavor": "cu128",
+  "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+  "run_id": "kfml_run_20261117_second_die",
+  "torch": "2.7.1+cu128"
+ },
+ "metrics": {
+  "allocated_gb": 6.332812499254942,
+  "async_copy_mb": 64.0,
+  "buffers": 139,
+  "free_end_gb": 8.9453125,
+  "free_start_gb": 9.046875,
+  "graph_replays": 40,
+  "streams": 16,
+  "target_gb": 6.332812499254942
+ },
+ "test": "stress_alloc",
+ "torch": "2.7.1+cu128",
+ "wall_s": 3.071
+}
