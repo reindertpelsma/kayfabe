@@ -279,10 +279,9 @@ pub const AMPERE_CHANNEL_GPFIFO_A: u32 = 0xc56f;
 ///
 /// ★ `RS_FLAGS_ALLOC_PRIVILEGED` and `Parents = RS_LIST(classId(KernelChannel))`
 /// (`resource_list.h:1541-1543`) — a privileged leaf under a channel, allocated by the
-/// guest's own KERNEL RM inside `nvGpuOpsChannelAllocate`. That is why gVisor's nvproxy
-/// has never seen it (`grep -rn 0xc076 gvisor/` is empty): as an ioctl it does not cross
-/// the boundary nvproxy gates. It reaches us only because in Mode 2 the transport is GSP
-/// RPC and we are the GSP — hence `Origin::Mode2Rpc`.
+/// guest's own KERNEL RM inside `nvGpuOpsChannelAllocate`. As an ioctl it never crosses
+/// a userspace boundary. It reaches us only because in Mode 2 the transport is GSP
+/// RPC and we are the GSP — hence a `Mode2Rpc` row (`tools/api_boundaries/ingress_rules.tsv`).
 ///
 /// ogkm `src/common/sdk/nvidia/inc/class/clc076.h`.
 pub const GP100_UVM_SW: u32 = 0xc076;

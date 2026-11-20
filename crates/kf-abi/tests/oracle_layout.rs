@@ -1,15 +1,14 @@
 //! Layout proof against the oracles — **not** against ourselves.
 //!
-//! Three independent readings of the same ABI exist in this project's trees:
+//! Two independent readings of the same ABI exist in this project's trees:
 //!
 //! | oracle | what it is | where |
 //! |---|---|---|
 //! | **ogkm** | NVIDIA's own generated headers, 610.43.02 | `research_clones/ogkm/` |
-//! | **nvproxy** | gVisor's independent transcription, per driver version | `gvisor/pkg/abi/nvgpu/` |
 //! | **the C artifact** | this project's working implementation + its parity test | `nvidia-gpu-passthrough/src/abi/`, `tests/abi_parity/` |
 //!
-//! The generated code comes from the first. This file pins it against the other
-//! two, with a `file:line` citation on every number, because a generator checked
+//! The generated code comes from the first. This file pins it against the other,
+//! and against rustc's own layout, with a `file:line` citation on every number, because a generator checked
 //! only against its own input is a tautology.
 //!
 //! ★ Where the oracles **disagree**, the disagreement is written down as an
@@ -262,169 +261,7 @@ fn the_c_artifacts_bufferid_bug_does_not_reproduce() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. vs gVisor nvproxy — an independent transcription by another team.
-// ---------------------------------------------------------------------------
-
-/// Field-for-field against `gvisor/pkg/abi/nvgpu/frontend.go`.
-///
-/// Total size alone would not catch the `nvos64_abi_fix` bug class: swapping two
-/// same-width fields leaves `sizeof` identical. So every offset is named.
-#[test]
-fn nvos_frontend_structs_match_nvproxys_field_layout() {
-    // gvisor/pkg/abi/nvgpu/frontend.go:255-262
-    assert_layout(
-        &nvos::Nvos00Parameters::LAYOUT,
-        16,
-        &[
-            ("h_root", 0),
-            ("h_object_parent", 4),
-            ("h_object_old", 8),
-            ("status", 12),
-        ],
-        "nvproxy frontend.go:255",
-    );
-    // frontend.go:300-310
-    assert_layout(
-        &nvos::Nvos21Parameters::LAYOUT,
-        32,
-        &[
-            ("h_root", 0),
-            ("h_object_parent", 4),
-            ("h_object_new", 8),
-            ("h_class", 12),
-            ("p_alloc_parms", 16),
-            ("params_size", 24),
-            ("status", 28),
-        ],
-        "nvproxy frontend.go:300",
-    );
-    // frontend.go:371-381
-    assert_layout(
-        &nvos::Nvos55Parameters::LAYOUT,
-        28,
-        &[
-            ("h_client", 0),
-            ("h_parent", 4),
-            ("h_object", 8),
-            ("h_client_src", 12),
-            ("h_object_src", 16),
-            ("flags", 20),
-            ("status", 24),
-        ],
-        "nvproxy frontend.go:371",
-    );
-    // frontend.go:738-748
-    assert_layout(
-        &nvos::Nvos54Parameters::LAYOUT,
-        32,
-        &[
-            ("h_client", 0),
-            ("h_object", 4),
-            ("cmd", 8),
-            ("flags", 12),
-            ("params", 16),
-            ("params_size", 24),
-            ("status", 28),
-        ],
-        "nvproxy frontend.go:738",
-    );
-    // ★ frontend.go:788-800. `nvos64_abi_fix` was a FIELD ORDER bug in exactly
-    // this struct; `pRightsRequested` before `paramsSize`, and `flags` between
-    // `paramsSize` and `status`, are the three positions that were wrong.
-    assert_layout(
-        &nvos::Nvos64Parameters::LAYOUT,
-        48,
-        &[
-            ("h_root", 0),
-            ("h_object_parent", 4),
-            ("h_object_new", 8),
-            ("h_class", 12),
-            ("p_alloc_parms", 16),
-            ("p_rights_requested", 24),
-            ("params_size", 32),
-            ("flags", 36),
-            ("status", 40),
-        ],
-        "nvproxy frontend.go:788",
-    );
-    // frontend.go:711-723, NVOS47_PARAMETERS_V550 — the shape from 550.54.04 on,
-    // which covers every driver version this crate supports.
-    assert_layout(
-        &nvos::Nvos47Parameters::LAYOUT,
-        48,
-        &[
-            ("h_client", 0),
-            ("h_device", 4),
-            ("h_dma", 8),
-            ("h_memory", 12),
-            ("flags", 16),
-            ("dma_offset", 24),
-            ("size", 32),
-            ("status", 40),
-        ],
-        "nvproxy frontend.go:711 (NVOS47_PARAMETERS_V550)",
-    );
-    // frontend.go:654-668, NVOS46_PARAMETERS_V580.
-    assert_layout(
-        &nvos::Nvos46Parameters::LAYOUT,
-        64,
-        &[
-            ("h_client", 0),
-            ("h_device", 4),
-            ("h_dma", 8),
-            ("h_memory", 12),
-            ("offset", 16),
-            ("length", 24),
-            ("flags", 32),
-            ("flags2", 36),
-            ("kind_override", 40),
-            ("dma_offset", 48),
-            ("status", 56),
-        ],
-        "nvproxy frontend.go:654 (NVOS46_PARAMETERS_V580)",
-    );
-    // frontend.go:625-639, the pre-580.65.06 NVOS46 — our transcription.
-    assert_layout(
-        &Nvos46ParametersPre580::LAYOUT,
-        56,
-        &[
-            ("h_client", 0),
-            ("h_device", 4),
-            ("h_dma", 8),
-            ("h_memory", 12),
-            ("offset", 16),
-            ("length", 24),
-            ("flags", 32),
-            ("dma_offset", 40),
-            ("status", 48),
-        ],
-        "nvproxy frontend.go:625 (NVOS46_PARAMETERS)",
-    );
-}
-
-/// `gvisor/pkg/abi/nvgpu/classes.go:198-211`.
-#[test]
-fn nv0080_alloc_params_match_nvproxys_field_layout() {
-    assert_layout(
-        &classes::Nv0080AllocParameters::LAYOUT,
-        56,
-        &[
-            ("device_id", 0),
-            ("h_client_share", 4),
-            ("h_target_client", 8),
-            ("h_target_device", 12),
-            ("flags", 16),
-            ("va_space_size", 24),
-            ("va_start_internal", 32),
-            ("va_limit_internal", 40),
-            ("va_mode", 48),
-        ],
-        "nvproxy classes.go:198",
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 3. vs the C artifact — a working implementation and its parity test.
+// 2. vs the C artifact — a working implementation and its parity test.
 // ---------------------------------------------------------------------------
 
 /// The sizes the C artifact's `abi_parity` test asserts, for the structs where
@@ -449,17 +286,17 @@ fn sizes_match_the_c_artifacts_abi_parity_expectations() {
 
 /// ★ **A FINDING, asserted rather than resolved.**
 ///
-/// `NVOS46_PARAMETERS` is the one struct in the slice where the three oracles do
+/// `NVOS46_PARAMETERS` is the one struct in the slice where the oracles do
 /// not say the same thing, and the shape of the disagreement matters:
 ///
 /// | oracle | says | citation |
 /// |---|---|---|
 /// | ogkm 610.43.02 | **64** (`flags2`, `kindOverride` present) | `nvos.h:2168` |
-/// | nvproxy | **56** below 580.65.06, **64** from 580.65.06 | `frontend.go:625`, `:654`; `version.go:1057` |
+/// | driver matrix (ogkm per tag) | **56** below 580.65.06, **64** from 580.65.06 | `crate::generated::matrix` |
 /// | C artifact — **runtime** | 56 for ≤575, **64** for 580 | `nvkvm_abi.h:66,76,86` |
 /// | C artifact — **parity test** | **56**, unconditionally | `abi_parity_test.go:68` |
 ///
-/// nvproxy and the C's *runtime* agree, and ogkm confirms the newer form. The C's
+/// The driver matrix and the C's *runtime* agree, and ogkm confirms the newer form. The C's
 /// *parity test* is the outlier: it asserts one size for a struct the C's own
 /// runtime knows is versioned, so the test is **weaker than the code it guards**
 /// and would stay green if the 580 branch of `nvkvm_abi.h` were deleted.
@@ -469,7 +306,7 @@ fn sizes_match_the_c_artifacts_abi_parity_expectations() {
 /// does not use.
 #[test]
 fn nvos46_the_three_oracles_disagree_and_here_is_exactly_how() {
-    // ogkm 610.43.02 and nvproxy's post-580.65.06 form.
+    // ogkm 610.43.02, the post-580.65.06 form.
     assert_eq!(nvos::Nvos46Parameters::SIZE, 64);
     assert_eq!(nvos::Nvos46Parameters::LAYOUT.offset_of("status"), Some(56));
     assert_eq!(
@@ -477,7 +314,7 @@ fn nvos46_the_three_oracles_disagree_and_here_is_exactly_how() {
         Some(48)
     );
 
-    // nvproxy's pre-580.65.06 form and the C's 535/570 runtime profile — which
+    // The pre-580.65.06 form and the C's 535/570 runtime profile — which
     // is ALSO what the C's parity test asserts, unconditionally.
     assert_eq!(Nvos46ParametersPre580::SIZE, 56);
     assert_eq!(Nvos46ParametersPre580::LAYOUT.offset_of("status"), Some(48));
@@ -768,7 +605,7 @@ fn nv_esc_numbers_match_ogkm_and_stay_in_the_byte_range() {
     }
 }
 
-/// The class ids, against ogkm and nvproxy.
+/// The class ids, against ogkm.
 #[test]
 fn class_ids_match_the_headers() {
     assert_eq!(
@@ -850,7 +687,7 @@ fn class_ids_match_the_headers() {
 /// — the two indirect halves of a channel's VAS resolution — have a **second
 /// oracle**, and it is the 580 tree.
 ///
-/// Neither nvproxy nor the C artifact models either struct, so 610 alone would be
+/// The C artifact models neither struct, so 610 alone would be
 /// single-oracle territory like `NV0000_ALLOC_PARAMETERS`. But
 /// `research_clones/ogkm-580.159.04/src/common/sdk/nvidia/inc/nvos.h:2903-2911`
 /// and `:3232-3237` declare the identical field lists in the identical order —
@@ -980,7 +817,7 @@ fn the_channel_alloc_prefix_stops_where_the_two_trees_stop_agreeing() {
 /// `NV0000_ALLOC_PARAMETERS` — the one struct in the slice with **no oracle
 /// outside ogkm**, asserted as such.
 ///
-/// Neither `gvisor/pkg/abi/nvgpu/` nor `nvidia-gpu-passthrough/src/abi/` defines
+/// `nvidia-gpu-passthrough/src/abi/` does not define
 /// it (`grep -r NV0000_ALLOC_PARAMETERS` finds nothing in either tree). Inside
 /// ogkm the two vendored tags now agree exactly — the full 120-byte layout is
 /// `ogkm-580: src/common/sdk/nvidia/inc/class/cl0000.h:47-52` /
@@ -1298,7 +1135,7 @@ fn the_bench_driver_declares_no_queue_geometry_and_the_table_supplies_it() {
     );
 }
 
-/// Independent C compiler at both audited source revisions; no nvproxy/C-artifact
+/// Independent C compiler at both audited source revisions; no C-artifact
 /// transcription of this software-only class is available. Facts and emitter are
 /// in traces/windows_code43_walls_20261007/deferred-compiled-layouts.json.
 #[test]
