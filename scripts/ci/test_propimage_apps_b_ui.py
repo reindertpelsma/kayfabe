@@ -122,6 +122,24 @@ class Balance(unittest.TestCase):
             self.assertEqual(ps_balance(B.render_check(name, "a" * 32)), "", name)
 
 
+class VariableShadowing(unittest.TestCase):
+    """PowerShell variable names are CASE-INSENSITIVE: `foreach ($d in ...)` inside a function overwrote the caller's `$D` (the row's
+    output directory) and `inventory.txt` was written to `C:\\WINDOWS\\system32\\Common\\inventory.txt` (MEASURED on the first Vast run of
+    the new full B image, 2026-11-20). No loop variable or parameter of launch.ps1 may equal, ignoring case, a script-level name."""
+
+    SCRIPT_LEVEL = {"d", "r", "t", "c", "appname", "deadline"}
+
+    def test_no_loop_variable_shadows_a_script_level_name(self):
+        text = LAUNCH.read_text(encoding="utf-8")
+        loops = {m.lower() for m in re.findall(r"foreach\s*\(\s*\$([A-Za-z_][A-Za-z0-9_]*)\s+in\b", text)}
+        params = {m.lower() for blk in re.findall(r"param\s*\(([^)]*)\)", text) for m in re.findall(r"\$([A-Za-z_][A-Za-z0-9_]*)", blk)}
+        self.assertEqual(sorted((loops | params) & self.SCRIPT_LEVEL), [])
+
+    def test_the_inventory_path_is_built_from_the_output_directory(self):
+        text = LAUNCH.read_text(encoding="utf-8")
+        self.assertIn('"$D\\inventory.txt"', text)
+
+
 class LaunchTable(unittest.TestCase):
     def setUp(self):
         self.ps1 = LAUNCH.read_text()

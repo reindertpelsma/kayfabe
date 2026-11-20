@@ -53,10 +53,10 @@ function Write-Inventory {
     foreach ($root in @(Get-ChildItem -LiteralPath 'C:\Program Files' -Directory -Filter 'Adobe*' -ErrorAction SilentlyContinue)) {
       $lines += ('root: ' + $root.Name)
       foreach ($e in @(Get-ChildItem -LiteralPath $root.FullName -File -Filter '*.exe' -ErrorAction SilentlyContinue)) { $lines += ('  exe: ' + $e.Name) }
-      foreach ($d in @(Get-ChildItem -LiteralPath $root.FullName -Directory -ErrorAction SilentlyContinue)) {
-        $lines += ('  folder: ' + $d.Name)
-        foreach ($e in @(Get-ChildItem -LiteralPath $d.FullName -File -Filter '*.exe' -ErrorAction SilentlyContinue)) { $lines += ('    exe: ' + $e.Name) }
-        foreach ($s in @(Get-ChildItem -LiteralPath $d.FullName -Directory -ErrorAction SilentlyContinue)) {
+      foreach ($dirItem in @(Get-ChildItem -LiteralPath $root.FullName -Directory -ErrorAction SilentlyContinue)) {
+        $lines += ('  folder: ' + $dirItem.Name)
+        foreach ($e in @(Get-ChildItem -LiteralPath $dirItem.FullName -File -Filter '*.exe' -ErrorAction SilentlyContinue)) { $lines += ('    exe: ' + $e.Name) }
+        foreach ($s in @(Get-ChildItem -LiteralPath $dirItem.FullName -Directory -ErrorAction SilentlyContinue)) {
           foreach ($e in @(Get-ChildItem -LiteralPath $s.FullName -File -Filter '*.exe' -ErrorAction SilentlyContinue)) { $lines += ('    exe: ' + $s.Name + '\' + $e.Name) }
         }
         if ($lines.Count -gt 1500) { break }
