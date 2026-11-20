@@ -1,6 +1,6 @@
 # V3 multi-GPU audit — is it still possible, and is it required?
 
-> **STATUS (updated 2026-09-26, branch `v3-mgpu`): LIVE — blockers 1 and 2 FIXED, harness BUILT,
+> **STATUS (refs re-checked 2026-11-20: two dead literal references repointed, nothing else re-verified; updated 2026-09-26, branch `v3-mgpu`): LIVE — blockers 1 and 2 FIXED, harness BUILT,
 > per-card BAR1 budget check BUILT (in-process scope).** See §6 for the fixes and §7 for what was
 > measured on a multi-GPU box. §2's blocker text below is kept as the audit found it; each blocker
 > now carries a ✔ line naming its fix.
@@ -125,7 +125,7 @@ There are no lock files, fixed `/tmp` paths or singleton fds in the crates.
 
 ogkm forwards a Device alloc to GSP through `NV_RM_RPC_ALLOC_SHARE_DEVICE`, which builds
 `NV0080_ALLOC_PARAMETERS device_alloc_params = {0}` and never sets `deviceId`
-(`research_clones/ogkm-580.159.04/src/nvidia/inc/kernel/vgpu/rpc.h:96-106`). So every guest GPU's
+(`ogkm-580:src/nvidia/inc/kernel/vgpu/rpc.h:96-106`, in `third_party/ogkm-580` at `b81d58e`; the macro body was read again on 2026-11-20 and does not set `deviceId`). So every guest GPU's
 GSP sees `deviceId = 0`.
 
 With one kf3 device (one GSP) per guest GPU, the device that received the RPC identifies the
@@ -223,7 +223,7 @@ selection points above.
   serially **highest minor first** with `/dev/nvidia0` closed unless `KF_HOLD0=1` (the guest
   renumbering case), then concurrently; each run's rc goes to a file and `client rc=` is 0 only
   if every run was 0 (a run that left no rc counts as a failure).
-- QEMU is started with `-name kf-fastguest` and the lane kills only `pkill -9 -f
+- QEMU is started with the process name "kf-fastguest" (`scripts/fastguest/run_fast_guest.sh`) and the lane kills only `pkill -9 -f
   '[k]f-fastguest'` — no longer every `qemu-system-x86` on the box. The GPU-drain wait takes
   the max over all GPUs.
 - ⊘ Not done: the doorbell-ledger grader is not device-scoped. Two devices print rows with the

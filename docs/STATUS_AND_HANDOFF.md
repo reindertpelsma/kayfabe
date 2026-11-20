@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-11-15.** One page to resume from. The newest dated UPDATE below (2026-11-15) is the last resume point recorded in this file; everything older was moved on 2026-11-07, unchanged, to [`history/`](history/) (see *History and the citation map*). Nothing in this file was re-run on 2026-11-07: each entry keeps its own date and evidence pointer, and a lane that finished later records itself in its own design document and `traces/` README, not here.
+**STATUS: LIVE, 2026-11-20.** One page to resume from. The newest dated UPDATE below (2026-11-20) is the last resume point recorded in this file; everything older was moved on 2026-11-07, unchanged, to [`history/`](history/) (see *History and the citation map*). Nothing in this file was re-run on 2026-11-07: each entry keeps its own date and evidence pointer, and a lane that finished later records itself in its own design document and `traces/` README, not here.
 
 ## Resume checklist
 
@@ -11,6 +11,16 @@
 5. The state of the branches: `git log --first-parent origin/master` (one line per batch) and `git log --first-parent origin/next`.
 6. The documents map: [`README.md`](README.md) (current documents versus history).
 
+
+## UPDATE 2026-11-20 — Distribution and packaging (design and owner rulings; nothing built)
+
+DESIGN-ONLY: [design/V3_PACKAGING_AND_DISTRIBUTION.md](design/V3_PACKAGING_AND_DISTRIBUTION.md), rulings in [OWNER_RULINGS.md](OWNER_RULINGS.md) §BC. Written down from the owner's 2026-11-20 discussion; it changes no code, gate or published page.
+- Decided: ship a patched QEMU release plus a build kit (full binary or module) that overlays the device onto any QEMU tree; every user setting on the QEMU command line, no environment variable needed; the guest driver automatic by default with the invariant that the guest never dictates the host ABI; the default standalone trust is git only, with three kinds of public object and a short printed line per download; the Worker reproducible by others; Microsoft terms prompted, NVIDIA terms noticed; user docs separate from internal docs.
+- CODE READ today (2026-11-20, `origin/next` `7fb1c98a0`): 27 device properties, none for display resolution or framelock, no umbrella object, no all-GPUs rule; `-global` is documented but no script uses it; no module build exists; no environment-read allowlist lint exists (120 distinct `KF3_`/`KF_`/`KAYFABE_` names in product sources); the property table in `docs/howto/installing.md` misses `x-gsp-observer-seconds`; automatic guest-driver selection works inside a branch only.
+- Added the same day (owner): the manual must tell how to start the display broker (non-headless only) with no environment dependency; section 2.6 of the design records the broker's flags and environment reads, two documentation defects (`broker/README.md` still shows nvkvm-pv QEMU options and advises `-display sdl`; `docs/howto/display.md` mixes design intent and history) and a target of explicit flags, one socket per GPU and a two-command quickstart.
+- Two standing blockers of a public binary are untouched: the GPL exception for the nvproxy-derived files (`LICENSE`, exception 2) and §P's security gate.
+- Open questions (design document, section 16): module feasibility, the umbrella object, the fourth Windows setting (the table has three), the rootless audit result, the attested-bundle workflow, display resolution and framelock, which limits become settable, Proxmox trees, when a binary may ship.
+- In flight elsewhere and only referenced: the two-phase Windows guest script, the kfroot audit, and the propimage configuration PRs #526 to #528.
 
 ## UPDATE 2026-11-15 — engines with no derived method table are not offered to a Windows guest (flag, default off; not run on hardware)
 
