@@ -114,6 +114,7 @@ async function harness(extra = {}) {
     machine_id: 200011,
     host_id: 3011,
     gpu_ram: 24576,
+    cpu_ram: 98304, // a 24 GB die needs 68234 MiB listed in the large profile (RAM_BELOW_VRAM_RULE, 2026-11-20)
     disk_space: 400,
     inet_down_cost: 0.002, // a priced network, so the bandwidth allowance is visible in the stored cost
   };

@@ -1,6 +1,6 @@
 # THE BAR0 DISPOSITION MAP — every page, every family, GSP and non-GSP
 
-**STATUS: LIVE.** Created 2026-09-21 (w824). Owner-requested. Derived by `[fable w824]` from ogkm
+**STATUS: RESEARCH, 2026-11-20.** Reclassified from LIVE on 2026-11-20 by the freshness gate. This is a table derived from external source (ogkm and nouveau, plus nova-core): 19 of the 20 dead references are files in those trees (ogkm, nouveau, and the Linux nova-core driver's `falcon.rs` and `gsp/*.rs`), which a default checkout does not contain, and 1 (`nvkvm_gpu_emul.c`) is the pre-v3 C prototype, now at `archive/nvkvm/src/qemu/nvkvm_gpu_emul.c`. It is still cited as the derivation of the trapped-page map by `crates/kf-trap/src/memmap.rs`, `crates/kf-trap/src/pramin.rs`, `V3_P4_PORT_MAP.md` and `V3_HW_BOUNDARY_INVENTORY.md`. Nothing in it was re-verified on 2026-11-20. Whether it should be LIVE again once the gate can resolve cites into the pinned oracles is the owner's call. ⊘ Original status line, kept as written: *LIVE.* Created 2026-09-21 (w824). Owner-requested. Derived by `[fable w824]` from ogkm
 (§50 level 2) and nouveau (§50 level 5); the timer analysis in §4 is mine and **corrects** one
 step of fable's.
 
