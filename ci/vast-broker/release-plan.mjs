@@ -6,12 +6,12 @@
 //   node ci/vast-broker/release-plan.mjs --market <offers.json> [--var NAME=VALUE ...] [--credit N] [--rehearsal DIE]
 //   node ci/vast-broker/release-plan.mjs --changed-files <list.txt>
 //   node ci/vast-broker/release-plan.mjs --app-lane --market <offers.json> --daily-cap USD (--first-release | --rotation <table.json>)
-//        [--spent-today USD] [--images a,b] [--families f1,f2] [--var NAME=VALUE ...]
+//        [--spent-today USD] [--images a,b | --apps app1,app2] [--families f1,f2] [--var NAME=VALUE ...]
 //
 // --changed-files: one path per line (git diff --name-only --no-renames master...HEAD); prints whether the app lane is
 // required (core_paths of app-lane.json, ruling section AZ item 5) and the matching paths. --app-lane: the app-lane plan
 // (src/app-lane.js, docs/design/V3_APP_LANE_PLANNER.md): every image on every family (--first-release) or the rotation of
-// the given table; exits 2 when the plan is refused (a missing offer, or an estimate over the daily cap). DESIGN-ONLY: the
+// the given table (--apps: the images that hold these applications, by src/bundles.js); exits 2 when the plan is refused (a missing offer, or an estimate over the daily cap). DESIGN-ONLY: the
 // Worker admin start kind 'app' is not built; this prints a plan and rents nothing.
 //
 // --rehearsal DIE plans the named one-die rehearsal scope (admin start {tier:'large', die, rehearsal:true}); it never
@@ -214,6 +214,7 @@ if (import.meta.url === 'file://' + process.argv[1]) {
     else if (args[i] === '--daily-cap') app.dailyCapUsd = Number(need(++i));
     else if (args[i] === '--spent-today') app.spentTodayUsd = Number(need(++i));
     else if (args[i] === '--images') app.images = need(++i).split(',');
+    else if (args[i] === '--apps') app.apps = need(++i).split(',');
     else if (args[i] === '--families') app.families = need(++i).split(',');
     else
       throw Error(
