@@ -1,0 +1,81 @@
+# STATUS: LIVE, 2026-11-20 (task I7; docs/design/V3_GUEST_INGRESS_TABLE.md section 5).
+# Controls and classes the committed lane evidence shows kayfabe serving with NV_OK. Wherever the pre-I7 gate
+# admitted one of these at a tag, the generated gate must admit it there too
+# (crates/kf-rm/tests/ingress_parity.rs). Source: every 'control 0x... result 0x00000000' line and every
+# successful alloc (hClass=... status=0x00000000, or a kayfabe-side 'alloc cls=... st=0x0') under traces/;
+# the committed traces hold only part of the lanes' logs (traces/EVIDENCE_ARCHIVE.md), so this is a lower bound.
+# Plus the controls kayfabe's code asks the gate about by constant (kf-rm chanlink / display / rmrpc policy).
+# Left out, with the reason:
+#   0x20808159 answered by kf_rm::inittables before the gate (GSS-legacy, no ogkm tag exports it); evidence is a pre-v3 nvkvm log
+#   0x20808162 answered by kf_rm::inittables before the gate (GSS-legacy, no ogkm tag exports it); evidence is a pre-v3 nvkvm log
+#   0x20810108 refused in v3 already (traces/v3_windows/discovery_20261004/linux_baseline: fn76/0x20810108=0x56); the 0x0 hit is a Windows host-side signal file
+#   0x0000cb33 NV_CONFIDENTIAL_COMPUTE: status 0 only in pre-v3 guest_boots logs; in v3 it has no alloc shape (refused after the gate either way)
+# kind	id	evidence
+control	0x00801813	traces/boots/w260/run_w260_off_qemu.log
+control	0x00802004	traces/w294_cudalimit/run_w294cup2_qemu.log
+control	0x00802009	traces/w294_cudalimit/run_w294cup2_qemu.log
+control	0x20800102	traces/boots/w260/run_w260_off_qemu.log
+control	0x2080012b	traces/boots/w260/run_w260_off_qemu.log
+control	0x208001b0	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800301	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a1c	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a1d	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a1f	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a22	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a26	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a2a	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a32	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a36	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a3d	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a40	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a41	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a48	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a4c	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a59	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a5c	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a61	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a6c	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a9b	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a9d	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800a9f	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800aac	traces/boots/w260/run_w260_off_qemu.log
+control	0x20800af3	traces/boots/w260/run_w260_off_qemu.log
+control	0x20801112	traces/boots/w260/run_w260_off_qemu.log
+control	0x20801210	traces/guest_boots/run_p1b_29e7c25_planectl_qemu.log
+control	0x20801303	traces/boots/w260/run_w260_off_qemu.log
+control	0x20801702	traces/boots/w260/run_w260_off_qemu.log
+control	0x20801803	traces/boots/w260/run_w260_off_qemu.log
+control	0x20801823	traces/boots/w260/run_w260_off_qemu.log
+control	0x2080182a	traces/boots/w260/run_w260_off_qemu.log
+control	0x2080182b	traces/boots/w260/run_w260_off_qemu.log
+control	0x20802a02	traces/boots/w260/run_w260_off_qemu.log
+control	0x20802a07	traces/boots/w260/run_w260_off_qemu.log
+control	0x20802a08	traces/boots/w260/run_w260_off_qemu.log
+control	0x20802a0b	traces/boots/w260/run_w260_off_qemu.log
+control	0x20803601	traces/boots/w260/run_w260_off_qemu.log
+control	0x20803801	traces/boots/w260/run_w260_off_qemu.log
+control	0x83de0309	traces/guest_boots/run_w290pdrain_qemu.log
+control	0x90f10106	traces/boots/w260/run_w260_off_qemu.log
+control	0xa06c0101	traces/boots/w260/run_w260_off_qemu.log
+control	0xa06c0103	traces/guest_boots/run_w290pdrain_qemu.log
+control	0xa06c0105	traces/guest_boots/run_w290pdrain_qemu.log
+control	0xa06c010a	traces/boots/w260/run_w260_off_qemu.log
+control	0xa06f0103	traces/boots/w260/run_w260_off_qemu.log
+control	0xa06f0104	traces/boots/w260/run_w260_off_qemu.log
+class	0x00000000	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x0000003e	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x00000040	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x00000079	traces/guest_boots/run_s45_748a207_tsgsched_probe.log
+class	0x00000080	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x000000de	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x00002080	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x00002081	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x000050a0	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x000083de	traces/guest_boots/run_s45_748a207_tsgsched_probe.log
+class	0x00009067	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x000090f1	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x0000a06c	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x0000c461	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x0000c56f	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x0000c7b5	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
+class	0x0000c7c0	traces/guest_boots/run_s44_b17381c_rmtrace_probe.log
