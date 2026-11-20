@@ -1,6 +1,6 @@
 # V3: the Windows gate and the box harness without root, and the explicit `kfroot` step
 
-STATUS: LIVE as code, 2026-11-15; NOT RUN ON A BOX. GPU-free tests and one hand run of the real `sudo` in a sandbox only (section 3).
+STATUS: LIVE as code, 2026-11-15; NOT RUN ON A BOX. GPU-free tests and one hand run of the real `sudo` in a sandbox only (section 3). 2026-11-20: every root step is audited in [V3_KFROOT_AUDIT](V3_KFROOT_AUDIT.md).
 Implements OWNER_RULINGS section AR item 6 (rootless proof; owner 2026-11-11 and 2026-11-15) for the Windows stages
 (`scripts/bench/box/windows_gate.sh`, `windows_apps.sh`, `scripts/bench/windows/win_vm.sh`). Not done (section 8): the payload
 (`vast_payload.py`, `vast_onstart.sh`) still starts every stage as root; nothing here has run on a GPU box.
