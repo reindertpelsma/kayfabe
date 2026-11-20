@@ -1625,6 +1625,28 @@
      ]
     }
    ]
+  },
+  "python-3.12.10-source": {
+   "row": null,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://www.python.org/ftp/python/3.12.10/Python-3.12.10.tgz",
+   "runs": "build",
+   "consumers": [
+    "scripts/apps/mlrows/private_python.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "measured": "2026-11-20",
+     "pin_origin": "measured-from-upstream",
+     "pin_source_url": "https://www.python.org/downloads/release/python-31210/",
+     "scope": "source",
+     "sha256": "15d9c623abfd2165fe816ea1fb385d6ed8cf3c664661ab357f1782e3036a6dac",
+     "size": 27122929,
+     "status": "MEASURED"
+    }
+   ]
   }
  },
  "unrouted": {
