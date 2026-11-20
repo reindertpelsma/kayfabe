@@ -1857,7 +1857,7 @@ impl CommandPolicy for InitTablePolicy {
         // (`C: src/qemu/nvkvm_gpu_emul.c:3334-3350`): libcudart issues `0x20809009`,
         // `0x20809001` and `0x20809064` at the end of its lazy device enumeration; **the
         // driver API never issues them**, which is exactly the asymmetry we measured. They
-        // are serviced entirely by GSP firmware — no kernel `#define`, absent from nvproxy —
+        // are serviced entirely by GSP firmware — no kernel `#define` —
         // so the C's zero-echo *"returned all-zeros, so cudart read 0 where it expects real
         // data and aborted with cudaErrorInitializationError(3) — silently (the reject is in
         // the reply PAYLOAD, not an errno/dmesg line)"*.

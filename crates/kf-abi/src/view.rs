@@ -7,11 +7,8 @@
 //! fields the core actually consumes, produced by [`crate::versions`] from
 //! whichever wire layout the detected driver version uses.
 //!
-//! This is nvproxy's own decomposition. `NVOS21_PARAMETERS` and
-//! `NVOS64_PARAMETERS` are two wire shapes for one verb, and nvproxy normalises
-//! them through `ToOS64`/`FromOS64`
-//! (`gvisor/pkg/abi/nvgpu/frontend.go:335-357, :824-827`) so its handlers see one
-//! shape. [`AllocReq`] is that, generalised: one view per verb, N wire layouts
+//! `NVOS21_PARAMETERS` and `NVOS64_PARAMETERS` are two wire shapes for one verb;
+//! [`AllocReq`] is the one view a handler sees: one view per verb, N wire layouts
 //! behind it.
 //!
 //! Field names deliberately mirror `kayfabe_core::rmgraph::RmEvent`'s payloads,
@@ -36,8 +33,7 @@ pub struct FreeReq {
 /// wire shapes (`NVOS21` v1 and `NVOS64` v2).
 ///
 /// `rights_requested` is `NVOS64`-only and reads as `0` from an `NVOS21`, which
-/// is what nvproxy's `NVOS21_PARAMETERS::GetPRightsRequested` also returns
-/// (`gvisor/pkg/abi/nvgpu/frontend.go:322-324`) — a *declared* absence, not a
+/// is a *declared* absence (the `NVOS21` struct has no such field), not a
 /// lost field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AllocReq {
@@ -300,9 +296,8 @@ pub struct UnmapMemoryDma {
 ///   (`ogkm-580: src/common/sdk/nvidia/inc/class/cl0000.h:47-52` /
 ///   `ogkm-610: src/common/sdk/nvidia/inc/class/cl0000.h:47-52`, with
 ///   `NV_PROC_NAME_MAX_LENGTH = 100U` at `nvlimits.h:47` in both), but has **no
-///   oracle outside ogkm at all**: gVisor's `nvproxy` does not model
-///   `NV0000_ALLOC_PARAMETERS`, and neither does the C artifact
-///   (`grep NV0000_ALLOC_PARAMETERS` finds nothing in either). Both vendored
+///   oracle outside ogkm at all**: the C artifact does not model
+///   `NV0000_ALLOC_PARAMETERS` (`grep NV0000_ALLOC_PARAMETERS` finds nothing). Both vendored
 ///   tags are ≥ 580 while [`crate::versions::table_for`] admits versions down to
 ///   550.54.14, and `pOsPidInfo` has the shape of a recent addition — so
 ///   `sizeof` at 550/575 was **unverified** when this was written. ★ [measured
@@ -326,8 +321,7 @@ pub struct ClientAllocFacts {
 /// `NV0080_ALLOC_PARAMETERS` — the multi-GPU routing fact a Device declares.
 ///
 /// Unlike [`ClientAllocFacts`] this is decoded from the **whole** struct, because
-/// its 56-byte size is confirmed by three independent oracles: ogkm 610.43.02,
-/// `gvisor/pkg/abi/nvgpu/classes.go:198-211`, and the C artifact's
+/// its 56-byte size is confirmed by two independent oracles: ogkm 610.43.02 and the C artifact's
 /// `tests/abi_parity/abi_parity_test.go:120` (`nv0080_alloc_parameters … 56`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DeviceAllocFacts {

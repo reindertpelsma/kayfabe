@@ -404,6 +404,12 @@ rebuilt and republished bundle and the new `bundle.pin` in the same change set; 
 `verify_image` with `expected_inputs`, upload the ISO and then the manifest create-only, re-download from the public URL and compare, then commit the pin
 (`first/bundle.pin.line`).
 
+**MEASURED, 2026-11-20 ([run](../traces/wb1_republish_license_20261120/README.md)), second republish:** the repository `LICENSE` (narrowed exception 2 after the gVisor removal, #545) and
+`THIRD_PARTY_NOTICES.md` are hashed inputs and are copied into the bundle, so #545 moved the input hash to `781c5d4f...` and `RepoPin` failed. Rebuilt from that branch (head `c298d6c94`):
+two builds equal (Level 1 and Level 2), ISO sha256 `5e01ceff9a475a1b490f00c4823e8c2373144a5786f207224980180fe13f076d`, 2708133888 bytes, inventory `fd0d8da3...`; only four
+files differ from the `9211a555` bundle (`KFAPPS.ID`, `LICENSES/kayfabe/LICENSE`, `LICENSES/kayfabe/THIRD_PARTY_NOTICES.md`, `bundle.inputs.json`). Uploaded create-only next to the
+older objects (none deleted); the pin now names it.
+
 **CODE READ:** `bundle.pin` is read by pattern: the `winapps-open.iso sha256=` line, and the `# inputs=` and `# inventory=` comment lines (the first must equal the tree's input hash); every other comment is ignored.
 
 Full recipe, qualification rules and rollout details: [Windows apps gate, section 3](design/V3_WINDOWS_APPS_GATE.md#3-inputs-public-bundle-and-official-run-time-media).
