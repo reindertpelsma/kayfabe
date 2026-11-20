@@ -1075,6 +1075,7 @@ class CmdRun(unittest.TestCase):
 class Setup(unittest.TestCase):
     def setUp(self):
         self.t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, self.t, True)          # the vllm test writes a 266 MB fake model here: without this every run left 266 MB in /tmp (it filled a 6 GB tmpfs)
         self.calls = []
         self.fail_pip = False
 
@@ -1669,12 +1670,13 @@ class Standalone(unittest.TestCase):
     """run_standalone.sh with a fake tool next to it, a fake apt-get and a fake id: what it runs, in which order, and how it ends."""
     script = ML / "run_standalone.sh"
 
-    def run_it(self, tool_body, uid="0"):
+    def run_it(self, tool_body, uid="0", ensure_rc=0):
         t = Path(tempfile.mkdtemp())
         (t / "tool").mkdir()
         shutil_copy = __import__("shutil").copyfile
         shutil_copy(self.script, t / "tool" / "run_standalone.sh")
         (t / "tool" / "mlrows.py").write_text(tool_body)
+        (t / "tool" / "private_python.py").write_text("import sys\nprint('PRIVATE_PYTHON ' + ' '.join(sys.argv[1:]), flush=True)\nsys.exit(" + str(ensure_rc) + ")\n")
         fake = t / "bin"
         fake.mkdir()
         (fake / "apt-get").write_text("#!/bin/sh\necho \"apt-get $*\" >> %s\n" % (t / "calls"))
@@ -1702,6 +1704,14 @@ class Standalone(unittest.TestCase):
         self.assertIn("JAX_SUMMARY status=PASS", done.stdout)
         self.assertIn("TENSORRT_SUMMARY status=FAIL", done.stdout)               # a failing row does not stop the others
         self.assertIn("APPNOTRUN driver_cuda_below_every_wheel", done.stdout)
+
+    def test_a_host_that_needs_it_gets_the_private_python_before_check_and_setup_and_a_failed_build_does_not_stop_the_run(self):
+        for rc in (0, 3):
+            done, _, t = self.run_it(self.TOOL, ensure_rc=rc)
+            lines = [l for l in done.stdout.splitlines() if l.startswith(("PRIVATE_PYTHON", "MLROWS "))]
+            self.assertEqual(lines[0], "PRIVATE_PYTHON ensure --root %s --if-needed" % (t / "out" / "root"), rc)
+            self.assertEqual([l.split()[1] for l in lines[1:]], ["check", "setup"], rc)
+            self.assertEqual(done.returncode, 0, done.stderr)
 
     def test_a_non_root_user_gets_no_apt_call(self):
         done, calls, _ = self.run_it(self.TOOL, uid="1000")
@@ -1895,6 +1905,771 @@ class TrustPins(unittest.TestCase):
     def test_the_vllm_row_turns_telemetry_off(self):
         self.assertIn('"VLLM_NO_USAGE_STATS": "1"', self.src("mlrows.py"))
         self.assertIn('"DO_NOT_TRACK": "1"', self.src("mlrows.py"))
+
+
+
+# ------------------------------------------------------------------------------------------------ 2026-11-20: a private Python 3.12 for the host (docs/design/V3_OPEN_ML_ROWS.md section 3a)
+import private_python as pp                      # noqa: E402  the module mlrows.py imports (scripts/apps/mlrows is on sys.path)
+import tarfile                                   # noqa: E402
+
+sys.path.insert(0, str(HERE))
+import kf_trust as kt                            # noqa: E402
+import trust_lint as tl                          # noqa: E402
+
+BUILD_PACKAGES = ["build-essential", "libbz2-dev", "libffi-dev", "liblzma-dev", "libsqlite3-dev", "libssl-dev", "zlib1g-dev"]
+FAKE_SHA = "ab" * 32                             # a made-up digest for the manifest-shape tests: the real one needs a measurement on a machine with network
+
+
+def source_tarball(path, top="Python-" + pp.PY_VERSION, extra=()):
+    """A tiny stand-in for the python.org tarball: one top directory with a `configure`; `extra` are (name, TarInfo-type, linkname) members that make it hostile."""
+    with tarfile.open(path, "w:gz") as tf:
+        for name in ("%s/configure" % top, "%s/Makefile.pre.in" % top):
+            info = tarfile.TarInfo(name)
+            body = b"#!/bin/sh\n"
+            info.size, info.mode = len(body), 0o755
+            tf.addfile(info, __import__("io").BytesIO(body))
+        for name, kind, link in extra:
+            info = tarfile.TarInfo(name)
+            info.type, info.linkname = kind, link
+            tf.addfile(info)
+
+
+class PrivateBox:
+    """A fake machine for private_python.ensure: every process goes through .run (argv recorded, answered from a script), nothing real starts."""
+
+    def __init__(self, test, installed=None, fetch="ok", fail=None, probe_missing="-", probe_version="3.12.10", policy="ok", tarball=None, timeout=None):
+        self.t = Path(tempfile.mkdtemp(prefix="pp-test-"))
+        test.addCleanup(__import__("shutil").rmtree, self.t, True)
+        self.root = self.t / "mlrows"
+        self.installed = set(BUILD_PACKAGES if installed is None else installed)
+        self.fetch, self.fail, self.probe_missing, self.probe_version, self.policy, self.tarball, self.timeout = fetch, fail, probe_missing, probe_version, policy, tarball, timeout
+        self.calls = []
+
+    def names(self):
+        """The calls as kinds: policy, apt, dpkg, fetch, configure, make, install, probe."""
+        out = []
+        for c in self.calls:
+            a = c["argv"]
+            out.append("apt" if a[:2] == ["bash", "-c"] else "policy" if a[0] == "bash" else "dpkg" if a[0] == "dpkg-query" else "fetch" if len(a) > 3 and a[2].endswith("kf_trust.py")
+                       else "configure" if a[0] == "./configure" else "install" if a[:2] == ["make", "altinstall"] else "make" if a[0] == "make" else "probe")
+        return out
+
+    def run(self, argv, env=None, timeout=60, cwd=None):
+        self.calls.append({"argv": list(argv), "env": env, "cwd": cwd, "timeout": timeout})
+        a = list(argv)
+        if a[0] == "bash" and a[1] == "-c":
+            self.installed.update(a[4:])
+            return 0, "", False
+        if a[0] == "bash":
+            return (0, "\n".join(BUILD_PACKAGES) + "\n", False) if self.policy == "ok" else (1, "", False)
+        if a[0] == "dpkg-query":
+            return (0, "install ok installed", False) if a[-1] in self.installed else (1, "", False)
+        if len(a) > 3 and a[2].endswith("kf_trust.py"):
+            if self.fetch == "ok":
+                out = Path(a[a.index("--out") + 1])
+                (self.tarball or (lambda o: source_tarball(o)))(out)
+                return 0, "KF_TRUST ok\n", False
+            return 4 if self.fetch == "TRUST_UNKNOWN_ARTIFACT" else 3, "%s %s: not in the trust manifest\n" % (self.fetch, pp.ARTIFACT), False
+        step = "configure" if a[0] == "./configure" else ("install" if a[:2] == ["make", "altinstall"] else "make" if a[0] == "make" else None)
+        if step:
+            if self.fail == step:
+                pp.prefix_of(self.root).mkdir(parents=True, exist_ok=True)
+                (pp.prefix_of(self.root) / ("partial_" + step)).write_text("x")
+                return (124 if self.timeout else 2), "checking for gcc... no\nconfigure: error: no acceptable C compiler found in $PATH\n", bool(self.timeout)
+            pp.prefix_of(self.root).mkdir(parents=True, exist_ok=True)
+            (pp.prefix_of(self.root) / ("partial_" + step)).write_text("x")           # files that a step leaves behind: a failure after it must not keep them
+            if step == "install":
+                exe = pp.interpreter_of(self.root)
+                exe.parent.mkdir(parents=True, exist_ok=True)
+                exe.write_text("#!/bin/sh\n")
+                exe.chmod(0o755)
+            return 0, "", False
+        if a[0] == str(pp.interpreter_of(self.root)) and "-c" in a:
+            self.marker_at_probe = (pp.prefix_of(self.root) / pp.MARKER).exists()
+            return 0, "KF_PY version=%s include=%s missing=%s\n" % (self.probe_version, self.root / pp.PRIVATE_DIR / "include" / "python3.12", self.probe_missing), False
+        raise AssertionError("an unexpected process: %r" % (a,))
+
+    def ensure(self, **kw):
+        kw.setdefault("root_user", True)
+        kw.setdefault("environ", {"PATH": "/usr/bin", "HOME": "/root", "LD_PRELOAD": "x", "PYTHONPATH": "/evil", "GITHUB_TOKEN": "t", "KF_TRUST_EVIDENCE_DIR": "/ev"})
+        return pp.ensure(self.root, run=self.run, **kw)
+
+    def steps(self):
+        return [c for c in self.calls if c["argv"][0] in ("./configure", "make")]
+
+
+class PrivatePython(unittest.TestCase):
+    def test_the_recipe_is_a_private_static_altinstall_with_the_prefix_derived_from_one_constant(self):
+        root = Path("/srv/apps/mlrows")
+        steps = pp.recipe(pp.prefix_of(root), "/src", 6)
+        self.assertEqual([s[0] for s in steps], ["configure", "make", "install"])
+        self.assertEqual(steps[0][1], ["./configure", "--prefix=/srv/apps/mlrows/" + pp.PRIVATE_DIR, "--with-ensurepip=no"])
+        self.assertEqual(steps[1][1], ["make", "-j6"])
+        self.assertEqual(steps[2][1], ["make", "altinstall"])
+        self.assertTrue(all(cwd == "/src" for _, _, cwd in steps))
+        flat = [a for _, argv, _ in steps for a in argv]
+        for bad in ("--enable-shared", "--enable-optimizations", "--with-lto", "install", "--prefix=/usr", "--prefix=/usr/local"):
+            self.assertNotIn(bad, flat)
+        self.assertEqual(pp.PRIVATE_DIR, "python312")
+        self.assertEqual(str(pp.interpreter_of(root)), "/srv/apps/mlrows/python312/bin/python3.12")
+
+    def test_the_version_is_one_constant_inside_the_range_the_pins_allow(self):
+        self.assertRegex(pp.PY_VERSION, r"^3\.12\.\d+$")
+        self.assertEqual(pp.ARTIFACT, "python-%s-source" % pp.PY_VERSION)
+        self.assertRegex(pp.ARTIFACT, kt.NAME.pattern)
+        lo, hi = tuple(PINS["python"]["min"]), tuple(PINS["python"]["max_exclusive"])
+        self.assertTrue(lo <= tuple(int(x) for x in pp.PY_VERSION.split("."))[:2] < hi)
+
+    def test_a_build_runs_the_steps_in_order_and_writes_the_marker_last(self):
+        b = PrivateBox(self)
+        r = b.ensure(jobs=4)
+        self.assertEqual((r["status"], r["built"], r["version"]), ("ok", True, pp.PY_VERSION), r)
+        self.assertEqual(b.names(), ["policy", "fetch"] + ["dpkg"] * len(BUILD_PACKAGES) + ["configure", "make", "install", "probe"])
+        self.assertFalse(b.marker_at_probe)                                               # the marker is written after the probe passed, never before
+        configure = b.steps()[0]
+        self.assertEqual(configure["argv"], ["./configure", "--prefix=" + str(pp.prefix_of(b.root)), "--with-ensurepip=no"])
+        self.assertEqual(b.steps()[1]["argv"], ["make", "-j4"])
+        self.assertEqual(b.steps()[2]["argv"], ["make", "altinstall"])
+        marker = json.loads((pp.prefix_of(b.root) / pp.MARKER).read_text())
+        self.assertEqual((marker["version"], marker["artifact"], marker["recipe"]), (pp.PY_VERSION, pp.ARTIFACT, pp.recipe_id(pp.prefix_of(b.root))))
+        self.assertRegex(marker["source_sha256"], r"^[0-9a-f]{64}$")
+        self.assertFalse((b.root / (pp.PRIVATE_DIR + ".build")).exists())           # the build tree is gone, the verified tarball stays for a second try
+
+    def test_a_marker_that_is_written_before_the_probe_would_bless_a_broken_build(self):
+        b = PrivateBox(self, probe_missing="ssl")
+        r = b.ensure()
+        self.assertEqual(r["status"], "FAIL")
+        self.assertFalse((pp.prefix_of(b.root) / pp.MARKER).exists())
+        self.assertFalse(pp.prefix_of(b.root).exists())
+
+    def test_a_second_ensure_builds_nothing(self):
+        b = PrivateBox(self)
+        b.ensure()
+        n = len(b.calls)
+        r = b.ensure()
+        self.assertEqual((r["status"], r["built"], r["reason"]), ("ok", False, "cached:" + pp.PY_VERSION))
+        self.assertEqual(b.names()[n:], ["probe"])                                        # only the probe that proves the cached one still runs
+        self.assertEqual(len(b.steps()), 3)
+
+    def test_a_cached_build_makes_no_network_apt_or_policy_call(self):
+        b = PrivateBox(self)
+        b.ensure()
+        b.calls.clear()
+        b.ensure()
+        self.assertEqual(set(b.names()), {"probe"})
+
+    def test_a_marker_of_another_recipe_or_version_or_a_missing_interpreter_is_a_rebuild(self):
+        for edit in (lambda m: m.update(version="3.12.1"), lambda m: m.update(recipe="0" * 64), lambda m: m.update(schema="x")):
+            b = PrivateBox(self)
+            b.ensure()
+            f = pp.prefix_of(b.root) / pp.MARKER
+            (pp.prefix_of(b.root) / "stale").write_text("x")
+            m = json.loads(f.read_text())
+            edit(m)
+            f.write_text(json.dumps(m))
+            n = len(b.steps())
+            self.assertTrue(b.ensure()["built"])
+            self.assertEqual(len(b.steps()), n + 3)
+            self.assertFalse((pp.prefix_of(b.root) / "stale").exists())               # the other recipe's tree is replaced, not built over
+        b = PrivateBox(self)
+        b.ensure()
+        pp.interpreter_of(b.root).unlink()
+        self.assertTrue(b.ensure()["built"])
+
+    def test_a_prefix_without_a_marker_is_never_used_and_is_replaced(self):
+        b = PrivateBox(self)
+        exe = pp.interpreter_of(b.root)
+        exe.parent.mkdir(parents=True)
+        exe.write_text("#!/bin/sh\n")
+        (pp.prefix_of(b.root) / "stale").write_text("x")
+        self.assertIsNone(pp.usable(b.root, b.run))
+        self.assertTrue(b.ensure()["built"])
+        self.assertFalse((pp.prefix_of(b.root) / "stale").exists())
+
+    def test_a_cached_python_with_a_missing_module_or_the_wrong_version_is_not_usable(self):
+        b = PrivateBox(self)
+        b.ensure()
+        for kw in ({"probe_missing": "ssl,zlib"}, {"probe_version": "3.12.1"}):
+            for k, v in kw.items():
+                setattr(b, k, v)
+            self.assertIsNone(pp.usable(b.root, b.run), kw)
+            b.probe_missing, b.probe_version = "-", pp.PY_VERSION
+
+    def test_a_host_that_already_has_python_312_builds_nothing_with_if_needed(self):
+        b = PrivateBox(self)
+        r = b.ensure(if_needed=True, running=(3, 12, 3))
+        self.assertEqual((r["status"], r["built"], r["reason"]), ("ok", False, "host_python_ok:3.12.3"))
+        self.assertEqual(b.calls, [])
+        r = b.ensure(if_needed=True, running=(3, 10, 12))
+        self.assertTrue(r["built"])
+        self.assertTrue(PrivateBox(self).ensure(if_needed=False, running=(3, 12, 3))["built"])           # without the flag it always ensures
+
+    def test_a_host_python_newer_than_the_pinned_range_is_not_good_enough_either(self):
+        self.assertTrue(PrivateBox(self).ensure(if_needed=True, running=(3, 15, 0))["built"])
+
+    def test_the_tarball_comes_through_kf_trust_and_nothing_else(self):
+        b = PrivateBox(self)
+        b.ensure()
+        fetch = next(c for c in b.calls if len(c["argv"]) > 3 and c["argv"][2].endswith("kf_trust.py"))
+        self.assertEqual(fetch["argv"][:5], [sys.executable, "-I", str(pp.KF_TRUST), "fetch", pp.ARTIFACT])
+        self.assertEqual(fetch["argv"][5], "--out")
+        for bad in ("--trust-lift", "--user-source", "--expect-sha256", "--operator-pin", "--mode"):
+            self.assertNotIn(bad, fetch["argv"])
+        self.assertEqual(pp.KF_TRUST, ROOT / "scripts/ci/kf_trust.py")
+        self.assertEqual(fetch["env"].get("KF_TRUST_EVIDENCE_DIR"), "/ev")                # the helper's own variables reach the helper (and only it)
+        self.assertNotIn("KF_TRUST_EVIDENCE_DIR", b.steps()[0]["env"])
+        text = (ML / "private_python.py").read_text()
+        for bad in ("urlopen", "urllib.request", "http.client", "requests.", "wget", "git clone", "shell=True"):
+            self.assertNotIn(bad, text)
+
+    def test_an_artifact_the_manifest_does_not_anchor_is_refused_by_name_before_apt_runs(self):
+        for code in ("TRUST_UNKNOWN_ARTIFACT", "TRUST_PIN_MISMATCH", "TRUST_NO_ANCHOR"):
+            b = PrivateBox(self, fetch=code, installed=[])
+            r = b.ensure()
+            self.assertEqual((r["status"], r["reason"], r["built"]), ("NOT_RUN", "python_source_refused:" + code, False), code)
+            self.assertNotIn("apt", b.names())
+            self.assertEqual(b.steps(), [])
+            self.assertFalse(pp.prefix_of(b.root).exists())
+
+    def test_a_transfer_that_fails_without_a_trust_code_is_named_by_its_exit_code(self):
+        b = PrivateBox(self)
+        orig = b.run
+        b.run = lambda argv, **kw: (7, "connection reset\n", False) if len(argv) > 3 and argv[2].endswith("kf_trust.py") else orig(argv, **kw)
+        r = pp.ensure(b.root, run=b.run, root_user=True, environ={})
+        self.assertEqual((r["status"], r["reason"]), ("NOT_RUN", "python_source_refused:rc7"))
+
+    def test_build_dependencies_are_installed_through_bash_as_root_and_rechecked(self):
+        b = PrivateBox(self, installed=["build-essential", "zlib1g-dev"])
+        r = b.ensure()
+        self.assertTrue(r["built"], r)
+        apt = next(c for c in b.calls if c["argv"][:2] == ["bash", "-c"])
+        self.assertIn("apt-get install -y", apt["argv"][2])
+        self.assertIn("--no-install-recommends", apt["argv"][2])
+        self.assertEqual(apt["env"]["DEBIAN_FRONTEND"], "noninteractive")
+        self.assertEqual(apt["argv"][4:], ["libbz2-dev", "libffi-dev", "liblzma-dev", "libsqlite3-dev", "libssl-dev"])      # only what is missing
+        self.assertLess(b.names().index("apt"), b.names().index("configure"))
+
+    def test_the_apt_call_gets_the_payload_shim_variables_and_nothing_else_does(self):
+        shim = {"PATH": "/usr/bin", "BASH_ENV": "/p/hooks.sh", "KF_PAYLOAD_ROOT": "/p", "KF_APT_CACHE_ROOT": "/c", "HOME": "/root", "GITHUB_TOKEN": "t"}
+        b = PrivateBox(self, installed=["build-essential"])
+        b.ensure(environ=shim)
+        apt = next(c for c in b.calls if c["argv"][:2] == ["bash", "-c"])
+        self.assertEqual(apt["env"], {"PATH": "/usr/bin", "BASH_ENV": "/p/hooks.sh", "KF_PAYLOAD_ROOT": "/p", "KF_APT_CACHE_ROOT": "/c", "DEBIAN_FRONTEND": "noninteractive", "LANG": "C", "LC_ALL": "C"})
+        for c in b.steps():
+            self.assertFalse({"BASH_ENV", "KF_PAYLOAD_ROOT", "KF_APT_CACHE_ROOT", "DEBIAN_FRONTEND"} & set(c["env"]))
+
+    def test_build_dependencies_nobody_may_install_are_a_named_not_run_and_nothing_builds(self):
+        b = PrivateBox(self, installed=["build-essential"])
+        r = b.ensure(root_user=False)
+        self.assertEqual(r["status"], "NOT_RUN")
+        self.assertTrue(r["reason"].startswith("build_deps_missing_and_not_root:libbz2-dev,"), r)
+        self.assertNotIn("apt", b.names())
+        self.assertEqual(b.steps(), [])
+        b = PrivateBox(self, installed=["build-essential"])
+        b.run_orig = b.run
+        b.run = lambda argv, **kw: (0, "", False) if argv[:2] == ["bash", "-c"] else b.run_orig(argv, **kw)      # an apt that installs nothing
+        r = pp.ensure(b.root, run=b.run, root_user=True, environ={})
+        self.assertEqual(r["status"], "NOT_RUN")
+        self.assertTrue(r["reason"].startswith("build_deps_missing:libbz2-dev,"), r)
+        self.assertEqual(b.steps(), [])
+
+    def test_an_unreadable_package_policy_is_named_and_nothing_runs(self):
+        b = PrivateBox(self, policy="bad")
+        r = b.ensure()
+        self.assertEqual((r["status"], r["reason"]), ("NOT_RUN", "package_policy_unreadable"))
+        self.assertEqual(b.names(), ["policy"])
+
+    def test_the_build_dependencies_come_from_the_one_policy_list(self):
+        b = PrivateBox(self)
+        b.ensure()
+        policy = next(c for c in b.calls if c["argv"][0] == "bash" and c["argv"][1] != "-c")
+        self.assertEqual(policy["argv"], ["bash", str(pp.PROVISION), "--packages", pp.PACKAGE_PROFILE])
+        self.assertEqual(pp.PROVISION, ROOT / "scripts/bench/provision_box.sh")
+
+    def test_a_failed_step_is_a_named_fail_that_leaves_no_prefix_and_no_marker(self):
+        for step in ("configure", "make", "install"):
+            b = PrivateBox(self, fail=step)
+            r = b.ensure()
+            self.assertEqual(r["status"], "FAIL", step)
+            self.assertTrue(r["reason"].startswith(step + "_failed:"), r["reason"])
+            self.assertIn("no_acceptable_C_compiler", r["reason"])
+            self.assertFalse(pp.prefix_of(b.root).exists(), step)
+            self.assertFalse((b.root / (pp.PRIVATE_DIR + ".build")).exists(), step)
+
+    def test_a_timed_out_step_says_so(self):
+        b = PrivateBox(self, fail="make", timeout=True)
+        self.assertTrue(b.ensure()["reason"].startswith("make_timeout:"))
+        self.assertFalse(pp.prefix_of(b.root).exists())
+
+    def test_a_built_python_is_checked_for_its_version_and_for_every_module_a_missing_header_would_drop(self):
+        for kw, why in (({"probe_missing": "ssl"}, "built_python_unusable:modules_missing:ssl"), ({"probe_missing": "ctypes,lzma"}, "built_python_unusable:modules_missing:ctypes,lzma"),
+                        ({"probe_version": "3.12.9"}, "built_python_unusable:wrong_version:3.12.9")):
+            b = PrivateBox(self, **kw)
+            r = b.ensure()
+            self.assertEqual((r["status"], r["reason"]), ("FAIL", why))
+            self.assertFalse((pp.prefix_of(b.root) / pp.MARKER).exists())
+        self.assertEqual(sorted(pp.REQUIRED_MODULES), sorted(["ssl", "zlib", "ctypes", "bz2", "lzma", "sqlite3", "venv", "ensurepip"]))
+
+    def test_the_probe_reads_what_a_real_interpreter_prints(self):
+        t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, t, True)
+        fake = t / "python3.12"
+        fake.write_text("#!/bin/sh\necho 'KF_PY version=3.12.10 include=/p/include/python3.12 missing=ssl,zlib'\n")
+        fake.chmod(0o755)
+        got = pp.probe(fake, pp.run_cmd)
+        self.assertEqual(got, {"version": (3, 12, 10), "include": "/p/include/python3.12", "missing": ["ssl", "zlib"]})
+        fake.write_text("#!/bin/sh\necho nonsense\n")
+        self.assertIsNone(pp.probe(fake, pp.run_cmd))
+        self.assertIsNone(pp.probe(t / "absent", pp.run_cmd))
+        fake.write_text("#!/bin/sh\necho 'KF_PY version=3.12.10 include=x missing=-'\nexit 1\n")
+        self.assertIsNone(pp.probe(fake, pp.run_cmd))
+        compile(pp.PROBE_CODE, "probe", "exec")                       # the program the interpreter runs is itself valid Python
+
+    def test_the_build_runs_in_an_allowlisted_environment(self):
+        b = PrivateBox(self)
+        b.ensure()
+        for c in b.steps():
+            self.assertEqual(sorted(c["env"]), ["LANG", "LC_ALL", "PATH"], c["argv"])
+            self.assertEqual((c["env"]["LANG"], c["env"]["LC_ALL"]), ("C", "C"))
+
+    def test_a_source_tarball_that_leaves_its_directory_is_refused_and_extracts_nothing_outside(self):
+        for extra, why in (([("Python-%s/../../escape" % pp.PY_VERSION, tarfile.REGTYPE, "")], "member_outside_the_tree"),
+                           ([("/abs/path", tarfile.REGTYPE, "")], "member_outside_the_tree"),
+                           ([("Python-%s/evil" % pp.PY_VERSION, tarfile.SYMTYPE, "/etc/passwd")], "link_outside_the_tree"),
+                           ([("Python-%s/evil" % pp.PY_VERSION, tarfile.SYMTYPE, "../../outside")], "link_outside_the_tree"),
+                           ([("Python-%s/hard" % pp.PY_VERSION, tarfile.LNKTYPE, "../x")], "link_outside_the_tree"),
+                           ([("Python-%s/dev" % pp.PY_VERSION, tarfile.CHRTYPE, "")], "special_member")):
+            t = Path(tempfile.mkdtemp())
+            self.addCleanup(__import__("shutil").rmtree, t, True)
+            tgz = t / "p.tgz"
+            source_tarball(tgz, extra=extra)
+            with self.assertRaises(ValueError) as cm:
+                pp.extract_source(tgz, t / "build")
+            self.assertTrue(str(cm.exception).startswith(why), (extra, str(cm.exception)))
+            self.assertFalse((t / "escape").exists() or (t.parent / "escape").exists())
+
+    def test_a_tarball_with_another_top_directory_or_two_is_refused_and_a_good_one_extracts(self):
+        t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, t, True)
+        source_tarball(t / "a.tgz", top="Python-3.11.0")
+        with self.assertRaises(ValueError):
+            pp.extract_source(t / "a.tgz", t / "b1")
+        source_tarball(t / "b.tgz", extra=[("other/file", tarfile.REGTYPE, "")])
+        with self.assertRaises(ValueError):
+            pp.extract_source(t / "b.tgz", t / "b2")
+        (t / "c.tgz").write_bytes(b"not a tarball")
+        with self.assertRaises(ValueError):
+            pp.extract_source(t / "c.tgz", t / "b3")
+        source_tarball(t / "d.tgz")
+        src = pp.extract_source(t / "d.tgz", t / "b4")
+        self.assertEqual(src, t / "b4" / ("Python-" + pp.PY_VERSION))
+        self.assertTrue(os.access(src / "configure", os.X_OK))
+
+    def test_a_refused_tarball_is_a_named_not_run_and_the_build_never_starts(self):
+        b = PrivateBox(self, tarball=lambda out: source_tarball(out, extra=[("Python-%s/x" % pp.PY_VERSION, tarfile.SYMTYPE, "/etc/passwd")]))
+        r = b.ensure()
+        self.assertEqual(r["status"], "NOT_RUN")
+        self.assertTrue(r["reason"].startswith("source_refused:link_outside_the_tree"), r)
+        self.assertEqual(b.steps(), [])
+
+    def test_it_only_ever_writes_below_its_own_prefix_and_never_replaces_the_system_python(self):
+        b = PrivateBox(self)
+        b.ensure()
+        prefix = str(pp.prefix_of(b.root))
+        for c in b.steps():
+            for a in c["argv"]:
+                if a.startswith("--prefix="):
+                    self.assertTrue(a.split("=", 1)[1].startswith(str(b.root) + os.sep), a)
+        self.assertTrue(prefix.endswith("/" + pp.PRIVATE_DIR))
+        self.assertTrue((b.root / "python312.dl").is_dir() and (b.root / "python312").is_dir())
+
+    def test_ensure_refuses_hostile_or_wrong_tarballs_before_building(self):
+        for make, why in ((lambda out: source_tarball(out, extra=[("Python-%s/../../escape" % pp.PY_VERSION, tarfile.REGTYPE, "")]), "member_outside_the_tree"),
+                          (lambda out: source_tarball(out, top="Python-3.11.0"), "unexpected_top_directory"),
+                          (lambda out: source_tarball(out, extra=[("Python-%s/dev" % pp.PY_VERSION, tarfile.CHRTYPE, "")]), "special_member"),
+                          (lambda out: source_tarball(out, extra=[("Python-%s/l" % pp.PY_VERSION, tarfile.SYMTYPE, "/etc")]), "link_outside_the_tree")):
+            b = PrivateBox(self, tarball=make)
+            r = b.ensure()
+            self.assertEqual(r["status"], "NOT_RUN", r)
+            self.assertTrue(r["reason"].startswith("source_refused:" + why), r)         # OUR check names it (a newer tarfile's own filter would refuse too, an older one does not have it)
+            self.assertEqual(b.steps(), [])
+            self.assertFalse((b.root.parent / "escape").exists() or (b.root / "escape").exists())
+
+    def test_main_passes_the_flags_through(self):
+        seen = []
+        for argv, want in ((["ensure", "--root", "/r", "--if-needed", "--jobs", "3"], ("/r", True, 3)), (["ensure", "--root", "/r"], ("/r", False, None))):
+            with mock.patch.object(pp, "ensure", lambda root, **k: seen.append((root, k["if_needed"], k["jobs"])) or pp.result("ok", "x")), mock.patch("sys.stdout", io.StringIO()):
+                pp.main(argv)
+            self.assertEqual(seen[-1], want)
+
+    def test_main_on_a_host_that_has_python_312_builds_nothing_and_on_an_old_one_builds(self):
+        for version, builds in (((3, 12, 3), False), ((3, 10, 12), True), ((3, 15, 0), True)):
+            b = PrivateBox(self)
+            out = io.StringIO()
+            with mock.patch.object(pp, "run_cmd", b.run), mock.patch.object(pp, "host_version", lambda v=version: v), mock.patch("os.geteuid", lambda: 0), mock.patch("sys.stdout", out):
+                self.assertEqual(pp.main(["ensure", "--root", str(b.root), "--if-needed"]), 0)
+            self.assertEqual(bool(b.steps()), builds, version)
+            self.assertIn("PRIVATE_PYTHON status=ok reason=" + ("built:" if builds else "host_python_ok:3.12.3"), out.getvalue())
+
+    def test_main_prints_one_line_and_exits_zero_for_a_refusal_and_three_for_a_failed_build(self):
+        for result, rc in ((pp.result("ok", "cached:x", Path("/r"), False, "3.12.10"), 0), (pp.result("NOT_RUN", "python_source_refused:TRUST_UNKNOWN_ARTIFACT"), 0), (pp.result("FAIL", "make_failed:x"), 3)):
+            buf = io.StringIO()
+            with mock.patch.object(pp, "ensure", lambda *a, **k: result), mock.patch("sys.stdout", buf):
+                self.assertEqual(pp.main(["ensure", "--root", "/r", "--if-needed"]), rc)
+            self.assertEqual(len(buf.getvalue().splitlines()), 1)
+            self.assertTrue(buf.getvalue().startswith("PRIVATE_PYTHON status=%s reason=" % result["status"]), buf.getvalue())
+
+    # ---- the anchor: recorded in git through kf_trust, or refused by name; it can never be a quiet fetch
+    def manifest_with(self, entry):
+        doc = json.loads(kt.MANIFEST.read_text())
+        doc["artifacts"].update(entry)
+        return doc
+
+    def test_the_manifest_entry_pin_entry_prints_is_valid_for_kf_trust_and_the_lint(self):
+        entry = pp.pin_entry(FAKE_SHA, 27_000_000, "2026-11-20")
+        doc = self.manifest_with(entry)
+        self.assertEqual(kt.validate_manifest(doc), [])
+        t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, t, True)
+        (t / "m.json").write_text(json.dumps(doc))
+        mine = [f for f in tl.lint(ROOT, t / "m.json") if pp.ARTIFACT in f[1] or "private_python" in f[1] or "private_python" in f[2]]      # the whole tree's findings are trust_lint.py's own run
+        self.assertEqual(mine, [])
+        self.assertIn("scripts/apps/mlrows/private_python.py", [c for c in doc["artifacts"][pp.ARTIFACT]["consumers"]])
+        self.assertTrue((ROOT / "scripts/apps/mlrows/private_python.py").is_file())
+        e = entry[pp.ARTIFACT]
+        a = e["anchors"][0]
+        self.assertEqual((a["class"], a["scope"], a["status"], a["pin_origin"]), ("upstream-pin", "source", "MEASURED", "measured-from-upstream"))
+        self.assertEqual(kt.confirmation(a), "owner-confirmed")                       # a SOURCE pin: not one of the binaries that await the owner
+        self.assertEqual((e["kind"], e["routing"], e["consumers"]), ("file", "helper", ["scripts/apps/mlrows/private_python.py"]))
+        self.assertEqual(e["origin"], "https://www.python.org/ftp/python/%s/Python-%s.tgz" % (pp.PY_VERSION, pp.PY_VERSION))
+        self.assertTrue(a["pin_source_url"].startswith("https://www.python.org/downloads/release/python-312"))
+        self.assertFalse(kt.is_ours(e["origin"]) or kt.is_ours(a["pin_source_url"]))
+
+    def test_the_lint_refuses_the_entry_without_a_hash_or_with_ours(self):
+        for edit in (lambda a: a.pop("sha256"), lambda a: a.update(sha256="xyz"), lambda a: a.update(pin_source_url="https://r2.dev/x"), lambda a: a.update(scope="binary")):
+            entry = pp.pin_entry(FAKE_SHA, 1, "2026-11-20")
+            edit(entry[pp.ARTIFACT]["anchors"][0])
+            self.assertNotEqual(kt.validate_manifest(self.manifest_with(entry)), [])
+
+    def test_the_committed_manifest_either_anchors_the_tarball_exactly_so_or_the_build_refuses_by_name(self):
+        doc = json.loads(kt.MANIFEST.read_text())
+        entry = doc["artifacts"].get(pp.ARTIFACT)
+        if entry is not None:
+            ref = pp.pin_entry(entry["anchors"][0]["sha256"], entry["anchors"][0]["size"], entry["anchors"][0]["measured"])[pp.ARTIFACT]
+            self.assertEqual(entry, ref)
+            return
+        out = Path(tempfile.mkdtemp()) / "Python.tgz"
+        self.addCleanup(__import__("shutil").rmtree, out.parent, True)
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err):
+            rc = kt.main(["fetch", pp.ARTIFACT, "--out", str(out)])
+        self.assertEqual(rc, 4)                                                       # TRUST_UNKNOWN_ARTIFACT: no network was needed to refuse
+        self.assertIn("TRUST_UNKNOWN_ARTIFACT", err.getvalue())
+        self.assertFalse(out.exists())
+
+    def test_pin_entry_hashes_the_file_and_cross_checks_the_release_pages_md5(self):
+        t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, t, True)
+        (t / "p.tgz").write_bytes(b"python bytes")
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out):
+            rc = pp.main(["pin-entry", "--tarball", str(t / "p.tgz"), "--md5", hashlib.md5(b"python bytes").hexdigest(), "--measured", "2026-11-20"])
+        self.assertEqual(rc, 0)
+        a = json.loads(out.getvalue())[pp.ARTIFACT]["anchors"][0]
+        self.assertEqual((a["sha256"], a["size"], a["measured"], a["scope"]), (hashlib.sha256(b"python bytes").hexdigest(), 12, "2026-11-20", "source"))
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+            rc = pp.main(["pin-entry", "--tarball", str(t / "p.tgz"), "--md5", "0" * 32])
+        self.assertEqual(rc, 3)
+        self.assertEqual(out.getvalue(), "")
+        self.assertIn("PIN_ENTRY_MD5_MISMATCH", err.getvalue())
+
+
+class Interpreter(unittest.TestCase):
+    """Which Python makes the venvs: the one that runs mlrows.py when it is inside the pinned range, else the private one when it is complete, else the refusal stays."""
+
+    def setUp(self):
+        self.t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, self.t, True)
+        self.calls = []
+
+    def own(self, version=(3, 10, 12)):
+        return {"exe": "/usr/bin/python3", "version": version, "include": "/usr/include/python3.10", "private": False}
+
+    def stage_private(self, probe="KF_PY version=3.12.10 include=%s missing=-", marker=True):
+        exe = pp.interpreter_of(self.t)
+        exe.parent.mkdir(parents=True, exist_ok=True)
+        exe.write_text("#!/bin/sh\n")
+        if marker:
+            (pp.prefix_of(self.t) / pp.MARKER).write_text(json.dumps({"schema": pp.MARKER_SCHEMA, "version": pp.PY_VERSION, "recipe": pp.recipe_id(pp.prefix_of(self.t))}))
+        inc = pp.prefix_of(self.t) / "include" / "python3.12"
+        inc.mkdir(parents=True, exist_ok=True)
+        self.probe_text = probe % inc
+        return inc
+
+    def run_cmd(self, argv, env=None, timeout=60, cwd=None, stdin=None):
+        self.calls.append(list(argv))
+        return 0, self.probe_text, False
+
+    def choose(self, own=None):
+        with mock.patch.object(mr, "run_cmd", self.run_cmd):
+            return mr.choose_interpreter(self.t, PINS, own=own or self.own())
+
+    def test_a_host_python_inside_the_range_is_used_and_nothing_is_probed(self):
+        self.stage_private()
+        got = self.choose(self.own((3, 12, 3)))
+        self.assertEqual((got["exe"], got["private"], got["version"]), ("/usr/bin/python3", False, (3, 12, 3)))
+        self.assertEqual(self.calls, [])
+
+    def test_the_edges_of_the_pinned_range_are_inside_it(self):
+        self.stage_private()
+        for version in ((3, 12, 0), (3, 14, 2)):
+            got = self.choose(self.own(version))
+            self.assertEqual((got["exe"], got["private"], got["version"]), ("/usr/bin/python3", False, version))
+        for version in ((3, 11, 9), (3, 15, 0)):
+            self.assertTrue(self.choose(self.own(version))["private"], version)             # below the range, and above it (no wheel is pinned for 3.15)
+
+    def test_an_old_host_python_takes_the_private_one_when_it_is_complete(self):
+        inc = self.stage_private()
+        got = self.choose()
+        self.assertEqual((got["exe"], got["private"], got["version"], got["include"]), (str(pp.interpreter_of(self.t)), True, (3, 12, 10), str(inc)))
+        self.assertEqual(self.calls[0][0], str(pp.interpreter_of(self.t)))
+
+    def test_an_old_host_python_without_a_complete_private_one_stays_and_the_refusal_stays(self):
+        self.assertFalse(self.choose()["private"])                                            # nothing built
+        self.stage_private(marker=False)
+        self.assertFalse(self.choose()["private"])                                            # a half-made prefix: no marker
+        for probe in ("KF_PY version=3.12.10 include=%s missing=ssl", "KF_PY version=3.11.9 include=%s missing=-", "KF_PY version=3.12.1 include=%s missing=-", "garbage %s"):
+            self.probe_text = probe % "/x"
+            (pp.prefix_of(self.t) / pp.MARKER).write_text(json.dumps({"schema": pp.MARKER_SCHEMA, "version": pp.PY_VERSION, "recipe": pp.recipe_id(pp.prefix_of(self.t))}))
+            self.assertFalse(self.choose()["private"], probe)
+
+    def private_facts(self, headers):
+        inc = self.stage_private()
+        if headers:
+            (inc / "Python.h").write_text("")
+        else:
+            (inc / "Python.h").unlink(missing_ok=True)
+        host_inc = self.t / "host_include"
+        host_inc.mkdir(exist_ok=True)
+        (host_inc / "Python.h").write_text("")                  # the running Python HAS its headers here: only the chosen interpreter's directory may decide
+        with mock.patch.object(mr, "run_cmd", lambda argv, **k: (0, self.probe_text, False) if "-c" in argv else (1, "", False)), \
+                mock.patch.object(mr.sysconfig, "get_paths", lambda *a, **k: {"include": str(host_inc)}):
+            return mr.collect_facts(str(self.t), interp=self.choose())
+
+    def test_facts_take_the_python_version_of_the_interpreter_that_makes_the_venvs(self):
+        f = self.private_facts(True)
+        self.assertEqual(f["python"], (3, 12, 10))
+        self.assertEqual(lib.choose_flavour("jax", dict(f, gpus=1, name="x", cc=(8, 6), total_mib=12000, driver_cuda=(13, 0)), PINS)["status"], "ok")      # no python_too_old
+
+    def test_facts_take_python_h_from_the_include_directory_of_that_interpreter(self):
+        self.assertTrue(self.private_facts(True)["python_h"])
+        self.assertFalse(self.private_facts(False)["python_h"])
+
+    def test_a_private_python_without_its_headers_is_not_enough_for_vllm(self):
+        f = dict(self.private_facts(False), gpus=1, name="x", cc=(8, 6), total_mib=12000, driver_cuda=(13, 0), gcc=True, disk_free_gb=500.0)
+        with mock.patch.object(mr, "run_cmd", lambda *a, **k: (0, "", False)):
+            st, why = mr.setup_row("vllm", self.t, f, PINS)
+        self.assertEqual(st, lib.NOT_RUN)
+        self.assertIn("no_c_compiler_or_python_headers", why)
+
+    def end_to_end_setup(self, private):
+        """`mlrows.py setup` on a host whose Python is 3.10, with real nvidia-smi output, a fake pip and a fake venv; the private Python is staged or not."""
+        if private:
+            (self.stage_private() / "Python.h").write_text("")
+        seen = []
+
+        def run(argv, env=None, timeout=60, cwd=None, stdin=None):
+            seen.append(list(argv))
+            if argv == [mr.SMI]:
+                return 0, fx("nvidia_smi_head_580_rtx3060.txt"), False
+            if argv[0] == mr.SMI:
+                return 0, fx("query_gpu_580_rtx3060.csv"), False
+            if "-c" in argv and argv[0] == str(pp.interpreter_of(self.t)):
+                return 0, self.probe_text, False
+            if argv[1:3] == ["-m", "venv"]:
+                (Path(argv[3]) / "bin").mkdir(parents=True)
+                (Path(argv[3]) / "bin" / "python").write_text("")
+            return 0, "ok\n", False
+
+        out = io.StringIO()
+        free = __import__("collections").namedtuple("usage", "total used free")(10**12, 0, 5 * 10**11)
+        with mock.patch.object(mr, "run_cmd", run), mock.patch.object(mr, "running_interpreter", lambda: self.own()), mock.patch.object(mr.shutil, "disk_usage", lambda p: free), \
+                mock.patch("sys.stdout", out):
+            rc = mr.main(["setup", "--root", str(self.t), "--rows", "jax"])
+        return rc, out.getvalue().splitlines(), seen
+
+    def test_setup_end_to_end_on_an_old_host_makes_the_venv_with_the_private_python_and_records_it(self):
+        rc, lines, seen = self.end_to_end_setup(True)
+        self.assertEqual(rc, 0, lines)
+        venv = next(c for c in seen if c[1:3] == ["-m", "venv"])
+        self.assertEqual(venv[0], str(pp.interpreter_of(self.t)))
+        self.assertTrue(any(l.startswith("MLROWS_SETUP row=jax status=ok ") for l in lines), lines)
+        self.assertIn("MLROWS_PYTHON exe=%s version=3.12.10 private=1" % pp.interpreter_of(self.t), lines)
+        self.assertFalse([l for l in lines if l.startswith("MLROWS_HINT")])
+        state = json.loads((self.t / "jax" / "setup.json").read_text())
+        self.assertEqual((state["python"], state["python_private"]), ("3.12.10", True))
+
+    def test_setup_end_to_end_on_an_old_host_without_the_private_python_refuses_by_name_and_says_how_to_get_it(self):
+        rc, lines, seen = self.end_to_end_setup(False)
+        self.assertEqual(rc, 0, lines)
+        self.assertIn("MLROWS_SETUP row=jax status=NOT_RUN reason=python_too_old:_3.10_<_3.12", lines)
+        self.assertFalse([c for c in seen if c[1:3] == ["-m", "venv"]])
+        hint = next(l for l in lines if l.startswith("MLROWS_HINT "))
+        tool = hint.split("hint=python3_", 1)[1].split("_ensure_--root_")[0]
+        self.assertTrue(Path(tool).is_file() and Path(tool).name == "private_python.py", tool)
+        self.assertTrue(hint.endswith("_ensure_--root_%s" % self.t))
+
+    def test_setup_makes_the_venv_with_the_chosen_interpreter_and_records_it(self):
+        t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, t, True)
+        seen = []
+
+        def run(argv, env=None, timeout=60, cwd=None, stdin=None):
+            seen.append(list(argv))
+            if argv[1:3] == ["-m", "venv"]:
+                (Path(argv[3]) / "bin").mkdir(parents=True)
+                (Path(argv[3]) / "bin" / "python").write_text("")
+            return 0, "", False
+
+        interp = {"exe": "/priv/python3.12", "version": (3, 12, 10), "include": "/priv/include", "private": True}
+        with mock.patch.object(mr, "run_cmd", run):
+            st, why = mr.setup_row("jax", t, facts(python=(3, 12, 10)), PINS, interp=interp)
+            self.assertEqual(st, "ok", why)
+            self.assertEqual(seen[0][:3], ["/priv/python3.12", "-m", "venv"])
+            state = json.loads((t / "jax" / "setup.json").read_text())
+            self.assertEqual((state["python"], state["python_private"]), ("3.12.10", True))
+            seen.clear()
+            mr.setup_row("tensorrt", t, facts(), PINS)
+            self.assertEqual(seen[0][0], sys.executable)                                       # without a chosen interpreter: the one that runs mlrows.py, as before
+            self.assertFalse(json.loads((t / "tensorrt" / "setup.json").read_text())["python_private"])
+
+    def setup_main(self, interp, f, extra=()):
+        buf = io.StringIO()
+        with mock.patch.object(mr, "choose_interpreter", lambda *a, **k: interp), mock.patch.object(mr, "collect_facts", lambda *a, **k: f), \
+                mock.patch.object(mr, "setup_row", lambda row, *a, **k: (lib.NOT_RUN, "python_too_old: 3.10 < 3.12") if f["python"] < (3, 12) else ("ok", "x")), mock.patch("sys.stdout", buf):
+            rc = mr.main(["setup", "--root", str(self.t), "--rows", "jax,tensorrt"] + list(extra))
+        return rc, buf.getvalue().splitlines()
+
+    def test_a_refused_old_python_names_the_way_out_without_changing_the_setup_line(self):
+        rc, lines = self.setup_main(self.own(), facts(python=(3, 10, 12)))
+        self.assertEqual(rc, 0)
+        self.assertIn("MLROWS_SETUP row=jax status=NOT_RUN reason=python_too_old:_3.10_<_3.12", lines)
+        hint = [l for l in lines if l.startswith("MLROWS_HINT ")]
+        self.assertEqual(len(hint), 2)
+        self.assertIn("row=jax", hint[0])
+        self.assertIn("private_python.py_ensure_--root_%s" % self.t, hint[0])
+        rc, lines = self.setup_main(self.own((3, 12, 3)), facts(python=(3, 12, 3)))
+        self.assertFalse([l for l in lines if l.startswith("MLROWS_HINT ")])
+
+    def test_check_and_run_each_choose_the_interpreter_from_the_root(self):
+        for argv in (["check", "--root", "{r}", "--rows", "jax"], ["run", "jax", "--root", "{r}", "--out", "{r}/o"]):
+            got = []
+            with mock.patch.object(mr, "choose_interpreter", lambda root, pins, **k: {"exe": "/priv", "version": (3, 12, 10), "include": "/i", "private": True}), \
+                    mock.patch.object(mr, "collect_facts", lambda path=".", interp=None: got.append(interp) or facts()), mock.patch.object(mr, "run_row", lambda *a, **k: (lib.NOT_RUN, "x", None, [], None, [])), \
+                    mock.patch("sys.stdout", io.StringIO()):
+                mr.main([a.format(r=self.t) for a in argv])
+            self.assertEqual([i["exe"] for i in got], ["/priv"], argv[0])
+
+    def test_check_run_and_setup_all_choose_the_interpreter_from_the_root(self):
+        seen = []
+
+        def chosen(root, pins, **k):
+            seen.append(str(root))
+            return {"exe": "/priv/python3.12", "version": (3, 12, 10), "include": "/priv/include", "private": True}
+
+        buf = io.StringIO()
+        got, handed = [], []
+        with mock.patch.object(mr, "choose_interpreter", chosen), mock.patch.object(mr, "collect_facts", lambda path=".", interp=None: got.append(interp) or facts()), \
+                mock.patch.object(mr, "run_row", lambda *a, **k: (lib.NOT_RUN, "x", None, [], None, [])), mock.patch.object(mr, "setup_row", lambda *a, **k: handed.append(k.get("interp")) or ("ok", "x")), \
+                mock.patch("sys.stdout", buf):
+            mr.main(["check", "--root", str(self.t), "--rows", "jax"])
+            mr.main(["run", "jax", "--root", str(self.t), "--out", str(self.t / "o")])
+            mr.main(["setup", "--root", str(self.t), "--rows", "jax"])
+        self.assertEqual(seen, [str(self.t)] * 3)
+        self.assertTrue(all(i and i["private"] for i in got) and len(got) == 3)
+        self.assertEqual([h["exe"] for h in handed], ["/priv/python3.12"])                      # and setup hands the same interpreter to the venv maker
+
+
+class PrivatePush(unittest.TestCase):
+    """The venvs link their interpreter into <root>/python312: the guest must find it at the same path, so push ships it with the rows and links the host's root to the bundle copy."""
+
+    def push(self, private=True, root_is_bundle=False):
+        t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, t, True)
+        root = t / "apps" / "mlrows"
+        (root / "jax/venv/bin").mkdir(parents=True)
+        (root / "jax/venv/bin/python").write_text("py")
+        (root / "jax/setup.json").write_text(json.dumps({"status": "ok", "python_private": private}))
+        (root / "python312/bin").mkdir(parents=True)
+        (root / "python312/bin/python3.12").write_text("py")
+        (root / "python312" / pp.MARKER).write_text(json.dumps({"schema": pp.MARKER_SCHEMA}))
+        (root / "python312.dl").mkdir()
+        (root / "python312.dl/Python.tgz").write_text("x")
+        sink, log = t / "sink", t / "remote.log"
+        transport = ["sh", "-c", 'echo "$0" >> %s; cat > $(mktemp %s_XXXXXX)' % (log, sink)]
+        buf = io.StringIO()
+        dest = str(root.parent) if root_is_bundle else "/opt/apps/bundle"
+        with mock.patch("sys.stdout", buf):
+            rc = mr.main(["push", "--root", str(root), "--rows", "jax", "--dest", dest, "--transport"] + transport)
+        names = []
+        for f in t.glob("sink_*"):
+            try:
+                with tarfile.open(f) as tf:
+                    names += tf.getnames()
+            except tarfile.TarError:
+                pass
+        return rc, buf.getvalue(), names, (log.read_text().splitlines() if log.exists() else []), root
+
+    def test_the_private_python_travels_with_a_venv_that_needs_it_and_the_guest_gets_the_hosts_path(self):
+        rc, out, names, remote, root = self.push()
+        self.assertEqual(rc, 0, out)
+        self.assertTrue(any(n.endswith("python312/bin/python3.12") for n in names))
+        self.assertFalse(any(".dl" in n or "Python.tgz" in n for n in names))
+        self.assertIn("what=python312 rc=0", out)
+        link = [r for r in remote if "ln -s" in r]
+        self.assertEqual(len(link), 1, remote)
+        self.assertIn("ln -sfn /opt/apps/bundle/mlrows %s" % root, link[0])
+        self.assertIn("mkdir -p %s" % root.parent, link[0])
+
+    def test_a_venv_made_with_the_system_python_ships_no_interpreter_and_no_link(self):
+        rc, out, names, remote, _ = self.push(private=False)
+        self.assertEqual(rc, 0, out)
+        self.assertFalse(any("python312" in n for n in names))
+        self.assertFalse([r for r in remote if "ln -s" in r])
+        self.assertNotIn("what=python312", out)
+
+    def test_a_staged_row_without_a_setup_state_ships_no_interpreter(self):
+        t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, t, True)
+        root = t / "apps" / "mlrows"
+        (root / "jax/venv/bin").mkdir(parents=True)
+        (root / "python312/bin").mkdir(parents=True)
+        (root / "python312" / pp.MARKER).write_text(json.dumps({"schema": pp.MARKER_SCHEMA}))
+        buf = io.StringIO()
+        with mock.patch("sys.stdout", buf):
+            rc = mr.main(["push", "--root", str(root), "--rows", "jax", "--transport", "sh", "-c", "cat >/dev/null"])
+        self.assertEqual(rc, 0)
+        self.assertNotIn("what=python312", buf.getvalue())
+
+    def test_a_root_that_is_the_bundle_copy_already_needs_no_link(self):
+        rc, out, names, remote, _ = self.push(root_is_bundle=True)
+        self.assertEqual(rc, 0, out)
+        self.assertFalse([r for r in remote if "ln -s" in r])
+
+    def test_a_failing_link_fails_the_push(self):
+        t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, t, True)
+        root = t / "apps" / "mlrows"
+        (root / "jax/venv/bin").mkdir(parents=True)
+        (root / "jax/setup.json").write_text(json.dumps({"status": "ok", "python_private": True}))
+        (root / "python312/bin").mkdir(parents=True)
+        (root / "python312" / pp.MARKER).write_text(json.dumps({"schema": pp.MARKER_SCHEMA}))
+        buf = io.StringIO()
+        with mock.patch("sys.stdout", buf):
+            rc = mr.main(["push", "--root", str(root), "--rows", "jax", "--transport", "sh", "-c", 'case "$0" in *ln\\ -s*) exit 5;; esac; cat >/dev/null'])
+        self.assertNotEqual(rc, 0)
+        self.assertIn("what=python312_link rc=5", buf.getvalue())
 
 
 if __name__ == "__main__":

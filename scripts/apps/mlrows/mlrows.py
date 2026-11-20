@@ -24,6 +24,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -37,6 +38,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import mlrows_lib as lib  # noqa: E402
+import private_python as pp  # noqa: E402
 
 SCRIPTS = {"vllm": "row_vllm.py", "tensorrt": "row_tensorrt.py", "jax": "row_jax.py"}
 SUMMARY = {"vllm": "VLLM_SUMMARY", "tensorrt": "TENSORRT_SUMMARY", "jax": "JAX_SUMMARY"}
@@ -81,16 +83,37 @@ def http_get(url, timeout=60, limit=1 << 30):
     return data
 
 
+# ------------------------------------------------------------------------------------------------ the interpreter that makes the venvs
+def running_interpreter():
+    return {"exe": sys.executable, "version": tuple(sys.version_info[:3]), "include": sysconfig.get_paths().get("include") or "", "private": False}
+
+
+def choose_interpreter(root, pins, own=None, run=None):
+    """The Python that makes (and is recorded for) the venvs of `root`: the one that runs this file when it is inside the pinned range; else the private Python 3.12 that
+    `private_python.py ensure` built below `root` when it is complete (a marker of this recipe, it runs, every module); else the one that runs this file, and the facts say
+    `python_too_old` as before. -> {exe, version, include, private}."""
+    own = own or running_interpreter()
+    lo, hi = tuple(pins["python"]["min"]), tuple(pins["python"]["max_exclusive"])
+    if not root or lo <= tuple(own["version"][:2]) < hi:
+        return own
+    got = pp.usable(root, run or run_cmd)          # exactly the pinned private version (inside the range: a test holds it), complete, and it runs
+    if got:
+        return {"exe": str(pp.interpreter_of(root)), "version": got["version"], "include": got["include"], "private": True}
+    return own
+
+
 # ------------------------------------------------------------------------------------------------ facts
-def collect_facts(disk_path="."):
+def collect_facts(disk_path=".", interp=None):
+    """The machine's facts. `interp` is the interpreter that makes the venvs (choose_interpreter): its version and its headers are the ones that count."""
+    interp = interp or running_interpreter()
     rc1, head, _ = run_cmd([SMI], timeout=30)
     rc2, query, _ = run_cmd([SMI, "--query-gpu=name,driver_version,compute_cap,memory.total", "--format=csv,noheader,nounits"], timeout=30)
-    inc = sysconfig.get_paths().get("include") or ""
+    inc = interp["include"]
     near = Path(disk_path).resolve()
     while not near.exists() and near != near.parent:
         near = near.parent                      # the root may not exist yet: the filesystem it will be on is the nearest parent's
     free = shutil.disk_usage(str(near)).free / 1e9
-    return lib.machine_facts(head if rc1 == 0 else "", query if rc2 == 0 else "", sys.version_info[:3],
+    return lib.machine_facts(head if rc1 == 0 else "", query if rc2 == 0 else "", tuple(interp["version"][:3]),
                              has_gcc=bool(shutil.which("gcc") or shutil.which("cc")), has_python_h=os.path.exists(os.path.join(inc, "Python.h")), disk_free_gb=free)
 
 
@@ -248,8 +271,10 @@ def toolchain_problem(spec, facts):
     return None
 
 
-def setup_row(row, root, facts, pins, forced=None, get=None):
-    """-> (status ok|NOT_RUN|FAIL, reason). Preconditions are named, the install is `pip --require-hashes`, nothing outside `root/row` is written."""
+def setup_row(row, root, facts, pins, forced=None, get=None, interp=None):
+    """-> (status ok|NOT_RUN|FAIL, reason). Preconditions are named, the install is `pip --require-hashes`, nothing outside `root/row` is written.
+    `interp` (choose_interpreter) is the Python that makes the venv; without it, the one that runs this file."""
+    interp = interp or running_interpreter()
     spec = pins["rows"][row]
     choice = select(row, facts, pins, forced)
     if choice["status"] == lib.NOT_RUN:
@@ -278,7 +303,7 @@ def setup_row(row, root, facts, pins, forced=None, get=None):
         shutil.rmtree(rowdir)                                  # a half-made or other-flavour directory is ours (under root/row): start clean
     rowdir.mkdir(parents=True)
     t0 = time.time()
-    rc, out, _ = run_cmd([sys.executable, "-m", "venv", str(venv)], timeout=300)
+    rc, out, _ = run_cmd([interp["exe"], "-m", "venv", str(venv)], timeout=300)
     if rc != 0:
         return lib.FAIL, "venv_failed: " + out.strip().splitlines()[-1][:160] if out.strip() else "venv_failed"
     rc, out, to = run_cmd(pip_argv(venv_python(root, row), lock), timeout=3600)
@@ -293,7 +318,7 @@ def setup_row(row, root, facts, pins, forced=None, get=None):
         if not ok:
             return lib.FAIL, "model_fetch_failed: " + detail
         model = detail
-    state = {"status": "ok", "row": row, "flavour": flavour, "lock_sha256": lsha, "python": ".".join(map(str, facts["python"])), "pip_seconds": round(pip_s, 1),
+    state = {"status": "ok", "row": row, "flavour": flavour, "lock_sha256": lsha, "python": ".".join(map(str, facts["python"])), "python_private": bool(interp["private"]), "pip_seconds": round(pip_s, 1),
              "venv_bytes": tree_bytes(venv), "model": model, "driver_cuda": list(facts["driver_cuda"]) if facts.get("driver_cuda") else None}
     setup_state_path(root, row).write_text(json.dumps(state, indent=1, sort_keys=True) + "\n")
     return "ok", "flavour %s, %.0f s, %.2f GB" % (flavour, pip_s, state["venv_bytes"] / 1e9)
@@ -406,7 +431,7 @@ def _kill(proc):
 
 def cmd_run(a):
     pins = lib.load_pins()
-    facts = collect_facts(a.root)
+    facts = collect_facts(a.root, choose_interpreter(a.root, pins))
     negctl = os.environ.get("KF_NEGCTL") == "1"
     out = a.out or str(Path(a.root) / a.row / "out")
     status, reason, flavour, checks, result, tail = run_row(a.row, a.root, out, facts, pins, a.flavor, negctl)
@@ -444,7 +469,7 @@ def cmd_list(_):
 
 def cmd_check(a):
     pins = lib.load_pins()
-    facts = collect_facts(a.root or ".")
+    facts = collect_facts(a.root or ".", choose_interpreter(a.root, pins))
     say("MLROWS_FACTS " + json.dumps({k: (list(v) if isinstance(v, tuple) else v) for k, v in facts.items()}, sort_keys=True))
     for row in a.rows.split(","):
         c = select(row, facts, pins, a.flavor)
@@ -474,11 +499,15 @@ def cmd_lockcheck(_):
 
 def cmd_setup(a):
     pins = lib.load_pins()
-    facts = collect_facts(a.root)
+    interp = choose_interpreter(a.root, pins)
+    facts = collect_facts(a.root, interp)
     rc = 0
+    say("MLROWS_PYTHON " + kv(exe=interp["exe"], version=".".join(map(str, interp["version"])), private=int(interp["private"])))
     for row in a.rows.split(","):
-        status, reason = setup_row(row, a.root, facts, pins, a.flavor)
+        status, reason = setup_row(row, a.root, facts, pins, a.flavor, interp=interp)
         say("MLROWS_SETUP " + kv(row=row, status=status, reason=reason[:200]))
+        if status == lib.NOT_RUN and reason.startswith("python_too_old"):
+            say("MLROWS_HINT " + kv(row=row, hint="python3 %s ensure --root %s" % (HERE / "private_python.py", a.root)))      # the way out, beside the refusal (the setup line stays as it was)
         rc = max(rc, 0 if status in ("ok", lib.NOT_RUN) else 3)
     return rc
 
@@ -498,13 +527,23 @@ def push_targets(root, rows):
     return [Path(root) / r for r in rows if (Path(root) / r).is_dir()]
 
 
+def needs_private_python(root, targets):
+    """True when a staged venv was made with the private Python: its interpreter link points into <root>/python312, so the guest needs that directory at the same path."""
+    return bool(pp.read_marker(root)) and any((read_setup(root, t.name) or {}).get("python_private") for t in targets)
+
+
 def cmd_push(a):
     """tar | transport: the tool directory and each staged row into the guest's /opt/apps/bundle/{mlrows_tool,mlrows}. The transport is the argv that runs a shell
-    command in the guest (scripts/bench/gssh_nv); its last argument is replaced by the remote tar command."""
+    command in the guest (scripts/bench/gssh_nv); its last argument is replaced by the remote tar command. A venv made with the private Python (python_private in its
+    setup.json) travels with that Python, and the guest gets the host's root path as a link to the bundle copy, so the venv's interpreter link resolves there as on the host."""
     rc = 0
+    targets = push_targets(a.root, a.rows.split(","))
     jobs = [("mlrows_tool", HERE, ["--exclude=__pycache__", "--exclude=*.lock.txt.new"], "sudo mkdir -p {d}/mlrows_tool && sudo tar -C {d}/mlrows_tool -xf -")]
-    for t in push_targets(a.root, a.rows.split(",")):
+    for t in targets:
         jobs.append((t.name, Path(a.root), ["--exclude=%s/out" % t.name, "--exclude=%s/pip.log" % t.name], "sudo mkdir -p {d}/mlrows && sudo tar -C {d}/mlrows -xf -", t.name))
+    private = needs_private_python(a.root, targets)
+    if private:
+        jobs.append((pp.PRIVATE_DIR, Path(a.root), [], "sudo mkdir -p {d}/mlrows && sudo tar -C {d}/mlrows -xf -", pp.PRIVATE_DIR))
     for job in jobs:
         label, base, excl, remote = job[:4]
         sub = [job[4]] if len(job) > 4 else ["."]
@@ -517,6 +556,12 @@ def cmd_push(a):
         size = tree_bytes(base / sub[0]) if sub != ["."] else tree_bytes(base)
         say("MLROWS_PUSH " + kv(what=label, rc=r or tar.returncode, bytes=size, secs=round(time.time() - t0, 1)))
         rc = rc or r or tar.returncode
+    host_root, bundle = os.path.abspath(a.root), os.path.join(a.dest, "mlrows")
+    if private and host_root != bundle:
+        link = "sudo mkdir -p %s && sudo ln -sfn %s %s" % (shlex.quote(os.path.dirname(host_root)), shlex.quote(bundle), shlex.quote(host_root))
+        r = subprocess.run(list(a.transport) + [link], stdin=subprocess.DEVNULL).returncode
+        say("MLROWS_PUSH " + kv(what=pp.PRIVATE_DIR + "_link", rc=r, bytes=0, secs=0))
+        rc = rc or r
     return rc
 
 

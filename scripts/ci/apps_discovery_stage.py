@@ -19,7 +19,8 @@ step, and removes both at the end, so no boot of this stage can write an image (
 `not_apps_image` when KF_GUEST_IMG names any other file, or when the apps image is the base image (a link); RETRY `no_apps_image` when the apps image is absent; RETRY
 `overlay_failed` when the overlay cannot be made. The base guest.qcow2 has no /opt/apps and persists writes: it is never a boot target of this stage.
 
-Steps (each bounded, each recorded): (1) `vkcts.py build` once on the host, (2) `mlrows.py setup` for the three ML rows on the host (network, hashed locks); a row it refuses (`MLROWS_SETUP row=R status=NOT_RUN reason=WHY`, for example
+Steps (each bounded, each recorded): (1) `vkcts.py build` once on the host, (1b) `private_python.py ensure --if-needed` for the ML rows (2026-11-20: a Python 3.12 built from the python.org source below the mlrows root
+when the host's is older than the locks, anchored through scripts/ci/kf_trust.py or refused by name; its outcome is `private_python` in the record, never a retry), (2) `mlrows.py setup` for the three ML rows on the host (network, hashed locks); a row it refuses (`MLROWS_SETUP row=R status=NOT_RUN reason=WHY`, for example
 `python_too_old:3.10<3.12` on a 22.04 host) is NOT booted: it is reported NOT_RUN with that reason at once and the stage still fails by name at the end,
 (2b) the throwaway overlay of the apps image (above), (3) when the host side of the matrix is installed (/opt/apps/bundle), `apps_matrix.sh host RUN <rows>` as the control (it runs FIRST: the comparison the matrix prints at the
 end of a guest run reads the host log); its absence is recorded (`host_control=absent`), never a failure, (4) `apps_matrix.sh guest RUN <rows>` (the guest is the subject).
@@ -52,7 +53,7 @@ ROW_TIMEOUT_S = {"nvcodec_matrix": 3000, "nvml_dcgm": 3300, "vkcts": 2700, "vllm
 ML_ROWS = ("vllm", "tensorrt", "jax")
 APPS_ROOT = "/workspace/apps"
 HOST_BUNDLE = "/opt/apps/bundle"
-STEP_TIMEOUT_S = {"build_vkcts": 3600, "setup_mlrows": 3600, "overlay": 300, "host": 4 * 3600, "guest": 6 * 3600}
+STEP_TIMEOUT_S = {"build_vkcts": 3600, "python312": 6000, "setup_mlrows": 3600, "overlay": 300, "host": 4 * 3600, "guest": 6 * 3600}   # python312: above the sum of private_python.TIMEOUT_S, so its own timeouts fire first
 RAN = {"PASS", "FAIL", "TIMEOUT", "HANG", "GUEST_DEAD", "BOOT_FAIL"}
 NOT_RAN = {"NOTRUN"}
 APPRES = re.compile(r"^APPRES side=(host|guest) app=([A-Za-z0-9_]{1,40}) verdict=([A-Z_]{1,16}) .*?note=(.*)$")
@@ -60,6 +61,8 @@ DCGM_STATE = re.compile(r"\bdcgm=([A-Za-z_]{1,16})\b")
 SAFE = re.compile(r"[A-Za-z0-9_.:=-]{1,80}")
 # what `mlrows.py setup` prints for a row (mlrows.py cmd_setup; kv() turns the reason's spaces into underscores)
 SETUP_LINE = re.compile(r"^MLROWS_SETUP row=([a-z]{1,20}) status=(\S{1,20}) reason=(\S*)$", re.M)
+# what `private_python.py ensure` prints (its cmd_ensure; kv() turns spaces into underscores)
+PYTHON_LINE = re.compile(r"^PRIVATE_PYTHON status=(\S{1,20}) reason=(\S{0,160}) version=\S+ python=\S+$", re.M)
 # a vkcts row whose note says CONFIG did not exercise a GPU (vkcts.py APPNOTE); a HANG note from apps_hook.sh says no result line came back
 CONFIG_NOTE = "CONFIG"
 NO_RESULT_NOTE = "no-result-line"
@@ -94,6 +97,16 @@ def setup_refusals(text, rows):
             tidy = re.sub(r"_*([<>:])_*", r"\1", reason)
             out[row] = (re.sub(r"[^A-Za-z0-9_.:=<>-]+", "_", tidy).strip("_")[:80]) or "setup_refused"
     return out
+
+
+def private_python_summary(text, rc):
+    """One printable token for the record: `<status>:<reason>` of the PRIVATE_PYTHON line the step printed (the last one), or FAIL:no_result_line_rc<rc> when it printed none
+    (a crash, a timeout). Bounded and printable, whatever the build tools said."""
+    found = PYTHON_LINE.findall(text or "")
+    if not found:
+        return "FAIL:no_result_line_rc%d" % rc
+    status, reason = found[-1]
+    return re.sub(r"[^A-Za-z0-9_.:=<>-]+", "_", "%s:%s" % (status, reason))[:100]
 
 
 def grade(rows, guest, host=None, dcgm_text="", refused=None):
@@ -161,7 +174,7 @@ def plan(rows=ROWS):
     if "vkcts" in rows:
         steps.append("build_vkcts")
     if any(r in rows for r in ML_ROWS):
-        steps.append("setup_mlrows")
+        steps += ["python312", "setup_mlrows"]         # the private Python 3.12 first (a host whose Python is already inside the pinned range builds nothing), then the venvs
     steps += ["overlay", "host", "guest"]          # the throwaway overlay of the apps image first; the host control only when the host side of the matrix is installed
     return {"rows": list(rows), "steps": steps, "budget_s_per_side": sum(ROW_TIMEOUT_S[r] for r in rows)}
 
@@ -234,8 +247,16 @@ def run(args, runner=real_runner, known=None, now=time.time, host_bundle=HOST_BU
         ml = [r for r in rows if r in ML_ROWS]
         refused = {}
         if ml:
+            ml_root = args.apps_root + "/mlrows"           # one root for the private Python, the venvs, the host control and the push: mlrows.py finds the private Python below it
+            # a Python older than the locks (Ubuntu 22.04: 3.10) gets a private 3.12 built from the python.org source (scripts/apps/mlrows/private_python.py); idempotent, and a
+            # refusal or a failed build is not a retry: it is recorded, and the rows then say python_too_old below (a named NOT_RUN), as before
+            rc_py = step("python312", ["python3", "-B", "-I", str(apps / "mlrows/private_python.py"), "ensure", "--if-needed", "--root", ml_root], "python312")
+            try:
+                record["private_python"] = private_python_summary((log_dir / "python312.log").read_text(errors="replace")[-20000:], rc_py)
+            except OSError:
+                record["private_python"] = "FAIL:no_result_line_rc%d" % rc_py
             # rc 0 on a refusal is by design (mlrows.py cmd_setup); a setup that did not finish is a named NOT_RUN of those rows (the guest run says why), not a harness retry
-            step("setup_mlrows", ["python3", "-B", "-I", str(apps / "mlrows/mlrows.py"), "setup", "--root", args.apps_root + "/mlrows", "--rows", ",".join(ml)], "setup_mlrows")
+            step("setup_mlrows", ["python3", "-B", "-I", str(apps / "mlrows/mlrows.py"), "setup", "--root", ml_root, "--rows", ",".join(ml)], "setup_mlrows")
             try:
                 refused = setup_refusals((log_dir / "setup_mlrows.log").read_text(errors="replace")[-200000:], ml)
             except OSError:

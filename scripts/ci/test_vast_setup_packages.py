@@ -3,6 +3,7 @@
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -88,6 +89,32 @@ missing_tool=$1 apt_trace=$2 KF_PROVISION_PROFILE=ci
         self.assertLess(code.index("if ! command -v cargo"), code.index("git clone"), "the probe cut stays before the clone")
         install = code.index("kf_trust.py\" fetch rustup-init") if 'kf_trust.py" fetch rustup-init' in code else code.index("kf_trust.py fetch rustup-init")
         self.assertGreater(install, code.index("git clone"), "kf_trust.py comes with the tree, so rustup is installed after the clone")
+
+    def test_pybuild_is_exactly_what_a_cpython_312_source_build_needs_for_the_ml_venvs(self):
+        """The private Python of the open ML rows (scripts/apps/mlrows/private_python.py, 2026-11-20) builds from the python.org source: the compiler and the headers of
+        the modules the venvs use (TLS for pip, zlib, ctypes, bz2, lzma, sqlite3). Nothing interactive, nothing from a PPA."""
+        self.assertEqual(
+            sorted(self.plan("pybuild")),
+            ["build-essential", "libbz2-dev", "libffi-dev", "liblzma-dev", "libsqlite3-dev", "libssl-dev", "zlib1g-dev"],
+        )
+
+    def test_pybuild_is_a_profile_of_its_own_so_no_other_profile_and_no_cache_digest_moves(self):
+        """Not in `ci` (test_ci_does_not_install_unused_openssl_headers) and not yet in the setup cache's profile list (vast_setup.package_names): adding it there changes the
+        policy digest, so every payload box would refuse the cache until the owner rebuilds it and commits the lock (test_vast_setup_lock_fresh). That is a deliberate second step."""
+        extra = set(self.plan("pybuild")) - {"build-essential", "libssl-dev"}          # build-essential is in `ci` and `full`, libssl-dev in `full` (never `ci`); the rest are in no other profile
+        for profile in ("ci", "full", "bench", "windows", "apps"):
+            self.assertFalse(extra & set(self.plan(profile)), profile)
+        self.assertNotIn("libssl-dev", self.plan("ci"))
+        sys.path.insert(0, str(ROOT / "scripts/ci"))
+        import vast_setup
+
+        self.assertFalse(extra & set(vast_setup.package_names(ROOT)))
+
+    def test_the_private_python_reads_its_dependencies_from_this_profile_and_nothing_else_names_them(self):
+        text = (ROOT / "scripts/apps/mlrows/private_python.py").read_text()
+        self.assertIn('PACKAGE_PROFILE = "pybuild"', text)
+        for name in ("libssl-dev", "libffi-dev", "zlib1g-dev", "libbz2-dev", "liblzma-dev", "libsqlite3-dev"):
+            self.assertNotIn(name, text.replace("# ", ""), name)
 
     def test_ci_keeps_real_build_driver_and_initrd_dependencies(self):
         self.assertTrue(
