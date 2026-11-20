@@ -1,6 +1,6 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-18 (the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-20 (the rootless payload run, section below, 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
 ## Job layout, concurrency and caches (2026-11-17)
@@ -378,6 +378,46 @@ does not go through [`kf_trust.py`](../scripts/ci/kf_trust.py), a pin that drift
 and a reason; it can only go down; a finding is fixed, the list is never re-recorded to pass). `kf_trust_mutants.py` and
 `trust_lint_mutants.py` weaken each rule once and need two named killers each. The gate and its mutants are ignored by the ladder like the other
 CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use them). Design: `docs/design/V3_STANDALONE_TRUST.md`.
+
+## Rootless payload run (2026-11-20)
+
+**STATUS of this section: LIVE as code, 2026-11-20; GPU-free tests and mutants only, NOT RUN ON A BOX.** The rootless run is a test that kayfabe's
+QEMU needs no root (OWNER_RULINGS section AR item 6): every stage that starts a kayfabe QEMU runs as an unprivileged user with no capability, and
+each root step the run still needed is a recorded `kfroot` step. The audit of every step is
+[V3_KFROOT_AUDIT](design/V3_KFROOT_AUDIT.md); the mechanism is [V3_KFROOT_ROOTLESS](design/V3_KFROOT_ROOTLESS.md).
+
+Flags and variables of `scripts/ci/vast_payload.py` (the payload is still started as root, as Vast starts it; these are not instruction fields and the
+Worker does not send them, so a Worker run is unchanged and a rootless run is started by hand on the box):
+
+| Flag | Variable | Meaning |
+|---|---|---|
+| `--rootless require` | `KF_PAYLOAD_ROOTLESS=require` | every stage but `provision` starts as the unprivileged user (`kfroot.py run`: every capability set empty, `NoNewPrivs=1`); default `off`; any other value is refused, never read as `off`; the flag beats the variable |
+| `--rootless-user USER` | `KF_PAYLOAD_ROOTLESS_USER` | the account (default `ci`; created by the bootstrap; never `root`) |
+| `--rootless-root-stage STAGE` (repeatable) | `KF_PAYLOAD_ROOTLESS_ROOT_STAGES=a,b` | the explicit approval of one stage the audit has not converted (`merge_bar`, `apps`, `propimage_apps`, `propimage_apps_b`, `matlab`, `specviewperf`); it runs as root, is recorded as the `VM-RUN` step `root_stage` and makes the verdict `ROOT_STAGES_APPROVED`; approving any other stage is refused |
+| `--rootless-memlock` | `KF_PAYLOAD_ROOTLESS_MEMLOCK=1` | raise RLIMIT_MEMLOCK for the user (`limits.d` and `prlimit`); off by default because the audit found no need |
+
+What it does, in order: `provision` runs as root and is one recorded `SETUP-ONCE` step. Before the first dropped stage, once: `kfroot.py bootstrap
+--only-needed` (the account, `/dev/kvm`, a missing device node, a readable kernel log, the workspace, the lock file: only what is not already there),
+the checkout, `/workspace/bench`, `/workspace/prov`, the evidence directory and `/workspace/apps` owned by the user, and the Rust toolchain copied
+to the user's home. A windows stage first runs `windows_gate.sh --prepare` as root (packages and the swtpm AppArmor rule; its `kfroot` lines are
+recorded through `KF_KFROOT_RECORD`). Later stages use `/workspace/prov` instead of `/root/prov`. An approved root stage runs as root and the trees go
+back to the user after it.
+
+Refusals, by name, before any stage starts (`KF_PAYLOAD_ROOTLESS_REFUSED <token>`, then `KF_PAYLOAD_FAIL suite=preflight`): `payload_not_root`,
+`unclassified:<stage>` (a stage the audit does not know), `root_stage_not_approved:<stage>`, `approval_not_a_root_stage:<name>`,
+`unmarked_root_op:<stage>:<file>:<line>:<op>` (a root operation in a dropped stage's entry script that is not a `kfroot` line: `kfroot.py
+lint-stage <stage>` runs the same check), `missing_script:...`. `--dry-run --rootless require` prints them without touching the box, and
+`KF_PAYLOAD_ROOTLESS mode=require ...` when the plan passes. A root step that fails at run time fails the stage as the suite `rootless_setup`.
+
+The record is `rootless` in `kf-result.json` (read and validated by `scripts/ci/vast_report.py`, schema in `kfroot.py` `Record`): `verdict`
+(`ROOTLESS`, `ROOT_STAGES_APPROVED`, or `VIOLATED` when a dropped stage asked for `kfroot` or a `kfroot` step is not in the audit), every stage with
+its kind and status (`probed` or `not_yet_run`), every `kfroot` step with its stage, return code and source, and the refused calls. Read it with
+`python3 -c "import json;print(json.dumps(json.load(open('/workspace/kf-result.json'))['rootless'],indent=1))"`. A `PASS` of the payload with
+`ROOTLESS` as the verdict is the claim; with `ROOT_STAGES_APPROVED` the claim holds for the stages that were not approved only.
+
+First run on a box (not done): [V3_KFROOT_AUDIT](design/V3_KFROOT_AUDIT.md) section 7 lists the smallest check for each open point; the manual run
+is `python3 scripts/ci/vast_payload.py <sha> <nonce> --rootless require --only windows_gate` with the plan variables (`KF_MERGE_WINDOWS=1`, ...).
+Tests `scripts/ci/test_kfroot_payload.py`, mutants `scripts/ci/kfroot_mutants.py` (two named killers each).
 
 ## Documentation freshness policy (2026-10-22)
 

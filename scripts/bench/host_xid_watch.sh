@@ -68,6 +68,17 @@
 set -uo pipefail
 
 OUTDIR=${XID_OUTDIR:-/workspace/bench}
+# The kernel log goes through kf_dmesg (scripts/lib/kfroot.sh): as root, or with kernel.dmesg_restrict=0, plain dmesg; in a dropped
+# tree with the log restricted, `kfroot dmesg` is refused (rc 126) and phase 0 below reports the run UNWATCHED (exit 7), never clean.
+# (2026-11-20, docs/design/V3_KFROOT_AUDIT.md, row X1: this wrapper starts every payload stage, so a raw dmesg here made every
+# dropped stage unwatched.) Without the library (a copy of this file alone) kf_dmesg is the plain dmesg it always was.
+_kf_xid_lib=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/kfroot.sh
+if [ -r "$_kf_xid_lib" ]; then
+  # shellcheck source=../lib/kfroot.sh
+  . "$_kf_xid_lib"
+else
+  kf_dmesg() { dmesg; }
+fi
 
 if [ "$#" -lt 3 ] || [ "$2" != "--" ]; then
   echo "usage: $0 <tag> -- <command> [args...]" >&2
@@ -91,7 +102,7 @@ say "command: $*"
 #
 # ⊘ This phase is not a formality and it must come FIRST. "no Xid" and "cannot read the log"
 # are the same empty grep, and only this phase separates them.
-DMESG_RAW=$(dmesg 2>/dev/null)
+DMESG_RAW=$(kf_dmesg 2>/dev/null)
 DMESG_RC=$?
 DMESG_LINES=$(printf '%s\n' "$DMESG_RAW" | grep -c '' || true)
 if [ "$DMESG_RC" -ne 0 ] || [ "${DMESG_LINES:-0}" -lt 2 ]; then
@@ -100,6 +111,7 @@ if [ "$DMESG_RC" -ne 0 ] || [ "${DMESG_LINES:-0}" -lt 2 ]; then
   say "  Likely: kernel.dmesg_restrict=1 (read it: sysctl kernel.dmesg_restrict), no"
   say "  CAP_SYSLOG in this container, or a non-root euid=$(id -u)."
   say "  ⊘ Do NOT rerun the measurement and quote its green: it would be equally unwatched."
+  [ "$DMESG_RC" -ne 126 ] || say "KFROOT_REFUSED dmesg: this tree is NoNewPrivs and kernel.dmesg_restrict=1 (the bootstrap step dmesg_readable was not run)"
   exit 7
 fi
 say "host_dmesg_lines=$DMESG_LINES  (readable — the clean/unwatched ambiguity is closed)"
@@ -108,7 +120,7 @@ say "host_gpu=$(nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
 # ★ The snapshot is the matching LINES, not a count. A count answers "how many"; the lines
 # answer "which", and a new Xid's text is the whole diagnostic value (`31` vs `13` vs `109`
 # are different bugs). `grep` here can legitimately match nothing — hence `|| true`.
-xid_lines() { dmesg 2>/dev/null | grep -aiE 'xid|MMU Fault|fell off the bus|GPU has fallen' || true; }
+xid_lines() { kf_dmesg 2>/dev/null | grep -aiE 'xid|MMU Fault|fell off the bus|GPU has fallen' || true; }
 
 BEFORE=$(xid_lines)
 BEFORE_N=$(printf '%s' "$BEFORE" | grep -c '' || true)

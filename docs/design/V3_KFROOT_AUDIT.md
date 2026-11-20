@@ -2,9 +2,8 @@
 
 STATUS: LIVE as an audit, 2026-11-20; read from the tree at `7fb1c98a0` (`origin/next`), NOT RUN ON A BOX. Every verdict below is code or
 documentation read, with the file and line it rests on; a verdict that needs a run says NOT YET RUN and names the smallest hardware check
-(section 7). Nothing here was measured on hardware by this audit. Marker [code PR]: the text describes the code change that follows this
-audit in a second pull request (its data form `STEPS` and `STAGE_POLICY` in `scripts/ci/kfroot.py`, tested by `scripts/ci/test_kfroot_payload.py`);
-this pull request changes no code, and until that one merges the tree has none of what a [code PR] line names.
+(section 7). Nothing here was measured on hardware by this audit. The data form of this table is `STEPS` and `STAGE_POLICY` in
+`scripts/ci/kfroot.py` (`python3 scripts/ci/kfroot.py steps`); `scripts/ci/test_kfroot_payload.py` fails when the two disagree.
 Parent: `docs/design/V3_KFROOT_ROOTLESS.md` (the mechanism). Ruling: `docs/OWNER_RULINGS.md` section AR item 6.
 
 ## 1. What the owner asked, and how it is read
@@ -23,8 +22,8 @@ Classes (the first three are the owner's; the fourth is added because three step
 | `CI-CONVENIENCE` | the CI does it for its own sake (ownership of a work tree, an instrument, an insurance setting) | to be removed; the row says how, and what keeps it today |
 | `TEST-MECHANISM` | the test's own apparatus: the account, the drop, the sudo log | stays, outside what a user does; it is what makes the run a test |
 
-[code PR] A step is also left out of a run when its effect is already there (`kfroot.py bootstrap --only-needed`, section 8): a step that is not
-run is not a `kfroot` step of the run.
+A step is also left out of a run when its effect is already there (`kfroot.py bootstrap --only-needed`, section 8): a step that is not run is
+not a `kfroot` step of the run.
 
 ## 2. A. The explicit `kfroot <cmd>` lines of the harness (today: 4 call sites and the drop)
 
@@ -41,11 +40,11 @@ comments, tests and documents):
 
 ## 3. B. The box bootstrap (`kfroot.py bootstrap`, `plan()`): 17 steps, now needed-checked
 
-Source: `plan()` of `scripts/ci/kfroot.py` (tree `7fb1c98a0`, :439-481). "Needed-check" [code PR] = left out with `--only-needed` when its effect is already there.
+Source: `plan()` of `scripts/ci/kfroot.py` (base tree :439-481). "Needed-check" = left out with `--only-needed` when its effect is already there.
 
 | Step | What | Class | Evidence and verdict | Needed-check |
 |---|---|---|---|---|
-| `kfroot_files` | `/usr/local/bin/kfroot`, `/usr/local/sbin/kfroot-wrapper`, `/etc/sudoers.d/kfroot` | `TEST-MECHANISM` | exists so a NON-root caller can name and log its root steps; a user has none. [code PR] The payload is root and `kfroot` then runs the command directly (`scripts/lib/kfroot.sh`: as root, `"$@"`), so the payload flow does not install it (a box without sudo is not a failure) | no ([code PR]: not run by the payload) |
+| `kfroot_files` | `/usr/local/bin/kfroot`, `/usr/local/sbin/kfroot-wrapper`, `/etc/sudoers.d/kfroot` | `TEST-MECHANISM` | exists so a NON-root caller can name and log its root steps; a user has none. The payload is root and `kfroot` then runs the command directly (`scripts/lib/kfroot.sh`: as root, `"$@"`), so the payload flow does not install it (a box without sudo is not a failure) | no (not run by the payload) |
 | `group_kvm` | `groupadd --system kvm` if missing | `CI-CONVENIENCE` | a distro with KVM has the group; only a minimal image lacks it | yes: skipped when the group exists |
 | `user` | `useradd`/`usermod -aG kvm` for the CI account | `TEST-MECHANISM` | a user is the account they log in as; the account is the test's subject | no |
 | `dev_kvm_group`, `dev_kvm_mode` | `chgrp kvm /dev/kvm`, `chmod 0660` | `SETUP-ONCE` | a user needs group membership and a `/dev/kvm` they may open (`windows_gate.sh:710` refuses by name `no-/dev/kvm-access`). Rehearsal: "`/dev/kvm` group `kvm`" on the Vast image (`traces/release_manual_rehearsal_20261115/README.md:36`) | yes: skipped when the node is group kvm and group read/write |
@@ -59,10 +58,10 @@ Source: `plan()` of `scripts/ci/kfroot.py` (tree `7fb1c98a0`, :439-481). "Needed
 | `gpu_lock` | creates `/tmp/kayfabe-fastguest.lock` mode 0666 | `CI-CONVENIENCE` | rehearsal harness defect (1): a root-created lock was refused to the user (`README.md:39`). With every stage the same uid the first stage creates it (`scripts/bench/cuda_ladder.sh:78`, `fastguest/run_fast_guest.sh:69`) | yes: only a missing or non-0666 lock |
 | `sudo_log`, `sudo_log_acl` | the root-owned audit file the CI user may read (sudo.ws) or an ACL on `auth.log` (sudo-rs) | `TEST-MECHANISM` | the audit of the test's own `kfroot` calls; a user has none | no |
 
-## 4. C. What the payload does as root without a `kfroot` line
+## 4. C. What the payload does as root without a `kfroot` line (now one line per stage, in `STAGE_POLICY`)
 
-At `7fb1c98a0` `scripts/ci/vast_payload.py` starts every stage as root (`execute_stages` runs each command directly). [code PR] With
-`--rootless require` (`docs/CI_V3.md`, "Rootless payload run") each stage has a kind (`STAGE_POLICY`); the column below is that kind:
+Before this audit `scripts/ci/vast_payload.py` started every stage as root (`execute_stages` ran each command directly). Now, with
+`--rootless require` (`docs/CI_V3.md`, "Rootless payload run"), each stage has a kind:
 
 | Stage | Kind | Class of its root need | Evidence | Status |
 |---|---|---|---|---|
@@ -101,11 +100,11 @@ kayfabe step and is not part of the claim "kayfabe's QEMU needs no root".
 
 ## 6. Counts and the unprivileged equivalents
 
-Steps of this audit (`STEPS` in the code PR): 25. By class: `SETUP-ONCE` 7 (`apt_prereqs`, `swtpm_apparmor_rule`, `swtpm_apparmor_load`, `dev_kvm_group`,
+Registered steps (`STEPS`): 25. By class: `SETUP-ONCE` 7 (`apt_prereqs`, `swtpm_apparmor_rule`, `swtpm_apparmor_load`, `dev_kvm_group`,
 `dev_kvm_mode`, `dev_kvm_missing`, `provision`), `CI-CONVENIENCE` 12 (`dmesg_via_kfroot`, `group_kvm`, `nvidia_node`, `nvidia_uvm`,
 `nvidia_modeset`, `nvidia_node_perms`, `dmesg_readable`, `memlock_limit`, `workspace`, `chown_tree`, `gpu_lock`, `toolchain_for_user`),
 `TEST-MECHANISM` 5 (`drop`, `kfroot_files`, `user`, `sudo_log`, `sudo_log_acl`), `VM-RUN` 1 (`root_stage`, covering six stages). Stage kinds
-(`STAGE_POLICY` of the code PR, 16 stages): `setup` 1, `user` 8 (2 probed by hand, 6 NOT YET RUN), `self_drop` 1, `root_stage` 6.
+(`STAGE_POLICY`, 16 stages): `setup` 1, `user` 8 (2 probed by hand, 6 NOT YET RUN), `self_drop` 1, `root_stage` 6.
 
 To be documented in the manual (flagged, not written here: `docs/howto/` is the published manual and nothing in it changes with this audit):
 
@@ -129,9 +128,9 @@ To be documented in the manual (flagged, not written here: `docs/howto/` is the 
 6. **The unconverted stages.** For each `root_stage`: run it dropped by hand, take the first refusal, convert, repeat; `specviewperf_stage.sh:485` first (a guard, not a need).
 7. **VM-run.** Any `KFROOT_REFUSED` in a dropped stage's log, or an `EACCES` on `/dev/kvm` or `/dev/nvidia*`, is a root need during the VM run: decide kayfabe bug or harness bug by the first failing path (a path under `qemu/hw/misc/kf3` or `crates/` is kayfabe's).
 
-## 8. [code PR] What the follow-up change does (and does not)
+## 8. What this change did (and did not)
 
-Done there (GPU-free, tested by `scripts/ci/test_kfroot_payload.py`, killed by `scripts/ci/kfroot_mutants.py`):
+Done (GPU-free, tested by `scripts/ci/test_kfroot_payload.py`, killed by `scripts/ci/kfroot_mutants.py`):
 - `scripts/ci/kfroot.py`: the audit as data (`STEPS`, `STAGE_POLICY`), the static check (`unmarked_root_ops`, `lint_stage`, `stage_refusals`), the record (`Record`, extended not duplicated: it holds the steps, the stages and the refusals), the orchestration (`Rootless`), `plan(only_needed=, memlock=)` and `bootstrap(install_files=False)` (the payload is root: no launcher, no sudoers file).
 - `scripts/ci/vast_payload.py`: `--rootless require` (flag or `KF_PAYLOAD_ROOTLESS`), `--rootless-user`, `--rootless-root-stage`, `--rootless-memlock`. Each non-setup stage starts through `kfroot.py run` as the user; a stage that needs root and was not approved is refused by name before anything starts; the record goes into `kf-result.json` as `rootless` (read by `scripts/ci/vast_report.py` `validate_rootless`).
 - `scripts/lib/kfroot.sh`: `KF_KFROOT_RECORD`, one line per `kfroot` call (root, sudo or refused).
