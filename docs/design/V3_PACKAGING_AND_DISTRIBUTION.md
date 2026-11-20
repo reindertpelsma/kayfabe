@@ -152,6 +152,35 @@ What this means for the rule. The rule is satisfied **in practice** when no name
 
 **Allowlist lint (DESIGN).** A CI gate that (a) lists every environment read in the product sources (the same `git grep` as above, plus string literals with the three prefixes); (b) holds the list to a committed allowlist file that assigns each name one of the six classes above and, for the two product-affecting classes, a fate and a date; (c) fails on a new name, on a changed class, and on a product-affecting read in a source path the release binary links; (d) is itself under a mutant test, like the other `scripts/ci` gates. **What exists today:** no such gate. `git ls-files scripts/ci | grep -i env` finds `provider_env_mutants.py`, `test_vast_provider_env.py` and `test_vast_setup_base_env.py`, which test the Vast VM's own environment, not kayfabe's. The lint is named as "later (Stage 3)" in `OWNER_RULINGS.md` §AT and as "not done" in `V3_FLAG_INVENTORY.md`, and `V3_CLOCK_RULE.md` says the repository has none. Related and existing: `scripts/bench/windows/win_vm.sh --env-file` accepts only `KF3_NAME=digits` lines (`docs/howto/windows-guest.md`), and `scripts/ci/doc_freshness.py` treats any `KF3_`, `KF_`, `KAYFABE_` or `NVKVM_` name in a document as a reference that must appear in source.
 
+### 2.6 The display broker (the non-headless case)
+
+**OWNER ADDITION (2026-11-20).** The manual must tell how to start and run the broker, for the non-headless case only, as simply as the QEMU side and with **no environment dependency**. A headless VM needs no broker (`OWNER_RULINGS.md` §AS item 7). The user-facing page is a later job (section 11); this section is its input.
+
+**Today (CODE READ at `origin/next` `7fb1c98a0`, unless marked; nothing here was run by this change).**
+
+- **What it is.** A separate C program in `broker/`, built with `cd broker && make`; the binary is `nvkvm-display-broker` (`BIN` in `broker/Makefile`), next to the test tools `nvkvm-broker-testclient`, `nvkvm-broker-relay` and `nvkvm-broker-dmabuf-src`. The Makefile keeps only the backends whose libraries are present and prints which. Backends: `wayland`, `x11`, and `test` (not reachable from `auto`, by design, `broker/nb_common.c`). Build dependencies are listed in the Makefile header (Wayland: `libwayland-dev wayland-protocols`; X11: `libxcb1-dev libxcb-dri3-dev libxcb-present-dev`, with optional `libxcb-render0-dev` and `libxcb-xinput-dev`). No release-tarball packaging of it exists (Q11).
+- **Flags** (the program's usage text): `--socket PATH`, `--socket-mode OCTAL` (default 0600), `--socket-group NAME`, `--socket-fd N`, `--no-peercred`, `--backend auto|wayland|x11|test`, `--size WxH` (default 1920x1080), `--title TEXT`, `--allow-user NAME`, `--allow-group NAME`, `--drop-user WHO`, `--fullscreen`, `--scale aspect|stretch|none`, `--persist`, `--clipboard off|guest-to-host|consent`, `--clipboard-trigger LIST`, `--refresh auto|none|HZ`, `--resolution auto|none|WxH`, `--present-mode`, `--trace-frames`, `--linear-only`, `--stats-line`. The broker serves one VMM connection and exits with it unless `--persist` is given. The broker does not create the socket's directory (`git grep mkdir broker/nvkvm_broker.c` finds nothing), so `/run/user/<uid>/` works and a new subdirectory under it does not unless the user makes it.
+- **Environment reads in `broker/`** (`git grep` for `getenv`, 2026-11-20): `WAYLAND_DISPLAY` and `DISPLAY` (`nb_common.c:392-393`, choosing the backend under `auto`; also quoted in the error messages of `nb_session_wl.c` and `nb_session_x11.c`); `SUDO_UID` (`nvkvm_broker.c`, near line 3929: when the broker runs as root it adds that uid to the allowed peers); `LISTEN_FDS` and `LISTEN_PID` (`nvkvm_broker.c`: systemd socket activation; `LISTEN_FDS` also decides whether a missing `--socket` is an error); `NB_TEST_NO_TICK` (the `test` backend only). The environment dependency is larger than the `getenv` lines: the Wayland backend connects with `wl_display_connect(NULL)` (`nb_session_wl.c:5478`) and the X11 backend with `xcb_connect(NULL, ...)` (`nb_session_x11.c:1975`), and by those libraries' documented behaviour (not read in this tree) `NULL` means "read `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR`" and "read `DISPLAY`". These are the desktop session's own variables, present in any terminal of that session; the dependency is real only for a broker started from outside the session (a service, `sudo`, ssh).
+- **QEMU side.** The socket is the device property `display-broker=<absolute path>` (unset = no broker). `display-broker-uid=<uid>` names one more uid accepted as the broker, needed only when the broker's uid differs from QEMU's: uid 0 and QEMU's effective uid at each connect are always accepted, the owner of the socket's directory is not (`kf3.c`, `crates/kf-broker/src/link.rs`). Symmetrically the broker accepts, by default, uid 0 and its own uid (or `SUDO_UID` when started as root through sudo), plus `--allow-user` and `--allow-group` (`nvkvm_broker.c`). `display=on` is opt-in (default off). `gop=on` is the boot display; the harness launchers always set both (`scripts/bench/display/interactive.sh`, `scripts/bench/diesweep/win_die.sh`). `gop-efi=<signed efi>` is needed for a Secure Boot guest (`kf3.c`: the boot display driver "signed", refused with `gop=off`; `docs/howto/windows-guest.md` describes the signing). `display-max-fps` is 24..75 and needs `display=on`.
+
+**Documentation defects found (CODE READ, 2026-11-20).**
+
+- `broker/README.md` is the imported nvkvm-pv README. It shows QEMU options that do not exist here (`-display nvkvm-broker,socket=...`) and advises `-display sdl` and `-display gtk` for an unconfined QEMU (its "Do you need this?" section and the example under "Run"); the kayfabe QEMU is built without SDL and GTK (`scripts/bench/build_kf3.sh` passes `--disable-gtk --disable-sdl`). It also tells the reader the broker is only for sandboxed VMMs, which is not the kayfabe reason for it (`OWNER_RULINGS.md` §AS item 7: the broker is the display piece, the replacement for Looking Glass).
+- `docs/howto/display.md` is a manual page that mixes in design intent and history: "the owner's direction of 2026-10-01", "the design makes the broker the frame clock (not built yet)", a long note correcting `broker/README.md`, evidence tags, and the author's launcher `scripts/bench/display/interactive.sh` whose `prep` builds the broker from a pinned revision of the nvkvm-pv repository (`KF_NVPV_REV`) instead of from `broker/`. A reader following the page can end up running a different broker than the one in the tree.
+- The two statements about the frame clock disagree: `display.md` says the broker as frame clock is "not built yet", while `broker/README.md` documents `CAP_TICK` and `EV_TICK` (the broker sends a tick per display refresh and the VMM may reply for lock-step frame requests) and `OWNER_RULINGS.md` §AL describes kayfabe's lock-step enforcement as live. What is built and what is only designed is Q12.
+
+**TARGET (DESIGN-ONLY).**
+
+1. **No environment needed.** Explicit flags for everything the broker reads from the environment, with the environment kept only as a documented fallback: a Wayland display name (working name `--wayland-display NAME`, an absolute path allowed so `XDG_RUNTIME_DIR` is not needed either), an X11 display (`--x11-display :N`), and an extra allowed uid (`--allow-uid UID`, replacing the use of `SUDO_UID`). Socket activation stays, because it is how a service manager hands over a socket. The names are working names; none exists today.
+2. **One broker socket per GPU.** Display is per GPU, so each `kf3-gpu` names its own socket. The umbrella object (section 1.3) provides a **default path template with a `{gpu}` placeholder** and a per-GPU override (`display-broker=` stays the per-device property). How several heads of one GPU (up to 8 in `kf-disp`) map to broker windows was not read here (Q11b).
+3. **A two-command quickstart.** Working binary name `kayfabe-broker` (the binary is `nvkvm-display-broker` today, Q11):
+   ```
+   kayfabe-broker --socket /run/user/$UID/kayfabe/gpu0.sock
+   qemu-system-x86_64 ... -device kf3-gpu,...,display=on,display-broker=/run/user/$UID/kayfabe/gpu0.sock
+   ```
+   with the broker creating the socket's directory (mode 0700) so the example needs no third command, and `display-broker-uid` shown only for the case where the two uids differ. A user whose broker and QEMU run as the same user never meets a uid option.
+4. **The page** (section 11) tells exactly this, names the build line (`cd broker && make`), says in one sentence that headless VMs skip it, and moves the sandbox rationale, the history and the frame-clock design out to internal documents.
+
 ## 3. The guest driver
 
 **OWNER DECISION.** The guest driver version is **automatic by default**: the guest chooses it. A command-line pin stays available for security. **The invariant: the guest never dictates the host ABI.** Host commands are authored by kayfabe from the **host** driver's tables; a guest request whose layout the host's tables cannot carry is refused with a named reason.
@@ -279,6 +308,7 @@ Facts recorded 2026-11-20 (counted in the tree):
 3. The Dg x Dh matrix and its generated table.
 4. The umbrella object, the global defaults and the all-GPUs rule, after Q2 and Q6.
 5. The module feasibility study (Q1), then the kit.
+   The broker flags and its README cleanup (section 2.6) are independent of it and can go first.
 6. Trust: the attest-and-publish workflow for kind-B objects, `INDEX.json`, the generated `docs/DOWNLOADS.md`.
 7. The Worker reproducibility section.
 8. The manual rewrite, last, once the commands it describes exist.
@@ -297,6 +327,7 @@ A design claim here is wrong if:
 - `-global kf3-gpu.<property>` does not apply to a kayfabe device on 10.2.4 (then global defaults need the umbrella);
 - a name in the last two rows of the section 2.5 table turns out to be needed by a normal Windows or Linux run (then it becomes a property or is hardwired on, and the rule is not met until it does);
 - the Dg x Dh generator finds a pair whose cell is neither a total translation, a defined default nor a named refusal (that is a defect in the host-ABI carry, and it is the matrix's reason to exist);
+- a graphical user following only the quickstart of section 2.6 cannot get a window (for example because a broker started outside the desktop session still needs a variable no flag covers);
 - a user following only the four steps of section 0 cannot start a VM (the manual rewrite is not done until a person who has not read internal documents has done it).
 
 ## 15. Consistency notes against earlier rulings
@@ -325,5 +356,11 @@ A design claim here is wrong if:
 **Q8. The attested-bundle workflow.** Which workflow builds, attests and uploads a kind-B object; how the Worker's accepted OIDC subject and workflow refs extend to it (today a fixed subject and two fixed workflow refs); where the object lands (the public bucket) and what in git states the expected attestation identity. Q8b: where the hand-written terms and handling rules of `docs/DOWNLOADS.md` go once the file is generated.
 
 **Q9. Proxmox and other trees.** Which QEMU versions the kit supports; what to do about a distribution's patch set that touches `hw/misc/meson.build` or `Kconfig`.
+
+**Q11. Broker packaging and names.** The binary name (`nvkvm-display-broker` today, `kayfabe-broker` in the quickstart), whether it ships in the release tarball and how it is built there (it needs different libraries from the QEMU build), and whether the broker's remaining nvkvm-pv naming (the `nvkvm_*` source files, the title default `nvkvm`) is renamed. Q11b: how multiple heads of one GPU map to broker windows or sockets.
+
+**Q12. Frame clock and framelock.** What is built of "the broker as the frame clock" (section 2.6, the `display.md` versus `broker/README.md` disagreement), and what "framelock mode" would add for the user. Together with Q6.
+
+**Q13. The resolution knob.** The broker's `--resolution` is only a suggestion to the guest and the device has no mode property (Q6): whether the user's knob lives on the broker, on the device or on both.
 
 **Q10. When may a binary be published?** The owner's goal is a release binary; the GPL exception (`kf-abi` capability tables, re-derivation task I7 of `V3_SWEEP_AND_INSTALL.md`) and the stage-2 security gate (§P) are both still open. Neither is decided here.
