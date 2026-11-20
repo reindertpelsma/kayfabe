@@ -2351,21 +2351,25 @@ class PrivatePython(unittest.TestCase):
             edit(entry[pp.ARTIFACT]["anchors"][0])
             self.assertNotEqual(kt.validate_manifest(self.manifest_with(entry)), [])
 
-    def test_the_committed_manifest_either_anchors_the_tarball_exactly_so_or_the_build_refuses_by_name(self):
+    def test_the_committed_manifest_anchors_the_tarball_exactly_as_pin_entry_prints_it(self):
+        entry = json.loads(kt.MANIFEST.read_text())["artifacts"].get(pp.ARTIFACT)
+        self.assertIsNotNone(entry, "the entry is the coordinator's (MEASURED 2026-11-20): without it the build refuses by name")
+        a = entry["anchors"][0]
+        self.assertEqual(entry, pp.pin_entry(a["sha256"], a["size"], a["measured"])[pp.ARTIFACT])
+        self.assertEqual(entry["origin"], "https://www.python.org/ftp/python/%s/Python-%s.tgz" % (pp.PY_VERSION, pp.PY_VERSION))
+
+    def test_without_the_entry_the_real_helper_refuses_by_name_and_downloads_nothing(self):
         doc = json.loads(kt.MANIFEST.read_text())
-        entry = doc["artifacts"].get(pp.ARTIFACT)
-        if entry is not None:
-            ref = pp.pin_entry(entry["anchors"][0]["sha256"], entry["anchors"][0]["size"], entry["anchors"][0]["measured"])[pp.ARTIFACT]
-            self.assertEqual(entry, ref)
-            return
-        out = Path(tempfile.mkdtemp()) / "Python.tgz"
-        self.addCleanup(__import__("shutil").rmtree, out.parent, True)
+        doc["artifacts"].pop(pp.ARTIFACT, None)
+        t = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, t, True)
+        (t / "m.json").write_text(json.dumps(doc))                                    # a copy of the manifest, never the committed file
         err = io.StringIO()
         with mock.patch("sys.stderr", err):
-            rc = kt.main(["fetch", pp.ARTIFACT, "--out", str(out)])
+            rc = kt.main(["fetch", pp.ARTIFACT, "--out", str(t / "Python.tgz"), "--manifest", str(t / "m.json")])
         self.assertEqual(rc, 4)                                                       # TRUST_UNKNOWN_ARTIFACT: no network was needed to refuse
         self.assertIn("TRUST_UNKNOWN_ARTIFACT", err.getvalue())
-        self.assertFalse(out.exists())
+        self.assertFalse((t / "Python.tgz").exists())
 
     def test_pin_entry_hashes_the_file_and_cross_checks_the_release_pages_md5(self):
         t = Path(tempfile.mkdtemp())

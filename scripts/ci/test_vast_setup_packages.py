@@ -3,7 +3,6 @@
 from pathlib import Path
 import re
 import subprocess
-import sys
 import tempfile
 import unittest
 
@@ -98,36 +97,12 @@ missing_tool=$1 apt_trace=$2 KF_PROVISION_PROFILE=ci
             ["build-essential", "libbz2-dev", "libffi-dev", "liblzma-dev", "libsqlite3-dev", "libssl-dev", "zlib1g-dev"],
         )
 
-    def test_pybuild_is_a_profile_of_its_own_so_no_other_profile_and_no_cache_digest_moves(self):
-        """Not in `ci` (test_ci_does_not_install_unused_openssl_headers) and not yet in the setup cache's profile list (vast_setup.package_names): adding it there changes the
-        policy digest, so every payload box would refuse the cache until the owner rebuilds it and commits the lock (test_vast_setup_lock_fresh). That is a deliberate second step."""
-        extra = set(self.plan("pybuild")) - {"build-essential", "libssl-dev"}          # build-essential is in `ci` and `full`, libssl-dev in `full` (never `ci`); the rest are in no other profile
-        for profile in ("ci", "full", "bench", "windows", "apps"):
-            self.assertFalse(extra & set(self.plan(profile)), profile)
-        self.assertNotIn("libssl-dev", self.plan("ci"))
-        sys.path.insert(0, str(ROOT / "scripts/ci"))
-        import vast_setup
-
-        self.assertFalse(extra & set(vast_setup.package_names(ROOT)))
-
-    def test_nvcodec_control_is_the_distribution_ffmpeg_the_open_rows_provisioning_installs_and_no_other_profile_holds_it(self):
-        """The host control of nvcodec_matrix (apps_discovery_stage.py) runs provision.sh of the open rows with the steps `nvcodec_probe ffmpeg`; its ffmpeg step is
-        `apt_install ffmpeg`. This profile is the package policy's name for that package. Like pybuild it is NOT in vast_setup.package_names yet (the cache digest moves)."""
+    def test_nvcodec_control_is_exactly_the_distribution_ffmpeg_and_no_other_profile_holds_it(self):
+        """The host control of nvcodec_matrix (apps_discovery_stage.py, 2026-11-20) installs ffmpeg through provision.sh of the open rows. The cross-file contracts (the
+        cache policy, provision.sh) are in test_package_profiles.py."""
         self.assertEqual(self.plan("nvcodec_control"), ["ffmpeg"])
         for profile in ("ci", "full", "bench", "windows", "apps", "pybuild"):
             self.assertNotIn("ffmpeg", self.plan(profile), profile)
-        provision = (ROOT / "scripts/apps/open_rows/provision.sh").read_text()
-        self.assertIn("apt_install ffmpeg", provision)
-        sys.path.insert(0, str(ROOT / "scripts/ci"))
-        import vast_setup
-
-        self.assertNotIn("ffmpeg", vast_setup.package_names(ROOT))
-
-    def test_the_private_python_reads_its_dependencies_from_this_profile_and_nothing_else_names_them(self):
-        text = (ROOT / "scripts/apps/mlrows/private_python.py").read_text()
-        self.assertIn('PACKAGE_PROFILE = "pybuild"', text)
-        for name in ("libssl-dev", "libffi-dev", "zlib1g-dev", "libbz2-dev", "liblzma-dev", "libsqlite3-dev"):
-            self.assertNotIn(name, text.replace("# ", ""), name)
 
     def test_ci_keeps_real_build_driver_and_initrd_dependencies(self):
         self.assertTrue(
