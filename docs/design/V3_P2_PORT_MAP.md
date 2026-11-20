@@ -1,6 +1,6 @@
 # V3 P2/P3 PORT MAP — the old control plane, file by file
 
-**STATUS: LIVE, 2026-09-24 (w826).** A read-only survey (agent, w826) of ~104k lines of the old
+**STATUS: ANSWERED, 2026-11-20.** Reclassified from LIVE on 2026-11-20 by the freshness gate. This was the copy order for P2 and P3 and its file names are the pre-v3 control plane at `e5dbea85` (now `archive/crates/kayfabe-*`); `THE_V3_PLAN.md` records P2 and P3 as executed. Whether each row was copied as written was not re-checked on 2026-11-20, and its line numbers are of `e5dbea85`. ⊘ Original status line, kept as written: *LIVE, 2026-09-24 (w826).* A read-only survey (agent, w826) of ~104k lines of the old
 control plane against the v3 rules in `V3_BUILD.md`. It is the copy order for P2 (guest GSP boot)
 and P3 (objects/controls → `nvidia-smi`). ⊘ Line numbers are as of `e5dbea85`.
 

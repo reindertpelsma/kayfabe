@@ -41,7 +41,7 @@ Every call kayfabe makes to the host driver is built by kayfabe from named value
 
 "Derive, never capture." A GPU's facts are read from the host through unprivileged controls; register offsets and class sets are generated from NVIDIA's open driver headers; only a small family table is maintained by hand. A captured per-GPU table is the thing the design exists to avoid. <!-- src: AGENTS.md, ARCHITECTURE.md -->
 
-The generated parts come from NVIDIA's open-gpu-kernel-modules (MIT) and open-gpu-doc; some capability allowlists derive from gVisor's `nvproxy`. See [Credits and notices](credits.md). <!-- src: THIRD_PARTY_NOTICES.md -->
+The generated parts come from NVIDIA's open-gpu-kernel-modules (MIT) and open-gpu-doc; the guest-ingress allowlist is generated from them too, and its default-deny design follows gVisor's `nvproxy`. See [Credits and notices](credits.md). <!-- src: THIRD_PARTY_NOTICES.md -->
 
 ## Do I need to patch the host or guest driver or kernel?
 

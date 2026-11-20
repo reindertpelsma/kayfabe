@@ -46,7 +46,7 @@ Applications that cannot be redistributed (commercial software, a licensed Windo
 - [Proprietary test images](proprietary-test-images.md) says what the maintainers' private images are and what the repository does not contain.
 - [Recreate the proprietary Windows image](recreate-the-proprietary-image.md) builds your own copy with your own accounts and licences.
 - [Bring your own Windows images](run-windows-images.md) runs applications on images you built.
-- A manifest or configuration file that names the path of an image and the list of applications in it, with a validator and a resolver, is coming: it is under review and has no manual page yet. No image is named by a letter in the model.
+- A configuration file that names each image (Windows or Linux), where its archive is and which applications it holds, with a validator and a resolver, is described in [Proprietary test images](proprietary-test-images.md#bring-your-own-image-configuration). No image is named by a letter in the model.
 
 ## Licences
 

@@ -88,7 +88,7 @@ Proxmox generates its own `-machine` and `-m`, starts its own QEMU, and keeps ex
 
 **Linux.** Install NVIDIA's `.run` driver with `-m=kernel-open` (the open module is what every run used). Nothing else is set. See [Linux guest](linux-guest.md). <!-- src: docs/howto/linux-guest.md -->
 
-**Windows.** Use NVIDIA's stock 580.88 installer and set these three values (DWORD, restart to apply). Setting the first two *before the driver's first start* avoids Code 43. The script `kayfabe-windows-setup.bat` does it, and the registry commands are in [Run a Windows guest](windows-guest.md). The harness gives Windows a TPM 2.0 and Secure Boot; a guest without them has no recorded acceptance run. <!-- src: docs/howto/windows-guest.md -->
+**Windows.** Use NVIDIA's stock 580.88 installer and set these three values (DWORD, restart to apply). Setting the first two *before the driver's first start* avoids Code 43. The script `scripts/windows/kayfabe-windows-setup.bat` sets them, in two phases; see [Run a Windows guest](windows-guest.md). The harness gives Windows a TPM 2.0 and Secure Boot; a guest without them has no recorded acceptance run. <!-- src: docs/howto/windows-guest.md -->
 
 | Key (`<index>` is the display adapter's own key: `0000` on Windows 11 Pro, `0001` on LTSC; read it, never assume) | Value |
 |---|---|

@@ -39,18 +39,18 @@ A guest whose own control layout differs from the host's, refused by this mechan
 
 By default the device assumes the guest runs the host's driver version, and switches to the version the guest driver announces when it starts if the two versions agree on everything the guest had already used. The guest driver is always checked against the version the device is using.
 
-- If the guest's driver is on another branch than the host's (for example a 580 guest on a 595 host), QEMU's log shows a line like `kf-rm: the guest says it is driver X; cannot re-select from Y: <what> differs and the guest already consumed it`, followed by the refusal:
+- If the guest's driver is on another branch than the host's (for example a 580 guest on a 595 host), QEMU's log shows:
 
   ```
-  the guest driver says it is "X" but this device's layouts were selected for Y — set the device property guest-driver=X (refusing SET_GUEST_SYSTEM_INFO rather than answering a X guest with Y layouts)
+  the guest says it is driver X; cannot re-select from Y (the version the device defaulted to): ... differs and the guest already consumed it. To serve this guest add guest-driver=X to the kf3-gpu device
   ```
 
-  Start the VM with `guest-driver=X`, using the version the message prints. For a Windows driver the value is the Linux tag of the same driver build; the Windows harness passes `580.65.06` for Windows driver 580.88.
-- If you declared `guest-driver=` and it does not match the guest, the same message appears: declare the version it names. A declared version is never overridden.
+  Add exactly the `guest-driver=X` the message prints to the `kf3-gpu` device and start the VM again. For a Windows driver the value is the Linux tag of the same driver build; the Windows harness passes `580.65.06` for Windows driver 580.88.
+- If you declared `guest-driver=` and it does not match the guest, the log says `the guest driver says it is "X" but this device's layouts were selected for Y ... set the device property guest-driver=X`: declare the version it names. A declared version is never overridden.
 - A guest driver version that kayfabe has not measured is refused by name (`driver X was never measured (looking up ...)`). Use a measured version ([Requirements](requirements.md)).
 - A guest driver version that does not parse: `guest driver version "..." does not parse (want major.minor[.patch])`.
 
-A driver close to the host's is recommended. That the message names the flag for a cross-branch pair is read from the code; a run of such a pair on hardware has not been recorded.
+A driver close to the host's is recommended. The message text is read from the code; a run of such a pair on hardware has not been recorded.
 
 ### No display in the guest
 
@@ -89,6 +89,7 @@ The device checks its configuration when QEMU starts and refuses by name rather 
 | `driver X was never measured (looking up ...)` or `guest driver X: ...` | The same, for the guest version declared by `guest-driver=` (or defaulted to the host's). A release between two measured tags can move a field, so kayfabe refuses rather than borrow a neighbour's layout. <!-- src: crates/kf-abi/src/matrix.rs, crates/kf-qemu/src/device.rs --> |
 | `guest driver version "..." does not parse (want major.minor[.patch])` | Fix the `guest-driver=` value. <!-- src: crates/kf-qemu/src/device.rs --> |
 | `the guest driver says it is "..." but this device's layouts were selected for X - set the device property guest-driver=...` | The guest's driver version (read when its driver starts) differs from the declared one, and kayfabe refuses `SET_GUEST_SYSTEM_INFO` rather than answer with another release's layouts. Declare the version the message names. A Windows driver is keyed as its Linux tag; the harness's example is `580.65.06` for Windows driver 580.88. <!-- src: crates/kf-rm/src/guestsysinfo.rs, scripts/bench/windows/README.md --> |
+| `the guest says it is driver X; cannot re-select from Y (the version the device defaulted to): ... differs and the guest already consumed it. To serve this guest add guest-driver=X to the kf3-gpu device` | You did not set `guest-driver=`, so the device defaulted to the host's driver version Y, and the guest's driver X belongs to a branch whose first messages differ from Y's (for example a 580.x guest on a 595.x host, or the reverse). kayfabe never lets the guest choose the host side, so it refuses by name. Add exactly the `guest-driver=` the message prints (the guest's version) to the `kf3-gpu` device. <!-- src: crates/kf-rm/src/lib.rs --> |
 | `kf3: requires -accel kvm` | The VM is not running under KVM. The device does not work with TCG or another accelerator. <!-- src: qemu/hw/misc/kf3/kf3.c --> |
 | `kf3: RAM discard is already disabled by something that pins guest RAM (a VFIO, iommufd or vfio-user device, an nvme:// drive, ...)` | Another device in the same VM pins guest RAM. Remove it; kayfabe refuses to share a VM with one. <!-- src: qemu/hw/misc/kf3/kf3.c --> |
 | `channel-budget` refused | Below 256, or above what the host can give (or 2048). Leave it at `0`. <!-- src: qemu/hw/misc/kf3/kf3.c --> |

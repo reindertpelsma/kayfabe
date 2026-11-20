@@ -1,0 +1,8 @@
+# STATUS: LIVE, 2026-11-20 (task I7; docs/design/V3_GUEST_INGRESS_TABLE.md section 5). REVIEWED LIST.
+# Ids the generated guest-ingress gate admits at a tag where the pre-I7 gate refused them. Read only by
+# crates/kf-rm/tests/ingress_parity.rs (never by the generator): any other such id fails that test. Each row
+# needs: the ogkm flag (NON_PRIVILEGED at the tag), kayfabe serving it, and why the old gate refused it.
+# kind	id	first_tag	last_tag	name	evidence
+control	0x00801909	550.40.07	550.40.07	NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL	ogkm 550.40.07 exports it NON_PRIVILEGED with the same name and flags as 550.54.14..615.71.09, where the old gate admitted it; served (kf-abi hostabi HOST_CONTROLS, CudaLimit statement); the old gate refused it at 550.40.07 only because that tag sorted under its 545.23.06 block, which predates the row
+control	0x20802068	550.40.07	550.40.07	NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE	ogkm 550.40.07 exports it NON_PRIVILEGED with the same name and flags as 550.54.14..615.71.09, where the old gate admitted it; served (named in kf-rm); same 545.23.06-block cause as above
+control	0x20801357	570.86.15	570.148.08	NV2080_CTRL_CMD_FB_GET_STATUS	ogkm 570.86.15..570.148.08 exports 0x20801357 as FB_GET_STATUS NON_PRIVILEGED, the same name and flags as 575.51.02..615.71.09 where the old gate admitted it; served (named in kf-rm); the old gate's 570 block carried the DRAM-encryption pair at their pre-575 numbers but not this id

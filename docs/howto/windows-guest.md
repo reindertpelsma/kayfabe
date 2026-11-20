@@ -24,7 +24,7 @@ You supply and license Windows yourself. Kayfabe ships no Windows and no NVIDIA 
 
 The stock GeForce driver on Windows runs its resource manager on the CPU by default. Kayfabe serves only the GSP firmware path, so the driver has to be told to use GSP. Without the first setting the driver stops with **Code 43**. This was seen on Windows 11 Pro and on Windows 11 Enterprise LTSC. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 
-One script sets all three (the script is added to the repository by a change that has not merged yet; until it has, use the values by hand, as described below): `scripts/windows/kayfabe-windows-setup.ps1`, with a wrapper `scripts/windows/kayfabe-windows-setup.bat` that starts it with the execution policy it needs. Copy both files into the guest and run it from an elevated prompt (right-click, Run as administrator), **before** NVIDIA's driver installer so that the display is not lost after the install:
+One script sets all three: `scripts/windows/kayfabe-windows-setup.ps1`, with a wrapper `scripts/windows/kayfabe-windows-setup.bat` that starts it with the execution policy it needs. Copy both files into the guest and run it from an elevated prompt (right-click, Run as administrator), **before** NVIDIA's driver installer so that the display is not lost after the install:
 
 ```
 kayfabe-windows-setup.bat            REM before the NVIDIA installer: sets what can be set (phase pre)
@@ -49,20 +49,9 @@ Options (they follow the file name): `-Phase auto|pre|post`; `-DriverKey "{4d36e
 
 `scripts/bench/windows/gsp_on.ps1` does rows 1 and 2 for the harness (`win_vm.sh nv-install` runs it). <!-- src: scripts/bench/windows/gsp_on.ps1 -->
 
-### Setting the values by hand
+These are settings for a development guest, not a complete installation guide for a production system.
 
-From an elevated command prompt in the guest. First read the display adapter's driver key, then substitute it:
-
-```
-powershell -NoProfile -Command "(Get-PnpDeviceProperty -InstanceId (Get-PnpDevice -PresentOnly | Where-Object InstanceId -like 'PCI\VEN_10DE*').InstanceId -KeyName DEVPKEY_Device_Driver).Data"
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\Class\<the key printed above>" /v EnableGpuFirmware /t REG_DWORD /d 1 /f
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm" /v EnableGpuFirmware /t REG_DWORD /d 1 /f
-reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f
-shutdown /r /t 0
-```
-<!-- src: docs/WINDOWS_GUEST_SETUP.md -->
-
-Set the first two values before the driver's first start where you can: that avoids the Code 43. These commands are the repository's own text; they have not been run as written in a recorded test.
+Not verified end to end: `kayfabe-windows-setup.ps1` has run only against a fake registry and a Windows runner's registry, not before a real NVIDIA driver install; rows 1 and 2 are the part that `gsp_on.ps1` applies and reads back in the test harness.
 
 ## Windows needs no environment variables
 

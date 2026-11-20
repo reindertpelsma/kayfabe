@@ -5,6 +5,7 @@ vast_payload.py (`--full`, the stages `apps_discovery` and `windows_open_rows`),
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -15,12 +16,14 @@ import unittest
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(ROOT / "scripts"))
 import apps_discovery_stage as ads  # noqa: E402
 import payload_instruction as pi  # noqa: E402
 import profile_resources  # noqa: E402
 import standalone_full as sf  # noqa: E402
 import vast_payload  # noqa: E402
 import vast_report  # noqa: E402
+from kfci import apps_gate  # noqa: E402
 
 SHA = "1234abcd" * 5
 
@@ -448,36 +451,85 @@ class AppsDiscoveryTests(unittest.TestCase):
         self.assertEqual(ads.read_res(Path(d.name) / "absent.res"), {})
 
     def test_the_plan_names_the_build_and_the_setup_before_the_matrix(self):
-        self.assertEqual(ads.plan()["steps"], ["build_vkcts", "setup_mlrows", "host", "guest"])
-        self.assertEqual(ads.plan(("vllm",))["steps"], ["setup_mlrows", "host", "guest"])
+        self.assertEqual(ads.plan()["steps"], ["build_vkcts", "setup_mlrows", "overlay", "host", "guest"])
+        self.assertEqual(ads.plan(("vllm",))["steps"], ["setup_mlrows", "overlay", "host", "guest"])
         self.assertEqual(ads.plan(("nvcodec_matrix",))["budget_s_per_side"], 3000)
 
     def test_every_row_of_the_stage_is_a_row_of_run_apps_and_has_a_timeout(self):
         scratch = tempfile.TemporaryDirectory(prefix="ads-list-")
         self.addCleanup(scratch.cleanup)
         import os
-        os.environ["TMPDIR"] = scratch.name
+        import unittest.mock
+        # patched, not assigned: a bare assignment outlived the test and pointed every later test of the process at a deleted directory
+        patch = unittest.mock.patch.dict(os.environ, {"TMPDIR": scratch.name})
+        patch.start()
+        self.addCleanup(patch.stop)
         known = ads.known_rows(ROOT)
         for row in ads.ROWS:
             if row in ("nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm", "tensorrt", "jax") and row not in known:
                 self.skipTest("the open-row PRs are not all in this tree: " + row)
             self.assertIn(row, ads.ROW_TIMEOUT_S)
 
-    def run_stage(self, results, bundle=True, host=False, runner=None, rows=None, deadline=0):
+    def test_the_tmpdir_of_the_rows_test_does_not_outlive_it(self):
+        # Regression (2026-11-20): the test above assigned os.environ["TMPDIR"] and its directory was then removed, so every later test of the
+        # same process (the shard layout decides which) found no temporary directory: the Windows gate and apps self-tests failed.
+        import os
+        before = os.environ.get("TMPDIR")
+        name = "test_every_row_of_the_stage_is_a_row_of_run_apps_and_has_a_timeout"
+        result = unittest.TestResult()
+        unittest.defaultTestLoader.loadTestsFromName(name, type(self)).run(result)
+        self.assertEqual((result.errors, result.failures), ([], []))
+        self.assertEqual(os.environ.get("TMPDIR"), before)
+
+    def run_stage(self, results, bundle=True, host=False, runner=None, rows=None, deadline=0, image=True, base=False, setup_log="", setup_rc=0, environ=None,
+                  receipt=None, overlay_rc=0, symlink_base=False, boom_on=None):
+        """The stage with a fake runner. `image`: the apps image exists in the bench dir; `base`: the base guest image does too; `setup_log`: what `mlrows.py setup`
+        printed (the stage reads it from the step's log); `receipt`: the text of guest_apps.qcow2.STAGED; `overlay_rc`: what `qemu-img create` returns;
+        `symlink_base`: guest_apps.qcow2 is a link to the base image; `boom_on`: a step whose runner raises. self.last keeps every call the runner saw (argv and env),
+        what existed when a boot step started (`boots`) and the bench dir."""
         d = tempfile.TemporaryDirectory(prefix="ads-run-")
         self.addCleanup(d.cleanup)
         root = Path(d.name)
         if bundle:
             (root / "bundle.tgz").write_text("x")
+        bench = root / "bench"
+        bench.mkdir()
+        if image:
+            (bench / "guest_apps.qcow2").write_text("apps image")
+        if base or symlink_base:
+            (bench / "guest.qcow2").write_text("base image")
+        if symlink_base:
+            (bench / "guest_apps.qcow2").unlink(missing_ok=True)
+            (bench / "guest_apps.qcow2").symlink_to(bench / "guest.qcow2")
+        if receipt is not None:
+            (bench / "guest_apps.qcow2.STAGED").write_text(receipt)
         run_dir = root / "results" / "r1"
         run_dir.mkdir(parents=True)
         calls = []
+        self.last = {"argv": [], "env": [], "bench": bench, "boots": []}
 
         def fake(argv, env, log, timeout):
             calls.append(argv[1:3] if argv[0] == "python3" else argv[2:4])
+            self.last["argv"].append(list(argv))
+            self.last["env"].append(dict(env))
+            if argv[0] == "qemu-img":
+                if not overlay_rc:
+                    Path(argv[-1]).write_text("overlay")
+                return overlay_rc
+            if boom_on and boom_on in argv:
+                raise RuntimeError("boom")
+            if argv[1].endswith("apps_matrix.sh"):
+                img = Path(env["KF_GUEST_IMG"])
+                sidecar = Path(str(img) + ".STAGED")
+                self.last["boots"].append({"side": argv[2], "image": img, "exists": img.exists(), "receipt": sidecar.read_text() if sidecar.exists() else None})
+            if "setup" in argv and any(a.endswith("mlrows.py") for a in argv):
+                Path(log).write_text(setup_log)
+                return setup_rc
             side = "guest" if "guest" in argv else "host" if "host" in argv else None
             if side:
-                (run_dir / (side + ".res")).write_text("".join("APPRES side=%s app=%s verdict=%s rc=0 secs=1 quiet=0 note=%s\n" % (side, a, v, n) for a, (v, n) in results.items()))
+                booted = argv[4:]
+                (run_dir / (side + ".res")).write_text("".join("APPRES side=%s app=%s verdict=%s rc=0 secs=1 quiet=0 note=%s\n" % (side, a, v, n)
+                                                               for a, (v, n) in results.items() if a in booted))
             return 0
 
         ns = types.SimpleNamespace(sha=SHA, checkout=str(ROOT), out=str(root / "out.json"), run_id="r1", rows=rows or ",".join(ads.ROWS), apps_root=str(root),
@@ -485,9 +537,12 @@ class AppsDiscoveryTests(unittest.TestCase):
         hostdir = root / "hostbundle"
         if host:
             hostdir.mkdir()
+        env_in = {k: v for k, v in os.environ.items() if k != "KF_GUEST_IMG"}
+        env_in["BENCH_DIR"] = str(bench)
+        env_in.update({k: v.replace("{bench}", str(bench)) for k, v in (environ or {}).items()})       # "{bench}" is this run's bench dir
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            rc = ads.run(ns, runner=runner or fake, known=set(ads.ROWS), host_bundle=str(hostdir))
+            rc = ads.run(ns, runner=runner or fake, known=set(ads.ROWS), host_bundle=str(hostdir), environ=env_in)
         return rc, json.loads((root / "out.json").read_text()), calls
 
     ALL_PASS = {r: ("PASS", "-") for r in ads.ROWS}
@@ -517,6 +572,214 @@ class AppsDiscoveryTests(unittest.TestCase):
     def test_an_unknown_verdict_word_fails_the_stage_by_name(self):
         rc, rec, _ = self.run_stage({**self.ALL_PASS, "jax": ("MAYBE", "-")})
         self.assertEqual((rc, rec["not_run"]), (1, ["jax"]))
+
+    # ---- 2026-11-20: the first run on a box booted the BASE guest image (the stage never named the apps image), see docs/design/V3_STANDALONE_FULL_RUN.md section 4
+    CONFIG_NOTE = "CONFIG cases=291 pass=0 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=291 gpu=EXTERNAL"
+    SETUP_REFUSED = ("MLROWS_FACTS {\"python\":[3,10,12],\"python_h\":false}\n"
+                     "MLROWS_SETUP row=vllm status=ok reason=flavour_cu130,_31_s,_9.80_GB\n"
+                     "MLROWS_SETUP row=tensorrt status=NOT_RUN reason=python_too_old:_3.10_<_3.12\n"
+                     "MLROWS_SETUP row=jax status=NOT_RUN reason=python_too_old:_3.10_<_3.12\n")
+
+    def overlay_of(self):
+        return self.last["bench"] / "discovery_r1.qcow2"
+
+    def test_every_step_gets_a_throwaway_overlay_and_never_an_image_itself(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, host=True, base=True)
+        self.assertEqual((rc, rec["verdict"]), (0, "PASS"))
+        bench = self.last["bench"]
+        images = [e.get("KF_GUEST_IMG") for e in self.last["env"]]
+        self.assertEqual(len(images), 5)                       # build, setup, overlay, host, guest
+        for image in images:
+            self.assertEqual(image, str(self.overlay_of()))
+            self.assertNotIn(Path(image).resolve(), (( bench / "guest_apps.qcow2").resolve(), (bench / "guest.qcow2").resolve()))
+        self.assertEqual({b["side"]: b["exists"] for b in self.last["boots"]}, {"host": True, "guest": True})
+
+    def test_the_overlay_is_backed_by_the_apps_image_the_gate_names(self):
+        self.run_stage(self.ALL_PASS, base=True)
+        create = next(a for a in self.last["argv"] if a[0] == "qemu-img")
+        backing = str((self.last["bench"] / "guest_apps.qcow2").resolve())
+        self.assertEqual(backing, str(Path(apps_gate.apps_image({"BENCH_DIR": str(self.last["bench"])})).resolve()))
+        self.assertEqual(create, ["qemu-img", "create", "-q", "-f", "qcow2", "-F", "qcow2", "-b", backing, str(self.overlay_of())])
+
+    def test_the_overlay_is_removed_when_the_stage_ends(self):
+        self.run_stage(self.ALL_PASS, receipt="version=580.159.04\n")
+        self.assertEqual([b["image"] for b in self.last["boots"]], [self.overlay_of()])       # it was there while the guest booted
+        self.assertFalse(self.overlay_of().exists())
+        self.assertFalse(Path(str(self.overlay_of()) + ".STAGED").exists())
+        self.assertTrue((self.last["bench"] / "guest_apps.qcow2").exists())            # the image itself is never removed
+
+    def test_the_overlay_is_removed_when_a_step_raises(self):
+        with self.assertRaises(RuntimeError):
+            self.run_stage(self.ALL_PASS, receipt="version=580.159.04\n", boom_on="guest")
+        self.assertFalse(self.overlay_of().exists())
+        self.assertFalse(Path(str(self.overlay_of()) + ".STAGED").exists())
+        self.assertTrue((self.last["bench"] / "guest_apps.qcow2").exists())
+
+    def test_the_boot_helper_finds_the_driver_receipt_beside_the_overlay(self):
+        """boot_nvkvm.sh reads `<image>.STAGED` (guest_profile.sh) and refuses an image without one: the overlay carries the apps image's receipt."""
+        self.run_stage(self.ALL_PASS, receipt="version=580.159.04\n")
+        self.assertEqual({b["receipt"] for b in self.last["boots"]}, {"version=580.159.04\n"})
+        self.run_stage(self.ALL_PASS)
+        self.assertEqual({b["receipt"] for b in self.last["boots"]}, {None})
+
+    def test_the_receipt_beside_the_overlay_is_a_copy_of_the_images_own(self):
+        self.run_stage(self.ALL_PASS, receipt="version=580.159.04\nsource=staged\n")
+        self.assertEqual(len(self.last["boots"]), 1)
+        self.assertEqual(self.last["boots"][0]["receipt"], "version=580.159.04\nsource=staged\n")
+        self.assertEqual((self.last["bench"] / "guest_apps.qcow2.STAGED").read_text(), "version=580.159.04\nsource=staged\n")      # copied, not moved
+
+    def test_an_overlay_that_could_not_be_made_is_a_retry_and_nothing_boots(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, overlay_rc=1)
+        self.assertEqual((rc, rec["verdict"], rec["reason"]), (3, "RETRY", "overlay_failed"))
+        self.assertEqual([a for a in self.last["argv"] if a[1].endswith("apps_matrix.sh")], [])
+
+    def test_an_overlay_failure_is_a_retry_in_the_payload_grader(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, overlay_rc=1)
+        with self.assertRaises(vast_payload.EvidenceError) as caught:
+            vast_payload.apps_discovery_rows("KF_APPS_DISCOVERY_RESULT " + json.dumps(rec, sort_keys=True, separators=(",", ":")) + "\n", rc, SHA, {})
+        self.assertEqual(caught.exception.name, "apps_discovery_retry")
+
+    def test_the_apps_gate_names_the_image_in_one_place(self):
+        self.assertEqual(apps_gate.apps_image({"BENCH_DIR": "/b"}), "/b/guest_apps.qcow2")
+        self.assertEqual(apps_gate.apps_image({}), "/workspace/bench/guest_apps.qcow2")
+        self.assertEqual(apps_gate.apps_image({"BENCH_DIR": "/b", "KF_GUEST_IMG": "/x/img.qcow2"}), "/x/img.qcow2")
+        self.assertEqual(apps_gate.base_image({"BENCH_DIR": "/b"}), "/b/guest.qcow2")
+
+    def test_no_apps_image_is_a_retry_before_anything_boots(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, image=False)
+        self.assertEqual((rc, rec["verdict"], rec["reason"]), (3, "RETRY", "no_apps_image"))
+        self.assertEqual((calls, self.last["argv"]), ([], []))
+
+    def test_the_base_guest_alone_is_not_an_apps_image(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, image=False, base=True)
+        self.assertEqual((rc, rec["reason"], calls), (3, "no_apps_image", []))
+        self.assertEqual([e for e in self.last["env"] if "guest.qcow2" in e.get("KF_GUEST_IMG", "")], [])
+
+    def test_a_kf_guest_img_that_names_the_base_image_is_refused_by_name_before_any_boot(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, base=True, environ={"KF_GUEST_IMG": "{bench}/guest.qcow2"})
+        self.assertEqual((rc, rec["verdict"], rec["reason"]), (1, "FAIL", "not_apps_image"))
+        self.assertEqual((calls, self.last["argv"]), ([], []))
+
+    def test_any_other_image_in_kf_guest_img_is_refused_too(self):
+        other_dir = tempfile.TemporaryDirectory(prefix="ads-img-")
+        self.addCleanup(other_dir.cleanup)
+        other = Path(other_dir.name) / "guest.qcow2"                 # even a file that is called guest.qcow2 elsewhere: it is not THE apps image
+        other.write_text("x")
+        rc, rec, calls = self.run_stage(self.ALL_PASS, environ={"KF_GUEST_IMG": str(other)})
+        self.assertEqual((rc, rec["verdict"], rec["reason"], calls), (1, "FAIL", "not_apps_image", []))
+
+    def test_a_kf_guest_img_that_is_the_apps_image_itself_is_accepted(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, environ={"KF_GUEST_IMG": "{bench}/guest_apps.qcow2"})
+        self.assertEqual((rc, rec["verdict"]), (0, "PASS"))
+
+    def test_an_apps_image_that_is_a_link_to_the_base_image_is_refused(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, symlink_base=True)
+        self.assertEqual((rc, rec["verdict"], rec["reason"], calls), (1, "FAIL", "not_apps_image", []))
+
+    def test_the_link_is_refused_even_when_kf_guest_img_names_the_link_itself(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, symlink_base=True, environ={"KF_GUEST_IMG": "{bench}/guest_apps.qcow2"})
+        self.assertEqual((rc, rec["reason"], calls), (1, "not_apps_image", []))
+
+    def test_the_refusal_is_a_failure_in_the_payload_grader(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, base=True, environ={"KF_GUEST_IMG": "{bench}/guest.qcow2"})
+        vast_report.validate_apps_discovery(rec)
+        with self.assertRaises(vast_payload.EvidenceError) as caught:
+            vast_payload.apps_discovery_rows("KF_APPS_DISCOVERY_RESULT " + json.dumps(rec, sort_keys=True, separators=(",", ":")) + "\n", rc, SHA, {})
+        self.assertEqual(caught.exception.name, "apps_discovery")
+
+    def test_the_missing_image_is_a_retry_in_the_payload_grader_too(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, image=False)
+        with self.assertRaises(vast_payload.EvidenceError) as caught:
+            vast_payload.apps_discovery_rows("KF_APPS_DISCOVERY_RESULT " + json.dumps(rec, sort_keys=True, separators=(",", ":")) + "\n", rc, SHA, {})
+        self.assertEqual(caught.exception.name, "apps_discovery_retry")
+
+    def test_a_config_row_is_not_run_and_never_a_breakage(self):
+        g = ads.grade(ads.ROWS, {**self.res(**{r: "PASS" for r in ads.ROWS}), "vkcts": ("FAIL", self.CONFIG_NOTE)})
+        self.assertEqual((g["not_run"], g["breakages"]), (["vkcts"], []))
+        entry = next(r for r in g["rows"] if r["name"] == "vkcts")
+        self.assertEqual((entry["status"], entry["guest"]), ("NOT_RUN", "FAIL"))
+        self.assertTrue(entry["reason"].startswith("CONFIG"), entry)
+        self.assertEqual(ads.verdict_of(g), "FAIL")
+        plain = ads.grade(("vkcts",), {"vkcts": ("FAIL", "VKCTS_SUMMARY fail=3")})
+        self.assertEqual((plain["not_run"], plain["breakages"]), ([], ["vkcts"]))
+
+    def test_a_config_row_fails_the_stage_by_name(self):
+        rc, rec, _ = self.run_stage({**self.ALL_PASS, "vkcts": ("FAIL", self.CONFIG_NOTE)})
+        self.assertEqual((rc, rec["verdict"], rec["not_run"], rec["breakages"], rec["reason"]), (1, "FAIL", ["vkcts"], [], "discovery_not_run:vkcts"))
+
+    def test_a_hang_without_a_result_line_is_not_run_and_a_dead_guest_is_not(self):
+        note = "no-result-line(guest_alive=1)"
+        g = ads.grade(("nvcodec_matrix", "nvml_dcgm"), {"nvcodec_matrix": ("HANG", note), "nvml_dcgm": ("GUEST_DEAD", "no-result-line(guest_alive=0)")})
+        self.assertEqual((g["not_run"], g["breakages"]), (["nvcodec_matrix"], ["nvml_dcgm"]))
+        self.assertTrue(g["rows"][0]["reason"].startswith("hang_"), g["rows"][0])
+
+    def test_a_dead_guest_is_a_listed_breakage_in_the_stage(self):
+        rc, rec, _ = self.run_stage({**self.ALL_PASS, "jax": ("GUEST_DEAD", "no-result-line(guest_alive=0)")})
+        self.assertEqual((rc, rec["verdict"], rec["not_run"], rec["breakages"]), (0, "PASS", [], ["jax"]))
+
+    def test_a_hang_without_a_result_line_fails_the_stage_by_name(self):
+        rc, rec, _ = self.run_stage({**self.ALL_PASS, "nvcodec_matrix": ("HANG", "no-result-line(guest_alive=1)")})
+        self.assertEqual((rc, rec["not_run"], rec["breakages"]), (1, ["nvcodec_matrix"], []))
+
+    def test_setup_refusals_are_read_with_their_real_reason(self):
+        got = ads.setup_refusals(self.SETUP_REFUSED, ads.ML_ROWS)
+        self.assertEqual(got, {"tensorrt": "python_too_old:3.10<3.12", "jax": "python_too_old:3.10<3.12"})
+        self.assertEqual(ads.setup_refusals(self.SETUP_REFUSED, ("vllm",)), {})          # only the rows the stage asked for
+        self.assertEqual(ads.setup_refusals("", ads.ML_ROWS), {})
+
+    def test_only_a_refusal_is_a_refusal(self):
+        text = ("MLROWS_SETUP row=vllm status=FAIL reason=pip_failed:_boom\n"
+                "MLROWS_SETUP row=jax status=ok reason=already_set_up\n"
+                "MLROWS_SETUP row=nvml_dcgm status=NOT_RUN reason=not_an_ml_row\n"
+                "noise MLROWS_SETUP row=tensorrt status=NOT_RUN reason=late\n")
+        self.assertEqual(ads.setup_refusals(text, ads.ML_ROWS), {})
+
+    def test_a_refusal_with_a_long_or_odd_reason_is_bounded_and_printable(self):
+        got = ads.setup_refusals("MLROWS_SETUP row=jax status=NOT_RUN reason=" + "x\u00e9;`$(id)" * 40 + "\n", ads.ML_ROWS)
+        self.assertRegex(got["jax"], r"^[A-Za-z0-9_.:=<>-]{1,80}$")
+
+    def test_rows_the_host_setup_refused_are_not_booted_and_say_why(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, setup_log=self.SETUP_REFUSED)
+        self.assertEqual((rc, rec["verdict"], rec["not_run"], rec["reason"]), (1, "FAIL", ["tensorrt", "jax"], "discovery_not_run:tensorrt,jax"))
+        by_name = {r["name"]: r for r in rec["rows"]}
+        for name in ("tensorrt", "jax"):
+            self.assertEqual((by_name[name]["status"], by_name[name]["guest"], by_name[name]["reason"]), ("NOT_RUN", "-", "python_too_old:3.10<3.12"))
+        for name in ("nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm"):
+            self.assertEqual(by_name[name]["status"], "PASS")
+        guest = next(a for a in self.last["argv"] if "guest" in a)
+        self.assertEqual(guest[4:], ["nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm"])
+        self.assertEqual(sum("guest" in a for a in self.last["argv"]), 1)
+
+    def test_a_refused_row_is_not_booted_on_the_host_control_either(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, host=True, setup_log=self.SETUP_REFUSED)
+        for side in ("host", "guest"):
+            argv = next(a for a in self.last["argv"] if side in a and a[1].endswith("apps_matrix.sh"))
+            self.assertEqual(argv[4:], ["nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm"], side)
+
+    def test_the_refusal_is_in_the_record_the_payload_reads(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, setup_log=self.SETUP_REFUSED)
+        vast_report.validate_apps_discovery(rec)
+        with self.assertRaises(vast_payload.EvidenceError) as caught:
+            vast_payload.apps_discovery_rows("KF_APPS_DISCOVERY_RESULT " + json.dumps(rec, sort_keys=True, separators=(",", ":")) + "\n", rc, SHA, {})
+        self.assertEqual(caught.exception.name, "apps_discovery_not_run")
+
+    def test_when_every_row_is_refused_nothing_boots_and_the_stage_fails_by_name(self):
+        rc, rec, calls = self.run_stage(self.ALL_PASS, rows="tensorrt,jax", setup_log=self.SETUP_REFUSED)
+        self.assertEqual((rc, rec["verdict"], rec["reason"], rec["not_run"]), (1, "FAIL", "discovery_not_run:tensorrt,jax", ["tensorrt", "jax"]))
+        self.assertEqual([s["step"] for s in rec["steps"]], ["setup_mlrows"])
+        self.assertEqual([a for a in self.last["argv"] if a[1].endswith("apps_matrix.sh")], [])
+
+    def test_all_refused_is_a_failure_of_the_record_and_never_a_retry(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, rows="tensorrt,jax", setup_log=self.SETUP_REFUSED)
+        self.assertNotEqual(rec["verdict"], "RETRY")
+        vast_report.validate_apps_discovery(rec)
+
+    def test_a_setup_that_failed_is_not_a_refusal_the_guest_names_it(self):
+        log = "MLROWS_SETUP row=vllm status=FAIL reason=pip_failed:_boom\n"
+        rc, rec, _ = self.run_stage({**self.ALL_PASS, "vllm": ("NOTRUN", "not-run:not_set_up")}, setup_rc=3, setup_log=log)
+        guest = next(a for a in self.last["argv"] if "guest" in a)
+        self.assertIn("vllm", guest[4:])
+        self.assertEqual((rc, rec["not_run"]), (1, ["vllm"]))
 
     def test_the_budget_is_the_sum_of_the_rows_timeouts_per_side(self):
         import time
@@ -553,7 +816,7 @@ class AppsDiscoveryTests(unittest.TestCase):
     def test_the_steps_run_in_order_and_the_host_runs_first_when_it_exists(self):
         rc, rec, calls = self.run_stage(self.ALL_PASS, host=True)
         steps = [s["step"] for s in rec["steps"]]
-        self.assertEqual(steps, ["build_vkcts", "setup_mlrows", "host", "guest"])
+        self.assertEqual(steps, ["build_vkcts", "setup_mlrows", "overlay", "host", "guest"])
 
     def test_a_pass_record_that_lists_a_not_run_row_is_refused_by_name(self):
         rc, rec, _ = self.run_stage(self.ALL_PASS)
