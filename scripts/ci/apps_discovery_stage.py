@@ -81,7 +81,8 @@ MAX_FINDINGS = 8
 MAX_TABLE_ROWS = 200
 GUEST_LOG_TAIL = 1 << 20                                    # the guest's log is the guest's: only its last MiB is read, where the emitted results.tsv block is
 PROVISION_FAIL = re.compile(r"^OPENROWS_(nvcodec_probe|ffmpeg)=FAIL reason=(\S*)$", re.M)
-TABLE_COLUMNS = ("case_id", "host_expect", "host", "host_reason", "guest_expect", "guest", "guest_reason", "class")
+TABLE_COLUMNS = ("case_id", "host_expect", "host", "host_reason", "guest_expect", "guest", "guest_reason", "class", "why")
+HOST_NO_AV1_NVENC = "host_ffmpeg_no_av1_nvenc"             # a host whose ffmpeg has no av1_nvenc (Ubuntu 22.04's 4.4.2) cannot judge an AV1 encode case: the control says so BY NAME
 # a vkcts row whose note says CONFIG did not exercise a GPU (vkcts.py APPNOTE); a HANG note from apps_hook.sh says no result line came back
 CONFIG_NOTE = "CONFIG"
 NO_RESULT_NOTE = "no-result-line"
@@ -138,10 +139,18 @@ def safe_case(case_id):
     return name if name[:1].isalpha() else ("c_" + name)[:40]
 
 
+def av1_encode_cases():
+    """The ids of the AV1 encode cases of the row's own case table (nvcodec_lib.load_cases), the ones that need `av1_nvenc` in the host's ffmpeg."""
+    if not hasattr(av1_encode_cases, "ids"):
+        av1_encode_cases.ids = frozenset(c["id"] for c in nvl.load_cases((OPEN_ROWS / "nvcodec_cases.tsv").read_text()) if c["op"] == "enc" and c["codec"] == "av1")
+    return av1_encode_cases.ids
+
+
 def classify_case(host, guest):
     """-> (class, why) of ONE case that FAILED in the guest. `guest` is its results row, `host` the control's row of the same case or None.
     GUEST_ONLY: the host passes it (a gap of kayfabe). AGREEMENT: the host fails it too (not a statement about kayfabe). UNCLASSIFIED: the host could not judge it
-    (not run, not supported, not listed): the failure stays an ordinary breakage and the host's own word is the `why`."""
+    (not run, not supported, not listed): the failure stays an ordinary breakage and the host's own word is the `why`; an AV1 encode case that the host could not run
+    because its ffmpeg has no encoder for it is `host_ffmpeg_no_av1_nvenc` (a named reason, not only UNCLASSIFIED)."""
     if host is None:
         return "UNCLASSIFIED", "host_case_missing"
     h, g = host["result"], guest["result"]
@@ -150,6 +159,8 @@ def classify_case(host, guest):
     if h in GUEST_FAILED:
         return "AGREEMENT", "host_" + h.lower()
     if h == "NOT_RUN":
+        if tidy(host.get("reason")) == "unknown_encoder" and guest["case_id"] in av1_encode_cases():
+            return "UNCLASSIFIED", HOST_NO_AV1_NVENC
         return "UNCLASSIFIED", "host_not_run:" + tidy(host.get("reason"))
     return "UNCLASSIFIED", "host_%s_guest_%s" % (h.lower(), g.lower())
 
@@ -185,7 +196,7 @@ def compare_with_guest(control, guest_rows):
         h, g = host.get(cid), guest.get(cid)
         cls, why = classify_case(h, g) if g is not None and g["result"] in GUEST_FAILED else ("-", "")
         table.append({"case_id": cid, "host_expect": h["expect"] if h else "-", "host": h["result"] if h else "-", "host_reason": h["reason"] if h else "-",
-                      "guest_expect": g["expect"] if g else "-", "guest": g["result"] if g else "-", "guest_reason": g["reason"] if g else "-", "class": cls})
+                      "guest_expect": g["expect"] if g else "-", "guest": g["result"] if g else "-", "guest_reason": g["reason"] if g else "-", "class": cls, "why": why or "-"})
         if cls != "-":
             findings.append({"case": safe_case(cid), "guest": g["result"], "host": h["result"] if h else "-", "class": cls, "why": why})
     findings.sort(key=lambda f: CLASS_ORDER.index(f["class"]))              # a stable sort: the telling ones survive the bound
@@ -242,6 +253,8 @@ def grade(rows, guest, host=None, dcgm_text="", refused=None, control=None):
                 status, reason = "PASS", "agrees_with_host:%d_failing_case%s" % (n, "" if n == 1 else "s")     # the host fails them too: not a breakage of kayfabe
             elif control["cls"] == "GUEST_ONLY":
                 reason = "host-capable,guest-fails"
+            else:
+                reason = "FAIL:" + next(f["why"] for f in control["findings"] if f["class"] == "UNCLASSIFIED")        # the host's own word, e.g. host_ffmpeg_no_av1_nvenc, on the row too
         if status == "NOT_RUN":
             not_run.append(name)
         if status == "KNOWN_BREAKAGE":

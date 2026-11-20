@@ -905,14 +905,57 @@ class AppsDiscoveryTests(unittest.TestCase):
         self.assertNotIn("class", row)
         self.assertEqual(rec["nvcodec_host_control"], "NOT_RUN:no_case_ran:caps_not_supported")             # a host that attempted nothing is not a control
 
-    def test_a_guest_failure_the_host_can_not_judge_stays_a_plain_breakage_with_the_hosts_own_reason(self):
-        # the measured case (Ubuntu 22.04 host: ffmpeg 4.4.2 has no av1_nvenc): the host's row is NOT_RUN unknown_encoder, so the control says nothing about AV1
+    NO_AV1 = "host_ffmpeg_no_av1_nvenc"
+
+    def test_the_measured_av1_failure_on_a_host_whose_ffmpeg_has_no_av1_nvenc_is_unclassified_with_that_named_reason(self):
+        # the measured case (Ubuntu 22.04 host: ffmpeg 4.4.2 has no av1_nvenc): the host's row is NOT_RUN unknown_encoder, so the control says nothing about AV1;
+        # coordinator decision 2026-11-20: UNCLASSIFIED, and the NAME of the reason is in the row and in the findings of the stage report
         rc, rec, _ = self.nv([self.case("enc_h264_420_8_1080p"), self.case(self.AV1, "NOT_RUN", reason="unknown_encoder")],
                              [self.case("enc_h264_420_8_1080p"), self.case(self.AV1, "FAIL", reason="encoder_params_rejected")])
         row, found = self.finding(rec)
-        self.assertEqual((row["status"], row["class"], row["reason"]), ("KNOWN_BREAKAGE", "UNCLASSIFIED", "FAIL"))
-        self.assertEqual((found[self.AV1]["host"], found[self.AV1]["why"]), ("NOT_RUN", "host_not_run:unknown_encoder"))
+        self.assertEqual((row["status"], row["class"], row["reason"]), ("KNOWN_BREAKAGE", "UNCLASSIFIED", "FAIL:" + self.NO_AV1))
+        self.assertEqual((found[self.AV1]["host"], found[self.AV1]["class"], found[self.AV1]["why"]), ("NOT_RUN", "UNCLASSIFIED", self.NO_AV1))
         self.assertEqual(rec["nvcodec_host_control"], "ran")
+        self.assertEqual(rec["breakages"], ["nvcodec_matrix"])
+        self.assertEqual(json.dumps(rec).count(self.NO_AV1), 2)                              # the stage's record: once on the row, once in its finding
+        vast_report.validate_apps_discovery(rec)
+        table = (self.last["bench"].parent / "results" / "r1" / "nvcodec_host_vs_guest.tsv").read_text().splitlines()
+        self.assertEqual(table[-1].split("\t")[-2:], ["UNCLASSIFIED", self.NO_AV1])           # and in the per-case table beside the logs
+
+    def test_every_av1_encode_case_of_the_row_gets_the_named_reason_and_nothing_else_does(self):
+        cases = nvl.load_cases((ROOT / "scripts/apps/open_rows/nvcodec_cases.tsv").read_text())
+        av1_enc = sorted(c["id"] for c in cases if c["op"] == "enc" and c["codec"] == "av1")
+        self.assertGreaterEqual(len(av1_enc), 5)
+        for c in cases:
+            got = ads.classify_case(self.case(c["id"], "NOT_RUN", reason="unknown_encoder"), self.case(c["id"], "FAIL", reason="x"))
+            self.assertEqual(got, ("UNCLASSIFIED", self.NO_AV1 if c["id"] in av1_enc else "host_not_run:unknown_encoder"), c["id"])
+        for cid in av1_enc:
+            got = ads.classify_case(self.case(cid, "NOT_RUN", reason="nvenc_unavailable"), self.case(cid, "FAIL", reason="x"))
+            self.assertEqual(got, ("UNCLASSIFIED", "host_not_run:nvenc_unavailable"), cid)
+
+    def test_an_av1_case_the_host_could_not_run_for_another_reason_keeps_that_reason(self):
+        rc, rec, _ = self.nv([self.case(self.AV1, "NOT_RUN", reason="nvenc_unavailable"), self.case("x_ok")], [self.case(self.AV1, "FAIL", reason="x"), self.case("x_ok")])
+        row, found = self.finding(rec)
+        self.assertEqual((found[self.AV1]["why"], row["reason"]), ("host_not_run:nvenc_unavailable", "FAIL:host_not_run:nvenc_unavailable"))
+
+    def test_an_av1_decode_case_is_not_a_missing_encoder_problem(self):
+        rc, rec, _ = self.nv([self.case("dec_av1_420_8_hw", "NOT_RUN", reason="unknown_encoder"), self.case("x_ok")], [self.case("dec_av1_420_8_hw", "FAIL", reason="x"), self.case("x_ok")])
+        row, found = self.finding(rec)
+        self.assertEqual((found["dec_av1_420_8_hw"]["why"], row["reason"]), ("host_not_run:unknown_encoder", "FAIL:host_not_run:unknown_encoder"))
+
+    def test_a_missing_encoder_for_another_codec_is_not_called_an_av1_problem(self):
+        rc, rec, _ = self.nv([self.case("enc_h264_420_8_1080p", "NOT_RUN", reason="unknown_encoder"), self.case("x_ok")],
+                             [self.case("enc_h264_420_8_1080p", "FAIL", reason="x"), self.case("x_ok")])
+        row, found = self.finding(rec)
+        self.assertEqual((found["enc_h264_420_8_1080p"]["why"], row["reason"]), ("host_not_run:unknown_encoder", "FAIL:host_not_run:unknown_encoder"))
+        self.assertNotIn(self.NO_AV1, json.dumps(rec))
+
+    def test_a_guest_only_case_next_to_the_av1_one_keeps_the_guest_only_verdict_and_its_reason(self):
+        host = [self.case("enc_h264_420_8_1080p"), self.case(self.AV1, "NOT_RUN", reason="unknown_encoder")]
+        guest = [self.case("enc_h264_420_8_1080p", "FAIL", reason="x"), self.case(self.AV1, "FAIL", reason="x")]
+        row, found = self.finding(self.nv(host, guest)[1])
+        self.assertEqual((row["class"], row["reason"]), ("GUEST_ONLY", "host-capable,guest-fails"))
+        self.assertEqual(found[self.AV1]["why"], self.NO_AV1)                                 # still named in its own finding
 
     def test_a_host_that_does_not_know_the_case_or_disagrees_in_kind_is_unclassified(self):
         for host, why in (([], "host_case_missing"), ([self.case(self.AV1, "NOT_SUPPORTED", "UNSUPPORTED", "caps_not_supported"), self.case("x_ok")], "host_not_supported_guest_fail"),
@@ -937,7 +980,8 @@ class AppsDiscoveryTests(unittest.TestCase):
         c = self.case
         table = [((c("k", "PASS"), c("k", "FAIL")), "GUEST_ONLY"), ((c("k", "PASS"), c("k", "MISMATCH")), "GUEST_ONLY"), ((c("k", "FAIL"), c("k", "FAIL")), "AGREEMENT"),
                  ((c("k", "MISMATCH"), c("k", "FAIL")), "AGREEMENT"), ((c("k", "FAIL"), c("k", "MISMATCH")), "AGREEMENT"), ((c("k", "NOT_SUPPORTED"), c("k", "FAIL")), "UNCLASSIFIED"),
-                 ((c("k", "NOT_RUN"), c("k", "FAIL")), "UNCLASSIFIED"), ((None, c("k", "FAIL")), "UNCLASSIFIED")]
+                 ((c("k", "NOT_RUN"), c("k", "FAIL")), "UNCLASSIFIED"), ((None, c("k", "FAIL")), "UNCLASSIFIED"),
+                 ((c(self.AV1, "NOT_RUN", reason="unknown_encoder"), c(self.AV1, "FAIL")), "UNCLASSIFIED")]
         for (host, guest), want in table:
             self.assertEqual(ads.classify_case(host, guest)[0], want, (host, guest))
 
@@ -1053,9 +1097,9 @@ class AppsDiscoveryTests(unittest.TestCase):
         guest = [self.case("a"), self.case(self.AV1, "FAIL", reason="encoder_params_rejected")]
         self.nv(host, guest)
         table = (Path(self.last["bench"]).parent / "results" / "r1" / "nvcodec_host_vs_guest.tsv").read_text().splitlines()
-        self.assertEqual(table[0].split("\t"), ["case_id", "host_expect", "host", "host_reason", "guest_expect", "guest", "guest_reason", "class"])
-        self.assertEqual(table[1].split("\t"), ["a", "SUPPORTED", "PASS", "ok", "SUPPORTED", "PASS", "ok", "-"])
-        self.assertEqual(table[2].split("\t"), [self.AV1, "SUPPORTED", "NOT_RUN", "unknown_encoder", "SUPPORTED", "FAIL", "encoder_params_rejected", "UNCLASSIFIED"])
+        self.assertEqual(table[0].split("\t"), ["case_id", "host_expect", "host", "host_reason", "guest_expect", "guest", "guest_reason", "class", "why"])
+        self.assertEqual(table[1].split("\t"), ["a", "SUPPORTED", "PASS", "ok", "SUPPORTED", "PASS", "ok", "-", "-"])
+        self.assertEqual(table[2].split("\t"), [self.AV1, "SUPPORTED", "NOT_RUN", "unknown_encoder", "SUPPORTED", "FAIL", "encoder_params_rejected", "UNCLASSIFIED", self.NO_AV1])
 
     def test_a_passing_guest_row_is_never_reclassified_by_the_host(self):
         rc, rec, _ = self.nv([self.case("a", "FAIL", reason="x")], [self.case("a")])
