@@ -1566,7 +1566,8 @@ MATLAB_PREFIX = "/workspace/kf-matlab"
 MATLAB_MARGIN_S = 300
 # 2026-11-17 apps_discovery and windows_open_rows (docs/design/V3_STANDALONE_FULL_RUN.md): the two stages that make the open rows part of ONE standalone full run. Both are
 # LARGE tier only, MANUAL-ONLY (planned by --only, or by --full which plans every stage of the manifest; no instruction field, no Worker budget row) and DISCOVERY
-# lane: a row that ran and failed is a reported breakage, a row that did not run fails the stage by name. Neither has run on a box.
+# lane: a row that ran and failed is a reported breakage, a row that did not run fails the stage by name. windows_open_rows has not run on a box; apps_discovery ran once
+# on 2026-11-20 and was red (docs/design/V3_STANDALONE_FULL_RUN.md section 4), its fixes have not run on a box.
 #   apps_discovery   scripts/ci/apps_discovery_stage.py: nvcodec_matrix, nvml_dcgm, vkcts, vllm, tensorrt, jax in the guest (host control when the host side is installed)
 #   windows_open_rows  scripts/bench/box/windows_apps.sh with the profile `open_source` (the VK-GL-CTS and DirectX sample rows) in the gate's LTSC guest, ONLINE with the
 #                      real clock (WINVM_NET=online; the clock rule picks the real clock from the network); the build downloads its toolchain and pinned sources
@@ -2236,8 +2237,10 @@ def main():
             ), short_row="apps_retry_time")
             stages.append(stage)
         if "apps_discovery" in plan:
-            # The open Linux rows that report and never gate, in the guest, right after the gate list (the bundle and the guest image the `apps` stage made are reused);
-            # scripts/ci/apps_discovery_stage.py owns the steps and the record. A row that did not run fails the stage by name.
+            # The open Linux rows that report and never gate, in the guest, right after the gate list. It reuses the bundle the `apps` stage made and boots the APPS image
+            # (guest_apps.qcow2 of BENCH_DIR, which the `apps` stage provisioned) through a throwaway overlay; it never boots the base guest.qcow2, and an absent apps image is
+            # a RETRY `no_apps_image` before anything starts (2026-11-20: it once booted the base image). scripts/ci/apps_discovery_stage.py owns the steps and the record.
+            # A row that did not run fails the stage by name.
             output_ad = evidence / "apps_discovery.run"
             stage = make_stage(
                 "apps_discovery",
