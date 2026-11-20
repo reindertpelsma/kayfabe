@@ -62,8 +62,8 @@
 //! from [`matrix`] — every consumed layout and constant, measured by compiling ogkm at each
 //! tag (`tools/drivermatrix/`). Selection is **exact membership** in the measured tag list;
 //! an unmeasured version is [`wire::AbiError::Unmeasured`], never a nearest-neighbour
-//! fallback (the ogkm history moves fields INSIDE a branch). The one hand-kept row set left
-//! is the capability allowlist (nvproxy policy, "newest row ≤ version").
+//! fallback (the ogkm history moves fields INSIDE a branch). The guest-ingress gate
+//! ([`capability`]) is generated per tag too ([`ingress_generated`]).
 //!
 //! ## 2.1 ★ The guest OS is a SECOND key, and it lives beside this one
 //!
@@ -135,6 +135,9 @@ pub mod guestsysinfo;
 pub mod gvaspacepdes;
 pub mod host_driver;
 pub mod hostabi;
+#[allow(missing_docs, clippy::all)]
+#[rustfmt::skip]
+pub mod ingress_generated;
 pub mod hoststub;
 pub mod inittables;
 pub mod memory_list;
@@ -346,11 +349,9 @@ impl core::fmt::Display for DriverVersion {
 
 /// # Axis-A runtime dispatch (shape only this milestone)
 ///
-/// One impl per generated driver version (nvproxy-style versioned tables with
-/// inherit-then-mutate deltas). The four branch points mirror nvproxy's proven
-/// decomposition: frontend ioctls, UVM ioctls, control commands, alloc classes —
-/// each handler carrying its generated param size + capability allowlist entry
-/// (closing the default-allow gap, `nvproxy_gap_analysis`).
+/// One impl per generated driver version. Four branch points: frontend ioctls, UVM ioctls,
+/// control commands, alloc classes — each handler carrying its generated param size and its
+/// guest-ingress verdict ([`capability`]).
 ///
 /// `Send + Sync` supertrait (decision #17): like `Arch`, a driver-version table set
 /// is immutable shared data, selected once at realize and stored core-side.

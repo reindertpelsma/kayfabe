@@ -15,6 +15,9 @@ Output JSON:
   ctrl_id_sources: {id: [code | extra_ids.txt | windows_ids.txt]}
   classes      : {NAME: id} from kf-abi generated/classes.rs
   alloc_structs: allocation / NVOS parameter struct names referenced in code
+  class_id_literals: 0x0000XXXX literals anywhere, and 0xXXXX literals in kf-chip (class candidates)
+  upper_idents : upper-case identifiers in code (a reader keeps those that are an ogkm class name)
+The guest-ingress gate (EXCLUDE) is not read: it must not count as serving what it admits.
 Nothing here reads a blob or a closed binary.
 """
 import json
@@ -24,6 +27,10 @@ import sys
 
 # every v3 crate (crates/kf-*); the frozen pre-v3 tree crates/kayfabe-* is not v3 and is not read
 CODE_DIRS = None
+# The guest-ingress gate itself is NOT evidence that kayfabe serves an id: an id named only by the gate
+# would make "served" circular (the gate would admit what it lists).  Its generated table and the
+# pre-I7 hand-written allowlist are therefore never read (docs/design/V3_GUEST_INGRESS_TABLE.md).
+EXCLUDE = {"crates/kf-abi/src/capability.rs", "crates/kf-abi/src/ingress_generated.rs"}
 # Top 16 bits of a control id = the class the control belongs to.
 CTRL_CLASS_TOPS = {"2080", "0080", "0073", "2081", "5070", "0041", "00f1", "30f1", "9096",
                    "00de", "0090", "208f", "2082", "00fd", "0071", "0000", "00da", "9067",
@@ -39,6 +46,7 @@ def main():
     root = sys.argv[1]
     extras = sys.argv[2:]
     names, ids, allocs = set(), set(), set()
+    class_ids, idents = set(), set()
     src = {}
     classes = {}
     dirs = CODE_DIRS or sorted("crates/" + d for d in os.listdir(os.path.join(root, "crates"))
@@ -51,6 +59,8 @@ def main():
                 if not f.endswith(".rs"):
                     continue
                 p = os.path.join(dp, f)
+                if os.path.relpath(p, root) in EXCLUDE:
+                    continue
                 raw = open(p, encoding="utf-8", errors="replace").read()
                 if p.endswith("generated/classes.rs"):
                     for m in re.finditer(r"pub const (\w+): u32 = (0x[0-9a-fA-F]+);", raw):
@@ -66,6 +76,16 @@ def main():
                     if top in CTRL_CLASS_TOPS and top != "0000":
                         ids.add(int(m.group(1) + m.group(2), 16))
                         src.setdefault(int(m.group(1) + m.group(2), 16), set()).add("code")
+                # class candidates: 0x0000XXXX literals, 4-digit literals in kf-chip's class tables,
+                # and upper-case identifiers (resolved against each tag's class names by the reader)
+                for m in re.finditer(r"\b0x0000_?([0-9a-fA-F]{4})\b", code):
+                    class_ids.add(int(m.group(1), 16))
+                if "/kf-chip/src/" in p:
+                    for m in re.finditer(r"\b0x([0-9a-fA-F]{4})\b", code):
+                        class_ids.add(int(m.group(1), 16))
+                for m in re.finditer(r"\b[A-Z][A-Z0-9]*_[A-Z0-9_]*[0-9][A-Z0-9_]*\b|\b[A-Z][A-Z0-9]*_[A-Z_]+\b", code):
+                    if "_CTRL_CMD_" not in m.group(0):
+                        idents.add(m.group(0))
                 for m in re.finditer(
                         r"\bNV[0-9A-Za-z_]*(?:ALLOC|ALLOCATION)_PARAM(?:ETER)?S\b|\bNVOS[0-9A-Z]+_PARAMETERS\b",
                         code):
@@ -82,6 +102,8 @@ def main():
         "ctrl_id_sources": {"0x%08x" % i: sorted(v) for i, v in sorted(src.items())},
         "classes": classes,
         "alloc_structs": sorted(allocs),
+        "class_id_literals": sorted("0x%04x" % i for i in class_ids),
+        "upper_idents": sorted(idents),
     }
     json.dump(out, sys.stdout, indent=1, sort_keys=True)
     print()

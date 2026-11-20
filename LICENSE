@@ -19,20 +19,23 @@ Exceptions:
 
   2. Some files are derived from gVisor's nvproxy. gVisor is Copyright The
      gVisor Authors and is licensed under the Apache License 2.0. These files
-     are available under the Apache License 2.0 only until they are re-derived
-     independently. This holds even where an older header in one of them also
-     names the GPL. The files are:
-       - crates/kf-abi/src/capability.rs
-       - crates/kayfabe-abi/src/capability.rs
+     are available under the Apache License 2.0 only. This holds even where an
+     older header in one of them also names the GPL. The files are:
+       - crates/kayfabe-abi/src/capability.rs (frozen pre-v3 crate; it is
+         linked only into the raw test client kayfabe-rm-ladder, which is a
+         bench instrument, not the QEMU device and not distributed)
        - archive/nvkvm/src/qemu/nvkvm_ctrl_allowlist.h
        - archive/nvkvm/src/qemu/nvkvm_fe_alloc_allowlist.h
        - archive/nvkvm/tests/abi_parity/abi_parity_test.go
        - every file that archive/nvkvm/CREDITS lists as directly derived from
          nvproxy
-     The kf3 QEMU device links kf-abi, and QEMU as a whole is GPL-2.0. A QEMU
-     binary built from this tree is therefore not yet distributable under the
-     GPL. Task I7 in docs/design/V3_SWEEP_AND_INSTALL.md includes re-deriving
-     these allowlists from NVIDIA's open-gpu-kernel-modules headers.
+     None of these is linked into the kf3 QEMU device. The device's
+     guest-ingress allowlist (crates/kf-abi/src/capability.rs and the
+     generated crates/kf-abi/src/ingress_generated.rs) was re-derived in task
+     I7 (2026-11-20) from NVIDIA's open-gpu-kernel-modules and kayfabe's own
+     measurements, and is under the grant above. scripts/ci/qemu_license_closure.py
+     checks that no file of this list, no Apache-2.0-only file and no
+     gVisor-derived text is in the device's link closure.
 
   3. A file that carries its own copyright or license notice is under the
      terms of that notice. For example:
