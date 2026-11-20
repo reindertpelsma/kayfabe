@@ -54,7 +54,7 @@ in the partition.
 
 **Not flipped yet:** with the list empty, making `control_carry` refuse an unlisted id at every host
 (fail closed) changes nothing for the code as scanned. It is still left for a separate change because three
-non-constant sites (`layout.cmd`, `map_cmd`, the `cmd` variables of `kf_rm::hostquery`) are proven by reading,
+non-constant sites (`layout.cmd`, `map_cmd`, the `cmd` variables of `kf_rm::hostquery`) were checked by reading,
 not mechanically, and the `kf-harness` probes (two `raw_control` sites) would also be refused. Proposed
 sequence: (1) this inventory in CI; (2) log-and-count an unlisted id at the bench and in the interval
 (`HOST-ABI UNLISTED`), (3) the coordinator's hardware run below shows zero counts, (4) flip to refuse.
@@ -63,7 +63,7 @@ sequence: (1) this inventory in CI; (2) log-and-count an unlisted id at the benc
 
 | constant | default | derived from | proposed property |
 |---|---|---|---|
-| `DEBUGGERS_PER_GR_OBJECT` | 4 | measured 1 per CUDA context (every committed `act debugger` line in `traces/`, 145 files; w827) | `limit-debuggers-per-gr-object` |
+| `DEBUGGERS_PER_GR_OBJECT` | 4 | measured 1 per CUDA context (every committed `act debugger` line in `traces/`, 145 files, counted 2026-11-20; w827) | `limit-debuggers-per-gr-object` |
 | debugger sessions per VM | the declared `channel-budget` (256..2048) | one CUDA context needs a GR channel of its own and holds one session | (follows `channel-budget`) |
 | `ENGINE_OBJECTS_PER_TWIN` | 128 | measured peak 6 per twin (`traces/windows_matrix_20261011/gravity-vulkan/…/qemu.log`, `traces/v3_display/dispsw_20261003/…/run_fin_on_d84086df_qemu.log`) | `limit-engine-objects-per-channel` |
 
