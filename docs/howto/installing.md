@@ -1,189 +1,110 @@
-# Running the QEMU device
+# Install
 
-**There is no installer.** Kayfabe is started today by the repository's own bench scripts, which were written for rented, disposable test hosts and run as root. This page describes what those scripts do and the QEMU device they start, so you can reproduce it on a machine you dedicate to the purpose. Every command names the file it comes from. <!-- src: README.md "Trying it", scripts/bench/display/interactive.sh -->
+If you can already give a virtual machine a GPU with VFIO, you can use kayfabe in four steps. The difference is that the host keeps using the GPU, and the VM gets an emulated NVIDIA GPU that runs on the real one.
 
-> **Warning.** The provisioning scripts purge NVIDIA driver packages, stop the host's display manager, load and unload kernel modules, create a tap network device, change `ip_forward` and add `iptables` rules. They are written for throwaway test machines. Do not run them on a machine you care about; read them first. <!-- src: scripts/bench/provision_host_driver.sh, scripts/bench/provision_bench_tree.sh -->
+1. Get the kayfabe QEMU: download a release, or build it.
+2. You now have a `qemu-system-x86_64` binary that contains the `kf3-gpu` device.
+3. Install your own Windows or Linux guest, with NVIDIA's own driver, the way you would for VFIO.
+4. Start the VM with `-device kf3-gpu` where you had the VFIO device.
 
-## Overview
+What the host needs is KVM and permission to open the NVIDIA device nodes. Kayfabe is not a kernel module and needs no VFIO rebind, no IOMMU group and no change to the host's NVIDIA driver. See [Requirements](requirements.md) for the supported GPUs and driver versions.
 
-1. Put the **open** NVIDIA driver on the host.
-2. Build the QEMU binary with the `kf3-gpu` device ([Building from source](building.md)).
-3. Prepare a guest ([Linux guest](linux-guest.md), [Windows guest](windows-guest.md)).
-4. Start QEMU with a `kf3-gpu` device. One GPU job at a time.
+## Step 1. Get the kayfabe QEMU
 
-## Stock drivers and opt-in patches
+**Download.** No release binary exists yet. The page for it is created at the first release. A QEMU binary built from this source is not yet distributable under the GPL ([Credits and notices](credits.md)), which is why none is published today.
 
-**CODE READ, 2026-11-07:** stock host and guest NVIDIA drivers are unmodified **by default**.
-The normal provisioners run the vendor installers. The repository also contains **opt-in**
-UVM and H5 host-driver experiments, guest bring-up/ring/RPC instrumentation, and a diagnostic
-QEMU observer. These require a separate explicit diagnostic build or application command;
-a run with an instrumented driver does not establish a stock-driver result.
-
-**CODE READ, 2026-11-07:** the optional offline release-bundle builder,
-`scripts/bench/windows/appmatrix/build_release_bundle.ps1`, applies
-`directx_vrs_gate.patch` to the Microsoft DirectX VRS test program in a temporary
-source worktree. Running this separate builder is the opt-in; it changes neither
-the NVIDIA driver, QEMU nor the guest OS. `release_bundle.py` only validates the
-resulting source/patch receipt and file hashes. The stock installation does not
-apply this test-program patch.
-<!-- src: scripts/bench/windows/appmatrix/build_release_bundle.ps1,
-     scripts/bench/windows/appmatrix/directx_vrs_gate.patch,
-     scripts/bench/windows/appmatrix/release_bundle.py,
-     scripts/ci/no-patch-inventory.json -->
-
-The QEMU build still adds the `kf3-gpu` device and its Meson/Kconfig integration as described in
-[Building from source](building.md). This is a custom QEMU build; “stock drivers” does not mean
-an unmodified distribution QEMU binary. The optional observer patch is separate from that integration.
-
-Run `python3 scripts/ci/no_patch_check.py` for the complete patch table, opt-in/record pointers,
-and the static stock-path check. Its source inventory is
-`scripts/ci/no-patch-inventory.json`. This is a lexical regression check over reviewed scripts,
-not a proof about arbitrary dynamic shell/Python execution. The README scopes its vendor-driver statement to the stock path and points at the opt-in requirements.
-Neither the static check nor the documented command establishes a passing vendor install or guest boot.
-<!-- src: scripts/ci/no_patch_check.py, scripts/ci/no-patch-inventory.json,
-     scripts/bench/build_kf3.sh, docs/RELEASE_CLAIMS.md -->
-
-## 1. The host driver
-
-The recorded runs use the open kernel module. The script that installs it for the bench is `scripts/bench/provision_host_driver.sh` (run as root; default version 580.159.04):
+**Build it yourself.** [Building from source](building.md) has every step. Once the Rust toolchain and the build packages are installed, the three commands that produce the binary are:
 
 ```sh
-HOST_DRIVER=580.159.04 bash scripts/bench/provision_host_driver.sh
-```
-<!-- src: scripts/bench/provision_host_driver.sh -->
-
-What it does, in order: blacklists `nouveau`; un-holds and purges every `nvidia-*` / `libnvidia-*` package; stops a running display manager (`display-manager`, `sddm`, `gdm3` or `lightdm`) and `nvidia-persistenced`; unloads the NVIDIA modules; removes the dkms tree; installs the compiler the running kernel was built with if needed; runs
-
-```sh
-sh NVIDIA-Linux-x86_64-<version>.run --silent --no-x-check --no-nouveau-check --no-questions --dkms -m=kernel-open -j8
+python3 -I scripts/ci/qemu_source.py fetch .          # QEMU 10.2.4, checked against a pinned hash
+tar -xf qemu-10.2.4.tar.xz
+bash scripts/bench/build_kf3.sh "$PWD/qemu-10.2.4"
 ```
 
-then loads the module and, if `nvidia-smi` does not name the GPU, tries up to three unload / PCI reset / reload recoveries. The `.run` comes from `https://us.download.nvidia.com/XFree86/Linux-x86_64/<version>/`, with the `tesla/<version>/` path as a fallback. <!-- src: scripts/bench/provision_host_driver.sh -->
+The last command prints a line `KF3_BUILT <path> rev=<revision> ...`. The path is your binary. Keep its `pc-bios` folder beside it; the build puts it there.
 
-**Check the result on content, not on the installer's exit status:** `/proc/driver/nvidia/version` must say "Open Kernel Module". <!-- src: scripts/bench/provision_host_driver.sh header -->
+Other QEMU versions than 10.2.4 are not documented. The device is built into the QEMU binary; there is no loadable module yet.
 
-## 2. The bench tree
+## Step 2. What you have
 
-`scripts/bench/provision_bench_tree.sh` (run as root after the driver step) prepares everything under `/workspace/bench` (override with `BENCH_DIR` in the launchers): <!-- src: scripts/bench/provision_bench_tree.sh -->
+A normal `qemu-system-x86_64` of QEMU 10.2.4 with one more device type, `kf3-gpu`. A VM without a `kf3-gpu` argument is plain QEMU. [Command-line reference](cli-reference.md) lists every property of the device.
 
-- installs the packages of `provision_box.sh --packages bench`;
-- downloads QEMU 10.2.4 and the Ubuntu 24.04 (noble) cloud image;
-- creates a tap device `nvktap0` with host address `192.168.77.1/24`, enables IPv4 forwarding and adds a masquerade rule and two `FORWARD` accepts for it; the guest sits at `192.168.77.2`;
-- generates an ssh key `guest_key`;
-- builds the kayfabe QEMU with `build_kf3.sh` (into `qemu-build-kf3`, and `kf3-bins/<rev>/`);
-- builds a guest disk `guest.qcow2` (the cloud image plus 30 GB), seeds it with cloud-init, boots it on stock QEMU, and installs the guest driver (see [Linux guest](linux-guest.md));
-- builds the guest-side raw client (musl).
+## Step 3. Install your guest and its driver
 
-The script expects the **guest driver `.run` of the same version as the host** at `/root/NVIDIA-Linux-x86_64-580.159.04.run`; that version string is fixed in the script. <!-- src: scripts/bench/provision_bench_tree.sh -->
+Install the guest the way you always do, from the vendor's installer, on whatever QEMU or libvirt setup you use. Kayfabe patches nothing in the guest.
 
-The tap network is the bench's choice. The Windows harness uses user-mode networking instead, so it needs no root network device. <!-- src: scripts/bench/windows/README.md -->
+- **Linux.** Install NVIDIA's driver in the guest (the `.run` installer or your distribution's package). Every recorded run used the open kernel module flavour. Nothing else is set in the guest. See [Run a Linux guest](linux-guest.md).
+- **Windows.** Install NVIDIA's driver with NVIDIA's installer, and apply the documented guest settings with the tested script `kayfabe-windows-setup.bat`. Without the settings the driver stops with Code 43. See [Run a Windows guest](windows-guest.md).
 
-## 3. One GPU job at a time
+**Which driver version.** A guest driver close to the host's driver is recommended and not required. If you leave the device property `guest-driver` unset, the device assumes the guest runs the host's driver version and adjusts to the version the guest driver announces when both have the same layout for the early start-up messages. A guest on another driver branch than the host needs `guest-driver=<the guest driver's version>`. If that is needed, QEMU's log says so by name; see [Troubleshooting](troubleshooting.md#the-guest-driver-and-the-host-driver-do-not-match). A pair of host and guest versions that kayfabe has not measured is refused by name rather than guessed.
 
-The launch scripts take an exclusive lock, `/tmp/kayfabe-fastguest.lock` (override with `KF_LOCK`), and wait for it. GPU runs are strictly serial: two concurrent runs of the fast lane kill each other's QEMU. <!-- src: scripts/fastguest/run_fast_guest.sh -->
+## Step 4. Start the VM with kayfabe
 
-Between runs the launcher also waits (up to about 30 s) for the previous VM's GPU memory to drain (`KF_GPU_IDLE_MIB`, default 512). <!-- src: scripts/fastguest/run_fast_guest.sh -->
+Take the command line you use with VFIO and change two things: the device, and the guest RAM, which must be a shared memory file.
 
-## 4. The `kf3-gpu` device
-
-Add the device to a QEMU command line built from the binary in `kf3-bins/<rev>/`. The device is a PCI display device. It takes its identity (vendor and device ids, the die's facts) from the host GPU at start. <!-- src: qemu/hw/misc/kf3/kf3.c, crates/kf-qemu/src/device.rs -->
-
-### Machine arguments it needs
+With VFIO:
 
 ```
--object memory-backend-memfd,id=ram0,size=<N>M,share=on
--machine q35,accel=kvm,memory-backend=ram0 -m <N> -cpu host
+qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 8192 ... \
+    -device vfio-pci,host=0000:01:00.0
 ```
-Guest RAM must be a shared memfd. With plain `-m` every store-backed path refuses. Use `-vga none` when the device provides the display. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/display/interactive.sh -->
 
-### Device properties
-
-Every property below is declared in `qemu/hw/misc/kf3/kf3.c`. Defaults are as declared there. <!-- src: qemu/hw/misc/kf3/kf3.c (kf3_properties) -->
-
-| Property | Default | What it does |
-|---|---|---|
-| `gpu-minor` | `0` | Which host GPU (the `/dev/nvidia<minor>` number). One device per host GPU; the same card twice is refused at start if the BAR1 budget does not fit. |
-| `fb-mb` | `8192` | Size of the guest's video memory in MiB. It is a real allocation of host VRAM and must fit the card. |
-| `bar1-size` | 256 MiB (bytes) | Guest BAR1 size. The harnesses pass `134217728` (128 MiB) because 256 MiB plus headroom does not fit a 256 MiB host aperture. |
-| `bar2-size` | 32 MiB (bytes) | Guest BAR2 size; the harnesses pass `33554432`. |
-| `bar1-overlays` | built-in default | Hopper and newer only: how many BAR1 doorbell views can be trapped at once. |
-| `msix-vectors` | `32` | MSI-X vectors. |
-| `guest-driver` | host's driver version | The guest's driver version, for the layouts kayfabe must speak. The guest driver's own version string is checked against it when the guest driver starts; a wrong declaration is a named refusal. Example from the Windows harness: `580.65.06` for Windows driver 580.88. |
-| `display` | off | Provide a virtual NVIDIA display the guest's driver drives. See [Display and the broker](display.md). |
-| `gop` | off | Boot display: a UEFI driver in the card's expansion ROM shows the firmware and boot screens. The harnesses always set it together with `display=on`. |
-| `gop-efi` | none | Path of the boot display driver, signed (for Secure Boot). Refused with `gop=off`. |
-| `x11-dispsw` | off | Experimental; needs `display=on`. |
-| `gpu-uuid` | `auto` | The guest-visible GPU UUID: `auto`, `random`, `host`, or `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. Built to give each VM a distinct UUID. [Code and GPU-free tests only as of 2026-10-08; not run on hardware when written.] |
-| `vm-id` | QEMU's `-uuid` | The VM's identity text for the above. |
-| `channel-budget` | `0` (derived from the host) | GPU channels per runlist told to the guest. Refused below 256 or above what the host can give (or 2048). |
-| `user-view-keep` | `0` (= 16) | Windows user-ring tuning: CPU views of the store that each channel keeps armed, up to 256. |
-| `windows-support` | `on` | **The Windows set is selected by what the guest declares about itself, which the guest controls, and the default is on: it is not a security boundary.** An honest Linux guest never reaches it; a guest that declares the Windows driver, truthfully or not, does. `off` is the hardening for Linux-only or multi-tenant hosts: a Linux-only VM that no declaration can switch on (a Windows guest on such a VM fails by name [not measured]). What the set is: the behaviours Windows needs and Linux does not use (the kernel graphics tier, per-process channel passthrough, the deferred-API objects, host-owned scheduling, the preemption and display-control answers, the colour path). On, Windows starts with no environment variables. The operator-only environment variable `KF3_DISPLAY_SDR_COLOR=1` (a lab override) forces the colour path even with `off`. See [Windows guest](windows-guest.md). [Added 2026-11-15; not run on hardware.] |
-| `report-utilization` | `on` | Show the guest the physical GPU's utilisation (`nvidia-smi` and NVML `utilization.gpu`, `utilization.memory`, encoder and decoder), which would otherwise read `[N/A]`. **On a GPU shared by several VMs this shows each guest the whole GPU's load, which includes what the other VMs run; hosts that share a GPU between tenants may prefer `off`. For isolated GPU sandboxes, `on` is fine.** The guest cannot change it. See [GPU utilisation in the guest](#gpu-utilisation-in-the-guest). |
-| `unmapped-reads-zero` | off | **Off (the default):** when the guest's GPU touches a GPU address that has nothing mapped, the GPU faults and the guest sees the error. Vulkan **sparse residency** does not work in that state: a shader that reads a non-resident part of a sparse image or buffer hangs its channel (host `Xid 109`), and the application gets a device-lost error. **On:** a GPU read of ANY unmapped guest address returns zero and a write is dropped, with no fault and no error. Sparse residency then works as on bare metal. **The cost, for this VM:** every fault the guest expects becomes a silent zero, including an application bug that reads freed memory and CUDA managed memory or HMM pages that would need demand paging (not supported by kayfabe today: they fail with an error when the property is off, and read zero when it is on). Turn it on only for a VM that needs sparse resources and does not use managed memory. [Added 2026-11-18; code and GPU-free tests only, not run on hardware.] |
-| `doorbell-ioeventfd` | off | Doorbell fast path; off until measured. |
-| `doorbell-ioeventfd-max` | `256` | Cap for the fast path. |
-| `display-broker` | unset | Absolute path of the display broker's socket. See [Display and the broker](display.md). |
-| `display-broker-uid` | `-1` | One more uid accepted as the broker. |
-| `display-broker-vram` | `auto` | GPU-copy path to the broker: `auto`, `on`, `off`. |
-| `display-max-fps` | `0` | Cap on the emulated vblank, 24 to 75 Hz; `0` means a 75 Hz cap. Refused outside 24..75 and without `display=on`. |
-| `dummy-bar` | off | A synthetic MMIO trap-floor probe: it adds lockless, BQL-held and ioeventfd test pages in the MSI-X BAR. It does not submit work to the GPU. [code reading: `qemu/hw/misc/kf3/kf3.c`, `docs/design/V3_DOORBELL_BASELINE.md`] |
-| `x-gsp-observer`, `x-gsp-observer-seconds` | unset, `300` | Diagnostic: record the guest driver's GSP traffic to a fresh file for 1 to 7200 s. |
-
-Properties are given as `-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0`, or for one property on an existing device `-global kf3-gpu.<property>=<value>`. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/windows/win_vm.sh -->
-
-Environment variables beginning with `KF3_` also exist (for example `KF3_RPC_TRACE=1` logs every command the emulated GPU answers). They are for development and benchmarking. A complete, supported list is **not documented yet**. (Windows needs none of them: since 2026-11-15 the Windows support set is on by default and is selected by the guest's own declaration; see `windows-support` above.) <!-- src: scripts/bench/windows/win_vm.sh -->
-
-### GPU utilisation in the guest
-
-With `report-utilization=on` (the default) the guest's `nvidia-smi` and NVML report the **whole GPU's** load: graphics/compute busy (`utilization.gpu`), memory-bandwidth busy (`utilization.memory`), and the NVENC, NVDEC, NVJPG and NVOFA engines, in whole percent and at most four updates a second. Nothing else of the host's telemetry is shown: no power, clocks, P-state, temperature, process list or process id. <!-- src: docs/design/V3_UTILIZATION_FLAG.md, section 5 -->
-
-- **It is read-only and one way.** The host reads the GPU's utilisation with one fixed request it builds itself (the same unprivileged call `nvidia-smi` makes on a bare-metal host), and writes the answer to the guest. While the property is on the host makes that read once a second, and four times a second while a guest is asking or has a linked, polled utilisation page. One answer to the guest can carry about 18 seconds of history (72 samples), so a single query shows the recent past as well as the present. No byte the guest sends is ever passed to the NVIDIA driver on the host for this.
-- **On is the default, and it is fine for isolated GPU sandboxes.** It rarely weakens multi-tenancy. What it shows is the physical GPU's whole-GPU load, so on a GPU shared between tenants every VM sees the same numbers and they move with what the other VMs run (a cross-tenant load side channel); a host that shares a GPU that way may prefer `report-utilization=off`.
-- **It is the physical GPU's load, not the VM's own.** On a GPU used by more than one VM, each guest can therefore see how busy the others make the GPU. That is the reason for the switch. With `report-utilization=off` the guest reads `[N/A]` and the host makes no utilisation read at all; hosts that share a GPU between tenants may prefer that.
-- **When it shows `[N/A]` with the property on:** the host driver version was not one the layouts were derived for, the host refuses the unprivileged read (for example a GPU in MIG mode), or the guest driver version has no derived layout. The device says so once in its log (`report-utilization=on, but this host has no unprivileged GPU-utilisation source`). Guest driver versions below 575 are not covered.
-- This changes only the utilisation fields. [Not yet run on a GPU: see `docs/design/V3_UTILIZATION_FLAG.md`, section 9, for the confirmation plan.]
-
-### Example: the Linux desktop guest's device line
-
-Assembled from `scripts/bench/display/interactive.sh` (not run as written for this page):
+With kayfabe:
 
 ```
--device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,display-broker=<socket>,display-broker-uid=<uid>
+kayfabe-qemu -machine q35,accel=kvm,memory-backend=ram0 -cpu host -m 8192 ... \
+    -object memory-backend-memfd,id=ram0,size=8192M,share=on \
+    -uuid <a fixed uuid for this VM> \
+    -device kf3-gpu,id=kf0,fb-mb=8192,bar1-size=134217728,bar2-size=33554432
 ```
-(The script also sets `x11-dispsw=on`; see [Display and the broker](display.md).) <!-- src: scripts/bench/display/interactive.sh -->
 
-## 5. Checks you can run
+`kayfabe-qemu` stands for the binary from step 2. The VM must not contain a VFIO device for the same GPU. [Command-line reference](cli-reference.md) says what each argument does and what the others do. If you already have a VM, [Attach to a VM you already have](attach-to-existing-vm.md) lists exactly what changes, including libvirt notes.
 
-All of these assume the bench tree above. They are strictly serial, one box at a time. <!-- src: AGENTS.md "Verification" -->
+- `gpu-minor=<n>` picks the host GPU (the number in `/dev/nvidia<n>`); the default is 0. One kayfabe device per host GPU.
+- `fb-mb` is real video memory taken from the host card; on a card with less than 10 GiB use the card's memory minus 2048 MiB.
+- `display=on` gives the guest a virtual monitor; leave it off for a headless GPU. See [Display and the broker](display.md).
 
-| Check | Command | Passing |
-|---|---|---|
-| GPU-free unit tests | `cargo test -p kf-<crate>` | tests pass |
-| GPU gates (no QEMU) | `bash scripts/bench/v3_gates.sh [logfile]` | `V3_GATES_EXIT pass=9 fail=0 ...` and exit status 0. It also runs a tenth probe, `kf-micro-reserve-probe reserve`. |
-| Host baseline, no VM | `bash scripts/fastguest/bare_metal_suite.sh <tag> [budget] [arms...]` | 30 arms pass on the host's own driver |
-| 30-arm thin guest | `KF_DEVICE=kf3 bash scripts/fastguest/fast_suite.sh <tag> 180` | `FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0` |
-| One thin-guest run | `KF_ARMS="--timer --engines" bash scripts/fastguest/run_fast_guest.sh <tag> <budget-seconds>` | `FAST_VERDICT=PASS` |
-| CUDA ladder (full guest) | `bash scripts/bench/cuda_ladder.sh host\|guest <tag> [reps] [rungs]` | the four rungs `cup2`, `cup3`, `cup8`, `cup8bench` pass |
+What is not verified yet: that an unmodified VFIO guest image boots with only the device swapped. The aim is that it does for Linux; the equivalence test that boots one image on both is not in the tree yet.
 
-<!-- src: scripts/bench/v3_gates.sh, scripts/fastguest/bare_metal_suite.sh, scripts/fastguest/fast_suite.sh, scripts/fastguest/run_fast_guest.sh, scripts/bench/cuda_ladder.sh -->
+## Permissions
 
-Rules the harness applies, which are worth copying to any setup of your own:
+QEMU must be able to open `/dev/kvm`, `/dev/nvidiactl`, `/dev/nvidia<n>` and `/dev/nvidia-uvm`. Run it as an ordinary user. One run as a throwaway user whose only group was `kvm` passed the Linux test suite and a Windows guest; it relied on NVIDIA's default mode 0666 for the `nvidia*` nodes and was recorded on one host. See [Security model](security.md). `nvidia-modprobe -c 0 -u` creates missing nodes.
 
-- **A timeout is a crash.** The thin guest gets one hard budget for the whole run (QEMU start to power-off). <!-- src: scripts/fastguest/run_fast_guest.sh -->
-- **A green run must have reached hardware.** The thin guest run fails if a guest channel was never forwarded to the GPU (`KF_REQUIRE_FORWARD=0` turns that off for a deliberate control run). <!-- src: scripts/fastguest/run_fast_guest.sh -->
-- **If bare metal passes and the guest fails, the defect is kayfabe's.** Run the host baseline first. <!-- src: AGENTS.md -->
-- **Watch the host's kernel log for Xid messages across a run.** A host GPU fault does not show up in the guest. `bash scripts/bench/host_xid_watch.sh <tag> -- <command>` runs a command and exits 6 if a new host Xid appeared across it. <!-- src: scripts/bench/host_xid_watch.sh -->
-- **Write a start marker and an exit line** for every job; a killed job and a running one look alike otherwise. <!-- src: AGENTS.md "Bench traps" -->
+## Check that it works
 
-## 6. Stopping a guest
+- QEMU's log has a line that starts with `kf3: host GPU minor=0 ...` and names the card. A refusal names its cause; see [Troubleshooting](troubleshooting.md).
+- In a Linux guest, `nvidia-smi` names the card.
+- In a Windows guest, `nvidia-smi` works and the display adapter has no error in Device Manager.
 
-The launchers stop a guest by asking it to power down (ACPI), then waiting, and only then killing QEMU. The interactive Linux launcher uses `scripts/bench/display/interactive.sh stop`; the Windows harness uses `scripts/bench/windows/win_vm.sh stop` (guest shutdown, then QMP `system_powerdown`, then QMP `quit`, never SIGKILL). <!-- src: scripts/bench/display/interactive.sh, scripts/bench/windows/README.md -->
+If something does not start, [Troubleshooting](troubleshooting.md) lists the messages. If you find a defect, [Report a problem](report-a-problem.md) says what to attach.
 
-## Not documented yet
+## Stopping a guest
 
-- A supported rootless installation guide. The branch `claude/rootless-audit-20261016` has [launch notes and permission checks](https://github.com/reindertpelsma/kayfabe/blob/32d7319b2/traces/rootless_audit_20261016/REPORT.txt) in sections 1, 2 and 7, with scripts under `scripts/bench/rootless/`. That audit is not merged, and its host-specific launchers are not a general installer. The scripts described here still run as root. See [Security model](security.md).
-- libvirt, systemd units, container images and sandbox profiles. *(2026-10-31: [Attach your GPU to a VM you already have](attach-to-existing-vm.md) now holds an [untested] libvirt sketch and the permission checks; there is still no recorded libvirt run.)* The design leaves sandboxing the (single) QEMU process to the deployer: see [Security model](security.md).
-- A complete reference for the `KF3_*` environment variables.
+Shut the guest down from inside it, or send ACPI power-down through QEMU (`system_powerdown` on the monitor). Wait for the QEMU process to exit before you start another VM on the same GPU: the card's memory is released a moment after QEMU exits.
+
+## Stock drivers, nothing patched
+
+Stock host and guest NVIDIA drivers are unmodified by default. Kayfabe ships no NVIDIA binaries. The repository also contains opt-in research code (host-driver experiments, guest instrumentation, a diagnostic QEMU observer) that is never part of the build or the install above; a run with an instrumented driver does not establish a stock-driver result. `python3 scripts/ci/no_patch_check.py` prints the complete table of patches in the repository and checks that no stock path applies one. The device itself is part of the custom QEMU build described in [Building from source](building.md): "stock drivers" does not mean an unmodified distribution QEMU.
+
+## Not available yet
+
+- A downloadable release (see step 1).
+- Distribution packages, container images, systemd units and sandbox profiles. The security model recommends confining the QEMU process; see [Security model](security.md).
+- Proxmox and libvirt are not tested; [Attach to a VM you already have](attach-to-existing-vm.md) has a libvirt sketch.
 - Several VMs on one GPU as a supported configuration.
 
-Verified on: the scripts and properties above were read from the repository at master (`04773c348`). Their results are recorded in the repository for kayfabe `afb552ea` (gates 9/9, bare metal 30/30, thin 30/30, RTX 3060, 2026-09-30) and `714ec29d3` (GA104, 2026-10-24). Not verified end to end for this page: no script on it was run.
+## Appendix. Optional helper scripts
+
+The repository's `scripts/bench/` directory holds the scripts the maintainers use to test on rented, disposable machines. **None of them is needed to install or run kayfabe**, and they are not a supported installer. They are listed so that you know what exists.
+
+> **Warning.** The provisioning scripts purge NVIDIA driver packages, stop the host's display manager, load and unload kernel modules, create a tap network device, change `ip_forward` and add `iptables` rules, and they run as root. They are written for throwaway test machines. Do not run them on a machine you care about; read them first.
+
+| Helper | What it does |
+|---|---|
+| `scripts/bench/provision_host_driver.sh` | Installs the open NVIDIA kernel module on a test host (default version 580.159.04). |
+| `scripts/bench/provision_bench_tree.sh` | Prepares a test tree: QEMU build, a guest disk, a tap network, the guest-side test client. |
+| `scripts/bench/display/interactive.sh` | Starts a Linux desktop guest in a broker window ([Display and the broker](display.md)). |
+| `scripts/bench/windows/win_vm.sh` | Installs and boots a Windows 11 test guest ([Windows test harness](windows-harness.md)). |
+| `scripts/bench/v3_gates.sh`, `scripts/fastguest/fast_suite.sh` | The GPU gates and the 30-arm suite ([Test it yourself](test-yourself.md)). |
+
+The launch scripts take an exclusive lock, `/tmp/kayfabe-fastguest.lock`, because GPU test runs must be strictly serial.

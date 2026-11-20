@@ -1,16 +1,16 @@
 # Run everything in one go (the standalone full run)
 
-One command runs every check kayfabe has on one rented or owned GPU machine, strictly: a check that cannot run stops the run by name, it is never dropped. This page is the usage; the list of what is covered, what each part needs and what is known not to run is in `docs/design/V3_STANDALONE_FULL_RUN.md` (internal, not part of this manual).
+One command runs every check kayfabe has on one rented or owned GPU machine, strictly: a check that cannot run stops the run by name, it is never dropped. This page is the usage; the list of what is covered, what each part needs and what is known not to run is in the project's internal design notes. <!-- src: docs/design/V3_STANDALONE_FULL_RUN.md -->
 
 Nothing here has run end to end yet. Treat the steps as unproven until a run is recorded.
 
 ## What you need
 
-- A Linux machine with KVM, one NVIDIA GPU and root, 700 GB of disk and about 64 GB of RAM (the big images ask for a 16 GB guest). The run takes about 28 hours (an estimate: `docs/design/V3_STANDALONE_FULL_RUN.md` has the parts) and downloads about 240 GB.
-- The repository at the revision you want to test, `python3`, and the network. The run installs what it needs; it trusts the repository and the upstream checksums it lists, and nothing else (`docs/howto/ci-downloads.md`).
+- A Linux machine with KVM, one NVIDIA GPU and root, 700 GB of disk and about 64 GB of RAM (the big images ask for a 16 GB guest). The run takes about 28 hours (an estimate) and downloads about 240 GB.
+- The repository at the revision you want to test, `python3`, and the network. The run installs what it needs; it trusts the repository and the upstream checksums it lists, and nothing else (`docs/howto/ops/ci-downloads.md`).
 - An instruction file (JSON, `kayfabe.payload-instruction/1`) for the large tier: Windows with two gate runs, the Windows apps profile, the Linux apps profile, the SPECviewperf lanes (`"spec": "both"`), and the list of your private images with `"propimages_strict": true`. `python3 -I scripts/ci/vast_payload.py --emit-instruction FILE` writes one from the environment variables the payload has always read.
 - The private objects (images, the SPECviewperf bundle) as files or as presigned URLs in one JSON file (`KF_SPEC_URL_FILE`). They are yours: nothing is checked against a hash of ours, the computed sha256 and size are recorded.
-- For the Linux image with the MATLAB rows (the stage is refused by name without it, or skip it): `--matlab-image PATH|URL` and `--matlab-driver VERSION|PATH|URL`. Pass a driver of 590.48.01 or newer: that image refused 580.159.04 and ran with 590.48.01 on one RTX 3080 (2026-11-17).
+- For the Linux image with the MATLAB rows (the stage is refused by name without it, or skip it): `--matlab-image PATH|URL` and `--matlab-driver VERSION|PATH|URL`. Pass a driver of 590.48.01 or newer: that image refused 580.159.04 and ran with 590.48.01 on one RTX 3080.
 
 ## The command
 

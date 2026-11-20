@@ -1,6 +1,6 @@
 # Run applications on your own Windows images
 
-STATUS: DESIGN-ONLY, 2026-11-16. The runner is built and tested without a GPU; no box has run it yet. Plain mode (no `state.json`) was never booted. Treat every step below as unproven until a run is recorded.
+Experimental: the runner is built and tested without a GPU; it has not yet run on a GPU box. Plain mode (no `state.json`) has not been booted. Treat every step below as unproven on hardware.
 
 The runner starts any number of Windows disk images as throwaway copies, finds out which applications each one has, runs the applications it has a driver for, and reports one verdict per application. It never writes to the image you give it.
 
@@ -50,11 +50,11 @@ An image without `state.json` needs a login for the guest (an ssh key with acces
 
 ## swtpm 0.10 or newer
 
-The images' TPM state needs swtpm 0.10 or newer; Ubuntu 22.04 ships 0.6.3. If the box's `swtpm` is older (or missing), the runner builds swtpm 0.10.1 under `/opt/tpm` before the first image starts, as the legacy stage does, instead of refusing the run (not run on a box yet: the build recipe is unproven). This needs root, `apt-get`, `git` and network access to the upstream source repositories, and takes several minutes. A failed step ends the run as REFUSED with a name (`SWTPM_SOURCE`, `SWTPM_SOURCE_COMMIT`, `SWTPM_BUILD`, `DOWNLOAD`, `PIN_UNSET:<role>`), never as a failed application. A swtpm of 0.10 or newer, including one already built under `/opt/tpm`, is used as it is.
+The images' TPM state needs swtpm 0.10 or newer; Ubuntu 22.04 ships 0.6.3. If the box's `swtpm` is older (or missing), the runner builds swtpm 0.10.1 under `/opt/tpm` before the first image starts, as the legacy stage does, instead of refusing the run (not yet run on a box; the build recipe is not verified). This needs root, `apt-get`, `git` and network access to the upstream source repositories, and takes several minutes. A failed step ends the run as REFUSED with a name (`SWTPM_SOURCE`, `SWTPM_SOURCE_COMMIT`, `SWTPM_BUILD`, `DOWNLOAD`, `PIN_UNSET:<role>`), never as a failed application. A swtpm of 0.10 or newer, including one already built under `/opt/tpm`, is used as it is.
 
 ## Which applications run
 
-Each application has a short name (`resolve`, `3dmark`, `superposition`, `solidworks`, `edrawings`, `edge`, `wukong`; more can be added, see `docs/design/V3_PROPIMAGE_RUNNER.md`). For an image the runner uses, in this order: the applications you declare with `--app NAME=present`; else the `software` list of the `state.json`; else the installed programs it reads from the guest (plain images only); else the names in `--apps`. `--app NAME=skip` removes one; `--apps` restricts the set.
+Each application has a short name (`resolve`, `3dmark`, `superposition`, `solidworks`, `edrawings`, `edge`, `wukong`; more can be added). For an image the runner uses, in this order: the applications you declare with `--app NAME=present`; else the `software` list of the `state.json`; else the installed programs it reads from the guest (plain images only); else the names in `--apps`. `--app NAME=skip` removes one; `--apps` restricts the set.
 
 Anything installed that has no driver is listed as not run (no driver) and is never an error. An application you name that is not on the image is reported not run (not on image).
 
@@ -75,7 +75,7 @@ Your images are yours: you can build a Windows image yourself, install software 
 - **`--strict` enforces pins.** A strict run is a deployment's check, for example a CI service that lists exactly the images it means. There, a pin that does not match refuses the image (`SOURCE_SHA256_MISMATCH`). Pins that are not about your own images, such as those of tools the repository downloads itself, hold as integrity checks on what the repository fetches by itself; something you pass yourself (a path, a URL, a mirror) is yours and is never refused on a pin (see the next section).
 - The integrity of an image you give is still checked: the three-member image zip must match its own `manifest.json` (hashes of the disk and the state), and its seed must match.
 
-To fetch images from your own object store, run your own deployment as described in `docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md`: build the images with the scripts in this repository, upload them to your own bucket (any S3-compatible store), write a pins file that names them, and pass it with `--pins FILE`. Then `--image prebuilt:pin:NAME` fetches the object `NAME` through presigned URLs that you supply with `--urls FILE`.
+To fetch images from your own object store, run your own deployment: build the images with the scripts in this repository, upload them to your own bucket (any S3-compatible store), write a pins file that names them, and pass it with `--pins FILE`. Then `--image prebuilt:pin:NAME` fetches the object `NAME` through presigned URLs that you supply with `--urls FILE`. <!-- src: docs/design/V3_PROPIMAGE_RUNNER.md; docs/design/V3_PINS_ARE_DEPLOYMENT_DATA.md -->
 
 ## What the repository downloads, and what you have to trust
 

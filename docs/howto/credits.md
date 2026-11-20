@@ -73,4 +73,4 @@ Kayfabe's own licence does not grant any rights to third-party software.
 
 Open an issue in the repository. Report a suspected vulnerability privately: see [Security model](security.md). <!-- src: SECURITY.md -->
 
-Verified on: not applicable to behaviour; the texts are taken from `LICENSE`, `THIRD_PARTY_NOTICES.md` and `docs/NOTICES.md` as of master (2026-10-26). This page is not legal advice, and the repository marks its own provenance policy wording as a draft awaiting legal review. <!-- src: docs/design/V3_PROVENANCE.md header -->
+This page is not legal advice, and the project marks its own provenance policy wording as a draft awaiting legal review. <!-- src: LICENSE, THIRD_PARTY_NOTICES.md, docs/NOTICES.md as of master 2026-10-26; docs/design/V3_PROVENANCE.md -->

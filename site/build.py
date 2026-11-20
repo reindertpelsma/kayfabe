@@ -280,9 +280,11 @@ def decorate_chapter(html, sections, file, version_text):
     for offset, rel, word in [(-1, "prev", "Previous"), (1, "next", "Next")]:
         if 0 <= index + offset < len(flat):
             other = flat[index + offset][1]
+            # relative to this chapter's own directory: chapters under a subdirectory (ops/) link across it
+            href = posixpath.relpath(other["href"], posixpath.dirname(page["href"]) or ".")
             pager += (
                 '<a rel="{}" href="{}"><span>{}</span> {}</a>'.format(
-                    rel, escape(other["href"], quote=True), word, escape(other["title"])
+                    rel, escape(href, quote=True), word, escape(other["title"])
                 )
             )
     pager += "</nav>"
