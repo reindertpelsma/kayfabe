@@ -394,6 +394,40 @@ impl ReselectAtFn1 {
     }
 }
 
+impl ReselectAtFn1 {
+    /// The log line for an outcome of [`Self::on_fn1`] (`None` for [`Reselection::Kept`]).
+    ///
+    /// A refusal for a defaulted device across a pre-fn-1 surface difference names the fix: the
+    /// exact `guest-driver=` pin to add, which is the version the GUEST reported (the one the
+    /// device cannot take on its own, since the guest never selects the host side), and the
+    /// version the device defaulted to. Which pairs are refused is decided by [`Self::on_fn1`],
+    /// not here.
+    #[must_use]
+    pub fn describe(&self, outcome: &Reselection) -> Option<String> {
+        Some(match outcome {
+            Reselection::Kept => return None,
+            Reselection::Reselected { from, to } => format!(
+                "kf-rm: guest driver RE-SELECTED at fn 1: {from} (defaulted) -> {to} (the guest's \
+                 own; pre-fn-1 surface identical)"
+            ),
+            Reselection::RefusedDeclared { reported } => format!(
+                "kf-rm: the guest says it is driver {reported}, the device was DECLARED {}; \
+                 not re-selecting a declared version",
+                self.current
+            ),
+            Reselection::RefusedUnserved { reported, why } => format!(
+                "kf-rm: the guest says it is driver {reported}; no table to re-select: {why}"
+            ),
+            Reselection::RefusedSurface { reported, what } => format!(
+                "kf-rm: the guest says it is driver {reported}; cannot re-select from {} (the \
+                 version the device defaulted to): {what} differs and the guest already consumed \
+                 it. To serve this guest add guest-driver={reported} to the kf3-gpu device",
+                self.provisional.driver_version()
+            ),
+        })
+    }
+}
+
 /// The outcome of [`ReselectAtFn1::on_fn1`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reselection {
@@ -431,25 +465,11 @@ pub enum Reselection {
 impl kf_gsp::CommandPolicy for ReselectAtFn1 {
     fn respond(&mut self, cmd: &kf_gsp::RpcCommand) -> Option<kf_gsp::Reply> {
         if cmd.function == kf_gsp::RpcFunction::SetGuestSystemInfo {
-            match self.on_fn1(&cmd.payload) {
-                Reselection::Kept => {}
-                Reselection::Reselected { from, to } => eprintln!(
-                    "kf-rm: guest driver RE-SELECTED at fn 1: {from} (defaulted) -> {to} (the guest's \
-                     own; pre-fn-1 surface identical)"
-                ),
-                Reselection::RefusedDeclared { reported } => eprintln!(
-                    "kf-rm: the guest says it is driver {reported}, the device was DECLARED {}; \
-                     not re-selecting a declared version",
-                    self.current
-                ),
-                Reselection::RefusedUnserved { reported, why } => eprintln!(
-                    "kf-rm: the guest says it is driver {reported}; no table to re-select: {why}"
-                ),
-                Reselection::RefusedSurface { reported, what } => eprintln!(
-                    "kf-rm: the guest says it is driver {reported}; cannot re-select from {}: \
-                     {what} differs and the guest already consumed it",
-                    self.current
-                ),
+            let outcome = self.on_fn1(&cmd.payload);
+            if let Some(line) = self.describe(&outcome) {
+                // ★ A hostile guest can send fn 1 again and again, so the line is rate-limited
+                // (`docs/design/V3_BOUNDARY_FUZZING.md`, BF-2); a plain `eprintln!` here was debt.
+                kf_arch::rate_eprintln!("{line}");
             }
         }
         self.inner.respond(cmd)
