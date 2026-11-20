@@ -808,13 +808,14 @@ def validate_apps_discovery(value):
     KNOWN_BREAKAGE, a row that did not run is NOT_RUN and is named in `not_run`; a PASS verdict has no NOT_RUN row."""
     name = re.compile(r"[a-z][a-z0-9_]{0,39}")
     text = re.compile(r"[\x20-\x7e]{0,120}")
-    keys = {"schema", "verdict", "sha", "run_id", "rows", "steps", "not_run", "breakages", "host_control", "reason", "guest_rc"}
+    keys = {"schema", "verdict", "sha", "run_id", "rows", "steps", "not_run", "breakages", "host_control", "reason", "guest_rc", "private_python"}
     ok = type(value) is dict and {"schema", "verdict", "sha", "run_id", "steps"} <= set(value) <= keys
     ok = ok and value["schema"] == 1 and value["verdict"] in ("PASS", "FAIL", "RETRY", "PARTIAL")
     ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
     ok = ok and type(value["run_id"]) is str and re.fullmatch("[A-Za-z0-9_.-]{1,48}", value["run_id"]) is not None
     ok = ok and type(value.get("reason", "")) is str and text.fullmatch(value.get("reason", "")) is not None
     ok = ok and value.get("host_control", "absent") in ("present", "absent")
+    ok = ok and type(value.get("private_python", "")) is str and text.fullmatch(value.get("private_python", "")) is not None
     steps = value["steps"]
     ok = ok and type(steps) is list and len(steps) <= 8 and all(
         type(x) is dict and set(x) == {"step", "rc", "s"} and name.fullmatch(x["step"]) and type(x["rc"]) is int and type(x["s"]) is int for x in steps)
