@@ -1,0 +1,13 @@
+[2026-11-19T23:33:41Z] OVERLAY_CREATED disk/gate_ci453fda76a6191b5e.qcow2 over base.qcow2
+[2026-11-19T23:33:42Z] KF_CLOCK image=kfwin net=offline using=recorded base=2026-11-19T23:33:14Z recorded=2026-11-19T23:33:14Z floor_input=- inputs=0
+[2026-11-19T23:33:42Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial; up to 120s)
+[2026-11-19T23:33:42Z] WINVM_RUN_START tag=gate_ci453fda76a6191b5e repo_rev=7fb1c98a kf3=on qemu=/workspace/bench/kf3-bins/7fb1c98a/qemu-system-x86_64 host_driver=595.91.07 overlay=gate_ci453fda76a6191b5e arm=B guest_driver=580.65.06 gop_efi=/workspace/winvm/secureboot/kf-gop.7fb1c98a.signed.efi sha256(gop_efi)=7c55184db4617655
+[2026-11-19T23:33:42Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.7fb1c98a.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-00000000-0000-0000-0000-000000000000
+[2026-11-19T23:33:42Z] VM_IDENTITY uuid=f95fffbf-9299-4418-8ba4-1631c870b396 serial=KF4A71AB4362 mac=52:54:00:08:78:88
+[2026-11-19T23:33:42Z] KF3_ENV KF3_RPC_TRACE=1 
+[2026-11-19T23:33:42Z] QEMU_START tag=gate_ci453fda76a6191b5e boot=1 pid=95041 log=logs/gate_ci453fda76a6191b5e_b1_qemu.log
+[2026-11-19T23:41:56Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-reset kf3_lines=381 host_xid=0
+[2026-11-19T23:41:56Z] guest rebooted: kf3 has no reset path, so a FRESH QEMU (same vars, same TPM state)
+[2026-11-19T23:41:56Z] QEMU_START tag=gate_ci453fda76a6191b5e boot=2 pid=95888 log=logs/gate_ci453fda76a6191b5e_b2_qemu.log
+[2026-11-19T23:59:30Z] WINVM_BOOT_END boot=2 rc=0 reason=guest-shutdown kf3_lines=23620 host_xid=0
+[2026-11-19T23:59:30Z] WINVM_RUN_END tag=gate_ci453fda76a6191b5e boots=2 reason=guest-shutdown

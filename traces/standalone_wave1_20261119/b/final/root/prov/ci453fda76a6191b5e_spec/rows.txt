@@ -1,0 +1,9 @@
+SPEC_ROW name=energy-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=creo-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=blender-01 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=enscape-01 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=medical-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=maya-07 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=catia-07 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=solidworks-08 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=0/0 reason=SETUP failed=-

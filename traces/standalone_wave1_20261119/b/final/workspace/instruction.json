@@ -1,0 +1,13 @@
+{
+ "linux_apps": "middle",
+ "rehearsal": true,
+ "schema": "kayfabe.payload-instruction/1",
+ "spec": "both",
+ "stages": [
+  "specviewperf"
+ ],
+ "tier": "large",
+ "winapps": "mid",
+ "windows": true,
+ "windows_runs": 2
+}

@@ -1,0 +1,1 @@
+{"flavor": "cu128", "flavor_reason": "chose cu128 (driver CUDA 13.0 >= 12.8 and sm_89 is inside sm_75..sm_120)", "facts": {"gpu_name": "NVIDIA GeForce RTX 4090", "compute_cap": "8.9", "driver": "580.159.04", "driver_cuda": "13.0", "vram_gb": 47.99}}

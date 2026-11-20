@@ -1,0 +1,6 @@
+[xid-watch] tag=ci3ccf9f55b5b33f3c_apps_discovery  host=ubuntu  utc=2026-11-20T01:14:07Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/apps_discovery_stage.py run --sha 7fb1c98a00cb79e825e4390f910141a6d4fe45a7 --checkout /workspace/kf-ci-src --out /workspace/kf-ci-evidence/apps_discovery.json --run-id ci3ccf9f55b5b33f3cd --deadline-epoch 1795156745
+[xid-watch] host_dmesg_lines=1235  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---

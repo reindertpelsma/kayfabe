@@ -1,0 +1,56 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=both winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       146G  8.1G  138G   6% /
+KF_PREFLIGHT_FREE_BYTES=147202449408
+KF_PAYLOAD_STAGE_START name=provision
+[xid-watch] tag=ci8f847100261b1cfb_provision  host=ubuntu  utc=2026-11-20T01:10:50Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/provision_full.sh
+[xid-watch] host_dmesg_lines=686  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 575.51.03
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+START 2026-11-20T01:10:50+00:00
+BOX_RC=0
+7fb1c98a0 Merge pull request #483 from reindertpelsma/claude/standalone-union-20261117
+DRIVER_RC=0
+NVIDIA GeForce RTX 4090, 580.159.04
+/dev/root       146G   13G  133G   9% /
+TREE_RC=0
+[2026-11-20T01:21:41+00:00] B4: guest ladder built: 5061712 bytes
+[2026-11-20T01:21:41+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/7fb1c98a/qemu-system-x86_64 rev=7fb1c98a mtime=2026-11-20 01:22:46.791610730 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[xid-watch] --- command output ends (rc=0) ---
+READY driver=580.159.04
+EXIT 2026-11-20T01:22:48+00:00
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (686 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci8f847100261b1cfb_provision.log
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=720113
+KF_PAYLOAD_STAGE_START name=kfml
+[xid-watch] tag=ci8f847100261b1cfb_kfml  host=ubuntu  utc=2026-11-20T01:22:52Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/kfml_stage.py run --sha 7fb1c98a00cb79e825e4390f910141a6d4fe45a7 --checkout /workspace/kf-ci-src --prefix /workspace/kf-kfml --out /workspace/kf-ci-evidence/kfml.json --tier large --run-id ci8f847100261b1cfb
+[xid-watch] host_dmesg_lines=722  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+KF_KFML_RESULT {"facts":{"compute_cap":"8.9","cuda":"12.8","driver":"580.159.04","driver_cuda":"13.0","flavor":"cu128","gpu_name":"NVIDIA GeForce RTX 4090","torch":"2.7.1+cu128","vram_gb":23.52},"rows":[{"metrics":{"amp_vs_fp32_max_window_diff":0.002144,"compiled_vs_eager_max_window_diff":0.000752,"forward_rel_err":0.003497,"grad_scaler":false,"params":812288,"reference_compared":false,"reference_config_mismatch":false},"name":"nanogpt_compile","reason":"","status":"PASS","wall_s":45.012},{"metrics":{"cases_checked":29,"layernorm_max_abs_err":0.003901,"matmul_worst_rel_err":5e-06,"softmax_max_abs_err":0.0},"name":"triton_kernels","reason":"","status":"PASS","wall_s":17.598},{"metrics":{"build_s":28.342426,"spin_clock_cycles":51661},"name":"cuda_ext_inline","reason":"","status":"PASS","wall_s":32.672},{"metrics":{"acc_amp":0.74,"acc_fp32":0.7375,"cuda_ipc":true,"grad_scaler":false,"pred_agreement":0.997,"train_s":17.730169},"name":"amp_convnet_cifar","reason":"","status":"PASS","wall_s":27.631},{"metrics":{"allocated_gb":16.192072,"async_copy_mb":64.0,"buffers":311,"free_end_gb":23.035828,"free_start_gb":23.131531,"graph_replays":40,"streams":16,"target_gb":16.192072},"name":"stress_alloc","reason":"","status":"PASS","wall_s":6.04},{"metrics":{"chunks":118,"oversub_gb":29.5,"vram_gb":23.516479},"name":"managed_oversub","reason":"","status":"PASS","wall_s":60.081}],"run_id":"ci8f847100261b1cfb","schema":1,"sha":"7fb1c98a00cb79e825e4390f910141a6d4fe45a7","steps":[{"rc":0,"s":3.6,"step":"plan"},{"rc":0,"s":133.3,"step":"setup"},{"rc":0,"s":0.8,"step":"fetch-data"},{"rc":0,"s":197.6,"step":"run"}],"tier":"large","verdict":"PASS"}
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (722 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci8f847100261b1cfb_kfml.log
+KF_PAYLOAD_STAGE_END name=kfml rc=0 duration_ms=341451
+KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=2
+stage name=provision rc=0 duration_ms=720113 result=PASS
+stage name=kfml rc=0 duration_ms=341451 result=PASS
+suite name=provision pass=1 fail=0 skip=0
+suite name=kfml pass=1 fail=0 skip=0
+KF_FINAL_SUMMARY_END

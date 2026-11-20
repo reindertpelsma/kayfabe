@@ -1,0 +1,1 @@
+{"count": 1, "die": "AD102", "entries": 3, "max_count": 1, "resolved_count": 1, "resolved_lower_bound": 1, "source_evidence": {"date": "2026-11-09", "path": "traces/lke193_phase0_20261109/README.md", "revision": "8d495e90"}, "unit": "distinct_reports", "unresolved_entries": 0, "verdict": "PASS"}
