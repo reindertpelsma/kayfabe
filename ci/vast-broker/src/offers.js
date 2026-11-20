@@ -127,7 +127,8 @@ export class OfferBook {
   // `market` (optional): an already fetched offer list (the release planner reads one list per
   // family); it bypasses the one-minute cache and is evaluated by exactly the same rules.
   // `vramFloorMb`: the middle tier's VRAM floor (0 = off).
-  async evaluate(vast, cfg, ledger, profile, { market, vramFloorMb = 0 } = {}) {
+  // `leg`: { tier, stages } (policy.js kfmlOversubRuns), the leg the offers are evaluated for; absent, no stage rule applies.
+  async evaluate(vast, cfg, ledger, profile, { market, vramFloorMb = 0, leg } = {}) {
     const evaluatedAt = this.now();
     const queryKey = String(cfg.diskGb) + ':' + String(cfg.maxInet);
     let hit =
@@ -202,6 +203,7 @@ export class OfferBook {
         badMachines,
         badHosts,
         reserved,
+        leg,
       });
       const country = offerCountry(offer);
       if (

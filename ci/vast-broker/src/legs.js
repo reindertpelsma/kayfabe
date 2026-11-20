@@ -2,10 +2,14 @@
 //   - where `releaseSeq` comes from, and
 //   - the instruction a release leg hands to its box (built with src/propimages.js, priced with src/bandwidth.js).
 // Pure apart from the two-method store the caller passes (get/put: the Worker's ledger). Nothing here runs unless the owner switches
-// PROPIMAGES_ENABLED on, so no live leg changes.
+// PROPIMAGES_ENABLED on, so no live leg changes; the one exception is `legStages` below (a stage list, no instruction is built).
 import { buildLeg, canonicalInstruction } from './propimages.js';
-import { estimateBandwidth, bandwidthEstimateInput } from './bandwidth.js';
+import { estimateBandwidth, bandwidthEstimateInput, legStages } from './bandwidth.js';
 import { middleAppsRequest } from './tier.js';
+
+// The stages a leg of `tier` will run (bandwidth.js legStages), for the stage rule of the offer policy (policy.js kfmlOversubRuns, the
+// kfml row's RAM-by-VRAM floor). src/index.js reaches bandwidth.js only through this module (test/propimages.test.js pins that).
+export { legStages };
 
 // releaseSeq is the ordinal of a RELEASE, and a retry of the same release must carry the same number (propimagePlan: one number, one
 // image assignment). The Worker keeps one counter and one memo per tested sha in the ledger it already has:
