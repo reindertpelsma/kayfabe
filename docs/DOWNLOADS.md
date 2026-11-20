@@ -188,6 +188,22 @@ is recorded below. **Update 2026-11-08 (MEASURED):** the coordinator uploaded th
 keys to the public bundles bucket, and the ISO's sha256 was re-verified by downloading it through bundles.kayfabe.dev; the repository bundle pin
 is filled with that digest. No Worker deployment or native/GPU pass is claimed, and the Worker integration is proposed, not deployed.
 
+**2026-11-20 (MEASURED on a Vast box and recomputed offline, tree 7fb1c98a0; supplements the pin statement above):** the repository pin
+was stale. `bundle.pin` carries `# inputs=ed2ddea1...` (the ISO built 2026-11-08 from 38bbbb2e9); the checkout derived `b8694b93...`
+because two hash-covered inputs changed afterwards, `appmatrix/apps.json` (PRs 470, 471, 475) and `appmatrix/guest/py/win_cuda_equiv.py`
+(PR 475); restoring exactly those two files to their 38bbbb2e9 versions reproduces `ed2ddea1...`. The stage `windows_apps` downloaded the
+pinned ISO (its sha256 equals the pin) and `verify_image` refused it ("embedded recipe input identity mismatch"). The failure is deterministic,
+and it was graded as a retryable MEDIA problem. **Rule:** the bundle must be republished (build, upload, update `bundle.pin`) whenever a
+hash-covered input changes: `apps.json`, `guest/**` `.ps1`/`.py`/`.html`, the six recipe files (`package_bundle.py`, `bundle_iso.py`,
+`bundle_tools.py`, `bundle_compliance.py`, `bundle_wheels.py`, `bundle_repro.py`), the licence files (`LICENSE`, `LICENSE-APACHE`,
+`LICENSE-GPL`, `THIRD_PARTY_NOTICES.md`), `bundle_tools.SOURCES`, and the package and toolchain selection of `manifest.json` and
+`gate_profiles.json`. `appmatrix/tests/test_bundle_pin.py` enforces it offline (`bundle_ci.pin_drift`, no ISO, no network), so it is RED on any tree
+whose pin is stale until the bundle is republished; no ratchet hides it. It does not check that the published ISO really embeds the pinned
+inputs (that needs the ISO; `fetch_public_bundle.py` checks it on the box). `fetch_public_bundle.py` now compares the pin's `# inputs=` with the
+tree before any request, and the published manifest's `inputs` before the 2.7 GB download, so a stale pin or manifest ends the stage as
+`WINAPPS_REFUSED class=PIN reason=RECIPE_INPUT_DRIFT` (or `PIN_MISMATCH`), graded as the failing row `windows_apps_pin`, not as `RETRY class=MEDIA`.
+Because the fetch now reads the pin's `# inputs=` line, that line is no longer a comment consumers may ignore.
+
 **OWNER SUPERSESSION, 2026-11-07 / CODE READ:** NVIDIA payloads are pinned official provisioning/run-time
 downloads only. They must never enter a distributed image/ISO or R2/GitHub object. Older proposals to cache
 them with a hosted bundle are superseded. LB1's Linux recipe and the Windows packaging path below remain
@@ -367,6 +383,28 @@ review/update bundle.pin with the generated ISO digest, inputs, Level 1 inventor
 trusted draft pin PR and OIDC broker are design only; no token handling or Worker change is implemented.
 This replaces the bundle's old GitHub-Releases private store. Setup cache and WinPE migration are separate;
 WB1 does not migrate NVIDIA files or move/delete old-store contents.
+
+### Republish (a hashed input changed after the pin)
+
+**MEASURED, 2026-11-20 (Vast box, wave-1 acceptance; the cause was then found by comparing the input hashes):** `windows_apps` failed on every fresh
+box with `fetch of winapps-open.iso failed: PUBLIC_BUNDLE_FAIL`. The ISO downloaded and matched its sha256 pin, then `verify_image` raised
+`embedded recipe input identity mismatch` (derived `b8694b93...`, embedded `ed2ddea1...`): `appmatrix/apps.json` (#470, #471, #475) and
+`guest/py/win_cuda_equiv.py` (#475) are covered by the input hash and had changed since the 2026-11-08 build. **Owner/coordinator decision:** rebuild from the
+current tree and republish; the inputs are not reverted.
+
+**MEASURED, 2026-11-20 ([run](../traces/wb1_republish_20261120/README.md)):** two `bundle_ci.py build` passes of tree `7fb1c98a0` are Level 1 and Level 2 equal;
+ISO sha256 `9211a55591679324d4e37df4acba57f80685e93d7096759b8959f8c9e1d4c4c0`, 2708131840 bytes, inputs `b8694b93...`, inventory `74cbb9f9...`.
+Against the 2026-11-08 manifest exactly four files differ (`apps.json`, `guest/py/win_cuda_equiv.py`, `bundle.inputs.json`, `KFAPPS.ID`). The ISO and its
+manifest were uploaded with new create-only keys (the 2026-11-08 objects and the three source archives are untouched; the old pin stays valid for its own
+sha), and `fetch_public_bundle.py` with the new pin fetched and verified the ISO from `bundles.kayfabe.dev` without credentials.
+
+**CODE READ:** a change to any input the hash covers (`manifest.json`, `gate_profiles.json`, `apps.json`, the guest files, the recipe programs) needs a
+rebuilt and republished bundle and the new `bundle.pin` in the same change set; the test and the named failure reason that enforce it are a separate change
+(#530). Procedure used here: `bundle_ci.py build --root <fresh dir> --inputs <package_bundle.py input-hash>` (no credentials in the environment),
+`verify_image` with `expected_inputs`, upload the ISO and then the manifest create-only, re-download from the public URL and compare, then commit the pin
+(`first/bundle.pin.line`).
+
+**CODE READ:** `bundle.pin` is read by pattern: the `winapps-open.iso sha256=` line, and the `# inputs=` and `# inventory=` comment lines (the first must equal the tree's input hash); every other comment is ignored.
 
 Full recipe, qualification rules and rollout details: [Windows apps gate, section 3](design/V3_WINDOWS_APPS_GATE.md#3-inputs-public-bundle-and-official-run-time-media).
 

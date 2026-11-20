@@ -1,6 +1,6 @@
 # The rewrite — what is deleted, what is kept, what is rewritten
 
-**STATUS: LIVE, 2026-09-21 (w822).** The operational half of `THE_DESIGN.md`: what happens to the
+**STATUS: ANSWERED, 2026-11-20.** Reclassified from LIVE on 2026-11-20 by the freshness gate. This was the plan for deleting, keeping and rewriting the pre-v3 tree; the rewrite was carried out as the `kf-*` crates, and the pre-v3 crates are frozen or archived (`ARCHITECTURE.md`, `archive/README.md`; `THE_V3_PLAN.md` records the v3 build as executed through P7). Which line of its deletion list was carried out exactly as written was not re-checked on 2026-11-20, and its dead references (a crate, four `KAYFABE_*` environment names, two bench scripts, one binary path) are of the pre-v3 tree. Read it as the plan and its reasoning, not as a to-do list. ⊘ Original status line, kept as written: *LIVE, 2026-09-21 (w822).* The operational half of `THE_DESIGN.md`: what happens to the
 144 175 lines that exist today, and how the work is kept cheap enough to iterate on.
 
 ---
