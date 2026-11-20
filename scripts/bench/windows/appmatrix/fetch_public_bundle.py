@@ -6,6 +6,8 @@ No run token, Worker route, credential or private-media fallback is used. The ba
 defaults to PUBLIC_BASE and may only ever be PUBLIC_BASE (a Worker/payload env value cannot point the fetch at
 another host); integrity is the sha256 pin in bundle.pin, checked against the manifest and the image.
 
+A pin or a published manifest that records other recipe inputs than this checkout derives is refused BEFORE the download.
+
 A failure prints one line, `PUBLIC_BUNDLE_FAIL reason=<R>`, with R from the closed set REASONS and never the exception text
 (a provider body, a signed URL or a credential could be in it). RECIPE_INPUT_DRIFT and PIN_MISMATCH mean the pin names a bundle
 that this checkout can no longer accept: deterministic, so windows_apps.sh refuses instead of renting another box (2026-11-19/20:
@@ -36,6 +38,7 @@ PIN_MISMATCH = frozenset(('public manifest differs from repo pin', 'image size/s
 
 def reason_of(error):
     """The closed-set reason for a failed fetch; never derived from anything but the exception's class and exact message."""
+    if isinstance(error, CI.RecipeInputDrift): return 'RECIPE_INPUT_DRIFT'
     if isinstance(error, OSError): return 'NETWORK'
     if isinstance(error, ValueError) and str(error) in RECIPE_INPUT_DRIFT: return 'RECIPE_INPUT_DRIFT'
     if isinstance(error, ValueError) and str(error) in PIN_MISMATCH: return 'PIN_MISMATCH'
@@ -49,8 +52,12 @@ def resolve_base(value):
     return PUBLIC_BASE
 
 
-def fetch(base, pin_text, output):
+def fetch(base, pin_text, output, tree_inputs=None):
+    """tree_inputs: this checkout's input hash (main always passes it). When given, a pin or a published manifest of other inputs is
+    RecipeInputDrift, raised before any request or before the 2.7 GB download (2026-11-20, measured: every fresh box downloaded the
+    ISO and then failed verify_image)."""
     base = P.public_base({'BUNDLE_PUBLIC_BASE_URL':base})
+    if tree_inputs is not None: CI.check_pin_inputs(pin_text, tree_inputs)
     digest = CI.read_pin(pin_text).get('sha256')
     if not digest: raise ValueError('missing public bundle pin')
     iso_key, receipt_key = P.keys(digest)
@@ -60,6 +67,8 @@ def fetch(base, pin_text, output):
     if len(raw)>2*1024**2: raise ValueError('public manifest exceeds limit')
     receipt = json.loads(raw); P.require_public(receipt)
     if receipt['image']['sha256'] != digest: raise ValueError('public manifest differs from repo pin')
+    if tree_inputs is not None and receipt.get('inputs') != tree_inputs:
+        raise CI.RecipeInputDrift('the public manifest records other recipe inputs than this checkout derives; ' + CI.PIN_DRIFT_HINT)
     pin = dict(name='winapps-open.iso', url=base.rstrip('/')+'/'+iso_key,
                sha256=digest, size=receipt['image']['size'])
     B.fetch_file('public-bundle', pin, output, image=True)
@@ -77,7 +86,7 @@ def main(argv=None):
         print('PUBLIC_BUNDLE_FAIL base-is-not-the-bundles-domain (the only accepted base is '+PUBLIC_BASE+')',file=sys.stderr);return 1
     try:
         urllib.request.install_opener(urllib.request.build_opener(B._HTTPSRedirect()))
-        fetch(base,a.pin.read_text(),a.out);print('PUBLIC_BUNDLE_OK');return 0
+        fetch(base,a.pin.read_text(),a.out,tree_inputs=CI.tree_inputs(HERE));print('PUBLIC_BUNDLE_OK');return 0
     except (OSError, ValueError, KeyError, TypeError) as error:
         print('PUBLIC_BUNDLE_FAIL reason='+reason_of(error),file=sys.stderr);return 1
 

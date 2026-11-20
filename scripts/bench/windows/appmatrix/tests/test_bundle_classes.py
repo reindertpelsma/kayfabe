@@ -329,7 +329,7 @@ class PublicBaseDefault(unittest.TestCase):
             shutil.copyfile(root / 'public/winapps-open.iso', destination)
 
         with patch.object(F.urllib.request, 'urlopen', side_effect=opened), patch.object(F.urllib.request, 'install_opener'), \
-                patch.object(B, 'fetch_file', side_effect=copy), patch('sys.stderr', errors):
+                patch.object(B, 'fetch_file', side_effect=copy), patch.object(B, 'input_hash', return_value=receipt['inputs']), patch('sys.stderr', errors):
             rc = F.main([*base, '--pin', str(pin), '--out', str(root / 'out.iso')])
         return rc, requests, errors.getvalue()
 
@@ -602,3 +602,146 @@ class WinAppsPinRefusal(unittest.TestCase):
         marker = 'verdict RETRY MEDIA "fetch of winapps-open.iso failed'
         self.assertEqual(text.count(marker), 1)
         self.assertTrue(text.index('fetch_failed() {') < text.index(marker) < text.index('\nrun_loop_alive_any()'))
+
+
+class PublicFetchDrift(unittest.TestCase):
+    """Ported from the first draft of the republish PR (#529, commit 5bb0dfa16): a pin or a published manifest of other inputs than
+    this checkout derives is named RECIPE_INPUT_DRIFT BEFORE the 2.7 GB download (2026-11-20, measured: every fresh box downloaded the
+    ISO and then failed verify_image). FALSIFIER: a stale pin that reaches a request; a manifest of other inputs that reaches the
+    download; a pin or manifest without inputs that is checked as equal; main() that does not pass the tree's hash on; any of them
+    printing the recorded text (the manifest is provider-controlled)."""
+    TREE, OLD, DIGEST = 'a' * 64, 'b' * 64, 'c' * 64
+
+    def pin(self, inputs=None):
+        return B.pin_text(self.DIGEST, self.OLD if inputs is None else inputs)
+
+    def receipt(self, inputs='default'):
+        receipt = dict(bundle_class='public', packages=[], image=dict(sha256=self.DIGEST, size=1))
+        if inputs is not None: receipt['inputs'] = self.OLD if inputs == 'default' else inputs
+        return receipt
+
+    def fetch(self, pin, receipt, verify=None):
+        import fetch_public_bundle as F
+        calls = dict(request=0, download=0)
+
+        def opened(request, timeout=None):
+            calls['request'] += 1
+            return io.BytesIO(B.canonical(receipt))
+
+        def download(*args, **kwargs):
+            calls['download'] += 1
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(F.urllib.request, 'urlopen', side_effect=opened), \
+                patch.object(B, 'fetch_file', side_effect=download), patch.object(B, 'verify_image', side_effect=verify or (lambda *a, **k: None)):
+            try:
+                F.fetch('https://bundles.kayfabe.dev', pin, Path(tmp) / 'x.iso', tree_inputs=self.TREE)
+                error = None
+            except ValueError as e:
+                error = e
+        return error, calls
+
+    def main(self, pin, receipt, verify=None):
+        import fetch_public_bundle as F
+        calls = dict(request=0)
+        errors = io.StringIO()
+
+        def opened(request, timeout=None):
+            calls['request'] += 1
+            return io.BytesIO(B.canonical(receipt))
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(F.urllib.request, 'urlopen', side_effect=opened), \
+                patch.object(F.urllib.request, 'install_opener'), patch.object(B, 'fetch_file'), patch.object(B, 'input_hash', return_value=self.TREE), \
+                patch.object(B, 'verify_image', side_effect=verify or (lambda *a, **k: None)), patch('sys.stderr', errors):
+            (Path(tmp) / 'bundle.pin').write_text(pin)
+            rc = F.main(['--pin', str(Path(tmp) / 'bundle.pin'), '--out', str(Path(tmp) / 'x.iso')])
+        return rc, calls['request'], errors.getvalue()
+
+    # the comparison
+    def test_equal_inputs_pass(self):
+        import bundle_ci as CI
+        CI.check_pin_inputs(self.pin(self.TREE), self.TREE)
+
+    def test_changed_inputs_are_named_with_both_digests_and_the_remedy(self):
+        import bundle_ci as CI
+        with self.assertRaises(CI.RecipeInputDrift) as caught: CI.check_pin_inputs(self.pin(), self.TREE)
+        for needle in (self.OLD, self.TREE, CI.PIN_DRIFT_HINT): self.assertIn(needle, str(caught.exception))
+
+    def test_a_pin_without_inputs_is_drift(self):
+        import bundle_ci as CI
+        with self.assertRaises(CI.RecipeInputDrift): CI.check_pin_inputs('winapps-open.iso sha256=' + self.DIGEST + '\n', self.TREE)
+
+    def test_a_pin_without_any_line_is_drift(self):
+        import bundle_ci as CI
+        with self.assertRaises(CI.RecipeInputDrift): CI.check_pin_inputs('# nothing pinned\n', self.TREE)
+
+    # fetch
+    def test_fetch_refuses_a_stale_pin_before_any_request(self):
+        import bundle_ci as CI
+        error, calls = self.fetch(self.pin(), self.receipt(self.TREE))
+        self.assertIsInstance(error, CI.RecipeInputDrift)
+        self.assertEqual(calls, dict(request=0, download=0))
+
+    def test_fetch_refuses_a_pin_without_inputs_before_any_request(self):
+        import bundle_ci as CI
+        error, calls = self.fetch('winapps-open.iso sha256=' + self.DIGEST + '\n', self.receipt(self.TREE))
+        self.assertIsInstance(error, CI.RecipeInputDrift)
+        self.assertEqual(calls['request'], 0)
+
+    def test_fetch_refuses_a_manifest_of_other_inputs_before_the_download(self):
+        import bundle_ci as CI
+        error, calls = self.fetch(self.pin(self.TREE), self.receipt(self.OLD))
+        self.assertIsInstance(error, CI.RecipeInputDrift)
+        self.assertEqual(calls, dict(request=1, download=0))
+
+    def test_fetch_refuses_a_manifest_without_inputs_before_the_download(self):
+        import bundle_ci as CI
+        error, calls = self.fetch(self.pin(self.TREE), self.receipt(None))
+        self.assertIsInstance(error, CI.RecipeInputDrift)
+        self.assertEqual(calls, dict(request=1, download=0))
+
+    def test_fetch_passes_when_the_pin_and_the_manifest_match_the_tree(self):
+        error, calls = self.fetch(self.pin(self.TREE), self.receipt(self.TREE))
+        self.assertIsNone(error)
+        self.assertEqual(calls, dict(request=1, download=1))
+
+    def test_fetch_keeps_other_image_errors_out_of_the_drift_class(self):
+        import bundle_ci as CI
+        def verify(*a, **k): raise ValueError('image identity mismatch')
+        error, calls = self.fetch(self.pin(self.TREE), self.receipt(self.TREE), verify=verify)
+        self.assertIsNotNone(error)
+        self.assertNotIsInstance(error, CI.RecipeInputDrift)
+        self.assertEqual(calls['download'], 1)
+
+    # main: the named reason, and the tree's hash reaches the check
+    def test_main_names_a_stale_pin_and_makes_no_request(self):
+        self.assertEqual(self.main(self.pin(), self.receipt(self.TREE)), (1, 0, 'PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n'))
+
+    def test_main_names_a_pin_without_inputs_and_makes_no_request(self):
+        self.assertEqual(self.main('winapps-open.iso sha256=' + self.DIGEST + '\n', self.receipt(self.TREE)),
+                         (1, 0, 'PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n'))
+
+    def test_main_names_a_manifest_of_other_inputs(self):
+        self.assertEqual(self.main(self.pin(self.TREE), self.receipt(self.OLD)), (1, 1, 'PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n'))
+
+    def test_main_names_an_image_whose_embedded_recipe_differs(self):
+        def verify(*a, **k): raise ValueError('embedded recipe input identity mismatch')
+        self.assertEqual(self.main(self.pin(self.TREE), self.receipt(self.TREE), verify=verify),
+                         (1, 1, 'PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n'))
+
+    def test_main_passes_when_everything_matches(self):
+        self.assertEqual(self.main(self.pin(self.TREE), self.receipt(self.TREE)), (0, 1, ''))
+
+    def test_main_never_prints_what_the_manifest_or_the_pin_recorded(self):
+        for pin, receipt in (('winapps-open.iso sha256=' + self.DIGEST + '\n# inputs=SECRET-PIN-BODY\n', self.receipt(self.TREE)), (self.pin(self.TREE), self.receipt('SECRET-MANIFEST-BODY'))):
+            rc, _, errors = self.main(pin, receipt)
+            self.assertEqual((rc, errors), (1, 'PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n'))
+
+    def test_main_computes_the_tree_hash_from_the_checkout(self):
+        import fetch_public_bundle as F
+        import bundle_ci as CI
+        seen = []
+        with tempfile.TemporaryDirectory() as tmp, patch.object(F, 'fetch', side_effect=lambda *a, **k: seen.append(k)), \
+                patch.object(F.urllib.request, 'install_opener'), patch.object(CI, 'tree_inputs', return_value=self.TREE):
+            (Path(tmp) / 'bundle.pin').write_text('')
+            F.main(['--pin', str(Path(tmp) / 'bundle.pin'), '--out', str(Path(tmp) / 'x.iso')])
+        self.assertEqual(seen, [dict(tree_inputs=self.TREE)])

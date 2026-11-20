@@ -41,24 +41,41 @@ def read_pin(text, bundle_class="public"):
 PIN_DRIFT_HINT = "republish the bundle (docs/DOWNLOADS.md, Windows app bundle) and update bundle.pin"
 
 
-def pin_drift(root=HERE, bundle_class="public"):
-    """None when bundle.pin's `# inputs=` equals the input hash the tree at `root` derives; else dict(pinned, derived).
+class RecipeInputDrift(ValueError):
+    """The bundle bundle.pin names was built from other inputs than this checkout derives. Deterministic: never a MEDIA fault."""
 
-    Offline and ISO-free: the hash is a function of the tree plus the package/toolchain/open-package selection that
-    manifest.json and gate_profiles.json make (the same computation as `plan`). A pin without an inputs line is drift, not a
-    pass (it names nothing the stage could check). fetch_public_bundle.py fails the same way, after downloading the ISO, when
-    a hash-covered input changed after the pinned bundle was built (2026-11-19/20, apps.json and win_cuda_equiv.py)."""
+
+def tree_inputs(root=HERE, bundle_class="public"):
+    """The input hash the tree at `root` derives (the same computation as `plan`); offline."""
     root = Path(root)
-    derived = B.input_hash(B.load(root / "manifest.json"), B.load(root / "gate_profiles.json"), root=root, bundle_class=bundle_class)
-    pinned = read_pin((root / "bundle.pin").read_text(encoding="utf-8"), bundle_class).get("inputs", "")
+    return B.input_hash(B.load(root / "manifest.json"), B.load(root / "gate_profiles.json"), root=root, bundle_class=bundle_class)
+
+
+def compare_pin(pin_text, derived, bundle_class="public"):
+    """None when the pin's `# inputs=` equals `derived`; else dict(pinned, derived). A pin without an inputs line is drift, not a
+    pass: it names nothing the stage could check."""
+    pinned = read_pin(pin_text, bundle_class).get("inputs", "")
     return None if pinned == derived else dict(pinned=pinned, derived=derived)
+
+
+def pin_drift(root=HERE, bundle_class="public"):
+    """compare_pin for the repository's bundle.pin and the tree at `root` (offline, ISO-free). fetch_public_bundle.py makes the
+    same check before any request, and again against the published manifest, when a hash-covered input changed after the pinned
+    bundle was built (2026-11-19/20, apps.json and win_cuda_equiv.py)."""
+    root = Path(root)
+    return compare_pin((root / "bundle.pin").read_text(encoding="utf-8"), tree_inputs(root, bundle_class), bundle_class)
+
+
+def check_pin_inputs(pin_text, derived, bundle_class="public"):
+    drift = compare_pin(pin_text, derived, bundle_class)
+    if drift: raise RecipeInputDrift(pin_drift_message(drift))
 
 
 def pin_drift_message(drift):
     return ("bundle.pin '# inputs=" + (drift["pinned"] or "<missing>") + "' differs from the input hash this checkout derives ("
             + drift["derived"] + "): a hash-covered input changed after the pinned bundle was built (apps.json, guest/**.ps1/.py/.html, "
             "the six recipe .py files, the LICENSE files, bundle_tools.SOURCES, or the manifest/profile selection), so fetch_public_bundle.py "
-            "would refuse the pinned ISO with RECIPE_INPUT_DRIFT. Fix: " + PIN_DRIFT_HINT + ".")
+            "refuses the pinned ISO with RECIPE_INPUT_DRIFT. Fix: " + PIN_DRIFT_HINT + ".")
 
 
 def plan(inputs, pin, verify=False, bundle_class="public", receipt=None):

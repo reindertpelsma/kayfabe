@@ -37,6 +37,11 @@ class RepoPin(unittest.TestCase):
             self.fail(C.pin_drift_message(drift))
 
 
+    def test_the_pin_carries_an_image_an_inputs_and_an_inventory_line(self):
+        pin = C.read_pin((Path(H.AM) / "bundle.pin").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(pin), ["inputs", "inventory", "sha256"])
+
+
 def make_tree(parent):
     """A disposable copy of the appmatrix directory plus the repo-root files the input hash reads (SOURCES, licences)."""
     root = Path(parent) / "scripts/bench/windows/appmatrix"

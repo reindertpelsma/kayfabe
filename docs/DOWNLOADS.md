@@ -199,8 +199,10 @@ hash-covered input changes: `apps.json`, `guest/**` `.ps1`/`.py`/`.html`, the si
 `LICENSE-GPL`, `THIRD_PARTY_NOTICES.md`), `bundle_tools.SOURCES`, and the package and toolchain selection of `manifest.json` and
 `gate_profiles.json`. `appmatrix/tests/test_bundle_pin.py` enforces it offline (`bundle_ci.pin_drift`, no ISO, no network), so it is RED on any tree
 whose pin is stale until the bundle is republished; no ratchet hides it. It does not check that the published ISO really embeds the pinned
-inputs (that needs the ISO; `fetch_public_bundle.py` checks it on the box). A stale pin now ends the stage as `WINAPPS_REFUSED class=PIN
-reason=RECIPE_INPUT_DRIFT` (or `PIN_MISMATCH`), graded as the failing row `windows_apps_pin`, not as `RETRY class=MEDIA`.
+inputs (that needs the ISO; `fetch_public_bundle.py` checks it on the box). `fetch_public_bundle.py` now compares the pin's `# inputs=` with the
+tree before any request, and the published manifest's `inputs` before the 2.7 GB download, so a stale pin or manifest ends the stage as
+`WINAPPS_REFUSED class=PIN reason=RECIPE_INPUT_DRIFT` (or `PIN_MISMATCH`), graded as the failing row `windows_apps_pin`, not as `RETRY class=MEDIA`.
+Because the fetch now reads the pin's `# inputs=` line, that line is no longer a comment consumers may ignore.
 
 **OWNER SUPERSESSION, 2026-11-07 / CODE READ:** NVIDIA payloads are pinned official provisioning/run-time
 downloads only. They must never enter a distributed image/ISO or R2/GitHub object. Older proposals to cache
