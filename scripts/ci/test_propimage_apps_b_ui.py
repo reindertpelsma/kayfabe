@@ -229,6 +229,7 @@ class CaptureScript(unittest.TestCase):
         self.assertEqual(len(re.findall(r"(?m)^function Scrub-Text", self.ps1)), 1)
         for needle in ("Scrub-Text $_", "$line = Scrub-Text", "Scrub-Text ($_.Exception.Message)"):
             self.assertIn(needle, self.ps1)
+        self.assertLess(self.ps1.index("$Script:Dismissed = @($Script:Dismissed | ForEach-Object { Scrub-Text $_ })"), self.ps1.index("\nFinish $R"))
 
     def test_the_scrub_patterns_equal_the_python_ones(self):
         m = re.search(r"\$Script:ScrubRes = @\((.*?)\n\)\n", self.ps1, re.S)

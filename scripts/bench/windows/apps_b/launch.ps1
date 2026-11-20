@@ -264,4 +264,6 @@ try {
   Set-UiError
   if (-not $R.quit) { $R.quit = if ($c.proc) { Quit-App $c.proc } else { 'not started' } }
 }
+# the dialogs the row dismissed are listed in result.json (window title: button): scrub them like everything else
+$Script:Dismissed = @($Script:Dismissed | ForEach-Object { Scrub-Text $_ })
 Finish $R
