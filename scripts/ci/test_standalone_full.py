@@ -573,7 +573,7 @@ class AppsDiscoveryTests(unittest.TestCase):
         rc, rec, _ = self.run_stage({**self.ALL_PASS, "jax": ("MAYBE", "-")})
         self.assertEqual((rc, rec["not_run"]), (1, ["jax"]))
 
-    # ---- 2026-11-20: the first run on a box booted the BASE guest image (the stage never named the apps image), see docs/design/V3_STANDALONE_FULL_RUN.md section 4
+    # ---- The first run on a box booted the BASE guest image (the stage never named the apps image), see docs/design/V3_STANDALONE_FULL_RUN.md section 4
     CONFIG_NOTE = "CONFIG cases=291 pass=0 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=291 gpu=EXTERNAL"
     SETUP_REFUSED = ("MLROWS_FACTS {\"python\":[3,10,12],\"python_h\":false}\n"
                      "MLROWS_SETUP row=vllm status=ok reason=flavour_cu130,_31_s,_9.80_GB\n"

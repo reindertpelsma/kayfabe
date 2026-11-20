@@ -119,7 +119,7 @@ MUTANTS = [
     M("no-time-left-is-ignored", "ads", "    if deadline and now() + budget > deadline:", "    if False:", AD + "test_not_enough_time_is_a_retry_before_anything_starts"),
     M("unknown-verdict-word-is-a-result", "ads", '            status, reason = "NOT_RUN", "unknown_verdict_" + reason_of(verdict)', '            status, reason = "KNOWN_BREAKAGE", verdict',
       AD + "test_an_unknown_verdict_word_is_not_a_result"),
-    # 2026-11-20 (first run on a box): the stage booted the base image, booted rows the host setup had refused, and graded unjudgeable rows as rows that ran
+    # The first run on a box: the stage booted the base image, booted rows the host setup had refused, and graded unjudgeable rows as rows that ran
     M("the-stage-boots-the-image-itself-writable", "ads", 'APPS_PER_BOOT="1", KF_GUEST_IMG=str(overlay))', 'APPS_PER_BOOT="1", KF_GUEST_IMG=image)',
       AD + "test_every_step_gets_a_throwaway_overlay_and_never_an_image_itself", AD + "test_the_overlay_is_removed_when_the_stage_ends"),
     M("the-overlay-step-is-never-run", "ads", 'if step("overlay", ["qemu-img", "create"', 'if 0 and step("overlay", ["qemu-img", "create"',
