@@ -2778,6 +2778,8 @@ jobs:
         env:
           NB_REQUIRE_FUSE: "1"
         run: make -C broker check
+      - name: Mutants of the start-up flags' wiring (make -C broker mutate-launch-flags)
+        run: make -C broker mutate-launch-flags
 
   platform:
     name: platform — public status API and status pages (ci/platform-api, site/status)

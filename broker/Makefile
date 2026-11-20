@@ -37,7 +37,7 @@ CFLAGS  += -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
 LDFLAGS += -Wl,-z,relro,-z,now
 
 OBJS = nvkvm_broker.o nb_common.o nb_cursor.o nb_geom.o nb_placeholder.o \
-       nb_frame.o nb_xor.o nb_tick.o \
+       nb_frame.o nb_xor.o nb_tick.o nb_launch.o \
        nb_session_x11.o nb_session_wl.o nb_session_test.o
 
 # The broker -- and only the broker -- may start one helper thread: the one
@@ -125,7 +125,7 @@ GBM_LIBS   = $(shell $(PKG_CONFIG) --libs gbm)
 endif
 
 .SECONDARY:
-.PHONY: all install clean report check check-sanitize check-probe check-tick-probe mutate-tick-core mutate-tick-core
+.PHONY: all install clean report check check-sanitize check-probe check-tick-probe mutate-tick-core mutate-tick-core mutate-launch-flags
 all: report $(BIN) $(TESTCLIENT) $(RELAY) $(if $(HAVE_GBM),$(DMASRC),)
 
 report:
@@ -216,14 +216,20 @@ test-geom: test/test_geom.c nb_geom.c nvkvm_broker.h \
 # (test/stall_fuse.py: mount(2) as root, fusermount3 otherwise -- package
 # fuse3).  Where FUSE is unusable that case prints SKIP; NB_REQUIRE_FUSE=1,
 # as CI sets it, makes that a failure instead.
-check: all test-utf8 test-cursor test-geom test-xor test-tick
+test-launch: test/test_launch.c nb_launch.c nvkvm_broker.h \
+             common/nvkvm_broker_proto.h
+	$(CC) $(CFLAGS) -o $@ test/test_launch.c nb_launch.c $(LDFLAGS)
+
+check: all test-utf8 test-cursor test-geom test-xor test-tick test-launch
 	./test-utf8
 	./test-cursor
 	./test-geom
 	./test-xor
 	./test-tick
+	./test-launch
 	python3 test/mutate_xor.py
 	python3 test/mutate_tick.py
+	python3 test/mutate_launch.py
 	bash selftest.sh
 	python3 test/test_adopted_socket.py ./$(BIN)
 	python3 test/test_clipboard.py ./$(BIN)
@@ -231,6 +237,7 @@ check: all test-utf8 test-cursor test-geom test-xor test-tick
 	python3 test/test_cursor.py ./$(BIN)
 	python3 test/test_xor.py ./$(BIN)
 	python3 test/test_tick.py ./$(BIN)
+	python3 test/test_launch_flags.py ./$(BIN)
 	python3 test/test_stats_clock.py
 
 # NOT SHIPPED: the instrument that measured what a Wayland client must commit
@@ -250,6 +257,11 @@ check-probe: $(BIN)
 
 # The tick wiring in the core, mutated (rebuild + the socket tests per mutant):
 # on demand, not part of `check`.
+# Breaks the WIRING of the start-up flags (the call sites of nb_launch.c), one defect at a time, and
+# demands test_launch_flags.py notices.  Rebuilds the broker per mutant, so it is a target of its own.
+mutate-launch-flags: $(BIN)
+	python3 test/mutate_launch_flags.py
+
 mutate-tick-core: $(BIN)
 	python3 test/mutate_tickcore.py
 
@@ -273,6 +285,6 @@ install: $(BIN)
 	install -m 0755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
 
 clean:
-	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) wl-tick-probe test-tick *.o *.d \
-	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor test-tick \
+	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) wl-tick-probe test-tick test-launch *.o *.d \
+	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor test-tick test-launch \
 	      test/utf8_extracted.inc

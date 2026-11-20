@@ -31,33 +31,33 @@ The broker is a small program that owns the window, the input and the clipboard,
 - **The broker owns the cursor and the pacing.** It draws the guest's cursor, including true inverting cursors, and kayfabe composes none; the design makes the broker the frame clock (not built yet), with kayfabe's clock as the fallback after 50 ms of silence. The display design notes record problems with QEMU's own front ends: SDL and GTK read a guest cursor with different conventions, GTK warps the host pointer under a grab, and GTK's window resizing re-modes the guest. <!-- src: docs/OWNER_RULINGS.md sections AJ, AK, AL; docs/design/V3_DISPLAY.md cursor-format and ui_info notes -->
 - **Frames are copied on the GPU into a frame kayfabe owns.** For a compositor on the same NVIDIA GPU the frame never crosses to the CPU, and the guest cannot change it after the copy; other compositors get a copy in host RAM, with shared memory as the last fallback. <!-- src: docs/OWNER_RULINGS.md section L -->
 
-The imported `broker/README.md` still says to use `-display sdl` for an unconfined QEMU. That advice is nvkvm-pv's and does not apply here: this QEMU has no SDL.
-
-Note that `broker/README.md` shows QEMU options of the `nvkvm-pv` project (`-display nvkvm-broker,socket=...`). **Kayfabe does not use those.** In kayfabe the socket is a property of the device: `display-broker=<absolute socket path>`.
+There is no `-display sdl`, `-display gtk` or `-display nvkvm-broker` option in this QEMU. The socket is a property of the device: `display-broker=<absolute socket path>`.
 
 ### Build and run
 
 ```sh
 cd broker && make          # prints which backends it kept (Wayland, X11)
 make check                 # build + selftest
-nvkvm-display-broker --socket /run/user/<uid>/nvkvm/display.sock --backend auto --persist --title "kayfabe guest"
+nvkvm-display-broker --socket /run/user/<uid>/kayfabe/gpu0.sock --backend auto --persist --title "kayfabe guest"
 ```
 <!-- src: broker/README.md, scripts/bench/display/interactive.sh -->
 
 Run it in your desktop session as your normal user. Then give QEMU the same socket and your uid:
 
 ```
--device kf3-gpu,...,display=on,gop=on,display-broker=/run/user/<uid>/nvkvm/display.sock,display-broker-uid=<uid>
+-device kf3-gpu,...,display=on,gop=on,display-broker=/run/user/<uid>/kayfabe/gpu0.sock,display-broker-uid=<uid>
 ```
 <!-- src: scripts/bench/display/interactive.sh -->
 
 `display-broker-uid` names one more uid accepted as the broker; uid 0 and QEMU's own effective uid are always accepted, and the owner of the socket's directory is not. <!-- src: qemu/hw/misc/kf3/kf3.c -->
 
-Test the broker alone before involving QEMU: `nvkvm-broker-testclient /run/nvkvm/display.sock --present 640x480` prints the handshake and every input event and sends one buffer. <!-- src: broker/README.md -->
+Test the broker alone before involving QEMU: `nvkvm-broker-testclient /run/user/<uid>/kayfabe/gpu0.sock --present 640x480` prints the handshake and every input event and sends one buffer. <!-- src: broker/README.md -->
 
 Broker options (from the program's own usage text): `--socket PATH`, `--socket-mode OCTAL` (default 0600), `--socket-group NAME`, `--backend auto|wayland|x11|test`, `--size WxH` (default 1920x1080), `--title TEXT`, `--allow-user NAME`, `--allow-group NAME`, `--drop-user WHO`, `--fullscreen`, `--scale aspect|stretch|none`, `--persist` (keep the window when the VMM disconnects), `--clipboard off|guest-to-host|consent`, `--clipboard-trigger LIST`, `--refresh auto|none|<Hz>`, `--resolution auto|none|WxH`, `--present-mode`, `--verbose`. Run it with `--help` for the full list. <!-- src: broker/nvkvm_broker.c (usage text), scripts/bench/display/interactive.sh -->
 
 By default root and the invoking user may connect. The socket is mode 0600. <!-- src: broker/README.md, broker/nvkvm_broker.c -->
+
+The broker creates the socket's directory (mode 0700, one level) when it does not exist, and refuses an existing one that belongs to a user it does not trust or that other users can write to. A broker started outside the desktop session needs no environment: `--wayland-display NAME` (or an absolute path), `--runtime-dir DIR`, `--x11-display :N`, `--xauthority FILE` and `--allow-uid UID` replace `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `DISPLAY`, `XAUTHORITY` and `SUDO_UID`; the variables stay as the fallback when a flag is not given. `--allow-uid` pairs with `display-broker-uid=` on the QEMU side when the two users differ. <!-- src: broker/README.md, broker/nb_launch.c, broker/nvkvm_broker.c -->
 
 ### Grab, focus and hotkeys
 
@@ -117,4 +117,4 @@ For Windows, the recorded way to get a visible desktop is the one in [Windows gu
 - Current supported display coverage beyond the named Linux guest driver. The branch `codex/sweep-integrate-20261018`, not merged, reports earlier AD102 broker runs with Linux 590.48.01 and 595.91.07 [reported in `traces/sweep_integrate_20261018/MATRIX.md` on that branch, historical revisions `9d6f210ba` and `6265b980f`]. Those historical runs do not establish current-master display compatibility.
 - HDR.
 
-Verified on: the Linux desktop at kayfabe `0e64a960` (host 595.91.07, RTX 4070, GNOME Wayland, 2026-10-08) and the Windows 11 desktop in the README's screenshot (2026-10-21). Not verified end to end: the broker build and the launchers were read from the repository, not run for this page.
+Verified on: the Linux desktop at kayfabe `0e64a960` (host 595.91.07, RTX 4070, GNOME Wayland, 2026-10-08) and the Windows 11 desktop in the README's screenshot (2026-10-21). Not verified end to end: the broker build and the launchers were read from the repository, not run for this page. The start-up flags (`--wayland-display`, `--x11-display`, `--allow-uid` and the rest) were tested without a display server, against stand-in sockets; they have not been run in a real Wayland or X11 session.

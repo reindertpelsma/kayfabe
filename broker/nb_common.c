@@ -389,8 +389,14 @@ struct nb_session *nb_session_open(const struct nb_config *cfg)
 {
     struct nb_session *s;
     const char *want = cfg->backend ? cfg->backend : "auto";
-    bool have_wl = getenv("WAYLAND_DISPLAY") != NULL;
-    bool have_x11 = getenv("DISPLAY") != NULL;
+    /* A display flag names its backend and nothing else: with --x11-display
+     * given, a WAYLAND_DISPLAY in the environment is not a reason to open a
+     * Wayland window.  Only with no display flag does the environment pick. */
+    bool flagged = cfg->wayland_display || cfg->x11_display;
+    bool have_wl = cfg->wayland_display ||
+                   (!flagged && getenv("WAYLAND_DISPLAY") != NULL);
+    bool have_x11 = cfg->x11_display ||
+                    (!flagged && getenv("DISPLAY") != NULL);
 
     if (!strcmp(want, "x11")) {
         return nb_session_x11(cfg);
@@ -417,7 +423,9 @@ struct nb_session *nb_session_open(const struct nb_config *cfg)
      * frame to a hardware plane (direct scanout) at all.
      */
     if (have_wl) {
-        nb_log("auto: WAYLAND_DISPLAY is set — trying the Wayland backend");
+        nb_log("auto: %s — trying the Wayland backend",
+               cfg->wayland_display ? "--wayland-display was given"
+                                    : "WAYLAND_DISPLAY is set");
         s = nb_session_wayland(cfg);
         if (s) {
             return s;
@@ -425,7 +433,9 @@ struct nb_session *nb_session_open(const struct nb_config *cfg)
         nb_log("auto: the Wayland backend did not come up; falling through");
     }
     if (have_x11) {
-        nb_log("auto: DISPLAY is set — trying the X11 backend");
+        nb_log("auto: %s — trying the X11 backend",
+               cfg->x11_display ? "--x11-display was given"
+                                : "DISPLAY is set");
         s = nb_session_x11(cfg);
         if (s) {
             return s;
@@ -435,7 +445,8 @@ struct nb_session *nb_session_open(const struct nb_config *cfg)
 
     nb_err("no display backend could open a window.");
     nb_err("  The broker is a SESSION program: it draws on the user's desktop,");
-    nb_err("  so it needs WAYLAND_DISPLAY or DISPLAY set and reachable.  It is");
+    nb_err("  so it needs --wayland-display / --x11-display (or WAYLAND_DISPLAY");
+    nb_err("  / DISPLAY in its environment) naming a reachable server.  It is");
     nb_err("  the VMM that is meant to be sandboxed away from the display");
     nb_err("  server — running the BROKER without one defeats the design.");
     return NULL;
