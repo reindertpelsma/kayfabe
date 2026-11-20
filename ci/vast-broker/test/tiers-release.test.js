@@ -41,6 +41,8 @@ function allowed(cfg, die, { id, machine, host, price = 0.2, country = 'US' }) {
     // Matrix v2: alternate vendors by id (odd = AMD, even = Intel), so a plan can cover both (src/release.js).
     cpu_name: id % 2 ? 'AMD EPYC 7B13' : 'Intel(R) Xeon(R) Gold 6338',
     compute_cap: cc,
+    gpu_ram: 12288,
+    cpu_ram: 65536,
     country,
     dph_total: price,
     pricing: { computeStorage: price, bandwidth: 0, effective: price, total: price * hours(cfg) },

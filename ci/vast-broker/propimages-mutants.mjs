@@ -262,13 +262,7 @@ const MUTANTS = [
   ['conditions of an entry ignored', [[BW, 'if (!matches(entry.when, ctx)) return;', '']]],
   [
     'skipped stage still counted',
-    [
-      [
-        BW,
-        'const chosen = plan.filter((n) => (!only.length || only.includes(n)) && !skip.includes(n));',
-        'const chosen = plan;',
-      ],
-    ],
+    [[BW, 'const chosen = selectStages(plan, { only, skip });', 'const chosen = plan;']],
   ],
   [
     'pinned size not read from the pin',

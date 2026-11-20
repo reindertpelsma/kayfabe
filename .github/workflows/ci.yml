@@ -2059,6 +2059,8 @@ jobs:
           node ci/vast-broker/simulation-mutants.mjs
           python3 scripts/ci/profile_resources.py
           node ci/vast-broker/profile-resources-mutants.mjs
+          # RAM-by-VRAM offer rule of the large tier (2026-11-20): two named killers per mutant.
+          node ci/vast-broker/offer-ram-vram-mutants.mjs
           # Worker proprietary-image configuration and instruction part, the /bench-data allow-list stays closed (2026-11-16): two named killers per mutant.
           node ci/vast-broker/propimages-mutants.mjs
           # Private-object presign route, lease-time trust scope, estimate as the price and releaseSeq (2026-11-17): two named killers per mutant.
@@ -2254,6 +2256,10 @@ jobs:
       # The host unmap-call cap (crates/kf-mem/src/batch.rs `UNMAP_CALL_MAX_ENTRIES`, 2026-11-15): each mutant needs two named killers.
       - name: Host unmap-call cap mutations require two named killers each
         run: python3 scripts/ci/va_apply_bounds_mutants.py
+      # The guest-influence caps (docs/design/V3_GUEST_INFLUENCE_AUDIT.md, 2026-11-20: kf-qemu debugger sessions and
+      # engine objects per twin, kf-host handle counter): each mutant needs two named killers.
+      - name: Guest-influence cap mutations require two named killers each
+        run: python3 scripts/ci/guest_influence_mutants.py
       # The bounded VA-apply phase profiling (docs/design/V3_VA_PROFILE.md, 2026-11-16: kf-mem vaprof/vasmgr/batch,
       # kf-qemu split delivery, kf-cuda ceiling geometry; observation only): each mutant needs two named killers.
       - name: VA-apply profiling mutations require two named killers each
