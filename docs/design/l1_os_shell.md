@@ -1,6 +1,6 @@
 # L1-M2 — the OS shell: reactor, raw module, VMM seam, and the reclamation lifecycle (decision #38)
 
-**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+**STATUS: RESEARCH, 2026-11-20.** This record describes the pre-v3 tree and the C prototype as they stood in September 2026. The code, file and environment names it cites are, as the freshness gate found, no longer at those paths (the pre-v3 crates are in `archive/crates/`, the C prototype in `archive/nvkvm/` and `archive/qemu/`) or are cites into NVIDIA/nouveau source that a default checkout does not contain. Nothing in it was re-verified on 2026-11-20. The architecture is `THE_ARCHITECTURE_v3.md` (and `ARCHITECTURE.md`); read this file for its measurements and reasoning, not as a description of the tree. ⊘ Original status line, kept as written: *LIVE AS A REFERENCE, 2026-09-21 (w822).* Cited by `THE_DESIGN.md`, which is the
 current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
 wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
 findings**, and the **reasoning** behind a constraint.
