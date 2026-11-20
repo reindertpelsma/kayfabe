@@ -329,7 +329,7 @@ class PublicBaseDefault(unittest.TestCase):
             shutil.copyfile(root / 'public/winapps-open.iso', destination)
 
         with patch.object(F.urllib.request, 'urlopen', side_effect=opened), patch.object(F.urllib.request, 'install_opener'), \
-                patch.object(B, 'fetch_file', side_effect=copy), patch('sys.stderr', errors):
+                patch.object(B, 'fetch_file', side_effect=copy), patch.object(B, 'input_hash', return_value=receipt['inputs']), patch('sys.stderr', errors):
             rc = F.main([*base, '--pin', str(pin), '--out', str(root / 'out.iso')])
         return rc, requests, errors.getvalue()
 

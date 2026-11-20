@@ -38,6 +38,19 @@ def read_pin(text, bundle_class="public"):
     return result
 
 
+class RecipeInputDrift(ValueError):
+    """The bundle named by bundle.pin was built from other inputs than this checkout derives (never a MEDIA fault)."""
+
+
+def check_pin_inputs(pin_text, tree_inputs):
+    """bundle.pin's `# inputs=` must equal the tree's input hash; a pin without one cannot be checked, so it is drift too."""
+    pinned = read_pin(pin_text).get("inputs")
+    if pinned != tree_inputs:
+        raise RecipeInputDrift("RECIPE_INPUT_DRIFT pin=" + (pinned or "none") + " tree=" + tree_inputs
+                               + " (a hashed input changed after the pinned bundle was built: rebuild and republish it, "
+                               "docs/DOWNLOADS.md, Windows app bundle, Republish)")
+
+
 def plan(inputs, pin, verify=False, bundle_class="public", receipt=None):
     if not re.fullmatch(r"[0-9a-f]{64}", inputs): raise ValueError("invalid input digest")
     published = read_pin(pin, bundle_class)

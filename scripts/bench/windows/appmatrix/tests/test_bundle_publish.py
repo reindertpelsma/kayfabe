@@ -639,5 +639,124 @@ class PublishGuard(unittest.TestCase):
         with self.assertRaises(ValueError): P.guard_publish(e)
 
 
+class PinDrift(unittest.TestCase):
+    """RECIPE_INPUT_DRIFT (2026-11-20, measured on a Vast box): apps.json and win_cuda_equiv.py changed after the pin was
+    built, so the fetched ISO failed verify_image with a bare PUBLIC_BUNDLE_FAIL and the stage ended RETRY MEDIA. The pin's
+    `# inputs=` must equal the tree's input hash, and a mismatch has its own name, before any download."""
+    TREE, OLD = "a" * 64, "b" * 64
+    DIGEST = "c" * 64
+
+    def pin(self, inputs=None):
+        return B.pin_text(self.DIGEST, self.OLD if inputs is None else inputs)
+
+    def receipt(self, inputs=None):
+        return dict(bundle_class="public", packages=[], inputs=self.OLD if inputs is None else inputs, image=dict(sha256=self.DIGEST, size=1))
+
+    def fetch(self, pin, receipt, tree=None, verify=None):
+        import fetch_public_bundle as F
+        calls = dict(request=0, download=0)
+
+        def opened(request, timeout=None):
+            calls["request"] += 1
+            return io.BytesIO(B.canonical(receipt))
+
+        def download(*args, **kwargs):
+            calls["download"] += 1
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(F.urllib.request, "urlopen", side_effect=opened), \
+                patch.object(B, "fetch_file", side_effect=download), \
+                patch.object(B, "verify_image", side_effect=verify or (lambda *a, **k: None)):
+            try:
+                F.fetch("https://bundles.kayfabe.dev", pin, Path(tmp) / "x.iso", tree_inputs=self.TREE if tree is None else tree)
+                error = None
+            except ValueError as e:
+                error = e
+        return error, calls
+
+    def main(self, pin, receipt, verify=None):
+        import fetch_public_bundle as F
+        calls = dict(request=0)
+        errors = io.StringIO()
+
+        def opened(request, timeout=None):
+            calls["request"] += 1
+            return io.BytesIO(B.canonical(receipt))
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(F.urllib.request, "urlopen", side_effect=opened), \
+                patch.object(F.urllib.request, "install_opener"), patch.object(B, "fetch_file"), patch.object(B, "input_hash", return_value=self.TREE), \
+                patch.object(B, "verify_image", side_effect=verify or (lambda *a, **k: None)), patch("sys.stderr", errors):
+            (Path(tmp) / "bundle.pin").write_text(pin)
+            rc = F.main(["--pin", str(Path(tmp) / "bundle.pin"), "--out", str(Path(tmp) / "x.iso")])
+        return rc, calls["request"], errors.getvalue()
+
+    def test_equal_inputs_pass(self):
+        C.check_pin_inputs(self.pin(self.TREE), self.TREE)
+
+    def test_changed_inputs_are_named(self):
+        with self.assertRaises(C.RecipeInputDrift) as caught: C.check_pin_inputs(self.pin(), self.TREE)
+        self.assertIn("RECIPE_INPUT_DRIFT", str(caught.exception))
+        self.assertIn(self.OLD, str(caught.exception)); self.assertIn(self.TREE, str(caught.exception))
+
+    def test_a_pin_without_inputs_cannot_be_checked_and_is_drift(self):
+        with self.assertRaises(C.RecipeInputDrift): C.check_pin_inputs("winapps-open.iso sha256=" + self.DIGEST + "\n", self.TREE)
+
+    def test_fetch_refuses_stale_pin_before_any_request(self):
+        error, calls = self.fetch(self.pin(), self.receipt())
+        self.assertIsInstance(error, C.RecipeInputDrift)
+        self.assertEqual(calls, dict(request=0, download=0))
+
+    def test_fetch_without_inputs_line_refuses_before_any_request(self):
+        error, calls = self.fetch("winapps-open.iso sha256=" + self.DIGEST + "\n", self.receipt(self.TREE))
+        self.assertIsInstance(error, C.RecipeInputDrift)
+        self.assertEqual(calls["request"], 0)
+
+    def test_fetch_refuses_a_manifest_of_other_inputs_before_the_download(self):
+        error, calls = self.fetch(self.pin(self.TREE), self.receipt(self.OLD))
+        self.assertIsInstance(error, C.RecipeInputDrift)
+        self.assertEqual(calls, dict(request=1, download=0))
+
+    def test_fetch_names_an_image_whose_embedded_recipe_differs(self):
+        def verify(*a, **k): raise ValueError("embedded recipe input identity mismatch")
+        error, calls = self.fetch(self.pin(self.TREE), self.receipt(self.TREE), verify=verify)
+        self.assertIsInstance(error, C.RecipeInputDrift)
+        self.assertEqual(calls["download"], 1)
+
+    def test_fetch_keeps_other_image_errors_unnamed(self):
+        def verify(*a, **k): raise ValueError("image identity mismatch")
+        error, _ = self.fetch(self.pin(self.TREE), self.receipt(self.TREE), verify=verify)
+        self.assertNotIsInstance(error, C.RecipeInputDrift)
+        self.assertIsNotNone(error)
+
+    def test_fetch_passes_when_everything_matches(self):
+        error, calls = self.fetch(self.pin(self.TREE), self.receipt(self.TREE))
+        self.assertIsNone(error); self.assertEqual(calls, dict(request=1, download=1))
+
+    def test_main_names_the_drift_and_makes_no_request(self):
+        rc, requests, errors = self.main(self.pin(), self.receipt())
+        self.assertEqual((rc, requests), (1, 0))
+        self.assertIn("PUBLIC_BUNDLE_FAIL RECIPE_INPUT_DRIFT", errors)
+
+    def test_main_names_a_manifest_of_other_inputs(self):
+        rc, requests, errors = self.main(self.pin(self.TREE), self.receipt(self.OLD))
+        self.assertEqual((rc, requests), (1, 1))
+        self.assertIn("PUBLIC_BUNDLE_FAIL RECIPE_INPUT_DRIFT", errors)
+
+    def test_main_names_an_embedded_recipe_mismatch(self):
+        def verify(*a, **k): raise ValueError("embedded recipe input identity mismatch")
+        rc, _, errors = self.main(self.pin(self.TREE), self.receipt(self.TREE), verify=verify)
+        self.assertEqual(rc, 1); self.assertIn("PUBLIC_BUNDLE_FAIL RECIPE_INPUT_DRIFT", errors)
+
+    def test_main_passes_the_tree_inputs_on(self):
+        rc, requests, errors = self.main(self.pin(self.TREE), self.receipt(self.TREE))
+        self.assertEqual((rc, requests, errors), (0, 1, ""))
+
+    def test_main_other_failures_name_only_the_exception_class(self):
+        def verify(*a, **k): raise ValueError("image identity mismatch SECRET-BODY")
+        rc, _, errors = self.main(self.pin(self.TREE), self.receipt(self.TREE), verify=verify)
+        self.assertEqual(rc, 1)
+        self.assertIn("PUBLIC_BUNDLE_FAIL reason=ValueError", errors); self.assertNotIn("RECIPE_INPUT_DRIFT", errors)
+        self.assertNotIn("SECRET-BODY", errors)
+
+
 if __name__ == "__main__":
     unittest.main()
