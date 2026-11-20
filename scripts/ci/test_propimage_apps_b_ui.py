@@ -231,8 +231,10 @@ class CaptureScript(unittest.TestCase):
             self.assertIn(needle, self.ps1)
 
     def test_the_scrub_patterns_equal_the_python_ones(self):
-        for rx in B.SCRUB_RES + (B.SCRUB_AFTER,):
-            self.assertIn("'%s'" % rx, self.ps1, rx)
+        m = re.search(r"\$Script:ScrubRes = @\((.*?)\n\)\n", self.ps1, re.S)
+        self.assertTrue(m)
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", m.group(1))), B.SCRUB_RES)         # the PowerShell list is the source of the comparison
+        self.assertIn("$Script:ScrubAfter = '%s'" % B.SCRUB_AFTER, self.ps1)
         self.assertIn("'<scrubbed>'", self.ps1)
         self.assertIn("'$1 <scrubbed>'", self.ps1)
 
@@ -241,6 +243,10 @@ class CaptureScript(unittest.TestCase):
         self.assertTrue(m)
         words = re.findall(r"'([^']+)'", m.group(1))
         self.assertEqual(tuple(words), B.HIT_WORDS)
+
+
+class Words(unittest.TestCase):
+    def test_the_requested_words_are_all_hit_words(self):
         for w in ("download", "install", "online", "model", "not available", "unavailable", "requires internet", "internet connection", "internet",
                   "sign in", "sign-in", "signin", "log in", "trial", "offline", "update", "connect", "licen", "subscription", "get started", "free",
                   "activate", "add-on", "addon", "plug-in", "plugin", "content", "library", "cloud", "account"):
@@ -273,8 +279,8 @@ class FakeGuest:
     """Just enough of the guest transport for propimage_apps_b.run_check: files in a dict, the bound check of the pull command evaluated here."""
     user = "kfimage"
 
-    def __init__(self, files):
-        self.files, self.asked, self.pulled = files, [], []
+    def __init__(self, files, grown=()):
+        self.files, self.asked, self.pulled, self.grown = files, [], [], grown       # `grown`: files that pass the size check and are bigger when pulled
 
     def ps(self, cmd):
         r = types.SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -286,7 +292,7 @@ class FakeGuest:
             m = re.search(r"Test-Path '[^']*/([^'/]+)'\)\{\$f=Get-Item '[^']*'.*-le (\d+)", cmd)
             fn, limit = m.group(1), int(m.group(2))
             self.asked.append((fn, limit))
-            if fn in self.files and len(self.files[fn]) <= limit:
+            if fn in self.files and (len(self.files[fn]) <= limit or fn in self.grown):
                 r.stdout = "bounded"
         elif "started" in cmd or "New-ScheduledTask" in cmd:
             r.stdout = "started"
@@ -311,8 +317,8 @@ def launch_result(app, **extra):
 
 
 class Pull(unittest.TestCase):
-    def run_row(self, app, files):
-        guest = FakeGuest(files)
+    def run_row(self, app, files, grown=()):
+        guest = FakeGuest(files, grown)
         self.td = tempfile.TemporaryDirectory()
         self.addCleanup(self.td.cleanup)
         stub = lambda g, operation, **kw: (operation(), {"verdict": "PASS", "required": [], "peak": {}, "baseline": {}, "samples": 1, "reasons": []})  # noqa: E731
@@ -388,6 +394,29 @@ class Pull(unittest.TestCase):
             self.assertEqual(p.read_bytes(), "Text | <scrubbed> | \ufffd\n".encode())
 
 
+    def test_a_row_that_is_not_a_launch_row_is_never_asked_for_the_ui_files(self):
+        files = {"result.json": launch_result("gpudiag"), "uitext.txt": b"x", "uitext_hits.txt": b"x", "inventory.txt": b"x"}
+        guest, row, d = self.run_row("gpudiag", files)
+        self.assertEqual([n for n, _ in guest.asked if n in B.UI_FILES], [])
+
+    def test_a_file_that_grew_after_the_size_check_is_deleted(self):
+        files = {"result.json": launch_result("bridge"), "uitext.txt": b"Text | a@b.co | x\n" * 40000, "uitext_hits.txt": b"Text | Download | x\n"}
+        guest, row, d = self.run_row("bridge", files, grown=("uitext.txt",))
+        self.assertIn("uitext.txt", guest.pulled)
+        self.assertFalse((d / "uitext.txt").exists())
+        self.assertTrue((d / "uitext_hits.txt").is_file())
+        self.assertTrue(row["ok"], row)
+
+    def test_every_ui_file_is_scrubbed_including_the_inventory(self):
+        mail = b"root: a@b.co\nText | c@d.org | key ABCD-1234-EFGH-5678\n"
+        files = {"result.json": launch_result("bridge"), "uitext.txt": mail, "uitext_hits.txt": mail, "inventory.txt": mail}
+        guest, row, d = self.run_row("bridge", files)
+        for f in B.UI_FILES:
+            text = (d / f).read_text()
+            self.assertEqual(text.count("<scrubbed>"), 3, f)
+            self.assertNotIn("@", text, f)
+
+
 class GradeLaunch(unittest.TestCase):
     def setUp(self):
         self.td = tempfile.TemporaryDirectory()
@@ -405,6 +434,11 @@ class GradeLaunch(unittest.TestCase):
         self.assertEqual(row["ui_hits"], 3)
         self.assertIn("ui_hits=3", row["signal"])
         self.assertEqual((row["status"], row["limited"], row["evidence"]), ("PASS_LIMITED", True, "UIA"))
+
+    def test_blank_lines_are_not_counted(self):
+        self.put()
+        (self.d / "uitext_hits.txt").write_text("a\n\n   \nb\n")
+        self.assertEqual(B.verdict("audition", "x", self.d, None)["ui_hits"], 2)
 
     def test_without_the_file_the_guest_count_is_used_and_without_both_it_is_zero(self):
         self.put(ui_hits=4)

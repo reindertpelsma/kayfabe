@@ -412,7 +412,7 @@ class PinsFlag(RunBase, unittest.TestCase):
                  "bad sha": json.dumps(dict(good, items=[dict(i, sha256="zz") for i in good["items"]])),
                  "dest traversal": json.dumps(dict(good, items=[dict(i, dest="../x") for i in good["items"]])),
                  "dest not text": json.dumps(dict(good, items=[dict(i, dest=7) for i in good["items"]])),
-                 "huge": " " * (sb.PINS_MAX_BYTES + 1)}
+                 "huge": json.dumps(good) + " " * (sb.PINS_MAX_BYTES + 1)}
         out = {}
         for label, text in cases.items():
             tmp = Path(tempfile.mkdtemp(prefix="kf-pab-bad-"))
@@ -433,6 +433,17 @@ class PinsFlag(RunBase, unittest.TestCase):
         path.write_text(json.dumps(doc))
         rc, seen, out = self.main("--pins", str(path))
         self.assertEqual((rc, seen, out.strip()), (2, [], "KF_PROPIMAGE_APPS_B_REFUSED PINS_NO_DATA"))
+
+    def test_the_run_refuses_a_file_without_the_data_volume_before_anything_starts(self):
+        doc = json.loads(self.other_pins().read_text())
+        doc["items"] = [i for i in doc["items"] if i["role"] != "data"]
+        path = self.other_pins().with_name("nodata.json")
+        path.write_text(json.dumps(doc))
+        env = self.make()
+        env.ctx.pins_path = path
+        rec = sb.run(env.ctx)
+        self.assertEqual((rec["verdict"], rec["reason"], rec["boots"]), ("REFUSED", "PINS_NO_DATA", []))
+        self.assertFalse((env.ctx.prefix / "dl").exists())
 
     def test_the_run_itself_refuses_a_missing_or_malformed_file_before_anything_starts(self):
         env = self.make()
@@ -506,6 +517,16 @@ class RowSelection(RunBase, unittest.TestCase):
             self.assertEqual(by[(n,)], MOD.CHECKS[n]["timeout"] + pa.BOOT_SLACK_S, n)
             self.assertLessEqual(MOD.CHECKS[n]["timeout"], 900, n)
         self.assertEqual(by[("dimension", "uxp")], 1200 + 900 + pa.BOOT_SLACK_S)
+
+    def test_ui_text_files_land_in_the_evidence_directory_of_their_row(self):
+        env = self.make()
+        ev = env.tmp / "evidence"
+        rec = sb.run(env.ctx, str(ev), apps=["bridge", "substance_painter"])
+        self.assertEqual(rec["verdict"], "PASS", rec)
+        for row in ("bridge", "substance_painter"):
+            for name in ("uitext.txt", "uitext_hits.txt", "inventory.txt", "verdict.json"):
+                self.assertTrue((ev / row / name).is_file(), (row, name))
+        self.assertFalse(list(ev.rglob("*.png")))
 
     def test_the_plan_command_lists_the_new_rows_as_boots_of_their_own(self):
         import contextlib
