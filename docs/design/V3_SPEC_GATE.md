@@ -15,6 +15,26 @@ retry row of the table in section 6 except `NOT_RUN SETUP`, and any other die. T
 
 **2026-11-17 (owner): the guest of the lanes now has the network and the real clock (`KF_SPEC_NET`, default online) and the licence probe is on by default: section 5a. CODE and GPU-free tests only.**
 
+**2026-11-20 (MEASURED on one box; CODE and GPU-free tests only): the copy into the guest has a derived time budget, a knob and progress lines.**
+MEASURED on one Vast RTX 4090 box (an EPYC 7B13 VM, tree `7fb1c98a0`): the stage ended `SPECVIEWPERF_STAGE_RETRY class=TIME` with 9 of 9 rows
+`NOT_RUN SETUP`, because the copy of the tree into the guest (`stream | zstd -d --long=31 | tarfilter.py | ssh tar`) reached its fixed 70-minute
+budget at about 5 MB/s, and nothing in the log said how far it had got. Why the rate was low is INFERRED, not measured: one host thread bound by
+the guest's user-mode network. The earlier box (a Ryzen 9 5950X) did the same step in 51 minutes (13.7 MB/s). Now
+(`scripts/bench/specviewperf/copy_budget.py`; `scripts/ci/test_spec_copy_budget.py`, `CopyBudget` in `test_vast_spec_stage.py`, 19 more mutants in
+`spec_stage_mutants.py`):
+(1) the budget is the lane's tree size (`lanes.json` `tree_gb`, read as GiB) at a floor rate of 5 MB/s (the measured worst case of that one box, a
+named constant), plus 20 % and 600 s, never more than the time left: 13,460 s for lane A, 11,913 s for lane B, 24,773 s for both. The knob
+`KF_SPEC_COPY_BUDGET_S` (whole seconds, 600 to 86400) replaces the derived number and is clamped to the time left too; a bad value is
+`RETRY class=OPERATOR`, by name, before anything is fetched or booted. (2) A byte counter sits between `tarfilter.py` and the ssh tar (the copy
+pipeline has five stages now, `cps[0..4]`, and the guest's tar is `cps[4]`); it appends `SPEC_NOTE copy progress bytes=<n> rate_mb_s=<r> elapsed_s=<t>
+budget_s=<b>` to `stage.log` every `KF_SPEC_COPY_NOTE_S` seconds (default 60) and one last line marked `final=1`; the lines are not status lines, so
+the wrapper does not stream them. The count is what was handed to the guest's tar, a little ahead of what the guest has written. (3) The TIME abort of
+the copy names the bytes copied, the observed rate and `needed_s≈` (the whole tree at that rate: the budget that would have sufficed), and is still
+`class=TIME`. Not measured: that a real box shows these lines (a fake launcher only). Not changed: `setup_s` (2700 s) of `lanes.json`, which the payload's whole-lane
+time check uses, still assumes a copy at 40 to 45 MB/s (INFERRED stale at 5 MB/s); and the copy budget is not reduced by the time the first
+viewset needs after the copy (INFERRED: a slow copy can use the whole time left and end as `NOT_RUN TIME` rows). A transport that does not pass the tree through
+ssh and the guest's user-mode network (a prepared disk or ISO) is a backlog design item of the owner, not built here.
+
 ## First real run, 2026-11-09 (MEASURED; evidence `traces/spec_stage_proof_20261109/`)
 
 Box: Vast RTX 4090 (AD102), label `kf-spec1`, host driver 595.91.07, Windows 11 LTSC 26100 with guest driver 580.88, kayfabe `next` tip
@@ -106,6 +126,8 @@ class **MEDIA** and the helper deletes the bytes. A transport failure of the dow
 time while downloading is **TIME**. The Worker mints at most 4 presigned URLs per object per run, each valid at most 20 minutes
 (CODE READ, `benchdata.js`); the helper takes at most 3 and resumes. **MEASURED** download speed 48 to 52 MB/s, so 14 to 16 minutes
 for the archive, and the hash of the whole file 1.5 to 5 minutes.
+
+**2026-11-20 note:** the copy through ssh and the guest's user-mode network ran at about 5 MB/s on one box, not at the disk's 40 to 45 MB/s named below; the copy's budget and its progress lines are in the 2026-11-20 note at the top of this document.
 
 The archive is downloaded in the background while the stage does its host reference and boots the copy guest. It is then verified
 (inside the helper), streamed through `zstd -d | tarfilter.py | ssh ... tar -xf -` into the guest, and deleted right after the copy.
@@ -337,7 +359,7 @@ GPU-free, all in `scripts/ci/` (run by the `Vast box scripts` workflow, which di
 - `test_vast_run_report.py`: the new `SpecStatusRows` class. `test_vast_payload_tiers.py` and `test_vast_payload_v7.py` were adapted
   (the lane is required).
 - Mutants, each killed by at least two tests: `payload_mutants.py` (the 19 `spec-*` cases), `spec_stage_mutants.py` (74: the lane,
-  filter, stage and wrapper rules; 28 more on 2026-11-17 for the network, the probe, the classification and `licence.py`), `run_report_mutants.py` (8 `spec-*` cases), plus the node tests of `tier.js`
+  filter, stage and wrapper rules; 28 more on 2026-11-17 for the network, the probe, the classification and `licence.py`; 19 more on 2026-11-20 for the copy budget and its progress), `run_report_mutants.py` (8 `spec-*` cases), plus the node tests of `tier.js`
   (`ci/vast-broker/test/tiers-release.test.js`).
 
 CI (`.github/workflows/vast-box-scripts.yml`): the job `gpu-free` runs these tests with the rest of `test_vast*.py`; the stage mutants

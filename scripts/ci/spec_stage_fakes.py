@@ -11,7 +11,7 @@ The fake guest answers the guest script's actions from the files under <root>/sc
 pass, fail_subtest, reset, refused, gather, gather_once, no_tdr, hang, dead, silent, scoreleak),
 `wall.<W>` (seconds the run takes on the fake clock), `polls.<W>`, `boot_fail.<kind><n>` (refused, bar1,
 nossh), `tar_rc`, `verify`, `cli_absent`, `scp_fail`, `fetch`, `cup8_fail_after`, `xid_new`, `block.<W>`.
-`die_mid` (a viewset mode): the guest is up for `polls.<W>` polls, then the VM process is gone (what a guest that shuts itself
+`tar_stall` / `tar_pause` (the guest's tar stops reading for good / waits that many seconds: the copy budget and its progress lines), `die_mid` (a viewset mode): the guest is up for `polls.<W>` polls, then the VM process is gone (what a guest that shuts itself
 down looks like). The licence probe (scripts/bench/windows/spec/licence_probe.ps1) answers from `licence.<kind><n>` (the boot
 number counts the copy boot too: copy1, run2, run3, ...), else `licence.default`, else a healthy readout; `runs.log` records the network (`net=`) and the clock
 the REAL clockrule.py picks for it (`rtc=`) at every launch.
@@ -22,6 +22,7 @@ import io
 import json
 import os
 from pathlib import Path
+import random
 import shutil
 import subprocess
 import tarfile
@@ -143,6 +144,10 @@ ssh)
     case "$cmd" in
         *KF_SSH_UP*) echo KF_SSH_UP ;;
         *'tar -xf -'*)
+            # tar_stall=<n>: take n bytes and then stop reading for good (a copy that does not end; the stage's timeout kills this);
+            # tar_pause=<s>: do not read for s seconds, then take everything (a slow copy: the progress lines come while it runs)
+            if [ -e "$S/tar_stall" ]; then head -c "$(rd tar_stall)" > "$R/guest_stream.tar"; exec /bin/sleep 120; fi
+            [ ! -e "$S/tar_pause" ] || /bin/sleep "$(rd tar_pause)"
             cat > "$R/guest_stream.tar"
             rc=$(rd tar_rc)
             exit "${rc:-0}" ;;
@@ -245,6 +250,8 @@ echo "fetch_bench_data: -> $out (sha256 ok)"
 FAKES = {
     "date": '#!/bin/bash\nif [ "$#" = 1 ] && [ "$1" = "+%s" ]; then echo $(( 1794000000 + $(cat "$FAKE_ROOT/clock_offset" 2>/dev/null || echo 0) )); else exec ' + REAL_DATE + ' "$@"; fi\n',
     "sleep": '#!/bin/bash\necho "$1" >> "$FAKE_ROOT/sleeps.log"\necho $(( $(cat "$FAKE_ROOT/clock_offset" 2>/dev/null || echo 0) + ${1%.*} )) > "$FAKE_ROOT/clock_offset"\n',
+    # the budgets the stage hands to `timeout` are recorded (timeouts.log: its arguments), then the real one runs
+    "timeout": '#!/bin/bash\necho "$*" >> "$FAKE_ROOT/timeouts.log"\nexec ' + (shutil.which("timeout") or "/usr/bin/timeout") + ' "$@"\n',
     "pgrep": '#!/bin/bash\n[ "${1:-}" = "-x" ] && exit 1\nexec ' + (shutil.which("pgrep") or "/usr/bin/pgrep") + ' "$@"\n',
     "id": '#!/bin/bash\n[ "${1:-}" = "-u" ] && echo 0 || exec /usr/bin/id "$@"\n',
     "free": '#!/bin/bash\nprintf "              total\\nMem:             %s\\n" "$(cat "$FAKE_ROOT/scn/ram" 2>/dev/null || echo 64)"\n',
@@ -276,9 +283,10 @@ def healthy_licence(tag="x", up_min=5):
     )
 
 
-def make_archive(root, members=None, bad=None):
+def make_archive(root, members=None, bad=None, pad=0):
     """The fake private copy: a zstd-compressed tar with the nine viewset directories. `bad` adds one member that
-    a tree of ours never holds ("symlink", "absolute", "dotdot")."""
+    a tree of ours never holds ("symlink", "absolute", "dotdot"). `pad` adds one incompressible file of that many bytes next to
+    the CLI, in no viewset directory (a stream that does not fit in the pipes: the copy budget tests need a copy that can stall)."""
     base = "Program Files/SPECviewperf 15"
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w", format=tarfile.GNU_FORMAT) as t:
@@ -297,6 +305,8 @@ def make_archive(root, members=None, bad=None):
         add_dir(base)
         add_file(base + "/SPECviewperf-CLI.exe", b"MZ" + b"cli" * 5)
         add_file(base + "/vcredist_x64.exe", b"MZvc")
+        if pad:
+            add_file(base + "/pad.bin", random.Random(7).randbytes(pad))  # outside every viewset directory: every lane keeps it
         for k, vid in enumerate(members or IDS):
             d = "%s/viewsets/%s-1.0.%d" % (base, vid, k + 1)
             add_dir(d)
@@ -320,7 +330,7 @@ def make_archive(root, members=None, bad=None):
 class Sandbox:
     """root/ holds the fake checkout (src/), the fake box state (winvm/, prov/, store/, bench/) and the fakes."""
 
-    def __init__(self, root, tag="ci0123abcd", pin=True, gate_pass=True, bad=None):
+    def __init__(self, root, tag="ci0123abcd", pin=True, gate_pass=True, bad=None, pad=0):
         self.root = Path(root)
         self.tag = tag
         self.src = self.root / "src"
@@ -335,7 +345,7 @@ class Sandbox:
         for d in (box, specd, win / "spec"):
             d.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(BENCH / "box/specviewperf_stage.sh", box / "specviewperf_stage.sh")
-        for name in ("lane.py", "licence.py", "lanes.json", "tarfilter.py", "stream_url.py"):
+        for name in ("lane.py", "licence.py", "lanes.json", "tarfilter.py", "stream_url.py", "copy_budget.py"):
             shutil.copyfile(BENCH / "specviewperf" / name, specd / name)
         (self.src / "scripts/ci").mkdir(parents=True, exist_ok=True)
         shutil.copyfile(HERE / "kf_trust.py", self.src / "scripts/ci/kf_trust.py")
@@ -353,7 +363,7 @@ class Sandbox:
             f.write_text(text)
             f.chmod(0o755)
         (self.root / "count_tar.py").write_text(COUNT_TAR)
-        self.sha = make_archive(self.root, bad=bad)
+        self.sha = make_archive(self.root, bad=bad, pad=pad)
         if pin:
             (box / "specviewperf.pin").write_text("# test pin\nspecviewperf-15.0.0.tar.zst sha256=%s\n" % self.sha)
         vm = self.root / "winvm/kfwin"
@@ -402,7 +412,7 @@ class Sandbox:
         if wrapper:
             env["KF_SPECVIEWPERF_LANE"] = str(self.src / "scripts/bench/box/specviewperf_stage.sh")
             env["KF_CI_PRIVATE_DIR"] = str(self.root / "private")
-        p = subprocess.run(self.command(wrapper), env=env, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+        p = subprocess.run(self.command(wrapper), env=env, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout, stdin=subprocess.DEVNULL)
         self.cleanup()
         return p
 
@@ -416,7 +426,7 @@ class Sandbox:
 
     def read(self, name):
         p = self.root / name
-        return p.read_text() if p.exists() else ""
+        return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
 
     def clock(self):
         return int(self.read("clock_offset") or 0)

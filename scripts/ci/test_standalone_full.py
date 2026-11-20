@@ -459,12 +459,27 @@ class AppsDiscoveryTests(unittest.TestCase):
         scratch = tempfile.TemporaryDirectory(prefix="ads-list-")
         self.addCleanup(scratch.cleanup)
         import os
-        os.environ["TMPDIR"] = scratch.name
+        import unittest.mock
+        # patched, not assigned: a bare assignment outlived the test and pointed every later test of the process at a deleted directory
+        patch = unittest.mock.patch.dict(os.environ, {"TMPDIR": scratch.name})
+        patch.start()
+        self.addCleanup(patch.stop)
         known = ads.known_rows(ROOT)
         for row in ads.ROWS:
             if row in ("nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm", "tensorrt", "jax") and row not in known:
                 self.skipTest("the open-row PRs are not all in this tree: " + row)
             self.assertIn(row, ads.ROW_TIMEOUT_S)
+
+    def test_the_tmpdir_of_the_rows_test_does_not_outlive_it(self):
+        # Regression (2026-11-20): the test above assigned os.environ["TMPDIR"] and its directory was then removed, so every later test of the
+        # same process (the shard layout decides which) found no temporary directory: the Windows gate and apps self-tests failed.
+        import os
+        before = os.environ.get("TMPDIR")
+        name = "test_every_row_of_the_stage_is_a_row_of_run_apps_and_has_a_timeout"
+        result = unittest.TestResult()
+        unittest.defaultTestLoader.loadTestsFromName(name, type(self)).run(result)
+        self.assertEqual((result.errors, result.failures), ([], []))
+        self.assertEqual(os.environ.get("TMPDIR"), before)
 
     def run_stage(self, results, bundle=True, host=False, runner=None, rows=None, deadline=0, image=True, base=False, setup_log="", setup_rc=0, environ=None,
                   receipt=None, overlay_rc=0, symlink_base=False, boom_on=None):

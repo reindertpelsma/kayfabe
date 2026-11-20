@@ -1,0 +1,140 @@
+{
+  "schema": "kayfabe.propimage-bundles/1",
+  "status": "STATUS: LIVE as data, 2026-11-19; READ by scripts/ci/propimage_config.py only (the generic stage and the Worker planner do not consume it yet: docs/design/V3_PROPIMAGE_CONFIG.md, steps 2-4). The project's own bundles, as operator deployment data: object keys and sizes are the project's store layout, not code. A third party passes its own file of the same schema. Sizes are read-backs of the store listing of 2026-11-19 unless a bundle's basis says otherwise. No licence key, account, e-mail, institution or credential belongs in this file (the validator refuses the shapes).",
+  "bundles": {
+    "imga": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261112/image-v2.zip",
+      "size_bytes": 50496618964,
+      "sha256": "cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3",
+      "ref": "propimage-kfimg-20261112.zip",
+      "apps": [
+        "solidworks",
+        "edrawings",
+        "3dmark",
+        "superposition",
+        "resolve"
+      ],
+      "basis": "object and identity as in propimages.json (store listing 2026-11-19 reads the same size); apps are the Worker's gate and discovery apps; the stage also runs rows edge and wukong",
+      "run": {
+        "rows_file": "scripts/bench/windows/propimage_check.py",
+        "pins_file": "scripts/ci/propimage_apps_pins.json",
+        "rows": [
+          "superposition",
+          "3dmark",
+          "solidworks",
+          "resolve",
+          "edrawings",
+          "edge",
+          "wukong"
+        ],
+        "solo_rows": [
+          "wukong"
+        ],
+        "data_iso": false,
+        "harness_args": {
+          "per_row": {
+            "superposition": [
+              "--superposition-run"
+            ],
+            "wukong": [
+              "--fb-mb",
+              "8192"
+            ]
+          }
+        }
+      }
+    },
+    "imgb": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261116/image.zip",
+      "size_bytes": 62506351001,
+      "sha256": "fe75afa169e65770f974fbcc3a2cb018ff14d58bd39b298539128cc6edcc154a",
+      "ref": "propimage-kfimg-20261116.zip",
+      "apps": [
+        "gpudiag",
+        "illustrator",
+        "acrobat",
+        "premiere",
+        "lightroomlaunch",
+        "dimension",
+        "uxp",
+        "photoshop",
+        "photoshopsample",
+        "photoshopprojects",
+        "aftereffects",
+        "aeparallel",
+        "aeprojects",
+        "aetoggle",
+        "mediaencoder",
+        "indesign",
+        "indesignsample",
+        "illustratorsample"
+      ],
+      "basis": "the Adobe image, version 1 (built 2026-11-16); a rebuilt candidate is not verified and is not entered here",
+      "licence_note": "named-user licences; the image is private and is never redistributed",
+      "run": {
+        "rows_file": "scripts/bench/windows/propimage_apps_b.py",
+        "pins_file": "scripts/ci/propimage_apps_b_pins.json",
+        "data_iso": true,
+        "guest_ram_mb": 16384,
+        "audio": true,
+        "harness_args": {
+          "before_apps": [
+            "--app-set",
+            "b"
+          ],
+          "after_apps": [
+            "--fb-mb",
+            "8192"
+          ]
+        }
+      }
+    },
+    "imgc": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-matlab-20261117/image.zip",
+      "size_bytes": 8128391922,
+      "sha256": "30780fbd7762690a86cda017aeacd459fa5ef5ed40aca6d6686e43b0234a9f1a",
+      "ref": "propimage-kfimg-matlab-20261117.zip",
+      "apps": [
+        "matlab"
+      ],
+      "basis": "identity is the full read-back of the object (2026-11-17, PR 467); propimages.json and matlab_pins.json still carry the earlier build until that PR merges",
+      "run": {
+        "rows_file": "scripts/bench/linux/matlab_rows.py",
+        "pins_file": "scripts/ci/matlab_pins.json",
+        "isolation": "row"
+      }
+    },
+    "imgd": {
+      "os": "windows",
+      "r2": "windows-proprietary/kfimg-20261118/image.zip",
+      "size_bytes": 86744842653,
+      "apps": [
+        "ansys",
+        "vred",
+        "maya_win",
+        "3dsmax",
+        "autocad",
+        "arcgispro",
+        "solidedge",
+        "keyshot",
+        "steam",
+        "quake2rtx",
+        "brightmemory"
+      ],
+      "basis": "UNVERIFIED. Every application is listed, not yet row-tested; the list comes from the build notes and probes and the owner confirms it. maya_win is the Windows Maya (the id maya is the Linux image's). No sha256; size from the store listing of 2026-11-19; no row table, so no run",
+      "licence_note": "Autodesk token not yet revoked; the vendor-side revoke and a passing token check come before any use on a rented box"
+    },
+    "imge": {
+      "os": "linux",
+      "r2": "linux-proprietary/kfimg-maya-20261119/image.zip",
+      "size_bytes": 7720510275,
+      "apps": [
+        "maya"
+      ],
+      "basis": "UNVERIFIED: built 2026-11-19; no sha256 and no token check are recorded in the repository; the size is the store listing of 2026-11-19; no row table exists yet, so no `run`"
+    }
+  }
+}
