@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-11-15.** One page to resume from. The newest dated UPDATE below (2026-11-15) is the last resume point recorded in this file; everything older was moved on 2026-11-07, unchanged, to [`history/`](history/) (see *History and the citation map*). Nothing in this file was re-run on 2026-11-07: each entry keeps its own date and evidence pointer, and a lane that finished later records itself in its own design document and `traces/` README, not here.
+**STATUS: LIVE, 2026-11-18.** One page to resume from. The newest dated UPDATE below (2026-11-15) is the last resume point recorded in this file; everything older was moved on 2026-11-07, unchanged, to [`history/`](history/) (see *History and the citation map*). Nothing in this file was re-run on 2026-11-07: each entry keeps its own date and evidence pointer, and a lane that finished later records itself in its own design document and `traces/` README, not here.
 
 ## Resume checklist
 
@@ -11,6 +11,10 @@
 5. The state of the branches: `git log --first-parent origin/master` (one line per batch) and `git log --first-parent origin/next`.
 6. The documents map: [`README.md`](README.md) (current documents versus history).
 
+
+## UPDATE 2026-11-18 — a vendor installer media as an offline application layer on the Windows 11 + NVIDIA base (measured on the pc; nothing sealed or uploaded)
+
+[`design/V3_WINDOWS_VENDOR_MEDIA_LAYER.md`](design/V3_WINDOWS_VENDOR_MEDIA_LAYER.md): how a 23 GB vendor media reaches the offline guest (a read-only UDF data disc built on the pc), the silent-install recipe from the media's own guide, what it cost (19 min 36 s, 66 GB installed, 65 GB of `C:` left), first launch, GPU findings, a second-machine-identity boot and two offline clones, all MEASURED with the hypotheses written first. The private image and the private notes are not in the repository.
 
 ## UPDATE 2026-11-15 — engines with no derived method table are not offered to a Windows guest (flag, default off; not run on hardware)
 
