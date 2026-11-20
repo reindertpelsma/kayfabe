@@ -388,6 +388,8 @@ rebuilt and republished bundle and the new `bundle.pin` in the same change set; 
 `verify_image` with `expected_inputs`, upload the ISO and then the manifest create-only, re-download from the public URL and compare, then commit the pin
 (`first/bundle.pin.line`).
 
+**CODE READ:** `bundle.pin` is read by pattern: the `winapps-open.iso sha256=` line, and the `# inputs=` and `# inventory=` comment lines (the first must equal the tree's input hash); every other comment is ignored.
+
 Full recipe, qualification rules and rollout details: [Windows apps gate, section 3](design/V3_WINDOWS_APPS_GATE.md#3-inputs-public-bundle-and-official-run-time-media).
 
 ## SPECviewperf in the Vast gate (the `specviewperf` stage)
