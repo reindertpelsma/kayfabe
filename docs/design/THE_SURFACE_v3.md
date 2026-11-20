@@ -248,8 +248,12 @@ at `:1146`), and **all ten** are wired through it — `eventnotify`, `businfo`, 
 ⚠ **The lesson is about the instrument, not the tree:** *"not in the dispatch table I read"* was
 reported as *"not dispatched"*. A negative from one grep is a statement about the grep.
 
+⊘ **SUPERSEDED 2026-11-20 (task I7, `docs/design/V3_GUEST_INGRESS_TABLE.md`):** the gate has no rule-based
+admissions any more; every admitted id is a generated row, and a bit-15 or `NV2081_BINAPI` control without one
+is refused. The paragraph below describes the gate before that date.
+
 ★ **Two rule-based admissions that are not enumerable as rows**: any control with the
-**GSS-legacy mask** bit 15 set (ported from gVisor's `nvproxy`), and any control on a
+**GSS-legacy mask** bit 15 set, and any control on a
 `NV2081_BINAPI` object. ⇒ Both admit *classes of number*, not numbers. ⚠ An allowlist that admits
 by rule cannot be audited by listing it.
 

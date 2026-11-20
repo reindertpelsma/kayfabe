@@ -44,7 +44,9 @@ host-userspace question only.
   `NV01_EVENT_OS_EVENT` (`src/qemu/nvkvm_handle.c:134-142`; the event fd is a `/dev/nvidia*` fd,
   `nvkvm_isolate_handlers.c:2615-2618`); the eventfd → KVM irqfd → MSI-X hop is standard KVM/QEMU.
 - **Per-family GSP boot** → nova-core (`linux/drivers/gpu/nova-core`, Rust, GA10x+ FWSEC/WPR2).
-- **Host control allowlist + layouts across driver versions** → nvproxy.
+- **Guest-ingress control/class allowlist across driver versions** → generated from ogkm since 2026-11-20
+  (`docs/design/V3_GUEST_INGRESS_TABLE.md`); layouts → the driver matrix. (Before that date this line named
+  nvproxy as the oracle; no nvproxy code or table is linked into the device any more.)
 - **Bench grading** → the old project's nvdiff live oracle + bare-metal suite.
 
 ## The crate map (from the w826 five-way inventory)

@@ -6,8 +6,8 @@ Kayfabe is dual-licensed: you may use, copy, modify and distribute it under **ei
 
 Exceptions you should know before building or redistributing: <!-- src: LICENSE -->
 
-- Some files are derived from **gVisor's `nvproxy`** (Copyright The gVisor Authors, Apache License 2.0). They are available under the Apache License 2.0 **only** until they are re-derived independently. `LICENSE` lists them.
-- The `kf3-gpu` device is built inside a QEMU source tree, and QEMU as a whole is GPL-2.0. The device links the crates that contain the gVisor-derived files. **A QEMU binary built from this tree is therefore not yet distributable under the GPL.** Read `LICENSE`, exception 2, before redistributing one.
+- A few files in the frozen pre-v3 tree and in `archive/` are derived from **gVisor's `nvproxy`** (Copyright The gVisor Authors, Apache License 2.0) and are available under the Apache License 2.0 **only**. `LICENSE`, exception 2, lists them. None of them is linked into the `kf3-gpu` QEMU device; a CI check keeps it that way.
+- The `kf3-gpu` device is built inside a QEMU source tree, and QEMU as a whole is GPL-2.0. The device's guest-ingress allowlist is generated from NVIDIA's open-gpu-kernel-modules and kayfabe's own measurements, and is under kayfabe's own licence.
 - `third_party/` holds git submodules (the Linux kernel, NVIDIA's open-gpu-kernel-modules and gVisor), each under its own licence. They are reference sources: not built, linked or copied into kayfabe.
 - The `broker/` directory (the display broker) is marked `GPL-2.0 OR Apache-2.0`, where the GPL option is version 2 only; either option may be chosen. <!-- src: THIRD_PARTY_NOTICES.md section 6 -->
 - A file that carries its own copyright or licence notice is under that notice. Traces, logs and captures contain data produced by third-party software and hardware.
@@ -21,7 +21,7 @@ Exceptions you should know before building or redistributing: <!-- src: LICENSE 
 | Struct layouts, class ids, control ids, register offsets and bit fields, **generated** from NVIDIA's headers | NVIDIA [open-gpu-kernel-modules](https://github.com/NVIDIA/open-gpu-kernel-modules) ("ogkm"), pinned as reference sources | MIT |
 | Video-engine class method headers | NVIDIA [open-gpu-doc](https://github.com/NVIDIA/open-gpu-doc) | MIT |
 | Host display-broker, imported from the author's earlier project | [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) | GPL-2.0 OR Apache-2.0 |
-| Capability allowlists derived from `nvproxy` | [gVisor](https://github.com/google/gvisor) | Apache-2.0 |
+| The design of the default-deny guest-ingress allowlist (reference; no code or tables included in the device) | [gVisor](https://github.com/google/gvisor) `nvproxy` | Apache-2.0 |
 | The QEMU in which the device is built | [QEMU](https://www.qemu.org/) | GPL-2.0 |
 | Reference reading only (nouveau, nova) | the Linux kernel, pinned as `third_party/linux` | each file's own header |
 | The only external crate in the shipped crates' dependency closure | [libc](https://github.com/rust-lang/libc) | MIT OR Apache-2.0 |
@@ -61,7 +61,7 @@ Kayfabe's own licence does not grant any rights to third-party software.
 ## Acknowledgements
 
 - NVIDIA, for publishing the open GPU kernel modules and documentation from which the interfaces are generated (MIT-licensed; notices in `THIRD_PARTY_NOTICES.md`).
-- The gVisor authors, for `nvproxy`, from which capability allowlists derive, and for the ioctl formats it documents.
+- The gVisor authors, for `nvproxy`, whose default-deny allowlist at the guest ingress is the design kayfabe's follows, and for the ioctl formats it documents.
 - The nouveau and nova developers and the Linux kernel, read as reference.
 - The QEMU project.
 - The virtio-win project and Red Hat, for the Windows virtio drivers the harness installs.

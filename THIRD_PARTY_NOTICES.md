@@ -1,6 +1,6 @@
 # Third-party notices
 
-**STATUS: LIVE, 2026-10-23.** What kayfabe uses from other projects, under which licence, and the
+**STATUS: LIVE, 2026-11-20 (section 4 rewritten for task I7).** What kayfabe uses from other projects, under which licence, and the
 notices those licences ask us to carry. kayfabe's own licence is in [`LICENSE`](LICENSE)
 (`Apache-2.0 OR GPL-2.0-or-later`, with the exceptions listed there). Trademarks and
 vendor-software notes are in [`docs/NOTICES.md`](docs/NOTICES.md).
@@ -21,6 +21,9 @@ into, or only referenced by this tree.
   headers by the tools below, and the generated files carry the notice that follows:
   - `crates/kf-abi/gen/` writes `crates/kf-abi/src/generated/{classes,ctrl,nvos,rpc,vbios,mod}.rs`
   - `tools/drivermatrix/emit_rust.py` writes `crates/kf-abi/src/generated/matrix.rs`
+  - `tools/api_boundaries/ingress_policy.py` writes `crates/kf-abi/src/ingress_generated.rs` and
+    `tools/api_boundaries/ingress_facts.tsv` (each control's export flags and each class's allocation
+    privilege, per driver tag; the guest-ingress allowlist, section 4)
   - `tools/derive_hwref.sh` writes `crates/kf-chip/data/hwref-*.tsv`
 - `tools/uvm_efs/patch/` is a patch to the nvidia-uvm sources and is MIT like them.
   `tools/host_patches/h5_userd_dma/include/nvkms-kapi.h` is an NVIDIA header kept with its own
@@ -102,12 +105,28 @@ links) have one external crate in their dependency closure (`cargo tree -e norma
 artifact. Their licences, as declared in their manifests, are MIT, Apache-2.0, Unlicense and
 Unicode-3.0 (or an `OR` combination of them). Run `cargo metadata` for the complete, current list.
 
-## 4. Code derived from gVisor (Apache-2.0)
+## 4. gVisor (Apache-2.0): design reference, and files in the frozen tree
 
-Some files derive from the nvproxy package of gVisor (<https://github.com/google/gvisor>),
-Copyright The gVisor Authors, licensed under the Apache License, Version 2.0 (the text is
-`LICENSE-APACHE`). The files and their terms are listed in `LICENSE`, exception 2. gVisor is also
-pinned as the reference submodule `third_party/gvisor`.
+**The guest-ingress allowlist.** The design of a default-deny allowlist of RM controls and allocation
+classes at the guest ingress follows the `nvproxy` package of gVisor (<https://github.com/google/gvisor>,
+<https://gvisor.dev/docs/user_guide/gpu/>). kayfabe's allowlist (`crates/kf-abi/src/capability.rs`, the
+generated `crates/kf-abi/src/ingress_generated.rs`) is generated from NVIDIA's open-gpu-kernel-modules
+(MIT, section 1) and kayfabe's own measurements and judgements by `tools/api_boundaries/ingress_policy.py`
+(task I7, 2026-11-20); no nvproxy code or tables are included in it.
+
+**Files in the frozen tree.** Some files outside the QEMU device still derive from nvproxy; `LICENSE`,
+exception 2, lists them (the frozen `crates/kayfabe-abi` crate and `archive/`), and they are available
+under the Apache License 2.0 only. gVisor is pinned as the reference submodule `third_party/gvisor`. Its
+notice:
+
+> Copyright The gVisor Authors.
+>
+> Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+> compliance with the License. You may obtain a copy of the License at
+> <http://www.apache.org/licenses/LICENSE-2.0> (also `LICENSE-APACHE` in this repository). Unless required
+> by applicable law or agreed to in writing, software distributed under the License is distributed on an
+> "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+> for the specific language governing permissions and limitations under the License.
 
 ## 5. Reference sources that are only cited
 

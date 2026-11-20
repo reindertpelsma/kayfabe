@@ -1818,3 +1818,24 @@ sentence was removed. Thin multi-GPU tests and aarch64 builds already exist (ite
 ## §AT. Proprietary-image runner: a list of images, prebuilt now and built later, state.json optional, clock and network asserted, 2026-11-16
 
 Owner, 2026-11-16: the runner takes any number of images (a list); the kinds are `prebuilt` (phase 1) and `built` (phase 2, after the release run); `state.json` is optional (required for CI); a faked clock requires the network off and a networked guest requires the real clock (asserted in every launch path); the Worker builds instructions from its image and app configuration. Design, schema and the phase split: `docs/design/V3_PROPIMAGE_RUNNER.md`.
+
+## §BD. gVisor out of the QEMU device; the guest-ingress allowlist generated from ogkm; parity as a test, 2026-11-20
+
+Owner, 2026-11-20 (relayed by the coordinator; task I7, `docs/design/V3_GUEST_INGRESS_TABLE.md`):
+
+1. Remove gVisor's nvproxy as a dependency of the distributed QEMU. A new driver branch needs only NVIDIA's ogkm release
+   plus the generator, never gVisor.
+2. Tables and ids come from ogkm. A safety judgement is not copyrightable: where ogkm lacks information, kayfabe applies
+   its own judgement, in its own words, with its own evidence, listed for after-the-fact review
+   (`tools/api_boundaries/ingress_rules.tsv`). Transcribing gVisor code, comments, data structures, ordering or tables
+   into the QEMU-linked tree stays forbidden. Risk judged low; a counsel check before the first public binary is
+   recommended, not blocking.
+3. Security parity is a hard requirement and is a TEST, not a generator input: nothing the old gate refused may be
+   admitted unless a reviewed exception with evidence lists it; what the old gate admitted and the new refuses is
+   checked against the lane evidence (`crates/kf-rm/tests/ingress_parity.rs`).
+4. Keep and improve the attribution: `THIRD_PARTY_NOTICES.md` and the credits page credit nvproxy as the design
+   reference for the default-deny allowlist at the guest ingress, with gVisor's Apache-2.0 notice;
+   `archive/nvkvm/CREDITS` stays as it is.
+5. Focus on the release: licence work kept to the minimum (regenerate, attribution, shrink `LICENSE` exception 2, the
+   closure check).
+
