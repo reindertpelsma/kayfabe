@@ -188,6 +188,20 @@ is recorded below. **Update 2026-11-08 (MEASURED):** the coordinator uploaded th
 keys to the public bundles bucket, and the ISO's sha256 was re-verified by downloading it through bundles.kayfabe.dev; the repository bundle pin
 is filled with that digest. No Worker deployment or native/GPU pass is claimed, and the Worker integration is proposed, not deployed.
 
+**2026-11-20 (MEASURED on a Vast box and recomputed offline, tree 7fb1c98a0; supplements the pin statement above):** the repository pin
+was stale. `bundle.pin` carries `# inputs=ed2ddea1...` (the ISO built 2026-11-08 from 38bbbb2e9); the checkout derived `b8694b93...`
+because two hash-covered inputs changed afterwards, `appmatrix/apps.json` (PRs 470, 471, 475) and `appmatrix/guest/py/win_cuda_equiv.py`
+(PR 475); restoring exactly those two files to their 38bbbb2e9 versions reproduces `ed2ddea1...`. The stage `windows_apps` downloaded the
+pinned ISO (its sha256 equals the pin) and `verify_image` refused it ("embedded recipe input identity mismatch"). The failure is deterministic,
+and it was graded as a retryable MEDIA problem. **Rule:** the bundle must be republished (build, upload, update `bundle.pin`) whenever a
+hash-covered input changes: `apps.json`, `guest/**` `.ps1`/`.py`/`.html`, the six recipe files (`package_bundle.py`, `bundle_iso.py`,
+`bundle_tools.py`, `bundle_compliance.py`, `bundle_wheels.py`, `bundle_repro.py`), the licence files (`LICENSE`, `LICENSE-APACHE`,
+`LICENSE-GPL`, `THIRD_PARTY_NOTICES.md`), `bundle_tools.SOURCES`, and the package and toolchain selection of `manifest.json` and
+`gate_profiles.json`. `appmatrix/tests/test_bundle_pin.py` enforces it offline (`bundle_ci.pin_drift`, no ISO, no network), so it is RED on any tree
+whose pin is stale until the bundle is republished; no ratchet hides it. It does not check that the published ISO really embeds the pinned
+inputs (that needs the ISO; `fetch_public_bundle.py` checks it on the box). A stale pin now ends the stage as `WINAPPS_REFUSED class=PIN
+reason=RECIPE_INPUT_DRIFT` (or `PIN_MISMATCH`), graded as the failing row `windows_apps_pin`, not as `RETRY class=MEDIA`.
+
 **OWNER SUPERSESSION, 2026-11-07 / CODE READ:** NVIDIA payloads are pinned official provisioning/run-time
 downloads only. They must never enter a distributed image/ISO or R2/GitHub object. Older proposals to cache
 them with a hosted bundle are superseded. LB1's Linux recipe and the Windows packaging path below remain

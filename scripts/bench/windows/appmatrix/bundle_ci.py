@@ -38,6 +38,29 @@ def read_pin(text, bundle_class="public"):
     return result
 
 
+PIN_DRIFT_HINT = "republish the bundle (docs/DOWNLOADS.md, Windows app bundle) and update bundle.pin"
+
+
+def pin_drift(root=HERE, bundle_class="public"):
+    """None when bundle.pin's `# inputs=` equals the input hash the tree at `root` derives; else dict(pinned, derived).
+
+    Offline and ISO-free: the hash is a function of the tree plus the package/toolchain/open-package selection that
+    manifest.json and gate_profiles.json make (the same computation as `plan`). A pin without an inputs line is drift, not a
+    pass (it names nothing the stage could check). fetch_public_bundle.py fails the same way, after downloading the ISO, when
+    a hash-covered input changed after the pinned bundle was built (2026-11-19/20, apps.json and win_cuda_equiv.py)."""
+    root = Path(root)
+    derived = B.input_hash(B.load(root / "manifest.json"), B.load(root / "gate_profiles.json"), root=root, bundle_class=bundle_class)
+    pinned = read_pin((root / "bundle.pin").read_text(encoding="utf-8"), bundle_class).get("inputs", "")
+    return None if pinned == derived else dict(pinned=pinned, derived=derived)
+
+
+def pin_drift_message(drift):
+    return ("bundle.pin '# inputs=" + (drift["pinned"] or "<missing>") + "' differs from the input hash this checkout derives ("
+            + drift["derived"] + "): a hash-covered input changed after the pinned bundle was built (apps.json, guest/**.ps1/.py/.html, "
+            "the six recipe .py files, the LICENSE files, bundle_tools.SOURCES, or the manifest/profile selection), so fetch_public_bundle.py "
+            "would refuse the pinned ISO with RECIPE_INPUT_DRIFT. Fix: " + PIN_DRIFT_HINT + ".")
+
+
 def plan(inputs, pin, verify=False, bundle_class="public", receipt=None):
     if not re.fullmatch(r"[0-9a-f]{64}", inputs): raise ValueError("invalid input digest")
     published = read_pin(pin, bundle_class)

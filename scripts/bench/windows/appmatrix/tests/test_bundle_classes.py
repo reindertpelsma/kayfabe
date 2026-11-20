@@ -432,3 +432,173 @@ class WinAppsStageWiring(unittest.TestCase):
                 if any((a.get('requires') or {}).get('official_fetch') for a in chosen):
                     with self.assertRaises(O.MediaDrift):  # why an unset driver was the next wall
                         O.select(catalogue, chosen, None)
+
+
+class PublicFetchReasons(unittest.TestCase):
+    """2026-11-19/20 (MEASURED): a pin that no longer matched the tree failed as `PUBLIC_BUNDLE_FAIL (no credentials or provider
+    body logged)` and was graded a retryable MEDIA problem, so the cause was invisible and a fresh box was rented for nothing.
+    FALSIFIER: main() prints the exception text or a provider body; a reason outside the closed set; a recipe/pin mismatch of
+    verify_image that is not named; a classification that a provider-controlled message can steer."""
+    RECIPE = ('embedded recipe input identity mismatch', 'artifact recipe differs from reviewed checkout inputs',
+              'recipe source audit differs from reviewed checkout')
+    PIN = ('public manifest differs from repo pin', 'image size/sha256 mismatch')
+    HOSTILE = ' https://u:p@bundles.kayfabe.dev/x?X-Amz-Signature=deadbeef Authorization: Bearer t0ken <html>provider body</html>'
+
+    def attempt(self, error):
+        import fetch_public_bundle as F
+        errors, out = io.StringIO(), io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(F, 'fetch', side_effect=error), \
+                patch.object(F.urllib.request, 'install_opener'), patch('sys.stderr', errors), patch('sys.stdout', out):
+            pin = Path(tmp) / 'bundle.pin'
+            pin.write_text('')
+            rc = F.main(['--pin', str(pin), '--out', str(Path(tmp) / 'out.iso')])
+        return rc, errors.getvalue(), out.getvalue()
+
+    def assert_reason(self, error, reason):
+        rc, err, out = self.attempt(error)
+        self.assertEqual((rc, err, out), (1, 'PUBLIC_BUNDLE_FAIL reason=' + reason + '\n', ''))
+
+    def test_the_first_recipe_mismatch_is_named(self): self.assert_reason(ValueError(self.RECIPE[0]), 'RECIPE_INPUT_DRIFT')
+    def test_the_reviewed_inputs_mismatch_is_named(self): self.assert_reason(ValueError(self.RECIPE[1]), 'RECIPE_INPUT_DRIFT')
+    def test_the_recipe_source_audit_mismatch_is_named(self): self.assert_reason(ValueError(self.RECIPE[2]), 'RECIPE_INPUT_DRIFT')
+    def test_a_manifest_that_differs_from_the_pin_is_named(self): self.assert_reason(ValueError(self.PIN[0]), 'PIN_MISMATCH')
+    def test_an_image_size_or_sha_mismatch_is_named(self): self.assert_reason(ValueError(self.PIN[1]), 'PIN_MISMATCH')
+
+    def test_an_oserror_is_network_and_its_text_is_not_printed(self):
+        self.assert_reason(OSError('connection reset' + self.HOSTILE), 'NETWORK')
+
+    def test_a_url_error_is_network_and_its_text_is_not_printed(self):
+        import urllib.error
+        self.assert_reason(urllib.error.URLError('timed out' + self.HOSTILE), 'NETWORK')
+
+    def test_any_other_error_is_other_and_its_text_is_not_printed(self):
+        for error in (ValueError('something else' + self.HOSTILE), KeyError('image'), TypeError('x' + self.HOSTILE)):
+            with self.subTest(error=type(error).__name__):
+                self.assert_reason(error, 'OTHER')
+
+    def test_a_provider_message_that_merely_contains_a_recipe_phrase_is_other(self):
+        self.assert_reason(ValueError('provider said: ' + self.RECIPE[0] + self.HOSTILE), 'OTHER')
+
+    def test_a_provider_message_that_merely_contains_a_pin_phrase_is_other(self):
+        self.assert_reason(ValueError('package public-bundle/x: ' + self.PIN[0]), 'OTHER')
+
+    def test_a_wrapped_download_error_with_a_recipe_phrase_is_other(self):
+        self.assert_reason(ValueError('package public-bundle/winapps-open.iso: ' + self.RECIPE[1]), 'OTHER')
+
+    def test_a_message_that_ends_with_a_pin_phrase_is_other(self):
+        self.assert_reason(ValueError('retry later: ' + self.PIN[1]), 'OTHER')
+
+    def test_the_closed_set_is_the_only_output(self):
+        import fetch_public_bundle as F
+        for error in (ValueError(self.RECIPE[0]), ValueError(self.PIN[1]), OSError('x'), ValueError('y'), KeyError('z')):
+            self.assertRegex(self.attempt(error)[1], r'\APUBLIC_BUNDLE_FAIL reason=(RECIPE_INPUT_DRIFT|PIN_MISMATCH|NETWORK|OTHER)\n\Z')
+        self.assertEqual(F.REASONS, ('RECIPE_INPUT_DRIFT', 'PIN_MISMATCH', 'NETWORK', 'OTHER'))
+
+    def test_the_phrases_are_the_ones_verify_image_raises(self):
+        # package_bundle.py is a hashed recipe input and cannot export its messages; a reworded message would silently become OTHER
+        import fetch_public_bundle as F
+        raised = {B.__file__: self.RECIPE + self.PIN[1:], F.__file__: self.PIN[:1]}
+        for path, messages in raised.items():
+            source = Path(path).read_text()
+            for message in messages:
+                self.assertEqual(source.count("raise ValueError('%s')" % message) + source.count('raise ValueError("%s")' % message), 1, message)
+
+    def test_success_is_unchanged(self):
+        import fetch_public_bundle as F
+        out = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(F, 'fetch'), patch.object(F.urllib.request, 'install_opener'), patch('sys.stdout', out):
+            pin = Path(tmp) / 'bundle.pin'
+            pin.write_text('')
+            self.assertEqual(F.main(['--pin', str(pin), '--out', str(Path(tmp) / 'out.iso')]), 0)
+        self.assertEqual(out.getvalue(), 'PUBLIC_BUNDLE_OK\n')
+
+
+class WinAppsPinRefusal(unittest.TestCase):
+    """A fetch that failed because the pin does not match this checkout is a named refusal, not RETRY class=MEDIA: another box
+    cannot fix it. FALSIFIER: RECIPE_INPUT_DRIFT or PIN_MISMATCH reaching `verdict RETRY MEDIA`; any other reason (NETWORK, OTHER,
+    a reason the log merely contains) becoming a refusal; a refusal that exits 0 or 3 or prints another line."""
+
+    @property
+    def body(self):
+        text = (Path(H.REPO) / 'scripts/bench/box/windows_apps.sh').read_text()
+        return text[text.index('fetch_app_disk() {'):text.index('\nrun_loop_alive_any()')]
+
+    def run_fn(self, log_text, call, log_name='fetch_bundle.txt'):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / log_name
+            log.write_text(log_text)
+            script = ('say() { echo "$*"; }\nverdict() { echo "VERDICT $*"; }\n' + self.body + '\nVERDICT=""\nrc_final=0\n'
+                      + call.replace('LOG', "'%s'" % log) + '\necho "FELL_THROUGH"\n')
+            r = subprocess.run(['bash', '-c', script], env={'PATH': os.environ['PATH']}, capture_output=True, text=True, timeout=30)
+            return r.returncode, r.stdout, r.stderr
+
+    def reason(self, log_text):
+        rc, out, _ = self.run_fn(log_text, 'pin_refusal_reason LOG')
+        return rc, out
+
+    def test_a_recipe_drift_log_names_its_reason(self):
+        self.assertEqual(self.reason('FETCH public-bundle/winapps-open.iso bytes=1\nPUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n'),
+                         (0, 'RECIPE_INPUT_DRIFT\nFELL_THROUGH\n'))
+
+    def test_a_pin_mismatch_log_names_its_reason(self):
+        self.assertEqual(self.reason('PUBLIC_BUNDLE_FAIL reason=PIN_MISMATCH\n'), (0, 'PIN_MISMATCH\nFELL_THROUGH\n'))
+
+    def test_a_network_failure_is_not_a_pin_reason(self):
+        self.assertEqual(self.reason('PUBLIC_BUNDLE_FAIL reason=NETWORK\n')[1], 'FELL_THROUGH\n')
+
+    def test_an_other_failure_is_not_a_pin_reason(self):
+        self.assertEqual(self.reason('PUBLIC_BUNDLE_FAIL reason=OTHER\n')[1], 'FELL_THROUGH\n')
+
+    def test_a_log_without_a_failure_line_is_not_a_pin_reason(self):
+        self.assertEqual(self.reason('FETCH public-bundle/winapps-open.iso bytes=1\n')[1], 'FELL_THROUGH\n')
+
+    def test_a_reason_with_trailing_text_is_not_a_pin_reason(self):
+        for line in ('PUBLIC_BUNDLE_FAIL reason=PIN_MISMATCH extra', 'PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT_X',
+                     'x PUBLIC_BUNDLE_FAIL reason=PIN_MISMATCH', 'PUBLIC_BUNDLE_FAIL reason=pin_mismatch'):
+            with self.subTest(line=line):
+                self.assertEqual(self.reason(line + '\n')[1], 'FELL_THROUGH\n')
+
+    def test_a_missing_log_is_not_a_pin_reason(self):
+        rc, out, _ = self.run_fn('', 'pin_refusal_reason /nonexistent/fetch_bundle.txt')
+        self.assertEqual(out, 'FELL_THROUGH\n')
+
+    def test_the_recipe_drift_refusal_line_and_exit_code(self):
+        rc, out, _ = self.run_fn('PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n', 'fetch_failed LOG')
+        self.assertEqual(rc, 2)
+        self.assertEqual(out.splitlines()[-1], 'WINAPPS_REFUSED class=PIN reason=RECIPE_INPUT_DRIFT')
+        self.assertNotIn('VERDICT', out)
+        self.assertNotIn('FELL_THROUGH', out)
+
+    def test_the_pin_mismatch_refusal_line_and_exit_code(self):
+        rc, out, _ = self.run_fn('PUBLIC_BUNDLE_FAIL reason=PIN_MISMATCH\n', 'fetch_failed LOG')
+        self.assertEqual(rc, 2)
+        self.assertEqual(out.splitlines()[-1], 'WINAPPS_REFUSED class=PIN reason=PIN_MISMATCH')
+        self.assertNotIn('VERDICT', out)
+
+    def test_the_refusal_says_what_to_do(self):
+        _, out, _ = self.run_fn('PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n', 'fetch_failed LOG')
+        self.assertIn('republish the bundle', out)
+        self.assertIn('bundle.pin', out)
+
+    def test_a_network_failure_stays_a_media_retry(self):
+        rc, out, _ = self.run_fn('PUBLIC_BUNDLE_FAIL reason=NETWORK\n', 'fetch_failed LOG')
+        self.assertEqual(rc, 3)
+        self.assertIn('VERDICT RETRY MEDIA fetch of winapps-open.iso failed', out)
+        self.assertIn('PUBLIC_BUNDLE_FAIL reason=NETWORK', out)
+        self.assertNotIn('WINAPPS_REFUSED', out)
+
+    def test_an_unnamed_failure_stays_a_media_retry(self):
+        rc, out, _ = self.run_fn('boom\n', 'fetch_failed LOG')
+        self.assertEqual(rc, 3)
+        self.assertIn('VERDICT RETRY MEDIA', out)
+        self.assertNotIn('WINAPPS_REFUSED', out)
+
+    def test_the_stage_calls_it_on_a_failed_fetch(self):
+        text = (Path(H.REPO) / 'scripts/bench/box/windows_apps.sh').read_text()
+        self.assertIn('if ! fetch_app_disk "$ISO" "$EV/fetch_bundle.txt"; then\n        fetch_failed "$EV/fetch_bundle.txt"\n    fi', text)
+
+    def test_the_media_retry_for_a_failed_fetch_is_only_inside_it(self):
+        text = (Path(H.REPO) / 'scripts/bench/box/windows_apps.sh').read_text()
+        marker = 'verdict RETRY MEDIA "fetch of winapps-open.iso failed'
+        self.assertEqual(text.count(marker), 1)
+        self.assertTrue(text.index('fetch_failed() {') < text.index(marker) < text.index('\nrun_loop_alive_any()'))

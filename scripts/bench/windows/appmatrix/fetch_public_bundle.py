@@ -5,6 +5,12 @@
 No run token, Worker route, credential or private-media fallback is used. The base URL is not a secret: it
 defaults to PUBLIC_BASE and may only ever be PUBLIC_BASE (a Worker/payload env value cannot point the fetch at
 another host); integrity is the sha256 pin in bundle.pin, checked against the manifest and the image.
+
+A failure prints one line, `PUBLIC_BUNDLE_FAIL reason=<R>`, with R from the closed set REASONS and never the exception text
+(a provider body, a signed URL or a credential could be in it). RECIPE_INPUT_DRIFT and PIN_MISMATCH mean the pin names a bundle
+that this checkout can no longer accept: deterministic, so windows_apps.sh refuses instead of renting another box (2026-11-19/20:
+apps.json and win_cuda_equiv.py changed after the pinned ISO was built). NETWORK is any OSError, which also covers a local disk
+error; transport failures that package_bundle.fetch_file has retried and re-raised as ValueError are OTHER.
 """
 import argparse
 import json
@@ -20,6 +26,20 @@ import bundle_compliance as C
 import publish_bundle as P
 
 PUBLIC_BASE = 'https://bundles.kayfabe.dev'
+REASONS = ('RECIPE_INPUT_DRIFT', 'PIN_MISMATCH', 'NETWORK', 'OTHER')
+# The exact messages verify_image() and fetch() raise (package_bundle.py is a hashed recipe input, so they are repeated here;
+# test_the_phrases_are_the_ones_verify_image_raises pins them). Exact match: a message that merely contains one is OTHER.
+RECIPE_INPUT_DRIFT = frozenset(('embedded recipe input identity mismatch', 'artifact recipe differs from reviewed checkout inputs',
+                                'recipe source audit differs from reviewed checkout'))
+PIN_MISMATCH = frozenset(('public manifest differs from repo pin', 'image size/sha256 mismatch'))
+
+
+def reason_of(error):
+    """The closed-set reason for a failed fetch; never derived from anything but the exception's class and exact message."""
+    if isinstance(error, OSError): return 'NETWORK'
+    if isinstance(error, ValueError) and str(error) in RECIPE_INPUT_DRIFT: return 'RECIPE_INPUT_DRIFT'
+    if isinstance(error, ValueError) and str(error) in PIN_MISMATCH: return 'PIN_MISMATCH'
+    return 'OTHER'
 
 
 def resolve_base(value):
@@ -58,8 +78,8 @@ def main(argv=None):
     try:
         urllib.request.install_opener(urllib.request.build_opener(B._HTTPSRedirect()))
         fetch(base,a.pin.read_text(),a.out);print('PUBLIC_BUNDLE_OK');return 0
-    except (OSError, ValueError, KeyError, TypeError):
-        print('PUBLIC_BUNDLE_FAIL (no credentials or provider body logged)',file=sys.stderr);return 1
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print('PUBLIC_BUNDLE_FAIL reason='+reason_of(error),file=sys.stderr);return 1
 
 
 if __name__=='__main__':sys.exit(main())

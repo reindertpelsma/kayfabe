@@ -23,6 +23,17 @@ CASES=[
  ('fetch-base-only-the-bundles-domain','fetch_public_bundle.py',"if value.rstrip('/') != PUBLIC_BASE:","if False:"),
  ('stage-never-passes-an-empty-base','../../box/windows_apps.sh','[ -z "${KF_WINAPPS_PUBLIC_BASE_URL:-}" ] || base_args=(--base "$KF_WINAPPS_PUBLIC_BASE_URL")','base_args=(--base "${KF_WINAPPS_PUBLIC_BASE_URL:-}")'),
  ('stage-default-official-driver','../../box/windows_apps.sh','DEFAULT_OFFICIAL_DRIVER=580.88  ','DEFAULT_OFFICIAL_DRIVER=580.65  '),
+ ('fetch-reason-recipe-drift-not-named','fetch_public_bundle.py',"and str(error) in RECIPE_INPUT_DRIFT:","and False:"),
+ ('fetch-reason-pin-mismatch-not-named','fetch_public_bundle.py',"and str(error) in PIN_MISMATCH:","and False:"),
+ ('fetch-reason-network-not-named','fetch_public_bundle.py',"if isinstance(error, OSError): return 'NETWORK'","if False: return 'NETWORK'"),
+ ('fetch-reason-prints-the-exception','fetch_public_bundle.py',"print('PUBLIC_BUNDLE_FAIL reason='+reason_of(error),file=sys.stderr)","print('PUBLIC_BUNDLE_FAIL reason='+reason_of(error)+' '+str(error),file=sys.stderr)"),
+ ('fetch-reason-recipe-phrase-by-substring','fetch_public_bundle.py',"and str(error) in RECIPE_INPUT_DRIFT:","and any(m in str(error) for m in RECIPE_INPUT_DRIFT):"),
+ ('fetch-reason-pin-phrase-by-substring','fetch_public_bundle.py',"and str(error) in PIN_MISMATCH:","and any(m in str(error) for m in PIN_MISMATCH):"),
+ ('stage-pin-reasons-widened','../../box/windows_apps.sh','(RECIPE_INPUT_DRIFT|PIN_MISMATCH)$/','([A-Z_]*)$/'),
+ ('stage-pin-refusal-is-a-media-retry','../../box/windows_apps.sh','        refuse_pin "$why"\n','        true\n'),
+ ('stage-pin-refusal-line','../../box/windows_apps.sh','say "WINAPPS_REFUSED class=PIN reason=$1"','say "WINAPPS_REFUSED why=$1"'),
+ ('stage-pin-refusal-exit-code','../../box/windows_apps.sh','reason=$1"; VERDICT=REFUSED; rc_final=2; exit 2; }','reason=$1"; VERDICT=REFUSED; rc_final=3; exit 3; }'),
+ ('stage-failed-fetch-not-routed','../../box/windows_apps.sh','        fetch_failed "$EV/fetch_bundle.txt"\n','        verdict RETRY MEDIA "fetch of winapps-open.iso failed (fetch_bundle.txt)"; exit 3\n'),
  ('public-domain-required','publish_bundle.py','if not C.https(base) or "?" in base or host.endswith((".r2.dev", ".r2.cloudflarestorage.com")):','if False:'),
 ]
 
