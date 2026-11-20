@@ -345,6 +345,8 @@ test('dieLegs: a rehearsal skips the host-driver filter and carries no matrix fi
     host_id: 6,
     country: 'US',
     gpu_name: 'RTX 4090',
+    gpu_ram: 12288,
+    cpu_ram: 65536,
     dph_total: 0.5,
     pricing: { total: 2, effective: 0.5 },
     host_capabilities: { can_swap_host_driver: false, host_driver: '999.99' },
@@ -735,6 +737,8 @@ test('N2: the shared credit rule is NaN- and string-safe (anything but a suffici
     host_id: 6,
     country: 'US',
     gpu_name: 'RTX 4090',
+    gpu_ram: 12288,
+    cpu_ram: 65536,
     dph_total: 0.5,
     pricing: { total: 2, effective: 0.5 },
   };

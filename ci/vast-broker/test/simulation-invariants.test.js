@@ -9,9 +9,6 @@ import { planRelease } from '../src/release.js';
 import { RELEASE_MATRIX } from '../src/release-matrix.js';
 import { Ledger } from '../src/ledger.js';
 import { OfferBook } from '../src/offers.js';
-// An RTX 4070 has 12 GB; the large profile reads gpu_ram (RAM_BELOW_VRAM_RULE, 2026-11-20), and without it every large offer here
-// would be refused by that rule instead of by the rule each test is about.
-const VRAM_MIB = 12288;
 const vars = {
   MAX_CONCURRENT_RENTALS: '9',
   RELEASE_ENABLED: 'true',
@@ -126,7 +123,6 @@ for (const tier of ['small', 'large'])
         { id: 2, compute: 0.19, rate: 0 },
       ].map((x) => ({
         ...cloud.offer,
-        gpu_ram: VRAM_MIB,
         id: x.id,
         machine_id: 100 + x.id,
         host_id: 200 + x.id,
@@ -158,7 +154,7 @@ for (const tier of ['small', 'large']) {
         profile,
         tier,
       ),
-      base = { ...new MockCloud().offer, gpu_ram: VRAM_MIB };
+      base = new MockCloud().offer;
     const o = {
       ...base,
       id: 1,
@@ -183,7 +179,7 @@ for (const tier of ['small', 'large']) {
   test('simulation invariant: hourly cap ' + tier, async () => {
     const profile = tier === 'large' ? 'release' : 'check',
       c = applyProfile(configuration({ ...env, ...vars }), profile, tier),
-      base = { ...new MockCloud().offer, gpu_ram: VRAM_MIB };
+      base = new MockCloud().offer;
     const o = {
       ...base,
       id: 1,
@@ -207,7 +203,7 @@ for (const tier of ['small', 'large']) {
   test('simulation invariant: deterministic offer ties ' + tier, async () => {
     const profile = tier === 'large' ? 'release' : 'check',
       c = applyProfile(configuration({ ...env, ...vars }), profile, tier),
-      base = { ...new MockCloud().offer, gpu_ram: VRAM_MIB };
+      base = new MockCloud().offer;
     const rows = [1, 2].map((id) => ({
       ...base,
       id,
@@ -258,7 +254,7 @@ for (const die of ['TU116', 'GB205'])
 for (const rate of [null, '0.001'])
   test('simulation invariant: malformed inbound cost ' + String(rate), async () => {
     const c = cfg(),
-      base = { ...new MockCloud().offer, gpu_ram: VRAM_MIB };
+      base = new MockCloud().offer;
     const o = {
       ...base,
       id: 1,
@@ -293,7 +289,7 @@ for (const kind of ['machine', 'host'])
           'release',
           'large',
         ),
-        base = { ...new MockCloud().offer, gpu_ram: VRAM_MIB };
+        base = new MockCloud().offer;
       const o = {
         ...base,
         id: 1,

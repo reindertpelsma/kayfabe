@@ -46,6 +46,8 @@ function offer(cfg, die, { cpu = AMD, price = 0.2, id = nextId++ } = {}) {
     gpu_name: 'GPU ' + die,
     cpu_name: cpu,
     compute_cap: cc,
+    gpu_ram: 12288,
+    cpu_ram: 65536,
     country: 'US',
     dph_total: price,
     pricing: { computeStorage: price, bandwidth: 0, effective: price, total: price * hours(cfg) },

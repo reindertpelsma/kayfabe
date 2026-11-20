@@ -68,7 +68,6 @@ export function randomMarket(seed) {
         vms_enabled: anchor || next() > 0.15,
         rentable: true,
         gpu_ram: 24576,
-        cpu_ram: 98304, // a 24 GB die needs 68234 MiB listed in the large profile (RAM_BELOW_VRAM_RULE, 2026-11-20)
       };
       if (n === 2) offer.machine_id = rows.at(-1).machine_id;
       if (n === 3) offer.host_id = 99991;
