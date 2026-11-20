@@ -150,6 +150,31 @@ pub const CHANNEL_CLASS_OUTSIDE_BIRTH: u32 = 0x4B75;
 /// refusals above, and the two lanes met in `v3-cand-1` (2026-10-04). A status is a name only while
 /// it is unique.
 pub const DISP_SW_CLASS_ID_UNREADABLE: u32 = 0x4B76;
+/// ★ 2026-11-20 (`V3_GUEST_INFLUENCE_AUDIT.md` G-3): the session's handle counter reached
+/// `u32::MAX`; no handle is ever minted twice, so every later alloc is refused before any ioctl.
+pub const HOST_HANDLES_EXHAUSTED: u32 = 0x4B7A;
+
+/// ★ G-3: the next handle from `next`, never wrapping: after `u32::MAX` the counter stays at `0`
+/// (`NV01_NULL_OBJECT`), which [`admit_want`] refuses by name.
+fn next_handle(next: &mut u32) -> u32 {
+    let h = *next;
+    if h != 0 {
+        *next = h.checked_add(1).unwrap_or(0);
+    }
+    h
+}
+
+/// ★ G-3: an alloc asking for handle `0` would let host RM pick one; kayfabe only asks for that
+/// when its counter is exhausted, so it is refused by name before any ioctl.
+fn admit_want(want: u32) -> Result<(), RmError> {
+    if want == 0 {
+        kf_arch::rate_eprintln!(
+            "kf-host: HOST HANDLES EXHAUSTED: the session minted u32::MAX handles; alloc refused"
+        );
+        return Err(RmError::Other(HOST_HANDLES_EXHAUSTED));
+    }
+    Ok(())
+}
 /// The store reservation and which form RM granted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reservation {
@@ -994,6 +1019,7 @@ impl HostRm {
         params: &mut [u8],
         inside: Option<&birth::InsideBirthPath>,
     ) -> Result<u32, RmError> {
+        admit_want(want)?;
         birth::admit_alloc_class(class, inside)?;
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
@@ -1052,6 +1078,7 @@ impl HostRm {
         class: u32,
         params: &mut [u8],
     ) -> Result<u32, RmError> {
+        admit_want(want)?;
         birth::admit_alloc_class(class, None)?;
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
@@ -1107,6 +1134,7 @@ impl HostRm {
         inner_at: usize,
         inner: &mut [u8],
     ) -> Result<u32, RmError> {
+        admit_want(want)?;
         birth::admit_alloc_class(class, None)?;
         // ⊘ The nested pointer is patched in place, so this block cannot be carried: it is sent
         // at the bench layout, which is only known correct on the interval the encoders were
@@ -1149,9 +1177,7 @@ impl HostRm {
     pub fn mint(&self) -> u32 {
         let _leaf = leafwitness::Held::enter();
         let mut o = self.objects.lock().expect("objects");
-        let h = o.next;
-        o.next = o.next.wrapping_add(1);
-        h
+        next_handle(&mut o.next)
     }
 
     /// Record `child`'s parent, so [`HostRm::free`] can name it.
@@ -2060,6 +2086,7 @@ impl HostRm {
         }
         birth::admit_alloc_class(NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, None)?;
         let want = self.mint();
+        admit_want(want)?;
         let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
         Nvos02ParametersWithFd {
             h_root: self.client.raw(),
@@ -2828,5 +2855,63 @@ mod control_plan_tests {
                 }
             }
         }
+    }
+}
+
+/// ★ 2026-11-20 (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-3, LOW): the session's handle counter
+/// never wraps. A guest drives one mint per host object it causes; before this the counter wrapped
+/// after about 889 million mints, through `0` (`NV01_NULL_OBJECT`: "RM picks") to kayfabe's own
+/// client handle and every handle it had issued.
+#[cfg(test)]
+mod mint_tests {
+    use super::{FIRST_HANDLE, HOST_HANDLES_EXHAUSTED, RmError, admit_want, next_handle};
+
+    #[test]
+    fn mint_refuses_at_exhaustion_and_never_reissues_a_handle() {
+        let mut next = u32::MAX - 1;
+        assert_eq!(next_handle(&mut next), u32::MAX - 1);
+        assert_eq!(next_handle(&mut next), u32::MAX);
+        for _ in 0..3 {
+            assert_eq!(
+                next_handle(&mut next),
+                0,
+                "exhausted: the null handle, forever"
+            );
+        }
+        assert!(next < FIRST_HANDLE, "never back into the issued range");
+    }
+
+    #[test]
+    fn an_exhausted_counter_stays_exhausted() {
+        let mut next = 0;
+        assert_eq!(next_handle(&mut next), 0);
+        assert_eq!(next, 0, "the null handle never advances into 1, 2, ...");
+    }
+
+    #[test]
+    fn an_exhausted_session_refuses_the_next_alloc_by_name() {
+        let mut next = u32::MAX;
+        assert!(admit_want(next_handle(&mut next)).is_ok());
+        assert!(matches!(
+            admit_want(next_handle(&mut next)),
+            Err(RmError::Other(HOST_HANDLES_EXHAUSTED))
+        ));
+    }
+
+    #[test]
+    fn the_first_handles_are_consecutive_from_the_first() {
+        let mut next = FIRST_HANDLE;
+        assert_eq!(next_handle(&mut next), FIRST_HANDLE);
+        assert_eq!(next_handle(&mut next), FIRST_HANDLE + 1);
+    }
+
+    #[test]
+    fn a_null_wanted_handle_is_refused_by_name_before_any_ioctl() {
+        assert!(matches!(
+            admit_want(0),
+            Err(RmError::Other(HOST_HANDLES_EXHAUSTED))
+        ));
+        assert!(admit_want(FIRST_HANDLE).is_ok());
+        assert!(admit_want(u32::MAX).is_ok());
     }
 }

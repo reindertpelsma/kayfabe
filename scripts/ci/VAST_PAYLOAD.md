@@ -312,7 +312,9 @@ any stage; it needs the Windows stage. Absent means no stage: nothing sends it t
 `windows_apps.sh` as the stage `windows_apps` right after `windows_gate` (a first red cancels it), in a fresh guest that is a
 child of the gate's overlay, with the app disk from the private R2 copy (`winapps-open.iso`, proposed Worker name; without its
 sha256 pin the answer is RETRY class MEDIA). Rows: `windows_apps` (pass), `windows_apps_retry_<class>` (PROVIDER, MEDIA,
-OPERATOR, HOSTREF, BAR1_EXCEPTION, refused, time), `windows_apps` as a failing row for a guest failure. Only one `WINAPPS_PASS` of
+OPERATOR, HOSTREF, BAR1_EXCEPTION, refused, time), `windows_apps` as a failing row for a guest failure, and (2026-11-20) `windows_apps_pin`
+for a stale bundle pin (`WINAPPS_REFUSED class=PIN reason=RECIPE_INPUT_DRIFT` or `PIN_MISMATCH`, from `fetch_public_bundle.py`): a failure that
+is deliberately not a `_retry_` row, because no fresh box can fix it (`docs/DOWNLOADS.md`, "Windows app bundle"). Only one `WINAPPS_PASS` of
 this revision and profile with exit 0 is a pass; a host, harness or input fault is never a pass and never an excuse.
 
 ## SPECviewperf stage (2026-11-07, DRAFT, disabled by default)

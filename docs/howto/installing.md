@@ -8,7 +8,7 @@
 
 1. Put the **open** NVIDIA driver on the host.
 2. Build the QEMU binary with the `kf3-gpu` device ([Building from source](building.md)).
-3. Prepare a guest ([Linux guest](linux-guest.md), [Windows guest](windows-guest.md)).
+3. Prepare a guest ([Linux guest](linux-guest.md), [Windows guest](windows-guest.md)). A Windows guest runs `scripts/windows/kayfabe-windows-setup.bat` once before NVIDIA's driver installer and once after it ([the settings](windows-guest.md#the-settings-it-needs-and-why)).
 4. Start QEMU with a `kf3-gpu` device. One GPU job at a time.
 
 ## Stock drivers and opt-in patches
