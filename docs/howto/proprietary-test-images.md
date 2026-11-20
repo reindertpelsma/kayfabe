@@ -46,6 +46,7 @@ The images are described by a configuration file, not by names in the code. Each
 
 - Check a file: `python3 scripts/ci/propimage_config.py --config YOUR.json validate`. A mistake is refused by name and exit status 2.
 - Ask which images an application list needs: `python3 scripts/ci/propimage_config.py --config YOUR.json resolve --apps app1,app2`. The answer is the images with the fewest total bytes that hold every application, and the byte total. An application that is on no image is refused by name; it is never skipped.
+- See what a run of one image would do, without running it: `python3 scripts/ci/propimage_stage.py --config YOUR.json plan --bundle ID` prints the rows, the boots and the harness commands. `--arm vfio --vfio-gpu 0000:01:00.0` plans the same run with the real GPU (the reference arm) instead of kf3; the default is kf3.
 - Put no licence key, account, e-mail address or credential in the file; the checker refuses what looks like one.
 
 ## What the open lanes use
