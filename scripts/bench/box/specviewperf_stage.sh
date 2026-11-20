@@ -17,7 +17,7 @@
 # unless KF_TRUST_MODE=strict; KF_SPEC_EXPECT_SHA256 is the user's own enforced pin; docs/OWNER_RULINGS.md section AX),
 # KF_SPEC_DISK_GB (grow the guest disk), KF_SPEC_COPY_ONLY, KF_SPEC_REUSE, KF_SPEC_KEEP_ON_FAIL (1 default | 0 | always), KF_SPEC_REBOOT_AFTER,
 # KF_SPEC_PAUSE_FILE, KF_SPEC_COPY_BUDGET_S, KF_SPEC_COPY_NOTE_S. Unset, the Vast path is unchanged.
-# 2026-11-20 (MEASURED on one Vast box, tree 7fb1c98a0): the copy into the guest ran at about 5 MB/s and hit its old fixed 70-minute budget (RETRY
+# In one Vast run at tree 7fb1c98a0, the copy into the guest ran at about 5 MB/s and hit its old fixed 70-minute budget (RETRY
 # class=TIME, every row NOT_RUN SETUP, nothing in the log about the rate). KF_SPEC_COPY_BUDGET_S=<600..86400 seconds> is the time the copy may take; unset,
 # it is DERIVED (scripts/bench/specviewperf/copy_budget.py: the lane's tree size from lanes.json at a floor rate of 5 MB/s, +20 % and +600 s), and
 # either way never more than the time left. A bad value is refused by name before anything starts (RETRY class=OPERATOR). While the copy runs the

@@ -310,7 +310,7 @@ MUTANTS = [
     M("licence-newest-event-not-preferred", "licence", 'if best is None or ev["time"] >= best["time"]:', 'if best is None:',
       NET + ".LicenceModule.test_the_newest_licence_event_is_reported_whatever_the_order_of_the_readout",
       NET + ".LicenceModule.test_the_newest_of_three_licence_events_is_reported"),
-    # --- 2026-11-20: the copy budget and the copy progress (copy_budget.py; test_spec_copy_budget.py, test_vast_spec_stage.CopyBudget) ---------
+    # --- the copy budget and the copy progress (copy_budget.py; test_spec_copy_budget.py, test_vast_spec_stage.CopyBudget) ---------
     M("copy-budget-ignores-the-knob", "copybudget", '    if knob is not None:\n        unclamped, source = knob, "knob"', '    if False:\n        unclamped, source = knob, "knob"',
       CBT + ".Budget", t("CopyBudget", "the_knob_sets_the_budget"), t("CopyBudget", "a_larger_knob_than_the_default_is_honoured_too")),
     M("copy-budget-derived-from-the-wrong-size", "copybudget", "for w in lane_mod.lane_ids(lane, tbl))", 'for w in tbl["viewsets"])',
