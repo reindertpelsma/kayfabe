@@ -1,0 +1,265 @@
+app-lane plan (offline; rents nothing; DESIGN-ONLY, the Worker start kind app is not built) mode=first_release release_seq=1 legs=8 parallel=0 estimate_usd=11.333 daily_cap_usd=1000 admitted=false refusals=NO_SLOTS
+  imga on turing die=TU116 machine=70001 GTX_1660_SUPER dph=0.15 down_gb=60.43 est_usd=0.8734
+  imga on ampere die=GA106 machine=70002 RTX_3060 dph=0.19 down_gb=60.43 est_usd=1.074
+  imga on ada die=AD104 machine=70005 RTX_4070_SUPER dph=0.35 down_gb=60.43 est_usd=1.8767
+  imga on blackwell die=GB205 machine=70009 RTX_5070 dph=0.2878 down_gb=60.43 est_usd=1.5647
+  imgb on turing die=TU106 machine=70000 RTX_2060S dph=0.1967 down_gb=74.1 est_usd=1.135
+  imgb on ampere die=GA106 machine=70003 RTX_3060 dph=0.2 down_gb=74.1 est_usd=1.1516
+  imgb on ada die=AD104 machine=70006 RTX_4070_SUPER dph=0.37 down_gb=74.1 est_usd=2.0044
+  imgb on blackwell die=GB206 machine=70011 RTX_5060_TI dph=0.3 down_gb=74.1 est_usd=1.6532
+{
+ "kind": "app",
+ "mode": "first_release",
+ "release_seq": 1,
+ "window_releases": 4,
+ "families": [
+  "turing",
+  "ampere",
+  "ada",
+  "blackwell"
+ ],
+ "images": [
+  "imga",
+  "imgb"
+ ],
+ "legs": [
+  {
+   "kind": "app",
+   "image": "imga",
+   "family": "turing",
+   "die": "TU116",
+   "offer_id": 7001,
+   "machine_id": 70001,
+   "host_id": 9001,
+   "gpu_name": "GTX_1660_SUPER",
+   "country": "US",
+   "dph_total": 0.15,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 60.43,
+   "bandwidth_up_gb": 0.01,
+   "stages": [
+    "propimage_apps"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 0.8734
+  },
+  {
+   "kind": "app",
+   "image": "imga",
+   "family": "ampere",
+   "die": "GA106",
+   "offer_id": 7002,
+   "machine_id": 70002,
+   "host_id": 9002,
+   "gpu_name": "RTX_3060",
+   "country": "US",
+   "dph_total": 0.19,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 60.43,
+   "bandwidth_up_gb": 0.01,
+   "stages": [
+    "propimage_apps"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 1.074
+  },
+  {
+   "kind": "app",
+   "image": "imga",
+   "family": "ada",
+   "die": "AD104",
+   "offer_id": 7005,
+   "machine_id": 70005,
+   "host_id": 9005,
+   "gpu_name": "RTX_4070_SUPER",
+   "country": "US",
+   "dph_total": 0.35,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 60.43,
+   "bandwidth_up_gb": 0.01,
+   "stages": [
+    "propimage_apps"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 1.8767
+  },
+  {
+   "kind": "app",
+   "image": "imga",
+   "family": "blackwell",
+   "die": "GB205",
+   "offer_id": 7009,
+   "machine_id": 70009,
+   "host_id": 9009,
+   "gpu_name": "RTX_5070",
+   "country": "US",
+   "dph_total": 0.2878,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 60.43,
+   "bandwidth_up_gb": 0.01,
+   "stages": [
+    "propimage_apps"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 1.5647
+  },
+  {
+   "kind": "app",
+   "image": "imgb",
+   "family": "turing",
+   "die": "TU106",
+   "offer_id": 7000,
+   "machine_id": 70000,
+   "host_id": 9000,
+   "gpu_name": "RTX_2060S",
+   "country": "US",
+   "dph_total": 0.1967,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 74.1,
+   "bandwidth_up_gb": 0.02,
+   "stages": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 1.135
+  },
+  {
+   "kind": "app",
+   "image": "imgb",
+   "family": "ampere",
+   "die": "GA106",
+   "offer_id": 7003,
+   "machine_id": 70003,
+   "host_id": 9003,
+   "gpu_name": "RTX_3060",
+   "country": "US",
+   "dph_total": 0.2,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 74.1,
+   "bandwidth_up_gb": 0.02,
+   "stages": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 1.1516
+  },
+  {
+   "kind": "app",
+   "image": "imgb",
+   "family": "ada",
+   "die": "AD104",
+   "offer_id": 7006,
+   "machine_id": 70006,
+   "host_id": 9006,
+   "gpu_name": "RTX_4070_SUPER",
+   "country": "US",
+   "dph_total": 0.37,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 74.1,
+   "bandwidth_up_gb": 0.02,
+   "stages": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 2.0044
+  },
+  {
+   "kind": "app",
+   "image": "imgb",
+   "family": "blackwell",
+   "die": "GB206",
+   "offer_id": 7011,
+   "machine_id": 70011,
+   "host_id": 9011,
+   "gpu_name": "RTX_5060_TI",
+   "country": "US",
+   "dph_total": 0.3,
+   "disk_gb": 300,
+   "vram_gb": 8,
+   "bandwidth_down_gb": 74.1,
+   "bandwidth_up_gb": 0.02,
+   "stages": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "manual_only": true,
+   "only": [
+    "propimage_apps",
+    "propimage_apps_b"
+   ],
+   "hard_minutes": 300,
+   "est_usd": 1.6532
+  }
+ ],
+ "unplaced": [],
+ "parallel": 0,
+ "estimate_usd": 11.333,
+ "spent_today_usd": 0,
+ "daily_cap_usd": 1000,
+ "cost_model": {
+  "hard_ms": 18000000,
+  "cron_ms": 60000
+ },
+ "rotation_after": {
+  "release_seq": 1,
+  "last": {
+   "imga": {
+    "turing": 1,
+    "ampere": 1,
+    "ada": 1,
+    "blackwell": 1
+   },
+   "imgb": {
+    "turing": 1,
+    "ampere": 1,
+    "ada": 1,
+    "blackwell": 1
+   }
+  }
+ },
+ "admitted": false,
+ "refusals": [
+  "NO_SLOTS"
+ ]
+}
