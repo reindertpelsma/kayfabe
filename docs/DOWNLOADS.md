@@ -382,13 +382,11 @@ Against the 2026-11-08 manifest exactly four files differ (`apps.json`, `guest/p
 manifest were uploaded with new create-only keys (the 2026-11-08 objects and the three source archives are untouched; the old pin stays valid for its own
 sha), and `fetch_public_bundle.py` with the new pin fetched and verified the ISO from `bundles.kayfabe.dev` without credentials.
 
-**CODE READ:** the rule from now on is that a change to any input the hash covers (`manifest.json`, `gate_profiles.json`, `apps.json`, the guest files,
-the recipe programs) needs a rebuilt and republished bundle and the new `bundle.pin` in the same change set. Two guards enforce it:
-`tests/test_bundle_pin_drift.py` compares `bundle.pin`'s `# inputs=` with the tree's input hash (CI, offline), and `fetch_public_bundle.py` names the
-mismatch `PUBLIC_BUNDLE_FAIL RECIPE_INPUT_DRIFT pin=... tree=...` for a stale pin, a manifest of other inputs or an image with another embedded recipe, before the
-2.7 GB download where it can. The stage's verdict keeps class MEDIA and carries that line as its reason. Procedure: `bundle_ci.py build --root <fresh dir>
---inputs <package_bundle.py input-hash>` (no credentials in the environment), `verify_image` with `expected_inputs`, upload the ISO and then the manifest
-create-only, re-download from the public URL and compare, then commit the pin (`first/bundle.pin.line`).
+**CODE READ:** a change to any input the hash covers (`manifest.json`, `gate_profiles.json`, `apps.json`, the guest files, the recipe programs) needs a
+rebuilt and republished bundle and the new `bundle.pin` in the same change set; the test and the named failure reason that enforce it are a separate change
+(#530). Procedure used here: `bundle_ci.py build --root <fresh dir> --inputs <package_bundle.py input-hash>` (no credentials in the environment),
+`verify_image` with `expected_inputs`, upload the ISO and then the manifest create-only, re-download from the public URL and compare, then commit the pin
+(`first/bundle.pin.line`).
 
 Full recipe, qualification rules and rollout details: [Windows apps gate, section 3](design/V3_WINDOWS_APPS_GATE.md#3-inputs-public-bundle-and-official-run-time-media).
 
