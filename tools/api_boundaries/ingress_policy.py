@@ -140,6 +140,13 @@ def _split_top(body):
     return parts
 
 
+def _keep_smallest(sink, key, value):
+    """Order-independent choice when one key is defined twice (the 0xffffffff "no override" macros):
+    the smallest value wins, so the extraction does not depend on directory order of the checkout."""
+    if key not in sink or value < sink[key]:
+        sink[key] = value
+
+
 def extract_tree(tree, tag):
     """-> facts for one ogkm tag: every exported control and every resource_list.h class."""
     src = os.path.join(tree, "src")
@@ -155,15 +162,16 @@ def extract_tree(tree, tag):
                 if sub == "ctrl":  # a control id NVIDIA's generator annotated (not every one says _CMD_)
                     for m in _FINN_CTRL.finditer(raw):
                         if "_CTRL_CMD_" not in m.group(1):
-                            finn_names.setdefault(int(m.group(2), 16), m.group(1))
+                            _keep_smallest(finn_names, int(m.group(2), 16), m.group(1))
                 for m in _DEFINE_HEX.finditer(_strip(raw)):
                     name, val = m.group(1), int(m.group(2), 16)
                     if sub == "ctrl" and "_CTRL_CMD_" in name and val > 0xffff:
-                        sink.setdefault(val, name)
+                        _keep_smallest(sink, val, name)
                     elif sub == "class" and val <= 0xffff and not name.endswith("_H_"):
-                        sink.setdefault(name, val)
+                        _keep_smallest(sink, name, val)
     for cid, n in finn_names.items():
-        ctrl_names.setdefault(cid, n)
+        if cid not in ctrl_names:
+            ctrl_names[cid] = n
     # A few classes (the NV01_EVENT_* family) are defined in nvos.h rather than a class header.
     for m in _DEFINE_HEX.finditer(_strip(_read(os.path.join(sdk, "nvos.h")))):
         if int(m.group(2), 16) <= 0xffff:

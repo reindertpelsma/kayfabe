@@ -267,6 +267,35 @@ def pt_ok(run):
     return run[1] and run[2] in ("OgkmNonPrivileged", "Mode2Rpc", "Empirical")
 
 
+class DeterministicExtraction(unittest.TestCase):
+    """One id defined twice (the 0xffffffff "no override" macros) must not depend on directory order.
+
+    CI found it: the same oracle tree gave a different name for control 0xffffffff in a checkout
+    whose directory order differed from the one the committed facts were made in."""
+
+    def test_keep_smallest_is_order_independent(self):
+        for order in ((("a", 3), ("a", 1), ("a", 2)), (("a", 1), ("a", 2), ("a", 3)), (("a", 2), ("a", 3), ("a", 1))):
+            sink = {}
+            for k, v in order:
+                ip._keep_smallest(sink, k, v)
+            self.assertEqual(sink, {"a": 1}, order)
+
+    def test_keep_smallest_orders_names_not_insertion(self):
+        first, second = {}, {}
+        for n in ("NVC372_X", "NV0000_Y", "NV0000_X"):
+            ip._keep_smallest(first, 0xFFFFFFFF, n)
+        for n in ("NV0000_X", "NV0000_Y", "NVC372_X"):
+            ip._keep_smallest(second, 0xFFFFFFFF, n)
+        self.assertEqual(first, second)
+        self.assertEqual(first, {0xFFFFFFFF: "NV0000_X"})
+
+    def test_distinct_keys_are_kept(self):
+        sink = {}
+        ip._keep_smallest(sink, 1, "B")
+        ip._keep_smallest(sink, 2, "A")
+        self.assertEqual(sink, {1: "B", 2: "A"})
+
+
 class OracleTrees(unittest.TestCase):
     def check_tag(self, env, sub, tag):
         tree = os.environ.get(env) or os.path.join(REPO, "third_party", sub)
@@ -278,6 +307,29 @@ class OracleTrees(unittest.TestCase):
             return
         fresh = ip._fact_rows(ip.extract_tree(tree, tag))
         self.assertEqual(fresh, ip.facts_at(REPO, tag), "ingress_facts.tsv at %s differs from the tree" % tag)
+
+    def test_extraction_does_not_depend_on_directory_order(self):
+        tree = os.environ.get("KF_OGKM_580") or os.path.join(REPO, "third_party", "ogkm-580")
+        if not os.path.isfile(os.path.join(tree, "src/nvidia/src/kernel/rmapi/resource_list.h")):
+            if os.environ.get("KF_REQUIRE_ORACLES") == "1":
+                self.fail("ORACLE-GATE: ogkm-580 missing and KF_REQUIRE_ORACLES=1")
+            print("ORACLE-GATE: SKIPPED order test: no tree - NOT a pass")
+            return
+        normal = ip._fact_rows(ip.extract_tree(tree, "580.159.04"))
+        real_walk = os.walk
+
+        def reversed_walk(top, *a, **k):
+            for dp, dn, fn in real_walk(top, *a, **k):
+                dn.reverse()
+                fn.reverse()
+                yield dp, dn, fn
+
+        os.walk = reversed_walk
+        try:
+            flipped = ip._fact_rows(ip.extract_tree(tree, "580.159.04"))
+        finally:
+            os.walk = real_walk
+        self.assertEqual(normal, flipped)
 
     def test_580_159_04(self):
         self.check_tag("KF_OGKM_580", "ogkm-580", "580.159.04")

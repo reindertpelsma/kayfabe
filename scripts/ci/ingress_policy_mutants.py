@@ -43,6 +43,7 @@ CASES = [
     ("absent-control-admitted", changed(GEN, '        return False, "NotExported"', '        return True, "OgkmNonPrivileged"')),
     ("unknown-control-given-a-row", changed(GEN, "                if not ruled:\n                    continue",
                                             "                if False:\n                    continue")),
+    ("duplicate-id-first-wins", changed(GEN, "    if key not in sink or value < sink[key]:", "    if key not in sink:")),
     # the gate
     ("gate-unlisted-admitted", changed(GATE, "        matches!(self, ControlPermit::Admitted { .. })",
                                        "        !matches!(self, ControlPermit::Denied(Denial::Refused { .. }))")),
