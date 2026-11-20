@@ -1,6 +1,6 @@
 # V3 — THE HARDWARE-BOUNDARY INVENTORY: every hardware-defined interface kayfabe touches, per die group
 
-**STATUS: LIVE, 2026-09-26 (branch `v3-hwinv`, off master `e05ff74d`). Source-only — no box was used.**
+**STATUS: RESEARCH, 2026-11-20.** Reclassified from LIVE on 2026-11-20 by the freshness gate. This is a source-only inventory of hardware interfaces; its 150 dead references are NVIDIA open-gpu-kernel-modules (ogkm) file names or globs (class headers, `dev_*` register headers, generated tables, UVM sources), which a default checkout does not contain. Nothing in it was re-verified on 2026-11-20. The kayfabe-side citations in it (for example `crates/kf-trap/src/memmap.rs`) were not re-checked either. ⊘ Original status line, kept as written: *LIVE, 2026-09-26 (branch `v3-hwinv`, off master `e05ff74d`). Source-only — no box was used.*
 The hardware-side counterpart of `nvkvm-pv`'s ioctl ABI table. It answers the owner's question
 *"We know all driver boundaries for ioctl structs from nvkvm-pv. Do we also know all hardware boundary
 structs?"*, lists every register, field and in-memory format kayfabe reads, writes, emulates or decodes,
