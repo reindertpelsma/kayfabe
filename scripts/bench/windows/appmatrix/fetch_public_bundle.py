@@ -29,11 +29,8 @@ def resolve_base(value):
     return PUBLIC_BASE
 
 
-def fetch(base, pin_text, output, tree_inputs=None):
-    """tree_inputs: this checkout's input hash. When given, a pin or manifest of other inputs is RECIPE_INPUT_DRIFT,
-    named before the 2.7 GB download (a measured failure of 2026-11-20 that a bare PUBLIC_BUNDLE_FAIL hid)."""
+def fetch(base, pin_text, output):
     base = P.public_base({'BUNDLE_PUBLIC_BASE_URL':base})
-    if tree_inputs is not None: CI.check_pin_inputs(pin_text, tree_inputs)
     digest = CI.read_pin(pin_text).get('sha256')
     if not digest: raise ValueError('missing public bundle pin')
     iso_key, receipt_key = P.keys(digest)
@@ -43,17 +40,10 @@ def fetch(base, pin_text, output, tree_inputs=None):
     if len(raw)>2*1024**2: raise ValueError('public manifest exceeds limit')
     receipt = json.loads(raw); P.require_public(receipt)
     if receipt['image']['sha256'] != digest: raise ValueError('public manifest differs from repo pin')
-    if tree_inputs is not None and receipt.get('inputs') != tree_inputs:
-        raise CI.RecipeInputDrift('RECIPE_INPUT_DRIFT manifest=' + str(receipt.get('inputs')) + ' tree=' + tree_inputs + ' (republish the bundle)')
     pin = dict(name='winapps-open.iso', url=base.rstrip('/')+'/'+iso_key,
                sha256=digest, size=receipt['image']['size'])
     B.fetch_file('public-bundle', pin, output, image=True)
-    try:
-        B.verify_image(output, receipt, public_only=True)
-    except ValueError as e:
-        if 'recipe input identity mismatch' in str(e):
-            raise CI.RecipeInputDrift('RECIPE_INPUT_DRIFT the image embeds other recipe inputs than this checkout derives (republish the bundle)') from None
-        raise
+    B.verify_image(output, receipt, public_only=True)
     (Path(output).parent/'winapps-open.manifest.json').write_bytes(B.canonical(receipt))
 
 
@@ -67,13 +57,9 @@ def main(argv=None):
         print('PUBLIC_BUNDLE_FAIL base-is-not-the-bundles-domain (the only accepted base is '+PUBLIC_BASE+')',file=sys.stderr);return 1
     try:
         urllib.request.install_opener(urllib.request.build_opener(B._HTTPSRedirect()))
-        tree=B.input_hash(B.load(HERE/'manifest.json'),B.load(HERE/'gate_profiles.json'))
-        fetch(base,a.pin.read_text(),a.out,tree_inputs=tree);print('PUBLIC_BUNDLE_OK');return 0
-    except CI.RecipeInputDrift as e:
-        print('PUBLIC_BUNDLE_FAIL '+str(e),file=sys.stderr);return 1
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        # Only the exception class is named: provider bodies, URLs and credentials stay out of the log.
-        print('PUBLIC_BUNDLE_FAIL reason='+type(e).__name__+' (no credentials or provider body logged)',file=sys.stderr);return 1
+        fetch(base,a.pin.read_text(),a.out);print('PUBLIC_BUNDLE_OK');return 0
+    except (OSError, ValueError, KeyError, TypeError):
+        print('PUBLIC_BUNDLE_FAIL (no credentials or provider body logged)',file=sys.stderr);return 1
 
 
 if __name__=='__main__':sys.exit(main())

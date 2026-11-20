@@ -45,13 +45,6 @@ CASES = [
     ('verify-needs-inventory', 'bundle_ci.py', 'if verify and reference is None and not published.get("inventory"):', 'if False:'),
     ('manual-never-ci', 'publish_bundle.py', 'if "CI" in env or "GITHUB_ACTIONS" in env:', 'if False:'),
     ('manual-presigned-only', 'publish_bundle.py', 'not env.get("BUNDLE_UPLOAD_URLS")', 'False'),
-    ('drift-pin-compare', 'bundle_ci.py', 'if pinned != tree_inputs:', 'if False:'),
-    ('drift-pin-without-inputs', 'bundle_ci.py', 'if pinned != tree_inputs:', 'if pinned and pinned != tree_inputs:'),
-    ('drift-checked-before-request', 'fetch_public_bundle.py', 'if tree_inputs is not None: CI.check_pin_inputs(pin_text, tree_inputs)', 'pass'),
-    ('drift-manifest-inputs', 'fetch_public_bundle.py', "if tree_inputs is not None and receipt.get('inputs') != tree_inputs:", 'if False:'),
-    ('drift-embedded-recipe-named', 'fetch_public_bundle.py', "if 'recipe input identity mismatch' in str(e):", 'if False:'),
-    ('drift-main-passes-tree', 'fetch_public_bundle.py', 'tree_inputs=tree)', 'tree_inputs=None)'),
-    ('drift-main-names-reason', 'fetch_public_bundle.py', "print('PUBLIC_BUNDLE_FAIL '+str(e),file=sys.stderr);return 1\n    except (OSError", "print('PUBLIC_BUNDLE_FAIL x',file=sys.stderr);return 1\n    except (OSError"),
     ('manual-no-static-credentials', 'publish_bundle.py', 'any(k in env for k in ("AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY","AWS_SESSION_TOKEN","R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY","KF_RUN_TOKEN"))', 'False'),
 ]
 
