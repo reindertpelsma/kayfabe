@@ -103,7 +103,7 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
   after a `WINDOWS_GATE_PASS` of the same tag (`KF_WINAPPS_PROFILE=small|mid|full|ids:a,b`, `KF_WINAPPS_ISO=<file>` for an app disk
   that is already on the box; without it the pinned public bundle comes from the bundles domain, the only base the fetcher accepts). It boots fresh guests that are overlays of the gate's overlay, with the app disk on AHCI and the guest
   offline, runs the profile's apps (`appmatrix/winapps.py --vm winvm`), grades them (`appmatrix/grade.py`) and ends in one of
-  `WINAPPS_PASS` (0), `WINAPPS_FAIL diag=KAYFABE` (1), `WINAPPS_RETRY class=...` (3, never a pass) or `WINAPPS_REFUSED` (2), then
+  `WINAPPS_PASS` (0), `WINAPPS_FAIL diag=KAYFABE` (1), `WINAPPS_RETRY class=...` (3, never a pass) or `WINAPPS_REFUSED` (2; `class=PIN reason=...` when the bundle pin is stale, not a retry class), then
   `WINAPPS_EXIT rc=N`. Log `<prov>/<tag>_winapps.log`, evidence `<prov>/<tag>_winapps.tgz`. A box never fetches an app from a vendor:
   the disk comes from the R2 copy (`docs/DOWNLOADS.md`, "Windows app bundle") or by hand. Design: `docs/design/V3_WINDOWS_APPS_GATE.md`.
 

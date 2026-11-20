@@ -1,6 +1,6 @@
 # The comment audit — what the source says that the design no longer means
 
-**STATUS: LIVE, 2026-09-21 (w823).** Answers the owner's directive *"Scan through comments, what is
+**STATUS: RESEARCH, 2026-11-20.** Reclassified from LIVE on 2026-11-20 by the freshness gate. This is the record of a comment-rot audit of the pre-v3 source at w823 (it names `/workspace/kf-master/crates/*/src`); the dead references are mostly pre-v3 files, crates and environment names (now archived or deleted) and a few ogkm file names. Nothing in it was re-verified on 2026-11-20. It is not a statement about the comments in the current `kf-*` crates. ⊘ Original status line, kept as written: *LIVE, 2026-09-21 (w823).* Answers the owner's directive *"Scan through comments, what is
 incompatible? How do I ensure the rotten docs are cleaned up so old architectures in old code is
 reference, not current, no confusion?"* Six parallel lanes over all 24 crates in
 `/workspace/kf-master/crates/*/src`, read against `THE_DESIGN.md` (w821).
