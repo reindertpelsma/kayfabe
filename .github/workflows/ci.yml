@@ -2262,6 +2262,15 @@ jobs:
       # engine objects per twin, kf-host handle counter): each mutant needs two named killers.
       - name: Guest-influence cap mutations require two named killers each
         run: python3 scripts/ci/guest_influence_mutants.py
+      # The guest-ingress gate (docs/design/V3_GUEST_INGRESS_TABLE.md, 2026-11-20, task I7): the generator's tests,
+      # the committed table being what the generator makes of the committed inputs, its mutants (two named
+      # killers each), and the licence closure of the kf3 QEMU device (no gVisor-derived or Apache-only file).
+      - name: Guest-ingress generator tests and table currency
+        run: python3 -I -m unittest discover -s tools/api_boundaries -p 'test_ingress_policy.py' -v
+      - name: Guest-ingress gate mutations require two named killers each
+        run: python3 scripts/ci/ingress_policy_mutants.py
+      - name: kf3 QEMU licence closure (no gVisor-derived, no Apache-only file linked)
+        run: python3 scripts/ci/qemu_license_closure.py
       # The bounded VA-apply phase profiling (docs/design/V3_VA_PROFILE.md, 2026-11-16: kf-mem vaprof/vasmgr/batch,
       # kf-qemu split delivery, kf-cuda ceiling geometry; observation only): each mutant needs two named killers.
       - name: VA-apply profiling mutations require two named killers each
@@ -2323,6 +2332,8 @@ jobs:
           test -f Cargo.toml && test -d crates
       - name: Oracle checkout (third_party/ogkm-580, shallow, pinned commit, id verified)
         run: bash scripts/ci/fetch_oracles.sh | tee "$RUNNER_TEMP/oracles.txt"
+      - name: Guest-ingress facts re-extracted from the oracle trees (580.159.04, 595.84)
+        run: KF_REQUIRE_ORACLES=1 python3 -I -m unittest discover -s tools/api_boundaries -p 'test_ingress_policy.py' -k OracleTrees -v
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
