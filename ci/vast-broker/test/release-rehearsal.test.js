@@ -41,6 +41,7 @@ async function harness(extra = {}, { payload = PAYLOAD_REHEARSAL } = {}) {
     machine_id: 200011,
     host_id: 3011,
     gpu_ram: 24576,
+    cpu_ram: 98304, // a 24 GB die needs 68234 MiB listed in the large profile (RAM_BELOW_VRAM_RULE, 2026-11-20)
     disk_space: 400,
   };
   h.cloud.price = 0.4;
@@ -344,6 +345,8 @@ test('dieLegs: a rehearsal skips the host-driver filter and carries no matrix fi
     host_id: 6,
     country: 'US',
     gpu_name: 'RTX 4090',
+    gpu_ram: 12288,
+    cpu_ram: 65536,
     dph_total: 0.5,
     pricing: { total: 2, effective: 0.5 },
     host_capabilities: { can_swap_host_driver: false, host_driver: '999.99' },
@@ -734,6 +737,8 @@ test('N2: the shared credit rule is NaN- and string-safe (anything but a suffici
     host_id: 6,
     country: 'US',
     gpu_name: 'RTX 4090',
+    gpu_ram: 12288,
+    cpu_ram: 65536,
     dph_total: 0.5,
     pricing: { total: 2, effective: 0.5 },
   };
