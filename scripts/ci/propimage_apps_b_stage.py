@@ -7,7 +7,7 @@ refuses until its three pins (image archive, signed boot GOP, open-asset data vo
 vast_payload.py as the manual-only stage `propimage_apps_b` and validated in vast_report.py (`validate_propimage_apps_b`); see
 docs/design/V3_PROPIMAGE_B_APPS.md, section "Stage selection and the report".
 
-    propimage_apps_b_stage.py run --sha SHA --checkout ROOT --prefix DIR --out FILE --urls FILE [--bench DIR] [--deadline-epoch N]
+    propimage_apps_b_stage.py run --sha SHA --checkout ROOT --prefix DIR --out FILE --urls FILE [--bench DIR] [--deadline-epoch N] [--pins FILE]
     propimage_apps_b_stage.py plan [--sha SHA]
 
 It reuses `propimage_apps.py` for everything that does not depend on the application list (preflight rows, pins and manifest, swtpm,
@@ -36,6 +36,7 @@ sys.path.insert(0, str(HERE))
 import propimage_apps as pa  # noqa: E402
 
 PINS_PATH = HERE / "propimage_apps_b_pins.json"
+PINS_MAX_BYTES = 65536      # a pins file is a few hundred bytes; a larger one is not one
 SCHEMA = 1
 APP_VERDICTS = ("PASS", "PASS_LIMITED", "FAIL", "INCONCLUSIVE", "HARNESS", "NOT_RUN", "MISSING")
 BOOT_BUDGET_S = pa.BOOT_BUDGET_S
@@ -43,6 +44,26 @@ DATA_ROLE = "data"
 FAILURE_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")    # the generic runner's classes (propimage_images.py)
 MAX_RECORD_BYTES = 49152
 CENSUS_IDS = 8              # distinct ids kept per census keyword in the record (the evidence directory keeps the full census)
+
+
+def check_pins_file(path):
+    """The pins file of this run (`run --pins FILE`, same schema as the committed one), or a named refusal before anything starts: PINS_MISSING (not a
+    regular file), PINS_UNREADABLE, PINS_MALFORMED (not valid for pa.load_pins, or larger than PINS_MAX_BYTES) or PINS_NO_DATA (no `data` role: image B
+    needs the open-asset volume). Reads the file only; fetches nothing."""
+    p = Path(path)
+    if not p.is_file():
+        raise pa.Refused("PINS_MISSING")
+    try:
+        if p.stat().st_size > PINS_MAX_BYTES:
+            raise ValueError("size")
+        doc = pa.load_pins(p)
+    except OSError:
+        raise pa.Refused("PINS_UNREADABLE")
+    except (ValueError, TypeError, KeyError, AttributeError, RecursionError):
+        raise pa.Refused("PINS_MALFORMED")
+    if DATA_ROLE not in {i["role"] for i in doc["items"]}:
+        raise pa.Refused("PINS_NO_DATA")
+    return p
 
 
 def apps_module(root):
@@ -198,8 +219,11 @@ def trim_census(c):
 
 
 def write_record(path, rec):
-    """pa.write_record with this stage's bound (the record has up to 24 rows): shrink evidence, xid lines and census ids until it fits."""
-    for evidence, lines, ids in ((24, 8, CENSUS_IDS), (8, 2, 4), (4, 1, 0), (2, 1, 0)):
+    """pa.write_record with this stage's bound (the record has up to 42 rows): shrink evidence, xid lines and census ids until it fits. The last tier
+    drops them all; a record that is still over the bound then is written complete (valid JSON, never cut) and the report validator refuses it by size.
+    MEASURED 2026-11-20 on synthetic worst-case rows (24 evidence names, 8 xid lines, full census per row): 42 rows are 55 kB after the tier before
+    the last, 35 kB after it; the real rows are far smaller."""
+    for evidence, lines, ids in ((24, 8, CENSUS_IDS), (8, 2, 4), (4, 1, 0), (2, 1, 0), (0, 0, 0)):
         for a in rec["apps"]:
             a["evidence"], a["host_xid"]["lines"] = a["evidence"][:evidence], a["host_xid"]["lines"][:lines]
             if a.get("census", {}).get("ids") is not None:
@@ -265,7 +289,7 @@ def run(ctx, evidence_dir=None, apps=None, guest_ram_mb=GUEST_RAM_MB, audio=AUDI
     klog, started, out_of_time = None, False, False
     try:
         pa.check_prefix(ctx.prefix)
-        ctx.pins_path = Path(PINS_PATH if ctx.pins_path == pa.PINS_PATH else ctx.pins_path)
+        ctx.pins_path = check_pins_file(PINS_PATH if ctx.pins_path == pa.PINS_PATH else ctx.pins_path)
         rows, family, build, pins, vendor = pa.preflight(ctx)
         rec["preflight"], rec["family"], rec["cpu_vendor"] = rows, family, vendor
         image = next(i for i in pins["items"] if i["role"] == "image")
@@ -417,7 +441,7 @@ def report_gpu_step(rows, label, out, kept_log, evidence_dir):
 GPU_EVIDENCE = ("gpu_fix.txt", "gpu_diag.json", "gpu_events.txt")
 
 # text evidence only: the verdicts, the sampled GPU numbers and the diagnostic output; never a PNG, PDF, PSD or video
-EVIDENCE_COPY = ("verdict.json", "result.json", "steps.log")
+EVIDENCE_COPY = ("verdict.json", "result.json", "steps.log", "uitext.txt", "uitext_hits.txt", "inventory.txt")
 EVIDENCE_GLOB = re.compile(r"[a-z0-9]+_gpu(\.json|_query\.csv|_dmon\.txt)|sniffer(_[a-z]+)?\.txt")
 
 
@@ -456,6 +480,8 @@ def main(argv=None):
     r.add_argument("--apps", help="comma list: run only these rows (default: all)")
     r.add_argument("--guest-ram-mb", type=int, default=GUEST_RAM_MB, help="guest RAM of every boot in MiB; 0 keeps the image's own 8192 (default %d)" % GUEST_RAM_MB)
     r.add_argument("--no-audio", action="store_true", help="boot without the virtual sound card")
+    r.add_argument("--pins", help="pins file (kayfabe.propimage-pins/1) of THIS run instead of the committed propimage_apps_b_pins.json "
+                                  "(image, gop, data, libtpms, swtpm); refused by name when missing or malformed (PINS_MISSING, PINS_MALFORMED, PINS_NO_DATA)")
     q = sub.add_parser("plan")
     q.add_argument("--sha", default="0" * 40)
     a = p.parse_args(argv)
@@ -468,7 +494,7 @@ def main(argv=None):
         if not pa.SHA_RE.fullmatch(a.sha):
             return 2
         ctx = pa.Context(a.sha, a.checkout, a.prefix, a.out, a.urls, bench=Path(a.bench), deadline_epoch=a.deadline_epoch, hardware=pa.hardware_now())
-        ctx.pins_path = PINS_PATH
+        ctx.pins_path = check_pins_file(a.pins) if a.pins else PINS_PATH
         return finish(run(ctx, a.evidence_dir, a.apps.split(",") if a.apps else None, a.guest_ram_mb, AUDIO and not a.no_audio), a.out)
     except pa.Refused as exc:
         print("KF_PROPIMAGE_APPS_B_REFUSED " + pa.clean(exc.reason, 80), flush=True)

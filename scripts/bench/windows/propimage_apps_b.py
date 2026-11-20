@@ -36,6 +36,59 @@ GUEST_DIR = r"C:\kfapps"
 SAFE_FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 MAX_PULL = 96 * 1024 * 1024
 
+# UI text of the launch rows (2026-11-20): text the guest read from the applications' windows through UI Automation (names of controls, never a screenshot),
+# the hit list of the lines that talk about downloads, models, accounts or an internet connection, and the install inventory (folder and exe NAMES).
+# They are pulled with their own small bound and scrubbed AGAIN here (e-mail-shaped, long hex or GUID-like, key-shaped strings, and anything after
+# "Signed in as" / "Welcome" / "Hello" on a line); a file that cannot be scrubbed is deleted, never kept. The patterns are the ones of `Scrub-Text` in
+# apps_b/launch.ps1 (a test compares them as text); keep both in step.
+UI_FILES = ("uitext.txt", "uitext_hits.txt", "inventory.txt")
+MAX_UI_PULL = 256 * 1024
+SCRUB = "<scrubbed>"
+SCRUB_RES = (
+    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+    r"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b",
+    r"\b[0-9A-Fa-f]{16,}\b",
+    r"\b[A-Za-z0-9]{4,6}(?:-[A-Za-z0-9]{4,6}){2,}\b",
+)
+SCRUB_AFTER = r"(?i)\b(signed in as|welcome|hello)\b.*$"
+# the words whose lines make uitext_hits.txt (case-insensitive, substring); the guest has the same list
+HIT_WORDS = ("download", "install", "online", "model", "not available", "unavailable", "requires internet", "internet connection", "internet", "sign in",
+             "sign-in", "signin", "log in", "trial", "offline", "update", "connect", "licen", "subscription", "get started", "free", "activate", "add-on",
+             "addon", "plug-in", "plugin", "content", "library", "cloud", "account")
+
+
+def scrub_text(text):
+    """`text` with the personal-looking parts replaced by <scrubbed>, line by line (the final newline is kept)."""
+    out = []
+    for line in str(text).splitlines():
+        for rx in SCRUB_RES:
+            line = re.sub(rx, SCRUB, line)
+        out.append(re.sub(SCRUB_AFTER, r"\1 " + SCRUB, line))
+    return "\n".join(out) + ("\n" if str(text).endswith("\n") else "")
+
+
+def scrub_file(path):
+    """Scrub a pulled UI text file in place (UTF-8 out, no BOM). Over the bound or unreadable: the file is deleted."""
+    p = Path(path)
+    try:
+        if p.is_symlink() or p.stat().st_size > MAX_UI_PULL:
+            raise OSError("bound")
+        p.write_text(scrub_text(p.read_bytes().decode("utf-8-sig", "replace")), encoding="utf-8")
+    except (OSError, ValueError):
+        p.unlink(missing_ok=True)
+
+
+def pull_names(res, name):
+    """The file names to ask the guest for after a row: the names its result lists, the shared diagnostics, and for a launch row the UI text files."""
+    names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt", "ps_progress.txt", "ae_progress.txt", "id_progress.txt", "ps_log_tail.txt", "pp_progress.txt", "pp_done.txt", "ae_stub.log", "pp_stub.log", "ame_stub.log", "app_events.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
+    return names + (list(UI_FILES) if name in LAUNCH_ONLY else [])
+
+
+def pull_limit(fn):
+    """The size bound of one pulled file in bytes."""
+    return MAX_UI_PULL if fn in UI_FILES else MAX_PULL
+
+
 # Opaque expectations for the open assets in the data volume (names as in scripts/bench/assets/test_assets.json).
 EXPECT = {
     "photo": {"name": "ktiponissi_dirfys_4480x2928.jpg", "w": 4480, "h": 2928},
@@ -84,10 +137,22 @@ CHECKS = {
     "bridge": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Bridge start (launch only; new, unmeasured)"},
     "characteranimator": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Character Animator start (launch only; new, unmeasured)"},
     "audition": {"timeout": 1200, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Audition start (launch only; new, unmeasured)"},
+    # 2026-11-20 (new full B image): the exe is DISCOVERED by file-name pattern (apps_b/launch.ps1), the install directory carries a version we do not know
+    "dreamweaver": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Dreamweaver start (launch only, exe discovered; new, unmeasured)"},
+    "incopy": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "InCopy start (launch only, exe discovered; new, unmeasured)"},
+    "substance_designer": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Substance 3D Designer start (launch only, exe discovered; new, unmeasured)"},
+    "substance_modeler": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Substance 3D Modeler start (launch only, exe discovered; new, unmeasured)"},
+    "substance_painter": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Substance 3D Painter start (launch only, exe discovered; new, unmeasured)"},
+    "substance_sampler": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Substance 3D Sampler start (launch only, exe discovered; new, unmeasured)"},
+    "substance_stager": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Substance 3D Stager start (launch only, exe discovered; new, unmeasured)"},
+    # `mediaencoder` is the After Effects hand-off row and `animate` is disabled: neither has a launch row, so these two are the launch rows of the same applications
+    "mediaencoderlaunch": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Media Encoder start (launch only, exe discovered; new, unmeasured)"},
+    "animatelaunch": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery", "path": "Animate start (launch only, exe discovered; new, unmeasured)"},
 }
 EMBED = {"premieretl": {"PP_TL": "pp_timeline.jsx"}, "amematrix": {"PP_TL": "pp_timeline.jsx"}, "aeadv3d": {"AE_ADV3D": "ae_adv3d.jsx"}, "aetoggle": {"AE_TOGGLE": "ae_toggle.jsx"}, "aeparallel": {"AE_MAKE": "ae_make.jsx"}, "aeparallel4": {"AE_MAKE": "ae_make.jsx"}, "aftereffects": {"AE_MAKE": "ae_make.jsx"}, "mediaencoder": {"AE_MAKE": "ae_make.jsx"}, "lightroom": {"LR_INFO": "lrplugin/kf.lrdevplugin/Info.lua", "LR_INIT": "lrplugin/kf.lrdevplugin/Init.lua"}}
 ENABLED = tuple(n for n, c in CHECKS.items() if not c.get("disabled"))
-LAUNCH_ONLY = ("premiere", "dimension", "uxp", "lightroomlaunch", "bridge", "characteranimator", "audition")
+LAUNCH_ONLY = ("premiere", "dimension", "uxp", "lightroomlaunch", "bridge", "characteranimator", "audition", "dreamweaver", "incopy", "substance_designer",
+               "substance_modeler", "substance_painter", "substance_sampler", "substance_stager", "mediaencoderlaunch", "animatelaunch")
 
 
 def render_check(name, run_id):
@@ -203,14 +268,15 @@ def run_check(name, out, guest, sleep=time.sleep, clock=time.monotonic, **_ignor
         for f in ("result.json", "steps.log"):
             guest.scp(remote + "/" + f, str(d / f), False)
         res = _json(d / "result.json")
-        names = [o.get("file") for o in res.get("outputs", [])] + ["sniffer.txt", "ps_progress.txt", "ae_progress.txt", "id_progress.txt", "ps_log_tail.txt", "pp_progress.txt", "pp_done.txt", "ae_stub.log", "pp_stub.log", "ame_stub.log", "app_events.txt"] + [f"sniffer_{a}.txt" for a in ("premiere", "aftereffects", "mediaencoder", "photoshop")]
-        for fn in names:
+        for fn in pull_names(res, name):
             if not isinstance(fn, str) or not SAFE_FILE.fullmatch(fn):
                 continue
-            q = guest.ps(f"if(Test-Path '{remote}/{fn}'){{$f=Get-Item '{remote}/{fn}';if($f.Length -le {MAX_PULL}){{'bounded'}}}}")
+            q = guest.ps(f"if(Test-Path '{remote}/{fn}'){{$f=Get-Item '{remote}/{fn}';if($f.Length -le {pull_limit(fn)}){{'bounded'}}}}")
             if q.returncode == 0 and q.stdout.strip() == "bounded":
                 if guest.scp(remote + "/" + fn, str(d / fn), False).returncode:
                     raise ValueError("Artifact transfer failed")
+                if fn in UI_FILES:
+                    scrub_file(d / fn)
         row = verdict(name, run_id, d, gpu_record)
     except (ValueError, TypeError, OSError, subprocess.TimeoutExpired) as exc:
         row = {"class": "harness", "app": name, "ok": False, "evidence": "NONE", "error": str(exc)}
@@ -461,12 +527,25 @@ def grade_gpudiag(r, d):
     return "the applications' GPU sniffers (%s) report an NVIDIA compute device" % ", ".join(found), ""
 
 
+def ui_hits(r, d):
+    """Number of lines in the pulled uitext_hits.txt; else the count the guest wrote (a plain int); else 0. Never raises: the capture is not graded."""
+    try:
+        p = Path(d) / "uitext_hits.txt"
+        if p.is_file() and not p.is_symlink() and p.stat().st_size <= MAX_UI_PULL:
+            return sum(1 for line in p.read_bytes().decode("utf-8", "replace").splitlines() if line.strip())
+    except OSError:
+        pass
+    n = r.get("ui_hits")
+    return n if type(n) is int and 0 <= n < 1 << 20 else 0
+
+
 def grade_launch(r, d, name):
     if not r.get("main_window"):
         raise ValueError("main window never appeared")
     if not r.get("alive"):
         raise ValueError("process not alive after the hold")
-    return "LIMITED: launched, main window reached (%d windows), process responding=%s, %s MB; no document work" % (len(r.get("titles") or []), r.get("responding"), r.get("private_mb")), ""
+    return "LIMITED: launched, main window reached (%d windows), process responding=%s, %s MB; no document work; ui_hits=%d" % (
+        len(r.get("titles") or []), r.get("responding"), r.get("private_mb"), ui_hits(r, d)), ""
 
 
 def grade_lightroom(r, d):
@@ -727,6 +806,7 @@ def verdict(name, run_id, directory, gpu_record):
         if r.get("error"):
             raise ValueError(str(r["error"])[:200])
         if name in LAUNCH_ONLY:
+            row["ui_hits"] = ui_hits(r, directory)       # the UI text capture is reported, never graded
             signal, info = grade_launch(r, directory, name)
             row.update(limited=True, evidence="UIA", status="PASS_LIMITED")
         else:
