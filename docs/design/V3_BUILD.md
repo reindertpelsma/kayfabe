@@ -1,6 +1,6 @@
 # V3_BUILD — how v3 is being built (branch `v3`)
 
-**STATUS: LIVE, 2026-09-24 (w826).** Governs the build order and what is copied. The design is
+**STATUS: LIVE, 2026-11-20 (w826; refs re-checked 2026-11-20).** ⊘ *2026-11-20:* every pre-v3 name below that the freshness gate flagged was repointed to where it lives now (`archive/crates/kayfabe-X/src/...` for the crates archived on 2026-09-26 and 2026-10-31, `archive/nvkvm/...` and `archive/qemu/...` for the C prototype; each file path was checked to exist). Cites into NVIDIA's open-gpu-kernel-modules are written `ogkm-580:<path>` (the path exists in `third_party/ogkm-580` at `b81d58e`; the 610 line numbers and the rule text itself were not re-verified on 2026-11-20). The copy table describes the intent of the build order at w826; whether each row was carried out as written was not re-checked. Governs the build order and what is copied. The design is
 `THE_ARCHITECTURE_v3.md` + `THE_V3_PLAN.md`; this file only records the execution decisions.
 
 ## Rules (owner, 2026-09-24)
@@ -21,7 +21,7 @@
   > "ledger of our own map handles" §4.2 (w825) itself sanctions, moved beside the walker. The walk
   > still reads the guest's live tables every time; nothing is served from the record; a stale
   > entry costs one extra diff line, never a wrong translation. ⇒ The walk emits a **DIFF**
-  > (`kf_cuda::diffmodel` is the spec; `kf-gate9` holds the GPU to it) and the CPU ledger +
+  > (`kf_cuda::diffmodel` is the spec; `crates/kf-harness/src/bin/kf-gate9.rs` holds the GPU to it) and the CPU ledger +
   > `plan_reconcile` are gone (`V3_P5_PORT_MAP.md` Q8). ⊘ Still never copied: `walkmirror`, a
   > whole-generation ack, anything that installs the walk itself as "previous state".
 - The target is the v3 architecture; **LLM parity is what v3 must deliver**, never a shortcut.
@@ -33,7 +33,7 @@ Pinned in `third_party/` (ogkm 610 + 580, linux for nouveau/nova, gvisor for nvp
 `/workspace/nvkvm-pv`. Rank: ogkm > nova > nouveau (THE_CONSTRAINTS §50); nvproxy answers the
 host-userspace question only.
 
-- **Per-die tables** → HOST-QUERY, unprivileged (ogkm `g_subdevice_nvoc.c` flags, `0x8` =
+- **Per-die tables** → HOST-QUERY, unprivileged (`ogkm-580:src/nvidia/generated/g_subdevice_nvoc.c` flags, `0x8` =
   NON_PRIVILEGED): interrupt data via `MC_GET_STATIC_INTR_TABLE 0x2080170e`,
   `MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS 0x2080170d`, `MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f`
   (the INTERNAL `0x20800a5c` and `FIFO_GET_DEVICE_INFO_TABLE 0x20801112` are kernel-only); engines
@@ -41,8 +41,8 @@ host-userspace question only.
   GPU info V2 — all NON_PRIVILEGED. Gaps: nova/nouveau device-info decoding as family rules. ★ The
   old tree's captured GA106 rows are the TEST ORACLE: on a GA106 host, derived == captured.
 - **Host event → guest MSI** → nvkvm-pv already materialises a host eventfd for
-  `NV01_EVENT_OS_EVENT` (`src/qemu/nvkvm_handle.c:134-142`; the event fd is a `/dev/nvidia*` fd,
-  `nvkvm_isolate_handlers.c:2615-2618`); the eventfd → KVM irqfd → MSI-X hop is standard KVM/QEMU.
+  `NV01_EVENT_OS_EVENT` (`archive/nvkvm/src/qemu/nvkvm_handle.c:134-142`; the event fd is a `/dev/nvidia*` fd,
+  `archive/nvkvm/src/qemu/nvkvm_isolate_handlers.c:2615-2618`); the eventfd → KVM irqfd → MSI-X hop is standard KVM/QEMU.
 - **Per-family GSP boot** → nova-core (`linux/drivers/gpu/nova-core`, Rust, GA10x+ FWSEC/WPR2).
 - **Host control allowlist + layouts across driver versions** → nvproxy.
 - **Bench grading** → the old project's nvdiff live oracle + bare-metal suite.
@@ -54,24 +54,24 @@ host-userspace question only.
 | `kf-util` | copy `kayfabe-util` | — |
 | `kf-arch` | copy `kayfabe-arch` (GSP seam; GMMU/USERD traits later) | — |
 | `kf-abi` | copy `kayfabe-abi` (generated modules, wire/view/versions, table layouts); `oracle.rs` test-only | regenerate from ogkm later |
-| `kf-gsp` | copy `kayfabe-gsp` {ring, element, ram, rpc, fault, seq}; **adapt** `boot.rs` (drop HeldReply / holds_for_refresh / deferred lane); `kayfabe-device/abi.rs`; drop `replay.rs` | — |
-| `kf-chip` | ⊘ **NOT a copy of `kayfabe-device/ga10x.rs`** (a GA106-only captured-constants file — the per-die shape v3 exists to end). Built on the **axes** (`derive_per_die_maintain_per_family`, owner 2026-09-13): **(a) FAMILY row, hand-maintained, one per generation** (`ga10x`/`ad10x`/`gh100`/`gb20x`: MMU format regime, USERD model, doorbell encoding, GSP boot style SEC2-booter vs FSP, ogkm header dir); **(b) register offsets GENERATED** from ogkm `dev_*.h` per family by the swref parser (`kayfabe-doorbell/swref.rs`) and class sets by `classgen.rs`; **(c) per-die facts READ FROM THE HOST GPU** at realize through unprivileged RM queries, else derived from ogkm, else fabricated so RM's own code accepts it — **each field carries its provenance**. The driver-version axis stays in `kf-abi`/`kf-gsp` (element layout keyed by version). | the generator, the `HostFacts` query set, the family table |
+| `kf-gsp` | copy `archive/crates/kayfabe-gsp` {ring, element, ram, rpc, fault, seq}; **adapt** `boot.rs` (drop HeldReply / holds_for_refresh / deferred lane); `archive/crates/kayfabe-device/src/abi.rs`; drop `replay.rs` | — |
+| `kf-chip` | ⊘ **NOT a copy of `archive/crates/kayfabe-device/src/ga10x.rs`** (a GA106-only captured-constants file — the per-die shape v3 exists to end). Built on the **axes** (`derive_per_die_maintain_per_family`, owner 2026-09-13): **(a) FAMILY row, hand-maintained, one per generation** (`ga10x`/`ad10x`/`gh100`/`gb20x`: MMU format regime, USERD model, doorbell encoding, GSP boot style SEC2-booter vs FSP, ogkm header dir); **(b) register offsets GENERATED** from ogkm `dev_*` register headers per family by the swref parser (`crates/kayfabe-doorbell/src/swref.rs`) and class sets by `classgen.rs`; **(c) per-die facts READ FROM THE HOST GPU** at realize through unprivileged RM queries, else derived from ogkm, else fabricated so RM's own code accepts it — **each field carries its provenance**. The driver-version axis stays in `kf-abi`/`kf-gsp` (element layout keyed by version). | the generator, the `HostFacts` query set, the family table |
 | `kf-trap` | `kayfabe-doorbell` {token, bitmap, wake, ring, trap, trappolicy, shadow, memmap}; the inline passthrough store | thin register adapter (~200 lines) replacing `RegPlane` |
-| `kf-rm` | `kayfabe-device` {inittables, staticinfo, guestsysinfo, inert, unserviced, census, sticky}; `kayfabe-rmrpc` {translate, reasm, fault}; doorbell {rmgraph, accessmap, rpc} | object graph keyed `(hClient,hObject)`; `GPU_GET_NAME_STRING` from the host |
-| `kf-host` | `RmConnection` from `isolate-host/rm.rs` (raw verbs public; no `HostRmBackend`, birth clients, exec VAS); `map_local_at_with_flags` + `invalidate_tlb`; `birth_channel`, `alloc_engine_object`, schedule; `kayfabe-linux-raw` chardev/ioctl/mapping/window/eventfd | deferred **unmap** flag; OS-event / NONSTALL registration |
+| `kf-rm` | `archive/crates/kayfabe-device` {inittables, staticinfo, guestsysinfo, inert, unserviced, census, sticky}; `archive/crates/kayfabe-rmrpc` {translate, reasm, fault}; doorbell {rmgraph, accessmap, rpc} | object graph keyed `(hClient,hObject)`; `GPU_GET_NAME_STRING` from the host |
+| `kf-host` | `RmConnection` from `crates/kayfabe-isolate-host/src/rm.rs` (raw verbs public; no `HostRmBackend`, birth clients, exec VAS); `map_local_at_with_flags` + `invalidate_tlb`; `birth_channel`, `alloc_engine_object`, schedule; `kayfabe-linux-raw` chardev/ioctl/mapping/window/eventfd | deferred **unmap** flag; OS-event / NONSTALL registration |
 | `kf-mem` | existing `kf-mem`; `kayfabe-cuda` + `cuda/walk` kernel (walk + the commit-on-ack DIFF against confirmed placements — ⊘ 2026-09-25, replaces "no delta snapshot" + the CPU ledger/planners); `reconcile_scoped` | our BAR1/BAR2 roots declared in static info; batched map with TLB-defer + one invalidate; scoped walks by named PDB |
-| `kf-chan` | doorbell {channel, completion, plane, hostverb}; `kayfabe-rt/translated.rs`; birth rules from `kayfabe-fwd` (adoptability by GPGA arithmetic, not bindings); `kayfabe-completion` policy | **Translated execution** (windows, own ring, GP copy, split at MEM_OP); **host event → irqfd → MSI** |
+| `kf-chan` | doorbell {channel, completion, plane, hostverb}; `archive/crates/kayfabe-rt/src/translated.rs`; birth rules from `archive/crates/kayfabe-fwd` (adoptability by GPGA arithmetic, not bindings); `archive/crates/kayfabe-completion` policy | **Translated execution** (windows, own ring, GP copy, split at MEM_OP); **host event → irqfd → MSI** |
 | `kf-core` | doorbell `vmm.rs` seam | — |
-| `kf-qemu` + `qemu/hw/misc/kf3/` | QOM glue + `KayfabeHostOps` from `nvkvm.c` / `shim_unsafe.rs`; `vmm-qemu` window verbs | device `kf3-gpu`, `kf3_` symbols, `KF_DEVICE` in the 3 harness sites |
+| `kf-qemu` + `qemu/hw/misc/kf3/` | QOM glue + `KayfabeHostOps` from `archive/qemu/hw/misc/nvkvm/nvkvm.c` / `archive/crates/kayfabe-qemu-raw/src/shim_unsafe.rs`; `vmm-qemu` window verbs | device `kf3-gpu`, `kf3_` symbols, `KF_DEVICE` in the 3 harness sites |
 
-⊘ **CORRECTED w826 (`V3_P2_PORT_MAP.md` §4.1): `kayfabe-device/sweep.rs` is NOT a publication
+⊘ **CORRECTED w826 (`V3_P2_PORT_MAP.md` §4.1): `archive/crates/kayfabe-device/src/sweep.rs` is NOT a publication
 sweep** — it is the control TRIAGE table (`SWEEP_TRIAGE`, :83-171) for the guest's engine sweep, and
 dropping it re-creates `t134a`'s silent engine amputation. It is COPIED into kf-rm. The name misled
 the list below. The full P2/P3 copy order is `V3_P2_PORT_MAP.md`.
 
-**Dropped outright:** `kayfabe-device/plane.rs` (except GSP dispatch ideas), fbwin/gpgaview/ceresolve/
-gvaspub/pubqueue/mmuinval/bar2/setpagedir, `kayfabe-core` gpu/project/gpa/reactor/promote-join,
-`kayfabe-rt` device/ceutils/completion_watch, `kayfabe-fwd` CE half, isolate crates, barmirror,
+**Dropped outright:** `archive/crates/kayfabe-device/src/plane.rs` (except GSP dispatch ideas), fbwin/gpgaview/ceresolve/
+gvaspub/pubqueue/mmuinval/bar2/setpagedir, `archive/crates/kayfabe-core` gpu/project/gpa/reactor/promote-join,
+`archive/crates/kayfabe-rt` device/ceutils/completion_watch, `archive/crates/kayfabe-fwd` CE half, isolate crates, barmirror,
 deviceview, walkmirror, the whole-generation delta/ack (⊘ 2026-09-25: the per-run commit-on-ack diff is a different thing — see the amended rule above).
 
 ## ★★★ Order: the real planes FIRST, graded by a GPU harness — guest boot LAST (owner, w826)
@@ -226,7 +226,7 @@ fat guest, kf3 binaries `kf3-bins/<rev>`).** The three guest-only failures of `V
   and its verdict is `k <= max_iter` (`:270-272`). ⊘ Why it cannot be closed from host userspace:
   a replayable host fault needs a fault-capable VAS, which RM refuses unless it is also
   EXTERNALLY_OWNED (`ogkm-580 vaspace_api.c:678-690`, i.e. UVM-owned page tables), and the fault
-  buffer class is `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED` (`resource_list.h`, `MMU_FAULT_BUFFER`). An owner
+  buffer class is `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED` (`ogkm-580:src/nvidia/src/kernel/rmapi/resource_list.h`, `MMU_FAULT_BUFFER`). An owner
   decision (a host fault channel, or a sanctioned eager-mapping policy) — `THE_OPEN_QUESTIONS.md` §4.
 - **R — guest read-only PTEs were read-write on the host (FIXED on `v3-roperm`, `a1a82903`;
   box vast 52732498, GA106).** Found by source review in `V3_UVM_DEMAND_PAGING.md` §6 (branch

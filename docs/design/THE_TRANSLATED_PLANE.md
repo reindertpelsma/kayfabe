@@ -1,6 +1,6 @@
 # THE TRANSLATED PLANE — how a guest's work reaches the real GPU
 
-**STATUS: LIVE.** Written 2026-09-21/22 (w824); **amended in place 2026-09-22 (w824b)** — a
+**STATUS: ANSWERED, 2026-11-20.** Reclassified from LIVE on 2026-11-20 by the freshness gate. This is the design statement for the Translated plane, written against the pre-v3 tree and amended in place (see below); `ARCHITECTURE.md` lists Translated execution in `kf-chan` and `crates/kf-harness/src/bin/kf-gate3.rs` is its GPU gate, but this document was not re-checked against `crates/kf-chan` on 2026-11-20, so which of its sections the code implements as written is unknown. Its 27 dead references are pre-v3 files (`kayfabe-fwd`, `kayfabe-core`, `kayfabe-rt`, `kayfabe-shell`), gate and tier names that are binaries or modules rather than crates, one environment name, and files in ogkm. Read it as rationale and measurements, not as a description of the tree. ⊘ Original status line, kept as written: *LIVE.* Written 2026-09-21/22 (w824); **amended in place 2026-09-22 (w824b)** — a
 synchrony audit after the owner's group-D correction (§10.1). Each amendment is marked `[w824b]`
 and says measured / cited / inferred; §5, §7, §9, §10-B, the verdict's X5 and §12 are corrected
 **above** the text they correct. Settles the design that closes `forwarded=0`.
