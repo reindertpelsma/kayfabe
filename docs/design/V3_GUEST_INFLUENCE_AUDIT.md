@@ -1,6 +1,6 @@
 # V3 guest-influence audit: host-side paths a guest can steer, and their bounds
 
-**STATUS: LIVE, 2026-11-20 (claude/guest-influence-20261120; GPU-free; no hardware run yet. Input: the
+**STATUS: LIVE, 2026-11-20 (claude/guest-influence-20261120; served.json correction from claude/no-gvisor-20261120 above §G-5's partition; GPU-free; no hardware run yet. Input: the
 adversarial reading in draft PR #537, `docs/design/V3_DRIVER_PAIR_CONFORMANCE.md` §3.3-3.4, re-derived here
 from the code, not taken over.)**
 
@@ -35,6 +35,13 @@ statements in `kf-qemu/src/chan.rs`; every host control call site in `crates/kf-
   the values; kayfabe validates the shape.
 - "Pass-through" in `control_carry` is the LAYOUT decision for those kayfabe-authored blocks (no
   conversion where the host's layout is the bench's), not a forwarding of guest bytes.
+
+⊘ **Correction 2026-11-20 (task I7, `docs/design/V3_GUEST_INGRESS_TABLE.md`):** `served.json` was regenerated with the
+guest-ingress gate excluded from the scan (`derive_served.py` `EXCLUDE`): the old file counted 71 ids and 122 names
+that only the hand-ported gate named. It now holds 357 literal control ids; the partition is the `HOST_CONTROLS` rows
+plus 285 ids in `answered_never_forwarded.txt` (12 added: named in current code, never forwarded; 77 removed: no
+longer served). The list of ids in neither set is still EMPTY. The guest-ingress table now also marks each control
+row `forwarded: true/false` from that file. The paragraph below is the 2026-11-20 morning state.
 
 **The partition (static, GPU-free, `crates/kf-abi/tests/control_partition.rs`):** the 421 served ids of
 `tools/api_boundaries/served.json` are 71 `HOST_CONTROLS` rows plus 350 ids answered or refused by kayfabe and

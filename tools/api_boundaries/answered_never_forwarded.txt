@@ -3,7 +3,6 @@
 # never sends to a host: every served id is a kf_abi::hostabi::HOST_CONTROLS row or is listed here,
 # never both (crates/kf-abi/tests/control_partition.rs). One hex id per line; '#' starts a comment
 # naming where served.json found it (code / extra_ids.txt / windows_ids.txt).
-0x00410110  # code
 0x00730101  # code,windows_ids.txt
 0x00730102  # code,windows_ids.txt
 0x00730107  # code,windows_ids.txt
@@ -51,69 +50,32 @@
 0x00731341  # windows_ids.txt
 0x00731365  # windows_ids.txt
 0x00731369  # code,extra_ids.txt,windows_ids.txt
-0x00738285  # code
 0x0073ffff  # code
 0x00800000  # code
 0x00800106  # windows_ids.txt
-0x00800201  # code
-0x00800280  # code
-0x00800288  # code
-0x00800289  # code
-0x0080028b  # code
-0x0080028e  # code
 0x00800294  # code,windows_ids.txt
-0x00801102  # code
-0x00801104  # code
-0x00801109  # code
-0x00801301  # code
 0x00801306  # windows_ids.txt
-0x00801307  # code
-0x00801401  # code
-0x00801402  # code
-0x00801701  # code
 0x00801707  # code,windows_ids.txt
-0x0080170d  # code
 0x0080170f  # code,windows_ids.txt
-0x00801713  # code
 0x00801714  # code
 0x00801801  # code
-0x00801806  # code
 0x00801809  # code
-0x0080180d  # code
 0x00801812  # code,windows_ids.txt
 0x00801813  # code
 0x00801814  # code
-0x00801815  # code
-0x00801b01  # code
 0x00802004  # code,windows_ids.txt
 0x00802009  # code,windows_ids.txt
 0x0080200a  # code,windows_ids.txt
-0x00808123  # code
 0x00809908  # code,extra_ids.txt,windows_ids.txt
-0x00da0002  # code
-0x00da0006  # code
-0x00de0001  # code
 0x00f10003  # code
-0x00fd0101  # code
-0x00fd0102  # code
-0x00fd0104  # code
-0x00fd0105  # code
 0x20800000  # code
 0x20800101  # code
-0x20800119  # code
 0x20800122  # code
-0x20800123  # code
 0x2080012b  # code,windows_ids.txt
 0x2080012c  # code
 0x2080012d  # code
 0x2080012f  # code,windows_ids.txt
-0x20800131  # code
-0x20800133  # code
 0x2080013f  # code,windows_ids.txt
-0x20800142  # code
-0x20800145  # code
-0x20800146  # code
-0x20800147  # code
 0x2080014b  # code,windows_ids.txt
 0x20800156  # code,windows_ids.txt
 0x20800157  # code,windows_ids.txt
@@ -121,20 +83,10 @@
 0x2080015f  # windows_ids.txt
 0x20800160  # windows_ids.txt
 0x20800169  # code
-0x2080016c  # code
 0x20800173  # windows_ids.txt
 0x20800177  # code
 0x2080017e  # code,windows_ids.txt
-0x2080018b  # code
-0x2080018d  # code
-0x2080018e  # code
-0x20800195  # code
-0x208001a3  # code
 0x208001a4  # windows_ids.txt
-0x20800403  # code
-0x20800406  # code
-0x20800407  # code
-0x20800513  # code
 0x20800802  # code
 0x20800803  # code
 0x20800806  # code
@@ -177,6 +129,7 @@
 0x20800a70  # code,windows_ids.txt
 0x20800a80  # code,extra_ids.txt,windows_ids.txt
 0x20800a87  # code,extra_ids.txt,windows_ids.txt
+0x20800a89  # code, by name (served.json regenerated 2026-11-20, I7)
 0x20800a9a  # windows_ids.txt
 0x20800a9b  # code
 0x20800a9d  # code
@@ -184,6 +137,9 @@
 0x20800aac  # code,windows_ids.txt
 0x20800aaf  # windows_ids.txt
 0x20800ab8  # code,extra_ids.txt,windows_ids.txt
+0x20800ac2  # code, by name (served.json regenerated 2026-11-20, I7)
+0x20800ac3  # code, by name (served.json regenerated 2026-11-20, I7)
+0x20800ac4  # code, by name (served.json regenerated 2026-11-20, I7)
 0x20800ac6  # code,windows_ids.txt
 0x20800adf  # code,windows_ids.txt
 0x20800af0  # windows_ids.txt
@@ -198,39 +154,31 @@
 0x20801110  # code,windows_ids.txt
 0x20801111  # code,extra_ids.txt,windows_ids.txt
 0x20801112  # code,windows_ids.txt
+0x20801114  # code, by name (served.json regenerated 2026-11-20, I7)
+0x20801115  # code, by name (served.json regenerated 2026-11-20, I7)
 0x20801116  # code
 0x20801117  # code
 0x20801119  # code
-0x20801201  # code
 0x20801209  # code
 0x20801211  # code,windows_ids.txt
-0x20801218  # code
-0x20801219  # code
 0x2080121f  # code,extra_ids.txt,windows_ids.txt
 0x20801220  # windows_ids.txt
 0x20801221  # windows_ids.txt
 0x20801222  # windows_ids.txt
 0x20801232  # code
-0x20801301  # code
-0x20801320  # code
 0x20801322  # windows_ids.txt
 0x20801344  # windows_ids.txt
 0x20801347  # windows_ids.txt
-0x20801352  # code
 0x20801357  # code,windows_ids.txt
-0x20801358  # code
-0x20801359  # code
 0x20801702  # code
 0x2080170d  # code
 0x20801801  # code
-0x20801802  # code
 0x20801803  # code,windows_ids.txt
 0x20801813  # windows_ids.txt
 0x20801819  # windows_ids.txt
 0x20801829  # windows_ids.txt
 0x2080182a  # code
 0x20801830  # windows_ids.txt
-0x2080200a  # code
 0x2080205a  # code,windows_ids.txt
 0x2080205b  # code,windows_ids.txt
 0x20802068  # code,windows_ids.txt
@@ -239,7 +187,6 @@
 0x2080220c  # code
 0x2080220d  # code,windows_ids.txt
 0x2080220e  # code,windows_ids.txt
-0x20802210  # code
 0x20802213  # code
 0x20802801  # code,extra_ids.txt,windows_ids.txt
 0x20802806  # code,extra_ids.txt,windows_ids.txt
@@ -251,22 +198,13 @@
 0x20802a0d  # code,windows_ids.txt
 0x20802a0f  # code,windows_ids.txt
 0x20802a12  # code,extra_ids.txt,windows_ids.txt
-0x20803001  # code
-0x20803002  # code
 0x20803039  # code
 0x20803083  # code,windows_ids.txt
 0x20803088  # code
-0x20803125  # code
 0x20803400  # windows_ids.txt
 0x20803401  # windows_ids.txt
 0x20803404  # windows_ids.txt
 0x20803c01  # windows_ids.txt
-0x20803d07  # code
-0x20804123  # code
-0x20807fff  # code
-0x20808000  # code
-0x20808123  # code
-0x20808124  # code
 0x20808159  # code,extra_ids.txt,windows_ids.txt
 0x208081ea  # windows_ids.txt
 0x20808513  # code
@@ -296,7 +234,6 @@
 0x2080a080  # code,windows_ids.txt
 0x2080a081  # windows_ids.txt
 0x2080a095  # windows_ids.txt
-0x2080a097  # code
 0x2080a0a4  # windows_ids.txt
 0x2080a0a7  # windows_ids.txt
 0x2080a0a8  # code,windows_ids.txt
@@ -320,16 +257,12 @@
 0x2080d02d  # windows_ids.txt
 0x2080dead  # code
 0x2080e0af  # windows_ids.txt
-0x2080e123  # code
-0x20810001  # code
-0x20810107  # code
 0x20810108  # code,extra_ids.txt,windows_ids.txt
 0x2081010d  # code,extra_ids.txt,windows_ids.txt
-0x20820001  # code
-0x208f1105  # code
 0x50700000  # code
 0x50700117  # windows_ids.txt
 0x50700118  # extra_ids.txt,windows_ids.txt
+0x5070020c  # code, by name (served.json regenerated 2026-11-20, I7)
 0x5070020d  # windows_ids.txt
 0x50700709  # extra_ids.txt,windows_ids.txt
 0x50800101  # windows_ids.txt
@@ -346,10 +279,12 @@
 0x90f10106  # windows_ids.txt
 0xa06c010a  # windows_ids.txt
 0xa06f0103  # code,windows_ids.txt
+0xa06f0108  # code, by name (served.json regenerated 2026-11-20, I7)
+0xa06f0109  # code, by name (served.json regenerated 2026-11-20, I7)
+0xa06f010a  # code, by name (served.json regenerated 2026-11-20, I7)
+0xa06f0110  # code, by name (served.json regenerated 2026-11-20, I7)
+0xa06f0111  # code, by name (served.json regenerated 2026-11-20, I7)
 0xa06f0112  # code
-0xc36f0101  # code
-0xc36f010a  # code
 0xc3700104  # windows_ids.txt
 0xc3700201  # windows_ids.txt
 0xc3720101  # windows_ids.txt
-0xc56f010b  # code
