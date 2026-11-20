@@ -25,7 +25,7 @@ def apps_log(kind, profile="small", rev=SHA[:8], exit_rc=None, extra=""):
         "PASS": f'WINAPPS_PASS rev={rev} gpu="RTX 4090" profile={profile} apps=8 hostref=green/green secs=1 {extra}',
         "FAIL": f'WINAPPS_FAIL diag=KAYFABE profile={profile} stage=done why="x" rev={rev} gpu="RTX 4090" hostref=green/green secs=1',
         "RETRY": f'WINAPPS_RETRY action=rerun-on-a-fresh-box class={extra or "OPERATOR"} profile={profile} stage=grade why="x" rev={rev} gpu="RTX 4090" hostref=green/green secs=1',
-        "REFUSED": "WINAPPS_REFUSED why=no-WINDOWS_GATE_PASS",
+        "REFUSED": f"WINAPPS_REFUSED {extra}" if extra else "WINAPPS_REFUSED why=no-WINDOWS_GATE_PASS",
     }[kind]
     details = ""
     if kind == "PASS":
@@ -93,6 +93,70 @@ class GradeTests(unittest.TestCase):
         self.assertEqual(self.grade(a + a, 0)[1], "windows_apps_retry_operator")
         b, _ = apps_log("FAIL")
         self.assertEqual(self.grade(a + b, 1)[1], "windows_apps")      # a FAIL anywhere in the log is never hidden by a PASS
+
+
+class PinRefusalTests(unittest.TestCase):
+    """2026-11-19/20 (MEASURED): a stale bundle.pin (fetch_public_bundle.py: RECIPE_INPUT_DRIFT) was graded
+    windows_apps_retry_media, "rerun-on-a-fresh-box", although no box can fix it. windows_apps.sh now prints
+    `WINAPPS_REFUSED class=PIN reason=<R>`; the payload grades it as the failing row windows_apps_pin.
+    FALSIFIER: that refusal graded as a retry row (the Worker's retry_only_failures and release.js retryRow both key on
+    `windows_apps_retry_` / `_retry_` names), as a pass, or any other refusal/class/reason promoted to windows_apps_pin."""
+    setUp = v7.V7Tests.setUp
+    _main_fixture = v7.V7Tests._main_fixture
+    grade = GradeTests.grade
+    REFUSAL = "class=PIN reason=RECIPE_INPUT_DRIFT"
+
+    def test_a_recipe_input_drift_refusal_is_the_pin_row(self):
+        text, rc = apps_log("REFUSED", extra=self.REFUSAL)
+        self.assertEqual(self.grade(text, rc), (None, "windows_apps_pin"))
+
+    def test_a_pin_mismatch_refusal_is_the_pin_row(self):
+        text, rc = apps_log("REFUSED", extra="class=PIN reason=PIN_MISMATCH")
+        self.assertEqual(self.grade(text, rc), (None, "windows_apps_pin"))
+
+    def test_the_pin_row_is_not_a_retry_row_by_the_runners_naming_rules(self):
+        name = self.grade(*apps_log("REFUSED", extra=self.REFUSAL))[1]
+        self.assertFalse(name.startswith(("windows_retry_", "apps_retry_", "windows_apps_retry_")))   # ci/vast-broker/runner.py retry_only_failures
+        self.assertNotRegex(name, r"^[a-z0-9]+_retry_[a-z0-9_]+$")                                    # ci/vast-broker/src/release.js retryRow
+        self.assertRegex(name, r"^[a-z][a-z0-9_]{0,47}$")                                             # the Worker's suite-name rule
+
+    def test_a_pin_refusal_with_a_retry_class_reason_stays_a_retry_refusal(self):
+        text, rc = apps_log("REFUSED", extra="class=PIN reason=NETWORK")
+        self.assertEqual(self.grade(text, rc)[1], "windows_apps_retry_refused")
+
+    def test_a_pin_refusal_with_an_unknown_reason_stays_a_retry_refusal(self):
+        text, rc = apps_log("REFUSED", extra="class=PIN reason=MADEUP")
+        self.assertEqual(self.grade(text, rc)[1], "windows_apps_retry_refused")
+
+    def test_the_pin_reason_under_another_class_stays_a_retry_refusal(self):
+        for cls in ("MEDIA", "OPERATOR"):
+            with self.subTest(cls=cls):
+                text, rc = apps_log("REFUSED", extra=f"class={cls} reason=RECIPE_INPUT_DRIFT")
+                self.assertEqual(self.grade(text, rc)[1], "windows_apps_retry_refused")
+
+    def test_a_pin_refusal_with_a_suffixed_reason_stays_a_retry_refusal(self):
+        text, rc = apps_log("REFUSED", extra="class=PIN reason=PIN_MISMATCH_X")
+        self.assertEqual(self.grade(text, rc)[1], "windows_apps_retry_refused")
+
+    def test_a_pin_refusal_followed_by_text_stays_a_retry_refusal(self):
+        text, rc = apps_log("REFUSED", extra=self.REFUSAL + " why=x")
+        self.assertEqual(self.grade(text, rc)[1], "windows_apps_retry_refused")
+
+    def test_an_ordinary_refusal_is_still_a_retry_refusal(self):
+        text, rc = apps_log("REFUSED")
+        self.assertEqual(self.grade(text, rc)[1], "windows_apps_retry_refused")
+
+    def test_a_pin_refusal_next_to_a_pass_is_not_a_pass(self):
+        passed, _ = apps_log("PASS")
+        text, rc = apps_log("REFUSED", extra=self.REFUSAL)
+        self.assertEqual(self.grade(passed + text, rc)[1], "windows_apps_retry_operator")
+
+    def test_the_stage_fails_the_run_with_the_pin_row_and_no_retry_row(self):
+        text, rc = apps_log("REFUSED", profile="mid", extra=self.REFUSAL)
+        rc_, result, calls = StageTests.run_stage(self, "mid", apps=(text, rc))
+        self.assertEqual(rc_, 1)
+        self.assertEqual([r["name"] for r in result["suites"] if r["fail"]], ["windows_apps_pin"])
+        self.assertEqual(result["verdict"], "FAIL")
 
 
 class RequestTests(unittest.TestCase):
