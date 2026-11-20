@@ -36,6 +36,10 @@
 #                                                                                   OPERATOR (our script: NOTRUN rows, budget ended,
 #                                                                                   driver died), HOSTREF, BAR1_EXCEPTION
 #   WINAPPS_REFUSED why=<w>                                                  exit 2  a precondition (no /dev/kvm access, no gate pass, ...)
+#   WINAPPS_REFUSED class=PIN reason=RECIPE_INPUT_DRIFT|PIN_MISMATCH         exit 2  the pinned app disk does not match this checkout
+#                                                                                   (bundle.pin is stale: republish the bundle; a fresh box
+#                                                                                   cannot fix it, so this is NOT a RETRY class; the payload
+#                                                                                   grades it as the failing row windows_apps_pin)
 #   WINAPPS_EXIT rc=<n> <utc>                                                always last
 # ROOTLESS (OWNER_RULINGS section AR item 6, 2026-11-15, NOT RUN ON A BOX): like windows_gate.sh this stage has no blanket root
 # refusal. It needs /dev/kvm and a kernel log it can read, directories it can write, and the packages and AppArmor rule the
@@ -143,6 +147,23 @@ fetch_app_disk() { # <out-iso> <log-file>
     python3 -I "$APPM/fetch_public_bundle.py" "${base_args[@]}" --pin "$APPM/bundle.pin" --out "$1" > "$2" 2>&1
 }
 
+# fetch_public_bundle.py prints one `PUBLIC_BUNDLE_FAIL reason=<R>` line with R from a closed set (never provider text). A reason that says
+# the pin no longer matches this checkout is deterministic, so it is a refusal: another box cannot fix it, and RETRY class=MEDIA
+# ("rerun-on-a-fresh-box") sent the 2026-11-19/20 run to a second box for the same failure. Anything else stays RETRY MEDIA.
+pin_refusal_reason() { # <fetch-log>  -> prints RECIPE_INPUT_DRIFT or PIN_MISMATCH; fails for any other log
+    sed -nE 's/^PUBLIC_BUNDLE_FAIL reason=(RECIPE_INPUT_DRIFT|PIN_MISMATCH)$/\1/p' "$1" 2> /dev/null | head -1 | grep .
+}
+refuse_pin() { say "WINAPPS_REFUSED class=PIN reason=$1"; VERDICT=REFUSED; rc_final=2; exit 2; }
+fetch_failed() { # <fetch-log>
+    local why
+    if why=$(pin_refusal_reason "$1"); then
+        say "APPS_NOTE the pinned app disk does not match this checkout; republish the bundle and update appmatrix/bundle.pin (docs/DOWNLOADS.md, Windows app bundle); a fresh box cannot fix this"
+        refuse_pin "$why"
+    fi
+    verdict RETRY MEDIA "fetch of winapps-open.iso failed (fetch_bundle.txt): $(tail -1 "$1" | head -c 160)"
+    exit 3
+}
+
 run_loop_alive_any() { pgrep -f "win_vm\.sh run " > /dev/null; }
 teardown_all() {
     local w=0
@@ -208,6 +229,13 @@ selftest() {
             *) bad=$((bad + 1)); echo "WINAPPS_SELFTEST_FAIL case=app-disk-base-$base_case got: $out" ;;
         esac
     done
+    # a fetch log that names a stale pin is refused; a network failure or an unnamed one is not
+    printf 'PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n' > "$tmpd/l1"
+    printf 'PUBLIC_BUNDLE_FAIL reason=PIN_MISMATCH\n' > "$tmpd/l2"
+    printf 'PUBLIC_BUNDLE_FAIL reason=NETWORK\n' > "$tmpd/l3"
+    n=$((n + 1))
+    [ "$(pin_refusal_reason "$tmpd/l1")/$(pin_refusal_reason "$tmpd/l2")" = RECIPE_INPUT_DRIFT/PIN_MISMATCH ] && ! pin_refusal_reason "$tmpd/l3" > /dev/null \
+        || { bad=$((bad + 1)); echo "WINAPPS_SELFTEST_FAIL case=pin-refusal-reason"; }
     rm -rf "$tmpd"
     # the default official driver is one the catalogue pins (a driver the guest does not have fails closed in winapps.py)
     n=$((n + 1))
@@ -290,8 +318,7 @@ if [ -z "$ISO" ]; then
     mkdir -p "$(dirname "$ISO")" 2> /dev/null || refuse "not-writable-$(dirname "$ISO")"
     [ -w "$(dirname "$ISO")" ] || refuse "not-writable-$(dirname "$ISO")"
     if ! fetch_app_disk "$ISO" "$EV/fetch_bundle.txt"; then
-        verdict RETRY MEDIA "fetch of winapps-open.iso failed (fetch_bundle.txt): $(tail -1 "$EV/fetch_bundle.txt" | head -c 160)"
-        exit 3
+        fetch_failed "$EV/fetch_bundle.txt"
     fi
 fi
 [ -f "$ISO" ] || { verdict RETRY MEDIA "no app disk at $ISO"; exit 3; }

@@ -294,7 +294,8 @@ def winapps_rows(text, rc, sha, profile):
     """Grade scripts/bench/box/windows_apps.sh. THE GATE IS THE GUEST PASSING (owner, 2026-11-01): only one
     WINAPPS_PASS for this revision and this profile with exit 0 is a passing row. RETRY (a host, harness, input or
     rental fault) and a refused precondition are never a pass and never a verdict on the guest; their row is
-    named windows_apps_retry_<class> so the runner can say "re-run on a fresh box"."""
+    named windows_apps_retry_<class> so the runner can say "re-run on a fresh box". The one exception is a refusal that
+    a fresh box cannot fix, the stale bundle pin: `windows_apps_pin`, a failure that is not a retry row."""
     verdicts = WINAPPS_VERDICT.findall(text)
     exits = re.findall(r"^WINAPPS_EXIT rc=([0-9]+)\b", text, re.M)
     kinds = {kind for kind, _ in verdicts}
@@ -330,6 +331,10 @@ def winapps_rows(text, rc, sha, profile):
         cls = found[1] if found and found[1] in WINAPPS_RETRY_CLASSES else "OPERATOR"
         raise EvidenceError("windows_apps_retry_" + cls.lower())
     if kinds == {"REFUSED"}:
+        # A stale bundle.pin (windows_apps.sh: `WINAPPS_REFUSED class=PIN reason=<R>`, R from fetch_public_bundle.py) is deterministic: no
+        # fresh box fixes it, so its row is NOT windows_apps_retry_* (the Worker reads that prefix as "not a verdict, run again").
+        if len(verdicts) == 1 and re.fullmatch(r" class=PIN reason=(RECIPE_INPUT_DRIFT|PIN_MISMATCH)", verdicts[0][1]):
+            raise EvidenceError("windows_apps_pin")
         raise EvidenceError("windows_apps_retry_refused")
     if "FAIL" in kinds:
         raise EvidenceError("windows_apps")

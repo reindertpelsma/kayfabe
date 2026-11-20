@@ -1,6 +1,6 @@
 # Comment audit — full appendix (Tables A–E)
 
-**STATUS: LIVE, 2026-09-21 (w823).** Raw six-lane output behind `THE_COMMENT_AUDIT.md`.
+**STATUS: RESEARCH, 2026-11-20.** Reclassified from LIVE on 2026-11-20 by the freshness gate, together with `THE_COMMENT_AUDIT.md`, whose raw evidence this is (232 dead references: pre-v3 files, environment names and branches). Nothing in it was re-verified on 2026-11-20. It is not a statement about the comments in the current `kf-*` crates. ⊘ Original status line, kept as written: *LIVE, 2026-09-21 (w823).* Raw six-lane output behind `THE_COMMENT_AUDIT.md`.
 ⊘ Read the synthesis there first; this file is the evidence, kept whole so the ~1500 dated
 measurement rows in Table C are not lost to a rewrite.
 
