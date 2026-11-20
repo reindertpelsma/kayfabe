@@ -25,7 +25,8 @@ import {
   CPU_VENDOR_REQUIRED,
 } from './release-matrix.js';
 import { DEFAULTS } from './defaults.js';
-import { gpuClass, resourceCaps, validateStagePolicy } from './policy.js';
+import { gpuClass, refusedByRamRule, resourceCaps, validateStagePolicy } from './policy.js';
+import { legStages } from './bandwidth.js';
 export const LINUX_LAST_ROW = 'cuda_fat';
 export const VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED']);
 const round = (x) => Math.round(x * 10000) / 10000;
@@ -47,6 +48,13 @@ export const requiredStageRows = (stages) => {
     ]),
   );
 };
+// The RAM-by-VRAM rule of the kfml row managed_oversub binds a LEG (policy.js refusedByRamRule): the leg of tier `legTier` runs
+// its planned stages (bandwidth.js legStages), so only a large leg, whose kfml run includes that row, drops offers over it; the
+// middle leg of a release (the second die of a family) keeps them. The rent path applies the same rule to the same leg.
+export const ramFit = (offers, legTier) => {
+  const leg = { tier: legTier, stages: legStages(legTier) };
+  return offers.filter((o) => !refusedByRamRule(o, leg));
+};
 // One full leg per matrix die; the compatibility path for other callers retains the old split.
 // `rehearsal` (2026-11-12): the named one-die rehearsal scope. The leg carries NO driver matrix (no release_matrix, drivers,
 // pins or subruns: the payload would refuse them, and they would be a false claim), and the host is not filtered by what it
@@ -57,14 +65,17 @@ export const requiredStageRows = (stages) => {
 // one Windows run, the apps, no SPEC lanes, priced at the middle hard limit (RELEASE_MIDDLE_HARD_RUNTIME_MINUTES).
 // Hosts whose cpu_name is not recognised as AMD or Intel (empty, ARM, unfamiliar) are never planned.
 export function eligibleOffers(offers, releaseMatrix, matrixRow) {
-  const swappable = matrixRow
-    ? offers.filter((o) =>
-        hostProvidesDrivers(
-          o.host_capabilities ?? releaseMatrix.host_capabilities.vast_kvm,
-          matrixRow,
-        ),
-      )
-    : offers;
+  const swappable = ramFit(
+    matrixRow
+      ? offers.filter((o) =>
+          hostProvidesDrivers(
+            o.host_capabilities ?? releaseMatrix.host_capabilities.vast_kvm,
+            matrixRow,
+          ),
+        )
+      : offers,
+    legTierOfRow(matrixRow),
+  );
   return swappable.filter((o) => rentableCpuName(o.cpu_name));
 }
 export function legEstimate(o, cfg, legTier) {
@@ -78,7 +89,8 @@ export function dieLegs(offers, cfg, matrixRow, { rehearsal = false, pin } = {})
   validateStagePolicy(cfg.releaseStages);
   const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
   matrixRow ??= releaseMatrix.dies.find((d) => d.die === offers[0]?.die);
-  if (!rehearsal) offers = eligibleOffers(offers, releaseMatrix, matrixRow);
+  const legTier = rehearsal ? 'large' : legTierOfRow(matrixRow);
+  offers = rehearsal ? ramFit(offers, legTier) : eligibleOffers(offers, releaseMatrix, matrixRow);
   const sorted = [...offers].sort(byPreference(cfg));
   if (!sorted.length) return [];
   const first = pin?.first ?? sorted[0];
@@ -87,7 +99,6 @@ export function dieLegs(offers, cfg, matrixRow, { rehearsal = false, pin } = {})
     pin && 'second' in pin
       ? (pin.second ?? undefined)
       : (others.find((o) => o.host_id !== first.host_id) ?? others[0]);
-  const legTier = rehearsal ? 'large' : legTierOfRow(matrixRow);
   const leg = (o, windowsRuns, extra = {}) => ({
     ...extra,
     ...(rehearsal ? {} : { leg_tier: legTier }),

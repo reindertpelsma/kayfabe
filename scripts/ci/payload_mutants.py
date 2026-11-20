@@ -725,6 +725,14 @@ CASES += [
 ]
 
 CASES += [
+    ("winapps-pin-refusal-is-a-retry-row", scoped("winapps_rows", 'raise EvidenceError("windows_apps_pin")', 'raise EvidenceError("windows_apps_retry_refused")')),
+    ("winapps-pin-refusal-never-recognised", scoped("winapps_rows", 'if len(verdicts) == 1 and re.fullmatch(', 'if False and re.fullmatch(')),
+    ("winapps-pin-refusal-any-reason", scoped("winapps_rows", '(RECIPE_INPUT_DRIFT|PIN_MISMATCH)', '[A-Z_]+')),
+    ("winapps-pin-refusal-any-class", scoped("winapps_rows", ' class=PIN reason=', ' class=[A-Z]+ reason=')),
+    ("winapps-pin-refusal-prefix-match", scoped("winapps_rows", 'if len(verdicts) == 1 and re.fullmatch(', 'if len(verdicts) == 1 and re.match(')),
+]
+
+CASES += [
     ("xd1-blackwell-host-names-refused", guard_replace(
         "engine in HOST_FAULT_NAMES['engines']", "engine in HOST_FAULT_NAMES['engines'] and not engine.startswith('GR_HOST')"
     ), "native_xid_guard.py"),

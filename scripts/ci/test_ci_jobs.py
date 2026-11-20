@@ -61,6 +61,7 @@ HARNESSES = [
     'python3 scripts/ci/video_class_coverage_mutants.py',
     'python3 scripts/ci/hide_untabled_video_mutants.py',
     'python3 scripts/ci/va_apply_bounds_mutants.py',
+    'python3 scripts/ci/guest_influence_mutants.py',
     'python3 scripts/ci/windows_profile_mutants.py',
     'python3 scripts/ci/va_profile_mutants.py',
     'python3 scripts/ci/dependencies.py',
