@@ -745,3 +745,30 @@ class PublicFetchDrift(unittest.TestCase):
             (Path(tmp) / 'bundle.pin').write_text('')
             F.main(['--pin', str(Path(tmp) / 'bundle.pin'), '--out', str(Path(tmp) / 'x.iso')])
         self.assertEqual(seen, [dict(tree_inputs=self.TREE)])
+
+    # the two behaviours stated as stubs that fail the test themselves
+    def test_a_stale_pin_never_reaches_urlopen(self):
+        import fetch_public_bundle as F
+        def forbidden(request, timeout=None): raise AssertionError('urlopen was called for ' + request.full_url)
+        errors = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(F.urllib.request, 'urlopen', side_effect=forbidden), \
+                patch.object(F.urllib.request, 'install_opener'), patch.object(B, 'input_hash', return_value=self.TREE), patch('sys.stderr', errors):
+            (Path(tmp) / 'bundle.pin').write_text(self.pin())
+            rc = F.main(['--pin', str(Path(tmp) / 'bundle.pin'), '--out', str(Path(tmp) / 'x.iso')])
+        self.assertEqual((rc, errors.getvalue()), (1, 'PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n'))
+
+    def test_a_manifest_of_other_inputs_never_requests_the_iso(self):
+        import fetch_public_bundle as F
+        urls = []
+        def only_the_manifest(request, timeout=None):
+            urls.append(request.full_url)
+            if request.full_url.endswith('.iso'): raise AssertionError('the ISO was requested: ' + request.full_url)
+            return io.BytesIO(B.canonical(self.receipt(self.OLD)))
+        errors = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(F.urllib.request, 'urlopen', side_effect=only_the_manifest), \
+                patch.object(F.urllib.request, 'install_opener'), patch.object(B, 'input_hash', return_value=self.TREE), patch('sys.stderr', errors):
+            (Path(tmp) / 'bundle.pin').write_text(self.pin(self.TREE))
+            rc = F.main(['--pin', str(Path(tmp) / 'bundle.pin'), '--out', str(Path(tmp) / 'x.iso')])
+        self.assertEqual((rc, errors.getvalue()), (1, 'PUBLIC_BUNDLE_FAIL reason=RECIPE_INPUT_DRIFT\n'))
+        self.assertEqual(len(urls), 1)
+        self.assertIn('/manifest-', urls[0])
