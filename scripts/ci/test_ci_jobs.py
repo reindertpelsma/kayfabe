@@ -89,6 +89,10 @@ HARNESSES = [
     'python3 scripts/ci/no_private_refs.py',
     'python3 scripts/ci/caller_contracts.py',
     'python3 scripts/ci/test_caller_contracts.py',
+    'python3 -B -I scripts/ci/env_allowlist.py',
+    'python3 -B -I scripts/ci/comment_hygiene.py',
+    'python3 -B -I scripts/ci/env_allowlist_mutants.py',
+    'python3 -B -I scripts/ci/comment_hygiene_mutants.py',
 ]
 
 SPLIT = ["worker-tests", "worker-mutants-a", "worker-mutants-b", "middle-apps", "mutants-a", "mutants-b", "selftests", "rust-mutants-a", "rust-mutants-b"]
