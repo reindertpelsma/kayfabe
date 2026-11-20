@@ -1,0 +1,9 @@
+=== asyncAPI side=host start=2026-11-20T22:32:00+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/asyncAPI
+[/opt/apps/bundle/samples/asyncAPI] - Starting...
+GPU Device 0: "Ada" with compute capability 8.9
+
+CUDA device [NVIDIA GeForce RTX 4090]
+time spent executing by the GPU: 6.26
+time spent by CPU in CUDA calls: 3.30
+CPU executed 15207 iterations while waiting for GPU to finish
+=== end rc=0 secs=2 2026-11-20T22:32:02+00:00

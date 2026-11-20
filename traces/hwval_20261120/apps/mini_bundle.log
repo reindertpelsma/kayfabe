@@ -1,0 +1,25 @@
+[mini_bundle 22:14:56] installing cuda-toolkit-12-6=12.6.3-1
+BUILD_cuda_toolkit=ok
+Build cuda_12.6.r12.6/compiler.35059454_0
+BUILD_dev_packages=ok
+BUILD_cuda_libs=ok
+BUILD_cuda_headers=ok
+BUILD_src_cuda_samples=ok
+BUILD_sample_deviceQuery=ok
+BUILD_sample_bandwidthTest=ok
+BUILD_sample_vectorAdd=ok
+BUILD_sample_matrixMul=ok
+BUILD_sample_simpleStreams=ok
+BUILD_sample_asyncAPI=ok
+BUILD_sample_simpleCallback=ok
+BUILD_sample_vectorAddDrv=ok
+BUILD_sample_matrixMulDrv=ok
+BUILD_sample_simpleCooperativeGroups=ok
+BUILD_sample_cudaTensorCoreGemm=ok
+BUILD_sample_graphMemoryNodes=ok
+BUILD_sample_simpleCudaGraphs=ok
+BUILD_sample_simpleCUBLAS=ok
+BUILD_sample_simpleCUFFT=ok
+BUILD_bundle_tar=ok
+BUNDLE 1.5G sha=6b8b806a38bf9cb4
+MINI_BUNDLE_DONE

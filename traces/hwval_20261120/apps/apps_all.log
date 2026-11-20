@@ -1,0 +1,7 @@
+START 2026-11-20T22:27:05+00:00
+INJECT_RC=0 2026-11-20T22:31:44+00:00
+asyncAPI bandwidthTest cudaTensorCoreGemm deviceQuery graphMemoryNodes matrixMul matrixMulDrv matrixMul_kernel64.fatbin simpleCUBLAS simpleCUFFT simpleCallback simpleCooperativeGroups simpleCudaGraphs simpleStreams vectorAdd vectorAddDrv vectorAdd_kernel64.fatbin 6.8.0-147-generic
+580.159.04
+[2026-11-20T22:31:44+00:00] GUEST_INJECT_DONE
+MINI_RC=0 2026-11-20T23:00:19+00:00
+EXIT 2026-11-20T23:00:19+00:00
