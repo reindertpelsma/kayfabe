@@ -11,28 +11,32 @@
 
 ## The settings it needs (and why)
 
-The stock GeForce driver on Windows runs its resource manager on the CPU by default. Kayfabe serves only the GSP firmware path, so the driver has to be told to use GSP. Without the first setting the driver stops with **Code 43** [measured on Windows 11 and on LTSC]. All values are DWORDs and take effect after a restart. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
+The stock GeForce driver on Windows runs its resource manager on the CPU by default. Kayfabe serves only the GSP firmware path, so the driver has to be told to use GSP. Without the first setting the driver stops with **Code 43** [measured on Windows 11 and on LTSC]. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 
-| # | Key | Value | Why |
-|---|---|---|---|
-| 1 | `HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\<index>` `EnableGpuFirmware` | `1` | forces GSP; `<index>` is the display adapter's own key (`0000` on Windows 11 Pro, `0001` on the LTSC image: read it, never assume) |
-| 2 | `HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm` `EnableGpuFirmware` | `1` | the same flag; the service key alone is not enough, set both |
-| 3 | `HKLM\SOFTWARE\Microsoft\Windows\Dwm` `OverlayTestMode` | `5` | without it, opening the Start menu reset the display driver on Windows 11 Pro (the cause is not known) |
-
-<!-- src: docs/WINDOWS_GUEST_SETUP.md -->
-
-From an elevated command prompt in the guest. First read the display adapter's driver key, then substitute it:
+One script sets all three: `scripts/windows/kayfabe-windows-setup.ps1`, with a wrapper `scripts/windows/kayfabe-windows-setup.bat` that starts it with the execution policy it needs. Copy both files into the guest and run it from an elevated prompt (right-click, Run as administrator), **before** NVIDIA's driver installer so that the display is not lost after the install:
 
 ```
-powershell -NoProfile -Command "(Get-PnpDeviceProperty -InstanceId (Get-PnpDevice -PresentOnly | Where-Object InstanceId -like 'PCI\VEN_10DE*').InstanceId -KeyName DEVPKEY_Device_Driver).Data"
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\Class\<the key printed above>" /v EnableGpuFirmware /t REG_DWORD /d 1 /f
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm" /v EnableGpuFirmware /t REG_DWORD /d 1 /f
-reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f
-shutdown /r /t 0
+kayfabe-windows-setup.bat            REM before the NVIDIA installer: sets what can be set (phase pre)
+REM ... run NVIDIA's installer, then:
+kayfabe-windows-setup.bat            REM after it: finds the adapter's key, sets the rest (phase post)
+shutdown /r /t 0                     REM the values take effect after a restart
 ```
-<!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 
-`scripts/bench/windows/gsp_on.ps1` does settings 1 and 2 while it installs the driver (it is what `win_vm.sh nv-install` runs): it disables the device, adds and installs the INF, writes both values, reads them back, then re-enables the device. Setting them **before the driver's first start** avoids the Code 43. <!-- src: docs/WINDOWS_GUEST_SETUP.md, scripts/bench/windows/gsp_on.ps1 -->
+All values are DWORDs. The script prints each value it sets and reads it back, changes nothing that is already right (run it as often as you like), refuses to run without administrator rights, and never restarts the machine. It does not need the NVIDIA driver to be installed. <!-- src: scripts/windows/kayfabe-windows-setup.ps1 -->
+
+| # | Key | Value | Phase | Why |
+|---|---|---|---|---|
+| 1 | `HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\<index>` `EnableGpuFirmware` | `1` | post | forces GSP; `<index>` is the display adapter's own key (`0000` on Windows 11 Pro, `0001` on the LTSC image: the script reads it, never assumes it) |
+| 2 | `HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm` `EnableGpuFirmware` | `1` | pre | the same flag; the service key alone is not enough, set both |
+| 3 | `HKLM\SOFTWARE\Microsoft\Windows\Dwm` `OverlayTestMode` | `5` | pre | without it, opening the Start menu reset the display driver on Windows 11 Pro (the cause is not known) |
+
+<!-- src: scripts/windows/kayfabe-windows-setup.json (this table is generated from it and a test keeps them equal) -->
+
+Why two phases: the display adapter's key (row 1) only exists once a driver is bound to the NVIDIA device, so it cannot be set before the install. Phase `pre` sets rows 2 and 3 (creating the service key if it is missing); phase `post` finds the adapter's key from the NVIDIA device's driver key, sets row 1 and repeats the others. The default, `-Phase auto`, picks `post` when an NVIDIA device is bound to NVIDIA's driver (Microsoft's Basic Display driver does not count) and `pre` otherwise. If the display shows Code 43 after the install, run the script again and restart.
+
+Options (they follow the file name): `-Phase auto|pre|post`; `-DriverKey "{4d36e968-e325-11ce-bfc1-08002be10318}\0001"` to name the adapter's key instead of discovering it; `-InstallDriver <dir>` for a single step, where `<dir>` is the folder NVIDIA's package was extracted to (it holds `Display.Driver\nv_dispi.inf`): it sets the `pre` values, disables the device, adds and installs the INF, sets row 1, reads everything back and re-enables the device. If a value does not read back it leaves the device disabled and says how to enable it. Exit code 0 is success, 1 a value that did not read back, 2 a refusal (not elevated, bad arguments), 3 no NVIDIA device or no NVIDIA driver bound where one is needed. <!-- src: scripts/windows/kayfabe-windows-setup.ps1 -->
+
+`scripts/bench/windows/gsp_on.ps1` does rows 1 and 2 for the harness (`win_vm.sh nv-install` runs it). <!-- src: scripts/bench/windows/gsp_on.ps1 -->
 
 These are settings for a development guest, not a complete installation guide for a production system.
 
@@ -189,7 +193,7 @@ See also [Troubleshooting](troubleshooting.md) and [Display and the broker](disp
 - Windows 10, or other Windows 11 builds than the two above.
 - A successful guest run with another NVIDIA driver version. Windows 581.51 was attempted on AD102 and failed with Code 43 [measured in the sweep matrix, revision `24906bf33`, P19 profile; historical source `9d6f210ba`]. This is recorded on the branch `codex/sweep-integrate-20261018`, not merged: [matrix](https://github.com/reindertpelsma/kayfabe/blob/0bbf3c55f/traces/sweep_integrate_20261018/MATRIX.md). Its same-board native Windows control passed, which is not a kayfabe guest pass.
 
-Verified on: Windows 11 Pro 26200 with driver 580.88 on an RTX 4070 (kayfabe `eb9f2aa3`, 2026-10-14; further results up to master `89fc8a222`, 2026-10-21, in the README); LTSC 26100 on rented hosts. Not verified end to end: the `reg add` snippet is the repository's own text and is not a recorded run of exactly those lines. Settings 1 and 2 are the part that `gsp_on.ps1` applies and reads back in the harness.
+Verified on: Windows 11 Pro 26200 with driver 580.88 on an RTX 4070 (kayfabe `eb9f2aa3`, 2026-10-14; further results up to master `89fc8a222`, 2026-10-21, in the README); LTSC 26100 on rented hosts. Not verified end to end: `kayfabe-windows-setup.ps1` has run only against a fake registry and a Windows runner's registry, not before a real NVIDIA driver install; rows 1 and 2 are the part that `gsp_on.ps1` applies and reads back in the harness.
 
 ## App gate policy
 

@@ -1,0 +1,32 @@
+{
+  "comment": "The one list of what scripts/windows/kayfabe-windows-setup.ps1 sets. The script's $KfSettings table, the table in docs/howto/windows-guest.md and docs/WINDOWS_GUEST_SETUP.md, and scripts/ci/test_windows_guest_setup.py all read or are checked against this file. All values are DWORDs in HKLM. A path ending in <index> is the display adapter's own driver key, which only exists once a driver is bound (phase post).",
+  "settings": [
+    {
+      "id": 1,
+      "phase": "post",
+      "path": "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\<index>",
+      "name": "EnableGpuFirmware",
+      "type": "DWord",
+      "value": 1,
+      "why": "forces GSP; `<index>` is the display adapter's own key (`0000` on Windows 11 Pro, `0001` on the LTSC image: the script reads it, never assumes it)"
+    },
+    {
+      "id": 2,
+      "phase": "pre",
+      "path": "SYSTEM\\CurrentControlSet\\Services\\nvlddmkm",
+      "name": "EnableGpuFirmware",
+      "type": "DWord",
+      "value": 1,
+      "why": "the same flag; the service key alone is not enough, set both"
+    },
+    {
+      "id": 3,
+      "phase": "pre",
+      "path": "SOFTWARE\\Microsoft\\Windows\\Dwm",
+      "name": "OverlayTestMode",
+      "type": "DWord",
+      "value": 5,
+      "why": "without it, opening the Start menu reset the display driver on Windows 11 Pro (the cause is not known)"
+    }
+  ]
+}
