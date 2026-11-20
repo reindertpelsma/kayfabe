@@ -41,6 +41,7 @@ async function harness(extra = {}, { payload = PAYLOAD_REHEARSAL } = {}) {
     machine_id: 200011,
     host_id: 3011,
     gpu_ram: 24576,
+    cpu_ram: 98304, // a 24 GB die needs 68234 MiB listed in the large profile (RAM_BELOW_VRAM_RULE, 2026-11-20)
     disk_space: 400,
   };
   h.cloud.price = 0.4;

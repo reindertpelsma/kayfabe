@@ -573,16 +573,23 @@ export function gpuClass(offer, cfg) {
   if (rules.length > 1) return null;
   return rules[0]?.die ?? 'CC_' + offer.compute_cap / 10;
 }
+// The payload profile (execution tier) of a budget class: release runs the large tier, sweep the adhoc tier, a check
+// the middle or the small tier.
+export const resourceProfileName = (
+  cfg,
+  profile = cfg.profile ?? 'check',
+  tierName = cfg.tierName,
+) =>
+  profile === 'release'
+    ? 'large'
+    : profile === 'sweep'
+      ? 'adhoc'
+      : tierName === 'middle'
+        ? 'middle'
+        : 'small';
 // Resource profiles are execution tiers; check/sweep/release remain budget classes.
 export function resourceCaps(cfg, profile = cfg.profile ?? 'check', tierName = cfg.tierName) {
-  const name =
-    profile === 'release'
-      ? 'large'
-      : profile === 'sweep'
-        ? 'adhoc'
-        : tierName === 'middle'
-          ? 'middle'
-          : 'small';
+  const name = resourceProfileName(cfg, profile, tierName);
   const base = DEFAULTS.payloadProfiles[name];
   const keys = ['bandwidthDownGb', 'bandwidthUpGb', 'diskGb', 'maxInetUsdPerGb'];
   const finite = (n, max) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= max;
@@ -702,6 +709,28 @@ export function offerPrice(offer, cfg, profile = cfg.profile ?? 'check') {
     total,
   };
 }
+// The listed-RAM floor of the kfml row `managed_oversub` (2026-11-20). MEASURED: a Vast KVM box listed with an RTX 4090
+// of 49140 MiB (the 48 GB variant) and 125 GB of RAM (MemTotal 103.5 GB) made the row NOT_RUN ("host RAM too small to
+// oversubscribe VRAM by 25%"). The row manages VRAM x KFML_OVERSUB_FACTOR bytes and needs that to fit in
+// KFML_OVERSUB_HOST_FRACTION of MemAvailable (scripts/kfml/kfml/workloads/managed_oversub.py: OVERSUB_FACTOR,
+// OVERSUB_HOST_RAM_FRACTION; test/offer-ram-vram.test.js reads them there and fails when these two differ). A KVM box
+// gets only part of the LISTED RAM as MemTotal. MEASURED 2026-11-20 (as reported): 64 GB listed gave 47.6 GiB, 125 GB
+// listed gave 103.6 GiB, a share of about 0.75 to 0.83; KVM_RAM_FRACTION is the conservative end of that range
+// (MemAvailable is below MemTotal by what the earlier stages leave in the page cache; that margin is not measured). The flat `quality.ramMb`
+// floor was calibrated on 24 GB dies and cannot hold for a 48 GB one, so the floor is derived from the offer's own VRAM.
+// Units: Vast reports both gpu_ram and cpu_ram in MiB.
+export const KFML_OVERSUB_FACTOR = 1.25;
+export const KFML_OVERSUB_HOST_FRACTION = 0.6;
+export const KVM_RAM_FRACTION = 0.75;
+// The payload profiles whose kfml plan runs that row: managed_oversub is a large-tier row (scripts/kfml/kfml/workloads),
+// and the middle tier's kfml plan leaves it out. The stage itself is planned in middle and large (defaults.json
+// payloadStageResources.kfml.profiles; the test checks that these are among them).
+export const KFML_OVERSUB_PROFILES = ['large'];
+// Listed MiB of RAM an offer with `gpuRamMb` MiB of VRAM needs for the row to run.
+export const listedRamNeededMb = (gpuRamMb) =>
+  (KFML_OVERSUB_FACTOR * gpuRamMb) / KFML_OVERSUB_HOST_FRACTION / KVM_RAM_FRACTION;
+// Offer sizes are whole MiB; the floor itself is admitted despite binary floating point.
+const LISTED_RAM_TOLERANCE_MB = 1e-6;
 // The explicit per-profile caps: price per hour, daily USD, daily rental count, concurrent rentals,
 // hard runtime and the die set offers are admitted from. Every admission, contract and budget
 // check reads its numbers here, so a tier cannot borrow another tier's cap.
@@ -790,6 +819,16 @@ export function offerRejections(
     !enough('cpu_ram', q.ramMb)
   )
     reasons.push('CPU_RAM');
+  // The kfml row `managed_oversub` needs host RAM in proportion to the die's VRAM (see KVM_RAM_FRACTION above). An offer
+  // without a numeric gpu_ram or cpu_ram fails closed.
+  if (
+    KFML_OVERSUB_PROFILES.includes(resourceProfileName(cfg, profile)) &&
+    !(
+      enough('gpu_ram', 1) &&
+      enough('cpu_ram', listedRamNeededMb(offer.gpu_ram) - LISTED_RAM_TOLERANCE_MB)
+    )
+  )
+    reasons.push('RAM_BELOW_VRAM_RULE');
   if (
     !enough('dlperf', Number.MIN_VALUE) ||
     typeof median !== 'number' ||

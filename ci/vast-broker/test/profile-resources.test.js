@@ -28,6 +28,7 @@ const offer = (id, compute, inet, disk = 120) => ({
   gpu_name: 'RTX_4070',
   cpu_name: 'AMD EPYC 7B13',
   compute_cap: 890,
+  gpu_ram: 12288, // an RTX 4070 has 12 GB; the large profile reads gpu_ram (RAM_BELOW_VRAM_RULE, 2026-11-20)
   geolocation: 'Texas, US',
   dph_base: compute,
   storage_cost: 0.12,
