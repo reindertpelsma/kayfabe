@@ -125,7 +125,7 @@ There are no lock files, fixed `/tmp` paths or singleton fds in the crates.
 
 ogkm forwards a Device alloc to GSP through `NV_RM_RPC_ALLOC_SHARE_DEVICE`, which builds
 `NV0080_ALLOC_PARAMETERS device_alloc_params = {0}` and never sets `deviceId`
-(`ogkm:src/nvidia/inc/kernel/vgpu/rpc.h:96-106`, in `third_party/ogkm-580` at `b81d58e`; the macro body was read again on 2026-11-20 and does not set `deviceId`). So every guest GPU's
+(`ogkm-580:src/nvidia/inc/kernel/vgpu/rpc.h:96-106`, in `third_party/ogkm-580` at `b81d58e`; the macro body was read again on 2026-11-20 and does not set `deviceId`). So every guest GPU's
 GSP sees `deviceId = 0`.
 
 With one kf3 device (one GSP) per guest GPU, the device that received the RPC identifies the

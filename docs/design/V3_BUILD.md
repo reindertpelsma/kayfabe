@@ -1,6 +1,6 @@
 # V3_BUILD — how v3 is being built (branch `v3`)
 
-**STATUS: LIVE, 2026-11-20 (w826; refs re-checked 2026-11-20).** ⊘ *2026-11-20:* every pre-v3 name below that the freshness gate flagged was repointed to where it lives now (`archive/crates/kayfabe-X/src/...` for the crates archived on 2026-09-26 and 2026-10-31, `archive/nvkvm/...` and `archive/qemu/...` for the C prototype; each file path was checked to exist). Cites into NVIDIA's open-gpu-kernel-modules are written `ogkm:<path>` (the path exists in `third_party/ogkm-580` at `b81d58e`; the 610 line numbers and the rule text itself were not re-verified on 2026-11-20). The copy table describes the intent of the build order at w826; whether each row was carried out as written was not re-checked. Governs the build order and what is copied. The design is
+**STATUS: LIVE, 2026-11-20 (w826; refs re-checked 2026-11-20).** ⊘ *2026-11-20:* every pre-v3 name below that the freshness gate flagged was repointed to where it lives now (`archive/crates/kayfabe-X/src/...` for the crates archived on 2026-09-26 and 2026-10-31, `archive/nvkvm/...` and `archive/qemu/...` for the C prototype; each file path was checked to exist). Cites into NVIDIA's open-gpu-kernel-modules are written `ogkm-580:<path>` (the path exists in `third_party/ogkm-580` at `b81d58e`; the 610 line numbers and the rule text itself were not re-verified on 2026-11-20). The copy table describes the intent of the build order at w826; whether each row was carried out as written was not re-checked. Governs the build order and what is copied. The design is
 `THE_ARCHITECTURE_v3.md` + `THE_V3_PLAN.md`; this file only records the execution decisions.
 
 ## Rules (owner, 2026-09-24)
@@ -33,7 +33,7 @@ Pinned in `third_party/` (ogkm 610 + 580, linux for nouveau/nova, gvisor for nvp
 `/workspace/nvkvm-pv`. Rank: ogkm > nova > nouveau (THE_CONSTRAINTS §50); nvproxy answers the
 host-userspace question only.
 
-- **Per-die tables** → HOST-QUERY, unprivileged (`ogkm:src/nvidia/generated/g_subdevice_nvoc.c` flags, `0x8` =
+- **Per-die tables** → HOST-QUERY, unprivileged (`ogkm-580:src/nvidia/generated/g_subdevice_nvoc.c` flags, `0x8` =
   NON_PRIVILEGED): interrupt data via `MC_GET_STATIC_INTR_TABLE 0x2080170e`,
   `MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS 0x2080170d`, `MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f`
   (the INTERNAL `0x20800a5c` and `FIFO_GET_DEVICE_INFO_TABLE 0x20801112` are kernel-only); engines
@@ -226,7 +226,7 @@ fat guest, kf3 binaries `kf3-bins/<rev>`).** The three guest-only failures of `V
   and its verdict is `k <= max_iter` (`:270-272`). ⊘ Why it cannot be closed from host userspace:
   a replayable host fault needs a fault-capable VAS, which RM refuses unless it is also
   EXTERNALLY_OWNED (`ogkm-580 vaspace_api.c:678-690`, i.e. UVM-owned page tables), and the fault
-  buffer class is `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED` (`ogkm:src/nvidia/src/kernel/rmapi/resource_list.h`, `MMU_FAULT_BUFFER`). An owner
+  buffer class is `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED` (`ogkm-580:src/nvidia/src/kernel/rmapi/resource_list.h`, `MMU_FAULT_BUFFER`). An owner
   decision (a host fault channel, or a sanctioned eager-mapping policy) — `THE_OPEN_QUESTIONS.md` §4.
 - **R — guest read-only PTEs were read-write on the host (FIXED on `v3-roperm`, `a1a82903`;
   box vast 52732498, GA106).** Found by source review in `V3_UVM_DEMAND_PAGING.md` §6 (branch
