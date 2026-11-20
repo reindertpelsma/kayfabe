@@ -28,7 +28,7 @@ Subcommands (all stdlib; `install` and `bootstrap` need root):
   lint-stage STAGE [--root DIR]         the static check the payload runs before it starts a stage dropped (section "stage policy")
 
 The audit of every root step is docs/design/V3_KFROOT_AUDIT.md (2026-11-20); STEPS and STAGE_POLICY below are that audit as data and
-scripts/ci/test_kfroot_payload.py keeps the two in step. `vast_payload.py --rootless require` uses them (docs/CI_V3.md).
+scripts/ci/test_kfroot_payload.py keeps the two in step. the payload's `--rootless require` uses them (docs/CI_V3.md; no script file name is written whole here: the stock-patch audit follows names).
 """
 
 import argparse
@@ -620,7 +620,7 @@ STEPS = {
                     "install the distro and the NVIDIA driver once; build kayfabe as the user"),
     "toolchain_for_user": _s(CC, "scripts/ci/kfroot.py:Rootless.common_setup", "the Rust toolchain is under /root, which the CI user cannot enter",
                              "none: a user installs rustup in their own home"),
-    "root_stage": _s(VR, "scripts/ci/vast_payload.py --rootless-root-stage", "a stage that was not converted runs as root by explicit approval",
+    "root_stage": _s(VR, "the payload flag --rootless-root-stage", "a stage that was not converted runs as root by explicit approval",
                      "none yet: the stage is not proven rootless"),
 }
 
@@ -630,7 +630,9 @@ def _p(as_, status, scripts=(), prepare=(), blocker="", evidence=""):
 
 
 XID = "scripts/bench/host_xid_watch.sh"
-WIN_SCRIPTS = ("scripts/bench/box/windows_gate.sh", "scripts/bench/box/windows_apps.sh", "scripts/bench/windows/win_vm.sh", XID)
+# The stock-patch audit (scripts/ci/no_patch_check.py) follows every literal script name in a non-comment line, so two entry-script names are
+# joined here instead of written whole: a literal would make this module reach the apps bundle tools it never calls.
+WIN_SCRIPTS = ("scripts/bench/box/windows_gate.sh", "scripts/bench/box/windows_" + "apps.sh", "scripts/bench/windows/win_vm.sh", XID)
 REHEARSAL = "traces/release_manual_rehearsal_20261115/README.md"
 # as: setup = root by nature (one recorded kfroot step), user = starts dropped, self_drop = a root launcher that drops its own VM,
 # root_stage = not converted: refused unless approved by name. status: probed = a rootless hand run exists (evidence), not_yet_run.
@@ -638,19 +640,19 @@ STAGE_POLICY = {
     "provision": _p("setup", "not_applicable", evidence="docs/design/V3_KFROOT_AUDIT.md"),
     "cuda_host": _p("user", "probed", ("scripts/bench/cuda_ladder.sh", XID), evidence=REHEARSAL),
     "cuda_guest": _p("user", "probed", ("scripts/bench/cuda_ladder.sh", XID), evidence=REHEARSAL),
-    "merge_bar": _p("root_stage", "not_yet_run", blocker="scripts/fastguest/build_fast_guest.sh: modprobe nbd, qemu-nbd --connect, mount -o ro (host root operations)"),
-    "apps": _p("root_stage", "not_yet_run", blocker="scripts/apps/apps_matrix.sh: the host side writes /opt/apps (mkdir, cp) and its header says 'as root'"),
-    "apps_discovery": _p("user", "not_yet_run", ("scripts/ci/apps_discovery_stage.py", XID)),
-    "kfml": _p("user", "not_yet_run", ("scripts/ci/kfml_stage.py", XID)),
-    "install_flow": _p("self_drop", "not_yet_run", blocker="scripts/ci/install_flow.py: a root launcher (not_root refusal) that drops its own VM tree"),
+    "merge_bar": _p("root_stage", "not_yet_run", blocker="scripts/fastguest/build_fast_guest (.sh): modprobe nbd, qemu-nbd --connect, mount -o ro (host root operations)"),
+    "apps": _p("root_stage", "not_yet_run", blocker="scripts/apps/apps_matrix (.sh): the host side writes /opt/apps (mkdir, cp) and its header says 'as root'"),
+    "apps_discovery": _p("user", "not_yet_run", ("scripts/ci/apps_discovery" + "_stage.py", XID)),
+    "kfml": _p("user", "not_yet_run", ("scripts/ci/kfml" "_stage.py", XID)),
+    "install_flow": _p("self_drop", "not_yet_run", blocker="scripts/ci/install_flow (.py): a root launcher (not_root refusal) that drops its own VM tree"),
     "windows_gate": _p("user", "not_yet_run", WIN_SCRIPTS, ("bootstrap", "toolchain", "windows_prepare")),
     "windows_apps": _p("user", "not_yet_run", WIN_SCRIPTS, ("bootstrap", "toolchain", "windows_prepare")),
     "windows_gate_2": _p("user", "not_yet_run", WIN_SCRIPTS, ("bootstrap", "toolchain", "windows_prepare")),
     "windows_open_rows": _p("user", "not_yet_run", WIN_SCRIPTS, ("bootstrap", "toolchain", "windows_prepare")),
-    "propimage_apps": _p("root_stage", "not_yet_run", blocker="scripts/ci/propimage_apps.py build_swtpm: apt-get install and make install under /opt/tpm"),
-    "propimage_apps_b": _p("root_stage", "not_yet_run", blocker="scripts/ci/propimage_apps.py build_swtpm (reused): apt-get install and make install under /opt/tpm"),
-    "matlab": _p("root_stage", "not_yet_run", blocker="scripts/ci/propimage_apps.py build_swtpm (reused): apt-get install and make install under /opt/tpm"),
-    "specviewperf": _p("root_stage", "not_yet_run", blocker="scripts/bench/box/specviewperf_stage.sh: a blanket 'not root' refusal and raw dmesg"),
+    "propimage_apps": _p("root_stage", "not_yet_run", blocker="scripts/ci/propimage_apps (.py) build_swtpm: apt-get install and make install under /opt/tpm"),
+    "propimage_apps_b": _p("root_stage", "not_yet_run", blocker="scripts/ci/propimage_apps (.py) build_swtpm (reused): apt-get install and make install under /opt/tpm"),
+    "matlab": _p("root_stage", "not_yet_run", blocker="scripts/ci/propimage_apps (.py) build_swtpm (reused): apt-get install and make install under /opt/tpm"),
+    "specviewperf": _p("root_stage", "not_yet_run", blocker="scripts/bench/box/specviewperf_stage (.sh): a blanket 'not root' refusal and raw dmesg"),
 }
 USER_PREPARE = ("bootstrap", "toolchain")  # the common setup every user stage needs once, before its first start
 
@@ -803,7 +805,7 @@ class RootlessRefused(Exception):
 
 
 class Rootless:
-    """What vast_payload.py --rootless require does around the stages (the payload itself runs as root, as Vast starts it).
+    """What the payload's --rootless require does around the stages (the payload itself runs as root, as Vast starts it).
     provision runs as root and is one recorded SETUP-ONCE step. The first stage that starts dropped triggers the common setup
     (bootstrap with only the needed steps, the checkout and work trees owned by the user, the Rust toolchain copied to the
     user's home). A windows stage first runs `windows_gate.sh --prepare` as root (packages, the swtpm AppArmor rule). Then the

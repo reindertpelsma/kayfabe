@@ -257,6 +257,16 @@ class StaticCheck(TempCase):
         self.assertEqual((p.returncode, p.stdout.strip()), (0, "KFROOT_LINT_RESULT stage=cuda_host as=user findings=0"))
 
 
+class StockPatchAudit(unittest.TestCase):
+    """The stock-patch audit follows every literal script name; naming the stage scripts in kfroot.py must not make the Windows entry scripts
+    (which source scripts/lib/kfroot.sh) reach an opt-in applicator (CI job 'Release check fixtures, mutants and stock patch policy')."""
+
+    def test_the_real_tree_passes_the_audit(self):
+        p = subprocess.run([sys.executable, str(ROOT / "scripts/ci/no_patch_check.py")], capture_output=True, text=True, cwd=ROOT)
+        self.assertEqual(p.returncode, 0, p.stdout[:600] + p.stderr[:600])
+        self.assertNotIn("stock path reaches opt-in applicator", p.stdout + p.stderr)
+
+
 class RootStageBlockersAreStillThere(unittest.TestCase):
     """A root stage cites its blocker. When the blocker is gone the stage can be converted: this test then fails, and the audit is re-done."""
 
@@ -1082,7 +1092,9 @@ class XidWatch(TempCase):
         bin_dir = self.tmp / "bin"
         bin_dir.mkdir(exist_ok=True)
         fake = bin_dir / "dmesg"
-        fake.write_text("#!/bin/bash\n" + "".join(f"echo line{i}\n" for i in range(dmesg_lines)))
+        # like the real one: refused while kernel.dmesg_restrict=1 and the caller is not root
+        fake.write_text('#!/bin/bash\nif [ "$(cat "$KFROOT_DMESG_RESTRICT")" = 1 ] && [ "${KFROOT_EUID:-0}" != 0 ]; then echo "dmesg: read kernel buffer failed: Operation not permitted" >&2; exit 1; fi\n'
+                        + "".join(f"echo line{i}\n" for i in range(dmesg_lines)))
         fake.chmod(0o755)
         (self.tmp / "restrict").write_text(restrict + "\n")
         (self.tmp / "status").write_text("Name:\tx\nNoNewPrivs:\t" + ("1" if nnp else "0") + "\n")
@@ -1127,6 +1139,54 @@ class XidWatch(TempCase):
                            env={"PATH": f"{bin_dir}:{os.environ['PATH']}", "XID_OUTDIR": str(self.tmp / "o2"), "HOME": str(self.tmp)})
         self.assertEqual(p.returncode, 7)
         self.assertIn("rc=0 with 1 line(s)", p.stdout)
+
+    def test_a_dmesg_on_the_path_is_honoured_by_a_non_root_caller_with_a_restricted_log(self):
+        # the CI runner case (test_vast_native_framing): the log source is a `dmesg` earlier on PATH, whatever the caller's uid and the sysctl say
+        bin_dir = self.tmp / "binx"
+        bin_dir.mkdir()
+        (bin_dir / "dmesg").write_text("#!/bin/bash\necho a\necho b\necho c\n")
+        (bin_dir / "dmesg").chmod(0o755)
+        (self.tmp / "restrict").write_text("1\n")
+        (self.tmp / "status").write_text("NoNewPrivs:\t0\n")
+        p = subprocess.run(["bash", str(XID), "tag", "--", "true"], capture_output=True, text=True,
+                           env={"PATH": f"{bin_dir}:{os.environ['PATH']}", "XID_OUTDIR": str(self.tmp / "out"), "HOME": str(self.tmp),
+                                "KFROOT_EUID": "1000", "KFROOT_DMESG_RESTRICT": str(self.tmp / "restrict"), "KFROOT_SELF_STATUS": str(self.tmp / "status")})
+        self.assertEqual(p.returncode, 0, p.stdout)
+        self.assertIn("host_dmesg_lines=3", p.stdout)
+
+    def test_the_new_xid_is_seen_by_a_non_root_caller_with_a_restricted_log(self):
+        bin_dir = self.tmp / "biny"
+        bin_dir.mkdir()
+        (bin_dir / "dmesg").write_text("#!/bin/bash\necho boot\necho ok\n[ -e " + str(self.tmp / "go") + " ] && echo 'NVRM: Xid (PCI:0000:01:00): 31, fault'\ntrue\n")
+        (bin_dir / "dmesg").chmod(0o755)
+        (self.tmp / "restrict").write_text("1\n")
+        p = subprocess.run(["bash", str(XID), "tag", "--", "touch", str(self.tmp / "go")], capture_output=True, text=True,
+                           env={"PATH": f"{bin_dir}:{os.environ['PATH']}", "XID_OUTDIR": str(self.tmp / "out"), "HOME": str(self.tmp),
+                                "KFROOT_EUID": "1000", "KFROOT_DMESG_RESTRICT": str(self.tmp / "restrict")})
+        self.assertEqual(p.returncode, 6, p.stdout)
+        self.assertIn("NEW HOST Xid ACROSS THE COMMAND", p.stdout)
+
+    def lone_copy(self, body, name):
+        lone = self.tmp / name / "scripts/bench"
+        lone.mkdir(parents=True)
+        (lone / "host_xid_watch.sh").write_text(XID.read_text())
+        bin_dir = self.tmp / (name + "bin")
+        bin_dir.mkdir()
+        (bin_dir / "dmesg").write_text(body)
+        (bin_dir / "dmesg").chmod(0o755)
+        return subprocess.run(["bash", str(lone / "host_xid_watch.sh"), "t", "--", "true"], capture_output=True, text=True,
+                              env={"PATH": f"{bin_dir}:{os.environ['PATH']}", "XID_OUTDIR": str(self.tmp / (name + "o")), "HOME": str(self.tmp)})
+
+    def test_a_copy_of_the_script_alone_with_an_unreadable_log_is_unwatched_by_the_failure_of_dmesg_itself(self):
+        p = self.lone_copy("#!/bin/bash\necho denied >&2\nexit 1\n", "lone3")
+        self.assertEqual(p.returncode, 7, p.stdout)
+        self.assertIn("returned rc=1 with", p.stdout)
+
+    def test_a_copy_of_the_script_alone_retries_the_plain_dmesg_as_its_fallback(self):
+        flag = self.tmp / "flag"
+        p = self.lone_copy(f'#!/bin/bash\nif [ ! -e {flag} ]; then touch {flag}; exit 1; fi\necho a\necho b\necho c\n', "lone4")
+        self.assertEqual(p.returncode, 0, p.stdout)
+        self.assertIn("host_dmesg_lines=3", p.stdout)
 
     def test_a_copy_of_the_script_alone_still_works(self):
         lone = self.tmp / "lone" / "scripts/bench"
