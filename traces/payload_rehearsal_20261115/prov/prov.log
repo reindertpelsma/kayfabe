@@ -1,0 +1,17 @@
+START 2026-11-15T11:40:24+00:00
+BOX_RC=0
+84dff90b6 Merge pull request #416 from reindertpelsma/claude/payload-instruction-20261115
+DRIVER_RC=0
+NVIDIA GeForce RTX 4090, 580.159.04
+/dev/root       194G   13G  182G   7% /
+TREE_RC=0
+[2026-11-15T11:52:17+00:00] B4: guest ladder built: 5061288 bytes
+[2026-11-15T11:52:17+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/84dff90b/qemu-system-x86_64 rev=84dff90b mtime=2026-11-15 11:53:28.330734831 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-15T11:53:29+00:00
