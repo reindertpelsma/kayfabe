@@ -99,7 +99,7 @@ pub const GID_DATA_OFF: usize = GID_INFO_OFF + 12;
 pub const GID_FLAGS_SHA1_BINARY: u32 = 0x2;
 
 /// `NV2080_CTRL_CMD_GPU_GET_GID_INFO` — the control the HOST is asked for its own GPU's UUID
-/// (non-privileged: it is in the nvproxy allow-list, `capability.rs`). Request: `index = 0`,
+/// (non-privileged in ogkm's export flags). Request: `index = 0`,
 /// `flags = ` [`GID_FLAGS_SHA1_BINARY`]; reply: `length = 16`, `data[0..16]`.
 pub const NV2080_CTRL_CMD_GPU_GET_GID_INFO: u32 = 0x2080_014a;
 
@@ -261,8 +261,7 @@ pub const BAR2_PDE_BASE_OFF: usize = BAR1_PDE_BASE_OFF + 8;
 /// answers `"NVIDIA GeForce RTX 3060"`, because the string says *what chip this is*. Under
 /// the owner's standing **READ-NATIVE, WRITE-TRAP** ruling (2026-07-31) the right source
 /// is therefore the **host GPU's own answer** —
-/// `NV2080_CTRL_CMD_GPU_GET_NAME_STRING` (`0x20800110`), already on this port's capability
-/// allowlist with origin `Nvproxy` — so a host holding an AD102 presents an AD102's name
+/// `NV2080_CTRL_CMD_GPU_GET_NAME_STRING` (`0x20800110`), a non-privileged ogkm control — so a host holding an AD102 presents an AD102's name
 /// with **no new chip row to write**. A hardcoded per-generation table is the thing that
 /// ruling exists to prevent.
 ///
