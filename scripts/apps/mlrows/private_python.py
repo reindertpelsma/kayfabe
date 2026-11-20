@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """A private CPython 3.12 for the HOST side of the open ML rows (stdlib only; GPU-free tested in scripts/ci/test_mlrows.py).
 
-STATUS: LIVE, 2026-11-20 (docs/design/V3_OPEN_ML_ROWS.md section 3a). Code and GPU-free tests; nothing here has run on a box. NOT DONE: the sha256 of the source tarball is
-not in scripts/ci/trust_manifest.json yet (it needs one measurement on a machine with network), so `ensure` refuses by name (`python_source_refused:TRUST_UNKNOWN_ARTIFACT`)
-until `pin-entry` has been run and its entry committed. The refusal is the safe state: the ML rows then say `python_too_old` as before.
+STATUS: LIVE, 2026-11-20 (docs/design/V3_OPEN_ML_ROWS.md section 3a). Code and GPU-free tests; nothing here has run on a box. The sha256 of the source tarball is anchored in
+scripts/ci/trust_manifest.json (`python-3.12.10-source`, MEASURED 2026-11-20 by the coordinator: its MD5 equals the python.org release page's and its Sigstore bundle verified); a
+pin that disagrees, or an artifact the manifest does not list, is a named refusal (`python_source_refused:TRUST_...`) before apt or the disk is touched. `pin-entry` stays for the
+day PY_VERSION changes.
 
 Why: the locks of the ML rows are cp312 and the stock Ubuntu 22.04 host of a Vast box has Python 3.10, so `mlrows.py setup` refused `python_too_old: 3.10 < 3.12` (MEASURED
 2026-11-20). Owner ruling 2026-11-20: build CPython 3.12 from the python.org SOURCE tarball on the provisioning host, into a prefix of its own (never the system Python), anchored in git

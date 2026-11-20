@@ -742,7 +742,7 @@ class AppsDiscoveryTests(unittest.TestCase):
 
     # ---- 2026-11-20: Python 3.12 on a 22.04 host is built from the python.org source into a private prefix (docs/design/V3_OPEN_ML_ROWS.md section 3a)
     PY_OK = "PRIVATE_PYTHON status=ok reason=built:3.12.10:212s version=3.12.10 python=/x/mlrows/python312/bin/python3.12\n"
-    PY_REFUSED = "PRIVATE_PYTHON status=NOT_RUN reason=python_source_refused:TRUST_UNKNOWN_ARTIFACT version=- python=-\n"
+    PY_REFUSED = "PRIVATE_PYTHON status=NOT_RUN reason=python_source_refused:TRUST_PIN_MISMATCH version=- python=-\n"
     SETUP_ALL_OK = "".join("MLROWS_SETUP row=%s status=ok reason=flavour_cu13\n" % r for r in ("vllm", "tensorrt", "jax"))
 
     def test_the_private_python_is_ensured_before_the_ml_setup_and_both_get_the_same_root(self):
@@ -777,7 +777,7 @@ class AppsDiscoveryTests(unittest.TestCase):
         self.assertNotIn("python312", [s["step"] for s in rec["steps"]])
 
     def test_the_record_says_what_the_private_python_did(self):
-        for log, rc, want in ((self.PY_OK, 0, "ok:built:3.12.10:212s"), (self.PY_REFUSED, 0, "NOT_RUN:python_source_refused:TRUST_UNKNOWN_ARTIFACT"),
+        for log, rc, want in ((self.PY_OK, 0, "ok:built:3.12.10:212s"), (self.PY_REFUSED, 0, "NOT_RUN:python_source_refused:TRUST_PIN_MISMATCH"),
                               ("PRIVATE_PYTHON status=FAIL reason=make_failed:error version=- python=-\n", 3, "FAIL:make_failed:error"),
                               ("", 124, "FAIL:no_result_line_rc124"), ("noise\n", 0, "FAIL:no_result_line_rc0"),
                               ("PRIVATE_PYTHON status=NOT_RUN reason=%s version=- python=-\n" % ("x" * 160), 0, "NOT_RUN:" + "x" * 92)):
@@ -801,7 +801,7 @@ class AppsDiscoveryTests(unittest.TestCase):
         self.assertEqual((rc, rec["verdict"], rec["not_run"], rec["reason"]), (1, "FAIL", ["tensorrt", "jax"], "discovery_not_run:tensorrt,jax"))
         by_name = {r["name"]: r for r in rec["rows"]}
         self.assertEqual(by_name["jax"]["reason"], "python_too_old:3.10<3.12")
-        self.assertEqual(rec["private_python"], "NOT_RUN:python_source_refused:TRUST_UNKNOWN_ARTIFACT")
+        self.assertEqual(rec["private_python"], "NOT_RUN:python_source_refused:TRUST_PIN_MISMATCH")
         self.assertEqual(next(a for a in self.last["argv"] if "guest" in a and a[1].endswith("apps_matrix.sh"))[4:], ["nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm"])
 
     def test_with_the_private_python_every_ml_row_is_booted_and_the_stage_passes(self):

@@ -11,6 +11,9 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 SOURCE = (HERE.parent / "bench/provision_box.sh").read_text()
+VAST_SETUP = (HERE / "vast_setup.py").read_text()
+# the files test_package_profiles.py reads besides provision_box.sh (2026-11-20: the cache policy list, the lock's digest, the private Python that names the profile)
+EXTRA_FILES = [("scripts/ci/test_package_profiles.py",), ("scripts/ci/vast_setup.py",), ("scripts/ci/setup-cache.lock.json",), ("scripts/apps/mlrows/private_python.py",)]
 
 
 def changed(old, new):
@@ -46,6 +49,18 @@ CASES = [
         ),
     ),
     (
+        "pybuild-loses-libssl",
+        changed("local pybuild=(build-essential zlib1g-dev libssl-dev libffi-dev", "local pybuild=(build-essential zlib1g-dev libffi-dev"),
+    ),
+    (
+        "pybuild-is-not-a-profile",
+        changed("    pybuild) printf '%s\\n' \"${pybuild[@]}\" ;;\n", ""),
+    ),
+    (
+        "pybuild-is-the-ci-list",
+        changed("pybuild) printf '%s\\n' \"${pybuild[@]}\"", "pybuild) printf '%s\\n' \"${required[@]}\""),
+    ),
+    (
         "bench-uses-full-stack",
         changed(
             "bench) printf '%s\\n' \"${bench[@]}\"",
@@ -53,8 +68,21 @@ CASES = [
         ),
     ),
 ]
+
+def changed_vast_setup(old, new):
+    assert VAST_SETUP.count(old) == 1, old
+    return VAST_SETUP.replace(old, new)
+
+
+# mutations of the cache policy list in vast_setup.py itself (a profile a stage installs must be in the cache's policy)
+VAST_SETUP_CASES = [
+    (
+        "pybuild-left-out-of-the-cache-policy",
+        changed_vast_setup('["ci", "bench", "windows", "apps", "pybuild"]', '["ci", "bench", "windows", "apps"]'),
+    ),
+]
 COLLECT = """import io,json,unittest
-s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_setup_packages.py')
+s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_*.py')
 r=unittest.TextTestRunner(stream=io.StringIO()).run(s)
 print(json.dumps({'tests':r.testsRun,'killers':[t.id() for t,_ in r.failures+r.errors]}))
 """
@@ -77,6 +105,9 @@ def main():
         bench = root / "scripts/bench"
         bench.mkdir()
         shutil.copyfile(HERE / "test_vast_setup_packages.py", ci / "test_vast_setup_packages.py")
+        for (rel,) in EXTRA_FILES:
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parents[1] / rel, root / rel)
         target = bench / "provision_box.sh"
         target.write_text(SOURCE)
         assert not run(root)["killers"]
@@ -86,6 +117,13 @@ def main():
             killers = sorted(set(result["killers"]))
             assert len(killers) >= 2, (name, killers)
             rows.append({"mutant": name, "count": len(killers), "killers": killers})
+        target.write_text(SOURCE)
+        for name, source in VAST_SETUP_CASES:
+            (ci / "vast_setup.py").write_text(source)
+            killers = sorted(set(run(root)["killers"]))
+            assert len(killers) >= 2, (name, killers)
+            rows.append({"mutant": name, "count": len(killers), "killers": killers})
+        (ci / "vast_setup.py").write_text(VAST_SETUP)
     print(json.dumps({"run": "v8-package-policy-mutants-20261023", "cases": rows}, indent=2))
 
 

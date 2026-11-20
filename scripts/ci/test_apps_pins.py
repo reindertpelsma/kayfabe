@@ -503,7 +503,7 @@ class StaticContracts(unittest.TestCase):
 
     def test_no_nvidia_package_is_in_the_setup_cache_policy(self):
         names = set()
-        for profile in ("ci", "bench", "windows", "apps"):
+        for profile in ("ci", "bench", "windows", "apps", "pybuild"):
             names.update(
                 subprocess.run(
                     ["bash", str(ROOT / "scripts/bench/provision_box.sh"), "--packages", profile],
