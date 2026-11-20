@@ -16,7 +16,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get -o Acquire::Retries=3 update -qq >/dev/null 2>&1
 apt-get -o Acquire::Retries=3 install -y -qq --no-install-recommends ffmpeg vulkan-tools libvulkan1 clinfo ocl-icd-libopencl1 hashcat \
   libegl1 libgles2 libgl1 python3-venv python3-pip curl ca-certificates unzip xz-utils libxi6 libxxf86vm1 libxfixes3 \
-  libxrender1 libxkbcommon0 libsm6 libice6 >/tmp/setup_apt.log 2>&1; ok apt $?
+  libxrender1 libxkbcommon0 libsm6 libice6 python3-dev >/tmp/setup_apt.log 2>&1; ok apt $?
 # ⊘ the NVIDIA OpenCL ICD file is installed by the driver .run; assert it rather than assume it
 ICD_DIR=${OPENCL_VENDORS_DIR:-/etc/OpenCL/vendors}
 mkdir -p "$ICD_DIR" && { [ -f "$ICD_DIR/nvidia.icd" ] || echo "libnvidia-opencl.so.1" > "$ICD_DIR/nvidia.icd"; } && [ -s "$ICD_DIR/nvidia.icd" ]; ok icd $?

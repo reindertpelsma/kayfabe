@@ -2136,6 +2136,9 @@ jobs:
           # status) and the slicing of middle_apps_mutants.py (every mutant in exactly one slice): >=2 named killers per mutant.
           python3 scripts/ci/unittest_shard_mutants.py
           python3 scripts/ci/middle_apps_shards_mutants.py
+          # The Windows guest setup script (2026-11-20): wrong value, missing read-back, accepts-unelevated and more, against an in-memory registry
+          # in PowerShell 7 (preinstalled on this runner image; a missing pwsh fails the harness); >=2 named killers per mutant.
+          python3 scripts/ci/windows_guest_setup_mutants.py --jobs 2
 
   mutants-b:
     name: script mutants B — kfroot, box downloader, runner stages, doc steps, fault names, self-tests
@@ -2200,6 +2203,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Every test_*.py of scripts/ci, this shard (a partition of the modules; scripts/ci/unittest_shard.py)
+        env:
+          # test_windows_guest_setup.py runs the script in pwsh (preinstalled on this image): a missing pwsh is a failure here, not a skip.
+          KF_REQUIRE_PWSH: "1"
         run: |
           # Runtime dependency (jose) from the committed lockfile; no install scripts run.
           npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
@@ -2307,6 +2313,21 @@ jobs:
           python3 -B -I scripts/ci/mlrows_mutants.py --jobs 4
           # Open Vulkan CTS row (2026-11-17, docs/design/V3_VULKAN_CTS_ROW.md): pins, case list, QPA parser, crash attribution, host-vs-guest diff; >=2 named killers per mutant.
           python3 -B -I scripts/ci/vkcts_mutants.py
+
+  # The Windows guest setup script (2026-11-20, docs/howto/windows-guest.md): scripts/windows/kayfabe-windows-setup.ps1 and its .bat run in
+  # Windows PowerShell 5.1 against the REAL registry of this disposable runner, with a faked adapter class key: the values and their types,
+  # idempotency, the refusal of an unelevated run (a fresh standard local user) and the cleanup. The runner has no NVIDIA device, so a real
+  # driver install is the hardware check. The script's table, the docs and the logic against an in-memory registry are tested in `selftests`
+  # (scripts/ci/test_windows_guest_setup.py) and `mutants-a` (scripts/ci/windows_guest_setup_mutants.py).
+  windows-guest-setup:
+    name: Windows guest setup script — real registry on windows-latest
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: kayfabe-windows-setup against the runner's registry (pre, post with a faked class key, idempotency, unelevated refusal, cleanup)
+        shell: powershell
+        run: .\scripts\ci\windows_setup_check.ps1
 
   # ★ THE PRODUCTION HALF, ON THE STRIPPED TREE (2026-11-09; OWNER_RULINGS section AQ, design:
   # docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4). A vast box clones the repository and
@@ -2924,7 +2945,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [stable, stripped, aarch64, firmware, broker, platform, ptx, worker-tests, worker-mutants-a, worker-mutants-b, middle-apps, mutants-a, mutants-b, selftests, rust-mutants-a, rust-mutants-b, open-rows-mutants]
+    needs: [stable, stripped, aarch64, firmware, broker, platform, ptx, worker-tests, worker-mutants-a, worker-mutants-b, middle-apps, mutants-a, mutants-b, selftests, rust-mutants-a, rust-mutants-b, open-rows-mutants, windows-guest-setup]
     runs-on: ubuntu-latest
     steps:
       - name: Require every needed job to have passed
@@ -2939,7 +2960,7 @@ jobs:
             ${{ needs.stable.result }} ${{ needs.worker-tests.result }} ${{ needs.worker-mutants-a.result }}
             ${{ needs.worker-mutants-b.result }} ${{ needs.middle-apps.result }} ${{ needs.mutants-a.result }}
             ${{ needs.mutants-b.result }} ${{ needs.selftests.result }} ${{ needs.rust-mutants-a.result }}
-            ${{ needs.rust-mutants-b.result }} ${{ needs.open-rows-mutants.result }}
+            ${{ needs.rust-mutants-b.result }} ${{ needs.open-rows-mutants.result }} ${{ needs.windows-guest-setup.result }}
         run: |
           echo "needed job results: $RESULTS (stripped: $STRIPPED; must have run: $MUST_RUN)"
           if [ "$STRIPPED" != success ]; then

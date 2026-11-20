@@ -1,6 +1,6 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-20 (the environment-read and comment-hygiene gates 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-20 (the `windows-guest-setup` job and its mutants 2026-11-20; the environment-read and comment-hygiene gates 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
 ## Job layout, concurrency and caches (2026-11-17)
@@ -57,6 +57,7 @@ about a minute of set-up; the two values that are not sums of measured steps are
 | `selftests` (3 shards) | every `test_*.py` of `scripts/ci`, a partition by module | 17.4 (one process) | about 6 each |
 | `rust-mutants-a` | Windows support profile mutants | 19.1 | about 20 |
 | `rust-mutants-b` | oracle gate, video classes, offer filter, unmap cap, VA profiling mutants | about 12.3 | about 13 |
+| `windows-guest-setup` | `scripts/ci/windows_setup_check.ps1` on `windows-latest`: `scripts/windows/kayfabe-windows-setup.*` (Windows PowerShell 5.1) against the runner's real registry with a faked adapter class key: values and types, idempotency, an unelevated run refused (a fresh standard local user), cleanup. A gate-carrying job. The table, the docs and the logic against an in-memory registry are in `selftests` (`test_windows_guest_setup.py`) and `mutants-a` (`windows_guest_setup_mutants.py`, needs `pwsh`) | not measured yet | INFERRED: about 3 |
 | `stripped` | unchanged: `cargo build` and `cargo test` on the stripped tree | 24.7 (44088759756), 44.5 (44084630157) | unchanged, now the longest job |
 
 The run's wall time without queueing is therefore the `stripped` job (INFERRED: 25 to 45 min) plus the gate, instead of 210 min plus the gate. Runner
