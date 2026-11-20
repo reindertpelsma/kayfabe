@@ -808,8 +808,8 @@ CASES = [
     (
         "image-copy-not-bounded",
         "scripts/kfci/apps_gate.py",
-        '["cp", "--", str(bench / "guest.qcow2"), str(image)], timeout=remaining',
-        '["cp", "--", str(bench / "guest.qcow2"), str(image)], timeout=7200',
+        '["cp", "--", str(bench / BASE_IMAGE_NAME), str(image)], timeout=remaining',
+        '["cp", "--", str(bench / BASE_IMAGE_NAME), str(image)], timeout=7200',
         "py",
     ),
     (
