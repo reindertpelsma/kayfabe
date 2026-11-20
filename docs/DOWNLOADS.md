@@ -368,6 +368,28 @@ trusted draft pin PR and OIDC broker are design only; no token handling or Worke
 This replaces the bundle's old GitHub-Releases private store. Setup cache and WinPE migration are separate;
 WB1 does not migrate NVIDIA files or move/delete old-store contents.
 
+### Republish (a hashed input changed after the pin)
+
+**MEASURED, 2026-11-20 (Vast box, wave-1 acceptance; the cause was then found by comparing the input hashes):** `windows_apps` failed on every fresh
+box with `fetch of winapps-open.iso failed: PUBLIC_BUNDLE_FAIL`. The ISO downloaded and matched its sha256 pin, then `verify_image` raised
+`embedded recipe input identity mismatch` (derived `b8694b93...`, embedded `ed2ddea1...`): `appmatrix/apps.json` (#470, #471, #475) and
+`guest/py/win_cuda_equiv.py` (#475) are covered by the input hash and had changed since the 2026-11-08 build. **Owner/coordinator decision:** rebuild from the
+current tree and republish; the inputs are not reverted.
+
+**MEASURED, 2026-11-20 ([run](../traces/wb1_republish_20261120/README.md)):** two `bundle_ci.py build` passes of tree `7fb1c98a0` are Level 1 and Level 2 equal;
+ISO sha256 `9211a55591679324d4e37df4acba57f80685e93d7096759b8959f8c9e1d4c4c0`, 2708131840 bytes, inputs `b8694b93...`, inventory `74cbb9f9...`.
+Against the 2026-11-08 manifest exactly four files differ (`apps.json`, `guest/py/win_cuda_equiv.py`, `bundle.inputs.json`, `KFAPPS.ID`). The ISO and its
+manifest were uploaded with new create-only keys (the 2026-11-08 objects and the three source archives are untouched; the old pin stays valid for its own
+sha), and `fetch_public_bundle.py` with the new pin fetched and verified the ISO from `bundles.kayfabe.dev` without credentials.
+
+**CODE READ:** a change to any input the hash covers (`manifest.json`, `gate_profiles.json`, `apps.json`, the guest files, the recipe programs) needs a
+rebuilt and republished bundle and the new `bundle.pin` in the same change set; the test and the named failure reason that enforce it are a separate change
+(#530). Procedure used here: `bundle_ci.py build --root <fresh dir> --inputs <package_bundle.py input-hash>` (no credentials in the environment),
+`verify_image` with `expected_inputs`, upload the ISO and then the manifest create-only, re-download from the public URL and compare, then commit the pin
+(`first/bundle.pin.line`).
+
+**CODE READ:** `bundle.pin` is read by pattern: the `winapps-open.iso sha256=` line, and the `# inputs=` and `# inventory=` comment lines (the first must equal the tree's input hash); every other comment is ignored.
+
 Full recipe, qualification rules and rollout details: [Windows apps gate, section 3](design/V3_WINDOWS_APPS_GATE.md#3-inputs-public-bundle-and-official-run-time-media).
 
 ## SPECviewperf in the Vast gate (the `specviewperf` stage)

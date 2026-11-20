@@ -126,13 +126,16 @@ for (const [code, mutate] of Object.entries(CODES))
     const p = py(['validate', 'check'], JSON.stringify(data));
     assert.equal(p.status, 0, p.stderr + p.stdout);
   });
+// A large-tier (release profile) rule: /availability serves only check and sweep, so the table above cannot reach it.
+// test/offer-ram-vram.test.js drives it through the release evaluation and this runner's strict validator.
+const RELEASE_ONLY = ['RAM_BELOW_VRAM_RULE'];
 test('item 9: every code the Worker can emit is in the table and runner-accepted', async () => {
   const source = ['policy.js', 'offers.js']
     .map((f) => readFile(new URL('../src/' + f, import.meta.url), 'utf8'))
     .map(async (x) => [...(await x).matchAll(/reasons\.push\('([A-Z_]+)'\)/g)].map((m) => m[1]));
   const emitted = [...new Set((await Promise.all(source)).flat())].sort();
   assert.ok(emitted.length >= 14, emitted.join());
-  assert.deepEqual(Object.keys(CODES).sort(), emitted);
+  assert.deepEqual([...Object.keys(CODES), ...RELEASE_ONLY].sort(), emitted);
   const p = py(['codes']);
   assert.equal(p.status, 0, p.stderr);
   assert.deepEqual(JSON.parse(p.stdout), emitted);
