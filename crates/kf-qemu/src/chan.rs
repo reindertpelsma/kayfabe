@@ -2577,7 +2577,11 @@ pub struct ChanPlane {
     pt_objs: Mutex<HashMap<(u32, u32), (u32, u32)>>,
     /// ★ w827: guest debugger session `(hClient, hDebugger)` → its host twin: `(guest device, host
     /// session, host GR object it is bound to)`.
-    dbg: Mutex<HashMap<(u32, u32), (u32, u32, u32)>>,
+    dbg: Mutex<DbgMap>,
+    /// ★ G-1 (2026-11-20): debugger sessions admitted and not yet answered ([`admit_debugger`]).
+    dbg_pending: DbgPending,
+    /// ★ G-1: the most live debugger sessions in this VM: the declared `channel-budget`.
+    dbg_vm_cap: usize,
     /// ★ w827: guest Devices `(hClient, hDevice)` whose CUDA limit is on, and whether OUR host
     /// device's is — the host limit is on iff any guest Device's is (the guest kernel sends only
     /// per-Device edges, so the union is exactly the guest's own state).
@@ -2787,6 +2791,15 @@ fn engine_object_pending(
 /// Trusted concurrent pending-object budget, not a family/die fact.
 const PENDING_ENGINE_OBJECTS: usize = 64;
 
+/// ★ 2026-11-20 (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-2): engine objects per passthrough twin,
+/// committed plus pending. Before this only the pending ones were capped, so a guest could add one
+/// host RM object per fresh handle on one channel (bounded only by the object graph's 2^18 live
+/// handles for the whole VM). `[measured: committed act lines in traces/, 2026-11-20]` the peak is 6
+/// on one twin (`traces/windows_matrix_20261011/gravity-vulkan/…/qemu.log`,
+/// `traces/v3_display/dispsw_20261003/…/run_fin_on_d84086df_qemu.log`; 5 in vulkaninfo); 128 is
+/// more than 20× that. Proposed property name (PR #538 §2.4): `limit-engine-objects-per-channel`.
+const ENGINE_OBJECTS_PER_TWIN: usize = 128;
+
 fn admit_engine_object(
     v: &mut PtChan,
     index: &ObjIndex,
@@ -2804,6 +2817,9 @@ fn admit_engine_object(
     if v.pending_objects.len() >= PENDING_ENGINE_OBJECTS {
         return Err("ENGINE_OBJECT_PENDING_BUDGET".into());
     }
+    if v.objects.len().saturating_add(v.pending_objects.len()) >= ENGINE_OBJECTS_PER_TWIN {
+        return Err("ENGINE_OBJECT_TWIN_BUDGET".into());
+    }
     v.pending_objects
         .try_reserve(1)
         .map_err(|_| "ENGINE_OBJECT_PENDING_ALLOCATION")?;
@@ -2811,6 +2827,74 @@ fn admit_engine_object(
     v.pending_objects
         .insert(handle, Arc::downgrade(&allocation));
     Ok(allocation)
+}
+
+/// ★ 2026-11-20 (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-1, HIGH): live debugger sessions per
+/// guest GR object. `[measured: every committed act line, traces/ (145 files), 2026-11-20]` CUDA
+/// opens exactly ONE per context (`cuCtxCreate`, w827); 4 is 4× that. Each session is a host
+/// debugger object plus, inside host RM, its own internal client, device and subdevice.
+/// Proposed property name (DoS limits family, PR #538 §2.4): `limit-debuggers-per-gr-object`.
+pub(crate) const DEBUGGERS_PER_GR_OBJECT: usize = 4;
+
+/// Guest debugger session `(hClient, hDebugger)` → `(guest device, host session, host GR object)`.
+pub(crate) type DbgMap = HashMap<(u32, u32), (u32, u32, u32)>;
+/// Debugger sessions admitted and not yet answered by their act: key → host GR object.
+pub(crate) type DbgPending = Arc<Mutex<HashMap<(u32, u32), u32>>>;
+
+/// ★ G-1: the admission of one guest `GT200_DEBUGGER` alloc, BEFORE any host call: a handle live or
+/// pending is refused (`DEBUGGER_HANDLE_BUSY`; before this the map silently replaced the entry and
+/// kept the old host session until its GR object went), as are a GR object holding
+/// [`DEBUGGERS_PER_GR_OBJECT`] sessions (`DEBUGGER_GR_OBJECT_BUDGET`) and a VM holding `per_vm`
+/// (`DEBUGGER_VM_BUDGET`: the `channel-budget` the guest was told — a CUDA context needs a GR
+/// channel of its own, and holds one session). Pending sessions count against both caps.
+pub(crate) fn admit_debugger(
+    live: &DbgMap,
+    pending: &HashMap<(u32, u32), u32>,
+    key: (u32, u32),
+    host_obj: u32,
+    per_vm: usize,
+) -> Result<(), &'static str> {
+    if live.contains_key(&key) || pending.contains_key(&key) {
+        return Err("DEBUGGER_HANDLE_BUSY");
+    }
+    let on_obj = live
+        .values()
+        .filter(|v| v.2 == host_obj)
+        .count()
+        .saturating_add(pending.values().filter(|g| **g == host_obj).count());
+    if on_obj >= DEBUGGERS_PER_GR_OBJECT {
+        return Err("DEBUGGER_GR_OBJECT_BUDGET");
+    }
+    if live.len().saturating_add(pending.len()) >= per_vm {
+        return Err("DEBUGGER_VM_BUDGET");
+    }
+    Ok(())
+}
+
+/// ★ G-1: one admitted, unanswered debugger session. Owned by its act; dropped when the act ends
+/// or is dropped unrun (a full queue, a reset), so the seat can never leak.
+pub(crate) struct PendingDebugger {
+    pending: DbgPending,
+    key: (u32, u32),
+}
+
+impl PendingDebugger {
+    /// Take the seat for `key` (bound to `host_obj`). `None`: the map is poisoned.
+    pub(crate) fn take(pending: &DbgPending, key: (u32, u32), host_obj: u32) -> Option<Self> {
+        pending.lock().ok()?.insert(key, host_obj);
+        Some(PendingDebugger {
+            pending: pending.clone(),
+            key,
+        })
+    }
+}
+
+impl Drop for PendingDebugger {
+    fn drop(&mut self) {
+        if let Ok(mut m) = self.pending.lock() {
+            m.remove(&self.key);
+        }
+    }
 }
 
 fn cancel_pending_engine_objects(pt: &crate::ptlock::PtLock<PtMap>, client: u32, object: u32) {
@@ -3276,6 +3360,8 @@ impl ChanPlane {
             relays: Mutex::new(HashMap::new()),
             pt_objs: Mutex::new(HashMap::new()),
             dbg: Mutex::new(HashMap::new()),
+            dbg_pending: Arc::default(),
+            dbg_vm_cap: usize::try_from(channel_budget).unwrap_or(usize::MAX),
             cuda_limit: Mutex::new((std::collections::BTreeSet::new(), false)),
             acts: Mutex::new(None),
             release,
@@ -5715,9 +5801,45 @@ impl ChanPlane {
                 };
             }
         };
+        // ★ G-1 (2026-11-20): admitted against the busy handle and both caps BEFORE any host call;
+        // the seat travels with the act and is given back when the act ends or is dropped.
+        let seat = {
+            let (Ok(live), Ok(pending)) = (self.dbg.lock(), self.dbg_pending.lock()) else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "DEBUGGER_MAP_POISONED".into(),
+                };
+            };
+            if let Err(why) =
+                admit_debugger(&live, &pending, (client, handle), host_obj, self.dbg_vm_cap)
+            {
+                kf_arch::rate_eprintln!(
+                    "kf3: GT200_DEBUGGER {client:#x}:{handle:#x} over {obj3d:#x} REFUSED {why} (per GR object {DEBUGGERS_PER_GR_OBJECT}, per VM {})",
+                    self.dbg_vm_cap
+                );
+                return ChanAnswer::Refused {
+                    status: if why == "DEBUGGER_HANDLE_BUSY" {
+                        NV_ERR_INVALID_ARGUMENT
+                    } else {
+                        NV_ERR_INSUFFICIENT_RESOURCES
+                    },
+                    why: format!("GT200_DEBUGGER over {client:#x}:{obj3d:#x}: {why}"),
+                };
+            }
+            drop(pending);
+            drop(live);
+            PendingDebugger::take(&self.dbg_pending, (client, handle), host_obj)
+        };
+        let Some(seat) = seat else {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INVALID_STATE,
+                why: "DEBUGGER_MAP_POISONED".into(),
+            };
+        };
         self.defer(
             "debugger",
             Box::new(move |me: &ChanPlane| {
+                let _seat = seat;
                 let h = me.rm.alloc_debugger(host_obj).map_err(|e| (NV_ERR_INVALID_STATE, format!("GT200_DEBUGGER over host object {host_obj:#x}: {e:?}")))?;
                 if let Ok(mut m) = me.dbg.lock() {
                     m.insert((client, handle), (parent, h, host_obj));
@@ -8944,8 +9066,8 @@ mod dispsw_tests {
         dispsw_mark_host_refused, register_other_sw, take_twin_object, withdraw_kept,
     };
     use super::{
-        EngineObject, PENDING_ENGINE_OBJECTS, admit_engine_object, engine_object_pending,
-        engine_owner_current, keep_engine_object, withdraw_engine_object,
+        ENGINE_OBJECTS_PER_TWIN, EngineObject, PENDING_ENGINE_OBJECTS, admit_engine_object,
+        engine_object_pending, engine_owner_current, keep_engine_object, withdraw_engine_object,
     };
     use crate::dispsw::{
         DispSwCounters, DispSwHost, Live, NV_ERR_INSUFFICIENT_RESOURCES, PER_CHANNEL_CAP, twin_one,
@@ -9259,6 +9381,61 @@ mod dispsw_tests {
         let last = admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 2000).unwrap();
         assert_eq!(v.pending_objects.len(), 2);
         assert!(!Arc::ptr_eq(&next, &last));
+    }
+
+    fn committed(v: &mut PtChan, n: u32) {
+        for h in 0..n {
+            v.objects.insert(
+                0x100 + h,
+                EngineObject {
+                    allocation: Arc::new(()),
+                    host: 0xcafe_0000 + h,
+                    kind: Kind::Compute,
+                    class: 0xc5c0,
+                },
+            );
+        }
+    }
+
+    /// ★ 2026-11-20 (`V3_GUEST_INFLUENCE_AUDIT.md` G-2): committed engine objects per twin are
+    /// capped, by name, before any host call (each one is a host RM object).
+    #[test]
+    fn engine_objects_per_twin_are_capped() {
+        let mut v = twin(1, &[]);
+        committed(&mut v, ENGINE_OBJECTS_PER_TWIN as u32);
+        assert_eq!(
+            admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 0x9000).err(),
+            Some("ENGINE_OBJECT_TWIN_BUDGET".to_string())
+        );
+        assert!(
+            v.pending_objects.is_empty(),
+            "a refused admission takes no seat"
+        );
+    }
+
+    #[test]
+    fn the_engine_object_cap_counts_pending_admissions() {
+        let mut v = twin(1, &[]);
+        committed(&mut v, ENGINE_OBJECTS_PER_TWIN as u32 - 4);
+        let _held: Vec<_> = (0..4)
+            .map(|i| admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 0x8000 + i).unwrap())
+            .collect();
+        assert_eq!(
+            admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 0x9000).err(),
+            Some("ENGINE_OBJECT_TWIN_BUDGET".to_string())
+        );
+    }
+
+    #[test]
+    fn a_twin_below_the_engine_object_cap_admits_exactly_up_to_it() {
+        let mut v = twin(1, &[]);
+        committed(&mut v, ENGINE_OBJECTS_PER_TWIN as u32 - 1);
+        let held = admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 0x9000);
+        assert!(held.is_ok(), "{:?}", held.err());
+        assert_eq!(
+            admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 0x9001).err(),
+            Some("ENGINE_OBJECT_TWIN_BUDGET".to_string())
+        );
     }
 
     /// A host that frees (recorded) and must never be asked to allocate or read back.
@@ -10630,5 +10807,157 @@ mod nvenc_cap_tests {
         });
         assert_eq!(st, 0);
         assert_eq!(book.lock().expect("book").of(4), 0);
+    }
+}
+
+/// ★ 2026-11-20 (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-1, HIGH): every guest `GT200_DEBUGGER`
+/// alloc used to cost one host debugger session (in host RM: its own internal client, device and
+/// subdevice, `kernel_sm_debugger_session.c` `_ksmdbgssnInitClient`) with no count, no busy-handle
+/// check, and a session kept even when the object seat refused the alloc afterwards.
+#[cfg(test)]
+mod debugger_tests {
+    use super::{DEBUGGERS_PER_GR_OBJECT, DbgMap, DbgPending, PendingDebugger, admit_debugger};
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    const C: u32 = 0xc1d0_0001;
+    const GR1: u32 = 0xcafe_0100;
+    const GR2: u32 = 0xcafe_0200;
+
+    fn live(n: usize, gr: u32, base: u32) -> DbgMap {
+        (0..n as u32)
+            .map(|i| ((C, base + i), (0x5c00_0001, 0xcafe_1000 + base + i, gr)))
+            .collect()
+    }
+
+    #[test]
+    fn a_debugger_handle_already_live_or_pending_is_refused_before_any_host_call() {
+        let l = live(1, GR1, 0x10);
+        assert_eq!(
+            admit_debugger(&l, &HashMap::new(), (C, 0x10), GR2, 64),
+            Err("DEBUGGER_HANDLE_BUSY")
+        );
+        let p: HashMap<(u32, u32), u32> = [((C, 0x20), GR2)].into_iter().collect();
+        assert_eq!(
+            admit_debugger(&DbgMap::new(), &p, (C, 0x20), GR1, 64),
+            Err("DEBUGGER_HANDLE_BUSY")
+        );
+        // Same handle number in ANOTHER client is another key.
+        assert_eq!(admit_debugger(&l, &p, (C + 1, 0x10), GR2, 64), Ok(()));
+    }
+
+    #[test]
+    fn a_debugger_alloc_over_its_own_live_handle_is_busy_not_budget() {
+        let l = live(DEBUGGERS_PER_GR_OBJECT, GR1, 0x10);
+        assert_eq!(
+            admit_debugger(&l, &HashMap::new(), (C, 0x11), GR2, 1 << 20),
+            Err("DEBUGGER_HANDLE_BUSY")
+        );
+    }
+
+    #[test]
+    fn a_second_alloc_racing_a_pending_one_is_busy() {
+        let pending: DbgPending = Arc::new(Mutex::new(HashMap::new()));
+        let _seat = PendingDebugger::take(&pending, (C, 0x10), GR1).expect("seat");
+        let p = pending.lock().unwrap();
+        assert_eq!(
+            admit_debugger(&DbgMap::new(), &p, (C, 0x10), GR2, 1 << 20),
+            Err("DEBUGGER_HANDLE_BUSY")
+        );
+    }
+
+    #[test]
+    fn pending_sessions_alone_fill_the_vm_budget() {
+        let p: HashMap<(u32, u32), u32> = (0..3u32)
+            .map(|i| ((C, 0x40 + i), 0xcafe_0100 + i))
+            .collect();
+        assert_eq!(
+            admit_debugger(&DbgMap::new(), &p, (C, 0x99), GR2, 3),
+            Err("DEBUGGER_VM_BUDGET")
+        );
+    }
+
+    #[test]
+    fn pending_sessions_alone_fill_a_gr_object_budget() {
+        let p: HashMap<(u32, u32), u32> = (0..DEBUGGERS_PER_GR_OBJECT as u32)
+            .map(|i| ((C, 0x40 + i), GR1))
+            .collect();
+        assert_eq!(
+            admit_debugger(&DbgMap::new(), &p, (C, 0x99), GR1, 1 << 20),
+            Err("DEBUGGER_GR_OBJECT_BUDGET")
+        );
+    }
+
+    #[test]
+    fn a_finished_act_frees_its_seat_for_the_next_alloc() {
+        let pending: DbgPending = Arc::new(Mutex::new(HashMap::new()));
+        drop(PendingDebugger::take(&pending, (C, 0x10), GR1).expect("seat"));
+        let p = pending.lock().unwrap();
+        assert_eq!(
+            admit_debugger(&DbgMap::new(), &p, (C, 0x10), GR1, 1),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn debuggers_per_gr_object_are_capped() {
+        let l = live(DEBUGGERS_PER_GR_OBJECT, GR1, 0x10);
+        assert_eq!(
+            admit_debugger(&l, &HashMap::new(), (C, 0x99), GR1, 1 << 20),
+            Err("DEBUGGER_GR_OBJECT_BUDGET")
+        );
+        assert_eq!(
+            admit_debugger(&l, &HashMap::new(), (C, 0x99), GR2, 1 << 20),
+            Ok(()),
+            "another GR object has its own budget"
+        );
+        let below = live(DEBUGGERS_PER_GR_OBJECT - 1, GR1, 0x10);
+        assert_eq!(
+            admit_debugger(&below, &HashMap::new(), (C, 0x99), GR1, 1 << 20),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn the_debugger_caps_count_pending_sessions() {
+        let l = live(DEBUGGERS_PER_GR_OBJECT - 1, GR1, 0x10);
+        let p: HashMap<(u32, u32), u32> = [((C, 0x80), GR1)].into_iter().collect();
+        assert_eq!(
+            admit_debugger(&l, &p, (C, 0x99), GR1, 1 << 20),
+            Err("DEBUGGER_GR_OBJECT_BUDGET")
+        );
+        let per_vm = DEBUGGERS_PER_GR_OBJECT; // live (cap-1) + one pending == per_vm
+        assert_eq!(
+            admit_debugger(&l, &p, (C, 0x99), GR2, per_vm),
+            Err("DEBUGGER_VM_BUDGET")
+        );
+    }
+
+    #[test]
+    fn debuggers_per_vm_are_capped_by_the_declared_channel_budget() {
+        let mut l = DbgMap::new();
+        for i in 0..8u32 {
+            l.insert((C, 0x10 + i), (0, 0xcafe_1000 + i, 0xcafe_0100 + i));
+        }
+        assert_eq!(
+            admit_debugger(&l, &HashMap::new(), (C, 0x99), 0xcafe_0900, 8),
+            Err("DEBUGGER_VM_BUDGET")
+        );
+        assert_eq!(
+            admit_debugger(&l, &HashMap::new(), (C, 0x99), 0xcafe_0900, 9),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn the_pending_debugger_seat_is_released_when_its_act_is_dropped() {
+        let pending: DbgPending = Arc::new(Mutex::new(HashMap::new()));
+        let seat = PendingDebugger::take(&pending, (C, 0x10), GR1).expect("seat");
+        assert_eq!(pending.lock().unwrap().get(&(C, 0x10)), Some(&GR1));
+        drop(seat);
+        assert!(
+            pending.lock().unwrap().is_empty(),
+            "a dropped or finished act gives its seat back"
+        );
     }
 }
