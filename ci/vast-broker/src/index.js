@@ -52,7 +52,7 @@ import {PRIVATE_PATH,PRIVATE_REFUSALS,privateAccess,privateCount,privateExists,p
 // prettier-ignore
 import {trustDecision} from './trust.js';
 // prettier-ignore
-import {releaseSeqFor,familyDiesOf,legInstruction} from './legs.js';
+import {releaseSeqFor,familyDiesOf,legInstruction,legStages} from './legs.js';
 import { offerPrice, providerId, applyResourceProfile } from './policy.js';
 import {
   BOOT_FAILURE_STATES,
@@ -1624,9 +1624,13 @@ export function createService({
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
     await github.boxProtocol(target.sha);
     const book = retrySource || market !== undefined ? new OfferBook(now) : offers;
+    // The leg this rental is for: its tier and the stages it will run (bandwidth.js legStages), so a stage's own offer rule
+    // (policy.js: the kfml row managed_oversub's RAM-by-VRAM floor) binds exactly the legs that run that stage.
+    const legTier = middleLeg ? 'middle' : tierName;
     const evaluation = await book.evaluate(vast, cfg, ledger, profile, {
       market,
       vramFloorMb: tierName === 'middle' ? cfg.middleVramFloorMb : 0,
+      leg: { tier: legTier, stages: legStages(legTier) },
     });
     if (retrySource) {
       const remaining =
