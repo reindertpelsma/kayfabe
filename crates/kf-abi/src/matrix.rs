@@ -810,13 +810,13 @@ mod tests {
         let between = DriverVersion {
             major: 580,
             minor: 159,
-            patch: 3,
+            patch: 2,
         };
         assert!(!is_measured(between));
         let s = ALL_STRUCTS[0];
         let e = s.at(between).expect_err("unmeasured must refuse");
         assert_eq!(e.version, between);
-        assert!(e.to_string().contains("580.159.03"), "{e}");
+        assert!(e.to_string().contains("580.159.02"), "{e}");
         assert!(
             e.to_string().contains("regen.sh"),
             "says how to measure it: {e}"

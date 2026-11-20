@@ -7255,6 +7255,15 @@ fn timer_allocation_keeps_transport_guards_and_does_not_admit_unknown_classes() 
             ));
             continue;
         }
+        // Compiled but below the oldest reviewed capability row (535.104.05): refused by
+        // name, never handed the 550 surface.
+        if (version.major, version.minor, version.patch) < (535, 104, 5) {
+            assert!(matches!(
+                kf_abi::versions::table_for(*version),
+                Err(AbiError::NoCapabilityRow { .. })
+            ));
+            continue;
+        }
         let table = kf_abi::versions::table_for(*version).unwrap();
         assert_eq!(
             table.alloc_params(ClassId(4)),

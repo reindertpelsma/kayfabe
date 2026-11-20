@@ -135,24 +135,48 @@ def closure(tag, work, local):
     return sorted({os.path.join(work, tag, d) for d in DIRS}), roots, missing
 
 
-def probe_source(roots):
-    lines = [
+def _head(roots):
+    return [
         "#include <stdio.h>", "#include <stddef.h>", "#include <stdint.h>",
         "#include <drm/drm.h>",
-    ] + [f'#include "{os.path.basename(r)}"' for r in roots] + ["int main(void) {"]
+    ] + [f'#include "{os.path.basename(r)}"' for r in roots]
+
+
+def items():
+    """Every probe item as (key, printf line). One line is one compilable unit."""
+    out = []
     for s, fields in STRUCTS.items():
         t = f"struct {s}"
-        lines.append(f'printf("sizeof\\t{s}\\t%zu\\n", sizeof({t}));')
+        out.append((f"sizeof:{s}", f'printf("sizeof\\t{s}\\t%zu\\n", sizeof({t}));'))
         for f in fields:
-            lines.append(f'printf("offsetof\\t{s}.{f}\\t%zu\\n", offsetof({t}, {f}));')
-            lines.append(
-                f'printf("sizeof\\t{s}.{f}\\t%zu\\n", sizeof((({t} *)0)->{f}));')
+            out.append((f"offsetof:{s}.{f}",
+                        f'printf("offsetof\\t{s}.{f}\\t%zu\\n", offsetof({t}, {f}));'))
+            out.append((f"sizeof:{s}.{f}",
+                        f'printf("sizeof\\t{s}.{f}\\t%zu\\n", sizeof((({t} *)0)->{f}));'))
     for i in IOCTLS:
-        lines.append(f'printf("ioctl\\t{i}\\t%#lx\\n", (unsigned long){i});')
+        out.append((f"ioctl:{i}", f'printf("ioctl\\t{i}\\t%#lx\\n", (unsigned long){i});'))
     for e in ENUMS:
-        lines.append(f'printf("enum\\t{e}\\t%d\\n", (int){e});')
-    lines += ["return 0;", "}"]
-    return "\n".join(lines) + "\n"
+        out.append((f"enum:{e}", f'printf("enum\\t{e}\\t%d\\n", (int){e});'))
+    return out
+
+
+def probe_source(roots, lines=None):
+    body = lines if lines is not None else [l for _, l in items()]
+    return "\n".join(_head(roots) + ["int main(void) {"] + body + ["return 0;", "}"]) + "\n"
+
+
+def compile_run(src, dirs, td, name="probe"):
+    """(stdout, None) or (None, scrubbed first compiler errors)."""
+    c = os.path.join(td, name + ".c")
+    exe = os.path.join(td, name)
+    open(c, "w").write(src)
+    r = subprocess.run(["gcc", "-std=gnu11", "-o", exe, c] + [f"-I{d}" for d in dirs],
+                       capture_output=True, text=True, env=dict(os.environ, LC_ALL="C"))
+    if r.returncode != 0:
+        # the temporary directory's name is scrubbed, so a re-run reproduces the file
+        errs = [l for l in r.stderr.replace(td, "<probe>").splitlines() if "error:" in l]
+        return None, " ".join(" | ".join(errs[:2] or [r.stderr]).split())[:300]
+    return subprocess.run([exe], capture_output=True, text=True, check=True).stdout, None
 
 
 def measure(tag, work, local):
@@ -161,19 +185,27 @@ def measure(tag, work, local):
     except Exception as e:  # network: the tag is unmeasured, never guessed
         return [("status", f"UNMEASURED fetch: {e}")]
     with tempfile.TemporaryDirectory() as td:
-        c = os.path.join(td, "probe.c")
-        exe = os.path.join(td, "probe")
-        open(c, "w").write(probe_source(roots))
-        cmd = ["gcc", "-std=gnu11", "-o", exe, c] + [f"-I{d}" for d in dirs]
-        r = subprocess.run(cmd, capture_output=True, text=True,
-                           env=dict(os.environ, LC_ALL="C"))
-        if r.returncode != 0:
-            # the temporary directory's name is scrubbed, so a re-run reproduces the file
-            errs = [l for l in r.stderr.replace(td, "<probe>").splitlines() if "error:" in l]
-            err = " ".join(" | ".join(errs[:2] or [r.stderr]).split())[:300]
+        out, err = compile_run(probe_source(roots), dirs, td)
+        if err is not None:
+            # ★ Per-item tolerance (2026-11-12): one member that a tag's struct does not have
+            # (`mig_device` before 575) must cost that ITEM, not the tag. Each item is compiled
+            # alone; an item that does not compile is written `ABSENT <compiler error>`, which
+            # kf_abi::drmnv reads as "differs from the transcription" (so the rung is still
+            # refused there, by name, with a MEASURED reason). If the headers themselves do not
+            # compile (no item prints), the tag stays UNMEASURED.
             why = f"missing {missing[:4]}; " if missing else ""
-            return [("status", f"UNMEASURED compile: {why}{err}")]
-        out = subprocess.run([exe], capture_output=True, text=True, check=True).stdout
+            rows, printed = [], 0
+            for key, line in items():
+                o, e = compile_run(probe_source(roots, [line]), dirs, td, "item")
+                if e is None:
+                    rows.append(o.rstrip("\n").split("\t"))
+                    printed += 1
+                else:
+                    rows.append([key.split(":")[0], key.split(":", 1)[1], f"ABSENT {e}"])
+            if printed == 0:
+                return [("status", f"UNMEASURED compile: {why}{err}")]
+            return [("status", "MEASURED"), ("header", " ".join(roots))] + [
+                (f"{k}:{n}", v) for k, n, v in rows]
     rows = [l.split("\t") for l in out.splitlines()]
     return [("status", "MEASURED"), ("header", " ".join(roots))] + [
         (f"{k}:{n}", v) for k, n, v in rows]
