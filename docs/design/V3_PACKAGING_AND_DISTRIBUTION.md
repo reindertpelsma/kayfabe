@@ -272,7 +272,7 @@ Today (CODE READ): `ci/vast-broker/wrangler.toml` declares the Durable Object bi
 
 ## 10. Testing from the repository alone
 
-**OWNER DECISION.** Everything is reproducible and auditable from the repository; `kayfabe-private` is never a dependency. Anyone can run: the GPU-free Rust tests; GPU tests on open Linux images; open-source applications (Blender, OBS) on them; the Windows open probes after the Microsoft prompt (section 7). Beyond that:
+**OWNER DECISION.** Everything is reproducible and auditable from the repository; no private repository is ever a dependency. Anyone can run: the GPU-free Rust tests; GPU tests on open Linux images; open-source applications (Blender, OBS) on them; the Windows open probes after the Microsoft prompt (section 7). Beyond that:
 
 - **Choosing what to test.** An interactive chooser as an **interactive mode of the existing standalone runner**, because `OWNER_RULINGS.md` §AS says no new CLI. The existing runner is `scripts/ci/vast_payload.py --full` with its instruction file (`docs/howto/full-standalone-run.md`, `scripts/ci/standalone_full.py`). Not built.
 - **Unreal:** point the runner at a folder holding the source or a built binary.
