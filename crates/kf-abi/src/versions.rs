@@ -374,7 +374,7 @@ pub struct RmControlWire {
 }
 
 /// The guest-ingress gate for exactly `version` ([`crate::capability`]), or `None` when the
-/// generated table has no such tag. Policy lookup only; [`table_for`] adds the measured-tag rule.
+/// generated table has no such tag. Policy lookup only; [`table_for`] adds the rule for tags that have a host gate.
 #[must_use]
 pub fn capabilities_for(version: DriverVersion) -> Option<&'static CapabilityTable> {
     CapabilityTable::for_version(version)
@@ -2198,7 +2198,7 @@ mod tests {
         );
     }
 
-    /// Every measured tag has its own gate, and a version that is no tag has none.
+    /// Every tag in the table has its own gate, and a version that is no tag has none.
     #[test]
     fn every_measured_tag_has_its_own_gate() {
         for v in crate::generated::matrix::MEASURED {

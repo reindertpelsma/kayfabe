@@ -16,7 +16,7 @@
 //! 2. what kayfabe serves: the ids and names its own code uses
 //!    (`tools/api_boundaries/served.json`; this gate is not read, so it cannot vouch for itself);
 //! 3. kayfabe's own rows (`tools/api_boundaries/ingress_rules.tsv`): ids that reach kayfabe only
-//!    because Mode 2's transport is GSP RPC ([`Basis::Mode2Rpc`]), ids measured on a real host
+//!    because Mode 2's transport is GSP RPC ([`Basis::Mode2Rpc`]), ids seen on a real host
 //!    stream ([`Basis::Empirical`]), and kayfabe's judgements ([`Judgement`]).
 //!
 //! The rule: a served control is admitted where its tag exports it `NON_PRIVILEGED` and not
@@ -53,7 +53,7 @@ pub enum Basis {
     /// kayfabe's own row: reaches kayfabe only because in Mode 2 the guest's KERNEL RM talks to
     /// kayfabe as its GSP. Every such row has a consumer that decides its params shape.
     Mode2Rpc,
-    /// kayfabe's own row: measured on a real host RM ioctl stream and served by kayfabe.
+    /// kayfabe's own row: seen on a real host RM ioctl stream and served by kayfabe.
     Empirical,
 }
 

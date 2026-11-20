@@ -93,7 +93,7 @@ pub enum AbiError {
         /// Patch version.
         patch: u16,
     },
-    /// ★ A measured driver version the guest-ingress table has no tag for
+    /// ★ A host driver version the guest-ingress table has no tag for
     /// (`crate::ingress_generated::TAGS`): there is no control/class surface to admit the guest
     /// against.
     NoCapabilityRow {

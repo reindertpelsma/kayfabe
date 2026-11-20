@@ -31,7 +31,7 @@ nearest-tag fallback. Each control row also says whether kayfabe ever forwards t
 | either | a row of `tools/api_boundaries/ingress_rules.tsv` overrides the derived verdict for its tags |
 
 "Served" is what kayfabe's own code names (`tools/api_boundaries/derive_served.py` → `served.json`: control ids
-and names, class ids and names, plus the measured Windows census and the matrix lists). **The gate is excluded
+and names, class ids and names, plus the Windows census and the matrix lists). **The gate is excluded
 from that scan** (`EXCLUDE` in `derive_served.py`): before I7, 71 control ids and 122 control names were "served"
 only because the gate itself named them, so the old `served.json` was circular. A control with no visibility flag
 is kernel-only in RM (`ogkm-580: kernel/rmapi/control.c:702`) and is refused (`KernelOnly`). The GSS-legacy bit
