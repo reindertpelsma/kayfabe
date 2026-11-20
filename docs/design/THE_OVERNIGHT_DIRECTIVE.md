@@ -7,7 +7,7 @@ metadata:
   date: 2026-09-13
 ---
 
-**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+**STATUS: LIVE AS A REFERENCE, 2026-11-20 (w822; ref re-checked 2026-11-20).** ⊘ *2026-11-20:* the one dead literal reference (goal 4, the pre-v3 `DoorbellTable` source) was repointed to `archive/crates/kayfabe-device/src/dbtable.rs`, which exists. The directive's goals and rules were not re-checked against the owner's later rulings (`docs/OWNER_RULINGS.md`, binding); where they disagree the rulings win. Original date: 2026-09-21 (w822). Cited by `THE_DESIGN.md`, which is the
 current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
 wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
 findings**, and the **reasoning** behind a constraint.
@@ -24,7 +24,7 @@ findings**, and the **reasoning** behind a constraint.
 2. **Raw client under the trap constraints**: NO read traps at all; write traps ONLY in BAR0,
    and NOT in PRAMIN; nowhere else (not BAR1, not BAR2).
 3. **No blocking calls on the vCPU thread**, and no locks that hold it.
-4. **The new DoorbellTable properly working** (`crates/kayfabe-device/src/dbtable.rs`).
+4. **The new DoorbellTable properly working** (`archive/crates/kayfabe-device/src/dbtable.rs`).
 5. **Code rot cleaned up, or MARKED with a plan** so the cleanup is mechanical. The eventual
    code targets PRODUCTION.
 6. **Every remaining write trap sub-millisecond**, via the proper queue/defer model.
