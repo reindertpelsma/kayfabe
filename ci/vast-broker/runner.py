@@ -527,6 +527,7 @@ REJECTION_CODES = frozenset(
         "DIE",
         "RELIABILITY",
         "CPU_RAM",
+        "RAM_BELOW_VRAM_RULE",
         "PERFORMANCE",
         "NETWORK",
         "DISK_BW",

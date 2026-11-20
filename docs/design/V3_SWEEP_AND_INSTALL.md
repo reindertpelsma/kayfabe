@@ -1,6 +1,6 @@
 # V3 sweep and install — every driver pair on every GPU family, tested on the binary users install
 
-**STATUS: DESIGN-ONLY, 2026-10-02; revised the same day after an adversarial review.** Nothing in this
+**STATUS: DESIGN-ONLY, 2026-10-02; revised the same day after an adversarial review; I7 licence status updated 2026-11-20 (§2.9).** Nothing in this
 document is built. Branch `v3-sweep`, cut from master `d88639f9`; not merged. The review raised 2 blockers,
 10 majors and 14 minors; each was re-read against the cited files before acting, none was rejected, and
 the fixes are folded into the sections they correct. The main changes: written PASS rules for every row
@@ -1156,6 +1156,14 @@ value that fits.
 ### 2.9 Gaps to close before any binary is distributed
 
 - **The license (§4 Q1).**
+  - ★ **I7 status, 2026-11-20 (`docs/design/V3_GUEST_INGRESS_TABLE.md`, branch `claude/no-gvisor-20261120`):**
+    the blocker below is removed in code. `kf-abi`'s guest-ingress allowlist is generated from ogkm and kayfabe's
+    own rows; `LICENSE` exception 2 now lists only the frozen `crates/kayfabe-abi/src/capability.rs` (linked only
+    into the raw test client, not the QEMU device) and `archive/`; `scripts/ci/qemu_license_closure.py` checks the
+    device's link closure in CI. Owner's position (2026-11-20): tables and ids come from NVIDIA's MIT release, a
+    safety judgement is not copyrightable, risk low; a counsel check before the first public binary is
+    recommended, not blocking. The rest of I7 (SPDX on the overlay files, `LICENSES/` in the tarball, the
+    sources tarball) is unchanged.
   - ⊘ **ANSWERED 2026-10-02:** the repository is now `Apache-2.0 OR GPL-2.0-or-later`; see `LICENSE`
     and `docs/OWNER_RULINGS.md` §G. The next line describes the state before that ruling.
     ⚠ This section missed one blocker, which the ruling found. `kf-abi`'s `capability.rs` is derived
@@ -1253,7 +1261,7 @@ Around the runner:
 - **Q1 — License for distributing binaries.**
   - ⊘ **ANSWERED 2026-10-02 — option (a), as `Apache-2.0 OR GPL-2.0-or-later`** (`LICENSE`;
     `docs/OWNER_RULINGS.md` §G). The question text below is kept as it was asked. ⚠ One more
-    blocker remains, the nvproxy-derived `capability.rs` (see §2.9).
+    blocker remained, the nvproxy-derived `capability.rs`; removed 2026-11-20 by I7 (see §2.9).
   - kf-qemu (Apache-2.0) is linked statically into QEMU (GPLv2). Every crate in the product closure is
     kayfabe's except `libc` 0.2.189, which is `MIT OR Apache-2.0` (its own `Cargo.toml`).
   - Options: (a) dual-license the closure as `Apache-2.0 OR MIT`, or add `GPL-2.0-or-later`, and give the

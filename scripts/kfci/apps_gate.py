@@ -114,6 +114,24 @@ MATRIX_BUDGET_DEFAULT_S = 3000
 APPS_MIN_FREE_GB = 60
 
 
+# The fat guest image the Linux apps stages boot, and the directory it lives in. The `apps` gate provisions it (a copy of the base guest.qcow2 plus the app
+# runtime); `scripts/ci/apps_discovery_stage.py` boots the SAME file through apps_image(). The base guest.qcow2 is never a boot target of an apps stage: it has no
+# /opt/apps, and a boot persists writes to its image (2026-11-20, docs/design/V3_STANDALONE_FULL_RUN.md section 4).
+BENCH_DIR_DEFAULT = "/workspace/bench"
+APPS_IMAGE_NAME = "guest_apps.qcow2"
+BASE_IMAGE_NAME = "guest.qcow2"
+
+
+def apps_image(env):
+    """The apps image path for an environment: KF_GUEST_IMG when it is set (the driver matrix's per-version guests), else BENCH_DIR/guest_apps.qcow2."""
+    return env.get("KF_GUEST_IMG") or str(Path(env.get("BENCH_DIR") or BENCH_DIR_DEFAULT) / APPS_IMAGE_NAME)
+
+
+def base_image(env):
+    """The base guest image of BENCH_DIR: what the apps image is copied from, and what no apps stage may boot."""
+    return str(Path(env.get("BENCH_DIR") or BENCH_DIR_DEFAULT) / BASE_IMAGE_NAME)
+
+
 def free_bytes(path):
     """Free bytes of the file system that holds path (or its nearest existing parent)."""
     path = Path(path)
@@ -356,8 +374,8 @@ class AppsGate(Step):
         if poll <= 0:
             raise ValueError("poll interval must be positive")
         root = Path(env.get("KF_APPS_ROOT") or "/workspace/apps")
-        bench = Path(env.get("BENCH_DIR") or "/workspace/bench")
-        env["KF_GUEST_IMG"] = env.get("KF_GUEST_IMG") or str(bench / "guest_apps.qcow2")
+        bench = Path(env.get("BENCH_DIR") or BENCH_DIR_DEFAULT)
+        env["KF_GUEST_IMG"] = apps_image(env)
         matrix = env.get("KF_APPS_MATRIX") or str(apps / "apps_matrix.sh")
         results = root / "results" / tag
         marker = root / "PROVISIONED"
@@ -550,13 +568,13 @@ class AppsGate(Step):
                 if remaining <= 1:
                     return 124
                 copied = ctx.process(
-                    ["cp", "--", str(bench / "guest.qcow2"), str(image)], timeout=remaining
+                    ["cp", "--", str(bench / BASE_IMAGE_NAME), str(image)], timeout=remaining
                 )
                 if copied.returncode:
                     image.unlink(missing_ok=True)  # never leave a partial image that a rerun would trust
                     return copied.returncode if copied.returncode > 0 else 128 - copied.returncode
             # The old sed changes every image= line and preserves all other bytes.
-            staged = (bench / "guest.qcow2.STAGED").read_bytes()
+            staged = (bench / (BASE_IMAGE_NAME + ".STAGED")).read_bytes()
             updated = re.sub(
                 rb"(?m)^image=.*", lambda _: b"image=" + os.fsencode(image), staged
             )

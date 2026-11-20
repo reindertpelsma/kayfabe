@@ -1,6 +1,6 @@
 # Leg B — the USERD naming problem: an independent survey of the solution space (w749)
 
-**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+**STATUS: RESEARCH, 2026-11-20.** Reclassified from LIVE AS A REFERENCE on 2026-11-20 by the freshness gate. This is a w749 survey of a pre-v3 problem (the USERD naming problem); all 45 of its dead references are ogkm file names, which a default checkout does not contain. Nothing in it was re-verified on 2026-11-20. The architecture is `THE_ARCHITECTURE_v3.md` (and `ARCHITECTURE.md`); read this file for its measurements and reasoning, not as a description of the tree. ⊘ Original status line, kept as written: *LIVE AS A REFERENCE, 2026-09-21 (w822).* Cited by `THE_DESIGN.md`, which is the
 current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
 wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
 findings**, and the **reasoning** behind a constraint.

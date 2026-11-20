@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mutation checks of the standalone full run (2026-11-17): every mutant needs two named killers (stdlib, GPU-free).
 
-Each mutant is one exact-once text replacement in a private copy of standalone_full.py, apps_discovery_stage.py, vast_payload.py, vast_report.py or matlab_stage.py
+Each mutant is one exact-once text replacement in a private copy of standalone_full.py, apps_discovery_stage.py, apps_gate.py, vast_payload.py, vast_report.py or matlab_stage.py
 (the whole of scripts/ci and scripts/kfci is copied, plus the harness files the payload imports); the named tests of test_standalone_full.py run against the copy and
 the failing ones are the killers. The unmutated copy must be green first.
 
@@ -25,6 +25,7 @@ FILES = {
     "payload": "scripts/ci/vast_payload.py",
     "report": "scripts/ci/vast_report.py",
     "matlab": "scripts/ci/matlab_stage.py",
+    "gate": "scripts/kfci/apps_gate.py",
 }
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_standalone_full."
@@ -111,13 +112,48 @@ MUTANTS = [
       AD + "test_a_missing_row_is_not_run_never_a_pass", AD + "test_a_missing_guest_row_fails_the_stage_by_name"),
     M("not-run-rows-do-not-fail-a-strict-stage", "ads", '        return "FAIL" if strict else "PARTIAL"', '        return "PARTIAL"',
       AD + "test_ran_and_failed_is_a_breakage_and_not_ran_is_named", AD + "test_a_row_that_did_not_run_fails_the_stage_by_name"),
-    M("the-guest-runs-before-the-host-control", "ads", "    if host_ok:\n        step(\"host\"", "    if False:\n        step(\"host\"",
+    M("the-guest-runs-before-the-host-control", "ads", "            if host_ok:\n                step(\"host\"", "            if False:\n                step(\"host\"",
       AD + "test_the_steps_run_in_order_and_the_host_runs_first_when_it_exists", AD + "test_a_stage_where_every_row_ran_passes_and_names_the_host_control"),
     M("no-bundle-is-not-a-retry", "ads", '        return finish("RETRY", "no_bundle")', '        return finish("PASS", "no_bundle")',
       AD + "test_no_bundle_is_a_retry_and_never_a_pass"),
     M("no-time-left-is-ignored", "ads", "    if deadline and now() + budget > deadline:", "    if False:", AD + "test_not_enough_time_is_a_retry_before_anything_starts"),
     M("unknown-verdict-word-is-a-result", "ads", '            status, reason = "NOT_RUN", "unknown_verdict_" + reason_of(verdict)', '            status, reason = "KNOWN_BREAKAGE", verdict',
       AD + "test_an_unknown_verdict_word_is_not_a_result"),
+    # 2026-11-20 (first run on a box): the stage booted the base image, booted rows the host setup had refused, and graded unjudgeable rows as rows that ran
+    M("the-stage-boots-the-image-itself-writable", "ads", 'APPS_PER_BOOT="1", KF_GUEST_IMG=str(overlay))', 'APPS_PER_BOOT="1", KF_GUEST_IMG=image)',
+      AD + "test_every_step_gets_a_throwaway_overlay_and_never_an_image_itself", AD + "test_the_overlay_is_removed_when_the_stage_ends"),
+    M("the-overlay-step-is-never-run", "ads", 'if step("overlay", ["qemu-img", "create"', 'if 0 and step("overlay", ["qemu-img", "create"',
+      AD + "test_every_step_gets_a_throwaway_overlay_and_never_an_image_itself", AD + "test_the_overlay_is_backed_by_the_apps_image_the_gate_names"),
+    M("the-overlay-is-never-removed", "ads", "    finally:\n        cleanup()\n", "    finally:\n        pass\n",
+      AD + "test_the_overlay_is_removed_when_the_stage_ends", AD + "test_the_overlay_is_removed_when_a_step_raises"),
+    M("the-overlay-is-not-removed-after-an-exception", "ads", "    finally:\n        cleanup()\n", "    except OSError:\n        cleanup()\n",
+      AD + "test_the_overlay_is_removed_when_the_stage_ends", AD + "test_the_overlay_is_removed_when_a_step_raises"),
+    M("a-foreign-kf-guest-img-is-ignored", "ads", "    if (requested and os.path.realpath(requested) != os.path.realpath(image)) or os.path.realpath(image) ==", "    if os.path.realpath(image) ==",
+      AD + "test_a_kf_guest_img_that_names_the_base_image_is_refused_by_name_before_any_boot", AD + "test_any_other_image_in_kf_guest_img_is_refused_too"),
+    M("an-apps-image-linked-to-the-base-is-accepted", "ads", "or os.path.realpath(image) == os.path.realpath(base_image(bench_env)):", ":",
+      AD + "test_an_apps_image_that_is_a_link_to_the_base_image_is_refused", AD + "test_the_link_is_refused_even_when_kf_guest_img_names_the_link_itself"),
+    M("a-missing-apps-image-boots-anyway", "ads", "    if not Path(image).is_file():\n", "    if False:\n",
+      AD + "test_no_apps_image_is_a_retry_before_anything_boots", AD + "test_the_base_guest_alone_is_not_an_apps_image"),
+    M("an-overlay-failure-boots-anyway", "ads", 'return finish("RETRY", "overlay_failed")', "pass",
+      AD + "test_an_overlay_that_could_not_be_made_is_a_retry_and_nothing_boots", AD + "test_an_overlay_failure_is_a_retry_in_the_payload_grader"),
+    M("the-driver-receipt-is-not-copied-to-the-overlay", "ads", '                shutil.copyfile(receipt, str(overlay) + ".STAGED")', "                pass",
+      AD + "test_the_boot_helper_finds_the_driver_receipt_beside_the_overlay", AD + "test_the_receipt_beside_the_overlay_is_a_copy_of_the_images_own"),
+    M("the-apps-image-is-the-base-image", "gate", "/ APPS_IMAGE_NAME)", "/ BASE_IMAGE_NAME)",
+      AD + "test_the_apps_gate_names_the_image_in_one_place", AD + "test_every_step_gets_a_throwaway_overlay_and_never_an_image_itself"),
+    M("refused-rows-are-booted", "ads", "        boot_rows = tuple(r for r in rows if r not in refused)", "        boot_rows = tuple(rows)",
+      AD + "test_rows_the_host_setup_refused_are_not_booted_and_say_why", AD + "test_when_every_row_is_refused_nothing_boots_and_the_stage_fails_by_name"),
+    M("a-refusal-loses-its-reason", "ads", '            out[row] = (re.sub(r"[^A-Za-z0-9_.:=<>-]+", "_", tidy).strip("_")[:80]) or "setup_refused"', '            out[row] = "setup_refused"',
+      AD + "test_setup_refusals_are_read_with_their_real_reason", AD + "test_rows_the_host_setup_refused_are_not_booted_and_say_why"),
+    M("a-failed-setup-counts-as-a-refusal", "ads", 'if status == "NOT_RUN" and row in rows and row in ML_ROWS:', 'if status in ("NOT_RUN", "FAIL") and row in rows and row in ML_ROWS:',
+      AD + "test_only_a_refusal_is_a_refusal", AD + "test_a_setup_that_failed_is_not_a_refusal_the_guest_names_it"),
+    M("all-rows-refused-is-a-retry", "ads", "        if boot_rows and not guest:", "        if not guest:",
+      AD + "test_when_every_row_is_refused_nothing_boots_and_the_stage_fails_by_name", AD + "test_all_refused_is_a_failure_of_the_record_and_never_a_retry"),
+    M("a-config-row-is-a-breakage", "ads", '        elif verdict == "FAIL" and note.startswith(CONFIG_NOTE):', "        elif False:",
+      AD + "test_a_config_row_is_not_run_and_never_a_breakage", AD + "test_a_config_row_fails_the_stage_by_name"),
+    M("a-hang-without-a-result-is-a-breakage", "ads", '        elif verdict == "HANG" and NO_RESULT_NOTE in note:', "        elif False:",
+      AD + "test_a_hang_without_a_result_line_is_not_run_and_a_dead_guest_is_not", AD + "test_a_hang_without_a_result_line_fails_the_stage_by_name"),
+    M("a-dead-guest-is-not-run", "ads", '        elif verdict == "HANG" and NO_RESULT_NOTE in note:', '        elif verdict in ("HANG", "GUEST_DEAD") and NO_RESULT_NOTE in note:',
+      AD + "test_a_hang_without_a_result_line_is_not_run_and_a_dead_guest_is_not", AD + "test_a_dead_guest_is_a_listed_breakage_in_the_stage"),
     M("row-bound-back-to-nineteen", "report", "MAX_SUITE_ROWS = 32", "MAX_SUITE_ROWS = 19", MF + "test_the_result_row_bound_fits_one_full_run", RV + "test_the_reader_takes_twenty_five_rows_one_full_run_reports"),
     M("full-record-with-skip-says-complete-is-accepted", "report", 'ok = ok and (not value["complete"] or not value["skipped"])', "pass", RV + "test_full_record_is_accepted_and_bad_ones_are_not"),
     M("open-rows-record-with-a-not-run-row-is-accepted", "report", 'ok = ok and value["passed"] <= value["ran"] <= value["expected"]', "pass", RV + "test_windows_open_rows_record"),
