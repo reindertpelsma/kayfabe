@@ -1,6 +1,6 @@
 # V3 refusal audit — every non-OK status kf3 returns where bare metal returns OK
 
-**STATUS: LIVE, 2026-09-26.** Measured on `vrf` (vast 52742480, RTX 3090 **GA102**, host
+**STATUS: ANSWERED, 2026-11-20.** Reclassified from LIVE on 2026-11-20 by the freshness gate. This is a measured audit at a fixed revision (`393012fd`, below): the question it answered (which statuses kf3 returns where bare metal returns OK) was answered then, and it is cited by `V3_GFX_TESTSET.md`, `V3_CDP.md` and `docs/STATUS_DETAIL.md` as that record. Its dead references are nine ogkm files and one selftest script that now lives at `archive/nvkvm/tests/mode2/nvdiff/nvd_selftest.sh`. It was not re-measured on a later revision. ⊘ Original status line, kept as written: *LIVE, 2026-09-26.* Measured on `vrf` (vast 52742480, RTX 3090 **GA102**, host
 `580.159.04`, guest `580.159.04`). Baseline kf3 `131f4841` (= v3-mapfix `56032c46` + the refusal
 ledger, which only logs); fixes first measured at `f8e6a513`; branch `v3-refusals` then rebased
 onto master `dd3aed08` (which had meanwhile landed v3-mapfix and v3-blackwell) as `393012fd` and

@@ -1,6 +1,6 @@
 # w750 PRE-REGISTRATION — route K, phase 1: the birth-client probe
 
-**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+**STATUS: RESEARCH, 2026-11-20.** Reclassified from LIVE AS A REFERENCE on 2026-11-20 by the freshness gate. This is the pre-registration of a w750 experiment on the pre-v3 tree: 16 of its 18 dead references are ogkm file names, the other two are a branch name (`w750-route-k`) and an all-caps name `K_S_CAPS_SYSADMIN`; no ref of that name exists in this clone, and the all-caps name was not checked. Nothing in it was re-verified on 2026-11-20. The architecture is `THE_ARCHITECTURE_v3.md` (and `ARCHITECTURE.md`); read this file for its measurements and reasoning, not as a description of the tree. ⊘ Original status line, kept as written: *LIVE AS A REFERENCE, 2026-09-21 (w822).* Cited by `THE_DESIGN.md`, which is the
 current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
 wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
 findings**, and the **reasoning** behind a constraint.
