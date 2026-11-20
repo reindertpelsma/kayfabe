@@ -1,6 +1,6 @@
 # ogkm residue — what NVIDIA left behind about monolithic RM, pre-Turing, and Windows
 
-**STATUS: LIVE, 2026-09-20 (w821).** `[owner]` *"Worth digging ogkm source so we get any leftover
+**STATUS: RESEARCH, 2026-11-20.** Reclassified from LIVE (2026-09-20, w821) on 2026-11-20 by the freshness gate. This is a survey of an external, pinned source (`third_party/ogkm`, 610.43.02), not a description of the kayfabe tree. Every file name and line number in it points into that submodule, which is not initialised in a default checkout; `scripts/ci/doc_freshness.py` therefore cannot resolve them, and they were **not** re-verified on 2026-11-20. The findings stand at the revision surveyed; their design consequences are carried by `THE_V3_PLAN.md` and `V3_P4_PORT_MAP.md`, which cite this document (§3 obligations 1-3, §5). `[owner]` *"Worth digging ogkm source so we get any leftover
 for either Windows behaviour or non-GSP behaviour, and record it. The rest is nouveau."*
 Surveyed against 610.43.02 with 580.159.04 as the delta reference.
 

@@ -57,6 +57,14 @@ export function plannedStages(instruction, { only = [], skip = [] } = {}) {
   return names;
 }
 
+// --only / --skip over a plan: the same rule as select_stages in scripts/ci/vast_payload.py.
+export const selectStages = (plan, { only = [], skip = [] } = {}) =>
+  plan.filter((n) => (!only.length || only.includes(n)) && !skip.includes(n));
+// The stages a leg of `tier` will run (2026-11-20): plannedStages of the leg's instruction, then the payload's --only/--skip.
+// The tier is the only instruction field the kfml stage depends on; the offer policy reads this list (policy.js kfmlOversubRuns).
+export const legStages = (tier, options = {}) =>
+  selectStages(plannedStages({ tier }, options), options);
+
 const matches = (when, ctx) =>
   when === undefined ||
   Object.entries(when).every(([key, list]) => {
@@ -107,7 +115,7 @@ export function estimateBandwidth(instruction, tier, options = {}) {
   const plan = plannedStages(instruction, { only });
   for (const name of [...only, ...skip])
     if (!plan.includes(name)) throw Error('bandwidth stage:' + name);
-  const chosen = plan.filter((n) => (!only.length || only.includes(n)) && !skip.includes(n));
+  const chosen = selectStages(plan, { only, skip });
   for (const name of chosen)
     if (!isObject(table.stages[name])) throw Error('bandwidth table stage:' + name);
   const sent = (instruction.propimages ?? []).map((img) => img.label);
