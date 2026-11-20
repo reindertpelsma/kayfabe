@@ -47,13 +47,19 @@ if str(HERE.parent) not in sys.path:
     sys.path.insert(0, str(HERE.parent))        # scripts/: the kfci package (stdlib only); the apps image is named in ONE place, kfci/apps_gate.py
 from kfci.apps_gate import apps_image, base_image  # noqa: E402
 
+OPEN_ROWS = HERE.parent / "apps" / "open_rows"
+if str(OPEN_ROWS) not in sys.path:
+    sys.path.insert(0, str(OPEN_ROWS))          # the row's own parsers (stdlib only): the host control is read with the code that wrote it
+import nvcodec_lib as nvl  # noqa: E402
+import rowio  # noqa: E402
+
 ROWS = ("nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm", "tensorrt", "jax")
 # the row's own timeout in scripts/apps/run_apps.sh, in seconds (a stage budget is the sum of them, per side)
 ROW_TIMEOUT_S = {"nvcodec_matrix": 3000, "nvml_dcgm": 3300, "vkcts": 2700, "vllm": 1800, "tensorrt": 1500, "jax": 1200}
 ML_ROWS = ("vllm", "tensorrt", "jax")
 APPS_ROOT = "/workspace/apps"
 HOST_BUNDLE = "/opt/apps/bundle"
-STEP_TIMEOUT_S = {"build_vkcts": 3600, "python312": 6000, "setup_mlrows": 3600, "overlay": 300, "host": 4 * 3600, "guest": 6 * 3600}   # python312: above the sum of private_python.TIMEOUT_S, so its own timeouts fire first
+STEP_TIMEOUT_S = {"build_vkcts": 3600, "python312": 6000, "setup_mlrows": 3600, "overlay": 300, "nvcodec_provision": 1800, "nvcodec_control": 1800, "host": 4 * 3600, "guest": 6 * 3600}   # python312: above the sum of private_python.TIMEOUT_S, so its own timeouts fire first
 RAN = {"PASS", "FAIL", "TIMEOUT", "HANG", "GUEST_DEAD", "BOOT_FAIL"}
 NOT_RAN = {"NOTRUN"}
 APPRES = re.compile(r"^APPRES side=(host|guest) app=([A-Za-z0-9_]{1,40}) verdict=([A-Z_]{1,16}) .*?note=(.*)$")
@@ -63,6 +69,19 @@ SAFE = re.compile(r"[A-Za-z0-9_.:=-]{1,80}")
 SETUP_LINE = re.compile(r"^MLROWS_SETUP row=([a-z]{1,20}) status=(\S{1,20}) reason=(\S*)$", re.M)
 # what `private_python.py ensure` prints (its cmd_ensure; kv() turns spaces into underscores)
 PYTHON_LINE = re.compile(r"^PRIVATE_PYTHON status=(\S{1,20}) reason=(\S{0,160}) version=\S+ python=\S+$", re.M)
+# the host control of nvcodec_matrix (2026-11-20): its own root below the apps root (the probe is built there; nothing of the apps bundle is used), and the vocabulary of its comparison
+NVCODEC = "nvcodec_matrix"
+CONTROL_DIR = "nvcodec_control"
+CONTROL_STEPS = ("nvcodec_provision", "nvcodec_control")
+CONTROL_ENV_DROPPED = ("KF_GUEST_IMG", "BENCH_DIR")         # the control never sees an image or the directory that holds one
+GUEST_FAILED = ("FAIL", "MISMATCH")                         # what a guest case that failed says (nvcodec_lib RESULTS)
+HOST_RAN = ("PASS", "FAIL", "MISMATCH")                     # a host case with one of these results was really attempted
+CLASS_ORDER = ("GUEST_ONLY", "UNCLASSIFIED", "AGREEMENT")   # the most telling first: a row takes the first class any of its failing cases has
+MAX_FINDINGS = 8
+MAX_TABLE_ROWS = 200
+GUEST_LOG_TAIL = 1 << 20                                    # the guest's log is the guest's: only its last MiB is read, where the emitted results.tsv block is
+PROVISION_FAIL = re.compile(r"^OPENROWS_(nvcodec_probe|ffmpeg)=FAIL reason=(\S*)$", re.M)
+TABLE_COLUMNS = ("case_id", "host_expect", "host", "host_reason", "guest_expect", "guest", "guest_reason", "class")
 # a vkcts row whose note says CONFIG did not exercise a GPU (vkcts.py APPNOTE); a HANG note from apps_hook.sh says no result line came back
 CONFIG_NOTE = "CONFIG"
 NO_RESULT_NOTE = "no-result-line"
@@ -109,8 +128,90 @@ def private_python_summary(text, rc):
     return re.sub(r"[^A-Za-z0-9_.:=<>-]+", "_", "%s:%s" % (status, reason))[:100]
 
 
-def grade(rows, guest, host=None, dcgm_text="", refused=None):
-    """The stage record. `guest` and `host` are read_res() dicts; `refused` is {row: reason} for rows that were never booted. Pure."""
+def tidy(text, limit=40):
+    return re.sub(r"[^A-Za-z0-9_.:=-]+", "_", str(text or "")).strip("_")[:limit] or "unspecified"
+
+
+def safe_case(case_id):
+    """A case id as the record's validator reads one: lower case, digits and underscores, starting with a letter, at most 40 characters (the guest's output is the guest's)."""
+    name = re.sub(r"[^a-z0-9_]+", "_", str(case_id).lower()).strip("_")[:40]
+    return name if name[:1].isalpha() else ("c_" + name)[:40]
+
+
+def classify_case(host, guest):
+    """-> (class, why) of ONE case that FAILED in the guest. `guest` is its results row, `host` the control's row of the same case or None.
+    GUEST_ONLY: the host passes it (a gap of kayfabe). AGREEMENT: the host fails it too (not a statement about kayfabe). UNCLASSIFIED: the host could not judge it
+    (not run, not supported, not listed): the failure stays an ordinary breakage and the host's own word is the `why`."""
+    if host is None:
+        return "UNCLASSIFIED", "host_case_missing"
+    h, g = host["result"], guest["result"]
+    if h == "PASS":
+        return "GUEST_ONLY", "host_pass"
+    if h in GUEST_FAILED:
+        return "AGREEMENT", "host_" + h.lower()
+    if h == "NOT_RUN":
+        return "UNCLASSIFIED", "host_not_run:" + tidy(host.get("reason"))
+    return "UNCLASSIFIED", "host_%s_guest_%s" % (h.lower(), g.lower())
+
+
+def host_control_state(provision_text, provision_rc, results_text, control_rc):
+    """What the control on the bare host amounted to. -> {status ran|NOT_RUN, reason, rows, verdict}. NOT_RUN names the real reason: the stock ffmpeg or the probe could
+    not be provided (provision.sh's own OPENROWS_ lines), the provisioning died, the matrix wrote no results, or no case was attempted at all (no NVENC: the cases' own reason)."""
+    failed = dict(PROVISION_FAIL.findall(provision_text or ""))
+    if "ffmpeg" in failed:
+        return {"status": "NOT_RUN", "reason": "no_ffmpeg:" + tidy(failed["ffmpeg"]), "rows": [], "verdict": "-"}
+    if "nvcodec_probe" in failed:
+        return {"status": "NOT_RUN", "reason": "no_probe:" + tidy(failed["nvcodec_probe"]), "rows": [], "verdict": "-"}
+    if provision_rc:
+        return {"status": "NOT_RUN", "reason": "provision_failed_rc%d" % provision_rc, "rows": [], "verdict": "-"}
+    rows = nvl.parse_results(results_text)[:MAX_TABLE_ROWS] if results_text else []
+    if not rows:
+        return {"status": "NOT_RUN", "reason": "no_results_rc%s" % control_rc, "rows": [], "verdict": "-"}
+    if not any(r["result"] in HOST_RAN for r in rows):
+        counts = {}
+        for r in rows:
+            counts[tidy(r["reason"])] = counts.get(tidy(r["reason"]), 0) + 1
+        return {"status": "NOT_RUN", "reason": "no_case_ran:" + max(sorted(counts), key=counts.get), "rows": rows, "verdict": "-"}
+    verdict = "FAIL" if any(r["result"] in GUEST_FAILED for r in rows) else "PASS"
+    return {"status": "ran", "reason": "", "rows": rows, "verdict": verdict}
+
+
+def compare_with_guest(control, guest_rows):
+    """The control with the per-case table (host next to guest) and the findings, from the guest's results rows. Pure."""
+    host = {r["case_id"]: r for r in control["rows"]}
+    guest = {r["case_id"]: r for r in guest_rows[:MAX_TABLE_ROWS]}
+    table, findings = [], []
+    for cid in list(guest) + [c for c in host if c not in guest]:
+        h, g = host.get(cid), guest.get(cid)
+        cls, why = classify_case(h, g) if g is not None and g["result"] in GUEST_FAILED else ("-", "")
+        table.append({"case_id": cid, "host_expect": h["expect"] if h else "-", "host": h["result"] if h else "-", "host_reason": h["reason"] if h else "-",
+                      "guest_expect": g["expect"] if g else "-", "guest": g["result"] if g else "-", "guest_reason": g["reason"] if g else "-", "class": cls})
+        if cls != "-":
+            findings.append({"case": safe_case(cid), "guest": g["result"], "host": h["result"] if h else "-", "class": cls, "why": why})
+    findings.sort(key=lambda f: CLASS_ORDER.index(f["class"]))              # a stable sort: the telling ones survive the bound
+    cls = next((c for c in CLASS_ORDER if any(f["class"] == c for f in findings)), "")
+    return dict(control, table=table, findings=findings, count=len(findings), cls=cls)
+
+
+def table_tsv(table):
+    def cell(v):
+        return re.sub(r"[\t\r\n]+", " ", str(v or "-"))[:100]
+    return "\t".join(TABLE_COLUMNS) + "\n" + "".join("\t".join(cell(r[c]) for c in TABLE_COLUMNS) + "\n" for r in table)
+
+
+def read_tail(path, limit):
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - limit))
+            return f.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+
+
+def grade(rows, guest, host=None, dcgm_text="", refused=None, control=None):
+    """The stage record. `guest` and `host` are read_res() dicts; `refused` is {row: reason} for rows that were never booted; `control` is the host control of
+    nvcodec_matrix (host_control_state, then compare_with_guest): a guest row that failed is explained by it per case. Pure."""
     entries, not_run, breakages = [], [], []
     for name in rows:
         verdict, note = guest.get(name, (None, ""))
@@ -132,17 +233,28 @@ def grade(rows, guest, host=None, dcgm_text="", refused=None):
             status, reason = "KNOWN_BREAKAGE", verdict
         else:
             status, reason = "NOT_RUN", "unknown_verdict_" + reason_of(verdict)
+        if not host_verdict and name == NVCODEC and control and control["status"] == "ran":
+            host_verdict = control["verdict"]                    # the apps_matrix host side wins when it ran; else the control's own verdict of the row
+        explained = name == NVCODEC and status == "KNOWN_BREAKAGE" and verdict == "FAIL" and bool(control and control.get("findings"))
+        if explained:
+            n = control["count"]
+            if control["cls"] == "AGREEMENT":
+                status, reason = "PASS", "agrees_with_host:%d_failing_case%s" % (n, "" if n == 1 else "s")     # the host fails them too: not a breakage of kayfabe
+            elif control["cls"] == "GUEST_ONLY":
+                reason = "host-capable,guest-fails"
         if status == "NOT_RUN":
             not_run.append(name)
         if status == "KNOWN_BREAKAGE":
             breakages.append(name)
         entry = {"name": name, "status": status, "guest": verdict or "-", "host": host_verdict or "-", "reason": reason}
+        if explained:
+            entry["class"], entry["findings"] = control["cls"], control["findings"][:MAX_FINDINGS]
         if name == "nvml_dcgm" and status == "PASS":
             state = DCGM_STATE.search(dcgm_text)
             if state:
                 entry["dcgm"] = state.group(1)
         entries.append(entry)
-    return {"rows": entries, "not_run": not_run, "breakages": breakages, "host_control": "present" if host else "absent"}
+    return {"rows": entries, "not_run": not_run, "breakages": breakages, "host_control": "present" if host or (control and control["status"] == "ran") else "absent"}
 
 
 def verdict_of(record, strict=True):
@@ -175,7 +287,10 @@ def plan(rows=ROWS):
         steps.append("build_vkcts")
     if any(r in rows for r in ML_ROWS):
         steps += ["python312", "setup_mlrows"]         # the private Python 3.12 first (a host whose Python is already inside the pinned range builds nothing), then the venvs
-    steps += ["overlay", "host", "guest"]          # the throwaway overlay of the apps image first; the host control only when the host side of the matrix is installed
+    steps.append("overlay")                         # the throwaway overlay of the apps image first
+    if NVCODEC in rows:
+        steps += list(CONTROL_STEPS)               # the nvcodec host control: the bare host, stock ffmpeg, no bundle and no image; before any boot
+    steps += ["host", "guest"]                      # the apps_matrix host side only when it is installed
     return {"rows": list(rows), "steps": steps, "budget_s_per_side": sum(ROW_TIMEOUT_S[r] for r in rows)}
 
 
@@ -232,8 +347,8 @@ def run(args, runner=real_runner, known=None, now=time.time, host_bundle=HOST_BU
     log_dir = result_dir.parent
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    def step(name, argv, key):
-        s = run_step(runner, name, argv, env, log_dir, STEP_TIMEOUT_S[key])
+    def step(name, argv, key, step_env=None):
+        s = run_step(runner, name, argv, env if step_env is None else step_env, log_dir, STEP_TIMEOUT_S[key])
         steps.append(s)
         return s["rc"]
 
@@ -264,7 +379,7 @@ def run(args, runner=real_runner, known=None, now=time.time, host_bundle=HOST_BU
         # a row the host setup refused has no venv to run in: booting it costs a boot per row (about 26 minutes for two rows on 2026-11-20) to learn what setup already said
         boot_rows = tuple(r for r in rows if r not in refused)
         host_ok = Path(host_bundle).is_dir()
-        guest, host, guest_rc, dcgm_text = {}, None, None, ""
+        guest, host, guest_rc, dcgm_text, control = {}, None, None, "", None
         if boot_rows:
             # the guest boots THIS file, writable, and every boot of the stage lands in it: a child of the apps image, which no boot touches. The boot helper reads the driver
             # receipt `<image>.STAGED` beside the path it is given, so the child carries a copy (an image without one is refused by name there, as the apps image would be)
@@ -274,16 +389,34 @@ def run(args, runner=real_runner, known=None, now=time.time, host_bundle=HOST_BU
             receipt = Path(image + ".STAGED")
             if receipt.is_file():
                 shutil.copyfile(receipt, str(overlay) + ".STAGED")
+            if NVCODEC in boot_rows:
+                # the HOST CONTROL (2026-11-20), before any guest boot: the row's own matrix on the bare host through the distribution's ffmpeg. It needs no apps bundle (the probe is
+                # built into its own root by provision.sh, the two steps it asks for) and never sees an image: its environment has no KF_GUEST_IMG and no BENCH_DIR
+                ctl_root, ctl_out = args.apps_root + "/" + CONTROL_DIR, result_dir / "nvcodec_host"
+                ctl_env = {k: v for k, v in env.items() if k not in CONTROL_ENV_DROPPED}
+                rc_p = step("nvcodec_provision", ["bash", str(apps / "open_rows/provision.sh"), ctl_root, "nvcodec_probe ffmpeg"], "nvcodec_provision", ctl_env)
+                provision_text = read_tail(log_dir / "nvcodec_provision.log", 20000)
+                rc_c, results_text = None, None
+                if rc_p == 0 and not PROVISION_FAIL.search(provision_text):          # the stock ffmpeg and the probe are there: run the matrix; else there is nothing to run it with
+                    rc_c = step("nvcodec_control", ["python3", "-B", "-I", str(apps / "open_rows/nvcodec_matrix.py"), "run", "--out", str(ctl_out),
+                                                    "--probe", ctl_root + "/bin/nvcodec_probe"], "nvcodec_control", ctl_env)
+                    results_text = read_tail(ctl_out / "results.tsv", 200000) or None
+                control = host_control_state(provision_text, rc_p, results_text, rc_c)
+                record["nvcodec_host_control"] = "ran" if control["status"] == "ran" else "NOT_RUN:" + control["reason"]
             if host_ok:
                 step("host", ["bash", str(apps / "apps_matrix.sh"), "host", args.run_id, *boot_rows], "host")
             guest_rc = step("guest", ["bash", str(apps / "apps_matrix.sh"), "guest", args.run_id, *boot_rows], "guest")
             guest = read_res(result_dir / "guest_isolated.res", result_dir / "guest.res")
+            if control and control["status"] == "ran":
+                # the host's verdict per case next to the guest's (the guest's results.tsv is in its log between @@FILE markers, rowio): a TSV beside the logs, findings in the record
+                control = compare_with_guest(control, nvl.parse_results(rowio.extract(read_tail(result_dir / "nvcodec_matrix.guest.log", GUEST_LOG_TAIL)).get("results.tsv", "")))
+                (result_dir / "nvcodec_host_vs_guest.tsv").write_text(table_tsv(control["table"]))
             host = read_res(result_dir / "host.res") if host_ok else None
             try:
                 dcgm_text = (result_dir / "nvml_dcgm.guest.log").read_text(errors="replace")[-20000:]
             except OSError:
                 pass
-        graded = grade(rows, guest, host, dcgm_text, refused)
+        graded = grade(rows, guest, host, dcgm_text, refused, control)
         record.update(graded)
         if boot_rows and not guest:
             return finish("RETRY", "no_guest_results", {"guest_rc": guest_rc})

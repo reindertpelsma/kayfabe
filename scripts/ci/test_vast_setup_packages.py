@@ -110,6 +110,19 @@ missing_tool=$1 apt_trace=$2 KF_PROVISION_PROFILE=ci
 
         self.assertFalse(extra & set(vast_setup.package_names(ROOT)))
 
+    def test_nvcodec_control_is_the_distribution_ffmpeg_the_open_rows_provisioning_installs_and_no_other_profile_holds_it(self):
+        """The host control of nvcodec_matrix (apps_discovery_stage.py) runs provision.sh of the open rows with the steps `nvcodec_probe ffmpeg`; its ffmpeg step is
+        `apt_install ffmpeg`. This profile is the package policy's name for that package. Like pybuild it is NOT in vast_setup.package_names yet (the cache digest moves)."""
+        self.assertEqual(self.plan("nvcodec_control"), ["ffmpeg"])
+        for profile in ("ci", "full", "bench", "windows", "apps", "pybuild"):
+            self.assertNotIn("ffmpeg", self.plan(profile), profile)
+        provision = (ROOT / "scripts/apps/open_rows/provision.sh").read_text()
+        self.assertIn("apt_install ffmpeg", provision)
+        sys.path.insert(0, str(ROOT / "scripts/ci"))
+        import vast_setup
+
+        self.assertNotIn("ffmpeg", vast_setup.package_names(ROOT))
+
     def test_the_private_python_reads_its_dependencies_from_this_profile_and_nothing_else_names_them(self):
         text = (ROOT / "scripts/apps/mlrows/private_python.py").read_text()
         self.assertIn('PACKAGE_PROFILE = "pybuild"', text)
