@@ -1908,7 +1908,7 @@ class TrustPins(unittest.TestCase):
 
 
 
-# ------------------------------------------------------------------------------------------------ 2026-11-20: a private Python 3.12 for the host (docs/design/V3_OPEN_ML_ROWS.md section 3a)
+# ------------------------------------------------------------------------------------------------ A private Python 3.12 for the host (docs/design/V3_OPEN_ML_ROWS.md section 3a)
 import private_python as pp                      # noqa: E402  the module mlrows.py imports (scripts/apps/mlrows is on sys.path)
 import tarfile                                   # noqa: E402
 
@@ -2339,7 +2339,7 @@ class PrivatePython(unittest.TestCase):
         e = entry[pp.ARTIFACT]
         a = e["anchors"][0]
         self.assertEqual((a["class"], a["scope"], a["status"], a["pin_origin"]), ("upstream-pin", "source", "MEASURED", "measured-from-upstream"))
-        self.assertEqual(kt.confirmation(a), "owner-confirmed")                       # a SOURCE pin: not one of the binaries that await the owner
+        self.assertEqual(kt.confirmation(a), "owner-confirmed")                       # a SOURCE pin: not one of the binaries that await confirmation
         self.assertEqual((e["kind"], e["routing"], e["consumers"]), ("file", "helper", ["scripts/apps/mlrows/private_python.py"]))
         self.assertEqual(e["origin"], "https://www.python.org/ftp/python/%s/Python-%s.tgz" % (pp.PY_VERSION, pp.PY_VERSION))
         self.assertTrue(a["pin_source_url"].startswith("https://www.python.org/downloads/release/python-312"))

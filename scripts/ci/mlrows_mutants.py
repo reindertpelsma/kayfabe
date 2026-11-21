@@ -215,7 +215,7 @@ MUTANTS = [
     M("matrix-does-not-compare", "matrix", 'python3 -B -I "$HERE/mlrows/mlrows.py" compare "$row" "$R/$row.host.log" "$R/$row.guest.log" > "$R/$row.compare.txt" 2>&1;', ': "$R/$row.host.log" "$R/$row.guest.log" > "$R/$row.compare.txt" 2>&1;',
       MW + "test_the_shell_glue_pushes_sets_up_and_compares_the_rows", MW + "test_the_matrix_compares_host_and_guest_for_each_row_after_the_guest_runs"),
 
-    # 2026-11-20: the private Python 3.12 of the host (private_python.py) and the interpreter choice (mlrows.py)
+    # The private Python 3.12 of the host (private_python.py) and the interpreter choice (mlrows.py)
     M("private-python-is-shared", "pp", '["./configure", "--prefix=" + str(prefix), "--with-ensurepip=no"]', '["./configure", "--prefix=" + str(prefix), "--with-ensurepip=no", "--enable-shared"]',
       PP + "test_the_recipe_is_a_private_static_altinstall_with_the_prefix_derived_from_one_constant", PP + "test_a_build_runs_the_steps_in_order_and_writes_the_marker_last"),
     M("altinstall-becomes-install", "pp", '("install", ["make", "altinstall"], src)', '("install", ["make", "install"], src)',
