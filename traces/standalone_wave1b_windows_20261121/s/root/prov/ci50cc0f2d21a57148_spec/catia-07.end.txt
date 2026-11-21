@@ -1,0 +1,1 @@
+SPECRUN_END workload=catia-07 rc=0 start=2026-11-21T17:16:50Z end=2026-11-21T17:42:25Z secs=1535
