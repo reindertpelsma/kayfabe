@@ -253,7 +253,7 @@ pub trait RmObjects: Send {
     /// [`ObjectsRefusal`], by name.
     fn page_dir(&mut self, st: PageDirStatement) -> Result<(), ObjectsRefusal>;
 
-    /// ★ OWNER_RULINGS §U: a class-5080 registration control (`ctl`) on `(client, object)` —
+    /// A class-5080 registration control (`ctl`) on `(client, object)` returns
     /// the status the GSP answers, or `None` when this seat holds no deferred-API tables (the
     /// control then falls through and is refused as before). Default: no tables.
     fn deferred_api(
@@ -280,8 +280,8 @@ pub struct GraphObjects {
     pub graph: RmGraph,
     ram: Option<std::sync::Arc<dyn crate::memory_list::GuestRamAuthority>>,
     fb: Option<kf_chip::bar0::FbLayout>,
-    /// ★ OWNER_RULINGS §U: the VM's deferred-API tables (shared with the channel plane, which
-    /// looks entries up at the trigger). `None`: 5080 controls fall through, refused as before.
+    /// The VM's deferred-API tables, shared with the channel plane, which
+    /// looks entries up at the trigger. `None`: 5080 controls fall through, refused as before.
     deferred: Option<std::sync::Arc<crate::defapi::Registry>>,
     fifo_update_filter: Option<std::sync::Arc<dyn crate::defapi::FifoUpdateFilter>>,
 }
@@ -352,7 +352,7 @@ impl GraphObjects {
         }
     }
 
-    /// ★ OWNER_RULINGS §U: serve the class-5080 registration controls into `registry` (the
+    /// Serve the class-5080 registration controls into `registry` (the
     /// device's one registry, shared with the channel plane).
     #[must_use]
     pub fn with_deferred_api(mut self, registry: std::sync::Arc<crate::defapi::Registry>) -> Self {
@@ -771,7 +771,7 @@ fn refusal_reply(r: BridgeRefusal) -> Reply {
 pub struct ObjectPolicy {
     bridge: Bridge,
     objects: Box<dyn RmObjects>,
-    /// ★ OWNER_RULINGS §U: the deferred-API surface at the served version (`None` where the
+    /// The deferred-API surface at the served version (`None` where the
     /// matrix does not measure it — its controls then fall through, refused as before).
     defapi: Option<kf_abi::defapi::DefApiAbi>,
     /// 5080 controls served (for the bounded log).
@@ -840,7 +840,7 @@ impl ObjectPolicy {
         self
     }
 
-    /// ★ OWNER_RULINGS §U — a class-5080 registration control, served from the object graph's
+    /// A class-5080 registration control, served from the object graph's
     /// tables (`crate::defapi`): `NV_OK` with the params echoed (what the real GSP answered
     /// `[measured: the 2026-10-05 VFIO boots 8/9/10]`), or the real body's status. `None`: not a 5080 control this seat
     /// serves (no tables, not permitted at this boundary) — it falls through as before.

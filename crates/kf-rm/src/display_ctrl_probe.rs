@@ -1,7 +1,7 @@
 //! ⚠⚠ **FABRICATED ANSWER, now PRODUCT behaviour for a declared Windows guest (2026-11-15).** Was the
 //! default-off `KF3_DISPLAY_CTRL_PROBE` ([`DisplayCtrlProbe`] only; the private/HDMI/XBAR probes below are
-//! still opt-in diagnostics). Part of the Windows support profile ([`crate::winprofile`], `OWNER_RULINGS.md`
-//! §W 2026-11-15): the chain seats it behind [`crate::winprofile::WindowsOnly`], so it answers nothing for a
+//! still opt-in diagnostics). Part of the Windows support profile ([`crate::winprofile`]): the
+//! chain seats it behind [`crate::winprofile::WindowsOnly`], so it answers nothing for a
 //! Linux guest, for no declaration, or with `windows-support=off`. The text below is the 2026-10-08 probe's.
 //!
 //! 2026-10-08 (Windows 580.88, H-modeset): `[measured, run53 at 80169b57 and run55 at a88764b3,

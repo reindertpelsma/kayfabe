@@ -1,5 +1,5 @@
 //! ★ **GPU utilisation reported to the guest** — the `report-utilization` device property, default ON
-//! (`docs/design/V3_UTILIZATION_FLAG.md`, `docs/OWNER_RULINGS.md` §AV, owner decision 2026-11-17).
+//! (see `docs/design/V3_UTILIZATION_FLAG.md`).
 //!
 //! STATUS: LIVE, 2026-11-17 (GPU-free; **not run on hardware**: every hypothesis and its falsifier is in the
 //! design doc, section 9).

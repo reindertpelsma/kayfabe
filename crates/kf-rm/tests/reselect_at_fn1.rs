@@ -1,4 +1,4 @@
-//! ★★ Re-selection at fn 1 (`docs/design/V3_DRIVER_MATRIX.md` §4.2, owner ruling 6): a device
+//! ★★ Re-selection at fn 1 (`docs/design/V3_DRIVER_MATRIX.md` §4.2): a device
 //! whose guest version was DEFAULTED rebuilds its chain for the guest's own version when the
 //! pair's pre-fn-1 surface is identical, and refuses by name otherwise; a DECLARED version is
 //! never overridden.
