@@ -470,7 +470,7 @@ fn a_refused_subrange_unmap_desyncs_walker_and_host() {
 /// ONE MAP run: kept part 1..16 (unchanged) + new part 16..20 (refused). The run is FAILED, and the
 /// apply's "take its kept part down too" unmaps the 15 UNCHANGED pages — they are transiently AND
 /// persistently unmapped while the guest has the bad extension (hardware keeps them valid; a bad
-/// leaf must not damage its neighbours, owner rule (1)/(3), OWNER_RULINGS §AA).
+/// leaf must keep its neighbours accessible).
 // FAILED at 6fafcc6e; passes since the review fixes (2026-10-10) — in the default suite.
 #[test]
 fn a_refused_extension_takes_down_unchanged_neighbours() {
@@ -517,7 +517,7 @@ fn a_refused_extension_takes_down_unchanged_neighbours() {
 
 // ─── 3. leaf-size change with identical translation ────────────────────────────────────────────
 
-/// ★ FINDING 3 (MEDIUM, needs an owner ruling). The guest re-expresses sixteen 4 KiB leaves as one
+/// ★ FINDING 3 (MEDIUM). The guest re-expresses sixteen 4 KiB leaves as one
 /// 64 KiB leaf over the SAME backing (or back): every VA translates identically before and after.
 /// `same_mapping` keys on the leaf size, so all 16 VAs are unmapped then re-mapped — inside a
 /// guest RESERVATION too, where the host mapping unit is the row, not the leaf, and nothing forces
