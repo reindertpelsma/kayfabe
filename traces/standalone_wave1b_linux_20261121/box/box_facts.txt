@@ -1,0 +1,26 @@
+== date 2026-11-21T13:48:01Z
+== nvidia-smi
+name, driver_version, memory.total [MiB]
+NVIDIA GeForce RTX 4090, 580.159.04, 24564 MiB
+== host
+Model name:                           AMD EPYC 7C13 64-Core Processor
+               total        used        free      shared  buff/cache   available
+Mem:              95           1          41           0          53          93
+/dev/root       243G  102G  141G  43% /
+6.8.0-59-generic
+== xids (full dmesg grep)
+[ 6576.563770] NVRM: Xid (PCI:0000:00:07): 109, pid=127306, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[ 6905.544611] NVRM: Xid (PCI:0000:00:07): 109, pid=127306, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+== guest_apps.qcow2
+2026-11-21 12:16:45.112849763 +0000 21213478912 /workspace/bench/guest_apps.qcow2
+2026-11-21 13:33:38.062943013 +0000 6465519616 /workspace/bench/guest.qcow2
+ls: cannot access '/workspace/bench/discovery_*.qcow2': No such file or directory
+== kf3-bins
+9b3d1651
+== ci user
+uid=1002(ci) gid=1002(ci) groups=1002(ci),109(kvm)
+root:kvm 660 /dev/kvm
+root:root 666 /dev/nvidia0
+root:root 666 /dev/nvidiactl
+root:root 666 /dev/nvidia-uvm
+2
