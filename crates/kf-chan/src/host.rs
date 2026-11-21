@@ -712,8 +712,8 @@ impl HostRing {
         self.va + self.layout.fence_off + GATE_OFF
     }
 
-    /// ★★★ **The kernel-GR tier's admission** (owner rulings 2026-10-07, `OWNER_RULINGS.md` §S
-    /// items 1-2): on a graphics-runlist ring that owns a real GR context, assert the host channel
+    /// **Admission to the kernel-GR tier.** On a graphics-runlist ring that owns a real GR
+    /// context, assert the host channel
     /// is USER ([`kf_host::Channel::assert_user`]) — refusing otherwise — then allocate one host
     /// object of each family-invariant class ([`crate::grtables::GrClass::FIXED`]) and of the family 3D class that this host family lists AND
     /// host RM reports supported. The classes come from the fixed allowlist, never from guest

@@ -4,7 +4,7 @@
 //! ([`crate::worker`]) and the exhaustive model (`tests/user_loop_model.rs`) share. No I/O, no clock
 //! in any decision.
 //!
-//! The owner's rule: correctness and performance never depend on timing. A turn that cannot go on
+//! Correctness and performance never depend on timing. A turn that cannot go on
 //! says WHAT it waits for ([`Need`] -> [`Wait`]) and the worker learns of it from an event: the
 //! doorbell eventfd, the engine's non-stall event the batch marker raises, or (only where no event
 //! can exist) a bounded spin and the [`BACKSTOP_MS`] safety net, whose every firing that finds work
@@ -131,7 +131,7 @@ pub enum WakeSource {
     LockHolder,
 }
 
-/// One row of the sleep-safety table (owner, 2026-10-20): never block while an obligation could change in a way that needs handling and
+/// From the sleep-safety table: never block while an obligation could change in a way that needs handling and
 /// no NON-MISSABLE wake source covers that change. Wake moments are a SUPERSET of the moments processing is needed; an eventfd is never
 /// ground truth (every wake re-reads the state) but it may not MISS (it is armed before the state is evaluated).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,7 +190,7 @@ pub fn may_block(held: impl IntoIterator<Item = Obligation>) -> bool {
 
 /// Whether a look by `why` has any reason to touch a relay at all.
 ///
-/// ★ The doorbell contract (owner, 2026-10-17): the last doorbell covers every `GP_PUT` write before
+/// The doorbell contract: the last doorbell covers every `GP_PUT` write before
 /// it, and nothing else announces `GP_PUT`. So a look is warranted by a recorded private-word wait
 /// (`waiting`: a marker or carried wait) and by nothing else. `demand` (contention a lost `try_lock` left) is NOT a reason for any look,
 /// the safety net included: it belongs to the lock holder (hand-off). The backstop timer finding an idle relay must do nothing and
