@@ -1,7 +1,8 @@
 # V3 — replay tests: a logged failure becomes a GPU-free Rust test
 
-**STATUS: LIVE, 2026-11-18 (pilot: one defect, the slot-pool ceiling; FIXED 2026-11-18 on the replay test alone,
-NOT yet confirmed on hardware; a Wukong run on the pc or a box is the confirmation step).**
+**STATUS: LIVE, 2026-11-21 (pilot: one defect, the slot-pool ceiling; FIXED 2026-11-18 on the replay test alone,
+NOT yet confirmed on hardware; a Wukong run on the pc or a box is the confirmation step; 2026-11-21: a second logged
+occurrence on a pre-fix binary is fixture `adobe-slot29`).**
 Owner ruling 2026-11-16: every failure classified as a kayfabe-core bug gets a reproduction as a GPU-free
 `cargo test`, so the class cannot come back. This is the pattern, with the pilot as its worked example.
 
@@ -62,6 +63,14 @@ extension is carved out of a free run, so it cannot leave the pool or touch anot
   with overlap and is not attempted.
 
 ## Pilot: `crates/kf-cuda/tests/replay_slot_ceiling.rs`
+
+- **Second logged occurrence, 2026-11-21 (fixture `adobe-slot29`).** Windows 11 guest on the pc (RTX 4070, host 595.91.07),
+  Photoshop Camera Raw downloading AI models, binary `kf3-bins/6bfa2dbc` (read from `/proc/<pid>/exe`), which predates
+  the fix (d441120fc). `slot 29 grows 469248 -> 644608 required runs`, 1,268,992 free, largest 471,296, geometry
+  `tail 471296 (in-place growth would fit)`; the split did not apply, channel 0x80c was DEAD, and the guest then tore
+  down its contexts and display (the stall that was reported). The replay rebuilds the logged geometry byte for byte;
+  with the in-place fallback removed (the pre-fix decision) the refusal text equals the logged line; with the fix
+  the slot grows in place to 644,608 runs. This occurrence does not confirm the fix on hardware: the binary was older.
 
 - **Logged failure.** Wukong, FG off, 4096 MiB, profile build 68173023, boots p1 and p2 (`/root/night/PC_WUKONG_20261115.md`,
   mechanism M2): `walk capacity ceiling: slot pool exhausted: slot 32 grows 601088 -> 606464 required runs`, 1,203,456

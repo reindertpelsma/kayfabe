@@ -46,3 +46,27 @@ synthetic span 9216 1792 1
 synthetic span 12288 23040 10
 synthetic span 36352 1024 1
 end
+
+# 2026-11-21: a second measured occurrence, a different workload and guest (Windows 11, Photoshop Camera
+# Raw "AI Model Downloads"). Evidence (not committed: the qemu log holds the host GPU UUID): the pc,
+# /workspace/bench/adobe_addon_20261121/crash_evidence_20261121T213415Z/qemu_215110_at_2137Z.log. The
+# running binary was /workspace/bench/kf3-bins/6bfa2dbc/ (read from /proc/<pid>/exe), which PREDATES the
+# in-place fix d441120fc (2026-11-18). Same geometry logged twice (lines 50291-50292 and 50371-50374, t=2343.8 s
+# and t=2384.0 s): the pool did not change between the two refusals.
+case adobe-slot29
+source boot=adobe_addon_20261121 attempt=1 build=6bfa2dbc log=crash_evidence_20261121T213415Z/qemu_215110_at_2137Z.log:50291-50296
+config max_slots=128 walk_pool=1048576 slot_pool=2097152 max_cap=1048576 slot_default=1024
+# need: required 644608 = grain(need) gives (644352, 644608]; preferred 966912 = grain(need + need/2) gives [644438, 644608].
+event slot=29 need_lo=644438 need_hi=644608
+logged-ceiling slot pool exhausted: slot 29 grows 469248 → 644608 required runs (966912 preferred), 1268992 free (largest 471296) of 2097152
+logged-geometry slot 29 region 1156608+469248 required 644608 pool 2097152 free 1268992 in 8 region(s), largest [1625856+471296 164864+405504 847104+309504 59392+71680 13824+7680 36096+1792 5120+1024 10240+512]; adjacent free: head 309504 tail 471296 (in-place growth would fit); neighbours left s8@570368+276736 right none; slots held 21
+logged-consequence kf3: chan token 0x80c (VasKey(13965662590488021072)) DEAD: split: split walk (pdb Some(1ece0e000)): split Some(1ece0e000): VasKey(13965663307747559504) did not apply
+measured slot 29 1156608 469248
+measured slot 8 570368 276736
+synthetic span 0 5120 5
+synthetic span 6144 4096 4
+synthetic span 10752 3072 3
+synthetic span 21504 14592 2
+synthetic span 37888 21504 2
+synthetic span 131072 33792 3
+end
