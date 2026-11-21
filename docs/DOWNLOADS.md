@@ -410,6 +410,11 @@ two builds equal (Level 1 and Level 2), ISO sha256 `5e01ceff9a475a1b490f00c4823e
 files differ from the `9211a555` bundle (`KFAPPS.ID`, `LICENSES/kayfabe/LICENSE`, `LICENSES/kayfabe/THIRD_PARTY_NOTICES.md`, `bundle.inputs.json`). Uploaded create-only next to the
 older objects (none deleted); the pin now names it.
 
+**MEASURED, 2026-11-21 ([run](../traces/wb1_republish_notices_20261121/README.md)), third republish:** #559 edited `THIRD_PARTY_NOTICES.md` (Rust std notices, section 3), a hashed input that is
+copied into the bundle, so the input hash moved from `781c5d4f...` to `a586fb86...`. Rebuilt from that branch (head `c11fd95f1`): two builds equal (Level 1 and Level 2), ISO sha256
+`0367335a70de3af1a1aa262990aa84e14ee74fd3c17e13a0e9e5cc361406609d`, 2708133888 bytes, inventory `c281f342...`; only three files differ from the `5e01ceff` bundle (`KFAPPS.ID`,
+`LICENSES/kayfabe/THIRD_PARTY_NOTICES.md`, `bundle.inputs.json`). Uploaded create-only next to the older objects (none deleted); the pin now names it.
+
 **CODE READ:** `bundle.pin` is read by pattern: the `winapps-open.iso sha256=` line, and the `# inputs=` and `# inventory=` comment lines (the first must equal the tree's input hash); every other comment is ignored.
 
 Full recipe, qualification rules and rollout details: [Windows apps gate, section 3](design/V3_WINDOWS_APPS_GATE.md#3-inputs-public-bundle-and-official-run-time-media).

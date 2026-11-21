@@ -2192,6 +2192,8 @@ jobs:
           python3 scripts/ci/doc_steps_mutants.py
           # The command-line reference generator (2026-11-20): >=2 named killers per mutant.
           python3 scripts/ci/doc_cli_reference_mutants.py
+          # QEMU release kit and its draft-release workflow: >=2 named killers per mutant.
+          python3 -B -I scripts/ci/release_qemu_mutants.py --jobs 2
           # Native fault-name derivation (2026-11-16): the fixture and committed-JSON layers run here with no oracle (the oracle
           # layer skips; the vast-box-scripts job fetches the pin and requires it). >=2 named killers per mutant.
           python3 scripts/ci/derive_fault_names_mutants.py
