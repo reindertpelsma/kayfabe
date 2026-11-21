@@ -240,3 +240,8 @@ SPEC_LICENCE_STATE at=boot1_up222m up_min=223 status=Licensed remaining=129341_m
 SPEC_ROW name=enscape-01 result=FAIL subtests=5/10 reason=TIMEOUT failed=06_SanMiguelFullUltraHQ
 enscape_01 --- FAILED
 SPEC_LICENCE_STATE at=after_enscape_01 up_min=237 status=Licensed remaining=129327_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:36_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_start up_min=1 status=Licensed remaining=129325_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:16:03_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
+SPEC_LICENCE_STATE at=after_medical_04 up_min=13 status=Licensed remaining=129312_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:32_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=maya-07 result=PASS subtests=7/7 reason=- failed=-
+SPEC_LICENCE_STATE at=after_maya_07 up_min=26 status=Licensed remaining=129299_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:21_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online

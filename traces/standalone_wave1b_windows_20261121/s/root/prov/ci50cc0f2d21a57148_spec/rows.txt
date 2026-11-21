@@ -2,3 +2,5 @@ SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
 SPEC_ROW name=creo-04 result=PASS subtests=13/13 reason=- failed=-
 SPEC_ROW name=blender-01 result=PASS subtests=7/7 reason=- failed=-
 SPEC_ROW name=enscape-01 result=FAIL subtests=5/10 reason=TIMEOUT failed=06_SanMiguelFullUltraHQ
+SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
+SPEC_ROW name=maya-07 result=PASS subtests=7/7 reason=- failed=-

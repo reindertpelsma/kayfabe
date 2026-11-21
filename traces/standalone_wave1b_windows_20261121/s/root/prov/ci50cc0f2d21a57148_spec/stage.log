@@ -89,3 +89,16 @@ enscape_01 --- FAILED
 SPEC_LICENCE_STATE at=after_enscape_01 up_min=237 status=Licensed remaining=129327_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:36_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
 SPEC_NOTE stage=viewset_medical-04 2026-11-21T16:48:40+00:00 left_s=8344
 SPEC_NOTE graceful stop of the guest
+SPEC_NOTE ssh up after 0s
+SPEC_LICENCE_STATE at=boot2_start up_min=1 status=Licensed remaining=129325_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:16:03_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 257s)
+SPEC_NOTE settle_wait_s=257
+SPEC_NOTE run medical-04 (budget 1200s, mode full, left 7941s)
+SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
+SPEC_LICENCE_STATE at=after_medical_04 up_min=13 status=Licensed remaining=129312_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:32_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_maya-07 2026-11-21T17:03:35+00:00 left_s=7449
+SPEC_NOTE run maya-07 (budget 1200s, mode full, left 7442s)
+SPEC_ROW name=maya-07 result=PASS subtests=7/7 reason=- failed=-
+SPEC_LICENCE_STATE at=after_maya_07 up_min=26 status=Licensed remaining=129299_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:21_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_catia-07 2026-11-21T17:16:24+00:00 left_s=6680
+SPEC_NOTE run catia-07 (budget 2700s, mode full, left 6675s)

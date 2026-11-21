@@ -7,7 +7,7 @@ STATUS: LIVE (DRAFT, partial), 2026-11-21. MEASURED on two rented Vast boxes (ne
 | windows_gate (W, S) | PASS | W 3608 s (install 1861 s), S 3108 s (install 1632 s); `resets=0`, hostref green/green |
 | **windows_apps** (W) | **PASS** | 10 of 10 apps PASS, `WINAPPS_GRADE kind=PASS expected=10 pass=10 guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0`, 1899 s |
 | **windows_gate_2** (W, own gate inside the same leg) | **PASS** | 1652 s, `resets=0` |
-| **specviewperf** (S) | **IN PROGRESS: lane A done (3 PASS, enscape-01 FAIL TIMEOUT), lane B running** | copy step PASS at 46.9 MB/s; rows below |
+| **specviewperf** (S) | **IN PROGRESS: lane A done (3 PASS, enscape-01 FAIL TIMEOUT), lane B running (medical-04, maya-07 PASS)** | copy step PASS at 46.9 MB/s; rows below |
 The W leg ended `EXIT rc=0` with `KF_FINAL_SUMMARY verdict=PASS stages=4` (provision, windows_gate, windows_apps, windows_gate_2).
 
 ### windows_apps (F1 of wave 1: closed on `next`)
@@ -25,7 +25,10 @@ SPEC rows (`SPEC_ROW` lines; walls are from `SPECRUN_END` in the per-row `*.end.
 | A | creo-04 | PASS | 13/13 | 2219 s | 1243 s | 1.79 |
 | A | blender-01 | PASS | 7/7 | 4541 s | 1876 s | 2.42 |
 | A | enscape-01 | **FAIL** `reason=TIMEOUT` (budget 6300 s hit) | 5/10 | 6300 s budget hit, from 15:02:23Z | 2042 s | more than 3.1 |
-| B | medical-04, maya-07, catia-07, solidworks-08, unreal_engine-01 | NOT RUN YET (follow lane A in the same stage) | | | 318, 400, 803, 989, 1236 s | |
+| B | medical-04 | PASS | 10/10 | 395 s | 318 s | 1.24 |
+| B | maya-07 | PASS | 7/7 | 670 s | 400 s | 1.68 |
+| B | catia-07 | RUNNING (started 17:16Z) | | | 803 s | |
+| B | solidworks-08, unreal_engine-01 | NOT RUN YET (follow in the same stage) | | | 989, 1236 s | |
 No viewset failed, no guest shutdown, no licence event so far (`SPEC_LICENCE_STATE ... status=Licensed` at every probe, `s/root/prov/ci50cc0f2d21a57148_spec/licence_states.txt`).
 
 ### enscape-01: FAIL TIMEOUT, classified as a kayfabe gap (documented; NOT confirmed by a control on this die)
