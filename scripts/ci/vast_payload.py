@@ -1240,9 +1240,7 @@ def head_tail_text(path, head=256 * 1024, tail=1024 * 1024):
         return ""
 
 
-def kfml_prefetch_wanted(selected, rootless):
-    """The background dataset prefetch is a root process; a rootless run leaves it out (its files would be root-owned in the dropped stage's prefix)."""
-    return "kfml" in selected and rootless is None
+PREFETCH_ALLOWED = True   # a rootless run sets it False: the prefetch is a root process whose files would be root-owned in the dropped kfml stage's prefix
 
 
 def load_kfroot():
@@ -1876,6 +1874,8 @@ def start_kfml_prefetch(root, evidence, popen=subprocess.Popen):
     """Start the kfml dataset prefetch in the background before the first stage (2026-11-17): the CIFAR-10 server is slow (about 8 minutes with six ranged
     connections), provision and the other stages leave the network idle, and the kfml stage waits for the prefetch only if it is still running. Failure to
     start is not an error (the stage then downloads for itself); nothing here touches the stage verdicts. Returns the process or None."""
+    if not PREFETCH_ALLOWED:
+        return None
     script = Path(root) / "scripts/ci/kfml_stage.py"
     if not script.is_file():
         return None
@@ -2106,7 +2106,7 @@ def plan_only(args, root):
 
 
 def main():
-    global STOP
+    global STOP, PREFETCH_ALLOWED
     if len(sys.argv) == 5 and sys.argv[1] == "--grade-xid":
         return guard_command(sys.argv[2], Path(sys.argv[3]), int(sys.argv[4]))
     if len(sys.argv) > 3 and sys.argv[1] == "--guest-exec":
@@ -2166,6 +2166,7 @@ def main():
                 raise EvidenceError("preflight")
             print(rootless_line(rl, selected), flush=True)
         prov_dir = ROOTLESS_PROV_DIR if rootless else PROV_DIR
+        PREFETCH_ALLOWED = rootless is None
         spec_tbl = spec_table(root) if spec else None
         refresh_claims(result, windows)
         print(tier_line(instruction), flush=True)
@@ -2581,7 +2582,7 @@ def main():
         if [s["name"] for s in stages] != plan:
             raise EvidenceError("infrastructure")
         stages = [s for s in stages if s["name"] in selected]
-        if kfml_prefetch_wanted(selected, rootless):
+        if "kfml" in selected:
             start_kfml_prefetch(root, evidence)
         if rootless is None:
             return execute_stages(stages, soft, result, destination)   # exactly the call of every run before --rootless existed

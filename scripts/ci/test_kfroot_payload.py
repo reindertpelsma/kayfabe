@@ -1001,10 +1001,35 @@ class Flags(unittest.TestCase):
         with self.assertRaises(P.EvidenceError):
             P.rootless_request(self.args("--rootless", "require", "--rootless-user", "root"), {})
 
-    def test_the_kfml_prefetch_is_a_root_process_and_a_rootless_run_leaves_it_out(self):
-        self.assertTrue(P.kfml_prefetch_wanted(["kfml"], None))
-        self.assertFalse(P.kfml_prefetch_wanted(["kfml"], object()))
-        self.assertFalse(P.kfml_prefetch_wanted(["cuda_host"], None))
+    def test_the_kfml_prefetch_is_a_root_process_and_stays_off_while_a_rootless_run_says_so(self):
+        root = Path(tempfile.mkdtemp())
+        (root / "scripts/ci").mkdir(parents=True)
+        (root / "scripts/ci/kfml_stage.py").write_text("")
+        started = []
+        saved = P.PREFETCH_ALLOWED
+        try:
+            P.PREFETCH_ALLOWED = False
+            self.assertIsNone(P.start_kfml_prefetch(root, root, popen=lambda *a, **k: started.append(a)))
+            self.assertEqual(started, [])
+            P.PREFETCH_ALLOWED = True
+            P.start_kfml_prefetch(root, root, popen=lambda *a, **k: started.append(a))
+            self.assertEqual(len(started), 1)
+        finally:
+            P.PREFETCH_ALLOWED = saved
+
+    def test_a_declined_prefetch_leaves_no_root_owned_log_behind(self):
+        root = Path(tempfile.mkdtemp())
+        (root / "scripts/ci").mkdir(parents=True)
+        (root / "scripts/ci/kfml_stage.py").write_text("")
+        saved, P.PREFETCH_ALLOWED = P.PREFETCH_ALLOWED, False
+        try:
+            P.start_kfml_prefetch(root, root, popen=lambda *a, **k: None)
+        finally:
+            P.PREFETCH_ALLOWED = saved
+        self.assertFalse((root / "kfml_prefetch.run").exists())
+
+    def test_main_keeps_the_prefetch_block_the_kfml_tests_read(self):
+        self.assertIn('if "kfml" in selected:\n            start_kfml_prefetch(root, evidence)', (CI / "vast_payload.py").read_text())
 
     def test_the_rootless_variables_are_not_instruction_fields(self):
         for name in P.ROOTLESS_ENV:
@@ -1315,6 +1340,7 @@ class PayloadMain(TempCase):
 
         case = v7.V7Tests("test_hardware_converts_smi_units")
         case.setUp()
+        self.last_case = case
         captured, tmp = [], self.tmp
 
         class Safe(K.Rootless):
@@ -1356,6 +1382,11 @@ class PayloadMain(TempCase):
         self.assertEqual([s["name"] for s in captured[0]["stages"]], ["provision", "cuda_host", "merge_bar", "cuda_guest"])
         self.assertIn("KF_PAYLOAD_ROOTLESS mode=require user=ci memlock=0 root_stages=merge_bar", out)
 
+    def test_the_prefetch_switch_is_off_for_any_rootless_plan(self):
+        rc, _, _, _, out, _ = self.fixture({"KF_PAYLOAD_ROOTLESS": "require", "KF_PAYLOAD_ROOTLESS_ROOT_STAGES": "merge_bar"})
+        self.assertEqual(rc, 0, out)
+        self.assertIs(self.last_case.m.PREFETCH_ALLOWED, False)
+
     def test_a_non_root_payload_is_refused_before_any_stage(self):
         rc, result, captured, _, out, _ = self.fixture({"KF_PAYLOAD_ROOTLESS": "require", "KF_PAYLOAD_ROOTLESS_ROOT_STAGES": "merge_bar"}, euid=1000)
         self.assertEqual((rc, captured), (1, []))
@@ -1383,15 +1414,18 @@ class PayloadMain(TempCase):
         self.assertEqual(gate["command"][-1], "/root/prov")
         self.assertEqual(captured[0]["kw"], {})   # the call of every run before --rootless existed
 
-    def test_a_rootless_run_leaves_the_root_prefetch_out_and_a_normal_run_starts_it(self):
+    def test_a_rootless_run_turns_the_root_prefetch_off_and_a_normal_run_leaves_it_on(self):
         env = {"KF_TIER": "middle"}
         rc, _, captured, prefetch, out, _ = self.fixture({**env, "KF_PAYLOAD_ROOTLESS": "require", "KF_PAYLOAD_ROOTLESS_ROOT_STAGES": "merge_bar"})
         self.assertEqual(rc, 0, out)
         self.assertIn("kfml", [s["name"] for s in captured[0]["stages"]])
-        prefetch.assert_not_called()
+        self.assertIs(self.last_case.m.PREFETCH_ALLOWED, False)
+        prefetch.assert_called_once()   # main asks as always; the function declines
         rc, _, captured, prefetch, out, _ = self.fixture(env)
         self.assertEqual(rc, 0, out)
+        self.assertIs(self.last_case.m.PREFETCH_ALLOWED, True)
         prefetch.assert_called_once()
+
 
 
 if __name__ == "__main__":
