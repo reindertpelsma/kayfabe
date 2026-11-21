@@ -4,9 +4,11 @@
 // Ruling: docs/OWNER_RULINGS.md section AZ. Design: docs/design/V3_APP_LANE_PLANNER.md. Data: ci/vast-broker/app-lane.json.
 //
 // The planner never names an image: images, their needs and the core paths are configuration (app-lane.json), the
-// pinned sizes come from propimages.json and the downloads per stage from bandwidth.json.
+// pinned sizes come from propimages.json and the downloads per stage from bandwidth.json. Every configured image is a bundle of
+// propimage-bundles.json (src/bundles.js), and an application list is turned into the images to run by `bundlesFor` (option `apps`).
 import appLane from '../app-lane.json' with { type: 'json' };
 import { BANDWIDTH, estimateBandwidth, plannedStages } from './bandwidth.js';
+import { BUNDLES, bundlesFor } from './bundles.js';
 import { DEFAULTS } from './defaults.js';
 import { RELEASE_MATRIX } from './release-matrix.js';
 import { familyOf } from './tier.js';
@@ -83,7 +85,7 @@ export function appLaneRequired(changedFiles, corePaths) {
 }
 
 // ---- configuration -------------------------------------------------------------------------------------------------------
-export function validateAppLaneConfig(config, table = BANDWIDTH) {
+export function validateAppLaneConfig(config, table = BANDWIDTH, bundles = BUNDLES) {
   const errors = [];
   if (!isObject(config)) return ['config: not an object'];
   if (!Array.isArray(config.core_paths)) errors.push('core_paths: not an array');
@@ -106,6 +108,8 @@ export function validateAppLaneConfig(config, table = BANDWIDTH) {
     const id = img?.id;
     if (typeof id !== 'string' || !/^[a-z0-9_]{1,40}$/.test(id)) errors.push('image id');
     else if (seen.has(id)) errors.push('image duplicate: ' + id);
+    else if (!Object.hasOwn(bundles?.bundles ?? {}, id))
+      errors.push('image ' + id + ': not a bundle of propimage-bundles.json');
     seen.add(id);
     if (!posInt(img?.disk_gb)) errors.push('image ' + id + ': disk_gb');
     if (!(typeof img?.vram_gb === 'number' && Number.isFinite(img.vram_gb) && img.vram_gb > 0))
@@ -201,7 +205,7 @@ export function recordRotation(table, legs, releaseSeq) {
 
 // ---- the plan ------------------------------------------------------------------------------------------------------------
 // `allowed`: offers already evaluated under the release profile (src/offers.js, the Worker's own rejection rules).
-// Options: images (ids, default all configured), families (default the matrix's die families), firstRelease (every image
+// Options: apps (application names: the images are the bundles that hold them) or images (ids, default all configured), families (default the matrix's die families), firstRelease (every image
 // on every family, the rotation table is ignored), rotation (the table, required when not firstRelease), releaseSeq,
 // dailyCapUsd (required: the plan is refused when its estimate plus spentTodayUsd exceeds it), spentTodayUsd.
 // A leg is one image on one family on one box: the cheapest allowed offer of any die of that family with the image's VRAM,
@@ -216,7 +220,13 @@ export function planAppLane(allowed, cfg, opts = {}) {
   if (!firstRelease && !isObject(rotation))
     throw Error('rotation: a rotation table is required unless firstRelease is set');
   const all = config.images;
-  const wanted = opts.images ?? all.map((i) => i.id);
+  if (opts.apps !== undefined && opts.images !== undefined)
+    throw Error('apps and images are alternatives: give one');
+  // `apps`: the images that hold these applications (bundlesFor: fewest bytes), each of which must be an app-lane image.
+  const wanted =
+    opts.apps !== undefined
+      ? bundlesFor(BUNDLES, opts.apps)
+      : (opts.images ?? all.map((i) => i.id));
   for (const id of wanted) if (!all.some((i) => i.id === id)) throw Error('unknown image: ' + id);
   const images = all.filter((i) => wanted.includes(i.id));
   const families = opts.families ?? (cfg.releaseMatrix ?? RELEASE_MATRIX).policy.die_families;

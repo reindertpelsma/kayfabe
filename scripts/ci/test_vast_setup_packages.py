@@ -89,6 +89,14 @@ missing_tool=$1 apt_trace=$2 KF_PROVISION_PROFILE=ci
         install = code.index("kf_trust.py\" fetch rustup-init") if 'kf_trust.py" fetch rustup-init' in code else code.index("kf_trust.py fetch rustup-init")
         self.assertGreater(install, code.index("git clone"), "kf_trust.py comes with the tree, so rustup is installed after the clone")
 
+    def test_pybuild_is_exactly_what_a_cpython_312_source_build_needs_for_the_ml_venvs(self):
+        """The private Python of the open ML rows (scripts/apps/mlrows/private_python.py, 2026-11-20) builds from the python.org source: the compiler and the headers of
+        the modules the venvs use (TLS for pip, zlib, ctypes, bz2, lzma, sqlite3). Nothing interactive, nothing from a PPA."""
+        self.assertEqual(
+            sorted(self.plan("pybuild")),
+            ["build-essential", "libbz2-dev", "libffi-dev", "liblzma-dev", "libsqlite3-dev", "libssl-dev", "zlib1g-dev"],
+        )
+
     def test_ci_keeps_real_build_driver_and_initrd_dependencies(self):
         self.assertTrue(
             {

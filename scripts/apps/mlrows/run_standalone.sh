@@ -8,6 +8,8 @@ mkdir -p "$OUT"
 if [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null; then
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 python3-venv python3-dev gcc ca-certificates >"$OUT/apt.log" 2>&1
 fi
+# a host whose Python is older than the locks (Ubuntu 22.04: 3.10) gets a private 3.12 built from the python.org source, below $ROOT; a refusal is printed and the rows then say python_too_old
+python3 "$HERE/private_python.py" ensure --root "$ROOT" --if-needed || true
 python3 "$HERE/mlrows.py" check --root "$ROOT"
 python3 "$HERE/mlrows.py" setup --root "$ROOT"
 for row in jax tensorrt vllm; do
