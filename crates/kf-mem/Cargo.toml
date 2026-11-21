@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+kf-arch.workspace = true
 kf-host.workspace = true
 kf-trap.workspace = true
 kf-cuda.workspace = true

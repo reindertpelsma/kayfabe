@@ -560,12 +560,6 @@ impl Walker for GpuWalker {
     }
 }
 
-/// The first eight events of a site, then powers of two: a guest that repeats an event cannot
-/// flood the log.
-fn log_admitted(n: u64) -> bool {
-    n != 0 && (n <= 8 || n.is_power_of_two())
-}
-
 /// The named per-space ceiling of a space whose walk the kernel cut (`bits` holds a
 /// [`kf_cuda::abi::KF_ENTRY_CUT`] bit). `need` is the entry's reported need (0 = not reported).
 #[must_use]
@@ -2354,9 +2348,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 failed.insert(key);
                 self.stats.walk_cut_spaces = self.stats.walk_cut_spaces.saturating_add(1);
                 let line = walk_cut_line(key, walked_root, slot, e.refused, e.need);
-                if log_admitted(self.stats.walk_cut_spaces) {
-                    eprintln!("kf3: {line} [#{}]", self.stats.walk_cut_spaces);
-                }
+                kf_arch::rate_eprintln!("kf3: {line}");
                 self.stats.refuse(line);
             } else if a.refused > 0 {
                 failed.insert(key);
@@ -5019,8 +5011,8 @@ mod tests {
             b.contains("entry budget") && !b.contains("run share"),
             "{b}"
         );
-        // through the manager: the reported need reaches the line, and a cut repeated by a guest
-        // is logged on a bounded schedule
+        // through the manager: the reported need reaches the line; the line goes through
+        // `kf_arch::rate_eprintln!`, whose schedule (the first 8 events, then powers of two) is this
         let mut r = rig();
         r.tables
             .borrow_mut()
@@ -5036,12 +5028,14 @@ mod tests {
             "{:?}",
             r.m.stats.refusals
         );
-        let logged: Vec<u64> = (1..=1100).filter(|&n| log_admitted(n)).collect();
+        let logged: Vec<u64> = (1..=1100)
+            .filter(|&n| kf_arch::ratelog::admitted(n))
+            .collect();
         assert_eq!(
             logged,
             vec![1, 2, 3, 4, 5, 6, 7, 8, 16, 32, 64, 128, 256, 512, 1024]
         );
-        assert!(!log_admitted(0));
+        assert!(!kf_arch::ratelog::admitted(0));
     }
 
     /// The split of a channel whose space was cut fails by name, so the channel dies at its poll
