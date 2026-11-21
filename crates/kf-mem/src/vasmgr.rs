@@ -339,6 +339,8 @@ pub struct EntryDiff {
     /// leaves are absent from the walk; the rest of its diff is applied, and the space fails by
     /// name (its invalidate stays armed).
     pub refused: u32,
+    /// The capacity the entry reported it needed (`KfPdbEntry::need`; 0 = not reported).
+    pub need: u32,
 }
 
 /// A finished walk.
@@ -558,6 +560,34 @@ impl Walker for GpuWalker {
     }
 }
 
+/// The first eight events of a site, then powers of two: a guest that repeats an event cannot
+/// flood the log.
+fn log_admitted(n: u64) -> bool {
+    n != 0 && (n <= 8 || n.is_power_of_two())
+}
+
+/// The named per-space ceiling of a space whose walk the kernel cut (`bits` holds a
+/// [`kf_cuda::abi::KF_ENTRY_CUT`] bit). `need` is the entry's reported need (0 = not reported).
+#[must_use]
+pub fn walk_cut_line(key: VasKey, root: u64, slot: u32, bits: u32, need: u32) -> String {
+    use kf_cuda::abi::{
+        KF_ENTRY_FRONTIER_SHARE, KF_ENTRY_RUN_SHARE, KFWR_R_BUDGET, KFWR_R_FRONTIER_CAP,
+    };
+    let mut limits = Vec::new();
+    if bits & KFWR_R_FRONTIER_CAP != 0 {
+        limits.push(format!(
+            "its run share ({KF_ENTRY_RUN_SHARE} runs) or its frontier share ({KF_ENTRY_FRONTIER_SHARE} entries per level): KFWR_R_FRONTIER_CAP does not say which"
+        ));
+    }
+    if bits & KFWR_R_BUDGET != 0 {
+        limits.push("its entry budget (WalkCfg::entry_budget)".to_string());
+    }
+    format!(
+        "walk per-space CEILING: {key:?} root {root:#x} slot {slot}: the walk exceeded {} (refuse_mask={bits:#x}, reported need {need}); its whole diff is withheld, so its split fails and its invalidate is not completed",
+        limits.join(" and ")
+    )
+}
+
 /// ★ 2026-11-15: one report's entries as the apply sees them (split out of [`GpuWalker`]'s `poll`
 /// so that the mapping of the report's per-entry flags is testable without a GPU).
 ///
@@ -594,6 +624,7 @@ pub(crate) fn entry_diffs(r: &kf_cuda::Report, perm: &crate::apply::PermPolicy) 
                 } else {
                     0
                 },
+                need: p.need(),
             }
         })
         .collect()
@@ -1059,6 +1090,9 @@ pub struct VaStats {
     pub no_slot: u64,
     /// Spaces failed because their walk refused leaves.
     pub walk_refused_spaces: u64,
+    /// Spaces whose walk the kernel cut at a per-space limit ([`walk_cut_line`]): their whole diff
+    /// was withheld, so they fail hard (split failed, invalidate held), never as absence.
+    pub walk_cut_spaces: u64,
     /// ★ Review 2 item 5: runs refused for the refresh's host-call budget (absent until the guest's
     /// next walk of the space; no follow-up walk — review 3 item 1).
     pub budget_refused_runs: u64,
@@ -2313,7 +2347,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     .budget_refused_runs
                     .saturating_add(a.budget_refused as u64);
             }
-            if a.refused > 0 {
+            if e.refused & kf_cuda::abi::KF_ENTRY_CUT != 0 {
+                // The kernel withheld this space's WHOLE diff, unmaps included: what the guest
+                // dropped may still be mapped on the host and what it added is not. That is not
+                // absence, so neither the split nor the invalidate completes over it.
+                failed.insert(key);
+                self.stats.walk_cut_spaces = self.stats.walk_cut_spaces.saturating_add(1);
+                let line = walk_cut_line(key, walked_root, slot, e.refused, e.need);
+                if log_admitted(self.stats.walk_cut_spaces) {
+                    eprintln!("kf3: {line} [#{}]", self.stats.walk_cut_spaces);
+                }
+                self.stats.refuse(line);
+            } else if a.refused > 0 {
                 failed.insert(key);
                 if a.refusals_are_absence() {
                     absent_only.insert(key);
@@ -2622,6 +2667,11 @@ mod tests {
         diff_runs: Vec<usize>,
         /// A root whose walk "refuses" a leaf (`KFWR_R_LEAF_OOB`) — the refusal the ruling names.
         refuse_in: Option<u64>,
+        /// A root whose walk the kernel CUT at a per-space limit: `(pdb, KFWR_R_* bits)`. The
+        /// kernel withholds a cut space's whole diff, so its entry carries no runs.
+        cut_in: Option<(u64, u32)>,
+        /// The `need` every entry reports (the kernel's `KfPdbEntry::need`).
+        cut_need: u32,
         /// ★ 2026-11-15 (M4): the report's run capacity; a larger diff is cut as the kernel cuts it.
         report_cap: Option<usize>,
         /// ★ 2026-11-16: hidden capacity re-walks so far ([`Walker::capacity_retries`]; a test bumps it).
@@ -2645,6 +2695,8 @@ mod tests {
                 fail_poll: None,
                 diff_runs: vec![],
                 refuse_in: None,
+                cut_in: None,
+                cut_need: 0,
                 report_cap: None,
                 retries: 0,
             }
@@ -2744,11 +2796,17 @@ mod tests {
                 cut = c.cut;
             }
             for (i, (e, d)) in diffs.into_iter().enumerate() {
+                let cut_bits = self.cut_in.filter(|&(p, _)| p == e.pdb).map(|(_, b)| b);
+                if cut_bits.is_some() {
+                    reported[i].clear();
+                }
                 let runs: Vec<DiffRun> = reported[i]
                     .iter()
                     .map(|m| crate::apply::PermPolicy::default().diff_run(m))
                     .collect();
-                let refused = if self.refuse_in == Some(e.pdb) {
+                let refused = if let Some(b) = cut_bits {
+                    b
+                } else if self.refuse_in == Some(e.pdb) {
                     0x2000
                 } else {
                     0
@@ -2758,10 +2816,11 @@ mod tests {
                     slot: e.slot,
                     first,
                     runs,
-                    partial: d.partial || cut[i],
+                    partial: cut_bits.is_none() && (d.partial || cut[i]),
                     cut: cut[i],
                     overflow: d.overflow,
                     refused,
+                    need: self.cut_need,
                 });
                 first += reported[i].len();
                 last.push((e.slot, reported[i].clone()));
@@ -4046,6 +4105,23 @@ mod tests {
         assert_eq!(e[2].first, 4);
     }
 
+    /// A cut space's refused bits and reported need reach the apply as the report carries them
+    /// (`reserved2`: bits low, need high).
+    #[test]
+    fn a_cut_entrys_bits_and_need_reach_the_apply() {
+        use kf_cuda::abi::{KFWR_R_FRONTIER_CAP, KFWR_V_REFUSED};
+        let mut r = report_with(&[KFWR_V_REFUSED, 0], 0);
+        r.pdbs[0].reserved2 = (974_249u64 << 32) | u64::from(KFWR_R_FRONTIER_CAP);
+        r.pdbs[1].reserved2 = 7u64 << 32;
+        let e = entry_diffs(&r, &crate::apply::PermPolicy::default());
+        assert_eq!((e[0].refused, e[0].need), (KFWR_R_FRONTIER_CAP, 974_249));
+        assert_eq!(
+            (e[1].refused, e[1].need),
+            (0, 7),
+            "no V_REFUSED: no refused bits"
+        );
+    }
+
     /// The capacity-withheld case (`KFWR_V_PARTIAL`) is unchanged by the cut flag: still partial.
     #[test]
     fn a_capacity_withheld_entry_is_still_partial_for_the_apply() {
@@ -4870,6 +4946,152 @@ mod tests {
         assert_eq!(out.unreconciled.len(), 1);
         assert!(busy(&r.port));
         assert_eq!(r.m.stats.cleared_over_absent, 0);
+    }
+
+    /// A space whose walk the kernel CUT at a per-space limit (`KFWR_R_FRONTIER_CAP`, the run or
+    /// frontier share; `KFWR_R_BUDGET`) has its WHOLE diff withheld, unmaps included, so it is not
+    /// mere absence: the guest's invalidate stays armed (no completion over withheld mappings,
+    /// whatever the clear-over-absence default says) and nothing is mapped for it.
+    #[test]
+    fn a_walk_cut_by_a_per_space_limit_holds_the_invalidate() {
+        for bits in [
+            kf_cuda::abi::KFWR_R_FRONTIER_CAP,
+            kf_cuda::abi::KFWR_R_BUDGET,
+            kf_cuda::abi::KFWR_R_FRONTIER_CAP | 0x2000,
+        ] {
+            let mut r = rig();
+            assert!(r.m.clear_absent, "the default stays on");
+            r.tables
+                .borrow_mut()
+                .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+            r.m.walker_mut().cut_in = Some((PDB_A, bits));
+            let out = settle(&mut r, PDB_A);
+            assert_eq!(out.completed.len(), 0, "bits {bits:#x}: not completed");
+            assert_eq!(out.unreconciled.len(), 1, "bits {bits:#x}");
+            assert!(busy(&r.port), "bits {bits:#x}: the trigger stays armed");
+            assert_eq!(r.m.stats.cleared_over_absent, 0, "bits {bits:#x}");
+            assert!(
+                !ops(&r).iter().any(|o| matches!(o, Op::Map(..))),
+                "bits {bits:#x}: a cut space maps nothing"
+            );
+            assert_eq!(r.m.stats.walk_cut_spaces, 1, "bits {bits:#x}: named");
+            assert_eq!(
+                r.m.stats.walk_refused_spaces, 0,
+                "bits {bits:#x}: not absence"
+            );
+            assert!(
+                r.m.stats
+                    .refusals
+                    .iter()
+                    .any(|x| x.contains("walk per-space CEILING")),
+                "bits {bits:#x}: {:?}",
+                r.m.stats.refusals
+            );
+        }
+    }
+
+    /// The Camera Raw run of the pc (fixture numbers): slot 25, root 0x1ece5a000, needing
+    /// 969 918 then 974 249 runs, then cut with `refuse_mask=0x1000`. The ceiling line names the
+    /// root, the need and both limits the bit may mean; a leaf refusal is never a ceiling.
+    #[test]
+    fn the_logged_cut_is_named_with_both_limits() {
+        let l = walk_cut_line(
+            VasKey(13_965_663_178_898_540_624),
+            0x1ece_5a000,
+            25,
+            kf_cuda::abi::KFWR_R_FRONTIER_CAP,
+            974_249,
+        );
+        for want in [
+            "walk per-space CEILING",
+            "root 0x1ece5a000",
+            "slot 25",
+            "refuse_mask=0x1000",
+            "reported need 974249",
+            "1048576 runs",
+            "32768 entries per level",
+            "does not say which",
+        ] {
+            assert!(l.contains(want), "`{want}` missing from {l}");
+        }
+        let b = walk_cut_line(VasKey(1), 0x1000, 0, kf_cuda::abi::KFWR_R_BUDGET, 0);
+        assert!(
+            b.contains("entry budget") && !b.contains("run share"),
+            "{b}"
+        );
+        // through the manager: the reported need reaches the line, and a cut repeated by a guest
+        // is logged on a bounded schedule
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().cut_in = Some((PDB_A, kf_cuda::abi::KFWR_R_FRONTIER_CAP));
+        r.m.walker_mut().cut_need = 974_249;
+        let _ = settle(&mut r, PDB_A);
+        assert!(
+            r.m.stats
+                .refusals
+                .iter()
+                .any(|x| x.contains("reported need 974249")),
+            "{:?}",
+            r.m.stats.refusals
+        );
+        let logged: Vec<u64> = (1..=1100).filter(|&n| log_admitted(n)).collect();
+        assert_eq!(
+            logged,
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 16, 32, 64, 128, 256, 512, 1024]
+        );
+        assert!(!log_admitted(0));
+    }
+
+    /// The split of a channel whose space was cut fails by name, so the channel dies at its poll
+    /// (the existing DEAD path) instead of running over mappings that were never applied.
+    #[test]
+    fn a_walk_cut_by_a_per_space_limit_fails_the_split() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().cut_in = Some((PDB_A, kf_cuda::abi::KFWR_R_FRONTIER_CAP));
+        r.m.on_split(Some(PDB_A), 31, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let s = r.m.take_splits();
+        assert!(
+            matches!(&s[..], [(31, Err(e))] if e.contains("did not apply")),
+            "{s:?}"
+        );
+        assert_eq!(r.m.stats.splits_unsettled, 0, "not completed as unsettled");
+    }
+
+    /// A cut space is not retried by the host: with no new guest request nothing is walked again.
+    /// The guest's next request walks it again and it fails again (the limit is fixed); once the
+    /// space fits, the withheld diff is applied whole and the invalidate completes.
+    #[test]
+    fn a_cut_space_stays_failed_and_is_walked_again_only_on_a_guest_request() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().cut_in = Some((PDB_A, kf_cuda::abi::KFWR_R_FRONTIER_CAP));
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
+        let walks = r.m.walker().submits.len();
+        for _ in 0..4 {
+            let out = r.m.on_walk_ready(r.port.trigger());
+            assert!(out.completed.is_empty());
+        }
+        assert_eq!(r.m.walker().submits.len(), walks, "no host-side retry loop");
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1, "still cut, still failed");
+        assert!(busy(&r.port));
+        r.m.walker_mut().cut_in = None;
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1, "fits now: completes");
+        assert!(
+            ops(&r)
+                .iter()
+                .any(|o| matches!(o, Op::Map(0x1000, 0x10_0000, 0x1000)))
+        );
     }
 
     /// Past the walker's slots, an object is refused by name — never walked against a guess.

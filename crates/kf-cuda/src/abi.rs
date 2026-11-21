@@ -148,6 +148,19 @@ pub const KFWR_R_BUDGET: u32 = 1 << 5;
 pub const KFWR_R_PDB_CAP: u32 = 1 << 6;
 /// `KFWR_R_FRONTIER_CAP`: the parallel walk's frontier/stage ran out.
 pub const KFWR_R_FRONTIER_CAP: u32 = 1 << 12;
+/// `KF_WALK_SPACES_AT_BUDGET` (`cuda/walk/kf_walk.cu`): the shared frontier and run stage are split
+/// into this many per-space shares.
+pub const KF_WALK_SPACES_AT_BUDGET: u32 = 4;
+/// `KF_ENTRY_FRONTIER_SHARE`: the most frontier entries (tables or passed-through leaves) one
+/// space may hold at one level of the parallel walk (`KF_MAX_FRONTIER / KF_WALK_SPACES_AT_BUDGET`).
+pub const KF_ENTRY_FRONTIER_SHARE: u32 = 131_072 / KF_WALK_SPACES_AT_BUDGET;
+/// `KF_ENTRY_RUN_SHARE`: the most runs one space may stage in the leaf phase
+/// (`KF_MAX_SCRATCH / KF_WALK_SPACES_AT_BUDGET`).
+pub const KF_ENTRY_RUN_SHARE: u32 = (4 << 20) / KF_WALK_SPACES_AT_BUDGET;
+/// `KF_ENTRY_CUT`: the per-space limits that CUT a space's walk. The kernel then withholds that
+/// space's whole diff (unmaps included); exceeding either share sets `KFWR_R_FRONTIER_CAP`, so the
+/// bit alone does not say which share ran out.
+pub const KF_ENTRY_CUT: u32 = KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP;
 /// Per-entry flag: the entry's MAPs were withheld (slot capacity); re-walk after its UNMAPs.
 pub const KFWR_V_PARTIAL: u32 = 1 << 3;
 /// Per-entry flag: the slot is full and nothing can be retired; no runs.
@@ -1191,6 +1204,40 @@ pub const PS_512M: u8 = 3;
 
 #[cfg(test)]
 mod tests {
+    /// The per-space limits mirror the kernel's defines (`cuda/walk/kf_walk.cu`).
+    #[test]
+    fn per_space_limits_match_the_kernel() {
+        let cu = include_str!("../../../cuda/walk/kf_walk.cu");
+        let define = |name: &str| -> String {
+            cu.lines()
+                .find_map(|l| {
+                    let l = l.trim();
+                    l.strip_prefix("#define ")
+                        .and_then(|r| r.strip_prefix(name))
+                        .filter(|r| r.starts_with(' '))
+                        .map(|r| r.split("/*").next().unwrap_or("").trim().to_string())
+                })
+                .unwrap_or_else(|| panic!("{name} not defined in kf_walk.cu"))
+        };
+        assert_eq!(define("KF_WALK_SPACES_AT_BUDGET"), "4u");
+        assert_eq!(define("KF_MAX_FRONTIER"), "131072u");
+        assert_eq!(define("KF_MAX_SCRATCH"), "(4u << 20)");
+        assert_eq!(
+            define("KF_ENTRY_FRONTIER_SHARE"),
+            "(KF_MAX_FRONTIER / KF_WALK_SPACES_AT_BUDGET)"
+        );
+        assert_eq!(
+            define("KF_ENTRY_RUN_SHARE"),
+            "(KF_MAX_SCRATCH / KF_WALK_SPACES_AT_BUDGET)"
+        );
+        assert_eq!(
+            define("KF_ENTRY_CUT"),
+            "(KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP)"
+        );
+        assert_eq!(KF_ENTRY_FRONTIER_SHARE, 32_768);
+        assert_eq!(KF_ENTRY_RUN_SHARE, 1_048_576);
+    }
+
     use super::*;
     use core::mem::{offset_of, size_of};
 
