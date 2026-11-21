@@ -3363,7 +3363,7 @@ static int nb_prepare_socket_dir(const char *path, const struct nb_config *cfg)
     }
     switch (v) {
     case NB_DIR_NOT_DIR:
-        nb_err("socket directory %s is not a directory", dir);
+        nb_err("socket directory %s is not a directory. Refusing.", dir);
         break;
     case NB_DIR_FOREIGN_OWNER:
         nb_err("socket directory %s is owned by uid %u (mode %04o), who is "

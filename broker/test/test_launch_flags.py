@@ -377,6 +377,19 @@ def test_socket_dir(tmp):
     rc, err = run_to_exit(["--backend", "test", "--socket", os.path.join(f, "s.sock")],
                           clean_env())
     check(rc != 0 and "not a directory" in err, "a file as parent:\n" + err)
+    # The refusal must be the directory CHECK's, not a later bind() failing by luck:
+    # a refused directory stops the broker before it touches the socket at all.  This
+    # is the check that needs no second user (a file as the socket directory is
+    # refused whoever runs the broker).
+    check("bind " not in err and "Refusing" in err and "is not a directory" in err,
+          "a refused socket directory must stop before bind() (non-root runnable):\n" + err)
+    # the same through a symlink: stat() follows it, so the target is what is judged
+    link = os.path.join(tmp, "alink"); os.symlink(f, link)
+    rc, err = run_to_exit(["--backend", "test", "--socket", os.path.join(link, "s.sock")],
+                          clean_env())
+    check(rc != 0 and "bind " not in err and "Refusing" in err
+          and "is not a directory" in err,
+          "a symlink to a file as the socket directory must be refused before bind():\n" + err)
 
     # a stale non-socket is still never touched
     os.makedirs(os.path.join(tmp, "stale"), mode=0o700)
