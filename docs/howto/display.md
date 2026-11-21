@@ -34,11 +34,13 @@ qemu-system-x86_64 ... -vga none \
     -device kf3-gpu,id=kf0,...,display=on,gop=on,display-broker=/run/user/$(id -u)/kayfabe-gpu0.sock
 ```
 
-The broker opens a window when QEMU connects. The binary is called `nvkvm-display-broker` today. Use a socket path inside `/run/user/<uid>/`: the broker does not create a missing directory. The broker serves one VM and exits when it disconnects; add `--persist` to keep the window. Press `Ctrl+Alt+G` in the window to grab the keyboard and pointer, `Ctrl+Alt+F` for fullscreen.
+The broker opens a window when QEMU connects. The binary is called `nvkvm-display-broker` today. Use a socket path inside `/run/user/<uid>/`: the broker creates a missing socket directory (mode 0700, one level), and refuses an existing one that belongs to a user it does not trust or that other users can write to. The broker serves one VM and exits when it disconnects; add `--persist` to keep the window. Press `Ctrl+Alt+G` in the window to grab the keyboard and pointer, `Ctrl+Alt+F` for fullscreen.
 
 - **Same user.** If the broker and QEMU run as different users, name the broker's user on the device with `display-broker-uid=<uid>` (root and QEMU's own user are always accepted).
-- **Started from outside the desktop session** (a service, `sudo`, ssh): the broker finds your desktop through the session's environment (`WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` for Wayland, `DISPLAY` for X11), and a terminal of the session has them. Outside the session, set them. In the next release, not in the tree today: the options `--wayland-display NAME`, `--x11-display :N` and `--allow-uid UID` name the display and an extra allowed user on the command line instead.
+- **Started from outside the desktop session** (a service, `sudo`, ssh): the broker finds your desktop through the session's environment (`WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` for Wayland, `DISPLAY` for X11), and a terminal of the session has them. Outside the session you need no environment: `--wayland-display NAME` (or an absolute path), `--runtime-dir DIR`, `--x11-display :N`, `--xauthority FILE` and `--allow-uid UID` replace `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `DISPLAY`, `XAUTHORITY` and `SUDO_UID`; the variables stay as the fallback when a flag is not given. `--allow-uid` pairs with `display-broker-uid=` on the QEMU side when the two users differ. <!-- src: broker/README.md, broker/nb_launch.c, broker/nvkvm_broker.c -->
 - **Test the broker alone** before involving QEMU: `nvkvm-broker-testclient <socket> --present 640x480` prints the handshake and every input event and sends one buffer. It is built by the same `make`.
+
+**Not verified end to end:** the start-up flags were tested without a display server, against stand-in sockets; they have not been run in a real Wayland or X11 session.
 
 The `broker/README.md` file in the repository comes from an earlier project and shows QEMU options (`-display nvkvm-broker,socket=...`) that kayfabe does not use. In kayfabe the socket is the device property `display-broker=<absolute socket path>`.
 

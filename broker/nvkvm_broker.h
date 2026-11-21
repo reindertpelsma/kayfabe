@@ -144,6 +144,19 @@ struct nb_config {
      * read backwards by half the people who saw it.
      */
     int  scale_mode;
+    /*
+     * WHERE THE DISPLAY IS, spelled as flags so that a broker started outside
+     * the desktop session (a service, sudo, ssh) needs no environment.  Every
+     * one is NULL when not given, and then the library's own environment
+     * fallback applies exactly as before (WAYLAND_DISPLAY + XDG_RUNTIME_DIR for
+     * wayland, DISPLAY + XAUTHORITY for x11).  A flag always wins over the
+     * variable it replaces.  nb_launch.c.
+     */
+    const char *wayland_display; /* --wayland-display NAME or /abs/path      */
+    const char *x11_display;     /* --x11-display :N                          */
+    const char *runtime_dir;     /* --runtime-dir DIR (wayland names)         */
+    const char *xauthority;      /* --xauthority FILE                         */
+    bool        allow_uid_flag;  /* --allow-uid was given: SUDO_UID is unused */
 };
 
 /* ── a validated buffer description ──────────────────────────────────────── */
@@ -1404,5 +1417,62 @@ void nb_placeholder_fill(uint32_t *px, unsigned w, unsigned h,
 void nb_placeholder_text(uint32_t *px, unsigned w, unsigned h,
                          unsigned stride_px, unsigned x, unsigned y,
                          const char *s, unsigned scale, uint32_t argb);
+
+/* ── launch decisions, pure (nb_launch.c, test/test_launch.c) ──────────────── */
+
+/* nb_wl_socket_path() results (negative) */
+#define NB_WL_NO_RUNTIME_DIR (-1) /* relative name, no --runtime-dir, no XDG_RUNTIME_DIR */
+#define NB_WL_TOO_LONG       (-2) /* the path does not fit sockaddr_un.sun_path        */
+#define NB_WL_EMPTY_NAME     (-3) /* an empty name                                    */
+
+/*
+ * Which Wayland socket to connect to.  Returns 0 with out[0] == '\0' when
+ * neither --wayland-display nor --runtime-dir was given: the caller then lets
+ * libwayland read its own environment, byte for byte as before.  Otherwise
+ * out is the absolute path: the flag's name (else WAYLAND_DISPLAY, else
+ * "wayland-0", libwayland's own default), used as it is when it starts with
+ * '/', else joined to --runtime-dir (else XDG_RUNTIME_DIR).
+ */
+int nb_wl_socket_path(const char *flag_name, const char *flag_runtime_dir,
+                      const char *env_name, const char *env_runtime_dir,
+                      char *out, size_t cap);
+
+/* nb_sockdir_verdict() results */
+#define NB_DIR_OK            0
+#define NB_DIR_NOT_DIR       1  /* the parent is not a directory             */
+#define NB_DIR_FOREIGN_OWNER 2  /* owned by a uid this broker does not trust */
+#define NB_DIR_FOREIGN_WIDE  3  /* trusted other owner, but others may write */
+
+/*
+ * May a pre-existing directory hold the socket?  Trusted owners are the
+ * broker's own effective uid, root, and the --allow-uid/--allow-user list.  A
+ * trusted owner other than ourselves is refused when group or others can
+ * write there (and the sticky bit does not stop them replacing entries):
+ * whoever can rename the socket owns the broker's front door.
+ */
+int nb_sockdir_verdict(uint32_t st_mode, uid_t st_uid, uid_t self,
+                       const uid_t *trusted, int n_trusted);
+
+/* The mode a directory the broker creates gets: 0700, plus search (x) for the
+ * group/others only when --socket-mode explicitly lets them reach the socket. */
+unsigned nb_sockdir_create_mode(unsigned socket_mode);
+
+/*
+ * The SUDO_UID fallback.  True (and *out set) only when the broker runs as
+ * root, SUDO_UID is set, and no --allow-uid was given.  The value is parsed
+ * the way it always was (strtoul, unchecked).
+ */
+bool nb_sudo_uid_fallback(uid_t self_uid, const char *sudo_uid_env,
+                          bool allow_uid_flag, uid_t *out);
+
+/*
+ * A display flag that the chosen --backend would silently ignore: returns the
+ * flag's name, or NULL.  --wayland-display/--runtime-dir need wayland (or
+ * auto), --x11-display/--xauthority need x11 (or auto), and `test` takes none.
+ */
+const char *nb_display_flag_conflict(const struct nb_config *cfg);
+
+/* Strict --allow-uid: decimal digits only, 0 .. 4294967294.  0 on success. */
+int nb_parse_uid(const char *s, uid_t *out);
 
 #endif /* NVKVM_BROKER_H */
