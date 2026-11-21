@@ -263,9 +263,14 @@ def pack_entries(entries, out, epoch, prefix, preset=6):
 
 
 def safe_extract(archive, dest):
-    """Extract a tar archive of unknown origin: no absolute or parent-directory names, no escaping links, no device nodes."""
+    """Extract a tar archive of unknown origin: no absolute or parent-directory names, no escaping links, no device nodes.
+
+    A symlink with an absolute target is not extracted (upstream QEMU ships one, a dangling /opt/X11/include under roms/edk2);
+    the names of the links left out are returned, sorted.
+    """
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
+    dropped = set()
     try:
         with tarfile.open(archive) as tf:
             for m in tf.getmembers():
@@ -274,13 +279,18 @@ def safe_extract(archive, dest):
                     raise KitRefused("%s: member %r leaves the extraction directory" % (archive, m.name))
                 if not (m.isfile() or m.isdir() or m.issym() or m.islnk()):
                     raise KitRefused("%s: member %r is not a file, directory or link" % (archive, m.name))
-                if m.issym():
-                    target = os.path.normpath(os.path.join(os.path.dirname(m.name), m.linkname))
-                    if os.path.isabs(m.linkname) or target.startswith(".."):
-                        raise KitRefused("%s: link %r points outside the archive" % (archive, m.name))
-            tf.extractall(dest, filter="data")
+                if m.issym() and os.path.isabs(m.linkname):
+                    dropped.add(m.name)
+                elif m.issym() and os.path.normpath(os.path.join(os.path.dirname(m.name), m.linkname)).startswith(".."):
+                    raise KitRefused("%s: link %r points outside the archive" % (archive, m.name))
+
+            def keep(member, path):
+                return None if member.name in dropped else tarfile.data_filter(member, path)
+
+            tf.extractall(dest, filter=keep)
     except tarfile.TarError as e:
         raise KitRefused("%s cannot be extracted: %s" % (archive, e)) from None
+    return sorted(dropped)
 
 
 def render_manifest(doc, forbid=()):
@@ -484,14 +494,15 @@ def resolve_qemu(qi, work):
         if qi.kind == "tarball":
             anchors = ["qemu-release-signature"]
     unpack = work / "unpack"
-    safe_extract(tarball, unpack)
+    dropped = safe_extract(tarball, unpack)
     tops = [p for p in unpack.iterdir()]
     if len(tops) != 1 or not tops[0].is_dir():
         raise KitRefused("%s must hold exactly one top-level directory" % tarball)
     version = read_qemu_version(tops[0])
     check_supported(version)
     tops[0].rename(src)
-    source = {"kind": "tarball", "name": Path(tarball).name, "sha256": sha256_file(tarball), "signer": signer, "anchors": sorted(anchors)}
+    source = {"kind": "tarball", "name": Path(tarball).name, "sha256": sha256_file(tarball), "signer": signer, "anchors": sorted(anchors),
+              "dropped_absolute_links": dropped}
     return version, source
 
 

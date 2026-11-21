@@ -591,6 +591,12 @@ class SafeExtract(Tmp):
             with self.assertRaises(kit.KitRefused):
                 kit.safe_extract(p, self.tmp / "out")
 
+    def test_an_absolute_link_is_left_out_and_reported_and_the_rest_is_extracted(self):
+        p = self.tar([(self.info("top/a.txt", 1), b"a"), (self.info("top/abs", 0, tarfile.SYMTYPE, "/opt/X11/include"), None)])
+        self.assertEqual(kit.safe_extract(p, self.tmp / "out"), ["top/abs"])
+        self.assertTrue((self.tmp / "out/top/a.txt").is_file())
+        self.assertFalse(os.path.lexists(self.tmp / "out/top/abs"))
+
     def test_device_nodes_are_refused(self):
         p = self.tar([(self.info("top/dev", 0, tarfile.CHRTYPE), None)])
         with self.assertRaises(kit.KitRefused):
