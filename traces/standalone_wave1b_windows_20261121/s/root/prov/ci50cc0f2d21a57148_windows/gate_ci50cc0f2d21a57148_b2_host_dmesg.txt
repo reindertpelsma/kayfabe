@@ -1,0 +1,8 @@
+[ 2925.172577] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 2927.199069] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 3032.943221] x86/PAT: kf3-vamgr:63516 freeing invalid memtype [mem 0x2000520000-0x200071ffff]
+[ 3032.944017] x86/PAT: kf3-vamgr:63516 freeing invalid memtype [mem 0x2000720000-0x200091ffff]
+[ 3032.945209] x86/PAT: kf3-vamgr:63516 freeing invalid memtype [mem 0x2000920000-0x2000b1ffff]
+[ 3059.323772] x86/PAT: kf3-vamgr:63516 freeing invalid memtype [mem 0x2002c00000-0x2002c6ffff]
+[ 3158.960022] x86/PAT: kf3-vamgr:63516 freeing invalid memtype [mem 0x2003210000-0x200328ffff]
+[ 3930.783445] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0

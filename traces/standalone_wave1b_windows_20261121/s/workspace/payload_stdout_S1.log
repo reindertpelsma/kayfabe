@@ -1,0 +1,258 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=both winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       291G  8.1G  283G   3% /
+KF_PREFLIGHT_FREE_BYTES=303295361024
+KF_PAYLOAD_STAGE_START name=provision
+[xid-watch] tag=ci50cc0f2d21a57148_provision  host=ubuntu  utc=2026-11-21T11:09:45Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/provision_full.sh
+[xid-watch] host_dmesg_lines=713  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3090, 575.51.03
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+START 2026-11-21T11:09:45+00:00
+BOX_RC=0
+9b3d16519 Merge pull request #550 from reindertpelsma/claude/kfroot-payload-20261120
+DRIVER_RC=0
+NVIDIA GeForce RTX 3090, 580.159.04
+/dev/root       291G   13G  278G   5% /
+TREE_RC=0
+[2026-11-21T11:20:48+00:00] B4: guest ladder built: 5061776 bytes
+[2026-11-21T11:20:48+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/9b3d1651/qemu-system-x86_64 rev=9b3d1651 mtime=2026-11-21 11:22:05.406355969 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[xid-watch] --- command output ends (rc=0) ---
+READY driver=580.159.04
+EXIT 2026-11-21T11:22:07+00:00
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (713 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci50cc0f2d21a57148_provision.log
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=744281
+KF_PAYLOAD_STAGE_START name=windows_gate
+[xid-watch] tag=ci50cc0f2d21a57148_windows_gate  host=ubuntu  utc=2026-11-21T11:22:11Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/windows_gate.sh ci50cc0f2d21a57148 /root/prov
+[xid-watch] host_dmesg_lines=757  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+WINDOWS_GATE_START tag=ci50cc0f2d21a57148 rev=9b3d1651 source=/workspace/kf-ci-src 2026-11-21T11:22:13+00:00 idle_s=300 flags=none guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-21T11:22:13+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 58550(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 58550(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 58550(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 58550(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 58550(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 58597(bash) uid_root 0/0/0/0
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 3090" driver=580.159.04 cpus=13 ram_gb=98 disk_free_gb=270 uid=0 memlock_kb=12946016
+GATE_STAGE preflight EXIT ok 8s
+GATE_STAGE hostref_before START 2026-11-21T11:22:21+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 3090, 580.159.04, 24576 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 6s
+GATE_STAGE prereqs START 2026-11-21T11:22:27+00:00
+GATE_STAGE prereqs EXIT ok 26s
+GATE_STAGE kf3_binary START 2026-11-21T11:22:53+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/9b3d1651/qemu-system-x86_64 sha256=624c02891a8cb8a8 rev=9b3d1651
+GATE_STAGE kf3_binary EXIT ok 1s
+GATE_STAGE lke_die START 2026-11-21T11:22:54+00:00
+GATE_LKE_DIE die=GA102 source=native_rm
+GATE_STAGE lke_die EXIT ok 4s
+GATE_STAGE install START 2026-11-21T11:22:58+00:00
+GATE_STAGE install EXIT ok 1632s
+GATE_STAGE probes_build START 2026-11-21T11:50:10+00:00
+GATE_NOTE probes built: 6383bdab2996 32ce7ec91ce2 8440f5c327aa e5e0c228077c 
+GATE_STAGE probes_build EXIT ok 5s
+GATE_STAGE boot1 START 2026-11-21T11:50:15+00:00
+GATE_NOTE QEMU boot 1 of gate_ci50cc0f2d21a57148 started after 5s
+GATE_NOTE ssh up after 0s
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=mixed procs=5
+KFROOT_ASSERT_VIOLATION 58550(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 58550(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 58550(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 58550(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 58550(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 62774(qemu-system-x86) uid_root 0/0/0/0
+GATE_STAGE boot1 EXIT ok 52s
+GATE_STAGE check_kf3 START 2026-11-21T11:51:07+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 45s
+GATE_STAGE nv_install START 2026-11-21T11:51:52+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_2204&SUBSYS_40431458&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2204&SUBSYS_40431458&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2204&SUBSYS_40431458&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 265s
+GATE_STAGE desktop_prep START 2026-11-21T11:56:17+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-21T11:56:39Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 22s
+GATE_STAGE reboot START 2026-11-21T11:56:39+00:00
+GATE_NOTE second QEMU started after 20s
+GATE_NOTE ssh up after 0s
+GATE_STAGE reboot EXIT ok 72s
+GATE_STAGE desktop START 2026-11-21T11:57:51+00:00
+  GATE_BOOT utc=2026-11-21T11:49:54Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+  GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+  GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/21/2026 11:50 AM
+  GATE_DISPLAY name='NVIDIA GeForce RTX 3090' driver=32.0.15.8088 code=22 status=Error pnp=Error
+  GATE_STATE_DONE mode=desktop
+GATE_STAGE desktop EXIT ok 35s
+GATE_STAGE enable START 2026-11-21T11:58:26+00:00
+GATE_NOTE device enabled once at 2026-11-21T11:51:20Z (guest clock)
+  GATE_DISPLAY name='NVIDIA GeForce RTX 3090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STAGE enable EXIT ok 50s
+GATE_STAGE smi_probes START 2026-11-21T11:59:16+00:00
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 3090 (UUID: GPU-00000000-0000-0000-0000-000000000000)
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=4 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=7 timeout=0
+GATE_STAGE smi_probes EXIT ok 102s
+GATE_STAGE idle START 2026-11-21T12:00:58+00:00
+GATE_NOTE idle window observed 300s of 300s
+GATE_STAGE idle EXIT ok 329s
+GATE_STAGE post_idle START 2026-11-21T12:06:27+00:00
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=6 timeout=0
+  GATE_TDR since=2026-11-21T11:51:20Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=1 livekernelevent193_entries=3 livekernelevent193_resolved=1 livekernelevent193_unresolved=0 livekernelevent_stale=0 strict=0 total=0
+  GATE_LIVEDUMP 2026-11-21T11:51:45Z WATCHDOG-20261121-1151.dmp bytes=1364115456
+  GATE_WER_REPORT dir=Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df where=ReportQueue mtime=2026-11-21T11:53:09Z event_time=2026-11-21T11:52:12Z
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df ReportType=4
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df ReportStatus=2049
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[0].Value=193
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[1].Value=815
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[2].Value=2
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[3].Value=ffffae0313bd6080
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[4].Value=0
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df DynamicSig[1].Value=10.0.26100.<ip>.129
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df FriendlyEventName=Hardware error
+  GATE_WER_DUMP 2026-11-21T11:51:59Z WATCHDOG-20261121-1151.dmp bytes=806244
+  GATE_WER_DUMP 2026-11-21T11:51:45Z WATCHDOG-20261121-1151.dmp bytes=1364115456
+GATE_LKE report="Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df" where=ReportQueue event_type="LiveKernelEvent" event_time="2026-11-21T11:52:12Z" event_time_raw="134397355326219820" bucket="-" report_id="edb54fae-f93c-4fac-b3e6-c654a0b9e5df" P1="193" P2="815" P3="2" P4="ffffae0313bd6080" P5="0" P6="10_0_26100" P7="0_0" P8="256_1"
+GATE_LKE_HEADER bugcheck=0x00000193 p1=0x0000000000000815 p2=0x0000000000000002 p3=0xffffae0313bd6080 p4=0x0000000000000000 bytes_read=4096 file="WATCHDOG-20261121-1151.dmp"
+GATE_LKE_HEADER bugcheck=0x00000193 p1=0x0000000000000815 p2=0x0000000000000002 p3=0xffffae0313bd6080 p4=0x0000000000000000 bytes_read=4096 file="WATCHDOG-20261121-1151.dmp"
+GATE_LKE_HEADERS files=2
+GATE_TIMELINE enable=2026-11-21T11:51:20Z first_probe=2026-11-21T11:52:37Z first_dump=2026-11-21T11:51:45Z dump_minus_enable=25s dump_minus_first_probe=-52s
+  GATE_WER_NEAR report=Kernel_193_933d55c249cff1e7f5487134f97eb6423106d9a_00000000_edb54fae-f93c-4fac-b3e6-c654a0b9e5df none within +-120s
+  GATE_WER_NEAR report=WATCHDOG-20261121-1151.dmp dt=-120 2026-11-21T11:49:59Z Microsoft-Windows-Kernel-Power 172
+  GATE_WER_NEAR report=WATCHDOG-20261121-1151.dmp dt=-117 2026-11-21T11:50:02Z Microsoft-Windows-Kernel-Power 172
+  GATE_WER_NEAR report=WATCHDOG-20261121-1151.dmp dt=-116 2026-11-21T11:50:03Z Microsoft-Windows-Kernel-Power 577
+  GATE_WER_NEAR report=WATCHDOG-20261121-1151.dmp dt=-118 2026-11-21T11:50:02Z Microsoft-Windows-Kernel-Power 109
+  GATE_WER_NEAR report=WATCHDOG-20261121-1151.dmp dt=-106 2026-11-21T11:49:59Z Microsoft-Windows-Kernel-Power 172
+  GATE_WER_NEAR report=WATCHDOG-20261121-1151.dmp dt=-103 2026-11-21T11:50:02Z Microsoft-Windows-Kernel-Power 172
+  GATE_WER_NEAR report=WATCHDOG-20261121-1151.dmp dt=-102 2026-11-21T11:50:03Z Microsoft-Windows-Kernel-Power 577
+  GATE_WER_NEAR report=WATCHDOG-20261121-1151.dmp dt=-104 2026-11-21T11:50:02Z Microsoft-Windows-Kernel-Power 109
+GATE_LKE_RATCHET die=GA102 count=1 max=1 verdict=PASS
+GATE_LKE_COUNTS reports=1 entries=3 unresolved=0 resolved=1 unit=distinct_reports
+GATE_NOTE check --kf3 (after the driver): 0 FAIL line(s),   WIN_CHECK_DONE fail=0
+GATE_STAGE post_idle EXIT ok 145s
+GATE_STAGE collect_stop START 2026-11-21T12:08:52+00:00
+GATE_STAGE collect_stop EXIT ok 268s
+GATE_NOTE graceful stop of the guest (gate_ci50cc0f2d21a57148)
+KFROOT_ASSERT mode=record ok=unchecked label=final why=no-sudo-log-mark
+GATE_HOSTREF after green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 3090, 580.159.04, 24576 MiB, P0"
+WINDOWS_GATE_PASS rev=9b3d1651 gpu="NVIDIA GeForce RTX 3090" idle_s=300 hostref=green/green secs=3108 rootless=violated install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=1 live_dumps_193_entries=3 live_dumps_193_ratchet=PASS live_dumps_193_die=GA102 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-21T11:51:20Z
+GATE_NOTE evidence: /root/prov/ci50cc0f2d21a57148_windows (99 files), /root/prov/ci50cc0f2d21a57148_windows.tgz sha256=914ba9ce12ea2883
+WINDOWS_GATE_TIMING total=3108s preflight=8s hostref_before=6s prereqs=26s kf3_binary=1s lke_die=4s install=1632s probes_build=5s boot1=52s check_kf3=45s nv_install=265s desktop_prep=22s reboot=72s desktop=35s enable=50s smi_probes=102s idle=329s post_idle=145s collect_stop=268s
+WINDOWS_GATE_EXIT rc=0 2026-11-21T12:14:01+00:00
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (757 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci50cc0f2d21a57148_windows_gate.log
+KF_PAYLOAD_STAGE_END name=windows_gate rc=0 duration_ms=3111952
+KF_PAYLOAD_STAGE_START name=specviewperf
+[xid-watch] tag=ci50cc0f2d21a57148_specviewperf  host=ubuntu  utc=2026-11-21T12:14:03Z
+[xid-watch] command: env -u KF_SPEC_TABLE KF_SPEC_LANE=both KF_SPEC_DEADLINE_EPOCH=1795288064 KF_SPEC_NET=online bash /workspace/kf-ci-src/scripts/ci/vast_stage_specviewperf.sh ci50cc0f2d21a57148 /root/prov
+[xid-watch] host_dmesg_lines=811  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+SPEC_STAGE_START lane=both
+SPEC_STAGE_LIST lane=both n=9
+SPEC_COPY_DELETED removed=archive
+SPEC_LICENCE_STATE at=boot1_start up_min=1 status=Licensed remaining=129563_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
+SPEC_LICENCE_STATE at=after_energy_04 up_min=14 status=Licensed remaining=129549_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:25_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up29m up_min=30 status=Licensed remaining=129534_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up44m up_min=45 status=Licensed remaining=129518_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:15_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=creo-04 result=PASS subtests=13/13 reason=- failed=-
+SPEC_LICENCE_STATE at=after_creo_04 up_min=53 status=Licensed remaining=129511_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:58_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up67m up_min=68 status=Licensed remaining=129495_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:21_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up83m up_min=84 status=Licensed remaining=129480_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:40_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up98m up_min=99 status=Licensed remaining=129464_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:05_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up114m up_min=115 status=Licensed remaining=129449_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:30_PM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_ROW name=blender-01 result=PASS subtests=7/7 reason=- failed=-
+SPEC_LICENCE_STATE at=after_blender_01 up_min=130 status=Licensed remaining=129433_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:20_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up145m up_min=146 status=Licensed remaining=129418_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:48_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up160m up_min=161 status=Licensed remaining=129402_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up176m up_min=177 status=Licensed remaining=129387_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:28_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up191m up_min=192 status=Licensed remaining=129371_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up207m up_min=208 status=Licensed remaining=129356_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:34_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up222m up_min=223 status=Licensed remaining=129341_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:52_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=enscape-01 result=FAIL subtests=5/10 reason=TIMEOUT failed=06_SanMiguelFullUltraHQ
+enscape_01 --- FAILED
+SPEC_LICENCE_STATE at=after_enscape_01 up_min=237 status=Licensed remaining=129327_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:36_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_start up_min=1 status=Licensed remaining=129325_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:16:03_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
+SPEC_LICENCE_STATE at=after_medical_04 up_min=13 status=Licensed remaining=129312_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:32_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=maya-07 result=PASS subtests=7/7 reason=- failed=-
+SPEC_LICENCE_STATE at=after_maya_07 up_min=26 status=Licensed remaining=129299_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:21_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up41m up_min=42 status=Licensed remaining=129284_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:45_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
+SPEC_LICENCE_STATE at=after_catia_07 up_min=53 status=Licensed remaining=129272_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:27_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up68m up_min=69 status=Licensed remaining=129256_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:05_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up84m up_min=85 status=Licensed remaining=129241_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up99m up_min=100 status=Licensed remaining=129225_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=solidworks-08 result=FAIL subtests=7/8 reason=TIMEOUT failed=08_NASACrawlerShadedEdges
+solidworks_08 --- FAILED
+SPEC_LICENCE_STATE at=after_solidworks_08 up_min=105 status=Licensed remaining=129221_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:46_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=0/0 reason=TIME failed=-
+SPEC_LICENCE_STATE at=end up_min=105 status=Licensed remaining=129220_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:08_PM wlms=absent sppsvc=Running w32time=Stopped net=online
