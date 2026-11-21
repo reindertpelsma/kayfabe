@@ -1,0 +1,48 @@
+{
+ "checks": [
+  {
+   "cpu": [
+    1000000.0,
+    1000000.0,
+    1000000.0,
+    1000000.0
+   ],
+   "diff": 0,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    1000000.0,
+    1000000.0,
+    1000000.0,
+    1000000.0
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "sum_ones_1e6",
+   "numel": 1,
+   "on_gpu": true,
+   "ref": 1000000.0,
+   "tol": 0
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 4090"
+ },
+ "info": {
+  "available_memory": 3514040320.0,
+  "can_use_gpu": true,
+  "compute_capability": "8.9",
+  "device_count": 1,
+  "driver_version": 13.1,
+  "matlab_release": "2026b",
+  "multiprocessors": 128,
+  "name": "NVIDIA GeForce RTX 4090",
+  "toolkit_version": 13.1,
+  "total_memory": 3968073728.0
+ },
+ "row": "gpu_info",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

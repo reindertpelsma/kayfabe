@@ -1,0 +1,22 @@
+﻿{
+    "app":  "uxp",
+    "started":  1794783699.65,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "main_window":  true,
+    "titles":  [
+                   "Adobe UXP Developer Tools"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  116,
+    "quit":  "clean",
+    "ended":  1794783739.559,
+    "crash_events":  1,
+    "crash_dumps":  0,
+    "dismissed":  [
+
+                  ]
+}

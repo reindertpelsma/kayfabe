@@ -1,0 +1,101 @@
+{
+  "app": "resolve",
+  "ok": false,
+  "evidence": "FILE",
+  "signal": "",
+  "secs": 258,
+  "platform": "kf3",
+  "renders": {
+    "h264": {
+      "label": "H.264 MP4, UHD",
+      "status": "NOT_RUN",
+      "reason": "not reached"
+    },
+    "dnxhr": {
+      "label": "Avid DNxHR MOV, UHD",
+      "status": "NOT_RUN",
+      "reason": "not reached"
+    },
+    "prores": {
+      "label": "Apple ProRes MOV, UHD",
+      "status": "NOT_RUN",
+      "reason": "not reached"
+    },
+    "png": {
+      "label": "PNG image sequence, UHD",
+      "status": "NOT_RUN",
+      "reason": "not reached"
+    },
+    "hevc": {
+      "label": "H.265 MP4, 720p (software HEVC)",
+      "status": "NOT_RUN",
+      "reason": "not reached"
+    }
+  },
+  "findings": [
+    "grading was driven but fewer than three nodes could be read back on any clip: grade not proven"
+  ],
+  "problems": [
+    "driver step 'deliver page' did not complete (stage init)",
+    "driver step 'timeline on deliver page' did not complete (stage init)",
+    "guest script error: Deliver page did not open",
+    "render h264 was not reached",
+    "render dnxhr was not reached",
+    "render prores was not reached",
+    "render png was not reached",
+    "render hevc was not reached"
+  ],
+  "census_whole_row": {
+    "lines": 13115,
+    "unserviced": 400,
+    "unserviced_codes": {
+      "76": 400
+    },
+    "foreign_class": 0,
+    "dead_channels": 0,
+    "channels_retired": 16,
+    "xid": 0,
+    "tdr_or_timeout": 0,
+    "refused_leaves_absent": 7,
+    "patterns": []
+  },
+  "guest_nvidia_smi": {
+    "samples": 205,
+    "all_na": 0,
+    "utilization_numeric": 205
+  },
+  "resolve_log": {
+    "compute_api": "CUDA",
+    "gpus_detected": 1,
+    "device": "NVIDIA GeForce RTX 4090",
+    "cuda_board_manager": true,
+    "nvenc": true,
+    "nvdec": true,
+    "gpudetect_errors": [
+      "ct            | ERROR | 2026-11-12 17:56:54,821 | NVML Error Unknown Error (999): Querying device current PCI link width"
+    ]
+  },
+  "grade_nodes": [],
+  "guest_goto_debug": [
+    "page=Deliver elements=18 main=False button=False"
+  ],
+  "guest_app_events": [
+    "Application Error id=1000 Faulting application name: nvidia-smi.exe, version: 8.17.15.8088, time stamp: 0x6885c44f? | Faulting module name: nvml.dll, version: 8.17.15.8088, time stamp: 0x6885c42f? | Exception code: 0xc0000005? | Fault offse",
+    "Application Error id=1000 Faulting application name: Resolve.exe, version: <ip>, time stamp: 0x00000000? | Faulting module name: nvoglv64.dll, version: 32.0.15.8088, time stamp: 0x6885c454? | Exception code: 0xc0000409? | Fault offset: ",
+    "NVIDIA OpenGL Driver id=1 Unable to recover from a kernel exception. The application must close. |  |  | Error code: 3 (subcode 2)",
+    "Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for \\MINWINPC$ via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.microsoftaik.azure.net/templates/Aik/scep failed:? | ? | GetC",
+    "Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for Local system via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.microsoftaik.azure.net/templates/Aik/scep failed:? | ? | Ge"
+  ],
+  "guest_nvlddmkm_events": [
+    "id=153 2026-11-12T18:00:17.2050664+00:00",
+    "id=153 2026-11-12T18:00:17.0291082+00:00",
+    "id=153 2026-11-12T18:00:14.1440817+00:00"
+  ],
+  "lane": "gate",
+  "other_suites": {
+    "pugetbench": "NOT RUN: package not pinned (private object, owner to supply); PugetBench for DaVinci Resolve supports the free edition only up to v21.0 and the image has <ip> (scripting was removed from free in 21.1)",
+    "resolve_builtin_benchmark": "none exists in Resolve; the Deliver page's render speed is a UI readout only (not parsed)"
+  },
+  "status": "INCONCLUSIVE",
+  "error": "driver step 'deliver page' did not complete (stage init); driver step 'timeline on deliver page' did not complete (stage init); guest script error: Deliver page did not open; render h264 was not reached; render dnxhr was not reached; render prores was not reached"
+}

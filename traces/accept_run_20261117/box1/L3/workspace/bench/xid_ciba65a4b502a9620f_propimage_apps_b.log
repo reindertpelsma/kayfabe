@@ -1,0 +1,6 @@
+[xid-watch] tag=ciba65a4b502a9620f_propimage_apps_b  host=ubuntu  utc=2026-11-17T19:28:20Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/propimage_apps_b_stage.py run --sha 021cad3ccd4002b9f75b90b0f9f3ba0370e2ae67 --checkout /workspace/kf-ci-src --prefix /workspace/kf-propimage-b --out /workspace/kf-ci-evidence/propimage_apps_b.json --evidence-dir /workspace/kf-ci-evidence/propimage_apps_b --deadline-epoch 1794961398 --lane gate
+[xid-watch] host_dmesg_lines=1238  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---

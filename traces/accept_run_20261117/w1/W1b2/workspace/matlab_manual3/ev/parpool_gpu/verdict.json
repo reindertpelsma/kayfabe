@@ -1,0 +1,66 @@
+{
+ "census": {
+  "counts": {
+   "refused": 13,
+   "unserviced": 21
+  },
+  "lines": 665,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 13,
+   "submissions": 1200,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [],
+  "flag_disagrees": 0,
+  "n": 0
+ },
+ "facts": {},
+ "failure_class": "ASSERT",
+ "findings": [
+  "ERROR_ID:parallel:cluster:LicenseUnavailable"
+ ],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4794.0
+  },
+  "peak": {
+   "busy_samples": 2,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 13.0,
+   "gpu_dmon_sm": 13.0,
+   "mem_mb": 4805.0
+  },
+  "reasons": [
+   "video memory did not rise by 64 MiB (baseline 4794.0, peak 4805.0)"
+  ],
+  "required": [
+   "gpu",
+   "mem"
+  ],
+  "samples": 58,
+  "source": "host",
+  "verdict": "FAIL"
+ },
+ "host_xid": 0,
+ "lane": "discovery",
+ "rc": 1,
+ "reason": "ERROR_ID:parallel:cluster:LicenseUnavailable",
+ "result": {
+  "bytes": 208,
+  "sha256": "3014b7641169bea47fc4696dd750a823cbf028132e0c62bc09de72afbb4944c4"
+ },
+ "row": "parpool_gpu",
+ "secs": 24,
+ "verdict": "FAIL"
+}

@@ -1,0 +1,5 @@
+[13242.761051] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[13357.757077] x86/PAT: kf3-vamgr:86101 freeing invalid memtype [mem 0x1000520000-0x100071ffff]
+[13357.757481] x86/PAT: kf3-vamgr:86101 freeing invalid memtype [mem 0x1000720000-0x100091ffff]
+[14079.712760] workqueue: blk_mq_run_work_fn hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND
+[14082.498843] workqueue: kvmclock_update_fn [kvm] hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND

@@ -1,0 +1,61 @@
+SPEC_NOTE stage=preflight 2026-11-18T01:17:39+00:00 left_s=15830
+SPEC_STAGE_LIST lane=both n=9
+SPEC_NOTE rev=049fbf3c tag=ci04bc9108111549e2 lane=both release=15.0.0 deadline_left_s=15830
+SPEC_NOTE guest network=online (online: slirp restrict=off and the real clock, offline: restrict=on and the recorded clock; the Windows evaluation guest needs the network and the real time to complete its own start-up validation); licence probe=1
+SPEC_NOTE host: gpu="NVIDIA GeForce RTX 5070 Ti" cpus=30 ram_gb=98 disk_free_gb=246 need_gb=190
+SPEC_NOTE stage=fetch 2026-11-18T01:17:39+00:00 left_s=15830
+SPEC_NOTE stage=hostref_before 2026-11-18T01:17:39+00:00 left_s=15830
+SPEC_NOTE hostref before green cup8=PASS xid_count=0 xid_delta=0
+SPEC_NOTE stage=overlay 2026-11-18T01:17:39+00:00 left_s=15830
+SPEC_NOTE stage=boot_copy 2026-11-18T01:17:39+00:00 left_s=15830
+SPEC_NOTE ssh up after 10s
+SPEC_NOTE guest prep: SPEC_PREP exclusion=ok free_gb=183.5
+SPEC_NOTE stage=copy 2026-11-18T01:19:11+00:00 left_s=15738
+SPEC_NOTE copy: src=0 zstd=0 tarfilter=0 ssh_tar=0 
+SPEC_NOTE copy verified: 9 viewset directories match the manifest
+SPEC_NOTE guest post: SPEC_POST cli=present SPEC_POST icacls_rc=0 SPEC_POST vcredist_rc=0 
+SPEC_COPY_DELETED removed=archive
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE stage=boot_run 2026-11-18T02:10:09+00:00 left_s=12680
+SPEC_NOTE ssh up after 10s
+SPEC_LICENCE_STATE at=boot1_start up_min=2 status=Licensed remaining=129547_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:35_AM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 269s)
+SPEC_NOTE settle_wait_s=269
+SPEC_NOTE stage=viewset_energy-04 2026-11-18T02:17:05+00:00 left_s=12264
+SPEC_NOTE run energy-04 (budget 1200s, mode full, left 12260s)
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
+SPEC_LICENCE_STATE at=after_energy_04 up_min=12 status=Licensed remaining=129536_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:18:51_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_creo-04 2026-11-18T02:22:53+00:00 left_s=11916
+SPEC_NOTE run creo-04 (budget 3900s, mode full, left 11914s)
+SPEC_LICENCE_STATE at=boot1_up26m status=unavailable net=online
+SPEC_ROW name=creo-04 result=FAIL subtests=0/0 reason=GUEST failed=-
+creo_04 --- FAILED
+SPEC_LICENCE_STATE at=after_creo_04 status=unavailable net=online
+SPEC_NOTE stage=viewset_blender-01 2026-11-18T02:52:49+00:00 left_s=10120
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE ssh up after 0s
+SPEC_LICENCE_STATE at=boot2_start up_min=1 status=Licensed remaining=129498_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:26_AM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 269s)
+SPEC_NOTE settle_wait_s=269
+SPEC_NOTE run blender-01 (budget 5700s, mode full, left 9333s)
+SPEC_LICENCE_STATE at=boot2_up16m status=unavailable net=online
+SPEC_ROW name=blender-01 result=FAIL subtests=0/0 reason=GUEST failed=-
+blender_01 --- FAILED
+SPEC_LICENCE_STATE at=after_blender_01 status=unavailable net=online
+SPEC_NOTE stage=viewset_enscape-01 2026-11-18T03:32:14+00:00 left_s=7755
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE ssh up after 0s
+SPEC_LICENCE_STATE at=boot3_start up_min=1 status=Licensed remaining=129458_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:18:55_AM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 269s)
+SPEC_NOTE settle_wait_s=269
+SPEC_NOTE run enscape-01 (budget 6300s, mode full, left 6965s)
+SPEC_LICENCE_STATE at=boot3_up15m up_min=16 status=Licensed remaining=129443_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:10_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up30m up_min=32 status=Licensed remaining=129428_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:30_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up46m up_min=47 status=Licensed remaining=129412_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:18:47_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up61m up_min=62 status=Licensed remaining=129397_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:05_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up76m up_min=78 status=Licensed remaining=129382_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:22_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up92m up_min=93 status=Licensed remaining=129367_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:40_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE the stage script ended without a verdict (rc=143, stage=viewset_enscape-01)
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE guest overlay kept as spec_ci04bc9108111549e2.kept.qcow2 (KF_SPEC_KEEP_ON_FAIL=1)
+SPEC_COPY_DELETED removed=nothing

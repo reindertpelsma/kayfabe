@@ -1,0 +1,17 @@
+START 2026-11-18T00:16:47+00:00
+BOX_RC=0
+049fbf3cb Merge claude/kfml-strict-not-run-20261117 (PR #472) into the acceptance run tree: a NOT_RUN kfml row fails by name under a strict instruction
+DRIVER_RC=0
+NVIDIA GeForce RTX 5070 Ti, 580.159.04
+/dev/root       291G   13G  278G   5% /
+TREE_RC=0
+[2026-11-18T00:23:38+00:00] B4: guest ladder built: 5061712 bytes
+[2026-11-18T00:23:38+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/049fbf3c/qemu-system-x86_64 rev=049fbf3c mtime=2026-11-18 00:24:22.555761791 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-18T00:24:24+00:00

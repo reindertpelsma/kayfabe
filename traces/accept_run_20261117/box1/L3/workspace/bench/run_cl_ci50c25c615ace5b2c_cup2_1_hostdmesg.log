@@ -1,0 +1,2 @@
+[ 2173.013919] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 2236.662654] x86/PAT: kf3-vamgr:33125 freeing invalid memtype [mem 0x1001010000-0x10010fffff]

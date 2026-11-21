@@ -1,0 +1,7 @@
+diag2 port=39934 key_ok=y
+== now
+2026-11-15T23:05:11.1696346+00:00
+== uptime
+00:10:48.6874845
+== tasks named app_ or kf
+DIAGDONE

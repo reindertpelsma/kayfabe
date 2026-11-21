@@ -1,0 +1,18 @@
+KF_CLOCK image=propimage-linux net=offline using=recorded base=2026-11-17T08:49:26Z recorded=2026-11-17T08:49:26Z floor_input=- inputs=0
+clone clone1 pid 83611; ssh up after 250.2s
+MATCH     machine_id               want='adb8d5ab51e43f123cebc48fb01e0675' got='adb8d5ab51e43f123cebc48fb01e0675'
+MATCH     hostname                 want='kf-5bac0935' got='kf-5bac0935'
+MATCH     smbios_uuid              want='48772067-d8a6-52a2-ba42-1fa54765afb7' got='48772067-d8a6-52a2-ba42-1fa54765afb7'
+MATCH     smbios_serial            want='KFC3EBF2EE5B' got='KFC3EBF2EE5B'
+MATCH     baseboard_serial         want='KFB622B99AF9B' got='KFB622B99AF9B'
+MATCH     chassis_serial           want='KFCF8ED698FEB' got='KFCF8ED698FEB'
+MATCH     mac                      want=['52:54:00:8c:5f:56'] got=['52:54:00:8c:5f:56']
+MATCH     disk_serial              want=['KFDF6E3252A7F88'] got=['KFDF6E3252A7F88']
+MATCH     kernel_headers           kernel=6.8.0-149-generic
+MATCH     driver_build_tools       kernel_cc=x86_64-linux-gnu-gcc-13
+MATCH     cloud_init_disabled      True
+MATCH     cpu_no_forbidden_flags   []
+MATCH     no_network               internet=False ping=False
+MATCH     clock                    base=2026-11-17T08:49:26Z guest=2026-11-17T08:53:37Z window_s=265
+RESULT MATCH
+BOOT_RC=0

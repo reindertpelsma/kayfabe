@@ -1,0 +1,18 @@
+KF_MANIFEST sha256=f8cbf32f55d3e77e1cac4aee316513ab53d85c2cd9f222d0258ac430579639a3 items=2 bytes=1815245 stages=tools
+KF_STEP name=download.swtpm-0.10.1.tar.gz secs=2.0 bytes=415992 source=r2 MBps=0.21
+KF_STEP name=download.libtpms-0.10.1.tar.gz secs=2.0 bytes=1399253 source=r2 MBps=0.70
+KF_DOWNLOAD_DONE state=done ok=2 failed=0 total=2
+KF_VERIFY name=libtpms-0.10.1.tar.gz ok=1
+KF_VERIFY name=swtpm-0.10.1.tar.gz ok=1
+KF_MANIFEST sha256=b8b31ed87860063395a58c763af4a1d673edb8344e14a2404ed4576009fe0ebd items=1 bytes=50496618964 stages=image
+KF_STEP name=download.propimage-kfimg-20261112.zip secs=1099.6 bytes=50496618964 source=r2 MBps=45.92
+KF_DOWNLOAD_DONE state=done ok=1 failed=0 total=1
+KF_VERIFY name=propimage-kfimg-20261112.zip ok=1
+KF_MANIFEST sha256=53c15cdebf2bbca7f61f706c5bf3f79c040ba69b172609dc5f4504b4ff3fcf0f items=1 bytes=11224 stages=image
+KF_STEP name=download.kf-gop.signed.efi secs=0.8 bytes=11224 source=r2 MBps=0.01
+KF_DOWNLOAD_DONE state=done ok=1 failed=0 total=1
+KF_VERIFY name=kf-gop.signed.efi ok=1
+KF_MANIFEST sha256=b8b31ed87860063395a58c763af4a1d673edb8344e14a2404ed4576009fe0ebd items=1 bytes=50496618964 stages=image
+KF_STEP name=download.propimage-kfimg-20261112.zip secs=938.8 bytes=50496618964 source=r2 MBps=53.79
+KF_DOWNLOAD_DONE state=done ok=1 failed=0 total=1
+KF_VERIFY name=propimage-kfimg-20261112.zip ok=1

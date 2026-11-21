@@ -1,0 +1,26 @@
+﻿{
+    "app":  "acrobat",
+    "started":  1794784403.933,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "out.pdf",
+                        "bytes":  649302,
+                        "modified":  1794784422.739
+                    }
+                ],
+    "source":  "apollo11_anomaly_report_3.pdf",
+    "opened":  true,
+    "pages":  16,
+    "extract_ok":  true,
+    "extracted_pages":  5,
+    "saved":  true,
+    "helpers_left":  4,
+    "quit":  "clean",
+    "ended":  1794784425.522,
+    "crash_events":  1,
+    "crash_dumps":  0,
+    "dismissed":  [
+
+                  ]
+}

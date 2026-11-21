@@ -1,0 +1,8 @@
+{
+  "class": "harness",
+  "app": "illustrator",
+  "ok": false,
+  "evidence": "NONE",
+  "error": "Task timeout; no verdict",
+  "outputs_recorded": 0
+}

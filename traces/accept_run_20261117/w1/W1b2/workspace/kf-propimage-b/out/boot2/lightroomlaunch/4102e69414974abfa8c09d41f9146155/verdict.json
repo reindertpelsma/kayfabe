@@ -1,0 +1,34 @@
+{
+  "app": "lightroomlaunch",
+  "ok": false,
+  "evidence": "UIA",
+  "signal": "",
+  "error": "application did not exit cleanly (forced)",
+  "class": "app",
+  "limited": true,
+  "lane": "gate",
+  "path": "Lightroom Classic start: catalog open, GPU capability scan (launch only)",
+  "platform": "kf3",
+  "secs": 213,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 19.0,
+      "mem_mb": 9527.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 19.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 54
+    },
+    "baseline": {
+      "mem_mb": 9424.0,
+      "gpu": 2.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 595
+  },
+  "outputs_recorded": 3
+}

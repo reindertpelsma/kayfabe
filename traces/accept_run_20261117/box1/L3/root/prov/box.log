@@ -1,0 +1,19 @@
+PROVISION_START 2026-11-17T14:35:21+00:00
+   mirror archive.ubuntu.com/ubuntu -> 604535 B/s
+   mirror azure.archive.ubuntu.com/ubuntu -> 3421956 B/s
+   mirror mirrors.edge.kernel.org/ubuntu -> 66842 B/s
+== switching apt to azure.archive.ubuntu.com/ubuntu (3421956 B/s)
+apt timers masked (prevents the NEXT run; see header re: the one already running)
+apt SKIPPED - every dependency already present
+PROVISION_REPO=/root/kayfabe branch=kf-ci-approved rev=021cad3cc
+HEAD=021cad3cc branch=kf-ci-approved
+KF_SETUP_TIMING phase=rust_toolchain event=start utc=1794926127
+KF_SETUP_TIMING phase=rust_toolchain event=end utc=1794926128
+KF_SETUP_TIMING phase=rust_targets event=start utc=1794926128
+x86_64-unknown-linux-musl already installed for 1.99.0
+x86_64-unknown-uefi already installed for 1.99.0
+KF_SETUP_TIMING phase=rust_targets event=end utc=1794926128
+KF_SETUP_TIMING phase=workspace_build event=start utc=1794926128
+KF_SETUP_TIMING phase=workspace_build event=end utc=1794926128
+CARGO_RC=0
+PROVISION_DONE rc=0 2026-11-17T14:35:28+00:00

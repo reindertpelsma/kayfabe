@@ -1,0 +1,404 @@
+{
+ "checks": [
+  {
+   "cpu": [
+    0.033289677635221636,
+    0.97601424232559,
+    0.00142497883643955,
+    0.00013869241229258478
+   ],
+   "diff": 1.2807702338842571e-08,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    0.033289677360172285,
+    0.9760142392583759,
+    0.001424978720024228,
+    0.00013869231042917818
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "mldivide_single_512",
+   "numel": 1536,
+   "on_gpu": true,
+   "ref": 0.033289677635221636,
+   "tol": 0.0001
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "mldivide_resid_gpu_single_512",
+   "tol": 0.0001,
+   "value": 2.1527790750042186e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "mldivide_resid_cpu_single_512",
+   "tol": 0.0001,
+   "value": 1.7958325315703405e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "lu_resid_gpu_single_512",
+   "tol": 0.0001,
+   "value": 2.9849982752239157e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "lu_resid_cpu_single_512",
+   "tol": 0.0001,
+   "value": 1.1648148046106144e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_resid_gpu_single_512",
+   "tol": 0.0001,
+   "value": 3.2137114658326027e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_orth_gpu_single_512",
+   "tol": 0.0001,
+   "value": 4.815614715880656e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_resid_cpu_single_512",
+   "tol": 0.0001,
+   "value": 1.726512692812321e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "chol_resid_gpu_single_512",
+   "tol": 0.0001,
+   "value": 1.0895283253375965e-07
+  },
+  {
+   "cpu": [
+    0.023657064484535036,
+    0.9929255474100707,
+    0.000164779819897376,
+    0.0004361357423476875
+   ],
+   "diff": 8.708783270485715e-09,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    0.023657064727528543,
+    0.9929255525081757,
+    0.0001647797180339694,
+    0.000436135713243857
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "mldivide_single_1024",
+   "numel": 3072,
+   "on_gpu": true,
+   "ref": 0.023657064484535036,
+   "tol": 0.0001
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "mldivide_resid_gpu_single_1024",
+   "tol": 0.0001,
+   "value": 2.736025521699048e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "mldivide_resid_cpu_single_1024",
+   "tol": 0.0001,
+   "value": 2.5596924047022185e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "lu_resid_gpu_single_1024",
+   "tol": 0.0001,
+   "value": 2.4150889998963976e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "lu_resid_cpu_single_1024",
+   "tol": 0.0001,
+   "value": 1.2023815543216188e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_resid_gpu_single_1024",
+   "tol": 0.0001,
+   "value": 2.583567493275041e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_orth_gpu_single_1024",
+   "tol": 0.0001,
+   "value": 9.81449602477369e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_resid_cpu_single_1024",
+   "tol": 0.0001,
+   "value": 1.9416313534748042e-07
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "chol_resid_gpu_single_1024",
+   "tol": 0.0001,
+   "value": 1.0917422343936778e-07
+  },
+  {
+   "cpu": [
+    0.5565259639749592,
+    1.0038403307917179,
+    -0.01340717077255249,
+    0.023958604782819748
+   ],
+   "diff": 8.149853746225744e-07,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    0.5565259132915474,
+    1.0038402792270062,
+    -0.013407301157712936,
+    0.02395862527191639
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "lstsq_single_2000x500",
+   "numel": 500,
+   "on_gpu": true,
+   "ref": 0.5565259639749592,
+   "tol": 0.0001
+  },
+  {
+   "cpu": [
+    0.03404707105796841,
+    1.0112897391307463,
+    -7.512266629855244e-05,
+    0.0006141746837850825
+   ],
+   "diff": 3.802798026221641e-17,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    0.0340470710579684,
+    1.011289739130746,
+    -7.512266629855232e-05,
+    0.000614174683785082
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "mldivide_double_512",
+   "numel": 1536,
+   "on_gpu": true,
+   "ref": 0.03404707105796841,
+   "tol": 1e-10
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "mldivide_resid_gpu_double_512",
+   "tol": 1e-10,
+   "value": 3.5766340521315476e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "mldivide_resid_cpu_double_512",
+   "tol": 1e-10,
+   "value": 4.916732064938776e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "lu_resid_gpu_double_512",
+   "tol": 1e-10,
+   "value": 3.1195008974024837e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "lu_resid_cpu_double_512",
+   "tol": 1e-10,
+   "value": 1.0089868906533092e-15
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_resid_gpu_double_512",
+   "tol": 1e-10,
+   "value": 3.621160375035781e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_orth_gpu_double_512",
+   "tol": 1e-10,
+   "value": 6.476228251569689e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_resid_cpu_double_512",
+   "tol": 1e-10,
+   "value": 1.0927579016357063e-15
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "chol_resid_gpu_double_512",
+   "tol": 1e-10,
+   "value": 2.0074138425479023e-16
+  },
+  {
+   "cpu": [
+    0.02401075433721552,
+    0.9984976975846793,
+    -7.803635448344963e-06,
+    1.5516787360267633e-06
+   ],
+   "diff": 3.5816978533675435e-17,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    0.024010754337215532,
+    0.9984976975846791,
+    -7.803635448345076e-06,
+    1.5516787360266695e-06
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "mldivide_double_1024",
+   "numel": 3072,
+   "on_gpu": true,
+   "ref": 0.02401075433721552,
+   "tol": 1e-10
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "mldivide_resid_gpu_double_1024",
+   "tol": 1e-10,
+   "value": 5.041959266080504e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "mldivide_resid_cpu_double_1024",
+   "tol": 1e-10,
+   "value": 6.814424646021586e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "lu_resid_gpu_double_1024",
+   "tol": 1e-10,
+   "value": 3.486794810499202e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "lu_resid_cpu_double_1024",
+   "tol": 1e-10,
+   "value": 1.4268091716961105e-15
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_resid_gpu_double_1024",
+   "tol": 1e-10,
+   "value": 4.065881159758201e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_orth_gpu_double_1024",
+   "tol": 1e-10,
+   "value": 8.505398988301872e-16
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "qr_resid_cpu_double_1024",
+   "tol": 1e-10,
+   "value": 1.5908801600796431e-15
+  },
+  {
+   "guest_pass": true,
+   "kind": "resid",
+   "name": "chol_resid_gpu_double_1024",
+   "tol": 1e-10,
+   "value": 2.0141065280282034e-16
+  },
+  {
+   "cpu": [
+    0.5919963601699857,
+    0.9932105399163784,
+    0.014167689194452684,
+    0.023602784772601106
+   ],
+   "diff": 2.0622826041250937e-15,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    0.5919963601699856,
+    0.9932105399163791,
+    0.014167689194452769,
+    0.02360278477260101
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "lstsq_double_2000x500",
+   "numel": 500,
+   "on_gpu": true,
+   "ref": 0.5919963601699857,
+   "tol": 1e-10
+  },
+  {
+   "cpu": [
+    0.00971077576217985,
+    0.32983849993063885,
+    0.00033229125841920896,
+    0.00012270652586498582
+   ],
+   "diff": 2.775491466035936e-17,
+   "dtype": "double",
+   "exists_on_gpu": true,
+   "gpu": [
+    0.009710775762179848,
+    0.3298384999306388,
+    0.00033229125841920885,
+    0.00012270652586498569
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "mldivide_double_2048_after_100",
+   "numel": 2048,
+   "on_gpu": true,
+   "ref": 0.00971077576217985,
+   "tol": 1e-10
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 4090"
+ },
+ "row": "gpu_solve",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

@@ -1,0 +1,14 @@
+SPEC_LICENCE_STATE at=boot1_start up_min=2 status=Licensed remaining=129547_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:35_AM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_LICENCE_STATE at=after_energy_04 up_min=12 status=Licensed remaining=129536_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:18:51_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up26m status=unavailable net=online
+SPEC_LICENCE_STATE at=after_creo_04 status=unavailable net=online
+SPEC_LICENCE_STATE at=boot2_start up_min=1 status=Licensed remaining=129498_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:26_AM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up16m status=unavailable net=online
+SPEC_LICENCE_STATE at=after_blender_01 status=unavailable net=online
+SPEC_LICENCE_STATE at=boot3_start up_min=1 status=Licensed remaining=129458_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:18:55_AM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up15m up_min=16 status=Licensed remaining=129443_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:10_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up30m up_min=32 status=Licensed remaining=129428_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:30_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up46m up_min=47 status=Licensed remaining=129412_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:18:47_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up61m up_min=62 status=Licensed remaining=129397_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:05_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up76m up_min=78 status=Licensed remaining=129382_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:22_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up92m up_min=93 status=Licensed remaining=129367_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:40_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online

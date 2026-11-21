@@ -1,0 +1,64 @@
+{
+ "census": {
+  "counts": {
+   "refused": 12,
+   "unserviced": 21
+  },
+  "lines": 690,
+  "work": {
+   "base_missing": false,
+   "births": 4,
+   "doorbells": 0,
+   "retired": 4,
+   "status_lines": 12,
+   "submissions": 6085,
+   "verdict": "PASS"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [],
+  "flag_disagrees": 0,
+  "n": 39
+ },
+ "facts": {},
+ "failure_class": "GPU_NOT_USED",
+ "findings": [],
+ "gpu": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 4794.0
+  },
+  "peak": {
+   "busy_samples": 8,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 35.0,
+   "gpu_dmon_sm": 35.0,
+   "mem_mb": 4805.0
+  },
+  "reasons": [
+   "video memory did not rise by 64 MiB (baseline 4794.0, peak 4805.0)"
+  ],
+  "required": [
+   "gpu",
+   "mem"
+  ],
+  "samples": 53,
+  "source": "host",
+  "verdict": "FAIL"
+ },
+ "host_xid": 0,
+ "lane": "discovery",
+ "rc": 0,
+ "reason": "video memory did not rise by 64 MiB (baseline 4794.0, peak 4805.0)",
+ "result": {
+  "bytes": 6441,
+  "sha256": "c5f8ff3969c39c0838f1fff429b8da0a6463a5d389f8dbe3d599674f18e56187"
+ },
+ "row": "gpu_solve",
+ "secs": 22,
+ "verdict": "FAIL"
+}

@@ -1,0 +1,39 @@
+[xid-watch] tag=ci04bc9108111549e2_specviewperf  host=ubuntu  utc=2026-11-18T01:17:39Z
+[xid-watch] command: env -u KF_SPEC_TABLE KF_SPEC_LANE=both KF_SPEC_DEADLINE_EPOCH=1794980489 KF_SPEC_NET=online bash /workspace/kf-ci-src/scripts/ci/vast_stage_specviewperf.sh ci04bc9108111549e2 /root/prov
+[xid-watch] host_dmesg_lines=828  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 5070 Ti, 595.91.07
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+SPEC_STAGE_START lane=both
+SPEC_STAGE_LIST lane=both n=9
+SPEC_COPY_DELETED removed=archive
+SPEC_LICENCE_STATE at=boot1_start up_min=2 status=Licensed remaining=129547_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:35_AM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-
+SPEC_LICENCE_STATE at=after_energy_04 up_min=12 status=Licensed remaining=129536_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:18:51_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up26m status=unavailable net=online
+SPEC_ROW name=creo-04 result=FAIL subtests=0/0 reason=GUEST failed=-
+creo_04 --- FAILED
+SPEC_LICENCE_STATE at=after_creo_04 status=unavailable net=online
+SPEC_LICENCE_STATE at=boot2_start up_min=1 status=Licensed remaining=129498_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:26_AM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up16m status=unavailable net=online
+SPEC_ROW name=blender-01 result=FAIL subtests=0/0 reason=GUEST failed=-
+blender_01 --- FAILED
+SPEC_LICENCE_STATE at=after_blender_01 status=unavailable net=online
+SPEC_LICENCE_STATE at=boot3_start up_min=1 status=Licensed remaining=129458_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:18:55_AM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up15m up_min=16 status=Licensed remaining=129443_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:10_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up30m up_min=32 status=Licensed remaining=129428_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:30_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up46m up_min=47 status=Licensed remaining=129412_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:18:47_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up61m up_min=62 status=Licensed remaining=129397_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:05_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up76m up_min=78 status=Licensed remaining=129382_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:22_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot3_up92m up_min=93 status=Licensed remaining=129367_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/16/2027_1:19:40_AM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_COPY_DELETED removed=nothing
+SPECVIEWPERF_STAGE_RETRY class=OPERATOR
+SPECVIEWPERF_STAGE_EXIT rc=3
+[xid-watch] --- command output ends (rc=3) ---
+[xid-watch] xid_after=2
+[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — the run is VOID whatever it printed:
+    [ 8468.111405] NVRM: Xid (PCI:0000:00:07): 32, pid=89639, name=qemu-system-x86, channel 0x00000016 intr 00800000
+    [12848.681558] NVRM: Xid (PCI:0000:00:07): 32, pid=101402, name=qemu-system-x86, channel 0x0000001f intr 00800000
+[xid-watch]   ⊘ An "Xid 31 … FAULT_PDE" means the host MMU walked for an address that resolved
+[xid-watch]   to nothing — i.e. OUR placement, not the guest's methods. A rung that reports
+[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.

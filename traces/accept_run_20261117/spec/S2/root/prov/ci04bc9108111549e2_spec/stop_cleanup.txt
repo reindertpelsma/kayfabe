@@ -1,0 +1,14 @@
+[2026-11-18T02:09:49Z] stopping kfwin (pid 84444)
+[2026-11-18T02:10:06Z] stopped
+[2026-11-18T02:52:49Z] stopping kfwin (pid 89639)
+[2026-11-18T02:57:29Z] guest did not power off in 180s: QMP system_powerdown
+[2026-11-18T02:59:30Z] still running: QMP quit
+[2026-11-18T02:59:30Z] stopped
+[2026-11-18T03:32:14Z] stopping kfwin (pid 96632)
+[2026-11-18T03:36:55Z] guest did not power off in 180s: QMP system_powerdown
+[2026-11-18T03:38:55Z] still running: QMP quit
+[2026-11-18T03:38:55Z] stopped
+[2026-11-18T05:25:04Z] stopping kfwin (pid 101402)
+[2026-11-18T05:28:06Z] guest did not power off in 180s: QMP system_powerdown
+[2026-11-18T05:30:06Z] still running: QMP quit
+[2026-11-18T05:30:06Z] stopped

@@ -1,0 +1,2 @@
+[ 2598.874579] NVRM:unknown NVRM ioctl command: 0xf0
+[ 2959.265733] x86/PAT: worker:81219 freeing invalid memtype [mem 0xc0bb0000-0xc0bb0fff]

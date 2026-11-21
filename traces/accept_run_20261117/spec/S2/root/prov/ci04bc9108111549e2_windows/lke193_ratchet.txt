@@ -1,0 +1,2 @@
+GATE_LKE_RATCHET die=GB203 count=1 max=- verdict=UNKNOWN
+GATE_LKE_COUNTS reports=1 entries=3 unresolved=0 resolved=1 unit=distinct_reports

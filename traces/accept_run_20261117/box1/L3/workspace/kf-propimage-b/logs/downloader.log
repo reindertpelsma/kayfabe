@@ -1,0 +1,4 @@
+KF_MANIFEST sha256=0b354e4c78249f6ae221713bed67feb14a4303f2f71b7ee93847d94e0fa90e1b items=5 bytes=62874923070 stages=tools:image
+KF_STEP name=download.swtpm-0.10.1.tar.gz secs=0.7 bytes=415992 source=r2 MBps=0.56
+KF_STEP name=download.libtpms-0.10.1.tar.gz secs=1.0 bytes=1399253 source=r2 MBps=1.42
+KF_STEP name=download.kf-gop.signed.efi secs=0.5 bytes=11224 source=r2 MBps=0.02

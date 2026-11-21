@@ -1,0 +1,58 @@
+[xid-watch] tag=ci-arm-21602-2579  host=ubuntu  utc=2026-11-17T14:48:24Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --atomics-probe
+[xid-watch] host_dmesg_lines=809  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=5
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=23086 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--atomics-probe]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0036a
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R23 atomics probe   = 0x2080182a, 112-byte params, one bare Subdevice, no channel
+info  R23 H1=caller-state (all arms refuse)  H2=the 0xCD seed IS the capType
+info  R23 R18 replay  cap=CD tail=CD = refused Other(86)
+info  R23 cap=CD tail=00            = refused Other(86)
+★     R23 cap=SYSMEM(0) tail=CD     = NV_OK  echo cap=0x00000000 dbdf=0x00000000  body=WRITTEN
+      R23 cap=SYSMEM(0) tail=CD       raw=000000000000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd00000000
+      R23 op[ 0] IADD  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 1] IMIN  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 2] IMAX  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 3] INC   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 4] DEC   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 5] IAND  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 6] IOR   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 7] IXOR  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 8] EXCH  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 9] CAS   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[10] FADD  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[11] FMIN  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[12] FMAX  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+★     R23 libcuda replay all-zero   = NV_OK  echo cap=0x00000000 dbdf=0x00000000  body=UNTOUCHED
+      R23 libcuda replay all-zero     raw=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+info  R23 cap=GPU(1) tail=CD        = refused Other(86)
+info  R23 cap=P2P(2) tail=CD        = refused Other(86)
+info  R23 cap=3 (undeclared) tail=CD = refused Other(86)
+★     R23 cap=SYSMEM dbdf=CD tail=CD = NV_OK  echo cap=0x00000000 dbdf=0xcdcdcdcd  body=WRITTEN
+      R23 cap=SYSMEM dbdf=CD tail=CD   raw=00000000cdcdcdcd00cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd0000000000cdcdcd00000000
+      R23 op[ 0] IADD  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 1] IMIN  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 2] IMAX  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 3] INC   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 4] DEC   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 5] IAND  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 6] IOR   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 7] IXOR  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 8] EXCH  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[ 9] CAS   bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[10] FADD  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[11] FMIN  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+      R23 op[12] FMAX  bSupported=0x00 attributes=0x00000000 [] pad=cdcdcd
+done — atomics probe only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=5
+[xid-watch] ★ HOST Xid CLEAN across the command — 5 before, 5 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (809 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-21602-2579.log

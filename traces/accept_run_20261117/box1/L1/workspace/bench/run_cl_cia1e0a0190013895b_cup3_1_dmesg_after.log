@@ -1,0 +1,107 @@
+[   26.485574] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   26.500008] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   26.504294] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   33.397958] NVRM: tmrSetCurrentTime_GV100: ERROR: Write to PTIMER attempted even though Level 0 PLM is disabled.
+[   33.398058] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ timer_gv100.c:80
+[   33.471648] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   33.474285] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   33.474410] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   33.474422] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   33.837165] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   33.837738] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   33.839438] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   33.839445] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   33.839448] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   33.839451] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   33.842658] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   33.842666] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   33.851562] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   33.851577] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   33.851702] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   33.853023] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   33.855391] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00009; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   36.030201] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   43.364374] NVRM: tmrSetCurrentTime_GV100: ERROR: Write to PTIMER attempted even though Level 0 PLM is disabled.
+[   43.364386] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ timer_gv100.c:80
+[   43.423452] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   43.425736] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   43.425819] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   43.425829] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   43.775054] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   43.775707] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   43.777294] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   43.777300] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   43.777303] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   43.777307] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   43.780326] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   43.780334] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   43.787885] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   43.787893] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   43.787901] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   43.789233] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   43.791445] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00014; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   44.616430] ptrace attach of "./cup3"[1815] was attempted by "cut -c1-40 /proc/1815/syscall"[1888]
+[   50.095979] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[   50.096693] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[   50.097347] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  101.011791] systemd[1]: systemd 255.4-1ubuntu8.18 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+[  101.011964] systemd[1]: Detected virtualization kvm.
+[  101.012218] systemd[1]: Detected architecture x86-64.
+[  126.698310] systemd[1]: Stopping systemd-journald.service - Journal Service...
+[  126.699452] systemd-journald[321]: Received SIGTERM from PID 1 (systemd).
+[  126.701288] systemd[1]: netplan-ovs-cleanup.service - OpenVSwitch configuration for cleanup was skipped because of an unmet condition check (ConditionFileIsExecutable=/usr/bin/ovs-vsctl).
+[  126.702228] systemd[1]: Stopping systemd-networkd.service - Network Configuration...
+[  126.703950] systemd[1]: ssh.service: Deactivated successfully.
+[  126.704952] systemd[1]: Stopped ssh.service - OpenBSD Secure Shell server.
+[  126.705018] systemd[1]: ssh.service: Consumed 1.762s CPU time, 5.9M memory peak, 0B memory swap peak.
+[  126.716170] systemd[1]: Starting ssh.service - OpenBSD Secure Shell server...
+[  126.716530] systemd[1]: Stopping systemd-resolved.service - Network Name Resolution...
+[  126.718904] systemd[1]: rsyslog.service: Deactivated successfully.
+[  126.719417] systemd[1]: Stopped rsyslog.service - System Logging Service.
+[  126.730558] systemd[1]: Starting rsyslog.service - System Logging Service...
+[  126.731495] systemd[1]: multipathd.service: Deactivated successfully.
+[  126.732388] systemd[1]: Stopped multipathd.service - Device-Mapper Multipath Device Controller.
+[  126.736540] systemd[1]: systemd-networkd.service: Deactivated successfully.
+[  126.737231] systemd[1]: Stopped systemd-networkd.service - Network Configuration.
+[  126.738869] systemd[1]: ModemManager.service: Deactivated successfully.
+[  126.739426] systemd[1]: Stopped ModemManager.service - Modem Manager.
+[  126.743587] systemd[1]: systemd-resolved.service: Deactivated successfully.
+[  126.744583] systemd[1]: Stopped systemd-resolved.service - Network Name Resolution.
+[  126.827085] systemd[1]: Starting multipathd.service - Device-Mapper Multipath Device Controller...
+[  126.827394] systemd[1]: Stopping polkit.service - Authorization Manager...
+[  126.835764] systemd[1]: Starting systemd-networkd.service - Network Configuration...
+[  126.841137] systemd[1]: Starting systemd-resolved.service - Network Name Resolution...
+[  126.841489] systemd[1]: Stopping systemd-timesyncd.service - Network Time Synchronization...
+[  126.843756] systemd[1]: polkit.service: Deactivated successfully.
+[  126.844067] systemd[1]: Stopped polkit.service - Authorization Manager.
+[  126.857390] systemd[1]: Started ssh.service - OpenBSD Secure Shell server.
+[  126.864443] systemd[1]: Starting polkit.service - Authorization Manager...
+[  126.864788] systemd[1]: Stopping systemd-udevd.service - Rule-based Manager for Device Events and Files...
+[  126.865446] systemd[1]: systemd-timesyncd.service: Deactivated successfully.
+[  126.867767] systemd[1]: Stopped systemd-timesyncd.service - Network Time Synchronization.
+[  126.890181] systemd[1]: Starting systemd-timesyncd.service - Network Time Synchronization...
+[  126.892069] systemd[1]: Stopping udisks2.service - Disk Manager...
+[  126.912940] systemd[1]: systemd-udevd.service: Deactivated successfully.
+[  126.914755] systemd[1]: Stopped systemd-udevd.service - Rule-based Manager for Device Events and Files.
+[  126.914834] systemd[1]: systemd-udevd.service: Consumed 5.004s CPU time, 62.0M memory peak, 0B memory swap peak.
+[  126.927341] systemd[1]: Starting systemd-udevd.service - Rule-based Manager for Device Events and Files...
+[  126.928180] systemd[1]: systemd-journald.service: Deactivated successfully.
+[  126.928580] systemd[1]: Stopped systemd-journald.service - Journal Service.
+[  126.929351] systemd[1]: udisks2.service: Deactivated successfully.
+[  126.929768] systemd[1]: Stopped udisks2.service - Disk Manager.
+[  126.950772] systemd[1]: Starting systemd-journald.service - Journal Service...
+[  126.955984] systemd[1]: Starting udisks2.service - Disk Manager...
+[  126.956986] systemd[1]: Started multipathd.service - Device-Mapper Multipath Device Controller.
+[  126.957556] systemd[1]: Started systemd-networkd.service - Network Configuration.
+[  126.998039] audit: type=1400 audit(1794923173.800:121): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="rsyslogd" pid=2927 comm="apparmor_parser"
+[  127.010782] systemd-journald[2936]: Collecting audit messages is disabled.
+[  127.074980] systemd[1]: Started systemd-udevd.service - Rule-based Manager for Device Events and Files.
+[  127.075830] systemd[1]: Started polkit.service - Authorization Manager.
+[  127.088151] systemd[1]: Starting ModemManager.service - Modem Manager...
+[  127.088390] systemd[1]: Started systemd-timesyncd.service - Network Time Synchronization.
+[  127.101265] systemd[1]: Started rsyslog.service - System Logging Service.
+[  127.107114] systemd[1]: Started systemd-resolved.service - Network Name Resolution.
+[  127.121913] systemd[1]: Started udisks2.service - Disk Manager.
+[  127.133150] systemd[1]: Started ModemManager.service - Modem Manager.
+[  127.200735] systemd[1]: Started systemd-journald.service - Journal Service.

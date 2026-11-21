@@ -1,0 +1,22 @@
+[xid-watch] tag=cia1e0a0190013895b_apps  host=ubuntu  utc=2026-11-17T13:49:26Z
+[xid-watch] command: env KF_APPS_PROVISION=1 bash /workspace/kf-ci-src/scripts/bench/box/apps_gate.sh cia1e0a0190013895b /root/prov middle
+[xid-watch] host_dmesg_lines=1190  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+APP_POLICY name=UnifiedMemoryStreams os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=UnifiedMemoryPerf os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=conjugateGradientUM os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=attach_verify os=linux result=NOT_RUN note=unsupported (UVM)
+APPS_STAGE_LIST n=66 budget_s=3000 per_boot=100
+APPS_PROVISION_START 2026-11-17T13:49:28+00:00
+APPS_PROVISION_FAIL steps=BUILD_llama_cpp,missing_BUILD_llama_cpp,missing_BUILD_bundle_tar
+APPS_PROVISION_END rc=1 2026-11-17T14:04:28+00:00
+APPS_STAGE_RETRY class=MEDIA
+APPS_STAGE_EXIT rc=3
+[xid-watch] --- command output ends (rc=3) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1190 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_cia1e0a0190013895b_apps.log

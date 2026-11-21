@@ -1,0 +1,1 @@
+﻿00:32:03 id=4097 Microsoft-Windows-CAPI2: Successful auto update of third-party root certificate:: Subject: <CN=VeriSign Universal Root Certification Authority, OU="(c) 2008 VeriSign, Inc. - For authorized use only", OU=VeriSign Trust Network, O="VeriSign, Inc.", C=US> Sha1 thumbprint: <3679CA35668772304D30A5FB873B0FA77BB70D54>.

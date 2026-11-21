@@ -1,0 +1,24 @@
+KF_MANIFEST sha256=615774b550aab3a3ce65fb0ccd28c4caab29fddb3c938a2189d1cf5dfdd22d33 items=2 bytes=8544665448 stages=image
+KF_STEP name=download.NVIDIA-Linux-x86_64-590.48.01.run secs=35.2 bytes=416273526 source=mirror0 MBps=11.84
+KF_STEP name=download.propimage-kfimg-matlab-20261117.zip secs=237.1 bytes=8128391922 source=r2 MBps=34.29
+KF_DOWNLOAD_DONE state=done ok=2 failed=0 total=2
+KF_VERIFY name=propimage-kfimg-matlab-20261117.zip ok=1
+KF_VERIFY name=NVIDIA-Linux-x86_64-590.48.01.run ok=1
+KF_MANIFEST sha256=615774b550aab3a3ce65fb0ccd28c4caab29fddb3c938a2189d1cf5dfdd22d33 items=2 bytes=8544665448 stages=image
+KF_STEP name=download.NVIDIA-Linux-x86_64-590.48.01.run secs=7.3 bytes=416273526 source=mirror0 MBps=57.31
+KF_STEP name=download.propimage-kfimg-matlab-20261117.zip secs=179.7 bytes=8128391922 source=r2 MBps=45.23
+KF_DOWNLOAD_DONE state=done ok=2 failed=0 total=2
+KF_VERIFY name=propimage-kfimg-matlab-20261117.zip ok=1
+KF_VERIFY name=NVIDIA-Linux-x86_64-590.48.01.run ok=1
+KF_MANIFEST sha256=615774b550aab3a3ce65fb0ccd28c4caab29fddb3c938a2189d1cf5dfdd22d33 items=2 bytes=8544665448 stages=image
+KF_STEP name=download.NVIDIA-Linux-x86_64-590.48.01.run secs=8.5 bytes=416273526 source=mirror0 MBps=48.73
+KF_STEP name=download.propimage-kfimg-matlab-20261117.zip secs=205.2 bytes=8128391922 source=r2 MBps=39.60
+KF_DOWNLOAD_DONE state=done ok=2 failed=0 total=2
+KF_VERIFY name=propimage-kfimg-matlab-20261117.zip ok=1
+KF_VERIFY name=NVIDIA-Linux-x86_64-590.48.01.run ok=1
+KF_MANIFEST sha256=615774b550aab3a3ce65fb0ccd28c4caab29fddb3c938a2189d1cf5dfdd22d33 items=2 bytes=8544665448 stages=image
+KF_STEP name=download.NVIDIA-Linux-x86_64-590.48.01.run secs=21.9 bytes=416273526 source=mirror0 MBps=19.00
+KF_STEP name=download.propimage-kfimg-matlab-20261117.zip secs=174.9 bytes=8128391922 source=r2 MBps=46.47
+KF_DOWNLOAD_DONE state=done ok=2 failed=0 total=2
+KF_VERIFY name=propimage-kfimg-matlab-20261117.zip ok=1
+KF_VERIFY name=NVIDIA-Linux-x86_64-590.48.01.run ok=1
