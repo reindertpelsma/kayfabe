@@ -245,3 +245,6 @@ SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
 SPEC_LICENCE_STATE at=after_medical_04 up_min=13 status=Licensed remaining=129312_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:32_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
 SPEC_ROW name=maya-07 result=PASS subtests=7/7 reason=- failed=-
 SPEC_LICENCE_STATE at=after_maya_07 up_min=26 status=Licensed remaining=129299_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:21_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up41m up_min=42 status=Licensed remaining=129284_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:45_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
+SPEC_LICENCE_STATE at=after_catia_07 up_min=53 status=Licensed remaining=129272_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:27_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
