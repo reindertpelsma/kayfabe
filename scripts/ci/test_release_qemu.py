@@ -1180,6 +1180,71 @@ for _name in [n for n in dir(Signature) if n.startswith("test_")]:
     setattr(DetachedSignature, _name, None)
 
 
+class MissingTarball(OrchestrationBase):
+    def missing(self, name="nothing.tar.xz"):
+        return kit.QemuInput.tarball(self.tmp / name)
+
+    def test_a_missing_tarball_is_refused_with_its_path_named(self):
+        runner = FakeRunner()
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.build(qemu=self.missing(), runner=runner)
+        self.assertIn(str(self.tmp / "nothing.tar.xz"), str(cm.exception))
+        self.assertIn("does not exist", str(cm.exception))
+        self.assertEqual(runner.calls, [])
+
+    def test_a_directory_given_as_a_tarball_is_refused(self):
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.build(qemu=kit.QemuInput.tarball(self.q))
+        self.assertIn("not a file", str(cm.exception))
+
+    def test_resolve_refuses_a_missing_tarball_itself(self):
+        work = self.tmp / "rw"
+        work.mkdir()
+        with self.assertRaises(kit.KitRefused):
+            kit.resolve_qemu(self.missing(), work)
+
+    def cli(self, *args):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = kit.main(list(args))
+        return rc, err.getvalue()
+
+    def test_the_build_command_refuses_a_missing_tarball_without_a_traceback(self):
+        rc, err = self.cli("build", "--qemu-tarball", str(self.tmp / "nope.tar.xz"), "--out", str(self.tmp / "o"), "--workdir", str(self.tmp / "w"),
+                           "--kayfabe-root", str(self.k))
+        self.assertEqual(rc, 1)
+        self.assertIn("KIT_REFUSED", err)
+        self.assertIn("nope.tar.xz", err)
+
+    def test_the_source_command_refuses_a_missing_tarball_naming_the_tarball(self):
+        rc, err = self.cli("source", "--qemu-tarball", str(self.tmp / "nope.tar.xz"), "--out", str(self.tmp / "o"), "--workdir", str(self.tmp / "w"),
+                           "--kayfabe-root", str(self.k))
+        self.assertEqual(rc, 1)
+        self.assertIn("nope.tar.xz does not exist", err)
+
+    def test_the_build_command_refuses_a_directory_given_as_a_tarball(self):
+        rc, err = self.cli("build", "--qemu-tarball", str(self.tmp), "--out", str(self.tmp / "o"), "--workdir", str(self.tmp / "w"), "--kayfabe-root", str(self.k))
+        self.assertEqual(rc, 1)
+        self.assertIn("is not a file", err)
+
+    def test_the_source_tarball_maker_refuses_a_missing_tarball_itself(self):
+        write(self.k / "Cargo.toml", "[workspace]\n")
+        with self.assertRaises(kit.KitRefused) as cm:
+            kit.make_source_tarball(kayfabe_root=self.k, tarball=self.tmp / "nope.tar.xz", sig=self.tmp / "nope.tar.xz.sig", out=self.tmp / "o",
+                                    workdir=self.tmp / "sw")
+        self.assertIn("nope.tar.xz does not exist", str(cm.exception))
+
+    def test_the_plan_command_refuses_a_directory_given_as_a_tarball(self):
+        rc, err = self.cli("plan", "--qemu-tarball", str(self.tmp))
+        self.assertEqual(rc, 1)
+        self.assertIn("is not a file", err)
+
+    def test_the_plan_command_refuses_a_missing_tarball(self):
+        rc, err = self.cli("plan", "--qemu-tarball", str(self.tmp / "nope.tar.xz"))
+        self.assertEqual(rc, 1)
+        self.assertIn("does not exist", err)
+
+
 class FakeSigned(OrchestrationBase):
     """A QEMU tarball whose signature check and pin are stubbed, so the flow around them can be judged without the real key."""
 
@@ -1835,9 +1900,6 @@ class Workflow(unittest.TestCase):
     def test_the_draft_names_the_error_for_an_unverified_extra_file(self):
         self.assertIn("the artifact holds files that were not verified", self.draft_run())
 
-    def test_each_upload_pattern_must_match_exactly_one_file(self):
-        self.assertIn('expected exactly one file for $f', self.draft_run())
-
     def test_the_reproducibility_check_runs_outside_the_checkout(self):
         t = self.text()
         self.assertNotIn("dist/", t)
@@ -1891,8 +1953,8 @@ class VerifyPins(unittest.TestCase):
 
     def test_the_draft_loop_runs_over_the_four_attested_file_patterns(self):
         run = next(s["run"] for s in steps("draft") if "gh attestation verify" in s.get("run", ""))
-        loop = re.search(r"for f in ([^;]+); do", run).group(1).split()
-        self.assertEqual(loop, ["*-linux-x86_64.tar.xz", "*-source.tar.xz", "*-manifest.json", "SHA256SUMS"])
+        loop = re.search(r"for pat in ([^;]+); do", run).group(1).split()
+        self.assertEqual(loop, ["'*-linux-x86_64.tar.xz'", "'*-source.tar.xz'", "'*-manifest.json'", "SHA256SUMS"])
 
     def test_the_release_notes_command_has_all_three_pins(self):
         notes = [c for c in verify_commands(WORKFLOW.read_text()) if "Verify a download" in c]
@@ -1922,6 +1984,183 @@ class VerifyPins(unittest.TestCase):
         text = (ROOT / "docs/design/V3_PACKAGING_AND_DISTRIBUTION.md").read_text()
         for needle in ("signer workflow path", "refs/heads/master", "--deny-self-hosted-runners"):
             self.assertIn(needle, text)
+
+
+class DraftScript(Tmp):
+    """The shell of the draft step, run for real with a stub `gh`, so the checks are judged by what they do."""
+
+    STUB = """#!/bin/sh
+echo "$@" >> "$STUB_LOG"
+case "$1" in
+  api)
+    case "$STUB_API" in
+      ok) echo '{}'; exit 0;;
+      404) echo "gh: Not Found (HTTP 404)" >&2; exit 1;;
+      403) echo "gh: API rate limit exceeded (HTTP 403)" >&2; exit 1;;
+      429) echo "gh: Too Many Requests (HTTP 429)" >&2; exit 1;;
+      500) echo "gh: Internal Server Error (HTTP 500)" >&2; exit 1;;
+      503) echo "gh: Service Unavailable (HTTP 503)" >&2; exit 1;;
+      net) echo "error connecting to api.github.com" >&2; exit 1;;
+      b404a) echo "gh: Bad Gateway (HTTP 502) while fetching 404.html" >&2; exit 1;;
+      b404b) echo "gh: API rate limit exceeded (HTTP 403) after 404 retries" >&2; exit 1;;
+    esac;;
+  release)
+    case "$2" in
+      list)
+        case "$STUB_LIST" in
+          ok) printf 'other-tag\\n'; exit 0;;
+          has) printf 'other-tag\\n%s\\n' "$TAG"; exit 0;;
+          fail) echo "gh: Bad Gateway (HTTP 502)" >&2; exit 1;;
+          limit) echo "gh: API rate limit exceeded (HTTP 403)" >&2; exit 1;;
+        esac;;
+      create) exit 0;;
+    esac;;
+  attestation) [ "$STUB_ATTEST" = fail ] && { echo "no matching attestation" >&2; exit 1; }; exit 0;;
+esac
+exit 0
+"""
+    NAMES = ["kayfabe-qemu-10.2.4-abcdef12-linux-x86_64.tar.xz", "kayfabe-qemu-10.2.4-abcdef12-source.tar.xz",
+             "kayfabe-qemu-10.2.4-abcdef12-manifest.json"]
+
+    def setUp(self):
+        super().setUp()
+        self.script = next(s["run"] for s in steps("draft") if "gh release create" in s.get("run", ""))
+        self.bin = self.tmp / "bin"
+        write(self.bin / "gh", self.STUB, 0o755)
+        self.work = self.tmp / "work"
+        (self.work / "assets").mkdir(parents=True)
+        self.log = self.tmp / "gh.log"
+        self.files(self.NAMES)
+
+    def files(self, names):
+        for n in names:
+            write(self.work / "assets" / n, n)
+        sums = "".join("%s  %s\n" % (sha(n.encode()), n) for n in names)
+        write(self.work / "assets" / "SHA256SUMS", sums)
+
+    def run_script(self, api="404", lst="ok", attest="ok", tag="kayfabe-qemu-v1"):
+        env = {"PATH": "%s:/usr/bin:/bin" % self.bin, "TAG": tag, "GITHUB_REPOSITORY": "o/r", "GITHUB_SHA": "a" * 40, "GH_TOKEN": "x",
+               "STUB_API": api, "STUB_LIST": lst, "STUB_ATTEST": attest, "STUB_LOG": str(self.log)}
+        res = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", self.script], cwd=self.work, env=env, capture_output=True, text=True)
+        calls = self.log.read_text().splitlines() if self.log.exists() else []
+        return res.returncode, res.stdout + res.stderr, calls
+
+    def created(self, calls):
+        return [c for c in calls if c.startswith("release create")]
+
+    def test_a_tag_that_the_api_reports_as_not_found_lets_the_draft_be_created(self):
+        rc, out, calls = self.run_script(api="404")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(len(self.created(calls)), 1)
+
+    def test_a_rate_limited_tag_lookup_is_not_taken_for_an_absent_tag(self):
+        rc, out, calls = self.run_script(api="403")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("cannot check whether the tag", out)
+        self.assertEqual(self.created(calls), [])
+
+    def test_a_server_error_in_the_tag_lookup_is_not_taken_for_an_absent_tag(self):
+        rc, out, calls = self.run_script(api="500")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("cannot check whether the tag", out)
+        self.assertEqual(self.created(calls), [])
+
+    def test_a_too_many_requests_answer_is_not_taken_for_an_absent_tag(self):
+        self.assertNotEqual(self.run_script(api="429")[0], 0)
+
+    def test_an_unavailable_service_is_not_taken_for_an_absent_tag(self):
+        self.assertNotEqual(self.run_script(api="503")[0], 0)
+
+    def test_a_network_failure_is_not_taken_for_an_absent_tag(self):
+        rc, out, _ = self.run_script(api="net")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("cannot check", out)
+
+    def test_a_gateway_error_that_mentions_404_is_not_taken_for_an_absent_tag(self):
+        rc, out, calls = self.run_script(api="b404a")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(self.created(calls), [])
+
+    def test_a_rate_limit_that_mentions_404_is_not_taken_for_an_absent_tag(self):
+        rc, out, calls = self.run_script(api="b404b")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("cannot check whether the tag", out)
+
+    def test_an_existing_tag_stops_the_draft(self):
+        rc, out, calls = self.run_script(api="ok")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("already exists", out)
+        self.assertEqual(self.created(calls), [])
+
+    def test_a_failed_release_listing_is_not_taken_for_no_release(self):
+        rc, out, calls = self.run_script(lst="fail")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("cannot list the releases", out)
+        self.assertEqual(self.created(calls), [])
+
+    def test_a_rate_limited_release_listing_is_not_taken_for_no_release(self):
+        rc, out, calls = self.run_script(lst="limit")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(self.created(calls), [])
+
+    def test_an_existing_release_for_the_tag_stops_the_draft(self):
+        rc, out, calls = self.run_script(lst="has")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("a release for kayfabe-qemu-v1 already exists", out)
+        self.assertEqual(self.created(calls), [])
+
+    def test_the_four_verified_files_are_uploaded_and_nothing_else(self):
+        rc, out, calls = self.run_script()
+        self.assertEqual(rc, 0, out)
+        create = self.created(calls)[0]
+        self.assertEqual(create.split(" -- ", 1)[1].split(), self.NAMES + ["SHA256SUMS"])
+        verified = [c.split()[2] for c in calls if c.startswith("attestation verify")]
+        self.assertEqual(verified, self.NAMES + ["SHA256SUMS"])
+
+    def test_every_verify_call_carries_the_three_pins(self):
+        _, _, calls = self.run_script()
+        for c in calls:
+            if c.startswith("attestation verify"):
+                self.assertTrue(PIN_SIGNER.search(c.replace("o/r", "reindertpelsma/kayfabe")) or "o/r/.github/workflows/release-qemu.yml" in c, c)
+                self.assertIn("--source-ref refs/heads/master", c)
+                self.assertIn("--deny-self-hosted-runners", c)
+
+    def test_two_files_for_one_pattern_stop_the_draft_with_the_pattern_named(self):
+        write(self.work / "assets" / "kayfabe-qemu-10.2.4-other000-linux-x86_64.tar.xz", "second")
+        rc, out, calls = self.run_script()
+        self.assertNotEqual(rc, 0)
+        self.assertIn("expected exactly one file for *-linux-x86_64.tar.xz, found 2", out)
+        self.assertEqual(self.created(calls), [])
+
+    def test_a_missing_file_for_a_pattern_stops_the_draft_with_the_pattern_named(self):
+        (self.work / "assets" / self.NAMES[2]).unlink()
+        rc, out, calls = self.run_script()
+        self.assertNotEqual(rc, 0)
+        self.assertIn("expected exactly one file for *-manifest.json, found 0", out)
+        self.assertEqual(self.created(calls), [])
+
+    def test_an_extra_file_stops_the_draft(self):
+        write(self.work / "assets" / "extra.bin", "x")
+        rc, out, calls = self.run_script()
+        self.assertNotEqual(rc, 0)
+        self.assertIn("files that were not verified", out)
+        self.assertEqual(self.created(calls), [])
+
+    def test_a_failed_attestation_check_stops_the_draft(self):
+        rc, _, calls = self.run_script(attest="fail")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(self.created(calls), [])
+
+    def test_a_checksum_mismatch_stops_the_draft(self):
+        write(self.work / "assets" / self.NAMES[0], "tampered")
+        rc, out, calls = self.run_script()
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(self.created(calls), [])
+
+    def test_a_bad_tag_name_stops_the_draft_before_any_call(self):
+        rc, _, calls = self.run_script(tag="bad tag; rm -rf /")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

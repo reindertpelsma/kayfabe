@@ -54,7 +54,7 @@ The project's history page (written 2026-09-06) describes it this way: nvkvm-pv 
 
 ### Is there an installer or a download?
 
-No. There is no installer, no stable interface and no public binary; you build it from source. A QEMU binary built from the tree is not yet distributable under the GPL. See [Building from source](howto/building.md) and [Credits and notices](howto/credits.md).
+No. There is no installer, no stable interface and no public binary; you build it from source. Whether and when a binary is published is the project owner's decision, not a licence limit of the source. See [Building from source](howto/building.md) and [Credits and notices](howto/credits.md).
 <!-- src: README.md "Trying it" and status line; docs/howto/credits.md (LICENSE exception 2) -->
 
 ## Hardware and drivers

@@ -477,6 +477,15 @@ class QemuInput:
         return cls("tree", Path(path))
 
 
+def require_file(path, what):
+    path = Path(path)
+    if not path.exists():
+        raise KitRefused("%s %s does not exist" % (what, path))
+    if not path.is_file():
+        raise KitRefused("%s %s is not a file" % (what, path))
+    return path
+
+
 def tarball_matches_pin(tarball, pin_path=None):
     """True if the tarball has exactly the size and sha256 that scripts/bench/qemu.pin pins (the cache key of the one supported version)."""
     sys.path.insert(0, str(ROOT / "scripts" / "ci"))
@@ -517,7 +526,7 @@ def resolve_qemu(qi, work):
         tarball, sig = _fetch_official(work / "download")
         anchors = ["qemu-release-signature", "upstream-pin"]
     else:
-        tarball, sig = qi.path, qi.sig or Path(str(qi.path) + ".sig")
+        tarball, sig = require_file(qi.path, "the QEMU tarball"), qi.sig or Path(str(qi.path) + ".sig")
         anchors = ["user"]
     signer = None
     pinned = tarball_matches_pin(tarball)
@@ -682,6 +691,7 @@ def make_source_tarball(*, kayfabe_root, tarball, sig, out, runner=run_logged, c
     caller_env = dict(os.environ if caller_env is None else caller_env)
     ident = kayfabe_identity(kroot, allow_dirty)
     pin = read_release_pin()
+    require_file(tarball, "the QEMU tarball")
     signer = verify_signature(tarball, sig, RELEASE_KEYS, [f for f, _ in pin["signers"]])
     m = re.fullmatch(r"qemu-(.+)\.tar\.xz", Path(tarball).name)
     if not m:
@@ -787,6 +797,8 @@ def _inputs(p, a):
 
 def _plan(a, qi):
     kroot = Path(a.kayfabe_root)
+    if qi.kind == "tarball":
+        require_file(qi.path, "the QEMU tarball")
     version = read_qemu_version(qi.path) if qi.kind == "tree" else (qi.path.name[5:-7] if qi.kind == "tarball" else SUPPORTED_QEMU[0])
     check_supported(version)
     source = ({"kind": "tree", "tree_sha256": tree_digest(qi.path)} if qi.kind == "tree" else

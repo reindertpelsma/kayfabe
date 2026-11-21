@@ -142,12 +142,18 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           [[ "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "bad tag name"; exit 1; }
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > /dev/null 2>&1; then echo "the tag $TAG already exists"; exit 1; fi
-          if gh release list --repo "$GITHUB_REPOSITORY" --limit 500 --json tagName --jq '.[].tagName' | grep -Fxq -- "$TAG"; then echo "a release for $TAG already exists"; exit 1; fi
+          # only a 404 means the tag is absent; a rate limit, a 5xx or a network error is not an answer
+          if lookup="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" 2>&1)"; then echo "the tag $TAG already exists"; exit 1; fi
+          case "$lookup" in *"HTTP 404"*) ;; *) echo "cannot check whether the tag $TAG exists: $lookup"; exit 1;; esac
+          releases="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 500 --json tagName --jq '.[].tagName')" || { echo "cannot list the releases"; exit 1; }
+          if printf '%s\n' "$releases" | grep -Fxq -- "$TAG"; then echo "a release for $TAG already exists"; exit 1; fi
           cd assets
           upload=()
-          for f in *-linux-x86_64.tar.xz *-source.tar.xz *-manifest.json SHA256SUMS; do
-            [ -f "$f" ] && [ "$(ls -1 -- $f | wc -l)" -eq 1 ] || { echo "expected exactly one file for $f"; exit 1; }
+          shopt -s nullglob
+          for pat in '*-linux-x86_64.tar.xz' '*-source.tar.xz' '*-manifest.json' SHA256SUMS; do
+            matches=($pat)
+            [ "${#matches[@]}" -eq 1 ] || { echo "expected exactly one file for $pat, found ${#matches[@]}"; exit 1; }
+            f="${matches[0]}"
             gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-qemu.yml" --source-ref refs/heads/master --deny-self-hosted-runners
             upload+=("$f")
           done
