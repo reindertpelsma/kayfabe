@@ -97,6 +97,11 @@ links) have one external crate in their dependency closure (`cargo tree -e norma
 |---|---|---|
 | [libc](https://github.com/rust-lang/libc) | 0.2.189 | MIT OR Apache-2.0 |
 
+The Rust standard library and `compiler_builtins` of the pinned toolchain (`rust-toolchain.toml`) are
+statically linked into `libkf_qemu.a` and so into the QEMU binary (MIT OR Apache-2.0, with the notices of
+their own third-party code). The QEMU release tarball carries the toolchain's own notices
+(`share/doc/rust/COPYRIGHT-library.html`, `COPYRIGHT.html` and `licenses/`) under `notices/rust/`.
+
 `firmware/kf-gop` (the UEFI display driver) depends only on workspace crates. The generator
 `crates/kf-abi/gen/` has no dependencies.
 

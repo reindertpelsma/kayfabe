@@ -417,8 +417,9 @@ CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use the
   corresponding-source tarball (kayfabe source, vendored crates, the unmodified signed QEMU tarball) and a manifest (QEMU version and source anchor, kayfabe
   revision, every overlay patch with its sha256, the exact configure line, the toolchain versions, the hash of every output).
 - **Trust of the QEMU input.** The official tarball is accepted only if its qemu.org detached signature verifies against a signer fingerprint in
-  `scripts/release/qemu-release.pin` (a private gpg keyring built from `qemu-release-keys.asc`); `scripts/bench/qemu.pin` stays the cache key and is checked by
-  `kf_trust.py` as before. The signature file is fetched through `kf_trust.py` (manifest entry `qemu-source-signature`). A tarball or tree the user supplies is
+  `scripts/release/qemu-release.pin` (a private gpg keyring built from `qemu-release-keys.asc`; the signature must be a detached one) and the tarball must have the
+  size and sha256 pinned in `scripts/bench/qemu.pin`; this holds for the downloaded tarball (also checked by `kf_trust.py`) and for the tarball inside a source tarball, whose
+  signature is required. The signature file is fetched through `kf_trust.py` (manifest entry `qemu-source-signature`). A tarball or tree the user supplies is
   recorded as such (anchor `user`).
 - **Jobs.** `gate` (master only: `ci/vast-broker/release_gate.py`, the same-SHA GPU-gate check `release-build.yml` uses), `build` (source tarball, reproducibility check,
   `SHA256SUMS`, one run artifact; it runs the third-party build code and holds `contents: read` only, no OIDC), `attest` (master only, needs `gate` and `build` to have
@@ -431,6 +432,7 @@ CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use the
   checked). The kit fixes the clock (`SOURCE_DATE_EPOCH` = the commit time), the locale, the build paths (fixed `src` and `build` directory names, `-ffile-prefix-map`,
   `--remap-path-prefix`) and sorts and normalises the archive. Bit identity is measured for one toolchain on one machine, which is why the manifest records the toolchain;
   it is not claimed across machines.
+- **Licence notices.** The binary tarball carries QEMU's `COPYING`, `COPYING.LIB`, `LICENSE` and `pc-bios/README` (the firmware licences) and the Rust toolchain's standard-library notices under `notices/`, besides kayfabe's own licence files.
 - **Permissions.** Top level `permissions: {}`. `attest` has `id-token: write` and `attestations: write` and nothing else (the attestation is made in the run that builds and
   uploads, which is what the Worker verifies by the OIDC identity); `draft` has `contents: write` and `attestations: read`; `build` and `gate` have read permissions only. No
   secret but the default token. Every action is pinned by commit. The release is created with `--draft`; nothing in the workflow publishes it.

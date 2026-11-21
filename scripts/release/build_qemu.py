@@ -427,10 +427,25 @@ def run_logged(argv, cwd, env, log):
             return 127
 
 
-def probe_tool_versions(env):
+def probe_rust_notices(env, cwd=None):
+    """The notices of the Rust toolchain whose standard library is linked into the binary: {name under notices/rust: bytes}."""
+    try:
+        sysroot = subprocess.run(["rustc", "--print", "sysroot"], env=env, cwd=cwd, capture_output=True, text=True).stdout.strip()
+    except OSError:
+        sysroot = ""
+    doc = Path(sysroot) / "share" / "doc" / "rust"
+    found = {name: (doc / name).read_bytes() for name in RUST_NOTICE_FILES if (doc / name).is_file()}
+    for lic in sorted((doc / "licenses").glob("*.txt")) if (doc / "licenses").is_dir() else []:
+        found["licenses/" + lic.name] = lic.read_bytes()
+    if "COPYRIGHT-library.html" not in found:
+        raise KitRefused("the Rust toolchain has no share/doc/rust/COPYRIGHT-library.html (the notices of its standard library)")
+    return found
+
+
+def probe_tool_versions(env, cwd=None):
     def first(argv):
         try:
-            out = subprocess.run(argv, env=env, capture_output=True, text=True).stdout.strip().splitlines()
+            out = subprocess.run(argv, env=env, cwd=cwd, capture_output=True, text=True).stdout.strip().splitlines()
             return out[0].strip() if out else "unavailable"
         except OSError:
             return "missing"
@@ -550,14 +565,22 @@ def _step(runner, argv, cwd, env, log, what):
 README = """kayfabe QEMU %(qemu)s (kayfabe revision %(rev)s)
 
 This is QEMU %(qemu)s with the kayfabe `kf3-gpu` device linked in. QEMU is licensed under the GNU GPL version 2 (COPYING); the
-kayfabe parts under Apache-2.0 OR GPL-2.0-or-later (LICENSE). The complete corresponding source of this exact build is the
-`-source.tar.xz` published next to this file; `scripts/release/build_qemu.py build --source-tarball <it>` rebuilds it.
+kayfabe parts under Apache-2.0 OR GPL-2.0-or-later (LICENSE). Further licence texts and notices (QEMU's COPYING.LIB and LICENSE,
+the licences of the firmware files under share/qemu, the Rust standard library) are in notices/.
+%(source)s
 Use: bin/qemu-system-x86_64 -device kf3-gpu,gpu-minor=0 ... (docs/howto/installing.md). Nothing here is installed by the kit.
 """
+README_SOURCE_TARBALL = """The complete corresponding source of this exact build is the `-source.tar.xz` published next to this file;
+`scripts/release/build_qemu.py build --source-tarball <it>` rebuilds it."""
+README_OWN_SOURCE = """This build was made from QEMU source that was supplied to the build kit, not from a published source tarball (the manifest
+records it with anchor "user"). Its corresponding source is that QEMU source plus the kayfabe tree at the revision above."""
+QEMU_NOTICES = (("COPYING", "COPYING"), ("COPYING.LIB", "notices/qemu/COPYING.LIB"), ("LICENSE", "notices/qemu/LICENSE"),
+                ("pc-bios/README", "notices/qemu/pc-bios-README"))
+RUST_NOTICE_FILES = ("COPYRIGHT-library.html", "COPYRIGHT.html")
 
 
-def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_versions=probe_tool_versions, caller_env=None,
-          allow_dirty=False, source_tarball=None):
+def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_versions=probe_tool_versions, rust_notices=probe_rust_notices,
+          caller_env=None, allow_dirty=False, source_tarball=None):
     """Build the binary tarball and the manifest into `out`. Returns {'out', 'assets', 'manifest'}."""
     kroot, out = Path(kayfabe_root).absolute(), Path(out).absolute()
     caller_env = dict(os.environ if caller_env is None else caller_env)
@@ -600,9 +623,15 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
     for doc in DOC_FILES:
         if (kroot / doc).is_file():
             shutil.copyfile(kroot / doc, pkg / doc)
-    if (srcdir / "COPYING").is_file():
-        shutil.copyfile(srcdir / "COPYING", pkg / "COPYING")
-    (pkg / "README.txt").write_text(README % {"qemu": version, "rev": ident["revision"][:8]})
+    for member, target in QEMU_NOTICES:
+        if (srcdir / member).is_file():
+            (pkg / target).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(srcdir / member, pkg / target)
+    for name, data in sorted(rust_notices(env, kroot).items()):
+        (pkg / "notices" / "rust" / name).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / "notices" / "rust" / name).write_bytes(data)
+    (pkg / "README.txt").write_text(README % {"qemu": version, "rev": ident["revision"][:8],
+                                              "source": README_SOURCE_TARBALL if source_tarball is not None else README_OWN_SOURCE})
     staged = work / "assets"
     staged.mkdir()
     pack_tree(pkg, staged / names["binary"], ident["source_date_epoch"], top)
@@ -620,7 +649,7 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
         "configure": {"args": [configure_line([a], srcdir, builddir, kroot) for a in cargs], "line": configure_line(cargs, srcdir, builddir, kroot)},
         "environment": {k: env[k] for k in ("SOURCE_DATE_EPOCH", "TZ", "LC_ALL", "LANG", "CARGO_INCREMENTAL")}
         | {"path_maps": sorted([MAP_SRC, MAP_BUILD, MAP_KAYFABE, MAP_CARGO, MAP_RUSTUP, MAP_TARGET])},
-        "toolchain": tool_versions(env),
+        "toolchain": tool_versions(env, kroot),
         "outputs": sorted(outputs, key=lambda o: o["name"]),
     }
     text = render_manifest(manifest, forbid=[str(work), str(kroot), str(out), str(cargo_home), str(rustup_home)])
@@ -643,7 +672,7 @@ kayfabe/rust-toolchain.toml): run, from the directory that holds this source tar
 
   python3 -I <this directory>/kayfabe/scripts/release/build_qemu.py build --source-tarball <the .tar.xz file> --out out
 
-The binary tarball is byte-identical to the published one when the toolchain is the one its manifest records.
+The binary tarball is expected to be byte-identical to the published one on the toolchain its manifest records; that is measured only for two builds on one machine, not across machines. Compare the manifest first.
 """
 
 

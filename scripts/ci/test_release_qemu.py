@@ -701,6 +701,9 @@ class FakeRunner:
         return 0
 
 
+RUST_NOTICES = {"COPYRIGHT-library.html": b"<html>std</html>", "COPYRIGHT.html": b"<html>rustc</html>", "licenses/MIT.txt": b"MIT"}
+
+
 class OrchestrationBase(Tmp):
     def setUp(self):
         super().setUp()
@@ -710,11 +713,14 @@ class OrchestrationBase(Tmp):
             write(self.k / name, name)
         self.q = qemu_tree(self.tmp / "q")
         write(self.q / "COPYING", "GPL")
+        write(self.q / "COPYING.LIB", "LGPL")
+        write(self.q / "LICENSE", "qemu licence")
+        write(self.q / "pc-bios/README", "firmware licences")
 
     def build(self, work="w", out="o", runner=None, tools=None, **kw):
         runner = runner or FakeRunner()
         args = dict(kayfabe_root=self.k, qemu=kit.QemuInput.tree(self.q), out=self.tmp / out, workdir=self.tmp / work, jobs=2,
-                    runner=runner, tool_versions=tools or (lambda env: {"cc": "gcc 1"}), caller_env={"PATH": "/usr/bin", "HOME": "/h"})
+                    runner=runner, tool_versions=tools or (lambda env, cwd=None: {"cc": "gcc 1"}), rust_notices=lambda env, cwd=None: dict(RUST_NOTICES), caller_env={"PATH": "/usr/bin", "HOME": "/h"})
         args.update(kw)
         return kit.build(**args), runner
 
@@ -877,7 +883,7 @@ class Orchestration(OrchestrationBase):
 
     def test_a_tool_version_that_names_the_work_directory_is_refused(self):
         with self.assertRaises(kit.KitRefused):
-            self.build(tools=lambda env: {"cc": "gcc in %s" % (self.tmp / "w")})
+            self.build(tools=lambda env, cwd=None: {"cc": "gcc in %s" % (self.tmp / "w")})
 
     def test_the_qemu_trees_git_directory_is_not_copied(self):
         write(self.q / ".git/HEAD", "ref: x")
@@ -1029,6 +1035,65 @@ class OrchestrationMore(OrchestrationBase):
             names = {Path(n).name for n in tf.getnames()}
         for name in ("LICENSE", "LICENSE-APACHE", "LICENSE-GPL", "THIRD_PARTY_NOTICES.md", "COPYING"):
             self.assertIn(name, names)
+
+    def binary_names(self, **kw):
+        result, _ = self.build(**kw)
+        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
+            return {n.split("/", 1)[1] for n in tf.getnames() if "/" in n}, tf, result
+
+    def test_the_qemu_licence_texts_and_the_firmware_notices_are_in_the_binary_tarball(self):
+        names, _, _ = self.binary_names()
+        for expected in ("COPYING", "notices/qemu/COPYING.LIB", "notices/qemu/LICENSE", "notices/qemu/pc-bios-README"):
+            self.assertIn(expected, names)
+
+    def test_the_rust_standard_library_notices_are_in_the_binary_tarball(self):
+        names, _, _ = self.binary_names()
+        for expected in ("notices/rust/COPYRIGHT-library.html", "notices/rust/COPYRIGHT.html", "notices/rust/licenses/MIT.txt"):
+            self.assertIn(expected, names)
+
+    def test_a_toolchain_without_the_standard_library_notices_stops_the_build(self):
+        def none(env, cwd=None):
+            raise kit.KitRefused("no notices")
+        with self.assertRaises(kit.KitRefused):
+            self.build(rust_notices=none)
+
+    def test_the_notice_contents_are_the_source_files(self):
+        result, _ = self.build()
+        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
+            top = tf.getnames()[0]
+            self.assertEqual(tf.extractfile(top + "/notices/qemu/COPYING.LIB").read(), b"LGPL")
+            self.assertEqual(tf.extractfile(top + "/notices/rust/COPYRIGHT-library.html").read(), b"<html>std</html>")
+
+    def test_the_readme_does_not_promise_a_source_tarball_for_the_users_own_source(self):
+        result, _ = self.build()
+        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
+            text = tf.extractfile(tf.getnames()[0] + "/README.txt").read().decode()
+        self.assertNotIn("-source.tar.xz", text)
+        self.assertIn("supplied to the build kit", text)
+
+    def test_the_own_source_readme_names_the_user_anchor(self):
+        result, _ = self.build()
+        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
+            text = tf.extractfile(tf.getnames()[0] + "/README.txt").read().decode()
+        self.assertIn('anchor "user"', text)
+
+    def test_the_readme_points_at_the_source_tarball_when_the_build_came_from_one(self):
+        result, _ = self.build(source_tarball={"name": "x-source.tar.xz", "sha256": "0" * 64})
+        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
+            text = tf.extractfile(tf.getnames()[0] + "/README.txt").read().decode()
+        self.assertIn("`-source.tar.xz` published next to this file", text)
+        self.assertNotIn("supplied to the build kit", text)
+
+    def test_the_source_tarball_instructions_say_identity_is_not_measured_across_machines(self):
+        self.assertIn("not across machines", kit.BUILDING)
+
+    def test_the_source_tarball_instructions_do_not_promise_identity(self):
+        self.assertNotIn("is byte-identical to the published one", kit.BUILDING)
+
+    def test_the_tool_versions_are_probed_in_the_kayfabe_root(self):
+        seen = []
+        self.build(tools=lambda env, cwd=None: seen.append(cwd) or {})
+        self.assertEqual(seen, [self.k])
 
     def test_a_refused_second_build_leaves_the_first_outputs_untouched(self):
         a, _ = self.build()
@@ -1376,6 +1441,36 @@ class ExtractionFilter(Tmp):
         p = self.tar([(self.link("top/h", "../../etc/passwd", tarfile.LNKTYPE), None)])
         with self.assertRaises(kit.KitRefused):
             kit.safe_extract(p, self.tmp / "out")
+
+
+class RustNotices(Tmp):
+    def sysroot(self, files):
+        root = self.tmp / "sysroot"
+        for rel, data in files.items():
+            write(root / "share/doc/rust" / rel, data)
+        stub = self.tmp / "bin"
+        write(stub / "rustc", "#!/bin/sh\necho %s\n" % root, 0o755)
+        return {"PATH": str(stub) + ":/usr/bin:/bin"}
+
+    def test_the_notices_of_the_toolchains_standard_library_are_collected(self):
+        env = self.sysroot({"COPYRIGHT-library.html": "std", "COPYRIGHT.html": "rustc", "licenses/MIT.txt": "MIT", "README.md": "skipped"})
+        found = kit.probe_rust_notices(env)
+        self.assertEqual(sorted(found), ["COPYRIGHT-library.html", "COPYRIGHT.html", "licenses/MIT.txt"])
+        self.assertEqual(found["COPYRIGHT-library.html"], b"std")
+
+    def test_a_toolchain_without_the_library_notices_is_refused(self):
+        with self.assertRaises(kit.KitRefused):
+            kit.probe_rust_notices(self.sysroot({"COPYRIGHT.html": "rustc"}))
+
+    def test_the_refusal_names_the_missing_file(self):
+        with self.assertRaises(kit.KitRefused) as cm:
+            kit.probe_rust_notices(self.sysroot({"licenses/MIT.txt": "MIT"}))
+        self.assertIn("COPYRIGHT-library.html", str(cm.exception))
+
+    def test_the_real_toolchain_has_the_notices(self):
+        if shutil.which("rustc") is None:
+            self.skipTest("no rustc")
+        self.assertIn("COPYRIGHT-library.html", kit.probe_rust_notices({"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "")}, ROOT))
 
 
 class Compare(Tmp):
