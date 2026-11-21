@@ -357,7 +357,7 @@ impl StaticInfoPolicy {
     /// which is strictly later. ⇒ nothing inside the fn-65 path can issue a host ioctl,
     /// and the value must already be in hand when the policy is built.
     ///
-    /// ★ **Which is why the answer is not "query or fail".** Owner ruling, 2026-08-08:
+    /// **Fallback for fields unavailable through unprivileged ioctls.**
     /// fill in every field obtainable by unprivileged ioctl, **derive** the rest on the
     /// fly for any architecture, and prove the derived structure by compiling the
     /// driver's own parser as an oracle — the pattern `#116` already runs for the VBIOS.

@@ -1876,8 +1876,8 @@ impl CommandPolicy for InitTablePolicy {
         // of every boot unchanged.
         //
         // ⚠ **Why it is not the fix, stated so nobody ships it.** (1) A replayed constant is
-        // not READ-NATIVE and would rot on the next driver or chip — the exact thing the
-        // owner's ruling forbids. (2) `0x20809064`'s capture is **incomplete**: the C records
+        // not READ-NATIVE and would rot on the next driver or chip.
+        // (2) `0x20809064`'s capture is **incomplete**: the C records
         // only *"520B, leading 10 u32s"*, so this arm zero-fills a 480-byte tail it has never
         // measured — precisely the truncated-row hazard `kf_abi::oracle` was written for.
         // ⇒ A GREEN result justifies building the forward. A RED result on `…064` alone would
