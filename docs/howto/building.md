@@ -136,9 +136,12 @@ The kit fixes the clock (to the commit time of the checkout), the locale and eve
 **Verify a release you downloaded.** A release of this project carries the binary tarball, the corresponding source tarball, the manifest and a `SHA256SUMS` file, and each of them has a GitHub artifact attestation made by the workflow run that built it:
 
 ```sh
-gh attestation verify kayfabe-qemu-10.2.4-<revision>-linux-x86_64.tar.xz --repo reindertpelsma/kayfabe
+gh attestation verify kayfabe-qemu-10.2.4-<revision>-linux-x86_64.tar.xz \
+  --repo reindertpelsma/kayfabe --signer-workflow reindertpelsma/kayfabe/.github/workflows/release-qemu.yml --source-ref refs/heads/master --deny-self-hosted-runners
 sha256sum -c SHA256SUMS
 ```
+
+The three pins matter: `--repo` alone accepts an attestation made by any workflow on any branch of the repository, while `--signer-workflow`, `--source-ref` and `--deny-self-hosted-runners` accept only the release workflow, run from `master`, on a GitHub-hosted runner. Use all of them, for every file. <!-- src: .github/workflows/release-qemu.yml (draft job) -->
 
 To rebuild the binary from the source tarball, unpack it and point the kit inside at the tarball:
 

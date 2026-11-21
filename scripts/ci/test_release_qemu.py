@@ -1339,5 +1339,73 @@ class Workflow(unittest.TestCase):
                 self.assertNotIn("${{ github.event.inputs", str(s.get("run", "")))
 
 
+HOWTO = ROOT / "docs/howto/building.md"
+PIN_SIGNER = re.compile(r"--signer-workflow\s+(?:reindertpelsma/kayfabe|\"?\$\{?GITHUB_REPOSITORY\}?\"?|\$\{GITHUB_REPOSITORY\})/\.github/workflows/release-qemu\.yml")
+PIN_REF = re.compile(r"--source-ref\s+refs/heads/master(?=\s|$|\")")
+PIN_HOSTED = re.compile(r"--deny-self-hosted-runners(?=\s|$|\")")
+
+
+def verify_commands(text):
+    """Every `gh attestation verify` command of a text, with its backslash continuations joined."""
+    joined = re.sub(r"\\\n\s*", " ", text)
+    return [line for line in joined.splitlines() if "gh attestation verify" in line and not line.lstrip().startswith(("`", "-", "|"))]
+
+
+class VerifyPins(unittest.TestCase):
+    """A verification that names only the repository accepts an attestation from any workflow on any branch."""
+
+    def pins(self, command):
+        return {"signer-workflow": bool(PIN_SIGNER.search(command)), "source-ref": bool(PIN_REF.search(command)),
+                "deny-self-hosted-runners": bool(PIN_HOSTED.search(command))}
+
+    def assert_pinned(self, command, where):
+        self.assertEqual(self.pins(command), {"signer-workflow": True, "source-ref": True, "deny-self-hosted-runners": True}, where + ": " + command)
+
+    def test_the_helper_sees_a_missing_pin(self):
+        self.assertFalse(self.pins("gh attestation verify f --repo r --source-ref refs/heads/master")["signer-workflow"])
+        self.assertFalse(self.pins("gh attestation verify f --repo r --signer-workflow reindertpelsma/kayfabe/.github/workflows/release-qemu.yml")["source-ref"])
+        self.assertFalse(self.pins("gh attestation verify f --repo r --source-ref refs/heads/main")["source-ref"])
+
+    def test_the_draft_loop_verifies_with_all_three_pins(self):
+        run = next(s["run"] for s in steps("draft") if "gh attestation verify" in s.get("run", ""))
+        commands = [c for c in verify_commands(run) if c.lstrip().startswith("gh attestation verify")]
+        self.assertEqual(len(commands), 1)
+        self.assert_pinned(commands[0], "draft loop")
+
+    def test_the_draft_loop_runs_over_the_four_attested_file_patterns(self):
+        run = next(s["run"] for s in steps("draft") if "gh attestation verify" in s.get("run", ""))
+        loop = re.search(r"for f in ([^;]+); do", run).group(1).split()
+        self.assertEqual(loop, ["*-linux-x86_64.tar.xz", "*-source.tar.xz", "*-manifest.json", "SHA256SUMS"])
+
+    def test_the_release_notes_command_has_all_three_pins(self):
+        notes = [c for c in verify_commands(WORKFLOW.read_text()) if "Verify a download" in c]
+        self.assertEqual(len(notes), 1)
+        self.assert_pinned(notes[0], "release notes")
+
+    def test_every_verify_command_of_the_workflow_has_all_three_pins(self):
+        commands = verify_commands(WORKFLOW.read_text())
+        self.assertGreaterEqual(len(commands), 2)
+        for c in commands:
+            self.assert_pinned(c, "workflow")
+
+    def test_the_manual_command_has_all_three_pins(self):
+        commands = verify_commands(HOWTO.read_text())
+        self.assertEqual(len(commands), 1)
+        self.assert_pinned(commands[0], "building.md")
+
+    def test_every_verify_command_of_every_manual_page_has_all_three_pins(self):
+        found = 0
+        for page in sorted((ROOT / "docs/howto").rglob("*.md")):
+            for c in verify_commands(page.read_text()):
+                found += 1
+                self.assert_pinned(c, str(page.relative_to(ROOT)))
+        self.assertGreaterEqual(found, 1)
+
+    def test_the_design_note_for_a_future_verifier_names_the_three_pins(self):
+        text = (ROOT / "docs/design/V3_PACKAGING_AND_DISTRIBUTION.md").read_text()
+        for needle in ("signer workflow path", "refs/heads/master", "--deny-self-hosted-runners"):
+            self.assertIn(needle, text)
+
+
 if __name__ == "__main__":
     unittest.main()

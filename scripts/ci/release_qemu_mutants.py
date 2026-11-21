@@ -21,7 +21,7 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-FILES = {"kit": "scripts/release/build_qemu.py", "wf": ".github/workflows/release-qemu.yml"}
+FILES = {"kit": "scripts/release/build_qemu.py", "wf": ".github/workflows/release-qemu.yml", "doc": "docs/howto/building.md"}
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_release_qemu"
 COLLECT = """import io, json, sys, unittest
@@ -116,6 +116,16 @@ MUTANTS = [
     M("wf-tag-unchecked-at-release", "wf", '          [[ "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "bad tag name"; exit 1; }\n          cd assets', "          cd assets"),
     M("wf-tag-in-shell-text", "wf", "gh release create \"$TAG\"", "gh release create \"${{ inputs.tag }}\""),
     M("wf-checkout-keeps-credentials", "wf", "          persist-credentials: false\n      - name: Check the tag name", "          persist-credentials: true\n      - name: Check the tag name"),
+    M("wf-verify-loop-signer-workflow-dropped", "wf", ' --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-qemu.yml" --source-ref', " --source-ref"),
+    M("wf-verify-loop-source-ref-dropped", "wf", " --source-ref refs/heads/master --deny-self-hosted-runners\n          done", " --deny-self-hosted-runners\n          done"),
+    M("wf-verify-loop-hosted-runner-pin-dropped", "wf", "refs/heads/master --deny-self-hosted-runners\n          done", "refs/heads/master\n          done"),
+    M("wf-verify-loop-removed", "wf", '            gh attestation verify "$f" --repo', '            true "$f" --repo'),
+    M("wf-notes-signer-workflow-dropped", "wf", " --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release-qemu.yml --source-ref", " --source-ref"),
+    M("wf-notes-source-ref-dropped", "wf", " --source-ref refs/heads/master --deny-self-hosted-runners\" \\", " --deny-self-hosted-runners\" \\"),
+    M("wf-notes-hosted-runner-pin-dropped", "wf", "refs/heads/master --deny-self-hosted-runners\" \\", "refs/heads/master\" \\"),
+    M("doc-verify-signer-workflow-dropped", "doc", " --signer-workflow reindertpelsma/kayfabe/.github/workflows/release-qemu.yml --source-ref", " --source-ref"),
+    M("doc-verify-source-ref-dropped", "doc", " --source-ref refs/heads/master --deny-self-hosted-runners\nsha256sum", " --deny-self-hosted-runners\nsha256sum"),
+    M("doc-verify-hosted-runner-pin-dropped", "doc", " --deny-self-hosted-runners\nsha256sum -c", "\nsha256sum -c"),
     M("wf-attests-binary-only", "wf", "            dist/assets/*-source.tar.xz\n            dist/assets/*-manifest.json\n", ""),
 ]
 
@@ -129,13 +139,21 @@ def sandbox(parent, name, key, text):
         shutil.copyfile(ROOT / rel, root / rel)
     for rel in ("scripts/release/build_qemu.py", ".github/workflows/release-qemu.yml"):
         shutil.copyfile(ROOT / rel, root / rel)
+    (root / "docs/howto").mkdir(parents=True)
+    for child in (ROOT / "docs").iterdir():
+        if child.name != "howto":
+            os.symlink(child, root / "docs" / child.name)
+    for child in (ROOT / "docs/howto").iterdir():
+        os.symlink(child, root / "docs/howto" / child.name)
+    (root / "docs/howto/building.md").unlink()
+    shutil.copyfile(ROOT / "docs/howto/building.md", root / "docs/howto/building.md")
     for other in (ROOT / ".github/workflows").glob("*.yml"):
         if not (root / ".github/workflows" / other.name).exists():
             shutil.copyfile(other, root / ".github/workflows" / other.name)
     (root / FILES[key]).write_text(text)
     # everything else the tests look at is read only: link it
     for rel in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates", "firmware", "cuda", "qemu", "tools", "LICENSE", "LICENSE-APACHE",
-                "LICENSE-GPL", "THIRD_PARTY_NOTICES.md", "README.md", "docs", "traces"):
+                "LICENSE-GPL", "THIRD_PARTY_NOTICES.md", "README.md", "traces"):
         os.symlink(ROOT / rel, root / rel)
     for rel in ("scripts/ci/kf_trust.py", "scripts/ci/kf_fetch.py", "scripts/ci/qemu_source.py", "scripts/ci/trust_manifest.json"):
         os.symlink(ROOT / rel, root / rel)

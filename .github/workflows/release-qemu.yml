@@ -114,12 +114,12 @@ jobs:
           [[ "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "bad tag name"; exit 1; }
           cd assets
           for f in *-linux-x86_64.tar.xz *-source.tar.xz *-manifest.json SHA256SUMS; do
-            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-qemu.yml" --source-ref refs/heads/master
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-qemu.yml" --source-ref refs/heads/master --deny-self-hosted-runners
           done
           sha256sum --check SHA256SUMS
           printf '%s\n' \
             "Draft. Built by .github/workflows/release-qemu.yml at ${GITHUB_SHA}; not published." \
-            "Verify a download: gh attestation verify <file> --repo ${GITHUB_REPOSITORY}" \
+            "Verify a download: gh attestation verify <file> --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release-qemu.yml --source-ref refs/heads/master --deny-self-hosted-runners" \
             "The -source.tar.xz is the corresponding source of the binary (GPL); the -manifest.json lists its inputs, patches and configure line." \
             > ../notes.md
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "$TAG (draft)" --notes-file ../notes.md -- *
