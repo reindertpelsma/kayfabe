@@ -38,12 +38,22 @@ kf_packages() {
   # (pin_lib.sh: pin_install_cuda_toolkit) and never enters the cache, our images, R2 or a release asset.
   # Together with `required` (git, build-essential, pkg-config) these are everything build_bundle.sh installs.
   local apps=(cmake unzip libegl-dev libgles-dev ocl-icd-opencl-dev opencl-headers)
+  # The private CPython 3.12 that the host side of the open ML rows builds from the python.org source (scripts/apps/mlrows/private_python.py, 2026-11-20): a stock
+  # Ubuntu 22.04 host has 3.10 and the locks are cp312. Open Ubuntu archive packages only; a header missing here builds a Python without that module, which the build
+  # checks for (REQUIRED_MODULES). No readline, ncurses, tk or uuid: nothing interactive runs in this interpreter.
+  local pybuild=(build-essential zlib1g-dev libssl-dev libffi-dev libbz2-dev liblzma-dev libsqlite3-dev)
+  # The host control of the nvcodec_matrix row (scripts/ci/apps_discovery_stage.py, 2026-11-20): the DISTRIBUTION's ffmpeg on the bare host, the one provision.sh of
+  # scripts/apps/open_rows installs (`apt_install ffmpeg`). Ubuntu 22.04's is 4.4.2: it has NVENC for H.264 and HEVC and no av1_nvenc (MEASURED in
+  # docs/design/V3_OPEN_ROWS_FFMPEG_DCGM.md), so the control cannot judge the AV1 encode cases on such a host. Open Ubuntu archive package only.
+  local nvcodec_control=(ffmpeg)
   case "$profile" in
     ci) printf '%s\n' "${required[@]}" ;;
     full) printf '%s\n' "${required[@]}" "${optional[@]}" ;;
     bench) printf '%s\n' "${bench[@]}" ;;
     windows) printf '%s\n' "${windows[@]}" ;;
     apps) printf '%s\n' "${apps[@]}" ;;
+    pybuild) printf '%s\n' "${pybuild[@]}" ;;
+    nvcodec_control) printf '%s\n' "${nvcodec_control[@]}" ;;
     *) echo "unknown provisioning profile" >&2; return 2 ;;
   esac
 }

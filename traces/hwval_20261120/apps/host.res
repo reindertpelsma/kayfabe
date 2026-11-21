@@ -1,0 +1,16 @@
+APPRES side=host app=nvidia_smi verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=deviceQuery verdict=PASS rc=0 secs=2 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=vectorAdd verdict=PASS rc=0 secs=2 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=vectorAddDrv verdict=PASS rc=0 secs=1 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=matrixMul verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=matrixMulDrv verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=bandwidthTest verdict=PASS rc=0 secs=3 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=simpleStreams verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=asyncAPI verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=simpleCallback verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=simpleCooperativeGroups verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=cudaTensorCoreGemm verdict=PASS rc=0 secs=3 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=graphMemoryNodes verdict=PASS rc=0 secs=3 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=simpleCudaGraphs verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=simpleCUBLAS verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-
+APPRES side=host app=simpleCUFFT verdict=PASS rc=0 secs=2 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=- gpu_births=-

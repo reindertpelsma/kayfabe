@@ -463,6 +463,20 @@ class StaticContracts(unittest.TestCase):
         ]
         self.assertEqual(raw, [])
 
+    def test_the_python_headers_are_in_the_image_recipe_and_in_the_side_installer(self):
+        """2026-11-20: the guest had gcc and no Python.h (`MLROWS_FACTS ... "python_h": false`), so the vllm row could not build anything. The ML rows
+        need the headers in the apps image, and the side installer (the host and the guest are the same experiment) installs the same package."""
+        packages = json.loads((APPS / "image/recipe.json").read_text())["apt"]["packages"]
+        self.assertIn("python3-dev", packages)
+        self.assertIn("python3-venv", packages)
+        self.assertEqual(len(packages), len(set(packages)))
+        joined = self.guest.replace("\\\n", " ")          # the install line continues over three lines
+        match = re.search(r"^apt-get [^\n]*\binstall\b[^\n]*", joined, re.M)
+        self.assertIsNotNone(match)
+        words = match.group(0).split()
+        self.assertIn("python3-dev", words)
+        self.assertIn("python3-venv", words)
+
     def test_the_guest_side_refuses_to_run_without_the_pins(self):
         with tempfile.TemporaryDirectory() as directory:
             shutil.copyfile(APPS / "setup_side.sh", Path(directory) / "setup_side.sh")
@@ -489,7 +503,7 @@ class StaticContracts(unittest.TestCase):
 
     def test_no_nvidia_package_is_in_the_setup_cache_policy(self):
         names = set()
-        for profile in ("ci", "bench", "windows", "apps"):
+        for profile in ("ci", "bench", "windows", "apps", "pybuild", "nvcodec_control"):
             names.update(
                 subprocess.run(
                     ["bash", str(ROOT / "scripts/bench/provision_box.sh"), "--packages", profile],

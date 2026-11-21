@@ -12,6 +12,7 @@ import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync } from 'n
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { offlineAppPlan, releaseConfig } from '../release-plan.mjs';
 import { estimateBandwidth, plannedStages } from '../src/bandwidth.js';
 import { offerPrice, resourceCaps } from '../src/policy.js';
@@ -537,4 +538,113 @@ test('command line: --changed-files and --app-lane (exit 2 when refused)', () =>
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ---- (8) images are bundles; an application list is resolved by bundlesFor (2026-11-19, docs/design/V3_PROPIMAGE_CONFIG.md) -------------------
+// The generated plans did not change: the text of the two CLI plans below was captured from the tree before the planner read the bundle table.
+import { BUNDLES } from '../src/bundles.js';
+
+const cli = (...args) =>
+  spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(here('../release-plan.mjs')),
+      '--app-lane',
+      '--market',
+      fileURLToPath(here('./fixtures/release-market-synthetic.json')),
+      '--daily-cap',
+      '1000',
+      ...args,
+    ],
+    { encoding: 'utf8' },
+  );
+const golden = (name) => readFileSync(here('./fixtures/app-lane/' + name), 'utf8');
+const rotationTable = () => fileURLToPath(here('./fixtures/app-lane/rotation-table.json'));
+
+test('the first-release plan is byte-identical to the one captured before the bundle table', () => {
+  const r = cli('--first-release');
+  assert.equal(r.status, 2);
+  assert.equal(r.stdout, golden('plan-first.golden.txt'));
+});
+test('the rotation plan is byte-identical to the one captured before the bundle table', () => {
+  const r = cli('--rotation', rotationTable());
+  assert.equal(r.stdout, golden('plan-rotation.golden.txt'));
+});
+test('the golden plans are not trivial', () => {
+  assert.match(golden('plan-first.golden.txt'), /imga on ada die=AD104/);
+  assert.match(golden('plan-rotation.golden.txt'), /mode=rotation release_seq=4/);
+});
+test('every configured image is a bundle of the table, and a validation failure names it', () => {
+  assert.deepEqual(validateAppLaneConfig(APP_LANE), []);
+  const bad = structuredClone(APP_LANE);
+  bad.images[0].id = 'imgz';
+  assert.deepEqual(
+    validateAppLaneConfig(bad).filter((e) => e.includes('not a bundle')),
+    ['image imgz: not a bundle of propimage-bundles.json'],
+  );
+  const empty = structuredClone(BUNDLES);
+  delete empty.bundles.imga;
+  assert.ok(
+    validateAppLaneConfig(APP_LANE, undefined, empty).includes(
+      'image imga: not a bundle of propimage-bundles.json',
+    ),
+  );
+});
+test('an image id that is an inherited property name is not a bundle', () => {
+  const bad = structuredClone(APP_LANE);
+  bad.images[0].id = '__proto__';
+  assert.ok(validateAppLaneConfig(bad).some((e) => e.includes('__proto__: not a bundle')));
+});
+test('an image id that is a property of Object is not a bundle', () => {
+  const bad = structuredClone(APP_LANE);
+  bad.images[0].id = 'constructor';
+  assert.ok(validateAppLaneConfig(bad).some((e) => e.includes('constructor: not a bundle')));
+});
+test('--apps picks the images that hold the applications, and the plan is the full plan when both images are needed', () => {
+  const r = cli('--first-release', '--apps', 'solidworks,premiere');
+  assert.equal(r.stdout, golden('plan-first.golden.txt'));
+});
+test('--apps with one image plans that image only, like --images', () => {
+  const byApps = cli('--first-release', '--apps', 'premiere');
+  const byImages = cli('--first-release', '--images', 'imgb');
+  assert.equal(byApps.stdout, byImages.stdout);
+  assert.match(byApps.stdout, /imgb on ada/);
+  assert.doesNotMatch(byApps.stdout, /imga on/);
+});
+test('--apps names the bundle that is cheaper, over rotation too', () => {
+  const r = cli('--rotation', rotationTable(), '--apps', 'solidworks');
+  assert.match(r.stdout, /imga on/);
+  assert.doesNotMatch(r.stdout, /imgb on/);
+});
+test('an application on no bundle is refused by name', () => {
+  const r = cli('--first-release', '--apps', 'solidworks,nope');
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /UNKNOWN_APP:nope/);
+});
+test('an application on a bundle that is not an app-lane image is refused by name', () => {
+  const r = cli('--first-release', '--apps', 'matlab');
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /unknown image: imgc/);
+});
+test('apps and images are alternatives', () => {
+  const r = cli('--first-release', '--apps', 'solidworks', '--images', 'imga');
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /apps and images are alternatives/);
+});
+test('the planner resolves apps through bundlesFor in the API too', async () => {
+  const plan = await offlineAppPlan(market(), VARS, {
+    dailyCapUsd: 1000,
+    firstRelease: true,
+    apps: ['premiere'],
+  });
+  assert.deepEqual(plan.images, ['imgb']);
+  await assert.rejects(
+    offlineAppPlan(market(), VARS, {
+      dailyCapUsd: 1000,
+      firstRelease: true,
+      apps: ['premiere'],
+      images: ['imgb'],
+    }),
+    /alternatives/,
+  );
 });

@@ -12,16 +12,26 @@
 #   kf_rootless_assert LABEL EVDIR [ARGS...]
 #                          kfroot.py assert-tree in mode ${KF_ROOTLESS:-record} (require | record | off): prints the
 #                          KFROOT_ASSERT lines, writes EVDIR/rootless_LABEL.json, returns 1 when mode=require and violated.
+#   KF_KFROOT_RECORD=FILE  (2026-11-20) every `kfroot` call appends one line `KFROOT_USED<TAB>root|sudo|refused<TAB>CMD` to FILE;
+#                          `vast_payload.py --rootless require` reads it into the run's rootless record (scripts/ci/kfroot.py Record)
 # (KFROOT_EUID, KFROOT_SELF_STATUS and KFROOT_DMESG_RESTRICT are test knobs: a fake uid and fake /proc files)
+kf_record() { # HOW CMD...
+    local how=$1
+    shift
+    [ -z "${KF_KFROOT_RECORD:-}" ] || printf 'KFROOT_USED\t%s\t%s\n' "$how" "$*" >> "$KF_KFROOT_RECORD" 2> /dev/null || true
+}
 kfroot() {
     if [ "${KFROOT_EUID:-$(id -u)}" = 0 ]; then
+        kf_record root "$@"
         "$@"
         return
     fi
     if grep -q '^NoNewPrivs:[[:space:]]*1' "${KFROOT_SELF_STATUS:-/proc/self/status}" 2> /dev/null; then
+        kf_record refused "$@"
         echo "KFROOT_REFUSED NoNewPrivs=1: 'kfroot $*' cannot run inside the dropped kayfabe tree (do it before the drop)" >&2
         return 126
     fi
+    kf_record sudo "$@"
     command kfroot "$@"
 }
 kf_dmesg() {

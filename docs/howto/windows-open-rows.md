@@ -1,6 +1,6 @@
 # Run the open Windows rows (VK-GL-CTS and DirectX samples)
 
-STATUS: DESIGN-ONLY, 2026-11-17. The rows are written and tested without a GPU; nothing has run on a Windows guest or on native Windows yet. Treat every step as unproven until a run is recorded.
+Status: experimental. The rows are written and tested without a GPU; nothing has run on a Windows guest or on native Windows yet. Treat every step as unproven until a run is recorded.
 
 Two sets of checks build open-source test programs from their upstream sources inside a Windows machine and run them: the Khronos conformance suite (OpenGL 4.6 and Vulkan cases, plus a two-context OpenGL soak) and Microsoft's DirectX 12 samples (async compute, ExecuteIndirect, reserved resources, work graphs, HDR). You need nothing but this repository: no account, no licence, no private download. Every download is checked against an official upstream source, and the program sources are fetched at a pinned upstream commit.
 
@@ -56,4 +56,4 @@ By default the run trusts git only. Sources are checked out at a pinned upstream
 | `--tool git=C:\path\git.exe` | use your own tool (also `python`, `nuget`, `msvc=installed`); trusted, its hash is recorded |
 | `--prebuilt C:\my\build` | use a tree you built yourself instead of building; trusted, its hash is recorded |
 
-The design, the list of downloads with their checks, and what is still unverified are in `docs/design/V3_WINDOWS_OPEN_ROWS.md` (internal, not part of this manual).
+The design, the list of downloads with their checks, and what is still unverified are in the project's internal design notes, which are not part of this manual. <!-- src: docs/design/V3_WINDOWS_OPEN_ROWS.md -->

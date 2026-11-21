@@ -58,7 +58,14 @@ for app in $APPS; do
   line=$(grep -a '^APPRES ' <<<"$res" | tail -1)
   if [ -z "$line" ]; then
     v=HANG; [ $alive = 0 ] && v=GUEST_DEAD
-    line="APPRES side=guest app=$app verdict=$v rc=ssh$src secs=- quiet=- note=no-result-line(guest_alive=$alive)"
+    note="no-result-line(guest_alive=$alive)"
+    # ⊘ rc 126/127 from the guest shell is a command that could not start (run_apps.sh is not in the guest: an image without /opt/apps/bundle): nothing ran, so it is
+    #   NOTRUN with the path, never a HANG (a HANG is a finding about the guest; measured 2026-11-20: six boots of the base image said HANG for rows that never started)
+    if [ $alive = 1 ] && { [ "$src" = 126 ] || [ "$src" = 127 ]; }; then
+      miss=$(grep -a -m1 -oE '(/[A-Za-z0-9_./+-]+|[A-Za-z0-9_+-]+): (No such file or directory|Permission denied|command not found)' <<<"$res" | cut -d: -f1 | head -1)
+      v=NOTRUN; note="not-run:missing_command:${miss:-unknown}"
+    fi
+    line="APPRES side=guest app=$app verdict=$v rc=ssh$src secs=- quiet=- note=$note"
   fi
   if [ $alive = 1 ]; then
     $G "sudo cat /opt/apps/out/guest/$app.log" > "$OUT/$app.guest.log" 2>&1
@@ -84,12 +91,19 @@ for app in $APPS; do
   # later app burned its whole timeout silently. After any non-PASS row, prove the boot still runs
   # CUDA (vectorAdd, 60 s); if not, record WEDGED and end the boot — apps_matrix.sh reboots and
   # continues with the remaining apps, so one wedge costs one app, not the rest of the list.
+  # ⊘ no vectorAdd in the guest (an image without /opt/apps/bundle/samples): the probe proves nothing, so it says so and the boot goes on (`test -x` exits 1: absent; an
+  #   unreachable guest exits 255 and still reaches the probe, which then fails as before)
   case "$line" in *verdict=PASS*) ;; *)
     if [ "${APPS_WEDGE_PROBE:-1}" = 1 ]; then
-      sane=$(timeout 90 "$G" 'sudo timeout -k 5 60 /opt/apps/bundle/samples/vectorAdd 2>&1 | grep -c "Test PASSED"' 2>/dev/null | tr -d '\r')
-      if [ "${sane:-0}" != 1 ]; then
-        echo "APPS_WEDGE boot=$TAG after=$app sanity_vectorAdd=${sane:-none}" | tee -a "$OUT/guest.res"
-        echo "APPS_HOOK boot wedged after $app — stopping this boot"; break
+      timeout 30 "$G" 'test -x /opt/apps/bundle/samples/vectorAdd' >/dev/null 2>&1; has=$?
+      if [ "$has" = 1 ]; then
+        echo "APPS_HOOK no_samples_in_guest after $app — wedge probe skipped"
+      else
+        sane=$(timeout 90 "$G" 'sudo timeout -k 5 60 /opt/apps/bundle/samples/vectorAdd 2>&1 | grep -c "Test PASSED"' 2>/dev/null | tr -d '\r')
+        if [ "${sane:-0}" != 1 ]; then
+          echo "APPS_WEDGE boot=$TAG after=$app sanity_vectorAdd=${sane:-none}" | tee -a "$OUT/guest.res"
+          echo "APPS_HOOK boot wedged after $app — stopping this boot"; break
+        fi
       fi
     fi ;;
   esac

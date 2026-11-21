@@ -29,14 +29,17 @@ FILES = {
     "wrapper": "scripts/ci/vast_stage_specviewperf.sh",
     "fakes": "scripts/ci/spec_stage_fakes.py",
     "licence": "scripts/bench/specviewperf/licence.py",
+    "copybudget": "scripts/bench/specviewperf/copy_budget.py",
 }
 LANE = "test_vast_spec_lane"
 STG = "test_vast_spec_stage"
 NET = "test_vast_spec_online_ltsc"
+CBT = "test_spec_copy_budget"
 COPY = [
     "scripts/ci/test_vast_spec_lane.py",
     "scripts/ci/test_vast_spec_stage.py",
     "scripts/ci/test_vast_spec_online_ltsc.py",
+    "scripts/ci/test_spec_copy_budget.py",
     "scripts/bench/windows/clockrule.py",
     "scripts/bench/windows/spec/licence_probe.ps1",
     "scripts/ci/vast_payload.py",
@@ -307,6 +310,50 @@ MUTANTS = [
     M("licence-newest-event-not-preferred", "licence", 'if best is None or ev["time"] >= best["time"]:', 'if best is None:',
       NET + ".LicenceModule.test_the_newest_licence_event_is_reported_whatever_the_order_of_the_readout",
       NET + ".LicenceModule.test_the_newest_of_three_licence_events_is_reported"),
+    # --- the copy budget and the copy progress (copy_budget.py; test_spec_copy_budget.py, test_vast_spec_stage.CopyBudget) ---------
+    M("copy-budget-ignores-the-knob", "copybudget", '    if knob is not None:\n        unclamped, source = knob, "knob"', '    if False:\n        unclamped, source = knob, "knob"',
+      CBT + ".Budget", t("CopyBudget", "the_knob_sets_the_budget"), t("CopyBudget", "a_larger_knob_than_the_default_is_honoured_too")),
+    M("copy-budget-derived-from-the-wrong-size", "copybudget", "for w in lane_mod.lane_ids(lane, tbl))", 'for w in tbl["viewsets"])',
+      CBT + ".Derivation", t("CopyBudget", "the_default_budget_is_derived_from_the_lane_and_no_fixed_70_minutes"), t("CopyBudget", "the_log_says_where_the_budget_comes_from")),
+    M("copy-budget-not-clamped-to-the-time-left", "copybudget", "    return min(unclamped, max(int(left_s), 1)), source, nbytes, unclamped", "    return unclamped, source, nbytes, unclamped",
+      CBT + ".Budget", t("CopyBudget", "the_budget_never_exceeds_the_time_left")),
+    M("copy-budget-floor-rate-ten-times-faster", "copybudget", "FLOOR_RATE_BYTES_S = 5_000_000", "FLOOR_RATE_BYTES_S = 50_000_000",
+      CBT + ".Derivation", t("CopyBudget", "the_default_budget_is_derived_from_the_lane_and_no_fixed_70_minutes")),
+    M("copy-budget-without-the-margin", "copybudget", "MARGIN_PCT = 20 ", "MARGIN_PCT = 0 ",
+      CBT + ".Derivation", t("CopyBudget", "the_default_budget_is_derived_from_the_lane_and_no_fixed_70_minutes")),
+    M("copy-bad-knob-accepted", "copybudget", "re.ASCII) is None or not lo <= int(text) <= hi:", "re.ASCII) is None:",
+      CBT + ".Knob", t("CopyBudget", "a_bad_budget_knob_is_refused_by_name_before_anything_starts"), t("CopyBudget", "a_bad_progress_interval_knob_is_refused_by_name_before_anything_starts")),
+    M("copy-progress-line-never-written", "copybudget", '                os.write(fd, line.encode("ascii"))', "                pass",
+      CBT + ".Pipe", t("CopyBudget", "a_copy_leaves_a_progress_line_with_every_byte_it_moved"), t("CopyBudget", "progress_lines_come_while_the_copy_runs")),
+    M("copy-progress-only-at-the-end", "copybudget", "            if self.elapsed() >= due:", "            if False:",
+      CBT + ".Pipe", t("CopyBudget", "progress_lines_come_while_the_copy_runs")),
+    M2("copy-abort-line-without-bytes", "copybudget",
+       [("did not finish inside its budget: bytes=%d expected_bytes=%d rate_mb_s", "did not finish inside its budget: expected_bytes=%d rate_mb_s"),
+        ("        % (nbytes, expected, rate_mb_s(nbytes, elapsed_s), int(elapsed_s)", "        % (expected, rate_mb_s(nbytes, elapsed_s), int(elapsed_s)")],
+       CBT + ".Lines", CBT + ".Pipe", t("CopyBudget", "the_abort_line_names_the_bytes_the_rate_and_the_budget_that_would_have_sufficed")),
+    M("copy-abort-line-estimates-at-the-floor-rate", "copybudget", "    return math.ceil(round(max(expected, nbytes) * elapsed_s / nbytes, 6))", "    return math.ceil(round(expected / FLOOR_RATE_BYTES_S, 6))",
+      CBT + ".Rates", CBT + ".Lines", CBT + ".Pipe"),
+    M("copy-abort-line-divides-by-zero-bytes", "copybudget", "    if nbytes <= 0 or elapsed_s <= 0:\n        return None", "    if elapsed_s <= 0:\n        return None",
+      CBT + ".Rates", CBT + ".Lines", t("CopyBudget", "a_copy_that_never_moved_a_byte_says_so")),
+    M("copy-pipe-drops-a-byte", "copybudget", "            view = memoryview(chunk)\n", "            view = memoryview(chunk[:-1] if len(chunk) > 1 else chunk)\n",
+      CBT + ".Pipe", t("HappyPath", "lane_a_passes_in_order_with_one_row_per_viewset"), t("CopyBudget", "the_pipeline_status_of_each_stage_is_named_in_the_log")),
+    M("stage-copy-timeout-is-a-fixed-number", "stage", '    | timeout "$(cap "$COPY_BUDGET")" bash "$WV" ssh', '    | timeout "$(cap 4200)" bash "$WV" ssh',
+      t("CopyBudget", "the_default_budget_is_derived_from_the_lane_and_no_fixed_70_minutes"), t("CopyBudget", "the_knob_sets_the_budget"), t("CopyBudget", "a_larger_knob_than_the_default_is_honoured_too")),
+    M("stage-copy-without-the-byte-counter", "stage",
+      '    | copy_py pipe --status "$COPY_PROGRESS" --log "$LOG" --budget "$COPY_BUDGET" --expected "$COPY_EXPECTED" --note-s "${KF_SPEC_COPY_NOTE_S:-}" 2> "$WORK/copy_progress.err" \\\n', "",
+      t("CopyBudget", "a_copy_leaves_a_progress_line_with_every_byte_it_moved"), t("CopyBudget", "the_pipeline_status_of_each_stage_is_named_in_the_log"), t("CopyBudget", "the_status_of_the_guests_tar_is_the_last_of_five")),
+    M("stage-copy-guest-tar-status-index-stale", "stage", '[ "${cps[4]}" != 124 ] || abort TIME', '[ "${cps[3]}" != 124 ] || abort TIME',
+      t("CopyBudget", "a_copy_that_runs_out_of_time_is_retry_time_with_every_row_not_run_setup"), t("CopyBudget", "the_abort_line_names_the_bytes_the_rate_and_the_budget_that_would_have_sufficed")),
+    M("stage-bad-copy-knob-not-refused-up-front", "stage", 'cb_msg=$(copy_py check --budget "${KF_SPEC_COPY_BUDGET_S:-}" --note-s "${KF_SPEC_COPY_NOTE_S:-}") || abort OPERATOR "${cb_msg:-the copy knobs could not be checked}"\n', "",
+      t("CopyBudget", "a_bad_budget_knob_is_refused_by_name_before_anything_starts"), t("CopyBudget", "a_bad_progress_interval_knob_is_refused_by_name_before_anything_starts")),
+    M("stage-copy-knob-not-handed-to-the-helper", "stage", '--knob "${KF_SPEC_COPY_BUDGET_S:-}" --left', '--knob "" --left',
+      t("CopyBudget", "the_knob_sets_the_budget"), t("CopyBudget", "a_larger_knob_than_the_default_is_honoured_too")),
+    M("stage-copy-time-abort-says-nothing-of-the-bytes", "stage", '[ "${cps[4]}" != 124 ] || abort TIME "$(copy_py abort-text --status "$COPY_PROGRESS" --budget "$COPY_BUDGET" --expected "$COPY_EXPECTED")"',
+      '[ "${cps[4]}" != 124 ] || abort TIME "the copy into the guest did not finish inside its budget"',
+      t("CopyBudget", "the_abort_line_names_the_bytes_the_rate_and_the_budget_that_would_have_sufficed"), t("CopyBudget", "the_budget_that_would_have_sufficed_is_more_than_the_time_already_spent"),
+      t("CopyBudget", "a_copy_that_never_moved_a_byte_says_so")),
+    M("stage-copy-progress-notes-outside-the-stage-log", "stage", '--log "$LOG" --budget "$COPY_BUDGET"', '--log "$WORK/copy_progress.log" --budget "$COPY_BUDGET"',
+      t("CopyBudget", "a_copy_leaves_a_progress_line_with_every_byte_it_moved"), t("CopyBudget", "progress_lines_come_while_the_copy_runs")),
     # --- vast_stage_specviewperf.sh -------------------------------------------------------------------------------------------
     M("wrapper-no-start-marker", "wrapper", 'echo "SPEC_STAGE_START lane=$startlane"\n', "", WR),
     M("wrapper-start-marker-echoes-the-environment", "wrapper", "*) startlane=none ;; esac", "*) startlane=${KF_SPEC_LANE:-none} ;; esac", WR),
@@ -392,7 +439,7 @@ def main():
     chosen = [m for m in MUTANTS if args.only in m[0]]
     with tempfile.TemporaryDirectory(prefix="kf-spec-stage-mutants-") as parent:
         if not args.no_baseline:
-            baseline = run_tests(tree(parent, "base", {}), [LANE, STG, NET])
+            baseline = run_tests(tree(parent, "base", {}), [LANE, STG, NET, CBT])
             if baseline["killers"]:
                 print("BASELINE RED: %s" % baseline["killers"], file=sys.stderr)
                 return 1

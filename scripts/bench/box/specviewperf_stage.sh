@@ -16,7 +16,13 @@
 # the USER'S input, trusted and recorded (sha256 and size in the stage notes and trust.jsonl), and our git pin is only compared, never a refusal,
 # unless KF_TRUST_MODE=strict; KF_SPEC_EXPECT_SHA256 is the user's own enforced pin; docs/OWNER_RULINGS.md section AX),
 # KF_SPEC_DISK_GB (grow the guest disk), KF_SPEC_COPY_ONLY, KF_SPEC_REUSE, KF_SPEC_KEEP_ON_FAIL (1 default | 0 | always), KF_SPEC_REBOOT_AFTER,
-# KF_SPEC_PAUSE_FILE. Unset, the Vast path is unchanged.
+# KF_SPEC_PAUSE_FILE, KF_SPEC_COPY_BUDGET_S, KF_SPEC_COPY_NOTE_S. Unset, the Vast path is unchanged.
+# In one Vast run at tree 7fb1c98a0, the copy into the guest ran at about 5 MB/s and hit its old fixed 70-minute budget (RETRY
+# class=TIME, every row NOT_RUN SETUP, nothing in the log about the rate). KF_SPEC_COPY_BUDGET_S=<600..86400 seconds> is the time the copy may take; unset,
+# it is DERIVED (scripts/bench/specviewperf/copy_budget.py: the lane's tree size from lanes.json at a floor rate of 5 MB/s, +20 % and +600 s), and
+# either way never more than the time left. A bad value is refused by name before anything starts (RETRY class=OPERATOR). While the copy runs the
+# stage log gets `SPEC_NOTE copy progress bytes=<n> rate_mb_s=<r> elapsed_s=<t> budget_s=<b>` every KF_SPEC_COPY_NOTE_S seconds (default 60, 1..3600),
+# and one last line (final=1); the TIME abort names the bytes copied, the observed rate and `needed_s` (the budget that would have sufficed).
 # 2026-11-17 (owner): the guest has the network and the real clock. KF_SPEC_NET=online|offline (default online) is the WINVM_NET of every
 # boot of this stage (the copy boot and the lane's boots); online is slirp restrict=off, and the clock rule (docs/design/V3_CLOCK_RULE.md,
 # scripts/bench/windows/clockrule.py) then runs the real clock; offline is restrict=on with the recorded clock. The Windows evaluation guest
@@ -32,7 +38,7 @@
 #   3. the same-box host GPU reference BEFORE (as the gate);
 #   4. boot A: the gate's overlay, sealed, with a fresh child overlay, WITHOUT kf3 (std VGA: 94 GB of tree through the
 #      kf3 guest would only add risk), 16 GB RAM; the tree is streamed in
-#        zstd -d | tarfilter.py (this lane's viewsets only) | ssh ... tar -xf -
+#        zstd -d | tarfilter.py (this lane's viewsets only) | copy_budget.py pipe (the byte counter) | ssh ... tar -xf -
 #      and compared with the filter's manifest; write access and the shipped vcredist are set; the guest stops;
 #   5. boot B: the child overlay WITH kf3 (the gate's flags and guest driver), the desktop, then the settle wait (no
 #      CLI run sooner than settle_s after the boot: the first run within about 2 minutes of a reboot fails with
@@ -86,6 +92,7 @@ FETCH=$SOURCE/scripts/bench/box/fetch_bench_data.sh
 PINFILE=$SOURCE/scripts/bench/box/specviewperf.pin
 lane_py() { python3 -I "$SPECD/lane.py" "$@"; }
 licence_py() { python3 -I "$SPECD/licence.py" "$@"; }
+copy_py() { python3 -I "$SPECD/copy_budget.py" "$@"; }
 OBJECT=specviewperf-15.0.0.tar.zst
 
 export PATH="$PATH:$HOME/.cargo/bin"
@@ -527,6 +534,8 @@ fi
 if [ -n "${KF_SPEC_EXPECT_SHA256:-}" ]; then
     [[ $KF_SPEC_EXPECT_SHA256 =~ ^[0-9a-f]{64}$ ]] || abort OPERATOR "KF_SPEC_EXPECT_SHA256 must be 64 lowercase hex"
 fi
+# KF_SPEC_COPY_BUDGET_S and KF_SPEC_COPY_NOTE_S: a bad value is refused by name here, before anything is fetched or booted
+cb_msg=$(copy_py check --budget "${KF_SPEC_COPY_BUDGET_S:-}" --note-s "${KF_SPEC_COPY_NOTE_S:-}") || abort OPERATOR "${cb_msg:-the copy knobs could not be checked}"
 [ -f "$FETCH" ] || abort OPERATOR "no fetch helper"
 
 # win_vm.sh APPENDS to logs/<tag>_run.log, and wait_qemu_start reads that file for this boot's QEMU_START: a stale line of an
@@ -624,15 +633,23 @@ SRC=(stream_src)
 fi
 
 stage copy
+# the time the copy may take: KF_SPEC_COPY_BUDGET_S, else derived from the lane's size at a floor rate (copy_budget.py), never more than the time left
+cb=$(copy_py budget --lane "$LANE" --knob "${KF_SPEC_COPY_BUDGET_S:-}" --left "$(left)") || abort OPERATOR "the copy budget could not be derived (copy_budget.py budget)"
+read -r COPY_BUDGET _COPY_SRC COPY_EXPECTED _COPY_WANT COPY_WHY <<< "$cb"
+note "copy budget ${COPY_BUDGET}s ($COPY_WHY)"
+COPY_PROGRESS=$WORK/copy_progress.txt
+rm -f -- "$COPY_PROGRESS"
 set -o pipefail
+# five stages: src, zstd, tarfilter, the byte counter (progress notes into the stage log), the guest's tar (cps[0] .. cps[4])
 "${SRC[@]}" 2> "$WORK/stream.err" | zstd -d -c --long=31 2> "$WORK/zstd.err" \
     | python3 -I "$SPECD/tarfilter.py" --lane "$LANE" --manifest "$WORK/manifest.txt" 2> "$WORK/tarfilter.err" \
-    | timeout "$(cap 4200)" bash "$WV" ssh 'cmd /c "tar -xf - -C C:/"' > "$WORK/copy_tar.txt" 2>&1
+    | copy_py pipe --status "$COPY_PROGRESS" --log "$LOG" --budget "$COPY_BUDGET" --expected "$COPY_EXPECTED" --note-s "${KF_SPEC_COPY_NOTE_S:-}" 2> "$WORK/copy_progress.err" \
+    | timeout "$(cap "$COPY_BUDGET")" bash "$WV" ssh 'cmd /c "tar -xf - -C C:/"' > "$WORK/copy_tar.txt" 2>&1
 cps=("${PIPESTATUS[@]}")
-note "copy: src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} ssh_tar=${cps[3]} $(tr '\n' ' ' < "$WORK/tarfilter.err" | head -c 120)"
+note "copy: src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} progress=${cps[3]} ssh_tar=${cps[4]} $(tr '\n' ' ' < "$WORK/tarfilter.err" | head -c 120)"
 [ "${cps[0]}" != 3 ] || abort MEDIA "the streamed archive does not match its sha256 pin"
 [ "${cps[2]}" != 3 ] || abort MEDIA "the archive holds a member this tree never holds (tarfilter refused it)"
-[ "${cps[3]}" != 124 ] || abort TIME "the copy into the guest did not finish inside its budget"
+[ "${cps[4]}" != 124 ] || abort TIME "$(copy_py abort-text --status "$COPY_PROGRESS" --budget "$COPY_BUDGET" --expected "$COPY_EXPECTED")"
 if [ -n "${KF_SPEC_URL_FILE:-}" ] && [ -s "$WORK/stream_status.txt" ]; then
     # the user's URL file: its archive is trusted and RECORDED (sha256, size, how our pin compared), never refused on our pin
     read -r _kst kbytes _ksecs ksha kpin < "$WORK/stream_status.txt"
@@ -641,8 +658,8 @@ if [ -n "${KF_SPEC_URL_FILE:-}" ] && [ -s "$WORK/stream_status.txt" ]; then
         --source user-url-file --mode "${KF_TRUST_MODE:-trust-git-only}" --evidence-dir "$EVD" >> "$LOG" 2>&1 \
         || note "could not write the trust record (the numbers above are the record)"
 fi
-if [ "${cps[0]}" != 0 ] || [ "${cps[1]}" != 0 ] || [ "${cps[2]}" != 0 ] || [ "${cps[3]}" != 0 ]; then
-    abort TRANSPORT "the copy into the guest failed (src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} ssh_tar=${cps[3]})"
+if [ "${cps[0]}" != 0 ] || [ "${cps[1]}" != 0 ] || [ "${cps[2]}" != 0 ] || [ "${cps[3]}" != 0 ] || [ "${cps[4]}" != 0 ]; then
+    abort TRANSPORT "the copy into the guest failed (src=${cps[0]} zstd=${cps[1]} tarfilter=${cps[2]} progress=${cps[3]} ssh_tar=${cps[4]})"
 fi
 gspec 600 verify > "$WORK/guest_view.txt"
 grep -q '^SPEC_VERIFY_DONE' "$WORK/guest_view.txt" || abort TRANSPORT "the guest did not list the copied viewsets"

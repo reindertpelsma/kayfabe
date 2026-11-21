@@ -1,0 +1,6 @@
+=== simpleCUBLAS side=guest start=2026-11-20T22:58:07+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/simpleCUBLAS
+GPU Device 0: "Ada" with compute capability 8.9
+
+simpleCUBLAS test running..
+simpleCUBLAS test passed.
+=== end rc=0 secs=12 2026-11-20T22:58:19+00:00

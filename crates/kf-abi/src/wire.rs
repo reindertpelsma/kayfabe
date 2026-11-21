@@ -93,9 +93,9 @@ pub enum AbiError {
         /// Patch version.
         patch: u16,
     },
-    /// ★ A measured driver version below the oldest reviewed capability allowlist row
-    /// (`crate::versions`' `CAPS_ROWS`): there is no reviewed control/class surface to
-    /// admit the guest against.
+    /// ★ A host driver version the guest-ingress table has no tag for
+    /// (`crate::ingress_generated::TAGS`): there is no control/class surface to admit the guest
+    /// against.
     NoCapabilityRow {
         /// Major version.
         major: u16,
@@ -246,8 +246,8 @@ impl core::fmt::Display for AbiError {
                 };
                 write!(
                     f,
-                    "driver {v} is below the oldest reviewed capability allowlist (nvproxy \
-                     rows start at 550.54.04 in this port); refusing rather than admitting it \
+                    "driver {v} has no guest-ingress table (tools/api_boundaries/ingress_policy.py \
+                     generates one per driver-matrix tag); refusing rather than admitting it \
                      against another version's control/class surface"
                 )
             }

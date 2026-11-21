@@ -1,203 +1,80 @@
-# Windows guest
+# Run a Windows guest
 
-**What a Windows 11 guest needs to run NVIDIA's stock driver on kayfabe.** Labels: [measured] = a run on named hardware, [inferred] = reasoning. <!-- src: docs/WINDOWS_GUEST_SETUP.md (STATUS: LIVE, 2026-10-17) -->
+A Windows 11 guest runs NVIDIA's stock driver on kayfabe. You install Windows and the driver yourself; kayfabe adds the emulated GPU and needs a few registry settings in the guest, which one script sets. <!-- src: docs/WINDOWS_GUEST_SETUP.md (STATUS: LIVE, 2026-10-17) -->
+
+## The steps
+
+1. **Install Windows 11** in a VM that has the kayfabe device ([Install](installing.md), [Command-line reference](cli-reference.md), [Attach to a VM you already have](attach-to-existing-vm.md)). Give the VM a TPM 2.0 and UEFI Secure Boot firmware if you want what the tested guests had; a guest without them has no recorded acceptance run.
+2. **Run `kayfabe-windows-setup.bat`** in the guest before NVIDIA's driver installer, and again after it ([below](#the-settings-it-needs-and-why)).
+3. **Install NVIDIA's driver** with NVIDIA's own installer. Version 580.88 is the Windows driver that has been tested.
+4. **Restart** the guest. Check `nvidia-smi` and that Device Manager shows no error on the display adapter.
+5. For a visible desktop use `display=on,gop=on` on the device and a broker window or VNC ([Display and the broker](display.md)). Secure Boot guests need the boot display driver signed and given with `gop-efi=`.
+
+You supply and license Windows yourself. Kayfabe ships no Windows and no NVIDIA binary ([Credits and notices](credits.md)).
 
 ## What was tested
 
-- **Windows 11 Pro, build 26200 (the full retail edition)** [measured, 2026-10-14, kayfabe `eb9f2aa3`, RTX 4070]: the desktop and the application matrix (the benchmark output names "Microsoft Windows 11 Pro", kernel 10.0.26200). <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->
-- **Windows 11 Enterprise LTSC 2024, build 26100** (Microsoft's 90-day evaluation) [measured]: the image that `scripts/bench/windows/win_vm.sh install` builds, and the one used on rented hosts. <!-- src: docs/WINDOWS_GUEST_SETUP.md, scripts/bench/windows/README.md -->
+- **Windows 11 Pro, build 26200** (the retail edition): the desktop and the application matrix on an RTX 4070. <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->
+- **Windows 11 Enterprise LTSC 2024, build 26100** (Microsoft's 90-day evaluation): the image the test harness builds, used on rented hosts. <!-- src: docs/WINDOWS_GUEST_SETUP.md, scripts/bench/windows/README.md -->
 - **Driver:** NVIDIA's stock Windows driver, version 580.88, installed with NVIDIA's own installer or INF, unmodified. No driver, kernel or Windows binary is patched. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
-- Applications run unmodified from the vendors' complete installers; the README's table lists the results (Minecraft, Unigine Heaven, GravityMark, Edge with hardware video decode, CUDA, Blender, OBS, Office, SolidWorks and 3DMark). Several of those rows say their result files are not committed yet. <!-- src: README.md "What runs today" -->
+- Applications run unmodified from the vendors' complete installers; the project README lists the results (Minecraft, Unigine Heaven, GravityMark, Edge with hardware video decode, CUDA, Blender, OBS, Office, SolidWorks and 3DMark). <!-- src: README.md "What runs today" -->
+- GPU families: see [Requirements](requirements.md).
 
 ## The settings it needs (and why)
 
-The stock GeForce driver on Windows runs its resource manager on the CPU by default. Kayfabe serves only the GSP firmware path, so the driver has to be told to use GSP. Without the first setting the driver stops with **Code 43** [measured on Windows 11 and on LTSC]. All values are DWORDs and take effect after a restart. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
+The stock GeForce driver on Windows runs its resource manager on the CPU by default. Kayfabe serves only the GSP firmware path, so the driver has to be told to use GSP. Without the first setting the driver stops with **Code 43**. This was seen on Windows 11 Pro and on Windows 11 Enterprise LTSC. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 
-| # | Key | Value | Why |
-|---|---|---|---|
-| 1 | `HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\<index>` `EnableGpuFirmware` | `1` | forces GSP; `<index>` is the display adapter's own key (`0000` on Windows 11 Pro, `0001` on the LTSC image: read it, never assume) |
-| 2 | `HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm` `EnableGpuFirmware` | `1` | the same flag; the service key alone is not enough, set both |
-| 3 | `HKLM\SOFTWARE\Microsoft\Windows\Dwm` `OverlayTestMode` | `5` | without it, opening the Start menu reset the display driver on Windows 11 Pro (the cause is not known) |
-
-<!-- src: docs/WINDOWS_GUEST_SETUP.md -->
-
-From an elevated command prompt in the guest. First read the display adapter's driver key, then substitute it:
+One script sets all three: `scripts/windows/kayfabe-windows-setup.ps1`, with a wrapper `scripts/windows/kayfabe-windows-setup.bat` that starts it with the execution policy it needs. Copy both files into the guest and run it from an elevated prompt (right-click, Run as administrator), **before** NVIDIA's driver installer so that the display is not lost after the install:
 
 ```
-powershell -NoProfile -Command "(Get-PnpDeviceProperty -InstanceId (Get-PnpDevice -PresentOnly | Where-Object InstanceId -like 'PCI\VEN_10DE*').InstanceId -KeyName DEVPKEY_Device_Driver).Data"
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\Class\<the key printed above>" /v EnableGpuFirmware /t REG_DWORD /d 1 /f
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm" /v EnableGpuFirmware /t REG_DWORD /d 1 /f
-reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f
-shutdown /r /t 0
+kayfabe-windows-setup.bat            REM before the NVIDIA installer: sets what can be set (phase pre)
+REM ... run NVIDIA's installer, then:
+kayfabe-windows-setup.bat            REM after it: finds the adapter's key, sets the rest (phase post)
+shutdown /r /t 0                     REM the values take effect after a restart
 ```
-<!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 
-`scripts/bench/windows/gsp_on.ps1` does settings 1 and 2 while it installs the driver (it is what `win_vm.sh nv-install` runs): it disables the device, adds and installs the INF, writes both values, reads them back, then re-enables the device. Setting them **before the driver's first start** avoids the Code 43. <!-- src: docs/WINDOWS_GUEST_SETUP.md, scripts/bench/windows/gsp_on.ps1 -->
+All values are DWORDs. The script prints each value it sets and reads it back, changes nothing that is already right (run it as often as you like), refuses to run without administrator rights, and never restarts the machine. It does not need the NVIDIA driver to be installed. <!-- src: scripts/windows/kayfabe-windows-setup.ps1 -->
+
+| # | Key | Value | Phase | Why |
+|---|---|---|---|---|
+| 1 | `HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\<index>` `EnableGpuFirmware` | `1` | post | forces GSP; `<index>` is the display adapter's own key (`0000` on Windows 11 Pro, `0001` on the LTSC image: the script reads it, never assumes it) |
+| 2 | `HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm` `EnableGpuFirmware` | `1` | pre | the same flag; the service key alone is not enough, set both |
+| 3 | `HKLM\SOFTWARE\Microsoft\Windows\Dwm` `OverlayTestMode` | `5` | pre | without it, opening the Start menu reset the display driver on Windows 11 Pro (the cause is not known) |
+
+<!-- src: scripts/windows/kayfabe-windows-setup.json (this table is generated from it and a test keeps them equal) -->
+
+Why two phases: the display adapter's key (row 1) only exists once a driver is bound to the NVIDIA device, so it cannot be set before the install. Phase `pre` sets rows 2 and 3 (creating the service key if it is missing); phase `post` finds the adapter's key from the NVIDIA device's driver key, sets row 1 and repeats the others. The default, `-Phase auto`, picks `post` when an NVIDIA device is bound to NVIDIA's driver (Microsoft's Basic Display driver does not count) and `pre` otherwise. If the display shows Code 43 after the install, run the script again and restart.
+
+Options (they follow the file name): `-Phase auto|pre|post`; `-DriverKey "{4d36e968-e325-11ce-bfc1-08002be10318}\0001"` to name the adapter's key instead of discovering it; `-InstallDriver <dir>` for a single step, where `<dir>` is the folder NVIDIA's package was extracted to (it holds `Display.Driver\nv_dispi.inf`): it sets the `pre` values, disables the device, adds and installs the INF, sets row 1, reads everything back and re-enables the device. If a value does not read back it leaves the device disabled and says how to enable it. Exit code 0 is success, 1 a value that did not read back, 2 a refusal (not elevated, bad arguments), 3 no NVIDIA device or no NVIDIA driver bound where one is needed. <!-- src: scripts/windows/kayfabe-windows-setup.ps1 -->
+
+`scripts/bench/windows/gsp_on.ps1` does rows 1 and 2 for the harness (`win_vm.sh nv-install` runs it). <!-- src: scripts/bench/windows/gsp_on.ps1 -->
 
 These are settings for a development guest, not a complete installation guide for a production system.
 
-## The Windows harness: `win_vm.sh`
+Not verified end to end: `kayfabe-windows-setup.ps1` has run only against a fake registry and a Windows runner's registry, not before a real NVIDIA driver install; rows 1 and 2 are the part that `gsp_on.ps1` applies and reads back in the test harness.
 
-`scripts/bench/windows/win_vm.sh` installs a Windows 11 guest once and then boots it on kayfabe as many times as you like. It is one script and it needs a bench tree and a kayfabe QEMU built for the checkout's revision ([Building from source](building.md), [Running the QEMU device](installing.md)). It refuses by name when a command or file it needs is missing. <!-- src: scripts/bench/windows/README.md -->
+## Windows needs no environment variables
 
-Install the host tools it names:
+The Windows support set (the behaviours the Windows driver needs and Linux does not use) is on by default. It is selected by what the guest announces about itself when its driver starts, which names the driver build. That announcement comes from the guest, so it is not a security boundary: an honest Linux guest never reaches the Windows set, but any guest that announces Windows driver 580.88 does. No path into another VM or the host was found in a reading of the code; a dedicated hostile-guest review has not been done. On a host that runs only Linux guests, or several tenants, set `windows-support=off` on the device. A Windows guest on such a VM is refused by name and is expected to end in Code 43; that has not been tested. Some of the answers are made up by kayfabe rather than taken from the GPU (pool sizes, and success for the preemption and zcull binds with nothing bound on the host); the Windows driver needs them and they apply to a declared Windows guest only. Running Windows with no environment file has not been run on hardware yet. <!-- src: docs/design/V3_WINDOWS_SUPPORT_PROFILE.md, docs/OWNER_RULINGS.md section AT -->
 
-```sh
-apt-get install -y ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full
-```
-<!-- src: scripts/bench/windows/README.md -->
+## Other things a Windows guest needs
 
-### Windows needs no flags
-
-*(Since 2026-11-15.)* `win_vm.sh run` boots Windows with **no `KF3_*` environment file**. kayfabe's Windows support set (the kernel graphics tier, per-process channel passthrough, the deferred-API and software-runlist objects, host-owned scheduling, async preempt, the colour path, and the answers to the preemption, zcull, display-control and GFX pool queries that the Windows driver needs) is on by default and is selected by what the guest declares about itself when its driver starts (its first message to the emulated GPU, which names the driver build). **That declaration comes from the guest, so it is not a security boundary:** an honest Linux guest never declares the Windows driver and never reaches the Windows set, but any guest that declares Windows driver 580.88 does, and about fifteen paths that used to need an operator environment flag are now reachable by such a guest on a default VM (per-process channel passthrough, the deferred-API object, the kernel graphics tier, the copy-engine relay, memory-list descriptors, asynchronous preempt, host-owned scheduling, the colour decoder, and the made-up answers below). No path into another VM or the host was found when this was written [inferred from reading the code, not tested; a dedicated hostile-guest review is a follow-up]. On a host that runs only Linux guests, or several tenants, set `windows-support=off`: it is the hardening, and no declaration then reaches any of it. Some of those answers are made up by kayfabe, not taken from the GPU (the GFX pool sizes; `NV_OK` for the preemption and zcull binds with nothing bound on the host); they were measured as required by the Windows driver and are product behaviour for a declared Windows guest only. To make a VM Linux-only, set the device property `windows-support=off` ([Running the QEMU device](installing.md)); a Windows guest on such a VM is refused by name at its first Windows-only control [expected to end in Code 43; not measured]. **[Not yet run on hardware without an env file: the change was made 2026-11-15 from the measured env-file profile (RTX 4090, `windows_apps` 10/10); the first proof is the Windows gate on a rented box with no env file.]** <!-- src: docs/design/V3_WINDOWS_SUPPORT_PROFILE.md, docs/OWNER_RULINGS.md section AT -->
-
-### What it sets up
-
-| Piece | How |
-|---|---|
-| Windows | Windows 11 Enterprise LTSC 2024, the 90-day evaluation (build 26100), from Microsoft's own download link, installed unattended. |
-| Secure Boot | On. The VM has its own OVMF variable store; PK and KEK are generated for the VM; `db` holds Microsoft's keys plus this host's kayfabe `db` certificate, which signs kayfabe's boot-display driver (`gop-efi=`). |
-| TPM 2.0 | swtpm. The state is manufactured once per VM and then reused. The harness refuses to manufacture it again. |
-| BitLocker | Prevented from the first boot; `check` verifies the volume is decrypted. |
-| Drivers | The Red Hat virtio drivers (virtio-win 0.1.302), the QEMU guest agent. No balloon, no viomem. |
-| ssh | Win32-OpenSSH, key only; PowerShell is the default shell. |
-| Network | QEMU user networking with `restrict=on`: the guest has no route out, so no Windows Update. Only ssh is forwarded, `127.0.0.1:2224` to the guest by default. |
-
-<!-- src: scripts/bench/windows/README.md -->
-
-### Commands
-
-```sh
-S=scripts/bench/windows/win_vm.sh
-$S install                                  # once; about an hour on a nested box
-$S run --detach --tag basic                 # kayfabe + signed boot-display driver, display on
-$S ssh 'Get-PnpDevice -Class Display'
-$S shot                                     # PNG of the console
-$S check --kf3                              # WIN_* lines: Secure Boot, db, TPM, BitLocker, virtio...
-$S nv-install                               # NVIDIA 580.88, GSP forced on before nvlddmkm's first start
-$S collect nv1                              # Windows-side evidence into logs/evidence/nv1/
-$S stop                                     # guest shutdown, then QMP powerdown, then QMP quit
-$S status
-```
-<!-- src: scripts/bench/windows/README.md "Use"; scripts/bench/windows/win_vm.sh header -->
-
-Other sub-commands in the script's header: `scp-to`, `scp-from`, `sign` (export and sign this checkout's boot-display driver) and `fetch` (download and verify the pinned media). <!-- src: scripts/bench/windows/win_vm.sh -->
-
-`run` options:
-
-| Option | Effect |
-|---|---|
-| `--overlay NAME` | The disk to boot: `disk/NAME.qcow2` over the sealed `base.qcow2`, created on first use. Default `main`. |
-| `--guest-driver V` | The device's `guest-driver=` (for example `580.65.06` for Windows 580.88). |
-| `--kf3-extra P` | Extra device properties. |
-| `--no-kf3` | Boot on the standard VGA without kayfabe. |
-| `--arm A` / `--arm B` | Without (A, the default) or with (B) Hyper-V enlightenments. |
-| `--once` | Do not restart after a guest reboot. |
-| `--ssh-port N`, `--ssh-bind ADDR` | The host port for ssh; binding wider than `127.0.0.1` is explicit only. |
-| `--detach` | Run in the background. |
-| `--no-rpc-trace` | Do not set `KF3_RPC_TRACE=1` (on by default for kayfabe runs). |
-| `--tag`, `--max-boots` | Name the run; limit restarts (default 12). |
-| `--env-file FILE` | Export the `KF3_*` flags listed in FILE (only `KF3_NAME=digits` lines and `#` comments are accepted). Not needed to start Windows (since 2026-11-15 the Windows profile is the device's default); for measurement flags only, and `kf3_flags.sample.env` is a one-line example. |
-| `--dry-run` | Print the QEMU command line and exit; start nothing. |
-
-<!-- src: scripts/bench/windows/README.md; scripts/bench/windows/win_vm.sh (cmd_run) -->
-
-The harness environment: `WINVM_ROOT` (default `/workspace/winvm`), `WINVM_NAME`, `WINVM_RAM_MB` (8192), `WINVM_SMP` (8), `WINVM_KF3_FB_MB` (8192), `WINVM_SSH_PORT` (2224), `WINVM_QEMU`. <!-- src: scripts/bench/windows/win_vm.sh header -->
-
-**Added 2026-10-31, opt-in, not yet run on hardware** (for a rented box; the defaults are the old behaviour): `WINVM_LOCK_WAIT_S` (7200, how long `run` waits for the GPU lock), `WINVM_INSTALL_WAIT_S` (14400, how long `install` waits), `WINVM_SSH_CONNECT_TIMEOUT` (8), `WINVM_VM_IDENTITY=1` (a random SMBIOS UUID, serial and MAC per VM, kept in the VM's directory), `WINVM_DRY_RUN=1`, and the sub-command `desktop-prep` (autologon and `OverlayTestMode=5` for the account in `KF_GUEST_USER`, default `kf`; for throwaway guests only, because the password is then stored in the guest registry). The table is in `scripts/bench/windows/README.md`. <!-- src: scripts/bench/windows/README.md -->
-
-**Added 2026-10-31, opt-in, not yet run on hardware:** `WINVM_KF3_DISPLAY=off` makes `run` build the device without the display plane and without the boot display driver (`kf3-gpu,fb-mb=...,id=kf0`), for a box with no monitor; the default (`on`) is the device described in the next paragraph. `WINVM_INSTALL_CACHE=unsafe` runs the disk of the install-time boots only with QEMU's `cache=unsafe` (faster; after a host crash during an install, delete the VM and install again). It is not an image cache and shares nothing between VMs. `scripts/bench/box/windows_lane.sh` runs a fresh rented box up to a sealed image with these set. <!-- src: scripts/bench/windows/README.md; scripts/bench/windows/win_vm.sh header -->
-
-The QEMU command it builds uses the `pc-q35-10.2` machine with SMM, Secure Boot firmware, the TPM, and the device `kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=<signed driver>,id=kf0`. Every guest reboot starts a fresh QEMU with the same firmware variables and the same TPM state; the harness restarts it for you. <!-- src: scripts/bench/windows/win_vm.sh -->
-
-Rules the script enforces: every step logs `START` and `EXIT rc=` (a log with no `WINVM_RUN_END` belongs to a dead run); GPU work takes the shared lock `/tmp/kayfabe-fastguest.lock`; nothing secret is written into the repository. Keep the swtpm state and the ssh key private; a VM is never restored from another VM's state. <!-- src: scripts/bench/windows/README.md -->
-
-**Remote access:** `ssh -J <gpu-host> -p 2224 kf@127.0.0.1` with a key you passed to `install --authorized-key`. To watch the screen, forward the VNC socket: `ssh -N -L 5905:/workspace/winvm/kfwin/run/vnc.sock <gpu-host>` and point a VNC viewer at `localhost:5905`. <!-- src: scripts/bench/windows/README.md -->
-
-## Other things a Windows guest needs (not settings)
-
-- *(2026-10-31 note: `win_vm.sh` sets a fixed MAC and passes no `-uuid` or `-smbios`, so the harness does not set them (it restricts the network instead). The default `gpu-uuid=auto` is per-VM, but with no `-uuid` or `vm-id=` it is a random value on every boot. <!-- src: scripts/bench/windows/win_vm.sh, crates/kf-rm/src/gpuuid.rs -->)*
-- *(2026-10-31)* `win_vm.sh` gives each VM its own SMBIOS UUID, serial and MAC when `WINVM_VM_IDENTITY=1` is set before `install` (off by default; it has not run on hardware yet). Without it every VM has the same MAC and QEMU's default SMBIOS identity. <!-- src: scripts/bench/windows/README.md -->
-- A **unique SMBIOS UUID, serial and MAC per VM**, and offline setup until after OOBE (Windows Autopilot once matched a default-identity VM to an unrelated company tenant); an explicit `gpu-uuid`. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
+- **A unique identity per VM.** Give each VM its own SMBIOS UUID, serial number and MAC address, and do the setup offline until after the first-run wizard (Windows Autopilot once matched a default-identity VM to an unrelated company tenant). Pass `-uuid`, or `vm-id=`, so that the GPU UUID the guest sees (`gpu-uuid=auto`) is stable: without either it is random at every boot. <!-- src: docs/WINDOWS_GUEST_SETUP.md, crates/kf-rm/src/gpuuid.rs, scripts/bench/windows/win_vm.sh -->
 - **Do not snapshot an image with a Windows update staged**: it crash-loops `dwm.exe`. Block updates in test images. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
-- You supply and license Windows. The scripts download Microsoft's evaluation image, the virtio drivers and NVIDIA's installer from their vendors, each pinned by SHA-256. See [Credits and notices](credits.md). <!-- src: scripts/bench/windows/win_vm.sh, docs/NOTICES.md -->
-
-## Preparing the open application disk
-
-The permanent public disk is winapps-open.iso, label KFAPPS. Build it from a reviewed checkout using Python
-3.11+ standard library; the official Zig compiler is pinned in manifest.json. No shell extractor, ISO utility,
-distro mingw or pip resolution is needed. App originals stay intact and are staged inside Windows.
-
-```text
-python3 -I scripts/bench/windows/appmatrix/package_bundle.py fetch --dl downloads
-python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-a
-python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-b
-python3 -I scripts/bench/windows/appmatrix/package_bundle.py compare-image --iso out-b/winapps-open.iso --receipt out-a/winapps-open.manifest.json --out out-b
-```
-
-For manual downloads, also copy the tagged upstream tokenizers licence to
-Downloads/_compliance/hf_wheels/tokenizers-v0.22.2-LICENSE as shown by Layout. The wheel itself contains
-no legal text; the builder retains this pinned fallback alongside any bundled notices.
-
-Level 1 is the reproduction gate: identical file paths and SHA-256/size values, including the repository
-programs. Level 2 compares ISO bytes too, with a metadata WARNING when the files match but the container
-differs. Both ISO directory namespaces must expose the same files and bytes; a primary-only payload
-fails the check. Rock Ridge/System Use and hybrid filesystem records are unsupported and refused.
-`verify-image --out out-a` checks one object's integrity and its embedded recipe against
-the matching checkout, including pinned package/source bytes, guest files and licence notices. A receipt
-with freshly recalculated hashes cannot approve different inputs. Run it from the reviewed checkout used
-to build the image. Publication additionally requires that checkout's input digest before any store request.
-The GUI offers the same build, integrity and reproduction checks. No program currently uses the supported
-inventory-only/functional-check qualification. A vendor changing pinned bytes is INPUT_DRIFT, not flakiness.
-
-There is no permanent private bundle. The Linux box host obtains required CUDA/torch/llama, driver and
-conditional Microsoft/LunarG artifacts from official_fetch.json using J4 downloads with SHA-256 checks. The
-transient KFAPPSP disk and local manifest live only for the run and are removed after all guests stop.
-Nothing NVIDIA is uploaded to R2/GitHub; no Actions media artifact/cache is created. The guest stays offline.
-Both disks are read-only, fixed K: (KFAPPS) and P: (KFAPPSP).
-
-J2 must select the exact Windows driver with --official-driver VERSION or KF_WINAPPS_OFFICIAL_DRIVER
-(the box stage `windows_apps.sh` defaults it to 580.88, the driver its gate installs).
-Only known catalogue versions are accepted; currently 580.88 is pinned. Driver staging/install belongs
-before the parent Windows gate; the app harness checks that selected version and does not change it after
-the gate. --guest-driver is the separate kf3 ABI setting. A missing pin or wrong installed version is
-MEDIA_DRIFT/NOTRUN. Missing official media never passes; --no-official-fetch leaves required apps NOTRUN.
-The downloader/person or CI operator must accept the CUDA EULA for private use before official downloads.
-
-The first deliverable is build + verify, followed by coordinator manual upload of public content. CI
-publication remains optional and disabled; no secrets, domain, environment or enable flag is configured.
-The GUI supports selecting the receipt and original archives in a file manager. Keep its licence texts,
-notices and mirrored copyleft source together; source retention remains our obligation while distributing
-the binaries. Native cross-platform builds and live upload have not been measured by this change.
-<!-- src: scripts/bench/windows/appmatrix/package_bundle.py, scripts/bench/windows/appmatrix/bundle_repro.py, scripts/bench/windows/appmatrix/official_runtime.py -->
+- The guest changes its own Secure Boot variables (it adds the 2023 CAs to `db` and updates `dbx`). The variables file is live state of that VM: never regenerate it or copy it to another VM. <!-- src: scripts/bench/windows/README.md "Known limits" -->
+- A failed NVIDIA driver slows everything down: with the driver in Code 43, boot to a login took about 20 minutes and the guest ignored a shutdown request for 5 minutes. Fix the settings first. <!-- src: scripts/bench/windows/README.md "Known limits" -->
 
 ## Known limits
 
-- **Windows sleep/wake is not supported yet.** <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->
-- Edge can reset the display driver after 7 to 16 minutes of playback. <!-- src: README.md "Not finished" -->
-- MEASURED Windows gate PASS: TU106, TU116, GA104, GA106, AD102, AD104, GB205 and GB206 at `0c515b3b3`, 2026-11-04; GA102 at `006d845a`, 2026-11-03. GB202 is intermittent (FAIL, then two PASS on one box). See [requirements](requirements.md). <!-- src: traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md -->
-- On GB203 (RTX 5070 Ti) an earlier Windows gate passed once at `54410b7d`, 2026-11-03; before the display fixes the screen stayed black. <!-- src: traces/blackwell_win_20261103/, n=1 -->
-- `nv-install` is slow: it copies the 2.6 GB driver package over user networking at about 2.4 MB/s (18 minutes). <!-- src: scripts/bench/windows/README.md "Known limits" -->
-- **A failed NVIDIA driver slows everything down.** With the driver in Code 43, boot to ssh took about 20 minutes and the guest ignored `shutdown /s` for 5 minutes. <!-- src: scripts/bench/windows/README.md "Known limits" -->
-- The guest changes its own Secure Boot variables (it adds the 2023 CAs to `db` and updates `dbx`). The variables file is per-VM live state; never regenerate it or copy it to another VM. <!-- src: scripts/bench/windows/README.md "Known limits" -->
-
-See also [Troubleshooting](troubleshooting.md) and [Display and the broker](display.md).
+- **Windows sleep and wake is not supported yet.** <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->
+- Edge can reset the display driver after 7 to 16 minutes of video playback. <!-- src: README.md "Not finished" -->
+- Windows 11 reached a passing Windows gate on these GPUs: TU106, TU116, GA102, GA104, GA106, AD102, AD104, GB205 and GB206. GB202 was intermittent: one failure, then two passes on one machine. On GB203 (RTX 5070 Ti) the gate passed once; the screen had stayed black before the display fixes. These are results of past runs, not a promise for the current source. See [Requirements](requirements.md). <!-- src: traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md; traces/blackwell_win_20261103/ -->
+- Heavy scenes can reset the display driver (a TDR), and on some cards it loops. See [Troubleshooting](troubleshooting.md).
 
 ## Not documented yet
 
-- A Windows install on a machine without the harness (a plain ISO install onto a kayfabe-backed VM by hand). *(2026-10-31: [Attach your GPU to a VM you already have](attach-to-existing-vm.md) covers the QEMU side for an existing VM, untested.)*
+- A Windows install by hand from a plain ISO on a machine without the test harness. [Attach to a VM you already have](attach-to-existing-vm.md) covers the QEMU side, not tested.
 - Windows 10, or other Windows 11 builds than the two above.
-- A successful guest run with another NVIDIA driver version. Windows 581.51 was attempted on AD102 and failed with Code 43 [measured in the sweep matrix, revision `24906bf33`, P19 profile; historical source `9d6f210ba`]. This is recorded on the branch `codex/sweep-integrate-20261018`, not merged: [matrix](https://github.com/reindertpelsma/kayfabe/blob/0bbf3c55f/traces/sweep_integrate_20261018/MATRIX.md). Its same-board native Windows control passed, which is not a kayfabe guest pass.
+- A successful guest run with another NVIDIA driver version. Windows driver 581.51 was attempted on an AD102 card and failed with Code 43; the same board's native Windows run passed.
 
-Verified on: Windows 11 Pro 26200 with driver 580.88 on an RTX 4070 (kayfabe `eb9f2aa3`, 2026-10-14; further results up to master `89fc8a222`, 2026-10-21, in the README); LTSC 26100 on rented hosts. Not verified end to end: the `reg add` snippet is the repository's own text and is not a recorded run of exactly those lines. Settings 1 and 2 are the part that `gsp_on.ps1` applies and reads back in the harness.
-
-## App gate policy
-
-**Unsupported (UVM), for now:** `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify` and the Windows counterpart `managed_t`. The owner keeps UVM unmerged: the per-fault GR hold is unmeasured in this app qualification, and hardware timing plus an explicit bound are required before merge. Gate reports list them as `unsupported (UVM)`; they are not supported-app failures or hidden omissions. Historical results remain in the evidence: `conjugateGradientUM` printed SUCCESS with a wrong numerical result, so an exit code alone is not a correctness check.
-
-Manual or unsupported IDs supplied as gate expectations produce RETRY with no pass credit; raw results stay visible as observations.
-
-All eight `overlay_yuv_*` entries (probe, hide, occlude, resize, move, recreate, fullscreen, soak) are `manual: needs real display`, excluded from Vast profiles and listed in reports. The native simulated-display probe returned SETUP/refused (code 5) on Vast: no DIRECT overlay and no scenario frames; no real-monitor native record is committed. Evidence must name the physical monitor/connector, exact revision, GPU and drivers, native DIRECT-overlay reference, command, app version/hash, per-second modes/transitions/latency, duration, screenshots and reset/Xid counts.
-
-CODE READ at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad` (owner decision and RV2 correction 2026-11-09): LiveKernelEvent 193 is reported as distinct reports in `known_live_dumps_193`, with raw event entries in `live_dumps_193_entries`. The per-die ratchet remains report-only by default: above one report on AD102, TU106 or GA102 it emits WARN while keeping count/maximum evidence. Old maxima 2/3/4 were entry counts and remain in the JSON as provenance. `KF_WINGATE_LKE_RATCHET=gate` enables ceiling enforcement; `KF_WINGATE_STRICT_LKE=1` still gates on any non-stale 193 entry. Unseeded dies report UNKNOWN. Unresolved entries also report UNKNOWN unless resolved fresh reports already prove an overrun: the default remains WARN, and explicit gate mode fails. Contradictory report IDs and paths cannot establish staleness. The local `live_dumps_193_resolved` field counts distinct resolved fresh reports; adding unresolved entries cannot erase that known lower bound. Other reset counters still gate. `wer_reports.txt` and the gate log decode real Code/Parameter labels and older P1..P8 labels. Header discovery covers accessible `*.dmp` files recursively under LiveKernelReports and both WER stores, including hidden/system children, reading only the first 0x1000 bytes in the guest. MEASURED in supplied phase-0 records at `8d495e90`: retained 193-report headers contain bugcheck `0x193`, reason `0x815`; cause and correctness impact remain unresolved. DX1 reviewed those files GPU-free. The box report retains reports, resolved reports, entries, unit, unresolved entries and ratchet metadata; the current Worker sanitizer publishes only the existing `windows.live_dumps_193` alias. The Windows apps and SPEC stages remain disabled pending the first Worker run; neither new stage is deployed.
-<!-- src: scripts/bench/windows/appmatrix/gate_profiles.json; traces/windows_overlay_native_20261010/README.md; docs/OWNER_RULINGS.md section E; scripts/bench/box/windows_gate.sh; scripts/ci/vast_run_report.py -->
+To install and boot a throwaway Windows 11 guest with the project's own script, see [The Windows test harness](windows-harness.md).

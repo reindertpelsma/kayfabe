@@ -77,15 +77,25 @@ class FakeTransport:
         return digest, len(data)
 
 
+TRUST_ENV = ("KF_TRUST_MODE", "KF_TRUST_LIFT", "KF_TRUST_EVIDENCE_DIR")
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self._tmp.name)
         self.out = self.dir / "tool.run"
         self.ev = self.dir / "evidence"
-        self._env = {k: os.environ.pop(k) for k in ("KF_TRUST_MODE", "KF_TRUST_LIFT", "KF_TRUST_EVIDENCE_DIR") if k in os.environ}
-        self.addCleanup(lambda: os.environ.update(self._env))
+        self._env = {k: os.environ.pop(k) for k in TRUST_ENV if k in os.environ}
+        self.addCleanup(self._restore_env)
         self.addCleanup(self._tmp.cleanup)
+
+    def _restore_env(self):
+        """Put the trust variables back EXACTLY as found: a test that sets one (KF_TRUST_MODE=yolo) must not leak it into the next
+        test of the process (CI found it: test_mlrows then saw TRUST_BAD_MODE when it shared a shard with this module)."""
+        for k in TRUST_ENV:
+            os.environ.pop(k, None)
+        os.environ.update(self._env)
 
     def resolve(self, man, transport, **kw):
         kw.setdefault("evidence_dir", self.ev)
@@ -263,6 +273,36 @@ class ForbiddenAndMissingAnchors(Base):
         with self.assertRaises(T.TrustError) as cm:
             T.resolve("nope", self.out, manifest=manifest(pin()), transport=FakeTransport(), emit=False)
         self.assertEqual(cm.exception.code, "TRUST_UNKNOWN_ARTIFACT")
+
+
+
+class EnvIsRestored(unittest.TestCase):
+    """The Base cleanup leaves the process environment as it found it, also for a variable the test SET."""
+
+    def _run(self, before):
+        saved = {k: os.environ.get(k) for k in TRUST_ENV}
+        try:
+            for k in TRUST_ENV:
+                os.environ.pop(k, None)
+            os.environ.update(before)
+            case = Base("setUp")
+            case.setUp()
+            os.environ["KF_TRUST_MODE"] = "yolo"
+            os.environ["KF_TRUST_LIFT"] = "x"
+            case.doCleanups()
+            return {k: os.environ.get(k) for k in TRUST_ENV}
+        finally:
+            for k in TRUST_ENV:
+                os.environ.pop(k, None)
+            os.environ.update({k: v for k, v in saved.items() if v is not None})
+
+    def test_a_variable_the_test_set_does_not_leak(self):
+        self.assertEqual(self._run({}), {k: None for k in TRUST_ENV})
+
+    def test_a_variable_that_was_there_comes_back_unchanged(self):
+        got = self._run({"KF_TRUST_MODE": "strict"})
+        self.assertEqual(got["KF_TRUST_MODE"], "strict")
+        self.assertIsNone(got["KF_TRUST_LIFT"])
 
 
 class Modes(Base):

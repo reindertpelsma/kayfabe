@@ -45,5 +45,5 @@
       "basis": "disk_gb: ESTIMATE, the large profile disk; vram_gb: UNMEASURED placeholder (no VRAM floor of the image is recorded in the repository), set it from a measured run"
     }
   ],
-  "images_note": "The planner knows images only from this list (configuration, owner rule 2026-11-18). An image also needs an entry in propimages.json so that bandwidth.json can read its pinned size; images C and D are added here and there when they exist."
+  "images_note": "The planner knows images only from this list (configuration, owner rule 2026-11-18). Every image id here must be a bundle of propimage-bundles.json (src/app-lane.js checks it at load), and `--apps` / the `apps` option resolve an application list to images with the bundle table (src/bundles.js). An image also needs an entry in propimages.json so that bandwidth.json can read its pinned size; further images are added in those files when they exist."
 }

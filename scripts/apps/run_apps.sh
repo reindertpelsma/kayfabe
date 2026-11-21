@@ -134,7 +134,9 @@ for app in "$@"; do
   rc=$?; t1=$(date +%s)
   quiet=$(( t1 - $(stat -c %Y "$log") ))
   echo "=== end rc=$rc secs=$((t1-t0)) $(date -Is)" >> "$log"
-  note=$(grep -a -m1 -iE 'error|fail|illegal|cannot|unable|Xid|timeout|abort|segmentation|core dumped|no CUDA|not found|No such' "$log" | grep -v -E '^=== |errors: 0|CHECK .* ok' | head -1 | tr -s ' \t' ' ' | cut -c1-160 | tr '|' '/')
+  # ⊘ the header and end lines (`=== ...`) are dropped BEFORE the first match is taken: the header carries the row's own command (`--diag-timeout`, `grep -E "Error|error"`, `ffprobe -v error`),
+  #   and `grep -m1 ... | grep -v` took that line first and then dropped it, so the note of such a row was always `-` (measured 2026-11-20: nvml_dcgm on an image without the venv)
+  note=$(grep -a -v -E '^=== |errors: 0|CHECK .* ok' "$log" | grep -a -m1 -iE 'error|fail|illegal|cannot|unable|Xid|timeout|abort|segmentation|core dumped|no CUDA|not found|No such' | tr -s ' \t' ' ' | cut -c1-160 | tr '|' '/')
   if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then v=TIMEOUT
   elif grep -qaE 'command not found|No such file or directory' "$log" && ! grep -qaE "$rx" "$log"; then v=NOTRUN
   elif [ $rc -eq 0 ] && grep -qaE "$rx" "$log" && ! grep -qaE '^CHECK .*FAIL' "$log"; then v=PASS; note=${note:+warn:$note}

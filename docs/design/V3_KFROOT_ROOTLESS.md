@@ -1,6 +1,6 @@
 # V3: the Windows gate and the box harness without root, and the explicit `kfroot` step
 
-STATUS: LIVE as code, 2026-11-15; NOT RUN ON A BOX. GPU-free tests and one hand run of the real `sudo` in a sandbox only (section 3).
+STATUS: LIVE as code, 2026-11-15; NOT RUN ON A BOX. GPU-free tests and one hand run of the real `sudo` in a sandbox only (section 3). 2026-11-20: the payload now has a rootless mode and every root step is audited, see [V3_KFROOT_AUDIT](V3_KFROOT_AUDIT.md) and `docs/CI_V3.md` ("Rootless payload run"); section 8 below is corrected there first.
 Implements OWNER_RULINGS section AR item 6 (rootless proof; owner 2026-11-11 and 2026-11-15) for the Windows stages
 (`scripts/bench/box/windows_gate.sh`, `windows_apps.sh`, `scripts/bench/windows/win_vm.sh`). Not done (section 8): the payload
 (`vast_payload.py`, `vast_onstart.sh`) still starts every stage as root; nothing here has run on a GPU box.
@@ -144,6 +144,11 @@ the guest's verdict.
    refresh-stress census, and any node a driver (re)install creates after the bootstrap.
 
 ## 8. Not done, and follow-ups
+
+**2026-11-20 correction (above the text it corrects):** the first bullet below is out of date. `vast_payload.py --rootless require` now starts every stage but
+`provision` through `kfroot.py run`, calls the bootstrap (`--only-needed`) before the first dropped stage, copies the record into `kf-result.json` and
+loads `kfroot.py` lazily, so the harnesses that copy `vast_payload.py` need no copy-list change unless they enable the mode. `vast_onstart.sh` and the
+Worker are unchanged (the mode is started by hand). The six stages that are not converted are listed in [V3_KFROOT_AUDIT](V3_KFROOT_AUDIT.md) section 4.
 
 - `vast_payload.py` / `vast_onstart.sh` still run every stage as root; the box bootstrap (`kfroot.py bootstrap`) is not yet called from
   `vast_onstart.sh`, and the stage commands are not yet wrapped in `kfroot.py run`. Wiring them is a payload change that must also add

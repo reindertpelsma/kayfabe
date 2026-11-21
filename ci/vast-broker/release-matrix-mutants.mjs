@@ -120,6 +120,7 @@ const files = [
   'ci/vast-broker/propimages.json',
   'ci/vast-broker/bandwidth.json',
   'ci/vast-broker/app-lane.json',
+  'ci/vast-broker/propimage-bundles.json',
   'ci/vast-broker/release-plan.mjs',
   'ci/vast-broker/validate-release-matrix.mjs',
   'ci/vast-broker/test/release-matrix.test.js',

@@ -1,6 +1,6 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-18 (the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-20 (the rootless payload run, section below, 2026-11-20; the `windows-guest-setup` job and its mutants 2026-11-20; the environment-read and comment-hygiene gates 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
 ## Job layout, concurrency and caches (2026-11-17)
@@ -53,10 +53,11 @@ about a minute of set-up; the two values that are not sums of measured steps are
 | `worker-mutants-b` | report, release-*, rv2, driver-pins, simulation, profile, proprietary-image mutants | about 13.5 | about 14 |
 | `middle-apps` (4 slices) | `middle_apps_mutants.py --shard I/4`: every fourth of the 118 mutants from the I-th | 99.0 (one worker) | about 27 each (INFERRED: a quarter of 99 plus a baseline run and set-up) |
 | `mutants-a` | OIDC retry, propimage, clock rule, bandwidth, image size, kfci, instruction, and the mutants of the sharder and of the slicing | about 9 | about 10 |
-| `mutants-b` | kfroot, box downloader, runner stages, doc steps, fault names, evidence and bench self-tests | about 14 | about 15 |
+| `mutants-b` | kfroot, box downloader, runner stages, doc steps, command-line reference, fault names, evidence and bench self-tests | about 14 | about 15 |
 | `selftests` (3 shards) | every `test_*.py` of `scripts/ci`, a partition by module | 17.4 (one process) | about 6 each |
 | `rust-mutants-a` | Windows support profile mutants | 19.1 | about 20 |
 | `rust-mutants-b` | oracle gate, video classes, offer filter, unmap cap, VA profiling mutants | about 12.3 | about 13 |
+| `windows-guest-setup` | `scripts/ci/windows_setup_check.ps1` on `windows-latest`: `scripts/windows/kayfabe-windows-setup.*` (Windows PowerShell 5.1) against the runner's real registry with a faked adapter class key: values and types, idempotency, an unelevated run refused (a fresh standard local user), cleanup. A gate-carrying job. The table, the docs and the logic against an in-memory registry are in `selftests` (`test_windows_guest_setup.py`) and `mutants-a` (`windows_guest_setup_mutants.py`, needs `pwsh`) | not measured yet | INFERRED: about 3 |
 | `stripped` | unchanged: `cargo build` and `cargo test` on the stripped tree | 24.7 (44088759756), 44.5 (44084630157) | unchanged, now the longest job |
 
 The run's wall time without queueing is therefore the `stripped` job (INFERRED: 25 to 45 min) plus the gate, instead of 210 min plus the gate. Runner
@@ -367,6 +368,32 @@ non-destructive steps of `stripped`, where build and test live; it never runs th
 strip, which deletes files, so `--all` builds and tests the full tree) and enforces
 minimum step counts, so a shortened or malformed job cannot report a vacuous green.
 
+## Environment and comment gates (2026-11-20)
+
+**STATUS of this section: LIVE, 2026-11-20.** CODE READ: [`env_allowlist.py`](../scripts/ci/env_allowlist.py) and
+[`comment_hygiene.py`](../scripts/ci/comment_hygiene.py) run in the `stable` job beside `trust_lint.py`; their mutants run in `mutants-b`
+(two named killers per mutant, tests `test_env_allowlist.py` and `test_comment_hygiene.py`). Both are ignored by the ladder like the other CI-only scripts.
+
+- **Environment reads.** No environment variable is required to boot a Windows or Linux guest in production; the product path reads the
+  environment only inside an allowlist. The gate scans `qemu/hw/misc/kf3`, `broker`, `cuda/walk`, `firmware` and every `crates/kf-*`
+  for `std::env::var`/`var_os`/`vars`/`vars_os`/`env!`/`option_env!` and `getenv`/`secure_getenv` on comment- and string-masked text. It leaves out
+  `tests/`, `benches/`, `examples/`, test-named files and `#[cfg(test)]` items (not shipped code), the frozen `crates/kayfabe-*`, `archive/` and
+  `third_party/`. Every name must be in [`env_registry.json`](../scripts/ci/env_registry.json) with a class (`debug`, `measurement`, `inject`,
+  `stress`, `system`, `product`), the reading file, a one-line why and `changes_guest_served`. A read with a computed name is `<dynamic:file:fn>` and is registered like any
+  other. The gate fails on an unregistered read, a stale entry, an entry whose file does not read the name, a malformed entry, and on an
+  offender (class `product` or `changes_guest_served: true`) that is on neither the registry's `product_env_allowlist` nor
+  [`env-allowlist-debt.json`](../scripts/ci/env-allowlist-debt.json). That baseline is a ratchet: it can only shrink, a name that stops being an
+  offender must be deleted from it, and `--record-baseline` never adds a name. `env_allowlist.py report` prints the counts per class and the table of offenders
+  with file, line and a proposal (`device-property`, `keep-as-debug` or `delete`).
+- **Comment hygiene.** Code comments say what the code does and why; working notes, owner and process commentary and date-stamped annotations belong in
+  `docs/design` and the handoff files. The gate extracts the comments (Rust, C, CUDA, JavaScript, Python `#`, shell, PowerShell) of the tracked sources outside
+  `docs/`, `archive/`, `third_party/`, `traces/`, `site/` and `crates/kayfabe-*`, and flags a line that matches a pattern (owner rulings and dates,
+  `OWNER_RULINGS`, agent and model names, `AGENTS.md`/`CLAUDE.md` pointers, coordinator notes, "as discussed", `Added 2026-..`, `(since 2026-..)`, a comment that opens
+  with a date or a marker and a date, `Lane X` labels). Each pattern was counted on the tree first; words with a technical meaning (the owner of a lock, a guest agent, an RM
+  session, a coordinator thread) are not matched. A finding is identified by file, pattern and normalised text, so moving a comment does not make it new.
+  [`comment-hygiene-debt.json`](../scripts/ci/comment-hygiene-debt.json) is the shrink-only baseline. A finding is fixed by rewriting the comment; a
+  baseline entry whose comment is gone must be deleted (`--record-baseline` only removes). No comment was rewritten when the gate landed.
+
 ## Standalone trust gate (2026-11-17)
 
 CODE READ: [`trust_lint.py`](../scripts/ci/trust_lint.py) runs in the `stable` job beside `ignore_ladder.py check`; its mutants run in `mutants-b`. It reads
@@ -378,6 +405,46 @@ does not go through [`kf_trust.py`](../scripts/ci/kf_trust.py), a pin that drift
 and a reason; it can only go down; a finding is fixed, the list is never re-recorded to pass). `kf_trust_mutants.py` and
 `trust_lint_mutants.py` weaken each rule once and need two named killers each. The gate and its mutants are ignored by the ladder like the other
 CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use them). Design: `docs/design/V3_STANDALONE_TRUST.md`.
+
+## Rootless payload run (2026-11-20)
+
+**STATUS of this section: LIVE as code, 2026-11-20; GPU-free tests and mutants only, NOT RUN ON A BOX.** The rootless run is a test that kayfabe's
+QEMU needs no root (OWNER_RULINGS section AR item 6): every stage that starts a kayfabe QEMU runs as an unprivileged user with no capability, and
+each root step the run still needed is a recorded `kfroot` step. The audit of every step is
+[V3_KFROOT_AUDIT](design/V3_KFROOT_AUDIT.md); the mechanism is [V3_KFROOT_ROOTLESS](design/V3_KFROOT_ROOTLESS.md).
+
+Flags and variables of `scripts/ci/vast_payload.py` (the payload is still started as root, as Vast starts it; these are not instruction fields and the
+Worker does not send them, so a Worker run is unchanged and a rootless run is started by hand on the box):
+
+| Flag | Variable | Meaning |
+|---|---|---|
+| `--rootless require` | `KF_PAYLOAD_ROOTLESS=require` | every stage but `provision` starts as the unprivileged user (`kfroot.py run`: every capability set empty, `NoNewPrivs=1`); default `off`; any other value is refused, never read as `off`; the flag beats the variable |
+| `--rootless-user USER` | `KF_PAYLOAD_ROOTLESS_USER` | the account (default `ci`; created by the bootstrap; never `root`) |
+| `--rootless-root-stage STAGE` (repeatable) | `KF_PAYLOAD_ROOTLESS_ROOT_STAGES=a,b` | the explicit approval of one stage the audit has not converted (`merge_bar`, `apps`, `propimage_apps`, `propimage_apps_b`, `matlab`, `specviewperf`); it runs as root, is recorded as the `VM-RUN` step `root_stage` and makes the verdict `ROOT_STAGES_APPROVED`; approving any other stage is refused |
+| `--rootless-memlock` | `KF_PAYLOAD_ROOTLESS_MEMLOCK=1` | raise RLIMIT_MEMLOCK for the user (`limits.d` and `prlimit`); off by default because the audit found no need |
+
+What it does, in order: `provision` runs as root and is one recorded `SETUP-ONCE` step. Before the first dropped stage, once: `kfroot.py bootstrap
+--only-needed` (the account, `/dev/kvm`, a missing device node, a readable kernel log, the workspace, the lock file: only what is not already there),
+the checkout, `/workspace/bench`, `/workspace/prov`, the evidence directory and `/workspace/apps` owned by the user, and the Rust toolchain copied
+to the user's home. A windows stage first runs `windows_gate.sh --prepare` as root (packages and the swtpm AppArmor rule; its `kfroot` lines are
+recorded through `KF_KFROOT_RECORD`). Later stages use `/workspace/prov` instead of `/root/prov`. An approved root stage runs as root and the trees go
+back to the user after it.
+
+Refusals, by name, before any stage starts (`KF_PAYLOAD_ROOTLESS_REFUSED <token>`, then `KF_PAYLOAD_FAIL suite=preflight`): `payload_not_root`,
+`unclassified:<stage>` (a stage the audit does not know), `root_stage_not_approved:<stage>`, `approval_not_a_root_stage:<name>`,
+`unmarked_root_op:<stage>:<file>:<line>:<op>` (a root operation in a dropped stage's entry script that is not a `kfroot` line: `kfroot.py
+lint-stage <stage>` runs the same check), `missing_script:...`. `--dry-run --rootless require` prints them without touching the box, and
+`KF_PAYLOAD_ROOTLESS mode=require ...` when the plan passes. A root step that fails at run time fails the stage as the suite `rootless_setup`.
+
+The record is `rootless` in `kf-result.json` (read and validated by `scripts/ci/vast_report.py`, schema in `kfroot.py` `Record`): `verdict`
+(`ROOTLESS`, `ROOT_STAGES_APPROVED`, or `VIOLATED` when a dropped stage asked for `kfroot` or a `kfroot` step is not in the audit), every stage with
+its kind and status (`probed` or `not_yet_run`), every `kfroot` step with its stage, return code and source, and the refused calls. Read it with
+`python3 -c "import json;print(json.dumps(json.load(open('/workspace/kf-result.json'))['rootless'],indent=1))"`. A `PASS` of the payload with
+`ROOTLESS` as the verdict is the claim; with `ROOT_STAGES_APPROVED` the claim holds for the stages that were not approved only.
+
+First run on a box (not done): [V3_KFROOT_AUDIT](design/V3_KFROOT_AUDIT.md) section 7 lists the smallest check for each open point; the manual run
+is `python3 scripts/ci/vast_payload.py <sha> <nonce> --rootless require --only windows_gate` with the plan variables (`KF_MERGE_WINDOWS=1`, ...).
+Tests `scripts/ci/test_kfroot_payload.py`, mutants `scripts/ci/kfroot_mutants.py` (two named killers each).
 
 ## Documentation freshness policy (2026-10-22)
 

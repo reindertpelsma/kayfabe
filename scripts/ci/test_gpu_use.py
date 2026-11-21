@@ -645,6 +645,28 @@ class RunAppsRows(unittest.TestCase):
         rec = rows.evaluate(app, "host", log)
         return rec
 
+    # ---- `grep -m1` took the row's own header line (`cmd: ... --diag-timeout 1500`), and the filter after it dropped it: the note was `-` for every row
+    #      whose command text contains one of the words (timeout, error, fail ...)
+    def test_the_note_of_a_row_that_could_not_start_names_the_error_and_not_its_header(self):
+        res, log, _ = self.run_row("nvml_dcgm")
+        self.assertIn("--diag-timeout", log.splitlines()[0])
+        self.assertIn("verdict=NOTRUN", res)
+        note = res.split(" note=", 1)[1]
+        self.assertIn("No such file or directory", note)
+        self.assertNotIn("diag-timeout", note)
+        self.assertNotEqual(note, "-")
+
+    def test_the_note_of_a_failing_row_whose_command_text_says_error_is_its_own_error_line(self):
+        self.tool("data/blender/blender", r'''echo "Error: cannot open display" ; exit 1''')
+        res, log, _ = self.run_row("blender_cycles")
+        self.assertIn("verdict=FAIL", res)
+        self.assertIn("Error: cannot open display", res.split(" note=", 1)[1])
+
+    def test_the_note_never_starts_with_a_header_line(self):
+        for app in ("nvml_dcgm", "blender_cycles"):
+            res, log, _ = self.run_row(app)
+            self.assertFalse(res.split(" note=", 1)[1].startswith("==="), res)
+
     def test_blender(self):
         self.tool("data/blender/blender", r'''dev="${@: -2:1}"
 if [ "$dev" = CPU ]; then echo "BLENDER_DEVICES dev=CPU scene=CPU active=False cpu_enabled=True enabled=1 names=AMD EPYC"; echo "BLENDER_OK CPU cpu=AMD EPYC mean=0.6405"
@@ -899,8 +921,12 @@ class HookWithAFakeGuest(unittest.TestCase):
     FAKE_G = r'''#!/bin/bash
 case "$1" in
   true|"test -d "*) exit 0;;
+  "test -x "*) exit "${KF_FAKE_TESTX_RC:-0}";;
   "sudo dmesg | wc -l") echo 0;;
-  *"run_apps.sh guest"*) cat "$KF_FAKE_WINDOW" >> "$KF_FAKE_QLOG"; echo "$KF_FAKE_APPRES";;
+  *"run_apps.sh guest"*)
+    if [ -n "${KF_FAKE_RUN_RC:-}" ]; then echo "$KF_FAKE_RUN_ERR"; exit "$KF_FAKE_RUN_RC"; fi
+    cat "$KF_FAKE_WINDOW" >> "$KF_FAKE_QLOG"; echo "$KF_FAKE_APPRES";;
+  *"samples/vectorAdd"*) echo "${KF_FAKE_SANE:-1}";;
   "sudo cat /opt/apps/out/guest/"*) cat "$KF_FAKE_APPLOG";;
   "sudo dmesg | tail"*) ;;
   nvidia-smi*) echo "NVIDIA GeForce RTX 4090, 580.65.06, Disabled";;
@@ -908,7 +934,7 @@ case "$1" in
 esac
 '''
 
-    def run_hook(self, app, applog, window, negctl=False, base=True, smi=False):
+    def run_hook(self, app, applog, window, negctl=False, base=True, smi=False, run_rc=None, run_err="", appres=None, wedge_probe=False, testx_rc=0, sane=1):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         r = Path(tmp.name)
@@ -924,9 +950,14 @@ esac
         qlog = bench / "run_T_qemu.log"
         qlog.write_text((fx("kf3_base.txt") if base else "kf3: booting\n"))
         out = r / "out"
-        env = dict(os.environ, APPS=app, APPS_OUT=str(out), BENCH_DIR=str(bench), APPS_KF3_SETTLE="0", APPS_WEDGE_PROBE="0", APPS_GUEST_DRM="0",
+        env = dict(os.environ, APPS=app, APPS_OUT=str(out), BENCH_DIR=str(bench), APPS_KF3_SETTLE="0", APPS_WEDGE_PROBE="1" if wedge_probe else "0", APPS_GUEST_DRM="0",
                    KF_FAKE_WINDOW=str(FIX / window), KF_FAKE_QLOG=str(qlog), KF_FAKE_APPLOG=str(FIX / applog), KF_NEGCTL="1" if negctl else "0",
-                   KF_FAKE_APPRES="APPRES side=guest app=%s verdict=PASS rc=0 secs=3 quiet=0 note=-" % app)
+                   KF_FAKE_APPRES=appres or "APPRES side=guest app=%s verdict=PASS rc=0 secs=3 quiet=0 note=-" % app,
+                   KF_FAKE_TESTX_RC=str(testx_rc), KF_FAKE_SANE=str(sane))
+        for key in ("KF_FAKE_RUN_RC", "KF_FAKE_RUN_ERR"):
+            env.pop(key, None)
+        if run_rc is not None:
+            env.update(KF_FAKE_RUN_RC=str(run_rc), KF_FAKE_RUN_ERR=run_err)
         if smi:
             fake = r / "bin" / "nvidia-smi"
             fake.parent.mkdir()
@@ -970,6 +1001,97 @@ esac
     def test_the_box_nvidia_smi_is_sampled_around_the_app(self):
         got = self.run_hook("egl_offscreen", "egl_gpu.log", "kf3_window_gpu.log", smi=True)
         self.assertTrue((got["dir"] / "egl_offscreen.smi" / "host_query.csv").exists())
+
+    # ---- The first apps_discovery run on a box booted a guest image without /opt/apps/bundle: every row said HANG, and every boot "wedged"
+    MISSING = "bash: /opt/apps/bundle/run_apps.sh: No such file or directory"
+
+    def last_line(self, got):
+        return [l for l in got["guest"].splitlines() if l.startswith("APPRES ")][-1]
+
+    def test_a_missing_guest_command_is_not_run_never_a_hang(self):
+        got = self.run_hook("egl_offscreen", "egl_gpu.log", "kf3_window_idle.log", run_rc=127, run_err=self.MISSING)
+        line = self.last_line(got)
+        self.assertIn("verdict=NOTRUN", line)
+        self.assertNotIn("HANG", got["guest"])
+        self.assertIn("rc=ssh127", line)
+
+    def test_the_missing_command_is_named_by_its_path(self):
+        got = self.run_hook("egl_offscreen", "egl_gpu.log", "kf3_window_idle.log", run_rc=127, run_err=self.MISSING)
+        self.assertIn("note=not-run:missing_command:/opt/apps/bundle/run_apps.sh", self.last_line(got))
+
+    def test_a_missing_program_without_a_path_is_named_by_its_name(self):
+        got = self.run_hook("egl_offscreen", "egl_gpu.log", "kf3_window_idle.log", run_rc=127, run_err="bash: line 1: sudo: command not found")
+        self.assertIn("note=not-run:missing_command:sudo ", self.last_line(got))
+        got = self.run_hook("egl_offscreen", "egl_gpu.log", "kf3_window_idle.log", run_rc=127, run_err="something else entirely")
+        self.assertIn("note=not-run:missing_command:unknown ", self.last_line(got))
+
+    def test_a_guest_command_that_cannot_be_executed_is_not_run_too(self):
+        got = self.run_hook("egl_offscreen", "egl_gpu.log", "kf3_window_idle.log", run_rc=126, run_err="bash: /opt/apps/bundle/run_apps.sh: Permission denied")
+        line = self.last_line(got)
+        self.assertIn("verdict=NOTRUN", line)
+        self.assertIn("rc=ssh126", line)
+        self.assertIn("/opt/apps/bundle/run_apps.sh", line)
+
+    def hang_for(self, rc):
+        got = self.run_hook("egl_offscreen", "egl_gpu.log", "kf3_window_idle.log", run_rc=rc, run_err="some other failure")
+        self.assertIn("verdict=HANG", self.last_line(got), rc)
+        self.assertIn("note=no-result-line(guest_alive=1)", self.last_line(got), rc)
+
+    def test_a_guest_command_that_timed_out_is_still_a_hang(self):
+        self.hang_for(124)
+
+    def test_a_guest_command_that_failed_with_a_plain_error_is_still_a_hang(self):
+        self.hang_for(1)
+
+    def test_an_ssh_failure_with_no_result_line_is_still_a_hang(self):
+        self.hang_for(255)
+
+    def test_a_missing_command_in_the_ssh_text_is_only_read_when_there_is_no_result_line(self):
+        got = self.run_hook("egl_offscreen", "egl_gpu.log", "kf3_window_gpu.log")
+        self.assertIn("verdict=PASS", self.last_line(got))
+        self.assertNotIn("missing_command", got["guest"])
+
+    def test_the_wedge_probe_does_not_call_a_boot_without_samples_wedged(self):
+        got = self.run_hook("egl_offscreen", "egl_cpu.log", "kf3_window_idle.log", appres="APPRES side=guest app=egl_offscreen verdict=FAIL rc=1 secs=3 quiet=0 note=x",
+                            wedge_probe=True, testx_rc=1, sane=0)
+        self.assertIn("no_samples_in_guest", got["stdout"])
+        self.assertNotIn("wedged", got["stdout"])
+
+    def test_no_samples_in_the_guest_leaves_no_wedge_record(self):
+        got = self.run_hook("egl_offscreen", "egl_cpu.log", "kf3_window_idle.log", appres="APPRES side=guest app=egl_offscreen verdict=FAIL rc=1 secs=3 quiet=0 note=x",
+                            wedge_probe=True, testx_rc=1, sane=0)
+        self.assertNotIn("APPS_WEDGE", got["guest"])
+        self.assertIn("verdict=FAIL", got["guest"])
+
+    def test_a_boot_that_cannot_run_vectoradd_is_still_a_wedge(self):
+        got = self.run_hook("egl_offscreen", "egl_cpu.log", "kf3_window_idle.log", appres="APPRES side=guest app=egl_offscreen verdict=FAIL rc=1 secs=3 quiet=0 note=x",
+                            wedge_probe=True, testx_rc=0, sane=0)
+        self.assertIn("APPS_WEDGE boot=T after=egl_offscreen sanity_vectorAdd=0", got["guest"])
+
+    def test_a_wedge_ends_the_boot_with_its_old_message(self):
+        got = self.run_hook("egl_offscreen", "egl_cpu.log", "kf3_window_idle.log", appres="APPRES side=guest app=egl_offscreen verdict=FAIL rc=1 secs=3 quiet=0 note=x",
+                            wedge_probe=True, testx_rc=0, sane=0)
+        self.assertIn("APPS_HOOK boot wedged after egl_offscreen", got["stdout"])
+        self.assertNotIn("no_samples_in_guest", got["stdout"])
+
+    def probe_unreachable(self, testx_rc):
+        got = self.run_hook("egl_offscreen", "egl_cpu.log", "kf3_window_idle.log", appres="APPRES side=guest app=egl_offscreen verdict=FAIL rc=1 secs=3 quiet=0 note=x",
+                            wedge_probe=True, testx_rc=testx_rc, sane=0)
+        self.assertIn("APPS_WEDGE boot=T after=egl_offscreen", got["guest"], testx_rc)
+        self.assertNotIn("no_samples_in_guest", got["stdout"], testx_rc)
+
+    def test_a_guest_that_cannot_be_reached_by_ssh_still_fails_the_probe(self):
+        self.probe_unreachable(255)
+
+    def test_a_guest_that_does_not_answer_in_time_still_fails_the_probe(self):
+        self.probe_unreachable(124)
+
+    def test_a_boot_whose_probe_passes_is_not_a_wedge(self):
+        got = self.run_hook("egl_offscreen", "egl_cpu.log", "kf3_window_idle.log", appres="APPRES side=guest app=egl_offscreen verdict=FAIL rc=1 secs=3 quiet=0 note=x",
+                            wedge_probe=True, testx_rc=0, sane=1)
+        self.assertNotIn("APPS_WEDGE", got["guest"])
+        self.assertNotIn("wedged", got["stdout"])
+        self.assertNotIn("no_samples_in_guest", got["stdout"])
 
 
 class WindowsRows(unittest.TestCase):

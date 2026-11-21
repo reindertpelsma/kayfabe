@@ -1,0 +1,16 @@
+APPRES side=guest app=nvidia_smi verdict=PASS rc=0 secs=1 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=2 gpu_births=4 boot=ap_hwval_apps_b1 guest_xid=0 kf3_lines=293 kf3_refusals=18
+APPRES side=guest app=deviceQuery verdict=PASS rc=0 secs=6 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1190 gpu_births=7 boot=ap_hwval_apps_b2 guest_xid=0 kf3_lines=899 kf3_refusals=29
+APPRES side=guest app=vectorAdd verdict=PASS rc=0 secs=4 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1198 gpu_births=8 boot=ap_hwval_apps_b3 guest_xid=0 kf3_lines=869 kf3_refusals=29
+APPRES side=guest app=vectorAddDrv verdict=PASS rc=0 secs=5 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=1213 gpu_births=6 boot=ap_hwval_apps_b4 guest_xid=0 kf3_lines=863 kf3_refusals=29
+APPRES side=guest app=matrixMul verdict=PASS rc=0 secs=8 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1206 gpu_births=6 boot=ap_hwval_apps_b5 guest_xid=0 kf3_lines=885 kf3_refusals=29
+APPRES side=guest app=matrixMulDrv verdict=PASS rc=0 secs=6 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=1208 gpu_births=8 boot=ap_hwval_apps_b6 guest_xid=0 kf3_lines=870 kf3_refusals=29
+APPRES side=guest app=bandwidthTest verdict=PASS rc=0 secs=10 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1711 gpu_births=8 boot=ap_hwval_apps_b7 guest_xid=0 kf3_lines=903 kf3_refusals=29
+APPRES side=guest app=simpleStreams verdict=PASS rc=0 secs=9 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=1498 gpu_births=8 boot=ap_hwval_apps_b8 guest_xid=0 kf3_lines=913 kf3_refusals=29
+APPRES side=guest app=asyncAPI verdict=PASS rc=0 secs=8 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1485 gpu_births=8 boot=ap_hwval_apps_b9 guest_xid=0 kf3_lines=909 kf3_refusals=29
+APPRES side=guest app=simpleCallback verdict=PASS rc=0 secs=6 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1220 gpu_births=6 boot=ap_hwval_apps_b10 guest_xid=0 kf3_lines=900 kf3_refusals=29
+APPRES side=guest app=simpleCooperativeGroups verdict=PASS rc=0 secs=6 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=1915 gpu_births=8 boot=ap_hwval_apps_b11 guest_xid=0 kf3_lines=872 kf3_refusals=29
+APPRES side=guest app=cudaTensorCoreGemm verdict=PASS rc=0 secs=10 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1588 gpu_births=6 boot=ap_hwval_apps_b12 guest_xid=0 kf3_lines=914 kf3_refusals=29
+APPRES side=guest app=graphMemoryNodes verdict=PASS rc=0 secs=10 quiet=0 note=- gpu_use=NA gpu_auth=none gpu_subs=1564 gpu_births=6 boot=ap_hwval_apps_b13 guest_xid=0 kf3_lines=889 kf3_refusals=29
+APPRES side=guest app=simpleCudaGraphs verdict=PASS rc=0 secs=9 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1493 gpu_births=7 boot=ap_hwval_apps_b14 guest_xid=0 kf3_lines=889 kf3_refusals=29
+APPRES side=guest app=simpleCUBLAS verdict=PASS rc=0 secs=12 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1226 gpu_births=8 boot=ap_hwval_apps_b15 guest_xid=0 kf3_lines=960 kf3_refusals=29
+APPRES side=guest app=simpleCUFFT verdict=PASS rc=0 secs=8 quiet=1 note=- gpu_use=NA gpu_auth=none gpu_subs=1221 gpu_births=8 boot=ap_hwval_apps_b16 guest_xid=0 kf3_lines=885 kf3_refusals=29

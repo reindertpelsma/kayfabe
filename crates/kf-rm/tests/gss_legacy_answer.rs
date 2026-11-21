@@ -1,7 +1,8 @@
-//! **What this GSP answers when a rule — not a table row — let a control through.**
+//! **What this GSP answers for an unserviced GSS-legacy control.**
 //!
-//! The subject is `BridgeRefusal::GspRuleControlUnserviced`, and the property under test
-//! is not "a refusal happens" but *"a plausible answer cannot happen by accident"*.
+//! Since I7 (2026-11-20) the guest-ingress gate gives bit-15 controls no rule pass: an
+//! unserviced one is refused at the gate (`BridgeRefusal::ControlNotPermitted`). The property
+//! under test is not "a refusal happens" but *"a plausible answer cannot happen by accident"*.
 //!
 //! ## The failure this file exists to keep red
 //!
@@ -27,12 +28,12 @@
 //! reaching us again (`ogkm-580: rpc.c:11098-11103`, `ogkm-610: :10903-10908`). The full
 //! reading is on the refusal variant's own docs.
 
-use kf_abi::capability::{ControlPermit, PassthroughRule, RM_GSS_LEGACY_MASK};
+use kf_abi::capability::{ControlPermit, Denial, RM_GSS_LEGACY_MASK};
 use kf_abi::versions::{BENCH_DRIVER, DriverAbiTable, table_for};
 use kf_abi::{GuestOs, NV_ERR_NOT_SUPPORTED};
 use kf_arch::ids::ControlCmd;
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
-use kf_rm::rmrpc::{BridgeRefusal, Faulted, GraphObjects, GraphPolicy, Translation, translate};
+use kf_rm::rmrpc::{BridgeRefusal, GraphObjects, GraphPolicy, Translation, translate};
 use kf_trace::FaultTag;
 
 // =====================================================================================
@@ -82,7 +83,7 @@ fn control_cmd(cmd: u32, params_len: usize) -> RpcCommand {
 }
 
 // =====================================================================================
-// 1. The default is NAMED, and it names the rule
+// 1. The default is a gate refusal
 // =====================================================================================
 
 /// The three commands the C measured are all GSS-legacy, and all **non-privileged**
@@ -92,7 +93,7 @@ fn control_cmd(cmd: u32, params_len: usize) -> RpcCommand {
 /// Pins the premise the rest of the file rests on. Without it, a fixture that quietly
 /// stopped having bit 15 set would make every assertion below pass for the wrong reason.
 #[test]
-fn the_c_measured_cluster_is_gss_legacy_and_reaches_the_rule() {
+fn the_c_measured_cluster_is_gss_legacy_and_refused_at_the_gate() {
     for cmd in CUDART_INIT_GATE {
         assert_ne!(cmd & RM_GSS_LEGACY_MASK, 0, "{cmd:#010x} is not GSS-legacy");
         assert_ne!(
@@ -102,8 +103,8 @@ fn the_c_measured_cluster_is_gss_legacy_and_reaches_the_rule() {
         );
         assert_eq!(
             abi().capabilities().control(ControlCmd(cmd)),
-            ControlPermit::GssLegacyRule,
-            "{cmd:#010x} must reach the gate by the RULE, not by a table row",
+            ControlPermit::Denied(Denial::NotOnAllowlist),
+            "{cmd:#010x}: no ogkm tag exports it, so the gate has no row and refuses it",
         );
         assert_eq!(
             abi().control_params(ControlCmd(cmd)),
@@ -113,98 +114,32 @@ fn the_c_measured_cluster_is_gss_legacy_and_reaches_the_rule() {
     }
 }
 
-/// The default itself: exact variant, carrying the command **and** the rule.
+/// The default itself: exact variant, carrying the command.
 #[test]
 fn an_unknown_gss_legacy_control_refuses_by_name() {
     for cmd in CUDART_INIT_GATE {
         assert_eq!(
             translate(abi(), GuestOs::Linux, &control_cmd(cmd, 8)),
-            Err(BridgeRefusal::GspRuleControlUnserviced {
+            Err(BridgeRefusal::ControlNotPermitted {
                 cmd,
-                rule: PassthroughRule::GssLegacy,
+                denial: Denial::NotOnAllowlist,
             }),
         );
     }
 }
 
-/// The binary-API class rule is the *other* rule-based passthrough and shares the
-/// premise, so it shares the arm — and carries its own discriminator.
-#[test]
-fn the_binapi_rule_lands_in_the_same_arm_with_its_own_rule() {
-    // NV2081_BINAPI: any command in the class, with bit 15 CLEAR so the GSS rule cannot
-    // be the one that answers.
-    let cmd = 0x2081_0042u32;
-    assert_eq!(cmd & RM_GSS_LEGACY_MASK, 0);
-    assert_eq!(
-        abi().capabilities().control(ControlCmd(cmd)),
-        ControlPermit::BinApiRule,
-    );
-    assert_eq!(
-        translate(abi(), GuestOs::Linux, &control_cmd(cmd, 8)),
-        Err(BridgeRefusal::GspRuleControlUnserviced {
-            cmd,
-            rule: PassthroughRule::BinApi,
-        }),
-    );
-}
-
-/// A control that is neither denied nor rule-admitted nor modelled keeps the OLD arm.
-///
-/// The non-vacuity instrument for the split: if `GspRuleControlUnserviced` had simply
-/// replaced `UnknownControl`, every test above would still pass and the distinction would
-/// be decoration.
+/// A control the gate admits but nothing models is `UnknownControl`, not a gate refusal.
 #[test]
 fn a_listed_but_unmodelled_control_is_still_unknown_control() {
-    // On the allowlist (a row names it), bit 15 clear, no params decoder.
     let listed = abi()
         .capabilities()
-        .all_controls()
-        .map(|e| e.cmd)
-        .find(|&c| {
-            c & RM_GSS_LEGACY_MASK == 0
-                && (c >> 16) & 0xffff != 0x2081
-                && abi().control_params(ControlCmd(c)).is_none()
-        })
+        .admitted_controls()
+        .find(|&c| abi().control_params(ControlCmd(c)).is_none())
         .expect("some allowlisted control has no params decoder");
-    assert_eq!(
-        abi()
-            .capabilities()
-            .control(ControlCmd(listed))
-            .passthrough_rule(),
-        None,
-    );
     assert_eq!(
         translate(abi(), GuestOs::Linux, &control_cmd(listed, 8)),
         Err(BridgeRefusal::UnknownControl { cmd: listed }),
     );
-}
-
-/// The two rules are separately countable in the census.
-///
-/// ★ Distinct tags, and distinct from `UnknownControl`'s: a census that merged them could
-/// not answer "which rule is the long tail arriving through?", which is the number that
-/// decides what earns a forward arm first.
-#[test]
-fn each_rule_gets_its_own_census_tag() {
-    let gss = BridgeRefusal::GspRuleControlUnserviced {
-        cmd: CUDART_INIT_GATE[0],
-        rule: PassthroughRule::GssLegacy,
-    };
-    let bin = BridgeRefusal::GspRuleControlUnserviced {
-        cmd: 0x2081_0042,
-        rule: PassthroughRule::BinApi,
-    };
-    let unknown = BridgeRefusal::UnknownControl { cmd: 0x1234 };
-    assert_eq!(
-        gss.fault_tag(),
-        FaultTag("BridgeRefusal::GspRuleControlUnserviced::GssLegacy"),
-    );
-    assert_eq!(
-        bin.fault_tag(),
-        FaultTag("BridgeRefusal::GspRuleControlUnserviced::BinApi"),
-    );
-    assert_ne!(gss.fault_tag(), bin.fault_tag());
-    assert_ne!(gss.fault_tag(), unknown.fault_tag());
 }
 
 // =====================================================================================
@@ -248,7 +183,7 @@ fn posts_a_refusing_envelope_never_an_ok_echo() {
     assert_eq!(policy.census().total(), 3);
     assert_eq!(
         policy.census().of(FaultTag(
-            "BridgeRefusal::GspRuleControlUnserviced::GssLegacy"
+            "BridgeRefusal::ControlNotPermitted::NotOnAllowlist"
         )),
         3,
     );
@@ -396,46 +331,24 @@ const _: () = {
     assert!(BridgeRefusal::ImplicitVaspace.rpc_result() != 0);
 };
 
-/// **No modelled control is admitted by a rule** — and this pins a fact about the *data*,
-/// not about the code. Named that way on purpose.
-///
-/// The two are worth keeping apart. `translate_control` runs the params-table lookup
-/// **before** it consults the rule, so the split can only refine an arm that was already a
-/// refusal, and a modelled control would be decoded even if its command word had bit 15.
-/// But that ordering has **no test that can see it fail today**, because no modelled
-/// control carries the bit — the mutation "check the rule first" leaves this file green.
-/// What this test actually catches is the day someone *adds* a modelled control that a
-/// rule would also admit, which is the condition under which the ordering starts mattering.
-/// Stated rather than dressed up as an ordering test it is not.
 #[test]
-fn no_modelled_control_is_admitted_by_a_rule() {
+fn every_modelled_control_reaches_its_decoder() {
     let modelled: Vec<u32> = abi()
         .capabilities()
-        .all_controls()
-        .map(|e| e.cmd)
+        .admitted_controls()
         .filter(|&c| abi().control_params(ControlCmd(c)).is_some())
         .collect();
     assert!(
         !modelled.is_empty(),
-        "no modelled control found — this test would be vacuous",
+        "no modelled control found — this test would be vacuous"
     );
     for cmd in modelled {
-        assert_eq!(
-            abi()
-                .capabilities()
-                .control(ControlCmd(cmd))
-                .passthrough_rule(),
-            None,
-            "{cmd:#010x} is modelled AND rule-admitted — the ordering in \
-             `translate_control` is now load-bearing and needs a test that bites",
-        );
-        // Whatever it decodes to, it must NOT be the rule refusal: the decoder ran.
         match translate(abi(), GuestOs::Linux, &control_cmd(cmd, 8)) {
-            Err(BridgeRefusal::GspRuleControlUnserviced { .. }) => {
-                panic!("{cmd:#010x} is modelled but was diverted to the rule arm")
-            }
             Err(BridgeRefusal::UnknownControl { .. }) => {
                 panic!("{cmd:#010x} is modelled but reached the unmodelled arm")
+            }
+            Err(BridgeRefusal::ControlNotPermitted { .. }) => {
+                panic!("{cmd:#010x} is modelled and admitted but the gate refused it")
             }
             Ok(Translation::Held) => panic!("{cmd:#010x}: translate never holds"),
             Ok(_) | Err(_) => {}

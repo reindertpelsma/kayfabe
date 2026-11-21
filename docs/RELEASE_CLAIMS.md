@@ -342,3 +342,37 @@ python3 scripts/ci/release_claims_mutants.py
 - Rows for pages other than the README are not hash-bound and can go stale without a failure.
 - The ledger was written from the tree. Records that exist only on branches are cited as `git:<rev>:<path>` and
   were read, not re-run.
+
+## Claims moved out of the user manual (2026-11-20)
+
+The user manual (`docs/howto/`, `docs/FAQ.md`) no longer carries evidence labels or revisions in its visible text
+(`docs/design/V3_PACKAGING_AND_DISTRIBUTION.md` section 11). Where a de-tagged statement had no other record in the tree,
+the original sentence and its evidence are kept here. Statements whose evidence is a file in the tree stay cited in the
+page's source comment and are not repeated.
+
+- **Memory balloon, 2026-11-19** (`docs/howto/attach-to-existing-vm.md`). Original: "MEASURED 2026-11-19 on that host:
+  with the same kf3 build and a command line identical except for the balloon device, the reboot-then-CUDA sequence
+  passed 3 of 3 without the balloon, and hung every time with it (except one run that returned error 719); a cold start
+  with the balloon hung after 10 minutes idle, while QEMU's resident memory fell from 12.5 GB to 4.0 GB and the guest
+  reported 10.5 GB free (free-page reporting alone; no inflation was requested)." Host: RTX 4070, host driver
+  595.91.07, a Linux guest with free-page reporting on. Evidence: the coordinator's run of 2026-11-19 behind pull request
+  #524; no raw log is committed.
+- **Rootless run, 2026-10-16** (`docs/howto/security.md`, `requirements.md`, `docs/FAQ.md`). Original: a throwaway user whose only
+  group was `kvm` ran the 30-arm Linux suite 30 of 30, the GPU gates 9 of 9 and a Windows 11 guest running Unigine Heaven
+  (Direct3D 11) at 92.55 fps on average against 93.09 as root (-0.6%, inside a 3.3% run-to-run spread), with no VFIO rebind
+  and no kernel module, driver or udev change (kayfabe `0a746117`, RTX 4070, host driver 595.91.07, Ubuntu 26.04, one
+  host); a trace of the Linux guest run showed `/dev/kvm`, `/dev/nvidiactl`, `/dev/nvidia0` and `/dev/nvidia-uvm` opened, and
+  the display broker additionally uses `/dev/udmabuf`. Evidence: branch `claude/rootless-audit-20261016`, commit
+  `32d7319b2`, `traces/rootless_audit_20261016/REPORT.txt`; the directory is not in the tree.
+- **Two overlapping Linux thin guests on one RTX 3060** (`docs/FAQ.md`). Original: "reported in the hardware report, binary
+  revision `4e9aae9b`, host driver 580.159.04, one host, sections 4 and 5" of `docs/design/V3_MULTI_GPU_AUDIT.md`. The
+  revision appears in no other file of the tree.
+- **Intel host with the AMD vendor presented to the guest** (`docs/howto/recreate-the-proprietary-image.md`). Original: on
+  2026-11-15 such a host hung in Windows Boot Manager, measured by the maintainers. No record of that run is in the tree.
+- **Sealed-image sign-in findings, 2026-11-18** (same page). Original: two online checks on fresh overlays of the sealed image
+  still showed Steam, Autodesk (AutoCAD) and Esri (ArcGIS Pro) signed in, and Adobe asked to sign in; ArcGIS Pro offline
+  authorization measured on the maintainers' real build. The decision they led to is in `docs/OWNER_RULINGS.md`; the
+  checks themselves have no record in the tree.
+- **Step 7 application results, 2026-11-14** (same page). Original: 3DMark Time Spy pass with a score of 7400, Superposition
+  pass, Edge pass, Black Myth Wukong fail in two of five runs, measured on the maintainers' PC. Evidence: partly
+  `traces/hwrun_20261113/README.md`.

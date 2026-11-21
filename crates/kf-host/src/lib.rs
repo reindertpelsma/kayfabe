@@ -150,7 +150,7 @@ pub const CHANNEL_CLASS_OUTSIDE_BIRTH: u32 = 0x4B75;
 /// refusals above, and the two lanes met in `v3-cand-1` (2026-10-04). A status is a name only while
 /// it is unique.
 pub const DISP_SW_CLASS_ID_UNREADABLE: u32 = 0x4B76;
-/// ★ 2026-11-20 (`V3_GUEST_INFLUENCE_AUDIT.md` G-3): the session's handle counter reached
+/// (`V3_GUEST_INFLUENCE_AUDIT.md` G-3): the session's handle counter reached
 /// `u32::MAX`; no handle is ever minted twice, so every later alloc is refused before any ioctl.
 pub const HOST_HANDLES_EXHAUSTED: u32 = 0x4B7A;
 
@@ -2858,7 +2858,7 @@ mod control_plan_tests {
     }
 }
 
-/// ★ 2026-11-20 (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-3, LOW): the session's handle counter
+/// (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-3, LOW): the session's handle counter
 /// never wraps. A guest drives one mint per host object it causes; before this the counter wrapped
 /// after about 889 million mints, through `0` (`NV01_NULL_OBJECT`: "RM picks") to kayfabe's own
 /// client handle and every handle it had issued.
