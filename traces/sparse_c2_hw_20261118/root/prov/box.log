@@ -1,0 +1,70 @@
+PROVISION_START 2026-11-18T07:21:15+00:00
+   mirror archive.ubuntu.com/ubuntu -> 409386 B/s
+   mirror azure.archive.ubuntu.com/ubuntu -> 463961 B/s
+   mirror mirrors.edge.kernel.org/ubuntu -> 670140 B/s
+== switching apt to mirrors.edge.kernel.org/ubuntu (670140 B/s)
+apt timers masked (prevents the NEXT run; see header re: the one already running)
+apt SKIPPED - every dependency already present
+PROVISION_REPO=/root/kayfabe branch=kf-ci-approved rev=f5dbe55e8
+HEAD=f5dbe55e8 branch=kf-ci-approved
+KF_TRUST name=rustup-init-1.29.3 anchor=official-checksum-url sha256=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55 size=21347088 mode=trust-git-only gating=yes
+info: profile set to minimal
+info: default host tuple is x86_64-unknown-linux-gnu
+info: syncing channel updates for stable-x86_64-unknown-linux-gnu
+info: latest update on 2026-11-12 for version 1.100.0 (0ef1bc386 2026-11-09)
+info: downloading 3 components
+info: default toolchain set to stable-x86_64-unknown-linux-gnu
+
+  stable-x86_64-unknown-linux-gnu installed - rustc 1.100.0 (0ef1bc386 2026-11-09)
+
+
+Rust is installed now. Great!
+
+To get started you may need to restart your current shell.
+This would reload your PATH environment variable to include
+Cargo's bin directory ($HOME/.cargo/bin).
+
+To configure your current shell, you need to source the
+corresponding env file under $HOME/.cargo.
+
+Consider running the right command for your shell (note the leading DOT):
+. "$HOME/.cargo/env" # For sh/ash/dash/pdksh/bash
+cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu
+CC_x86_64-unknown-linux-gnu = None
+cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu
+CC_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CPATH
+cargo:rerun-if-env-changed=C_INCLUDE_PATH
+cargo:rerun-if-env-changed=CPLUS_INCLUDE_PATH
+cargo:rerun-if-env-changed=OBJC_INCLUDE_PATH
+cargo:rerun-if-env-changed=OBJCPLUS_INCLUDE_PATH
+cargo:rerun-if-env-changed=COMPILER_PATH
+cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH
+cargo:rerun-if-env-changed=GCC_EXEC_PREFIX
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu
+CFLAGS_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu
+CFLAGS_x86_64-unknown-linux-gnu = None
+KF_SETUP_TIMING phase=rust_toolchain event=start utc=1794986485
+KF_SETUP_TIMING phase=rust_toolchain event=end utc=1794986497
+KF_SETUP_TIMING phase=rust_targets event=start utc=1794986497
+info: downloading component rust-std
+x86_64-unknown-linux-musl ADDED for 1.99.0
+info: downloading component rust-std
+x86_64-unknown-uefi ADDED for 1.99.0
+KF_SETUP_TIMING phase=rust_targets event=end utc=1794986504
+KF_SETUP_TIMING phase=workspace_build event=start utc=1794986504
+KF_SETUP_TIMING phase=workspace_build event=end utc=1794986520
+CARGO_RC=0
+PROVISION_DONE rc=0 2026-11-18T07:22:00+00:00

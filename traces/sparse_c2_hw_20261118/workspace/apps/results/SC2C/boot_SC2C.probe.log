@@ -1,0 +1,98 @@
+=== boot_capture tag=SC2C at 2026-11-18T08:35:40+00:00 ===
+=== source revision: bb5b2c41a ===
+=== qemu binary: -rwxr-xr-x 1 root root 97118896 Nov 18 08:32 /workspace/bench/kf3-bins/bb5b2c41/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kf-ci-src/scripts/bench/boot_nvkvm.sh  sha256=0c01dc8eb42df9a4
+    used: /workspace/kf-ci-src/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Nov 18 08:35:44 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4090        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Nov 18 08:35 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Nov 18 08:35 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Nov 18 08:35 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Nov 18 08:35 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Nov 18 08:35 .
+drwxr-xr-x 18 root root   4000 Nov 18 08:35 ..
+cr--------  1 root root 240, 1 Nov 18 08:35 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Nov 18 08:35 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/ogr/ogr_hook2.sh at 2026-11-18T08:35:46+00:00 ===
+NVIDIA GeForce RTX 4090, 580.159.04
+OGR_HOOK tag=SC2C kf3=bb5b2c41 cases=[ msbind=/workspace/ogr/list_msbind.tsv msresid=/workspace/ogr/list_msresid.tsv t16=/workspace/ogr/list_t16.tsv t24=/workspace/ogr/list_t24.tsv mip2d=/workspace/ogr/list_mip2d.tsv mipcube=/workspace/ogr/list_mipcube.tsv imgmut=/workspace/ogr/list_imgmut.tsv dgimg=/workspace/ogr/list_dgimg.tsv intr=/workspace/ogr/list_intr.tsv rebind=/workspace/ogr/list_rebind.tsv bindinfo=/workspace/ogr/list_bindinfo.tsv alias=/workspace/ogr/list_alias.tsv]
+OGR_CASE_START msbind 08:35:50 q0=1487 h0=838
+OGR_APPRES msbind APPRES side=guest app=vkcts verdict=PASS rc=0 secs=7 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END msbind rc=0 08:36:01 host_xid_lines=0 kf3_lines=2725
+OGR_CASE_START msresid 08:36:01 q0=4212 h0=838
+OGR_APPRES msresid APPRES side=guest app=vkcts verdict=PASS rc=0 secs=4 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END msresid rc=0 08:36:09 host_xid_lines=0 kf3_lines=2426
+OGR_CASE_START t16 08:36:09 q0=6638 h0=838
+OGR_APPRES t16 APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END t16 rc=0 08:36:15 host_xid_lines=0 kf3_lines=2391
+OGR_CASE_START t24 08:36:16 q0=9029 h0=838
+OGR_APPRES t24 APPRES side=guest app=vkcts verdict=PASS rc=0 secs=4 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END t24 rc=0 08:36:23 host_xid_lines=0 kf3_lines=2403
+OGR_CASE_START mip2d 08:36:24 q0=11432 h0=838
+OGR_APPRES mip2d APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END mip2d rc=0 08:36:30 host_xid_lines=0 kf3_lines=2374
+OGR_CASE_START mipcube 08:36:30 q0=13806 h0=839
+OGR_APPRES mipcube APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END mipcube rc=0 08:36:37 host_xid_lines=0 kf3_lines=2364
+OGR_CASE_START imgmut 08:36:37 q0=16170 h0=839
+OGR_APPRES imgmut APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END imgmut rc=0 08:36:43 host_xid_lines=0 kf3_lines=2386
+OGR_CASE_START dgimg 08:36:44 q0=18556 h0=839
+OGR_APPRES dgimg APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END dgimg rc=0 08:36:50 host_xid_lines=0 kf3_lines=1967
+OGR_CASE_START intr 08:36:50 q0=20523 h0=839
+OGR_APPRES intr APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END intr rc=0 08:36:56 host_xid_lines=0 kf3_lines=1931
+OGR_CASE_START rebind 08:36:57 q0=22454 h0=839
+OGR_APPRES rebind APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END rebind rc=0 08:37:03 host_xid_lines=0 kf3_lines=2342
+OGR_CASE_START bindinfo 08:37:03 q0=24796 h0=839
+OGR_APPRES bindinfo APPRES side=guest app=vkcts verdict=PASS rc=0 secs=6 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END bindinfo rc=0 08:37:12 host_xid_lines=0 kf3_lines=2382
+OGR_CASE_START alias 08:37:13 q0=27179 h0=843
+OGR_APPRES alias APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END alias rc=0 08:37:19 host_xid_lines=0 kf3_lines=2357
+OGR_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 24 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=538
+GUEST_DMESG_AFTER_NVRM=532
+GUEST_DMESG_WORKLOAD_DELTA=514
+=== HOST dmesg delta for this boot (watermark 837 → 843) ===
+HOST_DMESG_LINES=6
+HOST_DMESG_NVRM=1
+HOST_DMESG_XID=0
+0

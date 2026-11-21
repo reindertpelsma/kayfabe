@@ -1,0 +1,306 @@
+ok      git
+ok      cmake
+ok      python3
+ok      g++
+ok      gcc
+ok      make
+ok      ninja (optional, make is used without it)
+MISSING libvulkan.so.1 (the Vulkan loader, needed to RUN deqp-vk)
+ok      an NVIDIA Vulkan ICD file (/etc/vulkan/icd.d/nvidia_icd.json)
+[vkcts 07:36:14] running the pinned external/fetch_sources.py
+Cloning into '/workspace/apps/vkcts/src-97f8150df083a62a/external/spirv-tools/src'...
+Note: switching to '1d0401cd2b68ae34cda9ff625bedd1be4ed6214a'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 1d0401cd spirv-val: Validate RayQuery in struct (#6898)
+Cloning into '/workspace/apps/vkcts/src-97f8150df083a62a/external/glslang/src'...
+Deleted tag 'main-tot' (was 9dbe42fa)
+Deleted tag 'master-tot' (was 4e9cde50)
+Note: switching to '2ff6f609379ce43c4291c732cf6a19dd2461a680'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 2ff6f609 Allow sampler and image assignment under GL_ARB_bindless_texture
+Cloning into '/workspace/apps/vkcts/src-97f8150df083a62a/external/spirv-headers/src'...
+Note: switching to 'cb42dec3830d3ac67fa449ecdc0c0f73d5e74498'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at cb42dec support for SPV_INTEL_subgroup_bitcast_shuffle (#634)
+Cloning into '/workspace/apps/vkcts/src-97f8150df083a62a/external/vulkan-docs/src'...
+Note: switching to '01aaacd99480487bf63830959513c5ca8ceb996d'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 01aaacd9 Change log for September 25, 2026 Vulkan 1.4.364 spec update:
+Cloning into '/workspace/apps/vkcts/src-97f8150df083a62a/external/amber/src'...
+Note: switching to 'c9f1e2871ccbb0b0564c4a33e359801144f6b7c1'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at c9f1e28 Add alpha to coverage support (#1123)
+Cloning into '/workspace/apps/vkcts/src-97f8150df083a62a/external/jsoncpp/src'...
+Note: switching to '89e2973c754a9c02a49974d839779b151e95afd6'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 89e2973 Don't use build dir build interfaces (#1419)
+Cloning into '/workspace/apps/vkcts/src-97f8150df083a62a/external/vulkansc-pcutil/src'...
+Note: switching to 'f67d9e8e1c04f179ebeb837d21ab06192ad43fa0'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at f67d9e8 cmake: PCC discovery robustness improvements
+Cloning into '/workspace/apps/vkcts/src-97f8150df083a62a/external/vulkan-video-samples/src'...
+Note: switching to 'a193f6496760d69afcd39eab4ae63bf32ec8b5e1'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at a193f64 release: create v0.5.1
+Cloning into '/workspace/apps/vkcts/src-97f8150df083a62a/external/video_generator/src'...
+Note: switching to 'v0.1.1'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 9703a0c Release v0.1.1
+Fetching https://github.com/madler/zlib/releases/download/v1.2.13/zlib-1.2.13.tar.gz
+Extracting zlib-1.2.13.tar.gz to zlib/src
+Fetching https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.50.tar.gz
+Extracting v1.6.50.tar.gz to libpng/src
+Fetching https://raw.githubusercontent.com/baldurk/renderdoc/v1.1/renderdoc/api/app/renderdoc_app.h
+Directory: /workspace/apps/vkcts/src-97f8150df083a62a/external/spirv-tools/src
+Directory: /workspace/apps/vkcts/src-97f8150df083a62a/external/glslang/src
+Directory: /workspace/apps/vkcts/src-97f8150df083a62a/external/spirv-headers/src
+Directory: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkan-docs/src
+Directory: /workspace/apps/vkcts/src-97f8150df083a62a/external/amber/src
+Directory: /workspace/apps/vkcts/src-97f8150df083a62a/external/jsoncpp/src
+Directory: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkansc-pcutil/src
+Directory: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkan-video-samples/src
+Directory: /workspace/apps/vkcts/src-97f8150df083a62a/external/video_generator/src
+[vkcts 07:37:15] running the pinned external/fetch_video_decode_samples.py
+Fetching https://storage.googleapis.com/vulkan-video-samples/avc/4k_26_ibp_main.h264
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/avc/4k_26_ibp_main.h264
+Fetching https://storage.googleapis.com/vulkan-video-samples/avc/clip-a.h264
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/avc/clip-a.h264
+Fetching https://storage.googleapis.com/vulkan-video-samples/avc/clip-c.h264
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/avc/clip-c.h264
+Fetching https://storage.googleapis.com/vulkan-video-samples/hevc/hevc-big_buck_bunny_2160p.h265
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/hevc/hevc-big_buck_bunny_2160p.h265
+Fetching https://storage.googleapis.com/vulkan-video-samples/hevc/clip-d.h265
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/hevc/clip-d.h265
+Fetching https://storage.googleapis.com/vulkan-video-samples/hevc/hevc-itu-slist-a.h265
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/hevc/hevc-itu-slist-a.h265
+Fetching https://storage.googleapis.com/vulkan-video-samples/hevc/hevc-itu-slist-b.h265
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/hevc/hevc-itu-slist-b.h265
+Fetching https://storage.googleapis.com/vulkan-video-samples/hevc/LTRPSPS_A_Qualcomm_1.bit
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/hevc/LTRPSPS_A_Qualcomm_1.bit
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-176x144-main-basic-8.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-176x144-main-basic-8.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-176x144-main-basic-10.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-176x144-main-basic-10.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-176x144-main-cdef-10.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-176x144-main-cdef-10.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-176x144-main-forward-key-frame-10.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-176x144-main-forward-key-frame-10.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-176x144-main-globalmotion-8.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-176x144-main-globalmotion-8.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-176x144-main-loop-filter-10.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-176x144-main-loop-filter-10.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-176x144-main-lossless-10.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-176x144-main-lossless-10.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-176x144-main-orderhint-10.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-176x144-main-orderhint-10.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-1920x1080-intrabc-extreme-dv-8.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-1920x1080-intrabc-extreme-dv-8.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-1920x1080-main-superres-8.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-1920x1080-main-superres-8.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-352x288-main-allintra-8.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-352x288-main-allintra-8.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-352x288-main-cdfupdate-8.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-352x288-main-cdfupdate-8.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-352x288-main-filmgrain-8.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-352x288-main-filmgrain-8.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-640x360-main-svc-L1T2-8.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-640x360-main-svc-L1T2-8.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-argon_test1019.obu
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-argon_test1019.obu
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-argon_test787.obu
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-argon_test787.obu
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-frames_refs_short_signaling_golden.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-frames_refs_short_signaling_golden.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-argon_test9354_2.obu
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-argon_test9354_2.obu
+Fetching https://storage.googleapis.com/vulkan-video-samples/av1/av1-sizeup-fluster.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/av1/av1-sizeup-fluster.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-176x144-key-10.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-176x144-key-10.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-512x288-basic-10.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-512x288-basic-10.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-352x288-show-existing-frames.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-352x288-show-existing-frames.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-351x287-basic.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-351x287-basic.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-1920x1080-tile-1x2.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-1920x1080-tile-1x2.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-1920x1080-tile-1x4.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-1920x1080-tile-1x4.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-3980x2160-tile-1x8.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-3980x2160-tile-1x8.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-1920x1080-tile-4x4.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-1920x1080-tile-4x4.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-resize.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-resize.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-352x240-lf.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-352x240-lf.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-320x240-10bits.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-320x240-10bits.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-352x288-intra-only.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-352x288-intra-only.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-852x480-segkey.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-852x480-segkey.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-352x288-quant-00.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-352x288-quant-00.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-352x288-quant-26.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-352x288-quant-26.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-352x288-quant-59.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-352x288-quant-59.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-resize-1-2.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-resize-1-2.ivf
+Fetching https://storage.googleapis.com/vulkan-video-samples/vp9/vp9-1280x720-svc.ivf
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/vp9/vp9-1280x720-svc.ivf
+Done: 45 downloaded and verified, 0 already present and verified (45 total)
+[vkcts 07:37:30] running the pinned external/fetch_video_encode_samples.py
+Fetching https://storage.googleapis.com/vulkan-video-samples/yuv/176x144_30_i420.yuv
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/yuv/176x144_30_i420.yuv
+Fetching https://storage.googleapis.com/vulkan-video-samples/yuv/352x288_15_i420.yuv
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/yuv/352x288_15_i420.yuv
+Fetching https://storage.googleapis.com/vulkan-video-samples/yuv/FT_720x480_420_8le.yuv
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/yuv/720x480_420_8le.yuv
+Fetching https://storage.googleapis.com/vulkan-video-samples/yuv/FT_1920x1080_420_8le.yuv
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/yuv/1920x1080_420_8le.yuv
+Fetching https://storage.googleapis.com/vulkan-video-samples/yuv/identical_2f_720x480_420_8le.yuv
+Downloaded and verified: /workspace/apps/vkcts/src-97f8150df083a62a/external/vulkancts/data/vulkan/video/yuv/identical_2f_720x480_420_8le.yuv
+Done: 5 downloaded and verified, 0 already present and verified (5 total)
+[vkcts 07:37:35] configure: -B /workspace/apps/vkcts/build-97f8150df083a62a -G Ninja -DDEQP_TARGET=vulkan_headless -DSELECTED_BUILD_TARGETS=deqp-vk -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE=-O1 -g0 -DNDEBUG -DCMAKE_C_FLAGS_RELEASE=-O1 -g0 -DNDEBUG -DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc
+[vkcts 07:37:42] building deqp-vk with 19 jobs (box time-box 5400s)
+VKCTS_BUILD key=97f8150df083a62a fetch_s=147 build_s=177 jobs=19 binary_mb=73
+BUILD_vkcts=ok
+VKCTS_ARTIFACT /workspace/apps/vkcts/97f8150df083a62a

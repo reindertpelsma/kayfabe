@@ -1,0 +1,84 @@
+OGR_BOOT tag=SOFF2 kf3=/workspace/bench/kf3-bins/f5dbe55e/qemu-system-x86_64 cases=[ msbind=/workspace/ogr/list_msbind.tsv msresid=/workspace/ogr/list_msresid.tsv t16=/workspace/ogr/list_t16.tsv t24=/workspace/ogr/list_t24.tsv mip2d=/workspace/ogr/list_mip2d.tsv mipcube=/workspace/ogr/list_mipcube.tsv imgmut=/workspace/ogr/list_imgmut.tsv dgimg=/workspace/ogr/list_dgimg.tsv intr=/workspace/ogr/list_intr.tsv rebind=/workspace/ogr/list_rebind.tsv bindinfo=/workspace/ogr/list_bindinfo.tsv alias=/workspace/ogr/list_alias.tsv  pcreate=/workspace/ogr/list_pcreate.tsv pquery=/workspace/ogr/list_pquery.tsv phigh=/workspace/ogr/list_phigh.tsv prt=/workspace/ogr/list_prt.tsv] 08:01:47
+OGR_BOOT dev_extra=[]
+OGR_BOOT_END rc=0 08:14:53
+OGR_HOOK tag=SOFF2 kf3=f5dbe55e cases=[ msbind=/workspace/ogr/list_msbind.tsv msresid=/workspace/ogr/list_msresid.tsv t16=/workspace/ogr/list_t16.tsv t24=/workspace/ogr/list_t24.tsv mip2d=/workspace/ogr/list_mip2d.tsv mipcube=/workspace/ogr/list_mipcube.tsv imgmut=/workspace/ogr/list_imgmut.tsv dgim
+OGR_CASE_START msbind 08:02:19 q0=1420 h0=745
+OGR_APPRES msbind APPRES side=guest app=vkcts verdict=PASS rc=0 secs=8 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END msbind rc=0 08:02:31 host_xid_lines=0 kf3_lines=2767
+OGR_CASE_START msresid 08:02:31 q0=4188 h0=745
+OGR_APPRES msresid APPRES side=guest app=vkcts verdict=PASS rc=0 secs=307 quiet=0 note=ok cases=3 pass=2 warn=0 ns=0 fail=0 crash=0 timeout=1 notrun=0 gpu=EXTERNAL
+OGR_CASE_END msresid rc=0 08:07:42 host_xid_lines=1 kf3_lines=4008
+OGR_CASE_START t16 08:07:43 q0=8196 h0=748
+OGR_APPRES t16 APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END t16 rc=0 08:07:49 host_xid_lines=0 kf3_lines=2392
+OGR_CASE_START t24 08:07:49 q0=10588 h0=748
+OGR_APPRES t24 APPRES side=guest app=vkcts verdict=PASS rc=0 secs=307 quiet=0 note=ok cases=3 pass=2 warn=0 ns=0 fail=0 crash=0 timeout=1 notrun=0 gpu=EXTERNAL
+OGR_CASE_END t24 rc=0 08:13:01 host_xid_lines=1 kf3_lines=3999
+OGR_CASE_START mip2d 08:13:01 q0=14588 h0=750
+OGR_APPRES mip2d APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END mip2d rc=0 08:13:07 host_xid_lines=0 kf3_lines=2380
+OGR_CASE_START mipcube 08:13:08 q0=16968 h0=751
+OGR_APPRES mipcube APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END mipcube rc=0 08:13:14 host_xid_lines=0 kf3_lines=2367
+OGR_CASE_START imgmut 08:13:14 q0=19335 h0=751
+OGR_APPRES imgmut APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END imgmut rc=0 08:13:21 host_xid_lines=0 kf3_lines=2391
+OGR_CASE_START dgimg 08:13:21 q0=21726 h0=751
+OGR_APPRES dgimg APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END dgimg rc=0 08:13:27 host_xid_lines=0 kf3_lines=1975
+OGR_CASE_START intr 08:13:27 q0=23702 h0=751
+OGR_APPRES intr APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END intr rc=0 08:13:33 host_xid_lines=0 kf3_lines=1939
+OGR_CASE_START rebind 08:13:34 q0=25641 h0=751
+OGR_APPRES rebind APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END rebind rc=0 08:13:40 host_xid_lines=0 kf3_lines=2357
+OGR_CASE_START bindinfo 08:13:40 q0=27998 h0=751
+OGR_APPRES bindinfo APPRES side=guest app=vkcts verdict=PASS rc=0 secs=5 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END bindinfo rc=0 08:13:48 host_xid_lines=0 kf3_lines=2363
+OGR_CASE_START alias 08:13:48 q0=30361 h0=757
+OGR_APPRES alias APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END alias rc=0 08:13:55 host_xid_lines=0 kf3_lines=2356
+OGR_CASE_START pcreate 08:13:55 q0=32717 h0=757
+OGR_APPRES pcreate APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=2 warn=0 ns=0 fail=1 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END pcreate rc=0 08:14:02 host_xid_lines=0 kf3_lines=3457
+OGR_CASE_START pquery 08:14:02 q0=36174 h0=757
+OGR_APPRES pquery APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=2 warn=0 ns=0 fail=1 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END pquery rc=0 08:14:09 host_xid_lines=0 kf3_lines=3445
+OGR_CASE_START phigh 08:14:10 q0=39619 h0=757
+OGR_APPRES phigh APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END phigh rc=0 08:14:16 host_xid_lines=0 kf3_lines=2687
+OGR_CASE_START prt 08:14:17 q0=42306 h0=757
+OGR_APPRES prt APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END prt rc=0 08:14:23 host_xid_lines=0 kf3_lines=2145
+OGR_VKPRIO rc=0
+OGR_VKPRIO VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=0 flags=0xf count=16 reported=MEDIUM
+OGR_VKPRIO VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=1 flags=0xc count=2 reported=MEDIUM
+OGR_VKPRIO VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=2 flags=0xe count=8 reported=MEDIUM
+OGR_VKPRIO VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=3 flags=0x2c count=1 reported=MEDIUM
+OGR_VKPRIO VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=4 flags=0x4c count=2 reported=MEDIUM
+OGR_VKPRIO VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=5 flags=0x10c count=1 reported=MEDIUM
+OGR_VKPRIO VKPRIO create family=0 priority=LOW result=0
+OGR_VKPRIO VKPRIO create family=0 priority=MEDIUM result=0
+OGR_VKPRIO VKPRIO create family=0 priority=HIGH result=-1000174001
+OGR_VKPRIO VKPRIO create family=0 priority=REALTIME result=-1000174001
+OGR_VKPRIO VKPRIO create family=1 priority=LOW result=0
+OGR_VKPRIO VKPRIO create family=1 priority=MEDIUM result=0
+OGR_VKPRIO VKPRIO create family=1 priority=HIGH result=-1000174001
+OGR_VKPRIO VKPRIO create family=1 priority=REALTIME result=-1000174001
+OGR_VKPRIO VKPRIO create family=2 priority=LOW result=0
+OGR_VKPRIO VKPRIO create family=2 priority=MEDIUM result=0
+OGR_VKPRIO VKPRIO create family=2 priority=HIGH result=-1000174001
+OGR_VKPRIO VKPRIO create family=2 priority=REALTIME result=-1000174001
+OGR_VKPRIO VKPRIO create family=3 priority=LOW result=0
+OGR_VKPRIO VKPRIO create family=3 priority=MEDIUM result=0
+OGR_VKPRIO VKPRIO create family=3 priority=HIGH result=-1000174001
+OGR_VKPRIO VKPRIO create family=3 priority=REALTIME result=-1000174001
+OGR_VKPRIO VKPRIO create family=4 priority=LOW result=0
+OGR_VKPRIO VKPRIO create family=4 priority=MEDIUM result=0
+OGR_VKPRIO VKPRIO create family=4 priority=HIGH result=-1000174001
+OGR_VKPRIO VKPRIO create family=4 priority=REALTIME result=-1000174001
+OGR_VKPRIO VKPRIO create family=5 priority=LOW result=0
+OGR_VKPRIO VKPRIO create family=5 priority=MEDIUM result=0
+OGR_VKPRIO VKPRIO create family=5 priority=HIGH result=-1000174001
+OGR_VKPRIO VKPRIO create family=5 priority=REALTIME result=-1000174001
+OGR_HOOK_DONE

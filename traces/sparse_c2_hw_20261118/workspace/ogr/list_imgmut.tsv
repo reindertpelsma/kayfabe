@@ -1,0 +1,3 @@
+info	dEQP-VK.info.device_properties
+info	dEQP-VK.info.device_extensions
+sparse	dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16_unorm_r16g16_snorm_r16g16_uint

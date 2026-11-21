@@ -1,0 +1,14 @@
+HOST_BUNDLE_IN=3.4G
+SETUP_apt=ok
+SETUP_icd=ok
+SETUP_torch=ok
+SETUP_pylibs=ok
+IMPORT_OK 2.6.0+cu124 0.21.0+cu124 4.46.3 13.3.0
+SETUP_imports=ok
+HF_MODEL_CACHED
+SETUP_hf_model=ok
+SETUP_gguf=ok
+SETUP_blender=ok
+SETUP_geekbench=SKIPPED (policy: docs/DOWNLOADS.md)
+/dev/root       214G   80G  134G  38% /
+SETUP_SIDE_DONE

@@ -1,0 +1,6 @@
+[ 3265.872643] x86/PAT: kf3-vamgr:94627 freeing invalid memtype [mem 0x10017a0000-0x100199ffff]
+[ 3265.872792] x86/PAT: kf3-vamgr:94627 freeing invalid memtype [mem 0x10019a0000-0x1001b9ffff]
+[ 3265.872908] x86/PAT: kf3-vamgr:94627 freeing invalid memtype [mem 0x1001ba0000-0x1001d9ffff]
+[ 3265.873021] x86/PAT: kf3-vamgr:94627 freeing invalid memtype [mem 0x1001da0000-0x1001f9ffff]
+[ 3265.873138] x86/PAT: kf3-vamgr:94627 freeing invalid memtype [mem 0x1001fa0000-0x100219ffff]
+[ 3265.873407] x86/PAT: kf3-vamgr:94627 freeing invalid memtype [mem 0x10021a0000-0x100239ffff]

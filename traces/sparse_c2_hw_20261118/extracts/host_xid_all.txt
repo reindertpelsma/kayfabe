@@ -1,0 +1,12 @@
+[ 2900.878509] NVRM: Xid (PCI:0000:00:07): 109, pid=94556, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[ 3218.905182] NVRM: Xid (PCI:0000:00:07): 109, pid=94556, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[ 3686.919599] NVRM: Xid (PCI:0000:00:07): 109, pid=97269, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[ 4004.945039] NVRM: Xid (PCI:0000:00:07): 109, pid=97269, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+[ 4729.786772] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_0 faulted @ 0x7b68_5c000000. Fault is o
+[ 4735.512054] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x00000020, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC0 GPCCLIENT_T1_2 faulted @ 0x71e9_46109000. Fault is o
+[ 4741.680278] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC4 GPCCLIENT_T1_0 faulted @ 0x77fa_c0200000. Fault is o
+[ 4856.449813] NVRM: Xid (PCI:0000:00:07): 31, pid=108940, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_
+[ 4859.508904] NVRM: Xid (PCI:0000:00:07): 31, pid=108940, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_
+[ 4862.515658] NVRM: Xid (PCI:0000:00:07): 31, pid=108940, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_
+[ 4865.572807] NVRM: Xid (PCI:0000:00:07): 31, pid=108940, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_
+[ 4949.917574] NVRM: Xid (PCI:0000:00:07): 31, pid=109974, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_P

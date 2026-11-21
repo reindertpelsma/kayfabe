@@ -1,0 +1,19 @@
+=== UnifiedMemoryPerf side=host start=2026-11-18T07:57:35+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/UnifiedMemoryPerf
+GPU Device 0: "Ada" with compute capability 8.9
+
+Running ........................................................
+
+Overall Time For matrixMultiplyPerf 
+
+Printing Average of 20 measurements in (ms)
+Size_KB	 UMhint	UMhntAs	 UMeasy	  0Copy	MemCopy	CpAsync	CpHpglk	CpPglAs
+4	  0.168	  0.168	  0.334	  0.010	  0.024	  0.020	  0.030	  0.032
+16	  0.171	  0.181	  0.412	  0.018	  0.040	  0.028	  0.045	  0.041
+64	  0.221	  0.227	  0.719	  0.053	  0.073	  0.064	  0.073	  0.052
+256	  0.403	  0.356	  1.306	  0.256	  0.188	  0.170	  0.166	  0.142
+1024	  1.305	  1.127	  2.449	  1.627	  1.019	  0.955	  0.573	  0.546
+4096	  4.519	  3.440	  8.515	 11.474	  3.804	  3.756	  2.310	  2.285
+16384	 17.424	 14.080	 33.806	 86.419	 16.407	 16.096	 10.859	 10.699
+
+NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.
+=== end rc=0 secs=8 2026-11-18T07:57:43+00:00

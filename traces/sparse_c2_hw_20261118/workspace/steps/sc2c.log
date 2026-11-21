@@ -1,0 +1,41 @@
+OGR_BOOT tag=SC2C kf3=/workspace/bench/kf3-bins/bb5b2c41/qemu-system-x86_64 cases=[ msbind=/workspace/ogr/list_msbind.tsv msresid=/workspace/ogr/list_msresid.tsv t16=/workspace/ogr/list_t16.tsv t24=/workspace/ogr/list_t24.tsv mip2d=/workspace/ogr/list_mip2d.tsv mipcube=/workspace/ogr/list_mipcube.tsv imgmut=/workspace/ogr/list_imgmut.tsv dgimg=/workspace/ogr/list_dgimg.tsv intr=/workspace/ogr/list_intr.tsv rebind=/workspace/ogr/list_rebind.tsv bindinfo=/workspace/ogr/list_bindinfo.tsv alias=/workspace/ogr/list_alias.tsv] 08:35:14
+OGR_BOOT dev_extra=[exact-sparse=on]
+OGR_BOOT_END rc=0 08:37:23
+OGR_HOOK tag=SC2C kf3=bb5b2c41 cases=[ msbind=/workspace/ogr/list_msbind.tsv msresid=/workspace/ogr/list_msresid.tsv t16=/workspace/ogr/list_t16.tsv t24=/workspace/ogr/list_t24.tsv mip2d=/workspace/ogr/list_mip2d.tsv mipcube=/workspace/ogr/list_mipcube.tsv imgmut=/workspace/ogr/list_imgmut.tsv dgimg
+OGR_CASE_START msbind 08:35:50 q0=1487 h0=838
+OGR_APPRES msbind APPRES side=guest app=vkcts verdict=PASS rc=0 secs=7 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END msbind rc=0 08:36:01 host_xid_lines=0 kf3_lines=2725
+OGR_CASE_START msresid 08:36:01 q0=4212 h0=838
+OGR_APPRES msresid APPRES side=guest app=vkcts verdict=PASS rc=0 secs=4 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END msresid rc=0 08:36:09 host_xid_lines=0 kf3_lines=2426
+OGR_CASE_START t16 08:36:09 q0=6638 h0=838
+OGR_APPRES t16 APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END t16 rc=0 08:36:15 host_xid_lines=0 kf3_lines=2391
+OGR_CASE_START t24 08:36:16 q0=9029 h0=838
+OGR_APPRES t24 APPRES side=guest app=vkcts verdict=PASS rc=0 secs=4 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END t24 rc=0 08:36:23 host_xid_lines=0 kf3_lines=2403
+OGR_CASE_START mip2d 08:36:24 q0=11432 h0=838
+OGR_APPRES mip2d APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END mip2d rc=0 08:36:30 host_xid_lines=0 kf3_lines=2374
+OGR_CASE_START mipcube 08:36:30 q0=13806 h0=839
+OGR_APPRES mipcube APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END mipcube rc=0 08:36:37 host_xid_lines=0 kf3_lines=2364
+OGR_CASE_START imgmut 08:36:37 q0=16170 h0=839
+OGR_APPRES imgmut APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END imgmut rc=0 08:36:43 host_xid_lines=0 kf3_lines=2386
+OGR_CASE_START dgimg 08:36:44 q0=18556 h0=839
+OGR_APPRES dgimg APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END dgimg rc=0 08:36:50 host_xid_lines=0 kf3_lines=1967
+OGR_CASE_START intr 08:36:50 q0=20523 h0=839
+OGR_APPRES intr APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END intr rc=0 08:36:56 host_xid_lines=0 kf3_lines=1931
+OGR_CASE_START rebind 08:36:57 q0=22454 h0=839
+OGR_APPRES rebind APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=2 warn=0 ns=1 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END rebind rc=0 08:37:03 host_xid_lines=0 kf3_lines=2342
+OGR_CASE_START bindinfo 08:37:03 q0=24796 h0=839
+OGR_APPRES bindinfo APPRES side=guest app=vkcts verdict=PASS rc=0 secs=6 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END bindinfo rc=0 08:37:12 host_xid_lines=0 kf3_lines=2382
+OGR_CASE_START alias 08:37:13 q0=27179 h0=843
+OGR_APPRES alias APPRES side=guest app=vkcts verdict=PASS rc=0 secs=2 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END alias rc=0 08:37:19 host_xid_lines=0 kf3_lines=2357
+OGR_HOOK_DONE

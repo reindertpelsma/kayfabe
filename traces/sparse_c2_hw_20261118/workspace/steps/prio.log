@@ -1,0 +1,79 @@
+OGR_BOOT tag=PRIO kf3=/workspace/bench/kf3-bins/bb5b2c41/qemu-system-x86_64 cases=[ pcreate=/workspace/ogr/list_pcreate.tsv pquery=/workspace/ogr/list_pquery.tsv phigh=/workspace/ogr/list_phigh.tsv prt=/workspace/ogr/list_prt.tsv] 08:32:36
+OGR_BOOT dev_extra=[]
+OGR_BOOT_END rc=0 08:35:14
+OGR_HOOK tag=PRIO kf3=bb5b2c41 cases=[ pcreate=/workspace/ogr/list_pcreate.tsv pquery=/workspace/ogr/list_pquery.tsv phigh=/workspace/ogr/list_phigh.tsv prt=/workspace/ogr/list_prt.tsv]
+OGR_CASE_START pcreate 08:33:38 q0=1431 h0=837
+OGR_APPRES pcreate APPRES side=guest app=vkcts verdict=PASS rc=0 secs=8 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END pcreate rc=0 08:33:50 host_xid_lines=0 kf3_lines=4030
+OGR_CASE_START pquery 08:33:50 q0=5462 h0=837
+OGR_APPRES pquery APPRES side=guest app=vkcts verdict=PASS rc=0 secs=10 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END pquery rc=0 08:34:02 host_xid_lines=0 kf3_lines=10359
+OGR_CASE_START phigh 08:34:03 q0=15821 h0=837
+OGR_APPRES phigh APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END phigh rc=0 08:34:09 host_xid_lines=0 kf3_lines=2738
+OGR_CASE_START prt 08:34:10 q0=18559 h0=837
+OGR_APPRES prt APPRES side=guest app=vkcts verdict=PASS rc=0 secs=3 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END prt rc=0 08:34:16 host_xid_lines=0 kf3_lines=2760
+OGR_VKPRIO root rc=0
+OGR_VKPRIO root VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=0 flags=0xf count=16 reported=LOW,MEDIUM,HIGH,REALTIME
+OGR_VKPRIO root VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=1 flags=0xc count=2 reported=LOW,MEDIUM,HIGH
+OGR_VKPRIO root VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=2 flags=0xe count=8 reported=LOW,MEDIUM,HIGH,REALTIME
+OGR_VKPRIO root VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=3 flags=0x2c count=1 reported=LOW,MEDIUM,HIGH
+OGR_VKPRIO root VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=4 flags=0x4c count=2 reported=LOW,MEDIUM,HIGH
+OGR_VKPRIO root VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=5 flags=0x10c count=1 reported=LOW,MEDIUM,HIGH,REALTIME
+OGR_VKPRIO root VKPRIO create family=0 priority=LOW result=0
+OGR_VKPRIO root VKPRIO create family=0 priority=MEDIUM result=0
+OGR_VKPRIO root VKPRIO create family=0 priority=HIGH result=0
+OGR_VKPRIO root VKPRIO create family=0 priority=REALTIME result=0
+OGR_VKPRIO root VKPRIO create family=1 priority=LOW result=0
+OGR_VKPRIO root VKPRIO create family=1 priority=MEDIUM result=0
+OGR_VKPRIO root VKPRIO create family=1 priority=HIGH result=0
+OGR_VKPRIO root VKPRIO create family=1 priority=REALTIME result=-1000174001
+OGR_VKPRIO root VKPRIO create family=2 priority=LOW result=0
+OGR_VKPRIO root VKPRIO create family=2 priority=MEDIUM result=0
+OGR_VKPRIO root VKPRIO create family=2 priority=HIGH result=0
+OGR_VKPRIO root VKPRIO create family=2 priority=REALTIME result=0
+OGR_VKPRIO root VKPRIO create family=3 priority=LOW result=0
+OGR_VKPRIO root VKPRIO create family=3 priority=MEDIUM result=0
+OGR_VKPRIO root VKPRIO create family=3 priority=HIGH result=0
+OGR_VKPRIO root VKPRIO create family=3 priority=REALTIME result=-1000174001
+OGR_VKPRIO root VKPRIO create family=4 priority=LOW result=0
+OGR_VKPRIO root VKPRIO create family=4 priority=MEDIUM result=0
+OGR_VKPRIO root VKPRIO create family=4 priority=HIGH result=0
+OGR_VKPRIO root VKPRIO create family=4 priority=REALTIME result=-1000174001
+OGR_VKPRIO root VKPRIO create family=5 priority=LOW result=0
+OGR_VKPRIO root VKPRIO create family=5 priority=MEDIUM result=0
+OGR_VKPRIO root VKPRIO create family=5 priority=HIGH result=0
+OGR_VKPRIO root VKPRIO create family=5 priority=REALTIME result=0
+OGR_VKPRIO user rc=0
+OGR_VKPRIO user VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=0 flags=0xf count=16 reported=MEDIUM
+OGR_VKPRIO user VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=1 flags=0xc count=2 reported=MEDIUM
+OGR_VKPRIO user VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=2 flags=0xe count=8 reported=MEDIUM
+OGR_VKPRIO user VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=3 flags=0x2c count=1 reported=MEDIUM
+OGR_VKPRIO user VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=4 flags=0x4c count=2 reported=MEDIUM
+OGR_VKPRIO user VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=5 flags=0x10c count=1 reported=MEDIUM
+OGR_VKPRIO user VKPRIO create family=0 priority=LOW result=0
+OGR_VKPRIO user VKPRIO create family=0 priority=MEDIUM result=0
+OGR_VKPRIO user VKPRIO create family=0 priority=HIGH result=-1000174001
+OGR_VKPRIO user VKPRIO create family=0 priority=REALTIME result=-1000174001
+OGR_VKPRIO user VKPRIO create family=1 priority=LOW result=0
+OGR_VKPRIO user VKPRIO create family=1 priority=MEDIUM result=0
+OGR_VKPRIO user VKPRIO create family=1 priority=HIGH result=-1000174001
+OGR_VKPRIO user VKPRIO create family=1 priority=REALTIME result=-1000174001
+OGR_VKPRIO user VKPRIO create family=2 priority=LOW result=0
+OGR_VKPRIO user VKPRIO create family=2 priority=MEDIUM result=0
+OGR_VKPRIO user VKPRIO create family=2 priority=HIGH result=-1000174001
+OGR_VKPRIO user VKPRIO create family=2 priority=REALTIME result=-1000174001
+OGR_VKPRIO user VKPRIO create family=3 priority=LOW result=0
+OGR_VKPRIO user VKPRIO create family=3 priority=MEDIUM result=0
+OGR_VKPRIO user VKPRIO create family=3 priority=HIGH result=-1000174001
+OGR_VKPRIO user VKPRIO create family=3 priority=REALTIME result=-1000174001
+OGR_VKPRIO user VKPRIO create family=4 priority=LOW result=0
+OGR_VKPRIO user VKPRIO create family=4 priority=MEDIUM result=0
+OGR_VKPRIO user VKPRIO create family=4 priority=HIGH result=-1000174001
+OGR_VKPRIO user VKPRIO create family=4 priority=REALTIME result=-1000174001
+OGR_VKPRIO user VKPRIO create family=5 priority=LOW result=0
+OGR_VKPRIO user VKPRIO create family=5 priority=MEDIUM result=0
+OGR_VKPRIO user VKPRIO create family=5 priority=HIGH result=-1000174001
+OGR_VKPRIO user VKPRIO create family=5 priority=REALTIME result=-1000174001
+OGR_HOOK_DONE

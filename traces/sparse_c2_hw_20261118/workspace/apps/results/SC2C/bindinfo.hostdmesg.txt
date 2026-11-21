@@ -1,0 +1,4 @@
+[ 4669.561122] x86/PAT: kf3-vamgr:106291 freeing invalid memtype [mem 0x10017a0000-0x100199ffff]
+[ 4669.561260] x86/PAT: kf3-vamgr:106291 freeing invalid memtype [mem 0x10019a0000-0x1001b9ffff]
+[ 4669.561382] x86/PAT: kf3-vamgr:106291 freeing invalid memtype [mem 0x1001ba0000-0x1001d9ffff]
+[ 4669.561500] x86/PAT: kf3-vamgr:106291 freeing invalid memtype [mem 0x1001da0000-0x1001f9ffff]

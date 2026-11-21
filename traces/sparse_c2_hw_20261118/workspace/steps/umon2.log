@@ -1,0 +1,11 @@
+UM_BOOT tag=UMON2 kf3=/workspace/bench/kf3-bins/bb5b2c41/qemu-system-x86_64 cases=[x] 08:37:23
+UM_BOOT dev_extra=[exact-sparse=on]
+UM_BOOT_END rc=0 08:38:31
+UM_HOOK tag=UMON2 dev_extra=[exact-sparse=on]
+UM_START UnifiedMemoryPerf 08:38:04
+UM_END UnifiedMemoryPerf rc=1 host_xid=      1 [ 4729.786772] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_0 faulted @ 0x7b68_5c000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ  guest_xid=0 c
+UM_START UnifiedMemoryStreams 08:38:11
+UM_END UnifiedMemoryStreams rc=255 host_xid=      1 [ 4735.512054] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x00000020, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC0 GPCCLIENT_T1_2 faulted @ 0x71e9_46109000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ  guest_xi
+UM_START conjugateGradientUM 08:38:18
+UM_END conjugateGradientUM rc=1 host_xid=      1 [ 4741.680278] NVRM: Xid (PCI:0000:00:07): 31, pid=107189, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC4 GPCCLIENT_T1_0 faulted @ 0x77fa_c0200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ  guest_xid=0
+UM_HOOK_DONE
