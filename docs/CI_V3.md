@@ -1,6 +1,6 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-20 (the rootless payload run, section below, 2026-11-20; the `windows-guest-setup` job and its mutants 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-20 (the rootless payload run, section below, 2026-11-20; the `windows-guest-setup` job and its mutants 2026-11-20; the environment-read and comment-hygiene gates 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
 ## Job layout, concurrency and caches (2026-11-17)
@@ -53,7 +53,7 @@ about a minute of set-up; the two values that are not sums of measured steps are
 | `worker-mutants-b` | report, release-*, rv2, driver-pins, simulation, profile, proprietary-image mutants | about 13.5 | about 14 |
 | `middle-apps` (4 slices) | `middle_apps_mutants.py --shard I/4`: every fourth of the 118 mutants from the I-th | 99.0 (one worker) | about 27 each (INFERRED: a quarter of 99 plus a baseline run and set-up) |
 | `mutants-a` | OIDC retry, propimage, clock rule, bandwidth, image size, kfci, instruction, and the mutants of the sharder and of the slicing | about 9 | about 10 |
-| `mutants-b` | kfroot, box downloader, runner stages, doc steps, fault names, evidence and bench self-tests | about 14 | about 15 |
+| `mutants-b` | kfroot, box downloader, runner stages, doc steps, command-line reference, fault names, evidence and bench self-tests | about 14 | about 15 |
 | `selftests` (3 shards) | every `test_*.py` of `scripts/ci`, a partition by module | 17.4 (one process) | about 6 each |
 | `rust-mutants-a` | Windows support profile mutants | 19.1 | about 20 |
 | `rust-mutants-b` | oracle gate, video classes, offer filter, unmap cap, VA profiling mutants | about 12.3 | about 13 |
@@ -367,6 +367,32 @@ steps too. The runner extracts the actual workflow (the `stable` job, the jobs s
 non-destructive steps of `stripped`, where build and test live; it never runs the
 strip, which deletes files, so `--all` builds and tests the full tree) and enforces
 minimum step counts, so a shortened or malformed job cannot report a vacuous green.
+
+## Environment and comment gates (2026-11-20)
+
+**STATUS of this section: LIVE, 2026-11-20.** CODE READ: [`env_allowlist.py`](../scripts/ci/env_allowlist.py) and
+[`comment_hygiene.py`](../scripts/ci/comment_hygiene.py) run in the `stable` job beside `trust_lint.py`; their mutants run in `mutants-b`
+(two named killers per mutant, tests `test_env_allowlist.py` and `test_comment_hygiene.py`). Both are ignored by the ladder like the other CI-only scripts.
+
+- **Environment reads.** No environment variable is required to boot a Windows or Linux guest in production; the product path reads the
+  environment only inside an allowlist. The gate scans `qemu/hw/misc/kf3`, `broker`, `cuda/walk`, `firmware` and every `crates/kf-*`
+  for `std::env::var`/`var_os`/`vars`/`vars_os`/`env!`/`option_env!` and `getenv`/`secure_getenv` on comment- and string-masked text. It leaves out
+  `tests/`, `benches/`, `examples/`, test-named files and `#[cfg(test)]` items (not shipped code), the frozen `crates/kayfabe-*`, `archive/` and
+  `third_party/`. Every name must be in [`env_registry.json`](../scripts/ci/env_registry.json) with a class (`debug`, `measurement`, `inject`,
+  `stress`, `system`, `product`), the reading file, a one-line why and `changes_guest_served`. A read with a computed name is `<dynamic:file:fn>` and is registered like any
+  other. The gate fails on an unregistered read, a stale entry, an entry whose file does not read the name, a malformed entry, and on an
+  offender (class `product` or `changes_guest_served: true`) that is on neither the registry's `product_env_allowlist` nor
+  [`env-allowlist-debt.json`](../scripts/ci/env-allowlist-debt.json). That baseline is a ratchet: it can only shrink, a name that stops being an
+  offender must be deleted from it, and `--record-baseline` never adds a name. `env_allowlist.py report` prints the counts per class and the table of offenders
+  with file, line and a proposal (`device-property`, `keep-as-debug` or `delete`).
+- **Comment hygiene.** Code comments say what the code does and why; working notes, owner and process commentary and date-stamped annotations belong in
+  `docs/design` and the handoff files. The gate extracts the comments (Rust, C, CUDA, JavaScript, Python `#`, shell, PowerShell) of the tracked sources outside
+  `docs/`, `archive/`, `third_party/`, `traces/`, `site/` and `crates/kayfabe-*`, and flags a line that matches a pattern (owner rulings and dates,
+  `OWNER_RULINGS`, agent and model names, `AGENTS.md`/`CLAUDE.md` pointers, coordinator notes, "as discussed", `Added 2026-..`, `(since 2026-..)`, a comment that opens
+  with a date or a marker and a date, `Lane X` labels). Each pattern was counted on the tree first; words with a technical meaning (the owner of a lock, a guest agent, an RM
+  session, a coordinator thread) are not matched. A finding is identified by file, pattern and normalised text, so moving a comment does not make it new.
+  [`comment-hygiene-debt.json`](../scripts/ci/comment-hygiene-debt.json) is the shrink-only baseline. A finding is fixed by rewriting the comment; a
+  baseline entry whose comment is gone must be deleted (`--record-baseline` only removes). No comment was rewritten when the gate landed.
 
 ## Standalone trust gate (2026-11-17)
 

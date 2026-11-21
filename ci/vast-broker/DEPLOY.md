@@ -48,7 +48,7 @@ redaction, storage bounds and API-outage limits. This source change does not dep
   of someone else's run.
   There is no attempt-3 ceiling. Admission does not cache this read; the latest-run resource
   can describe a previous attempt during a rerun. A 401 logs a fixed `github:run:<field>` code,
-  without the field value. See [rerun diagnosis](../../docs/howto/vast-rerun-auth.md).
+  without the field value. See [rerun diagnosis](../../docs/howto/ops/vast-rerun-auth.md).
 - **Tested commit.** The requested `tested_sha` must equal the run's `head_sha`. For `push` the
   OIDC `sha` must equal it too. MEASURED 2026-10-23 (read-only `gh api` on public
   `github/docs` `pull_request_target` runs, PR #46406): the
@@ -772,7 +772,7 @@ script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental toda
 
 ## Same-tree gate reuse
 
-CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/gpu-gate-reuse.md).
+CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/ops/gpu-gate-reuse.md).
 
 ## Result store (D1)
 

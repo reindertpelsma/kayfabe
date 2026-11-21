@@ -520,7 +520,7 @@ class Docs(unittest.TestCase):
     def test_the_manual_page_carries_no_dated_agent_notes_for_the_script(self):
         text = (ROOT / "docs/howto/windows-guest.md").read_text()
         start = text.index("## The settings it needs")
-        end = text.index("## The Windows harness")
+        end = text.index("\n## ", start + 4)  # the settings section ends at the next heading (the harness moved to its own page)
         section = text[start:end]
         self.assertNotRegex(section, r"20\d\d-\d\d-\d\d")
         self.assertNotRegex(section, r"[Ss]ince 20|\(20\d\d|evidence|STATUS")

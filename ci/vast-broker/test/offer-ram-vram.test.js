@@ -11,7 +11,7 @@ import { legStages, plannedStages } from '../src/bandwidth.js';
 import { offlinePlan } from '../release-plan.mjs';
 import { env, setup, MemoryStorage, MockCloud, rentBody, sha } from './helpers.js';
 const { configuration, offerRejections } = policy;
-// 2026-11-20. MEASURED: a Vast KVM box listed with an RTX 4090 of 49140 MiB and 125 GB of RAM (MemTotal 103.5 GB)
+// A Vast KVM box listed with an RTX 4090 of 49140 MiB and 125 GB of RAM (MemTotal 103.5 GB)
 // made the kfml row `managed_oversub` NOT_RUN ("host RAM too small to oversubscribe VRAM by 25%"). The row wants
 // 1.25 x VRAM <= 0.6 x MemAvailable, and a KVM box gets only about 0.75 to 0.83 of the LISTED RAM as MemTotal, so a
 // flat RAM floor calibrated on 24 GB dies cannot hold. The offer policy derives the listed-RAM floor from the offer's

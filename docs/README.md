@@ -5,8 +5,20 @@
 ## Published
 
 - **The user manual** is `docs/howto/` plus `docs/FAQ.md`. It is the only part of `docs/` that is
-  published (https://kayfabe.dev; see `site/README.md`). `docs/howto/SUMMARY.md` is its navigation,
-  and `docs/FAQ.md` is appended last by the site build.
+  published (https://kayfabe.dev; see `site/README.md`). `docs/howto/SUMMARY.md` is its navigation, and
+  `docs/FAQ.md` is appended last by the site build. It has three parts: **Part 1, Use kayfabe** (install, run a
+  Linux or Windows guest, display and the broker, the command-line reference, troubleshooting, report a
+  problem, security), **Part 2, Test it yourself** (what runs out of the box, bring-your-own images) and
+  **Part 3, Run your own CI (operators)**, whose pages live under `docs/howto/ops/`. A new page is listed in
+  `SUMMARY.md` and, in Parts 1 and 2, in the "Pages" tables of `docs/howto/index.md` (the site takes each page's
+  one-line description from those tables).
+- **The command-line reference** `docs/howto/cli-reference.md` has a device-property table that is
+  generated from `qemu/hw/misc/kf3/kf3.c` (`python3 scripts/ci/doc_cli_reference.py write`; the check is
+  in `docs/CI_V3.md`). Do not edit that table by hand.
+- **User pages carry no evidence labels.** CODE READ, MEASURED, NOT RUN, dated process notes and revisions belong in
+  the internal documents (`docs/RELEASE_CLAIMS.md` keeps the claims that were moved out of the manual). A user page
+  says the status in words (supported, experimental, not yet run on hardware, not verified); the `<!-- src: -->`
+  comments name the sources. The operator pages (Part 3) keep their labels because their readers deploy and audit.
 - **Everything else under `docs/` is internal**: design documents, status and handoff records, owner
   rulings, audits, references and archives. It is for contributors, is not part of the manual, and
   the site build refuses a manual page that links into it.

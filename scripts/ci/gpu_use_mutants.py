@@ -153,7 +153,7 @@ MUTANTS = [
     M("notrun-counted-as-a-defect", "mt", "if unjudged and not (alone == PASS):", "if False:",
       MT + "test_a_guest_notrun_from_the_gpu_use_judge_is_unattributed_not_a_defect",
       MT + "test_an_isolated_gpu_use_notrun_after_a_batched_fail_is_still_unattributed"),
-    # 2026-11-20: the first apps_discovery run booted an image without /opt/apps: HANG for rows that never started, a wedge for every boot, and a note of `-` for rows whose
+    # The first apps_discovery run booted an image without /opt/apps: HANG for rows that never started, a wedge for every boot, and a note of `-` for rows whose
     # command text says error or timeout
     M("a-missing-guest-command-is-a-hang", "hook", '    if [ $alive = 1 ] && { [ "$src" = 126 ] || [ "$src" = 127 ]; }; then', "    if false; then",
       HK + "test_a_missing_guest_command_is_not_run_never_a_hang", HK + "test_the_missing_command_is_named_by_its_path", HK + "test_a_guest_command_that_cannot_be_executed_is_not_run_too"),
