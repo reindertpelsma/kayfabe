@@ -2,7 +2,7 @@
 
 There is no public binary yet, so you build it. You build two things: the Rust workspace, and a QEMU binary that has the `kf3-gpu` device linked in. This page lists the steps of the build, in their order. Once you have the binary, continue with [Install](installing.md), step 3. <!-- src: README.md, scripts/bench/build_kf3.sh -->
 
-Read [Requirements](requirements.md) first. A QEMU binary built from this tree is not yet distributable under the GPL: see [Credits and notices](credits.md). <!-- src: LICENSE exception 2 -->
+Read [Requirements](requirements.md) first. No public binary is published yet; whether and when one is published is the project owner's decision, not a licence limit of the source (see [Credits and notices](credits.md)). <!-- src: docs/OWNER_RULINGS.md section BC item 1, LICENSE exception 2 -->
 
 ## 1. Get the source
 

@@ -2,7 +2,8 @@ name: Release QEMU build (draft release)
 # Builds the patched QEMU (kayfabe `kf3-gpu` device linked in) and its corresponding source on a GitHub runner, attests the
 # binary tarball, the source tarball and the manifest in this same run, and uploads them to a DRAFT release. It never publishes:
 # the owner reads the draft and publishes it by hand. Manual dispatch only; the Worker verifies the attestation by the OIDC
-# identity of this workflow (docs/CI_V3.md, "QEMU release workflow").
+# identity of this workflow (docs/CI_V3.md, "QEMU release workflow"). Three jobs after the gate: `build` runs the third-party
+# build code and holds no OIDC, `attest` holds OIDC and runs no build code, `draft` holds contents: write.
 on:
   workflow_dispatch:
     inputs:
@@ -39,15 +40,15 @@ jobs:
         run: python3 -I ci/vast-broker/release_gate.py
   build:
     # Off master the build still runs (a rehearsal: it is checked for reproducibility and its files are kept as a run artifact),
-    # but nothing is attested and no release is made. On master it needs the gate.
+    # with no OIDC, no attestation and no release. On master it needs a successful gate: a skipped or cancelled gate stops it.
     needs: gate
-    if: ${{ !cancelled() && needs.gate.result != 'failure' }}
+    if: ${{ !cancelled() && (github.ref != 'refs/heads/master' || needs.gate.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
       contents: read
-      id-token: write
-      attestations: write
+    outputs:
+      sums: ${{ steps.sums.outputs.sums }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -69,38 +70,67 @@ jobs:
           targets: x86_64-unknown-uefi
       - name: Source tarball (the corresponding source of the binary, with the vendored crates and the signed QEMU tarball)
         timeout-minutes: 15
-        run: python3 -I scripts/release/build_qemu.py source --out dist/source
+        run: python3 -I scripts/release/build_qemu.py source --out "$RUNNER_TEMP/source"
       - name: Reproducibility check (binary from the source tarball against a rebuild from this checkout)
         timeout-minutes: 45
         run: |
-          python3 -I scripts/release/build_qemu.py reproduce --source-tarball dist/source/*-source.tar.xz --out dist/repro
-          mkdir dist/assets
-          mv dist/repro/a/* dist/assets/
-          mv dist/source/*-source.tar.xz dist/assets/
-          (cd dist/assets && sha256sum -- * > SHA256SUMS)
-          ls -l dist/assets
-      - name: Attest the binary, the source and the manifest
-        if: ${{ github.ref == 'refs/heads/master' && needs.gate.result == 'success' }}
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: |
-            dist/assets/*-linux-x86_64.tar.xz
-            dist/assets/*-source.tar.xz
-            dist/assets/*-manifest.json
-            dist/assets/SHA256SUMS
+          python3 -I scripts/release/build_qemu.py reproduce --source-tarball "$RUNNER_TEMP"/source/*-source.tar.xz --out "$RUNNER_TEMP/repro"
+          mkdir "$RUNNER_TEMP/assets"
+          mv "$RUNNER_TEMP"/repro/a/* "$RUNNER_TEMP/assets/"
+          mv "$RUNNER_TEMP"/source/*-source.tar.xz "$RUNNER_TEMP/assets/"
+          (cd "$RUNNER_TEMP/assets" && sha256sum -- * > "$RUNNER_TEMP/SHA256SUMS" && mv "$RUNNER_TEMP/SHA256SUMS" SHA256SUMS)
+          ls -l "$RUNNER_TEMP/assets"
+      - name: Digest of the checksum file, for the attest job
+        id: sums
+        run: echo "sums=$(sha256sum "$RUNNER_TEMP/assets/SHA256SUMS" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: qemu-release-assets
-          path: dist/assets
+          path: ${{ runner.temp }}/assets
           if-no-files-found: error
           retention-days: 14
+  attest:
+    # No checkout and no build code: it downloads what `build` uploaded, proves every file is the one `build` listed, and attests.
+    needs: [gate, build]
+    if: ${{ github.ref == 'refs/heads/master' && needs.gate.result == 'success' && needs.build.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: qemu-release-assets
+          path: assets
+      - name: Every file is the one the build job listed, and no other file is there
+        env:
+          SUMS: ${{ needs.build.outputs.sums }}
+        run: |
+          cd assets
+          [[ "$SUMS" =~ ^[0-9a-f]{64}$ ]] || { echo "no digest from the build job"; exit 1; }
+          [ "$(sha256sum SHA256SUMS | cut -d' ' -f1)" = "$SUMS" ] || { echo "SHA256SUMS is not the file the build job made"; exit 1; }
+          sha256sum --check --strict SHA256SUMS
+          listed="$(cut -c67- SHA256SUMS | sort)"
+          present="$(ls -A | grep -vx SHA256SUMS | sort)"
+          [ "$listed" = "$present" ] || { echo "the artifact holds files SHA256SUMS does not list, or lacks listed ones"; exit 1; }
+          [ "$(printf '%s\n' "$listed" | wc -l)" -eq 3 ] || { echo "expected exactly three listed files"; exit 1; }
+      - name: Attest the binary, the source, the manifest and the checksums
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            assets/*-linux-x86_64.tar.xz
+            assets/*-source.tar.xz
+            assets/*-manifest.json
+            assets/SHA256SUMS
   draft:
-    needs: build
-    if: ${{ github.ref == 'refs/heads/master' }}
+    needs: [gate, build, attest]
+    if: ${{ github.ref == 'refs/heads/master' && needs.gate.result == 'success' && needs.attest.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
+      attestations: read
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -112,14 +142,20 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           [[ "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "bad tag name"; exit 1; }
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > /dev/null 2>&1; then echo "the tag $TAG already exists"; exit 1; fi
+          if gh release list --repo "$GITHUB_REPOSITORY" --limit 500 --json tagName --jq '.[].tagName' | grep -Fxq -- "$TAG"; then echo "a release for $TAG already exists"; exit 1; fi
           cd assets
+          upload=()
           for f in *-linux-x86_64.tar.xz *-source.tar.xz *-manifest.json SHA256SUMS; do
+            [ -f "$f" ] && [ "$(ls -1 -- $f | wc -l)" -eq 1 ] || { echo "expected exactly one file for $f"; exit 1; }
             gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-qemu.yml" --source-ref refs/heads/master --deny-self-hosted-runners
+            upload+=("$f")
           done
+          [ "$(ls -A | wc -l)" -eq 4 ] || { echo "the artifact holds files that were not verified"; exit 1; }
           sha256sum --check SHA256SUMS
           printf '%s\n' \
             "Draft. Built by .github/workflows/release-qemu.yml at ${GITHUB_SHA}; not published." \
             "Verify a download: gh attestation verify <file> --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release-qemu.yml --source-ref refs/heads/master --deny-self-hosted-runners" \
             "The -source.tar.xz is the corresponding source of the binary (GPL); the -manifest.json lists its inputs, patches and configure line." \
             > ../notes.md
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "$TAG (draft)" --notes-file ../notes.md -- *
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "$TAG (draft)" --notes-file ../notes.md -- "${upload[@]}"

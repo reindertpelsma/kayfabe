@@ -1191,26 +1191,25 @@ class Workflow(unittest.TestCase):
         self.assertNotIn("secrets: inherit", t)
         self.assertNotRegex(t, r"VAST|R2_|CLOUDFLARE|WORKER_")
 
-    def test_the_build_job_holds_the_attestation_permissions_and_nothing_else_writes(self):
+    def test_each_job_holds_only_the_permissions_of_its_role(self):
         jobs = workflow()["jobs"]
-        self.assertEqual(jobs["build"]["permissions"], {"contents": "read", "id-token": "write", "attestations": "write"})
-        for name, job in jobs.items():
-            perms = job.get("permissions", {})
-            if name != "build":
-                self.assertNotIn("id-token", perms, name)
-                self.assertNotIn("attestations", perms, name)
-        self.assertEqual(jobs["draft"]["permissions"], {"contents": "write"})
+        self.assertEqual(jobs["build"]["permissions"], {"contents": "read"})
+        self.assertEqual(jobs["attest"]["permissions"], {"id-token": "write", "attestations": "write"})
+        self.assertEqual(jobs["draft"]["permissions"], {"contents": "write", "attestations": "read"})
+        self.assertNotIn("id-token", jobs["draft"]["permissions"])
+        self.assertNotIn("id-token", jobs["gate"].get("permissions", {}))
 
     def test_attestation_covers_the_binary_the_source_and_the_manifest_from_this_run(self):
-        attest = [s for s in steps("build") if "attest-build-provenance" in str(s.get("uses", ""))]
+        attest = [s for s in steps("attest") if "attest-build-provenance" in str(s.get("uses", ""))]
         self.assertEqual(len(attest), 1)
         subjects = attest[0]["with"]["subject-path"]
         for needle in ("linux-x86_64.tar.xz", "source.tar.xz", "manifest.json"):
             self.assertIn(needle, subjects)
 
     def test_attestation_is_made_only_on_the_master_branch(self):
-        attest = next(s for s in steps("build") if "attest-build-provenance" in str(s.get("uses", "")))
-        self.assertIn("refs/heads/master", attest["if"])
+        self.assertIn("github.ref == 'refs/heads/master'", workflow()["jobs"]["attest"]["if"])
+        for s in steps("build"):
+            self.assertNotIn("attest-build-provenance", str(s.get("uses", "")))
 
     def test_the_release_is_a_draft_and_is_never_published(self):
         t = self.text()
@@ -1237,13 +1236,11 @@ class Workflow(unittest.TestCase):
                 if "actions/checkout" in str(s.get("uses", "")):
                     self.assertIs(s["with"]["persist-credentials"], False)
 
-    def test_the_build_checks_reproducibility_before_it_attests(self):
-        names = [s.get("name", "") for s in steps("build")]
-        repro = next(i for i, n in enumerate(names) if "reproduc" in n.lower())
-        attest = next(i for i, n in enumerate(names) if "attest" in n.lower())
-        self.assertLess(repro, attest)
-        t = self.text()
-        self.assertIn("build_qemu.py reproduce", t)
+    def test_the_build_checks_reproducibility_and_the_attest_job_waits_for_it(self):
+        names = [s.get("name", "").lower() for s in steps("build")]
+        self.assertTrue(any("reproduc" in n for n in names))
+        self.assertIn("build", workflow()["jobs"]["attest"]["needs"])
+        self.assertIn("build_qemu.py reproduce", self.text())
 
     def test_no_trigger_can_run_without_a_human(self):
         head = self.text().split("\npermissions:")[0]
@@ -1255,9 +1252,10 @@ class Workflow(unittest.TestCase):
         self.assertIn(" --draft ", line)
         self.assertIn('--target "$GITHUB_SHA"', line)
 
-    def test_attestation_needs_the_gate_result(self):
-        attest = next(s for s in steps("build") if "attest-build-provenance" in str(s.get("uses", "")))
-        self.assertIn("needs.gate.result == 'success'", attest["if"])
+    def test_attestation_needs_the_gate_and_the_build_to_have_succeeded(self):
+        cond = workflow()["jobs"]["attest"]["if"]
+        self.assertIn("needs.gate.result == 'success'", cond)
+        self.assertIn("needs.build.result == 'success'", cond)
 
     def test_only_the_draft_job_can_write_contents(self):
         for name, job in workflow()["jobs"].items():
@@ -1276,21 +1274,35 @@ class Workflow(unittest.TestCase):
 
     def test_published_assets_come_from_the_checked_build(self):
         run = next(s["run"] for s in steps("build") if "reproduc" in s.get("name", "").lower())
-        self.assertIn("mv dist/repro/a/* dist/assets/", run)
+        self.assertIn('mv "$RUNNER_TEMP"/repro/a/* "$RUNNER_TEMP/assets/"', run)
+        self.assertIn('--out "$RUNNER_TEMP/repro"', run)
         self.assertIn("--source-tarball", run)
 
     def test_every_job_that_publishes_or_attests_is_master_only(self):
         jobs = workflow()["jobs"]
-        self.assertIn("refs/heads/master", jobs["draft"]["if"])
-        self.assertIn("refs/heads/master", jobs["gate"]["if"])
+        for name in ("gate", "attest", "draft"):
+            self.assertIn("refs/heads/master", jobs[name]["if"], name)
         for name, job in jobs.items():
             if "gh release create" in json.dumps(job):
                 self.assertIn("refs/heads/master", job["if"], name)
 
-    def test_the_build_waits_for_the_gate_but_survives_its_skip(self):
+    def test_the_build_waits_for_the_gate_but_survives_its_skip_off_master(self):
         build = workflow()["jobs"]["build"]
         self.assertEqual(build["needs"], "gate")
-        self.assertIn("needs.gate.result != 'failure'", build["if"])
+        self.assertIn("github.ref != 'refs/heads/master'", build["if"])
+
+    def test_the_job_conditions_are_exactly_these(self):
+        jobs = workflow()["jobs"]
+        self.assertEqual(jobs["build"]["if"], "${{ !cancelled() && (github.ref != 'refs/heads/master' || needs.gate.result == 'success') }}")
+        self.assertEqual(jobs["attest"]["if"], "${{ github.ref == 'refs/heads/master' && needs.gate.result == 'success' && needs.build.result == 'success' }}")
+        self.assertEqual(jobs["draft"]["if"], "${{ github.ref == 'refs/heads/master' && needs.gate.result == 'success' && needs.attest.result == 'success' }}")
+        self.assertEqual(jobs["gate"]["if"], "${{ github.ref == 'refs/heads/master' }}")
+
+    def test_on_master_the_build_needs_a_successful_gate_not_just_a_non_failed_one(self):
+        cond = workflow()["jobs"]["build"]["if"]
+        self.assertIn("needs.gate.result == 'success'", cond)
+        self.assertNotIn("!= 'failure'", cond)
+        self.assertIn("!cancelled()", cond)
 
     def test_tag_is_validated_in_the_job_that_creates_the_release(self):
         run = next(s["run"] for s in steps("draft") if "gh release create" in s.get("run", ""))
@@ -1320,12 +1332,96 @@ class Workflow(unittest.TestCase):
         self.assertIs(checkout["with"]["persist-credentials"], False)
 
     def test_the_source_tarball_is_attested(self):
-        attest = next(s for s in steps("build") if "attest-build-provenance" in str(s.get("uses", "")))
+        attest = next(s for s in steps("attest") if "attest-build-provenance" in str(s.get("uses", "")))
         self.assertIn("-source.tar.xz", attest["with"]["subject-path"])
 
     def test_the_manifest_is_attested(self):
-        attest = next(s for s in steps("build") if "attest-build-provenance" in str(s.get("uses", "")))
+        attest = next(s for s in steps("attest") if "attest-build-provenance" in str(s.get("uses", "")))
         self.assertIn("-manifest.json", attest["with"]["subject-path"])
+
+    def test_the_build_job_has_no_oidc_and_no_attestation_step(self):
+        build = workflow()["jobs"]["build"]
+        self.assertNotIn("id-token", build["permissions"])
+        self.assertNotIn("attestations", build["permissions"])
+        self.assertNotIn("id-token", json.dumps(build))
+
+    def test_the_attest_job_runs_no_checkout_and_no_build_code(self):
+        for s in steps("attest"):
+            text = json.dumps(s)
+            for forbidden in ("actions/checkout", "build_qemu", "cargo", "apt-get", "ninja", "setup-"):
+                self.assertNotIn(forbidden, text)
+
+    def test_the_attest_job_rechecks_every_file_against_the_build_jobs_checksums(self):
+        run = next(s["run"] for s in steps("attest") if "sha256sum" in s.get("run", ""))
+        self.assertIn("sha256sum --check --strict SHA256SUMS", run)
+        self.assertIn('[ "$(sha256sum SHA256SUMS | cut -d\' \' -f1)" = "$SUMS" ]', run)
+        env = next(s["env"] for s in steps("attest") if "sha256sum" in s.get("run", ""))
+        self.assertEqual(env["SUMS"], "${{ needs.build.outputs.sums }}")
+        self.assertIn("sums", workflow()["jobs"]["build"]["outputs"])
+
+    def test_the_attest_job_refuses_files_the_checksums_do_not_list(self):
+        run = next(s["run"] for s in steps("attest") if "sha256sum" in s.get("run", ""))
+        self.assertIn('[ "$listed" = "$present" ]', run)
+
+    def test_the_attest_recheck_runs_before_the_attestation_and_has_all_three_checks(self):
+        names = [s.get("name", "") for s in steps("attest")]
+        self.assertLess(next(i for i, n in enumerate(names) if n.startswith("Every file")), next(i for i, n in enumerate(names) if n.startswith("Attest")))
+        step = next(s for s in steps("attest") if s.get("name", "").startswith("Every file"))
+        for needle in ("--check --strict", '= "$SUMS"', '"$listed" = "$present"'):
+            self.assertIn(needle, step["run"])
+        self.assertEqual(step["env"]["SUMS"], "${{ needs.build.outputs.sums }}")
+
+    def test_the_build_job_publishes_the_digest_of_its_checksum_file(self):
+        build = workflow()["jobs"]["build"]
+        self.assertEqual(build["outputs"]["sums"], "${{ steps.sums.outputs.sums }}")
+        step = next(s for s in build["steps"] if s.get("id") == "sums")
+        self.assertIn("SHA256SUMS", step["run"])
+
+    def draft_run(self):
+        return next(s["run"] for s in steps("draft") if "gh release create" in s.get("run", ""))
+
+    def test_the_draft_looks_for_an_existing_tag_before_it_creates_anything(self):
+        run = self.draft_run()
+        self.assertIn("git/ref/tags/$TAG", run)
+        self.assertLess(run.index("git/ref/tags/$TAG"), run.index("gh release create"))
+
+    def test_the_draft_names_the_error_for_an_existing_tag(self):
+        self.assertIn('echo "the tag $TAG already exists"; exit 1', self.draft_run())
+
+    def test_the_draft_looks_for_an_existing_release_before_it_creates_one(self):
+        run = self.draft_run()
+        self.assertIn("gh release list", run)
+        self.assertLess(run.index("gh release list"), run.index("gh release create"))
+
+    def test_the_draft_names_the_error_for_an_existing_release(self):
+        self.assertIn('echo "a release for $TAG already exists"; exit 1', self.draft_run())
+
+    def test_the_draft_job_may_read_attestations(self):
+        self.assertEqual(workflow()["jobs"]["draft"]["permissions"].get("attestations"), "read")
+
+    def test_no_release_command_uploads_by_glob(self):
+        self.assertNotRegex(self.text(), r"gh release (create|upload)[^\n]* -- \*")
+
+    def test_the_draft_uploads_only_the_four_verified_files(self):
+        run = next(s["run"] for s in steps("draft") if "gh release create" in s.get("run", ""))
+        self.assertIn('-- "${upload[@]}"', run)
+        self.assertNotIn("-- *", run)
+        self.assertIn('upload+=("$f")', run)
+
+    def test_the_draft_refuses_an_unverified_extra_file(self):
+        self.assertIn('[ "$(ls -A | wc -l)" -eq 4 ]', self.draft_run())
+
+    def test_the_draft_names_the_error_for_an_unverified_extra_file(self):
+        self.assertIn("the artifact holds files that were not verified", self.draft_run())
+
+    def test_each_upload_pattern_must_match_exactly_one_file(self):
+        self.assertIn('expected exactly one file for $f', self.draft_run())
+
+    def test_the_reproducibility_check_runs_outside_the_checkout(self):
+        t = self.text()
+        self.assertNotIn("dist/", t)
+        self.assertIn('--out "$RUNNER_TEMP/repro"', t)
+        self.assertIn('--out "$RUNNER_TEMP/source"', t)
 
     def test_tag_input_is_validated_before_use(self):
         t = self.text()

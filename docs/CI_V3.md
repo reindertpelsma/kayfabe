@@ -420,19 +420,27 @@ CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use the
   `scripts/release/qemu-release.pin` (a private gpg keyring built from `qemu-release-keys.asc`); `scripts/bench/qemu.pin` stays the cache key and is checked by
   `kf_trust.py` as before. The signature file is fetched through `kf_trust.py` (manifest entry `qemu-source-signature`). A tarball or tree the user supplies is
   recorded as such (anchor `user`).
-- **Jobs.** `gate` (master only: `ci/vast-broker/release_gate.py`, the same-SHA GPU-gate check `release-build.yml` uses), `build` (source tarball, then the
-  reproducibility check, then the attestation, then a run artifact) and `draft` (master only: `gh attestation verify` of every file, then `gh release create --draft`).
-  Off master only `build` runs, as a rehearsal: nothing is attested and no release is made.
-- **Reproducibility check.** The binary tarball is built from the source tarball and again from the checkout in another directory; the two must be byte-identical
-  (the manifests differ only in the key `source_tarball`). The kit fixes the clock (`SOURCE_DATE_EPOCH` = the commit time), the locale, the build paths (fixed
-  `src` and `build` directory names, `-ffile-prefix-map`, `--remap-path-prefix`) and sorts and normalises the archive. Bit identity holds for one toolchain, which is
-  why the manifest records it; it is not claimed across machines.
-- **Permissions.** Top level `permissions: {}`. `build` has `contents: read`, `id-token: write` and `attestations: write` (the attestation is made in the run that
-  builds and uploads, which is what the Worker verifies by the OIDC identity); `draft` has `contents: write` and nothing else. No secret but the default token. Every
-  action is pinned by commit. The release is created with `--draft`; nothing in the workflow publishes it. `ci/vast-broker/workflow-guard.js` lists the `build` job of
-  this file next to the one of `release-build.yml` as the places `id-token: write` may appear.
-- **What this does not change.** `docs/howto/credits.md` and `LICENSE` (exception 2) still say a QEMU built from this tree is not distributable under the GPL, and
-  the security gate of `OWNER_RULINGS.md` section P is unchanged: the draft is a draft until the owner rules on both.
+- **Jobs.** `gate` (master only: `ci/vast-broker/release_gate.py`, the same-SHA GPU-gate check `release-build.yml` uses), `build` (source tarball, reproducibility check,
+  `SHA256SUMS`, one run artifact; it runs the third-party build code and holds `contents: read` only, no OIDC), `attest` (master only, needs `gate` and `build` to have
+  succeeded; no checkout and no build code: it downloads the artifact, checks every file against the `SHA256SUMS` whose digest the `build` job published as a job output
+  and refuses a file the list does not name, then attests the three files and the list) and `draft` (master only: refuses an existing tag or release, runs
+  `gh attestation verify` on each of the four files with the signer workflow, the source ref and the hosted-runner pins, then `gh release create --draft` with exactly those
+  four files). Off master only `build` runs, as a rehearsal: no OIDC, no attestation, no release. On master a skipped or cancelled `gate` stops `build`.
+- **Reproducibility check.** The binary tarball is built from the source tarball and again from the checkout in another directory (both under `$RUNNER_TEMP`, outside the
+  checkout); the two must be byte-identical (the manifests differ only in the key `source_tarball` and in `qemu.source.anchors`, which records how the QEMU tarball was
+  checked). The kit fixes the clock (`SOURCE_DATE_EPOCH` = the commit time), the locale, the build paths (fixed `src` and `build` directory names, `-ffile-prefix-map`,
+  `--remap-path-prefix`) and sorts and normalises the archive. Bit identity is measured for one toolchain on one machine, which is why the manifest records the toolchain;
+  it is not claimed across machines.
+- **Permissions.** Top level `permissions: {}`. `attest` has `id-token: write` and `attestations: write` and nothing else (the attestation is made in the run that builds and
+  uploads, which is what the Worker verifies by the OIDC identity); `draft` has `contents: write` and `attestations: read`; `build` and `gate` have read permissions only. No
+  secret but the default token. Every action is pinned by commit. The release is created with `--draft`; nothing in the workflow publishes it.
+  `ci/vast-broker/workflow-guard.js` lists the `build` job of `release-build.yml` and the `attest` job of `release-qemu.yml` (exact file and job names) as the places
+  `id-token: write` may appear; `ci/vast-broker/test/release-qemu-workflow.test.js` refuses it in every other job and file.
+- **Verifying.** Every `gh attestation verify` of this workflow and of the manual pins `--signer-workflow reindertpelsma/kayfabe/.github/workflows/release-qemu.yml`,
+  `--source-ref refs/heads/master` and `--deny-self-hosted-runners`: `--repo` alone accepts an attestation from any workflow on any branch.
+- **What this does not change.** The standing blocker of a public binary is the owner's ruling (`OWNER_RULINGS.md` section BC item 1 and section P: the security gate and
+  the licence review of the QEMU-linked tree). `LICENSE` exception 2 and `scripts/ci/qemu_license_closure.py` describe the licence state of that tree. The draft stays a
+  draft until the owner rules.
 
 ## Rootless payload run (2026-11-20)
 
