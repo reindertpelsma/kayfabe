@@ -256,17 +256,20 @@ class TreeDigest(Tmp):
         os.utime(b / "a.txt", (1, 1))
         self.assertEqual(kit.tree_digest(a), kit.tree_digest(b))
 
-    def test_content_path_and_exec_bit_each_change_the_digest(self):
-        base = kit.tree_digest(self.make("base"))
+    def test_content_changes_the_digest(self):
         c = self.make("c")
         write(c / "a.txt", "alphA")
-        self.assertNotEqual(kit.tree_digest(c), base)
+        self.assertNotEqual(kit.tree_digest(c), kit.tree_digest(self.make("base")))
+
+    def test_a_rename_changes_the_digest(self):
         p = self.make("p")
         (p / "a.txt").rename(p / "z.txt")
-        self.assertNotEqual(kit.tree_digest(p), base)
+        self.assertNotEqual(kit.tree_digest(p), kit.tree_digest(self.make("base")))
+
+    def test_the_exec_bit_changes_the_digest(self):
         x = self.make("x")
         (x / "a.txt").chmod(0o755)
-        self.assertNotEqual(kit.tree_digest(x), base)
+        self.assertNotEqual(kit.tree_digest(x), kit.tree_digest(self.make("base")))
 
     def test_symlink_target_matters_and_is_not_followed(self):
         a = self.make("a")
@@ -370,16 +373,22 @@ class Identity(Tmp):
         self.assertEqual(ident["source_date_epoch"], 1767323045)
         self.assertFalse(ident["dirty"])
 
-    @unittest.skipUnless(HAVE_GIT, "git")
-    def test_a_modified_tracked_file_is_dirty_and_refused_by_default(self):
+    def dirty_tree(self):
         k = kayfabe_tree(self.tmp / "k")
         git(k, "init", "-q")
         git(k, "add", "-A")
         git(k, "commit", "-q", "-m", "x")
         write(k / "qemu/hw/misc/kf3/kf3.c", "changed\n")
-        self.assertTrue(kit.kayfabe_identity(k, allow_dirty=True)["dirty"])
+        return k
+
+    @unittest.skipUnless(HAVE_GIT, "git")
+    def test_a_modified_tracked_file_is_dirty_when_allowed(self):
+        self.assertTrue(kit.kayfabe_identity(self.dirty_tree(), allow_dirty=True)["dirty"])
+
+    @unittest.skipUnless(HAVE_GIT, "git")
+    def test_a_modified_tracked_file_is_refused_by_default(self):
         with self.assertRaises(kit.KitRefused):
-            kit.kayfabe_identity(k)
+            kit.kayfabe_identity(self.dirty_tree())
 
     @unittest.skipUnless(HAVE_GIT, "git")
     def test_a_modified_file_outside_the_shipped_paths_is_not_dirt(self):
@@ -471,6 +480,21 @@ class Signature(Tmp):
 
     def test_a_good_signature_by_a_listed_key_is_accepted_and_names_the_signer(self):
         self.assertEqual(self.verify(), self.keys["official"][0])
+
+    def test_the_signer_is_returned_in_upper_case_hex_of_forty_digits(self):
+        self.assertRegex(self.verify(), r"^[0-9A-F]{40}$")
+
+    def test_a_key_file_with_two_keys_accepts_a_signature_by_the_listed_one(self):
+        both = write(self.tmp / "both.asc", self.keys["official"][1].read_bytes() + self.keys["other"][1].read_bytes())
+        self.assertEqual(kit.verify_signature(self.data, self.sig, both, [self.keys["official"][0]]), self.keys["official"][0])
+
+    def test_a_key_file_with_two_keys_refuses_a_signature_by_the_unlisted_one(self):
+        both = write(self.tmp / "both.asc", self.keys["official"][1].read_bytes() + self.keys["other"][1].read_bytes())
+        other_sig = self.tmp / "o2.sig"
+        subprocess.run(["gpg", "--batch", "--detach-sign", "--local-user", self.keys["other"][0], "-o", str(other_sig), str(self.data)],
+                       env=self.genv, check=True, capture_output=True)
+        with self.assertRaises(kit.KitRefused):
+            kit.verify_signature(self.data, other_sig, both, [self.keys["official"][0]])
 
     def test_a_signature_by_an_unlisted_key_is_refused(self):
         with self.assertRaises(kit.KitRefused):
@@ -664,8 +688,8 @@ class Orchestration(Tmp):
         _, runner = self.build()
         argv = runner.calls[0][0]
         self.assertEqual(argv[:2], ["cargo", "build"])
-        for flag in ("--release", "--locked"):
-            self.assertIn(flag, argv)
+        self.assertIn("--release", argv)
+        self.assertIn("--locked", argv)
         self.assertEqual(argv[argv.index("-p") + 1], "kf-qemu")
 
     def test_configure_runs_in_the_build_directory_with_the_recorded_line(self):
@@ -686,14 +710,21 @@ class Orchestration(Tmp):
         for expected in ("bin/qemu-system-x86_64", "share/qemu/bios.bin", "LICENSE-GPL", "COPYING", "README.txt"):
             self.assertIn(top + "/" + expected, names)
 
-    def test_a_failing_step_stops_the_build_and_leaves_no_output(self):
-        for failing, count in (("cargo", 1), ("configure", 2), ("ninja", 3)):
-            with self.subTest(failing):
-                runner = FakeRunner(fail=failing)
-                with self.assertRaises(kit.BuildFailed):
-                    self.build(work="w_" + failing, out="o_" + failing, runner=runner)
-                self.assertEqual(len(runner.calls), count)
-                self.assertFalse((self.tmp / ("o_" + failing)).exists() and any((self.tmp / ("o_" + failing)).iterdir()))
+    def failing(self, step, count):
+        runner = FakeRunner(fail=step)
+        with self.assertRaises(kit.BuildFailed):
+            self.build(runner=runner)
+        self.assertEqual(len(runner.calls), count)
+        self.assertFalse((self.tmp / "o").exists() and any((self.tmp / "o").iterdir()))
+
+    def test_a_failing_cargo_stops_the_build_and_leaves_no_output(self):
+        self.failing("cargo", 1)
+
+    def test_a_failing_configure_stops_the_build_and_leaves_no_output(self):
+        self.failing("configure", 2)
+
+    def test_a_failing_compile_stops_the_build_and_leaves_no_output(self):
+        self.failing("ninja", 3)
 
     def test_unsupported_qemu_is_refused_before_anything_runs(self):
         write(self.q / "VERSION", "9.0.0\n")
@@ -739,25 +770,98 @@ class Orchestration(Tmp):
         m = json.loads((Path(result["out"]) / result["assets"]["manifest"]).read_text())
         self.assertEqual(m["qemu"]["source"]["tree_sha256"], before)
 
-    def test_a_dirty_revision_is_marked_in_the_asset_names_and_refused_unless_allowed(self):
+    def test_asset_names_carry_the_version_and_the_short_revision(self):
         names = kit.asset_names("10.2.4", "ab" * 20)
         self.assertEqual(names["binary"], "kayfabe-qemu-10.2.4-abababab-linux-x86_64.tar.xz")
         self.assertEqual(names["source"], "kayfabe-qemu-10.2.4-abababab-source.tar.xz")
         self.assertEqual(names["manifest"], "kayfabe-qemu-10.2.4-abababab-manifest.json")
+
+    def test_a_dirty_revision_is_marked_in_the_asset_names(self):
         self.assertEqual(kit.asset_names("10.2.4", "ab" * 20, dirty=True)["binary"], "kayfabe-qemu-10.2.4-abababab-dirty-linux-x86_64.tar.xz")
 
     def test_the_environment_given_to_every_step_is_the_scrubbed_one(self):
-        _, runner = self.build()
+        _, runner = self.build(caller_env={"PATH": "/usr/bin", "HOME": "/h", "CFLAGS": "-O0", "SOURCE_DATE_EPOCH": "7", "LD_PRELOAD": "/x.so"})
         for argv, _cwd, env in runner.calls:
             self.assertEqual(env["SOURCE_DATE_EPOCH"], "1700000000")
             self.assertNotIn("CFLAGS", env)
+            self.assertNotIn("LD_PRELOAD", env)
             self.assertEqual(env["TZ"], "UTC")
+
+    def test_cargo_runs_in_the_kayfabe_root_with_every_rust_path_remapped(self):
+        _, runner = self.build()
+        argv, cwd, env = runner.calls[0]
+        self.assertEqual(cwd, str(self.k))
+        self.assertIn("--remap-path-prefix=%s=/kayfabe-src" % self.k, env["RUSTFLAGS"])
+        self.assertIn("--remap-path-prefix=/h/.cargo=/cargo-home", env["RUSTFLAGS"])
+
+    def test_the_manifest_records_the_cargo_and_ninja_commands(self):
+        result, _ = self.build()
+        m = json.loads((Path(result["out"]) / result["assets"]["manifest"]).read_text())
+        self.assertEqual(m["cargo"], ["build", "--release", "--locked", "-p", "kf-qemu"])
+
+    def test_the_recorded_configure_line_has_no_gui_and_no_download(self):
+        result, _ = self.build()
+        m = json.loads((Path(result["out"]) / result["assets"]["manifest"]).read_text())
+        line = m["configure"]["line"]
+        for flag in ("--disable-gtk", "--disable-sdl", "--disable-download", "--enable-strip", "--target-list=x86_64-softmmu"):
+            self.assertIn(flag, line)
+        self.assertNotIn("--enable-gtk", line)
+        self.assertIn("--with-pkgversion=kayfabe-abababab", line)
+        self.assertIn("-ffile-prefix-map=<qemu-build>=/qemu-build", line)
+
+    def test_the_manifest_keys_are_sorted_at_every_level(self):
+        result, _ = self.build()
+        text = (Path(result["out"]) / result["assets"]["manifest"]).read_text()
+
+        def check(node):
+            if isinstance(node, dict):
+                self.assertEqual(list(node), sorted(node))
+                for v in node.values():
+                    check(v)
+            elif isinstance(node, list):
+                for v in node:
+                    check(v)
+        check(json.loads(text, object_pairs_hook=dict))
+
+    def test_a_tool_version_that_names_the_work_directory_is_refused(self):
+        with self.assertRaises(kit.KitRefused):
+            self.build(tools=lambda env: {"cc": "gcc in %s" % (self.tmp / "w")})
+
+    def test_the_qemu_trees_git_directory_is_not_copied(self):
+        write(self.q / ".git/HEAD", "ref: x")
+        seen = []
+
+        class Spy(FakeRunner):
+            def __call__(self, argv, cwd, env, log):
+                if Path(argv[0]).name == "configure":
+                    seen.append((Path(argv[0]).parent / ".git").exists())
+                return super().__call__(argv, cwd, env, log)
+
+        self.build(runner=Spy())
+        self.assertEqual(seen, [False])
+
+    def test_the_qemu_trees_git_directory_is_not_part_of_the_recorded_digest(self):
+        plain = kit.tree_digest(self.q)
+        write(self.q / ".git/HEAD", "ref: x")
+        result, _ = self.build()
+        m = json.loads((Path(result["out"]) / result["assets"]["manifest"]).read_text())
+        self.assertEqual(m["qemu"]["source"]["tree_sha256"], plain)
 
     def test_an_existing_workdir_that_is_not_ours_is_refused(self):
         write(self.tmp / "w/precious.txt", "keep")
         with self.assertRaises(kit.KitRefused):
             self.build()
+
+    def test_an_existing_workdir_that_is_not_ours_keeps_its_files(self):
+        write(self.tmp / "w/precious.txt", "keep")
+        with contextlib.suppress(kit.KitRefused):
+            self.build()
         self.assertTrue((self.tmp / "w/precious.txt").exists())
+
+    def test_a_workdir_the_kit_made_is_replaced(self):
+        self.build(out="o1")
+        result, _ = self.build(out="o2")
+        self.assertTrue((self.tmp / "o2" / result["assets"]["binary"]).is_file())
 
     def test_the_output_directory_must_not_already_hold_the_assets(self):
         self.build()
@@ -783,11 +887,16 @@ class Compare(Tmp):
         self.assertEqual(len(diff), 1)
         self.assertIn("linux-x86_64.tar.xz", diff[0])
 
-    def test_the_ignored_key_is_ignored_only_when_asked(self):
+    def test_a_differing_key_is_reported_when_nothing_is_ignored(self):
         self.dirs()
         diff = kit.compare_outputs(self.tmp / "a", self.tmp / "b", ignore_keys=())
         self.assertEqual(len(diff), 1)
         self.assertIn("manifest", diff[0])
+
+    def test_only_the_named_key_is_ignored(self):
+        self.dirs()
+        write(self.tmp / "b" / "kayfabe-qemu-x-manifest.json", json.dumps({"a": 2, "source_tarball": "b"}))
+        self.assertEqual(len(kit.compare_outputs(self.tmp / "a", self.tmp / "b", ignore_keys=("source_tarball",))), 1)
 
     def test_a_file_on_one_side_only_is_reported(self):
         self.dirs()
@@ -920,6 +1029,57 @@ class Workflow(unittest.TestCase):
         self.assertLess(repro, attest)
         t = self.text()
         self.assertIn("build_qemu.py reproduce", t)
+
+    def test_no_trigger_can_run_without_a_human(self):
+        head = self.text().split("\npermissions:")[0]
+        triggers = re.findall(r"^  ([a-z_]+):", head.split("\non:\n")[1], re.M)
+        self.assertEqual(triggers, ["workflow_dispatch"])
+
+    def test_release_create_names_the_draft_flag_and_the_target_sha(self):
+        line = next(l for l in self.text().splitlines() if "gh release create" in l)
+        self.assertIn(" --draft ", line)
+        self.assertIn('--target "$GITHUB_SHA"', line)
+
+    def test_attestation_needs_the_gate_result(self):
+        attest = next(s for s in steps("build") if "attest-build-provenance" in str(s.get("uses", "")))
+        self.assertIn("needs.gate.result == 'success'", attest["if"])
+
+    def test_only_the_draft_job_can_write_contents(self):
+        for name, job in workflow()["jobs"].items():
+            if name != "draft":
+                self.assertNotEqual(job.get("permissions", {}).get("contents"), "write", name)
+
+    def test_the_pins_are_the_ones_the_repo_already_uses(self):
+        others = "".join(p.read_text() for p in (ROOT / ".github/workflows").glob("*.yml") if p.name != "release-qemu.yml")
+        for use in re.findall(r"^\s*-?\s*uses:\s*(\S+)", self.text(), re.M):
+            self.assertIn(use, others, use)
+
+    def test_no_step_reads_the_secrets_context(self):
+        for job in workflow()["jobs"].values():
+            for s in job["steps"]:
+                self.assertNotIn("secrets.", json.dumps(s))
+
+    def test_published_assets_come_from_the_checked_build(self):
+        run = next(s["run"] for s in steps("build") if "reproduc" in s.get("name", "").lower())
+        self.assertIn("mv dist/repro/a/* dist/assets/", run)
+        self.assertIn("--source-tarball", run)
+
+    def test_every_job_that_publishes_or_attests_is_master_only(self):
+        jobs = workflow()["jobs"]
+        self.assertIn("refs/heads/master", jobs["draft"]["if"])
+        self.assertIn("refs/heads/master", jobs["gate"]["if"])
+        for name, job in jobs.items():
+            if "gh release create" in json.dumps(job):
+                self.assertIn("refs/heads/master", job["if"], name)
+
+    def test_the_build_waits_for_the_gate_but_survives_its_skip(self):
+        build = workflow()["jobs"]["build"]
+        self.assertEqual(build["needs"], "gate")
+        self.assertIn("needs.gate.result != 'failure'", build["if"])
+
+    def test_tag_is_validated_in_the_job_that_creates_the_release(self):
+        run = next(s["run"] for s in steps("draft") if "gh release create" in s.get("run", ""))
+        self.assertRegex(run, r"\^\[A-Za-z0-9")
 
     def test_tag_input_is_validated_before_use(self):
         t = self.text()

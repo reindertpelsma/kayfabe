@@ -406,6 +406,34 @@ and a reason; it can only go down; a finding is fixed, the list is never re-reco
 `trust_lint_mutants.py` weaken each rule once and need two named killers each. The gate and its mutants are ignored by the ladder like the other
 CI-only scripts; `kf_trust.py` and the manifest are not (the box scripts use them). Design: `docs/design/V3_STANDALONE_TRUST.md`.
 
+## QEMU release workflow (2026-11-21)
+
+**STATUS of this section: LIVE as code, 2026-11-21; the workflow itself has NOT RUN on GitHub (it can only be dispatched once it is on `master`).** CODE READ:
+[`release-qemu.yml`](../.github/workflows/release-qemu.yml), [`scripts/release/build_qemu.py`](../scripts/release/build_qemu.py) (the build kit), tests
+[`test_release_qemu.py`](../scripts/ci/test_release_qemu.py) (selftests shards) and mutants [`release_qemu_mutants.py`](../scripts/ci/release_qemu_mutants.py)
+(`mutants-b`, two named killers each).
+
+- **What it builds.** The patched QEMU (the `kf3-gpu` device and the `kf-qemu` Rust archive linked into `qemu-system-x86_64`, x86_64-softmmu only), a
+  corresponding-source tarball (kayfabe source, vendored crates, the unmodified signed QEMU tarball) and a manifest (QEMU version and source anchor, kayfabe
+  revision, every overlay patch with its sha256, the exact configure line, the toolchain versions, the hash of every output).
+- **Trust of the QEMU input.** The official tarball is accepted only if its qemu.org detached signature verifies against a signer fingerprint in
+  `scripts/release/qemu-release.pin` (a private gpg keyring built from `qemu-release-keys.asc`); `scripts/bench/qemu.pin` stays the cache key and is checked by
+  `kf_trust.py` as before. The signature file is fetched through `kf_trust.py` (manifest entry `qemu-source-signature`). A tarball or tree the user supplies is
+  recorded as such (anchor `user`).
+- **Jobs.** `gate` (master only: `ci/vast-broker/release_gate.py`, the same-SHA GPU-gate check `release-build.yml` uses), `build` (source tarball, then the
+  reproducibility check, then the attestation, then a run artifact) and `draft` (master only: `gh attestation verify` of every file, then `gh release create --draft`).
+  Off master only `build` runs, as a rehearsal: nothing is attested and no release is made.
+- **Reproducibility check.** The binary tarball is built from the source tarball and again from the checkout in another directory; the two must be byte-identical
+  (the manifests differ only in the key `source_tarball`). The kit fixes the clock (`SOURCE_DATE_EPOCH` = the commit time), the locale, the build paths (fixed
+  `src` and `build` directory names, `-ffile-prefix-map`, `--remap-path-prefix`) and sorts and normalises the archive. Bit identity holds for one toolchain, which is
+  why the manifest records it; it is not claimed across machines.
+- **Permissions.** Top level `permissions: {}`. `build` has `contents: read`, `id-token: write` and `attestations: write` (the attestation is made in the run that
+  builds and uploads, which is what the Worker verifies by the OIDC identity); `draft` has `contents: write` and nothing else. No secret but the default token. Every
+  action is pinned by commit. The release is created with `--draft`; nothing in the workflow publishes it. `ci/vast-broker/workflow-guard.js` lists the `build` job of
+  this file next to the one of `release-build.yml` as the places `id-token: write` may appear.
+- **What this does not change.** `docs/howto/credits.md` and `LICENSE` (exception 2) still say a QEMU built from this tree is not distributable under the GPL, and
+  the security gate of `OWNER_RULINGS.md` section P is unchanged: the draft is a draft until the owner rules on both.
+
 ## Rootless payload run (2026-11-20)
 
 **STATUS of this section: LIVE as code, 2026-11-20; GPU-free tests and mutants only, NOT RUN ON A BOX.** The rootless run is a test that kayfabe's

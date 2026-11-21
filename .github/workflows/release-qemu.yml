@@ -1,0 +1,125 @@
+name: Release QEMU build (draft release)
+# Builds the patched QEMU (kayfabe `kf3-gpu` device linked in) and its corresponding source on a GitHub runner, attests the
+# binary tarball, the source tarball and the manifest in this same run, and uploads them to a DRAFT release. It never publishes:
+# the owner reads the draft and publishes it by hand. Manual dispatch only; the Worker verifies the attestation by the OIDC
+# identity of this workflow (docs/CI_V3.md, "QEMU release workflow").
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag the draft release is created for, for example kayfabe-qemu-v1.0.0 (letters, digits, dot, underscore and dash). The tag is created when the draft is published.
+        required: true
+        type: string
+permissions: {}
+defaults:
+  run:
+    shell: bash --noprofile --norc -eo pipefail {0}
+concurrency:
+  group: release-qemu-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: ${{ github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: read
+      checks: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require the same master SHA tested by the trusted GPU workflow
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I ci/vast-broker/release_gate.py
+  build:
+    # Off master the build still runs (a rehearsal: it is checked for reproducibility and its files are kept as a run artifact),
+    # but nothing is attested and no release is made. On master it needs the gate.
+    needs: gate
+    if: ${{ !cancelled() && needs.gate.result != 'failure' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check the tag name
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "bad tag name"; exit 1; }
+      - name: Build packages
+        timeout-minutes: 10
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build pkg-config flex bison libglib2.0-dev libpixman-1-dev libslirp-dev libzstd-dev python3-venv python3-pip gnupg xz-utils git
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
+          targets: x86_64-unknown-uefi
+      - name: Source tarball (the corresponding source of the binary, with the vendored crates and the signed QEMU tarball)
+        timeout-minutes: 15
+        run: python3 -I scripts/release/build_qemu.py source --out dist/source
+      - name: Reproducibility check (binary from the source tarball against a rebuild from this checkout)
+        timeout-minutes: 45
+        run: |
+          python3 -I scripts/release/build_qemu.py reproduce --source-tarball dist/source/*-source.tar.xz --out dist/repro
+          mkdir dist/assets
+          mv dist/repro/a/* dist/assets/
+          mv dist/source/*-source.tar.xz dist/assets/
+          (cd dist/assets && sha256sum -- * > SHA256SUMS)
+          ls -l dist/assets
+      - name: Attest the binary, the source and the manifest
+        if: ${{ github.ref == 'refs/heads/master' && needs.gate.result == 'success' }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/assets/*-linux-x86_64.tar.xz
+            dist/assets/*-source.tar.xz
+            dist/assets/*-manifest.json
+            dist/assets/SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qemu-release-assets
+          path: dist/assets
+          if-no-files-found: error
+          retention-days: 14
+  draft:
+    needs: build
+    if: ${{ github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: qemu-release-assets
+          path: assets
+      - name: Verify the attestation of every file, then create the DRAFT release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "bad tag name"; exit 1; }
+          cd assets
+          for f in *-linux-x86_64.tar.xz *-source.tar.xz *-manifest.json SHA256SUMS; do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-qemu.yml" --source-ref refs/heads/master
+          done
+          sha256sum --check SHA256SUMS
+          printf '%s\n' \
+            "Draft. Built by .github/workflows/release-qemu.yml at ${GITHUB_SHA}; not published." \
+            "Verify a download: gh attestation verify <file> --repo ${GITHUB_REPOSITORY}" \
+            "The -source.tar.xz is the corresponding source of the binary (GPL); the -manifest.json lists its inputs, patches and configure line." \
+            > ../notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "$TAG (draft)" --notes-file ../notes.md -- *

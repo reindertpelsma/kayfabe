@@ -73,6 +73,7 @@ LIBS_PROBED = ("glib-2.0", "pixman-1", "slirp", "libzstd")
 MAP_SRC, MAP_BUILD, MAP_KAYFABE = "/qemu-src", "/qemu-build", "/kayfabe-src"
 MAP_CARGO, MAP_RUSTUP, MAP_TARGET = "/cargo-home", "/rustup-home", "/cargo-target"
 
+CARGO_ARGS = ("build", "--release", "--locked", "-p", "kf-qemu")
 MESON_HUNK = "subdir('kf3')"
 KCONFIG_STANZA = "\nconfig KF3\n    bool\n    default y if TEST_DEVICES\n    depends on PCI\n"
 DEVICE_DIR = "qemu/hw/misc/kf3"
@@ -542,8 +543,6 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
     kroot, out = Path(kayfabe_root).absolute(), Path(out).absolute()
     caller_env = dict(os.environ if caller_env is None else caller_env)
     ident = kayfabe_identity(kroot, allow_dirty)
-    if qemu.kind == "tree":
-        check_supported(read_qemu_version(qemu.path))
     work = _prepare_workdir(workdir)
     version, qsource = resolve_qemu(qemu, work)
     names = asset_names(version, ident["revision"], ident["dirty"])
@@ -555,7 +554,7 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
     cargo_home, rustup_home = default_homes(caller_env)
     env = build_env(epoch=ident["source_date_epoch"], kroot=kroot, cargo_home=cargo_home, rustup_home=rustup_home, target_dir=target,
                     caller=caller_env)
-    _step(runner, ["cargo", "build", "--release", "--locked", "-p", "kf-qemu", "-j", str(jobs)], kroot, env, logs / "cargo.log", "cargo build of kf-qemu")
+    _step(runner, ["cargo", *CARGO_ARGS, "-j", str(jobs)], kroot, env, logs / "cargo.log", "cargo build of kf-qemu")
     archive = target / "release" / "libkf_qemu.a"
     patches = apply_overlay(srcdir, kroot, archive)
     pkgversion = "kayfabe-" + ident["revision"][:8] + ("-dirty" if ident["dirty"] else "")
@@ -590,6 +589,7 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
         "qemu": {"version": version, "source": qsource},
         "kayfabe": {"revision": ident["revision"], "dirty": ident["dirty"], "kf3_abi": kf3_abi(kroot), "source_date_epoch": ident["source_date_epoch"]},
         "source_tarball": None if source_tarball is None else dict(source_tarball),
+        "cargo": list(CARGO_ARGS),
         "patches": patches,
         "configure": {"args": [configure_line([a], srcdir, builddir, kroot) for a in cargs], "line": configure_line(cargs, srcdir, builddir, kroot)},
         "environment": {k: env[k] for k in ("SOURCE_DATE_EPOCH", "TZ", "LC_ALL", "LANG", "CARGO_INCREMENTAL")}
