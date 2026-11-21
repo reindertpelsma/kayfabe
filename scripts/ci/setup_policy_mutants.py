@@ -13,7 +13,8 @@ HERE = Path(__file__).resolve().parent
 SOURCE = (HERE.parent / "bench/provision_box.sh").read_text()
 VAST_SETUP = (HERE / "vast_setup.py").read_text()
 # the files test_package_profiles.py reads besides provision_box.sh (2026-11-20: the cache policy list, the lock's digest, the private Python that names the profile)
-EXTRA_FILES = [("scripts/ci/test_package_profiles.py",), ("scripts/ci/vast_setup.py",), ("scripts/ci/setup-cache.lock.json",), ("scripts/apps/mlrows/private_python.py",)]
+EXTRA_FILES = [("scripts/ci/test_package_profiles.py",), ("scripts/ci/vast_setup.py",), ("scripts/ci/setup-cache.lock.json",), ("scripts/apps/mlrows/private_python.py",),
+               ("scripts/apps/open_rows/provision.sh",), ("scripts/ci/apps_discovery_stage.py",)]
 
 
 def changed(old, new):
@@ -61,6 +62,18 @@ CASES = [
         changed("pybuild) printf '%s\\n' \"${pybuild[@]}\"", "pybuild) printf '%s\\n' \"${required[@]}\""),
     ),
     (
+        "nvcodec-control-is-empty",
+        changed("local nvcodec_control=(ffmpeg)", "local nvcodec_control=()"),
+    ),
+    (
+        "nvcodec-control-is-not-a-profile",
+        changed("    nvcodec_control) printf '%s\\n' \"${nvcodec_control[@]}\" ;;\n", ""),
+    ),
+    (
+        "nvcodec-control-is-the-apps-list",
+        changed("nvcodec_control) printf '%s\\n' \"${nvcodec_control[@]}\"", "nvcodec_control) printf '%s\\n' \"${apps[@]}\""),
+    ),
+    (
         "bench-uses-full-stack",
         changed(
             "bench) printf '%s\\n' \"${bench[@]}\"",
@@ -78,7 +91,11 @@ def changed_vast_setup(old, new):
 VAST_SETUP_CASES = [
     (
         "pybuild-left-out-of-the-cache-policy",
-        changed_vast_setup('["ci", "bench", "windows", "apps", "pybuild"]', '["ci", "bench", "windows", "apps"]'),
+        changed_vast_setup('"apps", "pybuild", "nvcodec_control"]', '"apps", "nvcodec_control"]'),
+    ),
+    (
+        "nvcodec-control-left-out-of-the-cache-policy",
+        changed_vast_setup('"pybuild", "nvcodec_control"]', '"pybuild"]'),
     ),
 ]
 COLLECT = """import io,json,unittest

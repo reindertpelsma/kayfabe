@@ -61,5 +61,28 @@ class PrivatePythonPackages(unittest.TestCase):
             self.assertNotIn(name, text.replace("# ", ""), name)
 
 
+class NvcodecControlPackages(unittest.TestCase):
+    """The host control of nvcodec_matrix (scripts/ci/apps_discovery_stage.py) installs the distribution's ffmpeg through provision.sh of the open rows."""
+
+    def test_nvcodec_control_is_in_the_setup_cache_policy_because_the_payload_apt_is_cache_only(self):
+        self.assertEqual(plan("nvcodec_control"), ["ffmpeg"])
+        self.assertTrue(set(plan("nvcodec_control")) <= set(vast_setup.package_names(ROOT)))
+
+    def test_the_lock_names_the_policy_that_holds_ffmpeg_and_not_the_one_without_it(self):
+        self.assertEqual(lock_digest(), vast_setup.policy_digest(ROOT))
+        without = sorted(set(vast_setup.package_names(ROOT)) - {"ffmpeg"})
+        self.assertNotEqual(lock_digest(), hashlib.sha256(json.dumps(without, separators=(",", ":")).encode()).hexdigest())
+
+    def test_ffmpeg_is_in_no_other_profile(self):
+        for profile in ("ci", "full", "bench", "windows", "apps", "pybuild"):
+            self.assertNotIn("ffmpeg", plan(profile), profile)
+
+    def test_the_profile_is_what_the_provisioning_the_stage_runs_installs(self):
+        provision = (ROOT / "scripts/apps/open_rows/provision.sh").read_text()
+        self.assertIn("apt_install ffmpeg", provision)                                 # the package the profile names
+        stage = (HERE / "apps_discovery_stage.py").read_text()
+        self.assertIn('"nvcodec_probe ffmpeg"', stage)                                 # the steps of provision.sh the stage asks for: the probe and ffmpeg, nothing else
+
+
 if __name__ == "__main__":
     unittest.main()
