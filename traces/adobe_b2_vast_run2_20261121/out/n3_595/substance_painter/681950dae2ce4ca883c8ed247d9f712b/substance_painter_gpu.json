@@ -1,0 +1,32 @@
+{
+ "required": [],
+ "verdict": "PASS",
+ "reasons": [],
+ "baseline": {
+  "mem_mb": 9425.0,
+  "gpu": 2.0,
+  "enc_sessions": 0.0
+ },
+ "peak": {
+  "gpu": 7.0,
+  "mem_mb": 9503.0,
+  "enc_sessions": 0.0,
+  "gpu_dmon_sm": 7.0,
+  "enc": 0.0,
+  "dec": 0.0,
+  "busy_samples": 38
+ },
+ "samples": 1262,
+ "dmon_samples": 630,
+ "source": "host",
+ "guest": {
+  "verdict": "PASS",
+  "reasons": [
+   "no samples: the GPU could not be read (nvidia-smi missing, no GPU or empty output)"
+  ],
+  "peak": {},
+  "baseline": {},
+  "samples": 0
+ },
+ "name": "substance_painter"
+}

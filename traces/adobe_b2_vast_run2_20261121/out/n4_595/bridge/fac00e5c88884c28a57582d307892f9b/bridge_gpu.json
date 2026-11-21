@@ -1,0 +1,32 @@
+{
+ "required": [],
+ "verdict": "PASS",
+ "reasons": [],
+ "baseline": {
+  "mem_mb": 9433.0,
+  "gpu": 0.0,
+  "enc_sessions": 0.0
+ },
+ "peak": {
+  "gpu": 13.0,
+  "mem_mb": 9526.0,
+  "enc_sessions": 0.0,
+  "gpu_dmon_sm": 13.0,
+  "enc": 0.0,
+  "dec": 0.0,
+  "busy_samples": 49
+ },
+ "samples": 495,
+ "dmon_samples": 247,
+ "source": "host",
+ "guest": {
+  "verdict": "PASS",
+  "reasons": [
+   "no samples: the GPU could not be read (nvidia-smi missing, no GPU or empty output)"
+  ],
+  "peak": {},
+  "baseline": {},
+  "samples": 0
+ },
+ "name": "bridge"
+}

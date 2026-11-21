@@ -1,0 +1,35 @@
+{
+  "app": "bridge",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "LIMITED: launched, main window reached (1 windows), process responding=True, 463 MB; no document work; ui_hits=0",
+  "error": "",
+  "class": "app",
+  "limited": true,
+  "lane": "discovery",
+  "path": "Bridge start (launch only; new, unmeasured)",
+  "platform": "kf3",
+  "secs": 194,
+  "ui_hits": 0,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 13.0,
+      "mem_mb": 9526.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 13.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 49
+    },
+    "baseline": {
+      "mem_mb": 9433.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 495
+  },
+  "outputs_recorded": 5
+}

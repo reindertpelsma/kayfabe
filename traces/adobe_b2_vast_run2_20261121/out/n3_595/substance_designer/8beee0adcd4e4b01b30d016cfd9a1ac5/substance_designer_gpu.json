@@ -1,0 +1,32 @@
+{
+ "required": [],
+ "verdict": "PASS",
+ "reasons": [],
+ "baseline": {
+  "mem_mb": 9425.0,
+  "gpu": 0.0,
+  "enc_sessions": 0.0
+ },
+ "peak": {
+  "gpu": 14.0,
+  "mem_mb": 9495.0,
+  "enc_sessions": 0.0,
+  "gpu_dmon_sm": 14.0,
+  "enc": 0.0,
+  "dec": 0.0,
+  "busy_samples": 26
+ },
+ "samples": 600,
+ "dmon_samples": 300,
+ "source": "host",
+ "guest": {
+  "verdict": "PASS",
+  "reasons": [
+   "no samples: the GPU could not be read (nvidia-smi missing, no GPU or empty output)"
+  ],
+  "peak": {},
+  "baseline": {},
+  "samples": 0
+ },
+ "name": "substance_designer"
+}

@@ -1,0 +1,35 @@
+{
+  "app": "incopy",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "LIMITED: launched, main window reached (1 windows), process responding=True, 220 MB; no document work; ui_hits=0",
+  "error": "",
+  "class": "app",
+  "limited": true,
+  "lane": "discovery",
+  "path": "InCopy start (launch only, exe discovered; new, unmeasured)",
+  "platform": "kf3",
+  "secs": 136,
+  "ui_hits": 0,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 14.0,
+      "mem_mb": 9462.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 14.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 22
+    },
+    "baseline": {
+      "mem_mb": 9433.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 372
+  },
+  "outputs_recorded": 5
+}

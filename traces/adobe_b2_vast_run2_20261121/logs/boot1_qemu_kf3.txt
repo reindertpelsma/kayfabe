@@ -1,0 +1,1 @@
+qemu log unavailable: [Errno 2] No such file or directory: '/workspace/kf-propimage-b/work/boot1/run/qemu.log'

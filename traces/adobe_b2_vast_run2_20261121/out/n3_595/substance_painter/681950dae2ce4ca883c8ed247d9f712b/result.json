@@ -1,0 +1,26 @@
+{
+    "app":  "substance_painter",
+    "started":  1795139880.171,
+    "error":  "main window did not appear",
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe Substance 3D Painter",
+    "exe_name":  "Adobe Substance 3D Painter.exe",
+    "main_window":  false,
+    "titles":  [
+
+               ],
+    "alive":  false,
+    "responding":  false,
+    "private_mb":  0,
+    "ui_lines":  0,
+    "ui_hits":  0,
+    "quit":  "clean",
+    "ended":  1795140423.564,
+    "crash_events":  4,
+    "crash_dumps":  1,
+    "dismissed":  [
+
+                  ]
+}

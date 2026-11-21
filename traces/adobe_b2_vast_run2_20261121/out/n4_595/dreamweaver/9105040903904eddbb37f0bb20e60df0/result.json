@@ -1,0 +1,24 @@
+{
+    "app":  "dreamweaver",
+    "started":  1795140485.192,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe Dreamweaver 2021",
+    "exe_name":  "Dreamweaver.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Adobe Dreamweaver 2021"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  143,
+    "ui_lines":  7,
+    "ui_hits":  0,
+    "quit":  "clean",
+    "ended":  1795140631.221,
+    "dismissed":  [
+
+                  ]
+}

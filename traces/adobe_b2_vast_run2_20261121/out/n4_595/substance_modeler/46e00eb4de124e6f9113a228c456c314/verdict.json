@@ -1,0 +1,35 @@
+{
+  "app": "substance_modeler",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "LIMITED: launched, main window reached (1 windows), process responding=True, 5730 MB; no document work; ui_hits=2",
+  "error": "",
+  "class": "app",
+  "limited": true,
+  "lane": "discovery",
+  "path": "Substance 3D Modeler start (launch only, exe discovered; new, unmeasured)",
+  "platform": "kf3",
+  "secs": 266,
+  "ui_hits": 2,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 41.0,
+      "mem_mb": 9497.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 23.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 201
+    },
+    "baseline": {
+      "mem_mb": 9432.0,
+      "gpu": 2.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 692
+  },
+  "outputs_recorded": 5
+}

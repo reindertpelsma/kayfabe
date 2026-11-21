@@ -1,0 +1,9 @@
+Window | Adobe InCopy 2027 | 
+Pane | com.adobe.AdobeSplashKit.TextWindowClass | 
+Window | MainWindow | 
+TitleBar | Adobe InCopy 2027 | TitleBar
+MenuBar | System Menu Bar | SystemMenuBar
+Button | Minimize | Minimize
+Button | Restore | Restore
+Button | Close | Close
+MenuItem | System | Item 1
