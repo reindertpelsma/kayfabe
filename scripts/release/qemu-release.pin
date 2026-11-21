@@ -1,0 +1,12 @@
+# STATUS: LIVE, 2026-11-21. What scripts/release/build_qemu.py trusts about an upstream QEMU release tarball.
+#
+# The anchor is the OFFICIAL qemu.org detached signature of the tarball: it must verify against the key whose fingerprint is
+# listed in a `signer` line below. That fingerprint is the one https://www.qemu.org/download/ publishes for the release signing
+# key (it links https://keys.openpgp.org/vks/v1/by-fingerprint/<fingerprint>); qemu-release-keys.asc is that key, and the kit
+# refuses a key file whose fingerprint is not listed. The `signature` line is a pin of the signature file itself, a cache key for
+# the download (kf_trust.py needs a pin to fetch it): a signature that does not match its pin is refused before gpg runs, and a
+# tarball is accepted only if gpg verifies it, whatever the pin says.
+#
+# A change of QEMU version is a change of the `signature` line, of qemu.pin and of SUPPORTED_QEMU in build_qemu.py, reviewed like code.
+signer CEACC9E15534EBABB82D3FA03353C9CEF108B584 Michael Roth <michael.roth@amd.com>
+signature qemu-10.2.4.tar.xz.sig sha256=aca12b432b3c12c03812763ab306936c62550f4a120d94e454aee18de3e0eb84 size=310
