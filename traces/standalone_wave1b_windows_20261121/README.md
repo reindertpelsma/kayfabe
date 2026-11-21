@@ -7,7 +7,7 @@ STATUS: LIVE (DRAFT, partial), 2026-11-21. MEASURED on two rented Vast boxes (ne
 | windows_gate (W, S) | PASS | W 3608 s (install 1861 s), S 3108 s (install 1632 s); `resets=0`, hostref green/green |
 | **windows_apps** (W) | **PASS** | 10 of 10 apps PASS, `WINAPPS_GRADE kind=PASS expected=10 pass=10 guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0`, 1899 s |
 | **windows_gate_2** (W, own gate inside the same leg) | **PASS** | 1652 s, `resets=0` |
-| **specviewperf** (S) | **IN PROGRESS (see the rows table)** | copy step PASS at 46.9 MB/s; rows below |
+| **specviewperf** (S) | **IN PROGRESS: lane A done (3 PASS, enscape-01 FAIL TIMEOUT), lane B running** | copy step PASS at 46.9 MB/s; rows below |
 The W leg ended `EXIT rc=0` with `KF_FINAL_SUMMARY verdict=PASS stages=4` (provision, windows_gate, windows_apps, windows_gate_2).
 
 ### windows_apps (F1 of wave 1: closed on `next`)
@@ -24,9 +24,13 @@ SPEC rows (`SPEC_ROW` lines; walls are from `SPECRUN_END` in the per-row `*.end.
 | A | energy-04 | PASS | 6/6 | 448 s | 323 s | 1.39 |
 | A | creo-04 | PASS | 13/13 | 2219 s | 1243 s | 1.79 |
 | A | blender-01 | PASS | 7/7 | 4541 s | 1876 s | 2.42 |
-| A | enscape-01 | RUNNING at the time of this draft (started 15:02Z) | | | 2042 s | |
+| A | enscape-01 | **FAIL** `reason=TIMEOUT` (budget 6300 s hit) | 5/10 | 6300 s budget hit, from 15:02:23Z | 2042 s | more than 3.1 |
 | B | medical-04, maya-07, catia-07, solidworks-08, unreal_engine-01 | NOT RUN YET (follow lane A in the same stage) | | | 318, 400, 803, 989, 1236 s | |
 No viewset failed, no guest shutdown, no licence event so far (`SPEC_LICENCE_STATE ... status=Licensed` at every probe, `s/root/prov/ci50cc0f2d21a57148_spec/licence_states.txt`).
+
+### enscape-01: FAIL TIMEOUT, classified as a kayfabe gap (documented; NOT confirmed by a control on this die)
+MEASURED (`s/root/prov/ci50cc0f2d21a57148_spec/enscape-01.cli.txt`, status lines only): subtests 01 to 05 completed in 6.7, 14.1, 2.5, 5.3 and 8.1 minutes (37 minutes in all; the UltraHQ subtests took about 2.1 times their High twins, 02 against 01 and 04 against 03). Subtest `06_SanMiguelFullUltraHQ` started at 15:40:43Z and never completed; the stage's budget for the viewset (6300 s, 3 x native) ended it at about 16:47Z, after 66 minutes in that one subtest, where the High twin (05) took 8.1 minutes. The guest stayed up and `Licensed`; the host logged no Xid (`kernel_offsets.log`: `xid=0` throughout) and the viewset's TDR file is empty. One host RM line falls in the stall: `NVRM: virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x90000 RangeLo: 0xb0000, RangeHi: 0x13ffff` at 15:48:51Z (`s/workspace/kernel.log`); its relation to the stall is NOT established (the same RM line family is documented for the VA reservation granule in `docs/design/V3_HELD_HOLE_HANDOFF_20261010.md`, but that fix concerns a different geometry). The boot-B kf3 FB was `fb-mb=8192` on a 24 GB card (`gate_ci50cc0f2d21a57148_run.log`).
+Classification (exactly one): **kayfabe gap, already documented**: `docs/design/V3_SPEC_GATE.md` (g) records that enscape-01 under kayfabe fails ("refused by SPEC validation (`raytracing`, `sufficientVideoMemory`, with `fb-mb` 8192 on a 24 GB card) ... until kayfabe passes it natively-like"). What is new is the failure mode: on this sha the viewset gets through five subtests and then stalls, instead of being refused by validation. Hypothesis (stated before any control): the heaviest scene (San Miguel at Ultra HQ) needs more VRAM than the 8 GB framebuffer kf3 serves, and the guest waits instead of failing. Falsifier: the same subtest on native Windows on the same RTX 3090 also takes more than 66 minutes, or the same stall appears with `fb-mb` raised to the card's size under kayfabe (then the cause is not the framebuffer size, and if native also stalls it is a die limitation, not a kayfabe gap). No control was run (no native Windows on this box and no budget for a second boot in this run), so this stays a classification by the documented record, not a confirmed one.
 
 ## Boxes (label prefix `kf-accept-w1b-`, KVM image, `vms_enabled`, offers by final total price)
 | dir | instance | offer | die | host driver | CPU / RAM | legs |

@@ -81,3 +81,11 @@ SPEC_NOTE run enscape-01 (budget 6300s, mode full, left 14714s)
 SPEC_LICENCE_STATE at=boot1_up145m up_min=146 status=Licensed remaining=129418_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:48_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
 SPEC_LICENCE_STATE at=boot1_up160m up_min=161 status=Licensed remaining=129402_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
 SPEC_LICENCE_STATE at=boot1_up176m up_min=177 status=Licensed remaining=129387_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:28_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up191m up_min=192 status=Licensed remaining=129371_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up207m up_min=208 status=Licensed remaining=129356_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:34_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up222m up_min=223 status=Licensed remaining=129341_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:52_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=enscape-01 result=FAIL subtests=5/10 reason=TIMEOUT failed=06_SanMiguelFullUltraHQ
+enscape_01 --- FAILED
+SPEC_LICENCE_STATE at=after_enscape_01 up_min=237 status=Licensed remaining=129327_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:36_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_medical-04 2026-11-21T16:48:40+00:00 left_s=8344
+SPEC_NOTE graceful stop of the guest
