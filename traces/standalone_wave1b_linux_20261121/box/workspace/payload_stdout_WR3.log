@@ -1,0 +1,41 @@
+KF_PAYLOAD_ROOTLESS mode=require user=ci memlock=0 root_stages=none stages=install_flow
+KF_PAYLOAD_TIER windows=0 source=instruction tier=large rehearsal=1 windows_runs=1 stages=none spec=none winapps=none linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       243G   97G  146G  40% /
+KF_PREFLIGHT_FREE_BYTES=156222566400
+KF_PAYLOAD_STAGE_START name=install_flow
+[xid-watch] tag=ci30cccbefff50bd18_install_flow  host=ubuntu  utc=2026-11-21T13:42:54Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/install_flow.py run --sha 9b3d165192e03b5cd27a7eca1a0f7f494cbc058a --checkout /workspace/kf-ci-src --prefix /workspace/kf-install-flow --out /workspace/kf-ci-evidence/install_flow.json
+[xid-watch] host_dmesg_lines=799  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=2
+[xid-watch] --- command output begins ---
+KF_DOCSTEP_START doc=building.md step=clone user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=clone rc=0 ms=12354
+KF_DOCSTEP_START doc=building.md step=packages_list user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=packages_list rc=0 ms=32
+KF_DOCSTEP_START doc=building.md step=packages_install user=root timeout=3600
+KF_DOCSTEP_END doc=building.md step=packages_install rc=0 ms=54933
+KF_DOCSTEP_START doc=building.md step=rust_toolchain user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=rust_toolchain rc=0 ms=27988
+KF_DOCSTEP_START doc=building.md step=workspace_build user=unpriv timeout=7200
+KF_DOCSTEP_END doc=building.md step=workspace_build rc=0 ms=30745
+KF_DOCSTEP_START doc=building.md step=qemu_build user=unpriv timeout=7200
+KF_DOCSTEP_END doc=building.md step=qemu_build rc=0 ms=51057
+KF_DOCSTEP_START doc=building.md step=raw_client user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=raw_client rc=0 ms=21543
+KF_DOCSTEP_ARGS doc=attach-to-existing-vm.md step=qemu_args words=12
+KF_DOCSTEP_START doc=- step=boot_and_probe user=unpriv timeout=1800
+KF_DOCSTEP_END doc=- step=boot_and_probe rc=0 ms=53523
+KF_INSTALL_FLOW_RESULT {"binary":{"rev":"9b3d1651","source":"compiled"},"docs":{"attach-to-existing-vm.md":"c96dd79174336bdd9062638cfd95a7610d5bf8c77ebb80bff9669b1aa257ce3b","building.md":"dfec548b374e9119ffa982198289f6030f5bc6efe31255542e23d502b82125b7","installing.md":"035c3407851cbcb05697a6757265a8d3c8a59d3889e033c25a167024ae21044b","linux-guest.md":"7ee59cab3dc515e89737cc277a0bd1c0c8fc45eee929d5544817e3043aba512c","requirements.md":"9eb47c31769b25fc7110637241906336cebb7b1c042ca448c1f8c3c9fdbe9865"},"guest":{"boot_s":36,"cup8":"PASS","kf3_log_line":true,"nvidia_smi_rc":0,"qemu_args_source":"attach-to-existing-vm.md"},"root_steps":["packages_install","root_setup","copy_ssh_key","device_nodes"],"schema":1,"sha":"9b3d165192e03b5cd27a7eca1a0f7f494cbc058a","steps":[{"cap_eff":"0000000000000000","doc":"building.md","ms":12354,"rc":0,"step":"clone","uid":1003,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":32,"rc":0,"step":"packages_list","uid":1003,"user":"unpriv"},{"cap_eff":"000001ffffffffff","doc":"building.md","ms":54933,"rc":0,"step":"packages_install","uid":0,"user":"root"},{"cap_eff":"0000000000000000","doc":"building.md","ms":27988,"rc":0,"step":"rust_toolchain","uid":1003,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":30745,"rc":0,"step":"workspace_build","uid":1003,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":51057,"rc":0,"step":"qemu_build","uid":1003,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":21543,"rc":0,"step":"raw_client","uid":1003,"user":"unpriv"}],"substitutions":[{"literal":"https://github.com/reindertpelsma/kayfabe.git","step":"clone"},{"literal":"<a fixed uuid for this VM>","step":"qemu_args"}],"verdict":"PASS"}
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=2
+[xid-watch] ★ HOST Xid CLEAN across the command — 2 before, 2 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (799 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci30cccbefff50bd18_install_flow.log
+KF_PAYLOAD_STAGE_END name=install_flow rc=0 duration_ms=260860
+KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=1
+stage name=install_flow rc=0 duration_ms=260860 result=PASS
+suite name=install_flow pass=1 fail=0 skip=0
+KF_FINAL_SUMMARY_END

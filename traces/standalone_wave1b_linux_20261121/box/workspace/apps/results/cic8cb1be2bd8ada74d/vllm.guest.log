@@ -1,0 +1,178 @@
+=== vllm side=guest start=2026-11-21T13:08:45+00:00 host=ubuntu cmd: python3 -B -I /opt/apps/bundle/mlrows_tool/mlrows.py run vllm --root /opt/apps/bundle/mlrows --out /opt/apps/out/guest/vllm
+MLROWS_FACTS {"cc": [8, 9], "disk_free_gb": 46.325092352, "driver": "580.159.04", "driver_cuda": [13, 0], "gcc": true, "gpus": 1, "name": "NVIDIA GeForce RTX 4090", "python": [3, 12, 3], "python_h": true, "total_mib": 8192}
+MLROWS_ROW row=vllm flavour=cu13 negctl=0 lock_sha256=b170c21f4d74462c
+| W1121 13:08:54.740000 2416 torch/_opaque_base.py:6] torch._opaque_base is deprecated, use torch._custom_class_base instead
+| W1121 13:08:54.742000 2416 torch/_library/opaque_object.py:288] register_opaque_type is deprecated, use register_custom_class instead
+| W1121 13:08:54.743000 2416 torch/_library/opaque_object.py:211] typ='value' is deprecated, use typ='constant' instead
+| (MainProcess pid=2416) INFO 11-21 13:09:10 [startup.py:96] non-default args: {'tokenizer': '/opt/apps/bundle/mlrows/vllm/model', 'dtype': 'float16', 'max_model_len': 512, 'gpu_memory_utilization': 0.9, 'disable_log_stats': True, 'model': '/opt/apps/bundle/mlrows/vllm/model'}
+| (MainProcess pid=2416) WARNING 11-21 13:09:29 [flashinfer.py:107] FlashInfer kernels are disabled: flashinfer-cubin is not installed and nvcc (CUDA_HOME, CUDA_PATH, PATH or /usr/local/cuda) or ninja (PATH) is missing. Set CUDA_HOME to a CUDA toolkit and put ninja on PATH, or run `vllm download-kerne
+| (MainProcess pid=2416) INFO 11-21 13:09:29 [model.py:761] Resolved architecture: LlamaForCausalLM
+| (MainProcess pid=2416) WARNING 11-21 13:09:29 [model.py:2560] Casting torch.bfloat16 to torch.float16.
+| (MainProcess pid=2416) INFO 11-21 13:09:29 [model.py:2214] Using max model len 512
+| (MainProcess pid=2416) INFO 11-21 13:09:29 [scheduler.py:354] Chunked prefill is enabled with max_num_batched_tokens=8192.
+| (MainProcess pid=2416) INFO 11-21 13:09:29 [kernel.py:517] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'], gelu_and_mul_sparse=['triton', 'native'])
+| (MainProcess pid=2416) INFO 11-21 13:09:30 [numa_utils.py:575] Automatic NUMA binding unavailable on this host; starting unbound. Enable debug logging for the skip reason.
+| (EngineCore pid=2454) INFO 11-21 13:09:30 [core.py:153] Initializing a V1 LLM engine (v0.34.0) with config: model='/opt/apps/bundle/mlrows/vllm/model', speculative_config=None, tokenizer='/opt/apps/bundle/mlrows/vllm/model', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_re
+| (EngineCore pid=2454) INFO 11-21 13:09:33 [parallel_state.py:1935] world_size=1 rank=0 local_rank=0 distributed_init_method=file:///opt/apps/out/guest/vllm/cache/tmp/vllm_dist_3091330bccdc4cdcb9c182fa9c61bf18 backend=nccl
+| (EngineCore pid=2454) INFO 11-21 13:09:33 [parallel_state.py:2394] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, ETP rank 0, EP rank N/A, EPLB rank N/A
+| (EngineCore pid=2454) INFO 11-21 13:09:38 [cuda.py:239] NVIDIA Confidential Computing not detected via NVML
+| (EngineCore pid=2454) INFO 11-21 13:09:39 [model_runner.py:412] Loading model from scratch...
+| (EngineCore pid=2454) INFO 11-21 13:09:43 [cuda.py:549] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+| (EngineCore pid=2454) INFO 11-21 13:09:43 [flash_attn.py:1131] Using FlashAttention version 2
+| (EngineCore pid=2454) INFO 11-21 13:09:44 [base_loader.py:95] Initializing model took 4.623365 seconds
+| (EngineCore pid=2454) INFO 11-21 13:09:44 [weight_utils.py:1154] Filesystem type for checkpoints: EXT4. Checkpoint size: 0.25 GiB. Available RAM: 13.31 GiB.
+| (EngineCore pid=2454) INFO 11-21 13:09:44 [weight_utils.py:1177] Auto-prefetch is disabled because the filesystem (EXT4) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+| 
+| Loading safetensors checkpoint shards:   0% Completed | 0/1 [00:00<?, ?it/s]
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight embed_tokens.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.0.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.0.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.0.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.0.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.1.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.1.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.1.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.1.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.10.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.10.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.10.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.10.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.11.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.11.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.11.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.11.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.12.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.12.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.12.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.12.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.13.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:44 [utils.py:345] Attempted to load weight layers.13.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.13.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.13.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.14.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.14.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.14.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.14.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.15.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.15.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.15.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.15.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.16.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.16.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.16.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.16.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| ... (238 lines; the whole log is vllm.venv.log)
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.8.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.8.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.9.input_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.9.mlp.down_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.9.post_attention_layernorm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight layers.9.self_attn.o_proj.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| (EngineCore pid=2454) WARNING 11-21 13:09:45 [utils.py:345] Attempted to load weight norm.weight with dtype torch.bfloat16 into parameter with dtype torch.float16
+| 
+| Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:01<00:00,  1.63s/it]
+| 
+| Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:01<00:00,  1.63s/it]
+| 
+| (EngineCore pid=2454) INFO 11-21 13:09:45 [default_loader.py:543] Loading weights took 1.65 seconds
+| (EngineCore pid=2454) INFO 11-21 13:09:48 [model_runner.py:441] Model loading took 0.25 GiB memory and 9.549042 seconds
+| (EngineCore pid=2454) WARNING 11-21 13:09:48 [topk_topp_sampler.py:126] FlashInfer top-p/top-k sampling unavailable: FlashInfer kernels are disabled; falling back. Set VLLM_USE_FLASHINFER_SAMPLER=0 to silence.
+| (EngineCore pid=2454) INFO 11-21 13:09:48 [torch_utils.py:301] Reducing Torch threads from 6 to 1 for serving. Set OMP_NUM_THREADS in the external environment to override.
+| (EngineCore pid=2454) INFO 11-21 13:09:48 [utils.py:419] Using LBNHC KV cache layout.
+| (EngineCore pid=2454) INFO 11-21 13:09:50 [monitor.py:40] [backbone] Starting torch.compile
+| (EngineCore pid=2454) INFO 11-21 13:09:57 [backends.py:1110] [backbone] Using cache directory: /opt/apps/out/guest/vllm/cache/vllm/torch_compile_cache/140069308f/rank_0_0/backbone for vLLM's torch.compile
+| (EngineCore pid=2454) INFO 11-21 13:09:57 [backends.py:1167] [backbone] Dynamo bytecode transform time: 7.23 s
+| (EngineCore pid=2454) INFO 11-21 13:10:07 [backends.py:421] [backbone] Compiling a graph for compile range (1, 8192) takes 9.66 s
+| (EngineCore pid=2454) INFO 11-21 13:10:14 [backends.py:952] collected artifacts: 31 entries, 3 artifacts, 4184366 bytes total
+| (EngineCore pid=2454) INFO 11-21 13:10:14 [decorators.py:752] [backbone] saved AOT compiled function to /opt/apps/out/guest/vllm/cache/vllm/torch_compile_cache/torch_aot_compile/8da8911d04363e8d3f094bfd3b74472a813d11d9471ebb7f30df22b44ed924b8/rank_0_0/model
+| (EngineCore pid=2454) INFO 11-21 13:10:14 [monitor.py:62] [backbone] torch.compile took 23.68 s in total
+| (EngineCore pid=2454) INFO 11-21 13:10:14 [monitor.py:91] [backbone] Initial profiling/warmup run took 0.07 s
+| (EngineCore pid=2454) INFO 11-21 13:10:26 [gpu_worker.py:795] Available KV cache memory: 6.41 GiB
+| (EngineCore pid=2454) INFO 11-21 13:10:26 [kernel_warmup.py:294] JIT kernel warmup starting.
+| (EngineCore pid=2454) INFO 11-21 13:10:26 [kernel_warmup.py:304] JIT kernel warmup finished in 0.00s.
+| 
+| Capturing CUDA graphs (PIECEWISE):   0%|          | 0/51 [00:00<?, ?it/s]
+| Capturing CUDA graphs (PIECEWISE):   2%|▏         | 1/51 [00:00<00:05,  9.41it/s]
+| Capturing CUDA graphs (PIECEWISE):   6%|▌         | 3/51 [00:00<00:04, 10.96it/s]
+| Capturing CUDA graphs (PIECEWISE):  10%|▉         | 5/51 [00:00<00:04, 11.10it/s]
+| Capturing CUDA graphs (PIECEWISE):  14%|█▎        | 7/51 [00:00<00:03, 11.28it/s]
+| Capturing CUDA graphs (PIECEWISE):  18%|█▊        | 9/51 [00:00<00:03, 11.48it/s]
+| Capturing CUDA graphs (PIECEWISE):  22%|██▏       | 11/51 [00:00<00:03, 11.93it/s]
+| Capturing CUDA graphs (PIECEWISE):  25%|██▌       | 13/51 [00:01<00:03, 12.57it/s]
+| Capturing CUDA graphs (PIECEWISE):  29%|██▉       | 15/51 [00:01<00:02, 12.88it/s]
+| Capturing CUDA graphs (PIECEWISE):  33%|███▎      | 17/51 [00:01<00:03,  9.92it/s]
+| Capturing CUDA graphs (PIECEWISE):  37%|███▋      | 19/51 [00:01<00:03,  9.85it/s]
+| Capturing CUDA graphs (PIECEWISE):  41%|████      | 21/51 [00:01<00:03,  9.82it/s]
+| Capturing CUDA graphs (PIECEWISE):  45%|████▌     | 23/51 [00:02<00:02,  9.87it/s]
+| Capturing CUDA graphs (PIECEWISE):  49%|████▉     | 25/51 [00:02<00:02,  9.91it/s]
+| Capturing CUDA graphs (PIECEWISE):  53%|█████▎    | 27/51 [00:02<00:02,  9.81it/s]
+| Capturing CUDA graphs (PIECEWISE):  55%|█████▍    | 28/51 [00:02<00:02,  9.78it/s]
+| Capturing CUDA graphs (PIECEWISE):  57%|█████▋    | 29/51 [00:02<00:02,  9.75it/s]
+| Capturing CUDA graphs (PIECEWISE):  59%|█████▉    | 30/51 [00:02<00:02,  9.68it/s]
+| Capturing CUDA graphs (PIECEWISE):  61%|██████    | 31/51 [00:02<00:02,  9.68it/s]
+| Capturing CUDA graphs (PIECEWISE):  65%|██████▍   | 33/51 [00:03<00:01,  9.78it/s]
+| Capturing CUDA graphs (PIECEWISE):  67%|██████▋   | 34/51 [00:03<00:01,  9.81it/s]
+| Capturing CUDA graphs (PIECEWISE):  69%|██████▊   | 35/51 [00:03<00:01,  9.81it/s]
+| Capturing CUDA graphs (PIECEWISE):  71%|███████   | 36/51 [00:03<00:01,  9.84it/s]
+| Capturing CUDA graphs (PIECEWISE):  75%|███████▍  | 38/51 [00:03<00:01,  9.94it/s]
+| Capturing CUDA graphs (PIECEWISE):  78%|███████▊  | 40/51 [00:03<00:01, 10.03it/s]
+| Capturing CUDA graphs (PIECEWISE):  82%|████████▏ | 42/51 [00:04<00:00, 10.11it/s]
+| Capturing CUDA graphs (PIECEWISE):  86%|████████▋ | 44/51 [00:04<00:00, 10.12it/s]
+| Capturing CUDA graphs (PIECEWISE):  90%|█████████ | 46/51 [00:04<00:00,  9.90it/s]
+| Capturing CUDA graphs (PIECEWISE):  94%|█████████▍| 48/51 [00:04<00:00, 10.00it/s]
+| Capturing CUDA graphs (PIECEWISE):  98%|█████████▊| 50/51 [00:04<00:00, 10.09it/s]
+| Capturing CUDA graphs (PIECEWISE): 100%|██████████| 51/51 [00:04<00:00, 10.27it/s]
+| 
+| Capturing CUDA graphs (FULL):   0%|          | 0/35 [00:00<?, ?it/s]
+| Capturing CUDA graphs (FULL):   6%|▌         | 2/35 [00:00<00:02, 11.66it/s]
+| Capturing CUDA graphs (FULL):  11%|█▏        | 4/35 [00:00<00:02, 12.10it/s]
+| Capturing CUDA graphs (FULL):  17%|█▋        | 6/35 [00:00<00:02, 12.26it/s]
+| Capturing CUDA graphs (FULL):  23%|██▎       | 8/35 [00:00<00:02, 12.40it/s]
+| Capturing CUDA graphs (FULL):  29%|██▊       | 10/35 [00:00<00:01, 12.51it/s]
+| Capturing CUDA graphs (FULL):  34%|███▍      | 12/35 [00:00<00:01, 12.92it/s]
+| Capturing CUDA graphs (FULL):  40%|████      | 14/35 [00:01<00:01, 13.31it/s]
+| Capturing CUDA graphs (FULL):  46%|████▌     | 16/35 [00:01<00:01, 13.32it/s]
+| Capturing CUDA graphs (FULL):  51%|█████▏    | 18/35 [00:01<00:01, 12.82it/s]
+| Capturing CUDA graphs (FULL):  57%|█████▋    | 20/35 [00:01<00:01, 12.32it/s]
+| Capturing CUDA graphs (FULL):  63%|██████▎   | 22/35 [00:01<00:01, 12.82it/s]
+| Capturing CUDA graphs (FULL):  69%|██████▊   | 24/35 [00:01<00:00, 13.01it/s]
+| Capturing CUDA graphs (FULL):  74%|███████▍  | 26/35 [00:02<00:00, 13.71it/s]
+| Capturing CUDA graphs (FULL):  80%|████████  | 28/35 [00:02<00:00, 10.86it/s]
+| Capturing CUDA graphs (FULL):  86%|████████▌ | 30/35 [00:02<00:00, 11.48it/s]
+| Capturing CUDA graphs (FULL):  91%|█████████▏| 32/35 [00:02<00:00, 10.76it/s]
+| Capturing CUDA graphs (FULL):  97%|█████████▋| 34/35 [00:02<00:00, 10.80it/s]
+| Capturing CUDA graphs (FULL): 100%|██████████| 35/35 [00:02<00:00, 12.02it/s]
+| (EngineCore pid=2454) INFO 11-21 13:10:51 [model_runner.py:1216] Graph capturing finished in 9 secs, took 0.43 GiB
+| (EngineCore pid=2454) INFO 11-21 13:10:51 [gpu_worker.py:1175] Free memory on device (7.21/7.69 GiB) on startup. Desired GPU memory utilization is (0.9, 6.92 GiB). Actual usage is 0.36 GiB for consumed memory (weights + non-torch), 0.14 GiB for peak activation, and 0.43 GiB for CUDAGraph memory. Rep
+| (EngineCore pid=2454) INFO 11-21 13:10:52 [jit_monitor.py:87] Kernel JIT monitor activated; monitored JIT compilations during inference will use mode=warn.
+| (EngineCore pid=2454) INFO 11-21 13:10:54 [extensible_kv_cache.py:693] Memory after warmup: 6.35 GiB free, 0.06 GiB committed to the KV cache, 0.14 GiB kept for transient activations (0.14 GiB allocated at peak, 0.13 GiB of torch reservation growth); 3797 KV cache blocks (5.21 GiB) fit within the re
+| (EngineCore pid=2454) INFO 11-21 13:10:54 [kv_cache_utils.py:1168] GPU KV cache size: 243,008 tokens, Maximum concurrency for 512 tokens per request: 474.62x
+| (EngineCore pid=2454) INFO 11-21 13:10:54 [extensible_kv_cache.py:536] Extended KV cache to 3797 blocks (5.21 GiB).
+| (EngineCore pid=2454) INFO 11-21 13:10:54 [core.py:451] init engine (profile, create kv cache, warmup model) took 65.95 s (compilation: 23.68 s)
+| (EngineCore pid=2454) INFO 11-21 13:10:54 [kernel.py:517] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'], gelu_and_mul_sparse=['triton', 'native'])
+| (MainProcess pid=2416) INFO 11-21 13:10:54 [hf.py:743] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+| MLROW_JSON {"big_batch_copies_equal":true,"cudagraph_mode":"FULL_AND_PIECEWISE","cudagraph_n_sizes":51,"cudagraph_sizes_head":[1,2,4,8,16,24,32,40,48,56,64,72],"engine_children":["VLLM::EngineCore"],"engine_start_s":105.3,"gen_s":0.32,"max_tokens":32,"model_dir":["vllm","model"],"prompts":8,"repeat_
+| (MainProcess pid=2416) INFO 11-21 13:10:56 [core_client.py:822] [shutdown] MPClient: start timeout=default
+| (MainProcess pid=2416) INFO 11-21 13:10:56 [core_client.py:824] [shutdown] MPClient: stopping engine manager
+| (MainProcess pid=2416) INFO 11-21 13:10:56 [utils.py:628] [shutdown] Process manager: send sigterm to process EngineCore
+| (EngineCore pid=2454) INFO 11-21 13:10:56 [core.py:1698] [shutdown] EngineCore: trigger received signal=SIGTERM
+| (EngineCore pid=2454) INFO 11-21 13:10:56 [core.py:1889] [shutdown] EngineCore: start mode=abort timeout=0s
+| (EngineCore pid=2454) INFO 11-21 13:10:56 [core.py:1920] [shutdown] EngineCore: request processing complete; starting resource teardown
+| (EngineCore pid=2454) INFO 11-21 13:10:56 [core.py:1746] [shutdown] EngineCore: exiting busy loop
+| (MainProcess pid=2416) INFO 11-21 13:10:59 [core_client.py:826] [shutdown] MPClient: engine manager stopped
+| (MainProcess pid=2416) INFO 11-21 13:10:59 [core_client.py:827] [shutdown] MPClient: cleaning up background resources
+| (MainProcess pid=2416) INFO 11-21 13:10:59 [core_client.py:829] [shutdown] MPClient: complete
+MLROW_JSON {"big_batch_copies_equal":true,"cudagraph_mode":"FULL_AND_PIECEWISE","cudagraph_n_sizes":51,"cudagraph_sizes_head":[1,2,4,8,16,24,32,40,48,56,64,72],"engine_children":["VLLM::EngineCore"],"engine_start_s":105.3,"gen_s":0.32,"log_facts":{"graph_capture_gib":0.43,"graph_capture_s":9.0,"graphs_captured":51,"graphs_planned":51,"kv_cache_tokens":243008,"model_load_gib":0.25},"max_tokens":32,"mem_base_mib":0,"mem_growth_mib":6653,"mem_peak_mib":6653,"model_dir":["vllm","model"],"negctl":false,"prompts":8,"repeat_identical":true,"row":"vllm","secs":133.6,"text_head":[" the capital of the country.\n\nThe capita",", there was a little girl named Lily. Sh"],"token_ids":[[260,3575,282,260,1798,30,198,198,504,3575,282,4649,314,260,3575,282,260,1798,30,198,198,504,3575,282,4649,314,260,3575,282,260,1798,30],[28,665,436,253,1838,8180,3365,14176,30,2306,4161,281,253,2066,2291,351,874,1564,28,564,1041,3683,982,457,800,9173,288,1238,351,30,1963,1194],[472,585,304,1758,216,32,42,448,1003,216,32,472,4698,304,1758,216,33,42,448,1003,216,33,472,1745,42,448,1003,3987,46477,24,94,731],[2382,28,5724,28,284,4461,30,198,198,504,2380,8656,314,253,1763,338,2311,468,288,1044,260,1986,826,260,1296,3003,4683,30,378,2380,8656,314],[2585,288,722,260,2229,476,87,341,18,288,5125,253,4287,9872,30,378,2229,436,21887,411,260,1547,18603,284,32934,28,9914,28278,28,281,216,33],[216,34,33,34,5027,21391,30,198,198,504,16891,1225,282,913,314,216,34,33,34,5027,21391,30,198,198,504,16891,1225,282,913,314,216,34],[27003,690,260,23790,2767,198,198,504,2365,6354,16438,27003,690,260,23790,2767,30,198,198,504,2365,6354,16438,27003,690,260,23790,2767,30,198,198,504],[253,7132,1743,338,38262,260,970,260,1205,2106,1806,30,657,314,253,3854,282,7688,338,359,804,288,5482,253,1732,30,198,198,788,451,2524,28]],"token_sha256":"98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a","torch":"2.14.0+cu130","total_mib":8192,"unbatched_equal":true,"vllm":"0.34.0","wall_s":127.6}
+MLROWS_CHECK name=result_present ok=1 detail=
+MLROWS_CHECK name=tokens_for_every_prompt ok=1 detail=n=8
+MLROWS_CHECK name=token_sha256_matches_ids ok=1 detail=98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a
+MLROWS_CHECK name=greedy_repeat_identical ok=1 detail=the_same_batch_twice,_temperature_0
+MLROWS_CHECK name=engine_in_its_own_process ok=1 detail=['VLLM::EngineCore']
+MLROWS_CHECK name=cuda_graph_sizes ok=1 detail=n_sizes=51_mode=FULL_AND_PIECEWISE
+MLROWS_CHECK name=device_memory_grew ok=1 detail=growth=6653_MiB,_floor_300
+MLROWS_CHECK name=tokens_equal_committed_hash ok=1 detail=got_98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a
+GPU_USE_PROOF vllm device=cuda:0 name=NVIDIA GeForce RTX 4090 peak_mib=6653
+VLLM_SUMMARY status=PASS flavour=cu13 reason=ok secs=133.6 mem_growth_mib=6653 token_sha256=98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a
+MLROWS_RESULT {"checks":[{"detail":"","name":"result_present","ok":true},{"detail":"n=8","name":"tokens_for_every_prompt","ok":true},{"detail":"98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a","name":"token_sha256_matches_ids","ok":true},{"detail":"the same batch twice, temperature 0","name":"greedy_repeat_identical","ok":true},{"detail":"['VLLM::EngineCore']","name":"engine_in_its_own_process","ok":true},{"detail":"n_sizes=51 mode=FULL_AND_PIECEWISE","name":"cuda_graph_sizes","ok":true},{"detail":"growth=6653 MiB, floor 300","name":"device_memory_grew","ok":true},{"detail":"got 98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a","name":"tokens_equal_committed_hash","ok":true}],"flavour":"cu13","reason":"ok","result":{"big_batch_copies_equal":true,"cudagraph_mode":"FULL_AND_PIECEWISE","cudagraph_n_sizes":51,"cudagraph_sizes_head":[1,2,4,8,16,24,32,40,48,56,64,72],"engine_children":["VLLM::EngineCore"],"engine_start_s":105.3,"gen_s":0.32,"log_facts":{"graph_capture_gib":0.43,"graph_capture_s":9.0,"graphs_captured":51,"graphs_planned":51,"kv_cache_tokens":243008,"model_load_gib":0.25},"max_tokens":32,"mem_base_mib":0,"mem_growth_mib":6653,"mem_peak_mib":6653,"model_dir":["vllm","model"],"negctl":false,"prompts":8,"repeat_identical":true,"row":"vllm","secs":133.6,"text_head":[" the capital of the country.\n\nThe capita",", there was a little girl named Lily. Sh"],"token_ids":[[260,3575,282,260,1798,30,198,198,504,3575,282,4649,314,260,3575,282,260,1798,30,198,198,504,3575,282,4649,314,260,3575,282,260,1798,30],[28,665,436,253,1838,8180,3365,14176,30,2306,4161,281,253,2066,2291,351,874,1564,28,564,1041,3683,982,457,800,9173,288,1238,351,30,1963,1194],[472,585,304,1758,216,32,42,448,1003,216,32,472,4698,304,1758,216,33,42,448,1003,216,33,472,1745,42,448,1003,3987,46477,24,94,731],[2382,28,5724,28,284,4461,30,198,198,504,2380,8656,314,253,1763,338,2311,468,288,1044,260,1986,826,260,1296,3003,4683,30,378,2380,8656,314],[2585,288,722,260,2229,476,87,341,18,288,5125,253,4287,9872,30,378,2229,436,21887,411,260,1547,18603,284,32934,28,9914,28278,28,281,216,33],[216,34,33,34,5027,21391,30,198,198,504,16891,1225,282,913,314,216,34,33,34,5027,21391,30,198,198,504,16891,1225,282,913,314,216,34],[27003,690,260,23790,2767,198,198,504,2365,6354,16438,27003,690,260,23790,2767,30,198,198,504,2365,6354,16438,27003,690,260,23790,2767,30,198,198,504],[253,7132,1743,338,38262,260,970,260,1205,2106,1806,30,657,314,253,3854,282,7688,338,359,804,288,5482,253,1732,30,198,198,788,451,2524,28]],"token_sha256":"98fb8ab0f592d0abb8e1fb627817ab267c35913bde847e45b02f68974964875a","torch":"2.14.0+cu130","total_mib":8192,"unbatched_equal":true,"vllm":"0.34.0","wall_s":127.6},"row":"vllm","status":"PASS"}
+APPNOTE PASS on cu13: ok
+=== end rc=0 secs=138 2026-11-21T13:11:03+00:00
