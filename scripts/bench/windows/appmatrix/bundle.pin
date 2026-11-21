@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 # The sha256 pin of the Windows apps bundle in the public bundles bucket (docs/DOWNLOADS.md, "Windows app bundle").
-# STATUS: FILLED, 2026-11-20 (REPUBLISHED twice: 9211a555 after the apps.json change, 5e01ceff after the LICENSE change of #545; the older pins c4d18003... and 9211a555... stay valid for their own shas, see docs/DOWNLOADS.md, Republish). First filled 2026-11-08.
+# STATUS: FILLED, 2026-11-21 (REPUBLISHED three times: 9211a555 after the apps.json change, 5e01ceff after the LICENSE change of #545, 0367335a after the THIRD_PARTY_NOTICES.md change of #559; the older pins c4d18003..., 9211a555... and 5e01ceff... stay valid for their own shas, see docs/DOWNLOADS.md, Republish). First filled 2026-11-08.
 # The bundle was built twice from pinned official sources (Level 1 and Level 2 equal), uploaded by the coordinator to the public bundles bucket
-# (create-only keys), and the ISO's sha256 was re-verified through bundles.kayfabe.dev (traces/wb1_republish_20261120/README.md and traces/wb1_republish_license_20261120/README.md).
+# (create-only keys), and the ISO's sha256 was re-verified through bundles.kayfabe.dev (traces/wb1_republish_20261120/README.md and traces/wb1_republish_license_20261120/README.md and traces/wb1_republish_notices_20261121/README.md).
 # Consumers match the pin line and the `# inputs=` / `# inventory=` lines by pattern (the `# inputs=` line must equal the tree's input hash, see docs/DOWNLOADS.md, Republish); other comments are ignored.
-winapps-open.iso sha256=5e01ceff9a475a1b490f00c4823e8c2373144a5786f207224980180fe13f076d
-# inputs=781c5d4faf010c833dbf49090d4d3e98d518d0d7d5a26a58185905b59ff1b955
-# inventory=fd0d8da3c1e794eeb67e680eed7aa2cdf6a94712e26a78d3a389e1ceefb2a75f
-# iso_key=winapps-open/kfapps-5e01ceff9a475a1b490f00c4823e8c2373144a5786f207224980180fe13f076d.iso
-# manifest_key=winapps-open/manifest-5e01ceff9a475a1b490f00c4823e8c2373144a5786f207224980180fe13f076d.json
+winapps-open.iso sha256=0367335a70de3af1a1aa262990aa84e14ee74fd3c17e13a0e9e5cc361406609d
+# inputs=a586fb86633d3608f95542d7e2bf36f2fa44a25d15ea8c6134be8823590b7dee
+# inventory=c281f342ab1f30318271a5dcdc0a2c362d4ca753aeee60d49d2722d0e7732a6c
+# iso_key=winapps-open/kfapps-0367335a70de3af1a1aa262990aa84e14ee74fd3c17e13a0e9e5cc361406609d.iso
+# manifest_key=winapps-open/manifest-0367335a70de3af1a1aa262990aa84e14ee74fd3c17e13a0e9e5cc361406609d.json

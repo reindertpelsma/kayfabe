@@ -1384,6 +1384,37 @@
     }
    ]
   },
+  "qemu-source-signature": {
+   "row": 4,
+   "kind": "file",
+   "routing": "helper",
+   "origin": "https://download.qemu.org/qemu-10.2.4.tar.xz.sig",
+   "runs": "build",
+   "consumers": [
+    "scripts/release/build_qemu.py"
+   ],
+   "anchors": [
+    {
+     "class": "upstream-pin",
+     "sha256": "aca12b432b3c12c03812763ab306936c62550f4a120d94e454aee18de3e0eb84",
+     "size": 310,
+     "pin_origin": "measured-from-upstream",
+     "scope": "source",
+     "pin_source_url": "https://download.qemu.org/qemu-10.2.4.tar.xz.sig",
+     "status": "MEASURED",
+     "measured": "2026-11-21"
+    }
+   ],
+   "pin_files": [
+    {
+     "file": "scripts/release/qemu-release.pin",
+     "contains": [
+      "aca12b432b3c12c03812763ab306936c62550f4a120d94e454aee18de3e0eb84",
+      "310"
+     ]
+    }
+   ]
+  },
   "rustup-init-1.29.3": {
    "row": 3,
    "kind": "file",

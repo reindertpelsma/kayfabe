@@ -11,7 +11,7 @@ What the host needs is KVM and permission to open the NVIDIA device nodes. Kayfa
 
 ## Step 1. Get the kayfabe QEMU
 
-**Download.** No release binary exists yet. The page for it is created at the first release. A QEMU binary built from this source is not yet distributable under the GPL ([Credits and notices](credits.md)), which is why none is published today.
+**Download.** No release binary exists yet. The page for it is created at the first release. Whether and when a binary is published is the project owner's decision, not a licence limit of the source ([Credits and notices](credits.md)).
 
 **Build it yourself.** [Building from source](building.md) has every step. Once the Rust toolchain and the build packages are installed, the three commands that produce the binary are:
 
