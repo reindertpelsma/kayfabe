@@ -785,7 +785,7 @@ class AppsDiscoveryTests(unittest.TestCase):
         self.assertEqual(guest[4:], ["nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm"])
         self.assertEqual(sum("guest" in a for a in self.last["argv"]), 1)
 
-    # ---- 2026-11-20: Python 3.12 on a 22.04 host is built from the python.org source into a private prefix (docs/design/V3_OPEN_ML_ROWS.md section 3a)
+    # ---- Python 3.12 on a 22.04 host is built from the python.org source into a private prefix (docs/design/V3_OPEN_ML_ROWS.md section 3a)
     PY_OK = "PRIVATE_PYTHON status=ok reason=built:3.12.10:212s version=3.12.10 python=/x/mlrows/python312/bin/python3.12\n"
     PY_REFUSED = "PRIVATE_PYTHON status=NOT_RUN reason=python_source_refused:TRUST_PIN_MISMATCH version=- python=-\n"
     SETUP_ALL_OK = "".join("MLROWS_SETUP row=%s status=ok reason=flavour_cu13\n" % r for r in ("vllm", "tensorrt", "jax"))
@@ -873,7 +873,7 @@ class AppsDiscoveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 vast_report.validate_apps_discovery({**rec, "private_python": bad})
 
-    # ---- 2026-11-20: the nvcodec_matrix row failed in the guest on enc_av1_420_8_1080p (rc 234) and nothing said whether the HOST can do it (host_control=absent).
+    # ---- The nvcodec_matrix row failed in the guest on enc_av1_420_8_1080p (rc 234) and nothing said whether the HOST can do it (host_control=absent).
     # The stage now runs the row's own matrix on the bare host (stock ffmpeg, no bundle, no image) BEFORE any guest boot and classifies a guest failure by the host.
     AV1 = "enc_av1_420_8_1080p"
 
@@ -924,7 +924,7 @@ class AppsDiscoveryTests(unittest.TestCase):
 
     def test_the_measured_av1_failure_on_a_host_whose_ffmpeg_has_no_av1_nvenc_is_unclassified_with_that_named_reason(self):
         # the measured case (Ubuntu 22.04 host: ffmpeg 4.4.2 has no av1_nvenc): the host's row is NOT_RUN unknown_encoder, so the control says nothing about AV1;
-        # coordinator decision 2026-11-20: UNCLASSIFIED, and the NAME of the reason is in the row and in the findings of the stage report
+        # decision: UNCLASSIFIED, and the NAME of the reason is in the row and in the findings of the stage report
         rc, rec, _ = self.nv([self.case("enc_h264_420_8_1080p"), self.case(self.AV1, "NOT_RUN", reason="unknown_encoder")],
                              [self.case("enc_h264_420_8_1080p"), self.case(self.AV1, "FAIL", reason="encoder_params_rejected")])
         row, found = self.finding(rec)
