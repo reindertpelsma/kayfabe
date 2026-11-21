@@ -1055,11 +1055,18 @@ def bounded_text(path, limit=4 * 1024 * 1024):
     return data.decode("utf-8", errors="strict")
 
 
+def checkout_git(root, *args, stderr=subprocess.DEVNULL):
+    """Run git in the approved checkout. A rootless leg leaves that tree owned by the unprivileged user and git refuses a tree another
+    uid owns, so this one command trusts exactly this path (-c on the command line; nothing is written to any config, no wildcard)."""
+    root = str(root)
+    return subprocess.check_output(
+        ["git", "-c", "safe.directory=" + root, "-C", root, *args], text=True, stderr=stderr
+    ).strip()
+
+
 def prepare_checkout(root, sha):
     def git(*args):
-        return subprocess.check_output(
-            ["git", "-C", str(root), *args], text=True, stderr=subprocess.DEVNULL
-        ).strip()
+        return checkout_git(root, *args)
 
     if git("rev-parse", "HEAD") != sha:
         raise EvidenceError("infrastructure")
@@ -1493,9 +1500,7 @@ def guest_command(qlog, arguments):
             raise EvidenceError("host_xid")
         serial = Path(serials[0])
         root = Path(os.environ["KF_PAYLOAD_ROOT"])
-        revision = subprocess.check_output(
-            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
-        ).strip()
+        revision = checkout_git(root, "rev-parse", "HEAD", stderr=None)
         receipt = Path(os.environ["KF_PAYLOAD_NATIVE_RECEIPT"])
         before = json.loads(xid_guard.bounded(receipt))
         baseline = before.get("accepted_xid_lines", before["approved_native_xid_lines"])
