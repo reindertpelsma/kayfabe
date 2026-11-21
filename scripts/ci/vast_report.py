@@ -834,7 +834,7 @@ def validate_apps_discovery(value):
     KNOWN_BREAKAGE, a row that did not run is NOT_RUN and is named in `not_run`; a PASS verdict has no NOT_RUN row."""
     name = re.compile(r"[a-z][a-z0-9_]{0,39}")
     text = re.compile(r"[\x20-\x7e]{0,120}")
-    keys = {"schema", "verdict", "sha", "run_id", "rows", "steps", "not_run", "breakages", "host_control", "reason", "guest_rc", "private_python"}
+    keys = {"schema", "verdict", "sha", "run_id", "rows", "steps", "not_run", "breakages", "host_control", "reason", "guest_rc", "private_python", "nvcodec_host_control"}
     ok = type(value) is dict and {"schema", "verdict", "sha", "run_id", "steps"} <= set(value) <= keys
     ok = ok and value["schema"] == 1 and value["verdict"] in ("PASS", "FAIL", "RETRY", "PARTIAL")
     ok = ok and type(value["sha"]) is str and re.fullmatch("[0-9a-f]{40}", value["sha"]) is not None
@@ -842,18 +842,25 @@ def validate_apps_discovery(value):
     ok = ok and type(value.get("reason", "")) is str and text.fullmatch(value.get("reason", "")) is not None
     ok = ok and value.get("host_control", "absent") in ("present", "absent")
     ok = ok and type(value.get("private_python", "")) is str and text.fullmatch(value.get("private_python", "")) is not None
+    ok = ok and type(value.get("nvcodec_host_control", "")) is str and text.fullmatch(value.get("nvcodec_host_control", "")) is not None
     steps = value["steps"]
-    ok = ok and type(steps) is list and len(steps) <= 8 and all(
+    ok = ok and type(steps) is list and len(steps) <= 10 and all(
         type(x) is dict and set(x) == {"step", "rc", "s"} and name.fullmatch(x["step"]) and type(x["rc"]) is int and type(x["s"]) is int for x in steps)
     rows = value.get("rows", [])
     most = 8                                              # six rows today; the bound is a little above
     ok = ok and type(rows) is list and len(rows) <= most
     if ok:
         for r in rows:
-            ok = ok and type(r) is dict and {"name", "status", "guest", "host", "reason"} <= set(r) <= {"name", "status", "guest", "host", "reason", "dcgm"}
+            ok = ok and type(r) is dict and {"name", "status", "guest", "host", "reason"} <= set(r) <= {"name", "status", "guest", "host", "reason", "dcgm", "class", "findings"}
             ok = ok and name.fullmatch(str(r.get("name"))) is not None and r.get("status") in ("PASS", "KNOWN_BREAKAGE", "NOT_RUN")
             ok = ok and all(type(r.get(k)) is str and text.fullmatch(r[k]) is not None for k in ("guest", "host", "reason"))
             ok = ok and (r["status"] == "PASS" or r["reason"] != "")
+            ok = ok and r.get("class", "GUEST_ONLY") in ("GUEST_ONLY", "AGREEMENT", "UNCLASSIFIED")
+            found = r.get("findings", [])                                  # the host control's findings of nvcodec_matrix (apps_discovery_stage.py compare_with_guest)
+            ok = ok and type(found) is list and len(found) <= 8 and all(
+                type(f) is dict and set(f) == {"case", "guest", "host", "class", "why"} and name.fullmatch(str(f["case"]))
+                and f["guest"] in ("PASS", "NOT_SUPPORTED", "FAIL", "MISMATCH", "NOT_RUN", "-") and f["host"] in ("PASS", "NOT_SUPPORTED", "FAIL", "MISMATCH", "NOT_RUN", "-")
+                and f["class"] in ("GUEST_ONLY", "AGREEMENT", "UNCLASSIFIED") and type(f["why"]) is str and text.fullmatch(f["why"]) is not None for f in found)
     for key in ("not_run", "breakages"):
         ok = ok and type(value.get(key, [])) is list and len(value.get(key, [])) <= 8 and all(type(x) is str and name.fullmatch(x) for x in value.get(key, []))
     ok = ok and (value["verdict"] != "PASS" or not value.get("not_run"))
