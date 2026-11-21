@@ -42,6 +42,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RELEASE_PIN = HERE / "qemu-release.pin"
 RELEASE_KEYS = HERE / "qemu-release-keys.asc"
+QEMU_PIN = ROOT / "scripts" / "bench" / "qemu.pin"
 
 SCHEMA = "kayfabe.qemu-build/1"
 ASSET_PREFIX = "kayfabe-qemu"
@@ -177,6 +178,9 @@ def verify_signature(data, sig, key_file, allowed):
             raise KitRefused("%s holds no key whose fingerprint is a listed QEMU release signer" % key_file)
         if _gpg(home, "--import", str(key_file)).returncode != 0:
             raise KitRefused("cannot import %s" % key_file)
+        packets = _gpg(home, "--list-packets", str(sig)).stdout
+        if ":signature packet:" not in packets or re.search(r":(?:literal data|compressed|onepass_sig) packet:", packets):
+            raise KitRefused("%s is not a detached signature" % sig)
         res = _gpg(home, "--status-fd", "1", "--verify", str(sig), str(data))
     status = res.stdout
     valid = re.findall(r"^\[GNUPG:\] VALIDSIG (\S+)(?: \S+){8}(?: (\S+))?$", status, re.M)
@@ -458,6 +462,17 @@ class QemuInput:
         return cls("tree", Path(path))
 
 
+def tarball_matches_pin(tarball, pin_path=None):
+    """True if the tarball has exactly the size and sha256 that scripts/bench/qemu.pin pins (the cache key of the one supported version)."""
+    sys.path.insert(0, str(ROOT / "scripts" / "ci"))
+    import qemu_source
+    try:
+        _name, _version, sha256, size = qemu_source.read_pin(pin_path or QEMU_PIN)
+    except qemu_source.Refused as e:
+        raise KitRefused("cannot read the QEMU pin: %s" % e) from None
+    return Path(tarball).stat().st_size == size and sha256_file(tarball) == sha256
+
+
 def _fetch_official(dest):
     """The pinned tarball and its signature, through kf_trust.py; the tarball's pin is scripts/bench/qemu.pin."""
     sys.path.insert(0, str(ROOT / "scripts" / "ci"))
@@ -490,10 +505,14 @@ def resolve_qemu(qi, work):
         tarball, sig = qi.path, qi.sig or Path(str(qi.path) + ".sig")
         anchors = ["user"]
     signer = None
+    pinned = tarball_matches_pin(tarball)
     if qi.kind == "official" or qi.require_signature or sig.is_file():
         signer = verify_signature(tarball, sig, RELEASE_KEYS, [f for f, _ in pin["signers"]])
-        if qi.kind == "tarball":
-            anchors = ["qemu-release-signature"]
+        if not pinned:
+            raise KitRefused("%s is signed but is not the tarball pinned in scripts/bench/qemu.pin" % Path(tarball).name)
+        anchors = ["qemu-release-signature", "upstream-pin"]
+    elif pinned:
+        anchors = ["upstream-pin", "user"]
     unpack = work / "unpack"
     dropped = safe_extract(tarball, unpack)
     tops = [p for p in unpack.iterdir()]

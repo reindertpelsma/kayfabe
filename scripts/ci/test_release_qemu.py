@@ -40,6 +40,9 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+sha256_file = kit.sha256_file
+
+
 def write(path, text, mode=None):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1059,6 +1062,320 @@ class OrchestrationMore(OrchestrationBase):
         kit.pack_tree(self.tmp / "tb2", self.tmp / "qemu-10.2.4.tar.xz", 1, "x")
         with self.assertRaises(kit.KitRefused):
             self.build(qemu=kit.QemuInput.tarball(self.tmp / "qemu-10.2.4.tar.xz"))
+
+
+@unittest.skipUnless(HAVE_GPG, "gpg")
+class DetachedSignature(Signature):
+    """Signature tests that reuse the Signature fixture (two generated keys); the inherited tests are not repeated."""
+
+    def attached(self, mode):
+        out = self.tmp / ("attached-" + mode + ".sig")
+        subprocess.run(["gpg", "--batch", "--local-user", self.keys["official"][0], "--" + mode, "-o", str(out), str(self.data)],
+                       env=self.genv, check=True, capture_output=True)
+        return out
+
+    def test_an_attached_signature_is_refused(self):
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.verify(sig=self.attached("sign"))
+        self.assertIn("not a detached signature", str(cm.exception))
+
+    def test_an_armored_attached_signature_is_refused(self):
+        out = self.tmp / "attached-armored.sig"
+        subprocess.run(["gpg", "--batch", "--armor", "--sign", "--local-user", self.keys["official"][0], "-o", str(out), str(self.data)],
+                       env=self.genv, check=True, capture_output=True)
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.verify(sig=out)
+        self.assertIn("not a detached signature", str(cm.exception))
+
+    def test_a_clearsigned_text_is_refused(self):
+        with self.assertRaises(kit.KitRefused):
+            self.verify(sig=self.attached("clearsign"))
+
+    def test_a_detached_signature_in_ascii_armor_is_accepted(self):
+        out = self.tmp / "armored.sig"
+        subprocess.run(["gpg", "--batch", "--armor", "--detach-sign", "--local-user", self.keys["official"][0], "-o", str(out), str(self.data)],
+                       env=self.genv, check=True, capture_output=True)
+        self.assertEqual(self.verify(sig=out), self.keys["official"][0])
+
+    def test_random_bytes_are_not_a_signature(self):
+        with self.assertRaises(kit.KitRefused):
+            self.verify(sig=write(self.tmp / "junk.sig", b"\x00\x01 not a signature"))
+
+
+for _name in [n for n in dir(Signature) if n.startswith("test_")]:
+    setattr(DetachedSignature, _name, None)
+
+
+class FakeSigned(OrchestrationBase):
+    """A QEMU tarball whose signature check and pin are stubbed, so the flow around them can be judged without the real key."""
+
+    def setUp(self):
+        super().setUp()
+        from unittest import mock
+        self.mock = mock
+        src = qemu_tree(self.tmp / "tb/qemu-10.2.4")
+        write(src / "COPYING", "GPL")
+        self.tarball = self.tmp / "qemu-10.2.4.tar.xz"
+        kit.pack_tree(self.tmp / "tb/qemu-10.2.4", self.tarball, 1, "qemu-10.2.4")
+        self.sig = write(self.tmp / "qemu-10.2.4.tar.xz.sig", b"sig")
+        self.pin = write(self.tmp / "qemu.pin", "qemu-10.2.4.tar.xz sha256=%s size=%d\n" % (sha256_file(self.tarball), self.tarball.stat().st_size))
+        self.calls = []
+
+        def fake_verify(data, sig, key, allowed):
+            self.calls.append((Path(data).name, Path(sig).name))
+            if not Path(sig).is_file():
+                raise kit.KitRefused("no signature file")
+            return "A" * 40
+
+        for patcher in (mock.patch.object(kit, "verify_signature", fake_verify), mock.patch.object(kit, "QEMU_PIN", self.pin)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def resolve(self, qi, name="w"):
+        work = self.tmp / name
+        work.mkdir()
+        return kit.resolve_qemu(qi, work)
+
+    def test_the_pin_match_needs_the_pinned_size(self):
+        write(self.pin, "qemu-10.2.4.tar.xz sha256=%s size=%d\n" % (sha256_file(self.tarball), self.tarball.stat().st_size + 1))
+        self.assertFalse(kit.tarball_matches_pin(self.tarball))
+
+    def test_the_pin_match_needs_the_pinned_hash(self):
+        write(self.pin, "qemu-10.2.4.tar.xz sha256=%s size=%d\n" % ("1" * 64, self.tarball.stat().st_size))
+        self.assertFalse(kit.tarball_matches_pin(self.tarball))
+
+    def test_the_pin_match_accepts_the_pinned_bytes(self):
+        self.assertTrue(kit.tarball_matches_pin(self.tarball))
+
+    def test_a_signed_tarball_with_the_pinned_bytes_records_both_anchors(self):
+        version, source = self.resolve(kit.QemuInput.tarball(self.tarball))
+        self.assertEqual(version, "10.2.4")
+        self.assertEqual(source["anchors"], ["qemu-release-signature", "upstream-pin"])
+        self.assertEqual(source["signer"], "A" * 40)
+
+    def test_a_signed_tarball_that_is_not_the_pinned_bytes_is_refused(self):
+        write(self.pin, "qemu-10.2.4.tar.xz sha256=%s size=%d\n" % ("0" * 64, self.tarball.stat().st_size))
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.resolve(kit.QemuInput.tarball(self.tarball))
+        self.assertIn("qemu.pin", str(cm.exception))
+
+    def test_a_signed_tarball_with_the_pinned_hash_but_another_size_is_refused(self):
+        write(self.pin, "qemu-10.2.4.tar.xz sha256=%s size=%d\n" % (sha256_file(self.tarball), self.tarball.stat().st_size + 1))
+        with self.assertRaises(kit.KitRefused):
+            self.resolve(kit.QemuInput.tarball(self.tarball))
+
+    def test_an_unsigned_tarball_with_the_pinned_bytes_is_the_users_and_pinned(self):
+        self.sig.unlink()
+        _, source = self.resolve(kit.QemuInput.tarball(self.tarball))
+        self.assertEqual(source["anchors"], ["upstream-pin", "user"])
+        self.assertIsNone(source["signer"])
+        self.assertEqual(self.calls, [])
+
+    def test_an_unsigned_tarball_with_other_bytes_is_only_the_users(self):
+        self.sig.unlink()
+        write(self.pin, "qemu-10.2.4.tar.xz sha256=%s size=1\n" % ("0" * 64))
+        _, source = self.resolve(kit.QemuInput.tarball(self.tarball))
+        self.assertEqual(source["anchors"], ["user"])
+
+    def test_a_required_signature_that_is_missing_is_refused(self):
+        self.sig.unlink()
+        with self.assertRaises(kit.KitRefused):
+            self.resolve(kit.QemuInput.tarball(self.tarball, self.sig, require_signature=True))
+
+    def test_a_required_signature_that_is_missing_stops_the_build_before_any_step(self):
+        self.sig.unlink()
+        runner = FakeRunner()
+        with self.assertRaises(kit.KitRefused):
+            self.build(qemu=kit.QemuInput.tarball(self.tarball, self.sig, require_signature=True), runner=runner)
+        self.assertEqual(runner.calls, [])
+
+    def test_a_required_signature_is_checked_even_when_the_flag_is_the_only_reason(self):
+        self.resolve(kit.QemuInput.tarball(self.tarball, self.tmp / "elsewhere.sig", require_signature=False)) if False else None
+        with self.assertRaises(kit.KitRefused):
+            self.resolve(kit.QemuInput.tarball(self.tarball, self.tmp / "elsewhere.sig", require_signature=True))
+
+    def test_the_version_inside_a_signed_tarball_is_checked_after_extraction(self):
+        write(self.tmp / "tb/qemu-10.2.4/VERSION", "9.0.0\n")
+        kit.pack_tree(self.tmp / "tb/qemu-10.2.4", self.tarball, 1, "qemu-10.2.4")
+        write(self.pin, "qemu-10.2.4.tar.xz sha256=%s size=%d\n" % (sha256_file(self.tarball), self.tarball.stat().st_size))
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.resolve(kit.QemuInput.tarball(self.tarball))
+        self.assertIn("9.0.0", str(cm.exception))
+
+    def test_an_unsigned_tarball_of_an_unknown_version_stops_the_build(self):
+        self.sig.unlink()
+        write(self.tmp / "tb/qemu-10.2.4/VERSION", "9.0.0\n")
+        kit.pack_tree(self.tmp / "tb/qemu-10.2.4", self.tarball, 1, "qemu-10.2.4")
+        runner = FakeRunner()
+        with self.assertRaises(kit.KitRefused):
+            self.build(qemu=kit.QemuInput.tarball(self.tarball), runner=runner)
+        self.assertEqual(runner.calls, [])
+
+    def official(self, resolve=None):
+        fetched = {}
+
+        def fake_fetch(dest):
+            Path(dest).mkdir(parents=True, exist_ok=True)
+            fetched["dest"] = dest
+            return self.tarball
+
+        import kf_trust
+        import qemu_source
+        resolved = []
+
+        def fake_resolve(name, out, **kw):
+            resolved.append((name, Path(out).name, kw))
+            if resolve is None:
+                Path(out).write_bytes(b"sig")
+            else:
+                resolve()
+
+        for patcher in (self.mock.patch.object(qemu_source, "fetch", fake_fetch), self.mock.patch.object(kf_trust, "resolve", fake_resolve)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        return resolved
+
+    def test_the_official_signature_is_fetched_through_kf_trust_by_its_manifest_name(self):
+        resolved = self.official()
+        self.resolve(kit.QemuInput.official())
+        import kf_trust
+        self.assertEqual([(n, o) for n, o, _ in resolved], [("qemu-source-signature", "qemu-10.2.4.tar.xz.sig")])
+        self.assertEqual(resolved[0][2]["mode"], kf_trust.MODE_GIT_ONLY)
+
+    def test_the_official_flow_verifies_the_signature_file_kf_trust_delivered(self):
+        self.official()
+        self.sig.unlink()
+        self.resolve(kit.QemuInput.official())
+        self.assertEqual(self.calls, [("qemu-10.2.4.tar.xz", "qemu-10.2.4.tar.xz.sig")])
+
+    def test_a_refusal_of_the_signature_download_is_a_kit_refusal(self):
+        import kf_trust
+
+        def boom():
+            raise kf_trust.TrustError("TRUST_PIN_MISMATCH", "qemu-source-signature")
+
+        self.official(resolve=boom)
+        with self.assertRaises(kit.KitRefused) as cm:
+            self.resolve(kit.QemuInput.official())
+        self.assertIn("TRUST_PIN_MISMATCH", str(cm.exception))
+
+    def test_the_official_tarball_is_recorded_with_both_anchors(self):
+        self.official()
+        _, source = self.resolve(kit.QemuInput.official())
+        self.assertEqual(source["anchors"], ["qemu-release-signature", "upstream-pin"])
+
+
+class SourceTarballRoundTrip(Tmp):
+    """make_source_tarball then open_source_tarball, with the signature check stubbed and the vendoring faked."""
+
+    def setUp(self):
+        super().setUp()
+        from unittest import mock
+        self.k = kayfabe_tree(self.tmp / "k")
+        write(self.k / "Cargo.toml", "[workspace]\n")
+        write(self.k / "Cargo.lock", "# lock\n")
+        for name in ("LICENSE", "LICENSE-APACHE", "LICENSE-GPL"):
+            write(self.k / name, name)
+        write(self.k / "docs/internal.md", "not shipped")
+        if HAVE_GIT:
+            git(self.k, "init", "-q")
+            git(self.k, "add", "-A")
+            git(self.k, "commit", "-q", "-m", "x")
+        src = qemu_tree(self.tmp / "tb/qemu-10.2.4")
+        write(src / "COPYING", "GPL")
+        self.tarball = self.tmp / "qemu-10.2.4.tar.xz"
+        kit.pack_tree(self.tmp / "tb/qemu-10.2.4", self.tarball, 1, "qemu-10.2.4")
+        self.sig = write(self.tmp / "qemu-10.2.4.tar.xz.sig", b"sig")
+        self.verified = []
+        patcher = mock.patch.object(kit, "verify_signature", lambda d, s, k, a: self.verified.append((Path(d).name, Path(s).name)) or "A" * 40)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def make(self):
+        class Vendor(FakeRunner):
+            def __call__(self, argv, cwd, env, log):
+                rc = super().__call__(argv, cwd, env, log)
+                if argv[:2] == ["cargo", "vendor"]:
+                    write(Path(argv[-1]) / "libc/lib.rs", "x")
+                return rc
+
+        return kit.make_source_tarball(kayfabe_root=self.k, tarball=self.tarball, sig=self.sig, out=self.tmp / "out", runner=Vendor(),
+                                       workdir=self.tmp / "sw", caller_env={"PATH": "/usr/bin"})
+
+    @unittest.skipUnless(HAVE_GIT, "git")
+    def test_the_tarball_carries_kayfabe_the_vendored_crates_the_qemu_tarball_and_its_signature(self):
+        result = self.make()
+        with tarfile.open(Path(result["out"]) / result["name"]) as tf:
+            names = {n.split("/", 1)[1] for n in tf.getnames() if "/" in n}
+        for expected in ("BUILDING.txt", "kayfabe/Cargo.toml", "kayfabe/SOURCE_INFO.json", "kayfabe/.cargo/config.toml", "kayfabe/vendor/libc/lib.rs",
+                         "qemu/qemu-10.2.4.tar.xz", "qemu/qemu-10.2.4.tar.xz.sig", "kayfabe/qemu/hw/misc/kf3/kf3.c"):
+            self.assertIn(expected, names)
+        self.assertNotIn("kayfabe/docs/internal.md", names)
+
+    @unittest.skipUnless(HAVE_GIT, "git")
+    def test_the_signature_is_checked_when_the_source_tarball_is_made(self):
+        self.make()
+        self.assertEqual(self.verified, [("qemu-10.2.4.tar.xz", "qemu-10.2.4.tar.xz.sig")])
+
+    @unittest.skipUnless(HAVE_GIT, "git")
+    def test_opening_it_gives_a_tree_with_an_identity_and_an_input_that_requires_its_signature(self):
+        result = self.make()
+        kroot, qi, record = kit.open_source_tarball(Path(result["out"]) / result["name"], self.tmp / "open")
+        self.assertEqual(kit.kayfabe_identity(kroot)["revision"], git(self.k, "rev-parse", "HEAD"))
+        self.assertTrue(qi.require_signature)
+        self.assertEqual(qi.kind, "tarball")
+        self.assertTrue(qi.sig.name.endswith(".sig"))
+        self.assertEqual(record["sha256"], sha256_file(Path(result["out"]) / result["name"]))
+
+    @unittest.skipUnless(HAVE_GIT, "git")
+    def test_a_source_tarball_without_its_qemu_tarball_is_refused(self):
+        result = self.make()
+        out = Path(result["out"]) / result["name"]
+        broken = self.tmp / "broken"
+        safe = kit.safe_extract(out, broken)
+        top = next(broken.iterdir())
+        (top / "qemu" / "qemu-10.2.4.tar.xz").unlink()
+        kit.pack_tree(top, self.tmp / "broken.tar.xz", 1, top.name)
+        with self.assertRaises(kit.KitRefused):
+            kit.open_source_tarball(self.tmp / "broken.tar.xz", self.tmp / "open2")
+        self.assertEqual(safe, [])
+
+    @unittest.skipUnless(HAVE_GIT, "git")
+    def test_a_qemu_tarball_that_is_not_signed_by_a_listed_signer_stops_the_source_tarball(self):
+        from unittest import mock
+
+        def refuse(d, s, k, a):
+            raise kit.KitRefused("not signed")
+
+        with mock.patch.object(kit, "verify_signature", refuse), self.assertRaises(kit.KitRefused):
+            self.make()
+        self.assertFalse((self.tmp / "out").exists() and any((self.tmp / "out").iterdir()))
+
+
+class ExtractionFilter(Tmp):
+    """Cases only tarfile's own data filter catches: the kit's pre-check judges names and one-step links only."""
+
+    def tar(self, members):
+        p = self.tmp / "x.tar"
+        with tarfile.open(p, "w") as tf:
+            for info, data in members:
+                tf.addfile(info, io.BytesIO(data) if data is not None else None)
+        return p
+
+    def link(self, name, target, kind=tarfile.SYMTYPE):
+        i = tarfile.TarInfo(name)
+        i.type, i.linkname = kind, target
+        return i
+
+    def test_a_chain_of_links_that_leads_out_of_the_directory_is_refused(self):
+        p = self.tar([(self.link("top/p", "."), None), (self.link("top/p/q", "../.."), None)])
+        with self.assertRaises(kit.KitRefused):
+            kit.safe_extract(p, self.tmp / "out")
+
+    def test_a_hard_link_to_a_file_outside_is_refused(self):
+        p = self.tar([(self.link("top/h", "../../etc/passwd", tarfile.LNKTYPE), None)])
+        with self.assertRaises(kit.KitRefused):
+            kit.safe_extract(p, self.tmp / "out")
 
 
 class Compare(Tmp):
