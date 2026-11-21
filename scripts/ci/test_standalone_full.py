@@ -451,8 +451,9 @@ class AppsDiscoveryTests(unittest.TestCase):
         self.assertEqual(ads.read_res(Path(d.name) / "absent.res"), {})
 
     def test_the_plan_names_the_build_and_the_setup_before_the_matrix(self):
-        self.assertEqual(ads.plan()["steps"], ["build_vkcts", "setup_mlrows", "overlay", "host", "guest"])
-        self.assertEqual(ads.plan(("vllm",))["steps"], ["setup_mlrows", "overlay", "host", "guest"])
+        self.assertEqual(ads.plan()["steps"], ["build_vkcts", "python312", "setup_mlrows", "overlay", "host", "guest"])
+        self.assertEqual(ads.plan(("vllm",))["steps"], ["python312", "setup_mlrows", "overlay", "host", "guest"])
+        self.assertEqual(ads.plan(("nvcodec_matrix",))["steps"], ["overlay", "host", "guest"])
         self.assertEqual(ads.plan(("nvcodec_matrix",))["budget_s_per_side"], 3000)
 
     def test_every_row_of_the_stage_is_a_row_of_run_apps_and_has_a_timeout(self):
@@ -482,10 +483,11 @@ class AppsDiscoveryTests(unittest.TestCase):
         self.assertEqual(os.environ.get("TMPDIR"), before)
 
     def run_stage(self, results, bundle=True, host=False, runner=None, rows=None, deadline=0, image=True, base=False, setup_log="", setup_rc=0, environ=None,
-                  receipt=None, overlay_rc=0, symlink_base=False, boom_on=None):
+                  receipt=None, overlay_rc=0, symlink_base=False, boom_on=None, python_log="", python_rc=0):
         """The stage with a fake runner. `image`: the apps image exists in the bench dir; `base`: the base guest image does too; `setup_log`: what `mlrows.py setup`
         printed (the stage reads it from the step's log); `receipt`: the text of guest_apps.qcow2.STAGED; `overlay_rc`: what `qemu-img create` returns;
-        `symlink_base`: guest_apps.qcow2 is a link to the base image; `boom_on`: a step whose runner raises. self.last keeps every call the runner saw (argv and env),
+        `symlink_base`: guest_apps.qcow2 is a link to the base image; `boom_on`: a step whose runner raises; `python_log` and `python_rc`: what the
+        private-python step (`private_python.py ensure`) printed and returned. self.last keeps every call the runner saw (argv and env),
         what existed when a boot step started (`boots`) and the bench dir."""
         d = tempfile.TemporaryDirectory(prefix="ads-run-")
         self.addCleanup(d.cleanup)
@@ -522,6 +524,9 @@ class AppsDiscoveryTests(unittest.TestCase):
                 img = Path(env["KF_GUEST_IMG"])
                 sidecar = Path(str(img) + ".STAGED")
                 self.last["boots"].append({"side": argv[2], "image": img, "exists": img.exists(), "receipt": sidecar.read_text() if sidecar.exists() else None})
+            if any(a.endswith("private_python.py") for a in argv):
+                Path(log).write_text(python_log)
+                return python_rc
             if "setup" in argv and any(a.endswith("mlrows.py") for a in argv):
                 Path(log).write_text(setup_log)
                 return setup_rc
@@ -588,7 +593,7 @@ class AppsDiscoveryTests(unittest.TestCase):
         self.assertEqual((rc, rec["verdict"]), (0, "PASS"))
         bench = self.last["bench"]
         images = [e.get("KF_GUEST_IMG") for e in self.last["env"]]
-        self.assertEqual(len(images), 5)                       # build, setup, overlay, host, guest
+        self.assertEqual(len(images), 6)                       # build, python, setup, overlay, host, guest
         for image in images:
             self.assertEqual(image, str(self.overlay_of()))
             self.assertNotIn(Path(image).resolve(), (( bench / "guest_apps.qcow2").resolve(), (bench / "guest.qcow2").resolve()))
@@ -750,6 +755,94 @@ class AppsDiscoveryTests(unittest.TestCase):
         self.assertEqual(guest[4:], ["nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm"])
         self.assertEqual(sum("guest" in a for a in self.last["argv"]), 1)
 
+    # ---- 2026-11-20: Python 3.12 on a 22.04 host is built from the python.org source into a private prefix (docs/design/V3_OPEN_ML_ROWS.md section 3a)
+    PY_OK = "PRIVATE_PYTHON status=ok reason=built:3.12.10:212s version=3.12.10 python=/x/mlrows/python312/bin/python3.12\n"
+    PY_REFUSED = "PRIVATE_PYTHON status=NOT_RUN reason=python_source_refused:TRUST_PIN_MISMATCH version=- python=-\n"
+    SETUP_ALL_OK = "".join("MLROWS_SETUP row=%s status=ok reason=flavour_cu13\n" % r for r in ("vllm", "tensorrt", "jax"))
+
+    def test_the_private_python_is_ensured_before_the_ml_setup_and_both_get_the_same_root(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, python_log=self.PY_OK, setup_log=self.SETUP_ALL_OK)
+        argv = self.last["argv"]
+        py = next(a for a in argv if any(x.endswith("private_python.py") for x in a))
+        setup = next(a for a in argv if "setup" in a and any(x.endswith("mlrows.py") for x in a))
+        self.assertLess(argv.index(py), argv.index(setup))
+        self.assertEqual(py[:3], ["python3", "-B", "-I"])
+        self.assertEqual(py[3], str(ROOT / "scripts/apps/mlrows/private_python.py"))
+        self.assertEqual(py[4:6], ["ensure", "--if-needed"])
+        self.assertEqual(py[py.index("--root") + 1], setup[setup.index("--root") + 1])
+        self.assertTrue(py[py.index("--root") + 1].endswith("/mlrows"))
+
+    def test_the_python_step_asks_only_when_needed_and_for_the_same_root_as_the_venvs(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, python_log=self.PY_OK, setup_log=self.SETUP_ALL_OK)
+        py = next(a for a in self.last["argv"] if any(x.endswith("private_python.py") for x in a))
+        setup = next(a for a in self.last["argv"] if "setup" in a and any(x.endswith("mlrows.py") for x in a))
+        self.assertIn("--if-needed", py)
+        self.assertEqual(py[py.index("--root") + 1], setup[setup.index("--root") + 1])
+
+    def test_the_plan_is_the_list_of_steps_the_stage_really_runs(self):
+        for rows in (None, "vllm,tensorrt", "nvcodec_matrix,vkcts", "nvcodec_matrix"):
+            chosen = tuple(rows.split(",")) if rows else ads.ROWS
+            rc, rec, _ = self.run_stage({r: ("PASS", "-") for r in chosen}, host=True, rows=rows, python_log=self.PY_OK, setup_log=self.SETUP_ALL_OK)
+            self.assertEqual([s["step"] for s in rec["steps"]], ads.plan(chosen)["steps"], rows)
+
+    def test_a_stage_without_ml_rows_builds_no_python(self):
+        rc, rec, _ = self.run_stage({"jax": ("PASS", "-")}, rows="nvcodec_matrix", python_log=self.PY_OK)
+        self.assertFalse([a for a in self.last["argv"] if any(x.endswith("private_python.py") for x in a)])
+        self.assertNotIn("private_python", rec)
+        self.assertNotIn("python312", [s["step"] for s in rec["steps"]])
+
+    def test_the_record_says_what_the_private_python_did(self):
+        for log, rc, want in ((self.PY_OK, 0, "ok:built:3.12.10:212s"), (self.PY_REFUSED, 0, "NOT_RUN:python_source_refused:TRUST_PIN_MISMATCH"),
+                              ("PRIVATE_PYTHON status=FAIL reason=make_failed:error version=- python=-\n", 3, "FAIL:make_failed:error"),
+                              ("", 124, "FAIL:no_result_line_rc124"), ("noise\n", 0, "FAIL:no_result_line_rc0"),
+                              ("PRIVATE_PYTHON status=NOT_RUN reason=%s version=- python=-\n" % ("x" * 160), 0, "NOT_RUN:" + "x" * 92)):
+            rec = self.run_stage(self.ALL_PASS, python_log=log, python_rc=rc, setup_log=self.SETUP_ALL_OK)[1]
+            self.assertEqual(rec["private_python"], want)
+            vast_report.validate_apps_discovery(rec)
+
+    def test_a_step_that_printed_nothing_is_a_failure_in_the_record_and_the_summary_is_bounded_and_printable(self):
+        self.assertEqual(ads.private_python_summary("", 124), "FAIL:no_result_line_rc124")
+        self.assertEqual(ads.private_python_summary("noise\nPRIVATE_PYTHON status=ok\n", 0), "FAIL:no_result_line_rc0")
+        self.assertEqual(ads.private_python_summary("PRIVATE_PYTHON status=ok reason=a version=- python=-\nPRIVATE_PYTHON status=FAIL reason=b version=- python=-\n", 0), "FAIL:b")
+        long_reason = "PRIVATE_PYTHON status=NOT_RUN reason=%s version=- python=-\n" % ("x" * 160)
+        got = ads.private_python_summary(long_reason, 0)
+        self.assertLessEqual(len(got), 100)
+        rec = self.run_stage(self.ALL_PASS, python_log=long_reason, setup_log=self.SETUP_ALL_OK)[1]
+        vast_report.validate_apps_discovery(rec)
+        self.assertTrue(re.fullmatch(r"[\x20-\x7e]{1,120}", rec["private_python"]))
+
+    def test_without_the_private_python_the_old_host_still_refuses_by_name_and_the_other_rows_run(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, python_log=self.PY_REFUSED, setup_log=self.SETUP_REFUSED)
+        self.assertEqual((rc, rec["verdict"], rec["not_run"], rec["reason"]), (1, "FAIL", ["tensorrt", "jax"], "discovery_not_run:tensorrt,jax"))
+        by_name = {r["name"]: r for r in rec["rows"]}
+        self.assertEqual(by_name["jax"]["reason"], "python_too_old:3.10<3.12")
+        self.assertEqual(rec["private_python"], "NOT_RUN:python_source_refused:TRUST_PIN_MISMATCH")
+        self.assertEqual(next(a for a in self.last["argv"] if "guest" in a and a[1].endswith("apps_matrix.sh"))[4:], ["nvcodec_matrix", "nvml_dcgm", "vkcts", "vllm"])
+
+    def test_with_the_private_python_every_ml_row_is_booted_and_the_stage_passes(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, python_log=self.PY_OK, setup_log=self.SETUP_ALL_OK)
+        self.assertEqual((rc, rec["verdict"], rec["not_run"], rec["private_python"]), (0, "PASS", [], "ok:built:3.12.10:212s"))
+        self.assertEqual(next(a for a in self.last["argv"] if "guest" in a and a[1].endswith("apps_matrix.sh"))[4:], list(ads.ROWS))
+
+    def test_a_failed_python_build_is_not_a_retry_the_rows_say_python_too_old(self):
+        rc, rec, _ = self.run_stage(self.ALL_PASS, python_log="PRIVATE_PYTHON status=FAIL reason=make_failed:x version=- python=-\n", python_rc=3, setup_log=self.SETUP_REFUSED)
+        self.assertEqual((rc, rec["verdict"]), (1, "FAIL"))
+        self.assertNotEqual(rec["verdict"], "RETRY")
+        self.assertEqual([s["step"] for s in rec["steps"]][:3], ["build_vkcts", "python312", "setup_mlrows"])
+
+    def test_the_python_step_has_a_cap_above_the_sum_of_its_own_so_that_the_inner_timeouts_fire_first(self):
+        sys.path.insert(0, str(ROOT / "scripts/apps/mlrows"))
+        import private_python
+        inner = sum(private_python.TIMEOUT_S[k] for k in ("fetch", "apt", "configure", "make", "install"))
+        self.assertGreater(ads.STEP_TIMEOUT_S["python312"], inner)
+
+    def test_the_record_validator_takes_a_short_printable_private_python_and_nothing_else(self):
+        rec = self.run_stage(self.ALL_PASS, python_log=self.PY_OK, setup_log=self.SETUP_ALL_OK)[1]
+        vast_report.validate_apps_discovery(rec)
+        for bad in (5, "x" * 121, "tab\there", None):
+            with self.assertRaises(ValueError):
+                vast_report.validate_apps_discovery({**rec, "private_python": bad})
+
     def test_a_refused_row_is_not_booted_on_the_host_control_either(self):
         rc, rec, calls = self.run_stage(self.ALL_PASS, host=True, setup_log=self.SETUP_REFUSED)
         for side in ("host", "guest"):
@@ -766,7 +859,7 @@ class AppsDiscoveryTests(unittest.TestCase):
     def test_when_every_row_is_refused_nothing_boots_and_the_stage_fails_by_name(self):
         rc, rec, calls = self.run_stage(self.ALL_PASS, rows="tensorrt,jax", setup_log=self.SETUP_REFUSED)
         self.assertEqual((rc, rec["verdict"], rec["reason"], rec["not_run"]), (1, "FAIL", "discovery_not_run:tensorrt,jax", ["tensorrt", "jax"]))
-        self.assertEqual([s["step"] for s in rec["steps"]], ["setup_mlrows"])
+        self.assertEqual([s["step"] for s in rec["steps"]], ["python312", "setup_mlrows"])
         self.assertEqual([a for a in self.last["argv"] if a[1].endswith("apps_matrix.sh")], [])
 
     def test_all_refused_is_a_failure_of_the_record_and_never_a_retry(self):
@@ -816,7 +909,7 @@ class AppsDiscoveryTests(unittest.TestCase):
     def test_the_steps_run_in_order_and_the_host_runs_first_when_it_exists(self):
         rc, rec, calls = self.run_stage(self.ALL_PASS, host=True)
         steps = [s["step"] for s in rec["steps"]]
-        self.assertEqual(steps, ["build_vkcts", "setup_mlrows", "overlay", "host", "guest"])
+        self.assertEqual(steps, ["build_vkcts", "python312", "setup_mlrows", "overlay", "host", "guest"])
 
     def test_a_pass_record_that_lists_a_not_run_row_is_refused_by_name(self):
         rc, rec, _ = self.run_stage(self.ALL_PASS)

@@ -157,6 +157,38 @@ MUTANTS = [
     M("row-bound-back-to-nineteen", "report", "MAX_SUITE_ROWS = 32", "MAX_SUITE_ROWS = 19", MF + "test_the_result_row_bound_fits_one_full_run", RV + "test_the_reader_takes_twenty_five_rows_one_full_run_reports"),
     M("full-record-with-skip-says-complete-is-accepted", "report", 'ok = ok and (not value["complete"] or not value["skipped"])', "pass", RV + "test_full_record_is_accepted_and_bad_ones_are_not"),
     M("open-rows-record-with-a-not-run-row-is-accepted", "report", 'ok = ok and value["passed"] <= value["ran"] <= value["expected"]', "pass", RV + "test_windows_open_rows_record"),
+    # 2026-11-20: the private Python 3.12 step of the stage and its record field
+    M("the-python-step-never-runs", "ads", '            rc_py = step("python312", ["python3", "-B", "-I", str(apps / "mlrows/private_python.py"), "ensure", "--if-needed", "--root", ml_root], "python312")',
+      "            rc_py = 0",
+      AD + "test_the_private_python_is_ensured_before_the_ml_setup_and_both_get_the_same_root", AD + "test_the_record_says_what_the_private_python_did"),
+    M("the-python-step-runs-after-the-setup", "ads",
+      '            rc_py = step("python312", ["python3", "-B", "-I", str(apps / "mlrows/private_python.py"), "ensure", "--if-needed", "--root", ml_root], "python312")\n'
+      '            try:\n'
+      '                record["private_python"] = private_python_summary((log_dir / "python312.log").read_text(errors="replace")[-20000:], rc_py)\n'
+      '            except OSError:\n'
+      '                record["private_python"] = "FAIL:no_result_line_rc%d" % rc_py\n',
+      '            step("setup_mlrows", ["python3", "-B", "-I", str(apps / "mlrows/mlrows.py"), "setup", "--root", ml_root, "--rows", ",".join(ml)], "setup_mlrows")\n'
+      '            rc_py = step("python312", ["python3", "-B", "-I", str(apps / "mlrows/private_python.py"), "ensure", "--if-needed", "--root", ml_root], "python312")\n'
+      '            try:\n'
+      '                record["private_python"] = private_python_summary((log_dir / "python312.log").read_text(errors="replace")[-20000:], rc_py)\n'
+      '            except OSError:\n'
+      '                record["private_python"] = "FAIL:no_result_line_rc%d" % rc_py\n',
+      AD + "test_the_private_python_is_ensured_before_the_ml_setup_and_both_get_the_same_root", AD + "test_the_steps_run_in_order_and_the_host_runs_first_when_it_exists"),
+    M("the-python-step-is-not-conditional", "ads", '"ensure", "--if-needed", "--root", ml_root]', '"ensure", "--root", ml_root]',
+      AD + "test_the_private_python_is_ensured_before_the_ml_setup_and_both_get_the_same_root", AD + "test_the_python_step_asks_only_when_needed_and_for_the_same_root_as_the_venvs"),
+    M("the-python-step-uses-another-root", "ads", '"ensure", "--if-needed", "--root", ml_root]', '"ensure", "--if-needed", "--root", args.apps_root]',
+      AD + "test_the_private_python_is_ensured_before_the_ml_setup_and_both_get_the_same_root", AD + "test_the_python_step_asks_only_when_needed_and_for_the_same_root_as_the_venvs"),
+    M("a-failed-python-build-is-a-retry", "ads", '            try:\n                record["private_python"] = private_python_summary(',
+      '            if rc_py:\n                return finish("RETRY", "python_build_failed")\n            try:\n                record["private_python"] = private_python_summary(',
+      AD + "test_a_failed_python_build_is_not_a_retry_the_rows_say_python_too_old", AD + "test_the_record_says_what_the_private_python_did"),
+    M("a-silent-python-step-is-ok", "ads", '        return "FAIL:no_result_line_rc%d" % rc\n', '        return "ok:no_result_line"\n',
+      AD + "test_a_step_that_printed_nothing_is_a_failure_in_the_record_and_the_summary_is_bounded_and_printable", AD + "test_the_record_says_what_the_private_python_did"),
+    M("the-python-summary-is-unbounded", "ads", '"%s:%s" % (status, reason))[:100]', '"%s:%s" % (status, reason))[:100000]',
+      AD + "test_a_step_that_printed_nothing_is_a_failure_in_the_record_and_the_summary_is_bounded_and_printable", AD + "test_the_record_says_what_the_private_python_did"),
+    M("the-plan-forgets-the-python-step", "ads", '        steps += ["python312", "setup_mlrows"]', '        steps += ["setup_mlrows"]',
+      AD + "test_the_plan_names_the_build_and_the_setup_before_the_matrix", AD + "test_the_plan_is_the_list_of_steps_the_stage_really_runs"),
+    M("the-validator-refuses-the-private-python-field", "report", '"reason", "guest_rc", "private_python"}', '"reason", "guest_rc"}',
+      AD + "test_the_record_says_what_the_private_python_did", AD + "test_the_record_validator_takes_a_short_printable_private_python_and_nothing_else"),
 ]
 
 

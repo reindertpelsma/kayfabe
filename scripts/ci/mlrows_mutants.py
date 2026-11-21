@@ -27,6 +27,7 @@ FILES = {
     "matrix": "scripts/apps/apps_matrix.sh",
     "mt": "scripts/apps/matrix_table.py",
     "rows": "scripts/apps/gpu_use_rows.py",
+    "pp": "scripts/apps/mlrows/private_python.py",
 }
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_mlrows."
@@ -37,9 +38,9 @@ suite = unittest.defaultTestLoader.loadTestsFromNames(sys.argv[1:])
 r = unittest.TextTestRunner(stream=io.StringIO()).run(suite)
 print('KF_MUTATION_RESULT=' + json.dumps({'tests': r.testsRun, 'killers': [t.id() for t, _ in r.failures + r.errors]}))
 """
-(PI, FA, FL, LK, MO, JV, JT, JJ, PF, EN, RR, MM, CR, SE, CP, PU, MW, GJ, TP, HP) = (SUITE + n for n in (
+(PI, FA, FL, LK, MO, JV, JT, JJ, PF, EN, RR, MM, CR, SE, CP, PU, MW, GJ, TP, HP, PP, IC, PV) = (SUITE + n for n in (
     "Pins.", "Facts.", "Flavour.", "Locks.", "Model.", "JudgeVllm.", "JudgeTensorrt.", "JudgeJax.", "Proof.", "Env.", "RunRow.", "MemoryRecord.", "CmdRun.", "Setup.", "Compare.",
-    "Push.", "MatrixWiring.", "GpuUseJudge.", "TrustPins.", "HookPush."))
+    "Push.", "MatrixWiring.", "GpuUseJudge.", "TrustPins.", "HookPush.", "PrivatePython.", "Interpreter.", "PrivatePush."))
 
 
 def M(name, key, old, new, *tests):
@@ -213,6 +214,83 @@ MUTANTS = [
       MW + "test_the_shell_glue_pushes_sets_up_and_compares_the_rows", MW + "test_the_host_run_sets_the_rows_up_before_it_takes_the_gpu_lock"),
     M("matrix-does-not-compare", "matrix", 'python3 -B -I "$HERE/mlrows/mlrows.py" compare "$row" "$R/$row.host.log" "$R/$row.guest.log" > "$R/$row.compare.txt" 2>&1;', ': "$R/$row.host.log" "$R/$row.guest.log" > "$R/$row.compare.txt" 2>&1;',
       MW + "test_the_shell_glue_pushes_sets_up_and_compares_the_rows", MW + "test_the_matrix_compares_host_and_guest_for_each_row_after_the_guest_runs"),
+
+    # 2026-11-20: the private Python 3.12 of the host (private_python.py) and the interpreter choice (mlrows.py)
+    M("private-python-is-shared", "pp", '["./configure", "--prefix=" + str(prefix), "--with-ensurepip=no"]', '["./configure", "--prefix=" + str(prefix), "--with-ensurepip=no", "--enable-shared"]',
+      PP + "test_the_recipe_is_a_private_static_altinstall_with_the_prefix_derived_from_one_constant", PP + "test_a_build_runs_the_steps_in_order_and_writes_the_marker_last"),
+    M("altinstall-becomes-install", "pp", '("install", ["make", "altinstall"], src)', '("install", ["make", "install"], src)',
+      PP + "test_the_recipe_is_a_private_static_altinstall_with_the_prefix_derived_from_one_constant", PP + "test_a_build_runs_the_steps_in_order_and_writes_the_marker_last"),
+    M("parallelism-dropped", "pp", '("make", ["make", "-j%d" % jobs], src)', '("make", ["make"], src)',
+      PP + "test_the_recipe_is_a_private_static_altinstall_with_the_prefix_derived_from_one_constant", PP + "test_a_build_runs_the_steps_in_order_and_writes_the_marker_last"),
+    M("prefix-is-not-private", "pp", "    return Path(os.path.abspath(root)) / PRIVATE_DIR\n", "    return Path(os.path.abspath(root))\n",
+      PP + "test_the_recipe_is_a_private_static_altinstall_with_the_prefix_derived_from_one_constant", PP + "test_it_only_ever_writes_below_its_own_prefix_and_never_replaces_the_system_python"),
+    M("built-python-not-checked", "pp", '        if not got or got["missing"] or ".".join(map(str, got["version"])) != PY_VERSION:\n            shutil.rmtree(prefix, ignore_errors=True)\n',
+      '        if False:\n            shutil.rmtree(prefix, ignore_errors=True)\n',
+      PP + "test_a_built_python_is_checked_for_its_version_and_for_every_module_a_missing_header_would_drop", PP + "test_a_marker_that_is_written_before_the_probe_would_bless_a_broken_build"),
+    M("cached-python-with-a-missing-module-accepted", "pp", '\n    if not got or got["missing"] or ".".join(map(str, got["version"])) != PY_VERSION:\n        return None',
+      '\n    if not got or ".".join(map(str, got["version"])) != PY_VERSION:\n        return None',
+      PP + "test_a_cached_python_with_a_missing_module_or_the_wrong_version_is_not_usable", IC + "test_an_old_host_python_without_a_complete_private_one_stays_and_the_refusal_stays"),
+    M("cached-python-of-another-version-accepted", "pp", '\n    if not got or got["missing"] or ".".join(map(str, got["version"])) != PY_VERSION:\n        return None',
+      '\n    if not got or got["missing"]:\n        return None',
+      PP + "test_a_cached_python_with_a_missing_module_or_the_wrong_version_is_not_usable", IC + "test_an_old_host_python_without_a_complete_private_one_stays_and_the_refusal_stays"),
+    M("marker-not-required", "pp", '    if not marker or marker.get("version") != PY_VERSION or marker.get("recipe") != recipe_id(prefix_of(root)):', "    if False:",
+      PP + "test_a_prefix_without_a_marker_is_never_used_and_is_replaced", PP + "test_a_marker_of_another_recipe_or_version_or_a_missing_interpreter_is_a_rebuild", IC + "test_an_old_host_python_without_a_complete_private_one_stays_and_the_refusal_stays"),
+    M("a-second-ensure-rebuilds", "pp", '    if got:\n        return result("ok", "cached:" + PY_VERSION, root, False, PY_VERSION)', '    if False:\n        return result("ok", "cached:" + PY_VERSION, root, False, PY_VERSION)',
+      PP + "test_a_second_ensure_builds_nothing", PP + "test_a_cached_build_makes_no_network_apt_or_policy_call"),
+    M("if-needed-ignored", "pp", "    if if_needed:\n        pins =", "    if False:\n        pins =",
+      PP + "test_a_host_that_already_has_python_312_builds_nothing_with_if_needed", PP + "test_main_on_a_host_that_has_python_312_builds_nothing_and_on_an_old_one_builds"),
+    M("if-needed-upper-bound-dropped", "pp", 'if tuple(pins["min"]) <= sys_version[:2] < tuple(pins["max_exclusive"]):', 'if tuple(pins["min"]) <= sys_version[:2]:',
+      PP + "test_a_host_python_newer_than_the_pinned_range_is_not_good_enough_either", PP + "test_main_on_a_host_that_has_python_312_builds_nothing_and_on_an_old_one_builds"),
+    M("if-needed-flag-not-passed", "pp", "r = ensure(a.root, if_needed=a.if_needed, jobs=a.jobs)", "r = ensure(a.root, jobs=a.jobs)",
+      PP + "test_main_passes_the_flags_through", PP + "test_main_on_a_host_that_has_python_312_builds_nothing_and_on_an_old_one_builds"),
+    M("a-refused-anchor-is-accepted", "pp", "    if rc == 0 and Path(out).is_file():\n        return True, \"\"", "    if True:\n        return True, \"\"",
+      PP + "test_an_artifact_the_manifest_does_not_anchor_is_refused_by_name_before_apt_runs", PP + "test_a_transfer_that_fails_without_a_trust_code_is_named_by_its_exit_code"),
+    M("dpkg-status-ignored", "pp", '        if rc != 0 or "install ok installed" not in text:', "        if False:",
+      PP + "test_build_dependencies_are_installed_through_bash_as_root_and_rechecked", PP + "test_build_dependencies_nobody_may_install_are_a_named_not_run_and_nothing_builds"),
+    M("apt-without-the-shim-variables", "pp", "install_packages(run, absent, build_env(environ, apt=True))", "install_packages(run, absent, build_env(environ))",
+      PP + "test_the_apt_call_gets_the_payload_shim_variables_and_nothing_else_does", PP + "test_build_dependencies_are_installed_through_bash_as_root_and_rechecked"),
+    M("build-env-passes-everything", "pp", '    env = {k: v for k, v in source.items() if k in ENV_KEEP or (trust and k.startswith("KF_TRUST_")) or (apt and k in APT_SHIM_ENV)}\n', "    env = dict(source)\n",
+      PP + "test_the_build_runs_in_an_allowlisted_environment", PP + "test_the_apt_call_gets_the_payload_shim_variables_and_nothing_else_does"),
+    M("escaping-members-extracted", "pp", '        if os.path.isabs(m.name) or ".." in Path(m.name).parts or not (target == root or target.startswith(root + os.sep)):', "        if False:",
+      PP + "test_a_source_tarball_that_leaves_its_directory_is_refused_and_extracts_nothing_outside", PP + "test_ensure_refuses_hostile_or_wrong_tarballs_before_building"),
+    M("escaping-links-extracted", "pp", "            if os.path.isabs(m.linkname) or not (link == root or link.startswith(root + os.sep)):", "            if False:",
+      PP + "test_a_source_tarball_that_leaves_its_directory_is_refused_and_extracts_nothing_outside", PP + "test_a_refused_tarball_is_a_named_not_run_and_the_build_never_starts"),
+    M("device-nodes-extracted", "pp", "        elif not (m.isreg() or m.isdir()):", "        elif False:",
+      PP + "test_a_source_tarball_that_leaves_its_directory_is_refused_and_extracts_nothing_outside", PP + "test_ensure_refuses_hostile_or_wrong_tarballs_before_building"),
+    M("any-top-directory-accepted", "pp", '            if tops != {"Python-" + PY_VERSION}:', "            if False:",
+      PP + "test_a_tarball_with_another_top_directory_or_two_is_refused_and_a_good_one_extracts", PP + "test_ensure_refuses_hostile_or_wrong_tarballs_before_building"),
+    M("an-old-prefix-is-built-over", "pp", "    if prefix.exists():\n        shutil.rmtree(prefix)", "    if False:\n        shutil.rmtree(prefix)",
+      PP + "test_a_prefix_without_a_marker_is_never_used_and_is_replaced", PP + "test_a_marker_of_another_recipe_or_version_or_a_missing_interpreter_is_a_rebuild"),
+    M("a-failed-step-keeps-its-prefix", "pp", '                shutil.rmtree(prefix, ignore_errors=True)\n                return result("FAIL", "%s_%s:%s"', '                return result("FAIL", "%s_%s:%s"',
+      PP + "test_a_failed_step_is_a_named_fail_that_leaves_no_prefix_and_no_marker", PP + "test_a_timed_out_step_says_so"),
+    M("pin-entry-says-binary", "pp", '"scope": "source"', '"scope": "upstream-artifact"',
+      PP + "test_the_manifest_entry_pin_entry_prints_is_valid_for_kf_trust_and_the_lint", PP + "test_pin_entry_hashes_the_file_and_cross_checks_the_release_pages_md5"),
+    M("chooser-excludes-the-lower-edge", "mr", 'if not root or lo <= tuple(own["version"][:2]) < hi:', 'if not root or lo < tuple(own["version"][:2]) < hi:',
+      IC + "test_a_host_python_inside_the_range_is_used_and_nothing_is_probed", IC + "test_the_edges_of_the_pinned_range_are_inside_it"),
+    M("chooser-never-takes-the-private-python", "mr", '    if got:\n        return {"exe": str(pp.interpreter_of(root))', '    if False:\n        return {"exe": str(pp.interpreter_of(root))',
+      IC + "test_an_old_host_python_takes_the_private_one_when_it_is_complete", IC + "test_setup_end_to_end_on_an_old_host_makes_the_venv_with_the_private_python_and_records_it"),
+    M("venv-made-with-the-running-python", "mr", '[interp["exe"], "-m", "venv", str(venv)]', '[sys.executable, "-m", "venv", str(venv)]',
+      IC + "test_setup_makes_the_venv_with_the_chosen_interpreter_and_records_it", IC + "test_setup_end_to_end_on_an_old_host_makes_the_venv_with_the_private_python_and_records_it"),
+    M("facts-take-the-running-pythons-version", "mr", 'tuple(interp["version"][:3]),', "tuple(sys.version_info[:3]),",
+      IC + "test_facts_take_the_python_version_of_the_interpreter_that_makes_the_venvs", IC + "test_setup_end_to_end_on_an_old_host_makes_the_venv_with_the_private_python_and_records_it"),
+    M("facts-take-the-running-pythons-headers", "mr", '    inc = interp["include"]\n', '    inc = sysconfig.get_paths().get("include") or ""\n',
+      IC + "test_facts_take_python_h_from_the_include_directory_of_that_interpreter", IC + "test_a_private_python_without_its_headers_is_not_enough_for_vllm"),
+    M("setup-forgets-the-private-python", "mr", '"python_private": bool(interp["private"]),', '"python_private": False,',
+      IC + "test_setup_makes_the_venv_with_the_chosen_interpreter_and_records_it", IC + "test_setup_end_to_end_on_an_old_host_makes_the_venv_with_the_private_python_and_records_it"),
+    M("no-hint-beside-the-refusal", "mr", '        if status == lib.NOT_RUN and reason.startswith("python_too_old"):\n            say("MLROWS_HINT "', '        if False:\n            say("MLROWS_HINT "',
+      IC + "test_a_refused_old_python_names_the_way_out_without_changing_the_setup_line", IC + "test_setup_end_to_end_on_an_old_host_without_the_private_python_refuses_by_name_and_says_how_to_get_it"),
+    M("setup-hands-no-interpreter-to-the-venv-maker", "mr", "status, reason = setup_row(row, a.root, facts, pins, a.flavor, interp=interp)", "status, reason = setup_row(row, a.root, facts, pins, a.flavor)",
+      IC + "test_check_run_and_setup_all_choose_the_interpreter_from_the_root", IC + "test_setup_end_to_end_on_an_old_host_makes_the_venv_with_the_private_python_and_records_it"),
+    M("run-ignores-the-private-python", "mr", "    facts = collect_facts(a.root, choose_interpreter(a.root, pins))\n    negctl", "    facts = collect_facts(a.root)\n    negctl",
+      IC + "test_check_and_run_each_choose_the_interpreter_from_the_root", IC + "test_check_run_and_setup_all_choose_the_interpreter_from_the_root"),
+    M("check-ignores-the-private-python", "mr", 'facts = collect_facts(a.root or ".", choose_interpreter(a.root, pins))', 'facts = collect_facts(a.root or ".")',
+      IC + "test_check_and_run_each_choose_the_interpreter_from_the_root", IC + "test_check_run_and_setup_all_choose_the_interpreter_from_the_root"),
+    M("push-never-ships-the-private-python", "mr", "    private = needs_private_python(a.root, targets)", "    private = False",
+      PV + "test_the_private_python_travels_with_a_venv_that_needs_it_and_the_guest_gets_the_hosts_path", PV + "test_a_failing_link_fails_the_push"),
+    M("push-ships-it-for-every-venv", "mr", '    return bool(pp.read_marker(root)) and any((read_setup(root, t.name) or {}).get("python_private") for t in targets)', "    return bool(pp.read_marker(root))",
+      PV + "test_a_venv_made_with_the_system_python_ships_no_interpreter_and_no_link", PV + "test_a_staged_row_without_a_setup_state_ships_no_interpreter"),
+    M("push-links-nothing-into-the-guest", "mr", "    if private and host_root != bundle:", "    if False:",
+      PV + "test_the_private_python_travels_with_a_venv_that_needs_it_and_the_guest_gets_the_hosts_path", PV + "test_a_failing_link_fails_the_push"),
 ]
 
 
