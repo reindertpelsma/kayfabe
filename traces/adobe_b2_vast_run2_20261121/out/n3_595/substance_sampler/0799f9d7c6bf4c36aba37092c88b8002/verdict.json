@@ -1,0 +1,35 @@
+{
+  "app": "substance_sampler",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "LIMITED: launched, main window reached (1 windows), process responding=True, 1906 MB; no document work; ui_hits=5",
+  "error": "",
+  "class": "app",
+  "limited": true,
+  "lane": "discovery",
+  "path": "Substance 3D Sampler start (launch only, exe discovered; new, unmeasured)",
+  "platform": "kf3",
+  "secs": 199,
+  "ui_hits": 5,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 17.0,
+      "mem_mb": 9601.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 17.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 73
+    },
+    "baseline": {
+      "mem_mb": 9426.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 495
+  },
+  "outputs_recorded": 6
+}

@@ -1,0 +1,32 @@
+{
+ "required": [],
+ "verdict": "PASS",
+ "reasons": [],
+ "baseline": {
+  "mem_mb": 9391.0,
+  "gpu": 4.0,
+  "enc_sessions": 0.0
+ },
+ "peak": {
+  "gpu": 12.0,
+  "mem_mb": 9469.0,
+  "enc_sessions": 0.0,
+  "gpu_dmon_sm": 12.0,
+  "enc": 0.0,
+  "dec": 0.0,
+  "busy_samples": 120
+ },
+ "samples": 1923,
+ "dmon_samples": 960,
+ "source": "host",
+ "guest": {
+  "verdict": "PASS",
+  "reasons": [
+   "no samples: the GPU could not be read (nvidia-smi missing, no GPU or empty output)"
+  ],
+  "peak": {},
+  "baseline": {},
+  "samples": 0
+ },
+ "name": "lightroomlaunch"
+}

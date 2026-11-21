@@ -1,0 +1,2 @@
+02:23:41 id=1001 Windows Error Reporting: Fault bucket , type 0 Event Name: RADAR_PRE_LEAK_64 Response: Not available Cab Id: 0 Problem signature: P1: Adobe Substance 3D Stager.exe P2: 3.1.10.0 P3: 10.0.26200.2.0.0 P4: P5: P6: P7: P8: P9: P10: 
+dump Adobe Substance 3D Painter.exe.7260.dmp 130818367 bytes 02:00:42

@@ -1,0 +1,7 @@
+Window | Adobe Substance 3D Modeler | 
+TitleBar | Adobe Substance 3D Modeler | TitleBar
+MenuBar | System Menu Bar | SystemMenuBar
+Button | Minimize | Minimize
+Button | Maximize | Maximize
+Button | Close | Close
+MenuItem | System | Item 1

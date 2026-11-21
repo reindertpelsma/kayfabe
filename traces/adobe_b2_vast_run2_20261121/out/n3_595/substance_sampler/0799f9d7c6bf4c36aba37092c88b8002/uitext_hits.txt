@@ -1,0 +1,5 @@
+Custom | Get started with a sample project | 
+Custom | Drag and drop a file or select one from <a href='yourdevice'>your computer</a> or the <a href='assetLibrary'>Asset Library</a> | 
+Custom | Drag and drop files or select from <a href='yourdevice'>your computer</a> or the <a href='assetLibrary'>Assets Library</a> | 
+Hyperlink | Asset Library | 
+Hyperlink | Assets Library | 

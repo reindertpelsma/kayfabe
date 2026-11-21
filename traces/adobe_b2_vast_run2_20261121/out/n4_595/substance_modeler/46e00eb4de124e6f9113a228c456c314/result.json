@@ -1,0 +1,24 @@
+{
+    "app":  "substance_modeler",
+    "started":  1795139835.8,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe Substance 3D Modeler",
+    "exe_name":  "Adobe Substance 3D Modeler.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Adobe Substance 3D Modeler"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  5730,
+    "ui_lines":  7,
+    "ui_hits":  2,
+    "quit":  "clean",
+    "ended":  1795140101.983,
+    "dismissed":  [
+
+                  ]
+}

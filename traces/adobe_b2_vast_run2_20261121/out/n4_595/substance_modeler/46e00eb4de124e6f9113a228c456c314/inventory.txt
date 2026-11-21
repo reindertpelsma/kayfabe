@@ -1,0 +1,213 @@
+root: Adobe
+  folder: Acrobat DC
+    exe: Acrobat\Acrobat.exe
+    exe: Acrobat\AcrobatInfo.exe
+    exe: Acrobat\acrobat_sl.exe
+    exe: Acrobat\AcroBroker.exe
+    exe: Acrobat\acrodist.exe
+    exe: Acrobat\AcroShareTarget.exe
+    exe: Acrobat\AcroTextExtractor.exe
+    exe: Acrobat\acrotray.exe
+    exe: Acrobat\ADelRCP.exe
+    exe: Acrobat\ADNotificationManager.exe
+    exe: Acrobat\Adobe Crash Processor.exe
+    exe: Acrobat\AdobeCollabSync.exe
+    exe: Acrobat\CPInstCU.exe
+    exe: Acrobat\CRLogTransport.exe
+    exe: Acrobat\CRWindowsClientService.exe
+    exe: Acrobat\Eula.exe
+    exe: Acrobat\LogTransport2.exe
+    exe: Acrobat\ShowAppPickerForPDF.exe
+    exe: Acrobat\WebViewInstaller.exe
+    exe: Acrobat Elements\Acrobat Elements.exe
+  folder: Adobe After Effects 2027
+    exe: Support Files\Adobe Analysis Server.exe
+    exe: Support Files\AdobeCrashReport.exe
+    exe: Support Files\aerender.exe
+    exe: Support Files\AfterFX.exe
+    exe: Support Files\crashpad_handler.exe
+    exe: Support Files\CRLogTransport.exe
+    exe: Support Files\CRWindowsClientService.exe
+    exe: Support Files\dvaapprelauncher.exe
+    exe: Support Files\dynamiclinkmanager.exe
+    exe: Support Files\GPUSniffer.exe
+    exe: Support Files\TeamProjectsLocalHub.exe
+  folder: Adobe Animate 2027
+    exe: Animate.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: dynamiclinkmanager.exe
+    exe: HeadlessAnimateApp.exe
+    exe: sketchConfigTest.exe
+    exe: CEPHtmlEngine\CEPHtmlEngine.exe
+    exe: Players\FlashPlayer.exe
+  folder: Adobe Audition 2027
+    exe: Adobe Audition.exe
+    exe: AdobeCrashReport.exe
+    exe: crashpad_handler.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: dvaapprelauncher.exe
+    exe: dvaaudiofilterscan.exe
+    exe: dynamiclinkmanager.exe
+    exe: CEPHtmlEngine\CEPHtmlEngine.exe
+  folder: Adobe Bridge 2027
+    exe: Adobe Bridge.exe
+    exe: Adobe Crash Processor.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: CEPHtmlEngine\CEPHtmlEngine.exe
+    exe: dlms\amecommand.exe
+    exe: dlms\dynamiclinkmanager.exe
+    exe: dlms\dynamiclinkmediaserver.exe
+  folder: Adobe Character Animator 2026
+    exe: Support Files\AdobeCrashReport.exe
+    exe: Support Files\Character Animator.exe
+    exe: Support Files\crashpad_handler.exe
+    exe: Support Files\CRLogTransport.exe
+    exe: Support Files\CRWindowsClientService.exe
+    exe: Support Files\dvaapprelauncher.exe
+    exe: Support Files\dynamiclinkmanager.exe
+  folder: Adobe Creative Cloud
+    exe: ACC\Adobe Crash Processor.exe
+    exe: ACC\Creative Cloud CustomHook.exe
+    exe: ACC\Creative Cloud UI Helper.exe
+    exe: ACC\Creative Cloud.exe
+    exe: ACC\CRLogTransport.exe
+    exe: ACC\CRWindowsClientService.exe
+    exe: Diagnostics\Adobe Creative Cloud Diagnostics.exe
+  folder: Adobe Creative Cloud Experience
+    exe: CCXProcess.exe
+    exe: libs\node.exe
+  folder: Adobe Dimension
+    exe: Adobe Dimension.exe
+    exe: crashpad_handler.exe
+    exe: ffmpeg.exe
+    exe: gpu-sniffer-core.exe
+  folder: Adobe Dreamweaver 2021
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: Dreamweaver.exe
+    exe: DreamweaverHelper.exe
+    exe: DreamweaverImageHelper.exe
+    exe: LogTransport2.exe
+    exe: node\node.exe
+  folder: Adobe Illustrator 2027
+  folder: Adobe InCopy 2027
+    exe: Adobe Crash Processor.exe
+    exe: AISniffer.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: InCopy.exe
+    exe: Kickstart.exe
+  folder: Adobe InDesign 2027
+    exe: Adobe Crash Processor.exe
+    exe: AISniffer.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: InDesign.exe
+    exe: InDesignHelper.exe
+    exe: Kickstart.exe
+  folder: Adobe Lightroom CC
+    exe: Adobe Crash Processor.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: lightroom.exe
+  folder: Adobe Lightroom Classic
+    exe: Adobe Crash Processor.exe
+    exe: Adobe Lightroom CEF Helper.exe
+    exe: AdobeStorageHelper.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: HD_Deleter.exe
+    exe: Lightroom.exe
+  folder: Adobe Media Encoder 2026
+    exe: Adobe Media Encoder.exe
+    exe: AdobeCrashReport.exe
+    exe: AMEWebService.exe
+    exe: AMEWinService.exe
+    exe: ame_webservice_console.exe
+    exe: crashpad_handler.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: dvaapprelauncher.exe
+    exe: dvaaudiofilterscan.exe
+    exe: dynamiclinkmanager.exe
+    exe: GPUSniffer.exe
+    exe: TeamProjectsLocalHub.exe
+    exe: CEPHtmlEngine\CEPHtmlEngine.exe
+  folder: Adobe Media Encoder 2027
+    exe: Adobe Media Encoder.exe
+    exe: AdobeCrashReport.exe
+    exe: AMEWebService.exe
+    exe: AMEWinService.exe
+    exe: ame_webservice_console.exe
+    exe: crashpad_handler.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: dvaapprelauncher.exe
+    exe: dvaaudiofilterscan.exe
+    exe: dynamiclinkmanager.exe
+    exe: GPUSniffer.exe
+    exe: TeamProjectsLocalHub.exe
+    exe: CEPHtmlEngine\CEPHtmlEngine.exe
+  folder: Adobe Photoshop 2027
+    exe: Adobe Crash Processor.exe
+    exe: convert.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: flitetranscoder.exe
+    exe: LogTransport2.exe
+    exe: node.exe
+    exe: Photoshop.exe
+    exe: PhotoshopPrefsManager.exe
+    exe: pngquant.exe
+    exe: sniffer.exe
+    exe: XPUInfoIPC.exe
+    exe: Required\Droplet Template.exe
+  folder: Adobe Premiere Pro 2027
+    exe: Adobe Premiere Pro.exe
+    exe: AdobeCrashReport.exe
+    exe: crashpad_handler.exe
+    exe: CRLogTransport.exe
+    exe: CRWindowsClientService.exe
+    exe: dvaapprelauncher.exe
+    exe: dvaaudiofilterscan.exe
+    exe: dynamiclinkmanager.exe
+    exe: GPUSniffer.exe
+    exe: PProHeadless.exe
+    exe: TeamProjectsLocalHub.exe
+    exe: CEPHtmlEngine\CEPHtmlEngine.exe
+  folder: Adobe Substance 3D Designer
+    exe: Adobe Substance 3D Designer.exe
+    exe: AdobeCrashReportWindow.exe
+    exe: crashpad_handler.exe
+    exe: psdparse.exe
+    exe: sbscooker.exe
+    exe: sbsrender.exe
+    exe: sbsupdater.exe
+    exe: substance3d_baker.exe
+    exe: redists\vc_redist.x64.exe
+  folder: Adobe Substance 3D Modeler
+    exe: Adobe Substance 3D Modeler.exe
+    exe: AdobeCrashReportWindow.exe
+    exe: crashpad_handler.exe
+  folder: Adobe Substance 3D Painter
+    exe: Adobe Substance 3D Painter.exe
+    exe: AdobeCrashReportWindow.exe
+    exe: crashpad_handler.exe
+    exe: QtWebEngineProcess.exe
+  folder: Adobe Substance 3D Sampler
+    exe: Adobe Substance 3D Sampler.exe
+    exe: AdobeCrashReportWindow.exe
+    exe: alchcooker.exe
+    exe: crashpad_handler.exe
+    exe: redists\vc_redist.x64.exe
+  folder: Adobe Substance 3D Stager
+    exe: Adobe Substance 3D Stager.exe
+    exe: crashpad_handler.exe
+    exe: ffmpeg.exe
+    exe: gpu-sniffer-core.exe
+  folder: Adobe UXP Developer Tools
+    exe: Adobe UXP Developer Tools.exe
+  folder: Common

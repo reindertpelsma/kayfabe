@@ -1,0 +1,46 @@
+STATUS: FINAL, 2026-11-21 (run 2 of the new full B image on Vast; stopped by the wall-clock budget with 2 rows NOT RUN). Labels: MEASURED (a line of the run), INFERRED. Text only; no screenshot, account, e-mail, licence key. Evidence (scrubbed text): branch claude/b2-vast-test-20261120 (PR #542), directory traces/adobe_b2_vast_run2_20261121/; raw tarballs of the coordinator: /workspace/bench/b2_vast2_20261120/collect_n{1,2,3,4}.tgz.
+
+# PRE-REGISTRATION (written before any boot of this run, 2026-11-20 about 21:25Z; the box's first boot was 22:21Z)
+Question: does the host driver branch (580.159.04 vs 595.91.07) explain the Substance Painter crash of run 1 (Qt6WebEngineCore.dll 6.8.7.0, 0x80000003)?
+Design: same box, same die (RTX 4090), same image, same kf3 binary (rev 7fb1c98a0), only kayfabe's in-VM HOST driver changes. (a) Painter on 580.159.04, (b) swap to 595.91.07 (provision_host_driver.sh), Painter again.
+Falsifiers: H_host ("the host driver branch causes the crash") is FALSIFIED if Painter crashes at launch on 595.91.07 with the same signature; SUPPORTED if it fails on 580 and reaches the main window on 595 on the same die. H_flaky ("not reproducible") is FALSIFIED if (a) crashes again.
+Note (MEASURED earlier): "host 580.159.04" in run 1 is kayfabe's in-VM host driver chosen by provision_full.sh's default, not a property of the Vast machine; the offer-list driver of a Vast machine is irrelevant to a KVM guest, so the control did not need a 595 offer.
+
+# Run
+- Box 61703573 (RTX 4090, Ryzen 9 5950X, Slovakia): R2 at 1.5 to 5 MB/s per connection and GitHub at 72 KB/s (MEASURED, curl): destroyed after 22 min (about 0.2 USD), absence verified. Box 61706030 (offer 60312677, RTX 4090 24 GB, AMD Eng Sample CPU, 49 GiB RAM, 310 GB disk, California, label kf-accept-newb-213514): GitHub 12.5 MB/s, R2 about 260 MB/s total with 4 connections; 0.569 USD/h.
+- Image fetched by presigned GET minted on the coordinator (r2ro, 8 h; file mode 0600, shredded on the coordinator after use; no R2 key, token, account or licence identifier on the box); the downloader checked size and sha256 against the pins (79,580,643,738 B; ce44952d...), unpack verified; 80 GB in about 13 min. The stage's own fetch/verify/swtpm-build/unpack was driven by a kit wrapper (prep.py: boots mocked, cleanup disabled; NAMED DEVIATION: the stage deletes the image at its end). The test branch (commit dcd301e92) was checked out; kf3 binary of 7fb1c98a0 (as in run 1).
+- Boots by hand with propimage_check.py (one boot per batch; NAMED DEVIATION from the stage's one boot per discovery row; the harness' 55-minute boot-age guard limits a boot to 4 to 6 rows): n1 Painter on 580.159.04; n2 lightroomlaunch, dimension (580.159.04); host driver swap to 595.91.07 at 23:36Z (NVIDIA .run from us.download.nvidia.com as a user input, sha256 ca23c88d... recorded, open module, GPU_SETTLE ok); n3 Painter, designer, sampler, stager (595.91.07); n4 modeler, uxp, dreamweaver, incopy, bridge (595.91.07). Every boot: gpu step PASS, verify PASS (identity, recorded clock, TPM, seed GPU), host Xid CLEAN (0 before, 0 after, readable ring buffer) on all five boots.
+
+# Per-row verdicts (MEASURED; "PASS_LIMITED" = launched, main window reached, process responding, UI text captured; no document work)
+| row | host driver | verdict | detail |
+|---|---|---|---|
+| substance_painter (n1) | 580.159.04 | FAIL main window did not appear | APPCRASH Qt6WebEngineCore.dll 6.8.7.0, exception 0x80000003, fault offset 0x40d59e8, LiveKernelEvent 193 in the same second, 130 MB dump in the guest (not copied); 541 s |
+| substance_painter (n3) | 595.91.07 | FAIL main window did not appear | the SAME module, exception and fault offset (0x40d59e8), LiveKernelEvent 193 in the same second; 543 s |
+| lightroomlaunch | 580 | PASS_LIMITED, quit forced | window after 600 s (Dimension 92 s, Designer 88 s); 1403 MB; 10x LiveKernelEvent 117 and 2x 193 in bursts every about 4 min; the UI text walk got no time (700 s row deadline): ui_lines 0 |
+| dimension | 580 | PASS_LIMITED, quit forced | window after 92 s; the app's GPU sniffer reports the RTX 4090 (GL 4.1, memory 7853 MB); 11x LiveKernelEvent 117, 1x 193 in bursts; UIA walk cap reached, 3 lines (Chromium shell: Window, Pane "Chrome Legacy Window", Document) |
+| uxp | 595 | PASS_LIMITED | 73 MB, 13 UI lines, 0 hits |
+| substance_designer | 595 | PASS_LIMITED | 1377 MB, 29 UI lines |
+| substance_sampler | 595 | PASS_LIMITED | 1906 MB, 82 UI lines |
+| substance_stager | 595 | PASS_LIMITED | 229 MB, 2 UI lines (Chromium shell); 1x RADAR_PRE_LEAK_64 in the guest log |
+| substance_modeler | 595 | PASS_LIMITED | 5730 MB, GPU peak 41 percent, 7 UI lines |
+| bridge | 595 | PASS_LIMITED | 463 MB, 20 UI lines |
+| dreamweaver (2021) | 595 | PASS_LIMITED | 143 MB, 7 UI lines |
+| incopy (2027) | 595 | PASS_LIMITED | 220 MB, 9 UI lines |
+| audition | - | NOT RUN | the boot-age guard (55 min) of boot n4; not retried: 4 h wall-clock budget |
+| characteranimator | - | NOT RUN | same |
+Note: the harness prints `FAIL UIA application did not exit cleanly (forced)` for lightroomlaunch and dimension (its own `ok` flag is false, the status says PASS_LIMITED): the app had to be killed at the end, the window and the process were fine.
+
+# Painter conclusion (MEASURED)
+Pre-registered H_host is FALSIFIED: on the same box, same die and image, Painter crashed on 580.159.04 and on 595.91.07 with an identical signature (same faulting module version, exception code and offset). H_flaky is FALSIFIED too (reproduced on the second box, 2 of 2 on 580 across both runs plus 1 of 1 on 595). So the host driver branch is NOT the cause. Still OPEN (INFERRED, not tested): the die (AD102 here, AD104 on the pc), the Vast nested-KVM environment, the harness overrides of this run (guest RAM 16384 MiB, guest FB 8192 MiB, virtual sound card) against the pc's settings, or the app. The crash is a breakpoint (0x80000003) in Chromium code of Qt WebEngine one minute after launch. Bucket: no control exists yet, so none of "documented limitation / app bug confirmed by a control" can be claimed; the nearest honest label is KAYFABE GAP (SUSPECTED, unconfirmed): the owner's same-image offline run on the pc works. Next control (cheap, one boot on any box): Painter with `QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu` in the guest (falsifier: crash persists means not the GPU process), and the pc with the overrides of this run (falsifier: pc also crashes means it is the overrides/harness, not the die).
+
+# Other failures and findings (each with a bucket)
+1. lightroomlaunch and dimension (on 580, both): LiveKernelEvent 117 (video TDR timeout detected) in bursts every about 4 min and a Lightroom window delay of 600 s, host Xid CLEAN. Bucket: KAYFABE GAP, SUSPECTED (guest sees GPU timeouts while the host sees none), unconfirmed: the rows on 595 were not run (the 595 rows of other apps show 0 LiveKernelEvent 117, but they are other apps, so INFERRED only). Falsifier: lightroomlaunch on 595.91.07 or on the pc shows no 117 (then the host branch or kf3 timing matters), or shows the same 117 (then the app's GPU probe is the trigger).
+2. audition, characteranimator: NOT RUN (harness boot-age limit plus the 4 h budget). Bucket: config error (budget), not an app finding.
+3. Boot overhead (MEASURED): a boot is 10 to 12 min before the first row (first boot of a fresh overlay 11 min; gpu step 120 to 192 s), a launch row 2.5 to 9 min.
+
+# 'Missing add-ons' (UI Automation control names; owner's keywords: download, install, sign in, internet, offline, model(s), update, unavailable, plus not available)
+Result (MEASURED): 0 lines in any captured app matched. The table (app, text, count) is EMPTY: traces/adobe_b2_vast_run2_20261121/addons_table_owner_keywords.md. Controls that mention online content without the keywords (the harness' wider list): Designer: "Online documentation" (Learn list), "Built-in sample content is there to help you get started..."; Sampler: hyperlinks "Asset Library"/"Assets Library", "Get started with a sample project", "Open Sample Project": these are not "needs download" statements (file: online_related_controls_ui_table.md).
+CAVEAT (MEASURED coverage, then INFERRED meaning): UI Automation read the startup screen only: Designer 29 lines, Sampler 82, Bridge 20, UXP 13, InCopy 9, Dreamweaver 7, Modeler 7, Stager 2, Dimension 3, Lightroom 0 (no time), Painter 0 (crashed), Premiere 24 (run 1). Chromium/Qt-quick shells expose little. So "0 hits" does NOT say there are no missing add-ons, only that no startup text said so; the features (Sampler image-to-material, Designer/Painter content packs, Stager assets) were not triggered.
+
+# Cost and teardown
+Box 61703573 about 0.2 USD; box 61706030 3.39 h at 0.569 USD/h (1.93 USD) plus image traffic (about 0.1 USD): about 2.3 USD (the account credit fell 41.73 to 38.55 over the night; that includes the other agent's hwval box). Wall clock 21:13Z to 01:05Z (3 h 52 min). Both of my boxes destroyed by their own ids; `vastai show instances-v1` afterwards: no instance (the hwval box was not touched; it was already gone from the account list when I checked). The presigned-URL files on the coordinator were shredded; none was committed.

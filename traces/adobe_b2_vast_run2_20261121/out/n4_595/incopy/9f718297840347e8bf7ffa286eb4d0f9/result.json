@@ -1,0 +1,24 @@
+{
+    "app":  "incopy",
+    "started":  1795140764.468,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe InCopy 2027",
+    "exe_name":  "InCopy.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Adobe InCopy 2027"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  220,
+    "ui_lines":  9,
+    "ui_hits":  0,
+    "quit":  "clean",
+    "ended":  1795140900.49,
+    "dismissed":  [
+
+                  ]
+}

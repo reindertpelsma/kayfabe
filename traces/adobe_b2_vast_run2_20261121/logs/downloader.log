@@ -1,0 +1,12 @@
+KF_MANIFEST sha256=<scrubbed> items=5 bytes=79949215807 stages=tools:image
+KF_STEP name=download.swtpm-0.10.1.tar.gz secs=0.7 bytes=415992 source=r2 MBps=0.56
+KF_STEP name=download.libtpms-0.10.1.tar.gz secs=0.9 bytes=1399253 source=r2 MBps=1.48
+KF_STEP name=download.kf-gop.signed.efi secs=0.6 bytes=11224 source=r2 MBps=0.02
+KF_STEP name=download.test-assets-20261116c.iso secs=5.6 bytes=366745600 source=mirror0 MBps=65.13
+KF_STEP name=download.propimage-kfimg-adobefull-20261120.zip secs=1172.7 bytes=79580643738 source=r2 MBps=67.86
+KF_DOWNLOAD_DONE state=done ok=5 failed=0 total=5
+KF_VERIFY name=libtpms-0.10.1.tar.gz ok=1
+KF_VERIFY name=swtpm-0.10.1.tar.gz ok=1
+KF_VERIFY name=propimage-kfimg-adobefull-20261120.zip ok=1
+KF_VERIFY name=kf-gop.signed.efi ok=1
+KF_VERIFY name=test-assets-20261116c.iso ok=1

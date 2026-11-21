@@ -1,0 +1,20 @@
+Window | Desktop - Adobe Bridge | 
+Pane | DroverLord - Frame Window | 
+TitleBar | Desktop - Adobe Bridge | TitleBar
+MenuBar | Application | MenuBar
+Pane | OS_ViewContainer | 
+Pane | DroverLord - TabPanel Window | 
+MenuBar | System Menu Bar | SystemMenuBar
+Button | Minimize | Minimize
+Button | Restore | Restore
+Button | Close | Close
+MenuItem | File | Item 1
+MenuItem | Edit | Item 2
+MenuItem | View | Item 3
+MenuItem | Stacks | Item 4
+MenuItem | Label | Item 5
+MenuItem | Tools | Item 6
+MenuItem | Window | Item 7
+MenuItem | Help | Item 8
+MenuItem | System | Item 1
+Pane | OS_EditTextContainer | 

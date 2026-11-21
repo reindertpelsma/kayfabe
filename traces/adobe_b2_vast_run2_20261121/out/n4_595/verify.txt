@@ -1,0 +1,19 @@
+smbios_uuid MATCH want='<scrubbed>' got='<scrubbed>'
+smbios_serial MATCH want='KFEF3D6BA9A3' got='KFEF3D6BA9A3'
+baseboard_serial MATCH want='KFB6CB50B1882' got='KFB6CB50B1882'
+chassis_serial MATCH want='KFC032DA8C3F4' got='KFC032DA8C3F4'
+mac MATCH want=['52:54:00:b9:2c:9a'] got=['52:54:00:b9:2c:9a']
+disk_serial MATCH want=['KFD24E4C842F890'] got=['KFD24E4C842F890']
+gpu_uuid MATCH want='GPU-<scrubbed>' got='GPU-<scrubbed>'
+machine_guid MATCH want='<scrubbed>' got='<scrubbed>'
+clock MATCH base=2026-11-20T01:46:36Z guest=2026-11-20T01:55:46Z window=1800s
+cpu_vendor MATCH want='AuthenticAMD' got='AuthenticAMD'
+cpu_family_model_stepping MATCH want='AMD64 Family 23 Model 1 Stepping 2' got='AMD64 Family 23 Model 1 Stepping 2'
+cpu_brand MATCH want='AMD Virtual CPU' got='AMD Virtual CPU'
+cpu_processor_id MATCH want='<scrubbed>' got='<scrubbed>'
+cpu_cores MATCH want=8 got=8
+cpu_logical MATCH want=8 got=8
+cpu_flags_sha256 MATCH want='<scrubbed>' got='<scrubbed>'
+cpu_no_forbidden_flags MATCH guest shows: none
+tpm_present MATCH True
+tpm_ek_pub_hash MATCH want='<scrubbed>' got='<scrubbed>'

@@ -1,0 +1,29 @@
+Window | Adobe Substance 3D Designer | QApplication.QStackedWidget
+TitleBar | Adobe Substance 3D Designer | TitleBar
+MenuBar | System Menu Bar | SystemMenuBar
+Button | Minimize | Minimize
+Button | Restore | Restore
+Button | Close | Close
+MenuItem | System | Item 1
+Button | New graph | QApplication.QStackedWidget.Alg::HomeScr
+Button | Open package | QApplication.QStackedWidget.Alg::HomeScr
+Button | Import AxF | QApplication.QStackedWidget.Alg::HomeScr
+Button | Close home screen | QApplication.QStackedWidget.Alg::HomeScr
+CheckBox | Do not show on startup | QApplication.QStackedWidget.Alg::HomeScr
+ListItem | Home | QApplication.QStackedWidget.Alg::HomeScr
+ListItem | Learn | QApplication.QStackedWidget.Alg::HomeScr
+ListItem | About Designer | QApplication.QStackedWidget.Alg::HomeScr
+ListItem | Online documentation | QApplication.QStackedWidget.Alg::HomeScr
+ListItem | Website | QApplication.QStackedWidget.Alg::HomeScr
+ListItem | Forums | QApplication.QStackedWidget.Alg::HomeScr
+ListItem | Community assets | QApplication.QStackedWidget.Alg::HomeScr
+Text | Welcome <scrubbed>
+Text | Hide suggestions | QApplication.QStackedWidget.Alg::HomeScr
+Button | Go to samples | QApplication.QStackedWidget.Alg::HomeScr
+Text | New to Designer? | QApplication.QStackedWidget.Alg::HomeScr
+Text | Built-in sample content is there to help you get started. Dig into real examples, see how things are made and start creating your own content. Learn faster and build with confidence. | QApplication.QStackedWidget.Alg::HomeScr
+Text | Recent | QApplication.QStackedWidget.Alg::HomeScr
+Text | Filter | QApplication.QStackedWidget.Alg::HomeScr
+Header | NAME | QApplication.QStackedWidget.Alg::HomeScr
+Header | LAST MODIFIED | QApplication.QStackedWidget.Alg::HomeScr
+Header | SIZE | QApplication.QStackedWidget.Alg::HomeScr

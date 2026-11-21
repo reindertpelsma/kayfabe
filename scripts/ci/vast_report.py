@@ -431,6 +431,10 @@ PROPIMAGE_B_ROWS = {
     "indesign_s3": ("discovery", True), "indesign_s4": ("discovery", True), "indesign_s5": ("discovery", True), "indesign_s6": ("discovery", True),
     "acrobat": ("gate", True), "animate": ("gate", False), "premiere": ("gate", True), "mediaencoder": ("discovery", True),
     "lightroom": ("discovery", False), "lightroomlaunch": ("gate", True), "dimension": ("gate", True), "uxp": ("gate", True),
+    "bridge": ("discovery", True), "characteranimator": ("discovery", True), "audition": ("discovery", True),
+    "dreamweaver": ("discovery", True), "incopy": ("discovery", True), "substance_designer": ("discovery", True), "substance_modeler": ("discovery", True),
+    "substance_painter": ("discovery", True), "substance_sampler": ("discovery", True), "substance_stager": ("discovery", True),
+    "mediaencoderlaunch": ("discovery", True), "animatelaunch": ("discovery", True),
 }
 PROPIMAGE_B_PASS = ("PASS", "PASS_LIMITED")
 PROPIMAGE_B_CLASSES = ("CRASH", "HANG", "TDR", "XID", "ASSERT", "OUTPUT_MISMATCH")

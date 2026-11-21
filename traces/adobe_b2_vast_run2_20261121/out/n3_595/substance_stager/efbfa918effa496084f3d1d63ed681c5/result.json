@@ -1,0 +1,26 @@
+{
+    "app":  "substance_stager",
+    "started":  1795141287.667,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe Substance 3D Stager",
+    "exe_name":  "Adobe Substance 3D Stager.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Adobe Substance 3D Stager"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  229,
+    "ui_lines":  2,
+    "ui_hits":  0,
+    "quit":  "clean",
+    "ended":  1795141444.076,
+    "crash_events":  1,
+    "crash_dumps":  1,
+    "dismissed":  [
+
+                  ]
+}
