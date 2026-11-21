@@ -157,7 +157,7 @@ MUTANTS = [
     M("row-bound-back-to-nineteen", "report", "MAX_SUITE_ROWS = 32", "MAX_SUITE_ROWS = 19", MF + "test_the_result_row_bound_fits_one_full_run", RV + "test_the_reader_takes_twenty_five_rows_one_full_run_reports"),
     M("full-record-with-skip-says-complete-is-accepted", "report", 'ok = ok and (not value["complete"] or not value["skipped"])', "pass", RV + "test_full_record_is_accepted_and_bad_ones_are_not"),
     M("open-rows-record-with-a-not-run-row-is-accepted", "report", 'ok = ok and value["passed"] <= value["ran"] <= value["expected"]', "pass", RV + "test_windows_open_rows_record"),
-    # 2026-11-20: the private Python 3.12 step of the stage and its record field
+    # The private Python 3.12 step of the stage and its record field
     M("the-python-step-never-runs", "ads", '            rc_py = step("python312", ["python3", "-B", "-I", str(apps / "mlrows/private_python.py"), "ensure", "--if-needed", "--root", ml_root], "python312")',
       "            rc_py = 0",
       AD + "test_the_private_python_is_ensured_before_the_ml_setup_and_both_get_the_same_root", AD + "test_the_record_says_what_the_private_python_did"),
@@ -187,7 +187,7 @@ MUTANTS = [
       AD + "test_a_step_that_printed_nothing_is_a_failure_in_the_record_and_the_summary_is_bounded_and_printable", AD + "test_the_record_says_what_the_private_python_did"),
     M("the-plan-forgets-the-python-step", "ads", '        steps += ["python312", "setup_mlrows"]', '        steps += ["setup_mlrows"]',
       AD + "test_the_plan_names_the_build_and_the_setup_before_the_matrix", AD + "test_the_plan_is_the_list_of_steps_the_stage_really_runs"),
-    # 2026-11-20 (coordinator): an AV1 encode case on a host whose ffmpeg has no av1_nvenc is UNCLASSIFIED with the NAMED reason host_ffmpeg_no_av1_nvenc, on the row and in the findings
+    # An AV1 encode case on a host whose ffmpeg has no av1_nvenc is UNCLASSIFIED with the NAMED reason host_ffmpeg_no_av1_nvenc, on the row and in the findings
     M("the-av1-reason-is-lost", "ads", '            return "UNCLASSIFIED", HOST_NO_AV1_NVENC', '            return "UNCLASSIFIED", "host_not_run:unknown_encoder"',
       AD + "test_the_measured_av1_failure_on_a_host_whose_ffmpeg_has_no_av1_nvenc_is_unclassified_with_that_named_reason", AD + "test_every_av1_encode_case_of_the_row_gets_the_named_reason_and_nothing_else_does"),
     M("every-missing-encoder-is-an-av1-problem", "ads", '        if tidy(host.get("reason")) == "unknown_encoder" and guest["case_id"] in av1_encode_cases():', '        if tidy(host.get("reason")) == "unknown_encoder":',
@@ -206,7 +206,7 @@ MUTANTS = [
       AD + "test_a_case_the_host_passes_and_the_guest_fails_is_a_guest_only_breakage", AD + "test_the_record_validator_takes_the_control_fields_and_refuses_anything_else"),
     M("the-validator-refuses-the-private-python-field", "report", '"guest_rc", "private_python", "nvcodec_host_control"}', '"guest_rc", "nvcodec_host_control"}',
       AD + "test_the_record_says_what_the_private_python_did", AD + "test_the_record_validator_takes_a_short_printable_private_python_and_nothing_else"),
-    # 2026-11-20: the host control of nvcodec_matrix (the bare host, before any guest boot) and the classification of a guest failure by the host
+    # The host control of nvcodec_matrix (the bare host, before any guest boot) and the classification of a guest failure by the host
     M("host-pass-is-agreement", "ads", '        return "GUEST_ONLY", "host_pass"', '        return "AGREEMENT", "host_pass"',
       AD + "test_a_case_the_host_passes_and_the_guest_fails_is_a_guest_only_breakage", AD + "test_the_classification_of_one_case_is_a_pure_table"),
     M("host-failure-is-guest-only", "ads", '        return "AGREEMENT", "host_" + h.lower()', '        return "GUEST_ONLY", "host_" + h.lower()',
