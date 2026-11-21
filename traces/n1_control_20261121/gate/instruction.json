@@ -1,0 +1,11 @@
+{
+ "rehearsal": true,
+ "schema": "kayfabe.payload-instruction/1",
+ "spec": "laneb",
+ "stages": ["specviewperf"],
+ "tier": "large",
+ "windows": true,
+ "windows_runs": 1,
+ "winapps": "mid",
+ "linux_apps": "middle"
+}

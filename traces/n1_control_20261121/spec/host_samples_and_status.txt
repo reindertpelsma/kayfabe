@@ -1,0 +1,138 @@
+2026-11-21T20:52:44Z 17391 MiB, 100 %, 189.67 W
+2026-11-21T20:54:54Z 17391 MiB, 100 %, 345.49 W
+[2026-11-21|20:54:56] [workload: solidworks-08 / subtest: 07_NASACrawlerShaded] Started
+20:54:58
+2026-11-21T20:56:43Z 17394 MiB, 100 %, 193.17 W
+[2026-11-21|20:55:43] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Started
+20:56:47
+2026-11-21T20:59:42Z 17394 MiB, 100 %, 188.98 W
+[2026-11-21|20:55:43] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Started
+20:59:47
+2026-11-21T21:02:41Z 17394 MiB, 100 %, 192.34 W
+[2026-11-21|20:55:43] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Started
+21:02:45
+2026-11-21T21:03:28Z 17394 MiB, 100 %, 192.63 W
+[2026-11-21|20:55:43] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Started
+21:03:32
+2026-11-21T21:03:59Z 17394 MiB, 100 %, 192.72 W
+[2026-11-21|20:55:43] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Started
+21:04:04
+2026-11-21T21:04:12Z 17394 MiB, 100 %, 192.89 W
+[2026-11-21|20:55:43] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Started
+21:04:16
+2026-11-21T21:07:11Z 17394 MiB, 100 %, 191.92 W
+[2026-11-21|20:55:43] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Started
+21:07:15
+2026-11-21T21:10:13Z 17376 MiB, 0 %, 133.52 W
+[2026-11-21|21:07:46] [workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Completed
+21:10:16
+2026-11-21T21:13:36Z 17449 MiB, 19 %, 145.32 W
+[2026-11-21|21:10:15] [workload: enscape-01 / subtest: 01_BistroExtFullHigh] Started
+21:13:41
+2026-11-21T21:13:54Z 17448 MiB, 19 %, 145.43 W
+[2026-11-21|21:10:15] [workload: enscape-01 / subtest: 01_BistroExtFullHigh] Started
+21:13:58
+2026-11-21T21:16:31Z 17444 MiB, 9 %, 137.07 W
+[2026-11-21|21:16:18] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Started
+21:16:36
+2026-11-21T21:19:09Z 17450 MiB, 24 %, 149.55 W
+[2026-11-21|21:16:18] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Started
+21:19:14
+2026-11-21T21:21:46Z 17455 MiB, 100 %, 200.58 W
+[2026-11-21|21:16:18] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Started
+21:21:51
+2026-11-21T21:24:23Z 17456 MiB, 100 %, 211.13 W
+[2026-11-21|21:16:18] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Started
+21:24:27
+2026-11-21T21:27:00Z 17456 MiB, 100 %, 208.71 W
+[2026-11-21|21:16:18] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Started
+21:27:05
+2026-11-21T21:29:37Z 17443 MiB, 0 %, 135.66 W
+[2026-11-21|21:28:55] [workload: enscape-01 / subtest: 03_BistroIntFullHigh] Started
+21:29:41
+2026-11-21T21:32:14Z 17447 MiB, 100 %, 206.73 W
+[2026-11-21|21:31:13] [workload: enscape-01 / subtest: 04_BistroIntFullUltraHQ] Started
+21:32:18
+2026-11-21T21:34:51Z 17448 MiB, 76 %, 214.30 W
+[2026-11-21|21:31:13] [workload: enscape-01 / subtest: 04_BistroIntFullUltraHQ] Started
+21:34:55
+2026-11-21T21:37:28Z 17443 MiB, 0 %, 134.29 W
+[2026-11-21|21:36:15] [workload: enscape-01 / subtest: 05_SanMiguelFullHigh] Started
+21:37:32
+2026-11-21T21:40:05Z 17445 MiB, 0 %, 133.50 W
+[2026-11-21|21:36:15] [workload: enscape-01 / subtest: 05_SanMiguelFullHigh] Started
+21:40:09
+2026-11-21T21:42:41Z 17377 MiB, 0 %, 138.13 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+21:42:45
+2026-11-21T21:45:18Z 17445 MiB, 0 %, 135.40 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+21:45:22
+2026-11-21T21:47:55Z 17374 MiB, 0 %, 134.65 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+21:47:59
+2026-11-21T21:50:32Z 17374 MiB, 0 %, 134.06 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+21:50:35
+2026-11-21T21:53:08Z 17374 MiB, 0 %, 134.05 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+21:53:12
+2026-11-21T21:55:45Z 17374 MiB, 0 %, 133.59 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+21:55:49
+2026-11-21T21:58:22Z 17374 MiB, 0 %, 133.63 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+21:58:26
+2026-11-21T22:00:59Z 17374 MiB, 0 %, 133.63 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+22:01:03
+2026-11-21T22:03:36Z 17374 MiB, 0 %, 133.76 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+22:03:40
+2026-11-21T22:06:13Z 17374 MiB, 0 %, 133.52 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+22:06:17
+2026-11-21T22:08:50Z 17374 MiB, 0 %, 133.58 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+22:08:54
+2026-11-21T22:11:27Z 17374 MiB, 0 %, 133.37 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+22:11:31
+2026-11-21T22:14:04Z 17374 MiB, 0 %, 133.36 W
+[2026-11-21|21:42:42] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+22:14:08
+2026-11-21T22:16:41Z 17374 MiB, 0 %, 133.20 W
+22:16:46
+2026-11-21T22:19:19Z 17400 MiB, 0 %, 133.53 W
+[2026-11-21|22:17:00] [workload: unreal_engine-01 / subtest: 01_VotALitDetailTracing] Started
+22:19:24
+2026-11-21T22:21:57Z 17400 MiB, 0 %, 133.27 W
+[2026-11-21|22:17:00] [workload: unreal_engine-01 / subtest: 01_VotALitDetailTracing] Started
+22:22:01
+2026-11-21T22:24:34Z 17400 MiB, 0 %, 133.51 W
+[2026-11-21|22:17:00] [workload: unreal_engine-01 / subtest: 01_VotALitDetailTracing] Started
+22:24:38
+2026-11-21T22:27:11Z 17400 MiB, 0 %, 133.39 W
+[2026-11-21|22:17:00] [workload: unreal_engine-01 / subtest: 01_VotALitDetailTracing] Started
+22:27:15
+2026-11-21T22:29:47Z 17427 MiB, 0 %, 133.29 W
+[2026-11-21|22:28:23] [workload: unreal_engine-01 / subtest: 02_VotALitGlobalTracing] Started
+22:29:52
+2026-11-21T22:32:24Z 17428 MiB, 0 %, 133.48 W
+[2026-11-21|22:28:23] [workload: unreal_engine-01 / subtest: 02_VotALitGlobalTracing] Started
+22:32:28
+2026-11-21T22:35:01Z 17428 MiB, 1 %, 136.06 W
+[2026-11-21|22:28:23] [workload: unreal_engine-01 / subtest: 02_VotALitGlobalTracing] Started
+22:35:05
+2026-11-21T22:37:38Z 17428 MiB, 0 %, 133.60 W
+[2026-11-21|22:28:23] [workload: unreal_engine-01 / subtest: 02_VotALitGlobalTracing] Started
+22:37:42
+2026-11-21T22:40:14Z 17488 MiB, 39 %, 154.23 W
+[2026-11-21|22:39:29] [workload: unreal_engine-01 / subtest: 03_VotAUnlit] Started
+22:40:20
+2026-11-21T22:42:53Z 17473 MiB, 12 %, 135.48 W
+[2026-11-21|22:42:34] [workload: unreal_engine-01 / subtest: 05_CitySampleLitHitLighting] Started
+22:42:57
+2026-11-21T22:45:29Z 17496 MiB, 50 %, 179.74 W
+[2026-11-21|22:42:34] [workload: unreal_engine-01 / subtest: 05_CitySampleLitHitLighting] Started
+22:45:34

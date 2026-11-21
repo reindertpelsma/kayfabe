@@ -1,0 +1,75 @@
+SPEC_NOTE stage=preflight 2026-11-21T20:07:24+00:00 left_s=10056
+SPEC_STAGE_LIST lane=pcn1 n=3
+SPEC_NOTE rev=9b3d1651 tag=ci73c7b10ed0fc11b9 lane=pcn1 release=15.0.0 deadline_left_s=10056
+SPEC_NOTE narrowed table=lanes_n1.json ids=solidworks-08,enscape-01,unreal_engine-01: not a lane run; every verdict line of this run ends with NARROWED
+SPEC_NOTE guest network=online (online: slirp restrict=off and the real clock, offline: restrict=on and the recorded clock; the Windows evaluation guest needs the network and the real time to complete its own start-up validation); licence probe=1
+SPEC_NOTE host: gpu="NVIDIA GeForce RTX 3090" cpus=13 ram_gb=98 disk_free_gb=246 need_gb=60
+SPEC_NOTE stage=fetch 2026-11-21T20:07:28+00:00 left_s=10052
+SPEC_NOTE stage=hostref_before 2026-11-21T20:07:28+00:00 left_s=10052
+SPEC_NOTE hostref before green cup8=PASS xid_count=0 xid_delta=0
+SPEC_NOTE stage=overlay 2026-11-21T20:07:33+00:00 left_s=10047
+SPEC_NOTE stage=boot_copy 2026-11-21T20:07:33+00:00 left_s=10047
+SPEC_NOTE ssh up after 0s
+SPEC_NOTE guest prep: SPEC_PREP exclusion=ok free_gb=183.7
+SPEC_NOTE stage=copy 2026-11-21T20:08:59+00:00 left_s=9961
+SPEC_NOTE copy budget 8641s (derived: 33500744909 bytes at the floor of 5 MB/s (MEASURED 2026-11-20 on one box), +20% and 600 s)
+SPEC_NOTE copy progress bytes=470937600 rate_mb_s=7.8 elapsed_s=60 budget_s=8641
+SPEC_NOTE copy progress bytes=470937600 rate_mb_s=3.9 elapsed_s=120 budget_s=8641
+SPEC_NOTE copy progress bytes=470937600 rate_mb_s=2.6 elapsed_s=180 budget_s=8641
+SPEC_NOTE copy progress bytes=470937600 rate_mb_s=2.0 elapsed_s=240 budget_s=8641
+SPEC_NOTE copy progress bytes=470937600 rate_mb_s=1.6 elapsed_s=300 budget_s=8641
+SPEC_NOTE copy progress bytes=470937600 rate_mb_s=1.3 elapsed_s=360 budget_s=8641
+SPEC_NOTE copy progress bytes=470937600 rate_mb_s=1.1 elapsed_s=420 budget_s=8641
+SPEC_NOTE copy progress bytes=896661504 rate_mb_s=1.9 elapsed_s=480 budget_s=8641
+SPEC_NOTE copy progress bytes=2675681280 rate_mb_s=5.0 elapsed_s=540 budget_s=8641
+SPEC_NOTE copy progress bytes=2675681280 rate_mb_s=4.5 elapsed_s=600 budget_s=8641
+SPEC_NOTE copy progress bytes=5457950720 rate_mb_s=8.3 elapsed_s=660 budget_s=8641
+SPEC_NOTE copy progress bytes=8709558272 rate_mb_s=12.1 elapsed_s=720 budget_s=8641
+SPEC_NOTE copy progress bytes=11774146560 rate_mb_s=15.1 elapsed_s=780 budget_s=8641
+SPEC_NOTE copy progress bytes=14704547840 rate_mb_s=17.5 elapsed_s=840 budget_s=8641
+SPEC_NOTE copy progress bytes=17706024960 rate_mb_s=19.7 elapsed_s=900 budget_s=8641
+SPEC_NOTE copy progress bytes=20670392320 rate_mb_s=21.5 elapsed_s=960 budget_s=8641
+SPEC_NOTE copy progress bytes=23706050560 rate_mb_s=23.2 elapsed_s=1020 budget_s=8641
+SPEC_NOTE copy progress bytes=26714798080 rate_mb_s=24.7 elapsed_s=1080 budget_s=8641
+SPEC_NOTE copy progress bytes=29529251840 rate_mb_s=25.9 elapsed_s=1140 budget_s=8641
+SPEC_NOTE copy progress bytes=31676856320 rate_mb_s=26.7 elapsed_s=1186 budget_s=8641 final=1
+SPEC_NOTE copy: src=0 zstd=0 tarfilter=0 progress=0 ssh_tar=0 
+SPEC_NOTE your archive: sha256=ffe0e505e2f841ac876fbeac4d5f53edb0c36bd23d442cfe7f536f91cd114d5a bytes=42002015727 our git pin match (enforced=0; docs/OWNER_RULINGS.md section AX)
+KF_TRUST name=specviewperf-15.0.0.tar.zst anchor=user sha256=ffe0e505e2f841ac876fbeac4d5f53edb0c36bd23d442cfe7f536f91cd114d5a size=42002015727 mode=trust-git-only gating=yes
+SPEC_NOTE copy verified: 3 viewset directories match the manifest
+SPEC_NOTE guest post: SPEC_POST cli=present SPEC_POST icacls_rc=0 SPEC_POST vcredist_rc=0 
+SPEC_COPY_DELETED removed=archive
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE stage=boot_run 2026-11-21T20:30:15+00:00 left_s=8685
+SPEC_NOTE ssh up after 0s
+SPEC_LICENCE_STATE at=boot1_start up_min=1 status=Licensed remaining=129576_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:08:22_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE settle: no CLI run sooner than 300s after the boot (waiting 258s)
+SPEC_NOTE settle_wait_s=258
+SPEC_NOTE stage=viewset_solidworks-08 2026-11-21T20:36:42+00:00 left_s=8298
+SPEC_NOTE run solidworks-08 (budget 2700s, mode full, left 8287s)
+SPEC_LICENCE_STATE at=boot1_up15m up_min=17 status=Licensed remaining=129561_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:08:55_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up31m up_min=32 status=Licensed remaining=129545_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:08:25_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=solidworks-08 result=PASS subtests=8/8 reason=- failed=-
+SPEC_LICENCE_STATE at=after_solidworks_08 up_min=38 status=Licensed remaining=129540_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:08:48_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_enscape-01 2026-11-21T21:08:49+00:00 left_s=6371
+SPEC_NOTE run enscape-01 (budget 5400s, mode full, left 6365s)
+SPEC_LICENCE_STATE at=boot1_up52m up_min=53 status=Licensed remaining=129524_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:08:24_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up67m up_min=69 status=Licensed remaining=129509_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:08:55_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up83m up_min=84 status=Licensed remaining=129494_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:09:12_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot1_up98m up_min=99 status=Licensed remaining=129478_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:08:36_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=enscape-01 result=FAIL subtests=5/10 reason=SUBTEST failed=06_SanMiguelFullUltraHQ
+enscape_01 --- FAILED
+SPEC_LICENCE_STATE at=after_enscape_01 up_min=104 status=Licensed remaining=129473_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:08:37_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=viewset_unreal_engine-01 2026-11-21T22:15:38+00:00 left_s=2362
+SPEC_NOTE run unreal_engine-01 (budget 1756s, mode cut, left 2356s)
+SPEC_LICENCE_STATE at=boot1_up119m up_min=120 status=Licensed remaining=129458_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:09:19_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=2/8 reason=TIME failed=01_VotALitDetailTracing,02_VotALitGlobalTracing,05_CitySampleLitHitLighting
+SPEC_LICENCE_STATE at=after_unreal_engine_01 up_min=135 status=Licensed remaining=129443_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:09:04_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_NOTE stage=conclude 2026-11-21T22:46:05+00:00 left_s=535
+SPEC_LICENCE_STATE at=end up_min=135 status=Licensed remaining=129442_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_8:08:28_PM wlms=absent sppsvc=Running w32time=Stopped net=online
+SPEC_NOTE graceful stop of the guest
+SPEC_NOTE hostref after green cup8=PASS xid_count=0 xid_delta=0
+SPEC_NOTE guest overlay kept as spec_ci73c7b10ed0fc11b9.kept.qcow2 (KF_SPEC_KEEP_ON_FAIL=1)
+SPEC_COPY_DELETED removed=nothing
+SPEC_STAGE_COUNTS pass=1 fail=1 not_run=1 of=3
+SPECVIEWPERF_STAGE_FAIL NARROWED
