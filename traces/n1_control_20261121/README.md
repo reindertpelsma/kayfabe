@@ -62,7 +62,7 @@ Subtest minutes in this run (enscape-01 01..05): 6.0, 12.6, 2.3, 5.0, 6.4 (wave 
 unreal_engine-01: `01_VotALitDetailTracing` Failed after 11.4 min (native 3.6 min), `02_VotALitGlobalTracing` Failed after 11.0 min (native 1.3 min), `03` Completed in 1.5 min, `04` Completed in 1.6 min. This is the first time unreal_engine-01 ran under kayfabe in the record
 (2026-11-05: not run for lack of time; wave 1b: my config error), so the two Failed subtests are a new observation (finding N3 below), not a regression.
 
-## Host evidence for the stall (MEASURED, `host_va_lines.txt`, `spec/host_samples_and_status.txt`)
+## Host evidence for the stall (MEASURED on 2026-11-21, `host_va_lines.txt`, `spec/host_samples_and_status.txt`)
 - enscape-01 `06`: at 21:47:37Z (4 min 55 s after `06` started) the host kernel logged `NVRM: virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x90000 RangeLo: 0xb0000, RangeHi: 0x13ffff, pageSzLockMask: 0x11000`, preceded 13 s earlier by `kf3-vamgr` PAT unmap lines.
   **The same line (same status, size and range) was logged in wave 1b at fb-mb=8192**, 8 min 08 s into `06`, again after PAT lines 12 s earlier (`traces/standalone_wave1b_windows_20261121/s/workspace/kernel.log`, 15:48:51Z). No Xid in either run.
 - the guest was not frozen: `EnscapeClientBench.exe` and the SPEC CLI stayed alive and used CPU (7 s of CPU in a 38 s window for the benchmark process at 21:57Z), the licence stayed `Licensed`, host GPU utilisation read 0 % and 17.4 GB used (16 GiB framebuffer plus host RM).
