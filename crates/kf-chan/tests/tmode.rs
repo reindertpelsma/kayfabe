@@ -3,8 +3,8 @@
 //! emitted word authored, every emitted address inside a window, every emitted method allowlisted.
 use kf_abi::submit::{ce, method_header_decode, method_header_inc};
 use kf_chan::tmode::{
-    CHUNK_BYTES, Changed, Ir, MAX_PIECES, Operand, Rows, Shadow, Span, bind, chunk, decode,
-    resolve_spans,
+    CHUNK_BYTES, Changed, Ir, MAX_PIECES, Operand, Rows, Shadow, Span, Unresolved, bind, chunk,
+    decode, resolve_spans,
 };
 use kf_chan::translated::{CeState, Refusal, Target, Window, rewrite};
 use kf_chan::tspace_unsafe::TWindows;
@@ -43,7 +43,7 @@ impl MockRows {
     }
 }
 impl Rows for MockRows {
-    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, u64> {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, Unresolved> {
         resolve_spans(va, len, |at| {
             let (&start, &(n, ram, off, perm)) = self.0.range(..=at).next_back()?;
             (at < start + n).then(|| (ram, off + (at - start), start + n - at, perm))
@@ -52,7 +52,7 @@ impl Rows for MockRows {
     fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
         (dma.checked_add(len)? <= RAM.1).then_some(dma)
     }
-    fn resolve_epoch(&self, va: u64, len: u64) -> (Result<Vec<Span>, u64>, u64) {
+    fn resolve_epoch(&self, va: u64, len: u64) -> (Result<Vec<Span>, Unresolved>, u64) {
         (self.resolve(va, len), self.1.as_ref().map_or(0, |l| l.0))
     }
     fn changed_since(&self, epoch: u64, va: u64, len: u64) -> Changed {

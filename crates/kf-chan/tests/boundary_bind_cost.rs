@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ 2026-11-18 (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`, finding BF-1): what one
+//! ★ 2026-11-18 (boundary fuzzing, `docs/design/V3_BOUNDARY_FUZZING.md`, finding BF-1, fixed): what one
 //! refused guest-kernel CE launch may cost the host before it is refused.
 //!
 //! `tmode::bind` refuses a launch whose operand needs more than [`MAX_PIECES`] pieces, and a
@@ -9,7 +9,9 @@
 //! its own mappings. Invariant: a launch resolves at most `MAX_PIECES + 1` spans per side, whatever its
 //! footprint.
 use kf_abi::submit::{ce, method_header_inc};
-use kf_chan::tmode::{MAX_PIECES, Rows, Span, bind, decode, resolve_spans};
+use kf_chan::tmode::{
+    MAX_PIECES, MAX_SPANS, PushError, Pushed, Rows, Span, bind, decode, push_bound, resolve_spans,
+};
 use kf_chan::translated::Refusal;
 use kf_chan::tspace_unsafe::TWindows;
 use kf_host::MapPerm;
@@ -29,8 +31,18 @@ struct Discontiguous {
     spans: Cell<usize>,
     lookups: Cell<u64>,
 }
+
+impl Discontiguous {
+    fn new(pages: u64) -> Discontiguous {
+        Discontiguous {
+            pages,
+            spans: Cell::new(0),
+            lookups: Cell::new(0),
+        }
+    }
+}
 impl Rows for Discontiguous {
-    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, u64> {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, kf_chan::tmode::Unresolved> {
         let r = resolve_spans(va, len, |at| {
             self.lookups.set(self.lookups.get() + 1);
             let k = at.checked_sub(VA)? / PAGE;
@@ -43,9 +55,11 @@ impl Rows for Discontiguous {
                 )
             })
         });
-        if let Ok(s) = &r {
-            self.spans.set(self.spans.get().max(s.len()));
-        }
+        let n = match &r {
+            Ok(s) => s.len(),
+            Err(_) => self.lookups.get() as usize,
+        };
+        self.spans.set(self.spans.get().max(n));
         r
     }
     fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
@@ -93,44 +107,107 @@ fn bind_all(pb: &[u32], rows: &dyn Rows) -> Result<Vec<u32>, Refusal> {
 }
 
 #[test]
-#[ignore = "known defect: BF-1 (spans resolved before the MAX_PIECES cap), fix tracked in docs/design/V3_BOUNDARY_FUZZING.md"]
 fn a_refused_multi_line_launch_resolves_a_bounded_number_of_spans() {
     let lines = 64 * MAX_PIECES as u32;
-    let rows = Discontiguous {
-        pages: u64::from(lines),
-        spans: Cell::new(0),
-        lookups: Cell::new(0),
-    };
-    let t = std::time::Instant::now();
+    let rows = Discontiguous::new(u64::from(lines));
     let r = bind_all(&multi_line(lines), &rows);
-    let dt = t.elapsed();
     assert!(
-        r.is_err(),
-        "a discontiguous multi-line source is refused: {r:?}"
+        matches!(r, Err(Refusal::TooManySpans { va: VA, .. })),
+        "{r:?}"
     );
     assert!(
-        rows.spans.get() <= MAX_PIECES + 1 && rows.lookups.get() <= MAX_PIECES as u64 + 1,
-        "refused ({r:?}) after resolving {} spans with {} row lookups in {dt:?}: the work is the guest's footprint, \
-         not the cap",
-        rows.spans.get(),
+        rows.lookups.get() <= MAX_SPANS as u64 + 1,
+        "refused ({r:?}) after {} row lookups: the work is the guest's footprint, not the cap",
         rows.lookups.get()
     );
 }
 
-/// BF-1 pinned as it is today (`V3_REPLAY_TESTS.md` step 5): the refusal comes only after one span per
-/// line was resolved, so the work grows with the guest's `LINE_COUNT`. The fix deletes this pin and
-/// removes the `#[ignore]` above.
+/// ★ The cap is exactly `MAX_SPANS`: a single-line copy over `MAX_PIECES + 1` discontiguous pages
+/// resolves (both its spans fit) and is refused by its PIECES, as before BF-1; one page more is
+/// refused by its SPANS, at the cap.
 #[test]
-fn known_defect_bf1_a_refused_multi_line_launch_resolves_its_whole_footprint() {
-    let lines = 4 * MAX_PIECES as u32;
-    let rows = Discontiguous {
-        pages: u64::from(lines),
-        spans: Cell::new(0),
-        lookups: Cell::new(0),
-    };
-    assert_eq!(
-        bind_all(&multi_line(lines), &rows),
-        Err(Refusal::MultiLineDiscontiguous)
+fn the_span_cap_sits_exactly_above_what_a_bind_could_accept() {
+    for (pages, want_spans) in [(MAX_PIECES as u64 + 1, false), (MAX_SPANS as u64 + 1, true)] {
+        let rows = Discontiguous::new(pages);
+        let mut pb = m(SUB, 0, &[0xc7b5]);
+        pb.extend(m(
+            SUB,
+            ce::OFFSET_IN_UPPER,
+            &[(VA >> 32) as u32, VA as u32, 0, 0x20_0000],
+        ));
+        pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[(PAGE * pages) as u32]));
+        pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+        pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182 | ce::LAUNCH_DST_PHYSICAL]));
+        let r = bind_all(&pb, &rows);
+        if want_spans {
+            assert!(
+                matches!(r, Err(Refusal::TooManySpans { .. })),
+                "{pages} pages: {r:?}"
+            );
+        } else {
+            assert_eq!(
+                r,
+                Err(Refusal::TooManyPieces {
+                    pieces: pages as usize
+                }),
+                "{pages} pages"
+            );
+        }
+    }
+}
+
+/// ★ BF-1 must not turn a WAIT into a refusal: a large operand whose rows are contiguous (one span)
+/// but end before the operand does is `VirtualUnresolved`, which the runner hands back unbound to
+/// be re-bound after the walk (`Pushed::Unresolved`); and so is a gap after `MAX_PIECES` spans.
+#[test]
+fn a_large_bind_that_needs_a_walk_is_still_waited_not_refused() {
+    struct Contiguous(u64);
+    impl Rows for Contiguous {
+        fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, kf_chan::tmode::Unresolved> {
+            resolve_spans(va, len, |at| {
+                let k = at.checked_sub(VA)?;
+                (k < self.0).then(|| (true, k, self.0 - k, MapPerm::READ_WRITE))
+            })
+        }
+        fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
+            (dma.checked_add(len)? <= RAM.1).then_some(dma)
+        }
+    }
+    let lines = 64 * MAX_PIECES as u32;
+    // mapped: all but the last line, as one contiguous run
+    let contiguous = Contiguous(PAGE * u64::from(lines - 1));
+    let gap_after_many = Discontiguous::new(MAX_PIECES as u64);
+    for (name, rows, pb) in [
+        ("contiguous", &contiguous as &dyn Rows, multi_line(lines)),
+        (
+            "discontiguous",
+            &gap_after_many as &dyn Rows,
+            multi_line(MAX_PIECES as u32 + 1),
+        ),
+    ] {
+        let r = bind_all(&pb, rows);
+        assert!(
+            matches!(r, Err(Refusal::VirtualUnresolved { .. })),
+            "{name}: {r:?}"
+        );
+        let w = TWindows::new(FB, RAM, LIMIT).unwrap();
+        let ir = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
+        let pushed = push_bound(&ir, rows, &w, &mut Vec::new(), |_| Ok(true));
+        assert!(
+            matches!(pushed, Ok(Pushed::Unresolved { .. })),
+            "{name}: waited, not refused: {pushed:?}"
+        );
+    }
+    // and the over-cap launch is refused by the runner, not waited on
+    let over = Discontiguous::new(u64::from(lines));
+    let w = TWindows::new(FB, RAM, LIMIT).unwrap();
+    let ir = decode(&multi_line(lines), is_ce, &mut Default::default(), None).unwrap();
+    let pushed = push_bound(&ir, &over, &w, &mut Vec::new(), |_| Ok(true));
+    assert!(
+        matches!(
+            pushed,
+            Err(PushError::Refused(Refusal::TooManySpans { .. }))
+        ),
+        "{pushed:?}"
     );
-    assert_eq!(rows.spans.get(), lines as usize);
 }

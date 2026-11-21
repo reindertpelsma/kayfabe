@@ -230,10 +230,10 @@ const RUN32_GR_TAIL: [u32; 14] = [
 /// One placement row: `[0x1_2020_0000, +1 MiB)` → store offset `0x10_0000`, read-write.
 struct OneRow;
 impl super::Rows for OneRow {
-    fn resolve(&self, va: u64, len: u64) -> Result<Vec<super::Span>, u64> {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<super::Span>, super::Unresolved> {
         let (lo, n) = (0x1_2020_0000u64, 0x10_0000u64);
         if va < lo || va + len > lo + n {
-            return Err(va);
+            return Err(super::Unresolved::Uncovered(va));
         }
         Ok(vec![super::Span {
             ram: false,

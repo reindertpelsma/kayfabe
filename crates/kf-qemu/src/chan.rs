@@ -1632,8 +1632,10 @@ pub(crate) fn resolve_rows(
     rows: &crate::mem::PlacedRows,
     va: u64,
     len: u64,
-) -> Result<Vec<kf_chan::tmode::Span>, u64> {
-    let r = rows.read().map_err(|_| va)?;
+) -> Result<Vec<kf_chan::tmode::Span>, kf_chan::tmode::Unresolved> {
+    let r = rows
+        .read()
+        .map_err(|_| kf_chan::tmode::Unresolved::Uncovered(va))?;
     kf_chan::tmode::resolve_spans(va, len, |at| {
         let (&start, &(rlen, off, ram, perm)) = r.range(..=at).next_back()?;
         let end = start.checked_add(rlen)?;
@@ -1647,14 +1649,25 @@ pub(crate) fn resolve_rows(
 }
 
 impl kf_chan::tmode::Rows for Mem<'_> {
-    fn resolve(&self, va: u64, len: u64) -> Result<Vec<kf_chan::tmode::Span>, u64> {
+    fn resolve(
+        &self,
+        va: u64,
+        len: u64,
+    ) -> Result<Vec<kf_chan::tmode::Span>, kf_chan::tmode::Unresolved> {
         resolve_rows(&self.mirror.rows, va, len)
     }
     fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
         self.ram.dma_to_file_range(dma, len)
     }
     // ★ Review fix 2026-10-04 (§3.5, §7.13): the rows' commit log and the walk-pending signal.
-    fn resolve_epoch(&self, va: u64, len: u64) -> (Result<Vec<kf_chan::tmode::Span>, u64>, u64) {
+    fn resolve_epoch(
+        &self,
+        va: u64,
+        len: u64,
+    ) -> (
+        Result<Vec<kf_chan::tmode::Span>, kf_chan::tmode::Unresolved>,
+        u64,
+    ) {
         crate::mem::resolve_rows_epoch(&self.mirror.rows, &self.mirror.log, va, len)
     }
     fn changed_since(&self, epoch: u64, va: u64, len: u64) -> kf_chan::tmode::Changed {
@@ -9852,8 +9865,14 @@ mod rows_tests {
                 (true, 0x50_0000, 0x800, false)
             ]
         );
-        assert_eq!(resolve_rows(&rows, 0x4800, 0x1000), Err(0x5000));
-        assert_eq!(resolve_rows(&rows, 0x800, 0x10), Err(0x800));
+        assert_eq!(
+            resolve_rows(&rows, 0x4800, 0x1000),
+            Err(kf_chan::tmode::Unresolved::Uncovered(0x5000))
+        );
+        assert_eq!(
+            resolve_rows(&rows, 0x800, 0x10),
+            Err(kf_chan::tmode::Unresolved::Uncovered(0x800))
+        );
     }
 }
 

@@ -61,10 +61,10 @@ fn video(class: u32) -> TState {
 /// One guest row: VA `[0x1_2020_0000, +4 MiB)` at store offset `0x10_0000 + (va - lo)`.
 struct Rows;
 impl super::Rows for Rows {
-    fn resolve(&self, va: u64, len: u64) -> Result<Vec<super::Span>, u64> {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<super::Span>, super::Unresolved> {
         let (lo, n) = (0x1_2020_0000u64, 0x40_0000u64);
         if va < lo || va + len > lo + n {
-            return Err(va);
+            return Err(super::Unresolved::Uncovered(va));
         }
         Ok(vec![super::Span {
             ram: false,
