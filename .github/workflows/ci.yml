@@ -128,6 +128,11 @@ jobs:
           # not depend on us (scripts/ci/trust_manifest.json), no script downloads outside kf_trust.py or the ratcheted `unrouted` list, and
           # no anchor is "a sha256 in git of an artifact we build or host". Its tests run in the selftests shards.
           python3 -B -I scripts/ci/trust_lint.py
+          # Environment reads of the product sources: every name is in scripts/ci/env_registry.json with a class, and a name that
+          # changes what the guest is served is on the shrink-only baseline (docs/CI_V3.md, "Environment and comment gates").
+          python3 -B -I scripts/ci/env_allowlist.py
+          # Process and owner notes in code comments: a shrink-only baseline (scripts/ci/comment-hygiene-debt.json).
+          python3 -B -I scripts/ci/comment_hygiene.py
       # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
       # completion-source reactor's MODEL is core-owned and PURE: the core says
       # "notifiable source" and "completion source", full stop. The OS half — the
@@ -2180,6 +2185,9 @@ jobs:
           # Standalone trust helper and lint (2026-11-17): anchors, the default mode, the explicit lift, user input, evidence; the lint's rules: two named killers per mutant.
           python3 -B -I scripts/ci/kf_trust_mutants.py
           python3 -B -I scripts/ci/trust_lint_mutants.py
+          # Environment-read gate and comment-hygiene gate: two named killers per mutant.
+          python3 -B -I scripts/ci/env_allowlist_mutants.py
+          python3 -B -I scripts/ci/comment_hygiene_mutants.py
           # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.
           python3 scripts/ci/doc_steps_mutants.py
           # The command-line reference generator (2026-11-20): >=2 named killers per mutant.

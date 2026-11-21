@@ -2791,7 +2791,7 @@ fn engine_object_pending(
 /// Trusted concurrent pending-object budget, not a family/die fact.
 const PENDING_ENGINE_OBJECTS: usize = 64;
 
-/// ★ 2026-11-20 (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-2): engine objects per passthrough twin,
+/// (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-2): engine objects per passthrough twin,
 /// committed plus pending. Before this only the pending ones were capped, so a guest could add one
 /// host RM object per fresh handle on one channel (bounded only by the object graph's 2^18 live
 /// handles for the whole VM). `[measured: committed act lines in traces/, 2026-11-20]` the peak is 6
@@ -2829,7 +2829,7 @@ fn admit_engine_object(
     Ok(allocation)
 }
 
-/// ★ 2026-11-20 (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-1, HIGH): live debugger sessions per
+/// (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-1, HIGH): live debugger sessions per
 /// guest GR object. `[measured: every committed act line, traces/ (145 files), 2026-11-20]` CUDA
 /// opens exactly ONE per context (`cuCtxCreate`, w827); 4 is 4× that. Each session is a host
 /// debugger object plus, inside host RM, its own internal client, device and subdevice.
@@ -9397,7 +9397,7 @@ mod dispsw_tests {
         }
     }
 
-    /// ★ 2026-11-20 (`V3_GUEST_INFLUENCE_AUDIT.md` G-2): committed engine objects per twin are
+    /// (`V3_GUEST_INFLUENCE_AUDIT.md` G-2): committed engine objects per twin are
     /// capped, by name, before any host call (each one is a host RM object).
     #[test]
     fn engine_objects_per_twin_are_capped() {
@@ -10810,7 +10810,7 @@ mod nvenc_cap_tests {
     }
 }
 
-/// ★ 2026-11-20 (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-1, HIGH): every guest `GT200_DEBUGGER`
+/// (`docs/design/V3_GUEST_INFLUENCE_AUDIT.md` G-1, HIGH): every guest `GT200_DEBUGGER`
 /// alloc used to cost one host debugger session (in host RM: its own internal client, device and
 /// subdevice, `kernel_sm_debugger_session.c` `_ksmdbgssnInitClient`) with no count, no busy-handle
 /// check, and a session kept even when the object seat refused the alloc afterwards.

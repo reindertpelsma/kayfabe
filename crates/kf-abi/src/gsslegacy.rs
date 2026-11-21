@@ -72,8 +72,8 @@
 /// The one GSS-legacy control this port answers.
 ///
 /// ⊘ Deliberately **not** named after a symbol: it appears in no NVOC export table, in no open
-/// SDK header, and not in the C artifact's tables — searched at `ogkm-580`/`ogkm-610` on
-/// 2026-08-09. Its body lives in GSP
+/// SDK header, and not in the C artifact's tables — searched at `ogkm-580`/`ogkm-610`.
+/// Its body lives in GSP
 /// firmware. A plausible invented name would be the worst thing this constant could carry.
 pub const GSS_LEGACY_0X8159: u32 = 0x2080_8159;
 

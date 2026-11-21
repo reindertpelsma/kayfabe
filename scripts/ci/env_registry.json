@@ -1,0 +1,939 @@
+{
+ "schema": 1,
+ "product_env_allowlist": [],
+ "entries": [
+  {
+   "name": "<env:vars>",
+   "class": "system",
+   "file": "crates/kf-gop-image/build.rs",
+   "why": "Enumerates the whole environment so the nested firmware build inherits only an allowlisted set; build time.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "CARGO",
+   "class": "system",
+   "file": "crates/kf-gop-image/build.rs",
+   "why": "Path of the cargo that runs the build script, reused to build the firmware crate; set by cargo.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "CARGO_CFG_TARGET_ARCH",
+   "class": "system",
+   "file": "crates/kf-gop-image/build.rs",
+   "why": "Target architecture cargo passes to the build script, used to pick the UEFI triple.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "CARGO_CFG_TARGET_OS",
+   "class": "system",
+   "file": "firmware/kf-gop/build.rs",
+   "why": "Target OS cargo passes to the firmware build script; selects the UEFI link settings.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "CARGO_MANIFEST_DIR",
+   "class": "system",
+   "file": "crates/kf-gop-image/build.rs",
+   "why": "Crate directory cargo passes to build scripts and compile-time macros to locate workspace files.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "CARGO_PKG_VERSION",
+   "class": "system",
+   "file": "crates/kf-gop-image/build.rs",
+   "why": "Crate version cargo passes to the build script, compared with the firmware lock file.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "DISPLAY",
+   "class": "system",
+   "file": "broker/nb_common.c",
+   "why": "X11 display of the host session, read by the broker to choose the X11 view backend.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KAYFABE_CUDART_GATE",
+   "class": "inject",
+   "file": "crates/kf-rm/src/inittables.rs",
+   "why": "When set to replay, serves three GSS-legacy control ids (0x20809009/001/064) from a captured native reply; default refuses them.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KAYFABE_C_TRACE_CAP1",
+   "class": "debug",
+   "file": "crates/kf-crec/src/lib.rs",
+   "why": "Overrides the path of the committed cold-boot capture read by the kf-crec differential oracle; default is the file under traces/.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KAYFABE_C_TRACE_CAP1B",
+   "class": "debug",
+   "file": "crates/kf-crec/src/lib.rs",
+   "why": "Overrides the path of the second committed cold-boot capture read by the kf-crec differential oracle; default is the file under traces/.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KAYFABE_NO_KVM",
+   "class": "system",
+   "file": "crates/kf-linux-raw/src/kvm_gate.rs",
+   "why": "When 1, kvm_available() reports no /dev/kvm so KVM-gated tests skip; a test and gate selector only, default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KAYFABE_TRAP_CPU_SITE",
+   "class": "measurement",
+   "file": "crates/kf-util/src/trapwitness.rs",
+   "why": "Hex BAR0 offset whose traps are sampled for wall versus thread-CPU time in the trap census; unset leaves the census unarmed.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KAYFABE_TRAP_FATAL",
+   "class": "debug",
+   "file": "crates/kf-util/src/trapwitness.rs",
+   "why": "Arms the slow-trap witness with the default budget; a BAR0 trap over budget stops the process for inspection; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KAYFABE_TRAP_FATAL_ABORT",
+   "class": "debug",
+   "file": "crates/kf-util/src/trapwitness.rs",
+   "why": "When set, the armed slow-trap witness aborts the process on a violation instead of stopping it; default stops.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KAYFABE_TRAP_FATAL_US",
+   "class": "debug",
+   "file": "crates/kf-util/src/trapwitness.rs",
+   "why": "Arms the slow-trap witness with a budget in microseconds; a BAR0 trap over budget stops the process; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KAYFABE_VCPU_BLOCK_FATAL",
+   "class": "debug",
+   "file": "crates/kf-util/src/lockwitness.rs",
+   "why": "When set, a blocking door reached on a vCPU thread panics the process; default only counts such hits.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_ASYNC_PREEMPT_REENABLE_NOACT",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Answers a twins-only channel re-enable with NV_OK and no host action; default off, diagnostic that was never shipped.",
+   "changes_guest_served": true,
+   "proposal": "delete"
+  },
+  {
+   "name": "KF3_BAR0_READ_TRACE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/readtrace.rs",
+   "why": "Enables the host-side BAR0 read trace records; default off, output goes to the host log only.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_BAR0_TRACE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/bar0trace.rs",
+   "why": "Set to 1 to print bounded windows of BAR0 accesses around channel schedules to the host log; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_CARRY_ATOMIC_DISABLE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/device.rs",
+   "why": "Set to 1 to carry the ATOMIC_DISABLE PTE permission bit to the walker and host map; default not carried.",
+   "changes_guest_served": true,
+   "proposal": "device-property"
+  },
+  {
+   "name": "KF3_COMPLETION_PROBE",
+   "class": "measurement",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Value in ms arms read-back of released fence semaphores and dumps of stalled Translated channels to the log; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DBFAST_PROBE",
+   "class": "measurement",
+   "file": "crates/kf-qemu/src/device.rs",
+   "why": "Hex doorbell value registered on the kernel fast path for a slot no channel can occupy, to time transport only; default unset.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DBFAST_SPIN_US",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/device.rs",
+   "why": "Drainer polls doorbells up to this many microseconds (1..1000) after a delivery before parking; default off, experiment knob.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DEBUG",
+   "class": "debug",
+   "file": "crates/kf-rm/src/chanlink.rs",
+   "why": "Debug-profile switch that permits KF3_DEBUG_FORCE_MIGRATABLE to take effect; unset by default, so that flag is refused.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DEBUG_CURSOR",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Logs each distinct cursor image the host path or composer refuses, and dumps surfaces to a directory; off by default.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DEBUG_FORCE_MIGRATABLE",
+   "class": "debug",
+   "file": "crates/kf-rm/src/chanlink.rs",
+   "why": "With KF3_DEBUG set, routes guest user channels (GR/copy/video) through the migratable user-ring relay for validation; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DIAG_EVENT_RING",
+   "class": "measurement",
+   "file": "crates/kf-broker/src/ticks.rs",
+   "why": "When 1, records the last lock-step events in a ring for diagnosis; request decisions are identical either way; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DIAG_PROGRESS",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/userstrand.rs",
+   "why": "Threshold in ms above which the user-ring strand logs PROGRESS_STRAND lines; default off, log only.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DIAG_STEP_METERS",
+   "class": "measurement",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to enable per-step timing meters in the display worker counters; off by default.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DIAG_UNMAP_DELAY_MS",
+   "class": "stress",
+   "file": "crates/kf-mem/src/maplog.rs",
+   "why": "Holds every unmapping VA diff for N milliseconds on the VA thread before applying it, to provoke races; default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_ARMED_DEFAULTS",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to start each core life's ARMED HEAD_SET_MIN_FRAME_IDLE mirror at 0x10002 instead of 0; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_BLANK_STATE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to make a new core life report BLANK for every head's blanking control instead of 0; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_CAPS_OVERLAY_FILE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Path to a captured display caps page read from this host GPU, laid over the derived page; unset leaves it unchanged.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_CAPS_OVERLAY_GROUPS",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Comma list of caps-page groups to overlay from the caps overlay file; empty overlays every group. Only read with the overlay file.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_CAPS_OVERLAY_WORDS",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Comma list of hex caps-page offsets to overlay from the caps overlay file in addition to the groups. Only read with the overlay file.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_CORE_AT_VBLANK",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to latch and notify core updates at the next active-head vblank as hardware does; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_HDCP_STATE",
+   "class": "debug",
+   "file": "crates/kf-rm/src/display.rs",
+   "why": "Set to 1 to answer NV0073 SPECIFIC_GET_HDCP_STATE with NV_OK and zero flags instead of refusing it; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_HDMI_PROBE",
+   "class": "debug",
+   "file": "crates/kf-rm/src/display_ctrl_probe.rs",
+   "why": "Set to 1 to answer HDMI-related display controls (connector data, DFP info) with measured replies; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_HEAD_TIMING_EN_BASE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Hex value that every head's head-timing interrupt-enable register reads back before the guest writes it; unset reads 0.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_HOTPLUG_EDID_SEEN",
+   "class": "debug",
+   "file": "crates/kf-rm/src/display.rs",
+   "why": "Set to 1 to list a display in hotplugAfterEdidMask only until the guest reads its EDID; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to publish ILUT/TMO constructor-probe caps with an engine that refuses every display method; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_LOADV",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to set the head-timing LOADV status bit on every frame edge and republish event registers; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_METHOD_TRACE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to log head-timing enable writes and record up to 65536 display method DMA writes; off by default.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to publish OLUT constructor-probe caps with an engine that refuses every display method; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_PRIVATE_PROBE",
+   "class": "debug",
+   "file": "crates/kf-rm/src/display_ctrl_probe.rs",
+   "why": "Set to 1 to answer private display controls 0x730122 and 0x730128 with measured reply words; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_SDR_COLOR",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to force the SDR colour path for any guest identity, not only the Windows profile; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to publish TMO constructor-probe caps with an engine that refuses every display method; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to publish TMO-surface constructor-probe caps with an engine that refuses every display method; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DISPLAY_TRACE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to enable the display engine's host-side trace logging; off by default and changes no reply.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DISPLAY_TRACE_CAP",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Maximum trace lines per kind for the display write trace; defaults to 4096.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DISPLAY_WRITE_TRACE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/display.rs",
+   "why": "Set to 1 to log guest display-aperture writes, head-timing interrupts and window latches, bounded per kind; off by default.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_DISPLAY_XBAR_PROBE",
+   "class": "debug",
+   "file": "crates/kf-rm/src/display_ctrl_probe.rs",
+   "why": "Set to 1 to answer SYSTEM_GET_CAPS_V2 with measured crossbar caps and DFP_ASSIGN_SOR with a fixed topology; off by default.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_DOORBELL_CPL",
+   "class": "debug",
+   "file": "qemu/hw/misc/kf3/kf3.c",
+   "why": "When 1, logs the guest privilege level and RIP of the first 4096 usermode doorbell writes via read-only KVM ioctls; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_GSS_NATIVE",
+   "class": "debug",
+   "file": "crates/kf-rm/src/gssnative.rs",
+   "why": "Removed experiment: setting it to 1 only prints an ignored notice; the GSS-legacy controls stay refused. Dead read.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_INJECT_FWSEC_FAIL",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/device.rs",
+   "why": "Number of FWSEC failures to inject deliberately; default 0 (none).",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_INJECT_STALE_USERD",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Writes GP_PUT=GP_GET=n into the guest USERD at every Translated birth to reproduce a stale-slot flake; default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_INVALIDATE_CLEAR_OVER_ABSENT",
+   "class": "debug",
+   "file": "crates/kf-mem/src/vasmgr.rs",
+   "why": "Default on: a TLB invalidate completes even when named leaves cannot be mapped; 0 restores the withheld clear for A/B comparison.",
+   "changes_guest_served": true,
+   "proposal": "delete"
+  },
+  {
+   "name": "KF3_LAZY_OBSERVE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/userpump.rs",
+   "why": "Set to 0 to turn off the lazy private-USERD look in the Windows USER-ring relay; default on.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_LIFECYCLE_MODE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/userpump.rs",
+   "why": "Selects the USER-ring lifecycle ablation (always_scan, no_pointer_markers, no_anchored_windows); default is the full lifecycle.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_MAPLOG",
+   "class": "debug",
+   "file": "crates/kf-mem/src/maplog.rs",
+   "why": "When set, the memory plane logs timestamped map and unmap events to stderr; default off and invisible to the guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_NEGCTL_CARVE",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/tspace.rs",
+   "why": "Negative control: sets the firmware carve-out bound to 0, counts every vidmem leaf and forces refusal off; default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_NEGCTL_HEAP",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Positive control that counts every birth as a USERD outside the usable heap; counter only, never refuses; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_NEGCTL_NO_BAR1_DOORBELL",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/device.rs",
+   "why": "Skips BAR1 usermode-view classification on Hopper-and-later families so BAR1 doorbells become silent stores; default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_NEGCTL_NO_MICRO_RESERVE",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/mem.rs",
+   "why": "Set to 1 to disable micro memory reservations for batched maps, refusing over-bound rows; default reservations on.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_NEGCTL_SKIP_CAP_BRACKET",
+   "class": "inject",
+   "file": "crates/kf-host/src/channel.rs",
+   "why": "When 1, channel-alloc calls keep CAP_SYS_ADMIN so every privileged-stamped birth must be refused, proving the reply check fires; default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_NEGCTL_STALE_BIND",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Positive control: perturbs every recorded T-mode resolution so the stale-bind counter must move; counter only, default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_NEGCTL_TSPACE_OVERSIZE",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/tspace.rs",
+   "why": "Makes the T-space ring-region bound check fail so every Translated birth is refused; destructive, default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_NEGCTL_TWIN",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Answers every passthrough birth as a guest-kernel space, refusing it by name; destructive control, default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_NEGCTL_TWIN_WINDOW",
+   "class": "inject",
+   "file": "crates/kf-qemu/src/mem.rs",
+   "why": "Gives every new twin and prewarmed spare a store window to reintroduce the no-window defect; default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_NO_BATCHED_MAP",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/mem.rs",
+   "why": "Set to any value to turn off batched host maps and use the per-run path; default batched maps on.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_NO_GUEST_VA_RESERVE",
+   "class": "debug",
+   "file": "crates/kf-host/src/channel.rs",
+   "why": "When set, host VA spaces skip reserving the guest VA ranges, which changes where host RM places mappings; default reserves.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_PROF",
+   "class": "measurement",
+   "file": "crates/kf-qemu/src/prof.rs",
+   "why": "Set to 1 or on to arm attribution and timing counters (two clock reads per trap); default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_PT_NSI_MIN_INTERVAL_US",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Paces non-stall interrupt edges per guest vector with a minimum interval in microseconds, clamped to 1 s; default 0 (off).",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_PT_NSI_RELAY",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Set to 0 to count host FIFO_EVENT_MTHD edges without raising them to the guest; default on.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_PT_STALL_SNAPSHOT",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Set to 1 to log a USERD, ring and semaphore snapshot read from guest memory when twins stall; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_PT_STALL_SNAPSHOT_MS",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Silence in ms (200..10000, default 1000) before the stall snapshot fires; only used when KF3_PT_STALL_SNAPSHOT=1.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_PUT_CACHE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/userpump.rs",
+   "why": "Set to 0 to turn off the guest GP_PUT cache in the Windows USER-ring relay; default on.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_READ_TRACE_MAX_BYTES",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/readtrace.rs",
+   "why": "Caps the bytes the BAR0 trace may emit; trace controls only, default bounded limit.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_READ_TRACE_MAX_RECORDS",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/readtrace.rs",
+   "why": "Caps the number of BAR0 trace records emitted; host log only, default bounded limit.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_READ_TRACE_RANGES",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/readtrace.rs",
+   "why": "Restricts the BAR0 read trace to listed register ranges; host log only, default unrestricted.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_RELAY_GET_REFRESH",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Set to 1 to also write a relayed twin's engine GP_GET into the guest slot on every host wake; default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_RELAY_PB_PEEK",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Set to 1 or after-fifo-update to sample and log push-buffer words after forwarding; default off, never gates work.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_RPC_BODY_TRACE",
+   "class": "debug",
+   "file": "crates/kf-gsp/src/replytrace.rs",
+   "why": "When 1, traces bodies of posted GSP RPC records to stderr up to a fixed record and byte cap; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_RPC_TRACE",
+   "class": "debug",
+   "file": "crates/kf-rm/src/census.rs",
+   "why": "Set to 1 to log each RM command the chain answers, bounded by a process-lifetime quota; off by default, changes no reply.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_SW_SUBCH_INERT",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Set to 1 to silently accept SET_OBJECT of unknown classes on software subchannels 5-7 of T-mode rings; default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_TCENSUS",
+   "class": "measurement",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Set to a non-0 value to count what every Translated channel fetches and log one TCENSUS line at free; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_TRACE_NAME",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/readtrace.rs",
+   "why": "Names the device in BAR0 trace records (1..MAX characters of [0-9A-Za-z:._-]); host log only.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_TSHADOW",
+   "class": "measurement",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Legacy alias that turns on the Translated-channel fetch census only; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_USERD_RELAY_OFF",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Set to 1 to birth Windows user-work twins over the guest's own sysmem USERD without relay; default relay on.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_USER_RING_TRACE",
+   "class": "measurement",
+   "file": "crates/kf-qemu/src/userpump.rs",
+   "why": "Directory in which refused USER-ring scans write bounded reports of GP and segment words; default off, never changes decisions.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_VRAM_ATTRS",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/gpucopy.rs",
+   "why": "Selects the display VRAM allocation attribute set (s0, s1, s2); default s1, the NVKMS offscreen block-linear set.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_WALK_REFUSAL_DUMP",
+   "class": "debug",
+   "file": "crates/kf-mem/src/refusal_dump.rs",
+   "why": "When set and not 0, dumps page-table descriptors around refused walk leaves for diagnosis; default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF3_WIN_HIDE_UNTABLED_VIDEO",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/rmfacts.rs",
+   "why": "Set to 1 to withhold video engines that have no derived method table from the guest, read once at realize; default off.",
+   "changes_guest_served": true,
+   "proposal": "device-property"
+  },
+  {
+   "name": "KF3_WIN_REFUSE_PT_FIFO_UPDATE",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/chan.rs",
+   "why": "Set to 1 to refuse FIFO update controls on Passthrough channels carrying user work; default off.",
+   "changes_guest_served": true,
+   "proposal": "device-property"
+  },
+  {
+   "name": "KF3_WIN_USER_RING_RELAY",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/userrelay.rs",
+   "why": "Set to 0 to disable the Windows USER-ring relay route and use the old route as a falsifier; default on.",
+   "changes_guest_served": true,
+   "proposal": "device-property"
+  },
+  {
+   "name": "KF3_WIN_USER_RING_SHADOW",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/userrelay.rs",
+   "why": "Set to 1 to enable the Windows USER-ring shadow route (which also forces the relay on); default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_WORKER_PARK_INFINITE",
+   "class": "stress",
+   "file": "crates/kf-chan/src/worker.rs",
+   "why": "When 1, the channel worker parks with no timeout, disabling the periodic wake safety net so missed wakeups show up; default off.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "KF3_WRITE_TRACE_RANGES",
+   "class": "debug",
+   "file": "crates/kf-qemu/src/readtrace.rs",
+   "why": "Restricts the BAR0 write trace to listed register ranges; host log only, default unrestricted.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_GATE3_CE_CLASS",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-gate3.rs",
+   "why": "Hex copy-engine class the kf-gate3 bare-metal gate uses instead of the host default; standalone gate binary, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_GATE3_GRAPHICS",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-gate3.rs",
+   "why": "When 1, kf-gate3 adds a graphics-engine oracle arm; standalone gate binary, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_GATE_GPU",
+   "class": "system",
+   "file": "crates/kf-harness/src/lib.rs",
+   "why": "DRM minor of the host GPU the kf-harness gates open; default 0; standalone gates, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_GOP_IMAGE_NESTED_BUILD",
+   "class": "system",
+   "file": "crates/kf-gop-image/build.rs",
+   "why": "Set by the inner firmware build so kf-gop-image emits an empty image instead of recursing; build environment only.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_GOP_IMAGE_TARGET",
+   "class": "system",
+   "file": "crates/kf-gop-image/src/lib.rs",
+   "why": "Compile-time name of the UEFI target triple the embedded GOP driver was built for, set by build.rs, not by users.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_IOCTL_TRACE",
+   "class": "debug",
+   "file": "crates/kf-linux-raw/src/ioctltrace.rs",
+   "why": "Arms the ioctl trace (ring, on, 1 or verbose) and dumps it on a hang; default off and costs one relaxed load.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_LIFECYCLE_MUTANT",
+   "class": "inject",
+   "file": "crates/kf-chan/src/user_lifecycle.rs",
+   "why": "Selects a deliberate lifecycle bug for the mutation check; read only when the lifecycle-mutants feature is compiled in.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_NVENC_CONTEXT_INDEX",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-nvdec-context.rs",
+   "why": "Selects the NVENC instance (0..3) probed by the kf-nvdec-context binary; standalone probe, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_OFA_CONTEXT_INDEX",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-nvdec-context.rs",
+   "why": "Selects the OFA instance probed by the kf-nvdec-context binary; standalone probe, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_PHYS_ENGINE",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-phys-oracle.rs",
+   "why": "Selects the copy-engine instance (COPY0+N) exercised by kf-phys-oracle; default 0; standalone oracle, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_PROBE_ALLOW_ADMIN",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-ctl-probe.rs",
+   "why": "When 1, kf-ctl-probe runs even with CAP_SYS_ADMIN and labels results admin; default refuses; standalone probe binary.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_PROBE_EXTRA_ONLY",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-ctl-probe.rs",
+   "why": "When 1, kf-ctl-probe skips its built-in control rows and sends only extra rows; standalone probe binary.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_PROBE_GSS_ROWS",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-ctl-probe.rs",
+   "why": "When 1, kf-ctl-probe asks the host RM every GSS replay row and prints status and changed-byte counts; standalone probe.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_PROBE_HEAD",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-ctl-probe.rs",
+   "why": "Number of reply bytes (max 64, default 16) kf-ctl-probe prints per control; standalone probe, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_PROBE_I_KNOW",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-ctl-probe.rs",
+   "why": "Must be 1 for kf-ctl-probe to send zeroed controls to the real host GPU; standalone probe, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_PROBE_SCAN",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-ctl-probe.rs",
+   "why": "Control and size range list; kf-ctl-probe sends zero requests of each size to find accepted paramsSize; standalone probe.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_PROBE_ZBC",
+   "class": "debug",
+   "file": "crates/kf-harness/src/bin/kf-ctl-probe.rs",
+   "why": "When 1, kf-ctl-probe reads the host GPU ZBC clear table read-only; standalone probe, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_REV",
+   "class": "debug",
+   "file": "crates/kf-rawclient/src/runner.rs",
+   "why": "Source revision string the raw client stamps into its stress output; standalone client, never serves a guest.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_SELF_DEADLINE_MS",
+   "class": "debug",
+   "file": "crates/kf-linux-raw/src/ioctltrace.rs",
+   "why": "Milliseconds after which a watchdog thread dumps the ioctl trace and aborts the process; used by the raw client, default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_VAS_CENSUS",
+   "class": "measurement",
+   "file": "crates/kf-mem/src/vasmgr.rs",
+   "why": "When set, prints per-walk-entry run census and mirror-retire lines to stderr; log only, default off.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "KF_WALK_SERIAL",
+   "class": "debug",
+   "file": "cuda/walk/kf_walk.cu",
+   "why": "When set, the walk kernel runs as one serial launch instead of the parallel runner, changing the walk execution path; default parallel.",
+   "changes_guest_served": true,
+   "proposal": "keep-as-debug"
+  },
+  {
+   "name": "LISTEN_FDS",
+   "class": "system",
+   "file": "broker/nvkvm_broker.c",
+   "why": "systemd socket-activation descriptor count; the broker adopts the passed listening socket.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "LISTEN_PID",
+   "class": "system",
+   "file": "broker/nvkvm_broker.c",
+   "why": "systemd socket-activation pid, checked against the broker pid before the descriptors are adopted.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "OUT_DIR",
+   "class": "system",
+   "file": "crates/kf-gop-image/build.rs",
+   "why": "Build output directory cargo passes to the build script and to the embedding macro.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "RUSTC",
+   "class": "system",
+   "file": "crates/kf-gop-image/build.rs",
+   "why": "Compiler cargo passes to the build script, asked for its sysroot to check the UEFI target is installed.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "RUSTUP_TOOLCHAIN",
+   "class": "system",
+   "file": "crates/kf-gop-image/build.rs",
+   "why": "Toolchain name rustup sets; named in the missing-target message and kept for the nested build.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "SUDO_UID",
+   "class": "system",
+   "file": "broker/nvkvm_broker.c",
+   "why": "Invoking user id under sudo, used by the broker to hand its socket to that user.",
+   "changes_guest_served": false
+  },
+  {
+   "name": "WAYLAND_DISPLAY",
+   "class": "system",
+   "file": "broker/nb_common.c",
+   "why": "Wayland socket of the host session, read by the broker to choose the Wayland view backend.",
+   "changes_guest_served": false
+  }
+ ]
+}
