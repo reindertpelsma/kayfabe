@@ -934,6 +934,13 @@
    "file": "broker/nb_common.c",
    "why": "Wayland socket of the host session, read by the broker to choose the Wayland view backend.",
    "changes_guest_served": false
+  },
+  {
+   "name": "XDG_RUNTIME_DIR",
+   "class": "system",
+   "file": "broker/nb_session_wl.c",
+   "why": "Runtime directory of the host desktop session, read by the broker as the fallback when --runtime-dir is not given; it never reaches the guest.",
+   "changes_guest_served": false
   }
  ]
 }
