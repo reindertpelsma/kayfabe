@@ -29,3 +29,10 @@ solidworks-08 completed under kayfabe on 2026-11-05 on an RTX 4090 (rev `6a0683a
   (the stage's time guard decides what fits; a viewset it refuses is reported NOT_RUN TIME, not a verdict).
 - Input: the SPEC bundle only through a presigned GET minted on the coordinator (read-only token, 12 h TTL at most, URL file deleted from the box after the copy). No token, key, e-mail or licence identifier on the box.
 - Evidence: text only, GPU UUIDs/IPs/URL parameters redacted.
+
+## Operator decision rule for enscape-01 `06` (written 2026-11-21 21:58Z, BEFORE its outcome is known; measured so far in this run: solidworks-08 PASS 8/8 at fb-mb=16384, see Results)
+
+The 4.5 h wall clock does not leave room for both the full 5400 s budget of enscape-01 and unreal_engine-01 (needs about 45 min incl. boot and settle). Rule: if `06_SanMiguelFullUltraHQ`
+(started 21:42:42Z; 05, its High twin, took 6.4 min in this run; UltraHQ is about 2.1 times its High twin in 01/02 and 03/04; native 4090: 8 min) has not completed by 22:10Z (27.5 min, about 3.4 times the native wall),
+I kill the SPECviewperf CLI inside the guest (operator kill, recorded) so that the stage goes on to unreal_engine-01 in the same guest. enscape-01 is then reported as a stall by operator kill (not as the stage's own TIMEOUT), with that wait stated.
+If `06` completes before 22:10Z the viewset runs on to its normal end. Wave 1b's 8192 run waited 66 min without completion.
