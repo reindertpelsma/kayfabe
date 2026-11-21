@@ -1,0 +1,3 @@
+GPUSniffer testing 830
+CUDA system device count: 1
+OpenCL system device count: 1

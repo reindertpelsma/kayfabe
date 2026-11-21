@@ -1,0 +1,3 @@
+version	26.0.0
+renderer	cuda
+feature	advanced-3d	disabled	Active comp renderer is another renderer
