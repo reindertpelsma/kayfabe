@@ -119,6 +119,11 @@ jobs:
           # The ignore ladder (.gitignore <= .workerignore <= .dockerignore), the matcher against git and
           # docker semantics on this tree, and what the strip step would refuse (the stripped-tree job runs it).
           python3 scripts/ci/ignore_ladder.py check
+          # The manual's command-line reference (2026-11-20, docs/design/V3_PACKAGING_AND_DISTRIBUTION.md 2.3): the device-property table of
+          # docs/howto/cli-reference.md is generated from qemu/hw/misc/kf3/kf3.c; a missing property, a wrong default or a stale table fails.
+          python3 scripts/ci/doc_cli_reference.py check
+          # The manual's structure and wording: every page in SUMMARY.md once, no internal evidence label on a user page.
+          python3 scripts/ci/doc_manual_check.py
           # Standalone trust (2026-11-17, docs/design/V3_STANDALONE_TRUST.md): every download the repository defines has an anchor that does
           # not depend on us (scripts/ci/trust_manifest.json), no script downloads outside kf_trust.py or the ratcheted `unrouted` list, and
           # no anchor is "a sha256 in git of an artifact we build or host". Its tests run in the selftests shards.
@@ -2177,6 +2182,8 @@ jobs:
           python3 -B -I scripts/ci/trust_lint_mutants.py
           # Documented-commands runner and the install_flow stage (2026-11-15, OWNER_RULINGS section AS): >=2 named killers per mutant.
           python3 scripts/ci/doc_steps_mutants.py
+          # The command-line reference generator (2026-11-20): >=2 named killers per mutant.
+          python3 scripts/ci/doc_cli_reference_mutants.py
           # Native fault-name derivation (2026-11-16): the fixture and committed-JSON layers run here with no oracle (the oracle
           # layer skips; the vast-box-scripts job fetches the pin and requires it). >=2 named killers per mutant.
           python3 scripts/ci/derive_fault_names_mutants.py

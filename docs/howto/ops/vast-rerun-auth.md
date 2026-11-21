@@ -13,4 +13,4 @@ If the runner reports `phase=availability state=UNAUTHORIZED ... status=401`:
 
 A rerun keeps its original trusted BASE and expected Worker bundle hash. If the coordinator deploys a changed bundle, start a fresh GPU-relevant master commit with the matching committed manifest. Rerunning the old BASE after deployment will fail the bundle binding. Do not relax that check or adjust a timeout to obtain a gate result.
 
-For the 2026-10-27 incident, read the [sanitized evidence](../../traces/vast_auth401_20261018/README.md). The old log proves a GitHub metadata refusal, not an intentional attempt limit; the exact historical mismatching field remains unknown.
+For the 2026-10-27 incident, read the [sanitized evidence](https://github.com/reindertpelsma/kayfabe/blob/master/traces/vast_auth401_20261018/README.md). The old log proves a GitHub metadata refusal, not an intentional attempt limit; the exact historical mismatching field remains unknown.

@@ -22,4 +22,4 @@ CODE READ 2026-10-28 (`.github/workflows/site.yml`, `site/build.py`, `site/deplo
 
 ## Browse a local copy
 
-CODE READ 2026-10-28 (`site/build.py`, `.github/workflows/site.yml`): build with `--portable` for a copy under a URL prefix or opened from disk. Internal links use relative paths and explicit filenames. The version selector opens the chosen version's index when browsing from disk. This mode cannot also be a deploy candidate. CI checks portable output before rebuilding the regular Pages artifact; see [build instructions](../../site/README.md).
+CODE READ 2026-10-28 (`site/build.py`, `.github/workflows/site.yml`): build with `--portable` for a copy under a URL prefix or opened from disk. Internal links use relative paths and explicit filenames. The version selector opens the chosen version's index when browsing from disk. This mode cannot also be a deploy candidate. CI checks portable output before rebuilding the regular Pages artifact; see [build instructions](https://github.com/reindertpelsma/kayfabe/blob/master/site/README.md).

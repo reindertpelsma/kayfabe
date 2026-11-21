@@ -53,7 +53,7 @@ about a minute of set-up; the two values that are not sums of measured steps are
 | `worker-mutants-b` | report, release-*, rv2, driver-pins, simulation, profile, proprietary-image mutants | about 13.5 | about 14 |
 | `middle-apps` (4 slices) | `middle_apps_mutants.py --shard I/4`: every fourth of the 118 mutants from the I-th | 99.0 (one worker) | about 27 each (INFERRED: a quarter of 99 plus a baseline run and set-up) |
 | `mutants-a` | OIDC retry, propimage, clock rule, bandwidth, image size, kfci, instruction, and the mutants of the sharder and of the slicing | about 9 | about 10 |
-| `mutants-b` | kfroot, box downloader, runner stages, doc steps, fault names, evidence and bench self-tests | about 14 | about 15 |
+| `mutants-b` | kfroot, box downloader, runner stages, doc steps, command-line reference, fault names, evidence and bench self-tests | about 14 | about 15 |
 | `selftests` (3 shards) | every `test_*.py` of `scripts/ci`, a partition by module | 17.4 (one process) | about 6 each |
 | `rust-mutants-a` | Windows support profile mutants | 19.1 | about 20 |
 | `rust-mutants-b` | oracle gate, video classes, offer filter, unmap cap, VA profiling mutants | about 12.3 | about 13 |
