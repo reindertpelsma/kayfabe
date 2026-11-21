@@ -248,3 +248,11 @@ SPEC_LICENCE_STATE at=after_maya_07 up_min=26 status=Licensed remaining=129299_m
 SPEC_LICENCE_STATE at=boot2_up41m up_min=42 status=Licensed remaining=129284_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:45_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
 SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
 SPEC_LICENCE_STATE at=after_catia_07 up_min=53 status=Licensed remaining=129272_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:27_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up68m up_min=69 status=Licensed remaining=129256_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:05_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up84m up_min=85 status=Licensed remaining=129241_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:49_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_LICENCE_STATE at=boot2_up99m up_min=100 status=Licensed remaining=129225_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:09_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=solidworks-08 result=FAIL subtests=7/8 reason=TIMEOUT failed=08_NASACrawlerShadedEdges
+solidworks_08 --- FAILED
+SPEC_LICENCE_STATE at=after_solidworks_08 up_min=105 status=Licensed remaining=129221_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:46_PM wlms=absent sppsvc=Stopped w32time=Stopped net=online
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=0/0 reason=TIME failed=-
+SPEC_LICENCE_STATE at=end up_min=105 status=Licensed remaining=129220_minute(s)_(90_day(s)) expiry=Windows(R),_EnterpriseSEval_edition:_Timebased_activation_will_expire_2/19/2027_12:15:08_PM wlms=absent sppsvc=Running w32time=Stopped net=online

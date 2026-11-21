@@ -865,3 +865,5 @@
 2026-11-21T16:49:15,439076+00:00 NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
 2026-11-21T16:49:17,507676+00:00 NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
 2026-11-21T16:49:55,862010+00:00 x86/PAT: kf3-vamgr:89083 freeing invalid memtype [mem 0x2000520000-0x200071ffff]
+2026-11-21T18:02:47,671750+00:00 x86/PAT: kf3-vamgr:89083 freeing invalid memtype [mem 0x2000f20000-0x200111ffff]
+2026-11-21T18:02:47,671996+00:00 x86/PAT: kf3-vamgr:89083 freeing invalid memtype [mem 0x2001120000-0x200131ffff]
