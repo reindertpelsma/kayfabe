@@ -1,0 +1,36 @@
+[xid-watch] tag=cibe953c90921d7afa_windows_apps  host=ubuntu  utc=2026-11-19T23:55:17Z
+[xid-watch] command: env KF_WINAPPS_PROFILE=mid bash /workspace/kf-ci-src/scripts/bench/box/windows_apps.sh cibe953c90921d7afa /root/prov
+[xid-watch] host_dmesg_lines=732  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+WINAPPS_START tag=cibe953c90921d7afa rev=7fb1c98a source=/workspace/kf-ci-src 2026-11-19T23:55:18+00:00 profile=mid gate_tag=gate_cibe953c90921d7afa per_guest=8
+WINAPPS_REQUESTED=1
+APP_POLICY name=overlay_yuv_probe os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_hide os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_occlude os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_resize os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_move os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_recreate os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_fullscreen os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_soak os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=managed_t os=windows result=NOT_RUN note=unsupported (UVM)
+APPS_STAGE preflight 2026-11-19T23:55:18+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 68560(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 68560(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 68560(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 68560(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 68560(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 68607(bash) uid_root 0/0/0/0
+APPS_NOTE host: gpu="NVIDIA GeForce RTX 4090" cpus=30 ram_gb=195 disk_free_gb=295 apps=10 budget_s=3600
+APPS_NOTE app ids: nvidia_smi,deviceQuery_demo,matmul_t,cup8_ladder,dxprobe_d3d11,glgears_wgl,vulkaninfo,torch_correct,edge_webgl,dxprobe_d3d12
+APPS_STAGE app_disk 2026-11-19T23:55:21+00:00
+WINAPPS_RETRY action=rerun-on-a-fresh-box class=MEDIA profile=mid stage=app_disk why="fetch of winapps-open.iso failed (fetch_bundle.txt): PUBLIC_BUNDLE_FAIL (no credentials or provider body logged)" rev=7fb1c98a gpu="NVIDIA GeForce RTX 4090" hostref=unrun/unrun secs=50
+WINAPPS_EXIT rc=3 2026-11-19T23:56:08+00:00
+[xid-watch] --- command output ends (rc=3) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (732 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_cibe953c90921d7afa_windows_apps.log

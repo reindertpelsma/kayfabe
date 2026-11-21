@@ -1,0 +1,15 @@
+[11469.768483] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[12172.195234] NVRM: GPU at PCI:0000:00:07: GPU-00000000-0000-0000-0000-000000000000
+[12172.195247] NVRM: Xid (PCI:0000:00:07): 109, pid=142803, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+
+[12200.863693] x86/PAT: kf3-vamgr:142874 freeing invalid memtype [mem 0x2001670000-0x200179ffff]
+[12200.864711] x86/PAT: kf3-vamgr:142874 freeing invalid memtype [mem 0x20017a0000-0x200199ffff]
+[12200.865207] x86/PAT: kf3-vamgr:142874 freeing invalid memtype [mem 0x20019a0000-0x2001b9ffff]
+[12200.866668] x86/PAT: kf3-vamgr:142874 freeing invalid memtype [mem 0x2001ba0000-0x2001d9ffff]
+[12200.868084] x86/PAT: kf3-vamgr:142874 freeing invalid memtype [mem 0x2001da0000-0x2001f9ffff]
+[12200.870516] x86/PAT: kf3-vamgr:142874 freeing invalid memtype [mem 0x2001fa0000-0x200219ffff]
+[12200.871410] x86/PAT: kf3-vamgr:142874 freeing invalid memtype [mem 0x20021a0000-0x200239ffff]
+[12209.762975] x86/PAT: kf3-vamgr:142874 freeing invalid memtype [mem 0x20007c0000-0x20008effff]
+[12517.353484] NVRM: Xid (PCI:0000:00:07): 109, pid=142803, name=qemu-system-x86, channel 0x00000031, errorString CTX SWITCH TIMEOUT, Info 0x6c022
+
+[12659.451468] x86/PAT: kf3-vamgr:142874 freeing invalid memtype [mem 0x2001730000-0x200181ffff]

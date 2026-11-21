@@ -1,0 +1,119 @@
+{
+ "mode": "record",
+ "ok": false,
+ "schema": 1,
+ "sudo": null,
+ "tree": {
+  "processes": [
+   {
+    "cap": {
+     "CapAmb": "0000000000000000",
+     "CapBnd": "000001ffffffffff",
+     "CapEff": "000001ffffffffff",
+     "CapInh": "0000000000000000",
+     "CapPrm": "000001ffffffffff"
+    },
+    "comm": "bash",
+    "no_new_privs": "0",
+    "pid": 69267,
+    "uid": [
+     "0",
+     "0",
+     "0",
+     "0"
+    ],
+    "violations": [
+     "uid_root 0/0/0/0",
+     "capprm_held 000001ffffffffff",
+     "capeff_held 000001ffffffffff",
+     "capbnd_held 000001ffffffffff",
+     "no_new_privs_not_set 0"
+    ]
+   },
+   {
+    "cap": {
+     "CapAmb": "0000000000000000",
+     "CapBnd": "000001ffffffffff",
+     "CapEff": "000001ffffffffff",
+     "CapInh": "0000000000000000",
+     "CapPrm": "000001ffffffffff"
+    },
+    "comm": "bash",
+    "no_new_privs": "0",
+    "pid": 69314,
+    "uid": [
+     "0",
+     "0",
+     "0",
+     "0"
+    ],
+    "violations": [
+     "uid_root 0/0/0/0",
+     "capprm_held 000001ffffffffff",
+     "capeff_held 000001ffffffffff",
+     "capbnd_held 000001ffffffffff",
+     "no_new_privs_not_set 0"
+    ]
+   },
+   {
+    "cap": {
+     "CapAmb": "0000000000000000",
+     "CapBnd": "000001ffffffffff",
+     "CapEff": "000001ffffffffff",
+     "CapInh": "0000000000000000",
+     "CapPrm": "000001ffffffffff"
+    },
+    "comm": "python3",
+    "no_new_privs": "0",
+    "pid": 69315,
+    "uid": [
+     "0",
+     "0",
+     "0",
+     "0"
+    ],
+    "violations": [
+     "uid_root 0/0/0/0",
+     "capprm_held 000001ffffffffff",
+     "capeff_held 000001ffffffffff",
+     "capbnd_held 000001ffffffffff",
+     "no_new_privs_not_set 0"
+    ]
+   }
+  ],
+  "violations": [
+   "69267(bash) uid_root 0/0/0/0",
+   "69267(bash) capprm_held 000001ffffffffff",
+   "69267(bash) capeff_held 000001ffffffffff",
+   "69267(bash) capbnd_held 000001ffffffffff",
+   "69267(bash) no_new_privs_not_set 0",
+   "69314(bash) uid_root 0/0/0/0",
+   "69314(bash) capprm_held 000001ffffffffff",
+   "69314(bash) capeff_held 000001ffffffffff",
+   "69314(bash) capbnd_held 000001ffffffffff",
+   "69314(bash) no_new_privs_not_set 0",
+   "69315(python3) uid_root 0/0/0/0",
+   "69315(python3) capprm_held 000001ffffffffff",
+   "69315(python3) capeff_held 000001ffffffffff",
+   "69315(python3) capbnd_held 000001ffffffffff",
+   "69315(python3) no_new_privs_not_set 0"
+  ]
+ },
+ "violations": [
+  "69267(bash) uid_root 0/0/0/0",
+  "69267(bash) capprm_held 000001ffffffffff",
+  "69267(bash) capeff_held 000001ffffffffff",
+  "69267(bash) capbnd_held 000001ffffffffff",
+  "69267(bash) no_new_privs_not_set 0",
+  "69314(bash) uid_root 0/0/0/0",
+  "69314(bash) capprm_held 000001ffffffffff",
+  "69314(bash) capeff_held 000001ffffffffff",
+  "69314(bash) capbnd_held 000001ffffffffff",
+  "69314(bash) no_new_privs_not_set 0",
+  "69315(python3) uid_root 0/0/0/0",
+  "69315(python3) capprm_held 000001ffffffffff",
+  "69315(python3) capeff_held 000001ffffffffff",
+  "69315(python3) capbnd_held 000001ffffffffff",
+  "69315(python3) no_new_privs_not_set 0"
+ ]
+}
