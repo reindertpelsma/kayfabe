@@ -1,0 +1,4 @@
+09:11:20 ATTEMPT 2 qemu.log line 17965
+09:14:05 CONFIRM clicked, qemu.log line 20946
+09:21:33 result screen text: aie oS ; is - aa ae = —— Ee Eee <7 Detected low VRAM. Benchmark results may significantly differ from ss actual pati peM Ome Rceaetd AB zor reference only. a Z iz ee ee ee - - = ee ei ee 
+09:21:41 END result_screen vram_peak=3740 secs_since_launch=612 confirm_to_end=462 qlog 18029->20946->37948

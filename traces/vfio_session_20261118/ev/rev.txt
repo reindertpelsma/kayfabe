@@ -1,0 +1,6 @@
+e30ece557b31994bc651065a7ca37a9688da9dffdc2d5c17b3ca69721f7cdaca
+7.0.0-34-generic
+36 2026-11-16 18:59 /workspace/bench/kf3-
+== kf3 build: QEMU 10.2.4 rev 6bfa2dbc
+== archive 2026-11-16 18:59:25.236702540 +0100 (cargo succeeded: current for this revision by cargo's fingerprints)
+KF3_BUILT /workspace/bench/kf3-bins/6bfa2dbc/qemu-system-x86_64 rev=6bfa2dbc mtime=2026-11-16 18:59:31.898686050 +0100 (shared build dir /workspace/bench/qemu-build-kf3)

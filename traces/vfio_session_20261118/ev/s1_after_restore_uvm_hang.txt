@@ -1,0 +1,37 @@
+Wed Nov 18 04:05:03 AM UTC 2026
+--- lsmod
+nvidia_uvm           2088960  -1
+nvidia_drm            147456  3
+nvidia_modeset       1789952  3 nvidia_drm
+nvidia              15114240  38 nvidia_uvm,nvidia_modeset
+vfio_iommu_type1       49152  0
+vfio                   77824  1 vfio_iommu_type1
+initstate going refcnt -1
+--- D-state tasks
+ 241518  225826 D          00:00 rcu_barrier.part.0       /sbin/modprobe -r nvidia-uvm
+stack 241518
+[<0>] rcu_barrier.part.0+0x1d0/0x2f0
+[<0>] rcu_barrier+0x42/0x80
+[<0>] kmem_cache_destroy+0x133/0x1c0
+[<0>] uvm_va_range_exit+0x57/0xd0 [nvidia_uvm]
+[<0>] uvm_global_exit+0x4f/0xc0 [nvidia_uvm]
+[<0>] uvm_exit+0x18/0x40 [nvidia_uvm]
+[<0>] uvm_exit_entry+0x88/0x900 [nvidia_uvm]
+[<0>] __do_sys_delete_module.isra.0+0x1bd/0x2f0
+[<0>] __x64_sys_delete_module+0x12/0x20
+--- dmesg tail
+[27924.026239] nvidia-nvlink: Nvlink Core is being initialized, major device number 235
+
+[27924.028917] nvidia 0000:01:00.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=none
+[27924.078717] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[27924.094442] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 02:47:3
+[27924.101886] [drm] [nvidia-drm] [GPU ID 0x00000100] Loading driver
+[27924.945661] rfkill: input handler disabled
+[27925.453189] nvidia-nvlink: nvlink driver open
+[27925.453195] nvidia-nvlink: nvlink driver open
+[27925.486582] nvidia-nvlink: nvlink driver close
+[27925.589664] [drm] Initialized nvidia-drm 0.0.0 for 0000:01:00.0 on minor 1
+[27925.589678] nvidia 0000:01:00.0: vgaarb: deactivate vga console
+[27925.637712] fbcon: nvidia-drmdrmfb (fb0) is primary device
+[27925.637761] Console: switching to colour frame buffer device 240x67
+[27925.637767] nvidia 0000:01:00.0: [drm] fb0: nvidia-drmdrmfb frame buffer device
