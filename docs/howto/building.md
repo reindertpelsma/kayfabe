@@ -100,6 +100,54 @@ To use a tarball you already have, add `--from-file <path>`; it is checked again
 
 The per-revision directory exists because a shared binary was once replaced under a running test. The launch scripts run the binary for their own checkout's revision. <!-- src: scripts/bench/build_kf3.sh header -->
 
+## 5a. Build with the build kit
+
+`scripts/release/build_qemu.py` is the kit the project's release is built with. It builds the Rust archive, lays the `kf3-gpu` device into a QEMU source tree, configures and builds QEMU, and packs the result. It installs nothing, takes no lock and needs no root. It needs the packages of step 2, `gnupg`, and the toolchain of step 3. <!-- src: scripts/release/build_qemu.py (module docstring), .github/workflows/release-qemu.yml (package list) -->
+
+```sh
+python3 -I scripts/release/build_qemu.py plan                  # the inputs, the patch list and the exact configure line; builds nothing
+```
+
+```sh
+python3 -I scripts/release/build_qemu.py build --out dist      # a few minutes on 6 cores
+```
+<!-- src: scripts/release/build_qemu.py (plan, build); a full build of QEMU 10.2.4 took about 3 minutes on a 6-core machine (reproduce run) -->
+
+`dist/` then holds `kayfabe-qemu-<QEMU version>-<kayfabe revision>-linux-x86_64.tar.xz` and a `...-manifest.json`. Unpack the tarball anywhere: `bin/qemu-system-x86_64` finds its firmware in `share/qemu` beside it. The manifest lists the QEMU version and how its source was checked, the kayfabe revision, every file the kit adds to the QEMU tree with its sha256, the exact configure line, the versions of the compiler and libraries, and the sha256 of each output. The configure line has no GTK and no SDL (the display is the broker, see [Display and the broker](display.md)), one target (`x86_64-softmmu`) and no network access. <!-- src: scripts/release/build_qemu.py (build, CONFIGURE_FLAGS) -->
+
+**Which QEMU.** With no option the kit downloads the pinned official release (10.2.4) from `download.qemu.org` and accepts it only if its detached signature verifies against the release signer's key listed in `scripts/release/qemu-release.pin` (checked with a private `gpg` keyring that holds only that key; the fingerprint is the one `https://www.qemu.org/download/` publishes). To use your own QEMU source instead: <!-- src: scripts/release/qemu-release.pin, scripts/release/build_qemu.py (verify_signature) -->
+
+```sh
+python3 -I scripts/release/build_qemu.py build --qemu-tarball ~/src/qemu-10.2.4.tar.xz --out dist   # a release tarball (checked against its .sig when that file is beside it)
+python3 -I scripts/release/build_qemu.py build --qemu-tree ~/src/qemu-10.2.4 --out dist             # a source tree, for example the one a distribution builds from
+```
+
+A tarball or tree you supply is yours: the manifest says so and records its hash. The kit copies a tree and never changes it, and ignores its `.git`. It accepts QEMU 10.2.4 only and refuses any other version by name, listing the versions it knows. A tree that already has a `hw/misc/kf3` directory with other files in it is refused. A tree that already contains the two one-line hunks (`subdir('kf3')` in `hw/misc/meson.build` and a `config KF3` stanza in `hw/misc/Kconfig`) gets them once. <!-- src: scripts/release/build_qemu.py (QemuInput, apply_overlay, check_supported) -->
+
+**Check that a build is reproducible.** `reproduce` builds twice, in two different directories, and fails unless the binary tarball and the manifest are byte-identical:
+
+```sh
+python3 -I scripts/release/build_qemu.py reproduce --out repro   # builds twice, compares
+```
+<!-- src: scripts/release/build_qemu.py (reproduce); run for this page on one machine: KIT_REPRODUCIBLE for QEMU 10.2.4, for two builds from the checkout and for a build from the source tarball against one from the checkout -->
+
+The kit fixes the clock (to the commit time of the checkout), the locale and every build path, and sorts and normalises the archive. Identical bytes are expected for the same compiler, linker and libraries, which is why the manifest records them; a different toolchain can give a different binary. <!-- src: scripts/release/build_qemu.py (build_env, pack_tree, configure_args) -->
+
+**Verify a release you downloaded.** A release of this project carries the binary tarball, the corresponding source tarball, the manifest and a `SHA256SUMS` file, and each of them has a GitHub artifact attestation made by the workflow run that built it:
+
+```sh
+gh attestation verify kayfabe-qemu-10.2.4-<revision>-linux-x86_64.tar.xz --repo reindertpelsma/kayfabe
+sha256sum -c SHA256SUMS
+```
+
+To rebuild the binary from the source tarball, unpack it and point the kit inside at the tarball:
+
+```sh
+tar -xf kayfabe-qemu-10.2.4-<revision>-source.tar.xz
+python3 -I kayfabe-qemu-10.2.4-<revision>-source/kayfabe/scripts/release/build_qemu.py build --source-tarball kayfabe-qemu-10.2.4-<revision>-source.tar.xz --out dist
+```
+<!-- src: .github/workflows/release-qemu.yml, scripts/release/build_qemu.py (make_source_tarball, open_source_tarball) -->
+
 ## 6. Optional builds
 
 **The GPU gates** (`kf-gate1` to `kf-gate9`) play the guest against the real planes on a real GPU with no QEMU: `cargo build --release -p kf-harness --bins`, run through `scripts/bench/v3_gates.sh` (see [Running the QEMU device](installing.md)). <!-- src: scripts/bench/v3_gates.sh, ARCHITECTURE.md -->

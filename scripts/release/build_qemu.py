@@ -615,16 +615,16 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
 # ------------------------------------------------------------------------------------------------ the source tarball
 BUILDING = """Corresponding source of %(name)s (QEMU %(qemu)s + kayfabe revision %(rev)s).
 
-  kayfabe/   the kayfabe source (the device qemu/hw/misc/kf3/, the Rust crates, this kit under scripts/release/),
-             with the vendored crates.io sources (vendor/, libc only for the QEMU build) and the licence texts
+  kayfabe/   the kayfabe source (the device qemu/hw/misc/kf3/, the Rust crates, the build kit scripts/release/), the vendored
+             crates.io sources (vendor/) and the licence texts
   qemu/      the unmodified upstream QEMU release tarball and its detached signature
 
-To rebuild the binary (Linux, the packages of docs/howto/building.md; a Rust toolchain as pinned in kayfabe/rust-toolchain.toml):
+To rebuild the binary (Linux; the packages of kayfabe/docs/howto/building.md step 2 and gnupg; the Rust toolchain named in
+kayfabe/rust-toolchain.toml): run, from the directory that holds this source tarball's .tar.xz file,
 
-  python3 -I kayfabe/scripts/release/build_qemu.py build --out out        # from this directory's parent tarball:
-  python3 -I <this source tarball extracted>/kayfabe/scripts/release/build_qemu.py build --source-tarball <the .tar.xz> --out out
+  python3 -I <this directory>/kayfabe/scripts/release/build_qemu.py build --source-tarball <the .tar.xz file> --out out
 
-The output is byte-identical to the published binary tarball when the toolchain is the one recorded in its manifest.
+The binary tarball is byte-identical to the published one when the toolchain is the one its manifest records.
 """
 
 
