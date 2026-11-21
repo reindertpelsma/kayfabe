@@ -1,0 +1,1 @@
+kf-rm: the guest says it is driver 595.84; cannot re-select from 580.159.04 (the version the device defaulted to): MESSAGE_QUEUE_INIT_ARGUMENTS differs and the guest already consumed it. To serve this guest add guest-driver=595.84 to the kf3-gpu device [#1, rate-limited]

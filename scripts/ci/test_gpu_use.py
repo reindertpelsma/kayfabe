@@ -645,7 +645,7 @@ class RunAppsRows(unittest.TestCase):
         rec = rows.evaluate(app, "host", log)
         return rec
 
-    # ---- 2026-11-20: `grep -m1` took the row's own header line (`cmd: ... --diag-timeout 1500`), and the filter after it dropped it: the note was `-` for every row
+    # ---- `grep -m1` took the row's own header line (`cmd: ... --diag-timeout 1500`), and the filter after it dropped it: the note was `-` for every row
     #      whose command text contains one of the words (timeout, error, fail ...)
     def test_the_note_of_a_row_that_could_not_start_names_the_error_and_not_its_header(self):
         res, log, _ = self.run_row("nvml_dcgm")
@@ -1002,7 +1002,7 @@ esac
         got = self.run_hook("egl_offscreen", "egl_gpu.log", "kf3_window_gpu.log", smi=True)
         self.assertTrue((got["dir"] / "egl_offscreen.smi" / "host_query.csv").exists())
 
-    # ---- 2026-11-20: the first apps_discovery run on a box booted a guest image without /opt/apps/bundle: every row said HANG, and every boot "wedged"
+    # ---- The first apps_discovery run on a box booted a guest image without /opt/apps/bundle: every row said HANG, and every boot "wedged"
     MISSING = "bash: /opt/apps/bundle/run_apps.sh: No such file or directory"
 
     def last_line(self, got):

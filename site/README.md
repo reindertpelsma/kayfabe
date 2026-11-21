@@ -179,4 +179,4 @@ Tests: `python3 -m unittest discover -s site -p test_status.py` and, after
 
 ## Proposed always-reported Site status
 
-CODE READ 2026-10-27 (`.github/workflows/site.yml`, `site-status.yml`, `ci/vast-broker/site_policy.py`): PRs always get the custom `site` status. A read-only API decision skips an unrelated change; needed/uncertain changes build the exact PR head. The separate API-only reporter supports fork PRs without giving their code a status-writing token. Master deployment requires confirmed Site/docs/workflow changes, while existing publication events keep master tooling. See [status behavior](../docs/howto/site-status.md).
+CODE READ 2026-10-27 (`.github/workflows/site.yml`, `site-status.yml`, `ci/vast-broker/site_policy.py`): PRs always get the custom `site` status. A read-only API decision skips an unrelated change; needed/uncertain changes build the exact PR head. The separate API-only reporter supports fork PRs without giving their code a status-writing token. Master deployment requires confirmed Site/docs/workflow changes, while existing publication events keep master tooling. See [status behavior](../docs/howto/ops/site-status.md).

@@ -1,6 +1,6 @@
 # Building from source
 
-There is no installer and no public binary. You build two things: the Rust workspace, and a QEMU binary that has the `kf3-gpu` device linked in. This page lists the steps the repository's build scripts perform, in their order. <!-- src: README.md, scripts/bench/build_kf3.sh -->
+There is no public binary yet, so you build it. You build two things: the Rust workspace, and a QEMU binary that has the `kf3-gpu` device linked in. This page lists the steps of the build, in their order. Once you have the binary, continue with [Install](installing.md), step 3. <!-- src: README.md, scripts/bench/build_kf3.sh -->
 
 Read [Requirements](requirements.md) first. A QEMU binary built from this tree is not yet distributable under the GPL: see [Credits and notices](credits.md). <!-- src: LICENSE exception 2 -->
 
@@ -124,23 +124,23 @@ make check               # build + selftest
 
 Build dependencies named in `broker/Makefile`: `libwayland-dev wayland-protocols` (Wayland backend), `libxcb1-dev libxcb-dri3-dev libxcb-present-dev` (X11 backend), optionally `libxcb-render0-dev` and `libxcb-xinput-dev`. A backend is built only when its libraries are present, and the build prints which ones it kept. <!-- src: broker/Makefile -->
 
-## How the commands on this page are tested (2026-11-15)
+## How the commands on this page are tested
 
-The commands in the blocks above that carry a `<!-- kf-run: ... -->` line are run, as written, by the CI GPU boxes (payload stage `install_flow`, `scripts/ci/install_flow.py`, large tier only, selected with `--only install_flow`). There is no second copy of them: `scripts/ci/doc_steps.py` reads the blocks from this file and refuses a marker it does not know. The marker convention is in that script's header. Blocks without a marker (the broker build, the GPU gates, the thin guest) are not run by it.
+The commands in the blocks above that carry a `<!-- kf-run: ... -->` line are run, as written, by the project's CI GPU machines (payload stage `install_flow`, `scripts/ci/install_flow.py`, large tier only, selected with `--only install_flow`). There is no second copy of them: `scripts/ci/doc_steps.py` reads the blocks from this file and refuses a marker it does not know. The marker convention is in that script's header. Blocks without a marker (the broker build, the GPU gates, the thin guest) are not run by it.
 
 What the test changes, and nothing else:
 
 - **The clone URL.** `git clone https://github.com/reindertpelsma/kayfabe.git` is replaced by a clone of a local mirror that holds exactly the commit under test, because the stage must test that commit and not whatever the public repository says. The stage then checks that the clone's `HEAD` is that commit.
 - **Who runs it.** Every block runs in a fresh bash with `set -euo pipefail`, as a new unprivileged user in group `kvm` with no capabilities and a home directory under a temporary prefix. The one block marked `user=root` (`packages_install`) runs as root, where `sudo` is a no-op; the result lists which steps needed root.
-- **The QEMU tarball** is downloaded from `download.qemu.org` as the block says. [Not pinned by this page's block yet: the pin of `scripts/bench/qemu.pin` is a separate change.]
+- **The QEMU tarball** is downloaded as the block says and checked against the pin of `scripts/bench/qemu.pin`.
 
-*(Design, not implemented: when a CI-built attested binary exists for the exact commit, the stage will use it instead of the `qemu_build` step, as `docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md` section 2 describes. The hook is `install_flow.py`'s `--attested-binary`.)*
+<!-- src: docs/design/V3_BOX_DOWNLOADER_AND_SUPPLY_CHAIN.md section 2 (a CI-built attested binary is designed, not built; the hook is install_flow.py --attested-binary) -->
 
 ## Not documented yet
 
-- A one-command install, distribution packages, containers or a prebuilt binary.
+- A one-command install, distribution packages, containers or a prebuilt binary. The page for a downloadable release is created at the first release.
 - Building against a QEMU other than 10.2.4, or against a distribution's QEMU packages.
 - Cross-building for arm64.
 - Windows-host builds.
 
-Verified on: `cargo test -p kf-oprom` was run for this page (Rust 1.99.0, no GPU; every test binary of that crate passed). `build_kf3.sh`, `cargo build --workspace --release`, the broker build and the thin-guest build were read from their scripts, not run for this page. Every hardware result in the repository was produced with binaries from `build_kf3.sh`. <!-- src: AGENTS.md "Verification" -->
+<!-- src (basis of this page): `cargo test -p kf-oprom` was run for this page (Rust 1.99.0, no GPU; every test binary of that crate passed). `build_kf3.sh`, `cargo build --workspace --release`, the broker build and the thin-guest build were read from their scripts, not run for this page. Every hardware result in the repository was produced with binaries from `build_kf3.sh`. <!-- src: AGENTS.md "Verification" -- -->

@@ -7,4 +7,4 @@ CODE READ (`scripts/ci/vast_evidence.py`, `ci/vast-broker/src/evidence.js`, 2026
 - The bundle is private. It is kept for 30 days and only the repository owner can read it, with `scripts/ci/fetch_evidence.py` or `wrangler r2 object get`. It is never linked from the status API, the site or the job summary.
 - Treat a downloaded bundle as untrusted data from a machine that ran test code: read the files, do not run anything from it.
 
-The details (what is kept first, what is scrubbed and scanned, the upload protocol, the bucket and its retention rule) are in the [payload notes](../../scripts/ci/VAST_PAYLOAD.md) and in the [broker deployment notes](../../ci/vast-broker/DEPLOY.md).
+The details (what is kept first, what is scrubbed and scanned, the upload protocol, the bucket and its retention rule) are in the [payload notes](https://github.com/reindertpelsma/kayfabe/blob/master/scripts/ci/VAST_PAYLOAD.md) and in the [broker deployment notes](https://github.com/reindertpelsma/kayfabe/blob/master/ci/vast-broker/DEPLOY.md).

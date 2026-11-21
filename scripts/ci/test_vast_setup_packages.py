@@ -97,6 +97,13 @@ missing_tool=$1 apt_trace=$2 KF_PROVISION_PROFILE=ci
             ["build-essential", "libbz2-dev", "libffi-dev", "liblzma-dev", "libsqlite3-dev", "libssl-dev", "zlib1g-dev"],
         )
 
+    def test_nvcodec_control_is_exactly_the_distribution_ffmpeg_and_no_other_profile_holds_it(self):
+        """The host control of nvcodec_matrix (apps_discovery_stage.py, 2026-11-20) installs ffmpeg through provision.sh of the open rows. The cross-file contracts (the
+        cache policy, provision.sh) are in test_package_profiles.py."""
+        self.assertEqual(self.plan("nvcodec_control"), ["ffmpeg"])
+        for profile in ("ci", "full", "bench", "windows", "apps", "pybuild"):
+            self.assertNotIn("ffmpeg", self.plan(profile), profile)
+
     def test_ci_keeps_real_build_driver_and_initrd_dependencies(self):
         self.assertTrue(
             {

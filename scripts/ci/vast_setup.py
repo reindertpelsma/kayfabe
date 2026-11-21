@@ -50,7 +50,7 @@ def digest(path):
 
 def package_names(root):
     names = set()
-    for profile in ["ci", "bench", "windows", "apps", "pybuild"]:
+    for profile in ["ci", "bench", "windows", "apps", "pybuild", "nvcodec_control"]:
         text = subprocess.check_output(
             ["bash", str(root / "scripts/bench/provision_box.sh"), "--packages", profile], text=True
         )
