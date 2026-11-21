@@ -1288,6 +1288,142 @@ class HeadTail(TempCase):
         self.assertEqual(result["rootless"]["verdict"], "VIOLATED")
 
 
+class CheckoutOwnedByTheUser(TempCase):
+    """A rootless leg leaves the checkout owned by the unprivileged user (chown_tree); the next root leg must still read it, with trust for
+    exactly that path. git's own ownership check is faked with GIT_TEST_ASSUME_DIFFERENT_OWNER, and really exercised when the tests run as
+    root (the chown is then real)."""
+
+    SHA_ENV = {"GIT_TEST_ASSUME_DIFFERENT_OWNER": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+
+    def setUp(self):
+        super().setUp()
+        env = patch.dict(os.environ, self.SHA_ENV)
+        env.start()
+        self.addCleanup(env.stop)
+        for name in ("SUDO_UID", "GIT_CONFIG_COUNT"):
+            os.environ.pop(name, None)
+        self.repo = self.tmp / "checkout"
+        self.repo.mkdir()
+        self.git("init", "-q")
+        self.git("-c", "user.email=f@example.invalid", "-c", "user.name=F", "commit", "-q", "--allow-empty", "-m", "fixture")
+        self.git("remote", "add", "origin", "https://invalid.example/repository")
+
+    def git(self, *args, trusted=True, path=None):
+        path = path or self.repo
+        argv = ["git"] + (["-c", f"safe.directory={path}"] if trusted else []) + ["-C", str(path), *args]
+        env = dict(os.environ)
+        if trusted:
+            env.pop("GIT_TEST_ASSUME_DIFFERENT_OWNER", None)
+        return subprocess.check_output(argv, text=True, env=env, stderr=subprocess.PIPE).strip()
+
+    def head(self):
+        env = dict(os.environ)
+        env.pop("GIT_TEST_ASSUME_DIFFERENT_OWNER")
+        return subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True, env=env).strip()
+
+    def test_the_fixture_is_refused_by_plain_git(self):
+        with self.assertRaises(subprocess.CalledProcessError) as caught:
+            subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True, stderr=subprocess.PIPE)
+        self.assertIn("dubious ownership", caught.exception.stderr)
+
+    def test_prepare_checkout_reads_a_checkout_the_user_owns(self):
+        branch = P.prepare_checkout(self.repo, self.head())
+        self.assertEqual(branch, "kf-ci-approved")
+        self.assertEqual(self.git("remote", "get-url", "origin"), str(self.repo))
+        self.assertEqual(self.git("rev-parse", "refs/heads/" + branch), self.head())
+
+    def test_the_wrong_revision_is_still_refused_in_a_checkout_the_user_owns(self):
+        with self.assertRaises(P.EvidenceError):
+            P.prepare_checkout(self.repo, "b" * 40)
+        self.assertEqual(self.git("remote", "get-url", "origin"), "https://invalid.example/repository")
+
+    def test_the_trust_is_one_path_on_one_command_and_is_never_written(self):
+        seen = []
+        real = subprocess.check_output
+
+        def spy(argv, **kw):
+            seen.append(list(argv))
+            return real(argv, **kw)
+
+        head = self.head()
+        with patch.object(P.subprocess, "check_output", spy):
+            P.prepare_checkout(self.repo, head)
+            self.assertEqual(P.checkout_git(self.repo, "rev-parse", "HEAD"), head)
+        self.assertTrue(seen)
+        for argv in seen:
+            self.assertEqual(argv[:3], ["git", "-c", f"safe.directory={str(self.repo)}"])
+            self.assertNotIn("*", " ".join(argv))
+            self.assertNotIn("config", argv)
+            self.assertNotIn("--global", argv)
+        # nothing persisted: plain git still refuses the checkout, and the repository config names no safe.directory
+        with self.assertRaises(subprocess.CalledProcessError):
+            subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True, stderr=subprocess.PIPE)
+        self.assertNotIn("safe", (self.repo / ".git/config").read_text())
+
+    def test_the_trust_does_not_reach_a_sibling_checkout(self):
+        sibling = self.tmp / "sibling"
+        sibling.mkdir()
+        self.git("init", "-q", path=sibling)
+        seen = []
+        with patch.object(P.subprocess, "check_output", lambda argv, **kw: seen.append(list(argv)) or ""):
+            P.checkout_git(self.repo, "rev-parse", "--git-dir")
+        trusted = seen[0][:3]
+        self.assertEqual(trusted[2], f"safe.directory={str(self.repo)}")
+        with self.assertRaises(subprocess.CalledProcessError) as caught:
+            subprocess.check_output([*trusted, "-C", str(sibling), "rev-parse", "--git-dir"], text=True, stderr=subprocess.PIPE)
+        self.assertIn("dubious ownership", caught.exception.stderr)
+
+    def guest_command_run(self, spy=None):
+        serial, qlog = self.tmp / "serial", self.tmp / "qemu.log"
+        serial.write_text("")
+        qlog.write_text("")
+        receipt = self.tmp / "native.json"
+        receipt.write_text(json.dumps({"approved_native_xid_lines": []}))
+        arguments = ["/bin/qemu", "-name", "kf-fastguest", "-append", "console=hvc0 KF_ARMS=--defer-liveness,--probe-launch-dma", "-chardev",
+                     "file,id=kfcon0,path=" + str(serial)]
+        env = {"KF_PAYLOAD_ROOT": str(self.repo), "KF_PAYLOAD_NATIVE_RECEIPT": str(receipt), "KF_PAYLOAD_LOG": str(self.tmp / "log"),
+               "KF_PAYLOAD_DIAGNOSTIC_STATE": str(self.tmp / "diag.json"), "KF_PAYLOAD_XID_ALLOWED": str(self.tmp / "allowed"),
+               "KF_PAYLOAD_XID_FAILED": str(self.tmp / "failed")}
+        seen = []
+        with patch.dict(os.environ, env), patch.object(P.xid_guard, "supervise_guest", lambda *a: seen.append(a) or 0), \
+                contextlib.redirect_stdout(io.StringIO()):
+            if spy is None:
+                P.guest_command(qlog, arguments)
+            else:
+                with patch.object(P.subprocess, "check_output", spy):
+                    P.guest_command(qlog, arguments)
+        return seen
+
+    def test_the_xid_guard_reads_the_revision_of_a_checkout_the_user_owns(self):
+        head = self.head()
+        self.assertEqual([a[3] for a in self.guest_command_run()], [head])
+
+    def test_the_xid_guard_revision_read_trusts_only_the_checkout(self):
+        argvs = []
+        self.guest_command_run(lambda argv, **kw: argvs.append(list(argv)) or "a" * 40 + "\n")
+        self.assertEqual([a[:3] for a in argvs], [["git", "-c", f"safe.directory={self.repo}"]])
+        self.assertNotIn("*", " ".join(argvs[0]))
+
+    def test_a_symlinked_checkout_is_trusted_by_the_path_git_resolves(self):
+        link = self.tmp / "link"
+        link.symlink_to(self.repo, target_is_directory=True)
+        self.assertEqual(P.prepare_checkout(link, self.head()), "kf-ci-approved")
+        self.assertEqual(P.checkout_git(link, "rev-parse", "HEAD"), self.head())
+
+    @unittest.skipUnless(os.geteuid() == 0, "needs root to give a tree to another uid")
+    def test_a_tree_really_given_to_another_uid_is_read_by_root(self):
+        os.environ.pop("GIT_TEST_ASSUME_DIFFERENT_OWNER")
+        subprocess.check_call(["chown", "-R", "65534:65534", str(self.repo)])
+        os.environ.pop("SUDO_UID", None)
+        with self.assertRaises(subprocess.CalledProcessError):
+            subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True, stderr=subprocess.PIPE)
+        sha = subprocess.check_output(["git", "-c", f"safe.directory={self.repo}", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+        link = self.tmp / "link"
+        link.symlink_to(self.repo, target_is_directory=True)
+        self.assertEqual(P.prepare_checkout(link, sha), "kf-ci-approved")
+        self.assertEqual(P.prepare_checkout(self.repo, sha), "kf-ci-approved")
+
+
 class BootstrapForThePayload(TempCase):
     def test_the_payload_flow_installs_no_launcher_and_no_sudoers_file(self):
         calls = []
