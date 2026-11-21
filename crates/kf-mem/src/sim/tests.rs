@@ -119,7 +119,7 @@ fn remap_inside(
     runs
 }
 
-/// ★★★ THE COALESCED-ROW HAZARD (owner, 2026-10-09), on EVERY path: a 16-page row that is VA- and
+/// ★★★ THE COALESCED-ROW HAZARD, on EVERY path: a 16-page row that is VA- and
 /// GPA-contiguous is ONE committed placement; the guest then remaps ONE page of it. The other 15
 /// pages are UNCHANGED and must stay mapped at every instant — in the unreserved range (`NV01`)
 /// and in a reservation alike, with batching on or off.

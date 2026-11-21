@@ -59,7 +59,7 @@ use crate::ledger::{MapTarget, Settle};
 use kf_cuda::WalkEntry;
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
 
-/// ★ Owner ruling 2026-10-09 (`OWNER_RULINGS.md` §AA): an invalidate completes although the guest's
+/// An invalidate completes although the guest's
 /// tables hold leaves we cannot map (hardware completes it too; a bad leaf faults when USED).
 /// ON by default; `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0` restores the 2026-09-25 withheld clear (A/B).
 fn clear_over_absent() -> bool {
@@ -335,7 +335,7 @@ pub struct EntryDiff {
     pub cut: bool,
     /// Its slot is full and nothing can be retired: no progress is possible.
     pub overflow: bool,
-    /// ★ Owner ruling 2026-09-25: the `KFWR_R_*` bits its WALK refused (0 = none). Its refused
+    /// The `KFWR_R_*` bits its walk refused (0 = none). Its refused
     /// leaves are absent from the walk; the rest of its diff is applied, and the space fails by
     /// name (its invalidate stays armed).
     pub refused: u32,
@@ -942,7 +942,7 @@ enum Want {
         pdb: Option<u64>,
         /// The caller's ticket.
         ticket: u64,
-        /// ★ OWNER_RULINGS §U.2: walk exactly this space instead (a deferred TLB invalidate names
+        /// Walk exactly this space instead (a deferred TLB invalidate names
         /// the triggering channel's own space; `pdb` is then `None` and ignored).
         key: Option<VasKey>,
         /// ★ 2026-11-13: when the channel asked (request -> done is `SPLIT-LATE`'s clock).
@@ -1057,7 +1057,7 @@ pub struct VaStats {
     pub partial: u64,
     /// ★ Objects walked with no slot left (refused by name).
     pub no_slot: u64,
-    /// ★ Spaces failed because their walk refused leaves (owner ruling 2026-09-25).
+    /// Spaces failed because their walk refused leaves.
     pub walk_refused_spaces: u64,
     /// ★ Review 2 item 5: runs refused for the refresh's host-call budget (absent until the guest's
     /// next walk of the space; no follow-up walk — review 3 item 1).
@@ -1201,7 +1201,7 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
-    /// Owner ruling 2026-10-09: complete over absent leaves (read at construction; tests set it).
+    /// Complete over absent leaves. The value is read at construction and can be set by tests.
     clear_absent: bool,
     /// ★ Ruling 2026-09-26 (5): invalidates whose runs all applied but whose target's work is not
     /// live yet ([`Settle::Pending`]) — cleared by [`VaManager::on_targets`], never waited for.
@@ -1546,7 +1546,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
     }
 
-    /// ★★ OWNER_RULINGS §U.2: a deferred TLB invalidate's split — walk and apply exactly `key`
+    /// For a deferred TLB invalidate split, walk and apply exactly `key`
     /// (the triggering channel's own space), then report `ticket` done through
     /// [`VaManager::take_splits`]. A space with no root has nothing to be stale: done at once.
     pub fn on_split_space(&mut self, key: VasKey, ticket: u64, trigger: &Trigger) {
@@ -2324,8 +2324,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     a.first_refusal.clone().unwrap_or_default()
                 ));
             } else if e.refused != 0 {
-                // ★ Owner ruling 2026-09-25: a walk that refused leaves in this space is NOT the
-                // whole truth of it — what it did describe was applied above; the space fails by
+                // A walk that refused leaves in this space gave a partial result.
+                // What it did describe was applied above. The space fails by
                 // name so its invalidate is not cleared over leaves nobody mapped.
                 failed.insert(key);
                 absent_only.insert(key);
@@ -2500,13 +2500,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
                 continue;
             };
-            // ★ Owner ruling 2026-10-09 (§AA; supersedes 2026-09-25's "not cleared over leaves nobody
-            // mapped", opt-out `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`): the clear is NOT withheld when
+            // Unless `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`, clear the invalidate when
             // every failed space failed only by ABSENCE (a refused map or a walk-refused leaf, never
             // an unmap or an invalidate refusal) and none is re-walking. A GPU access to an absent
             // leaf faults on that space's twin (as the split already does, v3-mapfix); the withheld
             // clear instead left the guest polling the trigger forever with its locks held
-            // (`[measured run 223]`: one uncleared MMU_INVALIDATE, TDR 0x117).
+            // (`[measured run 223]`: one uncleared MMU_INVALIDATE, TDR 0x117, see `docs/design/V3_WINDOWS_BRING_UP_20261009.md`).
             let absent_ok = bad.is_some()
                 && self.clear_absent
                 && keys.iter().all(|k| {
@@ -4725,7 +4724,7 @@ mod tests {
         );
     }
 
-    /// ★ Owner ruling 2026-09-25: a walk that REFUSED leaves in a space fails that space by name
+    /// A walk that refused leaves in a space fails that space by name
     /// (its invalidate stays armed) — while what the walk did describe is still applied (the
     /// failure is scoped to the refused leaves, which are absent, never "unmapped").
     #[test]
@@ -4760,7 +4759,7 @@ mod tests {
         assert!(ops(&r).is_empty());
     }
 
-    /// ★ Owner ruling 2026-10-09: a space that failed ONLY by absence (a
+    /// A space that failed only by absence (a
     /// walk-refused leaf) no longer holds its invalidate armed forever; what the walk described is
     /// applied, the invalidate completes, and the refusal stays counted and named.
     #[test]
@@ -4793,7 +4792,7 @@ mod tests {
         );
     }
 
-    /// ★ Owner ruling 2026-10-09: a host-REFUSED map is absence too — the invalidate completes, the
+    /// A host-refused map is absence too. The invalidate completes, the
     /// refusal is named, and commit-on-ack still re-emits ONLY the refused map on the next diff.
     #[test]
     fn a_refused_map_completes_the_invalidate_and_is_retried_by_the_next_one() {

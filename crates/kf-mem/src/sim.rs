@@ -30,8 +30,7 @@
 //! Tests may place FOREIGN mappings (what kayfabe's other code maps through the same client and
 //! `hDma`); a mirror verb that removes or splits one is a VIOLATION. And a test may arm a GUARD —
 //! the VAs whose guest mapping does not change in this refresh — that is checked after EVERY host
-//! call: an unchanged VA that is transiently unmapped is a violation (owner, 2026-10-09: "every VA
-//! whose guest mapping is UNCHANGED must stay accessible at ALL times").
+//! call: an unchanged VA that is transiently unmapped is a violation.
 
 use crate::apply::{ApplyCfg, DiffRun, apply_entry};
 use crate::batch::{BatchedVas, SpaceVerbs};

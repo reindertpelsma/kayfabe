@@ -442,7 +442,7 @@ fn carve_reached(
 /// committed placements and maps the pieces of the walk in the gaps (`kf_walk.cu`, "THE DIFF
 /// AGAINST THE COMMITTED PLACEMENTS"), and its UNMAP run IS the committed placement (same `at`,
 /// same flags). So a one-page change inside a 16-page row arrives as UNMAP(16 pages) + MAP(5) +
-/// MAP(1, new) + MAP(10): fifteen pages whose guest mapping did not change. The owner's rule
+/// MAP(1, new) + MAP(10): fifteen pages retain their guest mapping. The mapping invariant
 /// (2026-10-09): *every VA whose guest mapping is unchanged stays accessible at all times* — so on
 /// a GPU target those pages get NO host call at all: neither unmapped nor re-mapped.
 ///
