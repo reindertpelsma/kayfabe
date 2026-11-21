@@ -1064,25 +1064,34 @@ class OrchestrationMore(OrchestrationBase):
             self.assertEqual(tf.extractfile(top + "/notices/qemu/COPYING.LIB").read(), b"LGPL")
             self.assertEqual(tf.extractfile(top + "/notices/rust/COPYRIGHT-library.html").read(), b"<html>std</html>")
 
-    def test_the_readme_does_not_promise_a_source_tarball_for_the_users_own_source(self):
-        result, _ = self.build()
+    def readme(self, **kw):
+        result, _ = self.build(**kw)
         with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
-            text = tf.extractfile(tf.getnames()[0] + "/README.txt").read().decode()
-        self.assertNotIn("-source.tar.xz", text)
-        self.assertIn("supplied to the build kit", text)
+            return tf.extractfile(tf.getnames()[0] + "/README.txt").read().decode()
 
-    def test_the_own_source_readme_names_the_user_anchor(self):
-        result, _ = self.build()
-        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
-            text = tf.extractfile(tf.getnames()[0] + "/README.txt").read().decode()
-        self.assertIn('anchor "user"', text)
+    def test_the_readme_does_not_promise_a_source_tarball_unconditionally(self):
+        text = self.readme()
+        self.assertNotIn("published next to this file", text)
+        self.assertIn("If it\nnames a source tarball (`source_tarball`)", text)
 
-    def test_the_readme_points_at_the_source_tarball_when_the_build_came_from_one(self):
-        result, _ = self.build(source_tarball={"name": "x-source.tar.xz", "sha256": "0" * 64})
-        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
-            text = tf.extractfile(tf.getnames()[0] + "/README.txt").read().decode()
-        self.assertIn("`-source.tar.xz` published next to this file", text)
-        self.assertNotIn("supplied to the build kit", text)
+    def test_the_readme_names_the_manifest_key_that_decides(self):
+        self.assertIn("`source_tarball`", self.readme())
+
+    def test_the_readme_says_who_supplied_a_users_own_source(self):
+        self.assertIn("supplied by whoever built this", self.readme())
+
+    def test_the_readme_covers_the_users_own_source(self):
+        text = self.readme()
+        self.assertIn('`qemu.source.anchors` is `["user"]`', text)
+        self.assertIn("QEMU source plus the kayfabe tree", text)
+
+    def test_the_readme_does_not_depend_on_how_the_source_was_given(self):
+        self.assertEqual(self.readme(work="w1", out="o1"), self.readme(work="w2", out="o2", source_tarball={"name": "x-source.tar.xz", "sha256": "0" * 64}))
+
+    def test_the_binary_tarball_is_the_same_whether_or_not_it_came_from_a_source_tarball(self):
+        a, _ = self.build(work="w1", out="o1")
+        b, _ = self.build(work="w2", out="o2", source_tarball={"name": "x-source.tar.xz", "sha256": "0" * 64})
+        self.assertEqual((self.tmp / "o1" / a["assets"]["binary"]).read_bytes(), (self.tmp / "o2" / b["assets"]["binary"]).read_bytes())
 
     def test_the_source_tarball_instructions_say_identity_is_not_measured_across_machines(self):
         self.assertIn("not across machines", kit.BUILDING)

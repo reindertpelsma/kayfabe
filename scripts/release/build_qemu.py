@@ -567,13 +567,15 @@ README = """kayfabe QEMU %(qemu)s (kayfabe revision %(rev)s)
 This is QEMU %(qemu)s with the kayfabe `kf3-gpu` device linked in. QEMU is licensed under the GNU GPL version 2 (COPYING); the
 kayfabe parts under Apache-2.0 OR GPL-2.0-or-later (LICENSE). Further licence texts and notices (QEMU's COPYING.LIB and LICENSE,
 the licences of the firmware files under share/qemu, the Rust standard library) are in notices/.
-%(source)s
+
+Corresponding source: the manifest (the `-manifest.json` published with this tarball) names every input of this build. If it
+names a source tarball (`source_tarball`), that `-source.tar.xz` is the complete corresponding source of this exact build, and
+`scripts/release/build_qemu.py build --source-tarball <it>` rebuilds it. If its `qemu.source.anchors` is `["user"]`, the QEMU
+source was supplied by whoever built this, and the corresponding source is that QEMU source plus the kayfabe tree at the
+revision above.
+
 Use: bin/qemu-system-x86_64 -device kf3-gpu,gpu-minor=0 ... (docs/howto/installing.md). Nothing here is installed by the kit.
 """
-README_SOURCE_TARBALL = """The complete corresponding source of this exact build is the `-source.tar.xz` published next to this file;
-`scripts/release/build_qemu.py build --source-tarball <it>` rebuilds it."""
-README_OWN_SOURCE = """This build was made from QEMU source that was supplied to the build kit, not from a published source tarball (the manifest
-records it with anchor "user"). Its corresponding source is that QEMU source plus the kayfabe tree at the revision above."""
 QEMU_NOTICES = (("COPYING", "COPYING"), ("COPYING.LIB", "notices/qemu/COPYING.LIB"), ("LICENSE", "notices/qemu/LICENSE"),
                 ("pc-bios/README", "notices/qemu/pc-bios-README"))
 RUST_NOTICE_FILES = ("COPYRIGHT-library.html", "COPYRIGHT.html")
@@ -630,8 +632,7 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
     for name, data in sorted(rust_notices(env, kroot).items()):
         (pkg / "notices" / "rust" / name).parent.mkdir(parents=True, exist_ok=True)
         (pkg / "notices" / "rust" / name).write_bytes(data)
-    (pkg / "README.txt").write_text(README % {"qemu": version, "rev": ident["revision"][:8],
-                                              "source": README_SOURCE_TARBALL if source_tarball is not None else README_OWN_SOURCE})
+    (pkg / "README.txt").write_text(README % {"qemu": version, "rev": ident["revision"][:8]})
     staged = work / "assets"
     staged.mkdir()
     pack_tree(pkg, staged / names["binary"], ident["source_date_epoch"], top)
