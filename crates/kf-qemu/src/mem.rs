@@ -3,7 +3,7 @@
 //!
 //! | piece | disposition | who touches it |
 //! |---|---|---|
-//! | PRAMIN (`BAR0 0x700000`, 1 MiB) | **A**: one RAM range under one memslot, no exit | the vCPU re-points it in the trapped window-base write: ONE host map + ONE `mmap` per move (owner ruling 2026-09-25, [`PraminPool`]); old views released by a reaper thread |
+//! | PRAMIN (`BAR0 0x700000`, 1 MiB) | **A**: one RAM range under one memslot, no exit | the vCPU re-points it in the trapped window-base write: one host map + one `mmap` per move ([`PraminPool`]); a reaper thread releases old views |
 //! | BAR2 (PCI BAR3) | **A**: one RAM range, scratch where nothing is mapped | the VA-manager thread, after the GPU walker walked OUR BAR2 root ([`CpuWindow`] as the reconcile's target) |
 //! | BAR1 | **A**: one RAM range, scratch where nothing is mapped | the VA-manager thread, after the GPU walker walked OUR BAR1 root (P5: [`K_BAR1`]) |
 //! | the three `MMU_INVALIDATE` registers | **B** | the vCPU arms + wakes ([`InvalidatePort`]); the VA-manager thread walks, reconciles, and only then clears |
@@ -759,14 +759,14 @@ pub struct WindowOps {
     trap: Option<&'static TrapNodes>,
     /// ★ 2026-10-03: whether this window's sinks and guest-RAM placements carry
     /// [`kf_linux_raw::WINDOW_ADVICE`]. BAR1 and BAR2: yes (VA thread). PRAMIN: no, its verbs run
-    /// on the vCPU, which gets ONE `mmap` per move and no `madvise` (owner ruling 2026-09-25); it
+    /// on the vCPU, which gets one `mmap` per move and no `madvise`. It
     /// needs none, since every move re-places all 16 slots.
     advise: bool,
 }
 
 /// ★ Whether a window's verbs carry [`kf_linux_raw::WINDOW_ADVICE`] (2026-10-03): only a window
 /// with no trap. A window with a trap (PRAMIN) runs its verbs on the vCPU, which gets ONE `mmap` per
-/// move and no `madvise` (owner ruling 2026-09-25); BAR1 and BAR2 run theirs on the VA thread.
+/// move and no `madvise`. BAR1 and BAR2 run theirs on the VA thread.
 #[must_use]
 pub const fn window_advises(has_trap: bool) -> bool {
     !has_trap
@@ -2707,7 +2707,7 @@ pub type Manager = VaManager<GpuWalker, Target>;
 pub enum SplitTarget {
     /// A guest `MEM_OP` invalidate's root (`None` = `PDB_ALL`).
     Pdb(Option<u64>),
-    /// ★ OWNER_RULINGS §U.2: the triggering channel's OWN space (a deferred TLB invalidate).
+    /// The triggering channel's own space for a deferred TLB invalidate.
     Space(kf_mem::vasmgr::VasKey),
 }
 
@@ -2735,7 +2735,7 @@ pub struct Inbox {
     /// ★ P6: `MEM_OP` splits a Translated channel asked for — `(ticket, guest token, target)`,
     /// ★ 2026-11-16: and when the worker queued it (observation only, `V3_VA_PROFILE.md`).
     splits: Mutex<Vec<(u64, u32, SplitTarget, std::time::Instant)>>,
-    /// ★ OWNER_RULINGS §U.2: the host gate a split opens once it is committed — ticket →
+    /// The host gate a split opens once it commits: ticket →
     /// `(the ring's gate, the payload its acquire waits for)`.
     gates: Mutex<std::collections::HashMap<u64, (kf_chan::host::Gate, u32)>>,
     /// ★ P6: tickets the VA thread took and has not finished — ticket → guest token.
@@ -3121,8 +3121,8 @@ impl Inbox {
         Ok(t)
     }
 
-    /// ★★ OWNER_RULINGS §U.2, a WORKER: channel `token` reached a deferred `DMA_INVALIDATE_TLB`;
-    /// its prior work completed and the host ring now holds an acquire of `payload` on `gate`.
+    /// On a worker, channel `token` reached a deferred `DMA_INVALIDATE_TLB`.
+    /// Its prior work completed and the host ring now holds an acquire of `payload` on `gate`.
     /// Ask the VA thread to walk the channel's OWN space `key` (the guest's handles in the entry are
     /// ignored) and — only after the diff is committed and the host invalidate landed — store
     /// `payload` ([`Inbox::finish_split`]). Returns the ticket to poll. ⊘ Never waits.
@@ -3314,7 +3314,7 @@ pub struct MemCounters {
     pub prewarmed: AtomicU64,
 }
 
-// ★ Owner ruling 2026-09-25: a PRAMIN re-point is ONE `mmap` on the vCPU. With a tiled scratch
+// A PRAMIN re-point is one `mmap` on the vCPU. With a tiled scratch
 // that holds only while PRAMIN is its own tile, since every run inside one tile is one piece.
 const _: () = assert!(
     kf_linux_raw::scratch_tile_len(kf_trap::trappolicy::PRAMIN_LEN)
@@ -3579,7 +3579,7 @@ impl MemPlane {
     }
 
     /// ★ **vCPU, in the trap**: the guest wrote the window base. Re-point PRAMIN: one host map +
-    /// one `mmap` (owner ruling 2026-09-25 — the ONE sanctioned vCPU syscall). ⊘ No lock: two racing writers each re-check the latest word after placing, so the
+    /// one `mmap`, the only vCPU syscall here. Without locking, two racing writers each re-check the latest word after placing, so the
     /// last to finish always leaves the latest window in place.
     pub fn pramin_write(&self, raw: u32) {
         let t0 = std::time::Instant::now();
@@ -3653,9 +3653,8 @@ impl TwinHost for HostRm {
 /// ★ `KF3_NEGCTL_TWIN_WINDOW=1` — the POSITIVE CONTROL of "no window in any twin" (review fix
 /// 2026-10-04): every new twin and every prewarmed spare ALSO gets a store window, recorded in its
 /// record, so its log line names it and the box-log gate's `WINDOWS=NONE` must fail. It
-/// reintroduces exactly the S1-21 defect, and it is the ONE path that breaks `OWNER_RULINGS.md`
-/// §AB rule 2 — kept (2026-10-10) because the owner keeps every measurement and control flag; never
-/// set it outside a dedicated control run. Default OFF; read once.
+/// reintroduces exactly the S1-21 defect. Use this flag only in a dedicated control run.
+/// Default off. The value is read once.
 #[must_use]
 pub fn negctl_twin_window() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -4846,7 +4845,7 @@ mod tests {
         assert!(inbox.take_walk_waiters().is_empty());
     }
 
-    /// ★★ OWNER_RULINGS §U.2: a gated split opens its gate only on success, only at its finish (on
+    /// A gated split opens its gate only on success, only at its finish (on
     /// the VA thread, after the commit), and before its outcome is published; a failed split never
     /// opens it; a released ring turns the release into a failure.
     #[test]
@@ -5880,7 +5879,7 @@ mod tests {
         assert_eq!((st.sunk, st.released, st.refused), (1, 1, 0));
     }
 
-    /// ★ PRAMIN keeps its one-`mmap` sink (owner ruling 2026-09-25): the production PRAMIN window is
+    /// The production PRAMIN window keeps its single `mmap` because it is
     /// its own tile, so every slot run of the trap's re-point is one placement.
     ///
     /// ★ And it makes NO `madvise` (third review): the PRAMIN `WindowOps` is built with

@@ -62,8 +62,7 @@ pub struct Config {
     /// device REFUSES to realize rather than invent one.
     pub display: bool,
     /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note;
-    /// option A, the design by `docs/OWNER_RULINGS.md` §N — default-on only once §N's conditions
-    /// hold): offer the
+    /// option A, default-on only after the design conditions hold): offer the
     /// `GF100_DISP_SW` object X11 compositors and X11 Vulkan presentation need, twinning each one
     /// under its channel's host twin with authored params (head 0, displayMask 0, caps 0) and
     /// refusing it by name where the host cannot (`kf_rm::DisplaySeat::x11_dispsw`). Needs
@@ -80,7 +79,7 @@ pub struct Config {
     /// ROM with a UEFI GOP driver whose framebuffer is BAR1 `[0, G)`, the BAR1 seed, the boot layer
     /// and the console region in fn 65. Needs `display=on`. Off (the default) is today's device.
     pub gop: bool,
-    /// ★ `display-max-fps` (`OWNER_RULINGS.md` §M, `V3_DISPLAY.md` §8.16): the cap on every head's
+    /// `display-max-fps` (`V3_DISPLAY.md` §8.16): the cap on every head's
     /// emulated vblank tick, in whole Hz, 24..=75; 0 (unset) caps at 75 with today's EDID.
     /// Validated by [`Config::check`]; needs `display=on`.
     pub display_max_fps: u32,
@@ -389,7 +388,7 @@ pub struct Device {
     /// ★★ The device reset (`docs/design/V3_DEVICE_RESET.md`): the vCPU gate and the drainer's
     /// sequence ([`crate::reset`]).
     pub reset: crate::reset::Reset,
-    /// The VM's deferred-API tables (OWNER_RULINGS §U) — per guest life, cleared by a reset.
+    /// The VM's deferred-API tables are per guest life and cleared by a reset.
     defapi_reg: std::sync::Arc<kf_rm::defapi::Registry>,
     /// ★ Device reset: the VA thread / the display worker is in its loop (set on entry, cleared on
     /// every exit). A reset never waits for an owner that is not running: one that never started
@@ -751,7 +750,7 @@ impl Device {
         } else {
             16 << 20
         };
-        // Production default (owner, 2026-10-11): use the host's unprivileged
+        // Production default: use the host's unprivileged
         // read-only timer view without an environment opt-in. A missing or
         // incompatible view is an explicit unsupported capability; never borrow
         // a layout from another driver or expose a wider register mapping.
@@ -874,7 +873,7 @@ impl Device {
                 token_fmt,
             )?));
         chans.start()?;
-        // ★ OWNER_RULINGS §U: the VM's deferred-API tables — filled by the object seat (the guest's
+        // The object seat fills the VM's deferred-API tables (from the guest's
         // class-5080 registration controls), read by the channel plane at the trigger.
         let defapi_reg = std::sync::Arc::new(kf_rm::defapi::Registry::new(
             kf_rm::defapi::Bounds::default(),
@@ -942,7 +941,7 @@ impl Device {
                     .map_err(|e| format!("display=on: store export: {e:?}"))?;
                 // ★ §8.11: the GPU-copy rung's probe — at realize (QEMU still has its privileges
                 // for the render node), AFTER the store (the guest's memory wins), on the display's
-                // own RM client (OWNER_RULINGS §N)
+                // own RM client.
                 let broker = cfg.display_broker.then(|| {
                     use kf_broker::gpucopy::VramMode;
                     let mode = cfg.display_broker_vram;
