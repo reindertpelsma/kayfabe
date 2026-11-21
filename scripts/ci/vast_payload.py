@@ -1218,7 +1218,71 @@ def record_net(result, name, before, after):
         net["stages"][name] = {"rx": max(0, after[1] - before[1]), "tx": max(0, after[2] - before[2])}
 
 
-def execute_stages(stages, soft, result, destination, runner=run_bounded):
+ROOTLESS_MODES = ("off", "require")
+ROOTLESS_ENV = ("KF_PAYLOAD_ROOTLESS", "KF_PAYLOAD_ROOTLESS_USER", "KF_PAYLOAD_ROOTLESS_ROOT_STAGES", "KF_PAYLOAD_ROOTLESS_MEMLOCK")
+ROOTLESS_PROV_DIR = "/workspace/prov"
+
+
+def head_tail_text(path, head=256 * 1024, tail=1024 * 1024):
+    """The start and the end of a stage's output as text; never raises (a stage log is bounded elsewhere, and a decode error is not a verdict)."""
+    try:
+        with open(path, "rb") as source:
+            size = source.seek(0, 2)
+            source.seek(0)
+            first = source.read(head)
+            if size > head + tail:
+                source.seek(size - tail)
+                first += b"\n" + source.read(tail)
+            elif size > head:
+                first += source.read(tail)
+        return first.decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+PREFETCH_ALLOWED = True   # a rootless run sets it False: the prefetch is a root process whose files would be root-owned in the dropped kfml stage's prefix
+
+
+def load_kfroot():
+    """scripts/ci/kfroot.py, imported only when --rootless is on (a harness that copies this file without it keeps working)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import kfroot
+    finally:
+        sys.path.pop(0)
+    return kfroot
+
+
+def rootless_request(args, environ):
+    """None when off; else {user, approved, memlock}. The flag beats the variable. A bad value is refused by name, never read as off.
+    (2026-11-20, docs/CI_V3.md "Rootless payload run": these are NOT instruction fields and the Worker does not send them.)"""
+    mode = args.rootless if args.rootless is not None else environ.get("KF_PAYLOAD_ROOTLESS", "off")
+    if mode not in ROOTLESS_MODES:
+        print("KF_PAYLOAD_ROOTLESS_REFUSED bad_mode", flush=True)
+        raise EvidenceError("preflight")
+    if mode == "off":
+        if args.rootless_root_stage or args.rootless_memlock or args.rootless_user:
+            print("KF_PAYLOAD_ROOTLESS_REFUSED rootless_option_without_require", flush=True)
+            raise EvidenceError("preflight")
+        return None
+    user = args.rootless_user or environ.get("KF_PAYLOAD_ROOTLESS_USER", "ci")
+    named = [x for x in environ.get("KF_PAYLOAD_ROOTLESS_ROOT_STAGES", "").split(",") if x]
+    approved = list(dict.fromkeys([*args.rootless_root_stage, *named]))
+    memlock = bool(args.rootless_memlock) or environ.get("KF_PAYLOAD_ROOTLESS_MEMLOCK", "") == "1"
+    try:
+        load_kfroot().check_user(user)
+    except Exception:
+        print("KF_PAYLOAD_ROOTLESS_REFUSED bad_user", flush=True)
+        raise EvidenceError("preflight") from None
+    return {"user": user, "approved": approved, "memlock": memlock}
+
+
+def rootless_line(request, stages):
+    return ("KF_PAYLOAD_ROOTLESS mode=require user=" + request["user"] + " memlock=" + str(int(request["memlock"]))
+            + " root_stages=" + (":".join(request["approved"]) or "none") + " stages=" + ":".join(stages))
+
+
+def execute_stages(stages, soft, result, destination, runner=run_bounded, *, rootless=None, approved=(), tag=""):
     """Persist the finished prefix even when a later suite times out or fails."""
     records = STAGE_RECORDS
     result["host_reference"] = "MISSING"
@@ -1235,7 +1299,20 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
         # Too little time left to finish: not run (rc 125), and not a verdict on the guest.
         short = need is not None and soft - int(time.time() * 1000) < need
         net_before = None if short else net_counters()
-        rc = 125 if short else runner(stage["command"], soft, stage["output"], stage["progress"])
+        command, refusal = stage["command"], None
+        if rootless is not None and not short:
+            # --rootless require: the stage starts as the unprivileged user (or as root where the audit and the owner say so), and every
+            # root step it needed is recorded (scripts/ci/kfroot.py Rootless)
+            try:
+                command = rootless.start(name, command, approved, tag)
+            except rootless.Refused as error:
+                refusal = str(error)
+                print("KF_PAYLOAD_ROOTLESS_REFUSED stage=" + name + " why=" + refusal[:60], flush=True)
+        rc = 125 if (short or refusal) else runner(command, soft, stage["output"], stage["progress"])
+        if rootless is not None and not short and not refusal:
+            rootless.finish(name, head_tail_text(stage["output"]))
+        if rootless is not None:
+            result["rootless"] = rootless.record.to_json()
         elapsed = int((time.monotonic() - start) * 1000)
         if not short:
             record_net(result, name, net_before, net_counters())
@@ -1247,6 +1324,8 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
         try:
             if short:
                 raise EvidenceError(stage["short_row"])
+            if refusal:
+                raise EvidenceError("rootless_setup")
             rows = stage["grade"](rc)
             if rc == 124:
                 raise EvidenceError("timeout", rows)
@@ -1795,6 +1874,8 @@ def start_kfml_prefetch(root, evidence, popen=subprocess.Popen):
     """Start the kfml dataset prefetch in the background before the first stage (2026-11-17): the CIFAR-10 server is slow (about 8 minutes with six ranged
     connections), provision and the other stages leave the network idle, and the kfml stage waits for the prefetch only if it is still running. Failure to
     start is not an error (the stage then downloads for itself); nothing here touches the stage verdicts. Returns the process or None."""
+    if not PREFETCH_ALLOWED:
+        return None
     script = Path(root) / "scripts/ci/kfml_stage.py"
     if not script.is_file():
         return None
@@ -1906,6 +1987,14 @@ def parse_args(argv):
                    "recorded); needs --only matlab and is refused together with an instruction that carries `matlab`")
     p.add_argument("--matlab-driver", metavar="VERSION|PATH|URL", help="standalone `matlab` stage: the NVIDIA Linux driver to install in the guest, a pinned version of "
                    "release-matrix.json or a .run file you supply")
+    p.add_argument("--rootless", choices=ROOTLESS_MODES, default=None, help="require: every stage but provision starts as the unprivileged user with no capability "
+                   "(scripts/ci/kfroot.py, docs/CI_V3.md 'Rootless payload run'); a stage that needs root is refused by name unless --rootless-root-stage names it; "
+                   "default off (or KF_PAYLOAD_ROOTLESS)")
+    p.add_argument("--rootless-user", metavar="USER", help="the unprivileged account (default ci, or KF_PAYLOAD_ROOTLESS_USER)")
+    p.add_argument("--rootless-root-stage", action="append", default=[], metavar="STAGE", help="explicit approval of one not-yet-converted stage as root (repeatable; "
+                   "recorded as a kfroot step; or KF_PAYLOAD_ROOTLESS_ROOT_STAGES=a,b)")
+    p.add_argument("--rootless-memlock", action="store_true", help="raise RLIMIT_MEMLOCK for the user (limits.d and prlimit); off by default (the audit found no need), "
+                   "or KF_PAYLOAD_ROOTLESS_MEMLOCK=1")
     p.add_argument("--dry-run", action="store_true", help="print the stage plan and run nothing")
     p.add_argument("--emit-instruction", metavar="FILE", help="write the instruction built from the source and exit")
     p.add_argument("--prefetch", metavar="MANIFEST", help="DRY-RUN ONLY (not wired into the executor yet): validate a download manifest "
@@ -1986,6 +2075,14 @@ def plan_only(args, root):
         if inst.spec:
             spec_table(root)
         prefetch = prefetch_line(args.prefetch, chosen) if args.prefetch else None
+        rl = rootless_request(args, os.environ)
+        if rl:
+            kr = load_kfroot()
+            tokens = kr.stage_refusals(chosen, root, rl["approved"])
+            for t in tokens:
+                print("KF_PAYLOAD_ROOTLESS_REFUSED " + t, flush=True)
+            if tokens:
+                raise EvidenceError("preflight")
     except EvidenceError as error:
         print("KF_PAYLOAD_FAIL suite=" + error.name, flush=True)
         return 1
@@ -2001,13 +2098,15 @@ def plan_only(args, root):
         if digest:
             print("KF_PAYLOAD_INSTRUCTION sha256=" + digest, flush=True)
         print("KF_PAYLOAD_PLAN stages=" + ":".join(chosen) + " planned=" + ":".join(plan), flush=True)
+        if rl:
+            print(rootless_line(rl, chosen), flush=True)
         if prefetch:
             print(prefetch, flush=True)
     return 0
 
 
 def main():
-    global STOP
+    global STOP, PREFETCH_ALLOWED
     if len(sys.argv) == 5 and sys.argv[1] == "--grade-xid":
         return guard_command(sys.argv[2], Path(sys.argv[3]), int(sys.argv[4]))
     if len(sys.argv) > 3 and sys.argv[1] == "--guest-exec":
@@ -2057,6 +2156,17 @@ def main():
             raise EvidenceError("preflight")
         if args.only or args.skip:
             result["selection"] = {"only": args.only, "skip": args.skip}
+        rootless, rl = None, rootless_request(args, os.environ)
+        if rl:
+            rootless = load_kfroot().Rootless(rl["user"], root, evidence=evidence, memlock=rl["memlock"], prov_dir=ROOTLESS_PROV_DIR)
+            tokens = rootless.preflight(selected, rl["approved"])
+            for t in tokens:
+                print("KF_PAYLOAD_ROOTLESS_REFUSED " + t, flush=True)
+            if tokens:
+                raise EvidenceError("preflight")
+            print(rootless_line(rl, selected), flush=True)
+        prov_dir = ROOTLESS_PROV_DIR if rootless else PROV_DIR
+        PREFETCH_ALLOWED = rootless is None
         spec_tbl = spec_table(root) if spec else None
         refresh_claims(result, windows)
         print(tier_line(instruction), flush=True)
@@ -2218,7 +2328,7 @@ def main():
             # boots the fat guest itself (apps_matrix.sh), one boot at a time, under its own budget.
             output_apps = evidence / "apps.run"
             names = apps_gate_list(root, apps_tier)
-            matrix_log = Path(PROV_DIR) / (tag + "_apps_matrix.log")
+            matrix_log = Path(prov_dir) / (tag + "_apps_matrix.log")
             stage = make_stage(
                 "apps",
                 [
@@ -2229,7 +2339,7 @@ def main():
                     "bash",
                     str(root / "scripts/bench/box/apps_gate.sh"),
                     tag,
-                    PROV_DIR,
+                    prov_dir,
                     APPS_LISTS[apps_tier][1],
                 ],
                 output_apps,
@@ -2296,11 +2406,11 @@ def main():
             output = evidence / "windows.run"
             stage = make_stage(
                 "windows_gate",
-                ["bash", str(root / "scripts/bench/box/windows_gate.sh"), tag, PROV_DIR],
+                ["bash", str(root / "scripts/bench/box/windows_gate.sh"), tag, prov_dir],
                 output,
                 [],
                 lambda rc: windows_rows(bounded_text(output), rc, sha),
-                [Path(PROV_DIR) / (tag + "_windows.log")],
+                [Path(prov_dir) / (tag + "_windows.log")],
             )
             stage.update(min_remaining_ms=WINDOWS_MIN_REMAINING_MS + (
                 WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0
@@ -2319,12 +2429,12 @@ def main():
                     "bash",
                     str(root / "scripts/bench/box/windows_apps.sh"),
                     tag,
-                    PROV_DIR,
+                    prov_dir,
                 ],
                 output_apps,
                 [],
                 lambda rc, output=output_apps: winapps_rows(bounded_text(output), rc, sha, winapps),
-                [Path(PROV_DIR) / (tag + "_winapps.log")],
+                [Path(prov_dir) / (tag + "_winapps.log")],
             )
             stage.update(
                 min_remaining_ms=WINAPPS_MIN_REMAINING_MS[winapps], short_row="windows_apps_retry_time"
@@ -2335,11 +2445,11 @@ def main():
             output2 = evidence / "windows_2.run"
             stage = make_stage(
                 "windows_gate_2",
-                ["bash", str(root / "scripts/bench/box/windows_gate.sh"), tag + "w2", PROV_DIR],
+                ["bash", str(root / "scripts/bench/box/windows_gate.sh"), tag + "w2", prov_dir],
                 output2,
                 [],
                 lambda rc: windows_rows(bounded_text(output2), rc, sha, "windows_gate_2"),
-                [Path(PROV_DIR) / (tag + "w2_windows.log")],
+                [Path(prov_dir) / (tag + "w2_windows.log")],
             )
             stage.update(
                 min_remaining_ms=WINDOWS_REPEAT_MIN_REMAINING_MS, short_row="windows_retry_time"
@@ -2361,12 +2471,12 @@ def main():
                     "bash",
                     str(root / "scripts/bench/box/windows_apps.sh"),
                     tag + "o",
-                    PROV_DIR,
+                    prov_dir,
                 ],
                 output_wo,
                 [],
                 lambda rc, output=output_wo: windows_open_rows_rows(bounded_text(output), rc, sha, result),
-                [Path(PROV_DIR) / (tag + "o_winapps.log")],
+                [Path(prov_dir) / (tag + "o_winapps.log")],
             )
             stage.update(min_remaining_ms=WINDOWS_OPEN_ROWS_MIN_REMAINING_MS, short_row="windows_open_rows_retry_time")
             stages.append(stage)
@@ -2458,12 +2568,12 @@ def main():
                     "bash",
                     str(root / "scripts/ci/vast_stage_specviewperf.sh"),
                     tag,
-                    PROV_DIR,
+                    prov_dir,
                 ],
                 output3,
                 [],
                 lambda rc: specviewperf_rows(bounded_text(output3), rc, spec, spec_tbl),
-                [Path(PROV_DIR) / (tag + "_spec") / "stage.log"],
+                [Path(prov_dir) / (tag + "_spec") / "stage.log"],
             )
             stage.update(
                 min_remaining_ms=spec_min_remaining_ms(spec_tbl, spec), short_row="specviewperf_retry_time"
@@ -2474,7 +2584,9 @@ def main():
         stages = [s for s in stages if s["name"] in selected]
         if "kfml" in selected:
             start_kfml_prefetch(root, evidence)
-        return execute_stages(stages, soft, result, destination)
+        if rootless is None:
+            return execute_stages(stages, soft, result, destination)   # exactly the call of every run before --rootless existed
+        return execute_stages(stages, soft, result, destination, rootless=rootless, approved=rl["approved"], tag=tag)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):
             result["verdict"] = "PROVIDER_FAULT"
