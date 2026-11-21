@@ -554,7 +554,14 @@ def build(*, kayfabe_root, qemu, out, workdir, jobs, runner=run_logged, tool_ver
     cargo_home, rustup_home = default_homes(caller_env)
     env = build_env(epoch=ident["source_date_epoch"], kroot=kroot, cargo_home=cargo_home, rustup_home=rustup_home, target_dir=target,
                     caller=caller_env)
-    _step(runner, ["cargo", *CARGO_ARGS, "-j", str(jobs)], kroot, env, logs / "cargo.log", "cargo build of kf-qemu")
+    vendored, cargo_config = (kroot / "vendor").is_dir() and (kroot / ".cargo" / "config.toml").is_file(), []
+    if not vendored:
+        _step(runner, ["cargo", "vendor", "--locked", "--manifest-path", kroot / "Cargo.toml", work / "vendor"], kroot, env, logs / "vendor.log",
+              "cargo vendor")
+        cargo_config = ["--config", 'source.crates-io.replace-with="vendored-sources"', "--config",
+                        'source.vendored-sources.directory="%s"' % (work / "vendor")]
+        env["RUSTFLAGS"] += " --remap-path-prefix=%s=%s/vendor" % (work / "vendor", MAP_KAYFABE)
+    _step(runner, ["cargo", *CARGO_ARGS, *cargo_config, "-j", str(jobs)], kroot, env, logs / "cargo.log", "cargo build of kf-qemu")
     archive = target / "release" / "libkf_qemu.a"
     patches = apply_overlay(srcdir, kroot, archive)
     pkgversion = "kayfabe-" + ident["revision"][:8] + ("-dirty" if ident["dirty"] else "")
@@ -693,8 +700,13 @@ def compare_outputs(a, b, ignore_keys=()):
         if name.endswith("manifest.json"):
             dx, dy = json.loads(x), json.loads(y)
             for key in ignore_keys:
-                dx.pop(key, None)
-                dy.pop(key, None)
+                for doc in (dx, dy):
+                    node = doc
+                    *parents, leaf = key.split(".")
+                    for part in parents:
+                        node = node.get(part) if isinstance(node, dict) else None
+                    if isinstance(node, dict):
+                        node.pop(leaf, None)
             if dx == dy:
                 continue
         diff.append("%s differs (sha256 %s vs %s)" % (name, sha256_bytes(x)[:16], sha256_bytes(y)[:16]))
@@ -788,7 +800,7 @@ def main(argv=None):
         if a.source_tarball:
             second_args = argparse.Namespace(**{**vars(a), "source_tarball": None})
             _build_one(second_args, QemuInput.official(), second, workdir / "b")
-            ignore = ("source_tarball",)
+            ignore = ("source_tarball", "qemu.source.anchors")
         else:
             _build_one(a, qi, second, workdir / "b")
             ignore = ()

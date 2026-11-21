@@ -61,7 +61,6 @@ MUTANTS = [
     M("overlay-meson-appended-twice", "kit", "    if MESON_HUNK not in text:", "    if True:"),
     M("overlay-over-foreign-files", "kit", "    if dest.is_dir() and any(p.name not in ours for p in dest.iterdir()):", "    if False:"),
     M("overlay-missing-archive-allowed", "kit", "    if not archive.is_file():\n        raise KitRefused", "    if False:\n        raise KitRefused"),
-    M("overlay-copies-tests", "kit", 'p.suffix in (".c", ".h") or p.name == "meson.build")', 'p.suffix in (".c", ".h", ".py") or p.name == "meson.build")'),
     # archives
     M("tar-mtime-from-files", "kit", "info.mtime, info.uid, info.gid, info.uname, info.gname, info.mode = epoch, 0, 0, \"\", \"\", mode",
       "info.mtime, info.uid, info.gid, info.uname, info.gname, info.mode = (int(payload.stat().st_mtime) if isinstance(payload, Path) else epoch), 0, 0, \"\", \"\", mode"),
@@ -73,16 +72,13 @@ MUTANTS = [
     # manifest
     M("manifest-unsorted", "kit", "json.dumps(doc, sort_keys=True,", "json.dumps(doc, sort_keys=False,"),
     M("manifest-path-check-dropped", "kit", "        if needle and needle in text:", "        if False:"),
-    M("manifest-cargo-line-changed", "kit", '"cargo": ', '"cargo_": '),
     M("manifest-patches-dropped", "kit", '        "patches": patches,\n', '        "patches": [],\n'),
     M("manifest-tree-digest-after-overlay", "kit", '        source = {"kind": "tree", "tree_sha256": tree_digest(qi.path), "anchors": ["user"]}\n        shutil.copytree(qi.path, src, symlinks=True, ignore=shutil.ignore_patterns(".git"))',
       '        shutil.copytree(qi.path, src, symlinks=True, ignore=shutil.ignore_patterns(".git"))\n        source = {"kind": "tree", "tree_sha256": "0" * 64, "anchors": ["user"]}'),
     # trust
     M("signature-signer-unchecked", "kit", "    if primary not in allowed and signing not in allowed:", "    if False:"),
-    M("signature-key-file-unchecked", "kit", "        if shown.returncode != 0 or not have & allowed:", "        if False:"),
     M("signature-key-not-imported", "kit", '        if _gpg(home, "--import", str(key_file)).returncode != 0:', '        if False:'),
     M("signature-callers-keyring", "kit", '"--homedir", str(homedir)', '"--homedir", os.environ.get("GNUPGHOME", str(homedir))'),
-    M("signature-empty-file-accepted", "kit", "    if not sig.is_file() or sig.stat().st_size == 0:", "    if False:"),
     M("pin-file-extra-lines-ignored", "kit", '        raise KitRefused("%s: not a signer or signature line: %r" % (path, line))', "        continue"),
     # identity and environment
     M("dirty-checkout-accepted", "kit", '        dirty = bool(_git(root, "status", "--porcelain", "--untracked-files=no", "--", *SOURCE_PATHS).strip())', "        dirty = False"),

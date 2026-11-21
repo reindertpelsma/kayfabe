@@ -410,12 +410,26 @@ class Identity(Tmp):
         with self.assertRaises(kit.KitRefused):
             kit.kayfabe_identity(kayfabe_tree(self.tmp / "k"))
 
-    def test_a_malformed_stamp_is_refused(self):
+    def stamp_refused(self, text):
         k = kayfabe_tree(self.tmp / "k")
-        for bad in ('{"revision": "abc", "source_date_epoch": 1}', '{"revision": "%s", "source_date_epoch": "1"}' % ("a" * 40), "nope"):
-            write(k / "SOURCE_INFO.json", bad)
-            with self.assertRaises(kit.KitRefused):
-                kit.kayfabe_identity(k)
+        write(k / "SOURCE_INFO.json", text)
+        with self.assertRaises(kit.KitRefused):
+            kit.kayfabe_identity(k)
+
+    def test_a_stamp_with_a_short_revision_is_refused(self):
+        self.stamp_refused('{"revision": "abc", "source_date_epoch": 1}')
+
+    def test_a_stamp_with_a_string_epoch_is_refused(self):
+        self.stamp_refused('{"revision": "%s", "source_date_epoch": "1"}' % ("a" * 40))
+
+    def test_a_stamp_with_a_zero_epoch_is_refused(self):
+        self.stamp_refused('{"revision": "%s", "source_date_epoch": 0}' % ("a" * 40))
+
+    def test_a_stamp_with_a_boolean_epoch_is_refused(self):
+        self.stamp_refused('{"revision": "%s", "source_date_epoch": true}' % ("a" * 40))
+
+    def test_a_stamp_that_is_not_json_is_refused(self):
+        self.stamp_refused("nope")
 
 
 class BuildEnvironment(unittest.TestCase):
@@ -526,7 +540,20 @@ class Signature(Tmp):
         os.environ["GNUPGHOME"] = str(self.home)
         self.addCleanup(os.environ.pop, "GNUPGHOME", None)
         with self.assertRaises(kit.KitRefused):
-            kit.verify_signature(self.data, self.sig, self.keys["other"][1], [self.keys["other"][0]])
+            kit.verify_signature(self.data, self.sig, self.keys["other"][1], [self.keys["official"][0], self.keys["other"][0]])
+
+    def test_the_callers_keyring_directory_is_left_alone(self):
+        empty = self.tmp / "callers-gnupg"
+        empty.mkdir(mode=0o700)
+        os.environ["GNUPGHOME"] = str(empty)
+        self.addCleanup(os.environ.pop, "GNUPGHOME", None)
+        self.verify()
+        self.assertEqual(list(empty.iterdir()), [])
+
+    def test_a_listed_signer_that_is_not_the_signing_key_is_refused(self):
+        both = write(self.tmp / "both.asc", self.keys["official"][1].read_bytes() + self.keys["other"][1].read_bytes())
+        with self.assertRaises(kit.KitRefused):
+            kit.verify_signature(self.data, self.sig, both, [self.keys["other"][0]])
 
 
 class CommittedKey(unittest.TestCase):
@@ -544,6 +571,19 @@ class CommittedKey(unittest.TestCase):
                                  check=True, capture_output=True, text=True).stdout
         fprs = re.findall(r"^fpr:+([0-9A-F]{40}):", out, re.M)
         self.assertIn(pin["signers"][0][0], fprs)
+
+    GOOD_PIN = "signer " + "A" * 40 + " x\nsignature q.sig sha256=" + "0" * 64 + " size=3\n"
+
+    def test_a_valid_pin_file_with_one_unknown_line_added_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(kit.read_release_pin(write(Path(d) / "ok", self.GOOD_PIN))["signature"]["size"], 3)
+            with self.assertRaises(kit.KitRefused):
+                kit.read_release_pin(write(Path(d) / "p", self.GOOD_PIN + "mystery line\n"))
+
+    def test_a_valid_pin_file_with_a_malformed_signature_line_added_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(kit.KitRefused):
+                kit.read_release_pin(write(Path(d) / "p", self.GOOD_PIN + "signature r.sig sha256=zz size=1\n"))
 
     def test_pin_file_with_a_bad_line_is_refused(self):
         with tempfile.TemporaryDirectory() as d:
@@ -630,19 +670,23 @@ class SafeExtract(Tmp):
 class FakeRunner:
     """Records every command and creates what the real tool would, so the orchestration can be judged without a compiler."""
 
-    def __init__(self, fail=None):
+    def __init__(self, fail=None, no_archive=False):
         self.calls = []
         self.fail = fail
+        self.no_archive = no_archive
 
     def __call__(self, argv, cwd, env, log):
         self.calls.append((list(argv), str(cwd), dict(env)))
         name = Path(argv[0]).name
         if self.fail == name:
             return 1
-        if name == "cargo":
+        if name == "cargo" and argv[1] == "vendor":
+            Path(argv[-1]).mkdir(parents=True, exist_ok=True)
+        elif name == "cargo":
             target = Path(env["CARGO_TARGET_DIR"]) / "release"
             target.mkdir(parents=True, exist_ok=True)
-            (target / "libkf_qemu.a").write_bytes(b"!<arch>\nrust")
+            if not self.no_archive:
+                (target / "libkf_qemu.a").write_bytes(b"!<arch>\nrust")
         elif name == "configure":
             Path(cwd, "build.ninja").write_text("rules")
         elif name == "ninja" and "install" in argv:
@@ -654,7 +698,7 @@ class FakeRunner:
         return 0
 
 
-class Orchestration(Tmp):
+class OrchestrationBase(Tmp):
     def setUp(self):
         super().setUp()
         self.k = kayfabe_tree(self.tmp / "k")
@@ -671,10 +715,13 @@ class Orchestration(Tmp):
         args.update(kw)
         return kit.build(**args), runner
 
+
+
+class Orchestration(OrchestrationBase):
     def test_steps_run_in_order_and_the_binary_tarball_and_manifest_are_written(self):
         result, runner = self.build()
         names = [Path(c[0][0]).name for c in runner.calls]
-        self.assertEqual(names, ["cargo", "configure", "ninja", "ninja"])
+        self.assertEqual(names, ["cargo", "cargo", "configure", "ninja", "ninja"])
         self.assertIn("install", runner.calls[-1][0])
         out = Path(result["out"])
         self.assertTrue((out / result["assets"]["binary"]).is_file())
@@ -686,7 +733,7 @@ class Orchestration(Tmp):
 
     def test_cargo_is_locked_release_and_only_the_qemu_crate(self):
         _, runner = self.build()
-        argv = runner.calls[0][0]
+        argv = runner.calls[1][0]
         self.assertEqual(argv[:2], ["cargo", "build"])
         self.assertIn("--release", argv)
         self.assertIn("--locked", argv)
@@ -694,7 +741,7 @@ class Orchestration(Tmp):
 
     def test_configure_runs_in_the_build_directory_with_the_recorded_line(self):
         result, runner = self.build()
-        argv, cwd, _ = runner.calls[1]
+        argv, cwd, _ = runner.calls[2]
         self.assertTrue(argv[0].endswith("/src/configure"))
         self.assertTrue(cwd.endswith("/build"))
         manifest = json.loads((Path(result["out"]) / result["assets"]["manifest"]).read_text())
@@ -721,10 +768,10 @@ class Orchestration(Tmp):
         self.failing("cargo", 1)
 
     def test_a_failing_configure_stops_the_build_and_leaves_no_output(self):
-        self.failing("configure", 2)
+        self.failing("configure", 3)
 
     def test_a_failing_compile_stops_the_build_and_leaves_no_output(self):
-        self.failing("ninja", 3)
+        self.failing("ninja", 4)
 
     def test_unsupported_qemu_is_refused_before_anything_runs(self):
         write(self.q / "VERSION", "9.0.0\n")
@@ -789,7 +836,7 @@ class Orchestration(Tmp):
 
     def test_cargo_runs_in_the_kayfabe_root_with_every_rust_path_remapped(self):
         _, runner = self.build()
-        argv, cwd, env = runner.calls[0]
+        argv, cwd, env = runner.calls[1]
         self.assertEqual(cwd, str(self.k))
         self.assertIn("--remap-path-prefix=%s=/kayfabe-src" % self.k, env["RUSTFLAGS"])
         self.assertIn("--remap-path-prefix=/h/.cargo=/cargo-home", env["RUSTFLAGS"])
@@ -803,11 +850,13 @@ class Orchestration(Tmp):
         result, _ = self.build()
         m = json.loads((Path(result["out"]) / result["assets"]["manifest"]).read_text())
         line = m["configure"]["line"]
-        for flag in ("--disable-gtk", "--disable-sdl", "--disable-download", "--enable-strip", "--target-list=x86_64-softmmu"):
-            self.assertIn(flag, line)
-        self.assertNotIn("--enable-gtk", line)
-        self.assertIn("--with-pkgversion=kayfabe-abababab", line)
+        tokens = line.split()
+        for flag in ("--disable-gtk", "--disable-sdl", "--disable-download", "--enable-strip", "--disable-debug-info", "--target-list=x86_64-softmmu"):
+            self.assertIn(flag, tokens)
+        self.assertNotIn("--enable-gtk", tokens)
+        self.assertIn("--with-pkgversion=kayfabe-abababab", tokens)
         self.assertIn("-ffile-prefix-map=<qemu-build>=/qemu-build", line)
+        self.assertIn("-ffile-prefix-map=<kayfabe-src>=/kayfabe-src", line)
 
     def test_the_manifest_keys_are_sorted_at_every_level(self):
         result, _ = self.build()
@@ -869,6 +918,149 @@ class Orchestration(Tmp):
             self.build(work="w2")
 
 
+class OrchestrationMore(OrchestrationBase):
+    """The same fixture, more observations."""
+
+    def manifest(self, result):
+        return json.loads((Path(result["out"]) / result["assets"]["manifest"]).read_text())
+
+    def test_a_version_that_extends_a_known_one_is_refused_by_the_build(self):
+        write(self.q / "VERSION", "10.2.40\n")
+        with self.assertRaises(kit.KitRefused):
+            self.build()
+
+    def test_a_version_file_with_extra_lines_is_refused_by_the_build(self):
+        write(self.q / "VERSION", "10.2.4\nlocal changes\n")
+        with self.assertRaises(kit.KitRefused):
+            self.build()
+
+    def test_the_recorded_tree_digest_changes_with_the_exec_bit(self):
+        a, _ = self.build(work="w1", out="o1")
+        (self.q / "configure").chmod(0o644)
+        b, _ = self.build(work="w2", out="o2")
+        self.assertNotEqual(self.manifest(a)["qemu"]["source"]["tree_sha256"], self.manifest(b)["qemu"]["source"]["tree_sha256"])
+
+    def test_the_recorded_tree_digest_changes_with_a_renamed_file(self):
+        a, _ = self.build(work="w1", out="o1")
+        (self.q / "COPYING").rename(self.q / "COPYING.renamed")
+        b, _ = self.build(work="w2", out="o2")
+        self.assertNotEqual(self.manifest(a)["qemu"]["source"]["tree_sha256"], self.manifest(b)["qemu"]["source"]["tree_sha256"])
+
+    def test_no_git_directory_is_copied_when_the_build_runs(self):
+        write(self.q / ".git/HEAD", "ref: x")
+        seen = []
+
+        class Spy(FakeRunner):
+            def __call__(self, argv, cwd, env, log):
+                if Path(argv[0]).name == "ninja":
+                    seen.append((Path(cwd).parent / "src/.git").exists())
+                return super().__call__(argv, cwd, env, log)
+
+        self.build(runner=Spy())
+        self.assertEqual(seen, [False, False])
+
+    def test_the_built_tree_has_both_hunks_and_the_device(self):
+        self.build()
+        src = self.tmp / "w/src"
+        self.assertIn("subdir('kf3')", (src / "hw/misc/meson.build").read_text())
+        self.assertIn("config KF3", (src / "hw/misc/Kconfig").read_text())
+        self.assertTrue((src / "hw/misc/kf3/libkf_qemu.a").is_file())
+
+    def test_a_foreign_file_in_the_qemu_tree_stops_the_build(self):
+        write(self.q / "hw/misc/kf3/mine.c", "x")
+        runner = FakeRunner()
+        with self.assertRaises(kit.KitRefused):
+            self.build(runner=runner)
+        self.assertEqual(len(runner.calls), 2)
+
+    def test_a_cargo_run_that_leaves_no_archive_stops_the_build(self):
+        runner = FakeRunner(no_archive=True)
+        with self.assertRaises(kit.KitRefused):
+            self.build(runner=runner)
+        self.assertEqual(len(runner.calls), 2)
+
+    def test_crates_are_vendored_first_and_cargo_is_told_to_use_them(self):
+        _, runner = self.build()
+        vendor, build = runner.calls[0][0], runner.calls[1][0]
+        self.assertEqual(vendor[:3], ["cargo", "vendor", "--locked"])
+        self.assertTrue(vendor[-1].endswith("/w/vendor"))
+        self.assertIn('source.crates-io.replace-with="vendored-sources"', build)
+        self.assertIn('source.vendored-sources.directory="%s"' % vendor[-1], build)
+        self.assertIn("--remap-path-prefix=%s=/kayfabe-src/vendor" % vendor[-1], runner.calls[1][2]["RUSTFLAGS"])
+
+    def test_a_source_tree_that_carries_its_vendor_directory_is_not_vendored_again(self):
+        write(self.k / "vendor/libc/x.rs", "x")
+        write(self.k / ".cargo/config.toml", "[source]\n")
+        _, runner = self.build()
+        self.assertEqual([c[0][1] for c in runner.calls if c[0][0] == "cargo"], ["build"])
+        self.assertNotIn("--config", runner.calls[0][0])
+
+    def test_the_manifest_lists_the_two_hunks(self):
+        m = self.manifest(self.build()[0])
+        kinds = {p["path"]: p["kind"] for p in m["patches"]}
+        self.assertEqual(kinds["hw/misc/Kconfig"], "append-stanza")
+        self.assertEqual(kinds["hw/misc/meson.build"], "append-line")
+        self.assertEqual(len(m["patches"]), 7)
+
+    def test_symlinks_stay_symlinks_in_the_binary_tarball(self):
+        class Linking(FakeRunner):
+            def __call__(self, argv, cwd, env, log):
+                rc = super().__call__(argv, cwd, env, log)
+                if Path(argv[0]).name == "ninja" and "install" in argv:
+                    os.symlink("bios.bin", Path(env["DESTDIR"]) / "usr/local/share/qemu/bios-alias.bin")
+                return rc
+
+        result, _ = self.build(runner=Linking())
+        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
+            link = next(m for m in tf.getmembers() if m.name.endswith("bios-alias.bin"))
+        self.assertTrue(link.issym())
+
+    def test_no_member_of_the_binary_tarball_names_an_owner(self):
+        result, _ = self.build()
+        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
+            self.assertEqual({(m.uid, m.gid, m.uname, m.gname) for m in tf.getmembers()}, {(0, 0, "", "")})
+
+    def test_all_licence_texts_are_in_the_binary_tarball(self):
+        result, _ = self.build()
+        with tarfile.open(Path(result["out"]) / result["assets"]["binary"]) as tf:
+            names = {Path(n).name for n in tf.getnames()}
+        for name in ("LICENSE", "LICENSE-APACHE", "LICENSE-GPL", "THIRD_PARTY_NOTICES.md", "COPYING"):
+            self.assertIn(name, names)
+
+    def test_a_refused_second_build_leaves_the_first_outputs_untouched(self):
+        a, _ = self.build()
+        before = (self.tmp / "o" / a["assets"]["binary"]).read_bytes()
+        with self.assertRaises(kit.KitRefused):
+            self.build(work="w2")
+        self.assertEqual((self.tmp / "o" / a["assets"]["binary"]).read_bytes(), before)
+
+    def tarball_input(self, name="qemu-10.2.4.tar.xz"):
+        src = qemu_tree(self.tmp / "tb/qemu-10.2.4")
+        write(src / "COPYING", "GPL")
+        os.symlink("/opt/X11/include", src / "abs")
+        kit.pack_tree(self.tmp / "tb/qemu-10.2.4", self.tmp / name, 1, "qemu-10.2.4")
+        return kit.QemuInput.tarball(self.tmp / name)
+
+    def test_a_tarball_input_is_extracted_and_recorded_with_its_hash(self):
+        qi = self.tarball_input()
+        result, _ = self.build(qemu=qi)
+        src = self.manifest(result)["qemu"]["source"]
+        self.assertEqual((src["kind"], src["name"], src["anchors"]), ("tarball", "qemu-10.2.4.tar.xz", ["user"]))
+        self.assertEqual(src["sha256"], sha((self.tmp / "qemu-10.2.4.tar.xz").read_bytes()))
+
+    def test_the_dropped_absolute_link_is_recorded_in_the_manifest(self):
+        result, _ = self.build(qemu=self.tarball_input())
+        self.assertEqual(self.manifest(result)["qemu"]["source"]["dropped_absolute_links"], ["qemu-10.2.4/abs"])
+        self.assertFalse(os.path.lexists(self.tmp / "w/src/abs"))
+
+    def test_a_tarball_with_two_top_level_directories_is_refused(self):
+        write(self.tmp / "tb2/a/VERSION", "10.2.4\n")
+        write(self.tmp / "tb2/b/VERSION", "10.2.4\n")
+        kit.pack_tree(self.tmp / "tb2", self.tmp / "qemu-10.2.4.tar.xz", 1, "x")
+        with self.assertRaises(kit.KitRefused):
+            self.build(qemu=kit.QemuInput.tarball(self.tmp / "qemu-10.2.4.tar.xz"))
+
+
 class Compare(Tmp):
     def dirs(self, same=True):
         for name in ("a", "b"):
@@ -880,6 +1072,13 @@ class Compare(Tmp):
     def test_identical_outputs_have_no_differences(self):
         self.dirs()
         self.assertEqual(kit.compare_outputs(self.tmp / "a", self.tmp / "b", ignore_keys=("source_tarball",)), [])
+
+    def test_a_dotted_key_names_a_nested_value(self):
+        for name, anchors in (("a", ["x"]), ("b", ["x", "y"])):
+            write(self.tmp / name / "kayfabe-qemu-x-manifest.json", json.dumps({"qemu": {"source": {"anchors": anchors, "sha256": "1"}}}))
+            write(self.tmp / name / "kayfabe-qemu-x-linux-x86_64.tar.xz", "bin")
+        self.assertEqual(kit.compare_outputs(self.tmp / "a", self.tmp / "b", ignore_keys=("qemu.source.anchors",)), [])
+        self.assertEqual(len(kit.compare_outputs(self.tmp / "a", self.tmp / "b", ignore_keys=())), 1)
 
     def test_a_changed_binary_is_reported_by_name(self):
         self.dirs(same=False)
@@ -897,6 +1096,11 @@ class Compare(Tmp):
         self.dirs()
         write(self.tmp / "b" / "kayfabe-qemu-x-manifest.json", json.dumps({"a": 2, "source_tarball": "b"}))
         self.assertEqual(len(kit.compare_outputs(self.tmp / "a", self.tmp / "b", ignore_keys=("source_tarball",))), 1)
+
+    def test_a_file_on_the_other_side_only_is_reported_too(self):
+        self.dirs()
+        write(self.tmp / "b" / "extra.txt", "x")
+        self.assertTrue(any("only in b" in d for d in kit.compare_outputs(self.tmp / "a", self.tmp / "b", ignore_keys=("source_tarball",))))
 
     def test_a_file_on_one_side_only_is_reported(self):
         self.dirs()
@@ -928,6 +1132,17 @@ class CommandLine(Tmp):
         self.assertEqual(rc, 1)
         self.assertIn("KIT_REFUSED", err)
         self.assertIn("10.2.4", err)
+
+    def test_a_build_of_an_unsupported_tree_exits_one(self):
+        write(self.tmp / "q/VERSION", "1.0.0\n")
+        rc, _, err = self.run_cli("build", "--qemu-tree", str(self.tmp / "q"), "--out", str(self.tmp / "o"), "--workdir", str(self.tmp / "w"))
+        self.assertEqual(rc, 1)
+        self.assertIn("KIT_REFUSED", err)
+
+    def test_plan_refuses_a_version_file_with_extra_lines(self):
+        write(self.tmp / "q/VERSION", "10.2.4\nextra\n")
+        rc, _, _ = self.run_cli("plan", "--qemu-tree", str(self.tmp / "q"))
+        self.assertEqual(rc, 1)
 
     def test_plan_prints_the_configure_line_and_the_inputs_and_builds_nothing(self):
         qemu_tree(self.tmp / "q")
@@ -1080,6 +1295,37 @@ class Workflow(unittest.TestCase):
     def test_tag_is_validated_in_the_job_that_creates_the_release(self):
         run = next(s["run"] for s in steps("draft") if "gh release create" in s.get("run", ""))
         self.assertRegex(run, r"\^\[A-Za-z0-9")
+
+    def test_no_job_has_write_all(self):
+        self.assertNotIn("write-all", self.text())
+        self.assertNotIn("read-all", self.text())
+
+    def test_the_reproducibility_step_runs_the_reproduce_command(self):
+        run = next(s["run"] for s in steps("build") if "reproduc" in s.get("name", "").lower())
+        self.assertIn("build_qemu.py reproduce", run)
+
+    def test_the_source_tarball_is_made_before_the_reproducibility_check(self):
+        names = [s.get("name", "").lower() for s in steps("build")]
+        self.assertLess(next(i for i, n in enumerate(names) if n.startswith("source tarball")), next(i for i, n in enumerate(names) if "reproduc" in n))
+
+    def test_the_draft_step_checks_the_tag_before_it_calls_gh(self):
+        run = next(s["run"] for s in steps("draft") if "gh release create" in s.get("run", ""))
+        self.assertLess(run.index("A-Za-z0-9"), run.index("gh "))
+
+    def test_release_create_uses_the_tag_variable(self):
+        self.assertIn('gh release create "$TAG"', self.text())
+
+    def test_checkout_in_the_build_job_has_no_credentials(self):
+        checkout = next(s for s in steps("build") if "actions/checkout" in str(s.get("uses", "")))
+        self.assertIs(checkout["with"]["persist-credentials"], False)
+
+    def test_the_source_tarball_is_attested(self):
+        attest = next(s for s in steps("build") if "attest-build-provenance" in str(s.get("uses", "")))
+        self.assertIn("-source.tar.xz", attest["with"]["subject-path"])
+
+    def test_the_manifest_is_attested(self):
+        attest = next(s for s in steps("build") if "attest-build-provenance" in str(s.get("uses", "")))
+        self.assertIn("-manifest.json", attest["with"]["subject-path"])
 
     def test_tag_input_is_validated_before_use(self):
         t = self.text()
