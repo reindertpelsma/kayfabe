@@ -496,17 +496,47 @@ class PlanOnlyNeeded(TempCase):
         dev, proc = self.tree()
         self.assertNotIn("gpu_lock", self.plan(dev, proc, memlock=False))
 
+    def test_the_executed_bootstrap_reads_the_log_setting_it_is_given_not_the_hosts(self):
+        dev, proc = self.tree()
+        (self.tmp / "restrict").write_text("1\n")
+        calls, saved = [], K.os.geteuid
+        K.os.geteuid = lambda: 0
+        try:
+            out = K.bootstrap("ci", workspace=str(self.tmp / "ws"), run=lambda argv, **kw: calls.append(argv) or Result(), root=str(self.tmp / "r"),
+                              dev=str(dev), proc=str(proc), only_needed=True, memlock=False, install_files=False,
+                              lock=str(self.tmp / "lock"), dmesg_restrict=str(self.tmp / "restrict"))
+        finally:
+            K.os.geteuid = saved
+        self.assertIn("dmesg_readable", [r["name"] for r in out])
+        self.assertIn(["sysctl", "-w", "kernel.dmesg_restrict=0"], calls)
+
+    def test_the_executed_bootstrap_makes_the_lock_file_it_is_given_not_the_hosts(self):
+        dev, proc = self.tree()
+        (self.tmp / "lock").unlink()
+        calls, saved = [], K.os.geteuid
+        K.os.geteuid = lambda: 0
+        try:
+            out = K.bootstrap("ci", workspace=str(self.tmp / "ws"), run=lambda argv, **kw: calls.append(argv) or Result(), root=str(self.tmp / "r"),
+                              dev=str(dev), proc=str(proc), only_needed=True, memlock=False, install_files=False,
+                              lock=str(self.tmp / "lock"), dmesg_restrict=str(self.tmp / "restrict"))
+        finally:
+            K.os.geteuid = saved
+        self.assertIn("gpu_lock", [r["name"] for r in out])
+        self.assertTrue([a for a in calls if str(self.tmp / "lock") in " ".join(a)], calls)
+
     def test_the_needed_check_is_what_the_executed_bootstrap_runs(self):
         dev, proc = self.tree()
         calls, saved = [], K.os.geteuid
         K.os.geteuid = lambda: 0
         try:
             out = K.bootstrap("ci", workspace=str(self.tmp / "ws"), run=lambda argv, **kw: calls.append(argv) or Result(), root=str(self.tmp / "r"),
-                              dev=str(dev), proc=str(proc), only_needed=True, memlock=False, install_files=False)
+                              dev=str(dev), proc=str(proc), only_needed=True, memlock=False, install_files=False,
+                              lock=str(self.tmp / "lock"), dmesg_restrict=str(self.tmp / "restrict"))
         finally:
             K.os.geteuid = saved
         names = [r["name"] for r in out]
         self.assertNotIn("kfroot_files", names)
+        self.assertNotIn("gpu_lock", names)
         self.assertNotIn("nvidia_node_perms", names)
         self.assertNotIn("dmesg_readable", names)
         self.assertFalse([a for a in calls if a[:1] == ["chmod"] and any("nvidia" in x for x in a)])

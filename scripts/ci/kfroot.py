@@ -540,7 +540,8 @@ def plan(user=DEFAULT_USER, workspace="/workspace", dev="/dev", proc="/proc", ch
 
 
 def bootstrap(user=DEFAULT_USER, workspace="/workspace", chown=(), dry_run=False, run=subprocess.run, root="/",
-              visudo="visudo", dev="/dev", proc="/proc", only_needed=False, memlock=True, install_files=True):
+              visudo="visudo", dev="/dev", proc="/proc", only_needed=False, memlock=True, install_files=True, lock=GPU_LOCK,
+              dmesg_restrict="/proc/sys/kernel/dmesg_restrict"):
     """Install first (it decides which file is the audit), then the planned steps. install_files=False (the payload, which is root and
     needs no launcher: `kfroot` runs the command directly as root) leaves the sudoers file, the launcher and the wrapper out, so a box
     without sudo is not a failure; the audit file is then the dedicated log, which the plan still creates."""
@@ -555,7 +556,7 @@ def bootstrap(user=DEFAULT_USER, workspace="/workspace", chown=(), dry_run=False
         results.append({"name": "kfroot_files", "argv": None, "path": SUDOERS, "required": True, "rc": 0})
     else:
         audit_log = SUDO_LOG
-    for step in plan(user, workspace, dev, proc, chown, audit_log, only_needed, memlock):
+    for step in plan(user, workspace, dev, proc, chown, audit_log, only_needed, memlock, lock, dmesg_restrict):
         if dry_run:
             results.append({**step.describe(), "rc": None})
             continue
