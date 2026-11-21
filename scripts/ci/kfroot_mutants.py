@@ -190,7 +190,7 @@ CASES = [
     M("payload-rootless-env-is-an-instruction-field", "payload", 'ROOTLESS_ENV = ("KF_PAYLOAD_ROOTLESS", ', 'ROOTLESS_ENV = ("KF_RELEASE_REHEARSAL", "KF_PAYLOAD_ROOTLESS", '),
     M("report-accepts-any-rootless-block", "report", '    if not ok:\n        raise ValueError("rootless")', "    if False:\n        raise ValueError(\"rootless\")"),
     M("report-accepts-a-forged-clean-verdict", "report", '    ok = ok and (value["verdict"] != "ROOTLESS" or not (value["refused"] or value["unaudited"]))\n', ""),
-    M("report-drops-the-rootless-key", "report", '            "kfml",\n            "net_bytes",\n            "rootless",\n        }', '            "kfml",\n            "net_bytes",\n        }'),
+    M("report-drops-the-rootless-key", "report", '            "windows_open_rows",\n            "rootless",\n            "full",', '            "windows_open_rows",\n            "full",'),
     M("record-file-not-written", "lib", "    [ -z \"${KF_KFROOT_RECORD:-}\" ] || printf", "    [ -z \"${KF_KFROOT_RECORD:-}\" ] || true || printf"),
     M("refused-use-not-recorded", "lib", '        kf_record refused "$@"\n', ""),
     M("root-use-not-recorded", "lib", '        kf_record root "$@"\n', ""),

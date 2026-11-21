@@ -938,11 +938,11 @@ def read_result_file(path):
             "matlab",
             "apps_discovery",
             "windows_open_rows",
+            "rootless",
             "full",
             "install_flow",
             "kfml",
             "net_bytes",
-            "rootless",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
