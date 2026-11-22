@@ -589,8 +589,8 @@ impl Storage<CpuView> {
     /// Processing it writes `USERD.REFERENCE = value` (the PROOF that every method before it,
     /// acquires included, was processed -- measured: `GP_GET` runs ahead of processing and proves
     /// nothing about that) and raises the engine's non-stall event the worker's epoll already
-    /// watches (the wake). No semaphore, no GPU-written memory: OWNER_RULINGS §AI authorises
-    /// read-only commands only; `USERD` is outside the GPU mapping.
+    /// watches (the wake). Commands are read-only, with no semaphore or GPU memory writes.
+    /// `USERD` is outside the GPU mapping.
     ///
     /// # Errors
     /// Invalid slot or retiring/released CPU view.

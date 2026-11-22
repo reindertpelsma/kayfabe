@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ Owner rulings 2026-10-07 — the kernel-GR tier and the software-subchannel rule, on the exact
+//! The kernel-GR tier and the software-subchannel rule, on the exact
 //! words Windows sent in run31 (`traces/windows_code43_walls_20261007/README.md`, run31).
 
 use super::{GrConfig, Ir, SwCall, TState, decode};
@@ -395,7 +395,7 @@ fn run44_gr_segment_admits_the_3d_report_semaphore_and_stops_at_the_software_met
     );
 }
 
-/// ★ OWNER_RULINGS §U (`KF3_DEFERRED_API`): the same run44 segment with the deferred-API path on —
+/// The same run44 segment with the deferred-API path on (`KF3_DEFERRED_API`):
 /// subchannel 5's value 1 names the channel's first software object (the 5080, `[measured: the
 /// 2026-10-05 VFIO boots 8/9/10]` always its first `ENG_SW` child), so the method is not refused in the decoder: it is a
 /// [`Ir::SwMethod`] split carrying the guest's `hApiHandle` (`0x40000002`, the handle VFIO
