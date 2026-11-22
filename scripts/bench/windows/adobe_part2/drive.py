@@ -21,7 +21,8 @@ import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-WIN = HERE.parent
+import os
+WIN = Path(os.environ.get("KF_WIN", str(HERE.parent)))
 sys.path.insert(0, str(WIN))
 
 
