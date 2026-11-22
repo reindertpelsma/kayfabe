@@ -653,6 +653,86 @@ mod tests {
         assert_eq!(e.seq, 2);
     }
 
+    /// ★ The guest-visible vblank is never starved by the broker (module doc: a hidden, occluded or
+    /// crashed broker costs [`BROKER_SILENCE_NS`], then the free clock ticks). A worker that wakes at
+    /// every [`TickSource::deadline_ns`] and delivers broker events in any pattern (silences of seconds
+    /// and minutes, floods inside the guard, flapping around 50 ms, a broker that stops for good)
+    /// never sees two consecutive vblanks further apart than the silence plus two periods: far below
+    /// the about 2 s after which Windows' display watchdog acts. (Mutations: a handoff that resumes
+    /// the free clock a period late per fallback; a broker source that never falls back.)
+    #[test]
+    fn a_silent_or_flapping_broker_never_starves_the_vblank() {
+        let bound = BROKER_SILENCE_NS + 2 * P;
+        let mut x = 0x2545_f491_4f6c_dd1du64;
+        let mut next = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        for case in 0..300 {
+            let mut s = free();
+            let mut now = 0u64;
+            let mut last: Option<u64> = None;
+            let seen = |e: Option<Emitted>, last: &mut Option<u64>| {
+                if let Some(e) = e {
+                    if let Some(l) = *last {
+                        assert!(
+                            e.stamp_ns - l <= bound,
+                            "case {case}: {} ns between vblanks",
+                            e.stamp_ns - l
+                        );
+                    }
+                    *last = Some(e.stamp_ns);
+                }
+            };
+            // broker events: gaps drawn from floods (1 ms), the guard edge, normal 60 Hz, the 50 ms
+            // boundary, and silences of 0.2 s to 3 min; the last stretch is a broker that stops
+            let mut events = Vec::new();
+            let mut t = 0u64;
+            for _ in 0..200 {
+                let r = next();
+                t += match r % 6 {
+                    0 => 1_000_000,
+                    1 => GUARD - 1 + r % 3,
+                    2 => P,
+                    3 => BROKER_SILENCE_NS - 5_000_000 + r % 10_000_000,
+                    4 => 200_000_000 + r % 3_000_000_000,
+                    _ => 180_000_000_000,
+                };
+                events.push(t);
+            }
+            let end = t + 10_000_000_000;
+            let mut it = events.into_iter().peekable();
+            let mut steps = 0u64;
+            while now < end {
+                steps += 1;
+                assert!(
+                    steps < 2_000_000,
+                    "case {case}: the deadline stopped advancing"
+                );
+                let d = s.deadline_ns().max(now);
+                match it.peek() {
+                    Some(&ev) if ev <= d => {
+                        now = ev;
+                        it.next();
+                        let (e, _) = s.broker_tick(now);
+                        seen(e, &mut last);
+                    }
+                    _ => {
+                        now = d;
+                        let (e, _) = s.due(now);
+                        seen(e, &mut last);
+                    }
+                }
+            }
+            assert!(
+                last.is_some_and(|l| l + bound >= end),
+                "case {case}: still ticking at the end"
+            );
+        }
+    }
+
     /// The constants are what the design says: 50 ms, one half, and the slowest legal tick (24 Hz)
     /// still speaks inside the silence with margin.
     #[test]

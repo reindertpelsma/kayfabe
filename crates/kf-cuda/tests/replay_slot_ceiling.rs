@@ -49,6 +49,9 @@ use std::collections::BTreeMap;
 
 const FIXTURE: &str = include_str!("fixtures/slot_ceiling_replay.txt");
 
+/// Every logged case: Wukong boots p1 and p2 and the Windows Camera Raw run (dates and sources in the fixture).
+const LOGGED: [&str; 3] = ["p1-slot32", "p2-slot32", "adobe-slot29"];
+
 /// One fixture case (2026-11-16): the logged lines, copied verbatim from the boot log, and the inputs derived from them.
 #[derive(Debug, Default)]
 struct Case {
@@ -259,6 +262,48 @@ fn p2_slot32_pool_matches_the_logged_geometry() {
     assert_logged_geometry("p2-slot32");
 }
 
+#[test]
+fn adobe_slot29_pool_matches_the_logged_geometry() {
+    assert_logged_geometry("adobe-slot29");
+}
+
+/// The second logged occurrence (fixture case `adobe-slot29`: Windows 11, Photoshop Camera Raw model
+/// downloads, binary 6bfa2dbc, which predates the fix). The slot is the LAST region of the pool, so its tail is the pool's
+/// end: the logged request grows in place to the logged required size (175 360 runs of the 471 296-run
+/// tail), not to the preferred 966 912 (497 664 extra, more than the tail). The pool keeps 295 936 runs
+/// after the slot and its 309 504-run head untouched. Before the fix this request was refused by name
+/// (the logged ceiling line), the split did not apply and channel 0x80c died.
+#[test]
+fn adobe_slot29_growth_takes_the_required_size_from_the_pool_tail() {
+    let c = case("adobe-slot29");
+    let mut cap = build(&c);
+    let mut dev = RecordingDevice::new(&c);
+    let m = cap
+        .slot_needed(29, c.need_hi)
+        .unwrap_or_else(|e| panic!("still refused at the logged ceiling: {e}"))
+        .expect("grows");
+    assert_eq!(m.from, r(1_156_608, 469_248));
+    assert_eq!(m.to, r(1_156_608, 644_608), "in place, required size");
+    assert_eq!(m.copy(), None);
+    dev.growth(m);
+    assert!(dev.copies.is_empty());
+    assert_eq!(cap.stats.ceilings, 0);
+    assert_eq!(cap.slot_pool_free(), 1_268_992 - 175_360);
+    let g = cap.slot_geometry(29, 644_608);
+    assert!(
+        g.contains("adjacent free: head 309504 tail 295936"),
+        "the head is untouched and the tail shrank by the extension: {g}"
+    );
+    // the same slot can still reach exactly its new tail end in place, and one grain more is a ceiling
+    let to_end = cap
+        .slot_needed(29, 644_608 + 295_936)
+        .expect("the rest of the tail")
+        .expect("grows");
+    assert_eq!(to_end.to, r(1_156_608, 940_544));
+    let e = cap.slot_needed(29, 940_544 + 1).unwrap_err();
+    assert!(e.contains("slot pool exhausted"), "{e}");
+}
+
 /// The runs a logged ceiling line names after `→` (the `required` size).
 fn logged_required(c: &Case) -> u32 {
     let after = c
@@ -274,7 +319,7 @@ fn logged_required(c: &Case) -> u32 {
 /// pair is not reachable for these layouts any more); only the required side is observable now.
 #[test]
 fn the_need_range_is_exactly_the_logged_required_size() {
-    for name in ["p1-slot32", "p2-slot32"] {
+    for name in LOGGED {
         let c = case(name);
         let req = logged_required(&c);
         let grown = |need: u32| {
@@ -307,7 +352,7 @@ fn the_need_range_is_exactly_the_logged_required_size() {
 /// the extension taken from the free run that the geometry line named.
 #[test]
 fn the_logged_growth_now_happens_in_place_without_a_copy() {
-    for name in ["p1-slot32", "p2-slot32"] {
+    for name in LOGGED {
         let c = case(name);
         let mut cap = build(&c);
         let mut dev = RecordingDevice::new(&c);
@@ -354,7 +399,7 @@ fn the_logged_growth_now_happens_in_place_without_a_copy() {
 /// without a copy that overlaps its source, leaving every region disjoint and inside the pool.
 #[test]
 fn a_growth_that_fits_in_place_is_not_a_ceiling() {
-    for name in ["p1-slot32", "p2-slot32"] {
+    for name in LOGGED {
         let c = case(name);
         let old = build(&c).slot_region(c.slot).expect("held");
         for need in [c.need_lo, c.need_hi] {
@@ -516,7 +561,7 @@ fn a_fixture_layout_with_an_overlapping_or_outside_region_is_refused() {
 /// layout derives (so a hand edit of a span shows up here as well as in the geometry line).
 #[test]
 fn fixture_layouts_hold_the_logged_number_of_slots() {
-    for name in ["p1-slot32", "p2-slot32"] {
+    for name in LOGGED {
         let c = case(name);
         let cap = build(&c);
         let held = regions(&c).len();
