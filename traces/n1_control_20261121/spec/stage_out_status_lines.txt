@@ -1,0 +1,9 @@
+STAGE_START 2026-11-21T20:07:24Z
+SPEC_STAGE_START lane=none
+SPEC_ROW name=solidworks-08 result=PASS subtests=8/8 reason=- failed=-
+SPEC_ROW name=enscape-01 result=FAIL subtests=5/10 reason=SUBTEST failed=06_SanMiguelFullUltraHQ
+SPEC_ROW name=unreal_engine-01 result=NOT_RUN subtests=2/8 reason=TIME failed=01_VotALitDetailTracing,02_VotALitGlobalTracing,05_CitySampleLitHitLighting
+SPEC_STAGE_COUNTS pass=1 fail=1 not_run=1 of=3
+SPECVIEWPERF_STAGE_FAIL NARROWED
+SPECVIEWPERF_STAGE_EXIT rc=1
+STAGE_END 2026-11-21T22:47:09Z rc=1
