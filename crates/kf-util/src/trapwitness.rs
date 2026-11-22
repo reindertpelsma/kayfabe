@@ -178,9 +178,8 @@ pub fn phase_profile() -> String {
 }
 /// ★★★★★ **WHICH trap held the longest — because a scalar names no site to fix.**
 ///
-/// **Owner ruling 2026-09-09**: *"no inline blocking executions in mmio traps. just general
-/// rule. real gpu also never holds any mmio write for milliseconds right. like rpc mmio
-/// starts the operation, the block is for example a semaphore."*
+/// An MMIO trap must avoid inline blocking. An MMIO write can start an asynchronous
+/// operation whose completion the guest waits for separately, such as with a semaphore.
 ///
 /// [`worst_trap_us`] is the conformance metric for that rule across **every** MMIO trap —
 /// [`TrapGuard`] wraps both the register read and the register write path. But a bare
@@ -202,9 +201,9 @@ static SLOW_TRAPS: AtomicU64 = AtomicU64::new(0);
 
 /// ★ Slow traps by decade: `1-10ms`, `10-100ms`, `100ms-1s`, `>1s`.
 ///
-/// ⊘ Four buckets and not a percentile: the owner's rule is a hard ceiling — *"a trap may not
-/// take longer than a millisecond"* — so what matters is HOW FAR over, not where the median
-/// sits. A boot with 187 traps in the 1-10 ms bucket and one over a second is a different
+/// Four buckets show how far traps exceed the one-millisecond ceiling. The median
+/// does not distinguish the different severities.
+/// A boot with 187 traps in the 1-10 ms bucket and one over a second is a different
 /// problem from 187 traps over a second, and `worst`+`count` cannot tell them apart.
 static SLOW_TRAP_BUCKETS: [AtomicU64; 4] = [
     AtomicU64::new(0),
@@ -623,8 +622,8 @@ pub mod trapcpu {
 
 /// ⊘⊘⊘ **TEMPORARY — THE OVER-BUDGET WATCHDOG. DELETE BEFORE SHIPPING.**
 ///
-/// Owner, 2026-09-12: *"crash when a trap exceeds 1ms. then you know where it happened, why,
-/// with dump, and iterate to fix it."*
+/// Abort when a trap exceeds one millisecond so the dump retains the stuck location
+/// for diagnosis.
 ///
 /// ★ Why a crash and not a log line: the census already says WHICH register is slow and has
 /// said so all session. What it cannot say is **where the time goes**, because by the time a
@@ -632,7 +631,7 @@ pub mod trapcpu {
 /// watchdog that aborts while the trap is still running freezes the stuck thread in place,
 /// so the core carries the answer instead of being sampled for.
 ///
-/// ⊘ `[measured w470]` the alternative — 10 Hz stack sampling — found one 0.4 s park and
+/// ⊘ `[measured w470]` (see `docs/design/THE_MACHINE.md`): 10 Hz stack sampling found one 0.4 s park and
 /// never once caught the multi-second event. Luck is not an instrument.
 ///
 /// Armed only by `KAYFABE_TRAP_FATAL_US`; absent, `watchdog_arm` returns before doing
@@ -680,8 +679,8 @@ mod watchdog {
     }
 
     /// ★★★ **PRAMIN is the enumerated exception and must not trip the watchdog.**
-    /// Owner, 2026-09-12: *"just exclude the pramin one"* — and the reason is in the
-    /// architecture: the BAR0 window base has **no completion for the guest to wait on**, so
+    /// The exception follows from the window's architecture:
+    /// the BAR0 window base has **no completion for the guest to wait on**, so
     /// the next read must observe the new window and the remap has to finish inline. It is
     /// bring-up only, so the stall is bounded. Watching it would only ever report the one
     /// stall we have already agreed to.
@@ -841,13 +840,13 @@ struct InFlight;
 /// because this crate forbids `unsafe` and cannot call `gettid` itself.
 static CURRENT_TID: std::sync::OnceLock<fn() -> i32> = std::sync::OnceLock::new();
 
-/// ★★★★★ **w592 — THE ONLY THING THAT CAN SETTLE THE OWNER'S RULE ABOUT A SLOW TRAP.**
+/// ★★★★★ **w592 — Distinguishing a slow trap from vCPU steal.**
 ///
 /// Owner, on the one trap still over budget: *"the thread wasn't scheduled doesn't count, but
 /// only if that's a vCPU steal, not if it was waiting on a blocking lock in the vCPU thread."*
 ///
 /// ⊘⊘ **Wall time cannot tell those apart, and every claim on this subject so far has been an
-/// ARGUMENT.** `[measured w583]` *"the 39.6 ms is not a lock — rank-0 waits measured ZERO and
+/// ARGUMENT.** `[measured w583]` (see `docs/design/THE_COMMENT_AUDIT_APPENDIX.md`) *"the 39.6 ms is not a lock — rank-0 waits measured ZERO and
 /// the worst hold is 330 us, so it falls on the schedulable side"* — true as far as it goes, and
 /// it establishes only that WE were not holding the thread. It does not establish that the
 /// thread was off-CPU rather than spinning in our own code, which is the distinction the rule
@@ -984,9 +983,7 @@ impl TrapGuard {
     /// for "unattributed". See [`WORST_TRAP_SITE`].
     #[must_use]
     pub fn enter_at(site: u64) -> Self {
-        // ⊘⊘⊘ **TEMPORARY DEBUG INSTRUMENT — DELETE BEFORE SHIPPING.** Owner, 2026-09-12:
-        // *"only during debug ensure this is OFF/deleted later and in prod (temporary to
-        // test dont leave it in code), is crash when a trap exceeds 1ms."* Default-off, and
+        // Temporary debug watchdog. Keep it off in production.
         // `watchdog_arm()` is a no-op unless `KAYFABE_TRAP_FATAL_US` is set.
         watchdog_arm();
         let inflight = InFlight::claim(site);
