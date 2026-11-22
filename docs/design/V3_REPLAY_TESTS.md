@@ -1,7 +1,9 @@
 # V3 — replay tests: a logged failure becomes a GPU-free Rust test
 
-**STATUS: LIVE, 2026-11-18 (pilot: one defect, the slot-pool ceiling; FIXED 2026-11-18 on the replay test alone,
-NOT yet confirmed on hardware; a Wukong run on the pc or a box is the confirmation step).**
+**STATUS: LIVE, 2026-11-21 (pilot: one defect, the slot-pool ceiling; FIXED 2026-11-18 on the replay test alone,
+NOT yet confirmed on hardware; a Wukong run on the pc or a box is the confirmation step. 2026-11-21: a second defect from
+the same pc night, a walk cut at a per-space limit, is handled by name and fails closed; see "Walk cut at a per-space
+limit" below; unit-tested only).**
 Owner ruling 2026-11-16: every failure classified as a kayfabe-core bug gets a reproduction as a GPU-free
 `cargo test`, so the class cannot come back. This is the pattern, with the pilot as its worked example.
 
@@ -77,3 +79,31 @@ extension is carved out of a free run, so it cannot leave the pool or touch anot
 - **Not covered.** The link ceiling -> DEAD split is read from adjacency in the log and from `vasmgr.rs` (an overflowed
   entry fails its space); `SPLIT-LATE` and `SLOW-APPLY` are timing and have no replay. The a1 and t1 ceilings predate the
   geometry line, so their layout is unknown and they cannot be replayed.
+
+## Walk cut at a per-space limit (2026-11-21; unit-tested only, no hardware run)
+
+- **Logged failure.** The pc, binary 8a4bd4b0, Camera Raw "Select Background". Walk slot 25 (root `0x1ece5a000`)
+  needed 969,918 and then 974,249 runs, and its walk region reached the per-space maximum (1,048,576). About 24 s later
+  its walk was CUT: `walk report carried refusals=17..59 refuse_mask=0x1000 pdbs=[1ece5a000] runs=0`, repeated about
+  2,100 times. Six `invalidate CLEARED OVER ABSENCE` lines named the same space, and the real GPU faulted (host Xid 31
+  `FAULT_PDE` on a CE and a GPC channel, Xid 32). Evidence (not committed: the logs hold the host GPU UUID):
+  `/workspace/bench/adobe_addon_20261121/crash_evidence_20261121T221353Z_acr_stuck/` on the pc.
+- **Mechanism (read from the code).** `kf_par_share` (`cuda/walk/kf_walk.cu`) cuts a space that exceeds its frontier
+  share (32,768 entries per level) or its run share (1,048,576 runs). It sets `KFWR_R_FRONTIER_CAP` for both, and the
+  kernel then withholds the space's WHOLE diff, unmaps included. `kf-mem` treated every walk refusal as absence (§AA),
+  so it completed the guest's invalidate and the split over mappings that were never applied.
+- **Now.** A refusal carrying a `KF_ENTRY_CUT` bit (`kf_cuda::abi`, tied to the kernel's defines by a test) is a
+  named per-space CEILING (`kf_mem::vasmgr::walk_cut_line`: root, slot, mask, reported need, and both limits, since the
+  bit cannot tell them apart; logged for the first 8 events and then at powers of two). It is a HARD failure:
+  - the split fails, so the channel dies at its poll (the existing DEAD path);
+  - the invalidate is not completed;
+  - the host does not re-walk it on its own; the guest's next request walks it again and it fails again until the
+    space fits.
+  A leaf refusal (absence) still completes as §AA rules. This applies §AA's own carve-out (a withheld UNMAP is not
+  absence) to the cut case.
+- **Open (owner-facing).** A held invalidate is what run 223 showed ends in a guest TDR 0x117. That is the guest's own
+  adapter reset, chosen here over silent real-GPU faults. A passthrough channel already running on the cut space is
+  not killed: no per-space channel kill exists. Follow-ups: derive the per-space limits from the guest's memory instead
+  of fixed kernel shares (a kernel and PTX change); find out why one space holds about 1 M runs (fragmented 4 KiB
+  guest pages?); report which share ran out (a new kernel bit).
+
