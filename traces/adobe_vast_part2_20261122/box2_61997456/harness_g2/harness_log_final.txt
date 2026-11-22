@@ -1,0 +1,48 @@
+[xid-watch] tag=g2  host=ubuntu  utc=2026-11-22T17:01:05Z
+[xid-watch] host_dmesg_lines=756  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+platform PASS NONE kf3
+DEVIATION: image.qcow2 sha256 taken from the unpack stamp (verified 2026-11-22T16:10:19Z)
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-22T02:43:26Z (fresh overlay)
+fb-mb PASS NONE DIAGNOSTIC ARM: guest-visible FB 8192 MiB (image default differs)
+ram-mb PASS NONE OVERRIDE: guest RAM 16384 MiB for this run (the image's own value is the default; sealed state.json unchanged)
+audio PASS NONE virtual HDA sound card, QEMU null backend (no host audio opened)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+ssh PASS NONE loopback guest transport ready
+power OK FILE OK values={"sleep":{"ac":0,"dc":0},"hibernate_after":{"ac":0,"dc":0},"unattended_sleep":{"ac":0,"dc":0},"hybrid_sleep":{"ac":0,"dc":0},"monitor":{"ac":0,"dc":0},"disk":{"ac":0,"dc":0},"wake_signin":{"
+gpu PASS NONE post-fix seed UUID exact match after 162s (expected=1 observed=1 host=n/a), problem code 0, settled before restart=True
+verify PASS NONE identity, clock, TPM and seed GPU checked
+hold released NONE guest held for manual iteration; ssh port 39934
+app:gpudiag PASS FILE the applications' GPU sniffers (premiere, aftereffects, mediaencoder) report an NVIDIA compute device
+stop PASS NONE own QEMU stopped; other own helpers cleaned by ExitStack
+[xid-watch] --- command output ends (rc=1) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (756 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_g2.log
+/workspace/img/out/g2/:
+gpu_diag.json
+gpu_fix.txt
+gpudiag
+power.json
+result.json
+result.md
+shutdown_events.json
+verify.txt
+
+/workspace/img/out/g2/gpudiag/ca1980cdf15a4983af3426f41c758c14:
+gpudiag_gpu.json
+gpudiag_gpu_dmon.txt
+gpudiag_gpu_query.csv
+gpudiag_host_dmon.txt
+gpudiag_host_query.csv
+host_dmon.txt
+host_query.csv
+output_stats.json
+result.json
