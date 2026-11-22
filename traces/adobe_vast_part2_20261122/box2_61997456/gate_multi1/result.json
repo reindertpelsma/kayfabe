@@ -1,0 +1,117 @@
+{
+    "app":  "gate_multi",
+    "started":  1795316147,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "final_shot":  "1920x1080-\u003e1280x720",
+    "final_titles":  [
+                         "Photoshop | Adobe Photoshop 2027",
+                         "Adobe Premiere Pro | TopLevelWindow",
+                         "WindowsTerminal | C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                         "Lightroom | Lightroom Classic",
+                         "Illustrator | MainWindow",
+                         "explorer | Program Manager"
+                     ],
+    "apps":  {
+                 "illustrator":  {
+                                     "exe_name":  "Illustrator.exe",
+                                     "cwd":  "C:\\Program Files\\Adobe\\Adobe Illustrator 2027\\Support Files\\Contents\\Windows",
+                                     "window_secs":  210,
+                                     "alive":  true,
+                                     "responding":  true,
+                                     "private_mb":  1250,
+                                     "shot_info":  "1920x1080-\u003e1280x720",
+                                     "titles":  [
+                                                    "Photoshop | Adobe Photoshop 2027",
+                                                    "Adobe Premiere Pro | TopLevelWindow",
+                                                    "WindowsTerminal | C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                                                    "Lightroom | Lightroom Classic",
+                                                    "Illustrator | MainWindow",
+                                                    "explorer | Program Manager"
+                                                ],
+                                     "ui_lines":  1,
+                                     "ui_signin_hits":  [
+
+                                                        ],
+                                     "main_window":  true,
+                                     "quit":  "clean"
+                                 },
+                 "lightroom":  {
+                                   "exe_name":  "Lightroom.exe",
+                                   "cwd":  "C:\\Program Files\\Adobe\\Adobe Lightroom Classic",
+                                   "window_secs":  449,
+                                   "alive":  true,
+                                   "responding":  true,
+                                   "private_mb":  3168,
+                                   "shot_info":  "1920x1080-\u003e1280x720",
+                                   "titles":  [
+                                                  "Photoshop | Adobe Photoshop 2027",
+                                                  "Adobe Premiere Pro | TopLevelWindow",
+                                                  "WindowsTerminal | C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                                                  "Lightroom | Lightroom Classic",
+                                                  "Illustrator | MainWindow",
+                                                  "explorer | Program Manager"
+                                              ],
+                                   "ui_lines":  305,
+                                   "ui_signin_hits":  [
+
+                                                      ],
+                                   "main_window":  true,
+                                   "quit":  "forced"
+                               },
+                 "premiere":  {
+                                  "exe_name":  "Adobe Premiere Pro.exe",
+                                  "cwd":  "C:\\Program Files\\Adobe\\Adobe Premiere Pro 2027",
+                                  "window_secs":  459,
+                                  "alive":  true,
+                                  "responding":  true,
+                                  "private_mb":  4500,
+                                  "shot_info":  "1920x1080-\u003e1280x720",
+                                  "titles":  [
+                                                 "Photoshop | Adobe Photoshop 2027",
+                                                 "Adobe Premiere Pro | TopLevelWindow",
+                                                 "WindowsTerminal | C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                                                 "Lightroom | Lightroom Classic",
+                                                 "Illustrator | MainWindow",
+                                                 "explorer | Program Manager"
+                                             ],
+                                  "ui_lines":  6,
+                                  "ui_signin_hits":  [
+
+                                                     ],
+                                  "main_window":  true,
+                                  "quit":  "clean"
+                              },
+                 "photoshop_acr":  {
+                                       "exe_name":  "Photoshop.exe",
+                                       "cwd":  "C:\\Program Files\\Adobe\\Adobe Photoshop 2027",
+                                       "window_secs":  499,
+                                       "alive":  true,
+                                       "responding":  true,
+                                       "private_mb":  4906,
+                                       "shot_info":  "1920x1080-\u003e1280x720",
+                                       "titles":  [
+                                                      "Photoshop | Adobe Photoshop 2027",
+                                                      "Adobe Premiere Pro | TopLevelWindow",
+                                                      "WindowsTerminal | C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                                                      "Lightroom | Lightroom Classic",
+                                                      "Illustrator | MainWindow",
+                                                      "explorer | Program Manager"
+                                                  ],
+                                       "ui_lines":  39,
+                                       "ui_signin_hits":  [
+
+                                                          ],
+                                       "main_window":  true,
+                                       "quit":  "forced"
+                                   }
+             },
+    "ended":  1795316935.18,
+    "crash_events":  1,
+    "crash_dumps":  0,
+    "dismissed":  [
+
+                  ]
+}

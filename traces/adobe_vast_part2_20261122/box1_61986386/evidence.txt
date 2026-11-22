@@ -1,0 +1,96 @@
+== nvidia-smi -q (excerpt)
+Driver Version                                         : 580.159.04
+    Product Name                                       : NVIDIA GeForce RTX 4090
+    Persistence Mode                                   : Enabled
+            PCIe Generation
+            Link Width
+    FB Memory Usage
+        Total                                          : 49140 MiB
+        Total                                          : 256 MiB
+        Total                                          : 0 MiB
+    Retired Pages
+    Remapped Rows
+        Remapping Failure Occurred                     : No
+== lspci
+00:07.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2684] (rev a1)
+== dmesg NVRM/Xid (filtered, first 25)
+[    4.669776] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   34.267683] NVRM: Persistence mode is deprecated and will be removed in a future release. Please use nvidia-persistenced instead.
+[   51.908373] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[  763.166522] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+== cpu
+CPU(s):                               30
+Model name:                           AMD EPYC 7502 32-Core Processor
+Mem:              73           1          54          16          17          55
+== harness log (g1 attempt 2)
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+platform PASS NONE kf3
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-22T02:43:26Z (fresh overlay)
+fb-mb PASS NONE DIAGNOSTIC ARM: guest-visible FB 8192 MiB (image default differs)
+ram-mb PASS NONE OVERRIDE: guest RAM 16384 MiB for this run (the image's own value is the default; sealed state.json unchanged)
+audio PASS NONE virtual HDA sound card, QEMU null backend (no host audio opened)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+== qemu.log non-status lines
+kf-host: host tier: stock
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: GSS 0x2080853b [(4, 1)] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784 [#1, rate-limited]
+kf3: host facts: GSS 0x2080852a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: Some(31), detail: "Other(31)" }) — not served
+kf3: host facts: FIFO latency buffers (engine, gp, pb) from the host: [(1, 240, 2880), (9, 240, 2880), (a, 240, 2000), (b, 20, e00), (c, 20, e00), (13, 20, 80), (1c, 20, 80), (1d, 20, 80), (22, 20, 80), (33, 20, 80)]
+kf3: channel budget 1789 per runlist (Derived; derived default 1789, host limit 2045; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)
+kf3: guest GPU UUID GPU-<uuid> (gpu-uuid=explicit, basis Explicit, devfn 0x20)
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: walk device NVIDIA GeForce RTX 4090 pageable_memory_access=yes (yes: the walker's store and pool bounds are host-memory-safety obligations, OWNER_RULINGS S1-05)
+kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf3: host GPU minor=0 bdf=0000:00:07.0 gpuId=0x7 rm_device_instance=0 cuda_device="NVIDIA GeForce RTX 4090" store=8192 MiB
+kf3: guest driver 580.65.06 (guest-driver=); measured ABI: static-info Pre610, element Pre610, init-args FourField, rm-control params@40, vgx Some((43, 19))
+kf3: native timer BAR0=0x9000, read-only 4096-byte mapping, host/guest layout TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 }
+kf3: P1+P2 T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/V3_P1P2_TSPACE.md); mirrors carry no window and no ring; host channel births require USER replies
+kf3: channel plane: Translated rings on host COPY2 (engine 0xb); completions on FIFO_EVENT_MTHD + CE2
+kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE1->Some(0) CE2->Some(1) CE3->Some(2) NVENC1->Some(4) NVENC2->Some(5) NVDEC0->Some(3) OFA->Some(6)]
+kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> a vector no armed engine shares, else GR0 vector Some(0) (relay=on, pacing=off; KF3_PT_NSI_RELAY / KF3_PT_NSI
+kf3: display plane ON — virtual NVDisplay for AD102 AD103 AD104 AD106 AD107 (IP 0x04040000, display class 0xc770, 4 heads)
+kf3: report-utilization=on: the guest is shown the PHYSICAL GPU's utilisation (whole device, 1 % resolution, a cross-tenant load side channel on a shared GPU; set report-utilization=off to hide it) [#1, rate-limited]
+kf3: broker: the GPU-copy rung is NOT offered: GPU-copy rung: nvidia-drm cannot import NVKMS memory here (GET_DEV_INFO supports_alloc = 0: nvidia-drm runs without modeset=1); frames go through host memory
+kf3: PRECOMP source=T1 fallback: PRECOMP own-subdevice control: Other(19270)
+kf3: display: caps page derived (sdr=true) — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)
+kf3: display: caps page derived (sdr=false) — 36 words: 35 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)
+kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID fnv1a64=c9dcbb394c28b1c7 (display-max-fps 0)
+kf-cuda: cuda thread posture thread=kf3-cuda-disp cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: display device 0000:00:07.0 pageable_memory_access=yes (yes: every compose-kernel bound is a host-memory-safety obligation, OWNER_RULINGS S1-05)
+kf3: broker: /dev/udmabuf opened — frames can go as a dma-buf (rungs 1 and 1b)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:07.0
+kf3: PRAMIN scratch: tile 0x100000 x 1 over 0x100000 (host RAM bound 0x100000)
+kf3: BAR1 scratch: tile 0x200000 x 64 over 0x8000000 (host RAM bound 0x200000)
+kf3: BAR2 scratch: tile 0x200000 x 16 over 0x2000000 (host RAM bound 0x200000)
+kf3: scratch host-RAM bound 0x500000 for this device (PRAMIN 0x100000 + BAR1 0x200000 + BAR2 0x200000); whole-window scratch would have allowed 0xa100000
+kf3: boot display ON — option ROM 11776 bytes (10de:2684, KFGP BAR1 +0x0, 1920x1080 pitch 7680, G = 0x7f0000); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU; kf-gop SIGNED (cert table 2008 bytes at +0x2400, WIN_CERTIFICATE 2008 bytes; /workspace/im
+kf3: P4 memory plane: store 8192 MiB (imported into the walker), walker pools 236 MiB of host GPU memory (walk pool 1048576 runs, slot pool 2097152 runs (2097152 free), max per space 1048576, slots held 0, grows 0, retries 0, ceilings 0, largest slot 0, larges
+kf-cuda: cuda thread posture thread=kf3-display cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf3: VA manager: pending-walk wait 50us..1ms (epoll_pwait2) (timer slack 5us)
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: display: display-max-fps unset — every head's vblank tick is capped at 75 Hz; copies without a flip are made at the console head's tick, while watched, and sent only when the frame's checksum changed
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+kf3: broker: relay to /workspace/img/work/g1/run/broker.sock (brokers accepted: uid 0, QEMU's effective uid at each connect, display-broker-uid 0); no clipboard
+kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0) [#1, rate-limited]
+kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: broker: connected to /workspace/img/work/g1/run/broker.sock, capabilities 0x3fff
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: broker window is now 1920x1080 at 0 mHz
+kf3: broker: window inactive (input suspended)
+== failed attempt 1
+clock PASS NONE RTC base 2026-11-22T02:43:26Z (fresh overlay)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+stop PASS NONE own QEMU stopped; other own helpers cleaned by ExitStack
+harness HARNESS NONE Guest SSH unavailable

@@ -1,0 +1,58 @@
+{
+    "app":  "painter_cwd",
+    "started":  1795317489.944,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "runs":  [
+                 {
+                     "mode":  "system32",
+                     "cwd":  "C:\\WINDOWS\\system32",
+                     "window":  false,
+                     "process_ended_before_window":  true,
+                     "secs_to_window_or_end":  67,
+                     "alive_after_hold":  false,
+                     "responding":  false,
+                     "titles":  [
+                                    "WindowsTerminal | C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                                    "explorer | Program Manager"
+                                ],
+                     "shot":  "1920x1080-\u003e1280x720",
+                     "app_events":  [
+                                        "03:19:11 id=1001 Fault bucket , type 0 Event Name: APPCRASH Response: Not available Cab Id: 0 Problem signature: P1: Adobe Substance 3D Painter.exe P2: 12.2.0.0 P3: 6ac807f5 P4: Qt6WebEngineCore.dll P5: 6.8.7.0 P6: 6aa30356 P7: 80000003 P8: 000000",
+                                        "03:19:11 id=1001 Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 193 P2: 815 P3: 2 P4: ffff808ca4fc9080 P5: 0 P6: 10_0_26200 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\\\?\\C:\\WINDOWS\\LiveK",
+                                        "03:19:11 id=1001 Fault bucket , type 0 Event Name: APPCRASH Response: Not available Cab Id: 0 Problem signature: P1: Adobe Substance 3D Painter.exe P2: 12.2.0.0 P3: 6ac807f5 P4: Qt6WebEngineCore.dll P5: 6.8.7.0 P6: 6aa30356 P7: 80000003 P8: 000000",
+                                        "03:19:06 id=1000 Faulting application name: Adobe Substance 3D Painter.exe, version: 12.2.0.0, time stamp: 0x6ac807f5 Faulting module name: Qt6WebEngineCore.dll, version: 6.8.7.0, time stamp: 0x6aa30356 Exception code: 0x80000003 Fault offset: 0x0"
+                                    ],
+                     "crash_qt6webengine":  true
+                 },
+                 {
+                     "mode":  "install",
+                     "cwd":  "C:\\Program Files\\Adobe\\Adobe Substance 3D Painter",
+                     "window":  true,
+                     "process_ended_before_window":  false,
+                     "secs_to_window_or_end":  48,
+                     "alive_after_hold":  true,
+                     "responding":  true,
+                     "titles":  [
+                                    "Adobe Substance 3D Painter | Adobe Substance 3D Painter",
+                                    "WindowsTerminal | C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                                    "explorer | Program Manager"
+                                ],
+                     "shot":  "1920x1080-\u003e1280x720",
+                     "app_events":  [
+
+                                    ],
+                     "crash_qt6webengine":  false
+                 }
+             ],
+    "exe_dir":  "Adobe Substance 3D Painter",
+    "version":  "12.2.0",
+    "ended":  1795317667.978,
+    "crash_events":  4,
+    "crash_dumps":  0,
+    "dismissed":  [
+
+                  ]
+}
