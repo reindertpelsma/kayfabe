@@ -1,0 +1,20 @@
+    FB Memory Usage
+        Total                             : 16384 MiB
+        Reserved                          : 339 MiB
+        Used                              : 201 MiB
+        Free                              : 15845 MiB
+      2 fb-mb=16384
+KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=2
+stage name=provision rc=0 duration_ms=720323 result=PASS
+stage name=windows_gate rc=0 duration_ms=3142363 result=PASS
+suite name=provision pass=1 fail=0 skip=0
+suite name=windows_gate pass=1 fail=0 skip=0
+KF_FINAL_SUMMARY_END
+BOX_RC=0
+DRIVER_RC=0
+TREE_RC=0
+LADDER_RC=0
+FG_RC=0
+KF3_RC=0
+READY driver=580.159.04
+2026-11-21T19:01:05Z
