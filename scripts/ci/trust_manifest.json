@@ -1825,6 +1825,12 @@
    "row": 35,
    "reason": "experiment-only probe of the Unigine Superposition installer (audit row 35)"
   },
+  "scripts/bench/windows/adobe_part2/dl_member.py": {
+   "count": 3,
+   "class": "user-input",
+   "row": null,
+   "reason": "ranged download of one stored member of the private sealed Adobe image from the operator's own presigned-URL file (private R2 object, never public, no public origin to anchor): user input, trusted, recorded; the member's sha256 is checked against the pin the operator passes (manifest.json) before use, and the image never enters git or leaves the box"
+  },
   "scripts/bench/windows/appmatrix/appdisk.py": {
    "count": 2,
    "class": "planned",
