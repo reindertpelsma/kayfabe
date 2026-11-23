@@ -1,0 +1,6106 @@
+{
+  "convention": "compiler-selected library source, literal cfg(test) AST items excluded; not binary reachability",
+  "crates": {
+    "kf-abi": {
+      "code": 54295,
+      "comment": 22812,
+      "blank": 4886,
+      "retained": 81993
+    },
+    "kf-arch": {
+      "code": 891,
+      "comment": 2267,
+      "blank": 156,
+      "retained": 3314
+    },
+    "kf-broker": {
+      "code": 5201,
+      "comment": 1708,
+      "blank": 428,
+      "retained": 7337
+    },
+    "kf-chan": {
+      "code": 12694,
+      "comment": 4026,
+      "blank": 812,
+      "retained": 17532
+    },
+    "kf-chip": {
+      "code": 2482,
+      "comment": 1509,
+      "blank": 248,
+      "retained": 4239
+    },
+    "kf-core": {
+      "code": 802,
+      "comment": 534,
+      "blank": 99,
+      "retained": 1435
+    },
+    "kf-cuda": {
+      "code": 5790,
+      "comment": 2541,
+      "blank": 436,
+      "retained": 8767
+    },
+    "kf-disp": {
+      "code": 9200,
+      "comment": 2635,
+      "blank": 603,
+      "retained": 12438
+    },
+    "kf-gop-image": {
+      "code": 32,
+      "comment": 47,
+      "blank": 10,
+      "retained": 89
+    },
+    "kf-gsp": {
+      "code": 3308,
+      "comment": 3404,
+      "blank": 301,
+      "retained": 7013
+    },
+    "kf-host": {
+      "code": 3476,
+      "comment": 1769,
+      "blank": 269,
+      "retained": 5514
+    },
+    "kf-linux-raw": {
+      "code": 4690,
+      "comment": 5109,
+      "blank": 535,
+      "retained": 10334
+    },
+    "kf-mem": {
+      "code": 5856,
+      "comment": 2188,
+      "blank": 373,
+      "retained": 8417
+    },
+    "kf-oprom": {
+      "code": 1024,
+      "comment": 426,
+      "blank": 84,
+      "retained": 1534
+    },
+    "kf-qemu": {
+      "code": 29092,
+      "comment": 6830,
+      "blank": 1439,
+      "retained": 37361
+    },
+    "kf-rm": {
+      "code": 16571,
+      "comment": 10665,
+      "blank": 1112,
+      "retained": 28348
+    },
+    "kf-trace": {
+      "code": 153,
+      "comment": 120,
+      "blank": 20,
+      "retained": 293
+    },
+    "kf-trap": {
+      "code": 2741,
+      "comment": 1697,
+      "blank": 310,
+      "retained": 4748
+    },
+    "kf-util": {
+      "code": 2264,
+      "comment": 1591,
+      "blank": 275,
+      "retained": 4130
+    }
+  },
+  "files": [
+    {
+      "path": "crates/kf-abi/src/bifstatic.rs",
+      "crate": "kf-abi",
+      "code": 50,
+      "comment": 94,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 155,
+      "cut": 0,
+      "source_sha256": "ffdd14ccfc8e78509973e4a7e719ddcbb7c44151fbf20d59fdb96f9351139717",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/bringup.rs",
+      "crate": "kf-abi",
+      "code": 349,
+      "comment": 716,
+      "blank": 61,
+      "inline_comment": 0,
+      "retained": 1126,
+      "cut": 0,
+      "source_sha256": "430d00f1c9448625f1c0b61b87eee864e11ebb70fc3ed09625f20b21bbff07d2",
+      "excluded_cfg_test_spans": [
+        [
+          1127,
+          1381
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/businfo.rs",
+      "crate": "kf-abi",
+      "code": 231,
+      "comment": 341,
+      "blank": 31,
+      "inline_comment": 0,
+      "retained": 603,
+      "cut": 0,
+      "source_sha256": "cf21f82b084e8cc2435e3f7427703708e5a70715837533166fba0bf13f0a5d4e",
+      "excluded_cfg_test_spans": [
+        [
+          604,
+          889
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/c2cinfo.rs",
+      "crate": "kf-abi",
+      "code": 26,
+      "comment": 57,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 91,
+      "cut": 0,
+      "source_sha256": "9c4be6927b156e87de1764fffed9494f6a1dfb4bd075b7581b2c70209c30636b",
+      "excluded_cfg_test_spans": [
+        [
+          92,
+          120
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/capability.rs",
+      "crate": "kf-abi",
+      "code": 1351,
+      "comment": 803,
+      "blank": 58,
+      "inline_comment": 0,
+      "retained": 2212,
+      "cut": 0,
+      "source_sha256": "4940e448e031002cb7b33fcab2e82725bc330d728938c39cfab20a32587537ce",
+      "excluded_cfg_test_spans": [
+        [
+          2213,
+          3800
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/cecaps.rs",
+      "crate": "kf-abi",
+      "code": 317,
+      "comment": 443,
+      "blank": 43,
+      "inline_comment": 0,
+      "retained": 803,
+      "cut": 0,
+      "source_sha256": "314f8d1fc9d05a7adef2457e083e2734ea7befdae111cb29b6215ef7f5d5a451",
+      "excluded_cfg_test_spans": [
+        [
+          804,
+          1205
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/cepce.rs",
+      "crate": "kf-abi",
+      "code": 119,
+      "comment": 209,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 342,
+      "cut": 0,
+      "source_sha256": "eb8d5103e4a2e3f3cdfb52bc5faf61b82e52d2f5e0b44c636500e749dcdeb738",
+      "excluded_cfg_test_spans": [
+        [
+          343,
+          499
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/chanbudget.rs",
+      "crate": "kf-abi",
+      "code": 176,
+      "comment": 51,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 244,
+      "cut": 0,
+      "source_sha256": "803643b458894d6808a227f03f386035571beff0128e1d780b129bd5d70694c5",
+      "excluded_cfg_test_spans": [
+        [
+          245,
+          325
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/chipinfo.rs",
+      "crate": "kf-abi",
+      "code": 162,
+      "comment": 257,
+      "blank": 26,
+      "inline_comment": 0,
+      "retained": 445,
+      "cut": 0,
+      "source_sha256": "d7b5c3b4929905396aff4e1b37777d225c10de6de0713f2a9a8d843ea994910a",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/confcompute.rs",
+      "crate": "kf-abi",
+      "code": 44,
+      "comment": 100,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 153,
+      "cut": 0,
+      "source_sha256": "83aa5a44f5b212ae6bb69e5232876c651b6534519680bba414823ab0bb59dc52",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/cudartinit.rs",
+      "crate": "kf-abi",
+      "code": 130,
+      "comment": 214,
+      "blank": 21,
+      "inline_comment": 0,
+      "retained": 365,
+      "cut": 0,
+      "source_sha256": "fd2ec334934592ded452d7f338bbbe8fcc3a1ab9cf3b35ac50d59acc68b23bb4",
+      "excluded_cfg_test_spans": [
+        [
+          366,
+          513
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/defapi.rs",
+      "crate": "kf-abi",
+      "code": 496,
+      "comment": 195,
+      "blank": 32,
+      "inline_comment": 0,
+      "retained": 723,
+      "cut": 0,
+      "source_sha256": "04da5a142feb1a3f31de0ebcdf6787e75faef5310909ba95ec69f7777447fda1",
+      "excluded_cfg_test_spans": [
+        [
+          724,
+          995
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/deviceinfo.rs",
+      "crate": "kf-abi",
+      "code": 295,
+      "comment": 458,
+      "blank": 32,
+      "inline_comment": 0,
+      "retained": 785,
+      "cut": 0,
+      "source_sha256": "f98d275033fb9c47cf4e626d59e5c0d546f34680d007348b96a265abc6acc09f",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/drmnv.rs",
+      "crate": "kf-abi",
+      "code": 285,
+      "comment": 98,
+      "blank": 27,
+      "inline_comment": 0,
+      "retained": 410,
+      "cut": 0,
+      "source_sha256": "0fc2f9b543b31db483de315a255f5d6ccd15a8175958e873dbdd4a60df87d68e",
+      "excluded_cfg_test_spans": [
+        [
+          411,
+          558
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/eventnotify.rs",
+      "crate": "kf-abi",
+      "code": 563,
+      "comment": 585,
+      "blank": 56,
+      "inline_comment": 0,
+      "retained": 1204,
+      "cut": 0,
+      "source_sha256": "a166251d4834609c2845376f85be16fcbd504d0c413230042d2de46cc9a0628b",
+      "excluded_cfg_test_spans": [
+        [
+          1204,
+          1303
+        ],
+        [
+          1305,
+          1388
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/falconinfo.rs",
+      "crate": "kf-abi",
+      "code": 177,
+      "comment": 269,
+      "blank": 20,
+      "inline_comment": 0,
+      "retained": 466,
+      "cut": 0,
+      "source_sha256": "966e19d3ee8333d599d7eed8d9770b9e1d007e0287ec9b14cba2d741000b7ce9",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/faultbuffer.rs",
+      "crate": "kf-abi",
+      "code": 178,
+      "comment": 361,
+      "blank": 40,
+      "inline_comment": 0,
+      "retained": 579,
+      "cut": 0,
+      "source_sha256": "c4bd5b23d27974bdd9df6025fb8bf05807158675c3bbe9f60bbb3347a78fb153",
+      "excluded_cfg_test_spans": [
+        [
+          580,
+          914
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/fbinfo.rs",
+      "crate": "kf-abi",
+      "code": 253,
+      "comment": 389,
+      "blank": 35,
+      "inline_comment": 0,
+      "retained": 677,
+      "cut": 0,
+      "source_sha256": "88d42e8baa2b87b71a5f2ee29e3ab1e6ba78f6e3a29b8480bc81b409f40a8f80",
+      "excluded_cfg_test_spans": [
+        [
+          678,
+          941
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/fecstrace.rs",
+      "crate": "kf-abi",
+      "code": 39,
+      "comment": 16,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 60,
+      "cut": 0,
+      "source_sha256": "76d357b906b27b7502db3e52544b27c1e1efe695d5f680179fe9373c8dd3ce21",
+      "excluded_cfg_test_spans": [
+        [
+          61,
+          83
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/fifochannels.rs",
+      "crate": "kf-abi",
+      "code": 37,
+      "comment": 90,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 136,
+      "cut": 0,
+      "source_sha256": "9ec2cfae46d5682c6c67710066bd7cc0eb85f6979519026fc3db78fdc5f8a218",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/fifoctl.rs",
+      "crate": "kf-abi",
+      "code": 135,
+      "comment": 58,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 209,
+      "cut": 0,
+      "source_sha256": "43bc55b8d2a818d82b4afc61030b5ca07120db18dfcedb3c00a2a40f4ec1179a",
+      "excluded_cfg_test_spans": [
+        [
+          210,
+          290
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/fmbpromote.rs",
+      "crate": "kf-abi",
+      "code": 152,
+      "comment": 215,
+      "blank": 22,
+      "inline_comment": 0,
+      "retained": 389,
+      "cut": 0,
+      "source_sha256": "1fecdbe9234a9503cd7c6b88097b0f0372f6b0b40b3b0d68145a4542b4bd0b34",
+      "excluded_cfg_test_spans": [
+        [
+          390,
+          631
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/fmbsize.rs",
+      "crate": "kf-abi",
+      "code": 23,
+      "comment": 140,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 170,
+      "cut": 0,
+      "source_sha256": "4ee0cf337e74f330cc57ef1a6ffe0858fbb5f0e6083ef9c968943bc5476a58b7",
+      "excluded_cfg_test_spans": [
+        [
+          171,
+          232
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/generated/classes.rs",
+      "crate": "kf-abi",
+      "code": 830,
+      "comment": 567,
+      "blank": 60,
+      "inline_comment": 0,
+      "retained": 1457,
+      "cut": 0,
+      "source_sha256": "d73a2cc0fb568681087beb8e07489fef0db4ff8c2649e86140a7ed5a37906cef",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/generated/ctrl.rs",
+      "crate": "kf-abi",
+      "code": 454,
+      "comment": 160,
+      "blank": 19,
+      "inline_comment": 0,
+      "retained": 633,
+      "cut": 0,
+      "source_sha256": "23aadd7ed1a5877cc1bc6c233175653e6b357f06d992da9e7d71c3049e689871",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/generated/matrix.rs",
+      "crate": "kf-abi",
+      "code": 31773,
+      "comment": 2813,
+      "blank": 2790,
+      "inline_comment": 4027,
+      "retained": 37376,
+      "cut": 0,
+      "source_sha256": "b29418c9777b5ebff35cac892cd9003719b363d9d426890a2723ff1fe2b27f61",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/generated/mod.rs",
+      "crate": "kf-abi",
+      "code": 8,
+      "comment": 38,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 48,
+      "cut": 0,
+      "source_sha256": "edf1abbb0fcbb00175eb31dcdde6028c61d529764fb7074bd3e713f5d1241e18",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/generated/nvos.rs",
+      "crate": "kf-abi",
+      "code": 1533,
+      "comment": 333,
+      "blank": 55,
+      "inline_comment": 0,
+      "retained": 1921,
+      "cut": 0,
+      "source_sha256": "f434c0439709ef48c7e777f7e02ef6df56835e3148a7d36804b5785fcad505e5",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/generated/rpc.rs",
+      "crate": "kf-abi",
+      "code": 824,
+      "comment": 251,
+      "blank": 49,
+      "inline_comment": 0,
+      "retained": 1124,
+      "cut": 0,
+      "source_sha256": "847beeb05bd7d875d428dff5e04a5e8993ec29180940ac53d925b3778e542217",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/generated/vbios.rs",
+      "crate": "kf-abi",
+      "code": 1139,
+      "comment": 438,
+      "blank": 84,
+      "inline_comment": 0,
+      "retained": 1661,
+      "cut": 0,
+      "source_sha256": "82d94ec704a439457ad3feadb418b748929713a2476d14dd4601f689a48ec034",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/generated/windows_twins.rs",
+      "crate": "kf-abi",
+      "code": 251,
+      "comment": 12,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 265,
+      "cut": 0,
+      "source_sha256": "8ebc5e0d3bff7d29f44be6a2f745132701bfa9638b8fa7a760d3d29c1fd2ab09",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/gfxpool.rs",
+      "crate": "kf-abi",
+      "code": 45,
+      "comment": 16,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 65,
+      "cut": 0,
+      "source_sha256": "96c47ca6608079c71e76d760d17274236ab7f9b580cfeecccead4c025c89dab9",
+      "excluded_cfg_test_spans": [
+        [
+          66,
+          108
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/gmmustatic.rs",
+      "crate": "kf-abi",
+      "code": 94,
+      "comment": 121,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 230,
+      "cut": 0,
+      "source_sha256": "1410e7e797adb6a9f7911dfe0f20862cd46e131986c24265453324221e3d8141",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/gpuatomics.rs",
+      "crate": "kf-abi",
+      "code": 92,
+      "comment": 148,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 253,
+      "cut": 0,
+      "source_sha256": "fb7ee915990e3ab8772f635bd97d068760132981492b0c2cbe86d64e77464911",
+      "excluded_cfg_test_spans": [
+        [
+          254,
+          390
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/gpuinfo.rs",
+      "crate": "kf-abi",
+      "code": 134,
+      "comment": 214,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 364,
+      "cut": 0,
+      "source_sha256": "d062f37a28d8cf7623788a40a9f2e88e5473fd9597911734cf44bcc32d77ca55",
+      "excluded_cfg_test_spans": [
+        [
+          365,
+          540
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/grfsinfo.rs",
+      "crate": "kf-abi",
+      "code": 233,
+      "comment": 232,
+      "blank": 24,
+      "inline_comment": 0,
+      "retained": 489,
+      "cut": 0,
+      "source_sha256": "e1f244a0c7aa435bb9b196b3136847852c64a3f23a48af9df3a965a7e565fdea",
+      "excluded_cfg_test_spans": [
+        [
+          490,
+          793
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/grinfo.rs",
+      "crate": "kf-abi",
+      "code": 171,
+      "comment": 216,
+      "blank": 18,
+      "inline_comment": 58,
+      "retained": 405,
+      "cut": 0,
+      "source_sha256": "ed805f9240d367caef8673787bb940d09cc7021a02afeefddae055cca289992d",
+      "excluded_cfg_test_spans": [
+        [
+          406,
+          520
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/grstatic.rs",
+      "crate": "kf-abi",
+      "code": 487,
+      "comment": 560,
+      "blank": 52,
+      "inline_comment": 26,
+      "retained": 1099,
+      "cut": 0,
+      "source_sha256": "acb52f52eb25ecef375825b1d285755619604c083dea2f7fdca0c64fc2d388c1",
+      "excluded_cfg_test_spans": [
+        [
+          1100,
+          1114
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/gspfeatures.rs",
+      "crate": "kf-abi",
+      "code": 194,
+      "comment": 237,
+      "blank": 28,
+      "inline_comment": 0,
+      "retained": 459,
+      "cut": 0,
+      "source_sha256": "769638e94c358e4c116f67e9f4fe33dd11bf77762f9424b0ffd07488ebed14ad",
+      "excluded_cfg_test_spans": [
+        [
+          460,
+          663
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/gspstaticinfo.rs",
+      "crate": "kf-abi",
+      "code": 534,
+      "comment": 487,
+      "blank": 57,
+      "inline_comment": 0,
+      "retained": 1078,
+      "cut": 0,
+      "source_sha256": "fa055632e891e1d605a6df6fbfa8a3111845a1a3d31b9974f22c2f1ce92739ec",
+      "excluded_cfg_test_spans": [
+        [
+          1079,
+          1722
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/gsslegacy.rs",
+      "crate": "kf-abi",
+      "code": 57,
+      "comment": 164,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 235,
+      "cut": 0,
+      "source_sha256": "a1ea90f18e26c8f8cf3f7981154108f65d1520d26f3352b6e89a1afb06964d13",
+      "excluded_cfg_test_spans": [
+        [
+          235,
+          316
+        ],
+        [
+          318,
+          369
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/gssreplay.rs",
+      "crate": "kf-abi",
+      "code": 277,
+      "comment": 153,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 445,
+      "cut": 0,
+      "source_sha256": "776d6ffbef4ded8e10893d4bbbe465af36cba1e98c0be8f503f972c5e3cae64d",
+      "excluded_cfg_test_spans": [
+        [
+          446,
+          653
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/guest_os.rs",
+      "crate": "kf-abi",
+      "code": 61,
+      "comment": 224,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 297,
+      "cut": 0,
+      "source_sha256": "e6f7a2c3225643811cfb28ee149f158766175e216bf9af635b726a90ca5cb9f9",
+      "excluded_cfg_test_spans": [
+        [
+          298,
+          430
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/guestsysinfo.rs",
+      "crate": "kf-abi",
+      "code": 208,
+      "comment": 178,
+      "blank": 23,
+      "inline_comment": 0,
+      "retained": 409,
+      "cut": 0,
+      "source_sha256": "42a71d327287645239363ab724d531ba909ca90081454e5f481ef05e0b79a683",
+      "excluded_cfg_test_spans": [
+        [
+          410,
+          479
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/gvaspacepdes.rs",
+      "crate": "kf-abi",
+      "code": 166,
+      "comment": 256,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 439,
+      "cut": 0,
+      "source_sha256": "d047167c6ab58c2139706bf79b40d0a29aabc4bd42e8fbe8d5b70ee25b8a5d9f",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/host_driver.rs",
+      "crate": "kf-abi",
+      "code": 122,
+      "comment": 152,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 290,
+      "cut": 0,
+      "source_sha256": "00084dc3f7dce1061c719a5fb07470c5e6a5264eaeaf7d54c8ea25f8053f8aba",
+      "excluded_cfg_test_spans": [
+        [
+          291,
+          418
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/hostabi.rs",
+      "crate": "kf-abi",
+      "code": 873,
+      "comment": 182,
+      "blank": 30,
+      "inline_comment": 0,
+      "retained": 1085,
+      "cut": 0,
+      "source_sha256": "49dbc7e3c763839224dd71febec972baba033c53b39926263e1d6c4f5f571eaa",
+      "excluded_cfg_test_spans": [
+        [
+          1086,
+          1485
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/hoststub.rs",
+      "crate": "kf-abi",
+      "code": 86,
+      "comment": 46,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 141,
+      "cut": 0,
+      "source_sha256": "8f42eac48c9ecaa1e6396c95d51ed4a330fc468c0b4068ea08f14bbfbae40a48",
+      "excluded_cfg_test_spans": [
+        [
+          142,
+          217
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/inittables.rs",
+      "crate": "kf-abi",
+      "code": 311,
+      "comment": 184,
+      "blank": 37,
+      "inline_comment": 0,
+      "retained": 532,
+      "cut": 0,
+      "source_sha256": "e24ec83d60386ae5a4db16fffb60f0f900d736b82613df0b69f9919c6473b420",
+      "excluded_cfg_test_spans": [
+        [
+          533,
+          641
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/invariant_classes.rs",
+      "crate": "kf-abi",
+      "code": 9,
+      "comment": 66,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 80,
+      "cut": 0,
+      "source_sha256": "a730d44deed53f9606470fcd44f02fbd7d5a9707a642f11e9b47e36aeef91b99",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/l2evict.rs",
+      "crate": "kf-abi",
+      "code": 74,
+      "comment": 288,
+      "blank": 20,
+      "inline_comment": 0,
+      "retained": 382,
+      "cut": 0,
+      "source_sha256": "039d123ade183bd39a0538d8aa76966e44c2f8b0240f3d410eba5ec62c6de049",
+      "excluded_cfg_test_spans": [
+        [
+          383,
+          499
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/lib.rs",
+      "crate": "kf-abi",
+      "code": 126,
+      "comment": 227,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 368,
+      "cut": 0,
+      "source_sha256": "ca45d128417f5e9d01063ac90795e8e01221d9cae110c06e61b616a7a1f81a7b",
+      "excluded_cfg_test_spans": [
+        [
+          369,
+          421
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/matrix.rs",
+      "crate": "kf-abi",
+      "code": 445,
+      "comment": 146,
+      "blank": 46,
+      "inline_comment": 0,
+      "retained": 637,
+      "cut": 0,
+      "source_sha256": "61d2e6af6434fd9c38351cc8a9b2ec2cf0e355d568d7b891c048581a17ed55f5",
+      "excluded_cfg_test_spans": [
+        [
+          638,
+          825
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/mcintr.rs",
+      "crate": "kf-abi",
+      "code": 9,
+      "comment": 52,
+      "blank": 6,
+      "inline_comment": 0,
+      "retained": 67,
+      "cut": 0,
+      "source_sha256": "c4bebaa89c890209d410ae1777b52591097ec8d258e7667260d7da05299492f8",
+      "excluded_cfg_test_spans": [
+        [
+          68,
+          88
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/memory_list.rs",
+      "crate": "kf-abi",
+      "code": 195,
+      "comment": 36,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 241,
+      "cut": 0,
+      "source_sha256": "627da6a3dcd94eb9d3dc113c09fc5b5a6e5dbe4f980d6e3a4a59c1566652d022",
+      "excluded_cfg_test_spans": [
+        [
+          242,
+          409
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/memory_list_generated.rs",
+      "crate": "kf-abi",
+      "code": 390,
+      "comment": 10,
+      "blank": 0,
+      "inline_comment": 0,
+      "retained": 400,
+      "cut": 0,
+      "source_sha256": "643e83700a94dcb7704122be56c93ea7de48a3c09d6e3fc3994466d372c74aa3",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/memsysconfig.rs",
+      "crate": "kf-abi",
+      "code": 155,
+      "comment": 331,
+      "blank": 27,
+      "inline_comment": 0,
+      "retained": 513,
+      "cut": 0,
+      "source_sha256": "622f2a7ecb40db3d8cd06248036347ef61dc267820ea68467c39ab396602949d",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/notifier.rs",
+      "crate": "kf-abi",
+      "code": 202,
+      "comment": 425,
+      "blank": 41,
+      "inline_comment": 0,
+      "retained": 668,
+      "cut": 0,
+      "source_sha256": "1c54013da8a017e796977deec4186ba4e75459f3c89bc472ba542e9e34882339",
+      "excluded_cfg_test_spans": [
+        [
+          668,
+          803
+        ],
+        [
+          805,
+          966
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/oracle.rs",
+      "crate": "kf-abi",
+      "code": 438,
+      "comment": 385,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 839,
+      "cut": 0,
+      "source_sha256": "6790bfb3f13dd37c2d5d6397c51cda7680dca8719c6df32b645f7aeb257f8472",
+      "excluded_cfg_test_spans": [
+        [
+          840,
+          1085
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/pcibars.rs",
+      "crate": "kf-abi",
+      "code": 88,
+      "comment": 178,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 279,
+      "cut": 0,
+      "source_sha256": "7e1c02f30b6942f39597a45260526d1d1f5d630e10fa010c4f504e87a63e0ff8",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/postevent.rs",
+      "crate": "kf-abi",
+      "code": 75,
+      "comment": 91,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 177,
+      "cut": 0,
+      "source_sha256": "d84df9db3632c5f3d4eda86fad0a6895cc5d7d7d7002710106478bf821ae7504",
+      "excluded_cfg_test_spans": [
+        [
+          178,
+          258
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/provenance.rs",
+      "crate": "kf-abi",
+      "code": 132,
+      "comment": 54,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 197,
+      "cut": 0,
+      "source_sha256": "fbc71dc9472b1703260d57d42eb6303670744bcba9ec58c524af9a58e750967a",
+      "excluded_cfg_test_spans": [
+        [
+          198,
+          287
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/rc.rs",
+      "crate": "kf-abi",
+      "code": 105,
+      "comment": 131,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 252,
+      "cut": 0,
+      "source_sha256": "8c5937103e4aeb29d72a0a2ed10f582ef26e3b2cee0c263b19dbdbea6b0ffbe0",
+      "excluded_cfg_test_spans": [
+        [
+          253,
+          324
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/regaccessmap.rs",
+      "crate": "kf-abi",
+      "code": 194,
+      "comment": 305,
+      "blank": 23,
+      "inline_comment": 0,
+      "retained": 522,
+      "cut": 0,
+      "source_sha256": "4882f7b8024a8d7b7cf77110b641ccf6eaa99bab916e1f2f24509fdadf086852",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/smcmode.rs",
+      "crate": "kf-abi",
+      "code": 44,
+      "comment": 120,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 174,
+      "cut": 0,
+      "source_sha256": "79148782b77c48f8dddf4c778b2aba8ab4d4eced1129f7664067ad7cefcc4563",
+      "excluded_cfg_test_spans": [
+        [
+          175,
+          245
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/submit.rs",
+      "crate": "kf-abi",
+      "code": 1976,
+      "comment": 2681,
+      "blank": 275,
+      "inline_comment": 11,
+      "retained": 4932,
+      "cut": 0,
+      "source_sha256": "609a5b10195da0fcec4059477664a1436470700f794cfe8184fd5e075914f39b",
+      "excluded_cfg_test_spans": [
+        [
+          3711,
+          4907
+        ],
+        [
+          5129,
+          5187
+        ],
+        [
+          6176,
+          6226
+        ],
+        [
+          6238,
+          6281
+        ],
+        [
+          6283,
+          6349
+        ],
+        [
+          6351,
+          6360
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/sw_runlist.rs",
+      "crate": "kf-abi",
+      "code": 203,
+      "comment": 62,
+      "blank": 19,
+      "inline_comment": 0,
+      "retained": 284,
+      "cut": 0,
+      "source_sha256": "4ce6bcdbd1dec3767ef9a6374ed9410e6502bf291b87648f27d0c539de6e9912",
+      "excluded_cfg_test_spans": [
+        [
+          285,
+          354
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/sw_runlist_native_generated.rs",
+      "crate": "kf-abi",
+      "code": 61,
+      "comment": 4,
+      "blank": 1,
+      "inline_comment": 0,
+      "retained": 66,
+      "cut": 0,
+      "source_sha256": "41ff18068472b4fb1afa6feffcb5d73662448cbfa2104b0e960229076c0b5c11",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/timer.rs",
+      "crate": "kf-abi",
+      "code": 31,
+      "comment": 8,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 43,
+      "cut": 0,
+      "source_sha256": "d5ea0ad4b26954a83edf803eac5a5904f0af664d673718c2382943d301328755",
+      "excluded_cfg_test_spans": [
+        [
+          44,
+          64
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/transcribed.rs",
+      "crate": "kf-abi",
+      "code": 342,
+      "comment": 198,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 555,
+      "cut": 0,
+      "source_sha256": "50493d85f2f93f6cb1117d010faa550abbcf547af6436c97c9b16ba4a444a2c2",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-abi/src/vbios.rs",
+      "crate": "kf-abi",
+      "code": 586,
+      "comment": 527,
+      "blank": 55,
+      "inline_comment": 17,
+      "retained": 1168,
+      "cut": 0,
+      "source_sha256": "6cb43d5f4962a70e9cbfc9e0fa16eba95e9ee000d5e77146dac3c06fa399723c",
+      "excluded_cfg_test_spans": [
+        [
+          1169,
+          1170
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/versions.rs",
+      "crate": "kf-abi",
+      "code": 1084,
+      "comment": 1096,
+      "blank": 103,
+      "inline_comment": 0,
+      "retained": 2283,
+      "cut": 0,
+      "source_sha256": "5aab024e7824b8c0e606b1bd9778824e84a5cbaa1bd93811aa752a2e49958af0",
+      "excluded_cfg_test_spans": [
+        [
+          2284,
+          2523
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/videocaps.rs",
+      "crate": "kf-abi",
+      "code": 83,
+      "comment": 51,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 144,
+      "cut": 0,
+      "source_sha256": "c6a565210c1efd44ef5ff8bbea9049a13005608dabb5a5a65cb1c8b60818ab78",
+      "excluded_cfg_test_spans": [
+        [
+          145,
+          182
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/view.rs",
+      "crate": "kf-abi",
+      "code": 314,
+      "comment": 533,
+      "blank": 40,
+      "inline_comment": 0,
+      "retained": 887,
+      "cut": 0,
+      "source_sha256": "1e79c83193acc9ba1729828ae320b8a2d3e8f428fc598eb408fdc7104f2ff602",
+      "excluded_cfg_test_spans": [
+        [
+          887,
+          974
+        ],
+        [
+          976,
+          1044
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/windows_twin.rs",
+      "crate": "kf-abi",
+      "code": 64,
+      "comment": 44,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 113,
+      "cut": 0,
+      "source_sha256": "6fa63b351ba6bc80e9cda3d78ac0a3e1902c7c36007e8ff3fa88f0b0f3d470ad",
+      "excluded_cfg_test_spans": [
+        [
+          114,
+          174
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/wire.rs",
+      "crate": "kf-abi",
+      "code": 260,
+      "comment": 180,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 457,
+      "cut": 0,
+      "source_sha256": "d305a56e5f70d885ae38909877d1af02fcf73a58b96ac67bb8271bd5000a914d",
+      "excluded_cfg_test_spans": [
+        [
+          458,
+          621
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-abi/src/zbc.rs",
+      "crate": "kf-abi",
+      "code": 65,
+      "comment": 42,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 118,
+      "cut": 0,
+      "source_sha256": "fd185e7f1bbec249d132a69b9b98d7dec98b917bfda7df4be2caa3b57ca72469",
+      "excluded_cfg_test_spans": [
+        [
+          119,
+          137
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-arch/src/fault.rs",
+      "crate": "kf-arch",
+      "code": 25,
+      "comment": 108,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 137,
+      "cut": 0,
+      "source_sha256": "bc0f854ee10c03bff81dd54eecec4562889495e83251427000d34a5487d23af5",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-arch/src/gsp.rs",
+      "crate": "kf-arch",
+      "code": 340,
+      "comment": 648,
+      "blank": 55,
+      "inline_comment": 0,
+      "retained": 1043,
+      "cut": 0,
+      "source_sha256": "3fbac65901b642357bff7bff61bb99ea9813ccf4acbd1f6bea25eda926b18210",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-arch/src/ids.rs",
+      "crate": "kf-arch",
+      "code": 86,
+      "comment": 102,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 205,
+      "cut": 0,
+      "source_sha256": "b1314c137a45ddeff3f63fea128608fd3bd7d1b8edca737b2082909586ed2456",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-arch/src/lib.rs",
+      "crate": "kf-arch",
+      "code": 440,
+      "comment": 1409,
+      "blank": 80,
+      "inline_comment": 0,
+      "retained": 1929,
+      "cut": 0,
+      "source_sha256": "72de044a9969cbf5cd6f1db3e87d582b580f4e0b0b764a67e485fa4cfee43c9d",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-broker/src/conn.rs",
+      "crate": "kf-broker",
+      "code": 2517,
+      "comment": 597,
+      "blank": 131,
+      "inline_comment": 6,
+      "retained": 3245,
+      "cut": 0,
+      "source_sha256": "3fe2f5dce5fe913be6f2e941da208431084ab851546ffe98ce43f381b2973d69",
+      "excluded_cfg_test_spans": [
+        [
+          3246,
+          3287
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-broker/src/console.rs",
+      "crate": "kf-broker",
+      "code": 282,
+      "comment": 143,
+      "blank": 27,
+      "inline_comment": 0,
+      "retained": 452,
+      "cut": 0,
+      "source_sha256": "2176aa8861a1a8c4d592b6798b822cd3de3560ce518f4ffd58b9af95b470c665",
+      "excluded_cfg_test_spans": [
+        [
+          453,
+          833
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-broker/src/cursor.rs",
+      "crate": "kf-broker",
+      "code": 425,
+      "comment": 176,
+      "blank": 50,
+      "inline_comment": 0,
+      "retained": 651,
+      "cut": 0,
+      "source_sha256": "d94eeb1167b5fbbb4d9a88d158b7ad291c7eaee19c0027899a7ef9ff82b38b8a",
+      "excluded_cfg_test_spans": [
+        [
+          652,
+          933
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-broker/src/gpucopy.rs",
+      "crate": "kf-broker",
+      "code": 143,
+      "comment": 67,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 227,
+      "cut": 0,
+      "source_sha256": "12ad4bf3eb3947f647d7cb329e444366fdda240f17bfced48af0416e97f64ce8",
+      "excluded_cfg_test_spans": [
+        [
+          228,
+          378
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-broker/src/input.rs",
+      "crate": "kf-broker",
+      "code": 359,
+      "comment": 105,
+      "blank": 31,
+      "inline_comment": 0,
+      "retained": 495,
+      "cut": 0,
+      "source_sha256": "4b7907d199da1ce939e90837e3abe7c7f12c314bcaec51d0b1db8ec9ac628aab",
+      "excluded_cfg_test_spans": [
+        [
+          496,
+          541
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-broker/src/lib.rs",
+      "crate": "kf-broker",
+      "code": 31,
+      "comment": 34,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 67,
+      "cut": 0,
+      "source_sha256": "dc596ac782791d8defac71b0dad84a9f03d809fc85aad2f3c6920a5eb92f76ad",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-broker/src/link.rs",
+      "crate": "kf-broker",
+      "code": 70,
+      "comment": 24,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 108,
+      "cut": 0,
+      "source_sha256": "ac6a5c2b13e5bca5510beeb192f56dd74f2d1a6a97a087b10d6756109e3f0f47",
+      "excluded_cfg_test_spans": [
+        [
+          109,
+          145
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-broker/src/slots.rs",
+      "crate": "kf-broker",
+      "code": 539,
+      "comment": 231,
+      "blank": 67,
+      "inline_comment": 0,
+      "retained": 837,
+      "cut": 0,
+      "source_sha256": "f7f2cb70a32387e2f6e6fec72d8a0c25667e3f33623eeeba6477dfb9c73adf65",
+      "excluded_cfg_test_spans": [
+        [
+          838,
+          1451
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-broker/src/ticks.rs",
+      "crate": "kf-broker",
+      "code": 442,
+      "comment": 137,
+      "blank": 49,
+      "inline_comment": 2,
+      "retained": 628,
+      "cut": 0,
+      "source_sha256": "f3ffdb276a43f656d23f3eb2ffdb6698fa7549f723fe564898b51be022ab70b3",
+      "excluded_cfg_test_spans": [
+        [
+          628,
+          891
+        ],
+        [
+          893,
+          1037
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-broker/src/wire.rs",
+      "crate": "kf-broker",
+      "code": 393,
+      "comment": 194,
+      "blank": 40,
+      "inline_comment": 0,
+      "retained": 627,
+      "cut": 0,
+      "source_sha256": "8555574ba5a1845f9d1b11692204a25fc736636ef57fe2edb25010ee6c19643d",
+      "excluded_cfg_test_spans": [
+        [
+          628,
+          834
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/census.rs",
+      "crate": "kf-chan",
+      "code": 137,
+      "comment": 43,
+      "blank": 22,
+      "inline_comment": 0,
+      "retained": 202,
+      "cut": 0,
+      "source_sha256": "cbb2b2fcd357a8bfa5d8a2d623b78828fc99c231027d84420e6be5334a2f436f",
+      "excluded_cfg_test_spans": [
+        [
+          203,
+          245
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/completions.rs",
+      "crate": "kf-chan",
+      "code": 70,
+      "comment": 36,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 120,
+      "cut": 0,
+      "source_sha256": "5821fcd2f65ceb946ed11cb18af92588ef19aec4d1c923c045a541e32d5d4901",
+      "excluded_cfg_test_spans": [
+        [
+          121,
+          222
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/dbfast.rs",
+      "crate": "kf-chan",
+      "code": 645,
+      "comment": 194,
+      "blank": 50,
+      "inline_comment": 1,
+      "retained": 889,
+      "cut": 0,
+      "source_sha256": "82127b6e8b78f499b2762b459be13b076613ccc08490459292fd47ad7383f0ad",
+      "excluded_cfg_test_spans": [
+        [
+          890,
+          1193
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/grtables.rs",
+      "crate": "kf-chan",
+      "code": 289,
+      "comment": 140,
+      "blank": 28,
+      "inline_comment": 18,
+      "retained": 457,
+      "cut": 0,
+      "source_sha256": "013c285e0eb1576c07aa050e64cf785e9db28466662a998da6f8f6e00de6c492",
+      "excluded_cfg_test_spans": [
+        [
+          458,
+          698
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/handoff.rs",
+      "crate": "kf-chan",
+      "code": 85,
+      "comment": 21,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 118,
+      "cut": 0,
+      "source_sha256": "b9d708ba1d1ccd7d3b9f44e837f81d2817ff4b6ade7186fcf714d0d90d38dd16",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-chan/src/host.rs",
+      "crate": "kf-chan",
+      "code": 1378,
+      "comment": 405,
+      "blank": 99,
+      "inline_comment": 4,
+      "retained": 1882,
+      "cut": 0,
+      "source_sha256": "77720d7b522d64a1f124ab7207c097476c7e5834afbe95d12b94d261752b68a6",
+      "excluded_cfg_test_spans": [
+        [
+          1882,
+          2010
+        ],
+        [
+          2012,
+          2094
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/lib.rs",
+      "crate": "kf-chan",
+      "code": 31,
+      "comment": 14,
+      "blank": 1,
+      "inline_comment": 0,
+      "retained": 46,
+      "cut": 0,
+      "source_sha256": "32a0282aaa6354d9ead3a659c922254e5c0acd138819ed3776d4ecf128692584",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-chan/src/passthrough.rs",
+      "crate": "kf-chan",
+      "code": 144,
+      "comment": 83,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 236,
+      "cut": 0,
+      "source_sha256": "4e415449e0097180e3009bfcb9b2d939eafa0dab723d72d5d6216e5ec4c239a8",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-chan/src/ptnsi.rs",
+      "crate": "kf-chan",
+      "code": 264,
+      "comment": 138,
+      "blank": 26,
+      "inline_comment": 0,
+      "retained": 428,
+      "cut": 0,
+      "source_sha256": "809711a35f0549c12ad062dd860e42752173973351c0c7a54b66e72f5aab76dc",
+      "excluded_cfg_test_spans": [
+        [
+          429,
+          693
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/rc.rs",
+      "crate": "kf-chan",
+      "code": 112,
+      "comment": 34,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 158,
+      "cut": 0,
+      "source_sha256": "418b512f51dace5b12593f15136abd06a64ef1d053fce641b3feff207e1630f5",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-chan/src/ring.rs",
+      "crate": "kf-chan",
+      "code": 312,
+      "comment": 128,
+      "blank": 27,
+      "inline_comment": 0,
+      "retained": 467,
+      "cut": 0,
+      "source_sha256": "cbac3c286fcf60f0bdce1296503441a493838e0afbedc6821982f4ac7f75788a",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-chan/src/swmethod.rs",
+      "crate": "kf-chan",
+      "code": 67,
+      "comment": 50,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 126,
+      "cut": 0,
+      "source_sha256": "311e81bbb84890af83483e1eb77391a8605bf5a6bfc005e8f636dfaf6a987546",
+      "excluded_cfg_test_spans": [
+        [
+          126,
+          386
+        ],
+        [
+          388,
+          454
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/tmode.rs",
+      "crate": "kf-chan",
+      "code": 1622,
+      "comment": 374,
+      "blank": 71,
+      "inline_comment": 3,
+      "retained": 2067,
+      "cut": 0,
+      "source_sha256": "85da7f7ead7ecdbcc9c92f8125a0d37dbe38ec58db9bff74b212b9983a7c0534",
+      "excluded_cfg_test_spans": [
+        [
+          393,
+          395
+        ],
+        [
+          397,
+          399
+        ],
+        [
+          2074,
+          2148
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/translated.rs",
+      "crate": "kf-chan",
+      "code": 863,
+      "comment": 384,
+      "blank": 48,
+      "inline_comment": 1,
+      "retained": 1295,
+      "cut": 0,
+      "source_sha256": "28f0407c42d2028356f7920aa69cd88828dff6f85861b73a7dd3b7ab37e7acc9",
+      "excluded_cfg_test_spans": [
+        [
+          1296,
+          1432
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/tspace_unsafe.rs",
+      "crate": "kf-chan",
+      "code": 454,
+      "comment": 158,
+      "blank": 33,
+      "inline_comment": 0,
+      "retained": 645,
+      "cut": 0,
+      "source_sha256": "18f89c8be35a23560016d02bfec2442e69008a1095bf09088954cd7e7e2e0c0a",
+      "excluded_cfg_test_spans": [
+        [
+          646,
+          866
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/ttables.rs",
+      "crate": "kf-chan",
+      "code": 389,
+      "comment": 166,
+      "blank": 31,
+      "inline_comment": 1,
+      "retained": 586,
+      "cut": 0,
+      "source_sha256": "0391786f42f9f55aa1db7004342e3c7ba92d3ca71af9da1128023668454e7270",
+      "excluded_cfg_test_spans": [
+        [
+          587,
+          733
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_batch.rs",
+      "crate": "kf-chan",
+      "code": 66,
+      "comment": 26,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 99,
+      "cut": 0,
+      "source_sha256": "e71821ed6ba659b3838e11c27345cefacf67874d211b39502da0f7a89ae176c1",
+      "excluded_cfg_test_spans": [
+        [
+          100,
+          199
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_consumption.rs",
+      "crate": "kf-chan",
+      "code": 108,
+      "comment": 57,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 178,
+      "cut": 0,
+      "source_sha256": "5dc0270ff3e68a0d63f3b4c55ebd0c9ce19e30490191e9e02b1b9cd44446f290",
+      "excluded_cfg_test_spans": [
+        [
+          179,
+          200
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_gate.rs",
+      "crate": "kf-chan",
+      "code": 117,
+      "comment": 110,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 241,
+      "cut": 0,
+      "source_sha256": "17712c119cd0d33a827311e33fc712e6aa94bdc44b9a786073745631a248a523",
+      "excluded_cfg_test_spans": [
+        [
+          242,
+          756
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_lazy.rs",
+      "crate": "kf-chan",
+      "code": 365,
+      "comment": 135,
+      "blank": 38,
+      "inline_comment": 0,
+      "retained": 538,
+      "cut": 0,
+      "source_sha256": "5133eec095f204e6b42a69d15fc8f96e6a9bb0659ee7fcc1d07ffd5aafc978ef",
+      "excluded_cfg_test_spans": [
+        [
+          539,
+          765
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_lifecycle.rs",
+      "crate": "kf-chan",
+      "code": 892,
+      "comment": 248,
+      "blank": 35,
+      "inline_comment": 0,
+      "retained": 1175,
+      "cut": 0,
+      "source_sha256": "1cfe7d50da57fb3bcbb80bf8555f6f33397ec1bcee835612a7c7f4695a30ac9d",
+      "excluded_cfg_test_spans": [
+        [
+          1176,
+          2387
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_loop.rs",
+      "crate": "kf-chan",
+      "code": 197,
+      "comment": 122,
+      "blank": 23,
+      "inline_comment": 0,
+      "retained": 342,
+      "cut": 0,
+      "source_sha256": "5225b4d6a3051bd3d0c13997675051f8d9167dd0b37f9b653857b239512551e1",
+      "excluded_cfg_test_spans": [
+        [
+          343,
+          500
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_progress.rs",
+      "crate": "kf-chan",
+      "code": 286,
+      "comment": 68,
+      "blank": 30,
+      "inline_comment": 0,
+      "retained": 384,
+      "cut": 0,
+      "source_sha256": "844c968c0c9c716ae61443fdb181f3f3845460f36b163e4fb66408eba7ab27ed",
+      "excluded_cfg_test_spans": [
+        [
+          29,
+          36
+        ],
+        [
+          123,
+          131
+        ],
+        [
+          340,
+          342
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_ring.rs",
+      "crate": "kf-chan",
+      "code": 113,
+      "comment": 73,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 201,
+      "cut": 0,
+      "source_sha256": "56ab5b24cfd0c19ae8a14b192e24568fb24049d80eab73bb2afdd38715166876",
+      "excluded_cfg_test_spans": [
+        [
+          202,
+          309
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_scan.rs",
+      "crate": "kf-chan",
+      "code": 326,
+      "comment": 80,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 423,
+      "cut": 0,
+      "source_sha256": "ade79373bdeb1d5c1a070afc15cac4caf3a86f7cb95796c8bbfc63ab9d8428fd",
+      "excluded_cfg_test_spans": [
+        [
+          424,
+          928
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_storage.rs",
+      "crate": "kf-chan",
+      "code": 530,
+      "comment": 169,
+      "blank": 35,
+      "inline_comment": 2,
+      "retained": 734,
+      "cut": 0,
+      "source_sha256": "9ad27abe0398ee6d9b66e65f6a82540df272f5c31f89f0915f86da401b3db83a",
+      "excluded_cfg_test_spans": [
+        [
+          710,
+          1235
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/user_stream.rs",
+      "crate": "kf-chan",
+      "code": 336,
+      "comment": 119,
+      "blank": 18,
+      "inline_comment": 0,
+      "retained": 473,
+      "cut": 0,
+      "source_sha256": "955f216d56548bd1fef9a9e5238d87e4d46542cd1b8426fb2e706ccd68f813c0",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-chan/src/user_turn.rs",
+      "crate": "kf-chan",
+      "code": 725,
+      "comment": 213,
+      "blank": 36,
+      "inline_comment": 0,
+      "retained": 974,
+      "cut": 0,
+      "source_sha256": "e06b7c38a4dee77f95876bc1f5d4ec41b9dba172783626ac0a40dde4f4c6d769",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-chan/src/userd_relay.rs",
+      "crate": "kf-chan",
+      "code": 82,
+      "comment": 66,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 156,
+      "cut": 0,
+      "source_sha256": "0af512c224b818f72a53280dd881f7ea8df6964e9d84b2418dc4045a7fa64820",
+      "excluded_cfg_test_spans": [
+        [
+          157,
+          403
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/video_generated.rs",
+      "crate": "kf-chan",
+      "code": 1353,
+      "comment": 32,
+      "blank": 3,
+      "inline_comment": 0,
+      "retained": 1388,
+      "cut": 0,
+      "source_sha256": "5251f16d2cc5d297dbe830c7f78b7de4ce5d5201acab954478da2cd0f7cfa027",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-chan/src/vtables.rs",
+      "crate": "kf-chan",
+      "code": 137,
+      "comment": 68,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 221,
+      "cut": 0,
+      "source_sha256": "257c018cc62089f4a714b200d0db50d35edfae580a0ba6a6c43553c1425ce17b",
+      "excluded_cfg_test_spans": [
+        [
+          222,
+          326
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chan/src/worker.rs",
+      "crate": "kf-chan",
+      "code": 199,
+      "comment": 72,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 283,
+      "cut": 0,
+      "source_sha256": "eb9d0f5be8d265227e3f6796bffaea64f23f7e2c1c8b27261ca367ed7c0f52ee",
+      "excluded_cfg_test_spans": [
+        [
+          284,
+          305
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/bar0.rs",
+      "crate": "kf-chip",
+      "code": 365,
+      "comment": 225,
+      "blank": 28,
+      "inline_comment": 0,
+      "retained": 618,
+      "cut": 0,
+      "source_sha256": "6a587742fe64a1fdda8a04c13e5334b39d8cc2c1122bd35b09b8da0cb309a8bb",
+      "excluded_cfg_test_spans": [
+        [
+          619,
+          791
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/bar1mode.rs",
+      "crate": "kf-chip",
+      "code": 52,
+      "comment": 32,
+      "blank": 6,
+      "inline_comment": 0,
+      "retained": 90,
+      "cut": 0,
+      "source_sha256": "23baad3f129f56c5a6608c1fc2a006d4e74e1b4eb0cc45d29e89b57d8f47ef1a",
+      "excluded_cfg_test_spans": [
+        [
+          91,
+          121
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/classes.rs",
+      "crate": "kf-chip",
+      "code": 279,
+      "comment": 62,
+      "blank": 13,
+      "inline_comment": 90,
+      "retained": 354,
+      "cut": 0,
+      "source_sha256": "4f531a47050e9e3f0d2310cec8361720c2754ac4400a6a4230e1ff00e8fb8b68",
+      "excluded_cfg_test_spans": [
+        [
+          353,
+          384
+        ],
+        [
+          386,
+          443
+        ],
+        [
+          445,
+          467
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/die.rs",
+      "crate": "kf-chip",
+      "code": 72,
+      "comment": 29,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 110,
+      "cut": 0,
+      "source_sha256": "37445d3255a0869a9ff6047504eb5295116391be70da14bc4cb19cad760f482c",
+      "excluded_cfg_test_spans": [
+        [
+          111,
+          161
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/display.rs",
+      "crate": "kf-chip",
+      "code": 107,
+      "comment": 49,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 167,
+      "cut": 0,
+      "source_sha256": "77489a32c1b316f5350347d40c9f747426118ad7a381ccbabe4b00e0bd2836a4",
+      "excluded_cfg_test_spans": [
+        [
+          168,
+          203
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/falcon_gsp.rs",
+      "crate": "kf-chip",
+      "code": 318,
+      "comment": 315,
+      "blank": 36,
+      "inline_comment": 0,
+      "retained": 669,
+      "cut": 0,
+      "source_sha256": "6273472360b306cc574bde57c88a3b57475c5158884a03732d8468ac3dd25084",
+      "excluded_cfg_test_spans": [
+        [
+          670,
+          873
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/fsp_gsp.rs",
+      "crate": "kf-chip",
+      "code": 456,
+      "comment": 340,
+      "blank": 49,
+      "inline_comment": 0,
+      "retained": 845,
+      "cut": 0,
+      "source_sha256": "814b3f473f7a5a63c127012bd1a665f2e716f14f9be8aa16bdd0350fb04b9763",
+      "excluded_cfg_test_spans": [
+        [
+          846,
+          1056
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/host_classes.rs",
+      "crate": "kf-chip",
+      "code": 75,
+      "comment": 24,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 106,
+      "cut": 0,
+      "source_sha256": "dc3c3a2aa0992b436e5fd4d6635738a1f2286d1b21819d0b6d6ef6c684ddaa84",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-chip/src/hwref.rs",
+      "crate": "kf-chip",
+      "code": 403,
+      "comment": 146,
+      "blank": 35,
+      "inline_comment": 0,
+      "retained": 584,
+      "cut": 0,
+      "source_sha256": "18819a02b2bbbe004eef9e1f05800ff06d2aa00741571040df40c2a34331ba09",
+      "excluded_cfg_test_spans": [
+        [
+          585,
+          741
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/lib.rs",
+      "crate": "kf-chip",
+      "code": 235,
+      "comment": 166,
+      "blank": 31,
+      "inline_comment": 0,
+      "retained": 432,
+      "cut": 0,
+      "source_sha256": "c206d33bbdcf222aec409200526c0ac6d6665bdf70a30d7873f8b429ffdd43a0",
+      "excluded_cfg_test_spans": [
+        [
+          432,
+          458
+        ],
+        [
+          460,
+          487
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/ptekind.rs",
+      "crate": "kf-chip",
+      "code": 36,
+      "comment": 20,
+      "blank": 7,
+      "inline_comment": 14,
+      "retained": 63,
+      "cut": 0,
+      "source_sha256": "34384f4c86ba07bd4b29cc2d6fcbbf07bbcc1ee3a8dc68104137100fadf43cc5",
+      "excluded_cfg_test_spans": [
+        [
+          63,
+          99
+        ],
+        [
+          101,
+          144
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/sked.rs",
+      "crate": "kf-chip",
+      "code": 22,
+      "comment": 45,
+      "blank": 6,
+      "inline_comment": 0,
+      "retained": 73,
+      "cut": 0,
+      "source_sha256": "5ee0856bae7558882eec7ad217ceb7cf4c64e23085a619a0269cce9020b955f8",
+      "excluded_cfg_test_spans": [
+        [
+          73,
+          116
+        ],
+        [
+          118,
+          153
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-chip/src/usermode.rs",
+      "crate": "kf-chip",
+      "code": 62,
+      "comment": 56,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 128,
+      "cut": 0,
+      "source_sha256": "8fa405e135f702ae045fea1f683c6d4679685d50ce0bb99ebdb584894cf2de22",
+      "excluded_cfg_test_spans": [
+        [
+          128,
+          186
+        ],
+        [
+          188,
+          235
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-core/src/caps.rs",
+      "crate": "kf-core",
+      "code": 136,
+      "comment": 41,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 192,
+      "cut": 0,
+      "source_sha256": "ece535a4cb62b521a87ecb05dc599946b0aa42ae9e6662c8a37a4cc1d00d28c0",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-core/src/channel.rs",
+      "crate": "kf-core",
+      "code": 79,
+      "comment": 91,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 184,
+      "cut": 0,
+      "source_sha256": "184d209730e3938c0ec44aa85ff73888e2b537b4858adfd213b908e6088ec28d",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-core/src/completion.rs",
+      "crate": "kf-core",
+      "code": 72,
+      "comment": 62,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 145,
+      "cut": 0,
+      "source_sha256": "1089067499607f8c2f25813976ed9e241c67dfbb2d47bb4fa42876b0d0eb4cbb",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-core/src/leaf.rs",
+      "crate": "kf-core",
+      "code": 68,
+      "comment": 55,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 133,
+      "cut": 0,
+      "source_sha256": "94587ed9670ddc27a3a8e277c7cb10665904ac44c62743f0c340a579e52c8549",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-core/src/lib.rs",
+      "crate": "kf-core",
+      "code": 12,
+      "comment": 11,
+      "blank": 3,
+      "inline_comment": 0,
+      "retained": 26,
+      "cut": 0,
+      "source_sha256": "71652c53b03e109dbdc4c9d3e33c1dd6b001b9b28ae091d075ce6bdb9f18b403",
+      "excluded_cfg_test_spans": [
+        [
+          27,
+          28
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-core/src/lifetime.rs",
+      "crate": "kf-core",
+      "code": 79,
+      "comment": 54,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 144,
+      "cut": 0,
+      "source_sha256": "774ba099295c064331314a8cb3834e72a0e0b6b09917990e0aae9fc6345c526f",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-core/src/plane.rs",
+      "crate": "kf-core",
+      "code": 356,
+      "comment": 220,
+      "blank": 35,
+      "inline_comment": 0,
+      "retained": 611,
+      "cut": 0,
+      "source_sha256": "f94bb021863edf384a893e4201f850efd644d207253fd3bcd80bcaf17bd3a2b3",
+      "excluded_cfg_test_spans": [
+        [
+          45,
+          101
+        ],
+        [
+          548,
+          551
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/abi.rs",
+      "crate": "kf-cuda",
+      "code": 659,
+      "comment": 434,
+      "blank": 67,
+      "inline_comment": 0,
+      "retained": 1160,
+      "cut": 0,
+      "source_sha256": "81889410cc46cc463159994e471d317a350cf033fa60b7c457ab48fcf067a250",
+      "excluded_cfg_test_spans": [
+        [
+          1161,
+          1449
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/capacity.rs",
+      "crate": "kf-cuda",
+      "code": 278,
+      "comment": 84,
+      "blank": 23,
+      "inline_comment": 0,
+      "retained": 385,
+      "cut": 0,
+      "source_sha256": "93597d9387352e1397f4eb6f3cb8b33c1af40e2e40bf9ceb77a1cf3a723c57a8",
+      "excluded_cfg_test_spans": [
+        [
+          386,
+          579
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/completion.rs",
+      "crate": "kf-cuda",
+      "code": 19,
+      "comment": 15,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 39,
+      "cut": 0,
+      "source_sha256": "e16cd3e09a6ba9f7d4daa0fa4313a397b8f0be304a248c715306753c2d4fedbd",
+      "excluded_cfg_test_spans": [
+        [
+          40,
+          131
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/diffmodel.rs",
+      "crate": "kf-cuda",
+      "code": 244,
+      "comment": 87,
+      "blank": 18,
+      "inline_comment": 0,
+      "retained": 349,
+      "cut": 0,
+      "source_sha256": "63b6e53a27ee6314ee93321144a232347ec9709e28c10409582525661fc42c67",
+      "excluded_cfg_test_spans": [
+        [
+          350,
+          929
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/display.rs",
+      "crate": "kf-cuda",
+      "code": 1430,
+      "comment": 348,
+      "blank": 76,
+      "inline_comment": 0,
+      "retained": 1854,
+      "cut": 0,
+      "source_sha256": "661cd475b2feb47dcfb273b46220b7be760b8435f6d4ac143ca4a89476886481",
+      "excluded_cfg_test_spans": [
+        [
+          1855,
+          2297
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/driver_unsafe.rs",
+      "crate": "kf-cuda",
+      "code": 1092,
+      "comment": 650,
+      "blank": 105,
+      "inline_comment": 2,
+      "retained": 1847,
+      "cut": 0,
+      "source_sha256": "88da25f8c28bc07266f459bdb19e621fee5cb8e31d0a9e58fc4d7953356361b8",
+      "excluded_cfg_test_spans": [
+        [
+          1551,
+          1574
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/lib.rs",
+      "crate": "kf-cuda",
+      "code": 13,
+      "comment": 27,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 42,
+      "cut": 0,
+      "source_sha256": "15b026bc7993ec0b6cebf712983eeba0f72897ee7ad5a44425c1981b3fa6fd3e",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-cuda/src/posture.rs",
+      "crate": "kf-cuda",
+      "code": 57,
+      "comment": 37,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 101,
+      "cut": 0,
+      "source_sha256": "ee18e1407ca4e6c5b0217350ddbc400a0885ef438ee72510ec16e88e78c402df",
+      "excluded_cfg_test_spans": [
+        [
+          102,
+          236
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/refusal_samples.rs",
+      "crate": "kf-cuda",
+      "code": 67,
+      "comment": 26,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 102,
+      "cut": 0,
+      "source_sha256": "d634d6f460c858765b6fe0c2745ef29db40697cd93adbd2ea787378a66c36397",
+      "excluded_cfg_test_spans": [
+        [
+          103,
+          193
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/selftest.rs",
+      "crate": "kf-cuda",
+      "code": 202,
+      "comment": 90,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 305,
+      "cut": 0,
+      "source_sha256": "bffb8737f41aa717bc4bfb9b2af681ed1c6288a7dc22e0b5405c5bc268db1c07",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-cuda/src/synth.rs",
+      "crate": "kf-cuda",
+      "code": 190,
+      "comment": 124,
+      "blank": 26,
+      "inline_comment": 0,
+      "retained": 340,
+      "cut": 0,
+      "source_sha256": "7c7e97620d3aadabdd945f0b28baf29632e24329dc91de8c08e146ad787dd8b1",
+      "excluded_cfg_test_spans": [
+        [
+          341,
+          371
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-cuda/src/walk.rs",
+      "crate": "kf-cuda",
+      "code": 1539,
+      "comment": 619,
+      "blank": 85,
+      "inline_comment": 0,
+      "retained": 2243,
+      "cut": 0,
+      "source_sha256": "b37e6c9c6f5ac712fae3b8fc375e329134c3204eb2758cef8183f1ee45bca7cb",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-disp/src/caps.rs",
+      "crate": "kf-disp",
+      "code": 559,
+      "comment": 120,
+      "blank": 18,
+      "inline_comment": 0,
+      "retained": 697,
+      "cut": 0,
+      "source_sha256": "98c6ec7cdff90d904dadcff730a2f096153181cca12fe65615ac40717a10bbb1",
+      "excluded_cfg_test_spans": [
+        [
+          698,
+          1265
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "crate": "kf-disp",
+      "code": 263,
+      "comment": 95,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 375,
+      "cut": 0,
+      "source_sha256": "c308ab828356c1fe1c48356b3294a66217d659e98bad6710b186a16a19fc9cbc",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-disp/src/capsoverlay.rs",
+      "crate": "kf-disp",
+      "code": 110,
+      "comment": 30,
+      "blank": 10,
+      "inline_comment": 8,
+      "retained": 150,
+      "cut": 0,
+      "source_sha256": "9ffa52f3f4fd4329efff2dfcb1a67cded9213cb181603cc5095009b13cbc0ebf",
+      "excluded_cfg_test_spans": [
+        [
+          151,
+          219
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/class.rs",
+      "crate": "kf-disp",
+      "code": 180,
+      "comment": 31,
+      "blank": 20,
+      "inline_comment": 0,
+      "retained": 231,
+      "cut": 0,
+      "source_sha256": "9ea350d1c4dc0d6dc526023d99c8e7d0388a0a9c6d32be0bbd16e73653850949",
+      "excluded_cfg_test_spans": [
+        [
+          232,
+          271
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/color.rs",
+      "crate": "kf-disp",
+      "code": 441,
+      "comment": 55,
+      "blank": 21,
+      "inline_comment": 0,
+      "retained": 517,
+      "cut": 0,
+      "source_sha256": "a7de262440900ceb6d1f59363c90c8e649acdfccbaeafd5858d4971fc4842d5d",
+      "excluded_cfg_test_spans": [
+        [
+          518,
+          1110
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/dispcaps.rs",
+      "crate": "kf-disp",
+      "code": 56,
+      "comment": 36,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 99,
+      "cut": 0,
+      "source_sha256": "8fa231fa38f4050b8a9ea37319e503c939e9d425ab189ed728065fc5f75a292c",
+      "excluded_cfg_test_spans": [
+        [
+          100,
+          188
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/edid.rs",
+      "crate": "kf-disp",
+      "code": 283,
+      "comment": 84,
+      "blank": 14,
+      "inline_comment": 15,
+      "retained": 381,
+      "cut": 0,
+      "source_sha256": "4b458acc7ac60ae4178cb09d502863924e7cd144be73f992533cfbb7c65ad3ba",
+      "excluded_cfg_test_spans": [
+        [
+          382,
+          630
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/engine.rs",
+      "crate": "kf-disp",
+      "code": 2007,
+      "comment": 469,
+      "blank": 98,
+      "inline_comment": 1,
+      "retained": 2574,
+      "cut": 0,
+      "source_sha256": "3c51051565a2e415951f62a3c0dbcd238550b2e1b4fb64fb60f7538c9ad4d956",
+      "excluded_cfg_test_spans": [
+        [
+          2575,
+          2576
+        ],
+        [
+          2577,
+          2578
+        ],
+        [
+          2579,
+          2580
+        ],
+        [
+          2581,
+          2582
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/hostcaps.rs",
+      "crate": "kf-disp",
+      "code": 91,
+      "comment": 8,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 104,
+      "cut": 0,
+      "source_sha256": "7933c254be086ac670f7ea2cd19ff5ae8d4312cfccd65f1e76cd2a1b2d30ee90",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-disp/src/inst.rs",
+      "crate": "kf-disp",
+      "code": 200,
+      "comment": 47,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 262,
+      "cut": 0,
+      "source_sha256": "54185631314fc5095778f205c0d51988f07fa8f6fce0464b595bf9b75f9d7ce1",
+      "excluded_cfg_test_spans": [
+        [
+          263,
+          433
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/layout.rs",
+      "crate": "kf-disp",
+      "code": 148,
+      "comment": 23,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 188,
+      "cut": 0,
+      "source_sha256": "8c45e5d4d3d9b633328042ec0b89e0b04767036c2275a15bd73cba15cc6914c8",
+      "excluded_cfg_test_spans": [
+        [
+          189,
+          293
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/lib.rs",
+      "crate": "kf-disp",
+      "code": 21,
+      "comment": 27,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 50,
+      "cut": 0,
+      "source_sha256": "5ae9106c69d6f62985cdad383c7c601715b3dc8d04615033428f4abb675d24c0",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-disp/src/lockstep.rs",
+      "crate": "kf-disp",
+      "code": 94,
+      "comment": 45,
+      "blank": 14,
+      "inline_comment": 1,
+      "retained": 153,
+      "cut": 0,
+      "source_sha256": "721f621e308b7be69567fef873f2370a00eebde114914da708a1e41826d4ffb6",
+      "excluded_cfg_test_spans": [
+        [
+          71,
+          77
+        ],
+        [
+          161,
+          228
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/model.rs",
+      "crate": "kf-disp",
+      "code": 1439,
+      "comment": 451,
+      "blank": 74,
+      "inline_comment": 3,
+      "retained": 1964,
+      "cut": 0,
+      "source_sha256": "c11be2aa39be8c8bcf385012763b97f40f7b5774c67c820486848fae519c63dc",
+      "excluded_cfg_test_spans": [
+        [
+          1965,
+          3587
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/pace.rs",
+      "crate": "kf-disp",
+      "code": 600,
+      "comment": 248,
+      "blank": 67,
+      "inline_comment": 1,
+      "retained": 915,
+      "cut": 0,
+      "source_sha256": "21cb716fe9f9043da4d57aad9b3f50f44d7ffb11c38e156a4575bba0f7bfe502",
+      "excluded_cfg_test_spans": [
+        [
+          915,
+          939
+        ],
+        [
+          941,
+          1605
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/ports.rs",
+      "crate": "kf-disp",
+      "code": 449,
+      "comment": 142,
+      "blank": 53,
+      "inline_comment": 0,
+      "retained": 644,
+      "cut": 0,
+      "source_sha256": "b7cf823a41d10c9fde7922e3de00304f4cabd4282c1bedcc4554463f5cd10922",
+      "excluded_cfg_test_spans": [
+        [
+          644,
+          734
+        ],
+        [
+          736,
+          832
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/precomp_fields.rs",
+      "crate": "kf-disp",
+      "code": 83,
+      "comment": 6,
+      "blank": 3,
+      "inline_comment": 0,
+      "retained": 92,
+      "cut": 0,
+      "source_sha256": "a18ecfe02895b92249c20f4a646250787842743934ae8c90e1ff807902ca009d",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-disp/src/pushbuf.rs",
+      "crate": "kf-disp",
+      "code": 135,
+      "comment": 61,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 208,
+      "cut": 0,
+      "source_sha256": "e35ea547ed0a56ab7dee2c059e8d86558c1861068b0ed1b8c4019ff2c8f2b622",
+      "excluded_cfg_test_spans": [
+        [
+          209,
+          338
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/regs.rs",
+      "crate": "kf-disp",
+      "code": 167,
+      "comment": 56,
+      "blank": 23,
+      "inline_comment": 0,
+      "retained": 246,
+      "cut": 0,
+      "source_sha256": "d31c964ca585faf03ce2aba89c8b8140efe033d8195852ad9f450921ec526440",
+      "excluded_cfg_test_spans": [
+        [
+          247,
+          358
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/scanout.rs",
+      "crate": "kf-disp",
+      "code": 1526,
+      "comment": 446,
+      "blank": 71,
+      "inline_comment": 13,
+      "retained": 2043,
+      "cut": 0,
+      "source_sha256": "b2c447d6d04a011a5e1372365ccab289b2a65f05f82c22d5bb9a7f5a68302f8e",
+      "excluded_cfg_test_spans": [
+        [
+          2043,
+          3527
+        ],
+        [
+          3529,
+          3574
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/tick.rs",
+      "crate": "kf-disp",
+      "code": 211,
+      "comment": 81,
+      "blank": 26,
+      "inline_comment": 0,
+      "retained": 318,
+      "cut": 0,
+      "source_sha256": "27a8fb1a43a8d33afcbb3bcb5b957cef6575f6e6bdc59bd111548f8fbe079f81",
+      "excluded_cfg_test_spans": [
+        [
+          137,
+          167
+        ],
+        [
+          350,
+          729
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-disp/src/vramslot.rs",
+      "crate": "kf-disp",
+      "code": 137,
+      "comment": 74,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 227,
+      "cut": 0,
+      "source_sha256": "59b68637e68b6972d5841a319d3622d30735b1b3f02adbca68470328d32fa65b",
+      "excluded_cfg_test_spans": [
+        [
+          228,
+          371
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-gop-image/src/lib.rs",
+      "crate": "kf-gop-image",
+      "code": 32,
+      "comment": 47,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 89,
+      "cut": 0,
+      "source_sha256": "29338870c3d60ae4e23136f7ff82002da3f9768b6ba90b687725dab3ae899a58",
+      "excluded_cfg_test_spans": [
+        [
+          89,
+          92
+        ],
+        [
+          94,
+          231
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-gsp/src/boot.rs",
+      "crate": "kf-gsp",
+      "code": 1457,
+      "comment": 1525,
+      "blank": 128,
+      "inline_comment": 0,
+      "retained": 3110,
+      "cut": 0,
+      "source_sha256": "45df241febf48e1e3b1916687e8ff490fe4b2b39202e4275dbfd813df81d72c7",
+      "excluded_cfg_test_spans": [
+        [
+          3106,
+          3191
+        ],
+        [
+          3193,
+          3405
+        ],
+        [
+          3407,
+          3585
+        ],
+        [
+          3587,
+          3753
+        ],
+        [
+          3755,
+          3850
+        ],
+        [
+          3852,
+          5610
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-gsp/src/element.rs",
+      "crate": "kf-gsp",
+      "code": 365,
+      "comment": 377,
+      "blank": 34,
+      "inline_comment": 1,
+      "retained": 776,
+      "cut": 0,
+      "source_sha256": "62d09557283feee1a91477733cc4d4bf2a95c51bf5306d2d5e0628c3fbc0722c",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-gsp/src/fault.rs",
+      "crate": "kf-gsp",
+      "code": 168,
+      "comment": 241,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 420,
+      "cut": 0,
+      "source_sha256": "c25f5427a8896e3d241f67cef4589ce444d32be0644301f69958a40e3a7e3899",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-gsp/src/large.rs",
+      "crate": "kf-gsp",
+      "code": 193,
+      "comment": 77,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 287,
+      "cut": 0,
+      "source_sha256": "9834b2ed2c1dc6027768a9d0cb6b5a219cea3b076bd470a97f2b8fb890446823",
+      "excluded_cfg_test_spans": [
+        [
+          288,
+          545
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-gsp/src/lib.rs",
+      "crate": "kf-gsp",
+      "code": 31,
+      "comment": 120,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 153,
+      "cut": 0,
+      "source_sha256": "90f0f6bc4c956f21c9a46a7fecd34ccce46fd6e780d9e8e0646992d85133ece1",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-gsp/src/ram.rs",
+      "crate": "kf-gsp",
+      "code": 146,
+      "comment": 135,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 297,
+      "cut": 0,
+      "source_sha256": "a39db321a39cd20bb051cde69203c0dfe73a605226eb8a81701683874452de55",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-gsp/src/refusal.rs",
+      "crate": "kf-gsp",
+      "code": 88,
+      "comment": 52,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 153,
+      "cut": 0,
+      "source_sha256": "eda1fd6ce7971528037eeb9e024d86c69314213c034e0bef905312d9b0ee4f60",
+      "excluded_cfg_test_spans": [
+        [
+          154,
+          205
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-gsp/src/replytrace.rs",
+      "crate": "kf-gsp",
+      "code": 63,
+      "comment": 8,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 75,
+      "cut": 0,
+      "source_sha256": "f778a289a94081a6d41d62fcdd8ca5ecb7f45cb371c1f5248c2a4e178e9e904f",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-gsp/src/ring.rs",
+      "crate": "kf-gsp",
+      "code": 283,
+      "comment": 261,
+      "blank": 36,
+      "inline_comment": 7,
+      "retained": 580,
+      "cut": 0,
+      "source_sha256": "14010bdc31a79ba021fb0af28fa3776c470b0b84ec7b7b9282bd0333a0650c27",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-gsp/src/rpc.rs",
+      "crate": "kf-gsp",
+      "code": 226,
+      "comment": 441,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 684,
+      "cut": 0,
+      "source_sha256": "1ea1befc250e5441264b6cc3462599c6abea07e1e5f49cee03c3adb217df4a8b",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-gsp/src/seq.rs",
+      "crate": "kf-gsp",
+      "code": 187,
+      "comment": 117,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 313,
+      "cut": 0,
+      "source_sha256": "3d356a28ec1f1d13ff253be6bb501aadc1c7dbc79618e2b13f04a52d4377d470",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-gsp/src/sysinfo.rs",
+      "crate": "kf-gsp",
+      "code": 101,
+      "comment": 50,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 165,
+      "cut": 0,
+      "source_sha256": "8004f9aedf79dffa89cd444b3346ed69a825ebd41265d62ae690543bcf1d0d0f",
+      "excluded_cfg_test_spans": [
+        [
+          166,
+          269
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-host/src/birth.rs",
+      "crate": "kf-host",
+      "code": 112,
+      "comment": 74,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 196,
+      "cut": 0,
+      "source_sha256": "3ff6e650d3a1ffaa34d78eb2646024ce31374b621ba4d8cf2cbec0847561d3c1",
+      "excluded_cfg_test_spans": [
+        [
+          197,
+          530
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-host/src/channel.rs",
+      "crate": "kf-host",
+      "code": 1464,
+      "comment": 766,
+      "blank": 111,
+      "inline_comment": 2,
+      "retained": 2341,
+      "cut": 0,
+      "source_sha256": "3e451baf2202648fb0248b913bfbea8fba9d435b7bbb1bd5a4950bc15569bf3e",
+      "excluded_cfg_test_spans": [
+        [
+          2310,
+          2409
+        ],
+        [
+          2437,
+          2487
+        ],
+        [
+          2489,
+          2606
+        ],
+        [
+          2608,
+          3189
+        ],
+        [
+          3191,
+          3304
+        ],
+        [
+          3306,
+          3443
+        ],
+        [
+          3445,
+          3500
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-host/src/event.rs",
+      "crate": "kf-host",
+      "code": 155,
+      "comment": 84,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 256,
+      "cut": 0,
+      "source_sha256": "bc590a2122b4623be7c0779705d19036344c0673ed38b15f41618164ff579d97",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-host/src/lib.rs",
+      "crate": "kf-host",
+      "code": 1383,
+      "comment": 756,
+      "blank": 102,
+      "inline_comment": 1,
+      "retained": 2241,
+      "cut": 0,
+      "source_sha256": "39b7fc77c71f7bda2582544054cd627ad332b1abb708ca90ba481e2b0d48bf6b",
+      "excluded_cfg_test_spans": [
+        [
+          2241,
+          2352
+        ],
+        [
+          2354,
+          2384
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-host/src/precomp.rs",
+      "crate": "kf-host",
+      "code": 83,
+      "comment": 20,
+      "blank": 4,
+      "inline_comment": 2,
+      "retained": 107,
+      "cut": 0,
+      "source_sha256": "31660aa86bc21c2f1bb8a73d463cc3e1e1fd21b80c66214c8e38bcb98db98808",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-host/src/precomp_layout.rs",
+      "crate": "kf-host",
+      "code": 38,
+      "comment": 2,
+      "blank": 0,
+      "inline_comment": 0,
+      "retained": 40,
+      "cut": 0,
+      "source_sha256": "4c764b1e0202b051a943b206353c863ea69ac2f469bcedcda9bc24307f819fdf",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-host/src/tier.rs",
+      "crate": "kf-host",
+      "code": 122,
+      "comment": 57,
+      "blank": 22,
+      "inline_comment": 0,
+      "retained": 201,
+      "cut": 0,
+      "source_sha256": "3c73706bfd143cf26ca7b5b3b6c22fba5a86b255a7fa18e79c5f6db4685ff7bb",
+      "excluded_cfg_test_spans": [
+        [
+          202,
+          325
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-host/src/timer.rs",
+      "crate": "kf-host",
+      "code": 119,
+      "comment": 10,
+      "blank": 3,
+      "inline_comment": 0,
+      "retained": 132,
+      "cut": 0,
+      "source_sha256": "7358acfca917c6587f361133b21a90a46655ca1047c7a994a45838da7bef1012",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/affinity.rs",
+      "crate": "kf-linux-raw",
+      "code": 1,
+      "comment": 7,
+      "blank": 1,
+      "inline_comment": 0,
+      "retained": 9,
+      "cut": 0,
+      "source_sha256": "2433ae2a5e3bcc1f2817d2d30422080482acb828cf1bdb80bdf921ca96c53699",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/affinity_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 33,
+      "comment": 45,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 80,
+      "cut": 0,
+      "source_sha256": "744af5e267c907dde40c6c80503f2a443e35502f32f8ceb989da709addaca6bc",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/bounds.rs",
+      "crate": "kf-linux-raw",
+      "code": 47,
+      "comment": 47,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 102,
+      "cut": 0,
+      "source_sha256": "45b1bb5878f278fe0ba41f761ce5b9cf020ec5625a4c6d7b88709864c32f2980",
+      "excluded_cfg_test_spans": [
+        [
+          103,
+          174
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/cache.rs",
+      "crate": "kf-linux-raw",
+      "code": 38,
+      "comment": 235,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 281,
+      "cut": 0,
+      "source_sha256": "5a6ef2efbd30a5ebb33e603327596b1d31a98a94d3cfcafcb9f29f63ff264131",
+      "excluded_cfg_test_spans": [
+        [
+          282,
+          357
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/capability.rs",
+      "crate": "kf-linux-raw",
+      "code": 164,
+      "comment": 122,
+      "blank": 22,
+      "inline_comment": 0,
+      "retained": 308,
+      "cut": 0,
+      "source_sha256": "39c72f359135c9f5b4b5d82a3517145ac253bd77efc98e9cf5238e8c9fc167e7",
+      "excluded_cfg_test_spans": [
+        [
+          309,
+          622
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/capability_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 23,
+      "comment": 30,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 58,
+      "cut": 0,
+      "source_sha256": "7b82b71f009084398de7878b465b0b2a8d842225b2328331286e4feb21cb6035",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/census.rs",
+      "crate": "kf-linux-raw",
+      "code": 82,
+      "comment": 91,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 185,
+      "cut": 0,
+      "source_sha256": "a7707d4fd58bd87fe18c9212193b1505136a9f148e1ff4e9d24d5db9dcfb01eb",
+      "excluded_cfg_test_spans": [
+        [
+          186,
+          254
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/chardev_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 331,
+      "comment": 427,
+      "blank": 35,
+      "inline_comment": 0,
+      "retained": 793,
+      "cut": 0,
+      "source_sha256": "d09c7cfe088729e94e06ad2bedd759e15ce0a9af6a119ff22b15e96fc79c7aaa",
+      "excluded_cfg_test_spans": [
+        [
+          794,
+          1213
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/drm.rs",
+      "crate": "kf-linux-raw",
+      "code": 233,
+      "comment": 76,
+      "blank": 23,
+      "inline_comment": 0,
+      "retained": 332,
+      "cut": 0,
+      "source_sha256": "4467a4b55e58141658f1fcfedff26f22a8d3f426f38f99a3749dbb4e2acbad96",
+      "excluded_cfg_test_spans": [
+        [
+          333,
+          584
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/drm_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 96,
+      "comment": 61,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 166,
+      "cut": 0,
+      "source_sha256": "7b8cff45c7a16b00c4832ccc197d4d14233a00e7d7e96e6f668fc5ea6b1c8109",
+      "excluded_cfg_test_spans": [
+        [
+          167,
+          213
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/epoll_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 180,
+      "comment": 129,
+      "blank": 19,
+      "inline_comment": 0,
+      "retained": 328,
+      "cut": 0,
+      "source_sha256": "7d4392e469099e8e1801fa44b4edeebabeda9611e79c508f071bb8e2dce6d69e",
+      "excluded_cfg_test_spans": [
+        [
+          329,
+          485
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/error.rs",
+      "crate": "kf-linux-raw",
+      "code": 183,
+      "comment": 160,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 350,
+      "cut": 0,
+      "source_sha256": "d9eaa340dd848d0ef3857412878c471ce79aa94da56c3097920de4702308f346",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/geometry.rs",
+      "crate": "kf-linux-raw",
+      "code": 85,
+      "comment": 61,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 155,
+      "cut": 0,
+      "source_sha256": "704f59097499e13e9dabc2812f22656cdc9202bfbdb745d8d86d3d6d20e595b6",
+      "excluded_cfg_test_spans": [
+        [
+          156,
+          304
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/host_fd_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 249,
+      "comment": 293,
+      "blank": 35,
+      "inline_comment": 1,
+      "retained": 577,
+      "cut": 0,
+      "source_sha256": "5378cb25019669ac42da5db79d9e46cef0a1094f583b973c6b06d7e317926916",
+      "excluded_cfg_test_spans": [
+        [
+          192,
+          202
+        ],
+        [
+          589,
+          951
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/ioctl.rs",
+      "crate": "kf-linux-raw",
+      "code": 47,
+      "comment": 67,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 128,
+      "cut": 0,
+      "source_sha256": "efe6d48f882a4dedc12a2a957aeabfb31bb90e118c5a91b8948c6ad1e7e761b5",
+      "excluded_cfg_test_spans": [
+        [
+          129,
+          192
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/ioctltrace.rs",
+      "crate": "kf-linux-raw",
+      "code": 128,
+      "comment": 75,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 215,
+      "cut": 0,
+      "source_sha256": "50bd84bff87c3058db024fa2ff117a2314ffa0afa81f0ebabb116220039c7b40",
+      "excluded_cfg_test_spans": [
+        [
+          216,
+          230
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/kvm_gate.rs",
+      "crate": "kf-linux-raw",
+      "code": 39,
+      "comment": 76,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 120,
+      "cut": 0,
+      "source_sha256": "01e13357dc22a7de3c5d4f531a0a241ead1433da882664470789f7816fe55ebe",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/kvm_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 383,
+      "comment": 352,
+      "blank": 42,
+      "inline_comment": 0,
+      "retained": 777,
+      "cut": 0,
+      "source_sha256": "68e0527d0fa29b7d5abbb345a33caeb38afa58678272f71e52d3c03c9a864979",
+      "excluded_cfg_test_spans": [
+        [
+          778,
+          1063
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/lib.rs",
+      "crate": "kf-linux-raw",
+      "code": 74,
+      "comment": 260,
+      "blank": 3,
+      "inline_comment": 0,
+      "retained": 337,
+      "cut": 0,
+      "source_sha256": "09201010430aeec263ee06b3ed14370786eff2aa466a28c8c6d4a920afb06db9",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/mapping_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 660,
+      "comment": 812,
+      "blank": 79,
+      "inline_comment": 0,
+      "retained": 1551,
+      "cut": 0,
+      "source_sha256": "68a1169b5ad44a0e53d0885beab5033827d5891041bf7cd02be840420d8a3872",
+      "excluded_cfg_test_spans": [
+        [
+          1552,
+          2519
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/memtype.rs",
+      "crate": "kf-linux-raw",
+      "code": 381,
+      "comment": 425,
+      "blank": 47,
+      "inline_comment": 1,
+      "retained": 853,
+      "cut": 0,
+      "source_sha256": "0927ada8cd9483c6ef121ebe187fb602fd7a6990c246aac90c0b71471e6d50fc",
+      "excluded_cfg_test_spans": [
+        [
+          854,
+          1111
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/page_size.rs",
+      "crate": "kf-linux-raw",
+      "code": 45,
+      "comment": 88,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 144,
+      "cut": 0,
+      "source_sha256": "93851408a34fa0ce9ce27d684d1c50a823755811c6e85177abe3141df66e8857",
+      "excluded_cfg_test_spans": [
+        [
+          144,
+          152
+        ],
+        [
+          154,
+          212
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/pagemap.rs",
+      "crate": "kf-linux-raw",
+      "code": 101,
+      "comment": 47,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 158,
+      "cut": 0,
+      "source_sha256": "5c1635e15dde2b760c8c3cce1034a7e547d2bd3a4a6639040e7443463c87b884",
+      "excluded_cfg_test_spans": [
+        [
+          159,
+          302
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/scratch.rs",
+      "crate": "kf-linux-raw",
+      "code": 133,
+      "comment": 230,
+      "blank": 18,
+      "inline_comment": 0,
+      "retained": 381,
+      "cut": 0,
+      "source_sha256": "232924326fb853d0a7658af06f2c9bd7ebf73142e4d9a84db8b557a79b6442e9",
+      "excluded_cfg_test_spans": [
+        [
+          382,
+          848
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/signal_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 52,
+      "comment": 90,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 154,
+      "cut": 0,
+      "source_sha256": "29d0c4898cc2c6dd2140af471b0ce1e3bf5308a37d7e0b06ac074afaffebd1f6",
+      "excluded_cfg_test_spans": [
+        [
+          151,
+          235
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/sysconf_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 3,
+      "comment": 22,
+      "blank": 1,
+      "inline_comment": 0,
+      "retained": 26,
+      "cut": 0,
+      "source_sha256": "4014a67adcbe753474e948d806d3c74c0695072eece7dfded7244eacbae8fee9",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/timerslack_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 13,
+      "comment": 21,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 36,
+      "cut": 0,
+      "source_sha256": "86e7db4fec88d4b08fcc1d9539ce4f11dfe21d93677ea321cf4c3a899808841c",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/udmabuf_gate.rs",
+      "crate": "kf-linux-raw",
+      "code": 40,
+      "comment": 27,
+      "blank": 6,
+      "inline_comment": 0,
+      "retained": 73,
+      "cut": 0,
+      "source_sha256": "dff4a13bcbd652b7a5ee9edb4f7086ac3b3aa34e4d7d2ac847c55fa482eee95c",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/unixsock_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 199,
+      "comment": 110,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 322,
+      "cut": 0,
+      "source_sha256": "e08b23e9d7fb92b58421d64052737b794ca398ea586bd4af05ab75e2835b6882",
+      "excluded_cfg_test_spans": [
+        [
+          323,
+          564
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/vcpu_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 345,
+      "comment": 226,
+      "blank": 31,
+      "inline_comment": 6,
+      "retained": 602,
+      "cut": 0,
+      "source_sha256": "ab6e8991c18764b5698e9fe1cf7d43b15a58ee85c282062d58eac23a63f6fd93",
+      "excluded_cfg_test_spans": [
+        [
+          603,
+          1138
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-linux-raw/src/view.rs",
+      "crate": "kf-linux-raw",
+      "code": 55,
+      "comment": 52,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 115,
+      "cut": 0,
+      "source_sha256": "36ad5baad90017a89cacb8f3bb5998ca06354647899b1d6d01bcdc8c8e8aa50f",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-linux-raw/src/window_unsafe.rs",
+      "crate": "kf-linux-raw",
+      "code": 247,
+      "comment": 345,
+      "blank": 26,
+      "inline_comment": 0,
+      "retained": 618,
+      "cut": 0,
+      "source_sha256": "43fc54867f4b5ea5ccbf953acee2ec79e06d8c929cae49bda91ed9ec8087a02b",
+      "excluded_cfg_test_spans": [
+        [
+          619,
+          1100
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-mem/src/addr.rs",
+      "crate": "kf-mem",
+      "code": 17,
+      "comment": 25,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 49,
+      "cut": 0,
+      "source_sha256": "6ae4817abb8bd8aaa30e2f452d29f6e9bd6537d188c13bcf08aaecda472c5a17",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-mem/src/apply.rs",
+      "crate": "kf-mem",
+      "code": 1101,
+      "comment": 372,
+      "blank": 41,
+      "inline_comment": 2,
+      "retained": 1514,
+      "cut": 0,
+      "source_sha256": "3023a1827e7928b81c532f680e2796827955aabc64c966cd617c3d0ce93f867f",
+      "excluded_cfg_test_spans": [
+        [
+          1515,
+          2870
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-mem/src/batch.rs",
+      "crate": "kf-mem",
+      "code": 1977,
+      "comment": 731,
+      "blank": 129,
+      "inline_comment": 3,
+      "retained": 2837,
+      "cut": 0,
+      "source_sha256": "8687d392d4aa1ed0dd6d7e98141fa012c46ef6ac3130722f1fb9bfb2a2cb1872",
+      "excluded_cfg_test_spans": [
+        [
+          2838,
+          4400
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-mem/src/cpuwin.rs",
+      "crate": "kf-mem",
+      "code": 692,
+      "comment": 294,
+      "blank": 53,
+      "inline_comment": 0,
+      "retained": 1039,
+      "cut": 0,
+      "source_sha256": "d11bdf05fb4982dafb15a1ecbf3a1dd4ba7731855e3e9ecf1476c7d176e2d335",
+      "excluded_cfg_test_spans": [
+        [
+          1040,
+          2034
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-mem/src/ledger.rs",
+      "crate": "kf-mem",
+      "code": 281,
+      "comment": 236,
+      "blank": 32,
+      "inline_comment": 0,
+      "retained": 549,
+      "cut": 0,
+      "source_sha256": "fd4dcda7d119f960e9c8dee4fe16a3e11c1e4ca8f4009f42cc4764ac19facb48",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-mem/src/lib.rs",
+      "crate": "kf-mem",
+      "code": 24,
+      "comment": 13,
+      "blank": 3,
+      "inline_comment": 0,
+      "retained": 40,
+      "cut": 0,
+      "source_sha256": "a2d7f595ab063c8dfabc6d3288137d8afac6eb5463197f74abbf63185c248015",
+      "excluded_cfg_test_spans": [
+        [
+          40,
+          41
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-mem/src/maplog.rs",
+      "crate": "kf-mem",
+      "code": 33,
+      "comment": 18,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 55,
+      "cut": 0,
+      "source_sha256": "db3e2e5473527f5d6722d5673a1f54e3939c2914905f6dc224dd385e4f88bcd9",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-mem/src/refusal_dump.rs",
+      "crate": "kf-mem",
+      "code": 379,
+      "comment": 55,
+      "blank": 23,
+      "inline_comment": 1,
+      "retained": 457,
+      "cut": 0,
+      "source_sha256": "41f0607166ed9a3596926d5e843c1b6a96b43968d4c211a4f1d948772d1ecaa3",
+      "excluded_cfg_test_spans": [
+        [
+          458,
+          623
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-mem/src/store.rs",
+      "crate": "kf-mem",
+      "code": 50,
+      "comment": 13,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 68,
+      "cut": 0,
+      "source_sha256": "f4ed51a51653e69349d81eaf9c2c6ad1de831eeff96bf667eaa4ad2d6edaeeeb",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-mem/src/vasmgr.rs",
+      "crate": "kf-mem",
+      "code": 1302,
+      "comment": 431,
+      "blank": 76,
+      "inline_comment": 2,
+      "retained": 1809,
+      "cut": 0,
+      "source_sha256": "8641b9ba31c1d5d46391a20427c87fc2f8fa0feb3d958bfc192a92ceedb250c9",
+      "excluded_cfg_test_spans": [
+        [
+          1810,
+          3450
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-oprom/src/desc.rs",
+      "crate": "kf-oprom",
+      "code": 313,
+      "comment": 110,
+      "blank": 24,
+      "inline_comment": 0,
+      "retained": 447,
+      "cut": 0,
+      "source_sha256": "c9a3aec42eed1e2df6b2e053fc554aac287e2daf8971dc506cc35de8050ae38c",
+      "excluded_cfg_test_spans": [
+        [
+          448,
+          667
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-oprom/src/lib.rs",
+      "crate": "kf-oprom",
+      "code": 13,
+      "comment": 48,
+      "blank": 3,
+      "inline_comment": 0,
+      "retained": 64,
+      "cut": 0,
+      "source_sha256": "312a3497f0b00deca1c86fd7f5dcd5afd1703afbdf7dce77a3429eda0ec5b6d6",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-oprom/src/pack.rs",
+      "crate": "kf-oprom",
+      "code": 90,
+      "comment": 66,
+      "blank": 11,
+      "inline_comment": 1,
+      "retained": 167,
+      "cut": 0,
+      "source_sha256": "c596eaf5f2c13a6f7d6bf333f7281709a0cb32cef5d104c9d9505b604a2f76ad",
+      "excluded_cfg_test_spans": [
+        [
+          168,
+          369
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-oprom/src/pe.rs",
+      "crate": "kf-oprom",
+      "code": 297,
+      "comment": 98,
+      "blank": 20,
+      "inline_comment": 0,
+      "retained": 415,
+      "cut": 0,
+      "source_sha256": "3164700224f866b3f691e264eb18f9e4158f417e986664ae7b52e2db7064b47f",
+      "excluded_cfg_test_spans": [
+        [
+          416,
+          624
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-oprom/src/rom.rs",
+      "crate": "kf-oprom",
+      "code": 311,
+      "comment": 104,
+      "blank": 26,
+      "inline_comment": 0,
+      "retained": 441,
+      "cut": 0,
+      "source_sha256": "978ce76273ff73b990ca42618f584a0fde8a3ac924e6c857780519275833187e",
+      "excluded_cfg_test_spans": [
+        [
+          442,
+          552
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/actq.rs",
+      "crate": "kf-qemu",
+      "code": 50,
+      "comment": 14,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 71,
+      "cut": 0,
+      "source_sha256": "64643ccfc2ac377063721427ef7aad1b6c52ecb20e1509ba321ba385d75bc2a7",
+      "excluded_cfg_test_spans": [
+        [
+          72,
+          153
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/bar0trace.rs",
+      "crate": "kf-qemu",
+      "code": 212,
+      "comment": 66,
+      "blank": 22,
+      "inline_comment": 0,
+      "retained": 300,
+      "cut": 0,
+      "source_sha256": "106ad3f96d92449e92882994495ac06b0ad2ed3bf2564122c0086fb7916f2ffd",
+      "excluded_cfg_test_spans": [
+        [
+          301,
+          402
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/bar1phys.rs",
+      "crate": "kf-qemu",
+      "code": 137,
+      "comment": 85,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 235,
+      "cut": 0,
+      "source_sha256": "7e2682d704c609c13131c3699702e9462188cbad5925c3268c906b6356cdf893",
+      "excluded_cfg_test_spans": [
+        [
+          168,
+          180
+        ],
+        [
+          249,
+          646
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/bootclean.rs",
+      "crate": "kf-qemu",
+      "code": 112,
+      "comment": 68,
+      "blank": 23,
+      "inline_comment": 0,
+      "retained": 203,
+      "cut": 0,
+      "source_sha256": "935384c1de7189daec6194d629da396d1bb4b6ed440fa1693aab7b44b86e30c3",
+      "excluded_cfg_test_spans": [
+        [
+          204,
+          377
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/broker.rs",
+      "crate": "kf-qemu",
+      "code": 252,
+      "comment": 95,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 363,
+      "cut": 0,
+      "source_sha256": "6fcc3fbbebe3c28e56a59ca7312a26119ddb224842ec40764821cb068b968c27",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-qemu/src/cardbudget.rs",
+      "crate": "kf-qemu",
+      "code": 80,
+      "comment": 43,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 133,
+      "cut": 0,
+      "source_sha256": "4dce4202f17591b741f4282d554cc5398f9b444e35a04f6ffccce397ddccf6fd",
+      "excluded_cfg_test_spans": [
+        [
+          134,
+          201
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/chan.rs",
+      "crate": "kf-qemu",
+      "code": 7003,
+      "comment": 1391,
+      "blank": 247,
+      "inline_comment": 1,
+      "retained": 8641,
+      "cut": 0,
+      "source_sha256": "6937701d5be418969e707ddd3a6c6f2c6dba50ee6104b5e452668d37ba7b94d0",
+      "excluded_cfg_test_spans": [
+        [
+          417,
+          429
+        ],
+        [
+          2490,
+          2501
+        ],
+        [
+          8658,
+          8688
+        ],
+        [
+          8690,
+          9183
+        ],
+        [
+          9185,
+          9233
+        ],
+        [
+          9235,
+          9326
+        ],
+        [
+          9328,
+          9355
+        ],
+        [
+          9357,
+          9394
+        ],
+        [
+          9396,
+          9561
+        ],
+        [
+          9563,
+          9580
+        ],
+        [
+          9582,
+          9744
+        ],
+        [
+          9746,
+          9814
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/chanrc.rs",
+      "crate": "kf-qemu",
+      "code": 205,
+      "comment": 8,
+      "blank": 16,
+      "inline_comment": 3,
+      "retained": 229,
+      "cut": 0,
+      "source_sha256": "590a94ac897747beb06ce1e4d66e48b124f2ca96a84f881c47fe3d1f69886800",
+      "excluded_cfg_test_spans": [
+        [
+          229,
+          342
+        ],
+        [
+          344,
+          521
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/defapi.rs",
+      "crate": "kf-qemu",
+      "code": 243,
+      "comment": 78,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 337,
+      "cut": 0,
+      "source_sha256": "f32b92435284a0cbdbb16f4d11c304afdf7f9a868717007efc82d91f159b0f09",
+      "excluded_cfg_test_spans": [
+        [
+          338,
+          594
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/device.rs",
+      "crate": "kf-qemu",
+      "code": 3431,
+      "comment": 807,
+      "blank": 93,
+      "inline_comment": 0,
+      "retained": 4331,
+      "cut": 0,
+      "source_sha256": "41e5eb807fddcf7760c80f57b867d03f4f289cd35e178816a43bdf6c0737419f",
+      "excluded_cfg_test_spans": [
+        [
+          4332,
+          4368
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/display.rs",
+      "crate": "kf-qemu",
+      "code": 4673,
+      "comment": 944,
+      "blank": 200,
+      "inline_comment": 5,
+      "retained": 5817,
+      "cut": 0,
+      "source_sha256": "52376c21ab96d9dbc97c1a2c3e14206d1ad730f11a7a9a48c7b670897b47aff3",
+      "excluded_cfg_test_spans": [
+        [
+          5815,
+          8280
+        ],
+        [
+          8282,
+          8398
+        ],
+        [
+          8400,
+          8506
+        ],
+        [
+          8508,
+          8685
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/dispsw.rs",
+      "crate": "kf-qemu",
+      "code": 390,
+      "comment": 174,
+      "blank": 31,
+      "inline_comment": 0,
+      "retained": 595,
+      "cut": 0,
+      "source_sha256": "65acb20f7f2a3bf1d9831c0cb99fdcc9d630d8dd450d0207c65c73f188fcc8ff",
+      "excluded_cfg_test_spans": [
+        [
+          596,
+          1144
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/exposure.rs",
+      "crate": "kf-qemu",
+      "code": 65,
+      "comment": 50,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 123,
+      "cut": 0,
+      "source_sha256": "e923a38c8359ed405e5f358b64a7cddfa22dfa5e23367fcb56e9ca2ad3adbd5c",
+      "excluded_cfg_test_spans": [
+        [
+          124,
+          168
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/failclosed.rs",
+      "crate": "kf-qemu",
+      "code": 31,
+      "comment": 31,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 66,
+      "cut": 0,
+      "source_sha256": "ce6d229e38ea106f0ce12bf4caa4156cbf4188585f2788a9b39174eb0e4fc80e",
+      "excluded_cfg_test_spans": [
+        [
+          67,
+          151
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/ffi_unsafe.rs",
+      "crate": "kf-qemu",
+      "code": 739,
+      "comment": 348,
+      "blank": 54,
+      "inline_comment": 0,
+      "retained": 1141,
+      "cut": 0,
+      "source_sha256": "84cf97fb5ac29d4a552de638ce1307947fc9f64458cd37d27dda1aaee6d3c421",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-qemu/src/gop.rs",
+      "crate": "kf-qemu",
+      "code": 157,
+      "comment": 93,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 267,
+      "cut": 0,
+      "source_sha256": "971a2bd4c5548d332a06a9779741a4be2b3a2a3d5b31c7d56f3bc00f1d130f4e",
+      "excluded_cfg_test_spans": [
+        [
+          268,
+          438
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/gpucopy.rs",
+      "crate": "kf-qemu",
+      "code": 252,
+      "comment": 72,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 341,
+      "cut": 0,
+      "source_sha256": "add1cbcfbbe6169c8922f2de34fb4ef30d9900238c8daf4ab6e6390d8145356d",
+      "excluded_cfg_test_spans": [
+        [
+          342,
+          378
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/gpuuid.rs",
+      "crate": "kf-qemu",
+      "code": 29,
+      "comment": 14,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 47,
+      "cut": 0,
+      "source_sha256": "2a6347edf6fbeb6764787151bf52c63053ba4f599341f4c711fab73242b357a5",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-qemu/src/heartbeat.rs",
+      "crate": "kf-qemu",
+      "code": 40,
+      "comment": 8,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 52,
+      "cut": 0,
+      "source_sha256": "921b30651359670c515d23729b50edb9fc964b039b0df9072a10b6f2bae4de37",
+      "excluded_cfg_test_spans": [
+        [
+          53,
+          258
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/hostfacts.rs",
+      "crate": "kf-qemu",
+      "code": 87,
+      "comment": 30,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 122,
+      "cut": 0,
+      "source_sha256": "739dde77656b7b3f0170440c24c918d0741f676f623c88015739f99fd3f0fa6c",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-qemu/src/hostidx.rs",
+      "crate": "kf-qemu",
+      "code": 25,
+      "comment": 17,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 50,
+      "cut": 0,
+      "source_sha256": "dee921bb91712404ab4bf94e323aa963ebed4d35ae5407d0fe30b3997c9ec21a",
+      "excluded_cfg_test_spans": [
+        [
+          50,
+          52
+        ],
+        [
+          54,
+          107
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/latejoin.rs",
+      "crate": "kf-qemu",
+      "code": 74,
+      "comment": 59,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 146,
+      "cut": 0,
+      "source_sha256": "35cee00c470b85c801bd55b1b992b65f82d554f3621dfbfe86b47ce57fe289a8",
+      "excluded_cfg_test_spans": [
+        [
+          147,
+          342
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/lib.rs",
+      "crate": "kf-qemu",
+      "code": 37,
+      "comment": 8,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 47,
+      "cut": 0,
+      "source_sha256": "7880c2c3ac497aa19bac994dd0f35bc6cd80e5c091da3d3d89c90ec9d5f096f8",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-qemu/src/mem.rs",
+      "crate": "kf-qemu",
+      "code": 2685,
+      "comment": 800,
+      "blank": 181,
+      "inline_comment": 1,
+      "retained": 3666,
+      "cut": 0,
+      "source_sha256": "2b35319570a513db8102194eca7590e51839922335c0d1ad080097b3138d6990",
+      "excluded_cfg_test_spans": [
+        [
+          3666,
+          4745
+        ],
+        [
+          4747,
+          4919
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/memreset.rs",
+      "crate": "kf-qemu",
+      "code": 86,
+      "comment": 46,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 140,
+      "cut": 0,
+      "source_sha256": "5f116f3bfed2cc30454eb0ee20f201fec3d7f82fd497e11ea2e0a01f6d69abff",
+      "excluded_cfg_test_spans": [
+        [
+          141,
+          302
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/prof.rs",
+      "crate": "kf-qemu",
+      "code": 294,
+      "comment": 62,
+      "blank": 28,
+      "inline_comment": 1,
+      "retained": 384,
+      "cut": 0,
+      "source_sha256": "36ee9abf5eff97f4094c640425b433708700cf1d0304bd2244b72ebf49595888",
+      "excluded_cfg_test_spans": [
+        [
+          385,
+          422
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/ptlock.rs",
+      "crate": "kf-qemu",
+      "code": 84,
+      "comment": 12,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 104,
+      "cut": 0,
+      "source_sha256": "387bc236d480682dc0e51d8bb864a8006b83d2434d662e913f9f5d0cf4a3f24d",
+      "excluded_cfg_test_spans": [
+        [
+          24,
+          28
+        ],
+        [
+          80,
+          83
+        ],
+        [
+          114,
+          294
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/raw_unsafe.rs",
+      "crate": "kf-qemu",
+      "code": 358,
+      "comment": 158,
+      "blank": 47,
+      "inline_comment": 0,
+      "retained": 563,
+      "cut": 0,
+      "source_sha256": "6fda661c6097420cf884c73b59376a6c27c287a2a3b3209744cd743365b0271f",
+      "excluded_cfg_test_spans": [
+        [
+          563,
+          577
+        ],
+        [
+          579,
+          784
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/readtrace.rs",
+      "crate": "kf-qemu",
+      "code": 411,
+      "comment": 87,
+      "blank": 33,
+      "inline_comment": 1,
+      "retained": 531,
+      "cut": 0,
+      "source_sha256": "b0c99ff333c5a0be4d68a49478f114b380b1a3ab015784658f8626c525227688",
+      "excluded_cfg_test_spans": [
+        [
+          532,
+          823
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/reset.rs",
+      "crate": "kf-qemu",
+      "code": 346,
+      "comment": 193,
+      "blank": 42,
+      "inline_comment": 0,
+      "retained": 581,
+      "cut": 0,
+      "source_sha256": "659df7cb6ecc5c08ee13eba98dd75d713d2ddeb3013eb3f01972a88645f24fc8",
+      "excluded_cfg_test_spans": [
+        [
+          582,
+          1501
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/rmfacts.rs",
+      "crate": "kf-qemu",
+      "code": 140,
+      "comment": 42,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 194,
+      "cut": 0,
+      "source_sha256": "7e7da08f39627435e1e872a7ea7dbe78a76ee38681063452b0f8a5a5cc642ea6",
+      "excluded_cfg_test_spans": [
+        [
+          195,
+          293
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/scrub.rs",
+      "crate": "kf-qemu",
+      "code": 159,
+      "comment": 105,
+      "blank": 19,
+      "inline_comment": 0,
+      "retained": 283,
+      "cut": 0,
+      "source_sha256": "ce02b8e80c78e22737c27328fbc4be3fcd759efa2a530275ace4738f111753f9",
+      "excluded_cfg_test_spans": [
+        [
+          284,
+          567
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/tspace.rs",
+      "crate": "kf-qemu",
+      "code": 317,
+      "comment": 139,
+      "blank": 24,
+      "inline_comment": 0,
+      "retained": 480,
+      "cut": 0,
+      "source_sha256": "48e1a3f83d8df5bc8a833e76066732490f9a2e5660cfe37c1f9213c399372b4c",
+      "excluded_cfg_test_spans": [
+        [
+          481,
+          681
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/twin.rs",
+      "crate": "kf-qemu",
+      "code": 69,
+      "comment": 61,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 144,
+      "cut": 0,
+      "source_sha256": "3c45c87de7f9bdf18b275b9af98449f32652318a313022bcd8de91ef4acc6cfe",
+      "excluded_cfg_test_spans": [
+        [
+          145,
+          341
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userbirth.rs",
+      "crate": "kf-qemu",
+      "code": 194,
+      "comment": 32,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 240,
+      "cut": 0,
+      "source_sha256": "4baff24c16ab3bfb775bff7bc7d3a63ac65289caa6e74198c1977c1a9b5da6b2",
+      "excluded_cfg_test_spans": [
+        [
+          151,
+          156
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userdram.rs",
+      "crate": "kf-qemu",
+      "code": 37,
+      "comment": 5,
+      "blank": 3,
+      "inline_comment": 0,
+      "retained": 45,
+      "cut": 0,
+      "source_sha256": "e4be290e82c20490325a6ef90003365e0252f02ae20f195db3c2c8b391baf544",
+      "excluded_cfg_test_spans": [
+        [
+          46,
+          102
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userpump.rs",
+      "crate": "kf-qemu",
+      "code": 2959,
+      "comment": 252,
+      "blank": 50,
+      "inline_comment": 0,
+      "retained": 3261,
+      "cut": 0,
+      "source_sha256": "4754e295f51cb8b9e56f066b1d5689b8d2e504826a61bdcb4e16b2ac08b1421e",
+      "excluded_cfg_test_spans": [
+        [
+          3262,
+          4164
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userquota.rs",
+      "crate": "kf-qemu",
+      "code": 109,
+      "comment": 16,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 134,
+      "cut": 0,
+      "source_sha256": "f536b443e111294e8f17ded014c90a47aaa2b6a477e4bac1c8a80018cdb9662f",
+      "excluded_cfg_test_spans": [
+        [
+          135,
+          245
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userread.rs",
+      "crate": "kf-qemu",
+      "code": 312,
+      "comment": 33,
+      "blank": 12,
+      "inline_comment": 2,
+      "retained": 357,
+      "cut": 0,
+      "source_sha256": "2f98359288c2190340a723185f5bf50abe4c4f45a4faa39198c5cb770d9a053f",
+      "excluded_cfg_test_spans": [
+        [
+          358,
+          853
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userrelay.rs",
+      "crate": "kf-qemu",
+      "code": 991,
+      "comment": 106,
+      "blank": 25,
+      "inline_comment": 2,
+      "retained": 1122,
+      "cut": 0,
+      "source_sha256": "1c59d98562b1e01159d546c0c23856cbbea6ecc8632b9f946b4b4939f50594f2",
+      "excluded_cfg_test_spans": [
+        [
+          1123,
+          1567
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/usershadow.rs",
+      "crate": "kf-qemu",
+      "code": 145,
+      "comment": 11,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 161,
+      "cut": 0,
+      "source_sha256": "585364e8142aee87d1737547f7f44be596ba8698a271df6f4d65e3f1dc342618",
+      "excluded_cfg_test_spans": [
+        [
+          162,
+          241
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userstore.rs",
+      "crate": "kf-qemu",
+      "code": 348,
+      "comment": 59,
+      "blank": 26,
+      "inline_comment": 0,
+      "retained": 433,
+      "cut": 0,
+      "source_sha256": "8bf51523ffc74d13a984a8db89387470b811e542dbe93c3e54183020875a34d0",
+      "excluded_cfg_test_spans": [
+        [
+          434,
+          969
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userstrand.rs",
+      "crate": "kf-qemu",
+      "code": 123,
+      "comment": 17,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 148,
+      "cut": 0,
+      "source_sha256": "f65fdfbb2b0fd4167a2b4c4c776b3cf5115fee5db0c35a94b623037ac9b1d963",
+      "excluded_cfg_test_spans": [
+        [
+          149,
+          176
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userva.rs",
+      "crate": "kf-qemu",
+      "code": 549,
+      "comment": 59,
+      "blank": 30,
+      "inline_comment": 0,
+      "retained": 638,
+      "cut": 0,
+      "source_sha256": "8f3be71b089953d69e90513aa6c0f835023cdb607414d368cdfc4c2f8d09fa03",
+      "excluded_cfg_test_spans": [
+        [
+          639,
+          1278
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/vblankgate.rs",
+      "crate": "kf-qemu",
+      "code": 52,
+      "comment": 32,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 95,
+      "cut": 0,
+      "source_sha256": "5e8a39e93e7e99880003613a17c80ce92411756aa684734bd1919d15794e9793",
+      "excluded_cfg_test_spans": [
+        [
+          96,
+          219
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/abi.rs",
+      "crate": "kf-rm",
+      "code": 78,
+      "comment": 52,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 134,
+      "cut": 0,
+      "source_sha256": "eb2efe4198d0d33389cd627751a1e39e0fcd5996e01bcbb9b271b72c2dc8fbf7",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/alias_index.rs",
+      "crate": "kf-rm",
+      "code": 58,
+      "comment": 1,
+      "blank": 1,
+      "inline_comment": 0,
+      "retained": 60,
+      "cut": 0,
+      "source_sha256": "896238ff570f45a0ec8296e84b18829c4526615d76f933da3ed5fa2a70b7211b",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/authored.rs",
+      "crate": "kf-rm",
+      "code": 473,
+      "comment": 210,
+      "blank": 37,
+      "inline_comment": 0,
+      "retained": 720,
+      "cut": 0,
+      "source_sha256": "fe067cddaf95a7557435ef2fcd7a835ee925736bfcef649cb9c3935a88efddab",
+      "excluded_cfg_test_spans": [
+        [
+          720,
+          787
+        ],
+        [
+          789,
+          821
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/barpde.rs",
+      "crate": "kf-rm",
+      "code": 375,
+      "comment": 159,
+      "blank": 28,
+      "inline_comment": 0,
+      "retained": 562,
+      "cut": 0,
+      "source_sha256": "c77aacbdd659b9f3ed8ac0c28fc044a58d5c30bfc926ea5b8c7f5487ddaebfd9",
+      "excluded_cfg_test_spans": [
+        [
+          563,
+          837
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/census.rs",
+      "crate": "kf-rm",
+      "code": 360,
+      "comment": 196,
+      "blank": 31,
+      "inline_comment": 0,
+      "retained": 587,
+      "cut": 0,
+      "source_sha256": "b6dce30fa9593961bd77c76152ca3c0620f892885677a00f3f8a73e71e355698",
+      "excluded_cfg_test_spans": [
+        [
+          588,
+          692
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/chanlink.rs",
+      "crate": "kf-rm",
+      "code": 1821,
+      "comment": 701,
+      "blank": 59,
+      "inline_comment": 0,
+      "retained": 2581,
+      "cut": 0,
+      "source_sha256": "56d7724005e02049d2ab6de2a961b07414439f532859fe9a1ff03c3eca50db3e",
+      "excluded_cfg_test_spans": [
+        [
+          2581,
+          4372
+        ],
+        [
+          4374,
+          4446
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/cmc_log_probe.rs",
+      "crate": "kf-rm",
+      "code": 49,
+      "comment": 18,
+      "blank": 2,
+      "inline_comment": 0,
+      "retained": 69,
+      "cut": 0,
+      "source_sha256": "ca5f4fcdb7fb7805d58a475e819f10ff8da0bd04ccbab1181e2ada15a0cbddad",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/consttab.rs",
+      "crate": "kf-rm",
+      "code": 567,
+      "comment": 135,
+      "blank": 36,
+      "inline_comment": 4,
+      "retained": 738,
+      "cut": 0,
+      "source_sha256": "4d443d2f748a16224ae63b32001eb7f8e63c4290643d85015b87c4642b14639c",
+      "excluded_cfg_test_spans": [
+        [
+          739,
+          940
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/defapi.rs",
+      "crate": "kf-rm",
+      "code": 375,
+      "comment": 124,
+      "blank": 36,
+      "inline_comment": 0,
+      "retained": 535,
+      "cut": 0,
+      "source_sha256": "3ff6a590101a3500f52d40ff0b47476fc1484a0ed5e712750b22188ade549c13",
+      "excluded_cfg_test_spans": [
+        [
+          536,
+          988
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/display.rs",
+      "crate": "kf-rm",
+      "code": 682,
+      "comment": 250,
+      "blank": 55,
+      "inline_comment": 1,
+      "retained": 987,
+      "cut": 0,
+      "source_sha256": "07dd45d4425ee2927c23cdee87084bd61abb1e1803adaf2c2ea7389264c16624",
+      "excluded_cfg_test_spans": [
+        [
+          988,
+          1749
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/display_ctrl_probe.rs",
+      "crate": "kf-rm",
+      "code": 319,
+      "comment": 88,
+      "blank": 30,
+      "inline_comment": 3,
+      "retained": 437,
+      "cut": 0,
+      "source_sha256": "80600758c029171147f3b257cc36c3d1371922c8f7b390a9fbdc8561a9fbdc01",
+      "excluded_cfg_test_spans": [
+        [
+          438,
+          665
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/faultbuffer.rs",
+      "crate": "kf-rm",
+      "code": 128,
+      "comment": 111,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 255,
+      "cut": 0,
+      "source_sha256": "deb7f7dcd0d9e1f14e70462133a4afb78079806945971f74a2edce167d50953a",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/fecstrace.rs",
+      "crate": "kf-rm",
+      "code": 58,
+      "comment": 24,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 89,
+      "cut": 0,
+      "source_sha256": "9a1f17fe98086c9c2d94400080cde30c4db2cde18633c8377aa3fa6e4fa13846",
+      "excluded_cfg_test_spans": [
+        [
+          90,
+          147
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/gfxpool_probe.rs",
+      "crate": "kf-rm",
+      "code": 65,
+      "comment": 11,
+      "blank": 6,
+      "inline_comment": 0,
+      "retained": 82,
+      "cut": 0,
+      "source_sha256": "9f956cc70ba8364e3975a3d569a6f405c5f646f83ba3a8d013a988fa85dfd0a9",
+      "excluded_cfg_test_spans": [
+        [
+          83,
+          211
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/gpuuid.rs",
+      "crate": "kf-rm",
+      "code": 180,
+      "comment": 117,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 314,
+      "cut": 0,
+      "source_sha256": "b10bc30d8ab29b11d748f23369ea09ed4941b29f0870902727db2ef4db76da50",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/gssnative.rs",
+      "crate": "kf-rm",
+      "code": 330,
+      "comment": 110,
+      "blank": 32,
+      "inline_comment": 0,
+      "retained": 472,
+      "cut": 0,
+      "source_sha256": "efe90ab8ecddbff3689645b17c82ac9e5cb495a91e7ebb81cbb2e10aa27f5bdf",
+      "excluded_cfg_test_spans": [
+        [
+          473,
+          532
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/guestsysinfo.rs",
+      "crate": "kf-rm",
+      "code": 134,
+      "comment": 103,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 248,
+      "cut": 0,
+      "source_sha256": "db387f3fc3a4f0769782d6fd9233c9c95c0fdfd4a0edd9d0b904df64cde77672",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/hostfacts.rs",
+      "crate": "kf-rm",
+      "code": 991,
+      "comment": 404,
+      "blank": 52,
+      "inline_comment": 17,
+      "retained": 1447,
+      "cut": 0,
+      "source_sha256": "fca05c56eaf015e3693ef3d83d848725e2c613747d6d8ddd55dee46b92d755a7",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/hostquery.rs",
+      "crate": "kf-rm",
+      "code": 1480,
+      "comment": 475,
+      "blank": 84,
+      "inline_comment": 0,
+      "retained": 2039,
+      "cut": 0,
+      "source_sha256": "516d2a20240a60ec90752229f07f38fec83891bef82f17dfd9d16be038b3e18c",
+      "excluded_cfg_test_spans": [
+        [
+          2040,
+          2087
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/hoststub.rs",
+      "crate": "kf-rm",
+      "code": 69,
+      "comment": 26,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 103,
+      "cut": 0,
+      "source_sha256": "5d44dd85ab1df3132f0babb89321b3ab95359179d64f000d69cc7246189aa2a7",
+      "excluded_cfg_test_spans": [
+        [
+          104,
+          267
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/inert.rs",
+      "crate": "kf-rm",
+      "code": 30,
+      "comment": 103,
+      "blank": 7,
+      "inline_comment": 0,
+      "retained": 140,
+      "cut": 0,
+      "source_sha256": "d279bc5f9705b2ba843630eaabc335bb74604c15bbfc7e6667ad9658951f2cde",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/inittables.rs",
+      "crate": "kf-rm",
+      "code": 1489,
+      "comment": 1829,
+      "blank": 41,
+      "inline_comment": 2,
+      "retained": 3359,
+      "cut": 0,
+      "source_sha256": "11c91eca4b19995e1a784f7a5616a548db22c38454d4547951c76d5e01dea448",
+      "excluded_cfg_test_spans": [
+        [
+          3360,
+          3397
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/lib.rs",
+      "crate": "kf-rm",
+      "code": 447,
+      "comment": 218,
+      "blank": 24,
+      "inline_comment": 0,
+      "retained": 689,
+      "cut": 0,
+      "source_sha256": "20126d9fcf5852123b00790358fba72ea9485979f7c7f2779d87d4cef19911fd",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/memory_access.rs",
+      "crate": "kf-rm",
+      "code": 189,
+      "comment": 45,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 248,
+      "cut": 0,
+      "source_sha256": "b88b92508de1675fe0d8d4189baf5f4aa70457c07d36ecc00c47d895ca55fc38",
+      "excluded_cfg_test_spans": [
+        [
+          249,
+          265
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/memory_list.rs",
+      "crate": "kf-rm",
+      "code": 212,
+      "comment": 33,
+      "blank": 12,
+      "inline_comment": 0,
+      "retained": 257,
+      "cut": 0,
+      "source_sha256": "8ab839f1ffacea14137305d1ded80b2bddbfdc9b9b77532d857e2842f7fb91a6",
+      "excluded_cfg_test_spans": [
+        [
+          258,
+          901
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/osevent.rs",
+      "crate": "kf-rm",
+      "code": 349,
+      "comment": 277,
+      "blank": 46,
+      "inline_comment": 0,
+      "retained": 672,
+      "cut": 0,
+      "source_sha256": "ee2bbfe1fcadc8c277ae3701fbcb581eacd8c3064752dd3090532fbc043cca71",
+      "excluded_cfg_test_spans": [
+        [
+          91,
+          99
+        ],
+        [
+          682,
+          1187
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/pmsr.rs",
+      "crate": "kf-rm",
+      "code": 96,
+      "comment": 58,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 167,
+      "cut": 0,
+      "source_sha256": "7f537865ca52b37a73c3df81446dd97f379a67eaf3bf218ac81ccbce8fd09ad7",
+      "excluded_cfg_test_spans": [
+        [
+          168,
+          304
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/precomp.rs",
+      "crate": "kf-rm",
+      "code": 216,
+      "comment": 26,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 251,
+      "cut": 0,
+      "source_sha256": "1709eaef70ded86e29fcc584ddb140b9d637b135187e5bf748d337b8db926ecd",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/preempt_bind_probe.rs",
+      "crate": "kf-rm",
+      "code": 180,
+      "comment": 32,
+      "blank": 19,
+      "inline_comment": 0,
+      "retained": 231,
+      "cut": 0,
+      "source_sha256": "91c26daef95f2170031e39a6b4990d6d552729d0949dc4830cf296456e4d0411",
+      "excluded_cfg_test_spans": [
+        [
+          232,
+          333
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/rmgraph.rs",
+      "crate": "kf-rm",
+      "code": 852,
+      "comment": 1427,
+      "blank": 82,
+      "inline_comment": 2,
+      "retained": 2361,
+      "cut": 0,
+      "source_sha256": "6c6ec286fd506328e68830af1f1f4e9ebb19825d8f497e6dafd16c087afa08bd",
+      "excluded_cfg_test_spans": [
+        [
+          2362,
+          2399
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/rmrpc/mod.rs",
+      "crate": "kf-rm",
+      "code": 591,
+      "comment": 1385,
+      "blank": 44,
+      "inline_comment": 0,
+      "retained": 2020,
+      "cut": 0,
+      "source_sha256": "ebf2a4bba268657eee631478d6cab9f7fdf8bc9d0001d3414f8593f65828d2e7",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/rmrpc/policy.rs",
+      "crate": "kf-rm",
+      "code": 681,
+      "comment": 242,
+      "blank": 71,
+      "inline_comment": 1,
+      "retained": 994,
+      "cut": 0,
+      "source_sha256": "fc6bd5bd8b56b0f4830eb17576a6b4d074e4a14078384a06424d645d3c8b8db8",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/rmrpc/reasm.rs",
+      "crate": "kf-rm",
+      "code": 139,
+      "comment": 202,
+      "blank": 18,
+      "inline_comment": 0,
+      "retained": 359,
+      "cut": 0,
+      "source_sha256": "86f865da5e853bfde75d411f8c53c6ba8cf622ff9e1d3f9d7dfa3f0299aa0474",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/rowserve.rs",
+      "crate": "kf-rm",
+      "code": 206,
+      "comment": 50,
+      "blank": 21,
+      "inline_comment": 0,
+      "retained": 277,
+      "cut": 0,
+      "source_sha256": "75aee1303a3a433dce704abfddd474674c336e99fcd4a8dab13c0270b11cc185",
+      "excluded_cfg_test_spans": [
+        [
+          278,
+          307
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/rpc.rs",
+      "crate": "kf-rm",
+      "code": 134,
+      "comment": 74,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 216,
+      "cut": 0,
+      "source_sha256": "411f059f2a39574b687f0f5ff74da833ec319f9fec78db605045b86847f70b3a",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/staticinfo.rs",
+      "crate": "kf-rm",
+      "code": 333,
+      "comment": 212,
+      "blank": 23,
+      "inline_comment": 0,
+      "retained": 568,
+      "cut": 0,
+      "source_sha256": "71d5335b892a68d3883d2883aa03e2fee6bab4fbb3c958bcaef99fd249ae0e71",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/sticky.rs",
+      "crate": "kf-rm",
+      "code": 228,
+      "comment": 419,
+      "blank": 28,
+      "inline_comment": 0,
+      "retained": 675,
+      "cut": 0,
+      "source_sha256": "f21f6b9e37d15a8e348cde8aea82928403036bf0145dd6df180920fe9996d0fc",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/sw_runlist_host.rs",
+      "crate": "kf-rm",
+      "code": 74,
+      "comment": 40,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 124,
+      "cut": 0,
+      "source_sha256": "cfa4fa3114fce47f880c0e4b973ae27cc58bbc93f36463fd9580d76fe1a78568",
+      "excluded_cfg_test_spans": [
+        [
+          125,
+          218
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/sw_runlist_probe.rs",
+      "crate": "kf-rm",
+      "code": 273,
+      "comment": 18,
+      "blank": 11,
+      "inline_comment": 0,
+      "retained": 302,
+      "cut": 0,
+      "source_sha256": "02b4828cf565df0b2b639834170ef5507d14a1abe2ab010140ce56ea5addfe90",
+      "excluded_cfg_test_spans": [
+        [
+          303,
+          902
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/sweep.rs",
+      "crate": "kf-rm",
+      "code": 732,
+      "comment": 223,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 963,
+      "cut": 0,
+      "source_sha256": "256d16af0cbd9c84b42818b7ed078fc37f866127bb295ceab4cde00ac3e89be3",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/sysmembar.rs",
+      "crate": "kf-rm",
+      "code": 51,
+      "comment": 47,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 106,
+      "cut": 0,
+      "source_sha256": "642fe614fbe1a7148c42748066275e602361b9a1f297055e7604fe9d0abc5f30",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/unserviced.rs",
+      "crate": "kf-rm",
+      "code": 79,
+      "comment": 233,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 327,
+      "cut": 0,
+      "source_sha256": "bef8436f9178b4275df07cc6e1126c6108fb619df0c953f2ee298af258cd89ed",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-rm/src/vfguest.rs",
+      "crate": "kf-rm",
+      "code": 177,
+      "comment": 95,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 286,
+      "cut": 0,
+      "source_sha256": "46711b6babac47782877cfa53918bc1141d8198df57004666d990fe6686856d7",
+      "excluded_cfg_test_spans": [
+        [
+          287,
+          479
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-rm/src/zbc.rs",
+      "crate": "kf-rm",
+      "code": 221,
+      "comment": 62,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 297,
+      "cut": 0,
+      "source_sha256": "2cb25dc0dc926a9fa187caf38156770f4fdce60c384b348005d6f6a20b988fbb",
+      "excluded_cfg_test_spans": [
+        [
+          298,
+          404
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trace/src/lib.rs",
+      "crate": "kf-trace",
+      "code": 86,
+      "comment": 69,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 169,
+      "cut": 0,
+      "source_sha256": "6220ec16addd0ccb3f365efa2f7f6df996ba56e83c15434adb9034d719d1e122",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trace/src/replay.rs",
+      "crate": "kf-trace",
+      "code": 67,
+      "comment": 51,
+      "blank": 6,
+      "inline_comment": 0,
+      "retained": 124,
+      "cut": 0,
+      "source_sha256": "44e9ec81754fb9e5084c244590ff3f5a172b31b83d633cc734b508cf5699cdb9",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/bar1db.rs",
+      "crate": "kf-trap",
+      "code": 114,
+      "comment": 53,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 184,
+      "cut": 0,
+      "source_sha256": "bba01221e9bd17858811c81a3c09997dea32fb1244dff5a290104cf670ed4986",
+      "excluded_cfg_test_spans": [
+        [
+          185,
+          315
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trap/src/bitmap.rs",
+      "crate": "kf-trap",
+      "code": 85,
+      "comment": 63,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 157,
+      "cut": 0,
+      "source_sha256": "e7c2807fecc62e3d36825aab28e5bacd41539e7693a496b48b81a6ff372a2f78",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/cacheop.rs",
+      "crate": "kf-trap",
+      "code": 119,
+      "comment": 93,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 225,
+      "cut": 0,
+      "source_sha256": "b53f18d21b2a6b73c0f782982e6648358180750176d6cf3ffbe292a764397bc0",
+      "excluded_cfg_test_spans": [
+        [
+          226,
+          323
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trap/src/cpuintr.rs",
+      "crate": "kf-trap",
+      "code": 203,
+      "comment": 83,
+      "blank": 19,
+      "inline_comment": 0,
+      "retained": 305,
+      "cut": 0,
+      "source_sha256": "eff10d3b0c917acaf078b25e0f149fa0fba459464441a7f390f7706ef1b17a32",
+      "excluded_cfg_test_spans": [
+        [
+          306,
+          396
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trap/src/fspemem.rs",
+      "crate": "kf-trap",
+      "code": 151,
+      "comment": 75,
+      "blank": 17,
+      "inline_comment": 0,
+      "retained": 243,
+      "cut": 0,
+      "source_sha256": "2eb2a21f6f90ec5c1c5d74451eb18bb09e11a75ddf3d16844ddff0758b344d05",
+      "excluded_cfg_test_spans": [
+        [
+          243,
+          360
+        ],
+        [
+          362,
+          390
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trap/src/lib.rs",
+      "crate": "kf-trap",
+      "code": 29,
+      "comment": 26,
+      "blank": 4,
+      "inline_comment": 0,
+      "retained": 59,
+      "cut": 0,
+      "source_sha256": "273c4c322778bfa05f8dd8a1a9865c1bb04038ffba4152d79e66fc7eb4b3628a",
+      "excluded_cfg_test_spans": [
+        [
+          60,
+          61
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trap/src/memmap.rs",
+      "crate": "kf-trap",
+      "code": 265,
+      "comment": 146,
+      "blank": 29,
+      "inline_comment": 1,
+      "retained": 440,
+      "cut": 0,
+      "source_sha256": "24a6b23965a547bf8f68712d890f65e433be5990324d2c56ab7a63e02de762ee",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/mmuinval.rs",
+      "crate": "kf-trap",
+      "code": 162,
+      "comment": 92,
+      "blank": 19,
+      "inline_comment": 0,
+      "retained": 273,
+      "cut": 0,
+      "source_sha256": "4937947a05484c58348471591935740e9a5330bc3d13184004995366d1ffd191",
+      "excluded_cfg_test_spans": [
+        [
+          274,
+          437
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trap/src/model.rs",
+      "crate": "kf-trap",
+      "code": 186,
+      "comment": 67,
+      "blank": 12,
+      "inline_comment": 4,
+      "retained": 265,
+      "cut": 0,
+      "source_sha256": "abed6abbd428912b7afcf23a8b0ba22542dc777ea660742dc2c6d64b372f07f5",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/pramin.rs",
+      "crate": "kf-trap",
+      "code": 69,
+      "comment": 40,
+      "blank": 9,
+      "inline_comment": 0,
+      "retained": 118,
+      "cut": 0,
+      "source_sha256": "a6155f52bfe66c7bd0969726a1226423393b40e06f846684a451f9c36517e470",
+      "excluded_cfg_test_spans": [
+        [
+          119,
+          171
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trap/src/relay_dispatch.rs",
+      "crate": "kf-trap",
+      "code": 125,
+      "comment": 58,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 199,
+      "cut": 0,
+      "source_sha256": "023d35fbb2cc0f8be79fc9075ec92dfad510840710f43bb522ee6d6f7399bd5b",
+      "excluded_cfg_test_spans": [
+        [
+          199,
+          206
+        ],
+        [
+          208,
+          210
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trap/src/relay_dispatch_impl.rs",
+      "crate": "kf-trap",
+      "code": 209,
+      "comment": 46,
+      "blank": 20,
+      "inline_comment": 0,
+      "retained": 275,
+      "cut": 0,
+      "source_sha256": "25d9a2ba1eebcb34d0d3bec9c06e3cc49ab61bf7efe0ed26e86f57be953cc9b2",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/ring.rs",
+      "crate": "kf-trap",
+      "code": 137,
+      "comment": 64,
+      "blank": 13,
+      "inline_comment": 5,
+      "retained": 214,
+      "cut": 0,
+      "source_sha256": "513013866f8bf01334acc4fc5b67d658606f557a4cf0d166122ae8c96c17e6b9",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/shadow.rs",
+      "crate": "kf-trap",
+      "code": 105,
+      "comment": 89,
+      "blank": 16,
+      "inline_comment": 0,
+      "retained": 210,
+      "cut": 0,
+      "source_sha256": "efd46778b58c23f198c0a165f86b8b7adf865e5d0aceede91aefbeb49ea4a12b",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/timer.rs",
+      "crate": "kf-trap",
+      "code": 50,
+      "comment": 93,
+      "blank": 10,
+      "inline_comment": 0,
+      "retained": 153,
+      "cut": 0,
+      "source_sha256": "0942b7a65dae75d6779c20636ee931a49949cf9c1b580be7804253de789a185f",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/token.rs",
+      "crate": "kf-trap",
+      "code": 267,
+      "comment": 144,
+      "blank": 23,
+      "inline_comment": 1,
+      "retained": 434,
+      "cut": 0,
+      "source_sha256": "dc1e97e827d20d78d05c151db9448ff8d821b9878bbcca4d87703bdbf924b2cd",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/tokenindex.rs",
+      "crate": "kf-trap",
+      "code": 147,
+      "comment": 70,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 232,
+      "cut": 0,
+      "source_sha256": "9b3bf070923af9a62bd1d7f737cd5c7c88468f400a7ba1d144a6e8e2f7425612",
+      "excluded_cfg_test_spans": [
+        [
+          232,
+          482
+        ],
+        [
+          484,
+          566
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-trap/src/trap.rs",
+      "crate": "kf-trap",
+      "code": 101,
+      "comment": 105,
+      "blank": 13,
+      "inline_comment": 0,
+      "retained": 219,
+      "cut": 0,
+      "source_sha256": "0e503212aae70c1292906c306df707d97ff203ecb28da41bf7c38fe5d83e1178",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/trappolicy.rs",
+      "crate": "kf-trap",
+      "code": 90,
+      "comment": 148,
+      "blank": 11,
+      "inline_comment": 1,
+      "retained": 249,
+      "cut": 0,
+      "source_sha256": "aea2dec62443522c48e7fb8376d8665664b29c99165cf58dd288181803080a34",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/vmm.rs",
+      "crate": "kf-trap",
+      "code": 66,
+      "comment": 107,
+      "blank": 14,
+      "inline_comment": 0,
+      "retained": 187,
+      "cut": 0,
+      "source_sha256": "8401940ecc9a9be25b003a727b960b82dc3e212d64b660ff4d38eb642fa5e49e",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-trap/src/wake.rs",
+      "crate": "kf-trap",
+      "code": 61,
+      "comment": 35,
+      "blank": 11,
+      "inline_comment": 2,
+      "retained": 107,
+      "cut": 0,
+      "source_sha256": "ac85d20f011e750882a21a98e2ff16e87ebcff21614859eb0e2862e5f392c05c",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-util/src/coverage.rs",
+      "crate": "kf-util",
+      "code": 332,
+      "comment": 163,
+      "blank": 43,
+      "inline_comment": 0,
+      "retained": 538,
+      "cut": 0,
+      "source_sha256": "89a0dd8730af5ead4ba3c8ef625338d24f108aa7376ebab04f91b65b241e8a9e",
+      "excluded_cfg_test_spans": [
+        [
+          539,
+          816
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-util/src/interval_map.rs",
+      "crate": "kf-util",
+      "code": 111,
+      "comment": 95,
+      "blank": 15,
+      "inline_comment": 0,
+      "retained": 221,
+      "cut": 0,
+      "source_sha256": "c3f61cf61fbdea1a439aceb94bb245801933db30b130285f91d91542a6e12fb9",
+      "excluded_cfg_test_spans": [
+        [
+          222,
+          292
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-util/src/leafwitness.rs",
+      "crate": "kf-util",
+      "code": 34,
+      "comment": 50,
+      "blank": 8,
+      "inline_comment": 0,
+      "retained": 92,
+      "cut": 0,
+      "source_sha256": "38e75bc1db0a105b3edb2a67e1278f77e35224cf6c2a21be49a160442a44d0a0",
+      "excluded_cfg_test_spans": [
+        [
+          93,
+          122
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-util/src/lib.rs",
+      "crate": "kf-util",
+      "code": 40,
+      "comment": 57,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 102,
+      "cut": 0,
+      "source_sha256": "031b8b9bc2b628962e3f37c7b31900f490f10535dfd81980fdb0e762bf6fc75e",
+      "excluded_cfg_test_spans": []
+    },
+    {
+      "path": "crates/kf-util/src/lock.rs",
+      "crate": "kf-util",
+      "code": 755,
+      "comment": 545,
+      "blank": 102,
+      "inline_comment": 0,
+      "retained": 1402,
+      "cut": 0,
+      "source_sha256": "f5cd8cc6756caf5296cac3afd6d93c7a58271540851997dea9d200fc7b9a585b",
+      "excluded_cfg_test_spans": [
+        [
+          619,
+          752
+        ],
+        [
+          1051,
+          1122
+        ],
+        [
+          1488,
+          1534
+        ],
+        [
+          1536,
+          1666
+        ],
+        [
+          1668,
+          1722
+        ],
+        [
+          1724,
+          1783
+        ],
+        [
+          1785,
+          1840
+        ],
+        [
+          1956,
+          2011
+        ],
+        [
+          2013,
+          2076
+        ],
+        [
+          2078,
+          2119
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-util/src/lockwitness.rs",
+      "crate": "kf-util",
+      "code": 164,
+      "comment": 158,
+      "blank": 23,
+      "inline_comment": 0,
+      "retained": 345,
+      "cut": 0,
+      "source_sha256": "bdc8f664a3ea7179ddb8a8bf54838e298a2c33534001148bb385cdb3309f842d",
+      "excluded_cfg_test_spans": [
+        [
+          346,
+          399
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-util/src/sha256.rs",
+      "crate": "kf-util",
+      "code": 136,
+      "comment": 11,
+      "blank": 5,
+      "inline_comment": 0,
+      "retained": 152,
+      "cut": 0,
+      "source_sha256": "efd1e6107ad574fe3faff7f8875effd89f1b78b532ba8acf33a5408310f8b0d0",
+      "excluded_cfg_test_spans": [
+        [
+          153,
+          201
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-util/src/time.rs",
+      "crate": "kf-util",
+      "code": 17,
+      "comment": 12,
+      "blank": 6,
+      "inline_comment": 0,
+      "retained": 35,
+      "cut": 0,
+      "source_sha256": "92c833474ca919dc0dee68ec22432e19d107b778f147c7d866e14f02979044af",
+      "excluded_cfg_test_spans": [
+        [
+          36,
+          47
+        ]
+      ]
+    },
+    {
+      "path": "crates/kf-util/src/trapwitness.rs",
+      "crate": "kf-util",
+      "code": 675,
+      "comment": 500,
+      "blank": 68,
+      "inline_comment": 4,
+      "retained": 1243,
+      "cut": 0,
+      "source_sha256": "5d2bf6c9e52a9dd55ff83313b3f0fabdc5f309f9d1640d19fb6561b261f1f866",
+      "excluded_cfg_test_spans": [
+        [
+          1242,
+          1333
+        ],
+        [
+          1335,
+          1399
+        ],
+        [
+          1401,
+          1459
+        ]
+      ]
+    }
+  ],
+  "revision": "e9408ce4bf3f7956c74309d7b49e4b3e3230479d",
+  "source_selection": "366 source files in 19 libraries selected by the normal non-test cargo check -p kf-qemu --lib artifact/dependency files at this source revision; original whole cfg(test) item spans excluded; not binary reachability."
+}
