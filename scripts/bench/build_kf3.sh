@@ -39,8 +39,8 @@ cp "$REPO"/qemu/hw/misc/kf3/*.c "$REPO"/qemu/hw/misc/kf3/*.h "$REPO"/qemu/hw/mis
 cp "$ARCHIVE" "$QEMU/hw/misc/kf3/libkf_qemu.a"
 grep -q "subdir('kf3')" "$QEMU/hw/misc/meson.build" || printf "\nsubdir('kf3')\n" >> "$QEMU/hw/misc/meson.build"
 grep -q '^config KF3' "$QEMU/hw/misc/Kconfig" || printf '\nconfig KF3\n    bool\n    default y if TEST_DEVICES\n    depends on PCI\n' >> "$QEMU/hw/misc/Kconfig"
-# ★ 2026-11-23: the third hunk, QEMU's S3 wake keeps each vCPU's Hyper-V MSR block (a Windows guest with hv-time hung in HLT
-# after every wake on a stable-TSC host; traces/win11_s3_wake_20261123/README.md). One implementation, the release kit's.
+# The third hunk: QEMU's S3 wake keeps each vCPU's Hyper-V MSR block, or a Windows guest with hv-time hangs in HLT after
+# a wake on a stable-TSC host. The release kit holds the one implementation (build_qemu.py WAKE_NEW).
 python3 -I "$REPO/scripts/release/build_qemu.py" wake-hunk "$QEMU"
 # One build at a time in the shared build dir (a second waits, it does not interleave).
 mkdir -p "$BUILD"
