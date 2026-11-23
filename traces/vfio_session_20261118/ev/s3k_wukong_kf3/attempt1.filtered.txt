@@ -1,0 +1,6 @@
+09:06:36 ATTEMPT 1 qemu.log line 8468
+09:10:20 CONFIRM clicked, qemu.log line 12619
+09:10:42 CONFIRM clicked, qemu.log line 16991
+09:10:49 LKE count 0->2: first GPU watchdog event, qemu.log line 17881
+09:10:49 game process gone; status={'now': '2026-11-12T17:56:37.3180335+00:00', 'alive': False, 'smi': '518, [N/A]', 'lke': ['2026-11-12T17:56:24.6656255+00:00 141', '2026-11-12T17:56:24.4661600+00:00 141'], 'launcher': 
+09:10:55 END game_exited vram_peak=3514 secs_since_launch=250 confirm_to_end=19 qlog 8530->16991->17881

@@ -1,0 +1,22 @@
+{
+ "name": "s2k_a3",
+ "tag": "s2k",
+ "platform": "kf3",
+ "image": "a",
+ "rows": "resolve",
+ "attempt": 3,
+ "rev": "6bfa2dbc",
+ "rc": 1,
+ "duration_s": 1328,
+ "row_lines": [
+  "app:resolve FAIL FILE dnxhr: render step failed; render start step failed; guest: only 0 samples inside the operation window (need 4); the sampler saw too little to judge; prores: render step failed; render start step fail"
+ ],
+ "app_crash_events": 0,
+ "start": "2026-11-18T04:55:54Z",
+ "end": "2026-11-18T05:18:04Z",
+ "crash_detect": null,
+ "census": {
+  "unserviced": 3041,
+  "refused": 786
+ }
+}

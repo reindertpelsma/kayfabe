@@ -1,0 +1,8 @@
+log: /workspace/bench/vfio_session_20261118/wk/s3k/qemu_s3k_copy.log lines 41904
+boot totals: {'M1_ofa_dead': 1, 'chan_DEAD_any': 1, 'walk_report_CUT': 0, 'walk_report_TRUNCATED': 0, 'SLOW_host_unmap_call': 5, 'SPLIT-LATE': 7, 'walk_capacity_ceiling': 0, 'SLOW-APPLY': 17, 'OFA_NOT_advertised': 0}
+att 1: end=game_exited reached_result=False ran=False vram_peak=3514 confirm_to_end=22 events=3 (4101/153:3) lke_top5={'141': 2} qlog=[8530, 16991, 17881]
+    {'M1_ofa_dead': 1, 'chan_DEAD_any': 1, 'SLOW_host_unmap_call': 1}
+att 2: end=result_screen reached_result=True ran=True vram_peak=3740 confirm_to_end=465 events=3 (4101/153:3) lke_top5={'141': 2} qlog=[18029, 20946, 37948]
+    {'SLOW_host_unmap_call': 4, 'SPLIT-LATE': 7, 'SLOW-APPLY': 17}
+att 3: end=game_exited reached_result=False ran=False vram_peak=431 confirm_to_end=None events=3 (4101/153:3) lke_top5={'141': 2} qlog=[38682, None, 40645]
+    {}
