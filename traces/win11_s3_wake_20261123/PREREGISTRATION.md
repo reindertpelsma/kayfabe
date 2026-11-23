@@ -93,3 +93,20 @@ in the guest's System log for the cycle window.
 - [read, KVM] the 13 us re-arm is KVM's own loop (`kvm_hv_process_stimers` -> `stimer_start`), not the guest: a single
   guest write of `count = -1404037` explains the whole storm, so the guest's deadline is a fixed value 0.14 s "before
   reference time zero".
+
+## Addendum 2 (2026-11-23 ~04:28Z, after R1, BEFORE the outcome of R1t is read)
+
+- [measured R1, box 62082978, kf3 `1052e2f9`, arm B, q35, stock QEMU] **1/1 CLEAN.** The box's L1 kernel marked its TSC
+  unstable (`tsc: Marking TSC unstable due to TSCs unsynchronized`, clocksource kvm-clock); the guest's TSC page at GPA
+  0xd000 read all zeros before the suspend, while suspended and after the wake (KVM publishes sequence 0 = invalid when it
+  has no master clock), so Windows read the reference time through the `TIME_REF_COUNT` MSR, which is always KVM's.
+  First post-wake one-shots: `count - time_now` = 4775 and 14663 (0.5 and 1.5 ms). After the wake Windows re-wrote `SIMP`
+  and `SINT3` on all 8 vCPUs (H3's falsifier hit for SIMP/SINT; `SCONTROL` was not in the filtered writes).
+- New, sharper form of H2/H4 (**H2'**): the storm needs a VALID TSC page before the suspend. The wake reset writes
+  `REFERENCE_TSC = 0`, KVM stops maintaining the page, the guest keeps reading the stale page in its RAM, and its
+  reference time diverges from KVM's `TIME_REF_COUNT` fallback used by the stimers.
+- **R1t:** the same box rebooted with `tsc=reliable clocksource=tsc` (L1 clocksource tsc, so KVM can keep a master clock
+  and publish a valid page). Prediction under H2': the TSC page reads non-zero before the suspend, and after the wake the
+  cycle fails with a post-wake one-shot outside `[time_now, time_now + 10 s]` (or a hang). *Falsifier of H2':* R1t with a
+  valid page before the suspend is CLEAN. If the page is still all zero, R1t says nothing about H2' (stated as such).
+- **R3 (F1) runs after R1t** under the same boot if R1t fails with a valid page: prediction CLEAN.

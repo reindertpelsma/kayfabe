@@ -96,7 +96,10 @@ class Vm:
             try:
                 s, f = qmpmod.qmp_open(str(self.root / "run" / "qmp.sock"), timeout=10)
                 try:
-                    return qmpmod.qmp_cmd(f, name, args)
+                    r = qmpmod.qmp_cmd(f, name, args)
+                    if "error" in r:
+                        raise RuntimeError(r["error"])
+                    return r.get("return", r)
                 finally:
                     s.close()
             except Exception as e:  # the screenshot loop holds the one-client socket now and then
@@ -223,7 +226,9 @@ def arm_boot_trace():
 
 
 def kf3_log(vm, tag):
-    return vm.root / "logs" / f"{tag}_b1_qemu.log"
+    """The newest boot's QEMU log of this tag (OVMF resets once when S3 is first enabled, and the run loop restarts)."""
+    logs = sorted((vm.root / "logs").glob(f"{tag}_b*_qemu.log"), key=lambda p: p.stat().st_mtime)
+    return logs[-1] if logs else vm.root / "logs" / f"{tag}_b1_qemu.log"
 
 
 def kf3_counts(path):
@@ -300,8 +305,9 @@ def cycle(vm, tag, n, out):
     wput("tracing_on", "0")
     wput("trace", "")
     wput("tracing_on", "1")
-    rc, o = vm.guest('Start-Process cmd.exe -ArgumentList "/c timeout /t 4 /nobreak & rundll32.exe '
-                     'powrprof.dll,SetSuspendState 0,1,0" -WindowStyle Hidden; "KF_SCHED"', 60)
+    # an ssh session is not the interactive one: a scheduled task in the signed-in user's session sleeps the machine
+    rc, o = vm.guest('schtasks /create /tn kfs3 /tr "rundll32.exe powrprof.dll,SetSuspendState 0,1,0" /sc once /st 23:59 '
+                     '/ru kf /it /f | Out-Null; schtasks /run /tn kfs3; "KF_SCHED"', 60)
     say(f"c{n} suspend requested rc={rc} {o.strip()[-60:]}")
     st, t = "", time.time()
     while time.time() - t < 120:
@@ -312,6 +318,9 @@ def cycle(vm, tag, n, out):
     say(f"c{n} status={st} after {time.time() - t:.0f}s")
     res = {"cycle": n, "boot0": boot0, "suspended": st == "suspended", "kf3_before": k0}
     if st != "suspended":
+        _, req = vm.guest('powercfg /requests; Get-WinEvent -FilterHashtable @{LogName="System"; StartTime=(Get-Date).AddMinutes(-4)} '
+                          '-EA 0 | select -First 15 | % { "$($_.Id) $($_.ProviderName): $($_.Message)".Substring(0,180) }', 90)
+        (out / f"c{n}_no_suspend_diag.txt").write_text(req)
         res["verdict"] = "FAIL"
         res["reasons"] = ["never suspended"]
         return res
@@ -399,7 +408,7 @@ def cmd_run(a):
             vmuuid = ln.split("=", 1)[1].strip()
     arm_boot_trace()
     env = dict(vm.env, WINVM_QEMU=str(wrapper), WINVM_OVERLAY_BACKING=a.backing)
-    r = sh(["bash", str(WINVM), "run", "--detach", "--once", "--overlay", tag, "--arm", a.arm, "--guest-driver",
+    r = sh(["bash", str(WINVM), "run", "--detach", "--max-boots", "3", "--overlay", tag, "--arm", a.arm, "--guest-driver",
             a.guest_driver, "--kf3-extra", f"gpu-uuid=GPU-{vmuuid}", "--tag", tag], env=env, timeout=120)
     say(f"launch rc={r.returncode} {r.stdout.strip()[-200:]} {r.stderr.strip()[-200:]}")
     t = time.time()
