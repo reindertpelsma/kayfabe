@@ -1,0 +1,51 @@
+{
+  "cleanup_without_ownership": {
+    "tests": 2,
+    "killers": [
+      "test_host_mode_failure_never_disconnects_another_attachment",
+      "test_skip_nbd_pack_failure_never_disconnects"
+    ]
+  },
+  "claim_before_successful_attach": {
+    "tests": 2,
+    "killers": [
+      "test_failed_attach_does_not_disconnect_an_unacquired_device",
+      "test_interrupted_failed_attach_does_not_claim_ownership"
+    ]
+  },
+  "successful_attach_not_owned": {
+    "tests": 2,
+    "killers": [
+      "test_owned_attachment_is_released_after_mount_failure",
+      "test_owned_attachment_is_released_after_term"
+    ]
+  },
+  "successful_release_keeps_stale_ownership": {
+    "tests": 2,
+    "killers": [
+      "test_normal_completion_disconnects_exactly_once",
+      "test_pack_failure_after_release_does_not_disconnect_twice"
+    ]
+  },
+  "failed_release_forgets_ownership": {
+    "tests": 2,
+    "killers": [
+      "test_failed_release_is_retried_while_still_owned",
+      "test_pack_failure_retries_a_failed_owned_release"
+    ]
+  },
+  "release_signal_not_deferred": {
+    "tests": 2,
+    "killers": [
+      "test_successful_release_interrupted_by_term_does_not_disconnect_twice",
+      "test_successful_release_interrupted_by_int_does_not_disconnect_twice"
+    ]
+  },
+  "attach_signal_not_deferred": {
+    "tests": 2,
+    "killers": [
+      "test_successful_attach_interrupted_by_term_is_released",
+      "test_successful_attach_interrupted_by_int_is_released"
+    ]
+  }
+}
