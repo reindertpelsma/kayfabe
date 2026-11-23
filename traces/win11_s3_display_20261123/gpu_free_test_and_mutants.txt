@@ -1,0 +1,17 @@
+GPU-free test of F3 (kf-qemu, device.rs, mod wake_shadow_tests), run 2026-11-23 in the agent's container at kf3 22ddc9e7.
+
+$ cargo test -p kf-qemu --lib wake_shadow
+test device::wake_shadow_tests::a_kept_wake_leaves_the_display_words_the_engine_published ... ok
+test device::wake_shadow_tests::a_kept_wake_restores_everything_outside_the_display ... ok
+test result: ok. 2 passed; 0 failed
+
+$ cargo test -p kf-qemu            (whole crate)
+test result: ok. 637 passed; 0 failed   (lib; every other target ok)
+
+Mutants of wake_keeps (each applied alone, then reverted):
+1. pre-fix behaviour (keep nothing:  false && ...)
+   a_kept_wake_leaves_the_display_words_the_engine_published ... FAILED   (GET word 0 after the kept wake)
+2. ignore the life (keep the display aperture for an ended life too)
+   a_kept_wake_leaves_the_display_words_the_engine_published ... FAILED   (ended life kept GET 0xe20)
+3. keep every word for a kept life (ignore the aperture)
+   a_kept_wake_restores_everything_outside_the_display ... FAILED          (NV_PMC word not restored)

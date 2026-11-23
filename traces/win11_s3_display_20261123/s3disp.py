@@ -38,5 +38,25 @@ def kf3_counts(path):
 s3tdr.kf3_counts = kf3_counts
 s3tdr.base.kf3_counts = kf3_counts
 
+_cycle = s3tdr.cycle
+
+
+def cycle(vm, tag, n, out):
+    """s3tdr's cycle; an event 153 counts only from the nvlddmkm provider (PREREGISTRATION.md, addendum 1): Kernel-Boot
+    also logs Id 153 at every boot, and the guest's clock step after the wake puts that boot's records inside the window."""
+    res = _cycle(vm, tag, n, out)
+    ev153 = [e for e in res.get("events", []) if re.search(r" 153 ", " " + e + " ")]
+    tdr = [e for e in ev153 if "nvlddmkm" in e.lower()]
+    res["event_153_nvlddmkm"] = tdr
+    res["event_153_other"] = [e for e in ev153 if e not in tdr]
+    if "event 153" in res.get("reasons", []) and not tdr:
+        res["reasons"] = [r for r in res["reasons"] if r != "event 153"]
+        res["verdict"] = "CLEAN" if not res["reasons"] else "FAIL"
+    return res
+
+
+s3tdr.cycle = cycle
+s3tdr.base.cycle = cycle
+
 if __name__ == "__main__":
     s3tdr.base.main()

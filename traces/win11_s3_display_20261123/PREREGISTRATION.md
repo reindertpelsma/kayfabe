@@ -93,3 +93,14 @@ CLEAN cycles in one boot. A display `STOPPED` is reported per cycle but is not p
    instrumentation-only build `544472a7` (built by `build_kf3.sh` in its own worktree and target dir). Judges H5 (a)
    and falsifier (i).
 5. Stop, compare, write the README. Destroy the box by its own id and verify its absence.
+
+## Addendum 1, 2026-11-23 (after D1 cycle 1, before any further run)
+
+D1 (F3 `a2df9a81`, box 62182559) cycle 1 was judged FAIL by the probe for `event 153`, but the only 153 record is
+`Microsoft-Windows-Kernel-Boot` (a boot-time record), dated 22:43 on the guest's clock before the clock step that the
+resume logs (`Kernel-General` 1 at 15:01:28): the boot's records fall "after" the window start. No nvlddmkm record, no
+display `STOPPED`/`STALL`, no RM unload (`fn 47 ... newLevel=0`: 0). The probe's 153 rule therefore misjudges. From here
+on (`s3disp.py`, this commit) an event 153 counts only when its provider is `nvlddmkm` (the TDR the gate is about);
+the other 153 records are kept in each cycle's result (`event_153_other`). Everything else in the CLEAN definition is
+unchanged. D1 cycle 1 is reported as probe-FAIL and hand-judged against this rule, and does not count toward N >= 3.
+**D2:** a fresh boot of the same gate overlay, F3 build, 3 cycles, with the corrected rule. Then D0 as planned.
