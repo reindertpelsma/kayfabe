@@ -48,7 +48,7 @@ about a minute of set-up; the two values that are not sums of measured steps are
 | job | what it runs | measured before (min) | expected (min) |
 | --- | --- | --- | --- |
 | `stable` | the gates above | 210.5 for the whole old job | about 8 |
-| `worker-tests` | prettier, black, `node --test` of the Worker and the admin, tier mutants | about 6.5 | about 7 |
+| `worker-tests` | prettier, black, `node --test` of the Worker and the admin (dev dependencies installed), Worker bundle pin check and its mutants, tier mutants | about 6.5 | about 7 |
 | `worker-mutants-a` | evidence-upload, provider-tolerance, denied-countries mutants | about 14.7 | about 15 |
 | `worker-mutants-b` | report, release-*, rv2, driver-pins, simulation, profile, proprietary-image mutants | about 13.5 | about 14 |
 | `middle-apps` (4 slices) | `middle_apps_mutants.py --shard I/4`: every fourth of the 118 mutants from the I-th | 99.0 (one worker) | about 27 each (INFERRED: a quarter of 99 plus a baseline run and set-up) |
