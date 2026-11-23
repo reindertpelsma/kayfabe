@@ -416,19 +416,19 @@
      "url": "private object named in propimages.json",
      "basis": "measured",
      "date": "2026-11-17",
-     "source": "ci/vast-broker/propimages.json objects (size read back after the owner's upload: 8,147,790,579 B)",
+     "source": "ci/vast-broker/propimages.json objects (size read back after the owner's upload: 8,128,391,922 B)",
      "note": "the size is the pinned size, edit it in propimages.json"
     },
     {
      "id": "matlab.driver",
      "what": "NVIDIA Linux installer of the lane's guest driver (official URL, pinned by sha256 in release-matrix.json)",
      "class": "official-url",
-     "down_bytes": 398000000,
+     "down_bytes": 416273526,
      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/",
      "basis": "ESTIMATE",
      "date": "2026-11-17",
-     "source": "ci/vast-broker/release-matrix.json driver_installers (396.6 to 398.3 MB for the 580 installers)",
-     "note": "one installer of about 0.4 GB; the version is per die (linux_guest_driver in the release matrix), so the size is an estimate",
+     "source": "ci/vast-broker/release-matrix.json driver_installers: the pinned size of 590.48.01 (416,273,526 B), the image's min_guest_driver in propimages.json",
+     "note": "one installer of about 0.4 GB; the version is per die (linux_guest_driver in the release matrix, raised to the image's min_guest_driver 590.48.01 when older), so the size is an estimate; today every pinned die gets 590.48.01 (test/matlab-instruction.test.js compares this number with that pin)",
      "calibrate": true
     }
    ],
