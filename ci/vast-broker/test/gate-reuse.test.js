@@ -14,6 +14,7 @@ const cases = [
   'logs-middle-base-order',
   'logs-middle-no-base',
   'logs-middle-duplicate',
+  'logs-middle-extra',
   'logs-middle-forged-name',
   'tree',
   'status-failure',

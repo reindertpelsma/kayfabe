@@ -1,5 +1,5 @@
 import { DEFAULTS } from './defaults.js';
-import { faultPenalty, retryEligible, validExtension } from './provider-policy.js';
+import { faultPenalty, retryEligible, validExtension, unusedRental } from './provider-policy.js';
 // prettier-ignore
 import {refuse,numericId,budgetRefuse} from './policy.js';
 // prettier-ignore
@@ -211,6 +211,15 @@ export class Ledger {
   async granted(run) {
     const key = await this.get('run:' + run);
     return key ? this.get('record:' + key) : null;
+  }
+  // Releases the commit's one-rental marker for a rental that never became usable (provider-policy.js unusedRental).
+  // Only the run's current leg may do it: a request that still holds an earlier leg of the same run key must not drop the
+  // marker of the leg a concurrent request has reserved since, and the marker is deleted only if it names this run key.
+  async releaseUnusedMarker(record) {
+    if (!unusedRental(record)) return;
+    if ((await this.granted(record.key))?.nonce !== record.nonce) return;
+    const cached = await this.get('sha:' + record.sha);
+    if (cached?.key === record.key) await this.storage.delete('sha:' + record.sha);
   }
   async grant(run, record) {
     await this.put('run:' + run, record.key);

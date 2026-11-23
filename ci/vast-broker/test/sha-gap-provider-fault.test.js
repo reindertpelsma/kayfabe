@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, sha, nonce } from './helpers.js';
+import { setup, sha, nonce, MemoryStorage } from './helpers.js';
 import { unusedRental } from '../src/provider-policy.js';
+import { Ledger } from '../src/ledger.js';
 
 // The commit gap (SHA_GAP_HOURS) is a cost guard: one rental per commit. A rental that never became usable and cannot
 // be replaced tested nothing, so a re-run of the commit is not a second rental of it. The rule is narrow on purpose:
@@ -150,4 +151,35 @@ test('a replacement that never came ends the chain and releases the commit', asy
   assert.equal(ended.replacementExhausted, true);
   assert.equal(await h.storage.get('sha:' + sha), undefined);
   assert.equal((await rerun(h)).status, 200);
+});
+
+// Two requests of one run can overlap (the runner retries): the one that still holds an earlier leg must not drop the
+// marker of the leg the other has reserved since. Both legs have the run key, so only the leg's nonce tells them apart.
+test('an earlier leg cannot release the marker of the live leg of its run', async () => {
+  const storage = new MemoryStorage(),
+    ledger = new Ledger(storage);
+  const leg = (nonce, extra = {}) => ({
+    key: '1-1',
+    run: '1',
+    sha,
+    nonce,
+    verdict: 'PROVIDER_FAULT',
+    replacementExhausted: true,
+    ...extra,
+  });
+  const stale = leg('a'.repeat(32)),
+    live = leg('b'.repeat(32), { verdict: null, replacementExhausted: false });
+  await ledger.save(live);
+  await ledger.grant('1-1', live);
+  await storage.put('sha:' + sha, { key: '1-1', started: 1 });
+  await ledger.releaseUnusedMarker(stale);
+  assert.ok(await storage.get('sha:' + sha), 'the live leg keeps its marker');
+  // the same leg, once it is the current one, does release it
+  await ledger.save({ ...live, verdict: 'PROVIDER_FAULT', replacementExhausted: true });
+  await ledger.releaseUnusedMarker({
+    ...live,
+    verdict: 'PROVIDER_FAULT',
+    replacementExhausted: true,
+  });
+  assert.equal(await storage.get('sha:' + sha), undefined);
 });

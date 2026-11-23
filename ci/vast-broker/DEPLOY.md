@@ -1230,11 +1230,11 @@ without the change. Local tests only: no rental, no Worker call, no upload.
    budget against a 180 minute limit, gets at most 15). The session deadline (90 minutes) and the money bound
    (`runBudgetUsd`) do not change, so the extension adds no spend beyond the bound already admitted. The reservation re-checks the rule
    (`validExtension`). A leg's token expires with its deadline, so a replacement keeps the earlier legs' expiries (`priorReportExpiries`, parallel to
-   `priorNonces`) and the publisher redacts each earlier token with its own expiry. `test/replacement-deadline.test.js`.
+   `priorNonces`) and the publisher redacts each earlier token with its own expiry; a chain whose list is shorter than its nonces (it began on a Worker without the list) is redacted under every expiry the run is known to have used. `test/replacement-deadline.test.js`.
 3. **The commit gap is released only by an unusable rental.** The marker `sha:<commit>` (one rental per commit, `SHA_GAP_HOURS`)
    is deleted when a run ends with verdict PROVIDER_FAULT, no box report ever (`firstReportAt` unset) and its replacement
    chain spent (`replacementExhausted`), by the same call that clears it when the create failed (`clearFailedSha`, which deletes
-   the marker only if it names this run key). Nothing else changes: a run whose box reported, a run with a replacement still
+   the marker only if it names this run key, and only for the run's current leg: `Ledger.releaseUnusedMarker` compares the leg's nonce with the stored record's, so an overlapping request that still holds an earlier leg cannot drop the marker of the leg another request has reserved). Nothing else changes: a run whose box reported, a run with a replacement still
    allowed, a stopped or timed-out run and a PASS keep the gap. The spend rows (`cost:*`) are not touched, so the daily rental count, the daily and
    rolling USD caps and the credit reserve still apply to the re-run; at most `DAILY_RENTALS` (4) such re-runs fit in a day. Narrowed in
    `provider-policy.js` `unusedRental`; `test/sha-gap-provider-fault.test.js`; `sha-gap-mutants.mjs` shows that dropping any one condition fails
@@ -1256,5 +1256,5 @@ to master's pin at that moment: deploy the new bundle only after the merge, as i
 Pin: the Worker bundle changed (items 1 to 3 are in `src/` and `defaults.json`), so `deployment.json` `bundle_sha256` and
 `wrangler.toml` `DEPLOYED_BUNDLE_SHA256` were regenerated with `scripts/check-bundle-pin.mjs` (the procedure of "Bundle pin
 regenerated 2026-11-23"). [MEASURED 2026-11-23, wrangler 4.152.0, physical `node_modules`, two identical dry-runs] The new pin is
-`5d730c0543ddaa46c79f5d7d1e5dce4769d5a8624ff1a4973a0e9f8443a81f2a` (it replaces `6df4c718...` of "Bundle pin regenerated 2026-11-23"). **Any further change under `src/` or `defaults.json` before the batch changes the bundle: re-measure the pin.**
+`2a0308fb314e8e263eddf496c1838e4d85622b0b7ec13d6564c5202d6dfa89ab` (it replaces `6df4c718...` of "Bundle pin regenerated 2026-11-23"). **Any further change under `src/` or `defaults.json` before the batch changes the bundle: re-measure the pin.**
 

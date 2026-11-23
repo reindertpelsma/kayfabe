@@ -130,6 +130,10 @@ if case.startswith("valid-middle") or case.startswith("logs-middle"):
         stages[1], stages[2] = stages[2], stages[1]
     if case == "logs-middle-no-base":
         stages = stages[3:]
+    if case == "logs-middle-extra":
+        # more PASS lines than the frame planned (stages=7, eight lines)
+        stages.append(("kfml", 100))
+        count = 7
     if case == "logs-middle-duplicate":
         stages.append(("windows_apps", 5))
     if case == "logs-middle-forged-name":

@@ -20,6 +20,7 @@ const TESTS = [
 const P = 'src/provider-policy.js',
   I = 'src/index.js',
   L = 'src/ledger.js',
+  U = 'src/publish.js',
   D = 'defaults.json',
   G = 'gate_reuse.py';
 const UNUSED =
@@ -34,6 +35,10 @@ const SINGLE = new Set([
   'extension may shrink',
   'marker of another run key deleted',
   'release in exhaust() removed',
+  'a stale leg releases the marker of the live leg',
+  'replay allows more PASS lines than the frame planned',
+  'current leg redacted with an earlier leg expiry',
+  'mismatched expiry lists redact under the current expiry only',
   'extensions summed over legs',
   'earlier token expiries not kept for redaction',
 ]);
@@ -68,33 +73,28 @@ const MUTANTS = [
     ],
   ],
   ['commit gap never released', [[P, UNUSED, 'export const unusedRental = () => false;']]],
-  [
-    'release ignores the verdict test (index)',
-    [
-      [
-        I,
-        'if (unusedRental(record)) await clearFailedSha(record);',
-        'await clearFailedSha(record);',
-      ],
-    ],
-  ],
+  ['release ignores the verdict test (index)', [[L, 'if (!unusedRental(record)) return;\n', '']]],
   [
     'marker of another run key deleted',
     [
       [
-        I,
-        'if (cached?.key === record.key) await ledger.storage.delete',
-        'if (cached) await ledger.storage.delete',
+        L,
+        "if (cached?.key === record.key) await this.storage.delete('sha:'",
+        "if (cached) await this.storage.delete('sha:'",
       ],
     ],
+  ],
+  [
+    'a stale leg releases the marker of the live leg',
+    [[L, 'if ((await this.granted(record.key))?.nonce !== record.nonce) return;\n', '']],
   ],
   [
     'spend row released with the marker',
     [
       [
-        I,
-        'if (unusedRental(record)) await clearFailedSha(record);',
-        "if (unusedRental(record)) {\n      await clearFailedSha(record);\n      await ledger.storage.delete('cost:' + record.key);\n    }",
+        L,
+        "if (cached?.key === record.key) await this.storage.delete('sha:' + record.sha);",
+        "if (cached?.key === record.key) {\n      await this.storage.delete('sha:' + record.sha);\n      await this.storage.delete('cost:' + record.key);\n    }",
       ],
     ],
   ],
@@ -147,6 +147,20 @@ const MUTANTS = [
     ],
   ],
   [
+    'current leg redacted with an earlier leg expiry',
+    [
+      [
+        U,
+        '[entry.nonce, [entry.reportExpiry]],',
+        '[entry.nonce, [expiries[0] ?? entry.reportExpiry]],',
+      ],
+    ],
+  ],
+  [
+    'mismatched expiry lists redact under the current expiry only',
+    [[U, ': known]),', ': [entry.reportExpiry]]),']],
+  ],
+  [
     'kvm device signature removed',
     [[D, '"reason": "KVM_DEVICE_ERROR"', '"reason": "KVM_DEVICE_ERRORS_OFF"']],
   ],
@@ -155,6 +169,10 @@ const MUTANTS = [
     [[D, '          "/dev/kvm"\n', '          "/dev/"\n']],
   ],
   ['replay takes only the old stage count', [[G, 'stages=[0-9]{1,2}"', 'stages=4"']]],
+  [
+    'replay allows more PASS lines than the frame planned',
+    [[G, 'or len(set(stages)) != planned', 'or len(set(stages)) < planned']],
+  ],
   ['replay allows a repeated stage', [[G, 'or len(set(stages)) != planned\n', '\n']]],
   [
     'replay ignores the base order',

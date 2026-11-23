@@ -62,7 +62,6 @@ import {
   providerLossVerdict,
   retryEligible,
   attemptReceipt,
-  unusedRental,
   replacementExtension,
 } from './provider-policy.js';
 import { ipPrefix, rentalLine, redactEndpoints } from './rental.js';
@@ -391,8 +390,10 @@ export function createService({
   // The commit marker blocks a second rental of the same commit for SHA_GAP_HOURS (a cost guard). A rental that
   // never became usable and cannot be replaced (provider-policy.js unusedRental) did not test the commit, so a
   // re-run of the same commit may rent again. The spend rows stay, so the daily and rolling caps still apply.
+  // Only the run's current leg may release it: a request that still holds an earlier leg must not drop the marker of the leg
+  // a concurrent request has reserved since (same run key, so clearFailedSha alone would delete it).
   async function releaseUnusedSha(record) {
-    if (unusedRental(record)) await clearFailedSha(record);
+    await ledger.releaseUnusedMarker(record);
   }
   async function recover(record, vast) {
     if (!record.id && record.ended === null) {
