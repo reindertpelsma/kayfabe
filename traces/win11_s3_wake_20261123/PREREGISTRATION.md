@@ -82,3 +82,14 @@ in the guest's System log for the cycle window.
 3. R2: arm A, same overlay family, 1-3 cycles. Judges H6.
 4. R3 (only if H2 or H3 holds and box time remains): F1 built on the box, arm B, up to 3 cycles.
 5. Stop, compare, write the README. No unplanned walls in this lease.
+
+## Addendum 1 (2026-11-23, before any run; the box was rented and is provisioning)
+
+- **R2b (only if box time remains after R1-R3):** arm B without `hv-stimer` (`hv-time`, `hv-synic` and the rest kept), via
+  a later `-cpu` in the wrapper. Windows then takes its clock interrupts from the LAPIC timer while still reading the TSC
+  page. *Prediction if H2/H4 hold through the stimer only:* the cycle is clean. *Falsifier of "the stimer is the only
+  casualty":* the R2b cycle fails.
+- Order of runs: R1, then R3 if its condition holds, then R2, then R2b.
+- [read, KVM] the 13 us re-arm is KVM's own loop (`kvm_hv_process_stimers` -> `stimer_start`), not the guest: a single
+  guest write of `count = -1404037` explains the whole storm, so the guest's deadline is a fixed value 0.14 s "before
+  reference time zero".
