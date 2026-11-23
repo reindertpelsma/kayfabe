@@ -3904,6 +3904,26 @@ impl Device {
         w
     }
 
+    /// Every allocated display DMA channel: `(chn, engine PUT, engine GET, the GET word the shadow
+    /// holds)`, in hex (bounded by the channel count).
+    fn display_chan_words(&self) -> Vec<(u32, String, String, String)> {
+        let Some(dp) = self.display else {
+            return Vec::new();
+        };
+        (0..kf_disp::ports::NUM_CHANNELS as u32)
+            .filter(|&c| dp.ports.generation(c) % 2 == 1)
+            .filter_map(|c| {
+                let (_, get) = dp.chan_put_get(c)?;
+                Some((
+                    c,
+                    format!("{:#x}", dp.ports.put(c)),
+                    format!("{:#x}", dp.ports.get(c)),
+                    format!("{:#x}", self.shadow_word(get)),
+                ))
+            })
+            .collect()
+    }
+
     /// ★ Device reset, stage Finish: the BAR0 register shadow as realize left it — every shadow
     /// piece zeroed and refilled exactly as [`Device::attach_shadow`] filled it (boot registers,
     /// the VBIOS image, the timer PLM), every hole page as built, and then what [`Device::seal_shadow`]
@@ -4063,7 +4083,20 @@ impl crate::reset::Owners for Device {
         // latched between the Drainer stage and the owners' acknowledgements is the old life's.
         self.intr.reset();
         self.hotplug_pending.store(0, Ordering::Release);
+        let wake_words = (life == crate::reset::Life::Kept).then(|| self.display_chan_words());
         self.restore_shadow();
+        if let (Some(before), Some(dp)) = (wake_words, self.display) {
+            let after = self.display_chan_words();
+            kf_arch::rate_eprintln!(
+                "kf3: device reset #{epoch} (S3 WAKE): display channels (chn, engine PUT, engine GET, GET word before -> after the shadow restore): {:?}",
+                before
+                    .into_iter()
+                    .zip(after)
+                    .map(|(b, a)| (b.0, b.1, b.2, b.3, a.3))
+                    .collect::<Vec<_>>()
+            );
+            dp.kept_wake();
+        }
         // An interrupt raised for the old life and still counted in a vector's eventfd (QEMU's
         // msix_reset already released every KVM route) would be injected at the next life's first
         // unmask: drained here, after everything that could raise one has stopped.

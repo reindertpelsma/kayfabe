@@ -1937,6 +1937,9 @@ pub struct DisplayPlane {
     /// ★ The guest's RM gave the display up (fn 47 without a PM transition: GSP-RM's own unload) —
     /// how many times; the worker ends the display's life at each ([`DisplayPlane::rm_unloaded`]).
     unloads: AtomicU64,
+    /// How many S3 wakes kept the guest's display life ([`DisplayPlane::kept_wake`]); the worker
+    /// logs each DMA channel's first PUT after each.
+    kept_wakes: AtomicU64,
     /// ★ 2026-10-18: whether store `[0, G)` may be shown as the boot picture
     /// ([`crate::bootclean`]). Tainted by a guest RM life, the seed's retirement and a device
     /// reset; cleaned only by a scrub that completed.
@@ -2135,6 +2138,24 @@ impl DisplayPlane {
     pub fn rm_unloaded(&self) {
         self.unloads.fetch_add(1, Ordering::AcqRel);
         let _ = self.wake.signal();
+    }
+
+    /// The BAR0 offsets of DMA channel `chn`'s PUT and GET words (`None`: no DMA channel has that
+    /// number).
+    #[must_use]
+    pub fn chan_put_get(&self, chn: u32) -> Option<(u64, u64)> {
+        let (kind, inst) = chan_of(chn)?;
+        if kind == ChannelKind::Cursor || inst >= self.map.windows.max(1) {
+            return None;
+        }
+        let b = self.map.user_base(kind, inst);
+        Some((b + self.map.put, b + self.map.get))
+    }
+
+    /// An S3 wake kept the guest's display life: the worker logs each DMA channel's first PUT
+    /// after it, with the GET the engine holds and the GET word the guest reads.
+    pub fn kept_wake(&self) {
+        self.kept_wakes.fetch_add(1, Ordering::AcqRel);
     }
 
     /// ★ Device reset: ask the worker to end the display's life for `epoch` (acknowledged on
@@ -2484,6 +2505,7 @@ impl DisplayPlane {
             ui_request: AtomicU64::new(0),
             life_reset: crate::reset::Ack::default(),
             unloads: AtomicU64::new(0),
+            kept_wakes: AtomicU64::new(0),
             boot_clean: crate::bootclean::BootClean::new(),
             formats,
             boot: None,
@@ -3148,6 +3170,8 @@ impl Device {
         let mut forced_logged = 0u64;
         let mut put_head = 0u64;
         let mut put_dropped = 0u64;
+        // (kept wakes seen, DMA channels whose first PUT after the last of them was logged)
+        let mut wake_seen = (0u64, 0u128);
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
@@ -3367,6 +3391,21 @@ impl Device {
                 };
                 if put == decoded || dp.ports.generation(chn) != life {
                     return;
+                }
+                let w = dp.kept_wakes.load(Ordering::Acquire);
+                if w != wake_seen.0 {
+                    wake_seen = (w, 0);
+                }
+                let bit = 1u128.checked_shl(chn).unwrap_or(0);
+                if w != 0 && bit != 0 && wake_seen.1 & bit == 0 {
+                    wake_seen.1 |= bit;
+                    let word = dp
+                        .chan_put_get(chn)
+                        .map_or(u32::MAX, |(_, g)| self.shadow_word(g));
+                    kf_arch::rate_eprintln!(
+                        "kf3: display: after the S3 wake, chn {chn} PUT {put:#x}: engine decoded {decoded:#x}, published GET {:#x}, GET word the guest reads {word:#x}",
+                        dp.ports.get(chn)
+                    );
                 }
                 match io.pushbuffer(pb) {
                     Ok(bytes) => {
