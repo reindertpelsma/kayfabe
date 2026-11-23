@@ -1,0 +1,5 @@
+17:28:09 BOOT_TEST_START image=/data/winimage_skeleton_20261107/cap3/disk.qcow2 sb=ms ram=8192 smp=4 port=35222 nic=virtio disk=virtio pid=3078147
+17:28:10 QEMU_STARTED pid=3078196
+17:34:28 SSH_UP at 325s
+17:34:46 BOOT_TEST_RESULT sb=ms disk=virtio nic=virtio first_change_s=21 ssh_up_s=325 screens=19 last_screen=7a5a63b11083 verdict=ssh_up
+WRAPPER_EXIT rc=0
