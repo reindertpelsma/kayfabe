@@ -1,0 +1,7 @@
+[apps_matrix 2026-11-18T08:27:05+00:00] START side=guest run=c2um_on rev=f5dbe55e apps=3
+[apps_matrix 2026-11-18T08:27:05+00:00] kf3 binary: /workspace/bench/kf3-bins/f5dbe55e/qemu-system-x86_64
+[apps_matrix 2026-11-18T08:27:51+00:00] boot ap_c2um_on_b1 rc=0 apps=[UnifiedMemoryStreams] :: /workspace/bench/run_ap_c2um_on_b1_probe.log:APPS_HOOK boot wedged after UnifiedMemoryStreams — stopping this boot /workspace/bench/run_ap_c2um_on_b1_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-11-18T08:28:34+00:00] boot ap_c2um_on_b2 rc=0 apps=[UnifiedMemoryPerf] :: /workspace/bench/run_ap_c2um_on_b2_probe.log:APPS_HOOK boot wedged after UnifiedMemoryPerf — stopping this boot /workspace/bench/run_ap_c2um_on_b2_probe.log:APPS_HOOK_DONE 
+[apps_matrix 2026-11-18T08:29:17+00:00] boot ap_c2um_on_b3 rc=0 apps=[conjugateGradientUM] :: /workspace/bench/run_ap_c2um_on_b3_probe.log:APPS_HOOK boot wedged after conjugateGradientUM — stopping this boot /workspace/bench/run_ap_c2um_on_b3_probe.log:APPS_HOOK_DONE 
+scripts/apps/apps_matrix.sh: line 105: /workspace/apps/results/c2um_on/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-18T08:29:17+00:00] GUEST_DONE batched: 0 pass / 6;  isolated re-runs: 0 pass / 0

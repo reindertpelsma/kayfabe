@@ -1,0 +1,31 @@
+VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=0 flags=0xf count=16 reported=MEDIUM
+VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=1 flags=0xc count=2 reported=MEDIUM
+VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=2 flags=0xe count=8 reported=MEDIUM
+VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=3 flags=0x2c count=1 reported=MEDIUM
+VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=4 flags=0x4c count=2 reported=MEDIUM
+VKPRIO device=NVIDIA GeForce RTX 4090 queue_family=5 flags=0x10c count=1 reported=MEDIUM
+VKPRIO create family=0 priority=LOW result=0
+VKPRIO create family=0 priority=MEDIUM result=0
+VKPRIO create family=0 priority=HIGH result=-1000174001
+VKPRIO create family=0 priority=REALTIME result=-1000174001
+VKPRIO create family=1 priority=LOW result=0
+VKPRIO create family=1 priority=MEDIUM result=0
+VKPRIO create family=1 priority=HIGH result=-1000174001
+VKPRIO create family=1 priority=REALTIME result=-1000174001
+VKPRIO create family=2 priority=LOW result=0
+VKPRIO create family=2 priority=MEDIUM result=0
+VKPRIO create family=2 priority=HIGH result=-1000174001
+VKPRIO create family=2 priority=REALTIME result=-1000174001
+VKPRIO create family=3 priority=LOW result=0
+VKPRIO create family=3 priority=MEDIUM result=0
+VKPRIO create family=3 priority=HIGH result=-1000174001
+VKPRIO create family=3 priority=REALTIME result=-1000174001
+VKPRIO create family=4 priority=LOW result=0
+VKPRIO create family=4 priority=MEDIUM result=0
+VKPRIO create family=4 priority=HIGH result=-1000174001
+VKPRIO create family=4 priority=REALTIME result=-1000174001
+VKPRIO create family=5 priority=LOW result=0
+VKPRIO create family=5 priority=MEDIUM result=0
+VKPRIO create family=5 priority=HIGH result=-1000174001
+VKPRIO create family=5 priority=REALTIME result=-1000174001
+VKALLOC requested=4000 ok=4000 last_failure=0 secs=8.702 us_per_allocation=2175.4 memory_types=5

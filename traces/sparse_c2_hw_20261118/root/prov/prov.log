@@ -1,0 +1,17 @@
+START 2026-11-18T07:21:15+00:00
+BOX_RC=0
+f5dbe55e8 hw-confirm tree: merge fixes (queue_priority test gains utilization: None; utilization use-site anchors follow the ABI-37 argument order) and the gap_vkprio probe from claude/gap-matrix-20261118
+DRIVER_RC=0
+NVIDIA GeForce RTX 4090, 580.159.04
+/dev/root       214G   13G  201G   6% /
+TREE_RC=0
+[2026-11-18T07:27:03+00:00] B4: guest ladder built: 5061712 bytes
+[2026-11-18T07:27:03+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/f5dbe55e/qemu-system-x86_64 rev=f5dbe55e mtime=2026-11-18 07:27:37.456409939 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-18T07:27:38+00:00

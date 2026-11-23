@@ -1,0 +1,3 @@
+OGR_BOOT tag=SOFF kf3=/workspace/bench/kf3-bins/f5dbe55e/qemu-system-x86_64 cases=[ msbind=/workspace/ogr/list_msbind.tsv msresid=/workspace/ogr/list_msresid.tsv t16=/workspace/ogr/list_t16.tsv t24=/workspace/ogr/list_t24.tsv mip2d=/workspace/ogr/list_mip2d.tsv mipcube=/workspace/ogr/list_mipcube.tsv imgmut=/workspace/ogr/list_imgmut.tsv dgimg=/workspace/ogr/list_dgimg.tsv intr=/workspace/ogr/list_intr.tsv rebind=/workspace/ogr/list_rebind.tsv bindinfo=/workspace/ogr/list_bindinfo.tsv alias=/workspace/ogr/list_alias.tsv  pcreate=/workspace/ogr/list_pcreate.tsv pquery=/workspace/ogr/list_pquery.tsv phigh=/workspace/ogr/list_phigh.tsv prt=/workspace/ogr/list_prt.tsv] 07:57:44
+OGR_BOOT dev_extra=[]
+OGR_BOOT_END rc=0 07:58:21

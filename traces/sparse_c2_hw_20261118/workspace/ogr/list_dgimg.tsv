@@ -1,0 +1,3 @@
+info	dEQP-VK.info.device_properties
+info	dEQP-VK.info.device_extensions
+sparse	dEQP-VK.sparse_resources.device_group_image_sparse_residency.2d.rgba16ui.1024_128_1
