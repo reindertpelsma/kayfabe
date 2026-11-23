@@ -1,0 +1,398 @@
+# kind	item	first_host	last_host	verdict   (derived by crates/kf-abi/tests/driver_pair_conformance.rs from traces/driver_matrix/ranges.tsv; regenerate with KF_REGEN_PAIR_TABLE=1; docs/design/V3_DRIVER_PAIR_CONFORMANCE.md)
+# tags	535.309.01 545.23.08 550.40.07 550.54.14 550.90.07 555.42.02 560.28.03 565.57.01 570.86.15 570.124.06 570.148.08 575.51.02 575.51.03 575.57.08 575.64.05 580.65.06 580.82.07 580.94.02 580.95.05 580.105.08 580.126.09 580.159.04 580.173.02 580.178.04 590.48.01 595.84 595.91.07 610.43.02 610.57.04 615.71.09
+guest	abi_table	535.309.01	610.57.04	OK
+guest	abi_table	615.71.09	615.71.09	REFUSED(driver 615.71.09: the measured layout of GSP_MSG_QUEUE_ELEMENT has no encoding in kayfabe (a real gap — docs/design/V3_DRIVER_MATRIX.md §6))
+host	NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET 0x20800404	535.309.01	615.71.09	OK
+host	NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR 0x00410103	535.309.01	615.71.09	OK
+host	NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2 0x00000205	535.309.01	615.71.09	OK
+host	NV0000_CTRL_CMD_OS_UNIX_EXPORT_OBJECT_TO_FD 0x00003d05	535.309.01	615.71.09	OK
+host	NV0000_CTRL_CMD_OS_UNIX_IMPORT_OBJECT_FROM_FD 0x00003d06	535.309.01	615.71.09	OK
+host	NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2 0x00800292	535.309.01	545.23.08	CONDITIONAL(REFUSED-IF-FULL classList[160] carries data the target version's struct has no room for)
+host	NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2 0x00800292	550.40.07	550.90.07	CONDITIONAL(REFUSED-IF-FULL classList[174] carries data the target version's struct has no room for)
+host	NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2 0x00800292	555.42.02	575.64.05	CONDITIONAL(REFUSED-IF-FULL classList[100] carries data the target version's struct has no room for)
+host	NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2 0x00800292	580.65.06	615.71.09	OK
+host	NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL 0x00801909	535.309.01	615.71.09	OK
+host	NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE 0x0080170e	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_FIFO_GET_INFO 0x20801109	535.309.01	615.71.09	OK
+host	NV0080_CTRL_CMD_MSENC_GET_CAPS_V2 0x00801b02	535.309.01	535.309.01	REFUSED(Layout: NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS does not exist at driver 535.309.01 (measured))
+host	NV0080_CTRL_CMD_MSENC_GET_CAPS_V2 0x00801b02	545.23.08	545.23.08	REFUSED(Layout: NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS does not exist at driver 545.23.08 (measured))
+host	NV0080_CTRL_CMD_MSENC_GET_CAPS_V2 0x00801b02	550.40.07	580.82.07	CONDITIONAL(REFUSED-IF-FULL capsTbl[4] carries data the target version's struct has no room for)
+host	NV0080_CTRL_CMD_MSENC_GET_CAPS_V2 0x00801b02	580.94.02	580.178.04	OK
+host	NV0080_CTRL_CMD_MSENC_GET_CAPS_V2 0x00801b02	590.48.01	615.71.09	CONDITIONAL(REFUSED-IF-FULL(reply) capsTbl[5] carries data the target version's struct has no room for)
+host	NV0080_CTRL_CMD_BSP_GET_CAPS_V2 0x00801c02	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GPU_GET_INFO_V2 0x20800102	535.309.01	535.309.01	CONDITIONAL(REFUSED-IF-FULL gpuInfoList[64] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GPU_GET_INFO_V2 0x20800102	545.23.08	570.148.08	CONDITIONAL(REFUSED-IF-FULL gpuInfoList[65] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GPU_GET_INFO_V2 0x20800102	575.51.02	575.64.05	CONDITIONAL(REFUSED-IF-FULL gpuInfoList[66] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GPU_GET_INFO_V2 0x20800102	580.65.06	595.91.07	OK
+host	NV2080_CTRL_CMD_GPU_GET_INFO_V2 0x20800102	610.43.02	615.71.09	CONDITIONAL(REFUSED-IF-FULL(reply) gpuInfoList[70] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GPU_GET_NAME_STRING 0x20800110	535.309.01	590.48.01	OK
+host	NV2080_CTRL_CMD_GPU_GET_NAME_STRING 0x20800110	595.84	615.71.09	CONDITIONAL(REFUSED-IF-FULL gpuNameString[64] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GPU_GET_SHORT_NAME_STRING 0x20800111	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GPU_GET_GID_INFO 0x2080014a	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GPU_GET_PES_INFO 0x20800168	535.309.01	610.57.04	OK
+host	NV2080_CTRL_CMD_GPU_GET_PES_INFO 0x20800168	615.71.09	615.71.09	CONDITIONAL(REFUSED-IF-FULL(reply) tpcToPesMap[10] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GPU_GET_ENGINES_V2 0x20800170	535.309.01	535.309.01	CONDITIONAL(REFUSED-IF-FULL engineList[62] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GPU_GET_ENGINES_V2 0x20800170	545.23.08	545.23.08	CONDITIONAL(REFUSED-IF-FULL engineList[63] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GPU_GET_ENGINES_V2 0x20800170	550.40.07	555.42.02	CONDITIONAL(REFUSED-IF-FULL engineList[64] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GPU_GET_ENGINES_V2 0x20800170	560.28.03	615.71.09	OK
+host	NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO 0x208001b0	535.309.01	535.309.01	REFUSED(Layout: NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS does not exist at driver 535.309.01 (measured))
+host	NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO 0x208001b0	545.23.08	545.23.08	REFUSED(Layout: NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS does not exist at driver 545.23.08 (measured))
+host	NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO 0x208001b0	550.40.07	615.71.09	OK
+host	NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION 0x20800301	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_BIOS_GET_INFO_V2 0x20800810	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS 0x2080110b	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_GET_ZCULL_INFO 0x20801206	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND 0x20801208	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE 0x20801210	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER 0x2080121b	535.309.01	570.148.08	CONDITIONAL(ABSENT-ON-HOST -globalSmId[].physicalCpcId: request refused if set, reply reads 0; ABSENT-ON-HOST -globalSmId[].ugpuId: request refused if set, reply reads 0; ABSENT-ON-HOST -globalSmId[].virtualTpcId: request refused if set, reply reads 0)
+host	NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER 0x2080121b	575.51.02	575.64.05	CONDITIONAL(ABSENT-ON-HOST -globalSmId[].physicalCpcId: request refused if set, reply reads 0; ABSENT-ON-HOST -globalSmId[].virtualTpcId: request refused if set, reply reads 0)
+host	NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER 0x2080121b	580.65.06	610.57.04	OK
+host	NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER 0x2080121b	615.71.09	615.71.09	DEFAULTED(+globalSmId[].virtualDpcId)
+host	NV2080_CTRL_CMD_GR_GET_CAPS_V2 0x20801227	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_GET_INFO_V2 0x20801228	535.309.01	535.309.01	CONDITIONAL(REFUSED-IF-FULL grInfoList[53] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GR_GET_INFO_V2 0x20801228	545.23.08	565.57.01	CONDITIONAL(REFUSED-IF-FULL grInfoList[56] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GR_GET_INFO_V2 0x20801228	570.86.15	580.178.04	OK
+host	NV2080_CTRL_CMD_GR_GET_INFO_V2 0x20801228	590.48.01	615.71.09	CONDITIONAL(REFUSED-IF-FULL(reply) grInfoList[58] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_GR_GET_GPC_MASK 0x2080122a	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_GET_TPC_MASK 0x2080122b	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_GET_ENGINE_CONTEXT_PROPERTIES 0x2080122d	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER 0x20801230	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC 0x20801234	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_GET_ZCULL_MASK 0x20801237	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GR_GET_GFX_GPC_AND_TPC_INFO 0x20801239	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_FB_GET_INFO_V2 0x20801303	535.309.01	535.309.01	CONDITIONAL(REFUSED-IF-FULL fbInfoList[54] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_FB_GET_INFO_V2 0x20801303	545.23.08	555.42.02	CONDITIONAL(REFUSED-IF-FULL fbInfoList[55] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_FB_GET_INFO_V2 0x20801303	560.28.03	575.64.05	CONDITIONAL(REFUSED-IF-FULL fbInfoList[57] carries data the target version's struct has no room for)
+host	NV2080_CTRL_CMD_FB_GET_INFO_V2 0x20801303	580.65.06	615.71.09	OK
+host	NV2080_CTRL_CMD_FB_FLUSH_GPU_CACHE 0x2080130e	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO 0x20801315	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_MC_GET_ARCH_INFO 0x20801701	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE 0x2080170e	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	535.309.01	535.309.01	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 535.309.01 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	545.23.08	545.23.08	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 545.23.08 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	550.40.07	550.40.07	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 550.40.07 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	550.54.14	550.54.14	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 550.54.14 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	550.90.07	550.90.07	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 550.90.07 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	555.42.02	555.42.02	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 555.42.02 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	560.28.03	560.28.03	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 560.28.03 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	565.57.01	565.57.01	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 565.57.01 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	570.86.15	570.86.15	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 570.86.15 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	570.124.06	570.124.06	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 570.124.06 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	570.148.08	570.148.08	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 570.148.08 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	575.51.02	575.51.02	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 575.51.02 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	575.51.03	575.51.03	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 575.51.03 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	575.57.08	575.57.08	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 575.57.08 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	575.64.05	575.64.05	REFUSED(Layout: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 575.64.05 (measured))
+host	NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f	580.65.06	615.71.09	OK
+host	NV2080_CTRL_CMD_BUS_GET_INFO_V2 0x20801823	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_BUS_GET_C2C_INFO 0x2080182b	535.309.01	570.148.08	CONDITIONAL(ABSENT-ON-HOST -bLinkInHS: request refused if set, reply reads 0)
+host	NV2080_CTRL_CMD_BUS_GET_C2C_INFO 0x2080182b	575.51.02	595.91.07	OK
+host	NV2080_CTRL_CMD_BUS_GET_C2C_INFO 0x2080182b	610.43.02	615.71.09	DEFAULTED(+bEncryptionEnabled)
+host	NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2 0x2080200b	535.309.01	535.309.01	REFUSED(Layout: NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS does not exist at driver 535.309.01 (measured))
+host	NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2 0x2080200b	545.23.08	545.23.08	REFUSED(Layout: NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS does not exist at driver 545.23.08 (measured))
+host	NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2 0x2080200b	550.40.07	615.71.09	OK
+host	NV2080_CTRL_CMD_DMA_INVALIDATE_TLB 0x20802502	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK 0x20802a02	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_CE_GET_CAPS_V2 0x20802a03	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_CE_GET_ALL_CAPS 0x20802a0a	535.309.01	535.309.01	CONDITIONAL(REFUSED-IF-FULL capsTbl does not fit the target version's narrower field)
+host	NV2080_CTRL_CMD_CE_GET_ALL_CAPS 0x20802a0a	545.23.08	615.71.09	OK
+host	NV2080_CTRL_CMD_GSP_GET_FEATURES 0x20803601	535.309.01	615.71.09	OK
+host	NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO 0x20803801	535.309.01	615.71.09	OK
+host	NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK 0x83de0309	535.309.01	615.71.09	OK
+host	NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE 0x90960106	535.309.01	615.71.09	OK
+host	NVA06C_CTRL_CMD_GPFIFO_SCHEDULE 0xa06c0101	535.309.01	570.148.08	CONDITIONAL(ABSENT-ON-HOST -bSkipEnable: request refused if set, reply reads 0)
+host	NVA06C_CTRL_CMD_GPFIFO_SCHEDULE 0xa06c0101	575.51.02	615.71.09	OK
+host	NVA06C_CTRL_CMD_BIND 0xa06c0102	535.309.01	615.71.09	OK
+host	NVA06C_CTRL_CMD_SET_TIMESLICE 0xa06c0103	535.309.01	615.71.09	OK
+host	NVA06C_CTRL_CMD_PREEMPT 0xa06c0105	535.309.01	615.71.09	OK
+host	NVA06F_CTRL_CMD_BIND 0xa06f0104	535.309.01	615.71.09	OK
+host	NV906F_CTRL_GET_CLASS_ENGINEID 0x906f0101	535.309.01	615.71.09	OK
+host	NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN 0xc36f0108	535.309.01	615.71.09	OK
+host	0x20809064	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x20809064 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20809064	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x20809064	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x20809064	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x20809064	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x20809064	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x20809064	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x20809064	580.159.04	580.159.04	OK(opaque 520 B, exact tag measured)
+host	0x20809064	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x20809064	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x20809064	590.48.01	595.84	REFUSED(NoHeader: host control 0x20809064 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20809064	595.91.07	595.91.07	OK(opaque 520 B, exact tag measured)
+host	0x20809064	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x20809064 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a028	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080a028 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a028	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080a028	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080a028	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080a028	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080a028	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080a028	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080a028	580.159.04	580.159.04	OK(opaque 2192 B, exact tag measured)
+host	0x2080a028	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080a028	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080a028	590.48.01	595.84	REFUSED(NoHeader: host control 0x2080a028 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a028	595.91.07	595.91.07	OK(opaque 2192 B, exact tag measured)
+host	0x2080a028	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080a028 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a084	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080a084 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a084	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080a084	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080a084	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080a084	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080a084	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080a084	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080a084	580.159.04	580.159.04	OK(opaque 4 B, exact tag measured)
+host	0x2080a084	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080a084	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080a084	590.48.01	595.84	REFUSED(NoHeader: host control 0x2080a084 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a084	595.91.07	595.91.07	OK(opaque 4 B, exact tag measured)
+host	0x2080a084	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080a084 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a026	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080a026 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a026	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080a026	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080a026	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080a026	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080a026	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080a026	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080a026	580.159.04	580.159.04	OK(opaque 532 B, exact tag measured)
+host	0x2080a026	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080a026	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080a026	590.48.01	595.84	REFUSED(NoHeader: host control 0x2080a026 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a026	595.91.07	595.91.07	OK(opaque 532 B, exact tag measured)
+host	0x2080a026	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080a026 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20809009	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x20809009 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20809009	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x20809009	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x20809009	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x20809009	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x20809009	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x20809009	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x20809009	580.159.04	580.159.04	OK(opaque 8 B, exact tag measured)
+host	0x20809009	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x20809009	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x20809009	590.48.01	595.84	REFUSED(NoHeader: host control 0x20809009 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20809009	595.91.07	595.91.07	OK(opaque 8 B, exact tag measured)
+host	0x20809009	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x20809009 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20809001	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x20809001 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20809001	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x20809001	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x20809001	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x20809001	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x20809001	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x20809001	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x20809001	580.159.04	580.159.04	OK(opaque 8 B, exact tag measured)
+host	0x20809001	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x20809001	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x20809001	590.48.01	595.84	REFUSED(NoHeader: host control 0x20809001 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20809001	595.91.07	595.91.07	OK(opaque 8 B, exact tag measured)
+host	0x20809001	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x20809001 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a001	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080a001 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a001	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080a001	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080a001	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080a001	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080a001	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080a001	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080a001	580.159.04	580.159.04	OK(opaque 16 B, exact tag measured)
+host	0x2080a001	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080a001	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080a001	590.48.01	595.84	REFUSED(NoHeader: host control 0x2080a001 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080a001	595.91.07	595.91.07	OK(opaque 16 B, exact tag measured)
+host	0x2080a001	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080a001 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080852a	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080852a has no public header (measured:1784 NV_OK at 595.84 and 595.91.07, traces/constants_measure_20261014b/tier2/raw_36762817.txt:27, raw_49498406.txt:27, raw_53783014.txt:27, raw_55027878.txt:27)
+host	0x2080852a	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080852a	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080852a	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080852a	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080852a	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080852a	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080852a	580.159.04	580.159.04	OK(opaque 1784 B, exact tag measured)
+host	0x2080852a	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080852a	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080852a	590.48.01	590.48.01	REFUSED(NoHeader: host control 0x2080852a has no public header (measured:1784 NV_OK at 595.84 and 595.91.07, traces/constants_measure_20261014b/tier2/raw_36762817.txt:27, raw_49498406.txt:27, raw_53783014.txt:27, raw_55027878.txt:27)
+host	0x2080852a	595.84	595.91.07	OK(opaque 1784 B, exact tag measured)
+host	0x2080852a	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080852a has no public header (measured:1784 NV_OK at 595.84 and 595.91.07, traces/constants_measure_20261014b/tier2/raw_36762817.txt:27, raw_49498406.txt:27, raw_53783014.txt:27, raw_55027878.txt:27)
+host	0x20808524	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x20808524 has no public header (measured:AD104,595.91.07,2026-10-13)
+host	0x20808524	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x20808524	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x20808524	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x20808524	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x20808524	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x20808524	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x20808524	580.159.04	580.159.04	OK(opaque 4 B, exact tag measured)
+host	0x20808524	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x20808524	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x20808524	590.48.01	595.84	REFUSED(NoHeader: host control 0x20808524 has no public header (measured:AD104,595.91.07,2026-10-13)
+host	0x20808524	595.91.07	595.91.07	OK(opaque 4 B, exact tag measured)
+host	0x20808524	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x20808524 has no public header (measured:AD104,595.91.07,2026-10-13)
+host	0x2080a70a	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080a70a has no public header (measured:AD104,595.91.07,2026-10-13)
+host	0x2080a70a	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080a70a	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080a70a	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080a70a	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080a70a	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080a70a	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080a70a	580.159.04	580.159.04	OK(opaque 26 B, exact tag measured)
+host	0x2080a70a	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080a70a	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080a70a	590.48.01	595.84	REFUSED(NoHeader: host control 0x2080a70a has no public header (measured:AD104,595.91.07,2026-10-13)
+host	0x2080a70a	595.91.07	595.91.07	OK(opaque 26 B, exact tag measured)
+host	0x2080a70a	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080a70a has no public header (measured:AD104,595.91.07,2026-10-13)
+host	0x2080a088	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080a088 has no public header (measured:AD104,595.91.07,2026-10-13)
+host	0x2080a088	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080a088	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080a088	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080a088	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080a088	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080a088	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080a088	580.159.04	580.159.04	OK(opaque 12 B, exact tag measured)
+host	0x2080a088	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080a088	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080a088	590.48.01	595.84	REFUSED(NoHeader: host control 0x2080a088 has no public header (measured:AD104,595.91.07,2026-10-13)
+host	0x2080a088	595.91.07	595.91.07	OK(opaque 12 B, exact tag measured)
+host	0x2080a088	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080a088 has no public header (measured:AD104,595.91.07,2026-10-13)
+host	0x2080852c	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080852c has no public header (measured:AD104,595.91.07,2026-11-04)
+host	0x2080852c	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080852c	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080852c	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080852c	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080852c	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080852c	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080852c	580.159.04	580.159.04	OK(opaque 1440 B, exact tag measured)
+host	0x2080852c	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080852c	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080852c	590.48.01	595.84	REFUSED(NoHeader: host control 0x2080852c has no public header (measured:AD104,595.91.07,2026-11-04)
+host	0x2080852c	595.91.07	595.91.07	OK(opaque 1440 B, exact tag measured)
+host	0x2080852c	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080852c has no public header (measured:AD104,595.91.07,2026-11-04)
+host	0x20808162	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x20808162 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20808162	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x20808162	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x20808162	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x20808162	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x20808162	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x20808162	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x20808162	580.159.04	580.159.04	OK(opaque 1 B, exact tag measured)
+host	0x20808162	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x20808162	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x20808162	590.48.01	595.84	REFUSED(NoHeader: host control 0x20808162 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x20808162	595.91.07	595.91.07	OK(opaque 1 B, exact tag measured)
+host	0x20808162	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x20808162 has no public header (measured:AD104,595.91.07,2026-10-14)
+host	0x2080852e	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080852e has no public header (zero request measured NV_OK at 528 B on AD103 575.51.03 and GSP 580.65.05)
+host	0x2080852e	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080852e	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080852e	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080852e	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080852e	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080852e	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080852e	580.159.04	580.159.04	OK(branch-sized, exact tag measured)
+host	0x2080852e	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080852e	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080852e	590.48.01	590.48.01	REFUSED(NoHeader: host control 0x2080852e has no public header (zero request measured NV_OK at 528 B on AD103 575.51.03 and GSP 580.65.05)
+host	0x2080852e	595.84	595.91.07	OK(branch-sized, exact tag measured)
+host	0x2080852e	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080852e has no public header (zero request measured NV_OK at 528 B on AD103 575.51.03 and GSP 580.65.05)
+host	0x2080853a	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080853a has no public header (zero request measured NV_OK at 1456 B on AD103 575.51.03 and GSP 580.65.05)
+host	0x2080853a	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080853a	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080853a	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080853a	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080853a	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080853a	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080853a	580.159.04	580.159.04	OK(branch-sized, exact tag measured)
+host	0x2080853a	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080853a	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080853a	590.48.01	590.48.01	REFUSED(NoHeader: host control 0x2080853a has no public header (zero request measured NV_OK at 1456 B on AD103 575.51.03 and GSP 580.65.05)
+host	0x2080853a	595.84	595.91.07	OK(branch-sized, exact tag measured)
+host	0x2080853a	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080853a has no public header (zero request measured NV_OK at 1456 B on AD103 575.51.03 and GSP 580.65.05)
+host	0x2080a618	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080a618 has no public header (zero request measured NV_OK at 8620 B on AD103 575.51.03 and GSP 580.65.05)
+host	0x2080a618	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080a618	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080a618	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080a618	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080a618	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080a618	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080a618	580.159.04	580.159.04	OK(branch-sized, exact tag measured)
+host	0x2080a618	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080a618	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080a618	590.48.01	590.48.01	REFUSED(NoHeader: host control 0x2080a618 has no public header (zero request measured NV_OK at 8620 B on AD103 575.51.03 and GSP 580.65.05)
+host	0x2080a618	595.84	595.91.07	OK(branch-sized, exact tag measured)
+host	0x2080a618	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080a618 has no public header (zero request measured NV_OK at 8620 B on AD103 575.51.03 and GSP 580.65.05)
+host	0x2080853b	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x2080853b has no public header (Windows 580.88 (GSP 580.65.05) issued it once at 1832 B, never measured on a host)
+host	0x2080853b	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x2080853b	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x2080853b	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x2080853b	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x2080853b	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x2080853b	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x2080853b	580.159.04	580.159.04	OK(branch-sized, exact tag measured)
+host	0x2080853b	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x2080853b	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x2080853b	590.48.01	590.48.01	REFUSED(NoHeader: host control 0x2080853b has no public header (Windows 580.88 (GSP 580.65.05) issued it once at 1832 B, never measured on a host)
+host	0x2080853b	595.84	595.91.07	OK(branch-sized, exact tag measured)
+host	0x2080853b	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x2080853b has no public header (Windows 580.88 (GSP 580.65.05) issued it once at 1832 B, never measured on a host)
+host	0x20808163	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x20808163 has no public header (measured:AD104,595.91.07,2026-10-11)
+host	0x20808163	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x20808163	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x20808163	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x20808163	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x20808163	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x20808163	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x20808163	580.159.04	580.159.04	OK(opaque 4 B, exact tag measured)
+host	0x20808163	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x20808163	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x20808163	590.48.01	595.84	REFUSED(NoHeader: host control 0x20808163 has no public header (measured:AD104,595.91.07,2026-10-11)
+host	0x20808163	595.91.07	595.91.07	OK(opaque 4 B, exact tag measured)
+host	0x20808163	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x20808163 has no public header (measured:AD104,595.91.07,2026-10-11)
+host	0x20808164	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x20808164 has no public header (measured:AD104,595.91.07,2026-10-11)
+host	0x20808164	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x20808164	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x20808164	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x20808164	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x20808164	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x20808164	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x20808164	580.159.04	580.159.04	OK(opaque 4 B, exact tag measured)
+host	0x20808164	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x20808164	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x20808164	590.48.01	595.84	REFUSED(NoHeader: host control 0x20808164 has no public header (measured:AD104,595.91.07,2026-10-11)
+host	0x20808164	595.91.07	595.91.07	OK(opaque 4 B, exact tag measured)
+host	0x20808164	610.43.02	615.71.09	REFUSED(NoHeader: host control 0x20808164 has no public header (measured:AD104,595.91.07,2026-10-11)
+host	0x20802096	535.309.01	575.64.05	REFUSED(NoHeader: host control 0x20802096 has no public header (derived: ogkm ctrl2080perf.h compiled by tools/util-probe/generate.py)
+host	0x20802096	580.65.06	580.65.06	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.65.06 not probed)
+host	0x20802096	580.82.07	580.82.07	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.82.07 not probed)
+host	0x20802096	580.94.02	580.94.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.94.02 not probed)
+host	0x20802096	580.95.05	580.95.05	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.95.05 not probed)
+host	0x20802096	580.105.08	580.105.08	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.105.08 not probed)
+host	0x20802096	580.126.09	580.126.09	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.126.09 not probed)
+host	0x20802096	580.159.04	580.159.04	OK(opaque 55888 B, exact tag measured)
+host	0x20802096	580.173.02	580.173.02	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.173.02 not probed)
+host	0x20802096	580.178.04	580.178.04	UNKNOWN(no ogkm oracle for this id; 580-interval contract, 580.178.04 not probed)
+host	0x20802096	590.48.01	615.71.09	OK(opaque 55888 B, exact tag measured)
+summary	host 535.309.01	535.309.01	535.309.01	controls=78 OK=45 DEFAULTED=0 CONDITIONAL=9 UNKNOWN=0 REFUSED=24 worst=REFUSED
+summary	host 545.23.08	545.23.08	545.23.08	controls=78 OK=46 DEFAULTED=0 CONDITIONAL=8 UNKNOWN=0 REFUSED=24 worst=REFUSED
+summary	host 550.40.07	550.40.07	550.40.07	controls=78 OK=48 DEFAULTED=0 CONDITIONAL=9 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 550.54.14	550.54.14	550.54.14	controls=78 OK=48 DEFAULTED=0 CONDITIONAL=9 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 550.90.07	550.90.07	550.90.07	controls=78 OK=48 DEFAULTED=0 CONDITIONAL=9 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 555.42.02	555.42.02	555.42.02	controls=78 OK=48 DEFAULTED=0 CONDITIONAL=9 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 560.28.03	560.28.03	560.28.03	controls=78 OK=49 DEFAULTED=0 CONDITIONAL=8 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 565.57.01	565.57.01	565.57.01	controls=78 OK=49 DEFAULTED=0 CONDITIONAL=8 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 570.86.15	570.86.15	570.86.15	controls=78 OK=50 DEFAULTED=0 CONDITIONAL=7 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 570.124.06	570.124.06	570.124.06	controls=78 OK=50 DEFAULTED=0 CONDITIONAL=7 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 570.148.08	570.148.08	570.148.08	controls=78 OK=50 DEFAULTED=0 CONDITIONAL=7 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 575.51.02	575.51.02	575.51.02	controls=78 OK=52 DEFAULTED=0 CONDITIONAL=5 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 575.51.03	575.51.03	575.51.03	controls=78 OK=52 DEFAULTED=0 CONDITIONAL=5 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 575.57.08	575.57.08	575.57.08	controls=78 OK=52 DEFAULTED=0 CONDITIONAL=5 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 575.64.05	575.64.05	575.64.05	controls=78 OK=52 DEFAULTED=0 CONDITIONAL=5 UNKNOWN=0 REFUSED=21 worst=REFUSED
+summary	host 580.65.06	580.65.06	580.65.06	controls=78 OK=57 DEFAULTED=0 CONDITIONAL=1 UNKNOWN=20 REFUSED=0 worst=UNKNOWN
+summary	host 580.82.07	580.82.07	580.82.07	controls=78 OK=57 DEFAULTED=0 CONDITIONAL=1 UNKNOWN=20 REFUSED=0 worst=UNKNOWN
+summary	host 580.94.02	580.94.02	580.94.02	controls=78 OK=58 DEFAULTED=0 CONDITIONAL=0 UNKNOWN=20 REFUSED=0 worst=UNKNOWN
+summary	host 580.95.05	580.95.05	580.95.05	controls=78 OK=58 DEFAULTED=0 CONDITIONAL=0 UNKNOWN=20 REFUSED=0 worst=UNKNOWN
+summary	host 580.105.08	580.105.08	580.105.08	controls=78 OK=58 DEFAULTED=0 CONDITIONAL=0 UNKNOWN=20 REFUSED=0 worst=UNKNOWN
+summary	host 580.126.09	580.126.09	580.126.09	controls=78 OK=58 DEFAULTED=0 CONDITIONAL=0 UNKNOWN=20 REFUSED=0 worst=UNKNOWN
+summary	host 580.159.04	580.159.04	580.159.04	controls=78 OK=78 DEFAULTED=0 CONDITIONAL=0 UNKNOWN=0 REFUSED=0 worst=OK
+summary	host 580.173.02	580.173.02	580.173.02	controls=78 OK=58 DEFAULTED=0 CONDITIONAL=0 UNKNOWN=20 REFUSED=0 worst=UNKNOWN
+summary	host 580.178.04	580.178.04	580.178.04	controls=78 OK=58 DEFAULTED=0 CONDITIONAL=0 UNKNOWN=20 REFUSED=0 worst=UNKNOWN
+summary	host 590.48.01	590.48.01	590.48.01	controls=78 OK=57 DEFAULTED=0 CONDITIONAL=2 UNKNOWN=0 REFUSED=19 worst=REFUSED
+summary	host 595.84	595.84	595.84	controls=78 OK=61 DEFAULTED=0 CONDITIONAL=3 UNKNOWN=0 REFUSED=14 worst=REFUSED
+summary	host 595.91.07	595.91.07	595.91.07	controls=78 OK=75 DEFAULTED=0 CONDITIONAL=3 UNKNOWN=0 REFUSED=0 worst=CONDITIONAL
+summary	host 610.43.02	610.43.02	610.43.02	controls=78 OK=54 DEFAULTED=1 CONDITIONAL=4 UNKNOWN=0 REFUSED=19 worst=REFUSED
+summary	host 610.57.04	610.57.04	610.57.04	controls=78 OK=54 DEFAULTED=1 CONDITIONAL=4 UNKNOWN=0 REFUSED=19 worst=REFUSED
+summary	host 615.71.09	615.71.09	615.71.09	controls=78 OK=52 DEFAULTED=2 CONDITIONAL=5 UNKNOWN=0 REFUSED=19 worst=REFUSED
