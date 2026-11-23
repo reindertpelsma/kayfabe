@@ -13,7 +13,7 @@ if [ ! -f "$IMG.apps_resized" ]; then qemu-img resize "$IMG" +40G && touch "$IMG
 # ⚠ -cpu host is required (x86-64-v2 for numpy; see provision_guest_llm.sh)
 qemu-system-x86_64 -enable-kvm -cpu host -m 12G -smp 8 -display none \
   -drive if=virtio,file="$IMG",format=qcow2 \
-  -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
+  -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2222-:22 -device virtio-net-pci,netdev=n0 \
   -serial file:"$BENCH/appsprov_serial.log" -daemonize -pidfile "$BENCH/appsprov.pid"
 # the stage kills this script's process group on a timeout; QEMU is daemonized, so stop it here as well
 trap '[ -s "$BENCH/appsprov.pid" ] && kill "$(cat "$BENCH/appsprov.pid")" 2>/dev/null; exit 143' TERM INT

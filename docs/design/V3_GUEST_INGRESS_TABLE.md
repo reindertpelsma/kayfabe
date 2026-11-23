@@ -111,6 +111,12 @@ gate skips the class check.
 
 ## 6. Licence (task I7, owner position)
 
+⊘ *Correction 2026-11-23 (security audit stage 2, S2-04b in `docs/audits/2026-11-23-v3-stage2.md`): the scope
+stated in the next paragraph left out code the kf3 binary embeds. The gate now also scans `cuda/display` (the
+display PTX kf-cuda embeds) and `firmware/kf-gop` (the GOP driver kf-gop-image's build script builds and embeds,
+with its own `Cargo.lock`), follows build-dependency edges, and fails on a third-party crate that its
+`EXTERNAL_PINNED` set does not name (today `libc`).*
+
 The QEMU-linked tree no longer contains gVisor-derived code, data, comments or citations;
 `scripts/ci/qemu_license_closure.py` walks kf-qemu's cargo closure (19 workspace crates, one external crate,
 `libc`, `MIT OR Apache-2.0`) plus `qemu/hw/misc/kf3` and `cuda/walk`, and fails on a file named in `LICENSE`
