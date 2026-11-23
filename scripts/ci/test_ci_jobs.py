@@ -30,6 +30,8 @@ HARNESSES = [
     'python3 -m black --check --config ci/vast-broker/pyproject.toml ci/vast-broker',
     'node --test ci/vast-broker/test',
     'node ci/vast-broker/scripts/mutate-tiers.mjs',
+    'node ci/vast-broker/scripts/check-bundle-pin.mjs',
+    'node ci/vast-broker/scripts/bundle-pin-mutants.mjs',
     'python3 scripts/ci/oidc_retry_mutants.py',
     'python3 -B -I scripts/ci/test_propimage.py',
     'python3 -B -I scripts/ci/propimage_mutants.py',
@@ -160,6 +162,13 @@ class Layout(unittest.TestCase):
             steps = jobs()[name]["steps"]
             first_run = next(s["run"] for s in steps if "run" in s)
             self.assertIn("npm ci --prefix ci/vast-broker --omit=dev", logical_lines(first_run)[0], name)
+
+    def test_worker_tests_install_the_dev_dependencies_so_the_bundle_test_runs(self):
+        # test/bundle.test.js skips without wrangler (a dev dependency); an --omit=dev install let a stale pin through.
+        installs = [line for line in logical_lines("\n".join(s.get("run", "") for s in jobs()["worker-tests"]["steps"]))
+                    if line.startswith("npm ci --prefix ci/vast-broker")]
+        self.assertEqual(len(installs), 1, installs)
+        self.assertNotIn("--omit=dev", installs[0])
 
     def test_stable_and_stripped_have_a_time_limit_too(self):
         for name in ("stable", "stripped"):

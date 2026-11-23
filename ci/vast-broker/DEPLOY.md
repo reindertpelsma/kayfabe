@@ -101,7 +101,7 @@ leaves the box to the Worker's timers (paid work survives a Worker outage).
 ## Build and test
 
 [CODE READ: package.json, package-lock.json] Install first: `npm ci --ignore-scripts` in
-`ci/vast-broker` (tests alone need `npm ci --omit=dev --ignore-scripts`: only `jose`). In
+`ci/vast-broker` (the tests need the dev dependency `wrangler` too, or `test/bundle.test.js` skips; CI installs it). In
 `ci/vast-broker`, run `npm test`; from the repository root, run `node --test ci/vast-broker/test`
 (the CI form). Both run the same suite.
 `--ignore-scripts` skips the install scripts of esbuild and workerd; their platform binaries
@@ -111,9 +111,10 @@ arrive as optional dependencies, and `npm ci` checks every tarball against the l
 output: `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>` writes `<dir>/index.js`
 (byte-identical across runs and checkout paths), and its SHA-256 is `bundle_sha256` in
 `deployment.json` and `DEPLOYED_BUNDLE_SHA256` in `wrangler.toml` (vars are not part of the
-module). `test/bundle.test.js` re-checks this when the dev dependencies are installed; GitHub CI
-installs only `--omit=dev` and skips it, so a `src/` change without a hash update is caught by the
-deploy helper at deploy time, not by CI (final review C1). After any
+module). `test/bundle.test.js` re-checks this when the dev dependencies are installed. Until 2026-11-23
+GitHub CI installed only `--omit=dev` and skipped it, so a stale pin reached `next` (see "Bundle pin
+regenerated 2026-11-23" at the end). CI now installs the dev dependencies in `worker-tests` and runs
+`scripts/check-bundle-pin.mjs`, which fails instead of skipping, and `scripts/bundle-pin-mutants.mjs`. After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 
@@ -1189,3 +1190,20 @@ is [CODE READ + GPU-free tests]; nothing ran against Cloudflare or Vast.
   the full URL) in every private and public log, report and evidence path it writes, including the
   values the box held at rent time. Boxes receive them by design; they are not capabilities beyond
   reaching the Worker's edge, because every route still needs a run token.
+
+## Bundle pin regenerated 2026-11-23
+
+STATUS: LIVE, 2026-11-23 as source; NOT DEPLOYED. Local dry-runs only: no upload, no Worker call, no rental.
+
+[MEASURED 2026-11-23, wrangler 4.152.0, physical `node_modules`] The pin on `next` was `afdcfe985b901192210da35ad661bc13ec96df189583d3cc22c3e8e98d88d369`
+(set at `cbf74eb81`, which a dry-run of that commit reproduces). `next` at `90a658c31` bundles to
+`6df4c71856b6ca53feeb773c04b78a186fa88939b6821a69d036398799ceb57b` (two dry-runs, identical), which is the new pin in `deployment.json`
+and `wrangler.toml`. The source changed after the old pin without a regeneration: #375, #447, #446, #455, #459, #521, #483, #526, #528, #539
+(`src/`, `defaults.json` and the new JSON tables the bundle imports changed; `package-lock.json` and `wrangler.toml` vars did not). Why CI missed it:
+`worker-tests` installed with `--omit=dev`, so `test/bundle.test.js` skipped (INFERRED from the workflow; CI was green).
+
+CI check (`worker-tests`): the install includes the dev dependencies, `node ci/vast-broker/scripts/check-bundle-pin.mjs` fails when either pin differs from a fresh
+dry-run bundle or when wrangler is missing, and `node ci/vast-broker/scripts/bundle-pin-mutants.mjs` shows it killing a one-byte change of `src/index.js`, a
+one-byte change of `defaults.json`, and a pin edited in one of the two files. [MEASURED 2026-11-23] On `next` before the pin change the check exits 1.
+
+Order: master must carry the new pin before the coordinator deploys the Worker (rule above); set `RELEASE_ENABLED=false` before any rollback.
