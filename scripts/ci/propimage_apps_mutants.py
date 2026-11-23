@@ -25,11 +25,13 @@ FILES = {
     "report": "scripts/ci/vast_report.py",
     "payload": "scripts/ci/vast_payload.py",
     "pab": "scripts/ci/propimage_apps_b_stage.py",
+    "pabm": "scripts/bench/windows/propimage_apps_b.py",
+    "uit": "scripts/bench/windows/apps_b/ui_table.py",
     "check": "scripts/bench/windows/propimage_check.py",
 }
 SOURCES = {key: (ROOT / path).read_text() for key, path in FILES.items()}
 SUITE = "test_propimage_apps."
-COPY_DIRS = ["scripts/ci", "scripts/kfci"]
+COPY_DIRS = ["scripts/ci", "scripts/kfci", "scripts/bench/windows/apps_b"]
 COPY_FILES = [
     "scripts/bench/native_xid_guard.py",
     "scripts/bench/native_fault_names.json",
@@ -57,6 +59,10 @@ r = unittest.TextTestRunner(stream=io.StringIO()).run(suite)
 print('KF_MUTATION_RESULT=' + json.dumps({'tests': r.testsRun, 'killers': [t.id() for t, _ in r.failures + r.errors]}))
 """
 
+PF, RS, SH, RP2 = ("test_propimage_apps_b_stage." + n for n in ("PinsFlag.", "RowSelection.", "Shrink.", "Report."))   # image B test branch 2026-11-20
+UI = "test_propimage_apps_b_ui."
+UPULL, USCR, UGRADE, UTAB, UWORDS, UCAP = (UI + n for n in ("Pull.", "Scrub.", "GradeLaunch.", "LaunchTable.", "Words.", "CaptureScript."))
+UT = "test_ui_table.T."
 PB, BG, CK = ("test_propimage_apps_b_stage.Plan.", "test_propimage_apps_b_stage.GuestRam.", "test_propimage_check.T.")   # image B's stage and the harness
 P, V, B, K, R, RP, W, G, RV = (SUITE + n for n in (
     "Pins.", "Preflight.", "Boots.", "Verdicts.", "Run.", "ReportValidation.", "PayloadWiring.", "KernelLogWindows.", "ReportValidation."))
@@ -255,6 +261,69 @@ MUTANTS = [
       CK + "test_pipeline_passes_the_ram_and_audio_overrides_to_the_argv", CK + "test_pipeline_ram_alone_sets_no_sound_card"),
     M("b-check-audio-not-forwarded", "check", "ram_mb=a.ram_mb, audio=a.audio,", "ram_mb=a.ram_mb, audio=False,",
       CK + "test_pipeline_passes_the_ram_and_audio_overrides_to_the_argv", CK + "test_pipeline_audio_alone_sets_no_ram_override"),
+    # image B test branch (2026-11-20): --pins, the discovery launch rows, the UI text capture (host side), ui_table.py. Two named killers each.
+    M("b-stage-pins-flag-not-wired", "pab", "        ctx.pins_path = check_pins_file(a.pins) if a.pins else PINS_PATH\n", "        ctx.pins_path = PINS_PATH\n",
+      PF + "test_main_hands_the_given_file_to_the_run", PF + "test_main_refuses_a_missing_file_by_name_before_the_run"),
+    M("b-stage-run-ignores-the-given-pins", "pab", "ctx.pins_path = check_pins_file(PINS_PATH if ctx.pins_path == pa.PINS_PATH else ctx.pins_path)",
+      "ctx.pins_path = check_pins_file(PINS_PATH)",
+      PF + "test_the_record_image_block_shows_the_given_file", PF + "test_an_unpinned_data_role_in_the_given_file_still_refuses"),
+    M("b-stage-pins-missing-not-named", "pab", '        raise pa.Refused("PINS_MISSING")', '        raise pa.Refused("PINS_MALFORMED")',
+      PF + "test_main_refuses_a_missing_file_by_name_before_the_run", PF + "test_the_run_itself_refuses_a_missing_or_malformed_file_before_anything_starts"),
+    M("b-stage-pins-malformed-accepted", "pab", "        doc = pa.load_pins(p)", '        doc = {"items": [{"role": "data"}]}',
+      PF + "test_main_refuses_a_malformed_file_by_name_before_the_run", PF + "test_the_run_itself_refuses_a_missing_or_malformed_file_before_anything_starts"),
+    M("b-stage-pins-size-unbounded", "pab", "        if p.stat().st_size > PINS_MAX_BYTES:\n            raise ValueError(\"size\")", "        if False:\n            raise ValueError(\"size\")",
+      PF + "test_main_refuses_a_malformed_file_by_name_before_the_run", PF + "test_the_run_itself_refuses_a_missing_or_malformed_file_before_anything_starts"),
+    M("b-stage-pins-without-data-accepted", "pab", '    if DATA_ROLE not in {i["role"] for i in doc["items"]}:', "    if False:",
+      PF + "test_a_file_without_the_data_volume_is_refused_by_name", PF + "test_the_run_refuses_a_file_without_the_data_volume_before_anything_starts"),
+    M("b-stage-last-shrink-tier-dropped", "pab", "(4, 1, 0), (2, 1, 0), (0, 0, 0)):", "(4, 1, 0), (2, 1, 0)):",
+      SH + "test_every_row_count_up_to_the_whole_table_fits_the_bound", RP2 + "test_the_worst_case_record_is_shrunk_by_the_stage_to_fit_and_still_validates"),
+    M("b-stage-shrink-keeps-the-evidence", "pab", 'a["evidence"], a["host_xid"]["lines"] = a["evidence"][:evidence], a["host_xid"]["lines"][:lines]',
+      'a["evidence"], a["host_xid"]["lines"] = a["evidence"], a["host_xid"]["lines"][:lines]',
+      SH + "test_every_row_count_up_to_the_whole_table_fits_the_bound", RP2 + "test_the_worst_case_record_is_shrunk_by_the_stage_to_fit_and_still_validates"),
+    M("b-stage-ui-text-not-copied-as-evidence", "pab", '"steps.log", "uitext.txt", "uitext_hits.txt", "inventory.txt")', '"steps.log")',
+      "test_propimage_apps_b_stage.Run.test_whole_run_passes_and_copies_text_evidence_only", RS + "test_ui_text_files_land_in_the_evidence_directory_of_their_row"),
+    M("b-stage-boot-need-ignores-the-row-timeouts", "pab", '            need = sum(timeouts[a] for a in boot["apps"])', "            need = 100",
+      RS + "test_each_boot_is_given_the_sum_of_its_rows_timeouts_plus_the_slack", RS + "test_the_deadline_guard_counts_the_new_rows_timeouts"),
+    M("b-stage-discovery-launch-rows-share-a-boot", "pab", '        if lanes and lanes.get(app) == "discovery":', "        if False:",
+      RS + "test_discovery_launch_rows_boot_alone_and_gate_rows_share_a_boot_within_the_budget", RS + "test_the_plan_command_lists_the_new_rows_as_boots_of_their_own"),
+    M("b-module-ui-files-not-pulled", "pabm", "    return names + (list(UI_FILES) if name in LAUNCH_ONLY else [])", "    return names",
+      UPULL + "test_the_ui_files_are_in_the_pull_list_of_launch_rows_only", UPULL + "test_run_check_pulls_the_ui_files_and_scrubs_them_on_the_host"),
+    M("b-module-ui-files-pulled-for-every-row", "pabm", "(list(UI_FILES) if name in LAUNCH_ONLY else [])", "list(UI_FILES)",
+      UPULL + "test_the_ui_files_are_in_the_pull_list_of_launch_rows_only", UPULL + "test_a_row_that_is_not_a_launch_row_is_never_asked_for_the_ui_files"),
+    M("b-module-ui-bound-lost", "pabm", "    return MAX_UI_PULL if fn in UI_FILES else MAX_PULL", "    return MAX_PULL",
+      UPULL + "test_the_ui_files_have_their_own_small_bound", UPULL + "test_an_oversized_ui_file_is_not_pulled"),
+    M("b-module-pulled-ui-files-not-scrubbed", "pabm", "                if fn in UI_FILES:\n                    scrub_file(d / fn)\n", "                pass\n",
+      UPULL + "test_run_check_pulls_the_ui_files_and_scrubs_them_on_the_host", UPULL + "test_every_ui_file_is_scrubbed_including_the_inventory"),
+    M("b-module-unscrubbable-file-kept", "pabm", "        p.unlink(missing_ok=True)\n", "        pass\n",
+      UPULL + "test_scrub_file_deletes_a_file_it_cannot_scrub", UPULL + "test_a_file_that_grew_after_the_size_check_is_deleted"),
+    M("b-module-scrub-email-dropped", "pabm", '    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",\n', "",
+      USCR + "test_email_guid_hex_key_and_after_keyword", UCAP + "test_the_scrub_patterns_equal_the_python_ones"),
+    M("b-module-scrub-key-pattern-dropped", "pabm", '    r"\\b[A-Za-z0-9]{4,6}(?:-[A-Za-z0-9]{4,6}){2,}\\b",\n', "",
+      USCR + "test_email_guid_hex_key_and_after_keyword", UCAP + "test_the_scrub_patterns_equal_the_python_ones"),
+    M("b-module-scrub-after-keyword-dropped", "pabm", '        out.append(re.sub(SCRUB_AFTER, r"\\1 " + SCRUB, line))', "        out.append(line)",
+      USCR + "test_email_guid_hex_key_and_after_keyword", USCR + "test_a_multi_line_text_is_scrubbed_line_by_line_and_keeps_its_newline"),
+    M("b-module-hit-word-dropped", "pabm", '"library", "cloud", "account")', '"library", "account")',
+      UCAP + "test_the_hit_words_equal_the_python_ones", UWORDS + "test_the_requested_words_are_all_hit_words"),
+    M("b-module-ui-hits-not-reported", "pabm", '            row["ui_hits"] = ui_hits(r, directory)       # the UI text capture is reported, never graded\n', "            pass\n",
+      UGRADE + "test_ui_hits_are_counted_from_the_pulled_file_and_reported", UGRADE + "test_without_the_file_the_guest_count_is_used_and_without_both_it_is_zero"),
+    M("b-module-ui-hits-from-the-guest-only", "pabm", "        if p.is_file() and not p.is_symlink() and p.stat().st_size <= MAX_UI_PULL:", "        if False:",
+      UGRADE + "test_ui_hits_are_counted_from_the_pulled_file_and_reported", UGRADE + "test_blank_lines_are_not_counted"),
+    M("b-module-new-row-not-launch-only", "pabm", '"dreamweaver", "incopy", "substance_designer",\n               "substance_modeler",', '"substance_designer",\n               "substance_modeler",',
+      UTAB + "test_discovery_rows_are_launch_only_discovery_rows_with_a_short_timeout", "test_propimage_apps_b.T.test_every_check_has_a_script_and_grader"),
+    M("b-module-discovery-row-timeout-1200", "pabm", '"dreamweaver": {"timeout": 900,', '"dreamweaver": {"timeout": 1200,',
+      UTAB + "test_discovery_rows_are_launch_only_discovery_rows_with_a_short_timeout", RS + "test_each_boot_is_given_the_sum_of_its_rows_timeouts_plus_the_slack"),
+    M("b-module-discovery-row-is-a-gate-row", "pabm", '"incopy": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "discovery"', '"incopy": {"timeout": 900, "script": "launch.ps1", "gpu": (), "lane": "gate"',
+      UTAB + "test_discovery_rows_are_launch_only_discovery_rows_with_a_short_timeout", "test_propimage_apps_b_stage.Report.test_the_row_table_equals_the_application_table"),
+    M("ui-table-severity-order-reversed", "uit", 'SEVERITIES = ("high", "medium", "low")', 'SEVERITIES = ("low", "medium", "high")',
+      UT + "test_ordering_is_severity_then_app_then_appearance", UT + "test_high_severity_rows_survive_the_bound"),
+    M("ui-table-no-dedupe", "uit", "            if not name or key in seen:", "            if not name:",
+      UT + "test_dedupe_per_app_ignores_case_and_keeps_other_apps", UT + "test_the_same_text_in_the_out_tree_and_its_evidence_copy_is_one_row"),
+    M("ui-table-cells-not-scrubbed", "uit", '    return scrub_text(text).replace("|", "\\\\|").replace("\\n", " ").strip() or "-"', '    return text.replace("|", "\\\\|").replace("\\n", " ").strip() or "-"',
+      UT + "test_the_table_text_is_scrubbed_even_when_the_file_was_not", UT + "test_the_app_and_feature_cells_are_scrubbed_too"),
+    M("ui-table-unbounded", "uit", "    for _, (app, feature, text, sev) in ordered[:max_rows]:", "    for _, (app, feature, text, sev) in ordered:",
+      UT + "test_the_table_is_bounded_and_says_how_many_rows_were_cut", UT + "test_high_severity_rows_survive_the_bound"),
+    M("ui-table-heading-line-is-its-own-feature", "uit", '        out.append(heading_at[i - 1] if i else "-")', '        out.append(heading_at[i] if i is not None else "-")',
+      UT + "test_no_heading_before_the_text_gives_a_dash_and_a_heading_line_is_not_its_own_feature", UT + "test_without_a_context_file_the_hit_file_is_the_context"),
     # the payload wiring
     M("payload-stage-in-the-default-plan", "payload", "PROPIMAGE_APPS_IN_LARGE = False", "PROPIMAGE_APPS_IN_LARGE = True",
       W + "test_not_in_the_default_plan_and_only_with_only_in_large", W + "test_manual_only_table_and_the_budget_guard"),
@@ -319,7 +388,7 @@ def main():
     args = parser.parse_args()
     chosen = [m for m in MUTANTS if args.only in m[0]]
     with tempfile.TemporaryDirectory(prefix="kf-propimage-apps-mutants-") as parent:
-        baseline = run_tests(tree(parent, "base", {}), [SUITE.rstrip("."), "test_propimage_apps_b_stage", "test_propimage_check"])
+        baseline = run_tests(tree(parent, "base", {}), [SUITE.rstrip("."), "test_propimage_apps_b_stage", "test_propimage_check", "test_propimage_apps_b_ui", "test_ui_table"])
         if baseline["killers"]:
             print("BASELINE RED: %s" % baseline["killers"], file=sys.stderr)
             return 1

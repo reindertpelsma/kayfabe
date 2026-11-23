@@ -1,0 +1,31 @@
+{
+    "app":  "dimension",
+    "started":  1795141032.6,
+    "error":  null,
+    "outputs":  [
+                    {
+                        "file":  "sniffer.txt",
+                        "bytes":  1041,
+                        "modified":  1795141189.257
+                    }
+                ],
+    "exe_dir":  "Adobe Dimension",
+    "exe_name":  "Adobe Dimension.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Adobe Dimension"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  104,
+    "ui_lines":  3,
+    "ui_hits":  0,
+    "uitext_error":  "walk cap reached",
+    "quit":  "forced",
+    "ended":  1795141684.265,
+    "crash_events":  12,
+    "crash_dumps":  0,
+    "dismissed":  [
+
+                  ]
+}

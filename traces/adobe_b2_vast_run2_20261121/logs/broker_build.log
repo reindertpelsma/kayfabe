@@ -1,0 +1,24 @@
+make: Entering directory '/workspace/kf-ci-src/broker'
+Makefile:111: No display backend will be compiled in: only --backend test will work.
+Makefile:112: Wayland: apt install libwayland-dev wayland-protocols
+Makefile:113: X11:     apt install libxcb1-dev libxcb-dri3-dev libxcb-present-dev
+nvkvm-display-broker backends:
+  dma-buf test source : NO - apt install libgbm-dev
+  wayland : NO - install libwayland-dev wayland-protocols
+  x11     : NO - install libxcb1-dev libxcb-dri3-dev libxcb-present-dev
+  test    : yes (always)
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nvkvm_broker.o nvkvm_broker.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_common.o nb_common.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_cursor.o nb_cursor.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_geom.o nb_geom.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_placeholder.o nb_placeholder.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_frame.o nb_frame.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_xor.o nb_xor.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_tick.o nb_tick.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_session_x11.o nb_session_x11.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_session_wl.o nb_session_wl.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -MMD -MP -c -o nb_session_test.o nb_session_test.c
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -o nvkvm-display-broker nvkvm_broker.o nb_common.o nb_cursor.o nb_geom.o nb_placeholder.o nb_frame.o nb_xor.o nb_tick.o nb_session_x11.o nb_session_wl.o nb_session_test.o -Wl,-z,relro,-z,now -pthread
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -o nvkvm-broker-testclient testclient.c -Wl,-z,relro,-z,now
+cc -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wvla -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -I. -Icommon -o <scrubbed> dmabuf_relay.c -Wl,-z,relro,-z,now
+make: Leaving directory '/workspace/kf-ci-src/broker'

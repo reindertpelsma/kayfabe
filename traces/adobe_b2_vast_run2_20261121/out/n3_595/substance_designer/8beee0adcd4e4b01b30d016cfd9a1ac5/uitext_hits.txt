@@ -1,0 +1,2 @@
+ListItem | Online documentation | QApplication.QStackedWidget.Alg::HomeScr
+Text | Built-in sample content is there to help you get started. Dig into real examples, see how things are made and start creating your own content. Learn faster and build with confidence. | QApplication.QStackedWidget.Alg::HomeScr

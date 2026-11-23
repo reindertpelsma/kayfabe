@@ -1,0 +1,33 @@
+{
+  "app": "substance_painter",
+  "ok": false,
+  "evidence": "NONE",
+  "signal": "",
+  "error": "main window did not appear",
+  "class": "app",
+  "limited": false,
+  "lane": "discovery",
+  "path": "Substance 3D Painter start (launch only, exe discovered; new, unmeasured)",
+  "platform": "kf3",
+  "secs": 541,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 13.0,
+      "mem_mb": 9509.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 13.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 39
+    },
+    "baseline": {
+      "mem_mb": 9424.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 1210
+  },
+  "outputs_recorded": 6
+}

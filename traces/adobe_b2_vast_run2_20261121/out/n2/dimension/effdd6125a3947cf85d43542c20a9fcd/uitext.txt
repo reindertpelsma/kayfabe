@@ -1,0 +1,3 @@
+Window | Adobe Dimension | 
+Pane | Chrome Legacy Window | -1149792576
+Document | Chrome Legacy Window | -1149792576

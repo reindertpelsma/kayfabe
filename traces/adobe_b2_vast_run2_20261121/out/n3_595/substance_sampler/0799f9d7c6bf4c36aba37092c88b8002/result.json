@@ -1,0 +1,26 @@
+{
+    "app":  "substance_sampler",
+    "started":  1795140956.1,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe Substance 3D Sampler",
+    "exe_name":  "Adobe Substance 3D Sampler.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Adobe Substance 3D Sampler"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  1906,
+    "ui_lines":  82,
+    "ui_hits":  5,
+    "quit":  "clean",
+    "ended":  1795141155.789,
+    "crash_events":  0,
+    "crash_dumps":  1,
+    "dismissed":  [
+
+                  ]
+}

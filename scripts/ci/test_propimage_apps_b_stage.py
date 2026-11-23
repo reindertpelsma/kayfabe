@@ -236,6 +236,9 @@ class RunBase:
             (d / "result.json").write_text("{}")
             (d / "out.png").write_bytes(b"\x89PNG not evidence")
             (d / (app + "_gpu.json")).write_text("{}")
+            if limited:
+                for f in ("uitext.txt", "uitext_hits.txt", "inventory.txt"):
+                    (d / f).write_text("Text | x | y\n")
             rows.append({"step": "app:" + app, "verdict": verdict, "evidence": doc["evidence"], "class": "app", "detail": "d"})
             mark.line("app:%s %s %s d\n" % (app, verdict, doc["evidence"]))
         (out / "result.json").write_text(json.dumps(rows))
@@ -258,6 +261,9 @@ class Run(RunBase, unittest.TestCase):
         self.assertIn("verdict.json", copied)
         self.assertIn("photoshop_gpu.json", copied)
         self.assertNotIn("out.png", copied)
+        for name in ("uitext.txt", "uitext_hits.txt", "inventory.txt"):      # the UI text of the launch rows is text evidence, copied next to the verdict
+            self.assertIn(name, copied)
+            self.assertEqual({p.parent.name for p in ev.rglob(name)}, set(MOD.LAUNCH_ONLY) & set(ORDER))
         self.assertFalse((env.ctx.prefix / "unpacked").exists())
 
     def test_one_failing_gate_row_fails_the_stage_and_names_it(self):
@@ -347,6 +353,263 @@ class GuestRam(RunBase, unittest.TestCase):
             sb.main(base)
             sb.main(base + ["--guest-ram-mb", "0", "--no-audio"])
         self.assertEqual(calls, [(16384, True), (0, False)])
+
+
+RECOMMENDED = ("gpudiag,premiere,lightroomlaunch,dimension,uxp,bridge,characteranimator,audition,dreamweaver,incopy,substance_designer,"
+               "substance_modeler,substance_painter,substance_sampler,substance_stager,mediaencoderlaunch,animatelaunch").split(",")
+
+
+class PinsFlag(RunBase, unittest.TestCase):
+    """`run --pins FILE` (2026-11-20): the pins of THIS run come from the file (same schema as the committed one); absent, nothing changes; a missing or
+    malformed file is refused by a named reason before anything starts."""
+
+    def other_pins(self, **changes):
+        doc = pins_doc()
+        for it in doc["items"]:
+            if it["role"] == "image":
+                it.update(name="propimage-kfimg-20261120.zip", sha256="d" * 64, size=71234567890)
+            it.update(changes.get(it["role"], {}))
+        tmp = Path(tempfile.mkdtemp(prefix="kf-pab-pins2-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        path = tmp / "new_b.json"
+        path.write_text(json.dumps(doc))
+        return path
+
+    def main(self, *flags):
+        import contextlib
+        import io
+        seen = []
+        with unittest.mock.patch.object(sb, "run", lambda ctx, ev, apps, ram, audio: (seen.append(ctx.pins_path), {"verdict": "NOT_RUN"})[1]), \
+                unittest.mock.patch.object(sb, "finish", lambda rec, out: 0), unittest.mock.patch.object(pa, "hardware_now", lambda: {}):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = sb.main(["run", "--sha", SHA, "--out", "/dev/null", *flags])
+        return rc, seen, buf.getvalue()
+
+    def test_main_hands_the_given_file_to_the_run(self):
+        path = self.other_pins()
+        rc, seen, _ = self.main("--pins", str(path))
+        self.assertEqual((rc, seen), (0, [path]))
+
+    def test_main_without_the_flag_uses_the_committed_file(self):
+        rc, seen, _ = self.main()
+        self.assertEqual((rc, seen), (0, [sb.PINS_PATH]))
+
+    def test_main_refuses_a_missing_file_by_name_before_the_run(self):
+        rc, seen, out = self.main("--pins", "/nonexistent/pins.json")
+        self.assertEqual((rc, seen), (2, []))
+        self.assertEqual(out.strip(), "KF_PROPIMAGE_APPS_B_REFUSED PINS_MISSING")
+        d = Path(tempfile.mkdtemp(prefix="kf-pab-dir-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        rc, seen, out = self.main("--pins", str(d))                # a directory is not a pins file either
+        self.assertEqual((rc, seen, out.strip()), (2, [], "KF_PROPIMAGE_APPS_B_REFUSED PINS_MISSING"))
+
+    def bad_files(self):
+        good = json.loads(self.other_pins().read_text())
+        dup = '{"schema": "kayfabe.propimage-pins/1", "schema": "x"}'
+        cases = {"not json": "not json {", "empty": "", "list": "[]", "wrong schema": json.dumps(dict(good, schema="other/1")),
+                 "extra key": json.dumps(dict(good, extra=1)), "duplicate key": dup, "no items": json.dumps(dict(good, items=[])),
+                 "bad sha": json.dumps(dict(good, items=[dict(i, sha256="zz") for i in good["items"]])),
+                 "dest traversal": json.dumps(dict(good, items=[dict(i, dest="../x") for i in good["items"]])),
+                 "dest not text": json.dumps(dict(good, items=[dict(i, dest=7) for i in good["items"]])),
+                 "huge": json.dumps(good) + " " * (sb.PINS_MAX_BYTES + 1)}
+        out = {}
+        for label, text in cases.items():
+            tmp = Path(tempfile.mkdtemp(prefix="kf-pab-bad-"))
+            self.addCleanup(shutil.rmtree, tmp, True)
+            (tmp / "p.json").write_text(text)
+            out[label] = tmp / "p.json"
+        return out
+
+    def test_main_refuses_a_malformed_file_by_name_before_the_run(self):
+        for label, path in self.bad_files().items():
+            rc, seen, out = self.main("--pins", str(path))
+            self.assertEqual((rc, seen, out.strip()), (2, [], "KF_PROPIMAGE_APPS_B_REFUSED PINS_MALFORMED"), label)
+
+    def test_a_file_without_the_data_volume_is_refused_by_name(self):
+        doc = json.loads(self.other_pins().read_text())
+        doc["items"] = [i for i in doc["items"] if i["role"] != "data"]
+        path = self.other_pins().with_name("nodata.json")
+        path.write_text(json.dumps(doc))
+        rc, seen, out = self.main("--pins", str(path))
+        self.assertEqual((rc, seen, out.strip()), (2, [], "KF_PROPIMAGE_APPS_B_REFUSED PINS_NO_DATA"))
+
+    def test_the_run_refuses_a_file_without_the_data_volume_before_anything_starts(self):
+        doc = json.loads(self.other_pins().read_text())
+        doc["items"] = [i for i in doc["items"] if i["role"] != "data"]
+        path = self.other_pins().with_name("nodata.json")
+        path.write_text(json.dumps(doc))
+        env = self.make()
+        env.ctx.pins_path = path
+        rec = sb.run(env.ctx)
+        self.assertEqual((rec["verdict"], rec["reason"], rec["boots"]), ("REFUSED", "PINS_NO_DATA", []))
+        self.assertFalse((env.ctx.prefix / "dl").exists())
+
+    def test_the_run_itself_refuses_a_missing_or_malformed_file_before_anything_starts(self):
+        env = self.make()
+        env.ctx.pins_path = Path("/nonexistent/pins.json")
+        rec = sb.run(env.ctx)
+        self.assertEqual((rec["verdict"], rec["reason"], rec["boots"], rec["apps"]), ("REFUSED", "PINS_MISSING", [], []))
+        self.assertFalse((env.ctx.prefix / "dl").exists())
+        self.assertFalse((env.ctx.prefix / "work").exists())
+        for label, path in self.bad_files().items():
+            env = self.make()
+            env.ctx.pins_path = path
+            rec = sb.run(env.ctx)
+            self.assertEqual((rec["verdict"], rec["reason"], rec["boots"]), ("REFUSED", "PINS_MALFORMED", []), label)
+
+    def test_the_record_image_block_shows_the_given_file(self):
+        path = self.other_pins()
+        env = self.make()
+        env.ctx.pins_path = path
+        rec = sb.run(env.ctx)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertEqual(rec["image"], {"name": "propimage-kfimg-20261120.zip", "sha256": "d" * 64, "size": 71234567890})
+        self.assertNotEqual(rec["image"]["sha256"], pa.load_pins(sb.PINS_PATH)["items"][0]["sha256"])
+
+    def test_the_committed_pins_file_is_untouched_and_names_no_new_image(self):
+        by = {i["role"]: i for i in pa.load_pins(sb.PINS_PATH)["items"]}
+        self.assertEqual(by["image"]["name"], "propimage-kfimg-20261116.zip")
+        self.assertNotIn("20261120", sb.PINS_PATH.read_text())
+
+    def test_an_unpinned_data_role_in_the_given_file_still_refuses(self):
+        path = self.other_pins(data={"sha256": None, "size": None})
+        env = self.make()
+        env.ctx.pins_path = path
+        rec = sb.run(env.ctx)
+        self.assertEqual((rec["verdict"], rec["reason"]), ("REFUSED", "PIN_UNSET:data"))
+
+
+class RowSelection(RunBase, unittest.TestCase):
+    """`--apps` picks exactly the named rows in table order; the boot plan accounts for the new launch rows by their own timeouts."""
+
+    def run_apps(self, apps):
+        env = self.make()
+        timeouts = []
+        inner = env.ctx.boot_runner
+        env.ctx.boot_runner = lambda ctx, argv, log, timeout, mark: (timeouts.append((argv[argv.index("--apps") + 1].split(","), timeout)), inner(ctx, argv, log, timeout, mark))[1]
+        return sb.run(env.ctx, apps=apps), timeouts
+
+    def test_the_recommended_list_selects_exactly_those_rows_in_table_order(self):
+        rec, _ = self.run_apps(RECOMMENDED)
+        self.assertEqual([a["app"] for a in rec["apps"]], [n for n in MOD.CHECKS if n in RECOMMENDED])
+        self.assertEqual(sorted(a["app"] for a in rec["apps"]), sorted(RECOMMENDED))
+        self.assertEqual((rec["verdict"], rec["reason"]), ("PASS", ""), rec)
+        self.assertEqual(sorted(rec["limited"]), sorted(n for n in RECOMMENDED if n != "gpudiag"))
+
+    def test_the_issue_list_is_selected_as_written(self):
+        want = "premiere,lightroomlaunch,dimension,uxp,bridge,characteranimator,audition".split(",")
+        rec, _ = self.run_apps(want)
+        self.assertEqual([a["app"] for a in rec["apps"]], [n for n in MOD.CHECKS if n in want])
+        self.assertEqual(len(rec["apps"]), 7)
+
+    def test_discovery_launch_rows_boot_alone_and_gate_rows_share_a_boot_within_the_budget(self):
+        rec, seen = self.run_apps(RECOMMENDED)
+        self.assertEqual([b["apps"] for b in rec["boots"]],
+                         [["gpudiag", "premiere", "lightroomlaunch"], ["dimension", "uxp"], *[[n] for n in RECOMMENDED[5:]]])
+        for b in rec["boots"]:
+            self.assertLessEqual(sum(MOD.CHECKS[a]["timeout"] for a in b["apps"]), sb.BOOT_BUDGET_S)
+
+    def test_each_boot_is_given_the_sum_of_its_rows_timeouts_plus_the_slack(self):
+        _, seen = self.run_apps(RECOMMENDED)
+        by = {tuple(apps): t for apps, t in seen}
+        for n in NEW_ROWS:
+            self.assertEqual(by[(n,)], MOD.CHECKS[n]["timeout"] + pa.BOOT_SLACK_S, n)
+            self.assertLessEqual(MOD.CHECKS[n]["timeout"], 900, n)
+        self.assertEqual(by[("dimension", "uxp")], 1200 + 900 + pa.BOOT_SLACK_S)
+
+    def test_ui_text_files_land_in_the_evidence_directory_of_their_row(self):
+        env = self.make()
+        ev = env.tmp / "evidence"
+        rec = sb.run(env.ctx, str(ev), apps=["bridge", "substance_painter"])
+        self.assertEqual(rec["verdict"], "PASS", rec)
+        for row in ("bridge", "substance_painter"):
+            for name in ("uitext.txt", "uitext_hits.txt", "inventory.txt", "verdict.json"):
+                self.assertTrue((ev / row / name).is_file(), (row, name))
+        self.assertFalse(list(ev.rglob("*.png")))
+
+    def test_the_plan_command_lists_the_new_rows_as_boots_of_their_own(self):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(sb.main(["plan"]), 0)
+        plan = json.loads(buf.getvalue())
+        for n in NEW_ROWS:
+            self.assertIn([n], plan["boots"], n)
+
+    def test_the_deadline_guard_counts_the_new_rows_timeouts(self):
+        import time
+        env = self.make()
+        env.ctx.deadline_epoch = time.time() + MOD.CHECKS["dreamweaver"]["timeout"] + 800        # less than timeout + 900: the boot is not started
+        rec = sb.run(env.ctx, apps=["dreamweaver"])
+        self.assertEqual((rec["boots"][0]["rc"], rec["apps"][0]["verdict"]), (125, "NOT_RUN"))
+        env = self.make()
+        env.ctx.deadline_epoch = time.time() + MOD.CHECKS["dreamweaver"]["timeout"] + 1000
+        rec = sb.run(env.ctx, apps=["dreamweaver"])
+        self.assertEqual((rec["boots"][0]["rc"], rec["apps"][0]["verdict"]), (0, "PASS_LIMITED"))
+
+
+NEW_ROWS = ("dreamweaver", "incopy", "substance_designer", "substance_modeler", "substance_painter", "substance_sampler", "substance_stager",
+            "mediaencoderlaunch", "animatelaunch")
+
+
+class Shrink(RunBase, unittest.TestCase):
+    """The record bound with 42 rows: the stage shrinks evidence, xid lines and census ids tier by tier and ends with a tier that drops them all."""
+
+    def worst(self, n):
+        keywords = vast_report.CENSUS_KEYWORDS
+        apps = [{"app": "row%02d" % i, "lane": "discovery", "verdict": "FAIL", "kind": "UIA", "limited": False, "secs": 99999, "detail": "d" * 200,
+                 "platform": "kf3", "path": "p" * 80,
+                 "evidence": [{"file": "f%02d_%s.txt" % (j, "x" * 50), "bytes": 9, "sha256": "e" * 64} for j in range(24)],
+                 "gpu": {"required": ["gpu"], "verdict": "FAIL", "peak": {"k%d" % j: 123456 for j in range(12)}},
+                 "host_xid": {"count": 8, "lines": ["NVRM: Xid " + "9" * 180] * 8},
+                 "census": {"lines": 9, "counts": {k: 9 for k in keywords}, "xid": 9, "ids": {k: ["0x%022x" % m for m in range(8)] for k in keywords}}}
+                for i in range(n)]
+        return {"schema": 1, "image_set": "b", "verdict": "FAIL", "sha": SHA, "reason": "x", "family": None, "cpu_vendor": None, "preflight": [],
+                "image": {"name": "n", "sha256": "c" * 64, "size": 1}, "swtpm": {"version": None, "built": False}, "boots": [], "apps": apps,
+                "failed": [], "limited": [], "breakages": [], "not_run": {}}
+
+    def written(self, rec):
+        tmp = Path(tempfile.mkdtemp(prefix="kf-pab-shrink-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        data = sb.write_record(tmp / "r.json", rec)
+        self.assertEqual((tmp / "r.json").read_text(), data + "\n")
+        return data
+
+    def test_every_row_count_up_to_the_whole_table_fits_the_bound(self):
+        for n in (21, 24, 30, 33, 42, 48):
+            data = self.written(self.worst(n))
+            self.assertLessEqual(len(data.encode()), sb.MAX_RECORD_BYTES, n)
+            json.loads(data)
+
+    def test_the_whole_table_is_at_most_what_the_last_tier_can_hold(self):
+        self.assertGreaterEqual(len(MOD.ENABLED), 40)
+        self.assertLessEqual(len(self.written(self.worst(len(MOD.ENABLED))).encode()), sb.MAX_RECORD_BYTES)
+
+    def test_the_result_is_still_the_same_rows_with_their_verdicts(self):
+        data = json.loads(self.written(self.worst(42)))
+        self.assertEqual([a["app"] for a in data["apps"]], ["row%02d" % i for i in range(42)])
+        self.assertTrue(all(a["verdict"] == "FAIL" and a["detail"] == "d" * 200 for a in data["apps"]))
+        for a in data["apps"]:
+            self.assertLessEqual(len(a["evidence"]), 24)
+            self.assertLessEqual(len(a["host_xid"]["lines"]), 8)
+            self.assertEqual(a["host_xid"]["count"], 8)         # the count is never shrunk, only the sample lines
+
+    def test_a_small_record_is_not_shrunk_at_all(self):
+        rec = self.worst(3)
+        before = json.dumps(rec, separators=(",", ":"), sort_keys=True)
+        self.assertEqual(self.written(rec), before)
+
+    def test_a_record_nothing_can_shrink_enough_is_still_valid_json_and_is_reported_oversize(self):
+        rec = self.worst(6)
+        for a in rec["apps"]:
+            a["detail"] = "d" * 200
+            a["path"] = "p" * 80
+        rec["preflight"] = [{"name": "x%d" % i, "status": "MATCH", "detail": "y" * 200} for i in range(400)]
+        data = self.written(rec)
+        self.assertGreater(len(data.encode()), sb.MAX_RECORD_BYTES)
+        json.loads(data)                                     # complete, never truncated; the report validator refuses it by size
 
 
 class Report(RunBase, unittest.TestCase):

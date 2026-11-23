@@ -1,0 +1,149 @@
+[
+  {
+    "step": "prerequisite",
+    "verdict": "PASS",
+    "detail": "swtpm >= 0.10 (libtpms state compatibility still required)",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "platform",
+    "verdict": "PASS",
+    "detail": "kf3",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "unpack",
+    "verdict": "PASS",
+    "detail": "SHA256 of image and state; derived seed verified",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "overlay",
+    "verdict": "PASS",
+    "detail": "throwaway clone of image.base.qcow2; base not booted",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "clock",
+    "verdict": "PASS",
+    "detail": "RTC base 2026-11-20T01:46:36Z (fresh overlay)",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "fb-mb",
+    "verdict": "PASS",
+    "detail": "DIAGNOSTIC ARM: guest-visible FB 8192 MiB (image default differs)",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "ram-mb",
+    "verdict": "PASS",
+    "detail": "OVERRIDE: guest RAM 16384 MiB for this run (the image's own value is the default; sealed state.json unchanged)",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "audio",
+    "verdict": "PASS",
+    "detail": "virtual HDA sound card, QEMU null backend (no host audio opened)",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "boot",
+    "verdict": "PASS",
+    "detail": "ci mode, restrict=on, disposable overlay",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "ssh",
+    "verdict": "PASS",
+    "detail": "loopback guest transport ready",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "power",
+    "verdict": "OK",
+    "detail": "OK values={\"sleep\":{\"ac\":0,\"dc\":0},\"hibernate_after\":{\"ac\":0,\"dc\":0},\"unattended_sleep\":{\"ac\":0,\"dc\":0},\"hybrid_sleep\":{\"ac\":0,\"dc\":0},\"monitor\":{\"ac\":0,\"dc\":0},\"disk\":{\"ac\":0,\"dc\":0},\"wake_signin\":{\"ac\":0,\"dc\":0},\"hibernate_enabled\":0,\"fast_startup\":0,\"lock_screen\":1,\"inactivity\":0,\"desktop_active\":\"0\",\"desktop_secure\":\"0\",\"desktop_timeout\":\"0\",\"policy_active\":\"0\",\"policy_secure\":\"0\",\"policy_timeout\":\"0\",\"hiberfile_exists\":false,\"restart_required\":false,\"screen_active\":false,\"screen_secure\":false,\"screen_timeout\":0}",
+    "evidence": "FILE",
+    "class": "harness"
+  },
+  {
+    "step": "gpu",
+    "verdict": "PASS",
+    "detail": "post-fix seed UUID exact match after 166s (expected=1 observed=1 host=n/a), problem code 0, settled before restart=True",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "verify",
+    "verdict": "PASS",
+    "detail": "identity, clock, TPM and seed GPU checked",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "app:substance_modeler",
+    "verdict": "PASS_LIMITED",
+    "detail": "LIMITED: launched, main window reached (1 windows), process responding=True, 5730 MB; no document work; ui_hits=2",
+    "evidence": "UIA",
+    "class": "app"
+  },
+  {
+    "step": "app:uxp",
+    "verdict": "PASS_LIMITED",
+    "detail": "LIMITED: launched, main window reached (1 windows), process responding=True, 73 MB; no document work; ui_hits=0",
+    "evidence": "UIA",
+    "class": "app"
+  },
+  {
+    "step": "app:dreamweaver",
+    "verdict": "PASS_LIMITED",
+    "detail": "LIMITED: launched, main window reached (1 windows), process responding=True, 143 MB; no document work; ui_hits=0",
+    "evidence": "UIA",
+    "class": "app"
+  },
+  {
+    "step": "app:incopy",
+    "verdict": "PASS_LIMITED",
+    "detail": "LIMITED: launched, main window reached (1 windows), process responding=True, 220 MB; no document work; ui_hits=0",
+    "evidence": "UIA",
+    "class": "app"
+  },
+  {
+    "step": "app:bridge",
+    "verdict": "PASS_LIMITED",
+    "detail": "LIMITED: launched, main window reached (1 windows), process responding=True, 463 MB; no document work; ui_hits=0",
+    "evidence": "UIA",
+    "class": "app"
+  },
+  {
+    "step": "app:audition",
+    "verdict": "NOT_RUN",
+    "detail": "Boot-age warning: check budget would cross 55 minutes; fresh boot required",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "app:characteranimator",
+    "verdict": "NOT_RUN",
+    "detail": "Boot-age warning: check budget would cross 55 minutes; fresh boot required",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "stop",
+    "verdict": "PASS",
+    "detail": "own QEMU stopped; other own helpers cleaned by ExitStack",
+    "evidence": "NONE",
+    "class": "harness"
+  }
+]

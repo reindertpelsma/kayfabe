@@ -1,0 +1,7 @@
+Window | Adobe Dreamweaver 2021 | 
+TitleBar | Adobe Dreamweaver 2021 | TitleBar
+MenuBar | System Menu Bar | SystemMenuBar
+Button | Minimize | Minimize
+Button | Restore | Restore
+Button | Close | Close
+MenuItem | System | Item 1

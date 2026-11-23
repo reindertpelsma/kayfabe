@@ -1,0 +1,26 @@
+{
+    "app":  "substance_designer",
+    "started":  1795140562.065,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe Substance 3D Designer",
+    "exe_name":  "Adobe Substance 3D Designer.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Adobe Substance 3D Designer"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  1377,
+    "ui_lines":  29,
+    "ui_hits":  2,
+    "quit":  "clean",
+    "ended":  1795140810.175,
+    "crash_events":  0,
+    "crash_dumps":  1,
+    "dismissed":  [
+
+                  ]
+}

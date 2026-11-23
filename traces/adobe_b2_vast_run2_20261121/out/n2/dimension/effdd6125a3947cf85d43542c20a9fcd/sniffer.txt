@@ -1,0 +1,22 @@
+Tester="AdobeDimension"
+snifferStart="2026-11-20_02:17:14"
+AIFCoreInitialized=1
+AIFOGLInitialized=1
+OGLContextCreated=1
+NumGLGPUs=1
+glgpu[0].GLVersion="4.1"
+glgpu[0].GLVendor="NVIDIA Corporation"
+glgpu[0].IsIntegratedGLGPU=0
+glgpu[0].GLMemoryMB=7853
+glgpu[0].GLName="NVIDIA GeForce RTX 4090"
+glgpu[0].GLVendorID=4318
+glgpu[0].GLDriverVersion="32.0.15.8088"
+glgpu[0].GLRectTextureSize=32768
+glgpu[0].GLRenderer="NVIDIA GeForce RTX 4090/PCIe/SSE2"
+glgpu[0].GLRendererID=9860
+glgpu[0].HasGLNPOTSupport=1
+glgpu[0].GLDriver="C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\nvldumdx.dll,C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\nvldumdx.dll,C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\nvldumdx.dll,C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_fe5f369669db2f36\nvldumdx.dll"
+glgpu[0].GLDriverDate="20250727000000.000000-000"
+glgpu[0].CanCompileProgramGLSL=1
+glgpu[0].GLFrameBufferOK=1
+

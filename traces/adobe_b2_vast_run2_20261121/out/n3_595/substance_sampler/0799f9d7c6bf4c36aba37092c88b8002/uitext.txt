@@ -1,0 +1,82 @@
+Window | Adobe Substance 3D Sampler | mainWindow
+TitleBar | Adobe Substance 3D Sampler | TitleBar
+MenuBar | System Menu Bar | SystemMenuBar
+Button | Minimize | Minimize
+Button | Restore | Restore
+Button | Close | Close
+Custom | Project | 
+Custom | Assets | 
+Button | Home | 
+Button | All libraries | 
+ComboBox | w: | 
+ComboBox | h: | 
+Custom | 0 ms / 0 fps | 
+Custom | No available channels | 
+Custom | Layers | 
+Custom | Properties | 
+Button | New project | createNewProjectMenuItem
+Button | Quick start | createNewBlankMenuItem
+Button | Open | openProjectMenuItem
+Custom | Home | 
+Custom | Learn | 
+Custom | Files | 
+Custom | <a href='xxx'>About Sampler</a> | 
+Custom | <a href='xxx'>Documentation</a> | 
+Custom | v 6.0.4 - Jalapeño | 
+Custom | Welcome <scrubbed>
+Custom | Get started with a sample project | 
+Custom | Open a pre-made wool material project in Sampler to learn the basics of creating materials from images. | 
+Button | Open Sample Project | 
+Custom | Materials in minutes | 
+Custom | Use physical size with scans | 
+Custom | Create embroidery patches | 
+Custom | Use texture generators for textile design | 
+Custom | Create a new asset from a file or a quick action | 
+Custom | Turn an image or a Substance file into a 3D asset | 
+Custom | Drag and drop a file or select one from <a href='yourdevice'>your computer</a> or the <a href='assetLibrary'>Asset Library</a> | 
+Custom | Convert image to material | 
+Custom | Adjust image | 
+Custom | Convert image to embroidery | 
+Custom | Import textures | 
+Custom | Recent | 
+MenuItem | System | Item 1
+Custom | <i>Click the Add asset button <img src="qrc:/qt/qml/Style/Icons/custom/S_Add_18_N_D.svg"/> or Quick action button <img src="qrc:/qt/qml/Style/Icons/custom/S_QuickAction_18_N.svg"/> to create an asset. You can also drag image and SBSAR files to the viewport.</i> | 
+Custom | Materials | 
+Custom | (60) | 
+Text | Asphalt | 
+Text | Bark | 
+Text | Base Material | 
+Text | Brushed Metal | 
+Text | Brushed Paint | 
+Text | Carbon Fiber | 
+Text | Cardboard | 
+Text | Ceramic | 
+Text | Chambray | 
+Text | Clay | 
+Text | Concrete Cast | 
+Text | Concrete Coarse | 
+Text | Cork | 
+Text | Cotton Jersey | 
+Text | Denim | 
+Text | Felt | 
+Text | Galvanized Metal | 
+Text | Georgette | 
+Text | Grain Leather | 
+Text | Grip Plastic | 
+Custom | Filters | 
+Custom | (77) | 
+Custom | Texture generators | 
+Custom | (28) | 
+Text | w: | 
+ComboBox | 64 | 
+Text | h: | 
+ComboBox | Fit to screen | 
+ComboBox | Normal | 
+Custom | Drag and drop files or select from <a href='yourdevice'>your computer</a> or the <a href='assetLibrary'>Assets Library</a> | 
+Custom | No settings available, first create an asset in the Project panel. | 
+Hyperlink | About Sampler | 
+Hyperlink | Documentation | 
+Hyperlink | your computer | 
+Hyperlink | Asset Library | 
+Hyperlink | Assets Library | 
+Custom | 0 ms / 4 fps | 

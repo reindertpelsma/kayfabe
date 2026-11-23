@@ -1,0 +1,24 @@
+{
+    "app":  "uxp",
+    "started":  1795140236.751,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe UXP Developer Tools",
+    "exe_name":  "Adobe UXP Developer Tools.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Adobe UXP Developer Tools"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  73,
+    "ui_lines":  13,
+    "ui_hits":  0,
+    "quit":  "clean",
+    "ended":  1795140355.326,
+    "dismissed":  [
+
+                  ]
+}

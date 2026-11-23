@@ -1,0 +1,30 @@
+[xid-watch] tag=n2  host=ubuntu  utc=2026-11-20T22:45:04Z
+[xid-watch] command: python3 -B -I scripts/bench/windows/propimage_check.py --dir /workspace/kf-propimage-b/unpacked --work /workspace/kf-propimage-b/work/n2 --out /workspace/kf-propimage-b/out/n2 --qemu /workspace/bench/kf3-bins/dcd301e9/qemu-system-x86_64 --flags scripts/bench/windows/kf3_flags.sample.env --broker /workspace/kf-ci-src/broker/nvkvm-display-broker --gop-efi /workspace/kf-propimage-b/dl/image/kf-gop.signed.efi --display broker --app-set b --data-iso /workspace/kf-propimage-b/dl/image/test-assets.iso --apps lightroomlaunch,dimension,uxp,substance_designer --fb-mb 8192 --ram-mb 16384 --audio
+[xid-watch] host_dmesg_lines=730  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+platform PASS NONE kf3
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-20T01:46:36Z (fresh overlay)
+fb-mb PASS NONE DIAGNOSTIC ARM: guest-visible FB 8192 MiB (image default differs)
+ram-mb PASS NONE OVERRIDE: guest RAM 16384 MiB for this run (the image's own value is the default; sealed state.json unchanged)
+audio PASS NONE virtual HDA sound card, QEMU null backend (no host audio opened)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+ssh PASS NONE loopback guest transport ready
+power OK FILE OK values={"sleep":{"ac":0,"dc":0},"hibernate_after":{"ac":0,"dc":0},"unattended_sleep":{"ac":0,"dc":0},"hybrid_sleep":{"ac":0,"dc":0},"monitor":{"ac":0,"dc":0},"disk":{"ac":0,"dc":0},"wake_signin":{"
+gpu PASS NONE post-fix seed UUID exact match after 153s (expected=1 observed=1 host=n/a), problem code 0, settled before restart=True
+verify PASS NONE identity, clock, TPM and seed GPU checked
+app:lightroomlaunch FAIL UIA application did not exit cleanly (forced)
+app:dimension FAIL UIA application did not exit cleanly (forced)
+app:uxp NOT_RUN NONE Boot-age warning: check budget would cross 55 minutes; fresh boot required
+app:substance_designer NOT_RUN NONE Boot-age warning: check budget would cross 55 minutes; fresh boot required
+stop PASS NONE own QEMU stopped; other own helpers cleaned by ExitStack
+[xid-watch] --- command output ends (rc=1) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (730 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_n2.log

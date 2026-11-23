@@ -1,0 +1,2 @@
+Window | Adobe Substance 3D Modeler | 
+TitleBar | Adobe Substance 3D Modeler | TitleBar

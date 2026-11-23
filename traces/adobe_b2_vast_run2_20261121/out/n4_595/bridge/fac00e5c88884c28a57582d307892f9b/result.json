@@ -1,0 +1,24 @@
+{
+    "app":  "bridge",
+    "started":  1795141039.566,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe Bridge 2027",
+    "exe_name":  "Adobe Bridge.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Desktop - Adobe Bridge"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  463,
+    "ui_lines":  20,
+    "ui_hits":  0,
+    "quit":  "clean",
+    "ended":  1795141233.777,
+    "dismissed":  [
+
+                  ]
+}

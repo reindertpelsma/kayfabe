@@ -1,0 +1,13 @@
+Pane | Adobe UXP Developer Tools | 
+Document | Chrome Legacy Window | -170298512
+TitleBar | Adobe UXP Developer Tools | TitleBar
+MenuBar | System Menu Bar | SystemMenuBar
+Button | Minimize | Minimize
+Button | Maximize | Maximize
+Button | Close | Close
+MenuItem | System | Item 1
+MenuItem | File | 
+MenuItem | Edit | 
+MenuItem | Actions | 
+MenuItem | View | 
+MenuItem | Help | 

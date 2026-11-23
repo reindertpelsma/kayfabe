@@ -1,0 +1,27 @@
+{
+    "app":  "lightroomlaunch",
+    "started":  1795139884.207,
+    "error":  null,
+    "outputs":  [
+
+                ],
+    "exe_dir":  "Adobe Lightroom Classic",
+    "exe_name":  "Lightroom.exe",
+    "main_window":  true,
+    "titles":  [
+                   "Lightroom Classic"
+               ],
+    "alive":  true,
+    "responding":  true,
+    "private_mb":  1403,
+    "ui_lines":  0,
+    "ui_hits":  0,
+    "uitext_error":  "no time left for a walk",
+    "quit":  "forced",
+    "ended":  1795140769.21,
+    "crash_events":  12,
+    "crash_dumps":  0,
+    "dismissed":  [
+
+                  ]
+}
