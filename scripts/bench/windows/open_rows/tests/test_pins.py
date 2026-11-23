@@ -23,7 +23,7 @@ class PinsPolicy(unittest.TestCase):
     def test_committed_pins_are_valid(self):
         doc = pins()
         self.assertEqual({"cts", "dxs"}, set(doc["sources"]))
-        self.assertEqual(9, len(doc["rows"]))
+        self.assertEqual(10, len(doc["rows"]))
 
     def test_sources_are_anchored_by_a_pinned_commit(self):
         for name, src in pins()["sources"].items():

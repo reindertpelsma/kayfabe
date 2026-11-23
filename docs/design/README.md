@@ -58,6 +58,7 @@ Meaning of the status words: LIVE describes the current tree (as of the document
 | [`V3_LINUX_PERF_BASELINE_6692e621.md`](V3_LINUX_PERF_BASELINE_6692e621.md) | V3_LINUX_PERF_BASELINE_6692e621 - the Linux performance baseline before the Windows integration | 2026-10-10 |
 | [`V3_MULTI_GPU_AUDIT.md`](V3_MULTI_GPU_AUDIT.md) | V3 multi-GPU audit — is it still possible, and is it required? | 2026-11-20 |
 | [`V3_NOT_IN_GIT.md`](V3_NOT_IN_GIT.md) | V3 — what is intentionally NOT in git | 2026-10-10 |
+| [`V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md`](V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md) | V3 open lanes: nvbandwidth, llama.cpp on Vulkan, LibreHardwareMonitor (NVAPI) | 2026-11-23 |
 | [`V3_OPEN_ML_ROWS.md`](V3_OPEN_ML_ROWS.md) | V3 open ML rows: vLLM, TensorRT and JAX / XLA (discovery lane) | 2026-11-17 |
 | [`V3_OPEN_ROWS_FFMPEG_DCGM.md`](V3_OPEN_ROWS_FFMPEG_DCGM.md) | V3 open rows: the FFmpeg NVENC/NVDEC capability matrix and the DCGM + NVML sweep | 2026-11-17 |
 | [`V3_P1P2_TSPACE.md`](V3_P1P2_TSPACE.md) | P1 + P2: no window in any space an unprivileged guest channel uses; Translated work in its own space | 2026-10-10 |

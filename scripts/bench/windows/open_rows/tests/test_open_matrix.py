@@ -22,7 +22,8 @@ from kfopen_common import Result
 PINS = P.load_pins()
 APPS = {a["id"]: a for a in json.load(open(os.path.join(H.AM, "apps.json")))["apps"]}
 PROF = json.load(open(os.path.join(H.AM, "gate_profiles.json")))
-OPEN_IDS = sorted(PINS["rows"])
+# rows that are wired into apps.json; a row flagged matrix=deferred runs through kfopen.py only (hwmon_lhm_nvapi: apps.json is hash-covered by bundle.pin)
+OPEN_IDS = sorted(r for r, row in PINS["rows"].items() if row.get("matrix", {}).get("state") != "deferred")
 
 
 class Rows(unittest.TestCase):

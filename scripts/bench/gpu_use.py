@@ -420,8 +420,59 @@ def proof_egl(text, **_):
     return _proof(not why, m.group(1), why)
 
 
+VK_DEVICE_RX = re.compile(r"^ggml_vulkan: (\d+) = (.+?) \((.*?)\) \|", re.M)
+VK_TABLE_RX = re.compile(r"^\|[^|]*\|[^|]*\|[^|]*\|\s*([^|\s][^|]*?)\s*\|\s*(\d+)\s*\|\s*(?:pp|tg)\d+\s*\|\s*([0-9.]+)", re.M)
+
+
+def proof_llama_vulkan(text, **_):
+    """llama.cpp on its Vulkan backend: ggml_vulkan lists an NVIDIA device (not llvmpipe, lavapipe or SwiftShader, which a Vulkan loader may list first and which run
+    the whole benchmark on the CPU), and every llama-bench row ran on the Vulkan backend with ngl >= 1 and a positive t/s."""
+    text = _text(text)
+    devs = VK_DEVICE_RX.findall(text)
+    if not devs:
+        return _proof(False if "ggml_vulkan" in text or VK_TABLE_RX.search(text) else None, "", ["no `ggml_vulkan: N = <device>` line: no Vulkan device was found, the benchmark ran on the CPU"])
+    gpu = [d for d in devs if _nvidia(d[1]) and not SOFT_GPU_NAMES.search(d[2])]
+    if not gpu:
+        return _proof(False, devs[0][1], ["the Vulkan device is not an NVIDIA GPU: " + devs[0][1][:60]])
+    rows = VK_TABLE_RX.findall(text)
+    if not rows:
+        return _proof(None, gpu[0][1], ["no llama-bench table row"])
+    bad = [r for r in rows if "vulkan" not in r[0].lower() or "cpu" in r[0].lower() or int(r[1]) < 1 or float(r[2]) <= 0]
+    if bad:
+        return _proof(False, gpu[0][1], ["llama-bench ran on backend %r with ngl %s and %s t/s" % (bad[0][0], bad[0][1], bad[0][2])])
+    return _proof(True, gpu[0][1], [], rows=len(rows))
+
+
+NVB_PROOF_RX = re.compile(r"^NVBANDWIDTH_PROOF device=(\S+) gpus=(\d+) passed=(\d+) ce=(\d+) sm=(\d+) latency=(\d+) local=(\d+) min_gbps=([0-9.eE+-]+)\s*$", re.M)
+NVB_MIN_GBPS = 0.05
+
+
+def proof_nvbandwidth(text, **_):
+    """nvbandwidth: the row prints `NVBANDWIDTH_PROOF` from its own measurements after the cases ran. A copy has no CPU form, so what can go wrong is a GPU that is
+    not there (CUDA_VISIBLE_DEVICES empty: no device, cases that pass with no figure), a non-NVIDIA name, no copy-engine or no SM-copy case passed, or a figure
+    below any real link's."""
+    text = _text(text)
+    hits = NVB_PROOF_RX.findall(text)
+    if not hits:
+        return _proof(None, "", ["no NVBANDWIDTH_PROOF line (the row dropped its device proof)"])
+    device, gpus, passed, ce, sm, lat, loc, floor = hits[-1]
+    name, why = device.replace("_", " "), []
+    if int(gpus) < 1:
+        why.append("nvbandwidth listed no GPU device")
+    elif not _nvidia(name):
+        why.append("device name is not an NVIDIA GPU: " + name[:60])
+    if int(ce) < 1:
+        why.append("no copy-engine case passed")
+    if int(sm) < 1:
+        why.append("no SM-copy case passed")
+    if int(passed) >= 1 and float(floor) < NVB_MIN_GBPS:
+        why.append("smallest bandwidth %s GB/s is below %g" % (floor, NVB_MIN_GBPS))
+    return _proof(not why, name, why, passed=int(passed), ce=int(ce), sm=int(sm))
+
+
 PROOFS = {"blender": proof_blender, "llama": proof_llama, "framework": proof_framework, "nvenc": proof_nvenc, "nvdec": proof_nvdec,
-          "hashcat": proof_hashcat, "opencl_bench": proof_opencl_bench, "vkpeak": proof_vkpeak, "egl": proof_egl}
+          "hashcat": proof_hashcat, "opencl_bench": proof_opencl_bench, "vkpeak": proof_vkpeak, "egl": proof_egl,
+          "llama_vulkan": proof_llama_vulkan, "nvbandwidth": proof_nvbandwidth}
 
 
 # ------------------------------------------------------------------------------------------------ the verdict

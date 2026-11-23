@@ -2329,6 +2329,8 @@ jobs:
           python3 -B -I scripts/ci/mlrows_mutants.py --jobs 4
           # Open Vulkan CTS row (2026-11-17, docs/design/V3_VULKAN_CTS_ROW.md): pins, case list, QPA parser, crash attribution, host-vs-guest diff; >=2 named killers per mutant.
           python3 -B -I scripts/ci/vkcts_mutants.py
+          # Open lanes (nvbandwidth, llama.cpp Vulkan; 2026-11-23, docs/design/V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md): the case judge, the GPU-use proofs and their negative controls, the Vulkan device/backend judge, the pins and the wiring; >=2 named killers per mutant.
+          python3 -B -I scripts/ci/open_lanes_mutants.py --jobs 4
 
   # The Windows guest setup script (2026-11-20, docs/howto/windows-guest.md): scripts/windows/kayfabe-windows-setup.ps1 and its .bat run in
   # Windows PowerShell 5.1 against the REAL registry of this disposable runner, with a faked adapter class key: the values and their types,

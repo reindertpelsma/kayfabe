@@ -32,6 +32,11 @@ A row prints `KFOPEN VERDICT PASS ...`, or a `CHECK <name> FAIL <why>` line, or 
 | `dxsamples_nbody_async`, `dxsamples_execute_indirect`, `dxsamples_reserved_resources`, `dxsamples_hdr` | the sample runs for 40 seconds, is driven with keys, shows non-blank window contents, closes cleanly with exit code 0 |
 | `dxsamples_work_graphs` | the console sample runs a work graph and prints the expected shape of output; not run if the adapter has no work graph support |
 | `dxsamples_multiadapter` | always not run: it needs two GPUs |
+| `hwmon_lhm_nvapi` | LibreHardwareMonitor's library reads the NVIDIA GPU's temperature, clock, load and memory sensors through the driver's NVAPI; the row checks that each has a plausible value and that `nvidia-smi` agrees. Download: the release zip, checked against the checksum of that release; no build tools are needed |
+
+### The sensor-reader row
+
+`hwmon_lhm_nvapi` needs no compiler: `kfopen.py run hwmon_lhm_nvapi` downloads the LibreHardwareMonitor release zip (MPL-2.0), checks it against the sha256 the release itself lists, unpacks it under `C:\kfopen\tools\lhm` and runs `lhm_dump.ps1`, which prints what the library read as one line of JSON. `--negctl` runs the same reader with its GPU group switched off; that run must be judged a failure, and the command exits 0 only if it was. The row is run through `kfopen.py` and is not yet a row of the app matrix (the matrix file is part of the published app bundle and changes only with a republish). Nothing has run on Windows yet.
 
 ## The native control for the conformance rows
 

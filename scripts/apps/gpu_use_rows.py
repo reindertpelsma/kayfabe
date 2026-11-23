@@ -67,6 +67,11 @@ ROWS = {
     "vllm": ("a+proof", "framework", {"framework": "vllm", "min_mib": 300}, ("gpu",), dict(LONG), "FAIL"),
     "tensorrt": ("b", "framework", {"framework": "tensorrt", "min_mib": 200}, ("gpu",), dict(LONG), "FAIL"),
     "jax": ("b", "framework", {"framework": "jax", "min_mib": 1000}, ("gpu",), dict(LONG), "FAIL"),
+    # the open lanes of docs/design/V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md (discovery rows). llama_vulkan CAN fall back (a CPU Vulkan driver listed first, -ngl 0, no ICD at all):
+    # class b. nvbandwidth cannot (a copy has no CPU form), its proof line comes from the row's own measurements: class a+proof. UNCALIBRATED engines, as above:
+    # memory rises by the buffers (a bare-metal observation only, host_engines() drops it for a guest) and the SM-copy kernels keep the graphics engine busy for whole seconds.
+    "llama_vulkan": ("b", "llama_vulkan", {}, ("gpu", "mem"), dict(LONG), "FAIL"),
+    "nvbandwidth": ("a+proof", "nvbandwidth", {}, ("gpu", "mem"), dict(LONG), "FAIL"),
 }
 INFO = ("nvidia_smi", "deviceQuery", "vulkaninfo", "clinfo", "nvml_dcgm")   # nvml_dcgm reads fields (its own census asserts what work it did)
 WIRED = tuple(r for r, v in ROWS.items() if v[0] in ("b", "a+proof"))      # rows whose verdict the judge may rewrite

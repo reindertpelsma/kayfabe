@@ -132,6 +132,8 @@ fi
 # provision.sh prints OPENROWS_<step>=ok|FAIL lines (a prefix the stage's BUILD_/SETUP_ checks do not read): a failed step makes the row
 # report NOT_RUN with its reason, and can never turn a gate bundle into a failed one. It fills $B/bin/nvcodec_probe and $B/dcgm_root.tar.
 bash "$HERE/open_rows/provision.sh" "$B" || say "open rows: at least one OPENROWS_ step failed (the rows report NOT_RUN; the gate list is unaffected)"
+# the nvbandwidth and llama.cpp Vulkan lanes (docs/design/V3_OPEN_LANES_NVBW_LLAMAVK_LHM.md): same rule, builds $B/bin/nvbandwidth and $B/llama_vk/
+bash "$HERE/open_rows/provision_lanes.sh" "$B" || say "open lanes: at least one OPENROWS_ step failed (the rows report NOT_RUN; the gate list is unaffected)"
 rm -rf "$B/src" "$B/nvcodec_probe.log" "$B/ffmpeg.log" "$B/dcgm.log" "$B/nvidia.key" "$B/dcgm_files.txt" 2>/dev/null
 mkdir -p "$B/share" && cp -r "$HERE/open_rows" "$B/share/"
 cp -u "$HERE/src/ai_bench.py" "$HERE"/src/*.py "$B/share/" 2>/dev/null
