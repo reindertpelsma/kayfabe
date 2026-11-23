@@ -87,6 +87,7 @@ To use a tarball you already have, add `--from-file <path>`; it is checked again
 1. Runs `cargo build --release -p kf-qemu` and requires the resulting `target/release/libkf_qemu.a`. A failed cargo step stops the script, so a stale archive is never used.
 2. Copies every `qemu/hw/misc/kf3/*.c`, `*.h` and `meson.build` into `<qemu>/hw/misc/kf3/`, and the archive beside them.
 3. Appends `subdir('kf3')` to `hw/misc/meson.build` and a `config KF3` stanza (`bool`, `default y if TEST_DEVICES`, `depends on PCI`) to `hw/misc/Kconfig`, unless they are already there.
+   It also replaces QEMU's `pc_machine_wakeup` in `hw/i386/pc.c` so that waking a guest from sleep (ACPI S3) keeps each vCPU's Hyper-V enlightenment state; without it a Windows guest started with `hv-time` can hang right after waking on a host with a stable TSC. The replacement is applied once and refused on a QEMU whose `pc_machine_wakeup` differs from 10.2.4's. <!-- src: scripts/release/build_qemu.py (WAKE_OLD, WAKE_NEW, apply_wake_hunk); scripts/bench/build_kf3.sh -->
 4. Takes a lock on the build directory, then configures QEMU, only if the directory is new or was configured with different flags (a stale configuration is removed whole and rebuilt):
    ```
    --target-list=x86_64-softmmu --disable-docs --disable-tools --disable-guest-agent
@@ -122,7 +123,7 @@ python3 -I scripts/release/build_qemu.py build --qemu-tarball ~/src/qemu-10.2.4.
 python3 -I scripts/release/build_qemu.py build --qemu-tree ~/src/qemu-10.2.4 --out dist             # a source tree, for example the one a distribution builds from
 ```
 
-A tarball or tree you supply is yours: the manifest says so and records its hash. The kit copies a tree and never changes it, and ignores its `.git`. It accepts QEMU 10.2.4 only and refuses any other version by name, listing the versions it knows. A tree that already has a `hw/misc/kf3` directory with other files in it is refused. A tree that already contains the two one-line hunks (`subdir('kf3')` in `hw/misc/meson.build` and a `config KF3` stanza in `hw/misc/Kconfig`) gets them once. <!-- src: scripts/release/build_qemu.py (QemuInput, apply_overlay, check_supported) -->
+A tarball or tree you supply is yours: the manifest says so and records its hash. The kit copies a tree and never changes it, and ignores its `.git`. It accepts QEMU 10.2.4 only and refuses any other version by name, listing the versions it knows. A tree that already has a `hw/misc/kf3` directory with other files in it is refused. A tree that already contains the two one-line hunks (`subdir('kf3')` in `hw/misc/meson.build` and a `config KF3` stanza in `hw/misc/Kconfig`) gets them once. The kit also replaces `pc_machine_wakeup` in `hw/i386/pc.c` (the sleep/wake change described above, recorded in the manifest as `replace-function`); a tree whose `pc_machine_wakeup` is not QEMU 10.2.4's is refused. <!-- src: scripts/release/build_qemu.py (QemuInput, apply_overlay, check_supported) -->
 
 **Check that a build is reproducible.** `reproduce` builds twice, in two different directories, and fails unless the binary tarball and the manifest are byte-identical:
 

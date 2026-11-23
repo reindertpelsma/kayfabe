@@ -1,0 +1,12 @@
+{
+ "uname": "6.8.0-59-generic",
+ "clocksource": "tsc",
+ "tsc_dmesg": [
+  "[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<box-root-partuuid> ro tsc=reliable clocksource=tsc console=tty1 console=ttyS0 panic=-1",
+  "[    0.072674] Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<box-root-partuuid> ro tsc=reliable clocksource=tsc console=tty1 console=ttyS0 panic=-1"
+ ],
+ "cpu_flags_has_constant_tsc": false,
+ "cpu_flags_has_nonstop_tsc": false,
+ "repo_rev": "1052e2f90",
+ "gpu": "NVIDIA GeForce RTX 4090, 580.159.04"
+}

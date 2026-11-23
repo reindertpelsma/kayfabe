@@ -10,6 +10,7 @@ two directories on the same machine, give the same bytes. It installs nothing an
   build_qemu.py build     [QEMU INPUT] --out DIR     binary tarball + manifest in DIR
   build_qemu.py source    [QEMU INPUT] --out DIR     the corresponding-source tarball of a build (GPL), vendored crates included
   build_qemu.py reproduce [QEMU INPUT] --out DIR     build twice into DIR/a and DIR/b and fail unless the outputs are identical
+  build_qemu.py wake-hunk QEMU_TREE                  only the S3-wake hunk of hw/i386/pc.c, in place (scripts/bench/build_kf3.sh)
 
 QEMU INPUT is one of (none = the pinned official release, downloaded, signature-verified):
   --qemu-tarball FILE   a QEMU release tarball you have (verified against FILE.sig when that exists)
@@ -78,6 +79,46 @@ CARGO_ARGS = ("build", "--release", "--locked", "-p", "kf-qemu")
 MESON_HUNK = "subdir('kf3')"
 KCONFIG_STANZA = "\nconfig KF3\n    bool\n    default y if TEST_DEVICES\n    depends on PCI\n"
 DEVICE_DIR = "qemu/hw/misc/kf3"
+# The third hunk (2026-11-23, traces/win11_s3_wake_20261123/README.md): QEMU's S3 wake resets every vCPU with a cold CPU
+# reset, which zeroes the Hyper-V synthetic MSRs and writes them to KVM (HV_X64_MSR_REFERENCE_TSC = 0 among them) while the
+# guest TSC restarts near 0. A Windows guest with hv-time does not re-enable the TSC page on resume and keeps reading the
+# stale page, so its reference time goes negative, every synthetic-timer deadline it writes is "before zero", and KVM never
+# delivers it: all vCPUs idle in HLT forever. The hunk keeps the Hyper-V MSR block of every vCPU across the wake (a
+# hypervisor does not sleep with its guest); architectural CPU state is reset as before. No-op without hv-* flags.
+WAKE_FILE = "hw/i386/pc.c"
+WAKE_OLD = """static void pc_machine_wakeup(MachineState *machine)
+{
+    cpu_synchronize_all_states();
+    pc_machine_reset(machine, RESET_TYPE_WAKEUP);
+    cpu_synchronize_all_post_reset();
+}
+"""
+WAKE_NEW = """/* kayfabe: a guest S3 wake keeps the Hyper-V synthetic MSR state (traces/win11_s3_wake_20261123). */
+#define KF_HV_LO offsetof(CPUX86State, msr_hv_hypercall)
+#define KF_HV_LEN (offsetof(CPUX86State, msr_hv_tsc_emulation_status) + sizeof(uint64_t) - KF_HV_LO)
+static void pc_machine_wakeup(MachineState *machine)
+{
+    CPUState *cs;
+    size_t n = 0, i = 0;
+    uint8_t *save;
+
+    cpu_synchronize_all_states();
+    CPU_FOREACH(cs) {
+        n++;
+    }
+    save = g_malloc(n * KF_HV_LEN);
+    CPU_FOREACH(cs) {
+        memcpy(save + KF_HV_LEN * i++, (uint8_t *)&X86_CPU(cs)->env + KF_HV_LO, KF_HV_LEN);
+    }
+    pc_machine_reset(machine, RESET_TYPE_WAKEUP);
+    i = 0;
+    CPU_FOREACH(cs) {
+        memcpy((uint8_t *)&X86_CPU(cs)->env + KF_HV_LO, save + KF_HV_LEN * i++, KF_HV_LEN);
+    }
+    g_free(save);
+    cpu_synchronize_all_post_reset();
+}
+"""
 
 
 class KitRefused(Exception):
@@ -374,6 +415,7 @@ def apply_overlay(qemu_tree, kroot, archive):
         raise KitRefused("%s lacks hw/misc/meson.build or hw/misc/Kconfig: not a QEMU source tree" % qemu_tree)
     if not archive.is_file():
         raise KitRefused("the kayfabe archive %s was not built" % archive)
+    wake_text = _wake_hunk_text(qemu_tree)
     sources = _device_sources(kroot)
     dest = qemu_tree / "hw/misc/kf3"
     ours = {p.name for p in sources} | {"libkf_qemu.a"}
@@ -395,7 +437,32 @@ def apply_overlay(qemu_tree, kroot, archive):
     records.sort(key=lambda r: r["path"])
     records.append({"path": "hw/misc/Kconfig", "kind": "append-stanza", "sha256": sha256_bytes(KCONFIG_STANZA.encode())})
     records.append({"path": "hw/misc/meson.build", "kind": "append-line", "text": MESON_HUNK})
+    if wake_text is not None:
+        (qemu_tree / WAKE_FILE).write_text(wake_text)
+    records.append({"path": WAKE_FILE, "kind": "replace-function", "sha256": sha256_bytes(WAKE_NEW.encode())})
     return records
+
+
+def _wake_hunk_text(qemu_tree):
+    """The new text of hw/i386/pc.c with the wake hunk, None when it is already there; refuses a tree it cannot place it in."""
+    pc = Path(qemu_tree) / WAKE_FILE
+    if not pc.is_file():
+        raise KitRefused("%s lacks %s: not an x86 QEMU source tree" % (qemu_tree, WAKE_FILE))
+    text = pc.read_text()
+    if text.count(WAKE_NEW) == 1 and WAKE_OLD not in text:
+        return None
+    if text.count(WAKE_OLD) != 1:
+        raise KitRefused("%s: pc_machine_wakeup is not the QEMU 10.2.4 text the S3-wake hunk replaces" % pc)
+    return text.replace(WAKE_OLD, WAKE_NEW)
+
+
+def apply_wake_hunk(qemu_tree):
+    """Only the S3-wake hunk (scripts/bench/build_kf3.sh lays the rest itself). Returns 'applied' or 'present'."""
+    new = _wake_hunk_text(qemu_tree)
+    if new is None:
+        return "present"
+    (Path(qemu_tree) / WAKE_FILE).write_text(new)
+    return "applied"
 
 
 # ------------------------------------------------------------------------------------------------ environment and runner
@@ -808,7 +875,8 @@ def _plan(a, qi):
     plan = {"qemu_version": version, "qemu_source": source, "supported_qemu": list(SUPPORTED_QEMU),
             "patches": [{"path": "hw/misc/kf3/" + p.name, "kind": "add-file", "sha256": sha256_file(p)} for p in _device_sources(kroot)]
             + [{"path": "hw/misc/kf3/libkf_qemu.a", "kind": "add-file", "note": "cargo build --release --locked -p kf-qemu"},
-               {"path": "hw/misc/Kconfig", "kind": "append-stanza"}, {"path": "hw/misc/meson.build", "kind": "append-line", "text": MESON_HUNK}],
+               {"path": "hw/misc/Kconfig", "kind": "append-stanza"}, {"path": "hw/misc/meson.build", "kind": "append-line", "text": MESON_HUNK},
+               {"path": WAKE_FILE, "kind": "replace-function", "sha256": sha256_bytes(WAKE_NEW.encode())}],
             "configure_line": configure_line(cargs, *where)}
     return plan
 
@@ -831,7 +899,16 @@ def main(argv=None):
             s.add_argument("--workdir", metavar="DIR", help="scratch directory, recreated each run (default: OUT.work)")
         if name in ("build", "reproduce"):
             s.add_argument("--jobs", type=int, default=os.cpu_count() or 2, help="parallel jobs")
+    w = sub.add_parser("wake-hunk", help="apply only the S3-wake hunk to a QEMU tree in place (build_kf3.sh)")
+    w.add_argument("tree", metavar="QEMU_TREE")
     a = p.parse_args(argv)
+    if a.cmd == "wake-hunk":
+        try:
+            print("KIT_WAKE_HUNK %s %s" % (apply_wake_hunk(a.tree), Path(a.tree) / WAKE_FILE))
+            return 0
+        except KitRefused as e:
+            print("KIT_REFUSED: %s" % e, file=sys.stderr)
+            return 1
     qi = _inputs(p, a)
     try:
         if a.cmd == "plan":
