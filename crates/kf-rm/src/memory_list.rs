@@ -38,8 +38,9 @@ pub enum AccessError {
 }
 
 /// Trusted RAM authority supplied by the VMM. Registration never touches contents.
-/// Implementations must validate writable real RAM, revoke generations on topology
-/// changes, and hold the registration guard across every bounded copy. A generation
+/// Implementations must validate writable real RAM, revoke generations when a byte's
+/// guest-physical translation changes (a re-split of the same mapping is not a change), and
+/// hold the registration guard across every bounded copy. A generation
 /// of zero is invalid and exhausted counters must never wrap or revive old tokens.
 pub trait GuestRamAuthority: core::fmt::Debug + Send + Sync {
     /// Validate the whole span and return its current nonzero topology generation.

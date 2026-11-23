@@ -1921,12 +1921,25 @@ impl Device {
         fd: Option<crate::raw_unsafe::BackendFd>,
         fd_off: u64,
     ) {
-        self.ram.add(crate::mem::RamBlock {
+        let len = mem.len();
+        let revoked = self.ram.add(crate::mem::RamBlock {
             gpa,
             mem,
             fd,
             fd_off,
         });
+        // A machine reset (an S3 wake included) re-splits the flat view; only a changed
+        // translation ends the leases (`RamMap`'s docs).
+        let generation = self.ram.try_generation().unwrap_or(0);
+        if revoked {
+            kf_arch::rate_eprintln!(
+                "kf3: RAM add gpa={gpa:#x} len={len:#x} fd_off={fd_off:#x}: the translation CHANGED, every RAM lease revoked (generation {generation})"
+            );
+        } else {
+            kf_arch::rate_eprintln!(
+                "kf3: RAM add gpa={gpa:#x} len={len:#x} fd_off={fd_off:#x}: translation kept (generation {generation})"
+            );
+        }
         // the main loop was a holder of the RAM topology lock (a relay's `admit_user_generation` answers Busy): ring the relays that lost to it
         self.chans.handoff_released();
     }
@@ -1955,6 +1968,7 @@ impl Device {
     /// Unregister the guest RAM block at `gpa`.
     pub fn ram_del(&self, gpa: u64) {
         self.ram.del(gpa);
+        kf_arch::rate_eprintln!("kf3: RAM del gpa={gpa:#x}");
         self.chans.handoff_released();
     }
 

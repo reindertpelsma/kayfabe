@@ -656,6 +656,38 @@ mod tests {
         let generation = ram.generation.load(Ordering::Relaxed);
         (ram, block, rows, RowsLog::default(), generation)
     }
+    /// The block at the same address showing other bytes of the file: a changed translation,
+    /// which revokes (an identical re-registration does not, `RamMap`'s docs).
+    fn moved(block: &super::super::RamBlock) -> super::super::RamBlock {
+        super::super::RamBlock {
+            fd_off: block.fd_off + 0x1000,
+            ..block.test_alias()
+        }
+    }
+    /// The S3 wake's flat-view re-split (`traces/win11_s3_tdr_20261123/`): the same file bytes
+    /// at the same addresses, registered as one longer block, keep a relay's birth generation, so
+    /// its source snapshots and their publication still admit. Before the fix the re-split
+    /// revoked it and every relay born before the wake refused `Topology` for good.
+    #[test]
+    fn a_wake_resplit_of_the_same_ram_keeps_the_birth_generation() {
+        let (ram, block, rows, log, generation) = fixture();
+        block.mem.write_from(0, &[7, 8, 9, 10]);
+        let before = snapshot(&rows, &log, &ram, generation, 0x10000, 4, &mut NoStore).unwrap();
+        // one section removed, the same bytes added back as two (a window toggled in between)
+        ram.del(block.gpa);
+        for at in [0, 0x4000] {
+            ram.add(super::super::RamBlock {
+                gpa: block.gpa + at,
+                mem: block.mem.test_sub(at as usize, 0x4000),
+                fd: block.fd.clone(),
+                fd_off: block.fd_off + at,
+            });
+        }
+        assert_eq!(before.admit(|| 7), Ok(7));
+        let after = snapshot(&rows, &log, &ram, generation, 0x10000, 4, &mut NoStore).unwrap();
+        assert_eq!(after.bytes, [7, 8, 9, 10]);
+        assert!(mapped(&rows, &log, &ram, generation, 0x10000, 8, 0).is_ok());
+    }
     #[test]
     fn snapshots_are_owned_bounded_and_never_expose_partial_hole_reads() {
         let (ram, block, rows, log, generation) = fixture();
@@ -687,7 +719,7 @@ mod tests {
         );
         drop(guard);
         ram.del(block.gpa);
-        ram.add(block.test_alias());
+        ram.add(moved(&block));
         assert_eq!(
             snapshot(&rows, &log, &ram, generation, 0x10000, 4, &mut NoStore).err(),
             Some(Refusal::Topology)
@@ -768,7 +800,7 @@ mod tests {
             .unwrap()
             .insert(0x10000, (0x8000, 0, true, MapPerm::READ_WRITE));
         ram.del(block.gpa);
-        ram.add(block.test_alias());
+        ram.add(moved(&block));
         assert_eq!(s.admit(|| panic!("old topology")), Err(Refusal::Topology));
         drop(rows);
         assert_eq!(s.admit(|| panic!("gone source")), Err(Refusal::Changed));
@@ -1131,7 +1163,7 @@ mod tests {
         let (ram, block, rows, log, generation) = fixture();
         let receipts = stream_receipts(&ram, &rows, &log, generation);
         ram.del(block.gpa);
-        ram.add(block.test_alias());
+        ram.add(moved(&block));
         assert_eq!(
             admit_all(&receipts, || panic!("revoked topology")),
             Err(Refusal::Topology)
