@@ -44,6 +44,12 @@ _cycle = s3tdr.cycle
 def cycle(vm, tag, n, out):
     """s3tdr's cycle; an event 153 counts only from the nvlddmkm provider (PREREGISTRATION.md, addendum 1): Kernel-Boot
     also logs Id 153 at every boot, and the guest's clock step after the wake puts that boot's records inside the window."""
+    if n == 1:
+        # addendum 2: no unattended re-sleep after a wake no user input followed (system unattended sleep timeout)
+        _, o = vm.guest("powercfg /setacvalueindex scheme_current sub_sleep 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 0; "
+                        "powercfg /setactive scheme_current; "
+                        "powercfg /query scheme_current sub_sleep 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0", 60)
+        (out / "unattended_sleep.txt").write_text(o)
     res = _cycle(vm, tag, n, out)
     ev153 = [e for e in res.get("events", []) if re.search(r" 153 ", " " + e + " ")]
     tdr = [e for e in ev153 if "nvlddmkm" in e.lower()]

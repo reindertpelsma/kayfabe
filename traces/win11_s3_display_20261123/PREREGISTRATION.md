@@ -104,3 +104,13 @@ on (`s3disp.py`, this commit) an event 153 counts only when its provider is `nvl
 the other 153 records are kept in each cycle's result (`event_153_other`). Everything else in the CLEAN definition is
 unchanged. D1 cycle 1 is reported as probe-FAIL and hand-judged against this rule, and does not count toward N >= 3.
 **D2:** a fresh boot of the same gate overlay, F3 build, 3 cycles, with the corrected rule. Then D0 as planned.
+
+## Addendum 2, 2026-11-23 (after D2, before D3)
+
+D2 (F3 `a2df9a81`, box 62182559, one boot): cycles 1 and 2 CLEAN (addendum 1 rule). Before cycle 3's request the guest
+was already in S3 on its own (its ssh did not answer, `boot0` empty, QMP `suspended` at once); the probe woke it, and kf3
+logged a third PM suspend and a third kept wake with no RM unload, but the probe judged the cycle FAIL ("new boot")
+because `boot0` was unreadable (`boot1` equals cycles 1-2's `LastBootUpTime`). [inferred] Windows' system unattended
+sleep timeout (about 2 min after a wake with no user input) put it back to sleep. D2 therefore does NOT count as N = 3.
+**D3:** a fresh boot, F3, 3 cycles; `s3disp.py` (this commit) sets the unattended sleep timeout
+(`7bc4a2f9-d8fc-4469-b07b-33eb785aaca0`) to 0 in the guest before cycle 1. The CLEAN definition is unchanged.
