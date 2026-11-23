@@ -66,7 +66,9 @@ redaction, storage bounds and API-outage limits. This source change does not dep
   newer run supersede the older runs of its branch and the caps answer BUSY. None of these
   refusals closes another run.
 - Commit gap, exactly: the commit row lives 30 days from the start of the rental (or
-  `SHA_GAP_HOURS` if that is longer) and is removed when the create failed. So a first-attempt
+  `SHA_GAP_HOURS` if that is longer) and is removed when the create failed or when the run ended
+  as an unusable rental (see "gpu-vast hardening" at the end: a provider fault with no box report
+  and no replacement left). So a first-attempt
   run key (`run_attempt` 1) of a commit tested in the last 30 days is refused, whatever
   `SHA_GAP_HOURS` says. The 24 h gap applies only to a re-run of the same commit (`run_attempt`
   above 1). The spent-key refusal lasts while the spend row exists: the row is pruned 30 days
@@ -1207,3 +1209,51 @@ dry-run bundle or when wrangler is missing, and `node ci/vast-broker/scripts/bun
 one-byte change of `defaults.json`, and a pin edited in one of the two files. [MEASURED 2026-11-23] On `next` before the pin change the check exits 1.
 
 Order: master must carry the new pin before the coordinator deploys the Worker (rule above); set `RELEASE_ENABLED=false` before any rollback.
+
+## gpu-vast hardening (2026-11-23)
+
+STATUS: LIVE, 2026-11-23 as source; NOT DEPLOYED. Four causes of the four attempts of the last batch PR gate
+(run 43348729279, 2026-11-13; analysis in `docs/CI_V3.md`, "gpu-vast failure causes"), each with a test that fails
+without the change. Local tests only: no rental, no Worker call, no upload.
+
+1. **A boot stuck on the `/dev/kvm` device error is a fatal provider signature.** `defaults.json`
+   `providerPolicy.fatalSignatures` has a second rule, reason `KVM_DEVICE_ERROR`, source `status`, matching both
+   `error gathering device information while adding custom device` and `/dev/kvm` in the provider's status message
+   (case-insensitive, as every rule). It is confirmed like the others (two observations, `confirmationSeconds` 90 apart), so the box is
+   destroyed as a PROVIDER_FAULT a few minutes after the first sighting and the bounded replacement starts, instead of
+   waiting for the 75 minute boot timeout. `test/provider-kvm-device.test.js`.
+2. **A replacement gets back the time the unusable legs took.** The payload's stage budget (`KF_SOFT_DEADLINE`) counts
+   from the first rental, and `apps` starts only with 245 minutes left (`scripts/ci/vast_payload.py`). A replacement exists only
+   because the earlier legs never posted (`retryEligible`), so its hard and soft deadlines move by the time since the
+   first rental, at most `providerPolicy.replacementExtensionMinutes` (25) in all, and never beyond the runner's remaining wait
+   budget less `admissionMarginMinutes` (a larger extension would be refused as `RUNNER_TIME`; a sweep runner, with a 200 minute
+   budget against a 180 minute limit, gets at most 15). The session deadline (90 minutes) and the money bound
+   (`runBudgetUsd`) do not change, so the extension adds no spend beyond the bound already admitted. The reservation re-checks the rule
+   (`validExtension`). `test/replacement-deadline.test.js`.
+3. **The commit gap is released only by an unusable rental.** The marker `sha:<commit>` (one rental per commit, `SHA_GAP_HOURS`)
+   is deleted when a run ends with verdict PROVIDER_FAULT, no box report ever (`firstReportAt` unset) and its replacement
+   chain spent (`replacementExhausted`), by the same call that clears it when the create failed (`clearFailedSha`, which deletes
+   the marker only if it names this run key). Nothing else changes: a run whose box reported, a run with a replacement still
+   allowed, a stopped or timed-out run and a PASS keep the gap. The spend rows (`cost:*`) are not touched, so the daily rental count, the daily and
+   rolling USD caps and the credit reserve still apply to the re-run; at most `DAILY_RENTALS` (4) such re-runs fit in a day. Narrowed in
+   `provider-policy.js` `unusedRental`; `test/sha-gap-provider-fault.test.js`; `sha-gap-mutants.mjs` shows that dropping any one condition fails
+   a test. To restore the old rule, make `unusedRental` return false.
+4. **`gate_reuse.py` replays any complete PASS, not only four stages.** The post-merge push run of master reuses the
+   same-tree PR PASS instead of renting; the replay accepted only `stages=4`, and the pull-request gate plans more (the 2026-11-13
+   PASS had seven; kfml makes it eight). It now takes the stage count from the frame, requires one PASS line per
+   stage, no repeats, at most 16, and the base stages first in the order every tier plans them; a run that replaced an unusable box (up to
+   `maxAttempts` rentals) is accepted too. The base list is the one list this file keeps (it is fetched alone, so it cannot
+   import the payload); `scripts/ci/test_gate_reuse_stages.py` feeds the payload's own plan for every tier through the replay and fails when the
+   payload's plan stops starting with it. For the push run the workflow and `gate_reuse.py` come from the merge commit, so this takes
+   effect on the first push after the batch lands.
+
+What the post-merge push run needs (2026-11-13: run 43389562598): its first attempt rented a box and the runner refused the Worker's answer at
+`runner.py` line 862 (the manifest compare, INFERRED to be the bundle hash: master pinned `bf98dfcd...`), which left a commit marker, so the re-run
+two minutes later got `BUDGET:sha-gap`. So it needs (a) a replayable PR PASS (item 4) so that it never rents, and (b) the deployed Worker bundle equal
+to master's pin at that moment: deploy the new bundle only after the merge, as in "Coordinator order".
+
+Pin: the Worker bundle changed (items 1 to 3 are in `src/` and `defaults.json`), so `deployment.json` `bundle_sha256` and
+`wrangler.toml` `DEPLOYED_BUNDLE_SHA256` were regenerated with `scripts/check-bundle-pin.mjs` (the procedure of "Bundle pin
+regenerated 2026-11-23"). [MEASURED 2026-11-23, wrangler 4.152.0, physical `node_modules`, two identical dry-runs] The new pin is
+`1010ca9063bb6ff6717d3112dad52f8d7059ad24631a3ca82dea70f8f86ca4bc` (it replaces `6df4c718...` of "Bundle pin regenerated 2026-11-23"). **Any further change under `src/` or `defaults.json` before the batch changes the bundle: re-measure the pin.**
+

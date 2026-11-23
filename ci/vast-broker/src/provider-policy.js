@@ -199,6 +199,42 @@ export function retryEligible(record, at, policy) {
     at < record.softDeadline
   );
 }
+// A rental whose box never posted and whose replacement chain is spent tested nothing: no stage ran and no
+// further replacement is allowed. Only such a rental may give back its commit's one-rental marker (index.js
+// releaseUnusedSha); the daily and rolling spend rows are untouched, so the caps still count it.
+export const unusedRental = (record) =>
+  record.verdict === 'PROVIDER_FAULT' &&
+  record.firstReportAt === undefined &&
+  record.replacementExhausted === true;
+// Time a replacement leg gets back. A replacement exists only because the legs before it never posted
+// (retryEligible), so their wall time carried no stage; the payload's stage budget (KF_SOFT_DEADLINE) counts
+// from the first rental and would otherwise be spent on a box that never ran. The hard and soft deadlines of the
+// replacement move by the time since the first rental, at most `replacementExtensionMinutes` in all (never the
+// sum over several legs), and never beyond the runner's own wait budget (`runnerMs`, the runner's remaining time,
+// less the admission margin): a larger extension would be refused as RUNNER_TIME. The money bound
+// (runBudgetUsd) and the session deadline are unchanged.
+export function replacementExtension(prior, at, policy, runnerMs, marginMs) {
+  const earlier = prior.deadlineExtension ?? 0,
+    cap = (policy.replacementExtensionMinutes ?? 0) * 60000,
+    lost = Math.max(0, at - (prior.originalStarted ?? prior.started)),
+    room = Number.isFinite(runnerMs)
+      ? Math.max(0, runnerMs - marginMs - (prior.hardDeadline - earlier - at))
+      : cap;
+  return Math.max(earlier, Math.min(cap, lost, room));
+}
+// The reservation's check of a replacement's deadlines: the same extension rule, applied to what was stored.
+export function validExtension(record, prior, policy) {
+  const earlier = prior.deadlineExtension ?? 0,
+    extension = record.deadlineExtension ?? 0;
+  return (
+    Number.isFinite(extension) &&
+    extension >= earlier &&
+    extension <= (policy.replacementExtensionMinutes ?? 0) * 60000 &&
+    extension <= Math.max(earlier, record.started - (prior.originalStarted ?? prior.started)) &&
+    record.hardDeadline === prior.hardDeadline - earlier + extension &&
+    record.softDeadline === prior.softDeadline - earlier + extension
+  );
+}
 export function attemptReceipt(record, at = record.ended) {
   return {
     instance: record.id,

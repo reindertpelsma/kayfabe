@@ -467,7 +467,9 @@ own-instance labels (`kf-ci-<batch>-<leg>`), teardown by exact id, the cron's de
 lists the batch with its state, verdict, estimate and spend; **Stop** on a row stops one box, the
 batch stop (`{"batch": "<id>"}` to `/api/stop`) or **Stop all** ends the release without
 re-runs. A small or middle start is one box and, like a PR rental, is not rented for a commit that
-already rented within `SHA_GAP_HOURS` (the leg stays pending and shows `BUDGET:sha-gap`).
+already rented within `SHA_GAP_HOURS` (the leg stays pending and shows `BUDGET:sha-gap`). The one exception is a rental
+that never became usable and has no replacement left (DEPLOY.md, "gpu-vast hardening"); its commit is rented again at once,
+under the same daily and rolling caps.
 
 **Die lists, caveat (review F10).** The fallbacks GB202 (Windows gate 1 FAIL in 3 runs at
 `0c515b3b`, `traces/die_coverage_20261104/blackwell/`) and AD103/AD106 (Windows not run there) are in

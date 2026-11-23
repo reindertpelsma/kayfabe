@@ -62,6 +62,8 @@ import {
   providerLossVerdict,
   retryEligible,
   attemptReceipt,
+  unusedRental,
+  replacementExtension,
 } from './provider-policy.js';
 import { ipPrefix, rentalLine, redactEndpoints } from './rental.js';
 import { mergeEndpointValues, redactEndpointValues } from './endpoint-values.js';
@@ -386,6 +388,12 @@ export function createService({
     const cached = await ledger.get('sha:' + record.sha);
     if (cached?.key === record.key) await ledger.storage.delete('sha:' + record.sha);
   }
+  // The commit marker blocks a second rental of the same commit for SHA_GAP_HOURS (a cost guard). A rental that
+  // never became usable and cannot be replaced (provider-policy.js unusedRental) did not test the commit, so a
+  // re-run of the same commit may rent again. The spend rows stay, so the daily and rolling caps still apply.
+  async function releaseUnusedSha(record) {
+    if (unusedRental(record)) await clearFailedSha(record);
+  }
   async function recover(record, vast) {
     if (!record.id && record.ended === null) {
       record.id = await vast.reconcile(record);
@@ -438,6 +446,7 @@ export function createService({
       await exhaust(record, { reportBytes: lastReportBytes }, 'ATTEMPT_OR_TIME_LIMIT');
     }
     await ledger.settle(record, now());
+    await releaseUnusedSha(record);
     console.log(JSON.stringify({ event: 'destroyed' }));
   }
   async function close(record, vast, reason, verdict = 'FAIL') {
@@ -1382,7 +1391,7 @@ export function createService({
       refuse('BAD_REQUEST', 400);
     const target = await github.authorize(c, rentRequest.tested_sha);
     const prior = await ledger.granted(key);
-    let retrySource;
+    let retrySource, retryExtension;
     if (prior) {
       if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);
       clocks(prior, cfg);
@@ -1404,7 +1413,16 @@ export function createService({
         retryEligible(prior, now(), cfg.provider)
       ) {
         retrySource = prior;
-        cfg.hard = prior.hardDeadline - now();
+        retryExtension = replacementExtension(
+          prior,
+          now(),
+          cfg.provider,
+          Number.isFinite(rentRequest.remaining_seconds)
+            ? rentRequest.remaining_seconds * 1000
+            : undefined,
+          DEFAULTS.admissionMarginMinutes * 60000,
+        );
+        cfg.hard = prior.hardDeadline - (prior.deadlineExtension ?? 0) + retryExtension - now();
         cfg.boot = Math.min(cfg.boot, cfg.hard);
       } else {
         if (prior.id && prior.ended === null)
@@ -1429,6 +1447,7 @@ export function createService({
         runnerSeconds: rentRequest.remaining_seconds,
         force: Number(c.run_attempt) > 1, // An owner re-run; the SHA gap below still applies.
         retrySource,
+        retryExtension,
       });
     } catch (e) {
       if (!retrySource) throw e;
@@ -1483,7 +1502,10 @@ export function createService({
         cfg,
       );
     await ledger.save(r);
-    if (r.ended !== null) await ledger.settle(r, r.ended);
+    if (r.ended !== null) {
+      await ledger.settle(r, r.ended);
+      await releaseUnusedSha(r);
+    }
   }
   // One admission path for every rental: the GitHub-triggered check and sweep, the owner's admin
   // start and each leg of a release. Every check below applies to all of them; the only
@@ -1514,6 +1536,7 @@ export function createService({
     runnerSeconds,
     force = false,
     retrySource,
+    retryExtension = 0,
     leg,
     market,
     costGuard,
@@ -1825,8 +1848,11 @@ export function createService({
       r.sessionDeadline =
         retrySource.sessionDeadline ?? r.originalStarted + cfg.provider.sessionMinutes * 60000;
       r.rentalAttempts = structuredClone(retrySource.rentalAttempts ?? []);
-      r.hardDeadline = retrySource.hardDeadline;
-      r.softDeadline = retrySource.softDeadline;
+      // A replacement keeps the run's deadlines, moved by the time the unusable legs before it took.
+      r.deadlineExtension = retryExtension;
+      const shift = retryExtension - (retrySource.deadlineExtension ?? 0);
+      r.hardDeadline = retrySource.hardDeadline + shift;
+      r.softDeadline = retrySource.softDeadline + shift;
       r.bootDeadline = Math.min(r.bootDeadline, r.softDeadline);
       r.ttl = r.hardDeadline - r.started;
       r.billingTtl = r.ttl + cfg.cronPeriod;

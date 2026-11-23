@@ -4,6 +4,17 @@ import { spawnSync } from 'node:child_process';
 // FALSIFIER: current code already transfers only complete, same-tree trusted evidence.
 const cases = [
   'valid',
+  'valid-middle',
+  'valid-middle-kfml',
+  'valid-middle-replaced',
+  'logs-middle-rental-overflow',
+  'logs-middle-stage-failed',
+  'logs-middle-count-mismatch',
+  'logs-middle-too-many',
+  'logs-middle-base-order',
+  'logs-middle-no-base',
+  'logs-middle-duplicate',
+  'logs-middle-forged-name',
   'tree',
   'status-failure',
   'status-pending',

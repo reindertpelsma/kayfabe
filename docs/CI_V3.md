@@ -1,7 +1,28 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-11-20 (the rootless payload run, section below, 2026-11-20; the `windows-guest-setup` job and its mutants 2026-11-20; the environment-read and comment-hygiene gates 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-23 (the gpu-vast failure causes and their bounds, section below, 2026-11-23; the rootless payload run, section below, 2026-11-20; the `windows-guest-setup` job and its mutants 2026-11-20; the environment-read and comment-hygiene gates 2026-11-20; the standalone trust gate and its mutants and the `open-rows-mutants` job of the standalone union 2026-11-17; the plain-log ratchet was added 2026-11-18; the job layout, the concurrency rule and the timing audit 2026-11-17; the VA-apply profiling mutants and the profile-table self-test 2026-11-16; the host unmap-call cap mutants 2026-11-15; the rest is as of 2026-11-09).** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
+
+## gpu-vast failure causes and what bounds them (2026-11-23)
+
+**STATUS of this section: LIVE, 2026-11-23 as source; the Worker change is NOT DEPLOYED.** The causes are MEASURED from the logs of two GitHub runs
+(`gh run view <id> --log`): run 43348729279 (the gate of the batch PR `next` to master, 2026-11-13, four attempts) and run 43389562598 (the push to
+master after its merge). The fixes are CODE (ci/vast-broker/DEPLOY.md, "gpu-vast hardening"), each with a test that fails without it.
+
+| cause | what the 2026-11-13 logs show | change |
+|---|---|---|
+| a boot that never ends | attempt 1: the first box sat in `created` with the daemon message `error gathering device information while adding custom device "/dev/kvm"` from 02:03 to 03:18 (the 75 minute boot timeout), then the bounded replacement started | the message is a fatal status signature (`KVM_DEVICE_ERROR`), confirmed within about two minutes |
+| the apps stage had no time | attempt 1, replacement box: provision 573 s, cuda_host 12 s, merge_bar 1172 s, cuda_guest 283 s, then `apps` refused as `apps_retry_time` (`rc=125`, 0 ms) because 245 minutes of the 300 minute limit were no longer left | the replacement gets back the time the unusable legs took (at most 25 minutes, inside the runner's wait budget) |
+| the retry was refused | attempts 2 and 3 (03:58 and 03:59): `BUDGET:sha-gap`, 40 minutes after the replacement was rented, gap 1 hour | the gap is released only by a rental that never became usable and has no replacement left; a rental that ran stages keeps it |
+| the push run was red | run 43389562598: attempt 1 rented a box and the runner refused the Worker's answer at its manifest compare; the re-run was `BUDGET:sha-gap` (124 s). `gate_reuse.py` had not replayed the PR PASS: it accepted only `stages=4`, and the gate had seven | the replay takes the stage count from the PASS frame (any complete PASS, base stages first, one PASS line per planned stage) |
+
+What is not changed: the 245 minute reserve of `apps` (its parts are measured worst cases in `vast_payload.py`), the 1 hour deployed gap, the daily caps
+and the credit reserve. With the extension, a replacement rented up to about 32 minutes after the first rental still reaches `apps`, against 7 minutes without it (arithmetic in
+`test/replacement-deadline.test.js` from the stage durations above, INFERRED for any box other than the measured one: a slower merge_bar or a longer boot moves both limits earlier). The measured
+pass of attempt 4 (2026-11-13, 125 minutes on one box, no replacement) needed none of this.
+
+The post-merge push run needs two things, and the second is an operating rule: a replayable PR PASS (above), and a deployed Worker bundle equal to master's pin when it
+starts (INFERRED as the cause of the refused answer; `runner.py` compares `bundle_sha256` of the deployed Worker with the pin). Deploy the new bundle after the merge, not before.
 
 ## Job layout, concurrency and caches (2026-11-17)
 

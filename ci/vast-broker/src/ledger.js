@@ -1,5 +1,5 @@
 import { DEFAULTS } from './defaults.js';
-import { faultPenalty, retryEligible } from './provider-policy.js';
+import { faultPenalty, retryEligible, validExtension } from './provider-policy.js';
 // prettier-ignore
 import {refuse,numericId,budgetRefuse} from './policy.js';
 // prettier-ignore
@@ -269,8 +269,7 @@ export class Ledger {
           !['run', 'attempt', 'sha', 'branch', 'profile', 'runnerNonce'].every(
             (key) => record[key] === prior[key],
           ) ||
-          record.hardDeadline !== prior.hardDeadline ||
-          record.softDeadline !== prior.softDeadline ||
+          !validExtension(record, prior, cfg.provider) ||
           record.originalStarted !== (prior.originalStarted ?? prior.started) ||
           record.sessionDeadline !== prior.sessionDeadline ||
           record.started < prior.ended ||
