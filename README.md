@@ -51,6 +51,18 @@ For development, start with [the handoff](docs/STATUS_AND_HANDOFF.md), [build in
 
 Documented commands: `cargo build --workspace --release` and `KAYFABE_NO_KVM=1 cargo test --workspace --locked --no-fail-fast -j2`. A [cold-clone run](traces/release_checks_20261107/README.md) at `fe0cd47e3` built successfully but recorded 14 test failures.
 
+## Where things are
+
+| You want | Go to |
+|---|---|
+| The product code | [`crates/`](crates/README.md) (`kf-*` crates are v3; `kayfabe-*` are frozen), the QEMU device in `qemu/hw/misc/kf3/`, the walk kernel in `cuda/walk/`, the display broker in `broker/`, the boot-display driver in `firmware/` |
+| The user manual | [`docs/howto/`](docs/howto/index.md) and [`docs/FAQ.md`](docs/FAQ.md), built into [kayfabe.dev](https://kayfabe.dev/) by `site/`. The only part of `docs/` that is published |
+| What is current | [`docs/STATUS_AND_HANDOFF.md`](docs/STATUS_AND_HANDOFF.md), [`docs/OWNER_RULINGS.md`](docs/OWNER_RULINGS.md) (binding), [`ARCHITECTURE.md`](ARCHITECTURE.md), [`docs/design/`](docs/design/README.md) (index by status) |
+| Evidence | [`traces/`](traces/INDEX.md), one directory per run; bulk files of old runs are in archives ([`traces/EVIDENCE_ARCHIVE.md`](traces/EVIDENCE_ARCHIVE.md)); claims and their checklists in [`docs/RELEASE_CLAIMS.md`](docs/RELEASE_CLAIMS.md) |
+| CI | [`.github/workflows/`](.github/workflows), the gates in [`scripts/ci/`](scripts/ci/README.md), the Cloudflare Workers in [`ci/`](ci/README.md); what each gate is: [`docs/CI_V3.md`](docs/CI_V3.md) |
+| Bench scripts and tools | [`scripts/`](scripts/README.md), [`tools/`](tools/README.md) |
+| History, not current | [`docs/history/`](docs/history/), [`docs/archive/`](docs/archive/), [`archive/`](archive/README.md), the `HANDOFF_*` and `RESUME_*` files in `docs/`; [`docs/README.md`](docs/README.md) is the full map |
+
 ## Learn more
 
 [Architecture](ARCHITECTURE.md) | [design](docs/design/THE_ARCHITECTURE_v3.md) | [owner rulings](docs/OWNER_RULINGS.md) | [documentation map](docs/README.md) | [contributor rules](AGENTS.md) | [release claims and manual evidence templates](docs/RELEASE_CLAIMS.md)
