@@ -8448,6 +8448,33 @@ mod tests {
         );
     }
 
+    /// ★ C-04 / S1-03 (PR #384): the bytes readable at a frame's address travel with the address, from
+    /// the worker's `publish` to the console's `take`. `kf3_display_frame` refuses a geometry that does
+    /// not fit that length, so a `take` that returned `len: 0` would turn every real frame into "no
+    /// frame" and the console would stay black, with nothing else wrong. Each slot keeps its own
+    /// length, and a later frame replaces it.
+    #[test]
+    fn the_console_take_carries_the_length_of_the_slot_it_returns() {
+        let c = ConsoleShare::default();
+        let a = c.free_slot().unwrap();
+        c.publish(a, frame(0x1000, 1), true, None);
+        let shown = c.take().unwrap();
+        assert_eq!((shown.addr, shown.len), (0x1000, 7680 * 1080));
+        // a second frame in another slot has another length; the console gets that one, not slot a's
+        let b = c.free_slot().unwrap();
+        assert_ne!(a, b);
+        let mut f = frame(0x2000, 2);
+        f.len = 7680 * 1080 + 4096;
+        c.publish(b, f, true, None);
+        let shown = c.take().unwrap();
+        assert_eq!((shown.addr, shown.len), (0x2000, 7680 * 1080 + 4096));
+        // the geometry the console checks it against is the one that crossed with it
+        assert!(
+            crate::ffi_unsafe::CheckedFrame::of(&shown).is_some(),
+            "a frame taken from the share fits its own length"
+        );
+    }
+
     /// ★ M2 triple buffering: the console only ever takes the newest READY frame; the worker's next
     /// target is never the one shown nor the one ready; an untaken frame is replaced, not queued.
     #[test]
