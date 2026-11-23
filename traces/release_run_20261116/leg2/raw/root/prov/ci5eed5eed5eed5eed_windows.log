@@ -1,0 +1,24 @@
+WINDOWS_GATE_START tag=ci5eed5eed5eed5eed rev=03c3c419 source=/workspace/kf-ci-src 2026-11-16T03:35:17+00:00 idle_s=300 flags=none guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-16T03:35:18+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 118683(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 118683(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 118683(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 118683(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 118683(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 118730(bash) uid_root 0/0/0/0
+GATE_NOTE host: gpu="NVIDIA RTX 4000 Ada Generation" driver=580.159.04 cpus=5 ram_gb=24 disk_free_gb=420 uid=0 memlock_kb=3220928
+GATE_STAGE preflight EXIT ok 6s
+GATE_STAGE hostref_before START 2026-11-16T03:35:24+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA RTX 4000 Ada Generation, 580.159.04, 20475 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 6s
+GATE_STAGE prereqs START 2026-11-16T03:35:30+00:00
+GATE_STAGE prereqs EXIT ok 19s
+GATE_STAGE kf3_binary START 2026-11-16T03:35:49+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/03c3c419/qemu-system-x86_64 sha256=d0cb479d21d7ab37 rev=03c3c419
+GATE_STAGE kf3_binary EXIT ok 0s
+GATE_STAGE lke_die START 2026-11-16T03:35:49+00:00
+GATE_LKE_DIE die=AD104 source=native_rm
+GATE_STAGE lke_die EXIT ok 2s
+GATE_STAGE install START 2026-11-16T03:35:51+00:00

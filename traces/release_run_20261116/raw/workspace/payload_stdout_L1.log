@@ -1,0 +1,739 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=lanea winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       543G  8.1G  535G   2% /
+KF_PREFLIGHT_FREE_BYTES=573874577408
+KF_PAYLOAD_STAGE_START name=provision
+[xid-watch] tag=ci5eed5eed5eed5eed_provision  host=ubuntu  utc=2026-11-16T01:35:32Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/provision_full.sh
+[xid-watch] host_dmesg_lines=686  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 575.51.03
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+START 2026-11-16T01:35:32+00:00
+BOX_RC=0
+03c3c4199 release-run tree only: KF_PROPIMAGE_SKIP_APPS (operator skip of an app with no verdict source, recorded NOT_RUN)
+DRIVER_RC=0
+NVIDIA GeForce RTX 4060 Ti, 580.159.04
+/dev/root       543G   13G  530G   3% /
+TREE_RC=0
+[2026-11-16T01:45:27+00:00] B4: guest ladder built: 5061288 bytes
+[2026-11-16T01:45:27+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/03c3c419/qemu-system-x86_64 rev=03c3c419 mtime=2026-11-16 01:46:36.853764384 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[xid-watch] --- command output ends (rc=0) ---
+READY driver=580.159.04
+EXIT 2026-11-16T01:46:38+00:00
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (686 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_provision.log
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=667901
+KF_PAYLOAD_STAGE_START name=cuda_host
+[xid-watch] tag=ci5eed5eed5eed5eed_cuda_host  host=ubuntu  utc=2026-11-16T01:46:42Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/cuda_ladder.sh host ci5eed5eed5eed5eed 1 cup2,cup3,cup8,cup8bench
+[xid-watch] host_dmesg_lines=718  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+CUDA_LADDER_STARTED=2026-11-16T01:46:44+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=03c3c419
+bench sizes=16,2048 iters=20 batch=10
+host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+src cup2.c md5 d9f82375ebd54de500aeb7f85ef71efc
+src cup3.c md5 b353d96b3694261293e5bdd409c0863e
+src cup8.c md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8
+src cup8bench.c md5 6c9f86d2581016ec9d34d6a7636fc8b5
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1159 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1159 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1876 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1876 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1949 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1949 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2492 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=1 BENCH_INIT_MS=1483.99
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=112.84
+CL_BENCH mode=host rep=1 BENCH_MODULE_MS=18.00
+CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.026 med_ms=0.007 p90_ms=0.007 min_ms=0.007 max_ms=0.008 gflops=1.155 batch_per_launch_ms=0.003 batch_gflops=2.371 h2d_ms=0.032 d2h_med_ms=0.007 submit_med_ms=0.003 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.004 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=13.042 med_ms=13.018 p90_ms=13.029 min_ms=12.057 max_ms=13.038 gflops=1319.748 batch_per_launch_ms=12.107 batch_gflops=1418.984 h2d_ms=3.275 d2h_med_ms=1.801 submit_med_ms=0.005 sync_med_ms=13.012 sync_cpu_med_ms=13.012 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.007 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=13.042 med_ms=13.018 p90_ms=13.029 min_ms=12.057 max_ms=13.038 gflops=1319.748 batch_per_launch_ms=12.107 batch_gflops=1418.984 h2d_ms=3.275 d2h_med_ms=1.801 submit_med_ms=0.005 sync_med_ms=13.012 sync_cpu_med_ms=13.012 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.007 bad=0 maxerr=0
+CUDA_LADDER_STARTED=2026-11-16T01:46:44+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=03c3c419
+bench sizes=16,2048 iters=20 batch=10
+host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+src cup2.c md5 d9f82375ebd54de500aeb7f85ef71efc
+src cup3.c md5 b353d96b3694261293e5bdd409c0863e
+src cup8.c md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8
+src cup8bench.c md5 6c9f86d2581016ec9d34d6a7636fc8b5
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1159 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1876 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1949 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2492 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=1 BENCH_INIT_MS=1483.99
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=112.84
+CL_BENCH mode=host rep=1 BENCH_MODULE_MS=18.00
+CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.026 med_ms=0.007 p90_ms=0.007 min_ms=0.007 max_ms=0.008 gflops=1.155 batch_per_launch_ms=0.003 batch_gflops=2.371 h2d_ms=0.032 d2h_med_ms=0.007 submit_med_ms=0.003 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.004 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=13.042 med_ms=13.018 p90_ms=13.029 min_ms=12.057 max_ms=13.038 gflops=1319.748 batch_per_launch_ms=12.107 batch_gflops=1418.984 h2d_ms=3.275 d2h_med_ms=1.801 submit_med_ms=0.005 sync_med_ms=13.012 sync_cpu_med_ms=13.012 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.007 bad=0 maxerr=0
+CUDA_LADDER_DONE=2026-11-16T01:46:52+00:00
+[xid-watch] --- command output ends (rc=0) ---
+CUDA_LADDER_DONE=2026-11-16T01:46:52+00:00
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (718 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_cuda_host.log
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=12304
+KF_PAYLOAD_STAGE_START name=merge_bar
+[xid-watch] tag=ci5eed5eed5eed5eed_merge_bar  host=ubuntu  utc=2026-11-16T01:46:55Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/merge_check.sh 03c3c41990e3f880beea77563d61ac8dcba0d55c ci5eed5eed5eed5eed
+[xid-watch] host_dmesg_lines=718  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+START 2026-11-16T01:46:57+00:00
+Preparing worktree (detached HEAD 03c3c4199)
+HEAD=03c3c41990e3f880beea77563d61ac8dcba0d55c CHECKOUT=/workspace/bench/verify-worktrees/ci5eed5eed5eed5eed.qC8iVa NOFETCH=0 TREE=none SECTIONS= 
+IGNORE_STRIP kept=3577 removed=21852 rev=HEAD
+IGNORE_STRIP_KEY 92d7e7e836d404559e3327d470ee2d00a469c42efb4b8e08d259941f0a1f0c30
+IGNORE_STRIP_VERIFIED removed=21852 rev=HEAD
+KF_REQUIRE_ORACLES=1
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/03c3c419/qemu-system-x86_64 rev=03c3c419 mtime=2026-11-16 01:48:28.703805561 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_STARTED=2026-11-16T01:48:56+00:00 arms=30 budget=180s
+bin=/workspace/kf-ci-src/target/release/kayfabe-rm-ladder  rev=03c3c4199
+gpu=NVIDIA GeForce RTX 4060 Ti  driver=580.159.04(open)  pci_dev=0x280310DE  cc=8.9
+ARM                          VERDICT    secs  why
+--timer                      PASS         6s  6s
+BARE_CELL_ARM arm=timer verdict=PASS secs=6 ms=5527 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--engines                    PASS         6s  6s
+BARE_CELL_ARM arm=engines verdict=PASS secs=6 ms=5547 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--doorbell-census            PASS         5s  5s
+BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=5 ms=5606 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--gpu-info-sweep             PASS         6s  6s
+BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=6 ms=5492 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--bus-info-sweep             PASS         8s  8s
+BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=8 ms=8745 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--concurrency                PASS        10s  10s
+BARE_CELL_ARM arm=concurrency verdict=PASS secs=10 ms=9401 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--defer-liveness             PASS        17s  17s
+BARE_CELL_ARM arm=defer-liveness verdict=PASS secs=17 ms=17591 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--blockage-coverage          PASS         6s  6s
+BARE_CELL_ARM arm=blockage-coverage verdict=PASS secs=6 ms=5871 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--alias-two-vas              PASS         6s  6s
+BARE_CELL_ARM arm=alias-two-vas verdict=PASS secs=6 ms=5527 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--alias-unmap-observe        PASS         5s  5s
+BARE_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=5 ms=5460 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--map-propagation            PASS         6s  6s
+BARE_CELL_ARM arm=map-propagation verdict=PASS secs=6 ms=5498 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--late-map-race              PASS         6s  6s
+BARE_CELL_ARM arm=late-map-race verdict=PASS secs=6 ms=5898 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--missing-page-fault         PASS         8s  8s
+BARE_CELL_ARM arm=missing-page-fault verdict=PASS secs=8 ms=8539 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--uvm-invalidate             PASS         6s  6s
+BARE_CELL_ARM arm=uvm-invalidate verdict=PASS secs=6 ms=5565 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--uvm-mean                   PASS         3s  3s
+BARE_CELL_ARM arm=uvm-mean verdict=PASS secs=3 ms=3337 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--executor-vas               PASS         6s  6s
+BARE_CELL_ARM arm=executor-vas verdict=PASS secs=6 ms=5483 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--guest-ring-channel         PASS         5s  5s
+BARE_CELL_ARM arm=guest-ring-channel verdict=PASS secs=5 ms=5511 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--dictated-ring              PASS         6s  6s
+BARE_CELL_ARM arm=dictated-ring verdict=PASS secs=6 ms=5511 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--dictated-ring-negative     PASS         5s  5s
+BARE_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=5 ms=5527 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--ce-client                  PASS         6s  6s
+BARE_CELL_ARM arm=ce-client verdict=PASS secs=6 ms=5511 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--ce-client-guest-ram        PASS        11s  11s
+BARE_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=11 ms=11319 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--guest-ram-pin              PASS         6s  6s
+BARE_CELL_ARM arm=guest-ram-pin verdict=PASS secs=6 ms=5545 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--bar1-crossing              PASS         5s  5s
+BARE_CELL_ARM arm=bar1-crossing verdict=PASS secs=5 ms=5529 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--atomics-probe              PASS         6s  6s
+BARE_CELL_ARM arm=atomics-probe verdict=PASS secs=6 ms=5516 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--pce-mask-probe             PASS         5s  5s
+BARE_CELL_ARM arm=pce-mask-probe verdict=PASS secs=5 ms=5500 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--gpga-reserve-probe         PASS        38s  38s
+BARE_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=38 ms=37408 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--map-stress                 PASS         5s  5s
+BARE_CELL_ARM arm=map-stress verdict=PASS secs=5 ms=5526 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--concurrent-fuzz            PASS         6s  6s
+BARE_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=6 ms=5923 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+--cross-client-leak          PASS         6s  6s
+BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=6 ms=5515 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+--rpc-mixed-allocs           PASS         6s  6s
+BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=6 ms=6286 rc=0 pci_dev=0x280310DE drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+BARE_CELL pci_dev=0x280310DE gpu="NVIDIA GeForce RTX 4060 Ti" drv=580.159.04 kmod=open cc=8.9 rev=03c3c4199 pass=30 fail=0 crash=0 arms=30 uuid=GPU-00000000-0000-0000-0000-000000000000
+FG_RC=0
+FAST_SUITE_STARTED=2026-11-16T01:53:18+00:00 arms=30 budget=180s
+rev=03c3c4199
+ARM                          VERDICT   secs  why
+--timer                      PASS      24s   24s
+FAST_CELL_ARM arm=timer verdict=PASS secs=24 client_ms=1259
+--engines                    PASS      25s   25s
+FAST_CELL_ARM arm=engines verdict=PASS secs=25 client_ms=1920
+--doorbell-census            PASS      26s   26s
+FAST_CELL_ARM arm=doorbell-census verdict=PASS secs=26 client_ms=3289
+--gpu-info-sweep             PASS      24s   24s
+FAST_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=24 client_ms=1580
+--bus-info-sweep             PASS      28s   28s
+FAST_CELL_ARM arm=bus-info-sweep verdict=PASS secs=28 client_ms=4559
+--concurrency                PASS      34s   34s
+FAST_CELL_ARM arm=concurrency verdict=PASS secs=34 client_ms=10379
+--defer-liveness             PASS      37s   37s
+FAST_CELL_ARM arm=defer-liveness verdict=PASS secs=37 client_ms=13690
+--blockage-coverage          PASS      25s   25s
+FAST_CELL_ARM arm=blockage-coverage verdict=PASS secs=25 client_ms=1700
+--alias-two-vas              PASS      23s   23s
+FAST_CELL_ARM arm=alias-two-vas verdict=PASS secs=23 client_ms=1370
+--alias-unmap-observe        PASS      24s   24s
+FAST_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=24 client_ms=1670
+--map-propagation            PASS      25s   25s
+FAST_CELL_ARM arm=map-propagation verdict=PASS secs=25 client_ms=1550
+--late-map-race              PASS      25s   25s
+FAST_CELL_ARM arm=late-map-race verdict=PASS secs=25 client_ms=1730
+--missing-page-fault         PASS      27s   27s
+FAST_CELL_ARM arm=missing-page-fault verdict=PASS secs=27 client_ms=4399
+--uvm-invalidate             PASS      25s   25s
+FAST_CELL_ARM arm=uvm-invalidate verdict=PASS secs=25 client_ms=1470
+--uvm-mean                   PASS      26s   26s
+FAST_CELL_ARM arm=uvm-mean verdict=PASS secs=26 client_ms=2779
+--executor-vas               PASS      25s   25s
+FAST_CELL_ARM arm=executor-vas verdict=PASS secs=25 client_ms=1440
+--guest-ring-channel         PASS      25s   25s
+FAST_CELL_ARM arm=guest-ring-channel verdict=PASS secs=25 client_ms=1339
+--dictated-ring              PASS      23s   23s
+FAST_CELL_ARM arm=dictated-ring verdict=PASS secs=23 client_ms=1250
+--dictated-ring-negative     PASS      24s   24s
+FAST_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=24 client_ms=1290
+--ce-client                  PASS      25s   25s
+FAST_CELL_ARM arm=ce-client verdict=PASS secs=25 client_ms=1469
+--ce-client-guest-ram        PASS      84s   84s
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=84 client_ms=61470
+--guest-ram-pin              PASS      24s   24s
+FAST_CELL_ARM arm=guest-ram-pin verdict=PASS secs=24 client_ms=1289
+--bar1-crossing              PASS      24s   24s
+FAST_CELL_ARM arm=bar1-crossing verdict=PASS secs=24 client_ms=1539
+--atomics-probe              PASS      24s   24s
+FAST_CELL_ARM arm=atomics-probe verdict=PASS secs=24 client_ms=1349
+--pce-mask-probe             PASS      25s   25s
+FAST_CELL_ARM arm=pce-mask-probe verdict=PASS secs=25 client_ms=1259
+--gpga-reserve-probe         PASS      55s   55s
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=55 client_ms=30990
+--map-stress                 PASS      25s   25s
+FAST_CELL_ARM arm=map-stress verdict=PASS secs=25 client_ms=2619
+--concurrent-fuzz            PASS      28s   28s
+FAST_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=28 client_ms=5479
+--cross-client-leak          PASS      24s   24s
+FAST_CELL_ARM arm=cross-client-leak verdict=PASS secs=24 client_ms=1369
+--rpc-mixed-allocs           PASS      25s   25s
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=25 client_ms=2280
+
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+[xid-watch] --- command output ends (rc=0) ---
+BIRTH_CENSUS_SUITE arms=30 births=161 user=161 cuda_threads=90
+BIRTH_CENSUS_GATES births=12 user=12 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER
+EXIT rc=0 2026-11-16T02:09:27+00:00
+[xid-watch] xid_after=10
+[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — the run is VOID whatever it printed:
+    [  985.014071] NVRM: Xid (PCI:0000:00:07): 31, pid=65429, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [  988.038248] NVRM: Xid (PCI:0000:00:07): 31, pid=65429, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [  991.040623] NVRM: Xid (PCI:0000:00:07): 31, pid=65429, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [  994.065997] NVRM: Xid (PCI:0000:00:07): 31, pid=65429, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1030.852310] NVRM: Xid (PCI:0000:00:07): 31, pid=65797, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+    [ 1411.024816] NVRM: Xid (PCI:0000:00:07): 31, pid=69160, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1414.141848] NVRM: Xid (PCI:0000:00:07): 31, pid=69160, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1417.166228] NVRM: Xid (PCI:0000:00:07): 31, pid=69160, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1420.286284] NVRM: Xid (PCI:0000:00:07): 31, pid=69160, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1592.090838] NVRM: Xid (PCI:0000:00:07): 31, pid=70669, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[xid-watch]   ⊘ An "Xid 31 … FAULT_PDE" means the host MMU walked for an address that resolved
+[xid-watch]   to nothing — i.e. OUR placement, not the guest's methods. A rung that reports
+[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.
+KF_PAYLOAD_STAGE_END name=merge_bar rc=6 duration_ms=1354320
+KF_PAYLOAD_STAGE_START name=cuda_guest
+[xid-watch] tag=ci5eed5eed5eed5eed_cuda_guest  host=ubuntu  utc=2026-11-16T02:09:30Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/cuda_ladder.sh guest ci5eed5eed5eed5eed 1 cup2,cup3,cup8,cup8bench
+[xid-watch] host_dmesg_lines=1178  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+CUDA_LADDER_STARTED=2026-11-16T02:09:31+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=03c3c419
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10487 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f99 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10487 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f99 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10501 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f105 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10501 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f105 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=6 trapped=10704 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f104 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f51]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=6 trapped=10704 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f104 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f51]
+CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=388.32
+CUDA_LADDER_STARTED=2026-11-16T02:09:31+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=03c3c419
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10487 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f99 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10501 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f105 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=6 trapped=10704 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f104 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f51]
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=7 trapped=11169 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f206 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f358 0x00000802:e0f2 0x00000801:e0f52]
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=16 iters=20 first_ms=0.067 med_ms=0.038 p90_ms=0.040 min_ms=0.038 max_ms=0.083 gflops=0.213 batch_per_launch_ms=0.037 batch_gflops=0.222 h2d_ms=4.959 d2h_med_ms=0.037 submit_med_ms=0.034 sync_med_ms=0.005 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.037 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=2048 iters=20 first_ms=13.105 med_ms=13.046 p90_ms=13.052 min_ms=12.133 max_ms=13.055 gflops=1316.856 batch_per_launch_ms=12.141 batch_gflops=1415.014 h2d_ms=4.271 d2h_med_ms=2.451 submit_med_ms=0.041 sync_med_ms=13.005 sync_cpu_med_ms=13.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.046 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BENCH_INIT_MS=3833.42
+CL_BENCH mode=guest rep=1 GUEST_BENCH_CTX_MS=1113.68
+CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=388.32
+CUDA_LADDER_DONE=2026-11-16T02:15:00+00:00
+[xid-watch] --- command output ends (rc=0) ---
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=7 trapped=11169 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f206 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f358 0x00000802:e0f2 0x00000801:e0f52]
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=16 iters=20 first_ms=0.067 med_ms=0.038 p90_ms=0.040 min_ms=0.038 max_ms=0.083 gflops=0.213 batch_per_launch_ms=0.037 batch_gflops=0.222 h2d_ms=4.959 d2h_med_ms=0.037 submit_med_ms=0.034 sync_med_ms=0.005 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.037 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=2048 iters=20 first_ms=13.105 med_ms=13.046 p90_ms=13.052 min_ms=12.133 max_ms=13.055 gflops=1316.856 batch_per_launch_ms=12.141 batch_gflops=1415.014 h2d_ms=4.271 d2h_med_ms=2.451 submit_med_ms=0.041 sync_med_ms=13.005 sync_cpu_med_ms=13.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.046 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BENCH_INIT_MS=3833.42
+CL_BENCH mode=guest rep=1 GUEST_BENCH_CTX_MS=1113.68
+CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=388.32
+CUDA_LADDER_DONE=2026-11-16T02:15:00+00:00
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1178 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_cuda_guest.log
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=332041
+KF_PAYLOAD_STAGE_START name=apps
+[xid-watch] tag=ci5eed5eed5eed5eed_apps  host=ubuntu  utc=2026-11-16T02:15:02Z
+[xid-watch] command: env KF_APPS_PROVISION=1 bash /workspace/kf-ci-src/scripts/bench/box/apps_gate.sh ci5eed5eed5eed5eed /root/prov middle
+[xid-watch] host_dmesg_lines=1183  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+APP_POLICY name=UnifiedMemoryStreams os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=UnifiedMemoryPerf os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=conjugateGradientUM os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=attach_verify os=linux result=NOT_RUN note=unsupported (UVM)
+APPS_STAGE_LIST n=66 budget_s=3000 per_boot=100
+APPS_PROVISION_START 2026-11-16T02:15:04+00:00
+APPS_PROVISION_END rc=0 2026-11-16T02:38:36+00:00
+APPS_STAGE_START 2026-11-16T02:38:36+00:00 tag=ci5eed5eed5eed5eed
+[apps_matrix 2026-11-16T02:38:36+00:00] START side=guest run=ci5eed5eed5eed5eed rev=03c3c419 apps=66
+[apps_matrix 2026-11-16T02:38:36+00:00] kf3 binary: /workspace/bench/kf3-bins/03c3c419/qemu-system-x86_64
+APP_TRY app=nvidia_smi verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=298 kf3_refusals=18
+APP_TRY app=deviceQuery verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=898 kf3_refusals=29
+APP_TRY app=vectorAdd verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=832 kf3_refusals=22
+APP_TRY app=vectorAddDrv verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=809 kf3_refusals=20
+APP_TRY app=matrixMul verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=822 kf3_refusals=19
+APP_TRY app=matrixMulDrv verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=804 kf3_refusals=19
+APP_TRY app=bandwidthTest verdict=PASS rc=0 secs=4 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=834 kf3_refusals=19
+APP_TRY app=simpleStreams verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=845 kf3_refusals=17
+APP_TRY app=asyncAPI verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=842 kf3_refusals=17
+APP_TRY app=simpleAtomicIntrinsics verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=810 kf3_refusals=15
+APP_TRY app=simpleCallback verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=822 kf3_refusals=15
+APP_TRY app=simpleOccupancy verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=846 kf3_refusals=15
+APP_TRY app=simpleZeroCopy verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=822 kf3_refusals=15
+APP_TRY app=simpleCooperativeGroups verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=800 kf3_refusals=15
+APP_TRY app=concurrentKernels verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=834 kf3_refusals=16
+APP_TRY app=simpleIPC verdict=PASS rc=0 secs=4 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1312 kf3_refusals=15
+APP_TRY app=cudaTensorCoreGemm verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=834 kf3_refusals=15
+APP_TRY app=bf16TensorCoreGemm verdict=PASS rc=0 secs=14 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=840 kf3_refusals=15
+APP_TRY app=globalToShmemAsyncCopy verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=808 kf3_refusals=15
+APP_TRY app=cdpSimpleQuicksort verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=856 kf3_refusals=13
+APP_TRY app=graphMemoryNodes verdict=PASS rc=0 secs=4 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=806 kf3_refusals=12
+APP_TRY app=simpleCudaGraphs verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=805 kf3_refusals=12
+APP_TRY app=simpleCUBLAS verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=878 kf3_refusals=12
+APP_TRY app=simpleCUFFT verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=805 kf3_refusals=12
+APP_TRY app=conjugateGradient verdict=PASS rc=0 secs=2 quiet=1 note=warn:Test Summary: Error amount = 0.000000 boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=878 kf3_refusals=12
+APP_TRY app=MersenneTwisterGP11213 verdict=PASS rc=0 secs=1 quiet=0 note=warn:Max absolute error: 0.000000E+00 boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=806 kf3_refusals=12
+APP_TRY app=reduction verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=3000 kf3_refusals=12
+APP_TRY app=sortingNetworks verdict=PASS rc=0 secs=9 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=811 kf3_refusals=12
+APP_TRY app=scan verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=806 kf3_refusals=12
+APP_TRY app=histogram verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=831 kf3_refusals=12
+APP_TRY app=BlackScholes verdict=PASS rc=0 secs=3 quiet=1 note=warn:Max absolute error: 1.192093E-05 boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=807 kf3_refusals=13
+APP_TRY app=fastWalshTransform verdict=PASS rc=0 secs=6 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=807 kf3_refusals=12
+APP_TRY app=transpose verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=829 kf3_refusals=12
+APP_TRY app=stream_triad verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APP_TRY app=reduce verdict=PASS rc=0 secs=5 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=795 kf3_refusals=12
+APP_TRY app=nbody verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=794 kf3_refusals=12
+APP_TRY app=blackscholes verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=795 kf3_refusals=12
+APP_TRY app=mandelbrot verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APP_TRY app=conv2d verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=794 kf3_refusals=12
+APP_TRY app=sgemm_cublas verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=865 kf3_refusals=12
+APP_TRY app=fft_cufft verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APP_TRY app=sha256 verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=794 kf3_refusals=12
+APP_TRY app=memcpy2d verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APP_TRY app=stream_default verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APP_TRY app=stream_created verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=794 kf3_refusals=12
+APP_TRY app=stream_nonblocking verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=794 kf3_refusals=12
+APP_TRY app=stream_perthread verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APP_TRY app=stream_two verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APP_TRY app=stream_created2nd verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=793 kf3_refusals=12
+APP_TRY app=gpu_burn verdict=PASS rc=0 secs=96 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1360 kf3_refusals=20
+APP_TRY app=torch_correct verdict=PASS rc=0 secs=58 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1068 kf3_refusals=12
+APP_TRY app=torch_ai_bench verdict=PASS rc=0 secs=40 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1065 kf3_refusals=12
+APP_TRY app=hf_generate verdict=PASS rc=0 secs=16 quiet=2 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=878 kf3_refusals=12
+APP_TRY app=cupy verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=914 kf3_refusals=12
+APP_TRY app=llama_cpp_gen verdict=PASS rc=0 secs=4 quiet=0 note=warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CUDA_Host, using CPU instead boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1420 kf3_refusals=12
+APP_TRY app=llama_bench verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1610 kf3_refusals=12
+APP_TRY app=vulkaninfo verdict=PASS rc=0 secs=2 quiet=0 note=warn:error: XDG_RUNTIME_DIR is invalid or not set in the environment. boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1113 kf3_refusals=6
+APP_TRY app=vkpeak verdict=PASS rc=0 secs=455 quiet=3 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=3000 kf3_refusals=4
+APP_TRY app=egl_offscreen verdict=PASS rc=0 secs=20 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=473 kf3_refusals=4
+APP_TRY app=clinfo verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1147 kf3_refusals=24
+APP_TRY app=clpeak verdict=PASS rc=0 secs=150 quiet=1 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=883 kf3_refusals=13
+APP_TRY app=nvenc_h264 verdict=PASS rc=0 secs=7 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=861 kf3_refusals=13
+APP_TRY app=nvenc_hevc verdict=PASS rc=0 secs=8 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=854 kf3_refusals=12
+APP_TRY app=nvdec_h264 verdict=PASS rc=0 secs=6 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=879 kf3_refusals=12
+APP_TRY app=hashcat verdict=PASS rc=0 secs=27 quiet=0 note=warn:This means that hashcat cannot use the full parallel power of your device(s). boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1277 kf3_refusals=15
+APP_TRY app=blender_cycles verdict=PASS rc=0 secs=11 quiet=0 note=- boot=ap_ci5eed5eed5eed5eed_b1 guest_xid=0 kf3_lines=1590 kf3_refusals=24
+[apps_matrix 2026-11-16T03:00:02+00:00] boot ap_ci5eed5eed5eed5eed_b1 rc=0 apps=[nvidia_smi deviceQuery vectorAdd vectorAddDrv matrixMul matrixMulDrv bandwidthTest simpleStreams asyncAPI simpleAtomicIntrinsics simpleCallback simpleOccupancy simpleZeroCopy simpleCooperativeGroups concurrentKernels simpleIPC cudaTensorCoreGemm bf16TensorCoreGemm globalToShmemAsyncCopy cdpSimpleQuicksort graphMemoryNodes simpleCudaGraphs simpleCUBLAS simpleCUFFT conjugateGradient MersenneTwisterGP11213 reduction sortingNetworks scan histogram BlackScholes fastWalshTransform transpose stream_triad reduce nbody blackscholes mandelbrot conv2d sgemm_cublas fft_cufft sha256 memcpy2d stream_default stream_created stream_nonblocking stream_perthread stream_two stream_created2nd gpu_burn torch_correct torch_ai_bench hf_generate cupy llama_cpp_gen llama_bench vulkaninfo vkpeak egl_offscreen clinfo clpeak nvenc_h264 nvenc_hevc nvdec_h264 hashcat blender_cycles] :: /workspace/bench/run_ap_ci5eed5eed5eed5eed_b1_probe.log:APPS_HOOK tag=ap_ci5eed5eed5eed5eed_b1 apps=[nvidia_smi deviceQuery vectorAdd vectorAddDrv matrixMul matrixMulDrv bandwidthTest simpleStreams as
+/workspace/kf-ci-src/scripts/apps/apps_matrix.sh: line 80: /workspace/apps/results/ci5eed5eed5eed5eed/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-16T03:00:02+00:00] GUEST_DONE batched: 66 pass / 66;  isolated re-runs: 0 pass / 0
+APPS_STAGE_MATRIX_END rc=0 secs=1286
+APP_ROW name=nvidia_smi os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=deviceQuery os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=vectorAdd os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=vectorAddDrv os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=matrixMul os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=matrixMulDrv os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=bandwidthTest os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=simpleStreams os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=asyncAPI os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleAtomicIntrinsics os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCallback os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=simpleOccupancy os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleZeroCopy os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCooperativeGroups os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=concurrentKernels os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleIPC os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=cudaTensorCoreGemm os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=bf16TensorCoreGemm os=linux result=PASS secs=14 guest_xid=0 note=-
+APP_ROW name=globalToShmemAsyncCopy os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=cdpSimpleQuicksort os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=graphMemoryNodes os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=simpleCudaGraphs os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCUBLAS os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCUFFT os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=conjugateGradient os=linux result=PASS secs=2 guest_xid=0 note=warn:Test Summary: Error amount = 0.000000
+APP_ROW name=MersenneTwisterGP11213 os=linux result=PASS secs=1 guest_xid=0 note=warn:Max absolute error: 0.000000E+00
+APP_ROW name=reduction os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=sortingNetworks os=linux result=PASS secs=9 guest_xid=0 note=-
+APP_ROW name=scan os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=histogram os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=BlackScholes os=linux result=PASS secs=3 guest_xid=0 note=warn:Max absolute error: 1.192093E-05
+APP_ROW name=fastWalshTransform os=linux result=PASS secs=6 guest_xid=0 note=-
+APP_ROW name=transpose os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_triad os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=reduce os=linux result=PASS secs=5 guest_xid=0 note=-
+APP_ROW name=nbody os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=blackscholes os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=mandelbrot os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=conv2d os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=sgemm_cublas os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=fft_cufft os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=sha256 os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=memcpy2d os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=stream_default os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_created os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_nonblocking os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_perthread os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=stream_two os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_created2nd os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=gpu_burn os=linux result=PASS secs=96 guest_xid=0 note=-
+APP_ROW name=torch_correct os=linux result=PASS secs=58 guest_xid=0 note=-
+APP_ROW name=torch_ai_bench os=linux result=PASS secs=40 guest_xid=0 note=-
+APP_ROW name=hf_generate os=linux result=PASS secs=16 guest_xid=0 note=-
+APP_ROW name=cupy os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=llama_cpp_gen os=linux result=PASS secs=4 guest_xid=0 note=warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CU
+APP_ROW name=llama_bench os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=vulkaninfo os=linux result=PASS secs=2 guest_xid=0 note=warn:error: XDG_RUNTIME_DIR is invalid or not set in the environment.
+APP_ROW name=vkpeak os=linux result=PASS secs=455 guest_xid=0 note=-
+APP_ROW name=egl_offscreen os=linux result=PASS secs=20 guest_xid=0 note=-
+APP_ROW name=clinfo os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=clpeak os=linux result=PASS secs=150 guest_xid=0 note=-
+APP_ROW name=nvenc_h264 os=linux result=PASS secs=7 guest_xid=0 note=-
+APP_ROW name=nvenc_hevc os=linux result=PASS secs=8 guest_xid=0 note=-
+APP_ROW name=nvdec_h264 os=linux result=PASS secs=6 guest_xid=0 note=-
+APP_ROW name=hashcat os=linux result=PASS secs=27 guest_xid=0 note=warn:This means that hashcat cannot use the full parallel power of your device(s).
+APP_ROW name=blender_cycles os=linux result=PASS secs=11 guest_xid=0 note=-
+APPS_STAGE_COUNTS pass=66 fail=0 not_run=0 of=66 secs=1286
+APPS_STAGE_PASS
+APPS_STAGE_EXIT rc=0
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1183 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_apps.log
+KF_PAYLOAD_STAGE_END name=apps rc=0 duration_ms=2702003
+KF_PAYLOAD_STAGE_START name=install_flow
+[xid-watch] tag=ci5eed5eed5eed5eed_install_flow  host=ubuntu  utc=2026-11-16T03:00:05Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/install_flow.py run --sha 03c3c41990e3f880beea77563d61ac8dcba0d55c --checkout /workspace/kf-ci-src --prefix /workspace/kf-install-flow --out /workspace/kf-ci-evidence/install_flow.json
+[xid-watch] host_dmesg_lines=1185  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+KF_DOCSTEP_START doc=building.md step=clone user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=clone rc=0 ms=13745
+KF_DOCSTEP_START doc=building.md step=packages_list user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=packages_list rc=0 ms=32
+KF_DOCSTEP_START doc=building.md step=packages_install user=root timeout=3600
+KF_DOCSTEP_END doc=building.md step=packages_install rc=0 ms=79060
+KF_DOCSTEP_START doc=building.md step=rust_toolchain user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=rust_toolchain rc=0 ms=27302
+KF_DOCSTEP_START doc=building.md step=workspace_build user=unpriv timeout=7200
+KF_DOCSTEP_END doc=building.md step=workspace_build rc=0 ms=28987
+KF_DOCSTEP_START doc=building.md step=qemu_build user=unpriv timeout=7200
+KF_DOCSTEP_END doc=building.md step=qemu_build rc=0 ms=60903
+KF_DOCSTEP_START doc=building.md step=raw_client user=unpriv timeout=3600
+KF_DOCSTEP_END doc=building.md step=raw_client rc=0 ms=21550
+KF_DOCSTEP_ARGS doc=attach-to-existing-vm.md step=qemu_args words=12
+KF_DOCSTEP_START doc=- step=boot_and_probe user=unpriv timeout=1800
+KF_DOCSTEP_END doc=- step=boot_and_probe rc=0 ms=57464
+KF_INSTALL_FLOW_RESULT {"binary":{"rev":"03c3c419","source":"compiled"},"docs":{"attach-to-existing-vm.md":"0ba2d259cfda640ebd5d1a7b4e2af0a0bba445f9db3e93e1da186f09de053e56","building.md":"46780a36a81de60a9d07382b7a0dd80aeb5c66c4fb6e6b37d1ffbfcb3b8be962","installing.md":"0c9f50fbaa0ed0182b5b5ed5c702bd40ec092e1baacc081f9574d4fa2629a1e5","linux-guest.md":"6945366c739c3e270d8f6145062dfbcc88ca0cdea6925e62016a9843eb8af94c","requirements.md":"a93131dfd18167d857fee6f59d95ffc1e7b544a49c5ba8880a89d696efc36437"},"guest":{"boot_s":37,"cup8":"PASS","kf3_log_line":true,"nvidia_smi_rc":0,"qemu_args_source":"attach-to-existing-vm.md"},"root_steps":["packages_install","root_setup","copy_ssh_key","device_nodes"],"schema":1,"sha":"03c3c41990e3f880beea77563d61ac8dcba0d55c","steps":[{"cap_eff":"0000000000000000","doc":"building.md","ms":13745,"rc":0,"step":"clone","uid":1002,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":32,"rc":0,"step":"packages_list","uid":1002,"user":"unpriv"},{"cap_eff":"000001ffffffffff","doc":"building.md","ms":79060,"rc":0,"step":"packages_install","uid":0,"user":"root"},{"cap_eff":"0000000000000000","doc":"building.md","ms":27302,"rc":0,"step":"rust_toolchain","uid":1002,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":28987,"rc":0,"step":"workspace_build","uid":1002,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":60903,"rc":0,"step":"qemu_build","uid":1002,"user":"unpriv"},{"cap_eff":"0000000000000000","doc":"building.md","ms":21550,"rc":0,"step":"raw_client","uid":1002,"user":"unpriv"}],"substitutions":[{"literal":"https://github.com/reindertpelsma/kayfabe.git","step":"clone"},{"literal":"<a fixed uuid for this VM>","step":"qemu_args"}],"verdict":"PASS"}
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1185 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_install_flow.log
+KF_PAYLOAD_STAGE_END name=install_flow rc=0 duration_ms=315247
+KF_PAYLOAD_STAGE_START name=windows_gate
+[xid-watch] tag=ci5eed5eed5eed5eed_windows_gate  host=ubuntu  utc=2026-11-16T03:05:20Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/windows_gate.sh ci5eed5eed5eed5eed /root/prov
+[xid-watch] host_dmesg_lines=1191  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+WINDOWS_GATE_START tag=ci5eed5eed5eed5eed rev=03c3c419 source=/workspace/kf-ci-src 2026-11-16T03:05:22+00:00 idle_s=300 flags=none guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-16T03:05:22+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 125674(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 125674(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 125674(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 125674(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 125674(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 125721(bash) uid_root 0/0/0/0
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 4060 Ti" driver=580.159.04 cpus=23 ram_gb=98 disk_free_gb=392 uid=0 memlock_kb=12973352
+GATE_STAGE preflight EXIT ok 7s
+GATE_STAGE hostref_before START 2026-11-16T03:05:29+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 4060 Ti, 580.159.04, 16380 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 5s
+GATE_STAGE prereqs START 2026-11-16T03:05:34+00:00
+GATE_STAGE prereqs EXIT ok 25s
+GATE_STAGE kf3_binary START 2026-11-16T03:05:59+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/03c3c419/qemu-system-x86_64 sha256=d0cb479d21d7ab37 rev=03c3c419
+GATE_STAGE kf3_binary EXIT ok 0s
+GATE_STAGE lke_die START 2026-11-16T03:05:59+00:00
+GATE_LKE_DIE die=AD106 source=native_rm
+GATE_STAGE lke_die EXIT ok 2s
+GATE_STAGE install START 2026-11-16T03:06:01+00:00
+GATE_STAGE install EXIT ok 1742s
+GATE_STAGE probes_build START 2026-11-16T03:35:03+00:00
+GATE_NOTE probes built: 0f5c3de968f0 d8d472e64571 437236ffd888 ebeb015797c3 
+GATE_STAGE probes_build EXIT ok 5s
+GATE_STAGE boot1 START 2026-11-16T03:35:08+00:00
+GATE_NOTE QEMU boot 1 of gate_ci5eed5eed5eed5eed started after 4s
+GATE_NOTE ssh up after 20s
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=mixed procs=5
+KFROOT_ASSERT_VIOLATION 125674(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 125674(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 125674(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 125674(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 125674(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 131154(qemu-system-x86) uid_root 0/0/0/0
+GATE_STAGE boot1 EXIT ok 132s
+GATE_STAGE check_kf3 START 2026-11-16T03:37:20+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 53s
+GATE_STAGE nv_install START 2026-11-16T03:38:13+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_2803&SUBSYS_51741462&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2803&SUBSYS_51741462&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2803&SUBSYS_51741462&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 325s
+GATE_STAGE desktop_prep START 2026-11-16T03:43:38+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-16T03:43:58Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 20s
+GATE_STAGE reboot START 2026-11-16T03:43:58+00:00
+GATE_NOTE second QEMU started after 20s
+GATE_NOTE ssh up after 10s
+GATE_STAGE reboot EXIT ok 186s
+GATE_STAGE desktop START 2026-11-16T03:47:04+00:00
+  GATE_BOOT utc=2026-11-16T03:44:52Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+  GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+  GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/16/2026 3:46 AM
+  GATE_DISPLAY name='NVIDIA GeForce RTX 4060 Ti' driver=32.0.15.8088 code=22 status=Error pnp=Error
+  GATE_STATE_DONE mode=desktop
+GATE_STAGE desktop EXIT ok 31s
+GATE_STAGE enable START 2026-11-16T03:47:35+00:00
+GATE_NOTE device enabled once at 2026-11-16T03:47:51Z (guest clock)
+  GATE_DISPLAY name='NVIDIA GeForce RTX 4060 Ti' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STAGE enable EXIT ok 88s
+GATE_STAGE smi_probes START 2026-11-16T03:49:03+00:00
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 4060 Ti (UUID: GPU-00000000-0000-0000-0000-000000000000)
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=3 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=5 timeout=0
+GATE_STAGE smi_probes EXIT ok 84s
+GATE_STAGE idle START 2026-11-16T03:50:27+00:00
+GATE_NOTE idle window observed 300s of 300s
+GATE_STAGE idle EXIT ok 326s
+GATE_STAGE post_idle START 2026-11-16T03:55:53+00:00
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=5 timeout=0
+  GATE_TDR since=2026-11-16T03:47:51Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=1 livekernelevent193_entries=3 livekernelevent193_resolved=1 livekernelevent193_unresolved=0 livekernelevent_stale=0 strict=0 total=0
+  GATE_LIVEDUMP 2026-11-16T03:48:46Z WATCHDOG-20261116-0348.dmp bytes=1322999808
+  GATE_WER_REPORT dir=Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 where=ReportQueue mtime=2026-11-16T03:49:38Z event_time=2026-11-16T03:49:14Z
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 ReportType=4
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 ReportStatus=2049
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[0].Value=193
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[1].Value=815
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[2].Value=2
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[3].Value=ffffb28f6ab9f080
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[4].Value=0
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 DynamicSig[1].Value=10.0.26100.<ip>.129
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 FriendlyEventName=Hardware error
+  GATE_WER_DUMP 2026-11-16T03:49:05Z WATCHDOG-20261116-0348.dmp bytes=816924
+  GATE_WER_DUMP 2026-11-16T03:48:46Z WATCHDOG-20261116-0348.dmp bytes=1322999808
+GATE_LKE report="Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00" where=ReportQueue event_type="LiveKernelEvent" event_time="2026-11-16T03:49:14Z" event_time_raw="134392745545119799" bucket="-" report_id="7cb9454f-58f2-4d09-87d5-4d0dc5c91d00" P1="193" P2="815" P3="2" P4="ffffb28f6ab9f080" P5="0" P6="10_0_26100" P7="0_0" P8="256_1"
+GATE_LKE_HEADER bugcheck=0x00000193 p1=0x0000000000000815 p2=0x0000000000000002 p3=0xffffb28f6ab9f080 p4=0x0000000000000000 bytes_read=4096 file="WATCHDOG-20261116-0348.dmp"
+GATE_LKE_HEADER bugcheck=0x00000193 p1=0x0000000000000815 p2=0x0000000000000002 p3=0xffffb28f6ab9f080 p4=0x0000000000000000 bytes_read=4096 file="WATCHDOG-20261116-0348.dmp"
+GATE_LKE_HEADERS files=2
+GATE_TIMELINE enable=2026-11-16T03:47:51Z first_probe=2026-11-16T03:49:46Z first_dump=2026-11-16T03:48:46Z dump_minus_enable=55s dump_minus_first_probe=-60s
+  GATE_WER_NEAR report=Kernel_193_431ff87aa7119284df224613b67e63d755ed1_00000000_7cb9454f-58f2-4d09-87d5-4d0dc5c91d00 none within +-120s
+  GATE_WER_NEAR report=WATCHDOG-20261116-0348.dmp none within +-120s
+  GATE_WER_NEAR report=WATCHDOG-20261116-0348.dmp none within +-120s
+GATE_LKE_RATCHET die=AD106 count=1 max=- verdict=UNKNOWN
+GATE_LKE_COUNTS reports=1 entries=3 unresolved=0 resolved=1 unit=distinct_reports
+GATE_NOTE check --kf3 (after the driver): 0 FAIL line(s),   WIN_CHECK_DONE fail=0
+GATE_STAGE post_idle EXIT ok 123s
+GATE_STAGE collect_stop START 2026-11-16T03:57:56+00:00
+GATE_STAGE collect_stop EXIT ok 195s
+GATE_NOTE graceful stop of the guest (gate_ci5eed5eed5eed5eed)
+KFROOT_ASSERT mode=record ok=unchecked label=final why=no-sudo-log-mark
+GATE_HOSTREF after green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 4060 Ti, 580.159.04, 16380 MiB, P0"
+WINDOWS_GATE_PASS rev=03c3c419 gpu="NVIDIA GeForce RTX 4060 Ti" idle_s=300 hostref=green/green secs=3386 rootless=violated install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=1 live_dumps_193_entries=3 live_dumps_193_ratchet=UNKNOWN live_dumps_193_die=AD106 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-16T03:47:51Z
+GATE_NOTE evidence: /root/prov/ci5eed5eed5eed5eed_windows (99 files), /root/prov/ci5eed5eed5eed5eed_windows.tgz sha256=f2b436c7f82b7a3d
+WINDOWS_GATE_TIMING total=3386s preflight=7s hostref_before=5s prereqs=25s kf3_binary=0s lke_die=2s install=1742s probes_build=5s boot1=132s check_kf3=53s nv_install=325s desktop_prep=20s reboot=186s desktop=31s enable=88s smi_probes=84s idle=326s post_idle=123s collect_stop=195s
+WINDOWS_GATE_EXIT rc=0 2026-11-16T04:01:48+00:00
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1191 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_windows_gate.log
+KF_PAYLOAD_STAGE_END name=windows_gate rc=0 duration_ms=3390368
+KF_PAYLOAD_STAGE_START name=windows_apps
+[xid-watch] tag=ci5eed5eed5eed5eed_windows_apps  host=ubuntu  utc=2026-11-16T04:01:51Z
+[xid-watch] command: env KF_WINAPPS_PROFILE=mid bash /workspace/kf-ci-src/scripts/bench/box/windows_apps.sh ci5eed5eed5eed5eed /root/prov
+[xid-watch] host_dmesg_lines=1202  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4060 Ti, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+WINAPPS_START tag=ci5eed5eed5eed5eed rev=03c3c419 source=/workspace/kf-ci-src 2026-11-16T04:01:53+00:00 profile=mid gate_tag=gate_ci5eed5eed5eed5eed per_guest=8
+WINAPPS_REQUESTED=1
+APP_POLICY name=overlay_yuv_probe os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_hide os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_occlude os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_resize os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_move os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_recreate os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_fullscreen os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_soak os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=managed_t os=windows result=NOT_RUN note=unsupported (UVM)
+APPS_STAGE preflight 2026-11-16T04:01:53+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 135242(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 135242(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 135242(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 135242(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 135242(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 135290(bash) uid_root 0/0/0/0
+APPS_NOTE host: gpu="NVIDIA GeForce RTX 4060 Ti" cpus=23 ram_gb=98 disk_free_gb=366 apps=10 budget_s=3600
+APPS_NOTE app ids: nvidia_smi,deviceQuery_demo,matmul_t,cup8_ladder,dxprobe_d3d11,glgears_wgl,vulkaninfo,torch_correct,edge_webgl,dxprobe_d3d12
+APPS_STAGE app_disk 2026-11-16T04:01:57+00:00
+APPS_NOTE app disk /workspace/winapps/kfapps.iso sha256=c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee bytes=2708119552
+APPS_STAGE hostref_before 2026-11-16T04:04:39+00:00
+APPS_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0
+APPS_STAGE seal_parent 2026-11-16T04:04:43+00:00
+APPS_STAGE run_matrix 2026-11-16T04:04:43+00:00
+APPS_NOTE winapps.py rc=8 (0 done, 3 repeated guest boot failures, 4 guest limit, 6 time budget ended)
+KFROOT_ASSERT mode=record ok=unchecked label=final why=no-sudo-log-mark
+WINAPPS_RETRY action=rerun-on-a-fresh-box class=MEDIA_DRIFT profile=mid stage=run_matrix why="official pinned download/catalogue failed; no app pass claimed (driver.out)" rev=03c3c419 gpu="NVIDIA GeForce RTX 4060 Ti" hostref=green/unrun secs=170
+WINAPPS_EXIT rc=3 2026-11-16T04:04:43+00:00
+[xid-watch] --- command output ends (rc=3) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1202 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_windows_apps.log
+KF_PAYLOAD_STAGE_END name=windows_apps rc=3 duration_ms=174565
+KF_PAYLOAD_FAIL suite=windows_apps_retry_operator
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=9
+stage name=provision rc=0 duration_ms=667901 result=PASS
+stage name=cuda_host rc=0 duration_ms=12304 result=PASS
+stage name=merge_bar rc=6 duration_ms=1354320 result=PASS
+stage name=cuda_guest rc=0 duration_ms=332041 result=PASS
+stage name=apps rc=0 duration_ms=2702003 result=PASS
+stage name=install_flow rc=0 duration_ms=315247 result=PASS
+stage name=windows_gate rc=0 duration_ms=3390368 result=PASS
+stage name=windows_apps rc=3 duration_ms=174565 result=FAIL reason=windows_apps_retry_operator
+stage name=windows_gate_2 result=NOT_RUN
+suite name=provision pass=1 fail=0 skip=0
+suite name=cuda_host pass=4 fail=0 skip=0
+suite name=gates pass=9 fail=0 skip=0
+suite name=kf3_build pass=1 fail=0 skip=0
+suite name=raw_suite pass=30 fail=0 skip=0
+suite name=thin_suite pass=30 fail=0 skip=0
+suite name=birth_census pass=1 fail=0 skip=0
+suite name=cuda_fat pass=4 fail=0 skip=0
+suite name=apps pass=66 fail=0 skip=0
+suite name=install_flow pass=1 fail=0 skip=0
+suite name=windows_gate pass=1 fail=0 skip=0
+suite name=windows_apps_retry_operator pass=0 fail=1 skip=0
+first_fail stage=windows_apps line=no red line found; last line: [xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_windows~_apps.log
+KF_FINAL_SUMMARY_END

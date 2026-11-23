@@ -1,0 +1,17 @@
+START 2026-11-16T01:58:47+00:00
+BOX_RC=0
+03c3c4199 release-run tree only: KF_PROPIMAGE_SKIP_APPS (operator skip of an app with no verdict source, recorded NOT_RUN)
+DRIVER_RC=0
+NVIDIA RTX 4000 Ada Generation, 580.159.04
+/dev/root       485G   13G  472G   3% /
+TREE_RC=0
+[2026-11-16T02:08:12+00:00] B4: guest ladder built: 5061288 bytes
+[2026-11-16T02:08:12+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/03c3c419/qemu-system-x86_64 rev=03c3c419 mtime=2026-11-16 02:09:04.529138383 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-16T02:09:06+00:00

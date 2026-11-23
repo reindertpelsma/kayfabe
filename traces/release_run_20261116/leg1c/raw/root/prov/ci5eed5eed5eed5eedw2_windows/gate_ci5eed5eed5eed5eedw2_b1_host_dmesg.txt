@@ -1,0 +1,2 @@
+[10621.826746] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[10700.225311] workqueue: vmstat_update hogged CPU for >13333us 8 times, consider switching to WQ_UNBOUND

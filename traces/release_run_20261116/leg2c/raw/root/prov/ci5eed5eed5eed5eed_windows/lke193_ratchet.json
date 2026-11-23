@@ -1,0 +1,1 @@
+{"count": 1, "die": "TU106", "entries": 3, "max_count": 1, "resolved_count": 1, "resolved_lower_bound": 1, "source_evidence": {"date": "2026-11-03", "path": "traces/turing_boot_20261103/boxB/tbB1/wer_reports.txt", "revision": "e6dad00f"}, "unit": "distinct_reports", "unresolved_entries": 0, "verdict": "PASS"}

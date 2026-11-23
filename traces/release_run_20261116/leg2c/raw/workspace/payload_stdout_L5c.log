@@ -1,0 +1,20 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=lanea winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       388G   22G  367G   6% /
+KF_PREFLIGHT_FREE_BYTES=393051394048
+KF_PAYLOAD_STAGE_START name=cuda_guest
+CUDA_LADDER_STARTED=2026-11-16T04:16:45+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=c53dd6b8
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=1 duration_ms=6
+KF_PAYLOAD_FAIL suite=cuda_fat
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=6
+stage name=cuda_guest rc=1 duration_ms=6 result=FAIL reason=cuda_fat
+stage name=apps result=NOT_RUN
+stage name=install_flow result=NOT_RUN
+stage name=windows_gate result=NOT_RUN
+stage name=windows_apps result=NOT_RUN
+stage name=windows_gate_2 result=NOT_RUN
+suite name=cuda_fat pass=0 fail=1 skip=0
+first_fail stage=cuda_guest line=CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+KF_FINAL_SUMMARY_END

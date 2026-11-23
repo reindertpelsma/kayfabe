@@ -1,0 +1,12 @@
+[xid-watch] tag=ci5eed5eed5eed5eed_apps  host=ubuntu  utc=2026-11-16T03:26:47Z
+[xid-watch] command: env KF_APPS_PROVISION=1 bash /workspace/kf-ci-src/scripts/bench/box/apps_gate.sh ci5eed5eed5eed5eed /root/prov middle
+[xid-watch] host_dmesg_lines=1322  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+APP_POLICY name=UnifiedMemoryStreams os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=UnifiedMemoryPerf os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=conjugateGradientUM os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=attach_verify os=linux result=NOT_RUN note=unsupported (UVM)
+APPS_STAGE_LIST n=66 budget_s=3000 per_boot=100
+APPS_PROVISION_START 2026-11-16T03:26:49+00:00

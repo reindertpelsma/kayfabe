@@ -1,0 +1,2 @@
+[2026-11-16T04:24:23Z] stopping kfwin (pid 138610)
+Terminated

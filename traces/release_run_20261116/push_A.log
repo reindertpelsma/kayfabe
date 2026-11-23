@@ -1,0 +1,2 @@
+Warning: Permanently added '[<ip>]:45975' (ED25519) to the list of known hosts.
+PUSHFILE_OK dest=/workspace/kf-propimage/dl/image/image.zip sha256=cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3 rsync_secs=714 hash_secs=228

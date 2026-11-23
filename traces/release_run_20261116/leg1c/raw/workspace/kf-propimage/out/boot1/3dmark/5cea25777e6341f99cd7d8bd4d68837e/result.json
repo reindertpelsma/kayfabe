@@ -1,0 +1,13 @@
+﻿{
+    "result_file":  "",
+    "kind":  "PROBE",
+    "ui_ready":  true,
+    "ended":  1794507307.424,
+    "started":  1794507158.809,
+    "progress_seen":  false,
+    "app":  "3dmark",
+    "cli_output":  "AMD64\r\ndone\r\n18:12:48   _____ ____  __  __            _\r\n18:12:48  |___ /|  _ \\|  \\/  | __ _ _ __| | __\r\n18:12:48    |_ \\| | | | |\\/| |/ _` | \u0027__| |/ /\r\n18:12:48   ___) | |_| | |  | | (_| | |  |   \u003c\r\n18:12:48  |____/|____/|_|  |_|\\__,_|_|  |_|\\_\\\r\n18:12:48 3DMark Command Line Client version: 2.32.8919 64\r\n18:12:48 Futuremark Systeminfo version: 5.92.1497.0\r\n18:12:57 Professional or Developer license key required for command line access\r\n18:12:58\r\n",
+    "run_id":  "5cea25777e6341f99cd7d8bd4d68837e",
+    "error":  "No RUN link under the Time Spy card",
+    "ui_texts":  ""
+}

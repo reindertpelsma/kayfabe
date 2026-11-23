@@ -1,0 +1,41 @@
+2026-11-16T06:17:17Z START run_dir=/root/prov/ci5eed5eed5eed5eed_winapps/run vm=winvm kf3_rev=- apps=10
+2026-11-16T06:17:17Z MATRIX_START apps=10 (resume skips 0) per_guest=8 max_tdr=3 tier<=3
+2026-11-16T06:17:17Z win_vm.sh run --detach tag=apps_g1_061717 rc=0
+2026-11-16T06:17:23Z [g1] launched; waiting for the guest agent (<= 1500s)
+2026-11-16T06:19:30Z [g1] agent answered after 133s
+2026-11-16T06:19:30Z [g1] no KF_GUEST_PW: assuming autologon
+2026-11-16T06:19:47Z [g1] interactive session: KFWIN\kf
+2026-11-16T06:21:06Z [g1] pushed 32 guest files
+2026-11-16T06:21:06Z [g1] app disk attached (at launch (WINVM_APPS_ISO, AHCI cd-rom))
+2026-11-16T06:21:27Z [g1] setup ok: cd=K: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 8192 MiB
+2026-11-16T06:21:46Z [g1] READY boot=2026-11-16T06:17:47.5000000Z user=KFWIN\kf smi_ok=True
+2026-11-16T06:22:58Z [g1] nvidia_smi: PASS
+2026-11-16T06:23:07Z [g1] staged cuda_demo_suite (unzip, 1s)
+2026-11-16T06:24:06Z [g1] staged vc_redist (installer, 51s)
+2026-11-16T06:25:07Z [g1] deviceQuery_demo: PASS
+2026-11-16T06:25:16Z [g1] staged python_embed (python_embed, 1s)
+2026-11-16T06:27:47Z [g1] staged pywheels (wheels, 142s)
+2026-11-16T06:29:14Z [g1] matmul_t: PASS
+2026-11-16T06:30:13Z [g1] cup8_ladder: PASS
+2026-11-16T06:31:12Z [g1] dxprobe_d3d11: PASS
+2026-11-16T06:32:26Z [g1] glgears_wgl: PASS
+2026-11-16T06:32:35Z [g1] staged vulkan_rt (unzip, 1s)
+2026-11-16T06:33:37Z [g1] vulkaninfo: PASS
+2026-11-16T06:35:08Z [g1] torch_correct: PASS
+2026-11-16T06:35:35Z [g1] stopped (clean)
+2026-11-16T06:35:35Z win_vm.sh run --detach tag=apps_g2_063535 rc=0
+2026-11-16T06:35:41Z [g2] launched; waiting for the guest agent (<= 1500s)
+2026-11-16T06:38:07Z [g2] agent answered after 152s
+2026-11-16T06:38:07Z [g2] no KF_GUEST_PW: assuming autologon
+2026-11-16T06:38:18Z [g2] interactive session: KFWIN\kf
+2026-11-16T06:39:45Z [g2] pushed 32 guest files
+2026-11-16T06:39:45Z [g2] app disk attached (at launch (WINVM_APPS_ISO, AHCI cd-rom))
+2026-11-16T06:40:07Z [g2] setup ok: cd=K: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 8192 MiB
+2026-11-16T06:40:25Z [g2] READY boot=2026-11-16T06:36:05.5000000Z user=KFWIN\kf smi_ok=True
+2026-11-16T06:41:59Z [g2] edge_webgl: PASS
+2026-11-16T06:42:58Z [g2] staged vc_redist (installer, 51s)
+2026-11-16T06:44:08Z [g2] dxprobe_d3d12: PASS
+2026-11-16T06:44:35Z [g2] stopped (clean)
+2026-11-16T06:44:35Z PHASE2 re-running 0 non-PASS apps alone
+2026-11-16T06:44:35Z MATRIX_DONE batched: 10 pass / 10
+2026-11-16T06:44:35Z EXIT rc=0

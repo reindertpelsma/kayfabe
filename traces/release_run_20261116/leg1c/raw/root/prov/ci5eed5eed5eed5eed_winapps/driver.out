@@ -1,0 +1,66 @@
+OFFICIAL_OK package=cuda_demo_suite bytes=5164004 sha256=adffd0b0f7cca262025f171dcaa73f62af020de5d9a0d6e0fbe7dbd827dd77a8
+OFFICIAL_OK package=nvidia_driver bytes=890807536 sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9
+OFFICIAL_OK package=pywheels bytes=62561 sha256=e29e59829c297a7a5233bd9cc71094fc5bddbd076951482670178f9eade39b1f
+OFFICIAL_OK package=pywheels bytes=98780018 sha256=c9571d3b5f2e65758137e210f7fb3c3b34767f0af6b6ca04035a244b6141ee12
+OFFICIAL_OK package=pywheels bytes=133003 sha256=2ce9818e3e2d8f284c1a964414447ef148d42a5fd5e2a477a7118e574b293ec1
+OFFICIAL_OK package=pywheels bytes=26661 sha256=7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4
+OFFICIAL_OK package=pywheels bytes=221738 sha256=8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f
+OFFICIAL_OK package=pywheels bytes=134899 sha256=85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
+OFFICIAL_OK package=pywheels bytes=14303 sha256=11935df9bf455ed0c04eb87bcd720f02b1fe5e02128a9430f23aed6f93336fc7
+OFFICIAL_OK package=pywheels bytes=439333 sha256=2a3e9d53925597fbffafd2a37048dadeddd0bdaba58058f6ae0869ed709a184d
+OFFICIAL_OK package=pywheels bytes=536198 sha256=a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c
+OFFICIAL_OK package=pywheels bytes=2142205 sha256=e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0
+OFFICIAL_OK package=pywheels bytes=12567828 sha256=0a59a421a32580a009e8a1751345bf829631b990dc1794b80514ab722b435def
+OFFICIAL_OK package=pywheels bytes=7872489 sha256=9b382ba898a7c142a0801d03cf04ecabced96c1543c7b643a86f0928143802de
+OFFICIAL_OK package=pywheels bytes=25111930 sha256=f2ecb68b7b7b259d2ef3112ae760149f9b5a1e7c0fbb73d539da6250a648a614
+OFFICIAL_OK package=pywheels bytes=129956 sha256=d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+OFFICIAL_OK package=pywheels bytes=7227137 sha256=a2b55dd6b2a4c4b7d87ffa56bdb33fdc5fdb9a462173861a7bc097f17d91cb09
+OFFICIAL_OK package=pywheels bytes=456514 sha256=a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353
+OFFICIAL_OK package=pywheels bytes=818216 sha256=51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670
+OFFICIAL_OK package=pywheels bytes=6299353 sha256=e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5
+OFFICIAL_OK package=pywheels bytes=2915418348 sha256=f6c79eac0018f9d131479ee1b7a68edb030619a316bfbc69275043aa4f338e4c
+OFFICIAL_OK package=pywheels bytes=6227539 sha256=e59fc7405f2e0cfceefc2f867794900478871c2639d02779d55dc143657a7bbb
+OFFICIAL_OK package=pywheels bytes=45571 sha256=481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+OFFICIAL_OK package=vc_redist bytes=25635768 sha256=cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b
+OFFICIAL_OK package=vulkan_rt bytes=18211191 sha256=a25a927aa8b9f0371048f1861cf88ac3b9bc9b1fb332c42d897c8ab32695769a
+2026-11-16T06:17:17Z START run_dir=/root/prov/ci5eed5eed5eed5eed_winapps/run vm=winvm kf3_rev=- apps=10
+2026-11-16T06:17:17Z MATRIX_START apps=10 (resume skips 0) per_guest=8 max_tdr=3 tier<=3
+2026-11-16T06:17:17Z win_vm.sh run --detach tag=apps_g1_061717 rc=0
+2026-11-16T06:17:23Z [g1] launched; waiting for the guest agent (<= 1500s)
+2026-11-16T06:19:30Z [g1] agent answered after 133s
+2026-11-16T06:19:30Z [g1] no KF_GUEST_PW: assuming autologon
+2026-11-16T06:19:47Z [g1] interactive session: KFWIN\kf
+2026-11-16T06:21:06Z [g1] pushed 32 guest files
+2026-11-16T06:21:06Z [g1] app disk attached (at launch (WINVM_APPS_ISO, AHCI cd-rom))
+2026-11-16T06:21:27Z [g1] setup ok: cd=K: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 8192 MiB
+2026-11-16T06:21:46Z [g1] READY boot=2026-11-16T06:17:47.5000000Z user=KFWIN\kf smi_ok=True
+2026-11-16T06:22:58Z [g1] nvidia_smi: PASS
+2026-11-16T06:23:07Z [g1] staged cuda_demo_suite (unzip, 1s)
+2026-11-16T06:24:06Z [g1] staged vc_redist (installer, 51s)
+2026-11-16T06:25:07Z [g1] deviceQuery_demo: PASS
+2026-11-16T06:25:16Z [g1] staged python_embed (python_embed, 1s)
+2026-11-16T06:27:47Z [g1] staged pywheels (wheels, 142s)
+2026-11-16T06:29:14Z [g1] matmul_t: PASS
+2026-11-16T06:30:13Z [g1] cup8_ladder: PASS
+2026-11-16T06:31:12Z [g1] dxprobe_d3d11: PASS
+2026-11-16T06:32:26Z [g1] glgears_wgl: PASS
+2026-11-16T06:32:35Z [g1] staged vulkan_rt (unzip, 1s)
+2026-11-16T06:33:37Z [g1] vulkaninfo: PASS
+2026-11-16T06:35:08Z [g1] torch_correct: PASS
+2026-11-16T06:35:35Z [g1] stopped (clean)
+2026-11-16T06:35:35Z win_vm.sh run --detach tag=apps_g2_063535 rc=0
+2026-11-16T06:35:41Z [g2] launched; waiting for the guest agent (<= 1500s)
+2026-11-16T06:38:07Z [g2] agent answered after 152s
+2026-11-16T06:38:07Z [g2] no KF_GUEST_PW: assuming autologon
+2026-11-16T06:38:18Z [g2] interactive session: KFWIN\kf
+2026-11-16T06:39:45Z [g2] pushed 32 guest files
+2026-11-16T06:39:45Z [g2] app disk attached (at launch (WINVM_APPS_ISO, AHCI cd-rom))
+2026-11-16T06:40:07Z [g2] setup ok: cd=K: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 8192 MiB
+2026-11-16T06:40:25Z [g2] READY boot=2026-11-16T06:36:05.5000000Z user=KFWIN\kf smi_ok=True
+2026-11-16T06:41:59Z [g2] edge_webgl: PASS
+2026-11-16T06:42:58Z [g2] staged vc_redist (installer, 51s)
+2026-11-16T06:44:08Z [g2] dxprobe_d3d12: PASS
+2026-11-16T06:44:35Z [g2] stopped (clean)
+2026-11-16T06:44:35Z PHASE2 re-running 0 non-PASS apps alone
+2026-11-16T06:44:35Z MATRIX_DONE batched: 10 pass / 10
+2026-11-16T06:44:35Z EXIT rc=0

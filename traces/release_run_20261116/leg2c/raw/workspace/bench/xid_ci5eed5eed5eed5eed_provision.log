@@ -1,0 +1,12 @@
+[xid-watch] tag=ci5eed5eed5eed5eed_provision  host=ubuntu  utc=2026-11-16T03:47:16Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/provision_full.sh
+[xid-watch] host_dmesg_lines=799  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 575.51.03
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (799 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_provision.log

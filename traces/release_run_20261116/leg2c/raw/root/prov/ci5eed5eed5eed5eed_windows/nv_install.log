@@ -1,0 +1,7 @@
+[2026-11-16T05:01:58Z] START nv-extract
+[2026-11-16T05:02:44Z] NV_EXTRACTED /workspace/winvm/cache/nv580.88/Display.Driver (2.6G)
+[2026-11-16T05:02:44Z] EXIT nv-extract rc=0
+[2026-11-16T05:03:03Z] START nv-copy
+[2026-11-16T05:04:02Z] EXIT nv-copy rc=0
+[2026-11-16T05:04:07Z] START gsp-on
+[2026-11-16T05:06:56Z] EXIT gsp-on rc=0

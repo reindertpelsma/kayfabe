@@ -1,0 +1,7 @@
+Warning: Permanently added '[<ip>]:59804' (ED25519) to the list of known hosts.
+PUSHFILE_OK dest=/workspace/kf-propimage/dl/image/kf-gop.signed.efi sha256=423a9abc5789b8b4e9834ba016261efb9d64515d53f259a90446917ce91b848e rsync_secs=2 hash_secs=1
+Warning: Permanently added '[<ip>]:59804' (ED25519) to the list of known hosts.
+rsync error: received SIGINT, SIGTERM, or SIGHUP (code 20) at rsync.c(716) [sender=3.4.1]
+rsync try 1 rc=20
+Warning: Permanently added '[<ip>]:59804' (ED25519) to the list of known hosts.
+PUSHFILE_OK dest=/workspace/kf-propimage/dl/image/image.zip sha256=cddff40a501d8135c6c15ef7267b3b838304e5d6f089502707bce78712cb11b3 rsync_secs=2038 hash_secs=237

@@ -1,0 +1,795 @@
+KF_ARM_DIAG_BEGIN arm=--timer wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-26282  host=ubuntu  utc=2026-11-16T04:03:22Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --timer
+[xid-watch] host_dmesg_lines=845  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63472 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--timer]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d001d4
+ok    R6 hSubdevice      = 0xcafe0002
+info  R19 euid            = 0  ⚠ ROOT — RmValidateMmapRequest takes the osIsAdministrator() fast path and the range walk NEVER RUNS. This run is the CONTROL, not the measurement.
+★     R19 TIMER_GET_REGISTER_OFFSET = NV_OK, tmr_offset = 0x9000 (DRF_BASE(NV_PTIMER) is 0x9000)
+★     R19 NV01_TIMER alloc = hObject 0xcafe0004
+info  R19 NV01_TIMER map  = ioctl 0x414 / mmap 0x414 refused Other(19271)  (the object's own size for both)  ⚠ OUR OWN NOT_IN_THIS_OBJECT — the request never reached RM; that mmap length is not page-aligned
+info  R19 NV01_TIMER map  = ioctl 0x1000 / mmap 0x1000 refused Other(46)  (a whole page for both)  ← NV_ERR_INVALID_LIMIT: the driver says the length is past the resource's own size — a BOUND, not a privilege
+★     R19 NV01_TIMER map  = ioctl 0x414 / mmap 0x1000 ACCEPTED  (the object's size to RM, the rounded size to mmap)
+★     R19 PTIMER page     = 1794801805496048640 ns then 1794801805516278560 ns (+20229920 ns over a 20 ms sleep)
+★     R19 usermode mirror = 1794801805516308576 ns then 1794801805536546400 ns (+20237824 ns over a 20 ms sleep) — read through the SAME window the doorbell is rung through, so it costs no new mapping
+★      R19 same counter?   = PTIMER page 1794801805496048640 then 1794801805516278560, mirror 1794801805516308576 read next — mirror is 30016 ns after the second page reading (bound 1000000 ns)
+★     R19 host geography  = the PTIMER page carries the counter at page + 0x400; the usermode window carries it at page + 0x080, with the doorbell 0x10 bytes further on at page + 0x090
+done — timer probe only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (845 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-26282.log
+
+KF_ARM_DIAG_END arm=--timer
+KF_ARM_DIAG_BEGIN arm=--engines wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-13226  host=ubuntu  utc=2026-11-16T04:03:28Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --engines
+[xid-watch] host_dmesg_lines=845  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63524 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--engines]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d001ea
+ok    R6 hSubdevice      = 0xcafe0002
+ok    R7 hVaSpace       = 0xcafe0005
+ok    R8 hMemory        = 0xcafe0006 (1048576 bytes)
+ok    R9 host GPU VA    = 0x0000000200200000 (FIXED, as requested)
+info  R+ control          = Other(31) (a status, not a transport failure)
+ok    R+ bogus class      = refused: Other(34)
+kayfabe-isolate: GR-BIRTH iso0/gpu0 #1 engine=Ce vas=0xcafe000b adopt=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no ring at all, so nothing was consulted userd=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no USERD at all, so nothing was consulted → RingSource::Ours(None) [births=1 guest_ring=0 guest_userd=0 declined=0 not_asked=1 refused=0]
+ok    R13.1 channel      = 0xcafe000e, engine Ce, token 0x00000005 (runlist 0 chid 5)
+ok    R13.1 schedule     = on the runlist
+kayfabe-isolate: GR-BIRTH iso0/gpu0 #2 engine=GrCompute vas=0xcafe0010 adopt=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no ring at all, so nothing was consulted userd=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no USERD at all, so nothing was consulted → RingSource::Ours(None) [births=2 guest_ring=0 guest_userd=0 declined=0 not_asked=2 refused=0]
+ok    R13.2 channel      = 0xcafe0013, engine GrCompute, token 0x00000006 (runlist 0 chid 6)
+ok    R13.2 schedule     = on the runlist
+★     R13 token identity  = 0x00000005 != 0x00000006 (two live channels)
+ok    R13 unknown engine  = refused before any object was allocated
+★     R14 device memory   = wrote 0xa5a51234/0x5a5aedcb through mapping A, read both back through an INDEPENDENT mapping B
+ok    R14 USERD cursors   = GP_GET 0 GP_PUT 0
+ok    R14 ring bound      = a load past the object is refused BY BOUND
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+★     R15 SEM LANDED      = sem 0xbeef5ea1 (want 0xbeef5ea1), GP_GET 1 -> caught GP_PUT 1 — the GPU consumed our ring and released our semaphore
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+★     R17 CE COPY         = 4096 bytes: dst[0] 0x3f0011ff -> 0xc0ffee00, dst[last] 0xc0fff1ff (want 0xc0fff1ff) — read back through an INDEPENDENT mapping
+info  R13b engine sweep   = NV2080_ENGINE_TYPE_COPY(i) -> runlist, on GPU 0
+ok    R13b COPY(0)       = engineType 0x9 -> runlist 0 (token 0x00000008)
+ok    R13b COPY(1)       = engineType 0xa -> runlist 0 (token 0x00000008)
+ok    R13b COPY(2)       = engineType 0xb -> runlist 8 (token 0x00080008)
+ok    R13b COPY(3)       = engineType 0xc -> runlist 9 (token 0x00090008)
+ok    R13b COPY(4)       = engineType 0xd -> runlist 10 (token 0x000a0008)
+info  R13b COPY(5)       = refused Other(87)
+info  R13b COPY(6)       = refused Other(87)
+info  R13b COPY(7)       = refused Other(87)
+★     R13b VERDICT        = 4 DISTINCT runlists {0, 8, 9, 10} — engineType routes; a copy channel on runlist 0 is this part's GRCE, not a wrong-runlist bug
+ok    R13 free channel    = group, ring, USERD and mapping
+ok    R13 free channel    = group, ring, USERD and mapping
+ok    R10 isolate         = 4 workers
+ok    R11 through-isolate = host GPU VA 0x0000000200200000, hMemory 0xcafe0006
+kayfabe-isolate: GR-BIRTH iso0/gpu0 #1 engine=Ce vas=0xcafe000a adopt=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no ring at all, so nothing was consulted userd=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no USERD at all, so nothing was consulted → RingSource::Ours(None) [births=1 guest_ring=0 guest_userd=0 declined=0 not_asked=1 refused=0]
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x5 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped the ring, USERD and the usermode BAR0 window, and rang channel 0xcafe000d token 0x00000005
+done
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (845 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-13226.log
+
+KF_ARM_DIAG_END arm=--engines
+KF_ARM_DIAG_BEGIN arm=--doorbell-census wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-32205  host=ubuntu  utc=2026-11-16T04:03:33Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --doorbell-census
+[xid-watch] host_dmesg_lines=854  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63585 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--doorbell-census]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00201
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R13c census        = RM's own chid manager vs the work-submit token, GPU 0
+FACT per_runlist_channel_ram=0
+FACT chid_namespaces=[0] of 0..24
+FACT device_info_table=Err(InsufficientPermissions)
+SAMPLE engine_type=0x1 token=0x00000005 chid=5 chid_namespace=0
+SAMPLE engine_type=0x9 token=0x00000006 chid=6 chid_namespace=0
+SAMPLE engine_type=0xa token=0x00000007 chid=7 chid_namespace=0
+SAMPLE engine_type=0xb token=0x00080008 chid=8 chid_namespace=0
+SAMPLE engine_type=0xc token=0x00090009 chid=9 chid_namespace=0
+SAMPLE engine_type=0xd token=0x000a000a chid=10 chid_namespace=0
+SAMPLE-REFUSED engine_type=0xe reason=Other(87)
+SAMPLE-REFUSED engine_type=0xf reason=Other(87)
+SAMPLE-REFUSED engine_type=0x10 reason=Other(87)
+PARTITION engine_type=0x1 token=0x00000005 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0x9 token=0x00000005 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xa token=0x00000005 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xb token=0x00080005 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xc token=0x00090005 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xd token=0x000a0005 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION-REFUSED engine_type=0xe reason=Other(87)
+PARTITION-REFUSED engine_type=0xf reason=Other(87)
+PARTITION-REFUSED engine_type=0x10 reason=Other(87)
+FACT partition_is_vacuous=1
+info  R13c census        = done
+done — doorbell census only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (854 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-32205.log
+
+KF_ARM_DIAG_END arm=--doorbell-census
+KF_ARM_DIAG_BEGIN arm=--gpu-info-sweep wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-12731  host=ubuntu  utc=2026-11-16T04:03:39Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --gpu-info-sweep
+[xid-watch] host_dmesg_lines=917  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63637 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--gpu-info-sweep]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00217
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R21 gpuinfo sweep   = 70 indices x 1 call each, 564-byte params, tail seeded 0xCD
+info  R21 legend          = idx status data   (the port serves FORWARDED rows only)
+★     R21 0x00  NV_OK      data=0x00000000 (0)  echo=0x00000000  tail=untouched
+★     R21 0x01  NV_OK      data=0xa1852191 (2709856657)  echo=0x00000001  tail=untouched
+★     R21 0x02  NV_OK      data=0x00000040 (64)  echo=0x00000002  tail=untouched
+★     R21 0x03  NV_OK      data=0x00000000 (0)  echo=0x00000003  tail=untouched
+★     R21 0x04  NV_OK      data=0x00000000 (0)  echo=0x00000004  tail=untouched
+info  R21 0x05  refused    Other(86)
+info  R21 0x06  refused    Other(86)
+★     R21 0x07  NV_OK      data=0x00000000 (0)  echo=0x00000007  tail=untouched
+★     R21 0x08  NV_OK      data=0x00000000 (0)  echo=0x00000008  tail=untouched
+★     R21 0x09  NV_OK      data=0x00000019 (25)  echo=0x00000009  tail=untouched
+★     R21 0x0a  NV_OK      data=0x00000000 (0)  echo=0x0000000a  tail=untouched
+★     R21 0x0b  NV_OK      data=0x10286148 (271081800)  echo=0x0000000b  tail=untouched
+★     R21 0x0c  NV_OK      data=0x00000002 (2)  echo=0x0000000c  tail=untouched
+★     R21 0x0d  NV_OK      data=0x00000007 (7)  echo=0x0000000d  tail=untouched
+★     R21 0x0e  NV_OK      data=0x00000004 (4)  echo=0x0000000e  tail=untouched
+info  R21 0x0f  refused    Other(31)
+info  R21 0x10  refused    Other(31)
+★     R21 0x11  NV_OK      data=0x00000000 (0)  echo=0x00000011  tail=untouched
+★     R21 0x12  NV_OK      data=0x00000000 (0)  echo=0x00000012  tail=untouched
+★     R21 0x13  NV_OK      data=0x00000000 (0)  echo=0x00000013  tail=untouched
+★     R21 0x14  NV_OK      data=0x00000000 (0)  echo=0x00000014  tail=untouched
+★     R21 0x15  NV_OK      data=0x00000001 (1)  echo=0x00000015  tail=untouched
+★     R21 0x16  NV_OK      data=0xffffffff (4294967295)  echo=0x00000016  tail=untouched
+★     R21 0x17  NV_OK      data=0x00000000 (0)  echo=0x00000017  tail=untouched
+★     R21 0x18  NV_OK      data=0x00000001 (1)  echo=0x00000018  tail=untouched
+info  R21 0x19  refused    Other(86)
+★     R21 0x1a  NV_OK      data=0x00000001 (1)  echo=0x0000001a  tail=untouched
+★     R21 0x1b  NV_OK      data=0x00807080 (8417408)  echo=0x0000001b  tail=untouched
+info  R21 0x1c  refused    Other(31)
+info  R21 0x1d  refused    Other(86)
+★     R21 0x1e  NV_OK      data=0x00000000 (0)  echo=0x0000001e  tail=untouched
+★     R21 0x1f  NV_OK      data=0x00000001 (1)  echo=0x0000001f  tail=untouched
+★     R21 0x20  NV_OK      data=0x00000000 (0)  echo=0x00000020  tail=untouched
+info  R21 0x21  refused    Other(31)
+★     R21 0x22  NV_OK      data=0x00000000 (0)  echo=0x00000022  tail=untouched
+★     R21 0x23  NV_OK      data=0x53ce86c6 (1406043846)  echo=0x00000023  tail=untouched
+★     R21 0x24  NV_OK      data=0x74f52dcd (1962225101)  echo=0x00000024  tail=untouched
+★     R21 0x25  NV_OK      data=0x00000000 (0)  echo=0x00000025  tail=untouched
+info  R21 0x26  refused    Other(31)
+★     R21 0x27  NV_OK      data=0x00000000 (0)  echo=0x00000027  tail=untouched
+★     R21 0x28  NV_OK      data=0x00000000 (0)  echo=0x00000028  tail=untouched
+★     R21 0x29  NV_OK      data=0x00000000 (0)  echo=0x00000029  tail=untouched
+★     R21 0x2a  NV_OK      data=0x00000000 (0)  echo=0x0000002a  tail=untouched
+★     R21 0x2b  NV_OK      data=0x00000001 (1)  echo=0x0000002b  tail=untouched
+★     R21 0x2c  NV_OK      data=0x00000705 (1797)  echo=0x0000002c  tail=untouched
+★     R21 0x2d  NV_OK      data=0x00000000 (0)  echo=0x0000002d  tail=untouched
+★     R21 0x2e  NV_OK      data=0x00000000 (0)  echo=0x0000002e  tail=untouched
+★     R21 0x2f  NV_OK      data=0x00000000 (0)  echo=0x0000002f  tail=untouched
+★     R21 0x30  NV_OK      data=0x00000000 (0)  echo=0x00000030  tail=untouched
+★     R21 0x31  NV_OK      data=0x00000001 (1)  echo=0x00000031  tail=untouched
+★     R21 0x32  NV_OK      data=0x00000000 (0)  echo=0x00000032  tail=untouched
+★     R21 0x33  NV_OK      data=0x00000000 (0)  echo=0x00000033  tail=untouched
+★     R21 0x34  NV_OK      data=0x00000001 (1)  echo=0x00000034  tail=untouched
+★     R21 0x35  NV_OK      data=0x00000000 (0)  echo=0x00000035  tail=untouched
+★     R21 0x36  NV_OK      data=0x00000001 (1)  echo=0x00000036  tail=untouched
+★     R21 0x37  NV_OK      data=0x00000001 (1)  echo=0x00000037  tail=untouched
+★     R21 0x38  NV_OK      data=0x00000001 (1)  echo=0x00000038  tail=untouched
+★     R21 0x39  NV_OK      data=0x00000000 (0)  echo=0x00000039  tail=untouched
+★     R21 0x3a  NV_OK      data=0x00000000 (0)  echo=0x0000003a  tail=untouched
+★     R21 0x3b  NV_OK      data=0x00000000 (0)  echo=0x0000003b  tail=untouched
+★     R21 0x3c  NV_OK      data=0x00000000 (0)  echo=0x0000003c  tail=untouched
+★     R21 0x3d  NV_OK      data=0x00000001 (1)  echo=0x0000003d  tail=untouched
+★     R21 0x3e  NV_OK      data=0x00000000 (0)  echo=0x0000003e  tail=untouched
+★     R21 0x3f  NV_OK      data=0x00000000 (0)  echo=0x0000003f  tail=untouched
+★     R21 0x40  NV_OK      data=0x00000000 (0)  echo=0x00000040  tail=untouched
+★     R21 0x41  NV_OK      data=0x00000000 (0)  echo=0x00000041  tail=untouched
+★     R21 0x42  NV_OK      data=0x00000000 (0)  echo=0x00000042  tail=untouched
+info  R21 0x43  refused    Other(31)
+★     R21 0x44  NV_OK      data=0x00000000 (0)  echo=0x00000044  tail=untouched
+★     R21 0x45  NV_OK      data=0x00000000 (0)  echo=0x00000045  tail=untouched
+★     R21 libcuda 11     = NV_OK  0x11=0 0x22=0 0x27=0 0x2a=0 0x37=1 0x3b=0 0x3c=0 0x3d=1 0x2d=0 0x3a=0 0x44=0 
+done — gpu-info sweep only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (917 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-12731.log
+
+KF_ARM_DIAG_END arm=--gpu-info-sweep
+KF_ARM_DIAG_BEGIN arm=--bus-info-sweep wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-11922  host=ubuntu  utc=2026-11-16T04:03:44Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --bus-info-sweep
+[xid-watch] host_dmesg_lines=917  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63689 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--bus-info-sweep]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0022d
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R22 businfo sweep   = 52 indices x 1 call each, 420-byte params, tail seeded 0xCD
+info  R22 legend          = idx status data   (the port serves 0x2d ONLY)
+★     R22 0x00  NV_OK      data=0x00000003 (3)  echo=0x00000000  tail=untouched
+★     R22 0x01  NV_OK      data=0x000000d7 (215)  echo=0x00000001  tail=untouched
+★     R22 0x02  NV_OK      data=0x00000000 (0)  echo=0x00000002  tail=untouched
+★     R22 0x03  NV_OK      data=0x00454d03 (4541699)  echo=0x00000003  tail=untouched
+★     R22 0x04  NV_OK      data=0x00000000 (0)  echo=0x00000004  tail=untouched
+★     R22 0x05  NV_OK      data=0x00454d03 (4541699)  echo=0x00000005  tail=untouched
+★     R22 0x06  NV_OK      data=0x00000000 (0)  echo=0x00000006  tail=untouched
+★     R22 0x07  NV_OK      data=0x11030140 (285409600)  echo=0x00000007  tail=untouched
+★     R22 0x08  NV_OK      data=0x00000000 (0)  echo=0x00000008  tail=untouched
+★     R22 0x09  NV_OK      data=0x11030140 (285409600)  echo=0x00000009  tail=untouched
+★     R22 0x0a  NV_OK      data=0x00000000 (0)  echo=0x0000000a  tail=untouched
+★     R22 0x0b  NV_OK      data=0x00000005 (5)  echo=0x0000000b  tail=untouched
+★     R22 0x0c  NV_OK      data=0x00000005 (5)  echo=0x0000000c  tail=untouched
+★     R22 0x0d  NV_OK      data=0x20000000 (536870912)  echo=0x0000000d  tail=untouched
+★     R22 0x0e  NV_OK      data=0x00000002 (2)  echo=0x0000000e  tail=untouched
+★     R22 0x0f  NV_OK      data=0x00000000 (0)  echo=0x0000000f  tail=untouched
+★     R22 0x10  NV_OK      data=0x00000007 (7)  echo=0x00000010  tail=untouched
+★     R22 0x11  NV_OK      data=0x00000000 (0)  echo=0x00000011  tail=untouched
+★     R22 0x12  NV_OK      data=0x00000000 (0)  echo=0x00000012  tail=untouched
+★     R22 0x13  NV_OK      data=0x00000003 (3)  echo=0x00000013  tail=untouched
+★     R22 0x14  NV_OK      data=0x00222000 (2236416)  echo=0x00000014  tail=untouched
+★     R22 0x15  NV_OK      data=0x00000000 (0)  echo=0x00000015  tail=untouched
+★     R22 0x16  NV_OK      data=0x00454d03 (4541699)  echo=0x00000016  tail=untouched
+★     R22 0x17  NV_OK      data=0x11030140 (285409600)  echo=0x00000017  tail=untouched
+★     R22 0x18  NV_OK      data=0x00000009 (9)  echo=0x00000018  tail=untouched
+★     R22 0x19  NV_OK      data=0x00000000 (0)  echo=0x00000019  tail=untouched
+★     R22 0x1a  NV_OK      data=0x00000000 (0)  echo=0x0000001a  tail=untouched
+★     R22 0x1b  NV_OK      data=0x00000001 (1)  echo=0x0000001b  tail=untouched
+★     R22 0x1c  NV_OK      data=0x00000000 (0)  echo=0x0000001c  tail=untouched
+★     R22 0x1d  NV_OK      data=0x00000000 (0)  echo=0x0000001d  tail=untouched
+★     R22 0x1e  NV_OK      data=0x00000000 (0)  echo=0x0000001e  tail=untouched
+★     R22 0x1f  NV_OK      data=0x00000000 (0)  echo=0x0000001f  tail=untouched
+★     R22 0x20  NV_OK      data=0x00000000 (0)  echo=0x00000020  tail=untouched
+★     R22 0x21  NV_OK      data=0x00000000 (0)  echo=0x00000021  tail=untouched
+★     R22 0x22  NV_OK      data=0x00000000 (0)  echo=0x00000022  tail=untouched
+★     R22 0x23  NV_OK      data=0x00000000 (0)  echo=0x00000023  tail=untouched
+★     R22 0x24  NV_OK      data=0x00000000 (0)  echo=0x00000024  tail=untouched
+★     R22 0x25  NV_OK      data=0x00000000 (0)  echo=0x00000025  tail=untouched
+★     R22 0x26  NV_OK      data=0x00000000 (0)  echo=0x00000026  tail=untouched
+★     R22 0x27  NV_OK      data=0x00000000 (0)  echo=0x00000027  tail=untouched
+★     R22 0x28  NV_OK      data=0x00000000 (0)  echo=0x00000028  tail=untouched
+★     R22 0x29  NV_OK      data=0x00000000 (0)  echo=0x00000029  tail=untouched
+★     R22 0x2a  NV_OK      data=0x00000000 (0)  echo=0x0000002a  tail=untouched
+★     R22 0x2b  NV_OK      data=0x00000000 (0)  echo=0x0000002b  tail=untouched
+★     R22 0x2c  NV_OK      data=0x00000000 (0)  echo=0x0000002c  tail=untouched
+★     R22 0x2d  NV_OK      data=0x00222000 (2236416)  echo=0x0000002d  tail=untouched
+★     R22 0x2e  NV_OK      data=0x00000003 (3)  echo=0x0000002e  tail=untouched
+★     R22 0x2f  NV_OK      data=0x00222000 (2236416)  echo=0x0000002f  tail=untouched
+★     R22 0x30  NV_OK      data=0x00222000 (2236416)  echo=0x00000030  tail=untouched
+★     R22 0x31  NV_OK      data=0x00000001 (1)  echo=0x00000031  tail=untouched
+★     R22 0x32  NV_OK      data=0x00000000 (0)  echo=0x00000032  tail=untouched
+★     R22 0x33  NV_OK      data=0x00000000 (0)  echo=0x00000033  tail=untouched
+★     R22 libcuda:44     = NV_OK  0x00=0x00000003 0x02=0x00000000 0x0b=0x00000005 
+★     R22 libcuda:46     = NV_OK  0x0f=0x00000000 0x10=0x00000007 0x2c=0x00000000 0x2d=0x00222000 0x03=0x00454d03 0x06=0x00000000 
+info  R22 0x2d x16        = is PCIE_GEN_INFO a constant? (H1) or link state? (H2)
+★     R22 0x2d #0       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #1       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #2       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #3       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #4       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #5       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #6       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #7       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #8       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #9       = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #10      = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #11      = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #12      = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #13      = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #14      = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+★     R22 0x2d #15      = 0x00222000  MAX_SPEED=0 MAX_WIDTH=0 ASPM=0 GEN=gen3 CURR_LEVEL=gen3 GPU_GEN=gen3 SPEED_CHANGES=0 hi31_25=0x0
+info  R22 0x2d distinct   = 1 value(s): 0x00222000 
+done — bus-info sweep only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (917 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-11922.log
+
+KF_ARM_DIAG_END arm=--bus-info-sweep
+KF_ARM_DIAG_BEGIN arm=--concurrency wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-21920  host=ubuntu  utc=2026-11-16T04:03:53Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --concurrency
+[xid-watch] host_dmesg_lines=917  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63745 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--concurrency]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00243
+ok    R6 hSubdevice      = 0xcafe0002
+ok    R7 hVaSpace       = 0xcafe0005
+ok    R8 hMemory        = 0xcafe0006 (1048576 bytes)
+ok    R9 host GPU VA    = 0x0000000200200000 (FIXED, as requested)
+info  R+ control          = Other(31) (a status, not a transport failure)
+ok    R+ bogus class      = refused: Other(34)
+kayfabe-isolate: GR-BIRTH iso0/gpu0 #1 engine=Ce vas=0xcafe000b adopt=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no ring at all, so nothing was consulted userd=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no USERD at all, so nothing was consulted → RingSource::Ours(None) [births=1 guest_ring=0 guest_userd=0 declined=0 not_asked=1 refused=0]
+ok    R13.1 channel      = 0xcafe000e, engine Ce, token 0x00000005 (runlist 0 chid 5)
+ok    R13.1 schedule     = on the runlist
+kayfabe-isolate: GR-BIRTH iso0/gpu0 #2 engine=GrCompute vas=0xcafe0010 adopt=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no ring at all, so nothing was consulted userd=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no USERD at all, so nothing was consulted → RingSource::Ours(None) [births=2 guest_ring=0 guest_userd=0 declined=0 not_asked=2 refused=0]
+ok    R13.2 channel      = 0xcafe0013, engine GrCompute, token 0x00000006 (runlist 0 chid 6)
+ok    R13.2 schedule     = on the runlist
+★     R13 token identity  = 0x00000005 != 0x00000006 (two live channels)
+ok    R13 unknown engine  = refused before any object was allocated
+★     R14 device memory   = wrote 0xa5a51234/0x5a5aedcb through mapping A, read both back through an INDEPENDENT mapping B
+ok    R14 USERD cursors   = GP_GET 0 GP_PUT 0
+ok    R14 ring bound      = a load past the object is refused BY BOUND
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+★     R15 SEM LANDED      = sem 0xbeef5ea1 (want 0xbeef5ea1), GP_GET 1 -> caught GP_PUT 1 — the GPU consumed our ring and released our semaphore
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+★     R17 CE COPY         = 4096 bytes: dst[0] 0x3f0011ff -> 0xc0ffee00, dst[last] 0xc0fff1ff (want 0xc0fff1ff) — read back through an INDEPENDENT mapping
+ok    R13 free channel    = group, ring, USERD and mapping
+ok    R13 free channel    = group, ring, USERD and mapping
+ok    R10 isolate         = 4 workers
+ok    R11 through-isolate = host GPU VA 0x0000000200200000, hMemory 0xcafe0006
+kayfabe-isolate: GR-BIRTH iso0/gpu0 #1 engine=Ce vas=0xcafe000a adopt=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no ring at all, so nothing was consulted userd=NOT-ASKED ⊘ a doorbell materialization: this birth path offers no USERD at all, so nothing was consulted → RingSource::Ours(None) [births=1 guest_ring=0 guest_userd=0 declined=0 not_asked=1 refused=0]
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x5 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped the ring, USERD and the usermode BAR0 window, and rang channel 0xcafe000d token 0x00000005
+info  R12 4 threads x 200 verbs, alloc_vaspace + free
+ok    R12 1 thread (base)  = 800 verbs sequential, 1142 ms
+ok    R12 one client       = 636 overlapping pairs, 1416 ms
+ok    R12 4 clients      = 567 overlapping pairs, 1445 ms
+★     R12 SPEEDUP         = one client x4 workers: 0.81x   |   4 clients: 0.79x   (ideal 4.00x, 800 verbs)
+done
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (917 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-21920.log
+
+KF_ARM_DIAG_END arm=--concurrency
+KF_ARM_DIAG_BEGIN arm=--defer-liveness wrapper_rc=6 admitted=1
+[xid-watch] tag=ci-arm-63325-1454  host=ubuntu  utc=2026-11-16T04:04:02Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --defer-liveness
+[xid-watch] host_dmesg_lines=917  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63814 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--defer-liveness]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00260
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=launch-dma — ⊘ FIXED for this rung, whatever `--probe-*` asked for: the question is whether a READ through a freshly-written PTE resolves, and a semaphore release cannot ask it
+info  DL defer-liveness  = GPU 0, euid 0 — does a PTE written with NVOS46_FLAGS_DEFER_TLB_INVALIDATION become live with NO invalidate on any transport?
+info  DL the two worlds  = (A) the walk picks the fresh PTE up ⇒ a mapping can go live with nothing observable to a hypervisor; (B) it is not live until an invalidate ⇒ DEFER is a BATCHING contract and the boundary stays observable
+DEFER_SCOPE=leaf-PTE, small-page table, GA10x MMU regime, ONE board, VIRT_READ, one copy engine — ⊘ NOT a statement about big/huge pages, about page-directory entries, about writes, or about any other MMU generation
+ok    DL idle check      = no other process holds a /dev/nvidia* descriptor open
+
+═══ DL ARM PLAIN(rig-control) (slot 0) ═══
+info  DL plan            = guard 0x0000006000000000  V 0x0000006000010000  dst 0x0000006100000000  rings 0x0000005000000000/0x0000005040000000/0x0000005080000000
+ok    DL geometry        = guard and V share ONE 0x200000 directory span (so they share a leaf page table by construction), and every address is under 0x0000010000000000
+ok    DL vaspace         = a FRESH address space for this arm alone
+ok    DL objects         = guard 0x10000 @ 0x0000006000000000 magic 0x6a2d0289, data 0x200000 (mapping 0x10000) magic 0x0def0289, dst 0x10000 @ 0x0000006100000000 sentinel 0xdead0289
+ok    DL channels        = 3 built BEFORE the prime (prime/test/rescue), rings at 0x0000005000000000 0x0000005040000000 0x0000005080000000 — ⊘ none is created after it, because a channel's own ctx-buffer maps each end in an invalidate
+info  DL PDE before guard= PDE_ABSENT @ 0x0000006000010000 — ★ expect PDE_ABSENT: it is what makes the guard, and not something else, the thing that instantiated the leaf table
+ok    DL guard map       = 0x10000 @ 0x0000006000000000, page-size flag 4KB — HELD for the whole arm
+ok    DL dst map         = 0x10000 @ 0x0000006100000000
+★     DL PDE before map  = PDE_COVERS @ 0x0000006000010000 — the leaf table EXISTS, so step 6 writes a leaf PTE and allocates no level
+FAULT_MARK=defer_liveness_prime arm=PLAIN(rig-control) va=0x0000006000010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  DL prime copy      = Dead { saw: 3735880329 }
+info  DL prime notifier  = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     DL PRIME           = FAULTED. The MMU walked 0x0000006000010000 and the entry it found was non-present
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+info  DL channel control = test Live, rescue Live
+ok    DL channel control = both surviving channels still land after the prime
+ok    DL map             = 0x10000 @ 0x0000006000010000 asked 0x0000006000010000 DEFER=false PAGE_SIZE=4KB
+info  DL PTE after map   = PTE_UNMEASURED(rmStatus=0x007e) ; PDE after map = PDE_COVERS
+⊘     DL PTE            = UNMEASURED (rmStatus=0x007e) — expected on a release driver: GET_PTE_INFO carries RMCTRL_FLAGS_RM_TEST_ONLY_CODE. ⚠ FALLBACK IN FORCE: the PDE answer above is PAGE-TABLE granularity and does NOT say the leaf is valid, so the attribution moves to the RESCUE at step 10 — invalidate, retry, and a landing there proves the PTE was in memory all along
+info  DL invalidate      = NONE ISSUED BY ANY TRANSPORT — no control, no pushbuffer MEM_OP, nothing. This is the arm's defining property
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+info  DL test copy       = Live retire=RETIRED 
+info  DL test notifier   = fired=false status=0x0000 except_type=0x0
+
+═══ DL ARM DEFER(the-question) (slot 1) ═══
+info  DL plan            = guard 0x0000006200000000  V 0x0000006200010000  dst 0x0000006300000000  rings 0x0000005200000000/0x0000005240000000/0x0000005280000000
+ok    DL geometry        = guard and V share ONE 0x200000 directory span (so they share a leaf page table by construction), and every address is under 0x0000010000000000
+ok    DL vaspace         = a FRESH address space for this arm alone
+ok    DL objects         = guard 0x10000 @ 0x0000006200000000 magic 0x6a2d0289, data 0x200000 (mapping 0x10000) magic 0x0def0289, dst 0x10000 @ 0x0000006300000000 sentinel 0xdead0289
+ok    DL channels        = 3 built BEFORE the prime (prime/test/rescue), rings at 0x0000005200000000 0x0000005240000000 0x0000005280000000 — ⊘ none is created after it, because a channel's own ctx-buffer maps each end in an invalidate
+info  DL PDE before guard= PDE_ABSENT @ 0x0000006200010000 — ★ expect PDE_ABSENT: it is what makes the guard, and not something else, the thing that instantiated the leaf table
+ok    DL guard map       = 0x10000 @ 0x0000006200000000, page-size flag 4KB — HELD for the whole arm
+ok    DL dst map         = 0x10000 @ 0x0000006300000000
+★     DL PDE before map  = PDE_COVERS @ 0x0000006200010000 — the leaf table EXISTS, so step 6 writes a leaf PTE and allocates no level
+FAULT_MARK=defer_liveness_prime arm=DEFER(the-question) va=0x0000006200010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  DL prime copy      = Dead { saw: 3735880329 }
+info  DL prime notifier  = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     DL PRIME           = FAULTED. The MMU walked 0x0000006200010000 and the entry it found was non-present
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+info  DL channel control = test Live, rescue Live
+ok    DL channel control = both surviving channels still land after the prime
+ok    DL map             = 0x10000 @ 0x0000006200010000 asked 0x0000006200010000 DEFER=true PAGE_SIZE=4KB
+info  DL PTE after map   = PTE_UNMEASURED(rmStatus=0x007e) ; PDE after map = PDE_COVERS
+⊘     DL PTE            = UNMEASURED (rmStatus=0x007e) — expected on a release driver: GET_PTE_INFO carries RMCTRL_FLAGS_RM_TEST_ONLY_CODE. ⚠ FALLBACK IN FORCE: the PDE answer above is PAGE-TABLE granularity and does NOT say the leaf is valid, so the attribution moves to the RESCUE at step 10 — invalidate, retry, and a landing there proves the PTE was in memory all along
+info  DL invalidate      = NONE ISSUED BY ANY TRANSPORT — no control, no pushbuffer MEM_OP, nothing. This is the arm's defining property
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+info  DL test copy       = Dead { saw: 3735880329 } retire=NOT-RETIRED(sem still 0) 
+info  DL test notifier   = fired=true status=0xffff except_type=0x1f
+info  DL rescue          = the deferred copy was DEAD; issuing the invalidate now and retrying on the third channel, to say WHICH red this is
+ok    DL rescue invalidate = issued, rmStatus=0x0000
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+info  DL rescue copy     = Live retire=RETIRED
+
+═══ DL ARM DEFER+INVALIDATE(known-positive) (slot 2) ═══
+info  DL plan            = guard 0x0000006400000000  V 0x0000006400010000  dst 0x0000006500000000  rings 0x0000005400000000/0x0000005440000000/0x0000005480000000
+ok    DL geometry        = guard and V share ONE 0x200000 directory span (so they share a leaf page table by construction), and every address is under 0x0000010000000000
+ok    DL vaspace         = a FRESH address space for this arm alone
+ok    DL objects         = guard 0x10000 @ 0x0000006400000000 magic 0x6a2d0289, data 0x200000 (mapping 0x10000) magic 0x0def0289, dst 0x10000 @ 0x0000006500000000 sentinel 0xdead0289
+ok    DL channels        = 3 built BEFORE the prime (prime/test/rescue), rings at 0x0000005400000000 0x0000005440000000 0x0000005480000000 — ⊘ none is created after it, because a channel's own ctx-buffer maps each end in an invalidate
+info  DL PDE before guard= PDE_ABSENT @ 0x0000006400010000 — ★ expect PDE_ABSENT: it is what makes the guard, and not something else, the thing that instantiated the leaf table
+ok    DL guard map       = 0x10000 @ 0x0000006400000000, page-size flag 4KB — HELD for the whole arm
+ok    DL dst map         = 0x10000 @ 0x0000006500000000
+★     DL PDE before map  = PDE_COVERS @ 0x0000006400010000 — the leaf table EXISTS, so step 6 writes a leaf PTE and allocates no level
+FAULT_MARK=defer_liveness_prime arm=DEFER+INVALIDATE(known-positive) va=0x0000006400010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  DL prime copy      = Dead { saw: 3735880329 }
+info  DL prime notifier  = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     DL PRIME           = FAULTED. The MMU walked 0x0000006400010000 and the entry it found was non-present
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x00000007 runlist=0 chid=7 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x00000007 ★★★ WROTE — the store instruction executed
+info  DL channel control = test Live, rescue Live
+ok    DL channel control = both surviving channels still land after the prime
+ok    DL map             = 0x10000 @ 0x0000006400010000 asked 0x0000006400010000 DEFER=true PAGE_SIZE=4KB
+info  DL PTE after map   = PTE_UNMEASURED(rmStatus=0x007e) ; PDE after map = PDE_COVERS
+⊘     DL PTE            = UNMEASURED (rmStatus=0x007e) — expected on a release driver: GET_PTE_INFO carries RMCTRL_FLAGS_RM_TEST_ONLY_CODE. ⚠ FALLBACK IN FORCE: the PDE answer above is PAGE-TABLE granularity and does NOT say the leaf is valid, so the attribution moves to the RESCUE at step 10 — invalidate, retry, and a landing there proves the PTE was in memory all along
+ok    DL invalidate      = NV2080_CTRL_CMD_DMA_INVALIDATE_TLB issued on the subdevice, hVASpace = this arm's space, rmStatus=0x0000
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+info  DL test copy       = Live retire=RETIRED 
+info  DL test notifier   = fired=false status=0x0000 except_type=0x0
+
+═══ DL SUMMARY ═══
+info  DL PLAIN(rig-control)               prime_faulted=Some(true) except=Some("0x1f") chan_survived=true pde_before_map=PDE_COVERS pte=PTE_UNMEASURED(rmStatus=0x007e) placed=Some("0x0000006000010000") copy=LIVE rescue=None
+info  DL DEFER(the-question)              prime_faulted=Some(true) except=Some("0x1f") chan_survived=true pde_before_map=PDE_COVERS pte=PTE_UNMEASURED(rmStatus=0x007e) placed=Some("0x0000006200010000") copy=DEAD rescue=Some("LIVE")
+info  DL DEFER+INVALIDATE(known-positive) prime_faulted=Some(true) except=Some("0x1f") chan_survived=true pde_before_map=PDE_COVERS pte=PTE_UNMEASURED(rmStatus=0x007e) placed=Some("0x0000006400010000") copy=LIVE rescue=None
+DEFER_PRIME_FAULTS=3/3
+DEFER_RIGCTL=PASS
+DEFER_NEGCTL=PASS
+DEFER_LIVENESS=B
+RUNGCTL_defer_liveness=PASS
+RUNG_defer_liveness=PASS
+done — w289 defer-liveness rung only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=4
+[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — the run is VOID whatever it printed:
+    [ 1220.196443] NVRM: Xid (PCI:0000:00:07): 31, pid=63814, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_HSCE0 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1223.228489] NVRM: Xid (PCI:0000:00:07): 31, pid=63814, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_HSCE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1226.230610] NVRM: Xid (PCI:0000:00:07): 31, pid=63814, name=kayfabe-rm-ladd, channel 0x00000006, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_HSCE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1229.265197] NVRM: Xid (PCI:0000:00:07): 31, pid=63814, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_HSCE0 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[xid-watch]   ⊘ An "Xid 31 … FAULT_PDE" means the host MMU walked for an address that resolved
+[xid-watch]   to nothing — i.e. OUR placement, not the guest's methods. A rung that reports
+[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.
+
+KF_ARM_DIAG_END arm=--defer-liveness
+KF_ARM_DIAG_BEGIN arm=--blockage-coverage wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-18399  host=ubuntu  utc=2026-11-16T04:04:20Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --blockage-coverage
+[xid-watch] host_dmesg_lines=922  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=4
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63875 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--blockage-coverage]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00277
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+BLOCKAGE_PROBE_BEGIN gpu=0 euid=0 — R1/C1. Phase A maps BEFORE the doorbell (the covered population); phase B maps AFTER, with the channel already running (R1.3's residual, and this counter's KNOWN-POSITIVE)
+info  T1 the bar          = the VERDICT IS ON THE HOST. This program drives two populations and brackets them; `kayfabe: BLOCKAGE-COVERAGE …` on the host log is what C1 is graded on. ⊘ A green line here is not a green C1
+--- T1 phase A: MAP, THEN RING. Every mapping exists before the engine runs ---
+info  T1-A map            = BEFORE the doorbell, at 0x0000000741000000
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+ok    T1-A parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+info  T1-A outcome        = Landed { gp_get: 1, gp_put: 1 }
+BLOCKAGE_PROBE_A=PASS
+ok    T1-A control        = the payload landed with the target mapped BEFORE the doorbell. ⇒ every row this phase used was published before the channel could use it, BY CONSTRUCTION of the workload — the device line says whether we SAW that
+--- T1 phase B: RING, THEN MAP. No second doorbell — R1.3, the one case the blockage points structurally cannot cover ---
+info  T1-B map            = deferred until AFTER the doorbell
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+ok    T1-B parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+ok    T1-B late map       = mapped at 0x0000000761000000 AFTER the doorbell, with the channel running. NO further doorbell is sent
+info  T1-B outcome        = Landed { gp_get: 1, gp_put: 1 }
+BLOCKAGE_PROBE_B=PASS
+★     T1-B KNOWN-POSITIVE = a mapping created AFTER the doorbell, with the channel already running and NO second doorbell, was reached by the engine. ⇒ the device's `USES_UNCOVERED` MUST be > 0 for this phase. If it reads 0, the COUNTER is blind — that is not evidence of coverage
+BLOCKAGE_PROBE_END outcome=(P)
+done — blockage-coverage probe only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=4
+[xid-watch] ★ HOST Xid CLEAN across the command — 4 before, 4 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (922 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-18399.log
+
+KF_ARM_DIAG_END arm=--blockage-coverage
+KF_ARM_DIAG_BEGIN arm=--alias-two-vas wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-12118  host=ubuntu  utc=2026-11-16T04:04:26Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --alias-two-vas
+[xid-watch] host_dmesg_lines=922  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=4
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63927 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--alias-two-vas]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0028d
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=sem-release — the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine emulator                      decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red
+RUNG_map_propagation=NOTRUN
+RUNG_alias_unmap=NOTRUN
+RUNG_missing_page=NOTRUN
+RUNG_map_stress=NOTRUN
+RUNG_rpc_mixed=NOTRUN
+RUNG_cross_client=NOTRUN
+info  R1' alias two VAs   = GPU 0, euid 0 — ONE object, TWO GPU VAs, and a release through the FIRST one AFTER the second is mapped
+info  R1' the bar         = A must land (control), then B, then A AGAIN. ⊘ Steps A and B pass even where the second map revokes the first; only the RE-release through VA_A can see a revoke
+info  R1' host says A     = PDE_COVERS at 0x0000000711000000 (after mapping A)
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  R1' release via A   = Landed
+ok    R1' control         = MAGIC_A landed through the single mapping
+info  R1' host says A/B   = A PDE_COVERS / B PDE_COVERS (after mapping BOTH)
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  R1' release via B   = Landed
+★     R1' ALIAS PROVED    = MAGIC_B landed at offset 0x40 of the ONE object this rung allocated — VA_A and VA_B name the same memory, measured rather than asked for
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  R1' release via A#2 = Landed
+★     R1' BOTH VAs LIVE   = a release through VA_A landed AFTER VA_B was mapped over the same frame. ⇒ One allocation IS live at two GPU VAs at once. On bare metal this is the control. IN THE GUEST this REFUTES the FB-join aliasing diagnosis and must be said loudly
+RUNGCTL_alias_two_vas=PASS
+RUNG_alias_two_vas=PASS
+done — w379/w381 mapping-plane rungs only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=4
+[xid-watch] ★ HOST Xid CLEAN across the command — 4 before, 4 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (922 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-12118.log
+
+KF_ARM_DIAG_END arm=--alias-two-vas
+KF_ARM_DIAG_BEGIN arm=--alias-unmap-observe wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-12065  host=ubuntu  utc=2026-11-16T04:04:31Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --alias-unmap-observe
+[xid-watch] host_dmesg_lines=922  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=4
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=63979 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--alias-unmap-observe]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d002a3
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=sem-release — the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine emulator                      decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red
+RUNG_map_propagation=NOTRUN
+RUNG_alias_two_vas=NOTRUN
+RUNG_missing_page=NOTRUN
+RUNG_map_stress=NOTRUN
+RUNG_rpc_mixed=NOTRUN
+RUNG_cross_client=NOTRUN
+info  R1" unmap observe   = GPU 0, euid 0 — alias one object at two VAs, UNMAP the first, and ask whether the second survived
+info  R1" the bar         = both VAs live (control), then VA_A unmapped, then a release through VA_B must STILL land. ⊘ `pde_info` after an unmap is NOT graded — RM may leave the page table standing
+ALIAS_MARK=both_mapped va_a=0x0000000731000000 va_b=0x0000000831000000
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  R1" control A/B     = Landed / Landed
+ok    R1" control         = both aliases landed before the unmap
+ALIAS_MARK=unmap_a_begin va=0x0000000731000000
+ALIAS_MARK=unmap_a_end ok=true
+info  R1" host after unmap = A PDE_ABSENT / B PDE_COVERS ⊘ UNGRADED — PDE granularity cannot see a leaf go away
+info  R1" allocator says A = Ok(Free) (want Free — the VA is reusable again)
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  R1" release via B#2 = Landed
+★     R1" SIBLING SURVIVED = unmapping VA_A left VA_B live. ⇒ RM tracks the two aliases INDEPENDENTLY, and any fix that keys host backing by frame alone is weaker than the driver it stands in for
+RUNGCTL_alias_unmap=PASS
+RUNG_alias_unmap=PASS
+done — w379/w381 mapping-plane rungs only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=4
+[xid-watch] ★ HOST Xid CLEAN across the command — 4 before, 4 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (922 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-12065.log
+
+KF_ARM_DIAG_END arm=--alias-unmap-observe
+KF_ARM_DIAG_BEGIN arm=--map-propagation wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-25227  host=ubuntu  utc=2026-11-16T04:04:37Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --map-propagation
+[xid-watch] host_dmesg_lines=922  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=4
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=64031 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--map-propagation]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d002b9
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=sem-release — the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine emulator                      decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red
+RUNG_alias_two_vas=NOTRUN
+RUNG_alias_unmap=NOTRUN
+RUNG_missing_page=NOTRUN
+RUNG_map_stress=NOTRUN
+RUNG_rpc_mixed=NOTRUN
+RUNG_cross_client=NOTRUN
+info  R2 propagation      = GPU 0, euid 0 — map at a VA we dictate, then ask the HOST DRIVER whether it resolves
+info  R2 the bar          = an unmapped VA must probe FREE (negative control), the mapped one must NOT, and the VA must be FREE again after the unmap
+info  R2 N1 unmapped VA   = Ok(Free) at 0x0000000951000000
+info  R2 N2 pde(unmapped) = PDE_ABSENT ⊘ recorded, UNGRADED
+ok    R2 control          = the unmapped VA probes Free — the instrument can say no
+ok    R2 P1 placed as asked = 0x0000000911000000
+info  R2 P2 mapped VA     = Ok(Occupied(Other(19305)))
+ok    R2 P2               = the allocator refuses the mapped VA
+★     R2 P3 host tables   = PDE_COVERS at 0x0000000911000000
+info  R2 P4 after unmap   = Ok(Free)
+ok    R2 P4               = the VA is reusable again
+RUNGCTL_map_propagation=PASS
+RUNG_map_propagation=PASS
+done — w379/w381 mapping-plane rungs only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=4
+[xid-watch] ★ HOST Xid CLEAN across the command — 4 before, 4 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (922 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-25227.log
+
+KF_ARM_DIAG_END arm=--map-propagation
+KF_ARM_DIAG_BEGIN arm=--late-map-race wrapper_rc=0 admitted=1
+[xid-watch] tag=ci-arm-63325-14488  host=ubuntu  utc=2026-11-16T04:04:42Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --late-map-race
+[xid-watch] host_dmesg_lines=923  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=4
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=64084 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--late-map-race]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d002cf
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  W377 late-map race  = GPU 0, euid 0 — queue work behind a fence, ring ONCE, then map the memory it will touch
+info  W377 the bar        = ARM A (map before the doorbell) must PASS, or ARM B is uninterpretable. ⊘ Neither arm's verdict is the ioctl's return value
+info  W377-A map            = BEFORE the doorbell, at 0x0000000541000000
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+ok    W377-A parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+info  W377-A outcome      = Landed { gp_get: 1, gp_put: 1 }
+ok    W377-A control      = MAGIC landed with the target mapped BEFORE the doorbell — the channel, the fence and the release all work
+RACEMAP_ARM_A=PASS
+info  W377-B map            = deferred until AFTER the doorbell
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+ok    W377-B parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+ok    W377-B late map       = mapped at 0x0000000561000000 AFTER the doorbell, with the channel running. NO further doorbell is sent
+info  W377-B outcome      = Landed { gp_get: 1, gp_put: 1 }
+★     W377 LATE MAP LANDED = a mapping created AFTER the doorbell, with the channel already running and NO second doorbell, was walked by the engine (GP_GET 1 GP_PUT 1, target 0x1dea0031). ⇒ The driver publishes it, and a doorbell-triggered publisher CANNOT see it
+RACEMAP_ARM_B=PASS
+done — late-map race only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=4
+[xid-watch] ★ HOST Xid CLEAN across the command — 4 before, 4 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (923 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-63325-14488.log
+
+KF_ARM_DIAG_END arm=--late-map-race
+KF_ARM_DIAG_BEGIN arm=--missing-page-fault wrapper_rc=6 admitted=0
+[xid-watch] tag=ci-arm-63325-32465  host=ubuntu  utc=2026-11-16T04:04:48Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --missing-page-fault
+[xid-watch] host_dmesg_lines=923  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=4
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=64140 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--missing-page-fault]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d002e5
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=sem-release — the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine emulator                      decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red
+RUNG_map_propagation=NOTRUN
+RUNG_alias_two_vas=NOTRUN
+RUNG_alias_unmap=NOTRUN
+RUNG_map_stress=NOTRUN
+RUNG_rpc_mixed=NOTRUN
+RUNG_cross_client=NOTRUN
+info  R3 missing page     = GPU 0, euid 0 — fault a channel on a VA that was never mapped, with a BYSTANDER running in its own address space
+info  R3 the bar          = (a) CONTAINED: the bystander lands before AND after; (b) NAMED: the victim's error notifier fires with an exception type
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  R3 bystander before = Landed
+ok    R3 control          = the bystander lands BEFORE the fault
+FAULT_MARK=victim_release va=0x0000000a11000000
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000006 runlist=0 chid=6 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000006 ★★★ WROTE — the store instruction executed
+info  R3 victim           = Lost { saw: 3735880569 }
+info  R3 notifier         = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     R3 NAMED            = the driver wrote a robust-channel record. except_type 0x1f is what a host kernel log prints as `Xid 31`
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  R3 bystander after  = Landed
+★     R3 CONTAINED        = a channel in another address space kept landing across the fault
+RUNGCTL_missing_page=PASS
+RUNG_missing_page=PASS
+done — w379/w381 mapping-plane rungs only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=5
+[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — the run is VOID whatever it printed:
+    [ 1265.755184] NVRM: Xid (PCI:0000:00:07): 31, pid=64140, name=kayfabe-rm-ladd, channel 0x00000006, intr 00000000. MMU Fault: ENGINE HOST0 HUBCLIENT_HOST_CPU faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[xid-watch]   ⊘ An "Xid 31 … FAULT_PDE" means the host MMU walked for an address that resolved
+[xid-watch]   to nothing — i.e. OUR placement, not the guest's methods. A rung that reports
+[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.
+
+KF_ARM_DIAG_END arm=--missing-page-fault

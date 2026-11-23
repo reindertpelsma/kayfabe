@@ -1,0 +1,60 @@
+[xid-watch] tag=ci5eed5eed5eed5eed_windows_apps  host=ubuntu  utc=2026-11-16T05:26:54Z
+[xid-watch] command: env KF_WINAPPS_PROFILE=mid bash /workspace/kf-ci-src/scripts/bench/box/windows_apps.sh ci5eed5eed5eed5eed /root/prov
+[xid-watch] host_dmesg_lines=939  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=5
+[xid-watch] --- command output begins ---
+WINAPPS_START tag=ci5eed5eed5eed5eed rev=c53dd6b8 source=/workspace/kf-ci-src 2026-11-16T05:26:56+00:00 profile=mid gate_tag=gate_ci5eed5eed5eed5eed per_guest=8
+WINAPPS_REQUESTED=1
+APP_POLICY name=overlay_yuv_probe os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_hide os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_occlude os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_resize os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_move os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_recreate os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_fullscreen os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=overlay_yuv_soak os=windows result=NOT_RUN note=manual: needs real display
+APP_POLICY name=managed_t os=windows result=NOT_RUN note=unsupported (UVM)
+APPS_STAGE preflight 2026-11-16T05:26:56+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 76930(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 76930(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 76930(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 76930(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 76930(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 76977(bash) uid_root 0/0/0/0
+APPS_NOTE host: gpu="NVIDIA GeForce RTX 2060" cpus=92 ram_gb=52 disk_free_gb=340 apps=10 budget_s=3600
+APPS_NOTE app ids: nvidia_smi,deviceQuery_demo,matmul_t,cup8_ladder,dxprobe_d3d11,glgears_wgl,vulkaninfo,torch_correct,edge_webgl,dxprobe_d3d12
+APPS_STAGE app_disk 2026-11-16T05:27:00+00:00
+APPS_NOTE app disk /workspace/winapps/kfapps.iso sha256=c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee bytes=2708119552
+APPS_STAGE hostref_before 2026-11-16T05:28:24+00:00
+APPS_HOSTREF before green cup8=PASS xid_count=5 xid_delta=0
+APPS_STAGE seal_parent 2026-11-16T05:28:28+00:00
+APPS_STAGE run_matrix 2026-11-16T05:28:28+00:00
+APPS_NOTE winapps.py rc=0 (0 done, 3 repeated guest boot failures, 4 guest limit, 6 time budget ended)
+KFROOT_ASSERT mode=record ok=unchecked label=final why=no-sudo-log-mark
+APPS_STAGE hostref_after 2026-11-16T06:22:56+00:00
+APPS_HOSTREF after green cup8=PASS xid_count=5 xid_delta=0
+APPS_STAGE grade 2026-11-16T06:22:59+00:00
+WINAPPS_APP app=nvidia_smi class=pass verdict=PASS batched=PASS alone=- secs=12 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=deviceQuery_demo class=pass verdict=PASS batched=PASS alone=- secs=11 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=matmul_t class=pass verdict=PASS batched=PASS alone=- secs=54 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cup8_ladder class=pass verdict=PASS batched=PASS alone=- secs=12 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d11 class=pass verdict=PASS batched=PASS alone=- secs=11 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=glgears_wgl class=pass verdict=PASS batched=PASS alone=- secs=21 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=vulkaninfo class=guest_fail verdict=FAIL batched=FAIL alone=FAIL secs=18 tdr=0 wer=0 gsp=0 note=rc:1,success-string-missing,no-gpu-proof | WARNING: [Loader Message] Code 0 : windows_read_data_file
+WINAPPS_APP app=torch_correct class=pass verdict=PASS batched=PASS alone=- secs=62 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=edge_webgl class=pass verdict=PASS batched=PASS alone=- secs=34 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d12 class=pass verdict=PASS batched=PASS alone=- secs=19 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_GRADE kind=FAIL expected=10 pass=9 guest_fail=1 boot_fail=0 harness=0 not_run=0 extra=0
+WINAPPS_GRADE_GUEST_FAIL vulkaninfo
+APPS_STAGE collect 2026-11-16T06:23:00+00:00
+APPS_NOTE evidence: /root/prov/ci5eed5eed5eed5eed_winapps (83 files), /root/prov/ci5eed5eed5eed5eed_winapps.tgz sha256=a7145f803159861f
+WINAPPS_FAIL diag=KAYFABE profile=mid stage=done why="grade: kind=FAIL expected=10 pass=9 guest_fail=1 boot_fail=0 harness=0 not_run=0 extra=0; guest_fail=vulkaninfo; rootless=violated" rev=c53dd6b8 gpu="NVIDIA GeForce RTX 2060" hostref=green/green secs=3364
+WINAPPS_EXIT rc=1 2026-11-16T06:23:00+00:00
+[xid-watch] --- command output ends (rc=1) ---
+[xid-watch] xid_after=5
+[xid-watch] ★ HOST Xid CLEAN across the command — 5 before, 5 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (939 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci5eed5eed5eed5eed_windows_apps.log

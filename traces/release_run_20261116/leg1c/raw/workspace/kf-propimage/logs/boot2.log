@@ -1,0 +1,14 @@
+prerequisite PASS NONE swtpm >= 0.10 (libtpms state compatibility still required)
+unpack PASS NONE SHA256 of image and state; derived seed verified
+overlay PASS NONE throwaway clone of image.base.qcow2; base not booted
+clock PASS NONE RTC base 2026-11-12T17:49:48Z (fresh overlay)
+boot PASS NONE ci mode, restrict=on, disposable overlay
+ssh PASS NONE loopback guest transport ready
+power OK FILE OK values={"sleep":{"ac":0,"dc":0},"hibernate_after":{"ac":0,"dc":0},"unattended_sleep":{"ac":0,"dc":0},"hybrid_sleep":{"ac":0,"dc":0},"monitor":{"ac":0,"dc":0},"disk":{"ac":0,"dc":0},"wake_signin":{"
+gpu PASS NONE post-fix seed UUID exact match
+verify PASS NONE identity, clock, TPM and seed GPU checked
+app:solidworks PASS FILE API exported STEP with entity data (not a GPU/render benchmark)
+app:resolve PASS FILE Resolve created project kf6b6d0b6b (UIA main window 'DaVinci Resolve - kf6b6d0b6b'); its log after the start shows CUDA compute, NVDEC/NVENC initialised and OpenGL on NVIDIA Corporation NVIDIA GeForce
+app:edrawings PASS UIA eDrawings opened the sample part (UIA TabItem 'kfsample.sldprt'); licence dialog accepted: True (BM_CLICK on the UIA window handle)
+app:edge PASS UIA WebGL drew 173 frames in 4 s on ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 (0x00002684) Direct3D11 vs_5_0 ps_5_0, D3D11) (title read through UIA)
+stop PASS NONE own QEMU stopped; other own helpers cleaned by ExitStack

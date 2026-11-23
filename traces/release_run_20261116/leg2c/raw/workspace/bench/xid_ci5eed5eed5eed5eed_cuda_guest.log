@@ -1,0 +1,11 @@
+[xid-watch] tag=ci5eed5eed5eed5eed_cuda_guest  host=ubuntu  utc=2026-11-16T04:16:43Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/cuda_ladder.sh guest ci5eed5eed5eed5eed 1 cup2,cup3,cup8,cup8bench
+[xid-watch] host_dmesg_lines=925  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 2060, 580.159.04
+[xid-watch] xid_before=5
+[xid-watch] --- command output begins ---
+grep: /workspace/bench/run_cl_ci5eed5eed5eed5eed_cup2_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_ci5eed5eed5eed5eed_cup2_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_ci5eed5eed5eed5eed_cup2_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_ci5eed5eed5eed5eed_cup2_1_probe.log: No such file or directory
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]

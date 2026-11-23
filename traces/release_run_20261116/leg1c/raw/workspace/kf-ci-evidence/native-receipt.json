@@ -1,0 +1,569 @@
+{
+  "approved_native_xid_lines": [
+    "2026-11-16T04:01:26.482932+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=62623, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:01:29.508508+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=62623, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:01:32.509600+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=62623, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:01:35.538543+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=62623, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:02:13.350805+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=63009, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "diagnostics": [
+    {
+      "arm": "--timer",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-32221  host=ubuntu  utc=2026-11-16T04:00:40Z\n[xid-watch] command: /usr/bin/timeo\n[diagnostic preview: head and tail]\ne same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-32221.log\n",
+      "sha256": "5be6d27e1526b7bfc5aeb3cfe36d758af76af320cffc3b37730bb761a39f724d",
+      "source_bytes": 2682,
+      "dropped_bytes": 2464
+    },
+    {
+      "arm": "--engines",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-18056  host=ubuntu  utc=2026-11-16T04:00:46Z\n[xid-watch] command: /usr/bin/timeo\n[diagnostic preview: head and tail]\ne same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-18056.log\n",
+      "sha256": "c563473c3c67f396e7f7a14260fa907538bd3d393fa682ea26885a571926ab00",
+      "source_bytes": 5541,
+      "dropped_bytes": 5323
+    },
+    {
+      "arm": "--doorbell-census",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-6137  host=ubuntu  utc=2026-11-16T04:00:52Z\n[xid-watch] command: /usr/bin/timeou\n[diagnostic preview: head and tail]\nhe same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-6137.log\n",
+      "sha256": "44982d48d020828d99f5d2e13d366723541e5fe444d63d54b9f07935ccd6fbe0",
+      "source_bytes": 2553,
+      "dropped_bytes": 2335
+    },
+    {
+      "arm": "--gpu-info-sweep",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-10344  host=ubuntu  utc=2026-11-16T04:00:58Z\n[xid-watch] command: /usr/bin/timeo\n[diagnostic preview: head and tail]\ne same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-10344.log\n",
+      "sha256": "58337fa29c872bc07d6f9c185147ea1559daaac7c4678f22c7ec12f979141afe",
+      "source_bytes": 6789,
+      "dropped_bytes": 6571
+    },
+    {
+      "arm": "--bus-info-sweep",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-14115  host=ubuntu  utc=2026-11-16T04:01:03Z\n[xid-watch] command: /usr/bin/timeo\n[diagnostic preview: head and tail]\ne same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-14115.log\n",
+      "sha256": "bab337f70eb45de2df393efc788044f4fb7c8e832b7caff05b0f55391d77d313",
+      "source_bytes": 8194,
+      "dropped_bytes": 7976
+    },
+    {
+      "arm": "--concurrency",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-14164  host=ubuntu  utc=2026-11-16T04:01:12Z\n[xid-watch] command: /usr/bin/timeo\n[diagnostic preview: head and tail]\ne same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-14164.log\n",
+      "sha256": "4605a65d6f44b524a67d9c23e8d717bc0a18c0760a84a36b9c171586d01030b9",
+      "source_bytes": 5147,
+      "dropped_bytes": 4929
+    },
+    {
+      "arm": "--defer-liveness",
+      "mode": "native",
+      "rc": 6,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-29107  host=ubuntu  utc=2026-11-16T04:01:22Z\n[xid-watch] command: /usr/bin/timeo\n[diagnostic preview: head and tail]\nng that reports\n[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.\n",
+      "sha256": "cf1ace5c83593d2dc2e9f58b25193fb096c156c0bed2b5e74bd1b0c478876408",
+      "source_bytes": 16128,
+      "dropped_bytes": 15910
+    },
+    {
+      "arm": "--blockage-coverage",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-13423  host=ubuntu  utc=2026-11-16T04:01:40Z\n[xid-watch] command: /usr/bin/timeo\n[diagnostic preview: head and tail]\ne same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-13423.log\n",
+      "sha256": "12e938e48588efb4ee78937c886e0d21e98edae2dbb35efc3241a5f554f1e12e",
+      "source_bytes": 3672,
+      "dropped_bytes": 3454
+    },
+    {
+      "arm": "--alias-two-vas",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-3180  host=ubuntu  utc=2026-11-16T04:01:47Z\n[xid-watch] command: /usr/bin/timeou\n[diagnostic preview: head and tail]\nhe same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-3180.log\n",
+      "sha256": "14cff6036bd8ed74e7682aae22c75008906c02b69bd3c94b4491a4585ad6b516",
+      "source_bytes": 3643,
+      "dropped_bytes": 3425
+    },
+    {
+      "arm": "--alias-unmap-observe",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-154  host=ubuntu  utc=2026-11-16T04:01:53Z\n[xid-watch] command: /usr/bin/timeout\n[diagnostic preview: head and tail]\nthe same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-154.log\n",
+      "sha256": "da3dedb82666ba0b65ce64f08b8516fb606eda9a9a95bb418dc0cac4b6b195ad",
+      "source_bytes": 3575,
+      "dropped_bytes": 3357
+    },
+    {
+      "arm": "--map-propagation",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-12734  host=ubuntu  utc=2026-11-16T04:01:57Z\n[xid-watch] command: /usr/bin/timeo\n[diagnostic preview: head and tail]\ne same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-12734.log\n",
+      "sha256": "6696c6cb8d681dcdac8a4d207f2f8bb99828cbee697d66251ad8d7ae735d98dc",
+      "source_bytes": 2533,
+      "dropped_bytes": 2315
+    },
+    {
+      "arm": "--late-map-race",
+      "mode": "native",
+      "rc": 0,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-62203-737  host=ubuntu  utc=2026-11-16T04:02:03Z\n[xid-watch] command: /usr/bin/timeout\n[diagnostic preview: head and tail]\nthe same line printed by a blind instrument.\n[xid-watch] evidence: /workspace/bench/xid_ci-arm-62203-737.log\n",
+      "sha256": "64ab33d2f4549ad4e272f5332bd325100797d7f7168c8759b4c9b349137897ef",
+      "source_bytes": 3129,
+      "dropped_bytes": 2911
+    }
+  ],
+  "completed_arms": [
+    {
+      "pid": 64423,
+      "starttime": 101771,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--timer",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 64685,
+      "starttime": 104341,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--engines",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 64901,
+      "starttime": 106890,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--doorbell-census",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 65116,
+      "starttime": 109531,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--gpu-info-sweep",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 65329,
+      "starttime": 112070,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--bus-info-sweep",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 65613,
+      "starttime": 114844,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--concurrency",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 65846,
+      "starttime": 118429,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--defer-liveness",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 66084,
+      "starttime": 122155,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--blockage-coverage",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 66358,
+      "starttime": 124611,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--alias-two-vas",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 66571,
+      "starttime": 127096,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--alias-unmap-observe",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 66787,
+      "starttime": 129681,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--map-propagation",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 67167,
+      "starttime": 132153,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--late-map-race",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 67428,
+      "starttime": 134709,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--missing-page-fault",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 67649,
+      "starttime": 137475,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--uvm-invalidate",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 67863,
+      "starttime": 140116,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--uvm-mean",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 68078,
+      "starttime": 142756,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--executor-vas",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 68356,
+      "starttime": 145280,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--guest-ring-channel",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 68573,
+      "starttime": 148061,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--dictated-ring",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 68785,
+      "starttime": 150608,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--dictated-ring-negative",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 69003,
+      "starttime": 153268,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--ce-client",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 69276,
+      "starttime": 155743,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--ce-client-guest-ram",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 69766,
+      "starttime": 163969,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--guest-ram-pin",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 70041,
+      "starttime": 166644,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--bar1-crossing",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 70257,
+      "starttime": 169201,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--atomics-probe",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 70469,
+      "starttime": 171750,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--pce-mask-probe",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 70684,
+      "starttime": 174321,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--gpga-reserve-probe",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 70954,
+      "starttime": 179676,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--map-stress",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 71167,
+      "starttime": 182234,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--concurrent-fuzz",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 71449,
+      "starttime": 185002,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--cross-client-leak",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 71662,
+      "starttime": 187544,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--rpc-mixed-allocs",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    }
+  ],
+  "accepted_xid_lines": [
+    "2026-11-16T04:01:26.482932+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=62623, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:01:29.508508+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=62623, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:01:32.509600+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=62623, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:01:35.538543+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=62623, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:02:13.350805+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=63009, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE",
+    "2026-11-16T04:08:14.693915+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=65846, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:08:17.825497+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=65846, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:08:20.844713+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=65846, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:08:23.953549+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=65846, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-11-16T04:10:57.774894+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=67428, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "guest_proofs": [
+    {
+      "pid": 65846,
+      "starttime": 118429,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--defer-liveness",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      },
+      "serial_sha256": "6dc46550ec6c3a61ab8d94041ca31385300db96aa450646bc81d7a2f57801b37",
+      "qlog_sha256": "04a00251e89885cde29bc8a131467d27dd83cdd51551694d330eb786c919a979",
+      "accepted_faults": 4
+    },
+    {
+      "pid": 67428,
+      "starttime": 134709,
+      "exe": "/workspace/bench/kf3-bins/f723d326/qemu-system-x86_64",
+      "arm": "--missing-page-fault",
+      "revision": "f723d32614b15796cf12b9d0bf50706de7b6c0be",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "6b3e9f9e7819f8360748d73f4714f76800dc4b305d58f02aa226a2442d527a0a",
+        "scripts/fastguest/fast_suite.sh": "fed3f7f36053a4783f33876a1d1239133f0f301dba9de1db845ffea264b9ee01",
+        "scripts/fastguest/run_fast_guest.sh": "25104445eafea3e15bca8d624239d7371cf85511a1477cf88ebaca9e82678152",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      },
+      "serial_sha256": "bef4e0ca3b9681254c9b248a8599876df9275c342ac1d132862a42461e197641",
+      "qlog_sha256": "3b07df25dc0c3d133027ca1aa68e71c53a1463c0efd3613d258b02181f8aa8fd",
+      "accepted_faults": 1
+    }
+  ]
+}

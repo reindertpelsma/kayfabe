@@ -1,0 +1,4 @@
+04:47:57 waiting for /root/stage/.lock
+04:47:57 lock held
+Warning: Permanently added '[<ip>]:59804' (ED25519) to the list of known hosts.
+PUSH_OK key=specviewperf-15.0.0/specviewperf-15.0.0.tar.zst dest=/workspace/spec_pushed/specviewperf-15.0.0.tar.zst size=42002015727 sha256=ffe0e505e2f841ac876fbeac4d5f53edb0c36bd23d442cfe7f536f91cd114d5a r2_secs=114 hash_secs=107 rsync_secs=1062 05:12:37

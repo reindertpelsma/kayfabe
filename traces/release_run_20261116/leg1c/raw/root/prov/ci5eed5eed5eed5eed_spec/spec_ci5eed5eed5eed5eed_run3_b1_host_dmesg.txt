@@ -1,0 +1,2 @@
+[25151.566338] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[28785.216540] workqueue: irqfd_inject [kvm] hogged CPU for >13333us 8 times, consider switching to WQ_UNBOUND

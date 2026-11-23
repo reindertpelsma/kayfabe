@@ -1,0 +1,11 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=lanea winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       514G  189G  326G  37% /
+KF_PREFLIGHT_FREE_BYTES=348997664768
+KF_PAYLOAD_STAGE_START name=propimage_apps
+[xid-watch] tag=ci5eed5eed5eed5eed_propimage_apps  host=ubuntu  utc=2026-11-16T07:12:03Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/propimage_apps.py run --sha 4ed439efbec5a97b15f8aaf653fb4d17e0c1b0d4 --checkout /workspace/kf-ci-src --prefix /workspace/kf-propimage --out /workspace/kf-ci-evidence/propimage_apps.json --evidence-dir /workspace/kf-ci-evidence/propimage_apps --deadline-epoch 1794832621
+[xid-watch] host_dmesg_lines=1212  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
