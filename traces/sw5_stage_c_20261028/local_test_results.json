@@ -1,0 +1,120 @@
+{
+  "scope": "LOCAL fake-only suites; overlapping counts; neither hosted CI nor GPU tests",
+  "local_composed": {
+    "total": 194,
+    "passed": 194,
+    "skipped": 0,
+    "new_profile_included": 91,
+    "prior_core_included": 103,
+    "raw_private_log_sha256": "f200ad61efae3affb28fdeb7b09d6c276d3e0b1a26ebb953dd8224a2e22c99dd",
+    "source": "public synthetic fixtures + reviewed frozen private adapters",
+    "all_real_provider_calls": 0
+  },
+  "local_adapter_replay": {
+    "total": 16,
+    "passed": 16,
+    "overlaps_composed": true,
+    "raw_private_log_sha256": "f3db312478851c0f7db8d4eba4e68f8476da3714bd0f4373f54c4d0afdd63022"
+  },
+  "local_legacy_controls": {
+    "total": 40,
+    "passed": 40,
+    "overlaps_other_fixtures": true,
+    "raw_private_log_sha256": "7d41993ac1fffcf5b86dee1a713466e6172d7f94343e2e341ec1b32497d6c0f4"
+  },
+  "aggregate_unique_test_count_claimed": false,
+  "repository_only": {
+    "total_discovered": 194,
+    "passed": 151,
+    "skipped": 43,
+    "failed": 0,
+    "errors": 0,
+    "command": "env -u SW5_PROFILE_OPERATOR -u SW5_LEGACY_OPERATOR -u PYTHONPATH python3 -m unittest discover -v -s scripts/bench/family_resume",
+    "requires_no_private_operator_kit": true,
+    "real_provider_calls": 0,
+    "skipped_private_fixture_ids": [
+      "test_gb202_profile.LegacyIsolation.test_legacy_cap_cannot_be_raised",
+      "test_gb202_profile.LegacyIsolation.test_legacy_rate_ceiling_still_point_six",
+      "test_gb202_profile.LegacyIsolation.test_legacy_selected_5090_still_refused",
+      "test_gb202_profile.LegacyIsolation.test_legacy_stop_cannot_be_raised",
+      "test_gb202_profile.NativeScope.test_consistent_gb203_actual_rm_is_outside_profile",
+      "test_gb202_profile.NativeScope.test_consistent_gb206_actual_rm_is_outside_profile",
+      "test_gb202_profile.NativeScope.test_gb202_native_rm_first_revision",
+      "test_gb202_profile.NativeScope.test_gb202_native_rm_other_revision_name_is_advisory",
+      "test_gb202_profile.NativeScope.test_gb202_pending_target",
+      "test_gb202_profile.NativeScope.test_gb203_pending_target_rejected",
+      "test_gb202_profile.NativeScope.test_gb203_second_probe_does_not_bind_gb202_intent",
+      "test_gb202_profile.NativeScope.test_gb206_pending_target_rejected",
+      "test_gb202_profile.NativeScope.test_gb206_second_probe_does_not_bind_gb202_intent",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_backend_plan",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_blacklist_host",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_blacklist_machine",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_budget",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_dependency",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_empty_head",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_head",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_manifest",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_missing",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_plan",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_profile",
+      "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_source",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_backend_plan",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_blacklist_host",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_blacklist_machine",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_budget",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_dependency",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_empty_head",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_head",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_manifest",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_missing",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_plan",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_profile",
+      "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_source",
+      "test_gb202_profile_adapter.ProfileAdapter.test_gb206_empty_stage_marker_blocks_new_profile_create",
+      "test_gb202_profile_adapter.ProfileAdapter.test_gb206_timeout_stage_marker_blocks_new_profile_create",
+      "test_gb202_profile_adapter.ProfileAdapter.test_valid_full_proof_reaches_only_fake_arm",
+      "test_gb202_profile_adapter.ProfileAdapter.test_valid_full_proof_reaches_only_fake_create",
+      "test_gb202_watcher_plan.WatcherPlan.test_independent_watcher_rejects_other_capture_lead",
+      "test_gb202_watcher_plan.WatcherPlan.test_independent_watcher_rejects_other_duration"
+    ],
+    "raw_local_log_sha256": "ff0498fff874d3f9b5a2579da0f643454b90cca440ab9d809c9f6dc0ab6dd2d9",
+    "source_commit": "7b93e0521e65825883a860321865347216e53e74"
+  },
+  "hardware_verdict": "UNRUN_UNATTRIBUTED",
+  "private_executed_guard_provenance_hash": "5065e9946bac011b3f41b24edd555f15af933505",
+  "public_source_head": "7b93e0521e65825883a860321865347216e53e74",
+  "private_original_red_provenance": [
+    {
+      "tests": 73,
+      "failures": 54,
+      "errors": 3,
+      "private_commit_provenance_hash": "2756d0c95",
+      "published_ancestry": false
+    },
+    {
+      "tests": 2,
+      "failures": 2,
+      "private_commit_provenance_hash": "8019726b4",
+      "published_ancestry": false
+    },
+    {
+      "tests": 28,
+      "failures": 6,
+      "private_commit_provenance_hash": "17f2e5e02",
+      "published_ancestry": false
+    }
+  ],
+  "public_test_history": {
+    "sanitized_red_commit": "325f9ddf32aeba76fe4f348bc08cd5957a6243a0",
+    "red_total": 194,
+    "red_failures": 48,
+    "red_skips": 43,
+    "red_private_env_unset": true,
+    "raw_red_log_sha256": "d78d7530cde55f63c032f5b05be86e43435e8877969b550b3db41ffddbe46379",
+    "byte_identical_helper_green_commit": "7b93e0521e65825883a860321865347216e53e74",
+    "portable_passes": 151,
+    "portable_skips": 43,
+    "composed_passes": 194,
+    "private_execution_red_proof_not_relabelled_as_public": true
+  }
+}

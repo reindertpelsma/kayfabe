@@ -1,0 +1,22 @@
+{
+  "id": 58115039,
+  "candidate_die": "GB205",
+  "actual_die": "UNBOUND: no native RM probe",
+  "result": "EXCLUDED: initial native adapter unavailable",
+  "native": "UNRUN",
+  "guest": "UNRUN",
+  "xids": 0,
+  "rminit_failed": true,
+  "source_executed": false,
+  "initial_host_driver": "575.51.03 proprietary",
+  "provider_kernel_reason": "GPU requires NVIDIA open kernel modules",
+  "planned_driver_pair": "595.91.07/595.91.07 UNRUN; stopped before provisioning",
+  "qualification_limit": "initial adapter inventory stopped; native RM controls never ran; not a die-wide exclusion",
+  "target_source": "7dcedefea093de078188efd5f712561bde746362",
+  "actual_kf3_revision": null,
+  "guest_driver": null,
+  "native_arm_count": 0,
+  "guest_arm_count": 0,
+  "flags": "planned only; exports not reached",
+  "host_kernel": "6.8.0-59-generic"
+}

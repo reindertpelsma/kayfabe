@@ -1,0 +1,12 @@
+source "$KF_PAYLOAD_ROOT/scripts/ci/vast_payload_hooks.sh"
+# A refused earlier arm may never submit another GPU operation.
+if declare -F timeout >/dev/null; then
+    eval "$(declare -f timeout | sed '1s/timeout/sw5_watched_timeout/')"
+    timeout() {
+        if [ -e "$KF_PAYLOAD_XID_FAILED" ]; then
+            echo SW3_SKIPPED_AFTER_XID_STOP >&2
+            return 7
+        fi
+        sw5_watched_timeout "$@"
+    }
+fi

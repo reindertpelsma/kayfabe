@@ -1,0 +1,51 @@
+docs/PRODUCT_POSITIONING.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/STATUS_DETAIL.md:19: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/WORKFLOW_STRATEGY.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/audits/w301_cancellation_error_leaks.md:63: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/audits/w301_cancellation_error_leaks.md:63: LEGACY stale-suspect: old LIVE status with dead literal references: branch:w303-reap-and-preempt, path:crates/kayfabe-core/src/fault.rs, path:crates/kayfabe-core/src/gpu.rs, path:crates/kayfabe-core/src/project.rs, path:crates/kayfabe-core/src/rmgraph.rs, path:crates/kayfabe-fwd/src/lib.rs, path:crates/kayfabe-isolate-host/src/bin/rmladder.rs, path:crates/kayfabe-qemu-raw, path:crates/kayfabe-qemu-raw/src/shim.rs, path:crates/kayfabe-qemu-raw/tests/reap_composition_root.rs, path:crates/kayfabe-rmrpc/src/fault.rs, path:crates/kayfabe-rmrpc/src/lib.rs, path:crates/kayfabe-rmrpc/src/policy.rs, path:crates/kayfabe-rt/src/device.rs, path:crates/kayfabe-rt/src/executor.rs, path:crates/kayfabe-vmm-qemu/src/lib.rs, path:ctrl0080internal.h, path:ctrl2080fifo.h, path:ctrl2080rc.h, path:ctrl906f.h, path:ctrla06c.h, path:ctrla06fgpfifo.h, path:fwd/lib.rs, path:g_kernel_channel_group_api_nvoc.c, path:g_kernel_channel_nvoc.c, path:g_kernel_channel_nvoc.h, path:g_kernel_fifo_nvoc.c, path:g_kernel_rc_nvoc.h, path:g_subdevice_nvoc.c, path:gpu.rs, path:isolate-host/child.rs, path:isolate/lib.rs, path:kern_gmmu_gv100.c, path:kernel-open/nvidia-uvm/uvm_user_channel.c, path:kernel_channel.c, path:kernel_fifo_ctrl.c, path:kernel_gsp.c, path:kernel_rc_notification.c, path:kernel_rc_watchdog_callback.c, path:nv_gpu_ops.c, path:osapi.c, path:rmladder.rs, path:rpc.c, path:shim.rs, path:src/nvidia/generated/g_*_nvoc.c, path:src/nvidia/inc/kernel/rmapi/control.h, path:src/stub/*.c, path:tests/tests/cancellation.rs, path:tests/tests/cross_proc_lifetime.rs, path:tests/tests/simulated_fault.rs, path:uvm_channel.c, path:uvm_user_channel.c, path:vgpu_events.c
+docs/design/OVERNIGHT_NOTES_w825.md:3: LEGACY missing-date: date the STATUS paragraph with YYYY-MM-DD
+docs/design/THE_ARCHITECTURE_v3.md:3: LEGACY missing-supersession-notice: record SUPERSEDED and THE_ARCHITECTURE_v3.md in the same paragraph of docs/archive/THE_ARCHITECTURE_v2.md
+docs/design/THE_CONSTRAINTS.md:13: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/THE_MACHINE.md:8: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/THE_SURFACE_v2.md:7: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/THE_V3_PLAN.md:27: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/V3_APP_MATRIX.md:5: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/V3_BAR1_DOORBELL.md:10: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/design/V3_BAR1_DOORBELL.md:10: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/V3_BATCHED_MAP.md:93: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/V3_DISPLAY_PACING_20261017.md:3: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/design/V3_DOORBELL_IOEVENTFD.md:3: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/design/V3_FAMILY_PORT_ADA.md:7: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/V3_FLAG_INVENTORY.md:22: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/V3_GFX_TESTSET.md:4: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/V3_HEADLESS_GRAPHICS.md:3: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/design/V3_P4_PORT_MAP.md:3: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/design/V3_P5_PORT_MAP.md:3: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/design/V3_SECURITY_AUDIT_PLAN.md:3: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:8: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/design/V3_UVM_B3_IMPLEMENTATION.md:3: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/design/V3_VIOMMU.md:5: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/V3_WINDOWS_USER_RING_REFUSALS_20261012.md:8: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/design/the_uvm_map_external_allocation_wall.md:29: LEGACY misplaced-status: move current STATUS before opening prose/corrections
+docs/handoff/2026-10-04/README.md:3: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/handoff/2026-10-04/fps_owner_decisions.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/kernel_patches/README.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/bench_evidence/census_2026_08_07_probe35_findings.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/bench_evidence/w385/README.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/bench_rebuild_notes.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/full_suite_on_real_hardware.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/gsp_demand_list_boot1_new53.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/gsp_demand_list_cap1.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/gsp_rm_size_and_rpc_surface_580.md:3: LEGACY invalid-status: use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH
+docs/reference/memory_cacheability.md:3: LEGACY stale-suspect: old LIVE status with dead literal references: env:NVKVM_DEV_CTL, env:NVKVM_DEV_UVM, path:drivers/char/mem.c, path:e2_doorbell_witness.sh, path:escape.c, path:kernel_fifo_gm107.c, path:nv-mmap.c, path:nv-vm.c, path:nv.c, path:nvkvm_gpu_emul.c, path:ogkm/kernel-open/common/inc/nv-linux.h, path:ogkm/kernel-open/common/inc/nv-pgprot.h, path:ogkm/kernel-open/nvidia/nv-mmap.c, path:ogkm/kernel-open/nvidia/os-interface.c, path:os-interface.c, path:src/common/nvkvm_proto.h, path:src/guest/nvkvm_main.c, path:src/guest/nvkvm_mmap.c, path:src/guest/nvkvm_virtio.c, path:src/nvidia/arch/nvalloc/unix/src/escape.c, path:src/nvidia/src/kernel/rmapi/client_resource.c, path:src/qemu/nvkvm_mmap_host.c, path:src/qemu/virtio_nvgpu.c, path:tests/integration/pinned_write_bench.c, path:tests/mode2/cup6.c, path:tools/fixwb, path:tools/pteinfo
+docs/reference/mode2_bench_lifecycle.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/nvidia_abi_oracles.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/qemu_102_facilities.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/qemu_bql_spike.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/region_lock_mechanism_study.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/remaining_boot_surface.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/rm_semantics_measured.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/successful_boot_demand_ga106.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+docs/reference/uffd_isolate_kvm_study.md:1: LEGACY missing-status: open with a dated STATUS using an allowed state
+doc freshness: checked=184 existing-debt=50 new=0

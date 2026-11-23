@@ -1,0 +1,6 @@
+{
+  "raw_sha256": "272d1f448e0c7542d9e9d790b3b7bd2f378e624188b4e37baceac8e585e7c9d0",
+  "published_sha256": "6e84db28ebb2e2f0453a44afaae3b3c4d1d92f2a06969473392a885f1a895ca6",
+  "rule": "GPU UUID redaction",
+  "replacements": 1
+}

@@ -1,0 +1,5 @@
+SW5_START utc=2026-10-28T16:06:47Z rev=7dcedefea093de078188efd5f712561bde746362
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G  8.0G  167G   5% /
+No devices were found
+SW5_EXIT rc=6 utc=2026-10-28T16:06:47Z

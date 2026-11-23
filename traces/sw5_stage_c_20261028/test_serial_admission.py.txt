@@ -1,0 +1,43 @@
+"""No Stage C arm/create while any account lease, including CI, remains allocated."""
+import datetime as dt
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+import create_receipt_guard as G
+import operator_backend as O
+
+
+class SerialAdmission(unittest.TestCase):
+    def fixture(self, action, label):
+        with tempfile.TemporaryDirectory() as tmp:
+            parent=Path(tmp);root=parent/'lease';root.mkdir();now=G.utc()
+            plan=dict(armed_utc=now.isoformat(),deadline_utc=(now+dt.timedelta(hours=2)).isoformat(),
+                seconds=7200,quoted_rate=.17,rate_bound=.27,reserve_usd=8,reservation_usd=1.21,
+                capture_lead_seconds=600)
+            offer=dict(id=900,machine_id=32570,host_id=166946)
+            ref=G.prepare(root,offer,plan,71,dict(owner_id=71,complete=True,rows=[]),
+                          '7dcedefea093de078188efd5f712561bde746362')
+            b=O.Backend.__new__(O.Backend);b.here=Path(__file__).parent;b.offer=offer
+            b.evidence=root;b.intent_ref=ref;b.label=G.load(ref)['label']
+            b.watch=type('FakeWatch',(),dict(poll=lambda _:None))()
+            G.durable(root/'watch_ready.json',dict(state='ARMED',intent_sha256=ref.sha256))
+            occupied=dict(owner_id=71,complete=True,rows=[dict(id=99,label=label,
+                machine_id=13666,host_id=79466,dph_total=.12)])
+            with patch.object(O.approval_gate,'require_go',return_value={}),\
+                 patch.object(O.P,'snapshot',return_value=occupied),\
+                 patch.object(O.subprocess,'Popen') as popen,\
+                 patch.object(O.P,'create_once') as create:
+                with self.assertRaises(G.Unresolved):
+                    if action=='arm':b.arm(plan)
+                    else:b.create()
+                popen.assert_not_called();create.assert_not_called()
+
+    def test_ci_lease_blocks_arm(self):self.fixture('arm','kf-ci-fixture')
+    def test_other_lease_blocks_arm(self):self.fixture('arm','other-owner-fixture')
+    def test_ci_lease_blocks_create(self):self.fixture('create','kf-ci-fixture')
+    def test_other_lease_blocks_create(self):self.fixture('create','other-owner-fixture')
+
+
+if __name__=='__main__':unittest.main()
