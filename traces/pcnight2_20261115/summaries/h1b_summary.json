@@ -1,0 +1,149 @@
+[
+ {
+  "attempt": 1,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [],
+  "ran": false,
+  "end": "game_exited",
+  "seen": [
+   "lang",
+   "bright",
+   "scroll",
+   "agree",
+   "anykey",
+   "menu",
+   "confirm"
+  ],
+  "vram_peak": 3624,
+  "confirm_to_end": 51,
+  "qlog": [
+   7622,
+   12502,
+   17997
+  ],
+  "status": {
+   "now": "2026-11-12T17:56:25.4745111+00:00",
+   "alive": false,
+   "smi": "519, [N/A]",
+   "lke": [
+    "2026-11-12T17:56:08.6987660+00:00 141",
+    "2026-11-12T17:56:08.5412276+00:00 141"
+   ],
+   "launcher": false,
+   "cpu": 0
+  },
+  "events": [
+   "5:56:04 PM nvlddmkm id=153",
+   "5:56:06 PM nvlddmkm id=153",
+   "5:56:06 PM nvlddmkm id=153"
+  ]
+ },
+ {
+  "attempt": 2,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [
+   [
+    125,
+    38
+   ],
+   [
+    210,
+    53
+   ]
+  ],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 3740,
+  "confirm_to_end": 237,
+  "qlog": [
+   18148,
+   21364,
+   23094
+  ],
+  "status": {
+   "now": "2026-11-12T18:02:50.1283111+00:00",
+   "alive": true,
+   "smi": "17592181853864, [N/A]",
+   "lke": [
+    "2026-11-12T17:56:08.6987660+00:00 141",
+    "2026-11-12T17:56:08.5412276+00:00 141"
+   ],
+   "launcher": true,
+   "cpu": 444.890625
+  },
+  "events": [
+   "5:56:04 PM nvlddmkm id=153",
+   "5:56:06 PM nvlddmkm id=153",
+   "5:56:06 PM nvlddmkm id=153"
+  ]
+ },
+ {
+  "attempt": 3,
+  "shot_wh": [
+   1920,
+   1080
+  ],
+  "fps_series": [
+   [
+    89,
+    7
+   ]
+  ],
+  "ran": true,
+  "end": "result_screen",
+  "seen": [
+   "anykey",
+   "menu",
+   "confirm",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running",
+   "running"
+  ],
+  "vram_peak": 3741,
+  "confirm_to_end": 215,
+  "qlog": [
+   23367,
+   27373,
+   29021
+  ],
+  "status": {
+   "now": "2026-11-12T18:08:45.5097884+00:00",
+   "alive": true,
+   "smi": "17592181853876, [N/A]",
+   "lke": [
+    "2026-11-12T17:56:08.6987660+00:00 141",
+    "2026-11-12T17:56:08.5412276+00:00 141"
+   ],
+   "launcher": true,
+   "cpu": 435.046875
+  },
+  "events": [
+   "5:56:04 PM nvlddmkm id=153",
+   "5:56:06 PM nvlddmkm id=153",
+   "5:56:06 PM nvlddmkm id=153"
+  ]
+ }
+]

@@ -1,0 +1,61 @@
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 4 twin(s) [0xc1d002b9:0xff0e0102->host 0x6e, 0xc1d002b9:0xff040035->host 0
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 4 twin(s) [0xc1d002bc:0xff040037->host 0x72, 0xc1d002bc:0xff0e0102->host 0
+kf3: mem large apply VasKey(13965662590488021072): 0 maps + 32768 unmaps in 7 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 32768 runs), 0 fallback(s)
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem large apply VasKey(13965662590488021072): 81948 maps + 2 unmaps in 507 ms — 4133 map verb(s) (20 batch(es) carrying 77837 runs), 2 unmap verb(s) (2 range(s) carrying 2 runs), 0 fallback(s)
+kf3: mem large apply VasKey(13965662590488021072): 39008 maps + 0 unmaps in 229 ms — 10 map verb(s) (10 batch(es) carrying 39008 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+kf3: VasKey(13965665747288983632) mirror space=0xcafe11e2: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmAlloc seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W343GSSCENSUS cmd=0x2080a097 params_size=1168 params_at=40 payload_len=1208
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: mem large apply VasKey(13965662590488021072): 85848 maps + 2 unmaps in 524 ms — 4120 map verb(s) (21 batch(es) carrying 81750 runs), 2 unmap verb(s) (2 range(s) carrying 2 runs), 0 fallback(s)
+kf3: mem large apply VasKey(13965662590488021072): 0 maps + 120954 unmaps in 1092 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 120954 runs), 0 fallback(s)
+kf3: mem SPLIT-LATE ticket=77234 target=pdb:0xefa58000 ms=1100 (n=10, 0 still queued)
+kf3: mem large apply VasKey(13965662590488021072): 35084 maps + 0 unmaps in 204 ms — 10 map verb(s) (10 batch(es) carrying 35084 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+kf3: mem large apply VasKey(13965662590488021072): 19966 maps + 0 unmaps in 131 ms — 4104 map verb(s) (5 batch(es) carrying 15868 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+kf3: mem large apply VasKey(13965662590488021072): 63494 maps + 2 unmaps in 383 ms — 4112 map verb(s) (15 batch(es) carrying 59398 runs), 2 unmap verb(s) (2 range(s) carrying 2 runs), 0 fallback(s)
+kf3: mem large apply VasKey(13965662590488021072): 0 maps + 120930 unmaps in 1502 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 120930 runs), 0 fallback(s)
+kf3: mem SPLIT-LATE ticket=77238 target=pdb:0xefa58000 ms=1509 (n=11, 0 still queued)
+kf3: mem large apply VasKey(13965662590488021072): 0 maps + 19964 unmaps in 220 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 19964 runs), 0 fallback(s)
+kf3: mem large apply VasKey(13965662590488021072): 34798 maps + 0 unmaps in 179 ms — 12 map verb(s) (10 batch(es) carrying 34796 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d002a0:0xff040026->host 0x52] + 0 Translated ring(s) — async
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffe087311b5580) after the host's disable+preempt returned
+kf3: GSP rpc RmControl seq=0

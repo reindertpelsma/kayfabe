@@ -1,0 +1,2 @@
+kf3: display: monitor 1920x1080 at 29938 mHz, range max 30 Hz, EDID fnv1a64=2827c7b5b9c5d33f (display-max-fps 30)
+kf3: display: display-max-fps 30 Hz — every head's vblank tick is capped at 30 Hz; copies without a flip are made at the console head's tick, while watched, and sent only when the frame's checksum changed

@@ -1,0 +1,30 @@
+== attempt 1: polls=23 baseline_lke=0 (events older than first poll - 8 s)
+   first LKE guest=1794506308.4 -> host epoch 1794727359.3 (offset spread 3.2 s) -> qemu.log lines 19304..23188 (5 s window, 3884 lines)
+   heartbeats around: first trapped=2667080 applied=11177 refused=0 -> last trapped=2798411 applied=14813 refused=0
+   event counts in window: {'late': 174, 'refus': 78, 'mem large apply': 2, 'unserviced': 160, 'disable_channels': 12, 'walk capacity': 18}
+   large apply ms in window: [19, 352]
+   sample non-heartbeat lines:
+      kf3: GSP rpc RmAlloc seq=0
+      kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00153:0xff1fe010, classID1 host 0xcafe2d5b; no host registrations (238 us, off the GSP lock)
+      kf3: GSP rpc RmAlloc seq=0
+      kf3: act engine object: 0xc1d00153:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x20045 -> host object 0xcafe2d5c (278 us, off the GSP lock)
+      kf3: GSP rpc RmControl seq=0
+      kf3: act timeslice: 0xc1d00153:0xff0e0000 SET_TIMESLICE 16000 us on 1 twin group(s) (28818 us, off the GSP lock)
+      kf3: GSP rpc RmControl seq=0
+      kf3: act schedule: 0xc1d00153:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (311 us, off the GSP lock)
+== attempt 2: polls=9 baseline_lke=2 (events older than first poll - 8 s)
+   first LKE guest=1794506482.9 -> host epoch 1794727533.7 (offset spread 0.5 s) -> qemu.log lines 26824..30325 (5 s window, 3501 lines)
+   heartbeats around: first trapped=4027552 applied=16739 refused=0 -> last trapped=4298866 applied=20268 refused=0
+   event counts in window: {'unserviced': 131, 'late': 166, 'refus': 78, 'disable_channels': 2, 'walk capacity': 12}
+   large apply ms in window: none
+   sample non-heartbeat lines:
+      kf3: GSP rpc Free seq=0
+      kf3: GSP rpc Free seq=0
+      kf3: GSP rpc Free seq=0
+      kf3: GSP rpc Free seq=0
+      kf3: GSP rpc Free seq=0
+      kf3: walk capacity: re-walk (needs s106:4078); walk pool 1048576 runs, slot pool 2097152 runs (2071296 free), max per space 1048576, slots held 23, grows 49, retries 84, 
+      kf3: walk capacity: slot 106 grown 1024 → 6144 runs
+      kf3: walk capacity: re-walk (needs s106:4079); walk pool 1048576 runs, slot pool 2097152 runs (2066176 free), max per space 1048576, slots held 23, grows 50, retries 85, 
+== attempt 3: polls=38 baseline_lke=5 (events older than first poll - 8 s)
+   no LiveKernelEvent seen

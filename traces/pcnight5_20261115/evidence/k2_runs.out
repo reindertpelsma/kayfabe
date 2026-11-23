@@ -1,0 +1,4 @@
+RUN 1 3dmark start 2026-11-15T13:03:32Z
+RUN 1 done 242s ok=False 3DMark result has no positive graphics-test FPS
+RUN 2 3dmark start 2026-11-15T13:07:56Z
+RUN 2 done 191s ok=False 3DMark result has no positive graphics-test FPS

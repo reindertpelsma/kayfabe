@@ -1,0 +1,208 @@
+# qemu.log lines 17523..18952 (about 5 s before first LKE, +-1-2 s clock mapping); 1423 non-heartbeat lines, 207 matching apply|refus|walk capacity|UNSERVICED|DISABLE_CHANNELS|late|error|fail; first 250 shown
+kf-rm: RPC-REFUSED #15 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the
+kf-rm: RPC-REFUSED #16 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00156:0xff04000c->host 0x38] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00157:0xff04000d->host 0x39] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00156:0xff04000c->host 0x38] + 0 Translated ring(s); relays before after (192 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00157:0xff04000d->host 0x39] + 0 Translated ring(s); relays before after (184 us, off the GSP lock)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00156:0xff04000c->host 0x38] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00157:0xff04000d->host 0x39] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00158:0xff04000e->host 0x2003a] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLET
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00159:0xff04000f->host 0x3b] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0015a:0xff040010->host 0x2003c] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLET
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00156:0xff04000c->host 0x38] + 0 Translated ring(s); relays before after (166 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00157:0xff04000d->host 0x39] + 0 Translated ring(s); relays before after (167 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00158:0xff04000e->host 0x2003a] + 0 Translated ring(s); relays before after (171 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00159:0xff04000f->host 0x3b] + 0 Translated ring(s); relays before after (176 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0015a:0xff040010->host 0x2003c] + 0 Translated ring(s); relays before after (169 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: RPC-REFUSED #17 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the
+kf-rm: RPC-REFUSED #18 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 152)
+kf3: GSP REFUSED fn76/0x20809064=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 153)
+W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 154)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: walk capacity: slot 79 grown 1024 → 1792 runs
+kf3: walk capacity: re-walk (needs s79:1029); walk pool 1048576 runs, slot pool 2097152 runs (2075904 free), max per space 1048576, slots held 20, grows 22, retries 30, ceilings 0, largest slot 327424, largest walk 327424
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: walk capacity: slot 79 grown 1792 → 2816 runs
+kf3: walk capacity: re-walk (needs s79:1801); walk pool 1048576 runs, slot pool 2097152 runs (2074880 free), max per space 1048576, slots held 20, grows 23, retries 31, ceilings 0, largest slot 327424, largest walk 327424
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: walk capacity: slot 79 grown 2816 → 4352 runs
+kf3: walk capacity: re-walk (needs s79:2817); walk pool 1048576 runs, slot pool 2097152 runs (2074368 free), max per space 1048576, slots held 19, grows 24, retries 32, ceilings 0, largest slot 327424, largest walk 327424
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00157:0xff04000d->host 0x39] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE q
+kf3: act disable channels: 0xc1d00135 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00158:0xff04000e->host 0x2003a] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLET
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: USER_RING_LIFECYCLE (c1d00158, ff04000e) mode=Pointer Counts { entries_scan: 15, entries_pointer: 18, pointer_large_entries: 0, pointer_entry_max_bytes: 264, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x00001010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003a trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00157, ff04000d) mode=Pointer Counts { entries_scan: 17, entries_pointer: 443, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0
+kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=0 emulated=0 forwarded=0 host=0x39 trap=0 fast=0
+kf3: walk capacity: re-walk (needs s73:4078); walk pool 1048576 runs, slot pool 2097152 runs (2074368 free), max per space 1048576, slots held 19, grows 24, retries 33, ceilings 0, largest slot 327424, largest walk 327424
+kf3: walk capacity: slot 73 grown 1024 → 6144 runs
+kf3: walk capacity: re-walk (needs s73:4079); walk pool 1048576 runs, slot pool 2097152 runs (2069248 free), max per space 1048576, slots held 19, grows 25, retries 34, ceilings 0, largest slot 327424, largest walk 327424
+kf3: mem large apply VasKey(13965662607667890256): 4030 maps + 0 unmaps in 22 ms — 2 map verb(s) (2 batch(es) carrying 4030 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: walk capacity: re-walk (needs s78:1034); walk pool 1048576 runs, slot pool 2097152 runs (2071296 free), max per space 1048576, slots held 17, grows 25, retries 35, ceilings 0, largest slot 327424, largest walk 327424
+kf3: walk capacity: slot 78 grown 1024 → 1792 runs
+kf3: walk capacity: re-walk (needs s78:1047); walk pool 1048576 runs, slot pool 2097152 runs (2070528 free), max per space 1048576, slots held 17, grows 26, retries 36, ceilings 0, largest slot 327424, largest walk 327424
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xc: gp=0x20 pb=0xe00 (the host's answer)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: mem large apply VasKey(13965662607667890256): 0 maps + 4030 unmaps in 7 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 4030 runs), 0 fallback(s)
+kf3: walk capacity: re-walk (needs s90:1034); walk pool 1048576 runs, slot pool 2097152 runs (2068480 free), max per space 1048576, slots held 19, grows 26, retries 37, ceilings 0, largest slot 327424, largest walk 327424
+kf3: walk capacity: slot 90 grown 1024 → 1792 runs
+kf3: walk capacity: re-walk (needs s90:1045); walk pool 1048576 runs, slot pool 2097152 runs (2067712 free), max per space 1048576, slots held 19, grows 27, retries 38, ceilings 0, largest slot 327424, largest walk 327424
+kf3: walk capacity: re-walk (needs s90:1794); walk pool 1048576 runs, slot pool 2097152 runs (2067712 free), max per space 1048576, slots held 19, grows 27, retries 39, ceilings 0, largest slot 327424, largest walk 327424
+kf3: walk capacity: slot 90 grown 1792 → 2816 runs
+kf3: walk capacity: re-walk (needs s90:1805); walk pool 1048576 runs, slot pool 2097152 runs (2066688 free), max per space 1048576, slots held 19, grows 28, retries 40, ceilings 0, largest slot 327424, largest walk 327424

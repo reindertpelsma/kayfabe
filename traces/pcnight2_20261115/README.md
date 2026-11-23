@@ -1,0 +1,35 @@
+STATUS: LIVE 2026-11-15 (pcnight2; PC RTX 4070, kf3 binary kf3-bins/b20fd84b = origin/next b20fd84b, Windows proprietary image, offline overlays restrict=on, Black Myth Wukong benchmark driven by `scripts/` here = the pcnight_20261114 driver; 1920x1080).
+
+## Hypotheses and falsifiers (written BEFORE the first run)
+- H1 (overcommit): the 4096 MiB TDR is triggered by VRAM demand above the guest FB. Test: fb-mb=4096, LOW preset, DLSS/FG off, VRAM < 3.5 GB. Falsifier: TDR in 3 of 3 runs with VRAM < 3.5 GB.
+- H2 (perf gap): 36 vs 93 FPS is a real kayfabe cost. Test: guest FB like VFIO, same settings (Very High, DLSS+FG), 3 runs. Falsifier: kf3 average within 10 percent of 93 (>= 83.7).
+- H3 (launch TDR): the 35-70 s post-launch TDR follows a relaunch right after a completed benchmark, not a first launch. Falsifier: equal rates.
+
+## Deviations (measured)
+- fb-mb 12288 and 11264 were REFUSED at realize (`NoMemory`: host card has 12282 MiB, 11552 MiB free with gdm up). The largest size that booted was **10240 MiB**. So H2/H3 ran at 10240 (guest reports "10GB"), not 12288. VFIO reports 12 GB.
+- H3 was NOT run with the briefed protocol (fresh overlay, no benchmark, wait 120 s). It is derived from the H2 boots: attempt 1 of a boot is a first launch, attempt 2 starts right after a completed benchmark (the driver kills the game and relaunches). Dedicated protocol still open.
+- H1 needed a settings change: the benchmark reads `GameUserSettings.ini` (UISettingData), patched in the guest by `scripts/patch_*.ps1` before the driver; the result screen confirmed each preset (Graphics Preset/FG shown). VRAM is `nvidia-smi` memory.used in the guest, polled every 3 s; the game's own "Total VRAM Used" matches (3.5 GB at Low).
+- Extra arms added (not in the brief) to separate frame generation from VRAM: h1b (4096, Low, DLSS+FG on) and h1c (4096, Very High, FG off, DLSS on).
+
+## Runs (all one boot, 3 driver attempts each; names = work dirs; summaries in `summaries/`)
+| boot | fb-mb | settings | attempt 1 | attempt 2 | attempt 3 |
+|---|---|---|---|---|---|
+| h2a | 10240 | Very High, DLSS+FG | result 36 FPS (max 43, min 3, VRAM 5.6 GB; peak smi 5644 MiB) | TDR, LKE 23 s after launch (vram 2060) | result 35 FPS (max 42, min 1, 5.2 GB) |
+| h2b | 10240 | Very High, DLSS+FG | result 36 FPS (max 43, min 4, 5.4 GB) | TDR, LKE ~24 s after launch (vram 1337) | result 36 FPS (max 42, min 3, 5.3 GB) |
+| h1a | 4096 | Low, DLSS on, FG off | result 33 FPS (max 47, min 1, 3.5 GB, smi peak 3497 MiB) | result 33 (max 47, min 3, 3.5 GB, 3550 MiB) | result 32 (max 48, min 2, 3.5 GB, 3548 MiB) |
+| h1b | 4096 | Low, DLSS+FG on | TDR 48 s after Confirm, game exited (smi 3624) | result (smi 3740), no LKE | result (smi 3741), no LKE |
+| h1c | 4096 | Very High, DLSS on, FG off | TDR 480 s after Confirm (after a very slow run), game exited (smi 3630) | result after 424 s (normal ~220 s; smi 3716), no LKE | TDR 181 s after Confirm (smi 3656) |
+(h1a/h1b/h1c all say "VRAM 4GB / Detected low VRAM" on the result screen.) FPS values are read from the result screenshots (kept on the coordinator in /workspace/bench/pcnight2_20261115/{x,y,z,w,v}/wuk_*/, full evidence tarballs h*ev.tgz beside them; not committed, bulk).
+
+## Verdicts
+**H2: CONFIRMED (at 10240 MiB, not 12288).** MEASURED: kf3 at 10240 averages 36, 35, 36, 36 FPS (4 result screens in 2 boots; max 42-43, low 5th 29-30, min 1-4) against VFIO 93 / 92 / 93 (previous agent, same image/settings): about 39 percent of VFIO, falsifier (>= 83.7) not met. Time Confirm-to-result 217-227 s on kf3 (VFIO value not measured here). MEASURED additionally: the **Low preset, FG off at 4096 gives 32-33 FPS**, i.e. FPS barely moves when the graphics load drops a lot. [INFERRED] the limit is not GPU shading work but the kayfabe path (traps/applies/walks) or the virtual CPU; not tested here (no profile). The guest FB size is not the cause: 8192 (prev) and 10240 give the same 36.
+**H1: NOT FALSIFIED, weak support (call: CONFIRMED-weak).** MEASURED: 4096 + Low + FG off, smi peak 3497-3550 MiB (3.42-3.47 GiB; 3.67-3.72 GB decimal, so "< 3.5 GB" holds only in GiB), 0 of 3 TDR, all three reached the result screen. Falsifier (TDR 3 of 3) not met. Dose pattern at 4096 across arms: Low/FG off 0 of 3, Low/FG on 1 of 3, Very High/FG off 2 of 3 (previous agent: Very High/FG on 11 of 12). So frame generation is NOT necessary for the TDR (h1c), and a TDR also occurs at a Low preset when FG is on (h1b). Limits: n = 3 per arm; the guest's smi VRAM saturates near the 4 GiB FB (3.5-3.7 GB in every 4096 arm), so demand above the FB cannot be seen; the Low arm sits at 3.5 GB, near the limit, not clearly under it; the Low-vs-VH comparison changes several settings at once. Not proven causal.
+**H3: CONFIRMED (small n, benchmark-protocol, 10240/8192 only).** MEASURED today at 10240: first launches 0 of 2 TDR; launches right after a completed benchmark 2 of 2 TDR (23 s and ~24 s after launch, VRAM 1.3-2.1 GB, game dead). Previous agent's 8192 runs (summaries in pcnight_20261114): attempt 1 of boots w8/w9/w12 0 of 3; relaunch after a completed benchmark w9, w12 TDR, w8 attempts 2 and 3 fine. Pooled relaunch-after-completed 4 of 6 vs first launches 0 of 5; falsifier (equal rates) not met. Attempt 3 after a TDR attempt never TDR'd at launch (4 of 4: h2a, h2b, w9, w12). At 4096 no launch-phase TDR in any attempt today (those TDRs are benchmark-phase). [INFERRED] state left by the previous benchmark/process (teardown, unmap storm) matters; not isolated. Dedicated protocol (fresh overlay first launch, wait 120 s, vs after benchmark) still to run.
+
+## Host-side kf3 log (5 s before the first LKE; `host_excerpts/`, `tdr_ctx/`)
+- Launch TDRs h2a-2 / h2b-2 (window 17586..19048 / 17523..18952): per-5 s window `mem large apply` 7 and 22-26 ms, each carrying ~4030-4048 unmaps and 0 maps (the previous game's VA teardown); `walk capacity` re-walks/slot growth 1024->1792->2816 runs (13 and 18 lines), `RPC-REFUSED` NV40_I2C class refusals (constant, 1 cumulative refused), 16 DISABLE_CHANNELS, 139 `GSP rpc UNSERVICED code 76`. No apply >= 1 s, no new refusals in the window. UNSERVICED/refusal counts were NOT compared with a non-TDR window [open; may be baseline noise].
+- Benchmark-phase TDRs at 4096: h1c-1 window shows refused=26 (cumulative, unchanged), late 54, 9 refus lines, no large apply; h1c-3 (and h1b-1): 3 large applies 22-25 ms, 86 refused-type lines, walk capacity re-walks 16-20, late 169-183. No multi-second slow apply in these (previous agent saw up to 2.0 s in other 4096 storms; not seen here).
+
+## Housekeeping
+Locks: `flock /root/prov/pc_gpu.lock` per boot, START/END lines in PC_ACTIVE.log (agent `pcnight2`). No VFIO this session (nvidia + gdm untouched). Overlays deleted by the harness after each boot. Last boot ended 05:49Z; no new boot after 05:45Z. PC dirs left: /workspace/bench/pcnight2_20261115 (evidence tarballs, ~0.8 GB) on the PC; 164 GB free.
+Not run: J5 (Enscape, not in the image's app list per the previous README).

@@ -1,0 +1,13 @@
+﻿{
+    "result_file":  "",
+    "kind":  "PROBE",
+    "ui_ready":  false,
+    "ended":  1794506192.11,
+    "started":  1794505944.106,
+    "progress_seen":  false,
+    "app":  "3dmark",
+    "cli_output":  "AMD64\r\ndone\r\n17:52:27   _____ ____  __  __            _\r\n17:52:27  |___ /|  _ \\|  \\/  | __ _ _ __| | __\r\n17:52:27    |_ \\| | | | |\\/| |/ _` | \u0027__| |/ /\r\n17:52:27   ___) | |_| | |  | | (_| | |  |   \u003c\r\n17:52:27  |____/|____/|_|  |_|\\__,_|_|  |_|\\_\\\r\n17:52:27 3DMark Command Line Client version: 2.32.8919 64\r\n17:52:27 Futuremark Systeminfo version: 5.92.1497.0\r\n17:52:28 Professional or Developer license key required for command line access\r\n17:52:29\r\n",
+    "run_id":  "92f75ff15e0f49838275f5ed8e40b25e",
+    "error":  "Time Spy card not visible in the UI Automation tree (UI never became ready)",
+    "ui_texts":  "3DMark ; Logo ; HOME ; BENCHMARKS ; STRESS TESTS ; RESULTS ; OPTIONS ; Recommended benchmarks for your system ; Speed Way ; Ray tracing benchmark for high-end gaming PCs ; Enable Sound ; RUN ; Steel Nomad ; Benchmark for gaming PCs ; Storage Benchmark ; SSD performance test for gamers ; BUY ; CPU Profile ; CPU benchmarks for modern processors ; Your system ;  ; GPU ; NVIDIA GeForce RTX 4070 (9980 MB) ; NVIDIA GeForce RTX 4070  ; (9980 MB) ;  ; CPU ; AMD Virtual"
+}

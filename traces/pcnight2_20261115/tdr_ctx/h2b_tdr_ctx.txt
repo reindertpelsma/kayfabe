@@ -1,0 +1,18 @@
+== attempt 1: polls=26 baseline_lke=0
+   no LiveKernelEvent seen
+== attempt 2: polls=3 baseline_lke=2
+   first LKE guest=1794506354.4 -> host epoch 1794718041.7 (offset spread 1.0 s) -> qemu.log lines 17523..18952 (5 s window, 1429 lines)
+   heartbeats around: first trapped=4307798 applied=11560 refused=1 -> last trapped=4372228 applied=12458 refused=1
+   event counts in window: {'refus': 11, 'unserviced': 139, 'late': 21, 'disable_channels': 16, 'walk capacity': 18, 'mem large apply': 2}
+   large apply ms in window: [7, 22]
+   sample non-heartbeat lines:
+      kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+      kf3: mem large apply VasKey(13965662607667890256): 0 maps + 4030 unmaps in 7 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 4030 r
+      kf3: walk capacity: re-walk (needs s90:1034); walk pool 1048576 runs, slot pool 2097152 runs (2068480 free), max per space 1048576, slots held 19, grows 26, retries 37, c
+      kf3: walk capacity: slot 90 grown 1024 → 1792 runs
+      kf3: walk capacity: re-walk (needs s90:1045); walk pool 1048576 runs, slot pool 2097152 runs (2067712 free), max per space 1048576, slots held 19, grows 27, retries 38, c
+      kf3: walk capacity: re-walk (needs s90:1794); walk pool 1048576 runs, slot pool 2097152 runs (2067712 free), max per space 1048576, slots held 19, grows 27, retries 39, c
+      kf3: walk capacity: slot 90 grown 1792 → 2816 runs
+      kf3: walk capacity: re-walk (needs s90:1805); walk pool 1048576 runs, slot pool 2097152 runs (2066688 free), max per space 1048576, slots held 19, grows 28, retries 40, c
+== attempt 3: polls=20 baseline_lke=5
+   no LiveKernelEvent seen

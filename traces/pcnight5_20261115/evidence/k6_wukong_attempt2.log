@@ -1,0 +1,26 @@
+15:28:14 ATTEMPT 2 qemu.log line 38799
+15:28:35 t=12 ocr='& Raeyele Bin Syiegesiil.. earnabourr BETCuI US CUISIPICUUTE) " >| Wiiesesitt — <iDiawvings Helge WOR SP) siteaum nee 0° ae a oe a ee a m7 | i j more i/o F - , '
+15:28:48 t=25 ocr='& Raeyele Bin Syiegesiil.. earnabourr BETCuI US CUISIPICUUTE) " >| Wiiesesitt — <iDiawvings Helge WOR SP) siteaum nee 0° ae a oe a ee a m7 | i j more i/o F - , '
+15:29:01 t=38 ocr='seb LS Fy] AMA TOA GAME SCIENCE '
+15:29:15 t=52 ocr='Vy ST AE. Pik Lhe NIRS SA “0 SBS mx Py i S) ae ee. me Y Rk Se ell » a Nee a Oe 7 =" sae Os pes’ oe } = — a. “ BLACK MYTH: | 3 a tn ' '
+15:29:28 t=65 ocr='SO ee gee, © o, < Lo" Ba Py i >] . ie. |S . — 2aN A eo ied pes \ Oe: ie Oe me 7, 4 ae" Sa — 2, a ce GP. 3 ee S <e i 3 ae ee og = BLACK MYTH: — . ae gn & ” Press'
+15:29:46 t=82 ocr=': SA 1X “fiz . r Fan a \p er ree ee L i eo 4 5a Benchmark \ . (Si ae i" a Settings me MeaGc 2. o ag A; Purchase Now Pg ie be i ih Se, ee \ ae Pee x é he Ro VW T'
+15:30:03 t=99 ocr='| Benchmark : Are you sure you want to run benchmark? Confirm ‘ Cancel '
+15:30:07 CONFIRM clicked, qemu.log line 48371
+15:30:22 t=119 ocr=''
+15:30:34 t=131 ocr='oe | ¢ ee '
+15:30:48 t=145 ocr=''
+15:31:01 t=158 ocr='ME mls Sh Ea 5, ee ee A Pe a. pe bY ¢ Current FPS Re aa. #8 So v Pe. ee ded , a shen "a \ pane maby <a _ Go 4 “hee aa ae. se mah 28 ce Wer, . a a gg f\ " } 2S! '
+15:31:16 t=173 ocr='Fla, SONS Ee lll ee y [At eee MIRE Pe US A Ol a Oi’ Current FPS AT Ae NN ala 2x a ts ie ‘ 4" u 7 Ce UR mean Seas" ie lm “2 } y y 27 FPS Osa RN MEE e i. ed lade '
+15:31:30 t=187 ocr='Current FPS ya was ee. Se 4 é fx rye. 22 FPS Se Sie ae a ap POR Oe era a . ae ‘ £ Stee 7 ee (ese Sao P SH Wi A eee OOS iy ~ Ve : AA [Pee eS Oe sw ee Boy oe bad '
+15:31:44 t=201 ocr='2 b Gaui = Bea nee eee Se ier * \y 3 “4 ik, 2s el Pky oy aa RES ie > Cee ge i eee BR i ae ne te (ee Bag A ent FPS ; Ne ae ae ay ee ik Sea ete hee A, NP GOeg 24 '
+15:31:58 t=215 ocr='Current FPS = : ee i €s Se ge Sas Zee S25 2 eae \ 22 FPS £ : {5 SS 7 WSS a a ee = | : 2 fe 2s eee SS ete f eS —— 2 = ; = | ae St ep Ss —<aae fg. Mesa eee ae, = '
+15:32:13 t=229 ocr='ha. eee 4 < x - S rae 5. = Pr IRS Current FPS 77 ‘ie * ss, SS ae j BN Nas Be ae Fat 25 FPS 4 ia K tet Jy 7 fee i bs See A a a ; CY 4 pee GS gee os ea pees Fi al'
+15:32:27 t=244 ocr='ah, Se bash we. ee? pet: REN Ee ge a RES Se sig Oe ORE MO ee on PISS ca” hy ia nia MAG eo BE Current FPS a se is OF : Meee a8 ykoe Ba yA gee * ae, 25 FPS 2 ON A'
+15:32:41 t=258 ocr='Current FPS a ie I sarees *2 rag = ee 4 pa A 5 « ‘ j SS y 2 9 a So See > Eee x e 4g 3 ¢ Nee, Fae So ARES fei es Sas fe = . a Og SED setae ee = if NS So. eee ae '
+15:32:56 t=273 ocr='. — St! Wes, ys "a ys ne a ae SNe We, Lh luall ie y us es aie ata, ae eal] sls, 4 Current FPS x i & A Y a ON LE ‘ By ° 25 FPS yy) eer SS ‘ rr Oe ST xX : i BY a '
+15:33:10 t=286 ocr='6 8 r Current FPS sss tis gas ; 25 FPS x .s Gar ee . = Bele me De Sg - 2 eee Se. : Si ie OE a WS) aie o~ Whieeen 25 Wb oe Cok ee ee Ave OE ee eee Se ——C—*Cé#=E '
+15:33:22 t=299 ocr='Current FPS 26 FPS @ Exit '
+15:33:36 t=313 ocr='Vin “7 i. : BLACK MYTH Fa v< = ¥ 7~ = % Fs J rd Benchmark Results Operating System _ Graphic Setting - » Nov 12, 2026 r az Game Version Disp r eQuality ‘ 1.0.3.'
+15:33:36 result screen text: Vin “7 i. : BLACK MYTH Fa v< = ¥ 7~ = % Fs J rd Benchmark Results Operating System _ Graphic Setting - » Nov 12, 2026 r az Game Version Disp r eQuality ‘ 1.0.3.14649 Border Very Higl Average hg Ayal: Ng GO Se. a Operating System Version __ DisplayR Hair Quality ee 95 C8 ee : -. Bin 10.0.26200.1.256.
+15:33:45 END result_screen vram_peak=5156 secs_since_launch=321 confirm_to_end=222 qlog 39488->48371->61983

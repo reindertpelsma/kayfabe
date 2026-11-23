@@ -1,0 +1,251 @@
+# qemu.log lines 50950..54536 (about 5 s before first LKE, +-1-2 s clock mapping); 3581 non-heartbeat lines, 416 matching apply|refus|walk capacity|UNSERVICED|DISABLE_CHANNELS|late|error|fail; first 250 shown
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 406)
+W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 407)
+W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 408)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00253:0xff04001d->host 0x49] + 0 Translated ring(s); relays before after (385 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00254:0xff04001e->host 0x2004a] + 0 Translated ring(s); relays before after (193 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d00255:0xff04001f->host 0x2004b] + 0 Translated ring(s); relays before after (192 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 10 twin(s) [0xc1d00257:0xff0e010a->host 0x5d, 0xc1d00257:0xff0e0102->host 0x4e, 0xc1d00257:0xff0e0107->host 0x55, 0xc1d00257:0xff0e010
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0025a:0xff040023->host 0x20052] + 0 Translated ring(s); relays before after (325 us, off the GSP lock)
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 4 twin(s) [0xc1d00260:0xff040024->host 0x56, 0xc1d00260:0xff0e0103->host 0x58, 0xc1d00260:0xff0e0102->host 0x57, 0xc1d00260:0xff0e0104
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 4 twin(s) [0xc1d00269:0xff0e0104->host 0x66, 0xc1d00269:0xff0e0102->host 0x63, 0xc1d00269:0xff0e0103->host 0x64, 0xc1d00269:0xff04002a
+kf3: act disable channels: 0xc1d00159 DISABLE_CHANNELS(bDisable=false, bOnlyDisableScheduling=false, bRewindGpPut=false) over 4 twin(s) [0xc1d0026f:0xff0e0102->host 0x68, 0xc1d0026f:0xff0e0104->host 0x6b, 0xc1d0026f:0xff04002c->host 0x67, 0xc1d0026f:0xff0e0103
+kf3: VA_WORST apply_max_ms=3660 split_max_ms=3852 slow_applies=97 slow_splits=28 hostmaps(whole boot so far)=batch[calls=20054 rows=50623400 -> pieces(mmaps)=50623400 call_avg_us=16415 piece_avg_us=6 call_max_us=185212 piece_max_us=2931] ram_run_maps[n=2686310
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: TSPACE-RETIRE tok=0x80d host=0x10037 key=VasKey(13965664055071869008) ring_va=0xff00a00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000080d route=translated emulated=0 forwarded=0 host=0x10037 fast=0
+kf3: chan token 0x80d (host 0x10037) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_e
+kf3: act free: 0xc1d00178:0xff04000b: translated host 0x10037 (2042 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0xc host=0x36 key=VasKey(13965662590488021072) ring_va=0xff00c00000 released=true stale_binds=0/2 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000000c route=translated emulated=0 forwarded=1 host=0x36 fast=0
+kf3: chan token 0xc (host 0x36) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=2 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_ent
+kf3: act free: 0xc1d00174:0xff04000a: translated host 0x36 (3913 us, off the GSP lock)
+kf3: walk report carried refusals=2016 refuse_mask=0x400 pdbs=[ecdd3000] runs=7
+kf3: mem invalidate seq 14217 CLEARED OVER ABSENCE (Some(VasKey(13965664437323958352))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=2016 refuse_mask=0x400 pdbs=[ecdd3000] runs=1
+kf3: mem invalidate seq 14218 CLEARED OVER ABSENCE (Some(VasKey(13965664437323958352))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=2016 refuse_mask=0x400 pdbs=[ecdd3000] runs=1
+kf3: mem invalidate seq 14219 CLEARED OVER ABSENCE (Some(VasKey(13965664437323958352))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=2016 refuse_mask=0x400 pdbs=[ecdd3000] runs=1
+kf3: mem invalidate seq 14220 CLEARED OVER ABSENCE (Some(VasKey(13965664437323958352))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=2016 refuse_mask=0x400 pdbs=[ecdd3000] runs=1
+kf3: mem invalidate seq 14221 CLEARED OVER ABSENCE (Some(VasKey(13965664437323958352))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: walk report carried refusals=2016 refuse_mask=0x400 pdbs=[ecdd3000] runs=0
+kf3: mem invalidate seq 14222 CLEARED OVER ABSENCE (Some(VasKey(13965664437323958352))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: TSPACE-RETIRE tok=0x1805 host=0x3002f key=VasKey(13965663930517817456) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002f fast=0
+kf3: chan token 0x1805 (host 0x3002f) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_
+kf3: act free: 0xc1d0016d:0xff040003: translated host 0x3002f (1884 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x806 host=0x10030 key=VasKey(13965663930517817456) ring_va=0xff00900000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=0 host=0x10030 fast=0
+kf3: chan token 0x806 (host 0x10030) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_e
+kf3: act free: 0xc1d0016e:0xff040004: translated host 0x10030 (1474 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x2007 host=0xc0031 key=VasKey(13965663930517817456) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00002007 route=translated emulated=0 forwarded=0 host=0xc0031 fast=0
+kf3: chan token 0x2007 (host 0xc0031) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_
+kf3: act free: 0xc1d0016f:0xff040005: translated host 0xc0031 (1762 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x2008 host=0xc0032 key=VasKey(13965663930517817456) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00002008 route=translated emulated=0 forwarded=0 host=0xc0032 fast=0
+kf3: chan token 0x2008 (host 0xc0032) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_
+kf3: act free: 0xc1d00170:0xff040006: translated host 0xc0032 (1725 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x2809 host=0x50033 key=VasKey(13965663930517817456) ring_va=0xff00600000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00002809 route=translated emulated=0 forwarded=0 host=0x50033 fast=0
+kf3: chan token 0x2809 (host 0x50033) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_
+kf3: act free: 0xc1d00171:0xff040007: translated host 0x50033 (1717 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x200a host=0xc0034 key=VasKey(13965663930517817456) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000200a route=translated emulated=0 forwarded=0 host=0xc0034 fast=0
+kf3: chan token 0x200a (host 0xc0034) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_
+kf3: act free: 0xc1d00172:0xff040008: translated host 0xc0034 (1674 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x80b host=0x10035 key=VasKey(13965662590488021072) ring_va=0xff00400000 released=true stale_binds=0/541454 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x0000080b route=translated emulated=0 forwarded=1692263 host=0x10035 fast=0
+kf3: chan token 0x80b (host 0x10035) RETIRED, forwarded=1692263 submissions=443250 splits=32286/32286 serves=273111 last_put=Some(4711) gp_get=Some(4711) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_meth
+kf3: act free: 0xc1d00173:0xff040009: translated host 0x10035 (1600 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x804 host=0x1002e key=VasKey(13965663930517817456) ring_va=0xff00b00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=0 host=0x1002e fast=0
+kf3: chan token 0x804 (host 0x1002e) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_e
+kf3: act free: 0xc1d0016b:0xff040002: translated host 0x1002e (1469 us, off the GSP lock)
+kf3: USER_RING_LIFECYCLE (c1d0017a, ff04000c) mode=Scan Counts { entries_scan: 81, entries_pointer: 0, pointer_large_entries: 0, pointer_entry_max_bytes: 0, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, stream_
+kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=0 emulated=0 forwarded=0 host=0x38 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00180, ff04000f) mode=Pointer Counts { entries_scan: 17, entries_pointer: 994, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0
+kf3: DOORBELL-LEDGER tok=0x00000011 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3b trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00181, ff040010) mode=Pointer Counts { entries_scan: 15, entries_pointer: 120, pointer_large_entries: 0, pointer_entry_max_bytes: 3048, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0,
+kf3: DOORBELL-LEDGER tok=0x00001012 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003c trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00185, ff040013) mode=Pointer Counts { entries_scan: 17, entries_pointer: 2794, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 
+kf3: DOORBELL-LEDGER tok=0x00000015 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3f trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00186, ff040014) mode=Pointer Counts { entries_scan: 17, entries_pointer: 155, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0
+kf3: DOORBELL-LEDGER tok=0x00000016 route=passthrough rung=0 emulated=0 forwarded=0 host=0x40 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00187, ff040015) mode=Pointer Counts { entries_scan: 17, entries_pointer: 654, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0
+kf3: DOORBELL-LEDGER tok=0x00000017 route=passthrough rung=0 emulated=0 forwarded=0 host=0x41 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00188, ff040016) mode=Pointer Counts { entries_scan: 15, entries_pointer: 120, pointer_large_entries: 0, pointer_entry_max_bytes: 232, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, 
+kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20042 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00189, ff040017) mode=Pointer Counts { entries_scan: 15, entries_pointer: 35, pointer_large_entries: 0, pointer_entry_max_bytes: 232, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x00001019 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20043 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0018a, ff040018) mode=Pointer Counts { entries_scan: 15, entries_pointer: 35, pointer_large_entries: 0, pointer_entry_max_bytes: 232, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x0000101a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20044 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0018d, ff04000d) mode=Pointer Counts { entries_scan: 17, entries_pointer: 1100, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 
+kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=0 emulated=0 forwarded=0 host=0x39 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00190, ff04000e) mode=Pointer Counts { entries_scan: 17, entries_pointer: 112, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0
+kf3: DOORBELL-LEDGER tok=0x00000010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3a trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00191, ff040011) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1, pointer_large_entries: 0, pointer_entry_max_bytes: 48, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, str
+kf3: DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003d trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00192, ff040012) mode=Pointer Counts { entries_scan: 15, entries_pointer: 18, pointer_large_entries: 0, pointer_entry_max_bytes: 172, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003e trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00193, ff040019) mode=Pointer Counts { entries_scan: 17, entries_pointer: 823205, pointer_large_entries: 0, pointer_entry_max_bytes: 101480, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streame
+kf3: DOORBELL-LEDGER tok=0x0000001b route=passthrough rung=0 emulated=0 forwarded=0 host=0x45 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00194, ff04001a) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1, pointer_large_entries: 0, pointer_entry_max_bytes: 48, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, str
+kf3: DOORBELL-LEDGER tok=0x0000101c route=passthrough rung=0 emulated=0 forwarded=0 host=0x20046 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00195, ff04001b) mode=Pointer Counts { entries_scan: 17, entries_pointer: 152025, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed
+kf3: DOORBELL-LEDGER tok=0x0000001d route=passthrough rung=0 emulated=0 forwarded=0 host=0x47 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00196, ff04001c) mode=Pointer Counts { entries_scan: 15, entries_pointer: 9470, pointer_large_entries: 0, pointer_entry_max_bytes: 144, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0,
+kf3: DOORBELL-LEDGER tok=0x0000101e route=passthrough rung=0 emulated=0 forwarded=0 host=0x20048 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00201, ff040030) mode=Pointer Counts { entries_scan: 17, entries_pointer: 78, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0,
+kf3: DOORBELL-LEDGER tok=0x00000044 route=passthrough rung=0 emulated=0 forwarded=0 host=0x6e trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00202, ff040032) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1, pointer_large_entries: 0, pointer_entry_max_bytes: 48, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, str
+kf3: DOORBELL-LEDGER tok=0x00001046 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20070 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00207, ff040033) mode=Pointer Counts { entries_scan: 17, entries_pointer: 19, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0,
+kf3: DOORBELL-LEDGER tok=0x00000047 route=passthrough rung=0 emulated=0 forwarded=0 host=0x71 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0020b, ff040035) mode=Pointer Counts { entries_scan: 17, entries_pointer: 576, pointer_large_entries: 0, pointer_entry_max_bytes: 44668, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0
+kf3: DOORBELL-LEDGER tok=0x00000049 route=passthrough rung=0 emulated=0 forwarded=0 host=0x73 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000104a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20074 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0020d, ff040037) mode=Pointer Counts { entries_scan: 15, entries_pointer: 18, pointer_large_entries: 0, pointer_entry_max_bytes: 144, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x0000104b route=passthrough rung=0 emulated=0 forwarded=0 host=0x20075 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001f route=passthrough rung=0 emulated=0 forwarded=0 host=0x49 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004a trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00255, ff04001f) mode=Pointer Counts { entries_scan: 15, entries_pointer: 2347, pointer_large_entries: 0, pointer_entry_max_bytes: 8904, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0
+kf3: DOORBELL-LEDGER tok=0x00001021 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004b trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000822 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1004c trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00257, ff040021) mode=Pointer Counts { entries_scan: 17, entries_pointer: 3988858, pointer_large_entries: 0, pointer_entry_max_bytes: 65492, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streame
+kf3: DOORBELL-LEDGER tok=0x00000023 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4d trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00257, ff0e0102) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1284781, pointer_large_entries: 0, pointer_entry_max_bytes: 428, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed:
+kf3: DOORBELL-LEDGER tok=0x00000024 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4e trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00257, ff0e0103) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1529009, pointer_large_entries: 0, pointer_entry_max_bytes: 13800, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streame
+kf3: DOORBELL-LEDGER tok=0x00000025 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4f trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000826 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10050 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00257, ff0e0104) mode=Pointer Counts { entries_scan: 17, entries_pointer: 25, pointer_large_entries: 0, pointer_entry_max_bytes: 556, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x00000027 route=passthrough rung=0 emulated=0 forwarded=0 host=0x51 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0025a, ff040023) mode=Pointer Counts { entries_scan: 15, entries_pointer: 3, pointer_large_entries: 0, pointer_entry_max_bytes: 960, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, st
+kf3: DOORBELL-LEDGER tok=0x00001028 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20052 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00257, ff0e0105) mode=Pointer Counts { entries_scan: 17, entries_pointer: 5, pointer_large_entries: 0, pointer_entry_max_bytes: 4224, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x00000029 route=passthrough rung=0 emulated=0 forwarded=0 host=0x53 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00257, ff0e0106) mode=Pointer Counts { entries_scan: 15, entries_pointer: 3, pointer_large_entries: 0, pointer_entry_max_bytes: 120, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, st
+kf3: DOORBELL-LEDGER tok=0x0000002a route=passthrough rung=0 emulated=0 forwarded=0 host=0x54 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000002b route=passthrough rung=0 emulated=0 forwarded=0 host=0x55 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00260, ff040024) mode=Pointer Counts { entries_scan: 17, entries_pointer: 319972, pointer_large_entries: 0, pointer_entry_max_bytes: 4224, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed:
+kf3: DOORBELL-LEDGER tok=0x0000002c route=passthrough rung=0 emulated=0 forwarded=0 host=0x56 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00260, ff0e0102) mode=Pointer Counts { entries_scan: 15, entries_pointer: 239971, pointer_large_entries: 0, pointer_entry_max_bytes: 500, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 
+kf3: DOORBELL-LEDGER tok=0x0000002d route=passthrough rung=0 emulated=0 forwarded=0 host=0x57 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00260, ff0e0103) mode=Pointer Counts { entries_scan: 15, entries_pointer: 239975, pointer_large_entries: 0, pointer_entry_max_bytes: 296, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 
+kf3: DOORBELL-LEDGER tok=0x0000002e route=passthrough rung=0 emulated=0 forwarded=0 host=0x58 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000082f route=passthrough rung=0 emulated=0 forwarded=0 host=0x10059 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00260, ff0e0104) mode=Pointer Counts { entries_scan: 17, entries_pointer: 7, pointer_large_entries: 0, pointer_entry_max_bytes: 512, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, st
+kf3: DOORBELL-LEDGER tok=0x00000030 route=passthrough rung=0 emulated=0 forwarded=0 host=0x5a trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00257, ff0e0108) mode=Pointer Counts { entries_scan: 17, entries_pointer: 5, pointer_large_entries: 0, pointer_entry_max_bytes: 4224, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x00000031 route=passthrough rung=0 emulated=0 forwarded=0 host=0x5b trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00257, ff0e0109) mode=Pointer Counts { entries_scan: 15, entries_pointer: 3, pointer_large_entries: 0, pointer_entry_max_bytes: 120, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, st
+kf3: DOORBELL-LEDGER tok=0x00000032 route=passthrough rung=0 emulated=0 forwarded=0 host=0x5c trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000033 route=passthrough rung=0 emulated=0 forwarded=0 host=0x5d trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00263, ff040026) mode=Pointer Counts { entries_scan: 17, entries_pointer: 19, pointer_large_entries: 0, pointer_entry_max_bytes: 44652, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0,
+kf3: DOORBELL-LEDGER tok=0x00000034 route=passthrough rung=0 emulated=0 forwarded=0 host=0x5e trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001035 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2005f trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00267, ff040028) mode=Pointer Counts { entries_scan: 17, entries_pointer: 36, pointer_large_entries: 0, pointer_entry_max_bytes: 44668, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0,
+kf3: DOORBELL-LEDGER tok=0x00000036 route=passthrough rung=0 emulated=0 forwarded=0 host=0x60 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001037 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20061 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00269, ff04002a) mode=Pointer Counts { entries_scan: 17, entries_pointer: 5, pointer_large_entries: 0, pointer_entry_max_bytes: 4224, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x00000038 route=passthrough rung=0 emulated=0 forwarded=0 host=0x62 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00269, ff0e0102) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1, pointer_large_entries: 0, pointer_entry_max_bytes: 40, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, str
+kf3: DOORBELL-LEDGER tok=0x00000039 route=passthrough rung=0 emulated=0 forwarded=0 host=0x63 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00269, ff0e0103) mode=Pointer Counts { entries_scan: 15, entries_pointer: 3, pointer_large_entries: 0, pointer_entry_max_bytes: 96, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, str
+kf3: DOORBELL-LEDGER tok=0x0000003a route=passthrough rung=0 emulated=0 forwarded=0 host=0x64 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000083b route=passthrough rung=0 emulated=0 forwarded=0 host=0x10065 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000003c route=passthrough rung=0 emulated=0 forwarded=0 host=0x66 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0026f, ff04002c) mode=Pointer Counts { entries_scan: 17, entries_pointer: 5, pointer_large_entries: 0, pointer_entry_max_bytes: 4224, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x0000003d route=passthrough rung=0 emulated=0 forwarded=0 host=0x67 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0026f, ff0e0102) mode=Pointer Counts { entries_scan: 15, entries_pointer: 1, pointer_large_entries: 0, pointer_entry_max_bytes: 40, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, str
+kf3: DOORBELL-LEDGER tok=0x0000003e route=passthrough rung=0 emulated=0 forwarded=0 host=0x68 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0026f, ff0e0103) mode=Pointer Counts { entries_scan: 15, entries_pointer: 3, pointer_large_entries: 0, pointer_entry_max_bytes: 96, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, str
+kf3: DOORBELL-LEDGER tok=0x0000003f route=passthrough rung=0 emulated=0 forwarded=0 host=0x69 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000840 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1006a trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000041 route=passthrough rung=0 emulated=0 forwarded=0 host=0x6b trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0027d, ff04002e) mode=Pointer Counts { entries_scan: 17, entries_pointer: 276, pointer_large_entries: 0, pointer_entry_max_bytes: 44696, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0
+kf3: DOORBELL-LEDGER tok=0x00000042 route=passthrough rung=0 emulated=0 forwarded=0 host=0x6c trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d0027e, ff04002f) mode=Pointer Counts { entries_scan: 15, entries_pointer: 35, pointer_large_entries: 0, pointer_entry_max_bytes: 232, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: DOORBELL-LEDGER tok=0x00001043 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2006d trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00282, ff040034) mode=Pointer Counts { entries_scan: 17, entries_pointer: 319, pointer_large_entries: 0, pointer_entry_max_bytes: 44668, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0
+kf3: DOORBELL-LEDGER tok=0x00000048 route=passthrough rung=0 emulated=0 forwarded=0 host=0x72 trap=0 fast=0
+kf3: USER_RING_LIFECYCLE (c1d00285, ff04003a) mode=Pointer Counts { entries_scan: 15, entries_pointer: 35, pointer_large_entries: 0, pointer_entry_max_bytes: 232, refused_scan_budget: 0, refused_staged_span_budget: 0, entries_window: 0, segments_streamed: 0, s
+kf3: USER_RING_LIFECYCLE SUMMARY (all relays gone, #2) entries_scan=4498 entries_pointer=31316333 pointer_large_entries=0 refused_scan_budget=0 refused_staged_span_budget=0 segments_streamed=0 stream_restarts=0 stream_publish_retries=0 entries_window=0 to_poin
+kf3: USER_STORE_VIEWS keep=16 armed=5 evicted_at_quota=0 rm_refused_retry_ok=0 rm_refused_fallback_ok=0 rm_refused_read_refused=0
+kf3: DOORBELL-LEDGER tok=0x0000104e route=passthrough rung=0 emulated=0 forwarded=0 host=0x20078 trap=0 fast=0
+kf3: TSPACE-RETIRE tok=0x802 host=0x1002c key=VasKey(13965663930517817456) ring_va=0xff00200000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=1 host=0x1002c fast=0
+kf3: chan token 0x802 (host 0x1002c) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=3 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 contro
+kf3: act free: 0xc1d00168:0xff040000: translated host 0x1002c (1636 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x3 host=0x2d key=VasKey(13965663930517817456) ring_va=0xff00100000 released=true stale_binds=0/394 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000003 route=translated emulated=0 forwarded=88 host=0x2d fast=0
+kf3: chan token 0x3 (host 0x2d) RETIRED, forwarded=88 submissions=197 splits=0/0 serves=1233 last_put=Some(88) gp_get=Some(88) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 con
+kf3: act free: 0xc1d0016a:0xff040001: translated host 0x2d (2552 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x801 host=0x1002b key=VasKey(13970167551636799498) ring_va=0xff00000000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=2 host=0x1002b fast=0
+kf3: chan token 0x801 (host 0x1002b) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=4 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 contro
+kf3: act free: 0xc1e0015f:0x2: translated host 0x1002b (1742 us, off the GSP lock)
+kf3: mem t=1694.571s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 3) — the guest's RM gave BAR1 up; boot framebuffer scrub REFUSED: not scrubbed: a newer guest RM life began (fn 72) after this unload
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP command service REFUSED: QueueNotBound [#3, rate-limited]
+kf3: GSP command service REFUSED: QueueNotBound [#4, rate-limited]
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act birth translated: chan 0xc1e002b9:0xbaba0045 BORN Translated: token 0x1 -> host 0x2b in VasKey(13970169040828235842) gpfifo=0x0x32 userd=Some(Framebuffer { base: 4020699136, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_
+kf3: act promote translated context: 0xc1e002b9:0xbaba0045 GPU_PROMOTE_CTX satisfied by Translated host 0x2b GR=Some((cafe8ab9, c9c0)) VIDEO=None entries=9 init_ids=0xe05 va_ids=0xa7d bound=true — no guest buffer touched (3 us, off the GSP lock)
+kf3: TSPACE-RETIRE tok=0x1 host=0x2b key=VasKey(13970169040828235842) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=0 host=0x2b fast=0
+kf3: chan token 0x1 (host 0x2b) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0
+kf3: act free: 0xc1e002b9:0xbaba0045: translated host 0x2b (2524 us, off the GSP lock)
+kf3: mem invalidate seq 15548 CLEARED OVER ABSENCE (Some(VasKey(13970169041990451210))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 15552 CLEARED OVER ABSENCE (Some(VasKey(13970169041990451210))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 15553 CLEARED OVER ABSENCE (Some(VasKey(13970169041990451210))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: act birth translated: chan 0xc1e002ba:0x2 BORN Translated: token 0x801 -> host 0x1002b in VasKey(13970169041990451210) gpfifo=0x220064000x4096 userd=Some(Framebuffer { base: 4019519488, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-intern
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0xb: gp=0x20 pb=0xe00 (the host's answer)
+kf3: VasKey(13965665420871469168) is a guest-KERNEL space (Translated chan 0xc1d002c3:0xff040000): privileged leaves are mirrored here
+kf3: act birth translated: chan 0xc1d002c3:0xff040000 BORN Translated: token 0x802 -> host 0x1002c in VasKey(13965665420871469168) gpfifo=0x12024b000x16384 userd=Some(Sysmem { base: 10625593344, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KE
+kf3: chan 0xc1d002c3:0xff040000: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x1002c, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+kf3: act birth translated: chan 0xc1d002c5:0xff040001 BORN Translated: token 0x3 -> host 0x2d in VasKey(13965665420871469168) gpfifo=0x120276000x8192 userd=Some(Sysmem { base: 10625593856, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL r
+kf3: chan 0xc1d002c5:0xff040001: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x2d, software classID Some(1) (OWNER_RULINGS §U.1)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: act promote translated context: 0xc1d002c5:0xff040001 GPU_PROMOTE_CTX satisfied by Translated host 0x2d GR=Some((cafe8ad5, c9c0)) VIDEO=None entries=8 init_ids=0x5 va_ids=0xa7d bound=true — no guest buffer touched (2 us, off the GSP lock)
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
