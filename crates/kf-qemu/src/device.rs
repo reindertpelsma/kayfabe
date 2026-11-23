@@ -3935,12 +3935,13 @@ impl Device {
     /// the display engine, its ports and its channels are kept, so the GET, PUT, channel status and
     /// armed words it published stay what the guest reads.
     fn restore_shadow(&self, life: crate::reset::Life) {
-        let map = self.display.map(|dp| &dp.map);
-        let keep = |off: u64| wake_keeps(map, life, off);
         if let Some(pieces) = self.pieces.get() {
-            for p in pieces {
-                restore_piece(p, &self.piece_image(p.base, p.mem.len()), &keep);
-            }
+            restore_pieces(
+                pieces,
+                &|base, len| self.piece_image(base, len),
+                self.display.map(|dp| &dp.map),
+                life,
+            );
         }
         for h in &self.holes {
             h.reset(&self.boot);
@@ -4139,6 +4140,20 @@ impl crate::reset::Owners for Device {
 /// when it moves.
 fn wake_keeps(map: Option<&crate::display::RegMap>, life: crate::reset::Life, off: u64) -> bool {
     life == crate::reset::Life::Kept && map.is_some_and(|m| m.owns(off))
+}
+
+/// Rewrite every shadow piece to its realize image (`image(base, len)`), except the words a reset
+/// that ended as `life` keeps ([`wake_keeps`] over the display aperture `map`).
+fn restore_pieces(
+    pieces: &[Piece],
+    image: &dyn Fn(u64, usize) -> Vec<u8>,
+    map: Option<&crate::display::RegMap>,
+    life: crate::reset::Life,
+) {
+    let keep = |off: u64| wake_keeps(map, life, off);
+    for p in pieces {
+        restore_piece(p, &image(p.base, p.mem.len()), &keep);
+    }
 }
 
 /// Rewrite shadow piece `p` to `want`, word by word and only the words that differ, skipping every
@@ -4614,7 +4629,7 @@ mod config_tests {
 /// display published, an ended life gets the realize image back.
 #[cfg(test)]
 mod wake_shadow_tests {
-    use super::{Piece, restore_piece, wake_keeps};
+    use super::{Piece, restore_piece, restore_pieces, wake_keeps};
     use crate::display::RegMap;
     use crate::reset::Life;
     use kf_disp::model::ChannelKind;
@@ -4683,5 +4698,153 @@ mod wake_shadow_tests {
         q.mem.store_u32(0x4, 0xc30);
         restore_piece(&q, &[0u8; 0x1000], &|off| wake_keeps(None, Life::Kept, off));
         assert_eq!(q.mem.load_u32(0x4), Some(0), "no display: nothing to keep");
+    }
+
+    /// The realize image of every test piece: all zero.
+    fn zeros(_base: u64, len: usize) -> Vec<u8> {
+        vec![0u8; len]
+    }
+
+    /// The body of `fn <name>(` in this file's own source, up to the next item at the same depth.
+    fn body_of<'a>(src: &'a str, sig: &str) -> &'a str {
+        let start = src.find(sig).unwrap_or_else(|| panic!("{sig} not found"));
+        let rest = &src[start..];
+        let end = rest[1..].find("\n    fn ").map_or(rest.len(), |e| e + 1);
+        &rest[..end]
+    }
+
+    /// ★★ Falsifier: after a kept wake, an ENDED reset (a cold reset, a reboot, a new OS) leaves any
+    /// display word of the old life in the shadow. Two halves, because the device itself cannot be
+    /// built without a GPU: the restore over a piece set keeps the display words for a kept life and
+    /// restores them for the ended one that follows (kills a restore that ignores the keep check);
+    /// and the Finish stage passes ITS life to the restore, unchanged (kills a call site that passes
+    /// `Life::Kept`, which would carry one life's PUT, GET, channel-control and armed words into the
+    /// next boot with every functional test green).
+    #[test]
+    fn an_ended_reset_restores_the_display_aperture_even_after_a_kept_wake() {
+        let map = ada();
+        let user = map.user_base(ChannelKind::Window, 1);
+        let pieces = [piece(user, 0x1000), piece(0x0, 0x1000)];
+        pieces[0].mem.store_u32(0x0, 0xe20);
+        pieces[0].mem.store_u32(0x4, 0xe20);
+        pieces[1].mem.store_u32(0x100, 0x1234);
+
+        restore_pieces(&pieces, &zeros, Some(&map), Life::Kept);
+        assert_eq!(
+            pieces[0].mem.load_u32(0x4),
+            Some(0xe20),
+            "kept wake: GET kept"
+        );
+        assert_eq!(
+            pieces[0].mem.load_u32(0x0),
+            Some(0xe20),
+            "kept wake: PUT kept"
+        );
+        assert_eq!(
+            pieces[1].mem.load_u32(0x100),
+            Some(0),
+            "kept wake: NV_PMC restored"
+        );
+
+        // the next life's guest moves PUT, then the machine is reset cold
+        pieces[0].mem.store_u32(0x0, 0xf00);
+        restore_pieces(&pieces, &zeros, Some(&map), Life::Ended);
+        assert_eq!(
+            pieces[0].mem.load_u32(0x4),
+            Some(0),
+            "ended: GET back to realize"
+        );
+        assert_eq!(
+            pieces[0].mem.load_u32(0x0),
+            Some(0),
+            "ended: PUT back to realize"
+        );
+
+        let src = include_str!("device.rs");
+        let finish = body_of(
+            src,
+            "fn finish(&self, epoch: u64, life: crate::reset::Life) -> bool {",
+        );
+        assert_eq!(
+            finish.matches("restore_shadow(").count(),
+            1,
+            "one restore in Finish"
+        );
+        assert!(
+            finish.contains("self.restore_shadow(life);"),
+            "Finish restores the shadow for the life the reset ended as"
+        );
+        assert!(
+            !finish.contains("let life"),
+            "Finish never rebinds its life"
+        );
+        let restore = body_of(src, "fn restore_shadow(&self, life: crate::reset::Life) {");
+        assert!(
+            restore.contains("restore_pieces("),
+            "the shadow goes through restore_pieces"
+        );
+        let flat: String = restore.split_whitespace().collect();
+        assert!(
+            flat.contains("self.display.map(|dp|&dp.map),life,);"),
+            "restore_shadow passes its own life to restore_pieces"
+        );
+        assert!(
+            !restore.contains("Life::"),
+            "restore_shadow names no life of its own"
+        );
+    }
+
+    /// ★ Falsifier: the first word of the aperture is restored on a kept wake, or the word after its
+    /// last byte is kept. For every display row, at its derived `NV_PDISP` bounds.
+    #[test]
+    fn the_display_aperture_boundaries_are_exact_words() {
+        for row in kf_chip::display::ALL {
+            let r = kf_disp::regs::Regs::for_ip("580.159.04", row.ip_version).unwrap();
+            let t = kf_disp::class::for_version("580.159.04").unwrap();
+            let map = RegMap::resolve(&r, t, row).expect("register map");
+            let (lo, hi) = map.aperture();
+            assert_eq!(lo % 4, 0, "{}", row.chips);
+            let last = hi & !3;
+            let keeps = |off| wake_keeps(Some(&map), Life::Kept, off);
+            assert!(keeps(lo), "{}: first word {lo:#x}", row.chips);
+            assert!(!keeps(lo - 4), "{}: word before {:#x}", row.chips, lo - 4);
+            assert!(keeps(last), "{}: last word {last:#x}", row.chips);
+            assert!(
+                !keeps(last + 4),
+                "{}: word after {:#x}",
+                row.chips,
+                last + 4
+            );
+        }
+    }
+
+    /// ★ Falsifier: in a piece that starts below the aperture and ends inside it, a word below the
+    /// aperture is kept on a kept wake, or a word inside it is restored (a restore that indexes the
+    /// piece by byte instead of by word keeps the wrong words).
+    #[test]
+    fn a_piece_straddling_the_aperture_keeps_only_its_display_words() {
+        let map = ada();
+        let (lo, _) = map.aperture();
+        let base = lo - 0x800;
+        let p = piece(base, 0x1000);
+        for i in (0..0x1000).step_by(4) {
+            p.mem.store_u32(i, 0xaaaa_0000 | i as u32);
+        }
+        restore_piece(&p, &[0u8; 0x1000], &|off| {
+            wake_keeps(Some(&map), Life::Kept, off)
+        });
+        for i in (0..0x1000u64).step_by(4) {
+            let want = if base + i >= lo {
+                0xaaaa_0000 | i as u32
+            } else {
+                0
+            };
+            assert_eq!(
+                p.mem.load_u32(i as usize),
+                Some(want),
+                "word at {:#x}",
+                base + i
+            );
+        }
     }
 }

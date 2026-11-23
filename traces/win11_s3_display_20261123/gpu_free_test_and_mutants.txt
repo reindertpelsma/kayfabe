@@ -15,3 +15,29 @@ Mutants of wake_keeps (each applied alone, then reverted):
    a_kept_wake_leaves_the_display_words_the_engine_published ... FAILED   (ended life kept GET 0xe20)
 3. keep every word for a kept life (ignore the aperture)
    a_kept_wake_restores_everything_outside_the_display ... FAILED          (NV_PMC word not restored)
+
+Security review of PR #575 (2026-11-23, /root/night/SEC_REVIEW_PR575_20261123.md): four tests added at kf3 HEAD of the
+follow-up commit; each new test shown failing against the reviewer's surviving mutants (applied alone, then reverted):
+
+== M1 Finish passes Life::Kept
+   test device::wake_shadow_tests::an_ended_reset_restores_the_display_aperture_even_after_a_kept_wake ... FAILED
+   test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 634 filtered out; finished in 0.03s
+== M10 restore ignores the keep check
+   test device::wake_shadow_tests::an_ended_reset_restores_the_display_aperture_even_after_a_kept_wake ... FAILED
+   test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 634 filtered out; finished in 0.03s
+== M5 owns excludes lo
+   test device::wake_shadow_tests::the_display_aperture_boundaries_are_exact_words ... FAILED
+   test device::wake_shadow_tests::a_piece_straddling_the_aperture_keeps_only_its_display_words ... FAILED
+   test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 634 filtered out; finished in 0.03s
+== M8 owns extends hi by 4
+   test device::wake_shadow_tests::the_display_aperture_boundaries_are_exact_words ... FAILED
+   test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 634 filtered out; finished in 0.03s
+== M9 restore_piece indexes by byte
+   test device::wake_shadow_tests::a_piece_straddling_the_aperture_keeps_only_its_display_words ... FAILED
+   test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 634 filtered out; finished in 0.03s
+== M11 aperture shrunk below the cursor user areas
+   test display::tests::every_resolved_display_offset_is_inside_the_aperture ... FAILED
+   test device::wake_shadow_tests::the_display_aperture_boundaries_are_exact_words ... FAILED
+   test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 634 filtered out; finished in 0.01s
+
+cargo test -p kf-qemu: lib 641 passed, 0 failed (every other target ok).
