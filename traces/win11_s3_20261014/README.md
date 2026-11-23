@@ -1,6 +1,11 @@
 # Win11 S3 sleep/wake on kf3 `0c5fedff` (merge of the S3-resume branch and the user-ring-scan branch), 2026-10-14
 
 STATUS: RESEARCH. Result: **Windows 11 does NOT yet survive S3 sleep + wake on this host. 0/3 clean cycles.**
+⊘ *UPDATE 2026-11-23 (`traces/win11_s3_wake_20261123/README.md`, measured):* the hv-flags storm of runs 1-2 is caused by QEMU's
+wake reset zeroing `HV_X64_MSR_REFERENCE_TSC` (KVM stops maintaining the guest's TSC page) while the guest TSC restarts near 0;
+Windows keeps reading the stale page, writes "negative" stimer deadlines, and KVM's wrapped one-shot never fires. It needs a
+host with a valid TSC page (this trusted host); a third QEMU hunk that keeps the Hyper-V MSR block across the wake fixed it
+3/3 on q35. The "inferred" paragraph below (i440FX + OVMF as the common factor) does not hold for the storm.
 Measured = a run named here (kf3 log, host `perf kvm` trace, guest event log, screendump). Inferred = said so.
 
 Host: trusted box, RTX 4070, run 2990 (owner's disk `win11-full-b`), kf3 `0c5fedff` (= `7f781318d` + `c287af4f`,

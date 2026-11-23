@@ -1,0 +1,25 @@
+[     0.0s] S3PROBE_START label=r3f1 arm=B backing=gate_s3g cpu=- qemu=/workspace/bench/qemu-build-f1/qemu-system-x86_64
+[     1.6s] host {'uname': '6.8.0-59-generic', 'clocksource': 'tsc', 'tsc_dmesg': ['[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro tsc=reliable clocksource=tsc console=tty1 console=ttyS0 panic=-1', '[    0.072674] Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro tsc=reliable clocksource=tsc console=tty1 console=ttyS0 panic=-1'], 'cpu_flags_has_constant_tsc': False, 'cpu_flags_has_nonstop_tsc': False, 'repo_rev': '1052e2f90', 'gpu': 'NVIDIA GeForce RTX 4090, 580.159.04'}
+[     1.7s] launch rc=0 [2026-11-23T04:36:01Z] detached: tag=s3_r3f1, log logs/s3_r3f1_run.log (stdout logs/s3_r3f1_run.out) 
+[   182.0s] guest up=True after 180s
+[   275.4s] powercfg /a: The following sleep states are available on this system: | Standby (S3) | The following sleep states are not available on this system: | Standby (S1) | The system firmware does not support this standby state. | Standby (S2) | The system firmware does not support this standby state. | Hibernate | The system firmware does not support hibernation. | Standby (S0 Low Power Idle) | The system firmware d
+[   279.1s] c1 boot0=2026-11-23T03:41:30.5000000+00:00 hv_writes_before=37 tsc_page_gpa=0xd000
+[   281.6s] c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   295.6s] c1 status=suspended after 14s
+[   302.1s] c1 woke; status=running rates={'exits': 64552, 'halt_exits': 660, 'io_exits': 320, 'mmio_exits': 5937, 'halt_wakeup': 646, 'irq_injections': 9412} stimer_first=[{'ts': 828.489127, 'vcpu': 0, 'timer': 0, 'time_now': 2901250634, 'count': 2901261726, 'count_s64': 2901261726, 'delta_u64': 11092, 'wraps_x100': False}, {'ts': 828.492423, 'vcpu': 0, 'timer': 0, 'time_now': 2901283597, 'count': 2901293354, 'count_s64': 2901293354, 'delta_u64': 9757, 'wraps_x100': False}]
+[   370.1s] S3_CYCLE label=r3f1 n=1 verdict=CLEAN reasons=[]
+[   404.0s] c2 boot0=2026-11-23T03:41:30.5000000+00:00 hv_writes_before=8 tsc_page_gpa=None
+[   406.4s] c2 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   418.4s] c2 status=suspended after 12s
+[   424.9s] c2 woke; status=running rates={'exits': 67989, 'halt_exits': 238, 'io_exits': 66, 'mmio_exits': 5326, 'halt_wakeup': 226, 'irq_injections': 7679} stimer_first=[{'ts': 953.524056, 'vcpu': 0, 'timer': 0, 'time_now': 4151599868, 'count': 4151604032, 'count_s64': 4151604032, 'delta_u64': 4164, 'wraps_x100': False}, {'ts': 953.537263, 'vcpu': 0, 'timer': 0, 'time_now': 4151731937, 'count': 4151739901, 'count_s64': 4151739901, 'delta_u64': 7964, 'wraps_x100': False}]
+[   447.7s] S3_CYCLE label=r3f1 n=2 verdict=CLEAN reasons=[]
+[   483.8s] c3 boot0=2026-11-23T03:41:30.5000000+00:00 hv_writes_before=8 tsc_page_gpa=None
+[   487.9s] c3 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   497.9s] c3 status=suspended after 10s
+[   504.4s] c3 woke; status=running rates={'exits': 43334, 'halt_exits': 2175, 'io_exits': 0, 'mmio_exits': 792, 'halt_wakeup': 2120, 'irq_injections': 6376} stimer_first=[{'ts': 1030.733902, 'vcpu': 1, 'timer': 0, 'time_now': 4923698288, 'count': 4923712252, 'count_s64': 4923712252, 'delta_u64': 13964, 'wraps_x100': False}, {'ts': 1030.755164, 'vcpu': 2, 'timer': 0, 'time_now': 4923910908, 'count': 4923915677, 'count_s64': 4923915677, 'delta_u64': 4769, 'wraps_x100': False}]
+[   529.2s] S3_CYCLE label=r3f1 n=3 verdict=CLEAN reasons=[]
+[   559.2s] S3PROBE_DONE label=r3f1 clean=3/3 of 3 planned
+[   559.2s] S3PROBE_EXIT
