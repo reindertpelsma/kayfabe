@@ -1414,9 +1414,12 @@ pub fn resolve_rows_epoch(
     log: &RowsLog,
     va: u64,
     len: u64,
-) -> (Result<Vec<kf_chan::tmode::Span>, u64>, u64) {
+) -> (
+    Result<Vec<kf_chan::tmode::Span>, kf_chan::tmode::Unresolved>,
+    u64,
+) {
     let Ok(r) = rows.read() else {
-        return (Err(va), 0);
+        return (Err(kf_chan::tmode::Unresolved::Uncovered(va)), 0);
     };
     let epoch = log.epoch();
     let spans = kf_chan::tmode::resolve_spans(va, len, |at| {

@@ -441,7 +441,11 @@ fn control_entries_other_than_nop_and_extended_base_are_refused() {
 /// Guest memory that also exposes placement rows (one vidmem row over the pushbuffer).
 struct RowsMem(Mem);
 impl kf_chan::tmode::Rows for RowsMem {
-    fn resolve(&self, va: u64, len: u64) -> Result<Vec<kf_chan::tmode::Span>, u64> {
+    fn resolve(
+        &self,
+        va: u64,
+        len: u64,
+    ) -> Result<Vec<kf_chan::tmode::Span>, kf_chan::tmode::Unresolved> {
         kf_chan::tmode::resolve_spans(va, len, |at| {
             (PB..PB + 0x10_0000).contains(&at).then(|| {
                 (
