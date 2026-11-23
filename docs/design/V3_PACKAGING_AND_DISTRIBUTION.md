@@ -19,6 +19,8 @@ Labels. **OWNER DECISION (2026-11-20)**: stated by the owner in the discussion, 
 
 ### 1.2 What exists today (CODE READ)
 
+⊘ **Correction 2026-11-23 (CODE READ; the table row "GPL and the release binary" below is the 2026-11-20 state, kept as written).** Task I7 landed on 2026-11-20 after this document: the guest-ingress allowlist of `kf-abi` was re-derived from NVIDIA's open-gpu-kernel-modules and kayfabe's own measurements, `LICENSE` exception 2 was narrowed to files that are not in the device's link closure, and `scripts/ci/qemu_license_closure.py` runs in the `rust-mutants-b` job of CI (`OWNER_RULINGS.md` §BD; `qemu_license_closure.py` run on 2026-11-23 at `next` `92a7f2782`: CLEAN, 19 workspace crates, findings=0). So the GPL exception is **no longer a standing blocker**; a counsel check before the first public binary is recommended, not blocking. The security gate (§P) row is unchanged, and whether a binary may be published is still the owner's decision (Q10).
+
 | Piece | Today | Gap |
 |---|---|---|
 | Device sources | `qemu/hw/misc/kf3/`: `kf3.c` 2134 lines, `kf3.h` 289, `kf3_gop.h`, `kf3_guest_ram.h`, `meson.build` | none to overlay: the kit is already a copy |
@@ -100,6 +102,8 @@ PCI placement needs no kayfabe property: the device is a QEMU PCI device (parent
 
 ### 2.3 Gaps, in the order the owner will meet them
 
+⊘ **Correction 2026-11-23 (CODE READ, `next` `92a7f2782`):** item 5 below is built. `scripts/ci/doc_cli_reference.py` generates the property table of `docs/howto/cli-reference.md` from `qemu/hw/misc/kf3/kf3.c` and `python3 scripts/ci/doc_cli_reference.py check` fails when a `DEFINE_PROP` line has no row (run on 2026-11-23: `CLI_REFERENCE OK (27 properties)`; it runs in the `stable` job of `.github/workflows/ci.yml`, with `doc_cli_reference_mutants.py`). The text of item 5, and its count of 26 rows, is the 2026-11-20 state and is kept as written. Items 1 to 4 are unchanged.
+
 1. The umbrella `-object` and its relation to `-global` (Q2).
 2. All-GPUs-by-default (Q2).
 3. A display mode: resolution, and what "framelock" selects (Q6).
@@ -151,6 +155,8 @@ Still open in `V3_SECURITY_MODEL.md` section 7 and **not re-verified here**: run
 | **Behaviour experiments, default off (product-affecting)** | `KF3_DISPLAY_SDR_COLOR`, `_ARMED_DEFAULTS`, `_BLANK_STATE`, `_HDCP_STATE`, `_CORE_AT_VBLANK`, `_LOADV`, `_HOTPLUG_EDID_SEEN`, `_HEAD_TIMING_EN_BASE`, `_CAPS_OVERLAY_*`, `KF3_TEAR_GATE`, `KF3_SW_SUBCH_INERT`, `KF3_USERD_RELAY_OFF`, `KF3_RELAY_GET_REFRESH`, `KF3_WIN_USER_RING_SHADOW`, `KF3_WIN_REFUSE_PT_FIFO_UPDATE`, `KF3_WIN_HIDE_UNTABLED_VIDEO`, `KF3_ASYNC_PREEMPT_REENABLE_NOACT`, `KF3_CARRY_ATOMIC_DISABLE`, `KF3_DBFAST_SPIN_US`, `KF3_NO_GUEST_VA_RESERVE`, `KF3_VRAM_ATTRS`, `KF3_DISPLAY_*_PROBE` | each is an experiment or a falsifier arm; not needed to boot as far as the inventory says (`V3_FLAG_INVENTORY.md`, which is itself partly stale: 25 of its 137 names no longer appear in the tree) |
 
 What this means for the rule. The rule is satisfied **in practice** when no name in the last two rows is needed for a normal run; the 2026-11-15 flag cleanup removed the 18 flags of the Windows profile on that basis (`OWNER_RULINGS.md` §AT), but that change was not run on hardware (`V3_FLAG_INVENTORY.md`). It is satisfied **by construction** only when the product-affecting reads cannot be reached from a release binary's environment at all. DESIGN: each name in the last two rows gets one of three fates, decided per name: hardwire the shipped value and delete the read; turn it into a documented `x-`-prefixed device property (QEMU's own marker for an unstable property) if an operator really needs it; or compile it only into a lab build.
+
+⊘ **Correction 2026-11-23 (CODE READ, `next` `92a7f2782`):** the lint below exists. `scripts/ci/env_allowlist.py` with `scripts/ci/env_registry.json` and the debt file `scripts/ci/env-allowlist-debt.json` runs in the `stable` job (run on 2026-11-23: `reads=127 names registered=127 offenders-on-baseline=51 findings=0`), and `env_allowlist_mutants.py` runs in CI. Its text and the sentence "What exists today: no such gate" are the 2026-11-20 state and are kept as written; the fates of the 51 baseline offenders are still to be decided per name.
 
 **Allowlist lint (DESIGN).** A CI gate that (a) lists every environment read in the product sources (the same `git grep` as above, plus string literals with the three prefixes); (b) holds the list to a committed allowlist file that assigns each name one of the six classes above and, for the two product-affecting classes, a fate and a date; (c) fails on a new name, on a changed class, and on a product-affecting read in a source path the release binary links; (d) is itself under a mutant test, like the other `scripts/ci` gates. **What exists today:** no such gate. `git ls-files scripts/ci | grep -i env` finds `provider_env_mutants.py`, `test_vast_provider_env.py` and `test_vast_setup_base_env.py`, which test the Vast VM's own environment, not kayfabe's. The lint is named as "later (Stage 3)" in `OWNER_RULINGS.md` §AT and as "not done" in `V3_FLAG_INVENTORY.md`, and `V3_CLOCK_RULE.md` says the repository has none. Related and existing: `scripts/bench/windows/win_vm.sh --env-file` accepts only `KF3_NAME=digits` lines (`docs/howto/windows-guest.md`), and `scripts/ci/doc_freshness.py` treats any `KF3_`, `KF_`, `KAYFABE_` or `NVKVM_` name in a document as a reference that must appear in source.
 
@@ -298,10 +304,14 @@ Facts recorded 2026-11-20 (counted in the tree):
 **DESIGN.**
 
 1. The manual is rewritten around the four steps of section 0, with operator pages moved to a "run your own CI" section (also section 9) and evidence tags moved to the internal documents that carry the evidence. That rewrite is a separate, later job; this change does not touch `docs/howto/`.
+⊘ *2026-11-23: items 2 and 3 are built and run in CI: the property table (`scripts/ci/doc_cli_reference.py`), the environment allowlist (`scripts/ci/env_allowlist.py`) and the comment-hygiene gate (`scripts/ci/comment_hygiene.py`, baseline file `scripts/ci/comment-hygiene-debt.json`, run on 2026-11-23: `baseline=2070 new=0 stale=0`). The limits table of item 2 is not built.*
+
 2. The property table is **generated from `kf3.c`**, and a test fails when a `DEFINE_PROP` line has no row (section 2.3 item 5). The environment allowlist (section 2.5) and the limits table (section 2.4) are generated the same way.
 3. A gate for **date-stamped or agent-process notes in code comments** (for example the `★ 2026-10-03` and `⊘ [date, box id]` markers that fill `kf3.c`, `build_kf3.sh` and many Rust files). The marker style is the repository's own history, so the gate needs a baseline of existing debt and fails only on new lines, the way `scripts/ci/debt.py` ratchets other gates. Design notes and incident history move to internal documents, which already exist for most of them.
 
 ## 12. Order of work
+
+⊘ **Correction 2026-11-23:** steps 1 and 2 of the list below are done (see the corrections in sections 2.3, 2.5 and 11); the build kit of step 5 exists since 2026-11-21 (the UPDATE in section 1.2), the module study does not; the rest stands.
 
 **DESIGN, a suggestion, not a ruling.** Everything below is GPU-free except where it says so.
 
@@ -318,7 +328,7 @@ Facts recorded 2026-11-20 (counted in the tree):
 ## 13. What this document does not change
 
 - No code, no CI gate and no published page. The only other files touched are `docs/OWNER_RULINGS.md` (§BC) and `docs/STATUS_AND_HANDOFF.md`.
-- It does not lift the GPL exception or the security-audit gate (section 1.2). A release binary stays blocked on both until the owner rules otherwise.
+- ⊘ *2026-11-23: the GPL-exception half of this bullet is outdated, see the correction at the top of section 1.2; the security-audit half stands.* It does not lift the GPL exception or the security-audit gate (section 1.2). A release binary stays blocked on both until the owner rules otherwise.
 - It does not duplicate the Windows script (section 4.1), the kfroot audit (section 6) or the propimage configuration work (section 10): each is in flight elsewhere and is referenced.
 
 ## 14. Falsifiers
@@ -364,5 +374,7 @@ A design claim here is wrong if:
 **Q12. Frame clock and framelock.** What is built of "the broker as the frame clock" (section 2.6, the `display.md` versus `broker/README.md` disagreement), and what "framelock mode" would add for the user. Together with Q6.
 
 **Q13. The resolution knob.** The broker's `--resolution` is only a suggestion to the guest and the device has no mode property (Q6): whether the user's knob lives on the broker, on the device or on both.
+
+⊘ **Correction 2026-11-23:** the GPL half of Q10 is answered in fact by task I7 (2026-11-20, `OWNER_RULINGS.md` §BD, see the correction in section 1.2); the stage-2 security gate (§P) is still open, and the decision to publish is the owner's.
 
 **Q10. When may a binary be published?** The owner's goal is a release binary; the GPL exception (`kf-abi` capability tables, re-derivation task I7 of `V3_SWEEP_AND_INSTALL.md`) and the stage-2 security gate (§P) are both still open. Neither is decided here.

@@ -590,6 +590,7 @@ Source: the owner's whitepaper answers, forwarded by the coordinator on 2026-10-
   - files derived from gVisor's nvproxy, which stay Apache-2.0 only;
   - files that carry their own notice;
   - third-party data inside recorded traces.
+- ⊘ *Superseded in part 2026-11-23: the first bullet below (the re-derivation of the allowlists) was done by task I7 on 2026-11-20, see §BD and `LICENSE` exception 2; the other two bullets were not re-checked.*
 - **Still open, under task I7 (`docs/design/V3_SWEEP_AND_INSTALL.md`):**
   - Re-derive the nvproxy-derived allowlists (`kf-abi`/`kayfabe-abi` `capability.rs`) from ogkm
     headers. `kf-qemu` links `kf-abi`, so until then a QEMU binary built from this tree is not
