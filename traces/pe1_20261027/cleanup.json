@@ -1,0 +1,16 @@
+{
+  "run": "PE1-cleanup-20261027",
+  "iso_deleted": true,
+  "result_disks_deleted": true,
+  "private_firmware_and_key_deleted": true,
+  "own_build_targets_and_qemu_source_deleted": true,
+  "qemu_processes": 0,
+  "gdm_active": true,
+  "cuInit": 0,
+  "cuda_driver_calls_after_all_zero": true,
+  "dev_null_character": true,
+  "gpu_lock_release": "verified free by nonblocking flock after shell exit",
+  "vast_instances_created": [],
+  "vast_spend_usd": 0,
+  "verification_utc": "2026-10-27T23:39:01.828532+00:00"
+}
