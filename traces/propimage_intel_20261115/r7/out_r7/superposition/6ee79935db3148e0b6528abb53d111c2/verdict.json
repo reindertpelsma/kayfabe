@@ -1,0 +1,7 @@
+{
+  "class": "harness",
+  "app": "superposition",
+  "ok": false,
+  "evidence": "NONE",
+  "error": "Task timeout; no verdict"
+}

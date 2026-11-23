@@ -1,0 +1,172 @@
+== time 2026-11-12T17:54:22.9074373Z
+== Win32_Processor
+
+
+Manufacturer                            : GenuineIntel
+Name                                    : AMD Virtual CPU
+Description                             : Intel64 Family 23 Model 1 Stepping 2
+Family                                  : 1
+Architecture                            : 9
+ProcessorId                             : 178BFBFF00800F12
+NumberOfCores                           : 8
+NumberOfLogicalProcessors               : 8
+MaxClockSpeed                           : 2497
+L2CacheSize                             : 4096
+L3CacheSize                             : 8192
+VirtualizationFirmwareEnabled           : False
+SecondLevelAddressTranslationExtensions : False
+
+
+
+
+== registry CentralProcessor\0
+
+
+VendorIdentifier         : GenuineIntel
+Identifier               : Intel64 Family 23 Model 1 Stepping 2
+ProcessorNameString      : AMD Virtual CPU
+~MHz                     : 2496
+FeatureSet               : 823868927
+Update Revision          : {1, 0, 0, 0}
+Platform Specific Field1 : 
+
+
+
+
+== systeminfo (processor, hypervisor lines)
+OS Name:                       Microsoft Windows 11 Pro
+OS Version:                    10.0.26200 N/A Build 26200
+OS Build Type:                 Multiprocessor Free
+System Boot Time:              11/12/2026, 5:50:02 PM
+Processor(s):                  1 Processor(s) Installed.
+BIOS Version:                  EFI Development Kit II / OVMF 0.0.0, 2/6/2015
+Virtualization-based security: Status: Not enabled
+Hyper-V Requirements:          A hypervisor has been detected. Features required for Hyper-V will not be displayed.
+== cpuid probe
+vendor=GenuineIntel maxleaf=13
+leaf 00000001.0 eax=00800f12 ebx=07080800 ecx=fef83203 edx=178bfbff
+leaf 00000007.0 eax=00000000 ebx=009c01a9 ecx=00000000 edx=00000000
+leaf 0000000d.1 eax=00000007 ebx=00000340 ecx=00000000 edx=00000000
+leaf 80000000.0 eax=8000001e ebx=00000000 ecx=00000000 edx=00000000
+leaf 80000001.0 eax=00800f12 ebx=00000000 ecx=00400121 edx=2c100800
+leaf 80000008.0 eax=00003028 ebx=00000000 ecx=00000000 edx=00000000
+brand=AMD Virtual CPU
+hv_vendor=Microsoft Hv maxhv=40000005
+leaf 40000001.0 eax=31237648 ebx=00000000 ecx=00000000 edx=00000000
+leaf 40000003.0 eax=0000027e ebx=00000030 ecx=00000000 edx=00000408
+leaf 40000004.0 eax=00000028 ebx=00001fff ecx=00000000 edx=00000000
+decoded family=23 model=1 stepping=2
+== IsProcessorFeaturePresent
+pf0=False
+pf1=False
+pf2=True
+pf3=True
+pf6=True
+pf7=False
+pf8=True
+pf9=True
+pf10=True
+pf12=True
+pf13=True
+pf14=True
+pf17=True
+pf18=False
+pf20=False
+pf21=False
+pf22=True
+pf23=True
+pf24=False
+pf25=False
+pf26=False
+pf27=False
+pf28=True
+pf29=False
+pf30=False
+pf31=False
+pf32=True
+pf33=False
+pf34=False
+pf36=True
+pf37=True
+pf38=True
+pf39=True
+pf40=True
+pf41=False
+pf43=False
+pf44=False
+pf45=False
+== System events of interest (since boot)
+2026-11-12T17:50:03 Microsoft-Windows-Kernel-Boot id=153 Virtualization-based security (policies: 0) is disabled.
+2026-11-12T17:50:03 Microsoft-Windows-Kernel-Boot id=20 The last shutdown's success status was true. The last boot's success status was true.
+2026-11-12T17:50:03 Microsoft-Windows-Kernel-Boot id=247 Unable to load Pluton-Windows firmware. StatusCode: STATUS_SUCCESS, Reason: Failed to apply firmware.
+2026-11-12T17:50:03 Microsoft-Windows-Kernel-Boot id=238 EFI time zone bias: 2047. Daylight flags: 0. Firmware time: ?2026?-?11?-?12T17:50:00.000000000Z.
+2026-11-12T17:50:03 Microsoft-Windows-Kernel-Boot id=25 The boot menu policy was 0x1.
+2026-11-12T17:50:03 Microsoft-Windows-Kernel-Boot id=27 The boot type was 0x0.
+2026-11-12T17:50:03 Microsoft-Windows-Kernel-Boot id=18 There are 0x1 boot options on this system.
+2026-11-12T17:50:03 Microsoft-Windows-Kernel-Boot id=32 The bootmgr spent 0 ms waiting for user input.
+2026-11-12T17:50:11 Microsoft-Windows-Kernel-Power id=172 Connectivity state in standby: Disconnected, Reason: NIC compliance
+2026-11-12T17:50:12 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 0 in group 0 exposes the following power management capabilities:
+
+2026-11-12T17:50:12 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 1 in group 0 exposes the following power management capabilities:
+
+2026-11-12T17:50:12 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 2 in group 0 exposes the following power management capabilities:
+
+2026-11-12T17:50:12 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 3 in group 0 exposes the following power management capabilities:
+
+2026-11-12T17:50:12 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 4 in group 0 exposes the following power management capabilities:
+
+2026-11-12T17:50:12 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 5 in group 0 exposes the following power management capabilities:
+
+2026-11-12T17:50:12 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 6 in group 0 exposes the following power management capabilities:
+
+2026-11-12T17:50:12 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 7 in group 0 exposes the following power management capabilities:
+
+2026-11-12T17:52:58 Microsoft-Windows-DistributedCOM id=10016 The application-specific permission settings do not grant Local Launch permission for the COM Server application with CLSID 
+
+2026-11-12T17:52:58 Microsoft-Windows-DistributedCOM id=10016 The application-specific permission settings do not grant Local Launch permission for the COM Server application with CLSID 
+
+2026-11-12T17:52:58 Microsoft-Windows-DistributedCOM id=10016 The application-specific permission settings do not grant Local Launch permission for the COM Server application with CLSID 
+
+2026-11-12T22:33:27 Microsoft-Windows-Kernel-Boot id=153 Virtualization-based security (policies: 0) is disabled.
+2026-11-12T22:33:27 Microsoft-Windows-Kernel-Boot id=20 The last shutdown's success status was true. The last boot's success status was true.
+2026-11-12T22:33:27 Microsoft-Windows-Kernel-Boot id=247 Unable to load Pluton-Windows firmware. StatusCode: STATUS_SUCCESS, Reason: Failed to apply firmware.
+2026-11-12T22:33:27 Microsoft-Windows-Kernel-Boot id=238 EFI time zone bias: 2047. Daylight flags: 0. Firmware time: ?2026?-?11?-?12T14:33:26.000000000Z.
+2026-11-12T22:33:27 Microsoft-Windows-Kernel-Boot id=25 The boot menu policy was 0x1.
+2026-11-12T22:33:27 Microsoft-Windows-Kernel-Boot id=27 The boot type was 0x0.
+2026-11-12T22:33:27 Microsoft-Windows-Kernel-Boot id=18 There are 0x1 boot options on this system.
+2026-11-12T22:33:27 Microsoft-Windows-Kernel-Boot id=32 The bootmgr spent 0 ms waiting for user input.
+2026-11-12T22:33:28 Microsoft-Windows-Kernel-Power id=172 Connectivity state in standby: Disconnected, Reason: NIC compliance
+2026-11-12T22:33:28 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 0 in group 0 exposes the following power management capabilities:
+
+2026-11-12T22:33:28 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 1 in group 0 exposes the following power management capabilities:
+
+2026-11-12T22:33:28 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 2 in group 0 exposes the following power management capabilities:
+
+2026-11-12T22:33:28 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 3 in group 0 exposes the following power management capabilities:
+
+2026-11-12T22:33:28 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 4 in group 0 exposes the following power management capabilities:
+
+2026-11-12T22:33:28 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 5 in group 0 exposes the following power management capabilities:
+
+2026-11-12T22:33:28 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 6 in group 0 exposes the following power management capabilities:
+
+2026-11-12T22:33:28 Microsoft-Windows-Kernel-Processor-Power id=55 Processor 7 in group 0 exposes the following power management capabilities:
+
+2026-11-12T22:33:48 Service Control Manager id=7023 The netprofm service terminated with the following error: 
+
+== previous-boot crash evidence
+== Windows licensing state
+
+
+Name                 : Windows(R), Professional edition
+LicenseStatus        : 1
+GracePeriodRemaining : 0
+
+
+
+
+== Application log (SPP / activation / app licence providers)
+2026-11-12T17:54:24 Windows Error Reporting id=1001 Fault bucket , type 0
+
+2026-11-12T17:54:24 Windows Error Reporting id=1001 Fault bucket , type 0
+

@@ -1,0 +1,7 @@
+Exception calling "EndProcessing" with "0" argument(s): "NVIDIA display device restart failed"
+At line:202 char:17
++                 $__cmdletization_objectModelWrapper.EndProcessing()
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : RuntimeException
+ 

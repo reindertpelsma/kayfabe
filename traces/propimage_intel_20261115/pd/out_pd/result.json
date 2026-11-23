@@ -1,0 +1,58 @@
+[
+  {
+    "step": "prerequisite",
+    "verdict": "PASS",
+    "detail": "swtpm >= 0.10 (libtpms state compatibility still required)",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "unpack",
+    "verdict": "PASS",
+    "detail": "SHA256 of image and state; derived seed verified",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "overlay",
+    "verdict": "PASS",
+    "detail": "throwaway clone of image.base.qcow2; base not booted",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "clock",
+    "verdict": "PASS",
+    "detail": "RTC base 2026-11-12T17:49:48Z (fresh overlay)",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "boot",
+    "verdict": "PASS",
+    "detail": "ci mode, restrict=on, disposable overlay",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "clock-save",
+    "verdict": "WARN",
+    "detail": "Guest clock not saved: Guest UTC unavailable before shutdown",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "stop",
+    "verdict": "PASS",
+    "detail": "own QEMU stopped; other own helpers cleaned by ExitStack",
+    "evidence": "NONE",
+    "class": "harness"
+  },
+  {
+    "step": "harness",
+    "verdict": "HARNESS",
+    "detail": "Guest SSH unavailable",
+    "evidence": "NONE",
+    "class": "harness"
+  }
+]

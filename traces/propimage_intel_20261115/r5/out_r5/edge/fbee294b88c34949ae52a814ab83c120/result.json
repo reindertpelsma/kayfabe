@@ -1,0 +1,26 @@
+﻿{
+    "window_title":  "KFGL fbee294b88c34949ae52a814ab83c120 ok renderer=ANGLE (NVIDIA, NVIDIA GeForce RTX 3090 (0x00002204) Direct3D11 vs_5_0 ps_5_0, D3D11) frames=133 - Profile 1 - Microsoft​ Edge",
+    "launched":  true,
+    "kind":  "UIA",
+    "started":  1794508465.408,
+    "app":  "edge",
+    "ended":  1794508474.744,
+    "run_id":  "fbee294b88c34949ae52a814ab83c120",
+    "edge_pids":  [
+                      2272,
+                      10172,
+                      10672,
+                      4584,
+                      2428,
+                      3712,
+                      6140,
+                      10856,
+                      9676,
+                      8724,
+                      6312,
+                      2520,
+                      6708,
+                      4364,
+                      4288
+                  ]
+}
