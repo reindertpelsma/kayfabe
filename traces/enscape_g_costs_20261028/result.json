@@ -1,0 +1,193 @@
+{
+  "status": "DEBUG_EVIDENCE_WITH_WORKLOAD_LIMIT_DEVIATION_NO_COMPLETED_BENCHMARK_RESULT",
+  "date": "2026-10-28",
+  "run_alias": "G-8830",
+  "source_revision": "ebeaa49b842cb4d77217549d3aebcf5ba1c02f55",
+  "source_commit_url": "https://github.com/reindertpelsma/kayfabe/commit/ebeaa49b842cb4d77217549d3aebcf5ba1c02f55",
+  "debug_parent_revision": "fa0829d75c3f630266afd375fc0a7fd3cfae9d06",
+  "binary_sha256": "ac2e92276563166759be09001a2cca554477e974d57bfc796182ac779c7dddc3",
+  "flags": "original23 A7418 flags plus KF3_DIAG_REFRESH_STACK=1; unchanged from E11",
+  "guest_driver": "580.88",
+  "TdrDelay": null,
+  "TdrDdiDelay": null,
+  "tdr_readback": "both keys absent before launch",
+  "invocation": {
+    "arguments": [
+      "enscape",
+      "6"
+    ],
+    "selector": "06_SanMiguelFullUltraHQ",
+    "resolution": "FullHD1920x1080",
+    "vendor_script_sha256": "dde76812307c0e28e86d74b379c4ecd728a2335881759b58edc4b0a720953cdb",
+    "workload_json_sha256": "a46c9ee038b3364b3cfb069773c82695e50436e343b712f7e77dca225bd926e4",
+    "requests": 1,
+    "full_suite": false
+  },
+  "counter_scope": {
+    "denominator": "one complete synchronous per-space apply_entry target_apply_ns; not whole asyncBatch or split request wall",
+    "mark_calls": "OUTER Reservations::mark invocations, including inner block work and reindex; not Live::mark/Vec allocation count",
+    "stitch_calls": "whole MappedRegion::stitch invocations including reservation and piece mmap calls; not mmap count",
+    "nonoverlapping_VA_only": true,
+    "emission_condition": "valid returned target_apply >500ms with debug enabled",
+    "missing_or_smaller_windows": "not measured as zero",
+    "signal_cost_may_be_included": true
+  },
+  "rows": [
+    {
+      "walk": 16081,
+      "after_prelaunch_log_frontier": true,
+      "log_phase": "between_recorded_launch_and_end_frontiers",
+      "target_apply_ns": 803552284,
+      "mark_calls": 24,
+      "mark_ns": 293634126,
+      "stitch_calls": 24,
+      "stitch_ns": 355322462,
+      "apply_refused": 0,
+      "mark_plus_stitch_ns": 648956588,
+      "fraction": 0.8076096614019456,
+      "valid": true,
+      "duplicate_walk_space": false,
+      "threshold_verdict": "BELOW_1S_THRESHOLD",
+      "signal_debug": true,
+      "space_alias": "same-observed-space-1",
+      "mapped_runs": 98304,
+      "unmapped_runs": 0,
+      "map_verbs_reported": 24,
+      "batches_reported": 24,
+      "batch_logical_runs_reported": 98304,
+      "fallbacks_reported": 0
+    },
+    {
+      "walk": 16397,
+      "after_prelaunch_log_frontier": true,
+      "log_phase": "between_recorded_launch_and_end_frontiers",
+      "target_apply_ns": 3008184730,
+      "mark_calls": 24,
+      "mark_ns": 107007069,
+      "stitch_calls": 24,
+      "stitch_ns": 2612129799,
+      "apply_refused": 0,
+      "mark_plus_stitch_ns": 2719136868,
+      "fraction": 0.9039128617609863,
+      "valid": true,
+      "duplicate_walk_space": false,
+      "threshold_verdict": "OVER_50_PERCENT",
+      "signal_debug": true,
+      "space_alias": "same-observed-space-1",
+      "mapped_runs": 93454,
+      "unmapped_runs": 0,
+      "map_verbs_reported": 24,
+      "batches_reported": 24,
+      "batch_logical_runs_reported": 93454,
+      "fallbacks_reported": 0
+    }
+  ],
+  "qualifying_complete_target_apply_over_1s_rows": 1,
+  "threshold_interpretation": "one observed qualifying debug window exceeds50percent mark+stitch, mostly stitch; does not meet under20percent falsifier; not historical causal proof",
+  "unknown_inner_cardinality": [
+    "Live::mark calls",
+    "Vec allocations",
+    "stitch pieces",
+    "mmap syscalls"
+  ],
+  "scatter_receipt_limit": {
+    "retained_first_receipts": 32,
+    "all_before_prelaunch_log_frontier": true,
+    "join_to_slow_window": "NOT_IDENTIFIABLE; no walk/space IDs"
+  },
+  "code_read": {
+    "adjacent_backing_pieces_already_coalesced": true,
+    "file": "crates/kf-mem/src/ledger.rs",
+    "lines": [
+      492,
+      500
+    ],
+    "generic_coalescing_proposal": "STOPPED before code; no optimization or additional run"
+  },
+  "stack_observation": {
+    "headers": 22,
+    "top_own_frame_groups": [
+      {
+        "samples": 21,
+        "function": "MappedRegion::stitch",
+        "file": "crates/kf-linux-raw/src/mapping_unsafe.rs",
+        "raw_pc_line": 593,
+        "return_pc_minus_one_line": 584,
+        "code_read": "per-piece libc::mmap MAP_FIXED placement"
+      },
+      {
+        "samples": 1,
+        "function": "allocator growth reached by Vec::push in apply_entry",
+        "file": "crates/kf-mem/src/apply.rs",
+        "line": 1066
+      }
+    ],
+    "interpretation": "sampled positions, not a duration profile or exact ticket join"
+  },
+  "observed_outcome": {
+    "completed_result_observed": false,
+    "xml_nonempty": false,
+    "wrapper_exit_record_present": false,
+    "task_state_at_final_capture": "Ready",
+    "task_last_result_raw": 267014,
+    "registered_task_execution_limit": "PT30M",
+    "remaining_named_engine_processes_at_final_capture": 2,
+    "vendor_error_lines_observed": [],
+    "observed_nvlddmkm_event153_records_since_saved_guest_launch": 3,
+    "post_sample_behavior": "PERTURBED; no independent unperturbed TDR inference"
+  },
+  "execution_deviation": {
+    "requested_workload_limit_seconds": 1800,
+    "descendant_containment_at_limit": "NOT_ENFORCED; scheduled action was Ready but engine children persisted",
+    "final_capture_qpc_delta_from_launch_ticks": 18864158669,
+    "qpc_frequency": 10000000,
+    "final_read_attempt_error": "initial ReadAllText failed on live log; agent rc0 was not capture success; read-only shared-file retry succeeded",
+    "effect": "no completed benchmark claim; no resampling; earlier complete counter window retained",
+    "final_capture_elapsed_seconds_by_guest_qpc": 1886.4158669,
+    "process_snapshot_precedes_final_capture_qpc": true
+  },
+  "clock_limits": {
+    "guest_utc_offset_from_host": "approximately minus2hours; preserved without clock change",
+    "event_query_basis": "guest own saved launch UTC and retained guest records, not host UTC",
+    "precise_event_to_counter_or_ticket_alignment": "NOT_ESTABLISHED",
+    "counter_clock": "host Instant intervals"
+  },
+  "capture": {
+    "failure_trace_archive_bytes": 77480579,
+    "failure_trace_archive_sha256": "962f43df67288e08e6543f6ab279d36659b6ccdeb10ac90b47bef1fc7b00f8ee",
+    "failure_zip_entries_crc_checked": 16,
+    "dxg_etl_bytes": 407420928,
+    "nt_etl_bytes": 111165440,
+    "pre_stop_logger_reported_buffers_lost": {
+      "dxg": 0,
+      "nt": 0
+    },
+    "pre_stop_query_guest_utc": "2026-10-28T20:20:35.1819477Z",
+    "export_completed_guest_utc": "2026-10-28T20:20:50.9899525Z",
+    "exact_stop_instant": "not captured; bracketed by query/export",
+    "logger_restart": false,
+    "final_metadata_archive_bytes": 4591921,
+    "final_metadata_archive_sha256": "0ee0ed3ff5502363be94244767263e98ff23c9648701834b63c14bf065377b6a",
+    "final_zip_entries_crc_checked": 11,
+    "both_whole_archives_host_verified_before_cleanup": true,
+    "complete_boot_or_event_coverage": "NOT_CLAIMED; ETL ended before final workload cutoff, no ETL decode"
+  },
+  "restoration": {
+    "qmp_powerdown_clean": true,
+    "unclean": false,
+    "forced_signals": false,
+    "owned_QEMU_gone": true,
+    "foreign_QEMU_observed": 0,
+    "gdm_active": true,
+    "cuInit": 0,
+    "devnull_character": true,
+    "sealed_parent_unchanged": true,
+    "lock_released": true,
+    "unit_inactive_mainPID0": true,
+    "ended_host_utc": "2026-10-28T22:45:37.618635+00:00",
+    "whole_arm_within_2700s": true
+  },
+  "image_limit": "top parent content and backing-chain stat metadata sealed; underlying base full content hash not captured",
+  "publication_scope": "three metadata files only; no runtime ancestry or product fix",
+  "experimental_runtime_parent_revision": "bab3c0882b49c76f8a71d47fc672ba6330bc1313"
+}
