@@ -45,7 +45,7 @@ Read 2026-11-23 from the T1/T1b logs of that directory, the kf3 sources at `orig
 - [read, `nvkms-dma.c:184-230`, the open driver's analogue] a ring writer whose put is past GET and whose batch does not fit
   before the end only wraps (JUMP to 0) once GET is not 0, and otherwise waits. [inferred] a GET word stuck at 0 is the
   one value that blocks such a writer's wrap; a writer that gives up waiting (a timeout) and writes on would overrun the
-  ring exactly as measured. Windows' own room check is closed source: this is a plausible mechanism, not a read one.
+  ring exactly as measured (T1/T1b, 2026-11-23). Windows' own room check is closed source: this is a plausible mechanism, not a read one.
 
 ## Hypotheses (ranked), each with its falsifier
 
@@ -120,3 +120,9 @@ sleep timeout (about 2 min after a wake with no user input) put it back to sleep
 D3 (F3, one boot) was 3/3 CLEAN. D0 (control `544472a7`, instrumentation only) runs up to 3 cycles instead of 1, so that a
 wake with window 1's GET within 0x310 bytes of the ring end (the T1/T1b position; D3 reached it at its third wake) can
 occur; it stops at the first FAIL as every run does. Predictions and falsifier (i) as written above.
+
+## Addendum 4, 2026-11-23 (after all runs; editorial)
+
+One edit to the Phase 1 text above, made after the runs for the claim-ledger gate (`scripts/claim_ledger.py`): the words
+"(T1/T1b, 2026-11-23)" were added after "ring exactly as measured", naming the runs the sentence already referred to.
+Nothing else above was changed after the first run (`git log -p` of this file shows it).

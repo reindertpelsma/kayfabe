@@ -1,0 +1,62 @@
+{
+ "cycle": 1,
+ "boot0": "2026-11-23T14:56:58.5000000+00:00",
+ "suspended": true,
+ "kf3_before": {
+  "s3wake": 0,
+  "kept": 0,
+  "gsp_resume": 0,
+  "cold": 0,
+  "unserviced": 248,
+  "ram_add_kept": 9,
+  "ram_changed": 0,
+  "ram_del": 8,
+  "user_ring_topology": 0,
+  "user_ring_refused": 0,
+  "fn47_unload": 0,
+  "lines": 6442,
+  "disp_stopped": 0,
+  "disp_stall": 0,
+  "wake_words": 0,
+  "wake_puts": 0
+ },
+ "ssh_back": true,
+ "back_after_s": 23,
+ "boot1": "2026-11-23T14:56:58.5000000+00:00",
+ "kf3_after": {
+  "s3wake": 2,
+  "kept": 1,
+  "gsp_resume": 1,
+  "cold": 0,
+  "unserviced": 360,
+  "ram_add_kept": 10,
+  "ram_changed": 0,
+  "ram_del": 10,
+  "user_ring_topology": 0,
+  "user_ring_refused": 0,
+  "fn47_unload": 0,
+  "lines": 10043,
+  "disp_stopped": 0,
+  "disp_stall": 0,
+  "wake_words": 1,
+  "wake_puts": 8
+ },
+ "status_end": "running",
+ "judged_after_wake_s": 121,
+ "event_window_s": 162,
+ "nvidia_smi": "NVIDIA GeForce RTX 4090",
+ "events": [
+  "2026-11-23T15:01:50.9109375+00:00 1 Microsoft-Windows-Power-Troubleshooter",
+  "2026-11-23T15:01:28.5217626+00:00 1 Microsoft-Windows-Kernel-General",
+  "2026-11-23T15:01:19.7759462+00:00 107 Microsoft-Windows-Kernel-Power",
+  "2026-11-23T15:01:07.7211435+00:00 42 Microsoft-Windows-Kernel-Power",
+  "2026-11-23T22:47:51.6669965+00:00 1 Microsoft-Windows-Kernel-General",
+  "2026-11-23T22:46:22.1388366+00:00 1 Microsoft-Windows-FilterManager",
+  "2026-11-23T22:44:25.7851536+00:00 14 Microsoft-Windows-Wininit",
+  "2026-11-23T22:43:37.6740437+00:00 153 Microsoft-Windows-Kernel-Boot"
+ ],
+ "verdict": "FAIL",
+ "reasons": [
+  "event 153"
+ ]
+}

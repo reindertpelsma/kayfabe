@@ -4632,8 +4632,8 @@ mod wake_shadow_tests {
     }
 
     /// ★ Falsifier: after the restore of a kept S3 wake, window 1's GET word reads anything but the
-    /// GET its engine kept. The values are the ones measured at the stop in run T1b
-    /// (`traces/win11_s3_tdr_20261123/t1b/`): GET 0xe20 kept, the guest's next PUT 0x1130.
+    /// GET its engine kept. The values are the ones measured at the stop in run T1b at revision
+    /// `0c16cb72` (`traces/win11_s3_tdr_20261123/t1b/`): GET 0xe20 kept, the guest's next PUT 0x1130.
     #[test]
     fn a_kept_wake_leaves_the_display_words_the_engine_published() {
         let map = ada();
