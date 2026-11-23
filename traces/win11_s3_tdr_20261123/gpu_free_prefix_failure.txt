@@ -1,0 +1,48 @@
+GPU-free falsifier tests of F2, run 2026-11-23 in the agent's worktree (cargo test -p kf-qemu --lib).
+
+1. The two new tests against the PRE-FIX RamMap (crates/kf-qemu/src/mem.rs and device.rs checked out from origin/next
+   90a658c31, tests from this branch):
+
+test mem::userdram::tests::a_wake_resplit_of_the_same_ram_keeps_a_resolved_userd ... FAILED
+test mem::userread::tests::a_wake_resplit_of_the_same_ram_keeps_the_birth_generation ... FAILED
+thread 'mem::userdram::tests::a_wake_resplit_of_the_same_ram_keeps_a_resolved_userd' panicked at crates/kf-qemu/src/userdram.rs:141:9:
+assertion `left == right` failed
+  left: Err(Topology)
+ right: Ok(())
+thread 'mem::userread::tests::a_wake_resplit_of_the_same_ram_keeps_the_birth_generation' panicked at crates/kf-qemu/src/userread.rs:686:9:
+assertion `left == right` failed
+  left: Err(Topology)
+ right: Ok(7)
+test result: FAILED. 0 passed; 2 failed
+
+   (Err(Topology) is the refusal the relay logged on hardware: `USER_RING_PUT_READ: Topology`, R2 2026-11-23.)
+
+2. With the fix: `cargo test -p kf-qemu -p kf-rm` all pass (TEST_RC=0); scripts/ci/clippy.sh new=0.
+
+3. Mutants of the fix (each applied alone to the fixed mem.rs), `cargo test -p kf-qemu --lib -- userdram userread`:
+   a. `Translation::conflicts` never true (`... && !linear && false`): 4 FAILED
+      (topology_contention_retries_but_replacement_never_revives_old_userd,
+       a_wake_resplit_of_the_same_ram_keeps_a_resolved_userd,
+       publication_admission_rechecks_exact_source_and_retains_guards,
+       stream_receipts_topology_revocation_between_parts_forbids_publication)
+   b. every pair "linear" (`let linear = true || ...`): the same 4 FAILED.
+   The direction "same file bytes at another address" and the record bound are pinned by
+   mem::tests::translation_conflicts_only_when_a_byte_or_an_address_moves and
+   mem::tests::the_translation_record_is_bounded_and_revokes_when_full.
+
+4. After the security review of PR #574 (finding F1: the file-offset paths took "the fd of the lowest-address block",
+   so with removals no longer revoking, a second fd-backed region could serve the guest-RAM file's offsets inside one
+   QEMU transaction). Fix: RamMap pins the guest-RAM backend's (st_dev, st_ino) at the first fd-backed add and every
+   file-offset path (userread::snapshot/mapped, with_file_span/read_file, file_range, memory_list_block, backing_fd,
+   place_ram) resolves through RamMap::primary_fd; the reseed after a revoke keeps every still-registered block.
+   New tests and the mutant each kills (cargo test -p kf-qemu --lib -- <test>, each mutant alone):
+   MUTANT K2 pin ignored (lowest fd wins) rc 101
+   test mem::tests::a_change_of_primary_backend_refuses_file_offset_leases ... FAILED
+   MUTANT K1 no reseed after a revoke rc 101
+   test mem::tests::a_revoke_keeps_every_still_registered_translation ... FAILED
+   MUTANT K4 linear ignores file identity rc 101
+   test mem::userdram::tests::another_file_at_the_same_address_and_offset_ends_a_userd ... FAILED
+   MUTANT K3 del revokes again rc 101
+   test mem::tests::a_same_linear_shrink_keeps_generation_but_refuses_the_hidden_tail ... FAILED
+   K2's mutant is the pre-fix primary_fd (lowest fd wins), i.e. the test fails against the PR head before this fix.
+   K3 passes before and after (a pin of "the hidden TSEG tail is refused").

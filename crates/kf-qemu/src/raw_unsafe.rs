@@ -207,6 +207,13 @@ impl BackendFd {
         })
     }
 
+    /// The file's identity (`st_dev`, `st_ino`), the key [`PartialEq`] compares. Holds nothing
+    /// open: the RAM map keeps it for translations whose block is gone.
+    #[must_use]
+    pub fn identity(&self) -> (u64, u64) {
+        (self.dev, self.ino)
+    }
+
     /// Borrow it for one `mmap`. ⊘ Never closed here; open for as long as `self` lives.
     #[must_use]
     pub fn borrow(&self) -> std::os::fd::BorrowedFd<'_> {
@@ -698,6 +705,16 @@ impl RawRegion {
         RawRegion {
             ptr: self.ptr,
             len: self.len,
+        }
+    }
+
+    /// Test-only: a handle on `[off, off+len)` of the same leaked memory, so two RAM blocks can
+    /// show one backing at two partitions (a QEMU flat-view re-split).
+    pub(crate) fn test_sub(&self, off: usize, len: usize) -> RawRegion {
+        assert!(off.checked_add(len).is_some_and(|e| e <= self.len));
+        RawRegion {
+            ptr: self.span(off, len).unwrap(),
+            len,
         }
     }
 }

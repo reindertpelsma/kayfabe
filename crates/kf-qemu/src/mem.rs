@@ -111,10 +111,29 @@ impl RamBlock {
 
 /// ★ Guest RAM, as QEMU registered it — the VMM's own guest-physical layout, which is NOT the
 /// identity once there is a PCI hole.
+///
+/// The `generation` is the incarnation of the guest-RAM **translation** (guest-physical address
+/// to backend file offset), which every lease (a resolved sysmem USERD, a MemoryList registration,
+/// a user-ring source snapshot) captures at birth and re-checks at each access. It moves only when
+/// an added fd-backed block maps a byte differently from any translation registered before
+/// ([`Translation::conflicts`]). A flat-view re-split that maps the same bytes at the same
+/// addresses (QEMU removes `[0x100000, top)` and adds `[0xc0000, top)` when a PAM or TSEG window
+/// toggles, which a q35 machine reset does at every S3 wake) keeps it, so the leases survive. A
+/// removal alone keeps it too: every access resolves its span under the read guard, and a span
+/// whose block is gone is refused there. The S3 wake measurement that made this necessary:
+/// `traces/win11_s3_tdr_20261123/README.md`.
 #[derive(Debug)]
 pub struct RamMap {
     blocks: RwLock<Vec<RamBlock>>,
     generation: AtomicU64,
+    /// Every fd-backed translation registered since the last revocation; written only with the
+    /// `blocks` write guard held (add/del), never read elsewhere. Bounded by [`TRANSLATIONS_MAX`].
+    translations: Mutex<Vec<Translation>>,
+    /// The guest-RAM backend's file identity (`st_dev`, `st_ino`), pinned by the first fd-backed
+    /// add. Every path that reads guest RAM by FILE offset resolves through a block of this file
+    /// only ([`Self::primary_fd`]); a second fd-backed region (a DIMM, a shared-memory BAR) is never
+    /// "the first fd" when the low-RAM blocks are briefly gone inside one QEMU transaction.
+    primary: std::sync::OnceLock<(u64, u64)>,
 }
 
 impl Default for RamMap {
@@ -122,7 +141,46 @@ impl Default for RamMap {
         Self {
             blocks: RwLock::new(Vec::new()),
             generation: AtomicU64::new(1),
+            translations: Mutex::new(Vec::new()),
+            primary: std::sync::OnceLock::new(),
         }
+    }
+}
+
+/// Distinct translations remembered before the map revokes once and starts over (a policy bound,
+/// not a die fact: a q35 boot registers a handful of RAM sections).
+const TRANSLATIONS_MAX: usize = 256;
+
+/// One registered guest-RAM translation: `[gpa, gpa+len)` shows backend file `file` from `fd_off`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Translation {
+    file: (u64, u64),
+    gpa: u64,
+    fd_off: u64,
+    len: u64,
+}
+
+impl Translation {
+    fn of(b: &RamBlock) -> Option<Self> {
+        Some(Self {
+            file: b.fd.as_ref()?.identity(),
+            gpa: b.gpa,
+            fd_off: b.fd_off,
+            len: b.mem.len() as u64,
+        })
+    }
+    /// Whether `self` and `o` give some guest-physical byte, or some byte of the same file, two
+    /// different translations. Two pieces of one linear mapping (the same file and the same
+    /// `gpa - fd_off`) never conflict, however they are split.
+    fn conflicts(&self, o: &Translation) -> bool {
+        fn overlap(a: u64, alen: u64, b: u64, blen: u64) -> bool {
+            a < b.saturating_add(blen) && b < a.saturating_add(alen)
+        }
+        let linear = self.file == o.file
+            && self.gpa.wrapping_sub(self.fd_off) == o.gpa.wrapping_sub(o.fd_off);
+        let shares_gpa = overlap(self.gpa, self.len, o.gpa, o.len);
+        let shares_bytes = self.file == o.file && overlap(self.fd_off, self.len, o.fd_off, o.len);
+        (shares_gpa || shares_bytes) && !linear
     }
 }
 
@@ -165,18 +223,54 @@ impl RamMap {
         );
     }
 
-    /// Register (or replace) the block at `b.gpa`.
+    /// Register (or replace) the block at `b.gpa`. Returns whether the registration changed the
+    /// translation and so revoked every lease ([`RamMap`]'s docs).
     ///
     /// ⚠ Takes the write lock, so it waits for every outstanding [`RamRef`] (each held across one
     /// bounded copy, at most [`RAM_COPY_CHUNK`] bytes for the chunked accessors) — see
     /// [`Self::del`].
-    pub fn add(&self, b: RamBlock) {
-        if let Ok(mut v) = self.blocks.write() {
-            self.revoke();
-            v.retain(|x| x.gpa != b.gpa);
-            v.push(b);
-            v.sort_by_key(|x| x.gpa);
+    pub fn add(&self, b: RamBlock) -> bool {
+        let Ok(mut v) = self.blocks.write() else {
+            return false;
+        };
+        if let Some(fd) = &b.fd {
+            let _ = self.primary.set(fd.identity());
         }
+        let revoked = self.note_translation(&v, &b);
+        v.retain(|x| x.gpa != b.gpa);
+        v.push(b);
+        v.sort_by_key(|x| x.gpa);
+        revoked
+    }
+
+    /// With the `blocks` write guard held: record `b`'s translation and revoke when it conflicts
+    /// with one registered before (or the record is full). A block without a backend fd carries
+    /// no lease (every lease resolves through the shared fd) and is not recorded.
+    fn note_translation(&self, current: &[RamBlock], b: &RamBlock) -> bool {
+        let Some(t) = Translation::of(b) else {
+            return false;
+        };
+        let Ok(mut seen) = self.translations.lock() else {
+            self.revoke();
+            return true;
+        };
+        let changed = seen.iter().any(|o| t.conflicts(o)) || seen.len() >= TRANSLATIONS_MAX;
+        if changed {
+            self.revoke();
+            // every older lease is dead now: start over from what is registered after this add
+            seen.clear();
+            seen.extend(
+                current
+                    .iter()
+                    .filter(|x| x.gpa != b.gpa)
+                    .filter_map(Translation::of)
+                    .take(TRANSLATIONS_MAX.saturating_sub(1)),
+            );
+        }
+        if !seen.contains(&t) {
+            seen.push(t);
+        }
+        changed
     }
 
     /// Unregister the block at `gpa`.
@@ -185,9 +279,11 @@ impl RamMap {
     /// memory listener, under the BQL, on whichever thread commits the memory transaction — which
     /// can be a vCPU that reprogrammed a BAR) lands here. The write lock WAITS for every
     /// outstanding [`RamRef`] guard, then removes the block (its [`RawRegion`] is dropped: there is
-    /// no copy of it anywhere) and bumps the generation; only after this returns does QEMU free the
-    /// block (after its RCU grace period). So no kayfabe thread can touch the host address after
-    /// the unplug: a lookup after it finds nothing and refuses.
+    /// no copy of it anywhere); only after this returns does QEMU free the block (after its RCU
+    /// grace period). So no kayfabe thread can touch the host address after the unplug: a lookup
+    /// after it finds nothing and refuses. The generation is NOT moved here: a removal changes no
+    /// translation of a byte that stays mapped, and a later block that maps the removed range
+    /// differently revokes in [`Self::add`].
     ///
     /// Why the wait does not break *"nothing blocks on a vCPU or under a lock a vCPU takes"*: a
     /// guard is held across ONE bounded `memcpy` of guest RAM and nothing else — no syscall, no
@@ -201,7 +297,6 @@ impl RamMap {
     /// — needs the C device and the FFI (not this file) and is recorded as the follow-up.
     pub fn del(&self, gpa: u64) {
         if let Ok(mut v) = self.blocks.write() {
-            self.revoke();
             v.retain(|x| x.gpa != gpa);
         }
     }
@@ -221,7 +316,18 @@ impl RamMap {
     /// as the caller keeps it (C-03).
     #[must_use]
     pub fn backing_fd(&self) -> Option<BackendFd> {
-        self.guard()?.iter().find_map(|b| b.fd.clone())
+        self.primary_fd(&self.guard()?).cloned()
+    }
+
+    /// Under a guard the caller holds: the fd of a registered block of the pinned guest-RAM backend
+    /// ([`RamMap`]'s `primary`), or `None` while no block of that file is registered. Never the fd
+    /// of another file, whatever block happens to be lowest.
+    pub(crate) fn primary_fd<'a>(&self, blocks: &'a [RamBlock]) -> Option<&'a BackendFd> {
+        let id = *self.primary.get()?;
+        blocks
+            .iter()
+            .filter_map(|b| b.fd.as_ref())
+            .find(|fd| fd.identity() == id)
     }
 
     /// The block wholly covering `[gpa, gpa+len)`, borrowed through a [`RamRef`] that holds the
@@ -251,7 +357,7 @@ impl RamMap {
         f: impl FnOnce(&RawRegion, usize) -> R,
     ) -> Option<R> {
         let v = self.guard()?;
-        let first = v.iter().find_map(|x| x.fd.as_ref())?;
+        let first = self.primary_fd(&v)?;
         let b = v
             .iter()
             .filter(|b| b.fd.as_ref() == Some(first))
@@ -351,7 +457,7 @@ impl RamMap {
     #[must_use]
     pub fn file_range(&self, gpa: u64, len: u64) -> Option<(BackendFd, u64)> {
         let b = self.block_for(gpa, len)?;
-        let first = b.all().iter().find_map(|x| x.fd.as_ref())?;
+        let first = self.primary_fd(b.all())?;
         if b.fd.as_ref() != Some(first) {
             return None;
         }
@@ -484,7 +590,7 @@ impl MemoryListRam {
         if generation == 0 || self.0.generation.load(Ordering::Relaxed) != generation {
             return Err(AccessError::Topology);
         }
-        let block = memory_list_block(&guard, span).ok_or(AccessError::Topology)?;
+        let block = memory_list_block(self.0, &guard, span).ok_or(AccessError::Topology)?;
         let at = span
             .base
             .checked_sub(block.gpa)
@@ -506,12 +612,16 @@ impl core::fmt::Debug for MemoryListRam {
     }
 }
 
-fn memory_list_block(blocks: &[RamBlock], span: kf_rm::memory_list::RamSpan) -> Option<&RamBlock> {
+fn memory_list_block<'a>(
+    map: &RamMap,
+    blocks: &'a [RamBlock],
+    span: kf_rm::memory_list::RamSpan,
+) -> Option<&'a RamBlock> {
     if span.length == 0 {
         return None;
     }
     let end = span.base.checked_add(span.length)?;
-    let first = blocks.iter().find_map(|b| b.fd.as_ref())?;
+    let first = map.primary_fd(blocks)?;
     let mut overlaps = blocks.iter().filter(|b| {
         b.gpa
             .checked_add(b.mem.len() as u64)
@@ -556,7 +666,7 @@ impl kf_rm::memory_list::GuestRamAuthority for MemoryListRam {
     }
     fn validate(&self, span: kf_rm::memory_list::RamSpan) -> Option<u64> {
         let guard = self.0.blocks.read().ok()?;
-        memory_list_block(&guard, span)?;
+        memory_list_block(self.0, &guard, span)?;
         let generation = self.0.generation.load(Ordering::Relaxed);
         (generation != 0).then_some(generation)
     }
@@ -580,7 +690,7 @@ impl kf_rm::memory_list::GuestRamAuthority for MemoryListRam {
         if generation == 0 || self.0.generation.load(Ordering::Relaxed) != generation {
             return false;
         }
-        let Some(b) = memory_list_block(&guard, span) else {
+        let Some(b) = memory_list_block(self.0, &guard, span) else {
             return false;
         };
         let Some(at) = span
@@ -613,7 +723,7 @@ impl kf_rm::memory_list::GuestRamAuthority for MemoryListRam {
         if generation == 0 || self.0.generation.load(Ordering::Relaxed) != generation {
             return false;
         }
-        let Some(b) = memory_list_block(&guard, span) else {
+        let Some(b) = memory_list_block(self.0, &guard, span) else {
             return false;
         };
         let Some(at) = span
@@ -1129,7 +1239,7 @@ impl ViewOps for WindowOps {
             .blocks
             .read()
             .ok()
-            .and_then(|v| v.iter().find_map(|b| b.fd.clone()))
+            .and_then(|v| self.ram.primary_fd(&v).cloned())
             .ok_or("no fd-backed guest RAM (the VM needs memory-backend-memfd,share=on)")?;
         self.win
             .place(
@@ -4408,6 +4518,146 @@ pub fn apply_statement(
 #[cfg(test)]
 mod tests {
 
+    /// What counts as a changed guest-RAM translation (`RamMap`): every case a lease depends on.
+    #[test]
+    fn translation_conflicts_only_when_a_byte_or_an_address_moves() {
+        let t = |file, gpa, fd_off, len| Translation {
+            file: (1, file),
+            gpa,
+            fd_off,
+            len,
+        };
+        let low = t(7, 0x10_0000, 0x10_0000, 0x7ff0_0000);
+        // the same linear map, split or joined differently: the S3 wake's re-split
+        assert!(!low.conflicts(&t(7, 0xc_0000, 0xc_0000, 0x7ff4_0000)));
+        assert!(!low.conflicts(&t(7, 0x10_0000, 0x10_0000, 0x1000)));
+        // disjoint in both spaces
+        assert!(!low.conflicts(&t(7, 0x1_0000_0000, 0x8000_0000, 0x1000)));
+        assert!(!low.conflicts(&t(8, 0x1_0000_0000, 0x10_0000, 0x1000)));
+        // an address that now shows other bytes of the file, or another file
+        assert!(low.conflicts(&t(7, 0x20_0000, 0x30_0000, 0x1000)));
+        assert!(low.conflicts(&t(8, 0x20_0000, 0x20_0000, 0x1000)));
+        // the same bytes of the file now shown at another address
+        assert!(low.conflicts(&t(7, 0x1_0000_0000, 0x20_0000, 0x1000)));
+        // the end is exclusive
+        assert!(!low.conflicts(&t(7, 0x8000_0000, 0x0, 0x1000)));
+    }
+
+    fn blk(mem: &RawRegion, fd: &BackendFd, gpa: u64, fd_off: u64) -> RamBlock {
+        RamBlock {
+            gpa,
+            mem: mem.test_alias(),
+            fd: Some(fd.clone()),
+            fd_off,
+        }
+    }
+
+    /// After a revoke the record restarts from every block still registered: a later move of one
+    /// of them is a changed translation and revokes again.
+    #[test]
+    fn a_revoke_keeps_every_still_registered_translation() {
+        let ram = RamMap::default();
+        let (mem, fd) = crate::raw_unsafe::test_owned_ram(0x1000);
+        ram.add(blk(&mem, &fd, 0, 0));
+        ram.add(blk(&mem, &fd, 0x10000, 0x10000));
+        ram.del(0x10000);
+        assert!(ram.add(blk(&mem, &fd, 0x10000, 0x50000)));
+        let g = ram.try_generation().unwrap();
+        ram.del(0);
+        assert!(ram.add(blk(&mem, &fd, 0, 0x80000)));
+        assert_ne!(ram.try_generation(), Some(g));
+    }
+
+    /// A second fd-backed region (a DIMM, a shared-memory BAR) must never become "the" guest-RAM
+    /// file while the low-RAM blocks are gone inside one QEMU transaction (removals run before
+    /// adds): every file-offset path resolves through the backend pinned at the first add.
+    #[test]
+    fn a_change_of_primary_backend_refuses_file_offset_leases() {
+        use kf_rm::memory_list::GuestRamAuthority as _;
+        let ram: &'static RamMap = Box::leak(Box::new(RamMap::default()));
+        let (mf, f) = crate::raw_unsafe::test_owned_ram(0x2000);
+        let (mi, i) = crate::raw_unsafe::test_owned_ram(0x2000);
+        assert!(mi.write_from(0x100, &[0xee; 4]));
+        ram.add(blk(&mf, &f, 0, 0));
+        ram.add(blk(&mi, &i, 0xfe00_0000, 0));
+        let g = ram.try_generation().unwrap();
+        let span = kf_rm::memory_list::RamSpan {
+            base: 0x100,
+            length: 0x100,
+        };
+        assert_eq!(MemoryListRam(ram).validate(span), Some(g));
+        ram.del(0);
+        let mut out = [0u8; 4];
+        assert!(
+            !ram.read_file(0x100, &mut out),
+            "file I served file F's offset"
+        );
+        assert_eq!(ram.backing_fd(), None);
+        assert_eq!(ram.file_range(0xfe00_0100, 4), None);
+        assert!(!MemoryListRam(ram).read(span, g, 0, &mut out));
+        // the low-RAM block comes back: the same translation, the lease reads file F again
+        ram.add(blk(&mf, &f, 0, 0));
+        assert!(MemoryListRam(ram).read(span, g, 0, &mut out));
+        assert_eq!(ram.backing_fd().map(|b| b.identity()), Some(f.identity()));
+    }
+
+    /// TSEG closing over the top of low RAM: the same linear map, shorter. The generation stays,
+    /// and the hidden tail is refused at lookup.
+    #[test]
+    fn a_same_linear_shrink_keeps_generation_but_refuses_the_hidden_tail() {
+        let ram: &'static RamMap = Box::leak(Box::new(RamMap::default()));
+        let (mem, fd) = crate::raw_unsafe::test_owned_ram(0x2000);
+        ram.add(blk(&mem, &fd, 0x10_0000, 0x10_0000));
+        let g = ram.try_generation().unwrap();
+        let tail = super::userdram::Userd::new(ram, 0x10_1800, 0x200).unwrap();
+        ram.del(0x10_0000);
+        assert!(!ram.add(RamBlock {
+            gpa: 0x10_0000,
+            mem: mem.test_sub(0, 0x1000),
+            fd: Some(fd.clone()),
+            fd_off: 0x10_0000,
+        }));
+        assert_eq!(ram.try_generation(), Some(g));
+        assert_eq!(
+            tail.read(0, &mut [0u8; 4]),
+            Err(kf_rm::memory_list::AccessError::Topology)
+        );
+    }
+
+    /// The record of translations is bounded: past `TRANSLATIONS_MAX` distinct pieces the map
+    /// revokes once and starts over instead of growing with the guest's churn.
+    #[test]
+    fn the_translation_record_is_bounded_and_revokes_when_full() {
+        let ram = RamMap::default();
+        let (mem, fd) = crate::raw_unsafe::test_owned_ram(0x1000);
+        let g0 = ram.try_generation().unwrap();
+        for i in 0..TRANSLATIONS_MAX as u64 {
+            assert!(!ram.add(RamBlock {
+                gpa: i * 0x1000,
+                mem: mem.test_alias(),
+                fd: Some(fd.clone()),
+                fd_off: i * 0x1000,
+            }));
+        }
+        assert_eq!(ram.try_generation(), Some(g0));
+        assert!(ram.add(RamBlock {
+            gpa: 0x1000_0000,
+            mem: mem.test_alias(),
+            fd: Some(fd.clone()),
+            fd_off: 0x1000_0000,
+        }));
+        assert_eq!(ram.try_generation(), Some(g0 + 1));
+        assert!(ram.translations.lock().unwrap().len() <= TRANSLATIONS_MAX);
+        // a block with no backend fd carries no lease and is not recorded
+        let (anon, _) = crate::raw_unsafe::test_owned_ram(0x1000);
+        assert!(!ram.add(RamBlock {
+            gpa: 0x2000_0000,
+            mem: anon,
+            fd: None,
+            fd_off: 0,
+        }));
+    }
+
     // ★ 2026-11-16 (`V3_VA_PROFILE.md`, observation only): split enqueue and delivery timing.
 
     #[test]
@@ -5973,7 +6223,7 @@ mod memory_list_tests {
             Err(AccessError::Topology)
         );
         ram.0.del(block.gpa);
-        ram.0.add(block.test_alias());
+        ram.0.add(moved(&block));
         assert_eq!(
             ram.try_read(span, epoch, 0, &mut bytes),
             Err(AccessError::Topology)
@@ -5996,12 +6246,20 @@ mod memory_list_tests {
         assert!(!ram.read(span, 0, 0, &mut result));
         ram.0.del(block.gpa);
         assert!(!ram.read(span, epoch, 0, &mut result));
+        // the same bytes back at the same address: the same translation, the lease lives
         ram.0.add(block.test_alias());
+        assert!(ram.read(span, epoch, span.length - 2, &mut result));
+        // other bytes at that address: revoked, and validation names a new generation
+        ram.0.del(block.gpa);
+        ram.0.add(moved(&block));
         assert!(ram.validate(span).is_some());
         assert!(!ram.write(span, epoch, 0, &[1]));
         let current = ram.validate(span).unwrap();
-        ram.0.del(0xffff0000); // even unrelated/no-op topology notifications revoke
-        assert!(!ram.read(span, current, 0, &mut result));
+        assert_ne!(current, epoch);
+        // an unrelated removal changes no translation (it used to revoke every lease, which killed
+        // every Windows channel at an S3 wake)
+        ram.0.del(0xffff0000);
+        assert!(ram.read(span, current, 0, &mut result));
     }
     #[test]
     fn memory_list_whole_span_no_holes_overlap_foreign_fd_or_overflow() {
@@ -6085,11 +6343,18 @@ mod memory_list_tests {
         };
         ram.0.generation.store(u64::MAX, Ordering::Relaxed);
         assert_eq!(ram.validate(span), Some(u64::MAX));
-        ram.0.add(block.test_alias());
+        ram.0.add(moved(&block));
         assert_eq!(ram.validate(span), None);
         ram.0.del(block.gpa);
         ram.0.add(block.test_alias());
         assert_eq!(ram.validate(span), None);
+    }
+    /// The block at the same address showing other bytes of the file (a changed translation).
+    fn moved(block: &RamBlock) -> RamBlock {
+        RamBlock {
+            fd_off: block.fd_off + 0x10_0000,
+            ..block.test_alias()
+        }
     }
 }
 

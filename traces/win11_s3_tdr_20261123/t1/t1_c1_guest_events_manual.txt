@@ -1,0 +1,14 @@
+T1 cycle 1, read by hand at 2026-11-23T11:35:26Z (box clock) after the probe's crash (s3tdr.py formatting bug, fixed after
+this cycle): System log, Ids 41,1001,1,107,42,4101,153,14, last 12 guest-minutes (the guest clock runs on its own recorded
+clock, about 35 min behind the box), then nvidia-smi. Older boot-time rows (Kernel-Boot 153 = a boot event id of another
+provider, not nvlddmkm) trimmed.
+
+2026-11-23T11:02:03.7818755+00:00 153 nvlddmkm       "Restarting TDR occurred on GPUID:5"
+2026-11-23T11:02:03.7679783+00:00 153 nvlddmkm       "Reset TDR occurred on GPUID:5"
+2026-11-23T11:01:35.7922432+00:00 153 nvlddmkm       "Resetting TDR occurred on GPUID:5"
+2026-11-23T11:00:54.8811498+00:00 1 Microsoft-Windows-Power-Troubleshooter   (woke from sleep)
+2026-11-23T11:00:27.2627449+00:00 107 Microsoft-Windows-Kernel-Power         (resume)
+2026-11-23T11:00:20.0028099+00:00 42 Microsoft-Windows-Kernel-Power          (entering sleep)
+nvidia-smi: NVIDIA GeForce RTX 4090
+Event 153 data words (all three): 0 0 0 0 2 0 48 0 0 0 0 0 153 0 ... (the same as R2's).
+LiveKernelReports\WATCHDOG: no dump newer than 10:59:40 (that one predates the suspend: the gate's known AD102 dump).
