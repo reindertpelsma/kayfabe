@@ -1,0 +1,44 @@
+[2026-11-06|19:08:56] Gathering System Details: Started
+[2026-11-06|19:10:12] Gathering System Details: Finished
+[2026-11-06|19:10:12] Workload initialization: Started
+[2026-11-06|19:10:13] Workload initialization: Finished
+
+Valid Workloads: 
+  5) enscape-01 [v1.0.5] 
+    ✓ <id=33> 01_BistroExtFullHigh 
+    ✓ <id=34> 02_BistroExtFullUltraHQ 
+    ✓ <id=35> 03_BistroIntFullHigh 
+    ✓ <id=36> 04_BistroIntFullUltraHQ 
+    ✓ <id=37> 05_SanMiguelFullHigh 
+    ✓ <id=38> 06_SanMiguelFullUltraHQ 
+    ✓ <id=39> 07_RevitVillaLightViewHigh 
+    ✓ <id=40> 08_RevitVillaAnimFullHigh 
+    ✓ <id=41> 09_RhinoIntWhiteOutlineHigh 
+    ✓ <id=42> 10_RhinoIntFullHigh 
+    
+[2026-11-06|19:10:13] Starting Workload 1 of 1, Iteration 1 of 1
+[2026-11-06|19:10:13] [Workload:enscape-01] Starting
+[2026-11-06|19:10:14] [workload: enscape-01 / subtest: 01_BistroExtFullHigh] Started
+[2026-11-06|19:13:43] [workload: enscape-01 / subtest: 01_BistroExtFullHigh] Completed
+[2026-11-06|19:13:43] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Started
+[2026-11-06|19:19:37] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Completed
+[2026-11-06|19:19:37] [workload: enscape-01 / subtest: 03_BistroIntFullHigh] Started
+[2026-11-06|19:21:11] [workload: enscape-01 / subtest: 03_BistroIntFullHigh] Completed
+[2026-11-06|19:21:11] [workload: enscape-01 / subtest: 04_BistroIntFullUltraHQ] Started
+[2026-11-06|19:22:47] [workload: enscape-01 / subtest: 04_BistroIntFullUltraHQ] Completed
+[2026-11-06|19:22:47] [workload: enscape-01 / subtest: 05_SanMiguelFullHigh] Started
+[2026-11-06|19:27:15] [workload: enscape-01 / subtest: 05_SanMiguelFullHigh] Completed
+[2026-11-06|19:27:15] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+[2026-11-06|19:35:15] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Completed
+[2026-11-06|19:35:15] [workload: enscape-01 / subtest: 07_RevitVillaLightViewHigh] Started
+[2026-11-06|19:37:24] [workload: enscape-01 / subtest: 07_RevitVillaLightViewHigh] Completed
+[2026-11-06|19:37:24] [workload: enscape-01 / subtest: 08_RevitVillaAnimFullHigh] Started
+[2026-11-06|19:39:01] [workload: enscape-01 / subtest: 08_RevitVillaAnimFullHigh] Completed
+[2026-11-06|19:39:01] [workload: enscape-01 / subtest: 09_RhinoIntWhiteOutlineHigh] Started
+[2026-11-06|19:41:19] [workload: enscape-01 / subtest: 09_RhinoIntWhiteOutlineHigh] Completed
+[2026-11-06|19:41:19] [workload: enscape-01 / subtest: 10_RhinoIntFullHigh] Started
+[2026-11-06|19:42:58] [workload: enscape-01 / subtest: 10_RhinoIntFullHigh] Completed
+[2026-11-06|19:42:58] [Workload: enscape-01] Completed
+
+Run complete -- results and logs available in: 
+[Iteration 1] C:\spec\results\enscape-01\result_2026-11-06-19-10-13
