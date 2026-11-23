@@ -1,0 +1,13 @@
+[     0.0s] S3PROBE_START label=r2a arm=A backing=gate_s3g cpu=- qemu=/workspace/bench/kf3-bins/1052e2f9/qemu-system-x86_64
+[     1.6s] host {'uname': '6.8.0-59-generic', 'clocksource': 'tsc', 'tsc_dmesg': ['[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<box-root-partuuid> ro tsc=reliable clocksource=tsc console=tty1 console=ttyS0 panic=-1', '[    0.072674] Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<box-root-partuuid> ro tsc=reliable clocksource=tsc console=tty1 console=ttyS0 panic=-1'], 'cpu_flags_has_constant_tsc': False, 'cpu_flags_has_nonstop_tsc': False, 'repo_rev': '1052e2f90', 'gpu': 'NVIDIA GeForce RTX 4090, 580.159.04'}
+[     1.7s] launch rc=0 [2026-11-23T04:52:44Z] detached: tag=s3_r2a, log logs/s3_r2a_run.log (stdout logs/s3_r2a_run.out) 
+[   248.8s] guest up=True after 247s
+[   345.6s] powercfg /a: The following sleep states are available on this system: | Standby (S3) | The following sleep states are not available on this system: | Standby (S1) | The system firmware does not support this standby state. | Standby (S2) | The system firmware does not support this standby state. | Hibernate | The system firmware does not support hibernation. | Standby (S0 Low Power Idle) | The system firmware d
+[   353.2s] c1 boot0=2026-11-23T03:41:30.5000000+00:00 hv_writes_before=0 tsc_page_gpa=None
+[   358.6s] c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   376.6s] c1 status=suspended after 18s
+[   382.8s] c1 woke; status=running rates={'exits': 64568, 'halt_exits': 808, 'io_exits': 300, 'mmio_exits': 27453, 'halt_wakeup': 721, 'irq_injections': 2370} stimer_first=[]
+[   437.6s] S3_CYCLE label=r2a n=1 verdict=CLEAN reasons=[]
+[   467.6s] S3PROBE_DONE label=r2a clean=1/1 of 1 planned
+[   467.6s] S3PROBE_EXIT

@@ -187,7 +187,7 @@ def summarize(events, wake_ts):
         elif ev == "kvm_hv_synic_set_msr" and "host 1" in body and after:
             s["synic_host_writes_at_wake"] += 1
         elif ev == "kvm_hv_stimer_expiration" and after:
-            m = re.search(r"msg send (-?\d+)", body)
+            m = re.search(r"msg send result (-?\d+)", body)
             if m and int(m[1]) == 0:
                 s["expirations_ok"] += 1
             else:

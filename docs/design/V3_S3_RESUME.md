@@ -3,7 +3,9 @@
 **STATUS: LIVE, 2026-10-14 — MEASURED on the trusted host (RTX 4070, kf3 `559db30c`): the Linux desktop
 guest (ogkm 580.159.04, stock module) survives three S3 suspend/resume cycles in one boot (§6).** Branch
 `claude/s3-resume-20261014`. Evidence: `traces/linux_s3_resume_20261014/` (the failure) and its `fixed/`
-(the passing runs). Windows 11: run 2026-10-14, NOT yet surviving (§7a, correction above §7). Measured = a run or a GPU-free test named here; inferred =
+(the passing runs). Windows 11: run 2026-10-14, NOT yet surviving (§7a, correction above §7). **UPDATE 2026-11-23 (§7b, above
+§7a): the Windows post-wake hang is root-caused (QEMU's wake reset wipes the Hyper-V TSC page while the TSC restarts) and
+fixed by a third QEMU hunk; 3/3 cycles with it on one box; each wake is still followed by a guest TDR recovery.** Measured = a run or a GPU-free test named here; inferred =
 read from source, not executed.
 
 ## 1. The failure, measured (kf3 `c287af4f`, Linux desktop guest, ogkm 580.159.04)
@@ -159,6 +161,37 @@ Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as
   `V3_DISPLAY_PLANES_ORACLE.md` §tables. `traces/linux_s3_resume_20261014/fixed/validation-559db30c/`
   (its `summary.log` also holds the first fast attempt, NOTRUN: the raw client was built into another
   target dir — a harness slip, rerun).
+
+## 7b. UPDATE 2026-11-23: the Windows post-wake hang, root cause and fix (corrects §7a below)
+
+**STATUS: RESEARCH, 2026-11-23. MEASURED on Vast instance 62082978 (RTX 4090, nested KVM, L1 kernel 6.8.0-59), kf3 `1052e2f9`,
+q35, Windows 11 LTSC with the 580.88 driver from `windows_gate.sh`; evidence `traces/win11_s3_wake_20261123/README.md`
+(hypotheses committed before the runs).**
+- [measured R1t] The 2026-10-14 storm reproduces on q35 only when the host gives KVM a master clock (L1 rebooted with
+  `tsc=reliable clocksource=tsc`), i.e. when the guest's Hyper-V TSC page is valid. At the wake QEMU's cold CPU reset zeroes
+  every Hyper-V MSR field of `CPUX86State` (they sit before `end_reset_fields`) and writes them to KVM, so
+  `HV_X64_MSR_REFERENCE_TSC = 0`: KVM stops maintaining the page, which stayed byte-identical in guest RAM. The guest TSC went
+  back by the guest's uptime (TSC offset -588,320,593,649 cycles = -261.48 s at 2.25 GHz). Windows did not re-enable the page
+  (no write of 0x40000021, 0x40000000 or 0x40000001 after the wake), so its reference time read the stale page and went
+  negative; the first post-wake one-shot was `count = -0.3979 s` with KVM's `time_now = 261.08 s`. KVM's `stimer_start`
+  computes `100 * (count - time_now)` in u64, which wraps, so the hrtimer is in the past, `kvm_hv_process_stimers` never sees
+  the (u64) deadline reached and re-arms forever: the guest waits in HLT for a timer that never fires.
+- [measured R1] On a nested box whose L1 TSC is "unstable" (kvm-clock), the page is invalid (all zeros), Windows reads
+  `TIME_REF_COUNT` (always KVM's) and the wake is clean with stock QEMU: the hang depends on the host. §7a's inference that
+  the TSC is reset to 0 by the wake now holds as measured on a stable-TSC host; its inference that the common factor is
+  i440FX + OVMF is withdrawn for arm B (q35 hangs the same way); arm A on q35 was clean once (R2).
+- **Fix (hardwired, no flag):** a third QEMU source hunk, `pc_machine_wakeup` keeps each vCPU's Hyper-V MSR block
+  (`msr_hv_hypercall` .. `msr_hv_tsc_emulation_status`) across the `RESET_TYPE_WAKEUP` reset: read from KVM, reset, put back,
+  then written to KVM, so KVM republishes a valid page for the restarted TSC. Architectural CPU state is reset as before; a
+  guest without `hv-*` flags carries zeros through it. One implementation, `scripts/release/build_qemu.py` (`WAKE_NEW`),
+  applied by the release kit and by `scripts/bench/build_kf3.sh` (`build_qemu.py wake-hunk`). [measured R3] 3/3 clean cycles
+  with it on the stable-TSC boot (page republished, sequence 5; post-wake deadlines 0.4-1.4 ms ahead). A stock QEMU, or a
+  future loadable-module build, lacks it. Test: `scripts/ci/test_release_qemu.py` (`test_the_wake_hunk_*`,
+  `test_build_kf3_applies_the_wake_hunk_before_it_builds`); it pins the hunk's shape and order, the hardware runs pin its effect.
+- **Not fixed:** about 34-45 s after every wake (R1, R2, R3) the Windows driver logs event 153 "Resetting/Reset/Restarting TDR"
+  and its RM unloads (`fn 47 ... newLevel=0`) and comes back on a new GSP life; desktop and `nvidia-smi` work afterwards. Lead:
+  repeated `GSP rpc UNSERVICED { code: 76 }` between the wake and the unload (not analysed). The release row
+  `windows-sleep-wake` stays expected-FAIL until a run without the TDR passes.
 
 ## 7a. Windows 11 run (2026-10-14, kf3 `0c5fedff`) - correction folded above §7
 

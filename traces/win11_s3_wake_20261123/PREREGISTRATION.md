@@ -10,7 +10,7 @@ Without them: a resume and a self-reset 62 s later, a bugcheck 0x5C, three PM1_S
 
 ## Phase 1, GPU-free (read, not executed)
 
-Read: QEMU 10.2.4 (`scripts/bench/qemu.pin`, tarball sha256-verified through `scripts/ci/qemu_source.py`):
+Read 2026-11-23: QEMU 10.2.4 (`scripts/bench/qemu.pin`, tarball sha256-verified through `scripts/ci/qemu_source.py`):
 `target/i386/cpu.h`, `target/i386/kvm/kvm.c`, `hw/i386/pc.c`; Linux KVM `arch/x86/kvm/hyperv.c`, `x86.c` (from
 memory of mainline 5.15..6.x; the box kernel is named in the README after the run).
 
@@ -96,7 +96,7 @@ in the guest's System log for the cycle window.
 
 ## Addendum 2 (2026-11-23 ~04:28Z, after R1, BEFORE the outcome of R1t is read)
 
-- [measured R1, box 62082978, kf3 `1052e2f9`, arm B, q35, stock QEMU] **1/1 CLEAN.** The box's L1 kernel marked its TSC
+- [measured R1 2026-11-23, box 62082978, kf3 `1052e2f9`, arm B, q35, stock QEMU] **1/1 CLEAN.** The box's L1 kernel marked its TSC
   unstable (`tsc: Marking TSC unstable due to TSCs unsynchronized`, clocksource kvm-clock); the guest's TSC page at GPA
   0xd000 read all zeros before the suspend, while suspended and after the wake (KVM publishes sequence 0 = invalid when it
   has no master clock), so Windows read the reference time through the `TIME_REF_COUNT` MSR, which is always KVM's.

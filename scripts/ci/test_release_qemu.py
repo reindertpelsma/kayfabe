@@ -52,12 +52,18 @@ def write(path, text, mode=None):
     return path
 
 
+# the neighbourhood of QEMU 10.2.4's pc_machine_wakeup (hw/i386/pc.c), enough to place the S3-wake hunk
+PC_HEAD = "static void pc_machine_reset(MachineState *machine, ResetType type)\n{\n    qemu_devices_reset(type);\n}\n\n"
+PC_TAIL = "\nstatic void pc_machine_class_init(ObjectClass *oc, const void *data)\n{\n}\n"
+
+
 def qemu_tree(root, version="10.2.4"):
     root = Path(root)
     write(root / "VERSION", version + "\n")
     write(root / "hw/misc/meson.build", "system_ss.add(files('edu.c'))\n")
     write(root / "hw/misc/Kconfig", "config EDU\n    bool\n")
     write(root / "configure", "#!/bin/sh\n", 0o755)
+    write(root / "hw/i386/pc.c", PC_HEAD + kit.WAKE_OLD + PC_TAIL)
     return root
 
 
@@ -208,8 +214,9 @@ class Overlay(Tmp):
         self.assertEqual(by_path["hw/misc/kf3/libkf_qemu.a"]["sha256"], sha(self.a.read_bytes()))
         self.assertEqual(by_path["hw/misc/meson.build"]["kind"], "append-line")
         self.assertEqual(by_path["hw/misc/Kconfig"]["kind"], "append-stanza")
+        self.assertEqual(by_path["hw/i386/pc.c"]["kind"], "replace-function")
         self.assertEqual([r["path"] for r in records], sorted(r["path"] for r in records if r["kind"] == "add-file")
-                         + ["hw/misc/Kconfig", "hw/misc/meson.build"])
+                         + ["hw/misc/Kconfig", "hw/misc/meson.build", "hw/i386/pc.c"])
 
     def test_a_foreign_file_in_the_device_directory_is_refused(self):
         write(self.q / "hw/misc/kf3/notes.txt", "mine")
@@ -231,6 +238,48 @@ class Overlay(Tmp):
         (self.k / "qemu/hw/misc/kf3/kf3.c").unlink()
         with self.assertRaises(kit.KitRefused):
             self.apply()
+
+    # The S3-wake hunk (traces/win11_s3_wake_20261123). Falsifier named first: a kit or build_kf3.sh that leaves QEMU's
+    # pc_machine_wakeup as it is, or saves the Hyper-V block without putting it back after the reset, fails these.
+    def test_the_wake_hunk_keeps_the_hyperv_block_across_the_wake_reset(self):
+        self.apply()
+        pc = (self.q / "hw/i386/pc.c").read_text()
+        self.assertNotIn(kit.WAKE_OLD, pc)
+        self.assertEqual(pc.count("static void pc_machine_wakeup(MachineState *machine)"), 1)
+        body = pc[pc.index("static void pc_machine_wakeup"):pc.index("static void pc_machine_class_init")]
+        sync = body.index("cpu_synchronize_all_states();")
+        reset = body.index("pc_machine_reset(machine, RESET_TYPE_WAKEUP);")
+        put = body.index("cpu_synchronize_all_post_reset();")
+        save = body.index("memcpy(save + KF_HV_LEN")
+        restore = body.index("memcpy((uint8_t *)&X86_CPU(cs)->env + KF_HV_LO")
+        self.assertLess(sync, save)       # read from KVM first,
+        self.assertLess(save, reset)      # saved before the reset zeroes it,
+        self.assertLess(reset, restore)   # put back after the reset,
+        self.assertLess(restore, put)     # and before env is written to KVM
+        # the block spans the first partition-wide to the last per-VP Hyper-V field of CPUX86State (QEMU 10.2.4 cpu.h)
+        self.assertIn("offsetof(CPUX86State, msr_hv_hypercall)", pc)
+        self.assertIn("offsetof(CPUX86State, msr_hv_tsc_emulation_status) + sizeof(uint64_t)", pc)
+        self.assertTrue(pc.startswith(PC_HEAD) and pc.endswith(PC_TAIL))
+
+    def test_the_wake_hunk_is_applied_once(self):
+        self.apply()
+        once = (self.q / "hw/i386/pc.c").read_text()
+        self.apply()
+        self.assertEqual((self.q / "hw/i386/pc.c").read_text(), once)
+        self.assertEqual(kit.apply_wake_hunk(self.q), "present")
+
+    def test_a_pc_c_without_the_known_wakeup_is_refused_before_anything_is_written(self):
+        write(self.q / "hw/i386/pc.c", PC_HEAD + "static void pc_machine_wakeup(MachineState *m) { }\n" + PC_TAIL)
+        with self.assertRaises(kit.KitRefused):
+            self.apply()
+        self.assertFalse((self.q / "hw/misc/kf3").exists())
+        with self.assertRaises(kit.KitRefused):
+            kit.apply_wake_hunk(self.q)
+
+    def test_build_kf3_applies_the_wake_hunk_before_it_builds(self):
+        sh = (ROOT / "scripts/bench/build_kf3.sh").read_text()
+        hunk = sh.index("scripts/release/build_qemu.py\" wake-hunk \"$QEMU\"")
+        self.assertLess(hunk, sh.index("ninja -C"))
 
     def test_a_tree_that_already_has_the_hunks_keeps_exactly_one_each(self):
         write(self.q / "hw/misc/meson.build", "x\nsubdir('kf3')\n")
@@ -1004,12 +1053,13 @@ class OrchestrationMore(OrchestrationBase):
         self.assertEqual([c[0][1] for c in runner.calls if c[0][0] == "cargo"], ["build"])
         self.assertNotIn("--config", runner.calls[0][0])
 
-    def test_the_manifest_lists_the_two_hunks(self):
+    def test_the_manifest_lists_the_three_hunks(self):
         m = self.manifest(self.build()[0])
         kinds = {p["path"]: p["kind"] for p in m["patches"]}
         self.assertEqual(kinds["hw/misc/Kconfig"], "append-stanza")
         self.assertEqual(kinds["hw/misc/meson.build"], "append-line")
-        self.assertEqual(len(m["patches"]), 7)
+        self.assertEqual(kinds["hw/i386/pc.c"], "replace-function")
+        self.assertEqual(len(m["patches"]), 8)
 
     def test_symlinks_stay_symlinks_in_the_binary_tarball(self):
         class Linking(FakeRunner):
