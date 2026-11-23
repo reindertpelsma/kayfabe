@@ -1,0 +1,6 @@
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+2026-08-11T16:15:55.795336Z qemu-system-x86_64: info: nvkvm:   control 0x20800a36 result 0x00000000 x2
+2026-08-11T16:15:55.795387Z qemu-system-x86_64: info: nvkvm:   control 0x20800a41 result 0x00000000 x2
+[ 3689.683836] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
