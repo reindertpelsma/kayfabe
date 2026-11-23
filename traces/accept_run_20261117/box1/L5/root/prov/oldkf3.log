@@ -1,0 +1,6 @@
+START 2026-11-17T23:59:29+00:00
+HEAD=bb43a35a183b353b5785526f94da93a35f8ef771 CHECKOUT=/workspace/kf-old NOFETCH=0 TREE=/workspace/kf-old SECTIONS= kf3 
+KF_REQUIRE_ORACLES=1
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/bb43a35a/qemu-system-x86_64 rev=bb43a35a mtime=2026-11-18 00:02:51.216492585 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+EXIT rc=0 2026-11-18T00:02:51+00:00

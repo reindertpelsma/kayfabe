@@ -1,0 +1,33 @@
+{
+  "app": "acrobat",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "opened the 16-page PDF through the automation interface, extracted 5 pages into a new PDF",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "lane": "gate",
+  "path": "Direct2D page rendering",
+  "platform": "kf3",
+  "secs": 21,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 17.0,
+      "mem_mb": 9451.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 17.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 14
+    },
+    "baseline": {
+      "mem_mb": 9431.0,
+      "gpu": 2.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 173
+  },
+  "outputs_recorded": 4
+}

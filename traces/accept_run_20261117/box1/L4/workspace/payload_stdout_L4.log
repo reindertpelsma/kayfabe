@@ -1,0 +1,19 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=both winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       679G  122G  557G  18% /
+KF_PREFLIGHT_FREE_BYTES=597496479744
+KF_PAYLOAD_STAGE_START name=propimage_apps_b
+[xid-watch] tag=ciba65a4b502a9620f_propimage_apps_b  host=ubuntu  utc=2026-11-17T19:28:20Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/propimage_apps_b_stage.py run --sha 021cad3ccd4002b9f75b90b0f9f3ba0370e2ae67 --checkout /workspace/kf-ci-src --prefix /workspace/kf-propimage-b --out /workspace/kf-ci-evidence/propimage_apps_b.json --evidence-dir /workspace/kf-ci-evidence/propimage_apps_b --deadline-epoch 1794961398 --lane gate
+[xid-watch] host_dmesg_lines=1238  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+KF_PAYLOAD_STAGE_END name=propimage_apps_b rc=124 duration_ms=4383437
+KF_PAYLOAD_FAIL suite=timeout
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=2
+stage name=propimage_apps_b rc=124 duration_ms=4383437 result=TIMEOUT reason=timeout
+stage name=matlab result=NOT_RUN
+suite name=timeout pass=0 fail=1 skip=0
+first_fail stage=propimage_apps_b line=no red line found; last line: [xid-watch] --- command output begins ---
+KF_FINAL_SUMMARY_END

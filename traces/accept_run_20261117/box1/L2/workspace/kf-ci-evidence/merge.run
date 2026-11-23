@@ -1,0 +1,6 @@
+[xid-watch] tag=ci752b244811c91733_merge_bar  host=ubuntu  utc=2026-11-17T14:23:46Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/merge_check.sh 021cad3ccd4002b9f75b90b0f9f3ba0370e2ae67 ci752b244811c91733
+[xid-watch] host_dmesg_lines=1224  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---

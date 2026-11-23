@@ -1,0 +1,356 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=both winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       679G  8.1G  671G   2% /
+KF_PREFLIGHT_FREE_BYTES=719551320064
+KF_PAYLOAD_STAGE_START name=provision
+[xid-watch] tag=cia1e0a0190013895b_provision  host=ubuntu  utc=2026-11-17T12:58:42Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/provision_full.sh
+[xid-watch] host_dmesg_lines=683  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 575.51.03
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+START 2026-11-17T12:58:42+00:00
+BOX_RC=0
+d33d20c0b propimage_runner_mutants: payload-accepts-not-run anchors on the function that follows propimage_run_rows once PR #464 added matlab_refusal (the anchor matched nothing, x0)
+DRIVER_RC=0
+NVIDIA GeForce RTX 4090, 580.159.04
+/dev/root       679G   13G  666G   2% /
+TREE_RC=0
+[2026-11-17T13:13:53+00:00] B4: guest ladder built: 5061712 bytes
+[2026-11-17T13:13:53+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/d33d20c0/qemu-system-x86_64 rev=d33d20c0 mtime=2026-11-17 13:15:09.665684733 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[xid-watch] --- command output ends (rc=0) ---
+READY driver=580.159.04
+EXIT 2026-11-17T13:15:11+00:00
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (683 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_cia1e0a0190013895b_provision.log
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=991307
+KF_PAYLOAD_STAGE_START name=cuda_host
+[xid-watch] tag=cia1e0a0190013895b_cuda_host  host=ubuntu  utc=2026-11-17T13:15:15Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/cuda_ladder.sh host cia1e0a0190013895b 1 cup2,cup3,cup8,cup8bench
+[xid-watch] host_dmesg_lines=719  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+CUDA_LADDER_STARTED=2026-11-17T13:15:16+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=d33d20c0
+bench sizes=16,2048 iters=20 batch=10
+host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+src cup2.c md5 d9f82375ebd54de500aeb7f85ef71efc
+src cup3.c md5 b353d96b3694261293e5bdd409c0863e
+src cup8.c md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8
+src cup8bench.c md5 6c9f86d2581016ec9d34d6a7636fc8b5
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2055 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2055 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1812 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1812 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=2002 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=2002 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2198 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=1 BENCH_INIT_MS=1404.65
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=131.04
+CL_BENCH mode=host rep=1 BENCH_MODULE_MS=21.67
+CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.041 med_ms=0.007 p90_ms=0.008 min_ms=0.007 max_ms=0.008 gflops=1.108 batch_per_launch_ms=0.004 batch_gflops=2.269 h2d_ms=0.042 d2h_med_ms=0.008 submit_med_ms=0.003 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.005 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=3.624 med_ms=3.617 p90_ms=3.624 min_ms=3.306 max_ms=3.630 gflops=4749.462 batch_per_launch_ms=3.291 batch_gflops=5219.872 h2d_ms=4.182 d2h_med_ms=2.595 submit_med_ms=0.011 sync_med_ms=3.607 sync_cpu_med_ms=3.607 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.014 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=3.624 med_ms=3.617 p90_ms=3.624 min_ms=3.306 max_ms=3.630 gflops=4749.462 batch_per_launch_ms=3.291 batch_gflops=5219.872 h2d_ms=4.182 d2h_med_ms=2.595 submit_med_ms=0.011 sync_med_ms=3.607 sync_cpu_med_ms=3.607 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.014 bad=0 maxerr=0
+CUDA_LADDER_STARTED=2026-11-17T13:15:16+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=d33d20c0
+bench sizes=16,2048 iters=20 batch=10
+host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+src cup2.c md5 d9f82375ebd54de500aeb7f85ef71efc
+src cup3.c md5 b353d96b3694261293e5bdd409c0863e
+src cup8.c md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8
+src cup8bench.c md5 6c9f86d2581016ec9d34d6a7636fc8b5
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2055 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1812 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=2002 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2198 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=1 BENCH_INIT_MS=1404.65
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=131.04
+CL_BENCH mode=host rep=1 BENCH_MODULE_MS=21.67
+CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.041 med_ms=0.007 p90_ms=0.008 min_ms=0.007 max_ms=0.008 gflops=1.108 batch_per_launch_ms=0.004 batch_gflops=2.269 h2d_ms=0.042 d2h_med_ms=0.008 submit_med_ms=0.003 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.005 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=3.624 med_ms=3.617 p90_ms=3.624 min_ms=3.306 max_ms=3.630 gflops=4749.462 batch_per_launch_ms=3.291 batch_gflops=5219.872 h2d_ms=4.182 d2h_med_ms=2.595 submit_med_ms=0.011 sync_med_ms=3.607 sync_cpu_med_ms=3.607 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.014 bad=0 maxerr=0
+CUDA_LADDER_DONE=2026-11-17T13:15:26+00:00
+[xid-watch] --- command output ends (rc=0) ---
+CUDA_LADDER_DONE=2026-11-17T13:15:26+00:00
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (719 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_cia1e0a0190013895b_cuda_host.log
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=13088
+KF_PAYLOAD_STAGE_START name=merge_bar
+[xid-watch] tag=cia1e0a0190013895b_merge_bar  host=ubuntu  utc=2026-11-17T13:15:28Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/merge_check.sh d33d20c0b5f60f9c6aeddac4c624fe9d4e78e7b5 cia1e0a0190013895b
+[xid-watch] host_dmesg_lines=719  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+START 2026-11-17T13:15:29+00:00
+Preparing worktree (detached HEAD d33d20c0b)
+HEAD=d33d20c0b5f60f9c6aeddac4c624fe9d4e78e7b5 CHECKOUT=/workspace/bench/verify-worktrees/cia1e0a0190013895b.EBqGZP NOFETCH=0 TREE=none SECTIONS= 
+IGNORE_STRIP kept=3752 removed=22521 rev=HEAD
+IGNORE_STRIP_KEY 07ef3a4548379378afa716e41037c48fc7e272c1667021fb2ecfa7dee65ef453
+IGNORE_STRIP_VERIFIED removed=22521 rev=HEAD
+KF_REQUIRE_ORACLES=1
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/d33d20c0/qemu-system-x86_64 rev=d33d20c0 mtime=2026-11-17 13:17:13.087572650 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_STARTED=2026-11-17T13:17:47+00:00 arms=30 budget=180s
+bin=/workspace/kf-ci-src/target/release/kayfabe-rm-ladder  rev=d33d20c0b
+gpu=NVIDIA GeForce RTX 4090  driver=580.159.04(open)  pci_dev=0x268410DE  cc=8.9
+ARM                          VERDICT    secs  why
+--timer                      PASS         6s  6s
+BARE_CELL_ARM arm=timer verdict=PASS secs=6 ms=5548 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--engines                    PASS         5s  5s
+BARE_CELL_ARM arm=engines verdict=PASS secs=5 ms=5476 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--doorbell-census            PASS         6s  6s
+BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=6 ms=5543 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--gpu-info-sweep             PASS         5s  5s
+BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=5 ms=5422 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--bus-info-sweep             PASS         9s  9s
+BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=9 ms=8672 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--concurrency                PASS        10s  10s
+BARE_CELL_ARM arm=concurrency verdict=PASS secs=10 ms=9429 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--defer-liveness             PASS        17s  17s
+BARE_CELL_ARM arm=defer-liveness verdict=PASS secs=17 ms=17565 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--blockage-coverage          PASS         6s  6s
+BARE_CELL_ARM arm=blockage-coverage verdict=PASS secs=6 ms=5866 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--alias-two-vas              PASS         5s  5s
+BARE_CELL_ARM arm=alias-two-vas verdict=PASS secs=5 ms=5405 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--alias-unmap-observe        PASS         6s  6s
+BARE_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=6 ms=5439 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--map-propagation            PASS         5s  5s
+BARE_CELL_ARM arm=map-propagation verdict=PASS secs=5 ms=5472 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--late-map-race              PASS         6s  6s
+BARE_CELL_ARM arm=late-map-race verdict=PASS secs=6 ms=5766 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--missing-page-fault         PASS         9s  9s
+BARE_CELL_ARM arm=missing-page-fault verdict=PASS secs=9 ms=8989 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--uvm-invalidate             PASS         7s  7s
+BARE_CELL_ARM arm=uvm-invalidate verdict=PASS secs=7 ms=6380 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--uvm-mean                   PASS         5s  5s
+BARE_CELL_ARM arm=uvm-mean verdict=PASS secs=5 ms=5581 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--executor-vas               PASS         6s  6s
+BARE_CELL_ARM arm=executor-vas verdict=PASS secs=6 ms=5645 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--guest-ring-channel         PASS         5s  5s
+BARE_CELL_ARM arm=guest-ring-channel verdict=PASS secs=5 ms=5390 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--dictated-ring              PASS         6s  6s
+BARE_CELL_ARM arm=dictated-ring verdict=PASS secs=6 ms=5720 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--dictated-ring-negative     PASS         5s  5s
+BARE_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=5 ms=5441 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--ce-client                  PASS         6s  6s
+BARE_CELL_ARM arm=ce-client verdict=PASS secs=6 ms=5549 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--ce-client-guest-ram        PASS        13s  13s
+BARE_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=13 ms=12622 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--guest-ram-pin              PASS         6s  6s
+BARE_CELL_ARM arm=guest-ram-pin verdict=PASS secs=6 ms=5996 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--bar1-crossing              PASS         5s  5s
+BARE_CELL_ARM arm=bar1-crossing verdict=PASS secs=5 ms=5782 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--atomics-probe              PASS         6s  6s
+BARE_CELL_ARM arm=atomics-probe verdict=PASS secs=6 ms=5748 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--pce-mask-probe             PASS         5s  5s
+BARE_CELL_ARM arm=pce-mask-probe verdict=PASS secs=5 ms=5381 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--gpga-reserve-probe         PASS        27s  27s
+BARE_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=27 ms=26669 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--map-stress                 PASS         6s  6s
+BARE_CELL_ARM arm=map-stress verdict=PASS secs=6 ms=5553 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--concurrent-fuzz            PASS         6s  6s
+BARE_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=6 ms=6317 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+--cross-client-leak          PASS         6s  6s
+BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=6 ms=5603 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+--rpc-mixed-allocs           PASS         6s  6s
+BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=6 ms=6403 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+BARE_CELL pci_dev=0x268410DE gpu="NVIDIA GeForce RTX 4090" drv=580.159.04 kmod=open cc=8.9 rev=d33d20c0b pass=30 fail=0 crash=0 arms=30 uuid=GPU-00000000-0000-0000-0000-000000000000
+FG_RC=0
+FAST_SUITE_STARTED=2026-11-17T13:22:11+00:00 arms=30 budget=180s
+rev=d33d20c0b
+ARM                          VERDICT   secs  why
+--timer                      PASS      31s   31s
+FAST_CELL_ARM arm=timer verdict=PASS secs=31 client_ms=1939
+--engines                    PASS      32s   32s
+FAST_CELL_ARM arm=engines verdict=PASS secs=32 client_ms=2070
+--doorbell-census            PASS      34s   34s
+FAST_CELL_ARM arm=doorbell-census verdict=PASS secs=34 client_ms=3649
+--gpu-info-sweep             PASS      32s   32s
+FAST_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=32 client_ms=1449
+--bus-info-sweep             PASS      36s   36s
+FAST_CELL_ARM arm=bus-info-sweep verdict=PASS secs=36 client_ms=5059
+--concurrency                PASS      43s   43s
+FAST_CELL_ARM arm=concurrency verdict=PASS secs=43 client_ms=12620
+--defer-liveness             PASS      43s   43s
+FAST_CELL_ARM arm=defer-liveness verdict=PASS secs=43 client_ms=13969
+--blockage-coverage          PASS      31s   31s
+FAST_CELL_ARM arm=blockage-coverage verdict=PASS secs=31 client_ms=2010
+--alias-two-vas              PASS      32s   32s
+FAST_CELL_ARM arm=alias-two-vas verdict=PASS secs=32 client_ms=1619
+--alias-unmap-observe        PASS      32s   32s
+FAST_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=32 client_ms=1549
+--map-propagation            PASS      34s   34s
+FAST_CELL_ARM arm=map-propagation verdict=PASS secs=34 client_ms=1519
+--late-map-race              PASS      32s   32s
+FAST_CELL_ARM arm=late-map-race verdict=PASS secs=32 client_ms=2010
+--missing-page-fault         PASS      35s   35s
+FAST_CELL_ARM arm=missing-page-fault verdict=PASS secs=35 client_ms=4570
+--uvm-invalidate             PASS      35s   35s
+FAST_CELL_ARM arm=uvm-invalidate verdict=PASS secs=35 client_ms=3859
+--uvm-mean                   PASS      35s   35s
+FAST_CELL_ARM arm=uvm-mean verdict=PASS secs=35 client_ms=4410
+--executor-vas               PASS      33s   33s
+FAST_CELL_ARM arm=executor-vas verdict=PASS secs=33 client_ms=1420
+--guest-ring-channel         PASS      33s   33s
+FAST_CELL_ARM arm=guest-ring-channel verdict=PASS secs=33 client_ms=1570
+--dictated-ring              PASS      33s   33s
+FAST_CELL_ARM arm=dictated-ring verdict=PASS secs=33 client_ms=1480
+--dictated-ring-negative     PASS      33s   33s
+FAST_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=33 client_ms=1539
+--ce-client                  PASS      32s   32s
+FAST_CELL_ARM arm=ce-client verdict=PASS secs=32 client_ms=1440
+--ce-client-guest-ram        PASS      104s  104s
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=104 client_ms=74170
+--guest-ram-pin              PASS      32s   32s
+FAST_CELL_ARM arm=guest-ram-pin verdict=PASS secs=32 client_ms=1650
+--bar1-crossing              PASS      32s   32s
+FAST_CELL_ARM arm=bar1-crossing verdict=PASS secs=32 client_ms=1630
+--atomics-probe              PASS      32s   32s
+FAST_CELL_ARM arm=atomics-probe verdict=PASS secs=32 client_ms=1489
+--pce-mask-probe             PASS      32s   32s
+FAST_CELL_ARM arm=pce-mask-probe verdict=PASS secs=32 client_ms=1449
+--gpga-reserve-probe         PASS      60s   60s
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=60 client_ms=29410
+--map-stress                 PASS      34s   34s
+FAST_CELL_ARM arm=map-stress verdict=PASS secs=34 client_ms=2390
+--concurrent-fuzz            PASS      34s   34s
+FAST_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=34 client_ms=4340
+--cross-client-leak          PASS      33s   33s
+FAST_CELL_ARM arm=cross-client-leak verdict=PASS secs=33 client_ms=1490
+SUITE_RC=0
+--rpc-mixed-allocs           PASS      33s   33s
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=33 client_ms=2590
+
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+[xid-watch] --- command output ends (rc=0) ---
+BIRTH_CENSUS_SUITE arms=30 births=161 user=161 cuda_threads=90
+BIRTH_CENSUS_GATES births=12 user=12 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER
+EXIT rc=0 2026-11-17T13:42:29+00:00
+[xid-watch] xid_after=10
+[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — the run is VOID whatever it printed:
+    [ 1340.224223] NVRM: Xid (PCI:0000:00:07): 31, pid=64980, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1343.248061] NVRM: Xid (PCI:0000:00:07): 31, pid=64980, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1346.248934] NVRM: Xid (PCI:0000:00:07): 31, pid=64980, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1349.285219] NVRM: Xid (PCI:0000:00:07): 31, pid=64980, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1386.159580] NVRM: Xid (PCI:0000:00:07): 31, pid=65408, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+    [ 1821.654130] NVRM: Xid (PCI:0000:00:07): 31, pid=69046, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1824.862489] NVRM: Xid (PCI:0000:00:07): 31, pid=69046, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1827.811518] NVRM: Xid (PCI:0000:00:07): 31, pid=69046, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 1830.959737] NVRM: Xid (PCI:0000:00:07): 31, pid=69046, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+    [ 2049.383524] NVRM: Xid (PCI:0000:00:07): 31, pid=70922, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[xid-watch]   ⊘ An "Xid 31 … FAULT_PDE" means the host MMU walked for an address that resolved
+[xid-watch]   to nothing — i.e. OUR placement, not the guest's methods. A rung that reports
+[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.
+KF_PAYLOAD_STAGE_END name=merge_bar rc=6 duration_ms=1622895
+KF_PAYLOAD_STAGE_START name=cuda_guest
+[xid-watch] tag=cia1e0a0190013895b_cuda_guest  host=ubuntu  utc=2026-11-17T13:42:31Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/cuda_ladder.sh guest cia1e0a0190013895b 1 cup2,cup3,cup8,cup8bench
+[xid-watch] host_dmesg_lines=1185  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+CUDA_LADDER_STARTED=2026-11-17T13:42:32+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=d33d20c0
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10720 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f204 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f99 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10720 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f204 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f99 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10603 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f105 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10603 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f105 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=9 trapped=10869 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f208 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f104 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f52]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=9 trapped=10869 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f208 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f104 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f52]
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=8 trapped=11384 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f210 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f206 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f358 0x00000802:e0f2 0x00000801:e0f53]
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=16 iters=20 first_ms=0.071 med_ms=0.042 p90_ms=0.048 min_ms=0.042 max_ms=0.079 gflops=0.193 batch_per_launch_ms=0.037 batch_gflops=0.222 h2d_ms=6.883 d2h_med_ms=0.040 submit_med_ms=0.038 sync_med_ms=0.005 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.041 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=2048 iters=20 first_ms=3.914 med_ms=3.777 p90_ms=3.783 min_ms=3.770 max_ms=3.793 gflops=4548.074 batch_per_launch_ms=3.748 batch_gflops=4583.668 h2d_ms=8.334 d2h_med_ms=3.187 submit_med_ms=0.045 sync_med_ms=3.732 sync_cpu_med_ms=3.741 sync_offcpu_med_ms=-0.009 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.048 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BENCH_INIT_MS=3499.23
+CL_BENCH mode=guest rep=1 GUEST_BENCH_CTX_MS=1971.21
+CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=417.25
+CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=417.25
+CUDA_LADDER_STARTED=2026-11-17T13:42:32+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=d33d20c0
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10720 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f204 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f99 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10603 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f105 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f50]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=9 trapped=10869 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f208 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f104 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f52]
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=8 trapped=11384 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f210 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f206 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f358 0x00000802:e0f2 0x00000801:e0f53]
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=16 iters=20 first_ms=0.071 med_ms=0.042 p90_ms=0.048 min_ms=0.042 max_ms=0.079 gflops=0.193 batch_per_launch_ms=0.037 batch_gflops=0.222 h2d_ms=6.883 d2h_med_ms=0.040 submit_med_ms=0.038 sync_med_ms=0.005 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.041 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BSUM N=2048 iters=20 first_ms=3.914 med_ms=3.777 p90_ms=3.783 min_ms=3.770 max_ms=3.793 gflops=4548.074 batch_per_launch_ms=3.748 batch_gflops=4583.668 h2d_ms=8.334 d2h_med_ms=3.187 submit_med_ms=0.045 sync_med_ms=3.732 sync_cpu_med_ms=3.741 sync_offcpu_med_ms=-0.009 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.048 bad=0 maxerr=0
+CL_BENCH mode=guest rep=1 GUEST_BENCH_INIT_MS=3499.23
+CL_BENCH mode=guest rep=1 GUEST_BENCH_CTX_MS=1971.21
+CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=417.25
+CUDA_LADDER_DONE=2026-11-17T13:49:24+00:00
+[xid-watch] --- command output ends (rc=0) ---
+CUDA_LADDER_DONE=2026-11-17T13:49:24+00:00
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1185 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_cia1e0a0190013895b_cuda_guest.log
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=415227
+KF_PAYLOAD_STAGE_START name=apps
+[xid-watch] tag=cia1e0a0190013895b_apps  host=ubuntu  utc=2026-11-17T13:49:26Z
+[xid-watch] command: env KF_APPS_PROVISION=1 bash /workspace/kf-ci-src/scripts/bench/box/apps_gate.sh cia1e0a0190013895b /root/prov middle
+[xid-watch] host_dmesg_lines=1190  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+APP_POLICY name=UnifiedMemoryStreams os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=UnifiedMemoryPerf os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=conjugateGradientUM os=linux result=NOT_RUN note=unsupported (UVM)
+APP_POLICY name=attach_verify os=linux result=NOT_RUN note=unsupported (UVM)
+APPS_STAGE_LIST n=66 budget_s=3000 per_boot=100
+APPS_PROVISION_START 2026-11-17T13:49:28+00:00
+APPS_PROVISION_FAIL steps=BUILD_llama_cpp,missing_BUILD_llama_cpp,missing_BUILD_bundle_tar
+APPS_PROVISION_END rc=1 2026-11-17T14:04:28+00:00
+APPS_STAGE_RETRY class=MEDIA
+APPS_STAGE_EXIT rc=3
+[xid-watch] --- command output ends (rc=3) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1190 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_cia1e0a0190013895b_apps.log
+KF_PAYLOAD_STAGE_END name=apps rc=3 duration_ms=904531
+KF_PAYLOAD_FAIL suite=apps_retry_media
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=14
+stage name=provision rc=0 duration_ms=991307 result=PASS
+stage name=cuda_host rc=0 duration_ms=13088 result=PASS
+stage name=merge_bar rc=6 duration_ms=1622895 result=PASS
+stage name=cuda_guest rc=0 duration_ms=415227 result=PASS
+stage name=apps rc=3 duration_ms=904531 result=FAIL reason=apps_retry_media
+stage name=kfml result=NOT_RUN
+stage name=install_flow result=NOT_RUN
+stage name=windows_gate result=NOT_RUN
+stage name=windows_apps result=NOT_RUN
+stage name=windows_gate_2 result=NOT_RUN
+stage name=propimage_apps result=NOT_RUN
+stage name=propimage_apps_b result=NOT_RUN
+stage name=matlab result=NOT_RUN
+stage name=specviewperf result=NOT_RUN
+suite name=provision pass=1 fail=0 skip=0
+suite name=cuda_host pass=4 fail=0 skip=0
+suite name=gates pass=9 fail=0 skip=0
+suite name=kf3_build pass=1 fail=0 skip=0
+suite name=raw_suite pass=30 fail=0 skip=0
+suite name=thin_suite pass=30 fail=0 skip=0
+suite name=birth_census pass=1 fail=0 skip=0
+suite name=cuda_fat pass=4 fail=0 skip=0
+suite name=apps_retry_media pass=0 fail=1 skip=0
+first_fail stage=apps line=no red line found; last line: [xid-watch] evidence: /workspace/bench/xid_cia1e0a0190013895b_apps.log
+KF_FINAL_SUMMARY_END

@@ -1,0 +1,36 @@
+{
+ "census": {
+  "counts": {},
+  "lines": 0,
+  "work": {
+   "base_missing": false,
+   "births": 0,
+   "doorbells": 0,
+   "retired": 0,
+   "status_lines": 0,
+   "submissions": 0,
+   "verdict": "NOT_RUN"
+  },
+  "xid": 0
+ },
+ "checks": {
+  "failed": [],
+  "flag_disagrees": 0,
+  "n": 0
+ },
+ "facts": {},
+ "failure_class": "CRASH",
+ "findings": [],
+ "gpu": {},
+ "host_xid": 0,
+ "lane": "discovery",
+ "rc": 127,
+ "reason": "NO_USABLE_RESULT rc=127",
+ "result": {
+  "bytes": 0,
+  "sha256": null
+ },
+ "row": "gpu_info",
+ "secs": 0,
+ "verdict": "FAIL"
+}

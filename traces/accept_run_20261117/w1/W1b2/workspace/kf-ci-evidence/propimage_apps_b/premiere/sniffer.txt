@@ -1,0 +1,61 @@
+﻿GPUSniffer testing 830
+Initializing GPU Tech:
+	Try CUDA: 1
+	Try OpenCL: 1
+	Try Metal: 1
+	Try Vulkan: 1
+	Try DirectX: 0
+	KernelLoadAction: 2
+CUDA system device count: 1
+	Found CUDA device index: 0 Name: NVIDIA GeForce RTX 4090
+		Budget: 7429287936 bytes, 6.919 GB
+		CanReserve: 3848861696 bytes, 3.585 GB
+		Dedicated GPU Memory: 8234594304 bytes, 7.669 GB
+		Shared System Memory: 8554504192 bytes, 7.967 GB
+	    No capability restrictions detected - adding device to list
+OpenCL system device count: 1
+	Found OpenCL device Name: NVIDIA GeForce RTX 4090 supportsSSG: 0
+	Skipping nVidia OpenCL device
+Finished gpu initialization in 0.000 ms
+
+--- GPU Computation Info ---
+Found 1 devices supporting GPU computation.
+CUDA Device 0
+   Name: NVIDIA GeForce RTX 4090
+   Vendor: NVIDIA
+	Integrated: 0
+   Hardware Family: 8.9
+   API Support: 13
+   Total Video Memory: 7931MB
+--- DirectX Graphics Info ---
+Renderer: NVIDIA GeForce RTX 4090
+Vendor: NVIDIA
+Dedicated Device Memory: 7853 MB
+Dedicated System Memory: 0 MB
+Shared System Memory: 8158 MB
+Max Feature Level: 12.01
+Max Shader Model: 6.05
+Resource Binding Tier: 3
+Resource Heap Tier: 2
+Tiled Resource Tier: 4
+Tearing Supported: YES
+D3D11 Interop Supported: YES
+
+Attached Monitors: 
+   Monitor 0 properties: 
+      Name: \\.\DISPLAY3
+      Desktop Coordinates: (0, 0, 1920, 1080)
+      BitsPerColor: 8
+      Max Luminance: 270 nits
+      Min Luminance: 0.5 nits
+      Max FullFrame Luminance: 270 nits
+      Advanced Color Capabilities: OFF
+Finished DirectX Display test in 3902.32 ms
+
+--- OpenGL Info ---
+   OpenGL Test skipped: directx graphics tests already passed.
+
+GPUSniffer process exiting after  4272.46 ms 
+GPUSniffer result: 529(0x211)
+InitMS: 3818.22, SniffMS: 4272.96
+

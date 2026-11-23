@@ -1,0 +1,9 @@
+KF_MANIFEST sha256=f8cbf32f55d3e77e1cac4aee316513ab53d85c2cd9f222d0258ac430579639a3 items=2 bytes=1815245 stages=tools
+KF_STEP name=download.swtpm-0.10.1.tar.gz secs=0.5 bytes=415992 source=r2 MBps=0.77
+KF_STEP name=download.libtpms-0.10.1.tar.gz secs=0.9 bytes=1399253 source=r2 MBps=1.55
+KF_DOWNLOAD_DONE state=done ok=2 failed=0 total=2
+KF_VERIFY name=libtpms-0.10.1.tar.gz ok=1
+KF_VERIFY name=swtpm-0.10.1.tar.gz ok=1
+KF_MANIFEST sha256=b8b31ed87860063395a58c763af4a1d673edb8344e14a2404ed4576009fe0ebd items=1 bytes=50496618964 stages=image
+KF_DOWNLOAD_FAIL name=propimage-kfimg-20261112.zip class=RETRY reason=NETWORK
+KF_DOWNLOAD_DONE state=failed ok=0 failed=1 total=1

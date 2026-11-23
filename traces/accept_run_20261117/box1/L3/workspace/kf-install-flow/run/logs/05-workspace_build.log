@@ -1,0 +1,1599 @@
+info: syncing channel updates for 1.99.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-10-01 for version 1.99.0 (b940084d7 2026-09-28)
+info: component rust-std for target x86_64-unknown-linux-musl is up to date
+info: component rust-std for target x86_64-unknown-uefi is up to date
+info: downloading 2 components
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded libc v0.2.189
+   Compiling kf-util v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-util)
+   Compiling libc v0.2.189
+   Compiling kayfabe-util v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-util)
+   Compiling kayfabe-doorbell v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-doorbell)
+   Compiling kf-oprom v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-oprom)
+   Compiling kayfabe-isolate-host v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-isolate-host)
+   Compiling kayfabe-cuda v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-cuda)
+warning: value assigned to `prop` is never read
+   --> crates/kayfabe-cuda/src/driver_unsafe.rs:992:9
+    |
+992 |         prop.alloc_flags_reserved = [0; 4];
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kayfabe-cuda/src/walk.rs:525:13
+    |
+525 |         let mut h: KfDev = crate::driver_unsafe::zeroed();
+    |             ----^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `cuMemUnmap` and `cuMemAddressFree` are never read
+   --> crates/kayfabe-cuda/src/driver_unsafe.rs:169:16
+    |
+100 | pub struct Cuda {
+    |            ---- fields in this struct
+...
+169 |     pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^
+170 |     pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a method
+   --> crates/kayfabe-cuda/src/driver_unsafe.rs:930:5
+    |
+930 | /     pub fn export_device_allocation(
+931 | |         &self,
+932 | |         device: i32,
+933 | |         bytes: usize,
+934 | |     ) -> Result<ExportedAllocation, String> {
+    | |___________________________________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kayfabe-cuda/src/walk.rs:908:5
+    |
+908 |     pub fn ack(&mut self, generation: u64) -> Result<(), CudaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-gop-image v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-gop-image)
+warning: missing documentation for a function
+    --> crates/kayfabe-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kayfabe-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kayfabe-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-arch v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-arch)
+   Compiling kayfabe-arch v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-arch)
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:842:5
+    |
+842 | /     fn on_read(
+843 | |         &self,
+844 | |         _model: &dyn GspModel,
+845 | |         _bar: u8,
+...   |
+848 | |         _state: &ArchBootState,
+849 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:971:5
+    |
+971 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kayfabe-arch/src/gsp.rs:699:5
+    |
+699 | /     fn on_read(
+700 | |         &self,
+701 | |         _model: &dyn GspModel,
+702 | |         _bar: u8,
+...   |
+705 | |         _state: &ArchBootState,
+706 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: `kayfabe-cuda` (lib) generated 5 warnings (run `cargo fix --lib -p kayfabe-cuda` to apply 1 suggestion)
+   Compiling kf-abi v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-abi)
+   Compiling kf-trace v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-trace)
+   Compiling kayfabe-abi v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-abi)
+   Compiling kayfabe-isolate v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-isolate)
+warning: `kf-arch` (lib) generated 2 warnings
+warning: `kayfabe-arch` (lib) generated 1 warning
+warning: `kayfabe-util` (lib) generated 3 warnings
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a struct
+    --> crates/kayfabe-isolate/src/lib.rs:1195:1
+     |
+1195 | pub struct BareVaSpace {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a trait
+    --> crates/kayfabe-isolate/src/lib.rs:1202:1
+     |
+1202 | pub trait RmBackend: Send + Sync {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate/src/lib.rs:1600:5
+     |
+1600 |     fn cuda_walk_report(&mut self) -> Result<String, RmError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a module
+    --> crates/kayfabe-isolate/src/lib.rs:3258:1
+     |
+3258 | pub mod verbcost {
+     | ^^^^^^^^^^^^^^^^
+
+   Compiling kf-linux-raw v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-linux-raw)
+   Compiling kayfabe-linux-raw v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-linux-raw)
+warning: <email>: embedded boot-display GOP driver: 9216 bytes, x86_64-unknown-uefi
+warning: `kayfabe-isolate` (lib) generated 4 warnings
+warning: missing documentation for a method
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1435:5
+     |
+1435 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+  --> crates/kayfabe-linux-raw/src/arena_unsafe.rs:72:1
+   |
+72 | pub const ARENA_EXHAUSTED: &str = "the framebuffer page arena is exhausted: every 4 KiB index \
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for an associated function
+   --> crates/kayfabe-linux-raw/src/arena_unsafe.rs:161:5
+    |
+161 |     pub fn create(page: HostPageSize) -> Result<Self, RawError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kayfabe-linux-raw/src/mapping_unsafe.rs:977:5
+    |
+977 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: direct cast of function item into an integer
+   --> crates/kayfabe-linux-raw/src/signal_unsafe.rs:415:57
+    |
+415 |                     libc::signal(STALL_SIGNAL, on_stall as libc::sighandler_t);
+    |                                                         ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(function_casts_as_integer)]` on by default
+help: first cast to a pointer `as *const ()`
+    |
+415 |                     libc::signal(STALL_SIGNAL, on_stall as *const () as libc::sighandler_t);
+    |                                                         ++++++++++++
+
+   Compiling kf-cuda v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-cuda)
+   Compiling kf-broker v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-broker)
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+  --> crates/kf-cuda/src/refusal_samples.rs:68:14
+   |
+68 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |              ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+68 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+68 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |
+
+warning: `kf-linux-raw` (lib) generated 1 warning
+   Compiling kayfabe-chips v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-chips)
+warning: `kayfabe-linux-raw` (lib) generated 4 warnings (run `cargo fix --lib -p kayfabe-linux-raw` to apply 1 suggestion)
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:90:18
+   |
+90 |     NoChannels { engine: u32 },
+   |                  ^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:92:20
+   |
+92 |     BelowMinimum { asked: u32 },
+   |                    ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:95:9
+   |
+95 |         asked: u32,
+   |         ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:9
+   |
+96 |         limit: u32,
+   |         ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:97:9
+   |
+97 |         engine: u32,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:98:9
+   |
+98 |         total: u32,
+   |         ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:99:9
+   |
+99 |         in_use: u32,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-abi/src/chanbudget.rs:103:9
+    |
+103 |         derived: u32,
+    |         ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-abi/src/chanbudget.rs:104:9
+    |
+104 |         engine: u32,
+    |         ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-abi/src/chanbudget.rs:105:9
+    |
+105 |         total: u32,
+    |         ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-abi/src/chanbudget.rs:106:9
+    |
+106 |         in_use: u32,
+    |         ^^^^^^^^^^^
+
+warning: `kf-cuda` (lib) generated 1 warning (run `cargo fix --lib -p kf-cuda` to apply 1 suggestion)
+   Compiling kf-gsp v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-gsp)
+   Compiling kf-host v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-host)
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2911:5
+     |
+2911 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:3038:5
+     |
+3038 | /     pub fn post_event(
+3039 | |         &mut self,
+3040 | |         ram: &mut dyn GuestRam,
+3041 | |         rpc: &OutgoingRpc,
+3042 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+   Compiling kf-chip v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-chip)
+   Compiling kf-trap v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-trap)
+   Compiling kf-disp v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-disp)
+   Compiling kf-crec v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-crec)
+warning: `kf-abi` (lib) generated 11 warnings
+warning: `kf-gsp` (lib) generated 2 warnings
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/bitmap.rs:23:1
+   |
+23 | pub const N_TOKENS: usize = 1 << TOKEN_BITS;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/bitmap.rs:24:1
+   |
+24 | pub const N_WORDS: usize = N_TOKENS / 64;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/bitmap.rs:25:1
+   |
+25 | pub const N_SUMMARY: usize = N_WORDS / 64;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-trap/src/bitmap.rs:27:1
+   |
+27 | pub struct RungBitmap {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/bitmap.rs:54:5
+   |
+54 |     pub fn new() -> RungBitmap {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/memmap.rs:32:1
+   |
+32 | pub const PAGE: u64 = 0x1000;
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:67:12
+   |
+67 |     Hole { why: &'static str },
+   |            ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:86:5
+   |
+86 |     pub bar: Bar,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:87:5
+   |
+87 |     pub base: u64,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:88:5
+   |
+88 |     pub len: u64,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:89:5
+   |
+89 |     pub how: Disposition,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:95:5
+   |
+95 |     pub regions: Vec<Region>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:96:5
+   |
+96 |     pub bar0_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:97:5
+   |
+97 |     pub bar1_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/memmap.rs:98:5
+   |
+98 |     pub bar2_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-trap/src/model.rs:29:1
+   |
+29 | pub enum S {
+   | ^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:30:5
+   |
+30 |     Idle,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:31:5
+   |
+31 |     Rung,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:32:5
+   |
+32 |     Busy,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-trap/src/model.rs:33:5
+   |
+33 |     BusyRung,
+   |     ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:44:5
+   |
+44 |     pub bar: u8,
+   |     ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:45:5
+   |
+45 |     pub offset: u32,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:46:5
+   |
+46 |     pub value: u64,
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/ring.rs:47:5
+   |
+47 |     pub width: u8,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-trap/src/ring.rs:51:1
+   |
+51 | pub enum Push {
+   | ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-trap/src/ring.rs:61:1
+   |
+61 | pub struct PrivRing {
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/ring.rs:80:5
+   |
+80 |     pub fn new() -> PrivRing {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/ring.rs:181:5
+    |
+181 |     pub fn is_poisoned(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/ring.rs:185:5
+    |
+185 |     pub fn occupancy(&self) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/shadow.rs:41:5
+   |
+41 |     pub const fn new() -> Cell {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-trap/src/shadow.rs:45:5
+   |
+45 |     pub fn read(&self) -> u64 {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-trap/src/shadow.rs:98:1
+   |
+98 | pub enum ClearOutcome {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-trap/src/shadow.rs:110:5
+    |
+110 |     pub const fn new() -> Trigger {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/shadow.rs:199:5
+    |
+199 |     pub fn completed(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/timer.rs:31:1
+   |
+31 | pub const GA106_BAR0_PAGES: u32 = GA106_BAR0_BYTES >> 12;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/timer.rs:40:1
+   |
+40 | pub const VF_TIME_1: u32 = 0x30084;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/timer.rs:92:5
+   |
+92 |     pub hal: TimerHal,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+   --> crates/kf-trap/src/token.rs:111:1
+    |
+111 | pub const HOST_TOKEN_MASK: u64 = (1 << HOST_TOKEN_BITS) - 1;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/token.rs:117:5
+    |
+117 |     pub state: State,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/token.rs:118:5
+    |
+118 |     pub route: Route,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/token.rs:119:5
+    |
+119 |     pub host_token: u32,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-trap/src/token.rs:126:5
+    |
+126 |     pub fn decode(w: u64) -> Token {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/token.rs:135:5
+    |
+135 |     pub fn encode(self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-trap/src/token.rs:173:5
+    |
+173 |     pub const fn new() -> TokenWord {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/token.rs:178:5
+    |
+178 |     pub fn load(&self) -> Token {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:49:9
+   |
+49 |         readable: bool,
+   |         ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:50:9
+   |
+50 |         semantics: WriteSemantics,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:61:22
+   |
+61 |     RingHostInline { host_token: u32 },
+   |                      ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:80:5
+   |
+80 |     pub tokens: &'a [TokenWord],
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:81:5
+   |
+81 |     pub bits: &'a RungBitmap,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:85:5
+   |
+85 |     pub drainer_wake: &'a WakeWord,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/trap.rs:86:5
+   |
+86 |     pub ring: &'a PrivRing,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-trap/src/trappolicy.rs:75:1
+   |
+75 | pub const PRAMIN_LEN: u64 = 0x0010_0000;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/trappolicy.rs:197:5
+    |
+197 |     pub bar: Bar,
+    |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/trappolicy.rs:198:5
+    |
+198 |     pub base: u64,
+    |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/trappolicy.rs:199:5
+    |
+199 |     pub len: u64,
+    |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-trap/src/vmm.rs:61:22
+   |
+61 |     RingHostInline { host_token: u32 },
+   |                      ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/vmm.rs:119:5
+    |
+119 |     fn remove_memslot(&self, slot: SlotId) -> Result<(), VmmError>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/vmm.rs:127:5
+    |
+127 |     fn signal_drainer(&self);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kf-trap/src/vmm.rs:137:1
+    |
+137 | pub struct SlotId(pub u32);
+    | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+   --> crates/kf-trap/src/vmm.rs:140:1
+    |
+140 | pub enum VmmError {
+    | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-trap/src/vmm.rs:141:5
+    |
+141 |     BadGpa,
+    |     ^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-trap/src/vmm.rs:142:5
+    |
+142 |     NoSlots,
+    |     ^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-trap/src/vmm.rs:143:5
+    |
+143 |     Refused,
+    |     ^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/vmm.rs:147:9
+    |
+147 |         bar: u8,
+    |         ^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/vmm.rs:148:9
+    |
+148 |         base: u64,
+    |         ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-trap/src/vmm.rs:149:9
+    |
+149 |         len: u64,
+    |         ^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-trap/src/vmm.rs:183:1
+    |
+183 | pub fn store_value(data: &mut [u8], v: u64) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-trap/src/wake.rs:26:1
+   |
+26 | pub struct WakeWord(AtomicU64);
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-trap/src/wake.rs:42:5
+   |
+42 |     pub const fn new() -> WakeWord {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-trap/src/wake.rs:104:5
+    |
+104 |     pub fn pollers(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-core v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-core)
+   Compiling kf-mem v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-mem)
+warning: missing documentation for a variant
+  --> crates/kf-core/src/caps.rs:19:5
+   |
+19 |     Channel,
+   |     ^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/caps.rs:20:5
+   |
+20 |     EngineObject,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/caps.rs:21:5
+   |
+21 |     AddressSpace,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/caps.rs:29:1
+   |
+29 | pub enum Refusal {
+   | ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/caps.rs:31:23
+   |
+31 |     OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+   |                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/caps.rs:31:35
+   |
+31 |     OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+   |                                   ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/caps.rs:31:45
+   |
+31 |     OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },
+   |                                             ^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:113:5
+    |
+113 |     pub fn acquire(&mut self, t: Twin) -> Result<(), Refusal> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:127:5
+    |
+127 |     pub fn release(&mut self, t: Twin) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:133:5
+    |
+133 |     pub fn live(&self, t: Twin) -> u32 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/kf-core/src/caps.rs:153:5
+    |
+153 |     Backed {
+    |     ^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/caps.rs:154:9
+    |
+154 |         host_offset: u64,
+    |         ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kf-core/src/caps.rs:161:1
+    |
+161 | pub struct Aperture {
+    | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:168:5
+    |
+168 |     pub fn back(&mut self, offset: u64, len: u64) -> Backing {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:181:5
+    |
+181 |     pub fn len(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:185:5
+    |
+185 |     pub fn is_empty(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/caps.rs:189:5
+    |
+189 |     pub fn refusals(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-core/src/channel.rs:32:5
+   |
+32 |     AtAllocation,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/kf-core/src/channel.rs:48:1
+   |
+48 | pub struct Submission {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/channel.rs:49:5
+   |
+49 |     pub owner: Owner,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/channel.rs:50:5
+   |
+50 |     pub route: Route,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/channel.rs:51:5
+   |
+51 |     pub all_operands_translatable: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/channel.rs:103:16
+    |
+103 |     Modelled { operand_words: u8 },
+    |                ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/channel.rs:150:16
+    |
+150 |     TooLarge { want: u64, max: u64 },
+    |                ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/channel.rs:150:27
+    |
+150 |     TooLarge { want: u64, max: u64 },
+    |                           ^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/channel.rs:158:5
+    |
+158 |     pub fn name(&self) -> &'static str {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/completion.rs:80:1
+   |
+80 | pub enum Raise {
+   | ^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-core/src/completion.rs:88:5
+   |
+88 |     pub const fn new() -> EngineIrq {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/completion.rs:97:5
+   |
+97 |     pub fn arm(&self) {
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/completion.rs:130:5
+    |
+130 |     pub fn mask(&self) {
+    |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/completion.rs:142:5
+    |
+142 |     pub fn retired_count(&self) -> u64 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/leaf.rs:38:5
+   |
+38 |     pub block: u32,
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/leaf.rs:39:5
+   |
+39 |     pub offset: u64,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/leaf.rs:40:5
+   |
+40 |     pub len: u64,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/leaf.rs:44:1
+   |
+44 | pub enum LeafRefusal {
+   | ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/leaf.rs:85:5
+   |
+85 |     pub fn contains_gpa(&self, gpa: u64) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-core/src/leaf.rs:104:5
+    |
+104 |     pub fn new() -> GuestRamLayout {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/leaf.rs:107:5
+    |
+107 |     pub fn register(&mut self, b: GuestRamBlock) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/kf-core/src/lifetime.rs:56:1
+   |
+56 | pub const ORDER: [Step; 9] = [
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-core/src/lifetime.rs:69:1
+   |
+69 | pub enum TeardownError {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/lifetime.rs:71:18
+   |
+71 |     OutOfOrder { attempted: Step, expected: Step },
+   |                  ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-core/src/lifetime.rs:71:35
+   |
+71 |     OutOfOrder { attempted: Step, expected: Step },
+   |                                   ^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-core/src/lifetime.rs:83:5
+   |
+83 |     pub fn new() -> Teardown {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-core/src/lifetime.rs:87:5
+   |
+87 |     pub fn run(&mut self, s: Step) -> Result<(), TeardownError> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/lifetime.rs:104:5
+    |
+104 |     pub fn complete(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+   --> crates/kf-core/src/lifetime.rs:120:1
+    |
+120 | pub enum Diff {
+    | ^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates/kf-core/src/plane.rs:180:5
+    |
+180 |     pub const fn new() -> Vmm {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:192:5
+    |
+192 |     pub tokens: Vec<TokenWord>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:193:5
+    |
+193 |     pub bits: RungBitmap,
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:198:5
+    |
+198 |     pub ring: PrivRing,
+    |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-core/src/plane.rs:199:5
+    |
+199 |     pub token_mask: u32,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates/kf-core/src/plane.rs:320:5
+    |
+320 |     pub fn worker_wake(&self) -> &WakeWord {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-trap` (lib) generated 71 warnings
+   Compiling kf-chan v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-chan)
+warning: `kf-core` (lib) generated 52 warnings
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/kf-chan/src/dbfast.rs:504:14
+    |
+504 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+504 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+504 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+    |
+
+warning: missing documentation for a constant
+  --> crates/kf-mem/src/addr.rs:35:1
+   |
+35 | pub const PAGE: u64 = 0x1000;
+   | ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for an enum
+  --> crates/kf-mem/src/store.rs:14:1
+   |
+14 | pub enum StoreRefusal {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-mem/src/store.rs:17:9
+   |
+17 |         offset: u64,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-mem/src/store.rs:18:9
+   |
+18 |         len: u64,
+   |         ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-mem/src/store.rs:19:9
+   |
+19 |         object: u64,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/kf-mem/src/store.rs:21:5
+   |
+21 |     ZeroLength,
+   |     ^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:25:5
+   |
+25 |     pub fn name(&self) -> &'static str {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates/kf-mem/src/store.rs:41:5
+   |
+41 |     pub fn new(token: HostToken, len: u64) -> Store {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:44:5
+   |
+44 |     pub fn token(&self) -> HostToken {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:47:5
+   |
+47 |     pub fn len(&self) -> u64 {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/kf-mem/src/store.rs:50:5
+   |
+50 |     pub fn is_empty(&self) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kf-mem/src/vasmgr.rs:1314:5
+     |
+1314 |     pub fn walker_mut(&mut self) -> &mut W {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-rm v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-rm)
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:442:17
+    |
+442 |     BadHeader { at: usize, word: u32 },
+    |                 ^^^^^^^^^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:442:28
+    |
+442 |     BadHeader { at: usize, word: u32 },
+    |                            ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:444:17
+    |
+444 |     Truncated { at: usize },
+    |                 ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:448:22
+    |
+448 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                      ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:448:38
+    |
+448 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                                      ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-chan/src/translated.rs:448:49
+    |
+448 |     Untranslatable { target: Target, phys: u64, len: u64 },
+    |                                                 ^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/kf-chan/src/user_batch.rs:31:1
+   |
+31 | pub enum Refusal {
+   | ^^^^^^^^^^^^^^^^
+
+   Compiling kf-harness v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-harness)
+warning: `kf-mem` (lib) generated 12 warnings
+   Compiling kf-rawclient v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-rawclient)
+warning: missing documentation for a function
+  --> crates/kf-rm/src/rpc.rs:84:1
+   |
+84 | pub fn name_of(function: u32) -> Option<&'static str> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+   --> crates/kf-rm/src/rpc.rs:135:1
+    |
+135 | pub const CONTROLS: [(u32, ControlDisposition); 33] = [
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-rm/src/rpc.rs:201:1
+    |
+201 | pub fn control_disposition(cmd: u32) -> ControlDisposition {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-chan` (lib) generated 8 warnings (run `cargo fix --lib -p kf-chan` to apply 1 suggestion)
+   Compiling kf-census v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-census)
+warning: <email>: embedded isolate image: 1516584 bytes, x86_64-unknown-linux-musl
+warning: unused imports: `IMPOSSIBLE_CONVERSION` and `NOT_ON_THIS_RUNG`
+   --> crates/kayfabe-isolate-host/src/rm.rs:603:59
+    |
+603 |         ABI_DECODE_FAILED, ABI_ENCODE_FAILED, CharDevice, IMPOSSIBLE_CONVERSION,
+    |                                                           ^^^^^^^^^^^^^^^^^^^^^
+604 |         IOCTL_NUMBER_UNBUILDABLE, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC, NV_IOCTL_MAGIC,
+    |                                             ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `IMPOSSIBLE_CONVERSION` and `NOT_ON_THIS_RUNG`
+   --> crates/kayfabe-isolate-host/src/rm.rs:969:9
+    |
+969 |         IMPOSSIBLE_CONVERSION,
+    |         ^^^^^^^^^^^^^^^^^^^^^
+...
+972 |         NOT_ON_THIS_RUNG,
+    |         ^^^^^^^^^^^^^^^^
+
+warning: unused variable: `slice`
+   --> crates/kayfabe-isolate-host/src/listobj.rs:615:71
+    |
+615 | fn cross_client(rm: &mut HostRmBackend, gpu: u32, parent: HostHandle, slice: HostHandle) {
+    |                                                                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_slice`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+     --> crates/kayfabe-isolate-host/src/rm.rs:13695:13
+      |
+13695 |         let mut alloc =
+      |             ----^^^^^
+      |             |
+      |             help: remove this `mut`
+      |
+      = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `release_birth_space` and `birth_space_census` are never used
+    --> crates/kayfabe-isolate-host/src/rm.rs:4371:8
+     |
+3385 | impl RmConnection {
+     | ----------------- methods in this implementation
+...
+4371 |     fn release_birth_space(&self, isolate_client: u32, space: u32) -> Option<(u32, u32)> {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+4388 |     fn birth_space_census(&self) -> (usize, usize) {
+     |        ^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `minted_by` is never used
+   --> crates/kayfabe-isolate-host/src/rm.rs:916:23
+    |
+886 |     impl HandedClient {
+    |     ----------------- method in this implementation
+...
+916 |         pub(super) fn minted_by(self) -> u32 {
+    |                       ^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates/kayfabe-isolate-host/src/export.rs:135:1
+    |
+135 | pub struct ChildExports {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate-host/src/rm.rs:5299:5
+     |
+5299 |     pub fn import_object_from_fd(&self, fd: i32) -> Result<u32, RmError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate-host/src/rm.rs:5345:5
+     |
+5345 |     pub fn reserve_gpga(&self, len: u64) -> Result<u32, RmError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kayfabe-isolate-host/src/rm.rs:6752:5
+     |
+6752 |     pub object_bytes: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kayfabe-isolate-host/src/rm.rs:6753:5
+     |
+6753 |     pub tile_bytes: u64,
+     |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kayfabe-isolate-host/src/rm.rs:6754:5
+     |
+6754 |     pub base: u64,
+     |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+    --> crates/kayfabe-isolate-host/src/rm.rs:6757:5
+     |
+6757 |     pub total_ms: u128,
+     |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate-host/src/rm.rs:6769:5
+     |
+6769 |     pub fn landed(&self) -> usize {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+    --> crates/kayfabe-isolate-host/src/rm.rs:6833:1
+     |
+6833 | pub struct CeEvidence {
+     | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates/kayfabe-isolate-host/src/rm.rs:7840:5
+     |
+7840 | /     pub fn read_words_independently(
+7841 | |         &self,
+7842 | |         memory: HostHandle,
+7843 | |         len: u64,
+7844 | |         offsets: &[u64],
+7845 | |     ) -> Result<Vec<u32>, RmError> {
+     | |__________________________________^
+
+warning: missing documentation for a method
+     --> crates/kayfabe-isolate-host/src/rm.rs:13853:5
+      |
+13853 |     pub fn largest_mappable_mb(&mut self, start_mb: u64) -> Vec<(u64, Result<u64, String>)> {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+     --> crates/kayfabe-isolate-host/src/rm.rs:14295:5
+      |
+14295 | /     pub fn prove_identity_window(
+14296 | |         &mut self,
+14297 | |         bytes: u64,
+14298 | |         bases: &[u64],
+14299 | |     ) -> Result<IdentityWindowEvidence, RmError> {
+      | |________________________________________________^
+
+warning: missing documentation for a method
+     --> crates/kayfabe-isolate-host/src/rm.rs:14396:5
+      |
+14396 |     pub fn prove_ce_copy(&mut self, vas: HostHandle, pattern: u32) -> Result<CeEvidence, RmError> {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-rm` (lib) generated 3 warnings
+   Compiling kf-qemu v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-qemu)
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/chan.rs:3792:22
+     |
+3792 |                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+     |                      ^^^^^^^^^^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+     |
+3792 -                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+3792 +                     .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+     |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/device.rs:1428:23
+     |
+1428 |             let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+     |                       ^^^^^^^^^^^^
+     |
+help: replace the use of the deprecated method
+     |
+1428 -             let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+1428 +             let _ = w.try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+     |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/device.rs:4402:10
+     |
+4402 |     left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+     |          ^^^^^^^^^^^^
+     |
+help: replace the use of the deprecated method
+     |
+4402 -     left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+4402 +     left.try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+     |
+
+warning: `kayfabe-isolate-host` (lib) generated 19 warnings (run `cargo fix --lib -p kayfabe-isolate-host` to apply 4 suggestions)
+   Compiling kayfabe-rm-ladder v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kayfabe-rm-ladder)
+warning: unused doc comment
+     --> crates/kayfabe-rm-ladder/src/main.rs:15127:5
+      |
+15127 | /     /// ★ `--guest-ram-at <hex>` — dictate the operands' GPU VA. `None` = RM places them, the
+15128 | |     /// committed behaviour. `[measured w419]` R34 passes in the guest at RM's own placement
+15129 | |     /// (`0x1_2000_0000`); the LLM faults at `0x7cac_3360_0000`, which is where CUDA's unified
+15130 | |     /// addressing puts a device pointer. This is how those two are compared.
+      | |_____________________________________________________________________________^
+15131 |       let mut guest_ram_at: Option<u64> = None;
+      |       ----------------------------------------- rustdoc does not generate documentation for statements
+      |
+      = help: use `//` for a plain comment
+      = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused doc comment
+     --> crates/kayfabe-rm-ladder/src/main.rs:15132:5
+      |
+15132 | /     /// ★ `--guest-ram-dst-vidmem` — put the DESTINATION in device memory, which is the real
+15133 | |     /// H2D shape. `[measured w416-w419]` the LLM's fault is a copy engine WRITING its
+15134 | |     /// destination, and `.to('cuda')` uploads guest RAM into vidmem. With both operands in
+15135 | |     /// sysmem, R34's engine never writes to vidmem at all.
+      | |___________________________________________________________^
+15136 |       let mut guest_ram_dst_vidmem = false;
+      |       ------------------------------------- rustdoc does not generate documentation for statements
+      |
+      = help: use `//` for a plain comment
+
+warning: unused import: `ClassId`
+     --> crates/kayfabe-rm-ladder/src/main.rs:17727:29
+      |
+17727 |     use kayfabe_arch::ids::{ClassId, GpuId, GpuVa};
+      |                             ^^^^^^^
+      |
+      = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+    --> crates/kf-qemu/src/mem.rs:3104:14
+     |
+3104 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+     |              ^^^^^^^^^^^^
+     |
+help: replace the use of the deprecated method
+     |
+3104 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+3104 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+     |
+
+warning: unused variable: `bases`
+    --> crates/kayfabe-rm-ladder/src/main.rs:6121:9
+     |
+6121 |     let bases: Vec<u64> = vec![
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_bases`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable `persistence` is assigned to, but never used
+     --> crates/kayfabe-rm-ladder/src/main.rs:15055:9
+      |
+15055 |     let mut persistence = true;
+      |         ^^^^^^^^^^^^^^^
+      |
+      = note: consider using `_persistence` instead
+
+warning: value assigned to `persistence` is never read
+     --> crates/kayfabe-rm-ladder/src/main.rs:15261:35
+      |
+15261 |             "--no-persistence" => persistence = false,
+      |                                   ^^^^^^^^^^^^^^^^^^^
+      |
+      = help: maybe it is overwritten before being read?
+      = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `P2_COPY_ENGINE` is never used
+     --> crates/kayfabe-rm-ladder/src/main.rs:18438:11
+      |
+18438 |     const P2_COPY_ENGINE: u32 = 2;
+      |           ^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: trait `userstore::Host` is more private than the item `Cache`
+   --> crates/kf-qemu/src/userstore.rs:105:1
+    |
+105 | pub(crate) struct Cache<H: Host = Native> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ struct `Cache` is reachable at visibility `pub(crate)`
+    |
+note: but trait `userstore::Host` is only usable at visibility `pub(self)`
+   --> crates/kf-qemu/src/userstore.rs:86:1
+    |
+ 86 | trait Host {
+    | ^^^^^^^^^^
+    = note: `#[warn(private_bounds)]` on by default
+
+warning: trait `userstore::Host` is more private than the item `Cache<H>`
+   --> crates/kf-qemu/src/userstore.rs:155:1
+    |
+155 | impl<H: Host> Cache<H> {
+    | ^^^^^^^^^^^^^^^^^^^^^^ implementation `Cache<H>` is reachable at visibility `pub(crate)`
+    |
+note: but trait `userstore::Host` is only usable at visibility `pub(self)`
+   --> crates/kf-qemu/src/userstore.rs:86:1
+    |
+ 86 | trait Host {
+    | ^^^^^^^^^^
+
+warning: `kayfabe-rm-ladder` (bin "kayfabe-rm-ladder") generated 7 warnings (run `cargo fix --bin "kayfabe-rm-ladder" -p kayfabe-rm-ladder` to apply 2 suggestions)
+warning: `kf-qemu` (lib) generated 6 warnings (run `cargo fix --lib -p kf-qemu` to apply 4 suggestions)
+    Finished `release` profile [optimized] target(s) in 34.39s
+   Compiling kf-oprom v0.1.0 (/workspace/kf-install-flow/run/work/kayfabe/crates/kf-oprom)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.98s
+     Running unittests src/lib.rs (target/debug/deps/kf_oprom-c30073c653f04462)
+
+running 34 tests
+test desc::tests::bad_geometries_are_refused_by_name ... ok
+test desc::tests::encode_decode_round_trip_with_an_edid ... ok
+test desc::tests::every_corruption_is_refused_by_name ... ok
+test desc::tests::the_1080p_geometry_is_the_designs_g ... ok
+test desc::tests::the_descriptor_slot_follows_pcir_on_16_bytes ... ok
+test desc::tests::an_oversized_edid_is_refused_on_both_sides ... ok
+test desc::tests::fits_checks_the_end_without_overflow ... ok
+test desc::tests::the_stand_in_geometry_rounds_the_pitch ... ok
+test pack::tests::a_3d_controller_class_is_still_a_display ... ok
+test pack::tests::a_large_edid_still_leaves_room_before_the_pe ... ok
+test pack::tests::a_pe_that_is_not_block_sized_ends_on_the_boundary ... ok
+test pack::tests::pack_then_parse_round_trips ... ok
+test pack::tests::the_header_fields_sit_at_the_spec_offsets ... ok
+test pack::tests::the_machine_type_is_the_pes_own ... ok
+test pe::tests::a_certificate_table_is_reported ... ok
+test pe::tests::a_certificate_that_is_not_pkcs7_or_overflows_its_table_is_refused ... ok
+test pe::tests::a_different_pe_is_refused ... ok
+test pe::tests::a_driver_with_the_marker_passes ... ok
+test pe::tests::a_table_inside_the_image_or_misaligned_is_refused ... ok
+test pe::tests::a_machine_the_rom_cannot_name_is_refused_by_name ... ok
+test pe::tests::an_aarch64_driver_passes_with_its_own_machine ... ok
+test pe::tests::a_tampered_byte_is_refused_with_its_offset ... ok
+test pe::tests::an_application_a_foreign_machine_and_a_missing_marker_are_refused ... ok
+test pe::tests::an_sbsign_shaped_signature_of_the_same_driver_is_accepted ... ok
+test pe::tests::an_unsigned_file_and_a_signed_reference_are_refused ... ok
+test pe::tests::broken_headers_are_refused_not_read_past ... ok
+test pe::tests::trailing_data_after_the_table_is_refused ... ok
+test rom::tests::a_missing_last_bit_ends_at_the_rom_end_not_past_it ... ok
+test pe::tests::zero_padding_before_the_table_is_accepted_and_non_zero_padding_is_not ... ok
+test rom::tests::class_code_round_trips_through_pcir_byte_order ... ok
+test rom::tests::malformed_headers_are_refused_by_name ... ok
+test rom::tests::pcir_revisions_other_than_0_and_3_are_refused_by_name ... ok
+test rom::tests::one_efi_image_parses_with_its_payload_extent ... ok
+test pack::tests::refusals_are_by_name ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+     Running unittests src/bin/kf-oprom.rs (target/debug/deps/kf_oprom-e5dc21038f06e878)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/efi_virtio_golden.rs (target/debug/deps/efi_virtio_golden-e04440443bd1ca1c)
+
+running 2 tests
+test the_recorded_headers_parse_to_the_read_values ... ok
+test the_installed_rom_parses_to_the_same_values ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+   Doc-tests kf_oprom
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,27 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=both winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       679G  184G  495G  28% /
+KF_PREFLIGHT_FREE_BYTES=531184279552
+KF_PAYLOAD_STAGE_START name=propimage_apps
+[xid-watch] tag=ci645fc53197883f5c_propimage_apps  host=ubuntu  utc=2026-11-18T00:40:03Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/propimage_apps.py run --sha 049fbf3cb9697cc925b8e417787fce45e411d332 --checkout /workspace/kf-ci-src --prefix /workspace/kf-propimage --out /workspace/kf-ci-evidence/propimage_apps.json --evidence-dir /workspace/kf-ci-evidence/propimage_apps --deadline-epoch 1794980101 --images-file /workspace/kf-ci-evidence/propimage_images.json
+[xid-watch] host_dmesg_lines=3395  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+KF_PROPIMAGE_RUN_RESULT {"breakages":[],"cpu_vendor":"amd","family":"ada","images":[{"apps":[],"boots":[],"breakages":[],"decided":null,"guest_driver":null,"kind":"prebuilt","label":"imga","mode":null,"not_run":[],"reason":"DOWNLOAD","skip_class":null,"source":{"expect_sha256":null,"from":"pin","identity":"none","name":"propimage-kfimg-20261112.zip","pin_sha256":null,"sha256":null,"size":null},"unsupported":[],"verdict":"REFUSED"}],"pins_enforced":true,"platform":"kf3","preflight":[{"detail":"host AuthenticAMD, allowed AuthenticAMD","name":"cpu_vendor","status":"MATCH"},{"detail":"missing host flags: none","name":"cpu_features","status":"MATCH"},{"detail":"ada (MEASURED with this image)","name":"gpu_family","status":"MATCH"},{"detail":"built 0.10.1 under /opt/tpm (private signed tarballs)","name":"swtpm","status":"MATCH"},{"detail":"the kf3 QEMU of this revision","name":"kf3_qemu","status":"MATCH"},{"detail":"free 494 GiB","name":"disk","status":"MATCH"}],"reason":"imga:DOWNLOAD","rows":[],"schema":"kayfabe.propimage-run/1","sha":"049fbf3cb9697cc925b8e417787fce45e411d332","strict":true,"strict_failures":[],"summary":{"classes":{},"failed":0,"lanes":{"discovery":{"passed":0,"ran":0},"gate":{"passed":0,"ran":0}},"passed":0,"ran":0,"skipped":0},"swtpm":{"built":true,"version":"0.10.1"},"verdict":"REFUSED"}
+KF_PROPIMAGE_RUN_SUMMARY verdict=REFUSED ran 0, passed 0, skipped 0; STRICT: any skip is a failure [gate: ran 0, passed 0 | discovery: ran 0, passed 0, known breakages 0]
+[xid-watch] --- command output ends (rc=2) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (3395 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci645fc53197883f5c_propimage_apps.log
+KF_PAYLOAD_STAGE_END name=propimage_apps rc=2 duration_ms=1306666
+KF_PAYLOAD_FAIL suite=propimage_apps
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=2
+stage name=propimage_apps rc=2 duration_ms=1306666 result=FAIL reason=propimage_apps
+stage name=matlab result=NOT_RUN
+suite name=propimage_apps pass=0 fail=1 skip=0
+first_fail stage=propimage_apps line=no red line found; last line: [xid-watch] evidence: /workspace/bench/xid_ci645fc53197883f5c_propimage_apps.log
+KF_FINAL_SUMMARY_END

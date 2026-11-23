@@ -1,0 +1,21 @@
+[xid-watch] tag=ci-arm-64506-21094  host=ubuntu  utc=2026-11-17T13:20:15Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --guest-ram-pin
+[xid-watch] host_dmesg_lines=837  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=5
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=66110 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--guest-ram-pin]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0037b
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R29 guestpin probe = GPU 0, euid 0 — a shared memfd behind a real GuestRamPlane, granted at a NON-ZERO offset, described through the port's own `describe_guest_ram`, mapped at 0x0000000301400000
+★     R29 guestpin       = placed at 0x0000000301400000 AS ASKED, 65536 bytes at grant offset 0x10000, and the isolate's mapping reads 0x9a114001 — the word the VMM wrote at that offset. ⊘ This is the PRODUCTION route (GuestRamPlane -> describe_guest_ram -> map_gpu_va), not R25's parallel one. ⊘ It is a memfd THIS process made: it is SHAPED like guest RAM and it is not the guest's.
+done — guest-RAM pin probe only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=5
+[xid-watch] ★ HOST Xid CLEAN across the command — 5 before, 5 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (837 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-64506-21094.log

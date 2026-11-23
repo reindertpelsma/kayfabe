@@ -1,0 +1,13 @@
+[xid-watch] tag=ci50c25c615ace5b2c_kfml  host=ubuntu  utc=2026-11-17T16:22:30Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/kfml_stage.py run --sha 021cad3ccd4002b9f75b90b0f9f3ba0370e2ae67 --checkout /workspace/kf-ci-src --prefix /workspace/kf-kfml --out /workspace/kf-ci-evidence/kfml.json --tier large --run-id ci50c25c615ace5b2c
+[xid-watch] host_dmesg_lines=1209  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+KF_KFML_RESULT {"facts":{"compute_cap":"8.9","cuda":"12.8","driver":"580.159.04","driver_cuda":"13.0","flavor":"cu128","gpu_name":"NVIDIA GeForce RTX 4090","torch":"2.7.1+cu128","vram_gb":23.52},"rows":[{"metrics":{"amp_vs_fp32_max_window_diff":0.002144,"compiled_vs_eager_max_window_diff":0.001475,"forward_rel_err":0.003497,"grad_scaler":false,"params":812288,"reference_compared":false,"reference_config_mismatch":false},"name":"nanogpt_compile","reason":"","status":"PASS","wall_s":50.142},{"metrics":{"cases_checked":29,"layernorm_max_abs_err":0.003901,"matmul_worst_rel_err":5e-06,"softmax_max_abs_err":0.0},"name":"triton_kernels","reason":"","status":"PASS","wall_s":19.674},{"metrics":{"build_s":36.765343,"spin_clock_cycles":51746},"name":"cuda_ext_inline","reason":"","status":"PASS","wall_s":41.953},{"metrics":{"acc_amp":0.734,"acc_fp32":0.7345,"cuda_ipc":true,"grad_scaler":false,"pred_agreement":0.996,"train_s":20.643916},"name":"amp_convnet_cifar","reason":"","status":"PASS","wall_s":32.744},{"metrics":{"allocated_gb":16.192072,"async_copy_mb":64.0,"buffers":311,"free_end_gb":23.035828,"free_start_gb":23.131531,"graph_replays":40,"streams":16,"target_gb":16.192072},"name":"stress_alloc","reason":"","status":"PASS","wall_s":7.099},{"metrics":{},"name":"managed_oversub","reason":"host RAM too small to oversubscribe VRAM by 25%","status":"NOT_RUN","wall_s":38.394}],"run_id":"ci50c25c615ace5b2c","schema":1,"sha":"021cad3ccd4002b9f75b90b0f9f3ba0370e2ae67","steps":[{"rc":0,"s":3.5,"step":"plan"},{"rc":0,"s":163.3,"step":"setup"},{"rc":0,"s":0.8,"step":"fetch-data"},{"rc":0,"s":199.1,"step":"run"}],"tier":"large","verdict":"PASS"}
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1209 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci50c25c615ace5b2c_kfml.log

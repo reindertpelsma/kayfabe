@@ -1,0 +1,34 @@
+{
+  "app": "dimension",
+  "ok": true,
+  "evidence": "UIA",
+  "signal": "LIMITED: launched, main window reached (1 windows), process responding=True, 49 MB; no document work",
+  "error": "",
+  "class": "app",
+  "limited": true,
+  "lane": "gate",
+  "path": "OpenGL/OptiX init (launch only)",
+  "platform": "kf3",
+  "secs": 52,
+  "status": "PASS_LIMITED",
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 14.0,
+      "mem_mb": 9504.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 14.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 38
+    },
+    "baseline": {
+      "mem_mb": 9432.0,
+      "gpu": 2.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 222
+  },
+  "outputs_recorded": 4
+}

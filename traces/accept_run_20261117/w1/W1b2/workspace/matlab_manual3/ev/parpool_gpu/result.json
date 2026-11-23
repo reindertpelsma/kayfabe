@@ -1,0 +1,11 @@
+{
+ "checks": [],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 4090"
+ },
+ "row": "parpool_gpu",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "error"
+}

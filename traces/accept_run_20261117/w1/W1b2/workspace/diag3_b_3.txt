@@ -1,0 +1,98 @@
+diag3 i=3 at 08:11:10 port=39934
+== now
+2026-11-15T23:08:15.8864976+00:00
+== uptime
+00:13:53.4357577
+== tasks named app_ or kf
+kf_app_9222578d50a4479dbd7839fa79f6d75e path=\ state=Running lastrun=11/15/2026 11:07:48 PM lastresult=267009 user=<user> logon=Interactive
+== kfapps tree (newest 40)
+23:07:56 34 C:\kfapps\9222578d50a4479dbd7839fa79f6d75e\illustrator\steps.log
+23:07:56 1 C:\kfapps\9222578d50a4479dbd7839fa79f6d75e\illustrator
+23:07:51 1 C:\kfapps\9222578d50a4479dbd7839fa79f6d75e
+23:07:09 0 C:\kfapps\gpu\gpu_query.csv
+23:07:09 11 C:\kfapps\gpu\gpu_pids.txt
+23:07:09 1 C:\kfapps\gpu
+23:04:27 1079 C:\kfapps\73f76523e89e4d4c93ee661a33d64a83\gpudiag\result.json
+23:04:27 335 C:\kfapps\73f76523e89e4d4c93ee661a33d64a83\gpudiag\app_events.txt
+23:04:27 1 C:\kfapps\73f76523e89e4d4c93ee661a33d64a83\gpudiag
+23:04:27 3723 C:\kfapps\73f76523e89e4d4c93ee661a33d64a83\gpudiag\sniffer_photoshop.txt
+23:04:21 1789 C:\kfapps\73f76523e89e4d4c93ee661a33d64a83\gpudiag\sniffer_mediaencoder.txt
+23:03:57 1788 C:\kfapps\73f76523e89e4d4c93ee661a33d64a83\gpudiag\sniffer_aftereffects.txt
+23:03:29 1790 C:\kfapps\73f76523e89e4d4c93ee661a33d64a83\gpudiag\sniffer_premiere.txt
+23:03:09 1 C:\kfapps\73f76523e89e4d4c93ee661a33d64a83
+23:02:35 1 C:\kfapps\dumps
+== kfhw tree (newest 40)
+23:08:11 3439 C:\kfhw\diag3.ps1
+23:07:42 507 C:\kfhw\ps_run.ps1
+23:07:27 16919 C:\kfhw\app_9222578d50a4479dbd7839fa79f6d75e.ps1
+23:06:54 81 C:\kfhw\smi_L.txt
+23:02:42 15367 C:\kfhw\app_73f76523e89e4d4c93ee661a33d64a83.ps1
+22:59:41 103 C:\kfhw\power_0ddbc2d0071c42718a87fd7243c45b9e.json
+22:58:47 1432 C:\kfhw\power_0ddbc2d0071c42718a87fd7243c45b9e.ps1
+== steps.log and progress tails of the newest row dirs
+-- C:\kfapps\9222578d50a4479dbd7839fa79f6d75e\illustrator\steps.log 34 bytes 23:07:56
+   23:07:56 start
+   23:07:56 started
+-- C:\kfapps\73f76523e89e4d4c93ee661a33d64a83\gpudiag\result.json 1079 bytes 23:04:27
+                       },
+                       {
+                           "file":  "sniffer_aftereffects.txt",
+                           "bytes":  1788,
+                           "modified":  1794783837.519
+                       },
+                       {
+                           "file":  "sniffer_mediaencoder.txt",
+                           "bytes":  1789,
+                           "modified":  1794783861.544
+                       },
+                       {
+                           "file":  "sniffer_photoshop.txt",
+                           "bytes":  3723,
+                           "modified":  1794783867.031
+                       }
+                   ],
+       "quit":  "process",
+       "ended":  1794783867.045,
+       "crash_events":  1,
+       "crash_dumps":  0,
+       "dismissed":  [
+   
+                     ]
+   }
+== processes of interest
+
+   Id ProcessName SessionId cpu StartTime             
+   -- ----------- --------- --- ---------             
+ 9324 AISniffer           1 0.5 11/15/2026 11:08:16 PM
+ 1076 conhost             1   0 11/15/2026 10:58:39 PM
+ 6264 conhost             0   0 11/15/2026 11:08:12 PM
+ 7984 conhost             1   0 11/15/2026 11:07:48 PM
+10488 conhost             0   0 11/15/2026 11:08:16 PM
+ 6396 powershell          0 2.7 11/15/2026 11:08:17 PM
+ 8276 powershell          0 4.6 11/15/2026 11:08:14 PM
+ 9220 powershell          0 2.7 11/15/2026 11:08:16 PM
+ 9516 powershell          0 2.3 11/15/2026 11:08:12 PM
+11236 powershell          1 6.1 11/15/2026 11:07:48 PM
+
+
+
+== nvidia-smi -L with a 20 s limit
+nvidia-smi -L returned rc=
+GPU 0: NVIDIA GeForce RTX 4090 (UUID: GPU-<uuid>)
+== TaskScheduler operational, newest 25 (ids and short text)
+== Application log errors and warnings, last 20 min
+22:56:41 Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for WORKGROUP\KFB-CD69909F$ via https://-KeyId-144383471022c03fb4ea50d6195ff3
+22:56:39 Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for Local system via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.
+00:32:27 Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for \MINWINPC$ via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.mi
+00:32:27 Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for Local system via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.
+== System log errors, last 20 min
+Exception calling "Substring" with "2" argument(s): "Index and length must refer to a location 
+within the string.
+Parameter name: length"
+At C:\kfhw\diag3.ps1:25 char:163
++ ... ch-Object { "{0} {1} id={2} {3}" -f $_.TimeCreated.ToString('HH:mm:ss ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : ArgumentOutOfRangeException
+ 
+DIAGDONE

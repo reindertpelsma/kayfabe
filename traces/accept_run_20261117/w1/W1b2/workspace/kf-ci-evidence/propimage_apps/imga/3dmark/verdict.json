@@ -1,0 +1,7 @@
+{
+  "app": "3dmark",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "3DMark score 6576 (graphics 6949), graphics tests 42.43, 42.36 FPS, finished 2026-11-12T18:09:16Z on NVIDIA GeForce RTX 4090 driver 32.0.15.8088, all 10 workload status codes 0; CLI refused (Professional/Developer key needed), so the run went through UI Automation",
+  "secs": 794
+}

@@ -1,0 +1,33 @@
+{
+  "app": "gpudiag",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "the applications' GPU sniffers (premiere, aftereffects, mediaencoder) report an NVIDIA compute device",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "lane": "gate",
+  "path": "NVIDIA driver/CUDA enumeration by the applications own sniffers",
+  "platform": "kf3",
+  "secs": 77,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 17.0,
+      "mem_mb": 9519.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 17.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 44
+    },
+    "baseline": {
+      "mem_mb": 9424.0,
+      "gpu": 0.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 302
+  },
+  "outputs_recorded": 6
+}

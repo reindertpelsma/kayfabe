@@ -1,0 +1,33 @@
+{
+  "app": "illustrator",
+  "ok": true,
+  "evidence": "FILE",
+  "signal": "opened gradient_3d_colored.svg (720x705), added 400 shapes, exported 2880x2820 PNG (std 71.3) and a 1-page PDF",
+  "error": "",
+  "class": "app",
+  "limited": false,
+  "lane": "gate",
+  "path": "D3D11 canvas, large path counts, raster export",
+  "platform": "kf3",
+  "secs": 154,
+  "gpu": {
+    "required": [],
+    "verdict": "PASS",
+    "peak": {
+      "gpu": 10.0,
+      "mem_mb": 9528.0,
+      "enc_sessions": 0.0,
+      "gpu_dmon_sm": 10.0,
+      "enc": 0.0,
+      "dec": 0.0,
+      "busy_samples": 36
+    },
+    "baseline": {
+      "mem_mb": 9431.0,
+      "gpu": 1.0,
+      "enc_sessions": 0.0
+    },
+    "samples": 437
+  },
+  "outputs_recorded": 5
+}

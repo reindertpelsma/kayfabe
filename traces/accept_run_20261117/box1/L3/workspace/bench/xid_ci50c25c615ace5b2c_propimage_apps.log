@@ -1,0 +1,14 @@
+[xid-watch] tag=ci50c25c615ace5b2c_propimage_apps  host=ubuntu  utc=2026-11-17T19:25:41Z
+[xid-watch] command: python3 /workspace/kf-ci-src/scripts/ci/propimage_apps.py run --sha 021cad3ccd4002b9f75b90b0f9f3ba0370e2ae67 --checkout /workspace/kf-ci-src --prefix /workspace/kf-propimage --out /workspace/kf-ci-evidence/propimage_apps.json --evidence-dir /workspace/kf-ci-evidence/propimage_apps --deadline-epoch 1794979818 --images-file /workspace/kf-ci-evidence/propimage_images.json
+[xid-watch] host_dmesg_lines=1238  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=10
+[xid-watch] --- command output begins ---
+KF_PROPIMAGE_RUN_RESULT {"breakages":[],"cpu_vendor":"amd","family":"ada","images":[],"pins_enforced":true,"platform":"kf3","preflight":[{"detail":"host AuthenticAMD, allowed AuthenticAMD","name":"cpu_vendor","status":"MATCH"},{"detail":"missing host flags: none","name":"cpu_features","status":"MATCH"},{"detail":"ada (MEASURED with this image)","name":"gpu_family","status":"MATCH"},{"detail":"0.6.3","name":"swtpm","status":"MISMATCH"},{"detail":"the kf3 QEMU of this revision","name":"kf3_qemu","status":"MATCH"},{"detail":"free 556 GiB","name":"disk","status":"MATCH"}],"reason":"SWTPM_VERSION","rows":[],"schema":"kayfabe.propimage-run/1","sha":"021cad3ccd4002b9f75b90b0f9f3ba0370e2ae67","strict":true,"strict_failures":[],"summary":{"classes":{},"failed":0,"lanes":{"discovery":{"passed":0,"ran":0},"gate":{"passed":0,"ran":0}},"passed":0,"ran":0,"skipped":0},"verdict":"REFUSED"}
+KF_PROPIMAGE_RUN_SUMMARY verdict=REFUSED ran 0, passed 0, skipped 0; STRICT: any skip is a failure [gate: ran 0, passed 0 | discovery: ran 0, passed 0, known breakages 0]
+[xid-watch] --- command output ends (rc=2) ---
+[xid-watch] xid_after=10
+[xid-watch] ★ HOST Xid CLEAN across the command — 10 before, 10 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1238 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci50c25c615ace5b2c_propimage_apps.log

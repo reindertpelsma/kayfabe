@@ -1,0 +1,96 @@
+KF_PAYLOAD_TIER windows=1 source=instruction tier=large rehearsal=1 windows_runs=2 stages=specviewperf spec=both winapps=mid linuxapps=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       291G  8.1G  283G   3% /
+KF_PREFLIGHT_FREE_BYTES=303303012352
+KF_PAYLOAD_STAGE_START name=provision
+[xid-watch] tag=cid80d087d377faf35_provision  host=ubuntu  utc=2026-11-18T00:16:47Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/provision_full.sh
+[xid-watch] host_dmesg_lines=698  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=No devices were found
+nvidia-smi unavailable
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+START 2026-11-18T00:16:47+00:00
+BOX_RC=0
+049fbf3cb Merge claude/kfml-strict-not-run-20261117 (PR #472) into the acceptance run tree: a NOT_RUN kfml row fails by name under a strict instruction
+DRIVER_RC=0
+NVIDIA GeForce RTX 5070 Ti, 580.159.04
+/dev/root       291G   13G  278G   5% /
+TREE_RC=0
+[2026-11-18T00:23:38+00:00] B4: guest ladder built: 5061712 bytes
+[2026-11-18T00:23:38+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/049fbf3c/qemu-system-x86_64 rev=049fbf3c mtime=2026-11-18 00:24:22.555761791 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[xid-watch] --- command output ends (rc=0) ---
+READY driver=580.159.04
+EXIT 2026-11-18T00:24:24+00:00
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (698 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_cid80d087d377faf35_provision.log
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=458575
+KF_PAYLOAD_STAGE_START name=windows_gate
+[xid-watch] tag=cid80d087d377faf35_windows_gate  host=ubuntu  utc=2026-11-18T00:24:27Z
+[xid-watch] command: bash /workspace/kf-ci-src/scripts/bench/box/windows_gate.sh cid80d087d377faf35 /root/prov
+[xid-watch] host_dmesg_lines=749  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 5070 Ti, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+WINDOWS_GATE_START tag=cid80d087d377faf35 rev=049fbf3c source=/workspace/kf-ci-src 2026-11-18T00:24:29+00:00 idle_s=300 flags=none guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-18T00:24:29+00:00
+KFROOT_ASSERT mode=record ok=0 uid=0 capeff=held capprm=held capbnd=held nnp=0 procs=3
+KFROOT_ASSERT_VIOLATION 59319(bash) uid_root 0/0/0/0
+KFROOT_ASSERT_VIOLATION 59319(bash) capprm_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 59319(bash) capeff_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 59319(bash) capbnd_held 000001ffffffffff
+KFROOT_ASSERT_VIOLATION 59319(bash) no_new_privs_not_set 0
+KFROOT_ASSERT_VIOLATION 59366(bash) uid_root 0/0/0/0
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 5070 Ti" driver=580.159.04 cpus=30 ram_gb=98 disk_free_gb=270 uid=0 memlock_kb=12946452
+GATE_STAGE preflight EXIT ok 7s
+GATE_STAGE hostref_before START 2026-11-18T00:24:36+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 5070 Ti, 580.159.04, 16303 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 6s
+GATE_STAGE prereqs START 2026-11-18T00:24:42+00:00
+GATE_STAGE prereqs EXIT ok 18s
+GATE_STAGE kf3_binary START 2026-11-18T00:25:00+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/049fbf3c/qemu-system-x86_64 sha256=45dcc6a4e75ecd58 rev=049fbf3c
+GATE_STAGE kf3_binary EXIT ok 0s
+GATE_STAGE lke_die START 2026-11-18T00:25:00+00:00
+GATE_LKE_DIE die=GB203 source=native_rm
+GATE_STAGE lke_die EXIT ok 3s
+GATE_STAGE install START 2026-11-18T00:25:03+00:00
+GATE_STAGE install EXIT ok 1373s
+GATE_STAGE probes_build START 2026-11-18T00:47:56+00:00
+GATE_NOTE probes built: c4828adb4373 5205d165e415 19baf53449f2 dfa395b711dd 
+GATE_STAGE probes_build EXIT ok 3s
+GATE_STAGE boot1 START 2026-11-18T00:47:59+00:00
+GATE_NOTE QEMU boot 1 of gate_cid80d087d377faf35 started after 4s
+GATE_NOTE QEMU is gone while waiting for ssh (after 10s)
+KFROOT_ASSERT mode=record ok=unchecked label=final why=no-sudo-log-mark
+GATE_HOSTREF after green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 5070 Ti, 580.159.04, 16303 MiB, P0"
+WINDOWS_GATE_FAIL diag=KAYFABE stage=boot1 why="the guest never answered ssh after boot 1 (waited 10s of at most 900 s); run log: [2026-11-18T00:48:01Z] KF3_ENV KF3_RPC_TRACE=1  [2026-11-18T00:48:03Z] QEMU_START tag=gate_cid80d087d377faf35 boot=1 pid=64164 log=logs/gate_cid80d087d377faf35_b1_qemu.log " rev=049fbf3c gpu="NVIDIA GeForce RTX 5070 Ti" hostref=green/green secs=1544
+GATE_NOTE evidence: /root/prov/cid80d087d377faf35_windows (29 files), /root/prov/cid80d087d377faf35_windows.tgz sha256=8693134aa27e37e3
+WINDOWS_GATE_TIMING total=1544s preflight=7s hostref_before=6s prereqs=18s kf3_binary=0s lke_die=3s install=1373s probes_build=3s
+WINDOWS_GATE_EXIT rc=1 2026-11-18T00:50:13+00:00
+[xid-watch] --- command output ends (rc=1) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (749 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_cid80d087d377faf35_windows_gate.log
+KF_PAYLOAD_STAGE_END name=windows_gate rc=1 duration_ms=1547467
+KF_PAYLOAD_FAIL suite=windows_gate
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=3
+stage name=provision rc=0 duration_ms=458575 result=PASS
+stage name=windows_gate rc=1 duration_ms=1547467 result=FAIL reason=windows_gate
+stage name=specviewperf result=NOT_RUN
+suite name=provision pass=1 fail=0 skip=0
+suite name=windows_gate pass=0 fail=1 skip=0
+first_fail stage=windows_gate line=no red line found; last line: [xid-watch] evidence: /workspace/bench/xid_cid80d087d377faf35_windows_gate.log
+KF_FINAL_SUMMARY_END

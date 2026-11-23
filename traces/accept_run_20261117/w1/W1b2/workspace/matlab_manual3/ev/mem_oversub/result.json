@@ -1,0 +1,110 @@
+{
+ "checks": [
+  {
+   "device_index": 1,
+   "device_name": "NVIDIA GeForce RTX 4090",
+   "exists_on_gpu": true,
+   "guest_pass": true,
+   "kind": "gpuarray",
+   "name": "chunks_gpuarray",
+   "on_gpu": true,
+   "underlying": "uint32"
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "content_mismatches",
+   "value": 0
+  },
+  {
+   "cpu": [
+    1.7320508075688772,
+    3,
+    1,
+    1
+   ],
+   "diff": 0,
+   "dtype": "uint32",
+   "exists_on_gpu": true,
+   "gpu": [
+    1.7320508075688772,
+    3,
+    1,
+    1
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "sample_chunk_1",
+   "numel": 3,
+   "on_gpu": true,
+   "ref": 1.7320508075688772,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    19.05255888325765,
+    33,
+    11,
+    11
+   ],
+   "diff": 0,
+   "dtype": "uint32",
+   "exists_on_gpu": true,
+   "gpu": [
+    19.05255888325765,
+    33,
+    11,
+    11
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "sample_chunk_11",
+   "numel": 3,
+   "on_gpu": true,
+   "ref": 19.05255888325765,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    38.1051177665153,
+    66,
+    22,
+    22
+   ],
+   "diff": 0,
+   "dtype": "uint32",
+   "exists_on_gpu": true,
+   "gpu": [
+    38.1051177665153,
+    66,
+    22,
+    22
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "sample_chunk_22",
+   "numel": 3,
+   "on_gpu": true,
+   "ref": 38.1051177665153,
+   "tol": 0
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 4090"
+ },
+ "memory": {
+  "allocated_bytes": 2952790016.0,
+  "avail_after_alloc": 557056000.0,
+  "avail_end": 3507748864.0,
+  "avail_start": 3514040320.0,
+  "chunk_bytes": 134217728.0,
+  "chunks": 22,
+  "total": 3968073728.0
+ },
+ "row": "mem_oversub",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

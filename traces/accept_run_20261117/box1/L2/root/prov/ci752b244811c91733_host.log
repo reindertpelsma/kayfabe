@@ -1,0 +1,28 @@
+BARE_SUITE_STARTED=2026-11-17T14:26:05+00:00 arms=30 budget=180s
+bin=/workspace/kf-ci-src/target/release/kayfabe-rm-ladder  rev=021cad3cc
+gpu=NVIDIA GeForce RTX 4090  driver=580.159.04(open)  pci_dev=0x268410DE  cc=8.9
+ARM                          VERDICT    secs  why
+--timer                      PASS         6s  6s
+BARE_CELL_ARM arm=timer verdict=PASS secs=6 ms=5491 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--engines                    PASS         5s  5s
+BARE_CELL_ARM arm=engines verdict=PASS secs=5 ms=5524 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--doorbell-census            PASS         6s  6s
+BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=6 ms=5586 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--gpu-info-sweep             PASS         6s  6s
+BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=6 ms=5465 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--bus-info-sweep             PASS         8s  8s
+BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=8 ms=8773 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--concurrency                PASS        10s  10s
+BARE_CELL_ARM arm=concurrency verdict=PASS secs=10 ms=9319 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--defer-liveness             PASS        17s  17s
+BARE_CELL_ARM arm=defer-liveness verdict=PASS secs=17 ms=17627 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--blockage-coverage          PASS         6s  6s
+BARE_CELL_ARM arm=blockage-coverage verdict=PASS secs=6 ms=5854 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--alias-two-vas              PASS         6s  6s
+BARE_CELL_ARM arm=alias-two-vas verdict=PASS secs=6 ms=5373 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--alias-unmap-observe        PASS         5s  5s
+BARE_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=5 ms=5475 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--map-propagation            PASS         5s  5s
+BARE_CELL_ARM arm=map-propagation verdict=PASS secs=5 ms=5493 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc
+--late-map-race              PASS         5s  5s
+BARE_CELL_ARM arm=late-map-race verdict=PASS secs=5 ms=5907 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=021cad3cc

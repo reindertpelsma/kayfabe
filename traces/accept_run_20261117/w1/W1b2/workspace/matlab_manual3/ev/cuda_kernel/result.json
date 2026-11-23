@@ -1,0 +1,149 @@
+{
+ "checks": [
+  {
+   "cpu": [
+    34.28902037613783,
+    1001.1539702452719,
+    1.7272605895996094,
+    0.9375560283660889
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    34.28902037613783,
+    1001.1539702452719,
+    1.7272605895996094,
+    0.9375560283660889
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "vecadd_1000",
+   "numel": 1000,
+   "on_gpu": true,
+   "ref": 34.28902037613783,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    1106.5840167953497,
+    1049315.8068245514,
+    1.3632258176803589,
+    1.2059307098388672
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    1106.5840167953497,
+    1049315.8068245514,
+    1.3632258176803589,
+    1.2059307098388672
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "vecadd_1048573",
+   "numel": 1048573.0,
+   "on_gpu": true,
+   "ref": 1106.5840167953497,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    3416.279529167046,
+    10001688.467294179,
+    1.1428617238998413,
+    0.9291304349899292
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    3416.279529167046,
+    10001688.467294179,
+    1.1428617238998413,
+    0.9291304349899292
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "vecadd_10000000",
+   "numel": 10000000.0,
+   "on_gpu": true,
+   "ref": 3416.279529167046,
+   "tol": 0
+  },
+  {
+   "cpu": [
+    3416.279529167046,
+    10001688.467294179,
+    1.1428617238998413,
+    0.9291304349899292
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    3416.279529167046,
+    10001688.467294179,
+    1.1428617238998413,
+    0.9291304349899292
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "vecadd_after_40000_launches",
+   "numel": 10000000.0,
+   "on_gpu": true,
+   "ref": 3416.279529167046,
+   "tol": 0
+  },
+  {
+   "device_index": 1,
+   "device_name": "NVIDIA GeForce RTX 4090",
+   "exists_on_gpu": true,
+   "guest_pass": true,
+   "kind": "gpuarray",
+   "name": "kernel_output_gpuarray",
+   "on_gpu": true,
+   "underlying": "single"
+  },
+  {
+   "expected": 0,
+   "guest_pass": true,
+   "kind": "count",
+   "name": "no_write_past_n",
+   "value": 0
+  },
+  {
+   "cpu": [
+    68.69316602199032,
+    4062.3788410024717,
+    0.5235008001327515,
+    0.7686114311218262
+   ],
+   "diff": 0,
+   "dtype": "single",
+   "exists_on_gpu": true,
+   "gpu": [
+    68.69316602199032,
+    4062.3788410024717,
+    0.5235008001327515,
+    0.7686114311218262
+   ],
+   "guest_pass": true,
+   "kind": "cmp",
+   "name": "vecadd_first_n_of_guarded",
+   "numel": 4096,
+   "on_gpu": true,
+   "ref": 68.69316602199032,
+   "tol": 0
+  }
+ ],
+ "gpu_device": {
+  "can_use_gpu": true,
+  "index": 1,
+  "name": "NVIDIA GeForce RTX 4090"
+ },
+ "row": "cuda_kernel",
+ "schema": "kayfabe.matlab-row/1",
+ "status": "done"
+}

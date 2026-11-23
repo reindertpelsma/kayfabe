@@ -1,0 +1,34 @@
+[xid-watch] tag=ci-arm-64506-25707  host=ubuntu  utc=2026-11-17T13:19:22Z
+[xid-watch] command: /usr/bin/timeout --kill-after=5 180 python3 -I /workspace/kf-ci-src/scripts/bench/native_xid_guard.py native-exec /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --uvm-invalidate
+[xid-watch] host_dmesg_lines=832  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=5
+[xid-watch] --- command output begins ---
+KF_NATIVE_EXEC pid=65527 name=kayfabe-rm-ladd
+info  RMLADDER ARGV     = [--uvm-invalidate]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d002cf
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+ok    W392C hVaSpace      = 0xcafe0004
+--- w392c UVM raw client: forcing nvidia-uvm to build a KERNEL channel ---
+ok    W392C uuid          = GPU-00000000-0000-0000-0000-000000000000
+ok    W392C open          = /dev/nvidia-uvm
+ok    W392C INITIALIZE    = rmStatus 0x0
+ok    W392C MM_INITIALIZE = rmStatus 0x0
+ok    W392C REGISTER_GPU  = rmStatus 0x0
+ok    W392C REGISTER_VAS  = rmStatus 0x0
+ok    W392C UNREGISTER     = rmStatus 0x0
+=== ★★ W392C VERDICT — pre-registered ===
+    W392C_OUTCOME=(P) ★★★★★ THE CLIENT WORKS. UVM registered the GPU and a VA
+        space against a RAW RM connection — so nvidia-uvm built its channel
+        manager, and point 2's transport EXISTS on this run.
+        ⇒ On BARE METAL this is the client's known-positive.
+        ⇒ In the GUEST, a MEMOP-CENSUS of zero after this is OURS to explain.
+done — uvm-invalidate probe only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=5
+[xid-watch] ★ HOST Xid CLEAN across the command — 5 before, 5 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (832 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_ci-arm-64506-25707.log

@@ -1,0 +1,5 @@
+[ 1967.063649] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 1968.903371] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 1969.111877] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 1982.584150] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 2059.980571] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy

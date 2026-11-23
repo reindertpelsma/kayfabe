@@ -1,0 +1,8 @@
+KF_MANIFEST sha256=72961bc3b7b6c6353b2f5dbc56e9023e3f7b865dd2f6b974fa79304ef77775d0 items=3 bytes=62873107825 stages=image
+KF_STEP name=download.kf-gop.signed.efi secs=0.0 bytes=11224 source=present MBps=9.22
+KF_STEP name=download.test-assets-20261116c.iso secs=0.2 bytes=366745600 source=present MBps=1738.65
+KF_STEP name=download.propimage-kfimg-20261116.zip secs=55.4 bytes=62506351001 source=present MBps=1129.07
+KF_DOWNLOAD_DONE state=done ok=3 failed=0 total=3
+KF_VERIFY name=propimage-kfimg-20261116.zip ok=1
+KF_VERIFY name=kf-gop.signed.efi ok=1
+KF_VERIFY name=test-assets-20261116c.iso ok=1

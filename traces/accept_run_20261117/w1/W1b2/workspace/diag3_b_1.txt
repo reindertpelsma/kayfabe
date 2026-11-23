@@ -1,0 +1,48 @@
+diag3 i=1 at 08:08:20 port=39934
+== now
+2026-11-15T23:05:26.2946178+00:00
+== uptime
+00:11:03.8423300
+== tasks named app_ or kf
+kf_app_73f76523e89e4d4c93ee661a33d64a83 path=\ state=Ready lastrun=11/15/2026 11:03:04 PM lastresult=0 user=<user> logon=Interactive
+== kfhw tree (newest 40)
+23:05:22 3171 C:\kfhw\diag3.ps1
+23:04:43 544 C:\kfhw\ps_run.ps1
+23:02:42 15367 C:\kfhw\app_73f76523e89e4d4c93ee661a33d64a83.ps1
+22:59:41 103 C:\kfhw\power_0ddbc2d0071c42718a87fd7243c45b9e.json
+22:58:47 1432 C:\kfhw\power_0ddbc2d0071c42718a87fd7243c45b9e.ps1
+== steps.log and progress tails of the newest row dirs
+== processes of interest
+
+   Id ProcessName SessionId cpu StartTime             
+   -- ----------- --------- --- ---------             
+ 1076 conhost             1   0 11/15/2026 10:58:39 PM
+10340 conhost             0   0 11/15/2026 11:05:26 PM
+10780 conhost             0   0 11/15/2026 11:05:23 PM
+  856 powershell          0 2.4 11/15/2026 11:05:26 PM
+ 4208 powershell          0 4.2 11/15/2026 11:05:24 PM
+ 6348 powershell          0 1.8 11/15/2026 11:05:28 PM
+ 8956 powershell          0 2.5 11/15/2026 11:05:23 PM
+
+
+
+== nvidia-smi -L with a 20 s limit
+nvidia-smi -L returned rc=
+GPU 0: NVIDIA GeForce RTX 4090 (UUID: GPU-<uuid>)
+== TaskScheduler operational, newest 25 (ids and short text)
+== Application log errors and warnings, last 20 min
+22:56:41 Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for WORKGROUP\KFB-CD69909F$ via https://-KeyId-144383471022c03fb4ea50d6195ff3
+22:56:39 Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for Local system via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.
+00:32:27 Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for \MINWINPC$ via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.mi
+00:32:27 Microsoft-Windows-CertificateServicesClient-CertEnroll id=86 SCEP Certificate enrollment initialization for Local system via https://-KeyId-144383471022c03fb4ea50d6195ff37085055d63.
+== System log errors, last 20 min
+Exception calling "Substring" with "2" argument(s): "Index and length must refer to a location 
+within the string.
+Parameter name: length"
+At C:\kfhw\diag3.ps1:23 char:163
++ ... ch-Object { "{0} {1} id={2} {3}" -f $_.TimeCreated.ToString('HH:mm:ss ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : ArgumentOutOfRangeException
+ 
+DIAGDONE
