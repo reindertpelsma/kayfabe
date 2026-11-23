@@ -108,6 +108,25 @@ mod tests {
         assert_eq!(source.read(0, &mut [0]), Err(AccessError::Topology));
     }
 
+    /// Another file at the USERD's address and file offset is another translation: revoked (the
+    /// generation moves) and refused, however equal the numbers look.
+    #[test]
+    fn another_file_at_the_same_address_and_offset_ends_a_userd() {
+        let (ram, block) = fixture();
+        let source = Userd::new(ram, block.gpa + 0x600, 0x200).unwrap();
+        let g = ram.try_generation().unwrap();
+        let (other, other_fd) = crate::raw_unsafe::test_owned_ram(0x1000);
+        ram.del(block.gpa);
+        ram.add(super::super::RamBlock {
+            gpa: block.gpa,
+            mem: other,
+            fd: Some(other_fd),
+            fd_off: block.fd_off,
+        });
+        assert_ne!(ram.try_generation(), Some(g));
+        assert_eq!(source.read(0x8c, &mut [0; 4]), Err(AccessError::Topology));
+    }
+
     /// The S3 wake of a q35 guest (`traces/win11_s3_tdr_20261123/`): the machine reset toggles a
     /// TSEG/PAM window, so QEMU's flat view removes the low-RAM section and adds a longer one that
     /// shows the same file bytes at the same addresses. A sysmem USERD resolved before the wake

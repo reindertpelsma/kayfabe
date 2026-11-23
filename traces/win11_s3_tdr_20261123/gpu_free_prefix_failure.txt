@@ -29,3 +29,20 @@ test result: FAILED. 0 passed; 2 failed
    The direction "same file bytes at another address" and the record bound are pinned by
    mem::tests::translation_conflicts_only_when_a_byte_or_an_address_moves and
    mem::tests::the_translation_record_is_bounded_and_revokes_when_full.
+
+4. After the security review of PR #574 (finding F1: the file-offset paths took "the fd of the lowest-address block",
+   so with removals no longer revoking, a second fd-backed region could serve the guest-RAM file's offsets inside one
+   QEMU transaction). Fix: RamMap pins the guest-RAM backend's (st_dev, st_ino) at the first fd-backed add and every
+   file-offset path (userread::snapshot/mapped, with_file_span/read_file, file_range, memory_list_block, backing_fd,
+   place_ram) resolves through RamMap::primary_fd; the reseed after a revoke keeps every still-registered block.
+   New tests and the mutant each kills (cargo test -p kf-qemu --lib -- <test>, each mutant alone):
+   MUTANT K2 pin ignored (lowest fd wins) rc 101
+   test mem::tests::a_change_of_primary_backend_refuses_file_offset_leases ... FAILED
+   MUTANT K1 no reseed after a revoke rc 101
+   test mem::tests::a_revoke_keeps_every_still_registered_translation ... FAILED
+   MUTANT K4 linear ignores file identity rc 101
+   test mem::userdram::tests::another_file_at_the_same_address_and_offset_ends_a_userd ... FAILED
+   MUTANT K3 del revokes again rc 101
+   test mem::tests::a_same_linear_shrink_keeps_generation_but_refuses_the_hidden_tail ... FAILED
+   K2's mutant is the pre-fix primary_fd (lowest fd wins), i.e. the test fails against the PR head before this fix.
+   K3 passes before and after (a pin of "the hidden TSEG tail is refused").

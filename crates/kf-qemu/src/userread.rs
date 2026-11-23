@@ -181,7 +181,7 @@ pub(crate) fn mapped<'a>(
     if blocks.len() > PIECES {
         return Err(Refusal::Bounds);
     }
-    let fd = blocks.iter().find_map(|b| b.fd.as_ref());
+    let fd = ram.primary_fd(&blocks);
     let mut pieces = 0;
     for span in &spans {
         let end = span.off.checked_add(span.len).ok_or(Refusal::Bounds)?;
@@ -333,7 +333,7 @@ pub(crate) fn snapshot<'a>(
     if blocks.len() > PIECES {
         return Err(Refusal::Bounds);
     }
-    let first_fd = blocks.iter().find_map(|b| b.fd.as_ref());
+    let first_fd = ram.primary_fd(&blocks);
     let mut done = 0usize;
     let mut ram_pieces = 0usize;
     for span in &spans {
