@@ -1,0 +1,5 @@
+[apps_matrix 2026-11-17T21:31:23+00:00] START side=guest run=openguest_prov rev=04613288 apps=2
+[apps_matrix 2026-11-17T21:31:23+00:00] kf3 binary: /workspace/bench/kf3-bins/04613288/qemu-system-x86_64
+[apps_matrix 2026-11-17T21:32:47+00:00] boot ap_openguest_prov_b1 rc=0 apps=[nvidia_smi vectorAdd] :: /workspace/bench/run_ap_openguest_prov_b1_probe.log:APPS_HOOK tag=ap_openguest_prov_b1 apps=[nvidia_smi vectorAdd] guest=NVIDIA GeForce RTX 3090, 580.159.04, Disabled /workspace/bench/run_ap_openguest
+/workspace/kf-ci-src/scripts/apps/apps_matrix.sh: line 94: /workspace/apps/results/openguest_prov/guest_isolated.res: No such file or directory
+[apps_matrix 2026-11-17T21:32:47+00:00] GUEST_DONE batched: 2 pass / 2;  isolated re-runs: 0 pass / 0

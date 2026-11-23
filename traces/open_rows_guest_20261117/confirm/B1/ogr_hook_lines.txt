@@ -1,0 +1,12 @@
+OGR_HOOK tag=B1 kf3=ad1a0c4c cases=[t16a=/workspace/ogr/list_t16.tsv resid=/workspace/ogr/list_resid.tsv t16b=/workspace/ogr/list_t16.tsv]
+OGR_CASE_START t16a 00:39:59 q0=1432 h0=790
+OGR_APPRES t16a APPRES side=guest app=vkcts verdict=PASS rc=0 secs=8 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END t16a rc=0 00:40:12 host_xid_lines=0 kf3_lines=2714
+OGR_CASE_START resid 00:40:14 q0=4146 h0=790
+OGR_APPRES resid APPRES side=guest app=vkcts verdict=PASS rc=0 secs=311 quiet=0 note=ok cases=3 pass=2 warn=0 ns=0 fail=0 crash=0 timeout=1 notrun=0 gpu=EXTERNAL
+OGR_CASE_END resid rc=0 00:45:30 host_xid_lines=1 kf3_lines=4379
+OGR_CASE_START t16b 00:45:31 q0=8525 h0=793
+OGR_APPRES t16b APPRES side=guest app=vkcts verdict=PASS rc=0 secs=6 quiet=0 note=ok cases=3 pass=3 warn=0 ns=0 fail=0 crash=0 timeout=0 notrun=0 gpu=EXTERNAL
+OGR_CASE_END t16b rc=0 00:45:42 host_xid_lines=0 kf3_lines=2418
+OGR_HOOK_DONE
+HOOK_RC=0

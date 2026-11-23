@@ -1,0 +1,39 @@
+{
+ "app": {
+  "device": "cuda hwaccel",
+  "facts": {},
+  "ok": true,
+  "reasons": []
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 6,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 362,
+  "gr_methods": 0,
+  "retired": 6,
+  "serves": 1848,
+  "status_lines": 8,
+  "submissions": 1192,
+  "wakes": {
+   "CE2": 1047,
+   "GR0": 14,
+   "NVDEC0": 600
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] PASS: host census: +1192 submission(s), +6 channel birth(s) in the window",
+  "[app] PASS: the application reports cuda hwaccel"
+ ],
+ "row": "nvdec_h264",
+ "smi": null,
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "PASS"
+}

@@ -1,0 +1,63 @@
+{
+ "app": {
+  "device": "NVIDIA GeForce RTX 3090",
+  "facts": {
+   "rows": 2
+  },
+  "ok": true,
+  "reasons": []
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 6,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 321,
+  "gr_methods": 0,
+  "retired": 6,
+  "serves": 4768,
+  "status_lines": 6,
+  "submissions": 4118,
+  "wakes": {
+   "CE2": 3774
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] PASS: host census: +4118 submission(s), +6 channel birth(s) in the window",
+  "[host-smi] PASS: host engines: gpu busy (peak {'gpu': 91.0, 'mem_mb': 8792.0, 'gpu_dmon_sm': 91.0, 'busy_samples': 8})",
+  "[app] PASS: the application reports NVIDIA GeForce RTX 3090"
+ ],
+ "row": "llama_bench",
+ "smi": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 8761.0
+  },
+  "peak": {
+   "busy_samples": 8,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 91.0,
+   "gpu_dmon_sm": 91.0,
+   "mem_mb": 8792.0
+  },
+  "reasons": [],
+  "required": [
+   "gpu"
+  ],
+  "samples": 20,
+  "source": "host",
+  "unreadable": false,
+  "verdict": "PASS"
+ },
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "PASS"
+}

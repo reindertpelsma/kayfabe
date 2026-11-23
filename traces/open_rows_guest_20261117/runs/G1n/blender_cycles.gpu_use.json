@@ -1,0 +1,74 @@
+{
+ "app": {
+  "device": "",
+  "facts": {
+   "devices": [
+    "CPU"
+   ],
+   "oks": 1
+  },
+  "ok": false,
+  "reasons": [
+   "CUDA: BLENDER_OK missing (the row dropped its device proof)",
+   "OPTIX: BLENDER_OK missing (the row dropped its device proof)",
+   "a CPU render was reported (CPU cpu=AMD EPYC 7B13 64-Core Processor)"
+  ]
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 8,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 23,
+  "gr_methods": 0,
+  "retired": 6,
+  "serves": 48,
+  "status_lines": 16,
+  "submissions": 26,
+  "wakes": {
+   "CE2": 26
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] FAIL: host census: no GPU work in the window (submissions +26, channel births +8, doorbells +0, retired channels 6): the guest never submitted work to the GPU through kf3",
+  "[host-smi] FAIL: host engines: gpu engine idle: 0 sample(s) at or above 3% (need 1); peak 0.0; video memory did not rise by 64 MiB (baseline 8761.0, peak 8783.0)",
+  "[app] FAIL: CUDA: BLENDER_OK missing (the row dropped its device proof); OPTIX: BLENDER_OK missing (the row dropped its device proof); a CPU render was reported (CPU cpu=AMD EPYC 7B13 64-Core Processor)"
+ ],
+ "row": "blender_cycles",
+ "smi": {
+  "baseline": {
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "mem_mb": 8761.0
+  },
+  "peak": {
+   "busy_samples": 0,
+   "dec": 0.0,
+   "enc": 0.0,
+   "enc_sessions": 0.0,
+   "gpu": 0.0,
+   "gpu_dmon_sm": 0.0,
+   "mem_mb": 8783.0
+  },
+  "reasons": [
+   "gpu engine idle: 0 sample(s) at or above 3% (need 1); peak 0.0",
+   "video memory did not rise by 64 MiB (baseline 8761.0, peak 8783.0)"
+  ],
+  "required": [
+   "gpu",
+   "mem"
+  ],
+  "samples": 106,
+  "source": "host",
+  "unreadable": false,
+  "verdict": "FAIL"
+ },
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "FAIL"
+}

@@ -1,0 +1,10 @@
+=== llama_bench side=host start=2026-11-17T22:53:59+00:00 host=<box> cmd: /opt/apps/bundle/llama/llama-bench -m /opt/apps/data/qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl ${KF_NGL:-99} -p 512 -n 64 -r 2
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 24124 MiB):
+  Device 0: NVIDIA GeForce RTX 3090, compute capability 8.6, VMM: yes, VRAM: 24124 MiB
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |   0 |           pp512 |     5284.66 ± 843.03 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |   0 |            tg64 |         94.81 ± 0.29 |
+
+build: 4b1a27f (1)
+=== end rc=0 secs=3 2026-11-17T22:54:02+00:00

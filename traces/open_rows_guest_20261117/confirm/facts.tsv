@@ -1,0 +1,9 @@
+boot	case	kf3_lines	gsp_unserviced	REFUSED	RC_host_twin	host_xid_lines	guest_dmesg_lines	vkcts_summary
+A0	dgc	4293	329	19	2	5	94	VKCTS_SUMMARY side=guest cases=3 pass=2 warn=0 not_supported=0 fail=1 crash=0 timeout=0 not_run=0 device=NVIDIA_GeForce_RTX_3090 type=DISCRETE_GPU gpu_use=EXTERNAL
+A1	dgc	2293	164	15	0	0	47	VKCTS_SUMMARY side=guest cases=3 pass=3 warn=0 not_supported=0 fail=0 crash=0 timeout=0 not_run=0 device=NVIDIA_GeForce_RTX_3090 type=DISCRETE_GPU gpu_use=EXTERNAL
+B1	resid	4379	783	4	2	1	47	VKCTS_SUMMARY side=guest cases=3 pass=2 warn=0 not_supported=0 fail=0 crash=0 timeout=1 not_run=0 device=NVIDIA_GeForce_RTX_3090 type=DISCRETE_GPU gpu_use=EXTERNAL
+B1	t16a	2714	189	15	0	0	47	VKCTS_SUMMARY side=guest cases=3 pass=3 warn=0 not_supported=0 fail=0 crash=0 timeout=0 not_run=0 device=NVIDIA_GeForce_RTX_3090 type=DISCRETE_GPU gpu_use=EXTERNAL
+B1	t16b	2418	187	0	0	0	47	VKCTS_SUMMARY side=guest cases=3 pass=3 warn=0 not_supported=0 fail=0 crash=0 timeout=0 not_run=0 device=NVIDIA_GeForce_RTX_3090 type=DISCRETE_GPU gpu_use=EXTERNAL
+C1	msbind_a	2769	189	15	0	0	47	VKCTS_SUMMARY side=guest cases=3 pass=3 warn=0 not_supported=0 fail=0 crash=0 timeout=0 not_run=0 device=NVIDIA_GeForce_RTX_3090 type=DISCRETE_GPU gpu_use=EXTERNAL
+C1	msbind_b	2470	187	0	0	0	47	VKCTS_SUMMARY side=guest cases=3 pass=3 warn=0 not_supported=0 fail=0 crash=0 timeout=0 not_run=0 device=NVIDIA_GeForce_RTX_3090 type=DISCRETE_GPU gpu_use=EXTERNAL
+C1	msresid	4355	782	4	2	1	47	VKCTS_SUMMARY side=guest cases=3 pass=2 warn=0 not_supported=0 fail=0 crash=0 timeout=1 not_run=0 device=NVIDIA_GeForce_RTX_3090 type=DISCRETE_GPU gpu_use=EXTERNAL

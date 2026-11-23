@@ -1,0 +1,39 @@
+{
+ "app": {
+  "device": "",
+  "facts": {},
+  "ok": false,
+  "reasons": [
+   "the decoder outputs a software pixel format (pix_fmt: yuv420p): decoded on the CPU"
+  ]
+ },
+ "authority": "host",
+ "census": {
+  "base_missing": false,
+  "births": 0,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 0,
+  "gr_methods": 0,
+  "retired": 0,
+  "serves": 0,
+  "status_lines": 5,
+  "submissions": 0,
+  "wakes": {
+   "CE2": 641
+  },
+  "xid": 0
+ },
+ "class": "b",
+ "reasons": [
+  "[host-census] FAIL: host census: no GPU work in the window (submissions +0, channel births +0, doorbells +0, retired channels 0): the guest never submitted work to the GPU through kf3",
+  "[app] FAIL: the decoder outputs a software pixel format (pix_fmt: yuv420p): decoded on the CPU"
+ ],
+ "row": "nvdec_h264",
+ "smi": null,
+ "thresholds": {
+  "interval_ms": 100,
+  "min_samples": 1
+ },
+ "verdict": "FAIL"
+}

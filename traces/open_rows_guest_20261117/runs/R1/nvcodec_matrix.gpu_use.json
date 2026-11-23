@@ -1,0 +1,29 @@
+{
+ "app": null,
+ "authority": "none",
+ "census": {
+  "base_missing": false,
+  "births": 176,
+  "dead": 0,
+  "doorbells": 0,
+  "forwarded": 6469,
+  "gr_methods": 0,
+  "retired": 18,
+  "serves": 68579,
+  "status_lines": 28,
+  "submissions": 62981,
+  "wakes": {
+   "CE2": 86784,
+   "CE3": 840,
+   "GR0": 256,
+   "NVDEC0": 454,
+   "NVENC0": 4761
+  },
+  "xid": 0
+ },
+ "class": "own",
+ "reasons": [],
+ "row": "nvcodec_matrix",
+ "smi": null,
+ "verdict": "NA"
+}

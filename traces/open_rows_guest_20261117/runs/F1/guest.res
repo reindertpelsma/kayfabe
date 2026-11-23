@@ -1,0 +1,5 @@
+APPRES side=guest app=nvenc_h264 verdict=PASS rc=0 secs=11 quiet=0 note=- gpu_use=PASS gpu_auth=host gpu_subs=1501 gpu_births=6 boot=ap_F1_b1 guest_xid=0 kf3_lines=973 kf3_refusals=30
+APPRES side=guest app=nvenc_hevc verdict=PASS rc=0 secs=7 quiet=0 note=- gpu_use=PASS gpu_auth=host gpu_subs=1498 gpu_births=6 boot=ap_F1_b1 guest_xid=0 kf3_lines=892 kf3_refusals=22
+APPRES side=guest app=nvdec_h264 verdict=PASS rc=0 secs=8 quiet=0 note=- gpu_use=PASS gpu_auth=host gpu_subs=1192 gpu_births=6 boot=ap_F1_b1 guest_xid=0 kf3_lines=923 kf3_refusals=22
+APPRES side=guest app=hashcat verdict=PASS rc=0 secs=28 quiet=0 note=warn:This means that hashcat cannot use the full parallel power of your device(s). gpu_use=PASS gpu_auth=host gpu_subs=23253 gpu_births=6 boot=ap_F1_b1 guest_xid=0 kf3_lines=1311 kf3_refusals=24
+APPRES side=guest app=blender_cycles verdict=PASS rc=0 secs=8 quiet=0 note=- gpu_use=PASS gpu_auth=host gpu_subs=9522 gpu_births=12 boot=ap_F1_b1 guest_xid=0 kf3_lines=1643 kf3_refusals=38

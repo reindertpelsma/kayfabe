@@ -1,0 +1,16 @@
+=== nvenc_hevc side=host start=2026-11-17T22:54:07+00:00 host=<box> cmd: ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v ${KF_ENC:-hevc_nvenc} -preset p4 /opt/apps/out/host/nvenc_hevc.mp4 2>&1 | grep -v "^  " | tail -25; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 /opt/apps/out/host/nvenc_hevc.mp4 | sed 's/^/frame= /;s/$/ /'; echo "ENCODER_TAG $(ffprobe -v error -select_streams v:0 -show_entries stream_tags=encoder -of default=nw=1:nk=1 /opt/apps/out/host/nvenc_hevc.mp4)"
+Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':
+Stream mapping:
+Press [q] to stop, [?] for help
+x264 [error]: invalid preset 'p4'
+[libx264 @ 0x63d50646a700] Error setting preset/tune p4/(null).
+[libx264 @ 0x63d50646a700] Possible presets: ultrafast superfast veryfast faster fast medium slow slower veryslow placebo
+[libx264 @ 0x63d50646a700] Possible tunes: film animation grain stillimage psnr ssim fastdecode zerolatency
+Error initializing output stream 0:0 -- Error while opening encoder for output stream #0:0 - maybe incorrect parameters such as bit_rate, rate, width or height
+Conversion failed!
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5f7571615e40] moov atom not found
+/opt/apps/out/host/nvenc_hevc.mp4: Invalid data found when processing input
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x60146fa4bf00] moov atom not found
+/opt/apps/out/host/nvenc_hevc.mp4: Invalid data found when processing input
+ENCODER_TAG 
+=== end rc=0 secs=1 2026-11-17T22:54:08+00:00

@@ -1,0 +1,29 @@
+[boot_capture:ap_R1p_b1] BINARY kf3-bin-rev:04613288  (/workspace/bench/kf3-bins/04613288/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:ap_R1p_b1] host dmesg watermark: 825 lines
+[boot_capture:ap_R1p_b1] booting (extra args: none)
+KF_GUEST_PROFILE image=/workspace/bench/guest_apps.qcow2 source=receipt version=580.159.04
+== kf3 binary: /workspace/bench/kf3-bins/04613288/qemu-system-x86_64 (rev 04613288)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04
+[boot_capture:ap_R1p_b1] guest is up after 36s
+[boot_capture:ap_R1p_b1] module unloaded and ring buffer cleared; loading cold
+[boot_capture:ap_R1p_b1] opening the device (this is what runs RmInitAdapter)
+[boot_capture:ap_R1p_b1] captured 29 dmesg lines, 26 NVRM, 0 adapter → /workspace/bench/run_ap_R1p_b1_dmesg.log
+[boot_capture:ap_R1p_b1] --- the verdict lines ---
+[boot_capture:ap_R1p_b1] running POST_CAPTURE_HOOK: /workspace/kf-ci-src/scripts/apps/apps_hook.sh
+[boot_capture:ap_R1p_b1] hook finished: rc=0
+[boot_capture:ap_R1p_b1] guest dmesg after workload: 110 lines (104 NVRM), delta 81 → /workspace/bench/run_ap_R1p_b1_dmesg_after.log
+[boot_capture:ap_R1p_b1] host dmesg delta: 1 lines, 1 NVRM, 0
+0 Xid → /workspace/bench/run_ap_R1p_b1_hostdmesg.log
+[boot_capture:ap_R1p_b1] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:ap_R1p_b1] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=24021 applied=4416 refused=0 serviced=1573 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=402 walks=415/415 cleared=402 superseded=0 named_missed=7 unreconciled=0 absent_cleared=9 mapped=322 unmapped=238 clipped=0x0 held=0 vmm_over
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=3 host=0x1001a fast=0
+[boot_capture:ap_R1p_b1] ★ no /workspace/kf-ci-src/traces/guest_boots in this checkout — evidence stays on the box only, and a BOOTED claim
+[boot_capture:ap_R1p_b1]   made from this run cannot be re-verified by anyone reading the repository.
+[boot_capture:ap_R1p_b1] done. serial=/workspace/bench/run_ap_R1p_b1_serial.log qemu=/workspace/bench/run_ap_R1p_b1_qemu.log dmesg=/workspace/bench/run_ap_R1p_b1_dmesg.log dmesg_after=/workspace/bench/run_ap_R1p_b1_dmesg_after.log probe=/workspace/bench/run_ap_R1p_b1_probe.log hostdmesg=/workspace/bench/run_ap_R1p_b1_hostdmesg.log

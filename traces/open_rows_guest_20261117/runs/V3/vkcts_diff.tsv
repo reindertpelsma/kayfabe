@@ -1,0 +1,8 @@
+#case	area	host	guest	category
+dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba16ui.samples_4	sparse	Pass	Timeout	GUEST_ONLY_FAIL
+VKCTS_DIFF cases=3 candidates=1 same_ok=2 same_not_supported=0 both_fail=0 both_fail_different=0 guest_only_fail=1 guest_loses_support=0 guest_fail_host_ns=0 guest_gains_support=0 host_only_fail=0 host_fail_guest_not_supported=0 incomplete=0 host_digest=a1542225cbbb2a8c guest_digest=ff6f43841d17beea
+VKCTS_EXT_DIFF host_only=- guest_only=-
+VKCTS_GPU side=host source=host verdict=FAIL samples=12 busy_samples=0 peak_gpu_pct=0.0 mem_rise_mb=82 reasons=gpu_engine_idle:_0_sample(s)_at_or_above_3?_(need_2);_peak_0.0
+VKCTS_GPU side=guest source=host verdict=PASS samples=638 busy_samples=615 peak_gpu_pct=100.0 mem_rise_mb=67 reasons=-
+VKCTS_AREA info SAME_OK=2
+VKCTS_AREA sparse GUEST_ONLY_FAIL=1

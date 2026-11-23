@@ -1,0 +1,5 @@
+=== blender_cycles side=host start=2026-11-17T22:53:52+00:00 host=<box> cmd: for dev in ${KF_BLENDER_DEVS:-CUDA OPTIX}; do /opt/apps/data/blender/blender -b --factory-startup --python /opt/apps/bundle/share/blender_render.py -- $dev /opt/apps/out/host/blender_$dev.png 2>&1 | grep -E "BLENDER_|Error|error|Fra:1 .*Finished|[Ff]alling back" | tail -6; done
+BLENDER_DEVICES dev=CPU scene=CPU active=False cpu_enabled=True enabled=1 names=AMD EPYC 7B13 64-Core Processor
+Fra:1 Mem:38.11M (Peak 53.94M) | Time:00:02.85 | Mem:19.80M, Peak:19.80M | Scene, ViewLayer | Finished
+BLENDER_OK CPU cpu=AMD EPYC 7B13 64-Core Processor mean=0.6405
+=== end rc=0 secs=4 2026-11-17T22:53:56+00:00

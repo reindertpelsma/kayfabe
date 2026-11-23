@@ -1,0 +1,16 @@
+=== egl_offscreen side=guest start=2026-11-17T22:57:55+00:00 host=<box> cmd: ${KF_EGL_ENV:+env $KF_EGL_ENV }/opt/apps/bundle/bin/egl_offscreen
+libEGL warning: pci id for fd 3: 10de:2204, driver (null)
+
+pci id for fd 4: 10de:2204, driver (null)
+pci id for fd 5: 10de:2204, driver (null)
+libEGL warning: egl: failed to create dri2 screen
+libEGL warning: pci id for fd 3: 10de:2204, driver (null)
+
+pci id for fd 4: 10de:2204, driver (null)
+pci id for fd 5: 10de:2204, driver (null)
+libEGL warning: egl: failed to create dri2 screen
+libEGL warning: pci id for fd 3: 10de:2204, driver (null)
+
+CHECK egl_gl_Mtri_s FAIL
+[egl] eglInitialize failed
+=== end rc=0 secs=0 2026-11-17T22:57:55+00:00
