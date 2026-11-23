@@ -2,6 +2,18 @@
 
 **STATUS: LIVE, 2026-11-07.** The map of what is published, what is current and what is history.
 
+## Where things are (repository map)
+
+| You want | Go to |
+|---|---|
+| The product code | [`crates/`](../crates/README.md) (`kf-*` crates are v3; `kayfabe-*` are frozen), the QEMU device in `qemu/hw/misc/kf3/`, the walk kernel in `cuda/walk/`, the display broker in `broker/`, the boot-display driver in `firmware/` |
+| The user manual | [`docs/howto/`](howto/index.md) and [`docs/FAQ.md`](FAQ.md), built into [kayfabe.dev](https://kayfabe.dev/) by `site/`. The only part of `docs/` that is published |
+| What is current | [`docs/STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md), [`docs/OWNER_RULINGS.md`](OWNER_RULINGS.md) (binding), [`ARCHITECTURE.md`](../ARCHITECTURE.md), [`docs/design/`](design/README.md) (index by status) |
+| Evidence | [`traces/`](../traces/INDEX.md), one directory per run; bulk files of old runs are in archives ([`traces/EVIDENCE_ARCHIVE.md`](../traces/EVIDENCE_ARCHIVE.md)); claims and their checklists in [`docs/RELEASE_CLAIMS.md`](RELEASE_CLAIMS.md) |
+| CI | [`.github/workflows/`](../.github/workflows), the gates in [`scripts/ci/`](../scripts/ci/README.md), the Cloudflare Workers in [`ci/`](../ci/README.md); what each gate is: [`docs/CI_V3.md`](CI_V3.md) |
+| Bench scripts and tools | [`scripts/`](../scripts/README.md), [`tools/`](../tools/README.md) |
+| History, not current | [`docs/history/`](history/), [`docs/archive/`](archive/), [`archive/`](../archive/README.md), the `HANDOFF_*` and `RESUME_*` files in `docs/`; the sections below say which documents are which |
+
 ## Published
 
 - **The user manual** is `docs/howto/` plus `docs/FAQ.md`. It is the only part of `docs/` that is
