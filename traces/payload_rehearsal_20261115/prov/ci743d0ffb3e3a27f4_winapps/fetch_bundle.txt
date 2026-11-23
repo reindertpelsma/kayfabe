@@ -1,0 +1,2 @@
+FETCH public-bundle/winapps-open.iso bytes=2708119552
+PUBLIC_BUNDLE_OK
