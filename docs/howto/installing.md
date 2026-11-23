@@ -2,7 +2,7 @@
 
 If you can already give a virtual machine a GPU with VFIO, you can use kayfabe in four steps. The difference is that the host keeps using the GPU, and the VM gets an emulated NVIDIA GPU that runs on the real one.
 
-1. Get the kayfabe QEMU: download a release, or build it.
+1. Get the kayfabe QEMU: build it from source. A release download is planned; no release binary exists yet.
 2. You now have a `qemu-system-x86_64` binary that contains the `kf3-gpu` device.
 3. Install your own Windows or Linux guest, with NVIDIA's own driver, the way you would for VFIO.
 4. Start the VM with `-device kf3-gpu` where you had the VFIO device.
