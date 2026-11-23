@@ -97,9 +97,9 @@ def cycle(vm, tag, n, out):
     if ok:
         _, smi = vm.guest("nvidia-smi --query-gpu=name --format=csv,noheader", 60)
         window = int(time.time() - t_req) + 15
-        _, evlog = vm.guest('Get-WinEvent -FilterHashtable @{LogName="System"; StartTime=(Get-Date).AddSeconds(-%d)} -EA 0 '
+        _, evlog = vm.guest('Get-WinEvent -FilterHashtable @{LogName="System"; StartTime=(Get-Date).AddSeconds(-WINDOW_S)} -EA 0 '
                             '| ? { $_.Id -in 41,1001,1,107,42,4101,153,14 } | % { "$($_.TimeCreated.ToString("o")) '
-                            '$($_.Id) $($_.ProviderName)" }' % window, 90)
+                            '$($_.Id) $($_.ProviderName)" }'.replace("WINDOW_S", str(window)), 90)
         res["event_window_s"] = window
     res["nvidia_smi"] = smi.strip()[-200:]
     res["events"] = evlog.strip().splitlines()[-30:]

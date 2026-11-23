@@ -5,7 +5,9 @@ guest (ogkm 580.159.04, stock module) survives three S3 suspend/resume cycles in
 `claude/s3-resume-20261014`. Evidence: `traces/linux_s3_resume_20261014/` (the failure) and its `fixed/`
 (the passing runs). Windows 11: run 2026-10-14, NOT yet surviving (§7a, correction above §7). **UPDATE 2026-11-23 (§7b, above
 §7a): the Windows post-wake hang is root-caused (QEMU's wake reset wipes the Hyper-V TSC page while the TSC restarts) and
-fixed by a third QEMU hunk; 3/3 cycles with it on one box; each wake is still followed by a guest TDR recovery.** Measured = a run or a GPU-free test named here; inferred =
+fixed by a third QEMU hunk; 3/3 cycles with it on one box; each wake is still followed by a guest TDR recovery.** **UPDATE 2026-11-23 (§7c, above §7b):
+that TDR has two causes; the first (every RAM lease revoked by the wake's flat-view re-split) is fixed, the second (kf3's display
+engine stops window channel 1 after the wake) is open, so Windows still takes a TDR after every wake.** Measured = a run or a GPU-free test named here; inferred =
 read from source, not executed.
 
 ## 1. The failure, measured (kf3 `c287af4f`, Linux desktop guest, ogkm 580.159.04)
@@ -162,6 +164,29 @@ Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as
   (its `summary.log` also holds the first fast attempt, NOTRUN: the raw client was built into another
   target dir — a harness slip, rerun).
 
+## 7c. UPDATE 2026-11-23: the post-wake TDR, first cause fixed, second cause open (corrects §7b's "Not fixed" below)
+
+**STATUS: RESEARCH, 2026-11-23. MEASURED on Vast instance 62141661 (RTX 4090, nested KVM, L1 clocksource tsc), control kf3
+`90a658c3` and fix kf3 `0c16cb72`, q35, arm B, Windows 11 LTSC with 580.88; evidence `traces/win11_s3_tdr_20261123/README.md`
+(hypotheses committed before the runs).**
+- §7b's lead was not the cause: "code 76" is the RPC function `GSP_RM_CONTROL`, and the controls left UNSERVICED after the
+  wake are the ones every Windows boot leaves unserviced (read; PREREGISTRATION.md of that directory).
+- [measured T0, control] six user-ring relays born before the wake refused `USER_RING_PUT_READ: Topology` at their first
+  access after it, and the TDR came 24 s after the wake. Cause [read + measured]: `RamMap` moved its generation on every
+  guest-RAM section QEMU added or removed; a q35 wake resets the MCH, the SMRAM/TSEG windows toggle and the flat view
+  re-splits the low-RAM section (same file bytes at the same addresses); every lease that captured the generation (sysmem
+  USERD, user-ring source snapshots, MemoryList registrations) was dead for good. **Fix (F2, hardwired):** the generation
+  counts changes of the guest-RAM translation (guest-physical address to backend file offset): an fd-backed section that
+  maps a byte or an address differently from any translation registered before revokes; a re-split of the same linear map,
+  and a removal (a removed range is refused at lookup), do not. kf3 logs each `RAM add`/`RAM del` with `translation kept`
+  or `translation CHANGED`. Tests: `a_wake_resplit_of_the_same_ram_keeps_a_resolved_userd`,
+  `a_wake_resplit_of_the_same_ram_keeps_the_birth_generation` (fail before the fix with `Err(Topology)`), and the conflict
+  and bound tests in `mem.rs`. [measured T1, T1b with F2] no Topology refusal; every wake RAM change `translation kept`.
+- **Still open:** [measured T1, T1b] with F2 the TDR still follows every wake, 68-70 s after it: about 12 s after the wake
+  kf3's display engine halts window channel 1 (`PUT 0x1130 / GET 0xe20 outside the 4096-byte pushbuffer`, the guest
+  declared 4 KiB), then the core channel parks waiting for that window's interlock. [inferred] the guest's window-channel
+  PUT and the GET kf3 kept across the wake disagree. The release row `windows-sleep-wake` stays expected-FAIL.
+
 ## 7b. UPDATE 2026-11-23: the Windows post-wake hang, root cause and fix (corrects §7a below)
 
 **STATUS: RESEARCH, 2026-11-23. MEASURED on Vast instance 62082978 (RTX 4090, nested KVM, L1 kernel 6.8.0-59), kf3 `1052e2f9`,
@@ -190,7 +215,8 @@ q35, Windows 11 LTSC with the 580.88 driver from `windows_gate.sh`; evidence `tr
   `test_build_kf3_applies_the_wake_hunk_before_it_builds`); it pins the hunk's shape and order, the hardware runs pin its effect.
 - **Not fixed:** about 34-45 s after every wake (R1, R2, R3) the Windows driver logs event 153 "Resetting/Reset/Restarting TDR"
   and its RM unloads (`fn 47 ... newLevel=0`) and comes back on a new GSP life; desktop and `nvidia-smi` work afterwards. Lead:
-  repeated `GSP rpc UNSERVICED { code: 76 }` between the wake and the unload (not analysed). The release row
+  repeated `GSP rpc UNSERVICED { code: 76 }` between the wake and the unload (not analysed; ⊘ superseded by §7c: not the
+  cause; the TDR has two causes, one fixed). The release row
   `windows-sleep-wake` stays expected-FAIL until a run without the TDR passes.
 
 ## 7a. Windows 11 run (2026-10-14, kf3 `0c5fedff`) - correction folded above §7

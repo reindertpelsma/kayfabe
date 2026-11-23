@@ -1,0 +1,31 @@
+GPU-free falsifier tests of F2, run 2026-11-23 in the agent's worktree (cargo test -p kf-qemu --lib).
+
+1. The two new tests against the PRE-FIX RamMap (crates/kf-qemu/src/mem.rs and device.rs checked out from origin/next
+   90a658c31, tests from this branch):
+
+test mem::userdram::tests::a_wake_resplit_of_the_same_ram_keeps_a_resolved_userd ... FAILED
+test mem::userread::tests::a_wake_resplit_of_the_same_ram_keeps_the_birth_generation ... FAILED
+thread 'mem::userdram::tests::a_wake_resplit_of_the_same_ram_keeps_a_resolved_userd' panicked at crates/kf-qemu/src/userdram.rs:141:9:
+assertion `left == right` failed
+  left: Err(Topology)
+ right: Ok(())
+thread 'mem::userread::tests::a_wake_resplit_of_the_same_ram_keeps_the_birth_generation' panicked at crates/kf-qemu/src/userread.rs:686:9:
+assertion `left == right` failed
+  left: Err(Topology)
+ right: Ok(7)
+test result: FAILED. 0 passed; 2 failed
+
+   (Err(Topology) is the refusal the relay logged on hardware: `USER_RING_PUT_READ: Topology`, R2 2026-11-23.)
+
+2. With the fix: `cargo test -p kf-qemu -p kf-rm` all pass (TEST_RC=0); scripts/ci/clippy.sh new=0.
+
+3. Mutants of the fix (each applied alone to the fixed mem.rs), `cargo test -p kf-qemu --lib -- userdram userread`:
+   a. `Translation::conflicts` never true (`... && !linear && false`): 4 FAILED
+      (topology_contention_retries_but_replacement_never_revives_old_userd,
+       a_wake_resplit_of_the_same_ram_keeps_a_resolved_userd,
+       publication_admission_rechecks_exact_source_and_retains_guards,
+       stream_receipts_topology_revocation_between_parts_forbids_publication)
+   b. every pair "linear" (`let linear = true || ...`): the same 4 FAILED.
+   The direction "same file bytes at another address" and the record bound are pinned by
+   mem::tests::translation_conflicts_only_when_a_byte_or_an_address_moves and
+   mem::tests::the_translation_record_is_bounded_and_revokes_when_full.
