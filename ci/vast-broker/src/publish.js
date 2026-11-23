@@ -94,7 +94,17 @@ async function secretsOf(env, entry) {
     entry.scopes === undefined
       ? [undefined, ['public'], ['public', 'private']]
       : [entry.scopes, undefined];
-  for (const nonce of [entry.nonce, ...(entry.priorNonces ?? [])])
+  const prior = entry.priorNonces ?? [],
+    expiries = entry.priorReportExpiries ?? [];
+  const legs = [
+    [entry.nonce, entry.reportExpiry],
+    // an entry without the parallel list (or with a list of another length) has one expiry for every leg
+    ...prior.map((nonce, i) => [
+      nonce,
+      expiries.length === prior.length ? expiries[i] : entry.reportExpiry,
+    ]),
+  ];
+  for (const [nonce, reportExpiry] of legs)
     for (const scopes of forms)
       try {
         values.push(
@@ -105,7 +115,7 @@ async function secretsOf(env, entry) {
             nonce,
             key: entry.key,
             label: 'kf-ci-' + entry.key,
-            reportExpiry: entry.reportExpiry,
+            reportExpiry,
             ...(scopes === undefined ? {} : { scopes }),
           }),
         );

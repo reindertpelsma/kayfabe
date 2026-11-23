@@ -1863,6 +1863,12 @@ export function createService({
         32,
       );
       r.priorNonces = [...(retrySource.priorNonces ?? []), retrySource.nonce];
+      // An earlier leg's token expires with that leg's deadline, which a replacement may move: keep each one, parallel
+      // to priorNonces, so the published log redacts every earlier token byte for byte (src/publish.js).
+      r.priorReportExpiries = [
+        ...(retrySource.priorReportExpiries ?? []),
+        retrySource.reportExpiry,
+      ];
       r.known = [...new Set([...(retrySource.known ?? []), ...(r.known ?? [])])];
       // Keep one authenticated log chain and the run-wide byte/report limits across legs.
       for (const field of [

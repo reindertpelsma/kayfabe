@@ -14,6 +14,7 @@ const TESTS = [
   'replacement-deadline',
   'provider-kvm-device',
   'green-provider',
+  'run-report-extra',
   'gate-reuse',
 ].map((name) => here + 'test/' + name + '.test.js');
 const P = 'src/provider-policy.js',
@@ -34,6 +35,7 @@ const SINGLE = new Set([
   'marker of another run key deleted',
   'release in exhaust() removed',
   'extensions summed over legs',
+  'earlier token expiries not kept for redaction',
 ]);
 // [name, [[file, before, after], ...]]
 const MUTANTS = [
@@ -131,6 +133,16 @@ const MUTANTS = [
         I,
         'r.softDeadline = retrySource.softDeadline + shift;',
         'r.softDeadline = retrySource.softDeadline;',
+      ],
+    ],
+  ],
+  [
+    'earlier token expiries not kept for redaction',
+    [
+      [
+        I,
+        '...(retrySource.priorReportExpiries ?? []),\n        retrySource.reportExpiry,',
+        '...(retrySource.priorReportExpiries ?? []),\n        r.reportExpiry,',
       ],
     ],
   ],

@@ -1229,7 +1229,8 @@ without the change. Local tests only: no rental, no Worker call, no upload.
    budget less `admissionMarginMinutes` (a larger extension would be refused as `RUNNER_TIME`; a sweep runner, with a 200 minute
    budget against a 180 minute limit, gets at most 15). The session deadline (90 minutes) and the money bound
    (`runBudgetUsd`) do not change, so the extension adds no spend beyond the bound already admitted. The reservation re-checks the rule
-   (`validExtension`). `test/replacement-deadline.test.js`.
+   (`validExtension`). A leg's token expires with its deadline, so a replacement keeps the earlier legs' expiries (`priorReportExpiries`, parallel to
+   `priorNonces`) and the publisher redacts each earlier token with its own expiry. `test/replacement-deadline.test.js`.
 3. **The commit gap is released only by an unusable rental.** The marker `sha:<commit>` (one rental per commit, `SHA_GAP_HOURS`)
    is deleted when a run ends with verdict PROVIDER_FAULT, no box report ever (`firstReportAt` unset) and its replacement
    chain spent (`replacementExhausted`), by the same call that clears it when the create failed (`clearFailedSha`, which deletes
@@ -1255,5 +1256,5 @@ to master's pin at that moment: deploy the new bundle only after the merge, as i
 Pin: the Worker bundle changed (items 1 to 3 are in `src/` and `defaults.json`), so `deployment.json` `bundle_sha256` and
 `wrangler.toml` `DEPLOYED_BUNDLE_SHA256` were regenerated with `scripts/check-bundle-pin.mjs` (the procedure of "Bundle pin
 regenerated 2026-11-23"). [MEASURED 2026-11-23, wrangler 4.152.0, physical `node_modules`, two identical dry-runs] The new pin is
-`1010ca9063bb6ff6717d3112dad52f8d7059ad24631a3ca82dea70f8f86ca4bc` (it replaces `6df4c718...` of "Bundle pin regenerated 2026-11-23"). **Any further change under `src/` or `defaults.json` before the batch changes the bundle: re-measure the pin.**
+`5d730c0543ddaa46c79f5d7d1e5dce4769d5a8624ff1a4973a0e9f8443a81f2a` (it replaces `6df4c718...` of "Bundle pin regenerated 2026-11-23"). **Any further change under `src/` or `defaults.json` before the batch changes the bundle: re-measure the pin.**
 
