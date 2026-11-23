@@ -1,0 +1,29 @@
+[     0.0s] S3PROBE_START label=d3 arm=B backing=gate_gdisp cpu=- qemu=/workspace/bench/kf3-bins/a2df9a81/qemu-system-x86_64
+[     1.5s] host {'uname': '6.8.0-59-generic', 'clocksource': 'tsc', 'tsc_dmesg': ['[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<scrubbed> ro console=tty1 console=ttyS0 tsc=reliable clocksource=tsc panic=-1', '[    0.138779] Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=<scrubbed> ro console=tty1 console=ttyS0 tsc=reliable clocksource=tsc panic=-1'], 'cpu_flags_has_constant_tsc': False, 'cpu_flags_has_nonstop_tsc': False, 'repo_rev': '619294dd8', 'gpu': 'NVIDIA GeForce RTX 4090, 580.159.04'}
+[     1.6s] launch rc=0 [2026-11-23T15:43:08Z] detached: tag=s3_d3, log logs/s3_d3_run.log (stdout logs/s3_d3_run.out) 
+[   138.6s] guest up=True after 137s
+[   234.3s] powercfg /a: The following sleep states are available on this system: | Standby (S3) | The following sleep states are not available on this system: | Standby (S1) | The system firmware does not support this standby state. | Standby (S2) | The system firmware does not support this standby state. | Hibernate | The system firmware does not support hibernation. | Standby (S0 Low Power Idle) | The system firmware d
+[   242.2s] c1 boot0=2026-11-23T14:56:59.5000000+00:00 kf3_before={'s3wake': 0, 'kept': 0, 'gsp_resume': 0, 'cold': 0, 'unserviced': 252, 'ram_add_kept': 9, 'ram_changed': 0, 'ram_del': 8, 'user_ring_topology': 0, 'user_ring_refused': 0, 'fn47_unload': 0, 'lines': 6330, 'disp_stopped': 0, 'disp_stall': 0, 'wake_words': 0, 'wake_puts': 0}
+[   245.6s] c1 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   259.6s] c1 status=suspended after 14s
+[   264.7s] c1 system_wakeup sent
+[   293.6s] c1 ssh back=True after 29s
+[   393.6s] S3_CYCLE label=d3 n=1 verdict=CLEAN reasons=[]
+[   428.1s] c2 boot0=2026-11-23T14:56:59.5000000+00:00 kf3_before={'s3wake': 2, 'kept': 1, 'gsp_resume': 1, 'cold': 0, 'unserviced': 368, 'ram_add_kept': 10, 'ram_changed': 0, 'ram_del': 10, 'user_ring_topology': 0, 'user_ring_refused': 0, 'fn47_unload': 0, 'lines': 9886, 'disp_stopped': 0, 'disp_stall': 0, 'wake_words': 1, 'wake_puts': 8}
+[   431.6s] c2 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   447.6s] c2 status=suspended after 16s
+[   452.7s] c2 system_wakeup sent
+[   474.8s] c2 ssh back=True after 22s
+[   581.1s] S3_CYCLE label=d3 n=2 verdict=CLEAN reasons=[]
+[   615.6s] c3 boot0=2026-11-23T14:56:59.5000000+00:00 kf3_before={'s3wake': 4, 'kept': 2, 'gsp_resume': 2, 'cold': 0, 'unserviced': 398, 'ram_add_kept': 10, 'ram_changed': 0, 'ram_del': 10, 'user_ring_topology': 0, 'user_ring_refused': 0, 'fn47_unload': 0, 'lines': 11431, 'disp_stopped': 0, 'disp_stall': 0, 'wake_words': 2, 'wake_puts': 9}
+[   619.1s] c3 suspend requested rc=0 UCCESS: Attempted to run the scheduled task "kfs3".
+KF_SCHED
+[   627.1s] c3 status=suspended after 8s
+[   632.2s] c3 system_wakeup sent
+[   651.8s] c3 ssh back=True after 20s
+[   760.8s] S3_CYCLE label=d3 n=3 verdict=CLEAN reasons=[]
+[   790.8s] S3PROBE_DONE label=d3 clean=3/3 of 3 planned
+[   813.6s] guest did not stop; QMP quit
+[   817.1s] S3PROBE_EXIT

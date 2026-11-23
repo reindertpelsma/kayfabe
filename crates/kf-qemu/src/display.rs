@@ -564,6 +564,12 @@ impl RegMap {
         out
     }
 
+    /// The display aperture (`NV_PDISP`): its first and last byte offsets, inclusive.
+    #[must_use]
+    pub fn aperture(&self) -> (u64, u64) {
+        (self.lo, self.hi)
+    }
+
     /// Is BAR0 offset `off` in the display aperture (`NV_PDISP`)?
     #[must_use]
     pub fn owns(&self, off: u64) -> bool {
@@ -1937,6 +1943,9 @@ pub struct DisplayPlane {
     /// ★ The guest's RM gave the display up (fn 47 without a PM transition: GSP-RM's own unload) —
     /// how many times; the worker ends the display's life at each ([`DisplayPlane::rm_unloaded`]).
     unloads: AtomicU64,
+    /// How many S3 wakes kept the guest's display life ([`DisplayPlane::kept_wake`]); the worker
+    /// logs each DMA channel's first PUT after each.
+    kept_wakes: AtomicU64,
     /// ★ 2026-10-18: whether store `[0, G)` may be shown as the boot picture
     /// ([`crate::bootclean`]). Tainted by a guest RM life, the seed's retirement and a device
     /// reset; cleaned only by a scrub that completed.
@@ -2135,6 +2144,24 @@ impl DisplayPlane {
     pub fn rm_unloaded(&self) {
         self.unloads.fetch_add(1, Ordering::AcqRel);
         let _ = self.wake.signal();
+    }
+
+    /// The BAR0 offsets of DMA channel `chn`'s PUT and GET words (`None`: no DMA channel has that
+    /// number).
+    #[must_use]
+    pub fn chan_put_get(&self, chn: u32) -> Option<(u64, u64)> {
+        let (kind, inst) = chan_of(chn)?;
+        if kind == ChannelKind::Cursor || inst >= self.map.windows.max(1) {
+            return None;
+        }
+        let b = self.map.user_base(kind, inst);
+        Some((b + self.map.put, b + self.map.get))
+    }
+
+    /// An S3 wake kept the guest's display life: the worker logs each DMA channel's first PUT
+    /// after it, with the GET the engine holds and the GET word the guest reads.
+    pub fn kept_wake(&self) {
+        self.kept_wakes.fetch_add(1, Ordering::AcqRel);
     }
 
     /// ★ Device reset: ask the worker to end the display's life for `epoch` (acknowledged on
@@ -2484,6 +2511,7 @@ impl DisplayPlane {
             ui_request: AtomicU64::new(0),
             life_reset: crate::reset::Ack::default(),
             unloads: AtomicU64::new(0),
+            kept_wakes: AtomicU64::new(0),
             boot_clean: crate::bootclean::BootClean::new(),
             formats,
             boot: None,
@@ -3148,6 +3176,8 @@ impl Device {
         let mut forced_logged = 0u64;
         let mut put_head = 0u64;
         let mut put_dropped = 0u64;
+        // (kept wakes seen, DMA channels whose first PUT after the last of them was logged)
+        let mut wake_seen = (0u64, 0u128);
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
@@ -3367,6 +3397,21 @@ impl Device {
                 };
                 if put == decoded || dp.ports.generation(chn) != life {
                     return;
+                }
+                let w = dp.kept_wakes.load(Ordering::Acquire);
+                if w != wake_seen.0 {
+                    wake_seen = (w, 0);
+                }
+                let bit = 1u128.checked_shl(chn).unwrap_or(0);
+                if w != 0 && bit != 0 && wake_seen.1 & bit == 0 {
+                    wake_seen.1 |= bit;
+                    let word = dp
+                        .chan_put_get(chn)
+                        .map_or(u32::MAX, |(_, g)| self.shadow_word(g));
+                    kf_arch::rate_eprintln!(
+                        "kf3: display: after the S3 wake, chn {chn} PUT {put:#x}: engine decoded {decoded:#x}, published GET {:#x}, GET word the guest reads {word:#x}",
+                        dp.ports.get(chn)
+                    );
                 }
                 match io.pushbuffer(pb) {
                     Ok(bytes) => {
@@ -7613,6 +7658,76 @@ mod tests {
                 );
             }
             assert_eq!(m.core_birth_words(true, true).len() as u64, 2 * heads);
+        }
+    }
+
+    /// ★ Falsifier: a register the display plane publishes or decodes lies outside the `NV_PDISP`
+    /// aperture of its family, for any guest branch and display row. A kept S3 wake keeps the
+    /// aperture's shadow words and restores the rest, so such a register would come back as its
+    /// realize value while the display engine kept its state: a half-kept display.
+    #[test]
+    fn every_resolved_display_offset_is_inside_the_aperture() {
+        for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
+            let t = kf_disp::class::for_version(version).unwrap();
+            for row in kf_chip::display::ALL {
+                let regs = Regs::for_ip(version, row.ip_version).unwrap();
+                let m = RegMap::resolve(&regs, t, row).unwrap();
+                let heads = u64::from(m.heads);
+                let windows = u64::from(m.windows);
+                let mut offs: Vec<(&str, u64)> = vec![
+                    ("core user area", m.core_assy),
+                    ("core user area end", m.core_assy + m.core_len - 4),
+                    ("core armed", m.core_armed),
+                    ("evt awaken win", m.evt_awaken_win),
+                    ("evt awaken other", m.evt_awaken_other),
+                    ("rm intr dispatch", m.rm_intr_dispatch),
+                    ("rm ctrl disp", m.rm_ctrl_disp),
+                ];
+                for (name, (b, st), n) in [
+                    ("window user area", m.win, windows),
+                    ("window-imm user area", m.winim, windows),
+                    ("cursor user area", m.curs, heads),
+                ] {
+                    offs.push((name, b));
+                    offs.push((name, b + (n - 1) * st + m.user_len - 4));
+                }
+                for (name, (b, st)) in [
+                    ("evt head timing", m.evt_head_timing),
+                    ("rm intr stat head timing", m.rm_intr_stat_head_timing),
+                    ("rg dpca", (m.rg_dpca.0, m.rg_dpca.1)),
+                ] {
+                    offs.push((name, b));
+                    offs.push((name, b + (heads - 1) * st));
+                }
+                for (name, o) in [
+                    ("rm intr en head timing", m.rm_intr_en_head_timing),
+                    ("loadv", m.loadv),
+                    ("core head state", m.core_head_state.map(|c| (c.0, c.1))),
+                ] {
+                    if let Some((b, st)) = o {
+                        offs.push((name, b));
+                        offs.push((name, b + (heads - 1) * st));
+                    }
+                }
+                offs.extend(m.evt_sem_win.map(|o| ("evt sem win", o)));
+                offs.extend(m.evt_dispatch.map(|(o, _)| ("evt dispatch", o)));
+                for k in 0..4 {
+                    let n = [1, windows, windows, heads][k];
+                    for (name, (b, st)) in [("chnctl", m.chnctl[k]), ("chnstatus", m.chnstatus[k])]
+                    {
+                        offs.push((name, b));
+                        offs.push((name, b + (n - 1) * st));
+                    }
+                }
+                for (name, off) in offs {
+                    assert!(
+                        m.owns(off),
+                        "{version} {}: {name} {off:#x} outside the aperture {:#x?}",
+                        row.chips,
+                        m.aperture()
+                    );
+                }
+            }
         }
     }
 

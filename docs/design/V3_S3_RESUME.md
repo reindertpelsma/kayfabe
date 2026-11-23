@@ -7,7 +7,8 @@ guest (ogkm 580.159.04, stock module) survives three S3 suspend/resume cycles in
 §7a): the Windows post-wake hang is root-caused (QEMU's wake reset wipes the Hyper-V TSC page while the TSC restarts) and
 fixed by a third QEMU hunk; 3/3 cycles with it on one box; each wake is still followed by a guest TDR recovery.** **UPDATE 2026-11-23 (§7c, above §7b):
 that TDR has two causes; the first (every RAM lease revoked by the wake's flat-view re-split) is fixed, the second (kf3's display
-engine stops window channel 1 after the wake) is open, so Windows still takes a TDR after every wake.** Measured = a run or a GPU-free test named here; inferred =
+engine stops window channel 1 after the wake) is open, so Windows still takes a TDR after every wake.** **UPDATE 2026-11-23 (§7d, above §7c): the second cause is root-caused and fixed (a kept wake's register-shadow restore showed the
+guest GET 0 on every display channel); with it, 3 consecutive S3 cycles in one boot without a TDR on one box.** Measured = a run or a GPU-free test named here; inferred =
 read from source, not executed.
 
 ## 1. The failure, measured (kf3 `c287af4f`, Linux desktop guest, ogkm 580.159.04)
@@ -164,6 +165,27 @@ Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as
   (its `summary.log` also holds the first fast attempt, NOTRUN: the raw client was built into another
   target dir — a harness slip, rerun).
 
+## 7d. UPDATE 2026-11-23: the display window-channel stop, root cause and fix (corrects §7c's "Still open" below)
+
+**STATUS: RESEARCH, 2026-11-23. MEASURED on Vast instance 62182559 (RTX 4090, nested KVM, L1 clocksource tsc), control kf3
+`544472a7` (instrumentation only) and fix kf3 `a2df9a81` (F3, code commit `22ddc9e7`), q35, arm B, Windows 11 LTSC with
+580.88; evidence `traces/win11_s3_display_20261123/README.md` (hypotheses committed before the runs).**
+- Cause [read + measured D0]: a kept wake keeps the display engine, its ports and its channels, but the device reset's
+  Finish stage restored the whole BAR0 register shadow to its realize image, the display aperture included. The guest reads
+  a display channel's GET from that shadow, and the worker republishes a GET only when it moves, so after the wake the
+  guest read GET 0 on every channel whose engine GET was not 0 (D0: window 1 engine GET 0xf60, GET word 0). The Windows
+  driver, its put at the kept GET and a 0x310-byte batch that did not fit before the 4 KiB ring end, wrote on past the end
+  without a wrap (PUT 0x1270); the engine stopped the channel, the core parked on its interlock and the TDR followed.
+  [inferred] it waited for a non-zero GET before wrapping, as `nvkms-dma.c` does, and gave up.
+- **Fix (F3, hardwired):** `restore_shadow(life)` leaves every display-aperture word as it is for a kept life
+  (`kf-qemu` `device.rs` `wake_keeps`); an ended life is restored as before. Tests:
+  `a_kept_wake_leaves_the_display_words_the_engine_published` (fails against the old restore) and
+  `a_kept_wake_restores_everything_outside_the_display`; three mutants killed.
+- [measured D3, F3] 3/3 CLEAN cycles in one boot (no nvlddmkm 153, no display stop or stall, no RM unload), including a
+  wake where window 1's GET (0xed0) left too little room for that batch; [measured D1, D2] 4 more wakes with the same
+  result (judged by hand where the probe misjudged, README). The release row `windows-sleep-wake` stays expected-FAIL
+  until the release run measures it.
+
 ## 7c. UPDATE 2026-11-23: the post-wake TDR, first cause fixed, second cause open (corrects §7b's "Not fixed" below)
 
 **STATUS: RESEARCH, 2026-11-23. MEASURED on Vast instance 62141661 (RTX 4090, nested KVM, L1 clocksource tsc), control kf3
@@ -182,6 +204,7 @@ Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as
   or `translation CHANGED`. Tests: `a_wake_resplit_of_the_same_ram_keeps_a_resolved_userd`,
   `a_wake_resplit_of_the_same_ram_keeps_the_birth_generation` (fail before the fix with `Err(Topology)`), and the conflict
   and bound tests in `mem.rs`. [measured T1, T1b with F2] no Topology refusal; every wake RAM change `translation kept`.
+- ⊘ *Superseded by §7d (2026-11-23): the stop's cause is the kept wake's shadow restore (GET read 0), fixed by F3.*
 - **Still open:** [measured T1, T1b] with F2 the TDR still follows every wake, 68-70 s after it: about 12 s after the wake
   kf3's display engine halts window channel 1 (`PUT 0x1130 / GET 0xe20 outside the 4096-byte pushbuffer`, the guest
   declared 4 KiB), then the core channel parks waiting for that window's interlock. [inferred] the guest's window-channel

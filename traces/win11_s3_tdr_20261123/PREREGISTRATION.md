@@ -93,3 +93,8 @@ consecutive CLEAN cycles in one boot.
    `origin/next` `90a658c3` build (no F2). *Prediction:* event 153 and `USER_RING_REFUSED ... Topology` after the wake,
    as in R1-R3. *Falsifier of "F2 is what made T1 clean":* T0 is CLEAN too.
 5. Stop, compare, write the README. Destroy the box by its own id, verify absence.
+
+## Addendum 2026-11-23 (after the runs of this directory)
+
+The open second cause (display window channel 1 stopped after the wake, H4) continues in
+`traces/win11_s3_display_20261123/PREREGISTRATION.md`, written and committed before its runs.
