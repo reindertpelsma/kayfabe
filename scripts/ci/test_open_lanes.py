@@ -825,7 +825,13 @@ class Wiring(unittest.TestCase):
         for needle in ("-DGGML_VULKAN=ON", "-DGGML_CUDA=OFF", "want nvbandwidth && step nvbandwidth nvbandwidth", "want llama_vulkan && step llama_vulkan llama_vulkan",
                        "pin_install_cuda_toolkit"):
             self.assertIn(needle, text)
-        self.assertNotIn("curl", text)
+        body = re.search(r"^lunarg_sdk\(\) \{\n(.*?)^\}\n", text, re.S | re.M).group(1)
+        self.assertEqual(text.count("curl -"), 2)                       # the two downloads of the LunarG SDK, nothing else
+        self.assertEqual(body.count("curl -"), 2)
+        self.assertEqual(body.count("sdk.sha"), 2)                                # fetched into a file and read back for the comparison
+        self.assertIn('"$OPENROWS_LUNARG_CHECKSUM_BASE/$v/linux/vulkan_sdk.tar.xz.txt"', body)   # from LunarG's checksum endpoint, not from the download's own host
+        self.assertLess(body.index("sdk.sha"), body.index("sha256sum"))          # the checksum is fetched from LunarG and compared ...
+        self.assertLess(body.index("SDK_HASH_MISMATCH"), body.index("tar -C"))   # ... before anything is unpacked
         self.assertNotIn("wget", text)
         self.assertNotIn("git clone", text)
         self.assertIsNone(re.search(r"command\s+apt-get", text))             # the one sanctioned bypass stays in pin_lib.sh
@@ -841,6 +847,43 @@ class Wiring(unittest.TestCase):
         defined = {l.split("=", 1)[0] for f in (OR / "pins.env", ROOT / "scripts/apps/pins.sh") for l in f.read_text().splitlines() if re.match(r"^[A-Z_0-9]+=", l)}
         self.assertEqual(set(), used - defined)
         self.assertTrue({"OPENROWS_NVB_COMMIT", "PIN_LLAMA_COMMIT", "OPENROWS_NVB_URL", "PIN_LLAMA_URL"} <= used)
+
+    def run_lunarg_sdk(self, good_checksum):
+        """The real lunarg_sdk function of provision_lanes.sh, with a fake curl that serves a small tarball and a checksum text."""
+        import hashlib
+        import io
+        import tarfile
+        text = (OR / "provision_lanes.sh").read_text()
+        fn = re.search(r"^lunarg_sdk\(\) \{\n.*?^\}\n", text, re.S | re.M).group(0)
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:xz") as tf:
+                data = b"#!/bin/sh\n"
+                info = tarfile.TarInfo("1.4.1.1/x86_64/bin/glslc")
+                info.size, info.mode = len(data), 0o755
+                tf.addfile(info, io.BytesIO(data))
+            tarball = buf.getvalue()
+            (t / "served.tar.xz").write_bytes(tarball)
+            digest = hashlib.sha256(tarball).hexdigest() if good_checksum else "0" * 64
+            (t / "served.sha").write_text(digest + "  vulkansdk-linux-x86_64-1.4.1.1.tar.xz\n")
+            write_exec(t / "bin" / "curl", '#!/bin/bash\nwhile [ $# -gt 0 ]; do case "$1" in -o) out=$2; shift;; http*) url=$1;; esac; shift; done\n'
+                                           'case "$url" in */sha/*) cp "%s/served.sha" "$out";; *) cp "%s/served.tar.xz" "$out";; esac\n' % (t, t))
+            script = ('ROOT=%s/root; OPENROWS_LUNARG_SDK_VERSION=1.4.1.1; OPENROWS_LUNARG_SDK_BASE=https://sdk.example/dl; OPENROWS_LUNARG_CHECKSUM_BASE=https://sdk.example/sha\n%s\n'
+                      'lunarg_sdk; echo "rc=$?"; ls "$ROOT/vulkan-sdk" 2>/dev/null\n') % (t, fn)
+            r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=dict(os.environ, PATH=str(t / "bin") + os.pathsep + os.environ["PATH"]))
+            return r.stdout, (t / "root" / "vulkan-sdk" / "1.4.1.1" / "x86_64" / "bin" / "glslc").exists()
+
+    def test_the_lunarg_sdk_is_unpacked_when_it_hashes_to_what_lunarg_lists(self):
+        out, unpacked = self.run_lunarg_sdk(True)
+        self.assertIn("rc=0", out)
+        self.assertTrue(unpacked)
+
+    def test_the_lunarg_sdk_download_is_refused_and_not_unpacked_when_the_hash_differs(self):
+        out, unpacked = self.run_lunarg_sdk(False)
+        self.assertIn("SDK_HASH_MISMATCH", out)
+        self.assertIn("rc=1", out)
+        self.assertFalse(unpacked)
 
     def test_provision_checks_every_source_out_at_its_pinned_commit(self):
         text = (OR / "provision_lanes.sh").read_text()
@@ -860,7 +903,7 @@ class Wiring(unittest.TestCase):
                     logical.append(cur.strip())
                     cur = ""
             for cmd in logical[:-1]:                    # the last command's status is the function's
-                if cmd.startswith(("local ", "nvcc=$(find_nvcc)")):
+                if cmd.startswith(("local ", "nvcc=$(find_nvcc)", "if ", "fi")):
                     continue
                 self.assertIn("return 1", cmd, "%s: %s" % (fn, cmd[:90]))
 

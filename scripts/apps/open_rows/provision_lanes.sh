@@ -48,7 +48,7 @@ lunarg_sdk() {
   [ -x "$d/$v/x86_64/bin/glslc" ] && return 0
   mkdir -p "$d" || return 1
   curl -fsSL --retry 3 --connect-timeout 20 -o "$d/sdk.tar.xz" "$OPENROWS_LUNARG_SDK_BASE/$v/linux/vulkan_sdk.tar.xz" || return 1
-  curl -fsSL --retry 3 --connect-timeout 20 -o "$d/sdk.sha" "$OPENROWS_LUNARG_SHA_BASE/$v/linux/vulkan_sdk.tar.xz.txt" || return 1
+  curl -fsSL --retry 3 --connect-timeout 20 -o "$d/sdk.sha" "$OPENROWS_LUNARG_CHECKSUM_BASE/$v/linux/vulkan_sdk.tar.xz.txt" || return 1
   [ "$(sha256sum "$d/sdk.tar.xz" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$d/sdk.sha")" ] || { echo "lunarg_sdk: SDK_HASH_MISMATCH the download is not what LunarG lists for $v"; return 1; }
   tar -C "$d" -xf "$d/sdk.tar.xz" && rm -f "$d/sdk.tar.xz" || return 1
 }

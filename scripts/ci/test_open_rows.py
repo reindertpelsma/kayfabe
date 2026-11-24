@@ -1669,7 +1669,7 @@ class StaticContracts(unittest.TestCase):
         self.assertEqual(keys, {"OPENROWS_NVCH_URL", "OPENROWS_NVCH_TAG", "OPENROWS_NVCH_COMMIT", "OPENROWS_NVIDIA_REPO_BASE", "OPENROWS_NVIDIA_KEY_FILE",
                                 "OPENROWS_NVIDIA_KEY_FPR", "OPENROWS_DCGM_VERSION", "OPENROWS_DCGM_PACKAGE_STEMS",
                                 # the pins of the nvbandwidth and llama.cpp Vulkan lanes (provision_lanes.sh, scripts/ci/test_open_lanes.py)
-                                "OPENROWS_NVB_URL", "OPENROWS_NVB_TAG", "OPENROWS_NVB_COMMIT", "OPENROWS_NVB_ARCHS", "OPENROWS_LUNARG_SDK_VERSION", "OPENROWS_LUNARG_SDK_BASE", "OPENROWS_LUNARG_SHA_BASE"})
+                                "OPENROWS_NVB_URL", "OPENROWS_NVB_TAG", "OPENROWS_NVB_COMMIT", "OPENROWS_NVB_ARCHS", "OPENROWS_LUNARG_SDK_VERSION", "OPENROWS_LUNARG_SDK_BASE", "OPENROWS_LUNARG_CHECKSUM_BASE"})
 
     def test_provision_waits_for_a_busy_package_manager_before_every_apt_call(self):
         text = (OR / "provision.sh").read_text()
