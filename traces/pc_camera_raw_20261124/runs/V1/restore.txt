@@ -1,0 +1,14 @@
+rmmod vfio_pci rc=0 
+rmmod vfio_pci_core rc=0 
+udev queue empty and no nvidia load pending for 10s
+modprobe block removed: True
+modprobe nvidia rc=0 
+modprobe nvidia_modeset rc=0 
+modprobe nvidia_drm rc=0 
+modprobe nvidia_uvm rc=0 
+audio function driver after restore: snd_hda_intel
+persistenced: (0, '')
+gdm start: (0, '')
+nvidia-smi rc=0 NVIDIA GeForce RTX 4070, 595.91.07
+udevadm settle: (0, '')
+nvidia_uvm live refcnt 0 stable 60s, no nvidia modprobe/rmmod running: settled

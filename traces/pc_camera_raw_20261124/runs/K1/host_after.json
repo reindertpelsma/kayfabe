@@ -1,0 +1,24 @@
+{
+ "tag": "after",
+ "utc": "2026-11-24T03:03:56Z",
+ "nvidia_version": "595.91.07",
+ "driver_01_00_0": "nvidia",
+ "driver_01_00_1": "snd_hda_intel",
+ "modules": [
+  "nvidia",
+  "nvidia_drm",
+  "nvidia_modeset",
+  "nvidia_uvm"
+ ],
+ "gdm": "active",
+ "dp_status": {
+  "card0-DP-4": "disconnected",
+  "card0-DP-5": "disconnected",
+  "card0-DP-6": "disconnected",
+  "card1-DP-1": "disconnected",
+  "card1-DP-2": "disconnected",
+  "card1-DP-3": "connected"
+ },
+ "udev_queue_empty": true,
+ "modprobe_block_present": false
+}
