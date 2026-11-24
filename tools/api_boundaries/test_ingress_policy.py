@@ -263,6 +263,45 @@ class CommittedTable(unittest.TestCase):
                 self.assertTrue(pt_ok(out["control"][i][ti]), (t, hex(i)))
 
 
+class ServedFreshness(unittest.TestCase):
+    """Security review of PR #541, F3, and of PR #545, F7: served.json is an input of the gate and of the
+    control partition (crates/kf-abi/tests/control_partition.rs), and only run_all.sh regenerated it.
+    Re-derive it from the tree and require every field the partition reads to be current. `upper_idents`
+    and `class_id_literals` move with any new identifier (most of which no ogkm tag knows), so they are
+    compared through their consumer: the generator must make the same table and report from the fresh
+    file as from the committed one."""
+
+    def fresh(self):
+        import subprocess
+        out = subprocess.run(
+            [sys.executable, "-I", os.path.join(HERE, "derive_served.py"), REPO,
+             os.path.join(HERE, "extra_ids.txt"), os.path.join(HERE, "windows_ids.txt")],
+            capture_output=True, text=True, check=True).stdout
+        return json.loads(out)
+
+    def test_served_json_is_current_where_it_is_read(self):
+        fresh = self.fresh()
+        committed = json.load(open(os.path.join(REPO, ip.SERVED)))
+        for k in ("ctrl_ids", "ctrl_names", "classes", "alloc_structs"):
+            self.assertEqual(fresh[k], committed[k], "%s in served.json is stale: run "
+                             "tools/api_boundaries/derive_served.py and commit the result" % k)
+        tmp = tempfile.mkdtemp()
+        try:
+            path = os.path.join(tmp, "served.json")
+            with open(path, "w") as f:
+                json.dump(fresh, f)
+            before, ip.SERVED = ip.SERVED, path
+            try:
+                from_fresh = ip.compute(REPO, None)
+            finally:
+                ip.SERVED = before
+        finally:
+            shutil.rmtree(tmp)
+        self.assertEqual(from_fresh, ip.compute(REPO, None),
+                         "the table generated from a fresh served.json differs from the committed one: "
+                         "regenerate served.json (derive_served.py), re-emit, commit both")
+
+
 def pt_ok(run):
     return run[1] and run[2] in ("OgkmNonPrivileged", "Mode2Rpc", "Empirical")
 

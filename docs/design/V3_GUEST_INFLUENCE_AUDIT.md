@@ -16,7 +16,7 @@ the shared GPU; MEDIUM = host resource exhaustion bounded by a per-VM quota; LOW
 | G-2 | guest engine-class alloc under a passthrough twin -> `ChanStatement::EngineObject` -> one host engine object | `kf-rm/src/chanlink.rs:1313` -> `kf-qemu/src/chan.rs:5145` (`engine_object`), `:2803` (`admit_engine_object`) | Add one host RM object per fresh handle on one channel. A refusal by the object seat IS withdrawn (`attach_engine_withdraw`), so the total is bounded by the graph's 2^18 live handles for the whole VM. | guest userspace; Linux and Windows | busy handle and 64 pending (`PENDING_ENGINE_OBJECTS`); committed objects only by `MAX_LIVE_HANDLES` (2^18 per VM) | **MEDIUM** (per-VM bound exists; whether 2^18 host objects exhaust GSP heap is unmeasured and could make it HIGH) | `chan::dispsw_tests::engine_objects_per_twin_are_capped`, `the_engine_object_cap_counts_pending_admissions`, `a_twin_below_the_engine_object_cap_admits_exactly_up_to_it` | PR A: `ENGINE_OBJECTS_PER_TWIN` = 128 (committed + pending) |
 | G-3 | host handle counter `HostRm::mint` | `kf-host/src/lib.rs:1177`, `:159` (`next_handle`), `:169` (`admit_want`) | Drive about 889 million mints (allocs, frees not needed to be slow) until the counter wraps through `0` (host RM then picks a handle) into kayfabe's own client handle and every handle issued. A live handle is refused by RM; a stale one kayfabe still holds could then name a newer object of THIS VM's own host client. | guest userspace (any alloc loop); Linux and Windows | none (`wrapping_add`) | **LOW** (same host client only; needs a second, stale-reference defect to matter) | `mint_tests::*` (5 tests) | PR A: the counter never wraps; past `u32::MAX` every alloc is refused by name (`HOST_HANDLES_EXHAUSTED` 0x4B7A) before any ioctl |
 | G-4 | guest `NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND` -> host ZCULL_BIND with the guest's 64-bit VA | `kf-rm/src/chanlink.rs:1641` -> `kf-qemu/src/chan.rs:4253` -> `kf-host/src/channel.rs:1948` | Point the zcull save buffer of its own GR twin at any VA of the twin's space, including a kayfabe placement (`MapTarget::reserved`, e.g. the read-only USERD page). The context-switch writes happen in the twin's own VA space with its own PTEs; a read-only PTE should fault the guest's own context. Whether the context-switch engine honours a read-only PTE is NOT measured. Everything writable there is already writable by the guest's own GPU work. | guest userspace (GL/Vulkan drivers send it); Linux and Windows | size 24, own client, mode <= 2 | **LOW** (guest-local unless the read-only PTE is ignored; then still only this VM's own twin placements) | proposed `zcull_bind_refuses_a_va_inside_a_vmm_placement` | NOT FIXED here: needs the twin's reserved set at the plane; hardware question below |
-| G-5 | `HOST_CONTROLS` is an inventory: `control_carry` passes an unlisted id through at the bench and at `[580.65.06, 581)` | `kf-abi/src/hostabi.rs:1232` | Nothing directly: a guest never chooses a host control id (below). The risk is a FUTURE kayfabe call site that sends an id with no row: its layout would go unchecked at the nine measured 580.x hosts. | n/a | none (a review habit) | **LOW / hardening** | `kf-abi/tests/control_partition.rs` (4 tests) | PR B: the static inventory; the default stays as is (see below) |
+| G-5 | `HOST_CONTROLS` is an inventory: `control_carry` passes an unlisted id through at the bench and at `[580.65.06, 581)` | `kf-abi/src/hostabi.rs:1232` | Nothing directly: a guest never chooses a host control id (below). The risk is a FUTURE kayfabe call site that sends an id with no row: its layout would go unchecked at the nine measured 580.x hosts. | n/a | none (a review habit) | **LOW / hardening** | `kf-abi/tests/control_partition.rs` (6 tests) | PR B: the static inventory; the default stays as is (see below) |
 
 ## G-5 precisely: what "passes through unchecked" means
 
@@ -35,6 +35,20 @@ statements in `kf-qemu/src/chan.rs`; every host control call site in `crates/kf-
   the values; kayfabe validates the shape.
 - "Pass-through" in `control_carry` is the LAYOUT decision for those kayfabe-authored blocks (no
   conversion where the host's layout is the bench's), not a forwarding of guest bytes.
+
+⊘ **Correction 2026-11-24 (security review of PRs #541 and #374, F1/F2/F374-1):** the scan below was weaker than
+written. It matched only `.raw_control(`, `_nested(` and `_opaque(` (not `raw_control_exact(`, the UFCS form, or a
+space before `(`), and it keyed non-constant sites by (file, argument), so a new `raw_control(obj, cmd, ..)` in a
+listed file passed. "Every host control call site resolves to a row" was therefore false for one site:
+`kf-host/src/channel.rs` `probe_deferred_channel_update` sends `0x50800103` (no row) through `raw_control_exact`;
+its only caller is a `kf-harness` probe. The test now (a) sees every method whose name starts with `raw_control`,
+in any spelling, plus the `host.control` / `host.device_control` seams, with comments and strings blanked;
+(b) keys each non-constant site by (file, enclosing function, argument) with its exact call count
+(`DYNAMIC_SITES`); (c) lists the two harness-only sites (`probe_deferred_channel_update`, `raw_control_opaque`)
+in `HARNESS_ONLY_SITES`, and `harness_only_methods_have_no_product_caller` fails if either method gains a
+caller outside `crates/kf-harness`. So the claim now reads: every host control call site in a product crate
+resolves to a row, is a listed non-constant site whose id comes from an authored table, or is a listed
+harness-only site that no product code reaches.
 
 ⊘ **Correction 2026-11-20 (task I7, `docs/design/V3_GUEST_INGRESS_TABLE.md`):** `served.json` was regenerated with the
 guest-ingress gate excluded from the scan (`derive_served.py` `EXCLUDE`): the old file counted 71 ids and 122 names
