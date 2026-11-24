@@ -1,5 +1,7 @@
 # Attach your GPU to a VM you already have
 
+**Assumes:** a Linux x86-64 host with KVM, an NVIDIA GPU from Turing onward driven by the open NVIDIA kernel module, and QEMU 10.2.4 with the kayfabe device, and a VM you already run under QEMU/KVM or libvirt.
+
 You already run a Linux or Windows VM under QEMU/KVM or libvirt. This page is only what changes to give it the kayfabe GPU: QEMU arguments, host permissions, a few guest settings. It does not install an operating system.
 
 "Not tested" marks a step that the repository has no script or record for. Everything else comes from the project's launch scripts. Read the status on the [introduction](index.md) first: research stage, no public binary.

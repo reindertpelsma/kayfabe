@@ -47,7 +47,7 @@ Per-die evidence and its historical limits: [family coverage](docs/design/V3_FAM
 
 ## Trying it
 
-For development, start with [the handoff](docs/STATUS_AND_HANDOFF.md), [build instructions](docs/howto/building.md) and [Windows bench instructions](scripts/bench/windows/README.md). The stock path uses vendor drivers; optional bring-up patches and UVM research do not establish supported UVM ([requirements](docs/howto/requirements.md)).
+Kayfabe assumes a Linux x86-64 host with KVM, an NVIDIA GPU from Turing onward driven by the open NVIDIA kernel module, and QEMU 10.2.4 ([requirements](docs/howto/requirements.md)). To try it, follow [Install](docs/howto/installing.md) and [building from source](docs/howto/building.md); the Windows test harness is described in the [Windows bench instructions](scripts/bench/windows/README.md). The stock path uses vendor drivers; optional bring-up patches and UVM research do not establish supported UVM.
 
 Documented commands: `cargo build --workspace --release` and `KAYFABE_NO_KVM=1 cargo test --workspace --locked --no-fail-fast -j2`. A [cold-clone run](traces/release_checks_20261107/README.md) at `fe0cd47e3` built successfully but recorded 14 test failures.
 
@@ -55,6 +55,6 @@ Documented commands: `cargo build --workspace --release` and `KAYFABE_NO_KVM=1 c
 
 [Architecture](ARCHITECTURE.md) | [design](docs/design/THE_ARCHITECTURE_v3.md) | [owner rulings](docs/OWNER_RULINGS.md) | [documentation map](docs/README.md) | [contributor rules](AGENTS.md) | [release claims and manual evidence templates](docs/RELEASE_CLAIMS.md)
 
-Dual-licensed **Apache-2.0 OR GPL-2.0-or-later**; [LICENSE](LICENSE) lists the exceptions. *Owner ruling 2026-11-24 ([§BF](docs/OWNER_RULINGS.md)):* the 2026-11-20 re-derivation of the device's guest-ingress allowlist from NVIDIA's open-gpu-kernel-modules (task I7, [§BD](docs/OWNER_RULINGS.md)) closes the GPL-exception item, so a binary may ship once the other gates pass; a counsel check before the first public binary stays recommended, not blocking. *Correction 2026-11-23 (the earlier text called the GPL exception a standing blocker of a QEMU binary):* the gVisor-derived Apache-2.0-only files are outside the device's link closure and `scripts/ci/qemu_license_closure.py` runs in CI. Whether and when a binary is published is still the owner's decision, after the security gate.
+Dual-licensed **Apache-2.0 OR GPL-2.0-or-later**; [LICENSE](LICENSE) lists the exceptions. The device's guest-ingress allowlist was re-derived from NVIDIA's open-gpu-kernel-modules on 2026-11-20 ([ruling §BF](docs/OWNER_RULINGS.md)), which closes the GPL-exception item: a binary may ship once the other gates pass. A counsel check before the first public binary is recommended, not blocking. The gVisor-derived Apache-2.0-only files are outside the device's link closure, and `scripts/ci/qemu_license_closure.py` checks that in CI. Whether and when a binary is published is the owner's decision, after the security gate.
 
 [Provenance policy](docs/design/V3_PROVENANCE.md) | [Security and private reporting](docs/howto/security.md)

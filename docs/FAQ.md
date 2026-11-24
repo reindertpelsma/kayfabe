@@ -3,6 +3,8 @@
 Questions the VM community asks first, answered from the design and the
 evidence in this repository. Where something is not verified, the answer says so. Where there is no
 verified answer, the answer says **not documented yet**. Plans and goals are on [Goals and plans](howto/goals.md).
+
+Answers assume a Linux x86-64 host with KVM, an NVIDIA GPU from Turing onward and QEMU 10.2.4, unless an answer says otherwise.
 <!-- src: README.md and docs/howto/*.md; each answer below names its sources -->
 
 ## The basics
@@ -14,13 +16,13 @@ No. Kayfabe is a QEMU device that shows the guest an emulated NVIDIA GPU, and th
 
 ### Does the host keep the GPU?
 
-Yes, that is the point of the design. The host driver stays loaded on the card and the host keeps using it; the guest does not own the device. The README's screenshot shows a Windows guest and a Linux desktop using one GPU at the same time. One caveat for today: the repository's provisioning scripts for test machines stop the host's display manager and purge NVIDIA packages, so they are for throwaway machines, not for your desktop. See [Running the QEMU device](howto/installing.md).
+Yes, that is the point of the design. The host driver stays loaded on the card and the host keeps using it; the guest does not own the device. The screenshot on the project's front page shows a Windows guest and a Linux desktop using one GPU at the same time. One caveat for today: the repository's provisioning scripts for test machines stop the host's display manager and purge NVIDIA packages, so they are for throwaway machines, not for your desktop. See [Install](howto/installing.md).
 <!-- src: README.md (headline, comparison table, screenshot caption); docs/howto/installing.md warning -->
 
 ### Why not VFIO passthrough?
 
-With VFIO one VM owns the whole GPU and the host does not keep it (README comparison). Kayfabe lets the host and the guest use the GPU together. What you give up is hardware-enforced isolation by an IOMMU: kayfabe's boundary is the GPU's own memory management unit plus kayfabe's checks, and it has not been audited (see the IOMMU answer below and *Is it safe to run untrusted guests?*). VFIO is also the native reference the README measures kayfabe against. Whether VFIO is safe for untrusted guests is itself contested: Microsoft's Discrete Device Assignment documentation says "You should only use Discrete Device Assignment where the tenants of the VMs are trusted", and Xen's `SUPPORT.md` says it is "generally not safe to use this feature to expose a physical device to completely untrusted guests". Those statements are about Microsoft's and Xen's own platforms. They are not a measured audit of Linux VFIO, and they do not show that kayfabe is safer.
-<!-- src: README.md comparison table; docs/PRODUCT_POSITIONING.md section 2 (verbatim Microsoft DDA and Xen SUPPORT.md quotes); this file, IOMMU answer; docs/howto/security.md -->
+With VFIO one VM owns the whole GPU and the host does not keep it ([comparison](howto/technical-faq.md#how-does-this-differ-from-the-alternatives)). Kayfabe lets the host and the guest use the GPU together. What you give up is hardware-enforced isolation by an IOMMU: kayfabe's boundary is the GPU's own memory management unit plus kayfabe's checks, and it has not been audited (see the IOMMU answer below and *Is it safe to run untrusted guests?*). VFIO is also the native reference that kayfabe's results are measured against. Whether VFIO is safe for untrusted guests is itself contested: Microsoft's Discrete Device Assignment documentation says "You should only use Discrete Device Assignment where the tenants of the VMs are trusted", and Xen's `SUPPORT.md` says it is "generally not safe to use this feature to expose a physical device to completely untrusted guests". Those statements are about Microsoft's and Xen's own platforms. They are not a measured audit of Linux VFIO, and they do not show that kayfabe is safer.
+<!-- src: docs/howto/technical-faq.md comparison table; docs/PRODUCT_POSITIONING.md section 2 (verbatim Microsoft DDA and Xen SUPPORT.md quotes); this file, IOMMU answer; docs/howto/security.md -->
 
 ### Why not virtio-gpu (Venus, virgl or a native context)?
 
@@ -112,7 +114,7 @@ One kayfabe device is created per host GPU. The recorded two-GPU thin-guest chec
 
 ### What is the performance cost?
 
-It depends on the workload. Large batches run close to host speed; many small launches pay for each one, because every doorbell write from the guest is a trapped write (a VM exit), and that cost is much higher on the nested rented hosts most results come from. Examples from the README, each with its limits: a matrix multiply in a Linux guest reached 0.997 of host speed on a rented, nested RTX 3060 box (older revisions), while a separate older campaign recorded eager PyTorch decoding at 0.29 of its own host control. These are separate nested RTX 3060 campaigns, not a matched cross-workload comparison. The newer RTX 4090 app record at `144557e43`, 2026-11-07, records per-workload figures and their limits; it does not qualify current-tree performance. <!-- src: traces/apps_linux_20261107/README.md -->
+It depends on the workload. Large batches run close to host speed; many small launches pay for each one, because every doorbell write from the guest is a trapped write (a VM exit), and that cost is much higher on the nested rented hosts most results come from. Examples, each with its limits: a matrix multiply in a Linux guest reached 0.997 of host speed on a rented, nested RTX 3060 box (older revisions), while a separate older campaign recorded eager PyTorch decoding at 0.29 of its own host control. These are separate nested RTX 3060 campaigns, not a matched cross-workload comparison. The newer RTX 4090 app record at `144557e43`, 2026-11-07, records per-workload figures and their limits; it does not qualify current-tree performance. <!-- src: traces/apps_linux_20261107/README.md -->
 <!-- src: README.md "Windows speed is being benchmarked again"; docs/howto/technical-faq.md "Why is performance uneven?" -->
 
 ### Does CUDA give the same results as the host?

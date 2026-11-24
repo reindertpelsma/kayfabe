@@ -1,5 +1,7 @@
 # Install
 
+**Assumes:** a Linux x86-64 host with KVM, an NVIDIA GPU from Turing onward driven by the open NVIDIA kernel module, and QEMU 10.2.4 with the kayfabe device ([Requirements](requirements.md)). Windows and macOS hosts, other QEMU versions and GPUs older than Turing are not covered.
+
 If you can already give a virtual machine a GPU with VFIO, you can use kayfabe in four steps. The difference is that the host keeps using the GPU, and the VM gets an emulated NVIDIA GPU that runs on the real one.
 
 1. Get the kayfabe QEMU: build it from source. A release download is planned; no release binary exists yet.
@@ -84,7 +86,7 @@ Shut the guest down from inside it, or send ACPI power-down through QEMU (`syste
 
 ## Stock drivers, nothing patched
 
-Stock host and guest NVIDIA drivers are unmodified by default. Kayfabe ships no NVIDIA binaries. The repository also contains opt-in research code (host-driver experiments, guest instrumentation, a diagnostic QEMU observer) that is never part of the build or the install above; a run with an instrumented driver does not establish a stock-driver result. `python3 scripts/ci/no_patch_check.py` prints the complete table of patches in the repository and checks that no stock path applies one. The device itself is part of the custom QEMU build described in [Building from source](building.md): "stock drivers" does not mean an unmodified distribution QEMU.
+Stock host and guest NVIDIA drivers are unmodified by default. Kayfabe ships no NVIDIA binaries. The repository also contains opt-in research code (host-driver experiments, guest instrumentation, a diagnostic QEMU observer) that is never part of the build or the install above; a run with an instrumented driver does not establish a stock-driver result. `python3 scripts/ci/no_patch_check.py` prints the complete table of patches in the repository and checks that no stock path applies one. The device itself is part of the custom QEMU build described in [Building from source](building.md): "stock drivers" does not mean an unmodified distribution QEMU. That build changes QEMU only by adding the device and two one-line build hunks; the one optional QEMU patch (Windows sleep and wake) is applied only if you name it.
 
 ## Not available yet
 
