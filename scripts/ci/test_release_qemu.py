@@ -1465,6 +1465,13 @@ class OrchestrationMore(OrchestrationBase):
         self.assertIn("+hyperv-wake", self.manifest(patched)["configure"]["line"])
         self.assertNotIn("hyperv-wake", self.manifest(plain)["configure"]["line"])
 
+    def test_the_version_string_of_a_patched_build_says_so_and_a_plain_one_does_not(self):
+        _, plain = self.build(work="w1", out="o1")
+        _, patched = self.build(work="w2", out="o2", with_patches=["hyperv-wake"])
+        flags = lambda r: [a for c in r.calls if Path(c[0][0]).name == "configure" for a in c[0] if str(a).startswith("--with-pkgversion=")]
+        self.assertEqual(flags(plain), ["--with-pkgversion=kayfabe-abababab"])
+        self.assertEqual(flags(patched), ["--with-pkgversion=kayfabe-abababab+hyperv-wake"])
+
     def test_the_readme_of_a_patched_build_names_the_patch_and_a_plain_one_does_not(self):
         self.assertNotIn("hyperv-wake", self.readme())
         self.assertIn("optional QEMU patch `hyperv-wake`", self.readme(work="w2", out="o2", with_patches=["hyperv-wake"]))
